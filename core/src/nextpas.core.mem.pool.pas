@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
@@ -31,6 +32,7 @@ type
     FBlockCount: SizeUInt;
     FFreeStack: Pointer;
     FAcquired: SizeUInt;
+    FAllocator: IAllocator;  { 可选：自定义分配器（nil = 使用系统 GetMem） }
     {** 位图：1=free, 0=allocated。用于 O(1) double-free 检测。 }
     FFreeBits: array of QWord;
     function BlockIndex(const APtr: Pointer): SizeUInt; inline;
@@ -38,8 +40,10 @@ type
     procedure ClearFreeBit(const AIdx: SizeUInt); inline;
     procedure SetFreeBit(const AIdx: SizeUInt); inline;
   public
-    {** 创建块池，分配 ABlockCount 个 ABlockSize 字节的块。 }
-    constructor Create(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt);
+    {** 创建块池，分配 ABlockCount 个 ABlockSize 字节的块。
+         AAllocator 可选，nil 时使用系统 GetMem。 }
+    constructor Create(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt;
+      AAllocator: IAllocator = nil);
     {** 释放后备内存。 }
     destructor Destroy; override;
 
@@ -121,7 +125,8 @@ end;
 
 { TLocalBlockPool }
 
-constructor TLocalBlockPool.Create(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt);
+constructor TLocalBlockPool.Create(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt;
+  AAllocator: IAllocator);
 var
   LActualBlockSize: SizeUInt;
   LI: SizeUInt;
@@ -136,11 +141,15 @@ begin
   FBlockSize := LActualBlockSize;
   FBlockCount := ABlockCount;
   FAcquired := 0;
+  FAllocator := AAllocator;
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
     raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: size overflow');
-  FBacking := GetMem(LTotalSize);
+  if FAllocator <> nil then
+    FBacking := FAllocator.GetMem(LTotalSize)
+  else
+    FBacking := GetMem(LTotalSize);
   if FBacking = nil then
     raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: out of memory');
   ZeroMem(FBacking, LTotalSize);
@@ -163,12 +172,16 @@ destructor TLocalBlockPool.Destroy;
 begin
   if FBacking <> nil then
   begin
-    FreeMem(FBacking);
+    if FAllocator <> nil then
+      FAllocator.FreeMem(FBacking)
+    else
+      FreeMem(FBacking);
     FBacking := nil;
   end;
   FFreeStack := nil;
   FBlockCount := 0;
   FAcquired := 0;
+  FAllocator := nil;
   FFreeBits := nil;
   inherited Destroy;
 end;

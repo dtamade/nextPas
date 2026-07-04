@@ -136,7 +136,12 @@ var
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
+  if ADst = nil then
+    Exit(DoGetMem(ASize));
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
+  if LHdr^.Magic <> GUARD_MAGIC then
+    raise EAllocError.Create(aeInvalidPointer,
+      'TGuardAllocator.ReallocMem: invalid guard magic (wild pointer)');
   LOldSize := LHdr^.UserSize;
 
   { Allocate new, copy, free old }
@@ -160,14 +165,8 @@ begin
     Exit;
   LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
-  begin
-    {$IFDEF DEBUG}
     raise EAllocError.Create(aeInvalidPointer,
       'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');
-    {$ELSE}
-    Exit;
-    {$ENDIF}
-  end;
   LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;

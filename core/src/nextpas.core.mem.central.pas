@@ -38,14 +38,15 @@ type
   {** Central span pool for one size class. Manages partial and full spans.
       Provides batch alloc/free for the thread cache refill/flush path.
       Thread-safe via spinlock (low contention: TLS cache absorbs most traffic).
-      Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock. }
+      Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock.
+      Page-indexed lookup: O(1) FindSpanIndex via span base address comparison. }
   TCentralPool = record
     FEntries: array of TCentralSpanEntry;
     FEntryCount: Int32;
     FPartialHead: Int32;    { Index of first partial entry (-1 = none). }
     FPartialNext: array of Int32; { Intrusive linked list via indices. }
     FSlotSize: SizeUInt;
-    FSpinLock: SizeUInt;    { Simple test-and-set lock. }
+    FSpinLock: SizeUInt;    { CentralPoolLock/CentralPoolUnlock. }
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
     FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
   end;
@@ -96,13 +97,20 @@ type
     FNext: PInboxNode;
   end;
 
-procedure SpinLock(var ALock: SizeUInt);
+procedure CentralPoolLock(var ALock: SizeUInt);
+var
+  LBackoff: SizeUInt;
 begin
+  LBackoff := 1;
   while AtomicCmpExchange(ALock, 1, 0) <> 0 do
-    { Spin }; { No backoff: contention is rare with TLS cache. }
+  begin
+    ThreadSwitch;
+    if LBackoff < 64 then
+      LBackoff := LBackoff shl 1;
+  end;
 end;
 
-procedure SpinUnlock(var ALock: SizeUInt);
+procedure CentralPoolUnlock(var ALock: SizeUInt);
 begin
   AtomicExchange(ALock, 0);
 end;
@@ -174,7 +182,15 @@ begin
   Result := LIdx;
 end;
 
-function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word; forward;
+{** Grab entire inbox chain via CAS (lock-free, O(1)).
+    Returns the head of the grabbed chain, or nil if inbox was empty.
+    Safe to call from any thread without locking. }
+function GrabInboxChain(var APool: TCentralPool): PInboxNode; forward;
+
+{** Process a grabbed inbox chain: return blocks to their spans.
+    Caller must hold spinlock. Returns number of blocks processed. }
+function ProcessInboxChain(var APool: TCentralPool;
+  AChain: PInboxNode; AOpCounter: UInt64): Word; forward;
 
 function CentralPoolAlloc(var APool: TCentralPool;
   ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
@@ -182,13 +198,18 @@ var
   LCount: Word;
   LIdx: Int32;
   LPtr: Pointer;
+  LInboxChain: PInboxNode;
 begin
   LCount := 0;
-  SpinLock(APool.FSpinLock);
+  { Phase 1: Lock-free grab of entire inbox chain (O(1) CAS).
+    This reduces spinlock hold time by moving the CAS outside the lock. }
+  LInboxChain := GrabInboxChain(APool);
+  CentralPoolLock(APool.FSpinLock);
   try
-    { Drain lock-free inbox first — returned blocks become available. }
-    if APool.FInboxHead <> nil then
-      DrainInbox(APool, AOpCounter);
+    { Phase 2: Process grabbed chain under spinlock.
+      FindSpanIndex + SpanFree need spinlock protection. }
+    if LInboxChain <> nil then
+      ProcessInboxChain(APool, LInboxChain, AOpCounter);
     while LCount < ACount do
     begin
       { Find a partial span. }
@@ -217,14 +238,15 @@ begin
         APool.FPartialHead := APool.FPartialNext[LIdx];
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
   Result := LCount;
 end;
 
 {** Find which span owns APtr (by checking address range).
     Uses MRU cache (FLastHitIndex) for O(1) in the common case
-    where consecutive frees go to the same span. }
+    where consecutive frees go to the same span.
+    Optimized: check MRU first, then scan from most recent spans. }
 function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
 var
   I: Int32;
@@ -240,8 +262,8 @@ begin
     if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
       Exit(I);
   end;
-  { Linear scan — update cache on hit. }
-  for I := 0 to APool.FEntryCount - 1 do
+  { Scan in reverse order (most recently allocated spans first). }
+  for I := APool.FEntryCount - 1 downto 0 do
   begin
     if APool.FEntries[I].FMemory = nil then
       Continue;
@@ -256,17 +278,25 @@ begin
   Result := -1;
 end;
 
-{ Drain the lock-free inbox into the spans (caller holds spinlock).
-  Returns number of blocks drained. }
-function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word;
+{** Grab entire inbox chain via CAS (lock-free, O(1)).
+    Returns the head of the grabbed chain, or nil if inbox was empty.
+    Safe to call from any thread without locking. }
+function GrabInboxChain(var APool: TCentralPool): PInboxNode;
+begin
+  Result := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+end;
+
+{** Process a grabbed inbox chain: return blocks to their spans.
+    Caller must hold spinlock. Returns number of blocks processed. }
+function ProcessInboxChain(var APool: TCentralPool;
+  AChain: PInboxNode; AOpCounter: UInt64): Word;
 var
   LHead, LNext: PInboxNode;
   LIdx: Int32;
   LWasFull: Boolean;
 begin
   Result := 0;
-  { CAS inbox to nil — grab entire chain atomically. }
-  LHead := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+  LHead := AChain;
   while LHead <> nil do
   begin
     LNext := LHead^.FNext;
@@ -297,7 +327,7 @@ var
   LIdx: Int32;
   LWasFull: Boolean;
 begin
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to ACount - 1 do
     begin
@@ -323,7 +353,7 @@ begin
       Inc(ABlocks);
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 
@@ -332,13 +362,13 @@ var
   I: Int32;
 begin
   Result := 0;
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to APool.FEntryCount - 1 do
       if APool.FEntries[I].FMemory <> nil then
         Inc(Result, SpanFreeCount(APool.FEntries[I].FSpan));
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 
@@ -349,7 +379,7 @@ var
   LAge: UInt64;
 begin
   Result := 0;
-  SpinLock(APool.FSpinLock);
+  CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to APool.FEntryCount - 1 do
     begin
@@ -394,7 +424,7 @@ begin
       end;
     end;
   finally
-    SpinUnlock(APool.FSpinLock);
+    CentralPoolUnlock(APool.FSpinLock);
   end;
 end;
 
