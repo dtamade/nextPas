@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试基础类型
+ *
+ * 定义 TBenchResult、TBenchStats、TBenchConfig、
+ * TBenchEntry 等核心数据结构和常量。
+ *}
 unit nextpas.core.bench.base;
 
 {$I nextpas.core.settings.inc}
@@ -99,6 +105,10 @@ type
     SuiteName: string;
     {** ST-04: 整体超时（毫秒），0=不超时。超时后跳过剩余 benchmark。 }
     TimeoutMs: Cardinal;
+    {** 启用并行执行（需配合 TParallelBenchmark） }
+    EnableParallel: Boolean;
+    {** 并行线程数，0=自动检测 CPU 核心数 }
+    ParallelThreads: Integer;
   end;
 
   {** 基准结果数组 }
@@ -627,41 +637,63 @@ end;
  }
 function GlobMatch(const APattern, AStr: string): Boolean;
 var
-  PI, SI: Integer;
+  LP, LS: PChar;
+  LPLen, LSLen, I: Integer;
 begin
-  PI := 1;
-  SI := 1;
-  while (PI <= Length(APattern)) and (SI <= Length(AStr)) do
+  if APattern = '' then
+    Exit(AStr = '');
+  if AStr = '' then
   begin
-    if APattern[PI] = '*' then
+    { 空字符串只匹配全 * 模式 }
+    LP := PChar(APattern);
+    LPLen := Length(APattern);
+    while (LPLen > 0) and (LP^ = '*') do
     begin
-      { 跳过连续的 * }
-      while (PI <= Length(APattern)) and (APattern[PI] = '*') do
-        Inc(PI);
-      { * 匹配到末尾：如果后面没有更多模式字符，直接成功 }
-      if PI > Length(APattern) then
-        Exit(True);
-      { 尝试 * 匹配 0,1,2,... 个字符 }
-      while SI <= Length(AStr) do
+      Inc(LP);
+      Dec(LPLen);
+    end;
+    Exit(LPLen = 0);
+  end;
+
+  LP := PChar(APattern);
+  LS := PChar(AStr);
+  LPLen := Length(APattern);
+  LSLen := Length(AStr);
+
+  while (LPLen > 0) and (LSLen > 0) do
+  begin
+    if LP^ = '*' then
+    begin
+      while (LPLen > 0) and (LP^ = '*') do
       begin
-        if GlobMatch(Copy(APattern, PI, MaxInt), Copy(AStr, SI, MaxInt)) then
+        Inc(LP);
+        Dec(LPLen);
+      end;
+      if LPLen = 0 then
+        Exit(True);
+      for I := 0 to LSLen - 1 do
+      begin
+        if GlobMatch(string(LP), string(LS + I)) then
           Exit(True);
-        Inc(SI);
       end;
       Exit(False);
     end
-    else if (APattern[PI] = '?') or (APattern[PI] = AStr[SI]) then
+    else if (LP^ = '?') or (LP^ = LS^) then
     begin
-      Inc(PI);
-      Inc(SI);
+      Inc(LP);
+      Inc(LS);
+      Dec(LPLen);
+      Dec(LSLen);
     end
     else
       Exit(False);
   end;
-  { 跳过尾部的 * }
-  while (PI <= Length(APattern)) and (APattern[PI] = '*') do
-    Inc(PI);
-  Result := (PI > Length(APattern)) and (SI > Length(AStr));
+  while (LPLen > 0) and (LP^ = '*') do
+  begin
+    Inc(LP);
+    Dec(LPLen);
+  end;
+  Result := (LPLen = 0) and (LSLen = 0);
 end;
 
 end.

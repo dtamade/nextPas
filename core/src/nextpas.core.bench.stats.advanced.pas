@@ -12,7 +12,8 @@ unit nextpas.core.bench.stats.advanced;
 interface
 
 uses
-  nextpas.core.bench.base;
+  nextpas.core.bench.base,
+  nextpas.core.platform;
 
 type
   {**
@@ -575,9 +576,9 @@ begin
   if LIterations <= 0 then
     LIterations := 1;
 
-  // Use GetTickCount64 as seed for true randomness.
+  // Use platform_monotonic_ns as seed for nanosecond-precision randomness.
   // Fixed seeds make bootstrap CIs deterministic and don't reflect sampling variability.
-  LSeed := GetTickCount64;
+  LSeed := platform_monotonic_ns;
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin

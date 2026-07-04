@@ -319,7 +319,7 @@ begin
   CheckContains(LReport, 'HashMap.Put');
   CheckContains(LReport, 'HashMap.Get(hit)');
   CheckContains(LReport, 'x');
-  CheckContains(LReport, 'slower');
+  CheckContains(LReport, 'SLOWER');
   Check(Pos('HashMap.Put', LReport) < Pos('HashMap.Get(hit)', LReport),
     'First comparison appears before second');
 end;
@@ -539,8 +539,8 @@ begin
 
   CheckContains(LReport, 'Baseline Comparison');
   CheckContains(LReport, 'Sort.1K');
-  CheckContains(LReport, 'faster');
-  Check(Pos('slower', LReport) = 0, 'Faster report does not show slower');
+  CheckContains(LReport, 'FASTER');
+  Check(Pos('SLOWER', LReport) = 0, 'Faster report does not show slower');
 end;
 
 procedure TestGenerateComparisonReport_SameRatio;
@@ -581,8 +581,8 @@ begin
 
   CheckContains(LReport, 'Memcpy');
   CheckContains(LReport, 'same');
-  Check(Pos('slower', LReport) = 0, 'Not significant report does not show slower');
-  Check(Pos('faster', LReport) = 0, 'Not significant report does not show faster');
+  Check(Pos('SLOWER', LReport) = 0, 'Not significant report does not show slower');
+  Check(Pos('FASTER', LReport) = 0, 'Not significant report does not show faster');
 end;
 
 procedure TestGenerateChart_AllSkipped;

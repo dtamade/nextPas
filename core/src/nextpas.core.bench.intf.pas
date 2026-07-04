@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试接口定义
+ *
+ * 定义 IBenchSuite、IBenchResults、IBenchContext、
+ * IBenchStatsAnalyzer、IBenchReportGenerator 等核心接口。
+ *}
 unit nextpas.core.bench.intf;
 
 {$mode objfpc}{$H+}

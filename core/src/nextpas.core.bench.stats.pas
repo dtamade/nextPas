@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试统计分析器
+ *
+ * 提供均值、中位数、标准差、Mann-Whitney U 检验、
+ * Welch t 检验、OLS 回归等统计分析功能。
+ *}
 unit nextpas.core.bench.stats;
 
 {$mode objfpc}{$H+}
