@@ -182,7 +182,15 @@ begin
   Result := LIdx;
 end;
 
-function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word; forward;
+{** Grab entire inbox chain via CAS (lock-free, O(1)).
+    Returns the head of the grabbed chain, or nil if inbox was empty.
+    Safe to call from any thread without locking. }
+function GrabInboxChain(var APool: TCentralPool): PInboxNode; forward;
+
+{** Process a grabbed inbox chain: return blocks to their spans.
+    Caller must hold spinlock. Returns number of blocks processed. }
+function ProcessInboxChain(var APool: TCentralPool;
+  AChain: PInboxNode; AOpCounter: UInt64): Word; forward;
 
 function CentralPoolAlloc(var APool: TCentralPool;
   ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
@@ -190,13 +198,18 @@ var
   LCount: Word;
   LIdx: Int32;
   LPtr: Pointer;
+  LInboxChain: PInboxNode;
 begin
   LCount := 0;
+  { Phase 1: Lock-free grab of entire inbox chain (O(1) CAS).
+    This reduces spinlock hold time by moving the CAS outside the lock. }
+  LInboxChain := GrabInboxChain(APool);
   CentralPoolLock(APool.FSpinLock);
   try
-    { Drain lock-free inbox first — returned blocks become available. }
-    if APool.FInboxHead <> nil then
-      DrainInbox(APool, AOpCounter);
+    { Phase 2: Process grabbed chain under spinlock.
+      FindSpanIndex + SpanFree need spinlock protection. }
+    if LInboxChain <> nil then
+      ProcessInboxChain(APool, LInboxChain, AOpCounter);
     while LCount < ACount do
     begin
       { Find a partial span. }
@@ -265,17 +278,25 @@ begin
   Result := -1;
 end;
 
-{ Drain the lock-free inbox into the spans (caller holds spinlock).
-  Returns number of blocks drained. }
-function DrainInbox(var APool: TCentralPool; AOpCounter: UInt64): Word;
+{** Grab entire inbox chain via CAS (lock-free, O(1)).
+    Returns the head of the grabbed chain, or nil if inbox was empty.
+    Safe to call from any thread without locking. }
+function GrabInboxChain(var APool: TCentralPool): PInboxNode;
+begin
+  Result := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+end;
+
+{** Process a grabbed inbox chain: return blocks to their spans.
+    Caller must hold spinlock. Returns number of blocks processed. }
+function ProcessInboxChain(var APool: TCentralPool;
+  AChain: PInboxNode; AOpCounter: UInt64): Word;
 var
   LHead, LNext: PInboxNode;
   LIdx: Int32;
   LWasFull: Boolean;
 begin
   Result := 0;
-  { CAS inbox to nil — grab entire chain atomically. }
-  LHead := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+  LHead := AChain;
   while LHead <> nil do
   begin
     LNext := LHead^.FNext;
