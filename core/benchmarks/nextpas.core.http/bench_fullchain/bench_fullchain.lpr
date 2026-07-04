@@ -7,7 +7,6 @@ program bench_fullchain;
 {$I nextpas.core.settings.inc}
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.base,
   nextpas.core.text.conv,

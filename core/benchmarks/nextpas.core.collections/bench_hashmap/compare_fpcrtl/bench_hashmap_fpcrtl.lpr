@@ -1,7 +1,7 @@
 program bench_hashmap_fpcrtl;
 {$mode objfpc}{$H+}
 {$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf, sysutils;
+uses nextpas.core.bench, nextpas.core.bench.intf;
 const N = 100000; HASH_SIZE = 131072;
 type
   PEntry = ^TEntry;

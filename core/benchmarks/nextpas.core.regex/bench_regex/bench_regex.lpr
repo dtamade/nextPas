@@ -1,6 +1,6 @@
 program bench_regex;
 {$I nextpas.core.settings.inc}
-uses SysUtils, nextpas.core.bench, nextpas.core.regex, nextpas.core.text.base;
+uses nextpas.core.bench, nextpas.core.regex, nextpas.core.text.base;
 
 const
   INPUT_SIZE = 10000;

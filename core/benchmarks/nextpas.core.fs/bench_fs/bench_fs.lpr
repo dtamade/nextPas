@@ -1,7 +1,8 @@
 program bench_fs;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.bench, nextpas.core.bench.intf,
-  SysUtils, nextpas.core.time.base, nextpas.core.io.intf, nextpas.core.io.buffer,
+uses
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.io.intf, nextpas.core.io.buffer,
   nextpas.core.fs.base, nextpas.core.fs.intf, nextpas.core.fs.stream,
   nextpas.core.fs.util, nextpas.core.platform.files.base,
   nextpas.core.platform.files, nextpas.core.platform.fs;

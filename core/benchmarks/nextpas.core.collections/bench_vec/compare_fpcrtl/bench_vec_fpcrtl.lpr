@@ -1,7 +1,7 @@
 program bench_vec_fpcrtl;
 {$mode objfpc}{$H+}
 {$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf, sysutils;
+uses nextpas.core.bench, nextpas.core.bench.intf;
 const N = 100000;
 var GData: array of Int64;
 procedure InitData;

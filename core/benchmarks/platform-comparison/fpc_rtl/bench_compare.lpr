@@ -1,6 +1,6 @@
 program bench_compare;
 {$mode objfpc}{$H+}
-uses nextpas.core.bench, nextpas.core.bench.intf, SysUtils, Linux, UnixType;
+uses nextpas.core.bench, nextpas.core.bench.intf, SysUtils;
 const TEST_FILE = '/tmp/bench_exists_test.txt'; MMAP_FILE = '/tmp/bench_mmap_1mb.dat';
 var GSink: UInt64;
 procedure Setup;

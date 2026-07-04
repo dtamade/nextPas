@@ -1,7 +1,7 @@
 program bench_http_server;
 {$I nextpas.core.settings.inc}
 uses
-  nextpas.core.thread.init, SysUtils,
+  nextpas.core.thread.init,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.http.base, nextpas.core.http.intf, nextpas.core.http.server,
   nextpas.core.http.middleware, nextpas.core.net, nextpas.core.net.intf,

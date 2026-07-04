@@ -3,7 +3,6 @@ program bench_priorityqueue;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.priorityqueue;
 

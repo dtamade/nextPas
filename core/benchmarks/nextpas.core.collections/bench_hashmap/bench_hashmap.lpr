@@ -3,7 +3,6 @@ program bench_hashmap;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.swiss.i32i32;

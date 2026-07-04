@@ -4,7 +4,7 @@ program bench_protocols;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bench,
   nextpas.core.cookie,
   nextpas.core.sse,

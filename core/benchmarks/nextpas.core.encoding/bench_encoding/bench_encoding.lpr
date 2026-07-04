@@ -3,7 +3,6 @@ program bench_encoding;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.encoding.base64,
   nextpas.core.encoding.hex;

@@ -1,7 +1,7 @@
 program bench_sort_fpcrtl;
 {$mode objfpc}{$H+}
 {$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf, sysutils;
+uses nextpas.core.bench, nextpas.core.bench.intf;
 const N = 10000;
 var
   GRandomData: array[0..N-1] of Integer;

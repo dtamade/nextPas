@@ -3,7 +3,7 @@ program bench_scan;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.bench,
   nextpas.core.platform.time,
   nextpas.core.text.escape,

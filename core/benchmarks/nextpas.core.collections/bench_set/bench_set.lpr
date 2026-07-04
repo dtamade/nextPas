@@ -3,7 +3,6 @@ program bench_set;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.hashset,
   nextpas.core.collections.tree_set,

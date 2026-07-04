@@ -1,7 +1,7 @@
 program bench_stopwatch;
 {$I nextpas.core.settings.inc}
 uses nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.stopwatch, nextpas.core.stopwatch.tick,
+  nextpas.core.time, nextpas.core.time.base, nextpas.core.stopwatch, nextpas.core.stopwatch.tick,
   nextpas.core.stopwatch.tick.unix, nextpas.core.stopwatch.tick.x86_64;
 var GSink: UInt64 = 0;
 procedure BenchStopwatchOverhead(const ACtx: IBenchContext);

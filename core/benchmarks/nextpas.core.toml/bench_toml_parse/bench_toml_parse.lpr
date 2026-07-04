@@ -4,7 +4,7 @@ program bench_toml_parse;
 {$optimization on}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,

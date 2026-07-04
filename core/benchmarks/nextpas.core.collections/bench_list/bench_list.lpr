@@ -3,7 +3,6 @@ program bench_list;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.collections.list,
   nextpas.core.collections.forward_list;
