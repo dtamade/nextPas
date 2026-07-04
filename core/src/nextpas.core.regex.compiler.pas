@@ -524,6 +524,14 @@ begin
     Result.StartClass := startBitmap;
     Result.StartClassSize := CharBitmapPopCount(startBitmap);
   end;
+  { Cache HasAsserts flag for fast DFA path selection }
+  Result.HasAsserts := False;
+  for i := 0 to C.Count - 1 do
+    if Result.Code[i].Op = opAssert then
+    begin
+      Result.HasAsserts := True;
+      Break;
+    end;
 end;
 
 end.

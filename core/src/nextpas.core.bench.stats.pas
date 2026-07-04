@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试统计分析器
+ *
+ * 提供均值、中位数、标准差、Mann-Whitney U 检验、
+ * Welch t 检验、OLS 回归等统计分析功能。
+ *}
 unit nextpas.core.bench.stats;
 
 {$mode objfpc}{$H+}
@@ -249,8 +255,8 @@ function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchS
 var
   LSorted: TDoubleArray;
   LLen: Integer;
-  LSum, LSumSq, LCompensation, LNext, LTemp: Double;
   LMean, LVariance: Double;
+  LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
   I: Integer;
 begin
@@ -264,22 +270,21 @@ begin
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
 
-  { Single pass: compute sum and Kahan-compensated sum-of-squares for variance }
-  LSum := 0.0;
-  LSumSq := 0.0;
-  LCompensation := 0.0;
+  { Welford's single-pass algorithm for numerically stable variance.
+    Reference: Welford, B.P. (1962). "Note on a Method for Calculating
+    Corrected Sums of Squares and Products". Technometrics. }
+  LMean := 0.0;
+  LM2 := 0.0;  { sum of squared deviations from current mean }
   for I := 0 to High(ASamples) do
   begin
-    LSum := LSum + ASamples[I];
-    LNext := Sqr(ASamples[I]) - LCompensation;
-    LTemp := LSumSq + LNext;
-    LCompensation := (LTemp - LSumSq) - LNext;
-    LSumSq := LTemp;
+    LDelta := ASamples[I] - LMean;
+    LMean := LMean + LDelta / (I + 1);
+    LDelta2 := ASamples[I] - LMean;
+    LM2 := LM2 + LDelta * LDelta2;
   end;
 
-  LMean := LSum / LLen;
   if LLen > 1 then
-    LVariance := (LSumSq - LLen * Sqr(LMean)) / (LLen - 1)  { sample variance via computational formula }
+    LVariance := LM2 / (LLen - 1)  { sample variance }
   else
     LVariance := 0.0;
 

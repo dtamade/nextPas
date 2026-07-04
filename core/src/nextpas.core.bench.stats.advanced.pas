@@ -12,7 +12,8 @@ unit nextpas.core.bench.stats.advanced;
 interface
 
 uses
-  nextpas.core.bench.base;
+  nextpas.core.bench.base,
+  nextpas.core.platform;
 
 type
   {**
@@ -170,7 +171,8 @@ implementation
 
 uses
   nextpas.core.math.trig,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.time.cpu;
 
 const
   TINV90_DATA: array[0..29] of Double = (
@@ -574,9 +576,9 @@ begin
   if LIterations <= 0 then
     LIterations := 1;
 
-  // 使用固定种子保证可复现性（类似 scipy.stats.bootstrap 的 random_state）。
-  // 真正的 bootstrap 质量取决于迭代次数，而非种子随机性。
-  LSeed := 12345;
+  // Use platform_monotonic_ns as seed for nanosecond-precision randomness.
+  // Fixed seeds make bootstrap CIs deterministic and don't reflect sampling variability.
+  LSeed := platform_monotonic_ns;
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin

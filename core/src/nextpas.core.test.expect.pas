@@ -51,7 +51,8 @@ type
     function ToBeLessThanD(const AExpected: Double): IExpectation;
     function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
     function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -63,11 +64,19 @@ type
     { Double equality within epsilon (like CheckEqual(Double)). }
     function ToEqualD(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
+    { Relative tolerance: |a-b| <= ARelEps * max(|a|, |b|).
+      Better than ToBeNear for values spanning wide ranges. }
+    function ToBeNearRel(const AExpected: Double;
+      const ARelEps: Double = 1e-9): IExpectation;
+    function ToNotBeNearRel(const AExpected: Double;
+      const ARelEps: Double = 1e-9): IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
+{ Alias for Expect(string) — explicit naming for clarity. }
+function ExpectStr(const AValue: string): IExpectation;
 function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
@@ -144,7 +153,8 @@ type
     function ToBeLessThanD(const AExpected: Double): IExpectation;
     function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
     function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -153,6 +163,10 @@ type
     function ToEqualPointer(const AExpected: Pointer): IExpectation;
     function ToEqualD(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
+    function ToBeNearRel(const AExpected: Double;
+      const ARelEps: Double = 1e-9): IExpectation;
+    function ToNotBeNearRel(const AExpected: Double;
+      const ARelEps: Double = 1e-9): IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -567,7 +581,10 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+function TExpectation.ToBeInRangeD(const ALow, AHigh: Double;
+  const AEpsilon: Double): IExpectation;
+var
+  LIn, LInEps: Boolean;
 begin
   RequireKind(ekDouble, 'ToBeInRangeD');
   if IsNan(FDoubleValue) or IsNan(ALow) or IsNan(AHigh) then
@@ -576,7 +593,14 @@ begin
   if ALow > AHigh then
     InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) +
       ') > high (' + FloatToStr(AHigh) + ')');
-  CheckMatch((FDoubleValue >= ALow) and (FDoubleValue <= AHigh),
+  LIn := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
+  { Epsilon tolerance: accept values slightly outside the range }
+  if not LIn then
+    LInEps := (Abs(FDoubleValue - ALow) <= AEpsilon) or
+              (Abs(FDoubleValue - AHigh) <= AEpsilon)
+  else
+    LInEps := True;
+  CheckMatch(LInEps,
     FloatToStr(FDoubleValue) + ' should not be in [' +
       FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']',
     FloatToStr(FDoubleValue) + ' is not in [' +
@@ -655,9 +679,75 @@ begin
   Result := Self;
 end;
 
+{ ── TExpectation: Relative tolerance ──────────────────────────────────────── }
+
+function TExpectation.ToBeNearRel(const AExpected: Double;
+  const ARelEps: Double): IExpectation;
+var
+  LAbsDiff, LScale: Double;
+begin
+  RequireKind(ekDouble, 'ToBeNearRel');
+  if IsNan(FDoubleValue) or IsNan(AExpected) then
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(FDoubleValue) + ' (NaN)');
+  LAbsDiff := Abs(FDoubleValue - AExpected);
+  LScale := Abs(AExpected);
+  if Abs(FDoubleValue) > LScale then
+    LScale := Abs(FDoubleValue);
+  { Near-zero fallback: when LScale < ARelEps, use absolute comparison }
+  if LScale < ARelEps then
+  begin
+    if FNegated then
+    begin
+      if LAbsDiff <= ARelEps then
+        InternalFail('Expected not near ' + FloatToStr(AExpected) +
+          ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(FDoubleValue));
+    end
+    else
+    begin
+      if LAbsDiff > ARelEps then
+        InternalFail('Expected ' + FloatToStr(AExpected) +
+          ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(FDoubleValue));
+    end;
+  end
+  else
+  begin
+    if FNegated then
+    begin
+      if LAbsDiff <= ARelEps * LScale then
+        InternalFail('Expected not near ' + FloatToStr(AExpected) +
+          ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(FDoubleValue));
+    end
+    else
+    begin
+      if LAbsDiff > ARelEps * LScale then
+        InternalFail('Expected ' + FloatToStr(AExpected) +
+          ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(FDoubleValue));
+    end;
+  end;
+  Result := Self;
+end;
+
+function TExpectation.ToNotBeNearRel(const AExpected: Double;
+  const ARelEps: Double): IExpectation;
+begin
+  RequireKind(ekDouble, 'ToNotBeNearRel');
+  FNegated := not FNegated;
+  try
+    Result := ToBeNearRel(AExpected, ARelEps);
+  finally
+    FNegated := not FNegated;
+  end;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
+begin
+  Result := TExpectation.CreateStr(AValue);
+end;
+
+function ExpectStr(const AValue: string): IExpectation;
 begin
   Result := TExpectation.CreateStr(AValue);
 end;

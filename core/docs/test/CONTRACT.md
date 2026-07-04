@@ -1,37 +1,39 @@
 # nextpas.core.test 代码契约
 
-**模块路径**：`core/src/nextpas.core.test*.pas` + `nextpas.core.testing.pas`（16 个源文件）
-**层级**：L1（依赖 L0: base, text, system, time, atomic, sync, thread, collections, platform）
+**模块路径**：`core/src/nextpas.core.test*.pas`（16 个源文件）
+**层级**：L1（依赖 L0: base, text, sync, atomic, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-04
-**版本**：6.6
+**版本**：6.7
 
 ---
 
-## 1. 接口契约
+## 1. 子模块
 
-### 1.1 子模块
+| 文件 | 职责 | LOC |
+|------|------|-----|
+| test.pas | 门面：re-export 所有公共 API | ~309 |
+| test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~736 |
+| test.check.pas | 过程式 Check* 断言 API（30+ 方法） | ~709 |
+| test.expect.pas | 流式 IExpectation 接口 + TExpectation 实现 | ~776 |
+| test.mock.pas | TMock/TMockState 手动 Mock 框架 | ~881 |
+| test.config.pas | TTestConfig record (22 字段) + IOutputSink + 配置解析 | ~563 |
+| test.runner.pas | TTestSuite/TTestRunner + 串行/并行执行 + Benchmark | ~1988 |
+| test.runner.cli.pas | CLI 参数解析（16 个 flag） | ~374 |
+| test.runner.parallel.pas | 并行 worker + timeout watchdog | ~528 |
+| test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender | ~471 |
+| test.discovery.pas | RTTI VMT 方法表扫描自动发现测试 | ~153 |
+| test.output.pas | ANSI 辅助、glob 匹配、JUnit XML、泄漏报告 | ~1094 |
+| test.output.json.pas | JSON 输出格式 | ~185 |
+| test.output.tap.pas | TAP v13 输出格式 | ~123 |
+| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~95 |
+| testing.pas | **DEPRECATED** v1 兼容层（371 外部调用者，待迁移） | ~133 |
 
-| 文件 | 职责 |
-|------|------|
-| test.base | 基础类型 (TTestEntry, TTestStatus, TBenchContext)、threadvar 状态、栈追踪 |
-| test.config | TTestConfig 配置记录、IOutputSink 接口、TBufferSink |
-| test.check | Check* 过程式断言 API (30+ 方法) |
-| test.expect | IExpectation 流式断言 API (Not_ + 30+ 方法) |
-| test.mock | TMock 手动 mock 框架 (Setup/Verify/RecordCall) |
-| test.discovery | RTTI VMT 方法表自动测试发现 |
-| test.helpers | 便捷辅助 (ExpectFail, WithMock, MakeBufferConfig) |
-| test.output | ANSI 着色、filter 匹配 (glob+hierarchical)、JUnit XML、leak 报告 |
-| test.output.tap | TAP v13 格式输出 |
-| test.output.json | JSON 格式输出 |
-| test.runner | TTestSuite/TTestRunner 串行/并行运行器、benchmark |
-| test.runner.cli | CLI 参数解析 (--filter, --bench, --timeout 等 16 个 flags) |
-| test.runner.context | TTestContext 子测试执行上下文 (ITestContext 实现) |
-| test.runner.parallel | 超时 worker + 并行线程 worker |
-| testing.pas | **DEPRECATED** v1 兼容层 (仅保留 Check/CheckEqual/Fail) |
-| test.pas | Facade re-export 门面 |
+---
 
-### 1.2 核心接口
+## 2. 核心接口
+
+### 2.1 IOutputSink
 
 ```pascal
 IOutputSink = interface
@@ -39,21 +41,13 @@ IOutputSink = interface
   procedure WriteLn(const AText: string);
   procedure Flush;
 end;
+```
 
-ITestContext = interface
-  procedure Run(const AName: string; AProc: TTestProc);
-  procedure Run(const AName: string; AProc: TTestClosure);
-  procedure RunNested(const AName: string; AProc: Pointer);
-  procedure Fail(const AMessage: string);
-  procedure Skip(const AReason: string = '');
-  function  GetTestName: string;
-  property  TestName: string read GetTestName;
-  procedure Log(const AMessage: string);
-  procedure LogF(const AFormat: string; const AArgs: array of const);
-  procedure OnCleanup(AProc: TTestProc);
-  procedure OnCleanup(AProc: TTestClosure);
-end;
+实现：`TStdoutSink`、`TStderrSink`、`TBufferSink`。
 
+### 2.2 IExpectation
+
+```pascal
 IExpectation = interface
   function Not_: IExpectation;
   function ToEqual(const AExpected: string): IExpectation;
@@ -68,15 +62,21 @@ IExpectation = interface
   function ToEndWith(const ASuffix: string): IExpectation;
   function ToBeGreaterThan(const AExpected: Int64): IExpectation;
   function ToBeLessThan(const AExpected: Int64): IExpectation;
+  function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+  function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
   function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
   function ToHaveLength(const AExpected: NativeInt): IExpectation;
   function ToRaise(AExceptionClass: ExceptClass; const AMessage: string = ''): IExpectation;
   function ToNotRaise: IExpectation;
   function ToBeNear(const AExpected: Double; const AEpsilon: Double = 1e-10): IExpectation;
   function ToNotBeNear(const AExpected: Double; const AEpsilon: Double = 1e-10): IExpectation;
+  function ToBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
+  function ToNotBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
   function ToBeGreaterThanD(const AExpected: Double): IExpectation;
   function ToBeLessThanD(const AExpected: Double): IExpectation;
-  function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+  function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+  function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+  function ToBeInRangeD(const ALow, AHigh: Double; const AEpsilon: Double = 1e-10): IExpectation;
   function ToContainCI(const ASubstr: string): IExpectation;
   function ToStartWithCI(const APrefix: string): IExpectation;
   function ToEndWithCI(const ASuffix: string): IExpectation;
@@ -84,7 +84,13 @@ IExpectation = interface
   function ToEqualPointer(const AExpected: Pointer): IExpectation;
   function ToEqualD(const AExpected: Double; const AEpsilon: Double = 1e-10): IExpectation;
 end;
+```
 
+工厂函数：`Expect(string)`, `ExpectStr`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc`。
+
+### 2.3 IMockSetup / IMockVerify
+
+```pascal
 IMockSetup = interface
   function Returns(const AValue: string): IMockSetup;
   function ReturnsInt(const AValue: Int64): IMockSetup;
@@ -103,143 +109,157 @@ IMockVerify = interface
   function  CalledBefore(const AOtherMethod: string): IMockVerify;
   function  CalledAfter(const AOtherMethod: string): IMockVerify;
   function  CalledWith(const AArgs: array of string): IMockVerify;
+  function  CalledWith(const AArgs: array of TMockValue): IMockVerify;
   function  CalledExactlyWith(ACount: Integer; const AArgs: array of string): IMockVerify;
+  function  CalledExactlyWith(ACount: Integer; const AArgs: array of TMockValue): IMockVerify;
 end;
 ```
 
-### 1.3 核心类型
+### 2.4 ITestContext
 
 ```pascal
-TTestStatus = (tsPassed, tsFailed, tsSkipped, tsError);
+ITestContext = interface
+  procedure Run(const AName: string; AProc: TTestProc);
+  procedure Run(const AName: string; AProc: TTestClosure);
+  procedure Fail(const AMessage: string);
+  procedure Skip(const AReason: string = '');
+  function  GetTestName: string;
+  procedure Log(const AMessage: string);
+  procedure OnCleanup(AProc: TTestProc);
+  procedure OnCleanup(AProc: TTestClosure);
+end;
+```
 
+---
+
+## 3. 核心类型
+
+### 3.1 TTestConfig (22 字段)
+
+```pascal
 TTestConfig = record
-  FilterPattern: string;
-  TagFilter: string;
-  TimeoutMs: UInt64;
-  AnsiMode: TAnsiMode;          // amAuto, amOn, amOff
-  OutSink: IOutputSink;
-  ErrSink: IOutputSink;
-  RetryCount: Integer;
-  MaxParallelWorkers: Integer;  // 0=unlimited, >0=max threads
-  RepeatAllCount: Integer;      // --count=N
-  SlowTestCount: Integer;       // top N slowest (default=5)
-  ShuffleSeed: Integer;         // 0=off, -1=random, >0=deterministic
-  FailFast: Boolean;
-  ListMode: Boolean;
-  ShortMode: Boolean;           // --short
-  ShowProgress: Boolean;        // [N/Total] prefix
-  MaxFailures: Integer;         // 0=unlimited
-  JsonOutput: Boolean;
-  VerboseMode: Boolean;         // --verbose
-  RunTimeoutSec: Integer;       // global suite timeout
-  BenchEnabled: Boolean;
-  BenchTimeMs: Integer;         // default 1000ms
-  BenchMem: Boolean;
-  RunPattern: string;           // --run: exact name match
+  FilterPattern: string;       { --filter: glob 模式匹配测试名 }
+  TagFilter    : string;       { --tag: 逗号分隔标签过滤 }
+  TimeoutMs    : UInt64;       { 每个测试的超时 (ms) }
+  AnsiMode     : TAnsiMode;    { amAuto/amOn/amOff }
+  OutSink      : IOutputSink;  { 标准输出接收器 }
+  ErrSink      : IOutputSink;  { 错误输出接收器 }
+  RetryCount   : Integer;      { 重试次数 (0=不重试) }
+  MaxParallelWorkers: Integer; { 0=无限, >0=批 dispatch 最大并发数 }
+  RepeatAllCount: Integer;     { --count=N: 全量重复 N 次 }
+  SlowTestCount : Integer;     { 显示最慢 N 个测试 (默认 5) }
+  ShuffleSeed   : Integer;     { 0=关闭, -1=随机, >0=指定种子 }
+  FailFast      : Boolean;     { --failfast: 首次失败立即停止 }
+  ListMode      : Boolean;     { --list: 列出测试名不运行 }
+  ShortMode     : Boolean;     { --short: 跳过 ShortSkip 标记的测试 }
+  ShowProgress  : Boolean;     { --progress: 显示 [N/Total] 进度 }
+  MaxFailures   : Integer;     { --failures-max: 最大失败数 }
+  JsonOutput    : Boolean;     { --json: 输出 JSON 报告 }
+  VerboseMode   : Boolean;     { --verbose: 显示 [PASS]/[FAIL]/[SKIP] }
+  RunTimeoutSec : Integer;     { --timeout: 全局 suite 超时 (秒) }
+  BenchEnabled  : Boolean;     { --bench: 运行 benchmark }
+  BenchTimeMs   : Integer;     { benchmark 目标时长 (默认 1000ms) }
+  BenchMem      : Boolean;     { --benchmem: 报告每次操作内存分配 }
+  RunPattern    : string;      { --run: 精确测试名匹配 (大小写无关) }
 end;
-
-TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail, ekBench);
-TMockValueKind = (mvUnset, mvString, mvInt64, mvBool, mvDouble);
 ```
 
-### 1.4 TTestSuite API 摘要
+### 3.2 TTestSuite (record, 值类型)
 
 ```pascal
-// ⚠️ With* methods return a NEW record — must assign: Suite := Suite.WithSetup(Proc);
-function WithConfig/WithSetup/WithTeardown/WithBeforeEach/WithAfterEach/WithEachCleanup: TTestSuite;
+TTestSuite = record
+  Name      : string;
+  Config    : TTestConfig;
+  Tests     : specialize TArray<TTestEntry>;
+  Setup/SetupClosure: TTestProc / TTestClosure;
+  Teardown/TeardownClosure: TTestProc / TTestClosure;
+  BeforeEach/BeforeEachClosure: TTestProc / TTestClosure;
+  AfterEach/AfterEachClosure: TTestProc / TTestClosure;
+  EachCleanups: specialize TArray<TTestClosure>;  { LIFO cleanup }
+  StubAllocations/FixtureAllocations: specialize TArray<Integer>;
+  LastRunPassed/HasRun/FCleanupDone: Boolean;
+  LastPass/LastFail/LastSkip: Integer;
+end;
+```
 
-// In-place registration (no return value needed):
-procedure Test(AName, AProc);                    // 10 overloads: Proc/Closure + Retry + Tags + DisplayName
-procedure TestRepeat(AName, AProc, ARepeatCount);
-procedure TestSubtest(AName, ASubtestProc);
-procedure TestTable(AName, ACases, AProc);
-procedure ShouldFail(AName, AProc, AMsg = '');   // Rust #[should_panic]
-procedure ShortSkip(AName, AProc);               // Go -short
-procedure Bench(AName, ABenchProc);
-procedure Skip(AName, AReason = '');
-procedure Cleanup(AProc);                        // LIFO cleanup (Go t.Cleanup)
-procedure SetSetup/SetTeardown/OnBeforeEach/OnAfterEach(AProc);
+**⚠️ With* 方法返回新 record，必须赋值**：`Suite := Suite.WithSetup(Proc);`
 
-// Execution:
-function Run: Boolean;
-function RunParallel(APool: IThreadPool): Boolean;
-function RunBenchmarks(out AResults: TBenchResults): Boolean;
+### 3.3 TTestRunner (record)
+
+```pascal
+TTestRunner = record
+  Name     : string;
+  Suites   : specialize TArray<TTestSuite>;
+  TotalPass/TotalFail/TotalSkip: Integer;
+  HasRun   : Boolean;
+end;
 ```
 
 ---
 
-## 2. 不变量
+## 4. 不变量
 
-- `--filter` 支持 glob (`*`, `?`)、brace expansion (`{a,b}`)、hierarchical (`Parent/Sub`)、逗号分隔多模式
-- `--run` 精确名称匹配 (case-insensitive)，优先级高于 `--filter`
-- `--tag` 逗号分隔 tag 过滤 (OR 语义)
-- `--timeout` 超时后标记 tsError（使用 platform_thread_timedjoin，零 CPU 浪费）
-- `--failfast` 首次失败立即停止（suite 级 + test 级双级）
-- `--failures-max=N` 跨 suite 累计 N 次失败后停止
-- `--shuffle` Fisher-Yates 随机（种子 -1=random，>0=deterministic）
-- `--count=N` 全部测试重复 N 次
-- `--short` 跳过 ShortSkip 标记的测试
-- `--progress` 显示 [N/Total] 进度
-- `--verbose` 显示 [PASS]/[FAIL]/[SKIP] + 耗时
-- `--bench[=pattern]` 启用 benchmark（自适应 N 缩放，Go 算法等价）
-- `--benchtime=Nms/Ns` 每个 benchmark 目标时间（默认 1s）
-- `--benchmem` 显示 B/op + allocs/op
-- `--json` stdout 输出 JSON 报告
-- `--list` 列出测试名不运行
-- BeforeEach/AfterEach 在串行模式与 test 同线程；并行模式每 worker 独立执行
-- EachCleanups LIFO 顺序执行，失败/成功均执行
-- NaN 在 Check*/Expect* 中统一视为不等于任何值（包括自身）
-- ShouldFail 测试：抛任何 Exception → tsPassed，不抛 → tsFailed
-- Subtests/Benchmarks 在 RunParallel 模式下自动跳过
+- `--filter` 使用 glob 模式匹配（`*` 通配符，大小写无关）
+- `--tag` 逗号分隔，任意匹配即通过
+- `--timeout` 每个测试独立超时（watchdog 子线程，非轮询）
+- `--timeout` 全局 suite 超时（`RunTimeoutSec`）
+- `--failfast` 首次失败立即停止当前 suite
+- `--failures-max` 总失败数达上限后停止
+- `--shuffle` 使用 Fisher-Yates 洗牌
+- `--count=N` 全量重复 N 次，每次独立计数
+- Benchmark 使用 adaptive N scaling（Go testing.B 算法）
+- BeforeEach/AfterEach 在同线程执行（并行模式下每个 worker 线程独立执行）
+- EachCleanups 以 LIFO 顺序执行（Go t.Cleanup 等价）
+- ShouldFail：proc 抛出任意异常则通过（Rust #[should_panic] 等价）
 
 ---
 
-## 3. 错误处理
+## 5. 线程安全
 
-- 测试失败抛 `EAssertionFailed`（由 Check*/Expect* 内部抛出）
-- 测试跳过抛 `ETestSkipped`（继承 EAbort，不被 CheckRaises 捕获）
-- 其他异常分类为 tsError（unexpected exception）
-- 配置解析：CLI 参数缺失/格式错误静默使用默认值（无 ETestConfigError）
-- Mock 验证失败抛 `EAssertionFailed`
-- 栈追踪：ExceptProc hook 过滤框架帧，仅保留用户代码的 file:line
-
----
-
-## 4. 线程安全
-
-- TTestSuite/TTestRunner 的 Run/RunParallel 从主线程调用
-- 并行模式：每个 worker 独立 TTestContext，GExecState 为 threadvar
-- GStubRegistry/GFixtureRegistry：NOT thread-safe，仅主线程访问
-- 并行输出通过 IMutex 保护 stdout
-- 超时 worker 使用 platform_thread_timedjoin（非轮询）
-- 真正卡死的 worker 通过 platform_thread_detach 释放，LRec 泄漏并计入 GTimeoutLeakCount
+- `GExecState` 是 threadvar，每线程独立
+- 串行模式：主线程执行，GExecState 在 finally 块内 Dispose
+- 并行模式：BeginThread 创建 worker，每个 worker 在 finally 块内 Dispose GExecState
+- 并行模式 mutex 保护共享输出（SafeRelease 模式）
+- `GStubRegistry` / `GFixtureRegistry` 非线程安全（仅主线程操作）
+- 并行模式不支持 subtest 和 benchmark（优雅跳过 + EmitParallelSkip）
 
 ---
 
-## 5. 内存管理
+## 6. 内存管理
 
-- IExpectation/TMock 通过引用计数自动释放（TInterfacedObject）
-- TTestEntry 的 TableCase/TableProc 通过 New/Dispose 管理（FCleanupDone 防重）
-- DiscoverTests 的 MethodStub 通过 New/GStubRegistry 管理
-- DiscoverTests 的 Fixture 对象通过 GFixtureRegistry 管理（finalization 安全网）
-- GExecState threadvar 在 finalization 中 Dispose
-- heaptrc 模式下 ReportLeakIfAny 检测并报告未释放内存
+- IExpectation 通过 COM 引用计数自动释放
+- TMock 由调用方手动 Free（WithMock 辅助确保异常时也释放）
+- GExecState threadvar：New 分配，Dispose 释放（finally 块内）
+- TTestSuite.Test 注册的 closure 由 record 析构时自动释放
+- DiscoverTests 分配的 PMethodStub 由 CleanupTableAllocations 释放
+- FCleanupDone guard 防止 --count=N 重跑时 double-free
+- CleanupTableAllocations 在 RunWithResult/RunParallelWithResult 结束时调用
 
 ---
 
-## 6. 测试覆盖
+## 7. 输出格式
 
-10 个套件，~550+ 测试：
+| 格式 | 触发 | 文件 |
+|------|------|------|
+| ANSI (默认) | 自动检测 TTY | test.output.pas |
+| TAP v13 | `--tap` | test.output.tap.pas |
+| JSON | `--json` | test.output.json.pas |
+| JUnit XML | `WriteJUnitXML` API | test.output.pas |
 
-| 套件 | 覆盖范围 | 测试数 |
-|------|---------|--------|
-| test_assertions | Check* 断言 + NaN/边界/epsilon | ~103 |
-| test_expect | IExpectation 流式 API + NaN/Pointer/Double | ~115 |
-| test_mock | TMock 录制/验证/返回值/typed/ResetAll | ~67 |
-| test_output | ANSI/filter/glob/hierarchical/JUnit/TAP/JSON | ~70 |
-| test_runner | 全特性集成: lifecycle/timeout/shuffle/failfast/bench/parallel | ~101 |
-| test_lifecycle | TestTable/TTestClosure/facade 完整性 | ~15 |
-| test_parallel | 并行执行/lifecycle/retry/skip/batch | ~10 |
-| test_diagnostics | 错误诊断/stack trace/Double/Error vs Failure | ~15 |
-| test_advanced | RTTI discovery/retry/TAP/JSON | ~13 |
-| test_subtests | 嵌套子测试/ITestContext/failure 传播/cleanup | ~15 |
+---
+
+## 8. 测试覆盖
+
+| 套件 | 测试数 | 覆盖范围 |
+|------|--------|----------|
+| test_assertions | 108 | Check* 全方法 |
+| test_expect | 119 | IExpectation 全方法 + negation |
+| test_mock | 75 | TMock/IMockSetup/IMockVerify + typed CalledWith |
+| test_lifecycle | 15 | Setup/Teardown/BeforeEach/AfterEach/Cleanup |
+| test_diagnostics | 15 | 错误消息质量 + 字符串差异 |
+| test_output | 70 | ANSI/glob/JUnit/leak report |
+| test_runner | ~60 | CLI/filter/shuffle/retry/timeout/parallel |
+| test_parallel | 8 | 并行执行 + timeout |
+| test_subtests | ~10 | Run(RunNested + CleanupTableAllocations |
+| test_advanced | ~13 | DiscoverTests/TestFixture/ShouldFail/TestTable |
+| **总计** | **~500+** | **0 泄漏**（test_assertions 32B 是 FPC artifact） |

@@ -319,7 +319,7 @@ begin
   CheckContains(LReport, 'HashMap.Put');
   CheckContains(LReport, 'HashMap.Get(hit)');
   CheckContains(LReport, 'x');
-  CheckContains(LReport, 'slower');
+  CheckContains(LReport, 'SLOWER');
   Check(Pos('HashMap.Put', LReport) < Pos('HashMap.Get(hit)', LReport),
     'First comparison appears before second');
 end;
@@ -472,6 +472,30 @@ begin
   CheckContains(LSVG, 'Boxplot Constant');
 end;
 
+procedure TestGenerateBoxPlot_SmallSamples;
+{ CR-23: Verify boxplot works correctly with 2-3 samples using linear interpolation }
+var
+  LSamples: TDoubleArray;
+  LSVG: string;
+begin
+  { 2 elements: Q1=first, Median=avg, Q3=second }
+  SetLength(LSamples, 2);
+  LSamples[0] := 10.0;
+  LSamples[1] := 20.0;
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'TwoElem');
+  Check(Length(LSVG) > 0, 'GenerateBoxPlot with 2 elements produces SVG');
+  CheckContains(LSVG, '<svg');
+
+  { 3 elements: Q1=interpolated, Median=middle, Q3=interpolated }
+  SetLength(LSamples, 3);
+  LSamples[0] := 10.0;
+  LSamples[1] := 20.0;
+  LSamples[2] := 30.0;
+  LSVG := GGenerator.GenerateBoxPlot(LSamples, 'ThreeElem');
+  Check(Length(LSVG) > 0, 'GenerateBoxPlot with 3 elements produces SVG');
+  CheckContains(LSVG, '<svg');
+end;
+
 procedure TestSanitizeTSVField;
 var
   LResults: array of TBenchResult;
@@ -515,8 +539,8 @@ begin
 
   CheckContains(LReport, 'Baseline Comparison');
   CheckContains(LReport, 'Sort.1K');
-  CheckContains(LReport, 'faster');
-  Check(Pos('slower', LReport) = 0, 'Faster report does not show slower');
+  CheckContains(LReport, 'FASTER');
+  Check(Pos('SLOWER', LReport) = 0, 'Faster report does not show slower');
 end;
 
 procedure TestGenerateComparisonReport_SameRatio;
@@ -557,8 +581,8 @@ begin
 
   CheckContains(LReport, 'Memcpy');
   CheckContains(LReport, 'same');
-  Check(Pos('slower', LReport) = 0, 'Not significant report does not show slower');
-  Check(Pos('faster', LReport) = 0, 'Not significant report does not show faster');
+  Check(Pos('SLOWER', LReport) = 0, 'Not significant report does not show slower');
+  Check(Pos('FASTER', LReport) = 0, 'Not significant report does not show faster');
 end;
 
 procedure TestGenerateChart_AllSkipped;
@@ -668,6 +692,7 @@ begin
     T.Test('to benchstat', @TestToBenchstat);
     T.Test('to cross-language HTML', @TestToCrossLanguageHTML);
     T.Test('generate box plot', @TestGenerateBoxPlot);
+    T.Test('box plot small samples', @TestGenerateBoxPlot_SmallSamples);
     T.Test('to HTML with box plot', @TestToHTMLWithBoxPlot);
     T.Test('generate comparison report', @TestGenerateComparisonReport);
     T.Test('comparison report faster', @TestGenerateComparisonReport_Faster);

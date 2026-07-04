@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试框架门面
+ *
+ * 提供 TBenchSuite 流式构建器和 TBenchResults 结果集合，
+ * 是 bench 模块的统一入口。
+ *}
 unit nextpas.core.bench;
 
 {$mode objfpc}{$H+}
@@ -713,7 +719,7 @@ var
   LPValue: Double;
   I, J: Integer;
 begin
-  // 预分配最大可能长度（结果数和基线数的较小值）
+  // 预分配最大可能长度（名称匹配的结果-基线对数）
   if FResultCount < FBaselineCount then
     SetLength(LComparisons, FResultCount)
   else

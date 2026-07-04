@@ -1197,7 +1197,8 @@ begin
     LAppender.Free;
     { Dispose thread-local GExecState allocated by SetTestContext.
       Must be inside finally — Exit (setup failure) skips code after finally.
-      Matches the parallel worker's cleanup in its finally block. }
+      Matches the parallel worker's cleanup in its finally block
+      (runner.parallel.pas:494-501). }
     if GExecState <> nil then
     begin
       Dispose(GExecState);

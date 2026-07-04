@@ -41,6 +41,7 @@ type
     FProgram: TRegexProgram;
     FTeddy: TTeddyMatcher;
     FValid: Boolean;
+    FDfaCache: Pointer;  { PDfaCache — lazily allocated, reused across IsMatch calls }
   public
     class function Compile(const APattern: string): TRegex; static;
     class function Compile(const APattern: string; AFlags: TRegexFlags): TRegex; static;
@@ -88,6 +89,7 @@ begin
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
   Result.FTeddy.PatternCount := 0;
+  Result.FDfaCache := nil;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
@@ -115,6 +117,7 @@ begin
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
   Result.FTeddy.PatternCount := 0;
+  Result.FDfaCache := nil;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
@@ -196,7 +199,14 @@ begin
     end;
     Exit(False);
   end;
-  Result := DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
+  { Lazy-allocate DFA cache for reuse across calls }
+  if FDfaCache = nil then
+  begin
+    FDfaCache := AllocMem(SizeOf(TDfaCache));
+    DfaCacheInit(PDfaCache(FDfaCache)^, Length(FProgram.Code));
+  end;
+  Result := DfaIsMatchCached(FProgram, PAnsiChar(AInput), Length(AInput),
+    PDfaCache(FDfaCache)^);
 end;
 
 function TRegex.Find(const AInput: string): TMatch;
@@ -332,7 +342,13 @@ begin
   end;
   if FProgram.NumCaptures = 0 then
   begin
-    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
+    if FDfaCache = nil then
+    begin
+      FDfaCache := AllocMem(SizeOf(TDfaCache));
+      DfaCacheInit(PDfaCache(FDfaCache)^, Length(FProgram.Code));
+    end;
+    Result := DfaFindAllCached(FProgram, PAnsiChar(AInput), Length(AInput),
+      PDfaCache(FDfaCache)^, AMaxMatches);
     Exit;
   end;
   Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);

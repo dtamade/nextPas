@@ -327,41 +327,74 @@ end;
 
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
-{ Simple selection: scan AResults up to ACount times, each time picking the
-  highest-duration entry not yet selected. O(ACount * N) but ACount is tiny. }
+{ Returns up to ACount slowest tests, sorted descending by Duration.
+  Uses full sort when K is large relative to N, selection scan otherwise. }
 var
+  LCopy: TTestResults;
+  LCount, I, J, LBestIdx: Integer;
   LUsed: array of Boolean;
-  I, J, LBestIdx: Integer;
-  LCount: Integer;
+  LTemp: TTestResult;
 begin
   if (ACount <= 0) or (Length(AResults) = 0) then
     Exit(nil);
   LCount := Length(AResults);
   if ACount > LCount then
     ACount := LCount;
-  SetLength(LUsed, LCount);
-  SetLength(Result, ACount);
-  for I := 0 to ACount - 1 do
+  { For small K relative to N, selection is O(K*N) which is fine.
+    For larger K, just sort a copy. Threshold: K*4 > N → sort. }
+  if ACount * 4 > LCount then
   begin
-    LBestIdx := -1;
-    for J := 0 to LCount - 1 do
+    { Full copy + insertion sort (small arrays, O(N^2) worst but fast in practice) }
+    SetLength(LCopy, LCount);
+    for I := 0 to LCount - 1 do
+      LCopy[I] := AResults[I];
+    for I := 1 to LCount - 1 do
     begin
-      if LUsed[J] then Continue;
-      if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
-        LBestIdx := J;
+      LTemp := LCopy[I];
+      J := I;
+      while (J > 0) and (LCopy[J - 1].Duration < LTemp.Duration) do
+      begin
+        LCopy[J] := LCopy[J - 1];
+        Dec(J);
+      end;
+      LCopy[J] := LTemp;
     end;
-    if LBestIdx < 0 then
+    SetLength(Result, ACount);
+    for I := 0 to ACount - 1 do
+      Result[I] := LCopy[I];
+    { Trim trailing zero-duration entries }
+    while (ACount > 0) and (Result[ACount - 1].Duration = 0) do
     begin
-      SetLength(Result, I);
-      Exit;
+      Dec(ACount);
+      SetLength(Result, ACount);
     end;
-    LUsed[LBestIdx] := True;
-    Result[I] := AResults[LBestIdx];
-    { Stop if the next best has 0 duration — no more meaningful entries }
-    if AResults[LBestIdx].Duration = 0 then
+  end
+  else
+  begin
+    { Selection scan for small K — O(K*N) }
+    SetLength(LUsed, LCount);
+    SetLength(Result, ACount);
+    for I := 0 to ACount - 1 do
     begin
-      SetLength(Result, I);
-      Exit;
+      LBestIdx := -1;
+      for J := 0 to LCount - 1 do
+      begin
+        if LUsed[J] then Continue;
+        if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
+          LBestIdx := J;
+      end;
+      if LBestIdx < 0 then
+      begin
+        SetLength(Result, I);
+        Exit;
+      end;
+      LUsed[LBestIdx] := True;
+      Result[I] := AResults[LBestIdx];
+      if AResults[LBestIdx].Duration = 0 then
+      begin
+        SetLength(Result, I);
+        Exit;
+      end;
     end;
   end;
 end;
@@ -369,16 +402,54 @@ end;
 procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
   ASeed: Integer);
 { Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random.
-  ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence. }
+  ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence.
+  On Unix, reads seed from /dev/urandom for better entropy.
+  On other platforms, falls back to GetTickCount64 mixed with stack address. }
 var
   I, J, N: Integer;
   LSeed: Integer;
   LTemp: TTestEntry;
+
+  function ReadRandomSeed: Integer;
+  { Best-effort entropy source. Falls back to tick count if unavailable. }
+  var
+    F: file;
+    LBytes: array[0..3] of Byte;
+    LRead: Integer;
+  begin
+    {$IFDEF UNIX}
+    Assign(F, '/dev/urandom');
+    {$I-}
+    Reset(F, 1);
+    {$I+}
+    if IOResult = 0 then
+    begin
+      BlockRead(F, LBytes, 4, LRead);
+      Close(F);
+      if LRead = 4 then
+      begin
+        Result := Integer((Cardinal(LBytes[0]) shl 24) or
+                          (Cardinal(LBytes[1]) shl 16) or
+                          (Cardinal(LBytes[2]) shl 8) or
+                          Cardinal(LBytes[3]));
+        Result := Result and $7FFFFFFF;
+        if Result = 0 then
+          Result := 1;
+        Exit;
+      end;
+    end;
+    {$ENDIF}
+    { Fallback: mix tick count with stack address for less predictability }
+    Result := Integer((GetTickCount64 xor NativeUInt(@LBytes)) and $7FFFFFFF);
+    if Result = 0 then
+      Result := 1;
+  end;
+
 begin
   N := Length(AEntries);
   if N <= 1 then Exit;
   if (ASeed = -1) or (ASeed = 0) then
-    LSeed := Integer(GetTickCount64 and $7FFFFFFF)
+    LSeed := ReadRandomSeed
   else
     LSeed := ASeed;
   { Simple LCG PRNG — not cryptographic, just needs to be uniform }

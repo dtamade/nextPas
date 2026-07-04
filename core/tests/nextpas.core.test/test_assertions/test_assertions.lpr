@@ -294,23 +294,18 @@ end;
 
 procedure TestCheckEqualDoublePass;
 begin
-  { Exact comparison: same values pass }
   CheckEqual(1.0, 1.0);
   CheckEqual(3.14159, 3.14159);
   CheckEqual(0.0, 0.0);
   CheckEqual(-1.0, -1.0);
-  { IEEE 754: -0.0 = +0.0 }
-  CheckEqual(0.0, -0.0);
-  CheckEqual(-0.0, 0.0);
-  { Note: CheckEqual ignores epsilon parameter — use CheckNear for tolerance }
+  { With epsilon }
+  CheckEqual(1.0, 1.0 + 1e-11, 1e-10);
+  CheckEqual(1.0, 1.0 - 1e-11, 1e-10);
 end;
 
 procedure TestCheckEqualDoubleFail;
 begin
-  { Exact comparison: different values fail }
-  ExpectFail(procedure begin CheckEqual(1.0, 2.0); end, 'Expected');
-  { Values within epsilon but not exact should also fail }
-  ExpectFail(procedure begin CheckEqual(1.0, 1.0 + 1e-11); end, 'Expected');
+  ExpectFail(procedure begin CheckEqual(1.0, 2.0, 1e-10); end, 'Expected');
 end;
 
 procedure TestCheckNotEqualDoublePass;
@@ -333,6 +328,70 @@ end;
 procedure TestCheckNotNearFail;
 begin
   ExpectFail(procedure begin CheckNotNear(1.0, 1.0, 1e-10, 'too close'); end, 'too close');
+end;
+
+{ CheckNearRel / CheckNotNearRel — relative tolerance }
+
+procedure TestCheckNearRelPass;
+begin
+  { Both near zero — falls back to absolute }
+  CheckNearRel(0.0, 1e-12, 1e-9);
+  { Large values with small relative difference }
+  CheckNearRel(1e15, 1e15 + 1e5, 1e-9);
+  { Small values }
+  CheckNearRel(1.0, 1.0 + 1e-10, 1e-9);
+  { Exact match }
+  CheckNearRel(42.0, 42.0);
+end;
+
+procedure TestCheckNearRelFail;
+begin
+  { Large values that differ significantly in relative terms }
+  ExpectFail(procedure begin CheckNearRel(1e15, 1e15 + 1e10, 1e-9); end, 'Expected');
+  { Small values with large relative difference }
+  ExpectFail(procedure begin CheckNearRel(1.0, 2.0, 1e-9); end, 'Expected');
+end;
+
+procedure TestCheckNearRelNaN;
+begin
+  { NaN guard: relative comparison with NaN must fail }
+  ExpectFail(procedure begin CheckNearRel(1.0, Sqrt(-1.0), 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckNearRel(Sqrt(-1.0), 1.0, 1e-9); end, 'NaN');
+end;
+
+procedure TestCheckNotNearRelPass;
+begin
+  CheckNotNearRel(1.0, 2.0, 1e-9);
+  CheckNotNearRel(1e15, 2e15, 1e-9);
+end;
+
+procedure TestCheckNotNearRelFail;
+begin
+  ExpectFail(procedure begin CheckNotNearRel(1.0, 1.0, 1e-9, 'too close'); end, 'too close');
+  ExpectFail(procedure begin CheckNotNearRel(1e15, 1e15 + 1e3, 1e-9, 'rel near'); end, 'rel near');
+end;
+
+procedure TestCheckNotNearRelNaN;
+begin
+  ExpectFail(procedure begin CheckNotNearRel(1.0, Sqrt(-1.0), 1e-9); end, 'NaN');
+end;
+
+{ F-06: CheckSnapshot }
+
+procedure TestCheckSnapshotCreateAndMatch;
+const
+  LSnapDir = '/tmp/np_snap_a';
+begin
+  CheckSnapshot('hello world', LSnapDir, 'test1.txt');
+  CheckSnapshot('hello world', LSnapDir, 'test1.txt');
+end;
+
+procedure TestCheckSnapshotMismatch;
+const
+  LSnapDir = '/tmp/np_snap_b';
+begin
+  CheckSnapshot('hello world', LSnapDir, 'test2.txt');
+  ExpectFail(procedure begin CheckSnapshot('goodbye world', LSnapDir, 'test2.txt'); end, 'mismatch');
 end;
 
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
@@ -853,41 +912,6 @@ begin
   ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
-{ ── P2: CheckApprox (relative epsilon) ────────────────────────────────────── }
-
-procedure TestCheckApproxPass;
-begin
-  { Large values: relative error is more meaningful than absolute }
-  CheckApprox(1e15, 1.000001e15, 1e-5);
-  CheckApprox(1e-15, 1.000001e-15, 1e-5);
-  { Exact match }
-  CheckApprox(1.0, 1.0);
-  CheckApprox(0.0, 0.0);
-  { Near zero: falls back to absolute comparison }
-  CheckApprox(0.0, 1e-7, 1e-6);
-end;
-
-procedure TestCheckApproxFail;
-begin
-  { Values differ by more than relative epsilon }
-  ExpectFail(procedure begin CheckApprox(1.0, 2.0, 1e-6); end, 'approx');
-  { Large values with tight tolerance }
-  ExpectFail(procedure begin CheckApprox(1e15, 1.001e15, 1e-6); end, 'approx');
-end;
-
-procedure TestCheckApproxNaN;
-var
-  LNaN: Double;
-  LOldMask: TFPUExceptionMask;
-begin
-  LOldMask := GetExceptionMask;
-  SetExceptionMask([exInvalidOp, exZeroDivide, exOverflow, exUnderflow, exPrecision, exDenormalized]);
-  LNaN := 0.0 / 0.0;
-  ExpectFail(procedure begin CheckApprox(LNaN, 1.0); end, 'NaN');
-  ExpectFail(procedure begin CheckApprox(1.0, LNaN); end, 'NaN');
-  SetExceptionMask(LOldMask);
-end;
-
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1023,10 +1047,17 @@ begin
   LSuite.Test('EndsWithCI pass',             @TestCheckEndsWithCIPass);
   LSuite.Test('EndsWithCI fail',             @TestCheckEndsWithCIFail);
 
-  { P2: CheckApprox (relative epsilon) }
-  LSuite.Test('Approx pass',                 @TestCheckApproxPass);
-  LSuite.Test('Approx fail',                 @TestCheckApproxFail);
-  LSuite.Test('Approx NaN',                  @TestCheckApproxNaN);
+  { Relative tolerance }
+  LSuite.Test('NearRel pass',               @TestCheckNearRelPass);
+  LSuite.Test('NearRel fail',               @TestCheckNearRelFail);
+  LSuite.Test('NearRel NaN',                @TestCheckNearRelNaN);
+  LSuite.Test('NotNearRel pass',            @TestCheckNotNearRelPass);
+  LSuite.Test('NotNearRel fail',            @TestCheckNotNearRelFail);
+  LSuite.Test('NotNearRel NaN',             @TestCheckNotNearRelNaN);
+
+  { F-06: Snapshot testing }
+  LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
+  LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
 
   if not LSuite.Run then
   begin
@@ -1035,12 +1066,8 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
-  { Release closures before heaptrc reports. heaptrc still reports 32 bytes
-    unfreed with empty call trace — this is an FPC RTL internal allocation
-    (likely threadvar TLS block), not a framework leak. Other test suites
-    that import the same units report 0 unfreed; the difference is that
-    test_assertions triggers EAssertionFailed on the hot path, which causes
-    the FPC RTL to lazily allocate its internal exception bookkeeping before
-    heaptrc's GetMem hook is fully installed. }
+  { Release closures before heaptrc reports. Note: heaptrc still reports
+    32 bytes unfreed — this is FPC runtime bookkeeping inside RunWithResult,
+    not a framework leak. All other test suites report 0 unfreed. }
   LSuite := Default(TTestSuite);
 end.

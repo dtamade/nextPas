@@ -18,11 +18,8 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
-{ CheckEqual for Double — IEEE 754 exact comparison (uses = operator).
-  NaN == NaN is false per IEEE 754. -0.0 == +0.0 is true.
-  For floating-point tolerance comparisons, use CheckNear instead.
-  The AEpsilon parameter is kept for backward compatibility but is ignored;
-  this performs exact comparison regardless of AEpsilon value. }
+{ CheckEqual for Double — uses CheckNear (absolute epsilon |a-b| <= AEpsilon).
+  For floating-point tolerance comparisons, use CheckNear directly. }
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 { 3-arg overloads: prepend AMessage on failure (backward compat). }
@@ -36,8 +33,8 @@ procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
-{ CheckNotEqual for Double — values must differ by more than AEpsilon.
-  For floating-point tolerance comparisons, use CheckNotNear instead. }
+{ CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
+  For floating-point tolerance comparisons, use CheckNotNear directly. }
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
@@ -87,26 +84,37 @@ procedure CheckLessOrEqualD(const AValue, AExpected: Double;
   const AEpsilon: Double = 1e-10);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
-  1e-10 is too tight. Callers should pass a larger AEpsilon or use a
-  relative-epsilon variant for magnitude-spanning comparisons. }
+  1e-10 is too tight. Callers should pass a larger AEpsilon or use
+  CheckNearRel (relative tolerance) for magnitude-spanning comparisons. }
 procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure CheckNotNear(const AExpected, AActual: Double;
   const AEpsilon: Double = 1e-10; const AMessage: string = '');
-{ Check that AActual is within relative tolerance of AExpected.
-  Uses |AActual - AExpected| / max(|AExpected|, |AActual|) < AEpsilon.
-  Better for magnitude-spanning comparisons than absolute epsilon. }
-procedure CheckApprox(const AExpected, AActual: Double;
-  const AEpsilon: Double = 1e-6; const AMessage: string = '');
+{ CheckNearRel — relative tolerance: |a-b| <= ARelEps * max(|a|, |b|).
+  Falls back to absolute comparison when both values are near zero. }
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 
+{ ── Snapshot Testing ──────────────────────────────────────────────────────── }
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+{ Compare AActual against a saved snapshot file at ASnapshotDir/ASnapshotName.
+  If the file does not exist, creates it (first-run auto-approval).
+  If the file exists and differs, fails with a diff message.
+  Set NEXTPAS_UPDATE_SNAPSHOTS=1 environment variable to auto-update. }
+
 implementation
 
 uses
-  Math; { IsNan for Double comparison NaN guards }
+  Math,       { IsNan for Double comparison NaN guards }
+  SysUtils;   { GetEnvironmentVariable for snapshot update flag }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -299,46 +307,62 @@ begin
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
 end;
 
-procedure CheckApprox(const AExpected, AActual: Double;
-  const AEpsilon: Double; const AMessage: string);
+procedure CheckNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
 var
-  LDiff, LScale: Double;
+  LAbsDiff, LScale: Double;
 begin
   if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected approx ' + FloatToStr(AExpected) +
-      ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
-  LDiff := Abs(AActual - AExpected);
-  { Relative error: use max(|expected|, |actual|) as scale }
+    InternalFail('Expected ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LAbsDiff := Abs(AActual - AExpected);
   LScale := Abs(AExpected);
   if Abs(AActual) > LScale then
     LScale := Abs(AActual);
-  { Both near zero: fall back to absolute comparison with AEpsilon }
-  if LScale < AEpsilon then
+  { When both values are near zero, LScale ≈ 0 → relative comparison degenerates.
+    Fall back to absolute comparison using ARelEps as absolute tolerance. }
+  if LScale < ARelEps then
   begin
-    if LDiff > AEpsilon then
+    if LAbsDiff > ARelEps then
       FailWithDefault(AMessage,
-        'Expected approx ' + FloatToStr(AExpected) +
-        ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+        'Expected ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
   end
-  else
+  else if LAbsDiff > ARelEps * LScale then
+    FailWithDefault(AMessage,
+      'Expected ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNotNearRel(const AExpected, AActual: Double;
+  const ARelEps: Double; const AMessage: string);
+var
+  LAbsDiff, LScale: Double;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+    InternalFail('Expected not near ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
+  LAbsDiff := Abs(AActual - AExpected);
+  LScale := Abs(AExpected);
+  if Abs(AActual) > LScale then
+    LScale := Abs(AActual);
+  if LScale < ARelEps then
   begin
-    if LDiff / LScale > AEpsilon then
+    if LAbsDiff <= ARelEps then
       FailWithDefault(AMessage,
-        'Expected approx ' + FloatToStr(AExpected) +
-        ' (rel ' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
-  end;
+        'Expected not near ' + FloatToStr(AExpected) +
+        ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+  end
+  else if LAbsDiff <= ARelEps * LScale then
+    FailWithDefault(AMessage,
+      'Expected not near ' + FloatToStr(AExpected) +
+      ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin
-  { IEEE 754 exact comparison: NaN != NaN, -0.0 = +0.0 }
-  if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected ' + FloatToStr(AExpected) +
-      ' but got ' + FloatToStr(AActual) + ' (NaN)');
-  if AExpected <> AActual then
-    InternalFail('Expected ' + FloatToStr(AExpected) +
-      ' but got ' + FloatToStr(AActual));
+  CheckNear(AExpected, AActual, AEpsilon);
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: Double;
@@ -390,7 +414,7 @@ end;
 procedure CheckNotContains(const AHaystack, ANeedle: string);
 begin
   if (Length(ANeedle) = 0) then
-    Exit; { empty needle matches everything — companion to CheckContains }
+    Exit; { empty needle is a no-op — consistent with CheckContains }
   if Pos(ANeedle, AHaystack) > 0 then
     InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
 end;
@@ -656,6 +680,81 @@ end;
 procedure Skip(const AReason: string);
 begin
   InternalSkip(AReason);
+end;
+
+{ ── Snapshot Testing ──────────────────────────────────────────────────────── }
+
+function ReadFileContents(const APath: string; out AContents: string): Boolean;
+var
+  F: TextFile;
+  LLine: string;
+begin
+  Result := False;
+  AContents := '';
+  Assign(F, APath);
+  {$I-}
+  Reset(F);
+  {$I+}
+  if IOResult <> 0 then
+    Exit;
+  while not Eof(F) do
+  begin
+    ReadLn(F, LLine);
+    if AContents <> '' then
+      AContents := AContents + #10;
+    AContents := AContents + LLine;
+  end;
+  Close(F);
+  Result := True;
+end;
+
+procedure WriteFileContents(const APath, AContents: string);
+var
+  F: TextFile;
+begin
+  Assign(F, APath);
+  {$I-}
+  Rewrite(F);
+  {$I+}
+  if IOResult <> 0 then
+    InternalFail('CheckSnapshot: cannot write ' + APath);
+  Write(F, AContents);
+  Flush(F);
+  Close(F);
+end;
+
+procedure CheckSnapshot(const AActual: string;
+  const ASnapshotDir, ASnapshotName: string);
+var
+  LPath, LExisting, LUpdateEnv: string;
+  LShouldUpdate: Boolean;
+begin
+  LPath := ASnapshotDir + '/' + ASnapshotName;
+  LShouldUpdate := GetEnvironmentVariable('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
+  if ReadFileContents(LPath, LExisting) then
+  begin
+    if LShouldUpdate then
+    begin
+      WriteFileContents(LPath, AActual);
+      Exit;
+    end;
+    if AActual <> LExisting then
+    begin
+      { Show first difference for debugging }
+      InternalFail('Snapshot mismatch: ' + LPath +
+        ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
+        StringDiff(LExisting, AActual));
+    end;
+  end
+  else
+  begin
+    { First run — create snapshot directory and file }
+    {$I-}
+    MkDir(ASnapshotDir);
+    {$I+}
+    { Ignore MkDir error if directory already exists }
+    WriteFileContents(LPath, AActual);
+  end;
 end;
 
 end.

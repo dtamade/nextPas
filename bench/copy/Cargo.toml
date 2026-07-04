@@ -1,0 +1,11 @@
+[package]
+name = "copy-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bench]]
+name = "copy_bench"
+harness = false
+
+[dependencies]
+criterion = "0.5"

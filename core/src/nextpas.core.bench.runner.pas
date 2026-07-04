@@ -1,3 +1,9 @@
+{**
+ * @desc 基准测试执行引擎
+ *
+ * 提供 TBenchContext 测量上下文和 TBenchRunner 执行器，
+ * 实现自适应迭代、预热、统计收集等核心测量逻辑。
+ *}
 unit nextpas.core.bench.runner;
 
 {$mode objfpc}{$H+}
@@ -194,9 +200,8 @@ type
     ParamValue: Int64;
   end;
 
-{** PF-07: bridge data is now a file-scope variable (not exported across units),
- *  set/cleared within ExecuteParallelEntry scope.
- *  GBridgeRunner is set alongside so ParallelBenchBridge can access the runner. }
+{** PF-07: bridge data is a file-scope variable (not exported across units),
+ *  set/cleared within ExecuteParallelEntry scope. }
 var
   GBridgeData: TParallelBridgeData;
   GBridgeRunner: TBenchRunner;
@@ -206,7 +211,7 @@ var
  *  CR-10 修复：记录线程起始/结束时间（通过 RecordElapsed），
  *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。
  *
- *  PF-07：桥接数据从 TBenchRunner.FBridgeData 读取，不再使用全局变量。 }
+ *  PF-07：桥接数据从 TBenchRunner.GBridgeData 读取。 }
 procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
 var
   LContext: IBenchContext;
@@ -214,7 +219,7 @@ var
   LIteration: Int64;
   LRunner: TBenchRunner;
 begin
-  { PF-07: runner instance accessed via GBridgeRunner (file-scope, not unit-exported) }
+  { PF-07: runner instance accessed via file-scope GBridgeRunner }
   LRunner := GBridgeRunner;
   if (LRunner = nil) or
      ((not Assigned(GBridgeData.Func)) and (not Assigned(GBridgeData.ParamFunc))) then
@@ -626,7 +631,7 @@ begin
   InitParallelContexts(AEntry.ParallelThreads);
   try
     FParallelBridgeFunc := AEntry.Func;
-    { PF-07: use file-scope GBridgeData instead of unit-exported global }
+    { PF-07: use TBenchRunner class fields instead of file-scope globals }
     GBridgeData.Runner := Self;
     GBridgeData.Func := FParallelBridgeFunc;
     GBridgeData.ParamFunc := AEntry.ParamFunc;
