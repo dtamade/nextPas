@@ -1,6 +1,7 @@
 # nextPas 项目总控计划
 
 > 最后更新：2026-07-05
+> 架构成熟度：[AL1 骨架期] → [AL2 收敛期] | 等级定义：`docs/architecture/architecture-maturity-levels.md`
 > 目标树：`docs/plans/goal-tree.md` | 编译器架构计划：`docs/plans/compiler-architecture-plan.md` | 编译器审计：`docs/plans/compiler-audit.md`
 
 ## 北极星

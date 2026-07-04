@@ -8,8 +8,11 @@
 > 本文件合并了 `compiler-findings.md`（36条量化发现）和 `compiler-architecture-critique.md`（架构哲学审视）。
 > 两份旧文件已归档，请只维护这一份。
 >
+> **架构成熟度**: 当前 [AL1 骨架期] → 目标 [AL2 收敛期]
+> **等级定义**: `docs/architecture/architecture-maturity-levels.md`
+>
 > 关联文档：
-> - 行动计划: `compiler-architecture-plan.md`（15周 5阶段）
+> - 行动计划: `compiler-architecture-plan.md`（15周 5阶段，AL1→AL2）
 > - 技术债看板: `debt-roadmap.md`
 > - 目标树: `goal-tree.md`
 
