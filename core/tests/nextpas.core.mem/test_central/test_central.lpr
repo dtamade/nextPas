@@ -7,7 +7,8 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.test,
-  nextpas.core.mem.central;
+  nextpas.core.mem.central,
+  nextpas.core.mem.cache.thread;
 
 var
   T: TTestSuite;
@@ -183,6 +184,75 @@ begin
   WriteLn('PASS: optimized lookup multiple spans');
 end;
 
+{ --- MPSC Inbox tests --- }
+
+procedure TestMpscInboxInit;
+var
+  LInbox: TMpscInbox;
+begin
+  MpscInboxInit(LInbox);
+  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after init');
+  WriteLn('PASS: MPSC inbox init');
+end;
+
+procedure TestMpscInboxPushDrain;
+var
+  LInbox: TMpscInbox;
+  LBlocks: array[0..9] of Pointer;
+  LDrained: array[0..9] of Pointer;
+  LCount: Word;
+  I: Integer;
+begin
+  MpscInboxInit(LInbox);
+  { Allocate and push 10 blocks. }
+  for I := 0 to 9 do
+  begin
+    GetMem(LBlocks[I], 64);
+    MpscInboxPush(LInbox, LBlocks[I]);
+  end;
+  Check(not MpscInboxIsEmpty(LInbox), 'inbox not empty after push');
+  { Drain all blocks. }
+  LCount := MpscInboxDrain(LInbox, 10, @LDrained[0]);
+  Check(LCount = 10, 'drained 10 blocks');
+  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after drain');
+  { Free all blocks. }
+  for I := 0 to 9 do
+    FreeMem(LDrained[I], 64);
+  WriteLn('PASS: MPSC inbox push/drain');
+end;
+
+procedure TestMpscInboxPartialDrain;
+var
+  LInbox: TMpscInbox;
+  LBlocks: array[0..9] of Pointer;
+  LDrained: array[0..9] of Pointer;
+  LCount: Word;
+  I: Integer;
+begin
+  MpscInboxInit(LInbox);
+  { Allocate and push 10 blocks. }
+  for I := 0 to 9 do
+  begin
+    GetMem(LBlocks[I], 64);
+    MpscInboxPush(LInbox, LBlocks[I]);
+  end;
+  { Drain only 5 blocks. }
+  LCount := MpscInboxDrain(LInbox, 5, @LDrained[0]);
+  Check(LCount = 5, 'drained 5 blocks');
+  Check(not MpscInboxIsEmpty(LInbox), 'inbox not empty after partial drain');
+  { Free drained blocks. }
+  for I := 0 to 4 do
+    FreeMem(LDrained[I], 64);
+  { Drain remaining. }
+  LCount := MpscInboxDrain(LInbox, 10, @LDrained[0]);
+  Check(LCount = 5, 'drained remaining 5 blocks');
+  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after full drain');
+  { Free remaining blocks. }
+  for I := 0 to 4 do
+    FreeMem(LDrained[I], 64);
+  WriteLn('PASS: MPSC inbox partial drain');
+end;
+
 { --- Main --- }
 
 begin
@@ -198,6 +268,9 @@ begin
   T.Test('MRU cache hits same span', @TestMruCacheHitsSameSpan);
   T.Test('page_indexed_lookup', @TestPageIndexedLookup);
   T.Test('page_indexed_lookup_multiple_spans', @TestPageIndexedLookupMultipleSpans);
+  T.Test('mpsc_inbox_init', @TestMpscInboxInit);
+  T.Test('mpsc_inbox_push_drain', @TestMpscInboxPushDrain);
+  T.Test('mpsc_inbox_partial_drain', @TestMpscInboxPartialDrain);
 
   T.Run;
   T.Summary;
