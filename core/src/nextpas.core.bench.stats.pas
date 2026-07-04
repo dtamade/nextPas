@@ -546,19 +546,38 @@ begin
   if LN = 1 then
     Exit(1.0);
 
-  { 1. 合并样本并标记来源 }
+  { 1. 合并样本并标记来源，过滤 NaN }
   SetLength(LCombined, LN);
   SetLength(LGroup, LN);
+  LN := 0;
   for I := 0 to LN1 - 1 do
   begin
-    LCombined[I] := A[I];
-    LGroup[I] := 0;
+    if not IsDoubleNaN(A[I]) then
+    begin
+      LCombined[LN] := A[I];
+      LGroup[LN] := 0;
+      Inc(LN);
+    end;
   end;
-  for I := 0 to LN2 - 1 do
+  LN1 := LN;
+  for I := 0 to Length(B) - 1 do
   begin
-    LCombined[LN1 + I] := B[I];
-    LGroup[LN1 + I] := 1;
+    if not IsDoubleNaN(B[I]) then
+    begin
+      LCombined[LN] := B[I];
+      LGroup[LN] := 1;
+      Inc(LN);
+    end;
   end;
+  LN2 := LN - LN1;
+
+  if (LN1 = 0) or (LN2 = 0) then
+    Exit(1.0);
+  if LN = 1 then
+    Exit(1.0);
+
+  SetLength(LCombined, LN);
+  SetLength(LGroup, LN);
 
   { 2. 构建索引数组用于间接排序 }
   SetLength(LSortedIdx, LN);

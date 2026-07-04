@@ -238,6 +238,9 @@ function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 {** Glob 模式匹配（* 匹配任意字符，? 匹配单个字符） }
 function GlobMatch(const APattern, AStr: string): Boolean;
 
+{** IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
+function IsDoubleNaN(const AValue: Double): Boolean; inline;
+
 implementation
 
 function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
@@ -400,7 +403,6 @@ begin
     DoQuickSort(AData, I, ARight, ADepthLimit - 1);
 end;
 
-{ IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
 function IsDoubleNaN(const AValue: Double): Boolean; inline;
 var
   LBits: UInt64 absolute AValue;

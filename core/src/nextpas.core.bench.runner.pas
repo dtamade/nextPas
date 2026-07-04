@@ -606,7 +606,6 @@ function TBenchRunner.ExecuteParallelEntry(const AEntry: TBenchEntry; AIters: In
 var
   LParallelResult: TParallelBenchResult;
   LPerThreadIterations: Int64;
-  LMaxThreadElapsedNs: UInt64;
   I: SizeInt;
 begin
   Result := Default(TBenchResult);
@@ -645,14 +644,11 @@ begin
     Result.Iterations := LPerThreadIterations * AEntry.ParallelThreads;
     Result.TotalNs := LParallelResult.TotalNs;
 
-    // CR-10: 从并行上下文聚合逐线程耗时，使用最大值
-    LMaxThreadElapsedNs := 0;
+    // CR-10: 从并行上下文聚合 BytesPerOp/AllocsPerOp
     for I := 0 to High(FParallelContexts) do
     begin
       if Assigned(FParallelContexts[I]) then
       begin
-        if (FParallelContexts[I] as TBenchContext).GetElapsedNs > LMaxThreadElapsedNs then
-          LMaxThreadElapsedNs := (FParallelContexts[I] as TBenchContext).GetElapsedNs;
         if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
           Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
         if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
