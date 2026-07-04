@@ -1,80 +1,25 @@
 program bench_uuid;
-
 {$I nextpas.core.settings.inc}
-
 uses
-  SysUtils,
-  nextpas.core.id.uuid,
-  nextpas.core.time;
-
-procedure BenchOp(const AName: string; const AOps: Int64; const AElapsed: TDuration);
-var
-  LNs: Int64;
+  nextpas.core.bench,
+  nextpas.core.bench.intf,
+  nextpas.core.id.uuid;
+var GParseInput: string; GFormatInput: TUuid;
+procedure InitData;
+begin GParseInput := '550e8400-e29b-41d4-a716-446655440000'; GFormatInput := TUuid.NewV4; end;
+procedure BenchNewV4(const ACtx: IBenchContext); var LU: TUuid; begin LU := TUuid.NewV4; end;
+procedure BenchNewV7(const ACtx: IBenchContext); var LU: TUuid; begin LU := TUuid.NewV7; end;
+procedure BenchUuidV4Str(const ACtx: IBenchContext); var LS: string; begin LS := UuidV4; end;
+procedure BenchUuidV7Str(const ACtx: IBenchContext); var LS: string; begin LS := UuidV7; end;
+procedure BenchParse(const ACtx: IBenchContext); var LU: TUuid; begin LU := TUuid.Parse(GParseInput); end;
+procedure BenchToString(const ACtx: IBenchContext); var LS: string; begin LS := GFormatInput.ToString; end;
+var LSuite: IBenchSuite;
 begin
-  LNs := AElapsed.AsNanoseconds;
-  if (LNs > 0) and (AOps > 0) then
-    WriteLn('  ', AName:40, LNs div AOps:8, ' ns/op')
-  else
-    WriteLn('  ', AName:40, '       ? ns/op');
-end;
-
-const
-  N_GEN = 1000000;
-  N_PARSE = 2000000;
-
-var
-  LStart: TInstant;
-  LI: Int32;
-  LU: TUuid;
-  LS: string;
-
-begin
-  WriteLn('=== nextpas.core.id.uuid benchmarks ===');
-  WriteLn;
-
-  WriteLn('--- Generate ---');
-  LStart := TInstant.Now;
-  for LI := 1 to N_GEN do
-    LU := TUuid.NewV4;
-  BenchOp('TUuid.NewV4', N_GEN, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for LI := 1 to N_GEN do
-    LU := TUuid.NewV7;
-  BenchOp('TUuid.NewV7', N_GEN, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for LI := 1 to N_GEN do
-    LS := UuidV4;
-  BenchOp('UuidV4 (string)', N_GEN, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for LI := 1 to N_GEN do
-    LS := UuidV7;
-  BenchOp('UuidV7 (string)', N_GEN, LStart.Elapsed);
-
-  WriteLn;
-  WriteLn('--- Parse ---');
-  LS := '550e8400-e29b-41d4-a716-446655440000';
-  LStart := TInstant.Now;
-  for LI := 1 to N_PARSE do
-    LU := TUuid.Parse(LS);
-  BenchOp('TUuid.Parse', N_PARSE, LStart.Elapsed);
-
-  WriteLn;
-  WriteLn('--- Format ---');
-  LU := TUuid.NewV4;
-  LStart := TInstant.Now;
-  for LI := 1 to N_PARSE do
-    LS := LU.ToString;
-  BenchOp('TUuid.ToString', N_PARSE, LStart.Elapsed);
-
-  WriteLn;
-  WriteLn('--- Reference (published benchmarks) ---');
-  WriteLn('  Go uuid.New() (v4):                     ~150 ns/op');
-  WriteLn('  Rust uuid::Uuid::new_v4():               ~30 ns/op');
-  WriteLn('  Go uuid.NewV7():                        ~160 ns/op');
-  WriteLn('  Rust uuid::Uuid::now_v7():               ~35 ns/op');
-  WriteLn;
-  WriteLn('Done.');
+  InitData;
+  LSuite := TBenchSuite.Create('uuid');
+  LSuite
+    .Add('NewV4', @BenchNewV4).Add('NewV7', @BenchNewV7)
+    .Add('UuidV4 (string)', @BenchUuidV4Str).Add('UuidV7 (string)', @BenchUuidV7Str)
+    .Add('Parse', @BenchParse).Add('ToString', @BenchToString);
+  WriteLn(LSuite.Run.PrintToConsole);
 end.

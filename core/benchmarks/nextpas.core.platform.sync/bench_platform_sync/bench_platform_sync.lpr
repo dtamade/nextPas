@@ -1,89 +1,29 @@
 program bench_platform_sync;
-
 {$I nextpas.core.settings.inc}
-
-uses
-  nextpas.core.platform.sync,
-  nextpas.core.platform.time;
-
-const
-  ITERATIONS = 1000000;
-
-procedure ReportMetric(const AName: string; const AElapsedNs: UInt64);
+uses nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.platform.sync;
+var GSink: UInt64 = 0;
+procedure BenchMutexLockUnlock(const ACtx: IBenchContext);
+var LM: TPlatformMutex;
 begin
-  WriteLn(AName, '-iterations=', ITERATIONS);
-  WriteLn(AName, '-elapsed-ns=', AElapsedNs);
-  if ITERATIONS > 0 then
-    WriteLn(AName, '-ns-per-op=', AElapsedNs div ITERATIONS);
+  if platform_mutex_init(LM, PLATFORM_MUTEX_NORMAL) <> 0 then begin ACtx.Skip; Exit; end;
+  platform_mutex_lock(LM); platform_mutex_unlock(LM);
+  platform_mutex_destroy(LM);
 end;
-
-procedure BenchMutexLockUnlock;
-var
-  LMutex: TPlatformMutex;
-  LStart: UInt64;
-  LElapsed: UInt64;
-  I: Integer;
+procedure BenchRwLockReadUnlock(const ACtx: IBenchContext);
+var LR: TPlatformRwLock;
 begin
-  if platform_mutex_init(LMutex, PLATFORM_MUTEX_NORMAL) <> 0 then
-    Halt(1);
-  LStart := platform_monotonic_ns;
-  for I := 1 to ITERATIONS do
-  begin
-    platform_mutex_lock(LMutex);
-    platform_mutex_unlock(LMutex);
-  end;
-  LElapsed := platform_monotonic_ns - LStart;
-  platform_mutex_destroy(LMutex);
-  ReportMetric('platform-sync-mutex-lock-unlock', LElapsed);
+  if platform_rwlock_init(LR) <> 0 then begin ACtx.Skip; Exit; end;
+  platform_rwlock_rdlock(LR); platform_rwlock_rdunlock(LR);
+  platform_rwlock_destroy(LR);
 end;
-
-procedure BenchRwLockReadUnlock;
-var
-  LRwLock: TPlatformRwLock;
-  LStart: UInt64;
-  LElapsed: UInt64;
-  I: Integer;
+procedure BenchSpinLockLockUnlock(const ACtx: IBenchContext);
+var LS: TPlatformSpinLock;
 begin
-  if platform_rwlock_init(LRwLock) <> 0 then
-    Halt(1);
-  LStart := platform_monotonic_ns;
-  for I := 1 to ITERATIONS do
-  begin
-    platform_rwlock_rdlock(LRwLock);
-    platform_rwlock_rdunlock(LRwLock);
-  end;
-  LElapsed := platform_monotonic_ns - LStart;
-  platform_rwlock_destroy(LRwLock);
-  ReportMetric('platform-sync-rwlock-read-unlock', LElapsed);
+  platform_spin_lock_init(LS); platform_spin_lock_lock(LS); platform_spin_lock_unlock(LS);
 end;
-
-procedure BenchAddressMismatch;
-var
-  LValue: Int32;
-  LStart: UInt64;
-  LElapsed: UInt64;
-  I: Integer;
+var LSuite: IBenchSuite;
 begin
-  LValue := 1;
-  LStart := platform_monotonic_ns;
-  for I := 1 to ITERATIONS do
-    if platform_wait_address32(@LValue, 2, 0) <> PLATFORM_ERR_AGAIN then
-      Halt(1);
-  LElapsed := platform_monotonic_ns - LStart;
-  ReportMetric('platform-sync-address-mismatch', LElapsed);
-end;
-
-begin
-  {$IFNDEF NEXTPAS_LINUX}
-  {$IFNDEF NEXTPAS_WINDOWS}
-  WriteLn('platform-sync-bench-status=unsupported');
-  Halt(0);
-  {$ENDIF}
-  {$ENDIF}
-
-  WriteLn('platform-sync-bench=running');
-  BenchMutexLockUnlock;
-  BenchRwLockReadUnlock;
-  BenchAddressMismatch;
-  WriteLn('platform-sync-bench-status=pass');
+  LSuite := TBenchSuite.Create('platform-sync');
+  LSuite.Add('Mutex/LockUnlock', @BenchMutexLockUnlock).Add('RwLock/ReadUnlock', @BenchRwLockReadUnlock).Add('SpinLock/LockUnlock', @BenchSpinLockLockUnlock);
+  WriteLn(LSuite.Run.PrintToConsole);
 end.
