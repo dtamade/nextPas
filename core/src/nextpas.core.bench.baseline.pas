@@ -318,7 +318,17 @@ end;
 
 procedure TBaselineManager.LoadFromFile(const AFileName: string);
 begin
-  LoadFromJSON(FsReadFileText(AFileName));
+  try
+    LoadFromJSON(FsReadFileText(AFileName));
+  except
+    on E: Exception do
+    begin
+      if Pos('No such file', E.Message) > 0 then
+        raise EBenchBaselineNotFound.CreateFmt('Baseline file not found: %s', [AFileName])
+      else
+        raise;
+    end;
+  end;
 end;
 
 function TBaselineManager.ToJSON: string;
@@ -379,7 +389,7 @@ begin
 
   LDocument := JsonParse(AJSON);
   if (LDocument = nil) or LDocument.HasError then
-    raise Exception.Create('Invalid baseline JSON');
+    raise EBenchError.Create('Invalid baseline JSON');
 
   LRoot := LDocument.Root;
   LBaselines := LRoot.ObjectGet('baselines');

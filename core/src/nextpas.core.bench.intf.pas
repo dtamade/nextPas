@@ -114,8 +114,8 @@ type
     ParamValue: Int64;       {< 传递给 ParamFunc 的参数值 }
     IsLoop: Boolean;         {< true = 用户控制循环（LoopFunc），false = 框架控制 }
     LoopFunc: TBenchLoopFunc; {< 用户控制循环的基准函数 }
-    Setup: TBenchSetupFunc;  {< 每次迭代前调用，返回上下文数据 }
-    Teardown: TBenchTeardownFunc; {< 每次迭代后调用，释放 Setup 返回的数据 }
+    Setup: TBenchSetupFunc;  {< 每次基准运行前调用（所有迭代共享同一 context 数据） }
+    Teardown: TBenchTeardownFunc; {< 基准运行结束后调用，释放 Setup 返回的数据 }
     Condition: Boolean;      {< false 时跳过此条目（用于条件基准） }
     EnableParallel: Boolean; {< true 时使用 ParallelThreads 个线程并行执行 }
     ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
@@ -202,6 +202,9 @@ type
     {** 添加基线（TDuration 便利重载，ST-05）。
      *  内部转换为 Double ns/op，与 Double 版本共存。 }
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
+
+    {** 添加完整基线数据（包含 BytesPerOp/AllocsPerOp/GitHash 等） }
+    function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
 
     {** 批量添加基线 (ST-06) }
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;

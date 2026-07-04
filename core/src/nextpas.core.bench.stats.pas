@@ -210,26 +210,8 @@ begin
 end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
-var
-  LIndex: Double;
-  LLower, LUpper: Integer;
 begin
-  if Length(ASorted) = 0 then
-    Exit(0.0);
-
-  if APercent <= 0 then
-    Exit(ASorted[0]);
-  if APercent >= 100 then
-    Exit(ASorted[High(ASorted)]);
-
-  LIndex := (APercent / 100.0) * (Length(ASorted) - 1);
-  LLower := Integer(Floor(LIndex));
-  LUpper := Integer(Ceil(LIndex));
-
-  if LLower = LUpper then
-    Result := ASorted[LLower]
-  else
-    Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
+  Result := PercentileSorted(ASorted, APercent);
 end;
 
 function TBenchStatsAnalyzer.CountOutliers(const ASorted: TDoubleArray;
@@ -380,6 +362,16 @@ begin
   Result := LTStat > TInvAlpha(LDF, AAlpha);
 end;
 
+{** 近似 p-value 评级（非精确统计检验）
+ *
+ *  使用正态近似 + t 分布修正，返回粗略的显著性评级：
+ *  - < 0.001: 高度显著
+ *  - 0.001-0.01: 显著
+ *  - 0.01-0.05: 边缘显著
+ *  - > 0.05: 不显著
+ *
+ *  注意：这是启发式评级，非精确 p-value。小样本时误差可达 10%+。
+ *  精确检验请使用 Mann-Whitney U（非参数，不依赖分布假设）。 }
 function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): Double;
 var
   LTStat: Double;
@@ -546,19 +538,38 @@ begin
   if LN = 1 then
     Exit(1.0);
 
-  { 1. 合并样本并标记来源 }
+  { 1. 合并样本并标记来源，过滤 NaN }
   SetLength(LCombined, LN);
   SetLength(LGroup, LN);
+  LN := 0;
   for I := 0 to LN1 - 1 do
   begin
-    LCombined[I] := A[I];
-    LGroup[I] := 0;
+    if not IsDoubleNaN(A[I]) then
+    begin
+      LCombined[LN] := A[I];
+      LGroup[LN] := 0;
+      Inc(LN);
+    end;
   end;
-  for I := 0 to LN2 - 1 do
+  LN1 := LN;
+  for I := 0 to Length(B) - 1 do
   begin
-    LCombined[LN1 + I] := B[I];
-    LGroup[LN1 + I] := 1;
+    if not IsDoubleNaN(B[I]) then
+    begin
+      LCombined[LN] := B[I];
+      LGroup[LN] := 1;
+      Inc(LN);
+    end;
   end;
+  LN2 := LN - LN1;
+
+  if (LN1 = 0) or (LN2 = 0) then
+    Exit(1.0);
+  if LN = 1 then
+    Exit(1.0);
+
+  SetLength(LCombined, LN);
+  SetLength(LGroup, LN);
 
   { 2. 构建索引数组用于间接排序 }
   SetLength(LSortedIdx, LN);
