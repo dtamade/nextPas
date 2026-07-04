@@ -362,6 +362,16 @@ begin
   Result := LTStat > TInvAlpha(LDF, AAlpha);
 end;
 
+{** 近似 p-value 评级（非精确统计检验）
+ *
+ *  使用正态近似 + t 分布修正，返回粗略的显著性评级：
+ *  - < 0.001: 高度显著
+ *  - 0.001-0.01: 显著
+ *  - 0.01-0.05: 边缘显著
+ *  - > 0.05: 不显著
+ *
+ *  注意：这是启发式评级，非精确 p-value。小样本时误差可达 10%+。
+ *  精确检验请使用 Mann-Whitney U（非参数，不依赖分布假设）。 }
 function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): Double;
 var
   LTStat: Double;

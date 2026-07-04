@@ -369,41 +369,46 @@ var
   LPivot, LTmp: Double;
   I, J: Integer;
 begin
-  // 小数组使用插入排序
-  if (ARight - ALeft + 1) < INSERTION_SORT_THRESHOLD then
+  { F-19: 尾递归优化，与 DoQuickSortIndirect 一致 }
+  while ARight - ALeft >= INSERTION_SORT_THRESHOLD do
   begin
-    DoInsertionSort(AData, ALeft, ARight);
-    Exit;
-  end;
-
-  // 深度耗尽，退化为 HeapSort（O(n log n) 保底）
-  if ADepthLimit <= 0 then
-  begin
-    DoHeapSort(AData, ALeft, ARight);
-    Exit;
-  end;
-
-  // 三数取中 pivot
-  LPivot := MedianOfThree(AData, ALeft, ARight);
-  I := ALeft;
-  J := ARight;
-  while I <= J do
-  begin
-    while AData[I] < LPivot do Inc(I);
-    while AData[J] > LPivot do Dec(J);
-    if I <= J then
+    if ADepthLimit <= 0 then
     begin
-      LTmp := AData[I];
-      AData[I] := AData[J];
-      AData[J] := LTmp;
-      Inc(I);
-      Dec(J);
+      DoHeapSort(AData, ALeft, ARight);
+      Exit;
+    end;
+    Dec(ADepthLimit);
+
+    // 三数取中 pivot
+    LPivot := MedianOfThree(AData, ALeft, ARight);
+    I := ALeft;
+    J := ARight;
+    repeat
+      while AData[I] < LPivot do Inc(I);
+      while AData[J] > LPivot do Dec(J);
+      if I <= J then
+      begin
+        LTmp := AData[I];
+        AData[I] := AData[J];
+        AData[J] := LTmp;
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+
+    // 尾递归：只递归较短的一半，较长的一半用循环处理
+    if J - ALeft < ARight - I then
+    begin
+      DoQuickSort(AData, ALeft, J, ADepthLimit);
+      ALeft := I;
+    end
+    else
+    begin
+      DoQuickSort(AData, I, ARight, ADepthLimit);
+      ARight := J;
     end;
   end;
-  if ALeft < J then
-    DoQuickSort(AData, ALeft, J, ADepthLimit - 1);
-  if I < ARight then
-    DoQuickSort(AData, I, ARight, ADepthLimit - 1);
+  DoInsertionSort(AData, ALeft, ARight);
 end;
 
 function IsDoubleNaN(const AValue: Double): Boolean; inline;

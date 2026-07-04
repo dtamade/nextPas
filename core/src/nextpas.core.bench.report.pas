@@ -194,6 +194,7 @@ begin
   end;
 end;
 
+{ 跨语言对比条目按名称排序（插入排序，数据量通常 <50 条，O(n²) 可接受） }
 procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
 var
   I: Integer;
@@ -334,13 +335,13 @@ end;
 function FormatThroughput(ABytesPerSec: Double): string;
 begin
   if ABytesPerSec < 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec) + ' B/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec, 1) + ' B/s'
   else if ABytesPerSec < 1024.0 * 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec / 1024.0) + ' KB/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / 1024.0, 1) + ' KB/s'
   else if ABytesPerSec < 1024.0 * 1024.0 * 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec / (1024.0 * 1024.0)) + ' MB/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / (1024.0 * 1024.0), 1) + ' MB/s'
   else
-    Result := FormatFloat('0.00', ABytesPerSec / (1024.0 * 1024.0 * 1024.0)) + ' GB/s';
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / (1024.0 * 1024.0 * 1024.0), 2) + ' GB/s';
 end;
 
 { 格式化变异系数 CV = StdDev / Mean * 100%

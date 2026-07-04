@@ -723,6 +723,9 @@ begin
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;
+  { F-18: 构造时一次性设置结果和环境，避免每次 To* 方法重复拷贝 }
+  FReportGenerator.SetResults(FResults);
+  FReportGenerator.SetEnvironment(FEnvironment);
 end;
 
 destructor TBenchResults.Destroy;
@@ -853,35 +856,26 @@ end;
 
 function TBenchResults.PrintToConsole: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.PrintToConsole;
 end;
 
 function TBenchResults.ToJSON: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToJSON;
 end;
 
 function TBenchResults.ToTSV: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToTSV;
 end;
 
 function TBenchResults.ToHTML: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToHTML;
 end;
 
 function TBenchResults.ToBenchstat: string;
 begin
-  FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.ToBenchstat;
 end;
 

@@ -136,10 +136,13 @@ type
     function ConfidenceInterval(ALevel: Double = 0.95): TConfidenceInterval;
 
     {**
-     * Bootstrap confidence interval
+     * Bootstrap 置信区间
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ALevel 置信水平（默认 0.95）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time，>0 = 固定种子用于可重现测试）
      *}
     function BootstrapCI(AIterations: Integer = 10000;
-      ALevel: Double = 0.95): TConfidenceInterval;
+      ALevel: Double = 0.95; ASeed: UInt64 = 0): TConfidenceInterval;
 
     {**
      * 正态性启发式 (Shapiro-Wilk-like 简化版)
@@ -534,7 +537,7 @@ begin
 end;
 
 function TAdvancedStats.BootstrapCI(AIterations: Integer;
-  ALevel: Double): TConfidenceInterval;
+  ALevel: Double; ASeed: UInt64): TConfidenceInterval;
 var
   LN: Integer;
   LIterations: Integer;
@@ -569,9 +572,11 @@ begin
   if LIterations <= 0 then
     LIterations := 1;
 
-  // Use platform_monotonic_ns as seed for nanosecond-precision randomness.
-  // Fixed seeds make bootstrap CIs deterministic and don't reflect sampling variability.
-  LSeed := platform_monotonic_ns;
+  // F-20: 可选种子，ASeed=0 时使用 monotonic time，>0 时固定种子用于可重现测试
+  if ASeed > 0 then
+    LSeed := ASeed
+  else
+    LSeed := platform_monotonic_ns;
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin
