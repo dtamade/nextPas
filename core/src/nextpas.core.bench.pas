@@ -1054,13 +1054,13 @@ begin
           LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
           { R3-04: baseline 无原始样本，用 ratio 阈值替代统计检验 }
           LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-          LCell.PValue := BENCH_MATRIX_DIFF_THRESHOLD;
+          LCell.SignificanceThreshold := BENCH_MATRIX_DIFF_THRESHOLD;
         end
         else
         begin
           LCell.Ratio := 1.0;
           LCell.IsSignificant := False;
-          LCell.PValue := 1.0;
+          LCell.SignificanceThreshold := 1.0;
         end;
 
         LRow.Cells[J] := LCell;

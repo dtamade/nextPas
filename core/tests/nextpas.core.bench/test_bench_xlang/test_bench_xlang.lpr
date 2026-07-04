@@ -485,6 +485,34 @@ begin
   Check(Length(LResults) = 3, 'Mixed line endings: parsed 3 results');
 end;
 
+{ === F-011: Malformed Input Tests === }
+
+procedure Test_GoBench_SpecialCharsInName;
+var
+  LResult: TBenchResult;
+begin
+  LResult := ParseGoBenchLine('Benchmark/Func(a=b)-4   1000   100.0 ns/op');
+  Check(LResult.Name = 'Benchmark/Func(a=b)', 'Special chars in name preserved');
+end;
+
+procedure Test_GoBench_NegativeIterations;
+var
+  LResult: TBenchResult;
+begin
+  { Negative iterations → SafeDeriveTotalNs returns 0, no crash }
+  LResult := ParseGoBenchLine('BenchmarkX-4   -100   100.0 ns/op');
+  Check(LResult.Iterations = -100, 'Negative iterations parsed');
+  Check(LResult.TotalNs = 0, 'Negative iterations → TotalNs = 0');
+end;
+
+procedure Test_RustBench_SpecialCharsInName;
+var
+  LResult: TBenchResult;
+begin
+  LResult := ParseRustBenchLine('bench_func/v1             time:   [100.00 ns 105.00 ns 110.00 ns]');
+  Check(Pos('bench_func/v1', LResult.Name) > 0, 'Rust special chars in name');
+end;
+
 { === Main === }
 
 var
@@ -528,6 +556,11 @@ begin
   T.Test('error: fpc invalid line', @Test_ParseFPCBenchLine_Invalid);
   T.Test('error: unknown parser', @Test_ParseBenchOutput_Unknown);
   T.Test('error: skipped count', @Test_GetLastParseSkippedCount);
+
+  { F-011: Malformed Input }
+  T.Test('malformed: go special chars in name', @Test_GoBench_SpecialCharsInName);
+  T.Test('malformed: go negative iterations', @Test_GoBench_NegativeIterations);
+  T.Test('malformed: rust special chars in name', @Test_RustBench_SpecialCharsInName);
 
   { Empty Input }
   T.Test('empty: go empty input', @Test_ParseGoBenchOutput_Empty);

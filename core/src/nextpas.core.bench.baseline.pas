@@ -43,6 +43,10 @@ type
 
   {**
    * 基线管理器
+   *
+   * F-012: record 类型（值语义），包含动态数组。
+   * 赋值时是浅拷贝（共享动态数组引用），不要同时修改两个拷贝。
+   * 如果需要独立拷贝，使用 Create 新建后 AddBaseline 逐条复制。
    *}
   TBaselineManager = record
   private
