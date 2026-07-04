@@ -185,7 +185,10 @@ const
    *  设置 =0 / false / no 时禁用内存跟踪。 }
   BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
 
-  {** 元数据常量 }
+  {** 元数据常量
+   *  F-013: 手动维护版本号。语义化版本: MAJOR.MINOR。
+   *  递增策略: MAJOR = API 不兼容变更, MINOR = 新功能/修复。
+   *  构建脚本可覆盖此值 (通过 -dBENCH_VERSION=X.Y.Z)。 }
   BENCH_VERSION = '1.0';
 
   {** 统计常量 }
