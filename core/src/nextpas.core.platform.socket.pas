@@ -37,7 +37,7 @@ const
   PLATFORM_IPPROTO_UDP = IPPROTO_UDP;
   PLATFORM_SOL_SOCKET  = SOL_SOCKET;
   PLATFORM_SO_REUSEADDR = SO_REUSEADDR;
-{$IFDEF NEXTPAS_DARWIN}
+{$IFDEF NEXTPAS_MACOS}
   PLATFORM_SO_REUSEPORT = $0200;
   PLATFORM_SO_LINGER   = $0080;
 {$ELSEIF defined(NEXTPAS_FREEBSD)}
@@ -138,7 +138,7 @@ implementation
 uses
   nextpas.core.platform.posix.ffi,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.base{$ENDIF}
-  {$IFDEF NEXTPAS_DARWIN}nextpas.core.platform.darwin.base{$ENDIF}
+  {$IFDEF NEXTPAS_MACOS}nextpas.core.platform.darwin.base{$ENDIF}
   {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
   ;
 
