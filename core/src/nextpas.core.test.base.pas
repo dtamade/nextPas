@@ -755,6 +755,10 @@ finalization
   { Clear threadvar strings before heaptrc tally to avoid false leak reports.
     FPC does not finalize threadvar managed types before heaptrc reports. }
   GLastTestTrace := '';
+  { Safety net: dispose main-thread GExecState if runner failed to clean up
+    (e.g. Halt() called during test execution, skipping finally blocks).
+    Worker threads' GExecState is already gone by finalization time — each
+    worker's finally block handles its own cleanup. }
   if GExecState <> nil then
     Dispose(GExecState);
 
