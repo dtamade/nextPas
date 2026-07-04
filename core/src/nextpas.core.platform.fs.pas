@@ -48,6 +48,7 @@ const
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -140,6 +141,17 @@ begin
   Result := LStat.FileType = ftDirectory;
 end;
 
+
+function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  if platform_file_stat(APath, LStat) <> 0 then
+    Exit(False);
+  if LStat.FileType <> ftRegular then
+    Exit(False);
+  Result := (LStat.Mode and 64) <> 0;
+end;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 var
   LStat: TPlatformFileStat;
