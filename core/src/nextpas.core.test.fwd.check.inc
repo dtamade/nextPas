@@ -33,6 +33,8 @@ begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+{ CheckEqualMsg — deprecated, suppress warning for facade forwarding }
+{$WARN SYMBOL_DEPRECATED OFF}
 procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
 begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
 
@@ -44,6 +46,7 @@ begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
 
 procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
 begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
+{$WARN SYMBOL_DEPRECATED ON}
 
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;

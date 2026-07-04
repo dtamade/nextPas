@@ -33,11 +33,16 @@ procedure CheckEqual(const AExpected, AActual: Int64;
   const AMessage: string); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
-{ CheckEqualMsg — avoids FPC overload ambiguity for UInt16/UInt32/UInt64. }
+{ CheckEqualMsg — avoids FPC overload ambiguity for UInt16/UInt32/UInt64.
+  Prefer CheckEqual(expected, actual, message) 3-arg overload when no ambiguity. }
 procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: Int64; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: UInt64; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;

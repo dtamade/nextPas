@@ -100,10 +100,13 @@ type
     procedure ShouldFail(const AName: string; AProc: TTestClosure;
       AExpectedClass: TClass;
       const AContains: string = '');
-    { ShouldFail with message substring matching only (no class check). }
+    { ShouldFail with message substring matching only (no class check).
+      ADummy is a disambiguation parameter (pass 0) — FPC cannot distinguish
+      this from ShouldFail(name, proc, msg) without it.
+      Prefer ShouldFail(name, proc, TClass, contains) when class check is desired. }
     procedure ShouldFail(const AName: string; AProc: TTestProc;
       const AContains: string;
-      ADummy: Integer);  { disambiguate from ShouldFail(name, proc, msg) }
+      ADummy: Integer);
     procedure ShouldFail(const AName: string; AProc: TTestClosure;
       const AContains: string;
       ADummy: Integer);
