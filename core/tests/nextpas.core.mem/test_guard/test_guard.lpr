@@ -4,6 +4,7 @@ program test_guard;
 uses
   SysUtils,
   nextpas.core.test,
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.guard;
 
@@ -175,6 +176,59 @@ begin
   end;
 end;
 
+{ ── ReallocMem boundary tests ── }
+
+procedure TestReallocNil;
+var
+  LAlloc: TGuardAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    { ReallocMem(nil) should behave like GetMem. }
+    LPtr := LAlloc.ReallocMem(nil, 128);
+    Check(LPtr <> nil, 'ReallocMem(nil, 128) returns non-nil');
+    LAlloc.FreeMem(LPtr);
+    WriteLn('PASS: ReallocMem(nil) acts as GetMem');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReallocWildPointer;
+var
+  LAlloc: TGuardAllocator;
+  LRaised: Boolean;
+  LStackVar: array[0..63] of Byte;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    { Case 1: Unmapped pointer ($DEADBEEF) — raises EAccessViolation. }
+    LRaised := False;
+    try
+      LAlloc.ReallocMem(Pointer($DEADBEEF), 64);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'unmapped pointer ReallocMem raises');
+
+    { Case 2: Mapped pointer (stack) but not from guard allocator —
+      Magic check catches it and raises EAllocError. }
+    LRaised := False;
+    try
+      LAlloc.ReallocMem(@LStackVar[0], 128);
+    except
+      on E: EAllocError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'stack pointer ReallocMem raises EAllocError');
+    WriteLn('PASS: ReallocMem wild pointer raises');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 { ── Main ── }
 
 begin
@@ -188,6 +242,8 @@ begin
   T.Test('alloc_mem_zeroed', @TestAllocMemZeroed);
   T.Test('traits', @TestTraits);
   T.Test('double_free_detection', @TestDoubleFreeDetection);
+  T.Test('realloc_nil', @TestReallocNil);
+  T.Test('realloc_wild_pointer', @TestReallocWildPointer);
 
   T.Run;
   T.Summary;

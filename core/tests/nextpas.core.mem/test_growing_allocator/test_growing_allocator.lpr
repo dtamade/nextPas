@@ -263,6 +263,57 @@ begin
   end;
 end;
 
+procedure TestReallocShrink;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr, LPtr2: PByte;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.GetMem(256));
+    for I := 0 to 255 do
+      LPtr[I] := Byte(I);
+    { Shrink to 64B — smaller size class. }
+    LPtr2 := PByte(LAlloc.ReallocMem(LPtr, 256, 64));
+    Check(LPtr2 <> nil, 'realloc shrink returns non-nil');
+    for I := 0 to 63 do
+      Check(LPtr2[I] = Byte(I), 'shrink data[' + IntToStr(I) + '] preserved');
+    LAlloc.FreeMem(LPtr2, 64);
+    WriteLn('PASS: realloc shrink (256→64)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReallocGrowAcrossBands;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr, LPtr2: PByte;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    LPtr := PByte(LAlloc.GetMem(64));
+    for I := 0 to 63 do
+      LPtr[I] := Byte(I + 1);
+    { Grow 64→4096 (band 0→band 2). }
+    LPtr2 := PByte(LAlloc.ReallocMem(LPtr, 64, 4096));
+    Check(LPtr2 <> nil, 'realloc 64→4096 returns non-nil');
+    for I := 0 to 63 do
+      Check(LPtr2[I] = Byte(I + 1), 'grow1 data[' + IntToStr(I) + ']');
+    { Grow 4096→131072 (band 2→band 5). }
+    LPtr := PByte(LAlloc.ReallocMem(LPtr2, 4096, 131072));
+    Check(LPtr <> nil, 'realloc 4096→131072 returns non-nil');
+    for I := 0 to 63 do
+      Check(LPtr[I] = Byte(I + 1), 'grow2 data[' + IntToStr(I) + ']');
+    LAlloc.FreeMem(LPtr, 131072);
+    WriteLn('PASS: realloc grow across bands (64→4K→128K)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 procedure TestBatchGetMemZero;
 var
   LAlloc: TGrowingAllocator;
@@ -301,6 +352,8 @@ begin
   T.Test('realloc_to_zero', @TestReallocToZero);
   T.Test('batch_get_free', @TestBatchGetMem);
   T.Test('batch_get_zero', @TestBatchGetMemZero);
+  T.Test('realloc_shrink', @TestReallocShrink);
+  T.Test('realloc_grow_bands', @TestReallocGrowAcrossBands);
 
   T.Run;
   T.Summary;
