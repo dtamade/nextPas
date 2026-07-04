@@ -82,6 +82,7 @@ type
 
   // === 分配器包装 ===
   TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
+  TVirtualArenaAdapter = nextpas.core.mem.allocator.arena.TVirtualArenaAdapter;
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;
   TFallbackAllocator = nextpas.core.mem.allocator.fallback.TFallbackAllocator;

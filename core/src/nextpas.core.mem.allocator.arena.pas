@@ -9,6 +9,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.arena.intf,
+  nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
   nextpas.core.mem.arena.virtual;
 
@@ -46,6 +48,37 @@ type
 
 {** 兼容性别名 }
 TFastArenaAllocator = TVirtualArenaAllocator;
+
+type
+  {** TVirtualArenaAdapter
+   *
+   *  将 TVirtualArena record 包装为 IArena 接口。
+   *  使 TVirtualArena 可用于需要 IArena 的多态场景
+   *  （如 TArenaConcurrent、TFallbackArena）。
+   *
+   *  非线程安全。需要并发访问时用 TArenaConcurrent 包装。
+   *}
+  TVirtualArenaAdapter = class(TInterfacedObject, IArena)
+  private
+    FArena: TVirtualArena;
+  public
+    constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+    destructor Destroy; override;
+
+    { IArena }
+    function Alloc(ASize: SizeUInt): Pointer;
+    function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+    function AllocZeroed(ASize: SizeUInt): Pointer;
+    function SaveMark: TArenaMark;
+    procedure RestoreToMark(AMark: TArenaMark);
+    procedure Reset;
+    function UsedSize: SizeUInt;
+    function RemainingSize: SizeUInt;
+    function Stats: TArenaStats;
+
+    {** 直接访问内部 TVirtualArena }
+    property Arena: TVirtualArena read FArena;
+  end;
 
 implementation
 
@@ -94,6 +127,71 @@ begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe      := False;
   Result.SupportsRealloc := False;
+end;
+
+{ TVirtualArenaAdapter }
+
+constructor TVirtualArenaAdapter.Create(AAlignment: SizeUInt);
+begin
+  inherited Create;
+  TVirtualArena_Init(FArena, AAlignment);
+end;
+
+destructor TVirtualArenaAdapter.Destroy;
+begin
+  TVirtualArena_Release(FArena);
+  inherited Destroy;
+end;
+
+function TVirtualArenaAdapter.Alloc(ASize: SizeUInt): Pointer;
+begin
+  Result := FArena.Alloc(ASize);
+end;
+
+function TVirtualArenaAdapter.AllocAligned(ASize, AAlign: SizeUInt): Pointer;
+begin
+  Result := FArena.AllocAligned(ASize, AAlign);
+end;
+
+function TVirtualArenaAdapter.AllocZeroed(ASize: SizeUInt): Pointer;
+begin
+  Result := FArena.AllocZeroed(ASize);
+end;
+
+function TVirtualArenaAdapter.SaveMark: TArenaMark;
+begin
+  Result := FArena.SaveMark;
+end;
+
+procedure TVirtualArenaAdapter.RestoreToMark(AMark: TArenaMark);
+begin
+  FArena.RestoreToMark(AMark);
+end;
+
+procedure TVirtualArenaAdapter.Reset;
+begin
+  FArena.Reset;
+end;
+
+function TVirtualArenaAdapter.UsedSize: SizeUInt;
+begin
+  Result := FArena.TotalUsed;
+end;
+
+function TVirtualArenaAdapter.RemainingSize: SizeUInt;
+var
+  LTotal: SizeUInt;
+begin
+  LTotal := FArena.TotalAllocated;
+  if LTotal > FArena.TotalUsed then
+    Result := LTotal - FArena.TotalUsed
+  else
+    Result := 0;
+end;
+
+function TVirtualArenaAdapter.Stats: TArenaStats;
+begin
+  Result := FArena.Stats;
 end;
 
 end.
