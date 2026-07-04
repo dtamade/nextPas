@@ -2016,12 +2016,171 @@ begin
   Result := RunAllIterLoop(AResults, True, APool);
 end;
 
+{ ── Benchmark save/compare helpers (E-12) ──────────────────────────────────── }
+
+procedure SaveBenchResultsToFile(const AFileName: string;
+  const AResults: specialize TArray<TBenchResults>);
+var
+  LFile: TextFile;
+  I, J: Integer;
+  LFirst: Boolean;
+begin
+  AssignFile(LFile, AFileName);
+  Rewrite(LFile);
+  try
+    WriteLn(LFile, '{');
+    WriteLn(LFile, '  "version": 1,');
+    WriteLn(LFile, '  "benchmarks": [');
+    LFirst := True;
+    for I := 0 to High(AResults) do
+      for J := 0 to High(AResults[I]) do
+      begin
+        if not LFirst then
+          WriteLn(LFile, ',');
+        LFirst := False;
+        Write(LFile, '    {"name": "' + AResults[I][J].Name + '"');
+        Write(LFile, ', "N": ' + IntToStr(AResults[I][J].N));
+        Write(LFile, ', "NsPerOp": ' + IntToStr(AResults[I][J].NsPerOp));
+        Write(LFile, ', "AllocBytes": ' + IntToStr(AResults[I][J].AllocBytes));
+        Write(LFile, ', "AllocCount": ' + IntToStr(AResults[I][J].AllocCount));
+        Write(LFile, '}');
+      end;
+    WriteLn(LFile);
+    WriteLn(LFile, '  ]');
+    WriteLn(LFile, '}');
+  finally
+    CloseFile(LFile);
+  end;
+end;
+
+function ParseJsonInt(const AJson, AKey: string): Int64;
+var
+  LPos, LEnd: Integer;
+  LSearch: string;
+begin
+  LSearch := '"' + AKey + '":';
+  LPos := Pos(LSearch, AJson);
+  if LPos = 0 then
+    Exit(0);
+  Inc(LPos, Length(LSearch));
+  while (LPos <= Length(AJson)) and (AJson[LPos] = ' ') do
+    Inc(LPos);
+  LEnd := LPos;
+  while (LEnd <= Length(AJson)) and (AJson[LEnd] in ['0'..'9', '-']) do
+    Inc(LEnd);
+  Result := StrToInt64Def(Copy(AJson, LPos, LEnd - LPos), 0);
+end;
+
+function ParseJsonString(const AJson, AKey: string): string;
+var
+  LPos, LEnd: Integer;
+  LSearch: string;
+begin
+  LSearch := '"' + AKey + '": "';
+  LPos := Pos(LSearch, AJson);
+  if LPos = 0 then
+    Exit('');
+  Inc(LPos, Length(LSearch));
+  LEnd := LPos;
+  while (LEnd <= Length(AJson)) and (AJson[LEnd] <> '"') do
+    Inc(LEnd);
+  Result := Copy(AJson, LPos, LEnd - LPos);
+end;
+
+function LoadBenchResultsFromFile(const AFileName: string): TBenchResults;
+var
+  LFile: TextFile;
+  LLine, LFull: string;
+  LCount, LCap: Integer;
+  LPos: Integer;
+begin
+  SetLength(Result, 0);
+  AssignFile(LFile, AFileName);
+  {$I-}
+  Reset(LFile);
+  {$I+}
+  if IOResult <> 0 then
+    Exit;
+  try
+    LFull := '';
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      LFull := LFull + LLine;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+  { Parse each {"name":...} object from the benchmarks array }
+  LCount := 0;
+  LCap := 0;
+  LPos := Pos('"name":', LFull);
+  while LPos > 0 do
+  begin
+    if LCount >= LCap then
+    begin
+      LCap := LCap * 2 + 4;
+      SetLength(Result, LCap);
+    end;
+    Result[LCount].Name := ParseJsonString(Copy(LFull, LPos, 200), 'name');
+    Result[LCount].N := Integer(ParseJsonInt(Copy(LFull, LPos, 200), 'N'));
+    Result[LCount].NsPerOp := ParseJsonInt(Copy(LFull, LPos, 200), 'NsPerOp');
+    Result[LCount].AllocBytes := ParseJsonInt(Copy(LFull, LPos, 200), 'AllocBytes');
+    Result[LCount].AllocCount := ParseJsonInt(Copy(LFull, LPos, 200), 'AllocCount');
+    Inc(LCount);
+    { Find next name }
+    LPos := Pos('"name":', Copy(LFull, LPos + 7, MaxInt));
+    if LPos > 0 then
+      Inc(LPos, Pos('"name":', LFull) + 6);
+  end;
+  SetLength(Result, LCount);
+end;
+
+procedure PrintBenchComparison(const AOutSink: IOutputSink;
+  const AConfig: TTestConfig;
+  const ACurrent, ABaseline: TBenchResults);
+var
+  I, J: Integer;
+  LRatio: Double;
+  LStatus: string;
+begin
+  AOutSink.WriteLn('');
+  AOutSink.WriteLn(AnsiBold('=== Benchmark Comparison ===', AConfig));
+  AOutSink.WriteLn(Format('%-40s %12s %12s %8s', ['Name', 'Current', 'Baseline', 'Ratio']));
+  AOutSink.WriteLn(StringOfChar('-', 72));
+  for I := 0 to High(ACurrent) do
+  begin
+    for J := 0 to High(ABaseline) do
+    begin
+      if ACurrent[I].Name = ABaseline[J].Name then
+      begin
+        if ABaseline[J].NsPerOp > 0 then
+          LRatio := ACurrent[I].NsPerOp / ABaseline[J].NsPerOp
+        else
+          LRatio := 1.0;
+        if LRatio > 1.1 then
+          LStatus := AnsiRed('REGRESSION', AConfig)
+        else if LRatio < 0.9 then
+          LStatus := AnsiGreen('improvement', AConfig)
+        else
+          LStatus := AnsiDim('~same', AConfig);
+        AOutSink.WriteLn(Format('%-40s %10dns %10dns %7.2fx %s',
+          [ACurrent[I].Name, ACurrent[I].NsPerOp, ABaseline[J].NsPerOp,
+           LRatio, LStatus]));
+        Break;
+      end;
+    end;
+  end;
+end;
+
 function TSuiteRunner.RunAllBenchmarks(
   out AResults: specialize TArray<TBenchResults>): Boolean;
 var
   I: Integer;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
+  LSaveFile, LCompareFile: string;
+  LBaseline: TBenchResults;
 begin
   ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
@@ -2037,6 +2196,24 @@ begin
     if not Suites[I].RunBenchmarks(AResults[I]) then
       { No benchmarks in this suite — not a failure }
       ;
+  end;
+  { E-12: --benchsave: save results to JSON file }
+  LSaveFile := GetBenchSaveFile(LConfig);
+  if LSaveFile <> '' then
+  begin
+    SaveBenchResultsToFile(LSaveFile, AResults);
+    LOutSink.WriteLn(AnsiGreen('Benchmarks saved to ', LConfig) + LSaveFile);
+  end;
+  { E-12: --benchcompare: load baseline and compare }
+  LCompareFile := GetBenchCompareFile(LConfig);
+  if LCompareFile <> '' then
+  begin
+    LBaseline := LoadBenchResultsFromFile(LCompareFile);
+    if Length(LBaseline) > 0 then
+      PrintBenchComparison(LOutSink, LConfig, AResults[0], LBaseline)
+    else
+      LOutSink.WriteLn(AnsiYellow('Warning: ', LConfig) +
+        'No benchmarks found in ' + LCompareFile);
   end;
 end;
 

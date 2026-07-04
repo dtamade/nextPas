@@ -18,7 +18,8 @@ type
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
-    ckBench, ckBenchTime, ckBenchMem, ckRun);
+    ckBench, ckBenchTime, ckBenchMem, ckRun,
+    ckBenchSave, ckBenchCompare);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -86,6 +87,8 @@ type
     BenchTimeMs   : Integer; { benchmark target duration in ms (default 1000 = 1s) }
     BenchMem      : Boolean; { true = report memory allocations per op }
     RunPattern    : string;  { --run: exact test name match (case-insensitive) }
+    BenchSaveFile : string;  { --benchsave=<file>: save benchmark results to JSON }
+    BenchCompareFile: string; { --benchcompare=<file>: compare against baseline JSON }
   end;
 
 function DefaultConfig: TTestConfig;
@@ -116,6 +119,8 @@ procedure SetDefaultBenchEnabled(AEnabled: Boolean);
 procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
 procedure SetDefaultBenchMem(ABenchMem: Boolean);
 procedure SetDefaultRunPattern(const APattern: string);
+procedure SetDefaultBenchSaveFile(const AFile: string);
+procedure SetDefaultBenchCompareFile(const AFile: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -131,6 +136,8 @@ function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
 function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  GetRunPattern(const AConfig: TTestConfig): string;
+function  GetBenchSaveFile(const AConfig: TTestConfig): string;
+function  GetBenchCompareFile(const AConfig: TTestConfig): string;
 
 implementation
 
@@ -163,6 +170,8 @@ begin
   Result.BenchTimeMs   := 1000; { default 1 second per benchmark }
   Result.BenchMem      := False;
   Result.RunPattern    := '';
+  Result.BenchSaveFile := '';
+  Result.BenchCompareFile := '';
 end;
 
 function DefaultConfig: TTestConfig;
@@ -363,6 +372,18 @@ begin
   Include(GExplicit, ckRun);
 end;
 
+procedure SetDefaultBenchSaveFile(const AFile: string);
+begin
+  GDefaultConfig.BenchSaveFile := AFile;
+  Include(GExplicit, ckBenchSave);
+end;
+
+procedure SetDefaultBenchCompareFile(const AFile: string);
+begin
+  GDefaultConfig.BenchCompareFile := AFile;
+  Include(GExplicit, ckBenchCompare);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -436,6 +457,16 @@ end;
 function GetRunPattern(const AConfig: TTestConfig): string;
 begin
   Result := ResolveConfig(AConfig).RunPattern;
+end;
+
+function GetBenchSaveFile(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).BenchSaveFile;
+end;
+
+function GetBenchCompareFile(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).BenchCompareFile;
 end;
 
 procedure TStdoutSink.Write(const AText: string);
