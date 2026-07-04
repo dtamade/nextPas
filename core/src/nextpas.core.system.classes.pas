@@ -10,7 +10,7 @@ unit nextpas.core.system.classes;
 interface
 
 uses
-  Classes,
+  Classes, SysUtils,
   nextpas.core.io.intf;
 
 type
@@ -31,6 +31,16 @@ const
   dupIgnore = Classes.dupIgnore;
   dupError = Classes.dupError;
   dupAccept = Classes.dupAccept;
+
+  { File mode constants — re-exported from SysUtils for FPC RTL isolation }
+  fmCreate = SysUtils.fmCreate;
+  fmOpenRead = SysUtils.fmOpenRead;
+  fmOpenWrite = SysUtils.fmOpenWrite;
+  fmOpenReadWrite = SysUtils.fmOpenReadWrite;
+  fmShareDenyNone = SysUtils.fmShareDenyNone;
+  fmShareDenyRead = SysUtils.fmShareDenyRead;
+  fmShareDenyWrite = SysUtils.fmShareDenyWrite;
+  fmShareExclusive = SysUtils.fmShareExclusive;
 
 implementation
 

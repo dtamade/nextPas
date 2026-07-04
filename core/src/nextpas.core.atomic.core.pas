@@ -143,6 +143,14 @@ begin
     asm
       yield
     end;
+  {$ELSEIF DEFINED(CPURISCV64)}
+    asm
+      nop
+    end;
+  {$ELSEIF DEFINED(CPURISCV32)}
+    asm
+      nop
+    end;
   {$ELSE}
   {$ENDIF}
 end;
