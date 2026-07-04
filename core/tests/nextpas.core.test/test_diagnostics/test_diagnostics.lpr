@@ -181,7 +181,6 @@ var
   LResult: TTestRunResult;
   LResults: specialize TArray<TTestRunResult>;
   LXml: string;
-  I: Integer;
   LFoundError, LFoundFailure: Boolean;
 begin
   LSuite := TTestSuite.Create('err_vs_fail');
@@ -211,6 +210,13 @@ begin
   LFoundFailure := Pos('<failure type="AssertionFailure"', LXml) > 0;
   CheckTrue(LFoundError, 'JUnit XML should have <error> for tsError');
   CheckTrue(LFoundFailure, 'JUnit XML should have <failure> for tsFailed');
+
+  { Explicitly finalize managed types to prevent heaptrc false positives.
+    FPC may not finalize nested managed types in dynamic arrays reliably
+    when the record goes out of scope. }
+  Finalize(LResults);
+  Finalize(LResult);
+  Finalize(LSuite);
 end;
 
 procedure TestTAPErrorVsFail;
@@ -236,6 +242,7 @@ begin
   { Error should have severity: error, failure should have severity: fail }
   CheckContains(LOut, 'severity: fail');
   CheckContains(LOut, 'severity: error');
+  Finalize(LResults);
 end;
 
 procedure TestJSONErrorVsFail;
@@ -258,6 +265,7 @@ begin
   LOut := JSONReport(LResults);
   CheckContains(LOut, '"status": "failed"');
   CheckContains(LOut, '"status": "error"');
+  Finalize(LResults);
 end;
 
 { ── 4. Trace not polluted by framework internals ─────────────────────────── }
