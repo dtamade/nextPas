@@ -1577,6 +1577,7 @@ begin
   Emit('');
   Emit('declare ptr @np_alloc(i64 %size)');
   Emit('declare void @np_free(ptr %raw, i64 %size)');
+  Emit('declare ptr @np_realloc(ptr %raw, i64 %old_size, i64 %new_size)');
   Emit('declare void @np_allocator_fault(i64 %code, i64 %arg0, i64 %arg1)');
 end;
 
