@@ -6,14 +6,14 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.parser;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSimpleGet;
 var
@@ -708,47 +708,47 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.h1.fast');
-  T.Run('Simple GET', @TestSimpleGet);
-  T.Run('POST with Content-Length', @TestPostWithContentLength);
-  T.Run('Multiple headers', @TestMultipleHeaders);
-  T.Run('HTTP/1.0 version', @TestHttp10Version);
-  T.Run('Incomplete headers', @TestIncompleteHeaders);
-  T.Run('Malformed request line', @TestMalformedRequestLine);
-  T.Run('Invalid same-length method fallback', @TestInvalidSameLengthMethodFallback);
-  T.Run('Chunked fallback', @TestChunkedFallback);
-  T.Run('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
-  T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
-  T.Run('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
-  T.Run('Content-Length grammar fallbacks without raise',
+  T := TTestSuite.Create('nextpas.core.http.impl.h1.fast');
+  T.Test('Simple GET', @TestSimpleGet);
+  T.Test('POST with Content-Length', @TestPostWithContentLength);
+  T.Test('Multiple headers', @TestMultipleHeaders);
+  T.Test('HTTP/1.0 version', @TestHttp10Version);
+  T.Test('Incomplete headers', @TestIncompleteHeaders);
+  T.Test('Malformed request line', @TestMalformedRequestLine);
+  T.Test('Invalid same-length method fallback', @TestInvalidSameLengthMethodFallback);
+  T.Test('Chunked fallback', @TestChunkedFallback);
+  T.Test('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
+  T.Test('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
+  T.Test('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
+  T.Test('Content-Length grammar fallbacks without raise',
     @TestContentLengthGrammarFallbacksWithoutRaise);
-  T.Run('Invalid header name fallback', @TestInvalidHeaderNameFallback);
-  T.Run('Header name tchar separator fallbacks',
+  T.Test('Invalid header name fallback', @TestInvalidHeaderNameFallback);
+  T.Test('Header name tchar separator fallbacks',
     @TestHeaderNameTCharSeparatorFallbacks);
-  T.Run('Invalid header value fallback', @TestInvalidHeaderValueFallback);
-  T.Run('Header value CTL/DEL fallbacks',
+  T.Test('Invalid header value fallback', @TestInvalidHeaderValueFallback);
+  T.Test('Header value CTL/DEL fallbacks',
     @TestHeaderValueCtlAndDelFallbacks);
-  T.Run('Header value HTAB/obs-text acceptance',
+  T.Test('Header value HTAB/obs-text acceptance',
     @TestHeaderValueHtabAndObsTextRemainAccepted);
-  T.Run('Request-target CTL/DEL fallbacks',
+  T.Test('Request-target CTL/DEL fallbacks',
     @TestRequestTargetCtlAndDelFallbacks);
-  T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
-  T.Run('Large headers (>1KB)', @TestLargeHeaders);
-  T.Run('Path with query string', @TestPathWithQuery);
-  T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
-  T.Run('Lazy headers trim trailing OWS like llhttp',
+  T.Test('Incomplete body fallback', @TestIncompleteBodyFallback);
+  T.Test('Large headers (>1KB)', @TestLargeHeaders);
+  T.Test('Path with query string', @TestPathWithQuery);
+  T.Test('Header value leading spaces', @TestHeaderValueLeadingSpaces);
+  T.Test('Lazy headers trim trailing OWS like llhttp',
     @TestLazyHeadersTrimTrailingOwsLikeLlhttp);
-  T.Run('Lazy headers raw lookup preserves semantics',
+  T.Test('Lazy headers raw lookup preserves semantics',
     @TestLazyHeadersRawLookupPreservesSemantics);
-  T.Run('Lazy headers reject invalid lookup names',
+  T.Test('Lazy headers reject invalid lookup names',
     @TestLazyHeadersRejectInvalidLookupNames);
-  T.Run('Lazy headers ForEach rejects nil callback',
+  T.Test('Lazy headers ForEach rejects nil callback',
     @TestLazyHeadersForEachRejectsNilCallback);
-  T.Run('Policy header flags', @TestPolicyHeaderFlags);
-  T.Run('Duplicate Host policy flag', @TestDuplicateHostPolicyFlag);
-  T.Run('Empty path', @TestEmptyPath);
-  T.Run('All methods', @TestAllMethods);
-  T.Run('Differential (vs llhttp)', @TestDifferential);
-  T.Run('Body offset correctness', @TestBodyOffset);
-  T.Summary;
+  T.Test('Policy header flags', @TestPolicyHeaderFlags);
+  T.Test('Duplicate Host policy flag', @TestDuplicateHostPolicyFlag);
+  T.Test('Empty path', @TestEmptyPath);
+  T.Test('All methods', @TestAllMethods);
+  T.Test('Differential (vs llhttp)', @TestDifferential);
+  T.Test('Body offset correctness', @TestBodyOffset);
+  if not T.Run then Halt(1);
 end.

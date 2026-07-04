@@ -3,14 +3,14 @@ program test_case;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.&case,
   nextpas.core.text.unicode;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure AppendUtf8(var ADst: string; const ACp: TUnicodeCodepoint);
 var
@@ -133,13 +133,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.unicode.case');
-  T.Run('ASCII case mapping', @TestAsciiCaseMapping);
-  T.Run('Unicode case mapping', @TestUnicodeCaseMapping);
-  T.Run('simple case fold', @TestSimpleCaseFold);
-  T.Run('full case fold', @TestFullCaseFold);
-  T.Run('identity mappings', @TestIdentityMappings);
-  T.Run('UTF-8 case mapping wrappers', @TestUtf8CaseMappingWrappers);
-  T.Run('boundary cases', @TestBoundaryCases);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.unicode.case');
+  T.Test('ASCII case mapping', @TestAsciiCaseMapping);
+  T.Test('Unicode case mapping', @TestUnicodeCaseMapping);
+  T.Test('simple case fold', @TestSimpleCaseFold);
+  T.Test('full case fold', @TestFullCaseFold);
+  T.Test('identity mappings', @TestIdentityMappings);
+  T.Test('UTF-8 case mapping wrappers', @TestUtf8CaseMappingWrappers);
+  T.Test('boundary cases', @TestBoundaryCases);
+  if not T.Run then Halt(1);
 end.

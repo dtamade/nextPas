@@ -6,7 +6,7 @@ program test_platform_process_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.process.base,
   nextpas.core.platform.process
   {$IFDEF NEXTPAS_WINDOWS}
@@ -16,7 +16,7 @@ uses
   ;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -227,17 +227,17 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.process.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.process.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('spawn + wait (exit 0)', @TestSpawnAndWait);
-  T.Run('pid returns reasonable value', @TestPid);
-  T.Run('piped: capture stdout', @TestSpawnPipedStdout);
-  T.Run('run: capture output', @TestRun);
-  T.Run('try_wait then wait', @TestTryWait);
-  T.Run('kill', @TestKill);
-  T.Run('detach', @TestDetach);
+  T.Test('spawn + wait (exit 0)', @TestSpawnAndWait);
+  T.Test('pid returns reasonable value', @TestPid);
+  T.Test('piped: capture stdout', @TestSpawnPipedStdout);
+  T.Test('run: capture output', @TestRun);
+  T.Test('try_wait then wait', @TestTryWait);
+  T.Test('kill', @TestKill);
+  T.Test('detach', @TestDetach);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -22,7 +22,7 @@ begin Result := ''; P := @ABuf;
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TTestSuite;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('hash.facade');
@@ -130,7 +130,7 @@ begin
     CheckTrue(CompareMem(@D1, @D2, 32));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.facade');
+  LRunner := TTestSuite.Create('nextpas.core.hash.facade');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

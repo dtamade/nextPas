@@ -3,11 +3,11 @@ program test_trig;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.trig;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -1222,39 +1222,39 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.trig');
-  T.Run('basic trig values', @TestBasicTrigValues);
-  T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
-  T.Run('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
-  T.Run('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
-  T.Run('direct trig non-finite overload parity contracts',
+  T := TTestSuite.Create('nextpas.core.math.trig');
+  T.Test('basic trig values', @TestBasicTrigValues);
+  T.Test('inverse trig domain contracts', @TestInverseTrigDomainContracts);
+  T.Test('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
+  T.Test('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);
+  T.Test('direct trig non-finite overload parity contracts',
     @TestDirectTrigNonFiniteOverloadParityContracts);
-  T.Run('circular trig signed zero contracts', @TestCircularTrigSignedZeroContracts);
-  T.Run('circular trig finite precision contracts', @TestCircularTrigFinitePrecisionContracts);
-  T.Run('ArcTan special contracts', @TestArcTanSpecialContracts);
-  T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
-  T.Run('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);
-  T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
-  T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
-  T.Run('exp log sqrt finite precision contracts',
+  T.Test('circular trig signed zero contracts', @TestCircularTrigSignedZeroContracts);
+  T.Test('circular trig finite precision contracts', @TestCircularTrigFinitePrecisionContracts);
+  T.Test('ArcTan special contracts', @TestArcTanSpecialContracts);
+  T.Test('ArcTan2 special cases', @TestArcTan2SpecialCases);
+  T.Test('ArcTan2 one-infinite contracts', @TestArcTan2OneInfiniteContracts);
+  T.Test('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
+  T.Test('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
+  T.Test('exp log sqrt finite precision contracts',
     @TestExpLogSqrtFinitePrecisionContracts);
-  T.Run('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
-  T.Run('Sqrt finite extremes subnormal contracts',
+  T.Test('exp sqrt IEEE contracts', @TestExpSqrtIEEEContracts);
+  T.Test('Sqrt finite extremes subnormal contracts',
     @TestSqrtFiniteExtremesSubnormalContracts);
-  T.Run('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
-  T.Run('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
-  T.Run('log base identity contracts', @TestLogBaseIdentityContracts);
-  T.Run('log positive subnormal contracts', @TestLogPositiveSubnormalContracts);
-  T.Run('power edge contracts', @TestPowerEdgeContracts);
-  T.Run('power negative finite base non-integer contracts',
+  T.Test('Exp finite overflow underflow contracts', @TestExpFiniteOverflowUnderflowContracts);
+  T.Test('log domain signed zero contracts', @TestLogDomainSignedZeroContracts);
+  T.Test('log base identity contracts', @TestLogBaseIdentityContracts);
+  T.Test('log positive subnormal contracts', @TestLogPositiveSubnormalContracts);
+  T.Test('power edge contracts', @TestPowerEdgeContracts);
+  T.Test('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);
-  T.Run('power non-finite contracts', @TestPowerNonFiniteContracts);
-  T.Run('Power finite identity precision contracts',
+  T.Test('power non-finite contracts', @TestPowerNonFiniteContracts);
+  T.Test('Power finite identity precision contracts',
     @TestPowerFiniteIdentityPrecisionContracts);
-  T.Run('Power finite overflow underflow sign contracts',
+  T.Test('Power finite overflow underflow sign contracts',
     @TestPowerFiniteOverflowUnderflowSignContracts);
-  T.Run('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);
-  T.Run('trig precision domain hardening contracts',
+  T.Test('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);
+  T.Test('trig precision domain hardening contracts',
     @TestTrigPrecisionDomainHardeningContracts);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -9,11 +9,11 @@ program test_xml;
 
 uses
   nextpas.core.mem.default,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.xml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === XmlParse（转发 TXmlDocument.Parse） === }
 
@@ -845,56 +845,56 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('XML Facade');
-  T.Run('XmlParseSimple', @TestXmlParseSimple);
-  T.Run('XmlParseNested', @TestXmlParseNested);
-  T.Run('TryXmlParseSuccess', @TestTryXmlParseSuccess);
-  T.Run('TryXmlParseFailureReturnsNil', @TestTryXmlParseFailureReturnsNil);
-  T.Run('TryXmlParseWithSuccess', @TestTryXmlParseWithSuccess);
-  T.Run('TryXmlParseWithFailureReturnsNil',
+  T := TTestSuite.Create('XML Facade');
+  T.Test('XmlParseSimple', @TestXmlParseSimple);
+  T.Test('XmlParseNested', @TestXmlParseNested);
+  T.Test('TryXmlParseSuccess', @TestTryXmlParseSuccess);
+  T.Test('TryXmlParseFailureReturnsNil', @TestTryXmlParseFailureReturnsNil);
+  T.Test('TryXmlParseWithSuccess', @TestTryXmlParseWithSuccess);
+  T.Test('TryXmlParseWithFailureReturnsNil',
     @TestTryXmlParseWithFailureReturnsNil);
-  T.Run('XmlTokenizeBasic', @TestXmlTokenizeBasic);
-  T.Run('XmlTokenizeEmpty', @TestXmlTokenizeEmpty);
-  T.Run('XmlTokenizeText', @TestXmlTokenizeText);
-  T.Run('XmlAllocatorSurface', @TestXmlAllocatorSurface);
-  T.Run('XmlDecodeEntities', @TestXmlDecodeEntities);
-  T.Run('XmlDecodeNumeric', @TestXmlDecodeNumeric);
-  T.Run('XmlEncodeText', @TestXmlEncodeText);
-  T.Run('XmlEncodeAttr', @TestXmlEncodeAttr);
-  T.Run('EncodeDecodeRoundTrip', @TestEncodeDecodeRoundTrip);
-  T.Run('XmlParseIgnoresDeclAndDoctype', @TestXmlParseIgnoresDeclAndDoctype);
-  T.Run('XmlParseAllowsDocumentWhitespace', @TestXmlParseAllowsDocumentWhitespace);
-  T.Run('XmlParseAllowsPreRootDoctype', @TestXmlParseAllowsPreRootDoctype);
-  T.Run('XmlTokenizeEmptyInput', @TestXmlTokenizeEmptyInput);
-  T.Run('XmlTokenizePropagatesError', @TestXmlTokenizePropagatesError);
-  T.Run('XmlTokenizeReportsExactEofPosition',
+  T.Test('XmlTokenizeBasic', @TestXmlTokenizeBasic);
+  T.Test('XmlTokenizeEmpty', @TestXmlTokenizeEmpty);
+  T.Test('XmlTokenizeText', @TestXmlTokenizeText);
+  T.Test('XmlAllocatorSurface', @TestXmlAllocatorSurface);
+  T.Test('XmlDecodeEntities', @TestXmlDecodeEntities);
+  T.Test('XmlDecodeNumeric', @TestXmlDecodeNumeric);
+  T.Test('XmlEncodeText', @TestXmlEncodeText);
+  T.Test('XmlEncodeAttr', @TestXmlEncodeAttr);
+  T.Test('EncodeDecodeRoundTrip', @TestEncodeDecodeRoundTrip);
+  T.Test('XmlParseIgnoresDeclAndDoctype', @TestXmlParseIgnoresDeclAndDoctype);
+  T.Test('XmlParseAllowsDocumentWhitespace', @TestXmlParseAllowsDocumentWhitespace);
+  T.Test('XmlParseAllowsPreRootDoctype', @TestXmlParseAllowsPreRootDoctype);
+  T.Test('XmlTokenizeEmptyInput', @TestXmlTokenizeEmptyInput);
+  T.Test('XmlTokenizePropagatesError', @TestXmlTokenizePropagatesError);
+  T.Test('XmlTokenizeReportsExactEofPosition',
     @TestXmlTokenizeReportsExactEofPosition);
-  T.Run('XmlTokenizeReportsExactCROnlyEofPosition',
+  T.Test('XmlTokenizeReportsExactCROnlyEofPosition',
     @TestXmlTokenizeReportsExactCROnlyEofPosition);
-  T.Run('XmlTokenizeRejectsInvalidReservedNamespaceBinding',
+  T.Test('XmlTokenizeRejectsInvalidReservedNamespaceBinding',
     @TestXmlTokenizeRejectsInvalidReservedNamespaceBinding);
-  T.Run('XmlTokenizeRejectsUnboundNamespacePrefix',
+  T.Test('XmlTokenizeRejectsUnboundNamespacePrefix',
     @TestXmlTokenizeRejectsUnboundNamespacePrefix);
-  T.Run('XmlRejectsInvalidCommentPayload',
+  T.Test('XmlRejectsInvalidCommentPayload',
     @TestXmlRejectsInvalidCommentPayload);
-  T.Run('XmlRejectsInvalidDocumentStructure',
+  T.Test('XmlRejectsInvalidDocumentStructure',
     @TestXmlRejectsInvalidDocumentStructure);
-  T.Run('XmlRejectsMisplacedDoctype',
+  T.Test('XmlRejectsMisplacedDoctype',
     @TestXmlRejectsMisplacedDoctype);
-  T.Run('XmlRejectsMissingRootElement',
+  T.Test('XmlRejectsMissingRootElement',
     @TestXmlRejectsMissingRootElement);
-  T.Run('XmlTokenizeRejectsInvalidNames',
+  T.Test('XmlTokenizeRejectsInvalidNames',
     @TestXmlTokenizeRejectsInvalidNames);
-  T.Run('XmlRejectsMisplacedXmlDecl',
+  T.Test('XmlRejectsMisplacedXmlDecl',
     @TestXmlRejectsMisplacedXmlDecl);
-  T.Run('XmlRejectsInvalidXmlDeclAttributes',
+  T.Test('XmlRejectsInvalidXmlDeclAttributes',
     @TestXmlRejectsInvalidXmlDeclAttributes);
-  T.Run('XmlRejectsDuplicateAttributes',
+  T.Test('XmlRejectsDuplicateAttributes',
     @TestXmlRejectsDuplicateAttributes);
-  T.Run('XmlRejectsRawLessThanInAttributeValue',
+  T.Test('XmlRejectsRawLessThanInAttributeValue',
     @TestXmlRejectsRawLessThanInAttributeValue);
-  T.Run('XmlAllowsDistinctExpandedAttributes',
+  T.Test('XmlAllowsDistinctExpandedAttributes',
     @TestXmlAllowsDistinctExpandedAttributes);
-  T.Run('XmlEncodeAttrApos', @TestXmlEncodeAttrApos);
-  T.Summary;
+  T.Test('XmlEncodeAttrApos', @TestXmlEncodeAttrApos);
+  if not T.Run then Halt(1);
 end.

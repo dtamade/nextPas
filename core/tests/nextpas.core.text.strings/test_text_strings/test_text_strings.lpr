@@ -4,11 +4,11 @@ program test_text_strings;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.strings;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestContains;
 var A: TStringArray;
@@ -252,29 +252,29 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.strings');
-  T.Run('Contains', @TestContains);
-  T.Run('IndexOf/LastIndexOf', @TestIndexOf);
-  T.Run('Sort', @TestSort);
-  T.Run('Reverse', @TestReverse);
-  T.Run('Join', @TestJoin);
-  T.Run('Split', @TestSplit);
-  T.Run('Filter', @TestFilter);
-  T.Run('Map', @TestMap);
-  T.Run('Unique', @TestUnique);
-  T.Run('Count', @TestCount);
-  T.Run('Append/Delete', @TestAppendDelete);
-  T.Run('Insert', @TestInsert);
-  T.Run('Slice', @TestSlice);
-  T.Run('Empty array', @TestEmpty);
-  T.Run('ParseLines', @TestParseLines);
-  T.Run('ParseLines (CRLF)', @TestParseLinesWindows);
-  T.Run('ParseKeyValues', @TestParseKeyValues);
-  T.Run('ParseKeyValues (colon)', @TestParseKeyValuesColon);
-  T.Run('StringPairsGet', @TestStringPairsGet);
-  T.Run('StringPairsContains', @TestStringPairsContains);
-  T.Run('StringPairsKeys', @TestStringPairsKeys);
-  T.Run('GlobMatch', @TestGlobMatch);
-  T.Run('StringsGlob', @TestStringsGlob);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.strings');
+  T.Test('Contains', @TestContains);
+  T.Test('IndexOf/LastIndexOf', @TestIndexOf);
+  T.Test('Sort', @TestSort);
+  T.Test('Reverse', @TestReverse);
+  T.Test('Join', @TestJoin);
+  T.Test('Split', @TestSplit);
+  T.Test('Filter', @TestFilter);
+  T.Test('Map', @TestMap);
+  T.Test('Unique', @TestUnique);
+  T.Test('Count', @TestCount);
+  T.Test('Append/Delete', @TestAppendDelete);
+  T.Test('Insert', @TestInsert);
+  T.Test('Slice', @TestSlice);
+  T.Test('Empty array', @TestEmpty);
+  T.Test('ParseLines', @TestParseLines);
+  T.Test('ParseLines (CRLF)', @TestParseLinesWindows);
+  T.Test('ParseKeyValues', @TestParseKeyValues);
+  T.Test('ParseKeyValues (colon)', @TestParseKeyValuesColon);
+  T.Test('StringPairsGet', @TestStringPairsGet);
+  T.Test('StringPairsContains', @TestStringPairsContains);
+  T.Test('StringPairsKeys', @TestStringPairsKeys);
+  T.Test('GlobMatch', @TestGlobMatch);
+  T.Test('StringsGlob', @TestStringsGlob);
+  if not T.Run then Halt(1);
 end.

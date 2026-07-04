@@ -4,13 +4,13 @@ program test_yaml_scanner;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
   nextpas.core.yaml.scanner;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestStreamStartEnd;
 var
@@ -334,23 +334,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.scanner');
-  T.Run('Stream start/end', @TestStreamStartEnd);
-  T.Run('Flow mapping', @TestFlowMapping);
-  T.Run('Flow sequence', @TestFlowSequence);
-  T.Run('Single quoted', @TestSingleQuoted);
-  T.Run('Double quoted', @TestDoubleQuoted);
-  T.Run('Rejects invalid double-quoted escape',
+  T := TTestSuite.Create('nextpas.core.yaml.scanner');
+  T.Test('Stream start/end', @TestStreamStartEnd);
+  T.Test('Flow mapping', @TestFlowMapping);
+  T.Test('Flow sequence', @TestFlowSequence);
+  T.Test('Single quoted', @TestSingleQuoted);
+  T.Test('Double quoted', @TestDoubleQuoted);
+  T.Test('Rejects invalid double-quoted escape',
     @TestRejectsInvalidDoubleQuotedEscape);
-  T.Run('Comments', @TestComments);
-  T.Run('Anchor/alias', @TestAnchorAlias);
-  T.Run('Rejects empty anchor/alias names', @TestRejectsEmptyAnchorAliasNames);
-  T.Run('Doc markers', @TestDocMarkers);
-  T.Run('Rejects unsupported directives', @TestRejectsUnsupportedDirectives);
-  T.Run('Rejects unsupported tags', @TestRejectsUnsupportedTags);
-  T.Run('Quoted bang strings remain scalars', @TestQuotedBangStringsRemainScalars);
-  T.Run('Nested flow', @TestNestedFlow);
-  T.Run('Block seq indicator', @TestBlockSeqIndicator);
-  T.Run('Plain scalar edge', @TestPlainScalarEdgeCases);
-  T.Summary;
+  T.Test('Comments', @TestComments);
+  T.Test('Anchor/alias', @TestAnchorAlias);
+  T.Test('Rejects empty anchor/alias names', @TestRejectsEmptyAnchorAliasNames);
+  T.Test('Doc markers', @TestDocMarkers);
+  T.Test('Rejects unsupported directives', @TestRejectsUnsupportedDirectives);
+  T.Test('Rejects unsupported tags', @TestRejectsUnsupportedTags);
+  T.Test('Quoted bang strings remain scalars', @TestQuotedBangStringsRemainScalars);
+  T.Test('Nested flow', @TestNestedFlow);
+  T.Test('Block seq indicator', @TestBlockSeqIndicator);
+  T.Test('Plain scalar edge', @TestPlainScalarEdgeCases);
+  if not T.Run then Halt(1);
 end.

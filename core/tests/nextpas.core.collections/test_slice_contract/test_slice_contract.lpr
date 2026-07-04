@@ -5,7 +5,7 @@ program test_slice_contract;
 uses
   nextpas.core.base,
   nextpas.core.collections.slice,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   TByteReadOnlySpan = specialize TReadOnlySpan<Byte>;
@@ -13,7 +13,7 @@ type
   TExceptionProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckRaisesOutOfRange(const AProc: TExceptionProc; const AName: string);
 var
@@ -150,11 +150,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.slice contract');
-  T.Run('span from pointer rejects nil non-empty', @TestSpanFromPointerRejectsNilNonEmpty);
-  T.Run('span from pointer rejects zero elem size', @TestSpanFromPointerRejectsZeroElemSize);
-  T.Run('span subspan rejects overflow', @TestSpanSubSpanRejectsOverflow);
-  T.Run('span2 subspan rejects overflow', @TestSpan2SubSpanRejectsOverflow);
-  T.Run('span2 count saturates on overflow', @TestSpan2CountSaturatesOnOverflow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.slice contract');
+  T.Test('span from pointer rejects nil non-empty', @TestSpanFromPointerRejectsNilNonEmpty);
+  T.Test('span from pointer rejects zero elem size', @TestSpanFromPointerRejectsZeroElemSize);
+  T.Test('span subspan rejects overflow', @TestSpanSubSpanRejectsOverflow);
+  T.Test('span2 subspan rejects overflow', @TestSpan2SubSpanRejectsOverflow);
+  T.Test('span2 count saturates on overflow', @TestSpan2CountSaturatesOnOverflow);
+  if not T.Run then Halt(1);
 end.

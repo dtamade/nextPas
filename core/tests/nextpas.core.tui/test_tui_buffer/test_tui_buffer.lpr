@@ -10,10 +10,10 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { 快照辅助：断言 buffer 各行内容（glyph 串）等于期望行数组 }
 procedure AssertRows(ABuf: TBuffer; const AExpected: array of AnsiString;
@@ -739,53 +739,51 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.buffer');
-  T.Run('create empty', @TestCreateEmpty);
-  T.Run('set string', @TestSetString);
-  T.Run('set string clip', @TestSetStringClip);
-  T.Run('set string left clip consumes hidden columns', @TestSetStringLeftClipConsumesHiddenColumns);
-  T.Run('set string left clip consumes hidden wide glyph', @TestSetStringLeftClipConsumesHiddenWideGlyph);
-  T.Run('set string offset', @TestSetStringOffset);
-  T.Run('set stringN wide clip', @TestSetStringNWideClip);
-  T.Run('set stringP', @TestSetStringP);
-  T.Run('set string left clip preserves visible columns',
+  T := TTestSuite.Create('nextpas.core.tui.buffer');
+  T.Test('create empty', @TestCreateEmpty);
+  T.Test('set string', @TestSetString);
+  T.Test('set string clip', @TestSetStringClip);
+  T.Test('set string left clip consumes hidden columns', @TestSetStringLeftClipConsumesHiddenColumns);
+  T.Test('set string left clip consumes hidden wide glyph', @TestSetStringLeftClipConsumesHiddenWideGlyph);
+  T.Test('set string offset', @TestSetStringOffset);
+  T.Test('set stringN wide clip', @TestSetStringNWideClip);
+  T.Test('set stringP', @TestSetStringP);
+  T.Test('set string left clip preserves visible columns',
     @TestSetStringLeftClipPreservesVisibleColumns);
-  T.Run('set stringP left clip preserves visible columns',
+  T.Test('set stringP left clip preserves visible columns',
     @TestSetStringPLeftClipPreservesVisibleColumns);
-  T.Run('set stringN left clip keeps max width visible',
+  T.Test('set stringN left clip keeps max width visible',
     @TestSetStringNLeftClipKeepsMaxWidthVisible);
-  T.Run('set string left clip clears partial wide tail',
+  T.Test('set string left clip clears partial wide tail',
     @TestSetStringLeftClipClearsPartialWideTail);
-  T.Run('set stringP left clip clears partial wide tail',
+  T.Test('set stringP left clip clears partial wide tail',
     @TestSetStringPLeftClipClearsPartialWideTail);
-  T.Run('set stringN left clip partial wide tail consumes max width',
+  T.Test('set stringN left clip partial wide tail consumes max width',
     @TestSetStringNLeftClipPartialWideTailConsumesMaxWidth);
-  T.Run('set stringP left clip consumes hidden columns',
+  T.Test('set stringP left clip consumes hidden columns',
     @TestSetStringPLeftClipConsumesHiddenColumns);
-  T.Run('cell at bounds', @TestCellAt);
-  T.Run('cjk width', @TestCJKWidth);
-  T.Run('fill rect', @TestFillRect);
-  T.Run('fill rect overwrite wide tail with narrow', @TestFillRectOverwritesWideGlyphTailWithNarrow);
-  T.Run('clear rect clears wide tail overlap', @TestClearRectClearsWideGlyphTailOverlap);
-  T.Run('diff same size', @TestDiffSameSize);
-  T.Run('diff into', @TestDiffInto);
-  T.Run('diff same size area origin change redraws at next origin',
+  T.Test('cell at bounds', @TestCellAt);
+  T.Test('cjk width', @TestCJKWidth);
+  T.Test('fill rect', @TestFillRect);
+  T.Test('fill rect overwrite wide tail with narrow', @TestFillRectOverwritesWideGlyphTailWithNarrow);
+  T.Test('clear rect clears wide tail overlap', @TestClearRectClearsWideGlyphTailOverlap);
+  T.Test('diff same size', @TestDiffSameSize);
+  T.Test('diff into', @TestDiffInto);
+  T.Test('diff same size area origin change redraws at next origin',
     @TestDiffSameSizeAreaOriginChangeRedrawsAtNextOrigin);
-  T.Run('diff full redraw skips wide tail', @TestDiffFullRedrawSkipsWideGlyphTail);
-  T.Run('resize', @TestResize);
-  T.Run('resize drops wide lead clipped at right edge', @TestResizeDropsWideLeadClippedAtRightEdge);
-  T.Run('resize drops orphan wide tail at left edge', @TestResizeDropsOrphanWideTailAtLeftEdge);
-  T.Run('style applied', @TestStyleApplied);
-  T.Run('combining mark grapheme', @TestCombiningMark);
-  T.Run('zwj emoji grapheme', @TestZWJEmoji);
-  T.Run('family emoji grapheme', @TestFamilyEmoji);
-  T.Run('skin tone emoji grapheme', @TestSkinToneEmoji);
-  T.Run('keycap emoji grapheme', @TestKeycapEmoji);
-  T.Run('overwrite wide lead with narrow', @TestOverwriteWideGlyphLeadWithNarrow);
-  T.Run('overwrite wide tail with narrow', @TestOverwriteWideGlyphTailWithNarrow);
-  T.Run('set stringP overwrite wide tail with narrow', @TestSetStringPOverwriteWideTailWithNarrow);
-  T.Run('overwrite width-1 grapheme clears glyph tail for diff', @TestOverwriteWidthOneGraphemeClearsGlyphTailForDiff);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T.Test('diff full redraw skips wide tail', @TestDiffFullRedrawSkipsWideGlyphTail);
+  T.Test('resize', @TestResize);
+  T.Test('resize drops wide lead clipped at right edge', @TestResizeDropsWideLeadClippedAtRightEdge);
+  T.Test('resize drops orphan wide tail at left edge', @TestResizeDropsOrphanWideTailAtLeftEdge);
+  T.Test('style applied', @TestStyleApplied);
+  T.Test('combining mark grapheme', @TestCombiningMark);
+  T.Test('zwj emoji grapheme', @TestZWJEmoji);
+  T.Test('family emoji grapheme', @TestFamilyEmoji);
+  T.Test('skin tone emoji grapheme', @TestSkinToneEmoji);
+  T.Test('keycap emoji grapheme', @TestKeycapEmoji);
+  T.Test('overwrite wide lead with narrow', @TestOverwriteWideGlyphLeadWithNarrow);
+  T.Test('overwrite wide tail with narrow', @TestOverwriteWideGlyphTailWithNarrow);
+  T.Test('set stringP overwrite wide tail with narrow', @TestSetStringPOverwriteWideTailWithNarrow);
+  T.Test('overwrite width-1 grapheme clears glyph tail for diff', @TestOverwriteWidthOneGraphemeClearsGlyphTailForDiff);
+  if not T.Run then Halt(1);
 end.

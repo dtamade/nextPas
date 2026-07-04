@@ -4,7 +4,7 @@ program test_transform;
 
 uses
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
@@ -12,7 +12,7 @@ uses
   nextpas.core.math.transform;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -965,16 +965,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.transform');
-  T.Run('projection builders', @TestProjectionBuilders);
-  T.Run('Ortho allows reversed bounds', @TestOrthoAllowsReversedBounds);
-  T.Run('model and view builders', @TestModelAndViewBuilders);
-  T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
-  T.Run('LookAt up direction controls roll', @TestLookAtUpDirectionControlsRoll);
-  T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
-  T.Run('Camera2D zoom scales view', @TestCamera2DZoomScalesView);
-  T.Run('direct double builder parity', @TestDirectDoubleBuilderParity);
-  T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
-  T.Run('geometry guards report public contract messages', @TestGeometryGuardMessages);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.math.transform');
+  T.Test('projection builders', @TestProjectionBuilders);
+  T.Test('Ortho allows reversed bounds', @TestOrthoAllowsReversedBounds);
+  T.Test('model and view builders', @TestModelAndViewBuilders);
+  T.Test('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
+  T.Test('LookAt up direction controls roll', @TestLookAtUpDirectionControlsRoll);
+  T.Test('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
+  T.Test('Camera2D zoom scales view', @TestCamera2DZoomScalesView);
+  T.Test('direct double builder parity', @TestDirectDoubleBuilderParity);
+  T.Test('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
+  T.Test('geometry guards report public contract messages', @TestGeometryGuardMessages);
+  if not T.Run then Halt(1);
 end.

@@ -4,11 +4,11 @@ program test_fs_text;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.fs;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function TmpPath: string;
 begin
@@ -275,25 +275,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.fs.text');
-  T.Run('WriteFileText', @TestWriteFileText);
-  T.Run('WriteFileText empty', @TestWriteFileTextEmpty);
-  T.Run('WriteFileLines', @TestWriteFileLines);
-  T.Run('WriteFileLines empty', @TestWriteFileLinesEmpty);
-  T.Run('AppendFile', @TestAppendFile);
-  T.Run('AppendFileText', @TestAppendFileText);
-  T.Run('Append non-existent', @TestAppendToNonExistent);
-  T.Run('Large text 100KB', @TestWriteReadLargeText);
-  T.Run('Unicode lines', @TestWriteFileLinesUnicode);
-  T.Run('AppendFileLine', @TestAppendFileLine);
-  T.Run('ReadFileText strips UTF-8 BOM', @TestReadFileTextStripsUtf8Bom);
-  T.Run('ReadFileText rejects invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
-  T.Run('ReadFileText UTF-16LE BOM', @TestReadFileText_UTF16LE_BOM);
-  T.Run('ReadFileText UTF-16BE BOM', @TestReadFileText_UTF16BE_BOM);
-  T.Run('ReadFileText empty file', @TestReadFileText_EmptyFile);
-  T.Run('ReadFileText ASCII no BOM', @TestReadFileText_ASCII_NoBOM);
-  T.Run('ReadFileText UTF-8 multi-byte', @TestReadFileText_UTF8_MultiByte);
-  T.Run('ScanFileLines', @TestScanFileLines);
-  T.Run('MapFileLines', @TestMapFileLines);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.fs.text');
+  T.Test('WriteFileText', @TestWriteFileText);
+  T.Test('WriteFileText empty', @TestWriteFileTextEmpty);
+  T.Test('WriteFileLines', @TestWriteFileLines);
+  T.Test('WriteFileLines empty', @TestWriteFileLinesEmpty);
+  T.Test('AppendFile', @TestAppendFile);
+  T.Test('AppendFileText', @TestAppendFileText);
+  T.Test('Append non-existent', @TestAppendToNonExistent);
+  T.Test('Large text 100KB', @TestWriteReadLargeText);
+  T.Test('Unicode lines', @TestWriteFileLinesUnicode);
+  T.Test('AppendFileLine', @TestAppendFileLine);
+  T.Test('ReadFileText strips UTF-8 BOM', @TestReadFileTextStripsUtf8Bom);
+  T.Test('ReadFileText rejects invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
+  T.Test('ReadFileText UTF-16LE BOM', @TestReadFileText_UTF16LE_BOM);
+  T.Test('ReadFileText UTF-16BE BOM', @TestReadFileText_UTF16BE_BOM);
+  T.Test('ReadFileText empty file', @TestReadFileText_EmptyFile);
+  T.Test('ReadFileText ASCII no BOM', @TestReadFileText_ASCII_NoBOM);
+  T.Test('ReadFileText UTF-8 multi-byte', @TestReadFileText_UTF8_MultiByte);
+  T.Test('ScanFileLines', @TestScanFileLines);
+  T.Test('MapFileLines', @TestMapFileLines);
+  if not T.Run then Halt(1);
 end.

@@ -4,10 +4,10 @@ program test_platform_sync_l0_boundary;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -89,10 +89,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.sync.l0_boundary');
-  T.Run('platform.sync source stays L0', @TestPlatformSyncSourceStaysL0);
-  T.Run('platform.sync.base source stays L0', @TestPlatformSyncBaseStaysL0);
-  T.Run('platform.sync example stays L0', @TestPlatformSyncExampleStaysL0);
-  T.Run('platform.sync benchmark stays L0', @TestPlatformSyncBenchmarkStaysL0);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.sync.l0_boundary');
+  T.Test('platform.sync source stays L0', @TestPlatformSyncSourceStaysL0);
+  T.Test('platform.sync.base source stays L0', @TestPlatformSyncBaseStaysL0);
+  T.Test('platform.sync example stays L0', @TestPlatformSyncExampleStaysL0);
+  T.Test('platform.sync benchmark stays L0', @TestPlatformSyncBenchmarkStaysL0);
+  if not T.Run then Halt(1);
 end.

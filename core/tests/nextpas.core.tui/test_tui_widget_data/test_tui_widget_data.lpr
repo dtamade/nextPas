@@ -14,8 +14,8 @@ uses
   nextpas.core.tui.widget.calendar,
   nextpas.core.tui.widget.breadcrumb,
   nextpas.core.tui.widget.statusbar,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 procedure CheckOutsideAreaEmpty(LBuf: TBuffer; const AArea: TRect; const AMessage: AnsiString);
 var
@@ -159,16 +159,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.data');
-  T.Run('linechart render', @TestLineChartRender);
-  T.Run('linechart multi-series', @TestLineChartMultiSeries);
-  T.Run('progress_group render', @TestProgressGroupRender);
-  T.Run('progress_group tiny area clipping', @TestProgressGroupTinyAreaDoesNotWriteOutsideCallerArea);
-  T.Run('timeline render', @TestTimelineRender);
-  T.Run('calendar render', @TestCalendarRender);
-  T.Run('breadcrumb render', @TestBreadcrumbRender);
-  T.Run('breadcrumb total width', @TestBreadcrumbTotalWidth);
-  T.Run('statusbar render', @TestStatusBarRender);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.data');
+  T.Test('linechart render', @TestLineChartRender);
+  T.Test('linechart multi-series', @TestLineChartMultiSeries);
+  T.Test('progress_group render', @TestProgressGroupRender);
+  T.Test('progress_group tiny area clipping', @TestProgressGroupTinyAreaDoesNotWriteOutsideCallerArea);
+  T.Test('timeline render', @TestTimelineRender);
+  T.Test('calendar render', @TestCalendarRender);
+  T.Test('breadcrumb render', @TestBreadcrumbRender);
+  T.Test('breadcrumb total width', @TestBreadcrumbTotalWidth);
+  T.Test('statusbar render', @TestStatusBarRender);
+  if not T.Run then Halt(1);
 end.

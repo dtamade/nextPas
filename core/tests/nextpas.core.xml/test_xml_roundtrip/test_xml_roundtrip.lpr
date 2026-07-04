@@ -14,10 +14,10 @@ uses
   nextpas.core.xml,
   nextpas.core.xml.base,
   nextpas.core.xml.dom,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Helper: parse twice, compare root structure === }
 
@@ -312,16 +312,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('XML Roundtrip');
-  T.Run('BasicRoundtrip', @TestBasicRoundtrip);
-  T.Run('AttributesRoundtrip', @TestAttributesRoundtrip);
-  T.Run('CDataRoundtrip', @TestCDataRoundtrip);
-  T.Run('CommentRoundtrip', @TestCommentRoundtrip);
-  T.Run('MixedContentRoundtrip', @TestMixedContentRoundtrip);
-  T.Run('SelfClosingRoundtrip', @TestSelfClosingRoundtrip);
-  T.Run('NamespaceRoundtrip', @TestNamespaceRoundtrip);
-  T.Run('EmptyElementRoundtrip', @TestEmptyElementRoundtrip);
-  T.Run('DeepNestingRoundtrip', @TestDeepNestingRoundtrip);
-  T.Run('MultipleChildrenRoundtrip', @TestMultipleChildrenRoundtrip);
-  T.Summary;
+  T := TTestSuite.Create('XML Roundtrip');
+  T.Test('BasicRoundtrip', @TestBasicRoundtrip);
+  T.Test('AttributesRoundtrip', @TestAttributesRoundtrip);
+  T.Test('CDataRoundtrip', @TestCDataRoundtrip);
+  T.Test('CommentRoundtrip', @TestCommentRoundtrip);
+  T.Test('MixedContentRoundtrip', @TestMixedContentRoundtrip);
+  T.Test('SelfClosingRoundtrip', @TestSelfClosingRoundtrip);
+  T.Test('NamespaceRoundtrip', @TestNamespaceRoundtrip);
+  T.Test('EmptyElementRoundtrip', @TestEmptyElementRoundtrip);
+  T.Test('DeepNestingRoundtrip', @TestDeepNestingRoundtrip);
+  T.Test('MultipleChildrenRoundtrip', @TestMultipleChildrenRoundtrip);
+  if not T.Run then Halt(1);
 end.

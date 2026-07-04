@@ -15,8 +15,8 @@ uses
   nextpas.core.tui.widget.modal,
   nextpas.core.tui.widget.popover,
   nextpas.core.tui.widget.tooltip,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === TPanel === }
 procedure TestPanelNew;
@@ -189,22 +189,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.layout');
-  T.Run('panel new', @TestPanelNew);
-  T.Run('panel layout', @TestPanelLayout);
-  T.Run('panel as IWidget', @TestPanelAsIWidget);
-  T.Run('panel sidebar', @TestPanelSidebar);
-  T.Run('split_pane horizontal', @TestSplitPaneHorizontal);
-  T.Run('split_pane vertical', @TestSplitPaneVertical);
-  T.Run('split_pane mouse down outside divider does not start drag',
+  T := TTestSuite.Create('nextpas.core.tui.widget.layout');
+  T.Test('panel new', @TestPanelNew);
+  T.Test('panel layout', @TestPanelLayout);
+  T.Test('panel as IWidget', @TestPanelAsIWidget);
+  T.Test('panel sidebar', @TestPanelSidebar);
+  T.Test('split_pane horizontal', @TestSplitPaneHorizontal);
+  T.Test('split_pane vertical', @TestSplitPaneVertical);
+  T.Test('split_pane mouse down outside divider does not start drag',
     @TestSplitPaneMouseDownOutsideDividerDoesNotStartDrag);
-  T.Run('modal content area', @TestModalContentArea);
-  T.Run('modal render', @TestModalRender);
-  T.Run('modal invisible', @TestModalInvisible);
-  T.Run('tooltip render at', @TestTooltipRenderAt);
-  T.Run('tooltip as IWidget', @TestTooltipAsIWidget);
-  T.Run('popover bordered tiny width does not leak content',
+  T.Test('modal content area', @TestModalContentArea);
+  T.Test('modal render', @TestModalRender);
+  T.Test('modal invisible', @TestModalInvisible);
+  T.Test('tooltip render at', @TestTooltipRenderAt);
+  T.Test('tooltip as IWidget', @TestTooltipAsIWidget);
+  T.Test('popover bordered tiny width does not leak content',
     @TestPopoverBorderedTinyWidthDoesNotLeakContent);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  if not T.Run then Halt(1);
 end.

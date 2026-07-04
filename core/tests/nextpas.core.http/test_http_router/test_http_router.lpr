@@ -5,7 +5,7 @@ program test_http_router;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.text.conv,
@@ -16,7 +16,7 @@ uses
   nextpas.core.http.router;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GHandlerCalled: string;
 
 type
@@ -813,32 +813,32 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.router');
-  T.Run('Static route match', @TestStaticRouteMatch);
-  T.Run('Static route no match', @TestStaticRouteNoMatch);
-  T.Run('Path param single', @TestPathParamSingle);
-  T.Run('Multiple params', @TestMultipleParams);
-  T.Run('Wildcard', @TestWildcard);
-  T.Run('Method dispatch', @TestMethodDispatch);
-  T.Run('Convenience methods', @TestConvenienceMethods);
-  T.Run('Static wins over param', @TestStaticWinsOverParam);
-  T.Run('Trailing slash', @TestTrailingSlash);
-  T.Run('Duplicate route raises', @TestDuplicateRouteRaises);
-  T.Run('Empty pattern raises', @TestEmptyPatternRaises);
-  T.Run('Nil handler raises', @TestNilHandlerRaises);
-  T.Run('Nil middleware raises', @TestNilMiddlewareRaises);
-  T.Run('Wildcard must be last', @TestWildcardMustBeLast);
-  T.Run('Deep static route', @TestDeepStaticRoute);
-  T.Run('100 static routes', @Test100StaticRoutes);
-  T.Run('100 param routes', @Test100ParamRoutes);
-  T.Run('Mixed priority static wins', @TestMixedPriorityStaticWins);
-  T.Run('Root route', @TestRootRoute);
-  T.Run('Double slash no match', @TestDoubleSlashNoMatch);
-  T.Run('Multiple wildcards raises', @TestMultipleWildcardsRaises);
-  T.Run('ServeHTTP integration', @TestServeHTTPIntegration);
-  T.Run('HEAD falls back to GET route', @TestHeadFallsBackToGetRoute);
-  T.Run('explicit HEAD route wins over GET fallback',
+  T := TTestSuite.Create('nextpas.core.http.router');
+  T.Test('Static route match', @TestStaticRouteMatch);
+  T.Test('Static route no match', @TestStaticRouteNoMatch);
+  T.Test('Path param single', @TestPathParamSingle);
+  T.Test('Multiple params', @TestMultipleParams);
+  T.Test('Wildcard', @TestWildcard);
+  T.Test('Method dispatch', @TestMethodDispatch);
+  T.Test('Convenience methods', @TestConvenienceMethods);
+  T.Test('Static wins over param', @TestStaticWinsOverParam);
+  T.Test('Trailing slash', @TestTrailingSlash);
+  T.Test('Duplicate route raises', @TestDuplicateRouteRaises);
+  T.Test('Empty pattern raises', @TestEmptyPatternRaises);
+  T.Test('Nil handler raises', @TestNilHandlerRaises);
+  T.Test('Nil middleware raises', @TestNilMiddlewareRaises);
+  T.Test('Wildcard must be last', @TestWildcardMustBeLast);
+  T.Test('Deep static route', @TestDeepStaticRoute);
+  T.Test('100 static routes', @Test100StaticRoutes);
+  T.Test('100 param routes', @Test100ParamRoutes);
+  T.Test('Mixed priority static wins', @TestMixedPriorityStaticWins);
+  T.Test('Root route', @TestRootRoute);
+  T.Test('Double slash no match', @TestDoubleSlashNoMatch);
+  T.Test('Multiple wildcards raises', @TestMultipleWildcardsRaises);
+  T.Test('ServeHTTP integration', @TestServeHTTPIntegration);
+  T.Test('HEAD falls back to GET route', @TestHeadFallsBackToGetRoute);
+  T.Test('explicit HEAD route wins over GET fallback',
     @TestExplicitHeadRouteWinsOverGetFallback);
-  T.Run('405 lists all methods', @Test405ListsAllMethods);
-  T.Summary;
+  T.Test('405 lists all methods', @Test405ListsAllMethods);
+  if not T.Run then Halt(1);
 end.

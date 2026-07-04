@@ -5,7 +5,7 @@ program test_uuid_v7_monotonic_clock_contract;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,
   nextpas.core.platform.random,
@@ -20,7 +20,7 @@ type
   PUuidV7GeneratorState = ^TUuidV7GeneratorState;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure ForceGlobalV7GeneratorState(const ALastMs: UInt64; const ARandA: UInt16);
 var
@@ -87,9 +87,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.uuid.v7_monotonic_clock_contract');
-  T.Run('rollback uses logical timestamp', @TestRollbackUsesLogicalTimestamp);
-  T.Run('frozen ms overflow advances logical timestamp', @TestFrozenMsOverflowAdvancesLogicalTimestamp);
-  T.Run('frozen max timestamp randA overflow fails fast', @TestFrozenMaxTimestampRandAOverflowFailsFast);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.uuid.v7_monotonic_clock_contract');
+  T.Test('rollback uses logical timestamp', @TestRollbackUsesLogicalTimestamp);
+  T.Test('frozen ms overflow advances logical timestamp', @TestFrozenMsOverflowAdvancesLogicalTimestamp);
+  T.Test('frozen max timestamp randA overflow fails fast', @TestFrozenMaxTimestampRandAOverflowFailsFast);
+  if not T.Run then Halt(1);
 end.

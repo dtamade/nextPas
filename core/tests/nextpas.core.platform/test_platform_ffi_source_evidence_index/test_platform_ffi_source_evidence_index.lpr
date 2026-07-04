@@ -4,7 +4,7 @@ program test_platform_ffi_source_evidence_index;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   DOC_PATH_FROM_TEST = '../../../docs/platform-ffi-source-evidence-index.md';
@@ -17,7 +17,7 @@ const
   VERIFY_LOCAL_PATH_FROM_ROOT = 'build/verify_local.sh';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -242,8 +242,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.ffi_source_evidence_index');
-  T.Run('platform ffi source evidence index doc is explicit', @TestSourceEvidenceIndexDocument);
-  T.Run('platform ffi source evidence route truth stays indexed', @TestSourceEvidenceRouteTruth);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.ffi_source_evidence_index');
+  T.Test('platform ffi source evidence index doc is explicit', @TestSourceEvidenceIndexDocument);
+  T.Test('platform ffi source evidence route truth stays indexed', @TestSourceEvidenceRouteTruth);
+  if not T.Run then Halt(1);
 end.

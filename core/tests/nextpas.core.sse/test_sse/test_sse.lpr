@@ -4,13 +4,13 @@ program test_sse;
 
 uses
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.sse.base,
   nextpas.core.sse.parser,
   nextpas.core.sse;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSimpleEvent;
 var
@@ -209,23 +209,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.sse');
-  T.Run('Simple event', @TestSimpleEvent);
-  T.Run('Named event', @TestNamedEvent);
-  T.Run('Multi-line data', @TestMultiLineData);
-  T.Run('ID field', @TestIdField);
-  T.Run('Retry field', @TestRetryField);
-  T.Run('Comment ignored', @TestCommentIgnored);
-  T.Run('CRLF line endings', @TestCRLFLineEndings);
-  T.Run('CR-only line endings', @TestCROnlyLineEndings);
-  T.Run('Incremental feed', @TestIncrementalFeed);
-  T.Run('Multiple events', @TestMultipleEvents);
-  T.Run('ID with NUL ignored', @TestIdWithNulIgnored);
-  T.Run('Non-numeric retry ignored', @TestNonNumericRetryIgnored);
-  T.Run('Parser last event id', @TestParserLastEventId);
-  T.Run('Finish without blank line', @TestFinishWithoutBlankLineNoDispatch);
-  T.Run('Finish with blank line', @TestFinishWithBlankLineDispatches);
-  T.Run('Empty data field', @TestEmptyDataField);
-  T.Run('Buffer overflow', @TestBufferOverflow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.sse');
+  T.Test('Simple event', @TestSimpleEvent);
+  T.Test('Named event', @TestNamedEvent);
+  T.Test('Multi-line data', @TestMultiLineData);
+  T.Test('ID field', @TestIdField);
+  T.Test('Retry field', @TestRetryField);
+  T.Test('Comment ignored', @TestCommentIgnored);
+  T.Test('CRLF line endings', @TestCRLFLineEndings);
+  T.Test('CR-only line endings', @TestCROnlyLineEndings);
+  T.Test('Incremental feed', @TestIncrementalFeed);
+  T.Test('Multiple events', @TestMultipleEvents);
+  T.Test('ID with NUL ignored', @TestIdWithNulIgnored);
+  T.Test('Non-numeric retry ignored', @TestNonNumericRetryIgnored);
+  T.Test('Parser last event id', @TestParserLastEventId);
+  T.Test('Finish without blank line', @TestFinishWithoutBlankLineNoDispatch);
+  T.Test('Finish with blank line', @TestFinishWithBlankLineDispatches);
+  T.Test('Empty data field', @TestEmptyDataField);
+  T.Test('Buffer overflow', @TestBufferOverflow);
+  if not T.Run then Halt(1);
 end.

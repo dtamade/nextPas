@@ -3,12 +3,12 @@ program test_system_sysutils_minimal;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.system.sysutils,
   nextpas.core.exception;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFormatDelegatesToTextContract;
 begin
@@ -84,12 +84,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.system.sysutils minimal');
-  T.Run('Format delegates to text contract', @TestFormatDelegatesToTextContract);
-  T.Run('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
-  T.Run('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
-  T.Run('SameText uses system-local ASCII fold', @TestSameTextUsesSystemLocalAsciiFold);
-  T.Run('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
-  T.Run('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
+  T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
+  T.Test('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
+  T.Test('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
+  T.Test('SameText uses system-local ASCII fold', @TestSameTextUsesSystemLocalAsciiFold);
+  T.Test('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
+  T.Test('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
+  if not T.Run then Halt(1);
 end.

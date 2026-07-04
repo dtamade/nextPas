@@ -4,10 +4,10 @@ program test_validation;
 
 uses
   nextpas.core.validation,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Required === }
 
@@ -570,90 +570,89 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.validation');
+  T := TTestSuite.Create('nextpas.core.validation');
   { Required }
-  T.Run('required empty', @TestRequiredEmpty);
-  T.Run('required non-empty', @TestRequiredNonEmpty);
+  T.Test('required empty', @TestRequiredEmpty);
+  T.Test('required non-empty', @TestRequiredNonEmpty);
   { MinLen/MaxLen }
-  T.Run('minlen pass', @TestMinLenPass);
-  T.Run('minlen fail', @TestMinLenFail);
-  T.Run('maxlen pass', @TestMaxLenPass);
-  T.Run('maxlen fail', @TestMaxLenFail);
+  T.Test('minlen pass', @TestMinLenPass);
+  T.Test('minlen fail', @TestMinLenFail);
+  T.Test('maxlen pass', @TestMaxLenPass);
+  T.Test('maxlen fail', @TestMaxLenFail);
   { MinInt/MaxInt/RangeInt }
-  T.Run('minint pass', @TestMinIntPass);
-  T.Run('minint fail', @TestMinIntFail);
-  T.Run('maxint pass', @TestMaxIntPass);
-  T.Run('maxint fail', @TestMaxIntFail);
-  T.Run('rangeint pass', @TestRangeIntPass);
-  T.Run('rangeint fail low', @TestRangeIntFailLow);
-  T.Run('rangeint fail high', @TestRangeIntFailHigh);
+  T.Test('minint pass', @TestMinIntPass);
+  T.Test('minint fail', @TestMinIntFail);
+  T.Test('maxint pass', @TestMaxIntPass);
+  T.Test('maxint fail', @TestMaxIntFail);
+  T.Test('rangeint pass', @TestRangeIntPass);
+  T.Test('rangeint fail low', @TestRangeIntFailLow);
+  T.Test('rangeint fail high', @TestRangeIntFailHigh);
   { Email }
-  T.Run('email valid', @TestEmailValid);
-  T.Run('email no @', @TestEmailNoAt);
-  T.Run('email @ start', @TestEmailAtStart);
-  T.Run('email @ end', @TestEmailAtEnd);
-  T.Run('email empty', @TestEmailEmpty);
+  T.Test('email valid', @TestEmailValid);
+  T.Test('email no @', @TestEmailNoAt);
+  T.Test('email @ start', @TestEmailAtStart);
+  T.Test('email @ end', @TestEmailAtEnd);
+  T.Test('email empty', @TestEmailEmpty);
   { NotEmpty }
-  T.Run('notempty pass', @TestNotEmptyPass);
-  T.Run('notempty fail', @TestNotEmptyFail);
-  T.Run('notempty blank', @TestNotEmptyBlank);
+  T.Test('notempty pass', @TestNotEmptyPass);
+  T.Test('notempty fail', @TestNotEmptyFail);
+  T.Test('notempty blank', @TestNotEmptyBlank);
   { Matches }
-  T.Run('matches pass', @TestMatchesPass);
-  T.Run('matches fail', @TestMatchesFail);
-  T.Run('matches question', @TestMatchesQuestion);
+  T.Test('matches pass', @TestMatchesPass);
+  T.Test('matches fail', @TestMatchesFail);
+  T.Test('matches question', @TestMatchesQuestion);
   { OneOf }
-  T.Run('oneof pass', @TestOneOfPass);
-  T.Run('oneof fail', @TestOneOfFail);
+  T.Test('oneof pass', @TestOneOfPass);
+  T.Test('oneof fail', @TestOneOfFail);
   { Custom }
-  T.Run('custom pass', @TestCustomPass);
-  T.Run('custom fail', @TestCustomFail);
+  T.Test('custom pass', @TestCustomPass);
+  T.Test('custom fail', @TestCustomFail);
   { Combination }
-  T.Run('multi-field validation', @TestMultiFieldValidation);
-  T.Run('error messages format', @TestErrorMessages);
-  T.Run('empty validator', @TestEmptyValidator);
-  T.Run('chain multiple errors', @TestChainMultipleErrors);
-  T.Run('result add error direct', @TestResultAddErrorDirect);
-  T.Run('rangeint min=max', @TestRangeIntMinEqualsMax);
-  T.Run('rangeint at boundary low', @TestRangeIntAtBoundaryLow);
-  T.Run('rangeint at boundary high', @TestRangeIntAtBoundaryHigh);
-  T.Run('rangeint just below min', @TestRangeIntJustBelowMin);
-  T.Run('rangeint just above max', @TestRangeIntJustAboveMax);
-  T.Run('oneof empty options', @TestOneOfEmptyOptions);
-  T.Run('matches empty pattern', @TestMatchesEmptyPattern);
-  T.Run('matches empty both', @TestMatchesEmptyBoth);
-  T.Run('first error no errors', @TestFirstErrorNoErrors);
-  T.Run('error messages multiple', @TestErrorMessagesMultiple);
+  T.Test('multi-field validation', @TestMultiFieldValidation);
+  T.Test('error messages format', @TestErrorMessages);
+  T.Test('empty validator', @TestEmptyValidator);
+  T.Test('chain multiple errors', @TestChainMultipleErrors);
+  T.Test('result add error direct', @TestResultAddErrorDirect);
+  T.Test('rangeint min=max', @TestRangeIntMinEqualsMax);
+  T.Test('rangeint at boundary low', @TestRangeIntAtBoundaryLow);
+  T.Test('rangeint at boundary high', @TestRangeIntAtBoundaryHigh);
+  T.Test('rangeint just below min', @TestRangeIntJustBelowMin);
+  T.Test('rangeint just above max', @TestRangeIntJustAboveMax);
+  T.Test('oneof empty options', @TestOneOfEmptyOptions);
+  T.Test('matches empty pattern', @TestMatchesEmptyPattern);
+  T.Test('matches empty both', @TestMatchesEmptyBoth);
+  T.Test('first error no errors', @TestFirstErrorNoErrors);
+  T.Test('error messages multiple', @TestErrorMessagesMultiple);
   { New: URL }
-  T.Run('url valid https', @TestURLValid);
-  T.Run('url valid http', @TestURLValidHttp);
-  T.Run('url invalid no scheme', @TestURLInvalidNoScheme);
-  T.Run('url invalid empty', @TestURLInvalidEmpty);
-  T.Run('url invalid no host', @TestURLInvalidNoHost);
+  T.Test('url valid https', @TestURLValid);
+  T.Test('url valid http', @TestURLValidHttp);
+  T.Test('url invalid no scheme', @TestURLInvalidNoScheme);
+  T.Test('url invalid empty', @TestURLInvalidEmpty);
+  T.Test('url invalid no host', @TestURLInvalidNoHost);
   { New: IPv4 }
-  T.Run('ipv4 valid', @TestIPv4Valid);
-  T.Run('ipv4 valid 0.0.0.0', @TestIPv4ValidZero);
-  T.Run('ipv4 valid 255.255.255.255', @TestIPv4ValidMax);
-  T.Run('ipv4 invalid 256', @TestIPv4InvalidOctet);
-  T.Run('ipv4 invalid format', @TestIPv4InvalidFormat);
-  T.Run('ipv4 invalid chars', @TestIPv4InvalidChars);
-  T.Run('ipv4 invalid empty', @TestIPv4InvalidEmpty);
+  T.Test('ipv4 valid', @TestIPv4Valid);
+  T.Test('ipv4 valid 0.0.0.0', @TestIPv4ValidZero);
+  T.Test('ipv4 valid 255.255.255.255', @TestIPv4ValidMax);
+  T.Test('ipv4 invalid 256', @TestIPv4InvalidOctet);
+  T.Test('ipv4 invalid format', @TestIPv4InvalidFormat);
+  T.Test('ipv4 invalid chars', @TestIPv4InvalidChars);
+  T.Test('ipv4 invalid empty', @TestIPv4InvalidEmpty);
   { New: Contains/StartsWith/EndsWith }
-  T.Run('contains pass', @TestContainsPass);
-  T.Run('contains fail', @TestContainsFail);
-  T.Run('startswith pass', @TestStartsWithPass);
-  T.Run('startswith fail', @TestStartsWithFail);
-  T.Run('endswith pass', @TestEndsWithPass);
-  T.Run('endswith fail', @TestEndsWithFail);
+  T.Test('contains pass', @TestContainsPass);
+  T.Test('contains fail', @TestContainsFail);
+  T.Test('startswith pass', @TestStartsWithPass);
+  T.Test('startswith fail', @TestStartsWithFail);
+  T.Test('endswith pass', @TestEndsWithPass);
+  T.Test('endswith fail', @TestEndsWithFail);
   { New: Alpha/AlphaNum/Numeric }
-  T.Run('alpha pass', @TestAlphaPass);
-  T.Run('alpha fail', @TestAlphaFail);
-  T.Run('alpha empty', @TestAlphaEmpty);
-  T.Run('alphanum pass', @TestAlphaNumPass);
-  T.Run('alphanum fail', @TestAlphaNumFail);
-  T.Run('alphanum empty', @TestAlphaNumEmpty);
-  T.Run('numeric pass', @TestNumericPass);
-  T.Run('numeric fail', @TestNumericFail);
-  T.Run('numeric empty', @TestNumericEmpty);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('alpha pass', @TestAlphaPass);
+  T.Test('alpha fail', @TestAlphaFail);
+  T.Test('alpha empty', @TestAlphaEmpty);
+  T.Test('alphanum pass', @TestAlphaNumPass);
+  T.Test('alphanum fail', @TestAlphaNumFail);
+  T.Test('alphanum empty', @TestAlphaNumEmpty);
+  T.Test('numeric pass', @TestNumericPass);
+  T.Test('numeric fail', @TestNumericFail);
+  T.Test('numeric empty', @TestNumericEmpty);
+  if not T.Run then Halt(1);
 end.

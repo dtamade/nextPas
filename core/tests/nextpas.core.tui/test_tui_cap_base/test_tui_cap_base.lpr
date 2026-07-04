@@ -4,10 +4,10 @@ program test_tui_cap_base;
 
 uses
   nextpas.core.tui.cap.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCapabilityStatus;
 var
@@ -21,9 +21,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.cap_base');
-  T.Run('capability status', @TestCapabilityStatus);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.cap_base');
+  T.Test('capability status', @TestCapabilityStatus);
+  if not T.Run then Halt(1);
 end.

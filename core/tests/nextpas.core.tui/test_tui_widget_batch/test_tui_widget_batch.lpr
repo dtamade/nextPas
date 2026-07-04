@@ -16,8 +16,8 @@ uses
   nextpas.core.tui.widget.canvas,
   nextpas.core.tui.widget.table,
   nextpas.core.tui.widget.input,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === Gauge === }
 procedure TestGaugeEmpty;
@@ -179,19 +179,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.batch');
-  T.Run('gauge empty', @TestGaugeEmpty);
-  T.Run('gauge full', @TestGaugeFull);
-  T.Run('gauge label', @TestGaugeLabel);
-  T.Run('sparkline render', @TestSparklineRender);
-  T.Run('barchart with data', @TestBarchartWithData);
-  T.Run('canvas draw dot', @TestCanvasDrawDot);
-  T.Run('table with data', @TestTableWithData);
-  T.Run('table selection', @TestTableSelection);
-  T.Run('table empty rows clear state', @TestTableEmptyRowsClearState);
-  T.Run('table column alignment', @TestTableColumnAlignment);
-  T.Run('input render', @TestInputRender);
-  T.Run('input cursor', @TestInputCursor);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.batch');
+  T.Test('gauge empty', @TestGaugeEmpty);
+  T.Test('gauge full', @TestGaugeFull);
+  T.Test('gauge label', @TestGaugeLabel);
+  T.Test('sparkline render', @TestSparklineRender);
+  T.Test('barchart with data', @TestBarchartWithData);
+  T.Test('canvas draw dot', @TestCanvasDrawDot);
+  T.Test('table with data', @TestTableWithData);
+  T.Test('table selection', @TestTableSelection);
+  T.Test('table empty rows clear state', @TestTableEmptyRowsClearState);
+  T.Test('table column alignment', @TestTableColumnAlignment);
+  T.Test('input render', @TestInputRender);
+  T.Test('input cursor', @TestInputCursor);
+  if not T.Run then Halt(1);
 end.

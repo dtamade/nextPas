@@ -4,7 +4,7 @@ program test_compress_deep;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -14,7 +14,7 @@ uses
   nextpas.core.compress;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function SnapshotStreamPreservingPosition(const AStream: IStream): TBytes;
 var
@@ -828,53 +828,51 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.compress.deep');
+  T := TTestSuite.Create('nextpas.core.compress.deep');
   { Round-trip integrity }
-  T.Run('Gzip round-trip sequential', @TestGzipRoundTripSequential);
-  T.Run('Deflate round-trip all-zeros', @TestDeflateRoundTripAllZeros);
-  T.Run('LZ4 round-trip repetitive', @TestLz4RoundTripRepetitive);
+  T.Test('Gzip round-trip sequential', @TestGzipRoundTripSequential);
+  T.Test('Deflate round-trip all-zeros', @TestDeflateRoundTripAllZeros);
+  T.Test('LZ4 round-trip repetitive', @TestLz4RoundTripRepetitive);
   { Empty input }
-  T.Run('Gzip empty one-shot', @TestGzipEmptyOneShot);
-  T.Run('Deflate empty one-shot', @TestDeflateEmptyOneShot);
-  T.Run('LZ4 empty one-shot', @TestLz4EmptyOneShot);
+  T.Test('Gzip empty one-shot', @TestGzipEmptyOneShot);
+  T.Test('Deflate empty one-shot', @TestDeflateEmptyOneShot);
+  T.Test('LZ4 empty one-shot', @TestLz4EmptyOneShot);
   { Large input }
-  T.Run('Gzip 100KB', @TestGzipLarge100KB);
-  T.Run('Deflate 100KB', @TestDeflateLarge100KB);
-  T.Run('LZ4 100KB', @TestLz4Large100KB);
+  T.Test('Gzip 100KB', @TestGzipLarge100KB);
+  T.Test('Deflate 100KB', @TestDeflateLarge100KB);
+  T.Test('LZ4 100KB', @TestLz4Large100KB);
   { Double compress }
-  T.Run('Gzip double compress', @TestGzipDoubleCompress);
-  T.Run('LZ4 double compress', @TestLz4DoubleCompress);
+  T.Test('Gzip double compress', @TestGzipDoubleCompress);
+  T.Test('LZ4 double compress', @TestLz4DoubleCompress);
   { Corrupt/truncated }
-  T.Run('Gzip invalid magic', @TestGzipInvalidMagic);
-  T.Run('Gzip unsupported method', @TestGzipUnsupportedMethod);
-  T.Run('Deflate corrupt payload', @TestDeflateCorruptPayload);
-  T.Run('LZ4 truncated offset', @TestLz4TruncatedOffset);
-  T.Run('LZ4 output overflow', @TestLz4OutputOverflow);
-  T.Run('Gzip corrupt deflate payload', @TestGzipCorruptedDeflatePayload);
+  T.Test('Gzip invalid magic', @TestGzipInvalidMagic);
+  T.Test('Gzip unsupported method', @TestGzipUnsupportedMethod);
+  T.Test('Deflate corrupt payload', @TestDeflateCorruptPayload);
+  T.Test('LZ4 truncated offset', @TestLz4TruncatedOffset);
+  T.Test('LZ4 output overflow', @TestLz4OutputOverflow);
+  T.Test('Gzip corrupt deflate payload', @TestGzipCorruptedDeflatePayload);
   { Compression levels }
-  T.Run('Gzip all levels', @TestGzipAllLevels);
-  T.Run('Deflate all levels round-trip', @TestDeflateAllLevelsRoundTrip);
+  T.Test('Gzip all levels', @TestGzipAllLevels);
+  T.Test('Deflate all levels round-trip', @TestDeflateAllLevelsRoundTrip);
   { Streaming }
-  T.Run('Gzip streaming 64KB chunks', @TestGzipStreamingLargeChunks);
-  T.Run('Deflate streaming 96KB chunks', @TestDeflateStreamingLargeChunks);
-  T.Run('Deflate streaming flush-between', @TestDeflateStreamingFlushBetweenWrites);
-  T.Run('Deflate streaming flush publishes readable prefix',
+  T.Test('Gzip streaming 64KB chunks', @TestGzipStreamingLargeChunks);
+  T.Test('Deflate streaming 96KB chunks', @TestDeflateStreamingLargeChunks);
+  T.Test('Deflate streaming flush-between', @TestDeflateStreamingFlushBetweenWrites);
+  T.Test('Deflate streaming flush publishes readable prefix',
     @TestDeflateStreamingFlushPublishesReadablePrefix);
-  T.Run('Gzip streaming flush publishes readable prefix',
+  T.Test('Gzip streaming flush publishes readable prefix',
     @TestGzipStreamingFlushPublishesReadablePrefix);
-  T.Run('Gzip cross-API stream->oneshot', @TestGzipStreamingCrossAPIOneshot);
+  T.Test('Gzip cross-API stream->oneshot', @TestGzipStreamingCrossAPIOneshot);
   { Memory leak cycles }
-  T.Run('Gzip 5000 cycles', @TestGzipCycle5000);
-  T.Run('LZ4 5000 cycles', @TestLz4Cycle5000);
-  T.Run('Streaming 1000 cycles', @TestStreamingCycle1000);
+  T.Test('Gzip 5000 cycles', @TestGzipCycle5000);
+  T.Test('LZ4 5000 cycles', @TestLz4Cycle5000);
+  T.Test('Streaming 1000 cycles', @TestStreamingCycle1000);
   { Edge cases }
-  T.Run('LZ4 exact boundary', @TestLz4ExactBoundary);
-  T.Run('Gzip single byte', @TestGzipSingleBytePayload);
-  T.Run('Deflate max expansion', @TestDeflateMaxExpansion);
-  T.Run('LZ4 all same bytes', @TestLz4AllSameBytes);
-  T.Run('Gzip large expansion', @TestGzipLargeExpansion);
-  T.Run('Deflate oneshot vs stream', @TestDeflateOneShotVsStreamIndependent);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T.Test('LZ4 exact boundary', @TestLz4ExactBoundary);
+  T.Test('Gzip single byte', @TestGzipSingleBytePayload);
+  T.Test('Deflate max expansion', @TestDeflateMaxExpansion);
+  T.Test('LZ4 all same bytes', @TestLz4AllSameBytes);
+  T.Test('Gzip large expansion', @TestGzipLargeExpansion);
+  T.Test('Deflate oneshot vs stream', @TestDeflateOneShotVsStreamIndependent);
+  if not T.Run then Halt(1);
 end.

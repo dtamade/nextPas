@@ -24,10 +24,10 @@ uses
   nextpas.core.toml.writer,
   nextpas.core.toml.builder,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GSeed: UInt32 = 42;
 
 function Rng: UInt32;
@@ -320,26 +320,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml property');
+  T := TTestSuite.Create('nextpas.core.toml property');
   { P0: Roundtrip }
-  T.Run('roundtrip random strings', @TestRoundTripRandomStrings);
-  T.Run('roundtrip random integers', @TestRoundTripRandomIntegers);
-  T.Run('roundtrip nested tables', @TestRoundTripNestedTables);
-  T.Run('roundtrip array tables', @TestRoundTripArrayTables);
+  T.Test('roundtrip random strings', @TestRoundTripRandomStrings);
+  T.Test('roundtrip random integers', @TestRoundTripRandomIntegers);
+  T.Test('roundtrip nested tables', @TestRoundTripNestedTables);
+  T.Test('roundtrip array tables', @TestRoundTripArrayTables);
   { P1: Boundaries }
-  T.Run('integer boundaries', @TestIntegerBoundaries);
-  T.Run('depth boundaries', @TestDepthBoundaries);
+  T.Test('integer boundaries', @TestIntegerBoundaries);
+  T.Test('depth boundaries', @TestDepthBoundaries);
   { P1: Combinations }
-  T.Run('combination inline+dotted', @TestCombinationInlineDotted);
-  T.Run('combination array-table nested', @TestCombinationArrayTableNested);
-  T.Run('combination escaped key roundtrip', @TestCombinationEscapedKeyRoundTrip);
-  T.Run('combination mixed array', @TestCombinationMixedArrayTypes);
+  T.Test('combination inline+dotted', @TestCombinationInlineDotted);
+  T.Test('combination array-table nested', @TestCombinationArrayTableNested);
+  T.Test('combination escaped key roundtrip', @TestCombinationEscapedKeyRoundTrip);
+  T.Test('combination mixed array', @TestCombinationMixedArrayTypes);
   { P2: Zero Safety }
-  T.Run('zero-value TTomlValue', @TestZeroValueTTomlValue);
+  T.Test('zero-value TTomlValue', @TestZeroValueTTomlValue);
   { P2: Rejection Variants }
-  T.Run('rejection variants number', @TestRejectionVariantsNumber);
-  T.Run('rejection variants datetime', @TestRejectionVariantsDateTime);
-  T.Run('rejection variants table', @TestRejectionVariantsTable);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('rejection variants number', @TestRejectionVariantsNumber);
+  T.Test('rejection variants datetime', @TestRejectionVariantsDateTime);
+  T.Test('rejection variants table', @TestRejectionVariantsTable);
+  if not T.Run then Halt(1);
 end.

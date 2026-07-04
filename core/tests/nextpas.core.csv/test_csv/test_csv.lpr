@@ -7,10 +7,10 @@ uses
   nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner,
+  T: TTestSuite,
   nextpas.core.mem.allocator.base;
 
 type
@@ -1109,109 +1109,109 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.csv');
+  T := TTestSuite.Create('nextpas.core.csv');
 
   { Reader tests }
-  T.Run('BasicSingleRow', @TestBasicSingleRow);
-  T.Run('BasicMultiRow', @TestBasicMultiRow);
-  T.Run('QuotedFieldWithComma', @TestQuotedFieldWithComma);
-  T.Run('QuotedFieldWithNewline', @TestQuotedFieldWithNewline);
-  T.Run('DoubleQuoteEscape', @TestDoubleQuoteEscape);
-  T.Run('EmptyFields', @TestEmptyFields);
-  T.Run('EmptyInput', @TestEmptyInput);
-  T.Run('BlankLinesSkipped', @TestBlankLinesSkipped);
-  T.Run('SingleField', @TestSingleField);
-  T.Run('CRLFLineEnding', @TestCRLFLineEnding);
-  T.Run('TabDelimiter', @TestTabDelimiter);
-  T.Run('SemicolonDelimiter', @TestSemicolonDelimiter);
-  T.Run('ReaderCreateRejectsInvalidDelimiter',
+  T.Test('BasicSingleRow', @TestBasicSingleRow);
+  T.Test('BasicMultiRow', @TestBasicMultiRow);
+  T.Test('QuotedFieldWithComma', @TestQuotedFieldWithComma);
+  T.Test('QuotedFieldWithNewline', @TestQuotedFieldWithNewline);
+  T.Test('DoubleQuoteEscape', @TestDoubleQuoteEscape);
+  T.Test('EmptyFields', @TestEmptyFields);
+  T.Test('EmptyInput', @TestEmptyInput);
+  T.Test('BlankLinesSkipped', @TestBlankLinesSkipped);
+  T.Test('SingleField', @TestSingleField);
+  T.Test('CRLFLineEnding', @TestCRLFLineEnding);
+  T.Test('TabDelimiter', @TestTabDelimiter);
+  T.Test('SemicolonDelimiter', @TestSemicolonDelimiter);
+  T.Test('ReaderCreateRejectsInvalidDelimiter',
     @TestReaderCreateRejectsInvalidDelimiter);
-  T.Run('ReaderDelimiterSetterRejectsInvalidDelimiterAndKeepsPreviousDelimiter',
+  T.Test('ReaderDelimiterSetterRejectsInvalidDelimiterAndKeepsPreviousDelimiter',
     @TestReaderDelimiterSetterRejectsInvalidDelimiterAndKeepsPreviousDelimiter);
-  T.Run('ReadAll', @TestReadAll);
-  T.Run('ReadAll.StopsBeforeMalformedRow', @TestReadAllStopsBeforeMalformedRow);
-  T.Run('ReadAll.StopsBeforeWrongFieldCountRow', @TestReadAllStopsBeforeWrongFieldCountRow);
-  T.Run('LongField', @TestLongField);
+  T.Test('ReadAll', @TestReadAll);
+  T.Test('ReadAll.StopsBeforeMalformedRow', @TestReadAllStopsBeforeMalformedRow);
+  T.Test('ReadAll.StopsBeforeWrongFieldCountRow', @TestReadAllStopsBeforeWrongFieldCountRow);
+  T.Test('LongField', @TestLongField);
 
   { Writer tests }
-  T.Run('WriterBasic', @TestWriterBasic);
-  T.Run('WriterQuoting', @TestWriterQuoting);
-  T.Run('WriterQuotesSurroundingWhitespace', @TestWriterQuotesSurroundingWhitespace);
-  T.Run('WriterQuotesSingleEmptyField', @TestWriterQuotesSingleEmptyField);
-  T.Run('WriterQuoteEscape', @TestWriterQuoteEscape);
-  T.Run('WriterNewlineInField', @TestWriterNewlineInField);
-  T.Run('WriterCRLF', @TestWriterCRLF);
-  T.Run('WriterCustomDelimiter', @TestWriterCustomDelimiter);
-  T.Run('WriterMultiRow', @TestWriterMultiRow);
-  T.Run('WriterFieldByField', @TestWriterFieldByField);
-  T.Run('WriterToStringRejectsUnfinishedRow',
+  T.Test('WriterBasic', @TestWriterBasic);
+  T.Test('WriterQuoting', @TestWriterQuoting);
+  T.Test('WriterQuotesSurroundingWhitespace', @TestWriterQuotesSurroundingWhitespace);
+  T.Test('WriterQuotesSingleEmptyField', @TestWriterQuotesSingleEmptyField);
+  T.Test('WriterQuoteEscape', @TestWriterQuoteEscape);
+  T.Test('WriterNewlineInField', @TestWriterNewlineInField);
+  T.Test('WriterCRLF', @TestWriterCRLF);
+  T.Test('WriterCustomDelimiter', @TestWriterCustomDelimiter);
+  T.Test('WriterMultiRow', @TestWriterMultiRow);
+  T.Test('WriterFieldByField', @TestWriterFieldByField);
+  T.Test('WriterToStringRejectsUnfinishedRow',
     @TestWriterToStringRejectsUnfinishedRow);
-  T.Run('WriterRejectsZeroFieldRow', @TestWriterRejectsZeroFieldRow);
-  T.Run('WriterCreateRejectsInvalidDelimiter',
+  T.Test('WriterRejectsZeroFieldRow', @TestWriterRejectsZeroFieldRow);
+  T.Test('WriterCreateRejectsInvalidDelimiter',
     @TestWriterCreateRejectsInvalidDelimiter);
-  T.Run('WriterCommentMarkerQuotesLeadingCommentField',
+  T.Test('WriterCommentMarkerQuotesLeadingCommentField',
     @TestWriterCommentMarkerQuotesLeadingCommentField);
-  T.Run('WriterCommentMarkerFieldByFieldQuotesLeadingCommentField',
+  T.Test('WriterCommentMarkerFieldByFieldQuotesLeadingCommentField',
     @TestWriterCommentMarkerFieldByFieldQuotesLeadingCommentField);
-  T.Run('WriterCreateRejectsInvalidCommentMarker',
+  T.Test('WriterCreateRejectsInvalidCommentMarker',
     @TestWriterCreateRejectsInvalidCommentMarker);
 
   { Roundtrip tests }
-  T.Run('Roundtrip', @TestRoundtrip);
-  T.Run('RFC4180QuotedCRLF', @TestRFC4180QuotedCRLF);
-  T.Run('RFC4180EmptyQuoted', @TestRFC4180EmptyQuoted);
+  T.Test('Roundtrip', @TestRoundtrip);
+  T.Test('RFC4180QuotedCRLF', @TestRFC4180QuotedCRLF);
+  T.Test('RFC4180EmptyQuoted', @TestRFC4180EmptyQuoted);
 
   { Error handling tests }
-  T.Run('HasError.UnclosedQuote', @TestHasErrorUnclosedQuote);
-  T.Run('HasError.Normal', @TestHasErrorNormal);
-  T.Run('HasError.MultilineUnclosed', @TestHasErrorMultilineUnclosed);
-  T.Run('HasError.BareQuoteInUnquotedField', @TestHasErrorBareQuoteInUnquotedField);
-  T.Run('HasError.TextAfterClosingQuote', @TestHasErrorTextAfterClosingQuote);
-  T.Run('HasError.PositionBareQuoteCRLF', @TestErrorPositionBareQuoteCRLF);
-  T.Run('HasError.UnclosedQuoteOpeningPosition',
+  T.Test('HasError.UnclosedQuote', @TestHasErrorUnclosedQuote);
+  T.Test('HasError.Normal', @TestHasErrorNormal);
+  T.Test('HasError.MultilineUnclosed', @TestHasErrorMultilineUnclosed);
+  T.Test('HasError.BareQuoteInUnquotedField', @TestHasErrorBareQuoteInUnquotedField);
+  T.Test('HasError.TextAfterClosingQuote', @TestHasErrorTextAfterClosingQuote);
+  T.Test('HasError.PositionBareQuoteCRLF', @TestErrorPositionBareQuoteCRLF);
+  T.Test('HasError.UnclosedQuoteOpeningPosition',
     @TestErrorPositionUnclosedQuoteOpeningPosition);
-  T.Run('TrimSpace.UnclosedQuoteOpeningPosition',
+  T.Test('TrimSpace.UnclosedQuoteOpeningPosition',
     @TestTrimSpaceErrorPositionUnclosedQuoteOpeningPosition);
-  T.Run('HasError.ReadRowFailClosedAfterError',
+  T.Test('HasError.ReadRowFailClosedAfterError',
     @TestReadRowFailClosedAfterError);
 
   { FieldsPerRecord tests }
-  T.Run('FieldsPerRecord.Correct', @TestFieldsPerRecordCorrect);
-  T.Run('FieldsPerRecord.Mismatch', @TestFieldsPerRecordMismatch);
-  T.Run('FieldsPerRecord.ZeroInfersFirstRecordWidth',
+  T.Test('FieldsPerRecord.Correct', @TestFieldsPerRecordCorrect);
+  T.Test('FieldsPerRecord.Mismatch', @TestFieldsPerRecordMismatch);
+  T.Test('FieldsPerRecord.ZeroInfersFirstRecordWidth',
     @TestFieldsPerRecordZeroInfersFirstRecordWidth);
-  T.Run('FieldsPerRecord.NegativeAllowsVariableWidth',
+  T.Test('FieldsPerRecord.NegativeAllowsVariableWidth',
     @TestFieldsPerRecordNegativeAllowsVariableWidth);
 
   { TrimSpace tests }
-  T.Run('TrimSpace', @TestTrimSpace);
-  T.Run('TrimSpace.PreservesQuoted', @TestTrimSpacePreservesQuoted);
-  T.Run('TrimSpace.AllowsLeadingSpaceBeforeQuotedField',
+  T.Test('TrimSpace', @TestTrimSpace);
+  T.Test('TrimSpace.PreservesQuoted', @TestTrimSpacePreservesQuoted);
+  T.Test('TrimSpace.AllowsLeadingSpaceBeforeQuotedField',
     @TestTrimSpaceAllowsLeadingSpaceBeforeQuotedField);
-  T.Run('TrimSpace.AllowsTrailingSpaceAfterQuotedField',
+  T.Test('TrimSpace.AllowsTrailingSpaceAfterQuotedField',
     @TestTrimSpaceAllowsTrailingSpaceAfterQuotedField);
-  T.Run('TrimSpace.KeepsWhitespaceDelimiterAfterQuotedField',
+  T.Test('TrimSpace.KeepsWhitespaceDelimiterAfterQuotedField',
     @TestTrimSpaceKeepsWhitespaceDelimiterAfterQuotedField);
-  T.Run('TrimSpace.DoesNotSkipWhitespaceDelimiter',
+  T.Test('TrimSpace.DoesNotSkipWhitespaceDelimiter',
     @TestTrimSpaceDoesNotSkipWhitespaceDelimiter);
-  T.Run('TrimSpace.FalseRejectsTrailingSpaceAfterQuotedField',
+  T.Test('TrimSpace.FalseRejectsTrailingSpaceAfterQuotedField',
     @TestNoTrimSpaceRejectsTrailingSpaceAfterQuotedField);
 
   { Comment tests }
-  T.Run('Comment.Skip', @TestCommentSkip);
-  T.Run('Comment.MultipleLines', @TestCommentMultipleLines);
-  T.Run('Comment.OnlyInput', @TestCommentOnlyInput);
-  T.Run('Comment.InvalidMarker',
+  T.Test('Comment.Skip', @TestCommentSkip);
+  T.Test('Comment.MultipleLines', @TestCommentMultipleLines);
+  T.Test('Comment.OnlyInput', @TestCommentOnlyInput);
+  T.Test('Comment.InvalidMarker',
     @TestReaderCreateRejectsInvalidCommentMarker);
-  T.Run('Comment.DelimiterCollision',
+  T.Test('Comment.DelimiterCollision',
     @TestReaderCommentCollisionIsRejectedBeforeParsing);
-  T.Run('Allocator.NilFallsBackToDefault',
+  T.Test('Allocator.NilFallsBackToDefault',
     @TestCreateNilAllocatorUsesDefault);
-  T.Run('Allocator.ReadRowReallocateFailureSetsError',
+  T.Test('Allocator.ReadRowReallocateFailureSetsError',
     @TestReadRowReallocateFailureSetsError);
 
   { Combined tests }
-  T.Run('Comment+TrimSpace', @TestCommentPlusTrimSpace);
+  T.Test('Comment+TrimSpace', @TestCommentPlusTrimSpace);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

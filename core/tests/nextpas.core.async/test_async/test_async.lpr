@@ -6,7 +6,7 @@ uses
   Classes,
   StrUtils,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.time.cpu,
@@ -21,7 +21,7 @@ uses
   nextpas.core.net.tcp;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -1525,69 +1525,69 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.async');
+  T := TTestSuite.Create('nextpas.core.async');
 
-  T.Run('TimerHeapBasic', @TestTimerHeapBasic);
-  T.Run('TimerHeapOrder', @TestTimerHeapOrder);
-  T.Run('TimerHeapOrderByDeadline', @TestTimerHeapOrderByDeadline);
-  T.Run('TimerCancel', @TestTimerCancel);
-  T.Run('TimerCancelAfterFireIsStale', @TestTimerCancelAfterFireIsStale);
-  T.Run('TimerCancelClearsOwnerRefsSourceContract',
+  T.Test('TimerHeapBasic', @TestTimerHeapBasic);
+  T.Test('TimerHeapOrder', @TestTimerHeapOrder);
+  T.Test('TimerHeapOrderByDeadline', @TestTimerHeapOrderByDeadline);
+  T.Test('TimerCancel', @TestTimerCancel);
+  T.Test('TimerCancelAfterFireIsStale', @TestTimerCancelAfterFireIsStale);
+  T.Test('TimerCancelClearsOwnerRefsSourceContract',
     @TestTimerCancelClearsOwnerRefsSourceContract);
-  T.Run('TimerCloseClearsOwnerRefsSourceContract',
+  T.Test('TimerCloseClearsOwnerRefsSourceContract',
     @TestTimerCloseClearsOwnerRefsSourceContract);
-  T.Run('TimerNextDeadline', @TestTimerNextDeadline);
-  T.Run('TimerHandleNone', @TestTimerHandleNone);
-  T.Run('AsyncLoopCreate', @TestAsyncLoopCreate);
-  T.Run('AsyncLoopTimer', @TestAsyncLoopTimer);
-  T.Run('AsyncLoopMultiTimer', @TestAsyncLoopMultiTimer);
-  T.Run('AsyncLoopStop', @TestAsyncLoopStop);
-  T.Run('AsyncLoopStopWakesPlatformPollerSourceContract',
+  T.Test('TimerNextDeadline', @TestTimerNextDeadline);
+  T.Test('TimerHandleNone', @TestTimerHandleNone);
+  T.Test('AsyncLoopCreate', @TestAsyncLoopCreate);
+  T.Test('AsyncLoopTimer', @TestAsyncLoopTimer);
+  T.Test('AsyncLoopMultiTimer', @TestAsyncLoopMultiTimer);
+  T.Test('AsyncLoopStop', @TestAsyncLoopStop);
+  T.Test('AsyncLoopStopWakesPlatformPollerSourceContract',
     @TestAsyncLoopStopWakesPlatformPollerSourceContract);
-  T.Run('AsyncLoopIdleWaitUsesWakeDrivenTimeoutSourceContract',
+  T.Test('AsyncLoopIdleWaitUsesWakeDrivenTimeoutSourceContract',
     @TestAsyncLoopIdleWaitUsesWakeDrivenTimeoutSourceContract);
-  T.Run('AsyncLoopPendingQueueMutexSourceContract',
+  T.Test('AsyncLoopPendingQueueMutexSourceContract',
     @TestAsyncLoopPendingQueueMutexSourceContract);
-  T.Run('AsyncLoopIoSubmissionClosedStateSourceContract',
+  T.Test('AsyncLoopIoSubmissionClosedStateSourceContract',
     @TestAsyncLoopIoSubmissionClosedStateSourceContract);
-  T.Run('AsyncLoopExecutionClosedStateSourceContract',
+  T.Test('AsyncLoopExecutionClosedStateSourceContract',
     @TestAsyncLoopExecutionClosedStateSourceContract);
-  T.Run('AsyncLoopRunOncePostWakeTimersBeforeIoSourceContract',
+  T.Test('AsyncLoopRunOncePostWakeTimersBeforeIoSourceContract',
     @TestAsyncLoopRunOncePostWakeTimersBeforeIoSourceContract);
-  T.Run('AsyncLoopTimerReadinessGuardSourceContract',
+  T.Test('AsyncLoopTimerReadinessGuardSourceContract',
     @TestAsyncLoopTimerReadinessGuardSourceContract);
-  T.Run('AsyncStressUsesCthreadsSourceContract',
+  T.Test('AsyncStressUsesCthreadsSourceContract',
     @TestAsyncStressUsesCthreadsSourceContract);
-  T.Run('AsyncReadmeTruthMatrixSourceContract',
+  T.Test('AsyncReadmeTruthMatrixSourceContract',
     @TestAsyncReadmeTruthMatrixSourceContract);
-  T.Run('AsyncFacadeExportsTaskStateMachine',
+  T.Test('AsyncFacadeExportsTaskStateMachine',
     @TestAsyncFacadeExportsTaskStateMachine);
-  T.Run('AsyncLoopTimerCancel', @TestAsyncLoopTimerCancel);
-  T.Run('AsyncLoopIO', @TestAsyncLoopIO);
-  T.Run('AsyncLoopPoll', @TestAsyncLoopPoll);
-  T.Run('AsyncLoopPollDrainsPostBeforeExpiredTimer',
+  T.Test('AsyncLoopTimerCancel', @TestAsyncLoopTimerCancel);
+  T.Test('AsyncLoopIO', @TestAsyncLoopIO);
+  T.Test('AsyncLoopPoll', @TestAsyncLoopPoll);
+  T.Test('AsyncLoopPollDrainsPostBeforeExpiredTimer',
     @TestAsyncLoopPollDrainsPostBeforeExpiredTimer);
-  T.Run('AsyncLoopRunStopFromPostStillFiresExpiredTimers',
+  T.Test('AsyncLoopRunStopFromPostStillFiresExpiredTimers',
     @TestAsyncLoopRunStopFromPostStillFiresExpiredTimers);
-  T.Run('AsyncLoopRunOnceStopFromPostSkipsIoPoll',
+  T.Test('AsyncLoopRunOnceStopFromPostSkipsIoPoll',
     @TestAsyncLoopRunOnceStopFromPostSkipsIoPoll);
-  T.Run('AsyncLoopScheduleAt', @TestAsyncLoopScheduleAt);
-  T.Run('AsyncLoopAsyncRecvSend', @TestAsyncLoopAsyncRecvSend);
-  T.Run('AsyncLoopAsyncRecv', @TestAsyncLoopAsyncRecv);
-  T.Run('AsyncLoopAsyncAccept', @TestAsyncLoopAsyncAccept);
-  T.Run('AsyncLoopAsyncRecvTimeoutSuccess',
+  T.Test('AsyncLoopScheduleAt', @TestAsyncLoopScheduleAt);
+  T.Test('AsyncLoopAsyncRecvSend', @TestAsyncLoopAsyncRecvSend);
+  T.Test('AsyncLoopAsyncRecv', @TestAsyncLoopAsyncRecv);
+  T.Test('AsyncLoopAsyncAccept', @TestAsyncLoopAsyncAccept);
+  T.Test('AsyncLoopAsyncRecvTimeoutSuccess',
     @TestAsyncLoopAsyncRecvTimeoutSuccess);
-  T.Run('AsyncLoopAsyncRecvTimeoutExpired',
+  T.Test('AsyncLoopAsyncRecvTimeoutExpired',
     @TestAsyncLoopAsyncRecvTimeoutExpired);
-  T.Run('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
-  T.Run('PostRefCallback', @TestPostRefCallback);
-  T.Run('PostMethodCallback', @TestPostMethodCallback);
-  T.Run('ScheduleRefCallback', @TestScheduleRefCallback);
-  T.Run('ScheduleMethodCallback', @TestScheduleMethodCallback);
-  T.Run('AsyncSleepRefCallback', @TestAsyncSleepRefCallback);
-  T.Run('AsyncRecvRefCallback', @TestAsyncRecvRefCallback);
-  T.Run('OnCompleteRefCallback', @TestOnCompleteRefCallback);
-  T.Run('OnCompleteMethodCallback', @TestOnCompleteMethodCallback);
+  T.Test('PollerDirectCreateAndBackend', @TestPollerDirectCreateAndBackend);
+  T.Test('PostRefCallback', @TestPostRefCallback);
+  T.Test('PostMethodCallback', @TestPostMethodCallback);
+  T.Test('ScheduleRefCallback', @TestScheduleRefCallback);
+  T.Test('ScheduleMethodCallback', @TestScheduleMethodCallback);
+  T.Test('AsyncSleepRefCallback', @TestAsyncSleepRefCallback);
+  T.Test('AsyncRecvRefCallback', @TestAsyncRecvRefCallback);
+  T.Test('OnCompleteRefCallback', @TestOnCompleteRefCallback);
+  T.Test('OnCompleteMethodCallback', @TestOnCompleteMethodCallback);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -8,12 +8,12 @@ program test_log_audit;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCaptured: array of TLogRecord;
   GCaptureCount: Int32;
 
@@ -981,64 +981,64 @@ end;
 
 begin
   Randomize;
-  T := TTestRunner.Create('nextpas.core.log [AUDIT]');
+  T := TTestSuite.Create('nextpas.core.log [AUDIT]');
 
   { Pool recycling (R1 nil crash) }
-  T.Run('Pool: 20 events force reuse', @TestPoolRecycling_20Events);
-  T.Run('Pool: 2 loggers share pool', @TestPoolRecycling_DifferentHandlers);
-  T.Run('Pool: stress with long strings', @TestPoolRecycling_StressWithStrings);
+  T.Test('Pool: 20 events force reuse', @TestPoolRecycling_20Events);
+  T.Test('Pool: 2 loggers share pool', @TestPoolRecycling_DifferentHandlers);
+  T.Test('Pool: stress with long strings', @TestPoolRecycling_StressWithStrings);
 
   { JSON validity (R3 comma bug) }
-  T.Run('JSON: valid structure', @TestJsonOutput_ValidStructure);
-  T.Run('JSON: parse file', @TestJsonOutput_ParseFile);
-  T.Run('JSON: comma regression', @TestJsonOutput_CommaRegression);
+  T.Test('JSON: valid structure', @TestJsonOutput_ValidStructure);
+  T.Test('JSON: parse file', @TestJsonOutput_ParseFile);
+  T.Test('JSON: comma regression', @TestJsonOutput_CommaRegression);
 
   { Rotation (R4 size bug) }
-  T.Run('Rotation: exact size accounting', @TestRotation_ExactSizeAccounting);
-  T.Run('Rotation: MaxFiles respected', @TestRotation_MaxFilesRespected);
-  T.Run('Rotation: boundary exact', @TestRotation_BoundaryExact);
+  T.Test('Rotation: exact size accounting', @TestRotation_ExactSizeAccounting);
+  T.Test('Rotation: MaxFiles respected', @TestRotation_MaxFilesRespected);
+  T.Test('Rotation: boundary exact', @TestRotation_BoundaryExact);
 
   { WithAttrs lifecycle (R2 leak) }
-  T.Run('WithAttrs: chain of 10', @TestWithAttrs_ChainOf10);
-  T.Run('WithAttrs: scope release', @TestWithAttrs_ScopeRelease);
-  T.Run('WithAttrs: 100 iterations', @TestWithAttrs_100Iterations);
+  T.Test('WithAttrs: chain of 10', @TestWithAttrs_ChainOf10);
+  T.Test('WithAttrs: scope release', @TestWithAttrs_ScopeRelease);
+  T.Test('WithAttrs: 100 iterations', @TestWithAttrs_100Iterations);
 
   { Boundary conditions }
-  T.Run('Boundary: empty key/value', @TestBoundary_EmptyKeyValue);
-  T.Run('Boundary: exactly 8 attrs', @TestBoundary_AttrGrowthAt8);
-  T.Run('Boundary: 9 attrs (growth)', @TestBoundary_AttrGrowthAt9);
-  T.Run('Boundary: 16 attrs', @TestBoundary_AttrGrowthAt16);
-  T.Run('Boundary: 24 attrs', @TestBoundary_AttrGrowthAt24);
+  T.Test('Boundary: empty key/value', @TestBoundary_EmptyKeyValue);
+  T.Test('Boundary: exactly 8 attrs', @TestBoundary_AttrGrowthAt8);
+  T.Test('Boundary: 9 attrs (growth)', @TestBoundary_AttrGrowthAt9);
+  T.Test('Boundary: 16 attrs', @TestBoundary_AttrGrowthAt16);
+  T.Test('Boundary: 24 attrs', @TestBoundary_AttrGrowthAt24);
 
   { Re-entrancy (R1) }
-  T.Run('Reentry: actual re-entrant handler', @TestReentrancy_ActualReentry);
-  T.Run('Reentry: pool slot safety', @TestReentrancy_PoolSlotSafety);
+  T.Test('Reentry: actual re-entrant handler', @TestReentrancy_ActualReentry);
+  T.Test('Reentry: pool slot safety', @TestReentrancy_PoolSlotSafety);
 
   { Error paths }
-  T.Run('Error: handler exception', @TestErrorPath_HandlerException);
-  T.Run('Error: broken file silent skip', @TestErrorPath_BrokenFileSilentSkip);
-  T.Run('Error: multi partial failure', @TestErrorPath_MultiHandlerPartialFailure);
+  T.Test('Error: handler exception', @TestErrorPath_HandlerException);
+  T.Test('Error: broken file silent skip', @TestErrorPath_BrokenFileSilentSkip);
+  T.Test('Error: multi partial failure', @TestErrorPath_MultiHandlerPartialFailure);
 
   { Double-fire (R2) }
-  T.Run('DoubleFire: Msg then Send', @TestDoubleFire_MsgThenSend);
-  T.Run('DoubleFire: Send then Msg', @TestDoubleFire_SendThenMsg);
-  T.Run('DoubleFire: Msg twice', @TestDoubleFire_MsgTwice);
+  T.Test('DoubleFire: Msg then Send', @TestDoubleFire_MsgThenSend);
+  T.Test('DoubleFire: Send then Msg', @TestDoubleFire_SendThenMsg);
+  T.Test('DoubleFire: Msg twice', @TestDoubleFire_MsgTwice);
 
   { Content verification }
-  T.Run('Content: file handler format', @TestContent_FileHandlerFormat);
-  T.Run('Content: WithAttrs inherited', @TestContent_WithAttrsInherited);
-  T.Run('Content: special chars', @TestContent_SpecialCharsInStrings);
+  T.Test('Content: file handler format', @TestContent_FileHandlerFormat);
+  T.Test('Content: WithAttrs inherited', @TestContent_WithAttrsInherited);
+  T.Test('Content: special chars', @TestContent_SpecialCharsInStrings);
 
   { Nil handler }
-  T.Run('Nil: handler in logger', @TestNilHandler_InLogger);
-  T.Run('Nil: Enabled check', @TestNilHandler_Enabled);
+  T.Test('Nil: handler in logger', @TestNilHandler_InLogger);
+  T.Test('Nil: Enabled check', @TestNilHandler_Enabled);
 
   { Stress }
-  T.Run('Stress: 1000 events', @TestStress_1000Events);
-  T.Run('Stress: file rotation 200 writes', @TestStress_FileRotation_ManyWrites);
+  T.Test('Stress: 1000 events', @TestStress_1000Events);
+  T.Test('Stress: file rotation 200 writes', @TestStress_FileRotation_ManyWrites);
 
   { Disabled no side effects }
-  T.Run('Disabled: no side effects', @TestDisabled_NoSideEffects);
+  T.Test('Disabled: no side effects', @TestDisabled_NoSideEffects);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

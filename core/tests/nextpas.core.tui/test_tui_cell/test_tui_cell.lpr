@@ -7,10 +7,10 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSize;
 begin
@@ -155,19 +155,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.cell');
-  T.Run('size 40 bytes', @TestSize);
-  T.Run('empty', @TestEmpty);
-  T.Run('reset', @TestReset);
-  T.Run('set symbol ascii', @TestSetSymbolAscii);
-  T.Run('set symbol ascii canonicalizes reused cell', @TestSetSymbolAsciiCanonicalizesReusedCell);
-  T.Run('set symbol bytes', @TestSetSymbolBytes);
-  T.Run('set symbol bytes canonicalizes reused cell', @TestSetSymbolBytesCanonicalizesReusedCell);
-  T.Run('set symbol truncate', @TestSetSymbolTruncate);
-  T.Run('width zero coerced', @TestSetSymbolWidthZeroCoerced);
-  T.Run('apply style', @TestApplyStyle);
-  T.Run('equals', @TestEquals);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.cell');
+  T.Test('size 40 bytes', @TestSize);
+  T.Test('empty', @TestEmpty);
+  T.Test('reset', @TestReset);
+  T.Test('set symbol ascii', @TestSetSymbolAscii);
+  T.Test('set symbol ascii canonicalizes reused cell', @TestSetSymbolAsciiCanonicalizesReusedCell);
+  T.Test('set symbol bytes', @TestSetSymbolBytes);
+  T.Test('set symbol bytes canonicalizes reused cell', @TestSetSymbolBytesCanonicalizesReusedCell);
+  T.Test('set symbol truncate', @TestSetSymbolTruncate);
+  T.Test('width zero coerced', @TestSetSymbolWidthZeroCoerced);
+  T.Test('apply style', @TestApplyStyle);
+  T.Test('equals', @TestEquals);
+  if not T.Run then Halt(1);
 end.

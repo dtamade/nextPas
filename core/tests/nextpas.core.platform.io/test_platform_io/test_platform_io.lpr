@@ -8,10 +8,10 @@ uses
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -559,22 +559,22 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.io');
-  T.Run('create/close', @TestCreateClose);
-  T.Run('double close', @TestDoubleClose);
-  T.Run('pipe readable', @TestPipeReadable);
-  T.Run('timeout zero', @TestTimeoutZero);
-  T.Run('remove stops events', @TestRemove);
-  T.Run('userdata preserved', @TestUserData);
-  T.Run('multiple fds', @TestMultipleFds);
-  T.Run('wait capacity beyond 64', @TestWaitCapacityBeyondLegacy64);
-  T.Run('kqueue wake source contract', @TestKqueueWakeSourceContract);
-  T.Run('poller wait capacity source contract', @TestPollerWaitCapacitySourceContract);
-  T.Run('windows poller source contract', @TestWindowsPollerSourceContract);
-  T.Run('readiness server poller source contract', @TestReadinessServerPollerSourceContract);
-  T.Run('async loop wake source contract', @TestAsyncLoopWakeSourceContract);
+  T := TTestSuite.Create('nextpas.core.platform.io');
+  T.Test('create/close', @TestCreateClose);
+  T.Test('double close', @TestDoubleClose);
+  T.Test('pipe readable', @TestPipeReadable);
+  T.Test('timeout zero', @TestTimeoutZero);
+  T.Test('remove stops events', @TestRemove);
+  T.Test('userdata preserved', @TestUserData);
+  T.Test('multiple fds', @TestMultipleFds);
+  T.Test('wait capacity beyond 64', @TestWaitCapacityBeyondLegacy64);
+  T.Test('kqueue wake source contract', @TestKqueueWakeSourceContract);
+  T.Test('poller wait capacity source contract', @TestPollerWaitCapacitySourceContract);
+  T.Test('windows poller source contract', @TestWindowsPollerSourceContract);
+  T.Test('readiness server poller source contract', @TestReadinessServerPollerSourceContract);
+  T.Test('async loop wake source contract', @TestAsyncLoopWakeSourceContract);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('wake drain', @TestWakeDrain);
+  T.Test('wake drain', @TestWakeDrain);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

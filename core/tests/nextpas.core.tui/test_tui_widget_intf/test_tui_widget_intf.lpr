@@ -10,7 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   { 最小 stub widget：用单字符填满区域，验证 IWidget 契约可实现可调用 }
@@ -34,7 +34,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestImplementAndRender;
 var
@@ -121,12 +121,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.intf');
-  T.Run('implement and render', @TestImplementAndRender);
-  T.Run('polymorphic array', @TestPolymorphicArray);
-  T.Run('adapter render function', @TestAdapterRenderFunction);
-  T.Run('adapter rejects nil render function', @TestAdapterRejectsNilRenderFunction);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.intf');
+  T.Test('implement and render', @TestImplementAndRender);
+  T.Test('polymorphic array', @TestPolymorphicArray);
+  T.Test('adapter render function', @TestAdapterRenderFunction);
+  T.Test('adapter rejects nil render function', @TestAdapterRejectsNilRenderFunction);
+  if not T.Run then Halt(1);
 end.

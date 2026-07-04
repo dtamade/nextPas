@@ -5,7 +5,7 @@ program test_multimap;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.multimap.intf;
 
@@ -13,7 +13,7 @@ type
   IIntStrMMap = specialize IMultiMap<Integer, string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAddAndGetValueCount;
 var
@@ -113,14 +113,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.multimap');
-  T.Run('Add and GetValueCount', @TestAddAndGetValueCount);
-  T.Run('Contains', @TestContains);
-  T.Run('ContainsValue', @TestContainsValue);
-  T.Run('Remove key+value', @TestRemoveKeyValue);
-  T.Run('RemoveAll', @TestRemoveAll);
-  T.Run('KeyCount/TotalCount', @TestKeyCountTotalCount);
-  T.Run('Clear', @TestClear);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.multimap');
+  T.Test('Add and GetValueCount', @TestAddAndGetValueCount);
+  T.Test('Contains', @TestContains);
+  T.Test('ContainsValue', @TestContainsValue);
+  T.Test('Remove key+value', @TestRemoveKeyValue);
+  T.Test('RemoveAll', @TestRemoveAll);
+  T.Test('KeyCount/TotalCount', @TestKeyCountTotalCount);
+  T.Test('Clear', @TestClear);
+  T.Test('IsEmpty', @TestIsEmpty);
+  if not T.Run then Halt(1);
 end.

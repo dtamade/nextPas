@@ -9,10 +9,10 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.overlay,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreateClear;
 var
@@ -132,14 +132,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.overlay');
-  T.Run('create and clear', @TestCreateClear);
-  T.Run('merge transparent', @TestMergeTransparent);
-  T.Run('merge overwrite', @TestMergeOverwrite);
-  T.Run('set cell', @TestSetCell);
-  T.Run('clear resets marks', @TestClearResetsMarks);
-  T.Run('dirty flag', @TestDirtyFlag);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.overlay');
+  T.Test('create and clear', @TestCreateClear);
+  T.Test('merge transparent', @TestMergeTransparent);
+  T.Test('merge overwrite', @TestMergeOverwrite);
+  T.Test('set cell', @TestSetCell);
+  T.Test('clear resets marks', @TestClearResetsMarks);
+  T.Test('dirty flag', @TestDirtyFlag);
+  if not T.Run then Halt(1);
 end.

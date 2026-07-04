@@ -5,10 +5,10 @@ program test_platform_console_raw;
 uses
   nextpas.core.platform.console,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { 用 pipe 测试 read/write/wait_readable（无需真实 TTY） }
 
@@ -84,13 +84,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.console.raw');
-  T.Run('write+read pipe', @TestWriteReadPipe);
-  T.Run('wait readable timeout', @TestWaitReadableTimeout);
-  T.Run('wait readable ready', @TestWaitReadableReady);
-  T.Run('is terminal pipe', @TestIsTerminalPipe);
-  T.Run('mode carrier size', @TestModeCarrierSize);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.platform.console.raw');
+  T.Test('write+read pipe', @TestWriteReadPipe);
+  T.Test('wait readable timeout', @TestWaitReadableTimeout);
+  T.Test('wait readable ready', @TestWaitReadableReady);
+  T.Test('is terminal pipe', @TestIsTerminalPipe);
+  T.Test('mode carrier size', @TestModeCarrierSize);
+  if not T.Run then Halt(1);
 end.

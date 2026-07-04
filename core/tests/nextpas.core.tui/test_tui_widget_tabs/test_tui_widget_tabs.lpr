@@ -9,9 +9,9 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.tabs,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 { === TTabsState === }
 
@@ -118,23 +118,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_widget_tabs');
+  T := TTestSuite.Create('test_tui_widget_tabs');
   try
     { TTabsState }
-    T.Run('TabsState default', @TestTabsStateDefault);
+    T.Test('TabsState default', @TestTabsStateDefault);
 
     { ITabsWidget Builders }
-    T.Run('Tabs New', @TestTabsNew);
-    T.Run('Tabs render', @TestTabsRender);
-    T.Run('Tabs selection', @TestTabsSelection);
-    T.Run('Tabs WithActiveStyle', @TestTabsWithActiveStyle);
-    T.Run('Tabs WithInactiveStyle', @TestTabsWithInactiveStyle);
-    T.Run('Tabs WithSeparator', @TestTabsWithSeparator);
-    T.Run('Tabs as IWidget', @TestTabsAsIWidget);
-    T.Run('Tabs IWidget.Render', @TestTabsRenderIWidget);
+    T.Test('Tabs New', @TestTabsNew);
+    T.Test('Tabs render', @TestTabsRender);
+    T.Test('Tabs selection', @TestTabsSelection);
+    T.Test('Tabs WithActiveStyle', @TestTabsWithActiveStyle);
+    T.Test('Tabs WithInactiveStyle', @TestTabsWithInactiveStyle);
+    T.Test('Tabs WithSeparator', @TestTabsWithSeparator);
+    T.Test('Tabs as IWidget', @TestTabsAsIWidget);
+    T.Test('Tabs IWidget.Render', @TestTabsRenderIWidget);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
   end;
 end.

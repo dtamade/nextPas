@@ -5,11 +5,11 @@ program test_platform_thread;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 var
   GThreadResult: PtrUInt = 0;
@@ -148,14 +148,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.thread');
-  T.Run('Thread create and join', @TestThreadCreateJoin);
-  T.Run('Thread detach', @TestThreadDetach);
-  T.Run('TLS set/get', @TestTlsSetGet);
-  T.Run('Thread self token', @TestThreadSelfToken);
-  T.Run('Thread ID non-zero', @TestThreadId);
-  T.Run('CPU count >= 1', @TestCpuCount);
-  T.Run('Thread yield', @TestThreadYield);
-  T.Run('Thread sleep', @TestThreadSleep);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.thread');
+  T.Test('Thread create and join', @TestThreadCreateJoin);
+  T.Test('Thread detach', @TestThreadDetach);
+  T.Test('TLS set/get', @TestTlsSetGet);
+  T.Test('Thread self token', @TestThreadSelfToken);
+  T.Test('Thread ID non-zero', @TestThreadId);
+  T.Test('CPU count >= 1', @TestCpuCount);
+  T.Test('Thread yield', @TestThreadYield);
+  T.Test('Thread sleep', @TestThreadSleep);
+  if not T.Run then Halt(1);
 end.

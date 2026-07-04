@@ -13,8 +13,8 @@ uses
   nextpas.core.tui.widget.form,
   nextpas.core.tui.widget.command_palette,
   nextpas.core.tui.widget.scrollview,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === TInputEditor === }
 
@@ -255,26 +255,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.form');
-  T.Run('editor new', @TestEditorNew);
-  T.Run('editor insert', @TestEditorInsert);
-  T.Run('editor move left/right', @TestEditorMoveLeftRight);
-  T.Run('editor delete backward', @TestEditorDeleteBackward);
-  T.Run('editor undo', @TestEditorUndo);
-  T.Run('editor render', @TestEditorRender);
-  T.Run('select new', @TestSelectNew);
-  T.Run('select open', @TestSelectOpen);
-  T.Run('select open keeps highlight visible', @TestSelectOpenKeepsHighlightVisible);
-  T.Run('checkbox unchecked', @TestCheckboxUnchecked);
-  T.Run('checkbox checked', @TestCheckboxChecked);
-  T.Run('checkbox toggle', @TestCheckboxToggle);
-  T.Run('radio group render', @TestRadioGroupRender);
-  T.Run('radio group select', @TestRadioGroupSelect);
-  T.Run('command palette render', @TestCommandPaletteRender);
-  T.Run('command palette tiny viewport stays clipped',
+  T := TTestSuite.Create('nextpas.core.tui.widget.form');
+  T.Test('editor new', @TestEditorNew);
+  T.Test('editor insert', @TestEditorInsert);
+  T.Test('editor move left/right', @TestEditorMoveLeftRight);
+  T.Test('editor delete backward', @TestEditorDeleteBackward);
+  T.Test('editor undo', @TestEditorUndo);
+  T.Test('editor render', @TestEditorRender);
+  T.Test('select new', @TestSelectNew);
+  T.Test('select open', @TestSelectOpen);
+  T.Test('select open keeps highlight visible', @TestSelectOpenKeepsHighlightVisible);
+  T.Test('checkbox unchecked', @TestCheckboxUnchecked);
+  T.Test('checkbox checked', @TestCheckboxChecked);
+  T.Test('checkbox toggle', @TestCheckboxToggle);
+  T.Test('radio group render', @TestRadioGroupRender);
+  T.Test('radio group select', @TestRadioGroupSelect);
+  T.Test('command palette render', @TestCommandPaletteRender);
+  T.Test('command palette tiny viewport stays clipped',
     @TestCommandPaletteTinyViewportStaysClipped);
-  T.Run('scrollview render', @TestScrollViewRender);
-  T.Run('scrollview state', @TestScrollViewState);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('scrollview render', @TestScrollViewRender);
+  T.Test('scrollview state', @TestScrollViewState);
+  if not T.Run then Halt(1);
 end.

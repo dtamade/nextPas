@@ -6,10 +6,10 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.layout,
   nextpas.core.tui.layout.dsl,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestConstraintAliases;
 begin
@@ -44,11 +44,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.layout.dsl');
-  T.Run('constraint aliases', @TestConstraintAliases);
-  T.Run('V split', @TestVSplit);
-  T.Run('H split', @TestHSplit);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.layout.dsl');
+  T.Test('constraint aliases', @TestConstraintAliases);
+  T.Test('V split', @TestVSplit);
+  T.Test('H split', @TestHSplit);
+  if not T.Run then Halt(1);
 end.

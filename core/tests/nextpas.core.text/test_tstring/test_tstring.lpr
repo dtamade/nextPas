@@ -7,11 +7,11 @@
 program test_tstring;
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.tstring;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { helper: 从字面量创建 }
 function S(const AStr: AnsiString): TString;
@@ -488,39 +488,39 @@ end;
 
 { ===== 主程序 ===== }
 begin
-  T := TTestRunner.Create('nextpas.core.text.tstring');
-  T.Run('SizeOf', @TestSizeOf);
-  T.Run('ZeroInit', @TestZeroInit);
-  T.Run('EmptyFactory', @TestEmptyFactory);
-  T.Run('SSOShort', @TestSSOShort);
-  T.Run('SSOExactly15', @TestSSOExactly15);
-  T.Run('SSOExactly16', @TestSSOExactly16);
-  T.Run('HeapString', @TestHeapString);
-  T.Run('FiniSSO', @TestFiniSSO);
-  T.Run('FiniHeap', @TestFiniHeap);
-  T.Run('AssignSSO', @TestAssignSSO);
-  T.Run('AssignHeap', @TestAssignHeap);
-  T.Run('AssignMixed1', @TestAssignMixed1);
-  T.Run('AssignMixed2', @TestAssignMixed2);
-  T.Run('CoWRefcount', @TestCoWRefcount);
-  T.Run('CoWSelfAssign', @TestCoWSelfAssign);
-  T.Run('CoWUnique', @TestCoWUnique);
-  T.Run('CoWCopyOnWrite', @TestCoWCopyOnWrite);
-  T.Run('AssignReplacesOld', @TestAssignReplacesOld);
-  T.Run('MoveSSO', @TestMoveSSO);
-  T.Run('MoveHeap', @TestMoveHeap);
-  T.Run('SetLengthSSO', @TestSetLengthSSO);
-  T.Run('SetLengthPromote', @TestSetLengthPromote);
-  T.Run('UTF8Chinese', @TestUTF8Chinese);
-  T.Run('UTF8Long', @TestUTF8Long);
-  T.Run('NullTerminator', @TestNullTerminator);
-  T.Run('StringCreate', @TestStringCreate);
-  T.Run('StringCreateZero', @TestStringCreateZero);
-  T.Run('FPCRoundtrip', @TestFPCRoundtrip);
-  T.Run('CompareEqual', @TestCompareEqual);
-  T.Run('RefOneFastPath', @TestRefOneFastPath);
-  T.Run('CoWRefOneAfterShare', @TestCoWRefOneAfterShare);
-  T.Run('FastMemEqual', @TestFastMemEqual);
-  T.Run('HeaderSize', @TestHeaderSize);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.tstring');
+  T.Test('SizeOf', @TestSizeOf);
+  T.Test('ZeroInit', @TestZeroInit);
+  T.Test('EmptyFactory', @TestEmptyFactory);
+  T.Test('SSOShort', @TestSSOShort);
+  T.Test('SSOExactly15', @TestSSOExactly15);
+  T.Test('SSOExactly16', @TestSSOExactly16);
+  T.Test('HeapString', @TestHeapString);
+  T.Test('FiniSSO', @TestFiniSSO);
+  T.Test('FiniHeap', @TestFiniHeap);
+  T.Test('AssignSSO', @TestAssignSSO);
+  T.Test('AssignHeap', @TestAssignHeap);
+  T.Test('AssignMixed1', @TestAssignMixed1);
+  T.Test('AssignMixed2', @TestAssignMixed2);
+  T.Test('CoWRefcount', @TestCoWRefcount);
+  T.Test('CoWSelfAssign', @TestCoWSelfAssign);
+  T.Test('CoWUnique', @TestCoWUnique);
+  T.Test('CoWCopyOnWrite', @TestCoWCopyOnWrite);
+  T.Test('AssignReplacesOld', @TestAssignReplacesOld);
+  T.Test('MoveSSO', @TestMoveSSO);
+  T.Test('MoveHeap', @TestMoveHeap);
+  T.Test('SetLengthSSO', @TestSetLengthSSO);
+  T.Test('SetLengthPromote', @TestSetLengthPromote);
+  T.Test('UTF8Chinese', @TestUTF8Chinese);
+  T.Test('UTF8Long', @TestUTF8Long);
+  T.Test('NullTerminator', @TestNullTerminator);
+  T.Test('StringCreate', @TestStringCreate);
+  T.Test('StringCreateZero', @TestStringCreateZero);
+  T.Test('FPCRoundtrip', @TestFPCRoundtrip);
+  T.Test('CompareEqual', @TestCompareEqual);
+  T.Test('RefOneFastPath', @TestRefOneFastPath);
+  T.Test('CoWRefOneAfterShare', @TestCoWRefOneAfterShare);
+  T.Test('FastMemEqual', @TestFastMemEqual);
+  T.Test('HeaderSize', @TestHeaderSize);
+  if not T.Run then Halt(1);
 end.

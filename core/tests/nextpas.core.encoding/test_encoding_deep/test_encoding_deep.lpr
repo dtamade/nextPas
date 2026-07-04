@@ -4,13 +4,13 @@ program test_encoding_deep;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.encoding,
   nextpas.core.encoding.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function StrToBytes(const AStr: string): TBytes;
 var
@@ -709,64 +709,64 @@ end;
 { ===== Main ===== }
 
 begin
-  T := TTestRunner.Create('nextpas.core.encoding.deep');
+  T := TTestSuite.Create('nextpas.core.encoding.deep');
 
   { Base64 RFC 4648 }
-  T.Run('Base64 RFC4648 empty', @TestBase64RFC4648Empty);
-  T.Run('Base64 RFC4648 "f"', @TestBase64RFC4648_f);
-  T.Run('Base64 RFC4648 "fo"', @TestBase64RFC4648_fo);
-  T.Run('Base64 RFC4648 "foo"', @TestBase64RFC4648_foo);
-  T.Run('Base64 RFC4648 "foob"', @TestBase64RFC4648_foob);
-  T.Run('Base64 RFC4648 "fooba"', @TestBase64RFC4648_fooba);
-  T.Run('Base64 RFC4648 "foobar"', @TestBase64RFC4648_foobar);
-  T.Run('Base64 all zeros', @TestBase64AllZeros);
-  T.Run('Base64 all ones', @TestBase64AllOnes);
-  T.Run('Base64 padding 1 byte', @TestBase64PaddingOneByte);
-  T.Run('Base64 padding 2 bytes', @TestBase64PaddingTwoBytes);
-  T.Run('Base64 large round-trip', @TestBase64LargeRoundTrip);
-  T.Run('Base64 invalid char', @TestBase64InvalidChar);
-  T.Run('Base64 invalid single sextet', @TestBase64InvalidSingleSextet);
-  T.Run('Base64 invalid padding placement', @TestBase64InvalidPaddingPlacement);
-  T.Run('Base64 non-zero pad bits rejected', @TestBase64NonZeroPadBitsRejected);
+  T.Test('Base64 RFC4648 empty', @TestBase64RFC4648Empty);
+  T.Test('Base64 RFC4648 "f"', @TestBase64RFC4648_f);
+  T.Test('Base64 RFC4648 "fo"', @TestBase64RFC4648_fo);
+  T.Test('Base64 RFC4648 "foo"', @TestBase64RFC4648_foo);
+  T.Test('Base64 RFC4648 "foob"', @TestBase64RFC4648_foob);
+  T.Test('Base64 RFC4648 "fooba"', @TestBase64RFC4648_fooba);
+  T.Test('Base64 RFC4648 "foobar"', @TestBase64RFC4648_foobar);
+  T.Test('Base64 all zeros', @TestBase64AllZeros);
+  T.Test('Base64 all ones', @TestBase64AllOnes);
+  T.Test('Base64 padding 1 byte', @TestBase64PaddingOneByte);
+  T.Test('Base64 padding 2 bytes', @TestBase64PaddingTwoBytes);
+  T.Test('Base64 large round-trip', @TestBase64LargeRoundTrip);
+  T.Test('Base64 invalid char', @TestBase64InvalidChar);
+  T.Test('Base64 invalid single sextet', @TestBase64InvalidSingleSextet);
+  T.Test('Base64 invalid padding placement', @TestBase64InvalidPaddingPlacement);
+  T.Test('Base64 non-zero pad bits rejected', @TestBase64NonZeroPadBitsRejected);
 
   { Base64 URL-safe }
-  T.Run('Base64URL no padding', @TestBase64UrlNoPadding);
-  T.Run('Base64URL special chars', @TestBase64UrlSpecialChars);
-  T.Run('Base64URL round-trip', @TestBase64UrlRoundTrip);
+  T.Test('Base64URL no padding', @TestBase64UrlNoPadding);
+  T.Test('Base64URL special chars', @TestBase64UrlSpecialChars);
+  T.Test('Base64URL round-trip', @TestBase64UrlRoundTrip);
 
   { Hex }
-  T.Run('Hex empty', @TestHexRFC4648Empty);
-  T.Run('Hex known vectors', @TestHexKnownVectors);
-  T.Run('Hex all bytes', @TestHexAllBytes);
-  T.Run('Hex odd length', @TestHexOddLength);
-  T.Run('Hex invalid chars', @TestHexInvalidChars);
-  T.Run('Hex mixed case', @TestHexMixedCase);
-  T.Run('Hex invalid case', @TestHexInvalidCase);
+  T.Test('Hex empty', @TestHexRFC4648Empty);
+  T.Test('Hex known vectors', @TestHexKnownVectors);
+  T.Test('Hex all bytes', @TestHexAllBytes);
+  T.Test('Hex odd length', @TestHexOddLength);
+  T.Test('Hex invalid chars', @TestHexInvalidChars);
+  T.Test('Hex mixed case', @TestHexMixedCase);
+  T.Test('Hex invalid case', @TestHexInvalidCase);
 
   { URL }
-  T.Run('URL empty', @TestUrlEmpty);
-  T.Run('URL unreserved passthrough', @TestUrlUnreservedPassthrough);
-  T.Run('URL space encoding', @TestUrlSpaceEncoding);
-  T.Run('URL special chars', @TestUrlSpecialChars);
-  T.Run('URL round-trip', @TestUrlRoundTrip);
-  T.Run('URL UTF-8 bytes', @TestUrlUTF8Bytes);
-  T.Run('URL malformed UTF-8 percent bytes', @TestUrlDecodeRejectsMalformedUTF8PercentBytes);
-  T.Run('URL already encoded', @TestUrlAlreadyEncoded);
-  T.Run('URL truncated percent', @TestUrlTruncatedPercent);
-  T.Run('URL invalid percent hex', @TestUrlInvalidPercentHex);
+  T.Test('URL empty', @TestUrlEmpty);
+  T.Test('URL unreserved passthrough', @TestUrlUnreservedPassthrough);
+  T.Test('URL space encoding', @TestUrlSpaceEncoding);
+  T.Test('URL special chars', @TestUrlSpecialChars);
+  T.Test('URL round-trip', @TestUrlRoundTrip);
+  T.Test('URL UTF-8 bytes', @TestUrlUTF8Bytes);
+  T.Test('URL malformed UTF-8 percent bytes', @TestUrlDecodeRejectsMalformedUTF8PercentBytes);
+  T.Test('URL already encoded', @TestUrlAlreadyEncoded);
+  T.Test('URL truncated percent', @TestUrlTruncatedPercent);
+  T.Test('URL invalid percent hex', @TestUrlInvalidPercentHex);
 
   { Varint }
-  T.Run('Varint zero', @TestVarintZeroDeep);
-  T.Run('Varint one byte', @TestVarintOneByte);
-  T.Run('Varint two bytes', @TestVarintTwoBytes);
-  T.Run('Varint three bytes', @TestVarintThreeBytes);
-  T.Run('Varint max UInt64', @TestVarintMaxUInt64Deep);
-  T.Run('Varint protobuf 300', @TestVarintProtobufVector300);
-  T.Run('Varint overflow', @TestVarintOverflow);
-  T.Run('Varint empty input', @TestVarintEmptyInput);
-  T.Run('Varint non-canonical encoding', @TestVarintNonCanonicalEncoding);
-  T.Run('Varint malformed leaves bytes-read zero', @TestVarintMalformedLeavesBytesReadZero);
-  T.Run('Signed varint zigzag', @TestSignedVarintZigZag);
+  T.Test('Varint zero', @TestVarintZeroDeep);
+  T.Test('Varint one byte', @TestVarintOneByte);
+  T.Test('Varint two bytes', @TestVarintTwoBytes);
+  T.Test('Varint three bytes', @TestVarintThreeBytes);
+  T.Test('Varint max UInt64', @TestVarintMaxUInt64Deep);
+  T.Test('Varint protobuf 300', @TestVarintProtobufVector300);
+  T.Test('Varint overflow', @TestVarintOverflow);
+  T.Test('Varint empty input', @TestVarintEmptyInput);
+  T.Test('Varint non-canonical encoding', @TestVarintNonCanonicalEncoding);
+  T.Test('Varint malformed leaves bytes-read zero', @TestVarintMalformedLeavesBytesReadZero);
+  T.Test('Signed varint zigzag', @TestSignedVarintZigZag);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

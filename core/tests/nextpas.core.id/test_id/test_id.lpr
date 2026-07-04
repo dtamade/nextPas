@@ -5,7 +5,7 @@ program test_id;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.id,
   nextpas.core.id.base,
@@ -18,7 +18,7 @@ uses
   nextpas.core.id.xid;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TArgErrorProc = procedure;
@@ -879,90 +879,90 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id');
+  T := TTestSuite.Create('nextpas.core.id');
 
-  T.Run('UUID length', @TestUuidLength);
-  T.Run('UUID format (dashes)', @TestUuidFormat);
-  T.Run('UUID version 4', @TestUuidVersion);
-  T.Run('UUID variant', @TestUuidVariant);
+  T.Test('UUID length', @TestUuidLength);
+  T.Test('UUID format (dashes)', @TestUuidFormat);
+  T.Test('UUID version 4', @TestUuidVersion);
+  T.Test('UUID variant', @TestUuidVariant);
 
-  T.Run('UUID v7 length', @TestUuidV7Length);
-  T.Run('UUID v7 version', @TestUuidV7Version);
-  T.Run('UUID v7 variant', @TestUuidV7Variant);
-  T.Run('UUID v7 ordering', @TestUuidV7Ordering);
-  T.Run('UUID v7 timestamp', @TestUuidV7Timestamp);
-  T.Run('TUuid record v4', @TestUuidRecordV4);
-  T.Run('TUuid Nil', @TestUuidRecordNil);
-  T.Run('TUuid Equals', @TestUuidRecordEquals);
-  T.Run('TUuid CompareTo', @TestUuidRecordCompare);
-  T.Run('UUID parse valid', @TestUuidParseValid);
-  T.Run('UUID parse nil', @TestUuidParseNilStr);
-  T.Run('UUID parse case', @TestUuidParseCaseInsensitive);
-  T.Run('UUID parse invalid', @TestUuidParseInvalid);
-  T.Run('UUID parse invalid raises parse error', @TestUuidParseInvalidRaisesParseError);
-  T.Run('UUID roundtrip', @TestUuidRoundTrip);
+  T.Test('UUID v7 length', @TestUuidV7Length);
+  T.Test('UUID v7 version', @TestUuidV7Version);
+  T.Test('UUID v7 variant', @TestUuidV7Variant);
+  T.Test('UUID v7 ordering', @TestUuidV7Ordering);
+  T.Test('UUID v7 timestamp', @TestUuidV7Timestamp);
+  T.Test('TUuid record v4', @TestUuidRecordV4);
+  T.Test('TUuid Nil', @TestUuidRecordNil);
+  T.Test('TUuid Equals', @TestUuidRecordEquals);
+  T.Test('TUuid CompareTo', @TestUuidRecordCompare);
+  T.Test('UUID parse valid', @TestUuidParseValid);
+  T.Test('UUID parse nil', @TestUuidParseNilStr);
+  T.Test('UUID parse case', @TestUuidParseCaseInsensitive);
+  T.Test('UUID parse invalid', @TestUuidParseInvalid);
+  T.Test('UUID parse invalid raises parse error', @TestUuidParseInvalidRaisesParseError);
+  T.Test('UUID roundtrip', @TestUuidRoundTrip);
 
-  T.Run('ULID length', @TestUlidLength);
-  T.Run('ULID Crockford chars', @TestUlidCrockfordChars);
-  T.Run('ULID timestamp ordering', @TestUlidTimestampOrdering);
-  T.Run('ULID from known timestamp', @TestUlidFromKnownTimestamp);
+  T.Test('ULID length', @TestUlidLength);
+  T.Test('ULID Crockford chars', @TestUlidCrockfordChars);
+  T.Test('ULID timestamp ordering', @TestUlidTimestampOrdering);
+  T.Test('ULID from known timestamp', @TestUlidFromKnownTimestamp);
 
-  T.Run('NanoID default length', @TestNanoIdDefaultLength);
-  T.Run('NanoID custom length', @TestNanoIdCustomLength);
-  T.Run('NanoID custom alphabet', @TestNanoIdCustomAlphabet);
-  T.Run('NanoID URL-safe chars', @TestNanoIdUrlSafe);
+  T.Test('NanoID default length', @TestNanoIdDefaultLength);
+  T.Test('NanoID custom length', @TestNanoIdCustomLength);
+  T.Test('NanoID custom alphabet', @TestNanoIdCustomAlphabet);
+  T.Test('NanoID URL-safe chars', @TestNanoIdUrlSafe);
 
-  T.Run('V7 monotonic ordering', @TestV7MonotonicOrdering);
-  T.Run('V7 monotonic version', @TestV7MonotonicVersion);
-  T.Run('V7 monotonic burst', @TestV7MonotonicBurst);
+  T.Test('V7 monotonic ordering', @TestV7MonotonicOrdering);
+  T.Test('V7 monotonic version', @TestV7MonotonicVersion);
+  T.Test('V7 monotonic burst', @TestV7MonotonicBurst);
 
-  T.Run('Snowflake positive', @TestSnowflakePositive);
-  T.Run('Snowflake ordering', @TestSnowflakeOrdering);
-  T.Run('Snowflake extract', @TestSnowflakeExtract);
-  T.Run('Snowflake burst', @TestSnowflakeBurst);
+  T.Test('Snowflake positive', @TestSnowflakePositive);
+  T.Test('Snowflake ordering', @TestSnowflakeOrdering);
+  T.Test('Snowflake extract', @TestSnowflakeExtract);
+  T.Test('Snowflake burst', @TestSnowflakeBurst);
 
-  T.Run('KSUID length', @TestKsuidLength);
-  T.Run('KSUID timestamp', @TestKsuidTimestamp);
-  T.Run('KSUID ordering', @TestKsuidOrdering);
-  T.Run('KSUID roundtrip', @TestKsuidRoundTrip);
+  T.Test('KSUID length', @TestKsuidLength);
+  T.Test('KSUID timestamp', @TestKsuidTimestamp);
+  T.Test('KSUID ordering', @TestKsuidOrdering);
+  T.Test('KSUID roundtrip', @TestKsuidRoundTrip);
 
-  T.Run('XID length', @TestXidLength);
-  T.Run('XID timestamp', @TestXidTimestamp);
-  T.Run('XID ordering', @TestXidOrdering);
+  T.Test('XID length', @TestXidLength);
+  T.Test('XID timestamp', @TestXidTimestamp);
+  T.Test('XID ordering', @TestXidOrdering);
 
-  T.Run('ULID validation', @TestUlidValidation);
-  T.Run('ULID timestamp extract', @TestUlidTimestamp);
-  T.Run('ULID overflow', @TestUlidOverflow);
-  T.Run('KSUID parse invalid', @TestKsuidParseInvalid);
-  T.Run('XID roundtrip', @TestXidRoundTrip);
-  T.Run('NanoID boundary', @TestNanoIdBoundary);
-  T.Run('UUID NoDash', @TestUuidNoDash);
-  T.Run('UUID Hash', @TestUuidHash);
-  T.Run('XID Nil', @TestXidNil);
-  T.Run('XID parse invalid', @TestXidParseInvalid);
-  T.Run('XID TryParse failed out stable', @TestXidTryParseLeavesOutUntouchedOnFailure);
-  T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
-  T.Run('KSUID rejects overflow base62', @TestKsuidRejectsOverflowBase62);
-  T.Run('KSUID TryParse failed out stable', @TestKsuidTryParseLeavesOutUntouchedOnFailure);
-  T.Run('NanoID rejects excessive size', @TestNanoIdRejectsExcessiveSize);
-  T.Run('Snowflake init rejects invalid arguments', @TestSnowflakeInitRejectsInvalidArguments);
+  T.Test('ULID validation', @TestUlidValidation);
+  T.Test('ULID timestamp extract', @TestUlidTimestamp);
+  T.Test('ULID overflow', @TestUlidOverflow);
+  T.Test('KSUID parse invalid', @TestKsuidParseInvalid);
+  T.Test('XID roundtrip', @TestXidRoundTrip);
+  T.Test('NanoID boundary', @TestNanoIdBoundary);
+  T.Test('UUID NoDash', @TestUuidNoDash);
+  T.Test('UUID Hash', @TestUuidHash);
+  T.Test('XID Nil', @TestXidNil);
+  T.Test('XID parse invalid', @TestXidParseInvalid);
+  T.Test('XID TryParse failed out stable', @TestXidTryParseLeavesOutUntouchedOnFailure);
+  T.Test('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
+  T.Test('KSUID rejects overflow base62', @TestKsuidRejectsOverflowBase62);
+  T.Test('KSUID TryParse failed out stable', @TestKsuidTryParseLeavesOutUntouchedOnFailure);
+  T.Test('NanoID rejects excessive size', @TestNanoIdRejectsExcessiveSize);
+  T.Test('Snowflake init rejects invalid arguments', @TestSnowflakeInitRejectsInvalidArguments);
 
-  T.Run('UUID v4 stress 10k', @TestUuidV4Stress);
-  T.Run('Snowflake stress 10k', @TestSnowflakeStress);
-  T.Run('XID stress 10k', @TestXidStress);
-  T.Run('KSUID roundtrip stress 1k', @TestKsuidRoundTripStress);
-  T.Run('UUID parse all-zeros', @TestUuidParseAllZeros);
-  T.Run('UUID parse all-F', @TestUuidParseAllF);
+  T.Test('UUID v4 stress 10k', @TestUuidV4Stress);
+  T.Test('Snowflake stress 10k', @TestSnowflakeStress);
+  T.Test('XID stress 10k', @TestXidStress);
+  T.Test('KSUID roundtrip stress 1k', @TestKsuidRoundTripStress);
+  T.Test('UUID parse all-zeros', @TestUuidParseAllZeros);
+  T.Test('UUID parse all-F', @TestUuidParseAllF);
 
-  T.Run('KSUID boundary all-zero', @TestKsuidBoundaryAllZero);
-  T.Run('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
-  T.Run('ULID max timestamp', @TestUlidMaxTimestamp);
-  T.Run('ULID timestamp rejects overflow encoding', @TestUlidTimestampRejectsOverflowEncoding);
-  T.Run('ULID timestamp rejects malformed tail', @TestUlidTimestampRejectsMalformedTail);
-  T.Run('ULID lowercase roundtrip', @TestUlidLowercaseRoundTrip);
-  T.Run('XID high-char parse', @TestXidHighCharParse);
-  T.Run('Snowflake extract roundtrip', @TestSnowflakeExtractRoundTrip);
-  T.Run('RNG reseed safety', @TestRngReseedSafety);
+  T.Test('KSUID boundary all-zero', @TestKsuidBoundaryAllZero);
+  T.Test('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
+  T.Test('ULID max timestamp', @TestUlidMaxTimestamp);
+  T.Test('ULID timestamp rejects overflow encoding', @TestUlidTimestampRejectsOverflowEncoding);
+  T.Test('ULID timestamp rejects malformed tail', @TestUlidTimestampRejectsMalformedTail);
+  T.Test('ULID lowercase roundtrip', @TestUlidLowercaseRoundTrip);
+  T.Test('XID high-char parse', @TestXidHighCharParse);
+  T.Test('Snowflake extract roundtrip', @TestSnowflakeExtractRoundTrip);
+  T.Test('RNG reseed safety', @TestRngReseedSafety);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

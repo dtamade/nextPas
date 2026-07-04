@@ -7,10 +7,10 @@ uses
   nextpas.core.platform.x11.ffi,
   nextpas.core.gpu.gl.ffi,
   nextpas.core.gpu.gl,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { Compile-time size assertions for GLX types. }
 procedure TestGLXTypeSizes;
@@ -132,7 +132,7 @@ begin
   { Need libX11 loaded first for display operations. }
   if x11_load <> 0 then
   begin
-    T.Run('TestGLXLoad [SKIP: no libX11]',
+    T.Test('TestGLXLoad [SKIP: no libX11]',
       procedure begin end);
     Exit;
   end;
@@ -140,7 +140,7 @@ begin
   LResult := glx_load;
   if LResult <> 0 then
   begin
-    T.Run('TestGLXLoad [SKIP: no libGL]',
+    T.Test('TestGLXLoad [SKIP: no libGL]',
       procedure begin end);
     x11_unload;
     Exit;
@@ -180,7 +180,7 @@ begin
   if x11_load <> 0 then Exit;
   if glx_load <> 0 then
   begin
-    T.Run('TestGLLoad [SKIP: no libGL]',
+    T.Test('TestGLLoad [SKIP: no libGL]',
       procedure begin end);
     x11_unload;
     Exit;
@@ -189,7 +189,7 @@ begin
   LResult := gl_load;
   if LResult <> 0 then
   begin
-    T.Run('TestGLLoad [SKIP: gl_load failed]',
+    T.Test('TestGLLoad [SKIP: gl_load failed]',
       procedure begin end);
     glx_unload;
     x11_unload;
@@ -360,25 +360,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_glx_gl');
+  T := TTestSuite.Create('test_glx_gl');
 
   { Type sizes }
-  T.Run('GLXTypeSizes', @TestGLXTypeSizes);
-  T.Run('GLTypeSizes', @TestGLTypeSizes);
-  T.Run('XVisualInfoOffsets', @TestXVisualInfoOffsets);
+  T.Test('GLXTypeSizes', @TestGLXTypeSizes);
+  T.Test('GLTypeSizes', @TestGLTypeSizes);
+  T.Test('XVisualInfoOffsets', @TestXVisualInfoOffsets);
 
   { Constants }
-  T.Run('GLXConstants', @TestGLXConstants);
-  T.Run('GLConstants', @TestGLConstants);
+  T.Test('GLXConstants', @TestGLXConstants);
+  T.Test('GLConstants', @TestGLConstants);
 
   { Loaders }
-  T.Run('GLXNotLoadedByDefault', @TestGLXNotLoadedByDefault);
-  T.Run('GLNotLoadedByDefault', @TestGLNotLoadedByDefault);
-  T.Run('GLXLoad', @TestGLXLoad);
-  T.Run('GLLoad', @TestGLLoad);
-  T.Run('GLXDoubleLoadIdempotent', @TestGLXDoubleLoadIdempotent);
-  T.Run('GLDoubleLoadIdempotent', @TestGLDoubleLoadIdempotent);
-  T.Run('UnloadSafeWhenNotLoaded', @TestUnloadSafeWhenNotLoaded);
+  T.Test('GLXNotLoadedByDefault', @TestGLXNotLoadedByDefault);
+  T.Test('GLNotLoadedByDefault', @TestGLNotLoadedByDefault);
+  T.Test('GLXLoad', @TestGLXLoad);
+  T.Test('GLLoad', @TestGLLoad);
+  T.Test('GLXDoubleLoadIdempotent', @TestGLXDoubleLoadIdempotent);
+  T.Test('GLDoubleLoadIdempotent', @TestGLDoubleLoadIdempotent);
+  T.Test('UnloadSafeWhenNotLoaded', @TestUnloadSafeWhenNotLoaded);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

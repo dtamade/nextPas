@@ -5,7 +5,7 @@ program test_vecdeque_full;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.vecdeque.base,
   nextpas.core.collections.vecdeque,
@@ -27,7 +27,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreate;
 var
@@ -1043,78 +1043,78 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.vecdeque.full');
-  T.Run('Create', @TestCreate);
-  T.Run('PushFront Element', @TestPushfrontElement);
-  T.Run('PushBack Element', @TestPushbackElement);
-  T.Run('PopFront', @TestPopfront);
-  T.Run('PopBack', @TestPopback);
-  T.Run('IsEmpty', @TestIsempty);
-  T.Run('GetCount', @TestGetcount);
-  T.Run('GetCapacity', @TestGetcapacity);
-  T.Run('GetUnChecked', @TestGetunchecked);
-  T.Run('LoadFromArray Empty', @TestLoadfromarrayEmpty);
-  T.Run('ForEachUnChecked Index Count PredicateRefFunc', @TestForeachuncheckedIndexCountPredicatereffunc);
-  T.Run('Contains Element', @TestContainsElement);
-  T.Run('Contains Element EqualsFunc', @TestContainsElementEqualsfunc);
-  T.Run('Contains Element EqualsRefFunc', @TestContainsElementEqualsreffunc);
-  T.Run('Contains Element Index', @TestContainsElementIndex);
-  T.Run('Contains Element Index EqualsFunc', @TestContainsElementIndexEqualsfunc);
-  T.Run('Contains Element Index EqualsRefFunc', @TestContainsElementIndexEqualsreffunc);
-  T.Run('Contains Element Index Count', @TestContainsElementIndexCount);
-  T.Run('Contains Element Index Count EqualsFunc', @TestContainsElementIndexCountEqualsfunc);
-  T.Run('Contains Element Index Count EqualsRefFunc', @TestContainsElementIndexCountEqualsreffunc);
-  T.Run('ContainsUnChecked Element', @TestContainsuncheckedElement);
-  T.Run('ContainsUnChecked Element EqualsFunc', @TestContainsuncheckedElementEqualsfunc);
-  T.Run('ContainsUnChecked Element EqualsRefFunc', @TestContainsuncheckedElementEqualsreffunc);
-  T.Run('Find Element', @TestFindElement);
-  T.Run('Find Element EqualsFunc', @TestFindElementEqualsfunc);
-  T.Run('Find Element EqualsRefFunc', @TestFindElementEqualsreffunc);
-  T.Run('Find Element Index', @TestFindElementIndex);
-  T.Run('Find Element Index EqualsFunc', @TestFindElementIndexEqualsfunc);
-  T.Run('Find Element Index EqualsRefFunc', @TestFindElementIndexEqualsreffunc);
-  T.Run('Find Element Index Count', @TestFindElementIndexCount);
-  T.Run('Find Element Index Count EqualsFunc', @TestFindElementIndexCountEqualsfunc);
-  T.Run('Find Element Index Count EqualsRefFunc', @TestFindElementIndexCountEqualsreffunc);
-  T.Run('FindUnChecked Element', @TestFinduncheckedElement);
-  T.Run('FindUnChecked Element EqualsFunc', @TestFinduncheckedElementEqualsfunc);
-  T.Run('FindUnChecked Element EqualsRefFunc', @TestFinduncheckedElementEqualsreffunc);
-  T.Run('FindIF PredicateFunc', @TestFindifPredicatefunc);
-  T.Run('FindIF PredicateRefFunc', @TestFindifPredicatereffunc);
-  T.Run('GetGrowStrategy', @TestGetgrowstrategy);
-  T.Run('ShrinkToFit', @TestShrinktofit);
-  T.Run('Shrink', @TestShrink);
-  T.Run('Insert Index Element', @TestInsertIndexElement);
-  T.Run('Insert Index Array', @TestInsertIndexArray);
-  T.Run('Insert Index Pointer Count', @TestInsertIndexPointerCount);
-  T.Run('Insert Index Collection StartIndex', @TestInsertIndexCollectionStartindex);
-  T.Run('Remove Index', @TestRemoveIndex);
-  T.Run('Remove Index Count', @TestRemoveIndexCount);
-  T.Run('RemoveSwap Index', @TestRemoveswapIndex);
-  T.Run('RemoveSwap Index Count', @TestRemoveswapIndexCount);
-  T.Run('PopFrontRange ToCollection', @TestPopfrontrangeTocollection);
-  T.Run('PopBackRange ToCollection', @TestPopbackrangeTocollection);
-  T.Run('ClearAndReserve', @TestClearandreserve);
-  T.Run('PushFront Collection', @TestPushfrontCollection);
-  T.Run('ReplaceIf NewValue PredicateFunc', @TestReplaceifNewvaluePredicatefunc);
-  T.Run('IsSorted', @TestIssorted);
-  T.Run('IsSorted CompareFunc', @TestIssortedComparefunc);
-  T.Run('IsSorted CompareRefFunc', @TestIssortedComparereffunc);
-  T.Run('BinarySearchInsert Element', @TestBinarysearchinsertElement);
-  T.Run('Write Index Pointer Count', @TestWriteIndexPointerCount);
-  T.Run('Write Index Array', @TestWriteIndexArray);
-  T.Run('Write Index Collection', @TestWriteIndexCollection);
-  T.Run('Write Index Collection StartIndex', @TestWriteIndexCollectionStartindex);
-  T.Run('WriteExact Index Pointer Count', @TestWriteexactIndexPointerCount);
-  T.Run('WriteExact Index Array', @TestWriteexactIndexArray);
-  T.Run('WriteExact Index Collection', @TestWriteexactIndexCollection);
-  T.Run('WriteExact Index Collection StartIndex', @TestWriteexactIndexCollectionStartindex);
-  T.Run('GetData', @TestGetdata);
-  T.Run('SetData', @TestSetdata);
-  T.Run('GetElementTypeInfo', @TestGetelementtypeinfo);
-  T.Run('Wraparound Heavy', @TestWraparoundHeavy);
-  T.Run('Insert Index Collection StartIndex Heavy', @TestInsertIndexCollectionStartindexHeavy);
-  T.Run('Insert Collection Nil Raises', @TestInsertCollectionNilRaises);
-  T.Run('Write Pointer Nil Raises', @TestWritePointerNilRaises);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.vecdeque.full');
+  T.Test('Create', @TestCreate);
+  T.Test('PushFront Element', @TestPushfrontElement);
+  T.Test('PushBack Element', @TestPushbackElement);
+  T.Test('PopFront', @TestPopfront);
+  T.Test('PopBack', @TestPopback);
+  T.Test('IsEmpty', @TestIsempty);
+  T.Test('GetCount', @TestGetcount);
+  T.Test('GetCapacity', @TestGetcapacity);
+  T.Test('GetUnChecked', @TestGetunchecked);
+  T.Test('LoadFromArray Empty', @TestLoadfromarrayEmpty);
+  T.Test('ForEachUnChecked Index Count PredicateRefFunc', @TestForeachuncheckedIndexCountPredicatereffunc);
+  T.Test('Contains Element', @TestContainsElement);
+  T.Test('Contains Element EqualsFunc', @TestContainsElementEqualsfunc);
+  T.Test('Contains Element EqualsRefFunc', @TestContainsElementEqualsreffunc);
+  T.Test('Contains Element Index', @TestContainsElementIndex);
+  T.Test('Contains Element Index EqualsFunc', @TestContainsElementIndexEqualsfunc);
+  T.Test('Contains Element Index EqualsRefFunc', @TestContainsElementIndexEqualsreffunc);
+  T.Test('Contains Element Index Count', @TestContainsElementIndexCount);
+  T.Test('Contains Element Index Count EqualsFunc', @TestContainsElementIndexCountEqualsfunc);
+  T.Test('Contains Element Index Count EqualsRefFunc', @TestContainsElementIndexCountEqualsreffunc);
+  T.Test('ContainsUnChecked Element', @TestContainsuncheckedElement);
+  T.Test('ContainsUnChecked Element EqualsFunc', @TestContainsuncheckedElementEqualsfunc);
+  T.Test('ContainsUnChecked Element EqualsRefFunc', @TestContainsuncheckedElementEqualsreffunc);
+  T.Test('Find Element', @TestFindElement);
+  T.Test('Find Element EqualsFunc', @TestFindElementEqualsfunc);
+  T.Test('Find Element EqualsRefFunc', @TestFindElementEqualsreffunc);
+  T.Test('Find Element Index', @TestFindElementIndex);
+  T.Test('Find Element Index EqualsFunc', @TestFindElementIndexEqualsfunc);
+  T.Test('Find Element Index EqualsRefFunc', @TestFindElementIndexEqualsreffunc);
+  T.Test('Find Element Index Count', @TestFindElementIndexCount);
+  T.Test('Find Element Index Count EqualsFunc', @TestFindElementIndexCountEqualsfunc);
+  T.Test('Find Element Index Count EqualsRefFunc', @TestFindElementIndexCountEqualsreffunc);
+  T.Test('FindUnChecked Element', @TestFinduncheckedElement);
+  T.Test('FindUnChecked Element EqualsFunc', @TestFinduncheckedElementEqualsfunc);
+  T.Test('FindUnChecked Element EqualsRefFunc', @TestFinduncheckedElementEqualsreffunc);
+  T.Test('FindIF PredicateFunc', @TestFindifPredicatefunc);
+  T.Test('FindIF PredicateRefFunc', @TestFindifPredicatereffunc);
+  T.Test('GetGrowStrategy', @TestGetgrowstrategy);
+  T.Test('ShrinkToFit', @TestShrinktofit);
+  T.Test('Shrink', @TestShrink);
+  T.Test('Insert Index Element', @TestInsertIndexElement);
+  T.Test('Insert Index Array', @TestInsertIndexArray);
+  T.Test('Insert Index Pointer Count', @TestInsertIndexPointerCount);
+  T.Test('Insert Index Collection StartIndex', @TestInsertIndexCollectionStartindex);
+  T.Test('Remove Index', @TestRemoveIndex);
+  T.Test('Remove Index Count', @TestRemoveIndexCount);
+  T.Test('RemoveSwap Index', @TestRemoveswapIndex);
+  T.Test('RemoveSwap Index Count', @TestRemoveswapIndexCount);
+  T.Test('PopFrontRange ToCollection', @TestPopfrontrangeTocollection);
+  T.Test('PopBackRange ToCollection', @TestPopbackrangeTocollection);
+  T.Test('ClearAndReserve', @TestClearandreserve);
+  T.Test('PushFront Collection', @TestPushfrontCollection);
+  T.Test('ReplaceIf NewValue PredicateFunc', @TestReplaceifNewvaluePredicatefunc);
+  T.Test('IsSorted', @TestIssorted);
+  T.Test('IsSorted CompareFunc', @TestIssortedComparefunc);
+  T.Test('IsSorted CompareRefFunc', @TestIssortedComparereffunc);
+  T.Test('BinarySearchInsert Element', @TestBinarysearchinsertElement);
+  T.Test('Write Index Pointer Count', @TestWriteIndexPointerCount);
+  T.Test('Write Index Array', @TestWriteIndexArray);
+  T.Test('Write Index Collection', @TestWriteIndexCollection);
+  T.Test('Write Index Collection StartIndex', @TestWriteIndexCollectionStartindex);
+  T.Test('WriteExact Index Pointer Count', @TestWriteexactIndexPointerCount);
+  T.Test('WriteExact Index Array', @TestWriteexactIndexArray);
+  T.Test('WriteExact Index Collection', @TestWriteexactIndexCollection);
+  T.Test('WriteExact Index Collection StartIndex', @TestWriteexactIndexCollectionStartindex);
+  T.Test('GetData', @TestGetdata);
+  T.Test('SetData', @TestSetdata);
+  T.Test('GetElementTypeInfo', @TestGetelementtypeinfo);
+  T.Test('Wraparound Heavy', @TestWraparoundHeavy);
+  T.Test('Insert Index Collection StartIndex Heavy', @TestInsertIndexCollectionStartindexHeavy);
+  T.Test('Insert Collection Nil Raises', @TestInsertCollectionNilRaises);
+  T.Test('Write Pointer Nil Raises', @TestWritePointerNilRaises);
+  if not T.Run then Halt(1);
 end.

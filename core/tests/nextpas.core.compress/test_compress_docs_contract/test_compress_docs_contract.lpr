@@ -5,10 +5,10 @@ program test_compress_docs_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadText(const ARelativePath: string): string;
 var
@@ -2825,110 +2825,110 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.compress.docs-contract');
-  T.Run('audit Makefile target parser rejects optional runtime',
+  T := TTestSuite.Create('nextpas.core.compress.docs-contract');
+  T.Test('audit Makefile target parser rejects optional runtime',
     @TestAuditMakefileTargetPrerequisiteParserRejectsOptionalRuntime);
-  T.Run('audit Makefile target prerequisites match gate policy',
+  T.Test('audit Makefile target prerequisites match gate policy',
     @TestAuditMakefileTargetPrerequisitesMatchGatePolicy);
-  T.Run('compression level docs match source',
+  T.Test('compression level docs match source',
     @TestCompressionLevelDocsMatchSource);
-  T.Run('facade example docs match current API',
+  T.Test('facade example docs match current API',
     @TestFacadeExampleDocsMatchCurrentApi);
-  T.Run('runnable compress example docs match files',
+  T.Test('runnable compress example docs match files',
     @TestRunnableCompressExampleDocsMatchFiles);
-  T.Run('supported formats table matches facade',
+  T.Test('supported formats table matches facade',
     @TestSupportedFormatsTableMatchesFacade);
-  T.Run('Deflate format docs match source',
+  T.Test('Deflate format docs match source',
     @TestDeflateFormatDocsMatchSource);
-  T.Run('Deflate interop note matches source',
+  T.Test('Deflate interop note matches source',
     @TestDeflateInteropNoteMatchesSource);
-  T.Run('Gzip cross-API audit contract',
+  T.Test('Gzip cross-API audit contract',
     @TestGzipCrossApiAuditContract);
-  T.Run('bounded Deflate docs match surface',
+  T.Test('bounded Deflate docs match surface',
     @TestBoundedDeflateDocsMatchSurface);
-  T.Run('Deflate invalid header contract matches audit',
+  T.Test('Deflate invalid header contract matches audit',
     @TestDeflateInvalidHeaderContractMatchesAudit);
-  T.Run('Gzip error model docs match audit',
+  T.Test('Gzip error model docs match audit',
     @TestGzipErrorModelDocsMatchAudit);
-  T.Run('Gzip one-shot zlib state uses finally',
+  T.Test('Gzip one-shot zlib state uses finally',
     @TestGzipOneShotZlibStateUsesFinally);
-  T.Run('Gzip one-shot compression uses bounded allocation',
+  T.Test('Gzip one-shot compression uses bounded allocation',
     @TestGzipOneShotCompressionUsesBoundedAllocation);
-  T.Run('bounded Gzip docs match surface',
+  T.Test('bounded Gzip docs match surface',
     @TestBoundedGzipDocsMatchSurface);
-  T.Run('bounded output limit error docs match audit',
+  T.Test('bounded output limit error docs match audit',
     @TestBoundedOutputLimitErrorDocsMatchAudit);
-  T.Run('Gzip optional header errors match audit',
+  T.Test('Gzip optional header errors match audit',
     @TestGzipOptionalHeaderErrorsMatchAudit);
-  T.Run('Gzip trailer boundary matches audit',
+  T.Test('Gzip trailer boundary matches audit',
     @TestGzipTrailerBoundaryMatchesAudit);
-  T.Run('streaming lifecycle docs match contract',
+  T.Test('streaming lifecycle docs match contract',
     @TestStreamingLifecycleDocsMatchContract);
-  T.Run('streaming docs show bounded readers for untrusted input',
+  T.Test('streaming docs show bounded readers for untrusted input',
     @TestStreamingDocsShowBoundedReadersForUntrustedInput);
-  T.Run('streaming zlib avail narrowing matches source',
+  T.Test('streaming zlib avail narrowing matches source',
     @TestStreamingZlibAvailNarrowingMatchesSource);
-  T.Run('streaming reader cap probe matches source',
+  T.Test('streaming reader cap probe matches source',
     @TestStreamingReaderCapProbeMatchesSource);
-  T.Run('Deflate pending corrupt read source contract',
+  T.Test('Deflate pending corrupt read source contract',
     @TestDeflatePendingCorruptReadSourceContract);
-  T.Run('Gzip pending corrupt read source contract',
+  T.Test('Gzip pending corrupt read source contract',
     @TestGzipPendingCorruptReadSourceContract);
-  T.Run('one-shot zlib width guards match source',
+  T.Test('one-shot zlib width guards match source',
     @TestOneShotZlibWidthGuardsMatchSource);
-  T.Run('one-shot inflate state cleanup matches source',
+  T.Test('one-shot inflate state cleanup matches source',
     @TestOneShotInflateStateCleanupMatchesSource);
-  T.Run('bounded growth policy never exceeds cap',
+  T.Test('bounded growth policy never exceeds cap',
     @TestBoundedGrowthPolicyNeverExceedsCap);
-  T.Run('performance docs match current implementation',
+  T.Test('performance docs match current implementation',
     @TestPerformanceDocsMatchCurrentImplementation);
-  T.Run('LZ4 native bound guard matches pure policy',
+  T.Test('LZ4 native bound guard matches pure policy',
     @TestLz4NativeBoundGuardMatchesPurePolicy);
-  T.Run('LZ4 native facade owner boundary',
+  T.Test('LZ4 native facade owner boundary',
     @TestLz4NativeFacadeOwnerBoundary);
-  T.Run('LZ4 FFI unit is ABI-only and native owner boundary',
+  T.Test('LZ4 FFI unit is ABI-only and native owner boundary',
     @TestLz4FfiUnitIsAbiOnlyAndNativeOwnerBoundary);
-  T.Run('LZ4 decode bound guard matches pure policy',
+  T.Test('LZ4 decode bound guard matches pure policy',
     @TestLz4DecodeBoundGuardMatchesPurePolicy);
-  T.Run('LZ4 empty decode contract matches audit',
+  T.Test('LZ4 empty decode contract matches audit',
     @TestLz4EmptyDecodeContractMatchesAudit);
-  T.Run('LZ4 raw block docs match frame guard',
+  T.Test('LZ4 raw block docs match frame guard',
     @TestLz4RawBlockDocsMatchFrameGuard);
-  T.Run('LZ4 error model docs match audit',
+  T.Test('LZ4 error model docs match audit',
     @TestLz4ErrorModelDocsMatchAudit);
-  T.Run('LZ4 encoder block termination matches audit',
+  T.Test('LZ4 encoder block termination matches audit',
     @TestLz4EncoderBlockTerminationMatchesAudit);
-  T.Run('native LZ4 compile gate is in audit path',
+  T.Test('native LZ4 compile gate is in audit path',
     @TestNativeLz4CompileGateIsInAuditPath);
-  T.Run('native LZ4 runtime gate is optional',
+  T.Test('native LZ4 runtime gate is optional',
     @TestNativeLz4RuntimeGateIsOptional);
-  T.Run('native zlib compile gate is in audit path',
+  T.Test('native zlib compile gate is in audit path',
     @TestNativeZlibCompileGateIsInAuditPath);
-  T.Run('native zlib runtime proof docs are explicit',
+  T.Test('native zlib runtime proof docs are explicit',
     @TestNativeZlibRuntimeProofDocsAreExplicit);
-  T.Run('benchmark compile gate is in audit path',
+  T.Test('benchmark compile gate is in audit path',
     @TestBenchmarkCompileGateIsInAuditPath);
-  T.Run('benchmark runtime gate is optional',
+  T.Test('benchmark runtime gate is optional',
     @TestBenchmarkRunGateIsOptional);
-  T.Run('Go comparator compile gate is in audit path',
+  T.Test('Go comparator compile gate is in audit path',
     @TestGoComparatorCompileGateIsInAuditPath);
-  T.Run('compress example run gate is in audit path',
+  T.Test('compress example run gate is in audit path',
     @TestCompressExampleRunGateIsInAuditPath);
-  T.Run('heaptrc gate is in audit path',
+  T.Test('heaptrc gate is in audit path',
     @TestHeaptrcGateIsInAuditPath);
-  T.Run('docs-contract gate is in audit path',
+  T.Test('docs-contract gate is in audit path',
     @TestDocsContractGateIsInAuditPath);
-  T.Run('audit test target includes heaptrc',
+  T.Test('audit test target includes heaptrc',
     @TestAuditTestTargetIncludesHeaptrc);
-  T.Run('audit landing gate includes heaptrc',
+  T.Test('audit landing gate includes heaptrc',
     @TestAuditLandingGateIncludesHeaptrc);
-  T.Run('audit clean covers proxied gates',
+  T.Test('audit clean covers proxied gates',
     @TestAuditCleanCoversProxiedGates);
-  T.Run('deep heaptrc gate is explicit',
+  T.Test('deep heaptrc gate is explicit',
     @TestDeepHeaptrcGateIsExplicit);
-  T.Run('basic heaptrc gate is explicit',
+  T.Test('basic heaptrc gate is explicit',
     @TestBasicHeaptrcGateIsExplicit);
-  T.Run('docs-contract heaptrc gate is explicit',
+  T.Test('docs-contract heaptrc gate is explicit',
     @TestDocsContractHeaptrcGateIsExplicit);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

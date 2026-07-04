@@ -5,10 +5,10 @@ program test_ini_roundtrip;
 uses
   SysUtils,
   nextpas.core.ini,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== Load → ToString → Re-load → Verify ===== }
 
@@ -253,16 +253,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('ini roundtrip');
-  T.Run('basic roundtrip', @TestBasicRoundtrip);
-  T.Run('multi section roundtrip', @TestMultiSectionRoundtrip);
-  T.Run('write then roundtrip', @TestWriteThenRoundtrip);
-  T.Run('delete then roundtrip', @TestDeleteThenRoundtrip);
-  T.Run('empty roundtrip', @TestEmptyRoundtrip);
-  T.Run('global section roundtrip', @TestGlobalSectionRoundtrip);
-  T.Run('ReadBool roundtrip', @TestReadBoolRoundtrip);
-  T.Run('ReadInteger roundtrip', @TestReadIntegerRoundtrip);
-  T.Run('IniParse roundtrip', @TestIniParseRoundtrip);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('ini roundtrip');
+  T.Test('basic roundtrip', @TestBasicRoundtrip);
+  T.Test('multi section roundtrip', @TestMultiSectionRoundtrip);
+  T.Test('write then roundtrip', @TestWriteThenRoundtrip);
+  T.Test('delete then roundtrip', @TestDeleteThenRoundtrip);
+  T.Test('empty roundtrip', @TestEmptyRoundtrip);
+  T.Test('global section roundtrip', @TestGlobalSectionRoundtrip);
+  T.Test('ReadBool roundtrip', @TestReadBoolRoundtrip);
+  T.Test('ReadInteger roundtrip', @TestReadIntegerRoundtrip);
+  T.Test('IniParse roundtrip', @TestIniParseRoundtrip);
+  if not T.Run then Halt(1);
 end.

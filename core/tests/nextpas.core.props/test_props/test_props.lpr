@@ -4,13 +4,13 @@ program test_props;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.base,
   nextpas.core.fs,
   nextpas.core.props;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestParseBasic;
 var
@@ -128,17 +128,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.props');
-  T.Run('Parse basic', @TestParseBasic);
-  T.Run('Parse comments', @TestParseComments);
-  T.Run('Parse empty lines', @TestParseEmptyLines);
-  T.Run('Parse trimming', @TestParseTrimming);
-  T.Run('Parse no value', @TestParseNoValue);
-  T.Run('Parse custom sep', @TestParseCustomSep);
-  T.Run('PropsGet', @TestPropsGet);
-  T.Run('PropsHas', @TestPropsHas);
-  T.Run('Read/Write file', @TestReadWriteFile);
-  T.Run('Parse CRLF', @TestParseCRLF);
-  T.Run('Value with equals', @TestParseValueWithEquals);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.props');
+  T.Test('Parse basic', @TestParseBasic);
+  T.Test('Parse comments', @TestParseComments);
+  T.Test('Parse empty lines', @TestParseEmptyLines);
+  T.Test('Parse trimming', @TestParseTrimming);
+  T.Test('Parse no value', @TestParseNoValue);
+  T.Test('Parse custom sep', @TestParseCustomSep);
+  T.Test('PropsGet', @TestPropsGet);
+  T.Test('PropsHas', @TestPropsHas);
+  T.Test('Read/Write file', @TestReadWriteFile);
+  T.Test('Parse CRLF', @TestParseCRLF);
+  T.Test('Value with equals', @TestParseValueWithEquals);
+  if not T.Run then Halt(1);
 end.

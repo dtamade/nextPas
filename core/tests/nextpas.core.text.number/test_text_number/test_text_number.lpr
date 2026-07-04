@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.text.number,
   nextpas.core.text.view,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestIntToBuffer;
 var
@@ -303,21 +303,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.number');
-  T.Run('IntToBuffer', @TestIntToBuffer);
-  T.Run('UIntToBuffer', @TestUIntToBuffer);
-  T.Run('IntToHexBuffer', @TestHexBuffer);
-  T.Run('ParseInt64', @TestParseInt64);
-  T.Run('ParseUInt64', @TestParseUInt64);
-  T.Run('Parse integer overflow', @TestParseIntegerOverflow);
-  T.Run('ViewToInt64', @TestViewToInt);
-  T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
-  T.Run('FloatToBuffer', @TestFloatToBuffer);
-  T.Run('FloatToJsonBuffer', @TestFloatToJsonBuffer);
-  T.Run('ParseDouble', @TestParseDouble);
-  T.Run('ParseDouble rejects empty fraction', @TestParseDoubleRejectsFractionWithoutDigits);
-  T.Run('ParseDouble rejects overflow fallback', @TestParseDoubleRejectsOverflowFallback);
-  T.Run('ViewToDouble', @TestViewToDouble);
-  T.Run('float round-trip', @TestFloatRoundTrip);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.number');
+  T.Test('IntToBuffer', @TestIntToBuffer);
+  T.Test('UIntToBuffer', @TestUIntToBuffer);
+  T.Test('IntToHexBuffer', @TestHexBuffer);
+  T.Test('ParseInt64', @TestParseInt64);
+  T.Test('ParseUInt64', @TestParseUInt64);
+  T.Test('Parse integer overflow', @TestParseIntegerOverflow);
+  T.Test('ViewToInt64', @TestViewToInt);
+  T.Test('digit pairs 0-999', @TestDigitPairsCorrectness);
+  T.Test('FloatToBuffer', @TestFloatToBuffer);
+  T.Test('FloatToJsonBuffer', @TestFloatToJsonBuffer);
+  T.Test('ParseDouble', @TestParseDouble);
+  T.Test('ParseDouble rejects empty fraction', @TestParseDoubleRejectsFractionWithoutDigits);
+  T.Test('ParseDouble rejects overflow fallback', @TestParseDoubleRejectsOverflowFallback);
+  T.Test('ViewToDouble', @TestViewToDouble);
+  T.Test('float round-trip', @TestFloatRoundTrip);
+  if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@ program test_platform_host_abi_wave10_posix_stat_hosts;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   SOURCE_EVIDENCE_PATH_FROM_TEST = '../../../docs/platform-ffi-source-evidence-index.md';
@@ -48,7 +48,7 @@ const
   PLATFORM_THREAD_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -392,13 +392,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.host_abi_wave10_posix_stat_hosts');
-  T.Run('platform host ABI wave 10 Darwin stat source tokens are owned', @TestDarwinStatHostOwnerTokens);
-  T.Run('platform host ABI wave 10 FreeBSD stat source tokens are owned', @TestFreeBSDStatHostOwnerTokens);
-  T.Run('platform host ABI wave 10 Android stat source tokens are owned', @TestAndroidStatHostOwnerTokens);
-  T.Run('platform host ABI wave 10 keeps shared and generic Unix stat deferred', @TestSharedAndGenericUnixStatStillDeferred);
-  T.Run('platform host ABI wave 10 POSIX stat host evidence is documented', @TestHostAbiWave10PosixStatHostsEvidenceDocumented);
-  T.Run('platform host ABI wave 10 POSIX stat host route truth stays indexed', @TestHostAbiWave10PosixStatHostsRouteTruth);
-  T.Run('platform host ABI wave 10 keeps feature-specific file ffi absent', @TestFeatureSpecificFileFfiStillAbsent);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.host_abi_wave10_posix_stat_hosts');
+  T.Test('platform host ABI wave 10 Darwin stat source tokens are owned', @TestDarwinStatHostOwnerTokens);
+  T.Test('platform host ABI wave 10 FreeBSD stat source tokens are owned', @TestFreeBSDStatHostOwnerTokens);
+  T.Test('platform host ABI wave 10 Android stat source tokens are owned', @TestAndroidStatHostOwnerTokens);
+  T.Test('platform host ABI wave 10 keeps shared and generic Unix stat deferred', @TestSharedAndGenericUnixStatStillDeferred);
+  T.Test('platform host ABI wave 10 POSIX stat host evidence is documented', @TestHostAbiWave10PosixStatHostsEvidenceDocumented);
+  T.Test('platform host ABI wave 10 POSIX stat host route truth stays indexed', @TestHostAbiWave10PosixStatHostsRouteTruth);
+  T.Test('platform host ABI wave 10 keeps feature-specific file ffi absent', @TestFeatureSpecificFileFfiStillAbsent);
+  if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@ program test_impl_simd;
 
 uses
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math,
   nextpas.core.math.mat,
   nextpas.core.math.quat,
@@ -12,7 +12,7 @@ uses
   nextpas.core.math.impl.simd;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -444,17 +444,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.impl.simd');
-  T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
-  T.Run('vec3f simd helpers', @TestVec3fSimdHelpers);
-  T.Run('mat4f simd helpers', @TestMat4fSimdHelpers);
-  T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
-  T.Run('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
-  T.Run('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
-  T.Run('simd vec4f lane IEEE parity', @TestSimdVec4fLaneIeeeParity);
-  T.Run('simd vec4f reduction IEEE parity', @TestSimdVec4fReductionIeeeParity);
-  T.Run('simd mat4f mul vec4f IEEE parity', @TestSimdMat4fMulVec4fIeeeParity);
-  T.Run('simd quat rotate invalid vector public error parity',
+  T := TTestSuite.Create('nextpas.core.math.impl.simd');
+  T.Test('vec4f simd helpers', @TestVec4fSimdHelpers);
+  T.Test('vec3f simd helpers', @TestVec3fSimdHelpers);
+  T.Test('mat4f simd helpers', @TestMat4fSimdHelpers);
+  T.Test('quatf simd helpers', @TestQuatfSimdHelpers);
+  T.Test('simd helpers match public math semantics', @TestSimdHelpersMatchPublicMathSemantics);
+  T.Test('simd dot length stable edge parity', @TestSimdDotLengthStableEdgeParity);
+  T.Test('simd vec4f lane IEEE parity', @TestSimdVec4fLaneIeeeParity);
+  T.Test('simd vec4f reduction IEEE parity', @TestSimdVec4fReductionIeeeParity);
+  T.Test('simd mat4f mul vec4f IEEE parity', @TestSimdMat4fMulVec4fIeeeParity);
+  T.Test('simd quat rotate invalid vector public error parity',
     @TestSimdQuatfRotateInvalidVectorPublicParity);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

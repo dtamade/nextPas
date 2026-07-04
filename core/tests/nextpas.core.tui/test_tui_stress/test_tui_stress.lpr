@@ -12,8 +12,8 @@ uses
   nextpas.core.tui.widget.paragraph,
   nextpas.core.tui.widget.list,
   nextpas.core.tui.widget.table,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 procedure TestLargeBuffer;
 var LBuf: TBuffer;
@@ -121,14 +121,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.stress');
-  T.Run('4K buffer create', @TestLargeBuffer);
-  T.Run('4K buffer diff (3 changed rows)', @TestLargeBufferDiff);
-  T.Run('4K buffer diff (identical)', @TestLargeBufferIdenticalDiff);
-  T.Run('10000 item list render', @TestLargeListRender);
-  T.Run('20-col 100-row table render', @TestLargeTableRender);
-  T.Run('10KB string render', @TestLongStringRender);
-  T.Run('10KB paragraph wrap', @TestParagraphWrapLong);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.stress');
+  T.Test('4K buffer create', @TestLargeBuffer);
+  T.Test('4K buffer diff (3 changed rows)', @TestLargeBufferDiff);
+  T.Test('4K buffer diff (identical)', @TestLargeBufferIdenticalDiff);
+  T.Test('10000 item list render', @TestLargeListRender);
+  T.Test('20-col 100-row table render', @TestLargeTableRender);
+  T.Test('10KB string render', @TestLongStringRender);
+  T.Test('10KB paragraph wrap', @TestParagraphWrapLong);
+  if not T.Run then Halt(1);
 end.

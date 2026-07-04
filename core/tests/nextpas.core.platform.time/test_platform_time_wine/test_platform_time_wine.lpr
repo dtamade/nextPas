@@ -6,11 +6,11 @@ program test_platform_time_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -74,15 +74,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.time.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.time.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
-  T.Run('realtime clock returns reasonable value', @TestRealtimeIsReasonable);
-  T.Run('monotonic resolution is positive', @TestMonotonicResolutionIsPositive);
+  T.Test('monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
+  T.Test('realtime clock returns reasonable value', @TestRealtimeIsReasonable);
+  T.Test('monotonic resolution is positive', @TestMonotonicResolutionIsPositive);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Run('QPC to ns basic conversion', @TestQpcToNsBasic);
-  T.Run('resolution from frequency basic', @TestResolutionFromFrequencyBasic);
-  T.Summary;
+  T.Test('QPC to ns basic conversion', @TestQpcToNsBasic);
+  T.Test('resolution from frequency basic', @TestResolutionFromFrequencyBasic);
+  if not T.Run then Halt(1);
 end.

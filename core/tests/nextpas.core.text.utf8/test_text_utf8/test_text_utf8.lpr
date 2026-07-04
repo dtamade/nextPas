@@ -4,10 +4,10 @@ program test_text_utf8;
 
 uses
   nextpas.core.text.utf8,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDecodeAscii;
 var
@@ -203,20 +203,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.utf8');
-  T.Run('decode ASCII', @TestDecodeAscii);
-  T.Run('decode 2-byte', @TestDecode2Byte);
-  T.Run('decode 3-byte', @TestDecode3Byte);
-  T.Run('decode 4-byte', @TestDecode4Byte);
-  T.Run('decode invalid', @TestDecodeInvalid);
-  T.Run('nil nonzero span', @TestNilNonzeroSpan);
-  T.Run('encode', @TestEncode);
-  T.Run('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
-  T.Run('isValid', @TestIsValid);
-  T.Run('codepoint count', @TestCodePointCount);
-  T.Run('string wrappers', @TestStringWrappers);
-  T.Run('iterator', @TestIterator);
-  T.Run('iterator invalid', @TestIteratorInvalid);
-  T.Run('byte length', @TestByteLength);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.utf8');
+  T.Test('decode ASCII', @TestDecodeAscii);
+  T.Test('decode 2-byte', @TestDecode2Byte);
+  T.Test('decode 3-byte', @TestDecode3Byte);
+  T.Test('decode 4-byte', @TestDecode4Byte);
+  T.Test('decode invalid', @TestDecodeInvalid);
+  T.Test('nil nonzero span', @TestNilNonzeroSpan);
+  T.Test('encode', @TestEncode);
+  T.Test('encode nil destination fails closed', @TestEncodeNilDestinationFailsClosed);
+  T.Test('isValid', @TestIsValid);
+  T.Test('codepoint count', @TestCodePointCount);
+  T.Test('string wrappers', @TestStringWrappers);
+  T.Test('iterator', @TestIterator);
+  T.Test('iterator invalid', @TestIteratorInvalid);
+  T.Test('byte length', @TestByteLength);
+  if not T.Run then Halt(1);
 end.

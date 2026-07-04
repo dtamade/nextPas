@@ -3,13 +3,13 @@ program test_symbol_scope;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math,
   nextpas.core.math.trig,
   nextpas.core.simd.mathutil;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -136,8 +136,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math symbol scope');
-  T.Run('math + simd.mathutil common symbols', @TestMathAndSimdMathUtilNoAmbiguousCommonSymbols);
-  T.Run('expanded scalar/trig common symbols', @TestExpandedScalarTrigCommonSymbols);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.math symbol scope');
+  T.Test('math + simd.mathutil common symbols', @TestMathAndSimdMathUtilNoAmbiguousCommonSymbols);
+  T.Test('expanded scalar/trig common symbols', @TestExpandedScalarTrigCommonSymbols);
+  if not T.Run then Halt(1);
 end.

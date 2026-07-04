@@ -5,10 +5,10 @@ program test_platform_struct_sizes;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestLinuxStat;
 begin
@@ -75,18 +75,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.struct_sizes');
-  T.Run('TPlatformLinuxStat = 144', @TestLinuxStat);
-  T.Run('epoll_event = 12', @TestEpollEvent);
-  T.Run('inotify_event = 16', @TestInotifyEvent);
-  T.Run('sockaddr_in = 16', @TestSockaddrIn);
-  T.Run('sockaddr_in6 = 28', @TestSockaddrIn6);
-  T.Run('sockaddr_storage = 128', @TestSockaddrStorage);
-  T.Run('TAddrInfo = 48', @TestAddrInfo);
-  T.Run('iovec = 16', @TestIovec);
-  T.Run('pollfd = 8', @TestPollfd);
-  T.Run('pthread types', @TestPthreadTypes);
-  T.Run('FLock = 32', @TestFLock);
-  T.Run('msghdr = 56', @TestMsghdr);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.struct_sizes');
+  T.Test('TPlatformLinuxStat = 144', @TestLinuxStat);
+  T.Test('epoll_event = 12', @TestEpollEvent);
+  T.Test('inotify_event = 16', @TestInotifyEvent);
+  T.Test('sockaddr_in = 16', @TestSockaddrIn);
+  T.Test('sockaddr_in6 = 28', @TestSockaddrIn6);
+  T.Test('sockaddr_storage = 128', @TestSockaddrStorage);
+  T.Test('TAddrInfo = 48', @TestAddrInfo);
+  T.Test('iovec = 16', @TestIovec);
+  T.Test('pollfd = 8', @TestPollfd);
+  T.Test('pthread types', @TestPthreadTypes);
+  T.Test('FLock = 32', @TestFLock);
+  T.Test('msghdr = 56', @TestMsghdr);
+  if not T.Run then Halt(1);
 end.

@@ -6,11 +6,11 @@ program test_platform_random_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -83,14 +83,14 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.random.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.random.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('16-byte buffer returns 0', @TestReturnsZeroFor16Bytes);
-  T.Run('two consecutive calls differ', @TestTwoCallsDiffer);
-  T.Run('buffer is written (not all zeros)', @TestBufferIsWritten);
-  T.Run('4096-byte buffer filled normally', @TestLargeBuffer);
+  T.Test('16-byte buffer returns 0', @TestReturnsZeroFor16Bytes);
+  T.Test('two consecutive calls differ', @TestTwoCallsDiffer);
+  T.Test('buffer is written (not all zeros)', @TestBufferIsWritten);
+  T.Test('4096-byte buffer filled normally', @TestLargeBuffer);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

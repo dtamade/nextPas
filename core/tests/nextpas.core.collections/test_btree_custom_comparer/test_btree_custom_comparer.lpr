@@ -4,7 +4,7 @@ program test_btree_custom_comparer;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.btree;
 
 type
@@ -12,7 +12,7 @@ type
   TIntSet = specialize TBTreeSet<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GRangeItems: array[0..7] of Integer;
   GRangeCount: Integer;
 
@@ -188,10 +188,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.btree_custom_comparer');
-  T.Run('Map lookup and bounds honor descending comparer', @TestMapHonorsDescendingComparerForLookupAndBounds);
-  T.Run('Map range and enumeration honor descending comparer', @TestMapHonorsDescendingComparerForRangeAndEnumeration);
-  T.Run('Map split paths honor descending comparer', @TestMapHonorsDescendingComparerAfterSplits);
-  T.Run('Set honors descending comparer', @TestSetHonorsDescendingComparer);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.btree_custom_comparer');
+  T.Test('Map lookup and bounds honor descending comparer', @TestMapHonorsDescendingComparerForLookupAndBounds);
+  T.Test('Map range and enumeration honor descending comparer', @TestMapHonorsDescendingComparerForRangeAndEnumeration);
+  T.Test('Map split paths honor descending comparer', @TestMapHonorsDescendingComparerAfterSplits);
+  T.Test('Set honors descending comparer', @TestSetHonorsDescendingComparer);
+  if not T.Run then Halt(1);
 end.

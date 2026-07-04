@@ -7,7 +7,7 @@ program test_platform_socket;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.socket;
 
 type
@@ -20,7 +20,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function SockIsValid(const ASock: TPlatformSocket): Boolean;
 begin
@@ -376,27 +376,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.socket.focused_runtime');
+  T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
   { TCP lifecycle }
-  T.Run('create TCP', @TestCreateTcp);
-  T.Run('create UDP', @TestCreateUdp);
-  T.Run('TCP full lifecycle (bind/listen/accept/connect/send/recv)', @TestTcpFullLifecycle);
-  T.Run('double close safe', @TestDoubleClose);
-  T.Run('recv on closed socket', @TestRecvOnClosed);
-  T.Run('connect to port 1 refused', @TestConnectRefused);
+  T.Test('create TCP', @TestCreateTcp);
+  T.Test('create UDP', @TestCreateUdp);
+  T.Test('TCP full lifecycle (bind/listen/accept/connect/send/recv)', @TestTcpFullLifecycle);
+  T.Test('double close safe', @TestDoubleClose);
+  T.Test('recv on closed socket', @TestRecvOnClosed);
+  T.Test('connect to port 1 refused', @TestConnectRefused);
 
   { UDP }
-  T.Run('UDP sendto/recvfrom', @TestUdpSendRecv);
+  T.Test('UDP sendto/recvfrom', @TestUdpSendRecv);
 
   { Socket options }
-  T.Run('setsockopt REUSEADDR', @TestSetSockOpt);
-  T.Run('getsockname on unbound', @TestGetSockName);
-  T.Run('resolve IPv4 (127.0.0.1, localhost)', @TestResolveIpv4);
-  T.Run('set_nonblocking', @TestSetNonblocking);
-  T.Run('set_timeout', @TestSetTimeout);
-  T.Run('nonblocking accept returns would_block', @TestNonblockingAcceptWouldBlock);
-  T.Run('create with invalid params', @TestCreateInvalid);
+  T.Test('setsockopt REUSEADDR', @TestSetSockOpt);
+  T.Test('getsockname on unbound', @TestGetSockName);
+  T.Test('resolve IPv4 (127.0.0.1, localhost)', @TestResolveIpv4);
+  T.Test('set_nonblocking', @TestSetNonblocking);
+  T.Test('set_timeout', @TestSetTimeout);
+  T.Test('nonblocking accept returns would_block', @TestNonblockingAcceptWouldBlock);
+  T.Test('create with invalid params', @TestCreateInvalid);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

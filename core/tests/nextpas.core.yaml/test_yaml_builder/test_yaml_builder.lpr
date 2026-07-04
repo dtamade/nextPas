@@ -5,14 +5,14 @@ program test_yaml_builder;
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
   nextpas.core.yaml.builder,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   YAML_BUILDER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.yaml.builder.pas';
@@ -815,37 +815,37 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.builder');
-  T.Run('Build scalar', @TestBuildScalar);
-  T.Run('Build sequence', @TestBuildSequence);
-  T.Run('Build mapping', @TestBuildMapping);
-  T.Run('Build nested', @TestBuildNested);
-  T.Run('Build pretty', @TestBuildPretty);
-  T.Run('Deep nesting', @TestDeepNesting);
-  T.Run('Empty input', @TestEmptyInput);
-  T.Run('Malformed input', @TestMalformedInput);
-  T.Run('Large input', @TestLargeInput);
-  T.Run('Invalid access graceful', @TestInvalidAccessGraceful);
-  T.Run('Build float', @TestBuildFloat);
-  T.Run('Build string', @TestBuildString);
-  T.Run('Build empty seq', @TestBuildEmptySeq);
-  T.Run('Build empty map', @TestBuildEmptyMap);
-  T.Run('Build seq of maps', @TestBuildSeqOfMaps);
-  T.Run('Build map of seqs', @TestBuildMapOfSeqs);
-  T.Run('Build all types', @TestBuildAllTypes);
-  T.Run('PutStrView', @TestPutStrView);
-  T.Run('StringifyPretty custom indent', @TestStringifyPrettyCustomIndent);
-  T.Run('StringifyPretty zero indent', @TestStringifyPrettyZeroIndent);
-  T.Run('Build owns quoted special strings', @TestBuildOwnsQuotedSpecialStrings);
-  T.Run('Builder fails fast when container stack is full',
+  T := TTestSuite.Create('nextpas.core.yaml.builder');
+  T.Test('Build scalar', @TestBuildScalar);
+  T.Test('Build sequence', @TestBuildSequence);
+  T.Test('Build mapping', @TestBuildMapping);
+  T.Test('Build nested', @TestBuildNested);
+  T.Test('Build pretty', @TestBuildPretty);
+  T.Test('Deep nesting', @TestDeepNesting);
+  T.Test('Empty input', @TestEmptyInput);
+  T.Test('Malformed input', @TestMalformedInput);
+  T.Test('Large input', @TestLargeInput);
+  T.Test('Invalid access graceful', @TestInvalidAccessGraceful);
+  T.Test('Build float', @TestBuildFloat);
+  T.Test('Build string', @TestBuildString);
+  T.Test('Build empty seq', @TestBuildEmptySeq);
+  T.Test('Build empty map', @TestBuildEmptyMap);
+  T.Test('Build seq of maps', @TestBuildSeqOfMaps);
+  T.Test('Build map of seqs', @TestBuildMapOfSeqs);
+  T.Test('Build all types', @TestBuildAllTypes);
+  T.Test('PutStrView', @TestPutStrView);
+  T.Test('StringifyPretty custom indent', @TestStringifyPrettyCustomIndent);
+  T.Test('StringifyPretty zero indent', @TestStringifyPrettyZeroIndent);
+  T.Test('Build owns quoted special strings', @TestBuildOwnsQuotedSpecialStrings);
+  T.Test('Builder fails fast when container stack is full',
     @TestBuilderFailsFastWhenContainerStackIsFull);
-  T.Run('Builder end container fails closed',
+  T.Test('Builder end container fails closed',
     @TestBuilderEndContainerFailsClosed);
-  T.Run('Builder mapping pending key fails closed',
+  T.Test('Builder mapping pending key fails closed',
     @TestBuilderMappingPendingKeyFailsClosed);
-  T.Run('Builder second root fails closed',
+  T.Test('Builder second root fails closed',
     @TestBuilderSecondRootFailsClosed);
-  T.Run('Builder owned strings use allocator storage',
+  T.Test('Builder owned strings use allocator storage',
     @TestBuilderOwnedStringsUseAllocatorStorage);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

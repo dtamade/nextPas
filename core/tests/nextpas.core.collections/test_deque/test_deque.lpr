@@ -4,7 +4,7 @@ program test_deque;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque.intf,
@@ -21,7 +21,7 @@ type
   TStrDeque = specialize TArrayDeque<string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPushBackPopFront;
 var
@@ -627,36 +627,36 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.deque');
-  T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
-  T.Run('PushFront/PopBack (LIFO)', @TestPushFrontPopBack);
-  T.Run('Front/Back', @TestFrontBack);
-  T.Run('Random access', @TestRandomAccess);
-  T.Run('Wrap around', @TestWrapAround);
-  T.Run('Grow (100 elements)', @TestGrow);
-  T.Run('Mixed push front/back', @TestMixed);
-  T.Run('Clear', @TestClear);
-  T.Run('String type', @TestString);
-  T.Run('Reserve', @TestReserve);
-  T.Run('Auto free (interface)', @TestAutoFree);
-  T.Run('AppendFrom zero count is no-op', @TestAppendFromZeroCountIsNoOp);
-  T.Run('LoadFromPointer nil failure keeps contents', @TestLoadFromPointerNilFailureKeepsContents);
-  T.Run('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
-  T.Run('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
-  T.Run('AppendFrom range overflow raises', @TestAppendFromRangeOverflowRaises);
-  T.Run('Read/Overwrite range overflow preserves contents', @TestReadOverwriteRangeOverflowPreservesContents);
-  T.Run('DrainRange half-open and bounds', @TestDrainRangeHalfOpenAndBounds);
-  T.Run('Insert then PushBack integrity', @TestInsertThenPushBackIntegrity);
-  T.Run('RemoveAt then PushBack integrity', @TestRemoveAtThenPushBackIntegrity);
-  T.Run('SwapRemoveAt then PushBack', @TestSwapRemoveAtThenPushBack);
-  T.Run('PushFront(Pointer) order matches array', @TestPushFrontPointerOrderMatchesArray);
-  T.Run('MakeContiguous full buffer', @TestMakeContiguousFullBuffer);
-  T.Run('TryGet', @TestTryGet);
-  T.Run('TryRemoveAt', @TestTryRemoveAt);
-  T.Run('ReserveExact', @TestReserveExact);
-  T.Run('SplitOff', @TestSplitOff);
-  T.Run('ShrinkToFit', @TestShrinkToFit);
-  T.Run('Truncate', @TestTruncate);
-  T.Run('Resize', @TestResize);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.deque');
+  T.Test('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
+  T.Test('PushFront/PopBack (LIFO)', @TestPushFrontPopBack);
+  T.Test('Front/Back', @TestFrontBack);
+  T.Test('Random access', @TestRandomAccess);
+  T.Test('Wrap around', @TestWrapAround);
+  T.Test('Grow (100 elements)', @TestGrow);
+  T.Test('Mixed push front/back', @TestMixed);
+  T.Test('Clear', @TestClear);
+  T.Test('String type', @TestString);
+  T.Test('Reserve', @TestReserve);
+  T.Test('Auto free (interface)', @TestAutoFree);
+  T.Test('AppendFrom zero count is no-op', @TestAppendFromZeroCountIsNoOp);
+  T.Test('LoadFromPointer nil failure keeps contents', @TestLoadFromPointerNilFailureKeepsContents);
+  T.Test('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
+  T.Test('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
+  T.Test('AppendFrom range overflow raises', @TestAppendFromRangeOverflowRaises);
+  T.Test('Read/Overwrite range overflow preserves contents', @TestReadOverwriteRangeOverflowPreservesContents);
+  T.Test('DrainRange half-open and bounds', @TestDrainRangeHalfOpenAndBounds);
+  T.Test('Insert then PushBack integrity', @TestInsertThenPushBackIntegrity);
+  T.Test('RemoveAt then PushBack integrity', @TestRemoveAtThenPushBackIntegrity);
+  T.Test('SwapRemoveAt then PushBack', @TestSwapRemoveAtThenPushBack);
+  T.Test('PushFront(Pointer) order matches array', @TestPushFrontPointerOrderMatchesArray);
+  T.Test('MakeContiguous full buffer', @TestMakeContiguousFullBuffer);
+  T.Test('TryGet', @TestTryGet);
+  T.Test('TryRemoveAt', @TestTryRemoveAt);
+  T.Test('ReserveExact', @TestReserveExact);
+  T.Test('SplitOff', @TestSplitOff);
+  T.Test('ShrinkToFit', @TestShrinkToFit);
+  T.Test('Truncate', @TestTruncate);
+  T.Test('Resize', @TestResize);
+  if not T.Run then Halt(1);
 end.

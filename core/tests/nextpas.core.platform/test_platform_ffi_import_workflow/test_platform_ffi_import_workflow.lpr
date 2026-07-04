@@ -4,7 +4,7 @@ program test_platform_ffi_import_workflow;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   DOC_PATH_FROM_TEST = '../../../docs/platform-ffi-import-workflow.md';
@@ -19,7 +19,7 @@ const
   VERIFY_LOCAL_PATH_FROM_ROOT = 'build/verify_local.sh';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -173,8 +173,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.ffi_import_workflow');
-  T.Run('platform ffi import workflow doc is explicit', @TestWorkflowDocument);
-  T.Run('platform ffi import workflow route truth stays indexed', @TestWorkflowRouteTruth);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.ffi_import_workflow');
+  T.Test('platform ffi import workflow doc is explicit', @TestWorkflowDocument);
+  T.Test('platform ffi import workflow route truth stays indexed', @TestWorkflowRouteTruth);
+  if not T.Run then Halt(1);
 end.

@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.ini,
   nextpas.core.mem.default,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFacadeExposesCoreSurface;
 var
@@ -102,12 +102,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.ini (facade surface)');
-  T.Run('facade exposes core surface', @TestFacadeExposesCoreSurface);
-  T.Run('facade exposes write surface', @TestFacadeExposesWriteSurface);
-  T.Run('facade exposes delete surface', @TestFacadeExposesDeleteSurface);
-  T.Run('facade exposes allocator surface',
+  T := TTestSuite.Create('nextpas.core.ini (facade surface)');
+  T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
+  T.Test('facade exposes write surface', @TestFacadeExposesWriteSurface);
+  T.Test('facade exposes delete surface', @TestFacadeExposesDeleteSurface);
+  T.Test('facade exposes allocator surface',
     @TestFacadeExposesAllocatorSurface);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  if not T.Run then Halt(1);
 end.

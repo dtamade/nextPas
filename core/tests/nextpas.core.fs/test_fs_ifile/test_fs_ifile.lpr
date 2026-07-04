@@ -4,7 +4,7 @@ program test_fs_ifile;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -13,7 +13,7 @@ uses
   nextpas.core.fs;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GTmpDir: string;
 
 procedure SetupTmpDir;
@@ -368,27 +368,27 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.fs.ifile');
+    T := TTestSuite.Create('nextpas.core.fs.ifile');
 
-    T.Run('Create write close', @TestIFile_CreateWriteClose);
-    T.Run('Open read close', @TestIFile_OpenReadClose);
-    T.Run('Seek from beginning', @TestIFile_SeekFromBeginning);
-    T.Run('Seek from end', @TestIFile_SeekFromEnd);
-    T.Run('Seek from current', @TestIFile_SeekFromCurrent);
-    T.Run('Position and Size', @TestIFile_PositionSize);
-    T.Run('Name property', @TestIFile_Name);
-    T.Run('Sync', @TestIFile_Sync);
-    T.Run('Truncate', @TestIFile_Truncate);
-    T.Run('Truncate to zero', @TestIFile_TruncateToZero);
-    T.Run('Large I/O 128KB', @TestIFile_LargeIO);
-    T.Run('Interface release', @TestIFile_InterfaceRelease);
-    T.Run('Open nonexistent raises', @TestIFile_OpenNonexistent);
-    T.Run('SetPosition property', @TestIFile_SetPosition);
-    T.Run('Stat', @TestIFile_Stat);
-    T.Run('Partial read', @TestIFile_PartialRead);
-    T.Run('Read at EOF', @TestIFile_ReadAtEOF);
+    T.Test('Create write close', @TestIFile_CreateWriteClose);
+    T.Test('Open read close', @TestIFile_OpenReadClose);
+    T.Test('Seek from beginning', @TestIFile_SeekFromBeginning);
+    T.Test('Seek from end', @TestIFile_SeekFromEnd);
+    T.Test('Seek from current', @TestIFile_SeekFromCurrent);
+    T.Test('Position and Size', @TestIFile_PositionSize);
+    T.Test('Name property', @TestIFile_Name);
+    T.Test('Sync', @TestIFile_Sync);
+    T.Test('Truncate', @TestIFile_Truncate);
+    T.Test('Truncate to zero', @TestIFile_TruncateToZero);
+    T.Test('Large I/O 128KB', @TestIFile_LargeIO);
+    T.Test('Interface release', @TestIFile_InterfaceRelease);
+    T.Test('Open nonexistent raises', @TestIFile_OpenNonexistent);
+    T.Test('SetPosition property', @TestIFile_SetPosition);
+    T.Test('Stat', @TestIFile_Stat);
+    T.Test('Partial read', @TestIFile_PartialRead);
+    T.Test('Read at EOF', @TestIFile_ReadAtEOF);
 
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

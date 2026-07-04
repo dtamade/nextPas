@@ -2,8 +2,8 @@ program test_grapheme;
 {$I nextpas.core.settings.inc}
 uses
   nextpas.core.text.grapheme,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 procedure TestAscii;
 var R: TGraphemeResult;
@@ -286,26 +286,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.grapheme');
-  T.Run('ascii', @TestAscii);
-  T.Run('cjk', @TestCJK);
-  T.Run('combining mark', @TestCombiningMark);
-  T.Run('nko combining mark', @TestNKoCombiningMark);
-  T.Run('width zero-width combining marks', @TestWidthZeroWidthCombiningMarks);
-  T.Run('prepend joins following base', @TestPrependJoinsFollowingBase);
-  T.Run('prepend joins malformed replacement', @TestPrependJoinsMalformedReplacement);
-  T.Run('zwj emoji', @TestZWJEmoji);
-  T.Run('zwj after non-emoji', @TestZWJDoesNotJoinAfterNonEmoji);
-  T.Run('family emoji', @TestFamilyEmoji);
-  T.Run('skin tone emoji', @TestSkinToneEmoji);
-  T.Run('keycap emoji', @TestKeycapEmoji);
-  T.Run('regional indicator', @TestRegionalIndicator);
-  T.Run('variation selector', @TestVariationSelector);
-  T.Run('emoji tag sequence', @TestEmojiTagSequence);
-  T.Run('Indic clusters', @TestIndicClusters);
-  T.Run('empty', @TestEmpty);
-  T.Run('nil nonzero span', @TestNilNonzeroSpan);
-  T.Run('invalid byte', @TestInvalidByte);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.text.grapheme');
+  T.Test('ascii', @TestAscii);
+  T.Test('cjk', @TestCJK);
+  T.Test('combining mark', @TestCombiningMark);
+  T.Test('nko combining mark', @TestNKoCombiningMark);
+  T.Test('width zero-width combining marks', @TestWidthZeroWidthCombiningMarks);
+  T.Test('prepend joins following base', @TestPrependJoinsFollowingBase);
+  T.Test('prepend joins malformed replacement', @TestPrependJoinsMalformedReplacement);
+  T.Test('zwj emoji', @TestZWJEmoji);
+  T.Test('zwj after non-emoji', @TestZWJDoesNotJoinAfterNonEmoji);
+  T.Test('family emoji', @TestFamilyEmoji);
+  T.Test('skin tone emoji', @TestSkinToneEmoji);
+  T.Test('keycap emoji', @TestKeycapEmoji);
+  T.Test('regional indicator', @TestRegionalIndicator);
+  T.Test('variation selector', @TestVariationSelector);
+  T.Test('emoji tag sequence', @TestEmojiTagSequence);
+  T.Test('Indic clusters', @TestIndicClusters);
+  T.Test('empty', @TestEmpty);
+  T.Test('nil nonzero span', @TestNilNonzeroSpan);
+  T.Test('invalid byte', @TestInvalidByte);
+  if not T.Run then Halt(1);
 end.

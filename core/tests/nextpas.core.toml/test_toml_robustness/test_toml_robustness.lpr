@@ -8,10 +8,10 @@ uses
   nextpas.core.toml.base,
   nextpas.core.toml.value,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDeepNestedArrays;
 var
@@ -246,30 +246,29 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml robustness');
-  T.Run('deep nested arrays', @TestDeepNestedArrays);
-  T.Run('deep nested inline tables', @TestDeepNestedInlineTables);
-  T.Run('empty input', @TestEmptyInput);
-  T.Run('only whitespace', @TestOnlyWhitespace);
-  T.Run('only comments', @TestOnlyComments);
-  T.Run('very long key', @TestVeryLongKey);
-  T.Run('very long string', @TestVeryLongString);
-  T.Run('many keys (1000)', @TestManyKeys);
-  T.Run('null bytes in string', @TestNullBytesInString);
-  T.Run('control chars in bare key', @TestControlCharsInBareKey);
-  T.Run('unterminated string', @TestUnterminatedString);
-  T.Run('unterminated multi-line string', @TestUnterminatedMultiLineString);
-  T.Run('unterminated array', @TestUnterminatedArray);
-  T.Run('unterminated inline table', @TestUnterminatedInlineTable);
-  T.Run('missing equals', @TestMissingEquals);
-  T.Run('key without value', @TestKeyOnly);
-  T.Run('table header only', @TestTableHeaderOnly);
-  T.Run('max int64', @TestMaxInt64);
-  T.Run('min int64', @TestMinInt64);
-  T.Run('CRLF line endings', @TestCRLFLineEndings);
-  T.Run('moderate nesting (50)', @TestModerateNesting);
-  T.Run('hash index (500 keys)', @TestHashIndex500);
-  T.Run('hash index dup detect', @TestHashIndexDupDetect);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml robustness');
+  T.Test('deep nested arrays', @TestDeepNestedArrays);
+  T.Test('deep nested inline tables', @TestDeepNestedInlineTables);
+  T.Test('empty input', @TestEmptyInput);
+  T.Test('only whitespace', @TestOnlyWhitespace);
+  T.Test('only comments', @TestOnlyComments);
+  T.Test('very long key', @TestVeryLongKey);
+  T.Test('very long string', @TestVeryLongString);
+  T.Test('many keys (1000)', @TestManyKeys);
+  T.Test('null bytes in string', @TestNullBytesInString);
+  T.Test('control chars in bare key', @TestControlCharsInBareKey);
+  T.Test('unterminated string', @TestUnterminatedString);
+  T.Test('unterminated multi-line string', @TestUnterminatedMultiLineString);
+  T.Test('unterminated array', @TestUnterminatedArray);
+  T.Test('unterminated inline table', @TestUnterminatedInlineTable);
+  T.Test('missing equals', @TestMissingEquals);
+  T.Test('key without value', @TestKeyOnly);
+  T.Test('table header only', @TestTableHeaderOnly);
+  T.Test('max int64', @TestMaxInt64);
+  T.Test('min int64', @TestMinInt64);
+  T.Test('CRLF line endings', @TestCRLFLineEndings);
+  T.Test('moderate nesting (50)', @TestModerateNesting);
+  T.Test('hash index (500 keys)', @TestHashIndex500);
+  T.Test('hash index dup detect', @TestHashIndexDupDetect);
+  if not T.Run then Halt(1);
 end.

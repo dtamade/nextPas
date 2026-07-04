@@ -3,7 +3,7 @@ program test_quat;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.math.base,
   nextpas.core.math.scalar,
@@ -12,7 +12,7 @@ uses
   nextpas.core.math.quat;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -1307,41 +1307,41 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.quat');
-  T.Run('TQuatf contracts', @TestQuatfContracts);
-  T.Run('TQuatd contracts', @TestQuatdContracts);
-  T.Run('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
-  T.Run('quaternion Data aliases preserve signed-zero bits',
+  T := TTestSuite.Create('nextpas.core.math.quat');
+  T.Test('TQuatf contracts', @TestQuatfContracts);
+  T.Test('TQuatd contracts', @TestQuatdContracts);
+  T.Test('quaternion Data aliases write through', @TestQuaternionDataAliasesWriteThrough);
+  T.Test('quaternion Data aliases preserve signed-zero bits',
     @TestQuaternionDataAliasesPreserveSignedZeroBits);
-  T.Run('quaternion Data alias ABI offsets', @TestQuaternionDataAliasOffsets);
-  T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
-  T.Run('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
-  T.Run('huge finite normalize', @TestHugeFiniteNormalize);
-  T.Run('max finite normalize', @TestMaxFiniteNormalize);
-  T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
-  T.Run('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
-  T.Run('Rotate rejects non-finite vector inputs', @TestRotateRejectsNonFiniteVectorInputs);
-  T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
-  T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
-  T.Run('Interpolation follows shortest path for opposite-sign start',
+  T.Test('quaternion Data alias ABI offsets', @TestQuaternionDataAliasOffsets);
+  T.Test('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
+  T.Test('FromAxisAngle normalizes huge finite axis', @TestFromAxisAngleNormalizesHugeFiniteAxis);
+  T.Test('huge finite normalize', @TestHugeFiniteNormalize);
+  T.Test('max finite normalize', @TestMaxFiniteNormalize);
+  T.Test('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
+  T.Test('raw quaternion non-finite inputs fail fast', @TestRawQuaternionNonFiniteInputsFailFast);
+  T.Test('Rotate rejects non-finite vector inputs', @TestRotateRejectsNonFiniteVectorInputs);
+  T.Test('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
+  T.Test('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
+  T.Test('Interpolation follows shortest path for opposite-sign start',
     @TestInterpolationFollowsShortestPathForOppositeSignStart);
-  T.Run('Interpolation follows shortest path for opposite-sign end',
+  T.Test('Interpolation follows shortest path for opposite-sign end',
     @TestInterpolationFollowsShortestPathForOppositeSignEnd);
-  T.Run('Interpolation stays stable for equivalent endpoints',
+  T.Test('Interpolation stays stable for equivalent endpoints',
     @TestInterpolationStaysStableForEquivalentEndpoints);
-  T.Run('Interpolation stays stable for near-identical endpoints',
+  T.Test('Interpolation stays stable for near-identical endpoints',
     @TestInterpolationStaysStableForNearIdenticalEndpoints);
-  T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
+  T.Test('ToAxisAngle canonicalizes opposite-sign rotations',
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
-  T.Run('ToAxisAngle canonicalizes multi-turn inputs',
+  T.Test('ToAxisAngle canonicalizes multi-turn inputs',
     @TestToAxisAngleCanonicalizesMultiTurnInputs);
-  T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns',
+  T.Test('ToAxisAngle canonicalizes FromAxisAngle half-turns',
     @TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns);
-  T.Run('ToAxisAngle overwrites out parameters',
+  T.Test('ToAxisAngle overwrites out parameters',
     @TestToAxisAngleOverwritesOutParameters);
-  T.Run('Quaternion multiplication is non-commutative and right-first',
+  T.Test('Quaternion multiplication is non-commutative and right-first',
     @TestQuaternionMultiplicationIsNonCommutativeAndRightFirst);
-  T.Run('quaternion Equals non-finite comparison contracts',
+  T.Test('quaternion Equals non-finite comparison contracts',
     @TestQuaternionEqualsNonFiniteComparisonContracts);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

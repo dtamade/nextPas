@@ -5,13 +5,13 @@ program test_http_url;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.url;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestUrlEncodeSimple;
 begin
@@ -250,27 +250,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.url');
-  T.Run('UrlEncode simple', @TestUrlEncodeSimple);
-  T.Run('UrlEncode spaces', @TestUrlEncodeSpaces);
-  T.Run('UrlEncode special chars', @TestUrlEncodeSpecialChars);
-  T.Run('UrlDecode percent', @TestUrlDecodePercent);
-  T.Run('UrlDecode plus', @TestUrlDecodePlus);
-  T.Run('UrlDecode invalid raises', @TestUrlDecodeInvalidRaises);
-  T.Run('UrlEncode/Decode round-trip', @TestUrlEncodeDecodeRoundTrip);
-  T.Run('UrlDecodeQuery + to space', @TestUrlDecodeQueryPlusToSpace);
-  T.Run('UrlDecodeQuery percent', @TestUrlDecodeQueryPercent);
-  T.Run('UrlDecodePath + literal', @TestUrlDecodePathPlusLiteral);
-  T.Run('UrlDecodePath percent', @TestUrlDecodePathPercent);
-  T.Run('UrlDecodePath mixed', @TestUrlDecodePathMixed);
-  T.Run('UrlDecodePath invalid raises', @TestUrlDecodePathInvalidRaises);
-  T.Run('ParseQueryString basic', @TestParseQueryStringBasic);
-  T.Run('ParseQueryString multiple', @TestParseQueryStringMultiple);
-  T.Run('ParseQueryString empty value', @TestParseQueryStringEmptyValue);
-  T.Run('ParseQueryString no value', @TestParseQueryStringNoValue);
-  T.Run('ParseQueryString encoded', @TestParseQueryStringEncoded);
-  T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
-  T.Run('QueryParamValue', @TestQueryParamValue);
-  T.Run('QueryParamHas', @TestQueryParamHas);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.url');
+  T.Test('UrlEncode simple', @TestUrlEncodeSimple);
+  T.Test('UrlEncode spaces', @TestUrlEncodeSpaces);
+  T.Test('UrlEncode special chars', @TestUrlEncodeSpecialChars);
+  T.Test('UrlDecode percent', @TestUrlDecodePercent);
+  T.Test('UrlDecode plus', @TestUrlDecodePlus);
+  T.Test('UrlDecode invalid raises', @TestUrlDecodeInvalidRaises);
+  T.Test('UrlEncode/Decode round-trip', @TestUrlEncodeDecodeRoundTrip);
+  T.Test('UrlDecodeQuery + to space', @TestUrlDecodeQueryPlusToSpace);
+  T.Test('UrlDecodeQuery percent', @TestUrlDecodeQueryPercent);
+  T.Test('UrlDecodePath + literal', @TestUrlDecodePathPlusLiteral);
+  T.Test('UrlDecodePath percent', @TestUrlDecodePathPercent);
+  T.Test('UrlDecodePath mixed', @TestUrlDecodePathMixed);
+  T.Test('UrlDecodePath invalid raises', @TestUrlDecodePathInvalidRaises);
+  T.Test('ParseQueryString basic', @TestParseQueryStringBasic);
+  T.Test('ParseQueryString multiple', @TestParseQueryStringMultiple);
+  T.Test('ParseQueryString empty value', @TestParseQueryStringEmptyValue);
+  T.Test('ParseQueryString no value', @TestParseQueryStringNoValue);
+  T.Test('ParseQueryString encoded', @TestParseQueryStringEncoded);
+  T.Test('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
+  T.Test('QueryParamValue', @TestQueryParamValue);
+  T.Test('QueryParamHas', @TestQueryParamHas);
+  if not T.Run then Halt(1);
 end.

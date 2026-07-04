@@ -5,10 +5,10 @@ program test_poller_windows_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -760,29 +760,29 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.poller.windows_contract');
-  T.Run('poller Windows backend contract', @TestPollerWindowsBackendContract);
-  T.Run('IOCP lifecycle contract', @TestIocpLifecycleContract);
-  T.Run('IOCP run/stop/flush lifecycle contract',
+  T := TTestSuite.Create('nextpas.core.io.poller.windows_contract');
+  T.Test('poller Windows backend contract', @TestPollerWindowsBackendContract);
+  T.Test('IOCP lifecycle contract', @TestIocpLifecycleContract);
+  T.Test('IOCP run/stop/flush lifecycle contract',
     @TestIocpRunStopFlushLifecycleContract);
-  T.Run('async loop run lifecycle contract',
+  T.Test('async loop run lifecycle contract',
     @TestAsyncLoopRunLifecycleContract);
-  T.Run('IOCP close abort ownership contract',
+  T.Test('IOCP close abort ownership contract',
     @TestIocpCloseAbortOwnershipContract);
-  T.Run('IOCP pending counter contract',
+  T.Test('IOCP pending counter contract',
     @TestIocpPendingCounterContract);
-  T.Run('async loop timeout close lifecycle contract',
+  T.Test('async loop timeout close lifecycle contract',
     @TestAsyncLoopTimeoutCloseLifecycleContract);
-  T.Run('async loop timeout single-fire cleanup contract',
+  T.Test('async loop timeout single-fire cleanup contract',
     @TestAsyncLoopTimeoutSingleFireCleanupContract);
-  T.Run('IOCP synchronous failure ownership contract',
+  T.Test('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
-  T.Run('IOCP socket completion contract',
+  T.Test('IOCP socket completion contract',
     @TestIocpSocketCompletionContract);
-  T.Run('IOCP pending operation ownership contract',
+  T.Test('IOCP pending operation ownership contract',
     @TestIocpPendingOperationOwnershipContract);
-  T.Run('IOCP post-close file submission reject contract',
+  T.Test('IOCP post-close file submission reject contract',
     @TestIocpPostCloseFileSubmissionRejectContract);
-  T.Run('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
-  T.Summary;
+  T.Test('Windows handle width contract', @TestPollerWindowsHandleWidthContract);
+  if not T.Run then Halt(1);
 end.

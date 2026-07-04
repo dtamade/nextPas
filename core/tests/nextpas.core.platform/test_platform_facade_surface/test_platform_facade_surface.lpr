@@ -4,7 +4,7 @@ program test_platform_facade_surface;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   PLATFORM_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.pas';
@@ -21,7 +21,7 @@ const
   PLATFORM_INFO_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.info.ffi.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -211,9 +211,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.facade_surface');
-  T.Run('platform.info owns info logic', @TestPlatformInfoOwnsInfoLogic);
-  T.Run('platform facade is thin', @TestPlatformFacadeIsThin);
-  T.Run('platform.base stays pure', @TestPlatformBaseStaysPure);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.facade_surface');
+  T.Test('platform.info owns info logic', @TestPlatformInfoOwnsInfoLogic);
+  T.Test('platform facade is thin', @TestPlatformFacadeIsThin);
+  T.Test('platform.base stays pure', @TestPlatformBaseStaysPure);
+  if not T.Run then Halt(1);
 end.

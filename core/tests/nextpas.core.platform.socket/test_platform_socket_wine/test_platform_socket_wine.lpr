@@ -6,11 +6,11 @@ program test_platform_socket_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.socket;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -77,14 +77,14 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.socket.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.socket.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('create TCP', @TestCreateTcp);
-  T.Run('create UDP', @TestCreateUdp);
-  T.Run('TCP bind+listen', @TestTcpBind);
-  T.Run('connect refused', @TestConnectRefused);
+  T.Test('create TCP', @TestCreateTcp);
+  T.Test('create UDP', @TestCreateUdp);
+  T.Test('TCP bind+listen', @TestTcpBind);
+  T.Test('connect refused', @TestConnectRefused);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

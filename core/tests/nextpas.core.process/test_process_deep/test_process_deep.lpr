@@ -4,7 +4,7 @@ program test_process_deep;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.time.base,
@@ -15,7 +15,7 @@ uses
   nextpas.core.process.pipe;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { --- Test 1: Run simple command — verify output --- }
 
@@ -343,26 +343,26 @@ end;
 { --- Main --- }
 
 begin
-  T := TTestRunner.Create('nextpas.core.process [deep]');
-  T.Run('Run simple command', @TestRunSimpleCommand);
-  T.Run('Exit codes', @TestExitCodes);
-  T.Run('Stdin piping', @TestStdinPiping);
-  T.Run('Stderr capture', @TestStderrCapture);
-  T.Run('Environment variables', @TestEnvironmentVariables);
-  T.Run('Working directory', @TestWorkingDirectory);
-  T.Run('Process timeout', @TestProcessTimeout);
-  T.Run('Non-existent command', @TestNonExistentCommand);
-  T.Run('Large output 100KB', @TestLargeOutput);
-  T.Run('Multiple processes', @TestMultipleProcesses);
-  T.Run('Spawn + Kill', @TestSpawnKill);
-  T.Run('TryWait', @TestTryWait);
-  T.Run('Stdin null', @TestStdinNull);
-  T.Run('Stdout null', @TestStdoutNull);
-  T.Run('Chdir fail', @TestChdirFail);
-  T.Run('Command reuse', @TestCommandReuse);
-  T.Run('Capture', @TestCapture);
-  T.Run('RunIn', @TestRunIn);
-  T.Run('Dual pipe large', @TestDualPipeLarge);
-  T.Run('WaitWithOutput stdin', @TestWaitWithOutputStdin);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.process [deep]');
+  T.Test('Run simple command', @TestRunSimpleCommand);
+  T.Test('Exit codes', @TestExitCodes);
+  T.Test('Stdin piping', @TestStdinPiping);
+  T.Test('Stderr capture', @TestStderrCapture);
+  T.Test('Environment variables', @TestEnvironmentVariables);
+  T.Test('Working directory', @TestWorkingDirectory);
+  T.Test('Process timeout', @TestProcessTimeout);
+  T.Test('Non-existent command', @TestNonExistentCommand);
+  T.Test('Large output 100KB', @TestLargeOutput);
+  T.Test('Multiple processes', @TestMultipleProcesses);
+  T.Test('Spawn + Kill', @TestSpawnKill);
+  T.Test('TryWait', @TestTryWait);
+  T.Test('Stdin null', @TestStdinNull);
+  T.Test('Stdout null', @TestStdoutNull);
+  T.Test('Chdir fail', @TestChdirFail);
+  T.Test('Command reuse', @TestCommandReuse);
+  T.Test('Capture', @TestCapture);
+  T.Test('RunIn', @TestRunIn);
+  T.Test('Dual pipe large', @TestDualPipeLarge);
+  T.Test('WaitWithOutput stdin', @TestWaitWithOutputStdin);
+  if not T.Run then Halt(1);
 end.

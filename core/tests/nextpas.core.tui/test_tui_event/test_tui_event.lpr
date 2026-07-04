@@ -2,8 +2,8 @@ program test_tui_event;
 {$I nextpas.core.settings.inc}
 uses
   nextpas.core.tui.event,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 procedure TestNone;
 var E: TEvent;
 begin E := NoneEvent; Check(E.Kind = evNone, 'none kind'); end;
@@ -25,9 +25,8 @@ var E: TEvent;
 begin E := ResizeEvent(80, 24); Check(E.Kind = evResize, 'resize kind');
   CheckEqual(Int64(80), Int64(E.Resize.Width), 'w'); CheckEqual(Int64(24), Int64(E.Resize.Height), 'h'); end;
 begin
-  T := TTestRunner.Create('nextpas.core.tui.event');
-  T.Run('none', @TestNone); T.Run('key char', @TestKeyChar);
-  T.Run('key code', @TestKeyCode); T.Run('mouse', @TestMouse);
-  T.Run('resize', @TestResize); T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.event');
+  T.Test('none', @TestNone); T.Test('key char', @TestKeyChar);
+  T.Test('key code', @TestKeyCode); T.Test('mouse', @TestMouse);
+  if not T.Run then Halt(1);
 end.

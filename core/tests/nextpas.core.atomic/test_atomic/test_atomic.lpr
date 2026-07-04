@@ -6,14 +6,14 @@ uses
   nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.atomic,
   nextpas.core.atomic.compat,
   nextpas.core.platform.sync,
   test_atomic_direct_types_ptr;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadUtf8TextFile(const APath: string): string;
 var
@@ -844,8 +844,8 @@ begin
     'end.');
   LRunnerSection := ExtractSection(LAtomicTestSource,
     'begin' + LineEnding +
-    '  T := TTestRunner.Create(''nextpas.core.atomic'');',
-    '  T.Summary;');
+    '  T := TTestSuite.Create(''nextpas.core.atomic'');',
+  if not T.Run then Halt(1);
   LInvalidOrderMatrixSection := ExtractSection(LAtomicTestSource,
     'procedure ' + 'TestAtomicInvalidMemoryOrderSurfaceMatrix;' + LineEnding +
     'type',
@@ -1259,7 +1259,7 @@ begin
     'legacy pointer arithmetic/bitwise overloads and helper aliases have focused runtime coverage',
     'atomic README must document compat alias runtime coverage');
   CheckContains(LAtomicTestSource,
-    'T.Run(''compat public alias behavior'', @TestAtomicCompatAliasBehavior);',
+    'T.Test(''compat public alias behavior'', @TestAtomicCompatAliasBehavior);',
     'atomic runner must register compat alias runtime coverage');
   CheckContains(LCompatFacadeTestSection,
     'compat AtomicCompareExchange32 must return observed value on mismatch',
@@ -1406,7 +1406,7 @@ begin
   CheckContains(LAtomicTestSource, 'procedure TestAtomicTypedCasConsumeContract;',
     'atomic tests must keep runtime coverage for typed CAS consume normalization');
   CheckContains(LAtomicTestSource,
-    'T.Run(''typed atomic CAS consume contract'', @TestAtomicTypedCasConsumeContract);',
+    'T.Test(''typed atomic CAS consume contract'', @TestAtomicTypedCasConsumeContract);',
     'atomic runner must register typed CAS consume runtime coverage');
   CheckContains(LAtomicTestSource, 'CompareExchangeWeak(LExpectedInt32, 12, mo_consume)',
     'typed CAS consume runtime coverage must include weak Int32 CAS');
@@ -1427,7 +1427,7 @@ begin
   CheckContains(LDirectTypesPtrContractSection, 'direct atomic.types TAtomicPtr GetMut must expose the first backing storage slot',
     'direct atomic.types TAtomicPtr coverage must keep first-slot storage coverage');
   CheckContains(LRunnerSection,
-    'T.Run(''typed atomic natural alignment contract'', @TestAtomicTypedNaturalAlignmentContract);',
+    'T.Test(''typed atomic natural alignment contract'', @TestAtomicTypedNaturalAlignmentContract);',
     'atomic runner must register typed atomic natural alignment coverage');
   CheckEqual(Int64(1), Int64(CountOccurrences(LRunnerSection,
     'typed atomic natural alignment contract')),
@@ -1441,7 +1441,7 @@ begin
   CheckContains(LAtomicTestSource, 'procedure TestAtomicBoolRawStorageContract;',
     'atomic tests must keep runtime coverage for the exposed TAtomicBool raw 0/1 storage contract');
   CheckContains(LAtomicTestSource,
-    'T.Run(''typed atomic bool raw storage contract'', @TestAtomicBoolRawStorageContract);',
+    'T.Test(''typed atomic bool raw storage contract'', @TestAtomicBoolRawStorageContract);',
     'atomic runner must register TAtomicBool raw storage coverage');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` follows `atomic_is_lock_free_ptr`; `Load`/`Store`/`Exchange` publish the pointed-to address, strong/weak CAS update both the stored pointer and the observed expected pointer, and `GetMut` / `IntoInner` stay exclusive-access escape hatches rather than concurrent APIs.',
@@ -1468,7 +1468,7 @@ begin
     'LAtomicPtr.CompareExchangeWeak(LExpected, @LValueA, LInvalidOrder)',
     'direct atomic.types TAtomicPtr coverage must reject invalid weak single-order CAS');
   CheckContains(LAtomicTestSource,
-    'T.Run(''direct atomic.types ptr contract'', @TestAtomicTypesPtrContract);',
+    'T.Test(''direct atomic.types ptr contract'', @TestAtomicTypesPtrContract);',
     'atomic runner must register direct atomic.types TAtomicPtr runtime coverage');
   CheckContains(LAtomicDocsReadme,
     '`TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.',
@@ -1489,7 +1489,7 @@ begin
   CheckContains(LInvalidOrderMatrixSection, 'procedure TestAtomicInvalidMemoryOrderSurfaceMatrix;',
     'atomic tests must keep runtime coverage for the public invalid memory-order surface matrix');
   CheckContains(LRunnerSection,
-    'T.Run(''invalid memory-order surface matrix'', @TestAtomicInvalidMemoryOrderSurfaceMatrix);',
+    'T.Test(''invalid memory-order surface matrix'', @TestAtomicInvalidMemoryOrderSurfaceMatrix);',
     'atomic runner must register public invalid memory-order surface matrix coverage');
   CheckContains(LInvalidOrderMatrixSection, 'atomic_load_64(LInt64, mo_release)',
     'invalid memory-order matrix must cover 64-bit load rejection');
@@ -1612,7 +1612,7 @@ begin
   CheckContains(LAtomicTestSource, 'procedure TestAtomicSingleOrderCasDerivedFailureOrderMatrix;',
     'atomic tests must keep runtime coverage for single-order CAS derived failure-order matrix');
   CheckContains(LRunnerSection,
-    'T.Run(''single-order CAS derived failure-order matrix'', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);',
+    'T.Test(''single-order CAS derived failure-order matrix'', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);',
     'atomic runner must register single-order CAS derived failure-order matrix coverage');
   CheckContains(LSingleOrderCasMatrixSection, 'atomic_compare_exchange_strong(LInt32, LExpectedInt32, 21, mo_release)',
     'single-order CAS matrix must cover root Int32 release mismatch failure-order derivation');
@@ -2305,16 +2305,16 @@ begin
   CheckNotContains(LTypesISizeDecrementSection, 'FetchSub(1, AOrder) - 1',
     'typed ISize Decrement must not use checked signed subtraction for the returned wrap value');
   CheckContains(LAtomicTestSource,
-    'T.Run(''typed atomic unsigned wrap contract'', @TestAtomicUnsignedWrapContract);',
+    'T.Test(''typed atomic unsigned wrap contract'', @TestAtomicUnsignedWrapContract);',
     'typed unsigned wrap runtime contract must be registered');
   CheckContains(LAtomicTestSource,
-    'T.Run(''typed atomic signed wrap contract'', @TestAtomicSignedWrapContract);',
+    'T.Test(''typed atomic signed wrap contract'', @TestAtomicSignedWrapContract);',
     'typed signed wrap runtime contract must be registered');
   CheckContains(LRunnerSection,
     '{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}' + LineEnding +
-    '  T.Run(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
-    '  T.Run(''typed atomic int64/uint64 fetch contract'', @TestAtomicInt64UInt64FetchContract);' + LineEnding +
-    '  T.Run(''typed atomic update-if-equal contract'', @TestAtomicUpdateIfEqualContract);' + LineEnding +
+    '  T.Test(''typed atomic int64/uint64 contract'', @TestAtomicInt64UInt64Contract);' + LineEnding +
+    '  T.Test(''typed atomic int64/uint64 fetch contract'', @TestAtomicInt64UInt64FetchContract);' + LineEnding +
+    '  T.Test(''typed atomic update-if-equal contract'', @TestAtomicUpdateIfEqualContract);' + LineEnding +
     '  {$ENDIF}',
     'typed Int64/UInt64 runner registration must match the production 64-bit API gate');
   CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
@@ -7048,53 +7048,53 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.atomic');
-  T.Run('Load32/Store32 all orders', @TestLoad32Store32);
-  T.Run('Exchange32', @TestExchange32);
-  T.Run('CompareExchange32', @TestCompareExchange32);
-  T.Run('FetchAdd32/FetchSub32', @TestFetchAdd32);
-  T.Run('FetchAnd32/Or32/Xor32', @TestFetchBitwise32);
-  T.Run('Load64/Store64', @TestLoad64Store64);
-  T.Run('Exchange64', @TestExchange64);
-  T.Run('Pointer atomics', @TestPointerAtomics);
-  T.Run('Fences (no crash)', @TestFence);
-  T.Run('default atomic_load surface', @TestAtomicDefaultLoadSurface);
-  T.Run('atomic source contracts', @TestAtomicSourceContracts);
-  T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
-  T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
-  T.Run('typed atomic record API', @TestAtomicRecordTypes);
-  T.Run('typed atomic natural alignment contract', @TestAtomicTypedNaturalAlignmentContract);
-  T.Run('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
-  T.Run('typed atomic int32/uint32 fetch contract', @TestAtomicInt32UInt32FetchContract);
+  T := TTestSuite.Create('nextpas.core.atomic');
+  T.Test('Load32/Store32 all orders', @TestLoad32Store32);
+  T.Test('Exchange32', @TestExchange32);
+  T.Test('CompareExchange32', @TestCompareExchange32);
+  T.Test('FetchAdd32/FetchSub32', @TestFetchAdd32);
+  T.Test('FetchAnd32/Or32/Xor32', @TestFetchBitwise32);
+  T.Test('Load64/Store64', @TestLoad64Store64);
+  T.Test('Exchange64', @TestExchange64);
+  T.Test('Pointer atomics', @TestPointerAtomics);
+  T.Test('Fences (no crash)', @TestFence);
+  T.Test('default atomic_load surface', @TestAtomicDefaultLoadSurface);
+  T.Test('atomic source contracts', @TestAtomicSourceContracts);
+  T.Test('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
+  T.Test('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
+  T.Test('typed atomic record API', @TestAtomicRecordTypes);
+  T.Test('typed atomic natural alignment contract', @TestAtomicTypedNaturalAlignmentContract);
+  T.Test('typed atomic int32/uint32 contract', @TestAtomicInt32UInt32Contract);
+  T.Test('typed atomic int32/uint32 fetch contract', @TestAtomicInt32UInt32FetchContract);
   {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-  T.Run('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
-  T.Run('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
-  T.Run('typed atomic update-if-equal contract', @TestAtomicUpdateIfEqualContract);
+  T.Test('typed atomic int64/uint64 contract', @TestAtomicInt64UInt64Contract);
+  T.Test('typed atomic int64/uint64 fetch contract', @TestAtomicInt64UInt64FetchContract);
+  T.Test('typed atomic update-if-equal contract', @TestAtomicUpdateIfEqualContract);
   {$ENDIF}
-  T.Run('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
-  T.Run('typed atomic signed wrap contract', @TestAtomicSignedWrapContract);
-  T.Run('typed atomic bool contract', @TestAtomicBoolContract);
-  T.Run('typed atomic bool raw storage contract', @TestAtomicBoolRawStorageContract);
-  T.Run('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
-  T.Run('typed atomic isize/usize fetch contract', @TestAtomicISizeUSizeFetchContract);
-  T.Run('typed atomic ptr contract', @TestAtomicPtrContract);
-  T.Run('direct atomic.types ptr contract', @TestAtomicTypesPtrContract);
-  T.Run('atomic flag API', @TestAtomicFlagApi);
-  T.Run('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
-  T.Run('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
-  T.Run('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
-  T.Run('invalid memory-order surface matrix', @TestAtomicInvalidMemoryOrderSurfaceMatrix);
-  T.Run('single-order CAS derived failure-order matrix', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);
-  T.Run('typed atomic CAS consume contract', @TestAtomicTypedCasConsumeContract);
-  T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
-  T.Run('compat public alias behavior', @TestAtomicCompatAliasBehavior);
-  T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
-  T.Run('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
-  T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
-  T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
-  T.Run('atomic wait/notify 64-bit API', @TestAtomicWaitNotify64SurfaceAndBehavior);
-  T.Run('atomic refcount contract', @TestAtomicRefCountContract);
-  T.Run('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
-  T.Run('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);
-  T.Summary;
+  T.Test('typed atomic unsigned wrap contract', @TestAtomicUnsignedWrapContract);
+  T.Test('typed atomic signed wrap contract', @TestAtomicSignedWrapContract);
+  T.Test('typed atomic bool contract', @TestAtomicBoolContract);
+  T.Test('typed atomic bool raw storage contract', @TestAtomicBoolRawStorageContract);
+  T.Test('typed atomic isize/usize contract', @TestAtomicISizeUSizeContract);
+  T.Test('typed atomic isize/usize fetch contract', @TestAtomicISizeUSizeFetchContract);
+  T.Test('typed atomic ptr contract', @TestAtomicPtrContract);
+  T.Test('direct atomic.types ptr contract', @TestAtomicTypesPtrContract);
+  T.Test('atomic flag API', @TestAtomicFlagApi);
+  T.Test('fetch max/min/nand contract', @TestAtomicFetchMaxMinNandContract);
+  T.Test('pointer offset fetch contract', @TestAtomicPointerOffsetFetchContract);
+  T.Test('invalid memory-order contract', @TestAtomicInvalidMemoryOrderContract);
+  T.Test('invalid memory-order surface matrix', @TestAtomicInvalidMemoryOrderSurfaceMatrix);
+  T.Test('single-order CAS derived failure-order matrix', @TestAtomicSingleOrderCasDerivedFailureOrderMatrix);
+  T.Test('typed atomic CAS consume contract', @TestAtomicTypedCasConsumeContract);
+  T.Test('compat PascalCase facade', @TestAtomicCompatFacade);
+  T.Test('compat public alias behavior', @TestAtomicCompatAliasBehavior);
+  T.Test('tagged pointer atomic API', @TestAtomicTaggedPointer);
+  T.Test('tagged pointer update contracts', @TestAtomicTaggedPointerUpdateContracts);
+  T.Test('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
+  T.Test('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
+  T.Test('atomic wait/notify 64-bit API', @TestAtomicWaitNotify64SurfaceAndBehavior);
+  T.Test('atomic refcount contract', @TestAtomicRefCountContract);
+  T.Test('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
+  T.Test('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);
+  if not T.Run then Halt(1);
 end.

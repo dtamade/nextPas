@@ -23,7 +23,7 @@ uses
   nextpas.core.http.impl.h2.tls,
   nextpas.core.http.impl.tls.stream,
   nextpas.core.http.impl.registry,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base;
 
@@ -199,7 +199,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GDialQueue: array of ITcpStream;
   GDialCount: SizeInt;
   GDialIndex: SizeInt;
@@ -1825,50 +1825,50 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_http_h2_client');
-  T.Run('Handshake writes client preface and settings',
+  T := TTestSuite.Create('test_http_h2_client');
+  T.Test('Handshake writes client preface and settings',
     @TestHandshakeWritesClientPrefaceAndSettings);
-  T.Run('RoundTrip GET reads response',
+  T.Test('RoundTrip GET reads response',
     @TestRoundTripGetReadsResponse);
-  T.Run('RoundTrip POST writes data frame',
+  T.Test('RoundTrip POST writes data frame',
     @TestRoundTripPostWritesDataFrame);
-  T.Run('RoundTrip filters connection-specific request headers',
+  T.Test('RoundTrip filters connection-specific request headers',
     @TestRoundTripFiltersConnectionSpecificRequestHeaders);
-  T.Run('RoundTrip preserves TE trailers header',
+  T.Test('RoundTrip preserves TE trailers header',
     @TestRoundTripPreservesTeTrailersHeader);
-  T.Run('Runtime SETTINGS_INITIAL_WINDOW_SIZE updates active stream',
+  T.Test('Runtime SETTINGS_INITIAL_WINDOW_SIZE updates active stream',
     @TestRuntimeSettingsInitialWindowSizeUpdatesActiveStream);
-  T.Run('Request body reads WINDOW_UPDATE when send window blocked',
+  T.Test('Request body reads WINDOW_UPDATE when send window blocked',
     @TestRequestBodyReadsWindowUpdateWhenSendWindowBlocked);
-  T.Run('Stream ID increments across requests',
+  T.Test('Stream ID increments across requests',
     @TestStreamIdIncrementsAcrossRequests);
-  T.Run('GOAWAY marks connection not reusable',
+  T.Test('GOAWAY marks connection not reusable',
     @TestGoawayMarksConnectionNotReusable);
-  T.Run('PUSH_PROMISE triggers PROTOCOL_ERROR GOAWAY',
+  T.Test('PUSH_PROMISE triggers PROTOCOL_ERROR GOAWAY',
     @TestPushPromiseTriggersProtocolGoaway);
-  T.Run('DATA on connection stream triggers PROTOCOL_ERROR GOAWAY',
+  T.Test('DATA on connection stream triggers PROTOCOL_ERROR GOAWAY',
     @TestDataOnConnectionStreamTriggersProtocolGoaway);
-  T.Run('HEADERS on connection stream triggers PROTOCOL_ERROR GOAWAY',
+  T.Test('HEADERS on connection stream triggers PROTOCOL_ERROR GOAWAY',
     @TestHeadersOnConnectionStreamTriggersProtocolGoaway);
-  T.Run('CONTINUATION on different stream triggers PROTOCOL_ERROR GOAWAY',
+  T.Test('CONTINUATION on different stream triggers PROTOCOL_ERROR GOAWAY',
     @TestContinuationOnDifferentStreamTriggersProtocolGoaway);
-  T.Run('PING gets acked',
+  T.Test('PING gets acked',
     @TestPingGetsAcked);
-  T.Run('Transport reuses pooled connection',
+  T.Test('Transport reuses pooled connection',
     @TestTransportReusesPooledConnection);
-  T.Run('Transport CloseIdleConnections closes pooled conn',
+  T.Test('Transport CloseIdleConnections closes pooled conn',
     @TestTransportCloseIdleConnectionsClosesPooledConn);
-  T.Run('HTTPS transport negotiates h2 via ALPN',
+  T.Test('HTTPS transport negotiates h2 via ALPN',
     @TestHttpsTransportNegotiatesH2ViaALPN);
-  T.Run('HTTPS transport rejects unexpected ALPN',
+  T.Test('HTTPS transport rejects unexpected ALPN',
     @TestHttpsTransportRejectsUnexpectedALPN);
-  T.Run('H2 TLS server transport dispatches negotiated h2',
+  T.Test('H2 TLS server transport dispatches negotiated h2',
     @TestH2TlsServerTransportDispatchesNegotiatedH2);
-  T.Run('H2 TLS server transport rejects missing h2 ALPN',
+  T.Test('H2 TLS server transport rejects missing h2 ALPN',
     @TestH2TlsServerTransportRejectsMissingH2ALPN);
-  T.Run('BuildResponse avoids bytes stream copy source contract',
+  T.Test('BuildResponse avoids bytes stream copy source contract',
     @TestBuildResponseAvoidsBytesStreamCopySourceContract);
-  T.Run('Built-in HTTP/2 client transport is registered',
+  T.Test('Built-in HTTP/2 client transport is registered',
     @TestBuiltinHttp2ClientTransportIsRegistered);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

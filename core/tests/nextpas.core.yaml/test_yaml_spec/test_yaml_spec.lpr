@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.yaml.types,
   nextpas.core.yaml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== Block scalar chomping ===== }
 { Note: parser preserves internal indentation in block scalars }
@@ -556,58 +556,57 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('yaml spec compliance');
+  T := TTestSuite.Create('yaml spec compliance');
   { Chomping }
-  T.Run('chomping strip literal', @TestChompingStrip);
-  T.Run('chomping keep literal', @TestChompingKeep);
-  T.Run('chomping clip literal', @TestChompingClip);
-  T.Run('chomping strip folded', @TestFoldedChompingStrip);
-  T.Run('chomping keep folded', @TestFoldedChompingKeep);
+  T.Test('chomping strip literal', @TestChompingStrip);
+  T.Test('chomping keep literal', @TestChompingKeep);
+  T.Test('chomping clip literal', @TestChompingClip);
+  T.Test('chomping strip folded', @TestFoldedChompingStrip);
+  T.Test('chomping keep folded', @TestFoldedChompingKeep);
   { Empty values }
-  T.Run('empty value colon', @TestEmptyValueColon);
-  T.Run('empty value null', @TestEmptyValueNull);
-  T.Run('empty value tilde', @TestEmptyValueTilde);
-  T.Run('empty flow map', @TestEmptyMap);
-  T.Run('empty flow seq', @TestEmptySeq);
+  T.Test('empty value colon', @TestEmptyValueColon);
+  T.Test('empty value null', @TestEmptyValueNull);
+  T.Test('empty value tilde', @TestEmptyValueTilde);
+  T.Test('empty flow map', @TestEmptyMap);
+  T.Test('empty flow seq', @TestEmptySeq);
   { Complex nesting }
-  T.Run('map of sequences', @TestMapOfSequences);
-  T.Run('deeply nested 5 levels', @TestDeeplyNested);
-  T.Run('mixed flow and block', @TestMixedFlowAndBlock);
+  T.Test('map of sequences', @TestMapOfSequences);
+  T.Test('deeply nested 5 levels', @TestDeeplyNested);
+  T.Test('mixed flow and block', @TestMixedFlowAndBlock);
   { Quoted strings }
-  T.Run('double quoted backslash', @TestDoubleQuotedWithBackslash);
-  T.Run('single quoted literal', @TestSingleQuotedLiteral);
-  T.Run('single quoted no escapes', @TestSingleQuotedNoEscapes);
+  T.Test('double quoted backslash', @TestDoubleQuotedWithBackslash);
+  T.Test('single quoted literal', @TestSingleQuotedLiteral);
+  T.Test('single quoted no escapes', @TestSingleQuotedNoEscapes);
   { Multiline }
-  T.Run('multiline block literal', @TestMultilineBlockLiteral);
+  T.Test('multiline block literal', @TestMultilineBlockLiteral);
   { Boolean }
-  T.Run('boolean true/false variants', @TestBooleanVariants);
-  T.Run('yes/no/on/off are strings', @TestBooleanNotStrings);
+  T.Test('boolean true/false variants', @TestBooleanVariants);
+  T.Test('yes/no/on/off are strings', @TestBooleanNotStrings);
   { Integer bases }
-  T.Run('integer dec/hex/oct', @TestIntegerBases);
+  T.Test('integer dec/hex/oct', @TestIntegerBases);
   { Special floats }
-  T.Run('inf positive/negative', @TestSpecialFloats);
-  T.Run('nan value', @TestNanValue);
+  T.Test('inf positive/negative', @TestSpecialFloats);
+  T.Test('nan value', @TestNanValue);
   { Aliases }
-  T.Run('alias in sequence', @TestAliasInSequence);
-  T.Run('alias to mapping', @TestAliasToMapping);
+  T.Test('alias in sequence', @TestAliasInSequence);
+  T.Test('alias to mapping', @TestAliasToMapping);
   { Safe access }
-  T.Run('SeqGet out of bounds', @TestSeqGetOutOfBounds);
-  T.Run('MapGet nonexistent', @TestMapGetNonexistent);
-  T.Run('scalar as wrong type', @TestScalarAsWrongType);
-  T.Run('null as scalar', @TestNullAsScalar);
-  T.Run('int as float', @TestIntAsFloat);
-  T.Run('float as int', @TestFloatAsInt);
+  T.Test('SeqGet out of bounds', @TestSeqGetOutOfBounds);
+  T.Test('MapGet nonexistent', @TestMapGetNonexistent);
+  T.Test('scalar as wrong type', @TestScalarAsWrongType);
+  T.Test('null as scalar', @TestNullAsScalar);
+  T.Test('int as float', @TestIntAsFloat);
+  T.Test('float as int', @TestFloatAsInt);
   { Comments }
-  T.Run('comments everywhere', @TestCommentsEverywhere);
+  T.Test('comments everywhere', @TestCommentsEverywhere);
   { Anchors }
-  T.Run('anchor sequence', @TestAnchorSequence);
+  T.Test('anchor sequence', @TestAnchorSequence);
   { Stress }
-  T.Run('large mapping 100 keys', @TestLargeMapping);
-  T.Run('large sequence 100 items', @TestLargeSequence);
+  T.Test('large mapping 100 keys', @TestLargeMapping);
+  T.Test('large sequence 100 items', @TestLargeSequence);
   { Document markers }
-  T.Run('document markers ---/...', @TestDocumentMarkers);
+  T.Test('document markers ---/...', @TestDocumentMarkers);
   { Real-world }
-  T.Run('docker compose style', @TestDockerComposeStyle);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('docker compose style', @TestDockerComposeStyle);
+  if not T.Run then Halt(1);
 end.

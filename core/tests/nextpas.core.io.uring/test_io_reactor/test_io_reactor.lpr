@@ -4,7 +4,7 @@ program test_io_reactor;
 
 uses
   SysUtils, BaseUnix,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base,
@@ -13,7 +13,7 @@ uses
   nextpas.core.io.reactor;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCallbackCount: Int32;
   GLastResult: Int32;
   GLastUserData: UInt64;
@@ -344,20 +344,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.reactor');
-  T.Run('Create/Close', @TestReactorCreateClose);
-  T.Run('Async NOP', @TestAsyncNop);
-  T.Run('Async Read/Write', @TestAsyncReadWrite);
-  T.Run('Multiple async', @TestMultipleAsync);
-  T.Run('Poll batch', @TestPoll);
-  T.Run('Context passing', @TestContext);
-  T.Run('Entry recycling', @TestEntryRecycling);
-  T.Run('Close aborts pending NOP', @TestCloseAbortsPendingNop);
-  T.Run('Close dispatches all aborts when callback raises',
+  T := TTestSuite.Create('nextpas.core.io.reactor');
+  T.Test('Create/Close', @TestReactorCreateClose);
+  T.Test('Async NOP', @TestAsyncNop);
+  T.Test('Async Read/Write', @TestAsyncReadWrite);
+  T.Test('Multiple async', @TestMultipleAsync);
+  T.Test('Poll batch', @TestPoll);
+  T.Test('Context passing', @TestContext);
+  T.Test('Entry recycling', @TestEntryRecycling);
+  T.Test('Close aborts pending NOP', @TestCloseAbortsPendingNop);
+  T.Test('Close dispatches all aborts when callback raises',
     @TestCloseDispatchesAllAbortsWhenCallbackRaises);
-  T.Run('Completion re-enter Close does not abort again',
+  T.Test('Completion re-enter Close does not abort again',
     @TestCompletionReenterCloseDoesNotAbortAgain);
-  T.Run('Post-close submissions are rejected',
+  T.Test('Post-close submissions are rejected',
     @TestPostCloseSubmissionsAreRejected);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

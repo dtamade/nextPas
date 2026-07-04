@@ -10,10 +10,10 @@ uses
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.config,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === JSON 嵌套展平 === }
 
@@ -1008,56 +1008,56 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.nested');
-  T.Run('Json.NestedObject', @TestJsonNestedObject);
-  T.Run('Json.DeepNesting', @TestJsonDeepNesting);
-  T.Run('Json.Array', @TestJsonArray);
-  T.Run('Json.ArrayOfObjects', @TestJsonArrayOfObjects);
-  T.Run('Json.EmptyContainers', @TestJsonEmptyContainers);
-  T.Run('Json.ScalarFidelity', @TestJsonScalarFidelity);
-  T.Run('Yaml.NestedMapping', @TestYamlNestedMapping);
-  T.Run('Yaml.Sequence', @TestYamlSequence);
-  T.Run('Yaml.DeepNesting', @TestYamlDeepNesting);
-  T.Run('Toml.NestedTable', @TestTomlNestedTable);
-  T.Run('Toml.Array', @TestTomlArray);
-  T.Run('Toml.InlineTable', @TestTomlInlineTable);
-  T.Run('Toml.DottedKey', @TestTomlDottedKey);
-  T.Run('Toml.AmbiguousLiteralKeyVsTableRaises',
+  T := TTestSuite.Create('nextpas.core.config.nested');
+  T.Test('Json.NestedObject', @TestJsonNestedObject);
+  T.Test('Json.DeepNesting', @TestJsonDeepNesting);
+  T.Test('Json.Array', @TestJsonArray);
+  T.Test('Json.ArrayOfObjects', @TestJsonArrayOfObjects);
+  T.Test('Json.EmptyContainers', @TestJsonEmptyContainers);
+  T.Test('Json.ScalarFidelity', @TestJsonScalarFidelity);
+  T.Test('Yaml.NestedMapping', @TestYamlNestedMapping);
+  T.Test('Yaml.Sequence', @TestYamlSequence);
+  T.Test('Yaml.DeepNesting', @TestYamlDeepNesting);
+  T.Test('Toml.NestedTable', @TestTomlNestedTable);
+  T.Test('Toml.Array', @TestTomlArray);
+  T.Test('Toml.InlineTable', @TestTomlInlineTable);
+  T.Test('Toml.DottedKey', @TestTomlDottedKey);
+  T.Test('Toml.AmbiguousLiteralKeyVsTableRaises',
     @TestTomlAmbiguousLiteralKeyVsTableRaises);
-  T.Run('Toml.AmbiguousLiteralKeyVsDottedKeyRaises',
+  T.Test('Toml.AmbiguousLiteralKeyVsDottedKeyRaises',
     @TestTomlAmbiguousLiteralKeyVsDottedKeyRaises);
-  T.Run('Toml.TryLoadAmbiguousReturnsFalse',
+  T.Test('Toml.TryLoadAmbiguousReturnsFalse',
     @TestTomlTryLoadAmbiguousReturnsFalse);
-  T.Run('Json.AmbiguousLiteralKeyVsNestedPathRaises',
+  T.Test('Json.AmbiguousLiteralKeyVsNestedPathRaises',
     @TestJsonAmbiguousLiteralKeyVsNestedPathRaises);
-  T.Run('Json.TryLoadAmbiguousReturnsFalse',
+  T.Test('Json.TryLoadAmbiguousReturnsFalse',
     @TestJsonTryLoadAmbiguousReturnsFalse);
-  T.Run('Yaml.AmbiguousLiteralKeyVsNestedPathRaises',
+  T.Test('Yaml.AmbiguousLiteralKeyVsNestedPathRaises',
     @TestYamlAmbiguousLiteralKeyVsNestedPathRaises);
-  T.Run('Yaml.TryLoadAmbiguousReturnsFalse',
+  T.Test('Yaml.TryLoadAmbiguousReturnsFalse',
     @TestYamlTryLoadAmbiguousReturnsFalse);
-  T.Run('Json.EmptyTopLevelKeyRaises', @TestJsonEmptyTopLevelKeyRaises);
-  T.Run('Yaml.EmptyTopLevelKeyRaises', @TestYamlEmptyTopLevelKeyRaises);
-  T.Run('Toml.EmptyTopLevelKeyRaises', @TestTomlEmptyTopLevelKeyRaises);
-  T.Run('Toml.ArrayOfTables', @TestTomlArrayOfTables);
-  T.Run('CrossFormat.NestedOverride', @TestCrossFormatNestedOverride);
-  T.Run('CrossFormat.CrossSourceFlattenOverrideAfterCollisionGuard',
+  T.Test('Json.EmptyTopLevelKeyRaises', @TestJsonEmptyTopLevelKeyRaises);
+  T.Test('Yaml.EmptyTopLevelKeyRaises', @TestYamlEmptyTopLevelKeyRaises);
+  T.Test('Toml.EmptyTopLevelKeyRaises', @TestTomlEmptyTopLevelKeyRaises);
+  T.Test('Toml.ArrayOfTables', @TestTomlArrayOfTables);
+  T.Test('CrossFormat.NestedOverride', @TestCrossFormatNestedOverride);
+  T.Test('CrossFormat.CrossSourceFlattenOverrideAfterCollisionGuard',
     @TestCrossSourceFlattenOverrideAfterSameSourceCollisionGuard);
-  T.Run('Reload.Nested', @TestReloadNested);
-  T.Run('Json.TopLevelArray', @TestJsonTopLevelArray);
-  T.Run('Json.TopLevelScalar', @TestJsonTopLevelScalar);
-  T.Run('Yaml.TopLevelSequence', @TestYamlTopLevelSequence);
-  T.Run('GetSection.Root', @TestGetSectionRoot);
-  T.Run('GetSection.PrefixDirectChildren', @TestGetSectionPrefixDirectChildren);
-  T.Run('GetSection.ArrayIndexes', @TestGetSectionArrayIndexes);
-  T.Run('GetSection.MissingAndCaseInsensitive', @TestGetSectionMissingAndCaseInsensitive);
-  T.Run('GetStringArray.Basic', @TestGetStringArrayBasic);
-  T.Run('GetStringArray.SparseNumericOrder', @TestGetStringArraySortsNumericIndexesAndSkipsHoles);
-  T.Run('GetStringArray.IgnoresNonCanonicalNumericSegments',
+  T.Test('Reload.Nested', @TestReloadNested);
+  T.Test('Json.TopLevelArray', @TestJsonTopLevelArray);
+  T.Test('Json.TopLevelScalar', @TestJsonTopLevelScalar);
+  T.Test('Yaml.TopLevelSequence', @TestYamlTopLevelSequence);
+  T.Test('GetSection.Root', @TestGetSectionRoot);
+  T.Test('GetSection.PrefixDirectChildren', @TestGetSectionPrefixDirectChildren);
+  T.Test('GetSection.ArrayIndexes', @TestGetSectionArrayIndexes);
+  T.Test('GetSection.MissingAndCaseInsensitive', @TestGetSectionMissingAndCaseInsensitive);
+  T.Test('GetStringArray.Basic', @TestGetStringArrayBasic);
+  T.Test('GetStringArray.SparseNumericOrder', @TestGetStringArraySortsNumericIndexesAndSkipsHoles);
+  T.Test('GetStringArray.IgnoresNonCanonicalNumericSegments',
     @TestGetStringArrayIgnoresNonCanonicalNumericSegments);
-  T.Run('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
-  T.Run('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
-  T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);
-  T.Run('Malformed.JsonLineColumn', @TestMalformedJsonErrorIncludesLineAndColumn);
-  T.Summary;
+  T.Test('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
+  T.Test('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
+  T.Test('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);
+  T.Test('Malformed.JsonLineColumn', @TestMalformedJsonErrorIncludesLineAndColumn);
+  if not T.Run then Halt(1);
 end.

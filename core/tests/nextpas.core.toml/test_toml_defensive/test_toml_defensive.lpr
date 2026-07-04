@@ -15,10 +15,10 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.writer,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === 1. Error Recovery === }
 
@@ -271,28 +271,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml defensive');
+  T := TTestSuite.Create('nextpas.core.toml defensive');
   { Error Recovery }
-  T.Run('parse error then Done', @TestParseErrorThenDone);
-  T.Run('parse error then reparse', @TestParseErrorThenReparse);
-  T.Run('interface parse error', @TestInterfaceParseError);
+  T.Test('parse error then Done', @TestParseErrorThenDone);
+  T.Test('parse error then reparse', @TestParseErrorThenReparse);
+  T.Test('interface parse error', @TestInterfaceParseError);
   { Extreme Strings }
-  T.Run('100KB string value', @TestLargeStringValue);
-  T.Run('1000-line multi-line string', @TestLargeMultiLineString);
+  T.Test('100KB string value', @TestLargeStringValue);
+  T.Test('1000-line multi-line string', @TestLargeMultiLineString);
   { Hash Index }
-  T.Run('hash index multi-table switch', @TestHashIndexMultiTableSwitch);
-  T.Run('same keys different tables', @TestHashIndexDuplicateAcrossTables);
+  T.Test('hash index multi-table switch', @TestHashIndexMultiTableSwitch);
+  T.Test('same keys different tables', @TestHashIndexDuplicateAcrossTables);
   { DateTime Boundaries }
-  T.Run('datetime boundaries', @TestDateTimeBoundaries);
+  T.Test('datetime boundaries', @TestDateTimeBoundaries);
   { FindByPath }
-  T.Run('FindByPath edge cases', @TestFindByPathEdges);
-  T.Run('FindByPath 20-level', @TestFindByPathLongPath);
+  T.Test('FindByPath edge cases', @TestFindByPathEdges);
+  T.Test('FindByPath 20-level', @TestFindByPathLongPath);
   { Writer }
-  T.Run('writer nested array in inline', @TestWriterNestedArrayInInlineTable);
-  T.Run('writer 50 tables', @TestWriterManyTables);
+  T.Test('writer nested array in inline', @TestWriterNestedArrayInInlineTable);
+  T.Test('writer 50 tables', @TestWriterManyTables);
   { Stringify }
-  T.Run('stringify special keys', @TestStringifySpecialKeys);
-  T.Run('stringify nan/inf', @TestStringifyNanInf);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('stringify special keys', @TestStringifySpecialKeys);
+  T.Test('stringify nan/inf', @TestStringifyNanInf);
+  if not T.Run then Halt(1);
 end.

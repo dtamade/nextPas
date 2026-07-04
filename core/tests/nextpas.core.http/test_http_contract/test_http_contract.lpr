@@ -11,7 +11,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.intf,
@@ -25,7 +25,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GProcHandlerCalled: Boolean;
   GProcHandlerPath: string;
 
@@ -1190,42 +1190,42 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.contract');
-  T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
-  T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);
-  T.Run('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
-  T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
-  T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
-  T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
-  T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
-  T.Run('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);
-  T.Run('Chain applies middleware', @TestChainMiddleware);
-  T.Run('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
-  T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
-  T.Run('Injected client transport is used through facade client', @TestHttpClientTransportInjection);
-  T.Run('Injected server transport is used through facade server', @TestHttpServerTransportInjection);
-  T.Run('Injected server transport session factory is preferred',
+  T := TTestSuite.Create('nextpas.core.http.contract');
+  T.Test('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
+  T.Test('NewRouter: Get route + FindRoute', @TestNewRouter);
+  T.Test('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
+  T.Test('NewRequest: Method/Url/Version', @TestNewRequest);
+  T.Test('NewResponse: StatusCode/Headers', @TestNewResponse);
+  T.Test('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
+  T.Test('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
+  T.Test('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);
+  T.Test('Chain applies middleware', @TestChainMiddleware);
+  T.Test('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
+  T.Test('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
+  T.Test('Injected client transport is used through facade client', @TestHttpClientTransportInjection);
+  T.Test('Injected server transport is used through facade server', @TestHttpServerTransportInjection);
+  T.Test('Injected server transport session factory is preferred',
     @TestHttpServerTransportInjectionPrefersSessionFactory);
-  T.Run('Injected server transport context session factory is preferred',
+  T.Test('Injected server transport context session factory is preferred',
     @TestHttpServerTransportInjectionPrefersContextSessionFactory);
-  T.Run('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
-  T.Run('ParseQueryString basic', @TestParseQueryString);
-  T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
-  T.Run('HttpMethodToStr all methods', @TestHttpMethodToStr);
-  T.Run('HttpStrToMethod all methods', @TestHttpStrToMethod);
-  T.Run('HttpStatusText known codes', @TestHttpStatusText);
-  T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
-  T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
-  T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
-  T.Run('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
-  T.Run('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
-  T.Run('HttpServer honors explicit backend selection',
+  T.Test('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
+  T.Test('ParseQueryString basic', @TestParseQueryString);
+  T.Test('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
+  T.Test('HttpMethodToStr all methods', @TestHttpMethodToStr);
+  T.Test('HttpStrToMethod all methods', @TestHttpStrToMethod);
+  T.Test('HttpStatusText known codes', @TestHttpStatusText);
+  T.Test('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
+  T.Test('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
+  T.Test('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
+  T.Test('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
+  T.Test('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
+  T.Test('HttpServer honors explicit backend selection',
     @TestHttpServerHonorsExplicitBackendSelection);
-  T.Run('HttpServer facade owner-boundary source contract',
+  T.Test('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
-  T.Run('Chunked request trailer contract',
+  T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
-  T.Run('Chunked request multiple trailer declaration contract',
+  T.Test('Chunked request multiple trailer declaration contract',
     @TestChunkedRequestMultipleTrailerDeclarationContract);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

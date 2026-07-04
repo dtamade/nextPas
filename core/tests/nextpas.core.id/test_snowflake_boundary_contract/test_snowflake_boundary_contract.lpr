@@ -5,13 +5,13 @@ program test_snowflake_boundary_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.snowflake,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFirstIdAtEpochUsesSequenceZero;
 const
@@ -162,13 +162,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.snowflake.boundary_contract');
-  T.Run('first id at epoch uses sequence zero', @TestFirstIdAtEpochUsesSequenceZero);
-  T.Run('default epoch extracts Unix timestamp', @TestDefaultEpochExtractsUnixTimestamp);
-  T.Run('uninitialized generator fails fast', @TestUninitializedGeneratorFailsFast);
-  T.Run('future epoch fails fast', @TestFutureEpochFailsFast);
-  T.Run('timestamp delta above 41 bits is rejected', @TestTimestampDeltaAbove41BitsRejected);
-  T.Run('extract rejects negative epoch', @TestExtractRejectsNegativeEpoch);
-  T.Run('extract rejects timestamp add overflow', @TestExtractRejectsTimestampAddOverflow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.snowflake.boundary_contract');
+  T.Test('first id at epoch uses sequence zero', @TestFirstIdAtEpochUsesSequenceZero);
+  T.Test('default epoch extracts Unix timestamp', @TestDefaultEpochExtractsUnixTimestamp);
+  T.Test('uninitialized generator fails fast', @TestUninitializedGeneratorFailsFast);
+  T.Test('future epoch fails fast', @TestFutureEpochFailsFast);
+  T.Test('timestamp delta above 41 bits is rejected', @TestTimestampDeltaAbove41BitsRejected);
+  T.Test('extract rejects negative epoch', @TestExtractRejectsNegativeEpoch);
+  T.Test('extract rejects timestamp add overflow', @TestExtractRejectsTimestampAddOverflow);
+  if not T.Run then Halt(1);
 end.

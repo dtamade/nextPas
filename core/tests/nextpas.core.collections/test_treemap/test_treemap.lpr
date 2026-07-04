@@ -4,7 +4,7 @@ program test_treemap;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.treemap;
 
@@ -25,7 +25,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var LM: TIntTreeMap; v: Integer;
@@ -140,14 +140,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.treemap');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('Ordered ops (LowerBound/UpperBound)', @TestOrderedOps);
-  T.Run('GetRange returns false when no entries', @TestGetRangeReturnsFalseWhenNoEntries);
-  T.Run('GetRange low greater than high does not call callback', @TestGetRangeLowGreaterThanHighDoesNotCallCallback);
-  T.Run('Grow (1000)', @TestGrow);
-  T.Run('Clear', @TestClear);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.treemap');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('Ordered ops (LowerBound/UpperBound)', @TestOrderedOps);
+  T.Test('GetRange returns false when no entries', @TestGetRangeReturnsFalseWhenNoEntries);
+  T.Test('GetRange low greater than high does not call callback', @TestGetRangeLowGreaterThanHighDoesNotCallCallback);
+  T.Test('Grow (1000)', @TestGrow);
+  T.Test('Clear', @TestClear);
+  if not T.Run then Halt(1);
 end.

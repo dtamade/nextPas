@@ -10,7 +10,7 @@ uses
   nextpas.core.test;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TTestSuite;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('crypto.facade');
@@ -81,7 +81,7 @@ begin
     CheckEqual(0, TConstantTime.CompareBytes(TBytes.Create(1,2,3), TBytes.Create(1,2,4)));
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.crypto.facade');
+  LRunner := TTestSuite.Create('nextpas.core.crypto.facade');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

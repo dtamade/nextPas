@@ -6,10 +6,10 @@ uses
   nextpas.core.config,
   nextpas.core.errors,
   nextpas.core.fs,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function TempJsonPath(const AName: string): string;
 begin
@@ -238,24 +238,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.export');
-  T.Run('Export.ToJsonBuildsNestedObjectsAndArrays',
+  T := TTestSuite.Create('nextpas.core.config.export');
+  T.Test('Export.ToJsonBuildsNestedObjectsAndArrays',
     @TestToJsonBuildsNestedObjectsAndArrays);
-  T.Run('Export.ToJsonSupportsTopLevelDenseArray',
+  T.Test('Export.ToJsonSupportsTopLevelDenseArray',
     @TestToJsonSupportsTopLevelDenseArray);
-  T.Run('Export.ToJsonPreservesSparseNumericChildrenAsObject',
+  T.Test('Export.ToJsonPreservesSparseNumericChildrenAsObject',
     @TestToJsonPreservesSparseNumericChildrenAsObject);
-  T.Run('Export.IConfigToJsonExportsSnapshot',
+  T.Test('Export.IConfigToJsonExportsSnapshot',
     @TestIConfigToJsonExportsSnapshot);
-  T.Run('Export.ToJsonRoundTripsCanonicalStringValues',
+  T.Test('Export.ToJsonRoundTripsCanonicalStringValues',
     @TestToJsonRoundTripsCanonicalStringValues);
-  T.Run('Export.ToJsonRejectsScalarSubtreeConflict',
+  T.Test('Export.ToJsonRejectsScalarSubtreeConflict',
     @TestToJsonRejectsScalarSubtreeConflict);
-  T.Run('Export.ToJsonRejectsEmptyPathSegments',
+  T.Test('Export.ToJsonRejectsEmptyPathSegments',
     @TestToJsonRejectsEmptyPathSegments);
-  T.Run('Export.SaveToJsonWritesFile',
+  T.Test('Export.SaveToJsonWritesFile',
     @TestSaveToJsonWritesFile);
-  T.Run('Export.SaveToJsonPreservesExistingFileOnExportFailure',
+  T.Test('Export.SaveToJsonPreservesExistingFileOnExportFailure',
     @TestSaveToJsonPreservesExistingFileOnExportFailure);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

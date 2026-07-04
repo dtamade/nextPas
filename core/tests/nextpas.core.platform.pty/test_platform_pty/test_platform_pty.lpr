@@ -3,7 +3,7 @@ program test_platform_pty;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.pty.base,
   nextpas.core.platform.pty
 {$IFDEF NEXTPAS_UNIX}
@@ -14,7 +14,7 @@ uses
   ;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_UNIX}
 procedure TestOpenClose;
@@ -261,20 +261,18 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('platform.pty');
+  T := TTestSuite.Create('platform.pty');
 {$IFDEF NEXTPAS_UNIX}
-  T.Run('TestOpenClose', @TestOpenClose);
-  T.Run('TestResize', @TestResize);
-  T.Run('TestSpawnEcho', @TestSpawnEcho);
-  T.Run('TestSpawnBadPath', @TestSpawnBadPath);
-  T.Run('TestSpawnBadCwd', @TestSpawnBadCwd);
-  T.Run('TestSpawnCwd', @TestSpawnCwd);
-  T.Run('TestMasterReadWrite', @TestMasterReadWrite);
-  T.Run('TestMasterFd', @TestMasterFd);
+  T.Test('TestOpenClose', @TestOpenClose);
+  T.Test('TestResize', @TestResize);
+  T.Test('TestSpawnEcho', @TestSpawnEcho);
+  T.Test('TestSpawnBadPath', @TestSpawnBadPath);
+  T.Test('TestSpawnBadCwd', @TestSpawnBadCwd);
+  T.Test('TestSpawnCwd', @TestSpawnCwd);
+  T.Test('TestMasterReadWrite', @TestMasterReadWrite);
+  T.Test('TestMasterFd', @TestMasterFd);
 {$ELSE}
-  T.Run('TestPtyApiShape', @TestPtyApiShape);
+  T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  if not T.Run then Halt(1);
 end.

@@ -5,10 +5,10 @@ program test_text_scan;
 uses
   nextpas.core.text.scan,
   nextpas.core.text.view,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFindByte2;
 begin
@@ -185,22 +185,22 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.scan');
-  T.Run('FindByte', @TestFindByte);
-  T.Run('FindByte2', @TestFindByte2);
-  T.Run('FindByte3', @TestFindByte3);
-  T.Run('FindInRange', @TestFindInRange);
-  T.Run('FindNotInRange', @TestFindNotInRange);
-  T.Run('SkipWhitespace', @TestSkipWhitespace);
-  T.Run('SkipWhitespace long', @TestSkipWhitespaceLong);
-  T.Run('SkipWhitespace rejects control bytes', @TestSkipWhitespaceRejectsControlBytes);
-  T.Run('JsonNumber', @TestJsonNumber);
-  T.Run('JsonNumber invalid boundaries', @TestJsonNumberInvalidBoundaries);
-  T.Run('MatchLiteral', @TestMatchLiteral);
-  T.Run('MatchLiteral empty', @TestMatchLiteralEmpty);
-  T.Run('ViewSkipWhitespace', @TestViewSkipWhitespace);
-  T.Run('ViewMatchLiteral', @TestViewMatchLiteral);
-  T.Run('FindByte2 long', @TestFindByte2Long);
-  T.Run('FindSubstringCI folds needle case', @TestFindSubstringCIFoldsNeedleCase);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.scan');
+  T.Test('FindByte', @TestFindByte);
+  T.Test('FindByte2', @TestFindByte2);
+  T.Test('FindByte3', @TestFindByte3);
+  T.Test('FindInRange', @TestFindInRange);
+  T.Test('FindNotInRange', @TestFindNotInRange);
+  T.Test('SkipWhitespace', @TestSkipWhitespace);
+  T.Test('SkipWhitespace long', @TestSkipWhitespaceLong);
+  T.Test('SkipWhitespace rejects control bytes', @TestSkipWhitespaceRejectsControlBytes);
+  T.Test('JsonNumber', @TestJsonNumber);
+  T.Test('JsonNumber invalid boundaries', @TestJsonNumberInvalidBoundaries);
+  T.Test('MatchLiteral', @TestMatchLiteral);
+  T.Test('MatchLiteral empty', @TestMatchLiteralEmpty);
+  T.Test('ViewSkipWhitespace', @TestViewSkipWhitespace);
+  T.Test('ViewMatchLiteral', @TestViewMatchLiteral);
+  T.Test('FindByte2 long', @TestFindByte2Long);
+  T.Test('FindSubstringCI folds needle case', @TestFindSubstringCIFoldsNeedleCase);
+  if not T.Run then Halt(1);
 end.

@@ -21,7 +21,7 @@ begin
 end;
 
 var
-  LRunner: TTestRunner;
+  LRunner: TTestSuite;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('md5');
@@ -89,7 +89,7 @@ begin
     CheckEqual(64, LH.BlockSize);
   end);
 
-  LRunner := TTestRunner.Create('nextpas.core.hash.md5');
+  LRunner := TTestSuite.Create('nextpas.core.hash.md5');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

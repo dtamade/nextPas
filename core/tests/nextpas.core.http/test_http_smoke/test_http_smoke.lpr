@@ -8,7 +8,7 @@ program test_http_smoke;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.text.conv,
   nextpas.core.http,
@@ -21,7 +21,7 @@ uses
   nextpas.core.time.deadline;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== Server helpers ===== }
 
@@ -344,12 +344,12 @@ end;
 { ===== Main ===== }
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.smoke');
-  T.Run('GET 200 with body', @TestGet200WithBody);
-  T.Run('POST with JSON content-type', @TestPostWithJson);
-  T.Run('Router path params', @TestRouterPathParams);
-  T.Run('Redirect chain (301 -> 200)', @TestRedirectChain);
-  T.Run('Concurrent clients (2x5 requests)', @TestConcurrentClients);
-  T.Run('Client timeout', @TestClientTimeout);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.smoke');
+  T.Test('GET 200 with body', @TestGet200WithBody);
+  T.Test('POST with JSON content-type', @TestPostWithJson);
+  T.Test('Router path params', @TestRouterPathParams);
+  T.Test('Redirect chain (301 -> 200)', @TestRedirectChain);
+  T.Test('Concurrent clients (2x5 requests)', @TestConcurrentClients);
+  T.Test('Client timeout', @TestClientTimeout);
+  if not T.Run then Halt(1);
 end.

@@ -5,7 +5,7 @@ program test_http_middlewares;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -459,25 +459,25 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 begin
-  T := TTestRunner.Create('nextpas.core.http.middlewares');
+  T := TTestSuite.Create('nextpas.core.http.middlewares');
   { Recovery }
-  T.Run('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
-  T.Run('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
-  T.Run('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
+  T.Test('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
+  T.Test('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
+  T.Test('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
   { Logger }
-  T.Run('Logger: calls next handler', @TestLoggerCallsNext);
-  T.Run('Logger: preserves status', @TestLoggerPreservesStatus);
-  T.Run('Logger: no crash on 404', @TestLoggerNoCrash);
+  T.Test('Logger: calls next handler', @TestLoggerCallsNext);
+  T.Test('Logger: preserves status', @TestLoggerPreservesStatus);
+  T.Test('Logger: no crash on 404', @TestLoggerNoCrash);
   { CORS }
-  T.Run('CORS: preflight → 204 + headers', @TestCorsPreflight);
-  T.Run('CORS: normal GET with Origin', @TestCorsNormalRequest);
-  T.Run('CORS: no Origin → no CORS headers', @TestCorsNoOriginHeader);
-  T.Run('CORS: AllowCredentials header', @TestCorsCredentials);
+  T.Test('CORS: preflight → 204 + headers', @TestCorsPreflight);
+  T.Test('CORS: normal GET with Origin', @TestCorsNormalRequest);
+  T.Test('CORS: no Origin → no CORS headers', @TestCorsNoOriginHeader);
+  T.Test('CORS: AllowCredentials header', @TestCorsCredentials);
   { Timeout }
-  T.Run('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
-  T.Run('Timeout: slow handler still works', @TestTimeoutSlowHandler);
-  T.Run('Timeout: X-Response-Time has ms suffix', @TestTimeoutResponseTimeValue);
-  T.Summary;
+  T.Test('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
+  T.Test('Timeout: slow handler still works', @TestTimeoutSlowHandler);
+  T.Test('Timeout: X-Response-Time has ms suffix', @TestTimeoutResponseTimeValue);
+  if not T.Run then Halt(1);
 end.

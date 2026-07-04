@@ -5,10 +5,10 @@ program test_x11_ffi;
 uses
   nextpas.core.platform.x11,
   nextpas.core.platform.x11.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { Compile-only gate: types and constants are resolvable at compile time. }
 procedure TestTypeSizes;
@@ -158,7 +158,7 @@ begin
   LResult := x11_load;
   if LResult <> 0 then
   begin
-    T.Run('TestLoadLibX11 [SKIP: no libX11]',
+    T.Test('TestLoadLibX11 [SKIP: no libX11]',
       procedure begin end);
     Exit;
   end;
@@ -265,20 +265,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_x11_ffi');
-  T.Run('TypeSizes', @TestTypeSizes);
-  T.Run('Constants', @TestConstants);
-  T.Run('AllEventFieldHelpers', @TestAllEventFieldHelpers);
-  T.Run('EventTypeNegative', @TestEventTypeNegative);
-  T.Run('ZeroedEvent', @TestZeroedEvent);
-  T.Run('NotLoadedByDefault', @TestNotLoadedByDefault);
-  T.Run('LoadLibX11', @TestLoadLibX11);
-  T.Run('DoubleLoadIdempotent', @TestDoubleLoadIdempotent);
-  T.Run('UnloadSafeWhenNotLoaded', @TestUnloadSafeWhenNotLoaded);
-  T.Run('SelectionConstants', @TestSelectionConstants);
-  T.Run('SelreqHelpers', @TestSelreqHelpers);
-  T.Run('SelnotifyHelpers', @TestSelnotifyHelpers);
-  T.Run('SelclearHelpers', @TestSelclearHelpers);
-  T.Run('LoadSelectionFunctions', @TestLoadSelectionFunctions);
-  T.Summary;
+  T := TTestSuite.Create('test_x11_ffi');
+  T.Test('TypeSizes', @TestTypeSizes);
+  T.Test('Constants', @TestConstants);
+  T.Test('AllEventFieldHelpers', @TestAllEventFieldHelpers);
+  T.Test('EventTypeNegative', @TestEventTypeNegative);
+  T.Test('ZeroedEvent', @TestZeroedEvent);
+  T.Test('NotLoadedByDefault', @TestNotLoadedByDefault);
+  T.Test('LoadLibX11', @TestLoadLibX11);
+  T.Test('DoubleLoadIdempotent', @TestDoubleLoadIdempotent);
+  T.Test('UnloadSafeWhenNotLoaded', @TestUnloadSafeWhenNotLoaded);
+  T.Test('SelectionConstants', @TestSelectionConstants);
+  T.Test('SelreqHelpers', @TestSelreqHelpers);
+  T.Test('SelnotifyHelpers', @TestSelnotifyHelpers);
+  T.Test('SelclearHelpers', @TestSelclearHelpers);
+  T.Test('LoadSelectionFunctions', @TestLoadSelectionFunctions);
+  if not T.Run then Halt(1);
 end.

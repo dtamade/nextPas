@@ -6,13 +6,13 @@ program test_platform_files_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   TmpPrefix: array[0..255] of AnsiChar;
   TestPath: AnsiString;
   TestDir: AnsiString;
@@ -314,26 +314,26 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.files.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.files.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
   Check(platform_fs_temp_dir(@TmpPrefix[0], SizeOf(TmpPrefix)) > 0, 'temp dir init');
   InitTempPaths;
-  T.Run('open/create/close', @TestOpenCreateClose);
-  T.Run('write + read back', @TestWriteReadBack);
-  T.Run('open_ex append', @TestOpenExAppend);
-  T.Run('seek positions', @TestSeekPositions);
-  T.Run('truncate', @TestTruncate);
-  T.Run('stat file', @TestStatFile);
-  T.Run('stat directory', @TestStatDirectory);
-  T.Run('mkdir/rmdir', @TestMkdirRmdir);
-  T.Run('unlink', @TestUnlink);
-  T.Run('rename', @TestRename);
-  T.Run('dir enumeration', @TestDirEnumeration);
-  T.Run('open non-existent', @TestOpenNonExistent);
-  T.Run('fstat', @TestFstat);
-  T.Run('sync', @TestSync);
+  T.Test('open/create/close', @TestOpenCreateClose);
+  T.Test('write + read back', @TestWriteReadBack);
+  T.Test('open_ex append', @TestOpenExAppend);
+  T.Test('seek positions', @TestSeekPositions);
+  T.Test('truncate', @TestTruncate);
+  T.Test('stat file', @TestStatFile);
+  T.Test('stat directory', @TestStatDirectory);
+  T.Test('mkdir/rmdir', @TestMkdirRmdir);
+  T.Test('unlink', @TestUnlink);
+  T.Test('rename', @TestRename);
+  T.Test('dir enumeration', @TestDirEnumeration);
+  T.Test('open non-existent', @TestOpenNonExistent);
+  T.Test('fstat', @TestFstat);
+  T.Test('sync', @TestSync);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -114,6 +114,13 @@ procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
+{ 3-arg overloads: prepend AMessage on failure (backward compat). }
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string); overload;
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string); overload;
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
@@ -335,6 +342,18 @@ begin nextpas.core.test.check.CheckEqual(AExpected, AActual); end;
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AEpsilon); end;
+
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
 
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;

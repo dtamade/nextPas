@@ -8,10 +8,10 @@ uses
   nextpas.core.platform.mmap,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   TEST_PATH = '/tmp/nextpas_test_mmap.txt';
@@ -245,18 +245,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.mmap');
-  T.Run('map file + verify content', @TestMapFile);
-  T.Run('map non-existent file', @TestMapNonExistent);
-  T.Run('map empty file', @TestMapEmptyFile);
-  T.Run('double close', @TestDoubleClose);
-  T.Run('read last byte', @TestLargeRead);
-  T.Run('large file (256KB)', @TestLargeFile);
-  T.Run('content integrity (256 bytes)', @TestContentIntegrity);
-  T.Run('anonymous map', @TestAnonymousMap);
-  T.Run('read-write file map', @TestReadWriteFileMap);
-  T.Run('shared memory create/open', @TestSharedMemoryCreateOpen);
-  T.Run('Unix mmap page-size source contract', @TestUnixPageSizeSourceContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.mmap');
+  T.Test('map file + verify content', @TestMapFile);
+  T.Test('map non-existent file', @TestMapNonExistent);
+  T.Test('map empty file', @TestMapEmptyFile);
+  T.Test('double close', @TestDoubleClose);
+  T.Test('read last byte', @TestLargeRead);
+  T.Test('large file (256KB)', @TestLargeFile);
+  T.Test('content integrity (256 bytes)', @TestContentIntegrity);
+  T.Test('anonymous map', @TestAnonymousMap);
+  T.Test('read-write file map', @TestReadWriteFileMap);
+  T.Test('shared memory create/open', @TestSharedMemoryCreateOpen);
+  T.Test('Unix mmap page-size source contract', @TestUnixPageSizeSourceContract);
+  if not T.Run then Halt(1);
   Cleanup;
 end.

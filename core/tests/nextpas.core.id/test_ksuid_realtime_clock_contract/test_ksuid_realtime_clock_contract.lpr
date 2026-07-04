@@ -5,12 +5,12 @@ program test_ksuid_realtime_clock_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.ksuid,
   nextpas.core.platform.time;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestRealtimeAtEpochUsesZeroTimestamp;
 var
@@ -71,10 +71,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.ksuid.realtime_clock_contract');
-  T.Run('realtime at epoch uses zero timestamp', @TestRealtimeAtEpochUsesZeroTimestamp);
-  T.Run('realtime before epoch fails fast', @TestRealtimeBeforeEpochFailsFast);
-  T.Run('realtime above KSUID range fails fast', @TestRealtimeAboveKsuidRangeFailsFast);
-  T.Run('timestamp unix uses wide unix seconds', @TestTimestampUnixUsesWideUnixSeconds);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.ksuid.realtime_clock_contract');
+  T.Test('realtime at epoch uses zero timestamp', @TestRealtimeAtEpochUsesZeroTimestamp);
+  T.Test('realtime before epoch fails fast', @TestRealtimeBeforeEpochFailsFast);
+  T.Test('realtime above KSUID range fails fast', @TestRealtimeAboveKsuidRangeFailsFast);
+  T.Test('timestamp unix uses wide unix seconds', @TestTimestampUnixUsesWideUnixSeconds);
+  if not T.Run then Halt(1);
 end.

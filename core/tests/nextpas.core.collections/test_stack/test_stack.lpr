@@ -5,7 +5,7 @@ program test_stack;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.stack.intf;
 
@@ -13,7 +13,7 @@ type
   IIntStack = specialize IStack<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestMakeStackBasicLIFO;
 var
@@ -132,15 +132,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.stack');
-  T.Run('MakeStack basic LIFO', @TestMakeStackBasicLIFO);
-  T.Run('MakeStack from array', @TestMakeStackFromArray);
-  T.Run('Stack Peek', @TestStackPeek);
-  T.Run('Stack TryPop empty', @TestStackTryPopEmpty);
-  T.Run('Stack Pop empty raises', @TestStackPopEmptyRaises);
-  T.Run('Stack Clear', @TestStackClear);
-  T.Run('Push(array)', @TestStackPushArray);
-  T.Run('Push(Pointer)', @TestStackPushPointer);
-  T.Run('Count tracking', @TestStackCount);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.stack');
+  T.Test('MakeStack basic LIFO', @TestMakeStackBasicLIFO);
+  T.Test('MakeStack from array', @TestMakeStackFromArray);
+  T.Test('Stack Peek', @TestStackPeek);
+  T.Test('Stack TryPop empty', @TestStackTryPopEmpty);
+  T.Test('Stack Pop empty raises', @TestStackPopEmptyRaises);
+  T.Test('Stack Clear', @TestStackClear);
+  T.Test('Push(array)', @TestStackPushArray);
+  T.Test('Push(Pointer)', @TestStackPushPointer);
+  T.Test('Count tracking', @TestStackCount);
+  if not T.Run then Halt(1);
 end.

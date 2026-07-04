@@ -5,13 +5,13 @@ program test_mat;
 uses
   Math,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.mat;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TSingleBitCast = packed record
@@ -1312,31 +1312,31 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.mat');
-  T.Run('TMat3f contracts', @TestMat3fContracts);
-  T.Run('TMat4f contracts', @TestMat4fContracts);
-  T.Run('double precision matrix contracts', @TestDoublePrecisionContracts);
-  T.Run('matrix indexed aliases write through', @TestMatrixIndexedAliasesWriteThrough);
-  T.Run('matrix indexed aliases preserve signed-zero bits',
+  T := TTestSuite.Create('nextpas.core.math.mat');
+  T.Test('TMat3f contracts', @TestMat3fContracts);
+  T.Test('TMat4f contracts', @TestMat4fContracts);
+  T.Test('double precision matrix contracts', @TestDoublePrecisionContracts);
+  T.Test('matrix indexed aliases write through', @TestMatrixIndexedAliasesWriteThrough);
+  T.Test('matrix indexed aliases preserve signed-zero bits',
     @TestMatrixIndexedAliasesPreserveSignedZeroBits);
-  T.Run('matrix Data layout ABI offsets', @TestMatrixDataLayoutOffsets);
-  T.Run('matrix multiplication order contracts', @TestMatrixMultiplicationOrderContracts);
-  T.Run('single precision inverse fail-close contracts',
+  T.Test('matrix Data layout ABI offsets', @TestMatrixDataLayoutOffsets);
+  T.Test('matrix multiplication order contracts', @TestMatrixMultiplicationOrderContracts);
+  T.Test('single precision inverse fail-close contracts',
     @TestSinglePrecisionInverseFailCloseContracts);
-  T.Run('double precision inverse fail-close contracts',
+  T.Test('double precision inverse fail-close contracts',
     @TestDoublePrecisionInverseFailCloseContracts);
-  T.Run('single precision inverse overwrites out parameter',
+  T.Test('single precision inverse overwrites out parameter',
     @TestSinglePrecisionInverseOverwritesOutParameter);
-  T.Run('double precision inverse overwrites out parameter',
+  T.Test('double precision inverse overwrites out parameter',
     @TestDoublePrecisionInverseOverwritesOutParameter);
-  T.Run('matrix Equals non-finite comparison contracts',
+  T.Test('matrix Equals non-finite comparison contracts',
     @TestMatrixEqualsNonFiniteComparisonContracts);
-  T.Run('matrix arithmetic special-value contracts',
+  T.Test('matrix arithmetic special-value contracts',
     @TestMatrixArithmeticSpecialValueContracts);
-  T.Run('TMat4f MultPoint', @TestMatMultPoint);
-  T.Run('TMat4f MultDirection', @TestMatMultDirection);
-  T.Run('TMat4d MultPoint', @TestMatMultPointDouble);
-  T.Run('Mat Lerp', @TestMatLerp);
-  T.Run('Mat PerfectlyEquals', @TestMatPerfectlyEquals);
-  T.Summary;
+  T.Test('TMat4f MultPoint', @TestMatMultPoint);
+  T.Test('TMat4f MultDirection', @TestMatMultDirection);
+  T.Test('TMat4d MultPoint', @TestMatMultPointDouble);
+  T.Test('Mat Lerp', @TestMatLerp);
+  T.Test('Mat PerfectlyEquals', @TestMatPerfectlyEquals);
+  if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@ program test_system_facade;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.system,
   nextpas.core.exception,
@@ -36,7 +36,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSystemConstantsMirrorBaseCompileTruth;
 begin
@@ -648,21 +648,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.system facade');
-  T.Run('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
-  T.Run('system base carrier aliases mirror base compile-truth', @TestSystemBaseCarrierAliasesMirrorBaseCompileTruth);
-  T.Run('system ABI aliases mirror compiler truth', @TestSystemAbiAliasesMirrorCompilerTruth);
-  T.Run('base and system byte aliases coexist', @TestBaseAndSystemByteAliasesCoexist);
-  T.Run('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
-  T.Run('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);
-  T.Run('system memory facade delegates full base utils contract', @TestSystemMemoryFacadeDelegatesFullBaseUtilsContract);
-  T.Run('system FillMem delegates to base utils', @TestSystemFillMemDelegatesToBaseUtils);
-  T.Run('object lifecycle helpers delegate to base utils', @TestObjectLifecycleHelpersDelegateToBaseUtils);
-  T.Run('supports facade delegates object and interface queries', @TestSupportsFacadeDelegatesObjectAndInterfaceQueries);
-  T.Run('system exception root is canonical', @TestSystemExceptionRootIsCanonical);
-  T.Run('system base error aliases mirror base compile-truth', @TestSystemBaseErrorAliasesMirrorBaseCompileTruth);
-  T.Run('errors facade catches through system root', @TestErrorsFacadeStillCatchesThroughSystemRoot);
-  T.Run('system exception aliases stay canonical', @TestSystemExceptionAliasesStayCanonical);
-  T.Run('system error taxonomy aliases mirror canonical owners', @TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.system facade');
+  T.Test('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
+  T.Test('system base carrier aliases mirror base compile-truth', @TestSystemBaseCarrierAliasesMirrorBaseCompileTruth);
+  T.Test('system ABI aliases mirror compiler truth', @TestSystemAbiAliasesMirrorCompilerTruth);
+  T.Test('base and system byte aliases coexist', @TestBaseAndSystemByteAliasesCoexist);
+  T.Test('system memory guards delegate to base contract', @TestSystemMemoryGuardsDelegateToBaseContract);
+  T.Test('copy and compare facade delegates to base utils', @TestCopyAndCompareFacadeDelegatesToBaseUtils);
+  T.Test('system memory facade delegates full base utils contract', @TestSystemMemoryFacadeDelegatesFullBaseUtilsContract);
+  T.Test('system FillMem delegates to base utils', @TestSystemFillMemDelegatesToBaseUtils);
+  T.Test('object lifecycle helpers delegate to base utils', @TestObjectLifecycleHelpersDelegateToBaseUtils);
+  T.Test('supports facade delegates object and interface queries', @TestSupportsFacadeDelegatesObjectAndInterfaceQueries);
+  T.Test('system exception root is canonical', @TestSystemExceptionRootIsCanonical);
+  T.Test('system base error aliases mirror base compile-truth', @TestSystemBaseErrorAliasesMirrorBaseCompileTruth);
+  T.Test('errors facade catches through system root', @TestErrorsFacadeStillCatchesThroughSystemRoot);
+  T.Test('system exception aliases stay canonical', @TestSystemExceptionAliasesStayCanonical);
+  T.Test('system error taxonomy aliases mirror canonical owners', @TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners);
+  if not T.Run then Halt(1);
 end.

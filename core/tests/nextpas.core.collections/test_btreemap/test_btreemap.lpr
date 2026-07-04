@@ -5,7 +5,7 @@ program test_btreemap;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.btree;
 
 type
@@ -25,7 +25,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var M: TIntBTree; v: Integer;
@@ -353,25 +353,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.btreemap');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('Min/Max', @TestMinMax);
-  T.Run('Grow (10000)', @TestGrow);
-  T.Run('Remove stress (1000)', @TestRemoveStress);
-  T.Run('String key', @TestStringKey);
-  T.Run('Clear', @TestClear);
-  T.Run('LowerBound', @TestLowerBound);
-  T.Run('UpperBound', @TestUpperBound);
-  T.Run('ForEach', @TestForEach);
-  T.Run('Range', @TestRange);
-  T.Run('Floor', @TestFloor);
-  T.Run('Rank', @TestRank);
-  T.Run('Rank internal separator key', @TestRankInternalSeparatorKey);
-  T.Run('Missing remove rebalance keeps Rank/Select', @TestMissingRemoveRebalanceKeepsRankSelect);
-  T.Run('Missing remove after root merge shrinks root', @TestMissingRemoveAfterRootMergeShrinksRoot);
-  T.Run('PutSorted invalid count', @TestPutSortedRejectsInvalidCountBeforeClear);
-  T.Run('Enumerator (for-in)', @TestEnumerator);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.btreemap');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('Min/Max', @TestMinMax);
+  T.Test('Grow (10000)', @TestGrow);
+  T.Test('Remove stress (1000)', @TestRemoveStress);
+  T.Test('String key', @TestStringKey);
+  T.Test('Clear', @TestClear);
+  T.Test('LowerBound', @TestLowerBound);
+  T.Test('UpperBound', @TestUpperBound);
+  T.Test('ForEach', @TestForEach);
+  T.Test('Range', @TestRange);
+  T.Test('Floor', @TestFloor);
+  T.Test('Rank', @TestRank);
+  T.Test('Rank internal separator key', @TestRankInternalSeparatorKey);
+  T.Test('Missing remove rebalance keeps Rank/Select', @TestMissingRemoveRebalanceKeepsRankSelect);
+  T.Test('Missing remove after root merge shrinks root', @TestMissingRemoveAfterRootMergeShrinksRoot);
+  T.Test('PutSorted invalid count', @TestPutSortedRejectsInvalidCountBeforeClear);
+  T.Test('Enumerator (for-in)', @TestEnumerator);
+  if not T.Run then Halt(1);
 end.

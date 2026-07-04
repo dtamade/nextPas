@@ -10,8 +10,8 @@ uses
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.paragraph,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 procedure TestSimpleRender;
 var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
@@ -93,13 +93,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.paragraph');
-  T.Run('simple render', @TestSimpleRender);
-  T.Run('center alignment', @TestCenterAlignment);
-  T.Run('with block', @TestWithBlock);
-  T.Run('wrap trim', @TestWrapTrim);
-  T.Run('scroll y', @TestScrollY);
-  T.Run('as IWidget', @TestAsIWidget);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.paragraph');
+  T.Test('simple render', @TestSimpleRender);
+  T.Test('center alignment', @TestCenterAlignment);
+  T.Test('with block', @TestWithBlock);
+  T.Test('wrap trim', @TestWrapTrim);
+  T.Test('scroll y', @TestScrollY);
+  T.Test('as IWidget', @TestAsIWidget);
+  if not T.Run then Halt(1);
 end.

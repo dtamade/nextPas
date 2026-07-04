@@ -4,8 +4,8 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.event,
   nextpas.core.tui.interaction,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 procedure TestCapture;
 var C: TPointerCapture;
 begin C.Release; Check(not C.Active, 'released');
@@ -26,8 +26,8 @@ begin Check(DetectHoverChange(TRect.Make(0,0,5,5), 10,10, 2,2) = hcEntered, 'ent
   Check(DetectHoverChange(TRect.Make(0,0,5,5), 2,2, 10,10) = hcLeft, 'left');
   Check(DetectHoverChange(TRect.Make(0,0,5,5), 2,2, 3,3) = hcStay, 'stay'); end;
 begin
-  T := TTestRunner.Create('nextpas.core.tui.interaction');
-  T.Run('capture', @TestCapture); T.Run('session', @TestSession);
-  T.Run('hit test', @TestHitTest); T.Run('hover', @TestHover);
-  T.Summary; if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.interaction');
+  T.Test('capture', @TestCapture); T.Test('session', @TestSession);
+  T.Test('hit test', @TestHitTest); T.Test('hover', @TestHover);
+  if not T.Run then Halt(1);
 end.

@@ -3,7 +3,7 @@ program test_random;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
@@ -20,7 +20,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
@@ -730,29 +730,29 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.random');
-  T.Run('seed determinism', @TestSeedDeterminism);
-  T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
-  T.Run('range boundaries', @TestRangeBoundaries);
-  T.Run('state-forced half-open boundaries', @TestStateForcedHalfOpenBoundaries);
-  T.Run('integer ranges reject modulo-bias tail states', @TestIntegerRangesRejectModuloBiasTailStates);
-  T.Run('large finite float range stays finite and half-open',
+  T := TTestSuite.Create('nextpas.core.math.random');
+  T.Test('seed determinism', @TestSeedDeterminism);
+  T.Test('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
+  T.Test('range boundaries', @TestRangeBoundaries);
+  T.Test('state-forced half-open boundaries', @TestStateForcedHalfOpenBoundaries);
+  T.Test('integer ranges reject modulo-bias tail states', @TestIntegerRangesRejectModuloBiasTailStates);
+  T.Test('large finite float range stays finite and half-open',
     @TestLargeFiniteFloatRangeStaysFiniteAndHalfOpen);
-  T.Run('large finite forced max float range stays finite and half-open',
+  T.Test('large finite forced max float range stays finite and half-open',
     @TestLargeFiniteForcedMaxFloatRangeStaysFiniteAndHalfOpen);
-  T.Run('WeightedChoice large finite weights stay scale-invariant',
+  T.Test('WeightedChoice large finite weights stay scale-invariant',
     @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
-  T.Run('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);
-  T.Run('WeightedChoice zero-pick skips zero-weight prefixes',
+  T.Test('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);
+  T.Test('WeightedChoice zero-pick skips zero-weight prefixes',
     @TestWeightedChoiceZeroPickSkipsZeroWeightPrefixes);
-  T.Run('WeightedChoice max pick keeps tail weight reachable',
+  T.Test('WeightedChoice max pick keeps tail weight reachable',
     @TestWeightedChoiceMaxPickKeepsTailWeightReachable);
-  T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
-  T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
-  T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
-  T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);
-  T.Run('Gaussian zero-state clamp stays finite', @TestGaussianClampKeepsZeroStateFinite);
-  T.Run('non-finite parameter validation', @TestNonFiniteParameterValidation);
-  T.Run('NextBool rejects non-finite probability', @TestNextBoolRejectsNonFiniteProbability);
-  T.Summary;
+  T.Test('invalid ranges fail fast', @TestInvalidRangesFailFast);
+  T.Test('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
+  T.Test('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
+  T.Test('gaussian and circle vectors', @TestGaussianAndCircleVectors);
+  T.Test('Gaussian zero-state clamp stays finite', @TestGaussianClampKeepsZeroStateFinite);
+  T.Test('non-finite parameter validation', @TestNonFiniteParameterValidation);
+  T.Test('NextBool rejects non-finite probability', @TestNextBoolRejectsNonFiniteProbability);
+  if not T.Run then Halt(1);
 end.

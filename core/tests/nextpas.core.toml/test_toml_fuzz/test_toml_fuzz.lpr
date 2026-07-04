@@ -6,10 +6,10 @@ uses
   nextpas.core.text.view,
   nextpas.core.toml.base,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GSeed: UInt32 = 12345;
 
 function Rng: UInt32;
@@ -192,12 +192,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml fuzz');
-  T.Run('random input no crash (1000)', @TestRandomInputNoCrash);
-  T.Run('semi-valid no crash (500)', @TestSemiValidNoCrash);
-  T.Run('binary garbage no crash (200)', @TestBinaryGarbage);
-  T.Run('repeated structures', @TestRepeatedStructures);
-  T.Run('large valid document (500 sections)', @TestLargeValidDocument);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml fuzz');
+  T.Test('random input no crash (1000)', @TestRandomInputNoCrash);
+  T.Test('semi-valid no crash (500)', @TestSemiValidNoCrash);
+  T.Test('binary garbage no crash (200)', @TestBinaryGarbage);
+  T.Test('repeated structures', @TestRepeatedStructures);
+  T.Test('large valid document (500 sections)', @TestLargeValidDocument);
+  if not T.Run then Halt(1);
 end.

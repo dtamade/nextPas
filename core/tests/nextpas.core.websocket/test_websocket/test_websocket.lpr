@@ -5,12 +5,12 @@ program test_websocket;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.websocket.base,
   nextpas.core.websocket;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAcceptKeyRFC;
 var
@@ -358,23 +358,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.websocket');
-  T.Run('AcceptKey RFC vector', @TestAcceptKeyRFC);
-  T.Run('GenerateKey length', @TestGenerateKey);
-  T.Run('Encode/decode small frame', @TestEncodeDecodeSmallFrame);
-  T.Run('Encode/decode medium frame', @TestEncodeDecodeMediumFrame);
-  T.Run('Encode/decode large frame', @TestEncodeDecodeLargeFrame);
-  T.Run('Client masking', @TestClientMasking);
-  T.Run('Server no masking', @TestServerNoMasking);
-  T.Run('Mask/unmask round-trip', @TestMaskUnmaskRoundTrip);
-  T.Run('Text frame helper', @TestTextFrameHelper);
-  T.Run('Binary frame helper', @TestBinaryFrameHelper);
-  T.Run('Ping/Pong frame helpers', @TestPingPongFrameHelpers);
-  T.Run('Close frame with code+reason', @TestCloseFrameWithCodeAndReason);
-  T.Run('Decode incomplete data', @TestDecodeIncompleteData);
-  T.Run('Control frame payload limit', @TestControlFramePayloadLimit);
-  T.Run('Server rejects unmasked', @TestServerRejectsUnmaskedFrame);
-  T.Run('Client rejects masked', @TestClientRejectsMaskedFrame);
-  T.Run('Control frame must have FIN', @TestControlFrameMustHaveFin);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.websocket');
+  T.Test('AcceptKey RFC vector', @TestAcceptKeyRFC);
+  T.Test('GenerateKey length', @TestGenerateKey);
+  T.Test('Encode/decode small frame', @TestEncodeDecodeSmallFrame);
+  T.Test('Encode/decode medium frame', @TestEncodeDecodeMediumFrame);
+  T.Test('Encode/decode large frame', @TestEncodeDecodeLargeFrame);
+  T.Test('Client masking', @TestClientMasking);
+  T.Test('Server no masking', @TestServerNoMasking);
+  T.Test('Mask/unmask round-trip', @TestMaskUnmaskRoundTrip);
+  T.Test('Text frame helper', @TestTextFrameHelper);
+  T.Test('Binary frame helper', @TestBinaryFrameHelper);
+  T.Test('Ping/Pong frame helpers', @TestPingPongFrameHelpers);
+  T.Test('Close frame with code+reason', @TestCloseFrameWithCodeAndReason);
+  T.Test('Decode incomplete data', @TestDecodeIncompleteData);
+  T.Test('Control frame payload limit', @TestControlFramePayloadLimit);
+  T.Test('Server rejects unmasked', @TestServerRejectsUnmaskedFrame);
+  T.Test('Client rejects masked', @TestClientRejectsMaskedFrame);
+  T.Test('Control frame must have FIN', @TestControlFrameMustHaveFin);
+  if not T.Run then Halt(1);
 end.

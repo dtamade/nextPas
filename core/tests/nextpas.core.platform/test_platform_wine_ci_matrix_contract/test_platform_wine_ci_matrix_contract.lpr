@@ -5,14 +5,14 @@ program test_platform_wine_ci_matrix_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   SCRIPT_PATH_FROM_TEST = '../../../scripts/platform-wine-ci-matrix.sh';
   SCRIPT_PATH_FROM_ROOT = 'core/scripts/platform-wine-ci-matrix.sh';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ResolvePath(const APathFromTest, APathFromRoot: string): string;
 begin
@@ -117,9 +117,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.wine_ci_matrix_contract');
-  T.Run('script includes all Wine module mappings', @TestScriptIncludesAllModuleMappings);
-  T.Run('script enforces skip/log/summary contract',
+  T := TTestSuite.Create('nextpas.core.platform.wine_ci_matrix_contract');
+  T.Test('script includes all Wine module mappings', @TestScriptIncludesAllModuleMappings);
+  T.Test('script enforces skip/log/summary contract',
     @TestScriptEnforcesSkipLogAndSummaryContract);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

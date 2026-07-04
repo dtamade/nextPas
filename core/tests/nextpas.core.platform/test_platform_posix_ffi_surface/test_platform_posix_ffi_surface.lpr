@@ -4,7 +4,7 @@ program test_platform_posix_ffi_surface;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   POSIX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.base.pas';
@@ -15,7 +15,7 @@ const
   POSIX_MATH_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.math.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -203,7 +203,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.posix_ffi_surface');
-  T.Run('platform.posix.ffi exposes target matrix', @TestPosixFFIExposesTargetMatrix);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.posix_ffi_surface');
+  T.Test('platform.posix.ffi exposes target matrix', @TestPosixFFIExposesTargetMatrix);
+  if not T.Run then Halt(1);
 end.

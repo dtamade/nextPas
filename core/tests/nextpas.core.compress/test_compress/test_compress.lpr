@@ -2,7 +2,7 @@ program test_compress;
 {$I nextpas.core.settings.inc}
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -12,7 +12,7 @@ uses
   nextpas.core.compress;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDeflateRoundTrip;
 var
@@ -609,32 +609,32 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.compress');
-  T.Run('Deflate round-trip', @TestDeflateRoundTrip);
-  T.Run('Deflate levels', @TestDeflateLevels);
-  T.Run('Deflate empty', @TestDeflateEmpty);
-  T.Run('Deflate 1MB', @TestDeflateLarge);
-  T.Run('Gzip round-trip', @TestGzipRoundTrip);
-  T.Run('Gzip interop', @TestGzipInterop);
-  T.Run('LZ4 round-trip', @TestLz4RoundTrip);
-  T.Run('LZ4 empty', @TestLz4Empty);
-  T.Run('LZ4 1MB', @TestLz4Large);
-  T.Run('Deflate streaming', @TestDeflateStreaming);
-  T.Run('Gzip streaming', @TestGzipStreaming);
-  T.Run('Deflate flush', @TestDeflateFlush);
-  T.Run('Corrupted deflate', @TestCorruptedData);
-  T.Run('Corrupted gzip', @TestGzipCorrupted);
-  T.Run('Corrupted lz4', @TestLz4Corrupted);
-  T.Run('Gzip stream small', @TestGzipStreamSmall);
-  T.Run('Gzip cross-API', @TestGzipCrossAPI);
-  T.Run('Gzip stream CRC corrupt', @TestGzipStreamCRCCorrupt);
-  T.Run('Gzip truncated stream', @TestGzipTruncatedStream);
-  T.Run('LZ4 incompressible', @TestLz4Incompressible);
-  T.Run('Deflate stream corrupt', @TestDeflateStreamCorrupted);
-  T.Run('Gzip empty stream', @TestGzipEmptyStream);
-  T.Run('Single byte all algos', @TestSingleByte);
-  T.Run('Write after close', @TestWriteAfterClose);
-  T.Run('Read after close', @TestReadAfterClose);
-  T.Run('Double close', @TestDoubleClose);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.compress');
+  T.Test('Deflate round-trip', @TestDeflateRoundTrip);
+  T.Test('Deflate levels', @TestDeflateLevels);
+  T.Test('Deflate empty', @TestDeflateEmpty);
+  T.Test('Deflate 1MB', @TestDeflateLarge);
+  T.Test('Gzip round-trip', @TestGzipRoundTrip);
+  T.Test('Gzip interop', @TestGzipInterop);
+  T.Test('LZ4 round-trip', @TestLz4RoundTrip);
+  T.Test('LZ4 empty', @TestLz4Empty);
+  T.Test('LZ4 1MB', @TestLz4Large);
+  T.Test('Deflate streaming', @TestDeflateStreaming);
+  T.Test('Gzip streaming', @TestGzipStreaming);
+  T.Test('Deflate flush', @TestDeflateFlush);
+  T.Test('Corrupted deflate', @TestCorruptedData);
+  T.Test('Corrupted gzip', @TestGzipCorrupted);
+  T.Test('Corrupted lz4', @TestLz4Corrupted);
+  T.Test('Gzip stream small', @TestGzipStreamSmall);
+  T.Test('Gzip cross-API', @TestGzipCrossAPI);
+  T.Test('Gzip stream CRC corrupt', @TestGzipStreamCRCCorrupt);
+  T.Test('Gzip truncated stream', @TestGzipTruncatedStream);
+  T.Test('LZ4 incompressible', @TestLz4Incompressible);
+  T.Test('Deflate stream corrupt', @TestDeflateStreamCorrupted);
+  T.Test('Gzip empty stream', @TestGzipEmptyStream);
+  T.Test('Single byte all algos', @TestSingleByte);
+  T.Test('Write after close', @TestWriteAfterClose);
+  T.Test('Read after close', @TestReadAfterClose);
+  T.Test('Double close', @TestDoubleClose);
+  if not T.Run then Halt(1);
 end.

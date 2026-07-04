@@ -6,7 +6,7 @@ uses
   SysUtils,
   leak_tracker,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.linkedhashmap.intf,
@@ -20,7 +20,7 @@ type
   TIntTrackedEntry = specialize TMapEntry<Integer, ITracked>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutAndGet;
 var
@@ -242,17 +242,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.linkedhashmap');
-  T.Run('Put and Get', @TestPutAndGet);
-  T.Run('Insertion order', @TestInsertionOrder);
-  T.Run('Overwrite preserves order', @TestOverwritePreservesOrder);
-  T.Run('Remove', @TestRemove);
-  T.Run('ContainsKey', @TestContainsKey);
-  T.Run('Add (absent only)', @TestAdd);
-  T.Run('AddOrAssign', @TestAddOrAssign);
-  T.Run('Clear', @TestClear);
-  T.Run('Checked Get', @TestCheckedGet);
-  T.Run('Inherited Replace keeps backing map in sync', @TestInheritedReplaceKeepsBackingMapInSync);
-  T.Run('Inherited ReplaceIf keeps backing map in sync', @TestInheritedReplaceIfKeepsBackingMapInSync);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.linkedhashmap');
+  T.Test('Put and Get', @TestPutAndGet);
+  T.Test('Insertion order', @TestInsertionOrder);
+  T.Test('Overwrite preserves order', @TestOverwritePreservesOrder);
+  T.Test('Remove', @TestRemove);
+  T.Test('ContainsKey', @TestContainsKey);
+  T.Test('Add (absent only)', @TestAdd);
+  T.Test('AddOrAssign', @TestAddOrAssign);
+  T.Test('Clear', @TestClear);
+  T.Test('Checked Get', @TestCheckedGet);
+  T.Test('Inherited Replace keeps backing map in sync', @TestInheritedReplaceKeepsBackingMapInSync);
+  T.Test('Inherited ReplaceIf keeps backing map in sync', @TestInheritedReplaceIfKeepsBackingMapInSync);
+  if not T.Run then Halt(1);
 end.

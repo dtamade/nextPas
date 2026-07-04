@@ -7,10 +7,10 @@ uses
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function StrContains(const AHaystack, ANeedle: PAnsiChar): Boolean;
 var
@@ -160,13 +160,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.error');
-  T.Run('ENOENT message', @TestENOENT);
-  T.Run('EACCES message', @TestEACCES);
-  T.Run('code 0 (Success)', @TestZero);
-  T.Run('unknown error code', @TestUnknown);
-  T.Run('small buffer truncation', @TestSmallBuffer);
-  T.Run('fatal API exists', @TestFatalExists);
-  T.Run('fatal behavior (via subprocess)', @TestFatalBehavior);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.error');
+  T.Test('ENOENT message', @TestENOENT);
+  T.Test('EACCES message', @TestEACCES);
+  T.Test('code 0 (Success)', @TestZero);
+  T.Test('unknown error code', @TestUnknown);
+  T.Test('small buffer truncation', @TestSmallBuffer);
+  T.Test('fatal API exists', @TestFatalExists);
+  T.Test('fatal behavior (via subprocess)', @TestFatalBehavior);
+  if not T.Run then Halt(1);
 end.

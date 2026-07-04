@@ -3,13 +3,13 @@ program test_id_ulid_same_timestamp_order_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id,
   nextpas.core.id.rng,
   nextpas.core.platform.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSameTimestampSortsByRandomTail;
 const
@@ -40,7 +40,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.ulid.same_timestamp_order_contract');
-  T.Run('same timestamp ULIDs sort by tail order', @TestSameTimestampSortsByRandomTail);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.ulid.same_timestamp_order_contract');
+  T.Test('same timestamp ULIDs sort by tail order', @TestSameTimestampSortsByRandomTail);
+  if not T.Run then Halt(1);
 end.

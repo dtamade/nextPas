@@ -5,7 +5,7 @@ program test_hashset;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.hashset;
 
@@ -16,7 +16,7 @@ type
   TStrSet = specialize THashSet<string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function FoldAscii(const S: string): string;
 var
@@ -247,17 +247,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.hashset');
-  T.Run('Add/Contains', @TestAddContains);
-  T.Run('Add duplicate', @TestAddDuplicate);
-  T.Run('Remove', @TestRemove);
-  T.Run('Clear', @TestClear);
-  T.Run('String set', @TestStringSet);
-  T.Run('Grow (100 elements)', @TestGrow);
-  T.Run('Reserve', @TestReserve);
-  T.Run('Auto free (interface)', @TestAutoFree);
-  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
-  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
-  T.Run('set algebra preserves custom equality', @TestSetAlgebraPreservesCustomEquality);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.hashset');
+  T.Test('Add/Contains', @TestAddContains);
+  T.Test('Add duplicate', @TestAddDuplicate);
+  T.Test('Remove', @TestRemove);
+  T.Test('Clear', @TestClear);
+  T.Test('String set', @TestStringSet);
+  T.Test('Grow (100 elements)', @TestGrow);
+  T.Test('Reserve', @TestReserve);
+  T.Test('Auto free (interface)', @TestAutoFree);
+  T.Test('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Test('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Test('set algebra preserves custom equality', @TestSetAlgebraPreservesCustomEquality);
+  if not T.Run then Halt(1);
 end.

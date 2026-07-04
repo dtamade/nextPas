@@ -6,12 +6,12 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.text.format;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure ExpectInvalidFormat(const AFmt: string; const AArgs: array of const;
   const AMessage: string);
@@ -379,39 +379,39 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.conv+format');
+  T := TTestSuite.Create('nextpas.core.text.conv+format');
 
-  T.Run('IntToStr', @TestIntToStr);
-  T.Run('UIntToStr', @TestUIntToStr);
-  T.Run('IntToHex', @TestIntToHex);
-  T.Run('TryStrToInt', @TestTryStrToInt);
-  T.Run('TryStrToInt32', @TestTryStrToInt32);
-  T.Run('TryStrToUInt64', @TestTryStrToUInt64);
-  T.Run('FloatToStr', @TestFloatToStr);
-  T.Run('TryStrToFloat', @TestTryStrToFloat);
-  T.Run('TextOfChar', @TestTextOfChar);
-  T.Run('StringReplace', @TestStringReplace);
+  T.Test('IntToStr', @TestIntToStr);
+  T.Test('UIntToStr', @TestUIntToStr);
+  T.Test('IntToHex', @TestIntToHex);
+  T.Test('TryStrToInt', @TestTryStrToInt);
+  T.Test('TryStrToInt32', @TestTryStrToInt32);
+  T.Test('TryStrToUInt64', @TestTryStrToUInt64);
+  T.Test('FloatToStr', @TestFloatToStr);
+  T.Test('TryStrToFloat', @TestTryStrToFloat);
+  T.Test('TextOfChar', @TestTextOfChar);
+  T.Test('StringReplace', @TestStringReplace);
 
-  T.Run('Format basic', @TestFormatBasic);
-  T.Run('Format hex', @TestFormatHex);
-  T.Run('Format width', @TestFormatWidth);
-  T.Run('Format float', @TestFormatFloat);
-  T.Run('Format multi-arg', @TestFormatMultiArg);
-  T.Run('Format rejects malformed input', @TestFormatRejectsMalformedInput);
-  T.Run('Format rejects unbounded width and precision', @TestFormatRejectsUnboundedWidthAndPrecision);
-  T.Run('Compat format matches TextFormat', @TestCompatFormatMatchesTextFormat);
-  T.Run('Compat format rejects malformed input', @TestCompatFormatRejectsMalformedInput);
-  T.Run('BoolToStr', @TestBoolToStr);
-  T.Run('StrToInt raises convert error', @TestStrToIntRaisesConvertError);
-  T.Run('StrToIntDef', @TestStrToIntDef);
-  T.Run('StrToInt64Def', @TestStrToInt64Def);
-  T.Run('StrToFloat raises convert error', @TestStrToFloatRaisesConvertError);
-  T.Run('StrToFloatDef', @TestStrToFloatDef);
-  T.Run('LowerCase', @TestLowerCase);
-  T.Run('UpperCase', @TestUpperCase);
-  T.Run('UTF8 round-trip', @TestUTF8RoundTrip);
-  T.Run('ASCII bytes round-trip', @TestASCIIBytesRoundTrip);
-  T.Run('Big-endian Unicode', @TestBigEndianUnicode);
+  T.Test('Format basic', @TestFormatBasic);
+  T.Test('Format hex', @TestFormatHex);
+  T.Test('Format width', @TestFormatWidth);
+  T.Test('Format float', @TestFormatFloat);
+  T.Test('Format multi-arg', @TestFormatMultiArg);
+  T.Test('Format rejects malformed input', @TestFormatRejectsMalformedInput);
+  T.Test('Format rejects unbounded width and precision', @TestFormatRejectsUnboundedWidthAndPrecision);
+  T.Test('Compat format matches TextFormat', @TestCompatFormatMatchesTextFormat);
+  T.Test('Compat format rejects malformed input', @TestCompatFormatRejectsMalformedInput);
+  T.Test('BoolToStr', @TestBoolToStr);
+  T.Test('StrToInt raises convert error', @TestStrToIntRaisesConvertError);
+  T.Test('StrToIntDef', @TestStrToIntDef);
+  T.Test('StrToInt64Def', @TestStrToInt64Def);
+  T.Test('StrToFloat raises convert error', @TestStrToFloatRaisesConvertError);
+  T.Test('StrToFloatDef', @TestStrToFloatDef);
+  T.Test('LowerCase', @TestLowerCase);
+  T.Test('UpperCase', @TestUpperCase);
+  T.Test('UTF8 round-trip', @TestUTF8RoundTrip);
+  T.Test('ASCII bytes round-trip', @TestASCIIBytesRoundTrip);
+  T.Test('Big-endian Unicode', @TestBigEndianUnicode);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

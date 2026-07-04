@@ -5,12 +5,12 @@ program test_platform_sync_sizes;
 uses
   SysUtils,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base,{$ENDIF}
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.sync.base,
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TEmbeddedMutex = record
@@ -111,13 +111,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.sync.sizes');
+  T := TTestSuite.Create('nextpas.core.platform.sync.sizes');
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('Mutex size fits opaque buffer', @TestMutexSize);
-  T.Run('RwLock size fits opaque buffer', @TestRwLockSize);
-  T.Run('CondVar size fits opaque buffer', @TestCondVarSize);
-  T.Run('Opaque alignment matches Linux native ABI', @TestOpaqueAlignmentMatchesNativeLinuxABI);
+  T.Test('Mutex size fits opaque buffer', @TestMutexSize);
+  T.Test('RwLock size fits opaque buffer', @TestRwLockSize);
+  T.Test('CondVar size fits opaque buffer', @TestCondVarSize);
+  T.Test('Opaque alignment matches Linux native ABI', @TestOpaqueAlignmentMatchesNativeLinuxABI);
   {$ENDIF}
-  T.Run('Opaque storage is pointer-aligned', @TestOpaqueAlignment);
-  T.Summary;
+  T.Test('Opaque storage is pointer-aligned', @TestOpaqueAlignment);
+  if not T.Run then Halt(1);
 end.

@@ -5,10 +5,10 @@ program test_tui_task;
 uses
   nextpas.core.thread.init,
   nextpas.core.tui.task,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSpawnRejectsNilTaskFunc;
 var
@@ -31,9 +31,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.task');
-  T.Run('spawn rejects nil task function', @TestSpawnRejectsNilTaskFunc);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.task');
+  T.Test('spawn rejects nil task function', @TestSpawnRejectsNilTaskFunc);
+  if not T.Run then Halt(1);
 end.

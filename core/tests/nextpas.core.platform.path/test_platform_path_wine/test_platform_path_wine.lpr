@@ -6,11 +6,11 @@ program test_platform_path_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.path;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { 1. is_absolute — basic cross-platform cases (nil, empty, relative) }
 procedure TestPathIsAbsoluteBasic;
@@ -203,19 +203,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.path.wine_runtime_smoke');
-  T.Run('is_absolute basic', @TestPathIsAbsoluteBasic);
+  T := TTestSuite.Create('nextpas.core.platform.path.wine_runtime_smoke');
+  T.Test('is_absolute basic', @TestPathIsAbsoluteBasic);
 {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('is_absolute Windows (drive/UNC)', @TestPathIsAbsoluteWindows);
-  T.Run('resolve (GetFullPathNameW)', @TestPathResolve);
+  T.Test('is_absolute Windows (drive/UNC)', @TestPathIsAbsoluteWindows);
+  T.Test('resolve (GetFullPathNameW)', @TestPathResolve);
 {$ENDIF}
-  T.Run('join basic', @TestPathJoinBasic);
-  T.Run('join absolute child', @TestPathJoinAbsoluteChild);
-  T.Run('join empty base/child', @TestPathJoinEmptyBase);
-  T.Run('dirname', @TestPathDirname);
-  T.Run('basename', @TestPathBasename);
-  T.Run('extension', @TestPathExtension);
-  T.Run('normalize', @TestPathNormalize);
-  T.Run('ensure_sep', @TestPathEnsureSep);
-  T.Summary;
+  T.Test('join basic', @TestPathJoinBasic);
+  T.Test('join absolute child', @TestPathJoinAbsoluteChild);
+  T.Test('join empty base/child', @TestPathJoinEmptyBase);
+  T.Test('dirname', @TestPathDirname);
+  T.Test('basename', @TestPathBasename);
+  T.Test('extension', @TestPathExtension);
+  T.Test('normalize', @TestPathNormalize);
+  T.Test('ensure_sep', @TestPathEnsureSep);
+  if not T.Run then Halt(1);
 end.

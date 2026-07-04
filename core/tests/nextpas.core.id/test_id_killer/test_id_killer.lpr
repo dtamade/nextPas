@@ -4,7 +4,7 @@ program test_id_killer;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,
   nextpas.core.id.snowflake,
@@ -15,7 +15,7 @@ uses
   nextpas.core.id.rng;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Range Check Tests — expose integer overflow === }
 
@@ -220,18 +220,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.killer');
-  T.Run('XID parse range-check', @TestXidParseRangeCheck);
-  T.Run('KSUID parse range-check', @TestKsuidParseRangeCheck);
-  T.Run('UUID parse range-check', @TestUuidParseRangeCheck);
-  T.Run('Snowflake seq overflow 5k', @TestSnowflakeSequenceOverflow);
-  T.Run('V7 monotonic overflow 5k', @TestV7MonotonicOverflow);
-  T.Run('KSUID all-zero bytes', @TestKsuidAllZeroBytes);
-  T.Run('KSUID all-FF bytes', @TestKsuidAllFFBytes);
-  T.Run('KSUID single-bit patterns', @TestKsuidSingleBitPatterns);
-  T.Run('XID single-bit patterns', @TestXidSingleBitPatterns);
-  T.Run('UUID single-bit patterns', @TestUuidSingleBitPatterns);
-  T.Run('RNG large fill', @TestRngLargeFill);
-  T.Run('RNG reseed multiple', @TestRngReseedMultiple);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.killer');
+  T.Test('XID parse range-check', @TestXidParseRangeCheck);
+  T.Test('KSUID parse range-check', @TestKsuidParseRangeCheck);
+  T.Test('UUID parse range-check', @TestUuidParseRangeCheck);
+  T.Test('Snowflake seq overflow 5k', @TestSnowflakeSequenceOverflow);
+  T.Test('V7 monotonic overflow 5k', @TestV7MonotonicOverflow);
+  T.Test('KSUID all-zero bytes', @TestKsuidAllZeroBytes);
+  T.Test('KSUID all-FF bytes', @TestKsuidAllFFBytes);
+  T.Test('KSUID single-bit patterns', @TestKsuidSingleBitPatterns);
+  T.Test('XID single-bit patterns', @TestXidSingleBitPatterns);
+  T.Test('UUID single-bit patterns', @TestUuidSingleBitPatterns);
+  T.Test('RNG large fill', @TestRngLargeFill);
+  T.Test('RNG reseed multiple', @TestRngReseedMultiple);
+  if not T.Run then Halt(1);
 end.

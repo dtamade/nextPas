@@ -8,10 +8,10 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   TEST_PATH = '/tmp/nextpas_test_platform_file.tmp';
@@ -535,35 +535,35 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.files');
-  T.Run('open/create/close', @TestOpenCreateClose);
-  T.Run('write + read back', @TestWriteReadBack);
-  T.Run('truncate', @TestTruncate);
-  T.Run('sync', @TestSync);
-  T.Run('open non-existent', @TestOpenNonExistent);
-  T.Run('mkdir/rmdir', @TestMkdirRmdir);
-  T.Run('stat file', @TestStat);
-  T.Run('stat directory', @TestStatDirectory);
-  T.Run('rename/unlink', @TestRenameUnlink);
-  T.Run('getcwd/chdir', @TestGetcwdChdir);
-  T.Run('dir enumeration', @TestDirEnumeration);
-  T.Run('symlink stat', @TestSymlink);
-  T.Run('permission error', @TestPermissionError);
-  T.Run('create exclusive', @TestCreateExclusive);
-  T.Run('file lock exclusive', @TestLockExclusive);
-  T.Run('file trylock conflict', @TestTrylockConflict);
-  T.Run('symlink/readlink', @TestSymlinkReadlink);
-  T.Run('symlink/readlink small buffer',
+  T := TTestSuite.Create('nextpas.core.platform.files');
+  T.Test('open/create/close', @TestOpenCreateClose);
+  T.Test('write + read back', @TestWriteReadBack);
+  T.Test('truncate', @TestTruncate);
+  T.Test('sync', @TestSync);
+  T.Test('open non-existent', @TestOpenNonExistent);
+  T.Test('mkdir/rmdir', @TestMkdirRmdir);
+  T.Test('stat file', @TestStat);
+  T.Test('stat directory', @TestStatDirectory);
+  T.Test('rename/unlink', @TestRenameUnlink);
+  T.Test('getcwd/chdir', @TestGetcwdChdir);
+  T.Test('dir enumeration', @TestDirEnumeration);
+  T.Test('symlink stat', @TestSymlink);
+  T.Test('permission error', @TestPermissionError);
+  T.Test('create exclusive', @TestCreateExclusive);
+  T.Test('file lock exclusive', @TestLockExclusive);
+  T.Test('file trylock conflict', @TestTrylockConflict);
+  T.Test('symlink/readlink', @TestSymlinkReadlink);
+  T.Test('symlink/readlink small buffer',
     @TestSymlinkReadlinkSmallBufferReturnsRequiredLength);
-  T.Run('symlink/readlink one-byte buffer',
+  T.Test('symlink/readlink one-byte buffer',
     @TestSymlinkReadlinkOneByteBufferReturnsRequiredLength);
-  T.Run('open_ex append', @TestOpenEx);
-  T.Run('pread/pwrite', @TestPreadPwrite);
-  T.Run('fstat', @TestFstat);
-  T.Run('chmod', @TestChmod);
-  T.Run('truncate_path', @TestTruncatePath);
-  T.Run('directory close contract', @TestDirectoryCloseContract);
-  T.Run('Android directory enumeration source contract',
+  T.Test('open_ex append', @TestOpenEx);
+  T.Test('pread/pwrite', @TestPreadPwrite);
+  T.Test('fstat', @TestFstat);
+  T.Test('chmod', @TestChmod);
+  T.Test('truncate_path', @TestTruncatePath);
+  T.Test('directory close contract', @TestDirectoryCloseContract);
+  T.Test('Android directory enumeration source contract',
     @TestAndroidDirectoryEnumerationSourceContract);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.
