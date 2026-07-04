@@ -1,79 +1,68 @@
-# nextpas.core.mem 模块完善 + 编译器集成计划
+# nextPas 项目总控计划
 
-## 总体目标
-打造 freePascal 领域最优秀的内存管理框架，所有规划、设计与实现都应朝这个标准靠拢。
+> 最后更新：2026-07-05
+> 目标树：`docs/plans/goal-tree.md` | 自举路线图：`docs/plans/selfhost-roadmap.md` | 编译器治理：`compiler/CLAUDE.md`
 
-## 当前状态
-✅ 架构修复完成（Phase 1-5）
-✅ 性能验证：TFastArena 256B 64.8ns (比 System.GetMem 快 3.8x)
-✅ 测试验证：91/91 passed (8个测试套件)
+## 北极星
 
-## Phase 1: mem 模块完善（文档+测试覆盖+基准对照）
+打造 FreePascal 领域最优秀的编译器+运行时生态系统。
 
-### 1.1 文档完善
-- [ ] 创建 `docs/mem/README.md` - 模块概述
-- [ ] 创建 `docs/mem/ARCHITECTURE.md` - 架构设计文档
-- [ ] 创建 `docs/mem/API.md` - API 参考文档
-- [ ] 创建 `docs/mem/BENCHMARKS.md` - 基准测试报告
+## 当前状态 (2026-07-05)
 
-### 1.2 测试覆盖 100%
-- [ ] 审查现有测试覆盖率
-- [ ] 补充缺失的接口测试
-- [ ] 验证无内存泄漏（所有测试 0 leaks）
-- [ ] 添加边界条件测试
-- [ ] 添加并发测试（如果适用）
+### ✅ 已完成
+| 里程碑 | 内容 | 日期 |
+|--------|------|------|
+| C0-C4 | 编译器基础架构 | 2026-06-02 |
+| C5 | `{$IFDEF}` 预处理器支持 | 2026-07-03 |
+| C6-H4 | owned string return 改进 | 2026-07-03 |
+| C7 | 自举验证 | 2026-07-03 |
+| L0-L3 | 框架层模块契约 (57/57) | 2026-07-04 |
+| - | mem 审计 R4+R5 清零 | 2026-07-05 |
+| - | bench 审计 14/17 修复 | 2026-07-05 |
 
-### 1.3 基准对照
-- [ ] 编写基准对照测试（FPC RTL vs Go vs Rust）
-- [ ] 生成基准测试报告
-- [ ] 优化性能瓶颈
+### 🔢 关键指标
+- compiler-pass: 34/34 ✅
+- self-compile: 19/19 ✅
+- core/ 覆盖率: 963/972 (99.1%)
+- 契约体系: 57 模块全覆盖 ✅
 
-## Phase 2: 编译器集成准备
+### 🏗️ 进行中
+- **test 框架可用性修复**: M1 安全加固 ✅, M2 API 统一 🔄, M3 功能增强 🔲, M4 质量加固 🔲
+- **bench 审计收尾**: 14/17 findings 修复，3 个文档化跳过
+- **c2p_win32_compat**: 平台排除（C8 最后残留）
 
-### 2.1 理解编译器需求
-- [ ] 分析 HIR builder 的 Arena 使用情况
-- [ ] 分析 LLVM emitter buffer 的使用情况
-- [ ] 识别集成点和接口需求
+## 三阶段路线图
 
-### 2.2 设计集成方案
-- [ ] 设计 HIR builder Arena 迁移方案
-- [ ] 设计 LLVM emitter buffer 集成方案
-- [ ] 与 /codex 讨论方案可行性
+### 阶段 1: 编译器自举收尾
+- [ ] c2p_win32_compat 平台排除
+- [ ] C7 深化：目标运行时配置、多目标 IR、LLVM O2/LTO
+- [ ] permissive overload resolution → 正式重载解析
+- [ ] sema 主文件继续拆分（12,175 → 目标 <8000）
 
-### 2.3 实现集成
-- [ ] 实现 HIR builder Arena 迁移
-- [ ] 实现 LLVM emitter buffer 集成
-- [ ] 编写集成测试
-- [ ] 验证编译器功能正常
+### 阶段 2: 框架深度完善
+- [ ] mail 模块契约（L3 最后一块）
+- [ ] test 框架 M2-M4 完成
+- [ ] mem 模块编译器集成（HIR builder Arena, LLVM emitter buffer）
+- [ ] 增量编译（P0：符号表热缓存 → 热编译 <1s）
 
-## Phase 3: 复盘与优化
+### 阶段 3: 生态建设
+- [ ] 架构文档、API 文档完善
+- [ ] 贡献指南、示例项目
+- [ ] IDE 支持、调试工具链
 
-### 3.1 复盘
-- [ ] 与 /codex 复盘所有改动
-- [ ] 记录经验教训
-- [ ] 更新目标树
+## 治理文档索引
 
-### 3.2 优化
-- [ ] 根据复盘结果优化设计
-- [ ] 优化性能
-- [ ] 完善文档
+| 文档 | 用途 |
+|------|------|
+| `docs/plans/goal-tree.md` | 项目总控地图，每轮工作前后查阅同步 |
+| `docs/plans/selfhost-roadmap.md` | 自举路线图（合并自 c8-roadmap + selfhost-blockers） |
+| `compiler/CLAUDE.md` | 编译器工程治理：模块结构、质量门禁、技术债 |
+| `core/docs/design-conventions.md` | Core 模块设计规范 |
+| `docs/contracts/` | 57 模块代码契约 |
+| `docs/plans/debt-roadmap.md` | 技术债看板（待建立） |
 
-## 时间线
-- Phase 1: 1-2 天
-- Phase 2: 2-3 天
-- Phase 3: 1 天
-
-## 关键指标
-1. 测试覆盖率 100%
-2. 内存泄漏 0
-3. 性能超越 Go/Rust
-4. 接口设计优雅
-5. 文档完整
-6. 基准对照完整
-
-## 工具与方法
-- 使用 /codex 进行复盘和方案讨论
-- 使用 gpt-5.5 xhigh 解决难题
-- 使用团队模式加速开发
-- 每轮结束提交 git，保持变更清晰好追溯
-- 每轮结束报告当前在总路线图的位置
+## 工作纪律
+- 每轮开始前查阅 `goal-tree.md` 对齐方向
+- 每轮结束后同步 goal-tree 状态
+- 代码变更通过质量门禁后提交，commit message 有明确语义
+- 重大设计决策写入 `docs/adr/`
