@@ -217,6 +217,33 @@ begin
   LStats.Free;
 end;
 
+procedure Test_BootstrapCI_ZeroIterations;
+var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
+begin
+  LData := CreateTestData([1.0, 2.0, 3.0]);
+  LStats := TAdvancedStats.Create(LData);
+  { F-09: AIterations=0 should not crash, clamped to 1 }
+  LCI := LStats.BootstrapCI(0, 0.95);
+  Check(LCI.Lower <> 0.0, 'Bootstrap CI zero iterations: lower set');
+  Check(LCI.Upper <> 0.0, 'Bootstrap CI zero iterations: upper set');
+  LStats.Free;
+end;
+
+procedure Test_BootstrapCI_LevelBoundary;
+var LData: TDoubleArray; LStats: TAdvancedStats; LCI: TConfidenceInterval;
+begin
+  LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
+  { F-09: ALevel=1.0 → full range }
+  LCI := LStats.BootstrapCI(1000, 1.0);
+  Check(LCI.Lower <= LCI.Upper, 'Bootstrap CI level=1.0: lower <= upper');
+  Check(Abs(LCI.Level - 1.0) < 0.01, 'Bootstrap CI level=1.0: level preserved');
+  { F-09: ALevel=0.0 → degenerate }
+  LCI := LStats.BootstrapCI(1000, 0.0);
+  Check(LCI.Lower <= LCI.Upper, 'Bootstrap CI level=0.0: lower <= upper');
+  LStats.Free;
+end;
+
 procedure Test_TestNormality;
 var LData: TDoubleArray; LStats: TAdvancedStats; LResult: TNormalityTest;
 begin
@@ -563,6 +590,8 @@ begin
   T.Test('BootstrapCI', @Test_BootstrapCI);
   T.Test('BootstrapCI_Empty', @Test_BootstrapCI_Empty);
   T.Test('BootstrapCI_Single', @Test_BootstrapCI_Single);
+  T.Test('BootstrapCI_ZeroIterations', @Test_BootstrapCI_ZeroIterations);
+  T.Test('BootstrapCI_LevelBoundary', @Test_BootstrapCI_LevelBoundary);
   T.Test('TestNormality', @Test_TestNormality);
   T.Test('CompareWith', @Test_CompareWith);
   T.Test('WelchTScore_SignificantDifference', @Test_WelchTScore_SignificantDifference);
