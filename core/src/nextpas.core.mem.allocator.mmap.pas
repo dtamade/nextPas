@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.memory_map,
+  nextpas.core.text,
   nextpas.core.mem.mutex;
 
 type
@@ -285,7 +286,9 @@ begin
     FMap.Free;
     FMap := nil;
     FLock.Done;
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TMemoryMapAllocator: failed to create anonymous mapping');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TMemoryMapAllocator.Create: failed to create anonymous mapping (' +
+      IntToStr(Int64(aReservationSize)) + ' bytes)');
   end;
 
   FBase := FMap.BaseAddress;

@@ -12,6 +12,7 @@ uses
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.pool.fixed_slab;
 
 type
@@ -145,13 +146,15 @@ begin
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
-    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TLocalBlockPool.Create: size overflow (block_size=' + IntToStr(Int64(LActualBlockSize)) + ', count=' + IntToStr(Int64(ABlockCount)) + ')');
   if FAllocator <> nil then
     FBacking := FAllocator.GetMem(LTotalSize)
   else
     FBacking := GetMem(LTotalSize);
   if FBacking = nil then
-    raise EOutOfMemory.CreateMsg('TLocalBlockPool.Create: out of memory');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TLocalBlockPool.Create: out of memory (requested ' + IntToStr(Int64(LTotalSize)) + ' bytes)');
   ZeroMem(FBacking, LTotalSize);
 
   { 初始化位图：所有块标记为 free（位=1） }

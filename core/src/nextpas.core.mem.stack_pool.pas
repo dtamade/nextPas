@@ -35,6 +35,7 @@ uses
   nextpas.core.mem.base,            // ValidateAlignArg
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl,   // ResolveAllocator
+  nextpas.core.text,
   nextpas.core.mem.error;
 
 type
@@ -398,7 +399,8 @@ begin
 
   FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then
-    raise EOutOfMemory.CreateMsg('Failed to allocate stack buffer');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TStackPool.Create: failed to allocate stack buffer (' + IntToStr(Int64(ASize)) + ' bytes)');
 end;
 
 destructor TStackPool.Destroy;

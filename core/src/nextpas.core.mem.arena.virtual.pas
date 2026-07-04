@@ -12,6 +12,7 @@ uses
   nextpas.core.mem.arena.intf,
   nextpas.core.platform.mmap,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.platform.memory;
 
 type
@@ -246,7 +247,9 @@ begin
 
   AArena.FReservedBase := VirtualArenaReserve(ARENA_VIRTUAL_RESERVE);
   if AArena.FReservedBase = nil then
-    raise EOutOfMemory.CreateMsg('TVirtualArena_Init: failed to reserve virtual address space');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TVirtualArena_Init: failed to reserve virtual address space (' +
+      IntToStr(Int64(ARENA_VIRTUAL_RESERVE)) + ' bytes)');
 
   AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
   AArena.FFrontCommittedSize := 0;

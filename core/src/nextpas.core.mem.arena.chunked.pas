@@ -11,6 +11,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.arena.intf;
 
 type
@@ -525,7 +526,8 @@ begin
   FCacheLimit := CHUNK_CACHE_LIMIT;
 
   if not AddSegment(LInitSize) then
-    raise EOutOfMemory.CreateMsg('TChunkedArena: failed to allocate initial segment');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TChunkedArena: failed to allocate initial segment (' + IntToStr(Int64(LInitSize)) + ' bytes)');
   FActive := 0;
 end;
 

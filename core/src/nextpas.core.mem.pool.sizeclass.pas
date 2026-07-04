@@ -23,6 +23,7 @@ interface
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.text,
   nextpas.core.mem.error;
 
 const
@@ -147,7 +148,9 @@ begin
 
   LPage := GetMem(LSlotSize * LCount);
   if LPage = nil then
-    raise EOutOfMemory.CreateMsg('TSizeClassPool.AllocatePage: out of memory');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TSizeClassPool.AllocatePage: out of memory (slot_size=' +
+      IntToStr(Int64(LSlotSize)) + ', count=' + IntToStr(Int64(LCount)) + ')');
 
   { 记录页 }
   if FPageCounts[AClass] >= Length(FPages[AClass]) then
@@ -178,8 +181,8 @@ var
 begin
   LIdx := SizeClassIndex(ASize);
   if LIdx < 0 then
-    raise EOutOfMemory.CreateMsg(
-      'TSizeClassPool: size exceeds max size class (512)');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TSizeClassPool.ClassIndexForSize: size ' + IntToStr(Int64(ASize)) + ' exceeds max size class (512)');
   Result := TSizeClassIndex(LIdx);
 end;
 

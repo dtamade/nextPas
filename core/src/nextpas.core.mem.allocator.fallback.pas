@@ -28,6 +28,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
+  nextpas.core.text,
   nextpas.core.mem.arena.intf;
 
 type
@@ -221,7 +222,8 @@ var
 begin
   LOldCap := FMask + 1;
   if LOldCap > High(SizeUInt) shr 1 then
-    raise EOutOfMemory.CreateMsg('TFallbackAllocator.MapGrow: capacity overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TFallbackAllocator.MapGrow: capacity overflow (current=' + IntToStr(Int64(LOldCap)) + ')');
   LOldKeys := FKeys;
   LOldSources := FSources;
   LOldSizes := FSizes;

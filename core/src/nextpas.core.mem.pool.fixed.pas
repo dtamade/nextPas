@@ -10,6 +10,7 @@ uses
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.mutex,
+  nextpas.core.text,
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 // 说明：
@@ -343,7 +344,9 @@ begin
   // 如果分配器不提供对齐接口，则 over-allocate 并手动对齐
   LRaw := FAllocator.GetMem(FTotalSize + (FAlignment - 1));
   if LRaw = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate arena buffer');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TFixedPool.Create: failed to allocate arena buffer (' +
+      IntToStr(Int64(FTotalSize + (FAlignment - 1))) + ' bytes)');
   FRawBuffer := LRaw;
   try
     LAddr := PtrUInt(LRaw);

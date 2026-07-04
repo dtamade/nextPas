@@ -37,6 +37,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.error;
 
 const
@@ -396,13 +397,15 @@ begin
   // 额外字节数最大为 (Alignment - 1)，保证对齐后仍有 TotalSize 可用空间
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
-    raise EOutOfMemory.CreateMsg('TBlockPool: allocation size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TBlockPool: allocation size overflow (total=' + IntToStr(Int64(LTotalSize)) + ', align=' + IntToStr(Int64(FAlignment)) + ')');
   if FAllocator <> nil then
     LRaw := FAllocator.GetMem(LAllocSize)
   else
     GetMem(LRaw, LAllocSize);
   if LRaw = nil then
-    raise EOutOfMemory.CreateMsg('TBlockPool: failed to allocate memory');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TBlockPool: failed to allocate memory (requested ' + IntToStr(Int64(LAllocSize)) + ' bytes)');
 
   FRawBuffer := LRaw;
 

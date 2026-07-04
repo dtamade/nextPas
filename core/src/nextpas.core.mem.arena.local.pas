@@ -11,6 +11,7 @@ uses
   nextpas.core.mem.allocator.rtl,  // ResolveAllocator
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.arena.intf;
 
 type
@@ -81,7 +82,8 @@ begin
   begin
     FBacking := FAllocator.GetMem(ACapacity);
     if FBacking = nil then
-      raise EOutOfMemory.CreateMsg('TLocalArena.Create: out of memory');
+      raise EOutOfMemory.Create(aeOutOfMemory,
+        'TLocalArena.Create: out of memory (requested ' + IntToStr(Int64(ACapacity)) + ' bytes)');
   end
   else
     FBacking := nil;

@@ -20,6 +20,7 @@ uses
   nextpas.core.mem.pool.base,     // DefaultAcquireN / DefaultReleaseN (CS-001)
   nextpas.core.mem.blockpool,
   nextpas.core.mem.intf,          // IAllocator
+  nextpas.core.text,
   nextpas.core.mem.error;
 
 type
@@ -316,14 +317,16 @@ begin
 
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
-    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: segment size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingBlockPool: segment size overflow (blocks=' + IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')');
 
   if FAlignment <= 1 then
     LAllocSize := LBytes
   else
     LAllocSize := LBytes + (FAlignment - 1);
   if LAllocSize < LBytes then
-    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: allocation size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingBlockPool: allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')');
 
   if FAllocator = nil then
     LRaw := System.GetMem(LAllocSize)
@@ -563,7 +566,9 @@ begin
 
   LInitCap := FInitialCapacity;
   if not AddSegment(LInitCap) then
-    raise EOutOfMemory.CreateMsg('TGrowingBlockPool: failed to allocate initial segment');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingBlockPool.Create: failed to allocate initial segment (blocks=' +
+      IntToStr(Int64(LInitCap)) + ')');
 end;
 
 constructor TGrowingBlockPool.Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt);

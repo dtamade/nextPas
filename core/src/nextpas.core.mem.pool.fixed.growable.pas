@@ -11,6 +11,7 @@ uses
   nextpas.core.mem.utils,         // CalcGeometricGrowth
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
+  nextpas.core.text,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl;   // ResolveAllocator
 
@@ -257,11 +258,14 @@ begin
 
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
-    raise EOutOfMemory.CreateMsg('Total size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingFixedPool.AddArena: total size overflow (blocks=' +
+      IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')');
 
   LArena.Base := FAllocator.GetMem(LBytes);
   if LArena.Base = nil then
-    raise EOutOfMemory.CreateMsg('Failed to allocate arena');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingFixedPool.AddArena: failed to allocate arena (' + IntToStr(Int64(LBytes)) + ' bytes)');
   LArena.Blocks := aBlocks;
   LArena.Size := LBytes;
 
@@ -280,7 +284,9 @@ begin
 
   // grow free stack space and push all blocks
   if FFreeTop > (High(SizeUInt) - aBlocks) then
-    raise EOutOfMemory.CreateMsg('Free stack size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'TGrowingFixedPool.AddArena: free stack size overflow (top=' +
+      IntToStr(Int64(FFreeTop)) + ', blocks=' + IntToStr(Int64(aBlocks)) + ')');
   LNewLen := FFreeTop + aBlocks;
   if SizeUInt(Length(FFreeStack)) < LNewLen then
     SetLength(FFreeStack, LNewLen);
