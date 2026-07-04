@@ -14,7 +14,7 @@ macOS, FreeBSD, and Android remain mixed.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime through platform/io, async, process, file, and consumer gates with heaptrc expectations | keep focused gates green and expand consumer coverage only when contracts change |
-| Windows x86_64 | focused-runtime for 14/14 modules on real Windows VM via SSH; wine-runtime-smoke for all 14 modules; real-Windows runner via SSH | promote to ci-matrix |
+| Windows x86_64 | focused-runtime for 14/14 modules on real Windows VM via SSH; wine-runtime-smoke for all 14 modules; real-Windows runtime proof via SSH | promote to ci-matrix |
 | macOS / FreeBSD | source-contract and selected compile/runtime fragments | record passed rows separately; skipped rows are non-evidence |
 | Android / other forced hosts | forced-compile fragments | add host-specific runtime rows before claiming runtime readiness |
 

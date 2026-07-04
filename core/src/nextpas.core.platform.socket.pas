@@ -104,6 +104,7 @@ function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
   const AOptName: Int32; const AMs: UInt32): Int32;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
+function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
 { Sockaddr helpers (from net layer merge) }
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -346,6 +347,11 @@ end;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 begin
   Result := (AError = ESysEAGAIN) or (AError = ESysEWOULDBLOCK);
+end;
+
+function platform_socket_error_timed_out(const AError: Int32): Boolean;
+begin
+  Result := AError = ESysETIMEDOUT;
 end;
 
 { --- sockaddr helpers --- }
@@ -636,6 +642,11 @@ begin
   Result := AError = WSAEWOULDBLOCK;
 end;
 
+function platform_socket_error_timed_out(const AError: Int32): Boolean;
+begin
+  Result := AError = WSAETIMEDOUT;
+end;
+
 { --- sockaddr helpers --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
@@ -699,6 +710,7 @@ function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32)
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := -1; end;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := -1; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
 function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;

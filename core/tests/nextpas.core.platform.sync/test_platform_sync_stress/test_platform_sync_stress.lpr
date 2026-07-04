@@ -8,7 +8,7 @@ program test_platform_sync_stress;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils, Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.sync,
   nextpas.core.platform.time;
 
@@ -43,7 +43,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TCounterThread.Execute;
 var
@@ -286,15 +286,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.sync.stress');
+  T := TTestSuite.Create('nextpas.core.platform.sync.stress');
 
-  T.Run('mutex contended counter (4 threads x 10k)', @TestMutexContendedCounter);
-  T.Run('rwlock readers+writer no torn reads', @TestRwLockReadersWriter);
-  T.Run('condvar signal wakes one waiter', @TestCondvarSignalOne);
-  T.Run('wait_address32 value mismatch', @TestWaitAddressValueMismatch);
-  T.Run('wait_address64 value mismatch', @TestWaitAddress64ValueMismatch);
-  T.Run('mutex trylock contended returns BUSY', @TestMutexTrylockContended);
-  T.Run('mutex init/destroy stress (10k cycles)', @TestMutexInitDestroyStress);
+  T.Test('mutex contended counter (4 threads x 10k)', @TestMutexContendedCounter);
+  T.Test('rwlock readers+writer no torn reads', @TestRwLockReadersWriter);
+  T.Test('condvar signal wakes one waiter', @TestCondvarSignalOne);
+  T.Test('wait_address32 value mismatch', @TestWaitAddressValueMismatch);
+  T.Test('wait_address64 value mismatch', @TestWaitAddress64ValueMismatch);
+  T.Test('mutex trylock contended returns BUSY', @TestMutexTrylockContended);
+  T.Test('mutex init/destroy stress (10k cycles)', @TestMutexInitDestroyStress);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.
