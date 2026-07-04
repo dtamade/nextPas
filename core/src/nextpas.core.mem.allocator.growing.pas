@@ -86,6 +86,10 @@ implementation
 uses
   nextpas.core.mem.error;
 
+const
+  { Max threads tracked in global registry (power of 2 for fast modulo). }
+  MAX_THREAD_SLOTS = 256;
+
 var
   GGrowingAllocator: TGrowingAllocator;
 
@@ -95,6 +99,82 @@ procedure FlushToCentral(AIndex: Int32; ACount: Word; ABlocks: PPointer); forwar
 { Thread-local cache: one per thread, zero initialization on thread start. }
 threadvar
   GThreadCache: TThreadCache;
+
+{ Global registry: maps thread ID → TLS cache pointer.
+  Allows cross-thread free to push directly to owner's inbox. }
+type
+  TThreadSlot = record
+    FThreadId: QWord;
+    FCache: Pointer;  { Pointer to TThreadCache }
+    FActive: Boolean;
+  end;
+
+var
+  GThreadRegistry: array[0..MAX_THREAD_SLOTS - 1] of TThreadSlot;
+  GThreadRegistryLock: SizeUInt;
+
+procedure RegistryLock;
+begin
+  while AtomicCmpExchange(GThreadRegistryLock, 1, 0) <> 0 do
+    ThreadSwitch;
+end;
+
+procedure RegistryUnlock;
+begin
+  AtomicExchange(GThreadRegistryLock, 0);
+end;
+
+{ Register current thread's TLS cache in global registry. }
+procedure RegisterThreadCache;
+var
+  LSlot: SizeUInt;
+  LThreadId: QWord;
+begin
+  LThreadId := GetCurrentThreadId;
+  LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
+  RegistryLock;
+  try
+    GThreadRegistry[LSlot].FThreadId := LThreadId;
+    GThreadRegistry[LSlot].FCache := @GThreadCache;
+    GThreadRegistry[LSlot].FActive := True;
+  finally
+    RegistryUnlock;
+  end;
+end;
+
+{ Unregister current thread's TLS cache from global registry. }
+procedure UnregisterThreadCache;
+var
+  LSlot: SizeUInt;
+  LThreadId: QWord;
+begin
+  LThreadId := GetCurrentThreadId;
+  LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
+  RegistryLock;
+  try
+    if (GThreadRegistry[LSlot].FThreadId = LThreadId) and
+       GThreadRegistry[LSlot].FActive then
+    begin
+      GThreadRegistry[LSlot].FActive := False;
+      GThreadRegistry[LSlot].FCache := nil;
+    end;
+  finally
+    RegistryUnlock;
+  end;
+end;
+
+{ Find TLS cache for a given thread ID (lock-free read). }
+function FindThreadCache(AThreadId: QWord): Pointer;
+var
+  LSlot: SizeUInt;
+begin
+  LSlot := SizeUInt(AThreadId) and (MAX_THREAD_SLOTS - 1);
+  if GThreadRegistry[LSlot].FActive and
+     (GThreadRegistry[LSlot].FThreadId = AThreadId) then
+    Result := GThreadRegistry[LSlot].FCache
+  else
+    Result := nil;
+end;
 
 { --- Thread-exit cleanup ---
   UNIX: pthread TLS key destructor. Windows: FlsCallback.
@@ -128,7 +208,10 @@ function FlsSetValue(dwFlsIndex: DWORD; lpFlsData: Pointer): BOOL; stdcall; exte
 procedure ThreadExitFlush(AData: Pointer); cdecl;
 begin
   if (AData <> nil) and (GGrowingAllocator <> nil) then
+  begin
     ThreadCacheFlushAll(GThreadCache, @FlushToCentral);
+    UnregisterThreadCache;
+  end;
 end;
 
 {$IFDEF MSWINDOWS}
@@ -233,9 +316,10 @@ begin
   if ASize = 0 then
     Exit(nil);
   Inc(GThreadCache.FOpCount);
-  { Register thread-exit cleanup callback (once per thread). }
+  { Register thread-exit cleanup callback and global registry (once per thread). }
   if GThreadCache.FOpCount = 1 then
   begin
+    RegisterThreadCache;
     {$IFDEF UNIX}
     pthread_setspecific(GCacheCleanupKey, @GThreadCache);
     {$ENDIF}
@@ -323,6 +407,8 @@ procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
+  LOwnerThreadId: QWord;
+  LOwnerCache: Pointer;
 begin
   if APtr = nil then
     Exit;
@@ -334,63 +420,44 @@ begin
     System.FreeMem(APtr);
     Exit;
   end;
-  { Fast path for common small sizes: skip SizeClassIndex + shuffle overhead. }
+  { Compute size class index. }
   if ASize <= 256 then
-  begin
-    LIndex := Int32((ASize + 15) shr 4) - 1;
-    if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
-    begin
-      { Direct push to head: shuffle not needed for ≤2 element lists. }
-      LNode := PFreeNode(APtr);
-      LNode^.FNext := GThreadCache.FHeads[LIndex];
-      GThreadCache.FHeads[LIndex] := LNode;
-      Inc(GThreadCache.FCounts[LIndex]);
-      Exit;
-    end;
-  end
+    LIndex := Int32((ASize + 15) shr 4) - 1
   else if ASize <= 1024 then
-  begin
-    { Fast formula for band 1 (256-1024, 64B step): (size shr 6) + 14 }
-    LIndex := Int32(ASize shr 6) + 14;
-    if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
-    begin
-      LNode := PFreeNode(APtr);
-      LNode^.FNext := GThreadCache.FHeads[LIndex];
-      GThreadCache.FHeads[LIndex] := LNode;
-      Inc(GThreadCache.FCounts[LIndex]);
-      Exit;
-    end;
-  end
+    LIndex := Int32(ASize shr 6) + 14
   else
-  begin
     LIndex := SizeClassIndex(ASize);
-    if LIndex < 0 then
+  if LIndex < 0 then
+  begin
+    System.FreeMem(APtr);
+    Exit;
+  end;
+  { Cross-thread free optimization: check if block belongs to another thread.
+    If so, push directly to owner's per-thread inbox (lock-free). }
+  LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
+  if (LOwnerThreadId <> 0) and (LOwnerThreadId <> GetCurrentThreadId) then
+  begin
+    LOwnerCache := FindThreadCache(LOwnerThreadId);
+    if LOwnerCache <> nil then
     begin
-      System.FreeMem(APtr);
-      Exit;
-    end;
-    if GThreadCache.FCounts[LIndex] < AdaptiveMaxListSize(LIndex) then
-    begin
-      { For small lists, skip shuffle overhead — direct push to head.
-        Shuffle only matters once the list has enough entropy. }
-      if GThreadCache.FCounts[LIndex] < 8 then
-      begin
-        LNode := PFreeNode(APtr);
-        LNode^.FNext := GThreadCache.FHeads[LIndex];
-        GThreadCache.FHeads[LIndex] := LNode;
-        Inc(GThreadCache.FCounts[LIndex]);
-        Exit;
-      end;
-      FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
-        APtr, GThreadCache.FCounts[LIndex]);
-      Inc(GThreadCache.FCounts[LIndex]);
+      ThreadCacheInboxPush(PThreadCache(LOwnerCache)^, LIndex, APtr);
       Exit;
     end;
   end;
-  { Cache full: flush a batch to central, then push with shuffle. }
+  { Same-thread free: push to local TLS cache. }
+  if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
+  begin
+    LNode := PFreeNode(APtr);
+    LNode^.FNext := GThreadCache.FHeads[LIndex];
+    GThreadCache.FHeads[LIndex] := LNode;
+    Inc(GThreadCache.FCounts[LIndex]);
+    Exit;
+  end;
+  { Cache full: flush a batch to central, then push. }
   ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
-  FreeListInsertShuffled(Pointer(GThreadCache.FHeads[LIndex]),
-    APtr, GThreadCache.FCounts[LIndex]);
+  LNode := PFreeNode(APtr);
+  LNode^.FNext := GThreadCache.FHeads[LIndex];
+  GThreadCache.FHeads[LIndex] := LNode;
   Inc(GThreadCache.FCounts[LIndex]);
 end;
 {$pop}
