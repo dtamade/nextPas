@@ -1059,6 +1059,12 @@ begin
   LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
   LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
 
+  { E-10: CheckNaN / CheckNotNaN coverage }
+  LSuite.Test('CheckNaN pass',             @TestCheckNaNPass);
+  LSuite.Test('CheckNaN fail',             @TestCheckNaNFail);
+  LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
+  LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
+
   if not LSuite.Run then
   begin
     WriteLn;
