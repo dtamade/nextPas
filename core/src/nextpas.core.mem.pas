@@ -1,6 +1,14 @@
 unit nextpas.core.mem;
 {**
  * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
+ *
+ * @note 选择指南：
+ *   - 通用场景 → DefaultAllocator (IAllocator)
+ *   - 请求/帧级生命周期 → CreateDefaultArena (IArena)，用 Reset 一次性释放
+ *   - 需要 IAllocator 接口的 Arena → CreateArenaAllocator（仅分配不释放）
+ *   - 高频小对象 → MakeFixedSlabPool / TSlabPool（O(1) 分配释放）
+ *   - 并发场景 → TSlabPoolConcurrent / TSlabPoolSharded
+ *   - 测试泄漏检测 → TTrackingAllocator 包装任意 IAllocator
  *}
 
 {$I nextpas.core.settings.inc}
