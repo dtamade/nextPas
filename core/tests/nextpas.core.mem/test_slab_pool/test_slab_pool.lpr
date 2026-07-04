@@ -162,6 +162,7 @@ function TFixedSlabRecordingAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 procedure FreeInteriorSlabPointer;
@@ -253,6 +254,7 @@ begin
     LTraits := LPool.Traits;
     Check(True = LTraits.ZeroInitialized, 'AllocMem should promise zero initialization');
     Check(False = LTraits.ThreadSafe, 'plain slab pool should not claim thread safety');
+    Check(True = LTraits.SupportsRealloc, 'slab pool should support realloc');
 
     LPerf := LPool.GetPerfCounters;
     Check(Int64(0) = Int64(LPerf.AllocCalls), 'initial alloc calls');

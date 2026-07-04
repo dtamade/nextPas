@@ -93,6 +93,7 @@ function TVirtualArenaAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe      := False;
+  Result.SupportsRealloc := False;
 end;
 
 end.

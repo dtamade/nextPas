@@ -904,6 +904,7 @@ begin
   // keep consistent with TSlabPool but mark as thread-safe
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
+  Result.SupportsRealloc := True;
 end;
 
 function TSlabPoolSharded.Owns(APtr: Pointer): Boolean;

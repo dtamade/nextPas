@@ -434,7 +434,10 @@ begin
   if FInner <> nil then
     Result := FInner.Traits
   else
+  begin
     Result.ZeroInitialized := False;
+    Result.SupportsRealloc := True;
+  end;
   Result.ThreadSafe := True;
 end;
 

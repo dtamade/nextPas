@@ -133,6 +133,7 @@ function TFailingReallocateAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
 end;
@@ -202,6 +203,7 @@ function TFailingAllocateAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
 end;
@@ -262,6 +264,7 @@ function TCountingAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
 end;

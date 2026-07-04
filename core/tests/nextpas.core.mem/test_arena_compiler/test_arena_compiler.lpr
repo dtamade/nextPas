@@ -404,6 +404,7 @@ begin
     LTraits := LAlloc.Traits;
     Check(LTraits.ZeroInitialized = True, 'ZeroInitialized should be True (DoAllocMem calls AllocZeroed)');
     Check(LTraits.ThreadSafe = False, 'ThreadSafe should be False');
+    Check(LTraits.SupportsRealloc = False, 'SupportsRealloc should be False (arena does not support realloc)');
   finally
     LAlloc.Free;
   end;

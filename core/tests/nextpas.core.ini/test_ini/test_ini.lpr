@@ -97,6 +97,7 @@ function TFailingReallocateAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
   Result.HasMemSize := False;
   Result.SupportsAligned := False;
 end;
