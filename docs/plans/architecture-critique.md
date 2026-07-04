@@ -6,38 +6,51 @@
 
 ---
 
-## 核心判断
+## 前置说明
 
-**nextPas 有一个"大而全"的框架野心，但缺乏"少而精"的架构纪律。**
+**`nextpas.core` 是 nextPas 的标准库**，相当于 Go 的 `std`、Rust 的 `std`。
+它不仅仅是"编译器内核依赖"，而是面向所有 nextPas 开发者的通用库。
+TLS、HTTP、TUI、SIMD、crypto 都是标准库的一部分——这和 Go 的 `crypto/tls`、`net/http` 在 std 里是一样的。
 
-这不是说做得不好——自举成功本身就是巨大成就。但当前架构存在 **5 个系统性问题**，如果不纠正，会在未来 2-3 年持续拖累开发效率。
+本 critique 关注的是 **编译器与标准库之间的整合问题**，不是否定标准库的广度。
 
 ---
 
-## 问题一：编译器不是"内核之上的应用"
+## 核心判断
+
+**nextPas 编译器没有把自己当成标准库的客户。**
+
+自举成功是巨大成就。但编译器 49,667 行代码中，自己重新实现了标准库已有的数据结构（Vec、HashMap、Arena），
+而标准库 607,017 行代码中编译器只用了 5 个模块。**编译器在标准库旁边自己造轮子。**
+
+这是需要纠正的核心架构问题。如果不解决，未来每一次编译器改动都继续承受 O(n) 查找、SetLength+1 扩容、手动内存管理的代价。
+
+---
+
+## 问题一：编译器不是标准库的客户
 
 ### 现状
 
-编译器 49,667 行代码，只引用了 core 框架的 **5 个模块**：
+编译器 49,667 行代码，只引用了标准库的 **5 个模块**：
 
 ```
 nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
 nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 ```
 
-编译器的核心数据结构——AST、HIR、语义模型——**全部自己实现**，不使用 core 框架的任何数据结构。
+编译器的核心数据结构——AST、HIR、语义模型——**全部自己实现**，不使用标准库的任何数据结构。
 
 ### 这意味着什么
 
-| 编译器自己实现的 | core 框架已有的 |
-|-----------------|----------------|
+| 编译器自己实现的 | 标准库已有的 |
+|-----------------|-------------|
 | `array of TProcedureBodyEntry` (O(n) 查找) | `THashMap` (O(1)) |
 | `array of string` (SetLength+1) | `TVec<string>` (容量翻倍) |
 | `TGreenNode = class` (堆分配) | `TFastArena` (64.8ns 分配) |
 | `TDefineTable` (O(n) IndexOf) | `THashSet` (O(1)) |
 | 手动 `SameText` 比较 | `TStringView` / `TTextCompare` |
 
-**编译器是一艘用木板自己造引擎的火箭——core 框架的零件就放在旁边没用。**
+**编译器是一艘用木板自己造引擎的火箭——标准库的零件就放在旁边没用。**
 
 ### 健康架构应该是
 
@@ -46,7 +59,7 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 │          nextpas 编译器              │
 │  (只实现编译逻辑，不实现数据结构)      │
 ├─────────────────────────────────────┤
-│        nextpas.core 框架             │
+│        nextpas.core 标准库           │
 │  collections, mem, text, io, ...    │
 ├─────────────────────────────────────┤
 │        FreePascal RTL               │
@@ -61,7 +74,7 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 │  (编译逻辑 + 全部数据结构自己实现)     │
 │  (用木板造引擎)                      │
 ├─────────────────────────────────────┤
-│        nextpas.core 框架             │
+│        nextpas.core 标准库           │
 │  (编译器只用了 5/975 个模块)          │
 │  (精心打造的零件堆在仓库里)           │
 ├─────────────────────────────────────┤
@@ -69,7 +82,7 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 └─────────────────────────────────────┘
 ```
 
-**这是最大的架构问题：编译器不是 core 框架的"客户"，而是 core 框架的"邻居"。**
+**这是最大的架构问题：编译器不是标准库的客户，而是标准库的邻居。**
 
 ---
 
@@ -98,8 +111,8 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 
 ### 对标
 
-| 框架 | 接口/抽象比例 | 模式 |
-|------|-------------|------|
+| 标准库 | 接口/抽象比例 | 模式 |
+|--------|-------------|------|
 | Go std | ~100% (interface 是语言特性) | 每个包通过 interface 暴露 |
 | Rust std | ~80% (trait 驱动) | Iterator, Read, Write 等 trait |
 | Java std | ~60% | Collection, Stream 等接口 |
@@ -107,7 +120,35 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 
 ---
 
-## 问题三：TLS + SIMD 占了框架的 46%
+## 问题三：编译器不用标准库的数据结构
+
+### 现状
+
+标准库已有高质量的数据结构和内存管理：
+
+```
+THashMap<K,V>     — O(1) 查找
+TVec<T>           — 容量翻倍，摊销 O(1) push
+TStringView       — 零拷贝字符串引用
+TFastArena        — 64.8ns/alloc，批量释放
+THashSet<T>       — O(1) 集合操作
+```
+
+**编译器全部不用。** 编译器用 `array of T` + `SetLength+1`、`SameText` 线性查找、`class` 堆分配。
+
+### 对标
+
+| 编译器 | 内存策略 | 数据结构 |
+|--------|---------|---------|
+| Clang | `llvm::BumpPtrAllocator` + `Arena` | `DenseMap`, `SmallVector` |
+| Rust | `rustc_arena::TypedArena` | `IndexVec`, `FxHashMap` |
+| **nextPas** | **class 堆分配 + SetLength+1** | **array of T (O(n))** |
+
+标准库的 TFastArena、THashMap、TVec 就是为这种场景设计的，但编译器没用。
+
+---
+
+## 关于标准库规模：需要说明，不是问题
 
 ### 数据
 
@@ -121,104 +162,57 @@ nextpas.core.os.env, nextpas.core.time, nextpas.core.base.utils
 | Mem | 57 | 5.8% |
 | 其他 | 203 | 20.8% |
 
-**TLS + SIMD = 460 文件，接近一半。**
+### 这不是架构问题
 
-### 这意味着什么
-
-1. **TLS 的 OpenSSL API 封装（62 文件）** 本质上是 FFI 绑定，不应该和框架内核混在一起
-2. **SIMD 的 145 个 .inc 文件** 是 ISA 特定的内联汇编/ intrinsic，应该放在 `core/arch/` 下
-3. **框架的"门面"应该是 collections + mem + io + text + time**，但视觉上 TLS 和 SIMD 喧宾夺主
-
-### 健康架构应该是
+**TLS 模块的 231 个文件需要正确理解**：
 
 ```
-core/
-├── kernel/          ← 内核：mem, base, exception, contracts
-├── collections/     ← 数据结构
-├── io/              ← IO 抽象
-├── text/            ← 文本处理
-├── net/             ← 网络
-├── crypto/          ← 密码学
-├── arch/            ← SIMD/平台特定（移出主树）
-│   ├── simd/
-│   └── platform/
-├── tls/             ← TLS（FFI 绑定独立）
-│   ├── ffi/
-│   │   ├── openssl/
-│   │   ├── mbedtls/
-│   │   └── wolfssl/
-│   └── protocol/
-├── http/
-├── tui/
-└── test/
+nextpas.core.tls (231 files)
+├── 127 个纯 Pascal TLS 实现     ← nextPas 自己的 TLS 协议栈
+│   ├── tls12/ (11)              ← TLS 1.2 完整客户端/服务端
+│   ├── tls13/ (15)              ← TLS 1.3 握手、密钥调度
+│   ├── freepascal/ (13)         ← 自研密码学后端
+│   ├── cert/x509/pkcs/ (22)     ← 证书基础设施
+│   └── ocsp/ct/dane/... (66)    ← 协议周边
+│
+└── 104 个 FFI 后端绑定          ← 给用户选择密码学后端的自由
+    ├── OpenSSL (75)
+    ├── mbedTLS (8)
+    ├── wolfSSL (8)
+    └── winSSL (13)
 ```
+
+127 个纯 Pascal 文件是**自己实现的 TLS 协议栈**——这是标准库的核心资产，不是膨胀。
+104 个 FFI 文件提供了多后端选择——OpenSSL、mbedTLS、wolfSSL 或自研 FreePascal 后端。
+
+**这和 Go 的 `crypto/tls` 在标准库里是一样的。**
+
+**SIMD 模块同理**——229 个文件覆盖 SSE2/3/4、AVX2、AVX512、NEON、RISC-V Vector，
+提供跨 ISA 的统一向量化 API。这是标准库的能力深度，不是架构问题。
+
+**结论：TLS 和 SIMD 的文件数量反映了它们作为标准库模块的功能完整度，不构成架构缺陷。**
 
 ---
 
-## 问题四：IAllocator 抽象未被编译器采用
-
-### 现状
-
-core/mem 有精心设计的分配器体系：
-
-```
-IAllocator (接口)
-├── TBaseAllocator
-├── TArenaAllocator     (64.8ns/alloc)
-├── TCrtAllocator
-├── TMmapAllocator
-├── TMimallocAllocator
-├── TTrackingAllocator  (泄漏检测)
-├── TGuardAllocator     (越界检测)
-├── TLeakCheckAllocator
-└── TFallbackAllocator
-
-IArena
-├── TFastArena
-├── TChunkedArena
-├── TConcurrentArena
-└── TVirtualArena
-
-IPool / ISlabPool / ...
-```
-
-**但编译器完全不用这些。** 编译器用 `class` (堆分配)、`SetLength` (动态数组)、手动 `New/Dispose`。
-
-### 对标
-
-| 编译器 | 内存策略 |
-|--------|---------|
-| Clang | `llvm::BumpPtrAllocator` + `Arena` — 每个 AST 节点在 arena 中 |
-| Rust | `rustc_arena::TypedArena` — 编译结束后一次性释放 |
-| Go | 依赖 GC，但 `go/parser` 尽量复用节点 |
-| **nextPas** | **独立 class 堆分配 + SetLength+1 动态数组** |
-
----
-
-## 问题五：编译器 = 50K 行，框架 = 600K 行，但编译器不用框架
+## 问题四：编译器不用标准库 —— 是整合问题，不是标准库的问题
 
 ### 数据
 
 | 组件 | 代码量 | 编译器使用率 |
 |------|--------|-------------|
-| core 框架 | 607,017 行 (975 文件) | **0.5%** (5/975 模块) |
+| 标准库 | 607,017 行 (975 文件) | **0.5%** (5/975 模块) |
 | 编译器 | 49,667 行 (31 文件) | — |
 
-**框架是编译器的 12 倍大，但编译器几乎不用框架。**
+**标准库是编译器的 12 倍大，但编译器几乎不用标准库。**
 
-### 这意味着两种可能
-
-**可能性 A**：框架设计过度，不适合编译器的实际需求
-**可能性 B**：编译器实现过快，没有考虑复用框架
-
-**答案是两者都有。**
+### 根因
 
 - 编译器在 C0-C7 冲刺中快速堆砌功能，没时间做架构对齐
-- 框架在 L0-L3 建设中追求完整性，但没有把"服务编译器"作为首要设计目标
+- 标准库在 L0-L3 建设中追求完整性，但没有把"服务编译器"作为首要设计目标
 
 ### 应该怎么办
 
-**编译器应该成为框架的"第一个客户"和"设计驱动者"。**
+**编译器应该成为标准库的第一个客户和设计驱动者。**
 
 具体来说：
 1. 编译器用 `TVec<T>` 替代所有 `array of T` + `SetLength+1`
@@ -226,7 +220,8 @@ IPool / ISlabPool / ...
 3. 编译器用 `TFastArena` 管理 AST 节点生命周期
 4. 编译器用 `TStringView` 替代字符串拷贝
 
-如果框架的某个模块编译器用不上 → 说明该模块可能不需要在"内核"中。
+如果标准库的某个模块编译器用不上 → 不说明该模块不需要在标准库中（TLS、TUI 有各自的用户群），
+但**编译器需要的模块**应该优先稳定和优化。
 
 ---
 
@@ -235,14 +230,13 @@ IPool / ISlabPool / ...
 | 维度 | 评分 | 说明 |
 |------|------|------|
 | **自举能力** | ⭐⭐⭐⭐⭐ | C7 完成，自举成功 |
-| **框架完整度** | ⭐⭐⭐⭐ | 975 模块，覆盖极广 |
-| **接口抽象** | ⭐⭐ | 4.6% intf 比例太低 |
-| **编译器-框架整合** | ⭐ | 编译器基本不用框架 |
-| **模块组织** | ⭐⭐ | TLS/SIMD 喧宾夺主 |
-| **内存架构** | ⭐⭐⭐ | 分配器设计好，但编译器不用 |
+| **标准库完整度** | ⭐⭐⭐⭐⭐ | 975 模块，TLS/HTTP/TUI/SIMD/crypto 全覆盖 |
+| **接口抽象** | ⭐⭐ | 4.6% intf 比例太低，大部分模块直接暴露实现 |
+| **编译器-标准库整合** | ⭐ | 编译器基本不用标准库的数据结构 |
+| **内存架构** | ⭐⭐⭐ | 分配器体系设计好，但编译器不用 |
 | **API 一致性** | ⭐⭐⭐ | base/intf/impl 模式有但不统一 |
 
-**总评：功能强大，架构松散。像一个所有器官都健康但神经系统没连通的巨人。**
+**总评：标准库功能强大且完整。编译器没有把自己当成标准库的客户，这是唯一的核心架构问题。**
 
 ---
 
@@ -252,19 +246,18 @@ IPool / ISlabPool / ...
 
 1. **编译器接入 TFastArena** — 用 arena 管理 AST 节点，立即减少 80% 堆分配
 2. **编译器接入 THashMap** — 替换 O(n) 符号查找，立即提升编译速度
-3. **建立"编译器是框架客户"原则** — 写入 CLAUDE.md
+3. **建立"编译器是标准库客户"原则** — 写入 CLAUDE.md
 
-### Phase 1: 架构对齐（1-2 月）
+### Phase 1: 标准库接口化（1-2 月）
 
-4. **重组 core/ 目录** — kernel/ collections/ io/ text/ net/ crypto/ arch/ tls/ http/ tui/
-5. **TLS/SIMD FFI 绑定独立** — 从框架主树移到 `core/ffi/` 或独立包
-6. **提高接口比例** — 目标：50+% 模块有 intf
+4. **提高接口比例** — 目标：50+% 模块有 intf，让标准库更容易被编译器消费
+5. **编译器需要的数据结构优先稳定** — TVec, THashMap, TStringView, TFastArena
 
 ### Phase 2: 编译器重构（2-4 月）
 
-7. **sema God Class 拆分** — 用框架的接口模式重构
-8. **HIR Builder 用框架数据结构** — TVec, THashMap, TStringView
-9. **增量编译** — 用框架的 TFileCache / THash 做指纹
+6. **sema God Class 拆分** — 用标准库的接口模式重构
+7. **HIR Builder 用标准库数据结构** — TVec, THashMap, TStringView
+8. **增量编译** — 用标准库做文件指纹和缓存
 
 ---
 
@@ -277,3 +270,4 @@ IPool / ISlabPool / ...
 ---
 
 *架构批判不等于否定。nextPas 自举成功是巨大成就。这些问题是"下一步怎么走"的路线问题，不是"做错了什么"的指责。*
+
