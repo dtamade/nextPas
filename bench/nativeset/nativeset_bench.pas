@@ -1,6 +1,6 @@
 {$mode ObjFPC}{$H+}
 program nativeset_bench;
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
 
 const
   N = 100000;
@@ -72,7 +72,7 @@ var
 begin
   InitSets;
 
-  LSuite := TBenchSuite.Create('NativeSet')
+  LSuite := TBenchSuite.Create('nativeset')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

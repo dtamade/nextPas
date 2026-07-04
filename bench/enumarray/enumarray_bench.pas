@@ -1,8 +1,7 @@
 {$mode ObjFPC}{$H+}
 {$packenum 1}
 program enumarray_bench;
-uses SysUtils, Classes,
-  nextpas.core.base, nextpas.core.time.base,
+uses nextpas.core.base, nextpas.core.time.base,
   nextpas.core.bench, nextpas.core.bench.intf;
 
 const
@@ -57,15 +56,17 @@ end;
 
 var
   LSuite: IBenchSuite;
+  LResults: IBenchResults;
   I: Integer;
 begin
   for I := 0 to N-1 do
     GTokens[I] := TTokenKind(I mod 20);
-  LSuite := TBenchSuite.Create('EnumArray');
+  LSuite := TBenchSuite.Create('enumarray');
   LSuite.Add('Traverse/1M', @Traverse);
   LSuite.Add('FilterCount/1M', @FilterCount);
   LSuite.Add('SumOrdinals/1M', @SumOrdinals);
   LSuite.SetMinSamples(5);
   LSuite.SetMaxIterations(50000);
-  LSuite.Run;
+  LResults := LSuite.Run;
+  WriteLn(LResults.ToBenchStat);
 end.

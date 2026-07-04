@@ -10,7 +10,6 @@ program crypto_bench;
 }
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -160,7 +159,7 @@ begin
 
   InitPayload;
 
-  LSuite := TBenchSuite.Create('Crypto')
+  LSuite := TBenchSuite.Create('crypto')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

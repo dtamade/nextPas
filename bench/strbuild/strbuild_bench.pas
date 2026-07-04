@@ -2,7 +2,6 @@ program strbuild_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -93,7 +92,7 @@ begin
   WriteLn('N=', N, ' parts');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('StrBuild')
+  LSuite := TBenchSuite.Create('strbuild')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

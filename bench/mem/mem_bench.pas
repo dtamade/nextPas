@@ -10,7 +10,6 @@ program mem_bench;
 }
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -116,7 +115,7 @@ begin
   GRawAllocator := TAllocator(GAllocator as TObject);
   GPool := MakeFixedSlabPool(SMALL_SIZE);
 
-  LSuite := TBenchSuite.Create('Memory')
+  LSuite := TBenchSuite.Create('mem')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

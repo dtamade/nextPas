@@ -2,7 +2,7 @@
 program binsearch_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
 
 const
@@ -176,7 +176,7 @@ begin
 end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -185,7 +185,7 @@ begin
   WriteLn('=== nextPas binsearch_bench (', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%}, ') ===');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('BinSearchHit');
+  LSuite := TBenchSuite.Create('binsearch/hit');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Standard', @StdSearch_Hit);
   LSuite.Add('Branchless', @BranchlessSearch_Hit);
@@ -194,7 +194,7 @@ begin
   WriteLn(LResults.ToBenchStat);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('BinSearchMiss');
+  LSuite := TBenchSuite.Create('binsearch/miss');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Standard', @StdSearch_Miss);
   LSuite.Add('Branchless', @BranchlessSearch_Miss);

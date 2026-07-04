@@ -2,7 +2,6 @@
 program fncall_bench;
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -37,7 +36,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('FnCall');
+  LSuite := TBenchSuite.Create('fncall');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200));
   LSuite.SetMaxIterations(10000);
   LSuite.SetMinSamples(6);

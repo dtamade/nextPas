@@ -8,7 +8,8 @@ program bench_pool;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes, SyncObjs,
+  Classes, SyncObjs,  { Classes for TThread — cross-language benchmark requires FPC RTL }
+  nextpas.core.time.base,
   nextpas.core.sync.pool;
 
 const
@@ -25,6 +26,7 @@ type
     Pool: TSyncPool;
     Iterations: Integer;
     InternalMs: QWord; { 内部计时, 排除线程创建/销毁开销 }
+    T0, T1: TInstant;
     procedure Execute; override;
   end;
 
@@ -53,35 +55,37 @@ begin
     Pool.Put(LObj);
   end;
   { 计时: 仅测量 get/put 循环 }
-  LStart := GetTickCount64;
+  T0 := TInstant.Now;
   for I := 1 to Iterations do begin
     LObj := TTestObj(Pool.Get);
     LObj.Value := I;
     Pool.Put(LObj);
   end;
-  InternalMs := GetTickCount64 - LStart;
+  T1 := TInstant.Now;
+  InternalMs := T1.DurationSince(T0).AsMilliseconds;
 end;
 
 procedure BenchDirectAlloc;
 var
-  LStart: QWord;
+  T0, T1: TInstant;
   I: Integer;
   LObj: TTestObj;
 begin
-  LStart := GetTickCount64;
+  T0 := TInstant.Now;
   for I := 1 to N do
   begin
     LObj := TTestObj.Create;
     LObj.Value := I;
     LObj.Free;
   end;
-  WriteLn('Direct alloc x', N, ': ', GetTickCount64 - LStart, ' ms');
+  T1 := TInstant.Now;
+  WriteLn('Direct alloc x', N, ': ', T1.DurationSince(T0).AsMilliseconds, ' ms');
 end;
 
 procedure BenchPoolSingleThread;
 var
   LPool: TSyncPool;
-  LStart: QWord;
+  T0, T1: TInstant;
   I: Integer;
   LObj: TTestObj;
 begin
@@ -95,14 +99,15 @@ begin
       LPool.Put(LObj);
     end;
 
-    LStart := GetTickCount64;
+    T0 := TInstant.Now;
     for I := 1 to N do
     begin
       LObj := TTestObj(LPool.Get);
       LObj.Value := I;
       LPool.Put(LObj);
     end;
-    WriteLn('Pool get/put x', N, ': ', GetTickCount64 - LStart, ' ms');
+    T1 := TInstant.Now;
+    WriteLn('Pool get/put x', N, ': ', T1.DurationSince(T0).AsMilliseconds, ' ms');
   finally
     LPool.Free;
   end;

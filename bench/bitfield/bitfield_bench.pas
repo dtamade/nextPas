@@ -1,6 +1,6 @@
 {$mode ObjFPC}{$H+}
 program bitfield_bench;
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
 
 const
   BITS = 65536;
@@ -59,7 +59,7 @@ var
 begin
   InitBits;
 
-  LSuite := TBenchSuite.Create('BitField')
+  LSuite := TBenchSuite.Create('bitfield')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

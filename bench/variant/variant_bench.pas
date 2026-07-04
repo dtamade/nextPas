@@ -1,6 +1,6 @@
 {$mode ObjFPC}{$H+}
 program variant_bench;
-uses SysUtils, Classes, nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf;
 
 type
   TShapeKind = (skCircle, skRect, skTriangle);
@@ -69,7 +69,7 @@ var
 begin
   InitShapes;
 
-  LSuite := TBenchSuite.Create('Variant')
+  LSuite := TBenchSuite.Create('variant')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

@@ -14,7 +14,6 @@ program text_bench;
 }
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -145,7 +144,7 @@ begin
   WriteLn('JSON:     ', Length(GJsonStr), 'B parse × ', JSON_PARSE_N, ' iters');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Text')
+  LSuite := TBenchSuite.Create('text')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

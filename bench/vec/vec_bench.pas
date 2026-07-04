@@ -12,7 +12,6 @@ program vec_bench;
 }
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -122,7 +121,7 @@ begin
   WriteLn('Scan:   ', SCAN_LOOK, ' lookups in ', SCAN_N, '-element array');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Array')
+  LSuite := TBenchSuite.Create('vec')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)
