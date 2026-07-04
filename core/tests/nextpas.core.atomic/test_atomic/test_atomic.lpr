@@ -4,7 +4,7 @@ program test_atomic;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.atomic,

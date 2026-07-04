@@ -4,7 +4,7 @@ program test_lockfree;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
