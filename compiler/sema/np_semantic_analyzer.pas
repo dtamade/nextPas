@@ -5749,7 +5749,7 @@ procedure TSemanticAnalyzer.SeedRuntimeContracts;
   procedure AddRuntimeContract(const AContractName, AKind: string);
   begin
     FModel.AddRuntimeContract(AContractName);
-    FModel.AddTypedHirNode(AKind, AContractName, 0, 0, '');
+    FModel.AddTypedHirNode('runtime-contract', AContractName, 0, 0, '');
   end;
 
   procedure SeedUnitLifecycle;
@@ -5913,7 +5913,7 @@ begin
     (FRootAst.RootKindName = 'package')) then
   begin
     FModel.AddRuntimeContract(NPSYSTEM_PROCESS_FINI);
-    FModel.AddTypedHirNode('process-fini-runtime', NPSYSTEM_PROCESS_FINI, 0, 0, '');
+    FModel.AddTypedHirNode('runtime-contract', NPSYSTEM_PROCESS_FINI, 0, 0, '');
   end;
   if FNoFold then
   begin
