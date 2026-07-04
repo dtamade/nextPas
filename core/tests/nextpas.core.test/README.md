@@ -161,19 +161,26 @@ end.
 
 ### TTestSuite 是 mutable record
 
-`TTestSuite` 是 Pascal record（值类型），`With*` 方法返回新值：
+`TTestSuite` 是 Pascal record（值类型）。**推荐使用直接修改方法**（`SetSetup`/`OnBeforeEach` 等），它们就地修改 record，无返回值陷阱：
 
 ```pascal
-// ❌ 错误：WithSetup 返回新 record，原 Suite 不变
-Suite.WithSetup(Proc);
-Suite.Test('name', TestProc);
-
-// ✅ 正确：保存返回值
-Suite := Suite.WithSetup(Proc);
+// ✅ 推荐：直接修改方法，无陷阱
+Suite.SetSetup(Proc);
+Suite.OnBeforeEach(Proc);
+Suite.OnAfterEach(Proc);
+Suite.Cleanup(Proc);
 Suite.Test('name', TestProc);
 ```
 
-`Test()`/`Bench()`/`SetSetup()` 等过程式方法直接修改 record，无需保存返回值。
+`With*` 方法（`WithSetup`/`WithTeardown` 等）已 deprecated——它们返回新 record，丢弃返回值是常见 bug：
+
+```pascal
+// ❌ 错误：WithSetup 返回新 record，原 Suite 不变（编译警告）
+Suite.WithSetup(Proc);
+
+// ⚠️ 正确但不推荐：必须保存返回值
+Suite := Suite.WithSetup(Proc);
+```
 
 ### 并行模式限制
 
