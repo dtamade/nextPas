@@ -1,215 +1,70 @@
 program bench_json;
-
 {$I nextpas.core.settings.inc}
-{$Q-}{$R-}
-
 uses
-  SysUtils,
-  fpjson, jsonparser,
-  nextpas.core.time.base,
-  nextpas.core.text.view,
-  nextpas.core.text.builder,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.default,
-  nextpas.core.json,
-  nextpas.core.json.types,
-  nextpas.core.json.parser,
-  nextpas.core.json.value,
-  nextpas.core.json.writer;
-
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.json, nextpas.core.json.parser, nextpas.core.json.serializer;
 const
-  SMALL_JSON = '{"name":"Alice","age":30,"active":true,"score":3.14}';
-  MEDIUM_JSON = '{"users":[{"id":1,"name":"Alice","email":"alice@example.com","age":30},' +
-    '{"id":2,"name":"Bob","email":"bob@example.com","age":25},' +
-    '{"id":3,"name":"Charlie","email":"charlie@example.com","age":35}],' +
-    '"total":3,"page":1,"hasMore":false}';
-
+  SMALL_JSON = '{"name":"test","value":42,"items":[1,2,3,4,5]}';
 var
-  LARGE_JSON: string;
-
-procedure BuildLargeJson;
-var
-  B: TStringBuilder;
-  W: TJsonWriter;
-  I: Int32;
+  GLargeJson: string;
+  GSmallDoc: IJsonDocument;
+  GLargeDoc: IJsonDocument;
+  GCounter: UInt64;
+function BuildLargeJson: string;
+var LBuf: string; LI, LCap, LLen: Integer;
 begin
-  B.Init(8192);
-  W.Init(B);
-  W.BeginObject;
-    W.Key('items'); W.BeginArray;
-    for I := 0 to 99 do
-    begin
-      W.BeginObject;
-        W.Key('id'); W.Int(I);
-        W.Key('name'); W.Str('item_' + IntToStr(I));
-        W.Key('value'); W.Float(I * 1.5);
-        W.Key('active'); W.Bool(I mod 2 = 0);
-      W.EndObject;
-    end;
-    W.EndArray;
-    W.Key('count'); W.Int(100);
-  W.EndObject;
-  LARGE_JSON := B.ToString;
-  B.Done;
-end;
-
-procedure BenchOp(const AName: string; const AOps: Int64; const AElapsed: TDuration);
-var
-  LNs: Int64;
-  LNsPerOp: Double;
-begin
-  LNs := AElapsed.AsNanoseconds;
-  if LNs > 0 then
-    LNsPerOp := LNs / AOps
-  else
-    LNsPerOp := 0;
-  WriteLn(Format('  %-45s %8.0f ns/op', [AName, LNsPerOp]));
-end;
-
-procedure BenchParseSmall;
-const N = 50000;
-var
-  LStart: TInstant;
-  I: Int32;
-  Doc: IJsonDocument;
-  FpcDoc: TJSONData;
-begin
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    Doc := JsonParse(SMALL_JSON);
-  BenchOp('nextpas JsonParse (small, 52B)', N, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for I := 1 to N do
-  begin
-    FpcDoc := GetJSON(SMALL_JSON);
-    FpcDoc.Free;
+  LCap := 0; LLen := 0; LBuf := '';
+  for LI := 1 to 1000 do begin
+    if LLen + 60 > LCap then begin if LCap = 0 then LCap := 8192 else LCap := LCap * 2; SetLength(LBuf, LCap); end;
+    LLen := LLen + FormatBuf(LBuf[LLen + 1], '{"key":"item' + IntToStr(LI) + '","val":' + IntToStr(LI) + '},', []);
   end;
-  BenchOp('FPC fpjson GetJSON (small, 52B)', N, LStart.Elapsed);
+  SetLength(LBuf, LLen);
+  Result := '{"items":[' + LBuf + ']}';
 end;
-
-procedure BenchParseMedium;
-const N = 20000;
-var
-  LStart: TInstant;
-  I: Int32;
-  Doc: IJsonDocument;
-  FpcDoc: TJSONData;
+procedure BenchParseSmall(const ACtx: IBenchContext);
+var LDoc: IJsonDocument; LName: string;
 begin
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    Doc := JsonParse(MEDIUM_JSON);
-  BenchOp('nextpas JsonParse (medium, 250B)', N, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for I := 1 to N do
-  begin
-    FpcDoc := GetJSON(MEDIUM_JSON);
-    FpcDoc.Free;
+  LDoc := TJsonParser.Parse(SMALL_JSON);
+  LName := LDoc.Root.AsObject.GetString('name');
+  GCounter := GCounter xor UInt64(Length(LName));
+end;
+procedure BenchParseLarge(const ACtx: IBenchContext);
+var LDoc: IJsonDocument;
+begin
+  LDoc := TJsonParser.Parse(GLargeJson);
+  GCounter := GCounter xor UInt64(LDoc.Root.AsObject.Count);
+end;
+procedure BenchStringifySmall(const ACtx: IBenchContext);
+var LStr: string;
+begin LStr := GSmallDoc.Stringify; GCounter := GCounter xor UInt64(Length(LStr)); end;
+procedure BenchStringifyLarge(const ACtx: IBenchContext);
+var LStr: string;
+begin LStr := GLargeDoc.Stringify; GCounter := GCounter xor UInt64(Length(LStr)); end;
+procedure BenchAccessSmall(const ACtx: IBenchContext);
+var LVal: Integer; LLen: Integer;
+begin
+  LVal := GSmallDoc.Root.AsObject.GetInteger('value');
+  LLen := Length(GSmallDoc.Root.AsObject.GetArray('items'));
+  GCounter := GCounter xor UInt64(LVal) xor UInt64(LLen);
+end;
+procedure BenchAccessLarge(const ACtx: IBenchContext);
+var LObj: IJsonObject; LCount, LI, LVal: Integer;
+begin
+  LObj := GLargeDoc.Root.AsObject; LCount := LObj.Count;
+  for LI := 0 to LCount - 1 do begin
+    LVal := LObj.GetPair(LI).Value.AsInteger;
+    GCounter := GCounter xor UInt64(LVal);
   end;
-  BenchOp('FPC fpjson GetJSON (medium, 250B)', N, LStart.Elapsed);
 end;
-
-procedure BenchParseLarge;
-const N = 5000;
-var
-  LStart: TInstant;
-  I: Int32;
-  Doc: IJsonDocument;
-  FpcDoc: TJSONData;
+var LSuite: IBenchSuite;
 begin
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    Doc := JsonParse(LARGE_JSON);
-  BenchOp('nextpas JsonParse (large, ' + IntToStr(Length(LARGE_JSON)) + 'B)', N, LStart.Elapsed);
-
-  LStart := TInstant.Now;
-  for I := 1 to N do
-  begin
-    FpcDoc := GetJSON(LARGE_JSON);
-    FpcDoc.Free;
-  end;
-  BenchOp('FPC fpjson GetJSON (large, ' + IntToStr(Length(LARGE_JSON)) + 'B)', N, LStart.Elapsed);
-end;
-
-procedure BenchStringify;
-const N = 20000;
-var
-  LStart: TInstant;
-  I: Int32;
-  Doc: IJsonDocument;
-  FpcDoc: TJSONData;
-  S: string;
-begin
-  Doc := JsonParse(MEDIUM_JSON);
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    S := Doc.Stringify;
-  BenchOp('nextpas Stringify (medium)', N, LStart.Elapsed);
-
-  FpcDoc := GetJSON(MEDIUM_JSON);
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    S := FpcDoc.AsJSON;
-  BenchOp('FPC fpjson AsJSON (medium)', N, LStart.Elapsed);
-  FpcDoc.Free;
-end;
-
-procedure BenchAccess;
-const N = 100000;
-var
-  LStart: TInstant;
-  I: Int32;
-  Doc: IJsonDocument;
-  FpcDoc: TJSONData;
-  LDummy: Int64;
-begin
-  Doc := JsonParse(MEDIUM_JSON);
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    LDummy := Doc.Root.ObjectGet('total').AsInt;
-  BenchOp('nextpas ObjectGet+AsInt', N, LStart.Elapsed);
-
-  FpcDoc := GetJSON(MEDIUM_JSON);
-  LStart := TInstant.Now;
-  for I := 1 to N do
-    LDummy := (FpcDoc as TJSONObject).Get('total', Int64(0));
-  BenchOp('FPC fpjson Get(key)', N, LStart.Elapsed);
-  FpcDoc.Free;
-end;
-
-begin
-  BuildLargeJson;
-
-  WriteLn('=== nextpas.core.json benchmarks ===');
-  WriteLn;
-
-  WriteLn('--- Parse ---');
-  BenchParseSmall;
-  BenchParseMedium;
-  BenchParseLarge;
-  WriteLn;
-
-  WriteLn('--- Stringify ---');
-  BenchStringify;
-  WriteLn;
-
-  WriteLn('--- Access ---');
-  BenchAccess;
-  WriteLn;
-
-  WriteLn('--- Reference (measured, same machine) ---');
-  WriteLn('  Rust serde_json parse (small, 52B):        608 ns/op');
-  WriteLn('  Rust serde_json parse (medium, 250B):     2597 ns/op');
-  WriteLn('  Rust serde_json stringify (medium):        632 ns/op');
-  WriteLn('  Rust simd-json parse (small, 52B):         767 ns/op');
-  WriteLn('  Rust simd-json parse (medium, 250B):      1914 ns/op');
-  WriteLn;
-  WriteLn('--- Summary ---');
-  WriteLn('  nextpas vs FPC fpjson:    3.1x faster (parse), 11.9x (stringify)');
-  WriteLn('  nextpas vs Rust serde:    1.2-1.7x slower (parse), 1.06x (stringify)');
-  WriteLn('  nextpas vs Rust simd-json: 1.3-1.6x slower (parse)');
-  WriteLn;
-
-  WriteLn('Done.');
+  GLargeJson := BuildLargeJson;
+  GSmallDoc := TJsonParser.Parse(SMALL_JSON);
+  GLargeDoc := TJsonParser.Parse(GLargeJson);
+  GCounter := 0;
+  LSuite := TBenchSuite.Create('json');
+  LSuite.Add('Parse/small', @BenchParseSmall).Add('Parse/large', @BenchParseLarge)
+    .Add('Stringify/small', @BenchStringifySmall).Add('Stringify/large', @BenchStringifyLarge)
+    .Add('Access/small', @BenchAccessSmall).Add('Access/large', @BenchAccessLarge);
+  WriteLn(LSuite.Run.PrintToConsole);
 end.
