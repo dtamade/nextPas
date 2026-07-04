@@ -989,13 +989,11 @@ begin
   begin
     LRunCount := 0;
     LBeforeEachCounter := 0;
-    {$WARN SYMBOL_DEPRECATED OFF}
     LResultSuite := TTestSuite.Create('WithChain')
       .WithSetup(procedure begin Inc(GSetupCalled); end)
       .WithTeardown(procedure begin Inc(GTeardownCalled); end)
       .WithBeforeEach(procedure begin Inc(LBeforeEachCounter); end)
       .WithAfterEach(procedure begin Inc(GAfterEachCalled); end);
-    {$WARN SYMBOL_DEPRECATED ON}
     LResultSuite.Test('chained pass', procedure begin
       InterLockedIncrement(LRunCount);
       CheckTrue(True);

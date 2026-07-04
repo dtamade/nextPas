@@ -132,33 +132,23 @@ type
         Suite := Suite.WithSetup(Proc);  // ✅ correct
         Suite.WithSetup(Proc);           // ❌ BUG: changes discarded
       Prefer direct modification methods (SetSetup/OnBeforeEach/etc.) to avoid
-      this trap. With* methods are deprecated and will be removed in a future version. }
+      this trap. Note: FPC deprecated directive does not work on record methods,
+      so these cannot emit compile-time warnings. }
     function  WithConfig(const AConfig: TTestConfig): TTestSuite;
-      deprecated 'returns new record — prefer: Suite.Config := AConfig';
     function  WithSetup(AProc: TTestProc): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.SetSetup(AProc)';
     function  WithSetup(AProc: TTestClosure): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.SetSetup(AProc)';
     function  WithTeardown(AProc: TTestProc): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.SetTeardown(AProc)';
     function  WithTeardown(AProc: TTestClosure): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.SetTeardown(AProc)';
     function  WithBeforeEach(AProc: TTestProc): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.OnBeforeEach(AProc)';
     function  WithBeforeEach(AProc: TTestClosure): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.OnBeforeEach(AProc)';
     { Note: BeforeEach/AfterEach run in the same thread as the test.
       In parallel mode (RunParallel), each worker thread executes its own
       BeforeEach/AfterEach — if the closure captures shared state, the caller
       is responsible for synchronization. }
     function  WithAfterEach(AProc: TTestProc): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.OnAfterEach(AProc)';
     function  WithAfterEach(AProc: TTestClosure): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.OnAfterEach(AProc)';
     function  WithEachCleanup(AProc: TTestProc): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.Cleanup(AProc)';
     function  WithEachCleanup(AProc: TTestClosure): TTestSuite; overload;
-      deprecated 'returns new record — prefer: Suite.Cleanup(AProc)';
     function  Run: Boolean;
     function  RunWithResult(out AResult: TTestRunResult): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
