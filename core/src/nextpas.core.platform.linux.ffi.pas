@@ -26,6 +26,7 @@ function __fxstat(
   var AStat: TPlatformLinuxStat): Int32; cdecl; external 'c' name '__fxstat';
 function fstatat(dirfd: cint; pathname: PAnsiChar; var buf: TPlatformLinuxStat; flags: cint): cint; cdecl; external 'c' name 'fstatat';
 function pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
+function pthread_timedjoin_np(thread: PtrUInt; retval: PPointer; abstime: Pointer): Int32; cdecl; external 'c' name 'pthread_timedjoin_np';
 function dlopen(Name: PAnsiChar; Flags: Int32): Pointer; cdecl; external 'dl' name 'dlopen';
 function dlsym(Lib: Pointer; Name: PAnsiChar): Pointer; cdecl; external 'dl' name 'dlsym';
 function dlclose(Lib: Pointer): Int32; cdecl; external 'dl' name 'dlclose';
