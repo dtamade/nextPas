@@ -20,18 +20,19 @@ Phase I:   Shuffle + Guard Pages + Scan/NoScan                ✅
 Phase J:   基准与验证 + 碎片率测量                             ✅
 R18-R20:   ReallocMem + BatchAPI + Arena benchmark            ✅
 R25-R27:   性能终极优化 + 稳定性加固                            ✅
-当前位置:  全部完成，45 suites / 573+ tests / 0 failures
+Phase 2:   Per-Thread Inbox + Two-Phase Drain                  ✅
+当前位置:  全部完成，46 suites / 579+ tests / 0 failures
 ```
 
-## 当前状态 (2026-06-29)
+## 当前状态 (2026-07-05)
 
 - 49 源文件 / 19,920+ 行
-- **45 suites / 573+ tests / 0 failures / 0 leaks**
-- 核心热路径: Arena 7ns (135 Mops/s), 64B **16ns** (**3.5x 快于 glibc**), 1KB **21ns** (**4.5x 快于 glibc**)
-- 并发 4T: **4ns/op** (227 Mops/s)
+- **46 suites / 579+ tests / 0 failures / 0 leaks**
+- 核心热路径: Arena 8ns (120 Mops/s), 64B **17ns** (**57.5 Mops/s**), 1KB **18ns** (**56.2 Mops/s**)
+- 并发 4T: **5ns/op** (218 Mops/s) / **4ns/op** (257 Mops/s)
 - Batch API: 7.3ns/block (3.4x 快于逐个分配)
-- ReallocMem 同 class 零拷贝: 54ns
-- 已有能力: Arena (bump/local/chunked), 固定块池 (block/slab/mapped), 分片锁, 线程局部 TLS cache, 无锁 CAS, bitmap span, scavenger, guard pages
+- ReallocMem 同 class 零拷贝: 39ns
+- 已有能力: Arena (bump/local/chunked), 固定块池 (block/slab/mapped), 分片锁, 线程局部 TLS cache, 无锁 CAS MPSC inbox, bitmap span, scavenger, guard pages
 
 ---
 
@@ -41,12 +42,12 @@ R25-R27:   性能终极优化 + 稳定性加固                            ✅
 
 | 层次 | Go (runtime) | mimalloc | snmalloc | nextpas.core.mem |
 |------|-------------|----------|----------|-----------------|
-| **TLS cache** | mcache (136 slots, ~5ns) | TLS page (48 bins) | thread-local chunk | ❌ 无 |
-| **Central** | mcentral (lock-free spanSet) | OS page (delayed-free) | message queue | ❌ 无 |
+| **TLS cache** | mcache (136 slots, ~5ns) | TLS page (48 bins) | thread-local chunk | ✅ TThreadCache (per-size-class) |
+| **Central** | mcentral (lock-free spanSet) | OS page (delayed-free) | message queue | ✅ TCentralPool (spinlock + CAS inbox) |
 | **Global** | mheap (radix tree 5-level) | OS page heap | shared allocator | ⚠️ 各后端独立 |
 | **Size classes** | 68 (8B-32KB) | 48 (up to 64KB) | 16 (up to 64KB) | 7 (fixed pool) |
 | **Span** | bitmap 64-bit, BSF 1 指令 | page segment 256×64KB | chunk 16 classes | slab 页级 |
-| **X-thread free** | GC assist + mcentral | delayed-free list | message queue | mutex wrapper |
+| **X-thread free** | GC assist + mcentral | delayed-free list | message queue | ✅ MPSC inbox (lock-free) |
 | **Huge alloc** | mheap 直接 mmap | 直接 mmap | 直接 mmap | mmap allocator ✅ |
 | **OS 回收** | scavenger (2min) | eager purge bitmap | heartbeat | ❌ 无 |
 
