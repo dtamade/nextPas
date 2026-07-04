@@ -4,10 +4,10 @@ program test_toml_facade_surface;
 
 uses
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFacadeExposesCoreSurface;
 var
@@ -35,8 +35,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml (facade surface)');
-  T.Run('facade exposes core surface', @TestFacadeExposesCoreSurface);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml (facade surface)');
+  T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
+  if not T.Run then Halt(1);
 end.

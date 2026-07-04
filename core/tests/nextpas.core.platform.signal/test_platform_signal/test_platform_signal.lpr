@@ -6,10 +6,10 @@ uses
   nextpas.core.platform.signal,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GHandlerCalled: Int32;
   GLastSignal: Int32;
 
@@ -92,14 +92,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.signal');
-  T.Run('set handler + deliver', @TestSetHandler);
-  T.Run('set SIGINT handler', @TestSetSIGINT);
-  T.Run('overwrite handler', @TestOverwriteHandler);
-  T.Run('block + unblock delivery', @TestBlockUnblock);
-  T.Run('invalid signal', @TestInvalidSignal);
-  T.Run('reset handler', @TestResetHandler);
-  T.Run('multiple signals', @TestMultipleSignals);
-  T.Run('handler receives correct signal', @TestHandlerSignalArg);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.signal');
+  T.Test('set handler + deliver', @TestSetHandler);
+  T.Test('set SIGINT handler', @TestSetSIGINT);
+  T.Test('overwrite handler', @TestOverwriteHandler);
+  T.Test('block + unblock delivery', @TestBlockUnblock);
+  T.Test('invalid signal', @TestInvalidSignal);
+  T.Test('reset handler', @TestResetHandler);
+  T.Test('multiple signals', @TestMultipleSignals);
+  T.Test('handler receives correct signal', @TestHandlerSignalArg);
+  if not T.Run then Halt(1);
 end.

@@ -5,7 +5,7 @@ program test_btree_managed_lifecycle;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.btree,
   leak_tracker;
 
@@ -22,7 +22,7 @@ type
   TManagedRecordMap = specialize TBTreeMap<TManagedRecord, TManagedRecord>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GManagedRecordAlive: Int32 = 0;
   GManagedRecordBadFinalize: Int32 = 0;
 
@@ -372,15 +372,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.btree_managed_lifecycle');
-  T.Run('map managed values released after split clear', @TestMapManagedValuesReleasedAfterSplitClear);
-  T.Run('map managed value released after split remove', @TestMapManagedValueReleasedAfterSplitRemove);
-  T.Run('set managed key released after split remove', @TestSetManagedKeyReleasedAfterSplitRemove);
-  T.Run('map managed values released during remove stress', @TestMapManagedValuesReleasedDuringRemoveStress);
-  T.Run('set managed keys released during remove stress', @TestSetManagedKeysReleasedDuringRemoveStress);
-  T.Run('map PopMin/PopMax managed outputs own refs', @TestMapPopMinMaxManagedValueOutputsOwnRefs);
-  T.Run('set PopMin/PopMax managed outputs own refs', @TestSetPopMinMaxManagedItemOutputsOwnRefs);
-  T.Run('map managed record key/value remove rebalance lifecycle',
+  T := TTestSuite.Create('nextpas.core.collections.btree_managed_lifecycle');
+  T.Test('map managed values released after split clear', @TestMapManagedValuesReleasedAfterSplitClear);
+  T.Test('map managed value released after split remove', @TestMapManagedValueReleasedAfterSplitRemove);
+  T.Test('set managed key released after split remove', @TestSetManagedKeyReleasedAfterSplitRemove);
+  T.Test('map managed values released during remove stress', @TestMapManagedValuesReleasedDuringRemoveStress);
+  T.Test('set managed keys released during remove stress', @TestSetManagedKeysReleasedDuringRemoveStress);
+  T.Test('map PopMin/PopMax managed outputs own refs', @TestMapPopMinMaxManagedValueOutputsOwnRefs);
+  T.Test('set PopMin/PopMax managed outputs own refs', @TestSetPopMinMaxManagedItemOutputsOwnRefs);
+  T.Test('map managed record key/value remove rebalance lifecycle',
     @TestMapManagedRecordKeyValueRemoveRebalanceKeepsLifecycle);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -4,14 +4,14 @@ program test_http_h1parser;
 
 uses
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h1.parser;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadReaderStr(const AReader: IReader): string;
 var
@@ -2303,139 +2303,139 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.h1.parser');
-  T.Run('Simple GET', @TestSimpleGet);
-  T.Run('GET with path', @TestGetWithPath);
-  T.Run('POST with body', @TestPostWithBody);
-  T.Run('Multiple headers', @TestMultipleHeaders);
-  T.Run('HTTP/1.0 version', @TestHttp10Version);
-  T.Run('Response 200', @TestResponse200);
-  T.Run('Response 404', @TestResponse404);
-  T.Run('Response 204 no body', @TestResponse204NoBody);
-  T.Run('Response HEAD skip-body with content-length', @TestResponseHeadSkipBodyWithContentLength);
-  T.Run('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
-  T.Run('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
-  T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
-  T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
-  T.Run('Content-Length body', @TestContentLengthBody);
-  T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
-  T.Run('Chunked request body', @TestChunkedRequestBody);
-  T.Run('Request metadata fixed-length expect connection',
+  T := TTestSuite.Create('nextpas.core.http.impl.h1.parser');
+  T.Test('Simple GET', @TestSimpleGet);
+  T.Test('GET with path', @TestGetWithPath);
+  T.Test('POST with body', @TestPostWithBody);
+  T.Test('Multiple headers', @TestMultipleHeaders);
+  T.Test('HTTP/1.0 version', @TestHttp10Version);
+  T.Test('Response 200', @TestResponse200);
+  T.Test('Response 404', @TestResponse404);
+  T.Test('Response 204 no body', @TestResponse204NoBody);
+  T.Test('Response HEAD skip-body with content-length', @TestResponseHeadSkipBodyWithContentLength);
+  T.Test('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
+  T.Test('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
+  T.Test('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
+  T.Test('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
+  T.Test('Content-Length body', @TestContentLengthBody);
+  T.Test('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
+  T.Test('Chunked request body', @TestChunkedRequestBody);
+  T.Test('Request metadata fixed-length expect connection',
     @TestRequestMetadataFixedLengthExpectConnection);
-  T.Run('Request metadata span fast path keeps trim and token semantics',
+  T.Test('Request metadata span fast path keeps trim and token semantics',
     @TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics);
-  T.Run('Request metadata chunked transfer-encoding',
+  T.Test('Request metadata chunked transfer-encoding',
     @TestRequestMetadataChunkedTransferEncoding);
-  T.Run('Request metadata split duplicate watched headers',
+  T.Test('Request metadata split duplicate watched headers',
     @TestRequestMetadataSplitDuplicateWatchedHeaders);
-  T.Run('Request metadata ignores chunked trailer headers',
+  T.Test('Request metadata ignores chunked trailer headers',
     @TestRequestMetadataIgnoresChunkedTrailerHeaders);
-  T.Run('Request metadata publishes after headers complete',
+  T.Test('Request metadata publishes after headers complete',
     @TestRequestMetadataPublishesAfterHeadersComplete);
-  T.Run('Request body reader view', @TestRequestBodyReaderView);
-  T.Run('Response body reader view', @TestResponseBodyReaderView);
-  T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
-  T.Run('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
-  T.Run('Chunked request truncated chunk extension at EOF', @TestChunkedRequestTruncatedChunkExtensionAtEof);
-  T.Run('Chunked request truncated chunk extension CR at EOF', @TestChunkedRequestTruncatedChunkExtensionCrAtEof);
-  T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
-  T.Run('Chunked request truncated chunk-size line at EOF', @TestChunkedRequestTruncatedChunkSizeLineAtEof);
-  T.Run('Chunked request truncated terminal chunk ending at EOF', @TestChunkedRequestTruncatedTerminalChunkEndingAtEof);
-  T.Run('Chunked request truncated terminal chunk ending CR at EOF',
+  T.Test('Request body reader view', @TestRequestBodyReaderView);
+  T.Test('Response body reader view', @TestResponseBodyReaderView);
+  T.Test('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
+  T.Test('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
+  T.Test('Chunked request truncated chunk extension at EOF', @TestChunkedRequestTruncatedChunkExtensionAtEof);
+  T.Test('Chunked request truncated chunk extension CR at EOF', @TestChunkedRequestTruncatedChunkExtensionCrAtEof);
+  T.Test('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
+  T.Test('Chunked request truncated chunk-size line at EOF', @TestChunkedRequestTruncatedChunkSizeLineAtEof);
+  T.Test('Chunked request truncated terminal chunk ending at EOF', @TestChunkedRequestTruncatedTerminalChunkEndingAtEof);
+  T.Test('Chunked request truncated terminal chunk ending CR at EOF',
     @TestChunkedRequestTruncatedTerminalChunkEndingCrAtEof);
-  T.Run('Chunked request truncated terminal chunk extension at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionAtEof);
-  T.Run('Chunked request truncated terminal chunk extension CR at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionCrAtEof);
-  T.Run('Chunked request truncated terminal chunk ending after extension at EOF',
+  T.Test('Chunked request truncated terminal chunk extension at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionAtEof);
+  T.Test('Chunked request truncated terminal chunk extension CR at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionCrAtEof);
+  T.Test('Chunked request truncated terminal chunk ending after extension at EOF',
     @TestChunkedRequestTruncatedTerminalChunkEndingAfterExtensionAtEof);
-  T.Run('Chunked request truncated terminal chunk ending after extension CR at EOF',
+  T.Test('Chunked request truncated terminal chunk ending after extension CR at EOF',
     @TestChunkedRequestTruncatedTerminalChunkEndingAfterExtensionCrAtEof);
-  T.Run('Chunked request truncated chunk-data ending at EOF', @TestChunkedRequestTruncatedChunkDataEndingAtEof);
-  T.Run('Chunked request truncated chunk-data CR at EOF', @TestChunkedRequestTruncatedChunkDataCrAtEof);
-  T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
-  T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
-  T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
-  T.Run('Adapter framing errors consume through headers',
+  T.Test('Chunked request truncated chunk-data ending at EOF', @TestChunkedRequestTruncatedChunkDataEndingAtEof);
+  T.Test('Chunked request truncated chunk-data CR at EOF', @TestChunkedRequestTruncatedChunkDataCrAtEof);
+  T.Test('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
+  T.Test('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
+  T.Test('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Test('Adapter framing errors consume through headers',
     @TestAdapterFramingErrorConsumedOffsets);
-  T.Run('Chunked request unsupported transfer coding before chunked',
+  T.Test('Chunked request unsupported transfer coding before chunked',
     @TestChunkedRequestUnsupportedTransferCodingBeforeChunked);
-  T.Run('Request unsupported non-chunked transfer coding',
+  T.Test('Request unsupported non-chunked transfer coding',
     @TestRequestUnsupportedNonChunkedTransferCoding);
-  T.Run('Chunked request chunked must be final transfer coding',
+  T.Test('Chunked request chunked must be final transfer coding',
     @TestChunkedRequestChunkedMustBeFinalTransferCoding);
-  T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
-  T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
-  T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);
-  T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
-  T.Run('Chunked request truncated trailer field-name at EOF', @TestChunkedRequestTruncatedTrailerFieldNameAtEof);
-  T.Run('Chunked request truncated trailer separator at EOF', @TestChunkedRequestTruncatedTrailerSeparatorAtEof);
-  T.Run('Chunked request truncated trailer empty-value CR at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueCrAtEof);
-  T.Run('Chunked request truncated trailer empty-value at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueAtEof);
-  T.Run('Chunked request truncated trailer empty-value section CR at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueSectionCrAtEof);
-  T.Run('Chunked request truncated trailer whitespace at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceAtEof);
-  T.Run('Chunked request truncated trailer whitespace CR at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceCrAtEof);
-  T.Run('Chunked request truncated trailer whitespace section at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceSectionAtEof);
-  T.Run('Chunked request truncated trailer whitespace section CR at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceSectionCrAtEof);
-  T.Run('Chunked request truncated trailer field line at EOF', @TestChunkedRequestTruncatedTrailerFieldLineAtEof);
-  T.Run('Chunked request truncated trailer field CR at EOF', @TestChunkedRequestTruncatedTrailerFieldCrAtEof);
-  T.Run('Chunked request truncated trailer CR at EOF', @TestChunkedRequestTruncatedTrailerCrAtEof);
-  T.Run('HEAD request', @TestHeadRequest);
-  T.Run('Generic malformed request', @TestInvalidRequest);
-  T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
-  T.Run('Header with null byte', @TestHeaderNullByte);
-  T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
-  T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
-  T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
-  T.Run('Very long method rejected', @TestVeryLongMethodRejected);
-  T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
-  T.Run('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
-  T.Run('Content-Length keep-alive truncated follow-up request line consumes first request only',
+  T.Test('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
+  T.Test('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
+  T.Test('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);
+  T.Test('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
+  T.Test('Chunked request truncated trailer field-name at EOF', @TestChunkedRequestTruncatedTrailerFieldNameAtEof);
+  T.Test('Chunked request truncated trailer separator at EOF', @TestChunkedRequestTruncatedTrailerSeparatorAtEof);
+  T.Test('Chunked request truncated trailer empty-value CR at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueCrAtEof);
+  T.Test('Chunked request truncated trailer empty-value at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueAtEof);
+  T.Test('Chunked request truncated trailer empty-value section CR at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueSectionCrAtEof);
+  T.Test('Chunked request truncated trailer whitespace at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceAtEof);
+  T.Test('Chunked request truncated trailer whitespace CR at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceCrAtEof);
+  T.Test('Chunked request truncated trailer whitespace section at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceSectionAtEof);
+  T.Test('Chunked request truncated trailer whitespace section CR at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceSectionCrAtEof);
+  T.Test('Chunked request truncated trailer field line at EOF', @TestChunkedRequestTruncatedTrailerFieldLineAtEof);
+  T.Test('Chunked request truncated trailer field CR at EOF', @TestChunkedRequestTruncatedTrailerFieldCrAtEof);
+  T.Test('Chunked request truncated trailer CR at EOF', @TestChunkedRequestTruncatedTrailerCrAtEof);
+  T.Test('HEAD request', @TestHeadRequest);
+  T.Test('Generic malformed request', @TestInvalidRequest);
+  T.Test('Duplicate Content-Length', @TestDuplicateContentLength);
+  T.Test('Header with null byte', @TestHeaderNullByte);
+  T.Test('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
+  T.Test('Request-line splitting rejected', @TestRequestLineSplittingRejected);
+  T.Test('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
+  T.Test('Very long method rejected', @TestVeryLongMethodRejected);
+  T.Test('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
+  T.Test('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Test('Content-Length keep-alive truncated follow-up request line consumes first request only',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
-  T.Run('Content-Length keep-alive partial follow-up request line can complete later',
+  T.Test('Content-Length keep-alive partial follow-up request line can complete later',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Content-Length keep-alive truncated follow-up headers consumes first request only',
+  T.Test('Content-Length keep-alive truncated follow-up headers consumes first request only',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
-  T.Run('Content-Length keep-alive partial follow-up headers can complete later',
+  T.Test('Content-Length keep-alive partial follow-up headers can complete later',
     @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater);
-  T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
-  T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
-  T.Run('Chunked keep-alive truncated follow-up request line consumes first request only',
+  T.Test('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
+  T.Test('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Test('Chunked keep-alive truncated follow-up request line consumes first request only',
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
-  T.Run('Chunked keep-alive partial follow-up request line can complete later',
+  T.Test('Chunked keep-alive partial follow-up request line can complete later',
     @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Chunked keep-alive truncated follow-up headers consumes first request only',
+  T.Test('Chunked keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
-  T.Run('Chunked keep-alive partial follow-up headers can complete later',
+  T.Test('Chunked keep-alive partial follow-up headers can complete later',
     @TestChunkedKeepAlivePartialFollowUpHeadersCanCompleteLater);
-  T.Run('Chunked trailer keep-alive garbage tail consumes first request only',
+  T.Test('Chunked trailer keep-alive garbage tail consumes first request only',
     @TestChunkedTrailerKeepAliveGarbageTailConsumesFirstRequestOnly);
-  T.Run('Chunked trailer keep-alive truncated follow-up request line consumes first request only',
+  T.Test('Chunked trailer keep-alive truncated follow-up request line consumes first request only',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
-  T.Run('Chunked trailer keep-alive truncated follow-up headers consumes first request only',
+  T.Test('Chunked trailer keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
-  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later',
+  T.Test('Chunked trailer keep-alive partial follow-up headers can complete later',
     @TestChunkedTrailerKeepAlivePartialFollowUpHeadersCanCompleteLater);
-  T.Run('Chunked trailer pipelined next request does not pollute current request',
+  T.Test('Chunked trailer pipelined next request does not pollute current request',
     @TestChunkedTrailerPipelinedNextRequestDoesNotPolluteCurrentRequest);
-  T.Run('Chunked trailer partial follow-up request line can complete later',
+  T.Test('Chunked trailer partial follow-up request line can complete later',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
-  T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
-  T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
-  T.Run('Completed parser execute is terminal until reset',
+  T.Test('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
+  T.Test('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
+  T.Test('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
+  T.Test('Completed parser execute is terminal until reset',
     @TestCompletedParserExecuteIsTerminalUntilReset);
-  T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
-  T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
-  T.Run('Incomplete input', @TestIncompleteInput);
-  T.Run('Nil zero-length input is noop', @TestNilZeroLengthInputIsNoop);
-  T.Run('Nil positive-length input reports malformed',
+  T.Test('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
+  T.Test('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
+  T.Test('Incomplete input', @TestIncompleteInput);
+  T.Test('Nil zero-length input is noop', @TestNilZeroLengthInputIsNoop);
+  T.Test('Nil positive-length input reports malformed',
     @TestNilPositiveLengthInputReportsMalformed);
-  T.Run('Parser error state is terminal across execute and finish',
+  T.Test('Parser error state is terminal across execute and finish',
     @TestParserErrorStateIsTerminalAcrossExecuteAndFinish);
-  T.Run('Parser finish short-circuits existing error source contract',
+  T.Test('Parser finish short-circuits existing error source contract',
     @TestParserFinishShortCircuitsExistingErrorSourceContract);
-  T.Run('Reset and reparse', @TestResetAndReparse);
-  T.Run('Request with query', @TestRequestWithQuery);
-  T.Run('Multiple headers same name', @TestMultipleHeadersSameName);
-  T.Run('Split header callbacks accumulate', @TestSplitHeaderCallbacksAccumulate);
-  T.Summary;
+  T.Test('Reset and reparse', @TestResetAndReparse);
+  T.Test('Request with query', @TestRequestWithQuery);
+  T.Test('Multiple headers same name', @TestMultipleHeadersSameName);
+  T.Test('Split header callbacks accumulate', @TestSplitHeaderCallbacksAccumulate);
+  if not T.Run then Halt(1);
 end.

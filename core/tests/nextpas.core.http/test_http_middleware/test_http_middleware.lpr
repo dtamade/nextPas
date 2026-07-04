@@ -5,7 +5,7 @@ program test_http_middleware;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -603,19 +603,19 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 begin
-  T := TTestRunner.Create('nextpas.core.http.middleware');
-  T.Run('HandlerFunc wraps function', @TestHandlerFuncWraps);
-  T.Run('HandlerFunc rejects nil callbacks', @TestHandlerFuncRejectsNilCallbacks);
-  T.Run('Single middleware wraps handler', @TestSingleMiddleware);
-  T.Run('Multiple middlewares execute in order', @TestMultipleMiddlewaresOrder);
-  T.Run('Chain convenience function', @TestChainConvenience);
-  T.Run('MiddlewareFunc wraps function', @TestMiddlewareFuncWraps);
-  T.Run('Middleware factories reject nil inputs', @TestMiddlewareFactoriesRejectNilInputs);
-  T.Run('Middleware modifies response', @TestMiddlewareModifiesResponse);
-  T.Run('Middleware short-circuits', @TestMiddlewareShortCircuit);
-  T.Run('Empty chain passthrough', @TestEmptyChainPassthrough);
-  T.Run('Middleware writes body', @TestMiddlewareWritesBody);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.middleware');
+  T.Test('HandlerFunc wraps function', @TestHandlerFuncWraps);
+  T.Test('HandlerFunc rejects nil callbacks', @TestHandlerFuncRejectsNilCallbacks);
+  T.Test('Single middleware wraps handler', @TestSingleMiddleware);
+  T.Test('Multiple middlewares execute in order', @TestMultipleMiddlewaresOrder);
+  T.Test('Chain convenience function', @TestChainConvenience);
+  T.Test('MiddlewareFunc wraps function', @TestMiddlewareFuncWraps);
+  T.Test('Middleware factories reject nil inputs', @TestMiddlewareFactoriesRejectNilInputs);
+  T.Test('Middleware modifies response', @TestMiddlewareModifiesResponse);
+  T.Test('Middleware short-circuits', @TestMiddlewareShortCircuit);
+  T.Test('Empty chain passthrough', @TestEmptyChainPassthrough);
+  T.Test('Middleware writes body', @TestMiddlewareWritesBody);
+  if not T.Run then Halt(1);
 end.

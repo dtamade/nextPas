@@ -5,7 +5,7 @@ program test_http_message;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.net.base,
@@ -16,7 +16,7 @@ uses
   nextpas.core.http.message;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadBodyStr(const AReader: IReader): string;
 var
@@ -1168,103 +1168,103 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.message');
-  T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
-  T.Run('NewRequest parses string URL', @TestNewRequestParsesStringUrl);
-  T.Run('NewRequest accepts headers, body, and content length',
+  T := TTestSuite.Create('nextpas.core.http.message');
+  T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
+  T.Test('NewRequest parses string URL', @TestNewRequestParsesStringUrl);
+  T.Test('NewRequest accepts headers, body, and content length',
     @TestNewRequestWithHeadersBodyAndContentLength);
-  T.Run('NewRequest accepts string URL with headers, body, and content length',
+  T.Test('NewRequest accepts string URL with headers, body, and content length',
     @TestNewRequestStringUrlWithHeadersBodyAndContentLength);
-  T.Run('NewRequest accepts headers without body',
+  T.Test('NewRequest accepts headers without body',
     @TestNewRequestWithHeadersWithoutBody);
-  T.Run('NewRequest accepts string URL with headers without body',
+  T.Test('NewRequest accepts string URL with headers without body',
     @TestNewRequestStringUrlWithHeadersWithoutBody);
-  T.Run('NewRequest nil third argument keeps bytes helper semantics',
+  T.Test('NewRequest nil third argument keeps bytes helper semantics',
     @TestNewRequestNilThirdArgumentKeepsBytesHelper);
-  T.Run('NewRequest accepts string body helper',
+  T.Test('NewRequest accepts string body helper',
     @TestNewRequestWithStringBody);
-  T.Run('NewRequest accepts bytes body helper',
+  T.Test('NewRequest accepts bytes body helper',
     @TestNewRequestWithBytesBody);
-  T.Run('NewRequest accepts string URL bytes body helper',
+  T.Test('NewRequest accepts string URL bytes body helper',
     @TestNewRequestStringUrlWithBytesBody);
-  T.Run('NewRequest accepts string body helper without headers',
+  T.Test('NewRequest accepts string body helper without headers',
     @TestNewRequestWithStringBodyWithoutHeaders);
-  T.Run('NewRequest accepts bytes body helper without headers',
+  T.Test('NewRequest accepts bytes body helper without headers',
     @TestNewRequestWithBytesBodyWithoutHeaders);
-  T.Run('NewRequest accepts reader body helper without headers',
+  T.Test('NewRequest accepts reader body helper without headers',
     @TestNewRequestWithReaderBodyWithoutHeaders);
-  T.Run('NewRequest accepts string body and content-type helper without headers',
+  T.Test('NewRequest accepts string body and content-type helper without headers',
     @TestNewRequestWithStringBodyAndContentTypeWithoutHeaders);
-  T.Run('NewRequest accepts bytes body and content-type helper without headers',
+  T.Test('NewRequest accepts bytes body and content-type helper without headers',
     @TestNewRequestWithBytesBodyAndContentTypeWithoutHeaders);
-  T.Run('NewRequest accepts reader body and content-type helper without headers',
+  T.Test('NewRequest accepts reader body and content-type helper without headers',
     @TestNewRequestWithReaderBodyAndContentTypeWithoutHeaders);
-  T.Run('NewRequest creates headers when headers argument is nil',
+  T.Test('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
-  T.Run('Request constructors create headers when headers argument is nil',
+  T.Test('Request constructors create headers when headers argument is nil',
     @TestRequestConstructorsWithNilHeadersCreateHeaders);
-  T.Run('NewRequest rejects negative content length',
+  T.Test('NewRequest rejects negative content length',
     @TestNewRequestRejectsNegativeContentLength);
-  T.Run('NewRequest rejects conflicting content-length header',
+  T.Test('NewRequest rejects conflicting content-length header',
     @TestNewRequestRejectsConflictingContentLengthHeader);
-  T.Run('NewRequest accepts matching content-length header',
+  T.Test('NewRequest accepts matching content-length header',
     @TestNewRequestAcceptsMatchingContentLengthHeader);
-  T.Run('NewRequest rejects duplicate content-length header',
+  T.Test('NewRequest rejects duplicate content-length header',
     @TestNewRequestRejectsDuplicateContentLengthHeader);
-  T.Run('NewRequest rejects invalid content-length header',
+  T.Test('NewRequest rejects invalid content-length header',
     @TestNewRequestRejectsInvalidContentLengthHeader);
-  T.Run('NewRequest rejects headers-only positive content-length',
+  T.Test('NewRequest rejects headers-only positive content-length',
     @TestNewRequestRejectsHeadersOnlyPositiveContentLength);
-  T.Run('NewRequest accepts headers-only zero content-length',
+  T.Test('NewRequest accepts headers-only zero content-length',
     @TestNewRequestAcceptsHeadersOnlyZeroContentLength);
-  T.Run('NewRequest rejects nil body with positive content-length',
+  T.Test('NewRequest rejects nil body with positive content-length',
     @TestNewRequestRejectsNilBodyWithPositiveContentLength);
-  T.Run('NewRequest rejects transfer-encoding with content-length',
+  T.Test('NewRequest rejects transfer-encoding with content-length',
     @TestNewRequestRejectsTransferEncodingWithContentLength);
-  T.Run('NewRequest rejects transfer-encoding without content-length',
+  T.Test('NewRequest rejects transfer-encoding without content-length',
     @TestNewRequestRejectsTransferEncodingWithoutContentLength);
-  T.Run('Request headers accessible', @TestRequestHeadersAccessible);
-  T.Run('Request body nil is ok', @TestRequestBodyNilIsOk);
-  T.Run('PathParam set and get', @TestPathParamSetAndGet);
-  T.Run('PathParam not found returns empty', @TestPathParamNotFoundReturnsEmpty);
-  T.Run('RemoteAddr default and set', @TestRemoteAddrDefaultAndSet);
-  T.Run('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
-  T.Run('NewGetRequest convenience', @TestNewGetRequestConvenience);
-  T.Run('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
-  T.Run('NewResponse with nil headers creates headers',
+  T.Test('Request headers accessible', @TestRequestHeadersAccessible);
+  T.Test('Request body nil is ok', @TestRequestBodyNilIsOk);
+  T.Test('PathParam set and get', @TestPathParamSetAndGet);
+  T.Test('PathParam not found returns empty', @TestPathParamNotFoundReturnsEmpty);
+  T.Test('RemoteAddr default and set', @TestRemoteAddrDefaultAndSet);
+  T.Test('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
+  T.Test('NewGetRequest convenience', @TestNewGetRequestConvenience);
+  T.Test('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
+  T.Test('NewResponse with nil headers creates headers',
     @TestNewResponseWithNilHeadersCreatesHeaders);
-  T.Run('Response headers accessible', @TestResponseHeadersAccessible);
-  T.Run('Response body accessible', @TestResponseBodyAccessible);
-  T.Run('NewResponse accepts string body helper',
+  T.Test('Response headers accessible', @TestResponseHeadersAccessible);
+  T.Test('Response body accessible', @TestResponseBodyAccessible);
+  T.Test('NewResponse accepts string body helper',
     @TestNewResponseStringBodyHelper);
-  T.Run('Facade NewResponse accepts string body helper',
+  T.Test('Facade NewResponse accepts string body helper',
     @TestFacadeNewResponseStringBodyHelper);
-  T.Run('NewResponse accepts bytes body helper',
+  T.Test('NewResponse accepts bytes body helper',
     @TestNewResponseBytesBodyHelper);
-  T.Run('NewResponse nil third argument keeps nil body',
+  T.Test('NewResponse nil third argument keeps nil body',
     @TestNewResponseNilThirdArgumentKeepsNilBody);
-  T.Run('NewResponse explicit nil reader keeps nil body',
+  T.Test('NewResponse explicit nil reader keeps nil body',
     @TestNewResponseExplicitNilReaderKeepsNilBody);
-  T.Run('NewResponse rejects conflicting content-length header',
+  T.Test('NewResponse rejects conflicting content-length header',
     @TestNewResponseRejectsConflictingContentLengthHeader);
-  T.Run('NewResponse rejects transfer-encoding with fixed body',
+  T.Test('NewResponse rejects transfer-encoding with fixed body',
     @TestNewResponseRejectsTransferEncodingWithFixedBody);
-  T.Run('NewResponse rejects no-body status with non-empty string body',
+  T.Test('NewResponse rejects no-body status with non-empty string body',
     @TestNewResponseRejectsNoBodyStatusStringBody);
-  T.Run('NewResponse rejects no-body status with non-empty bytes body',
+  T.Test('NewResponse rejects no-body status with non-empty bytes body',
     @TestNewResponseRejectsNoBodyStatusBytesBody);
-  T.Run('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
-  T.Run('Multiple path params', @TestMultiplePathParams);
-  T.Run('Request content-length stored', @TestRequestContentLengthStored);
-  T.Run('Request from request-target parses URL on demand',
+  T.Test('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
+  T.Test('Multiple path params', @TestMultiplePathParams);
+  T.Test('Request content-length stored', @TestRequestContentLengthStored);
+  T.Test('Request from request-target parses URL on demand',
     @TestRequestFromRequestTargetParsesOnDemand);
-  T.Run('Request direct path/raw-query accessors',
+  T.Test('Request direct path/raw-query accessors',
     @TestRequestDirectPathAndRawQueryAccessors);
-  T.Run('Request direct path/raw-query absolute target',
+  T.Test('Request direct path/raw-query absolute target',
     @TestRequestDirectPathAccessorsPreserveAbsoluteTarget);
-  T.Run('Request direct path/raw-query target forms',
+  T.Test('Request direct path/raw-query target forms',
     @TestRequestDirectPathAccessorTargetForms);
-  T.Run('Request direct path/raw-query invalid absolute target raises',
+  T.Test('Request direct path/raw-query invalid absolute target raises',
     @TestRequestDirectPathAccessorInvalidAbsoluteTargetRaises);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

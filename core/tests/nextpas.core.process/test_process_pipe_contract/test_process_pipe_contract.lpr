@@ -6,7 +6,7 @@ uses
   nextpas.core.thread.init,
   SysUtils, Classes,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.process.pipe
@@ -22,7 +22,7 @@ uses
   ;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GPipeTestByte: Byte = 1;
 
 {$IFDEF NEXTPAS_LINUX}
@@ -845,31 +845,31 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.process.pipe_contract');
-  T.Run('invalid reader fd raises', @TestPipeReaderInvalidFdRaises);
-  T.Run('invalid writer fd raises', @TestPipeWriterInvalidFdRaises);
-  T.Run('invalid reader close raises', @TestPipeReaderCloseInvalidFdRaises);
-  T.Run('invalid writer close raises', @TestPipeWriterCloseInvalidFdRaises);
-  T.Run('reader exposes read-close and drain contracts',
+  T := TTestSuite.Create('nextpas.core.process.pipe_contract');
+  T.Test('invalid reader fd raises', @TestPipeReaderInvalidFdRaises);
+  T.Test('invalid writer fd raises', @TestPipeWriterInvalidFdRaises);
+  T.Test('invalid reader close raises', @TestPipeReaderCloseInvalidFdRaises);
+  T.Test('invalid writer close raises', @TestPipeWriterCloseInvalidFdRaises);
+  T.Test('reader exposes read-close and drain contracts',
     @TestPipeReaderExposesReadCloseContract);
-  T.Run('writer exposes write-close contract',
+  T.Test('writer exposes write-close contract',
     @TestPipeWriterExposesWriteCloseContract);
   {$IFDEF NEXTPAS_UNIX}
-  T.Run('reader zero-count returns 0', @TestPipeReaderZeroCountReturnsZero);
-  T.Run('writer zero-count returns 0', @TestPipeWriterZeroCountReturnsZero);
-  T.Run('reader EOF returns 0', @TestPipeReaderEofReturnsZero);
-  T.Run('closed reader wrapper raises', @TestPipeReaderClosedWrapperRaises);
-  T.Run('closed writer wrapper raises', @TestPipeWriterClosedWrapperRaises);
+  T.Test('reader zero-count returns 0', @TestPipeReaderZeroCountReturnsZero);
+  T.Test('writer zero-count returns 0', @TestPipeWriterZeroCountReturnsZero);
+  T.Test('reader EOF returns 0', @TestPipeReaderEofReturnsZero);
+  T.Test('closed reader wrapper raises', @TestPipeReaderClosedWrapperRaises);
+  T.Test('closed writer wrapper raises', @TestPipeWriterClosedWrapperRaises);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('reader nonblocking EAGAIN raises', @TestPipeReaderNonBlockingEagainRaises);
-  T.Run('writer nonblocking EAGAIN raises', @TestPipeWriterNonBlockingEagainRaises);
-  T.Run('reader retries EINTR', @TestPipeReaderRetriesEintr);
-  T.Run('writer retries EINTR', @TestPipeWriterRetriesEintr);
-  T.Run('writer completes after positive short write',
+  T.Test('reader nonblocking EAGAIN raises', @TestPipeReaderNonBlockingEagainRaises);
+  T.Test('writer nonblocking EAGAIN raises', @TestPipeWriterNonBlockingEagainRaises);
+  T.Test('reader retries EINTR', @TestPipeReaderRetriesEintr);
+  T.Test('writer retries EINTR', @TestPipeWriterRetriesEintr);
+  T.Test('writer completes after positive short write',
     @TestPipeWriterCompletesAfterPositiveShortWrite);
-  T.Run('writer broken pipe raises EIOError',
+  T.Test('writer broken pipe raises EIOError',
     @TestPipeWriterBrokenPipeRaisesInsteadOfSigPipe);
   {$ENDIF}
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@ program test_smallvec;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.smallvec;
 
 type
@@ -13,7 +13,7 @@ type
   TStrSmallVec = specialize TSmallVec<string, 4>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPushPopInline;
 var SV: TSmallVec4; v: Integer;
@@ -107,13 +107,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.smallvec');
-  T.Run('Push/Pop inline', @TestPushPopInline);
-  T.Run('Spill to heap', @TestSpillToHeap);
-  T.Run('Get/Put', @TestGetPut);
-  T.Run('Clear', @TestClear);
-  T.Run('Grow stress (100)', @TestGrowStress);
-  T.Run('String managed type', @TestStringManaged);
-  T.Run('ToArray', @TestToArray);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.smallvec');
+  T.Test('Push/Pop inline', @TestPushPopInline);
+  T.Test('Spill to heap', @TestSpillToHeap);
+  T.Test('Get/Put', @TestGetPut);
+  T.Test('Clear', @TestClear);
+  T.Test('Grow stress (100)', @TestGrowStress);
+  T.Test('String managed type', @TestStringManaged);
+  T.Test('ToArray', @TestToArray);
+  if not T.Run then Halt(1);
 end.

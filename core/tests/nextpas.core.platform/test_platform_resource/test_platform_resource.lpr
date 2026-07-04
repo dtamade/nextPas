@@ -5,12 +5,12 @@ program test_platform_resource;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -159,11 +159,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.resource');
-  T.Run('gets open-file resource limit', @TestGetOpenFilesLimit);
-  T.Run('sets open-file resource limit to the existing value', @TestSetOpenFilesLimitToSameValue);
-  T.Run('rejects invalid resource limit kind', @TestInvalidLimitKind);
-  T.Run('rejects invalid resource limit values', @TestInvalidLimitValues);
-  T.Run('Android resource source contract', @TestAndroidResourceSourceContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.resource');
+  T.Test('gets open-file resource limit', @TestGetOpenFilesLimit);
+  T.Test('sets open-file resource limit to the existing value', @TestSetOpenFilesLimitToSameValue);
+  T.Test('rejects invalid resource limit kind', @TestInvalidLimitKind);
+  T.Test('rejects invalid resource limit values', @TestInvalidLimitValues);
+  T.Test('Android resource source contract', @TestAndroidResourceSourceContract);
+  if not T.Run then Halt(1);
 end.

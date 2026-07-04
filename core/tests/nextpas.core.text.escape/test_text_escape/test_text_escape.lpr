@@ -7,10 +7,10 @@ uses
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.simd.vec,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestEscapeClean;
 var
@@ -220,19 +220,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.escape');
-  T.Run('escape clean', @TestEscapeClean);
-  T.Run('escape quote+backslash', @TestEscapeQuoteBackslash);
-  T.Run('escape control chars', @TestEscapeControlChars);
-  T.Run('escape null byte', @TestEscapeNullByte);
-  T.Run('escape to builder', @TestEscapeToBuilder);
-  T.Run('unescape basic', @TestUnescapeBasic);
-  T.Run('unescape named chars', @TestUnescapeNamedChars);
-  T.Run('unescape unicode', @TestUnescapeUnicode);
-  T.Run('unescape surrogate pair', @TestUnescapeSurrogatePair);
-  T.Run('unescape errors', @TestUnescapeErrors);
-  T.Run('unescape rejects bare controls', @TestUnescapeRejectsBareControlBytes);
-  T.Run('find string end', @TestFindStringEnd);
-  T.Run('escape long string', @TestEscapeLongString);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.escape');
+  T.Test('escape clean', @TestEscapeClean);
+  T.Test('escape quote+backslash', @TestEscapeQuoteBackslash);
+  T.Test('escape control chars', @TestEscapeControlChars);
+  T.Test('escape null byte', @TestEscapeNullByte);
+  T.Test('escape to builder', @TestEscapeToBuilder);
+  T.Test('unescape basic', @TestUnescapeBasic);
+  T.Test('unescape named chars', @TestUnescapeNamedChars);
+  T.Test('unescape unicode', @TestUnescapeUnicode);
+  T.Test('unescape surrogate pair', @TestUnescapeSurrogatePair);
+  T.Test('unescape errors', @TestUnescapeErrors);
+  T.Test('unescape rejects bare controls', @TestUnescapeRejectsBareControlBytes);
+  T.Test('find string end', @TestFindStringEnd);
+  T.Test('escape long string', @TestEscapeLongString);
+  if not T.Run then Halt(1);
 end.

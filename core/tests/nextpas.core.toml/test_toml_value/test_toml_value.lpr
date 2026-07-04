@@ -8,10 +8,10 @@ uses
   nextpas.core.toml.base,
   nextpas.core.toml.parser,
   nextpas.core.toml.value,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ParseDoc(const AToml: string): TTomlDocument;
 begin
@@ -333,29 +333,28 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml.value');
-  T.Run('invalid value', @TestInvalidValue);
-  T.Run('get string', @TestGetString);
-  T.Run('get int', @TestGetInt);
-  T.Run('get float', @TestGetFloat);
-  T.Run('get bool', @TestGetBool);
-  T.Run('get missing', @TestGetMissing);
-  T.Run('has', @TestHas);
-  T.Run('nested table', @TestNestedTable);
-  T.Run('chained get', @TestChainedGet);
-  T.Run('table len', @TestTableLen);
-  T.Run('table key at', @TestTableKeyAt);
-  T.Run('table value at', @TestTableValueAt);
-  T.Run('array len', @TestArrayLen);
-  T.Run('array get', @TestArrayGet);
-  T.Run('array table', @TestArrayTable);
-  T.Run('datetime', @TestDateTime);
-  T.Run('int promotes to float', @TestIntPromotesToFloat);
-  T.Run('enumerate array', @TestEnumerateArray);
-  T.Run('enumerate table', @TestEnumerateTable);
-  T.Run('enumerate empty', @TestEnumerateEmpty);
-  T.Run('key property', @TestKeyProperty);
-  T.Run('find by path', @TestFindByPath);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.toml.value');
+  T.Test('invalid value', @TestInvalidValue);
+  T.Test('get string', @TestGetString);
+  T.Test('get int', @TestGetInt);
+  T.Test('get float', @TestGetFloat);
+  T.Test('get bool', @TestGetBool);
+  T.Test('get missing', @TestGetMissing);
+  T.Test('has', @TestHas);
+  T.Test('nested table', @TestNestedTable);
+  T.Test('chained get', @TestChainedGet);
+  T.Test('table len', @TestTableLen);
+  T.Test('table key at', @TestTableKeyAt);
+  T.Test('table value at', @TestTableValueAt);
+  T.Test('array len', @TestArrayLen);
+  T.Test('array get', @TestArrayGet);
+  T.Test('array table', @TestArrayTable);
+  T.Test('datetime', @TestDateTime);
+  T.Test('int promotes to float', @TestIntPromotesToFloat);
+  T.Test('enumerate array', @TestEnumerateArray);
+  T.Test('enumerate table', @TestEnumerateTable);
+  T.Test('enumerate empty', @TestEnumerateEmpty);
+  T.Test('key property', @TestKeyProperty);
+  T.Test('find by path', @TestFindByPath);
+  if not T.Run then Halt(1);
 end.

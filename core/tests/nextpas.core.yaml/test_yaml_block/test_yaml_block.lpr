@@ -4,13 +4,13 @@ program test_yaml_block;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBlockMapping;
 var
@@ -271,23 +271,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.block');
-  T.Run('Block mapping', @TestBlockMapping);
-  T.Run('Block sequence', @TestBlockSequence);
-  T.Run('Block mapping with seq value', @TestBlockMappingWithSeqValue);
-  T.Run('Block nested mapping', @TestBlockNestedMapping);
-  T.Run('Block scalar literal', @TestBlockScalarLiteral);
-  T.Run('Mixed flow and block', @TestMixedFlowAndBlock);
-  T.Run('Block scalar folded', @TestBlockScalarFolded);
-  T.Run('Block scalar literal strip', @TestBlockScalarLiteralStrip);
-  T.Run('Block scalar literal keep', @TestBlockScalarLiteralKeep);
-  T.Run('Document markers', @TestDocumentMarkers);
-  T.Run('Block seq of mappings', @TestBlockSeqOfMappings);
-  T.Run('Comments in block', @TestCommentsInBlock);
-  T.Run('Empty values in block', @TestEmptyValuesInBlock);
-  T.Run('Nested block sequences', @TestNestedBlockSequences);
-  T.Run('Multi-level indent', @TestMultiLevelIndent);
-  T.Run('Boolean values', @TestBooleanValues);
-  T.Run('Null values', @TestNullValues);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.yaml.block');
+  T.Test('Block mapping', @TestBlockMapping);
+  T.Test('Block sequence', @TestBlockSequence);
+  T.Test('Block mapping with seq value', @TestBlockMappingWithSeqValue);
+  T.Test('Block nested mapping', @TestBlockNestedMapping);
+  T.Test('Block scalar literal', @TestBlockScalarLiteral);
+  T.Test('Mixed flow and block', @TestMixedFlowAndBlock);
+  T.Test('Block scalar folded', @TestBlockScalarFolded);
+  T.Test('Block scalar literal strip', @TestBlockScalarLiteralStrip);
+  T.Test('Block scalar literal keep', @TestBlockScalarLiteralKeep);
+  T.Test('Document markers', @TestDocumentMarkers);
+  T.Test('Block seq of mappings', @TestBlockSeqOfMappings);
+  T.Test('Comments in block', @TestCommentsInBlock);
+  T.Test('Empty values in block', @TestEmptyValuesInBlock);
+  T.Test('Nested block sequences', @TestNestedBlockSequences);
+  T.Test('Multi-level indent', @TestMultiLevelIndent);
+  T.Test('Boolean values', @TestBooleanValues);
+  T.Test('Null values', @TestNullValues);
+  if not T.Run then Halt(1);
 end.

@@ -5,11 +5,11 @@ program test_config_toml_export;
 uses
   nextpas.core.config,
   nextpas.core.fs,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.toml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function TempTomlPath(const AName: string): string;
 begin
@@ -259,24 +259,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.toml_export');
-  T.Run('TomlExport.ToTomlExportsLiteralFlatKeys',
+  T := TTestSuite.Create('nextpas.core.config.toml_export');
+  T.Test('TomlExport.ToTomlExportsLiteralFlatKeys',
     @TestToTomlExportsLiteralFlatKeys);
-  T.Run('TomlExport.ToTomlPreservesEscapedLiteralKeys',
+  T.Test('TomlExport.ToTomlPreservesEscapedLiteralKeys',
     @TestToTomlPreservesEscapedLiteralKeys);
-  T.Run('TomlExport.ToTomlSupportsTopLevelDenseArrayKeys',
+  T.Test('TomlExport.ToTomlSupportsTopLevelDenseArrayKeys',
     @TestToTomlSupportsTopLevelDenseArrayKeys);
-  T.Run('TomlExport.IConfigToTomlExportsSnapshot',
+  T.Test('TomlExport.IConfigToTomlExportsSnapshot',
     @TestIConfigToTomlExportsSnapshot);
-  T.Run('TomlExport.ToTomlRoundTripsCanonicalStringValues',
+  T.Test('TomlExport.ToTomlRoundTripsCanonicalStringValues',
     @TestToTomlRoundTripsCanonicalStringValues);
-  T.Run('TomlExport.ToTomlPreservesScalarSubtreeConflict',
+  T.Test('TomlExport.ToTomlPreservesScalarSubtreeConflict',
     @TestToTomlPreservesScalarSubtreeConflict);
-  T.Run('TomlExport.ToTomlPreservesEscapedStrings',
+  T.Test('TomlExport.ToTomlPreservesEscapedStrings',
     @TestToTomlPreservesEscapedStrings);
-  T.Run('TomlExport.SaveToTomlWritesFile',
+  T.Test('TomlExport.SaveToTomlWritesFile',
     @TestSaveToTomlWritesFile);
-  T.Run('TomlExport.SaveToTomlOverwritesAfterInMemoryLiteralExport',
+  T.Test('TomlExport.SaveToTomlOverwritesAfterInMemoryLiteralExport',
     @TestSaveToTomlOverwritesAfterInMemoryLiteralExport);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

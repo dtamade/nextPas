@@ -5,10 +5,10 @@ program test_base_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadText(const APath: string): string;
 var
@@ -53,8 +53,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.base contract');
-  T.Run('forward_list uses invariant violation', @TestForwardListUsesInvariantViolation);
-  T.Run('SizeUInt try guards preserve output contract', @TestSizeUIntTryGuardsPreserveOutputContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.base contract');
+  T.Test('forward_list uses invariant violation', @TestForwardListUsesInvariantViolation);
+  T.Test('SizeUInt try guards preserve output contract', @TestSizeUIntTryGuardsPreserveOutputContract);
+  if not T.Run then Halt(1);
 end.

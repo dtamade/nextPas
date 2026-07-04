@@ -6,9 +6,9 @@ uses
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.widget.syntax,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 type
   TSyntaxTestHelper = class
@@ -514,66 +514,66 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_syntax');
+  T := TTestSuite.Create('test_tui_syntax');
   Helper := TSyntaxTestHelper.Create;
   try
     { IsPascalKeyword }
-    T.Run('keyword begin', @TestKeywordBegin);
-    T.Run('keyword end', @TestKeywordEnd);
-    T.Run('keyword if then', @TestKeywordIfThen);
-    T.Run('keyword function', @TestKeywordFunction);
-    T.Run('keyword class', @TestKeywordClass);
-    T.Run('keyword operators', @TestKeywordOperators);
-    T.Run('keyword control', @TestKeywordControl);
-    T.Run('keyword other', @TestKeywordOther);
-    T.Run('non keyword', @TestNonKeyword);
+    T.Test('keyword begin', @TestKeywordBegin);
+    T.Test('keyword end', @TestKeywordEnd);
+    T.Test('keyword if then', @TestKeywordIfThen);
+    T.Test('keyword function', @TestKeywordFunction);
+    T.Test('keyword class', @TestKeywordClass);
+    T.Test('keyword operators', @TestKeywordOperators);
+    T.Test('keyword control', @TestKeywordControl);
+    T.Test('keyword other', @TestKeywordOther);
+    T.Test('non keyword', @TestNonKeyword);
 
     { IsPascalKeywordP }
-    T.Run('keyword P variant', @TestKeywordP);
-    T.Run('non keyword P variant', @TestNonKeywordP);
+    T.Test('keyword P variant', @TestKeywordP);
+    T.Test('non keyword P variant', @TestNonKeywordP);
 
     { TPascalHighlighter }
-    T.Run('highlighter LangId', @TestHighlighterLangId);
-    T.Run('highlighter TokenizeLine', @TestHighlighterTokenizeLine);
+    T.Test('highlighter LangId', @TestHighlighterLangId);
+    T.Test('highlighter TokenizeLine', @TestHighlighterTokenizeLine);
 
     { TokenizePascal }
-    T.Run('tokenize keyword', @TestTokenizeKeyword);
-    T.Run('tokenize identifier', @TestTokenizeIdentifier);
-    T.Run('tokenize number', @TestTokenizeNumber);
-    T.Run('tokenize hex number', @TestTokenizeHexNumber);
-    T.Run('tokenize string', @TestTokenizeString);
-    T.Run('tokenize block comment', @TestTokenizeBlockComment);
-    T.Run('tokenize line comment', @TestTokenizeLineComment);
-    T.Run('tokenize paren comment', @TestTokenizeParenComment);
-    T.Run('tokenize directive', @TestTokenizeDirective);
-    T.Run('tokenize symbols', @TestTokenizeSymbols);
-    T.Run('tokenize empty line', @TestTokenizeEmptyLine);
-    T.Run('tokenize mixed line', @TestTokenizeMixedLine);
-    T.Run('tokenize mixed with comment', @TestTokenizeMixedWithComment);
-    T.Run('tokenize negative number', @TestTokenizeNegativeNumber);
-    T.Run('tokenize float', @TestTokenizeFloat);
+    T.Test('tokenize keyword', @TestTokenizeKeyword);
+    T.Test('tokenize identifier', @TestTokenizeIdentifier);
+    T.Test('tokenize number', @TestTokenizeNumber);
+    T.Test('tokenize hex number', @TestTokenizeHexNumber);
+    T.Test('tokenize string', @TestTokenizeString);
+    T.Test('tokenize block comment', @TestTokenizeBlockComment);
+    T.Test('tokenize line comment', @TestTokenizeLineComment);
+    T.Test('tokenize paren comment', @TestTokenizeParenComment);
+    T.Test('tokenize directive', @TestTokenizeDirective);
+    T.Test('tokenize symbols', @TestTokenizeSymbols);
+    T.Test('tokenize empty line', @TestTokenizeEmptyLine);
+    T.Test('tokenize mixed line', @TestTokenizeMixedLine);
+    T.Test('tokenize mixed with comment', @TestTokenizeMixedWithComment);
+    T.Test('tokenize negative number', @TestTokenizeNegativeNumber);
+    T.Test('tokenize float', @TestTokenizeFloat);
 
     { TokenizePascalStateful }
-    T.Run('stateful normal line', @TestStatefulNormalLine);
-    T.Run('stateful block comment span', @TestStatefulBlockCommentSpan);
-    T.Run('stateful code after comment', @TestStatefulCodeAfterComment);
+    T.Test('stateful normal line', @TestStatefulNormalLine);
+    T.Test('stateful block comment span', @TestStatefulBlockCommentSpan);
+    T.Test('stateful code after comment', @TestStatefulCodeAfterComment);
 
     { TSyntaxDoc }
-    T.Run('syntax doc create', @TestSyntaxDocCreate);
-    T.Run('syntax doc GetTokens', @TestSyntaxDocGetTokens);
-    T.Run('syntax doc SetLineCount', @TestSyntaxDocSetLineCount);
-    T.Run('syntax doc Invalidate', @TestSyntaxDocInvalidate);
-    T.Run('syntax doc NotifyInsert', @TestSyntaxDocNotifyInsert);
-    T.Run('syntax doc NotifyDelete', @TestSyntaxDocNotifyDelete);
-    T.Run('syntax doc EnsureCleanTo', @TestSyntaxDocEnsureCleanTo);
+    T.Test('syntax doc create', @TestSyntaxDocCreate);
+    T.Test('syntax doc GetTokens', @TestSyntaxDocGetTokens);
+    T.Test('syntax doc SetLineCount', @TestSyntaxDocSetLineCount);
+    T.Test('syntax doc Invalidate', @TestSyntaxDocInvalidate);
+    T.Test('syntax doc NotifyInsert', @TestSyntaxDocNotifyInsert);
+    T.Test('syntax doc NotifyDelete', @TestSyntaxDocNotifyDelete);
+    T.Test('syntax doc EnsureCleanTo', @TestSyntaxDocEnsureCleanTo);
 
     { TSyntaxTheme }
-    T.Run('syntax theme default', @TestSyntaxThemeDefault);
-    T.Run('syntax theme nord', @TestSyntaxThemeNord);
-    T.Run('syntax theme styles differ', @TestSyntaxThemeStyleForDiffers);
+    T.Test('syntax theme default', @TestSyntaxThemeDefault);
+    T.Test('syntax theme nord', @TestSyntaxThemeNord);
+    T.Test('syntax theme styles differ', @TestSyntaxThemeStyleForDiffers);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
     Helper.Destroy;
   end;

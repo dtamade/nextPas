@@ -6,12 +6,12 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.cookie.base,
   nextpas.core.cookie;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckInvalidArgumentCookieError(const ALabel: string; const AError: EArgumentError);
 begin
@@ -245,23 +245,23 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.cookie');
-  T.Run('Parse simple', @TestParseSimple);
-  T.Run('Parse multiple', @TestParseMultiple);
-  T.Run('Parse empty value', @TestParseEmptyValue);
-  T.Run('Parse no value', @TestParseNoValue);
-  T.Run('Build cookie header', @TestBuildCookieHeader);
-  T.Run('Build Set-Cookie all attrs', @TestBuildSetCookieAllAttrs);
-  T.Run('Parse Set-Cookie flags', @TestParseSetCookieFlags);
-  T.Run('Parse Set-Cookie Max-Age', @TestParseSetCookieMaxAge);
-  T.Run('TryFindCookie found', @TestTryFindCookieFound);
-  T.Run('TryFindCookie not found', @TestTryFindCookieNotFound);
-  T.Run('Invalid input empty', @TestInvalidInputEmpty);
-  T.Run('CookieOf helper', @TestCookieOf);
-  T.Run('Valid cookie name', @TestValidCookieName);
-  T.Run('Valid cookie value', @TestValidCookieValue);
-  T.Run('Build rejects invalid name', @TestBuildRejectsInvalidName);
-  T.Run('Build rejects invalid value', @TestBuildRejectsInvalidValue);
-  T.Run('BuildSetCookie rejects CRLF', @TestBuildSetCookieRejectsInvalid);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.cookie');
+  T.Test('Parse simple', @TestParseSimple);
+  T.Test('Parse multiple', @TestParseMultiple);
+  T.Test('Parse empty value', @TestParseEmptyValue);
+  T.Test('Parse no value', @TestParseNoValue);
+  T.Test('Build cookie header', @TestBuildCookieHeader);
+  T.Test('Build Set-Cookie all attrs', @TestBuildSetCookieAllAttrs);
+  T.Test('Parse Set-Cookie flags', @TestParseSetCookieFlags);
+  T.Test('Parse Set-Cookie Max-Age', @TestParseSetCookieMaxAge);
+  T.Test('TryFindCookie found', @TestTryFindCookieFound);
+  T.Test('TryFindCookie not found', @TestTryFindCookieNotFound);
+  T.Test('Invalid input empty', @TestInvalidInputEmpty);
+  T.Test('CookieOf helper', @TestCookieOf);
+  T.Test('Valid cookie name', @TestValidCookieName);
+  T.Test('Valid cookie value', @TestValidCookieValue);
+  T.Test('Build rejects invalid name', @TestBuildRejectsInvalidName);
+  T.Test('Build rejects invalid value', @TestBuildRejectsInvalidValue);
+  T.Test('BuildSetCookie rejects CRLF', @TestBuildSetCookieRejectsInvalid);
+  if not T.Run then Halt(1);
 end.

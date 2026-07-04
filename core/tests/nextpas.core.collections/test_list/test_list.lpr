@@ -6,7 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.intf,
   failing_allocator,
   nextpas.core.collections,
@@ -27,7 +27,7 @@ type
   TManagedRecordList = specialize TList<TManagedRecord>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GManagedRecordAlive: Int32 = 0;
   GManagedRecordBadFinalize: Int32 = 0;
 
@@ -290,19 +290,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.list');
-  T.Run('PushFront/PopFront', @TestPushFrontPopFront);
-  T.Run('PushBack/PopBack', @TestPushBackPopBack);
-  T.Run('Front/Back', @TestFrontBack);
-  T.Run('TryFront/TryBack', @TestTryFrontTryBack);
-  T.Run('TryPopFront/TryPopBack', @TestTryPopFrontTryPopBack);
-  T.Run('Mixed Push/Pop', @TestMixedPushPop);
-  T.Run('Clear', @TestClear);
-  T.Run('String type (leak check)', @TestStringType);
-  T.Run('Managed Zero reinitializes slots', @TestManagedZeroReinitializesSlots);
-  T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
-  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
-  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
-  T.Run('PushBack block registry allocation failure is atomic', @TestPushBackBlockRegistryAllocationFailureIsAtomic);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.list');
+  T.Test('PushFront/PopFront', @TestPushFrontPopFront);
+  T.Test('PushBack/PopBack', @TestPushBackPopBack);
+  T.Test('Front/Back', @TestFrontBack);
+  T.Test('TryFront/TryBack', @TestTryFrontTryBack);
+  T.Test('TryPopFront/TryPopBack', @TestTryPopFrontTryPopBack);
+  T.Test('Mixed Push/Pop', @TestMixedPushPop);
+  T.Test('Clear', @TestClear);
+  T.Test('String type (leak check)', @TestStringType);
+  T.Test('Managed Zero reinitializes slots', @TestManagedZeroReinitializesSlots);
+  T.Test('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Test('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  T.Test('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Test('PushBack block registry allocation failure is atomic', @TestPushBackBlockRegistryAllocationFailureIsAtomic);
+  if not T.Run then Halt(1);
 end.

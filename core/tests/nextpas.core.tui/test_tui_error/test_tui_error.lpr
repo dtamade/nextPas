@@ -7,10 +7,10 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.tui.error,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestHierarchy;
 begin
@@ -68,12 +68,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.error');
-  T.Run('hierarchy', @TestHierarchy);
-  T.Run('catch as base ETui', @TestCatchAsBase);
-  T.Run('catch as ENextPasError', @TestCatchAsFrameworkRoot);
-  T.Run('catch as ECore compatibility', @TestCatchAsCoreCompatibility);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.error');
+  T.Test('hierarchy', @TestHierarchy);
+  T.Test('catch as base ETui', @TestCatchAsBase);
+  T.Test('catch as ENextPasError', @TestCatchAsFrameworkRoot);
+  T.Test('catch as ECore compatibility', @TestCatchAsCoreCompatibility);
+  if not T.Run then Halt(1);
 end.

@@ -4,14 +4,14 @@ program test_swisstable_managed_returns;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.hashmap.swiss;
 
 type
   TStringSwiss = specialize TSwissTable<string, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestManagedKeysOutliveTable;
 var
@@ -49,7 +49,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.swisstable_managed_returns');
-  T.Run('managed keys outlive table', @TestManagedKeysOutliveTable);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.swisstable_managed_returns');
+  T.Test('managed keys outlive table', @TestManagedKeysOutliveTable);
+  if not T.Run then Halt(1);
 end.

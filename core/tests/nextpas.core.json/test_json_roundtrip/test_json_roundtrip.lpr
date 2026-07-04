@@ -10,10 +10,10 @@ uses
   nextpas.core.json.types,
   nextpas.core.json.value,
   nextpas.core.json.builder,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ---------------------------------------------------------------------------
   Helper: walk a TJsonValue recursively and rebuild it with JsonBuilder.
@@ -353,16 +353,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json (roundtrip)');
-  T.Run('scalar roundtrip', @TestScalarRoundtrip);
-  T.Run('object roundtrip', @TestObjectRoundtrip);
-  T.Run('array roundtrip', @TestArrayRoundtrip);
-  T.Run('nested roundtrip', @TestNestedRoundtrip);
-  T.Run('empty containers', @TestEmptyContainers);
-  T.Run('unicode roundtrip', @TestUnicodeRoundtrip);
-  T.Run('all types roundtrip', @TestAllTypesRoundtrip);
-  T.Run('large document roundtrip', @TestLargeDocumentRoundtrip);
-  T.Run('builder escape roundtrip', @TestBuilderEscapeRoundtrip);
-  T.Run('deep nesting roundtrip', @TestDeepNestingRoundtrip);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.json (roundtrip)');
+  T.Test('scalar roundtrip', @TestScalarRoundtrip);
+  T.Test('object roundtrip', @TestObjectRoundtrip);
+  T.Test('array roundtrip', @TestArrayRoundtrip);
+  T.Test('nested roundtrip', @TestNestedRoundtrip);
+  T.Test('empty containers', @TestEmptyContainers);
+  T.Test('unicode roundtrip', @TestUnicodeRoundtrip);
+  T.Test('all types roundtrip', @TestAllTypesRoundtrip);
+  T.Test('large document roundtrip', @TestLargeDocumentRoundtrip);
+  T.Test('builder escape roundtrip', @TestBuilderEscapeRoundtrip);
+  T.Test('deep nesting roundtrip', @TestDeepNestingRoundtrip);
+  if not T.Run then Halt(1);
 end.

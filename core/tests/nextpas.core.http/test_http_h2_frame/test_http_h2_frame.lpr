@@ -10,7 +10,7 @@ uses
   nextpas.core.base,
   nextpas.core.http.base,
   nextpas.core.http.impl.h2.frame,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv;
 
 function HexNibble(const ACh: Char): Byte;
@@ -389,7 +389,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.frame') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.frame') do
   begin
     Run('Decode frame header masks reserved bit',
       @TestDecodeFrameHeaderMasksReservedBit);

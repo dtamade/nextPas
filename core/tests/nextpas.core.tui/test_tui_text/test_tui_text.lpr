@@ -7,10 +7,10 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.text,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSpanRaw;
 var
@@ -121,20 +121,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.text');
-  T.Run('span raw', @TestSpanRaw);
-  T.Run('span styled', @TestSpanStyled);
-  T.Run('span cjk width', @TestSpanCJKWidth);
-  T.Run('span keycap emoji width', @TestSpanKeycapEmojiWidth);
-  T.Run('line from string', @TestLineFromString);
-  T.Run('line from spans', @TestLineFromSpans);
-  T.Run('line alignment', @TestLineAlignment);
-  T.Run('text multiline', @TestTextFromStringMultiline);
-  T.Run('text crlf', @TestTextCRLF);
-  T.Run('text trailing lf', @TestTextTrailingLF);
-  T.Run('text from lines', @TestTextFromLines);
-  T.Run('text styled', @TestTextStyled);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.text');
+  T.Test('span raw', @TestSpanRaw);
+  T.Test('span styled', @TestSpanStyled);
+  T.Test('span cjk width', @TestSpanCJKWidth);
+  T.Test('span keycap emoji width', @TestSpanKeycapEmojiWidth);
+  T.Test('line from string', @TestLineFromString);
+  T.Test('line from spans', @TestLineFromSpans);
+  T.Test('line alignment', @TestLineAlignment);
+  T.Test('text multiline', @TestTextFromStringMultiline);
+  T.Test('text crlf', @TestTextCRLF);
+  T.Test('text trailing lf', @TestTextTrailingLF);
+  T.Test('text from lines', @TestTextFromLines);
+  T.Test('text styled', @TestTextStyled);
+  if not T.Run then Halt(1);
 end.

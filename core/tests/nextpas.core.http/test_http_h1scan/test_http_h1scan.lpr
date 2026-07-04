@@ -4,11 +4,11 @@ program test_http_h1scan;
 
 uses
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.http.impl.h1.scan;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFindCRLF_AtStart;
 var LBuf: string;
@@ -152,25 +152,25 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.h1.scan');
-  T.Run('FindCRLF at start', @TestFindCRLF_AtStart);
-  T.Run('FindCRLF at middle', @TestFindCRLF_AtMiddle);
-  T.Run('FindCRLF at end', @TestFindCRLF_AtEnd);
-  T.Run('FindCRLF not found', @TestFindCRLF_NotFound);
-  T.Run('FindCRLF lone CR', @TestFindCRLF_LoneCR);
-  T.Run('FindDoubleCRLF found', @TestFindDoubleCRLF_Found);
-  T.Run('FindDoubleCRLF not found', @TestFindDoubleCRLF_NotFound);
-  T.Run('FindDoubleCRLF at end', @TestFindDoubleCRLF_AtEnd);
-  T.Run('FindColon found', @TestFindColon_Found);
-  T.Run('FindColon not found', @TestFindColon_NotFound);
-  T.Run('ValidateToken valid', @TestValidateToken_Valid);
-  T.Run('ValidateToken invalid space', @TestValidateToken_InvalidSpace);
-  T.Run('ValidateToken invalid CTL', @TestValidateToken_InvalidCTL);
-  T.Run('Empty CRLF', @TestEmpty_CRLF);
-  T.Run('Empty DoubleCRLF', @TestEmpty_DoubleCRLF);
-  T.Run('Empty Colon', @TestEmpty_Colon);
-  T.Run('Empty ValidateToken', @TestEmpty_ValidateToken);
-  T.Run('Large input CRLF', @TestLargeInput_CRLF);
-  T.Run('Large input DoubleCRLF', @TestLargeInput_DoubleCRLF);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.http.impl.h1.scan');
+  T.Test('FindCRLF at start', @TestFindCRLF_AtStart);
+  T.Test('FindCRLF at middle', @TestFindCRLF_AtMiddle);
+  T.Test('FindCRLF at end', @TestFindCRLF_AtEnd);
+  T.Test('FindCRLF not found', @TestFindCRLF_NotFound);
+  T.Test('FindCRLF lone CR', @TestFindCRLF_LoneCR);
+  T.Test('FindDoubleCRLF found', @TestFindDoubleCRLF_Found);
+  T.Test('FindDoubleCRLF not found', @TestFindDoubleCRLF_NotFound);
+  T.Test('FindDoubleCRLF at end', @TestFindDoubleCRLF_AtEnd);
+  T.Test('FindColon found', @TestFindColon_Found);
+  T.Test('FindColon not found', @TestFindColon_NotFound);
+  T.Test('ValidateToken valid', @TestValidateToken_Valid);
+  T.Test('ValidateToken invalid space', @TestValidateToken_InvalidSpace);
+  T.Test('ValidateToken invalid CTL', @TestValidateToken_InvalidCTL);
+  T.Test('Empty CRLF', @TestEmpty_CRLF);
+  T.Test('Empty DoubleCRLF', @TestEmpty_DoubleCRLF);
+  T.Test('Empty Colon', @TestEmpty_Colon);
+  T.Test('Empty ValidateToken', @TestEmpty_ValidateToken);
+  T.Test('Large input CRLF', @TestLargeInput_CRLF);
+  T.Test('Large input DoubleCRLF', @TestLargeInput_DoubleCRLF);
+  if not T.Run then Halt(1);
 end.

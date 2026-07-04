@@ -5,7 +5,7 @@ program test_thread;
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Syscall,{$ENDIF}
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.thread,
   nextpas.core.thread.base,
@@ -23,7 +23,7 @@ type
   IIntPromise = specialize IPromise<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 var
   GCounter: Int32 = 0;
@@ -344,27 +344,27 @@ begin
   {$IFDEF UNIX}
   FpSignal(SIGABRT, @SigAbrtHandler);
   {$ENDIF}
-  T := TTestRunner.Create('nextpas.core.thread');
-  T.Run('Pool submit 10 tasks', @TestPoolSubmitAll);
-  T.Run('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
-  T.Run('Pool worker count', @TestPoolWorkerCount);
-  T.Run('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
-  T.Run('Channel with thread', @TestChannelWithThread);
-  T.Run('Channel close then receive', @TestChannelCloseReceiveFalse);
-  T.Run('Channel TrySend/TryReceive', @TestChannelTrySendReceive);
-  T.Run('Future complete', @TestFutureComplete);
-  T.Run('Future fail', @TestFutureFail);
-  T.Run('Future cancel', @TestFutureCancel);
-  T.Run('Future wait timeout', @TestFutureWaitTimeout);
-  T.Run('Cancellation basic', @TestCancellationBasic);
-  T.Run('Cancellation throw', @TestCancellationThrow);
-  T.Run('Cancellation wait', @TestCancellationWait);
-  T.Run('Channel send timeout', @TestChannelSendTimeout);
-  T.Run('Channel receive timeout', @TestChannelReceiveTimeout);
-  T.Run('FutureVoid basic', @TestFutureVoid);
-  T.Run('WhenAll', @TestWhenAll);
-  GAllPassed := T.AllPassed;
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.thread');
+  T.Test('Pool submit 10 tasks', @TestPoolSubmitAll);
+  T.Test('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
+  T.Test('Pool worker count', @TestPoolWorkerCount);
+  T.Test('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
+  T.Test('Channel with thread', @TestChannelWithThread);
+  T.Test('Channel close then receive', @TestChannelCloseReceiveFalse);
+  T.Test('Channel TrySend/TryReceive', @TestChannelTrySendReceive);
+  T.Test('Future complete', @TestFutureComplete);
+  T.Test('Future fail', @TestFutureFail);
+  T.Test('Future cancel', @TestFutureCancel);
+  T.Test('Future wait timeout', @TestFutureWaitTimeout);
+  T.Test('Cancellation basic', @TestCancellationBasic);
+  T.Test('Cancellation throw', @TestCancellationThrow);
+  T.Test('Cancellation wait', @TestCancellationWait);
+  T.Test('Channel send timeout', @TestChannelSendTimeout);
+  T.Test('Channel receive timeout', @TestChannelReceiveTimeout);
+  T.Test('FutureVoid basic', @TestFutureVoid);
+  T.Test('WhenAll', @TestWhenAll);
+  GAllPassed := T.Run;
+  if not T.Run then Halt(1);
   {$IFDEF UNIX}
   do_syscall(syscall_nr_exit_group, 0);
   {$ENDIF}

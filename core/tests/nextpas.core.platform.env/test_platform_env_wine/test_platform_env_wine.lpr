@@ -6,11 +6,11 @@ program test_platform_env_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.env;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -89,15 +89,15 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.env.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.env.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('env_get existing variable (PATH)', @TestEnvGetExisting);
-  T.Run('env_get nonexistent variable returns ENOENT', @TestEnvGetNonexistent);
-  T.Run('env_set then env_get round-trip', @TestEnvSetThenGet);
-  T.Run('env_unset removes variable', @TestEnvUnset);
-  T.Run('env_exists for PATH and fake var', @TestEnvExists);
+  T.Test('env_get existing variable (PATH)', @TestEnvGetExisting);
+  T.Test('env_get nonexistent variable returns ENOENT', @TestEnvGetNonexistent);
+  T.Test('env_set then env_get round-trip', @TestEnvSetThenGet);
+  T.Test('env_unset removes variable', @TestEnvUnset);
+  T.Test('env_exists for PATH and fake var', @TestEnvExists);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

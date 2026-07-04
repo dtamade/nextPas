@@ -4,7 +4,7 @@ program test_io_flow;
 
 uses
   SysUtils, nextpas.core.fs,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.view,
   nextpas.core.io.intf,
@@ -17,7 +17,7 @@ uses
   nextpas.core.io.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TZeroProgressWriter = class(TInterfacedObject, IWriter)
@@ -405,30 +405,30 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.flow');
-  T.Run('LineWriter basic', @TestLineWriterBasic);
-  T.Run('LineWriter empty', @TestLineWriterEmpty);
-  T.Run('LineWriter retries partial writer',
+  T := TTestSuite.Create('nextpas.core.io.flow');
+  T.Test('LineWriter basic', @TestLineWriterBasic);
+  T.Test('LineWriter empty', @TestLineWriterEmpty);
+  T.Test('LineWriter retries partial writer',
     @TestLineWriterRetriesPartialWriter);
-  T.Run('LineWriter zero-progress raises',
+  T.Test('LineWriter zero-progress raises',
     @TestLineWriterZeroProgressRaises);
-  T.Run('LineWriter flush forwards inner flusher',
+  T.Test('LineWriter flush forwards inner flusher',
     @TestLineWriterFlushForwardsInnerFlusher);
-  T.Run('LineWriter nil inner', @TestLineWriterNilInner);
-  T.Run('IoWriteLines', @TestIoWriteLines);
-  T.Run('IoWriteLine retries partial writer',
+  T.Test('LineWriter nil inner', @TestLineWriterNilInner);
+  T.Test('IoWriteLines', @TestIoWriteLines);
+  T.Test('IoWriteLine retries partial writer',
     @TestIoWriteLineRetriesPartialWriter);
-  T.Run('IoWriteLine zero-progress raises',
+  T.Test('IoWriteLine zero-progress raises',
     @TestIoWriteLineZeroProgressRaises);
-  T.Run('CollectLines basic', @TestCollectLinesBasic);
-  T.Run('CollectLines empty', @TestCollectLinesEmpty);
-  T.Run('CollectLinesFrom', @TestCollectLinesFrom);
-  T.Run('CollectLines 1000', @TestCollectLinesLarge);
-  T.Run('Mmap open', @TestMmapOpen);
-  T.Run('Mmap lines', @TestMmapLines);
-  T.Run('Mmap search', @TestMmapLinesSearch);
-  T.Run('Mmap empty', @TestMmapEmpty);
-  T.Run('Mmap CRLF', @TestMmapCRLF);
-  T.Run('Write then collect', @TestWriteThenCollect);
-  T.Summary;
+  T.Test('CollectLines basic', @TestCollectLinesBasic);
+  T.Test('CollectLines empty', @TestCollectLinesEmpty);
+  T.Test('CollectLinesFrom', @TestCollectLinesFrom);
+  T.Test('CollectLines 1000', @TestCollectLinesLarge);
+  T.Test('Mmap open', @TestMmapOpen);
+  T.Test('Mmap lines', @TestMmapLines);
+  T.Test('Mmap search', @TestMmapLinesSearch);
+  T.Test('Mmap empty', @TestMmapEmpty);
+  T.Test('Mmap CRLF', @TestMmapCRLF);
+  T.Test('Write then collect', @TestWriteThenCollect);
+  if not T.Run then Halt(1);
 end.

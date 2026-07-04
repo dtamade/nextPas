@@ -3,7 +3,7 @@ program test_system_typinfo_collections_consumer;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.system.typinfo,
   nextpas.core.collections.element_manager;
 
@@ -11,7 +11,7 @@ type
   TStringManager = specialize TElementManager<string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestElementManagerTypeInfoTruth;
 var
@@ -96,8 +96,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.system.typinfo collections consumer');
-  T.Run('element manager TypeInfo truth', @TestElementManagerTypeInfoTruth);
-  T.Run('managed string lifecycle consumer path', @TestManagedStringLifecycleConsumerPath);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.system.typinfo collections consumer');
+  T.Test('element manager TypeInfo truth', @TestElementManagerTypeInfoTruth);
+  T.Test('managed string lifecycle consumer path', @TestManagedStringLifecycleConsumerPath);
+  if not T.Run then Halt(1);
 end.

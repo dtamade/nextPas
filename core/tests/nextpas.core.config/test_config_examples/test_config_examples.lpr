@@ -6,10 +6,10 @@ uses
   Classes,
   SysUtils,
   Process,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GStartupExampleRan: Boolean = False;
   GStartupExampleExitCode: Integer = -1;
   GStartupExampleOutput: string = '';
@@ -238,15 +238,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('config startup examples');
-  T.Run('startup example run passes', @TestStartupPatternsExampleRunPasses);
-  T.Run('startup example reports key phase3 markers',
+  T := TTestSuite.Create('config startup examples');
+  T.Test('startup example run passes', @TestStartupPatternsExampleRunPasses);
+  T.Test('startup example reports key phase3 markers',
     @TestStartupPatternsExampleReportsKeyPhase3Markers);
-  T.Run('export example run passes', @TestExportPatternsExampleRunPasses);
-  T.Run('export example reports write markers',
+  T.Test('export example run passes', @TestExportPatternsExampleRunPasses);
+  T.Test('export example reports write markers',
     @TestExportPatternsExampleReportsWriteMarkers);
-  T.Run('mutation example run passes', @TestMutationPatternsExampleRunPasses);
-  T.Run('mutation example reports write markers',
+  T.Test('mutation example run passes', @TestMutationPatternsExampleRunPasses);
+  T.Test('mutation example reports write markers',
     @TestMutationPatternsExampleReportsWriteMarkers);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

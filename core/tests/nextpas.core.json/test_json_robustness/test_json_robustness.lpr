@@ -13,10 +13,10 @@ uses
   nextpas.core.json.parser,
   nextpas.core.json.value,
   nextpas.core.json.writer,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestEmptyInput;
 var Doc: IJsonDocument;
@@ -460,27 +460,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.robustness');
-  T.Run('empty input', @TestEmptyInput);
-  T.Run('depth boundary', @TestDepthBoundary);
-  T.Run('long string', @TestLongString);
-  T.Run('number overflow', @TestNumberOverflow);
-  T.Run('malformed structure', @TestMalformedStructure);
-  T.Run('duplicate keys', @TestDuplicateKeys);
-  T.Run('special strings', @TestSpecialStrings);
-  T.Run('null byte in string', @TestNullByteInString);
-  T.Run('invalid value positions', @TestInvalidValuePositions);
-  T.Run('structural error positions', @TestStructuralErrorPositions);
-  T.Run('literal boundary regressions', @TestLiteralBoundaryRegressions);
-  T.Run('string error positions', @TestStringErrorPositions);
-  T.Run('access on wrong type', @TestAccessOnWrongType);
-  T.Run('stress large array', @TestStressLargeArray);
-  T.Run('consecutive backslashes', @TestConsecutiveBackslashes);
-  T.Run('unicode in key', @TestUnicodeInKey);
-  T.Run('very long number', @TestVeryLongNumber);
-  T.Run('nested number error positions', @TestNestedNumberErrorPositions);
-  T.Run('nested objects', @TestNestedObjects);
-  T.Run('empty string key', @TestEmptyStringKey);
-  T.Run('repeated parse', @TestRepeatedParse);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.json.robustness');
+  T.Test('empty input', @TestEmptyInput);
+  T.Test('depth boundary', @TestDepthBoundary);
+  T.Test('long string', @TestLongString);
+  T.Test('number overflow', @TestNumberOverflow);
+  T.Test('malformed structure', @TestMalformedStructure);
+  T.Test('duplicate keys', @TestDuplicateKeys);
+  T.Test('special strings', @TestSpecialStrings);
+  T.Test('null byte in string', @TestNullByteInString);
+  T.Test('invalid value positions', @TestInvalidValuePositions);
+  T.Test('structural error positions', @TestStructuralErrorPositions);
+  T.Test('literal boundary regressions', @TestLiteralBoundaryRegressions);
+  T.Test('string error positions', @TestStringErrorPositions);
+  T.Test('access on wrong type', @TestAccessOnWrongType);
+  T.Test('stress large array', @TestStressLargeArray);
+  T.Test('consecutive backslashes', @TestConsecutiveBackslashes);
+  T.Test('unicode in key', @TestUnicodeInKey);
+  T.Test('very long number', @TestVeryLongNumber);
+  T.Test('nested number error positions', @TestNestedNumberErrorPositions);
+  T.Test('nested objects', @TestNestedObjects);
+  T.Test('empty string key', @TestEmptyStringKey);
+  T.Test('repeated parse', @TestRepeatedParse);
+  if not T.Run then Halt(1);
 end.

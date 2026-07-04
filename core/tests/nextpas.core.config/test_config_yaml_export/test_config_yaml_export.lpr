@@ -6,11 +6,11 @@ uses
   nextpas.core.config,
   nextpas.core.errors,
   nextpas.core.fs,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function TempYamlPath(const AName: string): string;
 begin
@@ -298,26 +298,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.yaml_export');
-  T.Run('YamlExport.ToYamlBuildsNestedObjectsAndArrays',
+  T := TTestSuite.Create('nextpas.core.config.yaml_export');
+  T.Test('YamlExport.ToYamlBuildsNestedObjectsAndArrays',
     @TestToYamlBuildsNestedObjectsAndArrays);
-  T.Run('YamlExport.ToYamlSupportsTopLevelDenseArray',
+  T.Test('YamlExport.ToYamlSupportsTopLevelDenseArray',
     @TestToYamlSupportsTopLevelDenseArray);
-  T.Run('YamlExport.ToYamlPreservesSparseNumericChildrenAsMap',
+  T.Test('YamlExport.ToYamlPreservesSparseNumericChildrenAsMap',
     @TestToYamlPreservesSparseNumericChildrenAsMap);
-  T.Run('YamlExport.IConfigToYamlExportsSnapshot',
+  T.Test('YamlExport.IConfigToYamlExportsSnapshot',
     @TestIConfigToYamlExportsSnapshot);
-  T.Run('YamlExport.ToYamlRoundTripsCanonicalStringValues',
+  T.Test('YamlExport.ToYamlRoundTripsCanonicalStringValues',
     @TestToYamlRoundTripsCanonicalStringValues);
-  T.Run('YamlExport.ToYamlPreservesFlowSpecialStrings',
+  T.Test('YamlExport.ToYamlPreservesFlowSpecialStrings',
     @TestToYamlPreservesFlowSpecialStrings);
-  T.Run('YamlExport.ToYamlRejectsScalarSubtreeConflict',
+  T.Test('YamlExport.ToYamlRejectsScalarSubtreeConflict',
     @TestToYamlRejectsScalarSubtreeConflict);
-  T.Run('YamlExport.ToYamlRejectsEmptyPathSegments',
+  T.Test('YamlExport.ToYamlRejectsEmptyPathSegments',
     @TestToYamlRejectsEmptyPathSegments);
-  T.Run('YamlExport.SaveToYamlWritesFile',
+  T.Test('YamlExport.SaveToYamlWritesFile',
     @TestSaveToYamlWritesFile);
-  T.Run('YamlExport.SaveToYamlPreservesExistingFileOnExportFailure',
+  T.Test('YamlExport.SaveToYamlPreservesExistingFileOnExportFailure',
     @TestSaveToYamlPreservesExistingFileOnExportFailure);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

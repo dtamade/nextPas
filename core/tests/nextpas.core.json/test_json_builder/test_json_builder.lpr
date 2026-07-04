@@ -8,10 +8,10 @@ uses
   nextpas.core.json.builder,
   nextpas.core.json.writer,
   nextpas.core.errors,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSimpleObject;
 var B: IJsonBuilder;
@@ -320,26 +320,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.builder');
-  T.Run('simple object', @TestSimpleObject);
-  T.Run('array', @TestArray);
-  T.Run('nested', @TestNested);
-  T.Run('all types', @TestAllTypes);
-  T.Run('auto release', @TestAutoRelease);
-  T.Run('raw json', @TestRawJson);
-  T.Run('AsView', @TestAsView);
-  T.Run('Len', @TestLen);
-  T.Run('builder with capacity', @TestBuilderWithCapacity);
-  T.Run('deep nesting', @TestDeepNesting);
-  T.Run('empty containers', @TestEmptyContainers);
-  T.Run('large object', @TestLargeObject);
-  T.Run('special strings', @TestSpecialStrings);
-  T.Run('number edges', @TestNumberEdges);
-  T.Run('multiple raw json', @TestMultipleRawJson);
-  T.Run('invalid sequence fail closed', @TestInvalidSequenceFailClosed);
-  T.Run('array key and root extra value fail closed',
+  T := TTestSuite.Create('nextpas.core.json.builder');
+  T.Test('simple object', @TestSimpleObject);
+  T.Test('array', @TestArray);
+  T.Test('nested', @TestNested);
+  T.Test('all types', @TestAllTypes);
+  T.Test('auto release', @TestAutoRelease);
+  T.Test('raw json', @TestRawJson);
+  T.Test('AsView', @TestAsView);
+  T.Test('Len', @TestLen);
+  T.Test('builder with capacity', @TestBuilderWithCapacity);
+  T.Test('deep nesting', @TestDeepNesting);
+  T.Test('empty containers', @TestEmptyContainers);
+  T.Test('large object', @TestLargeObject);
+  T.Test('special strings', @TestSpecialStrings);
+  T.Test('number edges', @TestNumberEdges);
+  T.Test('multiple raw json', @TestMultipleRawJson);
+  T.Test('invalid sequence fail closed', @TestInvalidSequenceFailClosed);
+  T.Test('array key and root extra value fail closed',
     @TestArrayKeyAndRootExtraValueFailClosed);
-  T.Run('container depth limit fails before writing',
+  T.Test('container depth limit fails before writing',
     @TestContainerDepthLimitFailsBeforeWriting);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

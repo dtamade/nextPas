@@ -4,10 +4,10 @@ program test_platform_ctypes_abi;
 
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCintSize;
 begin
@@ -88,16 +88,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.ctypes_abi');
-  T.Run('cint/cuint = 4 bytes', @TestCintSize);
-  T.Run('clong/culong LP64 vs ILP32', @TestClongSize);
-  T.Run('clonglong/culonglong = 8', @TestClonglongSize);
-  T.Run('csize_t = pointer size', @TestCsizeT);
-  T.Run('cfloat=4, cdouble=8', @TestCfloatDouble);
-  T.Run('fixed-width int types', @TestFixedWidth);
-  T.Run('char/short types', @TestCharTypes);
-  T.Run('pointer-sized POSIX types', @TestPointerSizedTypes);
-  T.Run('pid_t/uid_t/gid_t/mode_t', @TestPidUidGid);
-  T.Run('pthread types', @TestPthreadTypes);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.ctypes_abi');
+  T.Test('cint/cuint = 4 bytes', @TestCintSize);
+  T.Test('clong/culong LP64 vs ILP32', @TestClongSize);
+  T.Test('clonglong/culonglong = 8', @TestClonglongSize);
+  T.Test('csize_t = pointer size', @TestCsizeT);
+  T.Test('cfloat=4, cdouble=8', @TestCfloatDouble);
+  T.Test('fixed-width int types', @TestFixedWidth);
+  T.Test('char/short types', @TestCharTypes);
+  T.Test('pointer-sized POSIX types', @TestPointerSizedTypes);
+  T.Test('pid_t/uid_t/gid_t/mode_t', @TestPidUidGid);
+  T.Test('pthread types', @TestPthreadTypes);
+  if not T.Run then Halt(1);
 end.

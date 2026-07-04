@@ -4,12 +4,12 @@ program test_log;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCaptured: array of TLogRecord;
   GCaptureCount: Int32;
 
@@ -1435,78 +1435,78 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.log');
-  T.Run('Event builder', @TestEventBuilder);
-  T.Run('Level filtering', @TestLevelFiltering);
-  T.Run('Child logger', @TestChildLogger);
-  T.Run('Timestamp', @TestTimestamp);
-  T.Run('Bool/Float attrs', @TestBoolFloat);
-  T.Run('Err helper', @TestErrHelper);
-  T.Run('Send (no msg)', @TestSend);
-  T.Run('Console handler', @TestConsoleHandler);
-  T.Run('JSON handler', @TestJsonHandler);
-  T.Run('Global logger', @TestGlobalLogger);
-  T.Run('Disabled no alloc', @TestDisabledNoAlloc);
-  T.Run('Null logger', @TestNullLogger);
-  T.Run('File handler', @TestFileHandler);
-  T.Run('Multi handler', @TestMultiHandler);
-  T.Run('File rotation', @TestFileRotation);
-  T.Run('Many attrs', @TestManyAttrs);
-  T.Run('WithInt', @TestWithInt);
-  T.Run('WithGroup', @TestWithGroup);
-  T.Run('Log context', @TestLogContext);
-  T.Run('All levels', @TestAllLevels);
-  T.Run('Fatal level', @TestFatalLevel);
-  T.Run('Re-entrancy', @TestReentrancy);
-  T.Run('Broken file handler', @TestBrokenFileHandler);
-  T.Run('WithAttrs batch', @TestWithAttrsBatch);
-  T.Run('WithLevel', @TestWithLevel);
-  T.Run('AsILogger bridge', @TestAsILogger);
+  T := TTestSuite.Create('nextpas.core.log');
+  T.Test('Event builder', @TestEventBuilder);
+  T.Test('Level filtering', @TestLevelFiltering);
+  T.Test('Child logger', @TestChildLogger);
+  T.Test('Timestamp', @TestTimestamp);
+  T.Test('Bool/Float attrs', @TestBoolFloat);
+  T.Test('Err helper', @TestErrHelper);
+  T.Test('Send (no msg)', @TestSend);
+  T.Test('Console handler', @TestConsoleHandler);
+  T.Test('JSON handler', @TestJsonHandler);
+  T.Test('Global logger', @TestGlobalLogger);
+  T.Test('Disabled no alloc', @TestDisabledNoAlloc);
+  T.Test('Null logger', @TestNullLogger);
+  T.Test('File handler', @TestFileHandler);
+  T.Test('Multi handler', @TestMultiHandler);
+  T.Test('File rotation', @TestFileRotation);
+  T.Test('Many attrs', @TestManyAttrs);
+  T.Test('WithInt', @TestWithInt);
+  T.Test('WithGroup', @TestWithGroup);
+  T.Test('Log context', @TestLogContext);
+  T.Test('All levels', @TestAllLevels);
+  T.Test('Fatal level', @TestFatalLevel);
+  T.Test('Re-entrancy', @TestReentrancy);
+  T.Test('Broken file handler', @TestBrokenFileHandler);
+  T.Test('WithAttrs batch', @TestWithAttrsBatch);
+  T.Test('WithLevel', @TestWithLevel);
+  T.Test('AsILogger bridge', @TestAsILogger);
   { Bug fix verification tests }
-  T.Run('Nil handler With_', @TestNilHandlerWith);
-  T.Run('Nil handler log', @TestNilHandlerLog);
-  T.Run('WithGroup prefix', @TestWithGroupPrefix);
-  T.Run('WithGroup nested', @TestWithGroupNested);
-  T.Run('File handler WithGroup', @TestFileHandlerWithGroup);
-  T.Run('File handler write error', @TestFileHandlerWriteError);
-  T.Run('Pool size 256', @TestPoolSize256);
-  T.Run('Default logger init', @TestDefaultLoggerInit);
-  T.Run('Multi handler WithGroup', @TestMultiHandlerWithGroup);
-  T.Run('Convenience functions', @TestConvenienceFunctions);
-  T.Run('Reentrant logging', @TestReentrantLogging);
+  T.Test('Nil handler With_', @TestNilHandlerWith);
+  T.Test('Nil handler log', @TestNilHandlerLog);
+  T.Test('WithGroup prefix', @TestWithGroupPrefix);
+  T.Test('WithGroup nested', @TestWithGroupNested);
+  T.Test('File handler WithGroup', @TestFileHandlerWithGroup);
+  T.Test('File handler write error', @TestFileHandlerWriteError);
+  T.Test('Pool size 256', @TestPoolSize256);
+  T.Test('Default logger init', @TestDefaultLoggerInit);
+  T.Test('Multi handler WithGroup', @TestMultiHandlerWithGroup);
+  T.Test('Convenience functions', @TestConvenienceFunctions);
+  T.Test('Reentrant logging', @TestReentrantLogging);
   { === NEW DEEP TESTS === }
-  T.Run('Attr types (all 4)', @TestAttrTypes);
-  T.Run('Event chaining', @TestLogEventChaining);
-  T.Run('Level filtering exhaustive', @TestLevelFilteringExhaustive);
-  T.Run('With_ field chaining', @TestWithFieldChaining);
-  T.Run('WithGroup nesting', @TestWithGroupNesting);
-  T.Run('File rotation deep', @TestFileRotationDeep);
-  T.Run('File handler broken', @TestFileHandlerBroken);
-  T.Run('JSON output valid', @TestJsonOutputValid);
-  T.Run('Multi handler fanout', @TestMultiHandlerFanout);
-  T.Run('ILogger deep', @TestLoggerAsILoggerDeep);
-  T.Run('Empty message edge', @TestEmptyMessageEdge);
-  T.Run('Many attrs stress (100)', @TestManyAttrsStress);
-  T.Run('SetDefaultLogger deep', @TestSetDefaultLoggerDeep);
-  T.Run('Handler enabled filtering', @TestHandlerEnabledFiltering);
-  T.Run('Timestamp deep', @TestTimestampDeep);
-  T.Run('Pool stress 300', @TestPoolStress300);
-  T.Run('WithAttrs independence', @TestWithAttrsIndependence);
+  T.Test('Attr types (all 4)', @TestAttrTypes);
+  T.Test('Event chaining', @TestLogEventChaining);
+  T.Test('Level filtering exhaustive', @TestLevelFilteringExhaustive);
+  T.Test('With_ field chaining', @TestWithFieldChaining);
+  T.Test('WithGroup nesting', @TestWithGroupNesting);
+  T.Test('File rotation deep', @TestFileRotationDeep);
+  T.Test('File handler broken', @TestFileHandlerBroken);
+  T.Test('JSON output valid', @TestJsonOutputValid);
+  T.Test('Multi handler fanout', @TestMultiHandlerFanout);
+  T.Test('ILogger deep', @TestLoggerAsILoggerDeep);
+  T.Test('Empty message edge', @TestEmptyMessageEdge);
+  T.Test('Many attrs stress (100)', @TestManyAttrsStress);
+  T.Test('SetDefaultLogger deep', @TestSetDefaultLoggerDeep);
+  T.Test('Handler enabled filtering', @TestHandlerEnabledFiltering);
+  T.Test('Timestamp deep', @TestTimestampDeep);
+  T.Test('Pool stress 300', @TestPoolStress300);
+  T.Test('WithAttrs independence', @TestWithAttrsIndependence);
   { === ADVERSARIAL / DEEP TESTS (15 new) === }
-  T.Run('Console output format', @TestConsoleOutputFormat);
-  T.Run('JSON escaping', @TestJsonEscaping);
-  T.Run('File handler concurrent writes', @TestFileHandlerConcurrentWrites);
-  T.Run('Logger copy (value semantics)', @TestLoggerCopy);
-  T.Run('Err helper deep', @TestErrHelperDeep);
-  T.Run('Flush propagation', @TestFlushPropagation);
-  T.Run('Log context deep', @TestLogContextDeep);
-  T.Run('WithLevel change', @TestWithLevelChange);
-  T.Run('Large message (10K+100K)', @TestLargeMessage);
-  T.Run('Rapid create/destroy (1000)', @TestRapidCreateDestroy);
-  T.Run('NullLogger interface', @TestNullLoggerInterface);
-  T.Run('Attr str special values', @TestAttrStrSpecialValues);
-  T.Run('Multi handler empty', @TestMultiHandlerEmpty);
-  T.Run('File handler append', @TestFileHandlerAppend);
-  T.Run('Log record fields', @TestLogRecordFields);
-  T.Summary;
+  T.Test('Console output format', @TestConsoleOutputFormat);
+  T.Test('JSON escaping', @TestJsonEscaping);
+  T.Test('File handler concurrent writes', @TestFileHandlerConcurrentWrites);
+  T.Test('Logger copy (value semantics)', @TestLoggerCopy);
+  T.Test('Err helper deep', @TestErrHelperDeep);
+  T.Test('Flush propagation', @TestFlushPropagation);
+  T.Test('Log context deep', @TestLogContextDeep);
+  T.Test('WithLevel change', @TestWithLevelChange);
+  T.Test('Large message (10K+100K)', @TestLargeMessage);
+  T.Test('Rapid create/destroy (1000)', @TestRapidCreateDestroy);
+  T.Test('NullLogger interface', @TestNullLoggerInterface);
+  T.Test('Attr str special values', @TestAttrStrSpecialValues);
+  T.Test('Multi handler empty', @TestMultiHandlerEmpty);
+  T.Test('File handler append', @TestFileHandlerAppend);
+  T.Test('Log record fields', @TestLogRecordFields);
+  if not T.Run then Halt(1);
 end.

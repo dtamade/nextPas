@@ -6,7 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec,
@@ -31,7 +31,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCreate;
 var
@@ -943,58 +943,58 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.vec');
-  T.Run('Create', @TestCreate);
-  T.Run('Add', @TestAdd);
-  T.Run('Insert', @TestInsert);
-  T.Run('Delete', @TestDelete);
-  T.Run('DeleteSwap', @TestDeleteSwap);
-  T.Run('Pop', @TestPop);
-  T.Run('Grow (1000 elements)', @TestGrow);
-  T.Run('Contains', @TestContains);
-  T.Run('IndexOf', @TestIndexOf);
-  T.Run('Reserve', @TestReserve);
-  T.Run('Reserve failure raises OOM', @TestReserveFailureRaisesOutOfMemory);
-  T.Run('ReserveExact failure raises OOM', @TestReserveExactFailureRaisesOutOfMemory);
-  T.Run('String type', @TestString);
-  T.Run('Managed removal outputs outlive source slots', @TestManagedReturnValuesOutliveVecRemoval);
-  T.Run('Managed drain split retain ownership', @TestManagedDrainSplitRetainOwnership);
-  T.Run('Clear', @TestClear);
-  T.Run('Auto free (interface)', @TestAutoFree);
-  T.Run('Push', @TestPush);
-  T.Run('Peek/TryPeek', @TestPeekAndTryPeek);
-  T.Run('RemoveAt', @TestRemoveAt);
-  T.Run('SwapRemoveAt', @TestSwapRemoveAt);
-  T.Run('TryRemoveAt', @TestTryRemoveAt);
-  T.Run('Drain', @TestDrain);
-  T.Run('SplitOff', @TestSplitOff);
-  T.Run('ShrinkToFit', @TestShrinkToFit);
-  T.Run('Truncate', @TestTruncate);
-  T.Run('First/Last', @TestFirstLast);
-  T.Run('TryPop', @TestTryPop);
-  T.Run('TrySwapRemoveAt', @TestTrySwapRemoveAt);
-  T.Run('Filter', @TestFilter);
-  T.Run('Retain', @TestRetain);
-  T.Run('Any/All', @TestAnyAll);
-  T.Run('Dedup', @TestDedup);
-  T.Run('Splice', @TestSplice);
-  T.Run('EnsureCapacity', @TestEnsureCapacity);
-  T.Run('ReserveExact', @TestReserveExact);
-  T.Run('ResizeExact', @TestResizeExact);
-  T.Run('SetCapacity', @TestSetCapacity);
-  T.Run('FreeBuffer', @TestFreeBuffer);
-  T.Run('Write', @TestWrite);
-  T.Run('WriteExact', @TestWriteExact);
-  T.Run('TryLoadFrom', @TestTryLoadFrom);
-  T.Run('TryAppend', @TestTryAppend);
-  T.Run('DedupBy', @TestDedupBy);
-  T.Run('Get/SetGrowStrategy', @TestGetSetGrowStrategy);
-  T.Run('RemoveCopyAt', @TestRemoveCopyAt);
-  T.Run('SwapRemoveCopyAt', @TestSwapRemoveCopyAt);
-  T.Run('Sort adversarial inputs', @TestSortAdversarial);
-  T.Run('Push(Pointer, Count) bulk', @TestPushPointerBulk);
-  T.Run('Insert(Index, Pointer, Count) bulk', @TestInsertPointerBulk);
-  T.Run('Delete(Index, Count) multi', @TestDeleteMulti);
-  T.Run('SliceView clamps overflowing count', @TestSliceViewClampsOverflowingCount);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.vec');
+  T.Test('Create', @TestCreate);
+  T.Test('Add', @TestAdd);
+  T.Test('Insert', @TestInsert);
+  T.Test('Delete', @TestDelete);
+  T.Test('DeleteSwap', @TestDeleteSwap);
+  T.Test('Pop', @TestPop);
+  T.Test('Grow (1000 elements)', @TestGrow);
+  T.Test('Contains', @TestContains);
+  T.Test('IndexOf', @TestIndexOf);
+  T.Test('Reserve', @TestReserve);
+  T.Test('Reserve failure raises OOM', @TestReserveFailureRaisesOutOfMemory);
+  T.Test('ReserveExact failure raises OOM', @TestReserveExactFailureRaisesOutOfMemory);
+  T.Test('String type', @TestString);
+  T.Test('Managed removal outputs outlive source slots', @TestManagedReturnValuesOutliveVecRemoval);
+  T.Test('Managed drain split retain ownership', @TestManagedDrainSplitRetainOwnership);
+  T.Test('Clear', @TestClear);
+  T.Test('Auto free (interface)', @TestAutoFree);
+  T.Test('Push', @TestPush);
+  T.Test('Peek/TryPeek', @TestPeekAndTryPeek);
+  T.Test('RemoveAt', @TestRemoveAt);
+  T.Test('SwapRemoveAt', @TestSwapRemoveAt);
+  T.Test('TryRemoveAt', @TestTryRemoveAt);
+  T.Test('Drain', @TestDrain);
+  T.Test('SplitOff', @TestSplitOff);
+  T.Test('ShrinkToFit', @TestShrinkToFit);
+  T.Test('Truncate', @TestTruncate);
+  T.Test('First/Last', @TestFirstLast);
+  T.Test('TryPop', @TestTryPop);
+  T.Test('TrySwapRemoveAt', @TestTrySwapRemoveAt);
+  T.Test('Filter', @TestFilter);
+  T.Test('Retain', @TestRetain);
+  T.Test('Any/All', @TestAnyAll);
+  T.Test('Dedup', @TestDedup);
+  T.Test('Splice', @TestSplice);
+  T.Test('EnsureCapacity', @TestEnsureCapacity);
+  T.Test('ReserveExact', @TestReserveExact);
+  T.Test('ResizeExact', @TestResizeExact);
+  T.Test('SetCapacity', @TestSetCapacity);
+  T.Test('FreeBuffer', @TestFreeBuffer);
+  T.Test('Write', @TestWrite);
+  T.Test('WriteExact', @TestWriteExact);
+  T.Test('TryLoadFrom', @TestTryLoadFrom);
+  T.Test('TryAppend', @TestTryAppend);
+  T.Test('DedupBy', @TestDedupBy);
+  T.Test('Get/SetGrowStrategy', @TestGetSetGrowStrategy);
+  T.Test('RemoveCopyAt', @TestRemoveCopyAt);
+  T.Test('SwapRemoveCopyAt', @TestSwapRemoveCopyAt);
+  T.Test('Sort adversarial inputs', @TestSortAdversarial);
+  T.Test('Push(Pointer, Count) bulk', @TestPushPointerBulk);
+  T.Test('Insert(Index, Pointer, Count) bulk', @TestInsertPointerBulk);
+  T.Test('Delete(Index, Count) multi', @TestDeleteMulti);
+  T.Test('SliceView clamps overflowing count', @TestSliceViewClampsOverflowingCount);
+  if not T.Run then Halt(1);
 end.

@@ -6,13 +6,13 @@ program test_platform_fs_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   TmpPrefix: array[0..255] of AnsiChar;
   ExistsFilePath: AnsiString;
   MissingPath: AnsiString;
@@ -235,23 +235,23 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.fs.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.fs.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
   Check(platform_fs_temp_dir(@TmpPrefix[0], SizeOf(TmpPrefix)) > 0, 'temp dir init');
   InitTempPaths;
-  T.Run('exists file', @TestExistsFile);
-  T.Run('exists non-existent', @TestExistsNot);
-  T.Run('is_file', @TestIsFile);
-  T.Run('is_dir', @TestIsDir);
-  T.Run('file_size', @TestFileSize);
-  T.Run('temp_dir', @TestTempDir);
-  T.Run('mktemp', @TestMktemp);
-  T.Run('mkdir_p', @TestMkdirP);
-  T.Run('copy_file', @TestCopyFile);
-  T.Run('write_atomic', @TestWriteAtomic);
-  T.Run('read_file + free_buf', @TestReadFile);
+  T.Test('exists file', @TestExistsFile);
+  T.Test('exists non-existent', @TestExistsNot);
+  T.Test('is_file', @TestIsFile);
+  T.Test('is_dir', @TestIsDir);
+  T.Test('file_size', @TestFileSize);
+  T.Test('temp_dir', @TestTempDir);
+  T.Test('mktemp', @TestMktemp);
+  T.Test('mkdir_p', @TestMkdirP);
+  T.Test('copy_file', @TestCopyFile);
+  T.Test('write_atomic', @TestWriteAtomic);
+  T.Test('read_file + free_buf', @TestReadFile);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

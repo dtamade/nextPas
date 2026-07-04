@@ -4,14 +4,14 @@ program test_yaml_facade;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.errors,
   nextpas.core.yaml.types,
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function BuildAliasChainDocument(const AAliasDepth: Integer): string;
 var
@@ -840,70 +840,70 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml');
-  T.Run('Parse null', @TestParseNull);
-  T.Run('Parse bool', @TestParseBool);
-  T.Run('Parse int', @TestParseInt);
-  T.Run('Parse float', @TestParseFloat);
-  T.Run('Parse string', @TestParseString);
-  T.Run('Flow sequence', @TestFlowSequence);
-  T.Run('Flow mapping', @TestFlowMapping);
-  T.Run('Nested structure', @TestNestedStructure);
-  T.Run('Map key/value at', @TestMapKeyAt);
-  T.Run('Doc start marker', @TestDocStartMarker);
-  T.Run('Doc end marker', @TestDocEndMarker);
-  T.Run('Error handling', @TestErrorHandling);
-  T.Run('TryYamlParse success', @TestTryYamlParseSuccess);
-  T.Run('TryYamlParse failure returns diagnostic doc', @TestTryYamlParseFailureReturnsDiagnosticDoc);
-  T.Run('TryYamlParse rejects stray flow closers',
+  T := TTestSuite.Create('nextpas.core.yaml');
+  T.Test('Parse null', @TestParseNull);
+  T.Test('Parse bool', @TestParseBool);
+  T.Test('Parse int', @TestParseInt);
+  T.Test('Parse float', @TestParseFloat);
+  T.Test('Parse string', @TestParseString);
+  T.Test('Flow sequence', @TestFlowSequence);
+  T.Test('Flow mapping', @TestFlowMapping);
+  T.Test('Nested structure', @TestNestedStructure);
+  T.Test('Map key/value at', @TestMapKeyAt);
+  T.Test('Doc start marker', @TestDocStartMarker);
+  T.Test('Doc end marker', @TestDocEndMarker);
+  T.Test('Error handling', @TestErrorHandling);
+  T.Test('TryYamlParse success', @TestTryYamlParseSuccess);
+  T.Test('TryYamlParse failure returns diagnostic doc', @TestTryYamlParseFailureReturnsDiagnosticDoc);
+  T.Test('TryYamlParse rejects stray flow closers',
     @TestTryYamlParseRejectsStrayFlowClosers);
-  T.Run('TryYamlParse rejects trailing document content',
+  T.Test('TryYamlParse rejects trailing document content',
     @TestTryYamlParseRejectsTrailingDocumentContent);
-  T.Run('TryYamlParse rejects missing value separator',
+  T.Test('TryYamlParse rejects missing value separator',
     @TestTryYamlParseRejectsMissingValueSeparator);
-  T.Run('TryYamlParse rejects missing mapping key',
+  T.Test('TryYamlParse rejects missing mapping key',
     @TestTryYamlParseRejectsMissingMappingKey);
-  T.Run('TryYamlParse rejects block mapping entry without key',
+  T.Test('TryYamlParse rejects block mapping entry without key',
     @TestTryYamlParseRejectsBlockMappingEntryWithoutKey);
-  T.Run('TryYamlParse rejects unsupported explicit mapping keys',
+  T.Test('TryYamlParse rejects unsupported explicit mapping keys',
     @TestTryYamlParseRejectsUnsupportedExplicitMappingKeys);
-  T.Run('Alias resolution depth boundary', @TestAliasResolutionDepthBoundary);
-  T.Run('TryYamlParse rejects alias chain beyond depth limit',
+  T.Test('Alias resolution depth boundary', @TestAliasResolutionDepthBoundary);
+  T.Test('TryYamlParse rejects alias chain beyond depth limit',
     @TestTryYamlParseRejectsAliasChainBeyondDepthLimit);
-  T.Run('TryYamlParse rejects undefined alias',
+  T.Test('TryYamlParse rejects undefined alias',
     @TestTryYamlParseRejectsUndefinedAlias);
-  T.Run('TryYamlParse rejects empty anchor/alias names',
+  T.Test('TryYamlParse rejects empty anchor/alias names',
     @TestTryYamlParseRejectsEmptyAnchorAliasNames);
-  T.Run('TryYamlParse rejects deep flow nesting',
+  T.Test('TryYamlParse rejects deep flow nesting',
     @TestTryYamlParseRejectsDeepFlowNesting);
-  T.Run('TryYamlParse rejects deep block mapping nesting',
+  T.Test('TryYamlParse rejects deep block mapping nesting',
     @TestTryYamlParseRejectsDeepBlockMappingNesting);
-  T.Run('TryYamlParse rejects deep block sequence nesting',
+  T.Test('TryYamlParse rejects deep block sequence nesting',
     @TestTryYamlParseRejectsDeepBlockSequenceNesting);
-  T.Run('Stringify', @TestStringify);
-  T.Run('Stringify pretty', @TestStringifyPretty);
-  T.Run('Diagnostic document rejects stringify',
+  T.Test('Stringify', @TestStringify);
+  T.Test('Stringify pretty', @TestStringifyPretty);
+  T.Test('Diagnostic document rejects stringify',
     @TestDiagnosticDocumentRejectsStringify);
-  T.Run('Round-trip', @TestRoundTrip);
-  T.Run('Block mapping', @TestBlockMapping);
-  T.Run('Block sequence', @TestBlockSequence);
-  T.Run('Nested block map', @TestNestedBlockMap);
-  T.Run('MapHas', @TestMapHas);
-  T.Run('MapLen', @TestMapLen);
-  T.Run('SeqGet bounds', @TestSeqGetBounds);
-  T.Run('Empty document', @TestEmptyDocument);
-  T.Run('Multiline string', @TestMultilineString);
-  T.Run('TryYamlParse rejects invalid double-quoted escape',
+  T.Test('Round-trip', @TestRoundTrip);
+  T.Test('Block mapping', @TestBlockMapping);
+  T.Test('Block sequence', @TestBlockSequence);
+  T.Test('Nested block map', @TestNestedBlockMap);
+  T.Test('MapHas', @TestMapHas);
+  T.Test('MapLen', @TestMapLen);
+  T.Test('SeqGet bounds', @TestSeqGetBounds);
+  T.Test('Empty document', @TestEmptyDocument);
+  T.Test('Multiline string', @TestMultilineString);
+  T.Test('TryYamlParse rejects invalid double-quoted escape',
     @TestTryYamlParseRejectsInvalidDoubleQuotedEscape);
-  T.Run('Special values', @TestSpecialValues);
-  T.Run('Large document 1000', @TestLargeDocument);
-  T.Run('Invalid YAML', @TestInvalidYaml);
-  T.Run('Rejects multiple documents', @TestRejectsMultipleDocuments);
-  T.Run('Rejects unsupported directives', @TestRejectsUnsupportedDirectives);
-  T.Run('Rejects unsupported tags', @TestRejectsUnsupportedTags);
-  T.Run('Quoted bang strings remain strings', @TestQuotedBangStringsRemainStrings);
-  T.Run('Rejects unsupported merge keys', @TestRejectsUnsupportedMergeKeys);
-  T.Run('Quoted merge key remains data key', @TestQuotedMergeKeyRemainsDataKey);
-  T.Run('Rejects duplicate keys', @TestRejectsDuplicateKeys);
-  T.Summary;
+  T.Test('Special values', @TestSpecialValues);
+  T.Test('Large document 1000', @TestLargeDocument);
+  T.Test('Invalid YAML', @TestInvalidYaml);
+  T.Test('Rejects multiple documents', @TestRejectsMultipleDocuments);
+  T.Test('Rejects unsupported directives', @TestRejectsUnsupportedDirectives);
+  T.Test('Rejects unsupported tags', @TestRejectsUnsupportedTags);
+  T.Test('Quoted bang strings remain strings', @TestQuotedBangStringsRemainStrings);
+  T.Test('Rejects unsupported merge keys', @TestRejectsUnsupportedMergeKeys);
+  T.Test('Quoted merge key remains data key', @TestQuotedMergeKeyRemainsDataKey);
+  T.Test('Rejects duplicate keys', @TestRejectsDuplicateKeys);
+  if not T.Run then Halt(1);
 end.

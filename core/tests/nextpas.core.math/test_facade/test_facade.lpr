@@ -4,12 +4,12 @@ program test_facade;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.math;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function DoubleFromBits(const ABits: UInt64): Double;
 type
@@ -873,24 +873,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math facade');
-  T.Run('scalar and trig re-export', @TestFacadeScalarAndTrig);
-  T.Run('facade Wrap error semantics', @TestFacadeWrapErrorSemantics);
-  T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
-  T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
-  T.Run('facade vector surface', @TestFacadeVectorSurface);
-  T.Run('facade vector Lerp scalar parity contracts',
+  T := TTestSuite.Create('nextpas.core.math facade');
+  T.Test('scalar and trig re-export', @TestFacadeScalarAndTrig);
+  T.Test('facade Wrap error semantics', @TestFacadeWrapErrorSemantics);
+  T.Test('facade scalar rounding surface', @TestFacadeRoundingSurface);
+  T.Test('facade new scalar surface', @TestFacadeNewScalarSurface);
+  T.Test('facade vector surface', @TestFacadeVectorSurface);
+  T.Test('facade vector Lerp scalar parity contracts',
     @TestFacadeVectorLerpScalarParityContracts);
-  T.Run('facade random surface', @TestFacadeRandomSurface);
-  T.Run('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
-  T.Run('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
-  T.Run('facade public member compile surface', @TestFacadePublicMemberCompileSurface);
-  T.Run('facade root trig declaration parity compile surface',
+  T.Test('facade random surface', @TestFacadeRandomSurface);
+  T.Test('facade type alias compile surface', @TestFacadeTypeAliasCompileSurface);
+  T.Test('facade root forwarder compile surface', @TestFacadeRootForwarderCompileSurface);
+  T.Test('facade public member compile surface', @TestFacadePublicMemberCompileSurface);
+  T.Test('facade root trig declaration parity compile surface',
     @TestFacadeRootTrigDeclarationParityCompileSurface);
-  T.Run('facade Power finite identity precision contracts',
+  T.Test('facade Power finite identity precision contracts',
     @TestFacadePowerFiniteIdentityPrecisionContracts);
-  T.Run('facade Log exact identity contracts', @TestFacadeLogExactIdentityContracts);
-  T.Run('facade trig IEEE domain smoke', @TestFacadeTrigIeeeDomainSmoke);
-  T.Run('facade imports only root math unit', @TestFacadeImportsOnlyRootMathUnit);
-  T.Summary;
+  T.Test('facade Log exact identity contracts', @TestFacadeLogExactIdentityContracts);
+  T.Test('facade trig IEEE domain smoke', @TestFacadeTrigIeeeDomainSmoke);
+  T.Test('facade imports only root math unit', @TestFacadeImportsOnlyRootMathUnit);
+  if not T.Run then Halt(1);
 end.

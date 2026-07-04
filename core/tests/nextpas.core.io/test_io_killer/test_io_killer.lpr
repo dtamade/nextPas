@@ -4,13 +4,13 @@ program test_io_killer;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestStreamSeekBeyondSize;
 var LS: IStream; LBuf: array[0..9] of Byte; LRead: SizeUInt;
@@ -49,9 +49,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.killer');
-  T.Run('Stream seek beyond size', @TestStreamSeekBeyondSize);
-  T.Run('Stream empty read', @TestStreamEmptyRead);
-  T.Run('Stream write grow', @TestStreamWriteGrow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.io.killer');
+  T.Test('Stream seek beyond size', @TestStreamSeekBeyondSize);
+  T.Test('Stream empty read', @TestStreamEmptyRead);
+  T.Test('Stream write grow', @TestStreamWriteGrow);
+  if not T.Run then Halt(1);
 end.

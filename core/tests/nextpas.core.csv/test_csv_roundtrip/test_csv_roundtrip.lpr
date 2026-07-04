@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.csv,
   nextpas.core.mem.default,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== Writer → Reader roundtrip ===== }
 
@@ -180,16 +180,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('csv roundtrip');
-  T.Run('basic roundtrip', @TestBasicRoundtrip);
-  T.Run('roundtrip with quoting', @TestRoundtripWithQuoting);
-  T.Run('roundtrip with newlines', @TestRoundtripWithNewlines);
-  T.Run('roundtrip with empty fields', @TestRoundtripWithEmpty);
-  T.Run('roundtrip tab delimiter', @TestRoundtripTabDelimiter);
-  T.Run('roundtrip CRLF', @TestRoundtripCRLF);
-  T.Run('roundtrip with CreateWith', @TestRoundtripCreateWith);
-  T.Run('roundtrip large dataset', @TestRoundtripLargeDataset);
-  T.Run('parse then write roundtrip', @TestParseThenWrite);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('csv roundtrip');
+  T.Test('basic roundtrip', @TestBasicRoundtrip);
+  T.Test('roundtrip with quoting', @TestRoundtripWithQuoting);
+  T.Test('roundtrip with newlines', @TestRoundtripWithNewlines);
+  T.Test('roundtrip with empty fields', @TestRoundtripWithEmpty);
+  T.Test('roundtrip tab delimiter', @TestRoundtripTabDelimiter);
+  T.Test('roundtrip CRLF', @TestRoundtripCRLF);
+  T.Test('roundtrip with CreateWith', @TestRoundtripCreateWith);
+  T.Test('roundtrip large dataset', @TestRoundtripLargeDataset);
+  T.Test('parse then write roundtrip', @TestParseThenWrite);
+  if not T.Run then Halt(1);
 end.

@@ -7,10 +7,10 @@ uses
   nextpas.core.toml.base,
   nextpas.core.toml.value,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { --- Valid TOML that must parse --- }
 
@@ -953,123 +953,122 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml compliance');
+  T := TTestSuite.Create('nextpas.core.toml compliance');
   { Valid }
-  T.Run('multi-line basic string', @TestMultiLineBasicString);
-  T.Run('multi-line literal string', @TestMultiLineLiteralString);
-  T.Run('integer boundary', @TestIntegerBoundary);
-  T.Run('float precision', @TestFloatPrecision);
-  T.Run('empty string', @TestEmptyString);
-  T.Run('empty array', @TestEmptyArray);
-  T.Run('empty inline table', @TestEmptyInlineTable);
-  T.Run('nested arrays', @TestNestedArrays);
-  T.Run('unicode string', @TestUnicodeString);
-  T.Run('datetime fractional', @TestDateTimeFractional);
-  T.Run('datetime space separator', @TestDateTimeSpaceSeparator);
-  T.Run('multiple table sections', @TestMultipleTableSections);
-  T.Run('super-table after sub', @TestSuperTableAfterSub);
-  T.Run('dotted key creates implicit', @TestDottedKeyCreatesImplicit);
-  T.Run('array table multiple entries', @TestArrayTableMultipleEntries);
-  T.Run('inline table nested', @TestInlineTableNested);
-  T.Run('hex upper case', @TestHexUpperCase);
-  T.Run('zero integer', @TestZeroInteger);
-  T.Run('positive integer', @TestPositiveInteger);
+  T.Test('multi-line basic string', @TestMultiLineBasicString);
+  T.Test('multi-line literal string', @TestMultiLineLiteralString);
+  T.Test('integer boundary', @TestIntegerBoundary);
+  T.Test('float precision', @TestFloatPrecision);
+  T.Test('empty string', @TestEmptyString);
+  T.Test('empty array', @TestEmptyArray);
+  T.Test('empty inline table', @TestEmptyInlineTable);
+  T.Test('nested arrays', @TestNestedArrays);
+  T.Test('unicode string', @TestUnicodeString);
+  T.Test('datetime fractional', @TestDateTimeFractional);
+  T.Test('datetime space separator', @TestDateTimeSpaceSeparator);
+  T.Test('multiple table sections', @TestMultipleTableSections);
+  T.Test('super-table after sub', @TestSuperTableAfterSub);
+  T.Test('dotted key creates implicit', @TestDottedKeyCreatesImplicit);
+  T.Test('array table multiple entries', @TestArrayTableMultipleEntries);
+  T.Test('inline table nested', @TestInlineTableNested);
+  T.Test('hex upper case', @TestHexUpperCase);
+  T.Test('zero integer', @TestZeroInteger);
+  T.Test('positive integer', @TestPositiveInteger);
   { Invalid }
-  T.Run('reject duplicate key', @TestRejectDuplicateKey);
-  T.Run('reject duplicate table', @TestRejectDuplicateTable);
-  T.Run('reject bare key invalid', @TestRejectBareKeyInvalid);
-  T.Run('reject missing value', @TestRejectMissingValue);
-  T.Run('reject trailing garbage', @TestRejectTrailingGarbage);
-  T.Run('reject invalid month', @TestRejectInvalidMonth);
-  T.Run('reject invalid hour', @TestRejectInvalidHour);
-  T.Run('reject datetime trailing', @TestRejectDateTimeTrailing);
-  T.Run('dotted key with spaces', @TestDottedKeyWithSpaces);
-  T.Run('reject leading zero', @TestRejectLeadingZero);
-  T.Run('reject trailing dot', @TestRejectTrailingDot);
-  T.Run('reject leading dot', @TestRejectLeadingDot);
-  T.Run('reject trailing exponent', @TestRejectTrailingExponent);
-  T.Run('reject double underscore', @TestRejectDoubleUnderscore);
-  T.Run('reject leading underscore', @TestRejectLeadingUnderscore);
-  T.Run('reject trailing underscore', @TestRejectTrailingUnderscore);
-  T.Run('reject escape slash', @TestRejectEscapeSlash);
-  T.Run('unicode escape \\u', @TestUnicodeEscape4);
-  T.Run('unicode escape \\U', @TestUnicodeEscape8);
-  T.Run('reject inline table extension', @TestRejectInlineTableExtension);
-  T.Run('reject inline table reopen', @TestRejectInlineTableReopen);
+  T.Test('reject duplicate key', @TestRejectDuplicateKey);
+  T.Test('reject duplicate table', @TestRejectDuplicateTable);
+  T.Test('reject bare key invalid', @TestRejectBareKeyInvalid);
+  T.Test('reject missing value', @TestRejectMissingValue);
+  T.Test('reject trailing garbage', @TestRejectTrailingGarbage);
+  T.Test('reject invalid month', @TestRejectInvalidMonth);
+  T.Test('reject invalid hour', @TestRejectInvalidHour);
+  T.Test('reject datetime trailing', @TestRejectDateTimeTrailing);
+  T.Test('dotted key with spaces', @TestDottedKeyWithSpaces);
+  T.Test('reject leading zero', @TestRejectLeadingZero);
+  T.Test('reject trailing dot', @TestRejectTrailingDot);
+  T.Test('reject leading dot', @TestRejectLeadingDot);
+  T.Test('reject trailing exponent', @TestRejectTrailingExponent);
+  T.Test('reject double underscore', @TestRejectDoubleUnderscore);
+  T.Test('reject leading underscore', @TestRejectLeadingUnderscore);
+  T.Test('reject trailing underscore', @TestRejectTrailingUnderscore);
+  T.Test('reject escape slash', @TestRejectEscapeSlash);
+  T.Test('unicode escape \\u', @TestUnicodeEscape4);
+  T.Test('unicode escape \\U', @TestUnicodeEscape8);
+  T.Test('reject inline table extension', @TestRejectInlineTableExtension);
+  T.Test('reject inline table reopen', @TestRejectInlineTableReopen);
   { Official toml-test suite cases }
-  T.Run('spec-example-1', @TestSpecExample1);
-  T.Run('implicit-explicit-after', @TestImplicitExplicitAfter);
-  T.Run('reject hex escape', @TestRejectHexEscape);
-  T.Run('multiline array', @TestMultilineArray);
+  T.Test('spec-example-1', @TestSpecExample1);
+  T.Test('implicit-explicit-after', @TestImplicitExplicitAfter);
+  T.Test('reject hex escape', @TestRejectHexEscape);
+  T.Test('multiline array', @TestMultilineArray);
   { toml-test/invalid/integer }
-  T.Run('reject capital 0B/0X/0O', @TestRejectCapitalBin);
-  T.Run('reject capital 0X', @TestRejectCapitalHex);
-  T.Run('reject capital 0O', @TestRejectCapitalOct);
-  T.Run('reject double sign', @TestRejectDoubleSign);
-  T.Run('reject signed base prefix', @TestRejectSignedBase);
-  T.Run('reject leading zero signed', @TestRejectLeadingZeroSigned);
-  T.Run('reject underscore after prefix', @TestRejectUsAfterPrefix);
+  T.Test('reject capital 0B/0X/0O', @TestRejectCapitalBin);
+  T.Test('reject capital 0X', @TestRejectCapitalHex);
+  T.Test('reject capital 0O', @TestRejectCapitalOct);
+  T.Test('reject double sign', @TestRejectDoubleSign);
+  T.Test('reject signed base prefix', @TestRejectSignedBase);
+  T.Test('reject leading zero signed', @TestRejectLeadingZeroSigned);
+  T.Test('reject underscore after prefix', @TestRejectUsAfterPrefix);
   { toml-test/invalid/string }
-  T.Run('reject bad escapes', @TestRejectBadEscapes);
-  T.Run('reject bad unicode', @TestRejectBadUnicode);
-  T.Run('reject text after string', @TestRejectTextAfterString);
+  T.Test('reject bad escapes', @TestRejectBadEscapes);
+  T.Test('reject bad unicode', @TestRejectBadUnicode);
+  T.Test('reject text after string', @TestRejectTextAfterString);
   { StringifyPretty }
-  T.Run('stringify pretty', @TestStringifyPretty);
+  T.Test('stringify pretty', @TestStringifyPretty);
   { toml-test/invalid/float }
-  T.Run('reject float double-e', @TestRejectFloatDoubleE);
-  T.Run('reject float Inf/NaN capital', @TestRejectFloatCapital);
-  T.Run('reject float leading-zero', @TestRejectFloatLeadingZero);
+  T.Test('reject float double-e', @TestRejectFloatDoubleE);
+  T.Test('reject float Inf/NaN capital', @TestRejectFloatCapital);
+  T.Test('reject float leading-zero', @TestRejectFloatLeadingZero);
   { toml-test/invalid/table }
-  T.Run('reject table redefine key', @TestRejectTableRedefineKey);
-  T.Run('reject dotted key then array-table', @TestRejectDottedThenArrayTable);
+  T.Test('reject table redefine key', @TestRejectTableRedefineKey);
+  T.Test('reject dotted key then array-table', @TestRejectDottedThenArrayTable);
   { toml-test/invalid/inline-table }
-  T.Run('reject inline-table duplicate key', @TestRejectInlineDupKey);
-  T.Run('reject inline-table overwrite', @TestRejectInlineOverwrite);
+  T.Test('reject inline-table duplicate key', @TestRejectInlineDupKey);
+  T.Test('reject inline-table overwrite', @TestRejectInlineOverwrite);
   { toml-test/valid cases }
-  T.Run('spec-example-1-compact', @TestSpecExampleCompact);
-  T.Run('implicit-explicit-before', @TestImplicitExplicitBefore);
-  T.Run('implicit-groups', @TestImplicitGroups);
+  T.Test('spec-example-1-compact', @TestSpecExampleCompact);
+  T.Test('implicit-explicit-before', @TestImplicitExplicitBefore);
+  T.Test('implicit-groups', @TestImplicitGroups);
   { AsString convenience }
-  T.Run('AsString method', @TestAsStringMethod);
+  T.Test('AsString method', @TestAsStringMethod);
   { toml-test/valid/datetime }
-  T.Run('valid datetime lowercase t/z', @TestValidDateTimeLowerCase);
+  T.Test('valid datetime lowercase t/z', @TestValidDateTimeLowerCase);
   { toml-test/valid/key }
-  T.Run('valid dotted key mixed quotes', @TestValidDottedKeyMixed);
-  T.Run('valid key with spaces', @TestValidKeySpaces);
+  T.Test('valid dotted key mixed quotes', @TestValidDottedKeyMixed);
+  T.Test('valid key with spaces', @TestValidKeySpaces);
   { toml-test/invalid/datetime }
-  T.Run('reject datetime no-t', @TestRejectDateTimeNoT);
-  T.Run('reject datetime no-leads', @TestRejectDateTimeNoLeads);
-  T.Run('reject datetime no-secs', @TestRejectDateTimeNoSecs);
+  T.Test('reject datetime no-t', @TestRejectDateTimeNoT);
+  T.Test('reject datetime no-leads', @TestRejectDateTimeNoLeads);
+  T.Test('reject datetime no-secs', @TestRejectDateTimeNoSecs);
   { toml-test/valid/comment }
-  T.Run('valid tricky comments', @TestValidTrickyComments);
+  T.Test('valid tricky comments', @TestValidTrickyComments);
   { FindByPath }
-  T.Run('FindByPath', @TestFindByPath);
+  T.Test('FindByPath', @TestFindByPath);
   { toml-test/valid/array + inline-table + string }
-  T.Run('valid nested double array', @TestValidNestedDoubleArray);
-  T.Run('valid inline-table nested', @TestValidInlineTableNest);
-  T.Run('valid multiline line continuation', @TestValidMultilineContinuation);
-  T.Run('valid escaped backslash', @TestValidEscapedBackslash);
+  T.Test('valid nested double array', @TestValidNestedDoubleArray);
+  T.Test('valid inline-table nested', @TestValidInlineTableNest);
+  T.Test('valid multiline line continuation', @TestValidMultilineContinuation);
+  T.Test('valid escaped backslash', @TestValidEscapedBackslash);
   { Codex review regression tests }
-  T.Run('empty quoted key', @TestEmptyQuotedKey);
-  T.Run('reject hex overflow', @TestRejectHexOverflow);
-  T.Run('reject value-array as array-table', @TestRejectValueArrayAsArrayTable);
-  T.Run('reject dotted key reopen', @TestRejectDottedKeyReopen);
-  T.Run('multi-line 4 quotes', @TestMultiLine4Quotes);
-  T.Run('multi-line escaped-bs newline', @TestMultiLineEscapedBsNewline);
+  T.Test('empty quoted key', @TestEmptyQuotedKey);
+  T.Test('reject hex overflow', @TestRejectHexOverflow);
+  T.Test('reject value-array as array-table', @TestRejectValueArrayAsArrayTable);
+  T.Test('reject dotted key reopen', @TestRejectDottedKeyReopen);
+  T.Test('multi-line 4 quotes', @TestMultiLine4Quotes);
+  T.Test('multi-line escaped-bs newline', @TestMultiLineEscapedBsNewline);
   { toml-test/valid — remaining categories }
-  T.Run('valid float exponent forms', @TestValidFloatExponent);
-  T.Run('valid float zero forms', @TestValidFloatZero);
-  T.Run('valid integer zero forms', @TestValidIntegerZero);
-  T.Run('valid table sub-empty', @TestValidTableSubEmpty);
-  T.Run('valid table array-implicit', @TestValidTableArrayImplicit);
+  T.Test('valid float exponent forms', @TestValidFloatExponent);
+  T.Test('valid float zero forms', @TestValidFloatZero);
+  T.Test('valid integer zero forms', @TestValidIntegerZero);
+  T.Test('valid table sub-empty', @TestValidTableSubEmpty);
+  T.Test('valid table array-implicit', @TestValidTableArrayImplicit);
   { Codex R2 regression tests }
-  T.Run('reject [[a]] then [a]', @TestRejectArrayTableThenTable);
-  T.Run('reject time-only offset', @TestRejectTimeOnlyOffset);
-  T.Run('reject Feb 30', @TestRejectFeb30);
-  T.Run('literal multi-line 4 quotes', @TestLiteralMultiLine4Quotes);
+  T.Test('reject [[a]] then [a]', @TestRejectArrayTableThenTable);
+  T.Test('reject time-only offset', @TestRejectTimeOnlyOffset);
+  T.Test('reject Feb 30', @TestRejectFeb30);
+  T.Test('literal multi-line 4 quotes', @TestLiteralMultiLine4Quotes);
   { Multi-line control char rejection }
-  T.Run('reject ctrl in multi-line basic', @TestRejectCtrlMultiLineBasic);
-  T.Run('reject ctrl in multi-line literal', @TestRejectCtrlMultiLineLiteral);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('reject ctrl in multi-line basic', @TestRejectCtrlMultiLineBasic);
+  T.Test('reject ctrl in multi-line literal', @TestRejectCtrlMultiLineLiteral);
+  if not T.Run then Halt(1);
 end.

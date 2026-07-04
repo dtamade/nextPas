@@ -4,7 +4,7 @@ program test_hashmap;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashmap;
@@ -17,7 +17,7 @@ type
   TStrIntMap = specialize THashMap<string, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var
@@ -361,27 +361,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.hashmap');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Contains', @TestContains);
-  T.Run('Remove', @TestRemove);
-  T.Run('Overwrite', @TestOverwrite);
-  T.Run('Rehash (100 inserts)', @TestRehash);
-  T.Run('String key', @TestStringKey);
-  T.Run('Remove then insert (tombstone reuse)', @TestRemoveThenInsert);
-  T.Run('Clear', @TestClear);
-  T.Run('GetOrInsert', @TestGetOrInsert);
-  T.Run('Add (no overwrite)', @TestAddOnly);
-  T.Run('AddOrAssign', @TestAddOrAssign);
-  T.Run('TryGetValue', @TestTryGetValue);
-  T.Run('LoadFactor', @TestLoadFactor);
-  T.Run('Tombstone rehash', @TestTombstoneRehash);
-  T.Run('Auto free (interface)', @TestAutoFree);
-  T.Run('Reserve', @TestReserve);
-  T.Run('GetOrInsertWith', @TestGetOrInsertWith);
-  T.Run('ModifyOrInsert', @TestModifyOrInsert);
-  T.Run('Retain', @TestRetain);
-  T.Run('Max-load update does not grow', @TestMaxLoadUpdateDoesNotGrow);
-  T.Run('Max-load tombstone reuse does not grow', @TestMaxLoadTombstoneReuseDoesNotGrow);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.hashmap');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Contains', @TestContains);
+  T.Test('Remove', @TestRemove);
+  T.Test('Overwrite', @TestOverwrite);
+  T.Test('Rehash (100 inserts)', @TestRehash);
+  T.Test('String key', @TestStringKey);
+  T.Test('Remove then insert (tombstone reuse)', @TestRemoveThenInsert);
+  T.Test('Clear', @TestClear);
+  T.Test('GetOrInsert', @TestGetOrInsert);
+  T.Test('Add (no overwrite)', @TestAddOnly);
+  T.Test('AddOrAssign', @TestAddOrAssign);
+  T.Test('TryGetValue', @TestTryGetValue);
+  T.Test('LoadFactor', @TestLoadFactor);
+  T.Test('Tombstone rehash', @TestTombstoneRehash);
+  T.Test('Auto free (interface)', @TestAutoFree);
+  T.Test('Reserve', @TestReserve);
+  T.Test('GetOrInsertWith', @TestGetOrInsertWith);
+  T.Test('ModifyOrInsert', @TestModifyOrInsert);
+  T.Test('Retain', @TestRetain);
+  T.Test('Max-load update does not grow', @TestMaxLoadUpdateDoesNotGrow);
+  T.Test('Max-load tombstone reuse does not grow', @TestMaxLoadTombstoneReuseDoesNotGrow);
+  if not T.Run then Halt(1);
 end.

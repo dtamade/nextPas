@@ -5,14 +5,14 @@ program test_id_rng_failure_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id,
   nextpas.core.id.rng,
   nextpas.core.id.v7.monotonic,
   nextpas.core.platform.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure ExpectPublicGeneratorIoError(const AName: string; const AProc: TTestProc);
 var
@@ -247,14 +247,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.rng.failure_contract');
-  T.Run('entropy failure raises EIOError and unlocks', @TestEntropyFailureRaisesIoErrorAndUnlocks);
-  T.Run('refill failure does not partially write destination', @TestRefillFailureDoesNotPartiallyWriteDestination);
-  T.Run('nil nonzero raises EArgumentNil', @TestNilNonZeroRaisesArgumentNil);
-  T.Run('nil zero is noop', @TestNilZeroIsNoop);
+  T := TTestSuite.Create('nextpas.core.id.rng.failure_contract');
+  T.Test('entropy failure raises EIOError and unlocks', @TestEntropyFailureRaisesIoErrorAndUnlocks);
+  T.Test('refill failure does not partially write destination', @TestRefillFailureDoesNotPartiallyWriteDestination);
+  T.Test('nil nonzero raises EArgumentNil', @TestNilNonZeroRaisesArgumentNil);
+  T.Test('nil zero is noop', @TestNilZeroIsNoop);
   {$IFDEF CPU64}
-  T.Run('oversized request fails before entropy', @TestOversizedRequestFailsBeforeEntropy);
+  T.Test('oversized request fails before entropy', @TestOversizedRequestFailsBeforeEntropy);
   {$ENDIF}
-  T.Run('public generator entropy failures', @TestPublicGeneratorEntropyFailures);
-  T.Summary;
+  T.Test('public generator entropy failures', @TestPublicGeneratorEntropyFailures);
+  if not T.Run then Halt(1);
 end.

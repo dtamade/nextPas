@@ -5,7 +5,7 @@ program test_http_static;
 uses
   nextpas.core.thread.init,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.io.intf,
@@ -27,7 +27,7 @@ const
   CTmpDir = '/tmp/nextpas_test_static';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   PServerCtx = ^TServerCtx;
@@ -440,26 +440,26 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.http.static');
-    T.Run('ServeFile existing file', @TestServeFileExisting);
-    T.Run('ServeFile sets Content-Type', @TestServeFileContentType);
-    T.Run('ServeFile sets Content-Length', @TestServeFileContentLength);
-    T.Run('ServeFile missing returns 404', @TestServeFileMissing);
-    T.Run('ServeDir existing file', @TestServeDirExisting);
-    T.Run('ServeDir nested path', @TestServeDirNested);
-    T.Run('ServeDir path traversal blocked', @TestServeDirTraversalBlocked);
-    T.Run('ServeDir backslash traversal rejected',
+    T := TTestSuite.Create('nextpas.core.http.static');
+    T.Test('ServeFile existing file', @TestServeFileExisting);
+    T.Test('ServeFile sets Content-Type', @TestServeFileContentType);
+    T.Test('ServeFile sets Content-Length', @TestServeFileContentLength);
+    T.Test('ServeFile missing returns 404', @TestServeFileMissing);
+    T.Test('ServeDir existing file', @TestServeDirExisting);
+    T.Test('ServeDir nested path', @TestServeDirNested);
+    T.Test('ServeDir path traversal blocked', @TestServeDirTraversalBlocked);
+    T.Test('ServeDir backslash traversal rejected',
       @TestServeDirBackslashTraversalRejected);
-    T.Run('ServeDir URL-encoded traversal rejected',
+    T.Test('ServeDir URL-encoded traversal rejected',
       @TestServeDirUrlEncodedTraversalRejected);
-    T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
-    T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
-    T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
-    T.Run('Static file uses binary stream transfer',
+    T.Test('ServeDir missing file returns 404', @TestServeDirMissing);
+    T.Test('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
+    T.Test('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
+    T.Test('Static file uses binary stream transfer',
       @TestStaticFileUsesBinaryStreamTransfer);
-    T.Run('ServeFile preserves binary body bytes',
+    T.Test('ServeFile preserves binary body bytes',
       @TestServeFilePreservesBinaryBodyBytes);
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

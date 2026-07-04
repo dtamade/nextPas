@@ -4,7 +4,7 @@ program test_rbtreemap_custom_comparer_data;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.orderedmap.rb,
   nextpas.core.mem.intf,
@@ -19,7 +19,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function CompareRequiresData(const A, B: Integer; AData: Pointer): SizeInt;
 var
@@ -214,11 +214,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.rbtreemap_custom_comparer_data');
-  T.Run('comparer data reaches core and map key paths', @TestComparerDataReachesCoreAndMapKeyPaths);
-  T.Run('comparer data reaches range iterator', @TestComparerDataReachesRangeIterator);
-  T.Run('range MovePrev starts at last when right bound exceeds max', @TestRangeMovePrevStartsAtLastWhenRightBoundExceedsMax);
-  T.Run('range MovePrev honors exclusive right bound', @TestRangeMovePrevHonorsExclusiveRightBound);
-  T.Run('range iterators keep independent bounds', @TestRangeIteratorsKeepIndependentBounds);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.rbtreemap_custom_comparer_data');
+  T.Test('comparer data reaches core and map key paths', @TestComparerDataReachesCoreAndMapKeyPaths);
+  T.Test('comparer data reaches range iterator', @TestComparerDataReachesRangeIterator);
+  T.Test('range MovePrev starts at last when right bound exceeds max', @TestRangeMovePrevStartsAtLastWhenRightBoundExceedsMax);
+  T.Test('range MovePrev honors exclusive right bound', @TestRangeMovePrevHonorsExclusiveRightBound);
+  T.Test('range iterators keep independent bounds', @TestRangeIteratorsKeepIndependentBounds);
+  if not T.Run then Halt(1);
 end.

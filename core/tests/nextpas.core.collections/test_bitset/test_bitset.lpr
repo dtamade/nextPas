@@ -5,12 +5,12 @@ program test_bitset;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.bitset.intf;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestSetAndTest;
 var
@@ -156,17 +156,17 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.bitset');
-  T.Run('Set and Test', @TestSetAndTest);
-  T.Run('ClearBit', @TestClearBit);
-  T.Run('Flip', @TestFlip);
-  T.Run('Cardinality', @TestCardinality);
-  T.Run('SetAll/ClearAll', @TestSetAllClearAll);
-  T.Run('AndWith', @TestAndWith);
-  T.Run('OrWith', @TestOrWith);
-  T.Run('XorWith', @TestXorWith);
-  T.Run('NotBits', @TestNotBits);
-  T.Run('Large index', @TestLargeIndex);
-  T.Run('Out of range', @TestBitSetOutOfRange);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.bitset');
+  T.Test('Set and Test', @TestSetAndTest);
+  T.Test('ClearBit', @TestClearBit);
+  T.Test('Flip', @TestFlip);
+  T.Test('Cardinality', @TestCardinality);
+  T.Test('SetAll/ClearAll', @TestSetAllClearAll);
+  T.Test('AndWith', @TestAndWith);
+  T.Test('OrWith', @TestOrWith);
+  T.Test('XorWith', @TestXorWith);
+  T.Test('NotBits', @TestNotBits);
+  T.Test('Large index', @TestLargeIndex);
+  T.Test('Out of range', @TestBitSetOutOfRange);
+  if not T.Run then Halt(1);
 end.

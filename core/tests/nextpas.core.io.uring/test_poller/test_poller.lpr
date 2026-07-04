@@ -4,14 +4,14 @@ program test_poller;
 
 uses
   Classes, SysUtils, BaseUnix,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.modern,
   nextpas.core.io.poller;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCallbackCount: Int32;
   GLastResult: Int32;
   GLastUserData: UInt64;
@@ -493,19 +493,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.poller');
-  T.Run('Backend detection', @TestBackendDetection);
-  T.Run('Backend usability contract', @TestBackendUsabilityContract);
-  T.Run('Async docs backend truth contract', @TestAsyncDocsBackendTruthContract);
-  T.Run('Backend model source contract', @TestBackendModelSourceContract);
-  T.Run('Positioned file I/O capability contract',
+  T := TTestSuite.Create('nextpas.core.io.poller');
+  T.Test('Backend detection', @TestBackendDetection);
+  T.Test('Backend usability contract', @TestBackendUsabilityContract);
+  T.Test('Async docs backend truth contract', @TestAsyncDocsBackendTruthContract);
+  T.Test('Backend model source contract', @TestBackendModelSourceContract);
+  T.Test('Positioned file I/O capability contract',
     @TestPositionedFileIoCapabilityContract);
-  T.Run('Create/Close', @TestCreateClose);
-  T.Run('Async Read/Write (memfd)', @TestAsyncReadWrite);
-  T.Run('Multiple async ops', @TestMultipleAsync);
-  T.Run('Poll batch', @TestPollBatch);
-  T.Run('Context passing', @TestContextPassing);
-  T.Run('Pipe Read/Write', @TestPipeReadWrite);
-  T.Run('HasPending', @TestHasPending);
-  T.Summary;
+  T.Test('Create/Close', @TestCreateClose);
+  T.Test('Async Read/Write (memfd)', @TestAsyncReadWrite);
+  T.Test('Multiple async ops', @TestMultipleAsync);
+  T.Test('Poll batch', @TestPollBatch);
+  T.Test('Context passing', @TestContextPassing);
+  T.Test('Pipe Read/Write', @TestPipeReadWrite);
+  T.Test('HasPending', @TestHasPending);
+  if not T.Run then Halt(1);
 end.

@@ -12,10 +12,10 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.builder,
   nextpas.core.toml,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckParseErrorMessage(const ASource, AExpectedMessage,
   ACaseName: string);
@@ -534,48 +534,47 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.toml (facade)');
-  T.Run('parse simple', @TestParseSimple);
-  T.Run('parse nested', @TestParseNested);
-  T.Run('parse error', @TestParseError);
-  T.Run('TryTomlParse success', @TestTryTomlParseSuccess);
-  T.Run('TryTomlParse failure returns diagnostic doc', @TestTryTomlParseFailureReturnsDiagnosticDoc);
-  T.Run('parse unexpected end of input position',
+  T := TTestSuite.Create('nextpas.core.toml (facade)');
+  T.Test('parse simple', @TestParseSimple);
+  T.Test('parse nested', @TestParseNested);
+  T.Test('parse error', @TestParseError);
+  T.Test('TryTomlParse success', @TestTryTomlParseSuccess);
+  T.Test('TryTomlParse failure returns diagnostic doc', @TestTryTomlParseFailureReturnsDiagnosticDoc);
+  T.Test('parse unexpected end of input position',
     @TestParseUnexpectedEndOfInputPosition);
-  T.Run('parse invalid escape diagnostic message',
+  T.Test('parse invalid escape diagnostic message',
     @TestParseInvalidEscapeDiagnosticMessage);
-  T.Run('parse signed base prefix diagnostic message',
+  T.Test('parse signed base prefix diagnostic message',
     @TestParseSignedBasePrefixDiagnosticMessage);
-  T.Run('parse fractional seconds diagnostic message',
+  T.Test('parse fractional seconds diagnostic message',
     @TestParseFractionalSecondsDiagnosticMessage);
-  T.Run('auto release', @TestAutoRelease);
-  T.Run('builder', @TestBuilder);
-  T.Run('builder rejects unmatched EndArray',
+  T.Test('auto release', @TestAutoRelease);
+  T.Test('builder', @TestBuilder);
+  T.Test('builder rejects unmatched EndArray',
     @TestBuilderRejectsUnmatchedEndArray);
-  T.Run('builder rejects unmatched EndInlineTable',
+  T.Test('builder rejects unmatched EndInlineTable',
     @TestBuilderRejectsUnmatchedEndInlineTable);
-  T.Run('builder rejects mismatched inline container end',
+  T.Test('builder rejects mismatched inline container end',
     @TestBuilderRejectsMismatchedInlineContainerEnd);
-  T.Run('builder rejects inline container stack overflow',
+  T.Test('builder rejects inline container stack overflow',
     @TestBuilderRejectsInlineContainerStackOverflow);
-  T.Run('builder rejects table header inside array',
+  T.Test('builder rejects table header inside array',
     @TestBuilderRejectsTableHeaderInsideArray);
-  T.Run('builder rejects array table header inside array',
+  T.Test('builder rejects array table header inside array',
     @TestBuilderRejectsArrayTableHeaderInsideArray);
-  T.Run('builder table', @TestBuilderTable);
-  T.Run('stringify', @TestStringify);
-  T.Run('diagnostic document rejects stringify',
+  T.Test('builder table', @TestBuilderTable);
+  T.Test('stringify', @TestStringify);
+  T.Test('diagnostic document rejects stringify',
     @TestDiagnosticDocumentRejectsStringify);
-  T.Run('stringify matches parser depth boundary',
+  T.Test('stringify matches parser depth boundary',
     @TestStringifyMatchesParserDepthBoundary);
-  T.Run('stringify deep table path', @TestStringifyDeepTablePath);
-  T.Run('stringify rejects path stack overflow',
+  T.Test('stringify deep table path', @TestStringifyDeepTablePath);
+  T.Test('stringify rejects path stack overflow',
     @TestStringifyRejectsPathStackOverflow);
-  T.Run('real-world config', @TestRealWorldConfig);
-  T.Run('builder all types', @TestBuilderAllTypes);
-  T.Run('builder array table', @TestBuilderArrayTable);
-  T.Run('builder AsView/Len', @TestBuilderAsViewLen);
-  T.Run('TomlParseWith', @TestParseWith);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('real-world config', @TestRealWorldConfig);
+  T.Test('builder all types', @TestBuilderAllTypes);
+  T.Test('builder array table', @TestBuilderArrayTable);
+  T.Test('builder AsView/Len', @TestBuilderAsViewLen);
+  T.Test('TomlParseWith', @TestParseWith);
+  if not T.Run then Halt(1);
 end.

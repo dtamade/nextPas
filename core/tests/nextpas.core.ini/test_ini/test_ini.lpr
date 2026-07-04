@@ -9,10 +9,10 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.ini,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner,
+  T: TTestSuite,
   nextpas.core.mem.allocator.base;
 
 type
@@ -721,40 +721,40 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.ini');
-  T.Run('ReadString basic', @TestReadStringBasic);
-  T.Run('ReadInteger', @TestReadInteger);
-  T.Run('ReadBool', @TestReadBool);
-  T.Run('WriteString', @TestWriteString);
-  T.Run('Duplicate parsed key updates value', @TestDuplicateParsedKeyUpdatesValue);
-  T.Run('WriteInteger', @TestWriteInteger);
-  T.Run('WriteBool', @TestWriteBool);
-  T.Run('SectionExists', @TestSectionExists);
-  T.Run('Section case insensitive', @TestSectionCaseInsensitive);
-  T.Run('DeleteSection', @TestDeleteSection);
-  T.Run('GetSections', @TestGetSections);
-  T.Run('KeyExists', @TestKeyExists);
-  T.Run('DeleteKey', @TestDeleteKey);
-  T.Run('GetKeys', @TestGetKeys);
-  T.Run('Comments skipped', @TestCommentsSkipped);
-  T.Run('Value with spaces', @TestValueWithSpaces);
-  T.Run('Roundtrip', @TestRoundtrip);
-  T.Run('Empty file', @TestEmptyFile);
-  T.Run('Only comments', @TestOnlyComments);
-  T.Run('Keys without section', @TestKeysWithoutSection);
-  T.Run('Empty section', @TestEmptySection);
-  T.Run('Empty value', @TestEmptyValue);
-  T.Run('CRLF line endings', @TestCRLFLineEndings);
-  T.Run('Value with equals sign', @TestValueWithEquals);
-  T.Run('TryLoadFromString valid', @TestTryLoadFromStringValid);
-  T.Run('TryLoadFromString invalid section', @TestTryLoadFromStringInvalidSection);
-  T.Run('TryLoadFromFile missing', @TestTryLoadFromFileMissing);
-  T.Run('Delete non-existent', @TestDeleteNonExistent);
-  T.Run('SaveToFile + LoadFromFile roundtrip', @TestSaveAndLoadFromFile);
-  T.Run('SaveToFile format', @TestSaveToFileFormat);
-  T.Run('Allocator nil falls back to default',
+  T := TTestSuite.Create('nextpas.core.ini');
+  T.Test('ReadString basic', @TestReadStringBasic);
+  T.Test('ReadInteger', @TestReadInteger);
+  T.Test('ReadBool', @TestReadBool);
+  T.Test('WriteString', @TestWriteString);
+  T.Test('Duplicate parsed key updates value', @TestDuplicateParsedKeyUpdatesValue);
+  T.Test('WriteInteger', @TestWriteInteger);
+  T.Test('WriteBool', @TestWriteBool);
+  T.Test('SectionExists', @TestSectionExists);
+  T.Test('Section case insensitive', @TestSectionCaseInsensitive);
+  T.Test('DeleteSection', @TestDeleteSection);
+  T.Test('GetSections', @TestGetSections);
+  T.Test('KeyExists', @TestKeyExists);
+  T.Test('DeleteKey', @TestDeleteKey);
+  T.Test('GetKeys', @TestGetKeys);
+  T.Test('Comments skipped', @TestCommentsSkipped);
+  T.Test('Value with spaces', @TestValueWithSpaces);
+  T.Test('Roundtrip', @TestRoundtrip);
+  T.Test('Empty file', @TestEmptyFile);
+  T.Test('Only comments', @TestOnlyComments);
+  T.Test('Keys without section', @TestKeysWithoutSection);
+  T.Test('Empty section', @TestEmptySection);
+  T.Test('Empty value', @TestEmptyValue);
+  T.Test('CRLF line endings', @TestCRLFLineEndings);
+  T.Test('Value with equals sign', @TestValueWithEquals);
+  T.Test('TryLoadFromString valid', @TestTryLoadFromStringValid);
+  T.Test('TryLoadFromString invalid section', @TestTryLoadFromStringInvalidSection);
+  T.Test('TryLoadFromFile missing', @TestTryLoadFromFileMissing);
+  T.Test('Delete non-existent', @TestDeleteNonExistent);
+  T.Test('SaveToFile + LoadFromFile roundtrip', @TestSaveAndLoadFromFile);
+  T.Test('SaveToFile format', @TestSaveToFileFormat);
+  T.Test('Allocator nil falls back to default',
     @TestCreateNilAllocatorUsesDefault);
-  T.Run('LoadFromString reallocate failure raises',
+  T.Test('LoadFromString reallocate failure raises',
     @TestLoadFromStringReallocateFailureRaises);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

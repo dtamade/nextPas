@@ -4,10 +4,10 @@ program test_platform_fmt;
 
 uses
   nextpas.core.platform.fmt,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function BufEq(const A, B: PAnsiChar): Boolean;
 var I: Int32;
@@ -256,29 +256,29 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.fmt');
-  T.Run('int positive', @TestIntPositive);
-  T.Run('int negative', @TestIntNegative);
-  T.Run('uint max', @TestUintMax);
-  T.Run('hex', @TestHex);
-  T.Run('small buffer', @TestSmallBuffer);
-  T.Run('fmt_buf basic', @TestFmtBufBasic);
-  T.Run('fmt_buf string', @TestFmtBufString);
-  T.Run('fmt_buf hex', @TestFmtBufHex);
-  T.Run('fmt_buf empty', @TestFmtBufEmpty);
-  T.Run('nil buffer', @TestNilBuffer);
-  T.Run('parse uint', @TestParseUint);
-  T.Run('parse int', @TestParseInt);
-  T.Run('parse hex', @TestParseHex);
-  T.Run('parse errors', @TestParseErrors);
-  T.Run('str_lower', @TestStrLower);
-  T.Run('str_trim', @TestStrTrim);
-  T.Run('str_equal_nocase', @TestStrEqualNocase);
-  T.Run('str_find', @TestStrFind);
-  T.Run('str_starts_ends', @TestStrStartsEnds);
-  T.Run('fmt_float', @TestFmtFloat);
-  T.Run('fmt_buf %f', @TestFmtBufFloat);
-  T.Run('fmt_buf width/align', @TestFmtBufWidth);
-  T.Run('parse_float', @TestParseFloat);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.fmt');
+  T.Test('int positive', @TestIntPositive);
+  T.Test('int negative', @TestIntNegative);
+  T.Test('uint max', @TestUintMax);
+  T.Test('hex', @TestHex);
+  T.Test('small buffer', @TestSmallBuffer);
+  T.Test('fmt_buf basic', @TestFmtBufBasic);
+  T.Test('fmt_buf string', @TestFmtBufString);
+  T.Test('fmt_buf hex', @TestFmtBufHex);
+  T.Test('fmt_buf empty', @TestFmtBufEmpty);
+  T.Test('nil buffer', @TestNilBuffer);
+  T.Test('parse uint', @TestParseUint);
+  T.Test('parse int', @TestParseInt);
+  T.Test('parse hex', @TestParseHex);
+  T.Test('parse errors', @TestParseErrors);
+  T.Test('str_lower', @TestStrLower);
+  T.Test('str_trim', @TestStrTrim);
+  T.Test('str_equal_nocase', @TestStrEqualNocase);
+  T.Test('str_find', @TestStrFind);
+  T.Test('str_starts_ends', @TestStrStartsEnds);
+  T.Test('fmt_float', @TestFmtFloat);
+  T.Test('fmt_buf %f', @TestFmtBufFloat);
+  T.Test('fmt_buf width/align', @TestFmtBufWidth);
+  T.Test('parse_float', @TestParseFloat);
+  if not T.Run then Halt(1);
 end.

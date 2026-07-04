@@ -9,7 +9,7 @@ program test_http_h2_hpack_block;
 uses
   nextpas.core.base,
   nextpas.core.http.impl.h2.hpack,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv;
 
 function HexNibble(const ACh: Char): Byte;
@@ -278,7 +278,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.hpack') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.hpack') do
   begin
     Run('Decode first request without Huffman',
       @TestDecodeFirstRequestWithoutHuffman);

@@ -4,7 +4,7 @@ program test_platform_thread_host_ffi_surface;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   THREAD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.base.pas';
@@ -29,7 +29,7 @@ const
   WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -188,7 +188,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.thread.host_ffi_surface');
-  T.Run('platform.thread keeps raw ffi below unified wrappers', @TestPlatformThreadRawFFIBoundary);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.thread.host_ffi_surface');
+  T.Test('platform.thread keeps raw ffi below unified wrappers', @TestPlatformThreadRawFFIBoundary);
+  if not T.Run then Halt(1);
 end.

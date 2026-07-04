@@ -4,10 +4,10 @@ program test_platform_time_l0_boundary;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -106,12 +106,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.time.l0_boundary');
-  T.Run('platform.time facade stays L0', @TestPlatformTimeSourceStaysL0);
-  T.Run('platform.time base stays L0', @TestPlatformTimeBaseStaysL0);
-  T.Run('platform.time host stays L0', @TestPlatformTimeHostStaysL0);
-  T.Run('platform facade stays L0', @TestPlatformFacadeStaysL0);
-  T.Run('platform.time example stays L0', @TestPlatformTimeExampleStaysL0);
-  T.Run('platform.time benchmark stays L0', @TestPlatformTimeBenchmarkStaysL0);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.time.l0_boundary');
+  T.Test('platform.time facade stays L0', @TestPlatformTimeSourceStaysL0);
+  T.Test('platform.time base stays L0', @TestPlatformTimeBaseStaysL0);
+  T.Test('platform.time host stays L0', @TestPlatformTimeHostStaysL0);
+  T.Test('platform facade stays L0', @TestPlatformFacadeStaysL0);
+  T.Test('platform.time example stays L0', @TestPlatformTimeExampleStaysL0);
+  T.Test('platform.time benchmark stays L0', @TestPlatformTimeBenchmarkStaysL0);
+  if not T.Run then Halt(1);
 end.

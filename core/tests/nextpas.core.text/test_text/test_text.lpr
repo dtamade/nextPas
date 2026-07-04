@@ -5,12 +5,12 @@ program test_text;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text,
   nextpas.core.text.utils;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
@@ -459,34 +459,34 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text');
-  T.Run('Trim', @TestTrim);
-  T.Run('TrimLeft', @TestTrimLeft);
-  T.Run('TrimRight', @TestTrimRight);
-  T.Run('StartsWith', @TestStartsWith);
-  T.Run('EndsWith', @TestEndsWith);
-  T.Run('Contains', @TestContains);
-  T.Run('Split', @TestSplit);
-  T.Run('Join', @TestJoin);
-  T.Run('Replace', @TestReplace);
-  T.Run('ReplaceAll', @TestReplaceAll);
-  T.Run('ToUpper', @TestToUpper);
-  T.Run('ToLower', @TestToLower);
-  T.Run('PadLeft', @TestPadLeft);
-  T.Run('PadRight', @TestPadRight);
-  T.Run('Repeat', @TestRepeat);
-  T.Run('IndexOf', @TestIndexOf);
-  T.Run('LastIndexOf', @TestLastIndexOf);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('IsBlank', @TestIsBlank);
-  T.Run('UTF8Length', @TestUTF8Length);
-  T.Run('UTF8CodePointAt', @TestUTF8CodePointAt);
-  T.Run('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
-  T.Run('Utils surface', @TestUtilsSurface);
-  T.Run('Facade extended surface', @TestFacadeExtendedSurface);
-  T.Run('Facade owner routing', @TestFacadeOwnerRouting);
-  T.Run('Utils ownership contracts', @TestUtilsOwnershipContracts);
-  T.Run('Strings consume utils helpers', @TestStringsConsumeUtilsHelpers);
-  T.Run('Performance contracts', @TestTextPerformanceContracts);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text');
+  T.Test('Trim', @TestTrim);
+  T.Test('TrimLeft', @TestTrimLeft);
+  T.Test('TrimRight', @TestTrimRight);
+  T.Test('StartsWith', @TestStartsWith);
+  T.Test('EndsWith', @TestEndsWith);
+  T.Test('Contains', @TestContains);
+  T.Test('Split', @TestSplit);
+  T.Test('Join', @TestJoin);
+  T.Test('Replace', @TestReplace);
+  T.Test('ReplaceAll', @TestReplaceAll);
+  T.Test('ToUpper', @TestToUpper);
+  T.Test('ToLower', @TestToLower);
+  T.Test('PadLeft', @TestPadLeft);
+  T.Test('PadRight', @TestPadRight);
+  T.Test('Repeat', @TestRepeat);
+  T.Test('IndexOf', @TestIndexOf);
+  T.Test('LastIndexOf', @TestLastIndexOf);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('IsBlank', @TestIsBlank);
+  T.Test('UTF8Length', @TestUTF8Length);
+  T.Test('UTF8CodePointAt', @TestUTF8CodePointAt);
+  T.Test('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
+  T.Test('Utils surface', @TestUtilsSurface);
+  T.Test('Facade extended surface', @TestFacadeExtendedSurface);
+  T.Test('Facade owner routing', @TestFacadeOwnerRouting);
+  T.Test('Utils ownership contracts', @TestUtilsOwnershipContracts);
+  T.Test('Strings consume utils helpers', @TestStringsConsumeUtilsHelpers);
+  T.Test('Performance contracts', @TestTextPerformanceContracts);
+  if not T.Run then Halt(1);
 end.

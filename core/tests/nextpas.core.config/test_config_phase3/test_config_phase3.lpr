@@ -8,10 +8,10 @@ uses
   nextpas.core.errors,
   nextpas.core.config,
   nextpas.core.config.env,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestBuildReturnsReadableIConfig;
 var
@@ -1073,37 +1073,37 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config.phase3');
-  T.Run('Build.ReadSurface', @TestBuildReturnsReadableIConfig);
-  T.Run('Build.OwnsResult', @TestBuildOwnsResultAfterBuilderRelease);
-  T.Run('Build.RawReadMethods', @TestBuildRawReadMethods);
-  T.Run('Builder.DefaultPriority', @TestDefaultsStayLowestPriority);
-  T.Run('Builder.SourceOrderAndEnvPriority', @TestExplicitSourceOrderAndEnvPriority);
-  T.Run('Builder.BuildConfigIndependent', @TestBuildConfigReturnsIndependentMutableConfigs);
-  T.Run('Builder.BuildConfigRequiredKeyFailure',
+  T := TTestSuite.Create('nextpas.core.config.phase3');
+  T.Test('Build.ReadSurface', @TestBuildReturnsReadableIConfig);
+  T.Test('Build.OwnsResult', @TestBuildOwnsResultAfterBuilderRelease);
+  T.Test('Build.RawReadMethods', @TestBuildRawReadMethods);
+  T.Test('Builder.DefaultPriority', @TestDefaultsStayLowestPriority);
+  T.Test('Builder.SourceOrderAndEnvPriority', @TestExplicitSourceOrderAndEnvPriority);
+  T.Test('Builder.BuildConfigIndependent', @TestBuildConfigReturnsIndependentMutableConfigs);
+  T.Test('Builder.BuildConfigRequiredKeyFailure',
     @TestBuildConfigRaisesOnRequiredKeyFailure);
-  T.Run('Builder.BuildConfigMalformedFile',
+  T.Test('Builder.BuildConfigMalformedFile',
     @TestBuildConfigRaisesOnMalformedFile);
-  T.Run('Builder.RequireAndTryBuild', @TestRequireKeysAndTryBuildFailure);
-  T.Run('Builder.TryBuildInterpolationFailure', @TestTryBuildInterpolationFailure);
-  T.Run('Builder.TryBuildClearsPreexistingConfig',
+  T.Test('Builder.RequireAndTryBuild', @TestRequireKeysAndTryBuildFailure);
+  T.Test('Builder.TryBuildInterpolationFailure', @TestTryBuildInterpolationFailure);
+  T.Test('Builder.TryBuildClearsPreexistingConfig',
     @TestTryBuildClearsPreexistingConfigOnFailure);
-  T.Run('Builder.RejectsEmptyKeys', @TestBuilderRejectsEmptyKeys);
-  T.Run('Builder.RejectsEmptyEnvPrefix', @TestBuilderRejectsEmptyEnvPrefix);
-  T.Run('Builder.RejectsEmptyFilePath', @TestFileSourceRejectsEmptyPath);
-  T.Run('EnvHelpers.NameMapping', @TestConfigEnvNameMapping);
-  T.Run('EnvHelpers.WindowsBlockEnumeration', @TestWindowsEnvBlockEnumeration);
-  T.Run('FileSources.AndConfigLoad', @TestFileSourcesAndConfigLoad);
-  T.Run('FileSources.PriorityRules', @TestFileSourcePriorityRules);
-  T.Run('FileSources.LaterMalformedFailsClosed',
+  T.Test('Builder.RejectsEmptyKeys', @TestBuilderRejectsEmptyKeys);
+  T.Test('Builder.RejectsEmptyEnvPrefix', @TestBuilderRejectsEmptyEnvPrefix);
+  T.Test('Builder.RejectsEmptyFilePath', @TestFileSourceRejectsEmptyPath);
+  T.Test('EnvHelpers.NameMapping', @TestConfigEnvNameMapping);
+  T.Test('EnvHelpers.WindowsBlockEnumeration', @TestWindowsEnvBlockEnumeration);
+  T.Test('FileSources.AndConfigLoad', @TestFileSourcesAndConfigLoad);
+  T.Test('FileSources.PriorityRules', @TestFileSourcePriorityRules);
+  T.Test('FileSources.LaterMalformedFailsClosed',
     @TestLaterMalformedFileSourceFailsClosed);
-  T.Run('FileSources.LaterMissingFailsClosed',
+  T.Test('FileSources.LaterMissingFailsClosed',
     @TestLaterMissingFileSourceFailsClosed);
-  T.Run('FileSources.Errors', @TestFileSourceErrorsIncludePathAndParserDetail);
-  T.Run('FileSources.EmptyKeyFailsClosed', @TestFileSourceEmptyKeysFailClosed);
-  T.Run('JsonAndYamlContentSource.Errors', @TestJsonAndYamlContentSourceErrors);
-  T.Run('TomlContentSource.Errors', @TestTomlContentSourceErrors);
-  T.Run('IniContentSource.Errors', @TestIniContentSourceErrors);
-  T.Run('ContentSource.EmptyKeyErrors', @TestEmptyKeyContentSourceErrors);
-  T.Summary;
+  T.Test('FileSources.Errors', @TestFileSourceErrorsIncludePathAndParserDetail);
+  T.Test('FileSources.EmptyKeyFailsClosed', @TestFileSourceEmptyKeysFailClosed);
+  T.Test('JsonAndYamlContentSource.Errors', @TestJsonAndYamlContentSourceErrors);
+  T.Test('TomlContentSource.Errors', @TestTomlContentSourceErrors);
+  T.Test('IniContentSource.Errors', @TestIniContentSourceErrors);
+  T.Test('ContentSource.EmptyKeyErrors', @TestEmptyKeyContentSourceErrors);
+  if not T.Run then Halt(1);
 end.

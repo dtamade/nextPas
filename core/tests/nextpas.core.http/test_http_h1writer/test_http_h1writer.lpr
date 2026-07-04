@@ -5,7 +5,7 @@ program test_http_h1writer;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.net.base,
@@ -278,7 +278,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestWriteHeaderStatusLine;
 var
@@ -1376,81 +1376,81 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
-  T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
-  T.Run('Headers written after status line', @TestHeadersWrittenAfterStatusLine);
-  T.Run('CRLF separates headers from body', @TestCRLFSeparatesHeadersFromBody);
-  T.Run('Write auto-calls WriteHeader(200)', @TestWriteAutoCallsWriteHeader200);
-  T.Run('Multiple Write preserves body order under chunked encoding',
+  T := TTestSuite.Create('nextpas.core.http.impl.h1.writer');
+  T.Test('WriteHeader writes status line', @TestWriteHeaderStatusLine);
+  T.Test('Headers written after status line', @TestHeadersWrittenAfterStatusLine);
+  T.Test('CRLF separates headers from body', @TestCRLFSeparatesHeadersFromBody);
+  T.Test('Write auto-calls WriteHeader(200)', @TestWriteAutoCallsWriteHeader200);
+  T.Test('Multiple Write preserves body order under chunked encoding',
     @TestMultipleWritePreservesBodyOrder);
-  T.Run('Content-Length write preserves binary body bytes',
+  T.Test('Content-Length write preserves binary body bytes',
     @TestContentLengthWritePreservesBinaryBodyBytes);
-  T.Run('Chunked write preserves binary body bytes',
+  T.Test('Chunked write preserves binary body bytes',
     @TestChunkedWritePreservesBinaryBodyBytes);
-  T.Run('Custom status 404', @TestCustomStatus404);
-  T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
-  T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
-  T.Run('Full response format', @TestFullResponse);
-  T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
-  T.Run('Flush with Content-Length does not write final chunk',
+  T.Test('Custom status 404', @TestCustomStatus404);
+  T.Test('Multiple headers written correctly', @TestMultipleHeadersWritten);
+  T.Test('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
+  T.Test('Full response format', @TestFullResponse);
+  T.Test('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
+  T.Test('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
-  T.Run('WriteHeader rejects content-length transfer-encoding conflict',
+  T.Test('WriteHeader rejects content-length transfer-encoding conflict',
     @TestWriteHeaderRejectsContentLengthTransferEncodingConflict);
-  T.Run('WriteHeader rejects duplicate content-length',
+  T.Test('WriteHeader rejects duplicate content-length',
     @TestWriteHeaderRejectsDuplicateContentLength);
-  T.Run('WriteHeader rejects invalid content-length',
+  T.Test('WriteHeader rejects invalid content-length',
     @TestWriteHeaderRejectsInvalidContentLength);
-  T.Run('WriteHeader rejects oversized content-length',
+  T.Test('WriteHeader rejects oversized content-length',
     @TestWriteHeaderRejectsOversizedContentLength);
-  T.Run('204 response does not inject chunked encoding',
+  T.Test('204 response does not inject chunked encoding',
     @TestNoContentResponseDoesNotInjectChunkedEncoding);
-  T.Run('304 response does not inject chunked encoding',
+  T.Test('304 response does not inject chunked encoding',
     @TestNotModifiedResponseDoesNotInjectChunkedEncoding);
-  T.Run('100 response does not inject chunked encoding',
+  T.Test('100 response does not inject chunked encoding',
     @TestInformationalResponseDoesNotInjectChunkedEncoding);
-  T.Run('non-101 informational response allows later final response',
+  T.Test('non-101 informational response allows later final response',
     @TestNonSwitchingInformationalAllowsFinalResponse);
-  T.Run('101 response does not inject chunked encoding',
+  T.Test('101 response does not inject chunked encoding',
     @TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding);
-  T.Run('101 response rejects body write',
+  T.Test('101 response rejects body write',
     @TestSwitchingProtocolsResponseRejectsBodyWrite);
-  T.Run('204 response rejects body write',
+  T.Test('204 response rejects body write',
     @TestNoContentResponseRejectsBodyWrite);
-  T.Run('Suppressed-body write does not emit body or chunked encoding',
+  T.Test('Suppressed-body write does not emit body or chunked encoding',
     @TestSuppressBodyWriteDoesNotEmitBodyOrChunkedEncoding);
-  T.Run('Suppressed-body preserves explicit content-length',
+  T.Test('Suppressed-body preserves explicit content-length',
     @TestSuppressBodyPreservesExplicitContentLength);
-  T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
-  T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
-  T.Run('Flush without prior write commits default response',
+  T.Test('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
+  T.Test('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
+  T.Test('Flush without prior write commits default response',
     @TestFlushWithoutPriorWriteCommitsDefaultResponse);
-  T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
-  T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
-  T.Run('WriteHeader with short writer still writes full headers',
+  T.Test('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
+  T.Test('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
+  T.Test('WriteHeader with short writer still writes full headers',
     @TestWriteHeaderWithShortWriterStillWritesFullHeaders);
-  T.Run('Small header block uses a single writer call',
+  T.Test('Small header block uses a single writer call',
     @TestSmallHeaderBlockUsesSingleWriterCall);
-  T.Run('Common status lines use a single writer call',
+  T.Test('Common status lines use a single writer call',
     @TestCommonStatusLinesUseSingleWriterCall);
-  T.Run('Unknown status line keeps fallback reason',
+  T.Test('Unknown status line keeps fallback reason',
     @TestUnknownStatusLineKeepsFallbackReason);
-  T.Run('Known status line with short writer still writes full headers',
+  T.Test('Known status line with short writer still writes full headers',
     @TestKnownStatusLineWithShortWriterStillWritesFullHeaders);
-  T.Run('Large header block falls back and preserves wire bytes',
+  T.Test('Large header block falls back and preserves wire bytes',
     @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
-  T.Run('Content-Length body with short writer writes all bytes',
+  T.Test('Content-Length body with short writer writes all bytes',
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
-  T.Run('Content-Length body rejects writes past declared length',
+  T.Test('Content-Length body rejects writes past declared length',
     @TestContentLengthBodyRejectsWritePastDeclaredLength);
-  T.Run('Content-Length flush rejects short declared body',
+  T.Test('Content-Length flush rejects short declared body',
     @TestContentLengthFlushRejectsShortDeclaredBody);
-  T.Run('Chunked body with short writer writes complete chunk',
+  T.Test('Chunked body with short writer writes complete chunk',
     @TestChunkedBodyWithShortWriterWritesCompleteChunk);
-  T.Run('Outbound buffer drains all bytes through short writer',
+  T.Test('Outbound buffer drains all bytes through short writer',
     @TestOutboundBufferDrainAllHandlesShortWriter);
-  T.Run('Outbound buffer resumable drain survives would-block',
+  T.Test('Outbound buffer resumable drain survives would-block',
     @TestOutboundBufferTryDrainResumesAfterWouldBlock);
-  T.Run('Outbound buffer rejects ok zero-progress runtime writes',
+  T.Test('Outbound buffer rejects ok zero-progress runtime writes',
     @TestOutboundBufferTryDrainRejectsOkZeroProgress);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

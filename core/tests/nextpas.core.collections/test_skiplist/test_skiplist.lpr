@@ -4,7 +4,7 @@ program test_skiplist;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.skiplist,
   leak_tracker;
 
@@ -17,7 +17,7 @@ type
   TTrackedIntSkipList = specialize TSkipList<ITracked, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function CompareTracked(const A, B: ITracked): SizeInt;
 begin
@@ -227,15 +227,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.skiplist');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('Min/Max', @TestMinMax);
-  T.Run('Grow (1000)', @TestGrow);
-  T.Run('Clear', @TestClear);
-  T.Run('Default comparer built-in key types', @TestDefaultComparerBuiltInKeyTypes);
-  T.Run('Managed value overwrite/remove/clear', @TestManagedValueOverwriteRemoveClear);
-  T.Run('Managed key remove/free', @TestManagedKeyRemoveAndFree);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.skiplist');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('Min/Max', @TestMinMax);
+  T.Test('Grow (1000)', @TestGrow);
+  T.Test('Clear', @TestClear);
+  T.Test('Default comparer built-in key types', @TestDefaultComparerBuiltInKeyTypes);
+  T.Test('Managed value overwrite/remove/clear', @TestManagedValueOverwriteRemoveClear);
+  T.Test('Managed key remove/free', @TestManagedKeyRemoveAndFree);
+  if not T.Run then Halt(1);
 end.

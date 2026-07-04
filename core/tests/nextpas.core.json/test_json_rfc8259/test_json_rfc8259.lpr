@@ -8,10 +8,10 @@ uses
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function MustParse(const AJson: PAnsiChar; ALen: SizeUInt): Boolean;
 var Doc: TJsonDocument;
@@ -202,19 +202,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json.rfc8259');
-  T.Run('valid structures', @TestValidStructures);
-  T.Run('valid literals', @TestValidLiterals);
-  T.Run('valid numbers', @TestValidNumbers);
-  T.Run('valid strings', @TestValidStrings);
-  T.Run('reject invalid', @TestRejectInvalid);
-  T.Run('reject bad numbers', @TestRejectBadNumbers);
-  T.Run('reject bad strings', @TestRejectBadStrings);
-  T.Run('whitespace', @TestWhitespace);
-  T.Run('trailing content', @TestTrailingContent);
-  T.Run('deep nesting', @TestDeepNesting);
-  T.Run('edge numbers', @TestEdgeNumbers);
-  T.Run('accessor type safety', @TestAccessorTypeSafety);
-  T.Run('surrogate pair', @TestSurrogatePair);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.json.rfc8259');
+  T.Test('valid structures', @TestValidStructures);
+  T.Test('valid literals', @TestValidLiterals);
+  T.Test('valid numbers', @TestValidNumbers);
+  T.Test('valid strings', @TestValidStrings);
+  T.Test('reject invalid', @TestRejectInvalid);
+  T.Test('reject bad numbers', @TestRejectBadNumbers);
+  T.Test('reject bad strings', @TestRejectBadStrings);
+  T.Test('whitespace', @TestWhitespace);
+  T.Test('trailing content', @TestTrailingContent);
+  T.Test('deep nesting', @TestDeepNesting);
+  T.Test('edge numbers', @TestEdgeNumbers);
+  T.Test('accessor type safety', @TestAccessorTypeSafety);
+  T.Test('surrogate pair', @TestSurrogatePair);
+  if not T.Run then Halt(1);
 end.

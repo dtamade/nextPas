@@ -4,7 +4,7 @@ program test_platform_thread_no_fpc_units;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   THREAD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.base.pas';
@@ -13,7 +13,7 @@ const
   THREAD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -85,8 +85,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.thread.no_fpc_units');
-  T.Run('No FPC platform units', @TestNoFpcPlatformUnits);
-  T.Run('Base has no FPC platform units', @TestBaseNoFpcPlatformUnits);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.thread.no_fpc_units');
+  T.Test('No FPC platform units', @TestNoFpcPlatformUnits);
+  T.Test('Base has no FPC platform units', @TestBaseNoFpcPlatformUnits);
+  if not T.Run then Halt(1);
 end.

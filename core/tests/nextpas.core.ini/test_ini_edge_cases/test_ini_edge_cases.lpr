@@ -5,10 +5,10 @@ program test_ini_edge_cases;
 uses
   SysUtils,
   nextpas.core.ini,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ===== BOM handling ===== }
 
@@ -458,47 +458,46 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('ini edge cases');
+  T := TTestSuite.Create('ini edge cases');
   { BOM }
-  T.Run('UTF-8 BOM', @TestUTF8BOM);
+  T.Test('UTF-8 BOM', @TestUTF8BOM);
   { Comments }
-  T.Run('semicolon comments', @TestSemicolonComments);
-  T.Run('hash comments', @TestHashComments);
+  T.Test('semicolon comments', @TestSemicolonComments);
+  T.Test('hash comments', @TestHashComments);
   { Empty values }
-  T.Run('empty value', @TestEmptyValue);
-  T.Run('spaces around equals', @TestSpacesAroundEquals);
-  T.Run('value with equals sign', @TestValueWithEqualsSign);
+  T.Test('empty value', @TestEmptyValue);
+  T.Test('spaces around equals', @TestSpacesAroundEquals);
+  T.Test('value with equals sign', @TestValueWithEqualsSign);
   { Case sensitivity }
-  T.Run('section case insensitive', @TestSectionCaseInsensitive);
-  T.Run('key case insensitive', @TestKeyCaseInsensitive);
+  T.Test('section case insensitive', @TestSectionCaseInsensitive);
+  T.Test('key case insensitive', @TestKeyCaseInsensitive);
   { Whitespace }
-  T.Run('trailing spaces preserved', @TestTrailingSpacesPreserved);
-  T.Run('leading spaces trimmed', @TestLeadingSpacesTrimmed);
+  T.Test('trailing spaces preserved', @TestTrailingSpacesPreserved);
+  T.Test('leading spaces trimmed', @TestLeadingSpacesTrimmed);
   { Duplicate keys }
-  T.Run('duplicate key last wins', @TestDuplicateKeyLastWins);
+  T.Test('duplicate key last wins', @TestDuplicateKeyLastWins);
   { ReadBool }
-  T.Run('ReadBool all values', @TestReadBoolValues);
-  T.Run('ReadBool default', @TestReadBoolDefault);
+  T.Test('ReadBool all values', @TestReadBoolValues);
+  T.Test('ReadBool default', @TestReadBoolDefault);
   { ReadInteger }
-  T.Run('ReadInteger boundaries', @TestReadIntegerBoundaries);
-  T.Run('ReadInteger invalid', @TestReadIntegerInvalid);
+  T.Test('ReadInteger boundaries', @TestReadIntegerBoundaries);
+  T.Test('ReadInteger invalid', @TestReadIntegerInvalid);
   { Empty section }
-  T.Run('empty section', @TestEmptySection);
+  T.Test('empty section', @TestEmptySection);
   { Malformed }
-  T.Run('unclosed section bracket', @TestMalformedSectionNoClose);
-  T.Run('malformed recovers', @TestMalformedRecovers);
+  T.Test('unclosed section bracket', @TestMalformedSectionNoClose);
+  T.Test('malformed recovers', @TestMalformedRecovers);
   { Stress }
-  T.Run('50 sections', @TestManySections);
-  T.Run('100 keys', @TestManyKeys);
+  T.Test('50 sections', @TestManySections);
+  T.Test('100 keys', @TestManyKeys);
   { TryLoad }
-  T.Run('TryLoadFromString success', @TestTryLoadFromStringSuccess);
-  T.Run('TryLoadFromString failure', @TestTryLoadFromStringFailure);
+  T.Test('TryLoadFromString success', @TestTryLoadFromStringSuccess);
+  T.Test('TryLoadFromString failure', @TestTryLoadFromStringFailure);
   { IniStringify }
-  T.Run('IniStringify function', @TestIniStringifyFunction);
+  T.Test('IniStringify function', @TestIniStringifyFunction);
   { IniParse }
-  T.Run('IniParse convenience', @TestIniParseConvenience);
+  T.Test('IniParse convenience', @TestIniParseConvenience);
   { Write/Delete cycle }
-  T.Run('write delete cycle', @TestWriteDeleteCycle);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('write delete cycle', @TestWriteDeleteCycle);
+  if not T.Run then Halt(1);
 end.

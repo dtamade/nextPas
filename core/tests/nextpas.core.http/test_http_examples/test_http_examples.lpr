@@ -8,7 +8,7 @@ uses
   Process,
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.net,
@@ -17,7 +17,7 @@ uses
   nextpas.core.time.deadline;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GBuildRan: Boolean = False;
   GBuildExitCode: Integer = -1;
   GBuildOutput: string = '';
@@ -713,15 +713,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('http examples');
-  T.Run('server options demo builds', @TestServerOptionsDemoBuilds);
-  T.Run('server options demo serves documented endpoints',
+  T := TTestSuite.Create('http examples');
+  T.Test('server options demo builds', @TestServerOptionsDemoBuilds);
+  T.Test('server options demo serves documented endpoints',
     @TestServerOptionsDemoServesDocumentedEndpoints);
-  T.Run('hello server example serves documented endpoint',
+  T.Test('hello server example serves documented endpoint',
     @TestHelloServerExampleServesDocumentedEndpoint);
-  T.Run('get client example uses env URL without fixed port',
+  T.Test('get client example uses env URL without fixed port',
     @TestGetClientExampleUsesEnvUrlWithoutFixedPort);
-  T.Run('websocket echo demo serves documented endpoint',
+  T.Test('websocket echo demo serves documented endpoint',
     @TestWebSocketEchoDemoServesDocumentedEndpoint);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

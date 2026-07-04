@@ -5,10 +5,10 @@ program test_platform_windows_signal_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -116,10 +116,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.windows.signal_contract');
-  T.Run('Windows FFI owns console handler', @TestWindowsFfiOwnsConsoleHandler);
-  T.Run('Windows signal branch is not stub', @TestWindowsSignalBranchIsNotStub);
-  T.Run('Windows Ctrl+Break signal constant', @TestSignalConstantsDocumentWindowsBreak);
-  T.Run('TUI terminal checks hook results', @TestTuiTerminalChecksSignalHookResult);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.windows.signal_contract');
+  T.Test('Windows FFI owns console handler', @TestWindowsFfiOwnsConsoleHandler);
+  T.Test('Windows signal branch is not stub', @TestWindowsSignalBranchIsNotStub);
+  T.Test('Windows Ctrl+Break signal constant', @TestSignalConstantsDocumentWindowsBreak);
+  T.Test('TUI terminal checks hook results', @TestTuiTerminalChecksSignalHookResult);
+  if not T.Run then Halt(1);
 end.

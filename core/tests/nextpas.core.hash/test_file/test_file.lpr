@@ -4,7 +4,7 @@ program test_file;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.fs,
   nextpas.core.hash;
@@ -13,7 +13,7 @@ type
   TArgErrorProc = procedure;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GTmpDir: string;
 
 function InvalidHashAlgorithm: THashAlgorithm;
@@ -319,20 +319,20 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.hash.files');
-    T.Run('SHA256FileHex known vector', @TestSHA256FileHexKnownVector);
-    T.Run('SHA512FileHex known vector', @TestSHA512FileHexKnownVector);
-    T.Run('HashFileHex facade by algorithm', @TestHashFileHexFacadeByAlgorithm);
-    T.Run('HashFileHex empty file by algorithm', @TestHashFileHexEmptyFileByAlgorithm);
-    T.Run('HashFileHex invalid algorithm', @TestHashFileHexInvalidAlgorithm);
-    T.Run('SHA256FileHex empty file', @TestSHA256FileHexEmptyFile);
-    T.Run('SHA256FileHex streaming file', @TestFileHexStreamsPastSingleBuffer);
-    T.Run('SHA512FileHex binary bytes', @TestSHA512FileHexPreservesBinaryBytes);
-    T.Run('SHA256FileHex missing file error', @TestMissingFileRaisesNotFound);
-    T.Run('file hash empty path error', @TestEmptyPathRaisesArgumentError);
-    T.Run('file hash embedded NUL path error', @TestEmbeddedNulPathRaisesArgumentError);
-    T.Run('file hash directory path error', @TestDirectoryPathRaisesInvalidOperation);
-    T.Summary;
+    T := TTestSuite.Create('nextpas.core.hash.files');
+    T.Test('SHA256FileHex known vector', @TestSHA256FileHexKnownVector);
+    T.Test('SHA512FileHex known vector', @TestSHA512FileHexKnownVector);
+    T.Test('HashFileHex facade by algorithm', @TestHashFileHexFacadeByAlgorithm);
+    T.Test('HashFileHex empty file by algorithm', @TestHashFileHexEmptyFileByAlgorithm);
+    T.Test('HashFileHex invalid algorithm', @TestHashFileHexInvalidAlgorithm);
+    T.Test('SHA256FileHex empty file', @TestSHA256FileHexEmptyFile);
+    T.Test('SHA256FileHex streaming file', @TestFileHexStreamsPastSingleBuffer);
+    T.Test('SHA512FileHex binary bytes', @TestSHA512FileHexPreservesBinaryBytes);
+    T.Test('SHA256FileHex missing file error', @TestMissingFileRaisesNotFound);
+    T.Test('file hash empty path error', @TestEmptyPathRaisesArgumentError);
+    T.Test('file hash embedded NUL path error', @TestEmbeddedNulPathRaisesArgumentError);
+    T.Test('file hash directory path error', @TestDirectoryPathRaisesInvalidOperation);
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

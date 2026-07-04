@@ -13,9 +13,9 @@ uses
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.table,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 { === TTableColumn === }
 
@@ -217,35 +217,35 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_widget_table');
+  T := TTestSuite.Create('test_tui_widget_table');
   try
     { TTableColumn }
-    T.Run('TableColumn Make', @TestTableColumnMake);
-    T.Run('TableColumn WithAlign', @TestTableColumnWithAlign);
+    T.Test('TableColumn Make', @TestTableColumnMake);
+    T.Test('TableColumn WithAlign', @TestTableColumnWithAlign);
 
     { TTableRow }
-    T.Run('TableRow Make', @TestTableRowMake);
-    T.Run('TableRow WithStyle', @TestTableRowWithStyle);
+    T.Test('TableRow Make', @TestTableRowMake);
+    T.Test('TableRow WithStyle', @TestTableRowWithStyle);
 
     { TTableState }
-    T.Run('TableState Empty', @TestTableStateEmpty);
-    T.Run('TableState Select', @TestTableStateSelect);
-    T.Run('TableState ClearSelection', @TestTableStateClearSelection);
+    T.Test('TableState Empty', @TestTableStateEmpty);
+    T.Test('TableState Select', @TestTableStateSelect);
+    T.Test('TableState ClearSelection', @TestTableStateClearSelection);
 
     { ITable Builders }
-    T.Run('Table New', @TestTableNew);
-    T.Run('Table WithRows', @TestTableWithRows);
-    T.Run('Table WithBlock', @TestTableWithBlock);
-    T.Run('Table WithStyle', @TestTableWithStyle);
-    T.Run('Table WithHeaderStyle', @TestTableWithHeaderStyle);
-    T.Run('Table WithHighlightStyle', @TestTableWithHighlightStyle);
-    T.Run('Table WithHeader false', @TestTableWithHeaderFalse);
-    T.Run('Table as IWidget', @TestTableAsIWidget);
-    T.Run('Table multiple columns', @TestTableMultipleColumns);
-    T.Run('Table selection', @TestTableSelection);
+    T.Test('Table New', @TestTableNew);
+    T.Test('Table WithRows', @TestTableWithRows);
+    T.Test('Table WithBlock', @TestTableWithBlock);
+    T.Test('Table WithStyle', @TestTableWithStyle);
+    T.Test('Table WithHeaderStyle', @TestTableWithHeaderStyle);
+    T.Test('Table WithHighlightStyle', @TestTableWithHighlightStyle);
+    T.Test('Table WithHeader false', @TestTableWithHeaderFalse);
+    T.Test('Table as IWidget', @TestTableAsIWidget);
+    T.Test('Table multiple columns', @TestTableMultipleColumns);
+    T.Test('Table selection', @TestTableSelection);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
   end;
 end.

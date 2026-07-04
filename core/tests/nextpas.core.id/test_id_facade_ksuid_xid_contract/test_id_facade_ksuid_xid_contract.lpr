@@ -3,11 +3,11 @@ program test_id_facade_ksuid_xid_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestKsuidHelpersAreAvailableFromFacade;
 const
@@ -84,8 +84,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.facade_ksuid_xid_contract');
-  T.Run('KSUID helpers are available from facade', @TestKsuidHelpersAreAvailableFromFacade);
-  T.Run('XID helpers are available from facade', @TestXidHelpersAreAvailableFromFacade);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.facade_ksuid_xid_contract');
+  T.Test('KSUID helpers are available from facade', @TestKsuidHelpersAreAvailableFromFacade);
+  T.Test('XID helpers are available from facade', @TestXidHelpersAreAvailableFromFacade);
+  if not T.Run then Halt(1);
 end.

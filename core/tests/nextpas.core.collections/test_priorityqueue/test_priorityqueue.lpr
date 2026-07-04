@@ -5,7 +5,7 @@ program test_priorityqueue;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.priorityqueue,
   nextpas.core.collections.priorityqueue.intf;
@@ -25,7 +25,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TInspectableIntPQ.CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
 begin
@@ -173,15 +173,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.priorityqueue');
-  T.Run('Push and Pop (priority order)', @TestPushAndPop);
-  T.Run('Peek', @TestPeek);
-  T.Run('TryPop empty', @TestTryPopEmpty);
-  T.Run('Pop empty raises', @TestPopEmptyRaises);
-  T.Run('Clear', @TestClear);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('Many elements (100)', @TestManyElements);
-  T.Run('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
-  T.Run('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.priorityqueue');
+  T.Test('Push and Pop (priority order)', @TestPushAndPop);
+  T.Test('Peek', @TestPeek);
+  T.Test('TryPop empty', @TestTryPopEmpty);
+  T.Test('Pop empty raises', @TestPopEmptyRaises);
+  T.Test('Clear', @TestClear);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('Many elements (100)', @TestManyElements);
+  T.Test('SerializeToArrayBuffer count past end raises', @TestSerializeCountPastEndRaises);
+  T.Test('SerializeToArrayBuffer nil positive count raises', @TestSerializeNilPositiveCountRaises);
+  if not T.Run then Halt(1);
 end.

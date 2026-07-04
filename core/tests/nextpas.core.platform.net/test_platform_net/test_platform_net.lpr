@@ -7,7 +7,7 @@ program test_platform_net;
 
 uses
   nextpas.core.platform.socket,
-  nextpas.core.testing
+  nextpas.core.test
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base,
     nextpas.core.platform.posix.ffi
@@ -19,7 +19,7 @@ uses
   ;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function GetBoundSocketAddress(const ASock: TPlatformSocket;
   out AAddr: TPlatformSockAddr): Int32;
@@ -216,14 +216,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.net');
-  T.Run('create/close TCP', @TestCreateClose);
-  T.Run('create/close UDP', @TestCreateUDP);
-  T.Run('bind/listen', @TestBindListen);
-  T.Run('connect/accept/send/recv', @TestConnectAcceptSendRecv);
-  T.Run('shutdown', @TestShutdown);
-  T.Run('UDP send/recv', @TestUDPSendRecv);
-  T.Run('double close', @TestDoubleClose);
-  T.Run('connect refused', @TestConnectRefused);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.net');
+  T.Test('create/close TCP', @TestCreateClose);
+  T.Test('create/close UDP', @TestCreateUDP);
+  T.Test('bind/listen', @TestBindListen);
+  T.Test('connect/accept/send/recv', @TestConnectAcceptSendRecv);
+  T.Test('shutdown', @TestShutdown);
+  T.Test('UDP send/recv', @TestUDPSendRecv);
+  T.Test('double close', @TestDoubleClose);
+  T.Test('connect refused', @TestConnectRefused);
+  if not T.Run then Halt(1);
 end.

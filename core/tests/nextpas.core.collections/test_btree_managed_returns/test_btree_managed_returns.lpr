@@ -4,7 +4,7 @@ program test_btree_managed_returns;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.btree;
 
 type
@@ -12,7 +12,7 @@ type
   TStringSet = specialize TBTreeSet<string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function CompareString(const A, B: string; AData: Pointer): SizeInt;
 begin
@@ -73,8 +73,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.btree_managed_returns');
-  T.Run('map managed key/value arrays outlive map', @TestMapManagedKeyAndValueArraysOutliveMap);
-  T.Run('set managed array outlives set', @TestSetManagedArrayOutlivesSet);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.btree_managed_returns');
+  T.Test('map managed key/value arrays outlive map', @TestMapManagedKeyAndValueArraysOutliveMap);
+  T.Test('set managed array outlives set', @TestSetManagedArrayOutlivesSet);
+  if not T.Run then Halt(1);
 end.

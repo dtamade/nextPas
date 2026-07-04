@@ -3,13 +3,13 @@ program test_text_compare;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
   nextpas.core.text.compare;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure AppendUtf8(var ADst: string; const ACp: TUnicodeCodepoint);
 var
@@ -173,19 +173,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.compare');
-  T.Run('TextCompare ASCII', @TestTextCompareAscii);
-  T.Run('TextCompareI ASCII', @TestTextCompareCaseInsensitive);
-  T.Run('TextEqual', @TestTextEqual);
-  T.Run('TextEqualI', @TestTextEqualIgnoreCase);
-  T.Run('TextEqualCanonical', @TestTextEqualCanonical);
-  T.Run('TextEqualCaseFold', @TestTextEqualCaseFoldUnicode);
-  T.Run('TextCompareI Unicode', @TestTextCompareUnicodeCaseFold);
-  T.Run('TextStartsWith', @TestTextStartsWithAscii);
-  T.Run('TextStartsWithI', @TestTextStartsWithIgnoreCase);
-  T.Run('TextEndsWith', @TestTextEndsWithAscii);
-  T.Run('TextEndsWithI', @TestTextEndsWithIgnoreCase);
-  T.Run('TextContains', @TestTextContainsAscii);
-  T.Run('TextContainsI', @TestTextContainsIgnoreCase);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.compare');
+  T.Test('TextCompare ASCII', @TestTextCompareAscii);
+  T.Test('TextCompareI ASCII', @TestTextCompareCaseInsensitive);
+  T.Test('TextEqual', @TestTextEqual);
+  T.Test('TextEqualI', @TestTextEqualIgnoreCase);
+  T.Test('TextEqualCanonical', @TestTextEqualCanonical);
+  T.Test('TextEqualCaseFold', @TestTextEqualCaseFoldUnicode);
+  T.Test('TextCompareI Unicode', @TestTextCompareUnicodeCaseFold);
+  T.Test('TextStartsWith', @TestTextStartsWithAscii);
+  T.Test('TextStartsWithI', @TestTextStartsWithIgnoreCase);
+  T.Test('TextEndsWith', @TestTextEndsWithAscii);
+  T.Test('TextEndsWithI', @TestTextEndsWithIgnoreCase);
+  T.Test('TextContains', @TestTextContainsAscii);
+  T.Test('TextContainsI', @TestTextContainsIgnoreCase);
+  if not T.Run then Halt(1);
 end.

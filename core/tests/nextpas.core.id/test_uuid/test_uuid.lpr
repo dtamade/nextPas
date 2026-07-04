@@ -5,13 +5,13 @@ program test_uuid;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.id.base,
   nextpas.core.id.uuid;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { --- NewV4: generation + format validation --- }
 
@@ -609,87 +609,87 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.uuid');
+  T := TTestSuite.Create('nextpas.core.id.uuid');
 
   { V4 generation + format }
-  T.Run('V4 format (length + dashes)', @TestV4Format);
-  T.Run('V4 version byte', @TestV4Version);
-  T.Run('V4 variant byte', @TestV4Variant);
-  T.Run('V4 version nibble in string', @TestV4VersionNibbleInString);
-  T.Run('V4 variant nibble in string', @TestV4VariantNibbleInString);
+  T.Test('V4 format (length + dashes)', @TestV4Format);
+  T.Test('V4 version byte', @TestV4Version);
+  T.Test('V4 variant byte', @TestV4Variant);
+  T.Test('V4 version nibble in string', @TestV4VersionNibbleInString);
+  T.Test('V4 variant nibble in string', @TestV4VariantNibbleInString);
 
   { V7 generation + timestamp }
-  T.Run('V7 format (length + dashes)', @TestV7Format);
-  T.Run('V7 version byte', @TestV7Version);
-  T.Run('V7 variant byte', @TestV7Variant);
-  T.Run('V7 timestamp extract', @TestV7TimestampExtract);
-  T.Run('V7 at known timestamp', @TestV7AtKnownTimestamp);
-  T.Run('V7 at rejects overflow timestamp', @TestV7AtRejectsOverflowTimestamp);
+  T.Test('V7 format (length + dashes)', @TestV7Format);
+  T.Test('V7 version byte', @TestV7Version);
+  T.Test('V7 variant byte', @TestV7Variant);
+  T.Test('V7 timestamp extract', @TestV7TimestampExtract);
+  T.Test('V7 at known timestamp', @TestV7AtKnownTimestamp);
+  T.Test('V7 at rejects overflow timestamp', @TestV7AtRejectsOverflowTimestamp);
 
   { Parse / TryParse }
-  T.Run('Parse valid', @TestParseValid);
-  T.Run('Parse case insensitive', @TestParseCaseInsensitive);
-  T.Run('TryParse valid', @TestTryParseValid);
-  T.Run('TryParse invalid empty', @TestTryParseInvalidEmpty);
-  T.Run('TryParse invalid short', @TestTryParseInvalidShort);
-  T.Run('TryParse invalid chars', @TestTryParseInvalidChars);
-  T.Run('TryParse failed out stable', @TestTryParseLeavesOutUntouchedOnFailure);
-  T.Run('TryParse invalid no dashes', @TestTryParseInvalidNoDashes);
-  T.Run('TryParse misplaced dash', @TestTryParseMisplacedDash);
-  T.Run('TryParse rejects format-only outputs', @TestTryParseRejectsFormatOnlyOutputs);
-  T.Run('Parse invalid raises parse error', @TestParseInvalidRaisesParseError);
+  T.Test('Parse valid', @TestParseValid);
+  T.Test('Parse case insensitive', @TestParseCaseInsensitive);
+  T.Test('TryParse valid', @TestTryParseValid);
+  T.Test('TryParse invalid empty', @TestTryParseInvalidEmpty);
+  T.Test('TryParse invalid short', @TestTryParseInvalidShort);
+  T.Test('TryParse invalid chars', @TestTryParseInvalidChars);
+  T.Test('TryParse failed out stable', @TestTryParseLeavesOutUntouchedOnFailure);
+  T.Test('TryParse invalid no dashes', @TestTryParseInvalidNoDashes);
+  T.Test('TryParse misplaced dash', @TestTryParseMisplacedDash);
+  T.Test('TryParse rejects format-only outputs', @TestTryParseRejectsFormatOnlyOutputs);
+  T.Test('Parse invalid raises parse error', @TestParseInvalidRaisesParseError);
 
   { ToString roundtrip }
-  T.Run('ToString roundtrip V4', @TestToStringRoundTrip);
-  T.Run('ToString roundtrip V7', @TestToStringRoundTripV7);
+  T.Test('ToString roundtrip V4', @TestToStringRoundTrip);
+  T.Test('ToString roundtrip V7', @TestToStringRoundTripV7);
 
   { Nil UUID }
-  T.Run('Nil UUID', @TestNilUuid);
-  T.Run('Nil UUID version', @TestNilUuidVersion);
-  T.Run('NewV4 not nil', @TestNewV4NotNil);
-  T.Run('NewV7 not nil', @TestNewV7NotNil);
+  T.Test('Nil UUID', @TestNilUuid);
+  T.Test('Nil UUID version', @TestNilUuidVersion);
+  T.Test('NewV4 not nil', @TestNewV4NotNil);
+  T.Test('NewV7 not nil', @TestNewV7NotNil);
 
   { V7 time ordering }
-  T.Run('V7 time ordering (NewV7At)', @TestV7TimeOrdering);
-  T.Run('V7 consecutive ordering', @TestV7ConsecutiveOrdering);
+  T.Test('V7 time ordering (NewV7At)', @TestV7TimeOrdering);
+  T.Test('V7 consecutive ordering', @TestV7ConsecutiveOrdering);
 
   { Equal / NotEqual }
-  T.Run('Equal operator', @TestEqualOperator);
-  T.Run('NotEqual operator', @TestNotEqualOperator);
-  T.Run('Equal self', @TestEqualSelf);
+  T.Test('Equal operator', @TestEqualOperator);
+  T.Test('NotEqual operator', @TestNotEqualOperator);
+  T.Test('Equal self', @TestEqualSelf);
 
   { Additional coverage }
-  T.Run('ToStringNoDash', @TestToStringNoDash);
-  T.Run('CompareTo', @TestCompareTo);
-  T.Run('Hash consistency', @TestHash);
-  T.Run('Hash fixed vector', @TestHashFixedVector);
-  T.Run('V4 stress 10k', @TestV4Stress);
-  T.Run('V7 stress 10k', @TestV7Stress);
-  T.Run('Parse nil string', @TestParseNilString);
-  T.Run('UuidIsValid function', @TestUuidIsValidFunc);
+  T.Test('ToStringNoDash', @TestToStringNoDash);
+  T.Test('CompareTo', @TestCompareTo);
+  T.Test('Hash consistency', @TestHash);
+  T.Test('Hash fixed vector', @TestHashFixedVector);
+  T.Test('V4 stress 10k', @TestV4Stress);
+  T.Test('V7 stress 10k', @TestV7Stress);
+  T.Test('Parse nil string', @TestParseNilString);
+  T.Test('UuidIsValid function', @TestUuidIsValidFunc);
 
   { New: FromBytes }
-  T.Run('FromBytes', @TestFromBytes);
-  T.Run('FromBytes ToString', @TestFromBytesToString);
-  T.Run('FromBytes rejects short input', @TestFromBytesRejectsShortInput);
-  T.Run('FromBytes rejects long input', @TestFromBytesRejectsLongInput);
-  T.Run('ToBytes roundtrip', @TestToBytesRoundTrip);
-  T.Run('ToBytes rejects short output', @TestToBytesRejectsShortOutput);
-  T.Run('ToBytes rejects long output', @TestToBytesRejectsLongOutput);
+  T.Test('FromBytes', @TestFromBytes);
+  T.Test('FromBytes ToString', @TestFromBytesToString);
+  T.Test('FromBytes rejects short input', @TestFromBytesRejectsShortInput);
+  T.Test('FromBytes rejects long input', @TestFromBytesRejectsLongInput);
+  T.Test('ToBytes roundtrip', @TestToBytesRoundTrip);
+  T.Test('ToBytes rejects short output', @TestToBytesRejectsShortOutput);
+  T.Test('ToBytes rejects long output', @TestToBytesRejectsLongOutput);
 
   { New: Max UUID }
-  T.Run('Max UUID', @TestMaxUuid);
+  T.Test('Max UUID', @TestMaxUuid);
 
   { New: ToURN }
-  T.Run('ToURN', @TestToURN);
-  T.Run('ToURN nil', @TestToURNNil);
+  T.Test('ToURN', @TestToURN);
+  T.Test('ToURN nil', @TestToURNNil);
 
   { New: V5 }
-  T.Run('V5 deterministic', @TestV5Deterministic);
-  T.Run('V5 DNS example vector', @TestV5KnownDnsExampleVector);
-  T.Run('V5 version+variant', @TestV5VersionVariant);
-  T.Run('V5 different names', @TestV5DifferentNames);
-  T.Run('V5 different namespaces', @TestV5DifferentNamespaces);
+  T.Test('V5 deterministic', @TestV5Deterministic);
+  T.Test('V5 DNS example vector', @TestV5KnownDnsExampleVector);
+  T.Test('V5 version+variant', @TestV5VersionVariant);
+  T.Test('V5 different names', @TestV5DifferentNames);
+  T.Test('V5 different namespaces', @TestV5DifferentNamespaces);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

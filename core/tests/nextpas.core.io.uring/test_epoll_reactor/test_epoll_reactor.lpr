@@ -5,7 +5,7 @@ program test_epoll_reactor;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base,
@@ -13,7 +13,7 @@ uses
   nextpas.core.io.reactor.epoll;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GCallbackCount: Int32;
   GLastResult: Int32;
   GLastUserData: UInt64;
@@ -687,27 +687,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.reactor.epoll');
-  T.Run('Create/Close', @TestCreateClose);
-  T.Run('Async Read/Write', @TestAsyncReadWrite);
-  T.Run('Rejects positioned offsets', @TestRejectsPositionedOffsets);
-  T.Run('Multiple async', @TestMultipleAsync);
-  T.Run('Poll batch', @TestPollBatch);
-  T.Run('Context passing', @TestContext);
-  T.Run('Entry recycling', @TestEntryRecycling);
-  T.Run('Close aborts pending read', @TestCloseAbortsPendingRead);
-  T.Run('HasPending', @TestHasPending);
-  T.Run('AsyncClose cancels pending read for same fd',
+  T := TTestSuite.Create('nextpas.core.io.reactor.epoll');
+  T.Test('Create/Close', @TestCreateClose);
+  T.Test('Async Read/Write', @TestAsyncReadWrite);
+  T.Test('Rejects positioned offsets', @TestRejectsPositionedOffsets);
+  T.Test('Multiple async', @TestMultipleAsync);
+  T.Test('Poll batch', @TestPollBatch);
+  T.Test('Context passing', @TestContext);
+  T.Test('Entry recycling', @TestEntryRecycling);
+  T.Test('Close aborts pending read', @TestCloseAbortsPendingRead);
+  T.Test('HasPending', @TestHasPending);
+  T.Test('AsyncClose cancels pending read for same fd',
     @TestAsyncCloseCancelsPendingReadForSameFd);
-  T.Run('AsyncClose invalid fd returns errno',
+  T.Test('AsyncClose invalid fd returns errno',
     @TestAsyncCloseInvalidFdReturnsErrno);
-  T.Run('epoll syscall error model source contract',
+  T.Test('epoll syscall error model source contract',
     @TestEpollSyscallErrorModelSourceContract);
-  T.Run('Close dispatches all aborts when callback raises',
+  T.Test('Close dispatches all aborts when callback raises',
     @TestCloseDispatchesAllAbortsWhenCallbackRaises);
-  T.Run('Completion re-enter Close does not abort again',
+  T.Test('Completion re-enter Close does not abort again',
     @TestCompletionReenterCloseDoesNotAbortAgain);
-  T.Run('Post-close submissions are rejected',
+  T.Test('Post-close submissions are rejected',
     @TestPostCloseSubmissionsAreRejected);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

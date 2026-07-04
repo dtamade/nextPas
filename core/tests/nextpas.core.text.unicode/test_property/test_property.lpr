@@ -3,12 +3,12 @@ program test_property;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAsciiProperties;
 begin
@@ -72,12 +72,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.text.unicode');
-  T.Run('ASCII properties', @TestAsciiProperties);
-  T.Run('BMP properties', @TestBmpProperties);
-  T.Run('SMP properties', @TestSmpProperties);
-  T.Run('case mapping', @TestCaseMapping);
-  T.Run('punctuation/symbol/mark', @TestPunctuationSymbolAndMark);
-  T.Run('boundary cases', @TestBoundaryCases);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.text.unicode');
+  T.Test('ASCII properties', @TestAsciiProperties);
+  T.Test('BMP properties', @TestBmpProperties);
+  T.Test('SMP properties', @TestSmpProperties);
+  T.Test('case mapping', @TestCaseMapping);
+  T.Test('punctuation/symbol/mark', @TestPunctuationSymbolAndMark);
+  T.Test('boundary cases', @TestBoundaryCases);
+  if not T.Run then Halt(1);
 end.

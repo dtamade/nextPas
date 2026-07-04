@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.fs,
   nextpas.core.config,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function FacadeTempPath(const AName, AExt: string): string;
 begin
@@ -174,14 +174,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.config (facade surface)');
-  T.Run('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
-  T.Run('facade exposes trybuild failure surface',
+  T := TTestSuite.Create('nextpas.core.config (facade surface)');
+  T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
+  T.Test('facade exposes trybuild failure surface',
     @TestFacadeExposesTryBuildFailureSurface);
-  T.Run('facade exposes file-source error surface',
+  T.Test('facade exposes file-source error surface',
     @TestFacadeExposesFileSourceErrorSurface);
-  T.Run('facade exposes configload and direct mutable surface',
+  T.Test('facade exposes configload and direct mutable surface',
     @TestFacadeExposesConfigLoadAndDirectMutableSurface);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  if not T.Run then Halt(1);
 end.

@@ -5,7 +5,7 @@ program test_linkedhashset;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.linkedhashset.intf;
 
@@ -13,7 +13,7 @@ type
   IIntLHSet = specialize ILinkedHashSet<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestAddAndContains;
 var
@@ -119,14 +119,14 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.linkedhashset');
-  T.Run('Add and Contains', @TestAddAndContains);
-  T.Run('Insertion order', @TestInsertionOrder);
-  T.Run('Remove', @TestRemove);
-  T.Run('First/Last', @TestFirstLast);
-  T.Run('TryGetFirst/Last empty', @TestTryGetFirstLastEmpty);
-  T.Run('Clear', @TestClear);
-  T.Run('IsEmpty', @TestIsEmpty);
-  T.Run('Remove preserves order', @TestRemovePreservesOrder);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.linkedhashset');
+  T.Test('Add and Contains', @TestAddAndContains);
+  T.Test('Insertion order', @TestInsertionOrder);
+  T.Test('Remove', @TestRemove);
+  T.Test('First/Last', @TestFirstLast);
+  T.Test('TryGetFirst/Last empty', @TestTryGetFirstLastEmpty);
+  T.Test('Clear', @TestClear);
+  T.Test('IsEmpty', @TestIsEmpty);
+  T.Test('Remove preserves order', @TestRemovePreservesOrder);
+  if not T.Run then Halt(1);
 end.

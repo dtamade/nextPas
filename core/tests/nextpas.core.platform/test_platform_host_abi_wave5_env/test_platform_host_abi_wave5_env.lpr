@@ -4,7 +4,7 @@ program test_platform_host_abi_wave5_env;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   SOURCE_EVIDENCE_PATH_FROM_TEST = '../../../docs/platform-ffi-source-evidence-index.md';
@@ -40,7 +40,7 @@ const
   PLATFORM_THREAD_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
 var
@@ -275,11 +275,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.host_abi_wave5_env');
-  T.Run('platform host ABI wave 5 POSIX environment source tokens are owned', @TestHostAbiWave5PosixEnvironmentSourceTokens);
-  T.Run('platform host ABI wave 5 Windows environment source tokens are owned', @TestHostAbiWave5WindowsEnvironmentSourceTokens);
-  T.Run('platform host ABI wave 5 environment evidence is documented', @TestHostAbiWave5EnvironmentEvidenceDocumented);
-  T.Run('platform host ABI wave 5 environment route truth stays indexed', @TestHostAbiWave5EnvironmentRouteTruth);
-  T.Run('platform host ABI wave 5 keeps feature-specific environment ffi absent', @TestFeatureSpecificEnvironmentFfiStillAbsent);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.host_abi_wave5_env');
+  T.Test('platform host ABI wave 5 POSIX environment source tokens are owned', @TestHostAbiWave5PosixEnvironmentSourceTokens);
+  T.Test('platform host ABI wave 5 Windows environment source tokens are owned', @TestHostAbiWave5WindowsEnvironmentSourceTokens);
+  T.Test('platform host ABI wave 5 environment evidence is documented', @TestHostAbiWave5EnvironmentEvidenceDocumented);
+  T.Test('platform host ABI wave 5 environment route truth stays indexed', @TestHostAbiWave5EnvironmentRouteTruth);
+  T.Test('platform host ABI wave 5 keeps feature-specific environment ffi absent', @TestFeatureSpecificEnvironmentFfiStillAbsent);
+  if not T.Run then Halt(1);
 end.

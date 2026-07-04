@@ -5,14 +5,14 @@ program test_concurrent_hashmap_managed_returns;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.concurrent.hashmap;
 
 type
   TStringConcurrentMap = specialize TConcurrentHashMap<string, Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function HashString(const A: string): UInt32;
 var
@@ -64,7 +64,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.concurrent_hashmap_managed_returns');
-  T.Run('managed keys outlive map', @TestManagedKeysOutliveMap);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.concurrent_hashmap_managed_returns');
+  T.Test('managed keys outlive map', @TestManagedKeysOutliveMap);
+  if not T.Run then Halt(1);
 end.

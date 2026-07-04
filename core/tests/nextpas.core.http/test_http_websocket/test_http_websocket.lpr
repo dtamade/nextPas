@@ -6,7 +6,7 @@ uses
   nextpas.core.thread.init,
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -24,7 +24,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ReadTextFile(const APath: string): string;
 var
@@ -2780,47 +2780,45 @@ end;
 
 { Main }
 begin
-  T := TTestRunner.Create('http.websocket');
-  T.Run('HandshakeSuccess', @TestHandshakeSuccess);
-  T.Run('WebSocketAcceptGuidSourceContract',
+  T := TTestSuite.Create('http.websocket');
+  T.Test('HandshakeSuccess', @TestHandshakeSuccess);
+  T.Test('WebSocketAcceptGuidSourceContract',
     @TestWebSocketAcceptGuidSourceContract);
-  T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
-  T.Run('HandshakeNoKey', @TestHandshakeNoKey);
-  T.Run('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
-  T.Run('HandshakeConnectionUpgradeTokenRequired',
+  T.Test('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
+  T.Test('HandshakeNoKey', @TestHandshakeNoKey);
+  T.Test('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
+  T.Test('HandshakeConnectionUpgradeTokenRequired',
     @TestHandshakeConnectionUpgradeTokenRequired);
-  T.Run('HandshakeAcceptsDuplicateConnectionUpgradeToken',
+  T.Test('HandshakeAcceptsDuplicateConnectionUpgradeToken',
     @TestHandshakeAcceptsDuplicateConnectionUpgradeToken);
-  T.Run('TextFrameEcho', @TestTextFrameEcho);
-  T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
-  T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
+  T.Test('TextFrameEcho', @TestTextFrameEcho);
+  T.Test('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
+  T.Test('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
     @TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket);
-  T.Run('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);
-  T.Run('ControlFramePayloadTooLargeRejected', @TestControlFramePayloadTooLargeRejected);
-  T.Run('ReservedOpcodeRejected', @TestReservedOpcodeRejected);
-  T.Run('ReservedBitsRejected', @TestReservedBitsRejected);
-  T.Run('FragmentedControlFrameRejected', @TestFragmentedControlFrameRejected);
-  T.Run('InvalidCloseCodeRejected', @TestInvalidCloseCodeRejected);
-  T.Run('InvalidUtf8TextFrameRejected', @TestInvalidUtf8TextFrameRejected);
-  T.Run('InvalidUtf8CloseReasonRejected', @TestInvalidUtf8CloseReasonRejected);
-  T.Run('StandaloneContinuationFrameRejected', @TestStandaloneContinuationFrameRejected);
-  T.Run('FragmentedTextUtf8SequenceAccepted', @TestFragmentedTextUtf8SequenceAccepted);
-  T.Run('NonCanonicalPayloadLengthRejected', @TestNonCanonicalPayloadLengthRejected);
-  T.Run('NonCanonicalPayloadLength64Rejected', @TestNonCanonicalPayloadLength64Rejected);
-  T.Run('HighBitPayloadLength64Rejected', @TestHighBitPayloadLength64Rejected);
-  T.Run('WebSocketMaxFrameSizeRejectsDeclaredOversizeFrame',
+  T.Test('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);
+  T.Test('ControlFramePayloadTooLargeRejected', @TestControlFramePayloadTooLargeRejected);
+  T.Test('ReservedOpcodeRejected', @TestReservedOpcodeRejected);
+  T.Test('ReservedBitsRejected', @TestReservedBitsRejected);
+  T.Test('FragmentedControlFrameRejected', @TestFragmentedControlFrameRejected);
+  T.Test('InvalidCloseCodeRejected', @TestInvalidCloseCodeRejected);
+  T.Test('InvalidUtf8TextFrameRejected', @TestInvalidUtf8TextFrameRejected);
+  T.Test('InvalidUtf8CloseReasonRejected', @TestInvalidUtf8CloseReasonRejected);
+  T.Test('StandaloneContinuationFrameRejected', @TestStandaloneContinuationFrameRejected);
+  T.Test('FragmentedTextUtf8SequenceAccepted', @TestFragmentedTextUtf8SequenceAccepted);
+  T.Test('NonCanonicalPayloadLengthRejected', @TestNonCanonicalPayloadLengthRejected);
+  T.Test('NonCanonicalPayloadLength64Rejected', @TestNonCanonicalPayloadLength64Rejected);
+  T.Test('HighBitPayloadLength64Rejected', @TestHighBitPayloadLength64Rejected);
+  T.Test('WebSocketMaxFrameSizeRejectsDeclaredOversizeFrame',
     @TestWebSocketMaxFrameSizeRejectsDeclaredOversizeFrame);
-  T.Run('WebSocketMaxMessageSizeRejectsFragmentedMessage',
+  T.Test('WebSocketMaxMessageSizeRejectsFragmentedMessage',
     @TestWebSocketMaxMessageSizeRejectsFragmentedMessage);
-  T.Run('OutgoingPingPayloadTooLargeRejected', @TestOutgoingPingPayloadTooLargeRejected);
-  T.Run('OutgoingClosePayloadTooLargeRejected', @TestOutgoingClosePayloadTooLargeRejected);
-  T.Run('OutgoingCloseInvalidCodeRejected', @TestOutgoingCloseInvalidCodeRejected);
-  T.Run('OutgoingCloseInvalidUtf8ReasonRejected',
+  T.Test('OutgoingPingPayloadTooLargeRejected', @TestOutgoingPingPayloadTooLargeRejected);
+  T.Test('OutgoingClosePayloadTooLargeRejected', @TestOutgoingClosePayloadTooLargeRejected);
+  T.Test('OutgoingCloseInvalidCodeRejected', @TestOutgoingCloseInvalidCodeRejected);
+  T.Test('OutgoingCloseInvalidUtf8ReasonRejected',
     @TestOutgoingCloseInvalidUtf8ReasonRejected);
-  T.Run('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
-  T.Run('BinaryFrame', @TestBinaryFrame);
-  T.Run('CloseFrame', @TestCloseFrame);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T.Test('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
+  T.Test('BinaryFrame', @TestBinaryFrame);
+  T.Test('CloseFrame', @TestCloseFrame);
+  if not T.Run then Halt(1);
 end.

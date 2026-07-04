@@ -4,7 +4,7 @@ program test_bytes;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
@@ -13,7 +13,7 @@ uses
   nextpas.core.mem;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { ops tests }
 
@@ -489,45 +489,45 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.bytes');
+  T := TTestSuite.Create('nextpas.core.bytes');
 
-  T.Run('ops: Equal', @TestEqual);
-  T.Run('ops: Compare', @TestCompare);
-  T.Run('ops: IndexOf', @TestIndexOf);
-  T.Run('ops: StartsWith/EndsWith', @TestStartsEndsWith);
-  T.Run('ops: Concat', @TestConcat);
-  T.Run('ops: Fill', @TestSpanFill);
-  T.Run('ops: Reverse', @TestSpanReverse);
-  T.Run('ops: IndexOfSpan', @TestSpanIndexOfSpan);
+  T.Test('ops: Equal', @TestEqual);
+  T.Test('ops: Compare', @TestCompare);
+  T.Test('ops: IndexOf', @TestIndexOf);
+  T.Test('ops: StartsWith/EndsWith', @TestStartsEndsWith);
+  T.Test('ops: Concat', @TestConcat);
+  T.Test('ops: Fill', @TestSpanFill);
+  T.Test('ops: Reverse', @TestSpanReverse);
+  T.Test('ops: IndexOfSpan', @TestSpanIndexOfSpan);
 
-  T.Run('binary: Swap', @TestSwap);
-  T.Run('binary: Swap roundtrip', @TestSwapRoundTrip);
-  T.Run('binary: Read/Write', @TestReadWrite);
-  T.Run('binary: Byte order', @TestReadByteOrder);
-  T.Run('binary: TryRead advance', @TestTryReadAdvance);
-  T.Run('binary: TryWrite advance', @TestTryWriteAdvance);
+  T.Test('binary: Swap', @TestSwap);
+  T.Test('binary: Swap roundtrip', @TestSwapRoundTrip);
+  T.Test('binary: Read/Write', @TestReadWrite);
+  T.Test('binary: Byte order', @TestReadByteOrder);
+  T.Test('binary: TryRead advance', @TestTryReadAdvance);
+  T.Test('binary: TryWrite advance', @TestTryWriteAdvance);
 
-  T.Run('builder: Basic', @TestBuilderBasic);
-  T.Run('builder: AppendBytes', @TestBuilderAppendBytes);
-  T.Run('builder: AppendSpan', @TestBuilderAppendSpan);
-  T.Run('builder: Endian', @TestBuilderEndian);
-  T.Run('builder: Grow', @TestBuilderGrow);
-  T.Run('builder: Clear/Reserve', @TestBuilderClearReserve);
-  T.Run('builder: Truncate', @TestBuilderTruncate);
-  T.Run('builder: WrittenSpan', @TestBuilderWrittenSpan);
-  T.Run('builder: AutoFree', @TestBuilderAutoFree);
-  T.Run('builder: UInt64', @TestBuilderUInt64);
-  T.Run('builder: WithAllocator', @TestBuilderWithAllocator);
+  T.Test('builder: Basic', @TestBuilderBasic);
+  T.Test('builder: AppendBytes', @TestBuilderAppendBytes);
+  T.Test('builder: AppendSpan', @TestBuilderAppendSpan);
+  T.Test('builder: Endian', @TestBuilderEndian);
+  T.Test('builder: Grow', @TestBuilderGrow);
+  T.Test('builder: Clear/Reserve', @TestBuilderClearReserve);
+  T.Test('builder: Truncate', @TestBuilderTruncate);
+  T.Test('builder: WrittenSpan', @TestBuilderWrittenSpan);
+  T.Test('builder: AutoFree', @TestBuilderAutoFree);
+  T.Test('builder: UInt64', @TestBuilderUInt64);
+  T.Test('builder: WithAllocator', @TestBuilderWithAllocator);
 
-  T.Run('ops: SpanContains', @TestSpanContains);
-  T.Run('ops: SpanCopySlice', @TestSpanCopySlice);
-  T.Run('ops: SpanClone', @TestSpanClone);
+  T.Test('ops: SpanContains', @TestSpanContains);
+  T.Test('ops: SpanCopySlice', @TestSpanCopySlice);
+  T.Test('ops: SpanClone', @TestSpanClone);
 
-  T.Run('binary: ToEndian/FromEndian', @TestToFromEndian);
-  T.Run('binary: TryReadUInt8', @TestTryReadUInt8);
-  T.Run('binary: TryWriteUInt8', @TestTryWriteUInt8);
-  T.Run('binary: TryRead BE variants', @TestTryReadBE);
-  T.Run('binary: TryWrite all variants', @TestTryWriteAllVariants);
+  T.Test('binary: ToEndian/FromEndian', @TestToFromEndian);
+  T.Test('binary: TryReadUInt8', @TestTryReadUInt8);
+  T.Test('binary: TryWriteUInt8', @TestTryWriteUInt8);
+  T.Test('binary: TryRead BE variants', @TestTryReadBE);
+  T.Test('binary: TryWrite all variants', @TestTryWriteAllVariants);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

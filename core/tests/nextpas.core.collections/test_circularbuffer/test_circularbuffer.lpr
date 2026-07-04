@@ -5,7 +5,7 @@ program test_circularbuffer;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.circularbuffer.intf;
 
@@ -13,7 +13,7 @@ type
   IIntBuf = specialize ICircularBuffer<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPushAndPop;
 var
@@ -142,16 +142,16 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.circularbuffer');
-  T.Run('Push and Pop FIFO', @TestPushAndPop);
-  T.Run('Full reject mode', @TestFullRejectMode);
-  T.Run('Full overwrite mode', @TestFullOverwriteMode);
-  T.Run('Peek', @TestPeek);
-  T.Run('TryPop empty', @TestTryPopEmpty);
-  T.Run('Capacity', @TestCapacity);
-  T.Run('IsFull/IsEmpty', @TestIsFullIsEmpty);
-  T.Run('OverwriteOldest property', @TestOverwriteOldestProperty);
-  T.Run('Clear', @TestClear);
-  T.Run('Wrap around', @TestWrapAround);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.circularbuffer');
+  T.Test('Push and Pop FIFO', @TestPushAndPop);
+  T.Test('Full reject mode', @TestFullRejectMode);
+  T.Test('Full overwrite mode', @TestFullOverwriteMode);
+  T.Test('Peek', @TestPeek);
+  T.Test('TryPop empty', @TestTryPopEmpty);
+  T.Test('Capacity', @TestCapacity);
+  T.Test('IsFull/IsEmpty', @TestIsFullIsEmpty);
+  T.Test('OverwriteOldest property', @TestOverwriteOldestProperty);
+  T.Test('Clear', @TestClear);
+  T.Test('Wrap around', @TestWrapAround);
+  if not T.Run then Halt(1);
 end.

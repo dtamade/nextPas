@@ -4,7 +4,7 @@ program test_tui_ext_facade;
 
 uses
   nextpas.core.tui.ext,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   TExtRenderHost = class
@@ -18,7 +18,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TExtRenderHost.Render(AApp: TApp; var AFrame: TFrame);
 begin
@@ -124,11 +124,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.ext_facade');
-  T.Run('ext surface', @TestExtSurface);
-  T.Run('ext app task surface', @TestExtAppTaskSurface);
-  T.Run('ext facade exposes tui exceptions', @TestExtFacadeExposesTuiExceptions);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.ext_facade');
+  T.Test('ext surface', @TestExtSurface);
+  T.Test('ext app task surface', @TestExtAppTaskSurface);
+  T.Test('ext facade exposes tui exceptions', @TestExtFacadeExposesTuiExceptions);
+  if not T.Run then Halt(1);
 end.

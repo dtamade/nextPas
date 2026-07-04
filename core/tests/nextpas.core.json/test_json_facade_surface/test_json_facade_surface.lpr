@@ -4,10 +4,10 @@ program test_json_facade_surface;
 
 uses
   nextpas.core.json,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFacadeExposesCoreSurface;
 var
@@ -31,8 +31,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json (facade surface)');
-  T.Run('facade exposes core surface', @TestFacadeExposesCoreSurface);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.json (facade surface)');
+  T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
+  if not T.Run then Halt(1);
 end.

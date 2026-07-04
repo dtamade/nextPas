@@ -4,10 +4,10 @@ program test_tui_base;
 
 uses
   nextpas.core.tui.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { TRect.Make 与访问器 }
 procedure TestRectMake;
@@ -133,17 +133,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.base');
-  T.Run('rect make and accessors', @TestRectMake);
-  T.Run('rect empty', @TestRectEmpty);
-  T.Run('rect contains', @TestRectContains);
-  T.Run('rect intersects', @TestRectIntersects);
-  T.Run('rect intersection', @TestRectIntersection);
-  T.Run('rect union', @TestRectUnion);
-  T.Run('rect inner margin', @TestRectInner);
-  T.Run('helpers and ctors', @TestHelpers);
-  T.Run('direction enum', @TestDirection);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.base');
+  T.Test('rect make and accessors', @TestRectMake);
+  T.Test('rect empty', @TestRectEmpty);
+  T.Test('rect contains', @TestRectContains);
+  T.Test('rect intersects', @TestRectIntersects);
+  T.Test('rect intersection', @TestRectIntersection);
+  T.Test('rect union', @TestRectUnion);
+  T.Test('rect inner margin', @TestRectInner);
+  T.Test('helpers and ctors', @TestHelpers);
+  T.Test('direction enum', @TestDirection);
+  if not T.Run then Halt(1);
 end.

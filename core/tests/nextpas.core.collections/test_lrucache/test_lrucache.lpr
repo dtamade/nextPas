@@ -5,7 +5,7 @@ program test_lrucache;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.lrucache.intf;
 
@@ -13,7 +13,7 @@ type
   IIntCache = specialize ILruCache<Integer, string>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutAndGet;
 var
@@ -204,19 +204,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.lrucache');
-  T.Run('Put and Get', @TestPutAndGet);
-  T.Run('Get miss', @TestGetMiss);
-  T.Run('Eviction on capacity', @TestEvictionOnCapacity);
-  T.Run('Get promotes to MRU', @TestGetPromotesToMRU);
-  T.Run('Put overwrite', @TestPutOverwrite);
-  T.Run('Hit/Miss stats', @TestHitMissStats);
-  T.Run('Peek does not promote', @TestPeekDoesNotPromote);
-  T.Run('Remove', @TestRemove);
-  T.Run('Contains', @TestContains);
-  T.Run('Clear', @TestClear);
-  T.Run('Evict explicit', @TestEvictExplicit);
-  T.Run('EvictLeastRecent', @TestEvictLeastRecent);
-  T.Run('SetMaxSize shrinks', @TestSetMaxSize);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.lrucache');
+  T.Test('Put and Get', @TestPutAndGet);
+  T.Test('Get miss', @TestGetMiss);
+  T.Test('Eviction on capacity', @TestEvictionOnCapacity);
+  T.Test('Get promotes to MRU', @TestGetPromotesToMRU);
+  T.Test('Put overwrite', @TestPutOverwrite);
+  T.Test('Hit/Miss stats', @TestHitMissStats);
+  T.Test('Peek does not promote', @TestPeekDoesNotPromote);
+  T.Test('Remove', @TestRemove);
+  T.Test('Contains', @TestContains);
+  T.Test('Clear', @TestClear);
+  T.Test('Evict explicit', @TestEvictExplicit);
+  T.Test('EvictLeastRecent', @TestEvictLeastRecent);
+  T.Test('SetMaxSize shrinks', @TestSetMaxSize);
+  if not T.Run then Halt(1);
 end.

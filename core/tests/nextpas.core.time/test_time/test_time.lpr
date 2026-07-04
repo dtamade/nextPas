@@ -4,14 +4,14 @@ program test_time;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform,
   nextpas.core.platform.time,
   nextpas.core.time,
   nextpas.core.time.base;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDurationZero;
 var
@@ -284,24 +284,24 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.time');
-  T.Run('Duration zero', @TestDurationZero);
-  T.Run('Duration from units', @TestDurationFromUnits);
-  T.Run('Duration arithmetic', @TestDurationArithmetic);
-  T.Run('Duration saturation', @TestDurationSaturation);
-  T.Run('Duration comparison', @TestDurationComparison);
-  T.Run('Duration negate', @TestDurationNegate);
-  T.Run('Duration toString', @TestDurationToString);
-  T.Run('Instant now', @TestInstantNow);
-  T.Run('Instant elapsed', @TestInstantElapsed);
-  T.Run('Stopwatch basic', @TestStopwatch);
-  T.Run('Stopwatch accumulate', @TestStopwatchAccumulate);
-  T.Run('Stopwatch reset', @TestStopwatchReset);
-  T.Run('Platform time', @TestPlatformTime);
-  T.Run('DateTime now', @TestDateTimeNow);
-  T.Run('DateTime UTC now', @TestDateTimeUtcNow);
-  T.Run('DateTime math', @TestDateTimeMath);
-  T.Run('DaysBetween', @TestDaysBetween);
-  T.Run('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.time');
+  T.Test('Duration zero', @TestDurationZero);
+  T.Test('Duration from units', @TestDurationFromUnits);
+  T.Test('Duration arithmetic', @TestDurationArithmetic);
+  T.Test('Duration saturation', @TestDurationSaturation);
+  T.Test('Duration comparison', @TestDurationComparison);
+  T.Test('Duration negate', @TestDurationNegate);
+  T.Test('Duration toString', @TestDurationToString);
+  T.Test('Instant now', @TestInstantNow);
+  T.Test('Instant elapsed', @TestInstantElapsed);
+  T.Test('Stopwatch basic', @TestStopwatch);
+  T.Test('Stopwatch accumulate', @TestStopwatchAccumulate);
+  T.Test('Stopwatch reset', @TestStopwatchReset);
+  T.Test('Platform time', @TestPlatformTime);
+  T.Test('DateTime now', @TestDateTimeNow);
+  T.Test('DateTime UTC now', @TestDateTimeUtcNow);
+  T.Test('DateTime math', @TestDateTimeMath);
+  T.Test('DaysBetween', @TestDaysBetween);
+  T.Test('DateTimeToUnix/UnixToDateTime', @TestDateTimeToUnix);
+  if not T.Run then Halt(1);
 end.

@@ -6,10 +6,10 @@ uses
   Classes,
   Process,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
@@ -5273,249 +5273,247 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('http benchmarks');
-  T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
-  T.Run('bench_server url_path small smoke',
+  T := TTestSuite.Create('http benchmarks');
+  T.Test('bench_server small smoke', @TestBenchServerSmallSmoke);
+  T.Test('bench_server url_path small smoke',
     @TestBenchServerUrlPathSmallSmoke);
-  T.Run('bench_server rejects invalid workload',
+  T.Test('bench_server rejects invalid workload',
     @TestBenchServerRejectsInvalidWorkload);
-  T.Run('bench_server rejects invalid scale',
+  T.Test('bench_server rejects invalid scale',
     @TestBenchServerRejectsInvalidScale);
-  T.Run('bench_server rejects invalid backend',
+  T.Test('bench_server rejects invalid backend',
     @TestBenchServerRejectsInvalidBackend);
-  T.Run('bench_server epoll small smoke',
+  T.Test('bench_server epoll small smoke',
     @TestBenchServerEpollSmallSmoke);
-  T.Run('server comparators report requested/effective threads',
+  T.Test('server comparators report requested/effective threads',
     @TestServerComparatorsReportRequestedAndEffectiveThreads);
-  T.Run('server comparators report response read contract',
+  T.Test('server comparators report response read contract',
     @TestServerComparatorsReportResponseReadContract);
-  T.Run('bench_router handler dispatch smoke',
+  T.Test('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
-  T.Run('bench_router direct call smoke',
+  T.Test('bench_router direct call smoke',
     @TestBenchRouterDirectCallSmoke);
-  T.Run('bench_headers lookup smoke',
+  T.Test('bench_headers lookup smoke',
     @TestBenchHeadersLookupSmoke);
-  T.Run('bench_headers rejects no-match filter',
+  T.Test('bench_headers rejects no-match filter',
     @TestBenchHeadersRejectsNoMatchFilter);
-  T.Run('bench_h1writer response serialization smoke',
+  T.Test('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
-  T.Run('H1 outbound hot helpers inline source contract',
+  T.Test('H1 outbound hot helpers inline source contract',
     @TestH1OutboundHotHelpersInlineSourceContract);
-  T.Run('H1 server policy hot helpers inline source contract',
+  T.Test('H1 server policy hot helpers inline source contract',
     @TestH1ServerPolicyHotHelpersInlineSourceContract);
-  T.Run('HTTP headers lookup hot helpers inline source contract',
+  T.Test('HTTP headers lookup hot helpers inline source contract',
     @TestHttpHeadersLookupHotHelpersInlineSourceContract);
-  T.Run('H1 server response drain avoids generic buffered writer source contract',
+  T.Test('H1 server response drain avoids generic buffered writer source contract',
     @TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract);
-  T.Run('HTTP request direct path projection source contract',
+  T.Test('HTTP request direct path projection source contract',
     @TestHttpRequestDirectPathProjectionSourceContract);
-  T.Run('H1 parser request metadata cache source contract',
+  T.Test('H1 parser request metadata cache source contract',
     @TestH1ParserRequestMetadataCacheSourceContract);
-  T.Run('H1 parser request metadata span fast path source contract',
+  T.Test('H1 parser request metadata span fast path source contract',
     @TestH1ParserRequestMetadataSpanFastPathSourceContract);
-  T.Run('H1 fast lazy headers source contract',
+  T.Test('H1 fast lazy headers source contract',
     @TestH1FastLazyHeadersSourceContract);
-  T.Run('H1 writer compact header block source contract',
+  T.Test('H1 writer compact header block source contract',
     @TestH1WriterCompactHeaderBlockSourceContract);
-  T.Run('H1 writer known status line source contract',
+  T.Test('H1 writer known status line source contract',
     @TestH1WriterKnownStatusLineSourceContract);
-  T.Run('H1 writer outbound drain source contract',
+  T.Test('H1 writer outbound drain source contract',
     @TestH1WriterOutboundDrainSourceContract);
-  T.Run('bench_fullchain direct dispatch source contract',
+  T.Test('bench_fullchain direct dispatch source contract',
     @TestBenchFullchainDirectDispatchSourceContract);
-  T.Run('bench_fullchain middleware dispatch source contract',
+  T.Test('bench_fullchain middleware dispatch source contract',
     @TestBenchFullchainMiddlewareDispatchSourceContract);
-  T.Run('bench_fullchain server thread lifecycle source contract',
+  T.Test('bench_fullchain server thread lifecycle source contract',
     @TestBenchFullchainServerThreadLifecycleSourceContract);
-  T.Run('bench_fullchain strict response validation source contract',
+  T.Test('bench_fullchain strict response validation source contract',
     @TestBenchFullchainStrictResponseValidationSourceContract);
-  T.Run('benchmark docs adapter_no_url fast-path source contract',
+  T.Test('benchmark docs adapter_no_url fast-path source contract',
     @TestBenchmarkDocsAdapterNoUrlFastPathSourceContract);
-  T.Run('benchmark docs fullchain stable markers source contract',
+  T.Test('benchmark docs fullchain stable markers source contract',
     @TestBenchmarkDocsFullchainStableMarkersSourceContract);
-  T.Run('README fullchain benchmark truth source contract',
+  T.Test('README fullchain benchmark truth source contract',
     @TestReadmeFullchainBenchmarkTruthSourceContract);
-  T.Run('API coverage benchmark evidence summary source contract',
+  T.Test('API coverage benchmark evidence summary source contract',
     @TestApiCoverageBenchmarkEvidenceSummarySourceContract);
-  T.Run('H1 parser llhttp root alias source contract',
+  T.Test('H1 parser llhttp root alias source contract',
     @TestH1ParserLlhttpRootAliasSourceContract);
-  T.Run('benchmark docs H1 parser runner truth source contract',
+  T.Test('benchmark docs H1 parser runner truth source contract',
     @TestBenchmarkDocsH1ParserRunnerTruthSourceContract);
-  T.Run('bench_h1outbound drain smoke',
+  T.Test('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
-  T.Run('bench_fullchain plaintext smoke',
+  T.Test('bench_fullchain plaintext smoke',
     @TestBenchFullchainPlaintextSmoke);
-  T.Run('bench_fullchain direct plaintext smoke',
+  T.Test('bench_fullchain direct plaintext smoke',
     @TestBenchFullchainDirectPlaintextSmoke);
-  T.Run('bench_fullchain direct 1k smoke',
+  T.Test('bench_fullchain direct 1k smoke',
     @TestBenchFullchainDirect1KSmoke);
-  T.Run('bench_fullchain middleware noop smoke',
+  T.Test('bench_fullchain middleware noop smoke',
     @TestBenchFullchainMiddlewareNoopSmoke);
-  T.Run('bench_fullchain echo 1k smoke',
+  T.Test('bench_fullchain echo 1k smoke',
     @TestBenchFullchainEcho1KSmoke);
-  T.Run('bench_fullchain json smoke',
+  T.Test('bench_fullchain json smoke',
     @TestBenchFullchainJsonSmoke);
-  T.Run('bench_fullchain param route smoke',
+  T.Test('bench_fullchain param route smoke',
     @TestBenchFullchainParamRouteSmoke);
-  T.Run('bench_fullchain sink 16k smoke',
+  T.Test('bench_fullchain sink 16k smoke',
     @TestBenchFullchainSink16KSmoke);
-  T.Run('bench_fullchain rejects invalid backend',
+  T.Test('bench_fullchain rejects invalid backend',
     @TestBenchFullchainRejectsInvalidBackend);
-  T.Run('bench_fullchain rejects invalid max iters',
+  T.Test('bench_fullchain rejects invalid max iters',
     @TestBenchFullchainRejectsInvalidMaxIters);
-  T.Run('bench_fullchain epoll direct plaintext smoke',
+  T.Test('bench_fullchain epoll direct plaintext smoke',
     @TestBenchFullchainEpollDirectPlaintextSmoke);
-  T.Run('bench_fullchain epoll direct 1k smoke',
+  T.Test('bench_fullchain epoll direct 1k smoke',
     @TestBenchFullchainEpollDirect1KSmoke);
-  T.Run('bench_fullchain epoll echo 1k smoke',
+  T.Test('bench_fullchain epoll echo 1k smoke',
     @TestBenchFullchainEpollEcho1KSmoke);
-  T.Run('bench_fullchain epoll sink 16k smoke',
+  T.Test('bench_fullchain epoll sink 16k smoke',
     @TestBenchFullchainEpollSink16KSmoke);
-  T.Run('bench_fullchain rejects no-match filter',
+  T.Test('bench_fullchain rejects no-match filter',
     @TestBenchFullchainRejectsNoMatchFilter);
-  T.Run('HTTP top-level Pascal benchmark projects have Makefiles',
+  T.Test('HTTP top-level Pascal benchmark projects have Makefiles',
     @TestHttpTopLevelPascalBenchmarkProjectsHaveMakefiles);
-  T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
-  T.Run('go server comparator url_path small smoke',
+  T.Test('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
+  T.Test('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);
-  T.Run('go server comparator rejects invalid workload',
+  T.Test('go server comparator rejects invalid workload',
     @TestGoServerComparatorRejectsInvalidWorkload);
-  T.Run('go server comparator rejects invalid scale',
+  T.Test('go server comparator rejects invalid scale',
     @TestGoServerComparatorRejectsInvalidScale);
-  T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
-  T.Run('rust server comparator url_path small smoke',
+  T.Test('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
+  T.Test('rust server comparator url_path small smoke',
     @TestRustServerComparatorUrlPathSmallSmoke);
-  T.Run('rust server comparator rejects invalid workload',
+  T.Test('rust server comparator rejects invalid workload',
     @TestRustServerComparatorRejectsInvalidWorkload);
-  T.Run('rust server comparator rejects invalid scale',
+  T.Test('rust server comparator rejects invalid scale',
     @TestRustServerComparatorRejectsInvalidScale);
-  T.Run('hyper/tokio server comparator small smoke',
+  T.Test('hyper/tokio server comparator small smoke',
     @TestHyperTokioServerComparatorSmallSmoke);
-  T.Run('hyper/tokio server comparator url_path small smoke',
+  T.Test('hyper/tokio server comparator url_path small smoke',
     @TestHyperTokioServerComparatorUrlPathSmallSmoke);
-  T.Run('hyper/tokio server comparator rejects invalid workload',
+  T.Test('hyper/tokio server comparator rejects invalid workload',
     @TestHyperTokioServerComparatorRejectsInvalidWorkload);
-  T.Run('hyper/tokio server comparator rejects invalid scale',
+  T.Test('hyper/tokio server comparator rejects invalid scale',
     @TestHyperTokioServerComparatorRejectsInvalidScale);
-  T.Run('hyper/tokio comparator stack identity source contract',
+  T.Test('hyper/tokio comparator stack identity source contract',
     @TestHyperTokioComparatorStackIdentitySourceContract);
-  T.Run('server comparison runner small smoke',
+  T.Test('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
-  T.Run('server comparison runner url_path small smoke',
+  T.Test('server comparison runner url_path small smoke',
     @TestServerComparisonRunnerUrlPathSmallSmoke);
-  T.Run('server comparison runner adapter_no_url small smoke',
+  T.Test('server comparison runner adapter_no_url small smoke',
     @TestServerComparisonRunnerAdapterNoUrlSmallSmoke);
-  T.Run('server comparison runner response_1k small smoke',
+  T.Test('server comparison runner response_1k small smoke',
     @TestServerComparisonRunnerResponse1KSmallSmoke);
-  T.Run('server comparison runner runs summary smoke',
+  T.Test('server comparison runner runs summary smoke',
     @TestServerComparisonRunnerRunsSummarySmoke);
-  T.Run('server comparison runner include hyper smoke',
+  T.Test('server comparison runner include hyper smoke',
     @TestServerComparisonRunnerIncludeHyperSmoke);
-  T.Run('server comparison runner include hyper url_path smoke',
+  T.Test('server comparison runner include hyper url_path smoke',
     @TestServerComparisonRunnerIncludeHyperUrlPathSmoke);
-  T.Run('server comparison runner include hyper response_1k smoke',
+  T.Test('server comparison runner include hyper response_1k smoke',
     @TestServerComparisonRunnerIncludeHyperResponse1KSmoke);
-  T.Run('server comparison runner concurrency lock source contract',
+  T.Test('server comparison runner concurrency lock source contract',
     @TestServerComparisonRunnerConcurrencyLockSourceContract);
-  T.Run('server comparison summary keeps read-mode metadata source contract',
+  T.Test('server comparison summary keeps read-mode metadata source contract',
     @TestServerComparisonSummaryKeepsReadModeMetadataSourceContract);
-  T.Run('server comparison preserves requested threads source contract',
+  T.Test('server comparison preserves requested threads source contract',
     @TestServerComparisonPreservesRequestedThreadsSourceContract);
-  T.Run('server comparison runner validates raw markers source contract',
+  T.Test('server comparison runner validates raw markers source contract',
     @TestServerComparisonRunnerValidatesRawMarkersSourceContract);
-  T.Run('server comparison runner preserves requested threads',
+  T.Test('server comparison runner preserves requested threads',
     @TestServerComparisonRunnerPreservesRequestedThreads);
-  T.Run('server comparison runner rejects invalid nextpas backend',
+  T.Test('server comparison runner rejects invalid nextpas backend',
     @TestServerComparisonRunnerRejectsInvalidNextpasBackend);
-  T.Run('server comparison runner rejects unsafe output path',
+  T.Test('server comparison runner rejects unsafe output path',
     @TestServerComparisonRunnerRejectsUnsafeOutputPath);
-  T.Run('server comparison runner epoll smoke',
+  T.Test('server comparison runner epoll smoke',
     @TestServerComparisonRunnerEpollSmoke);
-  T.Run('server comparison runner epoll url_path smoke',
+  T.Test('server comparison runner epoll url_path smoke',
     @TestServerComparisonRunnerEpollUrlPathSmoke);
-  T.Run('server comparison runner epoll response_1k smoke',
+  T.Test('server comparison runner epoll response_1k smoke',
     @TestServerComparisonRunnerEpollResponse1KSmoke);
-  T.Run('server comparison runner include hyper epoll response_1k smoke',
+  T.Test('server comparison runner include hyper epoll response_1k smoke',
     @TestServerComparisonRunnerIncludeHyperEpollResponse1KSmoke);
-  T.Run('server comparison snapshot small smoke',
+  T.Test('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
-  T.Run('server comparison snapshot url_path smoke',
+  T.Test('server comparison snapshot url_path smoke',
     @TestServerComparisonSnapshotUrlPathSmoke);
-  T.Run('server comparison snapshot runs smoke',
+  T.Test('server comparison snapshot runs smoke',
     @TestServerComparisonSnapshotRunsSmoke);
-  T.Run('server comparison snapshot preserves requested threads',
+  T.Test('server comparison snapshot preserves requested threads',
     @TestServerComparisonSnapshotPreservesRequestedThreads);
-  T.Run('server comparison snapshot include hyper smoke',
+  T.Test('server comparison snapshot include hyper smoke',
     @TestServerComparisonSnapshotIncludeHyperSmoke);
-  T.Run('server comparison snapshot include hyper url_path smoke',
+  T.Test('server comparison snapshot include hyper url_path smoke',
     @TestServerComparisonSnapshotIncludeHyperUrlPathSmoke);
-  T.Run('server comparison snapshot include hyper response_1k smoke',
+  T.Test('server comparison snapshot include hyper response_1k smoke',
     @TestServerComparisonSnapshotIncludeHyperResponse1KSmoke);
-  T.Run('server comparison snapshot epoll url_path smoke',
+  T.Test('server comparison snapshot epoll url_path smoke',
     @TestServerComparisonSnapshotEpollUrlPathSmoke);
-  T.Run('server comparison snapshot epoll response_1k smoke',
+  T.Test('server comparison snapshot epoll response_1k smoke',
     @TestServerComparisonSnapshotEpollResponse1KSmoke);
-  T.Run('server comparison snapshot include hyper epoll response_1k smoke',
+  T.Test('server comparison snapshot include hyper epoll response_1k smoke',
     @TestServerComparisonSnapshotIncludeHyperEpollResponse1KSmoke);
-  T.Run('server comparison snapshot rejects invalid nextpas backend',
+  T.Test('server comparison snapshot rejects invalid nextpas backend',
     @TestServerComparisonSnapshotRejectsInvalidNextpasBackend);
-  T.Run('server comparison snapshot rejects unsafe output path',
+  T.Test('server comparison snapshot rejects unsafe output path',
     @TestServerComparisonSnapshotRejectsUnsafeOutputPath);
-  T.Run('server comparison snapshot epoll smoke',
+  T.Test('server comparison snapshot epoll smoke',
     @TestServerComparisonSnapshotEpollSmoke);
-  T.Run('C llhttp comparator requires LLHTTP_ROOT',
+  T.Test('C llhttp comparator requires LLHTTP_ROOT',
     @TestCllhttpComparatorRequiresRoot);
-  T.Run('H1 parser benchmark max iterations env',
+  T.Test('H1 parser benchmark max iterations env',
     @TestH1ParserBenchmarkMaxItersEnv);
-  T.Run('H1 parser benchmark rejects invalid max iterations env',
+  T.Test('H1 parser benchmark rejects invalid max iterations env',
     @TestH1ParserBenchmarkRejectsInvalidMaxIters);
-  T.Run('H1 parser benchmark filter env',
+  T.Test('H1 parser benchmark filter env',
     @TestH1ParserBenchmarkFilterEnv);
-  T.Run('H1 parser benchmark rejects no-match filter',
+  T.Test('H1 parser benchmark rejects no-match filter',
     @TestH1ParserBenchmarkRejectsNoMatchFilter);
-  T.Run('H1 parser benchmark header-span-add filter env',
+  T.Test('H1 parser benchmark header-span-add filter env',
     @TestH1ParserBenchmarkHeaderSpanAddFilterEnv);
-  T.Run('H1 parser benchmark metadata cache filter env',
+  T.Test('H1 parser benchmark metadata cache filter env',
     @TestH1ParserBenchmarkMetadataCacheFilterEnv);
-  T.Run('H1 parser benchmark request-path filter env',
+  T.Test('H1 parser benchmark request-path filter env',
     @TestH1ParserBenchmarkRequestPathFilterEnv);
-  T.Run('H1 parser benchmark request-rawquery filter env',
+  T.Test('H1 parser benchmark request-rawquery filter env',
     @TestH1ParserBenchmarkRequestRawQueryFilterEnv);
-  T.Run('H1 parser benchmark request-path+rawquery filter env',
+  T.Test('H1 parser benchmark request-path+rawquery filter env',
     @TestH1ParserBenchmarkRequestPathAndRawQueryFilterEnv);
-  T.Run('H1 parser benchmark url-parse request-target filter env',
+  T.Test('H1 parser benchmark url-parse request-target filter env',
     @TestH1ParserBenchmarkUrlParseRequestTargetFilterEnv);
-  T.Run('H1 parser benchmark url-parse generic filter env',
+  T.Test('H1 parser benchmark url-parse generic filter env',
     @TestH1ParserBenchmarkUrlParseGenericFilterEnv);
-  T.Run('H1 parser benchmark fast-headers filter env',
+  T.Test('H1 parser benchmark fast-headers filter env',
     @TestH1ParserBenchmarkFastHeadersFilterEnv);
-  T.Run('H1 parser benchmark fast-headers get-all filter env',
+  T.Test('H1 parser benchmark fast-headers get-all filter env',
     @TestH1ParserBenchmarkFastHeadersGetAllFilterEnv);
-  T.Run('H1 parser benchmark fast-headers has filter env',
+  T.Test('H1 parser benchmark fast-headers has filter env',
     @TestH1ParserBenchmarkFastHeadersHasFilterEnv);
-  T.Run('H1 parser benchmark fast-headers count filter env',
+  T.Test('H1 parser benchmark fast-headers count filter env',
     @TestH1ParserBenchmarkFastHeadersCountFilterEnv);
-  T.Run('H1 parser benchmark fast-headers foreach filter env',
+  T.Test('H1 parser benchmark fast-headers foreach filter env',
     @TestH1ParserBenchmarkFastHeadersForEachFilterEnv);
-  T.Run('C llhttp comparator small smoke when configured',
+  T.Test('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
-  T.Run('C llhttp comparator max iterations env when configured',
+  T.Test('C llhttp comparator max iterations env when configured',
     @TestCllhttpComparatorMaxItersEnvWhenConfigured);
-  T.Run('C llhttp comparator filter env when configured',
+  T.Test('C llhttp comparator filter env when configured',
     @TestCllhttpComparatorFilterEnvWhenConfigured);
-  T.Run('C llhttp comparator rejects no-match filter when configured',
+  T.Test('C llhttp comparator rejects no-match filter when configured',
     @TestCllhttpComparatorRejectsNoMatchFilterWhenConfigured);
-  T.Run('H1 parser flag matrix smoke',
+  T.Test('H1 parser flag matrix smoke',
     @TestH1ParserFlagMatrixSmoke);
-  T.Run('H1 parser flag matrix perf graceful smoke',
+  T.Test('H1 parser flag matrix perf graceful smoke',
     @TestH1ParserFlagMatrixPerfGracefulSmoke);
-  T.Run('H1 parser flag matrix runs summary smoke',
+  T.Test('H1 parser flag matrix runs summary smoke',
     @TestH1ParserFlagMatrixRunsSummarySmoke);
-  T.Run('H1 parser flag matrix rejects unsafe output dir',
+  T.Test('H1 parser flag matrix rejects unsafe output dir',
     @TestH1ParserFlagMatrixRejectsUnsafeOutputDir);
-  T.Run('H1 parser flag matrix requires parsed rows source contract',
+  T.Test('H1 parser flag matrix requires parsed rows source contract',
     @TestH1ParserFlagMatrixRequiresParsedRowsSourceContract);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  if not T.Run then Halt(1);
 end.

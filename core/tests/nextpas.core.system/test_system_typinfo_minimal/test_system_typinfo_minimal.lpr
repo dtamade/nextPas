@@ -4,7 +4,7 @@ program test_system_typinfo_minimal;
 
 uses
   Variants,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.system.typinfo;
 
 type
@@ -52,7 +52,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   ManagedProbeDestroyedCount: Int32 = 0;
 
 { TManagedProbe }
@@ -410,15 +410,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.system.typinfo');
-  T.Run('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
-  T.Run('integer PTypeInfo identity compile-truth', @TestIntegerPTypeInfoIdentityCompileTruth);
-  T.Run('PTypeInfo kind consistency compile-truth', @TestPTypeInfoKindConsistencyCompileTruth);
-  T.Run('structured kind aliases compile-truth', @TestStructuredKindAliasesCompileTruth);
-  T.Run('managed array lifecycle helpers', @TestManagedArrayLifecycleHelpers);
-  T.Run('interface reference array lifecycle helpers', @TestInterfaceReferenceArrayLifecycleHelpers);
-  T.Run('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
-  T.Run('managed interface array lifecycle helpers',
+  T := TTestSuite.Create('nextpas.core.system.typinfo');
+  T.Test('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
+  T.Test('integer PTypeInfo identity compile-truth', @TestIntegerPTypeInfoIdentityCompileTruth);
+  T.Test('PTypeInfo kind consistency compile-truth', @TestPTypeInfoKindConsistencyCompileTruth);
+  T.Test('structured kind aliases compile-truth', @TestStructuredKindAliasesCompileTruth);
+  T.Test('managed array lifecycle helpers', @TestManagedArrayLifecycleHelpers);
+  T.Test('interface reference array lifecycle helpers', @TestInterfaceReferenceArrayLifecycleHelpers);
+  T.Test('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
+  T.Test('managed interface array lifecycle helpers',
     @TestManagedInterfaceArrayLifecycleHelpers);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

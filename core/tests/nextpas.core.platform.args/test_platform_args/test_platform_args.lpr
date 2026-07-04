@@ -5,10 +5,10 @@ program test_platform_args;
 uses
   nextpas.core.platform.args,
   nextpas.core.platform.fs,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCount;
 begin
@@ -50,11 +50,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.args');
-  T.Run('count', @TestCount);
-  T.Run('get arg0', @TestGetArg0);
-  T.Run('get invalid index', @TestGetInvalid);
-  T.Run('exe path', @TestExePath);
-  T.Run('nil buffer', @TestNilBuf);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.args');
+  T.Test('count', @TestCount);
+  T.Test('get arg0', @TestGetArg0);
+  T.Test('get invalid index', @TestGetInvalid);
+  T.Test('exe path', @TestExePath);
+  T.Test('nil buffer', @TestNilBuf);
+  if not T.Run then Halt(1);
 end.

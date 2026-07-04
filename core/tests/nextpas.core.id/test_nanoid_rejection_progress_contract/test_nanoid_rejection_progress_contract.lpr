@@ -5,13 +5,13 @@ program test_nanoid_rejection_progress_contract;
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.id,
   nextpas.core.id.rng,
   nextpas.core.platform.random;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestRejectedEntropyFailsFast;
 var
@@ -41,7 +41,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.id.nanoid.rejection_progress_contract');
-  T.Run('rejected entropy fails fast', @TestRejectedEntropyFailsFast);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.id.nanoid.rejection_progress_contract');
+  T.Test('rejected entropy fails fast', @TestRejectedEntropyFailsFast);
+  if not T.Run then Halt(1);
 end.

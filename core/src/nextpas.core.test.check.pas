@@ -22,6 +22,13 @@ procedure CheckEqual(const AExpected, AActual: Pointer); overload;
   For floating-point tolerance comparisons, use CheckNear directly. }
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
+{ 3-arg overloads: prepend AMessage on failure (backward compat). }
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string); overload;
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string); overload;
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
@@ -191,6 +198,50 @@ begin
   if AExpected <> AActual then
     InternalFail('Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
       ' but got $' + IntToHex(NativeUInt(AActual), 16));
+end;
+
+{ 3-arg overloads: wrap 2-arg, prepend AMessage on failure }
+
+procedure CheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  try
+    CheckEqual(AExpected, AActual);
+  except
+    on E: EAssertionFailed do
+      if AMessage <> '' then
+        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+      else
+        raise;
+  end;
+end;
+
+procedure CheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  try
+    CheckEqual(AExpected, AActual);
+  except
+    on E: EAssertionFailed do
+      if AMessage <> '' then
+        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+      else
+        raise;
+  end;
+end;
+
+procedure CheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin
+  try
+    CheckEqual(AExpected, AActual);
+  except
+    on E: EAssertionFailed do
+      if AMessage <> '' then
+        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+      else
+        raise;
+  end;
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: string);

@@ -8,7 +8,7 @@ uses
   nextpas.core.reflect,
   nextpas.core.reflect.marshal,
   nextpas.core.config,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 type
   TServerConfig = record
@@ -24,7 +24,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function OffsetOfServerHost: PtrUInt;
 var
@@ -240,11 +240,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.reflect.marshal');
-  T.Run('unmarshal server config', @TestUnmarshalServerConfig);
-  T.Run('missing fields keep existing values', @TestMissingFieldsKeepExistingValues);
-  T.Run('empty config keeps zero values', @TestEmptyConfigKeepsZeroValues);
-  T.Run('multiple record types', @TestMultipleRecordTypes);
-  T.Run('invalid inputs do not crash', @TestInvalidInputsDoNotCrash);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.reflect.marshal');
+  T.Test('unmarshal server config', @TestUnmarshalServerConfig);
+  T.Test('missing fields keep existing values', @TestMissingFieldsKeepExistingValues);
+  T.Test('empty config keeps zero values', @TestEmptyConfigKeepsZeroValues);
+  T.Test('multiple record types', @TestMultipleRecordTypes);
+  T.Test('invalid inputs do not crash', @TestInvalidInputsDoNotCrash);
+  if not T.Run then Halt(1);
 end.

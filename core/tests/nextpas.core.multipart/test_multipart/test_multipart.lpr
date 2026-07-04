@@ -5,12 +5,12 @@ program test_multipart;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.multipart.base,
   nextpas.core.multipart;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function MakeBody(const S: string): TBytes;
 var
@@ -251,19 +251,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.multipart');
-  T.Run('Extract boundary', @TestExtractBoundary);
-  T.Run('Extract boundary quoted', @TestExtractBoundaryQuoted);
-  T.Run('Try extract boundary missing', @TestTryExtractBoundaryMissing);
-  T.Run('Parse single text field', @TestParseSingleTextField);
-  T.Run('Parse multiple fields', @TestParseMultipleFields);
-  T.Run('Parse file upload', @TestParseFileUpload);
-  T.Run('Parse mixed text+file', @TestParseMixed);
-  T.Run('Binary body preservation', @TestBinaryBodyPreservation);
-  T.Run('Empty body', @TestEmptyBody);
-  T.Run('Missing boundary raises', @TestMissingBoundary);
-  T.Run('Malformed no boundary in body', @TestMalformedNoBoundaryInBody);
-  T.Run('ParseMultipartFormData', @TestParseMultipartFormData);
-  T.Run('Boundary in binary no false split', @TestBoundaryInBinaryNoFalseSplit);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.multipart');
+  T.Test('Extract boundary', @TestExtractBoundary);
+  T.Test('Extract boundary quoted', @TestExtractBoundaryQuoted);
+  T.Test('Try extract boundary missing', @TestTryExtractBoundaryMissing);
+  T.Test('Parse single text field', @TestParseSingleTextField);
+  T.Test('Parse multiple fields', @TestParseMultipleFields);
+  T.Test('Parse file upload', @TestParseFileUpload);
+  T.Test('Parse mixed text+file', @TestParseMixed);
+  T.Test('Binary body preservation', @TestBinaryBodyPreservation);
+  T.Test('Empty body', @TestEmptyBody);
+  T.Test('Missing boundary raises', @TestMissingBoundary);
+  T.Test('Malformed no boundary in body', @TestMalformedNoBoundaryInBody);
+  T.Test('ParseMultipartFormData', @TestParseMultipartFormData);
+  T.Test('Boundary in binary no false split', @TestBoundaryInBinaryNoFalseSplit);
+  if not T.Run then Halt(1);
 end.

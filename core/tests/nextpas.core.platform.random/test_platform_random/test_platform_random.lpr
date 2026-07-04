@@ -4,10 +4,10 @@ program test_platform_random;
 
 uses
   nextpas.core.platform.random,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFill32;
 var
@@ -71,12 +71,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.random');
-  T.Run('fill 32 bytes non-zero', @TestFill32);
-  T.Run('two calls differ', @TestTwoCallsDiffer);
-  T.Run('fill 1 byte', @TestFill1);
-  T.Run('fill 4096 bytes', @TestFill4096);
-  T.Run('zero length', @TestZeroLen);
-  T.Run('nil nonzero', @TestNilNonZero);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.random');
+  T.Test('fill 32 bytes non-zero', @TestFill32);
+  T.Test('two calls differ', @TestTwoCallsDiffer);
+  T.Test('fill 1 byte', @TestFill1);
+  T.Test('fill 4096 bytes', @TestFill4096);
+  T.Test('zero length', @TestZeroLen);
+  T.Test('nil nonzero', @TestNilNonZero);
+  if not T.Run then Halt(1);
 end.

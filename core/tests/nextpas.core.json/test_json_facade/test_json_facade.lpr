@@ -9,10 +9,10 @@ uses
   nextpas.core.json,
   nextpas.core.json.types,
   nextpas.core.json.value,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function BuildLargeDuplicateKeyObject: string;
 var
@@ -308,28 +308,28 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.json (facade)');
-  T.Run('parse interface', @TestJsonParseInterface);
-  T.Run('auto release', @TestJsonParseAutoRelease);
-  T.Run('stringify', @TestJsonStringify);
-  T.Run('stringify func', @TestJsonStringifyFunc);
-  T.Run('parse error', @TestJsonParseError);
-  T.Run('parse error position', @TestJsonParseErrorPosition);
-  T.Run('parse unexpected end of input position',
+  T := TTestSuite.Create('nextpas.core.json (facade)');
+  T.Test('parse interface', @TestJsonParseInterface);
+  T.Test('auto release', @TestJsonParseAutoRelease);
+  T.Test('stringify', @TestJsonStringify);
+  T.Test('stringify func', @TestJsonStringifyFunc);
+  T.Test('parse error', @TestJsonParseError);
+  T.Test('parse error position', @TestJsonParseErrorPosition);
+  T.Test('parse unexpected end of input position',
     @TestJsonParseUnexpectedEndOfInputPosition);
-  T.Run('diagnostic document stringify fails closed',
+  T.Test('diagnostic document stringify fails closed',
     @TestJsonDiagnosticDocumentStringifyFailsClosed);
-  T.Run('TryJsonParse success', @TestTryJsonParseSuccess);
-  T.Run('TryJsonParse failure returns diagnostic doc', @TestTryJsonParseFailureReturnsDiagnosticDoc);
-  T.Run('parse nested', @TestJsonParseNested);
-  T.Run('pretty print', @TestPrettyPrint);
-  T.Run('parse with allocator', @TestJsonParseWithAllocator);
-  T.Run('stringify round-trip', @TestStringifyRoundTrip);
-  T.Run('edge case numbers', @TestEdgeCaseNumbers);
-  T.Run('escaped backslash combos', @TestEscapedBackslashCombos);
-  T.Run('duplicate keys small object lookup and iteration',
+  T.Test('TryJsonParse success', @TestTryJsonParseSuccess);
+  T.Test('TryJsonParse failure returns diagnostic doc', @TestTryJsonParseFailureReturnsDiagnosticDoc);
+  T.Test('parse nested', @TestJsonParseNested);
+  T.Test('pretty print', @TestPrettyPrint);
+  T.Test('parse with allocator', @TestJsonParseWithAllocator);
+  T.Test('stringify round-trip', @TestStringifyRoundTrip);
+  T.Test('edge case numbers', @TestEdgeCaseNumbers);
+  T.Test('escaped backslash combos', @TestEscapedBackslashCombos);
+  T.Test('duplicate keys small object lookup and iteration',
     @TestDuplicateKeyLookupAndIterationSmallObject);
-  T.Run('duplicate keys large object lookup and iteration',
+  T.Test('duplicate keys large object lookup and iteration',
     @TestDuplicateKeyLookupAndIterationLargeObject);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

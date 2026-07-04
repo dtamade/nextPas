@@ -8,12 +8,12 @@ program test_xml_reader;
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.xml.base,
   nextpas.core.xml.reader;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Helper === }
 
@@ -1058,73 +1058,73 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('XML Reader');
-  T.Run('SimpleElement', @TestSimpleElement);
-  T.Run('NestedElements', @TestNestedElements);
-  T.Run('TokenPositions', @TestTokenPositions);
-  T.Run('TokenPositions.CROnlyLineEnding',
+  T := TTestSuite.Create('XML Reader');
+  T.Test('SimpleElement', @TestSimpleElement);
+  T.Test('NestedElements', @TestNestedElements);
+  T.Test('TokenPositions', @TestTokenPositions);
+  T.Test('TokenPositions.CROnlyLineEnding',
     @TestTokenPositionsCROnlyLineEnding);
-  T.Run('TokenPositions.CRLFLineEndingCountsOnce',
+  T.Test('TokenPositions.CRLFLineEndingCountsOnce',
     @TestTokenPositionsCRLFLineEndingCountsOnce);
-  T.Run('SelfClosing', @TestSelfClosing);
-  T.Run('SelfClosingWithSpace', @TestSelfClosingWithSpace);
-  T.Run('AttributeDouble', @TestAttributeDouble);
-  T.Run('AttributeSingle', @TestAttributeSingle);
-  T.Run('MultipleAttributes', @TestMultipleAttributes);
-  T.Run('DuplicateAttributesAreRejected', @TestDuplicateAttributesAreRejected);
-  T.Run('AttributeEntityValue', @TestAttributeEntityValue);
-  T.Run('AttributeRawLessThanIsRejected',
+  T.Test('SelfClosing', @TestSelfClosing);
+  T.Test('SelfClosingWithSpace', @TestSelfClosingWithSpace);
+  T.Test('AttributeDouble', @TestAttributeDouble);
+  T.Test('AttributeSingle', @TestAttributeSingle);
+  T.Test('MultipleAttributes', @TestMultipleAttributes);
+  T.Test('DuplicateAttributesAreRejected', @TestDuplicateAttributesAreRejected);
+  T.Test('AttributeEntityValue', @TestAttributeEntityValue);
+  T.Test('AttributeRawLessThanIsRejected',
     @TestAttributeRawLessThanIsRejected);
-  T.Run('NamespaceDecl', @TestNamespaceDecl);
-  T.Run('DefaultNamespace', @TestDefaultNamespace);
-  T.Run('NamespaceDeclAllowsXmlPrefixBinding',
+  T.Test('NamespaceDecl', @TestNamespaceDecl);
+  T.Test('DefaultNamespace', @TestDefaultNamespace);
+  T.Test('NamespaceDeclAllowsXmlPrefixBinding',
     @TestNamespaceDeclAllowsXmlPrefixBinding);
-  T.Run('NamespaceDeclRejectsInvalidReservedBindings',
+  T.Test('NamespaceDeclRejectsInvalidReservedBindings',
     @TestNamespaceDeclRejectsInvalidReservedBindings);
-  T.Run('UnboundNamespacePrefixesAreRejected',
+  T.Test('UnboundNamespacePrefixesAreRejected',
     @TestUnboundNamespacePrefixesAreRejected);
-  T.Run('NamespaceAttributeDeclarationsAreVisibleBeforeUse',
+  T.Test('NamespaceAttributeDeclarationsAreVisibleBeforeUse',
     @TestNamespaceAttributeDeclarationsAreVisibleBeforeUse);
-  T.Run('DuplicateExpandedAttributeNamesAreRejected',
+  T.Test('DuplicateExpandedAttributeNamesAreRejected',
     @TestDuplicateExpandedAttributeNamesAreRejected);
-  T.Run('ExpandedAttributeNamesAllowDistinctNamespaces',
+  T.Test('ExpandedAttributeNamesAllowDistinctNamespaces',
     @TestExpandedAttributeNamesAllowDistinctNamespaces);
-  T.Run('InvalidQNamesAreRejected', @TestInvalidQNamesAreRejected);
-  T.Run('InvalidPITargetsAreRejected', @TestInvalidPITargetsAreRejected);
-  T.Run('TextEntityDecode', @TestTextEntityDecode);
-  T.Run('NumericEntity', @TestNumericEntity);
-  T.Run('CData', @TestCData);
-  T.Run('Comment', @TestComment);
-  T.Run('CommentRejectsInvalidPayload', @TestCommentRejectsInvalidPayload);
-  T.Run('PI', @TestPI);
-  T.Run('XmlDecl', @TestXmlDecl);
-  T.Run('XmlDeclAttributeContract', @TestXmlDeclAttributeContract);
-  T.Run('XmlDeclMustBeFirstToken', @TestXmlDeclMustBeFirstToken);
-  T.Run('Doctype', @TestDoctype);
-  T.Run('MismatchedTag', @TestMismatchedTag);
-  T.Run('UnexpectedEndTag', @TestUnexpectedEndTag);
-  T.Run('PositionTracking', @TestPositionTracking);
-  T.Run('Depth', @TestDepth);
-  T.Run('MixedContent', @TestMixedContent);
-  T.Run('LargeInput', @TestLargeInput);
-  T.Run('EmptyDocument', @TestEmptyDocument);
-  T.Run('OnlyDecl', @TestOnlyDecl);
-  T.Run('BOM', @TestBOM);
-  T.Run('XmlDecodeEntitiesUnit', @TestXmlDecodeEntitiesUnit);
-  T.Run('XmlEncodeTextUnit', @TestXmlEncodeTextUnit);
-  T.Run('XmlEncodeAttrUnit', @TestXmlEncodeAttrUnit);
-  T.Run('RoundTrip', @TestRoundTrip);
-  T.Run('NameFull', @TestNameFull);
-  T.Run('WhitespaceText', @TestWhitespaceText);
-  T.Run('EmptyElement', @TestEmptyElement);
-  T.Run('MultipleRoots', @TestMultipleRoots);
-  T.Run('DeeplyNested', @TestDeeplyNested);
-  T.Run('CommentInElement', @TestCommentInElement);
-  T.Run('CDataInElement', @TestCDataInElement);
-  T.Run('PrefixedElement', @TestPrefixedElement);
-  T.Run('DoctypeWithInternalSubset', @TestDoctypeWithInternalSubset);
-  T.Run('EntityApos', @TestEntityApos);
-  T.Run('MultiLineElement', @TestMultiLineElement);
-  T.Run('EmptyAttrValue', @TestEmptyAttrValue);
-  T.Summary;
+  T.Test('InvalidQNamesAreRejected', @TestInvalidQNamesAreRejected);
+  T.Test('InvalidPITargetsAreRejected', @TestInvalidPITargetsAreRejected);
+  T.Test('TextEntityDecode', @TestTextEntityDecode);
+  T.Test('NumericEntity', @TestNumericEntity);
+  T.Test('CData', @TestCData);
+  T.Test('Comment', @TestComment);
+  T.Test('CommentRejectsInvalidPayload', @TestCommentRejectsInvalidPayload);
+  T.Test('PI', @TestPI);
+  T.Test('XmlDecl', @TestXmlDecl);
+  T.Test('XmlDeclAttributeContract', @TestXmlDeclAttributeContract);
+  T.Test('XmlDeclMustBeFirstToken', @TestXmlDeclMustBeFirstToken);
+  T.Test('Doctype', @TestDoctype);
+  T.Test('MismatchedTag', @TestMismatchedTag);
+  T.Test('UnexpectedEndTag', @TestUnexpectedEndTag);
+  T.Test('PositionTracking', @TestPositionTracking);
+  T.Test('Depth', @TestDepth);
+  T.Test('MixedContent', @TestMixedContent);
+  T.Test('LargeInput', @TestLargeInput);
+  T.Test('EmptyDocument', @TestEmptyDocument);
+  T.Test('OnlyDecl', @TestOnlyDecl);
+  T.Test('BOM', @TestBOM);
+  T.Test('XmlDecodeEntitiesUnit', @TestXmlDecodeEntitiesUnit);
+  T.Test('XmlEncodeTextUnit', @TestXmlEncodeTextUnit);
+  T.Test('XmlEncodeAttrUnit', @TestXmlEncodeAttrUnit);
+  T.Test('RoundTrip', @TestRoundTrip);
+  T.Test('NameFull', @TestNameFull);
+  T.Test('WhitespaceText', @TestWhitespaceText);
+  T.Test('EmptyElement', @TestEmptyElement);
+  T.Test('MultipleRoots', @TestMultipleRoots);
+  T.Test('DeeplyNested', @TestDeeplyNested);
+  T.Test('CommentInElement', @TestCommentInElement);
+  T.Test('CDataInElement', @TestCDataInElement);
+  T.Test('PrefixedElement', @TestPrefixedElement);
+  T.Test('DoctypeWithInternalSubset', @TestDoctypeWithInternalSubset);
+  T.Test('EntityApos', @TestEntityApos);
+  T.Test('MultiLineElement', @TestMultiLineElement);
+  T.Test('EmptyAttrValue', @TestEmptyAttrValue);
+  if not T.Run then Halt(1);
 end.

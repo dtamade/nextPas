@@ -5,7 +5,7 @@ program test_net_deep;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.time.base,
@@ -20,7 +20,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
 {$IFDEF NEXTPAS_LINUX}
@@ -642,23 +642,23 @@ end;
 { --- Main --- }
 
 begin
-  T := TTestRunner.Create('nextpas.core.net [deep]');
-  T.Run('TCP connect+send+recv', @TestTcpConnectSendRecv);
-  T.Run('TCP listen+accept', @TestTcpListenAccept);
-  T.Run('Address parsing', @TestAddressParsing);
-  T.Run('Socket options', @TestSocketOptions);
-  T.Run('Connection refused', @TestConnectionRefused);
-  T.Run('Read timeout', @TestReadTimeout);
-  T.Run('Multiple connections', @TestMultipleConnections);
-  T.Run('Close/shutdown', @TestCloseShutdown);
-  T.Run('Empty send/recv', @TestEmptySendRecv);
-  T.Run('Large transfer 64KB', @TestLargeTransfer);
-  T.Run('UDP loopback', @TestUdpLoopback);
-  T.Run('UDP multiple datagrams', @TestUdpMultipleDatagrams);
-  T.Run('Resolve invalid', @TestResolveInvalid);
-  T.Run('LocalAddr/RemoteAddr', @TestLocalRemoteAddr);
-  T.Run('Write deadline', @TestWriteDeadline);
-  T.Run('Write deadline during stalled peer backpressure',
+  T := TTestSuite.Create('nextpas.core.net [deep]');
+  T.Test('TCP connect+send+recv', @TestTcpConnectSendRecv);
+  T.Test('TCP listen+accept', @TestTcpListenAccept);
+  T.Test('Address parsing', @TestAddressParsing);
+  T.Test('Socket options', @TestSocketOptions);
+  T.Test('Connection refused', @TestConnectionRefused);
+  T.Test('Read timeout', @TestReadTimeout);
+  T.Test('Multiple connections', @TestMultipleConnections);
+  T.Test('Close/shutdown', @TestCloseShutdown);
+  T.Test('Empty send/recv', @TestEmptySendRecv);
+  T.Test('Large transfer 64KB', @TestLargeTransfer);
+  T.Test('UDP loopback', @TestUdpLoopback);
+  T.Test('UDP multiple datagrams', @TestUdpMultipleDatagrams);
+  T.Test('Resolve invalid', @TestResolveInvalid);
+  T.Test('LocalAddr/RemoteAddr', @TestLocalRemoteAddr);
+  T.Test('Write deadline', @TestWriteDeadline);
+  T.Test('Write deadline during stalled peer backpressure',
     @TestWriteDeadlineDuringStalledPeerBackpressure);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

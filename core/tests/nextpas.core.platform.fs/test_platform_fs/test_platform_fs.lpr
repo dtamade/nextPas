@@ -8,10 +8,10 @@ uses
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure AssignPlatformHandle(var AHandle: TPlatformFileHandle; const AFd: Int32);
 begin
@@ -320,19 +320,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.fs');
-  T.Run('exists file', @TestExistsFile);
-  T.Run('exists non-existent', @TestExistsNot);
-  T.Run('is_file', @TestIsFile);
-  T.Run('is_dir', @TestIsDir);
-  T.Run('file_size', @TestFileSize);
-  T.Run('temp_dir', @TestTempDir);
-  T.Run('mktemp', @TestMktemp);
-  T.Run('mktemp unique', @TestMktempUnique);
-  T.Run('mkdir_p', @TestMkdirP);
-  T.Run('copy_file', @TestCopyFile);
-  T.Run('write_atomic', @TestWriteAtomic);
-  T.Run('read_file_into', @TestReadFileInto);
-  T.Run('file I/O contract', @TestFileIoContract);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.fs');
+  T.Test('exists file', @TestExistsFile);
+  T.Test('exists non-existent', @TestExistsNot);
+  T.Test('is_file', @TestIsFile);
+  T.Test('is_dir', @TestIsDir);
+  T.Test('file_size', @TestFileSize);
+  T.Test('temp_dir', @TestTempDir);
+  T.Test('mktemp', @TestMktemp);
+  T.Test('mktemp unique', @TestMktempUnique);
+  T.Test('mkdir_p', @TestMkdirP);
+  T.Test('copy_file', @TestCopyFile);
+  T.Test('write_atomic', @TestWriteAtomic);
+  T.Test('read_file_into', @TestReadFileInto);
+  T.Test('file I/O contract', @TestFileIoContract);
+  if not T.Run then Halt(1);
 end.

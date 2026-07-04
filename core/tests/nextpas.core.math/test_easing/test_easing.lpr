@@ -4,7 +4,7 @@ program test_easing;
 
 uses
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.easing;
 
 type
@@ -28,7 +28,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure CheckNearEpsilon(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
@@ -247,11 +247,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.easing');
-  T.Run('polynomial and expo easing', @TestPolynomialAndExpoEasing);
-  T.Run('elastic back and bounce easing', @TestElasticBackAndBounceEasing);
-  T.Run('EaseOutBounce piecewise branches', @TestEaseOutBouncePiecewiseBranches);
-  T.Run('finite out-of-range inputs extrapolate', @TestFiniteOutOfRangeInputsExtrapolate);
-  T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.math.easing');
+  T.Test('polynomial and expo easing', @TestPolynomialAndExpoEasing);
+  T.Test('elastic back and bounce easing', @TestElasticBackAndBounceEasing);
+  T.Test('EaseOutBounce piecewise branches', @TestEaseOutBouncePiecewiseBranches);
+  T.Test('finite out-of-range inputs extrapolate', @TestFiniteOutOfRangeInputsExtrapolate);
+  T.Test('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
+  if not T.Run then Halt(1);
 end.

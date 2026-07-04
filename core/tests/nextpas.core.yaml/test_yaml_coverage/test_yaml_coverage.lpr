@@ -5,7 +5,7 @@ program test_yaml_coverage;
 uses
   SysUtils,
   Classes,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
@@ -15,7 +15,7 @@ uses
   nextpas.core.yaml;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   YAML_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.yaml.parser.pas';
@@ -673,26 +673,26 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.yaml.coverage');
-  T.Run('PutFloat', @TestPutFloat);
-  T.Run('PutStrView', @TestPutStrView);
-  T.Run('Parse TStringView', @TestParseStringView);
-  T.Run('Parser allocator surface', @TestParserAllocatorSurface);
-  T.Run('Parser source tracks private surface and OOM guards',
+  T := TTestSuite.Create('nextpas.core.yaml.coverage');
+  T.Test('PutFloat', @TestPutFloat);
+  T.Test('PutStrView', @TestPutStrView);
+  T.Test('Parse TStringView', @TestParseStringView);
+  T.Test('Parser allocator surface', @TestParserAllocatorSurface);
+  T.Test('Parser source tracks private surface and OOM guards',
     @TestParserSourceTracksPrivateSurfaceAndOOMGuards);
-  T.Run('Parser node growth OOM fails closed',
+  T.Test('Parser node growth OOM fails closed',
     @TestParserNodeGrowthOOMFailsClosed);
-  T.Run('Parser anchor growth OOM fails closed',
+  T.Test('Parser anchor growth OOM fails closed',
     @TestParserAnchorGrowthOOMFailsClosed);
-  T.Run('Parser init allocate OOM fails closed',
+  T.Test('Parser init allocate OOM fails closed',
     @TestParserInitAllocateOOMFailsClosed);
-  T.Run('Parser reparse releases prior document',
+  T.Test('Parser reparse releases prior document',
     @TestParserReparseReleasesPriorDocument);
-  T.Run('K8s pod spec', @TestK8sPodSpec);
-  T.Run('Docker compose', @TestDockerCompose);
-  T.Run('GitHub Actions', @TestGitHubActions);
-  T.Run('Config file', @TestConfigFile);
-  T.Run('Multiline values', @TestMultilineValues);
-  T.Run('Complex nesting', @TestComplexNesting);
-  T.Summary;
+  T.Test('K8s pod spec', @TestK8sPodSpec);
+  T.Test('Docker compose', @TestDockerCompose);
+  T.Test('GitHub Actions', @TestGitHubActions);
+  T.Test('Config file', @TestConfigFile);
+  T.Test('Multiline values', @TestMultilineValues);
+  T.Test('Complex nesting', @TestComplexNesting);
+  if not T.Run then Halt(1);
 end.

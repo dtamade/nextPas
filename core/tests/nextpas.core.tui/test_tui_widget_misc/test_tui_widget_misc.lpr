@@ -10,8 +10,8 @@ uses
   nextpas.core.tui.widget.clear,
   nextpas.core.tui.widget.tabs,
   nextpas.core.tui.widget.scrollbar,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === TClearWidget === }
 procedure TestClearWidget;
@@ -125,16 +125,15 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.misc');
-  T.Run('clear widget', @TestClearWidget);
-  T.Run('tabs render', @TestTabsRender);
-  T.Run('tabs as IWidget', @TestTabsAsIWidget);
-  T.Run('scrollbar thumb', @TestScrollbarThumb);
-  T.Run('scrollbar render', @TestScrollbarRender);
-  T.Run('scrollbar hit test', @TestScrollbarHitTest);
-  T.Run('scrollbar clamps offset for thumb render and hit',
+  T := TTestSuite.Create('nextpas.core.tui.widget.misc');
+  T.Test('clear widget', @TestClearWidget);
+  T.Test('tabs render', @TestTabsRender);
+  T.Test('tabs as IWidget', @TestTabsAsIWidget);
+  T.Test('scrollbar thumb', @TestScrollbarThumb);
+  T.Test('scrollbar render', @TestScrollbarRender);
+  T.Test('scrollbar hit test', @TestScrollbarHitTest);
+  T.Test('scrollbar clamps offset for thumb render and hit',
     @TestScrollbarClampsOffsetForThumbRenderAndHit);
-  T.Run('scrollbar page up/down', @TestScrollbarPageUpDown);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T.Test('scrollbar page up/down', @TestScrollbarPageUpDown);
+  if not T.Run then Halt(1);
 end.

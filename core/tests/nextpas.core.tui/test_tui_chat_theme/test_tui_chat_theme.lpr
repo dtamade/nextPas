@@ -6,9 +6,9 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.widget.chat_theme,
-  nextpas.core.testing;
+  nextpas.core.test;
 
-var T: TTestRunner;
+var T: TTestSuite;
 
 { === ThemeDefaultDark === }
 
@@ -191,35 +191,35 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('test_tui_chat_theme');
+  T := TTestSuite.Create('test_tui_chat_theme');
   try
     { Factory }
-    T.Run('default dark factory', @TestDefaultDarkFactory);
-    T.Run('default dark bg colors', @TestDefaultDarkBgColors);
-    T.Run('default dark fg colors', @TestDefaultDarkFgColors);
-    T.Run('default dark accents', @TestDefaultDarkAccents);
-    T.Run('default dark status', @TestDefaultDarkStatus);
-    T.Run('default dark borders', @TestDefaultDarkBorders);
+    T.Test('default dark factory', @TestDefaultDarkFactory);
+    T.Test('default dark bg colors', @TestDefaultDarkBgColors);
+    T.Test('default dark fg colors', @TestDefaultDarkFgColors);
+    T.Test('default dark accents', @TestDefaultDarkAccents);
+    T.Test('default dark status', @TestDefaultDarkStatus);
+    T.Test('default dark borders', @TestDefaultDarkBorders);
 
     { Style builders }
-    T.Run('PrimaryText', @TestPrimaryText);
-    T.Run('SecondaryText', @TestSecondaryText);
-    T.Run('MutedText', @TestMutedText);
-    T.Run('UserLabel', @TestUserLabel);
-    T.Run('AiLabel', @TestAiLabel);
-    T.Run('ToolLabel', @TestToolLabel);
-    T.Run('SystemLabel', @TestSystemLabel);
-    T.Run('InfoLabel', @TestInfoLabel);
-    T.Run('InputBorderFocused', @TestInputBorderFocused);
-    T.Run('InputBorderBlurred', @TestInputBorderBlurred);
-    T.Run('StatusBarStyle', @TestStatusBarStyle);
+    T.Test('PrimaryText', @TestPrimaryText);
+    T.Test('SecondaryText', @TestSecondaryText);
+    T.Test('MutedText', @TestMutedText);
+    T.Test('UserLabel', @TestUserLabel);
+    T.Test('AiLabel', @TestAiLabel);
+    T.Test('ToolLabel', @TestToolLabel);
+    T.Test('SystemLabel', @TestSystemLabel);
+    T.Test('InfoLabel', @TestInfoLabel);
+    T.Test('InputBorderFocused', @TestInputBorderFocused);
+    T.Test('InputBorderBlurred', @TestInputBorderBlurred);
+    T.Test('StatusBarStyle', @TestStatusBarStyle);
 
     { Distinct checks }
-    T.Run('user/ai/tool accents distinct', @TestUserAiToolDistinct);
-    T.Run('status colors distinct', @TestStatusColorsDistinct);
+    T.Test('user/ai/tool accents distinct', @TestUserAiToolDistinct);
+    T.Test('status colors distinct', @TestStatusColorsDistinct);
 
     WriteLn;
-    T.Summary;
+  if not T.Run then Halt(1);
   finally
   end;
 end.

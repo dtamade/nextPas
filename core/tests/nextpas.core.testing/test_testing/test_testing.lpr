@@ -4,10 +4,10 @@ program test_testing;
 
 uses
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCheckPass;
 begin
@@ -49,11 +49,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.testing');
-  T.Run('Check pass', @TestCheckPass);
-  T.Run('CheckEqual string', @TestCheckEqualStr);
-  T.Run('CheckEqual int', @TestCheckEqualInt);
-  T.Run('CheckEqual bool', @TestCheckEqualBool);
-  T.Run('Fail is caught', @TestFailCaught);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.test');
+  T.Test('Check pass', @TestCheckPass);
+  T.Test('CheckEqual string', @TestCheckEqualStr);
+  T.Test('CheckEqual int', @TestCheckEqualInt);
+  T.Test('CheckEqual bool', @TestCheckEqualBool);
+  T.Test('Fail is caught', @TestFailCaught);
+  if not T.Run then Halt(1);
 end.

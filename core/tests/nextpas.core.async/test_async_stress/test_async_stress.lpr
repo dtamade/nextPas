@@ -5,7 +5,7 @@ program test_async_stress;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.time.cpu,
@@ -18,7 +18,7 @@ uses
   nextpas.core.io.poller;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 { === Shared state === }
 
@@ -385,17 +385,17 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.async.stress');
+  T := TTestSuite.Create('nextpas.core.async.stress');
 
-  T.Run('PostFromSameThread', @TestPostFromSameThread);
-  T.Run('PostFromOtherThread', @TestPostFromOtherThread);
-  T.Run('Wake', @TestWake);
-  T.Run('ManyTimers', @TestManyTimers);
-  T.Run('RapidScheduleCancel', @TestRapidScheduleCancel);
-  T.Run('CancelTimerAfterCloseIsStaleNoOp', @TestCancelTimerAfterCloseIsStaleNoOp);
-  T.Run('PostStress', @TestPostStress);
-  T.Run('TimerPlusIO', @TestTimerPlusIO);
-  T.Run('StopFromPost', @TestStopFromPost);
+  T.Test('PostFromSameThread', @TestPostFromSameThread);
+  T.Test('PostFromOtherThread', @TestPostFromOtherThread);
+  T.Test('Wake', @TestWake);
+  T.Test('ManyTimers', @TestManyTimers);
+  T.Test('RapidScheduleCancel', @TestRapidScheduleCancel);
+  T.Test('CancelTimerAfterCloseIsStaleNoOp', @TestCancelTimerAfterCloseIsStaleNoOp);
+  T.Test('PostStress', @TestPostStress);
+  T.Test('TimerPlusIO', @TestTimerPlusIO);
+  T.Test('StopFromPost', @TestStopFromPost);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

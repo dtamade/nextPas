@@ -5,7 +5,7 @@ program test_lockfree_stress;
 uses
   nextpas.core.thread.init,
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
@@ -27,7 +27,7 @@ type
   TIntSpmc = specialize TSpmcQueue<Integer>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -1614,20 +1614,20 @@ end;
 { ============================================================ }
 
 begin
-  T := TTestRunner.Create('nextpas.core.lockfree.stress');
-  T.Run('MPMC 8P+8C saturation (cap=16, 80K msgs)', @TestMpmcSaturation);
-  T.Run('MPMC single-slot 2P+2C exactly-once', @TestMpmcSingleSlotContention);
-  T.Run('Stack ABA stress (4T, cap=4, 100K cycles)', @TestStackABA);
-  T.Run('MPSC close race (4P + random close)', @TestMpscCloseRace);
-  T.Run('MPSC live consumer reclamation stress', @TestMpscLiveConsumerReclamation);
-  T.Run('Deque extreme steal (1 owner + 7 thieves, 200K)', @TestDequeExtremeSteal);
-  T.Run('SPSC full + close race', @TestSpscFullClose);
-  T.Run('MPMC rapid create/close cycles (50 rounds)', @TestMpmcRapidCycles);
-  T.Run('MPMC close races active producers', @TestMpmcCloseRacesActiveProducers);
-  T.Run('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
-  T.Run('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
-  T.Run('SPMC 1P+4C contention', @TestSpmcContention);
+  T := TTestSuite.Create('nextpas.core.lockfree.stress');
+  T.Test('MPMC 8P+8C saturation (cap=16, 80K msgs)', @TestMpmcSaturation);
+  T.Test('MPMC single-slot 2P+2C exactly-once', @TestMpmcSingleSlotContention);
+  T.Test('Stack ABA stress (4T, cap=4, 100K cycles)', @TestStackABA);
+  T.Test('MPSC close race (4P + random close)', @TestMpscCloseRace);
+  T.Test('MPSC live consumer reclamation stress', @TestMpscLiveConsumerReclamation);
+  T.Test('Deque extreme steal (1 owner + 7 thieves, 200K)', @TestDequeExtremeSteal);
+  T.Test('SPSC full + close race', @TestSpscFullClose);
+  T.Test('MPMC rapid create/close cycles (50 rounds)', @TestMpmcRapidCycles);
+  T.Test('MPMC close races active producers', @TestMpmcCloseRacesActiveProducers);
+  T.Test('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
+  T.Test('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
+  T.Test('SPMC 1P+4C contention', @TestSpmcContention);
 
-  T.Run('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
-  T.Summary;
+  T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
+  if not T.Run then Halt(1);
 end.

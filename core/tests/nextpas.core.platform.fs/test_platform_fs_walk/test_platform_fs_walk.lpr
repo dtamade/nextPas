@@ -7,10 +7,10 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   BASE = '/tmp/nextpas_walk_test';
@@ -387,20 +387,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.fs.walk');
-  T.Run('walk counts all', @TestWalkCountsAll);
-  T.Run('walk stop', @TestWalkStop);
-  T.Run('walk skip subtree', @TestWalkSkipSubtree);
-  T.Run('walk bad args', @TestWalkBadArgs);
-  T.Run('walk root is first', @TestWalkRootIsFirst);
-  T.Run('walk non-existent root', @TestWalkNonExistentRoot);
-  T.Run('walk user data', @TestWalkUserData);
-  T.Run('walk single file', @TestWalkSingleFile);
-  T.Run('walk empty dir', @TestWalkEmptyDir);
-  T.Run('walk symlink no-follow', @TestWalkSymlinkNoFollow);
-  T.Run('walk symlink follow', @TestWalkSymlinkFollow);
-  T.Run('walk dangling symlink', @TestWalkDanglingSymlink);
-  T.Run('walk dangling symlink follow reports error', @TestWalkDanglingSymlinkFollowReportsError);
-  T.Run('walk cycle protection', @TestWalkCycleProtection);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.platform.fs.walk');
+  T.Test('walk counts all', @TestWalkCountsAll);
+  T.Test('walk stop', @TestWalkStop);
+  T.Test('walk skip subtree', @TestWalkSkipSubtree);
+  T.Test('walk bad args', @TestWalkBadArgs);
+  T.Test('walk root is first', @TestWalkRootIsFirst);
+  T.Test('walk non-existent root', @TestWalkNonExistentRoot);
+  T.Test('walk user data', @TestWalkUserData);
+  T.Test('walk single file', @TestWalkSingleFile);
+  T.Test('walk empty dir', @TestWalkEmptyDir);
+  T.Test('walk symlink no-follow', @TestWalkSymlinkNoFollow);
+  T.Test('walk symlink follow', @TestWalkSymlinkFollow);
+  T.Test('walk dangling symlink', @TestWalkDanglingSymlink);
+  T.Test('walk dangling symlink follow reports error', @TestWalkDanglingSymlinkFollowReportsError);
+  T.Test('walk cycle protection', @TestWalkCycleProtection);
+  if not T.Run then Halt(1);
 end.

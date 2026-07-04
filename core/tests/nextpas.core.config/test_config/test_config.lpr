@@ -10,10 +10,10 @@ uses
   nextpas.core.time,
   nextpas.core.config,
   nextpas.core.config.watcher,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 type
   TConfigReloadProbe = class
@@ -2503,105 +2503,105 @@ end;
 { === Main === }
 
 begin
-  T := TTestRunner.Create('nextpas.core.config');
-  T.Run('GetString.Basic', @TestGetStringBasic);
-  T.Run('GetString.Default', @TestGetStringDefault);
-  T.Run('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
-  T.Run('GetRawString.PreservesPlaceholders', @TestGetRawStringPreservesPlaceholders);
-  T.Run('GetRawString.CaseInsensitive', @TestGetRawStringCaseInsensitive);
-  T.Run('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
-  T.Run('Interpolation.ExactPlaceholderChain', @TestInterpolationExactPlaceholderChain);
-  T.Run('Interpolation.CacheInvalidatesOnConfigWrite', @TestInterpolationCacheInvalidatesOnConfigWrite);
-  T.Run('Interpolation.EnvFallbackIsNotCached', @TestInterpolationEnvFallbackIsNotCached);
-  T.Run('Interpolation.ReplaceFromInvalidatesCache', @TestInterpolationReplaceFromInvalidatesCache);
-  T.Run('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
-  T.Run('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
-  T.Run('Interpolation.ConfigWinsOverEnv', @TestInterpolationConfigWinsOverEnv);
-  T.Run('Interpolation.EscapeAndUnresolved', @TestInterpolationEscapeAndUnresolved);
-  T.Run('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
-  T.Run('Interpolation.StringArray', @TestInterpolationStringArray);
-  T.Run('GetRawStringArray.PreservesPlaceholders', @TestGetRawStringArrayPreservesPlaceholders);
-  T.Run('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
-  T.Run('Required.StringAndRequire', @TestRequiredStringAndRequire);
-  T.Run('Required.MissingRaises', @TestRequiredMissingRaises);
-  T.Run('Required.EmptyRaises', @TestRequiredEmptyRaises);
-  T.Run('Required.TypedValues', @TestRequiredTypedValues);
-  T.Run('Required.TypedWhitespaceAndSign', @TestRequiredTypedWhitespaceAndSign);
-  T.Run('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
-  T.Run('Required.BoolWhitespaceAndCase', @TestRequiredBoolWhitespaceAndCase);
-  T.Run('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
-  T.Run('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
-  T.Run('ReadSurface.RejectsEmptyKeys', @TestReadSurfaceRejectsEmptyKeys);
-  T.Run('GetInt.Basic', @TestGetIntBasic);
-  T.Run('GetInt.Default', @TestGetIntDefault);
-  T.Run('GetInt.Invalid', @TestGetIntInvalid);
-  T.Run('GetInt.WhitespaceAndSign', @TestGetIntWhitespaceAndSign);
-  T.Run('GetBool.Basic', @TestGetBoolBasic);
-  T.Run('GetBool.Default', @TestGetBoolDefault);
-  T.Run('GetBool.WhitespaceAndCase', @TestGetBoolWhitespaceAndCase);
-  T.Run('GetBool.ShortTokenWhitespaceAndCase', @TestGetBoolShortTokenWhitespaceAndCase);
-  T.Run('GetBool.Invalid', @TestGetBoolInvalid);
-  T.Run('GetFloat.Basic', @TestGetFloatBasic);
-  T.Run('GetFloat.Default', @TestGetFloatDefault);
-  T.Run('GetFloat.Invalid', @TestGetFloatInvalid);
-  T.Run('GetFloat.WhitespaceAndSign', @TestGetFloatWhitespaceAndSign);
-  T.Run('SetDefault', @TestSetDefault);
-  T.Run('LoadFromIni.Sections', @TestLoadFromIniSections);
-  T.Run('LoadFromIni.GlobalKeys', @TestLoadFromIniGlobalKeys);
-  T.Run('LoadFromJson.Basic', @TestLoadFromJsonBasic);
-  T.Run('LoadFromJson.Types', @TestLoadFromJsonTypes);
-  T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
-  T.Run('TryLoadFromIni.InvalidReportsPosition', @TestTryLoadFromIniInvalidReportsPosition);
-  T.Run('TryLoadFromIni.FlattenedKeyCollision',
+  T := TTestSuite.Create('nextpas.core.config');
+  T.Test('GetString.Basic', @TestGetStringBasic);
+  T.Test('GetString.Default', @TestGetStringDefault);
+  T.Test('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
+  T.Test('GetRawString.PreservesPlaceholders', @TestGetRawStringPreservesPlaceholders);
+  T.Test('GetRawString.CaseInsensitive', @TestGetRawStringCaseInsensitive);
+  T.Test('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
+  T.Test('Interpolation.ExactPlaceholderChain', @TestInterpolationExactPlaceholderChain);
+  T.Test('Interpolation.CacheInvalidatesOnConfigWrite', @TestInterpolationCacheInvalidatesOnConfigWrite);
+  T.Test('Interpolation.EnvFallbackIsNotCached', @TestInterpolationEnvFallbackIsNotCached);
+  T.Test('Interpolation.ReplaceFromInvalidatesCache', @TestInterpolationReplaceFromInvalidatesCache);
+  T.Test('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
+  T.Test('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
+  T.Test('Interpolation.ConfigWinsOverEnv', @TestInterpolationConfigWinsOverEnv);
+  T.Test('Interpolation.EscapeAndUnresolved', @TestInterpolationEscapeAndUnresolved);
+  T.Test('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
+  T.Test('Interpolation.StringArray', @TestInterpolationStringArray);
+  T.Test('GetRawStringArray.PreservesPlaceholders', @TestGetRawStringArrayPreservesPlaceholders);
+  T.Test('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
+  T.Test('Required.StringAndRequire', @TestRequiredStringAndRequire);
+  T.Test('Required.MissingRaises', @TestRequiredMissingRaises);
+  T.Test('Required.EmptyRaises', @TestRequiredEmptyRaises);
+  T.Test('Required.TypedValues', @TestRequiredTypedValues);
+  T.Test('Required.TypedWhitespaceAndSign', @TestRequiredTypedWhitespaceAndSign);
+  T.Test('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
+  T.Test('Required.BoolWhitespaceAndCase', @TestRequiredBoolWhitespaceAndCase);
+  T.Test('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
+  T.Test('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
+  T.Test('ReadSurface.RejectsEmptyKeys', @TestReadSurfaceRejectsEmptyKeys);
+  T.Test('GetInt.Basic', @TestGetIntBasic);
+  T.Test('GetInt.Default', @TestGetIntDefault);
+  T.Test('GetInt.Invalid', @TestGetIntInvalid);
+  T.Test('GetInt.WhitespaceAndSign', @TestGetIntWhitespaceAndSign);
+  T.Test('GetBool.Basic', @TestGetBoolBasic);
+  T.Test('GetBool.Default', @TestGetBoolDefault);
+  T.Test('GetBool.WhitespaceAndCase', @TestGetBoolWhitespaceAndCase);
+  T.Test('GetBool.ShortTokenWhitespaceAndCase', @TestGetBoolShortTokenWhitespaceAndCase);
+  T.Test('GetBool.Invalid', @TestGetBoolInvalid);
+  T.Test('GetFloat.Basic', @TestGetFloatBasic);
+  T.Test('GetFloat.Default', @TestGetFloatDefault);
+  T.Test('GetFloat.Invalid', @TestGetFloatInvalid);
+  T.Test('GetFloat.WhitespaceAndSign', @TestGetFloatWhitespaceAndSign);
+  T.Test('SetDefault', @TestSetDefault);
+  T.Test('LoadFromIni.Sections', @TestLoadFromIniSections);
+  T.Test('LoadFromIni.GlobalKeys', @TestLoadFromIniGlobalKeys);
+  T.Test('LoadFromJson.Basic', @TestLoadFromJsonBasic);
+  T.Test('LoadFromJson.Types', @TestLoadFromJsonTypes);
+  T.Test('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
+  T.Test('TryLoadFromIni.InvalidReportsPosition', @TestTryLoadFromIniInvalidReportsPosition);
+  T.Test('TryLoadFromIni.FlattenedKeyCollision',
     @TestTryLoadFromIniRejectsFlattenedKeyCollision);
-  T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
-  T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
-  T.Run('TryLoadFromJson.InvalidReportsPositionCRLF',
+  T.Test('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
+  T.Test('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
+  T.Test('TryLoadFromJson.InvalidReportsPositionCRLF',
     @TestTryLoadFromJsonInvalidReportsPositionCRLF);
-  T.Run('TryLoadFromYamlAndToml.InvalidReportsOffset',
+  T.Test('TryLoadFromYamlAndToml.InvalidReportsOffset',
     @TestTryLoadFromYamlAndTomlInvalidReportOffset);
-  T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
-  T.Run('TryLoad.ShortVariantsValid', @TestTryLoadShortVariantsValid);
-  T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
-  T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
-  T.Run('LoadFromEnv.RejectsEmptyPrefix', @TestLoadFromEnvRejectsEmptyPrefix);
-  T.Run('Has', @TestHas);
-  T.Run('Has.CaseInsensitive', @TestHasCaseInsensitive);
-  T.Run('GetKeys', @TestGetKeys);
-  T.Run('EmptyConfig', @TestEmptyConfig);
-  T.Run('Override.Priority', @TestOverridePriority);
-  T.Run('Override.EnvHighest', @TestOverrideEnvHighest);
-  T.Run('Count', @TestCount);
-  T.Run('GetFloat.Zero', @TestGetFloatZero);
-  T.Run('GetFloat.Negative', @TestGetFloatNegative);
-  T.Run('Has.AfterMultipleLoads', @TestHasAfterMultipleLoads);
-  T.Run('GetKeys.Order', @TestGetKeysOrder);
-  T.Run('Count.AfterOverride', @TestCountAfterOverride);
-  T.Run('LoadFromYaml.Basic', @TestLoadFromYamlBasic);
-  T.Run('LoadFromToml.Section', @TestLoadFromTomlSection);
-  T.Run('MultiSource.Override', @TestMultiSourceOverride);
-  T.Run('ReplaceFrom', @TestReplaceFrom);
-  T.Run('LoadFromFile.Basic', @TestLoadFromFileBasic);
-  T.Run('LoadFromFile.RejectsEmptyPath', @TestLoadFromFileRejectsEmptyPath);
-  T.Run('TryLoadFromFile.SuccessAndErrorsPreserveExisting',
+  T.Test('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
+  T.Test('TryLoad.ShortVariantsValid', @TestTryLoadShortVariantsValid);
+  T.Test('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
+  T.Test('LoadFromEnv.Override', @TestLoadFromEnvOverride);
+  T.Test('LoadFromEnv.RejectsEmptyPrefix', @TestLoadFromEnvRejectsEmptyPrefix);
+  T.Test('Has', @TestHas);
+  T.Test('Has.CaseInsensitive', @TestHasCaseInsensitive);
+  T.Test('GetKeys', @TestGetKeys);
+  T.Test('EmptyConfig', @TestEmptyConfig);
+  T.Test('Override.Priority', @TestOverridePriority);
+  T.Test('Override.EnvHighest', @TestOverrideEnvHighest);
+  T.Test('Count', @TestCount);
+  T.Test('GetFloat.Zero', @TestGetFloatZero);
+  T.Test('GetFloat.Negative', @TestGetFloatNegative);
+  T.Test('Has.AfterMultipleLoads', @TestHasAfterMultipleLoads);
+  T.Test('GetKeys.Order', @TestGetKeysOrder);
+  T.Test('Count.AfterOverride', @TestCountAfterOverride);
+  T.Test('LoadFromYaml.Basic', @TestLoadFromYamlBasic);
+  T.Test('LoadFromToml.Section', @TestLoadFromTomlSection);
+  T.Test('MultiSource.Override', @TestMultiSourceOverride);
+  T.Test('ReplaceFrom', @TestReplaceFrom);
+  T.Test('LoadFromFile.Basic', @TestLoadFromFileBasic);
+  T.Test('LoadFromFile.RejectsEmptyPath', @TestLoadFromFileRejectsEmptyPath);
+  T.Test('TryLoadFromFile.SuccessAndErrorsPreserveExisting',
     @TestTryLoadFromFileSuccessAndErrorsPreserveExisting);
-  T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
-  T.Run('ConfigWatcher.HotReloadJson', @TestConfigWatcherHotReloadJson);
-  T.Run('ConfigWatcher.HotReloadYaml', @TestConfigWatcherHotReloadYaml);
-  T.Run('ConfigWatcher.HotReloadToml', @TestConfigWatcherHotReloadToml);
-  T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.FailedReloadDoesNotFireCallback',
+  T.Test('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
+  T.Test('ConfigWatcher.HotReloadJson', @TestConfigWatcherHotReloadJson);
+  T.Test('ConfigWatcher.HotReloadYaml', @TestConfigWatcherHotReloadYaml);
+  T.Test('ConfigWatcher.HotReloadToml', @TestConfigWatcherHotReloadToml);
+  T.Test('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
+  T.Test('ConfigWatcher.FailedReloadDoesNotFireCallback',
     @TestConfigWatcherFailedReloadDoesNotFireCallback);
-  T.Run('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.BadTomlRaises', @TestConfigWatcherBadTomlRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.AmbiguousJsonRaises',
+  T.Test('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);
+  T.Test('ConfigWatcher.BadTomlRaises', @TestConfigWatcherBadTomlRaisesAndPreservesOldConfig);
+  T.Test('ConfigWatcher.AmbiguousJsonRaises',
     @TestConfigWatcherAmbiguousJsonRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.AmbiguousYamlRaises',
+  T.Test('ConfigWatcher.AmbiguousYamlRaises',
     @TestConfigWatcherAmbiguousYamlRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.AmbiguousTomlRaises',
+  T.Test('ConfigWatcher.AmbiguousTomlRaises',
     @TestConfigWatcherAmbiguousTomlRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.BadIniRaises', @TestConfigWatcherBadIniRaisesAndPreservesOldConfig);
-  T.Run('ConfigWatcher.MissingFileRaises',
+  T.Test('ConfigWatcher.BadIniRaises', @TestConfigWatcherBadIniRaisesAndPreservesOldConfig);
+  T.Test('ConfigWatcher.MissingFileRaises',
     @TestConfigWatcherMissingFileRaisesAndPreservesOldConfig);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

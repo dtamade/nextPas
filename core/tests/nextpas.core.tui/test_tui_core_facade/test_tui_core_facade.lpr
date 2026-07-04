@@ -4,10 +4,10 @@ program test_tui_core_facade;
 
 uses
   nextpas.core.tui,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestCoreSurface;
 var
@@ -28,9 +28,7 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.core_facade');
-  T.Run('core surface', @TestCoreSurface);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.core_facade');
+  T.Test('core surface', @TestCoreSurface);
+  if not T.Run then Halt(1);
 end.

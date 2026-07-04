@@ -7,13 +7,13 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function LoadTextFile(const APath: string): string;
 var
@@ -676,42 +676,42 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.headers');
-  T.Run('Headers public API does not expose Set underscore',
+  T := TTestSuite.Create('nextpas.core.http.headers');
+  T.Test('Headers public API does not expose Set underscore',
     @TestHeadersPublicApiDoesNotExposeSetUnderscore);
-  T.Run('HTTP handwritten sources do not expose Set underscore',
+  T.Test('HTTP handwritten sources do not expose Set underscore',
     @TestHttpHandwrittenSourcesDoNotExposeSetUnderscore);
-  T.Run('Headers public API does not expose Del',
+  T.Test('Headers public API does not expose Del',
     @TestHeadersPublicApiDoesNotExposeDel);
-  T.Run('Set and Get basic', @TestSetAndGetBasic);
-  T.Run('Case-insensitive lookup', @TestCaseInsensitiveLookup);
-  T.Run('Add multiple values', @TestAddMultipleValues);
-  T.Run('GetAll returns all values', @TestGetAllReturnsAllValues);
-  T.Run('Set replaces existing', @TestSetReplacesExisting);
-  T.Run('Remove removes all values', @TestRemoveRemovesAllValues);
-  T.Run('Has returns true/false', @TestHasReturnsTrueFalse);
-  T.Run('Count reflects total entries', @TestCountReflectsTotalEntries);
-  T.Run('Clone creates independent copy', @TestCloneCreatesIndependentCopy);
-  T.Run('Get returns empty for missing', @TestGetReturnEmptyForMissing);
-  T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
-  T.Run('Remove non-existent is no-op', @TestRemoveNonExistentIsNoOp);
-  T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
-  T.Run('Mixed-case duplicates preserve Set/Remove/GetAll order',
+  T.Test('Set and Get basic', @TestSetAndGetBasic);
+  T.Test('Case-insensitive lookup', @TestCaseInsensitiveLookup);
+  T.Test('Add multiple values', @TestAddMultipleValues);
+  T.Test('GetAll returns all values', @TestGetAllReturnsAllValues);
+  T.Test('Set replaces existing', @TestSetReplacesExisting);
+  T.Test('Remove removes all values', @TestRemoveRemovesAllValues);
+  T.Test('Has returns true/false', @TestHasReturnsTrueFalse);
+  T.Test('Count reflects total entries', @TestCountReflectsTotalEntries);
+  T.Test('Clone creates independent copy', @TestCloneCreatesIndependentCopy);
+  T.Test('Get returns empty for missing', @TestGetReturnEmptyForMissing);
+  T.Test('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
+  T.Test('Remove non-existent is no-op', @TestRemoveNonExistentIsNoOp);
+  T.Test('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
+  T.Test('Mixed-case duplicates preserve Set/Remove/GetAll order',
     @TestMixedCaseDuplicatesSetRemoveGetAllPreserveOrder);
-  T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
-  T.Run('Parsed add canonicalizes parser validated headers',
+  T.Test('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
+  T.Test('Parsed add canonicalizes parser validated headers',
     @TestParsedAddCanonicalizesParserValidatedHeaders);
-  T.Run('Parsed span add canonicalizes parser validated headers',
+  T.Test('Parsed span add canonicalizes parser validated headers',
     @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
-  T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
-  T.Run('Validation allows horizontal tab in value',
+  T.Test('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
+  T.Test('Validation allows horizontal tab in value',
     @TestValidationAllowsHorizontalTabInValue);
-  T.Run('Lookup and remove reject invalid names',
+  T.Test('Lookup and remove reject invalid names',
     @TestLookupAndRemoveRejectInvalidNames);
-  T.Run('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
-  T.Run('SetBasicAuth sets Authorization', @TestSetBasicAuth);
-  T.Run('SetBearerAuth sets Authorization', @TestSetBearerAuth);
-  T.Run('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
-  T.Run('ForEach rejects nil callback', @TestForEachRejectsNilCallback);
-  T.Summary;
+  T.Test('Validation accepts tchar names', @TestValidationAcceptsTCharNames);
+  T.Test('SetBasicAuth sets Authorization', @TestSetBasicAuth);
+  T.Test('SetBearerAuth sets Authorization', @TestSetBearerAuth);
+  T.Test('Auth helpers reject nil headers', @TestAuthHelpersRejectNilHeaders);
+  T.Test('ForEach rejects nil callback', @TestForEachRejectsNilCallback);
+  if not T.Run then Halt(1);
 end.

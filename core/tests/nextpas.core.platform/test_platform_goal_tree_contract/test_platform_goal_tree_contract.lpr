@@ -5,7 +5,7 @@ program test_platform_goal_tree_contract;
 uses
   Classes,
   SysUtils,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 const
   GOAL_TREE_PATH_FROM_TEST = '../../../docs/platform/goal-tree.md';
@@ -26,7 +26,7 @@ const
     'core/tests/nextpas.core.platform.mmap/test_platform_mmap/Makefile';
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function ResolvePath(const APathFromTest, APathFromRoot: string): string;
 begin
@@ -216,19 +216,19 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.goal_tree_contract');
-  T.Run('Windows status does not overstate runtime readiness',
+  T := TTestSuite.Create('nextpas.core.platform.goal_tree_contract');
+  T.Test('Windows status does not overstate runtime readiness',
     @TestWindowsStatusDoesNotOverstateRuntimeReadiness);
-  T.Run('Windows evidence names current focused gates',
+  T.Test('Windows evidence names current focused gates',
     @TestWindowsEvidenceNamesCurrentFocusedGates);
-  T.Run('IOCP boundary is truthful', @TestIocpBoundaryIsTruthful);
-  T.Run('runtime truth matrix does not overstate Windows runtime',
+  T.Test('IOCP boundary is truthful', @TestIocpBoundaryIsTruthful);
+  T.Test('runtime truth matrix does not overstate Windows runtime',
     @TestRuntimeTruthMatrixDoesNotOverstateWindowsRuntime);
-  T.Run('resource evidence names current focused gate',
+  T.Test('resource evidence names current focused gate',
     @TestResourceEvidenceNamesCurrentFocusedGate);
-  T.Run('named Windows poller compile gate forces Windows host',
+  T.Test('named Windows poller compile gate forces Windows host',
     @TestNamedWindowsPollerCompileGateForcesWindowsHost);
-  T.Run('Android files/mmap compile gates are wired',
+  T.Test('Android files/mmap compile gates are wired',
     @TestAndroidFilesMmapCompileGatesAreWired);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

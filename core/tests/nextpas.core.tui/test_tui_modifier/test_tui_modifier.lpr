@@ -4,10 +4,10 @@ program test_tui_modifier;
 
 uses
   nextpas.core.tui.modifier,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestEmpty;
 begin
@@ -52,13 +52,11 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.modifier');
-  T.Run('empty', @TestEmpty);
-  T.Run('equality', @TestEquality);
-  T.Run('set operations', @TestSetOps);
-  T.Run('size 2 bytes', @TestSize);
-  T.Run('all bits', @TestAllBits);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.modifier');
+  T.Test('empty', @TestEmpty);
+  T.Test('equality', @TestEquality);
+  T.Test('set operations', @TestSetOps);
+  T.Test('size 2 bytes', @TestSize);
+  T.Test('all bits', @TestAllBits);
+  if not T.Run then Halt(1);
 end.

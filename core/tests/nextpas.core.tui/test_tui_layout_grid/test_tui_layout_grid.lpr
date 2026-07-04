@@ -6,10 +6,10 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.layout,
   nextpas.core.tui.layout.grid,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestUniformGrid;
 var
@@ -59,12 +59,10 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.layout.grid');
-  T.Run('uniform grid', @TestUniformGrid);
-  T.Run('constraint grid', @TestConstraintGrid);
-  T.Run('out of bounds', @TestOutOfBounds);
-  T.Run('empty grid', @TestEmptyGrid);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.layout.grid');
+  T.Test('uniform grid', @TestUniformGrid);
+  T.Test('constraint grid', @TestConstraintGrid);
+  T.Test('out of bounds', @TestOutOfBounds);
+  T.Test('empty grid', @TestEmptyGrid);
+  if not T.Run then Halt(1);
 end.

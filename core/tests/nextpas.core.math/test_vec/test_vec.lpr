@@ -5,12 +5,12 @@ program test_vec;
 uses
   Math,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.math.scalar,
   nextpas.core.math.vec;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   Vec2fSink: TVec2f;
   Vec3fSink: TVec3f;
   Vec4fSink: TVec4f;
@@ -1755,63 +1755,63 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.math.vec');
-  T.Run('TVec2f contracts', @TestVec2fContracts);
-  T.Run('TVec2f huge finite length + normalize', @TestVec2fHugeFiniteLengthAndNormalize);
-  T.Run('TVec3f contracts', @TestVec3fContracts);
-  T.Run('TVec3f huge finite length + normalize', @TestVec3fHugeFiniteLengthAndNormalize);
-  T.Run('vector max finite normalize contract', @TestVectorMaxFiniteNormalize);
-  T.Run('TVec4f contracts', @TestVec4fContracts);
-  T.Run('TVec4f huge finite length + normalize', @TestVec4fHugeFiniteLengthAndNormalize);
-  T.Run('double precision vector contracts', @TestDoublePrecisionContracts);
-  T.Run('TVec2d huge finite length + normalize', @TestVec2dHugeFiniteLengthAndNormalize);
-  T.Run('TVec3d huge finite length + normalize', @TestVec3dHugeFiniteLengthAndNormalize);
-  T.Run('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
-  T.Run('vector huge finite LengthSqr overflow contract',
+  T := TTestSuite.Create('nextpas.core.math.vec');
+  T.Test('TVec2f contracts', @TestVec2fContracts);
+  T.Test('TVec2f huge finite length + normalize', @TestVec2fHugeFiniteLengthAndNormalize);
+  T.Test('TVec3f contracts', @TestVec3fContracts);
+  T.Test('TVec3f huge finite length + normalize', @TestVec3fHugeFiniteLengthAndNormalize);
+  T.Test('vector max finite normalize contract', @TestVectorMaxFiniteNormalize);
+  T.Test('TVec4f contracts', @TestVec4fContracts);
+  T.Test('TVec4f huge finite length + normalize', @TestVec4fHugeFiniteLengthAndNormalize);
+  T.Test('double precision vector contracts', @TestDoublePrecisionContracts);
+  T.Test('TVec2d huge finite length + normalize', @TestVec2dHugeFiniteLengthAndNormalize);
+  T.Test('TVec3d huge finite length + normalize', @TestVec3dHugeFiniteLengthAndNormalize);
+  T.Test('TVec4d huge finite length + normalize', @TestVec4dHugeFiniteLengthAndNormalize);
+  T.Test('vector huge finite LengthSqr overflow contract',
     @TestVectorLengthSqrHugeFiniteOverflowContract);
-  T.Run('vector huge finite Dot contract', @TestVectorHugeFiniteDotContract);
-  T.Run('vector huge finite Cross cancellation contract',
+  T.Test('vector huge finite Dot contract', @TestVectorHugeFiniteDotContract);
+  T.Test('vector huge finite Cross cancellation contract',
     @TestVectorHugeFiniteCrossCancellationContract);
-  T.Run('vector huge finite Cross out-of-range signed infinity contract',
+  T.Test('vector huge finite Cross out-of-range signed infinity contract',
     @TestVectorHugeFiniteCrossOutOfRangeSignedInfinityContract);
-  T.Run('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
-  T.Run('vector Data alias ABI offsets', @TestVectorDataAliasOffsets);
-  T.Run('vector Data aliases preserve signed-zero bits',
+  T.Test('vector Data aliases write through', @TestVectorDataAliasesWriteThrough);
+  T.Test('vector Data alias ABI offsets', @TestVectorDataAliasOffsets);
+  T.Test('vector Data aliases preserve signed-zero bits',
     @TestVectorDataAliasesPreserveSignedZeroBits);
-  T.Run('vector measure non-finite contracts',
+  T.Test('vector measure non-finite contracts',
     @TestVectorMeasureNonFiniteContracts);
-  T.Run('vector measure non-finite type matrix contracts',
+  T.Test('vector measure non-finite type matrix contracts',
     @TestVectorMeasureNonFiniteTypeMatrixContracts);
-  T.Run('vector measure non-finite coverage matrix contracts',
+  T.Test('vector measure non-finite coverage matrix contracts',
     @TestVectorMeasureNonFiniteCoverageMatrixContracts);
-  T.Run('vector raw arithmetic special-value contracts',
+  T.Test('vector raw arithmetic special-value contracts',
     @TestVectorRawArithmeticSpecialValueContracts);
-  T.Run('vector signed-zero contracts',
+  T.Test('vector signed-zero contracts',
     @TestVectorSignedZeroContracts);
-  T.Run('vector signed-zero coverage matrix contracts',
+  T.Test('vector signed-zero coverage matrix contracts',
     @TestVectorSignedZeroCoverageMatrixContracts);
-  T.Run('vector min subnormal length and normalize contracts',
+  T.Test('vector min subnormal length and normalize contracts',
     @TestVectorMinSubnormalLengthAndNormalizeContracts);
-  T.Run('vector Lerp scalar parity contracts',
+  T.Test('vector Lerp scalar parity contracts',
     @TestVectorLerpScalarParityContracts);
-  T.Run('raw vector normalize non-finite inputs fail fast',
+  T.Test('raw vector normalize non-finite inputs fail fast',
     @TestRawVectorNormalizeNonFiniteInputsFailFast);
-  T.Run('vector division invalid divisors fail fast',
+  T.Test('vector division invalid divisors fail fast',
     @TestVectorDivisionInvalidDivisorsFailFast);
-  T.Run('vector mixed invalid divisor priority contracts',
+  T.Test('vector mixed invalid divisor priority contracts',
     @TestVectorMixedInvalidDivisorPriorityContracts);
-  T.Run('vector Equals non-finite comparison contracts',
+  T.Test('vector Equals non-finite comparison contracts',
     @TestVectorEqualsNonFiniteComparisonContracts);
-  T.Run('TVec2f Cross2D', @TestVec2fCross2D);
-  T.Run('TVec2d Cross2D', @TestVec2dCross2D);
-  T.Run('Vec Max/Min component-wise', @TestVecMaxMinComponent);
-  T.Run('Vec Max/Min double', @TestVecMaxMinDouble);
-  T.Run('Vec Abs', @TestVecAbs);
-  T.Run('Vec IsZero', @TestVecIsZero);
-  T.Run('Vec PerfectlyEquals', @TestVecPerfectlyEquals);
-  T.Run('TVec3f Average', @TestVec3fAverage);
-  T.Run('TVec3f AdjustToLength', @TestVec3fAdjustToLength);
-  T.Run('TVec4f/d ToPosition', @TestVec4fToPosition);
+  T.Test('TVec2f Cross2D', @TestVec2fCross2D);
+  T.Test('TVec2d Cross2D', @TestVec2dCross2D);
+  T.Test('Vec Max/Min component-wise', @TestVecMaxMinComponent);
+  T.Test('Vec Max/Min double', @TestVecMaxMinDouble);
+  T.Test('Vec Abs', @TestVecAbs);
+  T.Test('Vec IsZero', @TestVecIsZero);
+  T.Test('Vec PerfectlyEquals', @TestVecPerfectlyEquals);
+  T.Test('TVec3f Average', @TestVec3fAverage);
+  T.Test('TVec3f AdjustToLength', @TestVec3fAdjustToLength);
+  T.Test('TVec4f/d ToPosition', @TestVec4fToPosition);
   TouchVectorSinks;
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

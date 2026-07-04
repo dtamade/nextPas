@@ -6,7 +6,7 @@ uses
   nextpas.core.base,
   nextpas.core.http.base,
   nextpas.core.http.impl.h2.types,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 procedure TestSettingsDefaultsMatchFrameConstants;
 var
@@ -472,7 +472,7 @@ begin
 end;
 
 begin
-  with TTestRunner.Create('nextpas.core.http.impl.h2.types') do
+  with TTestSuite.Create('nextpas.core.http.impl.h2.types') do
   begin
     Run('Settings defaults match frame constants',
       @TestSettingsDefaultsMatchFrameConstants);

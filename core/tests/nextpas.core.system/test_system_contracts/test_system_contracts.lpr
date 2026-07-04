@@ -3,11 +3,11 @@ program test_system_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.system.contracts;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestProcessLifecycleContractNames;
 begin
@@ -38,8 +38,8 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.system.contracts');
-  T.Run('process and lifecycle contract names', @TestProcessLifecycleContractNames);
-  T.Run('object free contract names', @TestObjectFreeContractNames);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.system.contracts');
+  T.Test('process and lifecycle contract names', @TestProcessLifecycleContractNames);
+  T.Test('object free contract names', @TestObjectFreeContractNames);
+  if not T.Run then Halt(1);
 end.

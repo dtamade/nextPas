@@ -4,7 +4,7 @@ program test_trie;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections.trie,
   leak_tracker;
 
@@ -13,7 +13,7 @@ type
   TTrackedTrie = specialize TTrie<ITracked>;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPutGet;
 var LT: TStrTrie; v: Integer;
@@ -270,18 +270,18 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.trie');
-  T.Run('Put/Get', @TestPutGet);
-  T.Run('Update', @TestUpdate);
-  T.Run('Remove', @TestRemove);
-  T.Run('StartsWith (prefix search)', @TestStartsWith);
-  T.Run('Clear', @TestClear);
-  T.Run('Managed Clear releases values', @TestManagedClearReleasesValues);
-  T.Run('Managed Destroy releases values', @TestManagedDestroyReleasesValues);
-  T.Run('Managed Remove releases value', @TestManagedRemoveReleasesValue);
-  T.Run('Managed Remove empty-key releases value', @TestManagedRemoveEmptyKeyReleasesValue);
-  T.Run('Managed Overwrite releases old value', @TestManagedOverwriteReleasesOldValue);
-  T.Run('Managed Overwrite empty-key releases old value', @TestManagedOverwriteEmptyKeyReleasesOldValue);
-  T.Run('HasPrefix ignores removed tombstones', @TestHasPrefixIgnoresRemovedTombstones);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.trie');
+  T.Test('Put/Get', @TestPutGet);
+  T.Test('Update', @TestUpdate);
+  T.Test('Remove', @TestRemove);
+  T.Test('StartsWith (prefix search)', @TestStartsWith);
+  T.Test('Clear', @TestClear);
+  T.Test('Managed Clear releases values', @TestManagedClearReleasesValues);
+  T.Test('Managed Destroy releases values', @TestManagedDestroyReleasesValues);
+  T.Test('Managed Remove releases value', @TestManagedRemoveReleasesValue);
+  T.Test('Managed Remove empty-key releases value', @TestManagedRemoveEmptyKeyReleasesValue);
+  T.Test('Managed Overwrite releases old value', @TestManagedOverwriteReleasesOldValue);
+  T.Test('Managed Overwrite empty-key releases old value', @TestManagedOverwriteEmptyKeyReleasesOldValue);
+  T.Test('HasPrefix ignores removed tombstones', @TestHasPrefixIgnoresRemovedTombstones);
+  if not T.Run then Halt(1);
 end.

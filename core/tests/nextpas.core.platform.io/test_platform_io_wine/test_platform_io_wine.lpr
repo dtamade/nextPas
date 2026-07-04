@@ -6,7 +6,7 @@ program test_platform_io_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io
   {$IFDEF NEXTPAS_WINDOWS},
@@ -15,7 +15,7 @@ uses
   {$ENDIF};
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -87,14 +87,14 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.io.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.io.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('create/close', @TestCreateClose);
-  T.Run('timeout zero', @TestTimeoutZero);
-  T.Run('add/remove', @TestAddRemove);
-  T.Run('modify', @TestModify);
+  T.Test('create/close', @TestCreateClose);
+  T.Test('timeout zero', @TestTimeoutZero);
+  T.Test('add/remove', @TestAddRemove);
+  T.Test('modify', @TestModify);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

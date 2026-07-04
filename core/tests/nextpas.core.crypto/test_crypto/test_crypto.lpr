@@ -5,13 +5,13 @@ program test_crypto;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.crypto.ct.bigint,
   nextpas.core.crypto.p256.field,
   nextpas.core.crypto.pkcs8;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 function HexToBytes(const AHex: string): TBytes;
 var
@@ -552,61 +552,61 @@ end;
 { ===== Main ===== }
 
 begin
-  T := TTestRunner.Create('nextpas.core.crypto');
+  T := TTestSuite.Create('nextpas.core.crypto');
 
   { CT BigInt - Equality }
-  T.Run('CT Equal same', @TestCTEqual_Same);
-  T.Run('CT Equal different', @TestCTEqual_Different);
-  T.Run('CT Equal different length', @TestCTEqual_DifferentLength);
-  T.Run('CT Equal empty', @TestCTEqual_Empty);
-  T.Run('CT Equal zero', @TestCTEqual_Zero);
-  T.Run('CT Equal max value', @TestCTEqual_MaxValue);
+  T.Test('CT Equal same', @TestCTEqual_Same);
+  T.Test('CT Equal different', @TestCTEqual_Different);
+  T.Test('CT Equal different length', @TestCTEqual_DifferentLength);
+  T.Test('CT Equal empty', @TestCTEqual_Empty);
+  T.Test('CT Equal zero', @TestCTEqual_Zero);
+  T.Test('CT Equal max value', @TestCTEqual_MaxValue);
 
   { CT BigInt - LessThan }
-  T.Run('CT LessThan basic', @TestCTLessThan_Basic);
-  T.Run('CT LessThan high bit', @TestCTLessThan_HighBit);
-  T.Run('CT LessThan different length', @TestCTLessThan_DifferentLength);
+  T.Test('CT LessThan basic', @TestCTLessThan_Basic);
+  T.Test('CT LessThan high bit', @TestCTLessThan_HighBit);
+  T.Test('CT LessThan different length', @TestCTLessThan_DifferentLength);
 
   { CT BigInt - Select }
-  T.Run('CT Select true', @TestCTSelect_True);
-  T.Run('CT Select false', @TestCTSelect_False);
+  T.Test('CT Select true', @TestCTSelect_True);
+  T.Test('CT Select false', @TestCTSelect_False);
 
   { CT BigInt - ConditionalSwap }
-  T.Run('CT Swap true', @TestCTSwap_True);
-  T.Run('CT Swap false', @TestCTSwap_False);
+  T.Test('CT Swap true', @TestCTSwap_True);
+  T.Test('CT Swap false', @TestCTSwap_False);
 
   { CT BigInt - ModMul }
-  T.Run('CT ModMul basic', @TestCTModMul_Basic);
-  T.Run('CT ModMul larger', @TestCTModMul_LargerValues);
+  T.Test('CT ModMul basic', @TestCTModMul_Basic);
+  T.Test('CT ModMul larger', @TestCTModMul_LargerValues);
 
   { CT BigInt - ModExp }
-  T.Run('CT ModExp small power', @TestCTModExp_SmallPower);
-  T.Run('CT ModExp Fermat', @TestCTModExp_FermatLittle);
+  T.Test('CT ModExp small power', @TestCTModExp_SmallPower);
+  T.Test('CT ModExp Fermat', @TestCTModExp_FermatLittle);
 
   { P-256 Field }
-  T.Run('P256 Fe zero', @TestP256FeZero);
-  T.Run('P256 Fe one', @TestP256FeOne);
-  T.Run('P256 Fe bytes round-trip', @TestP256FeBytesRoundTrip);
-  T.Run('P256 Fe add zero', @TestP256FeAddZero);
-  T.Run('P256 Fe add commutative', @TestP256FeAddCommutative);
-  T.Run('P256 Fe sub self', @TestP256FeSubSelf);
-  T.Run('P256 Fe sub from zero', @TestP256FeSubFromZero);
-  T.Run('P256 Fe mul one', @TestP256FeMulOne);
-  T.Run('P256 Fe mul zero', @TestP256FeMulZero);
-  T.Run('P256 Fe mul commutative', @TestP256FeMulCommutative);
-  T.Run('P256 Fe sqr', @TestP256FeSqr);
-  T.Run('P256 Fe inv', @TestP256FeInv);
-  T.Run('P256 Fe inv larger', @TestP256FeInvLarger);
-  T.Run('P256 Fe cond copy', @TestP256FeCondCopy);
-  T.Run('P256 Fe NIST vector', @TestP256FeNISTVector);
-  T.Run('P256 Fe mul reduction', @TestP256FeMulReduction);
+  T.Test('P256 Fe zero', @TestP256FeZero);
+  T.Test('P256 Fe one', @TestP256FeOne);
+  T.Test('P256 Fe bytes round-trip', @TestP256FeBytesRoundTrip);
+  T.Test('P256 Fe add zero', @TestP256FeAddZero);
+  T.Test('P256 Fe add commutative', @TestP256FeAddCommutative);
+  T.Test('P256 Fe sub self', @TestP256FeSubSelf);
+  T.Test('P256 Fe sub from zero', @TestP256FeSubFromZero);
+  T.Test('P256 Fe mul one', @TestP256FeMulOne);
+  T.Test('P256 Fe mul zero', @TestP256FeMulZero);
+  T.Test('P256 Fe mul commutative', @TestP256FeMulCommutative);
+  T.Test('P256 Fe sqr', @TestP256FeSqr);
+  T.Test('P256 Fe inv', @TestP256FeInv);
+  T.Test('P256 Fe inv larger', @TestP256FeInvLarger);
+  T.Test('P256 Fe cond copy', @TestP256FeCondCopy);
+  T.Test('P256 Fe NIST vector', @TestP256FeNISTVector);
+  T.Test('P256 Fe mul reduction', @TestP256FeMulReduction);
 
   { PKCS8 - PBKDF2 }
-  T.Run('PBKDF2-SHA256 vector 1', @TestPBKDF2_SHA256_RFC6070_Vector1);
-  T.Run('PBKDF2-SHA256 vector 2', @TestPBKDF2_SHA256_RFC6070_Vector2);
-  T.Run('PBKDF2-SHA256 vector 3', @TestPBKDF2_SHA256_RFC6070_Vector3);
-  T.Run('PBKDF2-SHA256 empty password', @TestPBKDF2_SHA256_EmptyPassword);
-  T.Run('PBKDF2-SHA256 short key', @TestPBKDF2_SHA256_ShortKey);
+  T.Test('PBKDF2-SHA256 vector 1', @TestPBKDF2_SHA256_RFC6070_Vector1);
+  T.Test('PBKDF2-SHA256 vector 2', @TestPBKDF2_SHA256_RFC6070_Vector2);
+  T.Test('PBKDF2-SHA256 vector 3', @TestPBKDF2_SHA256_RFC6070_Vector3);
+  T.Test('PBKDF2-SHA256 empty password', @TestPBKDF2_SHA256_EmptyPassword);
+  T.Test('PBKDF2-SHA256 short key', @TestPBKDF2_SHA256_ShortKey);
 
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

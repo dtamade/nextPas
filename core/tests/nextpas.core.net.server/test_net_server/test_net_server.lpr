@@ -9,7 +9,7 @@ uses
   StrUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.net.server,
@@ -623,7 +623,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GProviderFactoryCalls: Int32;
   GLastMockProvider: TMockServerProvider;
 
@@ -3973,85 +3973,85 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.net.server');
-  T.Run('Default options', @TestDefaultOptions);
-  T.Run('Threaded server echo', @TestThreadedServerEcho);
-  T.Run('Threaded server shutdown without clients', @TestThreadedServerShutdownWithoutClients);
-  T.Run('Threaded server detach keeps connection open', @TestThreadedServerDetachKeepsConnectionOpen);
-  T.Run('Threaded server handler exception does not stop accept loop',
+  T := TTestSuite.Create('nextpas.core.net.server');
+  T.Test('Default options', @TestDefaultOptions);
+  T.Test('Threaded server echo', @TestThreadedServerEcho);
+  T.Test('Threaded server shutdown without clients', @TestThreadedServerShutdownWithoutClients);
+  T.Test('Threaded server detach keeps connection open', @TestThreadedServerDetachKeepsConnectionOpen);
+  T.Test('Threaded server handler exception does not stop accept loop',
     @TestThreadedServerHandlerExceptionDoesNotStopAcceptLoop);
-  T.Run('Threaded server shutdown with wildcard listen',
+  T.Test('Threaded server shutdown with wildcard listen',
     @TestThreadedServerShutdownWithWildcardListen);
-  T.Run('Threaded server shutdown with empty listen addr',
+  T.Test('Threaded server shutdown with empty listen addr',
     @TestThreadedServerShutdownWithEmptyListenAddr);
-  T.Run('Threaded server prefers session factory when available',
+  T.Test('Threaded server prefers session factory when available',
     @TestThreadedServerPrefersSessionFactoryWhenAvailable);
-  T.Run('Threaded server prefers context session factory when available',
+  T.Test('Threaded server prefers context session factory when available',
     @TestThreadedServerPrefersContextSessionFactoryWhenAvailable);
-  T.Run('Threaded server accepted handoff completes exactly once',
+  T.Test('Threaded server accepted handoff completes exactly once',
     @TestThreadedServerAcceptedHandoffCompletesExactlyOnce);
-  T.Run('Threaded server failing handoff reports failed outcome',
+  T.Test('Threaded server failing handoff reports failed outcome',
     @TestThreadedServerFailingHandoffReportsFailedOutcome);
-  T.Run('Threaded server rejects handoff after shutdown',
+  T.Test('Threaded server rejects handoff after shutdown',
     @TestThreadedServerRejectsHandoffAfterShutdown);
-  T.Run('Threaded server poll-driven session falls back to Run',
+  T.Test('Threaded server poll-driven session falls back to Run',
     @TestThreadedServerPollDrivenSessionFallsBackToRun);
-  T.Run('Built-in threaded backend factory exists',
+  T.Test('Built-in threaded backend factory exists',
     @TestBuiltInThreadedBackendFactoryExists);
-  T.Run('Kqueue backend source contract',
+  T.Test('Kqueue backend source contract',
     @TestKqueueBackendSourceContract);
-  T.Run('Net README backend truth source contract',
+  T.Test('Net README backend truth source contract',
     @TestNetReadmeBackendTruthSourceContract);
-  T.Run('Readiness consumer uses platform poller source contract',
+  T.Test('Readiness consumer uses platform poller source contract',
     @TestReadinessConsumerUsesPlatformPollerSourceContract);
-  T.Run('Readiness userdata preservation source contract',
+  T.Test('Readiness userdata preservation source contract',
     @TestReadinessUserDataPreservationSourceContract);
-  T.Run('Readiness empty-interest source contract',
+  T.Test('Readiness empty-interest source contract',
     @TestReadinessEmptyInterestSourceContract);
-  T.Run('Readiness wake fallback source contract',
+  T.Test('Readiness wake fallback source contract',
     @TestReadinessWakeFallbackSourceContract);
-  T.Run('Readiness setup failure closes poller source contract',
+  T.Test('Readiness setup failure closes poller source contract',
     @TestReadinessSetupFailureClosesPollerSourceContract);
-  T.Run('Readiness setup failure clears runtime context source contract',
+  T.Test('Readiness setup failure clears runtime context source contract',
     @TestReadinessSetupFailureClearsRuntimeContextSourceContract);
-  T.Run('Readiness pre-loop failure clears runtime context source contract',
+  T.Test('Readiness pre-loop failure clears runtime context source contract',
     @TestReadinessPreLoopFailureClearsRuntimeContextSourceContract);
-  T.Run('Readiness poll target lifecycle source contract',
+  T.Test('Readiness poll target lifecycle source contract',
     @TestReadinessPollTargetLifecycleSourceContract);
-  T.Run('Readiness session factory failure source contract',
+  T.Test('Readiness session factory failure source contract',
     @TestReadinessSessionFactoryFailureSourceContract);
-  T.Run('Readiness completion skips unregistered targets source contract',
+  T.Test('Readiness completion skips unregistered targets source contract',
     @TestReadinessCompletionSkipsUnregisteredTargetsSourceContract);
-  T.Run('Custom backend factory overrides selection',
+  T.Test('Custom backend factory overrides selection',
     @TestCustomBackendFactoryOverridesSelection);
-  T.Run('Missing backend factory raises not supported',
+  T.Test('Missing backend factory raises not supported',
     @TestMissingBackendFactoryRaisesNotSupported);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('Readiness server wakes poll-driven session after worker completion',
+  T.Test('Readiness server wakes poll-driven session after worker completion',
     @TestReadinessServerWakesPollDrivenSessionAfterWorkerCompletion);
-  T.Run('Epoll server echo', @TestEpollServerEcho);
-  T.Run('Epoll server shutdown without clients',
+  T.Test('Epoll server echo', @TestEpollServerEcho);
+  T.Test('Epoll server shutdown without clients',
     @TestEpollServerShutdownWithoutClients);
-  T.Run('Epoll server prefers context session factory when available',
+  T.Test('Epoll server prefers context session factory when available',
     @TestEpollServerPrefersContextSessionFactoryWhenAvailable);
-  T.Run('Epoll server session factory exception keeps accept loop running',
+  T.Test('Epoll server session factory exception keeps accept loop running',
     @TestEpollServerSessionFactoryExceptionKeepsAcceptLoopRunning);
-  T.Run('Epoll server invalid initial poll session keeps accept loop running',
+  T.Test('Epoll server invalid initial poll session keeps accept loop running',
     @TestEpollServerInvalidInitialPollSessionKeepsAcceptLoopRunning);
-  T.Run('Epoll server uses poll-driven session when available',
+  T.Test('Epoll server uses poll-driven session when available',
     @TestEpollServerUsesPollDrivenSessionWhenAvailable);
-  T.Run('Epoll server releases poll target after self-close throw',
+  T.Test('Epoll server releases poll target after self-close throw',
     @TestEpollServerReleasesPollTargetAfterSelfCloseThrow);
-  T.Run('Epoll server wakes poll-driven session after worker completion',
+  T.Test('Epoll server wakes poll-driven session after worker completion',
     @TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion);
-  T.Run('Epoll server drops late completion after poll target closes',
+  T.Test('Epoll server drops late completion after poll target closes',
     @TestEpollServerDropsLateCompletionAfterPollTargetCloses);
-  T.Run('Epoll server wakes poll-driven session on deadline',
+  T.Test('Epoll server wakes poll-driven session on deadline',
     @TestEpollServerWakesPollDrivenSessionOnDeadline);
-  T.Run('Epoll server shutdown releases parked poll-driven session',
+  T.Test('Epoll server shutdown releases parked poll-driven session',
     @TestEpollServerShutdownReleasesParkedPollDrivenSession);
-  T.Run('Epoll server restores blocking before handler ownership',
+  T.Test('Epoll server restores blocking before handler ownership',
     @TestEpollServerRestoresBlockingBeforeHandlerOwnership);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

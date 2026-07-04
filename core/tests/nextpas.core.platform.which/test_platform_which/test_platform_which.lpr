@@ -9,10 +9,10 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestFindSh;
 var
@@ -151,16 +151,16 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.which');
-  T.Run('find sh', @TestFindSh);
-  T.Run('find ls', @TestFindLs);
-  T.Run('not found', @TestNotFound);
-  T.Run('absolute path', @TestAbsolutePath);
-  T.Run('output buffer too small returns required length',
+  T := TTestSuite.Create('nextpas.core.platform.which');
+  T.Test('find sh', @TestFindSh);
+  T.Test('find ls', @TestFindLs);
+  T.Test('not found', @TestNotFound);
+  T.Test('absolute path', @TestAbsolutePath);
+  T.Test('output buffer too small returns required length',
     @TestOutputBufferTooSmallReturnsRequiredLength);
-  T.Run('absolute not exist', @TestAbsoluteNotExist);
+  T.Test('absolute not exist', @TestAbsoluteNotExist);
 {$IFDEF NEXTPAS_LINUX}
-  T.Run('long PATH finds tail entry', @TestLongPathFindsTailEntry);
+  T.Test('long PATH finds tail entry', @TestLongPathFindsTailEntry);
 {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

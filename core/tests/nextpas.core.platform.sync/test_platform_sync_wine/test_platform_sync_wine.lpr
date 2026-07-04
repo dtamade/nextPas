@@ -9,11 +9,11 @@ program test_platform_sync_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.sync;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -180,24 +180,24 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.platform.sync.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.platform.sync.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('mutex init + destroy', @TestMutexInitDestroy);
-  T.Run('mutex lock + unlock', @TestMutexLockUnlock);
-  T.Run('mutex trylock success', @TestMutexTrylockSuccess);
-  T.Run('mutex trylock conflict', @TestMutexTrylockConflict);
-  T.Run('rwlock init + destroy', @TestRwLockInitDestroy);
-  T.Run('rwlock rdlock + rdunlock', @TestRwLockRdLockUnlock);
-  T.Run('rwlock wrlock + wrunlock', @TestRwLockWrLockUnlock);
-  T.Run('rwlock tryrdlock', @TestRwLockTryRdLock);
-  T.Run('rwlock trywrlock', @TestRwLockTryWrLock);
-  T.Run('condvar init + destroy', @TestCondVarInitDestroy);
-  T.Run('condvar signal empty queue', @TestCondVarSignalEmpty);
-  T.Run('condvar broadcast empty queue', @TestCondVarBroadcastEmpty);
-  T.Run('wait address value mismatch', @TestWaitAddressValueMismatch);
-  T.Run('wait address nil pointer', @TestWaitAddressNil);
+  T.Test('mutex init + destroy', @TestMutexInitDestroy);
+  T.Test('mutex lock + unlock', @TestMutexLockUnlock);
+  T.Test('mutex trylock success', @TestMutexTrylockSuccess);
+  T.Test('mutex trylock conflict', @TestMutexTrylockConflict);
+  T.Test('rwlock init + destroy', @TestRwLockInitDestroy);
+  T.Test('rwlock rdlock + rdunlock', @TestRwLockRdLockUnlock);
+  T.Test('rwlock wrlock + wrunlock', @TestRwLockWrLockUnlock);
+  T.Test('rwlock tryrdlock', @TestRwLockTryRdLock);
+  T.Test('rwlock trywrlock', @TestRwLockTryWrLock);
+  T.Test('condvar init + destroy', @TestCondVarInitDestroy);
+  T.Test('condvar signal empty queue', @TestCondVarSignalEmpty);
+  T.Test('condvar broadcast empty queue', @TestCondVarBroadcastEmpty);
+  T.Test('wait address value mismatch', @TestWaitAddressValueMismatch);
+  T.Test('wait address nil pointer', @TestWaitAddressNil);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

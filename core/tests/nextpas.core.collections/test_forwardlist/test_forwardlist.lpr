@@ -6,7 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.mem.intf,
   failing_allocator,
   leak_tracker,
@@ -46,7 +46,7 @@ begin
 end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestPushFrontPopFront;
 var
@@ -472,27 +472,27 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.forwardlist');
-  T.Run('PushFront/PopFront', @TestPushFrontPopFront);
-  T.Run('Front', @TestFront);
-  T.Run('TryFront empty', @TestTryFrontEmpty);
-  T.Run('TryPopFront empty', @TestTryPopFrontEmpty);
-  T.Run('Remove by value', @TestRemoveByValue);
-  T.Run('Remove with equals func', @TestRemoveByValueWithEquals);
-  T.Run('RemoveIf', @TestRemoveIf);
-  T.Run('Clear', @TestClear);
-  T.Run('String type (leak check)', @TestStringType);
-  T.Run('Find', @TestFind);
-  T.Run('FindIf', @TestFindIf);
-  T.Run('InsertAfter/EraseAfter', @TestInsertAfterEraseAfter);
-  T.Run('EraseAfter before_begin to end removes whole list', @TestEraseAfterBeforeBeginToEndRemovesWholeList);
-  T.Run('EraseAfter before_begin to end releases managed items', @TestEraseAfterBeforeBeginToEndReleasesManagedItems);
-  T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
-  T.Run('Splice single tail keeps source append isolated', @TestSpliceSingleTailKeepsSourceAppendIsolated);
-  T.Run('Splice range tail keeps source append isolated', @TestSpliceRangeTailKeepsSourceAppendIsolated);
-  T.Run('Splice all keeps destination after source free', @TestSpliceAllKeepsDestinationAfterSourceFree);
-  T.Run('Merge keeps destination after source free', @TestMergeKeepsDestinationAfterSourceFree);
-  T.Run('MergeCopy keeps destination after temp free', @TestMergeCopyKeepsDestinationAfterTempFree);
-  T.Run('PushFront block registry allocation failure is atomic', @TestPushFrontBlockRegistryAllocationFailureIsAtomic);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.forwardlist');
+  T.Test('PushFront/PopFront', @TestPushFrontPopFront);
+  T.Test('Front', @TestFront);
+  T.Test('TryFront empty', @TestTryFrontEmpty);
+  T.Test('TryPopFront empty', @TestTryPopFrontEmpty);
+  T.Test('Remove by value', @TestRemoveByValue);
+  T.Test('Remove with equals func', @TestRemoveByValueWithEquals);
+  T.Test('RemoveIf', @TestRemoveIf);
+  T.Test('Clear', @TestClear);
+  T.Test('String type (leak check)', @TestStringType);
+  T.Test('Find', @TestFind);
+  T.Test('FindIf', @TestFindIf);
+  T.Test('InsertAfter/EraseAfter', @TestInsertAfterEraseAfter);
+  T.Test('EraseAfter before_begin to end removes whole list', @TestEraseAfterBeforeBeginToEndRemovesWholeList);
+  T.Test('EraseAfter before_begin to end releases managed items', @TestEraseAfterBeforeBeginToEndReleasesManagedItems);
+  T.Test('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
+  T.Test('Splice single tail keeps source append isolated', @TestSpliceSingleTailKeepsSourceAppendIsolated);
+  T.Test('Splice range tail keeps source append isolated', @TestSpliceRangeTailKeepsSourceAppendIsolated);
+  T.Test('Splice all keeps destination after source free', @TestSpliceAllKeepsDestinationAfterSourceFree);
+  T.Test('Merge keeps destination after source free', @TestMergeKeepsDestinationAfterSourceFree);
+  T.Test('MergeCopy keeps destination after temp free', @TestMergeCopyKeepsDestinationAfterTempFree);
+  T.Test('PushFront block registry allocation failure is atomic', @TestPushFrontBlockRegistryAllocationFailureIsAtomic);
+  if not T.Run then Halt(1);
 end.

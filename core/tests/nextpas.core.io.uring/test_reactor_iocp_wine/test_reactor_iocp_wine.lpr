@@ -9,14 +9,14 @@ program test_reactor_iocp_wine;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.platform.socket,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.io.reactor.iocp;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
@@ -556,18 +556,18 @@ end;
 {$ENDIF}
 
 begin
-  T := TTestRunner.Create('nextpas.core.io.reactor.iocp.wine_runtime_smoke');
+  T := TTestSuite.Create('nextpas.core.io.reactor.iocp.wine_runtime_smoke');
   {$IFDEF NEXTPAS_WINDOWS}
-  T.Run('create/close', @TestIocpCreateClose);
-  T.Run('AsyncSend', @TestIocpAsyncSend);
-  T.Run('Close with pending send', @TestIocpCloseWithPendingSend);
-  T.Run('Poll timeout', @TestIocpPollTimeout);
-  T.Run('AsyncRecv', @TestIocpAsyncRecv);
-  T.Run('AcceptEx+Send', @TestIocpAcceptSend);
-  T.Run('ConnectEx', @TestIocpConnectEx);
-  T.Run('AcceptEx+Recv', @TestIocpAcceptRecv);
+  T.Test('create/close', @TestIocpCreateClose);
+  T.Test('AsyncSend', @TestIocpAsyncSend);
+  T.Test('Close with pending send', @TestIocpCloseWithPendingSend);
+  T.Test('Poll timeout', @TestIocpPollTimeout);
+  T.Test('AsyncRecv', @TestIocpAsyncRecv);
+  T.Test('AcceptEx+Send', @TestIocpAcceptSend);
+  T.Test('ConnectEx', @TestIocpConnectEx);
+  T.Test('AcceptEx+Recv', @TestIocpAcceptRecv);
   {$ELSE}
-  T.Run('non-Windows skip', @TestNonWindowsSkip);
+  T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

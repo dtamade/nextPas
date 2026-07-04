@@ -7,7 +7,7 @@ uses
   Classes,
   SysUtils,
   StrUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.time.base,
@@ -21,7 +21,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   NONBLOCKING_WAIT_SPINS = 200;
@@ -744,34 +744,34 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.net');
-  T.Run('TCP stream write zero-progress source contract',
+  T := TTestSuite.Create('nextpas.core.net');
+  T.Test('TCP stream write zero-progress source contract',
     @TestTcpStreamWriteZeroProgressSourceContract);
-  T.Run('TCP echo', @TestTcpEcho);
-  T.Run('TCP large data', @TestTcpLargeData);
-  T.Run('UDP send/recv', @TestUdpSendRecv);
-  T.Run('UDP post-close guards', @TestUdpPostCloseGuards);
-  T.Run('Resolve', @TestResolve);
-  T.Run('Resolve DNS', @TestResolveDNS);
-  T.Run('NetAddress', @TestNetAddress);
-  T.Run('Connect refused', @TestConnectRefused);
-  T.Run('IO integration', @TestIoIntegration);
-  T.Run('Read deadline', @TestReadDeadline);
-  T.Run('Expired deadline', @TestExpiredDeadline);
-  T.Run('Infinite deadline', @TestInfiniteDeadline);
-  T.Run('SetNoDelay', @TestSetNoDelay);
-  T.Run('SetKeepAlive', @TestSetKeepAlive);
-  T.Run('TCP listener exposes runtime socket control',
+  T.Test('TCP echo', @TestTcpEcho);
+  T.Test('TCP large data', @TestTcpLargeData);
+  T.Test('UDP send/recv', @TestUdpSendRecv);
+  T.Test('UDP post-close guards', @TestUdpPostCloseGuards);
+  T.Test('Resolve', @TestResolve);
+  T.Test('Resolve DNS', @TestResolveDNS);
+  T.Test('NetAddress', @TestNetAddress);
+  T.Test('Connect refused', @TestConnectRefused);
+  T.Test('IO integration', @TestIoIntegration);
+  T.Test('Read deadline', @TestReadDeadline);
+  T.Test('Expired deadline', @TestExpiredDeadline);
+  T.Test('Infinite deadline', @TestInfiniteDeadline);
+  T.Test('SetNoDelay', @TestSetNoDelay);
+  T.Test('SetKeepAlive', @TestSetKeepAlive);
+  T.Test('TCP listener exposes runtime socket control',
     @TestTcpListenerSupportsRuntimeSocketControl);
-  T.Run('TCP stream exposes runtime socket control',
+  T.Test('TCP stream exposes runtime socket control',
     @TestTcpStreamSupportsRuntimeSocketControl);
-  T.Run('TCP listener try-accept reports would-block and accept',
+  T.Test('TCP listener try-accept reports would-block and accept',
     @TestTcpListenerRuntimeTryAccept);
-  T.Run('TCP stream try-read and try-write support nonblocking runtime I/O',
+  T.Test('TCP stream try-read and try-write support nonblocking runtime I/O',
     @TestTcpStreamRuntimeTryReadAndTryWrite);
-  T.Run('TCP stream post-close runtime guards',
+  T.Test('TCP stream post-close runtime guards',
     @TestTcpStreamPostCloseRuntimeGuards);
-  T.Run('TCP listener post-close runtime guards',
+  T.Test('TCP listener post-close runtime guards',
     @TestTcpListenerPostCloseRuntimeGuards);
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

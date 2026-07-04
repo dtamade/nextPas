@@ -4,7 +4,7 @@ program test_git;
 
 uses
   SysUtils,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
@@ -18,7 +18,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GTmpDir: string;
 
 function TGitCallbackFixture.Credential(const Url, UserFromURL: string; AllowedTypes: Cardinal): Boolean;
@@ -379,20 +379,20 @@ end;
 begin
   SetupTmpDir;
   try
-    T := TTestRunner.Create('nextpas.core.git');
-    T.Run('libgit2 loader reports missing override', @TestLibGit2LoaderReportsMissingOverride);
-    T.Run('libgit2 loader reports symbol failure', @TestLibGit2LoaderReportsSymbolResolutionFailure);
-    T.Run('libgit2 loader reports loaded path', @TestLibGit2LoaderReportsLoadedPath);
-    T.Run('Facade re-exports base constants', @TestFacadeReexportsBaseConstants);
-    T.Run('Unsupported callbacks are explicit', @TestUnsupportedCallbacksAreExplicit);
-    T.Run('DiscoverRepository fallback', @TestDiscoverRepositoryFallsBackToDotGitDirectory);
-    T.Run('DiscoverRepository supports gitfile worktree', @TestDiscoverRepositorySupportsGitFileWorktree);
-    T.Run('InitRepository discarded return value', @TestInitRepositorySupportsDiscardedReturnValue);
-    T.Run('Initialize is idempotent', @TestInitializeIsIdempotent);
-    T.Run('Status sees untracked file', @TestStatusSeesUntrackedFileAfterInit);
-    T.Run('Explicit Finalize waits for live repository', @TestExplicitFinalizeWaitsForLiveRepository);
-    T.Run('HeadCommit metadata', @TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease);
-    T.Summary;
+    T := TTestSuite.Create('nextpas.core.git');
+    T.Test('libgit2 loader reports missing override', @TestLibGit2LoaderReportsMissingOverride);
+    T.Test('libgit2 loader reports symbol failure', @TestLibGit2LoaderReportsSymbolResolutionFailure);
+    T.Test('libgit2 loader reports loaded path', @TestLibGit2LoaderReportsLoadedPath);
+    T.Test('Facade re-exports base constants', @TestFacadeReexportsBaseConstants);
+    T.Test('Unsupported callbacks are explicit', @TestUnsupportedCallbacksAreExplicit);
+    T.Test('DiscoverRepository fallback', @TestDiscoverRepositoryFallsBackToDotGitDirectory);
+    T.Test('DiscoverRepository supports gitfile worktree', @TestDiscoverRepositorySupportsGitFileWorktree);
+    T.Test('InitRepository discarded return value', @TestInitRepositorySupportsDiscardedReturnValue);
+    T.Test('Initialize is idempotent', @TestInitializeIsIdempotent);
+    T.Test('Status sees untracked file', @TestStatusSeesUntrackedFileAfterInit);
+    T.Test('Explicit Finalize waits for live repository', @TestExplicitFinalizeWaitsForLiveRepository);
+    T.Test('HeadCommit metadata', @TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease);
+  if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
   end;

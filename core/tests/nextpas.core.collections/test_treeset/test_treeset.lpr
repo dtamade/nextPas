@@ -6,7 +6,7 @@ uses
   SysUtils,
   Classes,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.tree_set,
   nextpas.core.collections.tree_set.intf,
@@ -21,7 +21,7 @@ type
   end;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TInspectableIntTreeSet.CopyToBuffer(aDst: Pointer; aCount: SizeUInt);
 begin
@@ -265,21 +265,21 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.treeset');
-  T.Run('TreeSet basic add/contains', @TestTreeSetBasic);
-  T.Run('TreeSet remove', @TestTreeSetRemove);
-  T.Run('TreeSet Min/Max', @TestTreeSetMinMax);
-  T.Run('TreeSet empty boundary', @TestTreeSetEmptyBoundary);
-  T.Run('TreeSet clear', @TestTreeSetClear);
-  T.Run('TreeSet remove all then free releases pool blocks', @TestTreeSetRemoveAllThenFreeReleasesPoolBlocks);
-  T.Run('RBTree Clear releases pool when root empty', @TestRBTreeClearReleasesPoolWhenRootEmpty);
-  T.Run('TreeSet SerializeToArrayBuffer respects count', @TestTreeSetSerializeRespectsCount);
-  T.Run('TreeSet SerializeToArrayBuffer errors', @TestTreeSetSerializeErrors);
-  T.Run('TreeSet LowerBound/UpperBound', @TestTreeSetBounds);
-  T.Run('TreeSet Union', @TestTreeSetUnion);
-  T.Run('TreeSet Intersect', @TestTreeSetIntersect);
-  T.Run('TreeSet Difference', @TestTreeSetDifference);
-  T.Run('LinkedHashSet basic (insertion order)', @TestLinkedHashSetBasic);
-  T.Run('LinkedHashSet remove', @TestLinkedHashSetRemove);
-  T.Summary;
+  T := TTestSuite.Create('nextpas.core.collections.treeset');
+  T.Test('TreeSet basic add/contains', @TestTreeSetBasic);
+  T.Test('TreeSet remove', @TestTreeSetRemove);
+  T.Test('TreeSet Min/Max', @TestTreeSetMinMax);
+  T.Test('TreeSet empty boundary', @TestTreeSetEmptyBoundary);
+  T.Test('TreeSet clear', @TestTreeSetClear);
+  T.Test('TreeSet remove all then free releases pool blocks', @TestTreeSetRemoveAllThenFreeReleasesPoolBlocks);
+  T.Test('RBTree Clear releases pool when root empty', @TestRBTreeClearReleasesPoolWhenRootEmpty);
+  T.Test('TreeSet SerializeToArrayBuffer respects count', @TestTreeSetSerializeRespectsCount);
+  T.Test('TreeSet SerializeToArrayBuffer errors', @TestTreeSetSerializeErrors);
+  T.Test('TreeSet LowerBound/UpperBound', @TestTreeSetBounds);
+  T.Test('TreeSet Union', @TestTreeSetUnion);
+  T.Test('TreeSet Intersect', @TestTreeSetIntersect);
+  T.Test('TreeSet Difference', @TestTreeSetDifference);
+  T.Test('LinkedHashSet basic (insertion order)', @TestLinkedHashSetBasic);
+  T.Test('LinkedHashSet remove', @TestLinkedHashSetRemove);
+  if not T.Run then Halt(1);
 end.

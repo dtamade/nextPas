@@ -10,10 +10,10 @@ uses
   nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure AssertRow(ABuf: TBuffer; AY: Integer; const AExpected, AMsg: AnsiString);
 begin
@@ -129,15 +129,13 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.block');
-  T.Run('render all borders', @TestRenderAllBorders);
-  T.Run('render title', @TestRenderTitle);
-  T.Run('inner all borders', @TestInnerAllBorders);
-  T.Run('inner no borders', @TestInnerNoBorders);
-  T.Run('inner title no border', @TestInnerTitleNoBorder);
-  T.Run('as IWidget', @TestAsIWidget);
-  T.Run('builder chain', @TestBuilderChain);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.block');
+  T.Test('render all borders', @TestRenderAllBorders);
+  T.Test('render title', @TestRenderTitle);
+  T.Test('inner all borders', @TestInnerAllBorders);
+  T.Test('inner no borders', @TestInnerNoBorders);
+  T.Test('inner title no border', @TestInnerTitleNoBorder);
+  T.Test('as IWidget', @TestAsIWidget);
+  T.Test('builder chain', @TestBuilderChain);
+  if not T.Run then Halt(1);
 end.

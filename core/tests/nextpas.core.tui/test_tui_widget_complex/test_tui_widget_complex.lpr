@@ -15,8 +15,8 @@ uses
   nextpas.core.tui.widget.virtual_list,
   nextpas.core.tui.widget.notification_center,
   nextpas.core.tui.widget.toast,
-  nextpas.core.testing;
-var T: TTestRunner;
+  nextpas.core.test;
+var T: TTestSuite;
 
 { === TDiffView === }
 
@@ -230,21 +230,20 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.widget.complex');
-  T.Run('diffview new', @TestDiffViewNew);
-  T.Run('diffview from unified', @TestDiffViewFromUnified);
-  T.Run('file tree render', @TestFileTreeRender);
-  T.Run('file tree navigation', @TestFileTreeNavigation);
-  T.Run('kanban render', @TestKanbanRender);
-  T.Run('kanban navigation', @TestKanbanNavigation);
-  T.Run('markdown render', @TestMarkdownRender);
-  T.Run('markdown empty', @TestMarkdownEmpty);
-  T.Run('virtual list render', @TestVirtualListRender);
-  T.Run('virtual list navigation', @TestVirtualListNavigation);
-  T.Run('notification center push', @TestNotificationCenterPush);
-  T.Run('notification center render', @TestNotificationCenterRender);
-  T.Run('toast push and tick', @TestToastPushAndTick);
-  T.Run('toast render', @TestToastRender);
-  T.Summary;
-  if not T.AllPassed then Halt(1);
+  T := TTestSuite.Create('nextpas.core.tui.widget.complex');
+  T.Test('diffview new', @TestDiffViewNew);
+  T.Test('diffview from unified', @TestDiffViewFromUnified);
+  T.Test('file tree render', @TestFileTreeRender);
+  T.Test('file tree navigation', @TestFileTreeNavigation);
+  T.Test('kanban render', @TestKanbanRender);
+  T.Test('kanban navigation', @TestKanbanNavigation);
+  T.Test('markdown render', @TestMarkdownRender);
+  T.Test('markdown empty', @TestMarkdownEmpty);
+  T.Test('virtual list render', @TestVirtualListRender);
+  T.Test('virtual list navigation', @TestVirtualListNavigation);
+  T.Test('notification center push', @TestNotificationCenterPush);
+  T.Test('notification center render', @TestNotificationCenterRender);
+  T.Test('toast push and tick', @TestToastPushAndTick);
+  T.Test('toast render', @TestToastRender);
+  if not T.Run then Halt(1);
 end.

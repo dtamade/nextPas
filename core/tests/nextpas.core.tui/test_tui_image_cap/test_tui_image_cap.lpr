@@ -4,10 +4,10 @@ program test_tui_image_cap;
 
 uses
   nextpas.core.tui.image_cap,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 procedure TestDetectsKittyProtocolFromKnownHints;
 begin
@@ -61,14 +61,12 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.image_cap');
-  T.Run('detects kitty protocol from known hints',
+  T := TTestSuite.Create('nextpas.core.tui.image_cap');
+  T.Test('detects kitty protocol from known hints',
     @TestDetectsKittyProtocolFromKnownHints);
-  T.Run('detects sixel protocol from known hints',
+  T.Test('detects sixel protocol from known hints',
     @TestDetectsSixelProtocolFromKnownHints);
-  T.Run('falls back conservatively without enhanced hints',
+  T.Test('falls back conservatively without enhanced hints',
     @TestFallsBackConservativelyWithoutEnhancedHints);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  if not T.Run then Halt(1);
 end.

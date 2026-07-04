@@ -10,7 +10,7 @@ uses
   nextpas.core.thread.init,
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
+  nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -30,7 +30,7 @@ uses
   nextpas.core.platform.thread;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
 {$IFDEF NEXTPAS_LINUX}
@@ -5810,455 +5810,455 @@ end;
 { Main }
 
 begin
-  T := TTestRunner.Create('nextpas.core.http.security');
-  T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
-  T.Run('TE + CL conflict reverse order', @TestTransferEncodingContentLengthConflictReverseOrder);
-  T.Run('Unsupported transfer coding before chunked -> 501',
+  T := TTestSuite.Create('nextpas.core.http.security');
+  T.Test('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
+  T.Test('TE + CL conflict reverse order', @TestTransferEncodingContentLengthConflictReverseOrder);
+  T.Test('Unsupported transfer coding before chunked -> 501',
     @TestUnsupportedTransferCodingBeforeChunked);
-  T.Run('Chunked must be final transfer coding -> 400',
+  T.Test('Chunked must be final transfer coding -> 400',
     @TestChunkedMustBeFinalTransferCoding);
-  T.Run('Invalid chunk size -> 400', @TestInvalidChunkSize);
-  T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
-  T.Run('Truncated chunk extension at EOF -> 400', @TestTruncatedChunkExtensionAtEof);
-  T.Run('Truncated chunk extension CR at EOF -> 400', @TestTruncatedChunkExtensionCrAtEof);
-  T.Run('Missing chunk-data CRLF', @TestMissingChunkDataCrLf);
-  T.Run('Truncated chunked request at EOF -> 400', @TestTruncatedChunkedRequestAtEof);
-  T.Run('Truncated chunk-size line at EOF -> 400', @TestTruncatedChunkSizeLineAtEof);
-  T.Run('Truncated terminal chunk ending at EOF -> 400', @TestTruncatedTerminalChunkEndingAtEof);
-  T.Run('Truncated terminal chunk ending CR at EOF -> 400', @TestTruncatedTerminalChunkEndingCrAtEof);
-  T.Run('Truncated terminal chunk extension at EOF -> 400', @TestTruncatedTerminalChunkExtensionAtEof);
-  T.Run('Truncated terminal chunk extension CR at EOF -> 400', @TestTruncatedTerminalChunkExtensionCrAtEof);
-  T.Run('Truncated terminal chunk ending after extension at EOF -> 400',
+  T.Test('Invalid chunk size -> 400', @TestInvalidChunkSize);
+  T.Test('Malformed chunk extension', @TestMalformedChunkExtension);
+  T.Test('Truncated chunk extension at EOF -> 400', @TestTruncatedChunkExtensionAtEof);
+  T.Test('Truncated chunk extension CR at EOF -> 400', @TestTruncatedChunkExtensionCrAtEof);
+  T.Test('Missing chunk-data CRLF', @TestMissingChunkDataCrLf);
+  T.Test('Truncated chunked request at EOF -> 400', @TestTruncatedChunkedRequestAtEof);
+  T.Test('Truncated chunk-size line at EOF -> 400', @TestTruncatedChunkSizeLineAtEof);
+  T.Test('Truncated terminal chunk ending at EOF -> 400', @TestTruncatedTerminalChunkEndingAtEof);
+  T.Test('Truncated terminal chunk ending CR at EOF -> 400', @TestTruncatedTerminalChunkEndingCrAtEof);
+  T.Test('Truncated terminal chunk extension at EOF -> 400', @TestTruncatedTerminalChunkExtensionAtEof);
+  T.Test('Truncated terminal chunk extension CR at EOF -> 400', @TestTruncatedTerminalChunkExtensionCrAtEof);
+  T.Test('Truncated terminal chunk ending after extension at EOF -> 400',
     @TestTruncatedTerminalChunkEndingAfterExtensionAtEof);
-  T.Run('Truncated terminal chunk ending after extension CR at EOF -> 400',
+  T.Test('Truncated terminal chunk ending after extension CR at EOF -> 400',
     @TestTruncatedTerminalChunkEndingAfterExtensionCrAtEof);
-  T.Run('Truncated chunk-data ending at EOF -> 400', @TestTruncatedChunkDataEndingAtEof);
-  T.Run('Truncated chunk-data CR at EOF -> 400', @TestTruncatedChunkDataCrAtEof);
-  T.Run('Fixed-length MaxBodySize -> 413', @TestFixedLengthMaxBodySizeRejected);
-  T.Run('Chunked MaxBodySize rejects before terminal chunk',
+  T.Test('Truncated chunk-data ending at EOF -> 400', @TestTruncatedChunkDataEndingAtEof);
+  T.Test('Truncated chunk-data CR at EOF -> 400', @TestTruncatedChunkDataCrAtEof);
+  T.Test('Fixed-length MaxBodySize -> 413', @TestFixedLengthMaxBodySizeRejected);
+  T.Test('Chunked MaxBodySize rejects before terminal chunk',
     @TestChunkedMaxBodySizeRejectsBeforeTerminalChunk);
-  T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
-  T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
-  T.Run('Oversized header >8KB', @TestOversizedHeader);
-  T.Run('Header field over MaxHeaderSize -> explicit 431',
+  T.Test('Generic malformed request -> 400', @TestGenericMalformedRequest);
+  T.Test('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
+  T.Test('Oversized header >8KB', @TestOversizedHeader);
+  T.Test('Header field over MaxHeaderSize -> explicit 431',
     @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431);
-  T.Run('Null byte in header -> 400', @TestHeaderNullByte);
-  T.Run('Separator in header field-name -> 400',
+  T.Test('Null byte in header -> 400', @TestHeaderNullByte);
+  T.Test('Separator in header field-name -> 400',
     @TestHeaderNameSeparatorRejected);
-  T.Run('Request line too long', @TestRequestLineTooLong);
-  T.Run('Request-target over MaxHeaderSize -> explicit 431',
+  T.Test('Request line too long', @TestRequestLineTooLong);
+  T.Test('Request-target over MaxHeaderSize -> explicit 431',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431);
-  T.Run('Slowloris partial request', @TestSlowloris);
-  T.Run('Partial fixed-length body idle-timeout closes connection',
+  T.Test('Slowloris partial request', @TestSlowloris);
+  T.Test('Partial fixed-length body idle-timeout closes connection',
     @TestPartialFixedLengthBodyIdleTimeout);
-  T.Run('Partial chunk-size line idle-timeout closes connection',
+  T.Test('Partial chunk-size line idle-timeout closes connection',
     @TestPartialChunkSizeLineIdleTimeout);
-  T.Run('Partial chunked body idle-timeout closes connection',
+  T.Test('Partial chunked body idle-timeout closes connection',
     @TestPartialChunkedBodyIdleTimeout);
-  T.Run('Partial chunked trailer idle-timeout closes connection',
+  T.Test('Partial chunked trailer idle-timeout closes connection',
     @TestPartialChunkedTrailerIdleTimeout);
-  T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
-  T.Run('CRLF injection in path -> 400', @TestCrlfInjection);
-  T.Run('Missing Host header -> 400', @TestMissingHost);
-  T.Run('Duplicate Host header -> 400', @TestDuplicateHost);
-  T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
-  T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
-  T.Run('Very long method name -> 400', @TestLongMethodName);
-  T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
-  T.Run('Expect positive flow sends interim 100 before final 200',
+  T.Test('HTTP/0.9 no version -> 400', @TestHttp09Request);
+  T.Test('CRLF injection in path -> 400', @TestCrlfInjection);
+  T.Test('Missing Host header -> 400', @TestMissingHost);
+  T.Test('Duplicate Host header -> 400', @TestDuplicateHost);
+  T.Test('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
+  T.Test('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
+  T.Test('Very long method name -> 400', @TestLongMethodName);
+  T.Test('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
+  T.Test('Expect positive flow sends interim 100 before final 200',
     @TestExpectContinuePositiveFlow);
-  T.Run('Expect duplicate 100-continue members still send interim 100',
+  T.Test('Expect duplicate 100-continue members still send interim 100',
     @TestExpectContinueDuplicateMembersStillSendInterim);
-  T.Run('Expect chunked positive flow sends interim 100 before final 200',
+  T.Test('Expect chunked positive flow sends interim 100 before final 200',
     @TestExpectContinueChunkedPositiveFlow);
-  T.Run('Expect chunked MaxBodySize rejects after interim 100',
+  T.Test('Expect chunked MaxBodySize rejects after interim 100',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
-  T.Run('Expect chunked invalid chunk-size rejects after interim 100',
+  T.Test('Expect chunked invalid chunk-size rejects after interim 100',
     @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterim);
-  T.Run('Expect chunked malformed chunk extension rejects after interim 100',
+  T.Test('Expect chunked malformed chunk extension rejects after interim 100',
     @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterim);
-  T.Run('Expect chunked missing chunk-data CRLF rejects after interim 100',
+  T.Test('Expect chunked missing chunk-data CRLF rejects after interim 100',
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim);
-  T.Run('Expect chunked malformed trailer field rejects after interim 100',
+  T.Test('Expect chunked malformed trailer field rejects after interim 100',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer field-name EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer field-name EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer separator EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer separator EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerSeparatorAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer empty-value CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer empty-value CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer empty-value EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer empty-value EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer empty-value section CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer empty-value section CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueSectionCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer whitespace CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer whitespace CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer whitespace EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer whitespace EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer whitespace section EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer whitespace section EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer field line EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer field line EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerFieldLineAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer field CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer field CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerFieldCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer section CR EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer section CR EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerSectionCrAtEofRejectsAfterInterim);
-  T.Run('Expect chunked truncated trailer section EOF rejects after interim 100',
+  T.Test('Expect chunked truncated trailer section EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterim);
-  T.Run('Expect chunked oversize trailer rejects after interim 100',
+  T.Test('Expect chunked oversize trailer rejects after interim 100',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
-  T.Run('Expect fixed-length partial body idle-timeout closes after interim 100',
+  T.Test('Expect fixed-length partial body idle-timeout closes after interim 100',
     @TestExpectContinuePartialFixedLengthBodyIdleTimeout);
-  T.Run('Expect fixed-length zero body progress idle-timeout closes after interim 100',
+  T.Test('Expect fixed-length zero body progress idle-timeout closes after interim 100',
     @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeout);
-  T.Run('Expect chunked partial body idle-timeout closes after interim 100',
+  T.Test('Expect chunked partial body idle-timeout closes after interim 100',
     @TestExpectContinuePartialChunkedBodyIdleTimeout);
-  T.Run('Expect chunked zero body progress idle-timeout closes after interim 100',
+  T.Test('Expect chunked zero body progress idle-timeout closes after interim 100',
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeout);
-  T.Run('Expect declared oversize rejects early without interim 100',
+  T.Test('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
-  T.Run('Expect huge Content-Length rejects early without interim 100',
+  T.Test('Expect huge Content-Length rejects early without interim 100',
     @TestExpectHugeContentLengthRejectsEarly);
-  T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
+  T.Test('Repeated Expect headers with unsupported member reject early without interim 100',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
-  T.Run('Expect zero content-length does not emit interim 100',
+  T.Test('Expect zero content-length does not emit interim 100',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
-  T.Run('Expect no-length request does not emit interim 100',
+  T.Test('Expect no-length request does not emit interim 100',
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim);
-  T.Run('HEAD Expect no-length request does not emit interim 100',
+  T.Test('HEAD Expect no-length request does not emit interim 100',
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
-  T.Run('Malformed direct error backpressure safe handling',
+  T.Test('Malformed direct error backpressure safe handling',
     @TestMalformedRequestBackpressureSafeHandling);
-  T.Run('Unsupported transfer-coding direct error backpressure safe handling',
+  T.Test('Unsupported transfer-coding direct error backpressure safe handling',
     @TestUnsupportedTransferCodingBackpressureSafeHandling);
-  T.Run('Unsupported Expect direct error backpressure safe handling',
+  T.Test('Unsupported Expect direct error backpressure safe handling',
     @TestUnsupportedExpectBackpressureSafeHandling);
-  T.Run('Payload-too-large direct error backpressure safe handling',
+  T.Test('Payload-too-large direct error backpressure safe handling',
     @TestPayloadTooLargeBackpressureSafeHandling);
-  T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling',
+  T.Test('Chunked-not-final transfer-coding direct error backpressure safe handling',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling);
-  T.Run('Invalid chunk-size direct error backpressure safe handling',
+  T.Test('Invalid chunk-size direct error backpressure safe handling',
     @TestInvalidChunkSizeBackpressureSafeHandling);
-  T.Run('Missing chunk-data CRLF direct error backpressure safe handling',
+  T.Test('Missing chunk-data CRLF direct error backpressure safe handling',
     @TestMissingChunkDataCrLfBackpressureSafeHandling);
-  T.Run('Malformed trailer field direct error backpressure safe handling',
+  T.Test('Malformed trailer field direct error backpressure safe handling',
     @TestMalformedTrailerFieldBackpressureSafeHandling);
-  T.Run('Truncated trailer field line EOF direct error backpressure safe handling',
+  T.Test('Truncated trailer field line EOF direct error backpressure safe handling',
     @TestTruncatedTrailerFieldLineEofBackpressureSafeHandling);
-  T.Run('Chunked oversize trailer direct error backpressure safe handling',
+  T.Test('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
-  T.Run('Header field over MaxHeaderSize direct error backpressure safe handling',
+  T.Test('Header field over MaxHeaderSize direct error backpressure safe handling',
     @TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandling);
-  T.Run('Request-target over MaxHeaderSize direct error backpressure safe handling',
+  T.Test('Request-target over MaxHeaderSize direct error backpressure safe handling',
     @TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandling);
-  T.Run('Queued follow-up 400 preserves wire order',
+  T.Test('Queued follow-up 400 preserves wire order',
     @TestQueuedFollowUp400PreservesWireOrder);
-  T.Run('Queued follow-up 501 preserves wire order',
+  T.Test('Queued follow-up 501 preserves wire order',
     @TestQueuedFollowUp501PreservesWireOrder);
-  T.Run('Queued follow-up 417 preserves wire order',
+  T.Test('Queued follow-up 417 preserves wire order',
     @TestQueuedFollowUp417PreservesWireOrder);
-  T.Run('Queued follow-up 431 preserves wire order',
+  T.Test('Queued follow-up 431 preserves wire order',
     @TestQueuedFollowUp431PreservesWireOrder);
-  T.Run('Queued follow-up 413 preserves wire order',
+  T.Test('Queued follow-up 413 preserves wire order',
     @TestQueuedFollowUp413PreservesWireOrder);
-  T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
-  T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
+  T.Test('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
+  T.Test('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
-  T.Run('Content-Length keep-alive partial follow-up request line can complete later',
+  T.Test('Content-Length keep-alive partial follow-up request line can complete later',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Content-Length keep-alive partial follow-up headers can complete later',
+  T.Test('Content-Length keep-alive partial follow-up headers can complete later',
     @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater);
-  T.Run('Content-Length keep-alive truncated follow-up headers safe handling',
+  T.Test('Content-Length keep-alive truncated follow-up headers safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling);
-  T.Run('Chunked extra bytes after close -> 400', @TestChunkedExtraBytesAfterClose);
-  T.Run('Chunked keep-alive garbage tail safe handling', @TestChunkedKeepAliveGarbageTailSafeHandling);
-  T.Run('Chunked keep-alive truncated follow-up request line safe handling',
+  T.Test('Chunked extra bytes after close -> 400', @TestChunkedExtraBytesAfterClose);
+  T.Test('Chunked keep-alive garbage tail safe handling', @TestChunkedKeepAliveGarbageTailSafeHandling);
+  T.Test('Chunked keep-alive truncated follow-up request line safe handling',
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling);
-  T.Run('Chunked keep-alive partial follow-up request line can complete later',
+  T.Test('Chunked keep-alive partial follow-up request line can complete later',
     @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Chunked keep-alive partial follow-up headers can complete later',
+  T.Test('Chunked keep-alive partial follow-up headers can complete later',
     @TestChunkedKeepAlivePartialFollowUpHeadersCanCompleteLater);
-  T.Run('Chunked keep-alive truncated follow-up headers safe handling',
+  T.Test('Chunked keep-alive truncated follow-up headers safe handling',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling);
-  T.Run('Chunked trailer keep-alive garbage tail safe handling',
+  T.Test('Chunked trailer keep-alive garbage tail safe handling',
     @TestChunkedTrailerKeepAliveGarbageTailSafeHandling);
-  T.Run('Chunked trailer keep-alive truncated follow-up request line safe handling',
+  T.Test('Chunked trailer keep-alive truncated follow-up request line safe handling',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling);
-  T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling',
+  T.Test('Chunked trailer keep-alive truncated follow-up headers safe handling',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling);
-  T.Run('Chunked trailer keep-alive partial follow-up request line can complete later',
+  T.Test('Chunked trailer keep-alive partial follow-up request line can complete later',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
-  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later',
+  T.Test('Chunked trailer keep-alive partial follow-up headers can complete later',
     @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLater);
-  T.Run('Chunked trailer pipelined next request in single write',
+  T.Test('Chunked trailer pipelined next request in single write',
     @TestChunkedTrailerPipelinedNextRequestInSingleWrite);
-  T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
-  T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
-  T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
-  T.Run('Chunked oversize trailer uses MaxHeaderSize',
+  T.Test('Negative Content-Length -> 400', @TestNegativeContentLength);
+  T.Test('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
+  T.Test('Malformed trailer field -> 400', @TestMalformedTrailerField);
+  T.Test('Chunked oversize trailer uses MaxHeaderSize',
     @TestChunkedOversizeTrailerUsesMaxHeaderSize);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('Chunked oversize trailer uses MaxHeaderSize with epoll backend',
+  T.Test('Chunked oversize trailer uses MaxHeaderSize with epoll backend',
     @TestChunkedOversizeTrailerUsesMaxHeaderSizeEpollBackend);
   {$ENDIF}
-  T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
-  T.Run('Truncated trailer field-name at EOF -> 400', @TestTruncatedTrailerFieldNameAtEof);
-  T.Run('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);
-  T.Run('Truncated trailer empty-value CR at EOF -> 400', @TestTruncatedTrailerEmptyValueCrAtEof);
-  T.Run('Truncated trailer empty-value at EOF -> 400', @TestTruncatedTrailerEmptyValueAtEof);
-  T.Run('Truncated trailer empty-value section CR at EOF -> 400', @TestTruncatedTrailerEmptyValueSectionCrAtEof);
-  T.Run('Truncated trailer whitespace at EOF -> 400', @TestTruncatedTrailerWhitespaceAtEof);
-  T.Run('Truncated trailer whitespace CR at EOF -> 400', @TestTruncatedTrailerWhitespaceCrAtEof);
-  T.Run('Truncated trailer whitespace section at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionAtEof);
-  T.Run('Truncated trailer whitespace section CR at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionCrAtEof);
-  T.Run('Truncated trailer field line at EOF -> 400', @TestTruncatedTrailerFieldLineAtEof);
-  T.Run('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
-  T.Run('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);
+  T.Test('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
+  T.Test('Truncated trailer field-name at EOF -> 400', @TestTruncatedTrailerFieldNameAtEof);
+  T.Test('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);
+  T.Test('Truncated trailer empty-value CR at EOF -> 400', @TestTruncatedTrailerEmptyValueCrAtEof);
+  T.Test('Truncated trailer empty-value at EOF -> 400', @TestTruncatedTrailerEmptyValueAtEof);
+  T.Test('Truncated trailer empty-value section CR at EOF -> 400', @TestTruncatedTrailerEmptyValueSectionCrAtEof);
+  T.Test('Truncated trailer whitespace at EOF -> 400', @TestTruncatedTrailerWhitespaceAtEof);
+  T.Test('Truncated trailer whitespace CR at EOF -> 400', @TestTruncatedTrailerWhitespaceCrAtEof);
+  T.Test('Truncated trailer whitespace section at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionAtEof);
+  T.Test('Truncated trailer whitespace section CR at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionCrAtEof);
+  T.Test('Truncated trailer field line at EOF -> 400', @TestTruncatedTrailerFieldLineAtEof);
+  T.Test('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
+  T.Test('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);
   {$IFDEF NEXTPAS_LINUX}
-  T.Run('CL + TE conflict with epoll backend',
+  T.Test('CL + TE conflict with epoll backend',
     @TestContentLengthTransferEncodingConflictEpollBackend);
-  T.Run('TE + CL conflict reverse order with epoll backend',
+  T.Test('TE + CL conflict reverse order with epoll backend',
     @TestTransferEncodingContentLengthConflictReverseOrderEpollBackend);
-  T.Run('Duplicate Content-Length -> 400 with epoll backend',
+  T.Test('Duplicate Content-Length -> 400 with epoll backend',
     @TestDuplicateContentLengthEpollBackend);
-  T.Run('Negative Content-Length -> 400 with epoll backend',
+  T.Test('Negative Content-Length -> 400 with epoll backend',
     @TestNegativeContentLengthEpollBackend);
-  T.Run('Generic malformed request -> 400 with epoll backend',
+  T.Test('Generic malformed request -> 400 with epoll backend',
     @TestGenericMalformedRequestEpollBackend);
-  T.Run('Null byte in header -> 400 with epoll backend',
+  T.Test('Null byte in header -> 400 with epoll backend',
     @TestHeaderNullByteEpollBackend);
-  T.Run('HTTP/0.9 no version -> 400 with epoll backend',
+  T.Test('HTTP/0.9 no version -> 400 with epoll backend',
     @TestHttp09RequestEpollBackend);
-  T.Run('CRLF injection in path -> 400 with epoll backend',
+  T.Test('CRLF injection in path -> 400 with epoll backend',
     @TestCrlfInjectionEpollBackend);
-  T.Run('Missing Host header -> 400 with epoll backend',
+  T.Test('Missing Host header -> 400 with epoll backend',
     @TestMissingHostEpollBackend);
-  T.Run('Duplicate Host header -> 400 with epoll backend',
+  T.Test('Duplicate Host header -> 400 with epoll backend',
     @TestDuplicateHostEpollBackend);
-  T.Run('Request line truncated at EOF -> 400 with epoll backend',
+  T.Test('Request line truncated at EOF -> 400 with epoll backend',
     @TestRequestLineTruncatedAtEofEpollBackend);
-  T.Run('Headers truncated at EOF -> 400 with epoll backend',
+  T.Test('Headers truncated at EOF -> 400 with epoll backend',
     @TestHeadersTruncatedAtEofEpollBackend);
-  T.Run('Very long method name -> 400 with epoll backend',
+  T.Test('Very long method name -> 400 with epoll backend',
     @TestLongMethodNameEpollBackend);
-  T.Run('Body larger than CL with Connection: close -> 400 with epoll backend',
+  T.Test('Body larger than CL with Connection: close -> 400 with epoll backend',
     @TestBodyLargerThanContentLengthEpollBackend);
-  T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
+  T.Test('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
-  T.Run('Chunked must be final transfer coding -> 400 with epoll backend',
+  T.Test('Chunked must be final transfer coding -> 400 with epoll backend',
     @TestChunkedMustBeFinalTransferCodingEpollBackend);
-  T.Run('Invalid chunk size -> 400 with epoll backend',
+  T.Test('Invalid chunk size -> 400 with epoll backend',
     @TestInvalidChunkSizeEpollBackend);
-  T.Run('Malformed chunk extension -> 400 with epoll backend',
+  T.Test('Malformed chunk extension -> 400 with epoll backend',
     @TestMalformedChunkExtensionEpollBackend);
-  T.Run('Truncated chunk extension at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunk extension at EOF -> 400 with epoll backend',
     @TestTruncatedChunkExtensionAtEofEpollBackend);
-  T.Run('Truncated chunk extension CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunk extension CR at EOF -> 400 with epoll backend',
     @TestTruncatedChunkExtensionCrAtEofEpollBackend);
-  T.Run('Missing chunk-data CRLF -> 400 with epoll backend',
+  T.Test('Missing chunk-data CRLF -> 400 with epoll backend',
     @TestMissingChunkDataCrLfEpollBackend);
-  T.Run('Chunked extra bytes after close -> 400 with epoll backend',
+  T.Test('Chunked extra bytes after close -> 400 with epoll backend',
     @TestChunkedExtraBytesAfterCloseEpollBackend);
-  T.Run('Truncated chunked request at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunked request at EOF -> 400 with epoll backend',
     @TestTruncatedChunkedRequestAtEofEpollBackend);
-  T.Run('Truncated chunk-size line at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunk-size line at EOF -> 400 with epoll backend',
     @TestTruncatedChunkSizeLineAtEofEpollBackend);
-  T.Run('Truncated terminal chunk ending at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk ending at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkEndingAtEofEpollBackend);
-  T.Run('Truncated terminal chunk ending CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk ending CR at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkEndingCrAtEofEpollBackend);
-  T.Run('Truncated terminal chunk extension at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk extension at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkExtensionAtEofEpollBackend);
-  T.Run('Truncated terminal chunk extension CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk extension CR at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkExtensionCrAtEofEpollBackend);
-  T.Run('Truncated terminal chunk ending after extension at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk ending after extension at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkEndingAfterExtensionAtEofEpollBackend);
-  T.Run('Truncated terminal chunk ending after extension CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated terminal chunk ending after extension CR at EOF -> 400 with epoll backend',
     @TestTruncatedTerminalChunkEndingAfterExtensionCrAtEofEpollBackend);
-  T.Run('Truncated chunk-data ending at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunk-data ending at EOF -> 400 with epoll backend',
     @TestTruncatedChunkDataEndingAtEofEpollBackend);
-  T.Run('Truncated chunk-data CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated chunk-data CR at EOF -> 400 with epoll backend',
     @TestTruncatedChunkDataCrAtEofEpollBackend);
-  T.Run('Fixed-length MaxBodySize -> 413 with epoll backend',
+  T.Test('Fixed-length MaxBodySize -> 413 with epoll backend',
     @TestFixedLengthMaxBodySizeRejectedEpollBackend);
-  T.Run('Chunked MaxBodySize rejects before terminal chunk with epoll backend',
+  T.Test('Chunked MaxBodySize rejects before terminal chunk with epoll backend',
     @TestChunkedMaxBodySizeRejectsBeforeTerminalChunkEpollBackend);
-  T.Run('Truncated trailer section at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer section at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerAtEofEpollBackend);
-  T.Run('Truncated trailer field-name at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer field-name at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerFieldNameAtEofEpollBackend);
-  T.Run('Truncated trailer separator at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer separator at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerSeparatorAtEofEpollBackend);
-  T.Run('Truncated trailer empty-value CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer empty-value CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerEmptyValueCrAtEofEpollBackend);
-  T.Run('Truncated trailer empty-value at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer empty-value at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerEmptyValueAtEofEpollBackend);
-  T.Run('Truncated trailer empty-value section CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer empty-value section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerEmptyValueSectionCrAtEofEpollBackend);
-  T.Run('Truncated trailer whitespace at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer whitespace at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerWhitespaceAtEofEpollBackend);
-  T.Run('Truncated trailer whitespace CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer whitespace CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerWhitespaceCrAtEofEpollBackend);
-  T.Run('Truncated trailer whitespace section at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer whitespace section at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerWhitespaceSectionAtEofEpollBackend);
-  T.Run('Truncated trailer whitespace section CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer whitespace section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerWhitespaceSectionCrAtEofEpollBackend);
-  T.Run('Truncated trailer field line at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer field line at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerFieldLineAtEofEpollBackend);
-  T.Run('Truncated trailer field CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer field CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerFieldCrAtEofEpollBackend);
-  T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
+  T.Test('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
-  T.Run('Truncated Content-Length request body at EOF -> 400 with epoll backend',
+  T.Test('Truncated Content-Length request body at EOF -> 400 with epoll backend',
     @TestTruncatedContentLengthRequestAtEofEpollBackend);
-  T.Run('Expect positive flow sends interim 100 before final 200 with epoll backend',
+  T.Test('Expect positive flow sends interim 100 before final 200 with epoll backend',
     @TestExpectContinuePositiveFlowEpollBackend);
-  T.Run('Expect duplicate 100-continue members still send interim 100 with epoll backend',
+  T.Test('Expect duplicate 100-continue members still send interim 100 with epoll backend',
     @TestExpectContinueDuplicateMembersStillSendInterimEpollBackend);
-  T.Run('Expect chunked positive flow sends interim 100 before final 200 with epoll backend',
+  T.Test('Expect chunked positive flow sends interim 100 before final 200 with epoll backend',
     @TestExpectContinueChunkedPositiveFlowEpollBackend);
-  T.Run('Expect chunked MaxBodySize rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked MaxBodySize rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked invalid chunk-size rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked invalid chunk-size rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked malformed chunk extension rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked malformed chunk extension rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked missing chunk-data CRLF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked missing chunk-data CRLF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked malformed trailer field rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked malformed trailer field rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer field-name EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer field-name EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer separator EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer separator EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerSeparatorAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer empty-value CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer empty-value CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer empty-value EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer empty-value EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer empty-value section CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer empty-value section CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerEmptyValueSectionCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer whitespace CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer whitespace CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer whitespace EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer whitespace EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer whitespace section EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer whitespace section EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer field line EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer field line EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerFieldLineAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer field CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer field CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerFieldCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer section CR EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer section CR EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerSectionCrAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked truncated trailer section EOF rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked truncated trailer section EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterimEpollBackend);
-  T.Run('Expect chunked oversize trailer rejects after interim 100 with epoll backend',
+  T.Test('Expect chunked oversize trailer rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
-  T.Run('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
+  T.Test('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Run('Expect fixed-length zero body progress idle-timeout closes after interim 100 with epoll backend',
+  T.Test('Expect fixed-length zero body progress idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Run('Expect chunked partial body idle-timeout closes after interim 100 with epoll backend',
+  T.Test('Expect chunked partial body idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend);
-  T.Run('Expect chunked zero body progress idle-timeout closes after interim 100 with epoll backend',
+  T.Test('Expect chunked zero body progress idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend);
-  T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
+  T.Test('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
-  T.Run('Expect huge Content-Length rejects early without interim 100 with epoll backend',
+  T.Test('Expect huge Content-Length rejects early without interim 100 with epoll backend',
     @TestExpectHugeContentLengthRejectsEarlyEpollBackend);
-  T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
+  T.Test('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
-  T.Run('Expect zero content-length does not emit interim 100 with epoll backend',
+  T.Test('Expect zero content-length does not emit interim 100 with epoll backend',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
-  T.Run('Expect no-length request does not emit interim 100 with epoll backend',
+  T.Test('Expect no-length request does not emit interim 100 with epoll backend',
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
-  T.Run('HEAD Expect no-length request does not emit interim 100 with epoll backend',
+  T.Test('HEAD Expect no-length request does not emit interim 100 with epoll backend',
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
-  T.Run('Slowloris partial request with epoll backend',
+  T.Test('Slowloris partial request with epoll backend',
     @TestSlowlorisEpollBackend);
-  T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',
+  T.Test('Partial fixed-length body idle-timeout closes connection with epoll backend',
     @TestPartialFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Run('Partial chunk-size line idle-timeout closes connection with epoll backend',
+  T.Test('Partial chunk-size line idle-timeout closes connection with epoll backend',
     @TestPartialChunkSizeLineIdleTimeoutEpollBackend);
-  T.Run('Partial chunked body idle-timeout closes connection with epoll backend',
+  T.Test('Partial chunked body idle-timeout closes connection with epoll backend',
     @TestPartialChunkedBodyIdleTimeoutEpollBackend);
-  T.Run('Partial chunked trailer idle-timeout closes connection with epoll backend',
+  T.Test('Partial chunked trailer idle-timeout closes connection with epoll backend',
     @TestPartialChunkedTrailerIdleTimeoutEpollBackend);
-  T.Run('Malformed direct error backpressure safe handling with epoll backend',
+  T.Test('Malformed direct error backpressure safe handling with epoll backend',
     @TestMalformedRequestBackpressureSafeHandlingEpollBackend);
-  T.Run('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',
+  T.Test('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',
     @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
-  T.Run('Unsupported Expect direct error backpressure safe handling with epoll backend',
+  T.Test('Unsupported Expect direct error backpressure safe handling with epoll backend',
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
-  T.Run('Payload-too-large direct error backpressure safe handling with epoll backend',
+  T.Test('Payload-too-large direct error backpressure safe handling with epoll backend',
     @TestPayloadTooLargeBackpressureSafeHandlingEpollBackend);
-  T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling with epoll backend',
+  T.Test('Chunked-not-final transfer-coding direct error backpressure safe handling with epoll backend',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend);
-  T.Run('Invalid chunk-size direct error backpressure safe handling with epoll backend',
+  T.Test('Invalid chunk-size direct error backpressure safe handling with epoll backend',
     @TestInvalidChunkSizeBackpressureSafeHandlingEpollBackend);
-  T.Run('Missing chunk-data CRLF direct error backpressure safe handling with epoll backend',
+  T.Test('Missing chunk-data CRLF direct error backpressure safe handling with epoll backend',
     @TestMissingChunkDataCrLfBackpressureSafeHandlingEpollBackend);
-  T.Run('Malformed trailer field direct error backpressure safe handling with epoll backend',
+  T.Test('Malformed trailer field direct error backpressure safe handling with epoll backend',
     @TestMalformedTrailerFieldBackpressureSafeHandlingEpollBackend);
-  T.Run('Truncated trailer field line EOF direct error backpressure safe handling with epoll backend',
+  T.Test('Truncated trailer field line EOF direct error backpressure safe handling with epoll backend',
     @TestTruncatedTrailerFieldLineEofBackpressureSafeHandlingEpollBackend);
-  T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
+  T.Test('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
-  T.Run('Header field over MaxHeaderSize direct error backpressure safe handling with epoll backend',
+  T.Test('Header field over MaxHeaderSize direct error backpressure safe handling with epoll backend',
     @TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend);
-  T.Run('Request-target over MaxHeaderSize direct error backpressure safe handling with epoll backend',
+  T.Test('Request-target over MaxHeaderSize direct error backpressure safe handling with epoll backend',
     @TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend);
-  T.Run('Queued follow-up 400 preserves wire order with epoll backend',
+  T.Test('Queued follow-up 400 preserves wire order with epoll backend',
     @TestQueuedFollowUp400PreservesWireOrderEpollBackend);
-  T.Run('Queued follow-up 501 preserves wire order with epoll backend',
+  T.Test('Queued follow-up 501 preserves wire order with epoll backend',
     @TestQueuedFollowUp501PreservesWireOrderEpollBackend);
-  T.Run('Queued follow-up 417 preserves wire order with epoll backend',
+  T.Test('Queued follow-up 417 preserves wire order with epoll backend',
     @TestQueuedFollowUp417PreservesWireOrderEpollBackend);
-  T.Run('Queued follow-up 431 preserves wire order with epoll backend',
+  T.Test('Queued follow-up 431 preserves wire order with epoll backend',
     @TestQueuedFollowUp431PreservesWireOrderEpollBackend);
-  T.Run('Queued follow-up 413 preserves wire order with epoll backend',
+  T.Test('Queued follow-up 413 preserves wire order with epoll backend',
     @TestQueuedFollowUp413PreservesWireOrderEpollBackend);
-  T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
+  T.Test('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
-  T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
+  T.Test('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
-  T.Run('Content-Length keep-alive partial follow-up request line can complete later with epoll backend',
+  T.Test('Content-Length keep-alive partial follow-up request line can complete later with epoll backend',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
-  T.Run('Content-Length keep-alive partial follow-up headers can complete later with epoll backend',
+  T.Test('Content-Length keep-alive partial follow-up headers can complete later with epoll backend',
     @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLaterEpollBackend);
-  T.Run('Content-Length keep-alive truncated follow-up headers safe handling with epoll backend',
+  T.Test('Content-Length keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
-  T.Run('Chunked keep-alive garbage tail safe handling with epoll backend',
+  T.Test('Chunked keep-alive garbage tail safe handling with epoll backend',
     @TestChunkedKeepAliveGarbageTailSafeHandlingEpollBackend);
-  T.Run('Chunked keep-alive truncated follow-up request line safe handling with epoll backend',
+  T.Test('Chunked keep-alive truncated follow-up request line safe handling with epoll backend',
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
-  T.Run('Chunked keep-alive partial follow-up request line can complete later with epoll backend',
+  T.Test('Chunked keep-alive partial follow-up request line can complete later with epoll backend',
     @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
-  T.Run('Chunked keep-alive partial follow-up headers can complete later with epoll backend',
+  T.Test('Chunked keep-alive partial follow-up headers can complete later with epoll backend',
     @TestChunkedKeepAlivePartialFollowUpHeadersCanCompleteLaterEpollBackend);
-  T.Run('Chunked keep-alive truncated follow-up headers safe handling with epoll backend',
+  T.Test('Chunked keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
-  T.Run('Chunked trailer keep-alive garbage tail safe handling with epoll backend',
+  T.Test('Chunked trailer keep-alive garbage tail safe handling with epoll backend',
     @TestChunkedTrailerKeepAliveGarbageTailSafeHandlingEpollBackend);
-  T.Run('Chunked trailer keep-alive truncated follow-up request line safe handling with epoll backend',
+  T.Test('Chunked trailer keep-alive truncated follow-up request line safe handling with epoll backend',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
-  T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend',
+  T.Test('Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
-  T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
+  T.Test('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
-  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later with epoll backend',
+  T.Test('Chunked trailer keep-alive partial follow-up headers can complete later with epoll backend',
     @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLaterEpollBackend);
-  T.Run('Chunked trailer pipelined next request in single write with epoll backend',
+  T.Test('Chunked trailer pipelined next request in single write with epoll backend',
     @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
-  T.Run('Malformed trailer field -> 400 with epoll backend',
+  T.Test('Malformed trailer field -> 400 with epoll backend',
     @TestMalformedTrailerFieldEpollBackend);
-  T.Run('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
+  T.Test('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
     @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431EpollBackend);
-  T.Run('Request-target over MaxHeaderSize -> explicit 431 with epoll backend',
+  T.Test('Request-target over MaxHeaderSize -> explicit 431 with epoll backend',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431EpollBackend);
   {$ENDIF}
-  T.Summary;
+  if not T.Run then Halt(1);
 end.

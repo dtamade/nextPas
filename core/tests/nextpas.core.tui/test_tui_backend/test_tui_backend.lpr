@@ -14,10 +14,10 @@ uses
   nextpas.core.tui.backend.test,
   nextpas.core.platform.console,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
 
 const
   TEST_STDOUT_FD = 1;
@@ -379,33 +379,31 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.tui.backend');
-  T.Run('test backend draw patches', @TestTestBackendDrawPatches);
-  T.Run('test backend cursor', @TestTestBackendCursor);
-  T.Run('test backend alternate', @TestTestBackendAlternate);
-  T.Run('test backend wide glyph cursor parity',
+  T := TTestSuite.Create('nextpas.core.tui.backend');
+  T.Test('test backend draw patches', @TestTestBackendDrawPatches);
+  T.Test('test backend cursor', @TestTestBackendCursor);
+  T.Test('test backend alternate', @TestTestBackendAlternate);
+  T.Test('test backend wide glyph cursor parity',
     @TestTestBackendWideGlyphCursorParity);
-  T.Run('ansi backend flush', @TestAnsiBackendFlush);
-  T.Run('ansi backend flush failure retains pending output',
+  T.Test('ansi backend flush', @TestAnsiBackendFlush);
+  T.Test('ansi backend flush failure retains pending output',
     @TestAnsiBackendFlushFailureRetainsPendingOutput);
-  T.Run('ansi backend draw patches output', @TestAnsiBackendDrawPatchesOutput);
-  T.Run('ansi backend enter alternate click tracking',
+  T.Test('ansi backend draw patches output', @TestAnsiBackendDrawPatchesOutput);
+  T.Test('ansi backend enter alternate click tracking',
     @TestAnsiBackendEnterAlternateClickTracking);
-  T.Run('ansi backend enter alternate scroll only',
+  T.Test('ansi backend enter alternate scroll only',
     @TestAnsiBackendEnterAlternateScrollOnly);
-  T.Run('ansi backend leave alternate disables modes before leaving',
+  T.Test('ansi backend leave alternate disables modes before leaving',
     @TestAnsiBackendLeaveAlternateDisablesModesBeforeLeaving);
-  T.Run('ansi backend draw patches reuses cursor and style',
+  T.Test('ansi backend draw patches reuses cursor and style',
     @TestAnsiBackendDrawPatchesReusesCursorAndStyleForAdjacentCells);
-  T.Run('ansi backend draw patches resets style for default cell',
+  T.Test('ansi backend draw patches resets style for default cell',
     @TestAnsiBackendDrawPatchesResetsStyleForDefaultCell);
-  T.Run('ansi backend draw patches reapplies style on change',
+  T.Test('ansi backend draw patches reapplies style on change',
     @TestAnsiBackendDrawPatchesReappliesStyleOnStyleChange);
-  T.Run('ansi backend draw patches applies underline color',
+  T.Test('ansi backend draw patches applies underline color',
     @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
-  T.Run('ansi backend draw patches wide glyph advances cursor',
+  T.Test('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  if not T.Run then Halt(1);
 end.

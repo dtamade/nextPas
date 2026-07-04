@@ -6,10 +6,10 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.contracts,
-  nextpas.core.testing;
+  nextpas.core.test;
 
 var
-  T: TTestRunner;
+  T: TTestSuite;
   GExplicitContractsBuild: Boolean = False;
 
 procedure ExpectNoRaise(const AProc: TProc; const AMessage: string);
@@ -71,12 +71,10 @@ end;
 begin
   ConfigureMode;
 
-  T := TTestRunner.Create('nextpas.core.contracts');
-  T.Run('require true never raises', @TestRequireTrueNeverRaises);
-  T.Run('require false raises invalid argument', @TestRequireFalseRaisesInvalidArgument);
-  T.Run('require assigned false raises argument nil', @TestRequireAssignedFalseRaisesArgumentNil);
-  T.Run('explicit contracts build marker', @TestExplicitContractsBuildMarker);
-  T.Summary;
-  if not T.AllPassed then
-    Halt(1);
+  T := TTestSuite.Create('nextpas.core.contracts');
+  T.Test('require true never raises', @TestRequireTrueNeverRaises);
+  T.Test('require false raises invalid argument', @TestRequireFalseRaisesInvalidArgument);
+  T.Test('require assigned false raises argument nil', @TestRequireAssignedFalseRaisesArgumentNil);
+  T.Test('explicit contracts build marker', @TestExplicitContractsBuildMarker);
+  if not T.Run then Halt(1);
 end.
