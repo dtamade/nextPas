@@ -855,6 +855,24 @@ begin
 
   { 大小写敏感 }
   Check(not GlobMatch('foo', 'Foo'), 'GlobMatch is case-sensitive');
+
+  { F-07: 边界测试 }
+  { ? 在字符串末尾 }
+  Check(GlobMatch('Foo?', 'FooA'), 'GlobMatch ? at end');
+  Check(not GlobMatch('Foo?', 'Foo'), 'GlobMatch ? at end requires char');
+
+  { 模式比字符串长 }
+  Check(not GlobMatch('FooBarBaz', 'Foo'), 'GlobMatch pattern longer than string');
+  Check(GlobMatch('F*o*B*r', 'FooBar'), 'GlobMatch interleaved wildcards');
+
+  { 多个连续 * }
+  Check(GlobMatch('***', 'anything'), 'GlobMatch triple star');
+  Check(GlobMatch('F***r', 'FooBar'), 'GlobMatch triple star middle');
+
+  { 单字符匹配 }
+  Check(GlobMatch('?', 'A'), 'GlobMatch single ?');
+  Check(not GlobMatch('?', ''), 'GlobMatch single ? empty string');
+  Check(GlobMatch('??', 'AB'), 'GlobMatch double ?');
 end;
 
 var

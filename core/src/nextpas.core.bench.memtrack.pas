@@ -342,7 +342,8 @@ begin
     if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
       GGlobalTracker := TMemoryTracker.Create(True);
   end;
-  GGlobalTracker.Reset;
+  if GGlobalTrackerInitialized <> 0 then  { F-02: guard against CAS loser race }
+    GGlobalTracker.Reset;
 end;
 
 function GetGlobalMemoryStats: TMemoryStats;

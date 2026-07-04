@@ -70,12 +70,12 @@ type
    *
    *  DS-13 Thread Safety Constraint:
    *  TBenchRunner is NOT thread-safe. It contains mutable state (FResults,
-   *  FConfig, FParallelContexts, FBridgeData) with no internal synchronization.
+   *  FConfig, FParallelContexts, FBridgeFunc) with no internal synchronization.
    *  All methods must be called from a single owning thread.
    *
    *  Parallel benchmarks are handled by delegating to TParallelBenchmark
    *  (in nextpas.core.bench.parallel), which manages its own thread pool.
-   *  The parallel bridge communicates back through the instance's FBridgeData
+   *  The parallel bridge communicates back through the instance's FBridgeFunc
    *  and FParallelContexts, but only after the WaitFor barrier ensures all
    *  worker threads have completed.
    *
@@ -93,6 +93,10 @@ type
     FParallelBridgeFunc: TBenchFunc;
     FParallelContexts: array of IBenchContext;
     FParallelContextsInitialized: Boolean;
+    { F-01: bridge data as instance fields (was file-scope GBridgeData global) }
+    FBridgeFunc: TBenchFunc;
+    FBridgeParamFunc: TBenchParamFunc;
+    FBridgeParamValue: Int64;
 
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
@@ -192,18 +196,9 @@ uses
   nextpas.core.bench.memtrack,
   nextpas.core.bench.parallel;
 
-type
-  TParallelBridgeData = record
-    Runner: TBenchRunner;
-    Func: TBenchFunc;
-    ParamFunc: TBenchParamFunc;
-    ParamValue: Int64;
-  end;
-
-{** PF-07: bridge data is a file-scope variable (not exported across units),
- *  set/cleared within ExecuteParallelEntry scope. }
+{** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
+ *  signature does not allow user data. Safe under DS-13 (single-runner). }
 var
-  GBridgeData: TParallelBridgeData;
   GBridgeRunner: TBenchRunner;
 
 {** 并行基准桥接函数
@@ -211,7 +206,7 @@ var
  *  CR-10 修复：记录线程起始/结束时间（通过 RecordElapsed），
  *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。
  *
- *  PF-07：桥接数据从 TBenchRunner.GBridgeData 读取。 }
+ *  F-01：桥接数据从 GBridgeRunner 实例字段读取。 }
 procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
 var
   LContext: IBenchContext;
@@ -219,10 +214,10 @@ var
   LIteration: Int64;
   LRunner: TBenchRunner;
 begin
-  { PF-07: runner instance accessed via file-scope GBridgeRunner }
+  { F-01: runner instance accessed via file-scope GBridgeRunner }
   LRunner := GBridgeRunner;
   if (LRunner = nil) or
-     ((not Assigned(GBridgeData.Func)) and (not Assigned(GBridgeData.ParamFunc))) then
+     ((not Assigned(LRunner.FBridgeFunc)) and (not Assigned(LRunner.FBridgeParamFunc))) then
     Exit;
 
   LContext := TBenchContext.Create;
@@ -230,10 +225,10 @@ begin
   for LIteration := 1 to AIterations do
   begin
     LContextObj.SetIterations(LIteration);
-    if Assigned(GBridgeData.ParamFunc) then
-      GBridgeData.ParamFunc(LContext, GBridgeData.ParamValue)
+    if Assigned(LRunner.FBridgeParamFunc) then
+      LRunner.FBridgeParamFunc(LContext, LRunner.FBridgeParamValue)
     else
-      GBridgeData.Func(LContext);
+      LRunner.FBridgeFunc(LContext);
     if LContextObj.IsSkipped then
       Break;
   end;
@@ -631,20 +626,18 @@ begin
   InitParallelContexts(AEntry.ParallelThreads);
   try
     FParallelBridgeFunc := AEntry.Func;
-    { PF-07: use TBenchRunner class fields instead of file-scope globals }
-    GBridgeData.Runner := Self;
-    GBridgeData.Func := FParallelBridgeFunc;
-    GBridgeData.ParamFunc := AEntry.ParamFunc;
-    GBridgeData.ParamValue := AEntry.ParamValue;
+    { F-01: bridge data stored in instance fields, not file-scope global }
+    FBridgeFunc := FParallelBridgeFunc;
+    FBridgeParamFunc := AEntry.ParamFunc;
+    FBridgeParamValue := AEntry.ParamValue;
     GBridgeRunner := Self;
     try
       LParallelResult := RunParallelBench(@ParallelBenchBridge,
         AEntry.ParallelThreads, LPerThreadIterations);
     finally
-      GBridgeData.Func := nil;
-      GBridgeData.ParamFunc := nil;
-      GBridgeData.ParamValue := 0;
-      GBridgeData.Runner := nil;
+      FBridgeFunc := nil;
+      FBridgeParamFunc := nil;
+      FBridgeParamValue := 0;
       GBridgeRunner := nil;
       FParallelBridgeFunc := nil;
     end;
@@ -830,9 +823,15 @@ end;
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
   I: Integer;
+  LResult: TBenchResult;
 begin
   for I := 1 to FConfig.WarmupIterations do
-    ExecuteEntry(AEntry, 1, False);
+  begin
+    LResult := ExecuteEntry(AEntry, 1, False);
+    { F-06: if warmup is skipped, stop early }
+    if LResult.Skipped then
+      Break;
+  end;
 end;
 
 function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;

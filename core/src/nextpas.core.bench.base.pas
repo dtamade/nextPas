@@ -633,67 +633,51 @@ end;
  *    ? — 匹配单个字符
  *    其他字符按字面匹配（大小写敏感）
  *
- *  递归实现，O(n*m) 最坏情况，基准名称通常很短，无性能问题。
+ *  F-03: 迭代实现（双指针 + 回溯），避免递归堆分配。
+ *  O(n*m) 最坏情况，基准名称通常很短，无性能问题。
  }
 function GlobMatch(const APattern, AStr: string): Boolean;
 var
-  LP, LS: PChar;
-  LPLen, LSLen, I: Integer;
+  LP, LS, LStarP, LStarS: PChar;
 begin
   if APattern = '' then
     Exit(AStr = '');
-  if AStr = '' then
-  begin
-    { 空字符串只匹配全 * 模式 }
-    LP := PChar(APattern);
-    LPLen := Length(APattern);
-    while (LPLen > 0) and (LP^ = '*') do
-    begin
-      Inc(LP);
-      Dec(LPLen);
-    end;
-    Exit(LPLen = 0);
-  end;
 
   LP := PChar(APattern);
   LS := PChar(AStr);
-  LPLen := Length(APattern);
-  LSLen := Length(AStr);
+  LStarP := nil;
+  LStarS := nil;
 
-  while (LPLen > 0) and (LSLen > 0) do
+  while LS^ <> #0 do
   begin
-    if LP^ = '*' then
+    if (LP^ = '*') then
     begin
-      while (LPLen > 0) and (LP^ = '*') do
-      begin
-        Inc(LP);
-        Dec(LPLen);
-      end;
-      if LPLen = 0 then
-        Exit(True);
-      for I := 0 to LSLen - 1 do
-      begin
-        if GlobMatch(string(LP), string(LS + I)) then
-          Exit(True);
-      end;
-      Exit(False);
+      { 记录回溯点：模式和字符串的当前位置 }
+      LStarP := LP;
+      LStarS := LS;
+      Inc(LP);
     end
     else if (LP^ = '?') or (LP^ = LS^) then
     begin
       Inc(LP);
       Inc(LS);
-      Dec(LPLen);
-      Dec(LSLen);
+    end
+    else if LStarP <> nil then
+    begin
+      { 回溯：* 多匹配一个字符 }
+      Inc(LStarS);
+      LP := LStarP + 1;  { 跳过 * }
+      LS := LStarS;
     end
     else
       Exit(False);
   end;
-  while (LPLen > 0) and (LP^ = '*') do
-  begin
+
+  { 跳过尾部的 * }
+  while LP^ = '*' do
     Inc(LP);
-    Dec(LPLen);
-  end;
-  Result := (LPLen = 0) and (LSLen = 0);
+
+  Result := LP^ = #0;
 end;
 
 end.
