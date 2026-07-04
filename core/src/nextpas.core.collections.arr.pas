@@ -15,6 +15,7 @@ uses
   nextpas.core.mem.allocator.base;
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
 
