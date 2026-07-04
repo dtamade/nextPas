@@ -659,6 +659,9 @@ finalization
     ExceptProc := GPrevExceptProc;
     GTestExceptProcHooked := False;
   end;
+  { Clear threadvar strings before heaptrc tally to avoid false leak reports.
+    FPC does not finalize threadvar managed types before heaptrc reports. }
+  GLastTestTrace := '';
   if GExecState <> nil then
     Dispose(GExecState);
 

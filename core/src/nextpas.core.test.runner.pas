@@ -1195,6 +1195,14 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
+    { Dispose thread-local GExecState allocated by SetTestContext.
+      Must be inside finally — Exit (setup failure) skips code after finally.
+      Matches the parallel worker's cleanup in its finally block. }
+    if GExecState <> nil then
+    begin
+      Dispose(GExecState);
+      GExecState := nil;
+    end;
   end;
 
   { Dispose table test allocations (PTestCase/PTestCaseProc heap data).
@@ -1203,16 +1211,6 @@ begin
     FCleanupDone guard prevents double-free when RunAllWithResult also
     calls CleanupTableAllocations after the full run. }
   CleanupTableAllocations;
-
-  { Dispose thread-local GExecState allocated by SetTestContext.
-    Matches the parallel worker's cleanup in its finally block.
-    Without this, heaptrc reports a 32-byte leak because the
-    finalization section may run after heaptrc's tally. }
-  if GExecState <> nil then
-  begin
-    Dispose(GExecState);
-    GExecState := nil;
-  end;
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;

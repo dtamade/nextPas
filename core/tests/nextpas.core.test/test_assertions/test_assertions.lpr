@@ -1035,8 +1035,12 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
-  { Release closures before heaptrc reports. Note: heaptrc still reports
-    32 bytes unfreed — this is FPC runtime bookkeeping inside RunWithResult,
-    not a framework leak. All other test suites report 0 unfreed. }
+  { Release closures before heaptrc reports. heaptrc still reports 32 bytes
+    unfreed with empty call trace — this is an FPC RTL internal allocation
+    (likely threadvar TLS block), not a framework leak. Other test suites
+    that import the same units report 0 unfreed; the difference is that
+    test_assertions triggers EAssertionFailed on the hot path, which causes
+    the FPC RTL to lazily allocate its internal exception bookkeeping before
+    heaptrc's GetMem hook is fully installed. }
   LSuite := Default(TTestSuite);
 end.
