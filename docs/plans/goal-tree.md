@@ -57,7 +57,7 @@
 | E3 | 工具链优化 | 🔲 | IDE 支持、调试 |
 1. [x] 治理文档刷新 (合并碎片文档 + 重写 goal-tree.md v2)
 2. [x] 编译器审计报告 (compiler-audit.md, 36 findings)
-3. [x] 编译器架构计划 v1 (compiler-architecture-plan.md, 15周 5阶段)
+3. [x] 编译器架构计划 v2.1 (compiler-architecture-plan.md, 15周 5阶段 + 规范对齐 + 风险矩阵 + 源码对标)
 4. [ ] c2p_win32_compat 平台排除
 5. [ ] P0 启动：编译器负责人开工
 1. [ ] P0 完成：编译器接入标准库 (THashMap/TVec/Arena) + 基线测量
@@ -66,7 +66,7 @@
 4. [ ] C7 深化: 多目标 IR、LLVM O2/LTO (smoke 已完成)
 | 2026-07-05 | 架构诊断 | TSemanticAnalyzer God Class (279方法/1class)；制定 5 阶段重构方案 |
 | 2026-07-05 | 编译器审计 v1 | compiler-audit.md 合并 findings + critique，36 条量化发现 |
-| 2026-07-05 | 架构计划 v1 | compiler-architecture-plan.md，15 周 5 阶段，对标 rustc/go |
+| 2026-07-05 | 架构计划 v2.1 | compiler-architecture-plan.md，15 周 5 阶段 + 规范对齐 + 风险矩阵 + Rust/Go 源码对标 |
 | 2026-07-05 | 目标树 v2.0 | 重构为 4 阶段，编译器架构升级为当前阶段 |
 ## 治理文档索引
 | 文档 | 用途 |

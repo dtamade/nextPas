@@ -88,7 +88,7 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 
 **对标**: rustc 重度使用 std，Go gc 重度使用 Go 标准库
 
-#### 任务 0.1: 符号表用 THashMap [🔲] 预估 2 天
+#### 任务 0.1: 符号表用 THashMap [✅ 2026-07-05] 预估 2 天
 
 | 项 | 内容 |
 |----|------|
@@ -442,6 +442,291 @@ make hygiene          # 必须通过
 
 ---
 
+---
+
+## 八、架构规范对齐
+
+> **关键原则**: 本计划不是另起炉灶。`docs/architecture/` 中已有 53 份规范文档，
+> 定义了编译器各层的稳定边界。实现时必须以规范为准，本计划是"执行路线"，规范是"设计真相"。
+
+### 8.1 计划阶段 ↔ 架构规范映射
+
+| 计划阶段 | 对应规范 | 规范中的关键约束 |
+|---------|---------|----------------|
+| P0 (基础设施) | `architecture-principles-specification.md` | arena allocation、string interning、immutable Green CST 优先 |
+| P1 (Pipeline) | `compiler-pipeline-specification.md` | 9 阶段显式流水线：Source DB → Lexer → Green CST → AST facade → Name resolution → Typed HIR → MIR → Codegen adapter → Target-aware output |
+| P1 (Sema 拆分) | `semantic-model-specification.md` | symbol graph + type graph + binding table + Typed HIR 四类产物；sema 不回写 AST |
+| P1 (MIR) | `ir-architecture-specification.md` | HIR = Typed SSA CFG，MIR = Erased SSA CFG；THIRModule/THIRFunction/THIRBlock 已定义 |
+| P1 (MIR) | `backend-specification.md` | MIR → Codegen adapter → Target-aware output path；assembler/linker 显式化 |
+| P2 (查询系统) | `language-service-specification.md` | language service core 持有 analysis session、open file overlays、incremental invalidation、semantic queries |
+| P3 (诊断) | `diagnostics-specification.md` | DiagnosticCode/Severity/Phase/PrimarySpan/RelatedSpans/Message/Notes 结构化记录 |
+| P3 (错误恢复) | `compiler-pipeline-specification.md` | 诊断是结构化产品，不是副作用 |
+| P4 (清理) | `architecture-principles-specification.md` | 代码质量、测试覆盖 |
+
+### 8.2 计划与规范的差异点（需要关注）
+
+| 差异 | 计划当前描述 | 规范定义 | 处理 |
+|------|------------|---------|------|
+| Pipeline 阶段数 | 计划说"6 阶段" | 规范定义 9 阶段（多了 Source database、AST facade、Codegen adapter） | **规范为准**：P1 实现时按 9 阶段设计 |
+| MIR 数据结构 | 计划中临时定义了 TBasicBlock/TStatement/TOperand | 规范中已定义 THIRModule/THIRFunction/THIRBlock/THIRInstr/TMIROpKind | **规范为准**：直接用规范中的数据结构 |
+| IR 层数 | 计划说 HIR→MIR→LIR 三层 | 规范说 HIR→MIR→LLVM IR（LIR = LLVM IR） | 一致，无冲突 |
+| 诊断结构 | 计划说 JSON 格式 | 规范定义了 DiagnosticCode/Severity/Phase/PrimarySpan 等内部结构 | **互补**：内部用规范结构，外部输出 JSON |
+
+### 8.3 规范阅读顺序（给编译器负责人）
+
+实现每个阶段前，先读对应规范：
+
+```
+P0: 不需要读规范（只改实现，不改架构）
+P1: compiler-pipeline-specification.md → semantic-model-specification.md → ir-architecture-specification.md → backend-specification.md
+P2: language-service-specification.md → unit-resolution-specification.md
+P3: diagnostics-specification.md → compiler-pipeline-specification.md（诊断章节）
+P4: architecture-principles-specification.md
+```
+
+---
+
+## 九、风险矩阵
+
+> 15 周计划不是无风险的。以下识别每个阶段的关键风险、依赖关系、降级方案。
+
+### 9.1 风险总览
+
+| 风险 ID | 风险 | 阶段 | 概率 | 影响 | 等级 |
+|---------|------|------|------|------|------|
+| R1 | THashMap 替换导致行为变化（哈希顺序 ≠ 数组顺序） | P0 | 中 | 高 | 🔴 |
+| R2 | Arena 分配破坏现有生命周期假设（use-after-free） | P0 | 高 | 高 | 🔴 |
+| R3 | Sema 拆分时引入回归（34 个 compiler-pass 不够覆盖 279 方法） | P1 | 高 | 极高 | 🔴 |
+| R4 | MIR 层引入后性能退化（多一层翻译） | P1 | 中 | 中 | 🟠 |
+| R5 | 查询系统复杂度超预期（rustc 查询系统迭代了 5 年） | P2 | 高 | 高 | 🔴 |
+| R6 | 增量编译正确性难保证（缓存失效不完整 → 过期结果） | P2 | 高 | 极高 | 🔴 |
+| R7 | 并行编译引入非确定性（竞态条件） | P2 | 中 | 高 | 🔴 |
+| R8 | MIR 优化 pass 破坏正确性（优化 bug） | P3 | 中 | 极高 | 🔴 |
+| R9 | Permissive overload 清理后发现新歧义（破坏现有代码） | P4 | 高 | 高 | 🔴 |
+
+### 9.2 风险详情与降级方案
+
+#### R1: THashMap 替换导致行为变化
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 现有代码依赖数组遍历顺序（隐式依赖） |
+| **检测方法** | compiler-pass 34/34 + compiler-fail snapshot 对比 |
+| **降级方案** | 先只改确定无顺序依赖的查找（FindTypeByName, FindSymbolByName），保留有顺序依赖的用 TOrderedDictionary |
+| **参考** | Go 的 map 迭代顺序是随机的，Go 编译器自身处理了这个问题 |
+
+#### R2: Arena 分配破坏生命周期
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | AST 节点在 Arena 释放后被引用 |
+| **检测方法** | heaptrc + valgrind（use-after-free 检测） |
+| **降级方案** | 分步迁移：先 Arena 化叶子节点（tokens），再内部节点，每次验证 compiler-pass |
+| **参考** | rustc 的 `BumpPtr` 是编译会话级 Arena，编译结束才释放 |
+
+#### R3: Sema 拆分引入回归
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 拆分时改变方法调用顺序或共享状态访问模式 |
+| **检测方法** | 每步 compiler-pass 34/34，compiler-fail snapshot 不变 |
+| **降级方案** | 先抽离纯函数模块（builtins、type_check），再抽离有状态模块（overload、string_ownership）；任何一步失败立即回滚该步 |
+| **硬依赖** | D-01/E-07 必须先解决（sema 单元测试补全到阶段 4 太晚，至少 P1 前要有 10 个关键路径测试） |
+
+#### R4: MIR 层引入后性能退化
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | HIR→MIR→LLVM IR 三阶段比 HIR→LLVM IR 两阶段慢 |
+| **检测方法** | 阶段 0 基线 vs 阶段 1 后编译时间对比 |
+| **降级方案** | MIR 层先做 identity transform（直通），优化 pass 延后到阶段 3；确保 MIR 层开销 < 5% |
+
+#### R5: 查询系统复杂度超预期
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 查询依赖图构建、失效传播、缓存键设计比预估复杂 |
+| **检测方法** | 阶段 2.1 第 3 天检查进度：如果查询系统框架还不能跑通，立即评估 |
+| **降级方案** | 降级为"显式缓存层"（手动 invalidate，不做自动依赖追踪），增量编译用文件级 mtime 而非查询级 |
+| **参考** | rustc 的查询系统（Salsa）从 2017 年开始迭代，2019 年才稳定。不要追求一步到位 |
+
+#### R6: 增量编译正确性难保证
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 缓存失效不完整 → 使用过期类型信息 → 生成错误代码 |
+| **检测方法** | 全量编译 vs 增量编译产物对比（`diff LLVM IR`） |
+| **降级方案** | 增量编译先只支持"文件级"（文件没变 → 跳过），不做"函数级"；提供 `--force-rebuild` 标志绕过缓存 |
+| **参考** | Go 的 `go build -i` 也是包级缓存，不做函数级增量 |
+
+#### R7: 并行编译引入非确定性
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 多线程访问共享状态（diagnostics sink、symbol interner、arena） |
+| **检测方法** | `rr` record-and-replay 或 stress test（100 次编译结果一致） |
+| **降级方案** | 并行编译先只做"单元级"（独立 unit 并行编译），不做"阶段级"并行；共享状态用 lock-free 或 immutability |
+
+#### R8: MIR 优化 pass 破坏正确性
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 优化 pass 在边界条件下行为不正确 |
+| **检测方法** | 每个 pass 独立单元测试 + compiler-pass 34/34 + compiler-fail snapshot |
+| **降级方案** | 每个 pass 有独立的 `--disable-opt=<passname>` 标志；默认只开启已验证安全的 pass |
+| **参考** | LLVM 的 `opt -O0` / `-O1` / `-O2` 分级策略 |
+
+#### R9: Permissive overload 清理后新歧义
+
+| 项 | 内容 |
+|----|------|
+| **触发条件** | 之前被 permissive 逻辑"碰巧选对"的代码，在正式重载解析下变成歧义 |
+| **检测方法** | compiler-pass 34/34（可能减少），compiler-fail 新增测试 |
+| **降级方案** | 分两阶段：先加"严格模式"标志（默认 off），收集所有歧义；下一阶段默认 on |
+
+### 9.3 阶段依赖图
+
+```
+P0 (基础设施) ──┐
+                ├──→ P1 (架构重构) ──→ P2 (查询化) ──→ P3 (能力补全) ──→ P4 (清理)
+                │         │                │                │
+                │         └── 硬依赖 ──────┘                │
+                │          (MIR 层必须先存在                  │
+                │           查询系统才能缓存它)               │
+                │                                           │
+                └── 软依赖 ──────────────────────────────────┘
+                 (Arena/THashMap/TVec 提升性能，
+                  但不阻塞后续阶段)
+```
+
+**关键路径**: P0 → P1 → P2 → P3 → P4（顺序依赖，不可跳过）
+**可并行**: P0.1/P0.2/P0.3 三个任务可并行（互不依赖）
+**最高风险点**: P1.2（Sema 拆分）+ P2.1（查询系统框架）
+
+---
+
+## 十、Rust/Go 源码对标索引
+
+> 每个设计决策不仅说"对标 rustc/go"，还给出具体源码路径。
+> 编译器负责人在实现时可以直接参考这些文件。
+
+### 10.1 Rust 编译器 (rustc) 源码参考
+
+| 设计决策 | rustc 源码路径 | 参考内容 |
+|---------|---------------|---------|
+| Pipeline 架构 | `compiler/rustc_driver/src/lib.rs` | `run_compiler()` 入口，阶段调度 |
+| Query system | `compiler/rustc_middle/src/query/mod.rs` | 查询定义宏，`TyCtxt` 查询方法 |
+| Query system (Salsa) | `https://github.com/salsa-rs/salsa` | Salsa 框架本身（rustc 的查询系统基础） |
+| HIR 定义 | `compiler/rustc_hir/src/hir.rs` | `HirId`, `Item`, `Expr`, `Stmt` 等 |
+| HIR lowering (AST→HIR) | `compiler/rustc_ast_lowering/src/lib.rs` | AST 到 HIR 的降级逻辑 |
+| Type checking | `compiler/rustc_typeck/src/check/mod.rs` | 类型检查主入口 |
+| Trait resolution | `compiler/rustc_trait_selection/src/traits/` | trait 解析（对标 overload resolution） |
+| MIR 定义 | `compiler/rustc_middle/src/mir/mod.rs` | `Body`, `BasicBlock`, `Statement`, `Terminator`, `Operand` |
+| MIR building | `compiler/rustc_mir_build/src/build/mod.rs` | HIR → MIR 构建 |
+| MIR optimizations | `compiler/rustc_mir_transform/src/` | MIR 优化 pass 集合 |
+| Arena allocation | `compiler/rustc_arena/src/lib.rs` | `TypedArena`, `DroplessArena` |
+| Symbol interning | `compiler/rustc_span/src/symbol.rs` | `Symbol` interned string |
+| Error diagnostics | `compiler/rustc_errors/src/lib.rs` | `Diagnostic`, `DiagnosticBuilder`, structured suggestions |
+| Error recovery (parser) | `compiler/rustc_parse/src/parser/mod.rs` | `recover()` 方法，同步点策略 |
+| Incremental compilation | `compiler/rustc_incremental/src/persist/` | 增量编译缓存持久化 |
+| Parallel compilation | `compiler/rustc_interface/src/queries.rs` | 查询并行执行 |
+| LLVM codegen | `compiler/rustc_codegen_llvm/src/lib.rs` | MIR → LLVM IR 翻译 |
+
+**rustc 本地克隆参考**:
+```bash
+git clone https://github.com/rust-lang/rust.git --depth 1
+# 关键目录: compiler/rustc_middle/src/mir/ (MIR 定义)
+#          compiler/rustc_mir_build/src/build/ (MIR 构建)
+#          compiler/rustc_typeck/src/ (类型检查)
+```
+
+### 10.2 Go 编译器 (gc) 源码参考
+
+| 设计决策 | gc 源码路径 | 参考内容 |
+|---------|-----------|---------|
+| Compiler entry | `src/cmd/compile/main.go` | `main()` 入口 |
+| SSA IR 定义 | `src/cmd/compile/internal/ssa/` | `Value`, `Block`, `Op` 等 SSA 结构 |
+| SSA IR generation | `src/cmd/compile/internal/ssagen/ssa.go` | AST → SSA 生成 |
+| SSA optimizations | `src/cmd/compile/internal/ssa/compile.go` | Pass 调度：`passes` 数组定义所有 pass 顺序 |
+| Type checking | `src/cmd/compile/internal/typecheck/` | 类型检查（Go 的类型检查在 AST 上直接做） |
+| Symbol table | `src/cmd/compile/internal/types/sym.go` | `Sym` 结构，符号查找 |
+| AST nodes | `src/cmd/compile/internal/ir/` | `Node` 接口，各种语句/表达式节点 |
+| Lexer | `src/cmd/compile/internal/syntax/scanner.go` | 词法分析 |
+| Parser | `src/cmd/compile/internal/syntax/parser.go` | 语法分析，错误恢复 |
+| Object file output | `src/cmd/compile/internal/obj/` | 目标文件生成 |
+| Inlining | `src/cmd/compile/internal/inline/inl.go` | 函数内联 |
+| Escape analysis | `src/cmd/compile/internal/escape/` | 逃逸分析（对标所有权分析） |
+| Devirtualization | `src/cmd/compile/internal/devirtualize/` | 去虚拟化 |
+
+**Go 本地克隆参考**:
+```bash
+git clone https://github.com/golang/go.git --depth 1
+# 关键目录: src/cmd/compile/internal/ssa/ (SSA IR 和优化)
+#          src/cmd/compile/internal/ssagen/ (AST→SSA)
+#          src/cmd/compile/internal/typecheck/ (类型检查)
+```
+
+### 10.3 对标参考优先级（按实现顺序）
+
+| 阶段 | 优先参考 | 原因 |
+|------|---------|------|
+| P0 | Go gc `types/sym.go` (符号表) | Go 的符号表设计简单直接，适合第一阶段 |
+| P1 | rustc `mir/mod.rs` (MIR 定义) + Go `ssa/` (SSA 设计) | MIR 设计参考 rustc，SSA 实现参考 Go |
+| P1 | rustc `rustc_typeck/` (类型检查拆分) | 学习如何拆分 God Class |
+| P2 | rustc `rustc_query_system/` + Salsa 框架 | 查询系统设计 |
+| P3 | rustc `rustc_mir_transform/` (MIR 优化) | 优化 pass 参考 |
+| P3 | rustc `rustc_parse/` (错误恢复) | 错误恢复策略 |
+| P3 | rustc `rustc_errors/` (诊断) | 结构化诊断设计 |
+
+### 10.4 关键参考片段
+
+**rustc MIR 核心定义** (`compiler/rustc_middle/src/mir/mod.rs`):
+```rust
+pub struct Body<'tcx> {
+    pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
+    pub local_decls: IndexVec<Local, LocalDecl<'tcx>>,
+    pub var_debug_info: Vec<VarDebugInfo<'tcx>>,
+    // ...
+}
+
+pub enum StatementKind<'tcx> {
+    Assign(Box<(Place<'tcx>, Rvalue<'tcx>)>),
+    // ...
+}
+
+pub enum TerminatorKind<'tcx> {
+    Goto { target: BasicBlock },
+    SwitchInt { discr: Operand<'tcx>, targets: SwitchTargets },
+    Return,
+    Call { func: Operand<'tcx>, args: Vec<Operand<'tcx>>, destination: Place<'tcx>, target: Option<BasicBlock>, unwind: UnwindAction },
+    // ...
+}
+```
+
+**Go SSA 核心定义** (`src/cmd/compile/internal/ssa/value.go`):
+```go
+type Value struct {
+    ID    ID
+    Op    Op
+    Type  *types.Type
+    Aux   interface{}
+    Args  []*Value
+    Block *Block
+    // ...
+}
+
+type Block struct {
+    ID       ID
+    Kind     BlockKind
+    Values   []*Value
+    Succs    []Edge
+    Preds    []Edge
+    // ...
+}
+```
+
+---
+
 *本计划对标 Rust 编译器 (rustc) 和 Go 编译器 (gc) 的架构设计。*
 *每个阶段有明确的输入、输出、验证标准。完成即闭环。*
-*最后更新：2026-07-05 | 版本: v2.0*
+*最后更新：2026-07-05 | 版本: v2.1*
