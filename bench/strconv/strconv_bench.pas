@@ -2,11 +2,12 @@ program strconv_bench;
 
 {$mode objfpc}{$H+}
 
-uses SysUtils, Classes,
-  nextpas.core.base,
+uses nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
-  nextpas.core.bench.intf;
+  nextpas.core.bench.intf,
+  nextpas.core.text.conv;
+
 
 const
   N = 100000;

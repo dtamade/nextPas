@@ -1,7 +1,9 @@
 {$mode objfpc}{$H+}
 program bench_sort_only;
 uses
-  SysUtils, np_sort_utils, nextpas.core.time.base;
+  np_sort_utils, nextpas.core.time.base,
+  nextpas.core.text.conv;
+
 
 const
   SORT_N = 10000;

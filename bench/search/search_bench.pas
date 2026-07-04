@@ -2,7 +2,6 @@ program search_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -81,7 +80,7 @@ begin
   WriteLn('Sorted array N=', N, ', queries=', QUERIES);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Search')
+  LSuite := TBenchSuite.Create('search')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

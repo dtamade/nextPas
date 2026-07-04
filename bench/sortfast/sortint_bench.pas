@@ -2,7 +2,7 @@
 program sortint_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.collections.arr.sort;
 
@@ -67,7 +67,7 @@ procedure QuickSort_1M(const ACtx: IBenchContext);
 begin QuickSortI32(@GInts1M[0], N1M); end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -75,7 +75,7 @@ begin
   WriteLn('=== nextPas sortint_bench (', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%}, ') ===');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('SortI32');
+  LSuite := TBenchSuite.Create('sortfast/i32');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('SortI32/10K', @SortI32_10K);
   LSuite.Add('SortI32/100K', @SortI32_100K);

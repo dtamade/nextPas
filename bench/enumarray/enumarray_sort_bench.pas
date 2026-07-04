@@ -1,8 +1,7 @@
 {$mode ObjFPC}{$H+}
 {$packenum 1}
 program enumarray_sort_bench;
-uses SysUtils, Classes,
-  nextpas.core.base, nextpas.core.time.base,
+uses nextpas.core.base, nextpas.core.time.base,
   nextpas.core.bench, nextpas.core.bench.intf;
 
 const
@@ -64,15 +63,17 @@ end;
 
 var
   LSuite: IBenchSuite;
+  LResults: IBenchResults;
   I: Integer;
 begin
   for I := 0 to N-1 do
     GCopy[I] := TTokenKind(19 - (I mod 20));
   Move(GCopy[0], GTokens[0], N);
-  LSuite := TBenchSuite.Create('EnumArraySort');
+  LSuite := TBenchSuite.Create('enumarray/sort');
   LSuite.Add('QuickSort/100K', @SortTokens);
   LSuite.Add('SetFilter/100K', @SetFilter);
   LSuite.SetMinSamples(10);
   LSuite.SetMaxIterations(10000);
-  LSuite.Run;
+  LResults := LSuite.Run;
+  WriteLn(LResults.ToBenchStat);
 end.

@@ -12,7 +12,6 @@ program bench_arena;
 
 uses
   {$ifdef unix}cthreads,{$endif}
-  SysUtils, Classes,
   nextpas.core.collections.hashmap,
   nextpas.core.text.builder,
   nextpas.core.json,
@@ -20,7 +19,9 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
-  np_sort_utils;
+  np_sort_utils,
+  nextpas.core.text.conv;
+
 
 const
   HASHMAP_N     = 100000;

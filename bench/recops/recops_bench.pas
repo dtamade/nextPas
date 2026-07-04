@@ -1,7 +1,7 @@
 program recops_bench;
 {$mode ObjFPC}{$H+}{$inline on}
 uses
-  SysUtils, Classes, Math,
+  Math,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -115,7 +115,7 @@ var
 begin
   InitData;
 
-  LSuite := TBenchSuite.Create('RecOps');
+  LSuite := TBenchSuite.Create('recops');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200));
   LSuite.SetMaxIterations(1000);
   LSuite.SetMinSamples(6);

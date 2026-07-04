@@ -2,7 +2,7 @@
 program setops_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.collections.arr.sort,
   nextpas.core.collections.hashmap.swiss.i32i32;
@@ -181,7 +181,7 @@ begin
 end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -189,7 +189,7 @@ begin
   WriteLn('=== nextPas setops_bench (', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%}, ') ===');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Intersection');
+  LSuite := TBenchSuite.Create('setops/intersection');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Merge/10Kx100K', @Intersect_10K);
   LSuite.Add('Merge/100Kx100K', @Intersect_100K);
@@ -201,7 +201,7 @@ begin
   WriteLn(LResults.ToBenchStat);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Union');
+  LSuite := TBenchSuite.Create('setops/union');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Merge/10Kx100K', @Union_10K);
   LSuite.Add('Merge/100Kx100K', @Union_100K);

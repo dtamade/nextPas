@@ -10,7 +10,6 @@ program io_bench;
 }
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.fs,
@@ -118,7 +117,7 @@ begin
   WriteFile(GTempPath, GData1MB);
   WriteFileText(GTempPath + '.txt', GTextData);
 
-  LSuite := TBenchSuite.Create('IO')
+  LSuite := TBenchSuite.Create('io')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(1000)
     .SetMinSamples(6)
@@ -138,6 +137,6 @@ begin
   WriteLn(LResults.ToBenchStat);
 
   { Cleanup }
-  SysUtils.DeleteFile(GTempPath);
-  SysUtils.DeleteFile(GTempPath + '.txt');
+  DeleteFile(GTempPath);
+  DeleteFile(GTempPath + '.txt');
 end.

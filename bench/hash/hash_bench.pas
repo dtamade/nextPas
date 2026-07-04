@@ -2,7 +2,6 @@ program hash_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -97,7 +96,7 @@ begin
   WriteLn('N=', N, ' string keys');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('HashMap')
+  LSuite := TBenchSuite.Create('hash')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)

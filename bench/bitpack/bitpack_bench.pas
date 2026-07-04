@@ -1,7 +1,6 @@
 program bitpack_bench;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -175,7 +174,7 @@ var
   LSuite: IBenchSuite;
 begin
   InitData;
-  LSuite := TBenchSuite.Create('BitPack');
+  LSuite := TBenchSuite.Create('bitpack');
   LSuite.Add('NonZeroCount', @BenchNonZeroCount);
   LSuite.Add('ByteSum',      @BenchByteSum);
   LSuite.Add('ByteMax',      @BenchByteMax);

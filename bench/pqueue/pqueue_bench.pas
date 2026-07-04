@@ -2,7 +2,7 @@
 program pqueue_bench;
 
 uses
-  SysUtils, Classes, nextpas.core.base,
+  nextpas.core.base,
   nextpas.core.time.base, nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.collections.priorityqueue;
 
@@ -159,7 +159,7 @@ begin
 end;
 
 var
-  LSuite: TBenchSuite;
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   GenData;
@@ -167,7 +167,7 @@ begin
   WriteLn('=== nextPas pqueue_bench (', {$I %FPCTARGETCPU%}, '-', {$I %FPCTARGETOS%}, ') ===');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('PQueuePush');
+  LSuite := TBenchSuite.Create('pqueue/push');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(10000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Push/1K', @Push_1K);
   LSuite.Add('Push/10K', @Push_10K);
@@ -176,7 +176,7 @@ begin
   WriteLn(LResults.ToBenchStat);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('PQueuePop');
+  LSuite := TBenchSuite.Create('pqueue/pop');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(1000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Pop/1K', @Pop_1K);
   LSuite.Add('Pop/10K', @Pop_10K);
@@ -185,7 +185,7 @@ begin
   WriteLn(LResults.ToBenchStat);
   WriteLn;
 
-  LSuite := TBenchSuite.Create('PQueueInterleaved');
+  LSuite := TBenchSuite.Create('pqueue/interleaved');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200)).SetMaxIterations(5000).SetMinSamples(6).SetWarmupIters(3);
   LSuite.Add('Interleaved/1K', @Interleaved_1K);
   LSuite.Add('Interleaved/10K', @Interleaved_10K);

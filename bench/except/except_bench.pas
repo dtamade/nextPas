@@ -1,7 +1,7 @@
 program except_bench;
 {$mode ObjFPC}{$H+}{$inline on}
 uses
-  SysUtils, Classes,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -116,7 +116,7 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('Except');
+  LSuite := TBenchSuite.Create('except');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200));
   LSuite.SetMaxIterations(1000);
   LSuite.SetMinSamples(6);

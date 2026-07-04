@@ -1,7 +1,6 @@
 {$mode ObjFPC}{$H+}
 program multidim_bench;
-uses SysUtils, Classes,
-  nextpas.core.base, nextpas.core.time.base,
+uses nextpas.core.base, nextpas.core.time.base,
   nextpas.core.bench, nextpas.core.bench.intf;
 
 const
@@ -67,13 +66,15 @@ end;
 
 var
   LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
   FillChar(GMatrix, SizeOf(GMatrix), 0);
-  LSuite := TBenchSuite.Create('Multidim');
+  LSuite := TBenchSuite.Create('multidim');
   LSuite.Add('RandomRead/150', @MultidimRead);
   LSuite.Add('RandomWrite/150', @MultidimWrite);
   LSuite.Add('LinearScan/10K', @MultidimLinear);
   LSuite.SetMinSamples(10);
   LSuite.SetMaxIterations(100000);
-  LSuite.Run;
+  LResults := LSuite.Run;
+  WriteLn(LResults.ToBenchStat);
 end.

@@ -2,7 +2,6 @@
 program matrix_bench;
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -115,7 +114,7 @@ var
 begin
   InitData;
 
-  LSuite := TBenchSuite.Create('Matrix');
+  LSuite := TBenchSuite.Create('matrix');
   LSuite.SetMinDuration(TDuration.FromMilliseconds(200));
   LSuite.SetMaxIterations(100);
   LSuite.SetMinSamples(6);

@@ -2,7 +2,6 @@ program sort_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bench,
@@ -198,7 +197,7 @@ begin
   WriteLn('Introsort implementation, Int64 arrays');
   WriteLn;
 
-  LSuite := TBenchSuite.Create('Sort')
+  LSuite := TBenchSuite.Create('sort')
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMaxIterations(10000)
     .SetMinSamples(6)
