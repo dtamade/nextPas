@@ -50,6 +50,7 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
@@ -129,6 +130,9 @@ begin Result := nil; end;
 
 function TMockRequest.GetContentLength: Int64;
 begin Result := 0; end;
+
+function TMockRequest.GetTrailers: IHttpHeaders;
+begin Result := nil; end;
 
 function TMockRequest.GetRemoteAddr: string;
 begin Result := '127.0.0.1'; end;
@@ -400,7 +404,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(5))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/fast');
   LWObj := TMockResponseWriter.Create;
@@ -424,7 +428,7 @@ begin
       TSleep.ForDuration(TDuration.FromMilliseconds(50));
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromMilliseconds(10))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/slow');
   LWObj := TMockResponseWriter.Create;
@@ -448,7 +452,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(1))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/check');
   LWObj := TMockResponseWriter.Create;
