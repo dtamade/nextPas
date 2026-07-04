@@ -51,7 +51,8 @@ type
     function ToBeLessThanD(const AExpected: Double): IExpectation;
     function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
     function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -152,7 +153,8 @@ type
     function ToBeLessThanD(const AExpected: Double): IExpectation;
     function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
     function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+    function ToBeInRangeD(const ALow, AHigh: Double;
+      const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
     function ToContainCI(const ASubstr: string): IExpectation;
     function ToStartWithCI(const APrefix: string): IExpectation;
@@ -575,7 +577,10 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeInRangeD(const ALow, AHigh: Double): IExpectation;
+function TExpectation.ToBeInRangeD(const ALow, AHigh: Double;
+  const AEpsilon: Double): IExpectation;
+var
+  LIn, LInEps: Boolean;
 begin
   RequireKind(ekDouble, 'ToBeInRangeD');
   if IsNan(FDoubleValue) or IsNan(ALow) or IsNan(AHigh) then
@@ -584,7 +589,14 @@ begin
   if ALow > AHigh then
     InternalFail('ToBeInRangeD: low (' + FloatToStr(ALow) +
       ') > high (' + FloatToStr(AHigh) + ')');
-  CheckMatch((FDoubleValue >= ALow) and (FDoubleValue <= AHigh),
+  LIn := (FDoubleValue >= ALow) and (FDoubleValue <= AHigh);
+  { Epsilon tolerance: accept values slightly outside the range }
+  if not LIn then
+    LInEps := (Abs(FDoubleValue - ALow) <= AEpsilon) or
+              (Abs(FDoubleValue - AHigh) <= AEpsilon)
+  else
+    LInEps := True;
+  CheckMatch(LInEps,
     FloatToStr(FDoubleValue) + ' should not be in [' +
       FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']',
     FloatToStr(FDoubleValue) + ' is not in [' +

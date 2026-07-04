@@ -112,6 +112,9 @@ type
       failure (Go t.Cleanup() equivalent). Handlers execute in LIFO order. }
     procedure Cleanup(AProc: TTestProc);
     procedure Cleanup(AProc: TTestClosure);
+    { ⚠️ With* methods return a NEW record — you MUST assign the return value:
+        Suite := Suite.WithSetup(Proc);  // ✅ correct
+        Suite.WithSetup(Proc);           // ❌ BUG: changes discarded }
     function  WithConfig(const AConfig: TTestConfig): TTestSuite;
     function  WithSetup(AProc: TTestProc): TTestSuite; overload;
     function  WithSetup(AProc: TTestClosure): TTestSuite; overload;
@@ -1192,6 +1195,15 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
+    { Dispose thread-local GExecState allocated by SetTestContext.
+      Must be inside finally — Exit (setup failure) skips code after finally.
+      Matches the parallel worker's cleanup in its finally block
+      (runner.parallel.pas:494-501). }
+    if GExecState <> nil then
+    begin
+      Dispose(GExecState);
+      GExecState := nil;
+    end;
   end;
 
   { Dispose table test allocations (PTestCase/PTestCaseProc heap data).

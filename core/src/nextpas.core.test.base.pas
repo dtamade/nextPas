@@ -403,8 +403,8 @@ procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;
   ASeed: Integer);
 { Fisher-Yates (Knuth) shuffle. ASeed > 0 = deterministic, ASeed = -1 = random.
   ASeed = 0 treated as -1 (random) to avoid degenerate LCG sequence.
-  Random seed reads from /dev/urandom (Unix) or CryptGenRandom (Windows)
-  for better entropy than GetTickCount64 alone. }
+  On Unix, reads seed from /dev/urandom for better entropy.
+  On other platforms, falls back to GetTickCount64 mixed with stack address. }
 var
   I, J, N: Integer;
   LSeed: Integer;
