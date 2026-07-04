@@ -1754,6 +1754,38 @@ begin
     TVec3d.Create(1.0, 2.0, 3.0)), 'TVec4d.ToPosition perspective divide');
 end;
 
+procedure TestVecExtendTruncate;
+var
+  V3f: TVec3f;
+  V4f: TVec4f;
+  V3d: TVec3d;
+  V4d: TVec4d;
+begin
+  // Vec3fExtend
+  V3f := TVec3f.Create(1.0, 2.0, 3.0);
+  V4f := Vec3fExtend(V3f, 4.0);
+  Check((V4f.X = 1.0) and (V4f.Y = 2.0) and (V4f.Z = 3.0) and (V4f.W = 4.0),
+    'Vec3fExtend preserves XYZ and sets W');
+
+  // Vec4fTruncate
+  V4f := TVec4f.Create(5.0, 6.0, 7.0, 8.0);
+  V3f := Vec4fTruncate(V4f);
+  Check((V3f.X = 5.0) and (V3f.Y = 6.0) and (V3f.Z = 7.0),
+    'Vec4fTruncate preserves XYZ and drops W');
+
+  // Vec3dExtend
+  V3d := TVec3d.Create(1.5, 2.5, 3.5);
+  V4d := Vec3dExtend(V3d, 4.5);
+  Check((V4d.X = 1.5) and (V4d.Y = 2.5) and (V4d.Z = 3.5) and (V4d.W = 4.5),
+    'Vec3dExtend preserves XYZ and sets W');
+
+  // Vec4dTruncate
+  V4d := TVec4d.Create(5.5, 6.5, 7.5, 8.5);
+  V3d := Vec4dTruncate(V4d);
+  Check((V3d.X = 5.5) and (V3d.Y = 6.5) and (V3d.Z = 7.5),
+    'Vec4dTruncate preserves XYZ and drops W');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.vec');
   T.Test('TVec2f contracts', @TestVec2fContracts);
@@ -1812,6 +1844,7 @@ begin
   T.Test('TVec3f Average', @TestVec3fAverage);
   T.Test('TVec3f AdjustToLength', @TestVec3fAdjustToLength);
   T.Test('TVec4f/d ToPosition', @TestVec4fToPosition);
+  T.Test('Vec extend/truncate', @TestVecExtendTruncate);
   TouchVectorSinks;
   if not T.Run then Halt(1);
 end.
