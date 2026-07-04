@@ -41,7 +41,9 @@ Current roadmap position: M8 nearly complete, M7 partial, M9 not started.
 - `bench_simd_seam` is source-contract guarded as internal-seam evidence only:
   it must not import private SIMD backend/dispatch/CPUInfo/direct/dataplane units
   and cannot approve public SIMD cutover by itself.
-- macOS and Windows host trig link/runtime proof is still pending.
+- Windows trig host link/runtime proof obtained via Wine: cross-compiled
+  `test_trig_host_compile_gate` for Win64 and executed successfully (exit 0).
+- macOS host trig link/runtime proof is still pending.
 
 M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.
 
@@ -78,7 +80,7 @@ nextpas.core.math final migration
 
 - Gate: scalar/trig focused tests pass with heaptrc, no public `math.ffi`
   dependency remains, and Linux/macOS/Windows trig link/runtime routes are proven.
-- Status: partial. Local Linux proof exists; macOS/Windows host truth remains.
+- Status: partial. Local Linux and Windows (Wine) proof exists; macOS host truth remains.
 
 ### M3-M6: Value Types, Transforms, Easing, Random, Noise
 
@@ -113,8 +115,8 @@ nextpas.core.math final migration
 - Scalar: integer conversion NaN/Inf/range boundary markers and Single huge
   finite wrap parity are locked; keep adding source-contract markers when new
   scalar edge semantics land.
-- Trig: obtain host matrix runtime truth for macOS/Windows.
+- Trig: obtain host matrix runtime truth for macOS. Windows proof obtained via Wine.
 - Vector: ✅ full non-finite measure and signed-zero matrix coverage complete.
 - SIMD: finish profiled runtime evidence and public SIMD contract design before
   any public cutover.
-- Host matrix: obtain macOS/Windows trig host link/runtime evidence.
+- Host matrix: obtain macOS trig host link/runtime evidence. Windows proof obtained via Wine.
