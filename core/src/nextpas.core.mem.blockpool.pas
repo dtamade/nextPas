@@ -34,6 +34,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,
   nextpas.core.mem.error;
@@ -105,6 +106,7 @@ type
     FFreeHead: Pointer;          // 空闲链表头（intrusive free-list）
     FFreeBits: array of QWord;   // 释放位图：1=free, 0=allocated
     FAllocCount: SizeUInt;       // 已分配数量
+    FAllocator: IAllocator;      // 可选：自定义分配器（nil = 使用系统 GetMem）
     // 统计
     FPeakAlloc: SizeUInt;        // 峰值分配
     FTotalAllocs: QWord;         // 总分配次数
@@ -128,7 +130,8 @@ type
      * @note aBlockSize 必须 > 0，aCapacity 必须 > 0
      *       2 的幂次块大小启用 shift/mask 快路径
      *}
-    constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT);
+    constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT;
+      aAllocator: IAllocator = nil);
 
     {** @desc 释放底层缓冲区，销毁池实例 *}
     destructor Destroy; override;
@@ -326,7 +329,8 @@ begin
   PPointer(LPtr)^ := nil;
 end;
 
-constructor TBlockPool.Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt);
+constructor TBlockPool.Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt;
+  aAllocator: IAllocator);
 var
   LActualBlockSize: SizeUInt;
   LTotalSize: SizeUInt;
@@ -376,6 +380,7 @@ begin
 
   FCapacity := aCapacity;
   FAlignment := LAlign;
+  FAllocator := aAllocator;
   FAllocCount := 0;
   FPeakAlloc := 0;
   FTotalAllocs := 0;
@@ -392,7 +397,10 @@ begin
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
     raise EOutOfMemory.CreateMsg('TBlockPool: allocation size overflow');
-  GetMem(LRaw, LAllocSize);
+  if FAllocator <> nil then
+    LRaw := FAllocator.GetMem(LAllocSize)
+  else
+    GetMem(LRaw, LAllocSize);
   if LRaw = nil then
     raise EOutOfMemory.CreateMsg('TBlockPool: failed to allocate memory');
 
@@ -413,10 +421,16 @@ end;
 destructor TBlockPool.Destroy;
 begin
   if FRawBuffer <> nil then
-    FreeMem(FRawBuffer);
+  begin
+    if FAllocator <> nil then
+      FAllocator.FreeMem(FRawBuffer)
+    else
+      FreeMem(FRawBuffer);
+  end;
   FBuffer := nil;
   FRawBuffer := nil;
   FFreeHead := nil;
+  FAllocator := nil;
   SetLength(FFreeBits, 0);
   inherited Destroy;
 end;
