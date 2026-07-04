@@ -371,6 +371,7 @@ TGuardAllocator: 每次分配用 PROT_NONE 页包围，越界写入立即 SIGSEG
 | Thread exit cleanup | pthread TLS key destructor, 防止缓存块泄漏 | `thread_exit_cleanup` |
 | Scavenge span unlink | 释放 span 前从 partial list 摘除 | `scavenger_concurrent` |
 | ReallocMem inline bug | FPC 常量折叠 codegen bug, 去掉 inline | `realloc_literal_constants` |
+| FindSpanIndex 优化 | reverse scan + MRU cache，提升多 span 场景性能 | `page_indexed_lookup`, `page_indexed_lookup_multiple_spans` |
 
 ### 测试覆盖 (test_stability)
 
