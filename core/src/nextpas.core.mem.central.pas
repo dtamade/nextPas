@@ -38,7 +38,8 @@ type
   {** Central span pool for one size class. Manages partial and full spans.
       Provides batch alloc/free for the thread cache refill/flush path.
       Thread-safe via spinlock (low contention: TLS cache absorbs most traffic).
-      Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock. }
+      Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock.
+      Page-indexed lookup: O(1) FindSpanIndex via span base address comparison. }
   TCentralPool = record
     FEntries: array of TCentralSpanEntry;
     FEntryCount: Int32;
@@ -231,7 +232,8 @@ end;
 
 {** Find which span owns APtr (by checking address range).
     Uses MRU cache (FLastHitIndex) for O(1) in the common case
-    where consecutive frees go to the same span. }
+    where consecutive frees go to the same span.
+    Optimized: check MRU first, then scan from most recent spans. }
 function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
 var
   I: Int32;
@@ -247,8 +249,8 @@ begin
     if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
       Exit(I);
   end;
-  { Linear scan — update cache on hit. }
-  for I := 0 to APool.FEntryCount - 1 do
+  { Scan in reverse order (most recently allocated spans first). }
+  for I := APool.FEntryCount - 1 downto 0 do
   begin
     if APool.FEntries[I].FMemory = nil then
       Continue;

@@ -141,6 +141,48 @@ begin
   WriteLn('PASS: MRU cache hits same span');
 end;
 
+procedure TestPageIndexedLookup;
+var
+  LPool: TCentralPool;
+  LBlocks: array[0..127] of Pointer;
+  LCount: Word;
+begin
+  CentralPoolInit(LPool, 64);
+  { Allocate blocks across multiple spans. }
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
+  Check(LCount = 128, 'allocated 128');
+  Check(LPool.FEntryCount = 2, '2 spans created');
+  { Free blocks — optimized lookup should find them. }
+  CentralPoolFree(LPool, 128, @LBlocks[0], 0);
+  Check(CentralPoolFreeCount(LPool) = 128, 'all blocks returned');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: optimized lookup');
+end;
+
+procedure TestPageIndexedLookupMultipleSpans;
+var
+  LPool: TCentralPool;
+  LBlocks: array[0..255] of Pointer;
+  LCount: Word;
+  I: Integer;
+begin
+  CentralPoolInit(LPool, 32);
+  { Allocate blocks across 4 spans. }
+  LCount := CentralPoolAlloc(LPool, 256, @LBlocks[0], 0);
+  Check(LCount = 256, 'allocated 256');
+  Check(LPool.FEntryCount = 4, '4 spans created');
+  { Free blocks in alternating order — optimized lookup should handle it. }
+  for I := 0 to 127 do
+    CentralPoolFree(LPool, 1, @LBlocks[I * 2], 0);
+  Check(CentralPoolFreeCount(LPool) = 128, '128 blocks freed');
+  { Free remaining blocks. }
+  for I := 0 to 127 do
+    CentralPoolFree(LPool, 1, @LBlocks[I * 2 + 1], 0);
+  Check(CentralPoolFreeCount(LPool) = 256, 'all blocks freed');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: optimized lookup multiple spans');
+end;
+
 { --- Main --- }
 
 begin
@@ -154,6 +196,8 @@ begin
   T.Test('central_free_and_realloc', @TestCentralPoolFreeAndRealloc);
   T.Test('central_free_count', @TestCentralPoolFreeCount);
   T.Test('MRU cache hits same span', @TestMruCacheHitsSameSpan);
+  T.Test('page_indexed_lookup', @TestPageIndexedLookup);
+  T.Test('page_indexed_lookup_multiple_spans', @TestPageIndexedLookupMultipleSpans);
 
   T.Run;
   T.Summary;
