@@ -39,6 +39,10 @@ type
     function Abs: TVec2f; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec2f): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec2f): TVec2f; inline;
+    { Swizzle - component reordering }
+    function GetYX: TVec2f; inline;
+    property YX: TVec2f read GetYX;
     var
       case Integer of
         0: (X, Y: Single);
@@ -81,6 +85,30 @@ type
     function Abs: TVec3f; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec3f): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec3f): TVec3f; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2f; inline;
+    function GetXZ: TVec2f; inline;
+    function GetYX: TVec2f; inline;
+    function GetYZ: TVec2f; inline;
+    function GetZX: TVec2f; inline;
+    function GetZY: TVec2f; inline;
+    function GetXZY: TVec3f; inline;
+    function GetYXZ: TVec3f; inline;
+    function GetYZX: TVec3f; inline;
+    function GetZXY: TVec3f; inline;
+    function GetZYX: TVec3f; inline;
+    property XY: TVec2f read GetXY;
+    property XZ: TVec2f read GetXZ;
+    property YX: TVec2f read GetYX;
+    property YZ: TVec2f read GetYZ;
+    property ZX: TVec2f read GetZX;
+    property ZY: TVec2f read GetZY;
+    property XZY: TVec3f read GetXZY;
+    property YXZ: TVec3f read GetYXZ;
+    property YZX: TVec3f read GetYZX;
+    property ZXY: TVec3f read GetZXY;
+    property ZYX: TVec3f read GetZYX;
     var
       case Integer of
         0: (X, Y, Z: Single);
@@ -121,6 +149,32 @@ type
     function Abs: TVec4f; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec4f): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec4f): TVec4f; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2f; inline;
+    function GetXZ: TVec2f; inline;
+    function GetXW: TVec2f; inline;
+    function GetYZ: TVec2f; inline;
+    function GetYW: TVec2f; inline;
+    function GetZW: TVec2f; inline;
+    function GetXYZ: TVec3f; inline;
+    function GetXYW: TVec3f; inline;
+    function GetXZW: TVec3f; inline;
+    function GetYZW: TVec3f; inline;
+    function GetWZY: TVec3f; inline;
+    function GetWZYX: TVec4f; inline;
+    property XY: TVec2f read GetXY;
+    property XZ: TVec2f read GetXZ;
+    property XW: TVec2f read GetXW;
+    property YZ: TVec2f read GetYZ;
+    property YW: TVec2f read GetYW;
+    property ZW: TVec2f read GetZW;
+    property XYZ: TVec3f read GetXYZ;
+    property XYW: TVec3f read GetXYW;
+    property XZW: TVec3f read GetXZW;
+    property YZW: TVec3f read GetYZW;
+    property WZY: TVec3f read GetWZY;
+    property WZYX: TVec4f read GetWZYX;
     var
       case Integer of
         0: (X, Y, Z, W: Single);
@@ -161,6 +215,10 @@ type
     function Abs: TVec2d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec2d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec2d): TVec2d; inline;
+    { Swizzle - component reordering }
+    function GetYX: TVec2d; inline;
+    property YX: TVec2d read GetYX;
     var
       case Integer of
         0: (X, Y: Double);
@@ -203,6 +261,30 @@ type
     function Abs: TVec3d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec3d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec3d): TVec3d; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2d; inline;
+    function GetXZ: TVec2d; inline;
+    function GetYX: TVec2d; inline;
+    function GetYZ: TVec2d; inline;
+    function GetZX: TVec2d; inline;
+    function GetZY: TVec2d; inline;
+    function GetXZY: TVec3d; inline;
+    function GetYXZ: TVec3d; inline;
+    function GetYZX: TVec3d; inline;
+    function GetZXY: TVec3d; inline;
+    function GetZYX: TVec3d; inline;
+    property XY: TVec2d read GetXY;
+    property XZ: TVec2d read GetXZ;
+    property YX: TVec2d read GetYX;
+    property YZ: TVec2d read GetYZ;
+    property ZX: TVec2d read GetZX;
+    property ZY: TVec2d read GetZY;
+    property XZY: TVec3d read GetXZY;
+    property YXZ: TVec3d read GetYXZ;
+    property YZX: TVec3d read GetYZX;
+    property ZXY: TVec3d read GetZXY;
+    property ZYX: TVec3d read GetZYX;
     var
       case Integer of
         0: (X, Y, Z: Double);
@@ -243,6 +325,32 @@ type
     function Abs: TVec4d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec4d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec4d): TVec4d; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2d; inline;
+    function GetXZ: TVec2d; inline;
+    function GetXW: TVec2d; inline;
+    function GetYZ: TVec2d; inline;
+    function GetYW: TVec2d; inline;
+    function GetZW: TVec2d; inline;
+    function GetXYZ: TVec3d; inline;
+    function GetXYW: TVec3d; inline;
+    function GetXZW: TVec3d; inline;
+    function GetYZW: TVec3d; inline;
+    function GetWZY: TVec3d; inline;
+    function GetWZYX: TVec4d; inline;
+    property XY: TVec2d read GetXY;
+    property XZ: TVec2d read GetXZ;
+    property XW: TVec2d read GetXW;
+    property YZ: TVec2d read GetYZ;
+    property YW: TVec2d read GetYW;
+    property ZW: TVec2d read GetZW;
+    property XYZ: TVec3d read GetXYZ;
+    property XYW: TVec3d read GetXYW;
+    property XZW: TVec3d read GetXZW;
+    property YZW: TVec3d read GetYZW;
+    property WZY: TVec3d read GetWZY;
+    property WZYX: TVec4d read GetWZYX;
     var
       case Integer of
         0: (X, Y, Z, W: Double);
@@ -1390,6 +1498,18 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y);
 end;
 
+function TVec2f.Clamp(const AMin, AMax: TVec2f): TVec2f;
+begin
+  Result := TVec2f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y));
+end;
+
+function TVec2f.GetYX: TVec2f;
+begin
+  Result := TVec2f.Create(Y, X);
+end;
+
 class function TVec3f.Create(const AX, AY, AZ: Single): TVec3f;
 begin
   Result.X := AX;
@@ -1592,6 +1712,69 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
 end;
 
+function TVec3f.Clamp(const AMin, AMax: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z));
+end;
+
+function TVec3f.GetXY: TVec2f;
+begin
+  Result := TVec2f.Create(X, Y);
+end;
+
+function TVec3f.GetXZ: TVec2f;
+begin
+  Result := TVec2f.Create(X, Z);
+end;
+
+function TVec3f.GetYX: TVec2f;
+begin
+  Result := TVec2f.Create(Y, X);
+end;
+
+function TVec3f.GetYZ: TVec2f;
+begin
+  Result := TVec2f.Create(Y, Z);
+end;
+
+function TVec3f.GetZX: TVec2f;
+begin
+  Result := TVec2f.Create(Z, X);
+end;
+
+function TVec3f.GetZY: TVec2f;
+begin
+  Result := TVec2f.Create(Z, Y);
+end;
+
+function TVec3f.GetXZY: TVec3f;
+begin
+  Result := TVec3f.Create(X, Z, Y);
+end;
+
+function TVec3f.GetYXZ: TVec3f;
+begin
+  Result := TVec3f.Create(Y, X, Z);
+end;
+
+function TVec3f.GetYZX: TVec3f;
+begin
+  Result := TVec3f.Create(Y, Z, X);
+end;
+
+function TVec3f.GetZXY: TVec3f;
+begin
+  Result := TVec3f.Create(Z, X, Y);
+end;
+
+function TVec3f.GetZYX: TVec3f;
+begin
+  Result := TVec3f.Create(Z, Y, X);
+end;
+
 class function TVec4f.Create(const AX, AY, AZ, AW: Single): TVec4f;
 begin
   Result.X := AX;
@@ -1785,6 +1968,75 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
 end;
 
+function TVec4f.Clamp(const AMin, AMax: TVec4f): TVec4f;
+begin
+  Result := TVec4f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z),
+    nextpas.core.math.scalar.Clamp(W, AMin.W, AMax.W));
+end;
+
+function TVec4f.GetXY: TVec2f;
+begin
+  Result := TVec2f.Create(X, Y);
+end;
+
+function TVec4f.GetXZ: TVec2f;
+begin
+  Result := TVec2f.Create(X, Z);
+end;
+
+function TVec4f.GetXW: TVec2f;
+begin
+  Result := TVec2f.Create(X, W);
+end;
+
+function TVec4f.GetYZ: TVec2f;
+begin
+  Result := TVec2f.Create(Y, Z);
+end;
+
+function TVec4f.GetYW: TVec2f;
+begin
+  Result := TVec2f.Create(Y, W);
+end;
+
+function TVec4f.GetZW: TVec2f;
+begin
+  Result := TVec2f.Create(Z, W);
+end;
+
+function TVec4f.GetXYZ: TVec3f;
+begin
+  Result := TVec3f.Create(X, Y, Z);
+end;
+
+function TVec4f.GetXYW: TVec3f;
+begin
+  Result := TVec3f.Create(X, Y, W);
+end;
+
+function TVec4f.GetXZW: TVec3f;
+begin
+  Result := TVec3f.Create(X, Z, W);
+end;
+
+function TVec4f.GetYZW: TVec3f;
+begin
+  Result := TVec3f.Create(Y, Z, W);
+end;
+
+function TVec4f.GetWZY: TVec3f;
+begin
+  Result := TVec3f.Create(W, Z, Y);
+end;
+
+function TVec4f.GetWZYX: TVec4f;
+begin
+  Result := TVec4f.Create(W, Z, Y, X);
+end;
+
 class function TVec2d.Create(const AX, AY: Double): TVec2d;
 begin
   Result.X := AX;
@@ -1955,6 +2207,18 @@ end;
 function TVec2d.PerfectlyEquals(const AOther: TVec2d): Boolean;
 begin
   Result := (X = AOther.X) and (Y = AOther.Y);
+end;
+
+function TVec2d.Clamp(const AMin, AMax: TVec2d): TVec2d;
+begin
+  Result := TVec2d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y));
+end;
+
+function TVec2d.GetYX: TVec2d;
+begin
+  Result := TVec2d.Create(Y, X);
 end;
 
 class function TVec3d.Create(const AX, AY, AZ: Double): TVec3d;
@@ -2159,6 +2423,69 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
 end;
 
+function TVec3d.Clamp(const AMin, AMax: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z));
+end;
+
+function TVec3d.GetXY: TVec2d;
+begin
+  Result := TVec2d.Create(X, Y);
+end;
+
+function TVec3d.GetXZ: TVec2d;
+begin
+  Result := TVec2d.Create(X, Z);
+end;
+
+function TVec3d.GetYX: TVec2d;
+begin
+  Result := TVec2d.Create(Y, X);
+end;
+
+function TVec3d.GetYZ: TVec2d;
+begin
+  Result := TVec2d.Create(Y, Z);
+end;
+
+function TVec3d.GetZX: TVec2d;
+begin
+  Result := TVec2d.Create(Z, X);
+end;
+
+function TVec3d.GetZY: TVec2d;
+begin
+  Result := TVec2d.Create(Z, Y);
+end;
+
+function TVec3d.GetXZY: TVec3d;
+begin
+  Result := TVec3d.Create(X, Z, Y);
+end;
+
+function TVec3d.GetYXZ: TVec3d;
+begin
+  Result := TVec3d.Create(Y, X, Z);
+end;
+
+function TVec3d.GetYZX: TVec3d;
+begin
+  Result := TVec3d.Create(Y, Z, X);
+end;
+
+function TVec3d.GetZXY: TVec3d;
+begin
+  Result := TVec3d.Create(Z, X, Y);
+end;
+
+function TVec3d.GetZYX: TVec3d;
+begin
+  Result := TVec3d.Create(Z, Y, X);
+end;
+
 class function TVec4d.Create(const AX, AY, AZ, AW: Double): TVec4d;
 begin
   Result.X := AX;
@@ -2350,6 +2677,75 @@ end;
 function TVec4d.PerfectlyEquals(const AOther: TVec4d): Boolean;
 begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
+end;
+
+function TVec4d.Clamp(const AMin, AMax: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z),
+    nextpas.core.math.scalar.Clamp(W, AMin.W, AMax.W));
+end;
+
+function TVec4d.GetXY: TVec2d;
+begin
+  Result := TVec2d.Create(X, Y);
+end;
+
+function TVec4d.GetXZ: TVec2d;
+begin
+  Result := TVec2d.Create(X, Z);
+end;
+
+function TVec4d.GetXW: TVec2d;
+begin
+  Result := TVec2d.Create(X, W);
+end;
+
+function TVec4d.GetYZ: TVec2d;
+begin
+  Result := TVec2d.Create(Y, Z);
+end;
+
+function TVec4d.GetYW: TVec2d;
+begin
+  Result := TVec2d.Create(Y, W);
+end;
+
+function TVec4d.GetZW: TVec2d;
+begin
+  Result := TVec2d.Create(Z, W);
+end;
+
+function TVec4d.GetXYZ: TVec3d;
+begin
+  Result := TVec3d.Create(X, Y, Z);
+end;
+
+function TVec4d.GetXYW: TVec3d;
+begin
+  Result := TVec3d.Create(X, Y, W);
+end;
+
+function TVec4d.GetXZW: TVec3d;
+begin
+  Result := TVec3d.Create(X, Z, W);
+end;
+
+function TVec4d.GetYZW: TVec3d;
+begin
+  Result := TVec3d.Create(Y, Z, W);
+end;
+
+function TVec4d.GetWZY: TVec3d;
+begin
+  Result := TVec3d.Create(W, Z, Y);
+end;
+
+function TVec4d.GetWZYX: TVec4d;
+begin
+  Result := TVec4d.Create(W, Z, Y, X);
 end;
 
 end.

@@ -131,6 +131,8 @@ function PopnStdDev(const AData: array of Double): Double; overload; inline;
 function PopnStdDev(const AData: array of Single): Single; overload; inline;
 function TotalVariance(const AData: array of Double): Double; overload; inline;
 function TotalVariance(const AData: array of Single): Single; overload; inline;
+function SumSquaredDeviations(const AData: array of Double): Double; overload; inline;
+function SumSquaredDeviations(const AData: array of Single): Single; overload; inline;
 
 function Sin(const AX: Double): Double; overload; inline;
 function Sin(const AX: Single): Single; overload; inline;
@@ -613,6 +615,16 @@ end;
 function TotalVariance(const AData: array of Single): Single;
 begin
   Result := nextpas.core.math.scalar.TotalVariance(AData);
+end;
+
+function SumSquaredDeviations(const AData: array of Double): Double;
+begin
+  Result := nextpas.core.math.scalar.SumSquaredDeviations(AData);
+end;
+
+function SumSquaredDeviations(const AData: array of Single): Single;
+begin
+  Result := nextpas.core.math.scalar.SumSquaredDeviations(AData);
 end;
 
 function Sin(const AX: Single): Single;

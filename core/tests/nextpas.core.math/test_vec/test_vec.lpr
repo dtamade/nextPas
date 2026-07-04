@@ -1786,6 +1786,134 @@ begin
     'Vec4dTruncate preserves XYZ and drops W');
 end;
 
+procedure TestVecSwizzle;
+var
+  V2f: TVec2f;
+  V3f: TVec3f;
+  V4f: TVec4f;
+  V2d: TVec2d;
+  V3d: TVec3d;
+  V4d: TVec4d;
+begin
+  // TVec2f swizzle
+  V2f := TVec2f.Create(1.0, 2.0);
+  Check(V2f.YX.PerfectlyEquals(TVec2f.Create(2.0, 1.0)), 'TVec2f.YX');
+
+  // TVec3f swizzle
+  V3f := TVec3f.Create(1.0, 2.0, 3.0);
+  Check(V3f.XY.PerfectlyEquals(TVec2f.Create(1.0, 2.0)), 'TVec3f.XY');
+  Check(V3f.XZ.PerfectlyEquals(TVec2f.Create(1.0, 3.0)), 'TVec3f.XZ');
+  Check(V3f.YX.PerfectlyEquals(TVec2f.Create(2.0, 1.0)), 'TVec3f.YX');
+  Check(V3f.YZ.PerfectlyEquals(TVec2f.Create(2.0, 3.0)), 'TVec3f.YZ');
+  Check(V3f.ZX.PerfectlyEquals(TVec2f.Create(3.0, 1.0)), 'TVec3f.ZX');
+  Check(V3f.ZY.PerfectlyEquals(TVec2f.Create(3.0, 2.0)), 'TVec3f.ZY');
+  Check(V3f.XZY.PerfectlyEquals(TVec3f.Create(1.0, 3.0, 2.0)), 'TVec3f.XZY');
+  Check(V3f.YXZ.PerfectlyEquals(TVec3f.Create(2.0, 1.0, 3.0)), 'TVec3f.YXZ');
+  Check(V3f.YZX.PerfectlyEquals(TVec3f.Create(2.0, 3.0, 1.0)), 'TVec3f.YZX');
+  Check(V3f.ZXY.PerfectlyEquals(TVec3f.Create(3.0, 1.0, 2.0)), 'TVec3f.ZXY');
+  Check(V3f.ZYX.PerfectlyEquals(TVec3f.Create(3.0, 2.0, 1.0)), 'TVec3f.ZYX');
+
+  // TVec4f swizzle
+  V4f := TVec4f.Create(1.0, 2.0, 3.0, 4.0);
+  Check(V4f.XY.PerfectlyEquals(TVec2f.Create(1.0, 2.0)), 'TVec4f.XY');
+  Check(V4f.XZ.PerfectlyEquals(TVec2f.Create(1.0, 3.0)), 'TVec4f.XZ');
+  Check(V4f.XW.PerfectlyEquals(TVec2f.Create(1.0, 4.0)), 'TVec4f.XW');
+  Check(V4f.YZ.PerfectlyEquals(TVec2f.Create(2.0, 3.0)), 'TVec4f.YZ');
+  Check(V4f.YW.PerfectlyEquals(TVec2f.Create(2.0, 4.0)), 'TVec4f.YW');
+  Check(V4f.ZW.PerfectlyEquals(TVec2f.Create(3.0, 4.0)), 'TVec4f.ZW');
+  Check(V4f.XYZ.PerfectlyEquals(TVec3f.Create(1.0, 2.0, 3.0)), 'TVec4f.XYZ');
+  Check(V4f.XYW.PerfectlyEquals(TVec3f.Create(1.0, 2.0, 4.0)), 'TVec4f.XYW');
+  Check(V4f.XZW.PerfectlyEquals(TVec3f.Create(1.0, 3.0, 4.0)), 'TVec4f.XZW');
+  Check(V4f.YZW.PerfectlyEquals(TVec3f.Create(2.0, 3.0, 4.0)), 'TVec4f.YZW');
+  Check(V4f.WZY.PerfectlyEquals(TVec3f.Create(4.0, 3.0, 2.0)), 'TVec4f.WZY');
+  Check(V4f.WZYX.PerfectlyEquals(TVec4f.Create(4.0, 3.0, 2.0, 1.0)), 'TVec4f.WZYX');
+
+  // TVec2d swizzle
+  V2d := TVec2d.Create(1.5, 2.5);
+  Check(V2d.YX.PerfectlyEquals(TVec2d.Create(2.5, 1.5)), 'TVec2d.YX');
+
+  // TVec3d swizzle
+  V3d := TVec3d.Create(1.5, 2.5, 3.5);
+  Check(V3d.XY.PerfectlyEquals(TVec2d.Create(1.5, 2.5)), 'TVec3d.XY');
+  Check(V3d.XZ.PerfectlyEquals(TVec2d.Create(1.5, 3.5)), 'TVec3d.XZ');
+  Check(V3d.YX.PerfectlyEquals(TVec2d.Create(2.5, 1.5)), 'TVec3d.YX');
+  Check(V3d.YZ.PerfectlyEquals(TVec2d.Create(2.5, 3.5)), 'TVec3d.YZ');
+  Check(V3d.ZX.PerfectlyEquals(TVec2d.Create(3.5, 1.5)), 'TVec3d.ZX');
+  Check(V3d.ZY.PerfectlyEquals(TVec2d.Create(3.5, 2.5)), 'TVec3d.ZY');
+  Check(V3d.XZY.PerfectlyEquals(TVec3d.Create(1.5, 3.5, 2.5)), 'TVec3d.XZY');
+  Check(V3d.YXZ.PerfectlyEquals(TVec3d.Create(2.5, 1.5, 3.5)), 'TVec3d.YXZ');
+  Check(V3d.YZX.PerfectlyEquals(TVec3d.Create(2.5, 3.5, 1.5)), 'TVec3d.YZX');
+  Check(V3d.ZXY.PerfectlyEquals(TVec3d.Create(3.5, 1.5, 2.5)), 'TVec3d.ZXY');
+  Check(V3d.ZYX.PerfectlyEquals(TVec3d.Create(3.5, 2.5, 1.5)), 'TVec3d.ZYX');
+
+  // TVec4d swizzle
+  V4d := TVec4d.Create(1.5, 2.5, 3.5, 4.5);
+  Check(V4d.XY.PerfectlyEquals(TVec2d.Create(1.5, 2.5)), 'TVec4d.XY');
+  Check(V4d.XZ.PerfectlyEquals(TVec2d.Create(1.5, 3.5)), 'TVec4d.XZ');
+  Check(V4d.XW.PerfectlyEquals(TVec2d.Create(1.5, 4.5)), 'TVec4d.XW');
+  Check(V4d.YZ.PerfectlyEquals(TVec2d.Create(2.5, 3.5)), 'TVec4d.YZ');
+  Check(V4d.YW.PerfectlyEquals(TVec2d.Create(2.5, 4.5)), 'TVec4d.YW');
+  Check(V4d.ZW.PerfectlyEquals(TVec2d.Create(3.5, 4.5)), 'TVec4d.ZW');
+  Check(V4d.XYZ.PerfectlyEquals(TVec3d.Create(1.5, 2.5, 3.5)), 'TVec4d.XYZ');
+  Check(V4d.XYW.PerfectlyEquals(TVec3d.Create(1.5, 2.5, 4.5)), 'TVec4d.XYW');
+  Check(V4d.XZW.PerfectlyEquals(TVec3d.Create(1.5, 3.5, 4.5)), 'TVec4d.XZW');
+  Check(V4d.YZW.PerfectlyEquals(TVec3d.Create(2.5, 3.5, 4.5)), 'TVec4d.YZW');
+  Check(V4d.WZY.PerfectlyEquals(TVec3d.Create(4.5, 3.5, 2.5)), 'TVec4d.WZY');
+  Check(V4d.WZYX.PerfectlyEquals(TVec4d.Create(4.5, 3.5, 2.5, 1.5)), 'TVec4d.WZYX');
+end;
+
+procedure TestVecClamp;
+var
+  V2f, Min2f, Max2f: TVec2f;
+  V3f, Min3f, Max3f: TVec3f;
+  V4f, Min4f, Max4f: TVec4f;
+  V2d, Min2d, Max2d: TVec2d;
+  V3d, Min3d, Max3d: TVec3d;
+  V4d, Min4d, Max4d: TVec4d;
+begin
+  // TVec2f clamp
+  V2f := TVec2f.Create(-1.0, 5.0);
+  Min2f := TVec2f.Create(0.0, 0.0);
+  Max2f := TVec2f.Create(1.0, 1.0);
+  Check(V2f.Clamp(Min2f, Max2f).PerfectlyEquals(TVec2f.Create(0.0, 1.0)), 'TVec2f.Clamp');
+
+  // TVec3f clamp
+  V3f := TVec3f.Create(-1.0, 5.0, 0.5);
+  Min3f := TVec3f.Create(0.0, 0.0, 0.0);
+  Max3f := TVec3f.Create(1.0, 1.0, 1.0);
+  Check(V3f.Clamp(Min3f, Max3f).PerfectlyEquals(TVec3f.Create(0.0, 1.0, 0.5)), 'TVec3f.Clamp');
+
+  // TVec4f clamp
+  V4f := TVec4f.Create(-1.0, 5.0, 0.5, 2.0);
+  Min4f := TVec4f.Create(0.0, 0.0, 0.0, 0.0);
+  Max4f := TVec4f.Create(1.0, 1.0, 1.0, 1.0);
+  Check(V4f.Clamp(Min4f, Max4f).PerfectlyEquals(TVec4f.Create(0.0, 1.0, 0.5, 1.0)), 'TVec4f.Clamp');
+
+  // TVec2d clamp
+  V2d := TVec2d.Create(-1.5, 5.5);
+  Min2d := TVec2d.Create(0.0, 0.0);
+  Max2d := TVec2d.Create(1.0, 1.0);
+  Check(V2d.Clamp(Min2d, Max2d).PerfectlyEquals(TVec2d.Create(0.0, 1.0)), 'TVec2d.Clamp');
+
+  // TVec3d clamp
+  V3d := TVec3d.Create(-1.5, 5.5, 0.5);
+  Min3d := TVec3d.Create(0.0, 0.0, 0.0);
+  Max3d := TVec3d.Create(1.0, 1.0, 1.0);
+  Check(V3d.Clamp(Min3d, Max3d).PerfectlyEquals(TVec3d.Create(0.0, 1.0, 0.5)), 'TVec3d.Clamp');
+
+  // TVec4d clamp
+  V4d := TVec4d.Create(-1.5, 5.5, 0.5, 2.5);
+  Min4d := TVec4d.Create(0.0, 0.0, 0.0, 0.0);
+  Max4d := TVec4d.Create(1.0, 1.0, 1.0, 1.0);
+  Check(V4d.Clamp(Min4d, Max4d).PerfectlyEquals(TVec4d.Create(0.0, 1.0, 0.5, 1.0)), 'TVec4d.Clamp');
+
+  // Test with negative ranges
+  V3f := TVec3f.Create(-5.0, -3.0, 0.0);
+  Min3f := TVec3f.Create(-4.0, -4.0, -4.0);
+  Max3f := TVec3f.Create(-2.0, -2.0, -2.0);
+  Check(V3f.Clamp(Min3f, Max3f).PerfectlyEquals(TVec3f.Create(-4.0, -3.0, -2.0)), 'TVec3f.Clamp negative range');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.vec');
   T.Test('TVec2f contracts', @TestVec2fContracts);
@@ -1845,6 +1973,8 @@ begin
   T.Test('TVec3f AdjustToLength', @TestVec3fAdjustToLength);
   T.Test('TVec4f/d ToPosition', @TestVec4fToPosition);
   T.Test('Vec extend/truncate', @TestVecExtendTruncate);
+  T.Test('Vec swizzle', @TestVecSwizzle);
+  T.Test('Vec clamp', @TestVecClamp);
   TouchVectorSinks;
   if not T.Run then Halt(1);
 end.

@@ -249,12 +249,20 @@ function StdDev(const AData: array of Single): Single; overload;
 function PopnStdDev(const AData: array of Double): Double; overload;
 function PopnStdDev(const AData: array of Single): Single; overload;
 
-{** * Computes the total variance (population variance * N).
+{** * Computes the total variance (sum of squared deviations from mean).
+ * This is the ANOVA definition: Σ(xi - x̄)²
  * @param AData The input array
  * @return The total variance, or NaN if the array is empty
  *}
 function TotalVariance(const AData: array of Double): Double; overload;
 function TotalVariance(const AData: array of Single): Single; overload;
+
+{** * Alias for TotalVariance - sum of squared deviations from mean.
+ * @param AData The input array
+ * @return The sum of squared deviations, or NaN if the array is empty
+ *}
+function SumSquaredDeviations(const AData: array of Double): Double; overload;
+function SumSquaredDeviations(const AData: array of Single): Single; overload;
 
 implementation
 
@@ -443,15 +451,46 @@ begin
   Result := Single(System.Sqrt(Double(Variance(AData))));
 end;
 
-{ TotalVariance - population variance for total dataset }
+{ TotalVariance - sum of squared deviations from mean (ANOVA definition) }
 function TotalVariance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
 begin
-  Result := PopnVariance(AData);
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff;
 end;
 
 function TotalVariance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
 begin
-  Result := PopnVariance(AData);
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff;
+end;
+
+{ SumSquaredDeviations - alias for TotalVariance }
+function SumSquaredDeviations(const AData: array of Double): Double; overload;
+begin
+  Result := TotalVariance(AData);
+end;
+
+function SumSquaredDeviations(const AData: array of Single): Single; overload;
+begin
+  Result := TotalVariance(AData);
 end;
 
 { PopnStdDev - population standard deviation }
