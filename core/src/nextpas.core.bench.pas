@@ -614,6 +614,7 @@ var
   LRunResult: TBenchResult;
   LStartNs: UInt64;
   LTimeoutNs: UInt64;
+  LEntryStartNs: UInt64; { F-017 }
   I: Integer;
 begin
   FRunner.SetConfig(FConfig);
@@ -639,7 +640,7 @@ begin
     if not FEntries[I].Condition then
       Continue;
 
-    // ST-04: 条目间超时检查
+    // ST-04: 条目间超时检查 (suite-level)
     if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
     begin
       // 剩余条目标记为 skipped
@@ -653,7 +654,19 @@ begin
       Continue;
     end;
 
-    LRunResult := FRunner.RunOne(FEntries[I]);
+    { F-017: per-benchmark timeout check }
+    if FEntries[I].TimeoutMs > 0 then
+    begin
+      LEntryStartNs := platform_monotonic_ns;
+      LRunResult := FRunner.RunOne(FEntries[I]);
+      if platform_monotonic_ns - LEntryStartNs >= UInt64(FEntries[I].TimeoutMs) * 1000000 then
+      begin
+        LRunResult.Skipped := True;
+        LRunResult.SkipReason := 'Per-benchmark timeout exceeded';
+      end;
+    end
+    else
+      LRunResult := FRunner.RunOne(FEntries[I]);
     if LRunResult.Executed then
     begin
       LResults[LResultCount] := LRunResult;
