@@ -91,9 +91,15 @@ type
     function  CalledAfter(const AOtherMethod: string): IMockVerify;
     { Verify at least one call was made with matching arguments }
     function  CalledWith(const AArgs: array of string): IMockVerify;
+    { Verify at least one call was made with typed matching arguments.
+      Compares TMockValue kind + value, so MockInt(42) ≠ MockStr('42'). }
+    function  CalledWith(const AArgs: array of TMockValue): IMockVerify;
     { Verify exactly N calls were made with matching arguments }
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of string): IMockVerify;
+    { Verify exactly N calls were made with typed matching arguments }
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of TMockValue): IMockVerify;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -131,6 +137,10 @@ type
     { Get call count for a method with matching arguments }
     function MatchingCallCount(const AMethodName: string;
       const AArgs: array of string): Integer;
+    { Get call count for a method with typed matching arguments.
+      Compares TMockValue kind + value. }
+    function MatchingCallCountTyped(const AMethodName: string;
+      const AArgs: array of TMockValue): Integer;
     { Get all recorded calls }
     property Calls: TMockCalls read FCalls;
     { Get the recorded call order (method names in sequence) }
@@ -260,6 +270,21 @@ begin
   SetLength(ATypedArgs, Length(AArgs));
   for I := 0 to High(AArgs) do
     ATypedArgs[I] := MockStr(AArgs[I]);
+end;
+
+function MockValueEqual(const A, B: TMockValue): Boolean;
+{ Deep equality: kind must match, then kind-specific value comparison. }
+begin
+  if A.Kind <> B.Kind then
+    Exit(False);
+  case A.Kind of
+    mvString: Result := A.StrVal = B.StrVal;
+    mvInt64:  Result := A.IntVal = B.IntVal;
+    mvBool:   Result := A.BoolVal = B.BoolVal;
+    mvDouble: Result := A.DblVal = B.DblVal; { exact bit-level; NaN ≠ NaN }
+  else
+    Result := True; { mvUnset == mvUnset }
+  end;
 end;
 
 { ── Local helpers ──────────────────────────────────────────────────────────── }
@@ -510,6 +535,31 @@ begin
   end;
 end;
 
+function TMockState.MatchingCallCountTyped(const AMethodName: string;
+  const AArgs: array of TMockValue): Integer;
+var
+  I, J: Integer;
+  LMatch: Boolean;
+begin
+  Result := 0;
+  for I := 0 to High(FCalls) do
+  begin
+    if FCalls[I].MethodName <> AMethodName then
+      Continue;
+    if Length(FCalls[I].TypedArgs) <> Length(AArgs) then
+      Continue;
+    LMatch := True;
+    for J := 0 to High(AArgs) do
+      if not MockValueEqual(FCalls[I].TypedArgs[J], AArgs[J]) then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    if LMatch then
+      Inc(Result);
+  end;
+end;
+
 procedure TMockState.Reset;
 begin
   FCalls := nil;
@@ -608,6 +658,9 @@ type
     function  CalledWith(const AArgs: array of string): IMockVerify;
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of string): IMockVerify;
+    function  CalledWith(const AArgs: array of TMockValue): IMockVerify;
+    function  CalledExactlyWith(ACount: Integer;
+      const AArgs: array of TMockValue): IMockVerify;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -749,6 +802,31 @@ begin
   if LCount <> ACount then
     InternalFail('Expected ' + FMethod + ' called exactly ' +
       IntToStr(ACount) + ' times with matching args, but was called ' +
+      IntToStr(LCount) + ' times');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledWith(const AArgs: array of TMockValue): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCountTyped(FMethod, AArgs);
+  if LCount = 0 then
+    InternalFail('Expected ' + FMethod + ' called with matching typed args, ' +
+      'but no matching call found (total calls: ' +
+      IntToStr(FState.CallCount(FMethod)) + ')');
+  Result := Self;
+end;
+
+function TMockVerifier.CalledExactlyWith(ACount: Integer;
+  const AArgs: array of TMockValue): IMockVerify;
+var
+  LCount: Integer;
+begin
+  LCount := FState.MatchingCallCountTyped(FMethod, AArgs);
+  if LCount <> ACount then
+    InternalFail('Expected ' + FMethod + ' called exactly ' +
+      IntToStr(ACount) + ' times with matching typed args, but was called ' +
       IntToStr(LCount) + ' times');
   Result := Self;
 end;
