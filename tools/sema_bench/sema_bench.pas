@@ -27,6 +27,8 @@ program sema_bench;
 {$UNITPATH ../../compiler/sema}
 {$UNITPATH ../../rtl/core/base}
 {$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../rtl/core/sysutils}
+{$UNITPATH ../../rtl/core/classes}
 {$UNITPATH ../../core/src}
 
 uses

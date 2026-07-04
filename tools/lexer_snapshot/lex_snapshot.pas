@@ -25,6 +25,10 @@
 program lex_snapshot;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../rtl/core/base}
+{$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../rtl/core/sysutils}
+{$UNITPATH ../../rtl/core/classes}
 
 uses
   SysUtils, Classes, np_lexer;
