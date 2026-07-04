@@ -398,7 +398,7 @@ end;
 
 procedure TestCheckNaNPass;
 begin
-  CheckNaN(NaN, 'NaN should be NaN');
+  CheckNaN(Sqrt(-1.0), 'NaN should be NaN');
 end;
 
 procedure TestCheckNaNFail;
@@ -413,7 +413,7 @@ end;
 
 procedure TestCheckNotNaNFail;
 begin
-  ExpectFail(procedure begin CheckNotNaN(NaN, 'expect-fail: NaN is NaN'); end);
+  ExpectFail(procedure begin CheckNotNaN(Sqrt(-1.0), 'expect-fail: NaN is NaN'); end);
 end;
 
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
