@@ -113,6 +113,10 @@ procedure CheckNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
+{ CheckNaN — passes if AValue is NaN. }
+procedure CheckNaN(const AValue: Double; const AMessage: string = '');
+{ CheckNotNaN — passes if AValue is NOT NaN. }
+procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
@@ -442,6 +446,19 @@ begin
     FailWithDefault(AMessage,
       'Expected not near ' + FloatToStr(AExpected) +
       ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual));
+end;
+
+procedure CheckNaN(const AValue: Double; const AMessage: string);
+begin
+  if not IsNan(AValue) then
+    FailWithDefault(AMessage,
+      'Expected NaN but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckNotNaN(const AValue: Double; const AMessage: string);
+begin
+  if IsNan(AValue) then
+    FailWithDefault(AMessage, 'Expected non-NaN but got NaN');
 end;
 
 procedure CheckEqual(const AExpected, AActual: Double;

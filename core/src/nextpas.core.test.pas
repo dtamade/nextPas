@@ -180,6 +180,8 @@ procedure CheckNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNaN(const AValue: Double; const AMessage: string = '');
+procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');

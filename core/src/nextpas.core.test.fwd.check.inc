@@ -179,6 +179,12 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNearRel(AExpected, AActual, ARelEps, AMessage); end;
 
+procedure CheckNaN(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNaN(AValue, AMessage); end;
+
+procedure CheckNotNaN(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotNaN(AValue, AMessage); end;
+
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
 
