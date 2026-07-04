@@ -64,6 +64,7 @@ type
   TStderrSink = nextpas.core.test.config.TStderrSink;
   TBufferSink = nextpas.core.test.config.TBufferSink;
   TTestConfig = nextpas.core.test.config.TTestConfig;
+  TTestConfigBuilder = nextpas.core.test.config.TTestConfigBuilder;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
