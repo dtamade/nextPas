@@ -23,7 +23,7 @@ const
   ExitSuccessCode = 0;
   ExitFailureCode = 1;
   BaselineTargetName = 'linux-x86_64';
-  LinuxX8664DefaultInterpreter = '/lib/ld64.so.1';
+  LinuxX8664DefaultInterpreter = '/lib64/ld-linux-x86-64.so.2';
   LinuxX8664FallbackLoader = '/lib64/ld-linux-x86-64.so.2';
   HarnessTempRoot = 'build/harness/work';
   DefaultStage0Executable = 'build/stage0-bootstrap/nextpas';
