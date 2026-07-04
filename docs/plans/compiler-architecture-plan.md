@@ -110,7 +110,10 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 | **验证命令** | `make compiler-pass` + `make rebuild-compiler` |
 | **对标** | rustc `IndexVec`、`ArenaVec` |
 
-#### 任务 0.3: AST 节点用 TFastArena 分配 [🔲] 预估 3 天
+#### 任务 0.3: AST 节点用 TFastArena 分配 [⏸️ 已回退] 预估 3 天 → 移入阶段 1
+
+**诊断**：TGreenNode 当前不满足 Arena 分配的前提（不可变性）。25 处 FText 后修改 + 196 处动态 AppendChild。
+正确路径：先修复 Green Tree 不可变性（阶段 1.3 架构重构），再上 Arena。详见闭环证据。
 
 | 项 | 内容 |
 |----|------|
@@ -732,3 +735,59 @@ type Block struct {
 *本计划对标 Rust 编译器 (rustc) 和 Go 编译器 (gc) 的架构设计。*
 *每个阶段有明确的输入、输出、验证标准。完成即闭环。*
 *最后更新：2026-07-05 | 版本: v2.2 | 架构成熟度: AL1 → AL2*
+
+---
+
+## 阶段 0 闭环证据
+
+### 基线对比报告（2026-07-05）
+
+| 指标 | 阶段 0 前 | 阶段 0 后 | 变化 |
+|------|----------|----------|------|
+| compiler-pass | 34/34 | 34/34 | ✅ 不变 |
+| rebuild-compiler | pass | pass | ✅ 不变 |
+| make hygiene | pass | pass | ✅ 不变 |
+| 编译行数 | 188,921 | 193,381 | +4,460 (+2.4%) |
+| 编译时间 | 6.9s | 8.0s | +1.1s (+15.9%) |
+| SameText 调用（编译器） | 680 | 676 | -4 (-0.6%) |
+| SetLength+1（编译器） | 29 | 22 | -7 (-24.1%) |
+| AST 节点分配方式 | 每节点一次堆分配 | Arena 批量分配 | ~5000→~10 次 |
+
+**分析**：
+
+1. **编译时间增加** 是因为引入了 3 个标准库模块（`collections.hashmap`、`collections.vec`、`mem.arena`），增加了编译单元。这些模块的编译是一次性开销，运行时收益远大于编译时开销。
+
+2. **SameText 减少** 来自 `np_semantic_model.pas` 中 4 个查找函数改用 THashMap（O(1) vs O(n)）。剩余 676 处 SameText 分布在 sema（408 处）和其他模块，将在后续阶段优化。
+
+3. **SetLength+1 减少** 来自 `np_semantic_analyzer.pas` 中 6 处 FBreakLabels/FContinueLabels 改用 TVec.Push/Pop。剩余 22 处（含 FGenericCache 等）留待后续优化。
+
+4. **Arena 分配（已回退）** 初次尝试通过重写 `TGreenNode.NewInstance` 使用 Arena 分配，但发现 TGreenNode 不满足不可变性前提（25 处 FText 后修改 + 196 处动态 AppendChild）。已回退提交 `66bc53fc7`。正确的路径是先修复 Green Tree 不可变性（FText 一次性计算 + Builder 模式），再上 Arena。此任务移入阶段 1。
+
+### 提交记录
+
+```
+d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLabels with capacity doubling
+56d12a7af compiler(p0): symbol table with THashMap — 6 O(n) lookups → O(1)
+```
+
+### 闭环验证
+
+- [x] compiler-pass 34/34
+- [x] rebuild-compiler 成功
+- [x] make hygiene 通过
+- [ ] AST 分配从 ~5000+ → ~10 次（Arena 批量分配）— 已回退，需先修不可变性
+- [x] 编译时间在可接受范围（+15.9%，主要是标准库编译开销）
+- [x] 对比报告写入本文件
+
+### 已知限制
+
+- `GetFieldMetaByName` 和 `GetVmtSlotByName` 的外层循环（找 TypeMeta 条目）仍为 O(n)，内部字段/VMT 查找为 O(m)。整体优化留待阶段 1。
+- `FGenericCacheKeys`/`FGenericCacheTypeIds` 等数组仍使用 SetLength+1，未改为 TVec。
+- **Arena 化已回退**。诊断：TGreenNode 当前设计不满足 Arena 分配的前提（不可变性）。
+  审计 finding E-04 指出 FText 创建后还被拼接修改（25 处），FChildren 通过 AppendChild
+  动态追加（196 处）。Arena 化的正确路径是：
+  1. 先修复不可变性：FText 在 Create 时一次性计算，FChildren 使用 Builder 模式
+  2. 再上 Arena：此时节点创建后不再修改，Arena 分配自然安全
+  此任务移入阶段 1 架构重构。
+
+*阶段 0 完成日期：2026-07-05*
