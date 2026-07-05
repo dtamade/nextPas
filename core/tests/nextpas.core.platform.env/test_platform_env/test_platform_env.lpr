@@ -3,8 +3,10 @@ program test_platform_env;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.env,
   nextpas.core.test;
 
@@ -12,17 +14,9 @@ var
   T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
-var
-  LLines: TStringList;
 begin
   Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(ARelativePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(ARelativePath);
 end;
 
 function ExtractFunctionBody(const ASource, AStartToken,

@@ -4,7 +4,7 @@ program test_platform_thread;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+
   nextpas.core.test,
   nextpas.core.platform.thread;
 

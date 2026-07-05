@@ -7,6 +7,7 @@ uses
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.errors,
   nextpas.core.test;
 
 var
@@ -79,6 +80,36 @@ begin
   R := platform_error_message(2, @Buf[0], 256);
   Check(R > 0, 'ENOENT returns length > 0');
   Check(StrContains(@Buf[0], 'o such file'), 'contains "o such file"');
+end;
+
+procedure TestEEXIST;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(17, @Buf[0], 256);
+  Check(R > 0, 'EEXIST returns length > 0');
+  Check(StrContains(@Buf[0], 'file exists'), 'contains "file exists"');
+end;
+
+procedure TestENOTDIR;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(20, @Buf[0], 256);
+  Check(R > 0, 'ENOTDIR returns length > 0');
+  Check(StrContains(@Buf[0], 'not a directory'), 'contains "not a directory"');
+end;
+
+procedure TestPathTooLong;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(-7, @Buf[0], 256);
+  Check(R > 0, 'PATH_TOO_LONG returns length > 0');
+  Check(StrContains(@Buf[0], 'path too long'), 'contains "path too long"');
 end;
 
 procedure TestEACCES;
@@ -159,14 +190,96 @@ begin
   Check(R.ExitCode = 1, 'exit code 1');
 end;
 
+{ Error path tests }
+procedure TestNilBuffer;
+var
+  R: Int32;
+begin
+  R := platform_error_message(2, nil, 256);
+  Check(R = -1, 'nil buffer returns -1');
+end;
+
+procedure TestZeroLengthBuffer;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(2, @Buf[0], 0);
+  Check(R = -1, 'zero length buffer returns -1');
+end;
+
+procedure TestNegativeLengthBuffer;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(2, @Buf[0], -1);
+  Check(R = -1, 'negative length buffer returns -1');
+end;
+
+procedure TestCategoryInvalid;
+begin
+  Check(platform_error_category(PLATFORM_ERR_INVALID) = ecInvalidArgument,
+    'INVALID maps to ecInvalidArgument');
+end;
+
+procedure TestCategoryUnsupported;
+begin
+  Check(platform_error_category(PLATFORM_ERR_UNSUPPORTED) = ecNotSupported,
+    'UNSUPPORTED maps to ecNotSupported');
+end;
+
+procedure TestCategoryTimeout;
+begin
+  Check(platform_error_category(PLATFORM_ERR_TIMEOUT) = ecTimeout,
+    'TIMEOUT maps to ecTimeout');
+end;
+
+procedure TestCategoryAgain;
+begin
+  Check(platform_error_category(PLATFORM_ERR_AGAIN) = ecWouldBlock,
+    'AGAIN maps to ecWouldBlock');
+end;
+
+procedure TestCategoryBusy;
+begin
+  Check(platform_error_category(PLATFORM_ERR_BUSY) = ecWouldBlock,
+    'BUSY maps to ecWouldBlock');
+end;
+
+procedure TestCategoryBadf;
+begin
+  Check(platform_error_category(PLATFORM_ERR_BADF) = ecIO,
+    'BADF maps to ecIO');
+end;
+
+procedure TestCategoryZero;
+begin
+  Check(platform_error_category(0) = ecNone,
+    'code 0 maps to ecNone');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.error');
   T.Test('ENOENT message', @TestENOENT);
+  T.Test('EEXIST message', @TestEEXIST);
+  T.Test('ENOTDIR message', @TestENOTDIR);
+  T.Test('PATH_TOO_LONG message', @TestPathTooLong);
   T.Test('EACCES message', @TestEACCES);
   T.Test('code 0 (Success)', @TestZero);
   T.Test('unknown error code', @TestUnknown);
   T.Test('small buffer truncation', @TestSmallBuffer);
   T.Test('fatal API exists', @TestFatalExists);
   T.Test('fatal behavior (via subprocess)', @TestFatalBehavior);
+  T.Test('nil buffer returns -1', @TestNilBuffer);
+  T.Test('zero length buffer returns -1', @TestZeroLengthBuffer);
+  T.Test('negative length buffer returns -1', @TestNegativeLengthBuffer);
+  T.Test('INVALID maps to ecInvalidArgument', @TestCategoryInvalid);
+  T.Test('UNSUPPORTED maps to ecNotSupported', @TestCategoryUnsupported);
+  T.Test('TIMEOUT maps to ecTimeout', @TestCategoryTimeout);
+  T.Test('AGAIN maps to ecWouldBlock', @TestCategoryAgain);
+  T.Test('BUSY maps to ecWouldBlock', @TestCategoryBusy);
+  T.Test('BADF maps to ecIO', @TestCategoryBadf);
+  T.Test('code 0 maps to ecNone', @TestCategoryZero);
   if not T.Run then Halt(1);
 end.

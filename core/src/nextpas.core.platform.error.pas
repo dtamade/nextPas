@@ -18,6 +18,7 @@ const
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
   PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
   PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
+  PLATFORM_ERR_PATH_TOO_LONG = -7;  { Path exceeds PLATFORM_FS_MAX_PATH }
 
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_error_category(ACode: Int32): TErrorCategory;
@@ -85,6 +86,14 @@ begin
       ALen := CopyPlatformErrorMessage('busy', ABuf, ABufLen);
     PLATFORM_ERR_BADF:
       ALen := CopyPlatformErrorMessage('bad fd', ABuf, ABufLen);
+    PLATFORM_ERR_EEXIST:
+      ALen := CopyPlatformErrorMessage('file exists', ABuf, ABufLen);
+    PLATFORM_ERR_ENOENT:
+      ALen := CopyPlatformErrorMessage('no such file', ABuf, ABufLen);
+    PLATFORM_ERR_ENOTDIR:
+      ALen := CopyPlatformErrorMessage('not a directory', ABuf, ABufLen);
+    PLATFORM_ERR_PATH_TOO_LONG:
+      ALen := CopyPlatformErrorMessage('path too long', ABuf, ABufLen);
   else
     Result := False;
     ALen := -1;

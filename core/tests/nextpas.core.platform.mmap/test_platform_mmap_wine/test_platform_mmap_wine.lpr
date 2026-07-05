@@ -5,7 +5,7 @@ program test_platform_mmap_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.mmap,
   nextpas.core.platform.files,

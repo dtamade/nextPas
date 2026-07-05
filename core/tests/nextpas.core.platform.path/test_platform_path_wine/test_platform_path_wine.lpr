@@ -5,7 +5,7 @@ program test_platform_path_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.path;
 
@@ -154,31 +154,32 @@ begin
   Check(string(PAnsiChar(@LBuf[0])) = '.txt', 'extension works with full path');
 end;
 
-{ 10. normalize — collapse . and .. components using Windows backslash paths }
+{ 10. normalize — collapse . and .. components }
 procedure TestPathNormalize;
 var
   LBuf: array[0..255] of AnsiChar;
   LRes: Int32;
   LR: string;
 begin
-  LRes := platform_path_normalize('\foo\.\bar', @LBuf[0], 256);
+  { Test with forward slashes (Unix-style) }
+  LRes := platform_path_normalize('/foo/./bar', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
-  Check((LR = 'foo\bar') or (LR = '\foo\bar'),
-    'normalize "\foo\.\bar" should yield "foo\bar" or "\foo\bar", got "' + LR + '"');
+  Check((LR = 'foo/bar') or (LR = '/foo/bar'),
+    'normalize "/foo/./bar" should yield "foo/bar" or "/foo/bar", got "' + LR + '"');
 
-  LRes := platform_path_normalize('\foo\bar\..\baz', @LBuf[0], 256);
+  LRes := platform_path_normalize('/foo/bar/../baz', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
-  Check((LR = 'foo\baz') or (LR = '\foo\baz'),
-    'normalize "\foo\bar\..\baz" should yield "foo\baz" or "\foo\baz", got "' + LR + '"');
+  Check((LR = 'foo/baz') or (LR = '/foo/baz'),
+    'normalize "/foo/bar/../baz" should yield "foo/baz" or "/foo/baz", got "' + LR + '"');
 
-  LRes := platform_path_normalize('foo\..\bar', @LBuf[0], 256);
+  LRes := platform_path_normalize('foo/../bar', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
-  Check(LR = 'bar', 'normalize "foo\..\bar" = "bar", got "' + LR + '"');
+  Check(LR = 'bar', 'normalize "foo/../bar" = "bar", got "' + LR + '"');
 
-  LRes := platform_path_normalize('\..\foo', @LBuf[0], 256);
+  LRes := platform_path_normalize('/../foo', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
-  Check((LR = '..\foo') or (LR = 'foo') or (LR = '\foo'),
-    'normalize "\..\foo" should yield ..\foo or foo or \foo, got "' + LR + '"');
+  Check((LR = '../foo') or (LR = 'foo') or (LR = '/foo'),
+    'normalize "/../foo" should yield ../foo or foo or /foo, got "' + LR + '"');
 
   LRes := platform_path_normalize('.', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));

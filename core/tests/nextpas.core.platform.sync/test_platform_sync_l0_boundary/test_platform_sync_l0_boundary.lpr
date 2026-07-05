@@ -3,7 +3,8 @@ program test_platform_sync_l0_boundary;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var

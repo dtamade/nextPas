@@ -5,7 +5,7 @@ program test_platform_thread_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;

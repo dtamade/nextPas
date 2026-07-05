@@ -3,7 +3,9 @@ program test_platform_thread_host_ffi_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 const
@@ -32,22 +34,8 @@ var
   T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
-var
-  LFile: Text;
-  LLine: string;
 begin
-  Result := '';
-  Assign(LFile, APath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      Result := Result + LowerCase(LLine) + #10;
-    end;
-  finally
-    Close(LFile);
-  end;
+  Result := LowerCase(FsReadFileText(APath));
 end;
 
 function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;

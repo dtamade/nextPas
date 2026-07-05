@@ -3,8 +3,9 @@ program test_platform_cross_ci_matrix_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 const
@@ -26,17 +27,10 @@ end;
 function LoadScriptText: string;
 var
   LPath: string;
-  LLines: TStringList;
 begin
   LPath := ResolvePath(SCRIPT_PATH_FROM_TEST, SCRIPT_PATH_FROM_ROOT);
   Check(FileExists(LPath), 'platform cross CI matrix script must exist: ' + LPath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LPath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LPath));
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);

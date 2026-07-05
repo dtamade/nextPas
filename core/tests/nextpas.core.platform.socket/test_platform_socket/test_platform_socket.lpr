@@ -6,7 +6,9 @@ program test_platform_socket;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.socket
 {$IFDEF NEXTPAS_UNIX}

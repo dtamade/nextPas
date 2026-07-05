@@ -3,7 +3,11 @@ program test_platform_ffi_owner_boundary;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.fs.glob,
+  nextpas.core.path,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 const
@@ -20,22 +24,8 @@ var
   T: TTestSuite;
 
 function ReadSourceFile(const APath: string): string;
-var
-  LFile: Text;
-  LLine: string;
 begin
-  Result := '';
-  Assign(LFile, APath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      Result := Result + LowerCase(LLine) + #10;
-    end;
-  finally
-    Close(LFile);
-  end;
+  Result := LowerCase(FsReadFileText(APath));
 end;
 
 function ResolveSourceDir: string;
@@ -136,7 +126,7 @@ end;
 
 procedure TestPlatformFFIOwnerBoundary;
 var
-  LSearch: TSearchRec;
+  LFiles: array of string;
   LSourceDir: string;
   LPath: string;
   LFileName: string;
@@ -168,6 +158,7 @@ var
   LFoundWindowsFfi: Boolean;
   LNonFfiCount: Integer;
   LFfiCount: Integer;
+  I: Integer;
 begin
   LSourceDir := ResolveSourceDir;
   LFoundPlatform := False;
@@ -198,100 +189,96 @@ begin
   LNonFfiCount := 0;
   LFfiCount := 0;
 
-  Check(FindFirst(IncludeTrailingPathDelimiter(LSourceDir) + 'nextpas.core.platform*.pas', faAnyFile, LSearch) = 0,
+  LFiles := FsGlob(LSourceDir, 'nextpas.core.platform*.pas');
+  Check(Length(LFiles) > 0,
     'platform source audit must locate nextpas.core.platform*.pas under: ' + LSourceDir);
-  try
-    repeat
-      if (LSearch.Attr and faDirectory) <> 0 then
-        Continue;
 
-      LFileName := LowerCase(LSearch.Name);
-      LPath := IncludeTrailingPathDelimiter(LSourceDir) + LSearch.Name;
+  for I := 0 to High(LFiles) do
+  begin
+    LPath := LFiles[I];
+    LFileName := LowerCase(ExtractFileName(LPath));
 
-      if LFileName = 'nextpas.core.platform.sync.windows.ffi.pas' then
-        Check(False, 'platform ffi must stay host-owned, not module-split: ' + LSearch.Name);
+    if LFileName = 'nextpas.core.platform.sync.windows.ffi.pas' then
+      Check(False, 'platform ffi must stay host-owned, not module-split: ' + LFileName);
 
-      if LFileName = 'nextpas.core.platform.pas' then
-        LFoundPlatform := True
-      else if LFileName = 'nextpas.core.platform.base.pas' then
-        LFoundPlatformBase := True
-      else if LFileName = 'nextpas.core.platform.info.pas' then
-        LFoundPlatformInfo := True
-      else if LFileName = 'nextpas.core.platform.time.pas' then
-        LFoundPlatformTime := True
-      else if LFileName = 'nextpas.core.platform.time.base.pas' then
-        LFoundPlatformTimeBase := True
-      else if LFileName = 'nextpas.core.platform.time.host.pas' then
-        LFoundPlatformTimeHost := True
-      else if LFileName = 'nextpas.core.platform.thread.pas' then
-        LFoundPlatformThread := True
-      else if LFileName = 'nextpas.core.platform.thread.base.pas' then
-        LFoundPlatformThreadBase := True
-      else if LFileName = 'nextpas.core.platform.sync.pas' then
-        LFoundPlatformSync := True
-      else if LFileName = 'nextpas.core.platform.sync.base.pas' then
-        LFoundPlatformSyncBase := True
-      else if LFileName = 'nextpas.core.platform.posix.base.pas' then
-        LFoundPosixBase := True
-      else if LFileName = 'nextpas.core.platform.posix.ffi.pas' then
-        LFoundPosixFfi := True
-      else if LFileName = 'nextpas.core.platform.posix.math.pas' then
-        LFoundPosixMath := True
-      else if LFileName = 'nextpas.core.platform.linux.base.pas' then
-        LFoundLinuxBase := True
-      else if LFileName = 'nextpas.core.platform.linux.ffi.pas' then
-        LFoundLinuxFfi := True
-      else if LFileName = 'nextpas.core.platform.darwin.base.pas' then
-        LFoundDarwinBase := True
-      else if LFileName = 'nextpas.core.platform.darwin.ffi.pas' then
-        LFoundDarwinFfi := True
-      else if LFileName = 'nextpas.core.platform.android.base.pas' then
-        LFoundAndroidBase := True
-      else if LFileName = 'nextpas.core.platform.android.ffi.pas' then
-        LFoundAndroidFfi := True
-      else if LFileName = 'nextpas.core.platform.freebsd.base.pas' then
-        LFoundFreeBSDBase := True
-      else if LFileName = 'nextpas.core.platform.freebsd.ffi.pas' then
-        LFoundFreeBSDFfi := True
-      else if LFileName = 'nextpas.core.platform.unix.base.pas' then
-        LFoundUnixBase := True
-      else if LFileName = 'nextpas.core.platform.unix.ffi.pas' then
-        LFoundUnixFfi := True
-      else if LFileName = 'nextpas.core.platform.windows.base.pas' then
-        LFoundWindowsBase := True
-      else if LFileName = 'nextpas.core.platform.windows.ffi.pas' then
-        LFoundWindowsFfi := True;
+    if LFileName = 'nextpas.core.platform.pas' then
+      LFoundPlatform := True
+    else if LFileName = 'nextpas.core.platform.base.pas' then
+      LFoundPlatformBase := True
+    else if LFileName = 'nextpas.core.platform.info.pas' then
+      LFoundPlatformInfo := True
+    else if LFileName = 'nextpas.core.platform.time.pas' then
+      LFoundPlatformTime := True
+    else if LFileName = 'nextpas.core.platform.time.base.pas' then
+      LFoundPlatformTimeBase := True
+    else if LFileName = 'nextpas.core.platform.time.host.pas' then
+      LFoundPlatformTimeHost := True
+    else if LFileName = 'nextpas.core.platform.thread.pas' then
+      LFoundPlatformThread := True
+    else if LFileName = 'nextpas.core.platform.thread.base.pas' then
+      LFoundPlatformThreadBase := True
+    else if LFileName = 'nextpas.core.platform.sync.pas' then
+      LFoundPlatformSync := True
+    else if LFileName = 'nextpas.core.platform.sync.base.pas' then
+      LFoundPlatformSyncBase := True
+    else if LFileName = 'nextpas.core.platform.posix.base.pas' then
+      LFoundPosixBase := True
+    else if LFileName = 'nextpas.core.platform.posix.ffi.pas' then
+      LFoundPosixFfi := True
+    else if LFileName = 'nextpas.core.platform.posix.math.pas' then
+      LFoundPosixMath := True
+    else if LFileName = 'nextpas.core.platform.linux.base.pas' then
+      LFoundLinuxBase := True
+    else if LFileName = 'nextpas.core.platform.linux.ffi.pas' then
+      LFoundLinuxFfi := True
+    else if LFileName = 'nextpas.core.platform.darwin.base.pas' then
+      LFoundDarwinBase := True
+    else if LFileName = 'nextpas.core.platform.darwin.ffi.pas' then
+      LFoundDarwinFfi := True
+    else if LFileName = 'nextpas.core.platform.android.base.pas' then
+      LFoundAndroidBase := True
+    else if LFileName = 'nextpas.core.platform.android.ffi.pas' then
+      LFoundAndroidFfi := True
+    else if LFileName = 'nextpas.core.platform.freebsd.base.pas' then
+      LFoundFreeBSDBase := True
+    else if LFileName = 'nextpas.core.platform.freebsd.ffi.pas' then
+      LFoundFreeBSDFfi := True
+    else if LFileName = 'nextpas.core.platform.unix.base.pas' then
+      LFoundUnixBase := True
+    else if LFileName = 'nextpas.core.platform.unix.ffi.pas' then
+      LFoundUnixFfi := True
+    else if LFileName = 'nextpas.core.platform.windows.base.pas' then
+      LFoundWindowsBase := True
+    else if LFileName = 'nextpas.core.platform.windows.ffi.pas' then
+      LFoundWindowsFfi := True;
 
-      LSource := ReadSourceFile(LPath);
-      if Pos('.ffi.pas', LFileName) > 0 then
-      begin
-        Inc(LFfiCount);
-        { freetype.ffi and x11.ffi use dlsym dynamic loading (function pointer vars),
-          not static external bindings — exempt from external check }
-        if (LFileName <> 'nextpas.core.platform.freetype.ffi.pas') and
-           (LFileName <> 'nextpas.core.platform.x11.ffi.pas') then
-          CheckTokenPresent(LSource, 'external ''',
-            'platform ffi unit must own external declarations: ' + LSearch.Name);
-        CheckTokenAbsent(LSource, ' inline',
-          'platform ffi unit must not contain inline helper declarations or implementations: ' + LSearch.Name);
-        CheckTokenAbsent(LSource, 'implementation' + #10 + 'uses',
-          'platform ffi unit implementation must not import helper dependencies: ' + LSearch.Name);
-        CheckTokenAbsent(LSource, 'begin' + #10,
-          'platform ffi unit must stay raw ABI declarations only, without helper bodies: ' + LSearch.Name);
-        CheckNoSyntheticHostPrefixedRawNames(LSource, LFileName);
-      end
-      else
-      begin
-        Inc(LNonFfiCount);
-        { thread.pas has one external pthread_timedjoin_np for Darwin-specific
-          ABI — tracked as architecture debt, exempt for now }
-        if LFileName <> 'nextpas.core.platform.thread.pas' then
-          CheckTokenAbsent(LSource, 'external ''',
-            'non-ffi platform unit must not declare external ABI directly: ' + LSearch.Name);
-      end;
-    until FindNext(LSearch) <> 0;
-  finally
-    FindClose(LSearch);
+    LSource := ReadSourceFile(LPath);
+    if Pos('.ffi.pas', LFileName) > 0 then
+    begin
+      Inc(LFfiCount);
+      { freetype.ffi and x11.ffi use dlsym dynamic loading (function pointer vars),
+        not static external bindings — exempt from external check }
+      if (LFileName <> 'nextpas.core.platform.freetype.ffi.pas') and
+         (LFileName <> 'nextpas.core.platform.x11.ffi.pas') then
+        CheckTokenPresent(LSource, 'external ''',
+          'platform ffi unit must own external declarations: ' + LFileName);
+      CheckTokenAbsent(LSource, ' inline',
+        'platform ffi unit must not contain inline helper declarations or implementations: ' + LFileName);
+      CheckTokenAbsent(LSource, 'implementation' + #10 + 'uses',
+        'platform ffi unit implementation must not import helper dependencies: ' + LFileName);
+      CheckTokenAbsent(LSource, 'begin' + #10,
+        'platform ffi unit must stay raw ABI declarations only, without helper bodies: ' + LFileName);
+      CheckNoSyntheticHostPrefixedRawNames(LSource, LFileName);
+    end
+    else
+    begin
+      Inc(LNonFfiCount);
+      { thread.pas has one external pthread_timedjoin_np for Darwin-specific
+        ABI — tracked as architecture debt, exempt for now }
+      if LFileName <> 'nextpas.core.platform.thread.pas' then
+        CheckTokenAbsent(LSource, 'external ''',
+          'non-ffi platform unit must not declare external ABI directly: ' + LFileName);
+    end;
   end;
 
   Check(LNonFfiCount >= 19, 'platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units');

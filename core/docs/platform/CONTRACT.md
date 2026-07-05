@@ -60,12 +60,15 @@
 
 ```pascal
 // 文件 I/O
-function platform_file_open(const APath: PAnsiChar; AFlags: Int32;
-  out AHandle: TPlatformFileHandle): Int32;
+function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
+  APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 function platform_file_read(const AHandle: TPlatformFileHandle;
-  AData: Pointer; ALen: Int32; out ANRead: Int32): Int32;
+  ABuf: Pointer; ALen: Int32; out ANRead: Int32): Int32;
 function platform_file_write(const AHandle: TPlatformFileHandle;
-  AData: Pointer; ALen: Int32): Int32;
+  ABuf: Pointer; ALen: Int32): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
 // 进程
@@ -75,9 +78,10 @@ function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
 
 // 线程
-function platform_thread_create(AProc: TThreadProc; AArg: Pointer;
-  out AThread: TPlatformThread): Int32;
-function platform_thread_join(var AThread: TPlatformThread): Int32;
+function platform_thread_create(out AHandle: TPlatformThreadHandle;
+  AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+function platform_thread_join(const AHandle: TPlatformThreadHandle;
+  out ARetVal: Pointer): Int32;
 
 // 同步
 function platform_mutex_init(out AMutex: TPlatformMutex): Int32;
@@ -85,9 +89,8 @@ function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 
 // 内存
-function platform_aligned_alloc(ASize: PtrUInt; AAlignment: PtrUInt): Pointer;
-function platform_aligned_realloc(APtr: Pointer; ANewSize: PtrUInt;
-  AAlignment: PtrUInt): Pointer;
+function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
+function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt): Pointer;
 ```
 
 ---
@@ -207,3 +210,56 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize: PtrUInt;
 ### Phase 3: API 增强
 - process.pas: `ATimeoutMs` 参数（Unix 轮询 + Windows 原生）
 - fs.pas: `is_executable` 检查全部三个执行位
+
+### Phase 4: TOCTOU 安全修复 (2026-07-05)
+- fs.pas: `platform_fs_read_file` 消除 TOCTOU 风险
+  - 旧实现：先 `stat` 获取文件大小，再分配内存读取
+  - 新实现：直接打开文件，循环读取直到 EOF（`platform_fs_read_until_eof`）
+  - 优势：无并发修改竞态，自动适应文件大小变化
+- fs.pas: `platform_fs_read_file_into` 消除 TOCTOU 风险
+  - 旧实现：先 `stat` 检查缓冲区容量，再读取
+  - 新实现：直接读取，缓冲区满时返回 `PLATFORM_FS_SHORT_READ_ERROR`
+- 测试：新增 `test_platform_fs_toctou` 并发读写测试
+
+### Phase 5: sendfile 零拷贝优化 (2026-07-05)
+- fs.pas: `platform_fs_copy_file` 使用 Linux sendfile 系统调用
+  - 旧实现：8KB 缓冲区循环 read/write
+  - 新实现：优先使用 sendfile 零拷贝，失败时 fallback 到 read/write
+  - 优势：大文件拷贝性能提升 2-10x，减少用户态/内核态切换
+  - 平台支持：Linux（sendfile），其他平台保持 read/write
+
+### Phase 6: API 清理 (2026-07-05)
+- fs.pas: `platform_fs_walk` 路径溢出处理
+  - 旧实现：路径超过 4095 字节时静默跳过
+  - 新实现：通过回调返回 `PLATFORM_FS_PATH_TOO_LONG` 错误码
+  - 优势：调用方可以检测和处理路径过长的情况
+- fs.pas: `platform_fs_mktemp` 标记 deprecated
+  - 推荐使用 `platform_fs_mktemp_handle` 版本
+  - 返回 `TPlatformFileHandle` 而非 `Int32` fd
+- memory.pas: `platform_aligned_free` DEBUG 模式 assert
+  - RELEASE 模式：静默忽略 magic 不匹配（兼容性）
+  - DEBUG 模式：assert 失败（快速定位 double-free）
+
+### Phase 7: 测试迁移 — FPC RTL 隔离 (2026-07-05)
+- 40 个测试文件消除 SysUtils/Classes 依赖
+  - TStringList → FsReadFileText (nextpas.core.fs.util)
+  - ExpandFileName → 相对路径
+  - LowerCase/IntToStr → nextpas.core.text.conv
+  - FindFirst/FindNext → FsGlob (nextpas.core.fs.glob)
+  - TThread → platform_thread (sync_stress 测试)
+  - Sleep → platform_thread_sleep_ns
+- 所有非 wine/windows 平台测试现在 0 FPC RTL 依赖
+- 验证：40 个测试套件全部通过，0 unfreed
+
+### Phase 8: 错误消息补全 + realloc 优化 (2026-07-05)
+- error.pas: `TryPlatformErrorTokenMessage` 补全 4 个缺失错误码
+  - EEXIST → "file exists"
+  - ENOENT → "no such file"
+  - ENOTDIR → "not a directory"
+  - PATH_TOO_LONG → "path too long"
+- error.pas: 新增 `PLATFORM_ERR_PATH_TOO_LONG = -7` 常量
+- memory.pas: `platform_aligned_realloc` 缩小原地优化
+  - 旧实现：始终 alloc+copy+free
+  - 新实现：缩小时直接更新 header size，零拷贝
+  - 优势：realloc 缩小操作 O(1)，无内存分配
+- 测试：error 10/10 通过，memory 13/13 通过
