@@ -34,6 +34,7 @@ type
   public
     constructor Create(const AModule: TMirModule);
     function Translate: string;
+    procedure SaveToFile(const APath: string);
   end;
 
 implementation
@@ -292,4 +293,15 @@ begin
   Result := FOutput;
 end;
 
+
+procedure TMirToLlvmTranslator.SaveToFile(const APath: string);
+var
+  F: TextFile;
+begin
+  Translate;
+  AssignFile(F, APath);
+  Rewrite(F);
+  Write(F, FOutput);
+  CloseFile(F);
+end;
 end.
