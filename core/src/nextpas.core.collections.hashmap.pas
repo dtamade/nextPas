@@ -90,7 +90,7 @@ type
    *   - 容量始终为 2 的幂次，便于位运算取模
    *   - 支持自定义哈希函数和相等比较函数
    *
-   * @threadsafety 非线程安全。并发访问请使用 TMichaelHashMap（nextpas.core.lockfree.hashmap）
+   * @threadsafety 非线程安全。并发访问请使用 TShardedHashMap（nextpas.core.lockfree.hashmap）
    *
    * @example
    *   var Map: specialize THashMap<String, Integer>;

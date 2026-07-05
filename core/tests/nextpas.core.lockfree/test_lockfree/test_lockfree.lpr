@@ -11,7 +11,9 @@ uses
   nextpas.core.lockfree,
   nextpas.core.lockfree.wait,
   nextpas.core.lockfree.ebr,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.text.conv,
+  nextpas.core.time;
 
 type
   TIntSpsc = specialize TSpscQueue<Integer>;
