@@ -195,6 +195,7 @@ var
   LHTML: TLineBuffer;
 begin
   LHTML := Default(TLineBuffer);
+  try
   GenerateHTMLHeader(LHTML);
   GenerateHTMLResultRows(LHTML);
   GenerateHTMLSkippedSection(LHTML);
@@ -202,6 +203,9 @@ begin
   GenerateHTMLBoxPlots(LHTML);
   GenerateHTMLFooter(LHTML);
   Result := BufferToString(LHTML);
+  finally
+    LHTML.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.ToCrossLanguageHTML(
@@ -220,6 +224,7 @@ begin
   SortCrossLangEntriesByName(LEntries);
 
   LHTML := Default(TLineBuffer);
+  try
   BufferAddLine(LHTML, '<!DOCTYPE html>');
   BufferAddLine(LHTML, '<html>');
   BufferAddLine(LHTML, '<head>');
@@ -280,6 +285,9 @@ begin
   BufferAddLine(LHTML, '</html>');
 
   Result := BufferToString(LHTML);
+  finally
+    LHTML.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
@@ -290,7 +298,7 @@ var
   LClass: string;
 begin
   LBuf := Default(TLineBuffer);
-
+  try
   BufferAddLine(LBuf, '<!DOCTYPE html>');
   BufferAddLine(LBuf, '<html><head><meta charset="utf-8">');
   BufferAddLine(LBuf, '<title>Multi-Baseline Comparison Matrix</title>');
@@ -360,4 +368,7 @@ begin
   BufferAddLine(LBuf, '</body></html>');
 
   Result := BufferToString(LBuf);
+  finally
+    LBuf.Builder.Done;
+  end;
 end;

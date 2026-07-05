@@ -6,6 +6,7 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.impl.scalar,
   nextpas.core.bench.base,
+  nextpas.core.bench.intf, { PF-06: for EBenchInvalidParam }
   nextpas.core.bench.stats.advanced,
   nextpas.core.test;
 
@@ -488,6 +489,59 @@ begin
   Check(LNoCrash, 'Infinity: Percentile survives without segfault');
 end;
 
+{ PF-06: Percentile range validation }
+procedure Test_Percentile_RangeValidation;
+var LData: TDoubleArray; LStats: TAdvancedStats;
+  LCaught: Boolean;
+begin
+  LData := CreateTestData([1.0, 2.0, 3.0, 4.0, 5.0]);
+  LStats := TAdvancedStats.Create(LData);
+  try
+    { Valid range should work }
+    CheckNear(1.0, LStats.Percentile(0), 0.001, 'P0 valid');
+    CheckNear(5.0, LStats.Percentile(100), 0.001, 'P100 valid');
+    CheckNear(3.0, LStats.Percentile(50), 0.001, 'P50 valid');
+
+    { Negative percentile should raise EBenchInvalidParam }
+    LCaught := False;
+    try
+      LStats.Percentile(-1.0);
+    except
+      on E: EBenchInvalidParam do LCaught := True;
+    end;
+    Check(LCaught, 'Percentile(-1.0) raises EBenchInvalidParam');
+
+    { Percentile > 100 should raise EBenchInvalidParam }
+    LCaught := False;
+    try
+      LStats.Percentile(101.0);
+    except
+      on E: EBenchInvalidParam do LCaught := True;
+    end;
+    Check(LCaught, 'Percentile(101.0) raises EBenchInvalidParam');
+
+    { Large negative percentile should raise EBenchInvalidParam }
+    LCaught := False;
+    try
+      LStats.Percentile(-100.0);
+    except
+      on E: EBenchInvalidParam do LCaught := True;
+    end;
+    Check(LCaught, 'Percentile(-100.0) raises EBenchInvalidParam');
+
+    { Large positive percentile should raise EBenchInvalidParam }
+    LCaught := False;
+    try
+      LStats.Percentile(200.0);
+    except
+      on E: EBenchInvalidParam do LCaught := True;
+    end;
+    Check(LCaught, 'Percentile(200.0) raises EBenchInvalidParam');
+  finally
+    LStats.Free;
+  end;
+end;
+
 procedure Test_GetData;
 var LOrig, LCopy: TDoubleArray; LStats: TAdvancedStats;
 begin
@@ -605,6 +659,7 @@ begin
   T.Test('InfinityInput_NoCrash', @Test_InfinityInput_NoCrash);
   T.Test('NaNInfinity_Kurtosis', @Test_NaNInfinity_Kurtosis);
   T.Test('NaNInfinity_Percentile', @Test_NaNInfinity_Percentile);
+  T.Test('Percentile_RangeValidation', @Test_Percentile_RangeValidation);
   T.Test('GetData', @Test_GetData);
   T.Test('Count', @Test_Count);
   T.Test('OutlierSeverity_None', @Test_OutlierSeverity_None);

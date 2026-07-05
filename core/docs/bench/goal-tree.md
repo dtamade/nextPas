@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 生产就绪 (Production Ready)
-**最后更新**: 2026-06-26 (Phase 3 完成)
+**最后更新**: 2026-07-05 (Phase 3 + 可用性改进完成)
 
 ## 目标树
 
@@ -66,10 +66,11 @@ B8  报告扩展 ✅
   B8.3  原始样本收集 (CollectRawSamples)            ✅
 
 B9  质量保证 ✅
-  B9.1  14 测试套件 / 257 框架级测试                 ✅
+  B9.1  15 测试套件 / 296 框架级测试                 ✅
   B9.2  nextpas.core.test 框架迁移                  ✅
-  B9.3  heaptrc 零泄漏验证 (12/12 套件全部启用 -gh)  ✅
+  B9.3  heaptrc 零泄漏验证 (15/15 套件全部启用 -gh)  ✅
   B9.4  API 覆盖补全 (GetData/Count/GetResults)     ✅
+  B9.5  可用性改进 4 里程碑全部完成                   ✅
 
 B10  文档 ✅
   B10.1  README.md (API 概览/快速开始)              ✅
@@ -103,27 +104,39 @@ B14  Phase 3: 超越 Go/Rust                               ✅
   B14.3  分布直方图 SVG (GenerateDistributionChart)      ✅
   B14.4  基线对比图 SVG (GenerateComparisonChart)        ✅
   B14.5  CI 集成模板 (shell + GitHub Actions)            ✅
+
+B15  可用性改进 (2026-07-05)                               ✅
+  B15.1  D04: GenerateComparisons O(n) HashMap 优化       ✅
+  B15.2  E03: ComputePercentiles 批量接口                  ✅
+  B15.3  E09: 并行预热多线程化                              ✅
+  B15.4  E11: ToJSON 统一 TJsonWriter                      ✅
+  B15.5  D08: xlang 解析器诊断输出                          ✅
+  B15.6  D12: HasRegression 简化                            ✅
+  B15.7  E05: 测试框架统一迁移                              ✅
 ```
 
 ## 测试套件分布
 
+> **最后更新**: 2026-07-05
+
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
-| test_bench_stats | 28 | ✅ 零泄漏 | 基础统计 + GeometricMean + OLS |
-| test_bench_stats_advanced | 30 | ✅ 零泄漏 | 高级统计 + 异常值分级 |
+| test_bench_stats | 38 | ✅ 零泄漏 | 基础统计 + GeometricMean + OLS |
+| test_bench_stats_advanced | 39 | ✅ 零泄漏 | 高级统计 + 异常值分级 + NaN/Inf |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
-| test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer |
-| test_bench_integration | 43 | ✅ 零泄漏 | 集成测试 |
-| test_bench_report | 28 | ✅ 零泄漏 | 报告生成 |
-| test_bench_xlang | 32 | ✅ 零泄漏 | 跨语言解析 |
-| test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 |
-| test_bench_memtrack | 16 | ✅ 零泄漏 | 内存追踪 |
+| test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer + 统计完整性 |
+| test_bench_integration | 49 | ✅ 零泄漏 | 集成测试 + 超时 + LoopContext |
+| test_bench_report | 30 | ✅ 零泄漏 | 报告生成 + 空结果 + 边界值 |
+| test_bench_xlang | 40 | ✅ 零泄漏 | 跨语言解析 + Unicode + 溢出保护 |
+| test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 + 字段验证 |
+| test_bench_memtrack | 16 | ✅ 零泄漏 | 内存追踪 + 全局跟踪器 |
 | test_bench_parallel | 11 | ✅ 零泄漏 | 并行基准 |
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
-| test_bench_invalid_parameters_heaptrc | 5 | ✅ 0 leaks | 参数校验 |
+| test_bench_invalid_parameters_heaptrc | 9 | ✅ 0 leaks | 参数校验 + 异常类型 |
 | test_bench_matrix | 15 | ✅ 0 leaks | 多基线矩阵 + 图表 + JSON |
-| **合计** | **257** | **14/14 通过** | |
+| test_bench_self_bench | N/A | ✅ 0 leaks | 自基准测试 |
+| **合计** | **~296** | **15/15 通过** | |
 
 ## 已解决的技术债务
 

@@ -110,7 +110,7 @@ var
   GGlobalTrackerInitialized: Integer = 0;  // 0=未初始化, 1=已初始化
   GOriginalMemoryManager: TMemoryManager;
   GTrackingEnabled: Boolean = False;
-  GEnableLock: Integer = 0;  // 0=unlocked, 1=locked — CAS spin lock for enable/disable
+  GEnableLock: Integer = 0;  // 0=unlocked, 1=locked — CAS try-lock for enable/disable
 
 function AtomicInc64(var ATarget: Int64; ADelta: Int64): Int64;
 var
@@ -285,7 +285,7 @@ procedure EnableGlobalMemoryTracking;
 begin
   if GTrackingEnabled then Exit;
 
-  // CAS spin lock: 防止并发调用
+  // CAS try-lock: 防止并发调用
   if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
     Exit;  // 另一个线程正在启用，直接返回
 
@@ -320,7 +320,7 @@ procedure DisableGlobalMemoryTracking;
 begin
   if not GTrackingEnabled then Exit;
 
-  // CAS spin lock: 防止并发调用
+  // CAS try-lock: 防止并发调用
   if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
     Exit;  // 另一个线程正在操作，直接返回
 

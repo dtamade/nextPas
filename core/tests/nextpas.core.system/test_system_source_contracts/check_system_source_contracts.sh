@@ -1,98 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CORE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CORE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 REPO_ROOT="$(cd "$CORE_ROOT/.." && pwd)"
 
-fail() {
-  echo "[FAIL] $*" >&2
-  exit 1
-}
+# shellcheck source=lib/helpers.sh
+source "$SCRIPT_DIR/lib/helpers.sh"
 
-require_file() {
-  local path="$1"
-  [[ -s "$CORE_ROOT/$path" ]] || fail "required non-empty file missing: core/$path"
-}
-
-require_token() {
-  local path="$1"
-  local token="$2"
-  rg -F --quiet -- "$token" "$CORE_ROOT/$path" || fail "core/$path missing token: $token"
-}
-
-require_repo_file() {
-  local path="$1"
-  [[ -s "$REPO_ROOT/$path" ]] || fail "required non-empty repo file missing: $path"
-}
-
-require_repo_token() {
-  local path="$1"
-  local token="$2"
-  rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
-}
-
-reject_token() {
-  local path="$1"
-  local token="$2"
-  if rg -F --quiet -- "$token" "$CORE_ROOT/$path"; then
-    fail "core/$path must not contain token: $token"
-  fi
-}
-
-require_repo_reject_token() {
-  local path="$1"
-  local token="$2"
-  if rg -F --quiet -- "$token" "$REPO_ROOT/$path"; then
-    fail "$path must not contain token: $token"
-  fi
-}
-
-require_repo_reject_regex() {
-  local path="$1"
-  local regex="$2"
-  if rg --quiet -- "$regex" "$REPO_ROOT/$path"; then
-    fail "$path must not match regex: $regex"
-  fi
-}
-
-list_pascal_uses_units() {
-  awk '
-    function trim(s) {
-      gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
-      return s
-    }
-    function emit_units(line, parts, i, unit) {
-      gsub(/\{[^}]*\}/, "", line)
-      sub(/\/\/.*/, "", line)
-      gsub(/^[ \t]*uses[ \t]*/, "", line)
-      split(line, parts, /[,;]/)
-      for (i in parts) {
-        unit = trim(parts[i])
-        if (unit != "" && unit !~ /^\$/) {
-          print unit
-        }
-      }
-    }
-    /^[ \t]*uses[ \t]*/ {
-      in_uses = 1
-      emit_units($0)
-      if ($0 ~ /;/) in_uses = 0
-      next
-    }
-    in_uses {
-      emit_units($0)
-      if ($0 ~ /;/) in_uses = 0
-    }
-  ' "$1"
-}
-
-require_repo_not_uses_unit() {
-  local path="$1"
-  local forbidden_unit="$2"
-  if list_pascal_uses_units "$REPO_ROOT/$path" | grep -Fxi --quiet "$forbidden_unit"; then
-    fail "$path must not directly use unit: $forbidden_unit"
-  fi
-}
+# ============================================================================
+# SECTION: Pascal interface surface parser
+# ============================================================================
 
 list_unit_facade_surface() {
   local unit_path="$1"
@@ -523,6 +441,10 @@ reject_repo_uses_unit_under() {
   done < <(find "$root" -type f \( -name '*.pas' -o -name '*.lpr' \))
 }
 
+# ============================================================================
+# SECTION: Documentation existence and token checks
+# ============================================================================
+
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
@@ -720,6 +642,10 @@ for token in \
   "leak-sensitive"; do
   require_token "docs/system/runtime-contracts.md" "$token"
 done
+
+# ============================================================================
+# SECTION: Runtime contract name and helper mapping checks
+# ============================================================================
 
 for helper in \
   "np.system.string_init" \
@@ -1233,6 +1159,10 @@ require_token "tests/nextpas.core.system/Makefile" "TObject.Free"
 require_token "tests/nextpas.core.system/Makefile" "stage0-query-system-object-free-check=pass"
 require_token "tests/nextpas.core.system/Makefile" "stage0-query-system-object-free-implicit-check=pass"
 
+# ============================================================================
+# SECTION: Root facade forwarding chain checks
+# ============================================================================
+
 require_token "src/nextpas.core.system.pas" "NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';"
 require_token "src/nextpas.core.system.pas" "MAX_SIZE_INT = nextpas.core.base.MAX_SIZE_INT;"
 require_token "src/nextpas.core.system.pas" "MAX_SIZE_UINT = nextpas.core.base.MAX_SIZE_UINT;"
@@ -1349,6 +1279,10 @@ reject_token "src/nextpas.core.system.typinfo.pas" "DynArraySetLength"
 reject_token "src/nextpas.core.system.typinfo.pas" "DynArrayResize"
 reject_token "src/nextpas.core.system.typinfo.pas" "DynArrayRelease"
 
+# ============================================================================
+# SECTION: Sub-unit facade checks (sysutils, typinfo, errors, classes)
+# ============================================================================
+
 require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv"
@@ -1393,6 +1327,10 @@ require_errors_facade_surface_allowlist
 reject_token "src/nextpas.core.system.errors.pas" "SysUtils"
 reject_token "src/nextpas.core.system.errors.pas" "TypInfo"
 reject_token "src/nextpas.core.system.errors.pas" "Classes"
+
+# ============================================================================
+# SECTION: FPC RTL isolation enforcement
+# ============================================================================
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"

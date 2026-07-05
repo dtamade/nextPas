@@ -187,7 +187,8 @@ uses
   nextpas.core.time.offsetdatetime,
   nextpas.core.json.writer,
   nextpas.core.bench.baseline,
-  nextpas.core.simd.cpuinfo;
+  nextpas.core.simd.cpuinfo,
+  nextpas.core.collections.hashmap.swiss.str;
 
 { TBenchSuite }
 
@@ -255,7 +256,7 @@ begin
   else
     Result.Cores := 0;
   Result.FPCVersion := {$I %FPCVERSION%};
-  Result.Timestamp := FormatDateTime('yyyy-mm-ddTHH:nn:ss', TOffsetDateTime.Now);
+  Result.Timestamp := FormatDateTime('%Y-%m-%dT%H:%M:%S', TOffsetDateTime.Now);
 end;
 
 {** ST-08: guard against mutation after Run }
@@ -761,6 +762,8 @@ begin
 end;
 
 function TBenchResults.GenerateComparisons: TBenchComparisonArray;
+type
+  TBaselineMap = specialize TSwissTableStr<Integer>;
 var
   LComparisons: array of TBenchComparison;
   LCount: Integer;
@@ -768,7 +771,9 @@ var
   LAnalyzer: TBenchStatsAnalyzer;
   LBaseStats, LCurrStats: TBenchStats;
   LPValue: Double;
-  I, J: Integer;
+  LMap: TBaselineMap;
+  LJ: Integer;
+  I: Integer;
 begin
   // 预分配最大可能长度（名称匹配的结果-基线对数）
   if FResultCount < FBaselineCount then
@@ -777,59 +782,66 @@ begin
     SetLength(LComparisons, FBaselineCount);
   LCount := 0;
 
-  LAnalyzer := TBenchStatsAnalyzer.Create;
+  // D04: 使用 HashMap 优化 O(n²) 名称匹配为 O(n)
+  LMap := TBaselineMap.Create(FBaselineCount * 2);
   try
-    for I := 0 to FResultCount - 1 do
-    begin
-      for J := 0 to FBaselineCount - 1 do
+    // 构建基线名称 → 索引映射
+    for I := 0 to FBaselineCount - 1 do
+      LMap.Put(FBaselines[I].Name, I);
+
+    LAnalyzer := TBenchStatsAnalyzer.Create;
+    try
+      for I := 0 to FResultCount - 1 do
       begin
-        if FResults[I].Name = FBaselines[J].Name then
+        // O(1) 查找匹配的基线
+        if not LMap.TryGetValue(FResults[I].Name, LJ) then
+          Continue;
+
+        LIdx := LCount;
+        LComparisons[LIdx].BaselineName := FBaselines[LJ].Name;
+        LComparisons[LIdx].BaselineNsPerOp := FBaselines[LJ].NsPerOp;
+        LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
+
+        if FBaselines[LJ].NsPerOp > 0 then
+          LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[LJ].NsPerOp
+        else
+          LComparisons[LIdx].Ratio := 1.0;
+
+        { Welch's t-test: 用当前结果的采样统计量与基线做对比 }
+        if (FResults[I].SampleCount > 1) and (FResults[I].StdDev > 0) then
         begin
-          LIdx := LCount;
-          LComparisons[LIdx].BaselineName := FBaselines[J].Name;
-          LComparisons[LIdx].BaselineNsPerOp := FBaselines[J].NsPerOp;
-          LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
+          LCurrStats := Default(TBenchStats);
+          LCurrStats.Mean := FResults[I].NsPerOp;
+          LCurrStats.StdDev := FResults[I].StdDev;
+          LCurrStats.SampleCount := FResults[I].SampleCount;
 
-          if FBaselines[J].NsPerOp > 0 then
-            LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[J].NsPerOp
-          else
-            LComparisons[LIdx].Ratio := 1.0;
+          LBaseStats := Default(TBenchStats);
+          LBaseStats.Mean := FBaselines[LJ].NsPerOp;
+          { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
+          LBaseStats.StdDev := FResults[I].StdDev;
+          LBaseStats.SampleCount := FResults[I].SampleCount;
 
-          { Welch's t-test: 用当前结果的采样统计量与基线做对比 }
-          if (FResults[I].SampleCount > 1) and (FResults[I].StdDev > 0) then
-          begin
-            LCurrStats := Default(TBenchStats);
-            LCurrStats.Mean := FResults[I].NsPerOp;
-            LCurrStats.StdDev := FResults[I].StdDev;
-            LCurrStats.SampleCount := FResults[I].SampleCount;
-
-            LBaseStats := Default(TBenchStats);
-            LBaseStats.Mean := FBaselines[J].NsPerOp;
-            { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
-            LBaseStats.StdDev := FResults[I].StdDev;
-            LBaseStats.SampleCount := FResults[I].SampleCount;
-
-            LPValue := LAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
-            LComparisons[LIdx].HasStatisticalTest := True;
-            LComparisons[LIdx].ApproximatePValue := LPValue;
-            LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
-          end
-          else
-          begin
-            { 采样不足，退回启发式判断 }
-            LComparisons[LIdx].HasStatisticalTest := False;
-            LComparisons[LIdx].IsSignificant :=
-              Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-            LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
-          end;
-
-          Inc(LCount);
-          Break;
+          LPValue := LAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
+          LComparisons[LIdx].HasStatisticalTest := True;
+          LComparisons[LIdx].ApproximatePValue := LPValue;
+          LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
+        end
+        else
+        begin
+          { 采样不足，退回启发式判断 }
+          LComparisons[LIdx].HasStatisticalTest := False;
+          LComparisons[LIdx].IsSignificant :=
+            Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+          LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
         end;
+
+        Inc(LCount);
       end;
+    finally
+      LAnalyzer.Free;
     end;
   finally
-    LAnalyzer.Free;
+    LMap.Free;
   end;
 
   // 截断到实际长度

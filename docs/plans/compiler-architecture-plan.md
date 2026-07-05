@@ -188,10 +188,10 @@ compiler/sema/
 
 | 子任务 | 输出文件 | 内容 | 验证 |
 |--------|---------|------|------|
-| 1.3a MIR 数据结构 [🔲] | `compiler/ir/np_mir_model.pas` | TBasicBlock, TStatement, TOperand, TTerminator | 单元测试 |
-| 1.3b HIR→MIR 降级 [🔲] | `compiler/ir/np_hir_to_mir.pas` | HIR 遍历 → MIR 基本块 | compiler-pass |
-| 1.3c MIR 优化框架 [🔲] | `compiler/ir/np_mir_optimize.pas` | Pass 注册/调度框架（优化 pass 本身在阶段 3） | 单元测试 |
-| 1.3d MIR→LLVM 翻译 [🔲] | `compiler/ir/np_mir_to_llvm.pas` | MIR 基本块 → LLVM IR | compiler-pass |
+  | 1.3a MIR 数据结构 [✅ 2026-07-05] | `compiler/ir/np_mir_model.pas` | TMirModule, TMirFunction, TMirBlock, TMirStmt | compiler-pass 34/34 |
+  | 1.3b HIR→MIR 降级 [✅ 2026-07-05] | `compiler/ir/np_hir_to_mir.pas` | HIR 遍历 → MIR 基本块 | compiler-pass 34/34 |
+  | 1.3c MIR 优化框架 [✅ 2026-07-05] | `compiler/ir/np_mir_optimize.pas` | IMirOptimizationPass + TMirPassManager | compiler-pass 34/34 |
+  | 1.3d MIR→LLVM 翻译 [✅ 2026-07-05] | `compiler/ir/np_mir_to_llvm.pas` | MIR 基本块 → LLVM IR 文本 | compiler-pass 34/34 |
 
 **MIR 核心数据结构**（Pascal 风格）:
 ```pascal

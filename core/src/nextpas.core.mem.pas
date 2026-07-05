@@ -6,9 +6,17 @@ unit nextpas.core.mem;
  *   - 通用场景 → DefaultAllocator (IAllocator)
  *   - 请求/帧级生命周期 → CreateDefaultArena (IArena)，用 Reset 一次性释放
  *   - 需要 IAllocator 接口的 Arena → CreateArenaAllocator（仅分配不释放）
- *   - 高频小对象 → MakeFixedSlabPool / TSlabPool（O(1) 分配释放）
- *   - 并发场景 → TSlabPoolConcurrent / TSlabPoolSharded
+ *   - 高频固定大小对象 → MakeFixedSlabPool / TFixedSlabPool / TLocalBlockPool
+ *     （Acquire/Release API，O(1) 分配释放，位图 double-free 检测）
+ *   - 高频可变大小对象 → TSlabPool / TSizeClassPool
+ *     （GetMem/FreeMem API，size-class 路由，O(1) 分配释放）
+ *   - 并发场景 → TSlabPoolConcurrent / TSlabPoolSharded / TBlockPoolConcurrent
  *   - 测试泄漏检测 → TTrackingAllocator 包装任意 IAllocator
+ *
+ * @note 固定大小 vs 通用 API：
+ *   - Acquire/Release — 固定大小槽位池（IPool/IBlockPool），不关心具体大小
+ *   - GetMem/FreeMem — 通用分配器（IAllocator），按请求大小路由
+ *   - 两者是不同范式，不要混用。详见 pool.base.pas 接口决策树。
  *}
 
 {$I nextpas.core.settings.inc}

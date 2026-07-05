@@ -242,7 +242,12 @@ implementation
 uses
   nextpas.core.test.runner.cli,
   nextpas.core.test.runner.context,
-  nextpas.core.test.runner.parallel;
+  nextpas.core.test.runner.parallel,
+  nextpas.core.json,
+  nextpas.core.json.builder,
+  nextpas.core.fs,
+  nextpas.core.time.base,
+  nextpas.core.bench.memtrack;
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
@@ -1234,9 +1239,9 @@ begin
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
       GetTickCount64 - LStartMs);
-    { Copy captured log lines on failure/error for report output }
-    if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
-       (Length(LSubCtx.FLogLines) > 0) then
+    { Copy captured log lines on failure/error or verbose mode for report output }
+    if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
+       ((LStatus in [tsFailed, tsError]) or LConfig.VerboseMode) then
       LTestResult.CapturedLog := LSubCtx.FLogLines;
     AppendResult(AResult.Results, LTestResult);
 
@@ -1654,18 +1659,20 @@ var
   LEntry: TTestEntry;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
-  LBenchTimeMs: Integer;
+  LBenchTimeNs: Int64;
   LShowMem: Boolean;
   LCtx: TBenchContext;
   LN: Integer;
-  LStartMs, LElapsedMs: Int64;
+  LStart: TInstant;
+  LElapsed: TDuration;
+  LElapsedNs: Int64;
   LResult: TBenchResult;
   LCount, LCap: Integer;
 begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
-  LBenchTimeMs := GetBenchTimeMs(LConfig);
-  if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
+  LBenchTimeNs := Int64(GetBenchTimeMs(LConfig)) * 1000000;
+  if LBenchTimeNs <= 0 then LBenchTimeNs := 1000000000;
   LShowMem := GetBenchMem(LConfig);
   LCount := 0;
   LCap := 0;
@@ -1677,22 +1684,21 @@ begin
     LEntry := Tests[I];
     if LEntry.Kind <> ekBench then Continue;
     if not IsTestEligible(LEntry, LConfig, '', True) then Continue;
-    { Adaptive N scaling — use GetTickCount64 (ms) for reliable timing }
+    { Adaptive N scaling — nanosecond precision via TInstant }
     LN := 1;
     repeat
       FillChar(LCtx, SizeOf(LCtx), 0);
       LCtx.N := LN;
-      LStartMs := GetTickCount64;
+      LStart := TInstant.Now;
       LEntry.BenchProc(@LCtx);
-      LElapsedMs := GetTickCount64 - LStartMs;
-      if LElapsedMs >= LBenchTimeMs then
+      LElapsed := LStart.Elapsed;
+      LElapsedNs := LElapsed.AsNanoseconds;
+      if LElapsedNs >= LBenchTimeNs then
         Break;
-      { Scale N: use Int64 to prevent overflow before bounds check.
-        Must check bounds BEFORE assigning back to Integer LN to avoid
-        truncation overflow on fast benchmarks where multiplication
-        exceeds MaxInt. }
-      if LElapsedMs < 10 then
+      { Proportional scaling: multiply-first to avoid truncation on fast benchmarks }
+      if LElapsedNs < 100000 then
       begin
+        { <0.1ms: scale aggressively }
         if Int64(LN) * 100 > 1000000000 then
         begin
           LN := 1000000000;
@@ -1702,22 +1708,40 @@ begin
       end
       else
       begin
-        if Int64(LN) * LBenchTimeMs div LElapsedMs > 1000000000 then
+        { Proportional: N * target / elapsed, with 20% overshoot }
+        if Int64(LN) * LBenchTimeNs div LElapsedNs > 1000000000 then
         begin
           LN := 1000000000;
           Break;
         end;
-        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
+        LN := Int64(LN) * LBenchTimeNs div LElapsedNs;
       end;
     until False;
-    { Final run with calibrated N }
+    { Final run with calibrated N — with optional memory tracking }
     FillChar(LCtx, SizeOf(LCtx), 0);
     LCtx.N := LN;
-    LStartMs := GetTickCount64;
-    LEntry.BenchProc(@LCtx);
-    LElapsedMs := GetTickCount64 - LStartMs;
-    LResult := MakeBenchResult(LEntry.Name, LN,
-      LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
+    if LShowMem then
+    begin
+      EnableGlobalMemoryTracking;
+      ResetGlobalMemoryTracker;
+    end;
+    try
+      LStart := TInstant.Now;
+      LEntry.BenchProc(@LCtx);
+      LElapsed := LStart.Elapsed;
+      if LShowMem then
+      begin
+        with GetGlobalMemoryStats do
+          LResult := MakeBenchResult(LEntry.Name, LN,
+            LElapsed.AsNanoseconds, AllocBytes, AllocCount);
+      end
+      else
+        LResult := MakeBenchResult(LEntry.Name, LN,
+          LElapsed.AsNanoseconds, LCtx.AllocBytes, LCtx.AllocCount);
+    finally
+      if LShowMem then
+        DisableGlobalMemoryTracking;
+    end;
     { Geometric growth: only grow during loop, trim once at end.
       Writing beyond logical length after SetLength-down triggers heaptrc
       guard violation even though allocated capacity is sufficient. }
@@ -2019,119 +2043,79 @@ end;
 { ── Benchmark save/compare helpers (E-12) ──────────────────────────────────── }
 
 procedure SaveBenchResultsToFile(const AFileName: string;
-  const AResults: specialize TArray<TBenchResults>);
+  const AResults: specialize TArray<TBenchResults>;
+  const ASuiteNames: specialize TArray<string>);
 var
-  LFile: TextFile;
+  LBuilder: IJsonBuilder;
   I, J: Integer;
-  LFirst: Boolean;
 begin
-  AssignFile(LFile, AFileName);
-  Rewrite(LFile);
-  try
-    WriteLn(LFile, '{');
-    WriteLn(LFile, '  "version": 1,');
-    WriteLn(LFile, '  "benchmarks": [');
-    LFirst := True;
-    for I := 0 to High(AResults) do
-      for J := 0 to High(AResults[I]) do
+  LBuilder := JsonBuilder;
+  LBuilder.BeginObject;
+  LBuilder.Key('version');
+  LBuilder.Int(1);
+  LBuilder.Key('benchmarks');
+  LBuilder.BeginArray;
+  for I := 0 to High(AResults) do
+    for J := 0 to High(AResults[I]) do
+    begin
+      LBuilder.BeginObject;
+      if (I >= 0) and (I < Length(ASuiteNames)) then
       begin
-        if not LFirst then
-          WriteLn(LFile, ',');
-        LFirst := False;
-        Write(LFile, '    {"name": "' + AResults[I][J].Name + '"');
-        Write(LFile, ', "N": ' + IntToStr(AResults[I][J].N));
-        Write(LFile, ', "NsPerOp": ' + IntToStr(AResults[I][J].NsPerOp));
-        Write(LFile, ', "AllocBytes": ' + IntToStr(AResults[I][J].AllocBytes));
-        Write(LFile, ', "AllocCount": ' + IntToStr(AResults[I][J].AllocCount));
-        Write(LFile, '}');
+        LBuilder.Key('suite');
+        LBuilder.Str(ASuiteNames[I]);
       end;
-    WriteLn(LFile);
-    WriteLn(LFile, '  ]');
-    WriteLn(LFile, '}');
-  finally
-    CloseFile(LFile);
-  end;
-end;
-
-function ParseJsonInt(const AJson, AKey: string): Int64;
-var
-  LPos, LEnd: Integer;
-  LSearch: string;
-begin
-  LSearch := '"' + AKey + '":';
-  LPos := Pos(LSearch, AJson);
-  if LPos = 0 then
-    Exit(0);
-  Inc(LPos, Length(LSearch));
-  while (LPos <= Length(AJson)) and (AJson[LPos] = ' ') do
-    Inc(LPos);
-  LEnd := LPos;
-  while (LEnd <= Length(AJson)) and (AJson[LEnd] in ['0'..'9', '-']) do
-    Inc(LEnd);
-  Result := StrToInt64Def(Copy(AJson, LPos, LEnd - LPos), 0);
-end;
-
-function ParseJsonString(const AJson, AKey: string): string;
-var
-  LPos, LEnd: Integer;
-  LSearch: string;
-begin
-  LSearch := '"' + AKey + '": "';
-  LPos := Pos(LSearch, AJson);
-  if LPos = 0 then
-    Exit('');
-  Inc(LPos, Length(LSearch));
-  LEnd := LPos;
-  while (LEnd <= Length(AJson)) and (AJson[LEnd] <> '"') do
-    Inc(LEnd);
-  Result := Copy(AJson, LPos, LEnd - LPos);
+      LBuilder.Key('name');
+      LBuilder.Str(AResults[I][J].Name);
+      LBuilder.Key('N');
+      LBuilder.Int(AResults[I][J].N);
+      LBuilder.Key('NsPerOp');
+      LBuilder.Int(AResults[I][J].NsPerOp);
+      LBuilder.Key('AllocBytes');
+      LBuilder.Int(AResults[I][J].AllocBytes);
+      LBuilder.Key('AllocCount');
+      LBuilder.Int(AResults[I][J].AllocCount);
+      LBuilder.EndObject;
+    end;
+  LBuilder.EndArray;
+  LBuilder.EndObject;
+  WriteFileText(AFileName, LBuilder.ToString);
 end;
 
 function LoadBenchResultsFromFile(const AFileName: string): TBenchResults;
 var
-  LFile: TextFile;
-  LLine, LFull: string;
-  LCount, LCap: Integer;
-  LPos: Integer;
+  LContent: string;
+  LDoc: IJsonDocument;
+  LRoot, LItem: TJsonValue;
+  LArrLen, LCount: UInt32;
+  I: Integer;
 begin
   SetLength(Result, 0);
-  AssignFile(LFile, AFileName);
-  {$I-}
-  Reset(LFile);
-  {$I+}
-  if IOResult <> 0 then
+  LContent := ReadFileText(AFileName);
+  if LContent = '' then
     Exit;
-  try
-    LFull := '';
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      LFull := LFull + LLine;
-    end;
-  finally
-    CloseFile(LFile);
-  end;
-  { Parse each {"name":...} object from the benchmarks array }
+  LDoc := JsonParse(LContent);
+  if (LDoc = nil) or LDoc.HasError then
+    Exit;
+  LRoot := LDoc.Root;
+  if not LRoot.IsObject then
+    Exit;
+  LRoot := LRoot.ObjectGet('benchmarks');
+  if not LRoot.IsArray then
+    Exit;
+  LArrLen := LRoot.ArrayLen;
+  SetLength(Result, LArrLen);
   LCount := 0;
-  LCap := 0;
-  LPos := Pos('"name":', LFull);
-  while LPos > 0 do
+  for I := 0 to Integer(LArrLen) - 1 do
   begin
-    if LCount >= LCap then
-    begin
-      LCap := LCap * 2 + 4;
-      SetLength(Result, LCap);
-    end;
-    Result[LCount].Name := ParseJsonString(Copy(LFull, LPos, 200), 'name');
-    Result[LCount].N := Integer(ParseJsonInt(Copy(LFull, LPos, 200), 'N'));
-    Result[LCount].NsPerOp := ParseJsonInt(Copy(LFull, LPos, 200), 'NsPerOp');
-    Result[LCount].AllocBytes := ParseJsonInt(Copy(LFull, LPos, 200), 'AllocBytes');
-    Result[LCount].AllocCount := ParseJsonInt(Copy(LFull, LPos, 200), 'AllocCount');
+    LItem := LRoot.ArrayGet(I);
+    if not LItem.IsObject then
+      Continue;
+    Result[LCount].Name := LItem.ObjectGet('name').AsStr.ToString;
+    Result[LCount].N := Integer(LItem.ObjectGet('N').AsInt);
+    Result[LCount].NsPerOp := LItem.ObjectGet('NsPerOp').AsInt;
+    Result[LCount].AllocBytes := LItem.ObjectGet('AllocBytes').AsInt;
+    Result[LCount].AllocCount := LItem.ObjectGet('AllocCount').AsInt;
     Inc(LCount);
-    { Find next name }
-    LPos := Pos('"name":', Copy(LFull, LPos + 7, MaxInt));
-    if LPos > 0 then
-      Inc(LPos, Pos('"name":', LFull) + 6);
   end;
   SetLength(Result, LCount);
 end;
@@ -2176,11 +2160,12 @@ end;
 function TSuiteRunner.RunAllBenchmarks(
   out AResults: specialize TArray<TBenchResults>): Boolean;
 var
-  I: Integer;
+  I, J: Integer;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LSaveFile, LCompareFile: string;
   LBaseline: TBenchResults;
+  LSuiteNames: specialize TArray<string>;
 begin
   ApplyCLIArgs;
   LConfig := RunnerConfig(Self);
@@ -2190,6 +2175,9 @@ begin
     AnsiBold(Name + ' benchmarks', LConfig) +
     AnsiBold(' ===', LConfig));
   SetLength(AResults, Length(Suites));
+  SetLength(LSuiteNames, Length(Suites));
+  for I := 0 to High(Suites) do
+    LSuiteNames[I] := Suites[I].Name;
   Result := True;
   for I := 0 to High(Suites) do
   begin
@@ -2201,16 +2189,20 @@ begin
   LSaveFile := GetBenchSaveFile(LConfig);
   if LSaveFile <> '' then
   begin
-    SaveBenchResultsToFile(LSaveFile, AResults);
+    SaveBenchResultsToFile(LSaveFile, AResults, LSuiteNames);
     LOutSink.WriteLn(AnsiGreen('Benchmarks saved to ', LConfig) + LSaveFile);
   end;
-  { E-12: --benchcompare: load baseline and compare }
+  { E-12: --benchcompare: load baseline and compare (all suites) }
   LCompareFile := GetBenchCompareFile(LConfig);
   if LCompareFile <> '' then
   begin
     LBaseline := LoadBenchResultsFromFile(LCompareFile);
     if Length(LBaseline) > 0 then
-      PrintBenchComparison(LOutSink, LConfig, AResults[0], LBaseline)
+    begin
+      for I := 0 to High(AResults) do
+        if Length(AResults[I]) > 0 then
+          PrintBenchComparison(LOutSink, LConfig, AResults[I], LBaseline);
+    end
     else
       LOutSink.WriteLn(AnsiYellow('Warning: ', LConfig) +
         'No benchmarks found in ' + LCompareFile);

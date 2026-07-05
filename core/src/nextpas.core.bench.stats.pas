@@ -93,6 +93,10 @@ type
 
     {** OLS 线性回归: time = intercept + slope * N }
     function ComputeOLSRegression(const AIterCounts, ATimes: TDoubleArray): TOLSRegression;
+
+    {** 批量计算百分位（一次排序，多次查询）
+     *  E03: 避免在同一数据上重复排序 }
+    function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
   end;
 
 implementation
@@ -212,6 +216,10 @@ end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 begin
+  { PF-06: range validation — reject out-of-range percentiles }
+  if (APercent < 0.0) or (APercent > 100.0) then
+    raise EBenchInvalidParam.CreateFmt(
+      'TBenchStatsAnalyzer.Percentile: APercent must be in [0, 100], got %.2f', [APercent]);
   Result := PercentileSorted(ASorted, APercent);
 end;
 
@@ -748,6 +756,28 @@ begin
     Result.RSquared := 1.0; { 所有 y 相同 → 完美拟合 }
 
   Result.Valid := True;
+end;
+
+function TBenchStatsAnalyzer.ComputePercentiles(
+  const ASamples: TDoubleArray): TPercentileResult;
+var
+  LSorted: TDoubleArray;
+begin
+  Result := Default(TPercentileResult);
+
+  if Length(ASamples) = 0 then
+    Exit;
+
+  // E03: 一次排序，多次查询
+  LSorted := Copy(ASamples);
+  SortDoubleArray(LSorted);
+
+  Result.P5 := Percentile(LSorted, 5.0);
+  Result.P25 := Percentile(LSorted, 25.0);
+  Result.P50 := Percentile(LSorted, 50.0);
+  Result.P75 := Percentile(LSorted, 75.0);
+  Result.P95 := Percentile(LSorted, 95.0);
+  Result.P99 := Percentile(LSorted, 99.0);
 end;
 
 end.

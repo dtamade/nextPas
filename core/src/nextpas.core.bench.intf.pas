@@ -19,6 +19,19 @@ uses
   nextpas.core.exception;
 
 type
+  {** 双精度浮点数组 }
+  TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+
+  {** 批量百分位计算结果 (E03: 避免重复排序) }
+  TPercentileResult = record
+    P5: Double;
+    P25: Double;
+    P50: Double;
+    P75: Double;
+    P95: Double;
+    P99: Double;
+  end;
+
   {** 基准框架异常基类 }
   EBenchError = class(ENextPasError);
 
@@ -370,6 +383,10 @@ type
     {** 几何均值（多 benchmark ratio 聚合的正确方法）
      *  @edge 空数组返回 1.0；非正 ratio 返回 0.0（哨兵值，表示非法输入） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
+
+    {** 批量计算百分位（一次排序，多次查询）
+     *  E03: 避免在同一数据上重复排序 }
+    function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
   end;
 
   {** 报告生成器接口

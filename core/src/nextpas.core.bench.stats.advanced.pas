@@ -175,7 +175,8 @@ implementation
 uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
-  nextpas.core.time.cpu;
+  nextpas.core.time.cpu,
+  nextpas.core.bench.intf; { PF-06: for EBenchInvalidParam }
 
 {** F-12: 全局计数器，防止 BootstrapCI 快速连续调用时种子碰撞 }
 var
@@ -363,6 +364,10 @@ end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
 begin
+  { PF-06: range validation — reject out-of-range percentiles }
+  if (APercentile < 0.0) or (APercentile > 100.0) then
+    raise EBenchInvalidParam.CreateFmt(
+      'TAdvancedStats.Percentile: APercentile must be in [0, 100], got %.2f', [APercentile]);
   EnsureSorted;
   Result := PercentileSorted(FSortedData, APercentile);
 end;
@@ -591,6 +596,9 @@ begin
     LSum := 0.0;
     for LSampleIndex := 0 to LN - 1 do
     begin
+      // 简化 PCG (LCG + 右移) — 用于 bootstrap 重采样足够均匀，
+      // 无完整 PCG-XSH-RR 输出置换。周期 2^64，对 bootstrap 够用。
+      // 不适用于密码学或需要高质量随机性的场景。
       LSeed := LSeed * 6364136223846793005 + 1442695040888963407;
       LDataIndex := Integer((LSeed shr 33) mod QWord(LN));
       LSum := LSum + FData[LDataIndex];

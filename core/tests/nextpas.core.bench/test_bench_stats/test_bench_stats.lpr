@@ -875,6 +875,59 @@ begin
   Check(GlobMatch('??', 'AB'), 'GlobMatch double ?');
 end;
 
+{ PF-06: Percentile range validation }
+procedure TestPercentile_RangeValidation;
+var
+  LSorted: TDoubleArray;
+  LCaught: Boolean;
+begin
+  SetLength(LSorted, 10);
+  LSorted[0] := 1.0; LSorted[1] := 2.0; LSorted[2] := 3.0; LSorted[3] := 4.0;
+  LSorted[4] := 5.0; LSorted[5] := 6.0; LSorted[6] := 7.0; LSorted[7] := 8.0;
+  LSorted[8] := 9.0; LSorted[9] := 10.0;
+
+  { Valid range should work }
+  CheckNear(1.0, GAnalyzer.Percentile(LSorted, 0), 0.001, 'P0 valid');
+  CheckNear(10.0, GAnalyzer.Percentile(LSorted, 100), 0.001, 'P100 valid');
+  CheckNear(5.5, GAnalyzer.Percentile(LSorted, 50), 0.001, 'P50 valid');
+
+  { Negative percentile should raise EBenchInvalidParam }
+  LCaught := False;
+  try
+    GAnalyzer.Percentile(LSorted, -1.0);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'Percentile(-1.0) raises EBenchInvalidParam');
+
+  { Percentile > 100 should raise EBenchInvalidParam }
+  LCaught := False;
+  try
+    GAnalyzer.Percentile(LSorted, 101.0);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'Percentile(101.0) raises EBenchInvalidParam');
+
+  { Large negative percentile should raise EBenchInvalidParam }
+  LCaught := False;
+  try
+    GAnalyzer.Percentile(LSorted, -100.0);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'Percentile(-100.0) raises EBenchInvalidParam');
+
+  { Large positive percentile should raise EBenchInvalidParam }
+  LCaught := False;
+  try
+    GAnalyzer.Percentile(LSorted, 200.0);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'Percentile(200.0) raises EBenchInvalidParam');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -918,6 +971,7 @@ begin
   T.Test('SortIndirect_AllEqual', @TestSortIndirect_AllEqual);
   T.Test('SortIndirect_LargeArray', @TestSortIndirect_LargeArray);
   T.Test('SortIndirect_OddLength', @TestSortIndirect_OddLength);
+  T.Test('Percentile_RangeValidation', @TestPercentile_RangeValidation);
 
   T.Run;
   T.Summary;

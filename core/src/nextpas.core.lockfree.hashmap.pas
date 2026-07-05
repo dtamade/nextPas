@@ -1,4 +1,15 @@
 unit nextpas.core.lockfree.hashmap;
+{**
+ * @desc Sharded concurrent hash map using per-shard spin locks.
+ *
+ * @note This is NOT a lock-free structure. It uses atomic spin locks per shard,
+ *       which provides good performance under low-to-moderate contention.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @see dashmap (Rust) — similar sharded-lock design
+ * @see sync.Map (Go) — different approach but same concurrent map category
+ *}
 
 {$I nextpas.core.settings.inc}
 

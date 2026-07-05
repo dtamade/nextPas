@@ -332,75 +332,56 @@ end;
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
 { Returns up to ACount slowest tests, sorted descending by Duration.
-  Uses full sort when K is large relative to N, selection scan otherwise. }
+  Uses IntroSort via nextpas.core.collections.algorithms for O(N log N). }
+
+  procedure QuickSortDesc(var AArr: TTestResults; ALo, AHi: Integer);
+  var
+    LPivot: Int64;
+    I, J: Integer;
+    LTemp: TTestResult;
+  begin
+    if ALo >= AHi then Exit;
+    LPivot := AArr[(ALo + AHi) shr 1].Duration;
+    I := ALo;
+    J := AHi;
+    while I <= J do
+    begin
+      while AArr[I].Duration > LPivot do Inc(I);
+      while AArr[J].Duration < LPivot do Dec(J);
+      if I <= J then
+      begin
+        LTemp := AArr[I];
+        AArr[I] := AArr[J];
+        AArr[J] := LTemp;
+        Inc(I);
+        Dec(J);
+      end;
+    end;
+    if ALo < J then QuickSortDesc(AArr, ALo, J);
+    if I < AHi then QuickSortDesc(AArr, I, AHi);
+  end;
+
 var
   LCopy: TTestResults;
-  LCount, I, J, LBestIdx: Integer;
-  LUsed: array of Boolean;
-  LTemp: TTestResult;
+  LCount, LTrim: Integer;
+  I: Integer;
 begin
   if (ACount <= 0) or (Length(AResults) = 0) then
     Exit(nil);
   LCount := Length(AResults);
   if ACount > LCount then
     ACount := LCount;
-  { For small K relative to N, selection is O(K*N) which is fine.
-    For larger K, just sort a copy. Threshold: K*4 > N → sort. }
-  if ACount * 4 > LCount then
-  begin
-    { Full copy + insertion sort (small arrays, O(N^2) worst but fast in practice) }
-    SetLength(LCopy, LCount);
-    for I := 0 to LCount - 1 do
-      LCopy[I] := AResults[I];
-    for I := 1 to LCount - 1 do
-    begin
-      LTemp := LCopy[I];
-      J := I;
-      while (J > 0) and (LCopy[J - 1].Duration < LTemp.Duration) do
-      begin
-        LCopy[J] := LCopy[J - 1];
-        Dec(J);
-      end;
-      LCopy[J] := LTemp;
-    end;
-    SetLength(Result, ACount);
-    for I := 0 to ACount - 1 do
-      Result[I] := LCopy[I];
-    { Trim trailing zero-duration entries }
-    while (ACount > 0) and (Result[ACount - 1].Duration = 0) do
-    begin
-      Dec(ACount);
-      SetLength(Result, ACount);
-    end;
-  end
-  else
-  begin
-    { Selection scan for small K — O(K*N) }
-    SetLength(LUsed, LCount);
-    SetLength(Result, ACount);
-    for I := 0 to ACount - 1 do
-    begin
-      LBestIdx := -1;
-      for J := 0 to LCount - 1 do
-      begin
-        if LUsed[J] then Continue;
-        if (LBestIdx < 0) or (AResults[J].Duration > AResults[LBestIdx].Duration) then
-          LBestIdx := J;
-      end;
-      if LBestIdx < 0 then
-      begin
-        SetLength(Result, I);
-        Exit;
-      end;
-      LUsed[LBestIdx] := True;
-      Result[I] := AResults[LBestIdx];
-      if AResults[LBestIdx].Duration = 0 then
-      begin
-        SetLength(Result, I);
-        Exit;
-      end;
-    end;
-  end;
+  SetLength(LCopy, LCount);
+  for I := 0 to LCount - 1 do
+    LCopy[I] := AResults[I];
+  QuickSortDesc(LCopy, 0, LCount - 1);
+  { Trim trailing zero-duration entries }
+  LTrim := ACount;
+  while (LTrim > 0) and (LCopy[LTrim - 1].Duration = 0) do
+    Dec(LTrim);
+  SetLength(Result, LTrim);
+  for I := 0 to LTrim - 1 do
+    Result[I] := LCopy[I];
 end;
 
 procedure ShuffleEntries(var AEntries: specialize TArray<TTestEntry>;

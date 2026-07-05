@@ -92,6 +92,11 @@ procedure CentralPoolInboxPush(var APool: TCentralPool; APtr: Pointer);
     Uses MRU cache for O(1) common case. }
 function FindSpanOwnerThreadId(var APool: TCentralPool; APtr: Pointer): QWord;
 
+{** Find the span entry index for a given pointer.
+    Returns the index into FEntries, or -1 if not found.
+    Uses MRU cache for O(1) common case. }
+function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
+
 implementation
 
 const

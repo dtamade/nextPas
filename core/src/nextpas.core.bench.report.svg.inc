@@ -48,6 +48,7 @@ begin
   LChartRight := LChartWidth - 36.0;
 
   LLines := Default(TLineBuffer);
+  try
   BufferAddLine(LLines,
     TextFormat('  <svg class="bench-chart" viewBox="%s" role="img" aria-label="Benchmark ns per op chart">',
       [TextFormat('0 0 %s 280', [FormatNumber(LChartWidth, 0)])]));
@@ -93,6 +94,9 @@ begin
   BufferAddLine(LLines, '</svg>');
 
   Result := BufferToString(LLines);
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.GenerateBoxPlot(
@@ -185,6 +189,7 @@ begin
       EscapeHTML(FormatNumber(LMin, 2)) + ' (constant)</text>');
     BufferAddLine(LLines, '</svg>');
     Result := BufferToString(LLines);
+    LLines.Builder.Done;
     Exit;
   end;
   LScale := 200.0 / (LMax - LMin);
@@ -197,6 +202,7 @@ begin
   LScaledQ3 := LBaseX + (LQ3 - LMin) * LScale;
 
   LLines := Default(TLineBuffer);
+  try
   BufferAddLine(LLines,
     '<svg viewBox="0 0 300 60" role="img" aria-label="Boxplot ' +
     EscapeHTML(AName) + '">');
@@ -232,6 +238,9 @@ begin
   BufferAddLine(LLines, '</svg>');
 
   Result := BufferToString(LLines);
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.GenerateDistributionChart(
@@ -246,6 +255,7 @@ var
   LChartW, LChartH: Double;
 begin
   LBuf := Default(TLineBuffer);
+  try
   if Length(ASamples) < 2 then
     Exit('');
 
@@ -317,6 +327,9 @@ begin
 
   BufferAddLine(LBuf, '</svg>');
   Result := BufferToString(LBuf);
+  finally
+    LBuf.Builder.Done;
+  end;
 end;
 
 { P2-3: 基线对比图 SVG }
@@ -331,6 +344,7 @@ var
   I: Integer;
 begin
   LBuf := Default(TLineBuffer);
+  try
   if Length(AComparisons) = 0 then Exit('');
 
   { 找最大值 }
@@ -402,4 +416,7 @@ begin
 
   BufferAddLine(LBuf, '</svg>');
   Result := BufferToString(LBuf);
+  finally
+    LBuf.Builder.Done;
+  end;
 end;
