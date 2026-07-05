@@ -138,6 +138,7 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.base{$ENDIF}
   {$IFDEF NEXTPAS_MACOS}nextpas.core.platform.darwin.base{$ENDIF}
   {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
