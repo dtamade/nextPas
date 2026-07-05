@@ -20,11 +20,17 @@ interface
 uses
   np_mir_model, np_mir_optimize;
 
+const
+  MAX_INLINE_STMTS = 10;
+
 type
+  TValueRemapEntry = record
+    OldId: TMirValueId;
+    NewId: TMirValueId;
+  end;
+  TValueRemapArray = array of TValueRemapEntry;
+
   TMirInlinePass = class(TInterfacedObject, IMirOptimizationPass)
-  private
-    const
-      MAX_INLINE_STMTS = 10;
   public
     function Name: string;
     function Run(var AModule: TMirModule): Boolean;
@@ -75,8 +81,7 @@ begin
 end;
 
 { Remap a single operand's ValueId from callee to caller namespace }
-procedure RemapOperand(var AOp: TMirOperand; const AOldToNew: array of record
-  OldId, NewId: TMirValueId; end);
+procedure RemapOperand(var AOp: TMirOperand; const AOldToNew: TValueRemapArray);
 var
   I: LongInt;
 begin
@@ -96,7 +101,7 @@ function InlineCallSite(var AModule: TMirModule;
 var
   CallerFn, CalleeFn: TMirFunction;
   CallStmt, InlinedStmt: TMirStmt;
-  RemapTable: array of record OldId, NewId: TMirValueId; end;
+  RemapTable: TValueRemapArray;
   I, J, ParamIdx: LongInt;
   InlinedStmts: array of TMirStmt;
 begin
