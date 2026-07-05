@@ -65,10 +65,10 @@ function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode
 function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
-function platform_file_read(const AHandle: TPlatformFileHandle;
-  ABuf: Pointer; ALen: Int32; out ANRead: Int32): Int32;
-function platform_file_write(const AHandle: TPlatformFileHandle;
-  ABuf: Pointer; ALen: Int32): Int32;
+function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
 // 进程
@@ -84,7 +84,8 @@ function platform_thread_join(const AHandle: TPlatformThreadHandle;
   out ARetVal: Pointer): Int32;
 
 // 同步
-function platform_mutex_init(out AMutex: TPlatformMutex): Int32;
+function platform_mutex_init(var AMutex: TPlatformMutex;
+  const AKind: Int32 = PLATFORM_MUTEX_ERRORCHECK): Int32;
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 
@@ -97,7 +98,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ## 2. 不变量
 
-- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError
+- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError，`PLATFORM_ERR_UNSUPPORTED` (95) = 不支持的平台
 - **句柄无效值**: `TPlatformFileHandle.Value = -1`（Unix）/ `INVALID_HANDLE_VALUE`（Windows）
 - **Socket 句柄**: >= 0（Unix）/ > 0（Windows）
 - **文件描述符**: 0/1/2 保留给 stdin/stdout/stderr
@@ -112,11 +113,14 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - **错误码**: `PLATFORM_ERR_*` 常量（`nextpas.core.platform.error`）
   - `PLATFORM_ERR_INVALID` (22) — 无效参数/nil 指针
   - `PLATFORM_ERR_ENOENT` (2) — 文件不存在
+  - `PLATFORM_ERR_EEXIST` (17) — 文件已存在
+  - `PLATFORM_ERR_ENOTDIR` (20) — 不是目录
   - `PLATFORM_ERR_BADF` (9) — 无效文件描述符
   - `PLATFORM_ERR_TIMEOUT` (110) — 操作超时
   - `PLATFORM_ERR_BUSY` (16) — 资源忙
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
+  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
 - **错误消息**: `platform_error_message(ACode, ABuf, ABufLen)` 返回人类可读消息
 - **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
 
@@ -152,7 +156,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 | Windows x86_64 | ✅ 完成 | Wine + CI |
 | FreeBSD | ✅ 完成 | 交叉编译 |
 | Android | ✅ 完成 | 交叉编译 |
-| Fallback stub | ✅ 完成 | 返回 -1 |
+| Fallback stub | ✅ 完成 | 返回 PLATFORM_ERR_UNSUPPORTED |
 
 ---
 
