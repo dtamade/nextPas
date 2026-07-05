@@ -30,6 +30,8 @@ type
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
+  {** @deprecated Use TBaselineData instead. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
@@ -58,7 +60,7 @@ type
     FEntryCapacity: Integer;
     FConfig: TBenchConfig;
     FFilter: string;
-    FBaselines: array of TBenchBaseline;
+    FBaselines: array of TBaselineData;
     FBaselineCount: Integer;
     FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
@@ -117,8 +119,8 @@ type
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
-    function AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
-    function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+    function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
+    function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
@@ -131,7 +133,7 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
-    FBaselines: array of TBenchBaseline;
+    FBaselines: array of TBaselineData;
     FBaselineCount: Integer;
     FReportGenerator: IBenchReportGenerator;
 
@@ -144,7 +146,7 @@ type
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
-      const ABaselines: array of TBenchBaseline);
+      const ABaselines: array of TBaselineData);
     destructor Destroy; override;
 
     {** IBenchResults 实现 }
@@ -165,13 +167,13 @@ type
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
     procedure AppendToTimeline(const APath: string);
     function CompareMultipleBaselines(
-      const ABaselines: array of TBenchBaseline): TMatrixResult;
+      const ABaselines: array of TBaselineData): TMatrixResult;
     function ToMatrixReport(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function ToMatrixHTML(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function ToMatrixJSON(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -396,6 +398,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -420,6 +424,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -585,7 +591,7 @@ begin
 end;
 
 {** F-08: 完整基线数据重载 }
-function TBenchSuite.AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
@@ -594,7 +600,7 @@ begin
   Inc(FBaselineCount);
 end;
 
-function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 var
   I: Integer;
 begin
@@ -726,7 +732,7 @@ end;
 
 constructor TBenchResults.Create(const AResults: array of TBenchResult;
   const AEnvironment: TBenchEnvironment;
-  const ABaselines: array of TBenchBaseline);
+  const ABaselines: array of TBaselineData);
 var
   I: Integer;
 begin
@@ -1072,7 +1078,7 @@ end;
 { P2-1: 多基线对比矩阵 }
 
 function TBenchResults.CompareMultipleBaselines(
-  const ABaselines: array of TBenchBaseline): TMatrixResult;
+  const ABaselines: array of TBaselineData): TMatrixResult;
 var
   LAnalyzer: TBenchStatsAnalyzer;
   LNCols: Integer;
@@ -1166,7 +1172,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixReport(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin
@@ -1176,7 +1182,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixHTML(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin
@@ -1186,7 +1192,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixJSON(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin

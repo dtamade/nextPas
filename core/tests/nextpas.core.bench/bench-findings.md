@@ -1,7 +1,7 @@
 # bench 模块全面审查 — Findings（第二期）
 
 > **审查日期**: 2026-06-23
-> **最后更新**: 2026-07-04
+> **最后更新**: 2026-07-06
 > **审查范围**: 11 源文件 + 14 测试文件 (~10,800 行)
 > **审查维度**: Correctness / Architecture / Performance / Test Coverage / API
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
@@ -9,10 +9,30 @@
 
 ---
 
-## 2026-07-04 可用性评估状态更新
+## 2026-07-06 可用性评估 + 防御性编程修复
 
-> **当前测试**: 14 suites / 281 tests / 0 failed / 0 leaks
+> **当前测试**: 15 suites / 315 tests / 0 failed / 0 leaks
 > **修复率**: 124 findings 中 122 项已修复 (98.4%)
+> **接口覆盖率**: 100%
+> **可用性评分**: 8.63/10（优秀）
+> **风险等级**: 低（无 P0/P1 风险）
+
+### 可用性评估修复 (2026-07-06)
+
+1. **U-12**: `ComputeStats` 空数组从静默返回 Default 改为抛 `EBenchInvalidParam`
+2. **U-13**: `AddRange` 空参数数组从静默忽略改为抛 `EBenchInvalidParam`
+3. **接口覆盖补全**: 新增 `TestAddBaselineData` 测试
+4. **废弃别名清理**: 接口签名统一使用 `TBaselineData`
+
+### 待评估项（非阻塞）
+
+| ID | 描述 | 决策 |
+|----|------|------|
+| U-04 | Create + TBenchConfig 单构造函数 | 跳过 — 双构造函数设计已足够清晰 |
+| U-20 | GBridgeRunner 移入实例 | 跳过 — 需改 TBenchParallelFunc 签名（破坏性变更） |
+| U-07 | SetTimeout 改用 TDuration | 跳过 — 破坏性变更，收益低 |
+| U-09 | SaveTo* 返回 IBenchResults | 跳过 — 破坏性变更 |
+| U-10 | EParseError 继承 EBenchError | 跳过 — 破坏性变更 |
 
 ### 已修复项汇总 (121/124)
 

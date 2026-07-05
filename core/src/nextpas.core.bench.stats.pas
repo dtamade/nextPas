@@ -253,10 +253,7 @@ var
 begin
   LLen := Length(ASamples);
   if LLen = 0 then
-  begin
-    Result := Default(TBenchStats);
-    Exit;
-  end;
+    raise EBenchInvalidParam.Create('ComputeStats: sample array must not be empty');
 
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
