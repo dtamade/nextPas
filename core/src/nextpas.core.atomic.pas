@@ -640,6 +640,16 @@ function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_ord
 function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
 {$ENDIF}
 
+{ Pointer-sized fetch_max/fetch_min/wait/notify — routes through 32/64-bit }
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_fetch_max(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t = mo_seq_cst): PtrInt; overload; inline;
+function atomic_fetch_max(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t = mo_seq_cst): PtrUInt; overload; inline;
+function atomic_fetch_min(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t = mo_seq_cst): PtrInt; overload; inline;
+function atomic_fetch_min(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t = mo_seq_cst): PtrUInt; overload; inline;
+function atomic_fetch_nand(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t = mo_seq_cst): PtrInt; overload; inline;
+function atomic_fetch_nand(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t = mo_seq_cst): PtrUInt; overload; inline;
+{$ENDIF}
+
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                               atomic_flag                                  │
 //└────────────────────────────────────────────────────────────────────────────┘
@@ -3638,6 +3648,48 @@ end;
 function atomic_fetch_nand_64(var aObj: UInt64; aArg: UInt64): UInt64;
 begin
   Result := atomic_fetch_nand_64(aObj, aArg, mo_seq_cst);
+end;
+{$ENDIF}
+
+{ Pointer-sized fetch_max/fetch_min/fetch_nand }
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+function atomic_fetch_max(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt;
+begin
+  Result := PtrInt(atomic_fetch_max_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));
+end;
+
+function atomic_fetch_max(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt;
+begin
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := PtrUInt(atomic_fetch_max(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  {$POP}
+end;
+
+function atomic_fetch_min(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt;
+begin
+  Result := PtrInt(atomic_fetch_min_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));
+end;
+
+function atomic_fetch_min(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt;
+begin
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := PtrUInt(atomic_fetch_min(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  {$POP}
+end;
+
+function atomic_fetch_nand(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt;
+begin
+  Result := PtrInt(atomic_fetch_nand_64(PInt64(@aObj)^, PInt64(@aArg)^, aOrder));
+end;
+
+function atomic_fetch_nand(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt;
+begin
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := PtrUInt(atomic_fetch_nand(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  {$POP}
 end;
 {$ENDIF}
 

@@ -358,11 +358,18 @@ type
     function FetchOr(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function FetchXor(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
 
+    function FetchMax(AValue: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+    function FetchMin(AValue: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+
     function UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+
+    function Wait(AExpected: PtrInt; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PPtrInt; inline;
     function IntoInner: PtrInt; inline;
@@ -399,11 +406,18 @@ type
     function FetchOr(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function FetchXor(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
 
+    function FetchMax(AValue: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+    function FetchMin(AValue: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+
     function UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+
+    function Wait(AExpected: PtrUInt; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PPtrUInt; inline;
     function IntoInner: PtrUInt; inline;
@@ -1305,6 +1319,16 @@ begin
   {$ENDIF}
 end;
 
+function TAtomicISize.FetchMax(AValue: PtrInt; AOrder: memory_order_t): PtrInt;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicISize.FetchMin(AValue: PtrInt; AOrder: memory_order_t): PtrInt;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
 function TAtomicISize.UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
   AOrder: memory_order_t): Boolean;
 begin
@@ -1323,6 +1347,33 @@ end;
 function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;
 begin
   Result := _ptrint_dec_result(FetchSub(1, AOrder));
+end;
+
+function TAtomicISize.Wait(AExpected: PtrInt; const ATimeoutNs: Int64): Int32;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  Result := atomic_wait(PInt32(@FValue)^, PInt32(@AExpected)^, ATimeoutNs);
+  {$ELSE}
+  Result := atomic_wait(PInt64(@FValue)^, PInt64(@AExpected)^, ATimeoutNs);
+  {$ENDIF}
+end;
+
+procedure TAtomicISize.NotifyOne;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  atomic_notify_one(PInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_one(PInt64(@FValue)^);
+  {$ENDIF}
+end;
+
+procedure TAtomicISize.NotifyAll;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  atomic_notify_all(PInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_all(PInt64(@FValue)^);
+  {$ENDIF}
 end;
 
 function TAtomicISize.GetMut: PPtrInt;
@@ -1475,6 +1526,16 @@ begin
   {$ENDIF}
 end;
 
+function TAtomicUSize.FetchMax(AValue: PtrUInt; AOrder: memory_order_t): PtrUInt;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicUSize.FetchMin(AValue: PtrUInt; AOrder: memory_order_t): PtrUInt;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
 function TAtomicUSize.UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
   AOrder: memory_order_t): Boolean;
 begin
@@ -1493,6 +1554,33 @@ end;
 function TAtomicUSize.Decrement(AOrder: memory_order_t): PtrUInt;
 begin
   Result := _ptruint_dec_result(FetchSub(1, AOrder));
+end;
+
+function TAtomicUSize.Wait(AExpected: PtrUInt; const ATimeoutNs: Int64): Int32;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  Result := atomic_wait(PUInt32(@FValue)^, PUInt32(@AExpected)^, ATimeoutNs);
+  {$ELSE}
+  Result := atomic_wait(PUInt64(@FValue)^, PUInt64(@AExpected)^, ATimeoutNs);
+  {$ENDIF}
+end;
+
+procedure TAtomicUSize.NotifyOne;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  atomic_notify_one(PUInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_one(PUInt64(@FValue)^);
+  {$ENDIF}
+end;
+
+procedure TAtomicUSize.NotifyAll;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  atomic_notify_all(PUInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_all(PUInt64(@FValue)^);
+  {$ENDIF}
 end;
 
 function TAtomicUSize.GetMut: PPtrUInt;
