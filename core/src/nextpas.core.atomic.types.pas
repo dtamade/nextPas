@@ -100,6 +100,9 @@ type
     function FetchOr(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
     function FetchXor(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
 
+    function FetchMax(AValue: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
+    function FetchMin(AValue: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
+
     function UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
@@ -728,6 +731,16 @@ end;
 function TAtomicUInt32.FetchXor(AMask: UInt32; AOrder: memory_order_t): UInt32;
 begin
   Result := atomic_fetch_xor(FValue, AMask, AOrder);
+end;
+
+function TAtomicUInt32.FetchMax(AValue: UInt32; AOrder: memory_order_t): UInt32;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicUInt32.FetchMin(AValue: UInt32; AOrder: memory_order_t): UInt32;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
 end;
 
 function TAtomicUInt32.UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
