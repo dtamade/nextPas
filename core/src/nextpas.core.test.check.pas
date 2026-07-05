@@ -134,7 +134,7 @@ procedure CheckSnapshot(const AActual: string;
 implementation
 
 uses
-  Math,                         { IsNan for Double comparison NaN guards }
+  nextpas.core.math.scalar,     { IsNan for Double comparison NaN guards }
   nextpas.core.platform.env;   { platform_env_get_str for snapshot update flag }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
