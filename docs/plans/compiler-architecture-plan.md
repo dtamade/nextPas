@@ -883,3 +883,64 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
   子节点转移上次尝试导致 12 个测试失败，需更仔细分析。
 
 *阶段 0 完成日期：2026-07-05*
+
+---
+
+## 阶段 0 闭环证据（补充 — 2026-07-05 二次测量）
+
+### 当前基线（查询系统 O(1) 优化后）
+
+| 指标 | 测量值 |
+|------|--------|
+| compiler-pass | 34/34 ✅ |
+| compiler-fail | 11/11 ✅ |
+| diagnostics | 1/1 ✅ |
+| lexer | 11/11 ✅ |
+| parser | 32/32 ✅ |
+| rebuild-compiler 行数 | 192,679 |
+| rebuild-compiler 时间 | 8.3s |
+| SameText 调用（编译器） | 696 |
+| SetLength+1（编译器） | 22 |
+| THashMap/THashSet 使用 | 16 处 |
+| TVec 使用 | 9 处 |
+| 编译器源文件总行数 | 63,927 |
+| 编译器 Pascal 文件数 | 81 |
+| sema 主文件行数 | 17,676（650 方法） |
+| sema 子模块总行数 | 776（builtins 469 + 5 个骨架 307） |
+| ir 模块总行数 | 12,299 |
+| heaptrc 分配（空程序） | 7,922 blocks / 3.8MB |
+| heaptrc 分配（base.pas 3,374 tokens） | 58,568 blocks / 82MB |
+| greenNodeCount（base.pas） | 1,059 nodes |
+
+### 与阶段 0 初次测量的对比
+
+| 指标 | 阶段 0 初次 | 当前 | 变化 |
+|------|-----------|------|------|
+| 编译行数 | 193,381 | 192,679 | -702 |
+| 编译时间 | 8.0s | 8.3s | +0.3s |
+| SameText | 676 | 696 | +20 |
+| SetLength+1 | 22 | 22 | 0 |
+
+### 审计发现（2026-07-05 二次审计）
+
+**实际完成度**（与计划标记的差异）：
+
+| 任务 | 计划标记 | 实际状态 | 说明 |
+|------|---------|---------|------|
+| P0.1 THashMap | ✅ | ✅ | 6 个函数 O(1) |
+| P0.2 TVec | ✅ | ⚠️ | 仍有 22 处 SetLength+1 |
+| P0.3 Arena/GreenTree | ⏸️ | ✅ | Green Tree 已重构为 rowan-style record |
+| P1.1 Pipeline | ✅ | ✅ | ICompilerPhase + TPhaseStatus |
+| P1.2 Sema 拆分 | 🔲 | ⚠️ | 3/6 模块是空骨架（overload/type_check/hir_lowering） |
+| P1.3 MIR 层 | 🔲 | ⚠️ | 框架就绪，HIR→MIR 是简化版 |
+| P1.4 Green Tree | 🔲 | ✅ | 已完成 rowan 重构 |
+| P2.1 查询系统 | 🔲 | ✅ | O(1) hash lookup（刚完成） |
+| P2.2 增量编译 | 🔲 | ⚠️ | PrepareIncrementalBuild/FinalizeIncrementalBuild 框架就绪，未接入 CLI |
+| P2.3 并行编译 | 🔲 | ⚠️ | TParallelScheduler 框架就绪 |
+| P3.1 MIR 优化 | 🔲 | ⚠️ | constfold/dce 有实质实现，4/6 是骨架 |
+| P3.2 错误恢复 | 🔲 | ✅ | np_error_recovery.pas |
+| P3.3 诊断 | 🔲 | ✅ | np_diagnostics_json.pas |
+| P4.1 Permissive | 🔲 | 🔲 | 未开始 |
+| P4.2 Blob* | 🔲 | 🔲 | 未开始 |
+| P4.3 测试补全 | 🔲 | 🔲 | 未开始 |
+
