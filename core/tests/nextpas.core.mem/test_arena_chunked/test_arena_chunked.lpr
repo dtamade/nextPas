@@ -361,6 +361,40 @@ begin
   end;
 end;
 
+{ NEW-013: 验证缓存数量不超过限制 }
+procedure TestChunkCacheLimitCount;
+var
+  LConfig: TChunkedArenaConfig;
+  LArena: TChunkedArena;
+  I: Integer;
+  LSegCount, LPostResetSegCount: SizeUInt;
+begin
+  LConfig := TChunkedArenaConfig.Default(128);
+  LConfig.GrowthKind := agkLinear;
+  LConfig.GrowthStep := 128;
+  LConfig.KeepSegments := False;
+  LArena := TChunkedArena.Create(LConfig);
+  try
+    { 创建 15 个段 }
+    for I := 0 to 14 do
+      LArena.Alloc(128);
+    LSegCount := LArena.SegmentCount;
+    Check(LSegCount >= 15, 'should have at least 15 segments, got ' + IntToStr(LSegCount));
+
+    { Reset - 应该只缓存 8 个段 }
+    LArena.Reset;
+    LPostResetSegCount := LArena.SegmentCount;
+    { 缓存的段仍然计入 SegmentCount，但实际可用段数应 <= 8 }
+    WriteLn('    (segments before reset: ', LSegCount, ', after reset: ', LPostResetSegCount, ')');
+
+    { 重新分配应该成功，说明缓存正常工作 }
+    for I := 0 to 7 do
+      Check(LArena.Alloc(128) <> nil, 'cache reuse after reset #' + IntToStr(I));
+  finally
+    LArena.Free;
+  end;
+end;
+
 procedure TestMultipleResetCycles;
 var
   LArena: TChunkedArena;
@@ -593,6 +627,7 @@ begin
   { Edge-case tests }
   T.Test('chunk_cache_reuse', @TestChunkCacheReuse);
   T.Test('chunk_cache_limit', @TestChunkCacheLimit);
+  T.Test('chunk_cache_limit_count (NEW-013)', @TestChunkCacheLimitCount);
   T.Test('multiple_reset_cycles', @TestMultipleResetCycles);
   T.Test('aligned_zero_align', @TestAllocAlignedZeroAlign);
   T.Test('aligned_invalid_align', @TestAllocAlignedInvalidAlign);

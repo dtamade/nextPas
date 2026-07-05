@@ -453,6 +453,55 @@ begin
   end;
 end;
 
+{ NEW-012: ReallocMem fallback 降级路径测试 }
+procedure TestFallbackReallocPrimaryFailsFallbackSucceeds;
+var
+  LPrimary: IAllocator;
+  LFallback: TFallbackAllocator;
+  LPtr, LNew: Pointer;
+begin
+  { Primary 是 OOM 分配器，所有 primary 分配都失败 }
+  LPrimary := TOomAllocator.Create;
+  LFallback := TFallbackAllocator.Create(LPrimary, GetRtlAllocator);
+  try
+    { 通过 fallback 分配 }
+    LPtr := LFallback.GetMem(64);
+    Check(LPtr <> nil, 'fallback alloc succeeded');
+    PByte(LPtr)^ := $AB; { 写入标记 }
+
+    { ReallocMem 应该通过 fallback 成功 }
+    LNew := LFallback.ReallocMem(LPtr, 128);
+    Check(LNew <> nil, 'realloc via fallback succeeded');
+    Check(PByte(LNew)^ = $AB, 'data preserved after realloc');
+
+    LFallback.FreeMem(LNew);
+  finally
+    LFallback.Free;
+  end;
+end;
+
+procedure TestFallbackReallocPrimaryFailsFallbackFails;
+var
+  LPrimary: IAllocator;
+  LFallback: TFallbackAllocator;
+  LPtr, LNew: Pointer;
+begin
+  { Primary 和 fallback 都是 OOM 分配器 }
+  LPrimary := TOomAllocator.Create;
+  LFallback := TFallbackAllocator.Create(LPrimary, TOomAllocator.Create);
+  try
+    { 通过 primary 分配（会失败）}
+    LPtr := LFallback.GetMem(64);
+    Check(LPtr = nil, 'primary alloc fails');
+
+    { ReallocMem 应该返回 nil }
+    LNew := LFallback.ReallocMem(nil, 64);
+    Check(LNew = nil, 'realloc returns nil when both fail');
+  finally
+    LFallback.Free;
+  end;
+end;
+
 { F-04: TFallbackAllocator.Traits must report ThreadSafe=False
   because its internal hash map has no synchronization. }
 procedure TestFallbackAllocatorTraitsThreadSafeFalse;
@@ -491,6 +540,8 @@ begin
   T.Test('FallbackAllocator realloc from fallback updates size', @TestFallbackAllocatorReallocMemFromFallbackUpdatesSize);
   T.Test('FallbackAllocator realloc(ptr,0) frees entry (R-21)', @TestFallbackReallocZeroSize);
   T.Test('FallbackAllocator realloc failure returns nil (R-21)', @TestFallbackReallocFailureReturnsNil);
+  T.Test('FallbackAllocator realloc primary fails fallback succeeds (NEW-012)', @TestFallbackReallocPrimaryFailsFallbackSucceeds);
+  T.Test('FallbackAllocator realloc both fail returns nil (NEW-012)', @TestFallbackReallocPrimaryFailsFallbackFails);
   T.Test('FallbackAllocator traits ThreadSafe=False (F-04)', @TestFallbackAllocatorTraitsThreadSafeFalse);
 
   { TFallbackArena }

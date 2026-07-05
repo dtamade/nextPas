@@ -61,7 +61,9 @@ uses
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
   nextpas.core.mem.pool,
-  nextpas.core.mem.pool.allocator;
+  nextpas.core.mem.pool.allocator,
+  nextpas.core.mem.span,
+  nextpas.core.mem.central;
 
 type
   // === 基础类型 ===
@@ -129,6 +131,11 @@ type
 
   // === 容器 ===
   TRingBuffer = nextpas.core.mem.ring_buffer.TRingBuffer;
+
+  // === Span/Central (高级构建块) ===
+  TSpan = nextpas.core.mem.span.TSpan;
+  TCentralPool = nextpas.core.mem.central.TCentralPool;
+  TCentralSpanEntry = nextpas.core.mem.central.TCentralSpanEntry;
 
   // === 内存映射 ===
   TMemoryMap = nextpas.core.mem.memory_map.TMemoryMap;

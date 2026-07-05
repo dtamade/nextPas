@@ -128,15 +128,15 @@ end;
 
 function TArenaConcurrent.AllocZeroed(aSize: SizeUInt): Pointer;
 begin
-  { Arena bump pointer 只有当前线程拿到 Result，锁外清零安全 }
+  { NEW-007 fix: 清零移到锁内，避免与 Reset 的数据竞争 }
   FLock.Acquire;
   try
     Result := FInner.Alloc(aSize);
+    if Result <> nil then
+      FillChar(Result^, aSize, 0);
   finally
     FLock.Release;
   end;
-  if Result <> nil then
-    FillChar(Result^, aSize, 0);
 end;
 
 function TArenaConcurrent.SaveMark: TArenaMark;

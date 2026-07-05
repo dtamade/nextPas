@@ -295,24 +295,30 @@ end;
 function TTrackingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.GetMem(ASize);
-  FLock.Acquire;
-  try
-    MapInsert(PtrUInt(Result), ASize, FNextAllocId);
-    Inc(FNextAllocId);
-  finally
-    FLock.Release;
+  if Result <> nil then
+  begin
+    FLock.Acquire;
+    try
+      MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+      Inc(FNextAllocId);
+    finally
+      FLock.Release;
+    end;
   end;
 end;
 
 function TTrackingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
 begin
   Result := FInner.AllocMem(ASize);
-  FLock.Acquire;
-  try
-    MapInsert(PtrUInt(Result), ASize, FNextAllocId);
-    Inc(FNextAllocId);
-  finally
-    FLock.Release;
+  if Result <> nil then
+  begin
+    FLock.Acquire;
+    try
+      MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+      Inc(FNextAllocId);
+    finally
+      FLock.Release;
+    end;
   end;
 end;
 

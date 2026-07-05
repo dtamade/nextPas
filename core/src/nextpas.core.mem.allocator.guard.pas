@@ -30,7 +30,9 @@ uses
 
 type
   {** Guard page allocator. Each allocation is surrounded by
-      unmapped pages — any out-of-bounds access triggers SIGSEGV. }
+      unmapped pages — any out-of-bounds access triggers SIGSEGV.
+
+      @warning 性能极低（每次分配 3 个 mmap 系统调用），仅用于调试/安全测试。 }
   TGuardAllocator = class(TAllocator)
   public
     function DoGetMem(ASize: SizeUInt): Pointer; override;
