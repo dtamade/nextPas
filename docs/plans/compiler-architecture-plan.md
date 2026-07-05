@@ -153,7 +153,7 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 
 **对标**: rustc 的 `rustc_typeck`、`rustc_trait_selection`、`rustc_mir_build`
 
-#### 任务 1.1: 定义 Pipeline 接口 [🔲] 预估 2 天
+#### 任务 1.1: 定义 Pipeline 接口 [✅ 2026-07-05] 预估 2 天
 
 | 项 | 内容 |
 |----|------|
