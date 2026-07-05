@@ -38,6 +38,7 @@ implementation
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error,
   nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
 
@@ -55,6 +56,8 @@ function platform_watch_add(var AWatcher: TPlatformWatcher;
 var
   LWd: Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LWd := inotify_add_watch(AWatcher.Fd, APath,
     IN_MODIFY or IN_CREATE or IN_DELETE or IN_MOVED_FROM or IN_MOVED_TO);
   if LWd < 0 then

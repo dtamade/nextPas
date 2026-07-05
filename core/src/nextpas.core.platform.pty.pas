@@ -100,6 +100,9 @@ begin
   APid := -1;
   AFailStage := ptssNone;
 
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
   begin
     AFailStage := ptssPipe;
