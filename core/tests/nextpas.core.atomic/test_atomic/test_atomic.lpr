@@ -568,7 +568,7 @@ begin
     'function AtomicCompatFailureOrder(const AOrder: TMemoryOrder): TMemoryOrder; inline;',
     'function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;');
   LTypesFailureSection := ExtractImplementationSection(LAtomicTypesSource,
-    'function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;',
+    'function _bool_raw(const AValue: Boolean): Int32; inline;',
     '{ TAtomicInt32 }');
   LTypesInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicInt32.is_lock_free: Boolean;',
@@ -635,7 +635,7 @@ begin
     'function TAtomicBool.Load(AOrder: memory_order_t): Boolean;');
   LTypesBoolRmwHelperSection := ExtractImplementationSection(LAtomicTypesSource,
     'function _atomic_bool_fetch(var AValue: Int32; const AOperand: Boolean;',
-    'function _uint32_inc_result(const AOld: UInt32): UInt32;');
+    'function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;');
   LTypesBoolFetchAndSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicBool.FetchAnd(AValue: Boolean; AOrder: memory_order_t): Boolean;',
     'function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;');

@@ -452,10 +452,6 @@ type
     function IntoInner: PT; inline;
   end;
 
-{ CAS memory order resolution helpers (interface-visible for generic records) }
-function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
-function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
-
 implementation
 
 uses
@@ -469,31 +465,6 @@ type
     abroXor,
     abroNand
   );
-
-function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
-begin
-  // Treat consume as acquire for CAS/RMW in the high-level wrappers.
-  // (Most real-world implementations also treat consume as acquire.)
-  if AOrder = mo_consume then
-    Result := mo_acquire
-  else
-    Result := AOrder;
-end;
-
-function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
-begin
-  // Failure order may not include release/acq_rel.
-  if ASuccessOrder = mo_relaxed then
-    Result := mo_relaxed
-  else if (ASuccessOrder = mo_consume) or (ASuccessOrder = mo_acquire) then
-    Result := mo_acquire
-  else if ASuccessOrder = mo_release then
-    Result := mo_relaxed
-  else if ASuccessOrder = mo_acq_rel then
-    Result := mo_acquire
-  else
-    Result := mo_seq_cst;
-end;
 
 function _bool_raw(const AValue: Boolean): Int32; inline;
 begin
@@ -538,132 +509,6 @@ begin
     LOldRaw := LExpectedRaw;
     cpu_pause;
   until False;
-end;
-
-function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
-begin
-  if AOld = High(UInt32) then
-    Result := UInt32(0)
-  else
-    Result := AOld + UInt32(1);
-end;
-
-function _uint32_dec_result(const AOld: UInt32): UInt32; inline;
-begin
-  if AOld = UInt32(0) then
-    Result := High(UInt32)
-  else
-    Result := AOld - UInt32(1);
-end;
-
-function _uint64_inc_result(const AOld: UInt64): UInt64; inline;
-begin
-  if AOld = High(UInt64) then
-    Result := UInt64(0)
-  else
-    Result := AOld + UInt64(1);
-end;
-
-function _uint64_dec_result(const AOld: UInt64): UInt64; inline;
-begin
-  if AOld = UInt64(0) then
-    Result := High(UInt64)
-  else
-    Result := AOld - UInt64(1);
-end;
-
-function _ptruint_inc_result(const AOld: PtrUInt): PtrUInt; inline;
-begin
-  if AOld = High(PtrUInt) then
-    Result := PtrUInt(0)
-  else
-    Result := AOld + PtrUInt(1);
-end;
-
-function _ptruint_dec_result(const AOld: PtrUInt): PtrUInt; inline;
-begin
-  if AOld = PtrUInt(0) then
-    Result := High(PtrUInt)
-  else
-    Result := AOld - PtrUInt(1);
-end;
-
-function _int32_from_bits(const AValue: UInt32): Int32; inline;
-var
-  LBits: UInt32;
-begin
-  LBits := AValue;
-  Result := PInt32(@LBits)^;
-end;
-
-function _int32_to_bits(const AValue: Int32): UInt32; inline;
-var
-  LValue: Int32;
-begin
-  LValue := AValue;
-  Result := PUInt32(@LValue)^;
-end;
-
-function _int64_from_bits(const AValue: UInt64): Int64; inline;
-var
-  LBits: UInt64;
-begin
-  LBits := AValue;
-  Result := PInt64(@LBits)^;
-end;
-
-function _int64_to_bits(const AValue: Int64): UInt64; inline;
-var
-  LValue: Int64;
-begin
-  LValue := AValue;
-  Result := PUInt64(@LValue)^;
-end;
-
-function _ptrint_from_bits(const AValue: PtrUInt): PtrInt; inline;
-var
-  LBits: PtrUInt;
-begin
-  LBits := AValue;
-  Result := PPtrInt(@LBits)^;
-end;
-
-function _ptrint_to_bits(const AValue: PtrInt): PtrUInt; inline;
-var
-  LValue: PtrInt;
-begin
-  LValue := AValue;
-  Result := PPtrUInt(@LValue)^;
-end;
-
-function _int32_inc_result(const AOld: Int32): Int32; inline;
-begin
-  Result := _int32_from_bits(_uint32_inc_result(_int32_to_bits(AOld)));
-end;
-
-function _int32_dec_result(const AOld: Int32): Int32; inline;
-begin
-  Result := _int32_from_bits(_uint32_dec_result(_int32_to_bits(AOld)));
-end;
-
-function _int64_inc_result(const AOld: Int64): Int64; inline;
-begin
-  Result := _int64_from_bits(_uint64_inc_result(_int64_to_bits(AOld)));
-end;
-
-function _int64_dec_result(const AOld: Int64): Int64; inline;
-begin
-  Result := _int64_from_bits(_uint64_dec_result(_int64_to_bits(AOld)));
-end;
-
-function _ptrint_inc_result(const AOld: PtrInt): PtrInt; inline;
-begin
-  Result := _ptrint_from_bits(_ptruint_inc_result(_ptrint_to_bits(AOld)));
-end;
-
-function _ptrint_dec_result(const AOld: PtrInt): PtrInt; inline;
-begin
-  Result := _ptrint_from_bits(_ptruint_dec_result(_ptrint_to_bits(AOld)));
 end;
 
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
