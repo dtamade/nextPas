@@ -123,7 +123,7 @@ var
 begin
   if platform_random_check_request(ABuf, ALen, LCheck) then
     Exit(LCheck);
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

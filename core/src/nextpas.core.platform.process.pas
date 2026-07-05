@@ -782,27 +782,27 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
-begin FillChar(AProc, SizeOf(AProc), 0); Result := -1; end;
+begin FillChar(AProc, SizeOf(AProc), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 procedure platform_process_detach(var AProc: TPlatformProcess);
 begin FillChar(AProc, SizeOf(AProc), 0); end;
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
-begin AReadHandle := -1; AWriteHandle := -1; Result := -1; end;
+begin AReadHandle := -1; AWriteHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
-begin AHandle := -1; Result := -1; end;
+begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
-begin AHandle := -1; Result := -1; end;
+begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
-begin AOutLen := 0; AExitCode := -1; Result := -1; end;
+begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

@@ -644,17 +644,17 @@ end;
 {$ENDIF}
 
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
-function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := -1; end;
-function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
-function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
-function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := -1; end;
+function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_thread_self: TPlatformThreadToken; begin Result := 0; end;
 function platform_thread_id: UInt64; begin Result := 0; end;
 procedure platform_thread_yield; begin end;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64); begin end;
-function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := -1; end;
-function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := -1; end;
-function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := -1; end;
+function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;
 {$ENDIF}{$ENDIF}

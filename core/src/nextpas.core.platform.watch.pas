@@ -268,13 +268,13 @@ end;
 
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
-begin AWatcher.Fd := -1; Result := -1; end;
+begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
 begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

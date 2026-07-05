@@ -130,15 +130,15 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
-begin FillChar(APipe, SizeOf(APipe), 0); Result := -1; end;
+begin FillChar(APipe, SizeOf(APipe), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.
