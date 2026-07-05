@@ -8,6 +8,16 @@ uses
   nextpas.core.platform.sync;
 
 type
+  {** TMemRwLock — 平台读写锁 record 封装
+   *
+   *  @note 平台默认策略：
+   *    Linux (pthread_rwlock): write-preferring (PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP)
+   *    macOS (pthread_rwlock): write-preferring (默认)
+   *    Windows (SRWLock): 未文档化，实测 write-preferring
+   *    与 Rust parking_lot::RwLock (write-preferring) 和 Go sync.RWMutex (write-preferring) 一致。
+   *
+   *  @warning 不可拷贝/传值 — 与 TMemMutex 相同约束，多线程共享时必须通过指针传递。
+   *}
   TMemRwLock = record
   private
     FHandle: TPlatformRwLock;

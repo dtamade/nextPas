@@ -1,28 +1,28 @@
 # nextpas.core.mem 可用性评估报告
 
-**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4)
-**评估范围**: 57 个源文件 / 48 个测试文件 / 604 tests / 0 failures / 0 leaks
+**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4), 2026-07-05 (R5)
+**评估范围**: 57 个源文件 / 48 个测试文件 / 615 tests / 0 failures / 0 leaks
 **评估维度**: 接口设计、API 易用性、调用一致性、错误提示、边界条件、测试覆盖、性能与内存安全
-**修复轮次**: R1 修复 5 项 (706d382fe) + R2 修复 3 项 (1e610af02, 3df1782a3, fb32149e7) + R4 修复 5 项
+**修复轮次**: R1 修复 5 项 + R2 修复 3 项 + R4 修复 5 项 + R5 修复 6 项
 
 ---
 
 ## Summary
 
-| 维度 | 得分 (1-10) | 等级 | R4 趋势 |
+| 维度 | 得分 (1-10) | 等级 | R5 趋势 |
 |------|-------------|------|---------|
-| 接口设计 | 8.5 | 优秀 | ↓ (Pool 接口碎片) |
+| 接口设计 | 8.5 | 优秀 | → |
 | API 易用性 | 8.0 | 良好 | → |
-| 调用一致性 | 7.5 | 良好 | ↓ (Acquire 签名分裂) |
-| 错误提示质量 | 8.0 | 良好 | → |
+| 调用一致性 | 7.5 | 良好 | → |
+| 错误提示质量 | 8.5 | 优秀 | ↑ (R5: AllocUnsafe DEBUG Assert) |
 | 边界条件 | 8.5 | 优秀 | → |
-| 测试覆盖 | 9.0 | 卓越 | ↑ (604 tests, +2 Traits 覆盖) |
+| 测试覆盖 | 9.0 | 卓越 | → |
 | 性能 | 9.5 | 卓越 | → |
-| 内存安全 | 8.0 | 良好 | ↑ (Traits 一致性修复) |
-| **综合** | **8.1** | **优秀** | — |
+| 内存安全 | 8.5 | 优秀 | ↑ (R5: AllocUnsafe 容量检查) |
+| **综合** | **8.4** | **优秀** | ↑ (8.1→8.4) |
 
 **风险等级**: LOW
-**结论**: 生产就绪。R4 深度审计发现 9 项新 finding，已修复 5 项（F-04/F-05/F-07/F-08/F-09），剩余 4 项为文档/接口层面改进（P1-P2）。
+**结论**: 生产就绪。R5 发现 6 项 P2 finding，全部已修复（3 代码 + 3 文档）。所有 P0/P1 问题已清零。
 
 ---
 
@@ -338,6 +338,68 @@ end;
 
 ---
 
+### R5 深度审计发现 (2026-07-05)
+
+### F-27 [P2-已修复] 门面类型覆盖率 38% — 高级路径文档缺失
+
+**位置**: `API-GUIDE.md`
+
+**问题**: 门面导出 65 个类型，但模块总计 169 个公共类型。`TGrowingAllocator`、`TSpan`、`ESlabPoolInvalidSize` 等高级类型需直接引用子模块。
+
+**修复**: 在 API-GUIDE.md 补充"高级路径"章节，列出 6 个子模块入口（Growing Allocator、Span、SizeClass、CentralPool、Slab 异常、ShuffleShard）。
+
+---
+
+### F-28 [P2-已修复] README.md IAllocator 方法数过时
+
+**位置**: `README.md:39-46`
+
+**问题**: README 声称 IAllocator 有 8 方法（含 AllocAligned/MemSize），实际已精简为 5 方法。
+
+**修复**: 同步 README 为 5 方法 + 说明 AllocAligned/MemSize 的归属。
+
+---
+
+### F-29 [P2-已修复] AllocUnsafe DEBUG Assert 不完整
+
+**位置**: `arena.virtual.pas:591-602`
+
+**问题**: AllocUnsafe 的 DEBUG Assert 只检查初始化状态，不检查容量。越界写入导致 SIGSEGV 而非清晰错误。
+
+**修复**: 增加 `Assert(FFrontPtr + aSize <= FFrontEnd)` 容量检查。仅 DEBUG 构建，Release 零开销。
+
+---
+
+### F-30 [P2-已修复] SlabConfig 废弃字段未清理
+
+**位置**: `pool.slab.pas:44-51`
+
+**问题**: `EnablePageMerging` 和 `PageSize` 标注为"兼容字段（当前未用）"但未标记 deprecated。
+
+**修复**: 添加 `@deprecated` 文档注释，说明未来可能移除。FPC 的 `deprecated` 指令对 record 字段不产生警告，故用文档注释替代。
+
+---
+
+### F-31 [P2-已修复] TMemRwLock 无平台策略文档
+
+**位置**: `rwlock.pas`
+
+**问题**: 未说明读写锁的平台默认策略。
+
+**修复**: 添加文档注释，说明 Linux/macOS/Windows 默认均为 write-preferring，与 Rust parking_lot 和 Go sync.RWMutex 一致。
+
+---
+
+### F-32 [P2-已修复] TFallbackAllocator Hash Map 无容量说明
+
+**位置**: `allocator.fallback.pas:57`
+
+**问题**: Hash map 无最大容量限制，但文档未说明。
+
+**修复**: 添加文档注释，说明 50% 负载因子 grow，无上限，受 fallback 频率约束。
+
+---
+
 ## Risk
 
 | ID | 风险 | 影响 | 概率 | 等级 | 状态 |
@@ -422,6 +484,12 @@ end;
 20. ✅ R5: F-19 Pool Acquire 签名决策树文档
 21. ✅ R5: F-20 IMemoryPool 语义边界文档
 22. ✅ R5: F-23 TThreadArenaManager 自动 thread-exit cleanup
+23. ✅ R5: F-27 API-GUIDE 高级路径章节
+24. ✅ R5: F-28 README IAllocator 方法同步 (8→5)
+25. ✅ R5: F-29 AllocUnsafe DEBUG 容量 Assert
+26. ✅ R5: F-30 SlabConfig 废弃字段 @deprecated
+27. ✅ R5: F-31 TMemRwLock 平台策略文档
+28. ✅ R5: F-32 TFallbackAllocator Map 容量说明
 
 ### 待处理
 

@@ -54,7 +54,11 @@ type
   private
     FPrimary: IAllocator;
     FFallback: IAllocator;
-    { Open-addressing hash map: Ptr → (Source, Size) }
+    { Open-addressing hash map: Ptr → (Source, Size).
+      50% load factor triggers grow. No maximum capacity limit —
+      growth is bounded by actual fallback allocation count, which is
+      rare (only triggered on primary OOM). If fallback frequency is
+      unexpectedly high, consider increasing primary arena capacity. }
     FKeys: array of PtrUInt;       { 0 = empty, 1 = tombstone }
     FSources: array of TFallbackSource;
     FSizes: array of SizeUInt;

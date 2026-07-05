@@ -43,11 +43,13 @@ type
   {** Slab 池配置参数 *}
   TSlabConfig = record
     MinShift: SizeUInt;            // 默认 3 (8B)
-    EnablePageMerging: Boolean;    // 兼容字段（当前未用）
+    {** @deprecated 兼容字段，当前未用，未来可能移除。请勿在新代码中设置此字段。 }
+    EnablePageMerging: Boolean;
     MaxAllocSize: SizeUInt;        // 0=不限制；>0 时限制单次分配（超过返回 nil）
     EnablePerfMonitoring: Boolean; // 仅统计调用次数；L0 core 不直接采样时间
     EnableDebug: Boolean;          // 调试开关（预留）
-    PageSize: SizeUInt;            // 兼容字段（默认 4096）
+    {** @deprecated 兼容字段，当前未用，未来可能移除。请勿在新代码中设置此字段。 }
+    PageSize: SizeUInt;
   end;
 
   {** Fallback 分配记录（超大/高对齐分配）*}

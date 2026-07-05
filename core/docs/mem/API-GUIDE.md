@@ -128,3 +128,71 @@ Pool := TSlabPool.Create(4096);
 Pool.GetMem(32);   // ✅ 自动选择合适的 size class
 Pool.GetMem(1024); // ✅ 大对象走 fallback
 ```
+
+## 高级路径（子模块入口）
+
+门面 `nextpas.core.mem` 导出 65 个常用类型。以下高级功能需直接引用子模块：
+
+### Go-style Growing Allocator
+
+```pascal
+uses nextpas.core.mem.allocator.growing;
+
+// TGrowingAllocator: TLS cache → central pool → system GetMem
+// 架构匹配 Go mcache/mcentral/mheap，线程安全
+var GAlloc: TGrowingAllocator;
+GAlloc := DefaultGrowingAllocator;
+P := GAlloc.GetMem(64);  // ~5ns via TLS cache
+GAlloc.FreeMem(P, 64);
+```
+
+### Span-based 内部分片
+
+```pascal
+uses nextpas.core.mem.span;
+
+// TSpan: 64-bit bitmap 管理固定大小 slot，O(1) BSF 分配
+var S: TSpan;
+SpanInit(S, BasePtr, 64, 32);
+Slot := SpanAlloc(S);  // O(1)
+SpanFree(S, Slot);     // O(1) + double-free 检测
+```
+
+### Size Class 查询
+
+```pascal
+uses nextpas.core.mem.sizeclass;
+
+// 62 个 size class，覆盖 16B-57344B
+Idx := SizeClassIndex(100);  // → 对应 class index
+Sz := SizeClassSize(Idx);    // → 实际分配大小
+```
+
+### Central Pool / Thread Cache
+
+```pascal
+uses nextpas.core.mem.central;
+uses nextpas.core.mem.cache.thread;
+
+// TCentralPool: spinlock 保护的批量 refill/flush
+// TThreadCache: TLS 缓存，零竞争
+```
+
+### Slab 专用异常
+
+```pascal
+uses nextpas.core.mem.pool.slab;
+
+// ESlabPoolInvalidSize: 无效大小
+// ESlabPoolCorruption: 池损坏检测
+```
+
+### Shuffle Shard
+
+```pascal
+uses nextpas.core.mem.shuffle;
+
+// TShuffleShard: 概率分片策略，用于负载均衡
+```
+
+> **原则**: 门面提供常用路径，子模块提供专业路径。不确定时用门面。

@@ -595,6 +595,8 @@ begin
   {$IFDEF DEBUG}
   Assert(aSize > 0, 'AllocUnsafe: aSize must be > 0');
   Assert(FFrontPtr <> nil, 'AllocUnsafe: arena not initialized');
+  Assert(PtrUInt(FFrontPtr) + PtrUInt(aSize) <= PtrUInt(FFrontEnd),
+    'AllocUnsafe: insufficient capacity');
   {$ENDIF}
   LNewEnd := PtrUInt(FFrontPtr) + PtrUInt(aSize);
   Result := Pointer(FFrontPtr);

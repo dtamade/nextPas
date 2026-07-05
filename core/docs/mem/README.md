@@ -39,10 +39,10 @@
 
 通用分配器接口（40+ 模块引用）：
 
-- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配
-- `AllocAligned` — 对齐分配
-- `MemSize` — 查询已分配大小
-- `Traits` — 分配器特性
+- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配（5 方法契约）
+- `Traits` — 分配器特性（ZeroInitialized / ThreadSafe / SupportsRealloc）
+
+对齐分配见 `IArena.AllocAligned`，分配大小查询见 `IMemoryPool`。
 
 ### TVirtualArena (record)
 
