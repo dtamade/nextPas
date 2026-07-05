@@ -239,6 +239,57 @@ begin
   WriteLn('PASS: inbox stack pop empty');
 end;
 
+{ NEW-024: ScavengeCentralPools 测试 }
+procedure TestScavengeFullyFreeSpans;
+var
+  LPool: TCentralPool;
+  LBlocks: array[0..127] of Pointer;
+  LCount: Word;
+  LReleased: Int32;
+begin
+  CentralPoolInit(LPool, 64);
+  { 分配 2 个 span (128 blocks) }
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
+  Check(LCount = 128, 'allocated 128');
+  Check(LPool.FEntryCount = 2, '2 spans created');
+
+  { 释放所有 blocks — 传入 AOpCounter=100 让 FLastFreeTick 被设置 }
+  CentralPoolFree(LPool, 128, @LBlocks[0], 100);
+  Check(CentralPoolFreeCount(LPool) = 128, 'all 128 blocks freed');
+
+  { Scavenge: idle threshold = 50, op counter = 200 → age = 100 >= 50 → 释放 }
+  LReleased := ScavengeCentralPools(LPool, 200, 50);
+  Check(LReleased = 2, 'released 2 idle spans');
+  Check(LPool.FEntries[0].FMemory = nil, 'span 0 memory released');
+  Check(LPool.FEntries[1].FMemory = nil, 'span 1 memory released');
+
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: scavenge fully free spans');
+end;
+
+procedure TestScavengeNotIdleYet;
+var
+  LPool: TCentralPool;
+  LBlocks: array[0..63] of Pointer;
+  LCount: Word;
+  LReleased: Int32;
+begin
+  CentralPoolInit(LPool, 64);
+  LCount := CentralPoolAlloc(LPool, 64, @LBlocks[0], 0);
+  Check(LCount = 64, 'allocated 64');
+
+  { 释放时 AOpCounter=100 → FLastFreeTick=100 }
+  CentralPoolFree(LPool, 64, @LBlocks[0], 100);
+
+  { Scavenge at op=120, threshold=50 → age=20 < 50 → 不释放 }
+  LReleased := ScavengeCentralPools(LPool, 120, 50);
+  Check(LReleased = 0, 'not idle long enough');
+  Check(LPool.FEntries[0].FMemory <> nil, 'span 0 memory still alive');
+
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: scavenge not idle yet');
+end;
+
 { --- Main --- }
 
 begin
@@ -257,6 +308,8 @@ begin
   T.Test('inbox_stack_init', @TestInboxStackInit);
   T.Test('inbox_stack_push_pop_all', @TestInboxStackPushPopAll);
   T.Test('inbox_stack_pop_empty', @TestInboxStackPopEmpty);
+  T.Test('scavenge_fully_free (NEW-024)', @TestScavengeFullyFreeSpans);
+  T.Test('scavenge_not_idle_yet (NEW-024)', @TestScavengeNotIdleYet);
 
   T.Run;
   T.Summary;

@@ -39,6 +39,13 @@ procedure SecureZeroBytes(var AData: TBytes);
  *}
 procedure SecureZeroString(var AStr: AnsiString);
 
+{**
+ * Securely zero a Unicode string
+ *
+ * @param AStr The Unicode string to zero
+ *}
+procedure SecureZeroUnicodeString(var AStr: UnicodeString);
+
 implementation
 
 uses
@@ -73,6 +80,20 @@ begin
     UniqueString(AStr);
     if Length(AStr) > 0 then
       SecureZeroMemory(@AStr[1], Length(AStr));
+    AStr := '';
+  end;
+end;
+
+procedure SecureZeroUnicodeString(var AStr: UnicodeString);
+var
+  LLen: Integer;
+begin
+  LLen := Length(AStr);
+  if LLen > 0 then
+  begin
+    UniqueString(AStr);
+    if Length(AStr) > 0 then
+      SecureZeroMemory(@AStr[1], Length(AStr) * SizeOf(WideChar));
     AStr := '';
   end;
 end;

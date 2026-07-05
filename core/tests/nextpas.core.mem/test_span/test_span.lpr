@@ -123,6 +123,78 @@ begin
   WriteLn('PASS: max slots');
 end;
 
+{ NEW-023: 64 slot 全部分配/释放 + double-free 检测 + SpanFree 返回值 }
+procedure TestSpanBitmapStress;
+var
+  LSpan: TSpan;
+  LBuf: array[0..65535] of Byte;
+  LPtrs: array[0..63] of Pointer;
+  I: Integer;
+begin
+  { 分配所有 64 个 slot }
+  SpanInit(LSpan, @LBuf[0], 1024, SPAN_MAX_SLOTS);
+  for I := 0 to 63 do
+  begin
+    LPtrs[I] := SpanAlloc(LSpan);
+    Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I) + ' non-nil');
+  end;
+  Check(LSpan.FFreeCount = 0, 'all 64 slots used');
+  Check(not SpanHasFree(LSpan), 'no free after full alloc');
+  Check(SpanAlloc(LSpan) = nil, 'alloc when full returns nil');
+
+  { 释放所有 64 个 slot }
+  for I := 0 to 63 do
+    Check(SpanFree(LSpan, LPtrs[I]), 'free #' + IntToStr(I) + ' returns True');
+  Check(LSpan.FFreeCount = 64, 'all 64 slots free');
+  Check(SpanIsEmpty(LSpan), 'empty after free all');
+
+  { double-free 检测: 再次释放 slot[0] 应返回 False }
+  Check(not SpanFree(LSpan, LPtrs[0]), 'double-free returns False');
+  Check(LSpan.FFreeCount = 64, 'free count unchanged after double-free');
+
+  { 越界指针: 释放 span 范围外的指针应返回 False }
+  Check(not SpanFree(LSpan, Pointer(PtrUInt($DEADBEEF))), 'out-of-range ptr returns False');
+  Check(LSpan.FFreeCount = 64, 'free count unchanged after bad ptr');
+
+  WriteLn('PASS: bitmap stress (64 alloc/free + double-free + oob)');
+end;
+
+{ NEW-023: 交错分配释放压力测试 }
+procedure TestSpanInterleavedAllocFree;
+var
+  LSpan: TSpan;
+  LBuf: array[0..65535] of Byte;
+  LPtrs: array[0..63] of Pointer;
+  I: Integer;
+begin
+  SpanInit(LSpan, @LBuf[0], 1024, 64);
+
+  { 分配所有 }
+  for I := 0 to 63 do
+    LPtrs[I] := SpanAlloc(LSpan);
+
+  { 交错释放：释放偶数 slot }
+  for I := 0 to 63 do
+    if I mod 2 = 0 then
+      Check(SpanFree(LSpan, LPtrs[I]), 'free even #' + IntToStr(I));
+  Check(LSpan.FFreeCount = 32, '32 slots freed (even)');
+
+  { 重新分配应拿到偶数 slot 中的一个 }
+  for I := 0 to 31 do
+  begin
+    LPtrs[I * 2] := SpanAlloc(LSpan);
+    Check(LPtrs[I * 2] <> nil, 're-alloc even #' + IntToStr(I));
+  end;
+  Check(LSpan.FFreeCount = 0, 'full again');
+
+  { 全部释放 }
+  for I := 0 to 63 do
+    SpanFree(LSpan, LPtrs[I]);
+  Check(SpanIsEmpty(LSpan), 'empty after interleaved test');
+
+  WriteLn('PASS: interleaved alloc/free stress');
+end;
+
 { --- Main --- }
 
 begin
@@ -135,6 +207,8 @@ begin
   T.Test('span_free_all', @TestSpanFreeAll);
   T.Test('different_slot_sizes', @TestSpanDifferentSlotSizes);
   T.Test('max_slots', @TestSpanMaxSlots);
+  T.Test('bitmap_stress_64 (NEW-023)', @TestSpanBitmapStress);
+  T.Test('interleaved_alloc_free (NEW-023)', @TestSpanInterleavedAllocFree);
 
   T.Run;
   T.Summary;
