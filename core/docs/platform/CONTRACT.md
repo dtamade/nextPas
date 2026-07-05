@@ -278,3 +278,19 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - sync.pas: `ATimeoutNs: Int64` 保持不变（纳秒精度是同步原语的刚需）
 - thread.pas: `ATimeoutMs: Int64` 已经是正确类型
 - 测试：所有 33 个测试套件通过，0 unfreed
+
+### Phase 10: TPlatformDuration 设计决策 (2026-07-06)
+- **决策**: 不引入 `TPlatformDuration` 类型，保持 `Int64` 参数
+- **原因**:
+  1. 平台模块是 L0 层，应保持最小化和低级抽象
+  2. `TDuration` 类型已在 L1 层 (`nextpas.core.time.base`) 定义
+  3. 平台模块不能依赖 L1 层（会创建循环依赖）
+  4. `Int64` 参数简单高效，符合 L0 层的设计原则
+- **方案**:
+  1. 平台模块继续使用 `Int64` 参数（ms 或 ns）
+  2. 高层模块使用 `TDuration` 类型，调用平台函数时转换为 `Int64`
+  3. 文档明确参数单位（ms 或 ns）
+- **对标**:
+  - Rust: `std::time::Duration` 在标准库层，系统调用层使用 `timespec`
+  - Go: `time.Duration` 在标准库层，系统调用层使用 `int64` 纳秒
+  - nextPas: `TDuration` 在 L1 层，平台层使用 `Int64`
