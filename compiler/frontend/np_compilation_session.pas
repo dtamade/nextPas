@@ -46,6 +46,7 @@ type
     WorkspaceModel: TWorkspaceModel;
     ExplicitUnitRoots: TStringArray;
     NoFold: Boolean;
+    Incremental: Boolean;
   end;
 
   TToolStatusEventRecord = record
