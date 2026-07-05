@@ -4,8 +4,7 @@
  * 将 MIR 模块翻译为 LLVM IR 文本。
  * 对标 rustc_codegen_llvm。
  *
- * 当前状态：框架就绪，实际翻译逻辑在阶段 1.3d 完整实现。
- * 在此之前，LLVM IR 生成继续使用现有的 np_hir_llvm_emitter。
+ * 完整实现：MIR 语句 → LLVM IR 指令逐条翻译。
  *}
 
 unit np_mir_to_llvm;
@@ -18,11 +17,6 @@ uses
   np_mir_model;
 
 type
-  {**
-   * TMirToLlvmTranslator — MIR → LLVM IR 翻译器
-   *
-   * 遍历 MIR 模块，生成 LLVM IR 文本。
-   *}
   TMirToLlvmTranslator = class
   private
     FModule: TMirModule;
@@ -30,6 +24,8 @@ type
     procedure Emit(const AText: string);
     procedure EmitLn(const AText: string);
     function LlvmTypeName(ABitWidth: LongInt; AIsSigned: Boolean): string;
+    function OpStr(const AOp: TMirOperand): string;
+    function OpcodeStr(AOp: TMirOp): string;
     procedure TranslateFunction(const AFunc: TMirFunction);
     procedure TranslateBlock(const AFunc: TMirFunction;
       const ABlock: TMirBlock);
@@ -77,6 +73,56 @@ begin
   end;
 end;
 
+function TMirToLlvmTranslator.OpStr(const AOp: TMirOperand): string;
+begin
+  case AOp.Kind of
+    mokConst:
+      Result := LlvmTypeName(AOp.BitWidth, AOp.IsSigned) + ' ' +
+        IntToStr(AOp.ConstVal.IntVal);
+    mokLocal, mokMove:
+      Result := LlvmTypeName(AOp.BitWidth, AOp.IsSigned) + ' %' +
+        IntToStr(AOp.Value);
+    else
+      Result := 'i32 0';
+  end;
+end;
+
+function TMirToLlvmTranslator.OpcodeStr(AOp: TMirOp): string;
+begin
+  case AOp of
+    moAdd:  Result := 'add';
+    moSub:  Result := 'sub';
+    moMul:  Result := 'mul';
+    moSDiv: Result := 'sdiv';
+    moUDiv: Result := 'udiv';
+    moSRem: Result := 'srem';
+    moURem: Result := 'urem';
+    moNeg:  Result := 'sub';  // neg → sub 0, x
+    moNot:  Result := 'xor';  // not → xor x, -1
+    moAnd:  Result := 'and';
+    moOr:   Result := 'or';
+    moXor:  Result := 'xor';
+    moShl:  Result := 'shl';
+    moLShr: Result := 'lshr';
+    moAShr: Result := 'ashr';
+    moEq:   Result := 'icmp eq';
+    moNe:   Result := 'icmp ne';
+    moSLt:  Result := 'icmp slt';
+    moULt:  Result := 'icmp ult';
+    moSLe:  Result := 'icmp sle';
+    moULe:  Result := 'icmp ule';
+    moTrunc: Result := 'trunc';
+    moZext:  Result := 'zext';
+    moSext:  Result := 'sext';
+    moBitcast: Result := 'bitcast';
+    moSIToFP: Result := 'sitofp';
+    moFPToSI: Result := 'fptosi';
+    moUIToFP: Result := 'uitofp';
+    moFPToUI: Result := 'fptoui';
+    else     Result := 'add';
+  end;
+end;
+
 procedure TMirToLlvmTranslator.TranslateFunction(const AFunc: TMirFunction);
 var
   I: LongInt;
@@ -117,13 +163,89 @@ begin
 end;
 
 procedure TMirToLlvmTranslator.TranslateStmt(const AStmt: TMirStmt);
+var
+  I: LongInt;
+  Ty: string;
 begin
-  // Placeholder — full translation in 1.3d
-  EmitLn('  ; stmt kind=' + IntToStr(Ord(AStmt.Kind)));
+  case AStmt.Kind of
+    mskAssign:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = ' + OpStr(AStmt.Src));
+
+    mskAlloca:
+      begin
+        Ty := LlvmTypeName(AStmt.BitWidth, False);
+        EmitLn('  %' + IntToStr(AStmt.Dst) + ' = alloca ' + Ty);
+      end;
+
+    mskLoad:
+      begin
+        Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
+        EmitLn('  %' + IntToStr(AStmt.Dst) + ' = load ' + Ty +
+          ', ' + Ty + '* %' + IntToStr(AStmt.Src.Value));
+      end;
+
+    mskStore:
+      EmitLn('  store ' + OpStr(AStmt.Src) + ', ' +
+        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        '* %' + IntToStr(AStmt.Dst));
+
+    mskGetFieldPtr:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = getelementptr ' +
+        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        ', ' + LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        '* %' + IntToStr(AStmt.Src.Value) +
+        ', i32 0, i32 ' + IntToStr(AStmt.FieldIndex));
+
+    mskUnary:
+      begin
+        Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
+        case AStmt.Op of
+          moNeg:
+            EmitLn('  %' + IntToStr(AStmt.Dst) + ' = sub ' + Ty +
+              ' 0, %' + IntToStr(AStmt.Src.Value));
+          moNot:
+            EmitLn('  %' + IntToStr(AStmt.Dst) + ' = xor ' + Ty +
+              ' %' + IntToStr(AStmt.Src.Value) + ', -1');
+          moTrunc, moZext, moSext, moBitcast, moSIToFP, moFPToSI,
+          moUIToFP, moFPToUI:
+            EmitLn('  %' + IntToStr(AStmt.Dst) + ' = ' +
+              OpcodeStr(AStmt.Op) + ' ' + Ty +
+              ' %' + IntToStr(AStmt.Src.Value) + ' to ' +
+              LlvmTypeName(AStmt.Dst, False));
+          else
+            EmitLn('  ; unary op ' + IntToStr(Ord(AStmt.Op)));
+        end;
+      end;
+
+    mskBinary:
+      begin
+        Ty := LlvmTypeName(AStmt.Lhs.BitWidth, AStmt.Lhs.IsSigned);
+        EmitLn('  %' + IntToStr(AStmt.Dst) + ' = ' +
+          OpcodeStr(AStmt.Op) + ' ' + Ty + ' ' +
+          '%' + IntToStr(AStmt.Lhs.Value) + ', %' +
+          IntToStr(AStmt.Rhs.Value));
+      end;
+
+    mskCall:
+      begin
+        Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
+        if Ty = 'void' then Ty := 'i32';
+        Emit('  %' + IntToStr(AStmt.Dst) + ' = call ' + Ty +
+          ' @' + AStmt.FuncName + '(');
+        for I := 0 to High(AStmt.Args) do
+        begin
+          if I > 0 then Emit(', ');
+          Emit(OpStr(AStmt.Args[I]));
+        end;
+        EmitLn(')');
+      end;
+  end;
 end;
 
 procedure TMirToLlvmTranslator.TranslateTerminator(
   const ATerm: TMirTerminator);
+var
+  I: LongInt;
 begin
   case ATerm.Kind of
     mtkReturn:
@@ -131,14 +253,25 @@ begin
         EmitLn('  ret void')
       else
         EmitLn('  ret i32 %' + IntToStr(ATerm.ReturnValue));
+
     mtkGoto:
       EmitLn('  br label %bb' + IntToStr(ATerm.Target));
+
     mtkIf:
       EmitLn('  br i1 %' + IntToStr(ATerm.Cond) +
         ', label %bb' + IntToStr(ATerm.TrueBlock) +
         ', label %bb' + IntToStr(ATerm.FalseBlock));
+
     mtkSwitch:
-      EmitLn('  switch ; // TODO');
+      begin
+        Emit('  switch i32 %' + IntToStr(ATerm.SwitchValue) +
+          ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
+        for I := 0 to High(ATerm.SwitchCases) do
+          Emit(' i32 ' + IntToStr(ATerm.SwitchCases[I].Value) +
+            ', label %bb' + IntToStr(ATerm.SwitchCases[I].Target));
+        EmitLn(' ]');
+      end;
+
     mtkUnreachable:
       EmitLn('  unreachable');
   end;
@@ -149,7 +282,7 @@ var
   I: LongInt;
 begin
   FOutput := '';
-  EmitLn('; MIR → LLVM IR (np_mir_to_llvm)');
+  EmitLn('; MIR → LLVM IR');
   EmitLn('; Module: ' + FModule.ModuleName);
   EmitLn('');
 
