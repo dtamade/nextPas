@@ -315,6 +315,8 @@ type EParseError
 type EIndexOutOfRangeError
 type EOutOfMemoryError
 type EOutOfMemory
+type EInterruptedError
+type EWouldBlockError
 const ecNone
 const ecInvalidArgument
 const ecNullReference
@@ -539,7 +541,7 @@ for token in \
   "deferred" \
   "not a current phase gate" \
   "TypInfo minimal live unit is unlocked" \
-  "stream-only bootstrap shim" \
+  "Classes compatibility shim" \
   "compatibility-facades.md" \
   "compatibility-matrix.md" \
   "typinfo-minimal-pressure.md"; do
@@ -1229,6 +1231,8 @@ require_token "src/nextpas.core.system.pas" "EParseError = nextpas.core.errors.E
 require_token "src/nextpas.core.system.pas" "EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;"
 require_token "src/nextpas.core.system.pas" "EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;"
 require_token "src/nextpas.core.system.pas" "EOutOfMemory = nextpas.core.errors.EOutOfMemory;"
+require_token "src/nextpas.core.system.pas" "EInterruptedError = nextpas.core.errors.EInterruptedError;"
+require_token "src/nextpas.core.system.pas" "EWouldBlockError = nextpas.core.errors.EWouldBlockError;"
 require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.exception.EConvertError;"
 require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.pas" "ecNone = nextpas.core.errors.ecNone;"
