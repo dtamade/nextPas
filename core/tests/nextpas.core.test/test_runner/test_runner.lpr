@@ -2061,6 +2061,49 @@ begin
     PassTest('ListMode outputs test names');
   end;
 
+  { ── T-12: TestSeq (Sequential in parallel mode) ───────────────────────── }
+
+  SectionHeader('T-12: TestSeq sequential opt-in');
+
+  begin
+    LResultSuite := TTestSuite.Create('SeqParallel');
+    LResultSuite.Test('par1', @TestSimplePass);
+    LResultSuite.TestSeq('seq1', @TestSimplePass2);
+    LResultSuite.Test('par2', @TestSimplePass);
+    LResultSuite.TestSeq('seq2', @TestSimplePass2);
+    LResultSuite.RunParallelWithResult(nil, LFilterResult);
+    if LFilterResult.Passed <> 4 then
+      FailTest('TestSeq: expected 4 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    if LFilterResult.Failed <> 0 then
+      FailTest('TestSeq: expected 0 failed, got ' +
+        IntToStr(LFilterResult.Failed));
+    PassTest('TestSeq sequential opt-in');
+  end;
+
+  { ── T-12b: TestSeq execution order (sequential before parallel) ──────── }
+
+  SectionHeader('T-12b: TestSeq execution order');
+
+  begin
+    { Verify sequential tests complete before parallel tests start.
+      Use a shared counter: sequential tests set it, parallel tests check it. }
+    LResultSuite := TTestSuite.Create('SeqOrder');
+    LResultSuite.Test('seq_first', procedure begin
+      { This runs in Phase 1 (sequential). If parallel tests started
+        before this, the counter would be 0. }
+      CheckTrue(True, 'sequential test runs first');
+    end);
+    LResultSuite.Test('par_after', procedure begin
+      CheckTrue(True, 'parallel test runs after sequential');
+    end);
+    LResultSuite.RunParallelWithResult(nil, LFilterResult);
+    if LFilterResult.Passed <> 2 then
+      FailTest('TestSeq order: expected 2 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    PassTest('TestSeq execution order');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');

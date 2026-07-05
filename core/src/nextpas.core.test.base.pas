@@ -134,6 +134,7 @@ type
     ShouldFailClass: TClass;      { ekShouldFail: expected exception class (nil = any) }
     ShouldFailContains: string;   { ekShouldFail: expected substring in exception message }
     ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
+    Sequential : Boolean;  { true = run serially even in parallel mode (Go t.Parallel() inverse) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;

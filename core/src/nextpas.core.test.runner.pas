@@ -114,6 +114,11 @@ type
       When ShortMode is off, the test runs normally. }
     procedure ShortSkip(const AName: string; AProc: TTestProc);
     procedure ShortSkip(const AName: string; AProc: TTestClosure);
+    { TestSeq: register a test that runs serially even in parallel mode.
+      Go t.Parallel() inverse — use for tests with shared mutable state
+      (DB, file system, global variables) that cannot run concurrently. }
+    procedure TestSeq(const AName: string; AProc: TTestProc);
+    procedure TestSeq(const AName: string; AProc: TTestClosure);
     procedure Skip(const AName: string; const AReason: string = '');
     procedure SetSetup(AProc: TTestProc);
     procedure SetSetup(AProc: TTestClosure);
@@ -750,6 +755,24 @@ var
 begin
   InitClosureEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.TestSeq(const AName: string; AProc: TTestProc);
+var
+  LEntry: TTestEntry;
+begin
+  InitProcEntry(LEntry, AName, AProc);
+  LEntry.Sequential := True;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.TestSeq(const AName: string; AProc: TTestClosure);
+var
+  LEntry: TTestEntry;
+begin
+  InitClosureEntry(LEntry, AName, AProc);
+  LEntry.Sequential := True;
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -1544,7 +1567,26 @@ begin
       to avoid double-counting. See ParallelWorkerProc. }
   end;
 
-  { Use BeginThread to ensure FPC properly initializes per-thread state
+  { Phase 1: Sequential tests — run serially before parallel batch.
+    Go t.Parallel() inverse: tests with shared mutable state (DB, file,
+    global vars) run first, one at a time, before parallel tests start. }
+  for I := 0 to High(Tests) do
+  begin
+    if not Tests[I].Sequential then
+      Continue;
+    if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
+      Continue;
+    if LConfig.ShortMode and Tests[I].ShortSkip then
+      Continue;
+    if (LRecs[I].Pass = nil) then
+      Continue; { filter-excluded }
+    ParallelWorkerProc(@LRecs[I]);
+    { Mark as "already processed" — result is in LResults[I],
+      which the final collection loop will pick up via Name <> ''. }
+  end;
+
+  { Phase 2: Parallel batch dispatch — skip Sequential tests (already done).
+    Use BeginThread to ensure FPC properly initializes per-thread state
     (exception handler chain, threadvar TLS, heap manager).
     Previously platform_thread_create (direct pthread_create) was used,
     which bypasses FPC init and caused intermittent SIGSEGV on thread exit.
@@ -1563,7 +1605,8 @@ begin
     LFirstEligible := -1;
     for I := LBatchStart to High(Tests) do
     begin
-      if IsTestEligible(Tests[I], LConfig, LTagFilter) then
+      if IsTestEligible(Tests[I], LConfig, LTagFilter) and
+         not Tests[I].Sequential then
       begin
         LFirstEligible := I;
         Break;
@@ -1579,6 +1622,8 @@ begin
         Break;
       if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Continue;
+      if Tests[I].Sequential then
+        Continue; { already ran in Phase 1 }
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
       begin
