@@ -229,6 +229,113 @@ begin
   Check(platform_pty_master_fd(LPty) = PtrInt(LPty.FMasterFd), 'master_fd matches');
   platform_pty_close(LPty);
 end;
+
+procedure TestDoubleClose;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  LRc: Int32;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  LRc := platform_pty_open(LSize, LPty);
+  Check(LRc = 0, 'open');
+  Check(platform_pty_close(LPty) = 0, 'first close');
+  // Second close should succeed (no-op since fds are already -1)
+  Check(platform_pty_close(LPty) = 0, 'second close no-op');
+end;
+
+procedure TestResizeAfterClose;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  LRc: Int32;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  LRc := platform_pty_open(LSize, LPty);
+  Check(LRc = 0, 'open');
+  platform_pty_close(LPty);
+
+  LSize.FCols := 120;
+  LRc := platform_pty_resize(LPty, LSize);
+  Check(LRc <> 0, 'resize after close should fail');
+end;
+
+procedure TestSpawnWithEnv;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  LPid, LRc: Int32;
+  LStage: TPlatformPtySpawnStage;
+  LBuf: array[0..255] of AnsiChar;
+  LN: ssize_t;
+  LArgv: array[0..3] of PAnsiChar;
+  LEnvp: array[0..2] of PAnsiChar;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  LRc := platform_pty_open(LSize, LPty);
+  Check(LRc = 0, 'open');
+
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'echo $NEXTPAS_TEST_VAR';
+  LArgv[3] := nil;
+  LEnvp[0] := 'NEXTPAS_TEST_VAR=hello_env';
+  LEnvp[1] := nil;
+  LRc := platform_pty_spawn(LPty, '/bin/sh', @LArgv[0], @LEnvp[0], nil, LPid, LStage);
+  Check(LRc = 0, 'spawn with env');
+  Check(LPid > 0, 'pid > 0');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LN := read(LPty.FMasterFd, @LBuf[0], 255);
+  Check(LN > 0, 'should read output');
+  Check(Pos('hello_env', string(PAnsiChar(@LBuf[0]))) > 0, 'output contains env var');
+
+  platform_pty_close(LPty);
+  waitpid(LPid, nil, 0);
+end;
+
+procedure TestSpawnLargeOutput;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  LPid, LRc: Int32;
+  LStage: TPlatformPtySpawnStage;
+  LBuf: array[0..4095] of AnsiChar;
+  LN: ssize_t;
+  LArgv: array[0..3] of PAnsiChar;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  LRc := platform_pty_open(LSize, LPty);
+  Check(LRc = 0, 'open');
+
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'for i in $(seq 1 20); do echo "line_$i"; done';
+  LArgv[3] := nil;
+  LRc := platform_pty_spawn(LPty, '/bin/sh', @LArgv[0], nil, nil, LPid, LStage);
+  Check(LRc = 0, 'spawn large output');
+  Check(LPid > 0, 'pid > 0');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LN := read(LPty.FMasterFd, @LBuf[0], 4095);
+  Check(LN > 0, 'should read output');
+  Check(Pos('line_1', string(PAnsiChar(@LBuf[0]))) > 0, 'output contains line_1');
+
+  platform_pty_close(LPty);
+  waitpid(LPid, nil, 0);
+end;
 {$ELSE}
 function NeverRunShapeOnly: Boolean;
 begin
@@ -271,6 +378,10 @@ begin
   T.Test('TestSpawnCwd', @TestSpawnCwd);
   T.Test('TestMasterReadWrite', @TestMasterReadWrite);
   T.Test('TestMasterFd', @TestMasterFd);
+  T.Test('TestDoubleClose', @TestDoubleClose);
+  T.Test('TestResizeAfterClose', @TestResizeAfterClose);
+  T.Test('TestSpawnWithEnv', @TestSpawnWithEnv);
+  T.Test('TestSpawnLargeOutput', @TestSpawnLargeOutput);
 {$ELSE}
   T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}
