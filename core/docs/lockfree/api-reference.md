@@ -1,6 +1,6 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-05
+> 更新: 2026-07-06
 
 ## 原子类型 (nextpas.core.atomic)
 
@@ -201,7 +201,10 @@ type
 
     // 高级操作
     procedure ForEach(const ACallback: TForEachCallback);
+    procedure ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
     function GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+    function GetOrInsertFn(const AKey: TKey; const ACompute: TComputeCallback): TGetOrInsertResult;
+    function GetOrUpdate(const AKey: TKey; const ADefault: TValue; const AUpdate: TUpdateCallback): TGetOrInsertResult;
     procedure Clear;
   end;
 ```
@@ -222,7 +225,10 @@ type
 | Contains | O(1) amortized | ✅ | 检查键是否存在 |
 | Count | O(shards) | ✅ | 逐 shard 加锁累加 |
 | ForEach | O(n) | ✅ | 逐 shard 遍历，持锁期间回调 |
+| ForEachCtx | O(n) | ✅ | 带上下文的逐 shard 遍历 |
 | GetOrInsert | O(1) amortized | ✅ | 原子获取或插入，仅加锁一次 |
+| GetOrInsertFn | O(1) amortized | ✅ | 延迟计算：仅在键不存在时调用 |
+| GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
 **性能特征**（vs TConcurrentHashMap）:
@@ -250,12 +256,26 @@ begin
     // ForEach 遍历
     LMap.ForEach(@MyCallback);
 
+    // ForEachCtx 带上下文遍历
+    LMap.ForEachCtx(@MyCtxCallback, @MyContext);
+
     // GetOrInsert 原子操作
     LRes := LMap.GetOrInsert('key2', 200);
     if LRes.Existed then
       WriteLn('Existing: ', LRes.Value)
     else
       WriteLn('Inserted: ', LRes.Value);
+
+    // GetOrInsertFn 延迟计算
+    LRes := LMap.GetOrInsertFn('key3', function(const AKey: AnsiString): Integer begin
+      Result := Length(AKey) * 10;  // 仅在键不存在时调用
+    end);
+
+    // GetOrUpdate 原子更新
+    LRes := LMap.GetOrUpdate('counter', 0, function(const AOld: Integer): Integer begin
+      Result := AOld + 1;  // 读取旧值，返回新值
+    end);
+    WriteLn('Counter: ', LRes.Value);
 
     // 清空
     LMap.Clear;
@@ -270,6 +290,84 @@ end;
 - 不可在 ForEach 回调中调用本 HashMap 的其他方法（死锁）
 - Count 返回近似值（逐 shard 加锁）
 - Remove 使用标记删除（esDeleted），不会 compact
+
+---
+
+## Hazard Pointer (nextpas.core.lockfree.hazard)
+
+```pascal
+type
+  TLockFreeReclaimProc = procedure(AData: Pointer; AUserData: Pointer);
+
+  THazardThread = record
+    // 每线程注册的 hazard 指针
+  end;
+
+  THazardDomain = class
+    constructor Create;
+    destructor Destroy; override;
+    function RegisterThread: THazardThread;
+    procedure UnregisterThread(var AThread: THazardThread);
+    procedure Protect(AThread: THazardThread; APtr: Pointer);
+    procedure Clear(AThread: THazardThread);
+    procedure Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer = nil);
+    procedure Collect(AThread: THazardThread);
+    function GlobalRetiredCount: Integer;
+  end;
+```
+
+**设计特点**:
+- 基于 Michael & Scott Hazard Pointer 算法
+- 每线程独立的 hazard 指针，无竞争
+- 延迟回收：退休节点在 Collect 时批量处理
+- 安全约束：Retire 不遍历线程链表（避免并发修改）
+
+**使用示例**:
+
+```pascal
+var
+  LDomain: THazardDomain;
+  LThread: THazardThread;
+  LData: Pointer;
+begin
+  LDomain := THazardDomain.Create;
+  try
+    // 注册线程
+    LThread := LDomain.RegisterThread;
+    try
+      // 保护指针
+      LDomain.Protect(LThread, LData);
+      try
+        // 安全访问 LData
+        DoSomething(LData);
+      finally
+        LDomain.Clear(LThread);
+      end;
+
+      // 退休旧指针
+      LDomain.Retire(LData, @MyReclaimProc, nil);
+
+      // 触发回收（显式调用）
+      LDomain.Collect(LThread);
+    finally
+      LDomain.UnregisterThread(LThread);
+    end;
+  finally
+    LDomain.Free;
+  end;
+end;
+```
+
+**回收流程**:
+1. `Protect`: 设置线程的 hazard 指针（moRelease）
+2. `Clear`: 清除线程的 hazard 指针（moRelease）
+3. `Retire`: 将指针加入退休链表（CAS moRelease）
+4. `Collect`: 检查所有线程的 hazard 指针，回收未被保护的节点
+
+**安全约束**:
+- `Collect` 必须在 `UnregisterThread` 前调用（遍历线程链表）
+- `Retire` 不调用 `Collect`（避免并发修改链表）
+- 退休节点的回收回调必须幂等（可能被多次调用）
 
 ---
 

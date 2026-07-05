@@ -21,13 +21,16 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.stack`    | `TLockFreeStack<T>`，有界 stack，内部使用 tagged index 约束 ABA-sensitive top/free-list 复用风险。 |
 | `nextpas.core.lockfree.deque`    | `TWorkStealingDeque<T>`，有界 single-owner push/pop + multi-thief steal deque。                    |
 | `nextpas.core.lockfree.ebr`      | `TEbrDomain` + `TEbrGuard`，保守 epoch-based reclamation 域。                                      |
+| `nextpas.core.lockfree.hazard`   | `THazardDomain` + `THazardThread`，Hazard Pointer 内存回收域。                                     |
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
 | `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
+| `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，基于分片锁的并发 HashMap。                                        |
 | `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
 
 `nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
-`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, and `TSpmcQueue<T>` so consumers
-can use the public lockfree surface without importing implementation submodules directly.
+`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
+`THazardDomain`, `TEbrDomain`, and `TEbrGuard` so consumers can use the public lockfree surface without
+importing implementation submodules directly.
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
 bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
@@ -155,6 +158,85 @@ count reclamation；安全边界依赖 single-consumer contract，以及销毁�
 **扩展警告**：如果未来将 EBR 推广到 "retired node 对未来进入者仍可达" 的结构，必须实现完整
 epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-check + 无 epoch 推进）仅适用于
 "retire 前已从 root set unlink" 的场景。
+
+## ShardedHashMap
+
+`TShardedHashMap<TKey, TValue>` 是基于分片锁的并发 HashMap。设计目标是高频低竞争场景下的最优性能。
+
+**设计特点**:
+- 16 个分片，每个分片使用 `AtomicExchange32` 自旋锁
+- 开放寻址 + 线性探测，负载因子 3/4
+- 自动扩容（2x）
+- 仅支持 unmanaged 类型
+
+**API 概览**:
+
+| 方法 | 复杂度 | 并发安全 | 说明 |
+|------|--------|----------|------|
+| Insert | O(1) amortized | ✅ | 插入或覆盖 |
+| Find | O(1) amortized | ✅ | 查找并返回值 |
+| Remove | O(1) amortized | ✅ | 删除键（标记 esDeleted） |
+| Contains | O(1) amortized | ✅ | 检查键是否存在 |
+| Count | O(shards) | ✅ | 逐 shard 加锁累加 |
+| ForEach | O(n) | ✅ | 逐 shard 遍历，持锁期间回调 |
+| ForEachCtx | O(n) | ✅ | 带上下文的逐 shard 遍历 |
+| GetOrInsert | O(1) amortized | ✅ | 原子获取或插入，仅加锁一次 |
+| GetOrInsertFn | O(1) amortized | ✅ | 延迟计算：仅在键不存在时调用 |
+| GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
+| Clear | O(n) | ✅ | 逐 shard 清空 |
+
+**性能特征**（vs TConcurrentHashMap）:
+
+| 场景 | TShardedHashMap | TConcurrentHashMap |
+|------|-----------------|-------------------|
+| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
+| 内存管理 | 无引用计数 | 有引用计数 |
+| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+
+**使用场景**:
+- 高频读写、低竞争的缓存
+- 统计计数器（GetOrUpdate）
+- 延迟初始化（GetOrInsertFn）
+
+## Hazard Pointer
+
+`THazardDomain` 是基于 Michael & Scott 算法的 Hazard Pointer 内存回收域。与 EBR 互补，适用于需要精确保护特定指针的场景。
+
+**设计特点**:
+- 每线程独立的 hazard 指针，无竞争
+- 延迟回收：退休节点在 Collect 时批量处理
+- 安全约束：Retire 不遍历线程链表（避免并发修改）
+
+**API 概览**:
+
+| 方法 | 说明 |
+|------|------|
+| RegisterThread | 注册线程，返回 THazardThread |
+| UnregisterThread | 注销线程 |
+| Protect | 设置线程的 hazard 指针 |
+| Clear | 清除线程的 hazard 指针 |
+| Retire | 将指针加入退休链表 |
+| Collect | 回收未被保护的退休节点 |
+
+**回收流程**:
+1. `Protect`: 设置线程的 hazard 指针（moRelease）
+2. `Clear`: 清除线程的 hazard 指针（moRelease）
+3. `Retire`: 将指针加入退休链表（CAS moRelease）
+4. `Collect`: 检查所有线程的 hazard 指针，回收未被保护的节点
+
+**安全约束**:
+- `Collect` 必须在 `UnregisterThread` 前调用（遍历线程链表）
+- `Retire` 不调用 `Collect`（避免并发修改链表）
+- 退休节点的回收回调必须幂等（可能被多次调用）
+
+**与 EBR 的对比**:
+
+| 特性 | EBR | Hazard Pointer |
+|------|-----|----------------|
+| 保护粒度 | 整个临界区 | 特定指针 |
+| 内存开销 | 低（每线程 3 个 epoch） | 中（每线程 N 个 hazard 指针） |
+| 回收延迟 | 低（epoch 推进即回收） | 高（需显式 Collect） |
+| 适用场景 | 读多写少、临界区短 | 需要精确保护特定指针 |
 
 ## Close/Destroy discipline
 
