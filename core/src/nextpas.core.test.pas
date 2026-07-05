@@ -50,11 +50,8 @@ type
   ETestSkipped = nextpas.core.test.base.ETestSkipped;
   TTestEntryKind = nextpas.core.test.base.TTestEntryKind;
   TTestEntry = nextpas.core.test.base.TTestEntry;
-  TBenchProc = nextpas.core.test.base.TBenchProc;
   TBenchContext = nextpas.core.test.base.TBenchContext;
-  PBenchContext = nextpas.core.test.base.PBenchContext;
   TBenchResult = nextpas.core.test.base.TBenchResult;
-  TBenchResults = nextpas.core.test.base.TBenchResults;
   TAnsiMode = nextpas.core.test.config.TAnsiMode;
   TConfigKey = nextpas.core.test.config.TConfigKey;
   TConfigKeys = nextpas.core.test.config.TConfigKeys;
@@ -76,7 +73,6 @@ const
   ekSkipped = nextpas.core.test.base.ekSkipped;
   ekTableTest = nextpas.core.test.base.ekTableTest;
   ekShouldFail = nextpas.core.test.base.ekShouldFail;
-  ekBench    = nextpas.core.test.base.ekBench;
   amAuto = nextpas.core.test.config.amAuto;
   amOn = nextpas.core.test.config.amOn;
   amOff = nextpas.core.test.config.amOff;

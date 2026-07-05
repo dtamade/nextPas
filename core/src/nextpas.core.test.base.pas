@@ -96,7 +96,6 @@ type
   end;
 
   TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail,
-    ekBench);
 
   TBenchContext = record
     N        : Integer;  { iterations — set by framework, user loop runs N times }
@@ -104,8 +103,6 @@ type
     AllocBytes: Int64;   { set by user (or framework) if --benchmem }
     AllocCount: Int64;   { set by user (or framework) if --benchmem }
   end;
-  PBenchContext = ^TBenchContext;
-  TBenchProc = procedure(BC: PBenchContext);
 
   TBenchResult = record
     Name      : string;
@@ -115,7 +112,6 @@ type
     AllocBytes: Int64;    { bytes per op (0 if not tracked) }
     AllocCount: Int64;    { allocs per op (0 if not tracked) }
   end;
-  TBenchResults = array of TBenchResult;
 
   TTestEntry = record
     Name       : string;
@@ -140,7 +136,6 @@ type
     ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
-    BenchProc  : TBenchProc;    { ekBench: benchmark function }
   end;
 
 { ── Internal State ───────────────────────────────────────────────────────── }
@@ -180,7 +175,6 @@ procedure ClearEntry(out AEntry: TTestEntry);
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
   { Construct a fully-initialized TTestResult in one call. }
-function MakeBenchResult(const AName: string; AN: Integer;
   ATotalNs: Int64; AAllocBytes: Int64 = 0; AAllocCount: Int64 = 0): TBenchResult;
   { Construct a TBenchResult with computed NsPerOp. }
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
@@ -287,7 +281,6 @@ begin
   AEntry.ShortSkip   := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
-  AEntry.BenchProc   := nil;
 end;
 
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
@@ -300,19 +293,7 @@ begin
   Result.CapturedLog := nil;
 end;
 
-function MakeBenchResult(const AName: string; AN: Integer;
-  ATotalNs: Int64; AAllocBytes: Int64; AAllocCount: Int64): TBenchResult;
-begin
-  Result.Name       := AName;
-  Result.N          := AN;
-  Result.TotalNs    := ATotalNs;
-  if AN > 0 then
-    Result.NsPerOp  := ATotalNs div AN
-  else
-    Result.NsPerOp  := 0;
-  Result.AllocBytes := AAllocBytes;
-  Result.AllocCount := AAllocCount;
-end;
+
 
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);

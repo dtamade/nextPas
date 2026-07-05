@@ -89,6 +89,14 @@ type
   procedure EnableGlobalMemoryTracking;
 
   {**
+   * 检测 heaptrc 是否已启用
+   *
+   * heaptrc (FPC -gh) 会 hook 内存管理器。如果 memtrack 也 hook，
+   * 每次分配会经过两层追踪，开销 10-20x，可能导致 OOM。
+   *}
+  function IsHeaptrcEnabled: Boolean;
+
+  {**
    * 禁用全局内存跟踪
    *}
   procedure DisableGlobalMemoryTracking;
@@ -281,8 +289,24 @@ begin
   Result := GGlobalTracker;
 end;
 
+function IsHeaptrcEnabled: Boolean;
+{$ifdef FPC}
+var
+  LHeapTrcUnit: Pointer; external name 'heaptrc';
+begin
+  Result := Assigned(LHeapTrcUnit);
+end;
+{$else}
+begin
+  Result := False;
+end;
+{$endif}
+
 procedure EnableGlobalMemoryTracking;
 begin
+  { OOM guard: 如果 heaptrc 已激活，跳过 memtrack，避免双重追踪 OOM }
+  if IsHeaptrcEnabled then
+    Exit;
   if GTrackingEnabled then Exit;
 
   // CAS try-lock: 防止并发调用
