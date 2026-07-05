@@ -21,6 +21,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.5**: A-01 runner.pas split — CLI 解析提取到 `runner.cli.pas` (373行), runner.pas 2336→1980行; C-02 `platform_thread_timedjoin` 替代 10ms 轮询; 所有 audit findings 全清
 - **v6.6**: Usability fixes — F-03 ToBeSame 消息修正, F-06 ToNotBeNear copy 模式, F-07 Mock.ResetAll, +4 回归测试
 - **v6.7**: Usability — F-04 注释修正, F-02 CheckNearRel/ToBeNearRel 相对容差, F-03 ExpectStr 别名, F-12 /dev/urandom shuffle 种子, F-13 GetTopSlowest 优化, F-05 Mock VerifyAll + 错误消息改进, F-06 CheckSnapshot 快照测试, review: ToBeInRangeD epsilon + TMockValues export
+- **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 
 ## 竞品对比
 
@@ -252,3 +253,4 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
   - `--benchmem`: 显示每次操作的内存分配 (B/op, allocs/op)
   - `FormatBenchLine`: ANSI 着色输出 `name N ns/op`
   - 新增 1 个 benchmark 测试 (Addition + StringConcat)
+- **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
