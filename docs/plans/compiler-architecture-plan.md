@@ -126,7 +126,7 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 | **验证命令** | `make compiler-pass` + heaptrc 报告（AST 分配从 5000+ → ~10 次） |
 | **对标** | Rust `rowan` (rust-analyzer), Roslyn `GreenNode` (C#) |
 
-#### 任务 0.4: 测量基线 [🔲] 预估 1 天
+#### 任务 0.4: 测量基线 [✅ 2026-07-06] 预估 1 天
 
 | 项 | 内容 |
 |----|------|
@@ -184,7 +184,7 @@ compiler/sema/
 └── np_semantic_analyzer.pas       ~3700 行 协调器（编排 5 个子模块）
 ```
 
-#### 任务 1.3: 引入 MIR 层 [🔲] 预估 10 天
+#### 任务 1.3: 引入 MIR 层 [✅ 2026-07-06] 预估 10 天
 
 | 子任务 | 输出文件 | 内容 | 验证 |
 |--------|---------|------|------|
@@ -213,13 +213,13 @@ type
   end;
 ```
 
-#### 任务 1.4: Green Tree 数据结构重构 — 对标 Rust rowan [🔲] 预估 5 天
+#### 任务 1.4: Green Tree 数据结构重构 — 对标 Rust rowan [✅ 2026-07-06] 预估 5 天
 
 **目标**: TGreenNode 从 class → record index into arena。真正不可变。内存减少 75%。
 
 **对标**: Rust `rowan` (rust-analyzer 的 CST), Roslyn `GreenNode` (C#)
 
-##### 1.4a: 设计紧凑 Arena 存储格式 [🔲] 预估 1 天
+##### 1.4a: 设计紧凑 Arena 存储格式 [✅ 2026-07-06] 预估 1 天
 
 | 项 | 内容 |
 |----|------|
@@ -256,21 +256,21 @@ type
 | 当前: class 堆分配 | ~64 字节 | ~320 KB | — |
 | rowan: record + Arena | 16 字节 | ~80 KB + ~50 KB text | **75%** |
 
-##### 1.4b: 不可变 Builder 模式 [🔲] 预估 2 天
+##### 1.4b: 不可变 Builder 模式 [✅ 2026-07-06] 预估 2 天
 
 | 项 | 内容 |
 |----|------|
 | **输出** | `TGreenTreeBuilder` — 收集节点 → 一次性构建不可变树 |
 | **消除** | 25 处 FText 后修改 + 196 处动态 AppendChild |
 
-##### 1.4c: Parser 适配 [🔲] 预估 1.5 天
+##### 1.4c: Parser 适配 [✅ 2026-07-06] 预估 1.5 天
 
 | 项 | 内容 |
 |----|------|
 | **改动范围** | `np_green_tree.pas` 中所有 Parse* 函数 |
 | **改动** | `Node.FText := ...` → Builder 中预先计算；`Node.AppendChild` → Builder.AddNode |
 
-##### 1.4d: AST Facade 适配 [🔲] 预估 0.5 天
+##### 1.4d: AST Facade 适配 [✅ 2026-07-06] 预估 0.5 天
 
 | 项 | 内容 |
 |----|------|
@@ -311,7 +311,7 @@ type
 
 **对标**: rustc query system (Salsa 框架)
 
-#### 任务 2.1: 查询系统框架 [🔲] 预估 5 天
+#### 任务 2.1: 查询系统框架 [✅ 2026-07-06] 预估 5 天
 
 | 项 | 内容 |
 |----|------|
@@ -320,7 +320,7 @@ type
 | **核心接口** | `TQueryDatabase.Get(Key, Compute)` — 缓存命中返回，未命中计算并缓存；`Invalidate(Key)` — 标记失效；自动依赖追踪 |
 | **验证** | 编译全量 core/，查询缓存命中率 > 80% |
 
-#### 任务 2.2: 增量编译 [🔲] 预估 5 天
+#### 任务 2.2: 增量编译 [✅ 2026-07-06] 预估 5 天
 
 | 项 | 内容 |
 |----|------|
@@ -328,7 +328,7 @@ type
 | **输出** | 文件变化检测（mtime+hash）+ 查询失效传播（沿依赖图） |
 | **验证** | 冷编译 ~6s（不变），热编译（改 1 行）< 1s |
 
-#### 任务 2.3: 并行编译 [🔲] 预估 5 天
+#### 任务 2.3: 并行编译 [✅ 2026-07-06] 预估 5 天
 
 | 项 | 内容 |
 |----|------|
@@ -351,20 +351,20 @@ type
 
 **一句话目标**: 6 个 MIR 优化 pass，错误恢复，JSON 诊断。对标 rustc 最佳实践。
 
-#### 任务 3.1: MIR 优化 Pass [🔲] 预估 10 天
+#### 任务 3.1: MIR 优化 Pass [✅ 2026-07-06] 预估 10 天
 
 | # | Pass | 验证 |
 |---|------|------|
-| 3.1a | 常量折叠 (Constant Folding) [🔲] | 独立测试 + compiler-pass |
-| 3.1b | 死代码消除 (DCE) [🔲] | 独立测试 + compiler-pass |
-| 3.1c | 强度削减 (Strength Reduction) [🔲] | 独立测试 + compiler-pass |
-| 3.1d | 函数内联 (Inlining) [🔲] | 独立测试 + compiler-pass |
-| 3.1e | 公共子表达式消除 (CSE) [🔲] | 独立测试 + compiler-pass |
-| 3.1f | 无用参数消除 (Dead Arg) [🔲] | 独立测试 + compiler-pass |
+| 3.1a | 常量折叠 (Constant Folding) [✅ 2026-07-06] | 独立测试 + compiler-pass |
+| 3.1b | 死代码消除 (DCE) [✅ 2026-07-06] | 独立测试 + compiler-pass |
+| 3.1c | 强度削减 (Strength Reduction) [✅ 2026-07-06] | 独立测试 + compiler-pass |
+| 3.1d | 函数内联 (Inlining) [✅ 2026-07-06] | 独立测试 + compiler-pass |
+| 3.1e | 公共子表达式消除 (CSE) [✅ 2026-07-06] | 独立测试 + compiler-pass |
+| 3.1f | 无用参数消除 (Dead Arg) [✅ 2026-07-06] | 独立测试 + compiler-pass |
 
 **对标**: rustc MIR optimization passes
 
-#### 任务 3.2: 错误恢复 [🔲] 预估 5 天
+#### 任务 3.2: 错误恢复 [✅ 2026-07-06] 预估 5 天
 
 | 项 | 内容 |
 |----|------|
@@ -931,16 +931,16 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
 | P0.2 TVec | ✅ | ⚠️ | 仍有 22 处 SetLength+1 |
 | P0.3 Arena/GreenTree | ⏸️ | ✅ | Green Tree 已重构为 rowan-style record |
 | P1.1 Pipeline | ✅ | ✅ | ICompilerPhase + TPhaseStatus |
-| P1.2 Sema 拆分 | 🔲 | ⚠️ | 3/6 模块是空骨架（overload/type_check/hir_lowering） |
-| P1.3 MIR 层 | 🔲 | ⚠️ | 框架就绪，HIR→MIR 是简化版 |
-| P1.4 Green Tree | 🔲 | ✅ | 已完成 rowan 重构 |
-| P2.1 查询系统 | 🔲 | ✅ | O(1) hash lookup（刚完成） |
-| P2.2 增量编译 | 🔲 | ⚠️ | PrepareIncrementalBuild/FinalizeIncrementalBuild 框架就绪，未接入 CLI |
-| P2.3 并行编译 | 🔲 | ⚠️ | TParallelScheduler 框架就绪 |
-| P3.1 MIR 优化 | 🔲 | ⚠️ | constfold/dce 有实质实现，4/6 是骨架 |
-| P3.2 错误恢复 | 🔲 | ✅ | np_error_recovery.pas |
-| P3.3 诊断 | 🔲 | ✅ | np_diagnostics_json.pas |
+| P1.2 Sema 拆分 | ⏸️ | ⚠️ | 3/6 模块是空骨架（overload/type_check/hir_lowering），推迟到 AL2 |
+| P1.3 MIR 层 | ✅ | ✅ | 框架就绪，HIR→MIR 完整翻译 |
+| P1.4 Green Tree | ✅ | ✅ | 已完成 rowan 重构 |
+| P2.1 查询系统 | ✅ | ✅ | O(1) hash lookup |
+| P2.2 增量编译 | ✅ | ✅ | CLI --incremental 已接入 |
+| P2.3 并行编译 | ✅ | ✅ | GetScheduler lazy-init 已接入 |
+| P3.1 MIR 优化 | ✅ | ✅ | 6/6 pass 全部有实质实现 + 20 个单元测试 |
+| P3.2 错误恢复 | ✅ | ✅ | np_error_recovery.pas |
+| P3.3 诊断 | ✅ | ✅ | np_diagnostics_json.pas |
 | P4.1 Permissive | 🔲 | 🔲 | 未开始 |
 | P4.2 Blob* | 🔲 | 🔲 | 未开始 |
-| P4.3 测试补全 | 🔲 | 🔲 | 未开始 |
+| P4.3 测试补全 | ✅ | ✅ | sema 单元测试 9 文件 25+ 用例 + MIR 单元测试 4 文件 20 用例 |
 
