@@ -61,7 +61,9 @@ uses
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
   nextpas.core.mem.pool,
-  nextpas.core.mem.pool.allocator;
+  nextpas.core.mem.pool.allocator,
+  nextpas.core.mem.span,
+  nextpas.core.mem.central;
 
 type
   // === 基础类型 ===
@@ -130,6 +132,11 @@ type
   // === 容器 ===
   TRingBuffer = nextpas.core.mem.ring_buffer.TRingBuffer;
 
+  // === Span/Central (高级构建块) ===
+  TSpan = nextpas.core.mem.span.TSpan;
+  TCentralPool = nextpas.core.mem.central.TCentralPool;
+  TCentralSpanEntry = nextpas.core.mem.central.TCentralSpanEntry;
+
   // === 内存映射 ===
   TMemoryMap = nextpas.core.mem.memory_map.TMemoryMap;
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
@@ -154,6 +161,7 @@ function CreateArenaAllocator(ACapacity: SizeUInt): IAllocator;
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
 procedure SecureZeroString(var AStr: AnsiString); inline;
+procedure SecureZeroUnicodeString(var AStr: UnicodeString); inline;
 
 implementation
 
@@ -218,6 +226,11 @@ end;
 procedure SecureZeroString(var AStr: AnsiString);
 begin
   nextpas.core.mem.secure.SecureZeroString(AStr);
+end;
+
+procedure SecureZeroUnicodeString(var AStr: UnicodeString);
+begin
+  nextpas.core.mem.secure.SecureZeroUnicodeString(AStr);
 end;
 
 end.

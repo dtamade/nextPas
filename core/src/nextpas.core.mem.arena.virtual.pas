@@ -588,6 +588,19 @@ begin
     ZeroMem(Result, aSize);
 end;
 
+{**
+ * AllocUnsafe - 热路径快速分配（无清零）
+ *
+ * @desc 不清零、不检查页面提交状态的快速分配路径。
+ *       仅用于页面已提交的热路径中，不能在 ResetHard 后立即使用。
+ *
+ * @precondition 页面已通过 Alloc/AllocZeroed 或 CommitPages 提交
+ * @precondition aSize > 0
+ * @precondition 剩余容量 >= aSize
+ *
+ * @see Alloc (安全路径，自动提交页面)
+ * @see ResetHard (会 decommit 所有页面，之后不能用 AllocUnsafe)
+ *}
 function TVirtualArena.AllocUnsafe(aSize: SizeUInt): Pointer;
 var
   LNewEnd: PtrUInt;

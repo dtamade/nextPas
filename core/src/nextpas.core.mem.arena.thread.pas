@@ -56,7 +56,18 @@ type
    *      LMgr.Free;
    *    end;
    *}
-  TThreadArenaManager = class
+  {**
+ * TThreadArenaManager - Thread-local arena manager with pool recycling
+ *
+ * @desc 管理线程本地 Arena 的创建和回收，使用池化减少分配开销。
+ *
+ * @warning 当前限制：每个线程只支持一个活跃的 TThreadArenaManager 实例。
+ *          如果创建第二个 manager，GActiveManager 被覆盖，第一个 manager 的
+ *          线程退出回调将无法正确归还 arena。
+ *
+ * @see TThreadArena
+ *}
+TThreadArenaManager = class
   private
     FConfig: TThreadArenaConfig;
     FPool: array of TLocalArena;

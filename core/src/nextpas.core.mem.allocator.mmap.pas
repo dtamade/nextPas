@@ -190,6 +190,18 @@ begin
   end;
 end;
 
+{**
+ * FreeLocked - 释放内存块并合并相邻空闲块
+ *
+ * @desc 释放指定指针对应的内存块，然后合并相邻的空闲块。
+ *
+ * @note 当前实现执行两次全扫描：
+ *   1. 合并相邻空闲块 (O(n))
+ *   2. 重建空闲链表 (O(n))
+ *   总复杂度 O(n)，n 是总块数。对于大量小分配的场景，性能退化严重。
+ *
+ * @see AllocateLocked
+ *}
 procedure TMemoryMapAllocator.FreeLocked(APtr: Pointer);
 var
   LHeaderOffset: UInt64;

@@ -229,6 +229,91 @@ begin
   end;
 end;
 
+{ NEW-025: 大分配 (>4KB) 边界测试 }
+procedure TestLargeAllocation;
+var
+  LAlloc: TGuardAllocator;
+  LPtr: PByte;
+  LI: Int32;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    { 16KB 分配 — 跨越多个页面 }
+    LPtr := PByte(LAlloc.GetMem(16384));
+    Check(LPtr <> nil, 'GetMem(16384) returns non-nil');
+    { 写入全部内容验证内存有效 }
+    for LI := 0 to 16383 do
+      LPtr[LI] := Byte(LI and $FF);
+    { 验证数据完整性 }
+    for LI := 0 to 16383 do
+      Check(LPtr[LI] = Byte(LI and $FF), 'data at ' + IntToStr(LI));
+    LAlloc.FreeMem(LPtr);
+    WriteLn('PASS: large allocation (16KB)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ NEW-025: 多次大分配释放交错测试 }
+procedure TestMultipleLargeAllocs;
+var
+  LAlloc: TGuardAllocator;
+  LPtrs: array[0..7] of Pointer;
+  LI: Int32;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    { 8 个 8KB 分配 }
+    for LI := 0 to 7 do
+    begin
+      LPtrs[LI] := LAlloc.GetMem(8192);
+      Check(LPtrs[LI] <> nil, 'alloc #' + IntToStr(LI));
+      FillChar(LPtrs[LI]^, 8192, Byte(LI));
+    end;
+    { 释放偶数，保留奇数 }
+    for LI := 0 to 7 do
+      if LI mod 2 = 0 then
+        LAlloc.FreeMem(LPtrs[LI]);
+    { 重新分配偶数 }
+    for LI := 0 to 7 do
+      if LI mod 2 = 0 then
+      begin
+        LPtrs[LI] := LAlloc.GetMem(8192);
+        Check(LPtrs[LI] <> nil, 're-alloc #' + IntToStr(LI));
+      end;
+    { 全部释放 }
+    for LI := 0 to 7 do
+      LAlloc.FreeMem(LPtrs[LI]);
+    WriteLn('PASS: multiple large allocs interleaved');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+{ NEW-025: 无效指针 FreeMem 检测 }
+procedure TestFreeInvalidPointer;
+var
+  LAlloc: TGuardAllocator;
+  LRaised: Boolean;
+  LStackVar: array[0..63] of Byte;
+begin
+  LAlloc := TGuardAllocator.Create;
+  try
+    { 释放栈指针（不是 guard allocator 分配的）→ 应抛出异常 }
+    LRaised := False;
+    try
+      LAlloc.FreeMem(@LStackVar[0]);
+    except
+      on E: EAllocError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'free stack pointer raises EAllocError');
+    WriteLn('PASS: free invalid pointer detected');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 { ── Main ── }
 
 begin
@@ -244,6 +329,9 @@ begin
   T.Test('double_free_detection', @TestDoubleFreeDetection);
   T.Test('realloc_nil', @TestReallocNil);
   T.Test('realloc_wild_pointer', @TestReallocWildPointer);
+  T.Test('large_allocation_16KB (NEW-025)', @TestLargeAllocation);
+  T.Test('multiple_large_allocs (NEW-025)', @TestMultipleLargeAllocs);
+  T.Test('free_invalid_pointer (NEW-025)', @TestFreeInvalidPointer);
 
   T.Run;
   T.Summary;
