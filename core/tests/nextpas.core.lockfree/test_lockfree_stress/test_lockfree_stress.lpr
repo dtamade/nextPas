@@ -25,9 +25,11 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 var
   T: TTestSuite;
+  GHashMapComputeCount: Int32;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -1608,6 +1610,78 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 14: HashMap GetOrInsertFn concurrent stress              }
+{ 4 threads, each inserting 1000 keys via GetOrInsertFn         }
+{ Verifies: no duplicates, all keys present, compute called     }
+{ ============================================================ }
+
+const
+  HASHMAP_STRESS_THREADS = 4;
+  HASHMAP_STRESS_PER_THREAD = 1000;
+
+var
+  GHashMapStressMap: TIntIntMap;
+
+function HashMapStressCompute(const AKey: Integer): Integer;
+begin
+  InterlockedIncrement(GHashMapComputeCount);
+  Result := AKey * 3;
+end;
+
+function HashMapStressWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_STRESS_PER_THREAD - 1 do
+  begin
+    LRes := GHashMapStressMap.GetOrInsertFn(LI, @HashMapStressCompute);
+    Check(not LRes.Existed, 'HashMap stress: key ' + IntToStr(LI) + ' must be first insert');
+    CheckEqual(Int64(LI * 3), Int64(LRes.Value), 'HashMap stress: value for key ' + IntToStr(LI));
+  end;
+end;
+
+procedure TestHashMapGetOrInsertFnConcurrent;
+var
+  LHandles: array[0..HASHMAP_STRESS_THREADS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+  LV: Integer;
+begin
+  GHashMapStressMap := TIntIntMap.Create;
+  GHashMapComputeCount := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to HASHMAP_STRESS_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapStressWorker,
+        Pointer(PtrInt(LI * HASHMAP_STRESS_PER_THREAD + 1)),
+        'HashMap stress worker ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap stress worker');
+
+    CheckEqual(Int64(HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD),
+      Int64(GHashMapStressMap.Count), 'HashMap stress: total count');
+    CheckEqual(Int64(HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD),
+      Int64(GHashMapComputeCount), 'HashMap stress: compute called once per key');
+
+    // Verify all values
+    for LI := 1 to HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD do
+    begin
+      Check(GHashMapStressMap.Find(LI, LV), 'HashMap stress: Find key ' + IntToStr(LI));
+      CheckEqual(Int64(LI * 3), Int64(LV), 'HashMap stress: value for key ' + IntToStr(LI));
+    end;
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap stress worker');
+    GHashMapStressMap.Free;
+  end;
+end;
+
 
 { ============================================================ }
 { Main                                                         }
@@ -1627,6 +1701,7 @@ begin
   T.Test('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
   T.Test('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
   T.Test('SPMC 1P+4C contention', @TestSpmcContention);
+  T.Test('HashMap GetOrInsertFn 4T concurrent (4K keys)', @TestHashMapGetOrInsertFnConcurrent);
 
   T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
   if not T.Run then Halt(1);

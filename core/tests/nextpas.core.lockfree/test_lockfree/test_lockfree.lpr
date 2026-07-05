@@ -36,6 +36,9 @@ const
 
 var
   T: TTestSuite;
+  GForEachSum: Integer;
+  GForEachCount: Integer;
+  GComputeCallCount: Integer;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -2671,6 +2674,260 @@ begin
   end;
 end;
 
+procedure ForEachCallback(const AKey: Integer; const AValue: Integer);
+begin
+  Inc(GForEachSum, AValue);
+  Inc(GForEachCount);
+end;
+
+procedure TestHashMapForEach;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Insert(3, 30);
+    GForEachSum := 0;
+    GForEachCount := 0;
+    LM.ForEach(@ForEachCallback);
+    CheckEqual(Int64(3), Int64(GForEachCount), 'ForEach visited 3 items');
+    CheckEqual(Int64(60), Int64(GForEachSum), 'ForEach sum of values');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapForEachEmpty;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create;
+  try
+    GForEachCount := 0;
+    LM.ForEach(@ForEachCallback);
+    CheckEqual(Int64(0), Int64(GForEachCount), 'ForEach empty map visits 0');
+  finally
+    LM.Free;
+  end;
+end;
+
+type
+  PCtxSum = ^TCtxSum;
+  TCtxSum = record
+    Sum: Integer;
+    Count: Integer;
+  end;
+
+procedure ForEachCtxCallback(const AKey: Integer; const AValue: Integer; AContext: Pointer);
+var
+  LCtx: PCtxSum;
+begin
+  LCtx := PCtxSum(AContext);
+  Inc(LCtx^.Sum, AValue);
+  Inc(LCtx^.Count);
+end;
+
+procedure TestHashMapForEachCtx;
+var
+  LM: TIntIntMap;
+  LCtx: TCtxSum;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Insert(3, 30);
+    LCtx.Sum := 0;
+    LCtx.Count := 0;
+    LM.ForEachCtx(@ForEachCtxCallback, @LCtx);
+    CheckEqual(Int64(3), Int64(LCtx.Count), 'ForEachCtx visited 3 items');
+    CheckEqual(Int64(60), Int64(LCtx.Sum), 'ForEachCtx sum of values');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapGetOrInsert;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First insert - should not exist
+    LRes := LM.GetOrInsert(42, 100);
+    Check(not LRes.Existed, 'GetOrInsert first call: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsert first call: Value=100');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrInsert');
+
+    // Second call - should find existing
+    LRes := LM.GetOrInsert(42, 999);
+    Check(LRes.Existed, 'GetOrInsert second call: Existed=True');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsert second call: returns original value');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after second GetOrInsert');
+
+    // Different key
+    LRes := LM.GetOrInsert(43, 200);
+    Check(not LRes.Existed, 'GetOrInsert new key: Existed=False');
+    CheckEqual(Int64(200), Int64(LRes.Value), 'GetOrInsert new key: Value=200');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapClear;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    for LI := 1 to 100 do
+      LM.Insert(LI, LI);
+    CheckEqual(Int64(100), Int64(LM.Count), 'Count before Clear');
+    LM.Clear;
+    CheckEqual(Int64(0), Int64(LM.Count), 'Count after Clear');
+    for LI := 1 to 100 do
+      Check(not LM.Contains(LI), 'not Contains after Clear key ' + IntToStr(LI));
+
+    // Reuse after clear
+    LM.Insert(1, 999);
+    Check(LM.Contains(1), 'Contains after re-insert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after re-insert');
+  finally
+    LM.Free;
+  end;
+end;
+
+function ComputeDouble(const AKey: Integer): Integer;
+begin
+  Inc(GComputeCallCount);
+  Result := AKey * 2;
+end;
+
+procedure TestHashMapGetOrInsertFn;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First call - should compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(21, @ComputeDouble);
+    Check(not LRes.Existed, 'GetOrInsertFn first call: Existed=False');
+    CheckEqual(Int64(42), Int64(LRes.Value), 'GetOrInsertFn first call: Value=42');
+    CheckEqual(Int64(1), Int64(GComputeCallCount), 'GetOrInsertFn first call: compute invoked');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrInsertFn');
+
+    // Second call - should NOT compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(21, @ComputeDouble);
+    Check(LRes.Existed, 'GetOrInsertFn second call: Existed=True');
+    CheckEqual(Int64(42), Int64(LRes.Value), 'GetOrInsertFn second call: returns original');
+    CheckEqual(Int64(0), Int64(GComputeCallCount), 'GetOrInsertFn second call: compute NOT invoked');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after second GetOrInsertFn');
+
+    // Different key - should compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(50, @ComputeDouble);
+    Check(not LRes.Existed, 'GetOrInsertFn new key: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsertFn new key: Value=100');
+    CheckEqual(Int64(1), Int64(GComputeCallCount), 'GetOrInsertFn new key: compute invoked');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
+var
+  GSingleKeyMap: TIntIntMap;
+  GSingleKeyComputeCount: Int32;
+
+function SingleKeyCompute(const AKey: Integer): Integer;
+begin
+  InterlockedIncrement(GSingleKeyComputeCount);
+  // Simulate expensive computation
+  platform_thread_sleep_ns(5000000);
+  Result := AKey * 10;
+end;
+
+function SingleKeyRaceWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  Result := nil;
+  LRes := GSingleKeyMap.GetOrInsertFn(42, @SingleKeyCompute);
+  CheckEqual(Int64(420), Int64(LRes.Value), 'Single-key race: all threads must see value=420');
+end;
+
+procedure TestHashMapGetOrInsertFnSingleKeyRace;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+begin
+  GSingleKeyMap := TIntIntMap.Create;
+  GSingleKeyComputeCount := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LHandles[LI], @SingleKeyRaceWorker, nil,
+        'Single-key race worker ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'Single-key race worker');
+    CheckEqual(Int64(1), Int64(GSingleKeyMap.Count), 'Single-key race: exactly 1 entry');
+    CheckEqual(Int64(1), Int64(GSingleKeyComputeCount), 'Single-key race: compute called exactly once');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'Single-key race worker');
+    GSingleKeyMap.Free;
+  end;
+end;
+
+function IncrementValue(const AOld: Integer): Integer;
+begin
+  Result := AOld + 1;
+end;
+
+procedure TestHashMapGetOrUpdate;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First call - key doesn't exist, inserts default=1
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(not LRes.Existed, 'GetOrUpdate first call: Existed=False');
+    CheckEqual(Int64(1), Int64(LRes.Value), 'GetOrUpdate first call: Value=1 (default)');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrUpdate');
+
+    // Second call - key exists, increments
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(LRes.Existed, 'GetOrUpdate second call: Existed=True');
+    CheckEqual(Int64(2), Int64(LRes.Value), 'GetOrUpdate second call: Value=2 (incremented)');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+
+    // Third call - increments again
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(LRes.Existed, 'GetOrUpdate third call: Existed=True');
+    CheckEqual(Int64(3), Int64(LRes.Value), 'GetOrUpdate third call: Value=3');
+
+    // Different key - inserts default
+    LRes := LM.GetOrUpdate(20, 100, @IncrementValue);
+    Check(not LRes.Existed, 'GetOrUpdate new key: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrUpdate new key: Value=100 (default)');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
 procedure TestSegQueueBasic;
 var
   LQ: TIntSegQueue;
@@ -4196,9 +4453,9 @@ begin
   CheckContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress:',
     'goal tree must report lockfree by evidence level instead of broad completion wording');
-  CheckContains(LCoreGoalTree, 'lockfree stress 12/12',
+  CheckContains(LCoreGoalTree, 'lockfree stress 14/14',
     'goal tree evidence header must report the current lockfree stress count');
-  CheckNotContains(LCoreGoalTree, 'lockfree stress 11/11',
+  CheckNotContains(LCoreGoalTree, 'lockfree stress 13/13',
     'goal tree evidence header must not keep stale lockfree stress count');
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
@@ -4610,6 +4867,14 @@ begin
   T.Test('HashMap multiple keys', @TestHashMapMultipleKeys);
   T.Test('HashMap zero count', @TestHashMapZeroCount);
   T.Test('HashMap resize', @TestHashMapResize);
+  T.Test('HashMap ForEach', @TestHashMapForEach);
+  T.Test('HashMap ForEach empty', @TestHashMapForEachEmpty);
+  T.Test('HashMap ForEachCtx', @TestHashMapForEachCtx);
+  T.Test('HashMap GetOrInsert', @TestHashMapGetOrInsert);
+  T.Test('HashMap GetOrInsertFn', @TestHashMapGetOrInsertFn);
+  T.Test('HashMap GetOrInsertFn single-key race', @TestHashMapGetOrInsertFnSingleKeyRace);
+  T.Test('HashMap GetOrUpdate', @TestHashMapGetOrUpdate);
+  T.Test('HashMap Clear', @TestHashMapClear);
   T.Test('Stack 4P+4C stress', @TestStackStress);
   T.Test('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Test('SegQueue basic', @TestSegQueueBasic);

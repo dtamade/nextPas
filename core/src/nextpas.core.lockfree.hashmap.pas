@@ -41,6 +41,20 @@ type
    * @see collections.hashmap.pas 中的 THashMap 用于单线程场景
    *}
   generic TShardedHashMapImpl<TKey, TValue> = class
+  public type
+    {** @desc ForEach 回调类型 }
+    TForEachCallback = procedure(const AKey: TKey; const AValue: TValue);
+    {** @desc ForEachCtx 带上下文的回调类型 }
+    TForEachCtxCallback = procedure(const AKey: TKey; const AValue: TValue; AContext: Pointer);
+    {** @desc GetOrInsert 返回结果 }
+    TGetOrInsertResult = record
+      Value: TValue;
+      Existed: Boolean;
+    end;
+    {** @desc GetOrInsertFn 延迟计算回调类型 }
+    TComputeCallback = function(const AKey: TKey): TValue;
+    {** @desc GetOrUpdate 更新回调类型（接收旧值，返回新值） }
+    TUpdateCallback = function(const AOldValue: TValue): TValue;
   private type
     TEntryState = (esEmpty, esOccupied, esDeleted);
     TEntry = record
@@ -81,6 +95,44 @@ type
     function Contains(const AKey: TKey): Boolean;
     {** @desc 总元素数（近似值） }
     function Count: PtrUInt;
+
+    {** @desc 遍历所有元素（持锁，回调期间其他操作阻塞）
+      @param ACallback 回调函数，接收 key 和 value
+      @note 回调期间持有所有 shard 锁，应尽快完成
+      @warning 不可在回调中调用本 HashMap 的其他方法（死锁） }
+    procedure ForEach(const ACallback: TForEachCallback);
+
+    {** @desc 遍历所有元素（带上下文指针）
+      @param ACallback 回调函数，接收 key、value 和上下文指针
+      @param AContext 透传给回调的上下文指针
+      @note 同 ForEach，持锁期间调用，不可重入 }
+    procedure ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
+
+    {** @desc 获取指定键的值；不存在则插入默认值并返回
+      @param AKey 要查找或插入的键
+      @param ADefault 不存在时插入的默认值
+      @return 结果记录：Value=找到的值或默认值，Existed=是否已存在
+      @note 原子操作，仅加锁一次 }
+    function GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+
+    {** @desc 获取指定键的值；不存在则通过回调延迟计算并插入
+      @param AKey 要查找或插入的键
+      @param ACompute 不存在时调用的计算函数（仅在需要时调用）
+      @return 结果记录：Value=找到的值或计算值，Existed=是否已存在
+      @note 原子操作，仅加锁一次；回调在持锁期间调用，应尽快返回 }
+    function GetOrInsertFn(const AKey: TKey; const ACompute: TComputeCallback): TGetOrInsertResult;
+
+    {** @desc 获取并更新：已存在则用回调更新，不存在则插入默认值
+      @param AKey 要查找或插入的键
+      @param ADefault 不存在时插入的默认值
+      @param AUpdate 已存在时调用的更新函数（接收旧值，返回新值）
+      @return 结果记录：Value=新值，Existed=更新前是否已存在
+      @note 原子操作，仅加锁一次；回调在持锁期间调用
+      @example 原子计数器: map.GetOrUpdate(key, 1, function(old) begin Result := old + 1 end) }
+    function GetOrUpdate(const AKey: TKey; const ADefault: TValue; const AUpdate: TUpdateCallback): TGetOrInsertResult;
+
+    {** @desc 清空所有元素 }
+    procedure Clear;
   end;
 
   generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
@@ -291,6 +343,168 @@ begin
     ShardLock(FShards[LI]);
     Inc(Result, FShards[LI].Count);
     ShardUnlock(FShards[LI]);
+  end;
+end;
+
+procedure TShardedHashMapImpl.ForEach(const ACallback: TForEachCallback);
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardLock(FShards[LShardIdx]);
+    try
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
+          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value);
+      end;
+    finally
+      ShardUnlock(FShards[LShardIdx]);
+    end;
+  end;
+end;
+
+procedure TShardedHashMapImpl.ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardLock(FShards[LShardIdx]);
+    try
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
+          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value, AContext);
+      end;
+    finally
+      ShardUnlock(FShards[LShardIdx]);
+    end;
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      Exit;
+    end;
+    // Not found - insert default
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ADefault;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := ADefault;
+    Result.Existed := False;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrInsertFn(const AKey: TKey; const ACompute: TComputeCallback): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      Exit;
+    end;
+    // Not found - compute value via callback
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ACompute(AKey);
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+    Result.Existed := False;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrUpdate(const AKey: TKey; const ADefault: TValue; const AUpdate: TUpdateCallback): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      FShards[LShardIdx].Entries[LIdx].Value := AUpdate(FShards[LShardIdx].Entries[LIdx].Value);
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      Exit;
+    end;
+    // Not found - insert default
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ADefault;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := ADefault;
+    Result.Existed := False;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+procedure TShardedHashMapImpl.Clear;
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardLock(FShards[LShardIdx]);
+    try
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        FShards[LShardIdx].Entries[LEntryIdx].State := esEmpty;
+        FShards[LShardIdx].Entries[LEntryIdx].Key := Default(TKey);
+        FShards[LShardIdx].Entries[LEntryIdx].Value := Default(TValue);
+      end;
+      FShards[LShardIdx].Count := 0;
+    finally
+      ShardUnlock(FShards[LShardIdx]);
+    end;
   end;
 end;
 

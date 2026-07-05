@@ -174,8 +174,6 @@ end;
 procedure THazardDomain.Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer);
 var
   LNode: PHazardRetiredNode;
-  LThread: PHazardThreadRec;
-  LThreadId: PtrUInt;
 begin
   if AData = nil then
     Exit;
@@ -187,21 +185,8 @@ begin
     LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
   until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease) = LNode^.Next;
   AtomicFetchAdd32(FGlobalRetiredCount, 1, moRelaxed);
-  // 遍历线程触发批量回收（跳过已逻辑删除的线程）
-  LThread := FThreads;
-  while LThread <> nil do
-  begin
-    if AtomicLoad32(LThread^.Deleted, moAcquire) = 0 then
-    begin
-      LThreadId := PtrUInt(LThread);
-      if AtomicFetchAdd32(PHazardThreadRec(LThreadId)^.RetiredCount, 1, moRelaxed) >= HAZARD_RETIRE_BATCH then
-      begin
-        AtomicStore32(PHazardThreadRec(LThreadId)^.RetiredCount, 0, moRelaxed);
-        Collect(LThreadId);
-      end;
-    end;
-    LThread := LThread^.Next;
-  end;
+  // 不遍历线程链表触发 Collect（避免并发修改链表导致悬空指针）
+  // Collect 由调用者显式触发，或在 Destroy 中统一回收
 end;
 
 procedure THazardDomain.Collect(const AThreadId: PtrUInt);

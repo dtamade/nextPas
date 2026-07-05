@@ -29,6 +29,15 @@ type
   TLockFreeReclaimProc = nextpas.core.lockfree.ebr.TLockFreeReclaimProc;
   THazardDomain = nextpas.core.lockfree.hazard.THazardDomain;
 
+  {** @desc QSBR 域（TQSBRDomain 是 TEbrDomain 的语义别名）
+    @details Quiescent-State Based Reclamation：仅当 FActiveCount=0 时回收所有退休节点。
+      适用场景：SegQueue 等临界区极短的无锁数据结构。
+    @see TEbrDomain 保持向后兼容
+    @see THazardDomain 用于读多写少、临界区较长的场景
+  }
+  TQSBRDomain = TEbrDomain;
+  TQSBRGuard = TEbrGuard;
+
   generic TSpscQueue<T> = class(specialize TSpscQueueImpl<T>)
   end;
 
@@ -54,6 +63,14 @@ type
   end;
 
   generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
+  end;
+
+  {** @desc 并发安全的分片锁 HashMap（TShardedHashMap 的语义别名）
+    @details 使用分片自旋锁实现并发安全，适合低到中等竞争场景。
+      与 TShardedHashMap 完全等价，仅命名更准确。
+    @see TShardedHashMap 保持向后兼容
+  }
+  generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
   end;
 
 implementation

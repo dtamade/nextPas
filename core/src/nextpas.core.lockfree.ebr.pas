@@ -22,13 +22,27 @@ type
   end;
 
   {** @desc 保守型内存回收域（Quiescent-State Based Reclamation, QSBR）
-    @details 设计为 "Zero-Active Reclamation"：仅当 FActiveCount=0 时回收所有退休节点。
-      不维护全局 epoch，不做 epoch 推进——依赖临界区极短（纳秒级）的使用场景。
+    @details **注意：这是 QSBR 变体，不是真正的 EBR（Epoch-Based Reclamation）。**
 
-      适用场景：SegQueue 等临界区仅包含几个原子操作的无锁数据结构。
-      不适用场景：长时间持有引用的读取端（应改用 THazardDomain）。
+    **算法特性**:
+    - 设计为 "Zero-Active Reclamation"
+    - 仅当 FActiveCount=0 时回收所有退休节点
+    - 不维护全局 epoch，不做 epoch 推进
+    - 依赖临界区极短（纳秒级）的使用场景
 
-      @see THazardDomain 用于读多写少、临界区较长的场景。
+    **适用场景**:
+    - SegQueue 等临界区仅包含几个原子操作的无锁数据结构
+    - 生产者-消费者模式，消费者处理极快
+
+    **不适用场景**:
+    - 长时间持有引用的读取端（应改用 THazardDomain）
+    - 需要精确控制回收时机的场景
+
+    **与真正 EBR 的区别**:
+    - 真正 EBR 维护全局 epoch，允许跨 epoch 的引用
+    - QSBR 仅检查当前是否有活跃线程，更保守但更简单
+
+    @see THazardDomain 用于读多写少、临界区较长的场景
   }
   TEbrDomain = class
   private
@@ -52,7 +66,9 @@ type
     function RetiredCount: PtrUInt;
   end;
 
-  {** @desc EBR 哨兵守卫（RAII 自动 Leave） }
+  {** @desc QSBR 哨兵守卫（RAII 自动 Leave）
+    @details TEbrGuard 是 QSBR 的 RAII 守卫，用于自动管理临界区进入和离开。
+  }
   TEbrGuard = record
   private
     FDomain: TEbrDomain;

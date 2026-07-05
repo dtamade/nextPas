@@ -1,6 +1,6 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-06-16
+> 更新: 2026-07-05
 
 ## 原子类型 (nextpas.core.atomic)
 
@@ -174,6 +174,102 @@ type
 - Guard 必须在访问共享数据前 Acquire，访问后 Release
 - TOCTOU 窗口: `Collect` 检查和退休链表交换之间，可能有新线程进入
 - Destroy 强制回收所有退休项（无视 ActiveCount）
+
+---
+
+## ShardedHashMap (nextpas.core.lockfree.hashmap)
+
+```pascal
+type
+  generic TShardedHashMap<TKey, TValue> = class
+  public type
+    TForEachCallback = procedure(const AKey: TKey; const AValue: TValue);
+    TGetOrInsertResult = record
+      Value: TValue;
+      Existed: Boolean;
+    end;
+  public
+    constructor Create(const AInitialCapacity: PtrUInt = 16);
+    destructor Destroy; override;
+
+    // 基础操作
+    procedure Insert(const AKey: TKey; const AValue: TValue);
+    function Find(const AKey: TKey; out AValue: TValue): Boolean;
+    function Remove(const AKey: TKey): Boolean;
+    function Contains(const AKey: TKey): Boolean;
+    function Count: PtrUInt;
+
+    // 高级操作
+    procedure ForEach(const ACallback: TForEachCallback);
+    function GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+    procedure Clear;
+  end;
+```
+
+**设计特点**:
+- 分片锁（16 shards），每个 shard 使用 AtomicExchange32 自旋锁
+- 开放寻址 + 线性探测
+- 负载因子 3/4，自动扩容
+- 仅支持 unmanaged 类型
+
+**API 说明**:
+
+| 方法 | 复杂度 | 并发安全 | 说明 |
+|------|--------|----------|------|
+| Insert | O(1) amortized | ✅ | 插入或覆盖 |
+| Find | O(1) amortized | ✅ | 查找并返回值 |
+| Remove | O(1) amortized | ✅ | 删除键（标记 esDeleted） |
+| Contains | O(1) amortized | ✅ | 检查键是否存在 |
+| Count | O(shards) | ✅ | 逐 shard 加锁累加 |
+| ForEach | O(n) | ✅ | 逐 shard 遍历，持锁期间回调 |
+| GetOrInsert | O(1) amortized | ✅ | 原子获取或插入，仅加锁一次 |
+| Clear | O(n) | ✅ | 逐 shard 清空 |
+
+**性能特征**（vs TConcurrentHashMap）:
+
+| 场景 | TShardedHashMap | TConcurrentHashMap |
+|------|-----------------|-------------------|
+| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
+| 内存管理 | 无引用计数 | 有引用计数 |
+| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+
+**使用示例**:
+
+```pascal
+var
+  LMap: specialize TShardedHashMap<AnsiString, Integer>;
+  LRes: specialize TGetOrInsertResult<Integer>;
+begin
+  LMap := specialize TShardedHashMap<AnsiString, Integer>.Create;
+  try
+    // 基础操作
+    LMap.Insert('key1', 100);
+    if LMap.Find('key1', LValue) then
+      WriteLn('Found: ', LValue);
+
+    // ForEach 遍历
+    LMap.ForEach(@MyCallback);
+
+    // GetOrInsert 原子操作
+    LRes := LMap.GetOrInsert('key2', 200);
+    if LRes.Existed then
+      WriteLn('Existing: ', LRes.Value)
+    else
+      WriteLn('Inserted: ', LRes.Value);
+
+    // 清空
+    LMap.Clear;
+  finally
+    LMap.Free;
+  end;
+end;
+```
+
+**注意事项**:
+- ForEach 回调期间持有 shard 锁，应尽快完成
+- 不可在 ForEach 回调中调用本 HashMap 的其他方法（死锁）
+- Count 返回近似值（逐 shard 加锁）
+- Remove 使用标记删除（esDeleted），不会 compact
 
 ---
 
