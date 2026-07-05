@@ -19,6 +19,13 @@ uses
 type
   TStringVec = specialize TVec<string>;
 
+  TGenericCacheEntry = record
+    Key: string;
+    TypeId: LongInt;
+  end;
+
+  TGenericCacheVec = specialize TVec<TGenericCacheEntry>;
+
   TProcedureBodyEntry = record
     Name: string;
     Body: TGreenNode;
@@ -58,8 +65,7 @@ type
     FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
     FGenericWorkCount: LongInt;
-    FGenericCacheKeys: array of string;
-    FGenericCacheTypeIds: array of LongInt;
+    FGenericCache: TGenericCacheVec;
     FPendingSignatures: array of TPendingSignatureEntry;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
@@ -702,6 +708,7 @@ begin
   FCurrentScopeId := 0;
   FBreakLabels := specialize TVec<string>.Create;
   FContinueLabels := specialize TVec<string>.Create;
+  FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
 end;
 
@@ -2961,6 +2968,7 @@ begin
     FImportedUnitTrees[Index].Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
+  FGenericCache.Free;
   FBuiltinRegistry.Free;
   FModel.Free;
   inherited Destroy;
@@ -9712,6 +9720,7 @@ var
   GenericTypeId: LongInt;
   NewTypeId: LongInt;
   CacheKey: string;
+  CacheEntry: TGenericCacheEntry;
 begin
   Result := 0;
   LtPos := Pos('<', ASpecText);
@@ -9719,24 +9728,23 @@ begin
     Exit;
 
   CacheKey := LowerCase(AOwnerUnitId + '#' + ASpecText);
-  for I := 0 to Length(FGenericCacheKeys) - 1 do
-    if FGenericCacheKeys[I] = CacheKey then
+  for I := 0 to FGenericCache.Count - 1 do
+    if FGenericCache[I].Key = CacheKey then
     begin
-      Result := FGenericCacheTypeIds[I];
+      Result := FGenericCache[I].TypeId;
       Exit;
     end;
   CacheKey := LowerCase(ASpecText);
-  for I := 0 to Length(FGenericCacheKeys) - 1 do
-    if (Length(FGenericCacheKeys[I]) > Length(CacheKey)) and
-      (FGenericCacheKeys[I][Length(FGenericCacheKeys[I]) - Length(CacheKey)] = '#') and
-      (Copy(FGenericCacheKeys[I], Length(FGenericCacheKeys[I]) - Length(CacheKey) + 1, MaxInt) = CacheKey) then
+  for I := 0 to FGenericCache.Count - 1 do
+    if (Length(FGenericCache[I].Key) > Length(CacheKey)) and
+      (FGenericCache[I].Key[Length(FGenericCache[I].Key) - Length(CacheKey)] = '#') and
+      (Copy(FGenericCache[I].Key, Length(FGenericCache[I].Key) - Length(CacheKey) + 1, MaxInt) = CacheKey) then
     begin
-      Result := FGenericCacheTypeIds[I];
+      Result := FGenericCache[I].TypeId;
       FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, Result, 0);
-      SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
-      FGenericCacheKeys[High(FGenericCacheKeys)] := LowerCase(AOwnerUnitId + '#' + ASpecText);
-      SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
-      FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := Result;
+      CacheEntry.Key := LowerCase(AOwnerUnitId + '#' + ASpecText);
+      CacheEntry.TypeId := Result;
+      FGenericCache.Push(CacheEntry);
       Exit;
     end;
 
@@ -9758,10 +9766,9 @@ begin
   FModel.SetTypeOwner(NewTypeId, AOwnerUnitId);
   FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, NewTypeId, 0);
 
-  SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
-  FGenericCacheKeys[High(FGenericCacheKeys)] := CacheKey;
-  SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
-  FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := NewTypeId;
+  CacheEntry.Key := CacheKey;
+  CacheEntry.TypeId := NewTypeId;
+  FGenericCache.Push(CacheEntry);
 
   InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
   Result := NewTypeId;
