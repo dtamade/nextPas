@@ -1616,6 +1616,7 @@ begin
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
 
+  FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;
 end;
