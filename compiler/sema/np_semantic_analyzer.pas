@@ -67,7 +67,7 @@ type
     FGenericWorkCount: LongInt;
     FGenericCache: TGenericCacheVec;
     FPendingSignatures: array of TPendingSignatureEntry;
-    FInliningStack: array of string;
+    FInliningStack: TStringVec;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
@@ -95,7 +95,7 @@ type
     FManagedRecordVarTypes: array of string;
     FPointerVarNames: array of string;
     FPointerVarTypes: array of string;
-    FVarParamNames: array of string;
+    FVarParamNames: TStringVec;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
     FImportedUnitTrees: array of TGreenTree;
@@ -708,6 +708,8 @@ begin
   FCurrentScopeId := 0;
   FBreakLabels := specialize TVec<string>.Create;
   FContinueLabels := specialize TVec<string>.Create;
+  FVarParamNames := specialize TVec<string>.Create;
+  FInliningStack := specialize TVec<string>.Create;
   FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
 end;
@@ -2495,19 +2497,17 @@ procedure TSemanticAnalyzer.RegisterVarParam(const AName: string);
 var
   Idx: LongInt;
 begin
-  for Idx := 0 to Length(FVarParamNames) - 1 do
+  for Idx := 0 to FVarParamNames.Count - 1 do
     if SameText(FVarParamNames[Idx], AName) then
       Exit;
-  Idx := Length(FVarParamNames);
-  SetLength(FVarParamNames, Idx + 1);
-  FVarParamNames[Idx] := AName;
+  FVarParamNames.Push(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParam(const AName: string): Boolean;
 var
   Idx: LongInt;
 begin
-  for Idx := 0 to Length(FVarParamNames) - 1 do
+  for Idx := 0 to FVarParamNames.Count - 1 do
     if SameText(FVarParamNames[Idx], AName) then
       Exit(True);
   Result := False;
@@ -2968,6 +2968,8 @@ begin
     FImportedUnitTrees[Index].Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
+  FVarParamNames.Free;
+  FInliningStack.Free;
   FGenericCache.Free;
   FBuiltinRegistry.Free;
   FModel.Free;
@@ -6306,28 +6308,21 @@ function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FInliningStack) - 1 do
+  for Index := 0 to FInliningStack.Count - 1 do
     if SameText(FInliningStack[Index], AName) then
       Exit(True);
   Result := False;
 end;
 
 procedure TSemanticAnalyzer.PushInlining(const AName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FInliningStack);
-  SetLength(FInliningStack, NextIndex + 1);
-  FInliningStack[NextIndex] := AName;
+  FInliningStack.Push(AName);
 end;
 
 procedure TSemanticAnalyzer.PopInlining;
-var
-  Last: LongInt;
 begin
-  Last := Length(FInliningStack) - 1;
-  if Last >= 0 then
-    SetLength(FInliningStack, Last);
+  if FInliningStack.Count > 0 then
+    FInliningStack.Pop;
 end;
 
 function EncodeRuntimeIntExpr(const ANode: TGreenNode;
@@ -16892,7 +16887,7 @@ begin
       Continue;
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
-    SetLength(FVarParamNames, 0);
+    FVarParamNames.Clear;
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
@@ -17244,7 +17239,7 @@ begin
     SavedMethodClass := FCurrentMethodClass;
 
     // Reset for void function with no params — 全部 13 个 tracker 清零
-    SetLength(FVarParamNames, 0);
+    FVarParamNames.Clear;
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
