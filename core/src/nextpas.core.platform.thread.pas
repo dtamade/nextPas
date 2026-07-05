@@ -147,10 +147,9 @@ begin
 end;
 
 { GNU extension — available since glibc 2.24 (2016). PTHREAD_TIMEOUT_CLOCK_ID
-  defaults to CLOCK_MONOTONIC on modern kernels. }
+  defaults to CLOCK_MONOTONIC on modern kernels.
+  Declaration moved to nextpas.core.platform.linux.ffi.pas }
 {$IFDEF NEXTPAS_LINUX}
-function pthread_timedjoin_np(thread: pthread_t; retval: PPointer;
-  abstime: PTimeSpec): Int32; cdecl; external 'c' name 'pthread_timedjoin_np';
 
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
   ATimeoutMs: Int64; out ARetVal: Pointer): Int32;

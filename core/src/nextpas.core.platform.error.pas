@@ -14,6 +14,7 @@ const
   PLATFORM_ERR_ENOTDIR     = 20;    { Not a directory }
   PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
   PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
+  PLATFORM_ERR_BADF        = 9;     { Bad file descriptor }
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
   PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
   PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
@@ -82,6 +83,8 @@ begin
       ALen := CopyPlatformErrorMessage('again', ABuf, ABufLen);
     PLATFORM_ERR_BUSY:
       ALen := CopyPlatformErrorMessage('busy', ABuf, ABufLen);
+    PLATFORM_ERR_BADF:
+      ALen := CopyPlatformErrorMessage('bad fd', ABuf, ABufLen);
   else
     Result := False;
     ALen := -1;
@@ -92,7 +95,7 @@ end;
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
   LMsg: PAnsiChar;
-  LLen, I: Int32;
+  LLen: Int32;
 begin
   if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
     Exit;
@@ -109,8 +112,8 @@ begin
     Inc(LLen);
   if LLen >= ABufLen then
     LLen := ABufLen - 1;
-  for I := 0 to LLen - 1 do
-    ABuf[I] := LMsg[I];
+  if LLen > 0 then
+    Move(LMsg^, ABuf^, LLen);
   ABuf[LLen] := #0;
   Result := LLen;
 end;
@@ -188,6 +191,8 @@ begin
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY:
       Exit(ecWouldBlock);
+    PLATFORM_ERR_BADF:
+      Exit(ecIO);
   end;
 
   case ACode of

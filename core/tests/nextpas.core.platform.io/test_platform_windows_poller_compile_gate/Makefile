@@ -1,5 +1,6 @@
 PROGRAM := test_platform_windows_poller_compile_gate
-FPC_FLAGS += -Cn -dNEXTPAS_FORCE_HOST_WINDOWS
+force_windows_flags ?= -dNEXTPAS_FORCE_HOST_WINDOWS
+FPC_FLAGS += -Cn $(force_windows_flags)
 include ../../common_compile_gate.mk
 
 cross-win64:

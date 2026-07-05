@@ -18,7 +18,7 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 procedure platform_process_detach(var AProc: TPlatformProcess);
@@ -36,8 +36,10 @@ implementation
   {$DEFINE NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
 {$ENDIF}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.time
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
 {$ENDIF}
@@ -289,16 +291,49 @@ begin
 end;
 
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
 var
   LStatus: Int32;
   LRet: pid_t;
+  LDeadlineNs, LNowNs: TPlatformTimeNanoseconds;
+  LSleepReq: timespec;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LStatus := 0;
-  repeat
-    LRet := waitpid(AProc.Pid, @LStatus, 0);
-  until (LRet >= 0) or (platform_get_errno <> ESysEINTR);
+  if ATimeoutMs <= 0 then
+  begin
+    repeat
+      LRet := waitpid(AProc.Pid, @LStatus, 0);
+    until (LRet >= 0) or (platform_get_errno <> ESysEINTR);
+  end
+  else
+  begin
+    LDeadlineNs := platform_monotonic_ns + TPlatformTimeNanoseconds(ATimeoutMs) * 1000000;
+    repeat
+      LRet := waitpid(AProc.Pid, @LStatus, WNOHANG);
+      if LRet > 0 then
+        Break;
+      if LRet < 0 then
+      begin
+        if platform_get_errno = ESysEINTR then
+        begin
+          LRet := 0;
+          Continue;
+        end;
+        Break;
+      end;
+      { LRet = 0: process still running }
+      LNowNs := platform_monotonic_ns;
+      if LNowNs >= LDeadlineNs then
+      begin
+        AResult.Status := psRunning;
+        Exit(PLATFORM_ERR_TIMEOUT);
+      end;
+      LSleepReq.tv_sec := 0;
+      LSleepReq.tv_nsec := 1000000; { 1 ms }
+      nanosleep(@LSleepReq, nil);
+    until False;
+  end;
   if LRet < 0 then
     Exit(platform_get_errno);
   Result := DecodeStatus(LStatus, AResult);
@@ -400,9 +435,15 @@ begin
     LTotal := 0;
     repeat
       LN := read(LStdoutPipe[0], @AOutBuf[LTotal], AOutBufLen - LTotal);
+      if LN < 0 then
+      begin
+        if platform_get_errno = ESysEINTR then
+          Continue;
+        Break;
+      end;
       if LN > 0 then
         Inc(LTotal, Int32(LN));
-    until (LN <= 0) or (LTotal >= AOutBufLen);
+    until (LN = 0) or (LTotal >= AOutBufLen);
     if LTotal < AOutBufLen then
       AOutBuf[LTotal] := #0;
     AOutLen := LTotal;
@@ -484,12 +525,23 @@ begin
   Result := 0;
 end;
 
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
 var
-  LExitCode: DWORD;
+  LExitCode, LTimeout, LWait: DWORD;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
-  if WaitForSingleObject(HANDLE(AProc.ProcessHandle), $FFFFFFFF) <> 0 then
+  if ATimeoutMs <= 0 then
+    LTimeout := $FFFFFFFF { INFINITE }
+  else
+    LTimeout := DWORD(ATimeoutMs);
+  LWait := WaitForSingleObject(HANDLE(AProc.ProcessHandle), LTimeout);
+  if LWait = $00000102 then
+  begin
+    { WAIT_TIMEOUT: process still running }
+    AResult.Status := psRunning;
+    Exit(PLATFORM_ERR_TIMEOUT);
+  end;
+  if LWait <> 0 then
     Exit(Int32(GetLastError));
   LExitCode := 0;
   if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then
@@ -731,7 +783,7 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 begin FillChar(AProc, SizeOf(AProc), 0); Result := -1; end;
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;

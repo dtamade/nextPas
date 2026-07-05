@@ -42,7 +42,8 @@ implementation
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
-  nextpas.core.platform.linux.ffi;
+  nextpas.core.platform.linux.ffi,
+  nextpas.core.platform.error;
 
 const
   { signal.inc exposes SIG_DFL as an integer; sigaction.sa_handler needs a pointer. }
@@ -68,6 +69,8 @@ procedure SigSetAdd(var ASet: TLibcSigSet; ASig: Int32);
 var
   LIdx, LBit: Int32;
 begin
+  if (ASig < 1) or (ASig > 128) then
+    Exit;
   Dec(ASig);
   LIdx := ASig div 64;
   LBit := ASig mod 64;
@@ -121,6 +124,8 @@ function platform_signal_block(ASignal: Int32): Int32;
 var
   LSet: TLibcSigSet;
 begin
+  if (ASignal < 1) or (ASignal > 128) then
+    Exit(PLATFORM_ERR_INVALID);
   SigSetEmpty(LSet);
   SigSetAdd(LSet, ASignal);
   if sigprocmask(SIG_BLOCK, @LSet, nil) <> 0 then
@@ -133,6 +138,8 @@ function platform_signal_unblock(ASignal: Int32): Int32;
 var
   LSet: TLibcSigSet;
 begin
+  if (ASignal < 1) or (ASignal > 128) then
+    Exit(PLATFORM_ERR_INVALID);
   SigSetEmpty(LSet);
   SigSetAdd(LSet, ASignal);
   if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
@@ -146,7 +153,8 @@ end;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.darwin.base,
-  nextpas.core.platform.darwin.ffi;
+  nextpas.core.platform.darwin.ffi,
+  nextpas.core.platform.error;
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
@@ -190,6 +198,8 @@ function platform_signal_block(ASignal: Int32): Int32;
 var
   LSet: TPlatformDarwinSignalSet;
 begin
+  if (ASignal < 1) or (ASignal > 31) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LSet, SizeOf(LSet), 0);
   LSet.Words[0] := UInt32(1) shl (ASignal - 1);
   if sigprocmask(SIG_BLOCK, @LSet, nil) <> 0 then
@@ -202,6 +212,8 @@ function platform_signal_unblock(ASignal: Int32): Int32;
 var
   LSet: TPlatformDarwinSignalSet;
 begin
+  if (ASignal < 1) or (ASignal > 31) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LSet, SizeOf(LSet), 0);
   LSet.Words[0] := UInt32(1) shl (ASignal - 1);
   if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
@@ -215,7 +227,8 @@ end;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.freebsd.base,
-  nextpas.core.platform.freebsd.ffi;
+  nextpas.core.platform.freebsd.ffi,
+  nextpas.core.platform.error;
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
@@ -260,6 +273,8 @@ var
   LSet: TPlatformFreeBSDSignalSet;
   LIdx, LBit: Int32;
 begin
+  if (ASignal < 1) or (ASignal > 31) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LSet, SizeOf(LSet), 0);
   LIdx := (ASignal - 1) div 32;
   LBit := (ASignal - 1) mod 32;
@@ -275,6 +290,8 @@ var
   LSet: TPlatformFreeBSDSignalSet;
   LIdx, LBit: Int32;
 begin
+  if (ASignal < 1) or (ASignal > 31) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LSet, SizeOf(LSet), 0);
   LIdx := (ASignal - 1) div 32;
   LBit := (ASignal - 1) mod 32;

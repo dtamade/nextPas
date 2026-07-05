@@ -314,6 +314,8 @@ begin
   LHeader := HeaderOf(APtr);
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
     Exit(nil);
+  if LHeader^.Alignment <> AAlignment then
+    Exit(nil);
   LOldSize := LHeader^.Size;
 
   Result := platform_aligned_alloc(ANewSize, AAlignment);

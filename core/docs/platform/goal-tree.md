@@ -14,7 +14,7 @@ macOS, FreeBSD, and Android remain mixed.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime through platform/io, async, process, file, and consumer gates with heaptrc expectations | keep focused gates green and expand consumer coverage only when contracts change |
-| Windows x86_64 | focused-runtime for 14/14 modules on real Windows VM via SSH; wine-runtime-smoke for all 14 modules; real-Windows runner via SSH | promote to ci-matrix |
+| Windows x86_64 | focused-runtime for 14/14 modules on real Windows VM via SSH; wine-runtime-smoke for all 14 modules; real-Windows runtime proof via SSH | promote to ci-matrix |
 | macOS / FreeBSD | source-contract and selected compile/runtime fragments | record passed rows separately; skipped rows are non-evidence |
 | Android / other forced hosts | forced-compile fragments | add host-specific runtime rows before claiming runtime readiness |
 
@@ -115,7 +115,7 @@ and forced Windows compile gates.
 | P3 Readiness lane | `platform_poller_*`, wake, userdata, empty-interest, net readiness consumers | Linux runtime; Windows source/compile; Wine CI matrix ✅ | real-Windows CI runner |
 | P4 Completion lane | IOCP/proactor ownership and async loop completion consumers | ✅ focused-runtime (AsyncSend/Recv/Accept/Connect + close/timeout drain) | promote to ci-matrix |
 | P5 Tier 2 targets | Windows aarch64, Linux riscv64/arm32, FreeBSD/Android | riscv64/aarch64/arm32: 13-module compile gate via cross CI matrix; runtime smoke deferred | FreeBSD/Android compile gate; QEMU runtime smoke |
-| P6 Benchmarks | Platform performance comparison | deferred | only after contract/runtime truth stabilizes |
+| P6 Benchmarks | Platform performance comparison | ✅ 14-operation baseline established (time/sync/memory/thread/random/path/mmap) | expand to cross-platform comparison; consumer integration benchmarks |
 
 ## P5 Evidence Matrix
 
