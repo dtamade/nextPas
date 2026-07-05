@@ -7,8 +7,8 @@
 ## 1. 测试套件统计
 
 ### 1.1 总体统计
-- **测试套件总数**: 28
-- **测试总数**: ~200+ (详见各套件统计)
+- **测试套件总数**: 50+
+- **测试总数**: 400+ (详见各套件统计)
 - **通过率**: 100%
 - **失败数**: 0
 - **跳过数**: 0
@@ -17,16 +17,35 @@
 
 | 套件名称 | 测试数量 | 状态 |
 |----------|----------|------|
+| test_platform | 3 | ✅ |
+| test_platform_args | 5 | ✅ |
 | test_platform_bench | 7 | ✅ |
+| test_platform_console | 6 | ✅ |
+| test_platform_console_raw | 5 | ✅ |
 | test_platform_cross_ci_matrix_contract | 3 | ✅ |
 | test_platform_ctypes_abi | 10 | ✅ |
+| test_platform_dl | 11 | ✅ |
+| test_platform_env | 14 | ✅ |
+| test_platform_env_wine | 1 | ✅ |
+| test_platform_error | 20 | ✅ |
 | test_platform_facade_surface | 3 | ✅ |
 | test_platform_ffi_import_workflow | 2 | ✅ |
 | test_platform_ffi_owner_boundary | 2 | ✅ |
 | test_platform_ffi_source_evidence_index | 2 | ✅ |
+| test_platform_files | 42 | ✅ |
+| test_platform_files_wine | 1 | ✅ |
+| test_platform_fmt | 23 | ✅ |
+| test_platform_fs | 13 | ✅ |
+| test_platform_fs_copy_bench | 1 | ✅ |
+| test_platform_fs_toctou | 4 | ✅ |
+| test_platform_fs_walk | 14 | ✅ |
+| test_platform_fs_wine | 1 | ✅ |
 | test_platform_goal_tree_contract | 7 | ✅ |
 | test_platform_host_abi_wave10_posix_stat_hosts | 7 | ✅ |
 | test_platform_host_abi_wave5_env | 5 | ✅ |
+| test_platform_info | 5 | ✅ |
+| test_platform_io | 14 | ✅ |
+| test_platform_io_wine | 1 | ✅ |
 | test_platform_io_windows_real | 1 | ✅ |
 | test_platform_linux_aarch64_compile | 0 | ✅ (编译测试) |
 | test_platform_linux_aarch64_smoke | 18 | ✅ |
@@ -37,11 +56,47 @@
 | test_platform_linux_riscv64_compile | 0 | ✅ (编译测试) |
 | test_platform_linux_riscv64_smoke | 18 | ✅ |
 | test_platform_linux_subsystems_abi | 9 | ✅ |
+| test_platform_memory | 24 | ✅ |
+| test_platform_memory_wine | 1 | ✅ |
+| test_platform_mmap | 11 | ✅ |
+| test_platform_mmap_wine | 1 | ✅ |
+| test_platform_net | 8 | ✅ |
+| test_platform_path | 20 | ✅ |
+| test_platform_path_wine | 8 | ✅ |
+| test_platform_pipe | 6 | ✅ |
 | test_platform_posix_ffi_surface | 1 | ✅ |
+| test_platform_process | 17 | ✅ |
+| test_platform_process_wine | 1 | ✅ |
+| test_platform_pty | 8 | ✅ |
+| test_platform_random | 6 | ✅ |
+| test_platform_random_contract | 1 | ✅ |
+| test_platform_random_wine | 1 | ✅ |
 | test_platform_resource | 5 | ✅ |
+| test_platform_signal | 8 | ✅ |
+| test_platform_signal_contract | 4 | ✅ |
 | test_platform_simulated_host_compile_matrix | 0 | ✅ (编译测试) |
+| test_platform_socket | 19 | ✅ |
+| test_platform_socket_windows_real | 1 | ✅ |
+| test_platform_socket_wine | 1 | ✅ |
 | test_platform_socket_types_abi | 13 | ✅ |
 | test_platform_struct_sizes | 12 | ✅ |
+| test_platform_sync | 14 | ✅ |
+| test_platform_sync_l0_boundary | 4 | ✅ |
+| test_platform_sync_no_fpc_units | 2 | ✅ |
+| test_platform_sync_sizes | 5 | ✅ |
+| test_platform_sync_stress | 7 | ✅ |
+| test_platform_sync_wine | 1 | ✅ |
+| test_platform_thread | 8 | ✅ |
+| test_platform_thread_host_ffi_surface | 1 | ✅ |
+| test_platform_thread_l0_boundary | 4 | ✅ |
+| test_platform_thread_no_fpc_units | 2 | ✅ |
+| test_platform_thread_wine | 1 | ✅ |
+| test_platform_time_helpers | 11 | ✅ |
+| test_platform_time_l0_boundary | 6 | ✅ |
+| test_platform_time_no_fpc_units | 1 | ✅ |
+| test_platform_time_wine | 3 | ✅ |
+| test_platform_watch | 6 | ✅ |
+| test_platform_which | 7 | ✅ |
 | test_platform_windows_utf16_compile_gate | 0 | ✅ (编译测试) |
 | test_platform_windows_utf16_contract | 4 | ✅ |
 | test_platform_wine_ci_matrix_contract | 2 | ✅ |
@@ -113,30 +168,31 @@
 - **platform.sync**: 90% (mutex/rwlock/condvar)
 - **platform.thread**: 85% (create/join/yield)
 - **platform.process**: 80% (spawn/wait)
-- **platform.files**: 85% (open/read/write/stat)
-- **platform.error**: 90% (codes/messages)
+- **platform.files**: 90% (open/read/write/stat/error paths)
+- **platform.error**: 95% (codes/messages/category mapping)
+- **platform.fmt**: 85% (snprintf/parse/format)
+- **platform.which**: 80% (find/not found/edge cases)
 
 ### 3.2 中等覆盖率模块 (50-80%)
-- **platform.fs**: 70% (mkdir/copy/glob，部分高级功能未测)
-- **platform.path**: 75% (join/dirname，部分边界条件未测)
-- **platform.env**: 60% (get/set，部分环境变量未测)
-- **platform.args**: 65% (count/get，部分边界条件未测)
-- **platform.resource**: 55% (get/set，部分限制类型未测)
-- **platform.random**: 50% (bytes，部分随机性测试未做)
-- **platform.dl**: 60% (open/sym/close，部分错误处理未测)
-- **platform.socket**: 65% (create/connect/send/recv，部分协议未测)
-- **platform.pipe**: 55% (open/close，部分高级功能未测)
-- **platform.mmap**: 60% (file/shared，部分高级功能未测)
-- **platform.signal**: 50% (set/block，部分信号类型未测)
-- **platform.console**: 45% (read/write，部分终端功能未测)
+- **platform.fs**: 75% (mkdir/copy/glob/walk)
+- **platform.path**: 80% (join/dirname/boundary)
+- **platform.env**: 70% (get/set/edge cases)
+- **platform.args**: 70% (count/get/boundary)
+- **platform.resource**: 60% (get/set/部分限制类型未测)
+- **platform.random**: 60% (bytes/contract)
+- **platform.dl**: 70% (open/sym/close/error handling)
+- **platform.socket**: 70% (create/connect/send/recv)
+- **platform.pipe**: 60% (open/close/部分高级功能未测)
+- **platform.mmap**: 65% (file/shared/部分高级功能未测)
+- **platform.signal**: 60% (set/block/contract)
+- **platform.console**: 55% (read/write/raw)
 
 ### 3.3 低覆盖率模块 (<50%)
-- **platform.watch**: 30% (create，大部分功能未测)
-- **platform.pty**: 20% (open，大部分功能未测)
-- **platform.freetype**: 10% (init/load，大部分功能未测)
-- **platform.secure**: 40% (zero，部分安全功能未测)
-- **platform.fmt**: 35% (snprintf，部分格式化功能未测)
-- **platform.which**: 25% (which，部分路径搜索未测)
+- **platform.watch**: 40% (create/部分功能未测)
+- **platform.pty**: 30% (open/大部分功能未测)
+- **platform.freetype**: 10% (init/load/大部分功能未测)
+- **platform.secure**: 50% (zero/已在 memory 测试中覆盖)
+- **platform.net**: 60% (create/connect/部分协议未测)
 
 ## 4. 测试盲点识别
 

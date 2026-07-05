@@ -60,12 +60,15 @@
 
 ```pascal
 // 文件 I/O
-function platform_file_open(const APath: PAnsiChar; AFlags: Int32;
-  out AHandle: TPlatformFileHandle): Int32;
+function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
+  APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 function platform_file_read(const AHandle: TPlatformFileHandle;
-  AData: Pointer; ALen: Int32; out ANRead: Int32): Int32;
+  ABuf: Pointer; ALen: Int32; out ANRead: Int32): Int32;
 function platform_file_write(const AHandle: TPlatformFileHandle;
-  AData: Pointer; ALen: Int32): Int32;
+  ABuf: Pointer; ALen: Int32): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
 // 进程
@@ -75,9 +78,10 @@ function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
 
 // 线程
-function platform_thread_create(AProc: TThreadProc; AArg: Pointer;
-  out AThread: TPlatformThread): Int32;
-function platform_thread_join(var AThread: TPlatformThread): Int32;
+function platform_thread_create(out AHandle: TPlatformThreadHandle;
+  AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+function platform_thread_join(const AHandle: TPlatformThreadHandle;
+  out ARetVal: Pointer): Int32;
 
 // 同步
 function platform_mutex_init(out AMutex: TPlatformMutex): Int32;
@@ -85,9 +89,8 @@ function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 
 // 内存
-function platform_aligned_alloc(ASize: PtrUInt; AAlignment: PtrUInt): Pointer;
-function platform_aligned_realloc(APtr: Pointer; ANewSize: PtrUInt;
-  AAlignment: PtrUInt): Pointer;
+function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
+function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt): Pointer;
 ```
 
 ---
