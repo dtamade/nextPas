@@ -244,6 +244,16 @@ type
     function FetchAnd(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
     function FetchOr(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
     function FetchXor(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
+    {**
+     * FetchNand - 布尔 NAND 原子操作
+     *
+     * 计算 not (Old and AValue)，即当 Old=True 且 AValue=True 时结果为 False，否则为 True。
+     * 语义上等价于: Result := not (Old and AValue) = (not Old) or (not AValue)
+     *
+     * @note 布尔 NAND 的实际使用场景极少，主要为 API 完整性保留。
+     *       与位操作 NAND 不同，布尔 NAND 在逻辑上等价于 implies (Old → not AValue)。
+     *}
     function FetchNand(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function GetMut: PInt32; inline;
