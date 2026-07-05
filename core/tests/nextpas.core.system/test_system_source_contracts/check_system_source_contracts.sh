@@ -403,6 +403,71 @@ EOF
   require_facade_surface_allowlist "typinfo facade" "$actual" "$expected"
 }
 
+require_errors_facade_surface_allowlist() {
+  local actual expected
+  actual="$(list_unit_facade_surface "$CORE_ROOT/src/nextpas.core.system.errors.pas")"
+  expected="$(cat <<'EOF'
+type Exception
+type ExceptClass
+type EConvertError
+type EAssertionFailed
+type EAbort
+type TErrorCategory
+type ENextPasError
+type ECore
+type EInvariantViolation
+type EArgumentNil
+type EEmptyCollection
+type EInvalidArgument
+type EInvalidResult
+type EInvalidState
+type EOutOfRange
+type ENotSupported
+type ENotCompatible
+type EInvalidOperation
+type EOverflow
+type EArgumentError
+type ENullReferenceError
+type EInvalidOperationError
+type ENotImplementedError
+type ENotSupportedError
+type ETimeoutError
+type ECancelledError
+type EPermissionError
+type ENotFoundError
+type EAlreadyExistsError
+type EResourceExhaustedError
+type EIOError
+type ENetworkError
+type EParseError
+type EIndexOutOfRangeError
+type EOutOfMemoryError
+type EOutOfMemory
+type EInterruptedError
+type EWouldBlockError
+const ecNone
+const ecInvalidArgument
+const ecNullReference
+const ecInvalidOperation
+const ecNotImplemented
+const ecNotSupported
+const ecTimeout
+const ecCancelled
+const ecInterrupted
+const ecWouldBlock
+const ecPermission
+const ecNotFound
+const ecAlreadyExists
+const ecResourceExhausted
+const ecIO
+const ecNetwork
+const ecParse
+const ecInternal
+EOF
+)"
+  require_facade_surface_allowlist "errors facade" "$actual" "$expected"
+}
+
 require_facade_surface_parser_regression() {
   local fixture actual expected
   fixture="$(mktemp)"
@@ -469,6 +534,7 @@ require_file "docs/system/typinfo-minimal-pressure.md"
 require_file "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_file "src/nextpas.core.system.typinfo.pas"
 require_file "src/nextpas.core.system.sysutils.pas"
+require_file "src/nextpas.core.system.errors.pas"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -485,6 +551,7 @@ require_token "docs/system/README.md" "typinfo-minimal-pressure.md"
 require_token "docs/system/README.md" "2026-06-07-system-typinfo-minimal-unlock-review.md"
 require_token "docs/system/README.md" "nextpas.core.system.typinfo"
 require_token "docs/system/README.md" "nextpas.core.system.sysutils"
+require_token "docs/system/README.md" "nextpas.core.system.errors"
 require_token "docs/system/README.md" "minimal live unit"
 require_token "docs/system/README.md" "Classes remain deferred"
 require_token "docs/system/README.md" "Root facade live surface"
@@ -938,7 +1005,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -1198,61 +1265,61 @@ require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.FillMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CopyMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.CompareMem"
 require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.Supports"
-require_token "src/nextpas.core.system.pas" "Exception = nextpas.core.exception.Exception;"
-require_token "src/nextpas.core.system.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
-require_token "src/nextpas.core.system.pas" "TErrorCategory = nextpas.core.exception.TErrorCategory;"
-require_token "src/nextpas.core.system.pas" "ENextPasError = nextpas.core.exception.ENextPasError;"
-require_token "src/nextpas.core.system.pas" "ECore = nextpas.core.base.ECore;"
-require_token "src/nextpas.core.system.pas" "EInvariantViolation = nextpas.core.base.EInvariantViolation;"
-require_token "src/nextpas.core.system.pas" "EArgumentNil = nextpas.core.base.EArgumentNil;"
-require_token "src/nextpas.core.system.pas" "EEmptyCollection = nextpas.core.base.EEmptyCollection;"
-require_token "src/nextpas.core.system.pas" "EInvalidArgument = nextpas.core.base.EInvalidArgument;"
-require_token "src/nextpas.core.system.pas" "EInvalidResult = nextpas.core.base.EInvalidResult;"
-require_token "src/nextpas.core.system.pas" "EInvalidState = nextpas.core.base.EInvalidState;"
-require_token "src/nextpas.core.system.pas" "EOutOfRange = nextpas.core.base.EOutOfRange;"
-require_token "src/nextpas.core.system.pas" "ENotSupported = nextpas.core.base.ENotSupported;"
-require_token "src/nextpas.core.system.pas" "ENotCompatible = nextpas.core.base.ENotCompatible;"
-require_token "src/nextpas.core.system.pas" "EInvalidOperation = nextpas.core.base.EInvalidOperation;"
-require_token "src/nextpas.core.system.pas" "EOverflow = nextpas.core.base.EOverflow;"
-require_token "src/nextpas.core.system.pas" "EArgumentError = nextpas.core.errors.EArgumentError;"
-require_token "src/nextpas.core.system.pas" "ENullReferenceError = nextpas.core.errors.ENullReferenceError;"
-require_token "src/nextpas.core.system.pas" "EInvalidOperationError = nextpas.core.errors.EInvalidOperationError;"
-require_token "src/nextpas.core.system.pas" "ENotImplementedError = nextpas.core.errors.ENotImplementedError;"
-require_token "src/nextpas.core.system.pas" "ENotSupportedError = nextpas.core.errors.ENotSupportedError;"
-require_token "src/nextpas.core.system.pas" "ETimeoutError = nextpas.core.errors.ETimeoutError;"
-require_token "src/nextpas.core.system.pas" "ECancelledError = nextpas.core.errors.ECancelledError;"
-require_token "src/nextpas.core.system.pas" "EPermissionError = nextpas.core.errors.EPermissionError;"
-require_token "src/nextpas.core.system.pas" "ENotFoundError = nextpas.core.errors.ENotFoundError;"
-require_token "src/nextpas.core.system.pas" "EAlreadyExistsError = nextpas.core.errors.EAlreadyExistsError;"
-require_token "src/nextpas.core.system.pas" "EResourceExhaustedError = nextpas.core.errors.EResourceExhaustedError;"
-require_token "src/nextpas.core.system.pas" "EIOError = nextpas.core.errors.EIOError;"
-require_token "src/nextpas.core.system.pas" "ENetworkError = nextpas.core.errors.ENetworkError;"
-require_token "src/nextpas.core.system.pas" "EParseError = nextpas.core.errors.EParseError;"
-require_token "src/nextpas.core.system.pas" "EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;"
-require_token "src/nextpas.core.system.pas" "EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;"
-require_token "src/nextpas.core.system.pas" "EOutOfMemory = nextpas.core.errors.EOutOfMemory;"
-require_token "src/nextpas.core.system.pas" "EInterruptedError = nextpas.core.errors.EInterruptedError;"
-require_token "src/nextpas.core.system.pas" "EWouldBlockError = nextpas.core.errors.EWouldBlockError;"
-require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.exception.EConvertError;"
-require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
-require_token "src/nextpas.core.system.pas" "ecNone = nextpas.core.errors.ecNone;"
-require_token "src/nextpas.core.system.pas" "ecInvalidArgument = nextpas.core.errors.ecInvalidArgument;"
-require_token "src/nextpas.core.system.pas" "ecNullReference = nextpas.core.errors.ecNullReference;"
-require_token "src/nextpas.core.system.pas" "ecInvalidOperation = nextpas.core.errors.ecInvalidOperation;"
-require_token "src/nextpas.core.system.pas" "ecNotImplemented = nextpas.core.errors.ecNotImplemented;"
-require_token "src/nextpas.core.system.pas" "ecNotSupported = nextpas.core.errors.ecNotSupported;"
-require_token "src/nextpas.core.system.pas" "ecTimeout = nextpas.core.errors.ecTimeout;"
-require_token "src/nextpas.core.system.pas" "ecCancelled = nextpas.core.errors.ecCancelled;"
-require_token "src/nextpas.core.system.pas" "ecInterrupted = nextpas.core.errors.ecInterrupted;"
-require_token "src/nextpas.core.system.pas" "ecWouldBlock = nextpas.core.errors.ecWouldBlock;"
-require_token "src/nextpas.core.system.pas" "ecPermission = nextpas.core.errors.ecPermission;"
-require_token "src/nextpas.core.system.pas" "ecNotFound = nextpas.core.errors.ecNotFound;"
-require_token "src/nextpas.core.system.pas" "ecAlreadyExists = nextpas.core.errors.ecAlreadyExists;"
-require_token "src/nextpas.core.system.pas" "ecResourceExhausted = nextpas.core.errors.ecResourceExhausted;"
-require_token "src/nextpas.core.system.pas" "ecIO = nextpas.core.errors.ecIO;"
-require_token "src/nextpas.core.system.pas" "ecNetwork = nextpas.core.errors.ecNetwork;"
-require_token "src/nextpas.core.system.pas" "ecParse = nextpas.core.errors.ecParse;"
-require_token "src/nextpas.core.system.pas" "ecInternal = nextpas.core.errors.ecInternal;"
+require_token "src/nextpas.core.system.pas" "Exception = nextpas.core.system.errors.Exception;"
+require_token "src/nextpas.core.system.pas" "ExceptClass = nextpas.core.system.errors.ExceptClass;"
+require_token "src/nextpas.core.system.pas" "TErrorCategory = nextpas.core.system.errors.TErrorCategory;"
+require_token "src/nextpas.core.system.pas" "ENextPasError = nextpas.core.system.errors.ENextPasError;"
+require_token "src/nextpas.core.system.pas" "ECore = nextpas.core.system.errors.ECore;"
+require_token "src/nextpas.core.system.pas" "EInvariantViolation = nextpas.core.system.errors.EInvariantViolation;"
+require_token "src/nextpas.core.system.pas" "EArgumentNil = nextpas.core.system.errors.EArgumentNil;"
+require_token "src/nextpas.core.system.pas" "EEmptyCollection = nextpas.core.system.errors.EEmptyCollection;"
+require_token "src/nextpas.core.system.pas" "EInvalidArgument = nextpas.core.system.errors.EInvalidArgument;"
+require_token "src/nextpas.core.system.pas" "EInvalidResult = nextpas.core.system.errors.EInvalidResult;"
+require_token "src/nextpas.core.system.pas" "EInvalidState = nextpas.core.system.errors.EInvalidState;"
+require_token "src/nextpas.core.system.pas" "EOutOfRange = nextpas.core.system.errors.EOutOfRange;"
+require_token "src/nextpas.core.system.pas" "ENotSupported = nextpas.core.system.errors.ENotSupported;"
+require_token "src/nextpas.core.system.pas" "ENotCompatible = nextpas.core.system.errors.ENotCompatible;"
+require_token "src/nextpas.core.system.pas" "EInvalidOperation = nextpas.core.system.errors.EInvalidOperation;"
+require_token "src/nextpas.core.system.pas" "EOverflow = nextpas.core.system.errors.EOverflow;"
+require_token "src/nextpas.core.system.pas" "EArgumentError = nextpas.core.system.errors.EArgumentError;"
+require_token "src/nextpas.core.system.pas" "ENullReferenceError = nextpas.core.system.errors.ENullReferenceError;"
+require_token "src/nextpas.core.system.pas" "EInvalidOperationError = nextpas.core.system.errors.EInvalidOperationError;"
+require_token "src/nextpas.core.system.pas" "ENotImplementedError = nextpas.core.system.errors.ENotImplementedError;"
+require_token "src/nextpas.core.system.pas" "ENotSupportedError = nextpas.core.system.errors.ENotSupportedError;"
+require_token "src/nextpas.core.system.pas" "ETimeoutError = nextpas.core.system.errors.ETimeoutError;"
+require_token "src/nextpas.core.system.pas" "ECancelledError = nextpas.core.system.errors.ECancelledError;"
+require_token "src/nextpas.core.system.pas" "EPermissionError = nextpas.core.system.errors.EPermissionError;"
+require_token "src/nextpas.core.system.pas" "ENotFoundError = nextpas.core.system.errors.ENotFoundError;"
+require_token "src/nextpas.core.system.pas" "EAlreadyExistsError = nextpas.core.system.errors.EAlreadyExistsError;"
+require_token "src/nextpas.core.system.pas" "EResourceExhaustedError = nextpas.core.system.errors.EResourceExhaustedError;"
+require_token "src/nextpas.core.system.pas" "EIOError = nextpas.core.system.errors.EIOError;"
+require_token "src/nextpas.core.system.pas" "ENetworkError = nextpas.core.system.errors.ENetworkError;"
+require_token "src/nextpas.core.system.pas" "EParseError = nextpas.core.system.errors.EParseError;"
+require_token "src/nextpas.core.system.pas" "EIndexOutOfRangeError = nextpas.core.system.errors.EIndexOutOfRangeError;"
+require_token "src/nextpas.core.system.pas" "EOutOfMemoryError = nextpas.core.system.errors.EOutOfMemoryError;"
+require_token "src/nextpas.core.system.pas" "EOutOfMemory = nextpas.core.system.errors.EOutOfMemory;"
+require_token "src/nextpas.core.system.pas" "EInterruptedError = nextpas.core.system.errors.EInterruptedError;"
+require_token "src/nextpas.core.system.pas" "EWouldBlockError = nextpas.core.system.errors.EWouldBlockError;"
+require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.system.errors.EConvertError;"
+require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.system.errors.EAssertionFailed;"
+require_token "src/nextpas.core.system.pas" "ecNone = nextpas.core.system.errors.ecNone;"
+require_token "src/nextpas.core.system.pas" "ecInvalidArgument = nextpas.core.system.errors.ecInvalidArgument;"
+require_token "src/nextpas.core.system.pas" "ecNullReference = nextpas.core.system.errors.ecNullReference;"
+require_token "src/nextpas.core.system.pas" "ecInvalidOperation = nextpas.core.system.errors.ecInvalidOperation;"
+require_token "src/nextpas.core.system.pas" "ecNotImplemented = nextpas.core.system.errors.ecNotImplemented;"
+require_token "src/nextpas.core.system.pas" "ecNotSupported = nextpas.core.system.errors.ecNotSupported;"
+require_token "src/nextpas.core.system.pas" "ecTimeout = nextpas.core.system.errors.ecTimeout;"
+require_token "src/nextpas.core.system.pas" "ecCancelled = nextpas.core.system.errors.ecCancelled;"
+require_token "src/nextpas.core.system.pas" "ecInterrupted = nextpas.core.system.errors.ecInterrupted;"
+require_token "src/nextpas.core.system.pas" "ecWouldBlock = nextpas.core.system.errors.ecWouldBlock;"
+require_token "src/nextpas.core.system.pas" "ecPermission = nextpas.core.system.errors.ecPermission;"
+require_token "src/nextpas.core.system.pas" "ecNotFound = nextpas.core.system.errors.ecNotFound;"
+require_token "src/nextpas.core.system.pas" "ecAlreadyExists = nextpas.core.system.errors.ecAlreadyExists;"
+require_token "src/nextpas.core.system.pas" "ecResourceExhausted = nextpas.core.system.errors.ecResourceExhausted;"
+require_token "src/nextpas.core.system.pas" "ecIO = nextpas.core.system.errors.ecIO;"
+require_token "src/nextpas.core.system.pas" "ecNetwork = nextpas.core.system.errors.ecNetwork;"
+require_token "src/nextpas.core.system.pas" "ecParse = nextpas.core.system.errors.ecParse;"
+require_token "src/nextpas.core.system.pas" "ecInternal = nextpas.core.system.errors.ecInternal;"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system constants mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base carrier aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system memory facade delegates full base utils contract"
@@ -1309,6 +1376,23 @@ reject_token "src/nextpas.core.system.sysutils.pas" "Now"
 reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
 reject_token "src/nextpas.core.system.sysutils.pas" "TFileStream"
 reject_token "src/nextpas.core.system.sysutils.pas" "TStringList"
+
+require_file "src/nextpas.core.system.errors.pas"
+require_token "src/nextpas.core.system.errors.pas" "unit nextpas.core.system.errors;"
+require_token "src/nextpas.core.system.errors.pas" "nextpas.core.exception"
+require_token "src/nextpas.core.system.errors.pas" "nextpas.core.base"
+require_token "src/nextpas.core.system.errors.pas" "nextpas.core.errors"
+require_token "src/nextpas.core.system.errors.pas" "Exception = nextpas.core.exception.Exception;"
+require_token "src/nextpas.core.system.errors.pas" "ExceptClass = nextpas.core.exception.ExceptClass;"
+require_token "src/nextpas.core.system.errors.pas" "EAbort = nextpas.core.exception.EAbort;"
+require_token "src/nextpas.core.system.errors.pas" "ENextPasError = nextpas.core.exception.ENextPasError;"
+require_token "src/nextpas.core.system.errors.pas" "ECore = nextpas.core.base.ECore;"
+require_token "src/nextpas.core.system.errors.pas" "EArgumentError = nextpas.core.errors.EArgumentError;"
+require_token "src/nextpas.core.system.errors.pas" "ecNone = nextpas.core.errors.ecNone;"
+require_errors_facade_surface_allowlist
+reject_token "src/nextpas.core.system.errors.pas" "SysUtils"
+reject_token "src/nextpas.core.system.errors.pas" "TypInfo"
+reject_token "src/nextpas.core.system.errors.pas" "Classes"
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"

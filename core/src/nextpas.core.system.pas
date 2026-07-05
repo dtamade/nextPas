@@ -10,8 +10,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.exception,
-  nextpas.core.errors;
+  nextpas.core.system.errors;
 
 const
   NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';
@@ -36,66 +35,68 @@ type
   TByteSpan = nextpas.core.base.TByteSpan;
   THashCode = nextpas.core.base.THashCode;
 
-  Exception = nextpas.core.exception.Exception;
-  ExceptClass = nextpas.core.exception.ExceptClass;
-  EConvertError = nextpas.core.exception.EConvertError;
-  EAssertionFailed = nextpas.core.exception.EAssertionFailed;
-  EAbort = nextpas.core.exception.EAbort;
+  { Exception taxonomy — forwarded from nextpas.core.system.errors }
+  Exception = nextpas.core.system.errors.Exception;
+  ExceptClass = nextpas.core.system.errors.ExceptClass;
+  EConvertError = nextpas.core.system.errors.EConvertError;
+  EAssertionFailed = nextpas.core.system.errors.EAssertionFailed;
+  EAbort = nextpas.core.system.errors.EAbort;
 
-  TErrorCategory = nextpas.core.exception.TErrorCategory;
-  ENextPasError = nextpas.core.exception.ENextPasError;
-  ECore = nextpas.core.base.ECore;
-  EInvariantViolation = nextpas.core.base.EInvariantViolation;
-  EArgumentNil = nextpas.core.base.EArgumentNil;
-  EEmptyCollection = nextpas.core.base.EEmptyCollection;
-  EInvalidArgument = nextpas.core.base.EInvalidArgument;
-  EInvalidResult = nextpas.core.base.EInvalidResult;
-  EInvalidState = nextpas.core.base.EInvalidState;
-  EOutOfRange = nextpas.core.base.EOutOfRange;
-  ENotSupported = nextpas.core.base.ENotSupported;
-  ENotCompatible = nextpas.core.base.ENotCompatible;
-  EInvalidOperation = nextpas.core.base.EInvalidOperation;
-  EOverflow = nextpas.core.base.EOverflow;
+  TErrorCategory = nextpas.core.system.errors.TErrorCategory;
+  ENextPasError = nextpas.core.system.errors.ENextPasError;
+  ECore = nextpas.core.system.errors.ECore;
+  EInvariantViolation = nextpas.core.system.errors.EInvariantViolation;
+  EArgumentNil = nextpas.core.system.errors.EArgumentNil;
+  EEmptyCollection = nextpas.core.system.errors.EEmptyCollection;
+  EInvalidArgument = nextpas.core.system.errors.EInvalidArgument;
+  EInvalidResult = nextpas.core.system.errors.EInvalidResult;
+  EInvalidState = nextpas.core.system.errors.EInvalidState;
+  EOutOfRange = nextpas.core.system.errors.EOutOfRange;
+  ENotSupported = nextpas.core.system.errors.ENotSupported;
+  ENotCompatible = nextpas.core.system.errors.ENotCompatible;
+  EInvalidOperation = nextpas.core.system.errors.EInvalidOperation;
+  EOverflow = nextpas.core.system.errors.EOverflow;
 
-  EArgumentError = nextpas.core.errors.EArgumentError;
-  ENullReferenceError = nextpas.core.errors.ENullReferenceError;
-  EInvalidOperationError = nextpas.core.errors.EInvalidOperationError;
-  ENotImplementedError = nextpas.core.errors.ENotImplementedError;
-  ENotSupportedError = nextpas.core.errors.ENotSupportedError;
-  ETimeoutError = nextpas.core.errors.ETimeoutError;
-  ECancelledError = nextpas.core.errors.ECancelledError;
-  EPermissionError = nextpas.core.errors.EPermissionError;
-  ENotFoundError = nextpas.core.errors.ENotFoundError;
-  EAlreadyExistsError = nextpas.core.errors.EAlreadyExistsError;
-  EResourceExhaustedError = nextpas.core.errors.EResourceExhaustedError;
-  EIOError = nextpas.core.errors.EIOError;
-  ENetworkError = nextpas.core.errors.ENetworkError;
-  EParseError = nextpas.core.errors.EParseError;
-  EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;
-  EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;
-  EOutOfMemory = nextpas.core.errors.EOutOfMemory;
-  EInterruptedError = nextpas.core.errors.EInterruptedError;
-  EWouldBlockError = nextpas.core.errors.EWouldBlockError;
+  EArgumentError = nextpas.core.system.errors.EArgumentError;
+  ENullReferenceError = nextpas.core.system.errors.ENullReferenceError;
+  EInvalidOperationError = nextpas.core.system.errors.EInvalidOperationError;
+  ENotImplementedError = nextpas.core.system.errors.ENotImplementedError;
+  ENotSupportedError = nextpas.core.system.errors.ENotSupportedError;
+  ETimeoutError = nextpas.core.system.errors.ETimeoutError;
+  ECancelledError = nextpas.core.system.errors.ECancelledError;
+  EPermissionError = nextpas.core.system.errors.EPermissionError;
+  ENotFoundError = nextpas.core.system.errors.ENotFoundError;
+  EAlreadyExistsError = nextpas.core.system.errors.EAlreadyExistsError;
+  EResourceExhaustedError = nextpas.core.system.errors.EResourceExhaustedError;
+  EIOError = nextpas.core.system.errors.EIOError;
+  ENetworkError = nextpas.core.system.errors.ENetworkError;
+  EParseError = nextpas.core.system.errors.EParseError;
+  EIndexOutOfRangeError = nextpas.core.system.errors.EIndexOutOfRangeError;
+  EOutOfMemoryError = nextpas.core.system.errors.EOutOfMemoryError;
+  EOutOfMemory = nextpas.core.system.errors.EOutOfMemory;
+  EInterruptedError = nextpas.core.system.errors.EInterruptedError;
+  EWouldBlockError = nextpas.core.system.errors.EWouldBlockError;
 
 const
-  ecNone = nextpas.core.errors.ecNone;
-  ecInvalidArgument = nextpas.core.errors.ecInvalidArgument;
-  ecNullReference = nextpas.core.errors.ecNullReference;
-  ecInvalidOperation = nextpas.core.errors.ecInvalidOperation;
-  ecNotImplemented = nextpas.core.errors.ecNotImplemented;
-  ecNotSupported = nextpas.core.errors.ecNotSupported;
-  ecTimeout = nextpas.core.errors.ecTimeout;
-  ecCancelled = nextpas.core.errors.ecCancelled;
-  ecInterrupted = nextpas.core.errors.ecInterrupted;
-  ecWouldBlock = nextpas.core.errors.ecWouldBlock;
-  ecPermission = nextpas.core.errors.ecPermission;
-  ecNotFound = nextpas.core.errors.ecNotFound;
-  ecAlreadyExists = nextpas.core.errors.ecAlreadyExists;
-  ecResourceExhausted = nextpas.core.errors.ecResourceExhausted;
-  ecIO = nextpas.core.errors.ecIO;
-  ecNetwork = nextpas.core.errors.ecNetwork;
-  ecParse = nextpas.core.errors.ecParse;
-  ecInternal = nextpas.core.errors.ecInternal;
+  { Error category constants — forwarded from nextpas.core.system.errors }
+  ecNone = nextpas.core.system.errors.ecNone;
+  ecInvalidArgument = nextpas.core.system.errors.ecInvalidArgument;
+  ecNullReference = nextpas.core.system.errors.ecNullReference;
+  ecInvalidOperation = nextpas.core.system.errors.ecInvalidOperation;
+  ecNotImplemented = nextpas.core.system.errors.ecNotImplemented;
+  ecNotSupported = nextpas.core.system.errors.ecNotSupported;
+  ecTimeout = nextpas.core.system.errors.ecTimeout;
+  ecCancelled = nextpas.core.system.errors.ecCancelled;
+  ecInterrupted = nextpas.core.system.errors.ecInterrupted;
+  ecWouldBlock = nextpas.core.system.errors.ecWouldBlock;
+  ecPermission = nextpas.core.system.errors.ecPermission;
+  ecNotFound = nextpas.core.system.errors.ecNotFound;
+  ecAlreadyExists = nextpas.core.system.errors.ecAlreadyExists;
+  ecResourceExhausted = nextpas.core.system.errors.ecResourceExhausted;
+  ecIO = nextpas.core.system.errors.ecIO;
+  ecNetwork = nextpas.core.system.errors.ecNetwork;
+  ecParse = nextpas.core.system.errors.ecParse;
+  ecInternal = nextpas.core.system.errors.ecInternal;
 
 procedure FreeAndNil(var AObj); inline;
 procedure SafeFree(var AObj); inline;

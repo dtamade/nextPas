@@ -7,6 +7,9 @@ not convert bootstrap RTL pressure into a broad public compatibility API.
 
 ## Current Decision Boundary
 
+- `nextpas.core.system.errors` is a live facade re-exporting all 38 exception
+  type aliases and 18 error-category constants from their canonical owners
+  (`nextpas.core.exception`, `nextpas.core.base`, `nextpas.core.errors`).
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
 - `nextpas.core.system.sysutils` has a minimal live exception-formatting,

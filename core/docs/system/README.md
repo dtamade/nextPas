@@ -58,7 +58,10 @@ ordering and runtime-fault classification.
 runtime and lifecycle names. It is constants-only: no helper implementation, no
 runtime registry, and no broader SysUtils, Classes or TypInfo surface.
 
-S4 compatibility facades are now split by evidence. `nextpas.core.system.typinfo`
+S4 compatibility facades are now split by evidence. `nextpas.core.system.errors`
+is a live facade re-exporting all 38 exception type aliases and 18 error-category
+constants from their canonical owners (`nextpas.core.exception`, `nextpas.core.base`,
+`nextpas.core.errors`). `nextpas.core.system.typinfo`
 has a minimal live unit for the seven-symbol TypInfo pressure set, and
 `nextpas.core.system.sysutils` has a minimal live exception-formatting,
 `SameText`, `IntToStr`, and `Trim` facade for `Format`, `SameText`,
@@ -116,6 +119,8 @@ backend-private magic strings.
 
 S4 boundary note:
 
+- `system.errors` is live as an exception taxonomy facade, re-exporting all 38
+  exception type aliases and 18 error-category constants from canonical owners
 - `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
 - `system.sysutils` is live only for `Format`, `SameText`, `IntToStr`, `Trim`,
   `Exception`, `ExceptClass`, `EConvertError`, and `EAssertionFailed`
