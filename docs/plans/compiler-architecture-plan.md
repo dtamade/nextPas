@@ -167,7 +167,7 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 | 子任务 | 输入 | 输出文件 | 行数 | 验证 |
 |--------|------|---------|------|------|
   | 1.2a 抽离 builtins [✅ 2026-07-05] | TSemanticAnalyzer 中 ~500 行内置函数注册 | `compiler/sema/np_sema_builtins.pas` | ~500 | compiler-pass 34/34 |
-| 1.2b 抽离 string_ownership [🔲] | `np_sema_string_ops.inc` (2,243 行) | `compiler/np_sema_string_ownership.pas` | ~2000 | compiler-pass 34/34 |
+  | 1.2b 抽离 string_ownership [✅ 2026-07-05] | `np_sema_string_ops.inc` (2,243 行) | `compiler/sema/np_sema_string_ownership.pas` | ~2000 | compiler-pass 34/34 |
 | 1.2c 抽离 overload [🔲] | TSemanticAnalyzer 中 ~1500 行重载解析 | `compiler/np_sema_overload.pas` | ~1500 | compiler-pass 34/34 |
 | 1.2d 抽离 type_check [🔲] | TSemanticAnalyzer 中 ~1500 行类型检查 | `compiler/np_sema_type_check.pas` | ~1500 | compiler-pass 34/34 |
 | 1.2e 抽离 hir_lowering [🔲] | `np_sema_runtime_expr.inc` (3,345 行) | `compiler/np_sema_hir_lowering.pas` | ~3000 | compiler-pass 34/34 |
