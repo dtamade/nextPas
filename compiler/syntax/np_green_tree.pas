@@ -4197,6 +4197,8 @@ var
   VarToken: TToken;
   Direction: string;
   RHS: TGreenNode;
+  InitExpr: TGreenNode;
+  VarNameNode: TGreenNode;
   ForOffset: LongInt;
 begin
   ForOffset := CurrentToken(ALexer, ACursor).ByteOffset;
@@ -4244,9 +4246,8 @@ begin
     Exit;
   end;
 
-  Node := TGreenNode.Create(gnkForStatement, ForOffset, 0, '');
-  Node.AppendChild(TGreenNode.Create(gnkIdentifier, VarToken.ByteOffset,
-    Length(VarToken.Lexeme), VarToken.Lexeme));
+  VarNameNode := TGreenNode.Create(gnkIdentifier, VarToken.ByteOffset,
+    Length(VarToken.Lexeme), VarToken.Lexeme);
 
   if not MatchTokenSilent(ALexer, ACursor, tkAssign) then
   begin
@@ -4256,9 +4257,7 @@ begin
     Exit(False);
   end;
 
-  RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
-  if RHS <> nil then
-    Node.AppendChild(RHS);
+  InitExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
 
   if CurrentToken(ALexer, ACursor).Kind = tkToKeyword then
     Direction := 'to'
@@ -4273,10 +4272,15 @@ begin
   end;
   Inc(ACursor);
 
+  { Create the for-statement node with the correct direction text from the start }
+  Node := TGreenNode.Create(gnkForStatement, ForOffset, 0, Direction);
+  Node.AppendChild(VarNameNode);
+  if InitExpr <> nil then
+    Node.AppendChild(InitExpr);
+
   RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
   if RHS <> nil then
     Node.AppendChild(RHS);
-  Node.Text := Direction;
 
   if not MatchTokenSilent(ALexer, ACursor, tkDoKeyword) then
   begin
@@ -4549,13 +4553,13 @@ begin
       begin
         HandlerToken := CurrentToken(ALexer, ACursor);
         Inc(ACursor);
-        HandlerNode := TGreenNode.Create(gnkExceptionHandler,
-          HandlerToken.ByteOffset, 0, '');
 
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
         begin
-          HandlerNode.Text := CurrentToken(ALexer, ACursor).Lexeme;
+          HandlerNode := TGreenNode.Create(gnkExceptionHandler,
+            HandlerToken.ByteOffset, 0,
+            CurrentToken(ALexer, ACursor).Lexeme);
           Inc(ACursor);
           if MatchTokenSilent(ALexer, ACursor, tkColon) then
           begin
@@ -4694,15 +4698,20 @@ var
         end;
       tkGotoKeyword:
         begin
-          StmtNode := TGreenNode.Create(gnkGotoStatement, Token.ByteOffset, 0, '');
-          List.AppendChild(StmtNode);
           Inc(ACursor);
           if (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind in
               [tkIdentifier, tkIntegerLiteral]) then
           begin
-            StmtNode.Text := CurrentToken(ALexer, ACursor).Lexeme;
+            StmtNode := TGreenNode.Create(gnkGotoStatement, Token.ByteOffset, 0,
+              CurrentToken(ALexer, ACursor).Lexeme);
+            List.AppendChild(StmtNode);
             Inc(ACursor);
+          end
+          else
+          begin
+            StmtNode := TGreenNode.Create(gnkGotoStatement, Token.ByteOffset, 0, '');
+            List.AppendChild(StmtNode);
           end;
           Inc(ATree.FNodeCount);
           Result := True;
@@ -4953,7 +4962,7 @@ var
             (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
           begin
             { assignment: (expr)^.field := value }
-            StmtNode.Text := 'assign';
+            StmtNode.NodeKind := gnkAssignmentStatement;
             Inc(ACursor);
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
@@ -5197,8 +5206,7 @@ end;
 
 procedure TGreenTree.CheckMutable;
 begin
-  // Assert-free: in production, frozen writes are silently ignored
-  // (the tree is immutable by convention after Freeze, not by runtime guard)
+  Assert(not FFrozen, 'TGreenTree: attempt to mutate frozen tree');
 end;
 
 procedure TGreenTree.Freeze;
@@ -5512,8 +5520,9 @@ var
   D: TGreenNodeData;
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
-    or (AChild = nil) or FOwner.IsFrozen then
+    or (AChild = nil) then
     Exit;
+  FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
   if D.ChildStart < 0 then
   begin
@@ -5542,8 +5551,7 @@ var
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
     Exit;
-  if FOwner.IsFrozen then
-    Exit;
+  FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
   D.Kind := AValue;
   FOwner.FNodes[FIndex] := D;
@@ -5583,8 +5591,7 @@ var
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
     Exit;
-  if FOwner.IsFrozen then
-    Exit;
+  FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
   D.TextStart := Length(FOwner.FNodeText);
   D.TextLen := Length(AValue);

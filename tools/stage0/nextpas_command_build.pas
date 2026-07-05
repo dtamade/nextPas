@@ -20,7 +20,8 @@ procedure RunBuild(
   const WorkspaceOverride: string;
   const UnitRootOverrides: TStringArray;
   const OutDirOverride: string;
-  const NoFold: Boolean
+  const NoFold: Boolean;
+  const Incremental: Boolean
 );
 
 implementation
@@ -74,7 +75,8 @@ procedure RunBuild(
   const WorkspaceOverride: string;
   const UnitRootOverrides: TStringArray;
   const OutDirOverride: string;
-  const NoFold: Boolean
+  const NoFold: Boolean;
+  const Incremental: Boolean
 );
 var
   CompilerExitCode: LongInt;
@@ -223,9 +225,12 @@ begin
     Options.WorkspaceModel := WorkspaceModel;
     Options.ExplicitUnitRoots := ResolvedUnitRoots;
     Options.NoFold := NoFold;
+    Options.Incremental := Incremental;
     Options.BuildContext.ArtifactRootPath := WorkspaceModel.ArtifactRootPath;
     Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
     Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);
+    if Incremental then
+      Session.PrepareIncrementalBuild;
     WorkspaceModel := nil;
     CaptureSessionContext(AState, Session);
     Session.AnalyzeSyntax;
@@ -255,6 +260,8 @@ begin
 
     AState.BuildContext.CompilerName := Session.PrimaryToolLogicalExecutable;
     RunResult := Session.ExecuteToolchain(GetEnvironmentVariable('PATH'));
+    if Incremental then
+      Session.FinalizeIncrementalBuild;
     try
       if RunResult.StepCount > 0 then
       begin

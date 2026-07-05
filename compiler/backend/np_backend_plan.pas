@@ -8,10 +8,11 @@ unit np_backend_plan;
 interface
 
 uses
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir,
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
   np_target_facts,
   np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_llvm_emitter, nextpas_json_helpers;
+  np_hir_llvm_emitter, nextpas_json_helpers,
+  np_hir_to_mir, np_mir_model, np_mir_to_llvm;
 
 type
   TBackendArtifact = record
@@ -544,6 +545,8 @@ var
   BitcodeArtifactPath: string;
   HirBuilder: THIRBuilder;
   HirEmitter: THIRLlvmEmitter;
+  Lowering: THirToMirLowering;
+  LlvmTranslator: TMirToLlvmTranslator;
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
@@ -605,13 +608,32 @@ begin
     HirBuilder := THIRBuilder.Create(FSemaModel);
     try
       HirBuilder.Build;
-      HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
-        FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout);
-      try
-        HirEmitter.EmitModule;
-        HirEmitter.SaveToFile(LlvmIrArtifactPath);
-      finally
-        HirEmitter.Free;
+      if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
+      begin
+        { Opt-in: HIR -> MIR -> LLVM IR pipeline }
+        Lowering := THirToMirLowering.Create(HirBuilder.Module);
+        try
+          LlvmTranslator := TMirToLlvmTranslator.Create(Lowering.Lower);
+          try
+            LlvmTranslator.SaveToFile(LlvmIrArtifactPath);
+          finally
+            LlvmTranslator.Free;
+          end;
+        finally
+          Lowering.Free;
+        end;
+      end
+      else
+      begin
+        { Default: HIR -> LLVM IR direct path }
+        HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
+          FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout);
+        try
+          HirEmitter.EmitModule;
+          HirEmitter.SaveToFile(LlvmIrArtifactPath);
+        finally
+          HirEmitter.Free;
+        end;
       end;
     finally
       HirBuilder.Free;
