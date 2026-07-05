@@ -596,6 +596,9 @@ begin
     LSum := 0.0;
     for LSampleIndex := 0 to LN - 1 do
     begin
+      // 简化 PCG (LCG + 右移) — 用于 bootstrap 重采样足够均匀，
+      // 无完整 PCG-XSH-RR 输出置换。周期 2^64，对 bootstrap 够用。
+      // 不适用于密码学或需要高质量随机性的场景。
       LSeed := LSeed * 6364136223846793005 + 1442695040888963407;
       LDataIndex := Integer((LSeed shr 33) mod QWord(LN));
       LSum := LSum + FData[LDataIndex];
