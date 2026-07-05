@@ -931,7 +931,7 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
 | P0.2 TVec | ✅ | ⚠️ | 仍有 22 处 SetLength+1 |
 | P0.3 Arena/GreenTree | ⏸️ | ✅ | Green Tree 已重构为 rowan-style record |
 | P1.1 Pipeline | ✅ | ✅ | ICompilerPhase + TPhaseStatus |
-| P1.2 Sema 拆分 | ⏸️ | ⚠️ | 3/6 模块是空骨架（overload/type_check/hir_lowering），推迟到 AL2 |
+| P1.2 Sema 拆分 | ⏸️ | ⚠️ | builtins+string_ownership 已提取（逻辑分组），3/6 模块是空骨架，物理分离推迟到 AL2 |
 | P1.3 MIR 层 | ✅ | ✅ | 框架就绪，HIR→MIR 完整翻译 |
 | P1.4 Green Tree | ✅ | ✅ | 已完成 rowan 重构 |
 | P2.1 查询系统 | ✅ | ✅ | O(1) hash lookup |
@@ -940,8 +940,8 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
 | P3.1 MIR 优化 | ✅ | ✅ | 6/6 pass 全部有实质实现 + 20 个单元测试 |
 | P3.2 错误恢复 | ✅ | ✅ | np_error_recovery.pas |
 | P3.3 诊断 | ✅ | ✅ | np_diagnostics_json.pas |
-| P4.1 Permissive | 🔲 | 🔲 | 未开始 |
-| P4.2 Blob* | 🔲 | 🔲 | 未开始 |
+| P4.1 Permissive | ⏸️ | ⚠️ | 14 处标记在关键路径，高风险推迟到 AL2 专门迭代 |
+| P4.2 Blob* | ⏸️ | ⚠️ | 90 处活跃 Blob 方法在 HIR builder，推迟到 AL2 |
 | P4.3 测试补全 | ✅ | ✅ | sema 单元测试 9 文件 25+ 用例 + MIR 单元测试 4 文件 20 用例 |
 
 
@@ -967,10 +967,12 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
 **策略**: 测试先行 — 每个提取必须有对应的单元测试覆盖。
 **验证**: compiler-pass 34/34 + sema 单元测试 ≥ 30。
 
-### AL2.2: Permissive Overload 清理（预估 5 天，P2 优先级）
+### AL2.2: Permissive Overload 清理（预估 5 天，P2 优先级）⚠️ 高风险
 
 **现状**: 14 处 `{ Permissive: ... }` 妥协标记在关键路径上。
 **目标**: 标准重载解析（精确匹配 → 类型提升 → 歧义报错）。
+**风险**: 可能破坏 32 个 compiler-pass 测试。需要测试先行。
+**策略**: 为每个标记添加专门测试 → 移除标记 → 验证。
 
 **方法**:
 1. 为 14 处标记添加单元测试
