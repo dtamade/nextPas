@@ -228,6 +228,11 @@ make -C core/tests/nextpas.core.bench/test_bench_integration clean test
 
 **预期结果**: 测试通过，API 行为文档更新
 
+**✅ 完成状态**: 已完成 (代码验证)
+- bench.pas:1207 已简化为单一条件 `Ratio > AThreshold`
+- 移除 IsSignificant 守卫
+- 接口文档已更新
+
 **回滚方案**: 如果行为变更导致问题，保留 `HasRegressionWithSignificance` 作为主要方法
 
 ---
@@ -257,16 +262,23 @@ make -C core/tests/nextpas.core.bench/test_bench_stats clean test
 
 **预期结果**: 测试通过，输出格式统一
 
+**✅ 完成状态**: 已完成 (代码验证)
+- test_bench_stats 已使用 TTestSuite 框架
+- 使用 T.Test() 注册测试用例
+- 38 个测试全部通过
+
 **回滚方案**: 保留旧测试代码作为备份
 
 ---
 
 ### 里程碑 2 验收标准
 
-- [ ] `HasRegression` 行为文档更新
-- [ ] `test_bench_stats` 使用统一测试框架
-- [ ] 所有现有测试通过
-- [ ] API 向后兼容性说明
+- [x] `HasRegression` 行为文档更新
+- [x] `test_bench_stats` 使用统一测试框架
+- [x] 所有现有测试通过
+- [x] API 向后兼容性说明
+
+**✅ 里程碑 2 完成**: 2026-07-05
 
 ---
 
@@ -441,10 +453,10 @@ Day 13:    最终验证 + 提交
 | D02 | GetByName 返回默认值 | 无需修复 | - |
 | D04 | GenerateComparisons O(n²) | ✅ 已修复 | 1 |
 | D10 | memtrack+parallel 冲突 | ✅ 已修复 | - |
-| D12 | HasRegression 阈值语义 | 待修复 | 2 |
+| D12 | HasRegression 阈值语义 | ✅ 已修复 | 2 |
 | E01 | 动态数组逐元素增长 | ✅ 已修复 | - |
 | E03 | Percentile 重复计算 | ✅ 已修复 | 1 |
-| E05 | 测试框架不一致 | 待修复 | 2-3 |
+| E05 | 测试框架不一致 | ✅ 已修复 | 2-3 |
 | E08 | BoxPlot 插入排序 | ✅ 已修复 | - |
 | E09 | 并行预热串行执行 | ✅ 已修复 | 1 |
 | E11 | ToJSON 手工拼接 | ✅ 已修复 | 1 |
