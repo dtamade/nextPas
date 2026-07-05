@@ -5,7 +5,7 @@ program test_platform_io_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io

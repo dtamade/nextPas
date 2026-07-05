@@ -5,7 +5,7 @@ program test_platform_files_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
