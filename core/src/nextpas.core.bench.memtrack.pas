@@ -171,7 +171,7 @@ begin
   LSize := 0;
   if GTrackingEnabled and (P <> nil) and Assigned(GOriginalMemoryManager.MemSize) then
     LSize := GOriginalMemoryManager.MemSize(P);
-  if GTrackingEnabled then
+  if GTrackingEnabled and (P <> nil) then
     GGlobalTracker.RecordFree(LSize);
   Result := GOriginalMemoryManager.FreeMem(P);
 end;
@@ -183,7 +183,7 @@ begin
   LSize := Size;
   if (LSize = 0) and (P <> nil) and Assigned(GOriginalMemoryManager.MemSize) then
     LSize := GOriginalMemoryManager.MemSize(P);
-  if GTrackingEnabled then
+  if GTrackingEnabled and (P <> nil) then
     GGlobalTracker.RecordFree(LSize);
   if Assigned(GOriginalMemoryManager.FreeMemSize) then
     Result := GOriginalMemoryManager.FreeMemSize(P, Size)

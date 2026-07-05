@@ -170,6 +170,16 @@ begin
   Result := HasArgFlag(AArg, '--benchmem', '-benchmem');
 end;
 
+function ParseBenchSavePattern(const AArg: string): string;
+begin
+  Result := ExtractArgValue(AArg, '--benchsave');
+end;
+
+function ParseBenchComparePattern(const AArg: string): string;
+begin
+  Result := ExtractArgValue(AArg, '--benchcompare');
+end;
+
 function ParseRunPattern(const AArg: string): string;
 begin
   Result := ExtractArgValue(AArg, '--run');
@@ -309,6 +319,16 @@ begin
   Result := FindFlagInArgs(@IsBenchMemArg);
 end;
 
+function ParseBenchSaveFromArgs: string;
+begin
+  Result := FindArgValue(@ParseBenchSavePattern, '--benchsave');
+end;
+
+function ParseBenchCompareFromArgs: string;
+begin
+  Result := FindArgValue(@ParseBenchComparePattern, '--benchcompare');
+end;
+
 function ParseRunFromArgs: string;
 begin
   Result := FindArgValue(@ParseRunPattern, '--run');
@@ -319,7 +339,7 @@ end;
 procedure ApplyCLIArgs;
 var
   LCount, LShuffleSeed, LMaxFail, LRunTimeout, LBenchTime: Integer;
-  LBenchPattern, LRunPattern: string;
+  LBenchPattern, LRunPattern, LBenchSave, LBenchCompare: string;
 begin
   if GetTestFilter = '' then
     SetTestFilter(ParseFilterFromArgs);
@@ -369,6 +389,13 @@ begin
     SetDefaultBenchTimeMs(LBenchTime);
   if ParseBenchMemFromArgs then
     SetDefaultBenchMem(True);
+  LBenchSave := ParseBenchSaveFromArgs;
+  if LBenchSave <> '' then
+    SetDefaultBenchSaveFile(LBenchSave);
+  LBenchCompare := ParseBenchCompareFromArgs;
+  if LBenchCompare <> '' then
+    SetDefaultBenchCompareFile(LBenchCompare);
 end;
 
 end.
+

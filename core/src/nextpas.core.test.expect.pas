@@ -70,6 +70,9 @@ type
       const ARelEps: Double = 1e-9): IExpectation;
     function ToNotBeNearRel(const AExpected: Double;
       const ARelEps: Double = 1e-9): IExpectation;
+    { NaN checks }
+    function ToBeNaN: IExpectation;
+    function ToBeNotNaN: IExpectation;
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -167,6 +170,8 @@ type
       const ARelEps: Double = 1e-9): IExpectation;
     function ToNotBeNearRel(const AExpected: Double;
       const ARelEps: Double = 1e-9): IExpectation;
+    function ToBeNaN: IExpectation;
+    function ToBeNotNaN: IExpectation;
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -738,6 +743,24 @@ begin
   finally
     FNegated := not FNegated;
   end;
+end;
+
+function TExpectation.ToBeNaN: IExpectation;
+begin
+  RequireKind(ekDouble, 'ToBeNaN');
+  CheckMatch(IsNan(FDoubleValue),
+    'Expected non-NaN but got NaN',
+    'Expected NaN but got ' + FloatToStr(FDoubleValue));
+  Result := Self;
+end;
+
+function TExpectation.ToBeNotNaN: IExpectation;
+begin
+  RequireKind(ekDouble, 'ToBeNotNaN');
+  CheckMatch(not IsNan(FDoubleValue),
+    'Expected NaN but got ' + FloatToStr(FDoubleValue),
+    'Expected non-NaN but got NaN');
+  Result := Self;
 end;
 
 { ── Expect factories ──────────────────────────────────────────────────────── }

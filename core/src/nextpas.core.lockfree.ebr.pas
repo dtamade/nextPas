@@ -21,7 +21,15 @@ type
     UserData: Pointer;
   end;
 
-  {** @desc Epoch-Based Reclamation 域（保守单次检查设计） }
+  {** @desc 保守型内存回收域（Quiescent-State Based Reclamation, QSBR）
+    @details 设计为 "Zero-Active Reclamation"：仅当 FActiveCount=0 时回收所有退休节点。
+      不维护全局 epoch，不做 epoch 推进——依赖临界区极短（纳秒级）的使用场景。
+
+      适用场景：SegQueue 等临界区仅包含几个原子操作的无锁数据结构。
+      不适用场景：长时间持有引用的读取端（应改用 THazardDomain）。
+
+      @see THazardDomain 用于读多写少、临界区较长的场景。
+  }
   TEbrDomain = class
   private
     FRetired: PEbrRetiredNode;

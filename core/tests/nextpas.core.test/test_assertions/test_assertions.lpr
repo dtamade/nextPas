@@ -394,6 +394,28 @@ begin
   ExpectFail(procedure begin CheckSnapshot('goodbye world', LSnapDir, 'test2.txt'); end, 'mismatch');
 end;
 
+{ E-10: CheckNaN / CheckNotNaN }
+
+procedure TestCheckNaNPass;
+begin
+  CheckNaN(Sqrt(-1.0), 'NaN should be NaN');
+end;
+
+procedure TestCheckNaNFail;
+begin
+  ExpectFail(procedure begin CheckNaN(1.0, 'expect-fail: 1.0 is not NaN'); end);
+end;
+
+procedure TestCheckNotNaNPass;
+begin
+  CheckNotNaN(1.0, '1.0 should not be NaN');
+end;
+
+procedure TestCheckNotNaNFail;
+begin
+  ExpectFail(procedure begin CheckNotNaN(Sqrt(-1.0), 'expect-fail: NaN is NaN'); end);
+end;
+
 { R6-40: Empty string semantics for Contains/StartsWith/EndsWith }
 
 procedure TestR640CheckContainsEmptyNeedle;
@@ -1058,6 +1080,12 @@ begin
   { F-06: Snapshot testing }
   LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
   LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
+
+  { E-10: CheckNaN / CheckNotNaN coverage }
+  LSuite.Test('CheckNaN pass',             @TestCheckNaNPass);
+  LSuite.Test('CheckNaN fail',             @TestCheckNaNFail);
+  LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
+  LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
 
   if not LSuite.Run then
   begin

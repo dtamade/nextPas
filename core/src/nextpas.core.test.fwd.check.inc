@@ -33,6 +33,8 @@ begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
 begin nextpas.core.test.check.CheckEqual(AExpected, AActual, AMessage); end;
+{ CheckEqualMsg — deprecated, suppress warning for facade forwarding }
+{$WARN SYMBOL_DEPRECATED OFF}
 procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
 begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
 
@@ -44,6 +46,7 @@ begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
 
 procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
 begin nextpas.core.test.check.CheckEqualMsg(AExpected, AActual, AMessage); end;
+{$WARN SYMBOL_DEPRECATED ON}
 
 procedure CheckNotEqual(const AExpected, AActual: string);
 begin nextpas.core.test.check.CheckNotEqual(AExpected, AActual); end;
@@ -175,6 +178,12 @@ begin nextpas.core.test.check.CheckNearRel(AExpected, AActual, ARelEps, AMessage
 procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNearRel(AExpected, AActual, ARelEps, AMessage); end;
+
+procedure CheckNaN(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNaN(AValue, AMessage); end;
+
+procedure CheckNotNaN(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotNaN(AValue, AMessage); end;
 
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;

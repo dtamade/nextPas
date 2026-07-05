@@ -119,6 +119,7 @@
 - 再读 `ui-rendering-specification.md`，确认 `DrawPlan`、`RenderGraph`、`SurfaceFrame` 和 render-side contract 怎样把 GUI 的硬件加速主路径冻结下来
 - 再读 `render-asset-pipeline-specification.md`，确认 shader、atlas、font metadata、theme/image preprocessing 和 `RenderAssetBundle` 怎样收敛到统一资产流水线
 - 再读 `ide-specification.md`，确认自有 IDE 应该怎样建立在 compiler、GUI framework、workspace truth 和 test/toolchain 控制面之上
+- 先读 `architecture-maturity-levels.md`，确认当前架构成熟度等级（AL0-AL5）和升级路径
 - 再读 `backend-specification.md`，确认 `MIR`、codegen adapter、assembler/linker 与产物路径如何冻结
 - 再读 `llvm-backend-specification.md`，确认 LLVM backend 为什么只是 backend contract 的一个实现
 - 再读 `c-interop-specification.md`，确认 C ABI、external symbol 与 target-aware linking 如何冻结

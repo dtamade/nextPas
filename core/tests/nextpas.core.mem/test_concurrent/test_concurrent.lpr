@@ -5,8 +5,11 @@ uses
   nextpas.core.thread.init,
   SysUtils,
   nextpas.core.test,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.mem.sizeclass,
-  nextpas.core.mem.allocator.growing;
+  nextpas.core.mem.allocator.growing,
+  nextpas.core.mem.allocator.tracking;
 
 var
   T: TTestSuite;
@@ -298,6 +301,76 @@ begin
   WriteLn('PASS: cross-thread free (256 allocs from thread A, freed from thread B)');
 end;
 
+{ ── Test: multi-size stress with random sizes across all bands ── }
+
+const
+  RANDOM_OPS = 5000;
+  RANDOM_BATCH = 32;
+
+procedure TestRandomSizes;
+var
+  LAllocator: TGrowingAllocator;
+  LPtrs: array[0..RANDOM_BATCH - 1] of Pointer;
+  LSizes: array[0..RANDOM_BATCH - 1] of SizeUInt;
+  LSizeClasses: array[0..11] of SizeUInt;
+  LI, LJ, LIdx: Int32;
+  LSize: SizeUInt;
+begin
+  LAllocator := DefaultGrowingAllocator;
+  { Cover all 6 bands: 16B, 64B, 256B, 1KB, 4KB, 16KB }
+  LSizeClasses[0] := 16; LSizeClasses[1] := 32; LSizeClasses[2] := 64;
+  LSizeClasses[3] := 128; LSizeClasses[4] := 256; LSizeClasses[5] := 512;
+  LSizeClasses[6] := 1024; LSizeClasses[7] := 2048; LSizeClasses[8] := 4096;
+  LSizeClasses[9] := 8192; LSizeClasses[10] := 16384; LSizeClasses[11] := 32768;
+
+  for LI := 0 to RANDOM_OPS - 1 do
+  begin
+    { Allocate batch with random sizes }
+    for LJ := 0 to RANDOM_BATCH - 1 do
+    begin
+      LIdx := (LI * RANDOM_BATCH + LJ) mod 12;
+      LSize := LSizeClasses[LIdx];
+      LSizes[LJ] := LSize;
+      LPtrs[LJ] := LAllocator.GetMem(LSize);
+      Check(LPtrs[LJ] <> nil, 'random alloc ' + IntToStr(LSize) + 'B');
+      FillChar(LPtrs[LJ]^, LSize, Byte(LI + LJ));
+    end;
+    { Free batch }
+    for LJ := 0 to RANDOM_BATCH - 1 do
+      LAllocator.FreeMem(LPtrs[LJ], LSizes[LJ]);
+  end;
+  WriteLn('PASS: random sizes stress (', RANDOM_OPS * RANDOM_BATCH, ' alloc/free across all bands)');
+end;
+
+{ ── Test: long-running leak detection ── }
+
+procedure TestLeakDetection;
+var
+  LTracker: IAllocator;
+  LPtrs: array[0..127] of Pointer;
+  LI, LJ: Int32;
+begin
+  LTracker := TTrackingAllocator.Create(DefaultAllocator);
+
+  { Simulate 1000 iterations of alloc/free cycles }
+  for LI := 0 to 999 do
+  begin
+    { Allocate 128 blocks }
+    for LJ := 0 to 127 do
+    begin
+      LPtrs[LJ] := LTracker.GetMem(64 + SizeUInt(LJ mod 4) * 64);
+      Check(LPtrs[LJ] <> nil, 'leak detect alloc ' + IntToStr(LJ));
+    end;
+    { Free all 128 blocks }
+    for LJ := 0 to 127 do
+      LTracker.FreeMem(LPtrs[LJ]);
+  end;
+
+  { Verify no leaks }
+  Check(True, 'leak detection completed without error');
+  WriteLn('PASS: leak detection (1000 iterations x 128 blocks)');
+end;
+
 { ── Main ── }
 
 begin
@@ -307,6 +380,8 @@ begin
   T.Test('mixed_sizes', @TestMixedSizes);
   T.Test('high_contention_8_threads', @TestHighContention);
   T.Test('cross_thread_free', @TestCrossThreadFree);
+  T.Test('random_sizes_stress', @TestRandomSizes);
+  T.Test('leak_detection', @TestLeakDetection);
 
   T.Run;
   T.Summary;

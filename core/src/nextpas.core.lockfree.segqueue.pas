@@ -105,6 +105,9 @@ var
   LSeg: PSegment;
   LNext: PSegment;
 begin
+  { Release EBR first: its destructor calls SegQueueReclaimSegment for
+    retired segments, which pushes them back into FFreePool. }
+  FEbr.Free;
   LSeg := FHead;
   while LSeg <> nil do
   begin
@@ -119,7 +122,6 @@ begin
     FreeMem(LSeg);
     LSeg := LNext;
   end;
-  FEbr.Free;
   inherited;
 end;
 

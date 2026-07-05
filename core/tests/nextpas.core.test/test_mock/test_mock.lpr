@@ -1159,6 +1159,98 @@ begin
   end;
 end;
 
+{ ── E-09: Mock When API ────────────────────────────────────────────────────── }
+
+procedure TestWhenBasicImpl(AMock: TMock);
+begin
+    AMock.Setup('Add').When([MockInt(1)]).ReturnsInt(10);
+    AMock.Setup('Add').When([MockInt(2)]).ReturnsInt(20);
+    CheckEqual(Int64(10), AMock.GetReturnInt('Add', [MockInt(1)]));
+    CheckEqual(Int64(20), AMock.GetReturnInt('Add', [MockInt(2)]));
+end;
+
+procedure TestWhenBasic;
+begin
+  WithMock(@TestWhenBasicImpl);
+end;
+
+procedure TestWhenFallbackImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').Returns('default');
+    AMock.Setup('Foo').When([MockStr('special')]).Returns('override');
+    CheckEqual('override', AMock.State.GetReturnTyped('Foo', [MockStr('special')]).StrVal);
+    CheckEqual('default', AMock.GetReturn('Foo'));
+end;
+
+procedure TestWhenFallback;
+begin
+  WithMock(@TestWhenFallbackImpl);
+end;
+
+procedure TestWhenMultipleArgsImpl(AMock: TMock);
+begin
+    AMock.Setup('Calc').When([MockInt(1), MockInt(2)]).ReturnsInt(3);
+    AMock.Setup('Calc').When([MockInt(10), MockInt(20)]).ReturnsInt(30);
+    CheckEqual(Int64(3), AMock.GetReturnInt('Calc', [MockInt(1), MockInt(2)]));
+    CheckEqual(Int64(30), AMock.GetReturnInt('Calc', [MockInt(10), MockInt(20)]));
+end;
+
+procedure TestWhenMultipleArgs;
+begin
+  WithMock(@TestWhenMultipleArgsImpl);
+end;
+
+procedure TestWhenTypeMismatchImpl(AMock: TMock);
+begin
+    AMock.Setup('Val').When([MockInt(42)]).ReturnsInt(100);
+    { MockStr('42') should NOT match MockInt(42) }
+    CheckEqual(Int64(0), AMock.GetReturnInt('Val', [MockStr('42')]));
+end;
+
+procedure TestWhenTypeMismatch;
+begin
+  WithMock(@TestWhenTypeMismatchImpl);
+end;
+
+procedure TestWhenBoolReturnImpl(AMock: TMock);
+begin
+    AMock.Setup('Flag').When([MockStr('yes')]).ReturnsBool(True);
+    AMock.Setup('Flag').When([MockStr('no')]).ReturnsBool(False);
+    CheckTrue(AMock.GetReturnBool('Flag', [MockStr('yes')]), 'yes → True');
+    CheckFalse(AMock.GetReturnBool('Flag', [MockStr('no')]), 'no → False');
+end;
+
+procedure TestWhenBoolReturn;
+begin
+  WithMock(@TestWhenBoolReturnImpl);
+end;
+
+procedure TestWhenDoubleReturnImpl(AMock: TMock);
+var
+  LValue: TMockValue;
+begin
+    AMock.Setup('Pi').When([MockInt(1)]).ReturnsDouble(3.14);
+    LValue := AMock.State.GetReturnTyped('Pi', [MockInt(1)]);
+    CheckTrue(LValue.Kind = mvDouble, 'When double kind');
+    CheckTrue(Abs(LValue.DblVal - 3.14) < 1e-12, 'When double value');
+end;
+
+procedure TestWhenDoubleReturn;
+begin
+  WithMock(@TestWhenDoubleReturnImpl);
+end;
+
+procedure TestWhenResetAllClearsImpl(AMock: TMock);
+begin
+    AMock.Setup('Foo').When([MockInt(1)]).ReturnsInt(10);
+    AMock.ResetAll;
+    CheckEqual(Int64(0), AMock.GetReturnInt('Foo', [MockInt(1)]));
+end;
+
+procedure TestWhenResetAllClears;
+begin
+  WithMock(@TestWhenResetAllClearsImpl);
+end;
 
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
@@ -1273,6 +1365,15 @@ begin
   Suite.Test('TestVerifyAllFailUncalled', @TestVerifyAllFailUncalled);
   Suite.Test('TestVerifyAllNoSetups', @TestVerifyAllNoSetups);
   Suite.Test('TestVerifyErrorMessage', @TestVerifyErrorMessage);
+
+  { E-09: Mock When API }
+  Suite.Test('TestWhenBasic', @TestWhenBasic);
+  Suite.Test('TestWhenFallback', @TestWhenFallback);
+  Suite.Test('TestWhenMultipleArgs', @TestWhenMultipleArgs);
+  Suite.Test('TestWhenTypeMismatch', @TestWhenTypeMismatch);
+  Suite.Test('TestWhenBoolReturn', @TestWhenBoolReturn);
+  Suite.Test('TestWhenDoubleReturn', @TestWhenDoubleReturn);
+  Suite.Test('TestWhenResetAllClears', @TestWhenResetAllClears);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);

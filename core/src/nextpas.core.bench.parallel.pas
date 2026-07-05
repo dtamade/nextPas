@@ -164,11 +164,30 @@ var
   LTotalIterations: Int64;
   LSequentialNs: Double;
 begin
-  // Warmup
+  // F-12: 并行热身 - 如果 ThreadCount > 1，用线程池预热各核心缓存
   if FConfig.WarmupIterations > 0 then
   begin
-    for I := 0 to FConfig.ThreadCount - 1 do
-      FFunc(I, FConfig.WarmupIterations);
+    if FConfig.ThreadCount > 1 then
+    begin
+      SetLength(LThreads, FConfig.ThreadCount);
+      try
+        for I := 0 to FConfig.ThreadCount - 1 do
+          LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.WarmupIterations);
+        for I := 0 to High(LThreads) do
+          LThreads[I].Start;
+        for I := 0 to High(LThreads) do
+          LThreads[I].WaitFor;
+      finally
+        for I := 0 to High(LThreads) do
+          LThreads[I].Free;
+        SetLength(LThreads, 0);
+      end;
+    end
+    else
+    begin
+      for I := 0 to FConfig.ThreadCount - 1 do
+        FFunc(I, FConfig.WarmupIterations);
+    end;
   end;
 
   // Create threads (PF-16: try-finally to prevent thread object leak)

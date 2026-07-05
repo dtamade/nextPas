@@ -24,10 +24,10 @@ type
 
   TCrossLangEntryArray = array of TCrossLangEntry;
 
-  {** 行缓冲区（直接字符串追加，消除中间数组）}
+  {** 行缓冲区（F-04: 动态数组 + Join 替代 O(n²) 拼接）}
   TLineBuffer = record
-    Content: string;
-    IsEmpty: Boolean;
+    Lines: array of string;
+    LineCount: Integer;
   end;
 
   {** 报告生成器 }
@@ -151,21 +151,50 @@ uses
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
-  if ABuf.IsEmpty then
+  if ABuf.LineCount >= Length(ABuf.Lines) then
   begin
-    ABuf.Content := ALine;
-    ABuf.IsEmpty := False;
-  end
-  else
-    ABuf.Content := ABuf.Content + LineEnding + ALine;
+    if ABuf.LineCount = 0 then
+      SetLength(ABuf.Lines, 64)
+    else
+      SetLength(ABuf.Lines, ABuf.LineCount * 2);
+  end;
+  ABuf.Lines[ABuf.LineCount] := ALine;
+  Inc(ABuf.LineCount);
 end;
 
 function BufferToString(const ABuf: TLineBuffer): string;
+var
+  I, LTotalLen, LLELen: Integer;
+  LP: PChar;
+  LLE: string;
 begin
-  if ABuf.IsEmpty then Exit('');
-  Result := ABuf.Content;
+  if ABuf.LineCount = 0 then Exit('');
+  LLE := LineEnding;
+  LLELen := Length(LLE);
+  { 一次性分配，逐行拷贝 }
+  LTotalLen := 0;
+  for I := 0 to ABuf.LineCount - 1 do
+    Inc(LTotalLen, Length(ABuf.Lines[I]));
+  if ABuf.LineCount > 1 then
+    Inc(LTotalLen, LLELen * (ABuf.LineCount - 1));
+  SetLength(Result, LTotalLen);
+  LP := PChar(Result);
+  for I := 0 to ABuf.LineCount - 1 do
+  begin
+    if I > 0 then
+    begin
+      Move(LLE[1], LP^, LLELen);
+      Inc(LP, LLELen);
+    end;
+    if Length(ABuf.Lines[I]) > 0 then
+    begin
+      Move(ABuf.Lines[I][1], LP^, Length(ABuf.Lines[I]));
+      Inc(LP, Length(ABuf.Lines[I]));
+    end;
+  end;
 end;
 
+{ 跨语言对比条目按名称排序（插入排序，数据量通常 <50 条，O(n²) 可接受） }
 procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
 var
   I: Integer;
@@ -200,25 +229,7 @@ begin
 end;
 
 { CR-23: Percentile with linear interpolation on already-sorted array }
-function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
-var
-  LIndex: Double;
-  LLower, LUpper: Integer;
-  LCount: Integer;
-begin
-  LCount := Length(ASorted);
-  if LCount = 0 then Exit(0.0);
-  if LCount = 1 then Exit(ASorted[0]);
-  if APercent <= 0 then Exit(ASorted[0]);
-  if APercent >= 100 then Exit(ASorted[High(ASorted)]);
-
-  LIndex := (APercent / 100.0) * (LCount - 1);
-  LLower := Trunc(LIndex);
-  LUpper := LLower + 1;
-  if LUpper >= LCount then
-    Exit(ASorted[High(ASorted)]);
-  Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
-end;
+{ 已移至 base.pas 作为公共函数 PercentileSorted }
 
 { TBenchReportGenerator }
 
@@ -324,13 +335,13 @@ end;
 function FormatThroughput(ABytesPerSec: Double): string;
 begin
   if ABytesPerSec < 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec) + ' B/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec, 1) + ' B/s'
   else if ABytesPerSec < 1024.0 * 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec / 1024.0) + ' KB/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / 1024.0, 1) + ' KB/s'
   else if ABytesPerSec < 1024.0 * 1024.0 * 1024.0 then
-    Result := FormatFloat('0.0', ABytesPerSec / (1024.0 * 1024.0)) + ' MB/s'
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / (1024.0 * 1024.0), 1) + ' MB/s'
   else
-    Result := FormatFloat('0.00', ABytesPerSec / (1024.0 * 1024.0 * 1024.0)) + ' GB/s';
+    Result := nextpas.core.text.conv.FloatToStrF(ABytesPerSec / (1024.0 * 1024.0 * 1024.0), 2) + ' GB/s';
 end;
 
 { 格式化变异系数 CV = StdDev / Mean * 100%

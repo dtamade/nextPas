@@ -19,6 +19,7 @@ type
     Next: PHazardThreadRec;
     HP: array of Pointer;
     RetiredCount: Int32;
+    Deleted: Int32;  // 0=正常, 1=已逻辑删除（CAS 标记删除模式）
   end;
 
   PHazardRetiredNode = ^THazardRetiredNode;
@@ -37,6 +38,8 @@ type
     FRetired: PHazardRetiredNode;
     FRetiredCount: Int32;
     FGlobalRetiredCount: Int32;
+    {** @desc 物理删除已逻辑删除的线程节点并释放内存 }
+    procedure DrainPendingFree;
   public
     {** @desc 创建 Hazard Domain（AHPCount 每线程 HP 数） }
     constructor Create(const AHPCount: PtrUInt = HAZARD_DEFAULT_HP_COUNT);
@@ -86,6 +89,7 @@ var
   LNode: PHazardRetiredNode;
   LNext: PHazardRetiredNode;
 begin
+  // 释放所有线程节点（包括已逻辑删除的）
   LThread := FThreads;
   while LThread <> nil do
   begin
@@ -94,6 +98,7 @@ begin
     FreeMem(LThread);
     LThread := LNextThread;
   end;
+  // 释放所有退休节点
   LNode := FRetired;
   while LNode <> nil do
   begin
@@ -117,6 +122,7 @@ begin
   for LI := 0 to FHPCount - 1 do
     LThread^.HP[LI] := nil;
   LThread^.RetiredCount := 0;
+  LThread^.Deleted := 0;
   repeat
     LThread^.Next := PHazardThreadRec(AtomicLoadPtr(Pointer(FThreads), moRelaxed));
   until AtomicCompareExchangePtr(Pointer(FThreads), LThread^.Next, LThread, moRelease) = LThread^.Next;
@@ -126,31 +132,17 @@ end;
 procedure THazardDomain.UnregisterThread(const AThreadId: PtrUInt);
 var
   LThread: PHazardThreadRec;
-  LPrev: PHazardThreadRec;
   LI: PtrUInt;
 begin
   LThread := PHazardThreadRec(AThreadId);
   if LThread = nil then
     Exit;
+  // 1. 清除 HP（必须在标记 Deleted 之前）
   for LI := 0 to FHPCount - 1 do
     LThread^.HP[LI] := nil;
-  LPrev := nil;
-  LThread := FThreads;
-  while LThread <> nil do
-  begin
-    if PtrUInt(LThread) = AThreadId then
-    begin
-      if LPrev = nil then
-        AtomicStorePtr(Pointer(FThreads), LThread^.Next, moRelease)
-      else
-        LPrev^.Next := LThread^.Next;
-      SetLength(LThread^.HP, 0);
-      FreeMem(LThread);
-      Exit;
-    end;
-    LPrev := LThread;
-    LThread := LThread^.Next;
-  end;
+  // 2. 原子标记为已删除（mo_release 保证 HP 清除对后续读者可见）
+  //    不修改链表结构，不释放内存 —— 延迟到 Collect 中的 DrainPendingFree 处理
+  AtomicStore32(LThread^.Deleted, 1, moRelease);
 end;
 
 function THazardDomain.Protect(const AThreadId: PtrUInt; const AHPIndex: PtrUInt; const APtr: Pointer): Pointer;
@@ -195,16 +187,20 @@ begin
     LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
   until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease) = LNode^.Next;
   AtomicFetchAdd32(FGlobalRetiredCount, 1, moRelaxed);
+  // 遍历线程触发批量回收（跳过已逻辑删除的线程）
   LThread := FThreads;
   while LThread <> nil do
   begin
-    LThreadId := PtrUInt(LThread);
-    LThread := LThread^.Next;
-    if AtomicFetchAdd32(PHazardThreadRec(LThreadId)^.RetiredCount, 1, moRelaxed) >= HAZARD_RETIRE_BATCH then
+    if AtomicLoad32(LThread^.Deleted, moAcquire) = 0 then
     begin
-      AtomicStore32(PHazardThreadRec(LThreadId)^.RetiredCount, 0, moRelaxed);
-      Collect(LThreadId);
+      LThreadId := PtrUInt(LThread);
+      if AtomicFetchAdd32(PHazardThreadRec(LThreadId)^.RetiredCount, 1, moRelaxed) >= HAZARD_RETIRE_BATCH then
+      begin
+        AtomicStore32(PHazardThreadRec(LThreadId)^.RetiredCount, 0, moRelaxed);
+        Collect(LThreadId);
+      end;
     end;
+    LThread := LThread^.Next;
   end;
 end;
 
@@ -219,6 +215,9 @@ var
   LI: PtrUInt;
   LReclaimCount: Int32;
 begin
+  // 0. 先清理已逻辑删除的线程节点
+  DrainPendingFree;
+
   LList := PHazardRetiredNode(AtomicExchangePtr(Pointer(FRetired), nil, moAcqRel));
   if LList = nil then
     Exit;
@@ -231,6 +230,12 @@ begin
     LThread := FThreads;
     while LThread <> nil do
     begin
+      // 跳过已逻辑删除的线程
+      if AtomicLoad32(LThread^.Deleted, moAcquire) <> 0 then
+      begin
+        LThread := LThread^.Next;
+        Continue;
+      end;
       for LI := 0 to FHPCount - 1 do
       begin
         if LThread^.HP[LI] = LNode^.Data then
@@ -282,7 +287,9 @@ begin
   LThread := FThreads;
   while LThread <> nil do
   begin
-    Inc(Result);
+    // 跳过已逻辑删除的线程
+    if AtomicLoad32(LThread^.Deleted, moAcquire) = 0 then
+      Inc(Result);
     LThread := LThread^.Next;
   end;
 end;
@@ -290,6 +297,66 @@ end;
 function THazardDomain.RetiredCount: PtrUInt;
 begin
   Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moRelaxed));
+end;
+
+procedure THazardDomain.DrainPendingFree;
+var
+  LPrev: PHazardThreadRec;
+  LNode: PHazardThreadRec;
+  LNext: PHazardThreadRec;
+  LToFreeHead: PHazardThreadRec;
+  LToFreeTail: PHazardThreadRec;
+begin
+  LToFreeHead := nil;
+  LToFreeTail := nil;
+  LPrev := nil;
+  LNode := FThreads;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    if AtomicLoad32(LNode^.Deleted, moAcquire) <> 0 then
+    begin
+      // 尝试 CAS 物理删除
+      if LPrev = nil then
+      begin
+        if AtomicCompareExchangePtr(Pointer(FThreads), LNode, LNext, moRelease) = LNode then
+        begin
+          // 成功将链表头跳过 LNode
+          LNode^.Next := LToFreeHead;
+          LToFreeHead := LNode;
+          if LToFreeTail = nil then
+            LToFreeTail := LNode;
+          // LPrev 不变（仍为 nil）
+          LNode := LNext;
+          Continue;
+        end;
+      end
+      else
+      begin
+        if AtomicCompareExchangePtr(Pointer(LPrev^.Next), LNode, LNext, moRelease) = LNode then
+        begin
+          LNode^.Next := LToFreeHead;
+          LToFreeHead := LNode;
+          if LToFreeTail = nil then
+            LToFreeTail := LNode;
+          LNode := LNext;
+          Continue;
+        end;
+      end;
+      // CAS 失败：前驱也被删除或链表被并发修改，跳过本轮
+    end;
+    LPrev := LNode;
+    LNode := LNext;
+  end;
+  // 释放上一轮收集的待释放节点
+  LNode := LToFreeHead;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    SetLength(LNode^.HP, 0);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
 end;
 
 end.

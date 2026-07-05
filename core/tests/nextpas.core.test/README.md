@@ -184,7 +184,7 @@ Suite := Suite.WithSetup(Proc);
 
 ### 并行模式限制
 
-子测试 (`TestSubtest`)、benchmarks、RTTI discovery 子测试在 `RunParallel` 模式下自动跳过。
+子测试 (`TestSubtest`)、benchmarks、RTTI discovery 子测试在 `RunParallel` 模式下自动跳过（输出 "subtests not supported in parallel mode"）。这是因为子测试需要嵌套线程调度，架构复杂度高。**如需并行执行子测试，请使用串行模式 `Run`。**
 
 ### Mock.ResetCalls vs ResetAll
 
