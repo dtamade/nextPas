@@ -529,6 +529,116 @@ begin
     'Android dir_read must not keep explicit unsupported stub');
 end;
 
+{ Error path tests }
+procedure TestOpenNilPathReturnsError;
+var
+  H: TPlatformFileHandle;
+begin
+  Check(platform_file_open(nil, fomReadOnly, fcmOpenExisting, H) <> 0,
+    'open nil path returns error');
+end;
+
+procedure TestStatNilPathReturnsError;
+var
+  LStat: TPlatformFileStat;
+begin
+  Check(platform_file_stat(nil, LStat) <> 0, 'stat nil path returns error');
+end;
+
+procedure TestMkdirNilPathReturnsError;
+begin
+  Check(platform_file_mkdir(nil, 493) <> 0, 'mkdir nil path returns error');
+end;
+
+procedure TestRmdirNilPathReturnsError;
+begin
+  Check(platform_file_rmdir(nil) <> 0, 'rmdir nil path returns error');
+end;
+
+procedure TestRenameNilPathsReturnsError;
+begin
+  Check(platform_file_rename(nil, '/tmp/test') <> 0, 'rename nil old path returns error');
+  Check(platform_file_rename('/tmp/test', nil) <> 0, 'rename nil new path returns error');
+end;
+
+procedure TestUnlinkNilPathReturnsError;
+begin
+  Check(platform_file_unlink(nil) <> 0, 'unlink nil path returns error');
+end;
+
+procedure TestChmodNilPathReturnsError;
+begin
+  Check(platform_file_chmod(nil, 420) <> 0, 'chmod nil path returns error');
+end;
+
+procedure TestTruncatePathNilReturnsError;
+begin
+  Check(platform_file_truncate_path(nil, 10) <> 0, 'truncate_path nil returns error');
+end;
+
+procedure TestSymlinkNilPathsReturnsError;
+begin
+  Check(platform_file_symlink(nil, '/tmp/link') <> 0, 'symlink nil target returns error');
+  Check(platform_file_symlink('/tmp/target', nil) <> 0, 'symlink nil link returns error');
+end;
+
+procedure TestReadlinkNilPathReturnsError;
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
+begin
+  Check(platform_file_readlink(nil, @LBuf[0], SizeOf(LBuf), LLen) <> 0,
+    'readlink nil path returns error');
+end;
+
+procedure TestReadlinkNilBufferReturnsError;
+var
+  LLen: Int32;
+begin
+  Check(platform_file_readlink('/tmp/test', nil, 256, LLen) <> 0,
+    'readlink nil buffer returns error');
+end;
+
+procedure TestDirOpenNilPathReturnsError;
+var
+  DH: TPlatformDirHandle;
+begin
+  Check(platform_dir_open(nil, DH) <> 0, 'dir_open nil path returns error');
+end;
+
+procedure TestCloseInvalidHandleReturnsError;
+var
+  H: TPlatformFileHandle;
+begin
+  H.Value := -1;
+  Check(platform_file_close(H) <> 0, 'close invalid handle returns error');
+end;
+
+procedure TestFstatInvalidHandleReturnsError;
+var
+  H: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
+begin
+  H.Value := -1;
+  Check(platform_file_fstat(H, LStat) <> 0, 'fstat invalid handle returns error');
+end;
+
+procedure TestTruncateInvalidHandleReturnsError;
+var
+  H: TPlatformFileHandle;
+begin
+  H.Value := -1;
+  Check(platform_file_truncate(H, 10) <> 0, 'truncate invalid handle returns error');
+end;
+
+procedure TestSyncInvalidHandleReturnsError;
+var
+  H: TPlatformFileHandle;
+begin
+  H.Value := -1;
+  Check(platform_file_sync(H) <> 0, 'sync invalid handle returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.files');
   T.Test('open/create/close', @TestOpenCreateClose);
@@ -560,5 +670,21 @@ begin
   T.Test('directory close contract', @TestDirectoryCloseContract);
   T.Test('Android directory enumeration source contract',
     @TestAndroidDirectoryEnumerationSourceContract);
+  T.Test('open nil path returns error', @TestOpenNilPathReturnsError);
+  T.Test('stat nil path returns error', @TestStatNilPathReturnsError);
+  T.Test('mkdir nil path returns error', @TestMkdirNilPathReturnsError);
+  T.Test('rmdir nil path returns error', @TestRmdirNilPathReturnsError);
+  T.Test('rename nil paths returns error', @TestRenameNilPathsReturnsError);
+  T.Test('unlink nil path returns error', @TestUnlinkNilPathReturnsError);
+  T.Test('chmod nil path returns error', @TestChmodNilPathReturnsError);
+  T.Test('truncate_path nil returns error', @TestTruncatePathNilReturnsError);
+  T.Test('symlink nil paths returns error', @TestSymlinkNilPathsReturnsError);
+  T.Test('readlink nil path returns error', @TestReadlinkNilPathReturnsError);
+  T.Test('readlink nil buffer returns error', @TestReadlinkNilBufferReturnsError);
+  T.Test('dir_open nil path returns error', @TestDirOpenNilPathReturnsError);
+  T.Test('close invalid handle returns error', @TestCloseInvalidHandleReturnsError);
+  T.Test('fstat invalid handle returns error', @TestFstatInvalidHandleReturnsError);
+  T.Test('truncate invalid handle returns error', @TestTruncateInvalidHandleReturnsError);
+  T.Test('sync invalid handle returns error', @TestSyncInvalidHandleReturnsError);
   if not T.Run then Halt(1);
 end.
