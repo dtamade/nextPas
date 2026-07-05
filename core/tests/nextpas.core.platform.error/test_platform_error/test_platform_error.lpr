@@ -81,6 +81,36 @@ begin
   Check(StrContains(@Buf[0], 'o such file'), 'contains "o such file"');
 end;
 
+procedure TestEEXIST;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(17, @Buf[0], 256);
+  Check(R > 0, 'EEXIST returns length > 0');
+  Check(StrContains(@Buf[0], 'file exists'), 'contains "file exists"');
+end;
+
+procedure TestENOTDIR;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(20, @Buf[0], 256);
+  Check(R > 0, 'ENOTDIR returns length > 0');
+  Check(StrContains(@Buf[0], 'not a directory'), 'contains "not a directory"');
+end;
+
+procedure TestPathTooLong;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_error_message(-7, @Buf[0], 256);
+  Check(R > 0, 'PATH_TOO_LONG returns length > 0');
+  Check(StrContains(@Buf[0], 'path too long'), 'contains "path too long"');
+end;
+
 procedure TestEACCES;
 var
   Buf: array[0..255] of AnsiChar;
@@ -162,6 +192,9 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.platform.error');
   T.Test('ENOENT message', @TestENOENT);
+  T.Test('EEXIST message', @TestEEXIST);
+  T.Test('ENOTDIR message', @TestENOTDIR);
+  T.Test('PATH_TOO_LONG message', @TestPathTooLong);
   T.Test('EACCES message', @TestEACCES);
   T.Test('code 0 (Success)', @TestZero);
   T.Test('unknown error code', @TestUnknown);

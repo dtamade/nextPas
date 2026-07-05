@@ -236,3 +236,27 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize: PtrUInt;
 - memory.pas: `platform_aligned_free` DEBUG 模式 assert
   - RELEASE 模式：静默忽略 magic 不匹配（兼容性）
   - DEBUG 模式：assert 失败（快速定位 double-free）
+
+### Phase 7: 测试迁移 — FPC RTL 隔离 (2026-07-05)
+- 40 个测试文件消除 SysUtils/Classes 依赖
+  - TStringList → FsReadFileText (nextpas.core.fs.util)
+  - ExpandFileName → 相对路径
+  - LowerCase/IntToStr → nextpas.core.text.conv
+  - FindFirst/FindNext → FsGlob (nextpas.core.fs.glob)
+  - TThread → platform_thread (sync_stress 测试)
+  - Sleep → platform_thread_sleep_ns
+- 所有非 wine/windows 平台测试现在 0 FPC RTL 依赖
+- 验证：40 个测试套件全部通过，0 unfreed
+
+### Phase 8: 错误消息补全 + realloc 优化 (2026-07-05)
+- error.pas: `TryPlatformErrorTokenMessage` 补全 4 个缺失错误码
+  - EEXIST → "file exists"
+  - ENOENT → "no such file"
+  - ENOTDIR → "not a directory"
+  - PATH_TOO_LONG → "path too long"
+- error.pas: 新增 `PLATFORM_ERR_PATH_TOO_LONG = -7` 常量
+- memory.pas: `platform_aligned_realloc` 缩小原地优化
+  - 旧实现：始终 alloc+copy+free
+  - 新实现：缩小时直接更新 header size，零拷贝
+  - 优势：realloc 缩小操作 O(1)，无内存分配
+- 测试：error 10/10 通过，memory 13/13 通过

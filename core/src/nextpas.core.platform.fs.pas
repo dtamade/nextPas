@@ -44,7 +44,7 @@ const
   PLATFORM_WALK_BADARGS   = -1;
   PLATFORM_WALK_MAX_DEPTH = 256;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
-  PLATFORM_FS_PATH_TOO_LONG = -7;
+  PLATFORM_FS_PATH_TOO_LONG = -7;  { Also defined as PLATFORM_ERR_PATH_TOO_LONG in error.pas }
   PLATFORM_FS_READ_CHUNK_SIZE = 65536; { 64KB initial chunk for dynamic read }
 
 function platform_fs_exists(const APath: PAnsiChar): Boolean;

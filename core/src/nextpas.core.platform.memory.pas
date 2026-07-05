@@ -323,14 +323,18 @@ begin
     Exit(nil);
   LOldSize := LHeader^.Size;
 
+  { Shrink in-place: no copy needed, just update the size }
+  if ANewSize <= LOldSize then
+  begin
+    LHeader^.Size := ANewSize;
+    Exit(APtr);
+  end;
+
+  { Grow: allocate new, copy, free old }
   Result := platform_aligned_alloc(ANewSize, AAlignment);
   if Result = nil then
     Exit;
-
-  if LOldSize < ANewSize then
-    Move(APtr^, Result^, LOldSize)
-  else
-    Move(APtr^, Result^, ANewSize);
+  Move(APtr^, Result^, LOldSize);
   platform_aligned_free(APtr);
 end;
 
