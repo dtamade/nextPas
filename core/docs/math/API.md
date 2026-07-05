@@ -136,7 +136,9 @@ Scalar helpers:
 `UInt32` overflow helpers report `High(UInt32)+1` and `High(UInt32)*2` as overflow; `High(UInt32)-1+1` and zero-times-high multiplication in either order return `False` without divide-by-zero.
 `GCD` and `LCM` normalize signs and return non-negative `Int64` results; representable `Low(Int64)`/`High(Int64)` boundary cases succeed, zero LCM returns `0` before overflow checks, and unrepresentable results raise `EArgumentError`.
 
-Statistical helpers: `Sum`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`.
+Statistical helpers: `Sum`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
+
+`SumSquaredDeviations` is an alias for `TotalVariance` (sum of squared deviations from mean).
 
 Trig helpers:
 
@@ -195,7 +197,7 @@ Vector `Length` and `Normalize` use scaled finite length paths, so huge finite `
 `TVec3*`, and `TVec4*` inputs preserve finite length, direction, and unit length without
 overflowing the intermediate squared length.
 `LengthSqr` also uses a non-throwing scaled path for huge finite inputs; below-overflow results stay finite, and if the true squared length is outside the target float range, it returns `+Inf` instead of raising an FPU overflow exception.
-`Dot` uses the same finite scaling strategy: huge finite inputs do not raise intermediate FPU
+`Dot` applies the same finite scaling strategy: huge finite inputs do not raise intermediate FPU
 overflow, exact finite cancellation stays finite, and true out-of-range results return signed infinity.
 `Cross` uses stable finite intermediate paths for huge finite `TVec3f` and `TVec3d` inputs:
 finite true components stay finite instead of becoming `NaN` through intermediate overflow,
@@ -215,6 +217,18 @@ Raw vector inputs containing NaN or infinity fail fast with `EArgumentError` whe
 `Normalize`.
 Vector scalar division and `ComponentDiv` reject zero, NaN, and infinite divisors with `EArgumentError`.
 Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and NaN, infinite, or negative epsilon values return `False`, while matching infinities compare equal with a valid epsilon.
+
+### Batch Operations
+
+Batch operations process vector arrays for bulk computation:
+
+- `BatchDot`: computes dot products of two vector arrays into a results array
+- `BatchNormalize`: normalizes a vector array in-place
+- `BatchTransform`: transforms a vector array by a matrix
+- `BatchLerp`: interpolates between two vector arrays
+- `BatchClamp`: clamps a vector array to min/max bounds
+
+All batch functions return the number of processed elements. They accept mismatched array lengths by processing `Min(Length(ALeft), Length(ARight))` elements.
 
 ## Matrices
 

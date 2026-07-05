@@ -114,6 +114,7 @@ PUBLIC_MATH_SOURCE_PATHS = {
     "src/nextpas.core.math.trig.pas",
     "src/nextpas.core.math.vec.pas",
     "src/nextpas.core.math.vec.base.pas",
+    "src/nextpas.core.math.vec.batch.pas",
     "src/nextpas.core.math.vec.compat.pas",
     "src/nextpas.core.math.mat.pas",
     "src/nextpas.core.math.mat.base.pas",
@@ -140,6 +141,7 @@ ROOT_FACADE_ALLOWED_USES = {
     "nextpas.core.math.scalar",
     "nextpas.core.math.trig",
     "nextpas.core.math.vec",
+    "nextpas.core.math.vec.batch",
     "nextpas.core.math.mat",
     "nextpas.core.math.quat",
     "nextpas.core.math.transform",
@@ -303,6 +305,12 @@ ROOT_FACADE_FORWARD_TARGETS = {
     "stddev": "scalar",
     "popnstddev": "scalar",
     "totalvariance": "scalar",
+    "sumsquareddeviations": "scalar",
+    "batchdot": "vec.batch",
+    "batchnormalize": "vec.batch",
+    "batchtransform": "vec.batch",
+    "batchlerp": "vec.batch",
+    "batchclamp": "vec.batch",
 }
 REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
     (
@@ -1338,6 +1346,7 @@ CONSUMER_FACING_UNITS = {
     "nextpas.core.math.trig",
     "nextpas.core.math.vec",
     "nextpas.core.math.vec.base",
+    "nextpas.core.math.vec.batch",
     "nextpas.core.math.vec.compat",
     "nextpas.core.math.mat",
     "nextpas.core.math.mat.base",

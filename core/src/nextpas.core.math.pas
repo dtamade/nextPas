@@ -9,6 +9,7 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
   nextpas.core.math.vec,
+  nextpas.core.math.vec.batch,
   nextpas.core.math.mat,
   nextpas.core.math.quat,
   nextpas.core.math.transform,
@@ -246,9 +247,6 @@ function GetExceptionMask: TFPUExceptionMask;
 procedure SetExceptionMask(const AMask: TFPUExceptionMask);
 
 implementation
-
-uses
-  nextpas.core.math.vec.batch;
 
 function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
 begin
