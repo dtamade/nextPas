@@ -9,28 +9,111 @@ uses
   nextpas.core.math.mat;
 
 type
+  {** Quaternion with Single precision.
+   *
+   * Used for 3D rotations. Quaternions avoid gimbal lock and provide
+   * smooth interpolation via Slerp/Nlerp.
+   *
+   * Component order: X, Y, Z (imaginary), W (real).
+   *}
   TQuatf = packed record
   public
     type
       TIndex = 0..3;
+    {** Creates a quaternion with the given components.
+     * @param AX The X component (imaginary)
+     * @param AY The Y component (imaginary)
+     * @param AZ The Z component (imaginary)
+     * @param AW The W component (real)
+     *}
     class function Create(const AX, AY, AZ, AW: Single): TQuatf; static; inline;
+    {** Returns the identity quaternion (0, 0, 0, 1) - no rotation. }
     class function Identity: TQuatf; static; inline;
+    {** Multiplies two quaternions (combines rotations).
+     * @param AA First rotation
+     * @param AB Second rotation
+     * @return The combined rotation (AA * AB)
+     *}
     class operator * (const AA, AB: TQuatf): TQuatf; inline;
+    {** Creates a quaternion from axis-angle representation.
+     * @param AAxis The rotation axis (should be normalized)
+     * @param AAngleRad The rotation angle in radians
+     * @return The quaternion representing the rotation
+     *}
     class function FromAxisAngle(const AAxis: TVec3f; const AAngleRad: Single): TQuatf; static;
+    {** Spherical linear interpolation between two quaternions.
+     * @param AA The start quaternion
+     * @param AB The end quaternion
+     * @param AT Interpolation factor (0 = AA, 1 = AB)
+     * @return The interpolated quaternion
+     *}
     class function Slerp(const AA, AB: TQuatf; const AT: Single): TQuatf; static;
+    {** Normalized linear interpolation (faster but less accurate than Slerp).
+     * @param AA The start quaternion
+     * @param AB The end quaternion
+     * @param AT Interpolation factor (0 = AA, 1 = AB)
+     * @return The interpolated quaternion
+     *}
     class function Nlerp(const AA, AB: TQuatf; const AT: Single): TQuatf; static;
+    {** Tests approximate equality. }
     class function Equals(const AA, AB: TQuatf; const AEpsilon: Single): Boolean; static; inline;
+    {** Converts to axis-angle representation.
+     * @param AAxis The output rotation axis
+     * @param AAngleRad The output angle in radians
+     *}
     procedure ToAxisAngle(out AAxis: TVec3f; out AAngleRad: Single);
+    {** Converts to a 3x3 rotation matrix.
+     * @return The rotation matrix
+     *}
     function ToRotationMatrix: TMat3f;
+    {** Rotates a vector by this quaternion.
+     * @param AVector The vector to rotate
+     * @return The rotated vector
+     *}
     function Rotate(const AVector: TVec3f): TVec3f;
+    {** Returns the conjugate quaternion (negates imaginary parts).
+     * @return The conjugate (-X, -Y, -Z, W)
+     *}
     function Conjugate: TQuatf; inline;
+    {** Computes the dot product with another quaternion.
+     * @param AOther The other quaternion
+     * @return The dot product
+     *}
     function Dot(const AOther: TQuatf): Single; inline;
+    {** Returns the inverse quaternion (conjugate / magnitude²).
+     * @return The inverse quaternion
+     *}
     function Inverse: TQuatf;
+    {** Checks if the quaternion is approximately unit length.
+     * @return True if ||Self|| ≈ 1
+     *}
     function IsNormalized: Boolean; inline;
+    {** Creates a quaternion from Euler angles.
+     * @param AYaw Yaw angle in radians
+     * @param APitch Pitch angle in radians
+     * @param ARoll Roll angle in radians
+     * @return The quaternion representing the rotation
+     *}
     class function FromEuler(const AYaw, APitch, ARoll: Single): TQuatf; static;
+    {** Converts to Euler angles.
+     * @return The Euler angles (Yaw, Pitch, Roll) in radians
+     *}
     function ToEuler: TVec3f;
+    {** Creates a quaternion that rotates from one vector to another.
+     * @param AFrom The source vector (should be normalized)
+     * @param ATo The target vector (should be normalized)
+     * @return The rotation quaternion
+     *}
     class function FromRotationArc(const AFrom, ATo: TVec3f): TQuatf; static;
+    {** Rotates towards a target quaternion with a maximum angle.
+     * @param ATarget The target quaternion
+     * @param AMaxAngle The maximum rotation angle in radians
+     * @return The rotated quaternion
+     *}
     function RotateTowards(const ATarget: TQuatf; const AMaxAngle: Single): TQuatf;
+    {** Normalizes the quaternion to unit length.
+     * @return The normalized quaternion
+     *}
     function Normalize: TQuatf;
     var
       case Integer of

@@ -66,36 +66,36 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single; overload;
  * @param AValue The input value
  * @return Floor of AValue as Int64
  *}
-function Floor(const AValue: Double): Int64; overload; inline;
-function Floor(const AValue: Single): Int64; overload; inline;
+function Floor(const AValue: Double): Int64; overload;
+function Floor(const AValue: Single): Int64; overload;
 
 {** * Returns the smallest integer not less than AValue.
  * @param AValue The input value
  * @return Ceiling of AValue as Int64
  *}
-function Ceil(const AValue: Double): Int64; overload; inline;
-function Ceil(const AValue: Single): Int64; overload; inline;
+function Ceil(const AValue: Double): Int64; overload;
+function Ceil(const AValue: Single): Int64; overload;
 
 {** * Rounds AValue to the nearest integer.
  * @param AValue The input value
  * @return AValue rounded to Int64
  *}
-function Round(const AValue: Double): Int64; overload; inline;
-function Round(const AValue: Single): Int64; overload; inline;
+function Round(const AValue: Double): Int64; overload;
+function Round(const AValue: Single): Int64; overload;
 
 {** * Truncates AValue toward zero.
  * @param AValue The input value
  * @return The integer part of AValue as Int64
  *}
-function Trunc(const AValue: Double): Int64; overload; inline;
-function Trunc(const AValue: Single): Int64; overload; inline;
+function Trunc(const AValue: Double): Int64; overload;
+function Trunc(const AValue: Single): Int64; overload;
 
 {** * Returns the fractional part of AValue.
  * @param AValue The input value
  * @return AValue - Trunc(AValue)
  *}
-function Frac(const AValue: Double): Double; overload; inline;
-function Frac(const AValue: Single): Single; overload; inline;
+function Frac(const AValue: Double): Double; overload;
+function Frac(const AValue: Single): Single; overload;
 
 {** * Returns the absolute value.
  * @param AValue The input value

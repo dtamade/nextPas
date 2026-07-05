@@ -8,6 +8,11 @@ uses
   nextpas.core.math.vec;
 
 type
+  {** 3x3 matrix with Single precision.
+   *
+   * Stored in column-major order: Data[Column][Row].
+   * Access via Items[Column, Row] property or Rows/Columns properties.
+   *}
   TMat3f = packed record
   public
     type
@@ -23,25 +28,46 @@ type
   public
     var
       Data: array[TIndex] of TColumn;
+    {** Creates a 3x3 matrix from three column vectors. }
     class function Create(const AColumn0, AColumn1, AColumn2: TVec3f): TMat3f; static; inline;
+    {** Returns a zero matrix (all zeros). }
     class function Zero: TMat3f; static; inline;
+    {** Returns an identity matrix. }
     class function Identity: TMat3f; static; inline;
     class operator + (const AA, AB: TMat3f): TMat3f; inline;
     class operator - (const AA, AB: TMat3f): TMat3f; inline;
     class operator - (const AValue: TMat3f): TMat3f; inline;
     class operator * (const AValue: TMat3f; const AScalar: Single): TMat3f; inline;
     class operator * (const AScalar: Single; const AValue: TMat3f): TMat3f; inline;
+    {** Multiplies matrix by vector (M * v). }
     class operator * (const AMatrix: TMat3f; const AVector: TVec3f): TVec3f; inline;
+    {** Multiplies two matrices. }
     class operator * (const AA, AB: TMat3f): TMat3f;
+    {** Tests approximate equality. }
     class function Equals(const AA, AB: TMat3f; const AEpsilon: Single): Boolean; static; inline;
+    {** Linearly interpolates between two matrices. }
     class function Lerp(const AA, AB: TMat3f; const AT: Single): TMat3f; static; inline;
+    {** Returns the transposed matrix. }
     function Transpose: TMat3f; inline;
+    {** Computes the determinant. }
     function Determinant: Single; inline;
+    {** Safely computes the inverse, returning false if singular.
+     * @param AInverse The output inverse matrix
+     * @return True if the matrix is invertible
+     *}
     function TryInverse(out AInverse: TMat3f): Boolean;
+    {** Computes the inverse matrix.
+     * @return The inverse matrix
+     * @raises EArgumentError if the matrix is singular
+     *}
     function Inverse: TMat3f;
+    {** Tests exact equality. }
     function PerfectlyEquals(const AOther: TMat3f): Boolean; inline;
+    {** Accesses matrix element by column and row. }
     property Items[const AColumn, ARow: TIndex]: Single read GetItems write SetItems; default;
+    {** Accesses matrix row as vector. }
     property Rows[const ARow: TIndex]: TVec3f read GetRows write SetRows;
+    {** Accesses matrix column as vector. }
     property Columns[const AColumn: TIndex]: TVec3f read GetColumns write SetColumns;
   end;
 
