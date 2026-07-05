@@ -789,7 +789,7 @@ begin
     begin
       { PF-18: guard against unbounded growth when timer resolution is too coarse.
         If LIters already >= MaxIters, break immediately. ScaleIterationsByTen
-        also caps at MaxIters, but add explicit check here for the LElapled=0 loop. }
+        also caps at MaxIters, but add explicit check here for the LElapsed=0 loop. }
       if LIters >= LMaxIters then
         Break;
       LIters := ScaleIterationsByTen(LIters, LMaxIters, LReachedMaxIters);
@@ -810,7 +810,16 @@ begin
         LIters := LMaxIters;
         Break;
       end;
-      LIters := Int64(LProjectedIters);
+      { BUG-FIX: two problems with original `Int64(LProjectedIters)`:
+        1. FPC Int64() on Double does bitwise reinterpretation, not numeric truncation.
+           e.g. Int64(118.90) = 4638067362024458516 (IEEE 754 bit pattern of 118.90).
+        2. Even with correct Trunc(), rounding to same value creates infinite loop.
+           e.g. LIters=125, LProjectedIters=125.48 → Trunc=125 → no progress.
+        Fix: use Trunc() for conversion, Inc() to guarantee forward progress. }
+      if Trunc(LProjectedIters) <= LIters then
+        Inc(LIters)
+      else
+        LIters := Trunc(LProjectedIters);
     end
     else
       Break;

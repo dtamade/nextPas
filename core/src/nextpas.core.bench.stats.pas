@@ -212,6 +212,10 @@ end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 begin
+  { PF-06: range validation — reject out-of-range percentiles }
+  if (APercent < 0.0) or (APercent > 100.0) then
+    raise EBenchInvalidParam.CreateFmt(
+      'TBenchStatsAnalyzer.Percentile: APercent must be in [0, 100], got %.2f', [APercent]);
   Result := PercentileSorted(ASorted, APercent);
 end;
 

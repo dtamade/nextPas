@@ -13,7 +13,8 @@ interface
 
 uses
   nextpas.core.bench.base,
-  nextpas.core.bench.intf;
+  nextpas.core.bench.intf,
+  nextpas.core.text.builder; { M3: for TStringBuilder in TLineBuffer }
 
 type
   TCrossLangEntry = record
@@ -24,10 +25,9 @@ type
 
   TCrossLangEntryArray = array of TCrossLangEntry;
 
-  {** 行缓冲区（F-04: 动态数组 + Join 替代 O(n²) 拼接）}
+  {** 行缓冲区 — 使用 TStringBuilder 实现，更优雅更高效 }
   TLineBuffer = record
-    Lines: array of string;
-    LineCount: Integer;
+    Builder: TStringBuilder;
   end;
 
   {** 报告生成器 }
@@ -144,54 +144,20 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.format,
   nextpas.core.math.scalar,
-  nextpas.core.json.writer,
-  nextpas.core.text.builder;
+  nextpas.core.json.writer;
 
-{ 辅助函数：行缓冲区操作 }
+{ 辅助函数：行缓冲区操作 — 基于 TStringBuilder }
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
 begin
-  if ABuf.LineCount >= Length(ABuf.Lines) then
-  begin
-    if ABuf.LineCount = 0 then
-      SetLength(ABuf.Lines, 64)
-    else
-      SetLength(ABuf.Lines, ABuf.LineCount * 2);
-  end;
-  ABuf.Lines[ABuf.LineCount] := ALine;
-  Inc(ABuf.LineCount);
+  if ABuf.Builder.Len > 0 then
+    ABuf.Builder.AppendStr(LineEnding);
+  ABuf.Builder.AppendStr(ALine);
 end;
 
 function BufferToString(const ABuf: TLineBuffer): string;
-var
-  I, LTotalLen, LLELen: Integer;
-  LP: PChar;
-  LLE: string;
 begin
-  if ABuf.LineCount = 0 then Exit('');
-  LLE := LineEnding;
-  LLELen := Length(LLE);
-  { 一次性分配，逐行拷贝 }
-  LTotalLen := 0;
-  for I := 0 to ABuf.LineCount - 1 do
-    Inc(LTotalLen, Length(ABuf.Lines[I]));
-  if ABuf.LineCount > 1 then
-    Inc(LTotalLen, LLELen * (ABuf.LineCount - 1));
-  SetLength(Result, LTotalLen);
-  LP := PChar(Result);
-  for I := 0 to ABuf.LineCount - 1 do
-  begin
-    if I > 0 then
-    begin
-      Move(LLE[1], LP^, LLELen);
-      Inc(LP, LLELen);
-    end;
-    if Length(ABuf.Lines[I]) > 0 then
-    begin
-      Move(ABuf.Lines[I][1], LP^, Length(ABuf.Lines[I]));
-      Inc(LP, Length(ABuf.Lines[I]));
-    end;
-  end;
+  Result := ABuf.Builder.ToString;
 end;
 
 { 跨语言对比条目按名称排序（插入排序，数据量通常 <50 条，O(n²) 可接受） }
@@ -421,7 +387,7 @@ var
   LMaxDetail: Integer;
   I: Integer;
 begin
-  LLines := Default(TLineBuffer);
+  LLines.Builder.Init(4096);
 
   // title
   BufferAddLine(LLines, '=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
@@ -512,6 +478,7 @@ begin
   end;
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 function TBenchReportGenerator.ToJSON: string;
@@ -599,7 +566,7 @@ var
   LLines: TLineBuffer;
   I: Integer;
 begin
-  LLines := Default(TLineBuffer);
+  LLines.Builder.Init(4096);
 
   // header
   BufferAddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
@@ -623,6 +590,7 @@ begin
   end;
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 { SVG 图表生成方法 — 从 report.svg.inc 包含 }
@@ -638,7 +606,7 @@ var
   LStatus: string;
   I: Integer;
 begin
-  LLines := Default(TLineBuffer);
+  LLines.Builder.Init(4096);
 
   BufferAddLine(LLines, '=== Baseline Comparison ===');
   BufferAddLine(LLines, '');
@@ -668,6 +636,7 @@ begin
   end;
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 function TBenchReportGenerator.ToBenchstat: string;
@@ -677,7 +646,7 @@ var
   LBytes, LAllocs: string;
   I: Integer;
 begin
-  LLines := Default(TLineBuffer);
+  LLines.Builder.Init(4096);
 
   { benchstat 兼容的 tab-separated 表头 }
   BufferAddLine(LLines, TextFormat('%-40s %12s %8s %12s %10s',
@@ -711,6 +680,7 @@ begin
   end;
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 { P2-1: 多基线对比矩阵 — Console 报告 }
@@ -723,7 +693,7 @@ var
   LRatio: Double;
   I, J: Integer;
 begin
-  LLines := Default(TLineBuffer);
+  LLines.Builder.Init(4096);
   LNCols := Length(AMatrix.BaselineNames);
 
   BufferAddLine(LLines, '=== Multi-Baseline Comparison Matrix ===');
@@ -797,6 +767,7 @@ begin
   end;
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 { 矩阵 JSON 导出 — CI 可直接消费 }

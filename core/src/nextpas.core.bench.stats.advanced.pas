@@ -175,7 +175,8 @@ implementation
 uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
-  nextpas.core.time.cpu;
+  nextpas.core.time.cpu,
+  nextpas.core.bench.intf; { PF-06: for EBenchInvalidParam }
 
 {** F-12: 全局计数器，防止 BootstrapCI 快速连续调用时种子碰撞 }
 var
@@ -363,6 +364,10 @@ end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
 begin
+  { PF-06: range validation — reject out-of-range percentiles }
+  if (APercentile < 0.0) or (APercentile > 100.0) then
+    raise EBenchInvalidParam.CreateFmt(
+      'TAdvancedStats.Percentile: APercentile must be in [0, 100], got %.2f', [APercentile]);
   EnsureSorted;
   Result := PercentileSorted(FSortedData, APercentile);
 end;
