@@ -294,3 +294,19 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - Rust: `std::time::Duration` 在标准库层，系统调用层使用 `timespec`
   - Go: `time.Duration` 在标准库层，系统调用层使用 `int64` 纳秒
   - nextPas: `TDuration` 在 L1 层，平台层使用 `Int64`
+
+### Phase 11: 高阶封装 API 设计决策 (2026-07-06)
+- **决策**: 不在平台模块添加 `read_all`/`write_all`/`send_all` 等高阶封装
+- **原因**:
+  1. 平台模块是 L0 层，应保持最小化和低级抽象
+  2. `platform_fs_read_all` 和 `platform_fs_write_all` 已在 `nextpas.core.platform.fs` 中实现
+  3. Socket 的 `send_all`/`recv_all` 应在 L1/L2 层实现（如 `nextpas.core.net`）
+  4. 平台模块只提供低级系统调用封装
+- **方案**:
+  1. 平台模块保持当前的低级 API（`platform_socket_send`/`platform_socket_recv`）
+  2. 高层模块实现便利函数（`send_all`/`recv_all`）
+  3. 文档明确 API 边界
+- **对标**:
+  - Rust: `std::io::Write::write_all` 在标准库层，系统调用层使用 `write`
+  - Go: `io.WriteFull` 在标准库层，系统调用层使用 `write`
+  - nextPas: 高阶封装在 L1/L2 层，平台层使用 `send`/`recv`

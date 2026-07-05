@@ -382,7 +382,7 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 | # | 任务 | 工作量 | 收益 |
 |---|------|--------|------|
 | P3-1 | 引入 `TPlatformDuration` 类型统一时间表示 | 4h | ❌ 已决策：不引入，保持 Int64 |
-| P3-2 | 添加高阶封装 API（read_all/write_all/send_all） | 6h | 开发效率 |
+| P3-2 | 添加高阶封装 API（read_all/write_all/send_all） | 6h | ❌ 已决策：不添加，保持 L0 最小化 |
 | P3-3 | 建立 CONTRACT.md CI 验证脚本 | 2h | 文档永不过期 |
 
 ---
