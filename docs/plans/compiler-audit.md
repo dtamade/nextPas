@@ -176,7 +176,7 @@ C0-C7 冲刺的隐含假设：    实际应该：
 ### C-02 [🟠] Green Tree — 每个 AST 节点是独立 class 实例
 
 - 中型源文件（5000 tokens）→ 5000+ 次堆分配
-- **对标**：Roslyn (C#) 用不可变树 + 节点复用。Rust rowan 用 arena + 索引
+- **对标**：Roslyn (C#) 用不可变树 + 节点复用。Rust `rowan` (rust-analyzer) 用 arena + 索引 — **已纳入计划阶段 1.4**
 - **行动计划**：阶段 0.3（Arena 分配）
 
 ### C-03 [🟠] 无 Arena/Region 分配 — 编译器生命周期内无释放

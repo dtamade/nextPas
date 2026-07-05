@@ -110,18 +110,21 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
 | **验证命令** | `make compiler-pass` + `make rebuild-compiler` |
 | **对标** | rustc `IndexVec`、`ArenaVec` |
 
-#### 任务 0.3: AST 节点用 TFastArena 分配 [⏸️ 已回退] 预估 3 天 → 移入阶段 1
+#### 任务 0.3: AST 节点 Arena 分配 [⏸️ 已回退] → 拆分为 1.4 Green Tree 数据结构重构
 
 **诊断**：TGreenNode 当前不满足 Arena 分配的前提（不可变性）。25 处 FText 后修改 + 196 处动态 AppendChild。
-正确路径：先修复 Green Tree 不可变性（阶段 1.3 架构重构），再上 Arena。详见闭环证据。
+正确路径：先修复 Green Tree 不可变性（阶段 1.4），再上 Arena。
+
+**原方案（已废弃）**：TGreenNode class + Arena 分配（只是把 class 从堆搬到 Arena，VMT 指针/字符串/动态数组开销全在）
+**新方案（阶段 1.4）**：对标 Rust rowan — TGreenNode 从 class 变为 record index，Arena 中存储紧凑数组。
 
 | 项 | 内容 |
 |----|------|
 | **输入文件** | `compiler/np_green_tree.pas`（TGreenNode = class，每个 token 一次堆分配） |
-| **输出文件** | `compiler/np_green_tree.pas`（TGreenTree 持有 IArena，所有节点 Arena 分配） |
-| **改动量** | ~500 行 |
+| **输出文件** | `compiler/np_green_tree.pas`（TGreenNode = record NodeIndex: LongInt，Arena 中紧凑存储） |
+| **改动量** | ~800 行（数据结构重构 + Parser 适配） |
 | **验证命令** | `make compiler-pass` + heaptrc 报告（AST 分配从 5000+ → ~10 次） |
-| **对标** | Go gc `Node` struct on Arena, rustc `BumpPtr` |
+| **对标** | Rust `rowan` (rust-analyzer), Roslyn `GreenNode` (C#) |
 
 #### 任务 0.4: 测量基线 [🔲] 预估 1 天
 
@@ -210,6 +213,84 @@ type
   end;
 ```
 
+#### 任务 1.4: Green Tree 数据结构重构 — 对标 Rust rowan [🔲] 预估 5 天
+
+**目标**: TGreenNode 从 class → record index into arena。真正不可变。内存减少 75%。
+
+**对标**: Rust `rowan` (rust-analyzer 的 CST), Roslyn `GreenNode` (C#)
+
+##### 1.4a: 设计紧凑 Arena 存储格式 [🔲] 预估 1 天
+
+| 项 | 内容 |
+|----|------|
+| **输出文件** | `compiler/syntax/np_green_tree.pas`（新增 Arena 存储结构） |
+| **设计** | 每个节点固定 16 字节，Arena 中连续存储 |
+
+```pascal
+type
+  TGreenNodeData = packed record
+    Kind: TGreenNodeKind;     // 4 字节
+    Flags: Byte;              // 1 字节
+    TextLen: Word;            // 2 字节
+    ChildStart: LongInt;      // 4 字节（-1 = 无子节点）
+    ChildCount: Word;         // 2 字节
+    Reserved: Word;           // 2 字节
+  end;  // 总: 16 字节
+
+  TGreenNode = record         // 值语义，可拷贝，无 VMT
+    Tree: PGreenTreeData;
+    Index: LongInt;           // -1 = nil
+  end;
+
+  TGreenTreeData = record
+    Nodes: TVec<TGreenNodeData>;  // Arena 连续存储
+    Text: string;                  // 所有 token 文本集中存储
+    RootIndex: LongInt;
+  end;
+```
+
+**内存对比**:
+
+| 方案 | 每节点 | 5000 节点 | 节省 |
+|------|--------|----------|------|
+| 当前: class 堆分配 | ~64 字节 | ~320 KB | — |
+| rowan: record + Arena | 16 字节 | ~80 KB + ~50 KB text | **75%** |
+
+##### 1.4b: 不可变 Builder 模式 [🔲] 预估 2 天
+
+| 项 | 内容 |
+|----|------|
+| **输出** | `TGreenTreeBuilder` — 收集节点 → 一次性构建不可变树 |
+| **消除** | 25 处 FText 后修改 + 196 处动态 AppendChild |
+
+##### 1.4c: Parser 适配 [🔲] 预估 1.5 天
+
+| 项 | 内容 |
+|----|------|
+| **改动范围** | `np_green_tree.pas` 中所有 Parse* 函数 |
+| **改动** | `Node.FText := ...` → Builder 中预先计算；`Node.AppendChild` → Builder.AddNode |
+
+##### 1.4d: AST Facade 适配 [🔲] 预估 0.5 天
+
+| 项 | 内容 |
+|----|------|
+| **改动范围** | `compiler/syntax/np_ast_facade.pas` |
+| **改动** | TGreenNode 从 class → record，属性从 Arena 读取 |
+
+**任务 1.4 闭环标准**:
+
+```
+[ ] TGreenNode = record（值语义），无 class，无 VMT
+[ ] 节点数据在 Arena 中紧凑存储（16 字节/节点）
+[ ] FText 0 处后修改（不可变）
+[ ] AppendChild 0 处后追加（Builder 模式）
+[ ] compiler-pass 34/34
+[ ] AST 分配次数: 5000+ → ~10（heaptrc）
+[ ] 内存峰值下降 > 50%
+```
+
+---
+
 #### 阶段 1 闭环标准
 
 ```
@@ -219,6 +300,7 @@ type
 [ ] sema/ 目录 6 个独立 unit，无 .inc 文件
 [ ] MIR 层 HIR→MIR→LLVM IR 全流程跑通
 [ ] Pipeline 接口化，阶段可独立替换
+[ ] Green Tree 数据结构重构完成（rowan 方案，不可变 + 紧凑存储）
 ```
 
 ---
@@ -379,6 +461,7 @@ type
 | 增量编译 | ✅ | incremental compilation | `go build -i` |
 | 并行编译 | ✅ | `-Z threads=N` | `go build -p N` |
 | Arena 分配 | ✅ | `BumpPtr` / `TypedArena` | Node on Arena |
+| Green Tree 紧凑存储 (rowan) | ✅ | `rowan` (rust-analyzer) | N/A |
 | 错误恢复 | ✅ | `rustc_parse` error recovery | `scanner.ErrorCount` |
 | 结构化诊断 | ✅ | `--error-format=json` | `go vet -json` |
 | 编译器用标准库 | ✅ | rustc 用 std | gc 用 Go std |
@@ -630,6 +713,7 @@ P0 (基础设施) ──┐
 | MIR building | `compiler/rustc_mir_build/src/build/mod.rs` | HIR → MIR 构建 |
 | MIR optimizations | `compiler/rustc_mir_transform/src/` | MIR 优化 pass 集合 |
 | Arena allocation | `compiler/rustc_arena/src/lib.rs` | `TypedArena`, `DroplessArena` |
+| CST / Green Tree (rowan) | `https://github.com/rust-analyzer/rowan` | `GreenNode`, `SyntaxNode`, compact arena storage |
 | Symbol interning | `compiler/rustc_span/src/symbol.rs` | `Symbol` interned string |
 | Error diagnostics | `compiler/rustc_errors/src/lib.rs` | `Diagnostic`, `DiagnosticBuilder`, structured suggestions |
 | Error recovery (parser) | `compiler/rustc_parse/src/parser/mod.rs` | `recover()` 方法，同步点策略 |
@@ -678,6 +762,7 @@ git clone https://github.com/golang/go.git --depth 1
 | P0 | Go gc `types/sym.go` (符号表) | Go 的符号表设计简单直接，适合第一阶段 |
 | P1 | rustc `mir/mod.rs` (MIR 定义) + Go `ssa/` (SSA 设计) | MIR 设计参考 rustc，SSA 实现参考 Go |
 | P1 | rustc `rustc_typeck/` (类型检查拆分) | 学习如何拆分 God Class |
+| P1 | `rowan` (rust-analyzer CST) + Roslyn `GreenNode` | Green Tree 紧凑存储，不可变树设计 |
 | P2 | rustc `rustc_query_system/` + Salsa 框架 | 查询系统设计 |
 | P3 | rustc `rustc_mir_transform/` (MIR 优化) | 优化 pass 参考 |
 | P3 | rustc `rustc_parse/` (错误恢复) | 错误恢复策略 |

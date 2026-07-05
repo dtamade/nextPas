@@ -92,6 +92,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
   - [ ] Pipeline 接口化（ICompilerPhase）
   - [ ] Sema God Class 拆分为 6 模块，0 个 .inc 文件
   - [ ] MIR 层 HIR→MIR→LLVM IR 全流程跑通
+  - [ ] Green Tree 数据结构重构（rowan 方案：TGreenNode = record index, 不可变, 紧凑存储, 内存-75%）
 - [ ] **P2 完成**: 查询化编译
   - [ ] 查询系统框架运行，缓存命中率 > 80%
   - [ ] 增量编译可用：热编译（改 1 行）< 1s
@@ -115,7 +116,8 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 | IR | 三层：HIR → MIR → LLVM IR |
 | 编译模式 | 查询化，按需+缓存 |
 | 符号查找 | THashMap O(1) |
-| 内存管理 | Arena + TVec 容量翻倍 |
+| 内存管理 | Arena + TVec 容量翻倍，Green Tree 紧凑存储（16 字节/节点） |
+| AST 表示 | TGreenNode = record index（rowan 方案），不可变，值语义 |
 | 诊断 | JSON 结构化 + 修复建议 |
 | 标准库使用 | > 30%（编译器重度使用 core/） |
 
@@ -126,6 +128,8 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 - O(n) 线性查找重新出现（SameText 遍历数组）
 - SetLength+1 逐元素扩容重新出现
 - MIR 层被绕过（HIR 直接到 LLVM IR）
+- TGreenNode 从 record 退回 class（VMT 指针、堆分配重新出现）
+- FText 后修改或 AppendChild 后追加重新出现（破坏不可变性）
 
 ---
 
