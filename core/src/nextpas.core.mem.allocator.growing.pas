@@ -40,8 +40,14 @@ type
         Large allocations use direct GetMem. }
     function GetMem(ASize: SizeUInt): Pointer; inline;
 
-    {** Free a block previously allocated by GetMem. }
+    {** Free a block previously allocated by GetMem.
+        ASize is required for O(1) size class lookup (hot path). }
     procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
+
+    {** Free a block previously allocated by GetMem.
+        Size class is determined by scanning central pool spans.
+        Slower than the two-parameter version — use when size is unknown. }
+    procedure FreeMem(APtr: Pointer);
 
     {** Allocate ASize bytes, zero-initialized. }
     function AllocMem(ASize: SizeUInt): Pointer;
@@ -480,6 +486,44 @@ begin
   LNode^.FNext := GThreadCache.FHeads[LIndex];
   GThreadCache.FHeads[LIndex] := LNode;
   Inc(GThreadCache.FCounts[LIndex]);
+end;
+{$pop}
+
+{$push}{$R-}
+procedure TGrowingAllocator.FreeMem(APtr: Pointer);
+var
+  I: Int32;
+begin
+  if APtr = nil then
+    Exit;
+  { GetMem routes through GGrowingAllocator, so we must scan its centrals. }
+  if GGrowingAllocator <> nil then
+  begin
+    for I := MEM_SIZECLASS_COUNT - 1 downto 0 do
+    begin
+      if GGrowingAllocator.FCentrals[I].FEntryCount <= 0 then
+        Continue;
+      if FindSpanOwnerThreadId(GGrowingAllocator.FCentrals[I], APtr) <> 0 then
+      begin
+        FreeMem(APtr, SizeClasses[I]);
+        Exit;
+      end;
+    end;
+  end
+  else
+  begin
+    for I := MEM_SIZECLASS_COUNT - 1 downto 0 do
+    begin
+      if FCentrals[I].FEntryCount <= 0 then
+        Continue;
+      if FindSpanOwnerThreadId(FCentrals[I], APtr) <> 0 then
+      begin
+        FreeMem(APtr, SizeClasses[I]);
+        Exit;
+      end;
+    end;
+  end;
+  System.FreeMem(APtr);
 end;
 {$pop}
 
