@@ -868,11 +868,18 @@ d6f3de428 compiler(p0): dynamic arrays → TVec<T> — FBreakLabels/FContinueLab
 
 - `GetFieldMetaByName` 和 `GetVmtSlotByName` 的外层循环（找 TypeMeta 条目）仍为 O(n)，内部字段/VMT 查找为 O(m)。整体优化留待阶段 1。
 - `FGenericCacheKeys`/`FGenericCacheTypeIds` 等数组仍使用 SetLength+1，未改为 TVec。
-- **Arena 化已回退**。诊断：TGreenNode 当前设计不满足 Arena 分配的前提（不可变性）。
-  审计 finding E-04 指出 FText 创建后还被拼接修改（25 处），FChildren 通过 AppendChild
-  动态追加（196 处）。Arena 化的正确路径是：
-  1. 先修复不可变性：FText 在 Create 时一次性计算，FChildren 使用 Builder 模式
-  2. 再上 Arena：此时节点创建后不再修改，Arena 分配自然安全
-  此任务移入阶段 1 架构重构。
+- **Arena 化已回退 + 不可变性修复启动**。
+  诊断：TGreenNode 不满足 Arena 前提（FText 后修改 25 处 + AppendChild 196 处）。
+  修复策略：FText 在 Create 时一次性计算，FChildren 用 Builder 模式。
+
+  **不可变性修复进度（2026-07-05）**：
+  - [x] ParseTypeReference: 5 处 FText 后修改 → Create 时一次性计算（`dde3da506`）
+  - [ ] ParseProcedureDecl/ParseFunctionDecl: 12 处 — 需谨慎处理子节点转移
+  - [ ] Class method directive: 3 处
+  - [ ] 其余 4 处（ParseForStatement 等）— 分类 A，可后续处理
+  - 剩余 FText 修改：21/25 → 目标 0/25
+
+  此任务在阶段 1 架构重构中继续。ParseProcedureDecl/ParseFunctionDecl 的
+  子节点转移上次尝试导致 12 个测试失败，需更仔细分析。
 
 *阶段 0 完成日期：2026-07-05*
