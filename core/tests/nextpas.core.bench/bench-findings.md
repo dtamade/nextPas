@@ -9,21 +9,30 @@
 
 ---
 
-## 2026-07-06 工程治理状态更新
+## 2026-07-06 可用性评估 + 防御性编程修复
 
-> **当前测试**: 15 suites / 314 tests / 0 failed / 0 leaks
+> **当前测试**: 15 suites / 316 tests / 0 failed / 0 leaks
 > **修复率**: 124 findings 中 122 项已修复 (98.4%)
-> **接口覆盖率**: 100%（所有 IBenchSuite/IBenchResults/IBenchStatsAnalyzer/IBenchReportGenerator 方法均有测试）
-> **类型统一**: TBenchBaseline 废弃别名已从接口签名和实现中移除，统一使用 TBaselineData
+> **接口覆盖率**: 100%
+> **可用性评分**: 8.63/10（优秀）
+> **风险等级**: 低（无 P0/P1 风险）
 
-### 工程治理变更 (2026-07-06)
+### 可用性评估修复 (2026-07-06)
 
-1. **接口覆盖补全**: 新增 `TestAddBaselineData` 测试，覆盖 `IBenchSuite.AddBaselineData` 方法
-2. **废弃别名清理**: 
-   - intf: 接口签名 `CompareMultipleBaselines`/`ToMatrixReport`/`ToMatrixHTML`/`ToMatrixJSON` 改用 `TBaselineData`
-   - facade: 内部实现和字段类型统一为 `TBaselineData`
-   - tests: 测试文件局部别名统一为 `TBaselineData`
-   - 保留 `TBenchBaseline` 作为 re-export 别名向后兼容
+1. **U-12**: `ComputeStats` 空数组从静默返回 Default 改为抛 `EBenchInvalidParam`
+2. **U-13**: `AddRange` 空参数数组从静默忽略改为抛 `EBenchInvalidParam`
+3. **接口覆盖补全**: 新增 `TestAddBaselineData` 测试
+4. **废弃别名清理**: 接口签名统一使用 `TBaselineData`
+
+### 待评估项（非阻塞）
+
+| ID | 描述 | 决策 |
+|----|------|------|
+| U-04 | Create + TBenchConfig 单构造函数 | 跳过 — 双构造函数设计已足够清晰 |
+| U-20 | GBridgeRunner 移入实例 | 跳过 — 需改 TBenchParallelFunc 签名（破坏性变更） |
+| U-07 | SetTimeout 改用 TDuration | 跳过 — 破坏性变更，收益低 |
+| U-09 | SaveTo* 返回 IBenchResults | 跳过 — 破坏性变更 |
+| U-10 | EParseError 继承 EBenchError | 跳过 — 破坏性变更 |
 
 ### 已修复项汇总 (121/124)
 
