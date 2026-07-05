@@ -4,7 +4,6 @@ program test_platform_sync;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;

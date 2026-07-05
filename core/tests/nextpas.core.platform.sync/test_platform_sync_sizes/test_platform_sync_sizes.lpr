@@ -3,7 +3,7 @@ program test_platform_sync_sizes;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base,{$ENDIF}
   nextpas.core.test,
   nextpas.core.platform.sync.base,

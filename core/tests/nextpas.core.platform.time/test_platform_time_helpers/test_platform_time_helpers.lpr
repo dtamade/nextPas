@@ -3,7 +3,9 @@ program test_platform_time_helpers;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.time;
 

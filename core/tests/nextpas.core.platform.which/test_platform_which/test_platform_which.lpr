@@ -3,12 +3,13 @@ program test_platform_which;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.platform.which,
   nextpas.core.platform.fs,
   nextpas.core.platform.env,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
+  nextpas.core.platform.thread,
   nextpas.core.test;
 
 var
@@ -100,7 +101,7 @@ var
 const
   TOOL_BODY = '#!/bin/sh' + #10 + 'exit 0' + #10;
 begin
-  LDir := '/tmp/nextpas-platform-which-long-path-' + IntToStr(GetProcessID);
+  LDir := '/tmp/nextpas-platform-which-long-path-' + IntToStr(platform_thread_id);
   LTool := LDir + '/npwhich_tail_tool';
   LHadOldPath := platform_env_get('PATH', nil, 0, LOldLen) = 0;
   if LHadOldPath then

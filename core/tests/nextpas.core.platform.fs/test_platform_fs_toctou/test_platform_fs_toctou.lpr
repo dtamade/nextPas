@@ -7,7 +7,9 @@ program test_platform_fs_toctou;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.fs,
   nextpas.core.platform.files,

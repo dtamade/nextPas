@@ -3,8 +3,11 @@ program test_platform_files;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
+  nextpas.core.base.utils,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.posix.ffi,
@@ -18,17 +21,9 @@ const
   TEST_DATA = 'Hello, nextPas platform.files!';
 
 function LoadSourceText(const ARelativePath: string): string;
-var
-  LLines: TStringList;
 begin
   Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(ARelativePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(ARelativePath);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);

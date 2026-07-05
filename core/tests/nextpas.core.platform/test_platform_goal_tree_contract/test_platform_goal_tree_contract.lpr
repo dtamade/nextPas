@@ -3,8 +3,9 @@ program test_platform_goal_tree_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 const
@@ -40,33 +41,19 @@ end;
 function LoadDocText: string;
 var
   LPath: string;
-  LLines: TStringList;
 begin
   LPath := ResolvePath(GOAL_TREE_PATH_FROM_TEST, GOAL_TREE_PATH_FROM_ROOT);
   Check(FileExists(LPath), 'platform goal tree must exist: ' + LPath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LPath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LPath));
 end;
 
 function LoadTextFile(const APathFromTest, APathFromRoot, AMessage: string): string;
 var
   LPath: string;
-  LLines: TStringList;
 begin
   LPath := ResolvePath(APathFromTest, APathFromRoot);
   Check(FileExists(LPath), AMessage + ': ' + LPath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LPath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LPath));
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);

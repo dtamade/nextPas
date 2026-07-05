@@ -3,7 +3,8 @@ program test_platform_memory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.platform.memory,
   nextpas.core.test;
 

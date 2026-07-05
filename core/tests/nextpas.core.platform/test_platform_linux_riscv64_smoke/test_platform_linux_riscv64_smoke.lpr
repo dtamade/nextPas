@@ -3,7 +3,7 @@ program test_platform_linux_riscv64_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+
   nextpas.core.platform.time,
   nextpas.core.platform.memory,
   nextpas.core.platform.thread,
