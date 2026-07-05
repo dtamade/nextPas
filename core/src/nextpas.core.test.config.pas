@@ -18,7 +18,8 @@ type
     ckOutSink, ckErrSink, ckRetry, ckWorkers, ckCount, ckSlow,
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
-    ckBench, ckBenchTime, ckBenchMem, ckRun);
+    ckBench, ckBenchTime, ckBenchMem, ckRun,
+    ckBenchSave, ckBenchCompare);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -86,6 +87,50 @@ type
     BenchTimeMs   : Integer; { benchmark target duration in ms (default 1000 = 1s) }
     BenchMem      : Boolean; { true = report memory allocations per op }
     RunPattern    : string;  { --run: exact test name match (case-insensitive) }
+    BenchSaveFile : string;  { --benchsave=<file>: save benchmark results to JSON }
+    BenchCompareFile: string; { --benchcompare=<file>: compare against baseline JSON }
+  end;
+
+  {** Fluent builder for TTestConfig
+   *
+   *  Usage:
+   *    LConfig := TTestConfigBuilder.Create
+   *      .WithFilter('my-test')
+   *      .WithTimeout(5000)
+   *      .WithFailFast(True)
+   *      .Build;
+   *}
+  TTestConfigBuilder = record
+  private
+    FConfig: TTestConfig;
+  public
+    class function Create: TTestConfigBuilder; static;
+    function WithFilter(const APattern: string): TTestConfigBuilder;
+    function WithTag(const ATag: string): TTestConfigBuilder;
+    function WithTimeout(ATimeoutMs: UInt64): TTestConfigBuilder;
+    function WithAnsiMode(AMode: TAnsiMode): TTestConfigBuilder;
+    function WithOutSink(const ASink: IOutputSink): TTestConfigBuilder;
+    function WithErrSink(const ASink: IOutputSink): TTestConfigBuilder;
+    function WithRetry(ACount: Integer): TTestConfigBuilder;
+    function WithWorkers(AWorkers: Integer): TTestConfigBuilder;
+    function WithRepeat(ACount: Integer): TTestConfigBuilder;
+    function WithSlowCount(ACount: Integer): TTestConfigBuilder;
+    function WithShuffle(ASeed: Integer): TTestConfigBuilder;
+    function WithFailFast(AFailFast: Boolean = True): TTestConfigBuilder;
+    function WithListMode(AListMode: Boolean = True): TTestConfigBuilder;
+    function WithShortMode(AShortMode: Boolean = True): TTestConfigBuilder;
+    function WithProgress(AProgress: Boolean = True): TTestConfigBuilder;
+    function WithMaxFailures(AMax: Integer): TTestConfigBuilder;
+    function WithJsonOutput(AJson: Boolean = True): TTestConfigBuilder;
+    function WithVerbose(AVerbose: Boolean = True): TTestConfigBuilder;
+    function WithRunTimeout(ATimeoutSec: Integer): TTestConfigBuilder;
+    function WithBench(AEnabled: Boolean = True): TTestConfigBuilder;
+    function WithBenchTime(ATimeMs: Integer): TTestConfigBuilder;
+    function WithBenchMem(AMem: Boolean = True): TTestConfigBuilder;
+    function WithRunPattern(const APattern: string): TTestConfigBuilder;
+    function WithBenchSave(const AFile: string): TTestConfigBuilder;
+    function WithBenchCompare(const AFile: string): TTestConfigBuilder;
+    function Build: TTestConfig;
   end;
 
 function DefaultConfig: TTestConfig;
@@ -116,6 +161,8 @@ procedure SetDefaultBenchEnabled(AEnabled: Boolean);
 procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
 procedure SetDefaultBenchMem(ABenchMem: Boolean);
 procedure SetDefaultRunPattern(const APattern: string);
+procedure SetDefaultBenchSaveFile(const AFile: string);
+procedure SetDefaultBenchCompareFile(const AFile: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -131,6 +178,8 @@ function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
 function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  GetRunPattern(const AConfig: TTestConfig): string;
+function  GetBenchSaveFile(const AConfig: TTestConfig): string;
+function  GetBenchCompareFile(const AConfig: TTestConfig): string;
 
 implementation
 
@@ -163,6 +212,8 @@ begin
   Result.BenchTimeMs   := 1000; { default 1 second per benchmark }
   Result.BenchMem      := False;
   Result.RunPattern    := '';
+  Result.BenchSaveFile := '';
+  Result.BenchCompareFile := '';
 end;
 
 function DefaultConfig: TTestConfig;
@@ -363,6 +414,18 @@ begin
   Include(GExplicit, ckRun);
 end;
 
+procedure SetDefaultBenchSaveFile(const AFile: string);
+begin
+  GDefaultConfig.BenchSaveFile := AFile;
+  Include(GExplicit, ckBenchSave);
+end;
+
+procedure SetDefaultBenchCompareFile(const AFile: string);
+begin
+  GDefaultConfig.BenchCompareFile := AFile;
+  Include(GExplicit, ckBenchCompare);
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -436,6 +499,16 @@ end;
 function GetRunPattern(const AConfig: TTestConfig): string;
 begin
   Result := ResolveConfig(AConfig).RunPattern;
+end;
+
+function GetBenchSaveFile(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).BenchSaveFile;
+end;
+
+function GetBenchCompareFile(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).BenchCompareFile;
 end;
 
 procedure TStdoutSink.Write(const AText: string);
@@ -555,6 +628,168 @@ begin
   FLines := nil;
   FLineCap := 0;
   FHasOpenLine := False;
+end;
+
+{ TTestConfigBuilder }
+
+class function TTestConfigBuilder.Create: TTestConfigBuilder;
+begin
+  Result.FConfig := DefaultConfig;
+end;
+
+function TTestConfigBuilder.WithFilter(const APattern: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.FilterPattern := APattern;
+end;
+
+function TTestConfigBuilder.WithTag(const ATag: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.TagFilter := ATag;
+end;
+
+function TTestConfigBuilder.WithTimeout(ATimeoutMs: UInt64): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.TimeoutMs := ATimeoutMs;
+end;
+
+function TTestConfigBuilder.WithAnsiMode(AMode: TAnsiMode): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.AnsiMode := AMode;
+end;
+
+function TTestConfigBuilder.WithOutSink(const ASink: IOutputSink): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.OutSink := ASink;
+end;
+
+function TTestConfigBuilder.WithErrSink(const ASink: IOutputSink): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.ErrSink := ASink;
+end;
+
+function TTestConfigBuilder.WithRetry(ACount: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.RetryCount := ACount;
+end;
+
+function TTestConfigBuilder.WithWorkers(AWorkers: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.MaxParallelWorkers := AWorkers;
+end;
+
+function TTestConfigBuilder.WithRepeat(ACount: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.RepeatAllCount := ACount;
+end;
+
+function TTestConfigBuilder.WithSlowCount(ACount: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.SlowTestCount := ACount;
+end;
+
+function TTestConfigBuilder.WithShuffle(ASeed: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.ShuffleSeed := ASeed;
+end;
+
+function TTestConfigBuilder.WithFailFast(AFailFast: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.FailFast := AFailFast;
+end;
+
+function TTestConfigBuilder.WithListMode(AListMode: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.ListMode := AListMode;
+end;
+
+function TTestConfigBuilder.WithShortMode(AShortMode: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.ShortMode := AShortMode;
+end;
+
+function TTestConfigBuilder.WithProgress(AProgress: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.ShowProgress := AProgress;
+end;
+
+function TTestConfigBuilder.WithMaxFailures(AMax: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.MaxFailures := AMax;
+end;
+
+function TTestConfigBuilder.WithJsonOutput(AJson: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.JsonOutput := AJson;
+end;
+
+function TTestConfigBuilder.WithVerbose(AVerbose: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.VerboseMode := AVerbose;
+end;
+
+function TTestConfigBuilder.WithRunTimeout(ATimeoutSec: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.RunTimeoutSec := ATimeoutSec;
+end;
+
+function TTestConfigBuilder.WithBench(AEnabled: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BenchEnabled := AEnabled;
+end;
+
+function TTestConfigBuilder.WithBenchTime(ATimeMs: Integer): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BenchTimeMs := ATimeMs;
+end;
+
+function TTestConfigBuilder.WithBenchMem(AMem: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BenchMem := AMem;
+end;
+
+function TTestConfigBuilder.WithRunPattern(const APattern: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.RunPattern := APattern;
+end;
+
+function TTestConfigBuilder.WithBenchSave(const AFile: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BenchSaveFile := AFile;
+end;
+
+function TTestConfigBuilder.WithBenchCompare(const AFile: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.BenchCompareFile := AFile;
+end;
+
+function TTestConfigBuilder.Build: TTestConfig;
+begin
+  Result := FConfig;
 end;
 
 initialization

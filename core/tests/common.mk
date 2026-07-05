@@ -18,9 +18,12 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/$(MODULE_NAME)/$(TEST_NAME)
 
 FPC_FLAGS = -MObjFPC -Sh -O2 -gl -gh -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: build run test clean
+.PHONY: build run test clean clean-src
 
-build:
+clean-src:
+	@find $(CORE_ROOT)/src -maxdepth 1 -type f \( -name '*.ppu' -o -name '*.o' \) -delete 2>/dev/null || true
+
+build: clean-src
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
@@ -29,5 +32,5 @@ run: build
 
 test: run
 
-clean:
+clean: clean-src
 	rm -rf $(BUILD_DIR)

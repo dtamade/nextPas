@@ -114,6 +114,7 @@ type
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
+    function AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
     function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
@@ -558,6 +559,16 @@ begin
   Result := AddBaseline(AName, Double(ANsPerOp.AsNanoseconds));
 end;
 
+{** F-08: 完整基线数据重载 }
+function TBenchSuite.AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+  EnsureBaselineCapacity;
+  FBaselines[FBaselineCount] := ABaseline;
+  Inc(FBaselineCount);
+end;
+
 function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
 var
   I: Integer;
@@ -565,7 +576,7 @@ begin
   GuardNotRun;
   Result := Self;
   for I := 0 to High(ABaselines) do
-    AddBaseline(ABaselines[I].Name, ABaselines[I].NsPerOp);
+    AddBaselineData(ABaselines[I]);
 end;
 
 function TBenchSuite.LoadBaseline(const APath: string): IBenchSuite;
@@ -587,9 +598,9 @@ begin
   end;
   LBaselines := LManager.GetAllBaselines;
 
-  // 将加载的基线添加到 suite
+  // 将加载的基线添加到 suite（F-08: 保留完整字段）
   for I := 0 to High(LBaselines) do
-    AddBaseline(LBaselines[I].Name, LBaselines[I].NsPerOp);
+    AddBaselineData(LBaselines[I]);
 end;
 
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;
@@ -614,6 +625,7 @@ var
   LRunResult: TBenchResult;
   LStartNs: UInt64;
   LTimeoutNs: UInt64;
+  LEntryStartNs: UInt64; { F-017 }
   I: Integer;
 begin
   FRunner.SetConfig(FConfig);
@@ -639,7 +651,7 @@ begin
     if not FEntries[I].Condition then
       Continue;
 
-    // ST-04: 条目间超时检查
+    // ST-04: 条目间超时检查 (suite-level)
     if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
     begin
       // 剩余条目标记为 skipped
@@ -653,7 +665,19 @@ begin
       Continue;
     end;
 
-    LRunResult := FRunner.RunOne(FEntries[I]);
+    { F-017: per-benchmark timeout check }
+    if FEntries[I].TimeoutMs > 0 then
+    begin
+      LEntryStartNs := platform_monotonic_ns;
+      LRunResult := FRunner.RunOne(FEntries[I]);
+      if platform_monotonic_ns - LEntryStartNs >= UInt64(FEntries[I].TimeoutMs) * 1000000 then
+      begin
+        LRunResult.Skipped := True;
+        LRunResult.SkipReason := 'Per-benchmark timeout exceeded';
+      end;
+    end
+    else
+      LRunResult := FRunner.RunOne(FEntries[I]);
     if LRunResult.Executed then
     begin
       LResults[LResultCount] := LRunResult;
@@ -699,6 +723,9 @@ begin
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;
+  { F-18: 构造时一次性设置结果和环境，避免每次 To* 方法重复拷贝 }
+  FReportGenerator.SetResults(FResults);
+  FReportGenerator.SetEnvironment(FEnvironment);
 end;
 
 destructor TBenchResults.Destroy;
@@ -829,35 +856,26 @@ end;
 
 function TBenchResults.PrintToConsole: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.PrintToConsole;
 end;
 
 function TBenchResults.ToJSON: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToJSON;
 end;
 
 function TBenchResults.ToTSV: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToTSV;
 end;
 
 function TBenchResults.ToHTML: string;
 begin
-  FReportGenerator.SetResults(FResults);
-  FReportGenerator.SetEnvironment(FEnvironment);
   Result := FReportGenerator.ToHTML;
 end;
 
 function TBenchResults.ToBenchstat: string;
 begin
-  FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.ToBenchstat;
 end;
 
@@ -1012,6 +1030,7 @@ var
   LRow: TMatrixRow;
   LCell: TMatrixCell;
   LRatios: array of TDoubleArray;
+  LRatioCounts: array of Integer;
   I, J: Integer;
 begin
   LNCols := Length(ABaselines);
@@ -1024,8 +1043,12 @@ begin
 
   { 为每个基线列初始化比率收集器 }
   SetLength(LRatios, LNCols);
+  SetLength(LRatioCounts, LNCols);
   for J := 0 to LNCols - 1 do
-    SetLength(LRatios[J], 0);
+  begin
+    SetLength(LRatios[J], FResultCount);
+    LRatioCounts[J] := 0;
+  end;
 
   LAnalyzer := TBenchStatsAnalyzer.Create;
   try
@@ -1066,8 +1089,8 @@ begin
         LRow.Cells[J] := LCell;
 
         { 收集 ratio 用于计算几何均值 }
-        SetLength(LRatios[J], Length(LRatios[J]) + 1);
-        LRatios[J][High(LRatios[J])] := LCell.Ratio;
+        LRatios[J][LRatioCounts[J]] := LCell.Ratio;
+        Inc(LRatioCounts[J]);
       end;
 
       Result.Rows[LIdx] := LRow;
@@ -1079,8 +1102,11 @@ begin
     SetLength(Result.GeometricMeanRatios, LNCols);
     for J := 0 to LNCols - 1 do
     begin
-      if Length(LRatios[J]) > 0 then
-        Result.GeometricMeanRatios[J] := LAnalyzer.GeometricMean(LRatios[J])
+      if LRatioCounts[J] > 0 then
+      begin
+        SetLength(LRatios[J], LRatioCounts[J]);
+        Result.GeometricMeanRatios[J] := LAnalyzer.GeometricMean(LRatios[J]);
+      end
       else
         Result.GeometricMeanRatios[J] := 1.0;
     end;

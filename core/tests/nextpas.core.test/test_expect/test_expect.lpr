@@ -868,6 +868,62 @@ begin
   ExpectStr('abc').ToEndWith('c');
 end;
 
+{ E-10: ToBeNaN / ToBeNotNaN coverage }
+
+procedure TestExpectToBeNaNPass;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0/0.0;
+  ExpectDouble(LNaN).ToBeNaN;
+end;
+
+procedure TestExpectToBeNaNFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(1.0).ToBeNaN; end, 'NaN');
+end;
+
+procedure TestExpectToBeNotNaNPass;
+begin
+  ExpectDouble(1.0).ToBeNotNaN;
+end;
+
+procedure TestExpectToBeNotNaNFail;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0/0.0;
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeNotNaN; end, 'NaN');
+end;
+
+procedure TestExpectToBeNaNNot;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0/0.0;
+  ExpectFail(procedure begin ExpectDouble(LNaN).Not_.ToBeNaN; end, 'non-NaN');
+end;
+
+procedure TestExpectToBeNotNaNNot;
+begin
+  ExpectFail(procedure begin ExpectDouble(1.0).Not_.ToBeNotNaN; end, 'NaN');
+end;
+
+{ E-10: Chaining returns self }
+
+procedure TestExpectChainingReturnsSelf;
+var
+  LExp: IExpectation;
+begin
+  { All methods should return the same IExpectation for chaining }
+  LExp := Expect('hello');
+  CheckTrue(LExp.ToEqual('hello') = LExp, 'ToEqual should return self');
+  LExp := ExpectBool(True);
+  CheckTrue(LExp.ToBeTrue = LExp, 'ToBeTrue should return self');
+  LExp := ExpectDouble(1.0);
+  CheckTrue(LExp.ToBeNear(1.0) = LExp, 'ToBeNear should return self');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1031,6 +1087,15 @@ begin
 
   { ExpectStr alias }
   LSuite.Test('ExpectStr alias',               @TestExpectStrAlias);
+
+  { E-10: NaN + chaining coverage }
+  LSuite.Test('ToBeNaN pass',                  @TestExpectToBeNaNPass);
+  LSuite.Test('ToBeNaN fail',                  @TestExpectToBeNaNFail);
+  LSuite.Test('ToBeNotNaN pass',               @TestExpectToBeNotNaNPass);
+  LSuite.Test('ToBeNotNaN fail',               @TestExpectToBeNotNaNFail);
+  LSuite.Test('Not_.ToBeNaN',                  @TestExpectToBeNaNNot);
+  LSuite.Test('Not_.ToBeNotNaN',               @TestExpectToBeNotNaNNot);
+  LSuite.Test('Chaining returns self',         @TestExpectChainingReturnsSelf);
 
   if not LSuite.Run then
   begin

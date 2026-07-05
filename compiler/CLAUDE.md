@@ -77,16 +77,34 @@ scripts/rebuild-compiler.sh
 bash scripts/c8_scan.sh
 ```
 
-## 当前状态 (2026-07-01)
+## 当前状态 (2026-07-05)
+
+### 里程碑
 - compiler-pass: 34/34 ✅
 - self-compile: 19/19 ✅
-- C8 scan: ~867/965 (89.8%), semantic failures: ~12
-- 本次修复: SIMD empty uses (3), parser optional interface/implementation, git binding keyword, preprocessor platform defines, {$H+} directive parsing
-- 主要债务: sema 主文件 12,175 行 (已从 17,735 行拆分), permissive overload 是临时方案
+- C5 `{$IFDEF}` 预处理器支持: ✅ (2026-07-03)
+- C6-H4 owned string return: ✅ (2026-07-03)
+- C7 自举验证: ✅ (2026-07-03)
+- core/ 覆盖率: 963/972 (99.1%) ✅
+
+### 残留
+- c2p_win32_compat（平台排除）
+- C7 深化：目标运行时配置、多目标 IR、LLVM O2/LTO
+
+### 主要债务
+- sema 主文件 12,175 行（已从 17,735 行拆分），需继续拆分（目标 <8000）
+- permissive overload resolution（选第一个候选）是 C8 临时方案
 
 ## 已知技术债
 - ~~IsBuiltinProcedure 函数列表过长（150+ 函数），需重构为注册表~~ ✅ 已完成
 - ~~IsDeferredSystemObjectMember 扩展过多（30+ 方法），需接口方法解析~~ ✅ 已清理并组织
 - ~~sema 17,735 行需拆分~~ ✅ 已拆分为 3 文件 (12,175 + 2,217 + 3,345)
+- ~~C6-H4 owned string return 限制需编译器级修复~~ ✅ 已完成 (2026-07-03)
+- ~~C5 `{$IFDEF}` 预处理器支持~~ ✅ 已完成 (2026-07-03)
 - Permissive overload resolution（选第一个候选）是 C8 临时方案
-- C6-H4 owned string return 限制需编译器级修复
+- sema 主文件 12,175 行仍需继续拆分（目标 <8000）
+
+## 治理关联
+- 项目总控计划: `PLAN.md`
+- 目标树: `docs/plans/goal-tree.md`
+- 自举路线图: `docs/plans/selfhost-roadmap.md`

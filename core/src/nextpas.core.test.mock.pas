@@ -65,6 +65,8 @@ type
 { ── Setup (configure return values) ───────────────────────────────────────── }
 
 type
+  IMockWhen = interface;
+
   IMockSetup = interface
     ['{A7B2C3D4-1234-5678-ABCD-EF0123456789}']
     { Configure the return value for this method }
@@ -77,6 +79,19 @@ type
     function ReturnsDouble(const AValue: Double): IMockSetup;
     { Mark this setup for ordered verification (InOrder) }
     function InOrder: IMockSetup;
+    { Configure parameter-dependent return value (E-09 When API).
+      When args match the recorded call, the configured return is used.
+      Example: Mock.Setup('Add').When([MockInt(1)]).ReturnsInt(10); }
+    function When(const AArgs: array of TMockValue): IMockWhen;
+  end;
+
+  {** Parameter-dependent return configuration (E-09) }
+  IMockWhen = interface
+    ['{C9D0E1F2-3456-789A-CDEF-012345678901}']
+    function Returns(const AValue: string): IMockSetup;
+    function ReturnsInt(const AValue: Int64): IMockSetup;
+    function ReturnsBool(AValue: Boolean): IMockSetup;
+    function ReturnsDouble(const AValue: Double): IMockSetup;
   end;
 
 { ── Verify (assert call expectations) ─────────────────────────────────────── }
@@ -111,11 +126,21 @@ type
 { ── Mock State ────────────────────────────────────────────────────────────── }
 
 type
+  {** E-09: Parameter-dependent return entry }
+  TMockWhenEntry = record
+    MethodName: string;
+    Args      : TMockValues;
+    ReturnValue: TMockValue;
+    HasReturn : Boolean;
+    ReturnStr : string;
+  end;
+
   TMockState = class
   private
     FCalls   : TMockCalls;
     FSetups  : specialize TArray<TMockCall>;
     FCallOrder: specialize TArray<string>;  { records method names in call order }
+    FWhenEntries: specialize TArray<TMockWhenEntry>; { E-09: conditional returns }
     procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
     procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
@@ -138,6 +163,13 @@ type
       const AArgs: array of string): Boolean;
     { Configure a return value }
     procedure SetReturn(const AMethodName, AValue: string);
+    { E-09: Add a parameter-dependent return entry }
+    procedure AddWhenEntry(const AMethodName: string;
+      const AArgs: array of TMockValue; const AValue: TMockValue;
+      const AReturnStr: string);
+    { E-09: Find matching When entry for given method + args }
+    function FindWhenEntry(const AMethodName: string;
+      const AArgs: array of TMockValue): Integer;
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
     { Get call count for a method with matching arguments }
@@ -196,11 +228,15 @@ type
     function GetReturnInt(const AMethodName: string): Int64; overload;
     function GetReturnInt(const AMethodName: string;
       const AArgs: array of string): Int64; overload;
+    function GetReturnInt(const AMethodName: string;
+      const AArgs: array of TMockValue): Int64; overload;
 
     { Get the configured return value as Boolean. Returns False if not configured. }
     function GetReturnBool(const AMethodName: string): Boolean; overload;
     function GetReturnBool(const AMethodName: string;
       const AArgs: array of string): Boolean; overload;
+    function GetReturnBool(const AMethodName: string;
+      const AArgs: array of TMockValue): Boolean; overload;
 
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
@@ -423,8 +459,15 @@ end;
 function TMockState.GetReturnTyped(const AMethodName: string;
   const AArgs: array of TMockValue): TMockValue;
 var
-  I: Integer;
+  I, LWhenIdx: Integer;
 begin
+  { E-09: Check When entries first (parameter-dependent returns) }
+  if Length(AArgs) > 0 then
+  begin
+    LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+    if LWhenIdx >= 0 then
+      Exit(FWhenEntries[LWhenIdx].ReturnValue);
+  end;
   for I := High(FSetups) downto 0 do
   begin
     if FSetups[I].MethodName = AMethodName then
@@ -512,6 +555,54 @@ begin
   AppendSetup(LSetup);
 end;
 
+procedure TMockState.AddWhenEntry(const AMethodName: string;
+  const AArgs: array of TMockValue; const AValue: TMockValue;
+  const AReturnStr: string);
+var
+  LEntry: TMockWhenEntry;
+  LOldLen, LCap, I: Integer;
+begin
+  LEntry.MethodName := AMethodName;
+  SetLength(LEntry.Args, Length(AArgs));
+  for I := 0 to High(AArgs) do
+    LEntry.Args[I] := AArgs[I];
+  LEntry.ReturnValue := AValue;
+  LEntry.HasReturn := True;
+  LEntry.ReturnStr := AReturnStr;
+  LOldLen := Length(FWhenEntries);
+  LCap := GrowCapacity(LOldLen, 4);
+  if LCap <> LOldLen then SetLength(FWhenEntries, LCap);
+  FWhenEntries[LOldLen] := LEntry;
+  SetLength(FWhenEntries, LOldLen + 1);
+end;
+
+function TMockState.FindWhenEntry(const AMethodName: string;
+  const AArgs: array of TMockValue): Integer;
+var
+  I, J: Integer;
+  LMatch: Boolean;
+begin
+  for I := High(FWhenEntries) downto 0 do
+  begin
+    if FWhenEntries[I].MethodName <> AMethodName then
+      Continue;
+    if Length(FWhenEntries[I].Args) <> Length(AArgs) then
+      Continue;
+    LMatch := True;
+    for J := 0 to High(AArgs) do
+    begin
+      if not MockValueEqual(FWhenEntries[I].Args[J], AArgs[J]) then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    end;
+    if LMatch then
+      Exit(I);
+  end;
+  Result := -1;
+end;
+
 function TMockState.CallCount(const AMethodName: string): Integer;
 var
   I: Integer;
@@ -583,6 +674,7 @@ begin
   FCalls := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenEntries := nil;
 end;
 
 function TMockState.GetSetupMethodNames: specialize TArray<string>;
@@ -609,6 +701,21 @@ type
     function ReturnsBool(AValue: Boolean): IMockSetup;
     function ReturnsDouble(const AValue: Double): IMockSetup;
     function InOrder: IMockSetup;
+    function When(const AArgs: array of TMockValue): IMockWhen;
+  end;
+
+  TMockWhen = class(TInterfacedObject, IMockWhen)
+  private
+    FState: TMockState;
+    FMethod: string;
+    FArgs: TMockValues;
+  public
+    constructor Create(AState: TMockState; const AMethod: string;
+      const AArgs: array of TMockValue);
+    function Returns(const AValue: string): IMockSetup;
+    function ReturnsInt(const AValue: Int64): IMockSetup;
+    function ReturnsBool(AValue: Boolean): IMockSetup;
+    function ReturnsDouble(const AValue: Double): IMockSetup;
   end;
 
 constructor TMockSetup.Create(AState: TMockState; const AMethod: string);
@@ -654,6 +761,67 @@ begin
     This method exists for fluent API readability:
       Mock.Setup('Foo').InOrder.Returns('x'); }
   Result := Self;
+end;
+
+function TMockSetup.When(const AArgs: array of TMockValue): IMockWhen;
+var
+  LWhen: TMockWhen;
+begin
+  LWhen := TMockWhen.Create(FState, FMethod, AArgs);
+  Result := LWhen;
+end;
+
+{ ── TMockWhen implementation (E-09) ────────────────────────────────────────── }
+
+constructor TMockWhen.Create(AState: TMockState; const AMethod: string;
+  const AArgs: array of TMockValue);
+var
+  I: Integer;
+begin
+  inherited Create;
+  FState := AState;
+  FMethod := AMethod;
+  SetLength(FArgs, Length(AArgs));
+  for I := 0 to High(AArgs) do
+    FArgs[I] := AArgs[I];
+end;
+
+function TMockWhen.Returns(const AValue: string): IMockSetup;
+var
+  LSetup: TMockSetup;
+begin
+  FState.AddWhenEntry(FMethod, FArgs, MockStr(AValue), AValue);
+  LSetup := TMockSetup.Create(FState, FMethod);
+  Result := LSetup;
+end;
+
+function TMockWhen.ReturnsInt(const AValue: Int64): IMockSetup;
+var
+  LSetup: TMockSetup;
+begin
+  FState.AddWhenEntry(FMethod, FArgs, MockInt(AValue), IntToStr(AValue));
+  LSetup := TMockSetup.Create(FState, FMethod);
+  Result := LSetup;
+end;
+
+function TMockWhen.ReturnsBool(AValue: Boolean): IMockSetup;
+var
+  LSetup: TMockSetup;
+  LStr: string;
+begin
+  if AValue then LStr := 'true' else LStr := 'false';
+  FState.AddWhenEntry(FMethod, FArgs, MockBool(AValue), LStr);
+  LSetup := TMockSetup.Create(FState, FMethod);
+  Result := LSetup;
+end;
+
+function TMockWhen.ReturnsDouble(const AValue: Double): IMockSetup;
+var
+  LSetup: TMockSetup;
+begin
+  FState.AddWhenEntry(FMethod, FArgs, MockDouble(AValue), FloatToStr(AValue));
+  LSetup := TMockSetup.Create(FState, FMethod);
+  Result := LSetup;
 end;
 
 { ── IMockVerify implementation ─────────────────────────────────────────────── }
@@ -945,6 +1113,28 @@ function TMock.GetReturnBool(const AMethodName: string;
   const AArgs: array of string): Boolean;
 begin
   Result := FState.GetReturnBool(AMethodName, AArgs);
+end;
+
+function TMock.GetReturnInt(const AMethodName: string;
+  const AArgs: array of TMockValue): Int64;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, AArgs);
+  if LTyped.Kind = mvInt64 then
+    Exit(LTyped.IntVal);
+  Result := 0;
+end;
+
+function TMock.GetReturnBool(const AMethodName: string;
+  const AArgs: array of TMockValue): Boolean;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, AArgs);
+  if LTyped.Kind = mvBool then
+    Exit(LTyped.BoolVal);
+  Result := False;
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;

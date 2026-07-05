@@ -15,6 +15,20 @@ const
   HASHMAP_LOAD_FACTOR_DEN = 4;
 
 type
+  {**
+   * 分片锁并发 HashMap。
+   *
+   * 使用分片自旋锁（per-shard spinlock via AtomicExchange32）实现并发安全，
+   * 不是 lock-free 结构。在高竞争场景下，自旋等待可能导致 CPU 浪费；
+   * 适合竞争不激烈的快速路径。
+   *
+   * @constraints
+   *   - TKey 和 TValue 必须是 unmanaged 类型
+   *   - 所有公共方法（Insert/Find/Remove/Contains/Count）是线程安全的
+   *   - Count 返回近似值（需要逐分片加锁）
+   *
+   * @see collections.hashmap.pas 中的 THashMap 用于单线程场景
+   *}
   generic TShardedHashMapImpl<TKey, TValue> = class
   private type
     TEntryState = (esEmpty, esOccupied, esDeleted);

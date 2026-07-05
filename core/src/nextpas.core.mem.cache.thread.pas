@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.atomic,
   nextpas.core.mem.base,
   nextpas.core.mem.sizeclass;
 
@@ -39,15 +40,41 @@ type
     FNext: PFreeNode;
   end;
 
+  {** MPSC inbox node for cross-thread free.
+      Uses the same layout as TFreeNode (intrusive, zero overhead). }
+  PMpscNode = ^TMpscNode;
+  TMpscNode = record
+    FNext: PMpscNode;
+  end;
+
+  {** MPSC inbox for cross-thread free (lock-free).
+      Multiple producers (other threads) can push via CAS exchange.
+      Single consumer (owner thread) drains during allocation.
+
+      Design inspired by snmalloc's FreeListMPSCQ:
+      - FHead: write端 (producers push here via exchange)
+      - FTail: read端 (consumer drains from here)
+      - FStub: sentinel node to avoid ABA问题 }
+  TMpscInbox = record
+    FHead: PMpscNode;    { Write end: producers exchange here. }
+    FTail: PMpscNode;    { Read end: consumer drains from here. }
+    FStub: TMpscNode;    { Sentinel node. }
+  end;
+
   {** Per-thread free-list cache for all size classes.
       Each slot is an intrusive singly-linked list of freed blocks.
       Allocations pop from the list; frees push to the list.
       When the list is empty, a batch refill is requested.
-      When the list exceeds CACHE_MAX_LIST_SIZE, a batch flush occurs. }
+      When the list exceeds CACHE_MAX_LIST_SIZE, a batch flush occurs.
+
+      MPSC inbox: other threads can push freed blocks here via lock-free
+      exchange. Owner thread drains inbox during allocation (before refill). }
+  PThreadCache = ^TThreadCache;
   TThreadCache = record
     FHeads: array[0..MEM_SIZECLASS_COUNT - 1] of PFreeNode;
     FCounts: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
     FOpCount: UInt64;
+    FInbox: TMpscInbox;  { MPSC inbox for cross-thread free. }
   end;
 
   {** Callback for batch refill: allocate ACount blocks of size class AIndex
@@ -99,6 +126,26 @@ function AdaptiveMaxListSize(ASizeClassIndex: Int32): Word; inline;
 procedure ThreadCacheFlushAll(var ACache: TThreadCache;
   AFlushProc: TFlushProc);
 
+{** Initialize an MPSC inbox (set sentinel, reset head/tail). }
+procedure MpscInboxInit(out AInbox: TMpscInbox);
+
+{** Push a block to the MPSC inbox (lock-free, safe from any thread).
+    Uses atomic exchange for O(1) enqueue. }
+procedure MpscInboxPush(var AInbox: TMpscInbox; APtr: Pointer);
+
+{** Drain all blocks from the MPSC inbox into ABlocks[].
+    Returns count drained. Only safe to call from the owner thread. }
+function MpscInboxDrain(var AInbox: TMpscInbox;
+  AMaxCount: Word; ABlocks: PPointer): Word;
+
+{** Check if the MPSC inbox is empty. }
+function MpscInboxIsEmpty(var AInbox: TMpscInbox): Boolean;
+
+{** Push a block to a specific size class inbox in the thread cache.
+    Lock-free, safe from any thread. Used for cross-thread free. }
+procedure ThreadCacheInboxPush(var ACache: TThreadCache;
+  ASizeClass: Int32; APtr: Pointer);
+
 implementation
 
 procedure ThreadCacheInit(out ACache: TThreadCache);
@@ -110,6 +157,7 @@ begin
     ACache.FHeads[I] := nil;
     ACache.FCounts[I] := 0;
   end;
+  MpscInboxInit(ACache.FInbox);
 end;
 
 function ThreadCacheAlloc(var ACache: TThreadCache;
@@ -241,6 +289,117 @@ begin
     while ACache.FHeads[LSizeClass] <> nil do
       ThreadCacheFlush(ACache, LSizeClass, AFlushProc);
   end;
+end;
+
+{ --- MPSC Inbox implementation --- }
+
+procedure MpscInboxInit(out AInbox: TMpscInbox);
+begin
+  AInbox.FStub.FNext := nil;
+  AInbox.FHead := @AInbox.FStub;
+  AInbox.FTail := @AInbox.FStub;
+end;
+
+procedure MpscInboxPush(var AInbox: TMpscInbox; APtr: Pointer);
+var
+  LNode, LPrev: PMpscNode;
+begin
+  LNode := PMpscNode(APtr);
+  LNode^.FNext := nil;
+  { Atomic exchange: get previous head, set new node as head.
+    This is the classic MPSC queue enqueue (lock-free). }
+  LPrev := PMpscNode(AtomicExchangePtr(Pointer(AInbox.FHead),
+    Pointer(LNode), moAcqRel));
+  { Link previous head to new node. }
+  AtomicStorePtr(Pointer(LPrev^.FNext), Pointer(LNode), moRelease);
+end;
+
+function MpscInboxDrain(var AInbox: TMpscInbox;
+  AMaxCount: Word; ABlocks: PPointer): Word;
+var
+  LTail, LNext: PMpscNode;
+begin
+  Result := 0;
+  LTail := AInbox.FTail;
+
+  { Skip sentinel if present. }
+  if LTail = @AInbox.FStub then
+  begin
+    LNext := PMpscNode(AtomicLoadPtr(Pointer(LTail^.FNext), moAcquire));
+    if LNext = nil then
+      Exit;
+    AInbox.FTail := LNext;
+    LTail := LNext;
+  end;
+
+  { Drain nodes from tail. }
+  while (Result < AMaxCount) and (LTail <> nil) do
+  begin
+    LNext := PMpscNode(AtomicLoadPtr(Pointer(LTail^.FNext), moAcquire));
+    ABlocks^ := Pointer(LTail);
+    Inc(ABlocks);
+    Inc(Result);
+    LTail := LNext;
+  end;
+
+  { Update tail. If we drained everything, re-insert sentinel. }
+  if LTail = nil then
+  begin
+    AInbox.FStub.FNext := nil;
+    { Try to re-insert sentinel as head. }
+    LNext := PMpscNode(AtomicExchangePtr(Pointer(AInbox.FHead),
+      Pointer(@AInbox.FStub), moAcqRel));
+    { Link previous head to sentinel. }
+    AtomicStorePtr(Pointer(LNext^.FNext), Pointer(@AInbox.FStub), moRelease);
+    { Re-read tail in case new items arrived. }
+    LNext := PMpscNode(AtomicLoadPtr(Pointer(AInbox.FStub.FNext), moAcquire));
+    if LNext <> nil then
+    begin
+      AInbox.FTail := LNext;
+      { Continue draining if we have capacity. }
+      while (Result < AMaxCount) and (LNext <> nil) do
+      begin
+        LTail := LNext;
+        LNext := PMpscNode(AtomicLoadPtr(Pointer(LTail^.FNext), moAcquire));
+        ABlocks^ := Pointer(LTail);
+        Inc(ABlocks);
+        Inc(Result);
+      end;
+      if LNext <> nil then
+        AInbox.FTail := LNext
+      else
+      begin
+        AInbox.FStub.FNext := nil;
+        AInbox.FTail := @AInbox.FStub;
+      end;
+    end
+    else
+      AInbox.FTail := @AInbox.FStub;
+  end
+  else
+    AInbox.FTail := LTail;
+end;
+
+function MpscInboxIsEmpty(var AInbox: TMpscInbox): Boolean;
+var
+  LTail, LNext: PMpscNode;
+begin
+  LTail := AInbox.FTail;
+  if LTail = @AInbox.FStub then
+  begin
+    LNext := PMpscNode(AtomicLoadPtr(Pointer(LTail^.FNext), moAcquire));
+    Result := LNext = nil;
+  end
+  else
+    Result := False;
+end;
+
+procedure ThreadCacheInboxPush(var ACache: TThreadCache;
+  ASizeClass: Int32; APtr: Pointer);
+begin
+  if (ASizeClass < 0) or (ASizeClass >= MEM_SIZECLASS_COUNT) then
+    Exit;
+  MpscInboxPush(ACache.FInbox, APtr);
 end;
 
 end.

@@ -449,6 +449,45 @@ begin
   end;
 end;
 
+{ E-04: TTestConfigBuilder }
+
+procedure TestConfigBuilder;
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := TTestConfigBuilder.Create
+    .WithFilter('my-test')
+    .WithTimeout(5000)
+    .WithFailFast(True)
+    .WithShuffle(-1)
+    .WithVerbose(True)
+    .WithMaxFailures(3)
+    .WithBench(True)
+    .WithBenchTime(2000)
+    .Build;
+  CheckEqual(LConfig.FilterPattern, 'my-test');
+  CheckEqual(Int64(LConfig.TimeoutMs), Int64(5000));
+  CheckTrue(LConfig.FailFast, 'FailFast');
+  CheckEqual(LConfig.ShuffleSeed, -1);
+  CheckTrue(LConfig.VerboseMode, 'VerboseMode');
+  CheckEqual(LConfig.MaxFailures, 3);
+  CheckTrue(LConfig.BenchEnabled, 'BenchEnabled');
+  CheckEqual(LConfig.BenchTimeMs, 2000);
+end;
+
+procedure TestConfigBuilderDefaults;
+var
+  LConfig: TTestConfig;
+begin
+  { Builder with no modifications should produce default config }
+  LConfig := TTestConfigBuilder.Create.Build;
+  CheckEqual(LConfig.FilterPattern, '');
+  CheckEqual(Int64(LConfig.TimeoutMs), Int64(0));
+  CheckFalse(LConfig.FailFast, 'FailFast default');
+  CheckEqual(LConfig.ShuffleSeed, 0);
+  CheckFalse(LConfig.VerboseMode, 'VerboseMode default');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
@@ -474,6 +513,10 @@ begin
   Suite.Test('TestFacadeSymbols', @TestFacadeSymbols);
   Suite.Test('TestResultAppenderResultsProperty', @TestResultAppenderResultsProperty);
   Suite.Test('R657SetupFailTeardown', @R657SetupFailTeardown);
+
+  { E-04: TTestConfigBuilder }
+  Suite.Test('ConfigBuilder', @TestConfigBuilder);
+  Suite.Test('ConfigBuilderDefaults', @TestConfigBuilderDefaults);
 
   Runner := TSuiteRunner.Create('lifecycle-tests');
   Runner.Add(Suite);

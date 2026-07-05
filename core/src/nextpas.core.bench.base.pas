@@ -185,7 +185,10 @@ const
    *  设置 =0 / false / no 时禁用内存跟踪。 }
   BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
 
-  {** 元数据常量 }
+  {** 元数据常量
+   *  F-013: 手动维护版本号。语义化版本: MAJOR.MINOR。
+   *  递增策略: MAJOR = API 不兼容变更, MINOR = 新功能/修复。
+   *  构建脚本可覆盖此值 (通过 -dBENCH_VERSION=X.Y.Z)。 }
   BENCH_VERSION = '1.0';
 
   {** 统计常量 }
@@ -234,6 +237,12 @@ function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 
 {** Glob 模式匹配（* 匹配任意字符，? 匹配单个字符） }
 function GlobMatch(const APattern, AStr: string): Boolean;
+
+{** IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
+function IsDoubleNaN(const AValue: Double): Boolean; inline;
+
+{** Percentile 线性插值（输入必须已排序） }
+function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
 
 implementation
 
@@ -360,50 +369,74 @@ var
   LPivot, LTmp: Double;
   I, J: Integer;
 begin
-  // 小数组使用插入排序
-  if (ARight - ALeft + 1) < INSERTION_SORT_THRESHOLD then
+  { F-19: 尾递归优化，与 DoQuickSortIndirect 一致 }
+  while ARight - ALeft >= INSERTION_SORT_THRESHOLD do
   begin
-    DoInsertionSort(AData, ALeft, ARight);
-    Exit;
-  end;
-
-  // 深度耗尽，退化为 HeapSort（O(n log n) 保底）
-  if ADepthLimit <= 0 then
-  begin
-    DoHeapSort(AData, ALeft, ARight);
-    Exit;
-  end;
-
-  // 三数取中 pivot
-  LPivot := MedianOfThree(AData, ALeft, ARight);
-  I := ALeft;
-  J := ARight;
-  while I <= J do
-  begin
-    while AData[I] < LPivot do Inc(I);
-    while AData[J] > LPivot do Dec(J);
-    if I <= J then
+    if ADepthLimit <= 0 then
     begin
-      LTmp := AData[I];
-      AData[I] := AData[J];
-      AData[J] := LTmp;
-      Inc(I);
-      Dec(J);
+      DoHeapSort(AData, ALeft, ARight);
+      Exit;
+    end;
+    Dec(ADepthLimit);
+
+    // 三数取中 pivot
+    LPivot := MedianOfThree(AData, ALeft, ARight);
+    I := ALeft;
+    J := ARight;
+    repeat
+      while AData[I] < LPivot do Inc(I);
+      while AData[J] > LPivot do Dec(J);
+      if I <= J then
+      begin
+        LTmp := AData[I];
+        AData[I] := AData[J];
+        AData[J] := LTmp;
+        Inc(I);
+        Dec(J);
+      end;
+    until I > J;
+
+    // 尾递归：只递归较短的一半，较长的一半用循环处理
+    if J - ALeft < ARight - I then
+    begin
+      DoQuickSort(AData, ALeft, J, ADepthLimit);
+      ALeft := I;
+    end
+    else
+    begin
+      DoQuickSort(AData, I, ARight, ADepthLimit);
+      ARight := J;
     end;
   end;
-  if ALeft < J then
-    DoQuickSort(AData, ALeft, J, ADepthLimit - 1);
-  if I < ARight then
-    DoQuickSort(AData, I, ARight, ADepthLimit - 1);
+  DoInsertionSort(AData, ALeft, ARight);
 end;
 
-{ IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
 function IsDoubleNaN(const AValue: Double): Boolean; inline;
 var
   LBits: UInt64 absolute AValue;
 begin
   Result := ((LBits and $7FF0000000000000) = $7FF0000000000000)
         and ((LBits and $000FFFFFFFFFFFFF) <> 0);
+end;
+
+function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
+var
+  LIndex: Double;
+  LLower, LUpper: Integer;
+  LCount: Integer;
+begin
+  LCount := Length(ASorted);
+  if LCount = 0 then Exit(0.0);
+  if LCount = 1 then Exit(ASorted[0]);
+  if APercent <= 0 then Exit(ASorted[0]);
+  if APercent >= 100 then Exit(ASorted[High(ASorted)]);
+
+  LIndex := (APercent / 100.0) * (LCount - 1);
+  LLower := Trunc(LIndex);
+  LUpper := LLower + 1;
+  if LUpper >= LCount then
+    Exit(ASorted[High(ASorted)]);
+  Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
 end;
 
 { NaN 安全分区: 将 NaN 值移到数组末尾，返回非 NaN 元素个数 }

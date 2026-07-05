@@ -64,6 +64,7 @@ type
   TStderrSink = nextpas.core.test.config.TStderrSink;
   TBufferSink = nextpas.core.test.config.TBufferSink;
   TTestConfig = nextpas.core.test.config.TTestConfig;
+  TTestConfigBuilder = nextpas.core.test.config.TTestConfigBuilder;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
@@ -123,10 +124,15 @@ procedure CheckEqual(const AExpected, AActual: Int64;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 { CheckEqualMsg — avoids FPC overload ambiguity for UInt16/UInt32/UInt64. }
+{ CheckEqualMsg — prefer CheckEqual(expected, actual, message) when no ambiguity. }
 procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: Int64; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: UInt64; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
+  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
@@ -175,6 +181,8 @@ procedure CheckNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
+procedure CheckNaN(const AValue: Double; const AMessage: string = '');
+procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
@@ -290,6 +298,7 @@ type
   TMockCalls = nextpas.core.test.mock.TMockCalls;
   TMockValues = nextpas.core.test.mock.TMockValues;
   IMockSetup = nextpas.core.test.mock.IMockSetup;
+  IMockWhen = nextpas.core.test.mock.IMockWhen;
   IMockVerify = nextpas.core.test.mock.IMockVerify;
 
 function MockStr(const AValue: string): TMockValue;

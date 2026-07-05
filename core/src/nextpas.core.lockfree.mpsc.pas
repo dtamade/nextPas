@@ -8,6 +8,20 @@ uses
   nextpas.core.atomic.core;
 
 type
+  {**
+   * 多生产者单消费者无界队列（MPSC Queue）。
+   *
+   * @constraints
+   *   - **严格单消费者**：TryDequeue / DequeueWait / DequeueTimeout 只能由一个线程调用。
+   *     多线程同时消费会导致数据竞争和 use-after-free。
+   *   - Enqueue 可由多个线程并发调用。
+   *   - T 必须是 unmanaged 类型。
+   *   - Close 后 Enqueue 仍可发布已 admitted 的元素；调用方必须自行停止 producer。
+   *   - Destroy 前必须调用 Close 并 drain 队列。
+   *
+   * @safety
+   *   FTail 的非原子读取是刻意设计，依赖 single-consumer contract 保证安全。
+   *}
   generic TMpscQueueImpl<T> = class
   private
     type
@@ -31,8 +45,11 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
+    {** @desc 非阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueWait(out AValue: T): Boolean;
+    {** @desc 带超时出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
     function IsClosed: Boolean;

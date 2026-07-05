@@ -136,10 +136,13 @@ type
     function ConfidenceInterval(ALevel: Double = 0.95): TConfidenceInterval;
 
     {**
-     * Bootstrap confidence interval
+     * Bootstrap 置信区间
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ALevel 置信水平（默认 0.95）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time，>0 = 固定种子用于可重现测试）
      *}
     function BootstrapCI(AIterations: Integer = 10000;
-      ALevel: Double = 0.95): TConfidenceInterval;
+      ALevel: Double = 0.95; ASeed: UInt64 = 0): TConfidenceInterval;
 
     {**
      * 正态性启发式 (Shapiro-Wilk-like 简化版)
@@ -253,6 +256,9 @@ var
   I: Integer;
   LMean: Double;
   LSum: Double;
+  LCompensation: Double;
+  LDiff: Double;
+  LTemp: Double;
 begin
   if Length(FData) < 2 then Exit(0);
 
@@ -261,10 +267,20 @@ begin
   if IsNaN(LMean) or IsInfinite(LMean) then
     Exit(0);
 
+  { F-09: Kahan 补偿求和，减少大数组浮点累积误差 }
   LSum := 0;
+  LCompensation := 0;
   for I := 0 to High(FData) do
-    LSum := LSum + Sqr(FData[I] - LMean);
-  Result := LSum / (Length(FData) - 1);
+  begin
+    LDiff := Sqr(FData[I] - LMean);
+    LTemp := LSum + LDiff;
+    if Abs(LSum) >= Abs(LDiff) then
+      LCompensation := LCompensation + ((LSum - LTemp) + LDiff)
+    else
+      LCompensation := LCompensation + ((LDiff - LTemp) + LSum);
+    LSum := LTemp;
+  end;
+  Result := (LSum + LCompensation) / (Length(FData) - 1);
 end;
 
 function TAdvancedStats.Skewness: Double;
@@ -342,29 +358,9 @@ begin
 end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
-var
-  LIndex: Double;
-  LFloor: Integer;
-  LCeil: Integer;
-  LCount: Integer;
 begin
-  LCount := Length(FData);
-  if LCount = 0 then Exit(0);
-
-  // PF-06: Validate input range
-  if APercentile < 0 then APercentile := 0;
-  if APercentile > 100 then APercentile := 100;
-
   EnsureSorted;
-
-  LIndex := (APercentile / 100) * (LCount - 1);
-  LFloor := Floor(LIndex);
-  LCeil := Ceil(LIndex);
-
-  if LFloor = LCeil then
-    Result := FSortedData[LFloor]
-  else
-    Result := FSortedData[LFloor] + (FSortedData[LCeil] - FSortedData[LFloor]) * (LIndex - LFloor);
+  Result := PercentileSorted(FSortedData, APercentile);
 end;
 
 function TAdvancedStats.IQR: Double;
@@ -541,7 +537,7 @@ begin
 end;
 
 function TAdvancedStats.BootstrapCI(AIterations: Integer;
-  ALevel: Double): TConfidenceInterval;
+  ALevel: Double; ASeed: UInt64): TConfidenceInterval;
 var
   LN: Integer;
   LIterations: Integer;
@@ -576,9 +572,11 @@ begin
   if LIterations <= 0 then
     LIterations := 1;
 
-  // Use platform_monotonic_ns as seed for nanosecond-precision randomness.
-  // Fixed seeds make bootstrap CIs deterministic and don't reflect sampling variability.
-  LSeed := platform_monotonic_ns;
+  // F-20: 可选种子，ASeed=0 时使用 monotonic time，>0 时固定种子用于可重现测试
+  if ASeed > 0 then
+    LSeed := ASeed
+  else
+    LSeed := platform_monotonic_ns;
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin
