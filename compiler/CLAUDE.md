@@ -32,17 +32,18 @@ compiler/
 - 函数不超过 100 行（超过必须拆分）
 
 ### np_semantic_analyzer.pas 治理
-原 17,735 行，已拆分为 3 文件 (12,175 + 2,217 + 3,345)。
-已完成提取:
-- `np_sema_string_ops.inc` — 字符串所有权追踪 (2,217 行)
-- `np_sema_runtime_expr.inc` — BuildRuntimeScalarHirExpr (3,345 行)
-- `np_sema_name_set.pas` — 名称集合查找 (O(log n), 100 行)
+当前 17,678 行。已完成提取:
+- `np_sema_builtins.pas` — 内置函数注册表 (~500 行) [✅]
+- `np_sema_string_ownership.pas` — 字符串所有权分析 (~836 行) [✅]
+- `np_sema_name_set.pas` — 名称集合查找 (O(log n), ~100 行) [✅]
 
-进一步拆分计划:
-- `np_sema_overload.pas` — 重载解析 (LookupCallBindingDeclaration 等)
-- `np_sema_type_check.pas` — 类型检查和推导
-- `np_sema_call_binding.pas` — 调用绑定和成员解析
-- `np_sema_hir_gen.pas` — HIR 生成
+骨架模块（AL2 补全）:
+- `np_sema_overload.pas` — 重载解析 (83 行骨架)
+- `np_sema_type_check.pas` — 类型检查 (58 行骨架)
+- `np_sema_hir_lowering.pas` — AST→HIR 降级 (42 行骨架)
+
+已删除过时文件:
+- `np_sema_runtime_expr.inc` (3,345 行) — WalkHaltCalls 副本，已与主文件合并
 
 ## 质量门禁
 

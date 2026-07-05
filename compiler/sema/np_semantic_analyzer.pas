@@ -19,6 +19,13 @@ uses
 type
   TStringVec = specialize TVec<string>;
 
+  TGenericCacheEntry = record
+    Key: string;
+    TypeId: LongInt;
+  end;
+
+  TGenericCacheVec = specialize TVec<TGenericCacheEntry>;
+
   TProcedureBodyEntry = record
     Name: string;
     Body: TGreenNode;
@@ -58,10 +65,9 @@ type
     FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
     FGenericWorkCount: LongInt;
-    FGenericCacheKeys: array of string;
-    FGenericCacheTypeIds: array of LongInt;
+    FGenericCache: TGenericCacheVec;
     FPendingSignatures: array of TPendingSignatureEntry;
-    FInliningStack: array of string;
+    FInliningStack: TStringVec;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
@@ -89,7 +95,7 @@ type
     FManagedRecordVarTypes: array of string;
     FPointerVarNames: array of string;
     FPointerVarTypes: array of string;
-    FVarParamNames: array of string;
+    FVarParamNames: TStringVec;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
     FImportedUnitTrees: array of TGreenTree;
@@ -702,6 +708,9 @@ begin
   FCurrentScopeId := 0;
   FBreakLabels := specialize TVec<string>.Create;
   FContinueLabels := specialize TVec<string>.Create;
+  FVarParamNames := specialize TVec<string>.Create;
+  FInliningStack := specialize TVec<string>.Create;
+  FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
 end;
 
@@ -2488,19 +2497,17 @@ procedure TSemanticAnalyzer.RegisterVarParam(const AName: string);
 var
   Idx: LongInt;
 begin
-  for Idx := 0 to Length(FVarParamNames) - 1 do
+  for Idx := 0 to FVarParamNames.Count - 1 do
     if SameText(FVarParamNames[Idx], AName) then
       Exit;
-  Idx := Length(FVarParamNames);
-  SetLength(FVarParamNames, Idx + 1);
-  FVarParamNames[Idx] := AName;
+  FVarParamNames.Push(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParam(const AName: string): Boolean;
 var
   Idx: LongInt;
 begin
-  for Idx := 0 to Length(FVarParamNames) - 1 do
+  for Idx := 0 to FVarParamNames.Count - 1 do
     if SameText(FVarParamNames[Idx], AName) then
       Exit(True);
   Result := False;
@@ -2961,6 +2968,9 @@ begin
     FImportedUnitTrees[Index].Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
+  FVarParamNames.Free;
+  FInliningStack.Free;
+  FGenericCache.Free;
   FBuiltinRegistry.Free;
   FModel.Free;
   inherited Destroy;
@@ -6298,28 +6308,21 @@ function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FInliningStack) - 1 do
+  for Index := 0 to FInliningStack.Count - 1 do
     if SameText(FInliningStack[Index], AName) then
       Exit(True);
   Result := False;
 end;
 
 procedure TSemanticAnalyzer.PushInlining(const AName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FInliningStack);
-  SetLength(FInliningStack, NextIndex + 1);
-  FInliningStack[NextIndex] := AName;
+  FInliningStack.Push(AName);
 end;
 
 procedure TSemanticAnalyzer.PopInlining;
-var
-  Last: LongInt;
 begin
-  Last := Length(FInliningStack) - 1;
-  if Last >= 0 then
-    SetLength(FInliningStack, Last);
+  if FInliningStack.Count > 0 then
+    FInliningStack.Pop;
 end;
 
 function EncodeRuntimeIntExpr(const ANode: TGreenNode;
@@ -9712,6 +9715,7 @@ var
   GenericTypeId: LongInt;
   NewTypeId: LongInt;
   CacheKey: string;
+  CacheEntry: TGenericCacheEntry;
 begin
   Result := 0;
   LtPos := Pos('<', ASpecText);
@@ -9719,24 +9723,23 @@ begin
     Exit;
 
   CacheKey := LowerCase(AOwnerUnitId + '#' + ASpecText);
-  for I := 0 to Length(FGenericCacheKeys) - 1 do
-    if FGenericCacheKeys[I] = CacheKey then
+  for I := 0 to FGenericCache.Count - 1 do
+    if FGenericCache[I].Key = CacheKey then
     begin
-      Result := FGenericCacheTypeIds[I];
+      Result := FGenericCache[I].TypeId;
       Exit;
     end;
   CacheKey := LowerCase(ASpecText);
-  for I := 0 to Length(FGenericCacheKeys) - 1 do
-    if (Length(FGenericCacheKeys[I]) > Length(CacheKey)) and
-      (FGenericCacheKeys[I][Length(FGenericCacheKeys[I]) - Length(CacheKey)] = '#') and
-      (Copy(FGenericCacheKeys[I], Length(FGenericCacheKeys[I]) - Length(CacheKey) + 1, MaxInt) = CacheKey) then
+  for I := 0 to FGenericCache.Count - 1 do
+    if (Length(FGenericCache[I].Key) > Length(CacheKey)) and
+      (FGenericCache[I].Key[Length(FGenericCache[I].Key) - Length(CacheKey)] = '#') and
+      (Copy(FGenericCache[I].Key, Length(FGenericCache[I].Key) - Length(CacheKey) + 1, MaxInt) = CacheKey) then
     begin
-      Result := FGenericCacheTypeIds[I];
+      Result := FGenericCache[I].TypeId;
       FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, Result, 0);
-      SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
-      FGenericCacheKeys[High(FGenericCacheKeys)] := LowerCase(AOwnerUnitId + '#' + ASpecText);
-      SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
-      FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := Result;
+      CacheEntry.Key := LowerCase(AOwnerUnitId + '#' + ASpecText);
+      CacheEntry.TypeId := Result;
+      FGenericCache.Push(CacheEntry);
       Exit;
     end;
 
@@ -9758,10 +9761,9 @@ begin
   FModel.SetTypeOwner(NewTypeId, AOwnerUnitId);
   FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, NewTypeId, 0);
 
-  SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
-  FGenericCacheKeys[High(FGenericCacheKeys)] := CacheKey;
-  SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
-  FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := NewTypeId;
+  CacheEntry.Key := CacheKey;
+  CacheEntry.TypeId := NewTypeId;
+  FGenericCache.Push(CacheEntry);
 
   InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
   Result := NewTypeId;
@@ -16885,7 +16887,7 @@ begin
       Continue;
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
-    SetLength(FVarParamNames, 0);
+    FVarParamNames.Clear;
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);
@@ -17237,7 +17239,7 @@ begin
     SavedMethodClass := FCurrentMethodClass;
 
     // Reset for void function with no params — 全部 13 个 tracker 清零
-    SetLength(FVarParamNames, 0);
+    FVarParamNames.Clear;
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
     SetLength(FBorrowedRuntimeArrVarNames, 0);

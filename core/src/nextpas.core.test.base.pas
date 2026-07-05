@@ -175,8 +175,6 @@ procedure ClearEntry(out AEntry: TTestEntry);
 function MakeTestResult(const AName: string; AStatus: TTestStatus;
   const AMessage: string; ADuration: Int64): TTestResult;
   { Construct a fully-initialized TTestResult in one call. }
-  ATotalNs: Int64; AAllocBytes: Int64 = 0; AAllocCount: Int64 = 0): TBenchResult;
-  { Construct a TBenchResult with computed NsPerOp. }
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
   { Append a TTestResult to a dynamic array. }

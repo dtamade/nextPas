@@ -30,6 +30,7 @@ var
   OutDirOverride: string;
   OptionName: string;
   NoFold: Boolean;
+  Incremental: Boolean;
   FoldSeen: Boolean;
   NoFoldSeen: Boolean;
 
@@ -393,6 +394,7 @@ begin
   WorkspaceOverride := '';
   OutDirOverride := '';
   NoFold := True;
+  Incremental := False;
   FoldSeen := False;
   NoFoldSeen := False;
   SetLength(UnitRootOverrides, 0);
@@ -409,6 +411,10 @@ begin
         Fail(State, 'conflicting-option: --no-fold after --fold', True);
       NoFoldSeen := True;
       NoFold := True;
+    end
+    else if OptionName = '--incremental' then
+    begin
+      Incremental := True;
     end
     else if OptionName = '--fold' then
     begin
@@ -476,6 +482,7 @@ begin
     WorkspaceOverride,
     UnitRootOverrides,
     OutDirOverride,
-    NoFold
+    NoFold,
+    Incremental
   );
 end.

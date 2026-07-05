@@ -313,14 +313,6 @@ begin
     Exit;
   end;
 
-  { Benchmarks: not supported in parallel mode — skip gracefully }
-  if R^.Entry.Kind = ekBench then
-  begin
-    EmitParallelSkip(R, 'benchmarks not supported in parallel mode',
-      LOutSink, LConfig);
-    Exit;
-  end;
-
   if Assigned(R^.Before) or Assigned(R^.BeforeClosure) then
   begin
     try

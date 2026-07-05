@@ -16,7 +16,7 @@ SOURCE  ?= $(PROGRAM).lpr
 
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/$(MODULE_NAME)/$(TEST_NAME)
 
-FPC_FLAGS = -MObjFPC -Sh -O2 -gl -gh -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
+FPC_FLAGS = -MObjFPC -Sh -O2 -gl -gh -dHEAPTRC_ACTIVE -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run test clean clean-src
 

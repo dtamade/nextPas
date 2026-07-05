@@ -27,7 +27,8 @@ unit np_query_database;
 interface
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.collections.hashmap;
 
 type
   {**
@@ -69,19 +70,23 @@ type
   {**
    * TQueryDatabase — 查询数据库
    *
-   * 简单的 Key→Value 缓存，支持：
-   *   - Get：缓存命中/未命中 → 自动计算
+   * Key→Value 缓存，支持：
+   *   - Get：O(1) 缓存命中/未命中 → 自动计算
    *   - Invalidate：标记指定 Key 为脏
    *   - InvalidatePrefix：标记所有匹配前缀的 Key 为脏
    *   - Clear：清空所有缓存
    *   - Stats：缓存命中率统计
+   *
+   * 内部使用 THashMap<string, LongInt> 做 O(1) Key→entries index 映射。
+   * 对标 Rust Salsa jar/database 模式。
    *}
   TQueryDatabase = class
   private
     FEntries: array of TQueryEntry;
+    { O(1) Key → entries index lookup, replaces linear FindEntry }
+    FIndex: specialize THashMap<string, LongInt>;
     FHits: LongInt;
     FMisses: LongInt;
-    function FindEntry(const AKey: TQueryKey): LongInt;
   public
     constructor Create;
     destructor Destroy; override;
@@ -115,6 +120,7 @@ implementation
 constructor TQueryDatabase.Create;
 begin
   inherited Create;
+  FIndex := specialize THashMap<string, LongInt>.Create;
   SetLength(FEntries, 0);
   FHits := 0;
   FMisses := 0;
@@ -124,17 +130,8 @@ destructor TQueryDatabase.Destroy;
 begin
   { Values are owned by the caller (TCompilationSession), not freed here }
   SetLength(FEntries, 0);
+  FIndex.Free;
   inherited Destroy;
-end;
-
-function TQueryDatabase.FindEntry(const AKey: TQueryKey): LongInt;
-var
-  I: LongInt;
-begin
-  for I := 0 to Length(FEntries) - 1 do
-    if FEntries[I].Key = AKey then
-      Exit(I);
-  Result := -1;
 end;
 
 function TQueryDatabase.Get(
@@ -144,8 +141,7 @@ function TQueryDatabase.Get(
 var
   Idx: LongInt;
 begin
-  Idx := FindEntry(AKey);
-  if Idx >= 0 then
+  if FIndex.TryGetValue(AKey, Idx) then
   begin
     if not FEntries[Idx].Dirty then
     begin
@@ -171,6 +167,7 @@ begin
     FEntries[Idx].Key := AKey;
     FEntries[Idx].Value := Result;
     FEntries[Idx].Dirty := False;
+    FIndex.Put(AKey, Idx);
   end;
 end;
 
@@ -180,8 +177,7 @@ var
 begin
   if AValue = nil then
     Exit;
-  Idx := FindEntry(AKey);
-  if Idx >= 0 then
+  if FIndex.TryGetValue(AKey, Idx) then
   begin
     { Update existing entry — caller retains ownership, old value is NOT freed }
     FEntries[Idx].Value := AValue;
@@ -193,14 +189,14 @@ begin
   FEntries[Idx].Key := AKey;
   FEntries[Idx].Value := AValue;
   FEntries[Idx].Dirty := False;
+  FIndex.Put(AKey, Idx);
 end;
 
 procedure TQueryDatabase.Invalidate(const AKey: TQueryKey);
 var
   Idx: LongInt;
 begin
-  Idx := FindEntry(AKey);
-  if Idx >= 0 then
+  if FIndex.TryGetValue(AKey, Idx) then
   begin
     { Caller retains ownership — just mark dirty }
     FEntries[Idx].Dirty := True;
@@ -223,11 +219,10 @@ begin
 end;
 
 procedure TQueryDatabase.Clear;
-var
-  I: LongInt;
 begin
-  { Values owned by caller, just clear the array }
+  { Values owned by caller, just clear the arrays }
   SetLength(FEntries, 0);
+  FIndex.Clear;
   FHits := 0;
   FMisses := 0;
 end;

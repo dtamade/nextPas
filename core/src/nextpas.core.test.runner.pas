@@ -115,10 +115,6 @@ type
     procedure ShortSkip(const AName: string; AProc: TTestProc);
     procedure ShortSkip(const AName: string; AProc: TTestClosure);
     procedure Skip(const AName: string; const AReason: string = '');
-    { Bench: register a benchmark (Go BenchmarkXxx equivalent).
-      BenchProc receives PBenchContext; framework controls N iterations.
-      Benches are only run when --bench is passed. }
-    procedure Bench(const AName: string; AProc: TBenchProc);
     procedure SetSetup(AProc: TTestProc);
     procedure SetSetup(AProc: TTestClosure);
     procedure SetTeardown(AProc: TTestProc);
@@ -160,7 +156,6 @@ type
         thread pool integration. }
     function  RunParallelWithResult(APool: IThreadPool;
       out AResult: TTestRunResult): Boolean;
-    function  RunBenchmarks(out AResults: TBenchResults): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
     { Dispose table test data, stubs, and fixtures. FCleanupDone guard
@@ -204,8 +199,6 @@ type
     function  RunAllParallel(APool: IThreadPool): Boolean;
     function  RunAllParallelWithResult(APool: IThreadPool;
       out AResults: specialize TArray<TTestRunResult>): Boolean;
-    function  RunAllBenchmarks(
-      out AResults: specialize TArray<TBenchResults>): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
   private
@@ -1035,10 +1028,6 @@ begin
     else
       LProgressPrefix := '';
 
-    { Benchmarks: migrated to TBenchSuite (nextpas.core.bench) }
-    if LEntry.Kind = ekBench then
-      Continue;
-
     { Skip check BEFORE BeforeEach — skipped tests don't need hooks }
     if LEntry.Kind = ekSkipped then
     begin
@@ -1627,7 +1616,286 @@ begin
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
 
+  Result := LFail = 0;
+  LastRunPassed := Result;
+end;
 
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ TTestSuite — Summary, AllPassed, CleanupTableAllocations                    }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure TTestSuite.Summary;
+var
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+begin
+  LConfig := ResolveConfig(Config);
+  if not HasRun then
+  begin
+    ResolveErrSink(LConfig).WriteLn(
+      AnsiYellow('Warning: ', LConfig) + Name + ' has not been run yet');
+    Exit;
+  end;
+  LOutSink := ResolveOutSink(LConfig);
+  LOutSink.WriteLn(
+    AnsiBold('--- ', LConfig) +
+    AnsiCyan(Name, LConfig) +
+    AnsiBold(' ---', LConfig));
+  LOutSink.WriteLn('  Total tests: ' + IntToStr(Length(Tests)));
+  LOutSink.WriteLn(
+    '  Passed: ' + IntToStr(LastPass) +
+    ', Failed: ' + IntToStr(LastFail) +
+    ', Skipped: ' + IntToStr(LastSkip));
+end;
+
+function TTestSuite.AllPassed: Boolean;
+begin
+  if not HasRun then
+    Result := Run
+  else
+    Result := LastRunPassed;
+end;
+
+procedure TTestSuite.CleanupTableAllocations;
+var
+  I: Integer;
+begin
+  if FCleanupDone then Exit;
+  FCleanupDone := True;
+  for I := 0 to High(Tests) do
+  begin
+    if Tests[I].Kind = ekTableTest then
+    begin
+      if Tests[I].TableCase <> nil then
+      begin
+        Dispose(PTestCase(Tests[I].TableCase));
+        Tests[I].TableCase := nil;
+      end;
+      if Tests[I].TableProc <> nil then
+      begin
+        Dispose(PTestCaseProc(Tests[I].TableProc));
+        Tests[I].TableProc := nil;
+      end;
+    end;
+  end;
+  for I := 0 to High(StubAllocations) do
+    if GStubRegistry[StubAllocations[I]] <> nil then
+    begin
+      FreeMem(GStubRegistry[StubAllocations[I]]);
+      GStubRegistry[StubAllocations[I]] := nil;
+    end;
+  StubAllocations := nil;
+  for I := 0 to High(FixtureAllocations) do
+    if GFixtureRegistry[FixtureAllocations[I]] <> nil then
+    begin
+      GFixtureRegistry[FixtureAllocations[I]].Free;
+      GFixtureRegistry[FixtureAllocations[I]] := nil;
+    end;
+  FixtureAllocations := nil;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ TSuiteRunner                                                                  }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure WriteRunnerBanner(const AName: string; const AConfig: TTestConfig;
+  const ASink: IOutputSink; AIsParallel: Boolean);
+var
+  LRepeatAll, LMaxFailures: Integer;
+  LLabel: string;
+begin
+  if AIsParallel then LLabel := ' (parallel)' else LLabel := '';
+  ASink.WriteLn(
+    AnsiBold('=== ', AConfig) +
+    AnsiBold(AName, AConfig) +
+    AnsiBold(LLabel + ' ===', AConfig));
+  LRepeatAll := GetRepeatAllCount(AConfig);
+  if LRepeatAll > 1 then
+    ASink.WriteLn(AnsiDim(
+      '  Running all tests ' + IntToStr(LRepeatAll) + ' times (--count=' +
+      IntToStr(LRepeatAll) + ')', AConfig));
+  if GetFailFast(AConfig) then
+    ASink.WriteLn(AnsiDim('  FailFast enabled', AConfig));
+  LMaxFailures := GetMaxFailures(AConfig);
+  if LMaxFailures > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Failures max: ' + IntToStr(LMaxFailures) + ' (--failures-max)',
+      AConfig));
+  if GetShortMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Short mode enabled (--short)', AConfig));
+  if GetVerboseMode(AConfig) then
+    ASink.WriteLn(AnsiDim('  Verbose mode (--verbose)', AConfig));
+  if GetRunTimeoutSec(AConfig) > 0 then
+    ASink.WriteLn(AnsiDim(
+      '  Run timeout: ' + IntToStr(GetRunTimeoutSec(AConfig)) + 's (--timeout)',
+      AConfig));
+end;
+
+class function TSuiteRunner.Create(const AName: string): TSuiteRunner;
+begin
+  Result.Name      := AName;
+  Result.Suites    := nil;
+  Result.TotalPass := 0;
+  Result.TotalFail := 0;
+  Result.TotalSkip := 0;
+  Result.HasRun    := False;
+end;
+
+procedure TSuiteRunner.Add(const ASuite: TTestSuite);
+var
+  LIdx: Integer;
+begin
+  LIdx := GrowArrayLen(Suites, 4);
+  Suites[LIdx] := ASuite;
+  Suites[LIdx].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
+  Suites[LIdx].EachCleanups := Copy(ASuite.EachCleanups, 0, Length(ASuite.EachCleanups));
+  SetLength(Suites, LIdx + 1);
+end;
+
+function TSuiteRunner.RunAll: Boolean;
+var
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  Result := RunAllWithResult(LResults);
+end;
+
+function TSuiteRunner.RunAllParallel(APool: IThreadPool): Boolean;
+var
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  Result := RunAllParallelWithResult(APool, LResults);
+end;
+
+function TSuiteRunner.RunAllIterLoop(
+  out AResults: specialize TArray<TTestRunResult>;
+  AIsParallel: Boolean; APool: IThreadPool): Boolean;
+var
+  I, LIter, LRepeatAll: Integer;
+  LAllPassed: Boolean;
+  LSuiteResult: TTestRunResult;
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+  LStartMs: Int64;
+  LFailFast: Boolean;
+  LMaxFailures: Integer;
+begin
+  LConfig := RunnerConfig(Self);
+  LOutSink := ResolveOutSink(LConfig);
+
+  if GetListMode(LConfig) then
+  begin
+    HasRun := True;
+    Exit(WriteListMode(Suites, LConfig, AResults));
+  end;
+
+  LRepeatAll := GetRepeatAllCount(LConfig);
+  if LRepeatAll <= 0 then LRepeatAll := 1;
+  LFailFast := GetFailFast(LConfig);
+  LMaxFailures := GetMaxFailures(LConfig);
+
+  WriteRunnerBanner(Name, LConfig, LOutSink, AIsParallel);
+
+  LAllPassed := True;
+  TotalPass := 0;
+  TotalFail := 0;
+  TotalSkip := 0;
+  SetLength(AResults, Length(Suites));
+
+  for LIter := 1 to LRepeatAll do
+  begin
+    if LRepeatAll > 1 then
+    begin
+      LOutSink.WriteLn('');
+      LOutSink.WriteLn(AnsiBold(
+        '--- Iteration ' + IntToStr(LIter) + '/' + IntToStr(LRepeatAll) +
+        ' ---', LConfig));
+      TotalPass := 0;
+      TotalFail := 0;
+      TotalSkip := 0;
+    end;
+    LStartMs := GetTickCount64;
+    for I := 0 to High(Suites) do
+    begin
+      if AIsParallel then
+      begin
+        if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+          LAllPassed := False;
+      end
+      else
+      begin
+        if not Suites[I].RunWithResult(LSuiteResult) then
+          LAllPassed := False;
+      end;
+      AResults[I] := LSuiteResult;
+      Inc(TotalPass, Suites[I].LastPass);
+      Inc(TotalFail, Suites[I].LastFail);
+      Inc(TotalSkip, Suites[I].LastSkip);
+      if (not LAllPassed) and LFailFast then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping after suite failure', LConfig));
+        Break;
+      end;
+      if (LMaxFailures > 0) and (TotalFail >= LMaxFailures) then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  stopping after ' + IntToStr(TotalFail) +
+          ' total failures (--failures-max)', LConfig));
+        Break;
+      end;
+    end;
+    if LRepeatAll > 1 then
+      LOutSink.WriteLn(AnsiDim(
+        '  Iteration ' + IntToStr(LIter) + ' completed in ' +
+        FormatDuration(GetTickCount64 - LStartMs), LConfig));
+  end;
+
+  for I := 0 to High(Suites) do
+    Suites[I].CleanupTableAllocations;
+
+  HasRun := True;
+  Result := LAllPassed;
+  if GetJsonOutput(LConfig) then
+    LOutSink.WriteLn(JSONReport(AResults, Name));
+end;
+
+function TSuiteRunner.RunAllWithResult(
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+begin
+  ApplyCLIArgs;
+  Result := RunAllIterLoop(AResults, False, nil);
+end;
+
+function TSuiteRunner.RunAllParallelWithResult(APool: IThreadPool;
+  out AResults: specialize TArray<TTestRunResult>): Boolean;
+begin
+  ApplyCLIArgs;
+  Result := RunAllIterLoop(AResults, True, APool);
+end;
+
+procedure TSuiteRunner.Summary;
+var
+  LConfig: TTestConfig;
+  LOutSink: IOutputSink;
+begin
+  LConfig := RunnerConfig(Self);
+  LOutSink := ResolveOutSink(LConfig);
+  LOutSink.WriteLn('');
+  LOutSink.WriteLn(AnsiBold('=== Summary ===', LConfig));
+  LOutSink.WriteLn('  Suites: ' + IntToStr(Length(Suites)));
+  LOutSink.WriteLn(
+    '  Passed: ' + IntToStr(TotalPass) +
+    ', Failed: ' + IntToStr(TotalFail) +
+    ', Skipped: ' + IntToStr(TotalSkip));
+end;
+
+function TSuiteRunner.AllPassed: Boolean;
+begin
+  if HasRun then
+    Result := TotalFail = 0
+  else
+    Result := RunAll;
+end;
 
 initialization
   GMainThreadId := platform_thread_id;
