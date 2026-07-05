@@ -196,6 +196,9 @@ type
     procedure Insert(const AKey: TKey; const AValue: TValue);
     function Find(const AKey: TKey; out AValue: TValue): Boolean;
     function Remove(const AKey: TKey): Boolean;
+    function Remove(const AKey: TKey; out AValue: TValue): Boolean;  // 返回旧值
+    function TryInsert(const AKey: TKey; const AValue: TValue): Boolean;  // CAS 语义
+    function Replace(const AKey: TKey; const ANewValue: TValue; out AOldValue: TValue): Boolean;
     function Contains(const AKey: TKey): Boolean;
     function Count: PtrUInt;
 
@@ -222,8 +225,11 @@ type
 | Insert | O(1) amortized | ✅ | 插入或覆盖 |
 | Find | O(1) amortized | ✅ | 查找并返回值 |
 | Remove | O(1) amortized | ✅ | 删除键（标记 esDeleted） |
+| Remove (out) | O(1) amortized | ✅ | 删除键并返回旧值 |
+| TryInsert | O(1) amortized | ✅ | CAS 语义：仅不存在时插入 |
+| Replace | O(1) amortized | ✅ | 原子替换并返回旧值 |
 | Contains | O(1) amortized | ✅ | 检查键是否存在 |
-| Count | O(shards) | ✅ | 逐 shard 加锁累加 |
+| Count | O(shards) | ✅ | 逐 shard 加锁累加（快照） |
 | ForEach | O(n) | ✅ | 逐 shard 遍历，持锁期间回调 |
 | ForEachCtx | O(n) | ✅ | 带上下文的逐 shard 遍历 |
 | GetOrInsert | O(1) amortized | ✅ | 原子获取或插入，仅加锁一次 |
@@ -304,15 +310,22 @@ type
   end;
 
   THazardDomain = class
-    constructor Create;
+    constructor Create(const AHPCount: PtrUInt = 2);
     destructor Destroy; override;
-    function RegisterThread: THazardThread;
-    procedure UnregisterThread(var AThread: THazardThread);
-    procedure Protect(AThread: THazardThread; APtr: Pointer);
-    procedure Clear(AThread: THazardThread);
-    procedure Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer = nil);
-    procedure Collect(AThread: THazardThread);
-    function GlobalRetiredCount: Integer;
+    function RegisterThread: PtrUInt;
+    procedure UnregisterThread(const AThreadId: PtrUInt);
+    function Protect(const AThreadId: PtrUInt; const AHPIndex: PtrUInt; const APtr: Pointer): Pointer;
+    procedure Clear(const AThreadId: PtrUInt; const AHPIndex: PtrUInt);
+    procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
+    procedure Collect(const AThreadId: PtrUInt);
+    function ActiveThreads: PtrUInt;
+    function RetiredCount: PtrUInt;
+  end;
+
+  THazardGuard = record
+    class function Acquire(const ADomain: THazardDomain; const AHPIndex: PtrUInt = 0): THazardGuard; static;
+    function Protect(const APtr: Pointer): Pointer;
+    procedure Release;
   end;
 ```
 
@@ -322,26 +335,51 @@ type
 - 延迟回收：退休节点在 Collect 时批量处理
 - 安全约束：Retire 不遍历线程链表（避免并发修改）
 
-**使用示例**:
+**使用示例（推荐：THazardGuard RAII）**:
 
 ```pascal
 var
   LDomain: THazardDomain;
-  LThread: THazardThread;
+  LGuard: THazardGuard;
   LData: Pointer;
 begin
   LDomain := THazardDomain.Create;
   try
-    // 注册线程
+    LGuard := THazardGuard.Acquire(LDomain, 0);
+    try
+      LData := LGuard.Protect(SharedPointer);
+      // 安全访问 LData
+      DoSomething(LData);
+    finally
+      LGuard.Release;
+    end;
+
+    // 退休旧指针
+    LDomain.Retire(LData, @MyReclaimProc, nil);
+  finally
+    LDomain.Free;
+  end;
+end;
+```
+
+**使用示例（底层 API）**:
+
+```pascal
+var
+  LDomain: THazardDomain;
+  LThread: PtrUInt;
+  LData: Pointer;
+begin
+  LDomain := THazardDomain.Create;
+  try
     LThread := LDomain.RegisterThread;
     try
-      // 保护指针
-      LDomain.Protect(LThread, LData);
+      LDomain.Protect(LThread, 0, LData);
       try
         // 安全访问 LData
         DoSomething(LData);
       finally
-        LDomain.Clear(LThread);
+        LDomain.Clear(LThread, 0);
       end;
 
       // 退休旧指针
@@ -365,9 +403,11 @@ end;
 4. `Collect`: 检查所有线程的 hazard 指针，回收未被保护的节点
 
 **安全约束**:
+- 推荐使用 `THazardGuard` RAII 守卫，自动管理生命周期
 - `Collect` 必须在 `UnregisterThread` 前调用（遍历线程链表）
 - `Retire` 不调用 `Collect`（避免并发修改链表）
 - 退休节点的回收回调必须幂等（可能被多次调用）
+- `Protect`/`Clear` 在 DEBUG 模式下校验参数，Release 模式静默忽略无效参数
 
 ---
 

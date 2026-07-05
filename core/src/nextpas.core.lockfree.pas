@@ -28,6 +28,7 @@ type
   TEbrGuard = nextpas.core.lockfree.ebr.TEbrGuard;
   TLockFreeReclaimProc = nextpas.core.lockfree.ebr.TLockFreeReclaimProc;
   THazardDomain = nextpas.core.lockfree.hazard.THazardDomain;
+  THazardGuard = nextpas.core.lockfree.hazard.THazardGuard;
 
   {** @desc QSBR 域（TQSBRDomain 是 TEbrDomain 的语义别名）
     @details Quiescent-State Based Reclamation：仅当 FActiveCount=0 时回收所有退休节点。

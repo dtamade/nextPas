@@ -338,6 +338,54 @@ begin
     GStressDomain.Free;
   end;
 end;
+procedure TestHazardGuardBasic;
+var
+  LDomain: THazardDomain;
+  LGuard: THazardGuard;
+  LPtr: Pointer;
+  LId: PtrUInt;
+begin
+  LDomain := THazardDomain.Create(2);
+  try
+    GReclaimCount := 0;
+    LGuard := THazardGuard.Acquire(LDomain, 0);
+    try
+      LPtr := LGuard.Protect(Pointer($DEAD));
+      Check(Pointer($DEAD) = LPtr, 'Protect returns the pointer');
+      // Retire and collect - protected item should be deferred
+      LDomain.Retire(Pointer($DEAD), @HazardReclaimProc);
+      LDomain.Retire(Pointer($BEEF), @HazardReclaimProc);
+      // Use a temp thread to Collect (Guard owns the registered thread)
+      LId := LDomain.RegisterThread;
+      LDomain.Collect(LId);
+      LDomain.UnregisterThread(LId);
+      CheckEqual(Int64(1), Int64(GReclaimCount), 'only unprotected item reclaimed');
+    finally
+      LGuard.Release;
+    end;
+    // After release, collect should reclaim the remaining item
+    LId := LDomain.RegisterThread;
+    LDomain.Collect(LId);
+    LDomain.UnregisterThread(LId);
+    CheckEqual(Int64(2), Int64(GReclaimCount), 'both items reclaimed after guard release');
+  finally
+    LDomain.Free;
+  end;
+end;
+procedure TestDestroyWithActiveThreads;
+var
+  LDomain: THazardDomain;
+  LId: PtrUInt;
+begin
+  GReclaimCount := 0;
+  LDomain := THazardDomain.Create(2);
+  LId := LDomain.RegisterThread;
+  LDomain.Retire(Pointer(1), @HazardReclaimProc);
+  LDomain.Retire(Pointer(2), @HazardReclaimProc);
+  // Destroy with active thread - should not crash
+  LDomain.Free;
+  CheckEqual(Int64(2), Int64(GReclaimCount), 'Destroy reclaims all even with active thread');
+end;
 begin
   T := TTestSuite.Create('all13_v2');
   T.Test('Create(0) rejects', @TestCreateZeroHPCount);
@@ -353,5 +401,7 @@ begin
   T.Test('Multi-thread protect vs retire', @TestMultiThreadProtectRetire);
   T.Test('Multiple HPs per thread', @TestMultipleHPPerThread);
   T.Test('Concurrent retire+collect stress', @TestConcurrentRetireCollect);
+  T.Test('THazardGuard RAII basic', @TestHazardGuardBasic);
+  T.Test('Destroy with active threads', @TestDestroyWithActiveThreads);
   if not T.Run then Halt(1);
 end.

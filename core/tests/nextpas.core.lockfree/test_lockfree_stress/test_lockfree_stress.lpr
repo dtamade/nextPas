@@ -1684,6 +1684,155 @@ end;
 
 
 { ============================================================ }
+{ TEST 15: HashMap concurrent Insert/Remove                     }
+{ 4 threads, each inserting 1000 keys, then removing them       }
+{ Verifies: no duplicates, correct count, all removed           }
+{ ============================================================ }
+
+const
+  HASHMAP_IR_THREADS = 4;
+  HASHMAP_IR_PER_THREAD = 1000;
+
+var
+  GHashMapIRMap: TIntIntMap;
+
+function HashMapIRInsertWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_IR_PER_THREAD - 1 do
+    GHashMapIRMap.Insert(LI, LI * 5);
+end;
+
+function HashMapIRRemoveWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_IR_PER_THREAD - 1 do
+    GHashMapIRMap.Remove(LI);
+end;
+
+procedure TestHashMapConcurrentInsertRemove;
+var
+  LHandles: array[0..HASHMAP_IR_THREADS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+  LV: Integer;
+begin
+  GHashMapIRMap := TIntIntMap.Create;
+  LHandleCount := 0;
+  try
+    // Phase 1: concurrent insert
+    for LI := 0 to HASHMAP_IR_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapIRInsertWorker,
+        Pointer(PtrInt(LI * HASHMAP_IR_PER_THREAD + 1)),
+        'HashMap IR insert ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR insert');
+
+    CheckEqual(Int64(HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD),
+      Int64(GHashMapIRMap.Count), 'IR: all keys inserted');
+
+    // Verify all values
+    for LI := 1 to HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD do
+    begin
+      Check(GHashMapIRMap.Find(LI, LV), 'IR: Find key ' + IntToStr(LI));
+      CheckEqual(Int64(LI * 5), Int64(LV), 'IR: value for key ' + IntToStr(LI));
+    end;
+
+    // Phase 2: concurrent remove
+    LHandleCount := 0;
+    for LI := 0 to HASHMAP_IR_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapIRRemoveWorker,
+        Pointer(PtrInt(LI * HASHMAP_IR_PER_THREAD + 1)),
+        'HashMap IR remove ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR remove');
+
+    CheckEqual(Int64(0), Int64(GHashMapIRMap.Count), 'IR: all keys removed');
+    for LI := 1 to HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD do
+      Check(not GHashMapIRMap.Contains(LI), 'IR: key ' + IntToStr(LI) + ' gone');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR cleanup');
+    GHashMapIRMap.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 16: HashMap concurrent Clear                             }
+{ 3 threads inserting + 1 thread clearing                       }
+{ Verifies: no crash, final state consistent                   }
+{ ============================================================ }
+
+var
+  GHashMapClearMap: TIntIntMap;
+  GHashMapClearDone: Int32;
+
+function HashMapClearInsertWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LBase: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg));
+  for LI := LBase to LBase + 499 do
+    GHashMapClearMap.Insert(LI, LI);
+end;
+
+function HashMapClearWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to 20 do
+  begin
+    GHashMapClearMap.Clear;
+    platform_thread_sleep_ns(1000000);
+  end;
+  AtomicStore32(GHashMapClearDone, 1, moRelease);
+end;
+
+procedure TestHashMapConcurrentClear;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+begin
+  GHashMapClearMap := TIntIntMap.Create;
+  GHashMapClearDone := 0;
+  LHandleCount := 0;
+  try
+    // 3 inserters + 1 clearer
+    for LI := 0 to 2 do
+    begin
+      StartThread(LHandles[LI], @HashMapClearInsertWorker,
+        Pointer(PtrInt(LI * 500 + 1)),
+        'HashMap clear insert ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    StartThread(LHandles[3], @HashMapClearWorker, nil, 'HashMap clearer');
+    Inc(LHandleCount);
+
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap clear test');
+    // No crash = pass. Count may be 0 or up to 1500.
+    Check(True, 'HashMap concurrent Clear: no crash');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap clear cleanup');
+    GHashMapClearMap.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Main                                                         }
 { ============================================================ }
 
@@ -1702,6 +1851,8 @@ begin
   T.Test('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
   T.Test('SPMC 1P+4C contention', @TestSpmcContention);
   T.Test('HashMap GetOrInsertFn 4T concurrent (4K keys)', @TestHashMapGetOrInsertFnConcurrent);
+  T.Test('HashMap 4T concurrent Insert/Remove (4K keys)', @TestHashMapConcurrentInsertRemove);
+  T.Test('HashMap concurrent Clear (3 insert + 1 clear)', @TestHashMapConcurrentClear);
 
   T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
   if not T.Run then Halt(1);

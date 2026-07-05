@@ -2928,6 +2928,80 @@ begin
   end;
 end;
 
+procedure TestHashMapTryInsert;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First insert - should succeed
+    Check(LM.TryInsert(1, 100), 'TryInsert new key succeeds');
+    Check(LM.Find(1, LV), 'Find after TryInsert');
+    CheckEqual(Int64(100), Int64(LV), 'value after TryInsert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after TryInsert');
+
+    // Second insert same key - should fail
+    Check(not LM.TryInsert(1, 999), 'TryInsert existing key fails');
+    Check(LM.Find(1, LV), 'Find after failed TryInsert');
+    CheckEqual(Int64(100), Int64(LV), 'value unchanged after failed TryInsert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after failed TryInsert');
+
+    // Different key - should succeed
+    Check(LM.TryInsert(2, 200), 'TryInsert different key succeeds');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second TryInsert');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapRemoveWithOldValue;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 100);
+    LM.Insert(2, 200);
+
+    // Remove existing - returns old value
+    Check(LM.Remove(1, LV), 'Remove existing key');
+    CheckEqual(Int64(100), Int64(LV), 'returned old value');
+    Check(not LM.Contains(1), 'key removed');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after Remove');
+
+    // Remove non-existing - returns false
+    Check(not LM.Remove(99, LV), 'Remove non-existing key returns false');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapReplace;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 100);
+
+    // Replace existing - returns old value
+    Check(LM.Replace(1, 200, LV), 'Replace existing key');
+    CheckEqual(Int64(100), Int64(LV), 'returned old value');
+    Check(LM.Find(1, LV), 'Find after Replace');
+    CheckEqual(Int64(200), Int64(LV), 'new value after Replace');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+
+    // Replace non-existing - returns false
+    Check(not LM.Replace(99, 300, LV), 'Replace non-existing returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
 procedure TestSegQueueBasic;
 var
   LQ: TIntSegQueue;
@@ -4874,6 +4948,9 @@ begin
   T.Test('HashMap GetOrInsertFn', @TestHashMapGetOrInsertFn);
   T.Test('HashMap GetOrInsertFn single-key race', @TestHashMapGetOrInsertFnSingleKeyRace);
   T.Test('HashMap GetOrUpdate', @TestHashMapGetOrUpdate);
+  T.Test('HashMap TryInsert', @TestHashMapTryInsert);
+  T.Test('HashMap Remove with old value', @TestHashMapRemoveWithOldValue);
+  T.Test('HashMap Replace', @TestHashMapReplace);
   T.Test('HashMap Clear', @TestHashMapClear);
   T.Test('Stack 4P+4C stress', @TestStackStress);
   T.Test('Deque owner+thief stress', @TestDequeOwnerThief);

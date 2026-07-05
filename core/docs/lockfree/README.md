@@ -176,8 +176,11 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 | Insert | O(1) amortized | ✅ | 插入或覆盖 |
 | Find | O(1) amortized | ✅ | 查找并返回值 |
 | Remove | O(1) amortized | ✅ | 删除键（标记 esDeleted） |
+| Remove (out) | O(1) amortized | ✅ | 删除键并返回旧值 |
+| TryInsert | O(1) amortized | ✅ | CAS 语义：仅不存在时插入 |
+| Replace | O(1) amortized | ✅ | 原子替换并返回旧值 |
 | Contains | O(1) amortized | ✅ | 检查键是否存在 |
-| Count | O(shards) | ✅ | 逐 shard 加锁累加 |
+| Count | O(shards) | ✅ | 逐 shard 加锁累加（快照） |
 | ForEach | O(n) | ✅ | 逐 shard 遍历，持锁期间回调 |
 | ForEachCtx | O(n) | ✅ | 带上下文的逐 shard 遍历 |
 | GetOrInsert | O(1) amortized | ✅ | 原子获取或插入，仅加锁一次 |
@@ -211,10 +214,10 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 | 方法 | 说明 |
 |------|------|
-| RegisterThread | 注册线程，返回 THazardThread |
-| UnregisterThread | 注销线程 |
-| Protect | 设置线程的 hazard 指针 |
-| Clear | 清除线程的 hazard 指针 |
+| Acquire | RAII 守卫：注册线程 + 设置 HP 索引 |
+| Protect | 保护指针（通过 Guard 或直接调用） |
+| Clear | 清除保护 |
+| Release | RAII 释放：清除保护 + 注销线程 |
 | Retire | 将指针加入退休链表 |
 | Collect | 回收未被保护的退休节点 |
 

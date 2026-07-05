@@ -17,7 +17,8 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.platform.thread;
 
 const
   HASHMAP_DEFAULT_SHARD_COUNT = 16;
@@ -91,14 +92,23 @@ type
     function Find(const AKey: TKey; out AValue: TValue): Boolean;
     {** @desc 删除键 }
     function Remove(const AKey: TKey): Boolean;
+    {** @desc 删除键并返回旧值；不存在返回 False }
+    function Remove(const AKey: TKey; out AValue: TValue): Boolean;
+    {** @desc 仅在键不存在时插入；已存在返回 False（CAS 语义） }
+    function TryInsert(const AKey: TKey; const AValue: TValue): Boolean;
+    {** @desc 原子替换：已存在则替换并返回旧值，不存在返回 False }
+    function Replace(const AKey: TKey; const ANewValue: TValue; out AOldValue: TValue): Boolean;
     {** @desc 检查键是否存在 }
     function Contains(const AKey: TKey): Boolean;
-    {** @desc 总元素数（近似值） }
+    {** @desc 总元素数（逐 shard 加锁累加的快照，非线性化）
+      @note 返回值是各 shard 计数之和。在并发 Insert/Remove 下，
+            与 ForEach 看到的元素集合可能不一致（各自是独立快照）。 }
     function Count: PtrUInt;
 
     {** @desc 遍历所有元素（持锁，回调期间其他操作阻塞）
       @param ACallback 回调函数，接收 key 和 value
-      @note 回调期间持有所有 shard 锁，应尽快完成
+      @note 逐 shard 遍历，每个 shard 持锁期间回调。
+            与 Count 各自是独立快照，在并发修改下可能不一致。
       @warning 不可在回调中调用本 HashMap 的其他方法（死锁） }
     procedure ForEach(const ACallback: TForEachCallback);
 
@@ -162,9 +172,21 @@ begin
 end;
 
 procedure TShardedHashMapImpl.ShardLock(var AShard: TShard);
+var
+  LSpins: Int32;
 begin
+  LSpins := 0;
   while AtomicExchange32(AShard.Lock, 1, moAcquire) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  end;
 end;
 
 procedure TShardedHashMapImpl.ShardUnlock(var AShard: TShard);
@@ -240,6 +262,8 @@ var
 begin
   if IsManagedType(TKey) or IsManagedType(TValue) then
     raise EArgumentError.Create('TShardedHashMap: TKey and TValue must be unmanaged');
+  if SizeOf(TKey) = 0 then
+    raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;
   LCap := AInitialCapacity;
   if LCap < 4 then
@@ -320,6 +344,73 @@ begin
       FShards[LShardIdx].Entries[LIdx].Key := Default(TKey);
       FShards[LShardIdx].Entries[LIdx].Value := Default(TValue);
       Dec(FShards[LShardIdx].Count);
+    end;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.Remove(const AKey: TKey; out AValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if Result then
+    begin
+      AValue := FShards[LShardIdx].Entries[LIdx].Value;
+      FShards[LShardIdx].Entries[LIdx].State := esDeleted;
+      FShards[LShardIdx].Entries[LIdx].Key := Default(TKey);
+      FShards[LShardIdx].Entries[LIdx].Value := Default(TValue);
+      Dec(FShards[LShardIdx].Count);
+    end;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.TryInsert(const AKey: TKey; const AValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFoundIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    if ShardFind(FShards[LShardIdx], AKey, LFoundIdx) then
+      Exit(False);
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := AValue;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result := True;
+  finally
+    ShardUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.Replace(const AKey: TKey; const ANewValue: TValue; out AOldValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardLock(FShards[LShardIdx]);
+  try
+    Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if Result then
+    begin
+      AOldValue := FShards[LShardIdx].Entries[LIdx].Value;
+      FShards[LShardIdx].Entries[LIdx].Value := ANewValue;
     end;
   finally
     ShardUnlock(FShards[LShardIdx]);
