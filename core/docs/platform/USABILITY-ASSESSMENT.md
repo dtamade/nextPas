@@ -383,7 +383,7 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 |---|------|--------|------|
 | P3-1 | 引入 `TPlatformDuration` 类型统一时间表示 | 4h | ❌ 已决策：不引入，保持 Int64 |
 | P3-2 | 添加高阶封装 API（read_all/write_all/send_all） | 6h | ❌ 已决策：不添加，保持 L0 最小化 |
-| P3-3 | 建立 CONTRACT.md CI 验证脚本 | 2h | 文档永不过期 |
+| P3-3 | 建立 CONTRACT.md CI 验证脚本 | 2h | ✅ 已完成 (26 checks) |
 
 ---
 
@@ -438,11 +438,11 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 
 ### 3. 本月完成
 - [x] 补充低覆盖率模块测试 (P2-3) — 2026-07-06
-- [ ] 建立 CONTRACT.md CI 验证 (P3-3)
+- [x] 建立 CONTRACT.md CI 验证 (P3-3) — 2026-07-06
 
 ### 4. 季度目标
-- [ ] 引入 `TPlatformDuration` (P3-1)
-- [ ] 添加高阶封装 API (P3-2)
+- [x] 引入 `TPlatformDuration` (P3-1) — ❌ 已决策：不引入
+- [x] 添加高阶封装 API (P3-2) — ❌ 已决策：不添加
 - [ ] 可用性评分提升到 8.5+
 
 ---
