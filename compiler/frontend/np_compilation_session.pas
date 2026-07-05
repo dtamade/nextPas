@@ -21,7 +21,11 @@ uses
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
   np_semantic_model, np_semantic_analyzer, np_workspace_model,
-  nextpas_json_helpers;
+  np_compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
+  np_query_database,
+  np_file_change_detector,
+  np_parallel_scheduler,
+  np_mir_to_llvm, nextpas_json_helpers;
 
 type
   TBuildContext = record
@@ -80,6 +84,10 @@ type
     FSearchIndexScanCount: LongInt;
     FSemanticModel: TSemanticModel;
     FSemanticStatus: string;
+    FQueryDB: TQueryDatabase;
+    FFileDetector: TFileChangeDetector;
+    FScheduler: TParallelScheduler;
+    FMirModule: TMirModule;
     FMirStatus: string;
     FBackendPlan: TBackendPlan;
     FBackendStatus: string;
@@ -151,6 +159,12 @@ type
     );
     destructor Destroy; override;
     procedure AnalyzeSyntax;
+
+    { Incremental compilation: check for file changes and invalidate caches }
+    function PrepareIncrementalBuild: Boolean;
+
+    { Take snapshot after successful build }
+    procedure FinalizeIncrementalBuild;
     procedure ResolveUnits;
     procedure AnalyzeSemantics;
     procedure LowerToMir;
@@ -186,7 +200,10 @@ type
     function TypeGraphStatus: string;
     function TypedHirStatus: string;
     function MirStatus: string;
+    function MirModule: TMirModule;
     function BackendPlanStatus: string;
+    // Pipeline phase status helpers (ICompilerPhase integration)
+    function PhaseStatusOf(const AStatus: string): TPhaseStatus;
     function ToolchainPlanStatus: string;
     function WorkspaceRootPath: string;
     function WorkspaceDiscoveryKind: string;
@@ -432,6 +449,9 @@ begin
   FSearchIndexScanCount := 0;
   FSemanticModel := nil;
   FSemanticStatus := 'deferred';
+  FQueryDB := TQueryDatabase.Create;
+  FFileDetector := TFileChangeDetector.Create;
+  FScheduler := nil;  { Created on-demand for parallel builds }
   FMirStatus := 'deferred';
   FBackendPlan := nil;
   FBackendStatus := 'deferred';
@@ -452,6 +472,7 @@ begin
   FOptions.WorkspaceModel.Free;
   FToolchainPlan.Free;
   FBackendPlan.Free;
+  FMirModule.Free;
   FSemanticModel.Free;
   FUnitGraph.Free;
   FSearchPathSet.Free;
@@ -460,6 +481,9 @@ begin
   FLexerResult.Free;
   FDiagnosticsSink.Free;
   FSourceDatabase.Free;
+  if FScheduler <> nil then FScheduler.Free;
+  FFileDetector.Free;
+  FQueryDB.Free;
   inherited Destroy;
 end;
 
@@ -492,6 +516,7 @@ end;
 procedure TCompilationSession.ResetIrState;
 begin
   ResetBackendState;
+  FreeAndNil(FMirModule);
   FMirStatus := 'deferred';
 end;
 
@@ -776,6 +801,46 @@ begin
   Result := '{' + TraceFields + '}';
 end;
 
+function TCompilationSession.PrepareIncrementalBuild: Boolean;
+var
+  RootPath: string;
+  Changed: TStringArray;
+  I: LongInt;
+begin
+  Result := True;
+  RootPath := FSourceDatabase.RootSourceCanonicalPath;
+
+  { First build: no snapshots yet }
+  if FFileDetector.SnapshotCount = 0 then
+    Exit;
+
+  { Check if any tracked file changed }
+  if not FFileDetector.AnyChanged then
+  begin
+    { Nothing changed — all queries still valid }
+    Exit;
+  end;
+
+  { Something changed — invalidate affected queries }
+  Changed := FFileDetector.ChangedFiles;
+  for I := 0 to Length(Changed) - 1 do
+  begin
+    FQueryDB.InvalidatePrefix('parse:' + Changed[I]);
+    FQueryDB.InvalidatePrefix('semantic:' + Changed[I]);
+  end;
+
+  { Reset state for recompilation }
+  Result := True;
+end;
+
+procedure TCompilationSession.FinalizeIncrementalBuild;
+var
+  RootPath: string;
+begin
+  RootPath := FSourceDatabase.RootSourceCanonicalPath;
+  FFileDetector.TakeSnapshot(RootPath, []);
+end;
+
 procedure TCompilationSession.AnalyzeSyntax;
 var
   RawLexer: TLexerResult;
@@ -844,7 +909,20 @@ end;
 procedure TCompilationSession.AnalyzeSemantics;
 var
   Analyzer: TSemanticAnalyzer;
+  CacheKey: string;
+  CachedModel: TObject;
 begin
+  { Query cache: if we already analyzed this file, skip }
+  CacheKey := 'semantic:' + FSourceDatabase.RootSourceCanonicalPath;
+  CachedModel := FQueryDB.Get(CacheKey, nil);
+  if (CachedModel <> nil) and (CachedModel is TSemanticModel) then
+  begin
+    FSemanticModel := TSemanticModel(CachedModel);
+    FSemanticStatus := FSemanticModel.Status;
+    { Do NOT call ResetSemanticState — it would free the cached model }
+    Exit;
+  end;
+
   ResetSemanticState;
   if (FAstFacade = nil) or (FUnitGraph = nil) or (FResolutionStatus <> 'ready') then
   begin
@@ -865,7 +943,12 @@ begin
     if FSemanticModel = nil then
       FSemanticStatus := 'deferred'
     else
+    begin
       FSemanticStatus := FSemanticModel.Status;
+      { Cache for incremental compilation — query DB owns the reference }
+      if FSemanticStatus = 'ready' then
+        FQueryDB.Store(CacheKey, FSemanticModel);
+    end;
   finally
     Analyzer.Free;
   end;
@@ -876,6 +959,9 @@ var
   HirBuilder: THIRBuilder;
   HirPrinter: THIRPrinter;
   HirPath: string;
+  Lowering: THirToMirLowering;
+  LlvmTranslator: TMirToLlvmTranslator;
+  LlvmOutput: string;
 begin
   ResetIrState;
   if (FSemanticModel = nil) or (FSemanticStatus <> 'ready') then
@@ -886,7 +972,34 @@ begin
 
   FMirStatus := 'ready';
 
-  if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
+  // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
+  if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
+  begin
+    HirBuilder := THIRBuilder.Create(FSemanticModel);
+    try
+      HirBuilder.Build;
+
+      Lowering := THirToMirLowering.Create(HirBuilder.Module);
+      try
+        FMirModule := Lowering.Lower;
+      finally
+        Lowering.Free;
+      end;
+
+      if GetEnvironmentVariable('NEXTPAS_MIR_DUMP') = '1' then
+      begin
+        LlvmTranslator := TMirToLlvmTranslator.Create(FMirModule);
+        try
+          LlvmOutput := LlvmTranslator.Translate;
+        finally
+          LlvmTranslator.Free;
+        end;
+      end;
+    finally
+      HirBuilder.Free;
+    end;
+  end
+  else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
   begin
     HirBuilder := THIRBuilder.Create(FSemanticModel);
     try
@@ -1356,6 +1469,16 @@ end;
 function TCompilationSession.MirStatus: string;
 begin
   Result := FMirStatus;
+end;
+
+function TCompilationSession.MirModule: TMirModule;
+begin
+  Result := FMirModule;
+end;
+
+function TCompilationSession.PhaseStatusOf(const AStatus: string): TPhaseStatus;
+begin
+  Result := StringToPhaseStatus(AStatus);
 end;
 
 function TCompilationSession.BackendPlanStatus: string;

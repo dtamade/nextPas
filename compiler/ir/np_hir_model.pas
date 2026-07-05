@@ -53,7 +53,8 @@ type
     hikFinallyEnd,
     hikExceptBegin,
     hikExceptEnd,
-    hikRaise
+    hikRaise,
+    hikConstFloat
   );
 
   THIRTermKind = (
@@ -83,6 +84,7 @@ type
     FieldIndex: LongInt;
     CallTarget: string;
     IntrinsicName: string;
+    FloatValue: Double;
     SourceLine: LongInt;
     SourceCol: LongInt;
   end;

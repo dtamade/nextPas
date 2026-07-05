@@ -5,7 +5,8 @@ unit np_semantic_model;
 interface
 
 uses
-  np_green_tree, np_hir_types;
+  np_green_tree, np_hir_types,
+  nextpas.core.collections.hashmap;
 
 type
   TSemanticHirValueClass = (
@@ -61,6 +62,7 @@ type
     SymbolId: LongInt;
     Children: array of LongInt;
     LiteralInt: Int64;
+    LiteralFloat: Double;
     LiteralStr: string;
     Op: string;
     SourceOffset: LongInt;
@@ -109,7 +111,7 @@ type
     Operand: string;
     ExprId: LongInt;
     TargetExprId: LongInt;
-    GreenNodeRef: TObject;  // optional: green tree node for unit init/fini body
+    GreenNodeRef: TGreenNode;  // optional: green tree node for unit init/fini body
     IsThreadVar: Boolean;   // true for threadvar declarations
   end;
 
@@ -202,6 +204,11 @@ type
     Value: Int64;
   end;
 
+  TSemanticFloatConstValue = record
+    Name: string;
+    Value: Double;
+  end;
+
   TSemanticStringConstValue = record
     Name: string;
     Value: string;
@@ -239,14 +246,21 @@ type
     FConstValues: array of TSemanticConstValue;
     FVarInitValues: array of TSemanticVarInitValue;
     FStringConstValues: array of TSemanticStringConstValue;
+    FFloatConstValues: array of TSemanticFloatConstValue;
     FTypeMetadataEntries: array of TTypeMetadata;
     FTypeScalarFacts: array of TSemanticScalarTypeFact;
     FUnitInitOrder: array of string;
     FRootName: string;
     FStatus: string;
+    // O(1) lookup indexes via THashMap (case-insensitive keys)
+    FTypeNameIndex: specialize THashMap<string, LongInt>;
+    FSymbolNameIndex: specialize THashMap<string, LongInt>;
+    FConstNameIndex: specialize THashMap<string, LongInt>;
+    FTypeMetaNameIndex: specialize THashMap<string, LongInt>;
     function FindTypeScalarFactIndex(const ATypeId: LongInt): LongInt;
   public
     constructor Create;
+    destructor Destroy; override;
     function AddSymbol(
       const AName: string;
       const AKind: string;
@@ -305,6 +319,7 @@ type
       const ASymbolId: LongInt;
       const AChildren: array of LongInt;
       const ALiteralInt: Int64;
+      const ALiteralFloat: Double;
       const ALiteralStr: string;
       const AOp: string;
       const ASourceOffset: LongInt;
@@ -315,7 +330,7 @@ type
     procedure SetTypedHirNodeTargetExprId(const AHirNodeId: LongInt;
       const AExprId: LongInt);
     procedure SetTypedHirNodeGreenRef(const AHirNodeId: LongInt;
-      const AGreenNode: TObject);
+      const AGreenNode: TGreenNode);
     procedure SetTypedHirNodeIsThreadVar(const AHirNodeId: LongInt;
       const AIsThreadVar: Boolean);
     function AddBinding(
@@ -382,6 +397,9 @@ type
     procedure AddStringConstValue(const AName: string; const AValue: string);
     function LookupStringConstValue(const AName: string;
       out AValue: string): Boolean;
+    procedure AddFloatConstValue(const AName: string; const AValue: Double);
+    function LookupFloatConstValue(const AName: string;
+      out AValue: Double): Boolean;
     procedure SetRootName(const AName: string);
     function RootName: string;
     procedure SetUnitInitOrder(const AOrder: array of string);
@@ -409,11 +427,26 @@ begin
   SetLength(FLibraryRequests, 0);
   SetLength(FConstValues, 0);
   SetLength(FVarInitValues, 0);
+  SetLength(FFloatConstValues, 0);
   SetLength(FStringConstValues, 0);
   SetLength(FTypeScalarFacts, 0);
   SetLength(FHirExprs, 0);
   FRootName := '';
   FStatus := 'deferred';
+  // Initialize O(1) lookup indexes
+  FTypeNameIndex := specialize THashMap<string, LongInt>.Create;
+  FSymbolNameIndex := specialize THashMap<string, LongInt>.Create;
+  FConstNameIndex := specialize THashMap<string, LongInt>.Create;
+  FTypeMetaNameIndex := specialize THashMap<string, LongInt>.Create;
+end;
+
+destructor TSemanticModel.Destroy;
+begin
+  FTypeNameIndex.Free;
+  FSymbolNameIndex.Free;
+  FConstNameIndex.Free;
+  FTypeMetaNameIndex.Free;
+  inherited Destroy;
 end;
 
 function TSemanticModel.FindTypeScalarFactIndex(
@@ -450,6 +483,8 @@ begin
   FSymbols[NextIndex].ParamSignature := '';
   FSymbols[NextIndex].ByteOffset := AByteOffset;
   Result := FSymbols[NextIndex].SymbolId;
+  // Update O(1) lookup index (case-insensitive)
+  FSymbolNameIndex.Put(LowerCase(AName), Result);
 end;
 
 function TSemanticModel.AddType(
@@ -466,6 +501,8 @@ begin
   FTypes[NextIndex].Kind := AKind;
   FTypes[NextIndex].ParentTypeId := 0;
   Result := FTypes[NextIndex].TypeId;
+  // Update O(1) lookup index (case-insensitive)
+  FTypeNameIndex.Put(LowerCase(AName), Result);
 end;
 
 procedure TSemanticModel.SetTypeKind(const ATypeId: LongInt;
@@ -890,7 +927,7 @@ begin
   FTypedHirNodes[NextIndex].Operand := AOperand;
   FTypedHirNodes[NextIndex].ExprId := 0;
   FTypedHirNodes[NextIndex].TargetExprId := 0;
-  FTypedHirNodes[NextIndex].GreenNodeRef := nil;
+  FTypedHirNodes[NextIndex].GreenNodeRef := NilGreenNode;
   Result := FTypedHirNodes[NextIndex].HirNodeId;
 end;
 
@@ -900,6 +937,7 @@ function TSemanticModel.AddHirExpr(
   const ASymbolId: LongInt;
   const AChildren: array of LongInt;
   const ALiteralInt: Int64;
+  const ALiteralFloat: Double;
   const ALiteralStr: string;
   const AOp: string;
   const ASourceOffset: LongInt;
@@ -953,7 +991,7 @@ begin
 end;
 
 procedure TSemanticModel.SetTypedHirNodeGreenRef(
-  const AHirNodeId: LongInt; const AGreenNode: TObject);
+  const AHirNodeId: LongInt; const AGreenNode: TGreenNode);
 var
   Idx: LongInt;
 begin
@@ -1074,23 +1112,17 @@ begin
 end;
 
 function TSemanticModel.FindTypeByName(const AName: string): LongInt;
-var
-  Index: LongInt;
 begin
-  for Index := 0 to Length(FTypes) - 1 do
-    if SameText(FTypes[Index].Name, AName) then
-      Exit(FTypes[Index].TypeId);
-  Result := 0;
+  // O(1) lookup via THashMap (case-insensitive)
+  if not FTypeNameIndex.TryGetValue(LowerCase(AName), Result) then
+    Result := 0;
 end;
 
 function TSemanticModel.FindSymbolByName(const AName: string): LongInt;
-var
-  Index: LongInt;
 begin
-  for Index := 0 to Length(FSymbols) - 1 do
-    if SameText(FSymbols[Index].Name, AName) then
-      Exit(FSymbols[Index].SymbolId);
-  Result := 0;
+  // O(1) lookup via THashMap (case-insensitive)
+  if not FSymbolNameIndex.TryGetValue(LowerCase(AName), Result) then
+    Result := 0;
 end;
 
 function TSemanticModel.SymbolTypeId(const ASymbolId: LongInt): LongInt;
@@ -1267,20 +1299,22 @@ begin
   SetLength(FConstValues, NextIndex + 1);
   FConstValues[NextIndex].Name := AName;
   FConstValues[NextIndex].Value := AValue;
+  // Update O(1) lookup index (case-insensitive)
+  FConstNameIndex.Put(LowerCase(AName), NextIndex);
 end;
 
 function TSemanticModel.LookupConstValue(const AName: string;
   out AValue: Int64): Boolean;
 var
-  Index: LongInt;
+  Idx: LongInt;
 begin
   AValue := 0;
-  for Index := 0 to Length(FConstValues) - 1 do
-    if SameText(FConstValues[Index].Name, AName) then
-    begin
-      AValue := FConstValues[Index].Value;
-      Exit(True);
-    end;
+  // O(1) lookup via THashMap (case-insensitive)
+  if FConstNameIndex.TryGetValue(LowerCase(AName), Idx) then
+  begin
+    AValue := FConstValues[Idx].Value;
+    Exit(True);
+  end;
   Result := False;
 end;
 
@@ -1366,17 +1400,25 @@ procedure TSemanticModel.SetTypeMeta(const ATypeId: LongInt;
   const AMeta: TTypeMetadata);
 var
   I: LongInt;
+  TypeName: string;
 begin
   for I := 0 to Length(FTypeMetadataEntries) - 1 do
     if FTypeMetadataEntries[I].TypeId = ATypeId then
     begin
       FTypeMetadataEntries[I] := AMeta;
       FTypeMetadataEntries[I].TypeId := ATypeId;
+      // Update O(1) lookup index
+      if (ATypeId > 0) and (ATypeId <= Length(FTypes)) then
+        FTypeMetaNameIndex.Put(LowerCase(FTypes[ATypeId - 1].Name), I);
       Exit;
     end;
-  SetLength(FTypeMetadataEntries, Length(FTypeMetadataEntries) + 1);
-  FTypeMetadataEntries[High(FTypeMetadataEntries)] := AMeta;
-  FTypeMetadataEntries[High(FTypeMetadataEntries)].TypeId := ATypeId;
+  I := Length(FTypeMetadataEntries);
+  SetLength(FTypeMetadataEntries, I + 1);
+  FTypeMetadataEntries[I] := AMeta;
+  FTypeMetadataEntries[I].TypeId := ATypeId;
+  // Update O(1) lookup index
+  if (ATypeId > 0) and (ATypeId <= Length(FTypes)) then
+    FTypeMetaNameIndex.Put(LowerCase(FTypes[ATypeId - 1].Name), I);
 end;
 
 function TSemanticModel.GetTypeMeta(const ATypeId: LongInt;
@@ -1396,15 +1438,15 @@ end;
 function TSemanticModel.GetTypeMetaByName(const ATypeName: string;
   out AMeta: TTypeMetadata): Boolean;
 var
-  I: LongInt;
+  Idx: LongInt;
 begin
   Result := False;
-  for I := 0 to Length(FTypeMetadataEntries) - 1 do
-    if SameText(FTypes[FTypeMetadataEntries[I].TypeId - 1].Name, ATypeName) then
-    begin
-      AMeta := FTypeMetadataEntries[I];
-      Exit(True);
-    end;
+  // O(1) lookup via THashMap (case-insensitive)
+  if FTypeMetaNameIndex.TryGetValue(LowerCase(ATypeName), Idx) then
+  begin
+    AMeta := FTypeMetadataEntries[Idx];
+    Exit(True);
+  end;
 end;
 
 function TSemanticModel.GetFieldMetaByName(const ATypeId: LongInt;
@@ -1443,6 +1485,29 @@ begin
         end;
       Exit;
     end;
+end;
+
+procedure TSemanticModel.AddFloatConstValue(const AName: string; const AValue: Double);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FFloatConstValues);
+  SetLength(FFloatConstValues, NextIndex + 1);
+  FFloatConstValues[NextIndex].Name := AName;
+  FFloatConstValues[NextIndex].Value := AValue;
+end;
+
+function TSemanticModel.LookupFloatConstValue(const AName: string; out AValue: Double): Boolean;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FFloatConstValues) - 1 do
+    if SameText(FFloatConstValues[Index].Name, AName) then
+    begin
+      AValue := FFloatConstValues[Index].Value;
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 procedure TSemanticModel.AddStringConstValue(const AName: string; const AValue: string);

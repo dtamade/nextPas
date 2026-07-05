@@ -176,6 +176,8 @@ type
     function CanLowerExpr(const AExprId: LongInt): Boolean;
     function CanLowerExprAsAddress(const AExprId: LongInt): Boolean;
     function CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
+    function EmitConstFloat(const AValue: Double): THIRValueId;
+    function GetFloatType: THIRTypeId;
     function EmitConstInt(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
@@ -713,6 +715,19 @@ begin
   Result := Expr.ValueClass = shvcAddress;
 end;
 
+function THIRBuilder.EmitConstFloat(const AValue: Double): THIRValueId;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikConstFloat;
+  Instr.TypeId := GetFloatType;
+  Instr.FloatValue := AValue;
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
 function THIRBuilder.EmitConstInt(const AValue: Int64): THIRValueId;
 begin
   Result := EmitConstIntOfType(AValue, GetIntType);
@@ -924,6 +939,7 @@ var
   V: THIRValueId;
   Instr: THIRInstr;
   ConstVal: Int64;
+  FloatConstVal: Double;
   HirType: THIRTypeId;
 begin
   InitExprResult(AResult);
@@ -962,6 +978,13 @@ begin
   if FSemaModel.LookupConstValue(Symbol.Name, ConstVal) then
   begin
     SetExprValue(AResult, EmitConstIntOfType(ConstVal, HirType), HirType,
+      shvcScalar);
+    Exit(True);
+  end;
+
+  if FSemaModel.LookupFloatConstValue(Symbol.Name, FloatConstVal) then
+  begin
+    SetExprValue(AResult, EmitConstFloat(FloatConstVal), GetFloatType,
       shvcScalar);
     Exit(True);
   end;
@@ -1795,6 +1818,11 @@ begin
     FIntTypeCache[WidthIndex, SignedIndex] :=
       FModule.Types.AddIntType(ABitWidth, ASigned);
   Result := FIntTypeCache[WidthIndex, SignedIndex];
+end;
+
+function THIRBuilder.GetFloatType: THIRTypeId;
+begin
+  Result := GetFloatTypeByWidth(64);  { Default to Double }
 end;
 
 function THIRBuilder.GetFloatTypeByWidth(
@@ -2956,6 +2984,8 @@ var
   Line, Token, Arg: string;
   V: THIRValueId;
   Instr: THIRInstr;
+  ExprId: LongInt;
+  ExprResult: THIRExprResult;
 begin
   Result := 0;
   ATypeId := 0;
@@ -2990,6 +3020,27 @@ begin
 
   for I := 0 to LineCount - 1 do
   begin
+    Line := Lines[I];
+    
+    { 检查是否是结构化表达式 }
+    if Copy(Line, 1, 5) = 'expr ' then
+    begin
+      { 提取 ExprId }
+      ExprId := StrToIntDef(Copy(Line, 6, Length(Line)), 0);
+      if ExprId > 0 then
+      begin
+        { 调用 LowerExpr 处理结构化表达式 }
+        if LowerExpr(ExprId, ExprResult) then
+        begin
+          Result := ExprResult.ValueId;
+          ATypeId := ExprResult.TypeId;
+          Exit;
+        end;
+      end;
+      { 如果 LowerExpr 失败，继续处理下一行 }
+      Continue;
+    end;
+
     Line := Lines[I];
     SpacePos := Pos(' ', Line);
     if SpacePos > 0 then

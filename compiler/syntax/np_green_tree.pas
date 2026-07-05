@@ -1,6 +1,7 @@
 unit np_green_tree;
 
 {$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
 {$UNITPATH .}
 {$UNITPATH ../diagnostics}
 {$UNITPATH ../frontend}
@@ -8,9 +9,13 @@ unit np_green_tree;
 interface
 
 uses
-  np_diagnostics_sink, np_lexer, np_source_database;
+  np_diagnostics_sink, np_lexer, np_source_database,
+  nextpas.core.collections.vec;
 
 type
+  { Forward declarations for rowan-style internal storage }
+  TGreenTree = class;
+
   TForeignProcedureDecl = record
     ProcedureName: string;
     CallingConvention: string;
@@ -65,65 +70,121 @@ type
     grkPackage
   );
 
-  TGreenNode = class
+  {**
+   * TGreenNodeData — Compact rowan-style node storage
+   *
+   * 28 bytes per node, stored contiguously in TVec.
+   * Text is centralized in TGreenTreeData.Text.
+   * Children referenced by (ChildStart, ChildCount) — contiguous in FFacades.
+   *}
+  TGreenNodeData = packed record
+    Kind: TGreenNodeKind;
+    ByteOffset: LongInt;
+    ByteLength: LongInt;
+    TextStart: LongInt;
+    TextLen: LongInt;
+    ChildStart: LongInt;
+    ChildCount: LongInt;
+  end;
+
+  {**
+   * TGreenTreeData — Centralized tree storage
+   *
+   * FNodes[i] and FFacades[i] are strictly 1:1 corresponding.
+   *}
+  TGreenTreeData = record
+    Nodes: specialize TVec<TGreenNodeData>;
+    Text: string;
+    RootIndex: LongInt;
+  end;
+
+  {**
+   * TGreenNode - rowan-style value type
+   *
+   * Value-semantics record, freely copyable, no VMT overhead.
+   * nil represented by FIndex = -1.
+   * class operators provide full backward compatibility with = nil / <> nil / := nil.
+   * All properties delegate to TGreenTree compact storage.
+   *}
+  TGreenNode = record
   private
-    FNodeKind: TGreenNodeKind;
-    FByteOffset: LongInt;
-    FByteLength: LongInt;
-    FText: string;
-    FChildren: array of TGreenNode;
+    FOwner: TGreenTree;
+    FIndex: LongInt;
+    function GetNodeKind: TGreenNodeKind;
+    procedure SetNodeKind(AValue: TGreenNodeKind);
+    function GetByteOffset: LongInt;
+    function GetByteLength: LongInt;
+    function GetText: string;
+    procedure SetText(const AValue: string);
     procedure AppendChild(const AChild: TGreenNode);
   public
+    class operator :=(const B: Pointer): TGreenNode;
+    class operator =(const A: TGreenNode; const B: Pointer): Boolean;
+    class operator <>(const A: TGreenNode; const B: Pointer): Boolean;
+    class operator =(const A: TGreenNode; const B: TGreenNode): Boolean;
+    class operator <>(const A: TGreenNode; const B: TGreenNode): Boolean;
     constructor Create(
       const ANodeKind: TGreenNodeKind;
       const AByteOffset: LongInt;
       const AByteLength: LongInt;
       const AText: string
     );
-    destructor Destroy; override;
+    constructor CreateFacade(AOwner: TGreenTree; AIndex: LongInt);
     function NodeKindName: string;
     function ChildCount: LongInt;
     function ChildAt(const AIndex: LongInt): TGreenNode;
-    property NodeKind: TGreenNodeKind read FNodeKind;
-    property ByteOffset: LongInt read FByteOffset;
-    property ByteLength: LongInt read FByteLength;
-    property Text: string read FText;
+    function IsNil: Boolean; inline;
+    property NodeKind: TGreenNodeKind read GetNodeKind write SetNodeKind;
+    property ByteOffset: LongInt read GetByteOffset;
+    property ByteLength: LongInt read GetByteLength;
+    property Text: string read GetText write SetText;
+    property Owner: TGreenTree read FOwner;
+    property Index: LongInt read FIndex;
   end;
 
-  TGreenTree = class
-  private
-    FRootKind: TGreenRootKind;
-    FDeclaredName: string;
-    FNodeCount: LongInt;
-    FIsValid: Boolean;
-    FInterfaceUses: array of string;
-    FImplementationUses: array of string;
-    FForeignProcedureDecls: array of TForeignProcedureDecl;
-    FRootNode: TGreenNode;
-    procedure AppendInterfaceUse(const AUseName: string);
-    procedure AppendImplementationUse(const AUseName: string);
-    procedure AppendForeignProcedureDecl(
-      const AForeignProcedureDecl: TForeignProcedureDecl
-    );
-  public
-    constructor Create;
-    destructor Destroy; override;
-    function RootKindName: string;
-    function InterfaceUseCount: LongInt;
-    function InterfaceUseAt(const AIndex: LongInt): string;
-    function ImplementationUseCount: LongInt;
-    function ImplementationUseAt(const AIndex: LongInt): string;
-    function ForeignProcedureDeclCount: LongInt;
-    function ForeignProcedureDeclAt(
-      const AIndex: LongInt
-    ): TForeignProcedureDecl;
-    function GreenNodeCount: LongInt;
-    property RootKind: TGreenRootKind read FRootKind;
-    property DeclaredName: string read FDeclaredName;
-    property NodeCount: LongInt read FNodeCount;
-    property IsValid: Boolean read FIsValid;
-    property RootNode: TGreenNode read FRootNode;
-  end;
+ TGreenTree = class
+ private
+   FRootKind: TGreenRootKind;
+   FDeclaredName: string;
+   FNodeCount: LongInt;
+   FIsValid: Boolean;
+   FFrozen: Boolean;
+   FInterfaceUses: array of string;
+   FImplementationUses: array of string;
+   FForeignProcedureDecls: array of TForeignProcedureDecl;
+   FRootNode: TGreenNode;
+   { Rowan-style compact storage: FNodes[i] <-> FFacades[i] strictly 1:1 }
+   FNodes: specialize TVec<TGreenNodeData>;
+   FNodeText: string;
+   FFacades: specialize TVec<TGreenNode>;
+   { Allocate node data and facade in the tree. Returns facade. }
+   procedure AppendInterfaceUse(const AUseName: string);
+   procedure AppendImplementationUse(const AUseName: string);
+   procedure AppendForeignProcedureDecl(
+     const AForeignProcedureDecl: TForeignProcedureDecl
+   );
+   procedure CheckMutable; inline;
+ public
+   constructor Create;
+   destructor Destroy; override;
+   procedure Freeze;
+   function RootKindName: string;
+   function InterfaceUseCount: LongInt;
+   function InterfaceUseAt(const AIndex: LongInt): string;
+   function ImplementationUseCount: LongInt;
+   function ImplementationUseAt(const AIndex: LongInt): string;
+   function ForeignProcedureDeclCount: LongInt;
+   function ForeignProcedureDeclAt(
+     const AIndex: LongInt
+   ): TForeignProcedureDecl;
+   function GreenNodeCount: LongInt;
+   property IsFrozen: Boolean read FFrozen;
+   property RootKind: TGreenRootKind read FRootKind;
+   property DeclaredName: string read FDeclaredName;
+   property NodeCount: LongInt read FNodeCount;
+   property IsValid: Boolean read FIsValid;
+   property RootNode: TGreenNode read FRootNode;
+ end;
 
 function ParseGreenTree(
   const ALexer: TLexerResult;
@@ -133,7 +194,7 @@ function ParseGreenTree(
 
 function GreenNodeKindLabel(const AKind: TGreenNodeKind): string;
 function GreenNodeIsNil(const ANode: TGreenNode): Boolean;
-function GreenNodeKindNameOf(const ANode: TGreenNode): string;
+function NilGreenNode: TGreenNode; inline;
 
 implementation
 
@@ -497,14 +558,7 @@ end;
 
 function GreenNodeIsNil(const ANode: TGreenNode): Boolean;
 begin
-  Result := ANode = nil;
-end;
-
-function GreenNodeKindNameOf(const ANode: TGreenNode): string;
-begin
-  if ANode = nil then
-    Exit('unknown');
-  Result := ANode.NodeKindName;
+  Result := ANode.IsNil;
 end;
 
 function TokenLabel(const AToken: TToken): string;
@@ -765,7 +819,7 @@ begin
         CurrentToken(ALexer, ACursor),
         'identifier'
       );
-      UsesNode.Free;
+      { { UsesNode.Free; } // record, no Free needed } // owned by tree FFacades
       Exit(False);
     end;
 
@@ -817,7 +871,7 @@ begin
         CurrentToken(ALexer, ACursor),
         ';'
       );
-      UsesNode.Free;
+      { { UsesNode.Free; } // record, no Free needed } // owned by tree FFacades
       Exit(False);
     end;
   end;
@@ -1130,7 +1184,7 @@ begin
           EmitSyntaxError(ADiagnostics, ARootFileId,
             CurrentToken(ALexer, ACursor), ')');
           if Result <> nil then
-            Result.Free;
+            { Result.Free; } // record, no Free needed
           Exit(nil);
         end;
         while (ACursor < ALexer.TokenCount) and
@@ -1398,7 +1452,7 @@ begin
     Right := ParseUnaryExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
     if Right = nil then
     begin
-      Left.Free;
+      { Left.Free; } // record, no Free needed
       Exit(nil);
     end;
     Result := TGreenNode.Create(gnkBinaryExpression, OpToken.ByteOffset, 0,
@@ -1434,7 +1488,7 @@ begin
     Right := ParseMulExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
     if Right = nil then
     begin
-      Left.Free;
+      { Left.Free; } // record, no Free needed
       Exit(nil);
     end;
     Result := TGreenNode.Create(gnkBinaryExpression, OpToken.ByteOffset, 0,
@@ -1471,7 +1525,7 @@ begin
     Right := ParseAddExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
     if Right = nil then
     begin
-      Left.Free;
+      { Left.Free; } // record, no Free needed
       Exit(nil);
     end;
     Result := TGreenNode.Create(gnkBinaryExpression, OpToken.ByteOffset, 0,
@@ -1677,7 +1731,7 @@ begin
       Inc(ACursor);
       Node := TGreenNode.Create(gnkProcedureCallStatement, NameToken.ByteOffset, 0,
         NameToken.Lexeme);
-      LhsNode.Free;
+      { { LhsNode.Free; } // record, no Free needed } // owned by tree FFacades
       if (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkRParen) then
       begin
@@ -1701,7 +1755,7 @@ begin
     begin
       Node := TGreenNode.Create(gnkProcedureCallStatement, NameToken.ByteOffset, 0,
         NameToken.Lexeme);
-      LhsNode.Free;
+      { { LhsNode.Free; } // record, no Free needed } // owned by tree FFacades
       AParent.AppendChild(Node);
       Inc(ATree.FNodeCount);
     end;
@@ -1746,8 +1800,8 @@ begin
     end;
   end;
 
-  LowExpr.Free;
-  HighExpr.Free;
+  { LowExpr.Free; } // record, no Free needed
+  { HighExpr.Free; } // record, no Free needed
 end;
 
 function ParseTypeReference(
@@ -1760,6 +1814,7 @@ var
   Token: TToken;
   NameNode, ArgNode, RangeNode: TGreenNode;
   SpecArgs: string;
+  FullName: string;
   Depth: LongInt;
 begin
   if ACursor >= ALexer.TokenCount then
@@ -1769,8 +1824,7 @@ begin
   case Token.Kind of
     tkIdentifier:
       begin
-        NameNode := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
-          Length(Token.Lexeme), Token.Lexeme);
+        FullName := Token.Lexeme;
         Inc(ACursor);
 
         if (ACursor < ALexer.TokenCount) and
@@ -1778,7 +1832,8 @@ begin
         begin
           Inc(ACursor);
           Result := TGreenNode.Create(gnkArrayType, Token.ByteOffset, 0, '');
-          Result.AppendChild(NameNode);
+          Result.AppendChild(TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+            Length(FullName), FullName));
           ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
@@ -1808,7 +1863,7 @@ begin
           end;
           SpecArgs := SpecArgs + '>';
           MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
-          NameNode.FText := NameNode.FText + SpecArgs;
+          FullName := FullName + SpecArgs;
         end;
 
         while (ACursor < ALexer.TokenCount) and
@@ -1818,7 +1873,7 @@ begin
           if (ACursor < ALexer.TokenCount) and
             IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
           begin
-            NameNode.FText := NameNode.FText + '.' +
+            FullName := FullName + '.' +
               CurrentToken(ALexer, ACursor).Lexeme;
             Inc(ACursor);
           end
@@ -1826,7 +1881,8 @@ begin
             Break;
         end;
 
-        Result := NameNode;
+        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+          Length(FullName), FullName);
       end;
     tkStringKeyword, tkFileKeyword:
       begin
@@ -1868,7 +1924,7 @@ begin
             Result.AppendChild(RangeNode);
         end
         else
-          RangeNode.Free;
+          { { RangeNode.Free; } // record, no Free needed } // owned by tree FFacades
       end;
     tkSetKeyword:
       begin
@@ -1886,7 +1942,13 @@ begin
         Inc(ACursor);
         Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
         if Result <> nil then
-          Result.FText := '^' + Result.FText;
+        begin
+          FullName := '^' + Result.Text;
+          NameNode := Result;
+          Result := TGreenNode.Create(NameNode.NodeKind, NameNode.ByteOffset,
+            Length(FullName), FullName);
+          { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
+        end;
       end;
     tkSpecializeKeyword:
       begin
@@ -1914,7 +1976,11 @@ begin
           end;
           SpecArgs := SpecArgs + '>';
           MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
-          Result.FText := Result.FText + SpecArgs;
+          FullName := Result.Text + SpecArgs;
+          NameNode := Result;
+          Result := TGreenNode.Create(NameNode.NodeKind, NameNode.ByteOffset,
+            Length(FullName), FullName);
+          { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
         end;
       end;
     tkReferenceKeyword:
@@ -1942,7 +2008,7 @@ begin
             Inc(ACursor);
             NameNode := ParseTypeReference(
               ALexer, ACursor, ADiagnostics, ARootFileId);
-            NameNode.Free;
+            { { NameNode.Free; } // record, no Free needed } // owned by tree FFacades
           end;
         end;
         Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
@@ -2023,7 +2089,7 @@ begin
     begin
       EmitSyntaxError(ADiagnostics, ARootFileId,
         CurrentToken(ALexer, ACursor), ':');
-      Node.Free;
+      { Node.Free } // owned by tree FFacades
       Exit(nil);
     end;
 
@@ -2049,14 +2115,14 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'BEGIN');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(nil);
   end;
 
   if not ParseBeginBlock(ALexer, ACursor, Node, ActiveExpressionTree,
     ADiagnostics, ARootFileId) then
   begin
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(nil);
   end;
 
@@ -2381,6 +2447,7 @@ var
   FieldNode: TGreenNode;
   UsedOriginalTypeNode: Boolean;
   Nesting: LongInt;
+  MethodModifiers: string;
 
   function CloneTypeNode(const ANode: TGreenNode): TGreenNode;
   var
@@ -2580,6 +2647,7 @@ begin
                   Inc(ACursor);
                 end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                MethodModifiers := '';
                 while (ACursor < ALexer.TokenCount) and
                   (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
                    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
@@ -2678,7 +2746,7 @@ begin
               end;
             end
             else
-              RangeNode.Free;
+              { { RangeNode.Free; } // record, no Free needed } // owned by tree FFacades
           end;
         tkClassKeyword:
           begin
@@ -2799,9 +2867,9 @@ begin
                  tkConstructorKeyword, tkDestructorKeyword,
                  tkGenericKeyword, tkClassKeyword] then
               begin
+                MethodModifiers := TokenKindName(CurrentToken(ALexer, ACursor).Kind);
                 ElementNode := TGreenNode.Create(gnkClassMethod,
-                  CurrentToken(ALexer, ACursor).ByteOffset, 0,
-                  TokenKindName(CurrentToken(ALexer, ACursor).Kind));
+                  CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
                 Inc(ACursor);
                 while (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind in
@@ -2856,14 +2924,15 @@ begin
                     IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
                 begin
                   if CurrentToken(ALexer, ACursor).Kind = tkVirtualKeyword then
-                    ElementNode.FText := ElementNode.FText + ';virtual'
+                    MethodModifiers := MethodModifiers + ';virtual'
                   else if CurrentToken(ALexer, ACursor).Kind = tkOverrideKeyword then
-                    ElementNode.FText := ElementNode.FText + ';override'
+                    MethodModifiers := MethodModifiers + ';override'
                   else if CurrentToken(ALexer, ACursor).Kind = tkAbstractKeyword then
-                    ElementNode.FText := ElementNode.FText + ';virtual;abstract';
+                    MethodModifiers := MethodModifiers + ';virtual;abstract';
                   Inc(ACursor);
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end;
+                ElementNode.Text := MethodModifiers;
                 TypeNode.AppendChild(ElementNode);
                 Inc(ATree.FNodeCount);
               end
@@ -3323,7 +3392,7 @@ begin
                 ADiagnostics,
                 ARootFileId
               );
-              TypeNode.Free;
+              { { TypeNode.Free; } // record, no Free needed } // owned by tree FFacades
             end;
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
@@ -3433,6 +3502,7 @@ var
   I: LongInt;
   J: LongInt;
   TypeParamText: string;
+  FullName: string;
 begin
   Node := TGreenNode.Create(gnkProcedureDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -3441,19 +3511,19 @@ begin
   if (ACursor >= ALexer.TokenCount) or
     (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
   begin
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
   NameToken := CurrentToken(ALexer, ACursor);
-  Node.FText := NameToken.Lexeme;
+  FullName := NameToken.Lexeme;
   Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
     (NameToken.Kind = tkStar) and
     (CurrentToken(ALexer, ACursor).Kind = tkStar) then
   begin
-    Node.FText := '**';
+    FullName := '**';
     Inc(ACursor);
   end;
 
@@ -3464,7 +3534,7 @@ begin
     if (ACursor < ALexer.TokenCount) and
       IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
-      Node.FText := Node.FText + '.' + CurrentToken(ALexer, ACursor).Lexeme;
+      FullName := FullName + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
     end
     else
@@ -3492,7 +3562,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
       Inc(ACursor);
     if TypeParamText <> '' then
-      Node.FText := Node.FText + '<' + TypeParamText + '>';
+      FullName := FullName + '<' + TypeParamText + '>';
   end;
 
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
@@ -3506,7 +3576,7 @@ begin
   begin
     if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
-      Node.FText := Node.FText + ';compilerproc';
+      FullName := FullName + ';compilerproc';
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
@@ -3519,7 +3589,7 @@ begin
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
     begin
-      Node.FText := Node.FText + ';external:' +
+      FullName := FullName + ';external:' +
         DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
       Inc(ACursor);
       if (ACursor < ALexer.TokenCount) and
@@ -3531,13 +3601,14 @@ begin
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
         begin
-          Node.FText := Node.FText + ':' +
+          FullName := FullName + ':' +
             DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
           Inc(ACursor);
         end;
       end;
     end;
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    Node.Text := FullName;
     AParent.AppendChild(Node);
     Inc(ATree.FNodeCount);
     Result := True;
@@ -3668,6 +3739,7 @@ var
   I: LongInt;
   J: LongInt;
   TypeParamText: string;
+  FullName: string;
 begin
   Node := TGreenNode.Create(gnkFunctionDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -3677,19 +3749,19 @@ begin
   if (ACursor >= ALexer.TokenCount) or
     not IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
   begin
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
   NameToken := CurrentToken(ALexer, ACursor);
-  Node.FText := NameToken.Lexeme;
+  FullName := NameToken.Lexeme;
   Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
     (NameToken.Kind = tkStar) and
     (CurrentToken(ALexer, ACursor).Kind = tkStar) then
   begin
-    Node.FText := '**';
+    FullName := '**';
     Inc(ACursor);
   end;
 
@@ -3700,7 +3772,7 @@ begin
     if (ACursor < ALexer.TokenCount) and
       IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
-      Node.FText := Node.FText + '.' + CurrentToken(ALexer, ACursor).Lexeme;
+      FullName := FullName + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
     end
     else
@@ -3728,7 +3800,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
       Inc(ACursor);
     if TypeParamText <> '' then
-      Node.FText := Node.FText + '<' + TypeParamText + '>';
+      FullName := FullName + '<' + TypeParamText + '>';
   end;
 
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
@@ -3760,7 +3832,7 @@ begin
   begin
     if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
-      Node.FText := Node.FText + ';compilerproc';
+      FullName := FullName + ';compilerproc';
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
@@ -3773,7 +3845,7 @@ begin
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
     begin
-      Node.FText := Node.FText + ';external:' +
+      FullName := FullName + ';external:' +
         DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
       Inc(ACursor);
       if (ACursor < ALexer.TokenCount) and
@@ -3785,13 +3857,14 @@ begin
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
         begin
-          Node.FText := Node.FText + ':' +
+          FullName := FullName + ':' +
             DecodePascalStringLiteral(CurrentToken(ALexer, ACursor).Lexeme);
           Inc(ACursor);
         end;
       end;
     end;
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    Node.Text := FullName;
     AParent.AppendChild(Node);
     Inc(ATree.FNodeCount);
     Result := True;
@@ -4047,7 +4120,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'THEN');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4098,7 +4171,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'DO');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4157,7 +4230,7 @@ begin
     begin
       EmitSyntaxError(ADiagnostics, ARootFileId,
         CurrentToken(ALexer, ACursor), 'DO');
-      Node.Free;
+      { Node.Free } // owned by tree FFacades
       Exit(False);
     end;
 
@@ -4179,7 +4252,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), ':=');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4195,7 +4268,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'TO/DOWNTO');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
   Inc(ACursor);
@@ -4203,13 +4276,13 @@ begin
   RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
   if RHS <> nil then
     Node.AppendChild(RHS);
-  Node.FText := Direction;
+  Node.Text := Direction;
 
   if not MatchTokenSilent(ALexer, ACursor, tkDoKeyword) then
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'DO');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4245,7 +4318,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'UNTIL');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4282,7 +4355,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'DO');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4320,7 +4393,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'OF');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4371,7 +4444,7 @@ begin
     begin
       EmitSyntaxError(ADiagnostics, ARootFileId,
         CurrentToken(ALexer, ACursor), ':');
-      SelectorNode.Free;
+      { { SelectorNode.Free; } // record, no Free needed } // owned by tree FFacades
       SkipToSyncSet(ALexer, ACursor, [tkSemicolon, tkEndKeyword, tkElseKeyword, tkEOF]);
       if (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
@@ -4406,7 +4479,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'END');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Exit(False);
   end;
 
@@ -4465,7 +4538,7 @@ begin
   else if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkExceptKeyword) then
   begin
-    Node.FNodeKind := gnkTryExceptStatement;
+    Node.NodeKind := gnkTryExceptStatement;
     Inc(ACursor);
 
     if (ACursor < ALexer.TokenCount) and
@@ -4482,7 +4555,7 @@ begin
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
         begin
-          HandlerNode.FText := CurrentToken(ALexer, ACursor).Lexeme;
+          HandlerNode.Text := CurrentToken(ALexer, ACursor).Lexeme;
           Inc(ACursor);
           if MatchTokenSilent(ALexer, ACursor, tkColon) then
           begin
@@ -4528,7 +4601,7 @@ begin
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'EXCEPT/FINALLY');
-    Node.Free;
+    { Node.Free } // owned by tree FFacades
     Result := False;
   end;
 end;
@@ -4628,7 +4701,7 @@ var
             (CurrentToken(ALexer, ACursor).Kind in
               [tkIdentifier, tkIntegerLiteral]) then
           begin
-            StmtNode.FText := CurrentToken(ALexer, ACursor).Lexeme;
+            StmtNode.Text := CurrentToken(ALexer, ACursor).Lexeme;
             Inc(ACursor);
           end;
           Inc(ATree.FNodeCount);
@@ -4782,7 +4855,7 @@ var
                 ADiagnostics,
                 ARootFileId
               );
-              RHS.Free;
+              { RHS.Free; } // record, no Free needed
             end;
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
@@ -4880,7 +4953,7 @@ var
             (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
           begin
             { assignment: (expr)^.field := value }
-            StmtNode.FText := 'assign';
+            StmtNode.Text := 'assign';
             Inc(ACursor);
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
@@ -5105,18 +5178,33 @@ begin
   FDeclaredName := '';
   FNodeCount := 0;
   FIsValid := False;
+  FFrozen := False;
   FRootNode := nil;
   SetLength(FInterfaceUses, 0);
   SetLength(FImplementationUses, 0);
   SetLength(FForeignProcedureDecls, 0);
+  FNodes := specialize TVec<TGreenNodeData>.Create;
+  FFacades := specialize TVec<TGreenNode>.Create;
+  FNodeText := '';
 end;
 
 destructor TGreenTree.Destroy;
 begin
-  FRootNode.Free;
+  FFacades.Free;
+  FNodes.Free;
   inherited Destroy;
 end;
 
+procedure TGreenTree.CheckMutable;
+begin
+  // Assert-free: in production, frozen writes are silently ignored
+  // (the tree is immutable by convention after Freeze, not by runtime guard)
+end;
+
+procedure TGreenTree.Freeze;
+begin
+  FFrozen := True;
+end;
 procedure TGreenTree.AppendInterfaceUse(const AUseName: string);
 var
   NextIndex: SizeInt;
@@ -5320,60 +5408,213 @@ begin
     end;
 
     Result.FIsValid := not ADiagnostics.HasErrors;
+    Result.Freeze;
   finally
     ActiveExpressionTree := PreviousExpressionTree;
   end;
 end;
 
+class operator TGreenNode.:=(const B: Pointer): TGreenNode;
+begin
+  Result.FOwner := nil;
+  Result.FIndex := -1;
+end;
+
+class operator TGreenNode.=(const A: TGreenNode; const B: Pointer): Boolean;
+begin
+  Result := A.FIndex < 0;
+end;
+
+class operator TGreenNode.<>(const A: TGreenNode; const B: Pointer): Boolean;
+begin
+  Result := A.FIndex >= 0;
+end;
+
+class operator TGreenNode.=(const A: TGreenNode; const B: TGreenNode): Boolean;
+begin
+  Result := (A.FOwner = B.FOwner) and (A.FIndex = B.FIndex);
+end;
+
+class operator TGreenNode.<>(const A: TGreenNode; const B: TGreenNode): Boolean;
+begin
+  Result := not (A = B);
+end;
+
+function NilGreenNode: TGreenNode; inline;
+begin
+  Result.FOwner := nil;
+  Result.FIndex := -1;
+end;
+
+{**
+ * TGreenNode.Create — backward-compatible factory
+ *
+ * Directly allocates node data in ActiveExpressionTree's compact storage
+ * and registers Self as the facade in FFacades.
+ * FNodes[i] and FFacades[i] are strictly 1:1.
+ *}
 constructor TGreenNode.Create(
   const ANodeKind: TGreenNodeKind;
   const AByteOffset: LongInt;
   const AByteLength: LongInt;
   const AText: string
 );
+var
+  Data: TGreenNodeData;
+  Idx: LongInt;
 begin
-  inherited Create;
-  FNodeKind := ANodeKind;
-  FByteOffset := AByteOffset;
-  FByteLength := AByteLength;
-  FText := AText;
-  SetLength(FChildren, 0);
+  if ActiveExpressionTree <> nil then
+  begin
+    if ActiveExpressionTree.IsFrozen then
+    begin
+      FOwner := nil;
+      FIndex := -1;
+      Exit;
+    end;
+    FOwner := ActiveExpressionTree;
+
+    Data.Kind := ANodeKind;
+    Data.ByteOffset := AByteOffset;
+    Data.ByteLength := AByteLength;
+    Data.TextStart := Length(FOwner.FNodeText);
+    Data.TextLen := Length(AText);
+    Data.ChildStart := -1;
+    Data.ChildCount := 0;
+
+    FOwner.FNodeText := FOwner.FNodeText + AText;
+    Idx := FOwner.FNodes.Count;
+    FOwner.FNodes.Push(Data);
+    FIndex := Idx;
+
+    { Register Self as the facade for this index }
+    FOwner.FFacades.Push(Self);
+    Exit;
+  end;
+
+  { Fallback: no active tree (should not happen in normal parsing) }
+  FOwner := nil;
+  FIndex := -1;
 end;
 
-destructor TGreenNode.Destroy;
-var
-  Index: LongInt;
+constructor TGreenNode.CreateFacade(AOwner: TGreenTree; AIndex: LongInt);
 begin
-  for Index := 0 to Length(FChildren) - 1 do
-    FChildren[Index].Free;
-  SetLength(FChildren, 0);
-  inherited Destroy;
+  FOwner := AOwner;
+  FIndex := AIndex;
+end;
+
+function TGreenNode.IsNil: Boolean;
+begin
+  Result := FIndex < 0;
 end;
 
 procedure TGreenNode.AppendChild(const AChild: TGreenNode);
 var
-  NextIndex: SizeInt;
+  D: TGreenNodeData;
 begin
-  NextIndex := Length(FChildren);
-  SetLength(FChildren, NextIndex + 1);
-  FChildren[NextIndex] := AChild;
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
+    or (AChild = nil) or FOwner.IsFrozen then
+    Exit;
+  D := FOwner.FNodes[FIndex];
+  if D.ChildStart < 0 then
+  begin
+    D.ChildStart := AChild.FIndex;
+    D.ChildCount := 1;
+  end
+  else
+    Inc(D.ChildCount);
+  FOwner.FNodes[FIndex] := D;
 end;
 
 function TGreenNode.NodeKindName: string;
 begin
-  Result := GreenNodeKindLabel(FNodeKind);
+  Result := GreenNodeKindLabel(GetNodeKind);
 end;
+function TGreenNode.GetNodeKind: TGreenNodeKind;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit(gnkUnknown);
+  Result := FOwner.FNodes[FIndex].Kind;
+end;
+
+procedure TGreenNode.SetNodeKind(AValue: TGreenNodeKind);
+var
+  D: TGreenNodeData;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit;
+  if FOwner.IsFrozen then
+    Exit;
+  D := FOwner.FNodes[FIndex];
+  D.Kind := AValue;
+  FOwner.FNodes[FIndex] := D;
+end;
+
+function TGreenNode.GetByteOffset: LongInt;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit(0);
+  Result := FOwner.FNodes[FIndex].ByteOffset;
+end;
+
+function TGreenNode.GetByteLength: LongInt;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit(0);
+  Result := FOwner.FNodes[FIndex].ByteLength;
+end;
+
+function TGreenNode.GetText: string;
+var
+  D: TGreenNodeData;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit('');
+  D := FOwner.FNodes[FIndex];
+  if (D.TextStart >= 0) and (D.TextLen > 0)
+    and (D.TextStart + D.TextLen <= Length(FOwner.FNodeText)) then
+    Result := Copy(FOwner.FNodeText, D.TextStart + 1, D.TextLen)
+  else
+    Result := '';
+end;
+
+procedure TGreenNode.SetText(const AValue: string);
+var
+  D: TGreenNodeData;
+begin
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit;
+  if FOwner.IsFrozen then
+    Exit;
+  D := FOwner.FNodes[FIndex];
+  D.TextStart := Length(FOwner.FNodeText);
+  D.TextLen := Length(AValue);
+  FOwner.FNodeText := FOwner.FNodeText + AValue;
+  FOwner.FNodes[FIndex] := D;
+end;
+
 
 function TGreenNode.ChildCount: LongInt;
 begin
-  Result := Length(FChildren);
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit(0);
+  Result := FOwner.FNodes[FIndex].ChildCount;
 end;
 
 function TGreenNode.ChildAt(const AIndex: LongInt): TGreenNode;
+var
+  D: TGreenNodeData;
+  ChildIdx: LongInt;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FChildren)) then
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
     Exit(nil);
-  Result := FChildren[AIndex];
+  D := FOwner.FNodes[FIndex];
+  if (AIndex < 0) or (AIndex >= D.ChildCount) or (D.ChildStart < 0) then
+    Exit(nil);
+  ChildIdx := D.ChildStart + AIndex;
+  if (ChildIdx >= 0) and (ChildIdx < FOwner.FFacades.Count) then
+    Result := FOwner.FFacades[ChildIdx]
+  else
+    Result := nil;
 end;
 
 end.

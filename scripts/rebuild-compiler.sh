@@ -41,6 +41,7 @@ fpc "$ROOT/tools/stage0/nextpas.pas" \
   -Fu"$ROOT/compiler/syntax" \
   -Fu"$ROOT/compiler/toolchain" \
   -Fu"$ROOT/compiler/targets" \
+  -Fu"$ROOT/compiler/query" \
   -Fu"$ROOT/rtl/core/base" \
   -Fu"$ROOT/rtl/core/text" \
   -Fu"$ROOT/core/src" \

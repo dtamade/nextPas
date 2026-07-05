@@ -129,14 +129,15 @@ constructor THIRLlvmEmitter.Create(AModule: THIRModule;
 begin
   inherited Create;
   FModule := AModule;
+  { 从参数读取，如果为空则使用 x86_64-linux 默认值 }
   if ALlvmTriple <> '' then
     FLlvmTriple := ALlvmTriple
   else
-    FLlvmTriple := DEFAULT_LLVM_TRIPLE;
+    FLlvmTriple := 'x86_64-unknown-linux-gnu';
   if ALlvmDataLayout <> '' then
     FLlvmDataLayout := ALlvmDataLayout
   else
-    FLlvmDataLayout := DEFAULT_LLVM_DATALAYOUT;
+    FLlvmDataLayout := 'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64';
   FLineCount := 0;
   FGlobalRefCount := 0;
   FNeedsWriteInt := False;
@@ -394,7 +395,7 @@ end;
 
 procedure THIRLlvmEmitter.EmitInstr(const AInstr: THIRInstr);
 var
-  LlvmType, Op: string;
+  LlvmType, Op, LTruncVal: string;
   I: LongInt;
 begin
   if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
@@ -943,10 +944,23 @@ begin
       begin
         if Length(AInstr.Operands) >= 3 then
         begin
-          Emit('  call void @np_memset(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ')');
+          if AInstr.ResultId > 0 then
+          begin
+            Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc i64 ' +
+              ValueRef(AInstr.Operands[2].ValueId) + ' to i8');
+            Emit('  call void @np_memset(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
+              ValueRef(AInstr.ResultId) + ', i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
+          end
+          else
+          begin
+            { No result ID - use inline trunc }
+            Emit('  call void @np_memset(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
+              'trunc (i64 ' + ValueRef(AInstr.Operands[2].ValueId) + ' to i8), i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
+          end;
           FNeedsMemset := True;
         end;
       end
@@ -1193,6 +1207,12 @@ begin
       Emit('  call void @np_raise()');
       Emit('  unreachable');
     end;
+    hikConstFloat:
+    begin
+      { Emit float constant as hex-encoded double for LLVM IR }
+      Emit('  ' + ValueRef(AInstr.ResultId) + ' = fadd double 0.0, ' +
+        FormatFloat('0.0################', AInstr.FloatValue));
+    end;
   end;
 end;
 
@@ -1375,6 +1395,8 @@ var
   I: LongInt;
   G: THIRGlobal;
   LFunc: THIRFunction;
+  LAlreadyEmitted: Boolean;
+  J: LongInt;
 begin
   FLineCount := 0;
   FStrConstCount := 0;
@@ -1430,6 +1452,19 @@ begin
   for I := 0 to FModule.FunctionCount - 1 do
   begin
     LFunc := FModule.FunctionAt(I);
+    { Skip duplicate function definitions }
+    if I > 0 then
+    begin
+      LAlreadyEmitted := False;
+      for J := 0 to I - 1 do
+        if SameText(FModule.FunctionAt(J).Name, LFunc.Name) then
+        begin
+          LAlreadyEmitted := True;
+          Break;
+        end;
+      if LAlreadyEmitted then
+        Continue;
+    end;
     EmitFunction(LFunc);
   end;
 
