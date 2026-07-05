@@ -232,7 +232,7 @@ begin
   FSeenMethod := AReq.Method;
   FSeenPath := AReq.Url.Path;
   LHeaders := NewHeaders;
-  LHeaders.Set_('x-transport', 'mock');
+  LHeaders.SetHeader('x-transport', 'mock');
   Result := NewResponse(HTTP_STATUS_CREATED, LHeaders, nil);
 end;
 
@@ -307,16 +307,16 @@ var
 begin
   LH := NewHeaders;
   Check(LH <> nil, 'NewHeaders returns non-nil');
-  LH.Set_('x-foo', 'bar');
+  LH.SetHeader('x-foo', 'bar');
   CheckEqual('bar', LH.Get('x-foo'), 'Get after Set');
   Check(LH.Has('x-foo'), 'Has returns true');
   Check(not LH.Has('x-missing'), 'Has returns false for missing');
   CheckEqual(Int64(1), Int64(LH.Count), 'Count = 1');
-  LH.Set_('x-baz', 'qux');
+  LH.SetHeader('x-baz', 'qux');
   CheckEqual(Int64(2), Int64(LH.Count), 'Count = 2');
   LClone := LH.Clone;
   CheckEqual('bar', LClone.Get('x-foo'), 'Clone preserves values');
-  LH.Del('x-foo');
+  LH.Remove('x-foo');
   Check(not LH.Has('x-foo'), 'Del removes header');
   CheckEqual(Int64(1), Int64(LH.Count), 'Count after Del');
   { Clone is independent }
@@ -448,7 +448,7 @@ var
   LH: IHttpHeaders;
 begin
   LH := NewHeaders;
-  LH.Set_('x-test', 'val');
+  LH.SetHeader('x-test', 'val');
   LResp := NewResponse(HTTP_STATUS_CREATED, LH, nil);
   Check(LResp <> nil, 'NewResponse returns non-nil');
   CheckEqual(Int64(201), Int64(LResp.StatusCode), 'StatusCode = 201');
@@ -1063,7 +1063,7 @@ begin
     LGotTrailerValue := AReq.Headers.Get('X-Test');
 
     LRespBody := 'ok';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LRespBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LRespBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LRespBody[1], SizeUInt(Length(LRespBody)));
   end);
@@ -1154,7 +1154,7 @@ begin
     LHasAuth := AReq.Headers.Has('X-Auth-Context');
 
     LRespBody := 'ok';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LRespBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LRespBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LRespBody[1], SizeUInt(Length(LRespBody)));
   end);

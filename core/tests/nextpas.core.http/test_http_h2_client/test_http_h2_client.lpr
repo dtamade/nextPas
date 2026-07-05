@@ -77,7 +77,7 @@ type
   TMockTLSConnection = class(TBaseSSLConnection, ISSLClientConnection,
     ISSLClientALPNConnection, IMockTLSProbe)
   private
-    FTransport: TStream;
+    FTransport: IStream;
     FSelectedALPN: string;
     FObservedALPN: string;
     FServerName: string;
@@ -108,7 +108,7 @@ type
     function DoGetState: string; override;
     function DoGetNativeHandle: Pointer; override;
   public
-    constructor Create(AContext: ISSLContext; ATransport: TStream;
+    constructor Create(AContext: ISSLContext; ATransport: IStream;
       const ASelectedALPN: string); reintroduce;
     procedure SetServerName(const AServerName: string);
     function GetServerName: string;
@@ -137,11 +137,11 @@ type
     procedure SetPreferredVersion(AVersion: TSSLProtocolVersion);
     function GetPreferredVersion: TSSLProtocolVersion;
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string;
       const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream;
+    procedure LoadPrivateKey(AStream: IStream;
       const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string;
@@ -183,7 +183,7 @@ type
     function GetCertificatePinningEnabled: Boolean;
     procedure ClearCertificatePins;
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     function IsValid: Boolean;
   end;
 
@@ -579,7 +579,7 @@ end;
 { TMockTLSConnection }
 
 constructor TMockTLSConnection.Create(AContext: ISSLContext;
-  ATransport: TStream; const ASelectedALPN: string);
+  ATransport: IStream; const ASelectedALPN: string);
 begin
   inherited Create(AContext);
   FTransport := ATransport;
@@ -634,7 +634,7 @@ end;
 
 procedure TMockTLSConnection.DoClose;
 begin
-  FreeAndNil(FTransport);
+  FTransport := nil;
 end;
 
 function TMockTLSConnection.DoRenegotiate: Boolean;
@@ -807,7 +807,7 @@ procedure TMockTLSContext.LoadCertificate(const AFileName: string);
 begin
 end;
 
-procedure TMockTLSContext.LoadCertificate(AStream: TStream);
+procedure TMockTLSContext.LoadCertificate(AStream: IStream);
 begin
 end;
 
@@ -820,7 +820,7 @@ procedure TMockTLSContext.LoadPrivateKey(const AFileName: string;
 begin
 end;
 
-procedure TMockTLSContext.LoadPrivateKey(AStream: TStream;
+procedure TMockTLSContext.LoadPrivateKey(AStream: IStream;
   const APassword: string);
 begin
 end;
@@ -987,7 +987,7 @@ begin
   Result := nil;
 end;
 
-function TMockTLSContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TMockTLSContext.CreateConnection(AStream: IStream): ISSLConnection;
 var
   LConn: TMockTLSConnection;
 begin
