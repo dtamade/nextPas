@@ -12,6 +12,9 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv;
 
+var
+  T: TTestSuite;
+
 function HexNibble(const ACh: Char): Byte;
 begin
   case ACh of
@@ -278,30 +281,31 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.hpack') do
-  begin
-    Run('Decode first request without Huffman',
-      @TestDecodeFirstRequestWithoutHuffman);
-    Run('Decode first request with Huffman',
-      @TestDecodeFirstRequestWithHuffman);
-    Run('Encode first request with Huffman',
-      @TestEncodeFirstRequestWithHuffman);
-    Run('Dynamic table can reference decoded entry',
-      @TestDynamicTableCanReferenceDecodedEntry);
-    Run('Decode RFC Huffman request sequence',
-      @TestDecodeRfcHuffmanRequestSequence);
-    Run('Encode RFC Huffman request sequence',
-      @TestEncodeRfcHuffmanRequestSequence);
-    Run('Encode dynamic table size update',
-      @TestEncodeDynamicTableSizeUpdate);
-    Run('Decode dynamic table size update evicts entries',
-      @TestDecodeDynamicTableSizeUpdateEvictsEntries);
-    Run('Decode rejects oversized dynamic table update',
-      @TestDecodeRejectsOversizedDynamicTableUpdate);
-    Run('Literal without indexing does not update dynamic table',
-      @TestLiteralWithoutIndexingDoesNotUpdateDynamicTable);
-    Run('Never-indexed literal does not update dynamic table',
-      @TestNeverIndexedLiteralDoesNotUpdateDynamicTable);
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.hpack');
+  T.Test('Decode first request without Huffman',
+    @TestDecodeFirstRequestWithoutHuffman);
+  T.Test('Decode first request with Huffman',
+    @TestDecodeFirstRequestWithHuffman);
+  T.Test('Encode first request with Huffman',
+    @TestEncodeFirstRequestWithHuffman);
+  T.Test('Dynamic table can reference decoded entry',
+    @TestDynamicTableCanReferenceDecodedEntry);
+  T.Test('Decode RFC Huffman request sequence',
+    @TestDecodeRfcHuffmanRequestSequence);
+  T.Test('Encode RFC Huffman request sequence',
+    @TestEncodeRfcHuffmanRequestSequence);
+  T.Test('Encode dynamic table size update',
+    @TestEncodeDynamicTableSizeUpdate);
+  T.Test('Decode dynamic table size update evicts entries',
+    @TestDecodeDynamicTableSizeUpdateEvictsEntries);
+  T.Test('Decode rejects oversized dynamic table update',
+    @TestDecodeRejectsOversizedDynamicTableUpdate);
+  T.Test('Literal without indexing does not update dynamic table',
+    @TestLiteralWithoutIndexingDoesNotUpdateDynamicTable);
+  T.Test('Never-indexed literal does not update dynamic table',
+    @TestNeverIndexedLiteralDoesNotUpdateDynamicTable);
+  if not T.Run then Halt(1);
+end.
     Summary;
   end;
 end.

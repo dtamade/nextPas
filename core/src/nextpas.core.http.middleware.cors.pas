@@ -22,39 +22,69 @@ function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.text.conv;
 
-{ Split AllowOrigins by comma and check if AOrigin is in the list.
-  '*' matches everything.  Comparison is case-insensitive. }
-function IsOriginAllowed(const AAllowOrigins, AOrigin: string): Boolean;
+type
+  TCorsState = record
+    Wildcard: Boolean;
+    Origins: array of string;
+    AllowMethods: string;
+    AllowHeaders: string;
+    MaxAge: Int32;
+    AllowCredentials: Boolean;
+  end;
+
+function ParseOrigins(const AAllowOrigins: string): TCorsState;
 var
   LStart, LEnd, LLen: Integer;
   LToken: string;
+  LCount: Integer;
 begin
-  if AAllowOrigins = '*' then
-    Exit(True);
-  LLen := Length(AAllowOrigins);
-  LStart := 1;
-  while LStart <= LLen do
+  Result.Wildcard := AAllowOrigins = '*';
+  Result.Origins := nil;
+  LCount := 0;
+
+  if not Result.Wildcard then
   begin
-    { skip leading whitespace / commas }
-    while (LStart <= LLen) and (AAllowOrigins[LStart] in [' ', ',']) do
-      Inc(LStart);
-    if LStart > LLen then
-      Break;
-    LEnd := LStart;
-    while (LEnd <= LLen) and not (AAllowOrigins[LEnd] in [',']) do
-      Inc(LEnd);
-    LToken := Trim(Copy(AAllowOrigins, LStart, LEnd - LStart));
-    if LToken <> '' then
+    LLen := Length(AAllowOrigins);
+    LStart := 1;
+    while LStart <= LLen do
     begin
-      if LowerCase(LToken) = LowerCase(AOrigin) then
-        Exit(True);
+      while (LStart <= LLen) and (AAllowOrigins[LStart] in [' ', ',']) do
+        Inc(LStart);
+      if LStart > LLen then
+        Break;
+      LEnd := LStart;
+      while (LEnd <= LLen) and not (AAllowOrigins[LEnd] in [',']) do
+        Inc(LEnd);
+      LToken := Trim(Copy(AAllowOrigins, LStart, LEnd - LStart));
+      if LToken <> '' then
+      begin
+        if LCount >= Length(Result.Origins) then
+          SetLength(Result.Origins, LCount + 4);
+        Result.Origins[LCount] := LowerCase(LToken);
+        Inc(LCount);
+      end;
+      LStart := LEnd + 1;
     end;
-    LStart := LEnd + 1;
+    SetLength(Result.Origins, LCount);
   end;
+end;
+
+function IsOriginAllowed(const AState: TCorsState; const AOrigin: string): Boolean;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  if AState.Wildcard then
+    Exit(True);
+  LLower := LowerCase(AOrigin);
+  for LI := 0 to High(AState.Origins) do
+    if AState.Origins[LI] = LLower then
+      Exit(True);
   Result := False;
 end;
 
@@ -68,13 +98,20 @@ begin
 end;
 
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
+var
+  LState: TCorsState;
 begin
+  LState := ParseOrigins(AOptions.AllowOrigins);
+  LState.AllowMethods := AOptions.AllowMethods;
+  LState.AllowHeaders := AOptions.AllowHeaders;
+  LState.MaxAge := AOptions.MaxAge;
+  LState.AllowCredentials := AOptions.AllowCredentials;
+
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LOrigin, LAllowOrigin: string;
-      LIsWildcard: Boolean;
     begin
       LOrigin := AReq.Headers.Get('Origin');
       if LOrigin = '' then
@@ -83,15 +120,13 @@ begin
         Exit;
       end;
 
-      LIsWildcard := AOptions.AllowOrigins = '*';
-
       { Determine the Access-Control-Allow-Origin value to emit.
         W3C rule: must NOT be '*' when AllowCredentials is true;
         the browser will reject that combination. }
-      if AOptions.AllowCredentials then
+      if LState.AllowCredentials then
       begin
         { Credentials mode: always echo the concrete Origin. }
-        if LIsWildcard or IsOriginAllowed(AOptions.AllowOrigins, LOrigin) then
+        if LState.Wildcard or IsOriginAllowed(LState, LOrigin) then
           LAllowOrigin := LOrigin
         else
           LAllowOrigin := '';
@@ -99,9 +134,9 @@ begin
       else
       begin
         { Non-credentials mode. }
-        if LIsWildcard then
+        if LState.Wildcard then
           LAllowOrigin := '*'
-        else if IsOriginAllowed(AOptions.AllowOrigins, LOrigin) then
+        else if IsOriginAllowed(LState, LOrigin) then
           LAllowOrigin := LOrigin
         else
           LAllowOrigin := '';
@@ -122,11 +157,11 @@ begin
       if LAllowOrigin <> '*' then
         AW.Headers.SetHeader('Vary', 'Origin');
 
-      AW.Headers.SetHeader('Access-Control-Allow-Methods', AOptions.AllowMethods);
-      AW.Headers.SetHeader('Access-Control-Allow-Headers', AOptions.AllowHeaders);
-      if AOptions.MaxAge > 0 then
-        AW.Headers.SetHeader('Access-Control-Max-Age', IntToStr(Int64(AOptions.MaxAge)));
-      if AOptions.AllowCredentials then
+      AW.Headers.SetHeader('Access-Control-Allow-Methods', LState.AllowMethods);
+      AW.Headers.SetHeader('Access-Control-Allow-Headers', LState.AllowHeaders);
+      if LState.MaxAge > 0 then
+        AW.Headers.SetHeader('Access-Control-Max-Age', IntToStr(Int64(LState.MaxAge)));
+      if LState.AllowCredentials then
         AW.Headers.SetHeader('Access-Control-Allow-Credentials', 'true');
 
       { Preflight: OPTIONS with Origin -> 204, don't call next }

@@ -68,6 +68,7 @@ uses
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
+  nextpas.core.text.conv,
   nextpas.core.text.utf8,
   nextpas.core.websocket.base,
   nextpas.core.net.intf;
@@ -106,18 +107,6 @@ class function TWebSocketOptions.Default: TWebSocketOptions;
 begin
   Result.MaxFrameSize := WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxMessageSize := WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
-end;
-
-function LowerCase(const S: string): string;
-var
-  I: Integer;
-begin
-  SetLength(Result, Length(S));
-  for I := 1 to Length(S) do
-    if (S[I] >= 'A') and (S[I] <= 'Z') then
-      Result[I] := Chr(Ord(S[I]) + 32)
-    else
-      Result[I] := S[I];
 end;
 
 function IsOWS(const ACh: Char): Boolean;

@@ -98,6 +98,7 @@ type
     IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
+    FPoolLock: TRTLCriticalSection;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
@@ -366,7 +367,9 @@ end;
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
-    pekUnsupportedTransferCoding,
+    pekNone:
+      Result := HTTP_STATUS_BAD_REQUEST;
+    pekUnsupportedTransferCoding:
       Result := HTTP_STATUS_NOT_IMPLEMENTED;
   else
     Result := HTTP_STATUS_BAD_REQUEST;
@@ -1962,12 +1965,14 @@ begin
   FOptions := AOptions;
   if FOptions.MaxPoolSize <= 0 then
     FOptions.MaxPoolSize := 64;
+  InitCriticalSection(FPoolLock);
   FPoolCount := 0;
 end;
 
 destructor TH1ClientTransport.Destroy;
 begin
   PoolClear;
+  DoneCriticalSection(FPoolLock);
   inherited Destroy;
 end;
 
@@ -2001,47 +2006,62 @@ var
   LI: Int32;
 begin
   Result := nil;
-  for LI := 0 to FPoolCount - 1 do
-    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
-    begin
-      Result := FPool[LI].Conn;
-      FPool[LI] := FPool[FPoolCount - 1];
-      Dec(FPoolCount);
-      if PooledConnectionIsReusable(Result) then
+  EnterCriticalSection(FPoolLock);
+  try
+    for LI := 0 to FPoolCount - 1 do
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+      begin
+        Result := FPool[LI].Conn;
+        FPool[LI] := FPool[FPoolCount - 1];
+        Dec(FPoolCount);
+        if PooledConnectionIsReusable(Result) then
+          Exit;
+        Result.Close;
+        Result := nil;
         Exit;
-      Result.Close;
-      Result := nil;
-      Exit;
-    end;
+      end;
+  finally
+    LeaveCriticalSection(FPoolLock);
+  end;
 end;
 
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
 begin
-  if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
-  begin
-    AConn.Close;
-    Exit;
+  EnterCriticalSection(FPoolLock);
+  try
+    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+    begin
+      AConn.Close;
+      Exit;
+    end;
+    AConn.SetReadDeadline(TDeadline.Infinite);
+    AConn.SetWriteDeadline(TDeadline.Infinite);
+    if FPoolCount >= Length(FPool) then
+      SetLength(FPool, FPoolCount + 4);
+    FPool[FPoolCount].Host := AHost;
+    FPool[FPoolCount].Port := APort;
+    FPool[FPoolCount].Conn := AConn;
+    Inc(FPoolCount);
+  finally
+    LeaveCriticalSection(FPoolLock);
   end;
-  AConn.SetReadDeadline(TDeadline.Infinite);
-  AConn.SetWriteDeadline(TDeadline.Infinite);
-  if FPoolCount >= Length(FPool) then
-    SetLength(FPool, FPoolCount + 4);
-  FPool[FPoolCount].Host := AHost;
-  FPool[FPoolCount].Port := APort;
-  FPool[FPoolCount].Conn := AConn;
-  Inc(FPoolCount);
 end;
 
 procedure TH1ClientTransport.PoolClear;
 var
   LI: Int32;
 begin
-  for LI := 0 to FPoolCount - 1 do
-    if FPool[LI].Conn <> nil then
-      FPool[LI].Conn.Close;
-  FPoolCount := 0;
-  SetLength(FPool, 0);
+  EnterCriticalSection(FPoolLock);
+  try
+    for LI := 0 to FPoolCount - 1 do
+      if FPool[LI].Conn <> nil then
+        FPool[LI].Conn.Close;
+    FPoolCount := 0;
+    SetLength(FPool, 0);
+  finally
+    LeaveCriticalSection(FPoolLock);
+  end;
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;

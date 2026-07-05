@@ -202,10 +202,12 @@ var
   LNorm: string;
   LI: Int32;
 begin
+  // Fast path: direct match (handles already-normalized names)
   for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = AName then
       Exit(LI);
 
+  // Only normalize if needed (uppercase letters present)
   if not NeedsNormalize(AName) then
     Exit(-1);
 

@@ -15,6 +15,9 @@ uses
   nextpas.core.test,
   nextpas.core.http.impl.h2.hpack.huffman;
 
+var
+  T: TTestSuite;
+
 function HexNibble(const ACh: Char): Byte;
 begin
   case ACh of
@@ -352,30 +355,28 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.hpack') do
-  begin
-    { Roundtrip tests }
-    Run('RFC Appendix C string vectors', @TestRfcAppendixCStringVectors);
-    Run('Known roundtrips', @TestKnownRoundtrips);
-    Run('Single byte roundtrips', @TestSingleByteRoundtrips);
-    Run('Empty string', @TestEmptyString);
-    Run('Long string (500 A-Z)', @TestLongString);
-    Run('Compression ratio', @TestCompressionRatio);
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.hpack');
+  { Roundtrip tests }
+  T.Test('RFC Appendix C string vectors', @TestRfcAppendixCStringVectors);
+  T.Test('Known roundtrips', @TestKnownRoundtrips);
+  T.Test('Single byte roundtrips', @TestSingleByteRoundtrips);
+  T.Test('Empty string', @TestEmptyString);
+  T.Test('Long string (500 A-Z)', @TestLongString);
+  T.Test('Compression ratio', @TestCompressionRatio);
 
-    { Error handling }
-    Run('Invalid padding raises', @TestInvalidPaddingRaises);
-    Run('Partial 1s padding raises', @TestPartial1sPaddingRaises);
-    Run('Limited decode truncation', @TestLimitedDecode);
-    Run('DecodeView roundtrip', @TestDecodeViewRoundtrip);
-    Run('DecodeView raw inline name/value', @TestDecodeViewRawInlineNameValue);
-    Run('DecodeView dynamic table reuse', @TestDecodeViewDynamicTableReuse);
-    Run('Reject dynamic table size update after header representation',
-      @TestRejectsDynamicTableSizeUpdateAfterHeaderRepresentation);
-    Run('Reject dynamic table size update above negotiated max',
-      @TestRejectsDynamicTableSizeUpdateAboveMax);
-    Run('Reject dynamic table size update UInt32 overflow',
-      @TestRejectsDynamicTableSizeUpdateUInt32Overflow);
+  { Error handling }
+  T.Test('Invalid padding raises', @TestInvalidPaddingRaises);
+  T.Test('Partial 1s padding raises', @TestPartial1sPaddingRaises);
+  T.Test('Limited decode truncation', @TestLimitedDecode);
+  T.Test('DecodeView roundtrip', @TestDecodeViewRoundtrip);
+  T.Test('DecodeView raw inline name/value', @TestDecodeViewRawInlineNameValue);
+  T.Test('DecodeView dynamic table reuse', @TestDecodeViewDynamicTableReuse);
+  T.Test('Reject dynamic table size update after header representation',
+    @TestRejectsDynamicTableSizeUpdateAfterHeaderRepresentation);
+  T.Test('Reject dynamic table size update above negotiated max',
+    @TestRejectsDynamicTableSizeUpdateAboveMax);
+  T.Test('Reject dynamic table size update UInt32 overflow',
+    @TestRejectsDynamicTableSizeUpdateUInt32Overflow);
 
-    Summary;
-  end;
+  if not T.Run then Halt(1);
 end.

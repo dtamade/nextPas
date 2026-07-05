@@ -14,6 +14,9 @@ uses
   nextpas.core.http.impl.h2.types,
   nextpas.core.test;
 
+var
+  T: TTestSuite;
+
 function BytesToAnsiString(const ABytes: TBytes): AnsiString;
 begin
   if Length(ABytes) = 0 then
@@ -1055,91 +1058,89 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.stream') do
-  begin
-    Run('Headers with END_STREAM decode and transition',
-      @TestHeadersWithEndStreamDecodeAndTransition);
-    Run('Headers and CONTINUATION assemble header block',
-      @TestHeadersAndContinuationAssembleHeaderBlock);
-    Run('Body reader releases flow credits and window overflow resets stream',
-      @TestBodyReaderReleasesFlowCreditsAndWindowOverflowResetsStream);
-    Run('Window update restores write capacity and local END_STREAM closes write side',
-      @TestWindowUpdateRestoresWriteCapacityAndLocalEndStreamClosesWriteSide);
-    Run('Reset discards pending buffers and reservations',
-      @TestResetDiscardsPendingBuffersAndReservations);
-    { -- New tests: state transitions -- }
-    Run('Idle stream starts with correct state',
-      @TestIdleStreamState);
-    Run('Cannot send data before headers on idle stream',
-      @TestIdleStreamCannotWriteData);
-    Run('Headers without END_STREAM creates open stream',
-      @TestHeadersWithoutEndStreamTransitionsToOpen);
-    Run('Headers with PRIORITY flag parses payload',
-      @TestHeadersWithPriorityFlag);
-    Run('Headers with PADDED flag parses padding',
-      @TestHeadersWithPaddedFlag);
-    Run('Headers zero padding is accepted',
-      @TestHeadersZeroPadding);
-    Run('Cannot send data on half closed local stream',
-      @TestCanWriteDataAfterStateChange);
-    { -- New tests: padding processing -- }
-    Run('DATA with PADDED flag strips padding bytes',
-      @TestDataPaddedFlag);
-    Run('DATA with zero padding still delivers payload',
-      @TestDataZeroPadding);
-    { -- New tests: RST_STREAM handling -- }
-    Run('RST_STREAM on open stream transitions to closed',
-      @TestRstStreamOnOpenStream);
-    Run('Multiple CONTINUATION fragments assemble',
-      @TestMultipleContinuationFragments);
-    Run('CONTINUATION without prior HEADERS is rejected',
-      @TestContinuationWithoutHeaders);
-    { -- New tests: flow control -- }
-    Run('Reserve beyond stream capacity does not reduce capacity',
-      @TestReserveBeyondStreamCapacity);
-    Run('CommitSend exceeds reserved raises',
-      @TestCommitSendExceedsReserved);
-    { -- New tests: body reader -- }
-    Run('Body reader on empty stream yields no bytes',
-      @TestBodyReaderEmpty);
-    Run('DiscardUnreadBody releases flow credits',
-      @TestDiscardUnreadBody);
-    { -- New tests: trailers -- }
-    Run('Trailers stored separately from headers',
-      @TestTrailersStoredSeparately);
-    Run('HEADERS after END_STREAM are rejected',
-      @TestHeadersAfterEndStreamResetStream);
-    Run('Second trailer section is rejected',
-      @TestSecondTrailerSectionResetStream);
-    Run('Pseudo trailer header is rejected',
-      @TestTrailerPseudoHeaderResetStream);
-    Run('Content-Length trailer header is rejected',
-      @TestTrailerContentLengthResetStream);
-    Run('Transfer-Encoding trailer header is rejected',
-      @TestTrailerTransferEncodingResetStream);
-    Run('Host trailer header is rejected',
-      @TestTrailerHostResetStream);
-    { -- New tests: pending response body -- }
-    Run('Pending response body set and get',
-      @TestPendingResponseBody);
-    { -- New tests: flow credit management -- }
-    Run('TakePendingWindowUpdate returns accumulated credits',
-      @TestTakePendingWindowUpdate);
-    Run('ApplyPeerInitialWindowSize adjusts stream window',
-      @TestApplyPeerInitialWindowSize);
-    { -- New tests: CAN_WRITE state -- }
-    Run('CanWriteData reflects stream state',
-      @TestCanWriteDataReflectsState);
-    { -- New tests: IH2StreamControl -- }
-    Run('Stream implements IH2StreamControl',
-      @TestImplementsIH2StreamControl);
-    Run('Stream has correct stream ID',
-      @TestStreamID);
-    { -- New tests: duplicate frame handling -- }
-    Run('OnData before OnHeaders resets stream',
-      @TestDataBeforeHeaders);
-    Run('Empty HPACK block does not set headers',
-      @TestEmptyHeadersBlock);
-    Summary;
-  end;
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.stream');
+  T.Test('Headers with END_STREAM decode and transition',
+    @TestHeadersWithEndStreamDecodeAndTransition);
+  T.Test('Headers and CONTINUATION assemble header block',
+    @TestHeadersAndContinuationAssembleHeaderBlock);
+  T.Test('Body reader releases flow credits and window overflow resets stream',
+    @TestBodyReaderReleasesFlowCreditsAndWindowOverflowResetsStream);
+  T.Test('Window update restores write capacity and local END_STREAM closes write side',
+    @TestWindowUpdateRestoresWriteCapacityAndLocalEndStreamClosesWriteSide);
+  T.Test('Reset discards pending buffers and reservations',
+    @TestResetDiscardsPendingBuffersAndReservations);
+  { -- New tests: state transitions -- }
+  T.Test('Idle stream starts with correct state',
+    @TestIdleStreamState);
+  T.Test('Cannot send data before headers on idle stream',
+    @TestIdleStreamCannotWriteData);
+  T.Test('Headers without END_STREAM creates open stream',
+    @TestHeadersWithoutEndStreamTransitionsToOpen);
+  T.Test('Headers with PRIORITY flag parses payload',
+    @TestHeadersWithPriorityFlag);
+  T.Test('Headers with PADDED flag parses padding',
+    @TestHeadersWithPaddedFlag);
+  T.Test('Headers zero padding is accepted',
+    @TestHeadersZeroPadding);
+  T.Test('Cannot send data on half closed local stream',
+    @TestCanWriteDataAfterStateChange);
+  { -- New tests: padding processing -- }
+  T.Test('DATA with PADDED flag strips padding bytes',
+    @TestDataPaddedFlag);
+  T.Test('DATA with zero padding still delivers payload',
+    @TestDataZeroPadding);
+  { -- New tests: RST_STREAM handling -- }
+  T.Test('RST_STREAM on open stream transitions to closed',
+    @TestRstStreamOnOpenStream);
+  T.Test('Multiple CONTINUATION fragments assemble',
+    @TestMultipleContinuationFragments);
+  T.Test('CONTINUATION without prior HEADERS is rejected',
+    @TestContinuationWithoutHeaders);
+  { -- New tests: flow control -- }
+  T.Test('Reserve beyond stream capacity does not reduce capacity',
+    @TestReserveBeyondStreamCapacity);
+  T.Test('CommitSend exceeds reserved raises',
+    @TestCommitSendExceedsReserved);
+  { -- New tests: body reader -- }
+  T.Test('Body reader on empty stream yields no bytes',
+    @TestBodyReaderEmpty);
+  T.Test('DiscardUnreadBody releases flow credits',
+    @TestDiscardUnreadBody);
+  { -- New tests: trailers -- }
+  T.Test('Trailers stored separately from headers',
+    @TestTrailersStoredSeparately);
+  T.Test('HEADERS after END_STREAM are rejected',
+    @TestHeadersAfterEndStreamResetStream);
+  T.Test('Second trailer section is rejected',
+    @TestSecondTrailerSectionResetStream);
+  T.Test('Pseudo trailer header is rejected',
+    @TestTrailerPseudoHeaderResetStream);
+  T.Test('Content-Length trailer header is rejected',
+    @TestTrailerContentLengthResetStream);
+  T.Test('Transfer-Encoding trailer header is rejected',
+    @TestTrailerTransferEncodingResetStream);
+  T.Test('Host trailer header is rejected',
+    @TestTrailerHostResetStream);
+  { -- New tests: pending response body -- }
+  T.Test('Pending response body set and get',
+    @TestPendingResponseBody);
+  { -- New tests: flow credit management -- }
+  T.Test('TakePendingWindowUpdate returns accumulated credits',
+    @TestTakePendingWindowUpdate);
+  T.Test('ApplyPeerInitialWindowSize adjusts stream window',
+    @TestApplyPeerInitialWindowSize);
+  { -- New tests: CAN_WRITE state -- }
+  T.Test('CanWriteData reflects stream state',
+    @TestCanWriteDataReflectsState);
+  { -- New tests: IH2StreamControl -- }
+  T.Test('Stream implements IH2StreamControl',
+    @TestImplementsIH2StreamControl);
+  T.Test('Stream has correct stream ID',
+    @TestStreamID);
+  { -- New tests: duplicate frame handling -- }
+  T.Test('OnData before OnHeaders resets stream',
+    @TestDataBeforeHeaders);
+  T.Test('Empty HPACK block does not set headers',
+    @TestEmptyHeadersBlock);
+  if not T.Run then Halt(1);
 end.

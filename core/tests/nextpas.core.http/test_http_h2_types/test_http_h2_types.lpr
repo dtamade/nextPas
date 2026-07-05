@@ -8,6 +8,9 @@ uses
   nextpas.core.http.impl.h2.types,
   nextpas.core.test;
 
+var
+  T: TTestSuite;
+
 procedure TestSettingsDefaultsMatchFrameConstants;
 var
   LSettings: TH2Settings;
@@ -472,49 +475,47 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.types') do
-  begin
-    Run('Settings defaults match frame constants',
-      @TestSettingsDefaultsMatchFrameConstants);
-    Run('Server options defaults', @TestServerOptionsDefaults);
-    Run('Client options defaults', @TestClientOptionsDefaults);
-    Run('Server options project to settings', @TestServerOptionsProjectToSettings);
-    Run('Client options project to settings', @TestClientOptionsProjectToSettings);
-    Run('Apply peer settings updates runtime view',
-      @TestApplyPeerSettingsUpdatesRuntimeView);
-    Run('Flow init and window accounting', @TestFlowInitAndWindowAccounting);
-    Run('Flow window shrink can go negative until consumed',
-      @TestFlowWindowShrinkCanGoNegativeUntilConsumed);
-    Run('Connection and stream flow carry identity',
-      @TestConnectionAndStreamFlowCarryIdentity);
-    Run('OnDataReceived exceeding capacity raises',
-      @TestFlowOnDataReceivedExceedsCapacity);
-    Run('OnDataConsumed returns credit',
-      @TestFlowOnDataConsumedReturnsWindow);
-    Run('OnDataConsumed exceeding inflight raises',
-      @TestFlowOnDataConsumedExceedsInflight);
-    Run('ReleaseReserved basic',
-      @TestFlowReleaseReservedBasic);
-    Run('ReleaseReserved exceeding reserved raises',
-      @TestFlowReleaseReservedExceedsReserved);
-    Run('OnWindowUpdate zero raises',
-      @TestFlowOnWindowUpdateZero);
-    Run('OnWindowUpdate overflow raises',
-      @TestFlowOnWindowUpdateOverflow);
-    Run('CanReserve boundary conditions',
-      @TestFlowCanReserveBoundaries);
-    Run('HasSendCapacity and HasReceiveCapacity',
-      @TestFlowHasSendAndReceiveCapacity);
-    Run('Client options validation rejects invalid',
-      @TestClientOptionsValidation);
-    Run('Server options validation rejects invalid',
-      @TestServerOptionsValidation);
-    Run('Connection flow reset',
-      @TestConnectionFlowReset);
-    Run('Stream flow apply windows',
-      @TestStreamFlowApplyWindows);
-    Run('Settings validation rejects invalid',
-      @TestSettingsValidation);
-    Summary;
-  end;
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.types');
+  T.Test('Settings defaults match frame constants',
+    @TestSettingsDefaultsMatchFrameConstants);
+  T.Test('Server options defaults', @TestServerOptionsDefaults);
+  T.Test('Client options defaults', @TestClientOptionsDefaults);
+  T.Test('Server options project to settings', @TestServerOptionsProjectToSettings);
+  T.Test('Client options project to settings', @TestClientOptionsProjectToSettings);
+  T.Test('Apply peer settings updates runtime view',
+    @TestApplyPeerSettingsUpdatesRuntimeView);
+  T.Test('Flow init and window accounting', @TestFlowInitAndWindowAccounting);
+  T.Test('Flow window shrink can go negative until consumed',
+    @TestFlowWindowShrinkCanGoNegativeUntilConsumed);
+  T.Test('Connection and stream flow carry identity',
+    @TestConnectionAndStreamFlowCarryIdentity);
+  T.Test('OnDataReceived exceeding capacity raises',
+    @TestFlowOnDataReceivedExceedsCapacity);
+  T.Test('OnDataConsumed returns credit',
+    @TestFlowOnDataConsumedReturnsWindow);
+  T.Test('OnDataConsumed exceeding inflight raises',
+    @TestFlowOnDataConsumedExceedsInflight);
+  T.Test('ReleaseReserved basic',
+    @TestFlowReleaseReservedBasic);
+  T.Test('ReleaseReserved exceeding reserved raises',
+    @TestFlowReleaseReservedExceedsReserved);
+  T.Test('OnWindowUpdate zero raises',
+    @TestFlowOnWindowUpdateZero);
+  T.Test('OnWindowUpdate overflow raises',
+    @TestFlowOnWindowUpdateOverflow);
+  T.Test('CanReserve boundary conditions',
+    @TestFlowCanReserveBoundaries);
+  T.Test('HasSendCapacity and HasReceiveCapacity',
+    @TestFlowHasSendAndReceiveCapacity);
+  T.Test('Client options validation rejects invalid',
+    @TestClientOptionsValidation);
+  T.Test('Server options validation rejects invalid',
+    @TestServerOptionsValidation);
+  T.Test('Connection flow reset',
+    @TestConnectionFlowReset);
+  T.Test('Stream flow apply windows',
+    @TestStreamFlowApplyWindows);
+  T.Test('Settings validation rejects invalid',
+    @TestSettingsValidation);
+  if not T.Run then Halt(1);
 end.

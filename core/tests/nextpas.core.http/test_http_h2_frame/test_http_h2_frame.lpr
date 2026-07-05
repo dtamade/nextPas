@@ -13,6 +13,9 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv;
 
+var
+  T: TTestSuite;
+
 function HexNibble(const ACh: Char): Byte;
 begin
   case ACh of
@@ -389,34 +392,32 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.frame') do
-  begin
-    Run('Decode frame header masks reserved bit',
-      @TestDecodeFrameHeaderMasksReservedBit);
-    Run('Encode frame header masks reserved bit',
-      @TestEncodeFrameHeaderMasksReservedBit);
-    Run('Encode frame places payload after 9-byte header',
-      @TestEncodeFramePlacesPayloadAfterNineByteHeader);
-    Run('Decode frame consumes header and payload',
-      @TestDecodeFrameConsumesHeaderAndPayload);
-    Run('Decode frame waits for complete payload',
-      @TestDecodeFrameWaitsForCompletePayload);
-    Run('Decode rejects nil buffer', @TestDecodeRejectsNilBuffer);
-    Run('SETTINGS payload exact bytes', @TestSettingsPayloadExactBytes);
-    Run('SETTINGS rejects trailing partial entry',
-      @TestSettingsRejectsTrailingPartialEntry);
-    Run('Fixed payload codecs', @TestFixedPayloadCodecs);
-    Run('Names and validation helpers', @TestNamesAndValidationHelpers);
-    Run('Frame type specific validation',
-      @TestFrameTypeSpecificValidation);
-    Run('Frame padding validation', @TestFramePaddingValidation);
-    Run('Client preface', @TestClientPreface);
-    Run('Encode frame empty payload', @TestEncodeFrameEmptyPayload);
-    Run('Encode frame oversized payload raises',
-      @TestEncodeFrameOversizedPayload);
-    Run('Frame type names complete', @TestFrameTypesComplete);
-    Run('Stream ID validation', @TestStreamIDValidation);
-    Run('PUSH_PROMISE validation', @TestPUSH_PROMISEValidation);
-    Summary;
-  end;
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.frame');
+  T.Test('Decode frame header masks reserved bit',
+    @TestDecodeFrameHeaderMasksReservedBit);
+  T.Test('Encode frame header masks reserved bit',
+    @TestEncodeFrameHeaderMasksReservedBit);
+  T.Test('Encode frame places payload after 9-byte header',
+    @TestEncodeFramePlacesPayloadAfterNineByteHeader);
+  T.Test('Decode frame consumes header and payload',
+    @TestDecodeFrameConsumesHeaderAndPayload);
+  T.Test('Decode frame waits for complete payload',
+    @TestDecodeFrameWaitsForCompletePayload);
+  T.Test('Decode rejects nil buffer', @TestDecodeRejectsNilBuffer);
+  T.Test('SETTINGS payload exact bytes', @TestSettingsPayloadExactBytes);
+  T.Test('SETTINGS rejects trailing partial entry',
+    @TestSettingsRejectsTrailingPartialEntry);
+  T.Test('Fixed payload codecs', @TestFixedPayloadCodecs);
+  T.Test('Names and validation helpers', @TestNamesAndValidationHelpers);
+  T.Test('Frame type specific validation',
+    @TestFrameTypeSpecificValidation);
+  T.Test('Frame padding validation', @TestFramePaddingValidation);
+  T.Test('Client preface', @TestClientPreface);
+  T.Test('Encode frame empty payload', @TestEncodeFrameEmptyPayload);
+  T.Test('Encode frame oversized payload raises',
+    @TestEncodeFrameOversizedPayload);
+  T.Test('Frame type names complete', @TestFrameTypesComplete);
+  T.Test('Stream ID validation', @TestStreamIDValidation);
+  T.Test('PUSH_PROMISE validation', @TestPUSH_PROMISEValidation);
+  if not T.Run then Halt(1);
 end.

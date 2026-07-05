@@ -23,6 +23,9 @@ uses
   nextpas.core.http.impl.h2.types,
   nextpas.core.test;
 
+var
+  T: TTestSuite;
+
 const
   H2_SESSION_SOURCE_PATH_FROM_TEST =
     '../../../src/nextpas.core.http.impl.h2.session.pas';
@@ -1826,73 +1829,71 @@ begin
 end;
 
 begin
-  with TTestSuite.Create('nextpas.core.http.impl.h2.session') do
-  begin
-    Run('Partial preface waits', @TestPartialPrefaceWaits);
-    Run('Wrong preface is connection error', @TestWrongPrefaceIsConnectionError);
-    Run('Preface without first frame waits', @TestPrefaceWithoutFirstFrameWaits);
-    Run('Partial first frame waits', @TestPartialFirstFrameWaits);
-    Run('Initial SETTINGS accepted', @TestInitialSettingsAccepted);
-    Run('Initial SETTINGS with payload accepted',
-      @TestInitialSettingsWithPayloadAccepted);
-    Run('First frame must be SETTINGS', @TestFirstFrameMustBeSettings);
-    Run('Initial SETTINGS must not ACK', @TestInitialSettingsMustNotAck);
-    Run('Initial SETTINGS uses connection stream',
-      @TestInitialSettingsUsesConnectionStream);
-    Run('Run handshake and simple request response',
-      @TestRunHandshakeAndSimpleRequestResponse);
-    Run('Run handshake advertises MAX_HEADER_LIST_SIZE',
-      @TestRunHandshakeAdvertisesMaxHeaderListSizeSetting);
-    Run('Run missing :path pseudo header resets stream',
-      @TestRunMissingPathPseudoHeaderResetsStream);
-    Run('Run missing :authority and host resets stream',
-      @TestRunMissingAuthorityAndHostResetsStream);
-    Run('Run pseudo header after regular header resets stream',
-      @TestRunPseudoHeaderAfterRegularHeaderResetsStream);
-    Run('Run duplicate pseudo header resets stream',
-      @TestRunDuplicatePseudoHeaderResetsStream);
-    Run('Run connection specific header resets stream',
-      @TestRunConnectionSpecificHeaderResetsStream);
-    Run('Run non-trailers TE header resets stream',
-      @TestRunNonTrailersTeHeaderResetsStream);
-    Run('Run DATA END_STREAM triggers handler and flow control update',
-      @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
-    Run('Run DATA over MaxBodySize returns 413 without handler',
-      @TestRunDataOverMaxBodySizeReturns413WithoutHandler);
-    Run('Run headers over MaxHeaderListSize returns 431 without handler',
-      @TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler);
-    Run('Run PING gets ACKed', @TestRunPingGetsAcked);
-    Run('Run RST_STREAM cancels pending request',
-      @TestRunRstStreamCancelsPendingRequest);
-    Run('Run GOAWAY stops new streams', @TestRunGoawayStopsNewStreams);
-    Run('Run GOAWAY rejects non-zero LastStreamID without local streams',
-      @TestRunGoawayRejectsNonZeroLastStreamIDWithoutLocalStreams);
-    Run('Run peer GOAWAY does not overwrite last seen peer stream id',
-      @TestRunPeerGoawayDoesNotOverwriteLastSeenPeerStreamID);
-    Run('Advance polls readable then writable',
-      @TestAdvancePollsReadableThenWritable);
-    Run('Run unknown extension frame is ignored',
-      @TestRunUnknownExtensionFrameIsIgnored);
-    Run('Run DATA on connection stream sends GOAWAY',
-      @TestRunDataOnConnectionStreamSendsGoaway);
-    Run('Run DATA on closed stream restores connection window',
-      @TestRunDataOnClosedStreamRestoresConnectionWindow);
-    Run('TH2StreamMap FindAndRemove returns detached stream',
-      @TestStreamMapFindAndRemoveReturnsDetachedStream);
-    Run('TH2StreamMap FindAndRemove source contract',
-      @TestStreamMapFindAndRemoveSourceContract);
-    Run('HandleData connection stream source contract',
-      @TestHandleDataConnectionStreamSourceContract);
-    Run('HandleGoaway split tracking source contract',
-      @TestHandleGoawayUsesSeparatePeerAndLocalStreamTrackingSourceContract);
-    Run('SendResponseBody avoids intermediate buffer copy source contract',
-      @TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract);
-    Run('Run client PUSH_PROMISE sends GOAWAY',
-      @TestRunPushPromiseSendsGoaway);
-    Run('Run trailing HEADERS complete request without overwriting headers',
-      @TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders);
-    Run('Run WINDOW_UPDATE resumes blocked response body',
-      @TestRunWindowUpdateResumesBlockedResponseBody);
-    Summary;
-  end;
+  T := TTestSuite.Create('nextpas.core.http.impl.h2.session');
+  T.Test('Partial preface waits', @TestPartialPrefaceWaits);
+  T.Test('Wrong preface is connection error', @TestWrongPrefaceIsConnectionError);
+  T.Test('Preface without first frame waits', @TestPrefaceWithoutFirstFrameWaits);
+  T.Test('Partial first frame waits', @TestPartialFirstFrameWaits);
+  T.Test('Initial SETTINGS accepted', @TestInitialSettingsAccepted);
+  T.Test('Initial SETTINGS with payload accepted',
+    @TestInitialSettingsWithPayloadAccepted);
+  T.Test('First frame must be SETTINGS', @TestFirstFrameMustBeSettings);
+  T.Test('Initial SETTINGS must not ACK', @TestInitialSettingsMustNotAck);
+  T.Test('Initial SETTINGS uses connection stream',
+    @TestInitialSettingsUsesConnectionStream);
+  T.Test('Run handshake and simple request response',
+    @TestRunHandshakeAndSimpleRequestResponse);
+  T.Test('Run handshake advertises MAX_HEADER_LIST_SIZE',
+    @TestRunHandshakeAdvertisesMaxHeaderListSizeSetting);
+  T.Test('Run missing :path pseudo header resets stream',
+    @TestRunMissingPathPseudoHeaderResetsStream);
+  T.Test('Run missing :authority and host resets stream',
+    @TestRunMissingAuthorityAndHostResetsStream);
+  T.Test('Run pseudo header after regular header resets stream',
+    @TestRunPseudoHeaderAfterRegularHeaderResetsStream);
+  T.Test('Run duplicate pseudo header resets stream',
+    @TestRunDuplicatePseudoHeaderResetsStream);
+  T.Test('Run connection specific header resets stream',
+    @TestRunConnectionSpecificHeaderResetsStream);
+  T.Test('Run non-trailers TE header resets stream',
+    @TestRunNonTrailersTeHeaderResetsStream);
+  T.Test('Run DATA END_STREAM triggers handler and flow control update',
+    @TestRunDataEndStreamTriggersHandlerAndFlowControlUpdate);
+  T.Test('Run DATA over MaxBodySize returns 413 without handler',
+    @TestRunDataOverMaxBodySizeReturns413WithoutHandler);
+  T.Test('Run headers over MaxHeaderListSize returns 431 without handler',
+    @TestRunHeadersOverMaxHeaderListSizeReturns431WithoutHandler);
+  T.Test('Run PING gets ACKed', @TestRunPingGetsAcked);
+  T.Test('Run RST_STREAM cancels pending request',
+    @TestRunRstStreamCancelsPendingRequest);
+  T.Test('Run GOAWAY stops new streams', @TestRunGoawayStopsNewStreams);
+  T.Test('Run GOAWAY rejects non-zero LastStreamID without local streams',
+    @TestRunGoawayRejectsNonZeroLastStreamIDWithoutLocalStreams);
+  T.Test('Run peer GOAWAY does not overwrite last seen peer stream id',
+    @TestRunPeerGoawayDoesNotOverwriteLastSeenPeerStreamID);
+  T.Test('Advance polls readable then writable',
+    @TestAdvancePollsReadableThenWritable);
+  T.Test('Run unknown extension frame is ignored',
+    @TestRunUnknownExtensionFrameIsIgnored);
+  T.Test('Run DATA on connection stream sends GOAWAY',
+    @TestRunDataOnConnectionStreamSendsGoaway);
+  T.Test('Run DATA on closed stream restores connection window',
+    @TestRunDataOnClosedStreamRestoresConnectionWindow);
+  T.Test('TH2StreamMap FindAndRemove returns detached stream',
+    @TestStreamMapFindAndRemoveReturnsDetachedStream);
+  T.Test('TH2StreamMap FindAndRemove source contract',
+    @TestStreamMapFindAndRemoveSourceContract);
+  T.Test('HandleData connection stream source contract',
+    @TestHandleDataConnectionStreamSourceContract);
+  T.Test('HandleGoaway split tracking source contract',
+    @TestHandleGoawayUsesSeparatePeerAndLocalStreamTrackingSourceContract);
+  T.Test('SendResponseBody avoids intermediate buffer copy source contract',
+    @TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract);
+  T.Test('Run client PUSH_PROMISE sends GOAWAY',
+    @TestRunPushPromiseSendsGoaway);
+  T.Test('Run trailing HEADERS complete request without overwriting headers',
+    @TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders);
+  T.Test('Run WINDOW_UPDATE resumes blocked response body',
+    @TestRunWindowUpdateResumesBlockedResponseBody);
+  if not T.Run then Halt(1);
 end.

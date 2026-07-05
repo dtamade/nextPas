@@ -174,6 +174,7 @@ type
   private
     FOptions: TH2ClientTransportOptions;
     FDefaultTLSContext: ISSLContext;
+    FPoolLock: TRTLCriticalSection;
     FPool: array of TH2PoolEntry;
     FPoolCount: Int32;
     function PoolGet(const AHost: string; const APort: UInt16;
@@ -1375,12 +1376,16 @@ begin
   AOptions.Validate;
   FOptions := AOptions;
   FDefaultTLSContext := nil;
+  InitCriticalSection(FPoolLock);
+  FPool := nil;
   FPoolCount := 0;
 end;
 
 destructor TH2ClientTransport.Destroy;
 begin
   PoolClear;
+  DoneCriticalSection(FPoolLock);
+  FDefaultTLSContext := nil;
   inherited Destroy;
 end;
 
@@ -1390,64 +1395,79 @@ var
   LI: Int32;
 begin
   Result := nil;
-  for LI := 0 to FPoolCount - 1 do
-    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-       (FPool[LI].Secure = ASecure) then
-    begin
-      Result := FPool[LI].Conn;
-      FPool[LI] := FPool[FPoolCount - 1];
-      Dec(FPoolCount);
-      if (Result <> nil) and Result.IsReusable then
-        Exit;
-      if Result <> nil then
+  EnterCriticalSection(FPoolLock);
+  try
+    for LI := 0 to FPoolCount - 1 do
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+         (FPool[LI].Secure = ASecure) then
       begin
-        Result.Close;
-        Result.Free;
+        Result := FPool[LI].Conn;
+        FPool[LI] := FPool[FPoolCount - 1];
+        Dec(FPoolCount);
+        if (Result <> nil) and Result.IsReusable then
+          Exit;
+        if Result <> nil then
+        begin
+          Result.Close;
+          Result.Free;
+        end;
+        Result := nil;
+        Exit;
       end;
-      Result := nil;
-      Exit;
-    end;
+  finally
+    LeaveCriticalSection(FPoolLock);
+  end;
 end;
 
 procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const ASecure: Boolean; const AConn: TH2ClientConnection);
 begin
-  if (AConn = nil) or (not AConn.IsReusable) then
-  begin
-    if AConn <> nil then
+  EnterCriticalSection(FPoolLock);
+  try
+    if (AConn = nil) or (not AConn.IsReusable) then
+    begin
+      if AConn <> nil then
+      begin
+        AConn.Close;
+        AConn.Free;
+      end;
+      Exit;
+    end;
+    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
     begin
       AConn.Close;
       AConn.Free;
+      Exit;
     end;
-    Exit;
+    if FPoolCount >= Length(FPool) then
+      SetLength(FPool, FPoolCount + 4);
+    FPool[FPoolCount].Host := AHost;
+    FPool[FPoolCount].Port := APort;
+    FPool[FPoolCount].Secure := ASecure;
+    FPool[FPoolCount].Conn := AConn;
+    Inc(FPoolCount);
+  finally
+    LeaveCriticalSection(FPoolLock);
   end;
-  if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
-  begin
-    AConn.Close;
-    AConn.Free;
-    Exit;
-  end;
-  if FPoolCount >= Length(FPool) then
-    SetLength(FPool, FPoolCount + 4);
-  FPool[FPoolCount].Host := AHost;
-  FPool[FPoolCount].Port := APort;
-  FPool[FPoolCount].Secure := ASecure;
-  FPool[FPoolCount].Conn := AConn;
-  Inc(FPoolCount);
 end;
 
 procedure TH2ClientTransport.PoolClear;
 var
   LI: Int32;
 begin
-  for LI := 0 to FPoolCount - 1 do
-    if FPool[LI].Conn <> nil then
-    begin
-      FPool[LI].Conn.Close;
-      FPool[LI].Conn.Free;
-    end;
-  FPool := nil;
-  FPoolCount := 0;
+  EnterCriticalSection(FPoolLock);
+  try
+    for LI := 0 to FPoolCount - 1 do
+      if FPool[LI].Conn <> nil then
+      begin
+        FPool[LI].Conn.Close;
+        FPool[LI].Conn.Free;
+      end;
+    FPool := nil;
+    FPoolCount := 0;
+  finally
+    LeaveCriticalSection(FPoolLock);
+  end;
 end;
 
 function TH2ClientTransport.SecureClientContext: ISSLContext;
