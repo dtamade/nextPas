@@ -200,10 +200,10 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 14 |
-| 框架级测试 | 257 |
+| 测试套件 | 15 |
+| 框架级测试 | ~296 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 14/14 套件全部启用 -gh，零泄漏 |
+| heaptrc | 15/15 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
@@ -231,7 +231,7 @@ end.
 ## 测试
 
 ```bash
-# 全量测试（12 个 suite）
+# 全量测试（15 个 suite）
 make -C core/tests/nextpas.core.bench test
 
 # 运行 bench 模块自身的基准测试
