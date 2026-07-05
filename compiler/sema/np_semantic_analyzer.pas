@@ -13,7 +13,7 @@ uses
   np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
   np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
-  np_sema_type_check, np_sema_hir_lowering,
+  np_sema_type_check, np_sema_hir_lowering, np_sema_runtime_vars,
   nextpas.core.collections.vec;
 
 type
