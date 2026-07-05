@@ -1324,6 +1324,33 @@ begin
   Check(LComparisons[1].BaselineNsPerOp = 100.0, 'Baseline[1] NsPerOp = 100.0');
 end;
 
+procedure TestAddBaselineData;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LComparisons: TBenchComparisonArray;
+  LBaseline: TBenchBaseline;
+begin
+  LBaseline := Default(TBenchBaseline);
+  LBaseline.Name := 'Fast';
+  LBaseline.NsPerOp := 75.0;
+  LBaseline.BytesPerOp := 512;
+  LBaseline.AllocsPerOp := 2;
+  LBaseline.GitHash := 'deadbeef';
+  LBaseline.Notes := 'test baseline';
+
+  LSuite := CreateFastSuite('AddBaselineDataTest');
+  LSuite.AddBaselineData(LBaseline);
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LComparisons := LResults.CompareWithBaseline;
+
+  Check(Length(LComparisons) = 1, 'AddBaselineData: 1 comparison');
+  Check(LComparisons[0].BaselineName = 'Fast', 'AddBaselineData: baseline name = Fast');
+  Check(LComparisons[0].BaselineNsPerOp = 75.0, 'AddBaselineData: baseline NsPerOp = 75.0');
+end;
+
 procedure TestSaveBaseline_RoundTrip;
 var
   LSuite: IBenchSuite;
@@ -1569,6 +1596,7 @@ begin
     T.Test('ToBenchstat_Integration', @TestToBenchstat_Integration);
     T.Test('CreateWithConfig', @TestTBenchSuite_CreateWithConfig);
     T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);
+    T.Test('AddBaselineData', @TestAddBaselineData);
     T.Test('SaveBaseline_RoundTrip', @TestSaveBaseline_RoundTrip);
     T.Test('AppendToTimeline', @TestAppendToTimeline);
     T.Test('CompareTwoResults', @TestCompareTwoResults);
