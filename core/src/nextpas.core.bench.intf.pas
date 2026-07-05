@@ -47,6 +47,8 @@ type
   {** 从 base 模块 re-export 数组类型 }
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
+  {** 从 base 模块 re-export 基线数据类型 }
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
   {** @deprecated Use TBaselineData instead. Kept for backward compatibility. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
 
@@ -315,19 +317,19 @@ type
 
     {** 多基线对比矩阵 (P2-1)：当前结果 vs N 个基线，返回矩阵 }
     function CompareMultipleBaselines(
-      const ABaselines: array of TBenchBaseline): TMatrixResult;
+      const ABaselines: array of TBaselineData): TMatrixResult;
 
     {** 多基线对比矩阵 — Console 报告 (P2-1) }
     function ToMatrixReport(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 多基线对比矩阵 — HTML 报告 (P2-1) }
     function ToMatrixHTML(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 多基线对比矩阵 — JSON 报告 (CI 消费) }
     function ToMatrixJSON(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
