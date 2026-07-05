@@ -20,7 +20,7 @@ unit nextpas.core.tls.dane;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv, SysUtils,
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
      nextpas.core.tls.base, nextpas.core.tls.openssl.base,
      nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp,
      nextpas.core.tls.logging, nextpas.core.tls.dane.ldns;
@@ -376,7 +376,7 @@ begin
     Exit;
   end;
 
-  Age := Round((Now - ARecord.Retrieved) * 86400);  // Convert to seconds
+  Age := Round((DateTimeNow - ARecord.Retrieved) * 86400);  // Convert to seconds
   Result := Age < FCacheTimeout;
 end;
 
@@ -463,7 +463,7 @@ begin
     Rec.Selector := TDANESelector(LdnsRecords[i].Selector);
     Rec.MatchingType := TDANEMatchingType(LdnsRecords[i].MatchingType);
     Rec.TTL := LdnsRecords[i].TTL;
-    Rec.Retrieved := Now;
+    Rec.Retrieved := DateTimeNow;
 
     // 复制证书数据
     SetLength(Rec.CertificateData, Length(LdnsRecords[i].CertData));
@@ -493,7 +493,7 @@ begin
   if Length(AData) > 0 then
     Move(AData[0], Rec.CertificateData[0], Length(AData));
   Rec.TTL := FCacheTimeout;
-  Rec.Retrieved := Now;
+  Rec.Retrieved := DateTimeNow;
 
   SetLength(FRecords, Length(FRecords) + 1);
   FRecords[High(FRecords)] := Rec;

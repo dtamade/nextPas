@@ -4,7 +4,7 @@ unit nextpas.core.tls.dane.pure;
 
 interface
 
-uses SysUtils, nextpas.core.base, nextpas.core.crypto.hash, nextpas.core.tls.x509;
+uses nextpas.core.base, nextpas.core.crypto.hash, nextpas.core.tls.x509;
 
 type
   TDANECertUsage = (cuCAConstraint = 0, cuServiceCert = 1, cuTrustAnchor = 2, cuDomainEE = 3);

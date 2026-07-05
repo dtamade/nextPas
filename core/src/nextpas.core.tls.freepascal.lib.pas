@@ -11,7 +11,6 @@ unit nextpas.core.tls.freepascal.lib;
 interface
 
 uses
-  Classes, SysUtils,
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.io.intf,

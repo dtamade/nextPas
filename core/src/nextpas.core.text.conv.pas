@@ -52,6 +52,10 @@ function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
 
+{** Returns the position of the last occurrence of any character from ADelimiters in S.
+    Returns 0 if none of the characters are found. }
+function LastDelimiter(const ADelimiters: string; const S: string): Integer;
+
 implementation
 
 uses
@@ -407,6 +411,17 @@ end;
 function SameText(const A, B: string): Boolean;
 begin
   Result := nextpas.core.text.compare.SameText(A, B);
+end;
+
+function LastDelimiter(const ADelimiters: string; const S: string): Integer;
+var
+  I, J: Integer;
+begin
+  Result := 0;
+  for I := Length(S) downto 1 do
+    for J := 1 to Length(ADelimiters) do
+      if S[I] = ADelimiters[J] then
+        Exit(I);
 end;
 
 end.

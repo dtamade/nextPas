@@ -12,7 +12,6 @@ unit nextpas.core.tls.openssl.certificate;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.base.utils,

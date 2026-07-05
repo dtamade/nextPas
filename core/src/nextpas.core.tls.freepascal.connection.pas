@@ -29,8 +29,8 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  Classes, SysUtils, DateUtils,
-  nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.strings, nextpas.core.base.utils, nextpas.core.system.classes,
+  nextpas.core.system.classes,
+  nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.strings, nextpas.core.base.utils,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,

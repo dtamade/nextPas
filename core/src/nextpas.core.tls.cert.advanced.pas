@@ -23,7 +23,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
-  SysUtils,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.errors,
@@ -276,7 +276,7 @@ begin
           // 2. ASN1_GENERALIZEDTIME to TDateTime conversion
           // Current behavior: Returns current time as fallback
           // Impact: Low - revocation status is correctly detected
-          Result.RevokedAt := Now;
+          Result.RevokedAt := DateTimeNow;
         end;
       V_OCSP_CERTSTATUS_UNKNOWN:
         Result.Status := ocspUnknown;
@@ -370,7 +370,7 @@ begin
     if Assigned(X509_CRL_get0_nextUpdate) then
       FNextUpdate := ASN1TimeToDateTime(X509_CRL_get0_nextUpdate(FCRL))
     else
-      FNextUpdate := Now + 7; // Fallback if API not available
+      FNextUpdate := DateTimeNow + 7; // Fallback if API not available
   finally
     BIO_free(LBio);
   end;
@@ -422,7 +422,7 @@ begin
   // Current behavior: Returns current time if revoked, 0 otherwise
   // Impact: Low - revocation check (IsRevoked) is correctly implemented
   if IsRevoked(ACert) then
-    Result := Now
+    Result := DateTimeNow
   else
     Result := 0;
 end;
@@ -448,7 +448,7 @@ end;
 
 function TCRLManagerImpl.IsExpired: Boolean;
 begin
-  Result := Now > FNextUpdate;
+  Result := DateTimeNow > FNextUpdate;
 end;
 
 function TCRLManagerImpl.GetNextUpdate: TDateTime;

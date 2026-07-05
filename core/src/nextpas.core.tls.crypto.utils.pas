@@ -39,7 +39,7 @@ interface
 uses
   nextpas.core.system, nextpas.core.exception,
   nextpas.core.io.intf, nextpas.core.fs.stream,
-  nextpas.core.text, nextpas.core.text.conv, SysUtils,
+  nextpas.core.text, nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
