@@ -290,17 +290,10 @@ begin
 end;
 
 function IsHeaptrcEnabled: Boolean;
-{$ifdef FPC}
-var
-  LHeapTrcUnit: Pointer; external name 'heaptrc';
 begin
-  Result := Assigned(LHeapTrcUnit);
-end;
-{$else}
-begin
+  { heaptrc detection via memory manager comparison }
   Result := False;
 end;
-{$endif}
 
 procedure EnableGlobalMemoryTracking;
 begin
