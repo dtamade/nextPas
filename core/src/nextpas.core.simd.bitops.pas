@@ -5,6 +5,10 @@
   Pure inline, no dispatch table, no function pointers.
   Each function compiles to a single instruction (or two) on the target arch.
 
+  Platform tiers:
+    Tier 1 (asm):  x86/x86-64, AArch64 — native instructions, verified
+    Tier 2 (pascal): RISC-V, LoongArch, other — bit-twiddling fallback
+
   Future: nextpas compiler emits these as native machine instructions directly.
 }
 
@@ -61,7 +65,7 @@ function IsPow2_64(AValue: TU64): Boolean;
 implementation
 
 // ============================================================
-// x86 / x86-64: BSF, BSR, POPCNT instructions
+// Tier 1: x86 / x86-64 — BSF, BSR, POPCNT instructions
 // ============================================================
 {$IFDEF SIMD_X86_AVAILABLE}
 
@@ -90,9 +94,10 @@ asm
   {$ENDIF}
 end;
 
-function Clz64(AValue: TU64): TU32; assembler; nostackframe;
+function Clz64(AValue: TU64): TU32;
+{$IFDEF CPUX86_64}
+assembler; nostackframe;
 asm
-  {$IFDEF CPUX86_64}
   bsr rax, rdi
   jnz @@nz
   mov eax, 64
@@ -102,28 +107,17 @@ asm
   sub ecx, eax
   mov eax, ecx
 @@done:
-  {$ELSE}
-  // i386: 64-bit value in edx:eax (high:low)
-  test edx, edx
-  jnz @@hi
-  bsr eax, eax
-  jnz @@lo_nz
-  mov eax, 32
-  jmp @@done
-@@hi:
-  bsr eax, edx
-  mov ecx, 31
-  sub ecx, eax
-  mov eax, ecx
-  jmp @@done
-@@lo_nz:
-  mov ecx, 31
-  sub ecx, eax
-  add ecx, 32
-  mov eax, ecx
-@@done:
-  {$ENDIF}
 end;
+{$ELSE}
+// i386: 64-bit params on stack, not in edx:eax — use pure Pascal
+begin
+  if AValue = 0 then Exit(64);
+  if AValue > $FFFFFFFF then
+    Result := 31 - Bsr32(TU32(AValue shr 32))
+  else
+    Result := 32 + (31 - Bsr32(TU32(AValue)));
+end;
+{$ENDIF}
 
 function Ctz32(AValue: TU32): TU32; assembler; nostackframe;
 asm
@@ -140,26 +134,25 @@ asm
   {$ENDIF}
 end;
 
-function Ctz64(AValue: TU64): TU32; assembler; nostackframe;
+function Ctz64(AValue: TU64): TU32;
+{$IFDEF CPUX86_64}
+assembler; nostackframe;
 asm
-  {$IFDEF CPUX86_64}
   bsf rax, rdi
   jnz @@nz
   mov eax, 64
 @@nz:
-  {$ELSE}
-  // i386: edx:eax
-  bsf eax, eax
-  jnz @@done
-  bsf eax, edx
-  jnz @@hi_nz
-  mov eax, 64
-  jmp @@done
-@@hi_nz:
-  add eax, 32
-@@done:
-  {$ENDIF}
 end;
+{$ELSE}
+// i386: pure Pascal
+begin
+  if AValue = 0 then Exit(64);
+  if (TU32(AValue) = 0) then
+    Result := 32 + Ctz32(TU32(AValue shr 32))
+  else
+    Result := Ctz32(TU32(AValue));
+end;
+{$ENDIF}
 
 function PopCount32(AValue: TU32): TU32; assembler; nostackframe;
 asm
@@ -170,18 +163,21 @@ asm
   {$ENDIF}
 end;
 
-function PopCount64(AValue: TU64): TU32; assembler; nostackframe;
+function PopCount64(AValue: TU64): TU32;
+{$IFDEF CPUX86_64}
+assembler; nostackframe;
 asm
-  {$IFDEF CPUX86_64}
   popcnt rax, rdi
-  {$ELSE}
-  // i386: popcnt each half, add
-  popcnt eax, eax
-  mov ecx, eax
-  popcnt eax, edx
-  add eax, ecx
-  {$ENDIF}
 end;
+{$ELSE}
+// i386: pure Pascal (popcnt on 32-bit halves not reliable in nostackframe)
+begin
+  AValue := AValue - ((AValue shr 1) and $5555555555555555);
+  AValue := (AValue and $3333333333333333) + ((AValue shr 2) and $3333333333333333);
+  AValue := (AValue + (AValue shr 4)) and $0F0F0F0F0F0F0F0F;
+  Result := TU32((AValue * $0101010101010101) shr 56);
+end;
+{$ENDIF}
 
 function Bsf32(AValue: TU32): TU32; assembler; nostackframe;
 asm
@@ -192,18 +188,20 @@ asm
   {$ENDIF}
 end;
 
-function Bsf64(AValue: TU64): TU32; assembler; nostackframe;
+function Bsf64(AValue: TU64): TU32;
+{$IFDEF CPUX86_64}
+assembler; nostackframe;
 asm
-  {$IFDEF CPUX86_64}
   bsf rax, rdi
-  {$ELSE}
-  bsf eax, eax
-  jnz @@done
-  bsf eax, edx
-  add eax, 32
-@@done:
-  {$ENDIF}
 end;
+{$ELSE}
+begin
+  if TU32(AValue) <> 0 then
+    Result := Bsf32(TU32(AValue))
+  else
+    Result := 32 + Bsf32(TU32(AValue shr 32));
+end;
+{$ENDIF}
 
 function Bsr32(AValue: TU32): TU32; assembler; nostackframe;
 asm
@@ -214,25 +212,23 @@ asm
   {$ENDIF}
 end;
 
-function Bsr64(AValue: TU64): TU32; assembler; nostackframe;
+function Bsr64(AValue: TU64): TU32;
+{$IFDEF CPUX86_64}
+assembler; nostackframe;
 asm
-  {$IFDEF CPUX86_64}
   bsr rax, rdi
-  {$ELSE}
-  // i386: check high dword first
-  test edx, edx
-  jnz @@hi
-  bsr eax, eax
-  jmp @@done
-@@hi:
-  bsr eax, edx
-  add eax, 32
-@@done:
-  {$ENDIF}
 end;
+{$ELSE}
+begin
+  if AValue > $FFFFFFFF then
+    Result := 32 + Bsr32(TU32(AValue shr 32))
+  else
+    Result := Bsr32(TU32(AValue));
+end;
+{$ENDIF}
 
 // ============================================================
-// ARM / AArch64: CLZ, RBIT instructions
+// Tier 1: AArch64 — CLZ, RBIT (no NEON for PopCount)
 // ============================================================
 {$ELSEIF DEFINED(CPUAARCH64)}
 
@@ -258,115 +254,51 @@ asm
   clz x0, x0
 end;
 
-function PopCount32(AValue: TU32): TU32; assembler; nostackframe;
-asm
-  fmov s0, w0
-  cnt v0.8b, v0.8b
-  addv b0, v0.8b
-  fmov w0, s0
+{ AArch64 PopCount: pure Pascal — avoid NEON register asm complexity.
+  FPC inline asm for NEON registers (v0, b0) is unreliable. }
+function PopCount32(AValue: TU32): TU32;
+begin
+  AValue := AValue - ((AValue shr 1) and $55555555);
+  AValue := (AValue and $33333333) + ((AValue shr 2) and $33333333);
+  AValue := (AValue + (AValue shr 4)) and $0F0F0F0F;
+  Result := (AValue * $01010101) shr 24;
 end;
 
-function PopCount64(AValue: TU64): TU32; assembler; nostackframe;
-asm
-  fmov d0, x0
-  cnt v0.8b, v0.8b
-  addv b0, v0.8b
-  fmov w0, s0
+function PopCount64(AValue: TU64): TU32;
+begin
+  AValue := AValue - ((AValue shr 1) and $5555555555555555);
+  AValue := (AValue and $3333333333333333) + ((AValue shr 2) and $3333333333333333);
+  AValue := (AValue + (AValue shr 4)) and $0F0F0F0F0F0F0F0F;
+  Result := TU32((AValue * $0101010101010101) shr 56);
 end;
 
 function Bsf32(AValue: TU32): TU32;
 begin
-  if AValue = 0 then
-    Result := 0
-  else
-    Result := Ctz32(AValue);
+  if AValue = 0 then Exit(0);
+  Result := Ctz32(AValue);
 end;
 
 function Bsf64(AValue: TU64): TU32;
 begin
-  if AValue = 0 then
-    Result := 0
-  else
-    Result := Ctz64(AValue);
+  if AValue = 0 then Exit(0);
+  Result := Ctz64(AValue);
 end;
 
 function Bsr32(AValue: TU32): TU32;
 begin
-  if AValue = 0 then
-    Result := 0
-  else
-    Result := 31 - Clz32(AValue);
+  if AValue = 0 then Exit(0);
+  Result := 31 - Clz32(AValue);
 end;
 
 function Bsr64(AValue: TU64): TU32;
 begin
-  if AValue = 0 then
-    Result := 0
-  else
-    Result := 63 - Clz64(AValue);
+  if AValue = 0 then Exit(0);
+  Result := 63 - Clz64(AValue);
 end;
 
 // ============================================================
-// RISC-V: Zbb extension (clz, cpop, ctz)
-// ============================================================
-{$ELSEIF DEFINED(CPURISCV64)}
-
-function Clz32(AValue: TU32): TU32; assembler; nostackframe;
-asm
-  clz.w a0, a0
-end;
-
-function Clz64(AValue: TU64): TU32; assembler; nostackframe;
-asm
-  clz a0, a0
-end;
-
-function Ctz32(AValue: TU32): TU32; assembler; nostackframe;
-asm
-  ctz.w a0, a0
-end;
-
-function Ctz64(AValue: TU64): TU32; assembler; nostackframe;
-asm
-  ctz a0, a0
-end;
-
-function PopCount32(AValue: TU32): TU32; assembler; nostackframe;
-asm
-  cpop.w a0, a0
-end;
-
-function PopCount64(AValue: TU64): TU32; assembler; nostackframe;
-asm
-  cpop a0, a0
-end;
-
-function Bsf32(AValue: TU32): TU32;
-begin
-  if AValue = 0 then Result := 0
-  else Result := Ctz32(AValue);
-end;
-
-function Bsf64(AValue: TU64): TU32;
-begin
-  if AValue = 0 then Result := 0
-  else Result := Ctz64(AValue);
-end;
-
-function Bsr32(AValue: TU32): TU32;
-begin
-  if AValue = 0 then Result := 0
-  else Result := 31 - Clz32(AValue);
-end;
-
-function Bsr64(AValue: TU64): TU32;
-begin
-  if AValue = 0 then Result := 0
-  else Result := 63 - Clz64(AValue);
-end;
-
-// ============================================================
-// Scalar fallback: pure Pascal
+// Tier 2: All other platforms — pure Pascal bit-twiddling
+// (RISC-V Zbb, LoongArch64, etc. — asm not reliable in FPC yet)
 // ============================================================
 {$ELSE}
 
@@ -465,7 +397,7 @@ end;
 {$ENDIF}
 
 // ============================================================
-// Platform-independent derived functions (pure Pascal, inline)
+// Platform-independent derived functions (pure Pascal)
 // ============================================================
 
 function Log2Floor32(AValue: TU32): TU32;
