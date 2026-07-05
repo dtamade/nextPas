@@ -472,6 +472,7 @@ procedure TestSystemExceptionAliasesStayCanonical;
 var
   LConvertError: nextpas.core.system.EConvertError;
   LAssertionError: nextpas.core.system.EAssertionFailed;
+  LAbort: nextpas.core.system.EAbort;
 begin
   LConvertError := nextpas.core.system.EConvertError.Create('conversion failed');
   try
@@ -487,6 +488,16 @@ begin
       'system EAssertionFailed must stay the canonical exception alias');
   finally
     LAssertionError.Free;
+  end;
+
+  LAbort := nextpas.core.system.EAbort.Create('abort');
+  try
+    Check(LAbort is nextpas.core.exception.EAbort,
+      'system EAbort must stay the canonical exception alias');
+    Check(LAbort.ClassType = nextpas.core.exception.EAbort,
+      'system EAbort must not introduce a shadow subclass');
+  finally
+    LAbort.Free;
   end;
 end;
 
@@ -696,6 +707,61 @@ begin
     'CompareMem zero size should return true regardless of pointers');
 end;
 
+procedure TestMemoryOperationsReentrancy;
+var
+  LBuf1, LBuf2: array[0..63] of Byte;
+  I, J: Integer;
+begin
+  { Verify memory operations are reentrant — no static state between calls }
+  for I := 0 to 63 do
+  begin
+    LBuf1[I] := Byte(I);
+    LBuf2[I] := 0;
+  end;
+
+  { Multiple sequential calls should not interfere }
+  for J := 0 to 9 do
+  begin
+    nextpas.core.system.CopyMem(@LBuf2[0], @LBuf1[0], 64);
+    Check(nextpas.core.system.CompareMem(@LBuf1[0], @LBuf2[0], 64),
+      'CopyMem+CompareMem should be consistent across iterations');
+  end;
+
+  { ZeroMem should be deterministic }
+  for J := 0 to 9 do
+  begin
+    nextpas.core.system.ZeroMem(@LBuf2[0], 64);
+    for I := 0 to 63 do
+      CheckEqual(Int64(0), Int64(LBuf2[I]),
+        'ZeroMem should clear all bytes consistently');
+  end;
+end;
+
+procedure TestSupportsReentrancy;
+var
+  LObject: TSystemFacadeProbe;
+  LOwner: IInterface;
+  LProbe: ISystemFacadeProbe;
+  I: Integer;
+begin
+  LObject := TSystemFacadeProbe.Create;
+  LOwner := LObject as IInterface;
+  try
+    { Multiple Supports queries should be consistent }
+    for I := 0 to 9 do
+    begin
+      LProbe := nil;
+      Check(nextpas.core.system.Supports(LObject, ISystemFacadeProbe, LProbe),
+        'Supports should consistently find interface');
+      CheckEqual(Int64(42), Int64(LProbe.Value),
+        'Supports should consistently return valid interface');
+      LProbe := nil;
+    end;
+  finally
+    LOwner := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system facade');
   T.Test('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
@@ -715,5 +781,7 @@ begin
   T.Test('system error taxonomy aliases mirror canonical owners', @TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners);
   T.Test('interrupted and would-block error aliases', @TestInterruptedAndWouldBlockAliases);
   T.Test('boundary conditions for memory operations', @TestBoundaryConditions);
+  T.Test('memory operations reentrancy', @TestMemoryOperationsReentrancy);
+  T.Test('Supports reentrancy', @TestSupportsReentrancy);
   if not T.Run then Halt(1);
 end.

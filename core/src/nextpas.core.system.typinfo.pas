@@ -3,6 +3,11 @@ unit nextpas.core.system.typinfo;
  * @desc Minimal TypInfo compatibility facade. This unit intentionally exposes
  * only identity/kind aliases and managed-array lifecycle helpers; property
  * reflection stays out of this live surface.
+ *
+ * Note: TypeInfo() and GetTypeKind() are compiler built-in functions available
+ * through System. They are NOT declared in this unit but become accessible when
+ * this unit is in the uses clause. This is by design — they are compile-truth
+ * imports, not unit-owned wrapper functions.
  *}
 
 {$I nextpas.core.settings.inc}

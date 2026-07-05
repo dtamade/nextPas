@@ -37,9 +37,24 @@ begin
     'object free release sub-contract name should be stable');
 end;
 
+procedure TestExceptionBoundaryContractNames;
+begin
+  CheckEqual('np.system.exception_try_push', NPSYSTEM_EXCEPTION_TRY_PUSH,
+    'exception try push contract name should be stable');
+  CheckEqual('np.system.exception_try_pop', NPSYSTEM_EXCEPTION_TRY_POP,
+    'exception try pop contract name should be stable');
+  CheckEqual('np.system.exception_raise', NPSYSTEM_EXCEPTION_RAISE,
+    'exception raise contract name should be stable');
+  CheckEqual('np.system.exception_finally_end', NPSYSTEM_EXCEPTION_FINALLY_END,
+    'exception finally end contract name should be stable');
+  CheckEqual('np.system.exception_except_end', NPSYSTEM_EXCEPTION_EXCEPT_END,
+    'exception except end contract name should be stable');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.contracts');
   T.Test('process and lifecycle contract names', @TestProcessLifecycleContractNames);
   T.Test('object free contract names', @TestObjectFreeContractNames);
+  T.Test('exception boundary contract names', @TestExceptionBoundaryContractNames);
   if not T.Run then Halt(1);
 end.

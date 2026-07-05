@@ -8,6 +8,12 @@ unit nextpas.core.system.memmanager;
  *   WARNING: SetMemoryManager is a low-level API. Passing nil function
  *   pointers will cause crashes. Callers are responsible for providing
  *   a valid memory manager record.
+ *
+ *   FPC RTL dependency note: This unit directly depends on System.TMemoryManager,
+ *   System.GetMemoryManager, and System.SetMemoryManager. This is acceptable
+ *   because memory manager hooks are inherently compiler/runtime-specific and
+ *   cannot be abstracted through nextpas.core.* without losing the ability to
+ *   intercept allocations at the RTL level.
  *}
 
 {$I nextpas.core.settings.inc}

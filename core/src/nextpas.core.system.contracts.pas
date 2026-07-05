@@ -19,6 +19,13 @@ const
   NPSYSTEM_OBJECT_FREE_RELEASE = 'np.system.object_free.release';
   NPSYSTEM_RUNTIME_FAULT = 'np.system.runtime_fault';
 
+  { Exception boundary contracts — compiler/runtime handshake names }
+  NPSYSTEM_EXCEPTION_TRY_PUSH = 'np.system.exception_try_push';
+  NPSYSTEM_EXCEPTION_TRY_POP = 'np.system.exception_try_pop';
+  NPSYSTEM_EXCEPTION_RAISE = 'np.system.exception_raise';
+  NPSYSTEM_EXCEPTION_FINALLY_END = 'np.system.exception_finally_end';
+  NPSYSTEM_EXCEPTION_EXCEPT_END = 'np.system.exception_except_end';
+
 implementation
 
 end.
