@@ -692,6 +692,13 @@ begin
     Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
+  if (LErrno = HPE_CLOSED_CONNECTION) and FComplete then
+  begin
+    FError := False;
+    FErrorMsg := '';
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
+    Exit;
+  end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
   begin
     FComplete := True;

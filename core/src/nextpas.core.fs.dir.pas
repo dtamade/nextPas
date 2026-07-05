@@ -246,7 +246,7 @@ begin
   if not IsRealDir(APath) then
   begin
     LResult := platform_file_unlink(PAnsiChar(APath));
-    if LResult <> 0 then
+    if (LResult <> 0) and (LResult <> 2) then  { ENOENT is fine: nothing to remove }
       RaiseFsError(LResult, 'removeall', APath);
     Exit(True);
   end;
@@ -265,7 +265,7 @@ begin
     else
     begin
       LResult := platform_file_unlink(PAnsiChar(LChild));
-      if LResult <> 0 then
+      if (LResult <> 0) and (LResult <> 2) then  { ENOENT: vanished between readdir and unlink }
         RaiseFsError(LResult, 'removeall', LChild);
     end;
   end;
