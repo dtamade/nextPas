@@ -35,7 +35,6 @@ compiler/
 原 17,735 行，已拆分为 3 文件 (12,175 + 2,217 + 3,345)。
 已完成提取:
 - `np_sema_string_ops.inc` — 字符串所有权追踪 (2,217 行)
-- `np_sema_runtime_expr.inc` — BuildRuntimeScalarHirExpr (3,345 行)
 - `np_sema_name_set.pas` — 名称集合查找 (O(log n), 100 行)
 
 进一步拆分计划:
