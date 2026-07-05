@@ -25,7 +25,7 @@ uses
 type
   TBenchResult = nextpas.core.bench.base.TBenchResult;
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
-  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
 
 var
@@ -1329,9 +1329,9 @@ var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
   LComparisons: TBenchComparisonArray;
-  LBaseline: TBenchBaseline;
+  LBaseline: TBaselineData;
 begin
-  LBaseline := Default(TBenchBaseline);
+  LBaseline := Default(TBaselineData);
   LBaseline.Name := 'Fast';
   LBaseline.NsPerOp := 75.0;
   LBaseline.BytesPerOp := 512;
