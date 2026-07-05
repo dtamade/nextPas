@@ -290,9 +290,15 @@ begin
 end;
 
 function IsHeaptrcEnabled: Boolean;
+{ heaptrc (-gh) 会 hook 内存管理器。如果 memtrack 也 hook，
+  每次分配会经过两层追踪，开销 10-20x，可能导致 OOM。
+  测试构建通过 -dHEAPTRC_ACTIVE 标志告知此函数。 }
 begin
-  { heaptrc detection via memory manager comparison }
+  {$ifdef HEAPTRC_ACTIVE}
+  Result := True;
+  {$else}
   Result := False;
+  {$endif}
 end;
 
 procedure EnableGlobalMemoryTracking;

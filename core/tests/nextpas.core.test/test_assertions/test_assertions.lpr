@@ -1,4 +1,19 @@
-{ test_assertions — Validates Check* procedural API }
+{ test_assertions — Validates Check* procedural API
+
+  CheckEqual comparison semantics:
+    string    → <> operator (exact match, case-sensitive)
+    Int64     → <> operator (exact match)
+    UInt64    → <> operator (exact match)
+    Boolean   → <> operator (exact match)
+    Pointer   → <> operator (exact address)
+    Double    → via CheckNear (Epsilon tolerance, see ToBeNear docs)
+    TBytes    → element-by-element (length + byte comparison)
+    3-arg     → wraps 2-arg + prepends AMessage on failure
+
+  ⚠ Float comparison: CheckEqual(expected, actual, epsilon) delegates to
+     CheckNear — epsilon=0 means bitwise identity, not "very tight".
+     For normal floating-point comparisons, always use epsilon > 0.
+ }
 program test_assertions;
 
 {$mode objfpc}{$H+}{$J-}
@@ -1089,13 +1104,11 @@ begin
 
   if not LSuite.Run then
   begin
+    Finalize(LSuite);
     WriteLn;
     FailTest('SOME TESTS FAILED');
   end;
   WriteLn;
   PassTest('ALL PASSED');
-  { Release closures before heaptrc reports. Note: heaptrc still reports
-    32 bytes unfreed — this is FPC runtime bookkeeping inside RunWithResult,
-    not a framework leak. All other test suites report 0 unfreed. }
-  LSuite := Default(TTestSuite);
+  Finalize(LSuite);
 end.

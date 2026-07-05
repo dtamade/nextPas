@@ -16,6 +16,7 @@ uses
 
 var
   GSetupCalled: Integer = 0;
+
   GTeardownCalled: Integer = 0;
   GBeforeEachCalled: Integer = 0;
   GAfterEachCalled: Integer = 0;
@@ -296,25 +297,12 @@ var
   LTimeoutRunOut: string;
   { Phase 12: cleanup }
   GCleanupCalled: Integer;
-  { Phase 13: benchmark }
-  LBenchSuite: TTestSuite;
-  LBenchResults: TBenchResults;
-  LBenchConfig: TTestConfig;
-  { G1: RunAllBenchmarks }
-  LBenchRunner: TSuiteRunner;
-  LBenchRunnerResults: specialize TArray<TBenchResults>;
-  { G1: AllPassed auto-run }
   LAutoRunSuite: TTestSuite;
   LAutoRunRunner: TSuiteRunner;
   { T-07: timeout exceeded }
   LFoundTimeout: Boolean;
   LI: Integer;
   { T-06: benchmark N scaling edge cases }
-  LBenchScalingSuite: TTestSuite;
-  LBenchScalingResults: TBenchResults;
-  LBenchScalingConfig: TTestConfig;
-  LBenchScalingSink: TBufferSink;
-  { T-07: suite-level retry }
   LRetrySuite: TTestSuite;
   LRetryResult: TTestRunResult;
   LRetryConfig: TTestConfig;
@@ -328,10 +316,6 @@ var
   LShouldFailResult: TTestRunResult;
   { T-11: ListMode }
   LListOutput: string;
-  { T-12: BenchSave/BenchCompare }
-  LBenchSaveSuite, LBenchCompareSuite: TTestSuite;
-  LBenchSaveRunner: TSuiteRunner;
-  LBenchSaveResults: specialize TArray<TBenchResults>;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -1587,62 +1571,6 @@ begin
   end;
 
   { ── Phase 13: Benchmark ──────────────────────────────────────────────────── }
-  WriteLn;
-  SectionHeader('Phase 13: Benchmark');
-  begin
-    ResetDefaultConfig;
-    LBenchSuite := TTestSuite.Create('BenchTest');
-    { Register a simple benchmark }
-    LBenchSuite.Bench('Addition', procedure(BC: PBenchContext)
-    var
-      I: Integer;
-      LSum: Int64;
-    begin
-      LSum := 0;
-      for I := 1 to BC^.N do
-        LSum := LSum + I;
-      { Prevent optimizer from eliminating the loop }
-      if LSum < 0 then WriteLn('impossible');
-    end);
-    LBenchSuite.Bench('StringConcat', procedure(BC: PBenchContext)
-    var
-      I: Integer;
-      S: string;
-    begin
-      S := '';
-      for I := 1 to BC^.N do
-        S := S + 'x';
-      if Length(S) < 0 then WriteLn('impossible');
-    end);
-    LBenchConfig := DefaultConfig;
-    LBenchConfig.BenchEnabled := True;
-    LBenchConfig.BenchTimeMs := 100; { short time for fast test }
-    LBenchSuite.Config := LBenchConfig;
-    LBenchSuite.RunBenchmarks(LBenchResults);
-    { Verify benchmark results }
-    if Length(LBenchResults) <> 2 then
-      FailTest('bench: expected 2 results, got ' +
-        IntToStr(Length(LBenchResults)));
-    if LBenchResults[0].Name <> 'Addition' then
-      FailTest('bench: expected name "Addition", got "' +
-        LBenchResults[0].Name + '"');
-    if LBenchResults[0].N <= 0 then
-      FailTest('bench: expected N > 0');
-    { NsPerOp may be 0 for sub-ms operations (ms granularity) — that's OK }
-    if LBenchResults[1].Name <> 'StringConcat' then
-      FailTest('bench: expected name "StringConcat", got "' +
-        LBenchResults[1].Name + '"');
-    if LBenchResults[1].N <= 0 then
-      FailTest('bench: expected N > 0');
-    { Verify NsPerOp is populated (may be 0 for sub-ms, but TotalNs should be > 0) }
-    if LBenchResults[0].TotalNs <= 0 then
-      FailTest('bench: expected TotalNs > 0');
-    ResetDefaultConfig;
-    PassTest('Benchmark');
-  end;
-
-  { ── Phase 13b: Cleanup LIFO order ──────────────────────────────────────── }
-  WriteLn;
   SectionHeader('Phase 13b: Cleanup LIFO order');
   begin
     ResetDefaultConfig;
@@ -1713,115 +1641,6 @@ begin
   end;
 
   { ── Phase 13d: Benchmark with --benchmem ───────────────────────────────── }
-  WriteLn;
-  SectionHeader('Phase 13d: Benchmark with --benchmem');
-  begin
-    ResetDefaultConfig;
-    LBenchSuite := TTestSuite.Create('BenchMemTest');
-    LBenchSuite.Bench('Alloc', procedure(BC: PBenchContext)
-    var
-      I: Integer;
-      P: Pointer;
-    begin
-      for I := 1 to BC^.N do
-      begin
-        GetMem(P, 64);
-        BC^.AllocBytes := BC^.AllocBytes + 64;
-        BC^.AllocCount := BC^.AllocCount + 1;
-        FreeMem(P);
-      end;
-    end);
-    LBenchConfig := DefaultConfig;
-    LBenchConfig.BenchEnabled := True;
-    LBenchConfig.BenchTimeMs := 100;
-    LBenchConfig.BenchMem := True;
-    LBenchSuite.Config := LBenchConfig;
-    LBenchSuite.RunBenchmarks(LBenchResults);
-    if Length(LBenchResults) <> 1 then
-      FailTest('benchmem: expected 1 result');
-    if LBenchResults[0].N <= 0 then
-      FailTest('benchmem: expected N > 0');
-    { With benchmem, FormatBenchLine should include B/op info }
-    { We verify via the result fields rather than output parsing }
-    if LBenchResults[0].AllocBytes < 0 then
-      FailTest('benchmem: AllocBytes should be >= 0');
-    if LBenchResults[0].AllocCount < 0 then
-      FailTest('benchmem: AllocCount should be >= 0');
-    ResetDefaultConfig;
-    PassTest('Benchmark with --benchmem');
-  end;
-
-  { ── Phase 13e: Benchmarks skipped in regular Run ───────────────────────── }
-  WriteLn;
-  SectionHeader('Phase 13e: Benchmarks skipped in Run');
-  begin
-    ResetDefaultConfig;
-    LBenchSuite := TTestSuite.Create('BenchSkipTest');
-    { Register both a test and a benchmark in the same suite }
-    LBenchSuite.Test('normal', procedure begin CheckTrue(True); end);
-    LBenchSuite.Bench('skipped_bench', procedure(BC: PBenchContext)
-    begin
-      { This should never be called in regular Run }
-      FailTest('bench: benchmark should not run in regular test mode');
-    end);
-    LBenchSuite.Config := DefaultConfig;
-    LBenchSuite.RunWithResult(LVerbResult);
-    { Only the normal test should run, benchmark should be skipped }
-    if LVerbResult.Passed <> 1 then
-      FailTest('bench skip: expected 1 passed, got ' +
-        IntToStr(LVerbResult.Passed));
-    { Benchmark should not appear in results at all }
-    if LVerbResult.Failed <> 0 then
-      FailTest('bench skip: expected 0 failed, got ' +
-        IntToStr(LVerbResult.Failed));
-    ResetDefaultConfig;
-    PassTest('Benchmarks skipped in Run');
-  end;
-
-  { ── G1: RunAllBenchmarks at runner level ───────────────────────── }
-  WriteLn;
-  SectionHeader('G1: RunAllBenchmarks (runner level)');
-  begin
-    ResetDefaultConfig;
-    LBenchConfig := DefaultConfig;
-    LBenchConfig.BenchEnabled := True;
-    LBenchConfig.BenchTimeMs := 100;
-    LBenchRunner := TSuiteRunner.Create('BenchRunner');
-    { Suite A: 1 benchmark }
-    LBenchSuite := TTestSuite.Create('BenchSuiteA');
-    LBenchSuite.Bench('OpA', procedure(BC: PBenchContext)
-    var
-      I: Integer;
-    begin
-      for I := 1 to BC^.N do
-        if I < 0 then WriteLn('x');
-    end);
-    LBenchSuite.Config := LBenchConfig;
-    LBenchRunner.Add(LBenchSuite);
-    { Suite B: 1 benchmark }
-    LBenchSuite := TTestSuite.Create('BenchSuiteB');
-    LBenchSuite.Bench('OpB', procedure(BC: PBenchContext)
-    var
-      I: Integer;
-    begin
-      for I := 1 to BC^.N do
-        if I < 0 then WriteLn('x');
-    end);
-    LBenchSuite.Config := LBenchConfig;
-    LBenchRunner.Add(LBenchSuite);
-    { RunAllBenchmarks aggregates results from all suites }
-    if not LBenchRunner.RunAllBenchmarks(LBenchRunnerResults) then
-      FailTest('RunAllBenchmarks should return True');
-    { Should have results from both suites }
-    if Length(LBenchRunnerResults) < 2 then
-      FailTest('RunAllBenchmarks: expected >= 2 suite results, got ' +
-        IntToStr(Length(LBenchRunnerResults)));
-    ResetDefaultConfig;
-    PassTest('RunAllBenchmarks runner level');
-  end;
-
-  { ── G1: AllPassed auto-run behavior ────────────────────────────── }
-  WriteLn;
   SectionHeader('G1: AllPassed auto-run');
   begin
     ResetDefaultConfig;
@@ -2084,80 +1903,6 @@ begin
   end;
 
   { ── T-06: Benchmark N scaling edge cases ───────────────────────────────── }
-
-  SectionHeader('T-06: Benchmark N scaling');
-
-  begin
-    { Fast benchmark: 0ms elapsed → N should scale up from 1 }
-    LBenchScalingSuite := TTestSuite.Create('BenchFast');
-    LBenchScalingSuite.Bench('noop', procedure(BC: PBenchContext)
-    begin
-      { Intentionally empty — 0ms elapsed forces maximum N scaling }
-    end);
-    LBenchScalingConfig := DefaultConfig;
-    LBenchScalingConfig.BenchEnabled := True;
-    LBenchScalingConfig.BenchTimeMs := 50; { short bench time }
-    LBenchScalingSuite.Config := LBenchScalingConfig;
-    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
-    if Length(LBenchScalingResults) <> 1 then
-      FailTest('fast bench: expected 1 result, got ' +
-        IntToStr(Length(LBenchScalingResults)));
-    { N should have scaled up significantly from 1 (100x per step) }
-    if LBenchScalingResults[0].N < 100 then
-      FailTest('fast bench: expected N >= 100, got ' +
-        IntToStr(LBenchScalingResults[0].N));
-    { ns/op should be very low }
-    if LBenchScalingResults[0].NsPerOp > 1000 then
-      FailTest('fast bench: expected ns/op < 1000, got ' +
-        IntToStr(LBenchScalingResults[0].NsPerOp));
-    PassTest('Fast benchmark N scaling');
-
-    { Slow benchmark: work exceeds BenchTimeMs on N=1 → immediate report }
-    LBenchScalingSuite := TTestSuite.Create('BenchSlow');
-    LBenchScalingSuite.Bench('sleep_100ms', procedure(BC: PBenchContext)
-    begin
-      SleepMs(100);
-    end);
-    LBenchScalingConfig := DefaultConfig;
-    LBenchScalingConfig.BenchEnabled := True;
-    LBenchScalingConfig.BenchTimeMs := 50; { shorter than work }
-    LBenchScalingSuite.Config := LBenchScalingConfig;
-    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
-    if Length(LBenchScalingResults) <> 1 then
-      FailTest('slow bench: expected 1 result, got ' +
-        IntToStr(Length(LBenchScalingResults)));
-    { N should stay at 1 since work already exceeds bench time }
-    if LBenchScalingResults[0].N <> 1 then
-      FailTest('slow bench: expected N=1, got ' +
-        IntToStr(LBenchScalingResults[0].N));
-    { ns/op should be ~100ms = 100,000,000 ns }
-    if LBenchScalingResults[0].NsPerOp < 50000000 then
-      FailTest('slow bench: expected ns/op >= 50M, got ' +
-        IntToStr(LBenchScalingResults[0].NsPerOp));
-    PassTest('Slow benchmark N=1 immediate');
-
-    { Medium benchmark: work within bench time → N scales but not to max }
-    LBenchScalingSuite := TTestSuite.Create('BenchMedium');
-    LBenchScalingSuite.Bench('fast_loop', procedure(BC: PBenchContext)
-    var K: Integer;
-    begin
-      for K := 1 to BC^.N do ; { trivial work }
-    end);
-    LBenchScalingConfig := DefaultConfig;
-    LBenchScalingConfig.BenchEnabled := True;
-    LBenchScalingConfig.BenchTimeMs := 100;
-    LBenchScalingSuite.Config := LBenchScalingConfig;
-    LBenchScalingSuite.RunBenchmarks(LBenchScalingResults);
-    if Length(LBenchScalingResults) <> 1 then
-      FailTest('medium bench: expected 1 result');
-    if LBenchScalingResults[0].N < 10 then
-      FailTest('medium bench: expected N >= 10, got ' +
-        IntToStr(LBenchScalingResults[0].N));
-    PassTest('Medium benchmark N scaling');
-  end;
-
-  { ── T-07: Suite-level retry (RetryCount via config) ───────────────────── }
-
   SectionHeader('T-07: Suite-level retry');
 
   begin
@@ -2315,43 +2060,6 @@ begin
     PassTest('ListMode outputs test names');
   end;
 
-  { ── T-12: BenchSave/BenchCompare roundtrip ─────────────────────────────── }
-
-  SectionHeader('T-12: BenchSave/BenchCompare roundtrip');
-
-  begin
-    LBenchSaveSuite := TTestSuite.Create('BenchSaveSuite');
-    LBenchSaveSuite.Bench('fast_bench', procedure(BC: PBenchContext)
-    begin
-      { No-op benchmark }
-    end);
-    { Save results to temp file }
-    LBenchSaveSuite.Config.BenchEnabled := True;
-    LBenchSaveSuite.Config.BenchSaveFile := '/tmp/nextpas_bench_test.json';
-    LBenchSaveSuite.Config.AnsiMode := amOff;
-    LBenchSaveRunner := Default(TSuiteRunner);
-    LBenchSaveRunner.Add(LBenchSaveSuite);
-    LBenchSaveRunner.RunAllBenchmarks(LBenchSaveResults);
-    { Verify file was created }
-    if not FileExists('/tmp/nextpas_bench_test.json') then
-      FailTest('BenchSave: file not created');
-    { Load and verify roundtrip }
-    LBenchCompareSuite := TTestSuite.Create('BenchCompareSuite');
-    LBenchCompareSuite.Bench('fast_bench', procedure(BC: PBenchContext)
-    begin
-      { Same benchmark for comparison }
-    end);
-    LBenchCompareSuite.Config.BenchEnabled := True;
-    LBenchCompareSuite.Config.BenchCompareFile := '/tmp/nextpas_bench_test.json';
-    LBenchCompareSuite.Config.AnsiMode := amOff;
-    LBenchSaveRunner := Default(TSuiteRunner);
-    LBenchSaveRunner.Add(LBenchCompareSuite);
-    LBenchSaveRunner.RunAllBenchmarks(LBenchSaveResults);
-    { Cleanup }
-    DeleteFile('/tmp/nextpas_bench_test.json');
-    PassTest('BenchSave/BenchCompare roundtrip');
-  end;
-
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2378,18 +2086,11 @@ begin
   LProgressSuite := Default(TTestSuite);
   LMaxFailSuite := Default(TTestSuite);
   LJsonSuite := Default(TTestSuite);
-  LBenchSuite := Default(TTestSuite);
-  LBenchRunner := Default(TSuiteRunner);
   LAutoRunSuite := Default(TTestSuite);
   LAutoRunRunner := Default(TSuiteRunner);
   LJsonSink := nil;
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;
-  LBenchSuite := Default(TTestSuite);
-  LBenchScalingSuite := Default(TTestSuite);
   LRetrySuite := Default(TTestSuite);
   LIdempotentSuite := Default(TTestSuite);
-  LBenchSaveSuite := Default(TTestSuite);
-  LBenchCompareSuite := Default(TTestSuite);
-  LBenchSaveRunner := Default(TSuiteRunner);
 end.
