@@ -223,8 +223,14 @@ function PosixMapFd(AFd: cint; ASize: UInt64; AOffset: UInt64;
   out AMap: TPlatformMappedFile): Int32;
 var
   LAddr: Pointer;
+  LPageSize: UInt64;
 begin
   if (ASize = 0) or (not MapFitsPtrUInt(ASize)) then
+    Exit(PLATFORM_MMAP_EINVAL);
+
+  { POSIX requires offset to be page-aligned }
+  LPageSize := platform_mmap_page_size;
+  if (LPageSize > 0) and ((AOffset mod LPageSize) <> 0) then
     Exit(PLATFORM_MMAP_EINVAL);
 
   LAddr := mmap(nil, PtrUInt(ASize), PosixProtection(AAccess),

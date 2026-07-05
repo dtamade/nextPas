@@ -29,6 +29,7 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
@@ -63,7 +64,7 @@ begin
   FillChar(ALib, SizeOf(ALib), 0);
   ALib.Handle := dlopen(APath, MapFlags(AFlags));
   if ALib.Handle = nil then
-    Result := 2 // caller uses platform_dl_error for details
+    Result := PLATFORM_ERR_ENOENT // caller uses platform_dl_error for details
   else
     Result := 0;
 end;
@@ -73,13 +74,13 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
 begin
   AAddr := nil;
   if ALib.Handle = nil then
-    Exit(22); // EINVAL
+    Exit(PLATFORM_ERR_INVALID);
   dlerror; // clear previous error
   AAddr := dlsym(ALib.Handle, AName);
   if AAddr = nil then
   begin
     if dlerror <> nil then
-      Result := 2 // symbol not found
+      Result := PLATFORM_ERR_ENOENT // symbol not found
     else
       Result := 0; // symbol genuinely maps to nil (rare but valid)
   end
@@ -90,7 +91,7 @@ end;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
 begin
   if ALib.Handle = nil then
-    Exit(22); // EINVAL
+    Exit(PLATFORM_ERR_INVALID);
   if dlclose(ALib.Handle) <> 0 then
     Result := platform_get_errno
   else

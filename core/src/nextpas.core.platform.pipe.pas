@@ -24,6 +24,7 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 
@@ -41,7 +42,7 @@ end;
 
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.ReadFd < 0 then Exit(9);
+  if APipe.ReadFd < 0 then Exit(PLATFORM_ERR_BADF);
   close(Int32(APipe.ReadFd));
   APipe.ReadFd := -1;
   Result := 0;
@@ -49,7 +50,7 @@ end;
 
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.WriteFd < 0 then Exit(9);
+  if APipe.WriteFd < 0 then Exit(PLATFORM_ERR_BADF);
   close(Int32(APipe.WriteFd));
   APipe.WriteFd := -1;
   Result := 0;
