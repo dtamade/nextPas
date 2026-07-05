@@ -227,18 +227,20 @@ var
 begin
   Result := AConfig;
   LDefaults := DefaultConfig;
+  { String fields: merge if empty (zero-value check is sufficient) }
   if Result.FilterPattern = '' then
     Result.FilterPattern := LDefaults.FilterPattern;
   if Result.TagFilter = '' then
     Result.TagFilter := LDefaults.TagFilter;
+  if Result.RunPattern = '' then
+    Result.RunPattern := LDefaults.RunPattern;
+  if Result.BenchSaveFile = '' then
+    Result.BenchSaveFile := LDefaults.BenchSaveFile;
+  if Result.BenchCompareFile = '' then
+    Result.BenchCompareFile := LDefaults.BenchCompareFile;
+  { Numeric fields: merge if zero (zero-value check is sufficient) }
   if Result.TimeoutMs = 0 then
     Result.TimeoutMs := LDefaults.TimeoutMs;
-  if Result.AnsiMode = amAuto then
-    Result.AnsiMode := LDefaults.AnsiMode;
-  if Result.OutSink = nil then
-    Result.OutSink := LDefaults.OutSink;
-  if Result.ErrSink = nil then
-    Result.ErrSink := LDefaults.ErrSink;
   if Result.RetryCount = 0 then
     Result.RetryCount := LDefaults.RetryCount;
   if Result.MaxParallelWorkers = 0 then
@@ -249,9 +251,36 @@ begin
     Result.SlowTestCount := LDefaults.SlowTestCount;
   if (Result.ShuffleSeed = 0) and not (ckShuffle in GExplicit) then
     Result.ShuffleSeed := LDefaults.ShuffleSeed;
-  { FailFast and ListMode: false is the intentional default, no merge needed }
-  if Result.RunPattern = '' then
-    Result.RunPattern := LDefaults.RunPattern;
+  if Result.MaxFailures = 0 then
+    Result.MaxFailures := LDefaults.MaxFailures;
+  if Result.RunTimeoutSec = 0 then
+    Result.RunTimeoutSec := LDefaults.RunTimeoutSec;
+  if Result.BenchTimeMs = 0 then
+    Result.BenchTimeMs := LDefaults.BenchTimeMs;
+  { Enum/interface fields: merge if default }
+  if Result.AnsiMode = amAuto then
+    Result.AnsiMode := LDefaults.AnsiMode;
+  if Result.OutSink = nil then
+    Result.OutSink := LDefaults.OutSink;
+  if Result.ErrSink = nil then
+    Result.ErrSink := LDefaults.ErrSink;
+  { Boolean fields: merge via GExplicit (false ≠ "not set") }
+  if not (ckFailFast in GExplicit) then
+    Result.FailFast := Result.FailFast or LDefaults.FailFast;
+  if not (ckList in GExplicit) then
+    Result.ListMode := Result.ListMode or LDefaults.ListMode;
+  if not (ckShort in GExplicit) then
+    Result.ShortMode := Result.ShortMode or LDefaults.ShortMode;
+  if not (ckProgress in GExplicit) then
+    Result.ShowProgress := Result.ShowProgress or LDefaults.ShowProgress;
+  if not (ckJsonOutput in GExplicit) then
+    Result.JsonOutput := Result.JsonOutput or LDefaults.JsonOutput;
+  if not (ckVerbose in GExplicit) then
+    Result.VerboseMode := Result.VerboseMode or LDefaults.VerboseMode;
+  if not (ckBench in GExplicit) then
+    Result.BenchEnabled := Result.BenchEnabled or LDefaults.BenchEnabled;
+  if not (ckBenchMem in GExplicit) then
+    Result.BenchMem := Result.BenchMem or LDefaults.BenchMem;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;

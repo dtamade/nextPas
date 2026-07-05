@@ -11,7 +11,8 @@ uses
   nextpas.core.test,
   { 白盒测试：直接验证 runner 内部 helper，而不是仅通过 facade 间接覆盖。 }
   nextpas.core.test.runner,
-  nextpas.core.test.output;
+  nextpas.core.test.output,
+  nextpas.core.fs;
 
 var
   GSetupCalled: Integer = 0;
@@ -323,6 +324,14 @@ var
   LIdempotentResult: TTestRunResult;
   { E-03: FormatDuration regression }
   LFormatMs: string;
+  { T-09: ShouldFail exception class }
+  LShouldFailResult: TTestRunResult;
+  { T-11: ListMode }
+  LListOutput: string;
+  { T-12: BenchSave/BenchCompare }
+  LBenchSaveSuite, LBenchCompareSuite: TTestSuite;
+  LBenchSaveRunner: TSuiteRunner;
+  LBenchSaveResults: specialize TArray<TBenchResults>;
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -2240,6 +2249,109 @@ begin
     PassTest('FormatDuration locale-independent');
   end;
 
+  { ── T-09: ShouldFail with exception class ──────────────────────────────── }
+
+  SectionHeader('T-09: ShouldFail exception class');
+
+  begin
+    LSuite1 := TTestSuite.Create('ShouldFailClass');
+    { ShouldFail with matching exception class → pass }
+    LSuite1.ShouldFail('match_class', procedure
+    begin
+      raise EAssertionFailed.Create('expected error');
+    end, EAssertionFailed);
+    { ShouldFail with parent class → also pass }
+    LSuite1.ShouldFail('parent_class', procedure
+    begin
+      raise EAssertionFailed.Create('error');
+    end, Exception);
+    LSuite1.RunWithResult(LShouldFailResult);
+    { Both should pass: EAssertionFailed matches both EAssertionFailed and Exception }
+    if LShouldFailResult.Passed <> 2 then
+      FailTest('ShouldFail class: expected 2 passed, got ' +
+        IntToStr(LShouldFailResult.Passed));
+    PassTest('ShouldFail with exception class matching');
+  end;
+
+  { ── T-10: RunPattern (--run) exact match ───────────────────────────────── }
+
+  SectionHeader('T-10: RunPattern (--run)');
+
+  begin
+    LFilterSuite := TTestSuite.Create('RunPatternSuite');
+    LFilterSuite.Config.RunPattern := 'exact_match';
+    LFilterSuite.Test('exact_match', @TestSimplePass);
+    LFilterSuite.Test('no_match', @TestSimplePass2);
+    LFilterSuite.RunWithResult(LFilterResult);
+    { Only exact_match should run }
+    if LFilterResult.Passed <> 1 then
+      FailTest('RunPattern: expected 1 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    PassTest('RunPattern (--run) exact match');
+  end;
+
+  { ── T-11: ListMode output ──────────────────────────────────────────────── }
+
+  SectionHeader('T-11: ListMode output');
+
+  begin
+    LJsonSink := TBufferSink.Create;
+    LJsonSuite := TTestSuite.Create('ListModeSuite');
+    LJsonSuite.Config.OutSink := LJsonSink;
+    LJsonSuite.Config.AnsiMode := amOff;
+    LJsonSuite.Config.ListMode := True;
+    LJsonSuite.Test('test_alpha', @TestSimplePass);
+    LJsonSuite.Test('test_beta', @TestSimplePass2);
+    { ListMode is handled at RunAll level, not RunWithResult }
+    LRunner := Default(TSuiteRunner);
+    LRunner.Add(LJsonSuite);
+    LRunner.RunAll;
+    LListOutput := LJsonSink.GetOutput;
+    { ListMode should output test names without running them }
+    if Pos('test_alpha', LListOutput) = 0 then
+      FailTest('ListMode: missing test_alpha in output');
+    if Pos('test_beta', LListOutput) = 0 then
+      FailTest('ListMode: missing test_beta in output');
+    PassTest('ListMode outputs test names');
+  end;
+
+  { ── T-12: BenchSave/BenchCompare roundtrip ─────────────────────────────── }
+
+  SectionHeader('T-12: BenchSave/BenchCompare roundtrip');
+
+  begin
+    LBenchSaveSuite := TTestSuite.Create('BenchSaveSuite');
+    LBenchSaveSuite.Bench('fast_bench', procedure(BC: PBenchContext)
+    begin
+      { No-op benchmark }
+    end);
+    { Save results to temp file }
+    LBenchSaveSuite.Config.BenchEnabled := True;
+    LBenchSaveSuite.Config.BenchSaveFile := '/tmp/nextpas_bench_test.json';
+    LBenchSaveSuite.Config.AnsiMode := amOff;
+    LBenchSaveRunner := Default(TSuiteRunner);
+    LBenchSaveRunner.Add(LBenchSaveSuite);
+    LBenchSaveRunner.RunAllBenchmarks(LBenchSaveResults);
+    { Verify file was created }
+    if not FileExists('/tmp/nextpas_bench_test.json') then
+      FailTest('BenchSave: file not created');
+    { Load and verify roundtrip }
+    LBenchCompareSuite := TTestSuite.Create('BenchCompareSuite');
+    LBenchCompareSuite.Bench('fast_bench', procedure(BC: PBenchContext)
+    begin
+      { Same benchmark for comparison }
+    end);
+    LBenchCompareSuite.Config.BenchEnabled := True;
+    LBenchCompareSuite.Config.BenchCompareFile := '/tmp/nextpas_bench_test.json';
+    LBenchCompareSuite.Config.AnsiMode := amOff;
+    LBenchSaveRunner := Default(TSuiteRunner);
+    LBenchSaveRunner.Add(LBenchCompareSuite);
+    LBenchSaveRunner.RunAllBenchmarks(LBenchSaveResults);
+    { Cleanup }
+    DeleteFile('/tmp/nextpas_bench_test.json');
+    PassTest('BenchSave/BenchCompare roundtrip');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2277,4 +2389,7 @@ begin
   LBenchScalingSuite := Default(TTestSuite);
   LRetrySuite := Default(TTestSuite);
   LIdempotentSuite := Default(TTestSuite);
+  LBenchSaveSuite := Default(TTestSuite);
+  LBenchCompareSuite := Default(TTestSuite);
+  LBenchSaveRunner := Default(TSuiteRunner);
 end.

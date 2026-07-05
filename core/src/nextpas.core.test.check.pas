@@ -33,16 +33,6 @@ procedure CheckEqual(const AExpected, AActual: Int64;
   const AMessage: string); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
-{ CheckEqualMsg — avoids FPC overload ambiguity for UInt16/UInt32/UInt64.
-  Prefer CheckEqual(expected, actual, message) 3-arg overload when no ambiguity. }
-procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
-  deprecated 'use CheckEqual(expected, actual, message)';
-procedure CheckEqualMsg(const AExpected, AActual: Int64; const AMessage: string);
-  deprecated 'use CheckEqual(expected, actual, message)';
-procedure CheckEqualMsg(const AExpected, AActual: UInt64; const AMessage: string);
-  deprecated 'use CheckEqual(expected, actual, message)';
-procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
-  deprecated 'use CheckEqual(expected, actual, message)';
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
@@ -134,8 +124,9 @@ procedure CheckSnapshot(const AActual: string;
 implementation
 
 uses
-  Math,                         { IsNan for Double comparison NaN guards }
-  nextpas.core.platform.env;   { platform_env_get_str for snapshot update flag }
+  nextpas.core.math.scalar,     { IsNan for Double comparison NaN guards }
+  nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
+  nextpas.core.fs;             { ReadFileText/WriteFileText for snapshot I/O }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -260,60 +251,6 @@ end;
 
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
-begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
-end;
-
-{ CheckEqualMsg — independent function name to avoid FPC overload ambiguity }
-
-procedure CheckEqualMsg(const AExpected, AActual: string; const AMessage: string);
-begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
-end;
-
-procedure CheckEqualMsg(const AExpected, AActual: Int64; const AMessage: string);
-begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
-end;
-
-procedure CheckEqualMsg(const AExpected, AActual: UInt64; const AMessage: string);
-begin
-  try
-    CheckEqual(Int64(AExpected), Int64(AActual));
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
-end;
-
-procedure CheckEqualMsg(const AExpected, AActual: Boolean; const AMessage: string);
 begin
   try
     CheckEqual(AExpected, AActual);
@@ -820,42 +757,14 @@ end;
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
 
 function ReadFileContents(const APath: string; out AContents: string): Boolean;
-var
-  F: TextFile;
-  LLine: string;
 begin
-  Result := False;
-  AContents := '';
-  Assign(F, APath);
-  {$I-}
-  Reset(F);
-  {$I+}
-  if IOResult <> 0 then
-    Exit;
-  while not Eof(F) do
-  begin
-    ReadLn(F, LLine);
-    if AContents <> '' then
-      AContents := AContents + #10;
-    AContents := AContents + LLine;
-  end;
-  Close(F);
-  Result := True;
+  AContents := ReadFileText(APath);
+  Result := AContents <> '';
 end;
 
 procedure WriteFileContents(const APath, AContents: string);
-var
-  F: TextFile;
 begin
-  Assign(F, APath);
-  {$I-}
-  Rewrite(F);
-  {$I+}
-  if IOResult <> 0 then
-    InternalFail('CheckSnapshot: cannot write ' + APath);
-  Write(F, AContents);
-  Flush(F);
-  Close(F);
+  WriteFileText(APath, AContents);
 end;
 
 procedure CheckSnapshot(const AActual: string;

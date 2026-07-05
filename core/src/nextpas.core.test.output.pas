@@ -11,6 +11,7 @@ interface
 uses
   nextpas.core.system,
   nextpas.core.platform.env,
+  nextpas.core.platform.console,
   nextpas.core.test.base,
   nextpas.core.test.config,
   nextpas.core.text.conv,
@@ -143,11 +144,6 @@ function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Intege
 
 implementation
 
-{$IFDEF UNIX}
-{ libc isatty — check if file descriptor is a terminal }
-function c_isatty(fd: LongInt): LongInt; cdecl; external 'c' name 'isatty';
-{$ENDIF}
-
 { Local wrapper: platform_env_get_str returns '' for missing vars }
 function GetEnv(const AName: string): string;
 begin
@@ -189,7 +185,7 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     { Enable ANSI if stdout is a TTY (terminal).
       When piped to a file or non-TTY, disable to avoid escape sequences. }
-    GAnsiEnabled := c_isatty(1) <> 0;
+    GAnsiEnabled := platform_console_is_terminal(1);
     {$ELSE}
     GAnsiEnabled := (GetEnv('TERM') <> '') or
                     (GetEnv('ANSICON') <> '') or

@@ -89,7 +89,7 @@ function ExpectProc(AProc: TTestProc): IExpectation;
 implementation
 
 uses
-  Math; { IsNan for Double comparison NaN guards }
+  nextpas.core.math.scalar; { IsNan for Double comparison NaN guards }
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
