@@ -156,12 +156,12 @@ end;
 {$ELSEIF DEFINED(CPUAARCH64)}
 procedure atomic_seq_cst_fence; assembler; nostackframe;
 asm
-  dmb ish
+  dmb #11  // dmb ish — full inner-shareable barrier
 end;
 {$ELSEIF DEFINED(CPUARM)}
 procedure atomic_seq_cst_fence; assembler; nostackframe;
 asm
-  dmb ish
+  dmb #11  // dmb ish — full inner-shareable barrier
 end;
 {$ELSEIF DEFINED(CPURISCV64) OR DEFINED(CPURISCV32)}
 procedure atomic_seq_cst_fence; assembler; nostackframe;
