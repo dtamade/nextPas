@@ -388,7 +388,7 @@ var
   I: Integer;
 begin
   LLines.Builder.Init(4096);
-
+  try
   // title
   BufferAddLine(LLines, '=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
   BufferAddLine(LLines, '');
@@ -478,7 +478,9 @@ begin
   end;
 
   Result := BufferToString(LLines);
-  LLines.Builder.Done;
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.ToJSON: string;
@@ -567,7 +569,7 @@ var
   I: Integer;
 begin
   LLines.Builder.Init(4096);
-
+  try
   // header
   BufferAddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
@@ -590,7 +592,9 @@ begin
   end;
 
   Result := BufferToString(LLines);
-  LLines.Builder.Done;
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 { SVG 图表生成方法 — 从 report.svg.inc 包含 }
@@ -607,7 +611,7 @@ var
   I: Integer;
 begin
   LLines.Builder.Init(4096);
-
+  try
   BufferAddLine(LLines, '=== Baseline Comparison ===');
   BufferAddLine(LLines, '');
   BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
@@ -636,7 +640,9 @@ begin
   end;
 
   Result := BufferToString(LLines);
-  LLines.Builder.Done;
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 function TBenchReportGenerator.ToBenchstat: string;
@@ -647,7 +653,7 @@ var
   I: Integer;
 begin
   LLines.Builder.Init(4096);
-
+  try
   { benchstat 兼容的 tab-separated 表头 }
   BufferAddLine(LLines, TextFormat('%-40s %12s %8s %12s %10s',
     ['name', 'ns/op', '+- %', 'B/op', 'allocs/op']));
@@ -680,7 +686,9 @@ begin
   end;
 
   Result := BufferToString(LLines);
-  LLines.Builder.Done;
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 { P2-1: 多基线对比矩阵 — Console 报告 }
@@ -695,7 +703,7 @@ var
 begin
   LLines.Builder.Init(4096);
   LNCols := Length(AMatrix.BaselineNames);
-
+  try
   BufferAddLine(LLines, '=== Multi-Baseline Comparison Matrix ===');
   BufferAddLine(LLines, '');
   BufferAddLine(LLines, 'Ratio = current / baseline. <1.0 faster, >1.0 slower.');
@@ -767,7 +775,9 @@ begin
   end;
 
   Result := BufferToString(LLines);
-  LLines.Builder.Done;
+  finally
+    LLines.Builder.Done;
+  end;
 end;
 
 { 矩阵 JSON 导出 — CI 可直接消费 }
