@@ -61,6 +61,8 @@ function BatchDot(const ALeft, ARight: array of TVec4f;
 function BatchNormalize(var AVectors: array of TVec2f): SizeInt; overload;
 function BatchNormalize(var AVectors: array of TVec3f): SizeInt; overload;
 function BatchNormalize(var AVectors: array of TVec4f): SizeInt; overload;
+function BatchNormalize(const ASource: array of TVec3f;
+                        var ADest: array of TVec3f): SizeInt; overload;
 
 function BatchTransform(const AMatrix: TMat3f;
                         const ASource: array of TVec2f;
@@ -301,6 +303,12 @@ end;
 function BatchNormalize(var AVectors: array of TVec4f): SizeInt;
 begin
   Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(const ASource: array of TVec3f;
+                        var ADest: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(ASource, ADest);
 end;
 
 function BatchTransform(const AMatrix: TMat3f;

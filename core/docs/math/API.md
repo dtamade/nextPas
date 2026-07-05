@@ -223,7 +223,7 @@ Vector `Equals` applies scalar `FloatEquals` component-wise: NaN components and 
 Batch operations process vector arrays for bulk computation:
 
 - `BatchDot`: computes dot products of two vector arrays into a results array
-- `BatchNormalize`: normalizes a vector array in-place
+- `BatchNormalize`: normalizes a vector array in-place, or from source to dest array
 - `BatchTransform`: transforms a vector array by a matrix
 - `BatchLerp`: interpolates between two vector arrays
 - `BatchClamp`: clamps a vector array to min/max bounds
