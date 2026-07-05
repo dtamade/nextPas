@@ -163,6 +163,7 @@ type
 
     { Incremental compilation: check for file changes and invalidate caches }
     function PrepareIncrementalBuild: Boolean;
+    function GetScheduler: TParallelScheduler;
 
     { Take snapshot after successful build }
     procedure FinalizeIncrementalBuild;
@@ -329,6 +330,7 @@ type
     property TargetFacts: TTargetFactsView read FTargetFacts;
     property RootFileId: TSourceFileId read FRootFileId;
     property UnitStateCount: LongInt read FUnitStateCount;
+    property Scheduler: TParallelScheduler read GetScheduler;
   end;
 
 implementation
@@ -800,6 +802,13 @@ begin
   AppendJsonField(TraceFields, 'result', JsonString(AResultValue));
   AppendJsonField(TraceFields, 'steps', '[' + StepJson + ']');
   Result := '{' + TraceFields + '}';
+end;
+
+function TCompilationSession.GetScheduler: TParallelScheduler;
+begin
+  if FScheduler = nil then
+    FScheduler := TParallelScheduler.Create;
+  Result := FScheduler;
 end;
 
 function TCompilationSession.PrepareIncrementalBuild: Boolean;
