@@ -28,7 +28,7 @@
 
 ### 一句话结论
 
-> 平台模块在底层系统抽象上达到生产级水平（性能 9.0、内存安全 9.0），但 API 层存在 134 个 `-1` fallback stub、30/489 nil guard 覆盖率等设计债务，对标 Rust/Go 差距主要在类型安全和 RAII 自动化上。timeout 类型已统一为 `Int64` ms/ns。
+> 平台模块在底层系统抽象上达到生产级水平（性能 9.0、内存安全 9.0），但 API 层存在 134 个 `-1` fallback stub、30/489 nil guard 覆盖率等设计债务，对标 Rust/Go 差距主要在类型安全和 RAII 自动化上。timeout 类型已统一为 `Int64` ms/ns，测试覆盖已提升到 80%+。
 
 ---
 
@@ -375,7 +375,7 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 |---|------|--------|------|
 | P2-1 | 补全 nil guard（dl/env/mmap/pipe/pty 等） | 4h | 消除段错误风险 |
 | P2-2 | 统一 timeout 类型为 `Int64` ms | 3h | ✅ 已完成 (Phase 9) |
-| P2-3 | 补充 watch/pty/freetype/resource/net/signal 测试 | 8h | 提升覆盖率到 80%+ |
+| P2-3 | 补充 watch/pty/freetype/resource/net/signal 测试 | 8h | ✅ 已完成 (25 新测试) |
 
 ### 中期优化 (季度)
 
@@ -437,7 +437,7 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 - [x] 统一 timeout 类型 (P2-2) — 2026-07-06
 
 ### 3. 本月完成
-- [ ] 补充低覆盖率模块测试 (P2-3)
+- [x] 补充低覆盖率模块测试 (P2-3) — 2026-07-06
 - [ ] 建立 CONTRACT.md CI 验证 (P3-3)
 
 ### 4. 季度目标
