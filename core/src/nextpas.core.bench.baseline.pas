@@ -61,6 +61,9 @@ type
      *}
     class function Create(ARegressionThreshold: Double = 1.1): TBaselineManager; static;
 
+    {** F-18: 深拷贝（独立副本，修改不影响原对象） }
+    function Clone: TBaselineManager;
+
     {**
      * 添加基线
      *}
@@ -136,6 +139,27 @@ begin
   Result.FBaselineCount := 0;
   Result.FBaselineCapacity := 0;
   Result.FRegressionThreshold := ARegressionThreshold;
+end;
+
+{** F-18: 深拷贝 — 独立的动态数组副本 }
+function TBaselineManager.Clone: TBaselineManager;
+var
+  I: Integer;
+begin
+  Result.FRegressionThreshold := FRegressionThreshold;
+  Result.FBaselineCount := FBaselineCount;
+  Result.FBaselineCapacity := FBaselineCount;
+  if FBaselineCount > 0 then
+  begin
+    SetLength(Result.FBaselines, FBaselineCount);
+    for I := 0 to FBaselineCount - 1 do
+      Result.FBaselines[I] := FBaselines[I];
+  end
+  else
+  begin
+    Result.FBaselines := nil;
+    Result.FBaselineCapacity := 0;
+  end;
 end;
 
 function TBaselineManager.FindBaseline(const AName: string): Integer;

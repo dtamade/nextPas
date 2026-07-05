@@ -201,6 +201,8 @@ uses
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
 var
   GBridgeRunner: TBenchRunner;
+  {** F-16: CAS flag to detect concurrent RunOne calls }
+  GBridgeBusy: Integer = 0;
 
 {** 并行基准桥接函数
  *
@@ -632,6 +634,11 @@ begin
     FBridgeFunc := FParallelBridgeFunc;
     FBridgeParamFunc := AEntry.ParamFunc;
     FBridgeParamValue := AEntry.ParamValue;
+    { F-16: 并发断言 — 检测是否已有另一个 RunOne 在执行并行 benchmark }
+    if InterlockedCompareExchange(GBridgeBusy, 1, 0) <> 0 then
+      raise EBenchError.Create(
+        'TBenchRunner: concurrent parallel benchmark execution detected. ' +
+        'Each TBenchSuite must Run() from a single thread.');
     GBridgeRunner := Self;
     try
       LParallelResult := RunParallelBench(@ParallelBenchBridge,
@@ -641,6 +648,7 @@ begin
       FBridgeParamFunc := nil;
       FBridgeParamValue := 0;
       GBridgeRunner := nil;
+      GBridgeBusy := 0;
       FParallelBridgeFunc := nil;
     end;
 
