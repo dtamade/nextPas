@@ -845,6 +845,7 @@ end;
 function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
   I: Integer;
+  LAvailable: string;
 begin
   for I := 0 to FResultCount - 1 do
   begin
@@ -854,7 +855,20 @@ begin
       Exit;
     end;
   end;
-  raise EBenchError.CreateFmt('Benchmark result not found: "%s"', [AName]);
+  { F-09: 列出可用名称帮助调试 }
+  LAvailable := '';
+  for I := 0 to FResultCount - 1 do
+  begin
+    if I >= 5 then
+    begin
+      LAvailable := LAvailable + ', ...';
+      Break;
+    end;
+    if I > 0 then LAvailable := LAvailable + ', ';
+    LAvailable := LAvailable + '"' + FResults[I].Name + '"';
+  end;
+  raise EBenchError.CreateFmt(
+    'Benchmark result not found: "%s". Available: [%s]', [AName, LAvailable]);
 end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;

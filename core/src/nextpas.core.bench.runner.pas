@@ -103,7 +103,8 @@ type
 
     {** 采集多个样本 }
     function CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
-      out AFirstSample: TBenchResult): TDoubleArray;
+      out AFirstSample: TBenchResult;
+      ATimeoutMs: Int64 = 0; ATimeoutStartNs: UInt64 = 0): TDoubleArray;
 
     {** 构建简单条目 }
     function BuildEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
@@ -833,13 +834,15 @@ begin
 end;
 
 function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
-  out AFirstSample: TBenchResult): TDoubleArray;
+  out AFirstSample: TBenchResult;
+  ATimeoutMs: Int64; ATimeoutStartNs: UInt64): TDoubleArray;
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
   LMinSamples, LSampleCount: Integer;
   LProbeNsPerOp: Double;
   LTargetNs: UInt64;
+  LTimeoutNs: UInt64;
   I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
@@ -884,8 +887,25 @@ begin
   SetLength(LSamples, LSampleCount);
   LSamples[0] := LProbeNsPerOp;  { 第一个样本已在探测中获得 }
 
+  { F-11: 预计算超时阈值 }
+  if (ATimeoutMs > 0) and (ATimeoutStartNs > 0) then
+    LTimeoutNs := UInt64(ATimeoutMs) * 1000000
+  else
+    LTimeoutNs := 0;
+
   for I := 1 to LSampleCount - 1 do
   begin
+    { F-11: 采样前检查 timeout }
+    if (LTimeoutNs > 0) and
+       (platform_monotonic_ns - ATimeoutStartNs >= LTimeoutNs) then
+    begin
+      SetLength(LSamples, I);
+      LSamples[I - 1] := 0.0;  { 标记最后一个样本为无效 }
+      AFirstSample.Skipped := True;
+      AFirstSample.SkipReason := 'Per-benchmark timeout exceeded during sampling';
+      Break;
+    end;
+
     { F-11: 在最后一次采样时启用内存追踪，而非仅第二次 }
     LMeasurement := ExecuteEntry(AEntry, AIters,
       FConfig.EnableMemoryTracking and (I = LSampleCount - 1));
@@ -1004,7 +1024,8 @@ begin
       Exit;
     end;
 
-    LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement);
+    LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement,
+      LTimeoutMs, LStartNs);
     if LMeasurement.Skipped then
     begin
       Result.Iterations := LMeasurement.Iterations;
