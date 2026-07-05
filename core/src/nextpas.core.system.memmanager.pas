@@ -4,6 +4,10 @@ unit nextpas.core.system.memmanager;
  *   that need to intercept allocations (e.g. benchmark memory tracking).
  *
  *   This is the ONLY place that re-exports System.TMemoryManager.
+ *
+ *   WARNING: SetMemoryManager is a low-level API. Passing nil function
+ *   pointers will cause crashes. Callers are responsible for providing
+ *   a valid memory manager record.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -16,7 +20,9 @@ type
 {** Get the current memory manager }
 procedure GetMemoryManager(out AMemMgr: TMemoryManager);
 
-{** Set a custom memory manager }
+{** Set a custom memory manager.
+    WARNING: All function pointers in AMemMgr must be non-nil.
+    Passing nil pointers will cause immediate crashes on next allocation. }
 procedure SetMemoryManager(const AMemMgr: TMemoryManager);
 
 implementation

@@ -3,7 +3,6 @@ program test_system_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.system,
@@ -647,6 +646,56 @@ begin
   end;
 end;
 
+procedure TestInterruptedAndWouldBlockAliases;
+var
+  LInterrupted: nextpas.core.system.EInterruptedError;
+  LWouldBlock: nextpas.core.system.EWouldBlockError;
+begin
+  LInterrupted := nil;
+  LWouldBlock := nil;
+  try
+    LInterrupted := nextpas.core.system.EInterruptedError.Create('interrupted');
+    LWouldBlock := nextpas.core.system.EWouldBlockError.Create('would block');
+    Check(LInterrupted.ClassType = nextpas.core.errors.EInterruptedError,
+      'system EInterruptedError should be canonical errors owner alias');
+    Check(LInterrupted.Category = nextpas.core.errors.ecInterrupted,
+      'system EInterruptedError should preserve canonical category');
+    Check(LWouldBlock.ClassType = nextpas.core.errors.EWouldBlockError,
+      'system EWouldBlockError should be canonical errors owner alias');
+    Check(LWouldBlock.Category = nextpas.core.errors.ecWouldBlock,
+      'system EWouldBlockError should preserve canonical category');
+  finally
+    LWouldBlock.Free;
+    LInterrupted.Free;
+  end;
+end;
+
+procedure TestBoundaryConditions;
+var
+  LBuf: array[0..7] of Byte;
+  I: Integer;
+begin
+  { FillMem(nil, 0) should be silent }
+  nextpas.core.system.FillMem(nil, 0, $FF);
+
+  { CopyMem with overlapping regions should work correctly }
+  for I := 0 to 7 do
+    LBuf[I] := Byte(I);
+  nextpas.core.system.CopyMem(@LBuf[2], @LBuf[0], 4);
+  CheckEqual(Int64(0), Int64(LBuf[2]), 'overlapping CopyMem byte 0');
+  CheckEqual(Int64(1), Int64(LBuf[3]), 'overlapping CopyMem byte 1');
+  CheckEqual(Int64(2), Int64(LBuf[4]), 'overlapping CopyMem byte 2');
+  CheckEqual(Int64(3), Int64(LBuf[5]), 'overlapping CopyMem byte 3');
+
+  { CompareMem with identical buffers should return true }
+  for I := 0 to 7 do
+    LBuf[I] := Byte(I + 10);
+  Check(nextpas.core.system.CompareMem(@LBuf[0], @LBuf[0], 8),
+    'CompareMem same pointer should return true');
+  Check(nextpas.core.system.CompareMem(@LBuf[0], @LBuf[4], 0),
+    'CompareMem zero size should return true regardless of pointers');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system facade');
   T.Test('system constants mirror base compile-truth', @TestSystemConstantsMirrorBaseCompileTruth);
@@ -664,5 +713,7 @@ begin
   T.Test('errors facade catches through system root', @TestErrorsFacadeStillCatchesThroughSystemRoot);
   T.Test('system exception aliases stay canonical', @TestSystemExceptionAliasesStayCanonical);
   T.Test('system error taxonomy aliases mirror canonical owners', @TestSystemErrorTaxonomyAliasesMirrorCanonicalOwners);
+  T.Test('interrupted and would-block error aliases', @TestInterruptedAndWouldBlockAliases);
+  T.Test('boundary conditions for memory operations', @TestBoundaryConditions);
   if not T.Run then Halt(1);
 end.

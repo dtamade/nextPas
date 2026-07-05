@@ -31,19 +31,8 @@ begin
 end;
 
 function SameText(const A, B: string): Boolean;
-var
-  I: SizeInt;
-  LLen: SizeInt;
 begin
-  LLen := Length(A);
-  if Length(B) <> LLen then
-    Exit(False);
-  for I := 1 to LLen do
-  begin
-    if UpCase(A[I]) <> UpCase(B[I]) then
-      Exit(False);
-  end;
-  Result := True;
+  Result := nextpas.core.text.conv.SameText(A, B);
 end;
 
 function IntToStr(const AValue: Int64): string;
