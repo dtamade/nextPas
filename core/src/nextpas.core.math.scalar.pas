@@ -66,36 +66,36 @@ function SmoothStep(const AEdge0, AEdge1, AValue: Single): Single; overload;
  * @param AValue The input value
  * @return Floor of AValue as Int64
  *}
-function Floor(const AValue: Double): Int64; overload; inline;
-function Floor(const AValue: Single): Int64; overload; inline;
+function Floor(const AValue: Double): Int64; overload;
+function Floor(const AValue: Single): Int64; overload;
 
 {** * Returns the smallest integer not less than AValue.
  * @param AValue The input value
  * @return Ceiling of AValue as Int64
  *}
-function Ceil(const AValue: Double): Int64; overload; inline;
-function Ceil(const AValue: Single): Int64; overload; inline;
+function Ceil(const AValue: Double): Int64; overload;
+function Ceil(const AValue: Single): Int64; overload;
 
 {** * Rounds AValue to the nearest integer.
  * @param AValue The input value
  * @return AValue rounded to Int64
  *}
-function Round(const AValue: Double): Int64; overload; inline;
-function Round(const AValue: Single): Int64; overload; inline;
+function Round(const AValue: Double): Int64; overload;
+function Round(const AValue: Single): Int64; overload;
 
 {** * Truncates AValue toward zero.
  * @param AValue The input value
  * @return The integer part of AValue as Int64
  *}
-function Trunc(const AValue: Double): Int64; overload; inline;
-function Trunc(const AValue: Single): Int64; overload; inline;
+function Trunc(const AValue: Double): Int64; overload;
+function Trunc(const AValue: Single): Int64; overload;
 
 {** * Returns the fractional part of AValue.
  * @param AValue The input value
  * @return AValue - Trunc(AValue)
  *}
-function Frac(const AValue: Double): Double; overload; inline;
-function Frac(const AValue: Single): Single; overload; inline;
+function Frac(const AValue: Double): Double; overload;
+function Frac(const AValue: Single): Single; overload;
 
 {** * Returns the absolute value.
  * @param AValue The input value
@@ -249,18 +249,27 @@ function StdDev(const AData: array of Single): Single; overload;
 function PopnStdDev(const AData: array of Double): Double; overload;
 function PopnStdDev(const AData: array of Single): Single; overload;
 
-{** * Computes the total variance (population variance * N).
+{** * Computes the total variance (sum of squared deviations from mean).
+ * This is the ANOVA definition: Σ(xi - x̄)²
  * @param AData The input array
  * @return The total variance, or NaN if the array is empty
  *}
 function TotalVariance(const AData: array of Double): Double; overload;
 function TotalVariance(const AData: array of Single): Single; overload;
 
+{** * Alias for TotalVariance - sum of squared deviations from mean.
+ * @param AData The input array
+ * @return The sum of squared deviations, or NaN if the array is empty
+ *}
+function SumSquaredDeviations(const AData: array of Double): Double; overload;
+function SumSquaredDeviations(const AData: array of Single): Single; overload;
+
 implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.math.impl.scalar;
+  nextpas.core.math.impl.scalar,
+  Math;
 
 { RoundTo - rounds AValue to ADecimals decimal places }
 function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
@@ -443,15 +452,46 @@ begin
   Result := Single(System.Sqrt(Double(Variance(AData))));
 end;
 
-{ TotalVariance - population variance for total dataset }
+{ TotalVariance - sum of squared deviations from mean (ANOVA definition) }
 function TotalVariance(const AData: array of Double): Double;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Double;
 begin
-  Result := PopnVariance(AData);
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(DoubleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff;
 end;
 
 function TotalVariance(const AData: array of Single): Single;
+var
+  i, LCount: Integer;
+  LMean, LSumSqDiff: Single;
 begin
-  Result := PopnVariance(AData);
+  LCount := Length(AData);
+  if LCount = 0 then
+    Exit(SingleQuietNaN);
+  LMean := Mean(AData);
+  LSumSqDiff := 0.0;
+  for i := 0 to LCount - 1 do
+    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
+  Result := LSumSqDiff;
+end;
+
+{ SumSquaredDeviations - alias for TotalVariance }
+function SumSquaredDeviations(const AData: array of Double): Double; overload;
+begin
+  Result := TotalVariance(AData);
+end;
+
+function SumSquaredDeviations(const AData: array of Single): Single; overload;
+begin
+  Result := TotalVariance(AData);
 end;
 
 { PopnStdDev - population standard deviation }
@@ -1446,62 +1486,150 @@ end;
 
 function Fmod(const AX, AY: Single): Single;
 var
-  LResult: Double;
+  LDoubleResult: Double;
+  LAbsX, LAbsY: Double;
 begin
-  if IsNaN(AX) or IsNaN(AY) or (AY = 0.0) or IsInfinite(AX) then
+  if SingleIsNaN(AX) or SingleIsNaN(AY) or (AY = 0.0) or SingleIsInfinite(AX) then
     Exit(SingleQuietNaN);
-  if IsInfinite(AY) then
+  if SingleIsInfinite(AY) then
     Exit(AX);
-  LResult := FmodPositiveFinite(Double(Abs(AX)), Double(Abs(AY)));
-  if LResult = 0.0 then
-    Result := SingleSignedZero(SingleHasSignBit(AX));
-  if LResult = 0.0 then
+  if (AX = 0.0) then
+  begin
+    if SingleHasSignBit(AX) then
+      Exit(SingleSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  LAbsX := Double(Abs(AX));
+  LAbsY := Double(Abs(AY));
+  if LAbsX < LAbsY then
+  begin
+    if SingleHasSignBit(AX) then
+      Result := Single(-LAbsX)
+    else
+      Result := Single(LAbsX);
     Exit;
-  Result := Single(LResult);
-  if Result = 0.0 then
-    Result := SingleSignedZero(SingleHasSignBit(AX))
-  else if SingleHasSignBit(AX) then
-    Result := -Result;
+  end;
+  if LAbsX = LAbsY then
+  begin
+    if SingleHasSignBit(AX) then
+      Exit(SingleSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
+  begin
+    Result := Single(Math.FMod(Double(AX), Double(AY)));
+    if Result = 0.0 then
+      Result := SingleSignedZero(SingleHasSignBit(AX));
+  end
+  else
+  begin
+    LDoubleResult := FmodPositiveFinite(LAbsX, LAbsY);
+    if LDoubleResult = 0.0 then
+      Result := SingleSignedZero(SingleHasSignBit(AX))
+    else if SingleHasSignBit(AX) then
+      Result := Single(-LDoubleResult)
+    else
+      Result := Single(LDoubleResult);
+  end;
 end;
 
 function Fmod(const AX, AY: Double): Double;
 var
-  LResult: Double;
+  LAbsX, LAbsY: Double;
 begin
-  if IsNaN(AX) or IsNaN(AY) or (AY = 0.0) or IsInfinite(AX) then
+  if DoubleIsNaN(AX) or DoubleIsNaN(AY) or (AY = 0.0) or DoubleIsInfinite(AX) then
     Exit(DoubleQuietNaN);
-  if IsInfinite(AY) then
+  if DoubleIsInfinite(AY) then
     Exit(AX);
-  LResult := FmodPositiveFinite(Abs(AX), Abs(AY));
-  if LResult = 0.0 then
-    Result := DoubleSignedZero(DoubleHasSignBit(AX));
-  if LResult = 0.0 then
+  if (AX = 0.0) then
+  begin
+    if DoubleHasSignBit(AX) then
+      Exit(DoubleSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  LAbsX := Abs(AX);
+  LAbsY := Abs(AY);
+  if LAbsX < LAbsY then
+  begin
+    if DoubleHasSignBit(AX) then
+      Result := -LAbsX
+    else
+      Result := LAbsX;
     Exit;
-  if DoubleHasSignBit(AX) then
-    Result := -LResult
+  end;
+  if LAbsX = LAbsY then
+  begin
+    if DoubleHasSignBit(AX) then
+      Exit(DoubleSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
+  begin
+    Result := Math.FMod(AX, AY);
+    if Result = 0.0 then
+      Result := DoubleSignedZero(DoubleHasSignBit(AX));
+  end
   else
-    Result := LResult;
+  begin
+    Result := FmodPositiveFinite(LAbsX, LAbsY);
+    if Result = 0.0 then
+      Result := DoubleSignedZero(DoubleHasSignBit(AX))
+    else if DoubleHasSignBit(AX) then
+      Result := -Result;
+  end;
 end;
 
 {$IF SizeOf(Extended) > SizeOf(Double)}
 function Fmod(const AX, AY: Extended): Extended;
 var
-  LResult: Extended;
+  LAbsX, LAbsY: Extended;
 begin
   if ExtendedIsNaN(AX) or ExtendedIsNaN(AY) or (AY = 0.0) or ExtendedIsInfinite(AX) then
     Exit(ExtendedQuietNaN);
   if ExtendedIsInfinite(AY) then
     Exit(AX);
-  LResult := FmodPositiveFinite(ExtendedAbsFinite(AX), ExtendedAbsFinite(AY));
-  if LResult = 0.0 then
+  if (AX = 0.0) then
   begin
-    Result := ExtendedSignedZero(ExtendedHasSignBit(AX));
+    if ExtendedHasSignBit(AX) then
+      Exit(ExtendedSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  LAbsX := ExtendedAbsFinite(AX);
+  LAbsY := ExtendedAbsFinite(AY);
+  if LAbsX < LAbsY then
+  begin
+    if ExtendedHasSignBit(AX) then
+      Result := -LAbsX
+    else
+      Result := LAbsX;
     Exit;
   end;
-  if ExtendedHasSignBit(AX) then
-    Result := -LResult
+  if LAbsX = LAbsY then
+  begin
+    if ExtendedHasSignBit(AX) then
+      Exit(ExtendedSignedZero(True))
+    else
+      Exit(0.0);
+  end;
+  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
+  begin
+    Result := Math.FMod(AX, AY);
+    if Result = 0.0 then
+      Result := ExtendedSignedZero(ExtendedHasSignBit(AX));
+  end
   else
-    Result := LResult;
+  begin
+    Result := FmodPositiveFinite(LAbsX, LAbsY);
+    if Result = 0.0 then
+      Result := ExtendedSignedZero(ExtendedHasSignBit(AX))
+    else if ExtendedHasSignBit(AX) then
+      Result := -Result;
+  end;
 end;
 {$ENDIF}
 

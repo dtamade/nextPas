@@ -5,52 +5,193 @@ unit nextpas.core.math.vec;
 interface
 
 type
+  {** 2D vector with Single precision.
+   *
+   * Provides component access via X, Y fields or Data array.
+   * All operations are numerically stable and handle special values (NaN, Inf) correctly.
+   *}
   TVec2f = packed record
   public
     type
       TIndex = 0..1;
+    {** Creates a 2D vector with the given components.
+     * @param AX The X component
+     * @param AY The Y component
+     * @return A new TVec2f with the specified values
+     *}
     class function Create(const AX, AY: Single): TVec2f; static; inline;
+    {** Returns a zero vector (0, 0). }
     class function Zero: TVec2f; static; inline;
+    {** Returns a one vector (1, 1). }
     class function One: TVec2f; static; inline;
+    {** Adds two vectors component-wise.
+     * @param AA First vector
+     * @param AB Second vector
+     * @return AA + AB
+     *}
     class operator + (const AA, AB: TVec2f): TVec2f; inline;
+    {** Subtracts two vectors component-wise.
+     * @param AA First vector
+     * @param AB Second vector
+     * @return AA - AB
+     *}
     class operator - (const AA, AB: TVec2f): TVec2f; inline;
+    {** Negates a vector.
+     * @param AValue The vector to negate
+     * @return -AValue
+     *}
     class operator - (const AValue: TVec2f): TVec2f; inline;
+    {** Multiplies a vector by a scalar.
+     * @param AValue The vector
+     * @param AScalar The scalar multiplier
+     * @return AValue * AScalar
+     *}
     class operator * (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;
+    {** Multiplies a scalar by a vector.
+     * @param AScalar The scalar multiplier
+     * @param AValue The vector
+     * @return AScalar * AValue
+     *}
     class operator * (const AScalar: Single; const AValue: TVec2f): TVec2f; inline;
+    {** Divides a vector by a scalar.
+     * @param AValue The vector dividend
+     * @param AScalar The scalar divisor (must be non-zero and finite)
+     * @return AValue / AScalar
+     * @raises EArgumentError if AScalar is zero, NaN, or infinite
+     *}
     class operator / (const AValue: TVec2f; const AScalar: Single): TVec2f; inline;
+    {** Multiplies two vectors component-wise (Hadamard product).
+     * @param AOther The second vector
+     * @return Component-wise product
+     *}
     function ComponentMul(const AOther: TVec2f): TVec2f; inline;
+    {** Divides two vectors component-wise.
+     * @param AOther The divisor vector (all components must be non-zero and finite)
+     * @return Component-wise quotient
+     * @raises EArgumentError if any component is zero, NaN, or infinite
+     *}
     function ComponentDiv(const AOther: TVec2f): TVec2f; inline;
+    {** Computes the dot product with numerical stability.
+     * @param AOther The second vector
+     * @return The dot product (Self · AOther)
+     *}
     function Dot(const AOther: TVec2f): Single; inline;
+    {** Computes the 2D cross product (scalar).
+     * @param AOther The second vector
+     * @return The cross product (X1*Y2 - Y1*X2)
+     *}
     function Cross2D(const AOther: TVec2f): Single; inline;
+    {** Linearly interpolates between this vector and a target.
+     * @param ATarget The target vector
+     * @param AT Interpolation factor (0 = Self, 1 = ATarget)
+     * @return The interpolated vector
+     *}
     function Lerp(const ATarget: TVec2f; const AT: Single): TVec2f; inline;
+    {** Tests approximate equality within epsilon.
+     * @param AOther The vector to compare
+     * @param AEpsilon Maximum allowed difference per component
+     * @return True if all components are within epsilon
+     *}
     function Equals(const AOther: TVec2f; const AEpsilon: Single): Boolean; inline;
+    {** Returns component-wise maximum.
+     * @param AOther The second vector
+     * @return Max(Self, AOther) per component
+     *}
     function Max(const AOther: TVec2f): TVec2f; inline;
+    {** Returns component-wise minimum.
+     * @param AOther The second vector
+     * @return Min(Self, AOther) per component
+     *}
     function Min(const AOther: TVec2f): TVec2f; inline;
+    {** Computes Euclidean distance to another vector.
+     * @param AOther The target vector
+     * @return The distance ||Self - AOther||
+     *}
     function Distance(const AOther: TVec2f): Single; inline;
+    {** Computes squared distance to another vector (faster, no sqrt).
+     * @param AOther The target vector
+     * @return The squared distance ||Self - AOther||²
+     *}
     function DistanceSqr(const AOther: TVec2f): Single; inline;
+    {** Reflects this vector off a normal.
+     * @param ANormal The surface normal (should be normalized)
+     * @return The reflected vector
+     *}
     function Reflect(const ANormal: TVec2f): TVec2f; inline;
+    {** Projects this vector onto a direction.
+     * @param ADirection The direction vector to project onto
+     * @return The projected vector
+     *}
     function ProjectOnto(const ADirection: TVec2f): TVec2f; inline;
+    {** Rejects this vector from a direction (perpendicular component).
+     * @param ADirection The direction vector to reject from
+     * @return The rejected vector
+     *}
     function RejectFrom(const ADirection: TVec2f): TVec2f; inline;
+    {** Safely normalizes the vector, returning zero for zero-length vectors.
+     * @return The normalized vector, or Zero if length is zero
+     *}
     function TryNormalize: TVec2f; inline;
+    {** Checks if the vector is approximately unit length.
+     * @return True if ||Self|| ≈ 1 within epsilon
+     *}
     function IsNormalized: Boolean; inline;
+    {** Computes squared length (faster, no sqrt).
+     * @return ||Self||²
+     *}
     function LengthSqr: Single; inline;
+    {** Computes Euclidean length.
+     * @return ||Self||
+     *}
     function Length: Single; inline;
+    {** Normalizes the vector to unit length.
+     * @return The normalized vector
+     * @raises EArgumentError if the vector is zero-length or non-finite
+     *}
     function Normalize: TVec2f; inline;
+    {** Returns component-wise absolute value.
+     * @return (|X|, |Y|)
+     *}
     function Abs: TVec2f; inline;
+    {** Checks if all components are zero.
+     * @return True if X = 0 and Y = 0
+     *}
     function IsZero: Boolean; inline;
+    {** Tests exact equality (bitwise comparison).
+     * @param AOther The vector to compare
+     * @return True if all components are exactly equal
+     *}
     function PerfectlyEquals(const AOther: TVec2f): Boolean; inline;
+    {** Constrains each component to lie within [AMin, AMax].
+     * @param AMin The minimum bounds
+     * @param AMax The maximum bounds
+     * @return The clamped vector
+     *}
+    function Clamp(const AMin, AMax: TVec2f): TVec2f; inline;
+    { Swizzle - component reordering }
+    {** Returns (Y, X) - swaps components. }
+    function GetYX: TVec2f; inline;
+    property YX: TVec2f read GetYX;
     var
       case Integer of
         0: (X, Y: Single);
         1: (Data: array[TIndex] of Single);
   end;
 
+  {** 3D vector with Single precision.
+   *
+   * Provides component access via X, Y, Z fields or Data array.
+   * Supports cross product, swizzle operations, and length adjustment.
+   *}
   TVec3f = packed record
   public
     type
       TIndex = 0..2;
+    {** Creates a 3D vector with the given components. }
     class function Create(const AX, AY, AZ: Single): TVec3f; static; inline;
+    {** Returns a zero vector (0, 0, 0). }
     class function Zero: TVec3f; static; inline;
+    {** Returns a one vector (1, 1, 1). }
     class function One: TVec3f; static; inline;
     class operator + (const AA, AB: TVec3f): TVec3f; inline;
     class operator - (const AA, AB: TVec3f): TVec3f; inline;
@@ -60,12 +201,15 @@ type
     class operator / (const AValue: TVec3f; const AScalar: Single): TVec3f; inline;
     function ComponentMul(const AOther: TVec3f): TVec3f; inline;
     function ComponentDiv(const AOther: TVec3f): TVec3f; inline;
+    {** Computes the dot product with numerical stability. }
     function Dot(const AOther: TVec3f): Single; inline;
+    {** Computes the cross product (returns vector perpendicular to both inputs). }
     function Cross(const AOther: TVec3f): TVec3f; inline;
     function Lerp(const ATarget: TVec3f; const AT: Single): TVec3f; inline;
     function Equals(const AOther: TVec3f; const AEpsilon: Single): Boolean; inline;
     function Max(const AOther: TVec3f): TVec3f; inline;
     function Min(const AOther: TVec3f): TVec3f; inline;
+    {** Returns the midpoint between two vectors. }
     function Average(const AOther: TVec3f): TVec3f; inline;
     function Distance(const AOther: TVec3f): Single; inline;
     function DistanceSqr(const AOther: TVec3f): Single; inline;
@@ -77,22 +221,66 @@ type
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec3f; inline;
+    {** Scales the vector to the specified length. }
     function AdjustToLength(const ALength: Single): TVec3f; inline;
     function Abs: TVec3f; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec3f): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec3f): TVec3f; inline;
+    { Swizzle - component reordering }
+    {** Returns (X, Y) - drops Z component. }
+    function GetXY: TVec2f; inline;
+    {** Returns (X, Z) - drops Y component. }
+    function GetXZ: TVec2f; inline;
+    {** Returns (Y, X) - swaps XY, drops Z. }
+    function GetYX: TVec2f; inline;
+    {** Returns (Y, Z) - drops X component. }
+    function GetYZ: TVec2f; inline;
+    {** Returns (Z, X) - rotates components. }
+    function GetZX: TVec2f; inline;
+    {** Returns (Z, Y) - drops X component. }
+    function GetZY: TVec2f; inline;
+    {** Returns (X, Z, Y) - swaps YZ. }
+    function GetXZY: TVec3f; inline;
+    {** Returns (Y, X, Z) - swaps XY. }
+    function GetYXZ: TVec3f; inline;
+    {** Returns (Y, Z, X) - rotates left. }
+    function GetYZX: TVec3f; inline;
+    {** Returns (Z, X, Y) - rotates right. }
+    function GetZXY: TVec3f; inline;
+    {** Returns (Z, Y, X) - reverses order. }
+    function GetZYX: TVec3f; inline;
+    property XY: TVec2f read GetXY;
+    property XZ: TVec2f read GetXZ;
+    property YX: TVec2f read GetYX;
+    property YZ: TVec2f read GetYZ;
+    property ZX: TVec2f read GetZX;
+    property ZY: TVec2f read GetZY;
+    property XZY: TVec3f read GetXZY;
+    property YXZ: TVec3f read GetYXZ;
+    property YZX: TVec3f read GetYZX;
+    property ZXY: TVec3f read GetZXY;
+    property ZYX: TVec3f read GetZYX;
     var
       case Integer of
         0: (X, Y, Z: Single);
         1: (Data: array[TIndex] of Single);
   end;
 
+  {** 4D vector with Single precision.
+   *
+   * Commonly used for homogeneous coordinates (XYZ + W).
+   * Supports perspective division via ToPosition method.
+   *}
   TVec4f = packed record
   public
     type
       TIndex = 0..3;
+    {** Creates a 4D vector with the given components. }
     class function Create(const AX, AY, AZ, AW: Single): TVec4f; static; inline;
+    {** Returns a zero vector (0, 0, 0, 0). }
     class function Zero: TVec4f; static; inline;
+    {** Returns a one vector (1, 1, 1, 1). }
     class function One: TVec4f; static; inline;
     class operator + (const AA, AB: TVec4f): TVec4f; inline;
     class operator - (const AA, AB: TVec4f): TVec4f; inline;
@@ -117,16 +305,68 @@ type
     function LengthSqr: Single; inline;
     function Length: Single; inline;
     function Normalize: TVec4f; inline;
+    {** Converts homogeneous coordinates to 3D position (perspective divide).
+     * @return (X/W, Y/W, Z/W) if W ≠ 0, otherwise (X, Y, Z)
+     *}
     function ToPosition: TVec3f; inline;
     function Abs: TVec4f; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec4f): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec4f): TVec4f; inline;
+    { Swizzle - component reordering }
+    {** Returns (X, Y) - drops Z, W components. }
+    function GetXY: TVec2f; inline;
+    {** Returns (X, Z) - drops Y, W components. }
+    function GetXZ: TVec2f; inline;
+    {** Returns (X, W) - drops Y, Z components. }
+    function GetXW: TVec2f; inline;
+    {** Returns (Y, Z) - drops X, W components. }
+    function GetYZ: TVec2f; inline;
+    {** Returns (Y, W) - drops X, Z components. }
+    function GetYW: TVec2f; inline;
+    {** Returns (Z, W) - drops X, Y components. }
+    function GetZW: TVec2f; inline;
+    {** Returns (X, Y, Z) - drops W component. }
+    function GetXYZ: TVec3f; inline;
+    {** Returns (X, Y, W) - drops Z component. }
+    function GetXYW: TVec3f; inline;
+    {** Returns (X, Z, W) - drops Y component. }
+    function GetXZW: TVec3f; inline;
+    {** Returns (Y, Z, W) - drops X component. }
+    function GetYZW: TVec3f; inline;
+    {** Returns (W, Z, Y) - reversed order. }
+    function GetWZY: TVec3f; inline;
+    {** Returns (W, Z, Y, X) - fully reversed. }
+    function GetWZYX: TVec4f; inline;
+    property XY: TVec2f read GetXY;
+    property XZ: TVec2f read GetXZ;
+    property XW: TVec2f read GetXW;
+    property YZ: TVec2f read GetYZ;
+    property YW: TVec2f read GetYW;
+    property ZW: TVec2f read GetZW;
+    property XYZ: TVec3f read GetXYZ;
+    property XYW: TVec3f read GetXYW;
+    property XZW: TVec3f read GetXZW;
+    property YZW: TVec3f read GetYZW;
+    property WZY: TVec3f read GetWZY;
+    property WZYX: TVec4f read GetWZYX;
     var
       case Integer of
         0: (X, Y, Z, W: Single);
         1: (Data: array[TIndex] of Single);
   end;
 
+  {**
+   * 2D vector with Double precision.
+   *
+   * TVec2d represents a 2D vector with X and Y components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, cross product (2D), interpolation, and swizzle
+   * properties for component reordering.
+   *
+   * @see TVec2f for Single precision version
+   * @see TVec3d for 3D double-precision vector
+   *}
   TVec2d = packed record
   public
     type
@@ -161,12 +401,27 @@ type
     function Abs: TVec2d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec2d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec2d): TVec2d; inline;
+    { Swizzle - component reordering }
+    function GetYX: TVec2d; inline;
+    property YX: TVec2d read GetYX;
     var
       case Integer of
         0: (X, Y: Double);
         1: (Data: array[TIndex] of Double);
   end;
 
+  {**
+   * 3D vector with Double precision.
+   *
+   * TVec3d represents a 3D vector with X, Y, and Z components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, cross product, interpolation, projection, reflection,
+   * and swizzle properties for component reordering.
+   *
+   * @see TVec3f for Single precision version
+   * @see TVec4d for 4D double-precision vector
+   *}
   TVec3d = packed record
   public
     type
@@ -203,12 +458,48 @@ type
     function Abs: TVec3d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec3d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec3d): TVec3d; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2d; inline;
+    function GetXZ: TVec2d; inline;
+    function GetYX: TVec2d; inline;
+    function GetYZ: TVec2d; inline;
+    function GetZX: TVec2d; inline;
+    function GetZY: TVec2d; inline;
+    function GetXZY: TVec3d; inline;
+    function GetYXZ: TVec3d; inline;
+    function GetYZX: TVec3d; inline;
+    function GetZXY: TVec3d; inline;
+    function GetZYX: TVec3d; inline;
+    property XY: TVec2d read GetXY;
+    property XZ: TVec2d read GetXZ;
+    property YX: TVec2d read GetYX;
+    property YZ: TVec2d read GetYZ;
+    property ZX: TVec2d read GetZX;
+    property ZY: TVec2d read GetZY;
+    property XZY: TVec3d read GetXZY;
+    property YXZ: TVec3d read GetYXZ;
+    property YZX: TVec3d read GetYZX;
+    property ZXY: TVec3d read GetZXY;
+    property ZYX: TVec3d read GetZYX;
     var
       case Integer of
         0: (X, Y, Z: Double);
         1: (Data: array[TIndex] of Double);
   end;
 
+  {**
+   * 4D vector with Double precision.
+   *
+   * TVec4d represents a 4D vector with X, Y, Z, and W components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, interpolation, projection, reflection, and swizzle
+   * properties for component reordering. Commonly used for homogeneous coordinates
+   * and quaternion representation.
+   *
+   * @see TVec4f for Single precision version
+   * @see TQuatd for quaternion representation
+   *}
   TVec4d = packed record
   public
     type
@@ -243,6 +534,32 @@ type
     function Abs: TVec4d; inline;
     function IsZero: Boolean; inline;
     function PerfectlyEquals(const AOther: TVec4d): Boolean; inline;
+    function Clamp(const AMin, AMax: TVec4d): TVec4d; inline;
+    { Swizzle - component reordering }
+    function GetXY: TVec2d; inline;
+    function GetXZ: TVec2d; inline;
+    function GetXW: TVec2d; inline;
+    function GetYZ: TVec2d; inline;
+    function GetYW: TVec2d; inline;
+    function GetZW: TVec2d; inline;
+    function GetXYZ: TVec3d; inline;
+    function GetXYW: TVec3d; inline;
+    function GetXZW: TVec3d; inline;
+    function GetYZW: TVec3d; inline;
+    function GetWZY: TVec3d; inline;
+    function GetWZYX: TVec4d; inline;
+    property XY: TVec2d read GetXY;
+    property XZ: TVec2d read GetXZ;
+    property XW: TVec2d read GetXW;
+    property YZ: TVec2d read GetYZ;
+    property YW: TVec2d read GetYW;
+    property ZW: TVec2d read GetZW;
+    property XYZ: TVec3d read GetXYZ;
+    property XYW: TVec3d read GetXYW;
+    property XZW: TVec3d read GetXZW;
+    property YZW: TVec3d read GetYZW;
+    property WZY: TVec3d read GetWZY;
+    property WZYX: TVec4d read GetWZYX;
     var
       case Integer of
         0: (X, Y, Z, W: Double);
@@ -1390,6 +1707,18 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y);
 end;
 
+function TVec2f.Clamp(const AMin, AMax: TVec2f): TVec2f;
+begin
+  Result := TVec2f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y));
+end;
+
+function TVec2f.GetYX: TVec2f;
+begin
+  Result := TVec2f.Create(Y, X);
+end;
+
 class function TVec3f.Create(const AX, AY, AZ: Single): TVec3f;
 begin
   Result.X := AX;
@@ -1592,6 +1921,69 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
 end;
 
+function TVec3f.Clamp(const AMin, AMax: TVec3f): TVec3f;
+begin
+  Result := TVec3f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z));
+end;
+
+function TVec3f.GetXY: TVec2f;
+begin
+  Result := TVec2f.Create(X, Y);
+end;
+
+function TVec3f.GetXZ: TVec2f;
+begin
+  Result := TVec2f.Create(X, Z);
+end;
+
+function TVec3f.GetYX: TVec2f;
+begin
+  Result := TVec2f.Create(Y, X);
+end;
+
+function TVec3f.GetYZ: TVec2f;
+begin
+  Result := TVec2f.Create(Y, Z);
+end;
+
+function TVec3f.GetZX: TVec2f;
+begin
+  Result := TVec2f.Create(Z, X);
+end;
+
+function TVec3f.GetZY: TVec2f;
+begin
+  Result := TVec2f.Create(Z, Y);
+end;
+
+function TVec3f.GetXZY: TVec3f;
+begin
+  Result := TVec3f.Create(X, Z, Y);
+end;
+
+function TVec3f.GetYXZ: TVec3f;
+begin
+  Result := TVec3f.Create(Y, X, Z);
+end;
+
+function TVec3f.GetYZX: TVec3f;
+begin
+  Result := TVec3f.Create(Y, Z, X);
+end;
+
+function TVec3f.GetZXY: TVec3f;
+begin
+  Result := TVec3f.Create(Z, X, Y);
+end;
+
+function TVec3f.GetZYX: TVec3f;
+begin
+  Result := TVec3f.Create(Z, Y, X);
+end;
+
 class function TVec4f.Create(const AX, AY, AZ, AW: Single): TVec4f;
 begin
   Result.X := AX;
@@ -1785,6 +2177,75 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
 end;
 
+function TVec4f.Clamp(const AMin, AMax: TVec4f): TVec4f;
+begin
+  Result := TVec4f.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z),
+    nextpas.core.math.scalar.Clamp(W, AMin.W, AMax.W));
+end;
+
+function TVec4f.GetXY: TVec2f;
+begin
+  Result := TVec2f.Create(X, Y);
+end;
+
+function TVec4f.GetXZ: TVec2f;
+begin
+  Result := TVec2f.Create(X, Z);
+end;
+
+function TVec4f.GetXW: TVec2f;
+begin
+  Result := TVec2f.Create(X, W);
+end;
+
+function TVec4f.GetYZ: TVec2f;
+begin
+  Result := TVec2f.Create(Y, Z);
+end;
+
+function TVec4f.GetYW: TVec2f;
+begin
+  Result := TVec2f.Create(Y, W);
+end;
+
+function TVec4f.GetZW: TVec2f;
+begin
+  Result := TVec2f.Create(Z, W);
+end;
+
+function TVec4f.GetXYZ: TVec3f;
+begin
+  Result := TVec3f.Create(X, Y, Z);
+end;
+
+function TVec4f.GetXYW: TVec3f;
+begin
+  Result := TVec3f.Create(X, Y, W);
+end;
+
+function TVec4f.GetXZW: TVec3f;
+begin
+  Result := TVec3f.Create(X, Z, W);
+end;
+
+function TVec4f.GetYZW: TVec3f;
+begin
+  Result := TVec3f.Create(Y, Z, W);
+end;
+
+function TVec4f.GetWZY: TVec3f;
+begin
+  Result := TVec3f.Create(W, Z, Y);
+end;
+
+function TVec4f.GetWZYX: TVec4f;
+begin
+  Result := TVec4f.Create(W, Z, Y, X);
+end;
+
 class function TVec2d.Create(const AX, AY: Double): TVec2d;
 begin
   Result.X := AX;
@@ -1955,6 +2416,18 @@ end;
 function TVec2d.PerfectlyEquals(const AOther: TVec2d): Boolean;
 begin
   Result := (X = AOther.X) and (Y = AOther.Y);
+end;
+
+function TVec2d.Clamp(const AMin, AMax: TVec2d): TVec2d;
+begin
+  Result := TVec2d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y));
+end;
+
+function TVec2d.GetYX: TVec2d;
+begin
+  Result := TVec2d.Create(Y, X);
 end;
 
 class function TVec3d.Create(const AX, AY, AZ: Double): TVec3d;
@@ -2159,6 +2632,69 @@ begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z);
 end;
 
+function TVec3d.Clamp(const AMin, AMax: TVec3d): TVec3d;
+begin
+  Result := TVec3d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z));
+end;
+
+function TVec3d.GetXY: TVec2d;
+begin
+  Result := TVec2d.Create(X, Y);
+end;
+
+function TVec3d.GetXZ: TVec2d;
+begin
+  Result := TVec2d.Create(X, Z);
+end;
+
+function TVec3d.GetYX: TVec2d;
+begin
+  Result := TVec2d.Create(Y, X);
+end;
+
+function TVec3d.GetYZ: TVec2d;
+begin
+  Result := TVec2d.Create(Y, Z);
+end;
+
+function TVec3d.GetZX: TVec2d;
+begin
+  Result := TVec2d.Create(Z, X);
+end;
+
+function TVec3d.GetZY: TVec2d;
+begin
+  Result := TVec2d.Create(Z, Y);
+end;
+
+function TVec3d.GetXZY: TVec3d;
+begin
+  Result := TVec3d.Create(X, Z, Y);
+end;
+
+function TVec3d.GetYXZ: TVec3d;
+begin
+  Result := TVec3d.Create(Y, X, Z);
+end;
+
+function TVec3d.GetYZX: TVec3d;
+begin
+  Result := TVec3d.Create(Y, Z, X);
+end;
+
+function TVec3d.GetZXY: TVec3d;
+begin
+  Result := TVec3d.Create(Z, X, Y);
+end;
+
+function TVec3d.GetZYX: TVec3d;
+begin
+  Result := TVec3d.Create(Z, Y, X);
+end;
+
 class function TVec4d.Create(const AX, AY, AZ, AW: Double): TVec4d;
 begin
   Result.X := AX;
@@ -2350,6 +2886,75 @@ end;
 function TVec4d.PerfectlyEquals(const AOther: TVec4d): Boolean;
 begin
   Result := (X = AOther.X) and (Y = AOther.Y) and (Z = AOther.Z) and (W = AOther.W);
+end;
+
+function TVec4d.Clamp(const AMin, AMax: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    nextpas.core.math.scalar.Clamp(X, AMin.X, AMax.X),
+    nextpas.core.math.scalar.Clamp(Y, AMin.Y, AMax.Y),
+    nextpas.core.math.scalar.Clamp(Z, AMin.Z, AMax.Z),
+    nextpas.core.math.scalar.Clamp(W, AMin.W, AMax.W));
+end;
+
+function TVec4d.GetXY: TVec2d;
+begin
+  Result := TVec2d.Create(X, Y);
+end;
+
+function TVec4d.GetXZ: TVec2d;
+begin
+  Result := TVec2d.Create(X, Z);
+end;
+
+function TVec4d.GetXW: TVec2d;
+begin
+  Result := TVec2d.Create(X, W);
+end;
+
+function TVec4d.GetYZ: TVec2d;
+begin
+  Result := TVec2d.Create(Y, Z);
+end;
+
+function TVec4d.GetYW: TVec2d;
+begin
+  Result := TVec2d.Create(Y, W);
+end;
+
+function TVec4d.GetZW: TVec2d;
+begin
+  Result := TVec2d.Create(Z, W);
+end;
+
+function TVec4d.GetXYZ: TVec3d;
+begin
+  Result := TVec3d.Create(X, Y, Z);
+end;
+
+function TVec4d.GetXYW: TVec3d;
+begin
+  Result := TVec3d.Create(X, Y, W);
+end;
+
+function TVec4d.GetXZW: TVec3d;
+begin
+  Result := TVec3d.Create(X, Z, W);
+end;
+
+function TVec4d.GetYZW: TVec3d;
+begin
+  Result := TVec3d.Create(Y, Z, W);
+end;
+
+function TVec4d.GetWZY: TVec3d;
+begin
+  Result := TVec3d.Create(W, Z, Y);
+end;
+
+function TVec4d.GetWZYX: TVec4d;
+begin
+  Result := TVec4d.Create(W, Z, Y, X);
 end;
 
 end.

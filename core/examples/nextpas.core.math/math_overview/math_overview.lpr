@@ -45,22 +45,22 @@ begin
   WriteLn('math-overview=ready');
 
   LDirection := TVec3f.Create(3.0, 4.0, 0.0).Normalize;
-  LRight := TVec3f.Cross(TVec3f.Create(0.0, 0.0, 1.0), LDirection).Normalize;
-  Require(TVec3f.Equals(TVec3f.Create(0.6, 0.8, 0.0), LDirection, Single(0.00001)),
+  LRight := TVec3f.Create(0.0, 0.0, 1.0).Cross(LDirection).Normalize;
+  Require(TVec3f.Create(0.6, 0.8, 0.0).Equals(LDirection, Single(0.00001)),
     'normalized direction mismatch');
   PrintScaled('direction-length-x1000', LDirection.Length);
-  PrintScaled('right-dot-direction-x1000', TVec3f.Dot(LRight, LDirection));
+  PrintScaled('right-dot-direction-x1000', LRight.Dot(LDirection));
 
   LRotation := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
   LRotated := LRotation.Rotate(TVec3f.Create(1.0, 0.0, 0.0));
-  Require(TVec3f.Equals(TVec3f.Create(0.0, 1.0, 0.0), LRotated, Single(0.00001)),
+  Require(TVec3f.Create(0.0, 1.0, 0.0).Equals(LRotated, Single(0.00001)),
     'quaternion quarter-turn mismatch');
   PrintScaled('quat-rotated-y-x1000', LRotated.Y);
 
   LModel := Translate(Single(1.0), Single(2.0), Single(-3.0)) *
     RotateZ(Single(HALF_PI)) * Scale(Single(2.0), Single(2.0), Single(2.0));
   LClip := LModel * TVec4f.Create(1.0, 0.0, 0.0, 1.0);
-  Require(TVec4f.Equals(TVec4f.Create(1.0, 4.0, -3.0, 1.0), LClip, Single(0.00001)),
+  Require(TVec4f.Create(1.0, 4.0, -3.0, 1.0).Equals(LClip, Single(0.00001)),
     'model transform mismatch');
   PrintScaled('model-point-y-x1000', LClip.Y);
 

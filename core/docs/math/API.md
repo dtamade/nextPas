@@ -411,6 +411,42 @@ Noise and FBM operate on the stored `Double` coordinate value. At magnitudes aro
 larger, sub-unit coordinate deltas collapse to the same representable `Double`, so those calls use
 stable lattice-equivalent semantics rather than raising an owner-level error.
 
+## FPU Exception Control
+
+`nextpas.core.math` provides FPU exception mask control for x86_64 MXCSR register.
+This replaces `Math.GetExceptionMask`/`SetExceptionMask` from FPC RTL without any FPC dependency.
+
+```pascal
+uses
+  nextpas.core.math;
+
+var
+  LOldMask: TFPUExceptionMask;
+begin
+  LOldMask := GetExceptionMask;
+  try
+    SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
+                      exOverflow, exUnderflow, exPrecision]);
+    { ... FPU-intensive work with exceptions masked ... }
+  finally
+    SetExceptionMask(LOldMask);
+  end;
+end;
+```
+
+### Types
+
+- `TFPUException` — Enum of FPU exception flags: `exInvalidOp`, `exDenormalized`,
+  `exZeroDivide`, `exOverflow`, `exUnderflow`, `exPrecision`.
+- `TFPUExceptionMask` — Set of `TFPUException`.
+
+### Functions
+
+- `GetExceptionMask: TFPUExceptionMask` — Returns current MXCSR exception mask.
+  Returns empty set `[]` on non-x86_64 targets.
+- `SetExceptionMask(AMask: TFPUExceptionMask)` — Sets MXCSR exception mask.
+  No-op on non-x86_64 targets.
+
 ## Verification
 
 Run the named full local math suite with:

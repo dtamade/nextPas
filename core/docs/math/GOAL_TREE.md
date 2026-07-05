@@ -1,6 +1,6 @@
 # nextpas.core.math Goal Tree
 
-> Last updated: 2026-06-09
+> Last updated: 2026-07-05
 > Goal: make `nextpas.core.math.*` the only official framework math API for
 > scalar math, trig, vectors, matrices, quaternions, transforms, easing, random,
 > and noise via `nextpas.core.math.random.TNoiseGen`.
@@ -22,7 +22,7 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 
 ## Current Position
 
-Current roadmap position: M8 partial, M7 partial, M9 not started.
+Current roadmap position: M8 nearly complete, M7 partial, M9 not started.
 
 - The final facade and public units exist for scalar, trig, vec, mat, quat,
   transform, easing, and random; noise is exposed through `random.TNoiseGen`.
@@ -30,16 +30,20 @@ Current roadmap position: M8 partial, M7 partial, M9 not started.
 - Public docs/source-contract gates reject legacy vector bridge type names,
   old vector imports/paths, public impl consumers, naked `external 'm'`, and
   `math.ffi` consumers.
-- Linux-focused local math gates have passed in prior slices, with heaptrc zero
-  evidence on Pascal behavior/facade tests where those gates were run.
+- Linux-focused local math gates pass with heaptrc zero evidence on all
+  Pascal behavior/facade tests (16 suites, 253 tests, 0 leaks).
 - Direct `Single`/`Double` trig/transcendental non-finite overload parity is
   source-contract guarded by `test_trig` and `test_api_surface`.
+- FPU exception control (`TFPUException`, `GetExceptionMask`, `SetExceptionMask`)
+  is documented in `API.md` and tested in `test_facade`.
 - `nextpas.core.math.impl.simd` is an internal seam only. Public value-type
   methods are not wired through it.
 - `bench_simd_seam` is source-contract guarded as internal-seam evidence only:
   it must not import private SIMD backend/dispatch/CPUInfo/direct/dataplane units
   and cannot approve public SIMD cutover by itself.
-- macOS and Windows host trig link/runtime proof is still pending.
+- Windows trig host link/runtime proof obtained via Wine: cross-compiled
+  `test_trig_host_compile_gate` for Win64 and executed successfully (exit 0).
+- macOS host trig link/runtime proof is still pending.
 
 M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.
 
@@ -76,7 +80,7 @@ nextpas.core.math final migration
 
 - Gate: scalar/trig focused tests pass with heaptrc, no public `math.ffi`
   dependency remains, and Linux/macOS/Windows trig link/runtime routes are proven.
-- Status: partial. Local Linux proof exists; macOS/Windows host truth remains.
+- Status: partial. Local Linux and Windows (Wine) proof exists; macOS host truth remains.
 
 ### M3-M6: Value Types, Transforms, Easing, Random, Noise
 
@@ -111,8 +115,8 @@ nextpas.core.math final migration
 - Scalar: integer conversion NaN/Inf/range boundary markers and Single huge
   finite wrap parity are locked; keep adding source-contract markers when new
   scalar edge semantics land.
-- Trig: obtain host matrix runtime truth for macOS/Windows.
-- Vector: finish full non-finite measure and signed-zero matrix coverage.
+- Trig: obtain host matrix runtime truth for macOS. Windows proof obtained via Wine.
+- Vector: ✅ full non-finite measure and signed-zero matrix coverage complete.
 - SIMD: finish profiled runtime evidence and public SIMD contract design before
   any public cutover.
-- Host matrix: obtain macOS/Windows trig host link/runtime evidence.
+- Host matrix: obtain macOS trig host link/runtime evidence. Windows proof obtained via Wine.

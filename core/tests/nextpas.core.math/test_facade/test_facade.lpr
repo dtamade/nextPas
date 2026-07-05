@@ -289,6 +289,8 @@ var
   LState: TRandomState;
   LRng: TRandomGen;
   LNoise: TNoiseGen;
+  LFPUExc: TFPUException;
+  LFPUMask: TFPUExceptionMask;
 begin
   LVec2f := TVec2f.Create(1.0, 2.0);
   LVec3f := TVec3f.Create(LVec2f.X, LVec2f.Y, 3.0);
@@ -307,6 +309,8 @@ begin
   LState.S1 := UInt64(2);
   LRng := nil;
   LNoise := nil;
+  LFPUExc := exInvalidOp;
+  LFPUMask := [exInvalidOp, exZeroDivide];
   Check((LVec4f.W = 1.0) and (LVec4d.W = 1.0),
     'facade vector aliases compile');
   Check((LMat3f.Data[0, 0] = 1.0) and (LMat4f.Data[0, 0] = 1.0) and
@@ -316,6 +320,8 @@ begin
   Check((LEasing <> nil) and (LEasing(0.5) = 0.5), 'facade easing alias compiles');
   Check((LState.S0 = UInt64(1)) and (LState.S1 = UInt64(2)) and
     (LRng = nil) and (LNoise = nil), 'facade random aliases compile');
+  Check((LFPUExc = exInvalidOp) and (LFPUMask = [exInvalidOp, exZeroDivide]),
+    'facade FPU exception aliases compile');
 end;
 
 procedure TestFacadeRootForwarderCompileSurface;
