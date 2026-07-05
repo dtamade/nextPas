@@ -291,8 +291,13 @@ begin
     Exit;
 
   LHeader := HeaderOf(APtr);
+{$IFDEF DEBUG}
+  Assert(LHeader^.Magic = PLATFORM_ALIGNED_ALLOC_MAGIC,
+    'platform_aligned_free: invalid magic (possible double-free or wrong pointer)');
+{$ELSE}
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
     Exit;
+{$ENDIF}
   platform_aligned_raw_free(LHeader^.RawPtr);
 end;
 

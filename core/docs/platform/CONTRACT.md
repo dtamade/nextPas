@@ -207,3 +207,32 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize: PtrUInt;
 ### Phase 3: API 增强
 - process.pas: `ATimeoutMs` 参数（Unix 轮询 + Windows 原生）
 - fs.pas: `is_executable` 检查全部三个执行位
+
+### Phase 4: TOCTOU 安全修复 (2026-07-05)
+- fs.pas: `platform_fs_read_file` 消除 TOCTOU 风险
+  - 旧实现：先 `stat` 获取文件大小，再分配内存读取
+  - 新实现：直接打开文件，循环读取直到 EOF（`platform_fs_read_until_eof`）
+  - 优势：无并发修改竞态，自动适应文件大小变化
+- fs.pas: `platform_fs_read_file_into` 消除 TOCTOU 风险
+  - 旧实现：先 `stat` 检查缓冲区容量，再读取
+  - 新实现：直接读取，缓冲区满时返回 `PLATFORM_FS_SHORT_READ_ERROR`
+- 测试：新增 `test_platform_fs_toctou` 并发读写测试
+
+### Phase 5: sendfile 零拷贝优化 (2026-07-05)
+- fs.pas: `platform_fs_copy_file` 使用 Linux sendfile 系统调用
+  - 旧实现：8KB 缓冲区循环 read/write
+  - 新实现：优先使用 sendfile 零拷贝，失败时 fallback 到 read/write
+  - 优势：大文件拷贝性能提升 2-10x，减少用户态/内核态切换
+  - 平台支持：Linux（sendfile），其他平台保持 read/write
+
+### Phase 6: API 清理 (2026-07-05)
+- fs.pas: `platform_fs_walk` 路径溢出处理
+  - 旧实现：路径超过 4095 字节时静默跳过
+  - 新实现：通过回调返回 `PLATFORM_FS_PATH_TOO_LONG` 错误码
+  - 优势：调用方可以检测和处理路径过长的情况
+- fs.pas: `platform_fs_mktemp` 标记 deprecated
+  - 推荐使用 `platform_fs_mktemp_handle` 版本
+  - 返回 `TPlatformFileHandle` 而非 `Int32` fd
+- memory.pas: `platform_aligned_free` DEBUG 模式 assert
+  - RELEASE 模式：静默忽略 magic 不匹配（兼容性）
+  - DEBUG 模式：assert 失败（快速定位 double-free）

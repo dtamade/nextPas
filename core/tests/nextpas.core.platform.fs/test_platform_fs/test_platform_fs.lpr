@@ -293,12 +293,12 @@ begin
     'full-read helper must advance after positive short reads');
   CheckContains(LSource, 'ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt',
     'read_file_into exposes caller-owned buffer contract');
-  CheckContains(LSource, 'if LSize > Int64(ABufCapacity) then',
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_READ_ERROR',
     'read_file_into rejects undersized caller buffer');
-  CheckContains(LSource, 'ALen := LRead',
+  CheckContains(LSource, 'ALen := LTotal',
     'read_file_into returns actual bytes read');
-  CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
-    'read_file must read the full stat-sized payload');
+  CheckContains(LSource, 'platform_fs_read_until_eof',
+    'read_file must use TOCTOU-safe dynamic read');
   CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
     'read_file must check close failure');
   CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
