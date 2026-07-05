@@ -77,6 +77,10 @@ uses
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+  { POSIX permission bits — universal across all Unix systems }
+  PLATFORM_S_IXUSR = $0040;  { 0100 octal: owner execute }
+  PLATFORM_S_IXGRP = $0008;  { 0010 octal: group execute }
+  PLATFORM_S_IXOTH = $0001;  { 0001 octal: other execute }
 
 function platform_fs_write_all(const AHandle: TPlatformFileHandle;
   AData: Pointer; ALen: PtrUInt): Int32;
@@ -150,7 +154,7 @@ begin
     Exit(False);
   if LStat.FileType <> ftRegular then
     Exit(False);
-  Result := (LStat.Mode and 64) <> 0;
+  Result := (LStat.Mode and (PLATFORM_S_IXUSR or PLATFORM_S_IXGRP or PLATFORM_S_IXOTH)) <> 0;
 end;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 var
