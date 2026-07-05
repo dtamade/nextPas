@@ -1,7 +1,7 @@
 # bench 模块全面审查 — Findings（第二期）
 
 > **审查日期**: 2026-06-23
-> **最后更新**: 2026-07-04
+> **最后更新**: 2026-07-06
 > **审查范围**: 11 源文件 + 14 测试文件 (~10,800 行)
 > **审查维度**: Correctness / Architecture / Performance / Test Coverage / API
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
@@ -14,6 +14,16 @@
 > **当前测试**: 15 suites / 314 tests / 0 failed / 0 leaks
 > **修复率**: 124 findings 中 122 项已修复 (98.4%)
 > **接口覆盖率**: 100%（所有 IBenchSuite/IBenchResults/IBenchStatsAnalyzer/IBenchReportGenerator 方法均有测试）
+> **类型统一**: TBenchBaseline 废弃别名已从接口签名和实现中移除，统一使用 TBaselineData
+
+### 工程治理变更 (2026-07-06)
+
+1. **接口覆盖补全**: 新增 `TestAddBaselineData` 测试，覆盖 `IBenchSuite.AddBaselineData` 方法
+2. **废弃别名清理**: 
+   - intf: 接口签名 `CompareMultipleBaselines`/`ToMatrixReport`/`ToMatrixHTML`/`ToMatrixJSON` 改用 `TBaselineData`
+   - facade: 内部实现和字段类型统一为 `TBaselineData`
+   - tests: 测试文件局部别名统一为 `TBaselineData`
+   - 保留 `TBenchBaseline` 作为 re-export 别名向后兼容
 
 ### 已修复项汇总 (121/124)
 
