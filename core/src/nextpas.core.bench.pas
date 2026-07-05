@@ -255,7 +255,7 @@ begin
   else
     Result.Cores := 0;
   Result.FPCVersion := {$I %FPCVERSION%};
-  Result.Timestamp := FormatDateTime('yyyy-mm-ddTHH:nn:ss', TOffsetDateTime.Now);
+  Result.Timestamp := FormatDateTime('%Y-%m-%dT%H:%M:%S', TOffsetDateTime.Now);
 end;
 
 {** ST-08: guard against mutation after Run }

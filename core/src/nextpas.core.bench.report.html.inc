@@ -202,6 +202,7 @@ begin
   GenerateHTMLBoxPlots(LHTML);
   GenerateHTMLFooter(LHTML);
   Result := BufferToString(LHTML);
+  LHTML.Builder.Done;
 end;
 
 function TBenchReportGenerator.ToCrossLanguageHTML(
@@ -280,6 +281,7 @@ begin
   BufferAddLine(LHTML, '</html>');
 
   Result := BufferToString(LHTML);
+  LHTML.Builder.Done;
 end;
 
 function TBenchReportGenerator.GenerateMatrixHTML(const AMatrix: TMatrixResult): string;
@@ -360,4 +362,5 @@ begin
   BufferAddLine(LBuf, '</body></html>');
 
   Result := BufferToString(LBuf);
+  LBuf.Builder.Done;
 end;

@@ -93,6 +93,7 @@ begin
   BufferAddLine(LLines, '</svg>');
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 function TBenchReportGenerator.GenerateBoxPlot(
@@ -185,6 +186,7 @@ begin
       EscapeHTML(FormatNumber(LMin, 2)) + ' (constant)</text>');
     BufferAddLine(LLines, '</svg>');
     Result := BufferToString(LLines);
+    LLines.Builder.Done;
     Exit;
   end;
   LScale := 200.0 / (LMax - LMin);
@@ -232,6 +234,7 @@ begin
   BufferAddLine(LLines, '</svg>');
 
   Result := BufferToString(LLines);
+  LLines.Builder.Done;
 end;
 
 function TBenchReportGenerator.GenerateDistributionChart(
@@ -317,6 +320,7 @@ begin
 
   BufferAddLine(LBuf, '</svg>');
   Result := BufferToString(LBuf);
+  LBuf.Builder.Done;
 end;
 
 { P2-3: 基线对比图 SVG }
@@ -402,4 +406,5 @@ begin
 
   BufferAddLine(LBuf, '</svg>');
   Result := BufferToString(LBuf);
+  LBuf.Builder.Done;
 end;
