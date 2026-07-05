@@ -95,7 +95,7 @@ type
     constructor Create(const AReason: string);
   end;
 
-  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail);
+  TTestEntryKind = (ekTest, ekSubtest, ekSkipped, ekTableTest, ekShouldFail,
 
   TBenchContext = record
     N        : Integer;  { iterations — set by framework, user loop runs N times }
