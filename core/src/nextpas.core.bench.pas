@@ -398,6 +398,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -422,6 +424,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin

@@ -928,6 +928,22 @@ begin
   Check(LCaught, 'Percentile(200.0) raises EBenchInvalidParam');
 end;
 
+{ U-12: ComputeStats 空数组应抛异常 }
+procedure TestComputeStats_EmptyArray;
+var
+  LCaught: Boolean;
+  LData: TDoubleArray;
+begin
+  LData := nil;
+  LCaught := False;
+  try
+    GAnalyzer.ComputeStats(LData);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'ComputeStats(empty) raises EBenchInvalidParam');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -972,6 +988,7 @@ begin
   T.Test('SortIndirect_LargeArray', @TestSortIndirect_LargeArray);
   T.Test('SortIndirect_OddLength', @TestSortIndirect_OddLength);
   T.Test('Percentile_RangeValidation', @TestPercentile_RangeValidation);
+  T.Test('ComputeStats_EmptyArray (U-12)', @TestComputeStats_EmptyArray);
 
   T.Run;
   T.Summary;

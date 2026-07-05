@@ -719,6 +719,28 @@ begin
   end;
   Check(LRaised, 'AddParallel rejects zero threads');
   Check(LCorrectType, 'AddParallel raises EBenchInvalidParam');
+
+  { U-13: AddRange 空参数数组应抛异常 }
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.AddRange('Empty', @BenchParamFunc, []);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+  Check(LRaised, 'AddRange rejects empty params');
+  Check(LCorrectType, 'AddRange raises EBenchInvalidParam');
 end;
 
 procedure TestTBenchSuite_LoadBaselineRaises;
