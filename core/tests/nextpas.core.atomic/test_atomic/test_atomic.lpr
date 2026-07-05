@@ -384,7 +384,7 @@ var
   LSingleStrongCasSection: string;
   LSingleWeakCasSection: string;
   LCompatFailureSection: string;
-  LTypesFailureSection: string;
+  LCoreFailureSection: string;
   LTypesInt32LockFreeSection: string;
   LTypesUInt32LockFreeSection: string;
   LTypesInt32FetchSection: string;
@@ -567,9 +567,9 @@ begin
   LCompatFailureSection := ExtractImplementationSection(LAtomicSource,
     'function AtomicCompatFailureOrder(const AOrder: TMemoryOrder): TMemoryOrder; inline;',
     'function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder): Int32;');
-  LTypesFailureSection := ExtractImplementationSection(LAtomicTypesSource,
-    'function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;',
-    '{ TAtomicInt32 }');
+  LCoreFailureSection := ExtractImplementationSection(LAtomicCoreSource,
+    'function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;',
+    'function _uint32_inc_result(const AOld: UInt32): UInt32; inline;');
   LTypesInt32LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicInt32.is_lock_free: Boolean;',
     'function TAtomicInt32.Load(AOrder: memory_order_t): Int32;');
@@ -635,7 +635,7 @@ begin
     'function TAtomicBool.Load(AOrder: memory_order_t): Boolean;');
   LTypesBoolRmwHelperSection := ExtractImplementationSection(LAtomicTypesSource,
     'function _atomic_bool_fetch(var AValue: Int32; const AOperand: Boolean;',
-    'function _uint32_inc_result(const AOld: UInt32): UInt32;');
+    'function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;');
   LTypesBoolFetchAndSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicBool.FetchAnd(AValue: Boolean; AOrder: memory_order_t): Boolean;',
     'function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;');
@@ -2091,7 +2091,7 @@ begin
     'direct atomic.types TAtomicPtr weak CAS must pass derived success/failure orders');
   CheckContains(LCompatFailureSection, 'mo_consume',
     'AtomicCompatFailureOrder must treat consume explicitly');
-  CheckContains(LTypesFailureSection, 'mo_consume',
+  CheckContains(LCoreFailureSection, 'mo_consume',
     'typed CAS failure-order helper must treat consume explicitly');
   CheckContains(LTypesInt32LockFreeSection, 'atomic_is_lock_free_32',
     'typed Int32 lock-free query must delegate to Int32 runtime truth');
@@ -2137,10 +2137,10 @@ begin
     'typed UInt32 FetchXor must delegate to the UInt32 atomic root');
   CheckContains(LTypesUInt32FetchSection, 'atomic_update_if_equal(FValue, AExpected, ADesired, AObserved, AOrder);',
     'typed UInt32 UpdateIfEqual must delegate to the 32-bit update-if-equal helper');
-  CheckNotContains(LTypesUInt32FetchSection, 'FetchMax',
-    'typed UInt32 must not expose signed FetchMax until root unsigned max semantics land');
-  CheckNotContains(LTypesUInt32FetchSection, 'FetchMin',
-    'typed UInt32 must not expose signed FetchMin until root unsigned min semantics land');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_max(FValue, AValue, AOrder);',
+    'typed UInt32 FetchMax must delegate to the UInt32 atomic root');
+  CheckContains(LTypesUInt32FetchSection, 'atomic_fetch_min(FValue, AValue, AOrder);',
+    'typed UInt32 FetchMin must delegate to the UInt32 atomic root');
   CheckNotContains(LTypesUInt32FetchSection, 'FetchNand',
     'typed UInt32 must not expose FetchNand until root unsigned nand surface lands');
   CheckContains(LTypesInt64LockFreeSection, 'atomic_is_lock_free_64',

@@ -100,6 +100,9 @@ type
     function FetchOr(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
     function FetchXor(AMask: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
 
+    function FetchMax(AValue: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
+    function FetchMin(AValue: UInt32; AOrder: memory_order_t = mo_seq_cst): UInt32; inline;
+
     function UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
@@ -241,6 +244,16 @@ type
     function FetchAnd(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
     function FetchOr(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
     function FetchXor(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
+    {**
+     * FetchNand - 布尔 NAND 原子操作
+     *
+     * 计算 not (Old and AValue)，即当 Old=True 且 AValue=True 时结果为 False，否则为 True。
+     * 语义上等价于: Result := not (Old and AValue) = (not Old) or (not AValue)
+     *
+     * @note 布尔 NAND 的实际使用场景极少，主要为 API 完整性保留。
+     *       与位操作 NAND 不同，布尔 NAND 在逻辑上等价于 implies (Old → not AValue)。
+     *}
     function FetchNand(AValue: Boolean; AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function GetMut: PInt32; inline;
@@ -355,11 +368,18 @@ type
     function FetchOr(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function FetchXor(AMask: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
 
+    function FetchMax(AValue: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+    function FetchMin(AValue: PtrInt; AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+
     function UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrInt; inline;
+
+    function Wait(AExpected: PtrInt; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PPtrInt; inline;
     function IntoInner: PtrInt; inline;
@@ -396,11 +416,18 @@ type
     function FetchOr(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function FetchXor(AMask: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
 
+    function FetchMax(AValue: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+    function FetchMin(AValue: PtrUInt; AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+
     function UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
     function Increment(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
     function Decrement(AOrder: memory_order_t = mo_seq_cst): PtrUInt; inline;
+
+    function Wait(AExpected: PtrUInt; const ATimeoutNs: Int64 = -1): Int32; inline;
+    procedure NotifyOne; inline;
+    procedure NotifyAll; inline;
 
     function GetMut: PPtrUInt; inline;
     function IntoInner: PtrUInt; inline;
@@ -452,10 +479,6 @@ type
     function IntoInner: PT; inline;
   end;
 
-{ CAS memory order resolution helpers (interface-visible for generic records) }
-function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
-function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
-
 implementation
 
 uses
@@ -469,31 +492,6 @@ type
     abroXor,
     abroNand
   );
-
-function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
-begin
-  // Treat consume as acquire for CAS/RMW in the high-level wrappers.
-  // (Most real-world implementations also treat consume as acquire.)
-  if AOrder = mo_consume then
-    Result := mo_acquire
-  else
-    Result := AOrder;
-end;
-
-function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
-begin
-  // Failure order may not include release/acq_rel.
-  if ASuccessOrder = mo_relaxed then
-    Result := mo_relaxed
-  else if (ASuccessOrder = mo_consume) or (ASuccessOrder = mo_acquire) then
-    Result := mo_acquire
-  else if ASuccessOrder = mo_release then
-    Result := mo_relaxed
-  else if ASuccessOrder = mo_acq_rel then
-    Result := mo_acquire
-  else
-    Result := mo_seq_cst;
-end;
 
 function _bool_raw(const AValue: Boolean): Int32; inline;
 begin
@@ -538,132 +536,6 @@ begin
     LOldRaw := LExpectedRaw;
     cpu_pause;
   until False;
-end;
-
-function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
-begin
-  if AOld = High(UInt32) then
-    Result := UInt32(0)
-  else
-    Result := AOld + UInt32(1);
-end;
-
-function _uint32_dec_result(const AOld: UInt32): UInt32; inline;
-begin
-  if AOld = UInt32(0) then
-    Result := High(UInt32)
-  else
-    Result := AOld - UInt32(1);
-end;
-
-function _uint64_inc_result(const AOld: UInt64): UInt64; inline;
-begin
-  if AOld = High(UInt64) then
-    Result := UInt64(0)
-  else
-    Result := AOld + UInt64(1);
-end;
-
-function _uint64_dec_result(const AOld: UInt64): UInt64; inline;
-begin
-  if AOld = UInt64(0) then
-    Result := High(UInt64)
-  else
-    Result := AOld - UInt64(1);
-end;
-
-function _ptruint_inc_result(const AOld: PtrUInt): PtrUInt; inline;
-begin
-  if AOld = High(PtrUInt) then
-    Result := PtrUInt(0)
-  else
-    Result := AOld + PtrUInt(1);
-end;
-
-function _ptruint_dec_result(const AOld: PtrUInt): PtrUInt; inline;
-begin
-  if AOld = PtrUInt(0) then
-    Result := High(PtrUInt)
-  else
-    Result := AOld - PtrUInt(1);
-end;
-
-function _int32_from_bits(const AValue: UInt32): Int32; inline;
-var
-  LBits: UInt32;
-begin
-  LBits := AValue;
-  Result := PInt32(@LBits)^;
-end;
-
-function _int32_to_bits(const AValue: Int32): UInt32; inline;
-var
-  LValue: Int32;
-begin
-  LValue := AValue;
-  Result := PUInt32(@LValue)^;
-end;
-
-function _int64_from_bits(const AValue: UInt64): Int64; inline;
-var
-  LBits: UInt64;
-begin
-  LBits := AValue;
-  Result := PInt64(@LBits)^;
-end;
-
-function _int64_to_bits(const AValue: Int64): UInt64; inline;
-var
-  LValue: Int64;
-begin
-  LValue := AValue;
-  Result := PUInt64(@LValue)^;
-end;
-
-function _ptrint_from_bits(const AValue: PtrUInt): PtrInt; inline;
-var
-  LBits: PtrUInt;
-begin
-  LBits := AValue;
-  Result := PPtrInt(@LBits)^;
-end;
-
-function _ptrint_to_bits(const AValue: PtrInt): PtrUInt; inline;
-var
-  LValue: PtrInt;
-begin
-  LValue := AValue;
-  Result := PPtrUInt(@LValue)^;
-end;
-
-function _int32_inc_result(const AOld: Int32): Int32; inline;
-begin
-  Result := _int32_from_bits(_uint32_inc_result(_int32_to_bits(AOld)));
-end;
-
-function _int32_dec_result(const AOld: Int32): Int32; inline;
-begin
-  Result := _int32_from_bits(_uint32_dec_result(_int32_to_bits(AOld)));
-end;
-
-function _int64_inc_result(const AOld: Int64): Int64; inline;
-begin
-  Result := _int64_from_bits(_uint64_inc_result(_int64_to_bits(AOld)));
-end;
-
-function _int64_dec_result(const AOld: Int64): Int64; inline;
-begin
-  Result := _int64_from_bits(_uint64_dec_result(_int64_to_bits(AOld)));
-end;
-
-function _ptrint_inc_result(const AOld: PtrInt): PtrInt; inline;
-begin
-  Result := _ptrint_from_bits(_ptruint_inc_result(_ptrint_to_bits(AOld)));
-end;
-
-function _ptrint_dec_result(const AOld: PtrInt): PtrInt; inline;
-begin
-  Result := _ptrint_from_bits(_ptruint_dec_result(_ptrint_to_bits(AOld)));
 end;
 
 function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
@@ -883,6 +755,16 @@ end;
 function TAtomicUInt32.FetchXor(AMask: UInt32; AOrder: memory_order_t): UInt32;
 begin
   Result := atomic_fetch_xor(FValue, AMask, AOrder);
+end;
+
+function TAtomicUInt32.FetchMax(AValue: UInt32; AOrder: memory_order_t): UInt32;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicUInt32.FetchMin(AValue: UInt32; AOrder: memory_order_t): UInt32;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
 end;
 
 function TAtomicUInt32.UpdateIfEqual(AExpected: UInt32; ADesired: UInt32; out AObserved: UInt32;
@@ -1447,6 +1329,16 @@ begin
   {$ENDIF}
 end;
 
+function TAtomicISize.FetchMax(AValue: PtrInt; AOrder: memory_order_t): PtrInt;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicISize.FetchMin(AValue: PtrInt; AOrder: memory_order_t): PtrInt;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
 function TAtomicISize.UpdateIfEqual(AExpected: PtrInt; ADesired: PtrInt; out AObserved: PtrInt;
   AOrder: memory_order_t): Boolean;
 begin
@@ -1465,6 +1357,33 @@ end;
 function TAtomicISize.Decrement(AOrder: memory_order_t): PtrInt;
 begin
   Result := _ptrint_dec_result(FetchSub(1, AOrder));
+end;
+
+function TAtomicISize.Wait(AExpected: PtrInt; const ATimeoutNs: Int64): Int32;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  Result := atomic_wait(PInt32(@FValue)^, PInt32(@AExpected)^, ATimeoutNs);
+  {$ELSE}
+  Result := atomic_wait(PInt64(@FValue)^, PInt64(@AExpected)^, ATimeoutNs);
+  {$ENDIF}
+end;
+
+procedure TAtomicISize.NotifyOne;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  atomic_notify_one(PInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_one(PInt64(@FValue)^);
+  {$ENDIF}
+end;
+
+procedure TAtomicISize.NotifyAll;
+begin
+  {$IF SIZEOF(PtrInt) = 4}
+  atomic_notify_all(PInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_all(PInt64(@FValue)^);
+  {$ENDIF}
 end;
 
 function TAtomicISize.GetMut: PPtrInt;
@@ -1617,6 +1536,16 @@ begin
   {$ENDIF}
 end;
 
+function TAtomicUSize.FetchMax(AValue: PtrUInt; AOrder: memory_order_t): PtrUInt;
+begin
+  Result := atomic_fetch_max(FValue, AValue, AOrder);
+end;
+
+function TAtomicUSize.FetchMin(AValue: PtrUInt; AOrder: memory_order_t): PtrUInt;
+begin
+  Result := atomic_fetch_min(FValue, AValue, AOrder);
+end;
+
 function TAtomicUSize.UpdateIfEqual(AExpected: PtrUInt; ADesired: PtrUInt; out AObserved: PtrUInt;
   AOrder: memory_order_t): Boolean;
 begin
@@ -1635,6 +1564,33 @@ end;
 function TAtomicUSize.Decrement(AOrder: memory_order_t): PtrUInt;
 begin
   Result := _ptruint_dec_result(FetchSub(1, AOrder));
+end;
+
+function TAtomicUSize.Wait(AExpected: PtrUInt; const ATimeoutNs: Int64): Int32;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  Result := atomic_wait(PUInt32(@FValue)^, PUInt32(@AExpected)^, ATimeoutNs);
+  {$ELSE}
+  Result := atomic_wait(PUInt64(@FValue)^, PUInt64(@AExpected)^, ATimeoutNs);
+  {$ENDIF}
+end;
+
+procedure TAtomicUSize.NotifyOne;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  atomic_notify_one(PUInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_one(PUInt64(@FValue)^);
+  {$ENDIF}
+end;
+
+procedure TAtomicUSize.NotifyAll;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  atomic_notify_all(PUInt32(@FValue)^);
+  {$ELSE}
+  atomic_notify_all(PUInt64(@FValue)^);
+  {$ENDIF}
 end;
 
 function TAtomicUSize.GetMut: PPtrUInt;
