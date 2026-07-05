@@ -163,6 +163,116 @@ begin
   CheckNear(32.0, LResults[0], 0.0, 'BatchDot single element value');
 end;
 
+procedure TestBatchDotNaN;
+var
+  LLeft, LRight: array[0..0] of TVec3f;
+  LResults: array[0..0] of Single;
+  LCount: SizeInt;
+begin
+  LLeft[0] := TVec3f.Create(1.0, 2.0, 3.0);
+  LRight[0] := TVec3f.Create(0.0 / 0.0, 5.0, 6.0);
+  LCount := BatchDot(LLeft, LRight, LResults);
+  Check(LCount = 1, 'BatchDot NaN returns count 1');
+  Check(IsNaN(LResults[0]), 'BatchDot NaN propagates');
+end;
+
+procedure TestBatchDotInfinity;
+var
+  LLeft, LRight: array[0..0] of TVec3f;
+  LResults: array[0..0] of Single;
+  LCount: SizeInt;
+begin
+  LLeft[0] := TVec3f.Create(1.0, 2.0, 3.0);
+  LRight[0] := TVec3f.Create(1.0 / 0.0, 5.0, 6.0);
+  LCount := BatchDot(LLeft, LRight, LResults);
+  Check(LCount = 1, 'BatchDot Inf returns count 1');
+  Check(LResults[0] > 1e30, 'BatchDot Inf propagates');
+end;
+
+procedure TestBatchDotMismatchedLength;
+var
+  LLeft: array[0..2] of TVec3f;
+  LRight: array[0..0] of TVec3f;
+  LResults: array[0..2] of Single;
+  LCount: SizeInt;
+begin
+  LLeft[0] := TVec3f.Create(1.0, 0.0, 0.0);
+  LLeft[1] := TVec3f.Create(0.0, 1.0, 0.0);
+  LLeft[2] := TVec3f.Create(0.0, 0.0, 1.0);
+  LRight[0] := TVec3f.Create(1.0, 0.0, 0.0);
+  LCount := BatchDot(LLeft, LRight, LResults);
+  Check(LCount = 1, 'BatchDot mismatched length returns min');
+  CheckNear(1.0, LResults[0], 0.0, 'BatchDot mismatched [0]');
+end;
+
+procedure TestBatchNormalizeZero;
+var
+  LVectors: array[0..0] of TVec3f;
+  LCount: SizeInt;
+begin
+  LVectors[0] := TVec3f.Create(0.0, 0.0, 0.0);
+  LCount := BatchNormalize(LVectors);
+  Check(LCount = 1, 'BatchNormalize zero vector returns count 1');
+  CheckNear(0.0, LVectors[0].Length, 0.0, 'BatchNormalize zero vector stays zero');
+end;
+
+procedure TestBatchNormalizeSourceDest;
+var
+  LSource: array[0..1] of TVec3f;
+  LDest: array[0..1] of TVec3f;
+  LCount: SizeInt;
+begin
+  LSource[0] := TVec3f.Create(3.0, 0.0, 0.0);
+  LSource[1] := TVec3f.Create(0.0, 4.0, 0.0);
+  LCount := BatchNormalize(LSource, LDest);
+  Check(LCount = 2, 'BatchNormalize source-dest returns count');
+  CheckNear(1.0, LDest[0].Length, 0.0, 'BatchNormalize source-dest [0] length');
+  CheckNear(1.0, LDest[1].Length, 0.0, 'BatchNormalize source-dest [1] length');
+  CheckNear(3.0, LSource[0].X, 0.0, 'BatchNormalize source unchanged [0]');
+end;
+
+procedure TestBatchTransformNaN;
+var
+  LMatrix: TMat4f;
+  LSource: array[0..0] of TVec3f;
+  LDest: array[0..0] of TVec3f;
+  LCount: SizeInt;
+begin
+  LMatrix := TMat4f.Identity;
+  LSource[0] := TVec3f.Create(0.0 / 0.0, 2.0, 3.0);
+  LCount := BatchTransform(LMatrix, LSource, LDest);
+  Check(LCount = 1, 'BatchTransform NaN returns count');
+  Check(IsNaN(LDest[0].X), 'BatchTransform NaN propagates X');
+end;
+
+procedure TestBatchLerpEndpoints;
+var
+  LStart, LEnd, LDest: array[0..0] of TVec3f;
+  LCount: SizeInt;
+begin
+  LStart[0] := TVec3f.Create(0.0, 0.0, 0.0);
+  LEnd[0] := TVec3f.Create(10.0, 10.0, 10.0);
+  LCount := BatchLerp(LStart, LEnd, 0.0, LDest);
+  Check(LCount = 1, 'BatchLerp t=0 returns count');
+  CheckNear(0.0, LDest[0].X, 0.0, 'BatchLerp t=0 returns start');
+  LCount := BatchLerp(LStart, LEnd, 1.0, LDest);
+  CheckNear(10.0, LDest[0].X, 0.0, 'BatchLerp t=1 returns end');
+end;
+
+procedure TestBatchClampMinMax;
+var
+  LVectors, LDest: array[0..0] of TVec3f;
+  LMin, LMax: TVec3f;
+  LCount: SizeInt;
+begin
+  LVectors[0] := TVec3f.Create(5.0, 5.0, 5.0);
+  LMin := TVec3f.Create(5.0, 5.0, 5.0);
+  LMax := TVec3f.Create(5.0, 5.0, 5.0);
+  LCount := BatchClamp(LVectors, LMin, LMax, LDest);
+  Check(LCount = 1, 'BatchClamp equal bounds returns count');
+  CheckNear(5.0, LDest[0].X, 0.0, 'BatchClamp equal bounds value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.vec.batch');
   T.Test('BatchDot', @TestBatchDot);
@@ -171,5 +281,13 @@ begin
   T.Test('BatchLerp', @TestBatchLerp);
   T.Test('BatchClamp', @TestBatchClamp);
   T.Test('BatchEmpty', @TestBatchEmpty);
+  T.Test('BatchDot NaN propagation', @TestBatchDotNaN);
+  T.Test('BatchDot Infinity propagation', @TestBatchDotInfinity);
+  T.Test('BatchDot mismatched length', @TestBatchDotMismatchedLength);
+  T.Test('BatchNormalize zero vector', @TestBatchNormalizeZero);
+  T.Test('BatchNormalize source-dest', @TestBatchNormalizeSourceDest);
+  T.Test('BatchTransform NaN propagation', @TestBatchTransformNaN);
+  T.Test('BatchLerp endpoints', @TestBatchLerpEndpoints);
+  T.Test('BatchClamp equal bounds', @TestBatchClampMinMax);
   if not T.Run then Halt(1);
 end.
