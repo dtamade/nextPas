@@ -119,8 +119,8 @@ type
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
-    function AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
-    function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+    function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
+    function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
@@ -146,7 +146,7 @@ type
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
-      const ABaselines: array of TBenchBaseline);
+      const ABaselines: array of TBaselineData);
     destructor Destroy; override;
 
     {** IBenchResults 实现 }
@@ -587,7 +587,7 @@ begin
 end;
 
 {** F-08: 完整基线数据重载 }
-function TBenchSuite.AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
@@ -596,7 +596,7 @@ begin
   Inc(FBaselineCount);
 end;
 
-function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 var
   I: Integer;
 begin
@@ -728,7 +728,7 @@ end;
 
 constructor TBenchResults.Create(const AResults: array of TBenchResult;
   const AEnvironment: TBenchEnvironment;
-  const ABaselines: array of TBenchBaseline);
+  const ABaselines: array of TBaselineData);
 var
   I: Integer;
 begin
