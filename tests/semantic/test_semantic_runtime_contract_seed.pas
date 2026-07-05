@@ -58,6 +58,14 @@ begin
   end;
 end;
 
+function IsRuntimeContractNode(const AKind: string): Boolean;
+begin
+  Result := (AKind = 'process-init-runtime') or
+            (AKind = 'process-fini-runtime') or
+            (AKind = 'unit-init-runtime') or
+            (AKind = 'unit-fini-runtime');
+end;
+
 function RuntimeContractNodeCount(const AModel: TSemanticModel;
   const AContractName: string): LongInt;
 var
@@ -68,7 +76,7 @@ begin
   for Index := 0 to AModel.TypedHirNodeCount - 1 do
   begin
     Node := AModel.TypedHirNodeAt(Index);
-    if (Node.Kind = 'runtime-contract') and (Node.DisplayName = AContractName) then
+    if IsRuntimeContractNode(Node.Kind) and (Node.DisplayName = AContractName) then
       Inc(Result);
   end;
 end;
@@ -83,7 +91,7 @@ begin
   for Index := 0 to AModel.TypedHirNodeCount - 1 do
   begin
     Result := AModel.TypedHirNodeAt(Index);
-    if Result.Kind = 'runtime-contract' then
+    if IsRuntimeContractNode(Result.Kind) then
     begin
       if Seen = AContractIndex then
         Exit;
@@ -114,7 +122,7 @@ begin
     Fail('runtime-contract-name-mismatch:' + IntToStr(AIndex) + ':' +
       Contract.Name);
   Node := RuntimeContractNodeAt(AModel, AIndex);
-  if Node.Kind <> 'runtime-contract' then
+  if not IsRuntimeContractNode(Node.Kind) then
     Fail('runtime-contract-node-order-missing:' + IntToStr(AIndex));
   if Node.DisplayName <> Contract.Name then
     Fail('runtime-contract-node-order-mismatch:' + IntToStr(AIndex) + ':' +

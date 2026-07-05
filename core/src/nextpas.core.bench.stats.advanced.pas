@@ -177,6 +177,10 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.time.cpu;
 
+{** F-12: 全局计数器，防止 BootstrapCI 快速连续调用时种子碰撞 }
+var
+  GBootstrapCallCount: UInt64 = 0;
+
 const
   TINV90_DATA: array[0..29] of Double = (
     6.314, 2.920, 2.353, 2.132, 2.015,
@@ -573,10 +577,14 @@ begin
     LIterations := 1;
 
   // F-20: 可选种子，ASeed=0 时使用 monotonic time，>0 时固定种子用于可重现测试
+  // F-12: 种子混合全局计数器，防止快速连续调用时种子碰撞
   if ASeed > 0 then
     LSeed := ASeed
   else
-    LSeed := platform_monotonic_ns;
+  begin
+    Inc(GBootstrapCallCount);
+    LSeed := platform_monotonic_ns xor (GBootstrapCallCount shl 32);
+  end;
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin

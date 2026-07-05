@@ -4,7 +4,7 @@ program test_atomic;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.atomic,
@@ -4289,6 +4289,60 @@ begin
     'unsigned atomic_fetch_nand_64 must return the previous 64-bit value');
   CheckEqual(Int64(not (UInt64(9) and UInt64($000000000000000F))), Int64(LValU64),
     'unsigned atomic_fetch_nand_64 must publish not(old and arg) for UInt64 values');
+
+  { ── Boundary value tests ───────────────────────────────────────────── }
+  LVal32 := High(Int32);
+  LOld32 := atomic_fetch_max(LVal32, High(Int32) - 1);
+  CheckEqual(Int64(High(Int32)), Int64(LOld32),
+    'atomic_fetch_max boundary: High(Int32) vs High(Int32)-1 returns old');
+  CheckEqual(Int64(High(Int32)), Int64(LVal32),
+    'atomic_fetch_max boundary: keeps High(Int32)');
+
+  LOld32 := atomic_fetch_min(LVal32, High(Int32));
+  CheckEqual(Int64(High(Int32)), Int64(LOld32),
+    'atomic_fetch_min boundary: High(Int32) vs High(Int32) returns old');
+  CheckEqual(Int64(High(Int32)), Int64(LVal32),
+    'atomic_fetch_min boundary: keeps High(Int32) on equal');
+
+  LVal32 := Low(Int32);
+  LOld32 := atomic_fetch_min(LVal32, Low(Int32) + 1);
+  CheckEqual(Int64(Low(Int32)), Int64(LOld32),
+    'atomic_fetch_min boundary: Low(Int32) vs Low(Int32)+1 returns old');
+  CheckEqual(Int64(Low(Int32)), Int64(LVal32),
+    'atomic_fetch_min boundary: keeps Low(Int32)');
+
+  LOld32 := atomic_fetch_max(LVal32, Low(Int32));
+  CheckEqual(Int64(Low(Int32)), Int64(LOld32),
+    'atomic_fetch_max boundary: Low(Int32) vs Low(Int32) returns old');
+  CheckEqual(Int64(Low(Int32)), Int64(LVal32),
+    'atomic_fetch_max boundary: keeps Low(Int32) on equal');
+
+  LVal32 := 0;
+  LOld32 := atomic_fetch_max(LVal32, -1);
+  CheckEqual(Int64(0), Int64(LOld32),
+    'atomic_fetch_max boundary: 0 vs -1 returns old');
+  CheckEqual(Int64(0), Int64(LVal32),
+    'atomic_fetch_max boundary: keeps 0 over -1');
+
+  LOld32 := atomic_fetch_min(LVal32, 1);
+  CheckEqual(Int64(0), Int64(LOld32),
+    'atomic_fetch_min boundary: 0 vs 1 returns old');
+  CheckEqual(Int64(0), Int64(LVal32),
+    'atomic_fetch_min boundary: keeps 0 under 1');
+
+  LVal64 := High(Int64);
+  LOld64 := atomic_fetch_max_64(LVal64, High(Int64) - 1);
+  CheckEqual(High(Int64), LOld64,
+    'atomic_fetch_max_64 boundary: High(Int64) vs High(Int64)-1 returns old');
+  CheckEqual(High(Int64), LVal64,
+    'atomic_fetch_max_64 boundary: keeps High(Int64)');
+
+  LVal64 := Low(Int64);
+  LOld64 := atomic_fetch_min_64(LVal64, Low(Int64) + 1);
+  CheckEqual(Low(Int64), LOld64,
+    'atomic_fetch_min_64 boundary: Low(Int64) vs Low(Int64)+1 returns old');
+  CheckEqual(Low(Int64), LVal64,
+    'atomic_fetch_min_64 boundary: keeps Low(Int64)');
 end;
 
 procedure TestAtomicPointerOffsetFetchContract;
@@ -6531,7 +6585,7 @@ begin
   begin
     if atomic_load(LStarted, mo_seq_cst) = 2 then
       Break;
-    Sleep(1);
+    SleepMs(1);
   end;
   CheckEqual(Int64(2), Int64(atomic_load(LStarted, mo_seq_cst)),
     'waiter threads must start before notify path is exercised');
@@ -6676,7 +6730,7 @@ begin
     begin
       if atomic_load(LStarted, mo_seq_cst) = 1 then
         Break;
-      Sleep(1);
+      SleepMs(1);
     end;
 
     if atomic_load(LStarted, mo_seq_cst) <> 1 then
@@ -6854,7 +6908,7 @@ begin
   begin
     if atomic_load(LStarted, mo_seq_cst) = ThreadCount then
       Break;
-    Sleep(1);
+    SleepMs(1);
   end;
   CheckEqual(Int64(ThreadCount), Int64(atomic_load(LStarted, mo_seq_cst)),
     'refcount workers must start before the borrow phase is released');
@@ -6982,7 +7036,7 @@ var
         LAllStarted := True;
         Break;
       end;
-      Sleep(1);
+      SleepMs(1);
     end;
 
     atomic_store(LGo, 1, mo_seq_cst);

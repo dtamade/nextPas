@@ -74,6 +74,8 @@ type
   EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;
   EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;
   EOutOfMemory = nextpas.core.errors.EOutOfMemory;
+  EInterruptedError = nextpas.core.errors.EInterruptedError;
+  EWouldBlockError = nextpas.core.errors.EWouldBlockError;
 
 const
   ecNone = nextpas.core.errors.ecNone;

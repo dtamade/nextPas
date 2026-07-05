@@ -616,8 +616,12 @@ function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; 
 // ✅ Phase 3: 新增 fetch_max/min/nand 操作
 function atomic_fetch_max(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
 function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32; overload; inline;
+function atomic_fetch_max(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
+function atomic_fetch_max(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
 function atomic_fetch_min(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
 function atomic_fetch_min(var aObj: Int32; aArg: Int32): Int32; overload; inline;
+function atomic_fetch_min(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
+function atomic_fetch_min(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
 function atomic_fetch_nand(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
 function atomic_fetch_nand(var aObj: Int32; aArg: Int32): Int32; overload; inline;
 
@@ -661,6 +665,18 @@ function atomic_is_lock_free_ptr: Boolean; inline;
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                             atomic_tagged_ptr                              │
 //└────────────────────────────────────────────────────────────────────────────┘
+//
+// Tagged pointer: packs a pointer and a monotonic tag into a single 8-byte
+// atomic value for ABA-safe lock-free algorithms.
+//
+// Platform tag width:
+//   64-bit (CPU64):  48-bit pointer + 16-bit tag  (UInt16, wraps at 65536)
+//   32-bit:          32-bit pointer + 32-bit tag  (UInt32, wraps at 2^32)
+//
+// On 64-bit platforms, pointers are 8-byte aligned, so the low 3 bits are
+// always zero. The 16-bit tag is sufficient for ABA protection in practice
+// because the tag wraps at 65536, making an ABA collision astronomically
+// unlikely within a single process lifetime.
 
 type
   atomic_tagged_ptr_t = nextpas.core.atomic.core.atomic_tagged_ptr_t;
@@ -2320,7 +2336,12 @@ begin
   {$POP}
 end;
 
-// weak 版本 - 在 x86 上与 strong 相同，但语义上允许虚假失败
+{ weak 版本 — 在 x86/x86_64 上与 strong 相同。
+  C++11 标准允许 weak CAS 发生虚假失败（spurious failure）。
+  x86 的 LOCK CMPXCHG 是 strong 语义，没有 weak 变体，
+  因此 weak = strong 是符合标准的合法实现。
+  ARM/RISC-V 的 LL/SC 循环天然支持 weak 语义（SC 可能因竞争而失败），
+  未来可在这些平台上优化为真正的 LL/SC weak 实现。 }
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
@@ -3369,6 +3390,19 @@ begin
   Result := atomic_fetch_max(aObj, aArg, mo_seq_cst);
 end;
 
+function atomic_fetch_max(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
+begin
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := UInt32(atomic_fetch_max(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
+  {$POP}
+end;
+
+function atomic_fetch_max(var aObj: UInt32; aArg: UInt32): UInt32;
+begin
+  Result := atomic_fetch_max(aObj, aArg, mo_seq_cst);
+end;
+
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 // ✅ Phase 3 优化: x86 LOCK CMPXCHG 隐含全屏障
 function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;
@@ -3522,6 +3556,19 @@ begin
 end;
 
 function atomic_fetch_min(var aObj: Int32; aArg: Int32): Int32;
+begin
+  Result := atomic_fetch_min(aObj, aArg, mo_seq_cst);
+end;
+
+function atomic_fetch_min(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
+begin
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := UInt32(atomic_fetch_min(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
+  {$POP}
+end;
+
+function atomic_fetch_min(var aObj: UInt32; aArg: UInt32): UInt32;
 begin
   Result := atomic_fetch_min(aObj, aArg, mo_seq_cst);
 end;

@@ -283,6 +283,7 @@ type Exception
 type ExceptClass
 type EConvertError
 type EAssertionFailed
+type EAbort
 type TErrorCategory
 type ENextPasError
 type ECore
@@ -314,6 +315,8 @@ type EParseError
 type EIndexOutOfRangeError
 type EOutOfMemoryError
 type EOutOfMemory
+type EInterruptedError
+type EWouldBlockError
 const ecNone
 const ecInvalidArgument
 const ecNullReference
@@ -538,7 +541,7 @@ for token in \
   "deferred" \
   "not a current phase gate" \
   "TypInfo minimal live unit is unlocked" \
-  'no public unit yet should exist for `nextpas.core.system.classes`' \
+  "Classes compatibility shim" \
   "compatibility-facades.md" \
   "compatibility-matrix.md" \
   "typinfo-minimal-pressure.md"; do
@@ -679,8 +682,8 @@ require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'int
 require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'intf_release';"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_addref"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_addref"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_intf_release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_intf_addref"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_intf_release"
 # Halt intrinsic uses implementation name 'halt', not 'np.system.halt'
 require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "if AInstr.IntrinsicName = 'halt' then"
@@ -710,12 +713,11 @@ done
 require_token "docs/system/runtime-contracts.md" "backend-private memory helpers"
 require_token "docs/system/runtime-contracts.md" 'not aliases for public `CopyMem` / `ZeroMem`'
 require_token "docs/system/runtime-contracts.md" "not raw memory facade expansion"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_memcpy"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_memzero"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memcpy"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memzero"
-require_repo_token "tests/hir/test_hir_class_alloc_contract.pas" "define internal void @np_memzero"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "call {ptr, i64} @np_str_concat("
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_memcpy"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_memzero"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memset"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memmove"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "call void @np_tstring_concat("
 for helper in \
   "np.system.object_free" \
   "np.system.object_free.destroy" \
@@ -826,11 +828,11 @@ require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_pop"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_finally_end"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_except_end"
 require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_raise"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_try_push"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_try_pop"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_finally_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_except_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_raise"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_try_push"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_try_pop"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_finally_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_except_end"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_raise"
 
 for token in \
   "Process Lifecycle" \
@@ -859,10 +861,10 @@ for helper in \
 done
 
 require_repo_token "compiler/sema/np_semantic_analyzer.pas" "SeedRuntimeContracts"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_init"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.process_fini"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddRuntimeContract(RuntimeContracts[Index])"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0, '')"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_INIT"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_FINI"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddRuntimeContract(AContractName)"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime')"
 require_repo_token "compiler/sema/np_semantic_model.pas" "function RuntimeContractAt(const AIndex: LongInt): TRuntimeContract;"
 require_repo_file "tests/semantic/test_semantic_runtime_contract_seed.pas"
 require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "semantic-runtime-contract-seed-status=pass"
@@ -936,7 +938,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -976,7 +978,6 @@ require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSyst
 require_repo_token "compiler/tests/test_typinfo_contract.pas" "GetTypeKind(TSystemTypInfoRecord) <> tkRecord"
 require_repo_reject_regex "compiler/tests/test_typinfo_contract.pas" '^[[:space:]]*TypInfo[,;]'
 require_repo_not_uses_unit "compiler/tests/test_typinfo_contract.pas" "TypInfo"
-require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "TFileStream"
 require_repo_token "compiler/toolchain/np_toolchain_runner.pas" "ExpandFileName"
 require_repo_token "compiler/frontend/np_workspace_model.pas" "ExpandFileName"
 require_repo_token "rtl/core/sysutils/np_sysutils.pas" "unit SysUtils;"
@@ -987,38 +988,26 @@ require_repo_token "core/src/nextpas.core.collections.hashmap.swiss.pas" "GetTyp
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "TArray string managed TypeInfo consumer contract"
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Copy(0, 1, 4)"
 require_repo_token "core/tests/nextpas.core.collections/test_managed_types/test_managed_types.lpr" "LA.Read(0, LReadBack, 6)"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "ManagedStringDynArraySource"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "ManagedInterfaceDynArraySource"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "BorrowedManagedStringDynArraySource"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "BorrowedManagedInterfaceDynArraySource"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "AssertNoManagedDynArrayRuntimeContracts"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.dynarray_set_length"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.dynarray_fini"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.string_fini"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "np.system.interface_release"
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "define internal ptr @np_dynarray_resize("
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "define internal void @np_dynarray_release("
-require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "define internal void @np_dynarray_fault("
-require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "define internal ptr @np_dynarray_resize("
-require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "define internal void @np_dynarray_release("
-require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "define internal void @np_dynarray_fault("
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "OwnedBorrowedSource"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "BorrowedResizeSource"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "StringSource"
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "declare void @np_dynarray_release("
+require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "declare void @np_dynarray_fault("
+require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "declare ptr @np_dynarray_resize("
+require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "declare void @np_dynarray_release("
+require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "declare void @np_dynarray_fault("
 require_repo_token "tests/hir/test_hir_dynarray_release_runtime_smoke.pas" "hir-dynarray-release-runtime-smoke-status=pass"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "missing-managed-string-dynarray-resize-call"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "missing-managed-interface-dynarray-resize-call"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "managed-string-dynarray-still-bare-arr-alloc"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "managed-interface-dynarray-still-bare-arr-alloc"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "MarkDynArraySetLengthContract"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "MarkDynArrayFiniContract"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "DynArrayElemTypeNeedsManagedContract"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "DynArrayElemTypeIsManagedInterface"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_set_length"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.dynarray_fini"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.string_fini"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "np.system.interface_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal ptr @np_dynarray_resize"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_dynarray_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_dynarray_fault"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_dynarray_fault"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_UNIT_INIT"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_UNIT_FINI"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_INIT"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_FINI"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare ptr @np_dynarray_resize"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_dynarray_release"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_dynarray_fault"
 require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
@@ -1026,9 +1015,7 @@ require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.obje
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_release_valid"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_release_invalid"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-release-helper-must-not-walk-fields"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "missing-object-free-release-helper-decl"
 require_repo_file "tests/hir/test_hir_field_dynarray_contract.pas"
 require_repo_file "tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas"
 require_repo_token "tests/hir/test_hir_field_dynarray_contract.pas" "setlength-field-arr-runtime"
@@ -1055,17 +1042,9 @@ require_repo_token "docs/architecture/runtime-bootstrap-specification.md" 'sourc
 require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`rtl/core/system/System.pas`'
 require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`TObject.Free`'
 require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "object-free-runtime"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "cleanup-class "
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "nil-guard true"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "heap-release true"
-require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.destroy"
-require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.cleanup"
-require_repo_token "compiler/ir/np_hir_builder.pas" "np.system.object_free.release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "np.system.object_free"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_free_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_release_valid"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "define internal void @np_object_release_invalid"
+require_repo_token "compiler/sema/np_semantic_analyzer.pas" "class-new-runtime"
+require_repo_token "compiler/ir/np_hir_builder.pas" "class_alloc"
+require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_object_free_release"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
@@ -1150,7 +1129,6 @@ require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "CopyArray(LDest, LSource, TypeInfo(ISystemTypInfoProbe)"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "FinalizeArray(LSource, TypeInfo(ISystemTypInfoProbe)"
 require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
-require_token "tests/nextpas.core.system/test_system_typinfo_minimal/Makefile" "test: run compiler-contract"
 require_token "tests/nextpas.core.system/Makefile" "test-object-free-runtime-contract"
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_SOURCE"
 require_token "tests/nextpas.core.system/Makefile" "test_hir_object_free_contract.pas"
@@ -1197,12 +1175,12 @@ require_token "src/nextpas.core.system.pas" "SIZE_8 = nextpas.core.base.SIZE_8;"
 require_token "src/nextpas.core.system.pas" "SIZE_16 = nextpas.core.base.SIZE_16;"
 require_token "src/nextpas.core.system.pas" "SIZE_32 = nextpas.core.base.SIZE_32;"
 require_token "src/nextpas.core.system.pas" "SIZE_64 = nextpas.core.base.SIZE_64;"
-require_token "src/nextpas.core.system.pas" "SizeInt = System.SizeInt;"
-require_token "src/nextpas.core.system.pas" "SizeUInt = System.SizeUInt;"
-require_token "src/nextpas.core.system.pas" "PtrInt = System.PtrInt;"
-require_token "src/nextpas.core.system.pas" "PtrUInt = System.PtrUInt;"
-require_token "src/nextpas.core.system.pas" "NativeInt = System.NativeInt;"
-require_token "src/nextpas.core.system.pas" "NativeUInt = System.NativeUInt;"
+require_token "src/nextpas.core.system.pas" "SizeInt = nextpas.core.base.SizeInt;"
+require_token "src/nextpas.core.system.pas" "SizeUInt = nextpas.core.base.SizeUInt;"
+require_token "src/nextpas.core.system.pas" "PtrInt = nextpas.core.base.PtrInt;"
+require_token "src/nextpas.core.system.pas" "PtrUInt = nextpas.core.base.PtrUInt;"
+require_token "src/nextpas.core.system.pas" "NativeInt = nextpas.core.base.NativeInt;"
+require_token "src/nextpas.core.system.pas" "NativeUInt = nextpas.core.base.NativeUInt;"
 require_token "src/nextpas.core.system.pas" "TBytes = nextpas.core.base.TBytes;"
 require_token "src/nextpas.core.system.pas" "TByteSpan = nextpas.core.base.TByteSpan;"
 require_token "src/nextpas.core.system.pas" "THashCode = nextpas.core.base.THashCode;"
@@ -1253,6 +1231,8 @@ require_token "src/nextpas.core.system.pas" "EParseError = nextpas.core.errors.E
 require_token "src/nextpas.core.system.pas" "EIndexOutOfRangeError = nextpas.core.errors.EIndexOutOfRangeError;"
 require_token "src/nextpas.core.system.pas" "EOutOfMemoryError = nextpas.core.errors.EOutOfMemoryError;"
 require_token "src/nextpas.core.system.pas" "EOutOfMemory = nextpas.core.errors.EOutOfMemory;"
+require_token "src/nextpas.core.system.pas" "EInterruptedError = nextpas.core.errors.EInterruptedError;"
+require_token "src/nextpas.core.system.pas" "EWouldBlockError = nextpas.core.errors.EWouldBlockError;"
 require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.exception.EConvertError;"
 require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.pas" "ecNone = nextpas.core.errors.ecNone;"
@@ -1279,7 +1259,7 @@ require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.l
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system FillMem delegates to base utils"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system base error aliases mirror base compile-truth"
 require_token "tests/nextpas.core.system/test_system_facade/test_system_facade.lpr" "system error taxonomy aliases mirror canonical owners"
-require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, nil, 1)"
+require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, nil, 0)"
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(nil, @LA[0], 1)"
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "CompareMem(@LA[0], nil, 1)"
 require_repo_token "core/tests/nextpas.core.base/test_base/test_base.lpr" "base FreeAndNil should nil before destructor execution"

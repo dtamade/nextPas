@@ -448,7 +448,7 @@ type
     function CompareExchangeWeak(var AExpected: PT; ADesired: PT;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
-    function GetMut: Pointer; inline;  // 返回 @FValue
+    function GetMut: Pointer; inline;  // 返回 @FValue（存储地址，非存储的值）
     function IntoInner: PT; inline;
   end;
 
