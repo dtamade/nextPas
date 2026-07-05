@@ -257,8 +257,9 @@ type
 
 {** 创建默认 Slab 配置 *}
 function CreateDefaultSlabConfig: TSlabConfig;
-{** 创建启用了页合并的 Slab 配置 *}
-function CreateSlabConfigWithPageMerging: TSlabConfig;
+{** 创建启用了页合并的 Slab 配置
+    @deprecated PageMerging 字段当前未用，请使用 CreateDefaultSlabConfig *}
+function CreateSlabConfigWithPageMerging: TSlabConfig; deprecated 'use CreateDefaultSlabConfig';
 implementation
 
 uses
