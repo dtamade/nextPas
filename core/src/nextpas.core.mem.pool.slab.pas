@@ -203,14 +203,6 @@ type
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     {** 释放 AllocAligned 分配的内存块 *}
     procedure FreeAligned(APtr: Pointer);
-    // IMemoryPool + IAllocator
-    // Compatibility helpers — prefer GetMem/FreeMem for new code
-    {** GetMem 的别名 — deprecated: 请使用 GetMem *}
-    function Alloc(ASize: SizeUInt): Pointer; inline; deprecated 'use GetMem instead';
-    {** FreeMem 的别名 — deprecated: 请使用 FreeMem *}
-    procedure Free(APtr: Pointer); overload; inline; deprecated 'use FreeMem instead';
-    {** FreeMem 的别名 — deprecated: 请使用 FreeMem *}
-    procedure ReleasePtr(APtr: Pointer); inline; deprecated 'use FreeMem instead';
     {**
      * 预热池：按指定单元大小预分配若干页
      *
@@ -955,22 +947,6 @@ begin
   if FConfig.MinShift=0 then FConfig.MinShift := 3;
   Create(aCapacity, aAllocator, FConfig.MinShift);
 end;
-
-function TSlabPool.Alloc(ASize: SizeUInt): Pointer; inline;
-begin
-  Result := GetMem(ASize);
-end;
-
-procedure TSlabPool.Free(APtr: Pointer); inline;
-begin
-  FreeMem(APtr);
-end;
-
-procedure TSlabPool.ReleasePtr(APtr: Pointer); inline;
-begin
-  FreeMem(APtr);
-end;
-
 
 
 

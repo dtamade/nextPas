@@ -73,10 +73,6 @@ type
     // IAllocator capability
     function Traits: TAllocatorTraits;
   public
-    // Compatibility helpers (same semantics as inner)
-    function Alloc(ASize: SizeUInt): Pointer; inline;
-    procedure Free(APtr: Pointer); inline;
-    procedure ReleasePtr(APtr: Pointer); inline;
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // Diagnostics forwarding
     function Owns(APtr: Pointer): Boolean;
@@ -380,25 +376,6 @@ function TSlabPoolConcurrent.Traits: TAllocatorTraits;
 begin
   Result := FInner.Traits;
   Result.ThreadSafe := True;
-end;
-
-{ ---------------------------------------------------------------------------
-  Compatibility helpers
-  --------------------------------------------------------------------------- }
-
-function TSlabPoolConcurrent.Alloc(ASize: SizeUInt): Pointer; inline;
-begin
-  Result := GetMem(ASize);
-end;
-
-procedure TSlabPoolConcurrent.Free(APtr: Pointer); inline;
-begin
-  FreeMem(APtr);
-end;
-
-procedure TSlabPoolConcurrent.ReleasePtr(APtr: Pointer); inline;
-begin
-  FreeMem(APtr);
 end;
 
 function TSlabPoolConcurrent.Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
