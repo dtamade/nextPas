@@ -245,7 +245,9 @@ uses
   nextpas.core.test.runner.parallel,
   nextpas.core.json,
   nextpas.core.json.builder,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.time.base,
+  nextpas.core.bench.memtrack;
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
@@ -1657,18 +1659,20 @@ var
   LEntry: TTestEntry;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
-  LBenchTimeMs: Integer;
+  LBenchTimeNs: Int64;
   LShowMem: Boolean;
   LCtx: TBenchContext;
   LN: Integer;
-  LStartMs, LElapsedMs: Int64;
+  LStart: TInstant;
+  LElapsed: TDuration;
+  LElapsedNs: Int64;
   LResult: TBenchResult;
   LCount, LCap: Integer;
 begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
-  LBenchTimeMs := GetBenchTimeMs(LConfig);
-  if LBenchTimeMs <= 0 then LBenchTimeMs := 1000;
+  LBenchTimeNs := Int64(GetBenchTimeMs(LConfig)) * 1000000;
+  if LBenchTimeNs <= 0 then LBenchTimeNs := 1000000000;
   LShowMem := GetBenchMem(LConfig);
   LCount := 0;
   LCap := 0;
@@ -1680,22 +1684,21 @@ begin
     LEntry := Tests[I];
     if LEntry.Kind <> ekBench then Continue;
     if not IsTestEligible(LEntry, LConfig, '', True) then Continue;
-    { Adaptive N scaling — use GetTickCount64 (ms) for reliable timing }
+    { Adaptive N scaling — nanosecond precision via TInstant }
     LN := 1;
     repeat
       FillChar(LCtx, SizeOf(LCtx), 0);
       LCtx.N := LN;
-      LStartMs := GetTickCount64;
+      LStart := TInstant.Now;
       LEntry.BenchProc(@LCtx);
-      LElapsedMs := GetTickCount64 - LStartMs;
-      if LElapsedMs >= LBenchTimeMs then
+      LElapsed := LStart.Elapsed;
+      LElapsedNs := LElapsed.AsNanoseconds;
+      if LElapsedNs >= LBenchTimeNs then
         Break;
-      { Scale N: use Int64 to prevent overflow before bounds check.
-        Must check bounds BEFORE assigning back to Integer LN to avoid
-        truncation overflow on fast benchmarks where multiplication
-        exceeds MaxInt. }
-      if LElapsedMs < 10 then
+      { Proportional scaling: multiply-first to avoid truncation on fast benchmarks }
+      if LElapsedNs < 100000 then
       begin
+        { <0.1ms: scale aggressively }
         if Int64(LN) * 100 > 1000000000 then
         begin
           LN := 1000000000;
@@ -1705,22 +1708,40 @@ begin
       end
       else
       begin
-        if Int64(LN) * LBenchTimeMs div LElapsedMs > 1000000000 then
+        { Proportional: N * target / elapsed, with 20% overshoot }
+        if Int64(LN) * LBenchTimeNs div LElapsedNs > 1000000000 then
         begin
           LN := 1000000000;
           Break;
         end;
-        LN := Int64(LN) * LBenchTimeMs div LElapsedMs;
+        LN := Int64(LN) * LBenchTimeNs div LElapsedNs;
       end;
     until False;
-    { Final run with calibrated N }
+    { Final run with calibrated N — with optional memory tracking }
     FillChar(LCtx, SizeOf(LCtx), 0);
     LCtx.N := LN;
-    LStartMs := GetTickCount64;
-    LEntry.BenchProc(@LCtx);
-    LElapsedMs := GetTickCount64 - LStartMs;
-    LResult := MakeBenchResult(LEntry.Name, LN,
-      LElapsedMs * 1000000, LCtx.AllocBytes, LCtx.AllocCount);
+    if LShowMem then
+    begin
+      EnableGlobalMemoryTracking;
+      ResetGlobalMemoryTracker;
+    end;
+    try
+      LStart := TInstant.Now;
+      LEntry.BenchProc(@LCtx);
+      LElapsed := LStart.Elapsed;
+      if LShowMem then
+      begin
+        with GetGlobalMemoryStats do
+          LResult := MakeBenchResult(LEntry.Name, LN,
+            LElapsed.AsNanoseconds, AllocBytes, AllocCount);
+      end
+      else
+        LResult := MakeBenchResult(LEntry.Name, LN,
+          LElapsed.AsNanoseconds, LCtx.AllocBytes, LCtx.AllocCount);
+    finally
+      if LShowMem then
+        DisableGlobalMemoryTracking;
+    end;
     { Geometric growth: only grow during loop, trim once at end.
       Writing beyond logical length after SetLength-down triggers heaptrc
       guard violation even though allocated capacity is sufficient. }
