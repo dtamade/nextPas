@@ -356,6 +356,17 @@ type
         1: (Data: array[TIndex] of Single);
   end;
 
+  {**
+   * 2D vector with Double precision.
+   *
+   * TVec2d represents a 2D vector with X and Y components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, cross product (2D), interpolation, and swizzle
+   * properties for component reordering.
+   *
+   * @see TVec2f for Single precision version
+   * @see TVec3d for 3D double-precision vector
+   *}
   TVec2d = packed record
   public
     type
@@ -400,6 +411,17 @@ type
         1: (Data: array[TIndex] of Double);
   end;
 
+  {**
+   * 3D vector with Double precision.
+   *
+   * TVec3d represents a 3D vector with X, Y, and Z components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, cross product, interpolation, projection, reflection,
+   * and swizzle properties for component reordering.
+   *
+   * @see TVec3f for Single precision version
+   * @see TVec4d for 4D double-precision vector
+   *}
   TVec3d = packed record
   public
     type
@@ -466,6 +488,18 @@ type
         1: (Data: array[TIndex] of Double);
   end;
 
+  {**
+   * 4D vector with Double precision.
+   *
+   * TVec4d represents a 4D vector with X, Y, Z, and W components using Double (64-bit)
+   * floating-point precision. It provides common vector operations including
+   * arithmetic, dot product, interpolation, projection, reflection, and swizzle
+   * properties for component reordering. Commonly used for homogeneous coordinates
+   * and quaternion representation.
+   *
+   * @see TVec4f for Single precision version
+   * @see TQuatd for quaternion representation
+   *}
   TVec4d = packed record
   public
     type

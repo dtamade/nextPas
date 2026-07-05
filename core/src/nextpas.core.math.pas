@@ -49,6 +49,33 @@ function Vec4fTruncate(const AVec: TVec4f): TVec3f; inline;
 function Vec3dExtend(const AVec: TVec3d; const AW: Double): TVec4d; inline;
 function Vec4dTruncate(const AVec: TVec4d): TVec3d; inline;
 
+{ Batch operations - SIMD-friendly vectorized operations }
+function BatchDot(const ALeft, ARight: array of TVec2f;
+                  var AResults: array of Single): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec3f;
+                  var AResults: array of Single): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec4f;
+                  var AResults: array of Single): SizeInt; overload;
+
+function BatchNormalize(var AVectors: array of TVec2f): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec3f): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec4f): SizeInt; overload;
+
+function BatchTransform(const AMatrix: TMat3f;
+                        const ASource: array of TVec2f;
+                        var ADest: array of TVec2f): SizeInt; overload;
+function BatchTransform(const AMatrix: TMat4f;
+                        const ASource: array of TVec3f;
+                        var ADest: array of TVec3f): SizeInt; overload;
+
+function BatchLerp(const AStart, AEnd: array of TVec3f;
+                   const AT: Single;
+                   var ADest: array of TVec3f): SizeInt; overload;
+
+function BatchClamp(const AVectors: array of TVec3f;
+                    const AMin, AMax: TVec3f;
+                    var ADest: array of TVec3f): SizeInt; overload;
+
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
@@ -220,6 +247,9 @@ procedure SetExceptionMask(const AMask: TFPUExceptionMask);
 
 implementation
 
+uses
+  nextpas.core.math.vec.batch;
+
 function Vec3fExtend(const AVec: TVec3f; const AW: Single): TVec4f;
 begin
   Result := nextpas.core.math.vec.Vec3fExtend(AVec, AW);
@@ -238,6 +268,69 @@ end;
 function Vec4dTruncate(const AVec: TVec4d): TVec3d;
 begin
   Result := nextpas.core.math.vec.Vec4dTruncate(AVec);
+end;
+
+{ Batch operations }
+
+function BatchDot(const ALeft, ARight: array of TVec2f;
+                  var AResults: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec3f;
+                  var AResults: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec4f;
+                  var AResults: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchNormalize(var AVectors: array of TVec2f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec4f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchTransform(const AMatrix: TMat3f;
+                        const ASource: array of TVec2f;
+                        var ADest: array of TVec2f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchTransform(const AMatrix: TMat4f;
+                        const ASource: array of TVec3f;
+                        var ADest: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchLerp(const AStart, AEnd: array of TVec3f;
+                   const AT: Single;
+                   var ADest: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchLerp(AStart, AEnd, AT, ADest);
+end;
+
+function BatchClamp(const AVectors: array of TVec3f;
+                    const AMin, AMax: TVec3f;
+                    var ADest: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
 end;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
