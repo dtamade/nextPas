@@ -11,6 +11,7 @@ CPUINFO_TEST_BIN := nextpas.core.simd.cpuinfo.test
 CPUINFO_FPC_FLAGS := -B -Mobjfpc -Sc -Si -O2 -gl
 CPUINFO_FPC_FLAGS += -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src/generated
 
+BITOPS_TEST := test_bitops
 RUNNER := nextpas.core.simd.test
 VEC_TEST := test_vec_all
 ALG_TEST := test_algorithms
@@ -63,6 +64,11 @@ test-algorithms:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) -B $(ALG_TEST).lpr
 	$(BUILD_DIR)/$(ALG_TEST) --all --format=plainnotiming
+
+test-bitops:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B $(BITOPS_TEST).lpr
+	$(BUILD_DIR)/$(BITOPS_TEST)
 
 api-coverage-contract:
 	$(PYTHON) check_public_api_test_coverage.py --summary-line --strict-thin
