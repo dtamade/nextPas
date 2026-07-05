@@ -1,28 +1,28 @@
 # nextpas.core.mem 可用性评估报告
 
-**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4), 2026-07-05 (R5)
-**评估范围**: 57 个源文件 / 48 个测试文件 / 615 tests / 0 failures / 0 leaks
+**评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4), 2026-07-05 (R5), 2026-07-05 (R6)
+**评估范围**: 58 个源文件 / 47 测试套件 / 545 tests / 0 failures / 0 leaks
 **评估维度**: 接口设计、API 易用性、调用一致性、错误提示、边界条件、测试覆盖、性能与内存安全
-**修复轮次**: R1 修复 5 项 + R2 修复 3 项 + R4 修复 5 项 + R5 修复 6 项
+**修复轮次**: R1 修复 5 项 + R2 修复 3 项 + R4 修复 5 项 + R5 修复 6 项 + R6 修复 3 项
 
 ---
 
 ## Summary
 
-| 维度 | 得分 (1-10) | 等级 | R5 趋势 |
+| 维度 | 得分 (1-10) | 等级 | R6 趋势 |
 |------|-------------|------|---------|
 | 接口设计 | 8.5 | 优秀 | → |
-| API 易用性 | 8.0 | 良好 | → |
-| 调用一致性 | 7.5 | 良好 | → |
-| 错误提示质量 | 8.5 | 优秀 | ↑ (R5: AllocUnsafe DEBUG Assert) |
+| API 易用性 | 8.5 | 优秀 | ↑ (R6: FreeMem 单参数重载) |
+| 调用一致性 | 8.0 | 良好 | ↑ (R6: MPSC→Treiber 统一) |
+| 错误提示质量 | 8.5 | 优秀 | → |
 | 边界条件 | 8.5 | 优秀 | → |
 | 测试覆盖 | 9.0 | 卓越 | → |
 | 性能 | 9.5 | 卓越 | → |
-| 内存安全 | 8.5 | 优秀 | ↑ (R5: AllocUnsafe 容量检查) |
-| **综合** | **8.4** | **优秀** | ↑ (8.1→8.4) |
+| 内存安全 | 9.0 | 卓越 | ↑ (R6: 并发崩溃修复) |
+| **综合** | **8.7** | **优秀** | ↑ (8.4→8.7) |
 
 **风险等级**: LOW
-**结论**: 生产就绪。R5 发现 6 项 P2 finding，全部已修复（3 代码 + 3 文档）。所有 P0/P1 问题已清零。
+**结论**: 生产就绪。R6 发现 1 个 P0 并发 bug + 2 个 P1 问题，全部已修复。所有 P0/P1 问题已清零。
 
 ---
 
@@ -458,6 +458,75 @@ end;
 
 ---
 
+### R6 深度审计发现 (2026-07-05)
+
+### F-33 [P0-已修复] MPSC Inbox 并发崩溃 — 三层根因
+
+**位置**: `cache.thread.pas`, `allocator.growing.pas`
+
+**问题**: test_stability 在并发 stress 测试中随机 SIGSEGV。根因三层叠加：
+1. `TThreadCache.FInbox` (MPSC 队列) 从未被消费 (`MpscInboxDrain` 从未调用)
+2. `ThreadExitFlush` 只排空 `FHeads`，不排空 `FInbox` — 跨线程释放的块泄漏
+3. `FindThreadCache` 有 TOCTOU 窗口 — 目标线程退出后返回悬空指针
+
+**修复**:
+- MPSC 队列 → Treiber stack (Push=1 CAS, PopAll=1 atomic exchange, 无 sentinel)
+- Per-size-class inbox 数组 (62 slots) 实现正确 central pool 归还
+- `ThreadExitFlush` 先 drain 所有 inbox 再 flush TLS cache
+- `FreeMem` 跨线程路径：owner 线程退出时降级到 central pool
+- `FindThreadCache` 使用原子读取 + 反序读取
+- `UnregisterThreadCache` 先清 FCache 再清 FActive
+
+**验证**: test_stability 17/17 通过（previously crashed），545 tests 全绿。
+
+---
+
+### F-34 [P1-已修复] TGrowingAllocator.FreeMem 双参数不兼容 IAllocator
+
+**位置**: `allocator.growing.pas:44`
+
+**问题**: `FreeMem(APtr: Pointer; ASize: SizeUInt)` 要求调用方传入大小，与 `IAllocator.FreeMem(ADst)` 不兼容。
+
+**修复**: 新增 `FreeMem(APtr: Pointer)` 单参数重载。通过扫描 `GGrowingAllocator.FCentrals` 的 span 所有权确定 size class，从大到小扫描避免误匹配。
+
+**关键发现**: `GetMem` 通过全局 `GGrowingAllocator` 路由（TLS cache → central pool），单参数 `FreeMem` 必须也扫描全局 centrals 而非本地实例。
+
+---
+
+### F-35 [P1-已修复] FindSpanIndex 未导出
+
+**位置**: `central.pas:258`
+
+**问题**: `FindSpanIndex` 在 implementation 段，外部模块无法使用。
+
+**修复**: 移至 interface 段导出。
+
+---
+
+### F-36 [P2] 两套 IAllocator 定义并存 — 已文档化
+
+**状态**: canonical 在 `mem.intf.pas`，`allocator.base.pas` 为 alias + 基类。门面已统一 re-export。无需代码修改。
+
+---
+
+### F-37 [P2] Acquire/GetMem 命名分裂 — 已文档化
+
+**状态**: 固定大小池用 Acquire/Release，通用用 GetMem/FreeMem。门面决策表已覆盖。
+
+---
+
+### F-38 [P2] platform.sync 编译错误 — 外部依赖
+
+**状态**: `L'kernel32'` 宽字符串字面量语法不支持。非 mem 模块问题。
+
+---
+
+### F-39 [P2] SecureZeroString COW 限制 — 已文档化
+
+**状态**: R5 F-26 已处理。
+
+---
+
 ## Next Steps
 
 ### 已完成 (R1+R2+R3+R4)
@@ -490,6 +559,9 @@ end;
 26. ✅ R5: F-30 SlabConfig 废弃字段 @deprecated
 27. ✅ R5: F-31 TMemRwLock 平台策略文档
 28. ✅ R5: F-32 TFallbackAllocator Map 容量说明
+29. ✅ R6: F-33 MPSC inbox → Treiber stack + per-size-class inbox + drain + 降级
+30. ✅ R6: F-34 TGrowingAllocator.FreeMem(APtr) 单参数重载
+31. ✅ R6: F-35 FindSpanIndex 接口导出
 
 ### 待处理
 

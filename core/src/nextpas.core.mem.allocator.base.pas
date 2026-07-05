@@ -1,4 +1,11 @@
 unit nextpas.core.mem.allocator.base;
+{**
+ * @desc Allocator 基类和类型定义。
+ *
+ * @note Canonical IAllocator 定义在 nextpas.core.mem.intf。
+ *       本单元提供 TAllocator/TMemAllocator 基类便利层。
+ *       门面 mem.pas 统一 re-export mem.intf 的 IAllocator。
+ *}
 
 {$I nextpas.core.settings.inc}
 

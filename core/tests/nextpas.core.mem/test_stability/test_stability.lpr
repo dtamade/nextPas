@@ -633,6 +633,31 @@ begin
   end;
 end;
 
+{ ── Single-param FreeMem (size-class lookup) ── }
+
+procedure TestSingleParamFreeMem;
+var
+  LAlloc: TGrowingAllocator;
+  LSizes: array[0..5] of SizeUInt = (16, 64, 256, 512, 1024, 4096);
+  LPtrs: array[0..5] of Pointer;
+  I: Integer;
+begin
+  LAlloc := TGrowingAllocator.Create;
+  try
+    for I := 0 to 5 do
+    begin
+      LPtrs[I] := LAlloc.GetMem(LSizes[I]);
+      Check(LPtrs[I] <> nil, 'alloc size ' + IntToStr(LSizes[I]));
+      PByte(LPtrs[I])^ := Byte(I);
+    end;
+    for I := 0 to 5 do
+      LAlloc.FreeMem(LPtrs[I]);
+    WriteLn('PASS: single-param FreeMem (size-class lookup)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 { ── Main ── }
 
 begin
@@ -654,6 +679,7 @@ begin
   T.Test('rapid_thread_creation', @TestRapidThreadCreation);
   T.Test('zero_size_edge_cases', @TestGrowingAllocatorGetMemZero);
   T.Test('realloc_stress', @TestReallocMemStress);
+  T.Test('single_param_freemem', @TestSingleParamFreeMem);
 
   T.Run;
   T.Summary;
