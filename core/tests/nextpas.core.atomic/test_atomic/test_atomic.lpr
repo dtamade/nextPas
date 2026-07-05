@@ -6585,7 +6585,7 @@ begin
   begin
     if atomic_load(LStarted, mo_seq_cst) = 2 then
       Break;
-    Sleep(1);
+    SleepMs(1);
   end;
   CheckEqual(Int64(2), Int64(atomic_load(LStarted, mo_seq_cst)),
     'waiter threads must start before notify path is exercised');
@@ -6730,7 +6730,7 @@ begin
     begin
       if atomic_load(LStarted, mo_seq_cst) = 1 then
         Break;
-      Sleep(1);
+      SleepMs(1);
     end;
 
     if atomic_load(LStarted, mo_seq_cst) <> 1 then
@@ -6908,7 +6908,7 @@ begin
   begin
     if atomic_load(LStarted, mo_seq_cst) = ThreadCount then
       Break;
-    Sleep(1);
+    SleepMs(1);
   end;
   CheckEqual(Int64(ThreadCount), Int64(atomic_load(LStarted, mo_seq_cst)),
     'refcount workers must start before the borrow phase is released');
@@ -7036,7 +7036,7 @@ var
         LAllStarted := True;
         Break;
       end;
-      Sleep(1);
+      SleepMs(1);
     end;
 
     atomic_store(LGo, 1, mo_seq_cst);

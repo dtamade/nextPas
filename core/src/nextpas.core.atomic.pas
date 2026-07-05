@@ -87,7 +87,7 @@ type
     function CompareExchangeWeak(var AExpected: PT; ADesired: PT;
       AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
 
-    function GetMut: PT; inline;
+    function GetMut: Pointer; inline;
     function IntoInner: PT; inline;
   end;
 
@@ -1153,9 +1153,9 @@ begin
   AExpected := PT(LExpected);
 end;
 
-function TAtomicPtr.GetMut: PT;
+function TAtomicPtr.GetMut: Pointer;
 begin
-  Result := FValue;
+  Result := @FValue;
 end;
 
 function TAtomicPtr.IntoInner: PT;

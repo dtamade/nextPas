@@ -32,8 +32,8 @@ const
   dupError = Classes.dupError;
   dupAccept = Classes.dupAccept;
 
-  { File mode constants — re-exported from SysUtils for FPC RTL isolation }
-  fmCreate = SysUtils.fmCreate;
+  { File mode constants — re-exported for FPC RTL isolation }
+  fmCreate = Classes.fmCreate;
   fmOpenRead = SysUtils.fmOpenRead;
   fmOpenWrite = SysUtils.fmOpenWrite;
   fmOpenReadWrite = SysUtils.fmOpenReadWrite;
