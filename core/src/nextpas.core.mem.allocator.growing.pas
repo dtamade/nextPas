@@ -84,6 +84,7 @@ procedure ResetDefaultGrowingAllocator;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.mem.error;
 
 const
@@ -142,7 +143,10 @@ begin
   end;
 end;
 
-{ Unregister current thread's TLS cache from global registry. }
+{ Unregister current thread's TLS cache from global registry.
+  Order: clear FCache first (with release), then set FActive = False.
+  This ensures concurrent FindThreadCache readers either see a valid
+  FCache with FActive=True, or nil FCache with FActive=False. }
 procedure UnregisterThreadCache;
 var
   LSlot: SizeUInt;
@@ -155,24 +159,33 @@ begin
     if (GThreadRegistry[LSlot].FThreadId = LThreadId) and
        GThreadRegistry[LSlot].FActive then
     begin
+      { Clear cache pointer first, then mark inactive. }
+      AtomicStorePtr(GThreadRegistry[LSlot].FCache, nil, moRelease);
       GThreadRegistry[LSlot].FActive := False;
-      GThreadRegistry[LSlot].FCache := nil;
     end;
   finally
     RegistryUnlock;
   end;
 end;
 
-{ Find TLS cache for a given thread ID (lock-free read). }
+{ Find TLS cache for a given thread ID (lock-free read).
+  Uses acquire loads to prevent TOCTOU: we read FCache first, then
+  FActive. If the thread exits between our reads, FActive will be
+  False and we return nil.
+
+  On x86-64 aligned loads have acquire semantics by default.
+  The AtomicLoadPtr provides the compiler barrier. }
 function FindThreadCache(AThreadId: QWord): Pointer;
 var
   LSlot: SizeUInt;
 begin
   LSlot := SizeUInt(AThreadId) and (MAX_THREAD_SLOTS - 1);
-  if GThreadRegistry[LSlot].FActive and
-     (GThreadRegistry[LSlot].FThreadId = AThreadId) then
-    Result := GThreadRegistry[LSlot].FCache
-  else
+  if GThreadRegistry[LSlot].FThreadId <> AThreadId then
+    Exit(nil);
+  { Read cache pointer first, then verify active flag.
+    If thread exits between these reads, FActive will be False. }
+  Result := AtomicLoadPtr(GThreadRegistry[LSlot].FCache);
+  if (Result <> nil) and (not GThreadRegistry[LSlot].FActive) then
     Result := nil;
 end;
 
@@ -209,6 +222,10 @@ procedure ThreadExitFlush(AData: Pointer); cdecl;
 begin
   if (AData <> nil) and (GGrowingAllocator <> nil) then
   begin
+    { Drain cross-thread-freed blocks from per-size-class inboxes first,
+      returning them to their respective central pools. }
+    ThreadCacheDrainInboxes(GThreadCache, @FlushToCentral);
+    { Then flush the local TLS free lists. }
     ThreadCacheFlushAll(GThreadCache, @FlushToCentral);
     UnregisterThreadCache;
   end;
@@ -433,7 +450,8 @@ begin
     Exit;
   end;
   { Cross-thread free optimization: check if block belongs to another thread.
-    If so, push directly to owner's per-thread inbox (lock-free). }
+    If so, push directly to owner's per-thread inbox (lock-free).
+    If owner thread has exited (cache not found), fall through to central pool. }
   LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
   if (LOwnerThreadId <> 0) and (LOwnerThreadId <> GetCurrentThreadId) then
   begin
@@ -443,6 +461,9 @@ begin
       ThreadCacheInboxPush(PThreadCache(LOwnerCache)^, LIndex, APtr);
       Exit;
     end;
+    { Owner thread exited — return directly to central pool. }
+    CentralPoolFree(FCentrals[LIndex], 1, @APtr, GThreadCache.FOpCount);
+    Exit;
   end;
   { Same-thread free: push to local TLS cache. }
   if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then

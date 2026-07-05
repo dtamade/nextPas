@@ -184,73 +184,59 @@ begin
   WriteLn('PASS: optimized lookup multiple spans');
 end;
 
-{ --- MPSC Inbox tests --- }
+{ --- Inbox Treiber stack tests --- }
 
-procedure TestMpscInboxInit;
+procedure TestInboxStackInit;
 var
-  LInbox: TMpscInbox;
+  LStack: TInboxStack;
 begin
-  MpscInboxInit(LInbox);
-  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after init');
-  WriteLn('PASS: MPSC inbox init');
+  InboxStackInit(LStack);
+  Check(InboxStackIsEmpty(LStack), 'stack empty after init');
+  WriteLn('PASS: inbox stack init');
 end;
 
-procedure TestMpscInboxPushDrain;
+procedure TestInboxStackPushPopAll;
 var
-  LInbox: TMpscInbox;
+  LStack: TInboxStack;
   LBlocks: array[0..9] of Pointer;
-  LDrained: array[0..9] of Pointer;
-  LCount: Word;
+  LHead, LNode: PInboxNode;
+  LCount: Integer;
   I: Integer;
 begin
-  MpscInboxInit(LInbox);
+  InboxStackInit(LStack);
   { Allocate and push 10 blocks. }
   for I := 0 to 9 do
   begin
     GetMem(LBlocks[I], 64);
-    MpscInboxPush(LInbox, LBlocks[I]);
+    InboxStackPush(LStack, LBlocks[I]);
   end;
-  Check(not MpscInboxIsEmpty(LInbox), 'inbox not empty after push');
-  { Drain all blocks. }
-  LCount := MpscInboxDrain(LInbox, 10, @LDrained[0]);
-  Check(LCount = 10, 'drained 10 blocks');
-  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after drain');
-  { Free all blocks. }
-  for I := 0 to 9 do
-    FreeMem(LDrained[I], 64);
-  WriteLn('PASS: MPSC inbox push/drain');
+  Check(not InboxStackIsEmpty(LStack), 'stack not empty after push');
+  { Pop all blocks. }
+  LHead := InboxStackPopAll(LStack);
+  Check(InboxStackIsEmpty(LStack), 'stack empty after pop all');
+  { Count and free all blocks. }
+  LCount := 0;
+  while LHead <> nil do
+  begin
+    LNode := LHead;
+    LHead := LHead^.FNext;
+    FreeMem(Pointer(LNode), 64);
+    Inc(LCount);
+  end;
+  Check(LCount = 10, 'popped all 10 blocks');
+  WriteLn('PASS: inbox stack push/pop all');
 end;
 
-procedure TestMpscInboxPartialDrain;
+procedure TestInboxStackPopEmpty;
 var
-  LInbox: TMpscInbox;
-  LBlocks: array[0..9] of Pointer;
-  LDrained: array[0..9] of Pointer;
-  LCount: Word;
-  I: Integer;
+  LStack: TInboxStack;
+  LHead: PInboxNode;
 begin
-  MpscInboxInit(LInbox);
-  { Allocate and push 10 blocks. }
-  for I := 0 to 9 do
-  begin
-    GetMem(LBlocks[I], 64);
-    MpscInboxPush(LInbox, LBlocks[I]);
-  end;
-  { Drain only 5 blocks. }
-  LCount := MpscInboxDrain(LInbox, 5, @LDrained[0]);
-  Check(LCount = 5, 'drained 5 blocks');
-  Check(not MpscInboxIsEmpty(LInbox), 'inbox not empty after partial drain');
-  { Free drained blocks. }
-  for I := 0 to 4 do
-    FreeMem(LDrained[I], 64);
-  { Drain remaining. }
-  LCount := MpscInboxDrain(LInbox, 10, @LDrained[0]);
-  Check(LCount = 5, 'drained remaining 5 blocks');
-  Check(MpscInboxIsEmpty(LInbox), 'inbox empty after full drain');
-  { Free remaining blocks. }
-  for I := 0 to 4 do
-    FreeMem(LDrained[I], 64);
-  WriteLn('PASS: MPSC inbox partial drain');
+  InboxStackInit(LStack);
+  LHead := InboxStackPopAll(LStack);
+  Check(LHead = nil, 'pop empty returns nil');
+  Check(InboxStackIsEmpty(LStack), 'stack still empty');
+  WriteLn('PASS: inbox stack pop empty');
 end;
 
 { --- Main --- }
@@ -268,9 +254,9 @@ begin
   T.Test('MRU cache hits same span', @TestMruCacheHitsSameSpan);
   T.Test('page_indexed_lookup', @TestPageIndexedLookup);
   T.Test('page_indexed_lookup_multiple_spans', @TestPageIndexedLookupMultipleSpans);
-  T.Test('mpsc_inbox_init', @TestMpscInboxInit);
-  T.Test('mpsc_inbox_push_drain', @TestMpscInboxPushDrain);
-  T.Test('mpsc_inbox_partial_drain', @TestMpscInboxPartialDrain);
+  T.Test('inbox_stack_init', @TestInboxStackInit);
+  T.Test('inbox_stack_push_pop_all', @TestInboxStackPushPopAll);
+  T.Test('inbox_stack_pop_empty', @TestInboxStackPopEmpty);
 
   T.Run;
   T.Summary;
