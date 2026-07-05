@@ -154,30 +154,31 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 
 ## 长期任务调研 (季度)
 
-### Task 7: 代码拆分
+### Task 7: 代码拆分 ✅ 已完成
 
-**当前状态**:
-| 文件 | 行数 | 建议 |
+**拆分结果** (2026-07-05):
+| 文件 | 原行数 | 新行数 | 职责 |
+|------|--------|--------|------|
+| `pool.fixed_slab.pas` | 1,758 | 898 | TFixedSlabPool 类实现 |
+| `pool.fixed_slab.nginx.pas` | — | 847 | Nginx slab 底层原语 |
+
+**未拆分文件** (评估后决定不拆分):
+| 文件 | 行数 | 原因 |
 |------|------|------|
-| `mem.utils.pas` | 1,379 | 拆分为 `mem.utils.bit` + `mem.utils.copy` |
-| `blockpool.sharded.pas` | 1,383 | 拆分为 `blockpool.sharded.core` + `blockpool.sharded.route` |
-| `pool.fixed_slab.pas` | 1,758 | 拆分为 `pool.fixed_slab.core` + `pool.fixed_slab.bitmap` |
+| `mem.utils.pas` | 1,379 | 全 inline 函数，内聚性极高 |
+| `blockpool.sharded.pas` | 1,383 | 单类实现，拆分破坏封装 |
 
-**风险**:  
-1. 循环依赖风险
-2. 编译时间可能增加
-3. 需要更新所有引用
-
-**建议**:  
-- **暂不拆分**，当前行数在可接受范围
-- 优先拆分 `pool.fixed_slab.pas`（1758 行，最大）
-- 拆分前需评估依赖关系
-
-**工作量**: 1-2 天
+**验证**: test_slab_pool 19/19 ✅, test_slab_thread_safety 2/2 ✅, L0 边界检查 ✅
 
 ---
 
-### Task 8: 异常粒度评估
+### Task 8: 异常粒度评估 ✅ 已完成
+
+**评估结论** (2026-07-05):
+- 核心 7 个异常类 + 9 个池特化异常，粒度合理
+- 185 个 raise 站点分布均匀
+- 对标 Rust/Go 无差距
+- **无需修改**
 
 **当前异常类**:
 | 异常类 | 继承关系 | 使用场景 |
@@ -203,7 +204,13 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 
 ---
 
-### Task 9: 编译时安全 (FPC -O2 死锁)
+### Task 9: 编译时安全 (FPC -O2 死锁) ✅ 已解决
+
+**评估结论** (2026-07-05):
+- USABILITY-AUDIT.md F-03 已标记 **已解决**
+- 当前实现使用 InterlockedCompareExchange + 平台 mutex，无 -O2 风险
+- 无虚方法调用、无接口指针调用在锁路径上
+- **无需操作**
 
 **当前状态**:  
 - `mutex.pas` 注释说明 FPC -O2 下指针调用可能死锁
