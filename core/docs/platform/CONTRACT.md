@@ -75,7 +75,7 @@ function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
 // 线程
 function platform_thread_create(out AHandle: TPlatformThreadHandle;
@@ -212,7 +212,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - mmap.pas: POSIX page alignment 前置校验
 
 ### Phase 3: API 增强
-- process.pas: `ATimeoutMs` 参数（Unix 轮询 + Windows 原生）
+- process.pas: `ATimeoutMs: Int64` 参数（Unix 轮询 + Windows 原生）
 - fs.pas: `is_executable` 检查全部三个执行位
 
 ### Phase 4: TOCTOU 安全修复 (2026-07-05)
@@ -267,3 +267,14 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - 新实现：缩小时直接更新 header size，零拷贝
   - 优势：realloc 缩小操作 O(1)，无内存分配
 - 测试：error 10/10 通过，memory 13/13 通过
+
+### Phase 9: Timeout 类型统一 (2026-07-06)
+- 所有 `ATimeoutMs` 参数统一为 `Int64` 类型
+  - console.pas: `platform_console_wait_readable` — `ATimeoutMs: Int32` → `Int64`
+  - io.pas: `platform_poller_wait` — `ATimeoutMs: Int32` → `Int64`
+  - process.pas: `platform_process_wait` — `ATimeoutMs: Int32` → `Int64`
+  - watch.pas: `platform_watch_poll` — `ATimeoutMs: Int32` → `Int64`
+  - socket.pas: `platform_socket_set_timeout` — `AMs: UInt32` → `ATimeoutMs: Int64`
+- sync.pas: `ATimeoutNs: Int64` 保持不变（纳秒精度是同步原语的刚需）
+- thread.pas: `ATimeoutMs: Int64` 已经是正确类型
+- 测试：所有 33 个测试套件通过，0 unfreed

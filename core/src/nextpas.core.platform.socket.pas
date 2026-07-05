@@ -113,7 +113,7 @@ function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32)
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
@@ -353,12 +353,12 @@ begin
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 var
   LTv: timeval;
 begin
-  LTv.tv_sec := AMs div 1000;
-  LTv.tv_usec := (AMs mod 1000) * 1000;
+  LTv.tv_sec := ATimeoutMs div 1000;
+  LTv.tv_usec := (ATimeoutMs mod 1000) * 1000;
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
     @LTv, SizeOf(LTv));
 end;
@@ -705,11 +705,11 @@ begin
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 var
   LMs: Int32;
 begin
-  LMs := Int32(AMs);
+  LMs := Int32(ATimeoutMs);
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
     @LMs, SizeOf(LMs));
 end;
@@ -840,7 +840,7 @@ function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Poin
 function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;

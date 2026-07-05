@@ -29,7 +29,7 @@ function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 function platform_watch_add(var AWatcher: TPlatformWatcher;
   const APath: PAnsiChar): Int32;
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 
 implementation
@@ -67,7 +67,7 @@ begin
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 type
   TInotifyEvent = packed record
     wd: Int32;
@@ -191,7 +191,7 @@ begin
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
   LEvent: TKEvent;
   LTimeout: TTimeSpec;
@@ -256,7 +256,7 @@ begin
   Result := Int32(ERROR_NOT_SUPPORTED);
 end;
 
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
   Result := -Int32(ERROR_NOT_SUPPORTED);
@@ -274,7 +274,7 @@ function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;

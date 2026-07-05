@@ -19,7 +19,7 @@ function platform_poller_enable_wake(var APoller: TPlatformPoller;
 function platform_poller_wake(var APoller: TPlatformPoller): Int32;
 function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
 function platform_poller_wait(var APoller: TPlatformPoller;
-  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
+  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;
 
 implementation
@@ -278,7 +278,7 @@ begin
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
-  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
+  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;
 var
   LEvents: pepoll_event;
@@ -442,7 +442,7 @@ begin
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
-  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
+  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;
 var
   LEvents: PKEvent;
@@ -938,7 +938,7 @@ begin
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
-  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
+  AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;
 var
   LPollFds: PWSAPollFdArray;
@@ -997,7 +997,7 @@ function platform_poller_remove(var APoller: TPlatformPoller; AFd: PtrUInt): Int
 function platform_poller_enable_wake(var APoller: TPlatformPoller; AUserData: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_poller_wake(var APoller: TPlatformPoller): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_poller_wait(var APoller: TPlatformPoller; AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32; out ACount: Int32): Int32; begin ACount := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_poller_wait(var APoller: TPlatformPoller; AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64; out ACount: Int32): Int32; begin ACount := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

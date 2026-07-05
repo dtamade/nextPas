@@ -28,7 +28,7 @@
 
 ### 一句话结论
 
-> 平台模块在底层系统抽象上达到生产级水平（性能 9.0、内存安全 9.0），但 API 层存在 134 个 `-1` fallback stub、30/489 nil guard 覆盖率、以及 timeout 类型不一致等设计债务，对标 Rust/Go 差距主要在类型安全和 RAII 自动化上。
+> 平台模块在底层系统抽象上达到生产级水平（性能 9.0、内存安全 9.0），但 API 层存在 134 个 `-1` fallback stub、30/489 nil guard 覆盖率等设计债务，对标 Rust/Go 差距主要在类型安全和 RAII 自动化上。timeout 类型已统一为 `Int64` ms/ns。
 
 ---
 
@@ -110,23 +110,22 @@ end;
 
 | 函数 | Timeout 类型 | 单位 |
 |------|-------------|------|
-| `platform_process_wait` | `Int32` | ms |
-| `platform_poller_wait` | `Int32` | ms |
-| `platform_watch_poll` | `Int32` | ms |
-| `platform_console_wait_readable` | `Int32` | ms |
+| `platform_process_wait` | `Int64` | ms |
+| `platform_poller_wait` | `Int64` | ms |
+| `platform_watch_poll` | `Int64` | ms |
+| `platform_console_wait_readable` | `Int64` | ms |
 | `platform_thread_timedjoin` | `Int64` | ms |
 | `platform_condvar_timedwait` | `Int64` | **ns** |
 | `platform_wait_address32` | `Int64` | **ns** |
 
-**风险**:
-- `Int32` ms 最大 ~24.8 天，足够大多数场景
-- `Int64` ns 用于同步原语，`Int32` ms 用于 I/O 操作 — 混用容易混淆
-- `platform_condvar_timedwait` 使用 ns 而其他使用 ms — 无文档说明
+**修复状态**: ✅ 已修复 (Phase 9, 2026-07-06)
+- 所有 `ATimeoutMs` 参数统一为 `Int64` 类型
+- sync.pas 的 `ATimeoutNs: Int64` 保持不变（纳秒精度是同步原语的刚需）
 
 **对标差距**:
 - Rust: `Duration` 类型统一时间表示
 - Go: `time.Duration` 统一为纳秒
-- nextPas: 混用 Int32 ms / Int64 ms / Int64 ns
+- nextPas: 现已统一为 `Int64 ms` / `Int64 ns`
 
 ---
 
@@ -375,7 +374,7 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 | # | 任务 | 工作量 | 收益 |
 |---|------|--------|------|
 | P2-1 | 补全 nil guard（dl/env/mmap/pipe/pty 等） | 4h | 消除段错误风险 |
-| P2-2 | 统一 timeout 类型为 `Int64` ms | 3h | 消除类型混淆 |
+| P2-2 | 统一 timeout 类型为 `Int64` ms | 3h | ✅ 已完成 (Phase 9) |
 | P2-3 | 补充 watch/pty/freetype/resource/net/signal 测试 | 8h | 提升覆盖率到 80%+ |
 
 ### 中期优化 (季度)
@@ -434,8 +433,8 @@ function platform_fs_read_file(path: PAnsiChar; out data: PByte; out len: PtrUIn
 - [ ] 更新 CONTRACT.md 签名 (P1-2)
 
 ### 2. 本周完成
-- [ ] 补全 nil guard (P2-1)
-- [ ] 统一 timeout 类型 (P2-2)
+- [x] 补全 nil guard (P2-1) — 2026-07-06
+- [x] 统一 timeout 类型 (P2-2) — 2026-07-06
 
 ### 3. 本月完成
 - [ ] 补充低覆盖率模块测试 (P2-3)

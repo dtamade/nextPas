@@ -18,7 +18,7 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 procedure platform_process_detach(var AProc: TPlatformProcess);
@@ -291,7 +291,7 @@ begin
 end;
 
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
 var
   LStatus: Int32;
   LRet: pid_t;
@@ -525,7 +525,7 @@ begin
   Result := 0;
 end;
 
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
 var
   LExitCode, LTimeout, LWait: DWORD;
 begin
@@ -783,7 +783,7 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 begin FillChar(AProc, SizeOf(AProc), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

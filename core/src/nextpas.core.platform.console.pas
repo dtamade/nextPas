@@ -57,7 +57,7 @@ function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32
  * @return cwReadable / cwTimeout / cwInterrupted（被信号打断）/ cwError
  * @note 不在内部重试 EINTR——调用方据此消费信号 pending 状态后自行决定重试。
  *}
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 
 implementation
 
@@ -176,7 +176,7 @@ begin
   Result := LSent;
 end;
 
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 var
   LPfd: pollfd;
   LRc: cint;
@@ -206,7 +206,7 @@ function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 {$ENDIF}
 {$ENDIF}
@@ -369,7 +369,7 @@ begin
   Result := LSent;
 end;
 
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 var
   LHandle: HANDLE;
   LTimeout: DWORD;
@@ -409,7 +409,7 @@ function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 {$ENDIF}
 
