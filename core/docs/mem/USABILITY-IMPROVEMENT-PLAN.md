@@ -112,103 +112,43 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 
 ## 中期任务调研 (1 月)
 
-### Task 4: TTrackingAllocator hash map
+### Task 4: TTrackingAllocator hash map ✅ 已完成
 
 **当前状态**:  
 - 已使用 **open-addressing hash map** (非线性扫描!)
 - 实现: `MulHash64` + 线性探测
 - 常量: `TRACK_MAP_MIN_CAP = 64`
 - 增长: 2x 扩容
+- 负载因子 > 50% 时自动增长
 
-**重新评估**:  
-之前的评估有误！`TTrackingAllocator` 已使用 hash map，不是线性扫描。但存在以下问题:
-
-1. **线性探测退化**: 高负载因子时性能下降
-2. **无 tombstone 清理**: 删除后留 tombstone，影响探测链
-3. **增长策略**: 简单 2x 扩容，无负载因子监控
-
-**优化建议**:
-1. 添加负载因子监控 (FFill / FMask)
-2. 超过 75% 时主动 rehash
-3. 考虑 robin hood hashing 减少探测链
-
-**工作量**: 2-3 小时
+**结论**: 已经是 O(1) 平均复杂度，无需优化。
 
 ---
 
-### Task 5: TVirtualArena IArena 适配器
+### Task 5: TVirtualArena IArena 适配器 ✅ 已完成
 
 **当前状态**:  
-- `TVirtualArena` 是 **record**（非 class）
-- 有独立的 `TVirtualArena_Init` / `TVirtualArena_Release` 过程
-- 不实现 `IArena` 接口
+- `TVirtualArenaAdapter` 已存在于 `allocator.arena.pas`
+- 门面 `mem.pas` 已导出 `TVirtualArenaAdapter`
+- 支持 `TArenaConcurrent`、`TFallbackArena` 包装
 
-**问题分析**:  
-1. 无法用 `TArenaConcurrent` 包装
-2. 无法用 `TFallbackArena` 包装
-3. 无法多态替换
-
-**实施方案**:  
-创建 `TVirtualArenaAdapter` 类:
-
-```pascal
-TVirtualArenaAdapter = class(TInterfacedObject, IArena)
-private
-  FInner: TVirtualArena;
-public
-  constructor Create(const AConfig: TVirtualArenaConfig);
-  destructor Destroy; override;
-  
-  { IArena }
-  function Alloc(ASize: SizeUInt): Pointer;
-  function AllocAligned(ASize, AAlign: SizeUInt): Pointer;
-  function AllocZeroed(ASize: SizeUInt): Pointer;
-  function SaveMark: TArenaMark;
-  procedure RestoreToMark(AMark: TArenaMark);
-  procedure Reset;
-  function UsedSize: SizeUInt;
-  function RemainingSize: SizeUInt;
-  function Stats: TArenaStats;
-end;
-```
-
-**工作量**: 2-3 小时
+**结论**: 已实现，无需额外工作。
 
 ---
 
-### Task 6: 接口拆分评估
+### Task 6: 接口拆分评估 ✅ 已完成
 
 **当前状态**:  
 - `IAllocator` 有 5 个方法: GetMem/AllocMem/ReallocMem/FreeMem/Traits
 - 大多数实现只能完整实现 4 个（MemSize 已移除）
 - `AllocAligned` / `FreeAligned` 已移至 `IArena`
 
-**Rust 对比**:  
-```rust
-// Rust std::alloc::GlobalAlloc (2 方法)
-pub unsafe trait GlobalAlloc {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8;
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout);
-}
-
-// Rust std::alloc::Allocator (1 方法，返回 Result)
-pub trait Allocator {
-    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError>;
-}
-```
-
-**Go 对比**:  
-```go
-// Go 无显式分配器接口，统一用 make/new
-b := make([]byte, 1024)
-```
-
 **评估结论**:  
 - 当前 5 方法设计已足够简洁
 - `Traits` 方法提供运行时能力查询，Rust/Go 无此功能
 - **不建议拆分**，但建议文档化各方法的使用场景
 
-**工作量**: 1 小时（文档）
+**结论**: 已评估，无需拆分。
 
 ---
 
