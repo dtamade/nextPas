@@ -744,7 +744,7 @@ begin
     Model.Free;
   end;
 
-  { === Test 14: BlobVar $len path computes tstring_len for TString vars === }
+  { === Test 14: EmitExprVar $len path computes tstring_len for TString vars === }
   Model := TSemanticModel.Create;
   try
     Model.AddTypedHirNode('process-init-runtime',
@@ -767,7 +767,7 @@ begin
         LlvmIr := Emitter.AsText;
 
         Check(Pos('call i64 @np_tstring_len(', LlvmIr) > 0,
-          'BlobVar $len computes tstring_len', 43);
+          'EmitExprVar $len computes tstring_len', 43);
       finally
         Emitter.Free;
       end;

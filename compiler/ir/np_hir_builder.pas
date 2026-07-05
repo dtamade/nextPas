@@ -126,33 +126,33 @@ type
     function EmitLoad(AType: THIRTypeId; AAddr: THIRValueId): THIRValueId;
     procedure EmitStore(AType: THIRTypeId; AVal, AAddr: THIRValueId);
 
-    function ParseIntBlob(const ABlob: string): THIRValueId;
-    function ParseIntBlobTyped(const ABlob: string;
+    function ParseIntExprArg(const AExprArg: string): THIRValueId;
+    function ParseIntExprArgTyped(const AExprArg: string;
       out ATypeId: THIRTypeId): THIRValueId;
-    procedure BlobInt(var S: TExprStack; const AArg: string);
-    procedure BlobNull(var S: TExprStack);
-    procedure BlobVar(var S: TExprStack; const AArg: string);
-    procedure BlobVarRef(var S: TExprStack; const AArg: string);
-    procedure BlobRecVar(var S: TExprStack; const AArg: string);
-    procedure BlobStrVar(var S: TExprStack; const AArg: string);
-    procedure BlobStrLit(var S: TExprStack; const AArg: string);
-    procedure BlobIs(var S: TExprStack; const AArg: string);
-    procedure BlobArrLoad(var S: TExprStack);
-    procedure BlobArrLoadPtr(var S: TExprStack);
-    procedure BlobArrElemRef(var S: TExprStack; const AArg: string);
-    procedure BlobFieldRef(var S: TExprStack; const AArg: string);
-    procedure BlobRLoad(var S: TExprStack; const AArg: string);
-    procedure BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
+    procedure EmitExprInt(var S: TExprStack; const AArg: string);
+    procedure EmitExprNull(var S: TExprStack);
+    procedure EmitExprVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprVarRef(var S: TExprStack; const AArg: string);
+    procedure EmitExprRecVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprStrVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprStrLit(var S: TExprStack; const AArg: string);
+    procedure EmitExprIs(var S: TExprStack; const AArg: string);
+    procedure EmitExprArrLoad(var S: TExprStack);
+    procedure EmitExprArrLoadPtr(var S: TExprStack);
+    procedure EmitExprArrElemRef(var S: TExprStack; const AArg: string);
+    procedure EmitExprFieldRef(var S: TExprStack; const AArg: string);
+    procedure EmitExprRLoad(var S: TExprStack; const AArg: string);
+    procedure EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
       const AIntrinsic: string);
-    procedure BlobBinOp(var S: TExprStack; AKind: THIRInstrKind);
-    procedure BlobCmp(var S: TExprStack; const AArg: string);
-    procedure BlobStrCmp(var S: TExprStack; const AArg: string);
-    procedure BlobZext(var S: TExprStack);
-    procedure BlobCall(var S: TExprStack; const AArg: string);
-    procedure BlobArrLoadVar(var S: TExprStack; const AArg: string);
-    procedure BlobField(var S: TExprStack; const AArg: string);
-    procedure BlobVcall(var S: TExprStack; AArg: string);
-    procedure BlobIvcall(var S: TExprStack; AArg: string);
+    procedure EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
+    procedure EmitExprCmp(var S: TExprStack; const AArg: string);
+    procedure EmitExprStrCmp(var S: TExprStack; const AArg: string);
+    procedure EmitExprZext(var S: TExprStack);
+    procedure EmitExprCall(var S: TExprStack; const AArg: string);
+    procedure EmitExprArrLoadVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprField(var S: TExprStack; const AArg: string);
+    procedure EmitExprVcall(var S: TExprStack; AArg: string);
+    procedure EmitExprIvcall(var S: TExprStack; AArg: string);
     function LowerExprKind(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function LowerCastExpr(const AExpr: TSemanticHirExpr;
@@ -207,9 +207,9 @@ type
     function LowerExprAddress(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
     function LowerNodeExprOrBlob(const ANode: TTypedHirNode;
-      const ABlob: string): THIRValueId;
+      const AExprArg: string): THIRValueId;
     function LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
-      const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
+      const AExprArg: string; out ATypeId: THIRTypeId): THIRValueId;
     function LowerNodeTargetExprAddress(const ANode: TTypedHirNode;
       out AResult: THIRExprResult): Boolean;
     function NormalizeScalarValueToType(const AValueId: THIRValueId;
@@ -358,29 +358,29 @@ begin
   Result := Types[Count - 1];
 end;
 
-function ExtractVarOperandName(const ABlob: string): string;
+function ExtractVarOperandName(const AExprArg: string): string;
 begin
   Result := '';
-  if (Length(ABlob) > 4) and (Copy(ABlob, 1, 4) = 'var ') then
+  if (Length(AExprArg) > 4) and (Copy(AExprArg, 1, 4) = 'var ') then
   begin
-    Result := Copy(ABlob, 5, Length(ABlob));
+    Result := Copy(AExprArg, 5, Length(AExprArg));
     if (Length(Result) > 0) and (Result[Length(Result)] = #10) then
       Result := Copy(Result, 1, Length(Result) - 1);
     Result := Trim(Result);
   end;
 end;
 
-function ExtractPlainVarOperandName(const ABlob: string): string;
+function ExtractPlainVarOperandName(const AExprArg: string): string;
 var
   NewlinePos: LongInt;
 begin
   Result := '';
-  if (Length(ABlob) <= 4) or (Copy(ABlob, 1, 4) <> 'var ') then
+  if (Length(AExprArg) <= 4) or (Copy(AExprArg, 1, 4) <> 'var ') then
     Exit;
-  NewlinePos := Pos(#10, ABlob);
-  if (NewlinePos <= 5) or (NewlinePos <> Length(ABlob)) then
+  NewlinePos := Pos(#10, AExprArg);
+  if (NewlinePos <= 5) or (NewlinePos <> Length(AExprArg)) then
     Exit;
-  Result := Trim(Copy(ABlob, 5, NewlinePos - 5));
+  Result := Trim(Copy(AExprArg, 5, NewlinePos - 5));
 end;
 
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel);
@@ -1698,15 +1698,15 @@ begin
 end;
 
 function THIRBuilder.LowerNodeExprOrBlob(const ANode: TTypedHirNode;
-  const ABlob: string): THIRValueId;
+  const AExprArg: string): THIRValueId;
 var
   TypeId: THIRTypeId;
 begin
-  Result := LowerNodeExprOrBlobTyped(ANode, ABlob, TypeId);
+  Result := LowerNodeExprOrBlobTyped(ANode, AExprArg, TypeId);
 end;
 
 function THIRBuilder.LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
-  const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
+  const AExprArg: string; out ATypeId: THIRTypeId): THIRValueId;
 var
   ExprResult: THIRExprResult;
 begin
@@ -1716,7 +1716,7 @@ begin
     ATypeId := ExprResult.TypeId;
     Exit(ExprResult.ValueId);
   end;
-  Result := ParseIntBlobTyped(ABlob, ATypeId);
+  Result := ParseIntExprArgTyped(AExprArg, ATypeId);
 end;
 
 function THIRBuilder.LowerNodeTargetExprAddress(const ANode: TTypedHirNode;
@@ -2133,7 +2133,7 @@ begin
   EmitInstr(Instr);
 end;
 
-procedure THIRBuilder.BlobInt(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprInt(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
 begin
@@ -2146,7 +2146,7 @@ begin
   S.Push(Instr.ResultId);
 end;
 
-procedure THIRBuilder.BlobNull(var S: TExprStack);
+procedure THIRBuilder.EmitExprNull(var S: TExprStack);
 var
   Instr: THIRInstr;
 begin
@@ -2159,7 +2159,7 @@ begin
   S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
-procedure THIRBuilder.BlobVar(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprVar(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, TsSlot, LenVal: THIRValueId;
@@ -2220,7 +2220,7 @@ begin
   end;
 end;
 
-procedure THIRBuilder.BlobVarRef(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprVarRef(var S: TExprStack; const AArg: string);
 var
   V: THIRValueId;
   I: LongInt;
@@ -2252,7 +2252,7 @@ begin
   end;
 end;
 
-procedure THIRBuilder.BlobRecVar(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprRecVar(var S: TExprStack; const AArg: string);
 var
   V: THIRValueId;
 begin
@@ -2261,7 +2261,7 @@ begin
     S.PushTyped(V, GetPtrType);
 end;
 
-procedure THIRBuilder.BlobStrVar(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprStrVar(var S: TExprStack; const AArg: string);
 var
   TsSlot, DataPtr, LenVal: THIRValueId;
 begin
@@ -2278,7 +2278,7 @@ begin
   S.PushTyped(LenVal, GetIntType);
 end;
 
-procedure THIRBuilder.BlobStrLit(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprStrLit(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   LenVal: THIRValueId;
@@ -2297,7 +2297,7 @@ begin
     S.PushTyped(LenVal, GetIntType);
 end;
 
-procedure THIRBuilder.BlobIs(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprIs(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2333,7 +2333,7 @@ begin
   S.Push(Instr.ResultId);
 end;
 
-procedure THIRBuilder.BlobArrLoad(var S: TExprStack);
+procedure THIRBuilder.EmitExprArrLoad(var S: TExprStack);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2352,7 +2352,7 @@ begin
   S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
-procedure THIRBuilder.BlobArrLoadPtr(var S: TExprStack);
+procedure THIRBuilder.EmitExprArrLoadPtr(var S: TExprStack);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2371,7 +2371,7 @@ begin
   S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType);
 end;
 
-procedure THIRBuilder.BlobArrElemRef(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprArrElemRef(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   BaseAlloca, BasePtr, IndexVal: THIRValueId;
@@ -2397,7 +2397,7 @@ begin
   S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
-procedure THIRBuilder.BlobFieldRef(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprFieldRef(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   BasePtr, FieldIndexValue: THIRValueId;
@@ -2430,7 +2430,7 @@ begin
   S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
-procedure THIRBuilder.BlobRLoad(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprRLoad(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, IdxVal: THIRValueId;
@@ -2465,7 +2465,7 @@ begin
   S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
-procedure THIRBuilder.BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
+procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
   const AIntrinsic: string);
 var
   Instr: THIRInstr;
@@ -2482,7 +2482,7 @@ begin
   S.Push(Instr.ResultId);
 end;
 
-procedure THIRBuilder.BlobBinOp(var S: TExprStack; AKind: THIRInstrKind);
+procedure THIRBuilder.EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
 var
   Lhs, Rhs: THIRValueId;
 begin
@@ -2491,7 +2491,7 @@ begin
   S.Push(EmitBinOp(AKind, GetIntType, Lhs, Rhs));
 end;
 
-procedure THIRBuilder.BlobCmp(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprCmp(var S: TExprStack; const AArg: string);
 var
   Lhs, Rhs: THIRValueId;
   LhsType, RhsType: THIRTypeId;
@@ -2509,7 +2509,7 @@ begin
   S.Push(EmitCmpOp(Kind, GetBoolType, Lhs, Rhs, LhsType, RhsType));
 end;
 
-procedure THIRBuilder.BlobStrCmp(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprStrCmp(var S: TExprStack; const AArg: string);
 var
   APtr, ALen, BPtr, BLen, ResultVal, OneVal: THIRValueId;
   PtrType, LenType: THIRTypeId;
@@ -2547,12 +2547,12 @@ begin
   S.PushTyped(ResultVal, GetIntType);
 end;
 
-procedure THIRBuilder.BlobZext(var S: TExprStack);
+procedure THIRBuilder.EmitExprZext(var S: TExprStack);
 begin
-  BlobUnaryOp(S, hikZext, '');
+  EmitExprUnaryOp(S, hikZext, '');
 end;
 
-procedure THIRBuilder.BlobCall(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprCall(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   CallArgs: array of THIRValueId;
@@ -2606,7 +2606,7 @@ begin
     S.Push(Instr.ResultId);
 end;
 
-procedure THIRBuilder.BlobArrLoadVar(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprArrLoadVar(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2649,7 +2649,7 @@ begin
     S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
-procedure THIRBuilder.BlobField(var S: TExprStack; const AArg: string);
+procedure THIRBuilder.EmitExprField(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2698,7 +2698,7 @@ begin
     S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
-procedure THIRBuilder.BlobVcall(var S: TExprStack; AArg: string);
+procedure THIRBuilder.EmitExprVcall(var S: TExprStack; AArg: string);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
@@ -2901,7 +2901,7 @@ begin
   EmitInstr(Instr);
 end;
 
-procedure THIRBuilder.BlobIvcall(var S: TExprStack; AArg: string);
+procedure THIRBuilder.EmitExprIvcall(var S: TExprStack; AArg: string);
 var
   Instr: THIRInstr;
   IntfPtr, ImtPtr, FnPtr: THIRValueId;
@@ -2968,14 +2968,14 @@ begin
   S.Push(Instr.ResultId);
 end;
 
-function THIRBuilder.ParseIntBlob(const ABlob: string): THIRValueId;
+function THIRBuilder.ParseIntExprArg(const AExprArg: string): THIRValueId;
 var
   TypeId: THIRTypeId;
 begin
-  Result := ParseIntBlobTyped(ABlob, TypeId);
+  Result := ParseIntExprArgTyped(AExprArg, TypeId);
 end;
 
-function THIRBuilder.ParseIntBlobTyped(const ABlob: string;
+function THIRBuilder.ParseIntExprArgTyped(const AExprArg: string;
   out ATypeId: THIRTypeId): THIRValueId;
 var
   S: TExprStack;
@@ -2994,9 +2994,9 @@ begin
   SetLength(Lines, 0);
   LineCount := 0;
   Line := '';
-  for I := 1 to Length(ABlob) do
+  for I := 1 to Length(AExprArg) do
   begin
-    if ABlob[I] = #10 then
+    if AExprArg[I] = #10 then
     begin
       if Line <> '' then
       begin
@@ -3008,7 +3008,7 @@ begin
       Line := '';
     end
     else
-      Line := Line + ABlob[I];
+      Line := Line + AExprArg[I];
   end;
   if Line <> '' then
   begin
@@ -3054,8 +3054,8 @@ begin
       Arg := '';
     end;
 
-    if Token = 'int' then BlobInt(S, Arg)
-    else if Token = 'null' then BlobNull(S)
+    if Token = 'int' then EmitExprInt(S, Arg)
+    else if Token = 'null' then EmitExprNull(S)
     else if Token = 'assigned' then
     begin
       V := FindAlloca(Arg);
@@ -3078,33 +3078,33 @@ begin
       EmitInstr(Instr);
       S.PushTyped(Instr.ResultId, GetPtrType);
     end
-    else if Token = 'strvar' then BlobStrVar(S, Arg)
-    else if Token = 'strlit' then BlobStrLit(S, Arg)
-    else if Token = 'var' then BlobVar(S, Arg)
-    else if Token = 'varref' then BlobVarRef(S, Arg)
+    else if Token = 'strvar' then EmitExprStrVar(S, Arg)
+    else if Token = 'strlit' then EmitExprStrLit(S, Arg)
+    else if Token = 'var' then EmitExprVar(S, Arg)
+    else if Token = 'varref' then EmitExprVarRef(S, Arg)
     else if Token = 'deref' then
     begin
       V := S.Pop;
       S.Push(EmitLoad(GetIntType, V));
     end
-    else if Token = 'recvar' then BlobRecVar(S, Arg)
-    else if Token = 'is' then BlobIs(S, Arg)
-    else if Token = 'arr_load' then BlobArrLoad(S)
-    else if Token = 'arr_load_ptr' then BlobArrLoadPtr(S)
-    else if Token = 'arr_elem_ref' then BlobArrElemRef(S, Arg)
-    else if Token = 'field_ref' then BlobFieldRef(S, Arg)
-    else if Token = 'rload' then BlobRLoad(S, Arg)
-    else if Token = 'add' then BlobBinOp(S, hikAdd)
-    else if Token = 'sub' then BlobBinOp(S, hikSub)
-    else if Token = 'mul' then BlobBinOp(S, hikMul)
-    else if Token = 'div' then BlobBinOp(S, hikDiv)
-    else if Token = 'mod' then BlobBinOp(S, hikMod)
-    else if Token = 'neg' then BlobUnaryOp(S, hikNeg, '')
-    else if Token = 'abs' then BlobUnaryOp(S, hikIntrinsic, 'abs')
-    else if Token = 'cmp' then BlobCmp(S, Arg)
-    else if Token = 'strcmp' then BlobStrCmp(S, Arg)
-    else if Token = 'zext' then BlobZext(S)
-    else if Token = 'call' then BlobCall(S, Arg)
+    else if Token = 'recvar' then EmitExprRecVar(S, Arg)
+    else if Token = 'is' then EmitExprIs(S, Arg)
+    else if Token = 'arr_load' then EmitExprArrLoad(S)
+    else if Token = 'arr_load_ptr' then EmitExprArrLoadPtr(S)
+    else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
+    else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)
+    else if Token = 'rload' then EmitExprRLoad(S, Arg)
+    else if Token = 'add' then EmitExprBinOp(S, hikAdd)
+    else if Token = 'sub' then EmitExprBinOp(S, hikSub)
+    else if Token = 'mul' then EmitExprBinOp(S, hikMul)
+    else if Token = 'div' then EmitExprBinOp(S, hikDiv)
+    else if Token = 'mod' then EmitExprBinOp(S, hikMod)
+    else if Token = 'neg' then EmitExprUnaryOp(S, hikNeg, '')
+    else if Token = 'abs' then EmitExprUnaryOp(S, hikIntrinsic, 'abs')
+    else if Token = 'cmp' then EmitExprCmp(S, Arg)
+    else if Token = 'strcmp' then EmitExprStrCmp(S, Arg)
+    else if Token = 'zext' then EmitExprZext(S)
+    else if Token = 'call' then EmitExprCall(S, Arg)
     else if Token = 'arrvar' then
     begin
       V := FindAlloca(Arg + '$ptr');
@@ -3128,10 +3128,10 @@ begin
           S.Push(EmitLoad(GetIntType, V));
       end;
     end
-    else if Token = 'arrload' then BlobArrLoadVar(S, Arg)
-    else if Token = 'field' then BlobField(S, Arg)
-    else if Token = 'vcall' then BlobVcall(S, Arg)
-    else if Token = 'ivcall' then BlobIvcall(S, Arg);
+    else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
+    else if Token = 'field' then EmitExprField(S, Arg)
+    else if Token = 'vcall' then EmitExprVcall(S, Arg)
+    else if Token = 'ivcall' then EmitExprIvcall(S, Arg);
   end;
 
   if S.Count > 0 then
@@ -3381,7 +3381,7 @@ begin
       begin
         V := NormalizeScalarValueToType(V, ValueType, StoreType);
         if V = 0 then
-          V := ParseIntBlob(Blob);
+          V := ParseIntExprArg(Blob);
       end;
       if V <> 0 then
         EmitStore(StoreType, V, Addr);
@@ -3400,7 +3400,7 @@ begin
   begin
     V := NormalizeInt64RuntimeValue(V, ValueType);
     if V = 0 then
-      V := ParseIntBlob(ANode.Operand);
+      V := ParseIntExprArg(ANode.Operand);
   end;
   if SameText(ANode.DisplayName, '__discard__') then
     Exit;
@@ -4001,7 +4001,7 @@ begin
     end
     else
     begin
-      ArgValue := ParseIntBlob(ArgBlob);
+      ArgValue := ParseIntExprArg(ArgBlob);
       if ArgValue <> 0 then
       begin
         SetLength(ArgOps, ArgCount + 1);
@@ -4158,9 +4158,9 @@ begin
   ValueStr := Trim(Copy(Rest, TabPos2 + 1, Length(Rest)));
   DestAlloca := FindAlloca(VarName);
   if DestAlloca = 0 then Exit;
-  CountV := ParseIntBlob(CountStr);
+  CountV := ParseIntExprArg(CountStr);
   if CountV = 0 then Exit;
-  ValueV := ParseIntBlob(ValueStr);
+  ValueV := ParseIntExprArg(ValueStr);
   if ValueV = 0 then Exit;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4194,7 +4194,7 @@ begin
   if SrcAlloca = 0 then Exit;
   DstAlloca := FindAlloca(DstVar);
   if DstAlloca = 0 then Exit;
-  CountV := ParseIntBlob(CountStr);
+  CountV := ParseIntExprArg(CountStr);
   if CountV = 0 then Exit;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4220,7 +4220,7 @@ begin
   if TabPos = 0 then Exit;
   VarName := Trim(Copy(Rest, 1, TabPos - 1));
   SizeStr := Trim(Copy(Rest, TabPos + 1, Length(Rest)));
-  SizeV := ParseIntBlob(SizeStr);
+  SizeV := ParseIntExprArg(SizeStr);
   if SizeV = 0 then Exit;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4380,7 +4380,7 @@ begin
   begin
     V := NormalizeInt64RuntimeValue(V, ValueType);
     if V = 0 then
-      V := ParseIntBlob(ANode.Operand);
+      V := ParseIntExprArg(ANode.Operand);
   end;
   if V <> 0 then
   begin
@@ -4507,8 +4507,8 @@ begin
   if (DstTs = 0) or (SrcTs = 0) then
     Exit;
 
-  StartVal := ParseIntBlob(StartBlob);
-  LenVal := ParseIntBlob(LenBlob);
+  StartVal := ParseIntExprArg(StartBlob);
+  LenVal := ParseIntExprArg(LenBlob);
   if (StartVal = 0) or (LenVal = 0) then
     Exit;
 
@@ -4616,7 +4616,7 @@ begin
   else
     ElemSizeStr := '';
 
-  SizeVal := ParseIntBlob(Blob);
+  SizeVal := ParseIntExprArg(Blob);
   if SizeVal = 0 then Exit;
 
   PtrAlloca := FindAlloca(ArrName + '$ptr');
@@ -4625,7 +4625,7 @@ begin
     Exit;
 
   if ElemSizeStr <> '' then
-    ElemSizeVal := ParseIntBlob('int ' + ElemSizeStr + #10)
+    ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
     ElemSizeVal := EmitConstIntOfType(8, GetIntType);
   if ElemSizeVal = 0 then
@@ -4718,10 +4718,10 @@ begin
     ReceiverPtr := EmitLoad(GetPtrType, ReceiverSlot);
   if ReceiverPtr = 0 then Exit;
 
-  NewLenVal := ParseIntBlob(LenBlob);
+  NewLenVal := ParseIntExprArg(LenBlob);
   if NewLenVal = 0 then Exit;
   if ElemSizeStr <> '' then
-    ElemSizeVal := ParseIntBlob('int ' + ElemSizeStr + #10)
+    ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
     ElemSizeVal := EmitConstIntOfType(8, GetIntType);
   if ElemSizeVal = 0 then Exit;
@@ -4779,7 +4779,7 @@ begin
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
   LenVal := EmitLoad(GetIntType, LenAlloca);
   if ElemSizeBlob <> '' then
-    ElemSizeVal := ParseIntBlob(ElemSizeBlob)
+    ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
   else
     ElemSizeVal := EmitConstIntOfType(8, GetIntType);
   if ElemSizeVal = 0 then
@@ -5245,7 +5245,7 @@ begin
           begin
             ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
             if ValVal = 0 then
-              ValVal := ParseIntBlob(ValBlob);
+              ValVal := ParseIntExprArg(ValBlob);
           end;
           if ValVal <> 0 then
             EmitStore(StoreType, ValVal, ElemPtr);
@@ -5288,7 +5288,7 @@ begin
 
     if ANode.DisplayName = '__field_setlength__' then
     begin
-      IdxVal := ParseIntBlob(Rest);
+      IdxVal := ParseIntExprArg(Rest);
       if IdxVal = 0 then Exit;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -5302,8 +5302,8 @@ begin
     end
     else
     begin
-      IdxVal := ParseIntBlob(IdxBlob);
-      ValVal := ParseIntBlob(ValBlob);
+      IdxVal := ParseIntExprArg(IdxBlob);
+      ValVal := ParseIntExprArg(ValBlob);
       if (IdxVal = 0) or (ValVal = 0) then Exit;
 
       BasePtr := EmitLoad(GetPtrType, ElemPtr);
@@ -5349,7 +5349,7 @@ begin
       begin
         ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
         if ValVal = 0 then
-          ValVal := ParseIntBlob(ValBlob);
+          ValVal := ParseIntExprArg(ValBlob);
       end;
       if ValVal <> 0 then
         EmitStore(StoreType, ValVal, ElemPtr);
@@ -5366,8 +5366,8 @@ begin
     Exit;
   end;
 
-  IdxVal := ParseIntBlob(IdxBlob);
-  ValVal := ParseIntBlob(ValBlob);
+  IdxVal := ParseIntExprArg(IdxBlob);
+  ValVal := ParseIntExprArg(ValBlob);
   if (IdxVal = 0) or (ValVal = 0) then Exit;
   IdxVal := NormalizeArrayIndexValue(ArrName, IdxVal);
   if IdxVal = 0 then Exit;
@@ -5609,7 +5609,7 @@ begin
     end
     else
     begin
-      ArgValue := ParseIntBlobTyped(ArgBlob, ArgType);
+      ArgValue := ParseIntExprArgTyped(ArgBlob, ArgType);
       if ArgValue <> 0 then
       begin
         SetLength(ArgOps, ArgCount + 1);
@@ -5928,7 +5928,7 @@ begin
         Instr.TypeId := 0;
         Instr.IntrinsicName := 'exc_store';
         SetLength(Instr.Operands, 1);
-        Instr.Operands[0] := MakeTypedOperand(ParseIntBlob(ANode.Operand), GetPtrType);
+        Instr.Operands[0] := MakeTypedOperand(ParseIntExprArg(ANode.Operand), GetPtrType);
         EmitInstr(Instr);
       end;
       FillChar(Instr, SizeOf(Instr), 0);
@@ -6013,7 +6013,7 @@ begin
       begin
         ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
         if ValVal = 0 then
-          ValVal := ParseIntBlob(ValBlob);
+          ValVal := ParseIntExprArg(ValBlob);
       end;
       if ValVal <> 0 then
         EmitStore(StoreType, ValVal, FieldPtr);
@@ -6093,7 +6093,7 @@ begin
     begin
       ValVal := NormalizeScalarValueToType(ValVal, ValueType, GetIntType);
       if ValVal = 0 then
-        ValVal := ParseIntBlob(ValBlob);
+        ValVal := ParseIntExprArg(ValBlob);
     end;
     if ValVal <> 0 then
       EmitStore(GetIntType, ValVal, FieldPtr);
@@ -6833,7 +6833,7 @@ begin
       end
       else
       begin
-        V := ParseIntBlob(ArgParts[I]);
+        V := ParseIntExprArg(ArgParts[I]);
         if V <> 0 then
         begin
           if ArgCount >= Length(ArgValues) then
