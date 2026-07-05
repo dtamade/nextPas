@@ -40,15 +40,18 @@ procedure WriteAll(const AWriter: IWriter; const ABuf; const ACount: SizeUInt;
   const AContext: string);
 var
   LBuf: PByte;
-  LTotal, LWritten: SizeUInt;
+  LTotal, LWritten, LRemaining: SizeUInt;
 begin
   LBuf := @ABuf;
   LTotal := 0;
   while LTotal < ACount do
   begin
-    LWritten := AWriter.Write(LBuf[LTotal], ACount - LTotal);
+    LRemaining := ACount - LTotal;
+    LWritten := AWriter.Write(LBuf[LTotal], LRemaining);
     if LWritten = 0 then
       raise EIOError.Create(AContext + ': write returned 0');
+    if LWritten > LRemaining then
+      raise EIOError.Create(AContext + ': writer over-reported bytes written');
     Inc(LTotal, LWritten);
   end;
 end;
