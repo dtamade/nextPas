@@ -172,6 +172,9 @@
 - **platform.error**: 95% (codes/messages/category mapping)
 - **platform.fmt**: 85% (snprintf/parse/format)
 - **platform.which**: 80% (find/not found/edge cases)
+- **platform.watch**: 70% (create/add/poll/detect modify/delete/directory)
+- **platform.pty**: 75% (open/close/spawn/resize/env/large output)
+- **platform.freetype**: 60% (load/unload/ref-counting/stress)
 
 ### 3.2 中等覆盖率模块 (50-80%)
 - **platform.fs**: 75% (mkdir/copy/glob/walk)
@@ -186,13 +189,10 @@
 - **platform.mmap**: 65% (file/shared/部分高级功能未测)
 - **platform.signal**: 60% (set/block/contract)
 - **platform.console**: 55% (read/write/raw)
+- **platform.net**: 60% (create/connect/部分协议未测)
 
 ### 3.3 低覆盖率模块 (<50%)
-- **platform.watch**: 40% (create/部分功能未测)
-- **platform.pty**: 30% (open/大部分功能未测)
-- **platform.freetype**: 10% (init/load/大部分功能未测)
-- **platform.secure**: 50% (zero/已在 memory 测试中覆盖)
-- **platform.net**: 60% (create/connect/部分协议未测)
+- (无)
 
 ## 4. 测试盲点识别
 
