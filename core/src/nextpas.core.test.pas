@@ -62,6 +62,8 @@ type
   TBufferSink = nextpas.core.test.config.TBufferSink;
   TTestConfig = nextpas.core.test.config.TTestConfig;
   TTestConfigBuilder = nextpas.core.test.config.TTestConfigBuilder;
+  TCacheEntry = nextpas.core.test.config.TCacheEntry;
+  TTestCache = nextpas.core.test.config.TTestCache;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
@@ -229,6 +231,8 @@ procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 procedure SetDefaultBenchEnabled(AEnabled: Boolean);
 procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
 procedure SetDefaultBenchMem(ABenchMem: Boolean);
+procedure SetDefaultCacheEnabled(AEnabled: Boolean);
+procedure SetDefaultCacheDir(const ADir: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -243,6 +247,8 @@ function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
 function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
+function  GetCacheEnabled(const AConfig: TTestConfig): Boolean;
+function  GetCacheDir(const AConfig: TTestConfig): string;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;

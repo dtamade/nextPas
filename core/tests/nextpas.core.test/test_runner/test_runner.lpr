@@ -27,6 +27,11 @@ var
   { R5-08: filter test variables }
   LFilterSuite: TTestSuite;
   LFilterResult: TTestRunResult;
+  { T-13: cache test variables }
+  LCache: TTestCache;
+  LCacheConfig1, LCacheConfig2: TTestConfig;
+  LCacheKey1, LCacheKey2, LCacheKey3: string;
+  LCacheEntry, LCacheGotEntry: TCacheEntry;
 
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
@@ -2102,6 +2107,40 @@ begin
       FailTest('TestSeq order: expected 2 passed, got ' +
         IntToStr(LFilterResult.Passed));
     PassTest('TestSeq execution order');
+  end;
+
+  { ── T-13: TestCache ──────────────────────────────────────────────────── }
+
+  SectionHeader('T-13: TestCache');
+
+  begin
+    LCache := TTestCache.Create('.nextpas/test-cache-test');
+    LCacheConfig1 := DefaultConfig;
+    LCacheConfig2 := DefaultConfig;
+    LCacheKey1 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    LCacheKey2 := LCache.ComputeKey([], '3.3.1', LCacheConfig2);
+    if LCacheKey1 <> LCacheKey2 then
+      FailTest('CacheKey: same inputs should produce same key');
+    { Different compiler version should produce different key }
+    LCacheKey3 := LCache.ComputeKey([], '3.2.0', LCacheConfig1);
+    if LCacheKey1 = LCacheKey3 then
+      FailTest('CacheKey: different compiler version should produce different key');
+    { Test cache put/get }
+    LCacheEntry.Status := Ord(tsPassed);
+    LCacheEntry.Message := '';
+    LCacheEntry.Duration := 42;
+    LCacheEntry.Time := 1234567890;
+    LCache.Put(LCacheKey1, 'test_cache_put', LCacheEntry);
+    if not LCache.Get(LCacheKey1, 'test_cache_put', LCacheGotEntry) then
+      FailTest('CacheGet: should find cached entry');
+    if LCacheGotEntry.Status <> Ord(tsPassed) then
+      FailTest('CacheGet: status mismatch');
+    if LCacheGotEntry.Duration <> 42 then
+      FailTest('CacheGet: duration mismatch');
+    { Non-existent entry should return False }
+    if LCache.Get(LCacheKey1, 'nonexistent', LCacheGotEntry) then
+      FailTest('CacheGet: should not find non-existent entry');
+    PassTest('TestCache');
   end;
 
   ResetDefaultConfig;

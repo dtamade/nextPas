@@ -329,6 +329,11 @@ begin
   Result := FindArgValue(@ParseBenchComparePattern, '--benchcompare');
 end;
 
+function IsCacheArg(const AArg: string): Boolean;
+begin
+  Result := HasArgFlag(AArg, '--cache', '-cache');
+end;
+
 function ParseRunFromArgs: string;
 begin
   Result := FindArgValue(@ParseRunPattern, '--run');
@@ -395,6 +400,8 @@ begin
   LBenchCompare := ParseBenchCompareFromArgs;
   if LBenchCompare <> '' then
     SetDefaultBenchCompareFile(LBenchCompare);
+  if FindFlagInArgs(@IsCacheArg) then
+    SetDefaultCacheEnabled(True);
 end;
 
 end.

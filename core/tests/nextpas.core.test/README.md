@@ -23,6 +23,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.7**: Usability — F-04 注释修正, F-02 CheckNearRel/ToBeNearRel 相对容差, F-03 ExpectStr 别名, F-12 /dev/urandom shuffle 种子, F-13 GetTopSlowest 优化, F-05 Mock VerifyAll + 错误消息改进, F-06 CheckSnapshot 快照测试, review: ToBeInRangeD epsilon + TMockValues export
 - **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 - **v7.0a**: Parallel Opt-in — `TestSeq()` 注册串行测试，并行模式下 Phase 1 先串行执行 Sequential 测试，Phase 2 再并行执行其余测试 (Go `t.Parallel()` inverse)
+- **v7.0b**: Test Cache — `TTestCache` 缓存测试结果，`--cache` 启用，FNV-1a hash (源文件+编译器+配置)
 
 ## 竞品对比
 
@@ -47,6 +48,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Retry | — | — | `Test(name, proc, N)` |
 | Mock | — | — | TMock fluent API |
 | Parallel opt-in | `t.Parallel()` | `#[serial]` | `TestSeq()` |
+| Test cache | `go test -cache` | — | `--cache` |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -257,3 +259,4 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
   - 新增 1 个 benchmark 测试 (Addition + StringConcat)
 - **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 - **v7.0a**: Parallel Opt-in — `TestSeq()` 注册串行测试，并行模式下 Phase 1 先串行执行 Sequential 测试，Phase 2 再并行执行其余测试 (Go `t.Parallel()` inverse)
+- **v7.0b**: Test Cache — `TTestCache` 缓存测试结果，`--cache` 启用，FNV-1a hash (源文件+编译器+配置)
