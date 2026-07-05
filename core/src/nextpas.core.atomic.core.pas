@@ -161,7 +161,7 @@ end;
 {$ELSEIF DEFINED(CPUARM)}
 procedure atomic_seq_cst_fence; assembler; nostackframe;
 asm
-  dmb #11  // dmb ish — full inner-shareable barrier
+  .long 0xf57ff05b  // dmb ish — inner-shareable barrier (ARM32 encoding)
 end;
 {$ELSEIF DEFINED(CPURISCV64) OR DEFINED(CPURISCV32)}
 procedure atomic_seq_cst_fence; assembler; nostackframe;
@@ -191,7 +191,7 @@ begin
     end;
   {$ELSEIF DEFINED(CPUARM)}
     asm
-      yield
+      .long 0xe320f001  // yield (ARM32 encoding: NOP-like hint)
     end;
   {$ELSEIF DEFINED(CPURISCV64)}
     asm

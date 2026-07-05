@@ -718,6 +718,103 @@ uses
 
 {$WARN 5024 off} // keep implementation hint-clean on platforms where order params are intentionally ignored
 
+{ Platform-specific weak CAS — single LL/SC attempt, no retry loop.
+  On x86: weak = strong (LOCK CMPXCHG has no weak variant).
+  On ARM/AArch64/RISC-V: single ldxr+stxr attempt, returns false on spurious failure. }
+
+{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+// x86: weak = strong, no platform-specific implementation needed
+{$ELSEIF DEFINED(CPUAARCH64)}
+function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // x0 = @aObj, x1 = @aExpected, w2 = aDesired
+  ldaxr  w3,[x0]          // Load-Exclusive with acquire
+  ldr    w4,[x1]          // Load expected
+  subs   w6,w3,w4         // Compare (sets flags)
+  cbnz   w6,.Lweak32_fail // Branch if not equal
+  stlxr  w5,w2,[x0]       // Store-Conditional with release (single attempt)
+  cbnz   w5,.Lweak32_fail
+  mov    w0,#1            // Success
+  ret
+.Lweak32_fail:
+  str    w3,[x1]          // Update expected to actual value
+  mov    w0,#0            // Failure
+  ret
+end;
+
+function _weak_cas_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
+asm
+  // x0 = @aObj, x1 = @aExpected, x2 = aDesired
+  ldaxr  x3,[x0]          // Load-Exclusive with acquire
+  ldr    x4,[x1]          // Load expected
+  subs   x6,x3,x4         // Compare (sets flags)
+  cbnz   x6,.Lweak64_fail // Branch if not equal
+  stlxr  w5,x2,[x0]       // Store-Conditional with release (single attempt)
+  cbnz   w5,.Lweak64_fail
+  mov    w0,#1            // Success
+  ret
+.Lweak64_fail:
+  str    x3,[x1]          // Update expected to actual value
+  mov    w0,#0            // Failure
+  ret
+end;
+
+{$ELSEIF DEFINED(CPUARM)}
+function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // r0 = @aObj, r1 = @aExpected, r2 = aDesired
+  ldrex  r3,[r0]          // Load-Exclusive
+  ldr    r4,[r1]          // Load expected
+  cmp    r3,r4            // Compare
+  bne    .Lweak32_arm_fail
+  strex  r5,r2,[r0]       // Store-Conditional (single attempt)
+  cmp    r5,#0
+  bne    .Lweak32_arm_fail
+  mov    r0,#1            // Success
+  bx     lr
+.Lweak32_arm_fail:
+  str    r3,[r1]          // Update expected to actual value
+  mov    r0,#0            // Failure
+  bx     lr
+end;
+
+{$ELSEIF DEFINED(CPURISCV64)}
+function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
+  lr.w    a3, 0(a0)       // Load-Reserved
+  lw      a4, 0(a1)       // Load expected
+  bne     a3, a4, .Lweak32_rv_fail
+  sc.w    a4, a2, 0(a0)   // Store-Conditional (single attempt)
+  bne     a4, x0, .Lweak32_rv_fail
+  addi    a0, x0, 1       // Success
+  ret
+.Lweak32_rv_fail:
+  sw      a3, 0(a1)       // Update expected to actual value
+  addi    a0, x0, 0       // Failure
+  ret
+end;
+
+function _weak_cas_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
+asm
+  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
+  lr.d    a3, 0(a0)       // Load-Reserved
+  ld      a4, 0(a1)       // Load expected
+  bne     a3, a4, .Lweak64_rv_fail
+  sc.d    a4, a2, 0(a0)   // Store-Conditional (single attempt)
+  bne     a4, x0, .Lweak64_rv_fail
+  addi    a0, x0, 1       // Success
+  ret
+.Lweak64_rv_fail:
+  sd      a3, 0(a1)       // Update expected to actual value
+  addi    a0, x0, 0       // Failure
+  ret
+end;
+
+{$ELSE}
+// Fallback: weak = strong
+{$ENDIF}
+
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│              Phase 4: cpu_pause - 减少自旋等待开销                          │
 //└────────────────────────────────────────────────────────────────────────────┘
@@ -1862,40 +1959,43 @@ end;
 
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean;
 begin
-  Result := atomic_compare_exchange(aObj, aExpected, aDesired);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, mo_seq_cst, mo_seq_cst);
 end;
 
 function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32): Boolean;
 begin
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := atomic_compare_exchange(PInt32(@aObj)^, PInt32(@aExpected)^, PInt32(@aDesired)^);
+  Result := atomic_compare_exchange_weak(PInt32(@aObj)^, PInt32(@aExpected)^, PInt32(@aDesired)^,
+    mo_seq_cst, mo_seq_cst);
   {$POP}
 end;
 
 {$IFDEF CPU64}
 function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt): Boolean;
 begin
-  Result := atomic_compare_exchange(aObj, aExpected, aDesired);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, mo_seq_cst, mo_seq_cst);
 end;
 
 function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt): Boolean;
 begin
-  Result := atomic_compare_exchange(PPtrInt(@aObj)^, PPtrInt(@aExpected)^, PPtrInt(@aDesired)^);
+  Result := atomic_compare_exchange_weak(PPtrInt(@aObj)^, PPtrInt(@aExpected)^, PPtrInt(@aDesired)^,
+    mo_seq_cst, mo_seq_cst);
 end;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean;
 begin
-  Result := atomic_compare_exchange_64(aObj, aExpected, aDesired);
+  Result := atomic_compare_exchange_weak_64(aObj, aExpected, aDesired, mo_seq_cst, mo_seq_cst);
 end;
 
 function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64): Boolean;
 begin
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := atomic_compare_exchange_64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^);
+  Result := atomic_compare_exchange_weak_64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^,
+    mo_seq_cst, mo_seq_cst);
   {$POP}
 end;
 {$ENDIF}
@@ -2155,35 +2255,89 @@ begin
   {$POP}
 end;
 
-{ weak 版本 — 在 x86/x86_64 上与 strong 相同。
-  C++11 标准允许 weak CAS 发生虚假失败（spurious failure）。
-  x86 的 LOCK CMPXCHG 是 strong 语义，没有 weak 变体，
-  因此 weak = strong 是符合标准的合法实现。
-  ARM/RISC-V 的 LL/SC 循环天然支持 weak 语义（SC 可能因竞争而失败），
-  未来可在这些平台上优化为真正的 LL/SC weak 实现。 }
+{ weak 版本 — 平台特定实现。
+  x86: weak = strong (LOCK CMPXCHG 无 weak 变体)。
+  ARM/AArch64/RISC-V: 单次 LL/SC 尝试，spurious failure 返回 false。
+  CAS loop 中使用 weak 可减少内部分支开销。 }
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
+  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
+  _consume_memory_orders(aSuccessOrder, aFailureOrder);
+  Result := _weak_cas_32(aObj, aExpected, aDesired);
+  if Result then
+  begin
+    case aSuccessOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end
+  else
+  begin
+    case aFailureOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end;
+  {$ELSE}
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ENDIF}
 end;
 
 function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := atomic_compare_exchange_weak(PInt32(@aObj)^, PInt32(@aExpected)^, PInt32(@aDesired)^,
+    aSuccessOrder, aFailureOrder);
+  {$POP}
 end;
 
 {$IFDEF CPU64}
 function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
+  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
+  _consume_memory_orders(aSuccessOrder, aFailureOrder);
+  Result := _weak_cas_64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^);
+  if Result then
+  begin
+    case aSuccessOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end
+  else
+  begin
+    case aFailureOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end;
+  {$ELSE}
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ENDIF}
 end;
 
 function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := atomic_compare_exchange_weak(PPtrInt(@aObj)^, PPtrInt(@aExpected)^, PPtrInt(@aDesired)^,
+    aSuccessOrder, aFailureOrder);
+  {$POP}
 end;
 {$ENDIF}
 
@@ -2191,13 +2345,41 @@ end;
 function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
+  AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);
+  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
   Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
+  _consume_memory_orders(aSuccessOrder, aFailureOrder);
+  Result := _weak_cas_64(aObj, aExpected, aDesired);
+  if Result then
+  begin
+    case aSuccessOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end
+  else
+  begin
+    case aFailureOrder of
+      mo_seq_cst: atomic_seq_cst_fence;
+      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+    else ;
+    end;
+  end;
+  {$ELSE}
+  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$ENDIF}
 end;
 
 function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
   aSuccessOrder, aFailureOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
+  {$PUSH}
+  {$WARN 4055 OFF}
+  Result := atomic_compare_exchange_weak_64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^,
+    aSuccessOrder, aFailureOrder);
+  {$POP}
 end;
 {$ENDIF}
 
