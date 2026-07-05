@@ -39,7 +39,7 @@ type
     Conn: ITcpStream;
   end;
 
-  TPrefixedTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  TPrefixedTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
   private
     FInner: ITcpStream;
     FPrefix: string;
@@ -48,11 +48,7 @@ type
     constructor Create(const AInner: ITcpStream; const APrefix: string);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
     procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
     function LocalAddr: TNetAddress;
     function RemoteAddr: TNetAddress;
     procedure Shutdown;
@@ -552,29 +548,9 @@ begin
   Result := FInner.Write(ABuf, ACount);
 end;
 
-function TPrefixedTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-begin
-  Result := FInner.Seek(AOffset, AOrigin);
-end;
-
 procedure TPrefixedTcpStream.Close;
 begin
   FInner.Close;
-end;
-
-function TPrefixedTcpStream.GetSize: Int64;
-begin
-  Result := FInner.Size;
-end;
-
-function TPrefixedTcpStream.GetPosition: Int64;
-begin
-  Result := FInner.Position;
-end;
-
-procedure TPrefixedTcpStream.SetPosition(const AValue: Int64);
-begin
-  FInner.Position := AValue;
 end;
 
 function TPrefixedTcpStream.LocalAddr: TNetAddress;
@@ -1230,6 +1206,7 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
+  except
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
@@ -1312,7 +1289,7 @@ begin
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead, not LKeepAlive);
+      LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
@@ -2306,7 +2283,7 @@ begin
     if LPooled then
     begin
       LConn.Close;
-      if (not LRequestWriteComplete) and (ExceptObject is EHttpError) then
+      if not LRequestWriteComplete then
         raise;
       if LResponseStarted then
         raise;
