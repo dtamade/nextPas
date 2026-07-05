@@ -87,7 +87,8 @@ type
     {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
-    {** 几何均值（多 benchmark ratio 聚合的正确方法） }
+    {** 几何均值（多 benchmark ratio 聚合的正确方法）
+     *  @edge 空数组返回 1.0；非正 ratio 返回 NaN（调用方应检查 IsDoubleNaN） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
 
     {** OLS 线性回归: time = intercept + slope * N }
@@ -671,7 +672,7 @@ begin
   for I := 0 to LLen - 1 do
   begin
     if ARatios[I] <= 0.0 then
-      Exit(0.0);  { 非法 ratio，返回 0 作为哨兵 }
+      Exit(0.0 / 0.0);  { F-13: 非法 ratio，返回 NaN 而非 0.0 }
     LSumLn := LSumLn + Ln(ARatios[I]);
   end;
 

@@ -103,7 +103,8 @@ type
 
     {** 采集多个样本 }
     function CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
-      out AFirstSample: TBenchResult): TDoubleArray;
+      out AFirstSample: TBenchResult;
+      ATimeoutMs: Int64 = 0; ATimeoutStartNs: UInt64 = 0): TDoubleArray;
 
     {** 构建简单条目 }
     function BuildEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
@@ -200,6 +201,8 @@ uses
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
 var
   GBridgeRunner: TBenchRunner;
+  {** F-16: CAS flag to detect concurrent RunOne calls }
+  GBridgeBusy: Integer = 0;
 
 {** 并行基准桥接函数
  *
@@ -541,11 +544,8 @@ begin
   if AIters <= 0 then
     Exit;
 
-  { CR-13 Known Limitation: Loop path (TBenchLoopFunc) does not support IBenchContext.
-  *  TBenchLoopFunc takes only (AIters: Int64) — no context parameter is available.
-  *  Therefore, loop benchmarks cannot use SetBytes/SetAllocs/Skip/ResetTimer.
-  *  Use the regular TBenchFunc path if context operations are needed. }
-  if AEntry.IsLoop and Assigned(AEntry.LoopFunc) then
+  { F-01: LoopFunc (no context) or LoopContextFunc (with context) }
+  if AEntry.IsLoop and (Assigned(AEntry.LoopFunc) or Assigned(AEntry.LoopContextFunc)) then
     Result := ExecuteLoopEntry(AEntry, AIters, ATrackMemory)
   else if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
     Result := ExecuteParallelEntry(AEntry, AIters, ATrackMemory)
@@ -576,21 +576,26 @@ begin
     try
       LContextObj.Reset;
       LContextObj.SetIterations(AIters);
-      AEntry.LoopFunc(AIters);
+      { F-01: dispatch to LoopContextFunc (with context) or LoopFunc (without) }
+      if Assigned(AEntry.LoopContextFunc) then
+        AEntry.LoopContextFunc(LContext, AIters)
+      else
+        AEntry.LoopFunc(AIters);
 
       Result.Iterations := AIters;
       Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
+      Result.BytesPerOp := LContextObj.GetBytesPerOp;
+      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
       Result.Skipped := LContextObj.IsSkipped;
       Result.SkipReason := LContextObj.GetSkipReason;
 
       if ATrackMemory then
       begin
         LMemoryStats := GetGlobalMemoryStats;
-        if Result.Iterations > 0 then
-        begin
+        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
           Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
+        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-        end;
       end;
     finally
       if ATrackMemory then
@@ -629,6 +634,11 @@ begin
     FBridgeFunc := FParallelBridgeFunc;
     FBridgeParamFunc := AEntry.ParamFunc;
     FBridgeParamValue := AEntry.ParamValue;
+    { F-16: 并发断言 — 检测是否已有另一个 RunOne 在执行并行 benchmark }
+    if InterlockedCompareExchange(GBridgeBusy, 1, 0) <> 0 then
+      raise EBenchError.Create(
+        'TBenchRunner: concurrent parallel benchmark execution detected. ' +
+        'Each TBenchSuite must Run() from a single thread.');
     GBridgeRunner := Self;
     try
       LParallelResult := RunParallelBench(@ParallelBenchBridge,
@@ -638,6 +648,7 @@ begin
       FBridgeParamFunc := nil;
       FBridgeParamValue := 0;
       GBridgeRunner := nil;
+      GBridgeBusy := 0;
       FParallelBridgeFunc := nil;
     end;
 
@@ -831,13 +842,15 @@ begin
 end;
 
 function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int64;
-  out AFirstSample: TBenchResult): TDoubleArray;
+  out AFirstSample: TBenchResult;
+  ATimeoutMs: Int64; ATimeoutStartNs: UInt64): TDoubleArray;
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
   LMinSamples, LSampleCount: Integer;
   LProbeNsPerOp: Double;
   LTargetNs: UInt64;
+  LTimeoutNs: UInt64;
   I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
@@ -882,8 +895,25 @@ begin
   SetLength(LSamples, LSampleCount);
   LSamples[0] := LProbeNsPerOp;  { 第一个样本已在探测中获得 }
 
+  { F-11: 预计算超时阈值 }
+  if (ATimeoutMs > 0) and (ATimeoutStartNs > 0) then
+    LTimeoutNs := UInt64(ATimeoutMs) * 1000000
+  else
+    LTimeoutNs := 0;
+
   for I := 1 to LSampleCount - 1 do
   begin
+    { F-11: 采样前检查 timeout }
+    if (LTimeoutNs > 0) and
+       (platform_monotonic_ns - ATimeoutStartNs >= LTimeoutNs) then
+    begin
+      SetLength(LSamples, I);
+      LSamples[I - 1] := 0.0;  { 标记最后一个样本为无效 }
+      AFirstSample.Skipped := True;
+      AFirstSample.SkipReason := 'Per-benchmark timeout exceeded during sampling';
+      Break;
+    end;
+
     { F-11: 在最后一次采样时启用内存追踪，而非仅第二次 }
     LMeasurement := ExecuteEntry(AEntry, AIters,
       FConfig.EnableMemoryTracking and (I = LSampleCount - 1));
@@ -1002,7 +1032,8 @@ begin
       Exit;
     end;
 
-    LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement);
+    LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement,
+      LTimeoutMs, LStartNs);
     if LMeasurement.Skipped then
     begin
       Result.Iterations := LMeasurement.Iterations;

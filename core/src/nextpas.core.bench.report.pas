@@ -767,7 +767,9 @@ begin
     for J := 0 to High(AMatrix.GeometricMeanRatios) do
     begin
       LRatio := AMatrix.GeometricMeanRatios[J];
-      if LRatio < 0.95 then
+      if IsDoubleNaN(LRatio) then
+        LLine := LLine + TextFormat(' %9s', ['N/A'])
+      else if LRatio < 0.95 then
         LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x +'])
       else if LRatio > 1.05 then
         LLine := LLine + TextFormat(' %9s', [FormatFloat('0.00', LRatio) + 'x -'])
@@ -838,7 +840,12 @@ begin
     LWriter.Key('geometricMeanRatios');
     LWriter.BeginArray;
     for I := 0 to High(AMatrix.GeometricMeanRatios) do
-      LWriter.Float(AMatrix.GeometricMeanRatios[I]);
+    begin
+      if IsDoubleNaN(AMatrix.GeometricMeanRatios[I]) then
+        LWriter.Null
+      else
+        LWriter.Float(AMatrix.GeometricMeanRatios[I]);
+    end;
     LWriter.EndArray;
     LWriter.EndObject;
     Result := LBuilder.ToString;

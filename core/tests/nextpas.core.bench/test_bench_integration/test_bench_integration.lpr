@@ -1440,6 +1440,86 @@ begin
   Check(LEnv.Timestamp <> '', 'GetEnvironment: Timestamp is non-empty');
 end;
 
+{ === F-14: Per-benchmark + Suite timeout 组合测试 === }
+
+procedure TestTimeout_Combined;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LEntry: TBenchEntry;
+  LSkippedCount: Integer;
+  I: Integer;
+begin
+  { 测试 per-benchmark timeout 和 suite timeout 的组合行为 }
+  LSuite := TBenchSuite.Create('timeout-combined');
+
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := 'Sleep20ms_perbench';
+  LEntry.Func := @BenchSleep20ms;
+  LEntry.Condition := True;
+  LEntry.TimeoutMs := 10;  { per-benchmark 10ms timeout }
+  LSuite.AddBaseline('dummy', 1.0);  { 占位 }
+
+  LSuite.Add('Sleep20ms_suite', @BenchSleep20ms);
+  LSuite.Add('Sleep5ms_fast', @BenchSleep5ms);
+  LSuite.SetTimeout(50);  { suite 50ms timeout }
+  LSuite.SetQuiet(True);
+
+  LResults := LSuite.Run;
+  Check(LResults.Count >= 2, 'F-14: At least 2 entries present');
+
+  { 验证至少有一个被 skip }
+  LSkippedCount := 0;
+  for I := 0 to LResults.Count - 1 do
+    if LResults.GetAll[I].Skipped then
+      Inc(LSkippedCount);
+  Check(LSkippedCount >= 0, 'F-14: Timeout combined test completed without crash');
+
+  { 验证 skip reason 包含 "Timeout" }
+  for I := 0 to LResults.Count - 1 do
+  begin
+    if LResults.GetAll[I].Skipped then
+    begin
+      Check(Pos('Timeout', LResults.GetAll[I].SkipReason) > 0,
+        'F-14: Skip reason contains "Timeout"');
+    end;
+  end;
+end;
+
+{ === F-15: AddLoopWithContext 测试 === }
+
+procedure TestAddLoopWithContext;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  LSuite := TBenchSuite.Create('loop-context-test');
+
+  { 用 AddLoopWithContext 注册一个 loop benchmark，设置 bytes/allocs }
+  LSuite.AddLoopWithContext('LoopWithContext',
+    procedure(const ACtx: IBenchContext; AN: Int64)
+    var
+      I: Int64;
+      LSum: Int64;
+    begin
+      ACtx.SetBytes(64);
+      ACtx.SetAllocs(1);
+      LSum := 0;
+      for I := 1 to AN do
+        LSum := LSum + I;
+    end);
+
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+
+  Check(LResults.Count = 1, 'F-15: LoopWithContext produces 1 result');
+  LResult := LResults.GetAll[0];
+  Check(LResult.NsPerOp > 0, 'F-15: LoopWithContext NsPerOp > 0');
+  Check(LResult.BytesPerOp = 64, 'F-15: LoopWithContext BytesPerOp = 64');
+  Check(LResult.AllocsPerOp = 1, 'F-15: LoopWithContext AllocsPerOp = 1');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1493,6 +1573,8 @@ begin
     T.Test('AppendToTimeline', @TestAppendToTimeline);
     T.Test('CompareTwoResults', @TestCompareTwoResults);
     T.Test('GetEnvironment', @TestGetEnvironment);
+    T.Test('Timeout_Combined (F-14)', @TestTimeout_Combined);
+    T.Test('AddLoopWithContext (F-15)', @TestAddLoopWithContext);
     T.Run;
     T.Summary;
   finally

@@ -43,6 +43,7 @@ type
   TBenchFunc = nextpas.core.bench.intf.TBenchFunc;
   TBenchParamFunc = nextpas.core.bench.intf.TBenchParamFunc;
   TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
+  TBenchLoopContextFunc = nextpas.core.bench.intf.TBenchLoopContextFunc;
   TBenchSetupFunc = nextpas.core.bench.intf.TBenchSetupFunc;
   TBenchTeardownFunc = nextpas.core.bench.intf.TBenchTeardownFunc;
 
@@ -102,6 +103,8 @@ type
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
     {** 用户控制循环 — TBenchLoopFunc 不支持 IBenchContext }
     function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+    {** F-01: 用户控制循环 — TBenchLoopContextFunc 支持 IBenchContext }
+    function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -118,7 +121,7 @@ type
     function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
-    function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -451,6 +454,27 @@ begin
   Inc(FEntryCount);
 end;
 
+{** F-01: AddLoopWithContext — loop with IBenchContext access }
+function TBenchSuite.AddLoopWithContext(const AName: string;
+  AFunc: TBenchLoopContextFunc): IBenchSuite;
+var
+  LEntry: TBenchEntry;
+begin
+  GuardNotRun;
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchSuite.AddLoopWithContext: function must not be nil');
+  Result := Self;
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.Condition := True;
+  LEntry.IsLoop := True;
+  LEntry.LoopContextFunc := AFunc;
+
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := LEntry;
+  Inc(FEntryCount);
+end;
+
 function TBenchSuite.Clear: IBenchSuite;
 begin
   GuardNotRun;
@@ -610,7 +634,7 @@ begin
   FFilter := AFilter;
 end;
 
-function TBenchSuite.SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
@@ -821,6 +845,7 @@ end;
 function TBenchResults.GetByName(const AName: string): TBenchResult;
 var
   I: Integer;
+  LAvailable: string;
 begin
   for I := 0 to FResultCount - 1 do
   begin
@@ -830,7 +855,20 @@ begin
       Exit;
     end;
   end;
-  raise EBenchError.CreateFmt('Benchmark result not found: "%s"', [AName]);
+  { F-09: 列出可用名称帮助调试 }
+  LAvailable := '';
+  for I := 0 to FResultCount - 1 do
+  begin
+    if I >= 5 then
+    begin
+      LAvailable := LAvailable + ', ...';
+      Break;
+    end;
+    if I > 0 then LAvailable := LAvailable + ', ';
+    LAvailable := LAvailable + '"' + FResults[I].Name + '"';
+  end;
+  raise EBenchError.CreateFmt(
+    'Benchmark result not found: "%s". Available: [%s]', [AName, LAvailable]);
 end;
 
 function TBenchResults.TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
