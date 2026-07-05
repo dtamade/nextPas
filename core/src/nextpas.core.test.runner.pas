@@ -1239,9 +1239,9 @@ begin
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
       GetTickCount64 - LStartMs);
-    { Copy captured log lines on failure/error for report output }
-    if (LStatus in [tsFailed, tsError]) and (LSubCtx <> nil) and
-       (Length(LSubCtx.FLogLines) > 0) then
+    { Copy captured log lines on failure/error or verbose mode for report output }
+    if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
+       ((LStatus in [tsFailed, tsError]) or LConfig.VerboseMode) then
       LTestResult.CapturedLog := LSubCtx.FLogLines;
     AppendResult(AResult.Results, LTestResult);
 
