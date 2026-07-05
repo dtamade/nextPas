@@ -400,9 +400,15 @@ begin
     LTotal := 0;
     repeat
       LN := read(LStdoutPipe[0], @AOutBuf[LTotal], AOutBufLen - LTotal);
+      if LN < 0 then
+      begin
+        if platform_get_errno = ESysEINTR then
+          Continue;
+        Break;
+      end;
       if LN > 0 then
         Inc(LTotal, Int32(LN));
-    until (LN <= 0) or (LTotal >= AOutBufLen);
+    until (LN = 0) or (LTotal >= AOutBufLen);
     if LTotal < AOutBufLen then
       AOutBuf[LTotal] := #0;
     AOutLen := LTotal;

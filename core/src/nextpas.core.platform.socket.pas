@@ -6,7 +6,8 @@ interface
 
 {$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.base;
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.error;
 {$ENDIF}
 
 const
@@ -317,6 +318,8 @@ var
   LSa: ^sockaddr_in;
 begin
   AAddr := 0;
+  if AHost = nil then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LHints, SizeOf(LHints), 0);
   LHints.ai_family := AF_INET;
   LHints.ai_socktype := SOCK_STREAM;
@@ -441,6 +444,8 @@ var
   LRes: PAddrInfo;
   LSa: ^sockaddr_in6;
 begin
+  if (AHost = nil) or (AAddr = nil) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(AAddr^, 16, 0);
   FillChar(LHints, SizeOf(LHints), 0);
   LHints.ai_family := AF_INET6;
@@ -463,7 +468,8 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.error;
 
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
@@ -665,6 +671,8 @@ var
   LRes: PWinAddrInfo;
 begin
   AAddr := 0;
+  if AHost = nil then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LHints, SizeOf(LHints), 0);
   LHints.ai_family := 2; { AF_INET }
   LHints.ai_socktype := 1; { SOCK_STREAM }
@@ -787,6 +795,8 @@ var
   LRes: PAddrInfo;
   LSa: ^sockaddr_in6;
 begin
+  if (AHost = nil) or (AAddr = nil) then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(AAddr^, 16, 0);
   FillChar(LHints, SizeOf(LHints), 0);
   LHints.ai_family := AF_INET6;

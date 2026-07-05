@@ -16,7 +16,8 @@ unit nextpas.core.platform.files;
 interface
 
 uses
-  nextpas.core.platform.files.base;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.error;
 
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
@@ -100,6 +101,9 @@ function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenM
 var
   LFlags: Int32;
 begin
+  AHandle.Value := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   case AMode of
     fomReadOnly:  LFlags := O_RDONLY;
     fomWriteOnly: LFlags := O_WRONLY;
@@ -353,6 +357,11 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  if APath = nil then
+  begin
+    FillChar(AStat, SizeOf(AStat), 0);
+    Exit(PLATFORM_ERR_INVALID);
+  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
     Exit(platform_get_errno);
@@ -375,6 +384,11 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  if APath = nil then
+  begin
+    FillChar(AStat, SizeOf(AStat), 0);
+    Exit(PLATFORM_ERR_INVALID);
+  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
     Exit(platform_get_errno);
@@ -415,6 +429,8 @@ end;
 
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if chmod(APath, AMode) = 0 then
     Result := 0
   else
@@ -423,6 +439,8 @@ end;
 
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if truncate(APath, ASize) = 0 then
     Result := 0
   else
@@ -431,6 +449,8 @@ end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if mkdir(APath, AMode) = 0 then
     Result := 0
   else
@@ -439,6 +459,8 @@ end;
 
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if rmdir(APath) = 0 then
     Result := 0
   else
@@ -447,6 +469,8 @@ end;
 
 function platform_file_unlink(const APath: PAnsiChar): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if unlink(APath) = 0 then
     Result := 0
   else
@@ -455,6 +479,8 @@ end;
 
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 begin
+  if (AOldPath = nil) or (ANewPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
   if rename(AOldPath, ANewPath) = 0 then
     Result := 0
   else
@@ -468,6 +494,8 @@ end;
 
 function platform_file_chdir(const APath: PAnsiChar): Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if chdir(APath) = 0 then
     Result := 0
   else
@@ -512,6 +540,8 @@ end;
 
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
 begin
+  if (ATarget = nil) or (ALinkPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
   if symlink(ATarget, ALinkPath) = 0 then
     Result := 0
   else
@@ -525,6 +555,8 @@ var
   LCopyLen: Int32;
 begin
   ALen := 0;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
   Result := platform_file_lstat(APath, LStat);
@@ -554,6 +586,8 @@ end;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 begin
   FillChar(AHandle, SizeOf(AHandle), 0);
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   AHandle.Fd := open(APath, O_RDONLY or O_DIRECTORY, 0);
   if AHandle.Fd < 0 then
     Result := platform_get_errno
