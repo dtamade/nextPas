@@ -690,12 +690,24 @@ begin
     FError := False;
     FErrorMsg := '';
     Result := ConsumedUntilErrorPosition(ABuf, ALen);
+    // Check for extra bytes after message complete on non-keep-alive
+    if (Result < ALen) and (not ShouldKeepAlive) then
+    begin
+      FError := True;
+      FComplete := False;
+      FErrorKind := pekMalformed;
+      FErrorMsg := 'Data after close connection';
+    end;
     Exit;
   end;
   if (LErrno = HPE_CLOSED_CONNECTION) and FComplete then
   begin
-    FError := False;
-    FErrorMsg := '';
+    { llhttp reports HPE_CLOSED_CONNECTION when data exists after
+      a Connection: close message — propagate as parser error }
+    FError := True;
+    FComplete := False;
+    FErrorKind := pekMalformed;
+    FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
   end;
