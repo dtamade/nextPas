@@ -124,6 +124,7 @@ type
     function LoadBaseline(const APath: string): IBenchSuite;
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
+    function SetTimeout(ADuration: TDuration): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -508,6 +509,7 @@ begin
       Exit;
     end;
   end;
+  raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
 end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -645,7 +647,18 @@ function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
+  if ATimeoutMs < 0 then
+    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: timeout must be >= 0');
   FConfig.TimeoutMs := ATimeoutMs;
+end;
+
+function TBenchSuite.SetTimeout(ADuration: TDuration): IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+  if ADuration.AsMilliseconds < 0 then
+    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: duration must be >= 0');
+  FConfig.TimeoutMs := ADuration.AsMilliseconds;
 end;
 
 function TBenchSuite.Run: IBenchResults;
@@ -1206,6 +1219,8 @@ var
   LComparisons: array of TBenchComparison;
   I: Integer;
 begin
+  if AThreshold <= 0 then
+    raise EBenchInvalidParam.Create('TBenchResults.HasRegression: threshold must be > 0');
   LComparisons := GenerateComparisons;
 
   for I := 0 to High(LComparisons) do

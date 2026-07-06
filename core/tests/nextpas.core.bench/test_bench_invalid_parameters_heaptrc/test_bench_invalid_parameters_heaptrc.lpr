@@ -308,6 +308,117 @@ begin
   end;
 end;
 
+procedure ExpectSetTimeoutNegativeRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.SetTimeout(-100);
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=SetTimeout(-100)');
+    Halt(11);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=SetTimeout(-100) (expected EBenchInvalidParam)');
+    Halt(111);
+  end;
+end;
+
+procedure ExpectSetTimeoutDurationNegativeRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.SetTimeout(TDuration.FromMilliseconds(-500));
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=SetTimeout(TDuration<0)');
+    Halt(12);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=SetTimeout(TDuration<0) (expected EBenchInvalidParam)');
+    Halt(112);
+  end;
+end;
+
+procedure ExpectRemoveByNameNotFoundRaised;
+var
+  LRaised: Boolean;
+  LCorrectType: Boolean;
+  LSuite: IBenchSuite;
+begin
+  LRaised := False;
+  LCorrectType := False;
+  LSuite := TBenchSuite.Create('Invalid');
+  try
+    try
+      LSuite.RemoveByName('NonExistent');
+    except
+      on E: EBenchInvalidParam do
+      begin
+        LRaised := True;
+        LCorrectType := True;
+      end;
+      on E: Exception do
+        LRaised := True;
+    end;
+  finally
+    LSuite := nil;
+  end;
+
+  if not LRaised then
+  begin
+    WriteLn('MISSING_EXCEPTION=RemoveByName(NonExistent)');
+    Halt(13);
+  end;
+  if not LCorrectType then
+  begin
+    WriteLn('WRONG_EXCEPTION_TYPE=RemoveByName(NonExistent) (expected EBenchInvalidParam)');
+    Halt(113);
+  end;
+end;
+
 procedure ExpectRunOneNilFuncRaised;
 var
   LRaised: Boolean;
@@ -358,6 +469,9 @@ begin
   T.Test('AddLoop(nil) raises EBenchInvalidParam', @ExpectAddLoopNilFuncRaised);
   T.Test('AddRange(nil) raises EBenchInvalidParam', @ExpectAddRangeNilFuncRaised);
   T.Test('RunOne(nil) raises EBenchInvalidParam', @ExpectRunOneNilFuncRaised);
+  T.Test('SetTimeout(-100) raises EBenchInvalidParam', @ExpectSetTimeoutNegativeRaised);
+  T.Test('SetTimeout(TDuration<0) raises EBenchInvalidParam', @ExpectSetTimeoutDurationNegativeRaised);
+  T.Test('RemoveByName(NonExistent) raises EBenchInvalidParam', @ExpectRemoveByNameNotFoundRaised);
   T.Run;
   T.Summary;
 

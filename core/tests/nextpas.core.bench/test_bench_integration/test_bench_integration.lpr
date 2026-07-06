@@ -1232,10 +1232,18 @@ end;
 procedure TestRemoveByName_NonExistent;
 var
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LSuite := CreateFastSuite('RemoveNonExistent');
   LSuite.Add('Exists', @BenchFast);
-  LSuite.RemoveByName('DoesNotExist');
+  LRaised := False;
+  try
+    LSuite.RemoveByName('DoesNotExist');
+  except
+    on E: EBenchInvalidParam do
+      LRaised := True;
+  end;
+  Check(LRaised, 'RemoveByName(non-existent) raises EBenchInvalidParam');
   LSuite.SetQuiet(True);
   LSuite.Run;
   Check(LSuite.Run.Count = 1, 'RemoveByName(non-existent) leaves existing entries intact');
@@ -1283,6 +1291,44 @@ begin
   LResults := LSuite.Run;
   Check(LResults.HasRegression(0.1), 'Low threshold detects regression (ratio >> 0.1)');
   Check(not LResults.HasRegression(1000000000.0), 'Very high threshold no regression');
+end;
+
+procedure TestHasRegression_ZeroThreshold;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LRaised: Boolean;
+begin
+  LSuite := CreateFastSuite('RegressionZero');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.AddBaseline('Fast', 0.001);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  LRaised := False;
+  try
+    LResults.HasRegression(0);
+  except
+    on E: EBenchInvalidParam do
+      LRaised := True;
+  end;
+  Check(LRaised, 'HasRegression(0) raises EBenchInvalidParam');
+end;
+
+procedure TestSetTimeout_TDuration;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  LSuite := TBenchSuite.Create('TimeoutDuration')
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(5000)
+    .SetMinSamples(3)
+    .SetWarmupIters(1)
+    .SetTimeout(TDuration.FromSeconds(10))
+    .Add('Fast', @BenchFast)
+    .SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.Count = 1, 'SetTimeout(TDuration) works correctly');
 end;
 
 procedure TestToBenchstat_Integration;
@@ -1615,6 +1661,8 @@ begin
     T.Test('ClearThenRun', @TestClearThenRun);
     T.Test('AddBaseline_TDuration', @TestAddBaseline_TDuration);
     T.Test('HasRegression_Thresholds', @TestHasRegression_Thresholds);
+    T.Test('HasRegression_ZeroThreshold', @TestHasRegression_ZeroThreshold);
+    T.Test('SetTimeout_TDuration', @TestSetTimeout_TDuration);
     T.Test('ToBenchstat_Integration', @TestToBenchstat_Integration);
     T.Test('CreateWithConfig', @TestTBenchSuite_CreateWithConfig);
     T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);

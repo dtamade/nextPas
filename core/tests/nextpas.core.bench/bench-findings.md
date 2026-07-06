@@ -11,10 +11,10 @@
 
 ## 2026-07-06 可用性评估 + 防御性编程修复
 
-> **当前测试**: 15 suites / 315 tests / 0 failed / 0 leaks
+> **当前测试**: 15 suites / 319 tests / 0 failed / 0 leaks
 > **修复率**: 124 findings 中 122 项已修复 (98.4%)
 > **接口覆盖率**: 100%
-> **可用性评分**: 8.63/10（优秀）
+> **可用性评分**: 8.91/10（优秀）
 > **风险等级**: 低（无 P0/P1 风险）
 
 ### 可用性评估修复 (2026-07-06)
@@ -24,13 +24,25 @@
 3. **接口覆盖补全**: 新增 `TestAddBaselineData` 测试
 4. **废弃别名清理**: 接口签名统一使用 `TBaselineData`
 
+### 边界验证修复 (2026-07-06)
+
+1. **C-25**: `RemoveByName` 未找到条目时从静默返回改为抛 `EBenchInvalidParam`
+2. **C-26**: `SetTimeout` 添加负值验证（`< 0` 抛 `EBenchInvalidParam`）
+3. **C-27**: `HasRegression` 添加阈值验证（`<= 0` 抛 `EBenchInvalidParam`）
+4. **C-12/C-13**: 新增 `SetTimeout(TDuration)` 重载，旧 `SetTimeout(Int64)` 标记 deprecated
+
+### 误报（不修复）
+
+1. **C-40**: `SaveBaseline` 内存泄漏 — 误报，`TBaselineManager` 是 record 非 class
+2. **C-06**: `AddRange` 文档不一致 — 误报，文档已正确描述 `{value}` 占位符机制
+
 ### 待评估项（非阻塞）
 
 | ID | 描述 | 决策 |
 |----|------|------|
 | U-04 | Create + TBenchConfig 单构造函数 | 跳过 — 双构造函数设计已足够清晰 |
 | U-20 | GBridgeRunner 移入实例 | 跳过 — 需改 TBenchParallelFunc 签名（破坏性变更） |
-| U-07 | SetTimeout 改用 TDuration | 跳过 — 破坏性变更，收益低 |
+| U-07 | SetTimeout 改用 TDuration | ✅ 已修复 — 新增 TDuration 重载，旧签名 deprecated |
 | U-09 | SaveTo* 返回 IBenchResults | 跳过 — 破坏性变更 |
 | U-10 | EParseError 继承 EBenchError | 跳过 — 破坏性变更 |
 
