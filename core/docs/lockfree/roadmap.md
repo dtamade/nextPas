@@ -67,9 +67,10 @@
 | 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |----------|-------------|---------------|
 | TSpscQueue | 10.1 | 99 |
-| TSpmcQueue | 14.0 | 71 |
-| TMpmcQueue | 14.6 | 68 |
-| TSegQueue | 61.6 | 16.2 |
+| TSpmcQueue | 13.3 | 75 |
+| TMpmcQueue | 14.7 | 68 |
+| TSegQueue | 58.7 | 17 |
+| EBR Retire | 127.9 | 7.8 |
 
 #### Channel 性能
 
@@ -197,6 +198,13 @@ L3: nextpas.core.lockfree.* (数据结构)
 |------|------|------|
 | MPMC fast path | 只在有等待者时通知 | 15.6ns → 14.6ns (1.07x) |
 | SPMC fast path | 只在有等待者时通知 | 14.3ns → 14.0ns (1.02x) |
+
+### 4.7 EBR Freelist 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| EBR freelist | 复用退休节点避免 GetMem | 138.0ns → 127.9ns (1.08x) |
+| SegQueue 间接 | EBR 优化间接受益 | 61.6ns → 58.7ns (1.05x) |
 
 ---
 
