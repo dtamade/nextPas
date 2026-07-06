@@ -206,12 +206,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
   if LResult < 0 then
-  begin
-    ASent := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ASent := Int32(LResult);
@@ -224,12 +226,14 @@ function platform_socket_recv(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := recv(ASocket.Value, ABuf, size_t(ALen), AFlags);
   if LResult < 0 then
-  begin
-    ARecvd := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ARecvd := Int32(LResult);
@@ -541,12 +545,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_send(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-  begin
-    ASent := 0;
-    Result := WSAGetLastError;
-  end
+    Result := WSAGetLastError
   else
   begin
     ASent := LResult;
@@ -559,12 +565,14 @@ function platform_socket_recv(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_recv(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-  begin
-    ARecvd := 0;
-    Result := WSAGetLastError;
-  end
+    Result := WSAGetLastError
   else
   begin
     ARecvd := LResult;
