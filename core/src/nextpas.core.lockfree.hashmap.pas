@@ -168,7 +168,8 @@ end;
 
 function TShardedHashMapImpl.ShardIndex(const AKey: TKey): PtrUInt;
 begin
-  Result := HashKey(AKey) mod FShardCount;
+  { Use bitmask instead of mod for power-of-2 shard count }
+  Result := HashKey(AKey) and (FShardCount - 1);
 end;
 
 procedure TShardedHashMapImpl.ShardLock(var AShard: TShard);
