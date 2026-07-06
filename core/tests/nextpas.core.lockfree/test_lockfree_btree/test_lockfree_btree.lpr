@@ -370,6 +370,144 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 13: Remove basic                                         }
+{ ============================================================ }
+
+procedure TestBTreeRemoveBasic;
+var
+  LS: TIntIntBTree;
+  LV: Integer;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    LS.Insert(3, 30);
+    CheckEqual(3, LS.Count, 'count before remove');
+
+    Check(LS.Remove(2), 'remove key 2');
+    CheckEqual(2, LS.Count, 'count after remove');
+    Check(not LS.Contains(2), 'key 2 removed');
+    Check(LS.Contains(1), 'key 1 still exists');
+    Check(LS.Contains(3), 'key 3 still exists');
+    Check(LS.Find(1, LV), 'find key 1');
+    CheckEqual(10, LV, 'value 1');
+    Check(LS.Find(3, LV), 'find key 3');
+    CheckEqual(30, LV, 'value 3');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 14: Remove from many keys                                }
+{ ============================================================ }
+
+procedure TestBTreeRemoveMany;
+const
+  KEY_COUNT = 100;
+var
+  LS: TIntIntBTree;
+  LI: Integer;
+  LV: Integer;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    for LI := 1 to KEY_COUNT do
+      LS.Insert(LI, LI * 10);
+    CheckEqual(KEY_COUNT, LS.Count, 'count before remove');
+
+    { Remove all even keys }
+    for LI := 2 to KEY_COUNT do
+    begin
+      if LI mod 2 = 0 then
+        Check(LS.Remove(LI), 'remove key ' + IntToStr(LI));
+    end;
+    CheckEqual(KEY_COUNT div 2, LS.Count, 'count after remove even');
+
+    { Verify remaining keys }
+    for LI := 1 to KEY_COUNT do
+    begin
+      if LI mod 2 = 1 then
+      begin
+        Check(LS.Find(LI, LV), 'odd key exists');
+        CheckEqual(LI * 10, LV, 'value matches');
+      end
+      else
+        Check(not LS.Contains(LI), 'even key removed');
+    end;
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 15: Remove non-existent key                              }
+{ ============================================================ }
+
+procedure TestBTreeRemoveNonExistent;
+var
+  LS: TIntIntBTree;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+
+    Check(not LS.Remove(3), 'remove non-existent key');
+    CheckEqual(2, LS.Count, 'count unchanged');
+    Check(not LS.Remove(0), 'remove key 0');
+    Check(not LS.Remove(-1), 'remove key -1');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 16: Remove from empty tree                               }
+{ ============================================================ }
+
+procedure TestBTreeRemoveEmpty;
+var
+  LS: TIntIntBTree;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    Check(not LS.Remove(1), 'remove from empty');
+    CheckEqual(0, LS.Count, 'count still 0');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 17: Remove all keys                                      }
+{ ============================================================ }
+
+procedure TestBTreeRemoveAll;
+const
+  KEY_COUNT = 50;
+var
+  LS: TIntIntBTree;
+  LI: Integer;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    for LI := 1 to KEY_COUNT do
+      LS.Insert(LI, LI * 10);
+    CheckEqual(KEY_COUNT, LS.Count, 'count before remove all');
+
+    for LI := 1 to KEY_COUNT do
+      Check(LS.Remove(LI), 'remove key ' + IntToStr(LI));
+    CheckEqual(0, LS.Count, 'count after remove all');
+    Check(not LS.Contains(1), 'key 1 not found');
+    Check(not LS.Contains(KEY_COUNT), 'last key not found');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.lockfree.btree');
   T.Test('Basic insert and find', @TestBTreeBasic);
@@ -384,5 +522,10 @@ begin
   T.Test('Reverse order insertion', @TestBTreeReverseOrder);
   T.Test('Random order insertion', @TestBTreeRandomOrder);
   T.Test('ForEachCtx with context', @TestBTreeForEachCtx);
+  T.Test('Remove basic', @TestBTreeRemoveBasic);
+  T.Test('Remove from many keys', @TestBTreeRemoveMany);
+  T.Test('Remove non-existent key', @TestBTreeRemoveNonExistent);
+  T.Test('Remove from empty tree', @TestBTreeRemoveEmpty);
+  T.Test('Remove all keys', @TestBTreeRemoveAll);
   if not T.Run then Halt(1);
 end.
