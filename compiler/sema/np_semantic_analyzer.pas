@@ -819,49 +819,14 @@ begin
 end;
 
 function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
-var
-  I: LongInt;
-  Child: TGreenNode;
 begin
-  Result := False;
-  if ADecl = nil then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) and
-      (SameText(Child.Text, 'String') or SameText(Child.Text, 'AnsiString')) then
-      Exit(True);
-  end;
+  Result := np_sema_type_check.DeclReturnsString(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclaresStringLocal(const ADecl: TGreenNode;
   const AName: string): Boolean;
-var
-  I, J: LongInt;
-  Child, Decl, TypeChild: TGreenNode;
 begin
-  Result := False;
-  if (ADecl = nil) or (AName = '') then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child = nil) or (Child.NodeKind <> gnkVarSection) then
-      Continue;
-    for J := 0 to Child.ChildCount - 1 do
-    begin
-      Decl := Child.ChildAt(J);
-      if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
-        (not SameText(Decl.Text, AName)) or (Decl.ChildCount = 0) then
-        Continue;
-      TypeChild := Decl.ChildAt(0);
-      if (TypeChild <> nil) and
-        (SameText(TypeChild.Text, 'String') or
-         SameText(TypeChild.Text, 'AnsiString')) then
-        Exit(True);
-    end;
-  end;
+  Result := np_sema_type_check.DeclaresStringLocal(ADecl, AName);
 end;
 
 function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
