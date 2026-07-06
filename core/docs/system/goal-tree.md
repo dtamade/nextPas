@@ -306,16 +306,16 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - [x] Define `TVarType` (Word alias)
 - [x] Define `TVarData` record (variant storage layout)
 - [x] Define variant constants (`varEmpty`, `varNull`, `varSmallint`, etc.)
-- [ ] Define `TVarOp` enum (variant operations) — deferred
+- [x] Define `TVarOp` enum (variant operations)
 - [ ] Add variant operator stubs (`=`, `<>`, `+`, `-`, `*`, `/`, etc.) — deferred
-- [ ] Add `VarType()`, `VarIsNull()`, `VarIsEmpty()` functions — deferred
+- [x] Add `VarType()`, `VarIsNull()`, `VarIsEmpty()` functions
 
 ### S8.3 Dynamic Array Type Support
 
 - [x] Define dynamic array type declaration syntax support
 - [x] Add `TBytes = array of Byte`
 - [x] Add `TCharArray = array of Char`
-- [ ] Document dynamic array lifecycle (reference counting, copy-on-write) — deferred
+- [x] Document dynamic array lifecycle (reference counting, copy-on-write)
 
 ### S8.4 Thread Types Support
 
@@ -358,7 +358,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 
 - [x] Add `ReadBarrier`, `ReadWriteBarrier`, `WriteBarrier` intrinsic stubs
 - [x] Add `Prefetch` intrinsic stub
-- [ ] Document memory ordering guarantees — deferred
+- [x] Document memory ordering guarantees
 
 ### S8.10 Additional FPC System Functions
 

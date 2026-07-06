@@ -116,6 +116,40 @@ function Assigned(const AP: Pointer): Boolean; overload; inline;
 function Assigned(const AObj: TObject): Boolean; overload; inline;
 function Assigned(const AIntf: IUnknown): Boolean; overload; inline;
 
+{ === Variant Utilities === }
+
+{**
+ * Variant operation codes for binary operations.
+ *}
+type
+  TVarOp = (
+    opAdd, opSubtract, opMultiply, opDivide,
+    opIntDivide, opModulus, opShiftLeft, opShiftRight,
+    opAnd, opOr, opXor, opCompare,
+    opNegate, opNot
+  );
+
+{**
+ * Return the type code of V.
+ * Returns varEmpty if V is unassigned.
+ *}
+function VarType(const V: Variant): TVarType; inline;
+
+{**
+ * Return True if V is Null.
+ *}
+function VarIsNull(const V: Variant): Boolean; inline;
+
+{**
+ * Return True if V is Unassigned (varEmpty).
+ *}
+function VarIsEmpty(const V: Variant): Boolean; inline;
+
+{**
+ * Return True if V is Null or Unassigned.
+ *}
+function VarIsClear(const V: Variant): Boolean; inline;
+
 implementation
 
 { === Memory Management === }
@@ -284,6 +318,28 @@ end;
 function Assigned(const AIntf: IUnknown): Boolean;
 begin
   Result := AIntf <> nil;
+end;
+
+{ === Variant Utilities === }
+
+function VarType(const V: Variant): TVarType;
+begin
+  Result := TVarData(V).VType;
+end;
+
+function VarIsNull(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType = varNull;
+end;
+
+function VarIsEmpty(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType = varEmpty;
+end;
+
+function VarIsClear(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType in [varEmpty, varNull];
 end;
 
 end.

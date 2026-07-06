@@ -139,6 +139,10 @@ primitives, thread management, and concurrency best practices.
 Platform differences live in `platform-differences.md`; it covers type sizes,
 byte order, calling conventions, memory layout, thread model, I/O, and
 cross-platform programming guidelines.
+Dynamic array lifecycle lives in `dynamic-array-lifecycle.md`; it covers
+memory layout, reference counting, copy-on-write, and lifecycle management.
+Memory ordering guarantees live in `memory-ordering.md`; it covers memory
+barriers, atomic operation ordering, and common concurrency patterns.
 
 ## Boundaries
 
