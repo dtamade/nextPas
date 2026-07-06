@@ -694,14 +694,27 @@ begin
   end;
   if (LErrno = HPE_CLOSED_CONNECTION) and FComplete then
   begin
-    { llhttp reports HPE_CLOSED_CONNECTION when data exists after
-      a Connection: close message — propagate as parser error }
-    FError := True;
-    FComplete := False;
-    FErrorKind := pekMalformed;
-    FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
-    Result := ConsumedUntilErrorPosition(ABuf, ALen);
-    Exit;
+    if FParserType = ptResponse then
+    begin
+      { Client-side: llhttp reports HPE_CLOSED_CONNECTION when data exists
+        after a Connection: close response. The response is already complete;
+        extra data is benign (e.g. trailing bytes). Consume silently. }
+      FError := False;
+      FErrorMsg := '';
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
+      Exit;
+    end
+    else
+    begin
+      { Server-side: extra bytes after a Connection: close request are
+        genuinely malformed — propagate as parser error. }
+      FError := True;
+      FComplete := False;
+      FErrorKind := pekMalformed;
+      FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
+      Exit;
+    end;
   end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
   begin

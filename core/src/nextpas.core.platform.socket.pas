@@ -414,7 +414,7 @@ begin
   FillChar(ASockAddr, SizeOf(ASockAddr), 0);
   ASockAddr.sin_family := AF_INET;
   ASockAddr.sin_port := platform_htons(APort);
-  ASockAddr.sin_addr.s_addr := AIP;
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
   ALen := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -422,7 +422,7 @@ end;
 procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
   out AIP: UInt32; out APort: UInt16);
 begin
-  AIP := ASockAddr.sin_addr.s_addr;
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
   APort := platform_ntohs(ASockAddr.sin_port);
 end;
 
@@ -478,10 +478,10 @@ function platform_ipv4_to_string(AIP: UInt32): string;
   end;
 
 begin
-  Result := OctetToStr(AIP and $FF) + '.' +
-            OctetToStr((AIP shr 8) and $FF) + '.' +
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
             OctetToStr((AIP shr 16) and $FF) + '.' +
-            OctetToStr((AIP shr 24) and $FF);
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
 end;
 
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -493,7 +493,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := platform_htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -851,7 +851,7 @@ begin
   FillChar(ASockAddr, SizeOf(ASockAddr), 0);
   ASockAddr.sin_family := AF_INET;
   ASockAddr.sin_port := platform_htons(APort);
-  ASockAddr.sin_addr.s_addr := AIP;
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
   ALen := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -859,7 +859,7 @@ end;
 procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
   out AIP: UInt32; out APort: UInt16);
 begin
-  AIP := ASockAddr.sin_addr.s_addr;
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
   APort := platform_ntohs(ASockAddr.sin_port);
 end;
 
@@ -915,10 +915,10 @@ function platform_ipv4_to_string(AIP: UInt32): string;
   end;
 
 begin
-  Result := OctetToStr(AIP and $FF) + '.' +
-            OctetToStr((AIP shr 8) and $FF) + '.' +
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
             OctetToStr((AIP shr 16) and $FF) + '.' +
-            OctetToStr((AIP shr 24) and $FF);
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
 end;
 
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -930,7 +930,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;
