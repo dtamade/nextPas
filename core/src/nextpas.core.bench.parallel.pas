@@ -86,7 +86,8 @@ type
 implementation
 
 uses
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  SysUtils; { F-02: for Exception class in thread error handling }
 
 
 
@@ -100,6 +101,7 @@ type
     FFunc: TBenchParallelFunc;
     FIterations: Int64;
     FElapsedNs: UInt64;
+    FExceptionMessage: string; { F-02: capture exception message }
   protected
     procedure Execute; override;
   public
@@ -108,6 +110,7 @@ type
     property BenchThreadId: Integer read FBenchThreadId;
     property Iterations: Int64 read FIterations;
     property ElapsedNs: UInt64 read FElapsedNs;
+    property ExceptionMessage: string read FExceptionMessage;
   end;
 
 { TBenchThread }
@@ -121,6 +124,7 @@ begin
   FFunc := AFunc;
   FIterations := AIterations;
   FElapsedNs := 0;
+  FExceptionMessage := '';
 end;
 
 procedure TBenchThread.Execute;
@@ -128,17 +132,25 @@ var
   LStartNs: UInt64;
   LEndNs: UInt64;
 begin
-  // Record start time using high-precision timer
-  LStartNs := platform_monotonic_ns;
+  try
+    // Record start time using high-precision timer
+    LStartNs := platform_monotonic_ns;
 
-  // Execute the benchmark function
-  FFunc(FBenchThreadId, FIterations);
+    // Execute the benchmark function
+    FFunc(FBenchThreadId, FIterations);
 
-  // Record end time
-  LEndNs := platform_monotonic_ns;
+    // Record end time
+    LEndNs := platform_monotonic_ns;
 
-  // Calculate elapsed time in nanoseconds
-  FElapsedNs := LEndNs - LStartNs;
+    // Calculate elapsed time in nanoseconds
+    FElapsedNs := LEndNs - LStartNs;
+  except
+    on E: Exception do
+    begin
+      FElapsedNs := 0;
+      FExceptionMessage := E.Message;
+    end;
+  end;
 end;
 
 { TParallelBenchmark }
@@ -216,6 +228,11 @@ begin
 
     for I := 0 to High(LThreads) do
     begin
+      { F-02: check for exceptions in worker threads }
+      if LThreads[I].ExceptionMessage <> '' then
+        raise Exception.CreateFmt('Thread %d failed: %s',
+          [LThreads[I].BenchThreadId, LThreads[I].ExceptionMessage]);
+
       FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;
       FResults.ThreadResults[I].Iterations := LThreads[I].Iterations;
       FResults.ThreadResults[I].ElapsedNs := LThreads[I].ElapsedNs;

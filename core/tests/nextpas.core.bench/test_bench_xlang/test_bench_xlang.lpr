@@ -499,9 +499,9 @@ procedure Test_GoBench_NegativeIterations;
 var
   LResult: TBenchResult;
 begin
-  { Negative iterations → SafeDeriveTotalNs returns 0, no crash }
+  { F-07: Negative iterations → clamped to 0, SafeDeriveTotalNs returns 0 }
   LResult := ParseGoBenchLine('BenchmarkX-4   -100   100.0 ns/op');
-  Check(LResult.Iterations = -100, 'Negative iterations parsed');
+  Check(LResult.Iterations = 0, 'Negative iterations clamped to 0');
   Check(LResult.TotalNs = 0, 'Negative iterations → TotalNs = 0');
 end;
 

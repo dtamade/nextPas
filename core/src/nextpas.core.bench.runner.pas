@@ -246,9 +246,10 @@ begin
 
   if LRunner.FParallelContextsInitialized and
      (AThreadId >= 0) and
-     (AThreadId < Length(LRunner.FParallelContexts)) then
+     (AThreadId < Length(LRunner.FParallelContexts)) and
+     Assigned(LRunner.FParallelContexts[AThreadId]) then
   begin
-    LRunner.FParallelContexts[AThreadId] := TBenchContext.Create;
+    { F-01: write to pre-created context instead of creating new one }
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
@@ -451,8 +452,10 @@ var
   LIndex: Integer;
 begin
   SetLength(FParallelContexts, AThreadCount);
+  { F-01: pre-create all TBenchContext objects in main thread to avoid
+    concurrent object creation in worker threads. }
   for LIndex := 0 to AThreadCount - 1 do
-    FParallelContexts[LIndex] := nil;
+    FParallelContexts[LIndex] := TBenchContext.Create;
   FParallelContextsInitialized := True;
 end;
 
