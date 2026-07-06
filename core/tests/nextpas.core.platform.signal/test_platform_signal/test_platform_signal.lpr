@@ -91,6 +91,17 @@ begin
   platform_signal_reset(PLATFORM_SIGUSR2);
 end;
 
+procedure TestIgnoreSignal;
+begin
+  // Ignore SIGUSR1, then send it — handler should NOT be called
+  GHandlerCalled := 0;
+  Check(platform_signal_ignore(PLATFORM_SIGUSR1) = 0, 'ignore signal');
+  kill(getpid, PLATFORM_SIGUSR1);
+  Check(GHandlerCalled = 0, 'handler not called when ignored');
+  // Reset to default
+  platform_signal_reset(PLATFORM_SIGUSR1);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.signal');
   T.Test('set handler + deliver', @TestSetHandler);
@@ -101,5 +112,6 @@ begin
   T.Test('reset handler', @TestResetHandler);
   T.Test('multiple signals', @TestMultipleSignals);
   T.Test('handler receives correct signal', @TestHandlerSignalArg);
+  T.Test('ignore signal', @TestIgnoreSignal);
   if not T.Run then Halt(1);
 end.
