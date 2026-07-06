@@ -1389,4 +1389,43 @@ b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
 ```
 d57977f15 feat(bench): AddSimple API + Bayesian sigma=0 tests (F-03/F-18)
 ```
+
+---
+
+## 2026-07-06 FPC RTL 隔离审计 + 修复
+
+**审计范围**: 11 源文件 + 18 测试文件
+**审计方法**: 全量 uses 子句扫描 + 逐行 System.* 引用检查
+**合规率**: 源文件 100% (修复后)
+
+### 发现
+
+| ID | 文件 | 行 | 违规 | 严重度 | 状态 |
+|----|------|-----|------|--------|------|
+| RTL-01 | base.pas | 567 | `System.Sqrt(2.0)` | P1 | ✅ 已修复 |
+| RTL-02 | base.pas | 569 | `System.Exp(...)` | P1 | ✅ 已修复 |
+| RTL-03 | base.pas | 615 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-04 | base.pas | 628 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-05 | stats.pas | 1086 | `System.Sqrt(LPosteriorVar)` | P1 | ✅ 已修复 |
+| RTL-06~14 | 9 测试文件 | — | `cthreads` | P2 | 设计如此 |
+
+### 修复方案
+
+在 `nextpas.core.math.scalar` 中新增包装函数:
+- `Sqrt(Double/Single)` → `System.Sqrt`
+- `Exp(Double)` → `System.Exp`
+- `Ln(Double)` → `System.Ln`
+
+bench 模块 `System.*` 引用: **7 → 0**
+
+### 测试文件 cthreads 说明
+
+9 个测试文件使用 `cthreads`（全部 `{$ifdef unix}` 守卫）。这是 FPC POSIX 线程的硬性要求，无法通过框架抽象绕过。建议:
+- 方案 A: 接受为测试标准做法（与 Go/Rust 测试框架一致）
+- 方案 B: 在 `nextpas.core.system` 中提供 `InitThreading` 封装
+
+### Commits
+```
+e442f8398 fix(bench): FPC RTL 隔离 — System.Sqrt/Exp/Ln 改用 math.scalar 包装
+```
 ```
