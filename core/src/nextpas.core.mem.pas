@@ -26,6 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
@@ -144,6 +145,12 @@ type
 
 function DefaultAllocator: IAllocator; inline;
 
+{** 全局分配函数 - 直接调用 DefaultAllocator **}
+function GetMem(ASize: SizeUInt): Pointer; inline;
+function AllocMem(ASize: SizeUInt): Pointer; inline;
+function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; inline;
+procedure FreeMem(ADst: Pointer); inline;
+
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
@@ -170,6 +177,26 @@ begin
   Result := nextpas.core.mem.default.DefaultAllocator;
 end;
 
+function GetMem(ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.GetMem(ASize);
+end;
+
+function AllocMem(ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.AllocMem(ASize);
+end;
+
+function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.ReallocMem(ADst, ASize);
+end;
+
+procedure FreeMem(ADst: Pointer);
+begin
+  DefaultAllocator.FreeMem(ADst);
+end;
+
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
   Result := AAllocator.AllocMem(ASize);
@@ -182,7 +209,8 @@ begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
   { 乘法前溢出检查：ACount * AElemSize > High(SizeUInt) 时拒绝 }
   if ACount > (High(SizeUInt) div AElemSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'AllocArray: size overflow (' + IntToStr(ACount) + ' * ' + IntToStr(AElemSize) + ')');
   LTotal := ACount * AElemSize;
   Result := AAllocator.AllocMem(LTotal);
 end;
