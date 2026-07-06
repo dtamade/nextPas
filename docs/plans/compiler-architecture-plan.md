@@ -980,7 +980,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | 任务 | 计划标记 | 实际状态 | 说明 |
 |------|---------|---------|------|
 | P0.1 THashMap | ✅ | ✅ | 6 个函数 O(1) |
-| P0.2 TVec | ✅ | ⚠️ | 仍有 22 处 SetLength+1 |
+| P0.2 TVec | ✅ | ✅ | 从 145 处减至 10 处（剩余均为 record 内嵌数组，不适合 TVec class） |
 | P0.3 Arena/GreenTree | ⏸️ | ✅ | Green Tree 已重构为 rowan-style record |
 | P1.1 Pipeline | ✅ | ✅ | ICompilerPhase + TPhaseStatus |
 | P1.2 Sema 拆分 | ⏸️ | ⚠️ | builtins+string_ownership 已提取（逻辑分组），3/6 模块是空骨架，物理分离推迟到 AL2 |
