@@ -235,6 +235,7 @@ begin
     sbAVX512: Result := 'AVX-512';
     sbNEON: Result := 'NEON';
     sbRISCVV: Result := 'RISC-V V';
+    sbLASX: Result := 'LoongArch LASX';
   end;
 end;
 
@@ -252,6 +253,7 @@ begin
     sbAVX512: Result := 'x86-64 AVX-512 SIMD implementation';
     sbNEON: Result := 'ARM NEON 128-bit SIMD (default scalar fallback; asm opt-in)';
     sbRISCVV: Result := 'RISC-V Vector Extension (RVV) (experimental opt-in)';
+    sbLASX: Result := 'LoongArch LASX 256-bit SIMD (experimental, requires hardware)';
   end;
 end;
 
