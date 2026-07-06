@@ -65,7 +65,7 @@ Allocator 侧：
 
 Growing allocator 内部层（不单独对外暴露）：
 
-- `nextpas.core.mem.sizeclass` — 62 档位大小分类表（O(1) 查表）
+- `nextpas.core.mem.sizeclass` — 69 档位大小分类表（O(1) 查表）
 - `nextpas.core.mem.span` — Bitmap span（BSF 单指令分配）
 - `nextpas.core.mem.cache.thread` — TLS free list + batch refill/flush
 - `nextpas.core.mem.central` — Central span pool + spinlock + lock-free inbox
@@ -164,7 +164,7 @@ type
 ┌─────────────────────────────────────────────────┐
 │  Thread-Local Cache (cache.thread.pas)          │
 │  - threadvar TThreadCache per thread            │
-│  - 62 size classes, adaptive batch refill       │
+│  - 69 size classes, adaptive batch refill       │
 │  - Free list: intrusive singly-linked           │
 │  - Zero contention hot path                     │
 ├─────────────────────────────────────────────────┤
@@ -175,7 +175,7 @@ type
 │  - Scavenger: periodic OS memory release        │
 ├─────────────────────────────────────────────────┤
 │  Size Class Table (sizeclass.pas)               │
-│  - 62 classes across 6 bands                    │
+│  - 69 classes across 7 bands                    │
 │  - O(1) lookup via table                        │
 │  - Band 0-3: 8-256B (small), 4-5: medium/large  │
 └─────────────────────────────────────────────────┘

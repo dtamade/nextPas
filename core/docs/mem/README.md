@@ -167,7 +167,7 @@ end;
 
 ## 测试覆盖
 
-- 47 test suites with 599 tests (migrated to `nextpas.core.test` v3.x)
+- 43 test suites with 613 tests (migrated to `nextpas.core.test` v3.x)
 - 0 memory leaks, 0 unfreed blocks
 - 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
 
