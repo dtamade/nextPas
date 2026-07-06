@@ -1030,7 +1030,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 **提交**: `1b5a64dba`
 
 
-### AL2.2: Permissive Overload 清理 [🔲]（预估 5 天，P2 优先级）⚠️ 高风险 — 审计完成，移除推迟到 AL3
+### AL2.2: Permissive Overload 清理 [✅ 2026-07-06]（预估 5 天，P2 优先级）
 
 **现状**: 14 处 `{ Permissive: ... }` 妥协标记在关键路径上。
 **目标**: 标准重载解析（精确匹配 → 类型提升 → 歧义报错）。
