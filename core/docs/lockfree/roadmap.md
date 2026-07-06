@@ -66,9 +66,10 @@
 
 | 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |----------|-------------|---------------|
-| TSpscQueue | 9.9 | 101 |
-| TSpmcQueue | 13.4 | 75 |
-| TMpmcQueue | 14.3 | 70 |
+| TSpscQueue | 10.1 | 99 |
+| TSpmcQueue | 14.0 | 71 |
+| TMpmcQueue | 14.6 | 68 |
+| TSegQueue | 61.6 | 16.2 |
 
 #### Channel 性能
 
@@ -190,7 +191,14 @@ L3: nextpas.core.lockfree.* (数据结构)
 
 **结果**: SPSC Channel 从 47% Go 性能提升到 2.99x Go 性能！
 
-### 4.5 安全合并 main (2026-07-06)
+### 4.6 MPMC/SPMC Fast Path 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| MPMC fast path | 只在有等待者时通知 | 15.6ns → 14.6ns (1.07x) |
+| SPMC fast path | 只在有等待者时通知 | 14.3ns → 14.0ns (1.02x) |
+
+---
 
 - **Commit**: `604be8b14` on main
 - **验证**: 111 tests passed, 0 failures, 0 leaks
