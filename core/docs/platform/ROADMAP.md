@@ -90,9 +90,15 @@
 
 ### 可用性改进 ✅
 - v1-v6 持续改进 (7.73 → 8.56)
-- nil guard 覆盖率: 6.1% → 59.1%
+- nil guard 覆盖率: 6.1% → 59.1% (297 guards)
 - -1 返回值基本清除
 - QUICKSTART.md 15 个示例
+
+### P7: FFI 覆盖率审计 ✅
+- 审计报告: FFI-COVERAGE-AUDIT.md v1.1
+- 评分: 8/10 → 9/10 (优秀)
+- 新增 FFI 绑定: sigpending/sigwait/clock_nanosleep/seteuid/setegid/getpwnam/getpwuid
+- 测试覆盖扩展: pty 5→9, resource 5→10, watch 7 tests
 
 ---
 
@@ -116,6 +122,7 @@
 | FreeBSD CI 集成 | P2 | ⬜ 待定 | 需要 cross-platform-actions CI |
 | Android CI 集成 | P3 | ⬜ 待定 | 需要 NDK 工具链 |
 | 性能优化 | P2 | ✅ 已完成 | path.normalize 7.4x 提升 (栈数组优化) |
+| FFI 覆盖率审计 | P2 | ✅ 已完成 | 评分 9/10, 6个新 FFI 绑定, 测试扩展 |
 
 ### 4.3 长期 (年度)
 

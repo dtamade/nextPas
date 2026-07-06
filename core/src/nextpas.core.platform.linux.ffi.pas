@@ -56,6 +56,8 @@ function sysinfo(info: PSysInfo): cint; cdecl; external 'c' name 'sysinfo';
 function uname(buf: PUtsName): cint; cdecl; external 'c' name 'uname';
 function sigaction(sig: cint; act: Pointer; oact: Pointer): cint; cdecl; external 'c' name 'sigaction';
 function sigprocmask(how: cint; nset: Pointer; oset: Pointer): cint; cdecl; external 'c' name 'sigprocmask';
+function sigpending(sigset: Pointer): cint; cdecl; external 'c' name 'sigpending';
+function sigwait(sigset: Pointer; sig: pcint): cint; cdecl; external 'c' name 'sigwait';
 function raise_signal(sig: cint): cint; cdecl; external 'c' name 'raise';
 function sendfile(out_fd: cint; in_fd: cint; offset: Pointer; count: size_t): ssize_t; cdecl; external 'c' name 'sendfile';
 function splice(fd_in: cint; off_in: Pointer; fd_out: cint; off_out: Pointer; len: size_t; flags: cuint): ssize_t; cdecl; external 'c' name 'splice';

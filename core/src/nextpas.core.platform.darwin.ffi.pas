@@ -21,6 +21,11 @@ function sigprocmask(
   const AHow: Int32;
   ANewSet: PPlatformDarwinSignalSet;
   AOldSet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'sigprocmask';
+function sigpending(
+  ASet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'sigpending';
+function sigwait(
+  ASet: PPlatformDarwinSignalSet;
+  ASig: PInt32): Int32; cdecl; external 'c' name 'sigwait';
 function pthread_sigmask(
   const AHow: Int32;
   ANewSet: PPlatformDarwinSignalSet;
