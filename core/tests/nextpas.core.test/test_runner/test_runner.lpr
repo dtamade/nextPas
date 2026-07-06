@@ -35,6 +35,23 @@ var
   LCacheRunSuite: TTestSuite;
   LCacheRunResult1, LCacheRunResult2: TTestRunResult;
   LCacheRunCount: Integer;
+  { T-14: RepeatAllCount }
+  LRepeatSuite: TTestSuite;
+  LRepeatRunner: TSuiteRunner;
+  LRepeatResults: specialize TArray<TTestRunResult>;
+  LRepeatCount: Integer;
+  { T-15: FailFast + MaxFailures }
+  LFailFastSuite: TTestSuite;
+  LFailFastResult: TTestRunResult;
+  LFailFastCount: Integer;
+  { T-16: TestClosure }
+  LClosureSuite: TTestSuite;
+  LClosureResult: TTestRunResult;
+  LClosureCount: Integer;
+  { T-17: WithEachCleanup }
+  LCleanupSuite: TTestSuite;
+  LCleanupResult: TTestRunResult;
+  LCleanupCount: Integer;
 
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
@@ -2204,6 +2221,108 @@ begin
     PassTest('Cache integration in runner');
   end;
 
+  { ── T-14: RepeatAllCount (--count=N) ───────────────────────────────────── }
+
+  SectionHeader('T-14: RepeatAllCount (--count=N)');
+
+  begin
+    LRepeatCount := 0;
+    LRepeatSuite := TTestSuite.Create('RepeatSuite');
+    LRepeatSuite.Config.RepeatAllCount := 3;
+    LRepeatSuite.Test('repeat_test', procedure begin
+      Inc(LRepeatCount);
+      CheckTrue(True, 'test runs');
+    end);
+    LRepeatRunner := TSuiteRunner.Create('RepeatRunner');
+    LRepeatRunner.Add(LRepeatSuite);
+    LRepeatRunner.RunAllWithResult(LRepeatResults);
+    if LRepeatCount <> 3 then
+      FailTest('RepeatAllCount: expected 3 runs, got ' + IntToStr(LRepeatCount));
+    PassTest('RepeatAllCount (--count=N)');
+  end;
+
+  { ── T-15: FailFast + MaxFailures combination ────────────────────────────── }
+
+  SectionHeader('T-15: FailFast + MaxFailures');
+
+  begin
+    LFailFastCount := 0;
+    LFailFastSuite := TTestSuite.Create('FailFastSuite');
+    LFailFastSuite.Config.FailFast := True;
+    LFailFastSuite.Config.MaxFailures := 2;
+    LFailFastSuite.Test('ff_pass1', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(True, 'pass');
+    end);
+    LFailFastSuite.Test('ff_fail1', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(False, 'fail 1');
+    end);
+    LFailFastSuite.Test('ff_fail2', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(False, 'fail 2');
+    end);
+    LFailFastSuite.Test('ff_pass2', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(True, 'pass');
+    end);
+    LFailFastSuite.RunWithResult(LFailFastResult);
+    { FailFast stops after first failure, MaxFailures caps at 2 }
+    if LFailFastResult.Failed < 1 then
+      FailTest('FailFast+MaxFailures: expected at least 1 failure, got ' +
+        IntToStr(LFailFastResult.Failed));
+    if LFailFastCount >= 4 then
+      FailTest('FailFast+MaxFailures: should have stopped early, but ran all ' +
+        IntToStr(LFailFastCount) + ' tests');
+    PassTest('FailFast + MaxFailures');
+  end;
+
+  { ── T-16: Test with TTestClosure ────────────────────────────────────────── }
+
+  SectionHeader('T-16: Test with TTestClosure');
+
+  begin
+    LClosureCount := 0;
+    LClosureSuite := TTestSuite.Create('ClosureSuite');
+    LClosureSuite.Test('closure_test', procedure begin
+      Inc(LClosureCount);
+      CheckTrue(True, 'closure test');
+    end);
+    LClosureSuite.RunWithResult(LClosureResult);
+    if LClosureCount <> 1 then
+      FailTest('TestClosure: expected 1 call, got ' + IntToStr(LClosureCount));
+    PassTest('Test with TTestClosure');
+  end;
+
+  { ── T-17: WithEachCleanup ──────────────────────────────────────────────── }
+
+  SectionHeader('T-17: WithEachCleanup');
+
+  begin
+    LCleanupCount := 0;
+    LCleanupSuite := TTestSuite.Create('CleanupSuite');
+    LCleanupSuite := LCleanupSuite.WithEachCleanup(procedure begin
+      Inc(LCleanupCount);
+    end);
+    LCleanupSuite.Test('cleanup_test1', procedure begin
+      CheckTrue(True, 'test 1');
+    end);
+    LCleanupSuite.Test('cleanup_test2', procedure begin
+      CheckTrue(True, 'test 2');
+    end);
+    LCleanupSuite.Test('cleanup_test3', procedure begin
+      CheckTrue(True, 'test 3');
+    end);
+    LCleanupSuite.RunWithResult(LCleanupResult);
+    if LCleanupCount <> 3 then
+      FailTest('WithEachCleanup: expected 3 cleanups, got ' +
+        IntToStr(LCleanupCount));
+    if LCleanupResult.Passed <> 3 then
+      FailTest('WithEachCleanup: expected 3 passed, got ' +
+        IntToStr(LCleanupResult.Passed));
+    PassTest('WithEachCleanup');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2238,4 +2357,9 @@ begin
   LVerbSink := nil;
   LRetrySuite := Default(TTestSuite);
   LIdempotentSuite := Default(TTestSuite);
+  LRepeatSuite := Default(TTestSuite);
+  LRepeatRunner := Default(TSuiteRunner);
+  LFailFastSuite := Default(TTestSuite);
+  LClosureSuite := Default(TTestSuite);
+  LCleanupSuite := Default(TTestSuite);
 end.
