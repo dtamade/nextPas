@@ -379,7 +379,7 @@ uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
   nextpas.core.simd.intrinsics.base,
-  nextpas.core.simd.intrinsics.x86.sse2;
+  nextpas.core.simd.intrinsics.sse2;
 
 {$PUSH}
 {$WARN 5026 OFF} // 低层桥接函数通过 raw leaf 间接使用参数，FPC 误报“未使用”

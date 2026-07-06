@@ -1,5 +1,5 @@
 {
-  nextpas.core.simd.intrinsics.x86.sse2.fastpath.inc
+  nextpas.core.simd.intrinsics.sse2.fastpath.inc
 
   Fast-path SIMD FP arithmetic with IEEE 754 special value handling.
 

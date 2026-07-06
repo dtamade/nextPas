@@ -1,5 +1,5 @@
 // Historical umbrella — not part of stable surface.
-// Use specific intrinsics units (e.g. intrinsics.x86.sse2) directly.
+// Use specific intrinsics units (e.g. intrinsics.sse2) directly.
 unit nextpas.core.simd.intrinsics;
 
 

@@ -68,7 +68,7 @@ end;
 
 {$I nextpas.core.simd.neon.scalar.math.inc}
 
-{$I nextpas.core.simd.neon.scalar.ext_math.inc}
+{$I nextpas.core.simd.neon.scalar.ext.math.inc}
 
 {$I nextpas.core.simd.neon.scalar.vector_math.inc}
 

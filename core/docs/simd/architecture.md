@@ -32,7 +32,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  L0: 类型定义 + Intrinsics                                   │
 │  base.pas (TVecF32x4, TMask4, TM128, ...)                   │
-│  intrinsics.x86.sse2.pas (SSE2 raw ISA)                     │
+│  intrinsics.sse2.pas (SSE2 raw ISA)                     │
 │  intrinsics.avx2.pas (AVX2 raw ISA)                         │
 │  intrinsics.neon.pas (NEON raw ISA)                          │
 └─────────────────────────────────────────────────────────────┘

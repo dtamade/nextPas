@@ -1,4 +1,4 @@
-unit nextpas.core.simd.intrinsics.x86.sse2;
+unit nextpas.core.simd.intrinsics.sse2;
 // Disposition: STABLE — low-level intrinsics, used by the SSE2 backend
 
 {$I nextpas.core.settings.inc}
@@ -5253,7 +5253,7 @@ end;
   These functions use real SIMD instructions while correctly handling
   special values (NaN, Inf, -0.0).
 }
-{$I nextpas.core.simd.intrinsics.x86.sse2.fastpath.inc}
+{$I nextpas.core.simd.intrinsics.sse2.fastpath.inc}
 
 end.
 

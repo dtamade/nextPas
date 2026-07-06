@@ -103,7 +103,7 @@
 - `nextpas.core.simd.intrinsics.sve.pas`
 - `nextpas.core.simd.intrinsics.sve.base.pas`
 - `nextpas.core.simd.intrinsics.sve2.pas`
-- `nextpas.core.simd.intrinsics.x86.sse2.pas`
+- `nextpas.core.simd.intrinsics.sse2.pas`
 
 **合并方案**:
 - x86 合并: sse2 + sse3 + sse41 + sse42 + avx + avx2 + avx512 + fma3 + aes + sha + mmx → `intrinsics.x86.pas`

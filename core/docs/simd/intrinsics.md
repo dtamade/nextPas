@@ -10,7 +10,7 @@ Intrinsics 层是 raw ISA 接口层，提供 TM128 类型和底层 SIMD 操作�
 
 ```
 nextpas.core.simd.intrinsics.base.pas     # 基础类型 TM128
-nextpas.core.simd.intrinsics.x86.sse2.pas # SSE2 raw ISA
+nextpas.core.simd.intrinsics.sse2.pas # SSE2 raw ISA
 nextpas.core.simd.intrinsics.avx2.pas     # AVX2 raw ISA
 nextpas.core.simd.intrinsics.avx512.pas   # AVX-512 raw ISA
 nextpas.core.simd.intrinsics.neon.pas     # NEON raw ISA
@@ -196,7 +196,7 @@ end;
 │  Backend Adapters (sse2.pas, avx2.pas)                      │
 │  SSE2AddF32x4(a, b) → 使用 TM128 类型                      │
 ├─────────────────────────────────────────────────────────────┤
-│  Intrinsics (intrinsics.x86.sse2.pas)                       │
+│  Intrinsics (intrinsics.sse2.pas)                       │
 │  simd_add_ps(a, b) → 标量回退（处理特殊值）                 │
 │  simd_load_ps(ptr) → 真正 SIMD 汇编                        │
 │  simd_add_epi32(a, b) → 真正 SIMD 汇编                     │
