@@ -558,7 +558,7 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   Result := platform_file_lstat(APath, LStat);
   if Result <> 0 then
     Exit;
@@ -1193,7 +1193,7 @@ var
 begin
   ALen := 0;
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   LHandle := CreateFileW(PWideChar(LPath), 0,

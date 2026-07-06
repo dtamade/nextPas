@@ -75,12 +75,12 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random
+  nextpas.core.platform.random,
+  nextpas.core.platform.error
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.linux.ffi,
-  nextpas.core.platform.error
+  nextpas.core.platform.linux.ffi
 {$ENDIF}
   ;
 
@@ -155,7 +155,7 @@ begin
   LBufSize := PLATFORM_FS_READ_CHUNK_SIZE;
   GetMem(LBuf, LBufSize);
   if LBuf = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LTotal := 0;
   repeat
@@ -166,13 +166,13 @@ begin
       if LNewSize < LBufSize then { overflow check }
       begin
         FreeMem(LBuf);
-        Exit(-1);
+        Exit(PLATFORM_ERR_INVALID);
       end;
       GetMem(LNewBuf, LNewSize);
       if LNewBuf = nil then
       begin
         FreeMem(LBuf);
-        Exit(-1);
+        Exit(PLATFORM_ERR_INVALID);
       end;
       Move(LBuf^, LNewBuf^, LTotal);
       FreeMem(LBuf);
@@ -252,7 +252,7 @@ var
   LResult: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 {$IFDEF NEXTPAS_WINDOWS}
   LResult := platform_env_get('TEMP', ABuf, ABufLen, LLen);
   if LResult <> 0 then
@@ -265,7 +265,7 @@ begin
       ABuf[3] := #0;
       Exit(3);
     end;
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   Result := LLen;
 {$ELSE}
@@ -281,7 +281,7 @@ begin
       Result := 4;
     end
     else
-      Result := -1;
+      Result := PLATFORM_ERR_INVALID;
   end;
 {$ENDIF}
 end;
@@ -293,7 +293,7 @@ var
   LR: Int32;
 begin
   if (APath = nil) or (APath[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LLen := 0;
   while (LLen < 4095) and (APath[LLen] <> #0) do
   begin
@@ -422,7 +422,7 @@ var
   LRand: array[0..5] of Byte;
 begin
   if (APath = nil) or (APath[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LBaseLen := 0;
   { Invariant: 1024 buffer - 1(dot) - 12(hex) - 1(NUL) = 1010 max base path }
   while (LBaseLen < 1010) and (APath[LBaseLen] <> #0) do
@@ -494,7 +494,7 @@ var
 begin
   AHandle := PLATFORM_FILE_INVALID_HANDLE;
   if (APathBuf = nil) or (APathBufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LTmpLen := platform_fs_temp_dir(@LTmpDir[0], SizeOf(LTmpDir));
   if LTmpLen < 0 then
@@ -509,7 +509,7 @@ begin
     while ASuffix[LSuffixLen] <> #0 do Inc(LSuffixLen);
 
   if LTmpLen + 1 + LPrefixLen + 16 + LSuffixLen + 1 > APathBufLen then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   for LAttempt := 0 to MAX_ATTEMPTS - 1 do
   begin
@@ -612,7 +612,7 @@ var
 begin
   ALen := 0;
   if ABuf = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if ABufCapacity = 0 then
     Exit(PLATFORM_FS_SHORT_READ_ERROR);
 

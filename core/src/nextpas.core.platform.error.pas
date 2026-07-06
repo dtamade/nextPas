@@ -56,7 +56,7 @@ var
   LLen: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LLen := 0;
   while AMessage[LLen] <> #0 do
@@ -109,7 +109,7 @@ begin
   if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
     Exit;
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LMsg := strerror(ACode);
   if LMsg = nil then
   begin
@@ -137,7 +137,7 @@ begin
   if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
     Exit;
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LLen := FormatMessageA(
     FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,
     nil, DWORD(ACode), 0, ABuf, DWORD(ABufLen), nil);

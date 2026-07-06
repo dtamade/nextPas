@@ -310,3 +310,23 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - Rust: `std::io::Write::write_all` 在标准库层，系统调用层使用 `write`
   - Go: `io.WriteFull` 在标准库层，系统调用层使用 `write`
   - nextPas: 高阶封装在 L1/L2 层，平台层使用 `send`/`recv`
+
+### Phase 12: -1 返回值统一 (2026-07-06)
+- **目标**: 将参数验证和内存分配失败的 `-1` 返回值替换为语义化的 `PLATFORM_ERR_*` 常量
+- **修改范围**: 10 个文件，39 个 `-1` 返回值
+  - `args.pas`: 3 个参数验证 → `PLATFORM_ERR_INVALID`
+  - `error.pas`: 1 个参数验证 → `PLATFORM_ERR_INVALID`
+  - `thread.pas`: 5 个参数验证 → `PLATFORM_ERR_INVALID`
+  - `fs.pas`: 6 个参数验证/内存分配 → `PLATFORM_ERR_INVALID`
+  - `console.pas`: 2 个参数验证 → `PLATFORM_ERR_INVALID`
+  - `fmt.pas`: 5 个参数验证/缓冲区 → `PLATFORM_ERR_INVALID`
+  - `path.pas`: 3 个参数验证/缓冲区 → `PLATFORM_ERR_INVALID`
+  - `files.pas`: 1 个参数验证 → `PLATFORM_ERR_INVALID`
+  - `socket.pas`: 4 个错误处理 → `PLATFORM_ERR_INVALID`
+  - `watch.pas`: 1 个错误处理 → `PLATFORM_ERR_BADF`
+- **保留 -1 的场景**:
+  - "未找到"指示器（如 `platform_str_find` 返回 -1 表示未找到）
+  - 无效文件描述符（如 `platform_pty_master_fd` 返回 -1 表示无效 fd）
+  - 错误条件（如 `platform_fs_mktemp` 失败时返回 -1）
+- **测试**: 所有平台测试通过，0 unfreed
+- **契约检查**: 26 通过，0 失败，1 警告（5 个合法 -1 返回）

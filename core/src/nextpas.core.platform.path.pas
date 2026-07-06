@@ -48,10 +48,12 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16;
@@ -445,7 +447,7 @@ begin
       if LNeed < 0 then
         Exit(LNeed);
       if LNeed >= Length(LHeap) then
-        Exit(-1);
+        Exit(PLATFORM_ERR_INVALID);
     end;
     LJoined := @LHeap[0];
   end;
@@ -890,7 +892,7 @@ var
   LLen, I: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LResult := nextpas.core.platform.posix.ffi.realpath(APath, @LResolved[0]);
   if LResult = nil then
     Exit(-1);
@@ -914,7 +916,7 @@ var
   LUtf8: AnsiString;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(-1);
 
