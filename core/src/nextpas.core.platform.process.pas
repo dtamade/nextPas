@@ -153,6 +153,8 @@ var
   LPid: pid_t;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LPid := fork;
   if LPid < 0 then
     Exit(platform_get_errno);
