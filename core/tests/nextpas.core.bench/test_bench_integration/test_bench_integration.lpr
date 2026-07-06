@@ -6,7 +6,7 @@ program test_bench_integration;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.exception,
   nextpas.core.math.scalar,
