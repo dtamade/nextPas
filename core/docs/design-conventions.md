@@ -801,7 +801,7 @@ build/
 ### L0: 内核（只依赖 FPC RTL）
 
 逐模块层级、owner、public facade、允许依赖和 truth level 以
-`docs/module-registry.md` 为准。本节只保留设计分层说明；当模块从治理候选变成
+`docs/core-module-registry.md` 为准。本节只保留设计分层说明；当模块从治理候选变成
 稳定层级事实时，先更新注册表和 source-contract gate。
 
 | 模块       | 职责                                           |
