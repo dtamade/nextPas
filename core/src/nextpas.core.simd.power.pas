@@ -16,7 +16,7 @@ unit nextpas.core.simd.power;
   - Double-precision floating-point support
   - Load/Store with alignment hints
 
-  Status: EXPERIMENTAL - Requires POWER hardware
+  Status: VERIFIED — QEMU ppc64 验证通过 (2026-07-06)
   Compatibility: POWER7 and newer processors
 }
 

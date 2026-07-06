@@ -387,3 +387,31 @@
 - 重要改动需要审查
 - 测试必须通过
 - 文档必须更新
+
+---
+
+## 延迟项路线图
+
+以下功能因编译器限制延迟，等待 nextpas 编译器实现对应后端后启用。
+
+### MIPS64 MSA
+
+**阻塞原因**: FPC `mips64el` 后端 `InternalError(2002122101)` — RTL 编译失败
+**当前状态**: STUB（纯声明，无实现）
+**解除条件**: nextpas 编译器实现 MIPS 后端
+**优先级**: 低（MIPS 设备市场份额下降）
+
+### WebAssembly SIMD128
+
+**阻塞原因**: FPC `wasm32` 后端不支持 SIMD128 intrinsics
+**当前状态**: STUB（纯声明，无实现）
+**解除条件**: nextpas 编译器实现 WASM 后端 + SIMD128 支持
+**优先级**: 中（WASM SIMD 是 Web 性能关键路径）
+
+### 启用步骤
+
+1. nextpas 编译器实现目标后端
+2. 移除 `{$IFDEF CPU...}` 中的 STUB 标记
+3. 实现 SIMD intrinsics（参考 LASX stub 模式）
+4. QEMU 或真机验证
+5. 更新本文档状态

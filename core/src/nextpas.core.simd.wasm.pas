@@ -5,19 +5,16 @@ unit nextpas.core.simd.wasm;
 
 {
   === nextpas.core.simd.wasm ===
-  WebAssembly SIMD128 backend implementation.
+  WebAssembly SIMD128 backend — STUB (等待 nextpas 编译器支持)
 
-  This unit provides the WASM SIMD128 backend for the nextpas.core.simd
-  dispatch system.
+  Status: STUB — FPC WASM32 后端不支持 SIMD128 intrinsics，
+  等待 nextpas 编译器实现 WASM 后端后启用 SIMD。
 
-  WASM SIMD128 provides:
+  WASM SIMD128 provides (未来):
   - 128-bit vector registers
   - Integer and floating-point operations
   - Saturating arithmetic
   - Load/Store with alignment hints
-
-  Status: EXPERIMENTAL - Requires WASM runtime support
-  Compatibility: All WASM runtimes with SIMD support (Chrome 91+, Firefox 89+, Node.js 16.4+)
 }
 
 interface

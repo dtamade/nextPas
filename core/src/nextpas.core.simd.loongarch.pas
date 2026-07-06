@@ -16,7 +16,7 @@ unit nextpas.core.simd.loongarch;
   - Vector load/store helpers
   - Permutation and rearrangement helpers
 
-  Status: EXPERIMENTAL - Requires LoongArch hardware for testing
+  Status: VERIFIED — QEMU loongarch64 验证通过 (2026-07-06)
   Compatibility: LoongArch 3A5000 and newer processors.
 }
 

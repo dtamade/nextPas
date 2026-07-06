@@ -5,19 +5,16 @@ unit nextpas.core.simd.mips;
 
 {
   === nextpas.core.simd.mips ===
-  MIPS MSA backend implementation.
+  MIPS MSA backend — STUB (FPC MIPS64 codegen 限制)
 
-  This unit provides the MIPS MSA (MIPS SIMD Architecture) backend
-  for the nextpas.core.simd dispatch system.
+  Status: STUB — FPC mips64el 后端 InternalError(2002122101)，
+  RTL 编译失败。等待 nextpas 编译器实现 MIPS 后端后启用。
 
-  MSA provides:
+  MSA provides (未来):
   - 32 x 128-bit vector registers (W0-W31)
   - Integer and floating-point operations
   - Saturating arithmetic
   - Load/Store with alignment hints
-
-  Status: EXPERIMENTAL - Requires MIPS hardware
-  Compatibility: MIPS Release 5 and newer processors
 }
 
 interface
