@@ -86,6 +86,18 @@ type
     procedure TestRepeat(const AName: string; AProc: TTestClosure;
       ARepeatCount: Integer);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
+    { TestTable: data-driven test with multiple input/output cases.
+      Each TTestCase provides input args and expected output. The test runs
+      once per case, reporting pass/fail per case.
+
+      NOTE: Most tests prefer Test() + closure for clarity. Use TestTable
+      when you have many input/output pairs that are cleaner as data than code.
+
+      Example:
+        TestTable('Add', [
+          TTestCase.Create(['1', '2'], '3'),
+          TTestCase.Create(['0', '0'], '0')
+        ], @AddProc); }
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
       AProc: TTestCaseProc);

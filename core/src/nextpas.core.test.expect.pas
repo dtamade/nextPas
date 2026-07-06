@@ -137,6 +137,12 @@ type
         or with APosMsg if (not FNegated and not AIsMatch). }
 
     { IExpectation }
+    { Not_: returns a NEW expectation with negated assertion.
+      Creates an independent heap copy so the original expectation
+      chain is not affected. This is intentional — allows:
+        E := ExpectStr('hello');
+        E.Not_.ToEqual('world');  // passes (negated)
+        E.ToEqual('hello');       // still works (original unchanged) }
     function Not_: IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
     function ToEqualInt(const AExpected: Int64): IExpectation;
