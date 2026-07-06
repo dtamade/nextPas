@@ -64,7 +64,7 @@ FAIL_COUNT=0
 for MODULE in "${COMPILER_MODULES[@]}"; do
   MODULE_NAME="$(basename "$MODULE" .pas)"
   echo -n "  Compiling $MODULE_NAME... "
-  if "$STAGE0" build "$MODULE" \
+  if "$STAGE0" build "$REPO_ROOT/$MODULE" \
       --target linux-x86_64 \
       --out-dir "$STAGE2_A" \
       > /dev/null 2>&1; then
