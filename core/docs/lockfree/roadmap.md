@@ -29,9 +29,9 @@
 | `lockfree.spmc` | 单生产者多消费者队列 | ✅ 完成 | 15 |
 | `lockfree.mpmc` | 多生产者多消费者队列 | ✅ 完成 | 15 |
 | `lockfree.mpsc` | 多生产者单消费者队列 | ✅ 完成 | 10 |
-| `lockfree.segqueue` | 分段无界队列 | ✅ 完成 | 10 |
-| `lockfree.stack` | 无锁栈 | ✅ 完成 | 10 |
-| `lockfree.deque` | 工作窃取双端队列 | ✅ 完成 | 8 |
+| `lockfree.segqueue` | 分段无界队列 | ✅ 完成 | 11 |
+| `lockfree.stack` | 无锁栈 | ✅ 完成 | 11 |
+| `lockfree.deque` | 工作窃取双端队列 | ✅ 完成 | 9 |
 | `lockfree.ebr` | Epoch-Based 回收 | ✅ 完成 | 8 |
 | `lockfree.hazard` | Hazard Pointer 回收 | ✅ 完成 | 13 |
 | `lockfree.channel` | 有界通道 (Go channel 语义) | ✅ 完成 | 10 |
@@ -50,10 +50,10 @@
 | 测试套件 | 测试数 | 状态 |
 |----------|--------|------|
 | test_atomic | 45 | ✅ 全绿 |
-| test_lockfree | 114 | ✅ 全绿 |
+| test_lockfree | 115 | ✅ 全绿 |
 | test_lockfree_hazard | 13 | ✅ 全绿 |
 | test_lockfree_stress | 13 | ✅ 全绿 |
-| **总计** | **185** | **✅ 全绿** |
+| **总计** | **186** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
@@ -67,16 +67,17 @@
 | 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |----------|-------------|---------------|
 | TSpscQueue | 10.1 | 99 |
-| TSpmcQueue | 14.0 | 71 |
-| TMpmcQueue | 14.6 | 68 |
-| TSegQueue | 61.6 | 16.2 |
+| TSpmcQueue | 13.3 | 75 |
+| TMpmcQueue | 14.7 | 68 |
+| TSegQueue | 58.7 | 17 |
+| EBR Retire | 127.9 | 7.8 |
 
 #### Channel 性能
 
 | 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |------|------|-------------|---------------|
-| **TLockFreeChannelSpsc** | **1P1C** | **38.2** | **26.2** |
-| TLockFreeChannel | MPMC | 90.9 | 11.0 |
+| **TLockFreeChannelSpsc** | **1P1C** | **40.3** | **24.8** |
+| TLockFreeChannel | MPMC | 80.2 | 12.5 |
 
 #### 跨语言对比 (1P1C Channel)
 
@@ -97,7 +98,7 @@
 | XxxWait | ✅ | ✅ | ✅ | ✅ | - | - | - | ✅ | ✅ | - |
 | XxxTimeout | ✅ | ✅ | ✅ | ✅ | - | - | - | ✅ | ✅ | - |
 | Batch | ✅ | - | ✅ | - | - | - | - | - | - | - |
-| Close | ✅ | ✅ | ✅ | ✅ | ✅ | - | - | ✅ | - | - |
+| Close | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | - | - |
 | ApproxCount | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | - | ✅ |
 
 ### 2.4 文档完整性
@@ -198,10 +199,59 @@ L3: nextpas.core.lockfree.* (数据结构)
 | MPMC fast path | 只在有等待者时通知 | 15.6ns → 14.6ns (1.07x) |
 | SPMC fast path | 只在有等待者时通知 | 14.3ns → 14.0ns (1.02x) |
 
+### 4.7 EBR Freelist 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| EBR freelist | 复用退休节点避免 GetMem | 138.0ns → 127.9ns (1.08x) |
+| SegQueue 间接 | EBR 优化间接受益 | 61.6ns → 58.7ns (1.05x) |
+
+### 4.8 Channel MPMC Fast Path 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| Channel MPMC fast path | 只在有等待者时通知 | 94.7ns → 80.2ns (1.18x) |
+
+### 4.9 Stack/Deque Close + SegQueue MPMC 测试 (2026-07-06)
+
+| 功能 | 内容 | 测试 |
+|------|------|------|
+| Stack Close/IsClosed | 栈关闭功能 | 1 |
+| Deque Close/IsClosed | 双端队列关闭功能 | 1 |
+| SegQueue 4P+4C MPMC | 多生产者多消费者测试 | 1 |
+
+### 4.10 SegQueue + EBR 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| SegQueue cache line padding | FHead/FTail 避免 false sharing | 减少缓存颠簸 |
+| SegQueue tail caching | Enqueue 从 FTail 开始遍历 | 避免从 head 遍历 |
+| SegQueue freelist | freelist limit 从 4 增加到 8 | 减少 GetMem/FreeMem |
+| EBR freelist limit | freelist limit 从 16 增加到 32 | 减少 GetMem/FreeMem |
+
+### 4.11 MPSC Fast Path 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| MPSC fast path | 只在有等待者时通知 | 减少不必要的通知 |
+
+### 4.12 Stack/Deque Cache Line Padding (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| Stack cache line padding | FTop/FFreeHead 避免 false sharing | 减少缓存颠簸 |
+| Deque cache line padding | FTop/FBottom 避免 false sharing | 减少缓存颠簸 |
+
+### 4.13 HashMap ShardIndex 位运算 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| ShardIndex bitmask | 用位运算替代 mod | 减少除法开销 |
+
 ---
 
 - **Commit**: `604be8b14` on main
-- **验证**: 111 tests passed, 0 failures, 0 leaks
+- **验证**: 118 tests passed, 0 failures, 0 leaks
 - **性能**: SPSC Channel 38.2 ns/op, 26.2 M ops/s
 - **跨语言**: 2.99x 快于 Go, 1.26x 快于 Rust
 

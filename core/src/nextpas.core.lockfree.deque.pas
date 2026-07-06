@@ -17,12 +17,21 @@ type
     FCapacity: PtrUInt;
     FMask: PtrUInt;
     FTop: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTop: TCacheLinePad;
+    {$POP}
     FBottom: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadBottom: TCacheLinePad;
+    {$POP}
+    FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
     function IsEmpty: Boolean;
     function ApproxCount: PtrUInt;
     function Capacity: PtrUInt;
@@ -52,12 +61,15 @@ begin
   SetLength(FBuffer, LCap);
   FTop := 0;
   FBottom := 0;
+  FClosed := 0;
 end;
 
 function TWorkStealingDequeImpl.TryPush(const AValue: T): Boolean;
 var
   LBottom, LTop, LSize: Int64;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   LBottom := AtomicLoad64(FBottom, moRelaxed);
   LTop := AtomicLoad64(FTop, moAcquire);
   LSize := LBottom - LTop;
@@ -117,6 +129,16 @@ begin
   LTop := AtomicLoad64(FTop, moAcquire);
   LBottom := AtomicLoad64(FBottom, moAcquire);
   Result := LTop >= LBottom;
+end;
+
+procedure TWorkStealingDequeImpl.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+end;
+
+function TWorkStealingDequeImpl.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
 function TWorkStealingDequeImpl.ApproxCount: PtrUInt;

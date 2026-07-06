@@ -129,7 +129,9 @@ begin
   LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
   AtomicStoreNode(LPrev^.Next, LNode, mo_release);
   AtomicFetchAdd32(FCount, 1, moRelaxed);
-  LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+  { Fast path: only notify if there are waiters }
+  if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+    LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
 function TMpscQueueImpl.TryEnqueue(const AValue: T): Boolean;

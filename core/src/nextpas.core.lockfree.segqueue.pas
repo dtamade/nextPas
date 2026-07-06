@@ -12,7 +12,7 @@ uses
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = 32;
-  SEGQUEUE_FREE_POOL_LIMIT = 4;
+  SEGQUEUE_FREE_POOL_LIMIT = 8;
 
 type
   generic TSegQueueImpl<T> = class
@@ -30,7 +30,13 @@ type
     end;
   private
     FHead: PSegment;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadHead: TCacheLinePad;
+    {$POP}
     FTail: PSegment;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTail: TCacheLinePad;
+    {$POP}
     FEnqueuePos: Int64;
     {$PUSH} {$WARN 05029 OFF}
     FPadEnqueue: TCacheLinePad;
@@ -158,13 +164,20 @@ var
   LNext: PSegment;
   LNewSeg: PSegment;
   LGuard: TEbrGuard;
+  LTailSeg: PSegment;
 begin
   LPos := AtomicFetchAdd64(FEnqueuePos, 1, moRelaxed);
   LIdx := Integer(LPos mod SEGQUEUE_SEGMENT_CAPACITY);
 
   LGuard := TEbrGuard.Acquire(FEbr);
   try
-    LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
+    { Fast path: try starting from tail segment to avoid traversal from head }
+    LTailSeg := PSegment(AtomicLoadPtr(Pointer(FTail), moAcquire));
+    if (LTailSeg <> nil) and (LTailSeg^.StartIndex <= LPos) and
+       ((LTailSeg^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) > LPos) then
+      LSeg := LTailSeg
+    else
+      LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
 
     while (LSeg^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) <= LPos do
     begin
