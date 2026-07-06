@@ -1359,4 +1359,34 @@ b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
 ```
 392480613 fix(bench): usability audit 9 findings — F-07/F-08/F-09/F-12/F-13/F-01/F-03/F-04/F-17
 ```
+
+---
+
+## 2026-07-06 F-03/F-18 补全
+
+**当前测试**: 18 suites / 361 tests / 0 leaks
+
+### F-03: AddSimple 快捷方法
+
+**问题**: 6 种函数类型认知负担
+**方案**: 新增 `TBenchSimpleFunc = procedure` 类型 + `IBenchSuite.AddSimple(name, func)` API
+
+实现细节:
+- `TBenchEntry` 新增 `SimpleFunc: TBenchSimpleFunc` 字段
+- runner sequential dispatch: `SimpleFunc` 优先于 `ParamFunc`/`Func`
+- runner parallel dispatch: `FBridgeSimpleFunc` 字段 + `ParallelBenchBridge` 检查
+- nil 防护: `AddSimple(nil)` 抛 `EBenchInvalidParam`
+
+### F-18: Bayesian sigma=0 测试覆盖
+
+**问题**: 所有测试都传 ASigma=10，从未测试 sigma=0（使用样本标准差）路径
+**方案**: 新增 2 个测试
+
+- `BayesianEstimate_SigmaZero`: 验证 sigma=0 时使用样本标准差，结果与显式传入近似值一致
+- `BayesianEstimate_SigmaZeroConstant`: 验证常量数据（stddev=0）时退化行为（sigma 降为 1e-10）
+
+### Commits
+```
+d57977f15 feat(bench): AddSimple API + Bayesian sigma=0 tests (F-03/F-18)
+```
 ```
