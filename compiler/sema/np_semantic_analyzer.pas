@@ -3516,7 +3516,7 @@ var
   Index: LongInt;
   MatchCount: LongInt;
   SeenIndex: LongInt;
-  SeenTypeIds: array of LongInt;
+  SeenTypeIds: specialize TVec<LongInt>;
   Symbol: TSemanticSymbol;
   TypeAlreadySeen: Boolean;
 begin
@@ -3527,7 +3527,7 @@ begin
     Exit;
 
   MatchCount := 0;
-  SetLength(SeenTypeIds, 0);
+  SeenTypeIds := specialize TVec<LongInt>.Create;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -3538,7 +3538,7 @@ begin
 
     CandidateTypeId := Symbol.TypeId;
     TypeAlreadySeen := False;
-    for SeenIndex := 0 to Length(SeenTypeIds) - 1 do
+    for SeenIndex := 0 to SeenTypeIds.Count - 1 do
       if SeenTypeIds[SeenIndex] = CandidateTypeId then
       begin
         TypeAlreadySeen := True;
@@ -3547,8 +3547,7 @@ begin
     if TypeAlreadySeen then
       Continue;
 
-    SetLength(SeenTypeIds, Length(SeenTypeIds) + 1);
-    SeenTypeIds[High(SeenTypeIds)] := CandidateTypeId;
+    SeenTypeIds.Push(CandidateTypeId);
 
     CandidateResolutionFailure := '';
     SetLength(Candidates, 0);
@@ -3574,6 +3573,7 @@ begin
     ATargetSymbolId := CandidateTargetSymbolId;
   end;
 
+  SeenTypeIds.Free;
   Result := MatchCount = 1;
 end;
 
@@ -7014,70 +7014,73 @@ function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
   IntfList: string;
-  SubConstraints: array of string;
+  SubConstraints: TStringVec;
   I, J: LongInt;
   SC: string;
 begin
   Result := True;
-  SetLength(SubConstraints, 0);
-  I := 1;
-  while I <= Length(AConstraint) do
-  begin
-    J := I;
-    while (J <= Length(AConstraint)) and (AConstraint[J] <> '|') do
-      Inc(J);
-    SetLength(SubConstraints, Length(SubConstraints) + 1);
-    SubConstraints[High(SubConstraints)] := Trim(Copy(AConstraint, I, J - I));
-    I := J + 1;
-  end;
-  for I := 0 to High(SubConstraints) do
-  begin
-    SC := SubConstraints[I];
-    if SC = '' then
-      Continue;
-    if SameText(SC, 'class') then
+  SubConstraints := TStringVec.Create;
+  try
+    I := 1;
+    while I <= Length(AConstraint) do
     begin
-      if not TypeMetaIsClass(AArgType) then
-      begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy constraint "class"');
-        Result := False;
-        Exit;
-      end;
-    end
-    else if SameText(SC, 'record') then
+      J := I;
+      while (J <= Length(AConstraint)) and (AConstraint[J] <> '|') do
+        Inc(J);
+      SubConstraints.Push(Trim(Copy(AConstraint, I, J - I)));
+      I := J + 1;
+    end;
+    for I := 0 to SubConstraints.Count - 1 do
     begin
-      if not TypeMetaIsRecord(AArgType) then
+      SC := SubConstraints[I];
+      if SC = '' then
+        Continue;
+      if SameText(SC, 'class') then
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy constraint "record"');
-        Result := False;
-        Exit;
-      end;
-    end
-    else
-    begin
-      if not TypeMetaIsClass(AArgType) then
+        if not TypeMetaIsClass(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy constraint "class"');
+          Result := False;
+          Exit;
+        end;
+      end
+      else if SameText(SC, 'record') then
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy interface constraint "' +
-          SC + '" (must be a class type)');
-        Result := False;
-        Exit;
-      end;
-      IntfList := TypeMetaInterfaces(AArgType);
-      if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
+        if not TypeMetaIsRecord(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy constraint "record"');
+          Result := False;
+          Exit;
+        end;
+      end
+      else
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not implement interface "' + SC + '"');
-        Result := False;
-        Exit;
+        if not TypeMetaIsClass(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy interface constraint "' +
+            SC + '" (must be a class type)');
+          Result := False;
+          Exit;
+        end;
+        IntfList := TypeMetaInterfaces(AArgType);
+        if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not implement interface "' + SC + '"');
+          Result := False;
+          Exit;
+        end;
       end;
     end;
+  finally
+    SubConstraints.Free;
   end;
 end;
 
@@ -7089,7 +7092,7 @@ var
   ParentName, ArgStr: string;
   ParentTypeId: LongInt;
   OwnerParams: string;
-  ArgNames: array of string;
+  ArgNames: TStringVec;
   ArgIndices: array of LongInt;
 begin
   LtPos := Pos('<', AParentSpec);
@@ -7133,7 +7136,7 @@ begin
 
   OwnerParams := FModel.TypeAt(ATypeId - 1).TypeParams;
 
-  SetLength(ArgNames, 0);
+  ArgNames := TStringVec.Create;
   I := 1;
   while I <= Length(ArgStr) do
   begin
@@ -7146,13 +7149,12 @@ begin
       else if (ArgStr[J] = ',') and (GtPos = 0) then Break;
       Inc(J);
     end;
-    SetLength(ArgNames, Length(ArgNames) + 1);
-    ArgNames[High(ArgNames)] := Trim(Copy(ArgStr, I, J - I));
+    ArgNames.Push(Trim(Copy(ArgStr, I, J - I)));
     I := J + 1;
   end;
 
-  SetLength(ArgIndices, Length(ArgNames));
-  for I := 0 to High(ArgNames) do
+  SetLength(ArgIndices, ArgNames.Count);
+  for I := 0 to ArgNames.Count - 1 do
   begin
     ArgIndices[I] := -1;
     J := 1;
@@ -7172,6 +7174,7 @@ begin
     end;
   end;
 
+  ArgNames.Free;
   FModel.SetTypeGenericParent(ATypeId, ParentTypeId, ArgIndices);
 end;
 
@@ -7801,9 +7804,9 @@ var
   NewSymbolId: LongInt;
   QualPrefix: string;
   ArgStr, ParamStr, ConstraintStr: string;
-  ArgTypes: array of string;
-  ParamNames: array of string;
-  Constraints: array of string;
+  ArgTypes: TStringVec;
+  ParamNames: TStringVec;
+  Constraints: TStringVec;
   MethodShortName: string;
   SubstSig: string;
   Decl: TGreenNode;
@@ -7868,7 +7871,7 @@ begin
     Exit;
   FModel.SetTypeInstantiatedFrom(AInstanceTypeId, GenericTypeId);
 
-  SetLength(ArgTypes, 0);
+  ArgTypes := TStringVec.Create;
   I := 1;
   while I <= Length(ArgStr) do
   begin
@@ -7884,53 +7887,50 @@ begin
         Break;
       Inc(J);
     end;
-    SetLength(ArgTypes, Length(ArgTypes) + 1);
-    ArgTypes[High(ArgTypes)] := Trim(Copy(ArgStr, I, J - I));
+    ArgTypes.Push(Trim(Copy(ArgStr, I, J - I)));
     I := J + 1;
   end;
 
-  SetLength(ParamNames, 0);
+  ParamNames := TStringVec.Create;
   I := 1;
   while I <= Length(ParamStr) do
   begin
     J := I;
     while (J <= Length(ParamStr)) and (ParamStr[J] <> ',') do
       Inc(J);
-    SetLength(ParamNames, Length(ParamNames) + 1);
-    ParamNames[High(ParamNames)] := Trim(Copy(ParamStr, I, J - I));
+    ParamNames.Push(Trim(Copy(ParamStr, I, J - I)));
     I := J + 1;
   end;
 
-  for I := 0 to High(ArgTypes) do
+  for I := 0 to ArgTypes.Count - 1 do
   begin
     if Pos('<', ArgTypes[I]) > 0 then
       ResolveOrInstantiateInlineGeneric(ArgTypes[I], AOwnerUnitId);
   end;
 
-  SetLength(Constraints, 0);
+  Constraints := TStringVec.Create;
   I := 1;
   while I <= Length(ConstraintStr) do
   begin
     J := I;
     while (J <= Length(ConstraintStr)) and (ConstraintStr[J] <> ',') do
       Inc(J);
-    SetLength(Constraints, Length(Constraints) + 1);
-    Constraints[High(Constraints)] := Trim(Copy(ConstraintStr, I, J - I));
+    Constraints.Push(Trim(Copy(ConstraintStr, I, J - I)));
     I := J + 1;
   end;
 
-  if (Length(ParamNames) > 0) and (Length(ArgTypes) <> Length(ParamNames)) then
+  if (ParamNames.Count > 0) and (ArgTypes.Count <> ParamNames.Count) then
   begin
     FDiagnostics.EmitError('sema.generic-arity-mismatch', 'sema',
       FRootFileId, 0,
-      'generic type ' + GenericName + ' expects ' + IntToStr(Length(ParamNames)) +
-      ' type argument(s), but ' + IntToStr(Length(ArgTypes)) + ' provided');
+      'generic type ' + GenericName + ' expects ' + IntToStr(ParamNames.Count) +
+      ' type argument(s), but ' + IntToStr(ArgTypes.Count) + ' provided');
     Exit;
   end;
 
-  for I := 0 to High(Constraints) do
+  for I := 0 to Constraints.Count - 1 do
   begin
-    if (Constraints[I] = '') or (I > High(ArgTypes)) then
+    if (Constraints[I] = '') or (I >= ArgTypes.Count) then
       Continue;
     if not CheckSingleConstraint(ArgTypes[I], Constraints[I]) then
       Exit;
@@ -7954,7 +7954,7 @@ begin
       FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
 
       SubstSig := '';
-      if (Length(ParamNames) > 0) and (Length(ArgTypes) >= Length(ParamNames)) then
+      if (ParamNames.Count > 0) and (ArgTypes.Count >= ParamNames.Count) then
       begin
         Decl := nil;
         for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
@@ -7966,7 +7966,7 @@ begin
           end;
         end;
         if Decl <> nil then
-          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames, ArgTypes)
+          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames.ToArray, ArgTypes.ToArray)
         else
         begin
           BodyIdx := Length(FPendingSignatures);
@@ -7975,11 +7975,11 @@ begin
           FPendingSignatures[BodyIdx].GenericName := GenericName;
           FPendingSignatures[BodyIdx].MethodShortName := MethodShortName;
           FPendingSignatures[BodyIdx].OwnerUnitId := AOwnerUnitId;
-          SetLength(FPendingSignatures[BodyIdx].ParamNames, Length(ParamNames));
-          for BodyIdx := 0 to High(ParamNames) do
+          SetLength(FPendingSignatures[BodyIdx].ParamNames, ParamNames.Count);
+          for BodyIdx := 0 to ParamNames.Count - 1 do
             FPendingSignatures[High(FPendingSignatures)].ParamNames[BodyIdx] := ParamNames[BodyIdx];
-          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, Length(ArgTypes));
-          for BodyIdx := 0 to High(ArgTypes) do
+          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, ArgTypes.Count);
+          for BodyIdx := 0 to ArgTypes.Count - 1 do
             FPendingSignatures[High(FPendingSignatures)].ArgTypes[BodyIdx] := ArgTypes[BodyIdx];
         end;
       end;
@@ -8034,7 +8034,7 @@ begin
         if I > 0 then
           SubstSig := SubstSig + ',';
         J := GenericType.GenericParent.ArgIndices[I];
-        if (J >= 0) and (J <= High(ArgTypes)) then
+        if (J >= 0) and (J < ArgTypes.Count) then
           SubstSig := SubstSig + ArgTypes[J]
         else
           SubstSig := SubstSig + '?';
@@ -8048,7 +8048,7 @@ begin
   if (GenericType.GenericParent.TemplateTypeId <= 0) or (GtPos < 0) then
   if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
-    for I := 0 to High(ParamNames) do
+    for I := 0 to ParamNames.Count - 1 do
     begin
       J := 1;
       while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
@@ -8111,7 +8111,7 @@ begin
   begin
     if Pos('<', SubstSig) > 0 then
     begin
-      for I := 0 to High(ParamNames) do
+      for I := 0 to ParamNames.Count - 1 do
       begin
         J := 1;
         while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
@@ -8135,6 +8135,9 @@ begin
   else
     FModel.AddStringConstValue(InstanceName + '$parent_class',
       FModel.TypeAt(GenericTypeId - 1).Name);
+  ArgTypes.Free;
+  ParamNames.Free;
+  Constraints.Free;
 end;
 
 function TSemanticAnalyzer.ResolveOrInstantiateInlineGeneric(
