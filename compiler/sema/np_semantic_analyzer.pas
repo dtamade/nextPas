@@ -10375,6 +10375,25 @@ begin
   Result := TSemanticAnalyzer(Ctx).ResolveTypeIdForOwner(ATypeName, AOwnerUnitId);
 end;
 
+function SemaBridge_EncodeRuntimeIntExprFold(const Ctx: Pointer;
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).EncodeRuntimeIntExprFold(ANode, ABlob);
+end;
+
+function SemaBridge_CanEmitStrCompareOperand(const Ctx: Pointer;
+  const ANode: TGreenNode; AAllowOwned: Boolean): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).CanEmitStrCompareOperand(ANode, AAllowOwned);
+end;
+
+function SemaBridge_EmitStrCompareOperand(const Ctx: Pointer;
+  const ANode: TGreenNode; AAllowOwned: Boolean;
+  out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).EmitStrCompareOperand(ANode, AAllowOwned, ABlob);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
@@ -10412,6 +10431,9 @@ begin
   Ctx.TryGetTypeCastTargetTypeId := @SemaBridge_TryGetTypeCastTargetTypeId;
   Ctx.TryGetIntrinsicExprName := @SemaBridge_TryGetIntrinsicExprName;
   Ctx.ResolveTypeIdForOwner := @SemaBridge_ResolveTypeIdForOwner;
+  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
+  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
+  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
   { Delegate }
   Result := np_sema_hir_lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
   { Sync mutable state back }
@@ -10467,143 +10489,16 @@ function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
   const ANode: TGreenNode; out ABlob: string;
   const AAllowOwnedStringCompare: Boolean): Boolean;
 var
-  LeftBlob, RightBlob, Op, Pred: string;
+  Ctx: TSemaHirLoweringContext;
 begin
-  ABlob := '';
-  if ANode = nil then
-    Exit(False);
-  if (ANode.NodeKind = gnkUnaryExpression) and
-    SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := 'int 1' + #10 + LeftBlob + 'zext' + #10 + 'sub' + #10 +
-      'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeVar(ANode.Text) then
-  begin
-    ABlob := 'var ' + ANode.Text + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
-  begin
-    ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
-  begin
-    ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkFunctionCall) or
-    ((ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2)) then
-  begin
-    if EncodeRuntimeIntExprFold(ANode, LeftBlob) then
-    begin
-      ABlob := LeftBlob + 'int 0' + #10 + 'cmp ne' + #10;
-      Exit(True);
-    end;
-  end;
-  if ANode.NodeKind <> gnkBinaryExpression then
-    Exit(False);
-  if ANode.ChildCount < 2 then
-    Exit(False);
-  Op := ANode.Text;
-  if Op = '=' then Pred := 'eq'
-  else if Op = '<>' then Pred := 'ne'
-  else if Op = '<' then Pred := 'slt'
-  else if Op = '<=' then Pred := 'sle'
-  else if Op = '>' then Pred := 'sgt'
-  else if Op = '>=' then Pred := 'sge'
-  else if SameText(Op, 'and') then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
-      'mul' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end
-  else if SameText(Op, 'or') then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
-      'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end
-  else if SameText(Op, 'is') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ANode.ChildAt(1) <> nil) and
-      (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
-    begin
-      if TypeMetaIsInterface(ANode.ChildAt(1).Text) then
-      begin
-        if (LookupClassVar(ANode.ChildAt(0).Text) <> '') and
-          (Pos(ANode.ChildAt(1).Text,
-            TypeMetaInterfaces(LookupClassVar(ANode.ChildAt(0).Text))) > 0) then
-          ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10
-        else
-          ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-        Exit(True);
-      end;
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-        'is ' + ANode.ChildAt(1).Text + #10 +
-        'int 0' + #10 + 'cmp ne' + #10;
-      Exit(True);
-    end;
-    Exit(False);
-  end
-  else if SameText(Op, 'as') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ANode.ChildAt(1) <> nil) and
-      (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-      (TypeMetaIsInterface(ANode.ChildAt(1).Text)) then
-    begin
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10;
-      Exit(True);
-    end;
-    Exit(False);
-  end
-  else
-    Exit(False);
-  if (Op = '=') or (Op = '<>') then
-  begin
-    if CanEmitStrCompareOperand(ANode.ChildAt(0),
-      AAllowOwnedStringCompare) and
-      CanEmitStrCompareOperand(ANode.ChildAt(1),
-      AAllowOwnedStringCompare) then
-    begin
-      if EmitStrCompareOperand(ANode.ChildAt(0),
-        AAllowOwnedStringCompare, LeftBlob) and
-        EmitStrCompareOperand(ANode.ChildAt(1),
-        AAllowOwnedStringCompare, RightBlob) then
-      begin
-        ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
-          'int 0' + #10 + 'cmp ne' + #10;
-        Exit(True);
-      end;
-    end;
-  end;
-  if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
-    Exit(False);
-  if not EncodeRuntimeIntExprFold(ANode.ChildAt(1), RightBlob) then
-    Exit(False);
-  ABlob := LeftBlob + RightBlob + 'cmp ' + Pred + #10;
-  Result := True;
+  Ctx.Model := FModel;
+  Ctx.RuntimeVars := FRuntimeVars;
+  Ctx.CallbackCtx := Pointer(Self);
+  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
+  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
+  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  Result := np_sema_hir_lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
+    AAllowOwnedStringCompare);
 end;
 
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
