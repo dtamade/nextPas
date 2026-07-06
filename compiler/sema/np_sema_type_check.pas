@@ -82,6 +82,9 @@ function BareCallCalleeName(const ACallNode: TGreenNode): string;
 function IsWrappedCallChild(const AParent, AChild: TGreenNode): Boolean;
 function IsImplicitSelfCallNode(const ACallNode: TGreenNode): Boolean;
 function IsQualifiedCallNode(const ACallNode: TGreenNode): Boolean;
+function ExtractDirectMemberCall(const ACallNode: TGreenNode;
+  out AReceiverName: string; out AMemberName: string;
+  out AMemberOffset: LongInt; out AArgCount: LongInt): Boolean;
 
 implementation
 
@@ -525,6 +528,70 @@ begin
       (CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
        gnkDereference]);
   end;
+end;
+
+function ExtractDirectMemberCall(
+  const ACallNode: TGreenNode;
+  out AReceiverName: string;
+  out AMemberName: string;
+  out AMemberOffset: LongInt;
+  out AArgCount: LongInt
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+  DotNode: TGreenNode;
+  InnerCallNode: TGreenNode;
+  MemberNode: TGreenNode;
+  ReceiverNode: TGreenNode;
+begin
+  Result := False;
+  AReceiverName := '';
+  AMemberName := '';
+  AMemberOffset := 0;
+  AArgCount := 0;
+  if (ACallNode = nil) or
+    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
+    (ACallNode.ChildCount = 0) then
+    Exit;
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if CalleeNode = nil then
+    Exit;
+
+  DotNode := nil;
+  InnerCallNode := nil;
+  if CalleeNode.NodeKind = gnkDotAccess then
+    DotNode := CalleeNode
+  else if (CalleeNode.NodeKind = gnkFunctionCall) and
+    SameText(ACallNode.Text, CalleeNode.Text) and
+    (CalleeNode.ChildCount > 0) and
+    (CalleeNode.ChildAt(0) <> nil) and
+    (CalleeNode.ChildAt(0).NodeKind = gnkDotAccess) then
+  begin
+    DotNode := CalleeNode.ChildAt(0);
+    InnerCallNode := CalleeNode;
+  end;
+
+  if (DotNode = nil) or (DotNode.ChildCount < 2) then
+    Exit;
+
+  ReceiverNode := DotNode.ChildAt(0);
+  MemberNode := DotNode.ChildAt(1);
+  if (ReceiverNode = nil) or (MemberNode = nil) or
+    (ReceiverNode.NodeKind <> gnkIdentifier) or
+    (MemberNode.NodeKind <> gnkIdentifier) then
+    Exit;
+
+  AReceiverName := ReceiverNode.Text;
+  AMemberName := MemberNode.Text;
+  AMemberOffset := MemberNode.ByteOffset;
+  if ACallNode.NodeKind = gnkFunctionCall then
+    AArgCount := ACallNode.ChildCount - 1
+  else if InnerCallNode <> nil then
+    AArgCount := InnerCallNode.ChildCount - 1
+  else
+    AArgCount := 0;
+  Result := (AReceiverName <> '') and (AMemberName <> '');
 end;
 
 end.
