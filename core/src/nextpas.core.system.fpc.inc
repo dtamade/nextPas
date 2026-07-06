@@ -66,3 +66,7 @@ type
 
   { Method type }
   TMethod = System.TMethod;
+
+  { Variant types }
+  TVarType = System.TVarType;
+  TVarData = System.TVarData;

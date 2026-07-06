@@ -344,6 +344,8 @@ type TInterfaceEntryType
 type PInterfaceTable
 type TInterfaceTable
 type TMethod
+type TVarType
+type TVarData
 EOF
 )"
   require_facade_surface_allowlist "root facade" "$actual" "$expected"

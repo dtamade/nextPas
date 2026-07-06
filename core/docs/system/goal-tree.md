@@ -272,3 +272,144 @@ nextPas uses `kernel.inc` (full kernel definition).
 **Next Phase**: S7 completion clears the way for compiler integration. The kernel is ready
 for the compiler to recognize `{$compiler_root}` and `{$compiler_type_kind}` directives
 and read type information from the kernel.
+
+## S8 Kernel Surface Completeness Audit
+
+S8 performs a comprehensive gap analysis between our kernel surface and FPC's System unit.
+The goal is to ensure the kernel is NOT minimal — it must be a complete, production-quality
+definition of all types, constants, and function signatures that the compiler and runtime need.
+
+### S8.1 FPC System Surface Audit
+
+Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functions, ~60 types):
+
+| Category | FPC Surface | Kernel Status | Gap |
+|----------|-------------|---------------|-----|
+| Basic types (SizeInt, etc.) | 12 types | ✅ base.inc | None |
+| Pointer types (PByte, etc.) | 9 types | ✅ base.inc | None |
+| String types (AnsiString, etc.) | 8 types | ✅ str.inc | None |
+| Interface types (IUnknown, etc.) | 6 types | ✅ intf.inc | None |
+| Class types (TObject, TClass, VMT) | 3 types + VMT | ✅ cls.inc | None |
+| RTTI types (TTypeKind, etc.) | 6 types | ✅ rtti.inc | None |
+| Exception types | 20+ classes | ✅ except.inc | None |
+| Memory management | 5 functions | ✅ mem.inc | None |
+| Compiler internal (fpc_*) | 90+ stubs | ✅ comp.inc | None |
+| Variant type | Variant, TVarType, TVarData | ❌ missing | **Gap** |
+| Dynamic array type | array of T | ❌ missing | **Gap** |
+| Thread types | TThread, TRTLCriticalSection | ❌ missing | **Gap** |
+| I/O types | Text, File, TFileRec | ❌ missing | **Gap** |
+| Memory manager | TMemoryManager | ❌ missing | **Gap** |
+| Program lifecycle | InitModule, FinalizeModule | ❌ missing | **Gap** |
+| Byte swap / endian | SwapEndian, BEtoN, LEtoN | ❌ missing | **Gap** |
+| Barrier / prefetch | ReadBarrier, WriteBarrier | ❌ missing | **Gap** |
+
+### S8.2 Variant Type Support
+
+- [ ] Define `Variant` type in `base.inc` or new `variant.inc`
+- [ ] Define `TVarType` (LongWord alias)
+- [ ] Define `TVarData` record (variant storage layout)
+- [ ] Define `TVarOp` enum (variant operations)
+- [ ] Define variant constants (`varEmpty`, `varNull`, `varSmallint`, etc.)
+- [ ] Add variant operator stubs (`=`, `<>`, `+`, `-`, `*`, `/`, etc.)
+- [ ] Add `VarType()`, `VarIsNull()`, `VarIsEmpty()` functions
+
+### S8.3 Dynamic Array Type Support
+
+- [ ] Define dynamic array type declaration syntax support
+- [ ] Add `TBytes = array of Byte` if not already present
+- [ ] Add `TCharArray = array of Char` for string operations
+- [ ] Document dynamic array lifecycle (reference counting, copy-on-write)
+
+### S8.4 Thread Types Support
+
+- [ ] Define `TThread` class stub (for compiler type resolution)
+- [ ] Define `TRTLCriticalSection` record
+- [ ] Define `TThreadFunc` function type
+- [ ] Add `BeginThread`, `EndThread` function stubs
+- [ ] Add `InterlockedIncrement`, `InterlockedDecrement`, `InterlockedExchange` stubs
+
+### S8.5 I/O Types Support
+
+- [ ] Define `Text` type (TextFile alias)
+- [ ] Define `File` type
+- [ ] Define `TFileRec` record
+- [ ] Define `TTextRec` record
+- [ ] Add `AssignFile`, `Reset`, `Rewrite`, `Append`, `CloseFile` stubs
+- [ ] Add `Read`, `ReadLn`, `Write`, `WriteLn` stubs
+
+### S8.6 Memory Manager Interface
+
+- [ ] Define `TMemoryManager` record (GetMem, FreeMem, ReAllocMem, etc.)
+- [ ] Define `TMemoryManagerEx` record (extended with AllocMem, MemSize)
+- [ ] Add `GetMemoryManager`, `SetMemoryManager` functions
+- [ ] Add `IsMemoryManagerSet` function
+
+### S8.7 Program Lifecycle Support
+
+- [ ] Define `InitModule` procedure stub
+- [ ] Define `FinalizeModule` procedure stub
+- [ ] Define unit initialization/finalization order contracts
+- [ ] Document `process_init` / `process_fini` lifecycle
+
+### S8.8 Byte Swap and Endian Support
+
+- [ ] Add `SwapEndian` overloaded functions (SmallInt, Word, LongInt, DWord, Int64, QWord)
+- [ ] Add `BEtoN`, `LEtoN`, `NtoBE`, `NtoLE` overloaded functions
+- [ ] Add `HTonN`, `NToHs` (network byte order) for socket support
+
+### S8.9 Barrier and Prefetch Support
+
+- [ ] Add `ReadBarrier`, `ReadWriteBarrier`, `WriteBarrier` intrinsic stubs
+- [ ] Add `Prefetch` intrinsic stub
+- [ ] Document memory ordering guarantees
+
+### S8.10 Additional FPC System Functions
+
+- [ ] Add `FillByte`, `FillDWord`, `FillQWord` (bulk fill)
+- [ ] Add `IndexChar`, `IndexByte`, `IndexWord`, `IndexDWord` (search)
+- [ ] Add `CompareChar`, `CompareByte`, `CompareWord`, `CompareDWord` (compare)
+- [ ] Add `MoveChar0` (null-terminated move)
+- [ ] Add `MemPos` (memory search)
+- [ ] Add `StackTop` function
+- [ ] Add `Swap` overloaded functions
+- [ ] Add `Inc`, `Dec`, `Include`, `Exclude` intrinsic stubs
+- [ ] Add `SetLength`, `Copy`, `Delete`, `Insert`, `Pos`, `Concat` string intrinsics
+
+### S8.11 TypInfo Facade Completeness
+
+- [ ] Audit TypInfo surface: `PTypeInfo`, `TTypeKind`, `TTypeInfo`, `TTypeData`
+- [ ] Add `GetTypeKind` compiler intrinsic
+- [ ] Add `TypeInfo` compiler intrinsic
+- [ ] Add `PropInfo`, `PropList`, `GetPropInfo` for property RTTI
+- [ ] Add `GetEnumName`, `GetEnumValue` for enum RTTI
+- [ ] Add `SetLength`, `Copy`, `Delete`, `Insert`, `Pos`, `Concat` for managed types
+
+### S8.12 SysUtils Facade Completeness
+
+- [ ] Audit SysUtils surface used by core modules
+- [ ] Add `Format` (already present via text.conv)
+- [ ] Add `SameText` (already present via text.conv)
+- [ ] Add `IntToStr` (already present via text.conv)
+- [ ] Add `Trim` (already present via text.conv)
+- [ ] Add `StrToInt`, `StrToInt64`, `StrToFloat` (numeric parsing)
+- [ ] Add `FloatToStr`, `CurrToStr` (numeric formatting)
+- [ ] Add `DateTimeToStr`, `DateToStr`, `TimeToStr` (date/time formatting)
+- [ ] Add `Now`, `Date`, `Time` (date/time access)
+- [ ] Add `FileExists`, `DirectoryExists` (filesystem checks)
+- [ ] Add `CreateDir`, `RemoveDir`, `ForceDirectories` (directory ops)
+- [ ] Add `DeleteFile`, `RenameFile`, `CopyFile` (file ops)
+- [ ] Add `ExtractFilePath`, `ExtractFileName`, `ExtractFileExt` (path ops)
+- [ ] Add `ChangeFileExt`, `IncludeTrailingPathDelimiter` (path manipulation)
+- [ ] Add `GetCurrentDir`, `SetCurrentDir` (working directory)
+- [ ] Add `ParamCount`, `ParamStr` (command line)
+- [ ] Add `GetEnvironmentVariable` (environment)
+- [ ] Add `Sleep` (timing)
+- [ ] Add `SysErrorMessage`, `GetLastOSError` (error handling)
+
+**S8 Exit Criteria**:
+- All kernel .inc files have complete type definitions matching FPC surface
+- All fpc_* stubs in comp.inc have correct signatures
+- TypInfo facade covers all RTTI types used by core modules
+- SysUtils facade covers all functions used by core modules
+- `make -C core/tests/nextpas.core.system clean test` passes
+- `fpc -Mobjfpc core/src/nextpas.core.system.pas` compiles cleanly
