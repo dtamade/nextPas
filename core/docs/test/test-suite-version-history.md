@@ -68,7 +68,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
 | `test_stress` | 高并发压力测试、大量测试注册、内存密集 | 1 |
-| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + MapIntToStr/Filter* combinators | 8 |
+| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult | 15 |
 
 ## 运行方式
 
@@ -290,6 +290,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.0c**: Cache integration — runner 自动查缓存/写缓存，命中显示 `(cached)` 跳过执行，`SourceFiles` 支持内容失效
 - **v7.1**: Property-based Testing — QuickCheck 风格，4 种生成器 (GenString/GenInt/GenBool/GenBytes)，自动 shrinking (二分缩小)，`Prop()` 注册属性测试
 - **v7.1a**: Generator Combinators — `MapIntToStr` (类型转换)、`FilterInt`/`FilterString`/`FilterBytes` (谓词过滤)，shrink 时尊重 filter 约束
+- **v7.1b**: GenChoice/GenOneOf + Shrink 修复 — `GenChoiceInt`/`GenChoiceString`/`GenChoiceBool` (从数组随机选取)、`GenOneOfInt`/`GenOneOfString` (组合多个生成器)；修复 shrink 无限递归 (固定点检测)；修复 `Prop()` 中 `FailTest` 调用 `Halt(1)` 导致 shrink 失效的问题；新增 `PropFail()` (抛异常) 和 `PropWithResult()` (返回缩小值)；Int shrink 改进 (尊重 FMin 边界)
 
 ## 路线图
 
@@ -297,6 +298,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 |------|------|------|------|
 | **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | ✅ 已完成 | 无 |
 | **v7.1a** | Generator Combinators — Map/Filter 组合器 | ✅ 已完成 | v7.1 |
+| **v7.1b** | GenChoice/GenOneOf + Shrink 修复 | ✅ 已完成 | v7.1a |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
@@ -321,12 +323,24 @@ MapIntToStr(GenInt(0, 9999), function(V: Int64): string begin Result := IntToStr
 FilterInt(GenInt(0, 1000), function(V: Int64): Boolean begin Result := V mod 2 = 0 end)
 FilterString(GenString(50), function(const V: string): Boolean begin Result := Length(V) > 0 end)
 FilterBytes(GenBytes(50), function(const V: TBytes): Boolean begin Result := Length(V) > 0 end)
+
+{ 选取器 (v7.1b) }
+GenChoiceInt([10, 20, 30])           // 从数组随机选取
+GenChoiceString(['foo', 'bar'])      // 字符串选取
+GenChoiceBool([True])                // 布尔选取
+GenOneOfInt([GenInt(0, 10), GenInt(100, 110)])    // 组合多个生成器
+GenOneOfString([GenString(5), GenString(10)])
+
+{ 测试辅助 (v7.1b) }
+PropFail('error message')            // 在 Prop 体内抛异常 (替代 FailTest)
+PropWithResult('name', @Test, Gen)   // 返回缩小后的值 (用于测试 shrink 行为)
 ```
 
 - QuickCheck 风格，不需要编译器支持
-- 4 种基础生成器 + 4 种组合器 (Map/Filter)
+- 4 种基础生成器 + 4 种组合器 (Map/Filter) + 5 种选取器 (Choice/OneOf)
 - 自动 shrinking: 失败时递归二分缩小输入，找到最小复现
 - Filter 组合器在 shrink 时也尊重谓词约束
+- PropFail: 在 Prop 测试体内使用 (FailTest 调用 Halt(1) 会跳过 shrink)
 
 ### v7.2 Coverage-guided Fuzzing 前置条件
 

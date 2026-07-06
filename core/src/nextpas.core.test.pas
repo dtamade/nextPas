@@ -382,6 +382,14 @@ function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
 function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
 function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
 function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+procedure PropFail(const AMsg: string);
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
 implementation
 

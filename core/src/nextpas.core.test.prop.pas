@@ -78,6 +78,15 @@ function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator; overload;
 function GenBytes(AMaxLen: Integer = 256): IBytesGenerator; overload;
 function GenBool: IBoolGenerator;
 
+{ Pick random values from a predefined array }
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+
+{ Combine multiple generators of the same type (randomly pick one per Generate) }
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+
 { ── Generator combinators ──────────────────────────────────────────────────── }
 
 { Map: transform Int64 generator output to string }
@@ -91,6 +100,11 @@ function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenera
 
 { Filter: reject TBytes values not matching predicate }
 function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+
+{ ── Property test helpers ──────────────────────────────────────────────────── }
+
+{ Raise EAssertionFailed — use inside Prop test bodies instead of FailTest }
+procedure PropFail(const AMsg: string);
 
 { ── Property test registration ─────────────────────────────────────────────── }
 
@@ -109,6 +123,11 @@ procedure Prop(const AName: string; ATest: TBoolTest;
 { Register a property test with a TBytes generator }
 procedure Prop(const AName: string; ATest: TBytesTest;
   AGen: IBytesGenerator; ARuns: Integer = 100; AShrink: Boolean = True); overload;
+
+{ Like Prop, but returns the shrunk value as string instead of calling FailTest.
+  Returns '' if all runs pass. Raises EAssertionFailed on unexpected errors. }
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
 implementation
 
@@ -216,14 +235,26 @@ begin
 end;
 
 function TIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
+var
+  LTarget: Int64;
 begin
-  SetLength(Result, 3);
-  { Try zero }
-  Result[0] := 0;
-  { Try half toward zero }
-  Result[1] := AValue div 2;
-  { Try one less }
-  Result[2] := AValue - 1;
+  { Shrink toward the "simplest" value: FMin if positive, 0 otherwise }
+  if FMin > 0 then
+    LTarget := FMin
+  else
+    LTarget := 0;
+  SetLength(Result, 4);
+  { Try simplest value }
+  Result[0] := LTarget;
+  { Try halfway between current and simplest }
+  Result[1] := LTarget + (AValue - LTarget) div 2;
+  { Try one step toward simplest }
+  if AValue > LTarget then
+    Result[2] := AValue - 1
+  else
+    Result[2] := AValue + 1;
+  { Try halfway between simplest and midpoint (faster convergence) }
+  Result[3] := LTarget + (AValue - LTarget) div 4;
 end;
 
 function TIntGenerator.Name: string;
@@ -629,6 +660,333 @@ begin
   Result := TFilterBytesGenerator.Create(AGen, APred);
 end;
 
+{ ── GenChoiceInt ──────────────────────────────────────────────────────────── }
+
+type
+  TChoiceIntGenerator = class(TInterfacedObject, IIntGenerator)
+  private
+    FValues: specialize TArray<Int64>;
+    FRng: TRandomGen;
+  public
+    constructor Create(const AValues: array of Int64);
+    destructor Destroy; override;
+    function Generate: Int64;
+    function Shrink(const AValue: Int64): specialize TArray<Int64>;
+    function Name: string;
+  end;
+
+constructor TChoiceIntGenerator.Create(const AValues: array of Int64);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FValues, Length(AValues));
+  for I := 0 to High(AValues) do
+    FValues[I] := AValues[I];
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TChoiceIntGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TChoiceIntGenerator.Generate: Int64;
+begin
+  Result := FValues[FRng.NextIntRange(0, Length(FValues) - 1)];
+end;
+
+function TChoiceIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
+var
+  I, N: Integer;
+begin
+  { Try values that are "simpler" (earlier in the array) }
+  N := 0;
+  SetLength(Result, Length(FValues));
+  for I := 0 to High(FValues) do
+  begin
+    if FValues[I] < AValue then
+    begin
+      Result[N] := FValues[I];
+      Inc(N);
+    end;
+  end;
+  SetLength(Result, N);
+end;
+
+function TChoiceIntGenerator.Name: string;
+begin
+  Result := 'GenChoiceInt(' + IntToStr(Length(FValues)) + ' values)';
+end;
+
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+begin
+  Result := TChoiceIntGenerator.Create(AValues);
+end;
+
+{ ── GenChoiceString ───────────────────────────────────────────────────────── }
+
+type
+  TChoiceStringGenerator = class(TInterfacedObject, IStringGenerator)
+  private
+    FValues: specialize TArray<string>;
+    FRng: TRandomGen;
+  public
+    constructor Create(const AValues: array of string);
+    destructor Destroy; override;
+    function Generate: string;
+    function Shrink(const AValue: string): specialize TArray<string>;
+    function Name: string;
+  end;
+
+constructor TChoiceStringGenerator.Create(const AValues: array of string);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FValues, Length(AValues));
+  for I := 0 to High(AValues) do
+    FValues[I] := AValues[I];
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TChoiceStringGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TChoiceStringGenerator.Generate: string;
+begin
+  Result := FValues[FRng.NextIntRange(0, Length(FValues) - 1)];
+end;
+
+function TChoiceStringGenerator.Shrink(const AValue: string): specialize TArray<string>;
+var
+  I, N: Integer;
+begin
+  { Try shorter strings first }
+  N := 0;
+  SetLength(Result, Length(FValues));
+  for I := 0 to High(FValues) do
+  begin
+    if (Length(FValues[I]) < Length(AValue)) or
+       ((Length(FValues[I]) = Length(AValue)) and (FValues[I] < AValue)) then
+    begin
+      Result[N] := FValues[I];
+      Inc(N);
+    end;
+  end;
+  SetLength(Result, N);
+end;
+
+function TChoiceStringGenerator.Name: string;
+begin
+  Result := 'GenChoiceString(' + IntToStr(Length(FValues)) + ' values)';
+end;
+
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+begin
+  Result := TChoiceStringGenerator.Create(AValues);
+end;
+
+{ ── GenChoiceBool ─────────────────────────────────────────────────────────── }
+
+type
+  TChoiceBoolGenerator = class(TInterfacedObject, IBoolGenerator)
+  private
+    FValues: specialize TArray<Boolean>;
+    FRng: TRandomGen;
+  public
+    constructor Create(const AValues: array of Boolean);
+    destructor Destroy; override;
+    function Generate: Boolean;
+    function Shrink(const AValue: Boolean): specialize TArray<Boolean>;
+    function Name: string;
+  end;
+
+constructor TChoiceBoolGenerator.Create(const AValues: array of Boolean);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FValues, Length(AValues));
+  for I := 0 to High(AValues) do
+    FValues[I] := AValues[I];
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TChoiceBoolGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TChoiceBoolGenerator.Generate: Boolean;
+begin
+  Result := FValues[FRng.NextIntRange(0, Length(FValues) - 1)];
+end;
+
+function TChoiceBoolGenerator.Shrink(const AValue: Boolean): specialize TArray<Boolean>;
+begin
+  SetLength(Result, 1);
+  Result[0] := False;
+end;
+
+function TChoiceBoolGenerator.Name: string;
+begin
+  Result := 'GenChoiceBool';
+end;
+
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+begin
+  Result := TChoiceBoolGenerator.Create(AValues);
+end;
+
+{ ── GenOneOfInt ───────────────────────────────────────────────────────────── }
+
+type
+  TOneOfIntGenerator = class(TInterfacedObject, IIntGenerator)
+  private
+    FGens: specialize TArray<IIntGenerator>;
+    FRng: TRandomGen;
+  public
+    constructor Create(const AGens: array of IIntGenerator);
+    destructor Destroy; override;
+    function Generate: Int64;
+    function Shrink(const AValue: Int64): specialize TArray<Int64>;
+    function Name: string;
+  end;
+
+constructor TOneOfIntGenerator.Create(const AGens: array of IIntGenerator);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FGens, Length(AGens));
+  for I := 0 to High(AGens) do
+    FGens[I] := AGens[I];
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TOneOfIntGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TOneOfIntGenerator.Generate: Int64;
+begin
+  Result := FGens[FRng.NextIntRange(0, Length(FGens) - 1)].Generate;
+end;
+
+function TOneOfIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
+var
+  LAll: specialize TArray<Int64>;
+  I, J, N: Integer;
+  LPart: specialize TArray<Int64>;
+begin
+  { Collect shrink candidates from all sub-generators }
+  N := 0;
+  SetLength(LAll, Length(FGens) * 4);
+  for I := 0 to High(FGens) do
+  begin
+    LPart := FGens[I].Shrink(AValue);
+    for J := 0 to High(LPart) do
+    begin
+      if N < Length(LAll) then
+      begin
+        LAll[N] := LPart[J];
+        Inc(N);
+      end;
+    end;
+  end;
+  SetLength(LAll, N);
+  Result := LAll;
+end;
+
+function TOneOfIntGenerator.Name: string;
+begin
+  Result := 'GenOneOfInt(' + IntToStr(Length(FGens)) + ' generators)';
+end;
+
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+begin
+  Result := TOneOfIntGenerator.Create(AGens);
+end;
+
+{ ── GenOneOfString ────────────────────────────────────────────────────────── }
+
+type
+  TOneOfStringGenerator = class(TInterfacedObject, IStringGenerator)
+  private
+    FGens: specialize TArray<IStringGenerator>;
+    FRng: TRandomGen;
+  public
+    constructor Create(const AGens: array of IStringGenerator);
+    destructor Destroy; override;
+    function Generate: string;
+    function Shrink(const AValue: string): specialize TArray<string>;
+    function Name: string;
+  end;
+
+constructor TOneOfStringGenerator.Create(const AGens: array of IStringGenerator);
+var
+  I: Integer;
+begin
+  inherited Create;
+  SetLength(FGens, Length(AGens));
+  for I := 0 to High(AGens) do
+    FGens[I] := AGens[I];
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TOneOfStringGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TOneOfStringGenerator.Generate: string;
+begin
+  Result := FGens[FRng.NextIntRange(0, Length(FGens) - 1)].Generate;
+end;
+
+function TOneOfStringGenerator.Shrink(const AValue: string): specialize TArray<string>;
+var
+  LAll: specialize TArray<string>;
+  I, J, N: Integer;
+  LPart: specialize TArray<string>;
+begin
+  N := 0;
+  SetLength(LAll, Length(FGens) * 4);
+  for I := 0 to High(FGens) do
+  begin
+    LPart := FGens[I].Shrink(AValue);
+    for J := 0 to High(LPart) do
+    begin
+      if N < Length(LAll) then
+      begin
+        LAll[N] := LPart[J];
+        Inc(N);
+      end;
+    end;
+  end;
+  SetLength(LAll, N);
+  Result := LAll;
+end;
+
+function TOneOfStringGenerator.Name: string;
+begin
+  Result := 'GenOneOfString(' + IntToStr(Length(FGens)) + ' generators)';
+end;
+
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+begin
+  Result := TOneOfStringGenerator.Create(AGens);
+end;
+
 { ── Shrinking helper ──────────────────────────────────────────────────────── }
 
 function ShrinkString(AGen: IStringGenerator; const AFailed: string;
@@ -641,12 +999,13 @@ begin
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
+    if LShrunk[I] = AFailed then
+      Continue;
     try
       ATest(LShrunk[I]);
     except
       on E: Exception do
       begin
-        { This smaller input also fails — recurse }
         Result := ShrinkString(AGen, LShrunk[I], ATest);
         Exit;
       end;
@@ -664,6 +1023,9 @@ begin
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
+    { Skip candidates equal to current value to prevent infinite recursion }
+    if LShrunk[I] = AFailed then
+      Continue;
     try
       ATest(LShrunk[I]);
     except
@@ -686,6 +1048,8 @@ begin
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
+    if LShrunk[I] = AFailed then
+      Continue;
     try
       ATest(LShrunk[I]);
     except
@@ -703,11 +1067,23 @@ function ShrinkBytes(AGen: IBytesGenerator; const AFailed: TBytes;
 var
   LShrunk: specialize TArray<TBytes>;
   I: Integer;
+
+  function BytesEqual(const A, B: TBytes): Boolean;
+  var J: Integer;
+  begin
+    if Length(A) <> Length(B) then Exit(False);
+    for J := 0 to High(A) do
+      if A[J] <> B[J] then Exit(False);
+    Result := True;
+  end;
+
 begin
   Result := AFailed;
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
+    if BytesEqual(LShrunk[I], AFailed) then
+      Continue;
     try
       ATest(LShrunk[I]);
     except
@@ -718,6 +1094,13 @@ begin
       end;
     end;
   end;
+end;
+
+{ ── Internal raise helper ──────────────────────────────────────────────────── }
+
+procedure PropFail(const AMsg: string);
+begin
+  raise EAssertionFailed.Create(AMsg);
 end;
 
 { ── Property test execution ───────────────────────────────────────────────── }
@@ -734,7 +1117,7 @@ begin
     try
       ATest(LValue);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         if AShrink then
           LValue := ShrinkString(AGen, LValue, ATest);
@@ -759,7 +1142,7 @@ begin
     try
       ATest(LValue);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         if AShrink then
           LValue := ShrinkInt(AGen, LValue, ATest);
@@ -784,7 +1167,7 @@ begin
     try
       ATest(LValue);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         if AShrink then
           LValue := ShrinkBool(AGen, LValue, ATest);
@@ -813,13 +1196,40 @@ begin
     try
       ATest(LValue);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         if AShrink then
           LValue := ShrinkBytes(AGen, LValue, ATest);
         FailTest('Property "' + AName + '" failed after ' + IntToStr(I) +
           ' runs with input: <' + IntToStr(Length(LValue)) + ' bytes> (' +
           AGen.Name + ')');
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('Property "' + AName + '" passed ' + IntToStr(ARuns) + ' runs');
+end;
+
+{ ── PropWithResult ────────────────────────────────────────────────────────── }
+
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
+var
+  I: Integer;
+  LValue: Int64;
+begin
+  Result := '';
+  for I := 1 to ARuns do
+  begin
+    LValue := AGen.Generate;
+    try
+      ATest(LValue);
+    except
+      on E: EAssertionFailed do
+      begin
+        if AShrink then
+          LValue := ShrinkInt(AGen, LValue, ATest);
+        Result := IntToStr(LValue);
         Exit;
       end;
     end;
