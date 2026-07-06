@@ -21,7 +21,8 @@ PROJECTS := \
 	test_http_middlewares \
 	test_http_stress \
 	test_http_websocket \
-	test_http_websocket_client
+	test_http_websocket_client \
+	test_http_fuzz
 
 .PHONY: test clean $(PROJECTS)
 
