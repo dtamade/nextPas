@@ -145,6 +145,12 @@ type
 
 function DefaultAllocator: IAllocator; inline;
 
+{** 全局分配函数 - 直接调用 DefaultAllocator **}
+function GetMem(ASize: SizeUInt): Pointer; inline;
+function AllocMem(ASize: SizeUInt): Pointer; inline;
+function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; inline;
+procedure FreeMem(ADst: Pointer); inline;
+
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
@@ -169,6 +175,26 @@ implementation
 function DefaultAllocator: IAllocator;
 begin
   Result := nextpas.core.mem.default.DefaultAllocator;
+end;
+
+function GetMem(ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.GetMem(ASize);
+end;
+
+function AllocMem(ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.AllocMem(ASize);
+end;
+
+function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+begin
+  Result := DefaultAllocator.ReallocMem(ADst, ASize);
+end;
+
+procedure FreeMem(ADst: Pointer);
+begin
+  DefaultAllocator.FreeMem(ADst);
 end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
