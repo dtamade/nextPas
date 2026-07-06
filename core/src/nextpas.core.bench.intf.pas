@@ -108,8 +108,12 @@ type
     property Name: string read GetName;
   end;
 
-  {** 基准函数类型 - 简单版本 }
+  {** 基准函数类型 - 简单版本（框架控制循环） }
   TBenchFunc = procedure(const ACtx: IBenchContext);
+
+  {** 基准函数类型 - 最简版本（无参数，框架控制循环）
+   *  F-03: 降低认知负担，类似 Go testing.B 的 func(b *B) }
+  TBenchSimpleFunc = procedure;
 
   {** 参数化基准函数类型 }
   TBenchParamFunc = procedure(const ACtx: IBenchContext; AParam: Int64);
@@ -141,6 +145,7 @@ type
     ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
     TimeoutMs: Int64;        {< F-017: per-benchmark 超时(毫秒)，0 = 使用 suite 级超时 }
     CollectRawSamples: Boolean; {< F-04: 强制收集原始样本，覆盖 config 级别设置 }
+    SimpleFunc: TBenchSimpleFunc; {< F-03: 最简版本函数（框架控制循环） }
   end;
 
   {** 基准套件接口 - Fluent Builder }
@@ -150,6 +155,11 @@ type
     {** 添加基准测试（简单版本）
      *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
+
+    {** 添加基准测试（最简版本，无参数）
+     *  F-03: 降低认知负担，框架控制循环，类似 Go testing.B
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
+    function AddSimple(const AName: string; AFunc: TBenchSimpleFunc): IBenchSuite;
 
     {** 添加基准测试（带 setup/teardown）
      *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }

@@ -43,6 +43,7 @@ type
   IBenchStatsAnalyzer = nextpas.core.bench.intf.IBenchStatsAnalyzer;
 
   TBenchFunc = nextpas.core.bench.intf.TBenchFunc;
+  TBenchSimpleFunc = nextpas.core.bench.intf.TBenchSimpleFunc;
   TBenchParamFunc = nextpas.core.bench.intf.TBenchParamFunc;
   TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
   TBenchLoopContextFunc = nextpas.core.bench.intf.TBenchLoopContextFunc;
@@ -95,6 +96,7 @@ type
 
     {** IBenchSuite 实现 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
+    function AddSimple(const AName: string; AFunc: TBenchSimpleFunc): IBenchSuite;
     function AddWithSetup(const AName: string; AFunc: TBenchFunc;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
     function AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -328,6 +330,26 @@ begin
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.Func := AFunc;
+  LEntry.Condition := True;
+
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := LEntry;
+  Inc(FEntryCount);
+end;
+
+function TBenchSuite.AddSimple(const AName: string;
+  AFunc: TBenchSimpleFunc): IBenchSuite;
+{ F-03: 存储 SimpleFunc，runner 直接调用 }
+var
+  LEntry: TBenchEntry;
+begin
+  GuardNotRun;
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchSuite.AddSimple: AFunc must not be nil');
+  Result := Self;
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.SimpleFunc := AFunc;
   LEntry.Condition := True;
 
   EnsureEntryCapacity;
