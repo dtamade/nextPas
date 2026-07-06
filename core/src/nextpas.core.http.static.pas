@@ -148,13 +148,10 @@ begin
     LWriter := TResponseWriterAdapter.Create(AW);
     nextpas.core.io.Copy(LWriter, LFile);
   except
-    on E: Exception do
-    begin
-      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
-      AW.GetHeaders.SetHeader('content-length', '21');
-      AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
-      AW.Write(PAnsiChar('Internal Server Error')^, 21);
-    end;
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', '21');
+    AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+    AW.Write(PAnsiChar('Internal Server Error')^, 21);
   end;
 end;
 

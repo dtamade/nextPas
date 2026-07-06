@@ -39,7 +39,7 @@ type
     Conn: ITcpStream;
   end;
 
-  TPrefixedTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
+  TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
   private
     FInner: ITcpStream;
     FPrefix: string;
@@ -507,9 +507,9 @@ begin
   Result := (E is ETimeoutError) or (E is ENetworkError);
 end;
 
-{ TPrefixedTcpStream }
+{ TReadPrependTcpStream }
 
-constructor TPrefixedTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
+constructor TReadPrependTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
 begin
   inherited Create;
   FInner := AInner;
@@ -517,7 +517,7 @@ begin
   FPrefixPos := 1;
 end;
 
-function TPrefixedTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TReadPrependTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LPtr: PByte;
   LCopy: SizeUInt;
@@ -544,47 +544,47 @@ begin
     Inc(Result, FInner.Read(LPtr^, ACount - Result));
 end;
 
-function TPrefixedTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+function TReadPrependTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := FInner.Write(ABuf, ACount);
 end;
 
-procedure TPrefixedTcpStream.Close;
+procedure TReadPrependTcpStream.Close;
 begin
   FInner.Close;
 end;
 
-function TPrefixedTcpStream.LocalAddr: TNetAddress;
+function TReadPrependTcpStream.LocalAddr: TNetAddress;
 begin
   Result := FInner.LocalAddr;
 end;
 
-function TPrefixedTcpStream.RemoteAddr: TNetAddress;
+function TReadPrependTcpStream.RemoteAddr: TNetAddress;
 begin
   Result := FInner.RemoteAddr;
 end;
 
-procedure TPrefixedTcpStream.Shutdown;
+procedure TReadPrependTcpStream.Shutdown;
 begin
   FInner.Shutdown;
 end;
 
-procedure TPrefixedTcpStream.SetNoDelay(const AValue: Boolean);
+procedure TReadPrependTcpStream.SetNoDelay(const AValue: Boolean);
 begin
   FInner.SetNoDelay(AValue);
 end;
 
-procedure TPrefixedTcpStream.SetKeepAlive(const AValue: Boolean);
+procedure TReadPrependTcpStream.SetKeepAlive(const AValue: Boolean);
 begin
   FInner.SetKeepAlive(AValue);
 end;
 
-procedure TPrefixedTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+procedure TReadPrependTcpStream.SetReadDeadline(const ADeadline: TDeadline);
 begin
   FInner.SetReadDeadline(ADeadline);
 end;
 
-procedure TPrefixedTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+procedure TReadPrependTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FInner.SetWriteDeadline(ADeadline);
 end;
@@ -1180,7 +1180,7 @@ begin
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
-      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+      LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
@@ -1284,7 +1284,7 @@ begin
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
-      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+      LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;

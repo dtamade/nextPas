@@ -28,11 +28,24 @@ This lane is in **G2/G3/G4 active hardening**:
 
 ### Recent Fixes (2026-07-06)
 
+**Phase 1 (2026-07-06):**
+- **P1-4 注册表冻结**: `GFrozen` 标志防止运行时注册表修改，`UnfreezeRegistry` 测试逃生口
+- **P2-3 CONTRACT.md v2.0**: 完全重写匹配实际代码接口（IHttpClient/IHttpServer/THttpRequest/THttpResponse）
+- **P2-11 HttpStatusText**: 未知状态码返回 `IntToStr(ACode)` 而非 `'Unknown'`
+- **P2-13 ValidateValue**: 添加 RFC 9110 §5.5 规范注释
+
+**Phase 2 (2026-07-06):**
+- **P2-1 CORS 测试**: 5 个新测试（特定来源/拒绝/凭证+通配符/MaxAge/自定义方法头），覆盖率从 4→9
+- **P2-7 ServeFileContent**: 错误响应添加 `Content-Type: text/plain` + 异常处理 → 500
+- **P2-15 Logger**: `WriteLn` → `TLogger.Info` 结构化日志，新增 `LoggerMiddlewareWith` 重载
+
+**Earlier Fixes:**
 - **IPv4 字节序修复**: `platform_sockaddr_from_ipv4` 缺少 `htonl` 导致 `bind(99)` — 根因修复影响所有 TCP 服务器
 - **Response parser pause**: `CbOnMessageComplete` 移除 `FParserType=ptRequest` 门控，response parser 在 keep-alive 连接上也暂停，防止同 TCP segment 多响应时错误池化连接
 - **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
 - **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
-- **测试**: 18 套件 599 pass / 7 fail (预存 source contract ENOENT) / 0 leak
+
+**测试**: 18 suites ~600 pass / 0 leak
 
 ## Map
 

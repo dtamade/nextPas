@@ -1,4 +1,9 @@
 unit nextpas.core.http.impl.h1.outbound;
+{**
+ * @desc Outbound buffer for HTTP/1.1 response writing.
+ *       Accumulates header + body bytes, drains to TCP stream with
+ *       resumable support for would-block (non-blocking I/O).
+ *}
 
 {$I nextpas.core.settings.inc}
 
