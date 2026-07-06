@@ -126,7 +126,7 @@ begin
   LRes := platform_watch_close(LWatcher);
   Check(LRes = 0, 'first close must succeed');
   LRes := platform_watch_close(LWatcher);
-  Check(LRes = -1, 'second close must return -1 (already closed)');
+  Check(LRes = PLATFORM_ERR_BADF, 'second close must return PLATFORM_ERR_BADF (already closed)');
 end;
 
 begin

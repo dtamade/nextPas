@@ -327,7 +327,7 @@ begin
   Result := getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);
@@ -454,7 +454,7 @@ begin
   Result := getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);
@@ -680,7 +680,7 @@ begin
   Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   if LRes^.ai_addr <> nil then
@@ -805,7 +805,7 @@ begin
   Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);

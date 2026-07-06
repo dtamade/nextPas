@@ -128,7 +128,7 @@ begin
     Result := 0;
   end
   else
-    Result := -1;
+    Result := PLATFORM_ERR_BADF;
 end;
 {$ENDIF}
 

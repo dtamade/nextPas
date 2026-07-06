@@ -33,13 +33,16 @@ function platform_str_ends_with(const AStr: PAnsiChar; ALen: Int32;
 
 implementation
 
+uses
+  nextpas.core.platform.error;
+
 function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
   LTmp: array[0..19] of AnsiChar;
   LPos, LLen, I: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then
   begin
     if ABufLen >= 2 then
@@ -79,13 +82,13 @@ var
   LLen: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if AValue < 0 then
   begin
     if ABufLen < 2 then
     begin
       ABuf[0] := #0;
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     end;
     ABuf[0] := '-';
     LLen := platform_fmt_uint(UInt64(-AValue), @ABuf[1], ABufLen - 1);
@@ -104,7 +107,7 @@ var
   LPos, LLen, I: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then
   begin
     if ABufLen >= 2 then
@@ -151,7 +154,7 @@ var
   LAbsVal: Double;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if ADecimals < 0 then ADecimals := 0;
   if ADecimals > 18 then ADecimals := 18;
 
@@ -177,7 +180,7 @@ begin
   LPos := 0;
   if LNeg then
   begin
-    if LPos >= ABufLen - 1 then begin ABuf[0] := #0; Exit(-1); end;
+    if LPos >= ABufLen - 1 then begin ABuf[0] := #0; Exit(PLATFORM_ERR_INVALID); end;
     ABuf[LPos] := '-'; Inc(LPos);
   end;
   for I := 0 to LIntLen - 1 do
@@ -244,7 +247,7 @@ var
 
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LFmtLen := 0;
   if AFmt <> nil then
     while AFmt[LFmtLen] <> #0 do Inc(LFmtLen);

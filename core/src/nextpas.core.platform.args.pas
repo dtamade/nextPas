@@ -10,11 +10,13 @@ function platform_args_exe_path(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 
 implementation
 
-{$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
-{$ENDIF}
+  nextpas.core.platform.error
+  {$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi
+  {$ENDIF}
+  ;
 
 function platform_args_count: Int32;
 begin
@@ -27,11 +29,11 @@ var
   L, I: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if (AIndex < 0) or (AIndex > System.ParamCount) then
   begin
     ABuf[0] := #0;
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   S := System.ParamStr(AIndex);
   L := Length(S);
@@ -49,7 +51,7 @@ var
   L: PtrInt;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   L := readlink('/proc/self/exe', ABuf, ABufLen - 1);
   if L < 0 then
     Exit(Int32(platform_get_errno));

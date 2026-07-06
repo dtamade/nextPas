@@ -63,6 +63,7 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.base{$ENDIF};
@@ -213,6 +214,7 @@ begin Result := cwError; end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
@@ -337,7 +339,7 @@ var
   LRead: DWORD;
 begin
   if ACount <= 0 then Exit(0);
-  if ABuf = nil then Exit(-1);
+  if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
   if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
   LRead := 0;
   if ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) = 0 then
@@ -353,7 +355,7 @@ var
   LChunk: DWORD;
 begin
   if ACount <= 0 then Exit(0);
-  if ABuf = nil then Exit(-1);
+  if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
   if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
   LPtr := PByte(ABuf);
   LSent := 0;
