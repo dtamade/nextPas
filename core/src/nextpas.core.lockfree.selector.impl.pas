@@ -8,8 +8,10 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
+  nextpas.core.platform.time,
   nextpas.core.lockfree.selector,
-  nextpas.core.lockfree.channel;
+  nextpas.core.lockfree.channel,
+  nextpas.core.lockfree.wait;
 
 const
   SELECTOR_DEFAULT_CAPACITY = 4;
@@ -65,7 +67,10 @@ type
   private
     FCases: array of TCase;
     FCount: PtrUInt;
+    FNotifyEpoch: Int32;
+    FNotifyWaiters: Int32;
     function PollOnce: PtrInt;
+    procedure NotifyChange(AData: Pointer);
   public
     constructor Create(const AExpectedCount: PtrUInt = SELECTOR_DEFAULT_CAPACITY);
     destructor Destroy; override;
@@ -106,6 +111,8 @@ begin
   else
     SetLength(FCases, AExpectedCount);
   FCount := 0;
+  FNotifyEpoch := 0;
+  FNotifyWaiters := 0;
 end;
 
 destructor TLockFreeSelectorImpl.Destroy;
@@ -116,6 +123,7 @@ begin
   if FCount > 0 then
     for LI := 0 to FCount - 1 do
     begin
+      FCases[LI].Channel.SetNotifier(nil, nil);
       if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
         Dispose(FCases[LI].SendValuePtr);
     end;
@@ -133,6 +141,7 @@ begin
   FCases[FCount].DataPtr := @AOutValue;
   FCases[FCount].SendValuePtr := nil;
   FCases[FCount].IsSend := False;
+  AChannel.SetNotifier(@NotifyChange, Self);
   Inc(FCount);
 end;
 
@@ -153,7 +162,15 @@ begin
   FCases[LIdx].SendValuePtr := LCopy;
   FCases[LIdx].DataPtr := LCopy;
   FCases[LIdx].IsSend := True;
+  FCases[LIdx].Channel.SetNotifier(@NotifyChange, Self);
   Inc(FCount);
+end;
+
+procedure TLockFreeSelectorImpl.NotifyChange(AData: Pointer);
+begin
+  AtomicFetchAdd32(FNotifyEpoch, 1, moRelease);
+  if AtomicLoad32(FNotifyWaiters, moRelaxed) > 0 then
+    LockFreeWakeAll(@FNotifyEpoch);
 end;
 
 function TLockFreeSelectorImpl.PollOnce: PtrInt;
@@ -180,6 +197,7 @@ function TLockFreeSelectorImpl.Select: TSelectResult;
 var
   LIdx: PtrInt;
   LSpins: Int32;
+  LEpoch: Int32;
 begin
   LSpins := 0;
   while True do
@@ -197,7 +215,14 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_sleep_ns(SELECTOR_BACKOFF_NS);
+      LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
+      AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
+      try
+        if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
+          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, -1);
+      finally
+        AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
+      end;
     end;
   end;
 end;
@@ -213,7 +238,9 @@ var
   LIdx: PtrInt;
   LSpins: Int32;
   LElapsed: Int64;
-  LSleepNs: Int64;
+  LWaitNs: Int64;
+  LEpoch: Int32;
+  LStart: QWord;
 begin
   LElapsed := 0;
   LSpins := 0;
@@ -234,11 +261,21 @@ begin
     else
     begin
       LSpins := 0;
-      LSleepNs := SELECTOR_BACKOFF_NS;
-      if LSleepNs > (ATimeoutNs - LElapsed) then
-        LSleepNs := ATimeoutNs - LElapsed;
-      platform_thread_sleep_ns(LSleepNs);
-      Inc(LElapsed, LSleepNs);
+      LWaitNs := ATimeoutNs - LElapsed;
+      if LWaitNs > 1000000 then
+        LWaitNs := 1000000;
+      LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
+      AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
+      try
+        if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
+        begin
+          LStart := platform_monotonic_ns;
+          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LWaitNs);
+          Inc(LElapsed, Int64(platform_monotonic_ns - LStart));
+        end;
+      finally
+        AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
+      end;
     end;
   end;
   Result.Index := -1;
@@ -252,6 +289,7 @@ begin
   if FCount > 0 then
     for LI := 0 to FCount - 1 do
     begin
+      FCases[LI].Channel.SetNotifier(nil, nil);
       if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
       begin
         Dispose(FCases[LI].SendValuePtr);
