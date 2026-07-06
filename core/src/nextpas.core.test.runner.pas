@@ -656,8 +656,8 @@ var
 begin
   for I := 0 to High(ACases) do
   begin
-    { Heap-allocate case data and proc to avoid closure capture issues }
-    New(LPCase);
+    GetMem(LPCase, SizeOf(TTestCase));
+    FillChar(LPCase^, SizeOf(TTestCase), 0);
     LPCase^ := ACases[I];
     New(LPProc);
     LPProc^ := AProc;
@@ -1344,13 +1344,10 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
-    { Dispose thread-local GExecState allocated by SetTestContext.
-      Must be inside finally — Exit (setup failure) skips code after finally.
-      Matches the parallel worker's cleanup in its finally block
-      (runner.parallel.pas:494-501). }
     if GExecState <> nil then
     begin
-      Dispose(GExecState);
+      Finalize(GExecState^);
+      FreeMem(GExecState);
       GExecState := nil;
     end;
   end;
@@ -1777,6 +1774,7 @@ begin
     end;
   end;
 
+  CleanupTableAllocations;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;
@@ -1830,7 +1828,8 @@ begin
     begin
       if Tests[I].TableCase <> nil then
       begin
-        Dispose(PTestCase(Tests[I].TableCase));
+        Finalize(PTestCase(Tests[I].TableCase)^);
+        FreeMem(Tests[I].TableCase);
         Tests[I].TableCase := nil;
       end;
       if Tests[I].TableProc <> nil then

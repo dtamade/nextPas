@@ -685,7 +685,10 @@ end;
 procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   if GExecState = nil then
-    New(GExecState);
+  begin
+    GetMem(GExecState, SizeOf(TTestExecState));
+    FillChar(GExecState^, SizeOf(TTestExecState), 0);
+  end;
   GExecState^.SuiteName  := ASuiteName;
   GExecState^.TestName   := ATestName;
   GExecState^.Failed     := False;
@@ -707,20 +710,17 @@ initialization
   GTestExceptProcHooked := True;
 
 finalization
-  { Restore previous ExceptProc handler }
   if GTestExceptProcHooked then
   begin
     ExceptProc := GPrevExceptProc;
     GTestExceptProcHooked := False;
   end;
-  { Clear threadvar strings before heaptrc tally to avoid false leak reports.
-    FPC does not finalize threadvar managed types before heaptrc reports. }
   GLastTestTrace := '';
-  { Safety net: dispose main-thread GExecState if runner failed to clean up
-    (e.g. Halt() called during test execution, skipping finally blocks).
-    Worker threads' GExecState is already gone by finalization time — each
-    worker's finally block handles its own cleanup. }
   if GExecState <> nil then
-    Dispose(GExecState);
+  begin
+    Finalize(GExecState^);
+    FreeMem(GExecState);
+    GExecState := nil;
+  end;
 
 end.

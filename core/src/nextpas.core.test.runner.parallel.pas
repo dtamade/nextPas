@@ -128,7 +128,8 @@ var
   LJoinTimeoutMs: Int64;
   LJoinResult: Int32;
 begin
-  New(LRec);
+  GetMem(LRec, SizeOf(TTimeoutRec));
+  FillChar(LRec^, SizeOf(TTimeoutRec), 0);
   LRec^.Proc := AProc;
   LRec^.Closure := AClosure;
   LRec^.Done := False;
@@ -160,7 +161,8 @@ begin
     end
     else
       Result := True;
-    Dispose(LRec);
+    Finalize(LRec^);
+    FreeMem(LRec);
   end
   else
   begin
@@ -179,7 +181,8 @@ begin
       AStatus := tsError;
       AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
       Result := False;
-      Dispose(LRec);
+      Finalize(LRec^);
+      FreeMem(LRec);
     end
     else
     begin
@@ -488,7 +491,8 @@ begin
       (ekSubtest, ekSkipped) that skip the normal cleanup below. }
     if GExecState <> nil then
     begin
-      Dispose(GExecState);
+      Finalize(GExecState^);
+      FreeMem(GExecState);
       GExecState := nil;
     end;
   end;

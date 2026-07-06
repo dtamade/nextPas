@@ -533,16 +533,23 @@ end;
 
 procedure TestFailUnexpected;
 { G1: FailUnexpected — formats "unexpected ClassName: Message" }
+var
+  LE: Exception;
 begin
+  LE := Exception.Create('boom');
   try
-    FailUnexpected(Exception.Create('boom'));
-    Fail('FailUnexpected should raise');
-  except
-    on E: EAssertionFailed do
-    begin
-      CheckContains(E.Message, 'unexpected');
-      CheckContains(E.Message, 'boom');
+    try
+      FailUnexpected(LE);
+      Fail('FailUnexpected should raise');
+    except
+      on E: EAssertionFailed do
+      begin
+        CheckContains(E.Message, 'unexpected');
+        CheckContains(E.Message, 'boom');
+      end;
     end;
+  finally
+    LE.Free;
   end;
 end;
 
@@ -1110,5 +1117,7 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
   Finalize(LSuite);
 end.
