@@ -76,8 +76,8 @@
 
 | 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |------|------|-------------|---------------|
-| **TLockFreeChannelSpsc** | **1P1C** | **38.2** | **26.2** |
-| TLockFreeChannel | MPMC | 90.9 | 11.0 |
+| **TLockFreeChannelSpsc** | **1P1C** | **40.3** | **24.8** |
+| TLockFreeChannel | MPMC | 80.2 | 12.5 |
 
 #### 跨语言对比 (1P1C Channel)
 
@@ -205,6 +205,12 @@ L3: nextpas.core.lockfree.* (数据结构)
 |------|------|------|
 | EBR freelist | 复用退休节点避免 GetMem | 138.0ns → 127.9ns (1.08x) |
 | SegQueue 间接 | EBR 优化间接受益 | 61.6ns → 58.7ns (1.05x) |
+
+### 4.8 Channel MPMC Fast Path 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| Channel MPMC fast path | 只在有等待者时通知 | 94.7ns → 80.2ns (1.18x) |
 
 ---
 
