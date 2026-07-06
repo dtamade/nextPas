@@ -99,6 +99,8 @@ type
     function IsFull: Boolean;
     function ApproxCount: PtrUInt;
     function Capacity: PtrUInt;
+    procedure Close;
+    function IsClosed: Boolean;
   end;
 ```
 
@@ -106,7 +108,10 @@ type
 - Enqueue: CAS on FEnqueuePos → moRelease store to slot Sequence
 - Dequeue: CAS on FDequeuePos → moAcquire load from slot Sequence
 
-**注意**: SPMC 不支持 Close（单生产者无界等待语义不同）
+**Close 语义**:
+- Close 后 TryEnqueue 返回 False，EnqueueWait/EnqueueTimeout 立即返回 False
+- Close 后 DequeueWait/DequeueTimeout 实现 drain-on-close：已入队数据仍可读，空时返回 False
+- Close 唤醒所有阻塞的 EnqueueWait/DequeueWait
 
 ---
 
@@ -131,9 +136,12 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
+    function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): Boolean;
     function IsEmpty: Boolean;
     function ApproxCount: PtrUInt;
+    procedure Close;
+    function IsClosed: Boolean;
   end;
 ```
 
@@ -142,7 +150,37 @@ type
 - 分段设计（每段 32 元素）
 - EBR 自动回收旧段
 - Enqueue 总是成功（无界）
+- TryEnqueue 在 Close 后返回 False
 - TryDequeue 可能返回 False（空队列）
+- Close 不影响已入队数据的读取
+
+---
+
+## MPSC 队列 (nextpas.core.lockfree.mpsc)
+
+```pascal
+type
+  generic TMpscQueue<T> = class
+    constructor Create;
+    destructor Destroy; override;
+    procedure Enqueue(const AValue: T);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): Boolean;
+    function DequeueWait(out AValue: T): Boolean;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+**特点**:
+- 无界 MPSC 链表队列（Treiber stack 变体）
+- Enqueue 使用 CAS 链表追加，总成功
+- TryEnqueue 在 Close 后返回 False
+- Close 后 DequeueWait/DequeueTimeout 实现 drain-on-close
+- ApproxCount 使用原子计数器（近似值）
 
 ---
 
@@ -245,18 +283,24 @@ type
 | 内存管理 | 无引用计数 | 有引用计数 |
 | 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
 
+**键相等性**:
+- 使用 `CompareByte` 逐字节比较，适用于所有 unmanaged 类型（Integer、Int64、record 等）
+- 不支持 managed 类型（AnsiString、UnicodeString 等）作为键——比较的是指针值而非内容
+- 记录类型键需注意 padding 字节：建议使用 packed record 或确保 padding 已清零
+
 **使用示例**:
 
 ```pascal
 var
-  LMap: specialize TShardedHashMap<AnsiString, Integer>;
-  LRes: specialize TGetOrInsertResult<Integer>;
+  LMap: specialize TShardedHashMap<Integer, AnsiString>;
+  LRes: specialize TGetOrInsertResult<AnsiString>;
+  LValue: AnsiString;
 begin
-  LMap := specialize TShardedHashMap<AnsiString, Integer>.Create;
+  LMap := specialize TShardedHashMap<Integer, AnsiString>.Create;
   try
     // 基础操作
-    LMap.Insert('key1', 100);
-    if LMap.Find('key1', LValue) then
+    LMap.Insert(1, 'value1');
+    if LMap.Find(1, LValue) then
       WriteLn('Found: ', LValue);
 
     // ForEach 遍历
@@ -266,19 +310,19 @@ begin
     LMap.ForEachCtx(@MyCtxCallback, @MyContext);
 
     // GetOrInsert 原子操作
-    LRes := LMap.GetOrInsert('key2', 200);
+    LRes := LMap.GetOrInsert(2, 'default');
     if LRes.Existed then
       WriteLn('Existing: ', LRes.Value)
     else
       WriteLn('Inserted: ', LRes.Value);
 
     // GetOrInsertFn 延迟计算
-    LRes := LMap.GetOrInsertFn('key3', function(const AKey: AnsiString): Integer begin
-      Result := Length(AKey) * 10;  // 仅在键不存在时调用
+    LRes := LMap.GetOrInsertFn(3, function(const AKey: Integer): AnsiString begin
+      Result := 'computed_' + IntToStr(AKey);  // 仅在键不存在时调用
     end);
 
     // GetOrUpdate 原子更新
-    LRes := LMap.GetOrUpdate('counter', 0, function(const AOld: Integer): Integer begin
+    LRes := LMap.GetOrUpdate(99, 0, function(const AOld: Integer): Integer begin
       Result := AOld + 1;  // 读取旧值，返回新值
     end);
     WriteLn('Counter: ', LRes.Value);
@@ -430,6 +474,7 @@ type
     // 控制
     procedure Close;
     function IsClosed: Boolean;
+    function IsEmpty: Boolean;
     function ApproxLen: PtrUInt;
     function Capacity: PtrUInt;
   end;
@@ -462,6 +507,7 @@ type
     // 等待
     function Select: TSelectResult;                               // 阻塞
     function SelectTimeout(const ATimeoutNs: Int64): TSelectResult; // 超时
+    function TrySelect: TSelectResult;                            // 非阻塞
     // 管理
     procedure Clear;
     function CaseCount: PtrUInt;

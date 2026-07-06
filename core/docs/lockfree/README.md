@@ -52,14 +52,14 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
-`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`Close`
-只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、join producer，并 drain
-队列后再销毁对象。
+`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`TryEnqueue`
+在 Close 后返回 False；`Close` 只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、
+join producer，并 drain 队列后再销毁对象。`ApproxCount` 是原子计数器快照。
 
 `TSegQueue<T>` 是基于 segmented linked ring 的无界 MPMC queue。`Enqueue` 在当前 tail segment
-没有后继时按 segment 粒度扩展存储；`TryDequeue` 只在对应 slot 的 sequence 已发布时返回成功。
-`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot helper，不承诺在竞争下提供
-共同线性化视图。
+没有后继时按 segment 粒度扩展存储；`TryEnqueue` 在 Close 后返回 False；`TryDequeue` 只在对应 slot
+的 sequence 已发布时返回成功。`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot
+helper，不承诺在竞争下提供共同线性化视图。`Close` 不影响已入队数据的读取。
 
 `TLockFreeStack<T>` 是固定容量 stack。push/pop 会先从内部 free-list 取得或归还 slot，因此不是
 无界栈，也不动态分配节点。
@@ -72,6 +72,7 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 `TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
 竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
+`Close` 设置 closed flag 并唤醒所有等待者；close 后 drain-on-close 语义允许读取已入队数据。
 `TSpmcQueue<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound.
 
 固定容量结构会拒绝 0 容量。`TSpscQueue<T>`、`TMpmcQueue<T>`、`TSpmcQueue<T>` 和
@@ -82,7 +83,7 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
 `TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
-`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.
 `TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.

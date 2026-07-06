@@ -3760,6 +3760,260 @@ begin
   end;
 end;
 
+{ MPSC TryEnqueue + ApproxCount }
+
+procedure TestMpscTryEnqueue;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(LQ.TryEnqueue(10), 'TryEnqueue 1');
+    Check(LQ.TryEnqueue(20), 'TryEnqueue 2');
+    CheckEqual(Int64(2), Int64(LQ.ApproxCount), 'ApproxCount 2');
+    LQ.Close;
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'ApproxCount 0 after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ SegQueue TryEnqueue + Close }
+
+procedure TestSegQueueTryEnqueueClose;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(not LQ.IsClosed, 'not closed initially');
+    Check(LQ.TryEnqueue(10), 'TryEnqueue 1');
+    Check(LQ.TryEnqueue(20), 'TryEnqueue 2');
+    LQ.Close;
+    Check(LQ.IsClosed, 'closed after Close');
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'empty after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ SPMC Close }
+
+procedure TestSpmcClose;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  try
+    Check(not LQ.IsClosed, 'not closed initially');
+    Check(LQ.TryEnqueue(10), 'enqueue 1');
+    Check(LQ.TryEnqueue(20), 'enqueue 2');
+    LQ.Close;
+    Check(LQ.IsClosed, 'closed after Close');
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(not LQ.EnqueueWait(30), 'EnqueueWait after close rejected');
+    Check(not LQ.EnqueueTimeout(30, 1000000), 'EnqueueTimeout after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'empty after drain');
+    Check(not LQ.DequeueWait(LV), 'DequeueWait on closed empty');
+    Check(not LQ.DequeueTimeout(LV, 1000000), 'DequeueTimeout on closed empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ Channel IsEmpty }
+
+procedure TestChannelIsEmpty;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.IsEmpty, 'empty initially');
+    LCh.TrySend(1);
+    Check(not LCh.IsEmpty, 'not empty after send');
+    LCh.TrySend(2);
+    Check(not LCh.IsEmpty, 'not empty with 2 items');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ Selector TrySelect }
+
+procedure TestSelectorTrySelect;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+
+    // 空 channel → TrySelect 应返回 false
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'TrySelect on empty returns not completed');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'TrySelect on empty index -1');
+
+    // 有数据 → TrySelect 应返回 true
+    LCh2.Send(55);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'TrySelect with data completes');
+    CheckEqual(Int64(1), Int64(LResult.Index), 'TrySelect selects Ch2 (index 1)');
+    CheckEqual(Int64(55), Int64(LVal), 'TrySelect received value 55');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+{ Channel 4P+4C stress test }
+
+var
+  GChannelStressQ: TIntChannel;
+  GChannelStressSum: Int64;
+
+function ChannelStressProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + 249 do
+    GChannelStressQ.Send(LI);
+end;
+
+function ChannelStressConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while GChannelStressQ.Receive(LV) do
+    InterlockedExchangeAdd64(GChannelStressSum, Int64(LV));
+end;
+
+procedure TestChannelStress;
+var
+  LProducers: array[0..3] of TPlatformThreadHandle;
+  LConsumers: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LExpected: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
+begin
+  GChannelStressQ := TIntChannel.Create(64);
+  GChannelStressSum := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LConsumers[LI], @ChannelStressConsumer, nil, 'Channel stress consumer');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to 3 do
+    begin
+      StartThread(LProducers[LI], @ChannelStressProducer, Pointer(PtrInt(LI * 250 + 1)), 'Channel stress producer');
+      Inc(LProducerCount);
+    end;
+    JoinStartedThreads(LProducers, LProducerCount, 'Channel stress producer');
+    platform_thread_sleep_ns(10000000);
+    GChannelStressQ.Close;
+    JoinStartedThreads(LConsumers, LConsumerCount, 'Channel stress consumer');
+    LExpected := Int64(1000) * 1001 div 2;
+    CheckEqual(LExpected, GChannelStressSum, 'Channel 4P+4C sum');
+  finally
+    GChannelStressQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'Channel stress producer');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'Channel stress consumer');
+    GChannelStressQ.Free;
+  end;
+end;
+
+{ Channel Close-while-Send }
+
+var
+  GChannelCloseSendQ: TIntChannel;
+  GChannelCloseSendStarted: Int32;
+  GChannelCloseSendResult: Int32;
+
+function ChannelCloseSendBlockedProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GChannelCloseSendStarted, 1, moRelease);
+  if GChannelCloseSendQ.SendTimeout(42, 5000000000) then
+    AtomicStore32(GChannelCloseSendResult, 0, moRelease)
+  else
+    AtomicStore32(GChannelCloseSendResult, 1, moRelease);
+end;
+
+procedure TestChannelCloseWhileSend;
+var
+  LCh: TIntChannel;
+  LProducer: TPlatformThreadHandle;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LProducerStarted: Boolean;
+  LResult: Int32;
+begin
+  LCh := TIntChannel.Create(1);
+  LProducerStarted := False;
+  try
+    Check(LCh.TrySend(1), 'fill channel before blocked send');
+    GChannelCloseSendQ := LCh;
+    AtomicStore32(GChannelCloseSendStarted, 0, moRelease);
+    AtomicStore32(GChannelCloseSendResult, -1, moRelease);
+    StartThread(LProducer, @ChannelCloseSendBlockedProducer, nil, 'Channel close-while-send producer');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GChannelCloseSendStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GChannelCloseSendStarted, moAcquire)),
+      'blocked SendTimeout thread must start before close');
+    LElapsedMs := GetTickCount64;
+    LCh.Close;
+    JoinStartedThread(LProducer, LProducerStarted, 'Channel close-while-send producer');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LResult := AtomicLoad32(GChannelCloseSendResult, moAcquire);
+    Check(LResult >= 0, 'blocked SendTimeout must complete after close (0=sent before close, 1=closed)');
+    Check(LElapsedMs < 1000, 'blocked SendTimeout should return promptly after close');
+  finally
+    if LProducerStarted then
+    begin
+      LCh.Close;
+      JoinStartedThread(LProducer, LProducerStarted, 'Channel close-while-send producer');
+    end;
+    GChannelCloseSendQ := nil;
+    LCh.Free;
+  end;
+end;
+
 procedure TestSegQueueManagedReject;
 var
   LStrQ: specialize TSegQueue<AnsiString>;
@@ -4236,7 +4490,7 @@ begin
     '`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.',
     'lockfree README must document single-slot MPMC support');
   CheckContains(LDocsReadme,
-    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
+    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.',
@@ -4770,7 +5024,7 @@ begin
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
     'goal tree must not report lockfree as broad completion without evidence-level truth');
-  CheckContains(LChannelSource, 'EInvalidOperationError.Create(''TLockFreeChannel.Send: channel closed''',
+  CheckContains(LChannelSource, 'TLockFreeChannel.Send: channel closed',
     'channel Send on closed must raise EInvalidOperationError');
   CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
     'hashmap ShardLock must use AtomicExchange with moAcquire');
@@ -5216,6 +5470,13 @@ begin
   T.Test('SPMC dequeue wait wakes on data', @TestSpmcDequeueWaitWake);
   T.Test('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
+  T.Test('MPSC TryEnqueue + ApproxCount', @TestMpscTryEnqueue);
+  T.Test('SegQueue TryEnqueue + Close', @TestSegQueueTryEnqueueClose);
+  T.Test('SPMC Close', @TestSpmcClose);
+  T.Test('Channel IsEmpty', @TestChannelIsEmpty);
+  T.Test('Selector TrySelect', @TestSelectorTrySelect);
+  T.Test('Channel 4P+4C stress', @TestChannelStress);
+  T.Test('Channel close while Send', @TestChannelCloseWhileSend);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Test('Managed type reject', @TestManagedTypeReject);

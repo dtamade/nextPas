@@ -55,6 +55,8 @@ type
     procedure Close;
     {** @desc Channel 是否已关闭 }
     function IsClosed: Boolean;
+    {** @desc Channel 是否为空 }
+    function IsEmpty: Boolean;
     {** @desc 近似队列长度 }
     function ApproxLen: PtrUInt;
     {** @desc Channel 容量 }
@@ -145,7 +147,7 @@ begin
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      raise EInvalidOperationError.Create('TLockFreeChannel.Send: channel closed');
+      raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [FCapacity]);
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TrySend(AValue) then
       Exit;
@@ -257,6 +259,11 @@ end;
 function TLockFreeChannelImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moRelaxed) <> 0;
+end;
+
+function TLockFreeChannelImpl.IsEmpty: Boolean;
+begin
+  Result := ApproxLen = 0;
 end;
 
 function TLockFreeChannelImpl.ApproxLen: PtrUInt;

@@ -19,6 +19,7 @@ type
 const
   SELECTOR_MAX_SPIN = 32;
   SELECTOR_BACKOFF_NS = 1000;
+  SELECTOR_TIMEOUT_ZERO = 0;
 
 implementation
 

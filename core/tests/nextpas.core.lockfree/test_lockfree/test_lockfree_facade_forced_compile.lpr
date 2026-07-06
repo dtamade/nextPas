@@ -96,14 +96,17 @@ begin
   GMpsc := TIntMpsc.Create;
   try
     GMpsc.Enqueue(1);
+    if GMpsc.TryEnqueue(2) then
+      GValue := 1;
     if GMpsc.TryDequeue(GValue) then
       GValue := GValue + 1;
-    GMpsc.Enqueue(2);
+    GMpsc.Enqueue(3);
     if GMpsc.DequeueWait(GValue) then
       GValue := GValue + 1;
-    GMpsc.Enqueue(3);
+    GMpsc.Enqueue(4);
     if GMpsc.DequeueTimeout(GValue, 0) then
       GValue := GValue + 1;
+    GCount := GCount + GMpsc.ApproxCount;
     if GMpsc.IsEmpty then
       GValue := GValue + 1;
     GMpsc.Close;
@@ -153,10 +156,15 @@ begin
   GSegQueue := TIntSegQueue.Create;
   try
     GSegQueue.Enqueue(1);
+    if GSegQueue.TryEnqueue(2) then
+      GValue := 1;
     if GSegQueue.TryDequeue(GValue) then
       GValue := GValue + 1;
     GCount := GCount + GSegQueue.ApproxCount;
     if GSegQueue.IsEmpty then
+      GValue := GValue + 1;
+    GSegQueue.Close;
+    if GSegQueue.IsClosed then
       GValue := GValue + 1;
   finally
     GSegQueue.Free;
@@ -182,6 +190,9 @@ begin
     GCount := GCount + GSpmc.Capacity + GSpmc.ApproxCount;
     if GSpmc.IsEmpty or GSpmc.IsFull then
       GValue := GValue + 1;
+    GSpmc.Close;
+    if GSpmc.IsClosed then
+      GValue := GValue + 1;
   finally
     GSpmc.Free;
   end;
@@ -205,6 +216,8 @@ begin
       GValue := GValue + 1;
     if GChannel.IsClosed then
       GValue := GValue + 1;
+    if GChannel.IsEmpty then
+      GValue := GValue + 1;
     GCount := GChannel.ApproxLen + GChannel.Capacity;
     GChannel.Close;
   finally
@@ -220,6 +233,9 @@ begin
     GChannel.Send(42);
     GSelector.AddRecv(GChannel, GValue);
     GSelectResult := GSelector.Select;
+    if GSelectResult.Completed then
+      GValue := GValue + 1;
+    GSelectResult := GSelector.TrySelect;
     if GSelectResult.Completed then
       GValue := GValue + 1;
     GSelectResult := GSelector.SelectTimeout(1000);

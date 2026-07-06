@@ -41,6 +41,7 @@ type
     {$POP}
     FFreePool: PSegment;
     FFreePoolCount: Integer;
+    FClosed: Int32;
     FEbr: TEbrDomain;
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     function AllocSegment(const AStartIndex: Int64): PSegment;
@@ -50,8 +51,14 @@ type
     destructor Destroy; override;
     {** @desc 无界入队；段不足时自动扩展 }
     procedure Enqueue(const AValue: T);
+    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 关闭队列（已入队数据仍可读出） }
+    procedure Close;
+    {** @desc 队列是否已关闭 }
+    function IsClosed: Boolean;
     {** @desc 近似空判断 }
     function IsEmpty: Boolean;
     {** @desc 近似计数 }
@@ -98,6 +105,7 @@ begin
   FDequeuePos := 0;
   FFreePool := nil;
   FFreePoolCount := 0;
+  FClosed := 0;
 end;
 
 destructor TSegQueueImpl.Destroy;
@@ -182,6 +190,24 @@ begin
   finally
     LGuard.Release;
   end;
+end;
+
+function TSegQueueImpl.TryEnqueue(const AValue: T): Boolean;
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
+  Enqueue(AValue);
+  Result := True;
+end;
+
+procedure TSegQueueImpl.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+end;
+
+function TSegQueueImpl.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
 function TSegQueueImpl.TryDequeue(out AValue: T): Boolean;

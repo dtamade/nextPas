@@ -15,7 +15,7 @@
 ├── 单生产者 + 多消费者 (SPMC)
 │   └── 使用 TSpmcQueue<T>
 │       - 多消费者 CAS 竞争 dequeue
-│       - 支持 wait/timeout
+│       - 支持 wait/timeout/close
 │       - 性能: 2.6 M ops/s (1P+2C)
 │
 ├── 多生产者 + 多消费者 (MPMC)
@@ -27,13 +27,14 @@
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
 │       - 无界，多生产者安全
-│       - 支持 wait/timeout
+│       - 支持 wait/timeout/try-enqueue/close
 │       - 性能: 最高 (无 CAS enqueue)
 │
 └── 无界 MPSC (高吞吐)
     └── 使用 TSegQueue<T>
         - 分段设计，EBR 回收
         - 无界，自动扩展
+        - 支持 try-enqueue/close
         - 性能: 1.5 M ops/s (2P+2C)
 
 需要栈？
@@ -97,10 +98,10 @@
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|
 | TSpscQueue | 1 线程 | 1 线程 | ✅ |
-| TSpmcQueue | 1 线程 | N 线程 | N/A |
+| TSpmcQueue | 1 线程 | N 线程 | ✅ |
 | TMpmcQueue | N 线程 | N 线程 | ✅ |
 | TMpscQueue | N 线程 | 1 线程 | ✅ |
-| TSegQueue | N 线程 | N 线程 | N/A |
+| TSegQueue | N 线程 | N 线程 | ✅ |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
 

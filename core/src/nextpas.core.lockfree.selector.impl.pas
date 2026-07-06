@@ -81,6 +81,9 @@ type
     {** @desc 阻塞等待第一个 case 完成
       @return 结果记录：Index=完成的 case 索引（按 Add 顺序从 0 开始），Completed=True }
     function Select: TSelectResult;
+    {** @desc 非阻塞尝试：立即检查所有 case，无一就绪则返回 Completed=False
+      @return 结果记录：就绪则 Completed=True + Index；否则 Completed=False, Index=-1 }
+    function TrySelect: TSelectResult;
     {** @desc 带超时等待第一个 case 完成
       @param ATimeoutNs 超时时间（纳秒）
       @return 结果记录：超时则 Completed=False, Index=-1 }
@@ -123,7 +126,7 @@ end;
 procedure TLockFreeSelectorImpl.AddRecv(AChannel: TChannel; var AOutValue: T);
 begin
   if not Assigned(AChannel) then
-    raise EArgumentError.Create('TLockFreeSelector.AddRecv: nil channel');
+    raise EArgumentError.CreateFmt('TLockFreeSelector.AddRecv: nil channel (case count=%d)', [FCount]);
   if FCount >= PtrUInt(Length(FCases)) then
     SetLength(FCases, Length(FCases) * 2);
   FCases[FCount].Channel := AChannel;
@@ -139,7 +142,7 @@ var
   LCopy: PT;
 begin
   if not Assigned(AChannel) then
-    raise EArgumentError.Create('TLockFreeSelector.AddSend: nil channel');
+    raise EArgumentError.CreateFmt('TLockFreeSelector.AddSend: nil channel (case count=%d)', [FCount]);
   if FCount >= PtrUInt(Length(FCases)) then
     SetLength(FCases, Length(FCases) * 2);
   LIdx := FCount;
@@ -197,6 +200,12 @@ begin
       platform_thread_sleep_ns(SELECTOR_BACKOFF_NS);
     end;
   end;
+end;
+
+function TLockFreeSelectorImpl.TrySelect: TSelectResult;
+begin
+  Result.Index := PollOnce;
+  Result.Completed := Result.Index >= 0;
 end;
 
 function TLockFreeSelectorImpl.SelectTimeout(const ATimeoutNs: Int64): TSelectResult;
