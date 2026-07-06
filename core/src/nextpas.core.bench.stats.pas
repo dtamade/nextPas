@@ -108,6 +108,16 @@ type
     {** Bootstrap 假设检验 (Phase B.3) }
     function BootstrapTestDifference(const A, B: TDoubleArray;
       AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
+    {** 贝叶斯估计 (Phase C.1) }
+    function BayesianEstimate(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ASigma: Double = 0): TBayesianEstimate;
+
+    {** 贝叶斯可信区间 (Phase C.2) }
+    function BayesianCredibleInterval(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
   end;
 
 implementation
@@ -1024,6 +1034,99 @@ begin
   finally
     LAdvanced.Free;
   end;
+end;
+
+{ ===== 贝叶斯估计 (Phase C) ===== }
+
+function TBenchStatsAnalyzer.BayesianEstimate(const AData: TDoubleArray;
+  APriorMean, APriorStdDev: Double; ASigma: Double): TBayesianEstimate;
+{ 正态-正态共轭模型
+  先验: μ ~ N(μ0, σ0²)
+  似然: x_i ~ N(μ, σ²)
+  后验: μ|x ~ N(μ_n, σ_n²)
+
+  σ_n² = 1 / (1/σ0² + n/σ²)
+  μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
+var
+  LN: Integer;
+  LSampleMean: Double;
+  LSigma: Double;
+  LPriorVar, LDataVar: Double;
+  LPosteriorVar: Double;
+  LZ: Double;
+begin
+  LN := Length(AData);
+
+  Result.PriorMean := APriorMean;
+  Result.PriorStdDev := APriorStdDev;
+  Result.SampleSize := LN;
+
+  if LN = 0 then
+  begin
+    { 无数据：后验 = 先验 }
+    Result.PosteriorMean := APriorMean;
+    Result.PosteriorStdDev := APriorStdDev;
+    Result.SampleMean := 0;
+    Result.CredibleLower := APriorMean - 1.96 * APriorStdDev;
+    Result.CredibleUpper := APriorMean + 1.96 * APriorStdDev;
+    Result.CredibleLevel := 0.95;
+    Exit;
+  end;
+
+  { 计算样本均值 }
+  LSampleMean := Mean(AData);
+  Result.SampleMean := LSampleMean;
+
+  { 确定 σ }
+  if ASigma > 0 then
+    LSigma := ASigma
+  else
+    LSigma := StdDev(AData);
+
+  { 防止 σ = 0 }
+  if LSigma < 1e-10 then
+    LSigma := 1e-10;
+
+  { 计算后验参数 }
+  LPriorVar := APriorStdDev * APriorStdDev;
+  LDataVar := LSigma * LSigma / LN; { σ²/n }
+
+  { σ_n² = 1 / (1/σ0² + n/σ²) }
+  LPosteriorVar := 1.0 / (1.0 / LPriorVar + LN / (LSigma * LSigma));
+  Result.PosteriorStdDev := System.Sqrt(LPosteriorVar);
+
+  { μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
+  Result.PosteriorMean := LPosteriorVar * (APriorMean / LPriorVar + LN * LSampleMean / (LSigma * LSigma));
+
+  { 95% 可信区间 }
+  LZ := 1.96; { z_{0.025} }
+  Result.CredibleLower := Result.PosteriorMean - LZ * Result.PosteriorStdDev;
+  Result.CredibleUpper := Result.PosteriorMean + LZ * Result.PosteriorStdDev;
+  Result.CredibleLevel := 0.95;
+end;
+
+function TBenchStatsAnalyzer.BayesianCredibleInterval(const AData: TDoubleArray;
+  APriorMean, APriorStdDev: Double; ALevel: Double; ASigma: Double): TConfidenceInterval;
+var
+  LEstimate: TBayesianEstimate;
+  LZ: Double;
+begin
+  LEstimate := BayesianEstimate(AData, APriorMean, APriorStdDev, ASigma);
+
+  { 计算指定水平的 z 值 }
+  { 简化：使用正态近似 }
+  if ALevel >= 0.99 then
+    LZ := 2.576
+  else if ALevel >= 0.95 then
+    LZ := 1.96
+  else if ALevel >= 0.90 then
+    LZ := 1.645
+  else
+    LZ := 1.96; { 默认 95% }
+
+  Result.Lower := LEstimate.PosteriorMean - LZ * LEstimate.PosteriorStdDev;
+  Result.Upper := LEstimate.PosteriorMean + LZ * LEstimate.PosteriorStdDev;
+  Result.Level := ALevel;
 end;
 
 end.

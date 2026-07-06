@@ -413,6 +413,27 @@ type
      *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time） }
     function BootstrapTestDifference(const A, B: TDoubleArray;
       AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
+    {** 贝叶斯估计 (Phase C.1)
+     *  正态-正态共轭模型：给定先验和数据，计算后验分布
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianEstimate(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ASigma: Double = 0): TBayesianEstimate;
+
+    {** 贝叶斯可信区间 (Phase C.2)
+     *  计算贝叶斯可信区间（比频率学派置信区间更直观）
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ALevel 可信水平（默认 0.95）
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianCredibleInterval(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
   end;
 
   {** 报告生成器接口

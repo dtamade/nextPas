@@ -170,6 +170,19 @@ type
     Level: Double; // e.g., 0.95 for 95%
   end;
 
+  {** 贝叶斯估计结果 (Phase C) }
+  TBayesianEstimate = record
+    PriorMean: Double;        // 先验均值
+    PriorStdDev: Double;      // 先验标准差
+    PosteriorMean: Double;    // 后验均值
+    PosteriorStdDev: Double;  // 后验标准差
+    SampleMean: Double;       // 样本均值
+    SampleSize: Integer;      // 样本大小
+    CredibleLower: Double;    // 可信区间下界
+    CredibleUpper: Double;    // 可信区间上界
+    CredibleLevel: Double;    // 可信水平
+  end;
+
   {** 多基线对比矩阵 — 超越 Go/Rust 的独有能力 }
 
   {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比。
