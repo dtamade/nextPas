@@ -2713,17 +2713,21 @@ begin
 end;
 
 procedure TSemanticAnalyzer.EmitBlockLabel(const ALabel: string);
+var Ctx: TSemaHirLoweringContext;
 begin
-  FModel.AddTypedHirNode('block-label-runtime', ALabel, 0, 0, ALabel);
-  FCurrentBlockTerminated := False;
+  Ctx.Model := FModel;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  np_sema_hir_lowering.EmitBlockLabel(Ctx, ALabel);
+  FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 
 procedure TSemanticAnalyzer.EmitGotoLabel(const ALabel: string);
+var Ctx: TSemaHirLoweringContext;
 begin
-  if FCurrentBlockTerminated then
-    Exit;
-  FModel.AddTypedHirNode('br-runtime', ALabel, 0, 0, ALabel);
-  FCurrentBlockTerminated := True;
+  Ctx.Model := FModel;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  np_sema_hir_lowering.EmitGotoLabel(Ctx, ALabel);
+  FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 destructor TSemanticAnalyzer.Destroy;
 var

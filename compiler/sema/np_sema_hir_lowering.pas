@@ -1,34 +1,7 @@
 {**
  * np_sema_hir_lowering.pas
  *
- * AST→HIR 降级模块 — AL2 物理分离候选
- *
- * 当前状态：逻辑分组标记。实现代码在 np_semantic_analyzer.pas 中。
- *
- * 物理分离策略（AL2 收敛期执行）：
- *   1. 提取 context record: TSemaHirLoweringContext
- *      - FHirModule: THIRModule
- *      - FModel: TSemanticModel
- *      - FDiagnostics: TDiagnosticsSink
- *      - FRootFileId: TSourceFileId
- *      - FRuntimeVarRegistry: TRuntimeVarRegistry
- *      - FOwnedStringTracker: TOwnedStringTracker
- *   2. 方法签名添加 const ctx: TSemaHirLoweringContext 参数
- *   3. 验证：compiler-pass 34/34
- *
- * 包含的方法（约 5 个方法，~3345 行）：
- *
- *   运行时表达式:
- *     BuildRuntimeScalarHirExpr       (~行 8750)
- *     AttachRuntimeReturnExpr
- *     AttachRuntimeConditionExpr
- *     EncodeRuntimeBoolExprFold
- *
- *   运行时语句降级:
- *     WalkHaltCalls
- *
- * 风险评估：高（5 个大方法共 3345 行，但方法数少，依赖复杂）
- * 建议：AL2 收敛期第三个物理分离目标
+ * AST→HIR 降级模块 — 从 TSemanticAnalyzer 提取
  *}
 
 unit np_sema_hir_lowering;
@@ -37,6 +10,55 @@ unit np_sema_hir_lowering;
 
 interface
 
+uses
+  SysUtils,
+  np_green_tree,
+  np_unit_graph,
+  np_ast_facade,
+  np_semantic_model,
+  np_sema_builtins,
+  np_sema_type_check,
+  np_hir_model,
+  np_source_database,
+  np_diagnostics_sink,
+  np_sema_overload;
+
+type
+  TSemaHirLoweringContext = record
+    Model: TSemanticModel;
+    UnitGraph: TUnitGraph;
+    RootAst: TAstFacade;
+    CurrentProcessingUnitId: string;
+    CurrentScopeId: LongInt;
+    ProcedureBodies: TProcedureBodyArray;
+    ImportedUnitOwners: array of string;
+    ImportedUnitTrees: array of TGreenTree;
+    BuiltinRegistry: TBuiltinRegistry;
+    HirModule: THIRModule;
+    Diagnostics: TDiagnosticsSink;
+    RootFileId: TSourceFileId;
+    BlockLabelCounter: LongInt;
+    CurrentMethodClass: string;
+    CurrentBlockTerminated: Boolean;
+  end;
+
+procedure EmitBlockLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
+procedure EmitGotoLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
+
 implementation
+
+procedure EmitBlockLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
+begin
+  Ctx.Model.AddTypedHirNode('block-label-runtime', ALabel, 0, 0, ALabel);
+  Ctx.CurrentBlockTerminated := False;
+end;
+
+procedure EmitGotoLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
+begin
+  if Ctx.CurrentBlockTerminated then
+    Exit;
+  Ctx.Model.AddTypedHirNode('br-runtime', ALabel, 0, 0, ALabel);
+  Ctx.CurrentBlockTerminated := True;
+end;
 
 end.
