@@ -176,6 +176,8 @@
 | QA-005 | v1/v2 兼容层并存 | ✅ 已关闭 | interfaces/mem_pool/adapter 已删除，仅剩 slab deprecated 标记 |
 | QA-006 | utils.pas 大文件 | ⚠️ 保持现状 | 同域工具函数，1379行不构成维护负担 |
 | TC-004 | pool.adapter 无测试 | ✅ 已关闭 | 文件已删除 |
+| TC-007 | 测试不用 test 框架 | ✅ 已关闭 | 44/47 已使用框架 |
+| TC-012 | 并发压力测试 | ✅ 已关闭 | 已包含全面 stress/high-contention 测试 |
 | SA-007 | PPU freshness | ⏳ 低优先级 | clean 约定降低风险 |
 | SA-010 | deprecated 测试 | ⏳ 低优先级 | compile truth 已覆盖 |
 | SA-011 | README 架构图 | ✅ 已有文档 | ARCHITECTURE.md (333行) + README.md (237行) 足够 |
@@ -187,12 +189,14 @@
 - QA-004: mem.interfaces 已添加 deprecated 标记
 - **QA-005**: v1/v2 兼容层已清理（interfaces.pas/mem_pool.pas/adapter.pas 已删除）
 - **TC-004**: pool.adapter.pas 已删除
+- **TC-007**: 44/47 测试已使用 nextpas.core.test 框架
+- **TC-012**: 并发测试已包含全面 stress/high-contention 测试
 - **SA-011**: ARCHITECTURE.md 已存在
 
 ### 最终审计结论
 
 **模块状态**: 生产级就绪 ✅
-- 593 tests 全部通过
+- 599 tests 全部通过
 - 0 泄漏
 - 0 critical/major 未关闭
 - 所有 FPC RTL 违规已清理

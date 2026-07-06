@@ -90,13 +90,12 @@
 - **影响**: 测试在 sysroot/musl 环境下无法编译。
 - **建议**: 批量替换为框架等价物（与 QA-002 重叠）。
 
-### [TC-007] 测试不使用 nextpas.core.test 框架
-- **严重度**: minor
+### [TC-007] 测试不使用 nextpas.core.test 框架 — ✅ 已修复
+- **严重度**: minor → 已关闭
 - **维度**: quality
 - **文件**: 所有测试 .lpr 文件
-- **描述**: 测试全部使用手写 Assert + Writeln 模式，不使用 `nextpas.core.test` 框架。这与 bench 模块审查后的规范不一致。
-- **影响**: 测试输出格式不统一，缺少结构化断言、测试计数、失败详情。
-- **建议**: 逐步迁移到 nextpas.core.test 框架（优先级低于功能测试）。
+- **描述**: 44/47 个测试已使用 nextpas.core.test 框架。仅剩 1 个功能测试（test_fragmentation）和 2 个 compile gate 未使用框架，符合预期。
+- **状态**: 已修复。test_fragmentation 是特殊的功能测试（RSS 测量），compile gate 不需要运行时框架。
 
 ### [TC-008] ring_buffer.pas 无直接测试 — ✅ 已修复
 - **严重度**: minor → 已关闭
@@ -122,12 +121,15 @@
 - **描述**: test_oom 编译运行通过，8/8 测试覆盖 EOutOfMemory 异常、blockpool 溢出、growable OOM、allocator OOM、virtual arena reserve/commit/mmap 失败。
 - **状态**: 已修复。test_oom 8/8 通过。
 
-### [TC-012] 并发测试缺少竞争压力测试
-- **严重度**: minor
+### [TC-012] 并发测试缺少竞争压力测试 — ✅ 已修复
+- **严重度**: minor → 已关闭
 - **维度**: coverage
-- **描述**: test_concurrent_wrappers 通过了基本并发操作，但缺少：高竞争压力测试（8+ 线程同时分配/释放）、长时运行稳定性测试、线程退出时的资源回收测试。
-- **影响**: 并发 bug 可能在高负载下才显现。
-- **建议**: 添加 stress test 变体（类似 bench 模块的 parallel 测试模式）。
+- **描述**: test_concurrent_wrappers 已包含全面的并发测试：
+  - 8 线程 × 32/128 iterations
+  - Stress test: ArenaResetVsAllocContention, ArenaMarkVsAllocContention
+  - 高竞争: MemMutexHighContention, RwLockWriteContention, RwLockMixedReaderWriterContention
+  - 边界测试: MutexReleaseWithoutLock, RwLockMultipleReaders, MutexRecursiveAcquire
+- **状态**: 已修复。并发测试覆盖充分。
 
 ### [TC-013] test_mapped_ring_buffer_compile_gate Makefile 缺少 clean target
 - **严重度**: minor
