@@ -355,6 +355,34 @@ procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 
+{ ── Re-exported types from test.prop ───────────────────────────────────────── }
+
+type
+  TStringTest = nextpas.core.test.prop.TStringTest;
+  TIntTest = nextpas.core.test.prop.TIntTest;
+  TBoolTest = nextpas.core.test.prop.TBoolTest;
+  TBytesTest = nextpas.core.test.prop.TBytesTest;
+  IStringGenerator = nextpas.core.test.prop.IStringGenerator;
+  IIntGenerator = nextpas.core.test.prop.IIntGenerator;
+  IBoolGenerator = nextpas.core.test.prop.IBoolGenerator;
+  IBytesGenerator = nextpas.core.test.prop.IBytesGenerator;
+  TIntToString = nextpas.core.test.prop.TIntToString;
+  TIntPred = nextpas.core.test.prop.TIntPred;
+  TStringPred = nextpas.core.test.prop.TStringPred;
+  TBytesPred = nextpas.core.test.prop.TBytesPred;
+
+function GenString(AMinLen, AMaxLen: Integer): IStringGenerator; overload;
+function GenString(AMaxLen: Integer = 256): IStringGenerator; overload;
+function GenInt(AMin, AMax: Int64): IIntGenerator; overload;
+function GenInt(AMax: Int64 = MaxInt): IIntGenerator; overload;
+function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator; overload;
+function GenBytes(AMaxLen: Integer = 256): IBytesGenerator; overload;
+function GenBool: IBoolGenerator;
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+
 implementation
 
 {$I nextpas.core.test.fwd.expect.inc}

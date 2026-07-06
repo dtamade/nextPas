@@ -53,3 +53,38 @@ begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
 
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
+
+{ ── Forward to test.prop ──────────────────────────────────────────────────── }
+
+function GenString(AMinLen, AMaxLen: Integer): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenString(AMinLen, AMaxLen); end;
+
+function GenString(AMaxLen: Integer): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenString(AMaxLen); end;
+
+function GenInt(AMin, AMax: Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenInt(AMin, AMax); end;
+
+function GenInt(AMax: Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenInt(AMax); end;
+
+function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator;
+begin Result := nextpas.core.test.prop.GenBytes(AMinLen, AMaxLen); end;
+
+function GenBytes(AMaxLen: Integer): IBytesGenerator;
+begin Result := nextpas.core.test.prop.GenBytes(AMaxLen); end;
+
+function GenBool: IBoolGenerator;
+begin Result := nextpas.core.test.prop.GenBool; end;
+
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+begin Result := nextpas.core.test.prop.MapIntToStr(AGen, AMap); end;
+
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+begin Result := nextpas.core.test.prop.FilterInt(AGen, APred); end;
+
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+begin Result := nextpas.core.test.prop.FilterString(AGen, APred); end;
+
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+begin Result := nextpas.core.test.prop.FilterBytes(AGen, APred); end;

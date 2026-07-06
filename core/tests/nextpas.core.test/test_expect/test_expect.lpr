@@ -855,6 +855,9 @@ begin
   { Diff slightly less than epsilon — should pass }
   ExpectDouble(1.0).ToEqualD(1.0 + 9.99e-11, 1e-10);
   ExpectDouble(1.0).ToEqualD(1.0 - 9.99e-11, 1e-10);
+  { Diff exactly equal to epsilon — test with integer multiples to avoid FP rounding }
+  ExpectDouble(100.0).ToEqualD(100.0 + 1e-6, 1e-6);
+  ExpectDouble(100.0).ToEqualD(100.0 - 1e-6, 1e-6);
   { Diff > epsilon → should fail }
   ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
 end;
