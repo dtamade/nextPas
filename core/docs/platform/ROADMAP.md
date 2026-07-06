@@ -115,7 +115,7 @@
 | macOS CI 集成 | P2 | ⬜ 待定 | 需要 Darwin 交叉编译工具链 |
 | FreeBSD CI 集成 | P2 | ⬜ 待定 | 需要 cross-platform-actions CI |
 | Android CI 集成 | P3 | ⬜ 待定 | 需要 NDK 工具链 |
-| 性能优化 | P2 | 📋 计划中 | 基于 benchmark 结果优化 |
+| 性能优化 | P2 | ✅ 已完成 | path.normalize 7.4x 提升 (栈数组优化) |
 
 ### 4.3 长期 (年度)
 
