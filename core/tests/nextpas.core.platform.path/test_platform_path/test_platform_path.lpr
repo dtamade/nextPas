@@ -225,6 +225,73 @@ begin
   Check(not platform_path_is_root(''), 'empty is not root');
 end;
 
+procedure TestEnsureSep;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  platform_path_ensure_sep('C:\tmp', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'C:\tmp\'), 'ensure_sep adds backslash');
+  platform_path_ensure_sep('C:\tmp\', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'C:\tmp\'), 'ensure_sep no double backslash');
+{$ELSE}
+  platform_path_ensure_sep('/tmp', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/tmp/'), 'ensure_sep adds slash');
+  platform_path_ensure_sep('/tmp/', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/tmp/'), 'ensure_sep no double slash');
+{$ENDIF}
+end;
+
+procedure TestTrimSep;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  platform_path_trim_sep('C:\tmp\', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'C:\tmp'), 'trim_sep removes trailing backslash');
+  platform_path_trim_sep('C:\tmp', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'C:\tmp'), 'trim_sep no-op without trailing');
+  platform_path_trim_sep('C:\', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'C:\'), 'trim_sep preserves root');
+{$ELSE}
+  platform_path_trim_sep('/tmp/', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/tmp'), 'trim_sep removes trailing slash');
+  platform_path_trim_sep('/tmp', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/tmp'), 'trim_sep no-op without trailing');
+  platform_path_trim_sep('/', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/'), 'trim_sep preserves root');
+{$ENDIF}
+end;
+
+procedure TestSameFileName;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(platform_path_same_file_name('Foo.txt', 'foo.txt'), 'case insensitive on Windows');
+  Check(platform_path_same_file_name('foo.txt', 'foo.txt'), 'same name');
+  Check(not platform_path_same_file_name('foo.txt', 'bar.txt'), 'different name');
+{$ELSE}
+  Check(platform_path_same_file_name('foo.txt', 'foo.txt'), 'same name');
+  Check(not platform_path_same_file_name('foo.txt', 'Foo.txt'), 'case sensitive on POSIX');
+  Check(not platform_path_same_file_name('foo.txt', 'bar.txt'), 'different name');
+{$ENDIF}
+end;
+
+procedure TestRelative;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  R := platform_path_relative('C:\tmp\a', 'C:\tmp\b', @Buf[0], 256);
+  if R > 0 then
+    Check(BufEq(@Buf[0], '..\b') or BufEq(@Buf[0], 'b'), 'relative C:\tmp\a -> C:\tmp\b');
+{$ELSE}
+  R := platform_path_relative('/tmp/a', '/tmp/b', @Buf[0], 256);
+  if R > 0 then
+    Check(BufEq(@Buf[0], '../b') or BufEq(@Buf[0], 'b'), 'relative /tmp/a -> /tmp/b');
+{$ENDIF}
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.path');
   T.Test('join basic', @TestJoinBasic);
@@ -247,5 +314,9 @@ begin
   T.Test('resolve non-existent', @TestResolveNonExistent);
   T.Test('join3', @TestJoin3);
   T.Test('is_root', @TestIsRoot);
+  T.Test('ensure_sep', @TestEnsureSep);
+  T.Test('trim_sep', @TestTrimSep);
+  T.Test('same_file_name', @TestSameFileName);
+  T.Test('relative', @TestRelative);
   if not T.Run then Halt(1);
 end.
