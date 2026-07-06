@@ -246,17 +246,17 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
   ABufLen: Int32; out ALen: Int32): Int32;
-begin ALen := 0; Result := -1; end;
+begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_env_unset(const AName: PAnsiChar): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_env_exists(const AName: PAnsiChar): Boolean;
 begin Result := False; end;
 function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 function platform_env_names_case_sensitive: Boolean;

@@ -65,17 +65,17 @@ function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode
 function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
-function platform_file_read(const AHandle: TPlatformFileHandle;
-  ABuf: Pointer; ALen: Int32; out ANRead: Int32): Int32;
-function platform_file_write(const AHandle: TPlatformFileHandle;
-  ABuf: Pointer; ALen: Int32): Int32;
+function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
 // 进程
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
 // 线程
 function platform_thread_create(out AHandle: TPlatformThreadHandle;
@@ -84,7 +84,8 @@ function platform_thread_join(const AHandle: TPlatformThreadHandle;
   out ARetVal: Pointer): Int32;
 
 // 同步
-function platform_mutex_init(out AMutex: TPlatformMutex): Int32;
+function platform_mutex_init(var AMutex: TPlatformMutex;
+  const AKind: Int32 = PLATFORM_MUTEX_ERRORCHECK): Int32;
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 
@@ -97,7 +98,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ## 2. 不变量
 
-- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError
+- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError，`PLATFORM_ERR_UNSUPPORTED` (95) = 不支持的平台
 - **句柄无效值**: `TPlatformFileHandle.Value = -1`（Unix）/ `INVALID_HANDLE_VALUE`（Windows）
 - **Socket 句柄**: >= 0（Unix）/ > 0（Windows）
 - **文件描述符**: 0/1/2 保留给 stdin/stdout/stderr
@@ -112,11 +113,14 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - **错误码**: `PLATFORM_ERR_*` 常量（`nextpas.core.platform.error`）
   - `PLATFORM_ERR_INVALID` (22) — 无效参数/nil 指针
   - `PLATFORM_ERR_ENOENT` (2) — 文件不存在
+  - `PLATFORM_ERR_EEXIST` (17) — 文件已存在
+  - `PLATFORM_ERR_ENOTDIR` (20) — 不是目录
   - `PLATFORM_ERR_BADF` (9) — 无效文件描述符
   - `PLATFORM_ERR_TIMEOUT` (110) — 操作超时
   - `PLATFORM_ERR_BUSY` (16) — 资源忙
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
+  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
 - **错误消息**: `platform_error_message(ACode, ABuf, ABufLen)` 返回人类可读消息
 - **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
 
@@ -152,7 +156,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 | Windows x86_64 | ✅ 完成 | Wine + CI |
 | FreeBSD | ✅ 完成 | 交叉编译 |
 | Android | ✅ 完成 | 交叉编译 |
-| Fallback stub | ✅ 完成 | 返回 -1 |
+| Fallback stub | ✅ 完成 | 返回 PLATFORM_ERR_UNSUPPORTED |
 
 ---
 
@@ -208,7 +212,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - mmap.pas: POSIX page alignment 前置校验
 
 ### Phase 3: API 增强
-- process.pas: `ATimeoutMs` 参数（Unix 轮询 + Windows 原生）
+- process.pas: `ATimeoutMs: Int64` 参数（Unix 轮询 + Windows 原生）
 - fs.pas: `is_executable` 检查全部三个执行位
 
 ### Phase 4: TOCTOU 安全修复 (2026-07-05)
@@ -263,3 +267,46 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - 新实现：缩小时直接更新 header size，零拷贝
   - 优势：realloc 缩小操作 O(1)，无内存分配
 - 测试：error 10/10 通过，memory 13/13 通过
+
+### Phase 9: Timeout 类型统一 (2026-07-06)
+- 所有 `ATimeoutMs` 参数统一为 `Int64` 类型
+  - console.pas: `platform_console_wait_readable` — `ATimeoutMs: Int32` → `Int64`
+  - io.pas: `platform_poller_wait` — `ATimeoutMs: Int32` → `Int64`
+  - process.pas: `platform_process_wait` — `ATimeoutMs: Int32` → `Int64`
+  - watch.pas: `platform_watch_poll` — `ATimeoutMs: Int32` → `Int64`
+  - socket.pas: `platform_socket_set_timeout` — `AMs: UInt32` → `ATimeoutMs: Int64`
+- sync.pas: `ATimeoutNs: Int64` 保持不变（纳秒精度是同步原语的刚需）
+- thread.pas: `ATimeoutMs: Int64` 已经是正确类型
+- 测试：所有 33 个测试套件通过，0 unfreed
+
+### Phase 10: TPlatformDuration 设计决策 (2026-07-06)
+- **决策**: 不引入 `TPlatformDuration` 类型，保持 `Int64` 参数
+- **原因**:
+  1. 平台模块是 L0 层，应保持最小化和低级抽象
+  2. `TDuration` 类型已在 L1 层 (`nextpas.core.time.base`) 定义
+  3. 平台模块不能依赖 L1 层（会创建循环依赖）
+  4. `Int64` 参数简单高效，符合 L0 层的设计原则
+- **方案**:
+  1. 平台模块继续使用 `Int64` 参数（ms 或 ns）
+  2. 高层模块使用 `TDuration` 类型，调用平台函数时转换为 `Int64`
+  3. 文档明确参数单位（ms 或 ns）
+- **对标**:
+  - Rust: `std::time::Duration` 在标准库层，系统调用层使用 `timespec`
+  - Go: `time.Duration` 在标准库层，系统调用层使用 `int64` 纳秒
+  - nextPas: `TDuration` 在 L1 层，平台层使用 `Int64`
+
+### Phase 11: 高阶封装 API 设计决策 (2026-07-06)
+- **决策**: 不在平台模块添加 `read_all`/`write_all`/`send_all` 等高阶封装
+- **原因**:
+  1. 平台模块是 L0 层，应保持最小化和低级抽象
+  2. `platform_fs_read_all` 和 `platform_fs_write_all` 已在 `nextpas.core.platform.fs` 中实现
+  3. Socket 的 `send_all`/`recv_all` 应在 L1/L2 层实现（如 `nextpas.core.net`）
+  4. 平台模块只提供低级系统调用封装
+- **方案**:
+  1. 平台模块保持当前的低级 API（`platform_socket_send`/`platform_socket_recv`）
+  2. 高层模块实现便利函数（`send_all`/`recv_all`）
+  3. 文档明确 API 边界
+- **对标**:
+  - Rust: `std::io::Write::write_all` 在标准库层，系统调用层使用 `write`
+  - Go: `io.WriteFull` 在标准库层，系统调用层使用 `write`
+  - nextPas: 高阶封装在 L1/L2 层，平台层使用 `send`/`recv`

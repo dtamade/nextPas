@@ -100,6 +100,9 @@ begin
   APid := -1;
   AFailStage := ptssNone;
 
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
   begin
     AFailStage := ptssPipe;
@@ -413,13 +416,13 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_pty_open(const ASize: TPlatformPtySize; out APty: TPlatformPty): Int32;
-begin FillChar(APty, SizeOf(APty), 0); Result := -1; end;
+begin FillChar(APty, SizeOf(APty), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_spawn(var APty: TPlatformPty; const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; out APid: Int32; out AFailStage: TPlatformPtySpawnStage): Int32;
-begin APid := -1; AFailStage := ptssNone; Result := -1; end;
+begin APid := -1; AFailStage := ptssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_resize(var APty: TPlatformPty; const ASize: TPlatformPtySize): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_close(var APty: TPlatformPty): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin Result := -1; end;
 {$ENDIF}

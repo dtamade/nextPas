@@ -498,7 +498,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -524,7 +524,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -550,7 +550,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -576,7 +576,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -736,7 +736,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -846,7 +846,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 

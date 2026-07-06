@@ -938,7 +938,7 @@ function platform_path_resolve(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 begin
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

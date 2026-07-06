@@ -161,7 +161,7 @@ begin
   if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
     Exit;
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

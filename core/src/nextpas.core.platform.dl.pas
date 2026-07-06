@@ -202,14 +202,14 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
-begin FillChar(ALib, SizeOf(ALib), 0); Result := -1; end;
+begin FillChar(ALib, SizeOf(ALib), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
-begin AAddr := nil; Result := -1; end;
+begin AAddr := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
-begin if ABuf <> nil then ABuf[0] := #0; Result := -1; end;
+begin if ABuf <> nil then ABuf[0] := #0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

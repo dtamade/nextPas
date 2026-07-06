@@ -57,7 +57,7 @@ function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32
  * @return cwReadable / cwTimeout / cwInterrupted（被信号打断）/ cwError
  * @note 不在内部重试 EINTR——调用方据此消费信号 pending 状态后自行决定重试。
  *}
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 
 implementation
 
@@ -176,7 +176,7 @@ begin
   Result := LSent;
 end;
 
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 var
   LPfd: pollfd;
   LRc: cint;
@@ -199,14 +199,14 @@ end;
 {$ELSE}
 { 非 Linux Unix（macOS/FreeBSD 等）：host base 单元尚未就绪，提供诚实 stub。 }
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
-begin FillChar(AMode, SizeOf(AMode), 0); Result := -1; end;
+begin FillChar(AMode, SizeOf(AMode), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 {$ENDIF}
 {$ENDIF}
@@ -369,7 +369,7 @@ begin
   Result := LSent;
 end;
 
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 var
   LHandle: HANDLE;
   LTimeout: DWORD;
@@ -396,20 +396,20 @@ end;
 function platform_console_is_terminal(AFd: Int32): Boolean;
 begin Result := False; end;
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
-begin ASize.Cols := 0; ASize.Rows := 0; Result := -1; end;
+begin ASize.Cols := 0; ASize.Rows := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_get_size_fd(AFd: Int32; out ASize: TPlatformConsoleSize): Int32;
-begin ASize.Cols := 0; ASize.Rows := 0; Result := -1; end;
+begin ASize.Cols := 0; ASize.Rows := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_enable_ansi: Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
-begin FillChar(AMode, SizeOf(AMode), 0); Result := -1; end;
+begin FillChar(AMode, SizeOf(AMode), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := -1; end;
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int32): TPlatformConsoleWait;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 {$ENDIF}
 
