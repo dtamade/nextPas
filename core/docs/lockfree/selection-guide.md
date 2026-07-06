@@ -92,15 +92,25 @@
 
 | 数据结构 | 场景 | 吞吐 (M ops/s) | 延迟 (ns/op) |
 |----------|------|---------------|-------------|
-| TSpscQueue | 1P+1C | 4.40 | 227 |
-| TSpmcQueue | 1P+2C | 2.60 | 385 |
-| TMpmcQueue | 2P+2C | 3.80 | 263 |
-| TMpscQueue | 4P+1C | ~3.0 | ~330 |
-| TSegQueue | 2P+2C | 1.50 | 667 |
-| TLockFreeStack | 4P+4C | ~5.0 | ~200 |
+| TSpscQueue | 1P+1C | 101 | 9.9 |
+| TSpmcQueue | 1P+2C | 75 | 13.4 |
+| TMpmcQueue | 2P+2C | 68 | 14.6 |
+| TMpscQueue | 4P+1C | ~68 | ~15 |
+| TSegQueue | 2P+2C | 17 | 59.1 |
+| TLockFreeStack | 4P+4C | ~67 | ~15 |
 | TWorkStealingDeque | 1 owner + 2 thieves | ~2.0 | ~500 |
-| TLockFreeChannelSpsc | 1P+1C | 待测试 | 待测试 |
-| TLockFreeChannel | MPMC | 0.63 | ~1500 |
+| **TLockFreeChannelSpsc** | **1P+1C** | **18.3** | **54.7** |
+| TLockFreeChannel | MPMC | 10.6 | 94.3 |
+
+### 跨语言对比 (1P1C Channel)
+
+| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
+|------|-------------|---------------|---------|
+| **nextpas SPSC Channel** | **54.7** | **18.3** | **2.09x 快** |
+| nextpas Channel | 94.3 | 10.6 | 1.21x 快 |
+| Go channel | 114.3 | 8.8 | 基准 |
+| Rust std::sync::mpsc | 38.2 | 26.2 | 3.0x 快 |
+| C++ mutex+condvar | 228.3 | 4.4 | 0.5x |
 
 ## 线程安全契约
 

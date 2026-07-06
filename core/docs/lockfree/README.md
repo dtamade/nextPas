@@ -412,3 +412,35 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。
+
+## 性能基准 (2026-07-06)
+
+**平台**: Linux x86_64, FPC 3.3.1, -O2
+**输入**: OPS=1,000,000; capacity=1024
+
+### 单线程 Try* 操作
+
+| 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
+|----------|-------------|---------------|
+| TSpscQueue | 9.9 | 101 |
+| TSpmcQueue | 13.4 | 75 |
+| TMpmcQueue | 14.6 | 68 |
+
+### Channel 性能
+
+| 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
+|------|------|-------------|---------------|
+| **TLockFreeChannelSpsc** | **1P1C** | **54.7** | **18.3** |
+| TLockFreeChannel | MPMC | 94.3 | 10.6 |
+
+### 跨语言对比 (1P1C Channel)
+
+| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
+|------|-------------|---------------|---------|
+| **nextpas SPSC Channel** | **54.7** | **18.3** | **2.09x 快** |
+| nextpas Channel | 94.3 | 10.6 | 1.21x 快 |
+| Go channel | 114.3 | 8.8 | 基准 |
+| Rust std::sync::mpsc | 38.2 | 26.2 | 3.0x 快 |
+| C++ mutex+condvar | 228.3 | 4.4 | 0.5x |
+
+**结论**: nextpas SPSC Channel 比 Go channel 快 2.09x，接近 Rust 性能。

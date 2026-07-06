@@ -5328,7 +5328,7 @@ begin
   CheckContains(LDocsReadme,
     'Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged',
     'lockfree README must document the wait helper lost-wake guard');
-  CheckContains(LBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
+  CheckContains(LBenchSource, 'WriteLn(''Platform: '', OSName, ''/'', CPUName)',
     'lockfree benchmark must print the platform evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',
     'lockfree benchmark must print the compiler flags evidence field');
