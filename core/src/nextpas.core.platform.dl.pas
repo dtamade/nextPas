@@ -23,7 +23,7 @@ function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 implementation
 
@@ -102,12 +102,12 @@ begin
   ALib.Handle := nil;
 end;
 
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LMsg: PAnsiChar;
   LLen, I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(-1);
   LMsg := dlerror;
   if LMsg = nil then
@@ -118,8 +118,8 @@ begin
   LLen := 0;
   while LMsg[LLen] <> #0 do
     Inc(LLen);
-  if LLen >= ABufLen then
-    LLen := ABufLen - 1;
+  if LLen >= ABufSize then
+    LLen := ABufSize - 1;
   for I := 0 to LLen - 1 do
     ABuf[I] := LMsg[I];
   ABuf[LLen] := #0;
@@ -176,13 +176,13 @@ begin
   ALib.Handle := 0;
 end;
 
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LErr: DWORD;
   LLen: DWORD;
   I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(-1);
   LErr := GetLastError;
   if LErr = 0 then
@@ -192,7 +192,7 @@ begin
   end;
   LLen := FormatMessageA(
     FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,
-    nil, LErr, 0, ABuf, DWORD(ABufLen), nil);
+    nil, LErr, 0, ABuf, DWORD(ABufSize), nil);
   if LLen = 0 then
   begin
     ABuf[0] := #0;
@@ -215,7 +215,7 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
 begin AAddr := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 begin if ABuf <> nil then ABuf[0] := #0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
