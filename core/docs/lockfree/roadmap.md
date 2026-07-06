@@ -29,9 +29,9 @@
 | `lockfree.spmc` | 单生产者多消费者队列 | ✅ 完成 | 15 |
 | `lockfree.mpmc` | 多生产者多消费者队列 | ✅ 完成 | 15 |
 | `lockfree.mpsc` | 多生产者单消费者队列 | ✅ 完成 | 10 |
-| `lockfree.segqueue` | 分段无界队列 | ✅ 完成 | 10 |
-| `lockfree.stack` | 无锁栈 | ✅ 完成 | 10 |
-| `lockfree.deque` | 工作窃取双端队列 | ✅ 完成 | 8 |
+| `lockfree.segqueue` | 分段无界队列 | ✅ 完成 | 11 |
+| `lockfree.stack` | 无锁栈 | ✅ 完成 | 11 |
+| `lockfree.deque` | 工作窃取双端队列 | ✅ 完成 | 9 |
 | `lockfree.ebr` | Epoch-Based 回收 | ✅ 完成 | 8 |
 | `lockfree.hazard` | Hazard Pointer 回收 | ✅ 完成 | 13 |
 | `lockfree.channel` | 有界通道 (Go channel 语义) | ✅ 完成 | 10 |
@@ -98,7 +98,7 @@
 | XxxWait | ✅ | ✅ | ✅ | ✅ | - | - | - | ✅ | ✅ | - |
 | XxxTimeout | ✅ | ✅ | ✅ | ✅ | - | - | - | ✅ | ✅ | - |
 | Batch | ✅ | - | ✅ | - | - | - | - | - | - | - |
-| Close | ✅ | ✅ | ✅ | ✅ | ✅ | - | - | ✅ | - | - |
+| Close | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | - | - |
 | ApproxCount | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | - | ✅ |
 
 ### 2.4 文档完整性
@@ -212,10 +212,18 @@ L3: nextpas.core.lockfree.* (数据结构)
 |------|------|------|
 | Channel MPMC fast path | 只在有等待者时通知 | 94.7ns → 80.2ns (1.18x) |
 
+### 4.9 Stack/Deque Close + SegQueue MPMC 测试 (2026-07-06)
+
+| 功能 | 内容 | 测试 |
+|------|------|------|
+| Stack Close/IsClosed | 栈关闭功能 | 1 |
+| Deque Close/IsClosed | 双端队列关闭功能 | 1 |
+| SegQueue 4P+4C MPMC | 多生产者多消费者测试 | 1 |
+
 ---
 
 - **Commit**: `604be8b14` on main
-- **验证**: 111 tests passed, 0 failures, 0 leaks
+- **验证**: 118 tests passed, 0 failures, 0 leaks
 - **性能**: SPSC Channel 38.2 ns/op, 26.2 M ops/s
 - **跨语言**: 2.99x 快于 Go, 1.26x 快于 Rust
 
