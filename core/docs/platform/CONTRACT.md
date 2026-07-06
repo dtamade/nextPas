@@ -66,9 +66,9 @@ function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenM
   ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
 // 进程
@@ -121,7 +121,7 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
   - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
-- **错误消息**: `platform_error_message(ACode, ABuf, ABufLen)` 返回人类可读消息
+- **错误消息**: `platform_error_message(ACode, ABuf, ABufSize)` 返回人类可读消息
 - **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
 
 ---

@@ -52,7 +52,7 @@ function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
-function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fs_temp_dir(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32; deprecated 'Use platform_fs_mktemp_handle instead';
 function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
@@ -246,20 +246,20 @@ begin
     ASize := LStat.Size;
 end;
 
-function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fs_temp_dir(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen: Int32;
   LResult: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
 {$IFDEF NEXTPAS_WINDOWS}
-  LResult := platform_env_get('TEMP', ABuf, ABufLen, LLen);
+  LResult := platform_env_get('TEMP', ABuf, ABufSize, LLen);
   if LResult <> 0 then
-    LResult := platform_env_get('TMP', ABuf, ABufLen, LLen);
+    LResult := platform_env_get('TMP', ABuf, ABufSize, LLen);
   if LResult <> 0 then
   begin
-    if ABufLen >= 4 then
+    if ABufSize >= 4 then
     begin
       ABuf[0] := 'C'; ABuf[1] := ':'; ABuf[2] := '\';
       ABuf[3] := #0;
@@ -269,12 +269,12 @@ begin
   end;
   Result := LLen;
 {$ELSE}
-  LResult := platform_env_get('TMPDIR', ABuf, ABufLen, LLen);
+  LResult := platform_env_get('TMPDIR', ABuf, ABufSize, LLen);
   if LResult = 0 then
     Result := LLen
   else
   begin
-    if ABufLen >= 5 then
+    if ABufSize >= 5 then
     begin
       ABuf[0] := '/'; ABuf[1] := 't'; ABuf[2] := 'm'; ABuf[3] := 'p';
       ABuf[4] := #0;

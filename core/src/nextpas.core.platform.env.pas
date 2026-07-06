@@ -9,7 +9,7 @@ type
     AData: Pointer): Boolean;
 
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32; out ALen: Int32): Int32;
+  ABufSize: Int32; out ALen: Int32): Int32;
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
 function platform_env_unset(const AName: PAnsiChar): Int32;
@@ -54,7 +54,7 @@ end;
 
 {$IFDEF NEXTPAS_UNIX}
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32; out ALen: Int32): Int32;
+  ABufSize: Int32; out ALen: Int32): Int32;
 var
   LVal: PAnsiChar;
   I: Int32;
@@ -67,11 +67,11 @@ begin
     Exit(2); // ENOENT
   while LVal[ALen] <> #0 do
     Inc(ALen);
-  if (ABuf <> nil) and (ABufLen > 0) then
+  if (ABuf <> nil) and (ABufSize > 0) then
   begin
     I := ALen;
-    if I >= ABufLen then
-      I := ABufLen - 1;
+    if I >= ABufSize then
+      I := ABufSize - 1;
     if I > 0 then
       Move(LVal^, ABuf^, I);
     ABuf[I] := #0;
@@ -129,7 +129,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32; out ALen: Int32): Int32;
+  ABufSize: Int32; out ALen: Int32): Int32;
 var
   LName: UnicodeString;
   LValue: array of WideChar;
@@ -139,7 +139,7 @@ var
 begin
   ALen := 0;
   if ABuf = nil then
-    ABufLen := 0;
+    ABufSize := 0;
   if not platform_env_name_valid(AName) then
     Exit(Int32(ERROR_INVALID_NAME));
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
@@ -164,7 +164,7 @@ begin
   LValue[LResult] := #0;
   if not platform_windows_wide_to_utf8_checked(@LValue[0], LUtf8) then
     Exit(Int32(ERROR_INVALID_NAME));
-  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
+  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
   Result := 0;
 end;
 
@@ -245,7 +245,7 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32; out ALen: Int32): Int32;
+  ABufSize: Int32; out ALen: Int32): Int32;
 begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;

@@ -3,6 +3,7 @@ program test_platform_fmt;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.fmt,
   nextpas.core.test;
 
@@ -97,9 +98,9 @@ end;
 
 procedure TestNilBuffer;
 begin
-  Check(platform_fmt_int(42, nil, 0) = -1, 'nil returns -1');
-  Check(platform_fmt_uint(42, nil, 0) = -1, 'nil uint returns -1');
-  Check(platform_fmt_hex(42, nil, 0) = -1, 'nil hex returns -1');
+  Check(platform_fmt_int(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil returns PLATFORM_ERR_INVALID');
+  Check(platform_fmt_uint(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil uint returns PLATFORM_ERR_INVALID');
+  Check(platform_fmt_hex(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil hex returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestParseUint;

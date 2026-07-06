@@ -196,7 +196,7 @@ var
   R: Int32;
 begin
   R := platform_error_message(2, nil, 256);
-  Check(R = -1, 'nil buffer returns -1');
+  Check(R = PLATFORM_ERR_INVALID, 'nil buffer returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestZeroLengthBuffer;
@@ -205,7 +205,7 @@ var
   R: Int32;
 begin
   R := platform_error_message(2, @Buf[0], 0);
-  Check(R = -1, 'zero length buffer returns -1');
+  Check(R = PLATFORM_ERR_INVALID, 'zero length buffer returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestNegativeLengthBuffer;
@@ -214,7 +214,7 @@ var
   R: Int32;
 begin
   R := platform_error_message(2, @Buf[0], -1);
-  Check(R = -1, 'negative length buffer returns -1');
+  Check(R = PLATFORM_ERR_INVALID, 'negative length buffer returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestCategoryInvalid;

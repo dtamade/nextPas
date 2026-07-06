@@ -14,9 +14,9 @@ function platform_windows_wide_to_utf8(const AText: PWideChar): AnsiString;
 function platform_windows_wide_to_utf8_checked(const AText: PWideChar;
   out AUtf8: AnsiString): Boolean;
 function platform_windows_copy_utf8_to_buffer(const AText: AnsiString;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_windows_wide_to_utf8_buffer(const AText: PWideChar;
-  ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Boolean;
+  ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Boolean;
 function platform_windows_envp_to_wide_block(const AEnvp: PPAnsiChar;
   out ABlock: UnicodeString): Boolean;
 function platform_windows_argv_to_command_line(const APath: PAnsiChar;
@@ -104,24 +104,24 @@ begin
 end;
 
 function platform_windows_copy_utf8_to_buffer(const AText: AnsiString;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LCopyLen: Int32;
 begin
   Result := Length(AText);
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit;
 
   LCopyLen := Result;
-  if LCopyLen >= ABufLen then
-    LCopyLen := ABufLen - 1;
+  if LCopyLen >= ABufSize then
+    LCopyLen := ABufSize - 1;
   if LCopyLen > 0 then
     Move(AText[1], ABuf^, LCopyLen);
   ABuf[LCopyLen] := #0;
 end;
 
 function platform_windows_wide_to_utf8_buffer(const AText: PWideChar;
-  ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Boolean;
+  ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Boolean;
 var
   LUtf8: AnsiString;
 begin
@@ -131,7 +131,7 @@ begin
     ALen := 0;
     Exit;
   end;
-  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
+  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
 end;
 
 function platform_windows_envp_to_wide_block(const AEnvp: PPAnsiChar;
