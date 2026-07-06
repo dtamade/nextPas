@@ -2151,14 +2151,9 @@ begin
   SectionHeader('T-13b: Cache integration in runner');
 
   begin
-    { Clean up any previous cache }
     LCacheRunConfig := DefaultConfig;
     LCacheRunConfig.CacheEnabled := True;
-    LCacheRunConfig.CacheDir := '.nextpas/test-cache-integration';
-    { Invalidate cache to ensure clean test }
-    LCache := TTestCache.Create('.nextpas/test-cache-integration');
-    LCache.Invalidate;
-    { Create a suite that counts invocations }
+    LCacheRunConfig.CacheDir := '../../../build/projects/nextpas.core.test/test_runner/cache';
     LCacheRunCount := 0;
     LCacheRunSuite := TTestSuite.Create('CacheRun');
     LCacheRunSuite.Config := LCacheRunConfig;

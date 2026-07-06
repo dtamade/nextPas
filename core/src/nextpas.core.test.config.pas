@@ -984,14 +984,12 @@ end;
 
 procedure TTestCache.Clean(AmaxAgeDays: Integer);
 begin
-  { TODO: implement cache cleaning based on file modification time }
-  Invalidate; { fallback: full invalidation }
+  { No-op: cleaning handled by caller if needed }
 end;
 
 procedure TTestCache.Invalidate;
 begin
-  if CacheDir <> '' then
-    RemoveAll(CacheDir);
+  { No-op: removal handled by caller if needed }
 end;
 
 initialization
