@@ -929,9 +929,6 @@ begin
   else
     Result := Int32(GetLastError);
 end;
-    Result := Int32(GetLastError);
-  end;
-end;
 
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
