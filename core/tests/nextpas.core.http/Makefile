@@ -19,7 +19,9 @@ PROJECTS := \
 	test_http_registry \
 	test_http_form \
 	test_http_middlewares \
-	test_http_stress
+	test_http_stress \
+	test_http_websocket \
+	test_http_websocket_client
 
 .PHONY: test clean $(PROJECTS)
 

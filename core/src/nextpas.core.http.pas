@@ -270,6 +270,16 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
 
+{ WebSocket client }
+function ConnectWebSocket(const AUrl: string): IWebSocket; overload; inline;
+function ConnectWebSocket(const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string): IWebSocket; overload; inline;
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
+
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; overload; inline;
@@ -650,6 +660,30 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW, AOptions);
+end;
+
+function ConnectWebSocket(const AUrl: string): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl);
+end;
+
+function ConnectWebSocket(const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl, AOptions);
+end;
+
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl);
+end;
+
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl, AOptions);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
