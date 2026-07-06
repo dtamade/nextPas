@@ -30,4 +30,6 @@
 {$I nextpas.core.system.endian.inc}
 {$I nextpas.core.system.barrier.inc}
 {$I nextpas.core.system.intrinsics.inc}
+{$I nextpas.core.system.thread.inc}
+{$I nextpas.core.system.io.inc}
 {$I nextpas.core.system.comp.inc}
