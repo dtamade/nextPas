@@ -32,6 +32,7 @@ type
     ScopeId: LongInt;
   end;
   TProcedureBodyArray = array of TProcedureBodyEntry;
+  TTypeIdArray = array of LongInt;
 
   TStringArray = array of string;
 
@@ -73,6 +74,9 @@ function HasOverload(const AName: string;
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyArray;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+
+function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
+function GetParamIdentitySignature(const ADecl: TGreenNode): string;
 
 implementation
 
@@ -179,6 +183,60 @@ begin
       Exit(True);
     end;
   Result := False;
+end;
+
+
+function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
+var
+  Index: LongInt;
+begin
+  Result := Length(ATypeIds) = 0;
+  if Result then
+    Exit;
+  for Index := 0 to Length(ATypeIds) - 1 do
+    if ATypeIds[Index] > 0 then
+      Exit(True);
+  Result := False;
+end;
+
+function GetParamIdentitySignature(const ADecl: TGreenNode): string;
+var
+  Child: TGreenNode;
+  Index: LongInt;
+  ParamChild: TGreenNode;
+  ParamIndex: LongInt;
+  TypeChild: TGreenNode;
+  TypeName: string;
+begin
+  Result := '';
+  if ADecl = nil then
+    Exit;
+  for Index := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(Index);
+    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
+      Continue;
+    ParamIndex := 0;
+    while ParamIndex < Child.ChildCount do
+    begin
+      ParamChild := Child.ChildAt(ParamIndex);
+      if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+      begin
+        TypeName := '';
+        if ParamChild.ChildCount > 0 then
+        begin
+          TypeChild := ParamChild.ChildAt(0);
+          if TypeChild <> nil then
+            TypeName := LowerCase(TypeChild.Text);
+        end;
+        if Result <> '' then
+          Result := Result + '|';
+        Result := Result + TypeName;
+      end;
+      Inc(ParamIndex);
+    end;
+    Exit;
+  end;
 end;
 
 end.

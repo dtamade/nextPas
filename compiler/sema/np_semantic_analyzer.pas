@@ -2983,43 +2983,8 @@ end;
 function TSemanticAnalyzer.GetParamIdentitySignature(
   const ADecl: TGreenNode
 ): string;
-var
-  Child: TGreenNode;
-  Index: LongInt;
-  ParamChild: TGreenNode;
-  ParamIndex: LongInt;
-  TypeChild: TGreenNode;
-  TypeName: string;
 begin
-  Result := '';
-  if ADecl = nil then
-    Exit;
-  for Index := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(Index);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-    ParamIndex := 0;
-    while ParamIndex < Child.ChildCount do
-    begin
-      ParamChild := Child.ChildAt(ParamIndex);
-      if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
-      begin
-        TypeName := '';
-        if ParamChild.ChildCount > 0 then
-        begin
-          TypeChild := ParamChild.ChildAt(0);
-          if TypeChild <> nil then
-            TypeName := LowerCase(TypeChild.Text);
-        end;
-        if Result <> '' then
-          Result := Result + '|';
-        Result := Result + TypeName;
-      end;
-      Inc(ParamIndex);
-    end;
-    Exit;
-  end;
+  Result := np_sema_overload.GetParamIdentitySignature(ADecl);
 end;
 
 function TSemanticAnalyzer.GetSubstitutedParamSignature(
@@ -4524,16 +4489,8 @@ end;
 function TSemanticAnalyzer.TypeIdArrayHasKnownTypes(
   const ATypeIds: TTypeIdArray
 ): Boolean;
-var
-  Index: LongInt;
 begin
-  Result := Length(ATypeIds) = 0;
-  if Result then
-    Exit;
-  for Index := 0 to Length(ATypeIds) - 1 do
-    if ATypeIds[Index] > 0 then
-      Exit(True);
-  Result := False;
+  Result := np_sema_overload.TypeIdArrayHasKnownTypes(ATypeIds);
 end;
 
 function TSemanticAnalyzer.CanonicalTypeId(const ATypeId: LongInt): LongInt;
