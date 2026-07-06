@@ -19,7 +19,13 @@ type
     FSlots: array of TSlot;
     FCapacity: Int32;
     FTop: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTop: TCacheLinePad;
+    {$POP}
     FFreeHead: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadFree: TCacheLinePad;
+    {$POP}
     FClosed: Int32;
     function PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
     function UnpackIdx(ATagged: Int64): Int32; inline;

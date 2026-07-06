@@ -17,7 +17,13 @@ type
     FCapacity: PtrUInt;
     FMask: PtrUInt;
     FTop: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTop: TCacheLinePad;
+    {$POP}
     FBottom: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadBottom: TCacheLinePad;
+    {$POP}
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
