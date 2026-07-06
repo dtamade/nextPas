@@ -4104,6 +4104,119 @@ begin
   end;
 end;
 
+procedure TestChannelSpscTimeout;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  LStart, LElapsed: UInt64;
+begin
+  LCh := TIntChannelSpsc.Create(2);
+  try
+    { Fill the channel }
+    Check(LCh.TrySend(1), 'First send must succeed');
+    Check(LCh.TrySend(2), 'Second send must succeed');
+    Check(not LCh.TrySend(3), 'Third send must fail (full)');
+
+    { SendTimeout should timeout }
+    LStart := GetTickCount64;
+    Check(not LCh.SendTimeout(3, 10000000), 'SendTimeout must timeout (10ms)');
+    LElapsed := GetTickCount64 - LStart;
+    Check(LElapsed >= 8, 'SendTimeout must wait at least 8ms');
+
+    { Receive one item }
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(1, LV, 'Received value must be 1');
+
+    { Now SendTimeout should succeed }
+    Check(LCh.SendTimeout(3, 10000000), 'SendTimeout must succeed after receive');
+
+    { ReceiveTimeout on empty channel should timeout }
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(2, LV, 'Received value must be 2');
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(3, LV, 'Received value must be 3');
+
+    LStart := GetTickCount64;
+    Check(not LCh.ReceiveTimeout(LV, 10000000), 'ReceiveTimeout must timeout (10ms)');
+    LElapsed := GetTickCount64 - LStart;
+    Check(LElapsed >= 8, 'ReceiveTimeout must wait at least 8ms');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscClose;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    { Send some items before close }
+    Check(LCh.TrySend(10), 'Send before close must succeed');
+    Check(LCh.TrySend(20), 'Send before close must succeed');
+
+    { Close the channel }
+    LCh.Close;
+    Check(LCh.IsClosed, 'Channel must be closed');
+
+    { Cannot send after close }
+    Check(not LCh.TrySend(30), 'TrySend after close must fail');
+
+    { Can still receive pending items }
+    Check(LCh.TryReceive(LV), 'Receive pending item must succeed');
+    CheckEqual(10, LV, 'First pending value must be 10');
+    Check(LCh.TryReceive(LV), 'Receive pending item must succeed');
+    CheckEqual(20, LV, 'Second pending value must be 20');
+
+    { No more items }
+    Check(not LCh.TryReceive(LV), 'Receive after drain must fail');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscCapacity;
+var
+  LCh: TIntChannelSpsc;
+begin
+  LCh := TIntChannelSpsc.Create(8);
+  try
+    CheckEqual(8, LCh.Capacity, 'Capacity must be 8');
+    Check(LCh.IsEmpty, 'New channel must be empty');
+    CheckEqual(0, LCh.ApproxLen, 'ApproxLen must be 0');
+
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.TrySend(3);
+    Check(not LCh.IsEmpty, 'Channel with items must not be empty');
+    CheckEqual(3, LCh.ApproxLen, 'ApproxLen must be 3');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscWrapAround;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  I: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    { Fill and drain multiple times to test wrap-around }
+    for I := 1 to 100 do
+    begin
+      Check(LCh.TrySend(I), 'Send must succeed');
+      Check(LCh.TryReceive(LV), 'Receive must succeed');
+      CheckEqual(I, LV, 'Value must match');
+    end;
+    Check(LCh.IsEmpty, 'Channel must be empty after drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestSegQueueManagedReject;
 var
   LStrQ: specialize TSegQueue<AnsiString>;
@@ -5570,6 +5683,10 @@ begin
 
   T.Test('Channel SPSC basic', @TestChannelSpscBasic);
   T.Test('Channel SPSC 1P1C stress', @TestChannelSpscStress);
+  T.Test('Channel SPSC timeout', @TestChannelSpscTimeout);
+  T.Test('Channel SPSC close', @TestChannelSpscClose);
+  T.Test('Channel SPSC capacity', @TestChannelSpscCapacity);
+  T.Test('Channel SPSC wrap-around', @TestChannelSpscWrapAround);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Test('Managed type reject', @TestManagedTypeReject);
