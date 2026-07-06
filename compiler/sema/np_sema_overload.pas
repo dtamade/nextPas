@@ -1170,15 +1170,15 @@ begin
         RootSignatureMatchIndex := RootExactMatchIndex
       else if RootExactMatchCount > 1 then
       begin
-        { Permissive: pick first exact match instead of failing }
-        RootSignatureMatchIndex := RootExactMatchIndex;
+        AResolutionFailureKind := 'ambiguous-overload';
+        Exit(False);
       end
       else if RootCompatibleMatchCount = 1 then
         RootSignatureMatchIndex := RootCompatibleMatchIndex
       else if RootCompatibleMatchCount > 1 then
       begin
-        { Permissive: pick first compatible match instead of failing }
-        RootSignatureMatchIndex := RootCompatibleMatchIndex;
+        AResolutionFailureKind := 'ambiguous-overload';
+        Exit(False);
       end
       else
       begin
@@ -1206,9 +1206,13 @@ begin
     end
     else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
     begin
-      { Permissive: pick first signature match instead of failing }
-      if RootSignatureMatchCount > 0 then
+        if RootSignatureMatchCount = 1 then
         RootSignatureMatchIndex := RootMatchIndex
+      else if RootSignatureMatchCount > 1 then
+      begin
+        AResolutionFailureKind := 'ambiguous-overload';
+        Exit(False);
+      end
       else
       begin
         AResolutionFailureKind := 'ambiguous-overload';
@@ -1269,11 +1273,8 @@ begin
 
   if HasArgTypeIds and (DirectImportExactMatchCount > 1) then
   begin
-    { Permissive: pick first direct import exact match }
-    ABody := Ctx.ProcedureBodies[DirectImportExactMatchIndex].Body;
-    ADecl := Ctx.ProcedureBodies[DirectImportExactMatchIndex].Decl;
-    AOwnerUnitId := Ctx.ProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
-    Exit(True);
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit(False);
   end;
 
   if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) and
@@ -1288,11 +1289,8 @@ begin
   if HasArgTypeIds and (DirectImportCompatibleMatchCount > 1) and
     (DirectImportExactMatchCount = 0) then
   begin
-    { Permissive: pick first direct import compatible match }
-    ABody := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].Body;
-    ADecl := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
-    AOwnerUnitId := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
-    Exit(True);
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit(False);
   end;
 
   if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
@@ -1379,15 +1377,15 @@ begin
       ImportedSignatureMatchIndex := ImportedExactMatchIndex
     else if ImportedExactMatchCount > 1 then
     begin
-      { Permissive: pick first imported exact match }
-      ImportedSignatureMatchIndex := ImportedExactMatchIndex;
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
     end
     else if ImportedCompatibleMatchCount = 1 then
       ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex
     else if ImportedCompatibleMatchCount > 1 then
     begin
-      { Permissive: pick first imported compatible match }
-      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex;
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
     end
     else
     begin
@@ -1399,10 +1397,14 @@ begin
   end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
-    { Permissive: pick first imported signature match if available }
-    if ImportedSignatureMatchCount > 0 then
+    if ImportedSignatureMatchCount = 1 then
     begin
       { Fall through to use ImportedSignatureMatchIndex }
+    end
+    else if ImportedSignatureMatchCount > 1 then
+    begin
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
     end
     else
     begin

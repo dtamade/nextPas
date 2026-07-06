@@ -4064,11 +4064,8 @@ begin
       ));
     if BodyExactMatchCount > 1 then
     begin
-      { Permissive: pick first exact match for method calls }
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyExactMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(0);
     end;
     if BodyCompatibleMatchCount = 1 then
       Exit(CallableSymbolIdForDeclaration(
@@ -4077,11 +4074,8 @@ begin
       ));
     if BodyCompatibleMatchCount > 1 then
     begin
-      { Permissive: pick first compatible match for method calls }
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyCompatibleMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(0);
     end;
   end;
   if SymbolMatchCount = 0 then
@@ -4143,8 +4137,8 @@ begin
         SymbolId := SameOwnerSymbolId
       else
       begin
-        { Permissive: pick first same-owner match }
-        SymbolId := SameOwnerSymbolId;
+        AResolutionFailureKind := 'ambiguous-overload';
+        SymbolId := 0;
       end;
     end
     else if not AHasArgSignature then
@@ -4198,9 +4192,11 @@ begin
     end
     else
     begin
-      { Permissive: pick first best match for method calls }
       if BestSymbolId > 0 then
-        SymbolId := BestSymbolId;
+      begin
+        AResolutionFailureKind := 'ambiguous-overload';
+        SymbolId := 0;
+      end;
       Exit;
     end;
   end;
@@ -4748,7 +4744,11 @@ begin
         MemberCandidates
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
       begin
-        { Permissive: suppress ambiguous-overload errors for C8 pass }
+        EmitSemaError(
+          'sema.ambiguous-overload',
+          'ambiguous call to overloaded function "' + MemberFailureName + '"',
+          MemberFailureOffset
+        );
       end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
       begin
@@ -4855,7 +4855,11 @@ begin
         if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'ambiguous-overload') then
         begin
-          { Permissive: suppress ambiguous-overload errors for C8 pass }
+          EmitSemaError(
+            'sema.ambiguous-overload',
+            'ambiguous call to overloaded function "' + MemberFailureName + '"',
+            MemberFailureOffset
+          );
         end
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'wrong-argument-count') then
