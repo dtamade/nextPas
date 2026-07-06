@@ -395,6 +395,45 @@ type
     {** 批量计算百分位（一次排序，多次查询）
      *  E03: 避免在同一数据上重复排序 }
     function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
+
+    {** 单样本 K-S 检验：检验数据是否来自正态分布 N(AMean, AStdDev²)
+     *  @edge 空数组返回 D=0, p=1；样本数=1 时 D=0, p=1 }
+    function KolmogorovSmirnovNormalTest(const AData: TDoubleArray;
+      AMean, AStdDev: Double): TKSTestResult;
+
+    {** 两样本 K-S 检验：检验两个样本是否来自同一分布
+     *  @edge 任一数组为空返回 D=0, p=1；任一数组大小=1 时使用近似 }
+    function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
+
+    {** Bootstrap 假设检验 (Phase B.3)
+     *  检验两组数据的均值是否有显著差异（Fisher 置换检验）
+     *  @param A 第一组数据
+     *  @param B 第二组数据
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time） }
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
+    {** 贝叶斯估计 (Phase C.1)
+     *  正态-正态共轭模型：给定先验和数据，计算后验分布
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianEstimate(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ASigma: Double = 0): TBayesianEstimate;
+
+    {** 贝叶斯可信区间 (Phase C.2)
+     *  计算贝叶斯可信区间（比频率学派置信区间更直观）
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ALevel 可信水平（默认 0.95）
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianCredibleInterval(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
   end;
 
   {** 报告生成器接口

@@ -1,5 +1,5 @@
 {**
- * @desc 高级统计分析器
+ * 高级统计分析器
  *
  * 提供高级统计分析功能，
  * 包括异常值检测、正态性检验、置信区间等。
@@ -16,14 +16,7 @@ uses
   nextpas.core.platform;
 
 type
-  {**
-   * 置信区间
-   *}
-  TConfidenceInterval = record
-    Lower: Double;
-    Upper: Double;
-    Level: Double; // e.g., 0.95 for 95%
-  end;
+  {** TConfidenceInterval is now in nextpas.core.bench.base }
 
   {**
    * 正态性检验结果
@@ -143,6 +136,27 @@ type
      *}
     function BootstrapCI(AIterations: Integer = 10000;
       ALevel: Double = 0.95; ASeed: UInt64 = 0): TConfidenceInterval;
+
+    {**
+     * BCa Bootstrap 置信区间 (Phase B.2)
+     *  Bias-Corrected and Accelerated 方法，比百分位数法更精确
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ALevel 置信水平（默认 0.95）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time）
+     *}
+    function BootstrapCI_BCa(AIterations: Integer = 10000;
+      ALevel: Double = 0.95; ASeed: UInt64 = 0): TConfidenceInterval;
+
+    {**
+     * Bootstrap 假设检验 (Phase B.3)
+     *  检验两组数据的均值是否有显著差异
+     *  @param A 第一组数据
+     *  @param B 第二组数据
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time）
+     *}
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
 
     {**
      * 正态性启发式 (Shapiro-Wilk-like 简化版)
@@ -553,12 +567,12 @@ var
   LMeans: TDoubleArray;
   LIterationIndex: Integer;
   LSampleIndex: Integer;
-  LSeed: QWord;
   LSum: Double;
   LDataIndex: Integer;
   LLowerIndex: Integer;
   LUpperIndex: Integer;
   LAlpha: Double;
+  LPRNG: TXoroshiro128Plus;
 begin
   LN := Length(FData);
   if LN = 0 then
@@ -584,23 +598,20 @@ begin
   // F-20: 可选种子，ASeed=0 时使用 monotonic time，>0 时固定种子用于可重现测试
   // F-12: 种子混合全局计数器，防止快速连续调用时种子碰撞
   if ASeed > 0 then
-    LSeed := ASeed
+    LPRNG.Init(ASeed)
   else
   begin
     Inc(GBootstrapCallCount);
-    LSeed := platform_monotonic_ns xor (GBootstrapCallCount shl 32);
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
   end;
+
   SetLength(LMeans, LIterations);
   for LIterationIndex := 0 to LIterations - 1 do
   begin
     LSum := 0.0;
     for LSampleIndex := 0 to LN - 1 do
     begin
-      // 简化 PCG (LCG + 右移) — 用于 bootstrap 重采样足够均匀，
-      // 无完整 PCG-XSH-RR 输出置换。周期 2^64，对 bootstrap 够用。
-      // 不适用于密码学或需要高质量随机性的场景。
-      LSeed := LSeed * 6364136223846793005 + 1442695040888963407;
-      LDataIndex := Integer((LSeed shr 33) mod QWord(LN));
+      LDataIndex := LPRNG.NextInt(LN);
       LSum := LSum + FData[LDataIndex];
     end;
     LMeans[LIterationIndex] := LSum / LN;
@@ -621,6 +632,228 @@ begin
   Result.Lower := LMeans[LLowerIndex];
   Result.Upper := LMeans[LUpperIndex];
   Result.Level := ALevel;
+end;
+
+function TAdvancedStats.BootstrapCI_BCa(AIterations: Integer;
+  ALevel: Double; ASeed: UInt64): TConfidenceInterval;
+{ BCa (Bias-Corrected and Accelerated) Bootstrap 置信区间
+  算法:
+  1. 计算偏差修正因子 z0 = Φ^(-1)(#(θ* < θ) / B)
+  2. 计算加速因子 a = Σ(θ_(.) - θ_(i))^3 / (6 * (Σ(θ_(.) - θ_(i))^2)^(3/2))
+  3. 调整百分位数: α1 = Φ(z0 + (z0 + zα)/(1 - a(z0 + zα)))
+                   α2 = Φ(z0 + (z0 + z(1-α))/(1 - a(z0 + z(1-α)))) }
+var
+  LN, LIterations: Integer;
+  LMeans: TDoubleArray;
+  LIterationIndex, LSampleIndex, LDataIndex: Integer;
+  LSum, LObservedMean: Double;
+  LPRNG: TXoroshiro128Plus;
+  LCountBelow: Integer;
+  LZ0, LA: Double;
+  LAlpha, LAlpha1, LAlpha2: Double;
+  LLowerIndex, LUpperIndex: Integer;
+  LDiff, LDiffSqSum, LDiffCbSum: Double;
+  LZAlpha, LZAlpha1m: Double;
+begin
+  LN := Length(FData);
+  if LN = 0 then
+  begin
+    Result.Lower := 0.0;
+    Result.Upper := 0.0;
+    Result.Level := ALevel;
+    Exit;
+  end;
+
+  if LN = 1 then
+  begin
+    Result.Lower := FData[0];
+    Result.Upper := FData[0];
+    Result.Level := ALevel;
+    Exit;
+  end;
+
+  LIterations := AIterations;
+  if LIterations <= 0 then
+    LIterations := 1;
+
+  // 初始化 PRNG
+  if ASeed > 0 then
+    LPRNG.Init(ASeed)
+  else
+  begin
+    Inc(GBootstrapCallCount);
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
+  end;
+
+  // 计算观测均值
+  LSum := 0.0;
+  for LDataIndex := 0 to LN - 1 do
+    LSum := LSum + FData[LDataIndex];
+  LObservedMean := LSum / LN;
+
+  // 生成 bootstrap 样本均值
+  SetLength(LMeans, LIterations);
+  for LIterationIndex := 0 to LIterations - 1 do
+  begin
+    LSum := 0.0;
+    for LSampleIndex := 0 to LN - 1 do
+    begin
+      LDataIndex := LPRNG.NextInt(LN);
+      LSum := LSum + FData[LDataIndex];
+    end;
+    LMeans[LIterationIndex] := LSum / LN;
+  end;
+
+  // 步骤 1: 计算偏差修正因子 z0
+  LCountBelow := 0;
+  for LIterationIndex := 0 to LIterations - 1 do
+    if LMeans[LIterationIndex] < LObservedMean then
+      Inc(LCountBelow);
+  // z0 = Φ^(-1)(#(θ* < θ) / B)
+  LZ0 := NormalQuantile((LCountBelow + 0.5) / (LIterations + 1));
+
+  // 步骤 2: 计算加速因子 a
+  // a = Σ(θ_(.) - θ_(i))^3 / (6 * (Σ(θ_(.) - θ_(i))^2)^(3/2))
+  // 使用 jackknife 估计
+  LDiffSqSum := 0.0;
+  LDiffCbSum := 0.0;
+  for LIterationIndex := 0 to LIterations - 1 do
+  begin
+    LDiff := LObservedMean - LMeans[LIterationIndex];
+    LDiffSqSum := LDiffSqSum + LDiff * LDiff;
+    LDiffCbSum := LDiffCbSum + LDiff * LDiff * LDiff;
+  end;
+  if LDiffSqSum > 0 then
+    LA := LDiffCbSum / (6.0 * Power(LDiffSqSum, 1.5))
+  else
+    LA := 0.0;
+
+  // 步骤 3: 调整百分位数
+  LAlpha := (1.0 - ALevel) / 2.0;
+  // zα = Φ^(-1)(α)
+  LZAlpha := NormalQuantile(LAlpha);
+  LZAlpha1m := NormalQuantile(1.0 - LAlpha);
+
+  // α1 = Φ(z0 + (z0 + zα)/(1 - a(z0 + zα)))
+  LAlpha1 := NormalCDF(LZ0 + (LZ0 + LZAlpha) / (1.0 - LA * (LZ0 + LZAlpha)));
+  // α2 = Φ(z0 + (z0 + z(1-α))/(1 - a(z0 + z(1-α))))
+  LAlpha2 := NormalCDF(LZ0 + (LZ0 + LZAlpha1m) / (1.0 - LA * (LZ0 + LZAlpha1m)));
+
+  SortDoubleArray(LMeans);
+
+  LLowerIndex := Trunc(LAlpha1 * LIterations);
+  LUpperIndex := Trunc(LAlpha2 * LIterations) - 1;
+  if LLowerIndex < 0 then LLowerIndex := 0;
+  if LUpperIndex >= LIterations then LUpperIndex := LIterations - 1;
+  if LUpperIndex < LLowerIndex then LUpperIndex := LLowerIndex;
+
+  Result.Lower := LMeans[LLowerIndex];
+  Result.Upper := LMeans[LUpperIndex];
+  Result.Level := ALevel;
+end;
+
+function TAdvancedStats.BootstrapTestDifference(const A, B: TDoubleArray;
+  AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
+{ Bootstrap 假设检验: 检验两组数据的均值差异是否显著
+  方法: Fisher 置换检验
+  1. 合并两组数据
+  2. 随机打乱顺序（Fisher-Yates shuffle）
+  3. 前 LNA 个作为 A 组，其余作为 B 组，计算均值差异
+  4. 与实际差异比较，得到 p-value }
+var
+  LNA, LNB, LN: Integer;
+  LMerged: TDoubleArray;
+  LPerm: TInt64Array;
+  LIterations: Integer;
+  LPRNG: TXoroshiro128Plus;
+  LMeanA, LMeanB, LObservedDiff: Double;
+  LI, LJ, LSwap, LIdx: Integer;
+  LCount: Integer;
+  LSumA, LSumB: Double;
+  LPermutedDiff: Double;
+begin
+  LNA := Length(A);
+  LNB := Length(B);
+
+  if (LNA = 0) or (LNB = 0) then
+  begin
+    Result.ObservedDiff := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Result.Iterations := 0;
+    Exit;
+  end;
+
+  // 计算观测差异
+  LMeanA := 0.0;
+  for LI := 0 to LNA - 1 do
+    LMeanA := LMeanA + A[LI];
+  LMeanA := LMeanA / LNA;
+
+  LMeanB := 0.0;
+  for LI := 0 to LNB - 1 do
+    LMeanB := LMeanB + B[LI];
+  LMeanB := LMeanB / LNB;
+
+  LObservedDiff := LMeanA - LMeanB;
+  Result.ObservedDiff := LObservedDiff;
+
+  // 合并数据
+  LN := LNA + LNB;
+  SetLength(LMerged, LN);
+  for LI := 0 to LNA - 1 do
+    LMerged[LI] := A[LI];
+  for LI := 0 to LNB - 1 do
+    LMerged[LNA + LI] := B[LI];
+
+  // 初始化排列索引
+  SetLength(LPerm, LN);
+  for LI := 0 to LN - 1 do
+    LPerm[LI] := LI;
+
+  // 初始化 PRNG
+  if ASeed > 0 then
+    LPRNG.Init(ASeed)
+  else
+  begin
+    Inc(GBootstrapCallCount);
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
+  end;
+
+  LIterations := AIterations;
+  if LIterations <= 0 then
+    LIterations := 1;
+
+  // Fisher permutation test
+  LCount := 0;
+  for LI := 0 to LIterations - 1 do
+  begin
+    // Fisher-Yates shuffle: 随机打乱排列
+    for LJ := LN - 1 downto 1 do
+    begin
+      LSwap := LPRNG.NextInt(LJ + 1);
+      LIdx := LPerm[LJ];
+      LPerm[LJ] := LPerm[LSwap];
+      LPerm[LSwap] := LIdx;
+    end;
+
+    // 计算前 LNA 个元素的和（A 组）和后 LNB 个元素的和（B 组）
+    LSumA := 0.0;
+    for LJ := 0 to LNA - 1 do
+      LSumA := LSumA + LMerged[LPerm[LJ]];
+    LSumB := 0.0;
+    for LJ := LNA to LN - 1 do
+      LSumB := LSumB + LMerged[LPerm[LJ]];
+
+    LPermutedDiff := (LSumA / LNA) - (LSumB / LNB);
+    if Abs(LPermutedDiff) >= Abs(LObservedDiff) then
+      Inc(LCount);
+  end;
+
+  // 双尾 p-value (包含 +1 修正，避免 p=0)
+  Result.PValue := (LCount + 1.0) / (LIterations + 1.0);
+  Result.IsSignificant := Result.PValue < BENCH_SIGNIFICANCE_ALPHA;
+  Result.Iterations := LIterations;
 end;
 
 function TAdvancedStats.TestNormalityByMoments: TNormalityTest;

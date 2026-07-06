@@ -113,11 +113,27 @@ B15  可用性改进 (2026-07-05)                               ✅
   B15.5  D08: xlang 解析器诊断输出                          ✅
   B15.6  D12: HasRegression 简化                            ✅
   B15.7  E05: 测试框架统一迁移                              ✅
+
+B16  边界验证修复 (2026-07-06)                               ✅
+  B16.1  C-25: RemoveByName 未找到时抛异常                  ✅
+  B16.2  C-26: SetTimeout 负值验证                          ✅
+  B16.3  C-27: HasRegression 阈值验证                       ✅
+  B16.4  C-12/C-13: SetTimeout(TDuration) 重载              ✅
+
+B17  Phase 5: 统计能力深化 (2026-07-06)                      ✅
+  B17.1  单样本 K-S 检验 (Kolmogorov-Smirnov)              ✅
+  B17.2  两样本 K-S 检验                                    ✅
+  B17.3  Xoroshiro128+ PRNG 升级                            ✅
+  B17.4  BCa Bootstrap (偏差修正加速)                       ✅
+  B17.5  Bootstrap 假设检验                                 ✅
+  B17.6  正态-正态共轭贝叶斯估计                            ✅
+  B17.7  贝叶斯可信区间                                     ✅
+  B17.8  先验融合 (历史数据作为先验)                        ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-05
+> **最后更新**: 2026-07-06
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
@@ -125,7 +141,7 @@ B15  可用性改进 (2026-07-05)                               ✅
 | test_bench_stats_advanced | 39 | ✅ 零泄漏 | 高级统计 + 异常值分级 + NaN/Inf |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
 | test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer + 统计完整性 |
-| test_bench_integration | 49 | ✅ 零泄漏 | 集成测试 + 超时 + LoopContext |
+| test_bench_integration | 52 | ✅ 零泄漏 | 集成测试 + 超时 + LoopContext |
 | test_bench_report | 30 | ✅ 零泄漏 | 报告生成 + 空结果 + 边界值 |
 | test_bench_xlang | 40 | ✅ 零泄漏 | 跨语言解析 + Unicode + 溢出保护 |
 | test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 + 字段验证 |
@@ -133,10 +149,13 @@ B15  可用性改进 (2026-07-05)                               ✅
 | test_bench_parallel | 11 | ✅ 零泄漏 | 并行基准 |
 | test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
 | test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
-| test_bench_invalid_parameters_heaptrc | 9 | ✅ 0 leaks | 参数校验 + 异常类型 |
+| test_bench_invalid_parameters_heaptrc | 12 | ✅ 0 leaks | 参数校验 + 异常类型 |
 | test_bench_matrix | 15 | ✅ 0 leaks | 多基线矩阵 + 图表 + JSON |
+| test_bench_ks | 12 | ✅ 0 leaks | K-S 检验 (Phase A) |
+| test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
+| test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
 | test_bench_self_bench | N/A | ✅ 0 leaks | 自基准测试 |
-| **合计** | **~296** | **15/15 通过** | |
+| **合计** | **~355** | **18/18 通过** | |
 
 ## 已解决的技术债务
 
