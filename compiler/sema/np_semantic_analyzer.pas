@@ -26,14 +26,6 @@ type
 
   TGenericCacheVec = specialize TVec<TGenericCacheEntry>;
 
-  TProcedureBodyEntry = record
-    Name: string;
-    Body: TGreenNode;
-    Decl: TGreenNode;
-    OwnerUnitId: string;
-    ScopeId: LongInt;
-  end;
-
   TParamSnapshot = record
     Name: string;
     HadValue: Boolean;
@@ -60,7 +52,7 @@ type
     FRootFileId: TSourceFileId;
     FNoFold: Boolean;
     FModel: TSemanticModel;
-    FProcedureBodies: array of TProcedureBodyEntry;
+    FProcedureBodies: TProcedureBodyArray;
     FCompilerProcNames: array of string;
     FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
@@ -3272,32 +3264,14 @@ begin
 end;
 
 function TSemanticAnalyzer.HasOverload(const AName: string): Boolean;
-var
-  Index, Count: LongInt;
 begin
-  Count := 0;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
-      Inc(Count);
-  Result := Count > 1;
+  Result := np_sema_overload.HasOverload(AName, FProcedureBodies);
 end;
 
 function TSemanticAnalyzer.LookupOverload(const AName: string;
   AArgCount: LongInt; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
-var
-  Index: LongInt;
 begin
-  ABody := nil;
-  ADecl := nil;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) and
-      DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-    begin
-      ABody := FProcedureBodies[Index].Body;
-      ADecl := FProcedureBodies[Index].Decl;
-      Exit(True);
-    end;
-  Result := False;
+  Result := np_sema_overload.LookupOverload(AName, AArgCount, FProcedureBodies, ABody, ADecl);
 end;
 
 function TSemanticAnalyzer.LookupCallBindingDeclaration(

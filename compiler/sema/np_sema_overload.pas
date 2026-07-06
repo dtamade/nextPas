@@ -24,6 +24,15 @@ uses
   np_green_tree;
 
 type
+  TProcedureBodyEntry = record
+    Name: string;
+    Body: TGreenNode;
+    Decl: TGreenNode;
+    OwnerUnitId: string;
+    ScopeId: LongInt;
+  end;
+  TProcedureBodyArray = array of TProcedureBodyEntry;
+
   TStringArray = array of string;
 
   { 参数签名结果 }
@@ -58,6 +67,12 @@ type
    * 名称重整：AName + '$' + Signature
    *}
   function MangledNameSig(const AName, ASig: string): string;
+
+function HasOverload(const AName: string;
+  const AProcedureBodies: TProcedureBodyArray): Boolean;
+function LookupOverload(const AName: string; AArgCount: LongInt;
+  const AProcedureBodies: TProcedureBodyArray;
+  out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
 
 implementation
 
@@ -132,6 +147,38 @@ begin
     Result := AName
   else
     Result := AName + '$' + ASig;
+end;
+
+
+function HasOverload(const AName: string;
+  const AProcedureBodies: TProcedureBodyArray): Boolean;
+var
+  Index, Count: LongInt;
+begin
+  Count := 0;
+  for Index := 0 to Length(AProcedureBodies) - 1 do
+    if SameText(AProcedureBodies[Index].Name, AName) then
+      Inc(Count);
+  Result := Count > 1;
+end;
+
+function LookupOverload(const AName: string; AArgCount: LongInt;
+  const AProcedureBodies: TProcedureBodyArray;
+  out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+var
+  Index: LongInt;
+begin
+  ABody := nil;
+  ADecl := nil;
+  for Index := 0 to Length(AProcedureBodies) - 1 do
+    if SameText(AProcedureBodies[Index].Name, AName) and
+      DeclAcceptsArgCount(AProcedureBodies[Index].Decl, AArgCount) then
+    begin
+      ABody := AProcedureBodies[Index].Body;
+      ADecl := AProcedureBodies[Index].Decl;
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 end.
