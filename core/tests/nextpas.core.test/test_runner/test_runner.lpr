@@ -1066,7 +1066,21 @@ begin
     PassTest('Regular test captured log');
   end;
 
-  { ── ShouldFail (expected failure) ─────────────────────────────────────── }
+  { ── ShouldFail (expected failure) ──────────────────────────────────────────
+    Overload patterns:
+      ShouldFail(name, proc)                    — any exception = pass, no exception = fail
+      ShouldFail(name, proc, 'reason')          — same as above, with reason message
+      ShouldFail(name, proc, EAbort)            — only EAbort (or subclass) = pass
+      ShouldFail(name, proc, EAbort, 'substr')  — EAbort + message contains 'substr' = pass
+      ShouldFail(name, proc, 'substr', 0)       — any exception + message contains 'substr' = pass
+                                                     (0 is disambiguation dummy — FPC can't distinguish
+                                                      this from ShouldFail(name, proc, 'reason'))
+
+    ⚠ FPC overload resolution pitfall:
+      ShouldFail(name, proc, 'some text') → matches the 'reason' overload, NOT 'contains'.
+      To match by message substring without class check, use the 4-arg form with dummy=0:
+        ShouldFail(name, proc, 'substring', 0)
+   }
   WriteLn;
   SectionHeader('Phase 6: ShouldFail (expected failure)');
   begin

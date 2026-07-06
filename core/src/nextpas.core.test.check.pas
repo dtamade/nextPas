@@ -219,48 +219,52 @@ begin
       ' but got ' + UIntToStr(AActual));
 end;
 
-{ 3-arg overloads: wrap 2-arg, prepend AMessage on failure }
+{ 3-arg overloads: direct check, prepend AMessage on failure }
 
 procedure CheckEqual(const AExpected, AActual: string;
   const AMessage: string);
 begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
+  if AExpected <> AActual then
+  begin
+    if AMessage <> '' then
+    begin
+      if (Length(AExpected) > 40) or (Length(AActual) > 40) or
+         (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
+        InternalFail(AMessage + ': ' + StringDiff(AExpected, AActual))
       else
-        raise;
+        InternalFail(AMessage + ': Expected "' + AExpected + '" but got "' + AActual + '"');
+    end
+    else
+    begin
+      if (Length(AExpected) > 40) or (Length(AActual) > 40) or
+         (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
+        InternalFail(StringDiff(AExpected, AActual))
+      else
+        InternalFail('Expected "' + AExpected + '" but got "' + AActual + '"');
+    end;
   end;
 end;
 
 procedure CheckEqual(const AExpected, AActual: Int64;
   const AMessage: string);
 begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
+  if AExpected <> AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(AActual))
+    else
+      InternalFail('Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
 begin
-  try
-    CheckEqual(AExpected, AActual);
-  except
-    on E: EAssertionFailed do
-      if AMessage <> '' then
-        raise EAssertionFailed.Create(AMessage + ': ' + E.Message)
-      else
-        raise;
-  end;
+  if AExpected <> AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + BoolToStr(AExpected, 'True', 'False') +
+        ' but got ' + BoolToStr(AActual, 'True', 'False'))
+    else
+      InternalFail('Expected ' + BoolToStr(AExpected, 'True', 'False') +
+        ' but got ' + BoolToStr(AActual, 'True', 'False'));
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: string);
@@ -315,7 +319,8 @@ begin
   if LDiff > AEpsilon then
     FailWithDefault(AMessage,
       'Expected ' + FloatToStr(AExpected) +
-      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual));
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) +
+      ' (diff=' + FloatToStr(LDiff) + ')');
 end;
 
 procedure CheckNotNear(const AExpected, AActual: Double;

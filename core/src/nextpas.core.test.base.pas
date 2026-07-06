@@ -500,8 +500,8 @@ begin
          not (E.InheritsFrom(AEntry.ShouldFailClass)) then
       begin
         AStatus := tsFailed;
-        AFailMsg := 'Expected exception ' + AEntry.ShouldFailClass.ClassName +
-          ' but got ' + E.ClassName + ': ' + E.Message;
+        AFailMsg := 'ShouldFail: expected ' + AEntry.ShouldFailClass.ClassName +
+          ' (or subclass) but got ' + E.ClassName + ': ' + E.Message;
         Exit;
       end;
       { Check message substring if specified }
@@ -509,7 +509,7 @@ begin
          (Pos(AEntry.ShouldFailContains, E.Message) = 0) then
       begin
         AStatus := tsFailed;
-        AFailMsg := 'Expected exception message containing "' +
+        AFailMsg := 'ShouldFail: expected message containing "' +
           AEntry.ShouldFailContains + '" but got: ' + E.Message;
         Exit;
       end;

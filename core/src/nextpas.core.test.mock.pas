@@ -238,6 +238,13 @@ type
     function GetReturnBool(const AMethodName: string;
       const AArgs: array of TMockValue): Boolean; overload;
 
+    { Get the configured return value as Double. Returns 0.0 if not configured. }
+    function GetReturnDouble(const AMethodName: string): Double; overload;
+    function GetReturnDouble(const AMethodName: string;
+      const AArgs: array of string): Double; overload;
+    function GetReturnDouble(const AMethodName: string;
+      const AArgs: array of TMockValue): Double; overload;
+
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
 
@@ -1135,6 +1142,40 @@ begin
   if LTyped.Kind = mvBool then
     Exit(LTyped.BoolVal);
   Result := False;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string): Double;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, []);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string;
+  const AArgs: array of string): Double;
+var
+  LTypedArgs: TMockValues;
+  LTyped: TMockValue;
+begin
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LTyped := FState.GetReturnTyped(AMethodName, LTypedArgs);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string;
+  const AArgs: array of TMockValue): Double;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, AArgs);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;

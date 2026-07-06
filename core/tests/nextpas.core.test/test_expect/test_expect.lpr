@@ -1,4 +1,24 @@
-{ test_expect — Validates IExpectation fluent API }
+{ test_expect — Validates IExpectation fluent API
+
+  API Recommendation — Factory function selection:
+    Type-safe factory (preferred):
+      ExpectStr(s)      — string, enables ToEqual/ToContain/ToStartWith/ToEndWith/ToHaveLength
+      ExpectInt(n)      — Int64, enables ToEqualInt/ToBeGreaterThan/ToBeLessThan/ToBeInRange/ToBePositive/ToBeNegative
+      ExpectBool(b)     — Boolean, enables ToBeTrue/ToBeFalse
+      ExpectDouble(d)   — Double, enables ToEqualDouble/ToBeNear/ToBeGreaterThan/ToBeLessThan
+      ExpectPtr(p)      — Pointer, enables ToBeNil/ToNotBeNil
+      ExpectProc(p)     — TTestProc, enables ToRaise/ToNotRaise
+
+    Convenience factory (string only):
+      Expect(s)         — equivalent to ExpectStr(s)
+      ⚠ Do NOT pass non-string to Expect(): compiles via implicit conversion
+        but creates wrong expectation kind, causing RequireKind to panic.
+
+    Example:
+      ExpectStr(name).ToEqual('Alice');          ✓ clear, type-safe
+      Expect(name).ToEqual('Alice');             ✓ also fine for strings
+      Expect(42).ToEqualInt(42);                 ✗ compiles but wrong kind! Use ExpectInt(42)
+ }
 program test_expect;
 
 {$mode objfpc}{$H+}{$J-}
@@ -301,22 +321,22 @@ end;
 
 procedure TestTypeMismatchIntToEqual;
 begin
-  ExpectFail(procedure begin ExpectInt(42).ToEqual('hello'); end, 'non-string');
+  ExpectFail(procedure begin ExpectInt(42).ToEqual('hello'); end, 'requires string expectation');
 end;
 
 procedure TestTypeMismatchStrToEqualInt;
 begin
-  ExpectFail(procedure begin Expect('hello').ToEqualInt(42); end, 'non-integer');
+  ExpectFail(procedure begin Expect('hello').ToEqualInt(42); end, 'requires integer expectation');
 end;
 
 procedure TestTypeMismatchStrToBeNil;
 begin
-  ExpectFail(procedure begin Expect('hello').ToBeNil; end, 'non-pointer');
+  ExpectFail(procedure begin Expect('hello').ToBeNil; end, 'requires pointer expectation');
 end;
 
 procedure TestTypeMismatchStrToRaise;
 begin
-  ExpectFail(procedure begin Expect('hello').ToRaise(Exception); end, 'non-proc');
+  ExpectFail(procedure begin Expect('hello').ToRaise(Exception); end, 'requires proc expectation');
 end;
 
 { ── F12: Not_ positive pass paths ─────────────────────────────────────────── }
@@ -418,6 +438,18 @@ begin
   end;
 end;
 
+{ ── Double comparison semantics ──────────────────────────────────────────────
+  ToBeNear(actual, tolerance):
+    if tolerance > 0: uses IsNear(actual, expected, tolerance) — true when
+      |actual - expected| <= tolerance (relative/absolute hybrid)
+    if tolerance = 0: uses IsExact — IEEE bitwise comparison, only true for
+      exact same bits (distinguishes +0.0/-0.0, NaN patterns, etc.)
+
+  ⚠ IsExact(tolerance=0) is NOT "very tight tolerance" — it's bitwise identity.
+     Use tolerance > 0 for normal floating-point comparisons.
+     Example: ExpectDouble(0.3).ToBeNear(0.3, 0.0) might FAIL on some platforms
+              because 0.3 cannot be represented exactly in IEEE 754.
+ }
 procedure TestExpectDouble;
 begin
   ExpectDouble(1.0).ToBeNear(1.0);
@@ -458,7 +490,7 @@ end;
 
 procedure TestExpectDoubleTypeMismatch;
 begin
-  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualInt(1); end, 'non-integer');
+  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualInt(1); end, 'requires integer expectation');
 end;
 
 { ── R2-F15: NaN/Infinity/Int64 boundary ────────────────────────────────────── }
@@ -565,13 +597,13 @@ end;
 procedure TestExpectIntToBeNearTypeMismatch;
 begin
   { ExpectInt creates ekInt, ToBeNear requires ekDouble → type mismatch }
-  ExpectFail(procedure begin ExpectInt(42).ToBeNear(42.0, 1.0); end, LowerCase('non-double'));
+  ExpectFail(procedure begin ExpectInt(42).ToBeNear(42.0, 1.0); end, 'requires double expectation');
 end;
 
 procedure TestExpectPtrToEqualIntTypeMismatch;
 begin
   { ExpectPtr creates ekPtr, ToEqualInt requires ekInt → type mismatch }
-  ExpectFail(procedure begin ExpectPtr(nil).ToEqualInt(0); end, LowerCase('non-integer'));
+  ExpectFail(procedure begin ExpectPtr(nil).ToEqualInt(0); end, 'requires integer expectation');
 end;
 
 { R6-45: Not_.ToBeNear combination }

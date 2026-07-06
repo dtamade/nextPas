@@ -57,16 +57,16 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 
 | 套件 | 覆盖范围 | 测试数 |
 |------|---------|--------|
-| `test_assertions` | Check* 过程式断言 API + NaN/边界/epsilon 覆盖 | 100 |
-| `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 113 |
-| `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回/ResetAll | 67 |
-| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合、TAP/JSON compliance | 70 |
-| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 134 (101+14x+15skip) |
-| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 15 |
-| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 10 |
-| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 15 |
-| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 13 |
-| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 15 |
+| `test_assertions` | Check* 过程式断言 API + NaN/边界/epsilon 覆盖 | 112 |
+| `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 126 |
+| `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回/ResetAll | 82 |
+| `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合、TAP/JSON compliance | 79 |
+| `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 117 |
+| `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 30 |
+| `test_parallel` | 并行执行、lifecycle、retry、skip、MaxParallelWorkers 批次调度、verbose、cleanup | 47 |
+| `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 17 |
+| `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
+| `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
 
 ## 运行方式
 
@@ -88,6 +88,29 @@ make -C core/tests/nextpas.core.test/test_runner test
 - 全局计数器用于 lifecycle 验证（GSetupCalled 等）
 
 ## 注意事项
+
+### 工厂函数推荐
+
+流式断言使用类型安全的工厂函数（推荐）：
+
+| 工厂函数 | 类型 | 启用的方法 |
+|---------|------|-----------|
+| `ExpectStr(s)` | string | ToEqual/ToContain/ToStartWith/ToEndWith/ToHaveLength |
+| `ExpectInt(n)` | Int64 | ToEqualInt/ToBeGreaterThan/ToBeLessThan/ToBeInRange/ToBePositive/ToBeNegative |
+| `ExpectBool(b)` | Boolean | ToBeTrue/ToBeFalse |
+| `ExpectDouble(d)` | Double | ToEqualDouble/ToBeNear/ToBeGreaterThan/ToBeLessThan |
+| `ExpectPtr(p)` | Pointer | ToBeNil/ToNotBeNil |
+| `ExpectProc(p)` | TTestProc | ToRaise/ToNotRaise |
+
+`Expect(s)` 是 `ExpectStr(s)` 的便捷别名，仅接受字符串。
+
+⚠ **不要向 `Expect()` 传递非字符串类型**：FPC `{$H+}` 允许隐式 `Int64→string` 转换，编译通过但会创建错误的 expectation kind，导致 `RequireKind` panic。
+
+```pascal
+ExpectStr(name).ToEqual('Alice');          ✓ 类型安全
+Expect(name).ToEqual('Alice');             ✓ 字符串也可
+Expect(42).ToEqualInt(42);                 ✗ 编译通过但运行时 panic！用 ExpectInt(42)
+```
 
 ### 快速上手
 

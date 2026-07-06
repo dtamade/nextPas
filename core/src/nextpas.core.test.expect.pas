@@ -244,9 +244,15 @@ const
   KindNames: array[TExpectationKind] of string = (
     'string', 'integer', 'boolean', 'pointer', 'proc', 'double'
   );
+  FactoryHints: array[TExpectationKind] of string = (
+    'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
+    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)'
+  );
 begin
   if FKind <> AKind then
-    InternalFail(AMethod + ' called on non-' + KindNames[AKind] + ' expectation');
+    InternalFail(AMethod + ' requires ' + KindNames[AKind] +
+      ' expectation, but got ' + KindNames[FKind] +
+      '. Use ' + FactoryHints[AKind] + ' to create the correct type.');
 end;
 
 procedure TExpectation.CheckMatch(AIsMatch: Boolean;
