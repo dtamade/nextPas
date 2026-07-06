@@ -156,11 +156,12 @@ begin
         { CAS failed — another producer won this slot }
         if LBackoff < 256 then
         begin
-          LI := LBackoff;
+          { Add variation based on position to reduce livelock }
+          LI := LBackoff + Integer(LPos and 3);
           repeat
             CpuPause;
             Dec(LI);
-          until LI = 0;
+          until LI <= 0;
           LBackoff := LBackoff * 2;
         end
         else
@@ -206,11 +207,12 @@ begin
       { CAS failed — another consumer won this slot }
       if LBackoff < 256 then
       begin
-        LI := LBackoff;
+        { Add variation based on position to reduce livelock }
+        LI := LBackoff + Integer(LPos and 3);
         repeat
           CpuPause;
           Dec(LI);
-        until LI = 0;
+        until LI <= 0;
         LBackoff := LBackoff * 2;
       end
       else
