@@ -50,7 +50,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Mock | — | — | TMock fluent API |
 | Parallel opt-in | `t.Parallel()` | `#[serial]` | `TestSeq()` |
 | Test cache | `go test -cache` | — | `--cache` |
-| Property-based test | QuickCheck (3rd party) | proptest | **v7.1** (deferred) |
+| Property-based test | QuickCheck (3rd party) | proptest | **v7.1** GenString/GenInt/GenBool/GenBytes + Map/Filter combinators |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -67,6 +67,8 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 17 |
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
+| `test_stress` | 高并发压力测试、大量测试注册、内存密集 | 1 |
+| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + MapIntToStr/Filter* combinators | 8 |
 
 ## 运行方式
 
@@ -285,28 +287,46 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 - **v7.0a**: Parallel Opt-in — `TestSeq()` 注册串行测试，并行模式下 Phase 1 先串行执行 Sequential 测试，Phase 2 再并行执行其余测试 (Go `t.Parallel()` inverse)
 - **v7.0b**: Test Cache — `TTestCache` 缓存测试结果，`--cache` 启用，FNV-1a hash (源文件+编译器+配置)
+- **v7.0c**: Cache integration — runner 自动查缓存/写缓存，命中显示 `(cached)` 跳过执行，`SourceFiles` 支持内容失效
+- **v7.1**: Property-based Testing — QuickCheck 风格，4 种生成器 (GenString/GenInt/GenBool/GenBytes)，自动 shrinking (二分缩小)，`Prop()` 注册属性测试
+- **v7.1a**: Generator Combinators — `MapIntToStr` (类型转换)、`FilterInt`/`FilterString`/`FilterBytes` (谓词过滤)，shrink 时尊重 filter 约束
 
 ## 路线图
 
 | 版本 | 特性 | 状态 | 依赖 |
 |------|------|------|------|
-| **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | 🟡 待实现 | 无 |
+| **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | ✅ 已完成 | 无 |
+| **v7.1a** | Generator Combinators — Map/Filter 组合器 | ✅ 已完成 | v7.1 |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
-### v7.1 Property-based Testing 设计方向
+### v7.1 Property-based Testing — 实际 API
 
 ```pascal
-Prop('Parse roundtrip', @TestRoundtrip)
-  .WithGen(GenString(1..1000))   // 结构化生成器
-  .Runs(1000)                     // 运行次数
-  .ShrinkOnFail;                  // 失败时自动缩小输入
+{ 基础用法 }
+procedure TestRoundtrip(const S: string);
+begin
+  CheckEqual(S, JsonDecode(JsonEncode(S)));
+end;
+Prop('JSON roundtrip', @TestRoundtrip, GenString(1000), 100, True);
+
+{ 4 种生成器 }
+GenString(AMaxLen) / GenString(AMinLen, AMaxLen)   // 可打印 ASCII
+GenInt(AMax) / GenInt(AMin, AMax)                   // Int64 范围
+GenBool                                              // 随机布尔
+GenBytes(AMaxLen) / GenBytes(AMinLen, AMaxLen)      // 随机字节
+
+{ 组合器 (v7.1a) }
+MapIntToStr(GenInt(0, 9999), function(V: Int64): string begin Result := IntToStr(V) end)
+FilterInt(GenInt(0, 1000), function(V: Int64): Boolean begin Result := V mod 2 = 0 end)
+FilterString(GenString(50), function(const V: string): Boolean begin Result := Length(V) > 0 end)
+FilterBytes(GenBytes(50), function(const V: TBytes): Boolean begin Result := Length(V) > 0 end)
 ```
 
 - QuickCheck 风格，不需要编译器支持
-- GenString/GenInt/GenBytes 等基础生成器
-- 组合生成器（record 字段独立生成 → 组合）
-- 收缩：失败时二分缩小输入，找到最小复现
+- 4 种基础生成器 + 4 种组合器 (Map/Filter)
+- 自动 shrinking: 失败时递归二分缩小输入，找到最小复现
+- Filter 组合器在 shrink 时也尊重谓词约束
 
 ### v7.2 Coverage-guided Fuzzing 前置条件
 
