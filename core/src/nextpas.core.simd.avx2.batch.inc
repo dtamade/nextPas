@@ -4819,3 +4819,19 @@ begin
   end;
   {$POP}
 end;
+
+// ============================================================================
+// Smart ArrayAddF32: 自动选择最佳实现
+// - 小数组 (<4KB/1024 floats): 使用普通版本 (cache-friendly)
+// - 大数组 (>=4KB): 使用非时态版本 (bypass cache)
+// ============================================================================
+
+procedure AVX2ArrayAddF32_Smart(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+const
+  NT_THRESHOLD = 16384; // 64KB = 16384 floats (exceeds L1 cache)
+begin
+  if aCount >= NT_THRESHOLD then
+    AVX2ArrayAddF32_NT(aSrc1, aSrc2, aDst, aCount)
+  else
+    AVX2ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+end;

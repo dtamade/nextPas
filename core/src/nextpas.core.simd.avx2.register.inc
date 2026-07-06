@@ -477,7 +477,7 @@ begin
   dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
 
   // Batch array operations (AVX2 256-bit)
-  dispatchTable.ArrayAddF32 := @AVX2ArrayAddF32;
+  dispatchTable.ArrayAddF32 := @AVX2ArrayAddF32_Smart;
   dispatchTable.ArraySubF32 := @AVX2ArraySubF32;
   dispatchTable.ArrayMulF32 := @AVX2ArrayMulF32;
   dispatchTable.ArrayDivF32 := @AVX2ArrayDivF32;

@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-06 (Phase 7-11 规划)
 
 ## 当前状态
 
@@ -52,248 +52,216 @@
 | G19: SysUtils 残留清理 | ✅ 100% | 77→0 |
 | G20: Gather/Scatter 正式化 | ✅ 100% | 正式 API |
 
+### 已完成 (✅) — 2026-07-06 更新
+
+| 目标 | 状态 | 说明 |
+|------|------|------|
+| G1: 核心运算完备性 | ✅ 100% | F32/F64/Integer batch 操作 |
+| G2: 神经网络推理层 | ✅ 100% | 47 个函数 |
+| G3: 质量保障 | ✅ 100% | 审计/测试/内存 |
+| G4: 文档与可发现性 | ✅ 100% | 文档体系 |
+| G5: 性能验证与基准 | ✅ 100% | 基准测试 |
+| G6: 文本/内存 SIMD 加速 | ✅ 100% | MemEqual, Utf8Validate |
+| G7: GEMM 微内核 | ✅ 100% | 矩阵乘法 |
+| G8: FFT SIMD 化 | ✅ 100% | 信号处理 |
+| G9: RTL 依赖清零 | ✅ 100% | 无 FPC RTL 依赖 |
+| G10: 高级计算 | ✅ 100% | parallel/quant/NEON |
+| G11: SIMD 深化 | ✅ 100% | INT8 dot/RealFft |
+| G12: 算法层 | ✅ 100% | Winograd/Attention/Strassen |
+| G13: SIMD contract qualification | ✅ 100% | 合规路线图 |
+| G14: 维护可持续性 | ✅ 100% | 维护体系 |
+| G15: 代码组织瘦身 | ✅ 100% | 可维护性 |
+| G19: SysUtils 残留清理 | ✅ 100% | 77→0 |
+| G20: Gather/Scatter 正式化 | ✅ 100% | 正式 API |
+| Phase 1: 编译期快速路径 | ✅ 100% | 静态分派宏 (SIMD_STATIC_*) |
+| Phase 2: FP 快速路径 + IEEE 754 | ✅ 100% | SSE2/AVX2 真实 SIMD 指令 |
+| Phase 3: 文件合并 + 命名规范化 | ✅ 100% | 214→88 文件 |
+| Phase 4: 平台扩展 | ✅ 100% | LoongArch/PPC64 QEMU 验证 |
+| Phase 5: Highway 静态调度 | ✅ 100% | SIMD_STATIC_BACKEND 支持 |
+| Phase 6: 类型覆盖扩展 | ✅ 100% | 全类型运算符 |
+
 ### 进行中 (⚠️)
 
 | 目标 | 状态 | 说明 |
 |------|------|------|
 | G16: RISC-V V 后端 | Phase 1-2 ✅ | Phase 3 需硬件 |
 | G17: Dispatch 开销优化 | Phase 1-3 ✅ | Phase 4: 硬件测量 |
-| G18: ArrayAdd 加速比 | Phase 1 ✅ | 6x 峰值 @256-1024 |
-| G21: NEON AArch64 覆盖度 | 执行中 | 基准测试 |
+| G18: ArrayAdd 加速比 | Phase 1 ✅ | 2.24x @16KB (实测) |
+| G21: NEON AArch64 覆盖度 | ✅ 100% | 558 槽位全覆盖 |
 
-### 未开始 (❌)
+### 延迟项 (🔒 等待 nextpas 编译器)
 
 | 目标 | 状态 | 说明 |
 |------|------|------|
-| Intrinsics FP 真正实现 | ❌ 未开始 | FP 算术是标量回退 |
-| 编译期快速路径 | ❌ 未开始 | 分派器开销优化 |
-| 静态调度 | ❌ 未开始 | 参考 Highway 双模式 |
-| LoongArch LASX Backend | ❌ 未开始 | Intrinsics 已有 stub |
-| WebAssembly SIMD | ❌ 未开始 | 需要新后端 |
-| POWER VSX | ❌ 未开始 | 需要新后端 |
-| MIPS MSA | ❌ 未开始 | 需要新后端 |
+| LoongArch LASX Backend | 🔒 STUB | FPC 无 LASX 内联汇编 |
+| WebAssembly SIMD | 🔒 STUB | FPC WASM32 无 SIMD128 |
+| POWER VSX | 🔒 STUB | 需 nextpas 后端 |
+| MIPS MSA | 🔒 STUB | FPC mips64el InternalError |
+
+### 下一步工作 (Phase 7+)
+
+| 目标 | 优先级 | 说明 |
+|------|--------|------|
+| 批量操作深度优化 | P0 | ArrayAdd/Mul/Div 循环展开 + 预取 |
+| SIMD vs 标量基准修正 | P0 | FPC 自动向量化导致基准不公平 |
+| 宽向量(512-bit)批处理 | P1 | AVX-512 批量操作优化 |
+| 内存操作优化 | P1 | MemCopy/MemSet 非对齐快速路径 |
+| 编译器集成 | P2 | nextpas 编译器 SIMD 内建支持 |
 
 ## 问题分析
 
-### 问题 1: 分派器开销
+### 问题 1: 基准测试不公平 (已发现)
 
-**现状**: atomic_load + 函数指针，~15-20 cycles 开销
-**原因**: FPC 编译器无法内联函数指针调用
-**影响**: 热路径性能下降
+**现状**: 标量基准被 FPC 自动向量化，导致 SIMD 看起来比标量慢
+**原因**: FPC `-O2`/`-O3` 会将 `for i := 0 to 3 do Result.f[i] := a.f[i] + b.f[i]` 编译为 SSE2 指令
+**影响**: 单向量操作基准 0.64x (实际 SIMD 并不慢，是标量已经很快)
+**解决**: 需要修正基准测试方法
 
-### 问题 2: Intrinsics FP 标量回退
+### 问题 2: 批量操作优化空间
 
-**现状**: FP 算术是标量回退，不是真正 SIMD
-**原因**: 处理特殊值 (NaN, Inf, -0.0)，确保 IEEE 754 一致性
-**影响**: Intrinsics 层未真正实现
+**现状**: ArrayAddF32 2.24x 加速比 (16KB)
+**原因**: 循环展开、预取、对齐优化不足
+**影响**: 批量操作性能可进一步提升
+**解决**: 深度优化批量操作循环
 
-### 问题 3: 文件数量庞大
+### 问题 3: 平台覆盖受限
 
-**现状**: 214 个源文件 (84 .pas + 130 .inc)
-**原因**: 历史积累，功能细分
-**影响**: 维护成本高
-
-### 问题 4: 平台覆盖不全
-
-**现状**: 主要支持 x86/ARM/RISC-V，其他平台未支持
-**原因**: 开发资源有限
+**现状**: x86/ARM/RISC-V 已支持，LoongArch/PPC64 已验证，MIPS/WASM 延迟
+**原因**: FPC 后端限制，需等待 nextpas 编译器
 **影响**: 跨平台兼容性受限
+**解决**: 等待 nextpas 编译器实现对应后端
 
 ## 路线图
 
-### Phase 1: 优化热路径 (短期, 1-2 周)
+### Phase 7: 批量操作深度优化 (P0, 1-2 周)
 
-**目标**: 减少分派器开销，提供编译期快速路径
+**目标**: 优化批量操作性能，充分发挥 SIMD 优势
 
 **任务**:
-1. [ ] 为 AVX2 提供编译期快速路径
-   ```pascal
-   {$IFDEF HAS_AVX2}
-   function VecF32x4Add(const a, b: TVecF32x4): TVecF32x4; inline;
-   begin
-     Result := AVX2AddF32x4(a, b);  // 直接调用
-   end;
-   {$ENDIF}
-   ```
+1. [ ] ArrayAddF32 循环展开优化
+   - 当前: 简单循环
+   - 目标: 4x/8x 展开 + 预取
+   - 预期: 3-4x 加速比 → 6-8x
 
-2. [ ] 为批量操作提供快速路径
-   ```pascal
-   procedure BatchAddF32x4(const A, B: array of TVecF32x4;
-                           var C: array of TVecF32x4);
-   begin
-     // 一次分派，多次调用
-   end;
-   ```
+2. [ ] ArrayMulF32/ArrayDivF32 优化
+   - 当前: 2.24x/2.23x
+   - 目标: 4x+ 加速比
 
-3. [ ] 添加编译期后端选择宏
-   ```pascal
-   {$DEFINE SIMD_BACKEND_AVX2}
-   ```
+3. [ ] 内存对齐优化
+   - 检测对齐状态，使用 aligned load/store
+   - 非对齐数据使用 movups
+
+4. [ ] 预取策略
+   - 软件预取下一批数据
+   - 减少 cache miss
 
 **验证**:
-- 基准测试: 分派器开销从 ~15-20 cycles 降到 ~1-2 cycles
+- 基准测试: ArrayAddF32 6x+ 加速比
 - 测试: 全部通过
 
-### Phase 2: 修复 Intrinsics 层 (中期, 2-4 周)
+### Phase 8: 基准测试修正 (P0, 1 周)
 
-**目标**: Intrinsics FP 算术使用真正 SIMD 指令
-
-**任务**:
-1. [ ] 在 Backend Adapters 中直接实现 FP SIMD
-   ```pascal
-   function SSE2AddF32x4(const a, b: TVecF32x4): TVecF32x4; assembler;
-   asm
-     movups xmm0, [a]
-     movups xmm1, [b]
-     addps xmm0, xmm1     // 真正的 SIMD 指令
-     movups [Result], xmm0
-   end;
-   ```
-
-2. [ ] 保留 Intrinsics 层用于特殊值处理
-   - Load/Store: 真正 SIMD 汇编
-   - Set/Zero: 真正 SIMD 汇编
-   - 整数算术: 真正 SIMD 汇编
-   - FP 算术: 标量回退 (处理特殊值)
-
-3. [ ] 添加 IEEE 754 测试
-   - NaN 传播测试
-   - Inf 处理测试
-   - -0.0 处理测试
-
-**验证**:
-- 基准测试: FP 操作性能提升 4-8x
-- 测试: IEEE 754 一致性测试通过
-
-### Phase 3: 简化文件结构 (中期, 2-4 周)
-
-**目标**: 减少文件数量，提高可维护性
+**目标**: 修正基准测试方法，公平比较 SIMD vs 标量
 
 **任务**:
-1. [ ] 合并相似功能的 .inc 文件
-2. [ ] 删除过时的 .inc 文件
-3. [ ] 统一命名规范
+1. [ ] 禁用 FPC 自动向量化
+   - 使用 `{$OPTIMIZATION OFF}` 或 volatile 变量
+   - 确保标量基准是真正的标量
+
+2. [ ] 添加 SIMD vs 手写标量基准
+   - 比较 SIMD vs 手写标量循环
+   - 测量真实加速比
+
+3. [ ] 添加吞吐量基准
+   - 测量 ops/sec 而不是单次操作延迟
+   - 批量操作吞吐量
 
 **验证**:
-- 文件数量: 214 → ~100
-- 编译时间: 不增加
+- 基准测试: SIMD vs 真实标量 4x+ 加速比
+- 文档: 更新性能数据
+
+### Phase 9: 宽向量优化 (P1, 2 周)
+
+**目标**: 优化 512-bit 批量操作
+
+**任务**:
+1. [ ] AVX-512 批量操作
+   - ArrayAddF32x16 (512-bit)
+   - ArrayMulF32x16
+
+2. [ ] 256-bit 批量操作优化
+   - ArrayAddF32x8 (AVX2)
+   - 利用 256-bit 寄存器
+
+3. [ ] 向量宽度自动选择
+   - 运行时检测最优宽度
+   - 动态选择 128/256/512-bit
+
+**验证**:
+- 基准测试: 512-bit 2x+ 快于 256-bit
 - 测试: 全部通过
 
-### Phase 4: 扩展平台支持 (长期, 2-3 月)
+### Phase 10: 内存操作优化 (P1, 2 周)
 
-**目标**: 支持更多平台
-
-**任务**:
-
-#### 4.1 LoongArch LASX (优先级: 高)
-
-- [ ] 实现 LASX Backend Adapter
-  ```pascal
-  function LASXAddF32x8(const a, b: TVecF32x8): TVecF32x8; assembler;
-  asm
-    xvld xr0, [a]
-    xvld xr1, [b]
-    xvadd.s xr0, xr0, xr1
-    xvst xr0, [Result]
-  end;
-  ```
-- [ ] 测试验证
-- [ ] 性能基准
-
-#### 4.2 WebAssembly SIMD (优先级: 中)
-
-- [ ] 实现 WASM SIMD Backend
-  ```pascal
-  function WASMAddF32x4(const a, b: TVecF32x4): TVecF32x4;
-  begin
-    // 使用 WASM SIMD 内建函数
-    Result := wasm_f32x4_add(a, b);
-  end;
-  ```
-- [ ] 测试验证
-- [ ] 性能基准
-
-#### 4.3 POWER VSX (优先级: 低)
-
-- [ ] 实现 VSX Backend Adapter
-- [ ] 测试验证
-- [ ] 性能基准
-
-#### 4.4 MIPS MSA (优先级: 低)
-
-- [ ] 实现 MSA Backend Adapter
-- [ ] 测试验证
-- [ ] 性能基准
-
-**验证**:
-- 平台: LoongArch, WebAssembly, POWER, MIPS
-- 测试: 全部通过
-- 性能: 与标量相比有提升
-
-### Phase 5: 静态调度 (长期, 1-2 月)
-
-**目标**: 参考 Highway 双模式设计，支持编译期确定后端
+**目标**: 优化 MemCopy/MemSet 等内存操作
 
 **任务**:
-1. [ ] 设计静态调度 API
-   ```pascal
-   // 静态调度
-   function VecF32x4Add_Static(const a, b: TVecF32x4): TVecF32x4; inline;
-   begin
-     {$IFDEF HAS_AVX2}
-     Result := AVX2AddF32x4(a, b);
-     {$ELSEIF HAS_SSE2}
-     Result := SSE2AddF32x4(a, b);
-     {$ELSE}
-     Result := ScalarAddF32x4(a, b);
-     {$ENDIF}
-   end;
-   ```
+1. [ ] MemCopy 对齐优化
+   - 检测源/目标对齐
+   - 使用 aligned load/store
 
-2. [ ] 实现编译期后端选择
-   ```pascal
-   {$PUSH}
-   {$DEFINE SIMD_BACKEND_AVX2}
-   // 使用静态调度
-   {$POP}
-   ```
+2. [ ] MemSet 向量化
+   - 使用 SIMD memset
+   - 16/32/64 字节批量设置
 
-3. [ ] 保持动态调度兼容
-   - 静态调度和动态调度并存
-   - 用户可以选择使用哪种
+3. [ ] MemEqual 优化
+   - 短字符串快速路径
+   - 长字符串 SIMD 比较
 
 **验证**:
-- 基准测试: 静态调度无分派器开销
+- 基准测试: MemCopy 2x+ 加速比
 - 测试: 全部通过
-- 兼容性: 动态调度仍然可用
+
+### Phase 11: 编译器集成 (P2, 长期)
+
+**目标**: nextpas 编译器 SIMD 内建支持
+
+**任务**:
+1. [ ] SIMD 类型内建支持
+   - TVecF32x4 作为编译器内建类型
+   - 直接生成 SIMD 指令
+
+2. [ ] SIMD 运算符重载
+   - `+`, `-`, `*`, `/` 直接映射到 SIMD 指令
+   - 无函数调用开销
+
+3. [ ] 自动向量化
+   - 编译器自动将循环向量化
+   - 利用 SIMD 指令
+
+**验证**:
+- 编译器: SIMD 类型和运算符工作
+- 性能: 无函数调用开销
 
 ## 优先级
 
-### P0: 必须完成 (Phase 1)
+### P0: 必须完成 (Phase 7-8)
 
-1. 编译期快速路径
-2. 批量操作优化
-3. 编译期后端选择宏
+1. 批量操作深度优化 (ArrayAdd 6x+)
+2. 基准测试修正 (公平比较)
+3. 循环展开 + 预取优化
 
-### P1: 应该完成 (Phase 2)
+### P1: 应该完成 (Phase 9-10)
 
-1. Intrinsics FP 真正实现
-2. IEEE 754 测试
-3. 性能基准测试
+1. 宽向量(512-bit)批处理优化
+2. 内存操作优化 (MemCopy/MemSet)
+3. 向量宽度自动选择
 
-### P2: 可以完成 (Phase 3)
+### P2: 未来完成 (Phase 11)
 
-1. 文件结构简化
-2. 命名规范统一
-3. 文档更新
-
-### P3: 未来完成 (Phase 4-5)
-
-1. LoongArch LASX Backend
-2. WebAssembly SIMD
-3. POWER VSX
-4. MIPS MSA
-5. 静态调度
+1. nextpas 编译器 SIMD 内建支持
+2. SIMD 类型和运算符
+3. 自动向量化
 
 ## 验证标准
 
@@ -301,25 +269,25 @@
 
 | 操作 | 目标 | 当前 | 差距 |
 |------|------|------|------|
-| VecF32x4Add | ~1 cycle | ~16-21 cycles | 16-21x |
-| MemEqual (16B) | ~1 cycle | ~16-21 cycles | 16-21x |
-| Utf8Validate (16B) | ~1 cycle | ~16-21 cycles | 16-21x |
-| BatchAddF32x4 (1000) | ~1000 cycles | ~16000-21000 cycles | 16-21x |
+| ArrayAddF32 (16KB) | 6x+ | 2.24x | 2.7x |
+| ArrayMulF32 (16KB) | 4x+ | 2.23x | 1.8x |
+| MemEqual (4KB) | 4x+ | 2.32x | 1.7x |
+| MemCopy (4KB) | 3x+ | 待测 | - |
 
 ### 正确性验证
 
-- 全部测试通过
+- 全部测试通过 (1542 tests)
 - IEEE 754 一致性测试
 - 边界条件测试
 
 ### 兼容性验证
 
-- x86_64: SSE2, AVX2, AVX-512
-- AArch64: NEON
-- RISC-V: RVV
-- LoongArch: LASX
-- WebAssembly: SIMD128
-- 标量回退: 全平台
+- x86_64: SSE2, AVX2, AVX-512 ✅
+- AArch64: NEON ✅ (opt-in)
+- RISC-V: RVV ✅ (experimental)
+- LoongArch: QEMU 验证 ✅
+- PPC64: QEMU 验证 ✅
+- 标量回退: 全平台 ✅
 
 ## 风险评估
 
@@ -340,32 +308,33 @@
 
 ## 成功标准
 
-### Phase 1 成功标准
+### Phase 7 成功标准
 
-- 分派器开销: ~15-20 cycles → ~1-2 cycles
-- 批量操作: 性能提升 10-20x
+- ArrayAddF32: 6x+ 加速比
+- ArrayMulF32: 4x+ 加速比
+- 循环展开: 4x/8x 展开
 - 测试: 全部通过
 
-### Phase 2 成功标准
+### Phase 8 成功标准
 
-- FP 操作: 性能提升 4-8x
-- IEEE 754: 一致性测试通过
+- 基准测试: SIMD vs 真实标量 4x+ 加速比
+- 文档: 更新性能数据
 - 测试: 全部通过
 
-### Phase 3 成功标准
+### Phase 9 成功标准
 
-- 文件数量: 214 → ~100
-- 编译时间: 不增加
+- 512-bit: 2x+ 快于 256-bit
+- 向量宽度: 自动选择
 - 测试: 全部通过
 
-### Phase 4 成功标准
+### Phase 10 成功标准
 
-- 平台: LoongArch, WebAssembly, POWER, MIPS
+- MemCopy: 3x+ 加速比
+- MemSet: 4x+ 加速比
 - 测试: 全部通过
-- 性能: 与标量相比有提升
 
-### Phase 5 成功标准
+### Phase 11 成功标准
 
-- 静态调度: 无分派器开销
-- 兼容性: 动态调度仍然可用
-- 测试: 全部通过
+- 编译器: SIMD 类型和运算符工作
+- 性能: 无函数调用开销
+- 兼容性: 与现有代码兼容
