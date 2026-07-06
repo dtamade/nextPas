@@ -144,12 +144,14 @@ function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LResult: PtrInt;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LResult := read(AHandle.Value, ABuf, ACount);
   if LResult < 0 then
-  begin
-    ABytesRead := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesRead := PtrUInt(LResult);
@@ -162,12 +164,14 @@ function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LResult: PtrInt;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LResult := write(AHandle.Value, ABuf, ACount);
   if LResult < 0 then
-  begin
-    ABytesWritten := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesWritten := PtrUInt(LResult);
@@ -180,12 +184,14 @@ function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LResult: PtrInt;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LResult := pread(AHandle.Value, ABuf, ACount, AOffset);
   if LResult < 0 then
-  begin
-    ABytesRead := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesRead := PtrUInt(LResult);
@@ -198,12 +204,14 @@ function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LResult: PtrInt;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LResult := pwrite(AHandle.Value, ABuf, ACount, AOffset);
   if LResult < 0 then
-  begin
-    ABytesWritten := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesWritten := PtrUInt(LResult);
@@ -839,6 +847,11 @@ function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LRead: DWORD;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LRead := 0;
   if ReadFile(AHandle.Value, ABuf, DWORD(ACount), @LRead, nil) then
   begin
@@ -846,10 +859,7 @@ begin
     Result := 0;
   end
   else
-  begin
-    ABytesRead := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -857,6 +867,11 @@ function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
 var
   LWritten: DWORD;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   LWritten := 0;
   if WriteFile(AHandle.Value, ABuf, DWORD(ACount), @LWritten, nil) then
   begin
@@ -864,10 +879,7 @@ begin
     Result := 0;
   end
   else
-  begin
-    ABytesWritten := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -876,6 +888,11 @@ var
   LOvl: OVERLAPPED;
   LRead: DWORD;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   FillChar(LOvl, SizeOf(LOvl), 0);
   LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
   LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
@@ -886,10 +903,7 @@ begin
     Result := 0;
   end
   else
-  begin
-    ABytesRead := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -898,6 +912,11 @@ var
   LOvl: OVERLAPPED;
   LWritten: DWORD;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
   FillChar(LOvl, SizeOf(LOvl), 0);
   LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
   LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
@@ -908,8 +927,8 @@ begin
     Result := 0;
   end
   else
-  begin
-    ABytesWritten := 0;
+    Result := Int32(GetLastError);
+end;
     Result := Int32(GetLastError);
   end;
 end;
