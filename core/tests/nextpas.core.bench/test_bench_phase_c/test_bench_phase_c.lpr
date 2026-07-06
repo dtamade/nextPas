@@ -313,6 +313,73 @@ begin
   end;
 end;
 
+{ ===== F-18: sigma=0 路径测试 ===== }
+
+procedure Test_BayesianEstimate_SigmaZero;
+{ F-18: 验证 ASigma=0 时使用样本标准差 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LEstimateWithSigma, LEstimateSigmaZero: TBayesianEstimate;
+  LI: Integer;
+begin
+  { 数据: 样本 stddev ~5.77 }
+  SetLength(LData, 30);
+  for LI := 0 to 29 do
+    LData[LI] := 100.0 + (LI mod 10);
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    { sigma=0: 使用样本标准差 }
+    LEstimateSigmaZero := LStats.BayesianEstimate(LData, 100.0, 10.0, 0);
+
+    { sigma=显式值: 使用样本标准差的近似值 }
+    LEstimateWithSigma := LStats.BayesianEstimate(LData, 100.0, 10.0, 5.77);
+
+    { 两者后验均值应接近 }
+    Check(Abs(LEstimateSigmaZero.PosteriorMean - LEstimateWithSigma.PosteriorMean) < 1.0,
+      'sigma=0 should use sample stddev, giving similar result');
+
+    { 后验标准差应小于先验 }
+    Check(LEstimateSigmaZero.PosteriorStdDev < 10.0,
+      'Posterior std should be < prior std');
+
+    { 样本大小应正确 }
+    Check(LEstimateSigmaZero.SampleSize = 30, 'Sample size should be 30');
+  finally
+    LStats.Free;
+  end;
+end;
+
+procedure Test_BayesianEstimate_SigmaZeroConstant;
+{ F-18: 验证常量数据时 sigma=0 的退化行为 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LEstimate: TBayesianEstimate;
+  LI: Integer;
+begin
+  { 常量数据: stddev=0, 应退化为 1e-10 }
+  SetLength(LData, 20);
+  for LI := 0 to 19 do
+    LData[LI] := 100.0;
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    LEstimate := LStats.BayesianEstimate(LData, 100.0, 10.0, 0);
+
+    { 常量数据：后验均值应接近 100 }
+    Check(Abs(LEstimate.PosteriorMean - 100.0) < 0.01,
+      'Constant data: posterior mean should be ~100');
+
+    { 后验应存在（不崩溃） }
+    Check(LEstimate.PosteriorStdDev > 0, 'Posterior std should be positive');
+    Check(LEstimate.SampleSize = 20, 'Sample size should be 20');
+  finally
+    LStats.Free;
+  end;
+end;
+
 { ===== 注册测试 ===== }
 
 var
@@ -336,6 +403,10 @@ begin
   { 先验融合 }
   T.Test('BayesianEstimate_PriorFusion', @Test_BayesianEstimate_PriorFusion);
   T.Test('BayesianEstimate_Convergence', @Test_BayesianEstimate_Convergence);
+
+  { F-18: sigma=0 路径 }
+  T.Test('BayesianEstimate_SigmaZero', @Test_BayesianEstimate_SigmaZero);
+  T.Test('BayesianEstimate_SigmaZeroConstant', @Test_BayesianEstimate_SigmaZeroConstant);
 
   T.Run;
   T.Summary;
