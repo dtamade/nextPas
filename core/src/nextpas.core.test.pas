@@ -3,12 +3,13 @@
   Re-exports all public API from sub-modules:
     test.base, test.check, test.config, test.expect, test.output,
     test.output.tap, test.output.json, test.runner, test.discovery,
-    test.mock, test.helpers
+    test.mock, test.helpers, test.prop
   White-box modules (not re-exported — import directly for internals):
     test.runner.cli, test.runner.context, test.runner.parallel
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection,
-  RTTI discovery, retry, TAP/JSON/JUnit output, mock framework. }
+  RTTI discovery, retry, TAP/JSON/JUnit output, mock framework,
+  property-based testing. }
 
 unit nextpas.core.test;
 
@@ -28,7 +29,8 @@ uses
   nextpas.core.test.runner,
   nextpas.core.test.discovery,
   nextpas.core.test.mock,
-  nextpas.core.test.helpers;
+  nextpas.core.test.helpers,
+  nextpas.core.test.prop;
 
 { ── Re-exported types from test.base ─────────────────────────────────────── }
 
