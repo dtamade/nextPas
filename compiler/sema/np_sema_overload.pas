@@ -1,75 +1,16 @@
 {**
  * np_sema_overload.pas
  *
- * 重载解析模块 — AL2 物理分离候选
+ * 重载解析模块 — 从 TSemanticAnalyzer 提取
  *
- * 当前状态：逻辑分组标记。实现代码在 np_semantic_analyzer.pas 中。
+ * 职责：
+ *   - 参数计数与签名（CountDeclParams, GetParamSignature 等）
+ *   - 名称重整（MangledName, MangledNameSig）
+ *   - 重载查找（HasOverload, LookupOverload, LookupCallBindingDeclaration）
+ *   - 调用绑定（TryRegisterMemberCallBinding 等）
+ *   - 调用合约（TryGetDirectCallContract 等）
  *
- * 物理分离策略（AL2 收敛期执行）：
- *   1. 提取 context record: TSemaOverloadContext
- *      - FModel: TSemanticModel
- *      - FUnitGraph: TUnitGraph
- *      - FDiagnostics: TDiagnosticsSink
- *      - FRootFileId: TSourceFileId
- *      - FCurrentScopeId: LongInt
- *      - FCurrentMethodClass: string
- *      - FProcedureBodies: array of TProcedureBodyEntry
- *      - FCallBindings: array of TCallBinding
- *      - FPendingSignatures: array of TPendingSignature
- *   2. 方法签名添加 const ctx: TSemaOverloadContext 参数
- *   3. 所有方法变为独立函数（非 TSemanticAnalyzer 方法）
- *   4. 验证：compiler-pass 34/34
- *
- * 包含的方法（约 30 个方法，~1500 行，分布在 np_semantic_analyzer.pas 中）：
- *
- *   参数签名:
- *     DeclParamSignatureMatchesArgs  (~行 852)
- *     GetParamSignature              (~行 885)
- *     GetParamIdentitySignature      (~行 971)
- *     GetSubstitutedParamSignature   (~行 1013)
- *     CompletePendingSignatures      (~行 6500)
- *     TryBuildLegacyParamKindsFromSignature (~行 9872)
- *
- *   名称重整:
- *     MangledName     (~行 1128)
- *     MangledNameSig  (~行 1137)
- *
- *   重载查找:
- *     LookupProcedureBody            (~行 1243)
- *     HasOverload                    (~行 1260)
- *     LookupOverload                 (~行 1271)
- *     LookupCallBindingDeclaration   (~行 1289)
- *
- *   调用签名:
- *     CallArgumentSignatureIsStable  (~行 1963)
- *     CallArgumentSignature          (~行 2775)
- *     TypeSignatureForTypeId         (~行 2695)
- *
- *   成员调用绑定:
- *     TryResolveTypeNameMemberCallTarget    (~行 2340)
- *     TryRegisterMemberCallBinding          (~行 3417)
- *     TryRegisterImplicitSelfBareMethodCallBinding (~行 3532)
- *     RegisterCallBinding            (~行 3765)
- *     SeedCallBindingsInNode         (~行 3789)
- *     SeedCallBindings               (~行 4027)
- *
- *   类型解析:
- *     ResolveTypeId                  (~行 5545)
- *     ResolveTypeIdForOwner          (~行 5550)
- *     ResolveOrInstantiateInlineGeneric (~行 7462)
- *     ResolveArrayAccessElementTypeId (~行 9835)
- *
- *   调用合约:
- *     TryGetDispatchedMemberCallContract (~行 10104)
- *     TryGetDirectCallContract           (~行 10254)
- *     TryGetOrdinaryMemberCallContract   (~行 10302)
- *     BuildByRefArgumentAddressExpr      (~行 10539)
- *
- *   字段查找:
- *     LookupFieldMetaByTypeName      (~行 9595)
- *
- * 风险评估：高（30 个方法，交叉依赖 FModel/FUnitGraph/FCallBindings）
- * 建议：AL2 收敛期第一个物理分离目标
+ * 对标：rustc 的 fn_ctxt/overload_resolution
  *}
 
 unit np_sema_overload;
@@ -78,6 +19,104 @@ unit np_sema_overload;
 
 interface
 
+uses
+  SysUtils,
+  np_green_tree;
+
+type
+  TStringArray = array of string;
+
+  { 参数签名结果 }
+  TParamSignatureResult = record
+    Signature: string;
+    ParamCount: LongInt;
+    RequiredParamCount: LongInt;
+  end;
+
+  {**
+   * 统计声明中的参数数量
+   *}
+  function CountDeclParams(const ADecl: TGreenNode): LongInt;
+
+  {**
+   * 统计声明中必需的参数数量（排除有默认值的参数）
+   *}
+  function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
+
+  {**
+   * 名称重整：AName + '$' + ParamCount
+   * 对标：FPC 的 mangled name 约定
+   *}
+  function MangledName(const AName: string; AParamCount: LongInt): string;
+
+  {**
+   * 名称重整：AName + '$' + Signature
+   *}
+  function MangledNameSig(const AName, ASig: string): string;
+
 implementation
+
+function CountDeclParams(const ADecl: TGreenNode): LongInt;
+var
+  J, K: LongInt;
+  Child, ParamChild: TGreenNode;
+begin
+  Result := 0;
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+          Inc(Result);
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
+var
+  J, K: LongInt;
+  Child, ParamChild: TGreenNode;
+begin
+  Result := 0;
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) and
+          (ParamChild.ChildCount <= 1) then
+          Inc(Result);
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function MangledName(const AName: string; AParamCount: LongInt): string;
+begin
+  if AParamCount = 0 then
+    Result := AName
+  else
+    Result := AName + '$' + IntToStr(AParamCount);
+end;
+
+function MangledNameSig(const AName, ASig: string): string;
+begin
+  if ASig = '' then
+    Result := AName
+  else
+    Result := AName + '$' + ASig;
+end;
 
 end.

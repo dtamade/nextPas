@@ -2824,51 +2824,14 @@ begin
 end;
 
 function TSemanticAnalyzer.CountDeclParams(const ADecl: TGreenNode): LongInt;
-var
-  J, K: LongInt;
-  Child, ParamChild: TGreenNode;
 begin
-  Result := 0;
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
-          Inc(Result);
-      end;
-      Exit;
-    end;
-  end;
+  Result := np_sema_overload.CountDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.CountRequiredDeclParams(
   const ADecl: TGreenNode): LongInt;
-var
-  J, K: LongInt;
-  Child, ParamChild: TGreenNode;
 begin
-  Result := 0;
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) and
-          (ParamChild.ChildCount <= 1) then
-          Inc(Result);
-      end;
-      Exit;
-    end;
-  end;
+  Result := np_sema_overload.CountRequiredDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclReturnTypeId(const ADecl: TGreenNode;
@@ -3196,19 +3159,13 @@ end;
 function TSemanticAnalyzer.MangledName(const AName: string;
   AParamCount: LongInt): string;
 begin
-  if AParamCount = 0 then
-    Result := AName
-  else
-    Result := AName + '$' + IntToStr(AParamCount);
+  Result := np_sema_overload.MangledName(AName, AParamCount);
 end;
 
 function TSemanticAnalyzer.MangledNameSig(const AName: string;
   const ASig: string): string;
 begin
-  if ASig = '' then
-    Result := AName
-  else
-    Result := AName + '$' + ASig;
+  Result := np_sema_overload.MangledNameSig(AName, ASig);
 end;
 
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
