@@ -277,6 +277,7 @@ type
     DoctorProjection: TDoctorProjectionContext;
     QueryProjection: TQueryProjectionContext;
     PackageProjection: TPackageProjectionContext;
+    DiagnosticsFormat: string;
   end;
 
 implementation
