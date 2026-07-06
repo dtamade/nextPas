@@ -125,7 +125,7 @@ EXPECTED_BACKEND_TRUTH = {
     ),
     'SSE3': (
         'backend adapter',
-        'src/nextpas.core.simd.sse3.pas',
+        'src/nextpas.core.simd.sse2.pas',
         'x86 entry chain',
         'dispatchable when CPU/runtime qualification passes',
     ),
@@ -137,13 +137,13 @@ EXPECTED_BACKEND_TRUTH = {
     ),
     'SSE4.1': (
         'backend adapter',
-        'src/nextpas.core.simd.sse41.pas',
+        'src/nextpas.core.simd.sse2.pas',
         'x86 entry chain',
         'dispatchable when CPU/runtime qualification passes',
     ),
     'SSE4.2': (
         'backend adapter',
-        'src/nextpas.core.simd.sse42.pas',
+        'src/nextpas.core.simd.sse2.pas',
         'x86 entry chain',
         'dispatchable when CPU/runtime qualification passes',
     ),

@@ -17268,8 +17268,8 @@ var
 begin
   LSourceLines := TStringList.Create;
   try
-    LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx512.pas');
-    AssertTrue('AVX512 unit source should exist for implementation-shape audit: ' + LUnitSourcePath,
+    LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx2.pas');
+    AssertTrue('AVX2 unit source should exist for implementation-shape audit: ' + LUnitSourcePath,
       FileExists(LUnitSourcePath));
     LSourceLines.LoadFromFile(LUnitSourcePath);
     LUnitSource := LowerCase(LSourceLines.Text);

@@ -23,11 +23,7 @@ uses
   nextpas.core.simd.backend.consistency.testcase,
   {$IFDEF CPUX86_64}
   nextpas.core.simd.sse2,
-  nextpas.core.simd.sse42,
   nextpas.core.simd.avx2,
-  {$IFDEF SIMD_BACKEND_AVX512}
-  nextpas.core.simd.avx512,
-  {$ENDIF}
   {$ENDIF}
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,

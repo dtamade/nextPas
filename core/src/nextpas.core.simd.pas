@@ -15,14 +15,8 @@ uses
   nextpas.core.simd.utils      // Shuffle, Blend, Convert operations
 {$IFDEF CPUX86_64}  // x86-64 SIMD backends use 64-bit assembly
   , nextpas.core.simd.sse2
-  , nextpas.core.simd.sse3      // SSE3: horizontal ops (HADDPS, HSUBPS)
   , nextpas.core.simd.ssse3     // SSSE3: byte shuffle (PSHUFB), integer abs (PABS)
-  , nextpas.core.simd.sse41     // SSE4.1: dot product (DPPS), rounding, PMULLD
-  , nextpas.core.simd.sse42     // SSE4.2: CRC32, string ops, PCMPGTQ
   , nextpas.core.simd.avx2
-  {$IFDEF SIMD_BACKEND_AVX512}
-  , nextpas.core.simd.avx512
-  {$ENDIF}
 {$ENDIF}
 {$IFDEF CPUI386}  // i386 SSE2 backend uses 32-bit assembly
   , nextpas.core.simd.sse2.i386

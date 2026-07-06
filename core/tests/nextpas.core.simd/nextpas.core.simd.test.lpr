@@ -53,9 +53,7 @@ uses
   {$ENDIF}
   {$IFDEF CPUX86_64}
   , nextpas.core.simd.sse2
-  , nextpas.core.simd.sse3
   , nextpas.core.simd.ssse3
-  , nextpas.core.simd.sse41
   , nextpas.core.simd.avx2
   {$ENDIF}
   ;
