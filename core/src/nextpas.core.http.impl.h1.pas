@@ -97,6 +97,7 @@ type
     FPoolLock: TRTLCriticalSection;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
+    FPending: string;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
@@ -2157,7 +2158,8 @@ begin
   LHasResponseTail := False;
   LSkippedInformational := False;
   LCurrentResponseStarted := False;
-  LPending := '';
+  LPending := FPending;
+  FPending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     if LPending <> '' then
@@ -2211,7 +2213,8 @@ begin
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
-  LHasResponseTail := LPending <> '';
+  FPending := LPending;
+  LHasResponseTail := FPending <> '';
   AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail) and
     (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
@@ -2265,6 +2268,7 @@ begin
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
+  FPending := '';
   LConn := PoolGet(LPoolHostKey, LPort);
   LPooled := LConn <> nil;
   if not LPooled then

@@ -619,8 +619,7 @@ begin
     Exit(HPE_INVALID_VERSION);
   end;
   LSelf.FComplete := True;
-  if (LSelf.FParserType = ptRequest) and
-     (p0^.upgrade = 0) and
+  if (p0^.upgrade = 0) and
      (llhttp_should_keep_alive(p0) <> 0) then
     Exit(HPE_PAUSED);
   Result := 0;
