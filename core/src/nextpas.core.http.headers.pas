@@ -187,6 +187,10 @@ begin
   end;
 end;
 
+{ RFC 9110 §5.5: Field value components MUST NOT include CR or LF
+  except when used within a quoted-string. HTAB (#9) is allowed.
+  This implementation rejects all control chars < #32 except HTAB,
+  and DEL (#127). }
 class procedure THttpHeaders.ValidateValue(const AValue: string);
 var
   LI: SizeInt;

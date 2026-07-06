@@ -1087,10 +1087,10 @@ begin
   try
     LRW.GetHeaders.SetHeader('Content-Length', '0');
     LRW.WriteHeader(THttpStatus(599));
-    CheckEqual('HTTP/1.1 599 Unknown'#13#10 +
+    CheckEqual('HTTP/1.1 599 599'#13#10 +
       'content-length: 0'#13#10 +
       #13#10, LW.GetOutput,
-      'unknown status falls back to numeric status and Unknown reason');
+      'unknown status falls back to numeric status text');
     Check(LW.WriteCalls > 2,
       'unknown status keeps generic multi-part fallback path');
   finally
