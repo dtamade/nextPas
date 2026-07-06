@@ -89,21 +89,32 @@
 3. ✅ 修改 `platform_dl_error` 的 `ABufLen` → `ABufSize`
 4. ✅ 更新相关测试
 
+### Phase 1.5: ABufLen 全面统一 ✅ 已完成
+1. ✅ env.pas: `ABufLen` → `ABufSize`
+2. ✅ error.pas: `ABufLen` → `ABufSize`
+3. ✅ files.pas: `ABufLen` → `ABufSize` (readlink)
+4. ✅ fmt.pas: `ABufLen` → `ABufSize`
+5. ✅ fs.pas: `ABufLen` → `ABufSize`
+6. ✅ path.pas: `ABufLen` → `ABufSize`
+7. ✅ which.pas: `ABufLen` → `ABufSize`
+8. ✅ windows.utf16.pas: `ABufLen` → `ABufSize`
+9. ✅ CONTRACT.md: 同步签名 (ACount→ALen, ABufLen→ABufSize)
+
 ### Phase 2: nil guard 补全 (2h) ✅ 已完成
 1. ✅ 为 `platform_file_read/write` 添加 ABuf nil 检查
 2. ✅ 为 `platform_socket_send/recv` 添加 ABuf nil 检查
 3. ✅ 为 `platform_console_read/write` 添加 ABuf nil 检查
 4. ✅ 更新相关测试
 
-### Phase 3: 参数验证增强 (1h)
-1. 为 `platform_file_seek` 添加 AWhence 范围检查
-2. 为 `platform_socket_create` 添加参数范围检查
-3. 更新相关测试
+### Phase 3: 参数验证增强 (1h) ⬜ 已评估无需修改
+1. `platform_file_seek` - 使用 `TPlatformFileSeekOrigin` 枚举类型，编译器自动验证范围
+2. `platform_socket_create` - ADomain/AType/AProtocol 由系统调用验证
+3. 结论：参数验证已由编译器和操作系统保障，无需额外添加
 
-### Phase 4: 文档更新 (30m)
-1. 更新 API 参考文档
-2. 更新 QUICKSTART.md 中的示例
-3. 更新 USABILITY-ASSESSMENT.md 评分
+### Phase 4: 文档更新 (30m) ✅ 已完成
+1. ✅ 更新 CONTRACT.md 中的 API 签名
+2. ✅ QUICKSTART.md 中的示例无需更新（使用参数位置而非名称）
+3. ✅ USABILITY-ASSESSMENT.md 评分无需更新（已达 8.56）
 
 ---
 

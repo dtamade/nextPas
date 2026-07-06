@@ -52,7 +52,7 @@ function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Bool
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
@@ -556,7 +556,7 @@ begin
     Result := platform_get_errno;
 end;
 
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 var
   LStat: TPlatformFileStat;
   LResult: PtrInt;
@@ -565,7 +565,7 @@ begin
   ALen := 0;
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   Result := platform_file_lstat(APath, LStat);
   if Result <> 0 then
@@ -576,8 +576,8 @@ begin
     Exit(-1);
   ALen := Int32(LStat.Size);
   LCopyLen := ALen;
-  if LCopyLen >= ABufLen then
-    LCopyLen := ABufLen - 1;
+  if LCopyLen >= ABufSize then
+    LCopyLen := ABufSize - 1;
   if LCopyLen <= 0 then
   begin
     ABuf[0] := #0;
@@ -1198,7 +1198,7 @@ begin
     Result := 0;
 end;
 
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 var
   LHandle: HANDLE;
   LBytesReturned: DWORD;
@@ -1208,7 +1208,7 @@ var
   LStart: Int32;
 begin
   ALen := 0;
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
@@ -1230,7 +1230,7 @@ begin
     LStart := 4;
   if LStart > 0 then
     Delete(LUtf8, 1, LStart);
-  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
+  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
   Result := 0;
 end;
 
@@ -1352,7 +1352,7 @@ function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Bool
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
