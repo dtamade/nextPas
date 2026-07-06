@@ -49,6 +49,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Mock | — | — | TMock fluent API |
 | Parallel opt-in | `t.Parallel()` | `#[serial]` | `TestSeq()` |
 | Test cache | `go test -cache` | — | `--cache` |
+| Property-based test | QuickCheck (3rd party) | proptest | **v7.1** (deferred) |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -260,3 +261,31 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 - **v7.0a**: Parallel Opt-in — `TestSeq()` 注册串行测试，并行模式下 Phase 1 先串行执行 Sequential 测试，Phase 2 再并行执行其余测试 (Go `t.Parallel()` inverse)
 - **v7.0b**: Test Cache — `TTestCache` 缓存测试结果，`--cache` 启用，FNV-1a hash (源文件+编译器+配置)
+
+## 路线图
+
+| 版本 | 特性 | 状态 | 依赖 |
+|------|------|------|------|
+| **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | 🟡 待实现 | 无 |
+| **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
+| **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
+
+### v7.1 Property-based Testing 设计方向
+
+```pascal
+Prop('Parse roundtrip', @TestRoundtrip)
+  .WithGen(GenString(1..1000))   // 结构化生成器
+  .Runs(1000)                     // 运行次数
+  .ShrinkOnFail;                  // 失败时自动缩小输入
+```
+
+- QuickCheck 风格，不需要编译器支持
+- GenString/GenInt/GenBytes 等基础生成器
+- 组合生成器（record 字段独立生成 → 组合）
+- 收缩：失败时二分缩小输入，找到最小复现
+
+### v7.2 Coverage-guided Fuzzing 前置条件
+
+- nextpas 编译器支持覆盖率插桩（类似 Go `-coverprofile`）
+- 运行时 sanitizer（ASan/MSan）或等价检测
+- LLVM 后端完成后可考虑 libFuzzer 集成
