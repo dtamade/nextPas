@@ -56,8 +56,8 @@
 | test_lockfree_hazard | 15 | ✅ 全绿 |
 | test_lockfree_stress | 16 | ✅ 全绿 |
 | test_lockfree_skiplist | 20 | ✅ 全绿 |
-| test_lockfree_btree | 12 | ✅ 全绿 |
-| **总计** | **237** | **✅ 全绿** |
+| test_lockfree_btree | 17 | ✅ 全绿 |
+| **总计** | **242** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

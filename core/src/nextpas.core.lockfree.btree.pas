@@ -69,6 +69,16 @@ type
     procedure FreeNode(ANode: PBTreeNode);
     procedure SplitChild(AParent: PBTreeNode; AIndex: Integer);
     procedure InsertNonFull(ANode: PBTreeNode; const AKey: TKey; const AValue: TValue);
+    {** Remove 辅助方法 }
+    function FindKeyIndex(ANode: PBTreeNode; const AKey: TKey): Integer;
+    procedure RemoveFromLeaf(ANode: PBTreeNode; AIndex: Integer);
+    procedure RemoveFromInternal(ANode: PBTreeNode; AIndex: Integer);
+    function GetPredecessor(ANode: PBTreeNode; out AKey: TKey; out AValue: TValue): Boolean;
+    procedure FillChild(AParent: PBTreeNode; AIndex: Integer);
+    procedure BorrowFromPrev(AParent: PBTreeNode; AIndex: Integer);
+    procedure BorrowFromNext(AParent: PBTreeNode; AIndex: Integer);
+    procedure MergeChildren(AParent: PBTreeNode; AIndex: Integer);
+    function RemoveInternal(ANode: PBTreeNode; const AKey: TKey): Boolean;
     procedure ForEachNode(ANode: PBTreeNode; const ACallback: TForEachCallback);
     procedure ForEachNodeCtx(ANode: PBTreeNode; const ACallback: TForEachCtxCallback; AContext: Pointer);
     procedure ForEachRangeNode(ANode: PBTreeNode; const AFrom, ATo: TKey; const ACallback: TForEachCallback);
@@ -382,11 +392,274 @@ begin
   end;
 end;
 
-function TConcurrentBTreeImpl.Remove(const AKey: TKey): Boolean;
+function TConcurrentBTreeImpl.FindKeyIndex(ANode: PBTreeNode; const AKey: TKey): Integer;
 begin
-  { Simplified implementation: mark as deleted by setting default value }
-  { A full implementation would rebalance the tree }
-  Result := False;
+  Result := 0;
+  while (Result < ANode^.KeyCount) and (CompareKeys(ANode^.Keys[Result], AKey) < 0) do
+    Inc(Result);
+end;
+
+procedure TConcurrentBTreeImpl.RemoveFromLeaf(ANode: PBTreeNode; AIndex: Integer);
+var
+  LI: Integer;
+begin
+  for LI := AIndex to ANode^.KeyCount - 2 do
+  begin
+    ANode^.Keys[LI] := ANode^.Keys[LI + 1];
+    ANode^.Values[LI] := ANode^.Values[LI + 1];
+  end;
+  ANode^.Keys[ANode^.KeyCount - 1] := Default(TKey);
+  ANode^.Values[ANode^.KeyCount - 1] := Default(TValue);
+  Dec(ANode^.KeyCount);
+  AtomicFetchSub32(FSize, 1, moRelaxed);
+end;
+
+function TConcurrentBTreeImpl.GetPredecessor(ANode: PBTreeNode; out AKey: TKey; out AValue: TValue): Boolean;
+var
+  LCurrent: PBTreeNode;
+begin
+  LCurrent := ANode;
+  while not LCurrent^.IsLeaf do
+    LCurrent := LCurrent^.Children[LCurrent^.KeyCount];
+  if LCurrent^.KeyCount > 0 then
+  begin
+    AKey := LCurrent^.Keys[LCurrent^.KeyCount - 1];
+    AValue := LCurrent^.Values[LCurrent^.KeyCount - 1];
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+procedure TConcurrentBTreeImpl.BorrowFromPrev(AParent: PBTreeNode; AIndex: Integer);
+var
+  LChild: PBTreeNode;
+  LSibling: PBTreeNode;
+  LI: Integer;
+begin
+  LChild := AParent^.Children[AIndex];
+  LSibling := AParent^.Children[AIndex - 1];
+
+  { Shift child keys right }
+  for LI := LChild^.KeyCount - 1 downto 0 do
+  begin
+    LChild^.Keys[LI + 1] := LChild^.Keys[LI];
+    LChild^.Values[LI + 1] := LChild^.Values[LI];
+  end;
+
+  { Shift child children right }
+  if not LChild^.IsLeaf then
+  begin
+    for LI := LChild^.KeyCount downto 0 do
+      LChild^.Children[LI + 1] := LChild^.Children[LI];
+  end;
+
+  { Move parent key down to child }
+  LChild^.Keys[0] := AParent^.Keys[AIndex - 1];
+  LChild^.Values[0] := AParent^.Values[AIndex - 1];
+
+  { Move sibling's last child to child's first child }
+  if not LChild^.IsLeaf then
+    LChild^.Children[0] := LSibling^.Children[LSibling^.KeyCount];
+
+  { Move sibling's last key up to parent }
+  AParent^.Keys[AIndex - 1] := LSibling^.Keys[LSibling^.KeyCount - 1];
+  AParent^.Values[AIndex - 1] := LSibling^.Values[LSibling^.KeyCount - 1];
+
+  Dec(LSibling^.KeyCount);
+  Inc(LChild^.KeyCount);
+end;
+
+procedure TConcurrentBTreeImpl.BorrowFromNext(AParent: PBTreeNode; AIndex: Integer);
+var
+  LChild: PBTreeNode;
+  LSibling: PBTreeNode;
+  LI: Integer;
+begin
+  LChild := AParent^.Children[AIndex];
+  LSibling := AParent^.Children[AIndex + 1];
+
+  { Move parent key down to child's last position }
+  LChild^.Keys[LChild^.KeyCount] := AParent^.Keys[AIndex];
+  LChild^.Values[LChild^.KeyCount] := AParent^.Values[AIndex];
+
+  { Move sibling's first child to child's last child }
+  if not LChild^.IsLeaf then
+    LChild^.Children[LChild^.KeyCount + 1] := LSibling^.Children[0];
+
+  { Move sibling's first key up to parent }
+  AParent^.Keys[AIndex] := LSibling^.Keys[0];
+  AParent^.Values[AIndex] := LSibling^.Values[0];
+
+  { Shift sibling keys left }
+  for LI := 0 to LSibling^.KeyCount - 2 do
+  begin
+    LSibling^.Keys[LI] := LSibling^.Keys[LI + 1];
+    LSibling^.Values[LI] := LSibling^.Values[LI + 1];
+  end;
+  LSibling^.Keys[LSibling^.KeyCount - 1] := Default(TKey);
+  LSibling^.Values[LSibling^.KeyCount - 1] := Default(TValue);
+
+  { Shift sibling children left }
+  if not LSibling^.IsLeaf then
+  begin
+    for LI := 0 to LSibling^.KeyCount - 1 do
+      LSibling^.Children[LI] := LSibling^.Children[LI + 1];
+    LSibling^.Children[LSibling^.KeyCount] := nil;
+  end;
+
+  Inc(LChild^.KeyCount);
+  Dec(LSibling^.KeyCount);
+end;
+
+procedure TConcurrentBTreeImpl.MergeChildren(AParent: PBTreeNode; AIndex: Integer);
+var
+  LChild: PBTreeNode;
+  LSibling: PBTreeNode;
+  LI: Integer;
+begin
+  LChild := AParent^.Children[AIndex];
+  LSibling := AParent^.Children[AIndex + 1];
+
+  { Move parent key to child }
+  LChild^.Keys[BTREE_MIN_KEYS] := AParent^.Keys[AIndex];
+  LChild^.Values[BTREE_MIN_KEYS] := AParent^.Values[AIndex];
+
+  { Copy sibling's keys to child }
+  for LI := 0 to LSibling^.KeyCount - 1 do
+  begin
+    LChild^.Keys[BTREE_MIN_KEYS + 1 + LI] := LSibling^.Keys[LI];
+    LChild^.Values[BTREE_MIN_KEYS + 1 + LI] := LSibling^.Values[LI];
+  end;
+
+  { Copy sibling's children to child }
+  if not LChild^.IsLeaf then
+  begin
+    for LI := 0 to LSibling^.KeyCount do
+      LChild^.Children[BTREE_MIN_KEYS + 1 + LI] := LSibling^.Children[LI];
+  end;
+
+  LChild^.KeyCount := BTREE_MAX_KEYS;
+
+  { Shift parent's keys and children }
+  for LI := AIndex to AParent^.KeyCount - 2 do
+  begin
+    AParent^.Keys[LI] := AParent^.Keys[LI + 1];
+    AParent^.Values[LI] := AParent^.Values[LI + 1];
+  end;
+  AParent^.Keys[AParent^.KeyCount - 1] := Default(TKey);
+  AParent^.Values[AParent^.KeyCount - 1] := Default(TValue);
+
+  for LI := AIndex + 1 to AParent^.KeyCount - 1 do
+    AParent^.Children[LI] := AParent^.Children[LI + 1];
+  AParent^.Children[AParent^.KeyCount] := nil;
+
+  Dec(AParent^.KeyCount);
+
+  { Free sibling }
+  Dispose(LSibling);
+end;
+
+procedure TConcurrentBTreeImpl.FillChild(AParent: PBTreeNode; AIndex: Integer);
+begin
+  { Try to borrow from left sibling }
+  if (AIndex > 0) and (AParent^.Children[AIndex - 1]^.KeyCount > BTREE_MIN_KEYS) then
+    BorrowFromPrev(AParent, AIndex)
+  { Try to borrow from right sibling }
+  else if (AIndex < AParent^.KeyCount) and (AParent^.Children[AIndex + 1]^.KeyCount > BTREE_MIN_KEYS) then
+    BorrowFromNext(AParent, AIndex)
+  { Merge with a sibling }
+  else
+  begin
+    if AIndex < AParent^.KeyCount then
+      MergeChildren(AParent, AIndex)
+    else
+      MergeChildren(AParent, AIndex - 1);
+  end;
+end;
+
+procedure TConcurrentBTreeImpl.RemoveFromInternal(ANode: PBTreeNode; AIndex: Integer);
+var
+  LKey: TKey;
+  LValue: TValue;
+begin
+  if ANode^.Children[AIndex]^.KeyCount > BTREE_MIN_KEYS then
+  begin
+    { Get predecessor }
+    GetPredecessor(ANode^.Children[AIndex], LKey, LValue);
+    ANode^.Keys[AIndex] := LKey;
+    ANode^.Values[AIndex] := LValue;
+    RemoveInternal(ANode^.Children[AIndex], LKey);
+  end
+  else if ANode^.Children[AIndex + 1]^.KeyCount > BTREE_MIN_KEYS then
+  begin
+    { Get successor - simplified: take first key from right child }
+    LKey := ANode^.Children[AIndex + 1]^.Keys[0];
+    LValue := ANode^.Children[AIndex + 1]^.Values[0];
+    ANode^.Keys[AIndex] := LKey;
+    ANode^.Values[AIndex] := LValue;
+    RemoveInternal(ANode^.Children[AIndex + 1], LKey);
+  end
+  else
+  begin
+    { Merge children and recurse }
+    MergeChildren(ANode, AIndex);
+    RemoveInternal(ANode^.Children[AIndex], ANode^.Keys[AIndex]);
+  end;
+end;
+
+function TConcurrentBTreeImpl.RemoveInternal(ANode: PBTreeNode; const AKey: TKey): Boolean;
+var
+  LIndex: Integer;
+begin
+  LIndex := FindKeyIndex(ANode, AKey);
+
+  if (LIndex < ANode^.KeyCount) and (CompareKeys(ANode^.Keys[LIndex], AKey) = 0) then
+  begin
+    if ANode^.IsLeaf then
+    begin
+      RemoveFromLeaf(ANode, LIndex);
+      Result := True;
+    end
+    else
+    begin
+      RemoveFromInternal(ANode, LIndex);
+      Result := True;
+    end;
+  end
+  else
+  begin
+    if ANode^.IsLeaf then
+      Exit(False);
+
+    if ANode^.Children[LIndex]^.KeyCount < BTREE_MIN_KEYS + 1 then
+      FillChild(ANode, LIndex);
+
+    if LIndex > ANode^.KeyCount then
+      Result := RemoveInternal(ANode^.Children[ANode^.KeyCount], AKey)
+    else
+      Result := RemoveInternal(ANode^.Children[LIndex], AKey);
+  end;
+end;
+
+function TConcurrentBTreeImpl.Remove(const AKey: TKey): Boolean;
+var
+  LOldRoot: PBTreeNode;
+begin
+  NodeWriteLock(FRoot^);
+  try
+    Result := RemoveInternal(FRoot, AKey);
+
+    { If root is empty and has children, make first child the new root }
+    if (FRoot^.KeyCount = 0) and (not FRoot^.IsLeaf) then
+    begin
+      LOldRoot := FRoot;
+      FRoot := FRoot^.Children[0];
+      Dispose(LOldRoot);
+    end;
+  finally
+    NodeWriteUnlock(FRoot^);
+  end;
 end;
 
 function TConcurrentBTreeImpl.Contains(const AKey: TKey): Boolean;
