@@ -130,6 +130,8 @@ for all types, functions, and facades exported by the system kernel.
 The design decisions live in `design-decisions.md`; it records 15 key architectural
 decisions with background, options, choices, and consequences to prevent future
 developers from repeating mistakes or making contradictory changes.
+The usage guide lives in `usage-guide.md`; it guides developers on how to
+extend the kernel and use its types, functions, and facades in their code.
 
 ## Boundaries
 
