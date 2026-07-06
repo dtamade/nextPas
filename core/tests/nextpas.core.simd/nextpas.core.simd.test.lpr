@@ -38,6 +38,7 @@ uses
   nextpas.core.simd.intrinsics.avx2.testcase,
   nextpas.core.simd.concurrent.testcase,  // ✅ Phase 5.4: Concurrent SIMD tests (12 tests)
   nextpas.core.simd.algorithms.testcase,
+  nextpas.core.simd.linalg.testcase,
   nextpas.core.simd.rvvparity.testcase,
   nextpas.core.simd.bench,
   nextpas.core.simd.base,
@@ -276,6 +277,7 @@ begin
   HandleSuite('TTestCase_SimdConcurrentFramework', TTestCase_SimdConcurrentFramework, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdConcurrentRegistration', TTestCase_SimdConcurrentRegistration, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdAlgorithms', TTestCase_SimdAlgorithms, aListOnly, aTargetSuite);
+  HandleSuite('TTestCase_SimdLinalg', TTestCase_SimdLinalg, aListOnly, aTargetSuite);
   HandleSuite('TRVVParityTestCase', TRVVParityTestCase, aListOnly, aTargetSuite);
   {$IFDEF CPUX86_64}
   HandleSuite('TTestCase_SSE3Correctness', TTestCase_SSE3Correctness, aListOnly, aTargetSuite);
