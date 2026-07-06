@@ -265,6 +265,11 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen));
   if LResult < 0 then
   begin
@@ -284,6 +289,11 @@ function platform_socket_recvfrom(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := recvfrom(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin
@@ -622,6 +632,11 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_sendto(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin
@@ -641,6 +656,11 @@ function platform_socket_recvfrom(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_recvfrom(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin

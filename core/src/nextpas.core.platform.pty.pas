@@ -297,6 +297,8 @@ var
 begin
   APid := -1;
   AFailStage := ptssNone;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   FillChar(LSiEx, SizeOf(LSiEx), 0);
   LSiEx.StartupInfo.cb := SizeOf(LSiEx);
   FillChar(LPi, SizeOf(LPi), 0);

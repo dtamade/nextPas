@@ -166,6 +166,8 @@ var
   LFd: Int32;
   LChange: TKEvent;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if AWatcher.WatchCount >= PLATFORM_WATCH_MAX_FDS then
     Exit(-1);
   LFd := open(APath, O_RDONLY, 0);

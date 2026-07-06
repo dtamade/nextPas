@@ -400,6 +400,8 @@ var
 begin
   AOutLen := 0;
   AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LStdoutPipe[0] := -1;
   LStdoutPipe[1] := -1;
   LDevNullRead := -1;
@@ -713,6 +715,8 @@ var
 begin
   AOutLen := 0;
   AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LStdoutRd := HANDLE(PtrInt(-1));
   LStdoutWr := HANDLE(PtrInt(-1));
   LDevNullRead := HANDLE(PtrInt(-1));
