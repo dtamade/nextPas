@@ -57,6 +57,9 @@ type
     LastPass     : Integer;
     LastFail     : Integer;
     LastSkip     : Integer;
+    { Source files for cache key computation — if set, cache key includes
+      file contents so cache is invalidated when source changes. }
+    SourceFiles  : specialize TArray<string>;
 
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc); overload;
@@ -340,6 +343,13 @@ begin
     Result := AEntry.DisplayName
   else
     Result := AEntry.Name;
+end;
+
+function GetCompilerVersion: string;
+const
+  cFPCVersion = {$I %FPCVERSION%};
+begin
+  Result := cFPCVersion;
 end;
 
 { Runner-level config: reads from the first suite's config.
@@ -949,6 +959,10 @@ var
   LIdx: Integer;
   LRunStartMs: Int64;
   LRunTimeoutMs: Int64;
+  LCache: TTestCache;
+  LCacheKey: string;
+  LCacheEntry: TCacheEntry;
+  LCacheHit: Boolean;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -963,6 +977,20 @@ begin
   LGTestTimeoutMs := GetTestTimeout(LConfig);
   LTagFilter := GetTagFilter(LConfig);
   LProgressCurrent := 0;
+  { Cache setup }
+  if LConfig.CacheEnabled then
+  begin
+    if LConfig.CacheDir <> '' then
+      LCache := TTestCache.Create(LConfig.CacheDir)
+    else
+      LCache := TTestCache.Create('.nextpas/test-cache');
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+  end
+  else
+  begin
+    LCache := Default(TTestCache);
+    LCacheKey := '';
+  end;
   { Pre-count eligible tests for progress display }
   if LConfig.ShowProgress then
   begin
@@ -1041,6 +1069,27 @@ begin
       EmitResult(tsSkipped, LEntry, 'skipped: short mode', LSkip,
         AResult.Results, LOutSink, LConfig);
       Continue;
+    end;
+
+    { Cache lookup — skip execution if cached result is valid }
+    LCacheHit := False;
+    if LConfig.CacheEnabled and (LCacheKey <> '') then
+    begin
+      LCacheHit := LCache.Get(LCacheKey, LEntry.Name, LCacheEntry);
+      if LCacheHit then
+      begin
+        LDisplayName := GetDisplayName(LEntry);
+        LStatus := TTestStatus(LCacheEntry.Status);
+        LLastFailMsg := LCacheEntry.Message;
+        IncByStatus(LStatus, LPass, LFail, LSkip);
+        LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
+          LCacheEntry.Duration);
+        AppendResult(AResult.Results, LTestResult);
+        WriteTestOutput(LStatus, LDisplayName + ' (cached)',
+          LLastFailMsg, LEntry.SkipReason,
+          LCacheEntry.Duration, LOutSink, LConfig);
+        Continue;
+      end;
     end;
 
     { Progress counter }
@@ -1246,6 +1295,16 @@ begin
        ((LStatus in [tsFailed, tsError]) or LConfig.VerboseMode) then
       LTestResult.CapturedLog := LSubCtx.FLogLines;
     AppendResult(AResult.Results, LTestResult);
+
+    { Cache store — persist result for future runs }
+    if LConfig.CacheEnabled and (LCacheKey <> '') then
+    begin
+      LCacheEntry.Status := Ord(LStatus);
+      LCacheEntry.Message := LLastFailMsg;
+      LCacheEntry.Duration := GetTickCount64 - LStartMs;
+      LCacheEntry.Time := 0;
+      LCache.Put(LCacheKey, LEntry.Name, LCacheEntry);
+    end;
 
     { Output per-test — use DisplayName + progress prefix }
     WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
@@ -1467,6 +1526,9 @@ var
   LBatchStart, LSpawned, LFirstEligible: Integer;
   LProgressCounter: Integer;
   LProgressTotal: Integer;
+  LCache: TTestCache;
+  LCacheKey: string;
+  LCacheEntry: TCacheEntry;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -1478,6 +1540,20 @@ begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
   LTagFilter := GetTagFilter(LConfig);
+  { Cache setup }
+  if LConfig.CacheEnabled then
+  begin
+    if LConfig.CacheDir <> '' then
+      LCache := TTestCache.Create(LConfig.CacheDir)
+    else
+      LCache := TTestCache.Create('.nextpas/test-cache');
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+  end
+  else
+  begin
+    LCache := Default(TTestCache);
+    LCacheKey := '';
+  end;
 
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, IntToStr(LTotal) + ' tests, parallel',
@@ -1537,6 +1613,21 @@ begin
         'skipped: short mode', 0);
       WriteTestOutput(tsSkipped, Tests[I].Name, '', 'short mode',
         0, LOutSink, LConfig);
+      Continue;
+    end;
+
+    { Cache lookup — skip thread spawn if cached result is valid }
+    if LConfig.CacheEnabled and (LCacheKey <> '') and
+       LCache.Get(LCacheKey, Tests[I].Name, LCacheEntry) then
+    begin
+      LThreads[I] := 0;
+      IncByStatus(TTestStatus(LCacheEntry.Status), LPass, LFail, LSkip);
+      LResults[I] := MakeTestResult(Tests[I].Name,
+        TTestStatus(LCacheEntry.Status), LCacheEntry.Message,
+        LCacheEntry.Duration);
+      WriteTestOutput(TTestStatus(LCacheEntry.Status),
+        Tests[I].Name + ' (cached)', LCacheEntry.Message, '',
+        LCacheEntry.Duration, LOutSink, LConfig);
       Continue;
     end;
 
@@ -1657,9 +1748,21 @@ begin
     BeginThread-failed slots also have LThreads[I]=0 but have result data
     written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
+  begin
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
+    { Cache store — persist result for future runs }
+    if LConfig.CacheEnabled and (LCacheKey <> '') and
+       (LResults[I].Name <> '') then
+    begin
+      LCacheEntry.Status := Ord(LResults[I].Status);
+      LCacheEntry.Message := LResults[I].Message;
+      LCacheEntry.Duration := LResults[I].Duration;
+      LCacheEntry.Time := 0;
+      LCache.Put(LCacheKey, LResults[I].Name, LCacheEntry);
+    end;
+  end;
 
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;

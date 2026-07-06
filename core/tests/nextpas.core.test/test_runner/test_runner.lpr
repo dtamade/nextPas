@@ -29,9 +29,12 @@ var
   LFilterResult: TTestRunResult;
   { T-13: cache test variables }
   LCache: TTestCache;
-  LCacheConfig1, LCacheConfig2: TTestConfig;
+  LCacheConfig1, LCacheConfig2, LCacheRunConfig: TTestConfig;
   LCacheKey1, LCacheKey2, LCacheKey3: string;
   LCacheEntry, LCacheGotEntry: TCacheEntry;
+  LCacheRunSuite: TTestSuite;
+  LCacheRunResult1, LCacheRunResult2: TTestRunResult;
+  LCacheRunCount: Integer;
 
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
@@ -2143,6 +2146,45 @@ begin
     PassTest('TestCache');
   end;
 
+  { ── T-13b: Cache integration in runner ─────────────────────────────────── }
+
+  SectionHeader('T-13b: Cache integration in runner');
+
+  begin
+    { Clean up any previous cache }
+    LCacheRunConfig := DefaultConfig;
+    LCacheRunConfig.CacheEnabled := True;
+    LCacheRunConfig.CacheDir := '.nextpas/test-cache-integration';
+    { Invalidate cache to ensure clean test }
+    LCache := TTestCache.Create('.nextpas/test-cache-integration');
+    LCache.Invalidate;
+    { Create a suite that counts invocations }
+    LCacheRunCount := 0;
+    LCacheRunSuite := TTestSuite.Create('CacheRun');
+    LCacheRunSuite.Config := LCacheRunConfig;
+    LCacheRunSuite.Test('cached_test', procedure begin
+      Inc(LCacheRunCount);
+      CheckTrue(True, 'test runs');
+    end);
+    { First run: cache miss, test should execute }
+    LCacheRunCount := 0;
+    LCacheRunSuite.RunWithResult(LCacheRunResult1);
+    if LCacheRunCount <> 1 then
+      FailTest('Cache integration: first run should execute test, got count=' +
+        IntToStr(LCacheRunCount));
+    if LCacheRunResult1.Passed <> 1 then
+      FailTest('Cache integration: first run should pass 1 test');
+    { Second run: cache hit, test should NOT execute }
+    LCacheRunCount := 0;
+    LCacheRunSuite.RunWithResult(LCacheRunResult2);
+    if LCacheRunCount <> 0 then
+      FailTest('Cache integration: second run should use cache (count should be 0), got count=' +
+        IntToStr(LCacheRunCount));
+    if LCacheRunResult2.Passed <> 1 then
+      FailTest('Cache integration: second run should pass 1 test (from cache)');
+    PassTest('Cache integration in runner');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2171,6 +2213,7 @@ begin
   LJsonSuite := Default(TTestSuite);
   LAutoRunSuite := Default(TTestSuite);
   LAutoRunRunner := Default(TSuiteRunner);
+  LCacheRunSuite := Default(TTestSuite);
   LJsonSink := nil;
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;

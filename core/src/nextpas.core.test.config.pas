@@ -985,11 +985,13 @@ end;
 procedure TTestCache.Clean(AmaxAgeDays: Integer);
 begin
   { TODO: implement cache cleaning based on file modification time }
+  Invalidate; { fallback: full invalidation }
 end;
 
 procedure TTestCache.Invalidate;
 begin
-  { TODO: implement full cache invalidation (delete cache dir) }
+  if CacheDir <> '' then
+    RemoveAll(CacheDir);
 end;
 
 initialization
