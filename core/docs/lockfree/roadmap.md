@@ -242,6 +242,12 @@ L3: nextpas.core.lockfree.* (数据结构)
 | Stack cache line padding | FTop/FFreeHead 避免 false sharing | 减少缓存颠簸 |
 | Deque cache line padding | FTop/FBottom 避免 false sharing | 减少缓存颠簸 |
 
+### 4.13 HashMap ShardIndex 位运算 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| ShardIndex bitmask | 用位运算替代 mod | 减少除法开销 |
+
 ---
 
 - **Commit**: `604be8b14` on main
