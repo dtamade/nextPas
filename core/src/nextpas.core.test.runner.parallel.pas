@@ -17,6 +17,7 @@ uses
   nextpas.core.test.output,
   nextpas.core.sync.intf,
   nextpas.core.platform.thread,
+  nextpas.core.time,
   nextpas.core.time.cpu;
 
 { ── Timeout worker (internal) ──────────────────────────────────────────────── }
@@ -274,7 +275,7 @@ var
   LStatus: TTestStatus;
   LFailMsg: string;
   LSkipReason: string;
-  LStartMs: Int64;
+  LStart: TInstant;
   LResultWritten: Boolean;
   LTotalRetries: Integer;
   LRetriesLeft: Integer;
@@ -294,7 +295,7 @@ begin
   LStatus := tsPassed;
   LFailMsg := '';
   LSkipReason := '';
-  LStartMs := GetTickCount64; { set before BeforeEach so duration is correct on skip }
+  LStart := TInstant.Now; { set before BeforeEach so duration is correct on skip }
   LResultWritten := False;
   LSkippedByBeforeEach := False;
   LTimeoutMs := GetTestTimeout(LConfig);
@@ -336,7 +337,7 @@ begin
           LOutSink.WriteLn(
             '  ' + FormatStatusLine(tsError, R^.Entry.Name,
               'beforeEach failed: ' + E.Message, LConfig));
-          { Set Duration to 0 directly — no test ran, don't use GetTickCount64 }
+          { Set Duration to 0 directly — no test ran, don't use TInstant.Now }
           if R^.Res <> nil then
           begin
             R^.Res^ := MakeTestResult(R^.Entry.Name, tsError, E.Message, 0);
@@ -359,7 +360,7 @@ begin
     repeat
       LStatus := tsPassed;
       LFailMsg := '';
-      LStartMs := GetTickCount64;
+      LStart := TInstant.Now;
       try
         if (LTimeoutMs > 0) and (R^.Entry.Kind = ekTest) and
            (Assigned(R^.Entry.Proc) or Assigned(R^.Entry.Closure)) then
@@ -457,7 +458,7 @@ begin
   try
     IncByStatus(LStatus, R^.Pass^, R^.Fail^, R^.Skip^);
     { Progress counter — increment and format prefix }
-    LDurMs := GetTickCount64 - LStartMs;
+    LDurMs := LStart.Elapsed.AsMilliseconds;
     LProgressPrefix := '';
     if R^.ProgressCounter <> nil then
     begin
