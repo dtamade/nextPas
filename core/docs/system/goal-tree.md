@@ -301,8 +301,8 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 | Byte swap / endian | SwapEndian, BEtoN, LEtoN | ✅ endian.inc | None |
 | Barrier / prefetch | ReadBarrier, WriteBarrier, Prefetch | ✅ barrier.inc | None |
 | Bulk fill/search/compare | FillByte, IndexChar, CompareChar | ✅ intrinsics.inc | None |
-| Thread types | TThread, TRTLCriticalSection | ❌ missing | **Gap** |
-| I/O types | Text, File, TFileRec | ❌ missing | **Gap** |
+| Thread types | TThread, TRTLCriticalSection | ✅ thread.inc | None |
+| I/O types | Text, File, TFileRec | ✅ io.inc | None |
 
 ### S8.2 Variant Type Support
 
@@ -323,20 +323,20 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 
 ### S8.4 Thread Types Support
 
-- [ ] Define `TThread` class stub (for compiler type resolution)
-- [ ] Define `TRTLCriticalSection` record
-- [ ] Define `TThreadFunc` function type
-- [ ] Add `BeginThread`, `EndThread` function stubs
-- [ ] Add `InterlockedIncrement`, `InterlockedDecrement`, `InterlockedExchange` stubs
+- [x] Define `TThread` class (for compiler type resolution)
+- [x] Define `TRTLCriticalSection` record
+- [x] Define `TThreadFunc` function type
+- [x] Add `BeginThread`, `EndThread` function stubs
+- [x] Add `InterlockedIncrement`, `InterlockedDecrement`, `InterlockedExchange` stubs
 
 ### S8.5 I/O Types Support
 
-- [ ] Define `Text` type (TextFile alias)
-- [ ] Define `File` type
-- [ ] Define `TFileRec` record
-- [ ] Define `TTextRec` record
-- [ ] Add `AssignFile`, `Reset`, `Rewrite`, `Append`, `CloseFile` stubs
-- [ ] Add `Read`, `ReadLn`, `Write`, `WriteLn` stubs
+- [x] Define `Text` type (TextFile alias)
+- [x] Define `File` type
+- [x] Define `TFileRec` record
+- [x] Define `TTextRec` record
+- [x] Add `AssignFile`, `Reset`, `Rewrite`, `Append`, `CloseFile` stubs
+- [x] Add `Read`, `ReadLn`, `Write`, `WriteLn` stubs
 
 ### S8.6 Memory Manager Interface
 
@@ -415,21 +415,21 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - `make -C core/tests/nextpas.core.system clean test` passes
 - `fpc -Mobjfpc core/src/nextpas.core.system.pas` compiles cleanly
 
-**S8 Partial Completion** (S8.2, S8.3, S8.6, S8.7, S8.8, S8.9, S8.10 done):
+**S8 Partial Completion** (S8.2, S8.3, S8.4, S8.5, S8.6, S8.7, S8.8, S8.9, S8.10 done):
 
 1. **Variant type**: TVarType, TVarData, varEmpty..varUString constants defined in base.inc
 2. **Dynamic array types**: TBytes, TCharArray defined in base.inc
-3. **Memory manager**: TMemoryManager, TMemoryManagerEx, GetMemoryManager/SetMemoryManager in memmgr.inc
-4. **Program lifecycle**: InitModule, FinalizeModule in lifecycle.inc
-5. **Byte swap/endian**: SwapEndian, BEtoN, LEtoN, NtoBE, NtoLE in endian.inc
-6. **Barrier/prefetch**: ReadBarrier, WriteBarrier, Prefetch in barrier.inc
-7. **Intrinsics**: FillByte, IndexChar, CompareChar, MemPos, StackTop in intrinsics.inc
+3. **Thread types**: TThread, TRTLCriticalSection, BeginThread/EndThread, InterlockedIncrement/Decrement in thread.inc
+4. **I/O types**: TFileRec, TTextRec, File, Text, AssignFile/Reset/Rewrite/Append/CloseFile, Read/ReadLn/Write/WriteLn in io.inc
+5. **Memory manager**: TMemoryManager, TMemoryManagerEx, GetMemoryManager/SetMemoryManager in memmgr.inc
+6. **Program lifecycle**: InitModule, FinalizeModule in lifecycle.inc
+7. **Byte swap/endian**: SwapEndian, BEtoN, LEtoN, NtoBE, NtoLE in endian.inc
+8. **Barrier/prefetch**: ReadBarrier, WriteBarrier, Prefetch in barrier.inc
+9. **Intrinsics**: FillByte, IndexChar, CompareChar, MemPos, StackTop in intrinsics.inc
 
-**Remaining S8 items** (deferred — not needed for compiler kernel):
-- S8.4: Thread types (TThread, TRTLCriticalSection) — runtime types, not compiler types
-- S8.5: I/O types (Text, File, TFileRec) — runtime types, not compiler types
+**Remaining S8 items** (deferred):
 - S8.11: TypInfo facade completeness — already has minimal surface
 - S8.12: SysUtils facade completeness — already has minimal surface
 
-**Next Phase**: S8 completion clears the way for S9 (Thread types) and S10 (I/O types).
-The kernel now has complete type definitions for all compiler-required types.
+**Next Phase**: S8 completion clears the way for S9 (TypInfo/SysUtils facade completeness).
+The kernel now has complete type definitions for ALL compiler-required types.
