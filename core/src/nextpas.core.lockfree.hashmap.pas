@@ -158,10 +158,38 @@ var
 begin
   LPtr := @AKey;
   LH := 14695981039346656037;
-  for LI := 0 to SizeOf(TKey) - 1 do
-  begin
-    LH := LH xor PtrUInt(LPtr[LI]);
-    LH := LH * 1099511628211;
+  { Fast path for common small key sizes }
+  case SizeOf(TKey) of
+    1: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+    end;
+    2: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+    end;
+    4: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[2])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[3])) * 1099511628211;
+    end;
+    8: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[2])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[3])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[4])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[5])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[6])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[7])) * 1099511628211;
+    end;
+  else
+    { Generic path for other sizes }
+    for LI := 0 to SizeOf(TKey) - 1 do
+    begin
+      LH := LH xor PtrUInt(LPtr[LI]);
+      LH := LH * 1099511628211;
+    end;
   end;
   Result := LH;
 end;
