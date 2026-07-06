@@ -105,14 +105,27 @@ begin
   LIdx := SizeClassIndex(32768);
   Check(LIdx = 56, '32768 -> 56 (class=32768)');
   LIdx := SizeClassIndex(53248);
-  Check(LIdx = 61, '53248 -> 61 (last class)');
+  Check(LIdx = 61, '53248 -> 61 (band 5 last)');
   WriteLn('PASS: band 5');
+end;
+
+procedure TestBand6;
+var
+  LIdx: Int32;
+begin
+  { 53KB-65KB, 2KB step: indices 62..68.
+    Note: 53248 = BAND5_MAX = BAND6_MIN, so 53248 maps to index 61 (band 5).
+    Band 6 first unique size = 55296 (index 63). }
+  LIdx := SizeClassIndex(55296);
+  Check(LIdx = 63, '55296 -> 63 (class=55296)');
+  LIdx := SizeClassIndex(65536);
+  Check(LIdx = 68, '65536 -> 68 (last class)');
+  WriteLn('PASS: band 6');
 end;
 
 procedure TestOversized;
 begin
-  Check(SizeClassIndex(53249) = -1, '53249 -> -1 (mmap)');
-  Check(SizeClassIndex(65536) = -1, '65536 -> -1 (mmap)');
+  Check(SizeClassIndex(65537) = -1, '65537 -> -1 (mmap)');
   Check(SizeClassIndex(1024 * 1024) = -1, '1MB -> -1 (mmap)');
   Check(SizeClassIndex(High(SizeUInt)) = -1, 'max -> -1 (mmap)');
   WriteLn('PASS: oversized');
@@ -135,7 +148,7 @@ begin
   end;
   { First entry = 16, last entry = 65536. }
   Check(SizeClassSize(0) = 16, 'first = 16');
-  Check(SizeClassSize(MEM_SIZECLASS_COUNT - 1) = 53248, 'last = 53248');
+  Check(SizeClassSize(MEM_SIZECLASS_COUNT - 1) = 65536, 'last = 65536');
   WriteLn('PASS: sizeclass table monotonic');
 end;
 
@@ -183,7 +196,7 @@ begin
   { Spot-check larger sizes at band boundaries. }
   LFailures := 0;
   LSize := 1024;
-  while LSize <= 53248 do
+  while LSize <= 65536 do
   begin
     LIdx := SizeClassIndex(LSize);
     if LIdx < 0 then
@@ -235,8 +248,8 @@ end;
 procedure TestIsSizeClassable;
 begin
   Check(IsSizeClassable(16), '16 is sizeclassable');
-  Check(IsSizeClassable(53248), '53248 is sizeclassable');
-  Check(not IsSizeClassable(53249), '53249 is not sizeclassable');
+  Check(IsSizeClassable(65536), '65536 is sizeclassable');
+  Check(not IsSizeClassable(65537), '65537 is not sizeclassable');
   WriteLn('PASS: IsSizeClassable');
 end;
 
@@ -269,6 +282,7 @@ begin
   T.Test('band_3', @TestBand3);
   T.Test('band_4', @TestBand4);
   T.Test('band_5', @TestBand5);
+  T.Test('band_6', @TestBand6);
   T.Test('oversized', @TestOversized);
   T.Test('sizeclass_table', @TestSizeClassSizeTable);
   T.Test('sizeclass_boundary', @TestSizeClassSizeBoundary);

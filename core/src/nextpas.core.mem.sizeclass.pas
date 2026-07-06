@@ -8,18 +8,18 @@ uses
   nextpas.core.base;
 
 const
-  { 68 size classes covering 16B - 65536B.
+  { 69 size classes covering 16B - 65536B.
     Bands (all boundaries aligned to step size):
       16B-256B    (16B step)   — 16 classes
       256B-1KB    (64B step)   — 13 classes
       1KB-4KB     (256B step)  — 13 classes
       4KB-8KB     (1KB step)   —  5 classes
       8KB-16KB    (2KB step)   —  5 classes
-      16KB-57KB   (4KB step)   — 10 classes
-      57KB-64KB   (2KB step)   —  6 classes
+      16KB-53KB   (4KB step)   — 10 classes
+      53KB-65KB   (2KB step)   —  7 classes
     > 65536B → direct mmap (no size class).
     Internal fragmentation (band 1+): worst 25% (4097→5120, 8193→10240). }
-  MEM_SIZECLASS_COUNT = 68;
+  MEM_SIZECLASS_COUNT = 69;
   MEM_SIZECLASS_MAX = 65536;
 
   { Minimum size class granularity. Allocations < 16B are rounded up to 16B. }
@@ -32,13 +32,13 @@ type
   { Pre-computed size class table. }
   TSizeClassTable = array[0..MEM_SIZECLASS_COUNT - 1] of TSizeClassEntry;
 
-{** Return the size class index (0..67) for a given allocation size.
+{** Return the size class index (0..68) for a given allocation size.
     Sizes are rounded up to the nearest class boundary.
     Returns -1 if ASize > MEM_SIZECLASS_MAX (caller should use direct mmap).
     O(1): single table lookup. }
 function SizeClassIndex(ASize: SizeUInt): Int32;
 
-{** Return the usable size for a given class index (0..67).
+{** Return the usable size for a given class index (0..68).
     The returned size is >= the size passed to SizeClassIndex. }
 function SizeClassSize(AIndex: Int32): SizeUInt;
 
