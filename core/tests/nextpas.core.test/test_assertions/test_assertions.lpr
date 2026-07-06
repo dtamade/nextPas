@@ -1008,6 +1008,64 @@ begin
   ExpectFail(procedure begin CheckEqual(LA, LB); end, 'Strings differ at position');
 end;
 
+{ ── AMessage overload tests ──────────────────────────────────────────────── }
+
+procedure TestCheckContainsWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckContains('hello world', 'xyz', 'context info');
+  end, 'context info');
+end;
+
+procedure TestCheckStartsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckStartsWith('hello world', 'xyz', 'prefix check');
+  end, 'prefix check');
+end;
+
+procedure TestCheckEndsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckEndsWith('hello world', 'xyz', 'suffix check');
+  end, 'suffix check');
+end;
+
+procedure TestCheckInRangeWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInRange(100, 1, 10, 'range context');
+  end, 'range context');
+end;
+
+procedure TestCheckGreaterThanWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckGreaterThan(5, 10, 'gt context');
+  end, 'gt context');
+end;
+
+procedure TestCheckNotEqualStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual('same', 'same', 'should differ');
+  end, 'should differ');
+end;
+
+procedure TestCheckNotEqualIntWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual(Int64(42), Int64(42), 'int should differ');
+  end, 'int should differ');
+end;
+
+procedure TestCheckLengthWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckLength(5, 3, 'length context');
+  end, 'length context');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1168,6 +1226,16 @@ begin
   LSuite.Test('Unicode combining',         @TestUnicodeCombining);
   LSuite.Test('Unicode empty',             @TestUnicodeEmpty);
   LSuite.Test('Unicode long diff',         @TestUnicodeLongDiff);
+
+  { AMessage overload tests }
+  LSuite.Test('Contains+msg',              @TestCheckContainsWithMessage);
+  LSuite.Test('StartsWith+msg',            @TestCheckStartsWithWithMessage);
+  LSuite.Test('EndsWith+msg',              @TestCheckEndsWithWithMessage);
+  LSuite.Test('InRange+msg',               @TestCheckInRangeWithMessage);
+  LSuite.Test('GreaterThan+msg',           @TestCheckGreaterThanWithMessage);
+  LSuite.Test('NotEqual string+msg',       @TestCheckNotEqualStringWithMessage);
+  LSuite.Test('NotEqual int+msg',          @TestCheckNotEqualIntWithMessage);
+  LSuite.Test('Length+msg',                @TestCheckLengthWithMessage);
 
   if not LSuite.Run then
   begin
