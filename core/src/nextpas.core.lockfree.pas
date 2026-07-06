@@ -16,6 +16,7 @@ uses
   nextpas.core.lockfree.channel,
   nextpas.core.lockfree.channel.spsc,
   nextpas.core.lockfree.hashmap,
+  nextpas.core.lockfree.hashset,
   nextpas.core.lockfree.skiplist,
   nextpas.core.lockfree.btree,
   nextpas.core.lockfree.segqueue,
@@ -101,6 +102,14 @@ type
     @see TConcurrentBTreeImpl 详细文档和示例
   }
   generic TConcurrentBTree<TKey, TValue> = class(specialize TConcurrentBTreeImpl<TKey, TValue>)
+  end;
+
+  {** @desc 并发 HashSet
+    @details 基于 TShardedHashMap 实现，所有值固定为 True。
+      支持 Insert/Remove/Contains/Count/ForEach/Clear。
+    @see TConcurrentHashSetImpl 详细文档和示例
+  }
+  generic TConcurrentHashSet<TKey> = class(specialize TConcurrentHashSetImpl<TKey>)
   end;
 
 implementation
