@@ -26,6 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.text,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
@@ -182,7 +183,8 @@ begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
   { 乘法前溢出检查：ACount * AElemSize > High(SizeUInt) 时拒绝 }
   if ACount > (High(SizeUInt) div AElemSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      'AllocArray: size overflow (' + IntToStr(ACount) + ' * ' + IntToStr(AElemSize) + ')');
   LTotal := ACount * AElemSize;
   Result := AAllocator.AllocMem(LTotal);
 end;

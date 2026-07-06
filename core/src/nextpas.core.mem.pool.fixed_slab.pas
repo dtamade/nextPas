@@ -18,6 +18,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.error,
   nextpas.core.mem.secure,
+  nextpas.core.text,
   nextpas.core.mem.pool.fixed_slab.nginx;
 
 type
@@ -183,24 +184,30 @@ begin
 
   n := NGX_SLAB_PAGE_SHIFT - FMinShift;
   if ACapacity > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: capacity overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: capacity overflow (' + IntToStr(ACapacity) + ')');
   desired_pages := (ACapacity + NGX_SLAB_PAGE_SIZE - 1) div NGX_SLAB_PAGE_SIZE;
   overhead_base := SizeOf(ngx_slab_pool_t) + n * (SizeOf(ngx_slab_page_t) + SizeOf(ngx_slab_stat_t));
   per_page_cost := SizeOf(ngx_slab_page_t) + NGX_SLAB_PAGE_SIZE;
   if (desired_pages <> 0) and (per_page_cost > High(SizeUInt) div desired_pages) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(desired_pages) + ' * ' + IntToStr(per_page_cost) + ')');
   page_payload_cost := desired_pages * per_page_cost;
   if overhead_base > High(SizeUInt) - page_payload_cost then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(overhead_base) + ' + ' + IntToStr(page_payload_cost) + ')');
   total_size := overhead_base + page_payload_cost;
   if total_size > High(SizeUInt) - NGX_SLAB_PAGE_SIZE then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(total_size) + ')');
   total_size := total_size + NGX_SLAB_PAGE_SIZE;
   if total_size > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: allocation size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: allocation size overflow (' + IntToStr(total_size) + ')');
   allocation_size := total_size + (NGX_SLAB_PAGE_SIZE - 1);
   if desired_pages > High(SizeUInt) div 16 then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: ownership index overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: ownership index overflow (' + IntToStr(desired_pages) + ')');
   ownership_capacity := desired_pages * 16;
 
   FRaw := FAllocator.GetMem(allocation_size);

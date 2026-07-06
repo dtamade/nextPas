@@ -515,7 +515,8 @@ begin
   begin
     LMask := LAlign - 1;
     if aConfig.BlockSize > (High(SizeUInt) - LMask) then
-      raise EAllocError.Create(aeInvalidLayout, 'TGrowingBlockPool: block size overflow');
+      raise EAllocError.Create(aeInvalidLayout,
+        'TGrowingBlockPool: block size overflow (' + IntToStr(aConfig.BlockSize) + ')');
     LActualBlockSize := (aConfig.BlockSize + LMask) and not LMask;
   end;
 
@@ -682,7 +683,8 @@ begin
   end;
 
   if LIdx >= LSeg.Blocks then
-    raise EAllocError.Create(aeInvalidPointer, 'TGrowingBlockPool.Release: block index out of range');
+    raise EAllocError.Create(aeInvalidPointer,
+      'TGrowingBlockPool.Release: block index out of range (' + IntToStr(LIdx) + '/' + IntToStr(LSeg.Blocks) + ')');
 
   if IsFreeBitSet(LSegIndex, LIdx) then
     raise EAllocError.Create(aeDoubleFree, 'TGrowingBlockPool.Release: double free detected');
