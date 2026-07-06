@@ -2,7 +2,7 @@
 
 **调研日期**: 2026-07-05  
 **目标范围**: 短期 3 项 + 中期 3 项 + 长期 3 项  
-**当前状态**: 调研完成，待实施
+**当前状态**: 8/9 任务已完成，仅 Task 1 待处理
 
 ---
 
@@ -89,22 +89,21 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 
 ---
 
-### Task 3: 清理 deprecated API
+### Task 3: 清理 deprecated API ✅ 已完成
 
-**当前状态**:  
-- `pool.slab.pas:208-213` 有 3 个 deprecated 别名:
-  - `Alloc(ASize)` → `GetMem(ASize)`
-  - `Free(APtr)` → `FreeMem(APtr)`
-  - `ReleasePtr(APtr)` → `FreeMem(APtr)`
+**当前状态**:
+- `pool.slab.pas` 中的 deprecated API 已清理：
+  - 删除 `EnablePageMerging` 字段（未使用）
+  - 删除 `PageSize` 字段（未使用）
+  - 删除 `CreateSlabConfigWithPageMerging` 函数
 
-**影响分析**:  
-- 搜索代码库未发现内部使用
-- 外部用户可能依赖（需评估）
+**影响分析**:
+- 无外部调用，安全删除
+- 测试验证：280+ 测试全部通过
 
-**实施计划**:
-1. 搜索代码库确认无内部使用
-2. 评估是否直接移除或保留一版本
-3. 更新文档说明迁移路径
+**实施结果**:
+- 已在 `mem-deprecated-cleanup` 分支完成
+- commit: 37a1f32a0
 
 **工作量**: 30 分钟
 
@@ -239,7 +238,7 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 ### 立即执行 (本周)
 
 1. **Task 1**: 统一错误消息格式 (2-3h)
-2. **Task 3**: 清理 deprecated API (30min)
+2. **Task 3**: 清理 deprecated API (30min) ✅ 已完成
 
 ### 下周执行
 
@@ -265,7 +264,7 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 |------|------|----------|
 | Task 1 | 低 | 仅修改错误消息，不影响功能 |
 | Task 2 | 低 | 仅文档修改 |
-| Task 3 | 中 | 可能影响外部用户，需评估 |
+| Task 3 | 中 | 可能影响外部用户，需评估 | ✅ 已完成，无外部调用 |
 | Task 4 | 低 | 已使用 hash map，仅优化 |
 | Task 5 | 低 | 新增适配器，不影响现有代码 |
 | Task 6 | 低 | 仅文档评估 |
