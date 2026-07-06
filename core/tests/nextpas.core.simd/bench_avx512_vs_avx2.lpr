@@ -8,7 +8,6 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.avx2,
-  nextpas.core.simd.avx512,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.bench;
 

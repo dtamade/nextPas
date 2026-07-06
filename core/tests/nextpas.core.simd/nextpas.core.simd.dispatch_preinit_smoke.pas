@@ -11,18 +11,12 @@ uses
   nextpas.core.simd.scalar
   {$IFDEF CPUX86_64}
   , nextpas.core.simd.sse2
-  , nextpas.core.simd.sse3
   , nextpas.core.simd.ssse3
-  , nextpas.core.simd.sse41
-  , nextpas.core.simd.sse42
   , nextpas.core.simd.avx2
   {$ENDIF}
   {$IFDEF CPU386}
   , nextpas.core.simd.sse2.i386
-  , nextpas.core.simd.sse3
   , nextpas.core.simd.ssse3
-  , nextpas.core.simd.sse41
-  , nextpas.core.simd.sse42
   {$ENDIF}
   ;
 

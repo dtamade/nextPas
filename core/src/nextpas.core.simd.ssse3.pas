@@ -73,7 +73,6 @@ implementation
 
 uses
   nextpas.core.simd.sse2,
-  nextpas.core.simd.sse3,
   nextpas.core.simd.cpuinfo;
 
 // === SSSE3 Byte Shuffle ===
