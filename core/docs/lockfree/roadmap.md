@@ -235,6 +235,13 @@ L3: nextpas.core.lockfree.* (数据结构)
 |------|------|------|
 | MPSC fast path | 只在有等待者时通知 | 减少不必要的通知 |
 
+### 4.12 Stack/Deque Cache Line Padding (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| Stack cache line padding | FTop/FFreeHead 避免 false sharing | 减少缓存颠簸 |
+| Deque cache line padding | FTop/FBottom 避免 false sharing | 减少缓存颠簸 |
+
 ---
 
 - **Commit**: `604be8b14` on main
