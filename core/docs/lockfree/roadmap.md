@@ -229,6 +229,12 @@ L3: nextpas.core.lockfree.* (数据结构)
 | SegQueue freelist | freelist limit 从 4 增加到 8 | 减少 GetMem/FreeMem |
 | EBR freelist limit | freelist limit 从 16 增加到 32 | 减少 GetMem/FreeMem |
 
+### 4.11 MPSC Fast Path 优化 (2026-07-06)
+
+| 优化 | 内容 | 效果 |
+|------|------|------|
+| MPSC fast path | 只在有等待者时通知 | 减少不必要的通知 |
+
 ---
 
 - **Commit**: `604be8b14` on main
