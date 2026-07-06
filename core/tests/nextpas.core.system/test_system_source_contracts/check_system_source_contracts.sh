@@ -307,6 +307,14 @@ procedure CopyMem
 function CompareMem
 function Supports
 function Supports
+function HTonN
+function HTonN
+function NToHs
+function NToHs
+function VarType
+function VarIsNull
+function VarIsEmpty
+function VarIsClear
 type TObject
 type TClass
 type TTypeKind

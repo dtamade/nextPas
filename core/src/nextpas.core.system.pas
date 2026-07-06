@@ -111,6 +111,16 @@ function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; inline;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; inline;
 
+function HTonN(AValue: Word): Word; overload;
+function HTonN(AValue: LongWord): LongWord; overload;
+function NToHs(AValue: Word): Word; overload;
+function NToHs(AValue: LongWord): LongWord; overload;
+
+function VarType(const V: Variant): TVarType;
+function VarIsNull(const V: Variant): Boolean;
+function VarIsEmpty(const V: Variant): Boolean;
+function VarIsClear(const V: Variant): Boolean;
+
 implementation
 
 procedure FreeAndNil(var AObj);
@@ -151,6 +161,62 @@ end;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
+end;
+
+function HTonN(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function HTonN(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: Word): Word;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function NToHs(AValue: LongWord): LongWord;
+begin
+  {$IFDEF ENDIAN_LITTLE}
+  Result := Swap(AValue);
+  {$ELSE}
+  Result := AValue;
+  {$ENDIF}
+end;
+
+function VarType(const V: Variant): TVarType;
+begin
+  Result := TVarData(V).VType;
+end;
+
+function VarIsNull(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType = varNull;
+end;
+
+function VarIsEmpty(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType = varEmpty;
+end;
+
+function VarIsClear(const V: Variant): Boolean;
+begin
+  Result := TVarData(V).VType in [varEmpty, varNull];
 end;
 
 end.
