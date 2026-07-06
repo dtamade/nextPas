@@ -10,6 +10,7 @@ program test_http_tls_real;
 {$I nextpas.core.settings.inc}
 
 uses
+  cthreads,
   SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.test,
@@ -89,6 +90,18 @@ begin
   Check(LClientCtx.IsValid, 'client TLS context is valid');
 end;
 
+type
+  TServerHandshakeThread = class(TThread)
+    FTlsServer: ISSLConnection;
+    FAcceptResult: Boolean;
+    procedure Execute; override;
+  end;
+
+procedure TServerHandshakeThread.Execute;
+begin
+  FAcceptResult := FTlsServer.Accept;
+end;
+
 procedure TestTlsHandshakeWithLocalServer;
 var
   LKeyPair: IKeyPairWithCertificate;
@@ -97,12 +110,14 @@ var
   LListener: ITcpListener;
   LClientConn, LServerConn: ITcpStream;
   LTlsClient, LTlsServer: ISSLConnection;
-  LClientStream, LServerStream: IStream;
   LAddr: TNetAddress;
   LPort: UInt16;
   LBuf: array[0..255] of Byte;
   LRead: SizeUInt;
   LTestData: AnsiString;
+  LSock: PtrUInt;
+  LRuntime: ITcpSocketRuntime;
+  LServerThread: TServerHandshakeThread;
 begin
   { Create self-signed cert }
   LKeyPair := TCertificateBuilder.Create
@@ -138,15 +153,31 @@ begin
   LServerConn := LListener.Accept;
   Check(LServerConn <> nil, 'server accepted connection');
 
-  { Create TLS connections }
-  LTlsClient := LClientCtx.CreateConnection(LClientConn as IStream);
+  { Create TLS connections using native socket handles }
+  Check(Supports(LClientConn, ITcpSocketRuntime, LRuntime), 'client supports ITcpSocketRuntime');
+  LSock := LRuntime.NativeSocketHandle;
+  LTlsClient := LClientCtx.CreateConnection(THandle(LSock));
   Check(LTlsClient <> nil, 'client TLS connection created');
-  LTlsServer := LServerCtx.CreateConnection(LServerConn as IStream);
-  Check(LTlsServer <> nil, 'server TLS connection created');
+  LRuntime := nil;
 
-  { Do TLS handshakes - server accepts first, then client connects }
-  Check(LTlsServer.Accept, 'server TLS accept succeeded');
+  Check(Supports(LServerConn, ITcpSocketRuntime, LRuntime), 'server supports ITcpSocketRuntime');
+  LSock := LRuntime.NativeSocketHandle;
+  LTlsServer := LServerCtx.CreateConnection(THandle(LSock));
+  Check(LTlsServer <> nil, 'server TLS connection created');
+  LRuntime := nil;
+
+  { TLS handshake: server runs in background thread, client in main thread.
+    Handshake requires bidirectional data exchange, so both must run concurrently. }
+  LServerThread := TServerHandshakeThread.Create(True);
+  LServerThread.FTlsServer := LTlsServer;
+  LServerThread.FreeOnTerminate := False;
+  LServerThread.Start;
+
   Check(LTlsClient.Connect, 'client TLS connect succeeded');
+
+  LServerThread.WaitFor;
+  Check(LServerThread.FAcceptResult, 'server TLS accept succeeded');
+  LServerThread.Free;
 
   { Verify TLS state }
   Check(LTlsServer.GetState <> '', 'server TLS state not empty');
@@ -154,23 +185,21 @@ begin
 
   { Send data from client to server }
   LTestData := 'Hello TLS!';
-  LClientStream := LTlsClient as IStream;
-  LServerStream := LTlsServer as IStream;
-  LClientStream.Write(LTestData[1], Length(LTestData));
+  LTlsClient.Write(LTestData[1], Length(LTestData));
 
   { Read data on server side }
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := LServerStream.Read(LBuf[0], SizeOf(LBuf));
+  LRead := LTlsServer.Read(LBuf[0], SizeOf(LBuf));
   Check(LRead = SizeUInt(Length(LTestData)), 'server received correct data length');
   Check(CompareMem(@LBuf[0], @LTestData[1], LRead), 'server received correct data');
 
   { Send response from server to client }
   LTestData := 'TLS OK!';
-  LServerStream.Write(LTestData[1], Length(LTestData));
+  LTlsServer.Write(LTestData[1], Length(LTestData));
 
   { Read response on client side }
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LRead := LClientStream.Read(LBuf[0], SizeOf(LBuf));
+  LRead := LTlsClient.Read(LBuf[0], SizeOf(LBuf));
   Check(LRead = SizeUInt(Length(LTestData)), 'client received correct data length');
   Check(CompareMem(@LBuf[0], @LTestData[1], LRead), 'client received correct data');
 
@@ -180,6 +209,25 @@ begin
   LClientConn := nil;
   LServerConn := nil;
   LListener := nil;
+end;
+
+type
+  TServerStreamThread = class(TThread)
+    FConn: ITcpStream;
+    FCtx: ISSLContext;
+    FResult: ITcpStream;
+    FError: string;
+    procedure Execute; override;
+  end;
+
+procedure TServerStreamThread.Execute;
+begin
+  try
+    FResult := NewTlsServerTcpStream(FConn, FCtx);
+  except
+    on E: Exception do
+      FError := E.Message;
+  end;
 end;
 
 procedure TestTlsStreamWrapper;
@@ -195,6 +243,7 @@ var
   LBuf: array[0..255] of Byte;
   LRead: SizeUInt;
   LTestData: AnsiString;
+  LServerThread: TServerStreamThread;
 begin
   { Create self-signed cert }
   LKeyPair := TCertificateBuilder.Create
@@ -225,13 +274,24 @@ begin
   LClientConn := TcpConnect('127.0.0.1', LPort);
   LServerConn := LListener.Accept;
 
-  { Create TLS streams using the HTTP module's wrapper }
+  { Create TLS streams using the HTTP module's wrapper.
+    Server runs in background thread because TLS handshake requires
+    bidirectional data exchange — client and server must run concurrently. }
+  LServerThread := TServerStreamThread.Create(True);
+  LServerThread.FConn := LServerConn;
+  LServerThread.FCtx := LServerCtx;
+  LServerThread.FreeOnTerminate := False;
+  LServerThread.Start;
+
   LClientStream := NewTlsClientTcpStream(LClientConn, LClientCtx, 'localhost',
     HTTP2_ALPN_PROTOCOL);
   Check(LClientStream <> nil, 'client TLS stream created');
 
-  LServerStream := NewTlsServerTcpStream(LServerConn, LServerCtx);
+  LServerThread.WaitFor;
+  Check(LServerThread.FError = '', 'server TLS stream: ' + LServerThread.FError);
+  LServerStream := LServerThread.FResult;
   Check(LServerStream <> nil, 'server TLS stream created');
+  LServerThread.Free;
 
   { Send data through TLS streams }
   LTestData := 'TLS Stream Test!';
