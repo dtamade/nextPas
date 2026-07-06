@@ -430,16 +430,16 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 
 | 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
 |------|------|-------------|---------------|
-| **TLockFreeChannelSpsc** | **1P1C** | **38.5** | **26.0** |
+| **TLockFreeChannelSpsc** | **1P1C** | **38.2** | **26.2** |
 | TLockFreeChannel | MPMC | 90.9 | 11.0 |
 
 ### 跨语言对比 (1P1C Channel)
 
 | 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
 |------|-------------|---------------|---------|
-| **nextpas SPSC Channel** | **38.5** | **26.0** | **2.80x 快** |
-| Rust std::sync::mpsc | 43.5 | 23.0 | 2.48x 快 |
-| Go channel | 107.8 | 9.3 | 基准 |
-| C++ mutex+condvar | 209.4 | 4.8 | 0.52x |
+| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
+| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
+| Go channel | 114.3 | 8.7 | 基准 |
+| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
 
-**结论**: nextpas SPSC Channel 比 Go channel 快 2.80x，比 Rust std::sync::mpsc 快 1.13x！
+**结论**: nextpas SPSC Channel 比 Go channel 快 2.99x，比 Rust std::sync::mpsc 快 1.26x！

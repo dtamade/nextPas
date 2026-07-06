@@ -99,17 +99,17 @@
 | TSegQueue | 2P+2C | 17 | 59.1 |
 | TLockFreeStack | 4P+4C | ~67 | ~15 |
 | TWorkStealingDeque | 1 owner + 2 thieves | ~2.0 | ~500 |
-| **TLockFreeChannelSpsc** | **1P+1C** | **26.0** | **38.5** |
+| **TLockFreeChannelSpsc** | **1P+1C** | **26.2** | **38.2** |
 | TLockFreeChannel | MPMC | 10.6 | 94.3 |
 
 ### 跨语言对比 (1P1C Channel)
 
 | 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
 |------|-------------|---------------|---------|
-| **nextpas SPSC Channel** | **38.5** | **26.0** | **2.80x 快** |
-| Rust std::sync::mpsc | 43.5 | 23.0 | 2.48x 快 |
-| Go channel | 107.8 | 9.3 | 基准 |
-| C++ mutex+condvar | 209.4 | 4.8 | 0.52x |
+| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
+| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
+| Go channel | 114.3 | 8.7 | 基准 |
+| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
 
 ## 线程安全契约
 
