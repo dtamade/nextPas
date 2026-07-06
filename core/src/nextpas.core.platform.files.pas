@@ -497,6 +497,8 @@ end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
 begin
+  if (ABuf = nil) or (ASize = 0) then
+    Exit(nil);
   Result := getcwd(ABuf, ASize);
 end;
 

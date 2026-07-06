@@ -43,7 +43,7 @@
 | 源文件数 | 89 |
 | 测试文件数 | 93 |
 | 公开 API 数 | 489 |
-| nil guard 数 | 295 |
+| nil guard 数 | 297 |
 | PLATFORM_ERR_* 使用 | 310 处 |
 | QUICKSTART 示例 | 15 个 |
 

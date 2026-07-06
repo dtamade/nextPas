@@ -58,6 +58,8 @@ var
   LWideLen: Int32;
 begin
   AWide := '';
+  if AText = nil then
+    Exit(False);
   LInputLen := AnsiZLen(AText);
   if LInputLen = 0 then
     Exit(True);
