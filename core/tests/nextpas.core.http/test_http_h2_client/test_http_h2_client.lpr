@@ -1824,6 +1824,246 @@ begin
     'BuildResponse uses dedicated H2 response body reader');
 end;
 
+{ -- New H2 client tests -- }
+
+procedure TestRoundTripHeadRequest;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmHead, 'http://example.com/head'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'HEAD response status');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'HEAD sends headers frame');
+    SetLength(LDecodedHeaders, 16);
+    DecodeRequestHeaders(LFrames[2].Payload, LDecodedHeaders);
+    CheckEqual('HEAD', HeaderValue(LDecodedHeaders, ':method'), 'HEAD method');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestRoundTripDeleteRequest;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '204', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmDelete, 'http://example.com/item/42'));
+    CheckEqual(Int64(204), Int64(LResp.StatusCode), 'DELETE response status');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'DELETE sends headers frame');
+    SetLength(LDecodedHeaders, 16);
+    DecodeRequestHeaders(LFrames[2].Payload, LDecodedHeaders);
+    CheckEqual('DELETE', HeaderValue(LDecodedHeaders, ':method'), 'DELETE method');
+    CheckEqual('/item/42', HeaderValue(LDecodedHeaders, ':path'), 'DELETE path');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestRoundTripPutRequest;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LBody: IStream;
+  LFrames: array[0..15] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+begin
+  LBody := CreateBytesStreamFrom([Byte('d'), Byte('a'), Byte('t'), Byte('a')]);
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmPut, 'http://example.com/item',
+      NewHttpHeaders, LBody as IReader, 4));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'PUT response status');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 4, 'PUT sends headers + data');
+    SetLength(LDecodedHeaders, 16);
+    DecodeRequestHeaders(LFrames[2].Payload, LDecodedHeaders);
+    CheckEqual('PUT', HeaderValue(LDecodedHeaders, ':method'), 'PUT method');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+    LBody := nil;
+  end;
+end;
+
+procedure TestRoundTripCustomHeaders;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('x-request-id', 'test-123');
+  LHeaders.Add('x-custom-header', 'custom-value');
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/custom', LHeaders));
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'custom headers sent');
+    SetLength(LDecodedHeaders, 16);
+    DecodeRequestHeaders(LFrames[2].Payload, LDecodedHeaders);
+    CheckEqual('test-123', HeaderValue(LDecodedHeaders, 'x-request-id'),
+      'x-request-id preserved');
+    CheckEqual('custom-value', HeaderValue(LDecodedHeaders, 'x-custom-header'),
+      'x-custom-header preserved');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+    LHeaders := nil;
+  end;
+end;
+
+procedure TestRoundTripQueryParameters;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..7] of TH2Frame;
+  LDecodedHeaders: array of THPackHeader;
+  LCount: SizeInt;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet,
+      'http://example.com/search?q=test&page=1'));
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    Check(LCount >= 3, 'query params sent');
+    SetLength(LDecodedHeaders, 16);
+    DecodeRequestHeaders(LFrames[2].Payload, LDecodedHeaders);
+    CheckEqual('/search?q=test&page=1', HeaderValue(LDecodedHeaders, ':path'),
+      'query parameters in path');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestMultipleRequestsOnSameConnection;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp1, LResp2: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '201', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp1 := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/first'));
+    CheckEqual(Int64(200), Int64(LResp1.StatusCode), 'first response status');
+    LResp1 := nil;
+    LResp2 := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/second'));
+    CheckEqual(Int64(201), Int64(LResp2.StatusCode), 'second response status');
+    LResp2 := nil;
+  finally
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestEmptyResponseBody;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '204', '', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/empty'));
+    CheckEqual(Int64(204), Int64(LResp.StatusCode), 'empty response status');
+    Check(LResp.Body = nil, 'empty response has nil body reader');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestResponseWithMultipleHeaders;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('x-request-id', 'req-123');
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200',
+      'content-type: text/html'#13#10 +
+      'x-response-id: resp-456'#13#10 +
+      'cache-control: no-cache', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/headers', LHeaders));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'multi-header response status');
+  finally
+    LResp := nil;
+    LConn.Free;
+    LStream := nil;
+    LHeaders := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('test_http_h2_client');
   T.Test('Handshake writes client preface and settings',
@@ -1870,5 +2110,13 @@ begin
     @TestBuildResponseAvoidsBytesStreamCopySourceContract);
   T.Test('Built-in HTTP/2 client transport is registered',
     @TestBuiltinHttp2ClientTransportIsRegistered);
+  T.Test('RoundTrip HEAD request', @TestRoundTripHeadRequest);
+  T.Test('RoundTrip DELETE request', @TestRoundTripDeleteRequest);
+  T.Test('RoundTrip PUT request', @TestRoundTripPutRequest);
+  T.Test('RoundTrip custom headers', @TestRoundTripCustomHeaders);
+  T.Test('RoundTrip query parameters', @TestRoundTripQueryParameters);
+  T.Test('Multiple requests on same connection', @TestMultipleRequestsOnSameConnection);
+  T.Test('Empty response body', @TestEmptyResponseBody);
+  T.Test('Response with multiple headers', @TestResponseWithMultipleHeaders);
   if not T.Run then Halt(1);
 end.

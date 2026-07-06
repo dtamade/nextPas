@@ -45,7 +45,7 @@ This lane is in **G2/G3/G4 active hardening**:
 - **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
 - **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
 
-**测试**: 18 suites ~600 pass / 0 leak
+**测试**: 23 suites ~726 pass / 0 leak
 
 ## Map
 
@@ -211,7 +211,7 @@ Design exclusions (by design, not gaps):
 - PRIORITY frame priority scheduling (parse, ignore — RFC permits)
 
 Remaining H2 hardening:
-- Test coverage vs h2-test-coverage-plan.md targets (client -33, frame -17, hpack -15); session gap closed
+- Test coverage vs h2-test-coverage-plan.md targets: client 30/55 (-25), frame 37/35 (✅ closed), hpack 29/30 (-1); session gap closed
 - Real TLS runtime proof (currently mock-based)
 - Documentation alignment (this document and ARCHITECTURE.md)
 
