@@ -4425,31 +4425,8 @@ function TSemanticAnalyzer.TypeSymbolForTypeId(
   const ATypeId: LongInt;
   out ASymbol: TSemanticSymbol
 ): Boolean;
-var
-  Index: LongInt;
-  Symbol: TSemanticSymbol;
 begin
-  ASymbol.SymbolId := 0;
-  ASymbol.Name := '';
-  ASymbol.Kind := '';
-  ASymbol.OwnerUnitId := '';
-  ASymbol.ScopeId := 0;
-  ASymbol.TypeId := 0;
-  ASymbol.ParamCount := -1;
-  ASymbol.ParamSignature := '';
-  ASymbol.ByteOffset := 0;
-  Result := False;
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-  for Index := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and (Symbol.TypeId = ATypeId) then
-    begin
-      ASymbol := Symbol;
-      Exit(True);
-    end;
-  end;
+  Result := np_sema_type_check.TypeSymbolForTypeId(FModel, ATypeId, ASymbol);
 end;
 
 function TSemanticAnalyzer.ClassTypeHasKnownNonMethodMember(
@@ -4480,55 +4457,15 @@ end;
 function TSemanticAnalyzer.TypeIdHasKnownClassLayout(
   const ATypeId: LongInt
 ): Boolean;
-var
-  ConstValue: Int64;
-  TypeSymbol: TSemanticSymbol;
-  Meta: TTypeMetadata;
 begin
-  Result := False;
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-  if FModel.GetTypeMeta(ATypeId, Meta) then
-  begin
-    Result := (not Meta.IsRecord) and (Meta.Size > 0);
-    Exit;
-  end;
-  if not TypeSymbolForTypeId(ATypeId, TypeSymbol) then
-    Exit;
-  Result := FModel.LookupConstValue(TypeSymbol.Name + '$vmt_count', ConstValue);
+  Result := np_sema_type_check.TypeIdHasKnownClassLayout(FModel, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsDeferredSystemObjectMember(
   const AMemberName: string
 ): Boolean;
 begin
-  { TObject methods that are genuinely deferred because System.pas is skipped }
-  Result := SameText(AMemberName, 'Free') or
-    SameText(AMemberName, 'Create') or
-    SameText(AMemberName, 'Destroy') or
-    SameText(AMemberName, 'CreateFmt') or
-    SameText(AMemberName, 'CreateRes') or
-    SameText(AMemberName, 'CreateResFmt') or
-    SameText(AMemberName, 'ClassName') or
-    SameText(AMemberName, 'ClassType') or
-    SameText(AMemberName, 'InheritsFrom') or
-    SameText(AMemberName, 'GetInterface') or
-    SameText(AMemberName, 'AfterConstruction') or
-    SameText(AMemberName, 'BeforeDestruction') or
-    { FPC System builtins that are methods }
-    SameText(AMemberName, '_AddRef') or
-    SameText(AMemberName, '_Release') or
-    { Interface methods that need deferred handling }
-    SameText(AMemberName, 'Write') or SameText(AMemberName, 'Read') or
-    SameText(AMemberName, 'Close') or SameText(AMemberName, 'Flush') or
-    SameText(AMemberName, 'Seek') or SameText(AMemberName, 'GetSize') or
-    SameText(AMemberName, 'SetSize') or
-    SameText(AMemberName, 'WriteByte') or SameText(AMemberName, 'ReadByte') or
-    SameText(AMemberName, 'Clone') or SameText(AMemberName, 'Reset') or
-    SameText(AMemberName, 'SetBlocking') or
-    SameText(AMemberName, 'CreateWithContext') or
-    SameText(AMemberName, 'Contains') or
-    SameText(AMemberName, 'Render');
+  Result := np_sema_type_check.IsDeferredSystemObjectMember(AMemberName);
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;

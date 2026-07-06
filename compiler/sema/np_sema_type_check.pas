@@ -68,6 +68,12 @@ function TypeMetaInterfaces(const AModel: TSemanticModel; const ATypeName: strin
 function IsIntrinsicExprName(const AName: string): Boolean;
 function TypeIdIsManagedString(const AModel: TSemanticModel; const ATypeId: LongInt): Boolean;
 
+function TypeSymbolForTypeId(const AModel: TSemanticModel; const ATypeId: LongInt;
+  out ASymbol: TSemanticSymbol): Boolean;
+function TypeIdHasKnownClassLayout(const AModel: TSemanticModel;
+  const ATypeId: LongInt): Boolean;
+function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
+
 implementation
 
 uses
@@ -273,6 +279,83 @@ begin
     Exit;
   TypeName := AModel.TypeAt(ATypeId - 1).Name;
   Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
+end;
+
+function TypeSymbolForTypeId(const AModel: TSemanticModel; const ATypeId: LongInt;
+  out ASymbol: TSemanticSymbol): Boolean;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  ASymbol.SymbolId := 0;
+  ASymbol.Name := '';
+  ASymbol.Kind := '';
+  ASymbol.OwnerUnitId := '';
+  ASymbol.ScopeId := 0;
+  ASymbol.TypeId := 0;
+  ASymbol.ParamCount := -1;
+  ASymbol.ParamSignature := '';
+  ASymbol.ByteOffset := 0;
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > AModel.TypeCount) then
+    Exit;
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if SameText(Symbol.Kind, 'type') and (Symbol.TypeId = ATypeId) then
+    begin
+      ASymbol := Symbol;
+      Exit(True);
+    end;
+  end;
+end;
+
+function TypeIdHasKnownClassLayout(const AModel: TSemanticModel;
+  const ATypeId: LongInt): Boolean;
+var
+  ConstValue: Int64;
+  TypeSymbol: TSemanticSymbol;
+  Meta: TTypeMetadata;
+begin
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > AModel.TypeCount) then
+    Exit;
+  if AModel.GetTypeMeta(ATypeId, Meta) then
+  begin
+    Result := (not Meta.IsRecord) and (Meta.Size > 0);
+    Exit;
+  end;
+  if not TypeSymbolForTypeId(AModel, ATypeId, TypeSymbol) then
+    Exit;
+  Result := AModel.LookupConstValue(TypeSymbol.Name + '$vmt_count', ConstValue);
+end;
+
+function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
+begin
+  Result := SameText(AMemberName, 'Free') or
+    SameText(AMemberName, 'Create') or
+    SameText(AMemberName, 'Destroy') or
+    SameText(AMemberName, 'CreateFmt') or
+    SameText(AMemberName, 'CreateRes') or
+    SameText(AMemberName, 'CreateResFmt') or
+    SameText(AMemberName, 'ClassName') or
+    SameText(AMemberName, 'ClassType') or
+    SameText(AMemberName, 'InheritsFrom') or
+    SameText(AMemberName, 'GetInterface') or
+    SameText(AMemberName, 'AfterConstruction') or
+    SameText(AMemberName, 'BeforeDestruction') or
+    SameText(AMemberName, '_AddRef') or
+    SameText(AMemberName, '_Release') or
+    SameText(AMemberName, 'Write') or SameText(AMemberName, 'Read') or
+    SameText(AMemberName, 'Close') or SameText(AMemberName, 'Flush') or
+    SameText(AMemberName, 'Seek') or SameText(AMemberName, 'GetSize') or
+    SameText(AMemberName, 'SetSize') or
+    SameText(AMemberName, 'WriteByte') or SameText(AMemberName, 'ReadByte') or
+    SameText(AMemberName, 'Clone') or SameText(AMemberName, 'Reset') or
+    SameText(AMemberName, 'SetBlocking') or
+    SameText(AMemberName, 'CreateWithContext') or
+    SameText(AMemberName, 'Contains') or
+    SameText(AMemberName, 'Render');
 end;
 
 end.
