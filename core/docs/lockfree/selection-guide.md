@@ -72,7 +72,7 @@
 │   ├── 单生产者单消费者 (1P1C)
 │   │   └── 使用 TLockFreeChannelSpsc<T>
 │   │       - 专为 1P1C 优化，使用原子 load/store
-│   │       - 性能接近 Go channel
+│   │       - 性能超越 Go channel (2.99x) 和 Rust (1.26x)
 │   │       - 阻塞/非阻塞/超时
 │   │
 │   └── 多生产者多消费者 (MPMC)

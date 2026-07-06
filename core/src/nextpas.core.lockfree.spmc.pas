@@ -113,7 +113,9 @@ begin
       begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 2, moRelease);
-        LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
         Exit(True);
       end;
     end
@@ -142,7 +144,9 @@ begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+          LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Exit(True);
       end;
     end
