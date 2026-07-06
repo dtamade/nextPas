@@ -4553,168 +4553,96 @@ begin
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.Size);
-  if FModel.LookupConstValue(ATypeName + '$size', V) then Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaSize(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsRecord(const ATypeName: string): Boolean;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.IsRecord);
-  Result := FModel.LookupConstValue(ATypeName + '$record', V);
+  Result := np_sema_type_check.TypeMetaIsRecord(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsClass(const ATypeName: string): Boolean;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    Exit((not Meta.IsRecord) and (Meta.Size > 0));
-  Result := (not FModel.LookupConstValue(ATypeName + '$record', V)) and
-    FModel.LookupConstValue(ATypeName + '$size', V);
+  Result := np_sema_type_check.TypeMetaIsClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsInterface(const ATypeName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$interface', V);
+  Result := np_sema_type_check.TypeMetaIsInterface(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeIsInterfaceByName(const ATypeName: string): Boolean;
-var TypeId: LongInt;
 begin
-  if TypeMetaIsInterface(ATypeName) then
-    Exit(True);
-  TypeId := FModel.FindTypeByName(ATypeName);
-  Result := (TypeId > 0) and
-    SameText(FModel.TypeAt(TypeId - 1).Kind, 'interface');
+  Result := np_sema_type_check.TypeIsInterfaceByName(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIndex(
   const ATypeName, AFieldName: string): Int64;
-var Meta: TTypeMetadata; FM: TFieldMeta; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].Index);
-  if FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$idx', V) then
-    Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaFieldIndex(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsStr(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsString);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$str', V);
+  Result := np_sema_type_check.TypeMetaFieldIsStr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsPtr(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsPointer);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$ptr', V);
+  Result := np_sema_type_check.TypeMetaFieldIsPtr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsDynArray(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsDynArray);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$arr', V);
+  Result := np_sema_type_check.TypeMetaFieldIsDynArray(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldDynArrayElemSize(
   const ATypeName, AFieldName: string): Int64;
 begin
-  if not FModel.LookupConstValue(
-    ATypeName + '.' + AFieldName + '$arr_elem_size', Result) then
-    Result := 8;
+  Result := np_sema_type_check.TypeMetaFieldDynArrayElemSize(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtSlot(
   const ATypeName, AMethodName: string): Int64;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.VmtSlots) do
-      if SameText(Meta.VmtSlots[I].MethodName, AMethodName) then
-        Exit(Meta.VmtSlots[I].SlotIndex);
-  if FModel.LookupConstValue(ATypeName + '$vmt_slot_' + AMethodName, V) then
-    Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaVmtSlot(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetPtr(
   const ATypeName, AMethodName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$ret_ptr_' + AMethodName, V);
+  Result := np_sema_type_check.TypeMetaRetPtr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetStr(
   const ATypeName, AMethodName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$ret_str_' + AMethodName, V);
+  Result := np_sema_type_check.TypeMetaRetStr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaParentClass(const ATypeName: string): string;
-var Meta: TTypeMetadata;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.ParentClassName <> '') then
-    Exit(Meta.ParentClassName);
-  if not FModel.LookupStringConstValue(ATypeName + '$parent_class', Result) then
-    Result := '';
+  Result := np_sema_type_check.TypeMetaParentClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.NextClassAncestorName(const ATypeName: string): string;
-var
-  TypeId: LongInt;
 begin
-  Result := '';
-  if ATypeName = '' then
-    Exit;
-
-  TypeId := FModel.FindTypeByName(ATypeName);
-  if (TypeId > 0) and (FModel.TypeAt(TypeId - 1).ParentTypeId > 0) then
-    Result := FModel.TypeAt(
-      FModel.TypeAt(TypeId - 1).ParentTypeId - 1).Name;
-  if Result = '' then
-    Result := TypeMetaParentClass(ATypeName);
-  if SameText(Result, ATypeName) then
-    Result := '';
+  Result := np_sema_type_check.NextClassAncestorName(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtCount(const ATypeName: string): Int64;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.VmtCount);
-  if FModel.LookupConstValue(ATypeName + '$vmt_count', V) then Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaVmtCount(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaInterfaces(const ATypeName: string): string;
-var Meta: TTypeMetadata;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Interfaces <> '') then
-    Exit(Meta.Interfaces);
-  if not FModel.LookupStringConstValue(ATypeName + '$interfaces', Result) then
-    Result := '';
+  Result := np_sema_type_check.TypeMetaInterfaces(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
