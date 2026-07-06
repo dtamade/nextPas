@@ -20,3 +20,6 @@ begin Result := nextpas.core.test.expect.ExpectPtr(AValue); end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectProc(AProc); end;
+
+function ExpectBytes(const AValue: TBytes): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectBytes(AValue); end;

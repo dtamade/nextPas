@@ -34,8 +34,14 @@ procedure CheckEqual(const AExpected, AActual: Int64;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
+procedure CheckNotEqual(const AExpected, AActual: string;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
+procedure CheckNotEqual(const AExpected, AActual: Int64;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckNotEqual(const AExpected, AActual: Boolean;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckNotEqual(const AExpected, AActual: UInt64); overload;
 { CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
@@ -49,45 +55,79 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 { Case-insensitive containment. }
 procedure CheckContainsCI(const AHaystack, ANeedle: string);
+procedure CheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 { Fails if AHaystack contains ANeedle. Empty needle is a no-op (always passes). }
 procedure CheckNotContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 { Case-insensitive CheckNotContains. }
 procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 procedure CheckStartsWith(const AStr, APrefix: string);
+procedure CheckStartsWith(const AStr, APrefix: string;
+  const AMessage: string); overload;
 { Case-insensitive prefix check. }
 procedure CheckStartsWithCI(const AStr, APrefix: string);
+procedure CheckStartsWithCI(const AStr, APrefix: string;
+  const AMessage: string); overload;
 procedure CheckEndsWith(const AStr, ASuffix: string);
+procedure CheckEndsWith(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 { Case-insensitive suffix check. }
 procedure CheckEndsWithCI(const AStr, ASuffix: string);
+procedure CheckEndsWithCI(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 { Fails if AStr starts with APrefix. Empty prefix is a no-op (always passes). }
 procedure CheckNotStartsWith(const AStr, APrefix: string);
+procedure CheckNotStartsWith(const AStr, APrefix: string;
+  const AMessage: string); overload;
 { Fails if AStr ends with ASuffix. Empty suffix is a no-op (always passes). }
 procedure CheckNotEndsWith(const AStr, ASuffix: string);
+procedure CheckNotEndsWith(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 { Pointer identity: passes if AExpected = AActual (same address). }
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
 { Inclusive range: passes if ALow <= AValue <= AHigh. }
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckInRange(const AValue, ALow, AHigh: Int64;
+  const AMessage: string); overload;
 { Double inclusive range: passes if ALow <= AValue <= AHigh (absolute epsilon). }
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
-procedure CheckLessThan(const AValue, AExpected: Int64);
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double; const AMessage: string); overload;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckLessThan(const AValue, AThreshold: Int64);
+procedure CheckLessThan(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
 procedure CheckLength(const AExpected, AActual: NativeInt);
+procedure CheckLength(const AExpected, AActual: NativeInt;
+  const AMessage: string); overload;
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
 { Double comparisons — absolute epsilon. }
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
@@ -307,6 +347,38 @@ begin
       UIntToStr(AActual));
 end;
 
+procedure CheckNotEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected values to differ but both are "' + AActual + '"')
+    else
+      InternalFail('Expected values to differ but both are "' + AActual + '"');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected values to differ but both are ' + IntToStr(AActual))
+    else
+      InternalFail('Expected values to differ but both are ' + IntToStr(AActual));
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected values to differ but both are ' +
+        BoolToStr(AActual, 'True', 'False'))
+    else
+      InternalFail('Expected values to differ but both are ' +
+        BoolToStr(AActual, 'True', 'False'));
+end;
+
 procedure CheckNear(const AExpected, AActual: Double;
   const AEpsilon: Double; const AMessage: string);
 var
@@ -488,6 +560,18 @@ begin
     InternalFail('"' + AHaystack + '" does not contain "' + ANeedle + '"');
 end;
 
+procedure CheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if (Length(ANeedle) = 0) then
+    Exit;
+  if Pos(ANeedle, AHaystack) = 0 then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AHaystack + '" does not contain "' + ANeedle + '"')
+    else
+      InternalFail('"' + AHaystack + '" does not contain "' + ANeedle + '"');
+end;
+
 procedure CheckNotContains(const AHaystack, ANeedle: string);
 begin
   if (Length(ANeedle) = 0) then
@@ -496,10 +580,32 @@ begin
     InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
 end;
 
+procedure CheckNotContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if (Length(ANeedle) = 0) then
+    Exit;
+  if Pos(ANeedle, AHaystack) > 0 then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AHaystack + '" should not contain "' + ANeedle + '"')
+    else
+      InternalFail('"' + AHaystack + '" should not contain "' + ANeedle + '"');
+end;
+
 procedure CheckStartsWith(const AStr, APrefix: string);
 begin
   if not StrStartsWith(AStr, APrefix) then
     InternalFail('"' + AStr + '" does not start with "' + APrefix + '"');
+end;
+
+procedure CheckStartsWith(const AStr, APrefix: string;
+  const AMessage: string);
+begin
+  if not StrStartsWith(AStr, APrefix) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" does not start with "' + APrefix + '"')
+    else
+      InternalFail('"' + AStr + '" does not start with "' + APrefix + '"');
 end;
 
 procedure CheckEndsWith(const AStr, ASuffix: string);
@@ -512,6 +618,22 @@ begin
   if (Length(AStr) < LLen) or
      (Copy(AStr, Length(AStr) - LLen + 1, LLen) <> ASuffix) then
     InternalFail('"' + AStr + '" does not end with "' + ASuffix + '"');
+end;
+
+procedure CheckEndsWith(const AStr, ASuffix: string;
+  const AMessage: string);
+var
+  LLen: NativeInt;
+begin
+  LLen := Length(ASuffix);
+  if LLen = 0 then
+    Exit;
+  if (Length(AStr) < LLen) or
+     (Copy(AStr, Length(AStr) - LLen + 1, LLen) <> ASuffix) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" does not end with "' + ASuffix + '"')
+    else
+      InternalFail('"' + AStr + '" does not end with "' + ASuffix + '"');
 end;
 
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string);
@@ -532,92 +654,155 @@ begin
       IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
 end;
 
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
+procedure CheckInRange(const AValue, ALow, AHigh: Int64;
+  const AMessage: string);
 begin
-  if AValue <= AExpected then
+  if ALow > AHigh then
+    InternalFail('CheckInRange: ALow (' + IntToStr(ALow) +
+      ') > AHigh (' + IntToStr(AHigh) + ')');
+  if (AValue < ALow) or (AValue > AHigh) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': ' + IntToStr(AValue) + ' not in range [' +
+        IntToStr(ALow) + '..' + IntToStr(AHigh) + ']')
+    else
+      InternalFail(IntToStr(AValue) + ' not in range [' +
+        IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
+end;
+
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
+begin
+  if AValue <= AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckLessThan(const AValue, AExpected: Int64);
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
+  const AMessage: string);
 begin
-  if AValue >= AExpected then
+  if AValue <= AThreshold then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' > ' +
+        IntToStr(AThreshold))
+    else
+      InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
+        IntToStr(AThreshold));
+end;
+
+procedure CheckLessThan(const AValue, AThreshold: Int64);
+begin
+  if AValue >= AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AThreshold: Int64;
+  const AMessage: string);
 begin
-  if AValue < AExpected then
+  if AValue >= AThreshold then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' < ' +
+        IntToStr(AThreshold))
+    else
+      InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
+        IntToStr(AThreshold));
+end;
+
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
+begin
+  if AValue < AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string);
 begin
-  if AValue > AExpected then
+  if AValue < AThreshold then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' >= ' +
+        IntToStr(AThreshold))
+    else
+      InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
+        IntToStr(AThreshold));
+end;
+
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
+begin
+  if AValue > AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
+end;
+
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string);
+begin
+  if AValue > AThreshold then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' <= ' +
+        IntToStr(AThreshold))
+    else
+      InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
+        IntToStr(AThreshold));
 end;
 
 { ── Double comparison operators ────────────────────────────────────────────── }
 
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue <= AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue <= AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+        FloatToStr(AThreshold) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue >= AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue >= AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+        FloatToStr(AThreshold) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue < AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue < AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue > AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue > AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
@@ -639,6 +824,31 @@ begin
       FloatToStr(AEpsilon) + ')');
 end;
 
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double; const AMessage: string);
+begin
+  if IsNan(AValue) or IsNan(ALow) or IsNan(AHigh) then
+    InternalFail(FloatToStr(AValue) + ' not in range [' +
+      FloatToStr(ALow) + '..' + FloatToStr(AHigh) + '] (NaN)');
+  if ALow > AHigh then
+    InternalFail('CheckInRangeD: ALow (' + FloatToStr(ALow) +
+      ') > AHigh (' + FloatToStr(AHigh) + ')');
+  if (AValue < ALow) and (Abs(AValue - ALow) > AEpsilon) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': ' + FloatToStr(AValue) + ' not in range [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']')
+    else
+      InternalFail(FloatToStr(AValue) + ' not in range [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
+  if (AValue > AHigh) and (Abs(AValue - AHigh) > AEpsilon) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': ' + FloatToStr(AValue) + ' not in range [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']')
+    else
+      InternalFail(FloatToStr(AValue) + ' not in range [' +
+        FloatToStr(ALow) + '..' + FloatToStr(AHigh) + ']');
+end;
+
 { ── String prefix/suffix negation ──────────────────────────────────────────── }
 
 procedure CheckContainsCI(const AHaystack, ANeedle: string);
@@ -649,6 +859,18 @@ begin
     InternalFail('"' + AHaystack + '" does not contain (ci) "' + ANeedle + '"');
 end;
 
+procedure CheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if Length(ANeedle) = 0 then
+    Exit;
+  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) = 0 then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AHaystack + '" does not contain (ci) "' + ANeedle + '"')
+    else
+      InternalFail('"' + AHaystack + '" does not contain (ci) "' + ANeedle + '"');
+end;
+
 procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
 begin
   if Length(ANeedle) = 0 then
@@ -657,11 +879,34 @@ begin
     InternalFail('"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
 end;
 
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if Length(ANeedle) = 0 then
+    Exit;
+  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) > 0 then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AHaystack + '" should not contain (ci) "' + ANeedle + '"')
+    else
+      InternalFail('"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
+end;
+
 procedure CheckStartsWithCI(const AStr, APrefix: string);
 begin
   if (Length(AStr) < Length(APrefix)) or
      (LowerCase(Copy(AStr, 1, Length(APrefix))) <> LowerCase(APrefix)) then
     InternalFail('"' + AStr + '" does not start with (ci) "' + APrefix + '"');
+end;
+
+procedure CheckStartsWithCI(const AStr, APrefix: string;
+  const AMessage: string);
+begin
+  if (Length(AStr) < Length(APrefix)) or
+     (LowerCase(Copy(AStr, 1, Length(APrefix))) <> LowerCase(APrefix)) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" does not start with (ci) "' + APrefix + '"')
+    else
+      InternalFail('"' + AStr + '" does not start with (ci) "' + APrefix + '"');
 end;
 
 procedure CheckEndsWithCI(const AStr, ASuffix: string);
@@ -674,12 +919,38 @@ begin
     InternalFail('"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
 end;
 
+procedure CheckEndsWithCI(const AStr, ASuffix: string;
+  const AMessage: string);
+begin
+  if Length(ASuffix) = 0 then
+    Exit;
+  if (Length(AStr) < Length(ASuffix)) or
+     (LowerCase(Copy(AStr, Length(AStr) - Length(ASuffix) + 1,
+      Length(ASuffix))) <> LowerCase(ASuffix)) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" does not end with (ci) "' + ASuffix + '"')
+    else
+      InternalFail('"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
+end;
+
 procedure CheckNotStartsWith(const AStr, APrefix: string);
 begin
   if Length(APrefix) = 0 then
     Exit; { empty prefix matches everything — consistent with CheckStartsWith }
   if StrStartsWith(AStr, APrefix) then
     InternalFail('"' + AStr + '" should not start with "' + APrefix + '"');
+end;
+
+procedure CheckNotStartsWith(const AStr, APrefix: string;
+  const AMessage: string);
+begin
+  if Length(APrefix) = 0 then
+    Exit;
+  if StrStartsWith(AStr, APrefix) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" should not start with "' + APrefix + '"')
+    else
+      InternalFail('"' + AStr + '" should not start with "' + APrefix + '"');
 end;
 
 procedure CheckNotEndsWith(const AStr, ASuffix: string);
@@ -691,11 +962,36 @@ begin
     InternalFail('"' + AStr + '" should not end with "' + ASuffix + '"');
 end;
 
+procedure CheckNotEndsWith(const AStr, ASuffix: string;
+  const AMessage: string);
+begin
+  if Length(ASuffix) = 0 then
+    Exit;
+  if (Length(AStr) >= Length(ASuffix)) and
+     (Copy(AStr, Length(AStr) - Length(ASuffix) + 1, Length(ASuffix)) = ASuffix) then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': "' + AStr + '" should not end with "' + ASuffix + '"')
+    else
+      InternalFail('"' + AStr + '" should not end with "' + ASuffix + '"');
+end;
+
 procedure CheckLength(const AExpected, AActual: NativeInt);
 begin
   if AExpected <> AActual then
     InternalFail('Expected length ' + IntToStr(AExpected) +
       ' but got ' + IntToStr(AActual));
+end;
+
+procedure CheckLength(const AExpected, AActual: NativeInt;
+  const AMessage: string);
+begin
+  if AExpected <> AActual then
+    if AMessage <> '' then
+      InternalFail(AMessage + ': Expected length ' + IntToStr(AExpected) +
+        ' but got ' + IntToStr(AActual))
+    else
+      InternalFail('Expected length ' + IntToStr(AExpected) +
+        ' but got ' + IntToStr(AActual));
 end;
 
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
