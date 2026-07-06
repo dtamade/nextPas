@@ -710,16 +710,12 @@ initialization
   GTestExceptProcHooked := True;
 
 finalization
-  { Restore previous ExceptProc handler }
   if GTestExceptProcHooked then
   begin
     ExceptProc := GPrevExceptProc;
     GTestExceptProcHooked := False;
   end;
-  { Clear threadvar strings before heaptrc tally to avoid false leak reports.
-    FPC does not finalize threadvar managed types before heaptrc reports. }
   GLastTestTrace := '';
-  { Safety net: free main-thread GExecState if runner failed to clean up. }
   if GExecState <> nil then
   begin
     Finalize(GExecState^);

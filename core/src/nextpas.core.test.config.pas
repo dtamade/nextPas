@@ -1025,4 +1025,9 @@ end;
 initialization
   ResetDefaultConfig;
 
+finalization
+  GDefaultConfig.OutSink := nil;
+  GDefaultConfig.ErrSink := nil;
+  Finalize(GDefaultConfig);
+
 end.

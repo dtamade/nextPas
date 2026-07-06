@@ -656,9 +656,6 @@ var
 begin
   for I := 0 to High(ACases) do
   begin
-    { Heap-allocate case data and proc to avoid closure capture issues.
-      Uses GetMem+FillChar instead of New to avoid FPC heaptrc false-positive
-      leak reports for records with managed types (strings). }
     GetMem(LPCase, SizeOf(TTestCase));
     FillChar(LPCase^, SizeOf(TTestCase), 0);
     LPCase^ := ACases[I];
@@ -1347,10 +1344,6 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
-    { Dispose thread-local GExecState allocated by SetTestContext.
-      Must be inside finally — Exit (setup failure) skips code after finally.
-      Matches the parallel worker's cleanup in its finally block
-      (runner.parallel.pas:494-501). }
     if GExecState <> nil then
     begin
       Finalize(GExecState^);
