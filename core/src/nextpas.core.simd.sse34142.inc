@@ -187,7 +187,7 @@ var
 begin
   LLen := SSE3LengthF32x4(a);
   if LLen > 0 then
-    Result := SSE2MulScalarF32x4(a, 1.0 / LLen)
+    Result := SSE2MulF32x4(a, SSE2SplatF32x4(1.0 / LLen))
   else
     Result := a;
 end;
@@ -198,7 +198,7 @@ var
 begin
   LLen := SSE3LengthF32x3(a);
   if LLen > 0 then
-    Result := SSE2MulScalarF32x4(a, 1.0 / LLen)
+    Result := SSE2MulF32x4(a, SSE2SplatF32x4(1.0 / LLen))
   else
     Result := a;
 end;
@@ -240,8 +240,7 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     dpps xmm0, xmm1, $7F
-    movq rax, xmm0
-    movq [Result], rax
+    movss [Result], xmm0
   end;
 end;
 
@@ -255,8 +254,7 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     dppd xmm0, xmm1, $3F
-    movq rax, xmm0
-    movq [Result], rax
+    movsd [Result], xmm0
   end;
 end;
 
@@ -391,7 +389,7 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     movups xmm2, [rcx]
-    blendvps xmm0, xmm1, xmm2
+    blendvps xmm1, xmm0
     movups [r8], xmm0
   end;
 end;
@@ -553,7 +551,7 @@ var
 begin
   LLen := SSE41LengthF32x4(a);
   if LLen > 0 then
-    Result := SSE2MulScalarF32x4(a, 1.0 / LLen)
+    Result := SSE2MulF32x4(a, SSE2SplatF32x4(1.0 / LLen))
   else
     Result := a;
 end;
@@ -564,7 +562,7 @@ var
 begin
   LLen := SSE41LengthF32x3(a);
   if LLen > 0 then
-    Result := SSE2MulScalarF32x4(a, 1.0 / LLen)
+    Result := SSE2MulF32x4(a, SSE2SplatF32x4(1.0 / LLen))
   else
     Result := a;
 end;
@@ -590,8 +588,8 @@ begin
     movdqu xmm0, [rax]
     movdqu xmm1, [rdx]
     pcmpeqq xmm0, xmm1
-    movq rax, xmm0
-    movq [Result], rax
+    pmovmskb eax, xmm0
+    mov [Result], al
   end;
 end;
 
@@ -607,7 +605,7 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     movups xmm2, [rcx]
-    blendvps xmm0, xmm1, xmm2
+    blendvps xmm1, xmm0
     movups [r8], xmm0
   end;
 end;
@@ -616,24 +614,49 @@ end;
 // SSE4.2 Extensions
 // ============================================================================
 
-function CRC32C_8(crc: UInt32; value: Byte): UInt32;
-begin
-  Result := crc32_8(crc, value);
+function CRC32C_8(crc: UInt32; value: Byte): UInt32; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  mov eax, edi
+  movzx esi, sil
+  crc32 eax, sil
+  {$ELSE}
+  mov eax, ecx
+  crc32 eax, dl
+  {$ENDIF}
 end;
 
-function CRC32C_16(crc: UInt32; value: UInt16): UInt32;
-begin
-  Result := crc32_16(crc, value);
+function CRC32C_16(crc: UInt32; value: UInt16): UInt32; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  mov eax, edi
+  crc32 eax, si
+  {$ELSE}
+  mov eax, ecx
+  crc32 eax, dx
+  {$ENDIF}
 end;
 
-function CRC32C_32(crc: UInt32; value: UInt32): UInt32;
-begin
-  Result := crc32_32(crc, value);
+function CRC32C_32(crc: UInt32; value: UInt32): UInt32; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  mov eax, edi
+  crc32 eax, esi
+  {$ELSE}
+  mov eax, ecx
+  crc32 eax, edx
+  {$ENDIF}
 end;
 
-function CRC32C_64(crc: UInt64; value: UInt64): UInt64;
-begin
-  Result := crc32_64(crc, value);
+function CRC32C_64(crc: UInt64; value: UInt64): UInt64; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  mov rax, rdi
+  crc32 rax, rsi
+  {$ELSE}
+  mov rax, rcx
+  crc32 rax, rdx
+  {$ENDIF}
 end;
 
 function CRC32C_Buffer(const data: Pointer; len: SizeUInt; initial: UInt32): UInt32;
@@ -680,8 +703,8 @@ begin
     movdqu xmm0, [rax]
     movdqu xmm1, [rdx]
     pcmpgtq xmm0, xmm1
-    movq rax, xmm0
-    movq [Result], rax
+    pmovmskb eax, xmm0
+    mov [Result], al
   end;
 end;
 

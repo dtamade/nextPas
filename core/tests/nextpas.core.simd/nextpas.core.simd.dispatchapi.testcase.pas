@@ -7461,7 +7461,7 @@ begin
     LSourceLines.LoadFromFile(LRegisterSourcePath);
     LRegisterSource := LowerCase(LSourceLines.Text);
 
-    LFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade_platform.inc');
+    LFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade.platform.inc');
     AssertTrue('NEON platform facade source should exist for implementation-shape audit: ' + LFacadeSourcePath,
       FileExists(LFacadeSourcePath));
     LSourceLines.LoadFromFile(LFacadeSourcePath);
@@ -7559,13 +7559,13 @@ begin
     LSourceLines.LoadFromFile(LRegisterSourcePath);
     LRegisterSource := LowerCase(LSourceLines.Text);
 
-    LAsmFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade_asm.inc');
+    LAsmFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade.asm.inc');
     AssertTrue('NEON asm facade source should exist for implementation-shape audit: ' + LAsmFacadeSourcePath,
       FileExists(LAsmFacadeSourcePath));
     LSourceLines.LoadFromFile(LAsmFacadeSourcePath);
     LAsmFacadeSource := LowerCase(LSourceLines.Text);
 
-    LScalarFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade_scalar.inc');
+    LScalarFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.facade.scalar.inc');
     AssertTrue('NEON scalar facade source should exist for implementation-shape audit: ' + LScalarFacadeSourcePath,
       FileExists(LScalarFacadeSourcePath));
     LSourceLines.LoadFromFile(LScalarFacadeSourcePath);
@@ -8518,7 +8518,7 @@ begin
     LSourceLines.LoadFromFile(LRegisterSourcePath);
     LRegisterSource := LowerCase(LSourceLines.Text);
 
-    LExtMathSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar.ext_math.inc');
+    LExtMathSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar.ext.math.inc');
     AssertTrue('NEON scalar ext-math source should exist for implementation-shape audit: ' + LExtMathSourcePath,
       FileExists(LExtMathSourcePath));
     LSourceLines.LoadFromFile(LExtMathSourcePath);
@@ -8606,7 +8606,7 @@ begin
     LSourceLines.LoadFromFile(LRegisterSourcePath);
     LRegisterSource := LowerCase(LSourceLines.Text);
 
-    LExtMathSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar.ext_math.inc');
+    LExtMathSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar.ext.math.inc');
     AssertTrue('NEON scalar ext-math source should exist for implementation-shape audit: ' + LExtMathSourcePath,
       FileExists(LExtMathSourcePath));
     LSourceLines.LoadFromFile(LExtMathSourcePath);
@@ -8831,7 +8831,7 @@ begin
     LSourceLines.LoadFromFile(LRegisterSourcePath);
     LRegisterSource := LowerCase(LSourceLines.Text);
 
-    LFallbackSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar_fallback.inc');
+    LFallbackSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.scalar.fallback.inc');
     AssertTrue('NEON scalar fallback source should exist for implementation-shape audit: ' + LFallbackSourcePath,
       FileExists(LFallbackSourcePath));
     LSourceLines.LoadFromFile(LFallbackSourcePath);
