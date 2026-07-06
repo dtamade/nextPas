@@ -20,6 +20,7 @@ uses
   np_semantic_model,
   np_sema_builtins,
   np_sema_type_check,
+  np_sema_runtime_vars,
   np_hir_model,
   np_source_database,
   np_diagnostics_sink,
@@ -27,8 +28,41 @@ uses
   np_base_types;
 
 type
+  { 回调函数类型 — 用于桥接尚未提取到独立模块的方法 }
+
+  TBuildTargetAddressExprFn = function(const Ctx: Pointer; const ATargetNode: TGreenNode;
+    out AExprId: LongInt): Boolean;
+  TBuildClassBaseAddressExprFn = function(const Ctx: Pointer; const ABaseName,
+    AClassName: string; out AExprId: LongInt): Boolean;
+  TBuildByRefArgumentAddressExprFn = function(const Ctx: Pointer;
+    const AArgNode: TGreenNode; out AExprId: LongInt): Boolean;
+  TBuildRuntimeArrayElementAddressHirExprFn = function(const Ctx: Pointer;
+    const ANode: TGreenNode; out AExprId: LongInt): Boolean;
+  TEvaluateIntegerConstantFn = function(const Ctx: Pointer; const ANode: TGreenNode;
+    out AValue: Int64): Boolean;
+  TInferExpressionTypeFn = function(const Ctx: Pointer;
+    const ANode: TGreenNode): LongInt;
+  TTypeIdForVariableFn = function(const Ctx: Pointer;
+    const AName: string): LongInt;
+  TTryGetDirectCallContractFn = function(const Ctx: Pointer; const ACallNode: TGreenNode;
+    out ACalleeName, AParamKinds: string; out AResultTypeId: LongInt): Boolean;
+  TTryGetDispatchedMemberCallContractFn = function(const Ctx: Pointer;
+    const ACallNode: TGreenNode; out ADispatchExprKind: TSemanticHirExprKind;
+    out ACalleeName, AParamKinds, AReceiverVarName: string;
+    out AResultTypeId, ASlotIndex: LongInt): Boolean;
+  TTryGetOrdinaryMemberCallContractFn = function(const Ctx: Pointer;
+    const ACallNode: TGreenNode; out AReceiverVarName, ACalleeName,
+    AParamKinds: string; out AResultTypeId, ASlotIndex: LongInt): Boolean;
+  TTryGetTypeCastTargetTypeIdFn = function(const Ctx: Pointer;
+    const ACallNode: TGreenNode; out ATypeId: LongInt): Boolean;
+  TTryGetIntrinsicExprNameFn = function(const Ctx: Pointer;
+    const ACallNode: TGreenNode; out AIntrinsicName: string): Boolean;
+  TResolveTypeIdForOwnerFn = function(const Ctx: Pointer; const ATypeName,
+    AOwnerUnitId: string): LongInt;
+
   { HIR 降级上下文 }
   TSemaHirLoweringContext = record
+    { 数据成员 }
     Model: TSemanticModel;
     UnitGraph: TUnitGraph;
     RootAst: TAstFacade;
@@ -43,7 +77,24 @@ type
     RootFileId: TSourceFileId;
     BlockLabelCounter: LongInt;
     CurrentMethodClass: string;
+    CurrentRetVarName: string;
+    RuntimeVars: TSemaRuntimeVarRegistry;
     CurrentBlockTerminated: Boolean;
+    { 回调 — 尚未提取到独立模块的方法 }
+    CallbackCtx: Pointer;
+    BuildTargetAddressExpr: TBuildTargetAddressExprFn;
+    BuildClassBaseAddressExpr: TBuildClassBaseAddressExprFn;
+    BuildByRefArgumentAddressExpr: TBuildByRefArgumentAddressExprFn;
+    BuildRuntimeArrayElementAddressHirExpr: TBuildRuntimeArrayElementAddressHirExprFn;
+    EvaluateIntegerConstant: TEvaluateIntegerConstantFn;
+    InferExpressionType: TInferExpressionTypeFn;
+    TypeIdForVariable: TTypeIdForVariableFn;
+    TryGetDirectCallContract: TTryGetDirectCallContractFn;
+    TryGetDispatchedMemberCallContract: TTryGetDispatchedMemberCallContractFn;
+    TryGetOrdinaryMemberCallContract: TTryGetOrdinaryMemberCallContractFn;
+    TryGetTypeCastTargetTypeId: TTryGetTypeCastTargetTypeIdFn;
+    TryGetIntrinsicExprName: TTryGetIntrinsicExprNameFn;
+    ResolveTypeIdForOwner: TResolveTypeIdForOwnerFn;
   end;
 
 { 标签发射 }
@@ -57,6 +108,10 @@ procedure AttachRuntimeReturnExpr(const Ctx: TSemaHirLoweringContext;
 { 诊断发射 }
 procedure EmitSemaError(const Ctx: TSemaHirLoweringContext;
   const ACode: string; const AMessage: string; const AByteOffset: LongInt);
+
+{ 运行时变量查询 }
+function HirLowering_IsRuntimeStrVar(const Ctx: TSemaHirLoweringContext;
+  const AName: string): Boolean;
 
 implementation
 
@@ -109,6 +164,31 @@ begin
     ACode, 'sema',
     BuildCoreSourceSpan(Ctx.RootFileId, AByteOffset, 0),
     AMessage, EmptyPayload);
+end;
+
+{ === 运行时变量查询 === }
+
+function HirLowering_IsRuntimeStrVar(const Ctx: TSemaHirLoweringContext;
+  const AName: string): Boolean;
+var
+  SymId: LongInt;
+  TypeId: LongInt;
+  TypeName: string;
+begin
+  if Ctx.RuntimeVars.IsRuntimeStrVar(AName) then
+    Exit(True);
+  SymId := Ctx.Model.FindSymbolByName(AName);
+  if SymId > 0 then
+  begin
+    TypeId := Ctx.Model.SymbolAt(SymId - 1).TypeId;
+    if TypeId > 0 then
+    begin
+      TypeName := Ctx.Model.TypeAt(TypeId - 1).Name;
+      if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') then
+        Exit(True);
+    end;
+  end;
+  Result := False;
 end;
 
 end.
