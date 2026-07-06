@@ -4,7 +4,7 @@ program test_bench_ks;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.bench.base,
   nextpas.core.bench.intf,

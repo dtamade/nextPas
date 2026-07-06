@@ -9,7 +9,7 @@ program test_bench_phase_c;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.test,
   nextpas.core.bench.base,

@@ -106,6 +106,25 @@ function Abs(const AValue: Single): Single; overload; inline;
 function Abs(const AValue: Int32): Int32; overload; inline;
 function Abs(const AValue: Int64): Int64; overload; inline;
 
+{** * Returns the square root.
+ * @param AValue The input value (must be >= 0)
+ * @return sqrt(AValue)
+ *}
+function Sqrt(const AValue: Double): Double; overload; inline;
+function Sqrt(const AValue: Single): Single; overload; inline;
+
+{** * Returns e raised to the power of AValue.
+ * @param AValue The exponent
+ * @return e^AValue
+ *}
+function Exp(const AValue: Double): Double; overload; inline;
+
+{** * Returns the natural logarithm of AValue.
+ * @param AValue The input value (must be > 0)
+ * @return ln(AValue)
+ *}
+function Ln(const AValue: Double): Double; overload; inline;
+
 {** * Returns the sign of a value as a typed value.
  * @param AValue The input value
  * @return -1, 0, or 1 matching the sign of AValue
@@ -1285,6 +1304,26 @@ function Abs(const AValue: Int64): Int64;
 begin
   RequireAbsConvertible('Abs', AValue);
   if AValue < 0 then Result := -AValue else Result := AValue;
+end;
+
+function Sqrt(const AValue: Double): Double;
+begin
+  Result := System.Sqrt(AValue);
+end;
+
+function Sqrt(const AValue: Single): Single;
+begin
+  Result := Single(System.Sqrt(Double(AValue)));
+end;
+
+function Exp(const AValue: Double): Double;
+begin
+  Result := System.Exp(AValue);
+end;
+
+function Ln(const AValue: Double): Double;
+begin
+  Result := System.Ln(AValue);
 end;
 
 function Sign(const AValue: Single): Single;

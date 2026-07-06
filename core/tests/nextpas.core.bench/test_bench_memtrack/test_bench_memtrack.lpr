@@ -4,7 +4,7 @@ program test_bench_memtrack;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.math.scalar,
   nextpas.core.system.classes,

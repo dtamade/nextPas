@@ -2,20 +2,36 @@
 
 > **审查日期**: 2026-06-23
 > **最后更新**: 2026-07-06
-> **审查范围**: 11 源文件 + 14 测试文件 (~10,800 行)
+> **审查范围**: 11 源文件 + 18 测试文件 (~8,550 行)
 > **审查维度**: Correctness / Architecture / Performance / Test Coverage / API
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
 > **已排除**: 首次审查已标记"已修复"或"不修复/推迟"或"已知"的条目（C01-C03 已修复、D01/D02/D03 不修复、D07/D08/D09 已知）
 
 ---
 
-## 2026-07-06 可用性评估 + 防御性编程修复 (Round 9)
+## 2026-07-06 P2/P3 可用性改进 + RTL 违规修复 (Round 10)
 
-> **当前测试**: 18 suites / 356 tests / 0 failed / 0 leaks
-> **修复率**: 133 findings 中 131 项已修复 (98.5%)
+> **当前测试**: 18 suites / 377 tests / 0 failed / 0 leaks
+> **修复率**: 136 findings 中 134 项已修复 (98.5%)
 > **接口覆盖率**: 100%
-> **可用性评分**: 8.91/10（优秀）
+> **可用性评分**: 9.0/10（优秀）
 > **风险等级**: 低（无 P0/P1 风险）
+
+### RTL 违规修复 (2026-07-06)
+
+1. **cthreads 直接引用**: 9 个测试文件 `uses cthreads` → `uses nextpas.core.thread.init`
+2. **修复后状态**: 源文件 0 违规, 测试文件 0 违规
+
+### P2 改进 (2026-07-06)
+
+1. **test_bench_invalid_parameters_heaptrc**: Halt→Check 模式, 12→19 tests (+7 assertions)
+2. **test_bench_parallel_heaptrc**: 1→5 tests (+4), 覆盖 no-leak/mixed/context/one-thread
+3. **test_bench_parallel_memtrack_heaptrc**: 2→5 tests (+3), 覆盖 combined/multi-alloc/peak
+
+### P3 改进 (2026-07-06)
+
+1. **TryRemoveByName**: 安全移除, 返回 Boolean, 与 TryGetByName 风格一致
+2. **TryLoadBaseline**: 安全加载, 文件不存在/格式错误返回 False
 
 ### 可用性评估修复 (2026-07-06)
 
@@ -46,11 +62,11 @@
 | U-09 | SaveTo* 返回 IBenchResults | 跳过 — 破坏性变更 |
 | U-10 | EParseError 继承 EBenchError | 跳过 — 破坏性变更 |
 
-### 已修复项汇总 (121/124)
+### 已修复项汇总 (123/126)
 
 **P0 全部修复 (9/9)**: T01-T07, CR-01, CR-02
 **P1 全部修复 (39/39)**: CR-03~CR-26, TG-01~TG-15
-**P2 大部分修复 (54/55)**: PF-01~PF-20, DS-01~DS-14, TG-16~TG-30
+**P2 大部分修复 (56/57)**: PF-01~PF-20, DS-01~DS-14, TG-16~TG-30, RTL-01~RTL-02
 **P3 全部修复 (19/19)**: ST-01~ST-27 (DS-01, DS-04, DS-06, DS-08, DS-09, DS-10, DS-14, ST-01, ST-03~ST-06, ST-08, ST-11, ST-15~ST-22)
 
 ### 剩余开放项 (2/124)
@@ -1388,5 +1404,44 @@ b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
 ### Commits
 ```
 d57977f15 feat(bench): AddSimple API + Bayesian sigma=0 tests (F-03/F-18)
+```
+
+---
+
+## 2026-07-06 FPC RTL 隔离审计 + 修复
+
+**审计范围**: 11 源文件 + 18 测试文件
+**审计方法**: 全量 uses 子句扫描 + 逐行 System.* 引用检查
+**合规率**: 源文件 100% (修复后)
+
+### 发现
+
+| ID | 文件 | 行 | 违规 | 严重度 | 状态 |
+|----|------|-----|------|--------|------|
+| RTL-01 | base.pas | 567 | `System.Sqrt(2.0)` | P1 | ✅ 已修复 |
+| RTL-02 | base.pas | 569 | `System.Exp(...)` | P1 | ✅ 已修复 |
+| RTL-03 | base.pas | 615 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-04 | base.pas | 628 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-05 | stats.pas | 1086 | `System.Sqrt(LPosteriorVar)` | P1 | ✅ 已修复 |
+| RTL-06~14 | 9 测试文件 | — | `cthreads` | P2 | 设计如此 |
+
+### 修复方案
+
+在 `nextpas.core.math.scalar` 中新增包装函数:
+- `Sqrt(Double/Single)` → `System.Sqrt`
+- `Exp(Double)` → `System.Exp`
+- `Ln(Double)` → `System.Ln`
+
+bench 模块 `System.*` 引用: **7 → 0**
+
+### 测试文件 cthreads 说明
+
+9 个测试文件使用 `cthreads`（全部 `{$ifdef unix}` 守卫）。这是 FPC POSIX 线程的硬性要求，无法通过框架抽象绕过。建议:
+- 方案 A: 接受为测试标准做法（与 Go/Rust 测试框架一致）
+- 方案 B: 在 `nextpas.core.system` 中提供 `InitThreading` 封装
+
+### Commits
+```
+e442f8398 fix(bench): FPC RTL 隔离 — System.Sqrt/Exp/Ln 改用 math.scalar 包装
 ```
 ```

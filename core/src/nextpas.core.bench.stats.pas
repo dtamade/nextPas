@@ -1083,7 +1083,7 @@ begin
 
   { σ_n² = 1 / (1/σ0² + n/σ²) }
   LPosteriorVar := 1.0 / (1.0 / LPriorVar + LN / (LSigma * LSigma));
-  Result.PosteriorStdDev := System.Sqrt(LPosteriorVar);
+  Result.PosteriorStdDev := Sqrt(LPosteriorVar);
 
   { μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
   Result.PosteriorMean := LPosteriorVar * (APriorMean / LPriorVar + LN * LSampleMean / (LSigma * LSigma));
