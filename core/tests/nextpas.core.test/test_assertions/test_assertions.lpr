@@ -1102,13 +1102,14 @@ begin
   LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
   LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
 
+  Finalize(LSuite);
   if not LSuite.Run then
   begin
-    Finalize(LSuite);
     WriteLn;
-    FailTest('SOME TESTS FAILED');
+    Halt(1);
   end;
+  WriteLn('STEP1');
+  WriteLn('STEP2');
   WriteLn;
   PassTest('ALL PASSED');
-  Finalize(LSuite);
 end.

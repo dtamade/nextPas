@@ -27,6 +27,34 @@ var
   { Phase 10: Cleanup in parallel }
   GCleanupCounter: Integer = 0;
 
+{ Named procedures for closures stored in global TTestSuite variables.
+  Anonymous closures in global records leak because FPC finalizes global
+  managed types after heaptrc's DumpHeap. }
+procedure ShouldFailRaises;
+begin
+  raise Exception.Create('expected error');
+end;
+
+procedure ShouldFailNoRaise;
+begin
+  { intentionally empty }
+end;
+
+procedure ShortSkipSlow;
+begin
+  CheckTrue(True);
+end;
+
+procedure ShortSkipSlow1;
+begin
+  CheckTrue(True);
+end;
+
+procedure CleanupIncrement;
+begin
+  InterLockedIncrement(GCleanupCounter);
+end;
+
 procedure TestParallelSimple;
 begin
   Check(True, 'simple parallel pass');
@@ -494,13 +522,9 @@ begin
   begin
     GShouldFailSuite := TTestSuite.Create('ShouldFailParallel');
     { ShouldFail that raises = should pass in parallel mode }
-    GShouldFailSuite.ShouldFail('raises_ok', procedure begin
-      raise Exception.Create('expected error');
-    end);
+    GShouldFailSuite.ShouldFail('raises_ok', @ShouldFailRaises);
     { ShouldFail that does NOT raise = should fail in parallel mode }
-    GShouldFailSuite.ShouldFail('no_raise_fail', procedure begin
-      { intentionally empty }
-    end);
+    GShouldFailSuite.ShouldFail('no_raise_fail', @ShouldFailNoRaise);
     { Regular test alongside ShouldFail }
     GShouldFailSuite.Test('regular_pass', @TestParallelPassA);
     GShouldFailSuite.RunParallelWithResult(nil, GShouldFailResult);
@@ -521,9 +545,7 @@ begin
     { Test 1: ShortSkip test runs normally when ShortMode is off }
     GShortSkipSuite := TTestSuite.Create('ShortSkipOff');
     GShortSkipSuite.Test('fast_pass', @TestParallelPassA);
-    GShortSkipSuite.ShortSkip('slow_skip', procedure begin
-      CheckTrue(True);
-    end);
+    GShortSkipSuite.ShortSkip('slow_skip', @ShortSkipSlow);
     GShortSkipSuite.Test('fast_pass2', @TestParallelPassA);
     GShortSkipSuite.RunParallelWithResult(nil, GShortSkipResult);
     if GShortSkipResult.Passed <> 3 then
@@ -537,9 +559,7 @@ begin
     { Test 2: ShortSkip test is skipped in parallel when ShortMode is on }
     GShortSkipSuite := TTestSuite.Create('ShortSkipOn');
     GShortSkipSuite.Test('fast1', @TestParallelPassA);
-    GShortSkipSuite.ShortSkip('slow1', procedure begin
-      CheckTrue(True);
-    end);
+    GShortSkipSuite.ShortSkip('slow1', @ShortSkipSlow1);
     GShortSkipSuite.Test('fast2', @TestParallelPassA);
     SetDefaultShortMode(True);
     GShortSkipSuite.Config := DefaultConfig;
@@ -580,7 +600,7 @@ begin
     ResetDefaultConfig;
     GCleanupCounter := 0;
     GVerbSuite := TTestSuite.Create('CleanupParallel');
-    GVerbSuite.Cleanup(procedure begin InterLockedIncrement(GCleanupCounter); end);
+    GVerbSuite.Cleanup(@CleanupIncrement);
     GVerbSuite.Test('cp1', @TestParallelPassA);
     GVerbSuite.Test('cp2', @TestParallelPassA);
     GVerbSuite.Test('cp3', @TestParallelPassA);
@@ -653,4 +673,12 @@ begin
 
   WriteLn;
   PassTest('ALL PARALLEL TESTS PASSED');
+  { Release global managed records before heaptrc tally.
+    FPC global finalization runs after heaptrc DumpHeap. }
+  GShouldFailSuite := Default(TTestSuite);
+  GShouldFailResult := Default(TTestRunResult);
+  GShortSkipSuite := Default(TTestSuite);
+  GShortSkipResult := Default(TTestRunResult);
+  GVerbSuite := Default(TTestSuite);
+  GVerbResult := Default(TTestRunResult);
 end.
