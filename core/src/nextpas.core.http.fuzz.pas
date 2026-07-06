@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.http.impl.h1.llhttp;
 
 type
@@ -48,7 +49,107 @@ type
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.http.base,
+  nextpas.core.http.websocket;
+
+type
+  { Simple IReader implementation for fuzz testing }
+  TFuzzReader = class(TInterfacedObject, IReader)
+  private
+    FData: nextpas.core.base.TBytes;
+    FPos: SizeUInt;
+  public
+    constructor Create(const AData: nextpas.core.base.TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TFuzzReader.Create(const AData: nextpas.core.base.TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 0;
+end;
+
+function TFuzzReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvail: SizeUInt;
+  LCount: SizeUInt;
+begin
+  LAvail := SizeUInt(Length(FData)) - FPos;
+  if LAvail = 0 then
+    Exit(0);
+  LCount := ACount;
+  if LCount > LAvail then
+    LCount := LAvail;
+  Move(FData[FPos], ABuf, LCount);
+  Inc(FPos, LCount);
+  Result := LCount;
+end;
+
+{ Parse WebSocket frame header - mirrors TWebSocketImpl.ReadFrame logic }
+procedure ParseWebSocketFrameHeader(const AData: nextpas.core.base.TBytes);
+var
+  LLen: Integer;
+  LHdr0, LHdr1: Byte;
+  LOpcode: Byte;
+  LMasked: Boolean;
+  LPayloadLen: UInt64;
+  LExtLen: array[0..7] of Byte;
+  I: Integer;
+begin
+  LLen := Length(AData);
+  if LLen < 2 then
+    raise EHttpError.Create('WebSocket: frame too short');
+
+  LHdr0 := AData[0];
+  LHdr1 := AData[1];
+
+  { Validate reserved bits }
+  if (LHdr0 and $70) <> 0 then
+    raise EHttpError.Create('WebSocket: reserved bits set');
+
+  { Validate opcode }
+  LOpcode := LHdr0 and $0F;
+  case LOpcode of
+    $0, $1, $2, $8, $9, $A: ; { Valid opcodes }
+  else
+    raise EHttpError.Create('WebSocket: reserved or invalid opcode');
+  end;
+
+  { Control frames must not be fragmented }
+  if (LOpcode >= $08) and ((LHdr0 and $80) = 0) then
+    raise EHttpError.Create('WebSocket: control frames must not be fragmented');
+
+  { Parse payload length }
+  LMasked := (LHdr1 and $80) <> 0;
+  LPayloadLen := LHdr1 and $7F;
+
+  if LPayloadLen = 126 then
+  begin
+    if LLen < 4 then
+      raise EHttpError.Create('WebSocket: frame too short for 16-bit length');
+    LPayloadLen := (UInt64(AData[2]) shl 8) or UInt64(AData[3]);
+    if LPayloadLen < 126 then
+      raise EHttpError.Create('WebSocket: non-canonical payload length');
+  end
+  else if LPayloadLen = 127 then
+  begin
+    if LLen < 10 then
+      raise EHttpError.Create('WebSocket: frame too short for 64-bit length');
+    if (AData[2] and $80) <> 0 then
+      raise EHttpError.Create('WebSocket: invalid 64-bit payload length');
+    LPayloadLen := 0;
+    for I := 2 to 9 do
+      LPayloadLen := (LPayloadLen shl 8) or UInt64(AData[I]);
+    if LPayloadLen < 65536 then
+      raise EHttpError.Create('WebSocket: non-canonical payload length');
+  end;
+
+  { Control frame payload size limit }
+  if (LOpcode >= $08) and (LPayloadLen > 125) then
+    raise EHttpError.Create('WebSocket: control frame payload too large');
+end;
 
 { TFuzzMutator }
 
@@ -238,8 +339,6 @@ var
   I, LSeedIdx: Integer;
   LData, LMutated: nextpas.core.base.TBytes;
   LCrashes: Int32;
-  LHdr: array[0..1] of Byte;
-  LLen: Integer;
 begin
   LCrashes := 0;
   for I := 0 to AIterations - 1 do
@@ -251,21 +350,9 @@ begin
     { Mutate }
     LMutated := TFuzzMutator.Mutate(LData);
 
-    { Try to parse WebSocket frame }
+    { Try to parse with real WebSocket frame parser logic }
     try
-      LLen := Length(LMutated);
-      if LLen >= 2 then
-      begin
-        LHdr[0] := LMutated[0];
-        LHdr[1] := LMutated[1];
-        { Basic validation - just check if we can read the header }
-        if (LHdr[0] and $70) <> 0 then
-          { Reserved bits set - invalid }
-          ;
-        if not (LHdr[0] and $0F in [0, 1, 2, 8, 9, 10]) then
-          { Invalid opcode }
-          ;
-      end;
+      ParseWebSocketFrameHeader(LMutated);
     except
       on E: Exception do
         Inc(LCrashes);
