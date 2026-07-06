@@ -488,6 +488,47 @@ type
 
 ---
 
+## SPSC Channel (nextpas.core.lockfree.channel.spsc)
+
+单生产者单消费者有界 Channel，专为 1P1C 场景优化。
+
+```pascal
+type
+  generic TLockFreeChannelSpsc<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    // 发送（阻塞/非阻塞/超时）
+    procedure Send(const AValue: T);
+    function TrySend(const AValue: T): Boolean;
+    function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    // 接收（阻塞/非阻塞/超时）
+    function Receive(out AValue: T): Boolean;
+    function TryReceive(out AValue: T): Boolean;
+    function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    // 控制
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxLen: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**与 TLockFreeChannel 的区别**:
+- 使用原子 load/store 替代 CAS（1P1C 无竞争）
+- 无序列号开销（环形缓冲区直接索引）
+- 性能接近 Go channel
+
+**使用场景**:
+- 单生产者单消费者
+- 需要高性能的有界通道
+- 不需要 MPMC 支持
+
+**限制**:
+- 仅支持 1P1C，不支持 MPMC
+- 使用 MPMC 场景请使用 TLockFreeChannel
+
+---
+
 ## Selector (nextpas.core.lockfree.selector)
 
 多路 Channel 复用器，Go `select` 语义的 Pascal 实现。

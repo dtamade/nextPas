@@ -25,11 +25,14 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
 | `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
 | `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，基于分片锁的并发 HashMap。                                        |
+| `nextpas.core.lockfree.channel`  | `TLockFreeChannel<T>`，有界无锁 Channel，序列号驱动的 MPMC 通道。                                  |
+| `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`，单生产者单消费者有界 Channel，专为 1P1C 优化。                    |
 | `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
 
 `nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
 `TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`THazardDomain`, `TEbrDomain`, and `TEbrGuard` so consumers can use the public lockfree surface without
+`THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
+`TLockFreeSelector<T>` so consumers can use the public lockfree surface without
 importing implementation submodules directly.
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation

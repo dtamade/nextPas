@@ -69,10 +69,17 @@
 
 需要 Channel（生产者-消费者通信）？
 ├── 单向通信
-│   └── 使用 TLockFreeChannel<T>
-│       - 有界，容量自动取整到 2 的幂
-│       - 阻塞/非阻塞/超时
-│       - Close 后已入队数据仍可读
+│   ├── 单生产者单消费者 (1P1C)
+│   │   └── 使用 TLockFreeChannelSpsc<T>
+│   │       - 专为 1P1C 优化，使用原子 load/store
+│   │       - 性能接近 Go channel
+│   │       - 阻塞/非阻塞/超时
+│   │
+│   └── 多生产者多消费者 (MPMC)
+│       └── 使用 TLockFreeChannel<T>
+│           - 有界，容量自动取整到 2 的幂
+│           - 阻塞/非阻塞/超时
+│           - Close 后已入队数据仍可读
 │
 └── 多路复用（Go select 语义）
     └── 使用 TLockFreeSelector<T>
@@ -92,6 +99,8 @@
 | TSegQueue | 2P+2C | 1.50 | 667 |
 | TLockFreeStack | 4P+4C | ~5.0 | ~200 |
 | TWorkStealingDeque | 1 owner + 2 thieves | ~2.0 | ~500 |
+| TLockFreeChannelSpsc | 1P+1C | 待测试 | 待测试 |
+| TLockFreeChannel | MPMC | 0.63 | ~1500 |
 
 ## 线程安全契约
 
@@ -104,6 +113,8 @@
 | TSegQueue | N 线程 | N 线程 | ✅ |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
+| TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |
+| TLockFreeChannel | N 线程 | N 线程 | ✅ |
 
 ## 内存回收方案选择
 
