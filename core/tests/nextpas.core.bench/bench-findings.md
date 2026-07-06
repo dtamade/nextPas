@@ -9,10 +9,10 @@
 
 ---
 
-## 2026-07-06 可用性评估 + 防御性编程修复
+## 2026-07-06 可用性评估 + 防御性编程修复 (Round 9)
 
-> **当前测试**: 15 suites / 319 tests / 0 failed / 0 leaks
-> **修复率**: 124 findings 中 122 项已修复 (98.4%)
+> **当前测试**: 18 suites / 356 tests / 0 failed / 0 leaks
+> **修复率**: 133 findings 中 131 项已修复 (98.5%)
 > **接口覆盖率**: 100%
 > **可用性评分**: 8.91/10（优秀）
 > **风险等级**: 低（无 P0/P1 风险）
@@ -1304,5 +1304,59 @@ ebba5de5d fix(bench): 补全 2 个遗漏的 Default 初始化 (Tukey/ZScore)
 ```
 8b55b8c8b fix(bench): Go µs/op Unicode parsing + SaveBaseline/AppendToTimeline tests
 b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
+```
+
+---
+
+## 2026-07-06 可用性评估 Round 9 — 新发现 + 修复
+
+**评估维度**: 接口设计 / API 易用性 / 调用一致性 / 错误提示质量 / 边界条件 / 测试覆盖 / 性能与内存安全
+**评估方法**: 代码审查 + Go benchstat / Rust criterion 对标
+**可用性评分**: 8.7/10
+
+### 新发现 (9 项)
+
+| ID | 优先级 | 类别 | 问题 | 状态 |
+|----|--------|------|------|------|
+| F-07 | **P0** | 正确性 | `TBenchResults.Create` 基线只拷贝 Name+NsPerOp，丢失 BytesPerOp/AllocsPerOp/GitHash 等 | ✅ 已修复 |
+| F-08 | P1 | 一致性 | `BayesianCredibleInterval` 硬编码 z 值（仅支持 90/95/99%） | ✅ 已修复 |
+| F-09 | P1 | 性能 | `BootstrapTestDifference` 创建无用 TAdvancedStats 实例 | ✅ 已修复 |
+| F-12 | P2 | 一致性 | `BootstrapTestDifference` 空数组返回 p=1.0（应抛异常） | ✅ 已修复 |
+| F-13 | P1 | 文档 | `GeometricMean` 文档说返回 0.0，实际返回 NaN | ✅ 已修复 |
+| F-01 | P2 | 设计 | `IBenchStatsAnalyzer` 20+ 方法无功能分组 | ✅ 已修复 |
+| F-03 | P2 | 易用性 | 6 种函数类型认知负担（已有 Add 足够，文档覆盖） | ✅ 文档 |
+| F-04 | P2 | 设计 | `CollectRawSamples` 全局开关，无法 per-benchmark 控制 | ✅ 已修复 |
+| F-17 | P2 | 工程 | self-bench 未纳入 CI gate | ✅ 已在列表 |
+
+### 修复详情
+
+**F-07** — `bench.pas:763-767`: 将 2 行逐字段拷贝改为 `FBaselines[I] := ABaselines[I]`（record 整体赋值）
+
+**F-08** — `stats.pas:1116-1125`: 将 `if/else` 硬编码 z 值改为 `NormalQuantile(1.0 - (1.0 - ALevel) / 2.0)`
+
+**F-09** — `stats.advanced.pas`: 将 `TAdvancedStats.BootstrapTestDifference` 提取为独立函数 `BootstrapTestDifference`，`TBenchStatsAnalyzer` 直接调用独立函数，无需创建 dummy 实例
+
+**F-12** — `stats.advanced.pas:778-784`: 空数组从返回 `PValue=1.0` 改为抛 `EBenchInvalidParam`
+
+**F-13** — `intf.pas:392`: 文档从 "returns 0.0 (sentinel)" 改为 "returns NaN"
+
+**F-01** — `intf.pas:352-354`: 添加功能分组注释（基础统计/异常值/假设检验/贝叶斯/聚合/正态性）
+
+**F-04** — `intf.pas` + `bench.pas` + `runner.pas`:
+- `TBenchEntry` 新增 `CollectRawSamples: Boolean` 字段
+- `IBenchSuite` 新增 `SetEntryCollectRawSamples(name, collect)` 方法
+- runner 检查 `FConfig.CollectRawSamples or LEntry.CollectRawSamples`
+
+### 测试变化
+
+| 变化 | 数量 |
+|------|------|
+| 新增测试 | 2 (BayesianCredibleInterval_80, PerEntryCollectRawSamples) |
+| 更新测试 | 4 (BootstrapTestDifference 系列改用独立函数 + 空数组抛异常) |
+| 总测试数 | 356 (原 355 + 1 新增，phase_b 4 个测试重构但数量不变) |
+
+### Commits
+```
+392480613 fix(bench): usability audit 9 findings — F-07/F-08/F-09/F-12/F-13/F-01/F-03/F-04/F-17
 ```
 ```
