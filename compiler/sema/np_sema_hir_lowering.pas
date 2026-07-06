@@ -23,7 +23,8 @@ uses
   np_hir_model,
   np_source_database,
   np_diagnostics_sink,
-  np_sema_overload;
+  np_sema_overload,
+  np_base_types;
 
 type
   { HIR 降级上下文 }
@@ -52,6 +53,10 @@ procedure EmitGotoLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
 { 运行时表达式附着 }
 procedure AttachRuntimeReturnExpr(const Ctx: TSemaHirLoweringContext;
   const AHirNodeId: LongInt; const AReturnVarName: string);
+
+{ 诊断发射 }
+procedure EmitSemaError(const Ctx: TSemaHirLoweringContext;
+  const ACode: string; const AMessage: string; const AByteOffset: LongInt);
 
 implementation
 
@@ -90,6 +95,20 @@ begin
     SymbolId, Children, 0, 0.0, '', '', 0, shvcScalar
   );
   Ctx.Model.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+end;
+
+{ === 诊断发射 === }
+
+procedure EmitSemaError(const Ctx: TSemaHirLoweringContext;
+  const ACode: string; const AMessage: string; const AByteOffset: LongInt);
+var
+  EmptyPayload: TDiagnosticPayload;
+begin
+  EmptyPayload.Kind := dpkNone;
+  Ctx.Diagnostics.EmitErrorWithPayload(
+    ACode, 'sema',
+    BuildCoreSourceSpan(Ctx.RootFileId, AByteOffset, 0),
+    AMessage, EmptyPayload);
 end;
 
 end.
