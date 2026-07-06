@@ -1055,7 +1055,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 3. 遗留代码 → 删除
 4. 更新所有引用点
 
-### AL2.4: 测试补全（预估 5 天，P4 优先级）
+### AL2.4: 测试补全 [✅ 2026-07-06]（预估 5 天，P4 优先级）
 
 **现状**: sema 9 文件 25+ 用例 + MIR 4 文件 20 用例。
 **目标**: sema 单元测试 ≥ 30 用例，覆盖所有关键路径。
@@ -1075,5 +1075,5 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | M1: Sema 分离完成 | 主文件 < 12,000 行，3 个提取模块 > 500 行 | +15 天 |
 | M2: Permissive 清零 | 0 处妥协标记，compiler-pass 34/34 | +5 天 |
 | M3: Blob 审计完成 | 284 处分类完毕，活跃引用已重命名 | +3 天 |
-| M4: 测试覆盖 | sema 30+ 用例，MIR 25+ 用例 | +5 天 |
+| M4: 测试覆盖 ✅ | sema 31 用例，MIR 20 用例 | 2026-07-06 |
 
