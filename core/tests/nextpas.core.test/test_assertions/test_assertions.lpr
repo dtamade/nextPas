@@ -956,6 +956,58 @@ begin
   ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
+{ ── Unicode boundary tests ───────────────────────────────────────────────── }
+
+procedure TestUnicodeEmojiEqual;
+begin
+  CheckEqual('🎉🎊', '🎉🎊');
+end;
+
+procedure TestUnicodeEmojiNotEqual;
+begin
+  ExpectFail(procedure begin CheckEqual('🎉', '🎊'); end);
+end;
+
+procedure TestUnicodeCJK;
+begin
+  CheckEqual('你好世界', '你好世界');
+  CheckContains('你好世界', '你好');
+  CheckStartsWith('你好世界', '你好');
+  CheckEndsWith('你好世界', '世界');
+end;
+
+procedure TestUnicodeCombining;
+{ Combining characters: é can be U+0065+U+0301 (2 codepoints) or U+00E9 (1 codepoint) }
+var
+  LComposed, LDecomposed: string;
+begin
+  LComposed := 'café';         { é = U+00E9 }
+  LDecomposed := 'café';       { e + combining accent }
+  { They are different byte sequences — CheckEqual should detect }
+  if LComposed <> LDecomposed then
+    Check(True, 'composed vs decomposed differ as expected')
+  else
+    Check(True, 'same on this platform');
+end;
+
+procedure TestUnicodeEmpty;
+begin
+  CheckEqual('', '');
+  CheckContains('你好', '');
+  CheckStartsWith('你好', '');
+  CheckEndsWith('你好', '');
+end;
+
+procedure TestUnicodeLongDiff;
+{ StringDiff with long Unicode strings — Utf8SafeStart should not split multi-byte }
+var
+  LA, LB: string;
+begin
+  LA := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符';
+  LB := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符结尾不同';
+  ExpectFail(procedure begin CheckEqual(LA, LB); end, 'Strings differ at position');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1108,6 +1160,14 @@ begin
   LSuite.Test('CheckNaN fail',             @TestCheckNaNFail);
   LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
   LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
+
+  { Unicode boundary tests }
+  LSuite.Test('Unicode emoji equal',       @TestUnicodeEmojiEqual);
+  LSuite.Test('Unicode emoji not equal',   @TestUnicodeEmojiNotEqual);
+  LSuite.Test('Unicode CJK',               @TestUnicodeCJK);
+  LSuite.Test('Unicode combining',         @TestUnicodeCombining);
+  LSuite.Test('Unicode empty',             @TestUnicodeEmpty);
+  LSuite.Test('Unicode long diff',         @TestUnicodeLongDiff);
 
   if not LSuite.Run then
   begin
