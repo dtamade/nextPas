@@ -73,6 +73,7 @@ function TypeSymbolForTypeId(const AModel: TSemanticModel; const ATypeId: LongIn
 function TypeIdHasKnownClassLayout(const AModel: TSemanticModel;
   const ATypeId: LongInt): Boolean;
 function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
+function IsSimpleIdentifierName(const AName: string): Boolean;
 
 implementation
 
@@ -356,6 +357,25 @@ begin
     SameText(AMemberName, 'CreateWithContext') or
     SameText(AMemberName, 'Contains') or
     SameText(AMemberName, 'Render');
+end;
+
+function IsSimpleIdentifierName(const AName: string): Boolean;
+var
+  I: LongInt;
+  Ch: Char;
+begin
+  if AName = '' then
+    Exit(False);
+  Ch := AName[1];
+  if not (Ch in ['A'..'Z', 'a'..'z', '_']) then
+    Exit(False);
+  for I := 2 to Length(AName) do
+  begin
+    Ch := AName[I];
+    if not (Ch in ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+      Exit(False);
+  end;
+  Result := True;
 end;
 
 end.
