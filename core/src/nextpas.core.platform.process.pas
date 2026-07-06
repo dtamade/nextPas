@@ -184,6 +184,9 @@ begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
 
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
   begin
     AFailStage := pssPipe;
@@ -660,6 +663,10 @@ var
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
+
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   FillChar(LSI, SizeOf(LSI), 0);
   LSI.cb := SizeOf(LSI);
   LSI.dwFlags := STARTF_USESTDHANDLES;
