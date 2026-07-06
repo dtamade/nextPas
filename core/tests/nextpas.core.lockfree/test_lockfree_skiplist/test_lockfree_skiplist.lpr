@@ -617,6 +617,130 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 21: Remove all keys                                      }
+{ ============================================================ }
+
+procedure TestSkipListRemoveAll;
+const
+  KEY_COUNT = 50;
+var
+  LS: TIntIntSkipList;
+  LI: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    for LI := 1 to KEY_COUNT do
+      LS.Insert(LI, LI * 10);
+    CheckEqual(KEY_COUNT, LS.Count, 'count before remove all');
+
+    for LI := 1 to KEY_COUNT do
+      Check(LS.Remove(LI), 'remove key ' + IntToStr(LI));
+    CheckEqual(0, LS.Count, 'count after remove all');
+    Check(not LS.Contains(1), 'key 1 not found');
+    Check(not LS.Contains(KEY_COUNT), 'last key not found');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 22: Remove non-existent key                              }
+{ ============================================================ }
+
+procedure TestSkipListRemoveNonExistent;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+
+    Check(not LS.Remove(3), 'remove non-existent key');
+    CheckEqual(2, LS.Count, 'count unchanged');
+    Check(not LS.Remove(0), 'remove key 0');
+    Check(not LS.Remove(-1), 'remove key -1');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 23: Negative keys                                        }
+{ ============================================================ }
+
+procedure TestSkipListNegativeKeys;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(-10, 100);
+    LS.Insert(-5, 50);
+    LS.Insert(0, 0);
+    LS.Insert(5, 50);
+    LS.Insert(10, 100);
+
+    Check(LS.Find(-10, LV), 'find -10');
+    CheckEqual(100, LV, 'value -10');
+    Check(LS.Find(-5, LV), 'find -5');
+    CheckEqual(50, LV, 'value -5');
+    Check(LS.Find(0, LV), 'find 0');
+    CheckEqual(0, LV, 'value 0');
+    Check(LS.Find(5, LV), 'find 5');
+    CheckEqual(50, LV, 'value 5');
+    Check(LS.Find(10, LV), 'find 10');
+    CheckEqual(100, LV, 'value 10');
+    Check(not LS.Find(-11, LV), '-11 not found');
+    Check(not LS.Find(11, LV), '11 not found');
+
+    Check(LS.Remove(-5), 'remove -5');
+    Check(not LS.Contains(-5), '-5 removed');
+    CheckEqual(4, LS.Count, 'count after remove');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 24: ForEach after remove                                 }
+{ ============================================================ }
+
+var
+  GRemovedSum: Integer;
+
+procedure RemovedSumCallback(const AKey: Integer; const AValue: Integer);
+begin
+  GRemovedSum := GRemovedSum + AValue;
+end;
+
+procedure TestSkipListForEachAfterRemove;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    LS.Insert(3, 30);
+    LS.Insert(4, 40);
+    LS.Insert(5, 50);
+
+    { Remove keys 2 and 4 }
+    LS.Remove(2);
+    LS.Remove(4);
+
+    GRemovedSum := 0;
+    LS.ForEach(@RemovedSumCallback);
+    CheckEqual(90, GRemovedSum, 'sum after remove (10+30+50)');
+    CheckEqual(3, LS.Count, 'count after remove');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.lockfree.skiplist');
   T.Test('Basic insert and find', @TestSkipListBasic);
@@ -639,5 +763,9 @@ begin
   T.Test('Interleaved insert/remove', @TestSkipListInterleaved);
   T.Test('Large key values', @TestSkipListLargeKeys);
   T.Test('ForEachCtx with context', @TestSkipListForEachCtx);
+  T.Test('Remove all keys', @TestSkipListRemoveAll);
+  T.Test('Remove non-existent key', @TestSkipListRemoveNonExistent);
+  T.Test('Negative keys', @TestSkipListNegativeKeys);
+  T.Test('ForEach after remove', @TestSkipListForEachAfterRemove);
   if not T.Run then Halt(1);
 end.
