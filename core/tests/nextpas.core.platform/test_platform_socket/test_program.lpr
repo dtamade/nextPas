@@ -131,6 +131,125 @@ begin
     '0 must not be timed-out');
 end;
 
+procedure TestSocketBindListen;
+var
+  LSock: TPlatformSocket;
+  LRes: Int32;
+  LAddr: TPlatformSockAddr;
+begin
+  LRes := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LSock);
+  if LRes = PLATFORM_ERR_UNSUPPORTED then
+  begin
+    Check(LRes = PLATFORM_ERR_UNSUPPORTED, 'unsupported on this platform');
+    Exit;
+  end;
+  Check(LRes = 0, 'create socket must succeed');
+
+  // Set SO_REUSEADDR to avoid address already in use
+  platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LRes, SizeOf(LRes));
+
+  // Create IPv4 address on port 0 (let OS choose)
+  LRes := platform_sockaddr_ipv4(0, 0, LAddr);
+  Check(LRes = 0, 'create sockaddr must succeed');
+
+  LRes := platform_socket_bind(LSock, @LAddr, LAddr.Len);
+  Check(LRes = 0, 'bind must succeed');
+
+  LRes := platform_socket_listen(LSock, 1);
+  Check(LRes = 0, 'listen must succeed');
+
+  platform_socket_close(LSock);
+end;
+
+procedure TestSocketGetSockName;
+var
+  LSock: TPlatformSocket;
+  LRes: Int32;
+  LAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
+begin
+  LRes := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LSock);
+  if LRes = PLATFORM_ERR_UNSUPPORTED then
+  begin
+    Check(LRes = PLATFORM_ERR_UNSUPPORTED, 'unsupported on this platform');
+    Exit;
+  end;
+  Check(LRes = 0, 'create socket must succeed');
+
+  // Set SO_REUSEADDR
+  platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LRes, SizeOf(LRes));
+
+  // Create IPv4 address on port 0
+  LRes := platform_sockaddr_ipv4(0, 0, LAddr);
+  Check(LRes = 0, 'create sockaddr must succeed');
+
+  LRes := platform_socket_bind(LSock, @LAddr, LAddr.Len);
+  Check(LRes = 0, 'bind must succeed');
+
+  LAddrLen := SizeOf(LAddr);
+  LRes := platform_socket_getsockname(LSock, @LAddr, @LAddrLen);
+  Check(LRes = 0, 'getsockname must succeed');
+
+  platform_socket_close(LSock);
+end;
+
+procedure TestSocketShutdown;
+var
+  LSock: TPlatformSocket;
+  LRes: Int32;
+  LAddr: TPlatformSockAddr;
+begin
+  LRes := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LSock);
+  if LRes = PLATFORM_ERR_UNSUPPORTED then
+  begin
+    Check(LRes = PLATFORM_ERR_UNSUPPORTED, 'unsupported on this platform');
+    Exit;
+  end;
+  Check(LRes = 0, 'create socket must succeed');
+
+  // Bind and listen first (shutdown requires a connected/bound socket)
+  platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LRes, SizeOf(LRes));
+  LRes := platform_sockaddr_ipv4(0, 0, LAddr);
+  Check(LRes = 0, 'create sockaddr must succeed');
+  LRes := platform_socket_bind(LSock, @LAddr, LAddr.Len);
+  Check(LRes = 0, 'bind must succeed');
+  LRes := platform_socket_listen(LSock, 1);
+  Check(LRes = 0, 'listen must succeed');
+
+  // Shutdown on listening socket - may succeed or fail depending on platform
+  platform_socket_shutdown(LSock, PLATFORM_SHUT_RDWR);
+
+  platform_socket_close(LSock);
+end;
+
+procedure TestSocketSetsockopt;
+var
+  LSock: TPlatformSocket;
+  LRes: Int32;
+  LVal: Int32;
+begin
+  LRes := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LSock);
+  if LRes = PLATFORM_ERR_UNSUPPORTED then
+  begin
+    Check(LRes = PLATFORM_ERR_UNSUPPORTED, 'unsupported on this platform');
+    Exit;
+  end;
+  Check(LRes = 0, 'create socket must succeed');
+
+  LVal := 1;
+  LRes := platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LVal, SizeOf(LVal));
+  Check(LRes = 0, 'setsockopt SO_REUSEADDR must succeed');
+
+  LRes := platform_socket_setsockopt(LSock, PLATFORM_IPPROTO_TCP, PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
+  Check(LRes = 0, 'setsockopt TCP_NODELAY must succeed');
+
+  platform_socket_close(LSock);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket');
   T.Test('socket constants', @TestSocketConstants);
@@ -141,5 +260,9 @@ begin
   T.Test('set timeout', @TestSocketSetTimeout);
   T.Test('error would block', @TestSocketErrorWouldBlock);
   T.Test('error timed out', @TestSocketErrorTimedOut);
+  T.Test('bind/listen', @TestSocketBindListen);
+  T.Test('getsockname', @TestSocketGetSockName);
+  T.Test('shutdown', @TestSocketShutdown);
+  T.Test('setsockopt', @TestSocketSetsockopt);
   if not T.Run then Halt(1);
 end.
