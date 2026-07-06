@@ -256,6 +256,85 @@ begin Result := SIMD_STATIC_VecI32x4Max(a, b); end;
 function VecI32x4CmpEq(const a, b: TVecI32x4): TMask4; inline;
 begin Result := SIMD_STATIC_VecI32x4CmpEq(a, b); end;
 
+// === I64x2 Operations ===
+
+function VecI64x2Add(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Add(a, b); end;
+
+function VecI64x2Sub(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Sub(a, b); end;
+
+function VecI64x2And(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2And(a, b); end;
+
+function VecI64x2Or(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Or(a, b); end;
+
+function VecI64x2Xor(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Xor(a, b); end;
+
+function VecI64x2Not(const a: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Not(a); end;
+
+function VecI64x2AndNot(const a, b: TVecI64x2): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2AndNot(a, b); end;
+
+function VecI64x2CmpEq(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpEq(a, b); end;
+
+function VecI64x2CmpNe(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpNe(a, b); end;
+
+function VecI64x2CmpGt(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpGt(a, b); end;
+
+function VecI64x2CmpLt(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpLt(a, b); end;
+
+function VecI64x2CmpGe(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpGe(a, b); end;
+
+function VecI64x2CmpLe(const a, b: TVecI64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecI64x2CmpLe(a, b); end;
+
+function VecI64x2Extract(const a: TVecI64x2; index: Integer): Int64; inline;
+begin Result := SIMD_STATIC_VecI64x2Extract(a, index); end;
+
+function VecI64x2Insert(const a: TVecI64x2; value: Int64; index: Integer): TVecI64x2; inline;
+begin Result := SIMD_STATIC_VecI64x2Insert(a, value, index); end;
+
+// === U64x2 Operations ===
+
+function VecU64x2Add(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2Add(a, b); end;
+
+function VecU64x2Sub(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2Sub(a, b); end;
+
+function VecU64x2And(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2And(a, b); end;
+
+function VecU64x2Or(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2Or(a, b); end;
+
+function VecU64x2Xor(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2Xor(a, b); end;
+
+function VecU64x2Not(const a: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2Not(a); end;
+
+function VecU64x2AndNot(const a, b: TVecU64x2): TVecU64x2; inline;
+begin Result := SIMD_STATIC_VecU64x2AndNot(a, b); end;
+
+function VecU64x2CmpEq(const a, b: TVecU64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecU64x2CmpEq(a, b); end;
+
+function VecU64x2CmpLt(const a, b: TVecU64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecU64x2CmpLt(a, b); end;
+
+function VecU64x2CmpGt(const a, b: TVecU64x2): TMask2; inline;
+begin Result := SIMD_STATIC_VecU64x2CmpGt(a, b); end;
+
 // === F32x8 Operations (256-bit) ===
 
 function VecF32x8Add(const a, b: TVecF32x8): TVecF32x8; inline;
