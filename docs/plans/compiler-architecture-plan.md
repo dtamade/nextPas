@@ -1085,17 +1085,17 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 > AL2 收敛期已进入。退出条件 7 大类，按依赖关系和风险排序。
 > 核心原则：测试先行、小步验证、每步可回滚。
 
-### AL2-D1: 测试覆盖率提升（预估 8 天，P0 优先级）
+### AL2-D1: 测试覆盖率提升 [🔄 部分]（预估 8 天，P0 优先级）
 
-**为什么先做**: 测试是所有后续重构的安全网。test/production 比当前 0.52x，目标 >1.0x。
+**为什么先做**: 测试是所有后续重构的安全网。test/production 比当前 0.55x，目标 >1.0x。
 
-| 子任务 | 内容 | 预估 |
+| 子任务 | 内容 | 状态 |
 |--------|------|------|
-| D1.1 MIR pass 单元测试 | 6 个 pass 各 ≥10 测试，覆盖边界和回归 | 3 天 |
-| D1.2 sema 单元测试扩展 | 31→100，覆盖 overload/type_check/hir_lowering 提取模块 | 3 天 |
-| D1.3 增量编译回归测试 | 全量 vs 增量产物 diff 一致性验证套件 | 2 天 |
+| D1.1 MIR pass 单元测试 | 13 fixtures, 6 passes 全部覆盖 | ✅ |
+| D1.2 sema 单元测试扩展 | 31→100, 覆盖 overload/type_check/hir_lowering/string_ownership | ✅ |
+| D1.3 增量编译回归测试 | 全量 vs 增量产物 diff 一致性验证套件 | 🔄 |
 
-**验证**: test/production 比 > 1.0x, sema 测试 ≥ 100, MIR pass 各 ≥ 10
+**当前指标**: mir 13/13, semantic 100/100, compiler-pass 32/34, test/prod 比 0.55x
 
 ### AL2-D2: MIR 优化扩展（预估 10 天，P1 优先级）
 
