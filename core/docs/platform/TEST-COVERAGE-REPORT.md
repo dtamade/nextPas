@@ -35,7 +35,7 @@
 | test_platform_files | 43 | ✅ |
 | test_platform_files_wine | 1 | ✅ |
 | test_platform_fmt | 23 | ✅ |
-| test_platform_fs | 13 | ✅ |
+| test_platform_fs | 16 | ✅ |
 | test_platform_fs_copy_bench | 1 | ✅ |
 | test_platform_fs_toctou | 4 | ✅ |
 | test_platform_fs_walk | 14 | ✅ |
@@ -61,13 +61,13 @@
 | test_platform_mmap | 11 | ✅ |
 | test_platform_mmap_wine | 1 | ✅ |
 | test_platform_net | 8 | ✅ |
-| test_platform_path | 20 | ✅ |
+| test_platform_path | 24 | ✅ |
 | test_platform_path_wine | 8 | ✅ |
 | test_platform_pipe | 6 | ✅ |
 | test_platform_posix_ffi_surface | 1 | ✅ |
 | test_platform_process | 17 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
-| test_platform_pty | 9 | ✅ |
+| test_platform_pty | 12 | ✅ |
 | test_platform_random | 6 | ✅ |
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
@@ -75,7 +75,7 @@
 | test_platform_signal | 9 | ✅ |
 | test_platform_signal_contract | 4 | ✅ |
 | test_platform_simulated_host_compile_matrix | 0 | ✅ (编译测试) |
-| test_platform_socket | 19 | ✅ |
+| test_platform_socket | 21 | ✅ |
 | test_platform_socket_windows_real | 1 | ✅ |
 | test_platform_socket_wine | 1 | ✅ |
 | test_platform_socket_types_abi | 13 | ✅ |
@@ -95,7 +95,7 @@
 | test_platform_time_l0_boundary | 6 | ✅ |
 | test_platform_time_no_fpc_units | 1 | ✅ |
 | test_platform_time_wine | 3 | ✅ |
-| test_platform_watch | 7 | ✅ |
+| test_platform_watch | 13 | ✅ |
 | test_platform_which | 7 | ✅ |
 | test_platform_windows_utf16_compile_gate | 0 | ✅ (编译测试) |
 | test_platform_windows_utf16_contract | 4 | ✅ |
