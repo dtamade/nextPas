@@ -65,6 +65,7 @@ type
     end;
     PShard = ^TShard;
     TShard = record
+      {** 读写锁: 0=无锁, >0=读锁计数, -1=写锁 }
       Lock: Int32;
       Entries: array of TEntry;
       Count: PtrUInt;
@@ -78,6 +79,10 @@ type
     function ShardIndex(const AKey: TKey): PtrUInt;
     procedure ShardLock(var AShard: TShard);
     procedure ShardUnlock(var AShard: TShard);
+    procedure ShardReadLock(var AShard: TShard);
+    procedure ShardReadUnlock(var AShard: TShard);
+    procedure ShardWriteLock(var AShard: TShard);
+    procedure ShardWriteUnlock(var AShard: TShard);
     procedure ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
     procedure ShardResize(var AShard: TShard);
     function ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
@@ -223,6 +228,67 @@ begin
   AtomicStore32(AShard.Lock, 0, moRelease);
 end;
 
+{** 获取读锁: 允许多个读者并发 }
+procedure TShardedHashMapImpl.ShardReadLock(var AShard: TShard);
+var
+  LLock: Int32;
+  LSpins: Int32;
+begin
+  LSpins := 0;
+  repeat
+    LLock := AtomicLoad32(AShard.Lock, moRelaxed);
+    if LLock >= 0 then
+    begin
+      { 尝试增加读锁计数 }
+      if AtomicCompareExchange32(AShard.Lock, LLock, LLock + 1, moAcquire) = LLock then
+        Exit;
+    end;
+    { 有写锁，等待 }
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+{** 释放读锁 }
+procedure TShardedHashMapImpl.ShardReadUnlock(var AShard: TShard);
+begin
+  AtomicFetchSub32(AShard.Lock, 1, moRelease);
+end;
+
+{** 获取写锁: 独占访问 }
+procedure TShardedHashMapImpl.ShardWriteLock(var AShard: TShard);
+var
+  LSpins: Int32;
+begin
+  LSpins := 0;
+  repeat
+    { 尝试从 0 变为 -1 (写锁) }
+    if AtomicCompareExchange32(AShard.Lock, 0, -1, moAcquire) = 0 then
+      Exit;
+    { 有读者或写者，等待 }
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+{** 释放写锁 }
+procedure TShardedHashMapImpl.ShardWriteUnlock(var AShard: TShard);
+begin
+  AtomicStore32(AShard.Lock, 0, moRelease);
+end;
+
 procedure TShardedHashMapImpl.ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
 var
   LI: PtrUInt;
@@ -320,7 +386,7 @@ var
   LFoundIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
       ShardResize(FShards[LShardIdx]);
@@ -338,7 +404,7 @@ begin
     FShards[LShardIdx].Entries[LIdx].State := esOccupied;
     Inc(FShards[LShardIdx].Count);
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -348,13 +414,13 @@ var
   LIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardReadLock(FShards[LShardIdx]);
   try
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
       AValue := FShards[LShardIdx].Entries[LIdx].Value;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardReadUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -364,7 +430,7 @@ var
   LIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
@@ -375,7 +441,7 @@ begin
       Dec(FShards[LShardIdx].Count);
     end;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -385,7 +451,7 @@ var
   LIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
@@ -397,7 +463,7 @@ begin
       Dec(FShards[LShardIdx].Count);
     end;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -408,7 +474,7 @@ var
   LFoundIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     if ShardFind(FShards[LShardIdx], AKey, LFoundIdx) then
       Exit(False);
@@ -423,7 +489,7 @@ begin
     Inc(FShards[LShardIdx].Count);
     Result := True;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -433,7 +499,7 @@ var
   LIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
@@ -442,7 +508,7 @@ begin
       FShards[LShardIdx].Entries[LIdx].Value := ANewValue;
     end;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -460,9 +526,9 @@ begin
   Result := 0;
   for LI := 0 to FShardCount - 1 do
   begin
-    ShardLock(FShards[LI]);
+    ShardReadLock(FShards[LI]);
     Inc(Result, FShards[LI].Count);
-    ShardUnlock(FShards[LI]);
+    ShardReadUnlock(FShards[LI]);
   end;
 end;
 
@@ -473,7 +539,7 @@ var
 begin
   for LShardIdx := 0 to FShardCount - 1 do
   begin
-    ShardLock(FShards[LShardIdx]);
+    ShardReadLock(FShards[LShardIdx]);
     try
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
@@ -481,7 +547,7 @@ begin
           ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value);
       end;
     finally
-      ShardUnlock(FShards[LShardIdx]);
+      ShardReadUnlock(FShards[LShardIdx]);
     end;
   end;
 end;
@@ -493,7 +559,7 @@ var
 begin
   for LShardIdx := 0 to FShardCount - 1 do
   begin
-    ShardLock(FShards[LShardIdx]);
+    ShardReadLock(FShards[LShardIdx]);
     try
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
@@ -501,7 +567,7 @@ begin
           ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value, AContext);
       end;
     finally
-      ShardUnlock(FShards[LShardIdx]);
+      ShardReadUnlock(FShards[LShardIdx]);
     end;
   end;
 end;
@@ -513,7 +579,7 @@ var
   LFound: Boolean;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
@@ -535,7 +601,7 @@ begin
     Result.Value := ADefault;
     Result.Existed := False;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -546,7 +612,7 @@ var
   LFound: Boolean;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
@@ -568,7 +634,7 @@ begin
     Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
     Result.Existed := False;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -579,7 +645,7 @@ var
   LFound: Boolean;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
@@ -602,7 +668,7 @@ begin
     Result.Value := ADefault;
     Result.Existed := False;
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -613,7 +679,7 @@ var
 begin
   for LShardIdx := 0 to FShardCount - 1 do
   begin
-    ShardLock(FShards[LShardIdx]);
+    ShardWriteLock(FShards[LShardIdx]);
     try
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
@@ -623,7 +689,7 @@ begin
       end;
       FShards[LShardIdx].Count := 0;
     finally
-      ShardUnlock(FShards[LShardIdx]);
+      ShardWriteUnlock(FShards[LShardIdx]);
     end;
   end;
 end;

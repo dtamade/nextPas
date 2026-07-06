@@ -4334,6 +4334,279 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ Edge-case: SPSC capacity=1                                    }
+{ ============================================================ }
+
+procedure TestSpscCapacityOne;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+begin
+  LQ := TIntSpsc.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LQ.Capacity), 'capacity=1');
+    Check(LQ.IsEmpty, 'initially empty');
+    Check(not LQ.IsFull, 'initially not full');
+    Check(LQ.TryEnqueue(42), 'enqueue to capacity=1');
+    Check(not LQ.TryEnqueue(99), 'enqueue to full capacity=1');
+    Check(LQ.IsFull, 'full after enqueue');
+    Check(LQ.TryDequeue(LV), 'dequeue from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LQ.IsEmpty, 'empty after dequeue');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: SPSC capacity=2                                    }
+{ ============================================================ }
+
+procedure TestSpscCapacityTwo;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+begin
+  LQ := TIntSpsc.Create(2);
+  try
+    CheckEqual(Int64(2), Int64(LQ.Capacity), 'capacity=2');
+    Check(LQ.TryEnqueue(1), 'enqueue first');
+    Check(LQ.TryEnqueue(2), 'enqueue second');
+    Check(not LQ.TryEnqueue(3), 'enqueue to full capacity=2');
+    Check(LQ.TryDequeue(LV), 'dequeue first');
+    CheckEqual(1, LV, 'first value');
+    Check(LQ.TryDequeue(LV), 'dequeue second');
+    CheckEqual(2, LV, 'second value');
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: MPMC capacity=1                                    }
+{ ============================================================ }
+
+procedure TestMpmcCapacityOne;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+begin
+  LQ := TIntMpmc.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LQ.Capacity), 'capacity=1');
+    Check(LQ.TryEnqueue(42), 'enqueue to capacity=1');
+    Check(not LQ.TryEnqueue(99), 'enqueue to full capacity=1');
+    Check(LQ.TryDequeue(LV), 'dequeue from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Stack capacity=1                                   }
+{ ============================================================ }
+
+procedure TestStackCapacityOne;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(1);
+  try
+    Check(LS.TryPush(42), 'push to capacity=1');
+    Check(not LS.TryPush(99), 'push to full capacity=1');
+    Check(LS.TryPop(LV), 'pop from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(not LS.TryPop(LV), 'pop from empty');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Deque capacity=1                                   }
+{ ============================================================ }
+
+procedure TestDequeCapacityOne;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(1);
+  try
+    Check(LD.TryPush(42), 'push to capacity=1');
+    Check(not LD.TryPush(99), 'push to full capacity=1');
+    Check(LD.TryPop(LV), 'pop from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+  finally
+    LD.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: HashMap single key stress                          }
+{ ============================================================ }
+
+procedure TestHashMapSingleKeyStress;
+const
+  OPS = 10000;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+  LV: Integer;
+  LFound: Boolean;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    { Repeatedly insert/update/remove the same key }
+    for LI := 1 to OPS do
+    begin
+      LM.Insert(1, LI);
+      LFound := LM.Find(1, LV);
+      Check(LFound, 'key must exist after insert');
+      CheckEqual(LI, LV, 'value must match');
+    end;
+    LM.Remove(1);
+    Check(not LM.Find(1, LV), 'key must not exist after remove');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: HashMap many keys stress                           }
+{ ============================================================ }
+
+procedure TestHashMapManyKeysStress;
+const
+  KEY_COUNT = 1000;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+  LV: Integer;
+  LFound: Boolean;
+begin
+  LM := TIntIntMap.Create(16);
+  try
+    { Insert many keys }
+    for LI := 1 to KEY_COUNT do
+      LM.Insert(LI, LI * 10);
+    CheckEqual(PtrUInt(KEY_COUNT), LM.Count, 'count after insert');
+    { Verify all keys }
+    for LI := 1 to KEY_COUNT do
+    begin
+      LFound := LM.Find(LI, LV);
+      Check(LFound, 'key must exist');
+      CheckEqual(LI * 10, LV, 'value must match');
+    end;
+    { Remove all keys }
+    for LI := 1 to KEY_COUNT do
+      Check(LM.Remove(LI), 'remove must succeed');
+    CheckEqual(PtrUInt(0), LM.Count, 'count after remove all');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Channel capacity=2                                 }
+{ ============================================================ }
+
+procedure TestChannelCapacityTwo;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySend(42), 'send to capacity=2');
+    Check(LCh.TrySend(99), 'send second to capacity=2');
+    Check(not LCh.TrySend(100), 'send to full capacity=2');
+    Check(LCh.TryReceive(LV), 'receive from capacity=2');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.TryReceive(LV), 'receive second from capacity=2');
+    CheckEqual(99, LV, 'second value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Channel SPSC capacity=1                            }
+{ ============================================================ }
+
+procedure TestChannelSpscCapacityOne;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(1);
+  try
+    Check(LCh.TrySend(42), 'send to capacity=1');
+    Check(not LCh.TrySend(99), 'send to full capacity=1');
+    Check(LCh.TryReceive(LV), 'receive from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Selector with single channel                       }
+{ ============================================================ }
+
+procedure TestSelectorSingleChannel;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LV: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(8);
+  LSel := TIntSelector.Create;
+  try
+    LV := 0;
+    LSel.AddRecv(LCh, LV);
+    LCh.TrySend(42);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'select must succeed');
+    CheckEqual(42, LV, 'value must match');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: EBR with many guards                               }
+{ ============================================================ }
+
+procedure TestEbrManyGuards;
+const
+  GUARD_COUNT = 100;
+var
+  LDomain: TEbrDomain;
+  LGuards: array[0..GUARD_COUNT - 1] of TEbrGuard;
+  LI: Integer;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    { Acquire many guards }
+    for LI := 0 to GUARD_COUNT - 1 do
+      LGuards[LI] := TEbrGuard.Acquire(LDomain);
+    { Release all guards }
+    for LI := 0 to GUARD_COUNT - 1 do
+      LGuards[LI].Release;
+  finally
+    LDomain.Free;
+  end;
+end;
+
 procedure TestSegQueueManagedReject;
 var
   LStrQ: specialize TSegQueue<AnsiString>;
@@ -5811,6 +6084,19 @@ begin
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
+
+  { Edge-case tests }
+  T.Test('SPSC capacity=1', @TestSpscCapacityOne);
+  T.Test('SPSC capacity=2', @TestSpscCapacityTwo);
+  T.Test('MPMC capacity=1', @TestMpmcCapacityOne);
+  T.Test('Stack capacity=1', @TestStackCapacityOne);
+  T.Test('Deque capacity=1', @TestDequeCapacityOne);
+  T.Test('HashMap single key stress', @TestHashMapSingleKeyStress);
+  T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
+  T.Test('Channel capacity=2', @TestChannelCapacityTwo);
+  T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
+  T.Test('Selector single channel', @TestSelectorSingleChannel);
+  T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);
 end.
