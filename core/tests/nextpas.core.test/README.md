@@ -24,6 +24,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 - **v6.8**: Bug fix — RunParallelWithResult 缺少 FinalizeResults 调用，导致 Passed/Skipped/AllPassed 始终为 0
 - **v7.0a**: Parallel Opt-in — `TestSeq()` 注册串行测试，并行模式下 Phase 1 先串行执行 Sequential 测试，Phase 2 再并行执行其余测试 (Go `t.Parallel()` inverse)
 - **v7.0b**: Test Cache — `TTestCache` 缓存测试结果，`--cache` 启用，FNV-1a hash (源文件+编译器+配置)
+- **v7.0c**: Cache integration — runner 自动查缓存/写缓存，命中显示 `(cached)` 跳过执行，`SourceFiles` 支持内容失效
 
 ## 竞品对比
 
