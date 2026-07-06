@@ -16,6 +16,7 @@ type
     hgToolchain,
     hgRTL,
     hgCRT,
+    hgMir,
     hgRegression
   );
 
@@ -93,6 +94,9 @@ const
     (Name: 'crt'; Directory: 'tests/crt';
      Expectation: 'crt-smoke'; Suffixes: '_smoke.pas';
      UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun),
+    (Name: 'mir'; Directory: 'tests/mir';
+     Expectation: 'mir-optimization'; Suffixes: '_pass.pas';
+     UsesSnapshot: False; CompilerMode: cmStage0BuildRun),
     (Name: 'regression'; Directory: 'tests/regression';
      Expectation: 'regression-guard'; Suffixes: '_regression.pas';
      UsesSnapshot: False; CompilerMode: cmHostFpcBuildRun)
