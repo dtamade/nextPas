@@ -5,6 +5,7 @@ program test_platform_args;
 uses
   nextpas.core.platform.args,
   nextpas.core.platform.fs,
+  nextpas.core.platform.error,
   nextpas.core.test;
 
 var
@@ -29,8 +30,8 @@ procedure TestGetInvalid;
 var
   Buf: array[0..63] of AnsiChar;
 begin
-  Check(platform_args_get(-1, @Buf[0], 64) = -1, 'index -1 returns -1');
-  Check(platform_args_get(9999, @Buf[0], 64) = -1, 'index 9999 returns -1');
+  Check(platform_args_get(-1, @Buf[0], 64) = PLATFORM_ERR_INVALID, 'index -1 returns PLATFORM_ERR_INVALID');
+  Check(platform_args_get(9999, @Buf[0], 64) = PLATFORM_ERR_INVALID, 'index 9999 returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestExePath;
@@ -45,8 +46,8 @@ end;
 
 procedure TestNilBuf;
 begin
-  Check(platform_args_get(0, nil, 0) = -1, 'nil buf returns -1');
-  Check(platform_args_exe_path(nil, 0) = -1, 'nil buf exe returns -1');
+  Check(platform_args_get(0, nil, 0) = PLATFORM_ERR_INVALID, 'nil buf returns PLATFORM_ERR_INVALID');
+  Check(platform_args_exe_path(nil, 0) = PLATFORM_ERR_INVALID, 'nil buf exe returns PLATFORM_ERR_INVALID');
 end;
 
 begin
