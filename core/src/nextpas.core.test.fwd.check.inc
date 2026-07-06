@@ -121,33 +121,33 @@ procedure CheckInRange(const AValue, ALow, AHigh: Int64;
   const AMessage: string);
 begin nextpas.core.test.check.CheckInRange(AValue, ALow, AHigh, AMessage); end;
 
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
-begin nextpas.core.test.check.CheckGreaterThan(AValue, AExpected); end;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
+begin nextpas.core.test.check.CheckGreaterThan(AValue, AThreshold); end;
 
-procedure CheckGreaterThan(const AValue, AExpected: Int64;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
   const AMessage: string);
-begin nextpas.core.test.check.CheckGreaterThan(AValue, AExpected, AMessage); end;
+begin nextpas.core.test.check.CheckGreaterThan(AValue, AThreshold, AMessage); end;
 
-procedure CheckLessThan(const AValue, AExpected: Int64);
-begin nextpas.core.test.check.CheckLessThan(AValue, AExpected); end;
+procedure CheckLessThan(const AValue, AThreshold: Int64);
+begin nextpas.core.test.check.CheckLessThan(AValue, AThreshold); end;
 
-procedure CheckLessThan(const AValue, AExpected: Int64;
+procedure CheckLessThan(const AValue, AThreshold: Int64;
   const AMessage: string);
-begin nextpas.core.test.check.CheckLessThan(AValue, AExpected, AMessage); end;
+begin nextpas.core.test.check.CheckLessThan(AValue, AThreshold, AMessage); end;
 
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
-begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected); end;
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
+begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AThreshold); end;
 
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64;
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string);
-begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AExpected, AMessage); end;
+begin nextpas.core.test.check.CheckGreaterOrEqual(AValue, AThreshold, AMessage); end;
 
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
-begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected); end;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
+begin nextpas.core.test.check.CheckLessOrEqual(AValue, AThreshold); end;
 
-procedure CheckLessOrEqual(const AValue, AExpected: Int64;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string);
-begin nextpas.core.test.check.CheckLessOrEqual(AValue, AExpected, AMessage); end;
+begin nextpas.core.test.check.CheckLessOrEqual(AValue, AThreshold, AMessage); end;
 
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double);
@@ -157,21 +157,21 @@ procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckInRangeD(AValue, ALow, AHigh, AEpsilon, AMessage); end;
 
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
-begin nextpas.core.test.check.CheckGreaterThanD(AValue, AExpected, AEpsilon); end;
+begin nextpas.core.test.check.CheckGreaterThanD(AValue, AThreshold, AEpsilon); end;
 
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
-begin nextpas.core.test.check.CheckLessThanD(AValue, AExpected, AEpsilon); end;
+begin nextpas.core.test.check.CheckLessThanD(AValue, AThreshold, AEpsilon); end;
 
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
-begin nextpas.core.test.check.CheckGreaterOrEqualD(AValue, AExpected, AEpsilon); end;
+begin nextpas.core.test.check.CheckGreaterOrEqualD(AValue, AThreshold, AEpsilon); end;
 
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
-begin nextpas.core.test.check.CheckLessOrEqualD(AValue, AExpected, AEpsilon); end;
+begin nextpas.core.test.check.CheckLessOrEqualD(AValue, AThreshold, AEpsilon); end;
 
 procedure CheckContainsCI(const AHaystack, ANeedle: string);
 begin nextpas.core.test.check.CheckContainsCI(AHaystack, ANeedle); end;

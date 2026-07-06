@@ -32,10 +32,10 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
-    function ToBeLessThan(const AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeGreaterThan(const AThreshold: Int64): IExpectation;
+    function ToBeLessThan(const AThreshold: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AThreshold: Int64): IExpectation;
+    function ToBeLessOrEqual(const AThreshold: Int64): IExpectation;
     { Inclusive range: ALow <= value <= AHigh. }
     function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
     function ToHaveLength(const AExpected: NativeInt): IExpectation;
@@ -49,10 +49,10 @@ type
     function ToNotBeNear(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
-    function ToBeLessThanD(const AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeGreaterThanD(const AThreshold: Double): IExpectation;
+    function ToBeLessThanD(const AThreshold: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AThreshold: Double): IExpectation;
+    function ToBeLessOrEqualD(const AThreshold: Double): IExpectation;
     function ToBeInRangeD(const ALow, AHigh: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
@@ -148,10 +148,10 @@ type
     function ToContain(const ASubstr: string): IExpectation;
     function ToStartWith(const APrefix: string): IExpectation;
     function ToEndWith(const ASuffix: string): IExpectation;
-    function ToBeGreaterThan(const AExpected: Int64): IExpectation;
-    function ToBeLessThan(const AExpected: Int64): IExpectation;
-    function ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
-    function ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+    function ToBeGreaterThan(const AThreshold: Int64): IExpectation;
+    function ToBeLessThan(const AThreshold: Int64): IExpectation;
+    function ToBeGreaterOrEqual(const AThreshold: Int64): IExpectation;
+    function ToBeLessOrEqual(const AThreshold: Int64): IExpectation;
     function ToBeInRange(const ALow, AHigh: Int64): IExpectation;
     function ToHaveLength(const AExpected: NativeInt): IExpectation;
     function ToRaise(AExceptionClass: ExceptClass;
@@ -162,10 +162,10 @@ type
     function ToNotBeNear(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
     { Double comparison }
-    function ToBeGreaterThanD(const AExpected: Double): IExpectation;
-    function ToBeLessThanD(const AExpected: Double): IExpectation;
-    function ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
-    function ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+    function ToBeGreaterThanD(const AThreshold: Double): IExpectation;
+    function ToBeLessThanD(const AThreshold: Double): IExpectation;
+    function ToBeGreaterOrEqualD(const AThreshold: Double): IExpectation;
+    function ToBeLessOrEqualD(const AThreshold: Double): IExpectation;
     function ToBeInRangeD(const ALow, AHigh: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
     { Case-insensitive string matching }
@@ -405,21 +405,21 @@ begin
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterThan(const AExpected: Int64): IExpectation;
+function TExpectation.ToBeGreaterThan(const AThreshold: Int64): IExpectation;
 begin
   RequireKind(ekInt64, 'ToBeGreaterThan');
-  CheckMatch(FIntValue > AExpected,
-    IntToStr(FIntValue) + ' should not be > ' + IntToStr(AExpected),
-    IntToStr(FIntValue) + ' is not > ' + IntToStr(AExpected));
+  CheckMatch(FIntValue > AThreshold,
+    IntToStr(FIntValue) + ' should not be > ' + IntToStr(AThreshold),
+    IntToStr(FIntValue) + ' is not > ' + IntToStr(AThreshold));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThan(const AExpected: Int64): IExpectation;
+function TExpectation.ToBeLessThan(const AThreshold: Int64): IExpectation;
 begin
   RequireKind(ekInt64, 'ToBeLessThan');
-  CheckMatch(FIntValue < AExpected,
-    IntToStr(FIntValue) + ' should not be < ' + IntToStr(AExpected),
-    IntToStr(FIntValue) + ' is not < ' + IntToStr(AExpected));
+  CheckMatch(FIntValue < AThreshold,
+    IntToStr(FIntValue) + ' should not be < ' + IntToStr(AThreshold),
+    IntToStr(FIntValue) + ' is not < ' + IntToStr(AThreshold));
   Result := Self;
 end;
 
@@ -558,71 +558,71 @@ end;
 
 { ── TExpectation: >= / <= for Int64 ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterOrEqual(const AExpected: Int64): IExpectation;
+function TExpectation.ToBeGreaterOrEqual(const AThreshold: Int64): IExpectation;
 begin
   RequireKind(ekInt64, 'ToBeGreaterOrEqual');
-  CheckMatch(FIntValue >= AExpected,
-    IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AExpected),
-    IntToStr(FIntValue) + ' is not >= ' + IntToStr(AExpected));
+  CheckMatch(FIntValue >= AThreshold,
+    IntToStr(FIntValue) + ' should not be >= ' + IntToStr(AThreshold),
+    IntToStr(FIntValue) + ' is not >= ' + IntToStr(AThreshold));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqual(const AExpected: Int64): IExpectation;
+function TExpectation.ToBeLessOrEqual(const AThreshold: Int64): IExpectation;
 begin
   RequireKind(ekInt64, 'ToBeLessOrEqual');
-  CheckMatch(FIntValue <= AExpected,
-    IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AExpected),
-    IntToStr(FIntValue) + ' is not <= ' + IntToStr(AExpected));
+  CheckMatch(FIntValue <= AThreshold,
+    IntToStr(FIntValue) + ' should not be <= ' + IntToStr(AThreshold),
+    IntToStr(FIntValue) + ' is not <= ' + IntToStr(AThreshold));
   Result := Self;
 end;
 
 { ── TExpectation: Double comparison ────────────────────────────────────────── }
 
-function TExpectation.ToBeGreaterThanD(const AExpected: Double): IExpectation;
+function TExpectation.ToBeGreaterThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterThanD');
-  if IsNan(FDoubleValue) or IsNan(AExpected) then
+  if IsNan(FDoubleValue) or IsNan(AThreshold) then
     InternalFail(FloatToStr(FDoubleValue) + ' is not > ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  CheckMatch(FDoubleValue > AExpected,
-    FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AExpected),
-    FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AExpected));
+      FloatToStr(AThreshold) + ' (NaN)');
+  CheckMatch(FDoubleValue > AThreshold,
+    FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AThreshold),
+    FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AThreshold));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessThanD(const AExpected: Double): IExpectation;
+function TExpectation.ToBeLessThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessThanD');
-  if IsNan(FDoubleValue) or IsNan(AExpected) then
+  if IsNan(FDoubleValue) or IsNan(AThreshold) then
     InternalFail(FloatToStr(FDoubleValue) + ' is not < ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  CheckMatch(FDoubleValue < AExpected,
-    FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AExpected),
-    FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AExpected));
+      FloatToStr(AThreshold) + ' (NaN)');
+  CheckMatch(FDoubleValue < AThreshold,
+    FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AThreshold),
+    FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AThreshold));
   Result := Self;
 end;
 
-function TExpectation.ToBeGreaterOrEqualD(const AExpected: Double): IExpectation;
+function TExpectation.ToBeGreaterOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AExpected) then
+  if IsNan(FDoubleValue) or IsNan(AThreshold) then
     InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  CheckMatch(FDoubleValue >= AExpected,
-    FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AExpected),
-    FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AExpected));
+      FloatToStr(AThreshold) + ' (NaN)');
+  CheckMatch(FDoubleValue >= AThreshold,
+    FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AThreshold),
+    FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AThreshold));
   Result := Self;
 end;
 
-function TExpectation.ToBeLessOrEqualD(const AExpected: Double): IExpectation;
+function TExpectation.ToBeLessOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AExpected) then
+  if IsNan(FDoubleValue) or IsNan(AThreshold) then
     InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  CheckMatch(FDoubleValue <= AExpected,
-    FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AExpected),
-    FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AExpected));
+      FloatToStr(AThreshold) + ' (NaN)');
+  CheckMatch(FDoubleValue <= AThreshold,
+    FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AThreshold),
+    FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AThreshold));
   Result := Self;
 end;
 

@@ -102,11 +102,11 @@ procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double = 1e-10);
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double; const AMessage: string); overload;
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
-procedure CheckGreaterThan(const AValue, AExpected: Int64;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
   const AMessage: string); overload;
-procedure CheckLessThan(const AValue, AExpected: Int64);
-procedure CheckLessThan(const AValue, AExpected: Int64;
+procedure CheckLessThan(const AValue, AThreshold: Int64);
+procedure CheckLessThan(const AValue, AThreshold: Int64;
   const AMessage: string); overload;
 procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckLength(const AExpected, AActual: NativeInt;
@@ -114,20 +114,20 @@ procedure CheckLength(const AExpected, AActual: NativeInt;
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64;
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string); overload;
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
-procedure CheckLessOrEqual(const AValue, AExpected: Int64;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string); overload;
 { Double comparisons — absolute epsilon. }
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
 { Check that AActual is within AEpsilon of AExpected (absolute difference).
   R4-07: Uses absolute epsilon — for large values (e.g. 1e15), the default
@@ -669,140 +669,140 @@ begin
         IntToStr(ALow) + '..' + IntToStr(AHigh) + ']');
 end;
 
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
 begin
-  if AValue <= AExpected then
+  if AValue <= AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckGreaterThan(const AValue, AExpected: Int64;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
   const AMessage: string);
 begin
-  if AValue <= AExpected then
+  if AValue <= AThreshold then
     if AMessage <> '' then
       InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' > ' +
-        IntToStr(AExpected))
+        IntToStr(AThreshold))
     else
       InternalFail('Expected ' + IntToStr(AValue) + ' > ' +
-        IntToStr(AExpected));
+        IntToStr(AThreshold));
 end;
 
-procedure CheckLessThan(const AValue, AExpected: Int64);
+procedure CheckLessThan(const AValue, AThreshold: Int64);
 begin
-  if AValue >= AExpected then
+  if AValue >= AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckLessThan(const AValue, AExpected: Int64;
+procedure CheckLessThan(const AValue, AThreshold: Int64;
   const AMessage: string);
 begin
-  if AValue >= AExpected then
+  if AValue >= AThreshold then
     if AMessage <> '' then
       InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' < ' +
-        IntToStr(AExpected))
+        IntToStr(AThreshold))
     else
       InternalFail('Expected ' + IntToStr(AValue) + ' < ' +
-        IntToStr(AExpected));
+        IntToStr(AThreshold));
 end;
 
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
 begin
-  if AValue < AExpected then
+  if AValue < AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64;
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string);
 begin
-  if AValue < AExpected then
+  if AValue < AThreshold then
     if AMessage <> '' then
       InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' >= ' +
-        IntToStr(AExpected))
+        IntToStr(AThreshold))
     else
       InternalFail('Expected ' + IntToStr(AValue) + ' >= ' +
-        IntToStr(AExpected));
+        IntToStr(AThreshold));
 end;
 
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
 begin
-  if AValue > AExpected then
+  if AValue > AThreshold then
     InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
-      IntToStr(AExpected));
+      IntToStr(AThreshold));
 end;
 
-procedure CheckLessOrEqual(const AValue, AExpected: Int64;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
   const AMessage: string);
 begin
-  if AValue > AExpected then
+  if AValue > AThreshold then
     if AMessage <> '' then
       InternalFail(AMessage + ': Expected ' + IntToStr(AValue) + ' <= ' +
-        IntToStr(AExpected))
+        IntToStr(AThreshold))
     else
       InternalFail('Expected ' + IntToStr(AValue) + ' <= ' +
-        IntToStr(AExpected));
+        IntToStr(AThreshold));
 end;
 
 { ── Double comparison operators ────────────────────────────────────────────── }
 
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue <= AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue <= AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+        FloatToStr(AThreshold) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue >= AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue >= AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-        FloatToStr(AExpected) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
+        FloatToStr(AThreshold) + ' (within epsilon ' + FloatToStr(AEpsilon) + ')')
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue < AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue < AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AExpected) then
+  if IsNan(AValue) or IsNan(AThreshold) then
     InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-      FloatToStr(AExpected) + ' (NaN)');
-  if AValue > AExpected then
-    if Abs(AValue - AExpected) <= AEpsilon then
+      FloatToStr(AThreshold) + ' (NaN)');
+  if AValue > AThreshold then
+    if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
     else
       InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-        FloatToStr(AExpected));
+        FloatToStr(AThreshold));
 end;
 
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
