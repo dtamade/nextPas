@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
 > 模块负责人: Claude (test worktree)
-> 最后更新: 2026-06-29
-> 治理状态: v6.0, 12 模块, 8724 行, 10 测试套件
+> 最后更新: 2026-07-06
+> 治理状态: v7.0c, 14 模块, 10 测试套件, ~360 测试
 
 ## Overview
 
@@ -34,6 +34,8 @@
 - **RTTI discovery**: `DiscoverTests` auto-discovers published methods
 - **Benchmarking**: `Bench` + adaptive N scaling (Go testing.B equivalent)
 - **Structured results**: `RunWithResult` / `RunAllWithResult` for programmatic result access
+- **Test caching**: `TTestCache` FNV-1a hash-based result caching (`--cache` CLI flag)
+- **Sequential opt-in**: `TestSeq()` for tests that must run serially (Go `t.Parallel()` inverse)
 - **Minimal dependencies**: Only uses FPC RTL (`SysUtils`) + `nextpas.core.*` modules
 
 ## Quick Start
@@ -737,3 +739,24 @@ L4 扩展层:  discovery.pas, mock.pas
 | test_diagnostics | runner.pas (filter/timeout) | ~10 |
 | test_advanced | runner.pas (advanced) | ~15 |
 | **总计** | | **~234** |
+
+### 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| [README.md](README.md) | 模块总览、API 参考、架构 |
+| [CONTRACT.md](CONTRACT.md) | 代码契约 |
+| [roadmap.md](roadmap.md) | 阶段路线图 |
+| [ROADMAP-v7.md](ROADMAP-v7.md) | v7.x 路线图 |
+| [benchmark-comparison.md](benchmark-comparison.md) | 竞品对比 |
+| [test-framework-plan.md](test-framework-plan.md) | 框架实施方案 |
+| [test-findings.md](test-findings.md) | 当前审计发现 |
+| [test-findings-legacy.md](test-findings-legacy.md) | 历史审计发现 |
+| [contract-audit.md](contract-audit.md) | 契约审计报告 |
+| [codex-fix-plan.md](codex-fix-plan.md) | Codex 修复计划 |
+| [fix-plan.md](fix-plan.md) | 修复计划 |
+| [usability-research-report.md](usability-research-report.md) | 可用性研究报告 |
+| [usability-implementation-plan.md](usability-implementation-plan.md) | 可用性实施计划 |
+| [v7.0-research.md](v7.0-research.md) | v7.0 研究报告 |
+| [research-report-2026-07-03.md](research-report-2026-07-03.md) | 2026-07-03 研究报告 |
+| [test-suite-version-history.md](test-suite-version-history.md) | 测试套件版本历史 |
