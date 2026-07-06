@@ -565,6 +565,108 @@ begin
   Check(not Assigned(TObject(nil)), 'Assigned should return False for nil object');
 end;
 
+{ === Critical Section Tests === }
+
+procedure TestCriticalSectionLifecycle;
+var
+  LCS: TRTLCriticalSection;
+begin
+  InitCriticalSection(LCS);
+  EnterCriticalSection(LCS);
+  LeaveCriticalSection(LCS);
+  DoneCriticalSection(LCS);
+end;
+
+procedure TestCriticalSectionTryEnter;
+var
+  LCS: TRTLCriticalSection;
+begin
+  InitCriticalSection(LCS);
+  { FPC's TryEnterCriticalSection returns LongInt (non-zero = success) }
+  Check(TryEnterCriticalSection(LCS) <> 0, 'TryEnterCriticalSection should succeed on unlocked section');
+  LeaveCriticalSection(LCS);
+  DoneCriticalSection(LCS);
+end;
+
+procedure TestCriticalSectionReentrancy;
+var
+  LCS: TRTLCriticalSection;
+begin
+  InitCriticalSection(LCS);
+  EnterCriticalSection(LCS);
+  { FPC's critical sections are reentrant }
+  EnterCriticalSection(LCS);
+  LeaveCriticalSection(LCS);
+  LeaveCriticalSection(LCS);
+  DoneCriticalSection(LCS);
+end;
+
+{ === Interlocked Operations Tests === }
+
+procedure TestInterlockedIncrement;
+var
+  LValue: LongInt;
+begin
+  LValue := 0;
+  CheckEqual(Int64(1), Int64(InterlockedIncrement(LValue)), 'InterlockedIncrement should return 1');
+  CheckEqual(Int64(1), Int64(LValue), 'InterlockedIncrement should update value');
+  CheckEqual(Int64(2), Int64(InterlockedIncrement(LValue)), 'InterlockedIncrement should return 2');
+  CheckEqual(Int64(2), Int64(LValue), 'InterlockedIncrement should update value');
+end;
+
+procedure TestInterlockedDecrement;
+var
+  LValue: LongInt;
+begin
+  LValue := 10;
+  CheckEqual(Int64(9), Int64(InterlockedDecrement(LValue)), 'InterlockedDecrement should return 9');
+  CheckEqual(Int64(9), Int64(LValue), 'InterlockedDecrement should update value');
+  CheckEqual(Int64(8), Int64(InterlockedDecrement(LValue)), 'InterlockedDecrement should return 8');
+  CheckEqual(Int64(8), Int64(LValue), 'InterlockedDecrement should update value');
+end;
+
+procedure TestInterlockedExchange;
+var
+  LValue: LongInt;
+  LOld: LongInt;
+begin
+  LValue := 42;
+  LOld := InterlockedExchange(LValue, 100);
+  CheckEqual(Int64(42), Int64(LOld), 'InterlockedExchange should return old value');
+  CheckEqual(Int64(100), Int64(LValue), 'InterlockedExchange should set new value');
+end;
+
+procedure TestInterlockedCompareExchange;
+var
+  LValue: LongInt;
+  LOld: LongInt;
+begin
+  LValue := 42;
+  { Should swap because current value (42) matches comparand (42) }
+  LOld := InterlockedCompareExchange(LValue, 100, 42);
+  CheckEqual(Int64(42), Int64(LOld), 'InterlockedCompareExchange should return old value');
+  CheckEqual(Int64(100), Int64(LValue), 'InterlockedCompareExchange should set new value');
+
+  { Should NOT swap because current value (100) doesn't match comparand (42) }
+  LOld := InterlockedCompareExchange(LValue, 200, 42);
+  CheckEqual(Int64(100), Int64(LOld), 'InterlockedCompareExchange should return current value');
+  CheckEqual(Int64(100), Int64(LValue), 'InterlockedCompareExchange should not change value');
+end;
+
+procedure TestInterlockedExchangeAdd;
+var
+  LValue: LongInt;
+  LOld: LongInt;
+begin
+  LValue := 10;
+  LOld := InterlockedExchangeAdd(LValue, 5);
+  CheckEqual(Int64(10), Int64(LOld), 'InterlockedExchangeAdd should return old value');
+  CheckEqual(Int64(15), Int64(LValue), 'InterlockedExchangeAdd should add to value');
+  LOld := InterlockedExchangeAdd(LValue, -3);
+  CheckEqual(Int64(15), Int64(LOld), 'InterlockedExchangeAdd should return old value');
+  CheckEqual(Int64(12), Int64(LValue), 'InterlockedExchangeAdd should subtract from value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system kernel');
 
@@ -643,6 +745,18 @@ begin
   { Assigned tests }
   T.Test('Assigned(pointer)', @TestAssignedPointer);
   T.Test('Assigned(object)', @TestAssignedObject);
+
+  { Critical section tests }
+  T.Test('CriticalSection lifecycle', @TestCriticalSectionLifecycle);
+  T.Test('CriticalSection TryEnter', @TestCriticalSectionTryEnter);
+  T.Test('CriticalSection reentrancy', @TestCriticalSectionReentrancy);
+
+  { Interlocked tests }
+  T.Test('InterlockedIncrement', @TestInterlockedIncrement);
+  T.Test('InterlockedDecrement', @TestInterlockedDecrement);
+  T.Test('InterlockedExchange', @TestInterlockedExchange);
+  T.Test('InterlockedCompareExchange', @TestInterlockedCompareExchange);
+  T.Test('InterlockedExchangeAdd', @TestInterlockedExchangeAdd);
 
   if not T.Run then Halt(1);
 end.
