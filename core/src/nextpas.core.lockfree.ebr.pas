@@ -184,7 +184,7 @@ begin
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
     { Add to freelist for reuse }
-    if FFreeListCount < 16 then
+    if FFreeListCount < 32 then
     begin
       LNode^.Next := FFreeList;
       FFreeList := LNode;
