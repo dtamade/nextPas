@@ -38,6 +38,7 @@
 | `lockfree.channel.spsc` | SPSC Channel (1P1C 优化) | ✅ 完成 | 5 |
 | `lockfree.selector` | 多路复用器 (Go select 语义) | ✅ 完成 | 8 |
 | `lockfree.hashmap` | 分片并发 HashMap | ✅ 完成 | 10 |
+| `lockfree.skiplist` | 并发跳表 | ✅ 完成 | 10 |
 
 **规模**: 21 文件, ~11200 行, 114 测试
 
@@ -53,7 +54,8 @@
 | test_lockfree | 129 | ✅ 全绿 |
 | test_lockfree_hazard | 15 | ✅ 全绿 |
 | test_lockfree_stress | 16 | ✅ 全绿 |
-| **总计** | **205** | **✅ 全绿** |
+| test_lockfree_skiplist | 10 | ✅ 全绿 |
+| **总计** | **215** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
