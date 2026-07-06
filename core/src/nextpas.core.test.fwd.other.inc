@@ -88,3 +88,25 @@ begin Result := nextpas.core.test.prop.FilterString(AGen, APred); end;
 
 function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
 begin Result := nextpas.core.test.prop.FilterBytes(AGen, APred); end;
+
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceInt(AValues); end;
+
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceString(AValues); end;
+
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceBool(AValues); end;
+
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenOneOfInt(AGens); end;
+
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenOneOfString(AGens); end;
+
+procedure PropFail(const AMsg: string);
+begin nextpas.core.test.prop.PropFail(AMsg); end;
+
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
+begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;
