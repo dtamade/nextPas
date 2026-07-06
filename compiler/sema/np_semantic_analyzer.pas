@@ -82,6 +82,7 @@ type
     FPendingStringTempNames: array of string;
     FPendingStringTempSources: array of string;
     FBuiltinRegistry: TBuiltinRegistry;
+    FRuntimeVars: TSemaRuntimeVarRegistry;
     FRuntimeArrVarNames: array of string;
     FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
@@ -712,6 +713,7 @@ begin
   FInliningStack := specialize TVec<string>.Create;
   FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
+  FRuntimeVars := TSemaRuntimeVarRegistry.Create;
 end;
 
 function TSemanticAnalyzer.NewBlockLabel(const APrefix: string): string;
@@ -721,84 +723,33 @@ begin
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeVarNames);
-  SetLength(FRuntimeVarNames, NextIndex + 1);
-  FRuntimeVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeVar(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRuntimeVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeStrVarNames);
-  SetLength(FRuntimeStrVarNames, NextIndex + 1);
-  FRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterOwnedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedRuntimeStrVarNames);
-  SetLength(FOwnedRuntimeStrVarNames, NextIndex + 1);
-  FOwnedRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterOwnedRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterBorrowedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeStrVarNames);
-  SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
-  FBorrowedRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterBorrowedRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterOwnedStringReturnFunc(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedStringReturnFuncNames);
-  SetLength(FOwnedStringReturnFuncNames, NextIndex + 1);
-  FOwnedStringReturnFuncNames[NextIndex] := AName;
+  FRuntimeVars.RegisterOwnedStringReturnFunc(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
@@ -827,53 +778,29 @@ begin
 end;
 
 function TSemanticAnalyzer.IsOwnedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsOwnedRuntimeStrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsBorrowedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsBorrowedRuntimeStrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsOwnedStringReturnFunc(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsOwnedStringReturnFunc(AName);
 end;
 
 procedure TSemanticAnalyzer.ClearPendingStringTempReleases;
 begin
-  SetLength(FPendingStringTempNames, 0);
-  SetLength(FPendingStringTempSources, 0);
+  FRuntimeVars.ClearPendingStringTempReleases;
 end;
 
 procedure TSemanticAnalyzer.QueuePendingStringTempRelease(
   const ATempName, ASourceName: string);
-var
-  NextIndex: SizeInt;
 begin
-  if (ATempName = '') or (ASourceName = '') then
-    Exit;
-  NextIndex := Length(FPendingStringTempNames);
-  SetLength(FPendingStringTempNames, NextIndex + 1);
-  SetLength(FPendingStringTempSources, NextIndex + 1);
-  FPendingStringTempNames[NextIndex] := ATempName;
-  FPendingStringTempSources[NextIndex] := ASourceName;
+  FRuntimeVars.QueuePendingStringTempRelease(ATempName, ASourceName);
 end;
 
 procedure TSemanticAnalyzer.EmitPendingStringTempReleases;
@@ -2249,49 +2176,23 @@ begin
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeArrVarNames);
-  SetLength(FRuntimeArrVarNames, NextIndex + 1);
-  FRuntimeArrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeArrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterBorrowedRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeArrVarNames);
-  SetLength(FBorrowedRuntimeArrVarNames, NextIndex + 1);
-  FBorrowedRuntimeArrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterBorrowedRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsBorrowedRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsBorrowedRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsStaticRuntimeArrVar(const AName: string): Boolean;
@@ -2417,100 +2318,43 @@ end;
 
 procedure TSemanticAnalyzer.RegisterClassVar(const AName, AClassName: string);
 var
-  Idx: LongInt;
   V: Int64;
 begin
-  for Idx := 0 to Length(FClassVarNames) - 1 do
-    if SameText(FClassVarNames[Idx], AName) then
-    begin
-      if FModel.LookupConstValue(FClassVarTypes[Idx] + '$vmt_count', V) and
-        TypeMetaIsInterface(FClassVarTypes[Idx]) then
-        Exit;
-      FClassVarTypes[Idx] := AClassName;
-      Exit;
-    end;
-  Idx := Length(FClassVarNames);
-  SetLength(FClassVarNames, Idx + 1);
-  SetLength(FClassVarTypes, Idx + 1);
-  FClassVarNames[Idx] := AName;
-  FClassVarTypes[Idx] := AClassName;
+  if FModel.LookupConstValue(FRuntimeVars.LookupClassVar(AName) + '$vmt_count', V) and
+    TypeMetaIsInterface(FRuntimeVars.LookupClassVar(AName)) then
+    Exit;
+  FRuntimeVars.RegisterClassVar(AName, AClassName);
 end;
 
 function TSemanticAnalyzer.LookupClassVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FClassVarNames) - 1 do
-    if SameText(FClassVarNames[Idx], AName) then
-      Exit(FClassVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupClassVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterRecordVar(const AName, ATypeName: string);
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-    begin
-      FRecordVarTypes[Idx] := ATypeName;
-      Exit;
-    end;
-  Idx := Length(FRecordVarNames);
-  SetLength(FRecordVarNames, Idx + 1);
-  SetLength(FRecordVarTypes, Idx + 1);
-  FRecordVarNames[Idx] := AName;
-  FRecordVarTypes[Idx] := ATypeName;
+  FRuntimeVars.RegisterRecordVar(AName, ATypeName);
 end;
 
 procedure TSemanticAnalyzer.RegisterPointerVar(const AName,
   APointeeTypeName: string);
-var
-  Idx: LongInt;
 begin
-  if (AName = '') or (APointeeTypeName = '') then
-    Exit;
-  for Idx := 0 to Length(FPointerVarNames) - 1 do
-    if SameText(FPointerVarNames[Idx], AName) then
-    begin
-      FPointerVarTypes[Idx] := APointeeTypeName;
-      Exit;
-    end;
-  Idx := Length(FPointerVarNames);
-  SetLength(FPointerVarNames, Idx + 1);
-  SetLength(FPointerVarTypes, Idx + 1);
-  FPointerVarNames[Idx] := AName;
-  FPointerVarTypes[Idx] := APointeeTypeName;
+  FRuntimeVars.RegisterPointerVar(AName, APointeeTypeName);
 end;
 
 function TSemanticAnalyzer.IsRecordVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRecordVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterVarParam(const AName: string);
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to FVarParamNames.Count - 1 do
-    if SameText(FVarParamNames[Idx], AName) then
-      Exit;
-  FVarParamNames.Push(AName);
+  FRuntimeVars.RegisterVarParam(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParam(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to FVarParamNames.Count - 1 do
-    if SameText(FVarParamNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsVarParam(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParamAtPosition(
@@ -2545,34 +2389,18 @@ begin
 end;
 
 function TSemanticAnalyzer.LookupRecordVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-      Exit(FRecordVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupRecordVar(AName);
 end;
 
 function TSemanticAnalyzer.LookupPointerVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FPointerVarNames) - 1 do
-    if SameText(FPointerVarNames[Idx], AName) then
-      Exit(FPointerVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupPointerVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterPtrReturnFunc(const AName, AClassName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FPtrReturnFuncs);
-  SetLength(FPtrReturnFuncs, NextIndex + 1);
-  SetLength(FPtrReturnTypes, NextIndex + 1);
-  FPtrReturnFuncs[NextIndex] := AName;
-  FPtrReturnTypes[NextIndex] := AClassName;
+  FRuntimeVars.RegisterPtrReturnFunc(AName, AClassName);
 end;
 
 procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree;
@@ -2590,13 +2418,8 @@ begin
 end;
 
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FPtrReturnFuncs) - 1 do
-    if SameText(FPtrReturnFuncs[Idx], AName) then
-      Exit(FPtrReturnTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupPtrReturnFunc(AName);
 end;
 
 function TSemanticAnalyzer.EmitStrConcatOperand(const ANode: TGreenNode;
@@ -2972,6 +2795,7 @@ begin
   FInliningStack.Free;
   FGenericCache.Free;
   FBuiltinRegistry.Free;
+  FRuntimeVars.Free;
   FModel.Free;
   inherited Destroy;
 end;
