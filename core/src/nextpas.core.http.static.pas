@@ -121,29 +121,41 @@ var
   LExt: string;
   LMime: string;
 begin
-  if not nextpas.core.fs.Exists(AFilePath) then
-  begin
-    AW.GetHeaders.SetHeader('content-length', '9');
-    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
-    AW.Write(PAnsiChar('Not Found')^, 9);
-    Exit;
+  try
+    if not nextpas.core.fs.Exists(AFilePath) then
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
+      AW.GetHeaders.SetHeader('content-length', '9');
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+      AW.Write(PAnsiChar('Not Found')^, 9);
+      Exit;
+    end;
+    LInfo := nextpas.core.fs.Stat(AFilePath);
+    if LInfo.FileType <> ftRegular then
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
+      AW.GetHeaders.SetHeader('content-length', '9');
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+      AW.Write(PAnsiChar('Not Found')^, 9);
+      Exit;
+    end;
+    LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
+    LExt := ExtractExt(AFilePath);
+    LMime := MimeTypeFromExt(LExt);
+    AW.GetHeaders.SetHeader('content-type', LMime);
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LInfo.Size));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    LWriter := TResponseWriterAdapter.Create(AW);
+    nextpas.core.io.Copy(LWriter, LFile);
+  except
+    on E: Exception do
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
+      AW.GetHeaders.SetHeader('content-length', '21');
+      AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
+      AW.Write(PAnsiChar('Internal Server Error')^, 21);
+    end;
   end;
-  LInfo := nextpas.core.fs.Stat(AFilePath);
-  if LInfo.FileType <> ftRegular then
-  begin
-    AW.GetHeaders.SetHeader('content-length', '9');
-    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
-    AW.Write(PAnsiChar('Not Found')^, 9);
-    Exit;
-  end;
-  LFile := nextpas.core.fs.Open(AFilePath, [fmRead]);
-  LExt := ExtractExt(AFilePath);
-  LMime := MimeTypeFromExt(LExt);
-  AW.GetHeaders.SetHeader('content-type', LMime);
-  AW.GetHeaders.SetHeader('content-length', IntToStr(LInfo.Size));
-  AW.WriteHeader(HTTP_STATUS_OK);
-  LWriter := TResponseWriterAdapter.Create(AW);
-  nextpas.core.io.Copy(LWriter, LFile);
 end;
 
 { ===== Public API ===== }
