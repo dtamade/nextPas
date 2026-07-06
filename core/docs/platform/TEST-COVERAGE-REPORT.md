@@ -20,7 +20,7 @@
 | test_platform | 3 | ✅ |
 | test_platform_args | 5 | ✅ |
 | test_platform_bench | 7 | ✅ |
-| test_platform_console | 6 | ✅ |
+| test_platform_console | 11 | ✅ |
 | test_platform_console_raw | 5 | ✅ |
 | test_platform_cross_ci_matrix_contract | 3 | ✅ |
 | test_platform_ctypes_abi | 10 | ✅ |
