@@ -252,8 +252,14 @@ type
 
     {** 设置整体超时（毫秒），超时后跳过剩余 benchmark (ST-04)。
      *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。
-     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。 }
-    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
+     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。
+     *  @deprecated 请使用 SetTimeout(ADuration: TDuration) 重载。 }
+    function SetTimeout(ATimeoutMs: Int64): IBenchSuite; deprecated 'use SetTimeout(TDuration)';
+
+    {** 设置整体超时（TDuration 便利重载）。
+     *  内部转换为毫秒存储。0 = 不超时（默认）。
+     *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
+    function SetTimeout(ADuration: TDuration): IBenchSuite;
 
     {** 运行基准测试 }
     function Run: IBenchResults;
