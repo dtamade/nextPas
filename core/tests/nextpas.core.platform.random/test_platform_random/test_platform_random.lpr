@@ -4,6 +4,7 @@ program test_platform_random;
 
 uses
   nextpas.core.platform.random,
+  nextpas.core.platform.error,
   nextpas.core.test;
 
 var
@@ -67,7 +68,7 @@ end;
 
 procedure TestNilNonZero;
 begin
-  CheckEqual(Int64(-1), Int64(platform_random_bytes(nil, 1)), 'nil nonzero returns -1');
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(platform_random_bytes(nil, 1)), 'nil nonzero returns PLATFORM_ERR_INVALID');
 end;
 
 begin

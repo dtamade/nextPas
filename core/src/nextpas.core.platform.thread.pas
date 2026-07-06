@@ -189,7 +189,7 @@ begin
   end
   else
   begin
-    Result := -1; { Unexpected error }
+    Result := PLATFORM_ERR_INVALID; { Unexpected error }
   end;
 end;
 {$ELSE}
@@ -587,7 +587,7 @@ begin
   else if LWaitResult = WAIT_TIMEOUT then
     Result := 1
   else
-    Result := -1;
+    Result := PLATFORM_ERR_INVALID;
 end;
 
 function platform_thread_self: TPlatformThreadToken;
