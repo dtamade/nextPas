@@ -4,6 +4,12 @@
   call-count verification.  Not an interface proxy — callers record
   calls manually and retrieve configured return values.
 
+  Dual API Design (intentional, not redundant):
+  - String API: Mock.CalledWith(['a', 'b']) — quick, flexible, no type safety
+  - Typed API:  Mock.CalledWith([MockStr('a'), MockInt(42)]) — type-safe matching
+  Both APIs are actively used (30+ calls each in tests). The typed API prevents
+  subtle bugs where MockInt(42) ≠ MockStr('42').
+
   Thread safety: NOT thread-safe. TMockState uses unsynchronized
   dynamic arrays (FCalls, FSetups, FCallOrder). Use only within a
   single test; for parallel tests, each worker must have its own
