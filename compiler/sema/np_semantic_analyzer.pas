@@ -2827,122 +2827,34 @@ begin
 end;
 
 function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
-  const ADecl: TGreenNode;
-  const AArgSignature: string;
-  const AArgCount: LongInt
-): Boolean;
-var
-  I: LongInt;
-  ParamSignature: string;
+  const ADecl: TGreenNode; const AArgSignature: string; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  ParamSignature := GetParamSignature(ADecl);
-  if (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
-    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature) then
-    Exit(True);
-  { Char → String promotion: 'i' arg matches 's' param }
-  if (AArgCount > 0) and (Length(ParamSignature) >= AArgCount) then
-  begin
-    Result := True;
-    for I := 1 to AArgCount do
-    begin
-      if (ParamSignature[I] = 's') and (I <= Length(AArgSignature)) and
-        (AArgSignature[I] = 'i') then
-        Continue;
-      if (I <= Length(AArgSignature)) and
-        SameText(ParamSignature[I], AArgSignature[I]) then
-        Continue;
-      Result := False;
-      Break;
-    end;
-  end
-  else
-    Result := False;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamSignatureMatchesArgs(Ctx, ADecl, AArgSignature, AArgCount);
 end;
 
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
-var
-  J, K: LongInt;
-  Child, ParamChild, TypeChild: TGreenNode;
-  TypeId: LongInt;
-  TypeName: string;
-  Dummy: Int64;
-  LTypeId: LongInt;
-  TypeSig: string;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := '';
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
-          Continue;
-        TypeName := '';
-        TypeChild := nil;
-        if ParamChild.ChildCount > 0 then
-        begin
-          TypeChild := ParamChild.ChildAt(0);
-          if TypeChild <> nil then
-            TypeName := LowerCase(TypeChild.Text);
-        end;
-        TypeId := 0;
-        if TypeChild <> nil then
-        begin
-          TypeId := ResolveTypeIdForOwner(
-            TypeChild.Text,
-            NormalizeUnitIdentity(FCurrentProcessingUnitId)
-          );
-          if TypeId <= 0 then
-            TypeId := ResolveTypeIdForOwner(
-              TypeChild.Text,
-              NormalizeUnitIdentity(FUnitGraph.RootName)
-            );
-          if TypeId <= 0 then
-            TypeId := ResolveTypeId(TypeChild.Text);
-        end;
-        TypeSig := TypeSignatureForTypeId(TypeId);
-        if TypeSig <> '' then
-          Result := Result + TypeSig
-        else if (TypeName = 'string') or (TypeName = 'ansistring') then
-          Result := Result + 's'
-        else if (TypeName = 'boolean') or (TypeName = 'bool') then
-          Result := Result + 'b'
-        else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
-          Result := Result + 'r'
-        else if (TypeChild <> nil) and TypeIsInterfaceByName(TypeChild.Text) then
-          Result := Result + 'f'
-        else if SameText(TypeName, 'integer') or SameText(TypeName, 'longint') or
-          SameText(TypeName, 'longword') or SameText(TypeName, 'cardinal') or
-          SameText(TypeName, 'smallint') or SameText(TypeName, 'word') or
-          SameText(TypeName, 'byte') or SameText(TypeName, 'shortint') or
-          SameText(TypeName, 'int64') or SameText(TypeName, 'qword') or
-          SameText(TypeName, 'uint64') or SameText(TypeName, 'sizeint') or
-          SameText(TypeName, 'sizeuint') or SameText(TypeName, 'uint32') or
-          SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') then
-          Result := Result + 'i'
-        else if (TypeChild <> nil) then
-        begin
-          LTypeId := FModel.FindTypeByName(TypeChild.Text);
-          if (LTypeId > 0) and
-            SameText(FModel.TypeAt(LTypeId - 1).Kind, 'class') then
-            Result := Result + 'c'
-          else if TypeMetaIsClass(TypeChild.Text) then
-            Result := Result + 'c'
-          else if TypeMetaSize(TypeChild.Text) > 0 then
-            Result := Result + 'p'
-          else
-            Result := Result + 'i';
-        end
-        else
-          Result := Result + 'i';
-      end;
-      Exit;
-    end;
-  end;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.GetParamSignature(Ctx, ADecl);
 end;
 
 function TSemanticAnalyzer.GetParamIdentitySignature(
@@ -3154,26 +3066,19 @@ begin
 end;
 
 function TSemanticAnalyzer.ParamDeclTypeId(
-  const AParamDecl: TGreenNode;
-  const AOwnerUnitId: string
-): LongInt;
-var
-  TypeChild: TGreenNode;
+  const AParamDecl: TGreenNode; const AOwnerUnitId: string): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := 0;
-  if (AParamDecl = nil) or (AParamDecl.ChildCount <= 0) then
-    Exit;
-  TypeChild := AParamDecl.ChildAt(0);
-  if (TypeChild = nil) or (TypeChild.NodeKind <> gnkIdentifier) then
-    Exit;
-  Result := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
-  if Result <= 0 then
-    Result := ResolveTypeIdForOwner(
-      TypeChild.Text,
-      NormalizeUnitIdentity(FUnitGraph.RootName)
-    );
-  if Result <= 0 then
-    Result := ResolveTypeId(TypeChild.Text);
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ParamDeclTypeId(Ctx, AParamDecl, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -3205,474 +3110,26 @@ begin
 end;
 
 function TSemanticAnalyzer.LookupCallBindingDeclaration(
-  const AName: string;
-  const AArgCount: LongInt;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgSignature: string;
-  const AHasArgSignature: Boolean;
-  const AHasTypeMismatchEvidence: Boolean;
+  const AName: string; const AArgCount: LongInt;
+  const AArgTypeIds: TTypeIdArray; const AArgSignature: string;
+  const AHasArgSignature: Boolean; const AHasTypeMismatchEvidence: Boolean;
   out AResolutionFailureKind: string;
-  out ABody: TGreenNode;
-  out ADecl: TGreenNode;
-  out AOwnerUnitId: string
-): Boolean;
-var
-  DirectImportCompatibleMatchCount: LongInt;
-  DirectImportCompatibleMatchIndex: LongInt;
-  DirectImportExactMatchCount: LongInt;
-  DirectImportExactMatchIndex: LongInt;
-  HasArgTypeIds: Boolean;
-  Index: LongInt;
-  ImportedDiagnosticMatchCount: LongInt;
-  ImportedMatchCount: LongInt;
-  ImportedMatchIndex: LongInt;
-  ImportedDiagnosticNameCount: LongInt;
-  ImportedNameCount: LongInt;
-  ImportedCompatibleMatchCount: LongInt;
-  ImportedCompatibleMatchIndex: LongInt;
-  ImportedDiagnosticSignatureMatchCount: LongInt;
-  ImportedExactMatchCount: LongInt;
-  ImportedExactMatchIndex: LongInt;
-  ImportedSignatureMatchCount: LongInt;
-  ImportedSignatureMatchIndex: LongInt;
-  DirectImportMatchCount: LongInt;
-  DirectImportMatchIndex: LongInt;
-  KnownSymbolId: LongInt;
-  RootMatchCount: LongInt;
-  RootMatchIndex: LongInt;
-  RootNameCount: LongInt;
-  RootOwnerUnitId: string;
-  RootCompatibleMatchCount: LongInt;
-  RootCompatibleMatchIndex: LongInt;
-  RootExactMatchCount: LongInt;
-  RootExactMatchIndex: LongInt;
-  RootSignatureMatchCount: LongInt;
-  RootSignatureMatchIndex: LongInt;
+  out ABody: TGreenNode; out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  ABody := nil;
-  ADecl := nil;
-  AOwnerUnitId := '';
-  AResolutionFailureKind := '';
-  { 内建过程 (Write/WriteLn/Read/ReadLn 等) 可变参数，跳过重载解析 }
-  if IsBuiltinProcedure(AName) then
-    Exit(False);
-  ImportedDiagnosticMatchCount := 0;
-  ImportedMatchCount := 0;
-  ImportedMatchIndex := -1;
-  ImportedDiagnosticNameCount := 0;
-  ImportedDiagnosticSignatureMatchCount := 0;
-  ImportedNameCount := 0;
-  ImportedCompatibleMatchCount := 0;
-  ImportedCompatibleMatchIndex := -1;
-  ImportedExactMatchCount := 0;
-  ImportedExactMatchIndex := -1;
-  ImportedSignatureMatchCount := 0;
-  ImportedSignatureMatchIndex := -1;
-  DirectImportCompatibleMatchCount := 0;
-  DirectImportCompatibleMatchIndex := -1;
-  DirectImportExactMatchCount := 0;
-  DirectImportExactMatchIndex := -1;
-  DirectImportMatchCount := 0;
-  DirectImportMatchIndex := -1;
-  RootMatchCount := 0;
-  RootMatchIndex := -1;
-  RootNameCount := 0;
-  RootCompatibleMatchCount := 0;
-  RootCompatibleMatchIndex := -1;
-  RootExactMatchCount := 0;
-  RootExactMatchIndex := -1;
-  RootSignatureMatchCount := 0;
-  RootSignatureMatchIndex := -1;
-  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
-  HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
-    TypeIdArrayHasKnownTypes(AArgTypeIds);
-
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
-    begin
-      if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or
-        SameText(FProcedureBodies[Index].OwnerUnitId,
-          FCurrentProcessingUnitId) then
-      begin
-        Inc(RootNameCount);
-        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-        begin
-          RootMatchIndex := Index;
-          Inc(RootMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            RootExactMatchIndex := Index;
-            Inc(RootExactMatchCount);
-          end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            RootCompatibleMatchIndex := Index;
-            Inc(RootCompatibleMatchCount);
-          end;
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(
-              FProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            RootSignatureMatchIndex := Index;
-            Inc(RootSignatureMatchCount);
-          end;
-        end;
-      end
-      else
-      begin
-        Inc(ImportedNameCount);
-        if OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[Index].OwnerUnitId
-        ) then
-          Inc(ImportedDiagnosticNameCount);
-        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-        begin
-          ImportedMatchIndex := Index;
-          Inc(ImportedMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedExactMatchIndex := Index;
-            Inc(ImportedExactMatchCount);
-          end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedCompatibleMatchIndex := Index;
-            Inc(ImportedCompatibleMatchCount);
-          end;
-          if UnitDirectlyImports(RootOwnerUnitId,
-            FProcedureBodies[Index].OwnerUnitId) then
-          begin
-            DirectImportMatchIndex := Index;
-            Inc(DirectImportMatchCount);
-            if HasArgTypeIds and DeclParamTypesExactMatch(
-              FProcedureBodies[Index].Decl,
-              FProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportExactMatchIndex := Index;
-              Inc(DirectImportExactMatchCount);
-            end
-            else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-              FProcedureBodies[Index].Decl,
-              FProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportCompatibleMatchIndex := Index;
-              Inc(DirectImportCompatibleMatchCount);
-            end;
-          end;
-          if OwnerUnitAllowsProjectSourceDiagnostic(
-            FProcedureBodies[Index].OwnerUnitId
-          ) then
-            Inc(ImportedDiagnosticMatchCount);
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(
-              FProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            ImportedSignatureMatchIndex := Index;
-            Inc(ImportedSignatureMatchCount);
-            if OwnerUnitAllowsProjectSourceDiagnostic(
-              FProcedureBodies[Index].OwnerUnitId
-            ) then
-              Inc(ImportedDiagnosticSignatureMatchCount);
-          end;
-        end;
-      end;
-    end;
-
-  if RootMatchCount > 0 then
-  begin
-    if HasArgTypeIds and
-      ((RootExactMatchCount > 0) or (RootCompatibleMatchCount > 0)) then
-    begin
-      if RootExactMatchCount = 1 then
-        RootSignatureMatchIndex := RootExactMatchIndex
-      else if RootExactMatchCount > 1 then
-      begin
-        { Permissive: pick first exact match instead of failing }
-        RootSignatureMatchIndex := RootExactMatchIndex;
-      end
-      else if RootCompatibleMatchCount = 1 then
-        RootSignatureMatchIndex := RootCompatibleMatchIndex
-      else if RootCompatibleMatchCount > 1 then
-      begin
-        { Permissive: pick first compatible match instead of failing }
-        RootSignatureMatchIndex := RootCompatibleMatchIndex;
-      end
-      else
-      begin
-        if AHasTypeMismatchEvidence then
-          AResolutionFailureKind := 'no-matching-overload';
-        Exit(False);
-      end;
-    end
-    else if RootMatchCount = 1 then
-    begin
-      if AHasArgSignature and
-        (not DeclParamSignatureMatchesArgs(
-          FProcedureBodies[RootMatchIndex].Decl,
-          AArgSignature,
-          AArgCount
-        )) then
-      begin
-        if AHasTypeMismatchEvidence then
-        begin
-          AResolutionFailureKind := 'type-mismatch';
-        end;
-        Exit(False);
-      end;
-      RootSignatureMatchIndex := RootMatchIndex
-    end
-    else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
-    begin
-      { Permissive: pick first signature match instead of failing }
-      if RootSignatureMatchCount > 0 then
-        RootSignatureMatchIndex := RootMatchIndex
-      else
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end;
-    end
-    else if RootSignatureMatchCount = 0 then
-    begin
-      if AHasTypeMismatchEvidence then
-        AResolutionFailureKind := 'no-matching-overload';
-      Exit(False);
-    end;
-
-    ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
-    ADecl := FProcedureBodies[RootSignatureMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[RootSignatureMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if RootNameCount > 0 then
-  begin
-    AResolutionFailureKind := 'wrong-argument-count';
-    Exit(False);
-  end;
-
-  if (RootNameCount = 0) and (ImportedNameCount = 0) then
-  begin
-    KnownSymbolId := FModel.LookupSymbolWithImports(AName, FCurrentScopeId);
-    if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
-      (FModel.FindTypeByName(AName) = 0) and
-      (not IsBuiltinProcedure(AName)) and
-      (not HasInstalledSourceImports) then
-      AResolutionFailureKind := 'unknown-callable';
-    Exit(False);
-  end;
-
-  if ImportedMatchCount = 0 then
-  begin
-    if ImportedDiagnosticNameCount > 0 then
-      AResolutionFailureKind := 'wrong-argument-count';
-    Exit(False);
-  end;
-
-  { Prefer direct imports over transitive imports (FPC-compatible).
-    When multiple imported units expose the same overload, a unit that
-    the current compilation unit directly uses takes priority.
-    Note: DirectImportMatchIndex always records the LAST matching direct
-    import. When DirectImportMatchCount > 1, the index may not point to
-    the "best" candidate — but we only use it when Count = 1, so this
-    is safe. If Count > 1, we fall through to the ambiguity check below. }
-  if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
-  begin
-    ABody := FProcedureBodies[DirectImportExactMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportExactMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportExactMatchCount > 1) then
-  begin
-    { Permissive: pick first direct import exact match }
-    ABody := FProcedureBodies[DirectImportExactMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportExactMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) and
-    (DirectImportExactMatchCount = 0) then
-  begin
-    ABody := FProcedureBodies[DirectImportCompatibleMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount > 1) and
-    (DirectImportExactMatchCount = 0) then
-  begin
-    { Permissive: pick first direct import compatible match }
-    ABody := FProcedureBodies[DirectImportCompatibleMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
-  begin
-    if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
-      DirectImportMatchIndex := DirectImportExactMatchIndex
-    else if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) then
-      DirectImportMatchIndex := DirectImportCompatibleMatchIndex
-    else if HasArgTypeIds then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else if AHasArgSignature and
-      (not DeclParamSignatureMatchesArgs(
-        FProcedureBodies[DirectImportMatchIndex].Decl,
-        AArgSignature,
-        AArgCount
-      )) then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end;
-    ABody := FProcedureBodies[DirectImportMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if ImportedMatchCount = 1 then
-  begin
-    if HasArgTypeIds and DeclParamTypesExactMatch(
-      FProcedureBodies[ImportedMatchIndex].Decl,
-      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
-      AArgTypeIds,
-      AArgCount
-    ) then
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-    else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-      FProcedureBodies[ImportedMatchIndex].Decl,
-      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
-      AArgTypeIds,
-      AArgCount
-    ) then
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-    else if HasArgTypeIds then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else if AHasArgSignature and
-      (not DeclParamSignatureMatchesArgs(
-        FProcedureBodies[ImportedMatchIndex].Decl,
-        AArgSignature,
-        AArgCount
-      )) then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-  end
-  else if HasArgTypeIds and
-    ((ImportedExactMatchCount > 0) or (ImportedCompatibleMatchCount > 0)) then
-  begin
-    if ImportedExactMatchCount = 1 then
-      ImportedSignatureMatchIndex := ImportedExactMatchIndex
-    else if ImportedExactMatchCount > 1 then
-    begin
-      { Permissive: pick first imported exact match }
-      ImportedSignatureMatchIndex := ImportedExactMatchIndex;
-    end
-    else if ImportedCompatibleMatchCount = 1 then
-      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex
-    else if ImportedCompatibleMatchCount > 1 then
-    begin
-      { Permissive: pick first imported compatible match }
-      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex;
-    end
-    else
-    begin
-      if AHasTypeMismatchEvidence and
-        (ImportedDiagnosticMatchCount = ImportedMatchCount) then
-        AResolutionFailureKind := 'no-matching-overload';
-      Exit(False);
-    end;
-  end
-  else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
-  begin
-    { Permissive: pick first imported signature match if available }
-    if ImportedSignatureMatchCount > 0 then
-    begin
-      { Fall through to use ImportedSignatureMatchIndex }
-    end
-    else
-    begin
-      if ((not AHasArgSignature) and (ImportedDiagnosticMatchCount > 1)) or
-        (ImportedDiagnosticSignatureMatchCount > 1) then
-        AResolutionFailureKind := 'ambiguous-overload';
-      Exit(False);
-    end;
-  end
-  else if ImportedSignatureMatchCount = 0 then
-  begin
-    if AHasTypeMismatchEvidence and
-      (ImportedDiagnosticMatchCount = ImportedMatchCount) then
-      AResolutionFailureKind := 'no-matching-overload';
-    Exit(False);
-  end;
-
-  ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
-  ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
-  AOwnerUnitId := FProcedureBodies[ImportedSignatureMatchIndex].OwnerUnitId;
-  Result := True;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.LookupCallBindingDeclaration(
+    Ctx, AName, AArgCount, AArgTypeIds, AArgSignature,
+    AHasArgSignature, AHasTypeMismatchEvidence,
+    AResolutionFailureKind, ABody, ADecl, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.OwnerUnitAllowsProjectSourceDiagnostic(
@@ -4257,58 +3714,18 @@ begin
 end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
-var
-  Fact: TSemanticScalarTypeFact;
-  TypeName: string;
-  TypeInfo: TSemanticType;
-  Dummy: Int64;
-  Meta: TTypeMetadata;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := '';
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-
-  TypeInfo := FModel.TypeAt(ATypeId - 1);
-  TypeName := TypeInfo.Name;
-  if (TypeName = '') then
-    Exit;
-  if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
-    SameText(TypeName, 'RawByteString') or
-    SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
-    SameText(TypeName, 'UnicodeString') then
-    Exit('s');
-  if SameText(TypeName, 'Boolean') then
-    Exit('b');
-  if SameText(TypeName, 'Integer') or SameText(TypeName, 'LongInt') or
-    SameText(TypeName, 'LongWord') or SameText(TypeName, 'Cardinal') or
-    SameText(TypeName, 'SmallInt') or SameText(TypeName, 'Word') or
-    SameText(TypeName, 'Byte') or SameText(TypeName, 'ShortInt') or
-    SameText(TypeName, 'Int64') or SameText(TypeName, 'QWord') or
-    SameText(TypeName, 'UInt64') or SameText(TypeName, 'SizeInt') or
-    SameText(TypeName, 'SizeUInt') or SameText(TypeName, 'UInt32') or
-    SameText(TypeName, 'PtrUInt') or SameText(TypeName, 'PtrInt') then
-    Exit('i');
-  if FModel.GetTypeScalarFact(ATypeId, Fact) and (Fact.Kind = sskPointer) then
-    Exit('p');
-  if FModel.GetTypeMeta(ATypeId, Meta) then
-  begin
-    if Meta.IsRecord then
-      Exit('r');
-    if TypeIsInterfaceByName(TypeName) then
-      Exit('f');
-    if SameText(TypeInfo.Kind, 'class') then
-      Exit('c');
-    Exit('p');
-  end;
-  if TypeMetaIsRecord(TypeName) then
-    Exit('r');
-  if TypeIsInterfaceByName(TypeName) then
-    Exit('f');
-  if TypeMetaIsClass(TypeName) then
-    Exit('c');
-  if TypeMetaSize(TypeName) > 0 then
-    Exit('p');
-  Result := 'i';
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.TypeSignatureForTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.TypeIdHasStableScalarFact(
@@ -4420,142 +3837,67 @@ begin
 end;
 
 function TSemanticAnalyzer.CanonicalTypeId(const ATypeId: LongInt): LongInt;
-var
-  CurrentTypeId: LongInt;
-  Depth: LongInt;
-  Meta: TTypeMetadata;
+var Ctx: TSemaOverloadContext;
 begin
-  CurrentTypeId := ATypeId;
-  Depth := 0;
-  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) and
-    (Depth < 16) do
-  begin
-    if FModel.GetTypeMeta(CurrentTypeId, Meta) and
-      (Meta.AliasTargetTypeId > 0) and
-      (Meta.AliasTargetTypeId <> CurrentTypeId) then
-      CurrentTypeId := Meta.AliasTargetTypeId
-    else
-      Break;
-    Inc(Depth);
-  end;
-  Result := CurrentTypeId;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.CanonicalTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsPointerTypeId(const ATypeId: LongInt): Boolean;
-var
-  CurrentTypeId: LongInt;
-  Fact: TSemanticScalarTypeFact;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  CurrentTypeId := CanonicalTypeId(ATypeId);
-  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) do
-  begin
-    if FModel.GetTypeScalarFact(CurrentTypeId, Fact) and
-      (Fact.Kind = sskPointer) then
-      Exit(True);
-    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
-  end;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.IsPointerTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesExactMatch(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgCount: LongInt
-): Boolean;
-var
-  Child: TGreenNode;
-  ChildIndex: LongInt;
-  LeftFact: TSemanticScalarTypeFact;
-  RightFact: TSemanticScalarTypeFact;
-  ParamEntryIndex: LongInt;
-  ParamDecl: TGreenNode;
-  ParamIndex: LongInt;
-  ParamTypeId: LongInt;
+  const ADecl: TGreenNode; const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  if (ADecl = nil) or (AArgCount < 0) or
-    (Length(AArgTypeIds) <> AArgCount) then
-    Exit;
-
-  for ChildIndex := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(ChildIndex);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-
-    ParamIndex := 0;
-    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
-    begin
-      ParamDecl := Child.ChildAt(ParamEntryIndex);
-      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
-        Continue;
-      if ParamIndex >= AArgCount then
-        Break;
-      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
-      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
-        (CanonicalTypeId(ParamTypeId) <>
-         CanonicalTypeId(AArgTypeIds[ParamIndex])) then
-      begin
-        if not (
-          FModel.GetTypeScalarFact(CanonicalTypeId(ParamTypeId), LeftFact) and
-          FModel.GetTypeScalarFact(CanonicalTypeId(AArgTypeIds[ParamIndex]), RightFact) and
-          (LeftFact.Kind in [sskBool, sskInt, sskFloat]) and
-          (RightFact.Kind = LeftFact.Kind) and
-          (RightFact.BitWidth = LeftFact.BitWidth) and
-          (RightFact.Signed = LeftFact.Signed)
-        ) then
-          Exit(False);
-      end;
-      Inc(ParamIndex);
-    end;
-    Exit(ParamIndex = AArgCount);
-  end;
-  Result := AArgCount = 0;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamTypesExactMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesCompatibleMatch(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgCount: LongInt
-): Boolean;
-var
-  Child: TGreenNode;
-  ChildIndex: LongInt;
-  ParamEntryIndex: LongInt;
-  ParamDecl: TGreenNode;
-  ParamIndex: LongInt;
-  ParamTypeId: LongInt;
+  const ADecl: TGreenNode; const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  if (ADecl = nil) or (AArgCount < 0) or
-    (Length(AArgTypeIds) <> AArgCount) then
-    Exit;
-
-  for ChildIndex := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(ChildIndex);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-
-    ParamIndex := 0;
-    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
-    begin
-      ParamDecl := Child.ChildAt(ParamEntryIndex);
-      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
-        Continue;
-      if ParamIndex >= AArgCount then
-        Break;
-      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
-      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
-        not AreTypesCompatible(ParamTypeId, AArgTypeIds[ParamIndex]) then
-        Exit(False);
-      Inc(ParamIndex);
-    end;
-    Exit(ParamIndex = AArgCount);
-  end;
-  Result := AArgCount = 0;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamTypesCompatibleMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
@@ -6185,104 +5527,19 @@ begin
   end;
 end;
 
-function TSemanticAnalyzer.AreTypesCompatible(
-  const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
-var
-  IntIds: array[0..16] of LongInt;
-  StrIds: array[0..4] of LongInt;
-  I: LongInt;
-  LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
-  CharTypeId, WideCharTypeId: LongInt;
-  CanonicalLhsTypeId, CanonicalRhsTypeId: LongInt;
+function TSemanticAnalyzer.AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  if ALhsTypeId = ARhsTypeId then
-    Exit(True);
-  if (ALhsTypeId = 0) or (ARhsTypeId = 0) then
-    Exit(True);
-
-  CanonicalLhsTypeId := CanonicalTypeId(ALhsTypeId);
-  CanonicalRhsTypeId := CanonicalTypeId(ARhsTypeId);
-  if CanonicalLhsTypeId = CanonicalRhsTypeId then
-    Exit(True);
-  if FModel.IsTypeDescendantOf(CanonicalRhsTypeId, CanonicalLhsTypeId) then
-    Exit(True);
-  if FModel.IsTypeDescendantOf(CanonicalLhsTypeId, CanonicalRhsTypeId) then
-    Exit(True);
-  if IsPointerTypeId(CanonicalLhsTypeId) and IsPointerTypeId(CanonicalRhsTypeId) then
-    Exit(True);
-
-  IntIds[0] := FModel.FindTypeByName('Byte');
-  IntIds[1] := FModel.FindTypeByName('Word');
-  IntIds[2] := FModel.FindTypeByName('LongInt');
-  IntIds[3] := FModel.FindTypeByName('Integer');
-  IntIds[4] := FModel.FindTypeByName('Int64');
-  IntIds[5] := FModel.FindTypeByName('QWord');
-  IntIds[6] := FModel.FindTypeByName('LongWord');
-  IntIds[7] := FModel.FindTypeByName('ShortInt');
-  IntIds[8] := FModel.FindTypeByName('SmallInt');
-  IntIds[9] := FModel.FindTypeByName('Int32');
-  IntIds[10] := FModel.FindTypeByName('UInt32');
-  IntIds[11] := FModel.FindTypeByName('UInt64');
-  IntIds[12] := FModel.FindTypeByName('WideChar');
-  IntIds[13] := FModel.FindTypeByName('Single');
-  IntIds[14] := FModel.FindTypeByName('Double');
-  IntIds[15] := FModel.FindTypeByName('AnsiChar');
-  IntIds[16] := FModel.FindTypeByName('Char');
-
-  LhsIsInt := False;
-  RhsIsInt := False;
-  for I := 0 to High(IntIds) do
-  begin
-    if CanonicalLhsTypeId = IntIds[I] then LhsIsInt := True;
-    if CanonicalRhsTypeId = IntIds[I] then RhsIsInt := True;
-  end;
-  if LhsIsInt and RhsIsInt then
-    Exit(True);
-
-  StrIds[0] := FModel.FindTypeByName('AnsiString');
-  StrIds[1] := FModel.FindTypeByName('ShortString');
-  StrIds[2] := FModel.FindTypeByName('WideString');
-  StrIds[3] := FModel.FindTypeByName('UnicodeString');
-  StrIds[4] := FModel.FindTypeByName('RawByteString');
-
-  LhsIsStr := False;
-  RhsIsStr := False;
-  for I := 0 to High(StrIds) do
-  begin
-    if CanonicalLhsTypeId = StrIds[I] then LhsIsStr := True;
-    if CanonicalRhsTypeId = StrIds[I] then RhsIsStr := True;
-  end;
-  if LhsIsStr and RhsIsStr then
-    Exit(True);
-
-  if CanonicalLhsTypeId = FModel.FindTypeByName('Boolean') then
-    Exit(CanonicalRhsTypeId = FModel.FindTypeByName('Boolean'));
-
-  CharTypeId := FModel.FindTypeByName('Char');
-  WideCharTypeId := FModel.FindTypeByName('WideChar');
-  if LhsIsStr and ((CanonicalRhsTypeId = CharTypeId) or
-    (CanonicalRhsTypeId = WideCharTypeId)) then
-    Exit(True);
-  if ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId)) and RhsIsStr then
-    Exit(True);
-  if ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId)) and
-    ((CanonicalRhsTypeId = CharTypeId) or
-     (CanonicalRhsTypeId = WideCharTypeId)) then
-    Exit(True);
-
-  { String literal → PAnsiChar / PChar implicit conversion }
-  if RhsIsStr and IsPointerTypeId(CanonicalLhsTypeId) then
-    Exit(True);
-
-  { Single-char string literal → Char/AnsiChar/WideChar implicit conversion }
-  if RhsIsStr and ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId) or
-    (CanonicalLhsTypeId = FModel.FindTypeByName('AnsiChar'))) then
-    Exit(True);
-
-  Result := False;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
 end;
 
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
@@ -7075,155 +6332,36 @@ begin
 end;
 
 function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := ResolveTypeIdForOwner(ATypeName, '');
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ResolveTypeId(Ctx, ATypeName);
 end;
 
 function TSemanticAnalyzer.ResolveTypeIdForOwner(
   const ATypeName: string;
   const APreferredOwnerUnitId: string;
-  const AAllowDirectImportSearch: Boolean
-): LongInt;
-var
-  CandidateSeen: Boolean;
-  DirectImportMatchCount: LongInt;
-  DotPos: LongInt;
-  I: LongInt;
-  Index: LongInt;
-  NormalizedOwnerUnitId: string;
-  PreferredMatchCount: LongInt;
-  QualifiedOwnerUnitId: string;
-  ShortTypeName: string;
-  Symbol: TSemanticSymbol;
-  UniqueTypeId: LongInt;
+  const AAllowDirectImportSearch: Boolean): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  if ATypeName = '' then
-    Exit(0);
-  if SameText(ATypeName, 'String') then
-    Exit(FModel.FindTypeByName('AnsiString'));
-  if SameText(ATypeName, 'Cardinal') then
-    Exit(FModel.FindTypeByName('LongWord'));
-  if SameText(ATypeName, 'Real') then
-    Exit(FModel.FindTypeByName('Double'));
-  if SameText(ATypeName, 'Extended') then
-    Exit(FModel.FindTypeByName('Double'));
-
-  DotPos := 0;
-  for I := Length(ATypeName) downto 1 do
-    if ATypeName[I] = '.' then
-    begin
-      DotPos := I;
-      Break;
-    end;
-  if (DotPos > 1) and (DotPos < Length(ATypeName)) then
-  begin
-    QualifiedOwnerUnitId := NormalizeUnitIdentity(
-      Copy(ATypeName, 1, DotPos - 1)
-    );
-    ShortTypeName := Copy(ATypeName, DotPos + 1, MaxInt);
-    if (QualifiedOwnerUnitId <> '') and (ShortTypeName <> '') then
-    begin
-      PreferredMatchCount := 0;
-      UniqueTypeId := 0;
-      for Index := 0 to FModel.SymbolCount - 1 do
-      begin
-        Symbol := FModel.SymbolAt(Index);
-        if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ShortTypeName) and
-          SameText(Symbol.OwnerUnitId, QualifiedOwnerUnitId) and
-          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-        begin
-          Inc(PreferredMatchCount);
-          if UniqueTypeId = 0 then
-            UniqueTypeId := Symbol.TypeId
-          else if UniqueTypeId <> Symbol.TypeId then
-          begin
-            if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-              UniqueTypeId := Symbol.TypeId
-            else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-              Exit(0);
-          end;
-        end;
-      end;
-      if PreferredMatchCount >= 1 then
-        Exit(UniqueTypeId);
-    end;
-  end;
-
-  NormalizedOwnerUnitId := NormalizeUnitIdentity(APreferredOwnerUnitId);
-  if NormalizedOwnerUnitId <> '' then
-  begin
-    PreferredMatchCount := 0;
-    UniqueTypeId := 0;
-    for Index := 0 to FModel.SymbolCount - 1 do
-    begin
-      Symbol := FModel.SymbolAt(Index);
-      if SameText(Symbol.Kind, 'type') and
-        SameText(Symbol.Name, ATypeName) and
-        SameText(Symbol.OwnerUnitId, NormalizedOwnerUnitId) and
-        (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-      begin
-        Inc(PreferredMatchCount);
-        if UniqueTypeId = 0 then
-          UniqueTypeId := Symbol.TypeId
-        else if UniqueTypeId <> Symbol.TypeId then
-        begin
-          if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-            UniqueTypeId := Symbol.TypeId
-          else if SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface') then
-            { Keep existing class/interface UniqueTypeId }
-          else
-            { Neither is class/interface yet — prefer later entry }
-            UniqueTypeId := Symbol.TypeId;
-        end;
-      end;
-    end;
-    if PreferredMatchCount >= 1 then
-      Exit(UniqueTypeId);
-
-    if AAllowDirectImportSearch then
-    begin
-      DirectImportMatchCount := 0;
-      UniqueTypeId := 0;
-      for Index := 0 to FModel.SymbolCount - 1 do
-      begin
-        Symbol := FModel.SymbolAt(Index);
-        if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ATypeName) and
-          UnitDirectlyImports(NormalizedOwnerUnitId, Symbol.OwnerUnitId) and
-          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-        begin
-          Inc(DirectImportMatchCount);
-          { Prefer later entry (full definition over forward declaration) }
-          UniqueTypeId := Symbol.TypeId;
-        end;
-      end;
-      if DirectImportMatchCount >= 1 then
-        Exit(UniqueTypeId);
-    end;
-  end;
-
-  CandidateSeen := False;
-  UniqueTypeId := 0;
-  for Index := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
-      (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-    begin
-      { Prefer later type entry (full definition over forward declaration) }
-      UniqueTypeId := Symbol.TypeId;
-      CandidateSeen := True;
-    end;
-  end;
-  if CandidateSeen then
-    Exit(UniqueTypeId);
-
-  Result := FModel.FindTypeByName(ATypeName);
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ResolveTypeIdForOwner(Ctx, ATypeName, APreferredOwnerUnitId, AAllowDirectImportSearch);
 end;
 
 function TSemanticAnalyzer.ImplicitSystemObjectParentTypeId(
