@@ -106,6 +106,7 @@
 | CONTRACT.md 同步 | P1 | ✅ 已完成 | 文档与代码一致 |
 | 更多 nil guard | P2 | ✅ 已完成 | 覆盖率 59.1% → 60.3% (297 guards) |
 | 错误消息上下文 | P2 | ✅ 已完成 | POSIX 标准描述 (invalid argument 等) |
+| POSIX errno 测试 | P2 | ✅ 已完成 | 22 个 errno 分类映射测试 (46 total) |
 
 ### 4.2 中期 (季度)
 
