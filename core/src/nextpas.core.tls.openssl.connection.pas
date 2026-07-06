@@ -26,6 +26,7 @@ uses
   nextpas.core.io.stream_adapter,
   nextpas.core.io.util,
   nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
@@ -1770,7 +1771,7 @@ var
     I: Integer;
   begin
     Result := False;
-    Parts := S.Split(['.']);
+    Parts := StringsSplit(S, '.');
     if Length(Parts) <> 4 then
       Exit;
 
@@ -1971,7 +1972,7 @@ begin
 
                 TSecurityLog.Debug('OpenSSL',
                   nextpas.core.text.conv.Format('Cert verify cache updated (valid=%s, code=%d)',
-                    [BoolToStr(CachedVerifyResult.Valid, True), CachedVerifyResult.ErrorCode]));
+                    [BoolToStr(CachedVerifyResult.Valid, 'True', 'False'), CachedVerifyResult.ErrorCode]));
               end;
             end
             else
