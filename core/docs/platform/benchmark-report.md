@@ -14,16 +14,16 @@
 | File write 4KB | **3590 ns** | 4174 ns | 3920 ns | **nextPas** |
 | File read 4KB | **1595 ns** | 2213 ns | 2020 ns | **nextPas** |
 | Futex wake | 576 ns | — | — | (single impl) |
-| path.normalize | **163 ns** | — | — | (stack array optimization) |
+| path.normalize | **142 ns** | — | — | (stack array optimization) |
 
 **nextPas wins 3/5 benchmarks**, competitive in all 5.
 
 ## Performance Optimizations (2026-07-06)
 
-### path.normalize: 7.4x faster (stack array)
+### path.normalize: 7.6x faster (stack array)
 
 **Before**: 1208.8 ns/op (dynamic array allocation)
-**After**: 163.7 ns/op (stack array with fallback)
+**After**: 142.7 ns/op (stack array with fallback)
 
 Optimization: Use stack-allocated fixed-size array (32 entries) for path parts,
 falling back to dynamic array only for paths with >32 components. Eliminates
