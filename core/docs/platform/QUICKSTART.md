@@ -133,6 +133,53 @@ begin
 end;
 ```
 
+### 8. Condition Variables
+
+```pascal
+uses
+  nextpas.core.platform.sync;
+
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+  LReady: Boolean;
+begin
+  platform_mutex_init(LMutex, 0);
+  platform_condvar_init(LCond);
+  try
+    platform_mutex_lock(LMutex);
+    while not LReady do
+      platform_condvar_wait(LCond, LMutex);
+    { handle condition }
+    platform_mutex_unlock(LMutex);
+  finally
+    platform_condvar_destroy(LCond);
+    platform_mutex_destroy(LMutex);
+  end;
+end;
+```
+
+### 9. Dynamic Library Loading
+
+```pascal
+uses
+  nextpas.core.platform.dl;
+
+var
+  Lib: TPlatformLibrary;
+  Addr: Pointer;
+begin
+  if platform_dl_open('libfoo.so', PLATFORM_DL_NOW, Lib) <> 0 then
+    Exit;
+  try
+    if platform_dl_sym(Lib, 'foo_function', Addr) = 0 then
+      { call function via Addr }
+  finally
+    platform_dl_close(LLib);
+  end;
+end;
+```
+
 ## Error Handling
 
 All functions return `Int32` error codes:
