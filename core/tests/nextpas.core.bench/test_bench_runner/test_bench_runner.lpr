@@ -11,6 +11,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
+  nextpas.core.bench,
   nextpas.core.bench.stats,
   nextpas.core.bench.runner;
 
@@ -591,6 +592,28 @@ begin
   end;
 end;
 
+{ F-04: per-entry CollectRawSamples override }
+procedure TestPerEntryCollectRawSamples;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+begin
+  LSuite := TBenchSuite.Create('per-entry-raw');
+  LSuite.Add('NoRaw', @BenchFast);
+  LSuite.SetEntryCollectRawSamples('NoRaw', False);
+
+  LSuite.Add('WithRaw', @BenchFast);
+  LSuite.SetEntryCollectRawSamples('WithRaw', True);
+
+  LResults := LSuite.Run;
+  LAll := LResults.GetAll;
+  Check(Length(LAll) = 2, 'Should have 2 results');
+
+  Check(Length(LAll[0].RawSamples) = 0, 'NoRaw: no raw samples');
+  Check(Length(LAll[1].RawSamples) > 0, 'WithRaw: has raw samples');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.bench.runner');
   T.Test('TBenchContext lifecycle', @TestTBenchContext);
@@ -607,6 +630,7 @@ begin
   T.Test('RunAll statistics completeness (TG-12)', @TestRunAll_StatisticsComplete);
   T.Test('Run + Summary', @TestRun_Summary);
   T.Test('Summary on empty runner', @TestRun_Summary_Empty);
+  T.Test('Per-entry CollectRawSamples (F-04)', @TestPerEntryCollectRawSamples);
   T.Run;
   T.Summary;
 end.

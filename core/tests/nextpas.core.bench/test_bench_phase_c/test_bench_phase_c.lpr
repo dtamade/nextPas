@@ -287,6 +287,32 @@ begin
   end;
 end;
 
+procedure Test_BayesianCredibleInterval_80;
+{ F-08: 验证非标准水平（80%）使用 NormalQuantile 而非硬编码 z 值 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LCI95, LCI80: TConfidenceInterval;
+  LI: Integer;
+begin
+  SetLength(LData, 50);
+  for LI := 0 to 49 do
+    LData[LI] := 100.0 + (LI mod 10);
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    LCI95 := LStats.BayesianCredibleInterval(LData, 100.0, 10.0, 0.95);
+    LCI80 := LStats.BayesianCredibleInterval(LData, 100.0, 10.0, 0.80);
+
+    { 80% 区间应比 95% 区间窄 }
+    Check(LCI80.Upper - LCI80.Lower < LCI95.Upper - LCI95.Lower,
+      '80% CI should be narrower than 95% CI');
+    Check(Abs(LCI80.Level - 0.80) < 0.001, 'Level should be 0.80');
+  finally
+    LStats.Free;
+  end;
+end;
+
 { ===== 注册测试 ===== }
 
 var
@@ -304,6 +330,7 @@ begin
   { 可信区间 }
   T.Test('BayesianCredibleInterval_95', @Test_BayesianCredibleInterval_95);
   T.Test('BayesianCredibleInterval_99', @Test_BayesianCredibleInterval_99);
+  T.Test('BayesianCredibleInterval_80', @Test_BayesianCredibleInterval_80);
   T.Test('BayesianCredibleInterval_EmptyData', @Test_BayesianCredibleInterval_EmptyData);
 
   { 先验融合 }

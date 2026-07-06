@@ -140,6 +140,7 @@ type
     EnableParallel: Boolean; {< true 时使用 ParallelThreads 个线程并行执行 }
     ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
     TimeoutMs: Int64;        {< F-017: per-benchmark 超时(毫秒)，0 = 使用 suite 级超时 }
+    CollectRawSamples: Boolean; {< F-04: 强制收集原始样本，覆盖 config 级别设置 }
   end;
 
   {** 基准套件接口 - Fluent Builder }
@@ -217,6 +218,11 @@ type
 
     {** 启用原始样本收集 }
     function CollectRawSamples: IBenchSuite;
+
+    {** 设置指定条目的原始样本收集（覆盖 config 级别设置）
+     *  @raises EBenchInvalidParam 当条目不存在时 }
+    function SetEntryCollectRawSamples(const AName: string;
+      ACollect: Boolean): IBenchSuite;
 
     {** 设置安静模式 }
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
@@ -348,7 +354,17 @@ type
     property Environment: TBenchEnvironment read GetEnvironment;
   end;
 
-  {** 统计分析器接口 }
+  {** 统计分析器接口
+   *
+   *  功能分组:
+   *    基础统计: ComputeStats, Mean, Median, StdDev, Percentile, ComputePercentiles
+   *    异常值检测: CountOutliers
+   *    假设检验: HasHeuristicDifference*, ComputeApproximatePValue, ComputeMannWhitneyPValue,
+   *              KolmogorovSmirnov*, BootstrapTestDifference
+   *    贝叶斯估计: BayesianEstimate, BayesianCredibleInterval
+   *    聚合: GeometricMean
+   *    正态性: LooksNormalHeuristic
+   *}
   IBenchStatsAnalyzer = interface
     ['{D4E5F6A7-B8C9-0D1E-2F3A-4B5C6D7E8F9A}']
 
@@ -389,7 +405,7 @@ type
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
     {** 几何均值（多 benchmark ratio 聚合的正确方法）
-     *  @edge 空数组返回 1.0；非正 ratio 返回 0.0（哨兵值，表示非法输入） }
+     *  @edge 空数组返回 1.0；非正 ratio 返回 NaN（调用方应检查 IsDoubleNaN） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
 
     {** 批量计算百分位（一次排序，多次查询）
