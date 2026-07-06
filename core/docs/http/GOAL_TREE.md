@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-06-16
+> Last updated: 2026-07-06
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -25,6 +25,14 @@ This lane is in **G2/G3/G4 active hardening**:
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
 - G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 181 focused tests. H2 is production-transport-ready, not just a foundation slice. Remaining work is test coverage hardening (client -33, frame -17, hpack -15 tests vs plan) and documentation alignment. Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
+
+### Recent Fixes (2026-07-06)
+
+- **IPv4 字节序修复**: `platform_sockaddr_from_ipv4` 缺少 `htonl` 导致 `bind(99)` — 根因修复影响所有 TCP 服务器
+- **Response parser pause**: `CbOnMessageComplete` 移除 `FParserType=ptRequest` 门控，response parser 在 keep-alive 连接上也暂停，防止同 TCP segment 多响应时错误池化连接
+- **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
+- **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
+- **测试**: 18 套件 599 pass / 7 fail (预存 source contract ENOENT) / 0 leak
 
 ## Map
 

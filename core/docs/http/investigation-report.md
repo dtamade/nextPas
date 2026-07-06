@@ -1,8 +1,23 @@
 # nextpas.core.http 问题调研报告
 
 **调研日期**: 2026-07-05
+**最后更新**: 2026-07-06
 **调研范围**: 36 个源文件 + 31 个测试目录
 **调研方法**: 根因分析 + 同类方案对标 + 修复策略 + 风险评估
+
+---
+
+## 〇、修复状态更新 (2026-07-06)
+
+| 问题 | 状态 | 修复 |
+|------|------|------|
+| P0-1: H2 测试编译失败 | ✅ 已修复 | test framework API 迁移 |
+| P0-2: IPv4 字节序错误 | ✅ 已修复 | `platform_sockaddr_from_ipv4` 添加 `htonl` |
+| P1-?: Connection:close 响应 | ✅ 已修复 | response parser `HPE_CLOSED_CONNECTION` 容忍额外数据 |
+| 新发现: Same-read tail 检测 | ✅ 已修复 | response parser pause + `FPending` 跨调用保留 |
+| 新发现: 信息响应字节丢失 | ✅ 已修复 | 1xx 跳过路径不再丢弃 `LPending` |
+
+**当前测试**: 18 套件 599 pass / 7 fail (预存 source contract ENOENT) / 0 leak
 
 ---
 
