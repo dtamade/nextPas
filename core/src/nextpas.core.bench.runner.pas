@@ -1070,7 +1070,7 @@ begin
     Result.P99 := LStats.P99;
     Result.Outliers := LStats.OutlierCount;
     Result.SampleCount := LStats.SampleCount;
-    if FConfig.CollectRawSamples then
+    if FConfig.CollectRawSamples or LEntry.CollectRawSamples then
       Result.RawSamples := LSamples;
 
     AddResult(Result);

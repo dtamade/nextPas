@@ -84,6 +84,9 @@ type
     procedure GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
     procedure GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
 
+    {** F-04: 按名称查找条目索引，未找到返回 -1 }
+    function FindEntryIndex(const AName: string): Integer;
+
   public
     constructor Create(const ASuiteName: string);
     {** ST-11: 使用自定义配置创建基准套件 }
@@ -116,6 +119,8 @@ type
     function EnableMemoryTracking: IBenchSuite;
     function DisableMemoryTracking: IBenchSuite;
     function CollectRawSamples: IBenchSuite;
+    function SetEntryCollectRawSamples(const AName: string;
+      ACollect: Boolean): IBenchSuite;
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
@@ -512,6 +517,30 @@ begin
   raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
 end;
 
+function TBenchSuite.FindEntryIndex(const AName: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to FEntryCount - 1 do
+    if FEntries[I].Name = AName then
+      Exit(I);
+  Result := -1;
+end;
+
+function TBenchSuite.SetEntryCollectRawSamples(const AName: string;
+  ACollect: Boolean): IBenchSuite;
+var
+  LIdx: Integer;
+begin
+  GuardNotRun;
+  Result := Self;
+  LIdx := FindEntryIndex(AName);
+  if LIdx < 0 then
+    raise EBenchInvalidParam.CreateFmt(
+      'TBenchSuite.SetEntryCollectRawSamples: entry "%s" not found', [AName]);
+  FEntries[LIdx].CollectRawSamples := ACollect;
+end;
+
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
 begin
   GuardNotRun;
@@ -762,8 +791,7 @@ begin
   SetLength(FBaselines, FBaselineCount);
   for I := 0 to FBaselineCount - 1 do
   begin
-    FBaselines[I].Name := ABaselines[I].Name;
-    FBaselines[I].NsPerOp := ABaselines[I].NsPerOp;
+    FBaselines[I] := ABaselines[I];
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;

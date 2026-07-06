@@ -1021,19 +1021,9 @@ end;
 
 function TBenchStatsAnalyzer.BootstrapTestDifference(const A, B: TDoubleArray;
   AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
-{ Note: BootstrapTestDifference doesn't need instance data, but we need an instance
-  to call the method. We use dummy data since the method only uses A and B params. }
-var
-  LDummy: TDoubleArray;
-  LAdvanced: TAdvancedStats;
+{ F-09: 直接调用独立函数，无需创建 TAdvancedStats 实例 }
 begin
-  SetLength(LDummy, 1);
-  LAdvanced := TAdvancedStats.Create(LDummy);
-  try
-    Result := LAdvanced.BootstrapTestDifference(A, B, AIterations, ASeed);
-  finally
-    LAdvanced.Free;
-  end;
+  Result := nextpas.core.bench.stats.advanced.BootstrapTestDifference(A, B, AIterations, ASeed);
 end;
 
 { ===== 贝叶斯估计 (Phase C) ===== }
@@ -1113,16 +1103,8 @@ var
 begin
   LEstimate := BayesianEstimate(AData, APriorMean, APriorStdDev, ASigma);
 
-  { 计算指定水平的 z 值 }
-  { 简化：使用正态近似 }
-  if ALevel >= 0.99 then
-    LZ := 2.576
-  else if ALevel >= 0.95 then
-    LZ := 1.96
-  else if ALevel >= 0.90 then
-    LZ := 1.645
-  else
-    LZ := 1.96; { 默认 95% }
+  { 使用正态分位数函数计算指定水平的 z 值 }
+  LZ := NormalQuantile(1.0 - (1.0 - ALevel) / 2.0);
 
   Result.Lower := LEstimate.PosteriorMean - LZ * LEstimate.PosteriorStdDev;
   Result.Upper := LEstimate.PosteriorMean + LZ * LEstimate.PosteriorStdDev;
