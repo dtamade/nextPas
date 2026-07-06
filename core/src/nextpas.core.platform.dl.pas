@@ -62,6 +62,7 @@ function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
+  { nil path = load self (dlopen(NULL, ...) semantics) }
   ALib.Handle := dlopen(APath, MapFlags(AFlags));
   if ALib.Handle = nil then
     Result := PLATFORM_ERR_ENOENT // caller uses platform_dl_error for details
@@ -74,6 +75,8 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
 begin
   AAddr := nil;
   if ALib.Handle = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if AName = nil then
     Exit(PLATFORM_ERR_INVALID);
   dlerror; // clear previous error
   AAddr := dlsym(ALib.Handle, AName);
@@ -136,6 +139,8 @@ var
   LPath: UnicodeString;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID); { Windows: nil path is invalid }
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));
@@ -151,6 +156,8 @@ begin
   AAddr := nil;
   if ALib.Handle = 0 then
     Exit(Int32(87)); // ERROR_INVALID_PARAMETER
+  if AName = nil then
+    Exit(PLATFORM_ERR_INVALID);
   AAddr := Pointer(GetProcAddress(HMODULE(ALib.Handle), AName));
   if AAddr = nil then
     Result := Int32(GetLastError)
