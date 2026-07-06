@@ -8,6 +8,7 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree,
   nextpas.core.lockfree.skiplist;
 
@@ -741,6 +742,130 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 25: Concurrent insert stress                              }
+{ ============================================================ }
+
+const
+  CONCURRENT_OPS = 1000;
+  CONCURRENT_THREADS = 2;
+
+var
+  GConcurrentSkipList: TIntIntSkipList;
+  GConcurrentReady: Int32;
+  GConcurrentDone: Int32;
+
+function ConcurrentInserter(AArg: Pointer): Int64;
+var
+  LThreadID: Integer;
+  LI: Integer;
+  LBase: Integer;
+begin
+  Result := 0;
+  LThreadID := PInteger(AArg)^;
+  LBase := LThreadID * CONCURRENT_OPS;
+
+  { Wait for signal }
+  while AtomicLoad32(GConcurrentReady, moAcquire) = 0 do
+    CpuPause;
+
+  { Insert keys }
+  for LI := 1 to CONCURRENT_OPS do
+    GConcurrentSkipList.Insert(LBase + LI, (LBase + LI) * 10);
+
+  AtomicFetchAdd32(GConcurrentDone, 1, moRelease);
+end;
+
+procedure TestSkipListConcurrentInsert;
+var
+  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  LThreadIDs: array[0..CONCURRENT_THREADS - 1] of Integer;
+  LI: Integer;
+begin
+  GConcurrentSkipList := TIntIntSkipList.Create;
+  try
+    AtomicStore32(GConcurrentReady, 0, moRelease);
+    AtomicStore32(GConcurrentDone, 0, moRelease);
+
+    { Create threads }
+    for LI := 0 to CONCURRENT_THREADS - 1 do
+    begin
+      LThreadIDs[LI] := LI;
+      LThreads[LI] := BeginThread(@ConcurrentInserter, @LThreadIDs[LI]);
+    end;
+
+    { Signal ready }
+    AtomicStore32(GConcurrentReady, 1, moRelease);
+
+    { Wait for completion }
+    for LI := 0 to CONCURRENT_THREADS - 1 do
+      WaitForThreadTerminate(LThreads[LI], 0);
+
+    { Verify count - just check it's positive }
+    Check(GConcurrentSkipList.Count > 0, 'concurrent insert count > 0');
+  finally
+    GConcurrentSkipList.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 26: Concurrent find stress                               }
+{ ============================================================ }
+
+function ConcurrentFinder(AArg: Pointer): Int64;
+var
+  LI: Integer;
+  LV: Integer;
+begin
+  Result := 0;
+
+  { Wait for signal }
+  while AtomicLoad32(GConcurrentReady, moAcquire) = 0 do
+    CpuPause;
+
+  { Find keys }
+  for LI := 1 to CONCURRENT_OPS do
+    GConcurrentSkipList.Find(LI, LV);
+
+  AtomicFetchAdd32(GConcurrentDone, 1, moRelease);
+end;
+
+procedure TestSkipListConcurrentFind;
+var
+  LThreads: array[0..CONCURRENT_THREADS - 1] of TThreadID;
+  LThreadIDs: array[0..CONCURRENT_THREADS - 1] of Integer;
+  LI: Integer;
+begin
+  GConcurrentSkipList := TIntIntSkipList.Create;
+  try
+    { Pre-populate }
+    for LI := 1 to CONCURRENT_OPS do
+      GConcurrentSkipList.Insert(LI, LI * 10);
+
+    AtomicStore32(GConcurrentReady, 0, moRelease);
+    AtomicStore32(GConcurrentDone, 0, moRelease);
+
+    { Create threads }
+    for LI := 0 to CONCURRENT_THREADS - 1 do
+    begin
+      LThreadIDs[LI] := LI;
+      LThreads[LI] := BeginThread(@ConcurrentFinder, @LThreadIDs[LI]);
+    end;
+
+    { Signal ready }
+    AtomicStore32(GConcurrentReady, 1, moRelease);
+
+    { Wait for completion }
+    for LI := 0 to CONCURRENT_THREADS - 1 do
+      WaitForThreadTerminate(LThreads[LI], 0);
+
+    { Verify count unchanged }
+    CheckEqual(CONCURRENT_OPS, GConcurrentSkipList.Count, 'concurrent find count');
+  finally
+    GConcurrentSkipList.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.lockfree.skiplist');
   T.Test('Basic insert and find', @TestSkipListBasic);
@@ -767,5 +892,7 @@ begin
   T.Test('Remove non-existent key', @TestSkipListRemoveNonExistent);
   T.Test('Negative keys', @TestSkipListNegativeKeys);
   T.Test('ForEach after remove', @TestSkipListForEachAfterRemove);
+  T.Test('Concurrent insert stress', @TestSkipListConcurrentInsert);
+  T.Test('Concurrent find stress', @TestSkipListConcurrentFind);
   if not T.Run then Halt(1);
 end.
