@@ -83,17 +83,17 @@
 
 ## 4. 实施步骤
 
-### Phase 1: 缓冲区参数命名统一 (1h)
-1. 修改 `platform_file_read/write` 的 `ACount` → `ALen`
-2. 修改 `platform_args_get` 的 `ABufLen` → `ABufSize`
-3. 修改 `platform_dl_error` 的 `ABufLen` → `ABufSize`
-4. 更新相关测试
+### Phase 1: 缓冲区参数命名统一 (1h) ✅ 已完成
+1. ✅ 修改 `platform_file_read/write` 的 `ACount` → `ALen`
+2. ✅ 修改 `platform_args_get` 的 `ABufLen` → `ABufSize`
+3. ✅ 修改 `platform_dl_error` 的 `ABufLen` → `ABufSize`
+4. ✅ 更新相关测试
 
-### Phase 2: nil guard 补全 (2h)
-1. 为 `platform_file_read/write` 添加 ABuf nil 检查
-2. 为 `platform_socket_send/recv` 添加 ABuf nil 检查
-3. 为 `platform_console_read/write` 添加 ABuf nil 检查
-4. 更新相关测试
+### Phase 2: nil guard 补全 (2h) ✅ 已完成
+1. ✅ 为 `platform_file_read/write` 添加 ABuf nil 检查
+2. ✅ 为 `platform_socket_send/recv` 添加 ABuf nil 检查
+3. ✅ 为 `platform_console_read/write` 添加 ABuf nil 检查
+4. ✅ 更新相关测试
 
 ### Phase 3: 参数验证增强 (1h)
 1. 为 `platform_file_seek` 添加 AWhence 范围检查
