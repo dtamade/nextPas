@@ -34,6 +34,18 @@ function MemPos(ANeedle: PByte; ANeedleLen: SizeUInt; AHaystack: PByte; AHaystac
 { Stack top }
 function StackTop: Pointer;
 
+{ Swap functions }
+procedure Swap(var A, B: Byte); overload;
+procedure Swap(var A, B: ShortInt); overload;
+procedure Swap(var A, B: Word); overload;
+procedure Swap(var A, B: SmallInt); overload;
+procedure Swap(var A, B: LongWord); overload;
+procedure Swap(var A, B: LongInt); overload;
+procedure Swap(var A, B: QWord); overload;
+procedure Swap(var A, B: Int64); overload;
+procedure Swap(var A, B: Pointer); overload;
+procedure Swap(var A, B: Boolean); overload;
+
 implementation
 
 { Bulk fill implementation }
@@ -264,3 +276,34 @@ var
 begin
   Result := @LStackVar;
 end;
+
+{ Swap implementation }
+procedure Swap(var A, B: Byte);
+var T: Byte; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: ShortInt);
+var T: ShortInt; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: Word);
+var T: Word; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: SmallInt);
+var T: SmallInt; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: LongWord);
+var T: LongWord; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: LongInt);
+var T: LongInt; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: QWord);
+var T: QWord; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: Int64);
+var T: Int64; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: Pointer);
+var T: Pointer; begin T := A; A := B; B := T; end;
+
+procedure Swap(var A, B: Boolean);
+var T: Boolean; begin T := A; A := B; B := T; end;

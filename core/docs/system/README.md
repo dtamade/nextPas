@@ -136,6 +136,9 @@ Error handling guidance lives in `error-handling.md`; it covers exception
 hierarchy, error classification, propagation, and best practices.
 Thread safety guidance lives in `thread-safety.md`; it covers synchronization
 primitives, thread management, and concurrency best practices.
+Platform differences live in `platform-differences.md`; it covers type sizes,
+byte order, calling conventions, memory layout, thread model, I/O, and
+cross-platform programming guidelines.
 
 ## Boundaries
 

@@ -368,7 +368,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - [x] Add `MoveChar0` (null-terminated move)
 - [x] Add `MemPos` (memory search)
 - [x] Add `StackTop` function
-- [ ] Add `Swap` overloaded functions — deferred
+- [x] Add `Swap` overloaded functions
 - [ ] Add `Inc`, `Dec`, `Include`, `Exclude` intrinsic stubs — deferred
 - [ ] Add `SetLength`, `Copy`, `Delete`, `Insert`, `Pos`, `Concat` string intrinsics — deferred
 
