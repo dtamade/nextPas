@@ -35,11 +35,13 @@ type
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
 
-    {** @desc 阻塞发送，直到有空间或 channel 关闭 }
+    {** @desc 阻塞发送，直到有空间或 channel 关闭
+      @raises EInvalidOperationError 如果 channel 已关闭（与 Go 的 panic 语义对齐） }
     procedure Send(const AValue: T);
-    {** @desc 非阻塞发送，无空间时立即返回 False }
+    {** @desc 非阻塞发送，无空间或已关闭时立即返回 False
+      @note 关闭时返回 False 而非抛异常——与 Go 的 `ch <- v` (panic) vs `select { case ch <- v: }` (ok=false) 语义对齐 }
     function TrySend(const AValue: T): Boolean;
-    {** @desc 带超时发送，超时返回 False }
+    {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
     {** @desc 阻塞接收；channel 关闭且无数据时返回 False }
@@ -122,7 +124,7 @@ begin
       if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + 2, moRelease);
+        AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
         LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
         Exit(True);
       end;
@@ -187,7 +189,7 @@ begin
     LPos := AtomicLoad64(FRecvPos, moRelaxed);
     LIdx := PtrUInt(LPos) and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    if LSeq = LPos + 2 then
+    if LSeq = LPos + 1 then
     begin
       if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
@@ -198,7 +200,7 @@ begin
         Exit(True);
       end;
     end
-    else if LSeq <= LPos + 1 then
+    else if LSeq < LPos + 1 then
       Exit(False)
     else
       CpuPause;

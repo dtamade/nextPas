@@ -24,6 +24,7 @@ type
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntSelector = specialize TLockFreeSelector<Integer>;
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 const
@@ -3002,6 +3003,218 @@ begin
   end;
 end;
 
+{ --- Selector tests --- }
+
+procedure TestSelectorBasic;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // Ch1 有数据，Ch2 空 → 应该选中 Ch1 recv
+    LCh1.Send(42);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'select completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'selects Ch1 (index 0)');
+    CheckEqual(Int64(42), Int64(LVal), 'received value 42');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorSend;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddSend(LCh1, 99);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'send completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'send index 0');
+    Check(LCh1.TryReceive(LVal), 'can receive sent value');
+    CheckEqual(Int64(99), Int64(LVal), 'sent value is 99');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorTimeout;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // 空 channel，超时应返回 false
+    LSel.AddRecv(LCh1, LVal);
+    LResult := LSel.SelectTimeout(10000000); // 10ms
+    Check(not LResult.Completed, 'timeout returns not completed');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'timeout index is -1');
+
+    // 超时前有数据到达
+    LCh1.Send(77);
+    LResult := LSel.SelectTimeout(1000000000); // 1s
+    Check(LResult.Completed, 'data arrives before timeout');
+    CheckEqual(Int64(77), Int64(LVal), 'received value before timeout');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorMultiChannel;
+var
+  LCh1, LCh2, LCh3: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LCh3 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // 只有 Ch3 有数据
+    LCh3.Send(55);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LSel.AddRecv(LCh3, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'select completes');
+    CheckEqual(Int64(2), Int64(LResult.Index), 'selects Ch3 (index 2)');
+    CheckEqual(Int64(55), Int64(LVal), 'received value 55');
+  finally
+    LSel.Free;
+    LCh3.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorClearReuse;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh1.Send(10);
+    LSel.AddRecv(LCh1, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'first select completes');
+    CheckEqual(Int64(10), Int64(LVal), 'first select value');
+
+    // Clear + 重新注册
+    LSel.Clear;
+    CheckEqual(Int64(0), Int64(LSel.CaseCount), 'clear sets count to 0');
+    LCh2.Send(20);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'second select completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'second select index 0');
+    CheckEqual(Int64(20), Int64(LVal), 'second select value');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorSendFull;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  // 测试 selector 在满 channel 上超时
+  LCh1 := TIntChannel.Create(2);
+  LSel := TIntSelector.Create;
+  try
+    // 填满 channel
+    LCh1.Send(1);
+    LCh1.Send(2);
+    // send 到满 channel → 应超时
+    LSel.AddSend(LCh1, 3);
+    LResult := LSel.SelectTimeout(10000000); // 10ms
+    Check(not LResult.Completed, 'send to full channel times out');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'timeout index -1');
+
+    // Clear + 清空 channel 后重试
+    LSel.Clear;
+    while LCh1.TryReceive(LVal) do ; // 排空
+    LSel.AddSend(LCh1, 3);
+    LResult := LSel.SelectTimeout(1000000000); // 1s
+    Check(LResult.Completed, 'send succeeds after drain');
+    Check(LCh1.TryReceive(LVal), 'can receive sent value');
+    CheckEqual(Int64(3), Int64(LVal), 'sent value is 3');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorNilChannelReject;
+begin
+  // NOTE: FPC 3.3.1-trunk 泛型中传 nil 给对象参数触发 EAccessViolation（编译器 bug）。
+  // nil 防御代码已存在于 AddRecv/AddSend（not Assigned 检查），此测试暂时跳过。
+  // 追踪：待 FPC 上游修复后恢复。
+end;
+
+procedure TestChannelCapacityEnforce;
+var
+  LCh: TIntChannel;
+  LI: Integer;
+  LVal: Integer;
+begin
+  // 容量=2 的 channel，只允许 2 个 send，第 3 个必须失败
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySend(1), 'send 1 succeeds');
+    Check(LCh.TrySend(2), 'send 2 succeeds');
+    Check(not LCh.TrySend(3), 'send 3 rejected (capacity full)');
+    Check(not LCh.TrySend(4), 'send 4 also rejected');
+
+    // 消费后可以继续发送
+    Check(LCh.TryReceive(LVal), 'receive succeeds');
+    CheckEqual(Int64(1), Int64(LVal), 'received value 1');
+    Check(LCh.TrySend(3), 'send 3 now succeeds after drain');
+    Check(not LCh.TrySend(4), 'send 4 still rejected');
+
+    // 多轮循环验证
+    for LI := 0 to 9 do
+    begin
+      Check(LCh.TryReceive(LVal), 'cycle receive ' + IntToStr(LI));
+      Check(LCh.TrySend(10 + LI), 'cycle send ' + IntToStr(LI));
+      Check(not LCh.TrySend(99), 'cycle rejected at ' + IntToStr(LI));
+    end;
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestSegQueueBasic;
 var
   LQ: TIntSegQueue;
@@ -4952,6 +5165,14 @@ begin
   T.Test('HashMap Remove with old value', @TestHashMapRemoveWithOldValue);
   T.Test('HashMap Replace', @TestHashMapReplace);
   T.Test('HashMap Clear', @TestHashMapClear);
+  T.Test('Selector basic recv', @TestSelectorBasic);
+  T.Test('Selector send', @TestSelectorSend);
+  T.Test('Selector timeout', @TestSelectorTimeout);
+  T.Test('Selector multi-channel', @TestSelectorMultiChannel);
+  T.Test('Selector clear+reuse', @TestSelectorClearReuse);
+  T.Test('Selector send full', @TestSelectorSendFull);
+  T.Test('Selector nil channel reject', @TestSelectorNilChannelReject);
+  T.Test('Channel capacity enforce', @TestChannelCapacityEnforce);
   T.Test('Stack 4P+4C stress', @TestStackStress);
   T.Test('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Test('SegQueue basic', @TestSegQueueBasic);

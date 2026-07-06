@@ -16,7 +16,9 @@ uses
   nextpas.core.lockfree.channel,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.segqueue,
-  nextpas.core.lockfree.spmc;
+  nextpas.core.lockfree.spmc,
+  nextpas.core.lockfree.selector,
+  nextpas.core.lockfree.selector.impl;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -29,6 +31,7 @@ type
   TLockFreeReclaimProc = nextpas.core.lockfree.ebr.TLockFreeReclaimProc;
   THazardDomain = nextpas.core.lockfree.hazard.THazardDomain;
   THazardGuard = nextpas.core.lockfree.hazard.THazardGuard;
+  TSelectResult = nextpas.core.lockfree.selector.TSelectResult;
 
   {** @desc QSBR 域（TQSBRDomain 是 TEbrDomain 的语义别名）
     @details Quiescent-State Based Reclamation：仅当 FActiveCount=0 时回收所有退休节点。
@@ -61,6 +64,13 @@ type
   end;
 
   generic TLockFreeChannel<T> = class(specialize TLockFreeChannelImpl<T>)
+  end;
+
+  {** @desc 多路 Channel 复用器（类型安全泛型包装）
+    @details 所有 case 必须使用相同类型 T。支持阻塞和超时两种等待模式。
+    @see TLockFreeSelectorImpl 详细文档和示例
+  }
+  generic TLockFreeSelector<T> = class(specialize TLockFreeSelectorImpl<T>)
   end;
 
   generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)

@@ -13,6 +13,8 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntSelector = specialize TLockFreeSelector<Integer>;
 
 var
   GSpsc: TIntSpsc;
@@ -185,6 +187,50 @@ begin
   end;
 end;
 
+var
+  GChannel: TIntChannel;
+  GSelector: TIntSelector;
+  GSelectResult: TSelectResult;
+
+procedure TouchChannelFacade;
+begin
+  GChannel := TIntChannel.Create(4);
+  try
+    GChannel.Send(1);
+    if GChannel.TrySend(2) then
+      GValue := 1;
+    if GChannel.Receive(GValue) then
+      GValue := GValue + 1;
+    if GChannel.TryReceive(GValue) then
+      GValue := GValue + 1;
+    if GChannel.IsClosed then
+      GValue := GValue + 1;
+    GCount := GChannel.ApproxLen + GChannel.Capacity;
+    GChannel.Close;
+  finally
+    GChannel.Free;
+  end;
+end;
+
+procedure TouchSelectorFacade;
+begin
+  GChannel := TIntChannel.Create(4);
+  GSelector := TIntSelector.Create;
+  try
+    GChannel.Send(42);
+    GSelector.AddRecv(GChannel, GValue);
+    GSelectResult := GSelector.Select;
+    if GSelectResult.Completed then
+      GValue := GValue + 1;
+    GSelectResult := GSelector.SelectTimeout(1000);
+    GCount := GSelector.CaseCount;
+    GSelector.Clear;
+  finally
+    GSelector.Free;
+    GChannel.Free;
+  end;
+end;
+
 begin
   TouchSpscFacade;
   TouchMpmcFacade;
@@ -193,4 +239,6 @@ begin
   TouchDequeFacade;
   TouchSegQueueFacade;
   TouchSpmcFacade;
+  TouchChannelFacade;
+  TouchSelectorFacade;
 end.

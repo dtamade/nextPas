@@ -30,7 +30,18 @@ type
     UserData: Pointer;
   end;
 
-  {** @desc Hazard Pointer 内存回收域（与 EBR 互补，适合读多写少场景） }
+  {** @desc Hazard Pointer 内存回收域（与 EBR 互补，适合读多写少场景）
+    @details **与 TEbrDomain 的关键区别**:
+    - TEbrDomain.Enter/Leave 是轻量级原子计数（O(1)），TEbrGuard 仅管理计数
+    - THazardDomain.RegisterThread 分配线程节点并加入链表，THazardGuard 会自动调用 RegisterThread/UnregisterThread
+    - TEbrDomain.ActiveCount 是 O(1) 原子读，THazardDomain.ActiveThreads 遍历链表 O(n)
+    - THazardDomain 保护单个指针（HP slot），TEbrDomain 保护整个临界区
+
+    **Guard 语义差异**:
+    - TEbrGuard.Acquire(Domain) → Domain.Enter（计数+1）
+    - THazardGuard.Acquire(Domain) → Domain.RegisterThread（分配线程节点）；Release → UnregisterThread
+    - 从 EBR 切换到 Hazard 时，Guard 的生命周期语义完全不同，必须重新评估使用模式
+  }
   THazardDomain = class
   private
     FHPCount: PtrUInt;
@@ -60,7 +71,9 @@ type
     {** @desc 回收未被任何线程保护的退休指针 }
     procedure Collect(const AThreadId: PtrUInt);
 
-    {** @desc 活跃线程数 }
+    {** @desc 活跃线程数（O(n) 遍历链表，跳过已逻辑删除的线程）
+      @note 与 TEbrDomain.ActiveCount（O(1) 原子读）不同，此方法需要遍历整个线程链表。
+        高频调用场景应缓存结果或改用 TEbrDomain。 }
     function ActiveThreads: PtrUInt;
     {** @desc 退休待回收数 }
     function RetiredCount: PtrUInt;
@@ -69,6 +82,14 @@ type
   {** @desc Hazard Pointer RAII 守卫（自动 Register/Protect/Clear/Unregister）
     @details 获取时注册线程并保护指针，释放时清除保护并注销线程。
       重复 Release 安全（FActive 守卫）。
+
+      **与 TEbrGuard 的区别**:
+      - TEbrGuard.Acquire 仅调用 Domain.Enter（原子计数+1）
+      - THazardGuard.Acquire 调用 Domain.RegisterThread（分配线程节点加入链表）
+      - 因此 THazardGuard 的创建/销毁开销高于 TEbrGuard，但提供精确的指针级保护
+
+      **nil Domain 行为**: Acquire(nil) 返回 FActive=False 的空守卫，Protect 直接透传指针（不做保护），
+      Release 为空操作。用于需要统一代码路径但某些执行环境不需要内存保护的场景。
     @example
       var LGuard: THazardGuard;
       LGuard := THazardGuard.Acquire(LDomain, 0);
@@ -180,9 +201,9 @@ begin
   LThread := PHazardThreadRec(AThreadId);
   {$IFDEF DEBUG}
   if LThread = nil then
-    raise EArgumentError.Create('THazardDomain.Protect: nil thread ID');
+    raise EArgumentError.CreateFmt('THazardDomain.Protect: nil thread ID (HP index=%d)', [AHPIndex]);
   if AHPIndex >= FHPCount then
-    raise EArgumentError.Create('THazardDomain.Protect: HP index out of bounds');
+    raise EArgumentError.CreateFmt('THazardDomain.Protect: HP index %d out of bounds (max=%d)', [AHPIndex, FHPCount - 1]);
   {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
   begin
@@ -201,9 +222,9 @@ begin
   LThread := PHazardThreadRec(AThreadId);
   {$IFDEF DEBUG}
   if LThread = nil then
-    raise EArgumentError.Create('THazardDomain.Clear: nil thread ID');
+    raise EArgumentError.CreateFmt('THazardDomain.Clear: nil thread ID (HP index=%d)', [AHPIndex]);
   if AHPIndex >= FHPCount then
-    raise EArgumentError.Create('THazardDomain.Clear: HP index out of bounds');
+    raise EArgumentError.CreateFmt('THazardDomain.Clear: HP index %d out of bounds (max=%d)', [AHPIndex, FHPCount - 1]);
   {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
     Exit;

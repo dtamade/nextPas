@@ -1,6 +1,6 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-06-16
+> 更新: 2026-07-06
 
 ## 快速决策树
 
@@ -65,6 +65,19 @@
     - 分片锁 HashMap (16 shards)
     - Insert/Find/Remove/Contains/Count
     - 自动 resize
+
+需要 Channel（生产者-消费者通信）？
+├── 单向通信
+│   └── 使用 TLockFreeChannel<T>
+│       - 有界，容量自动取整到 2 的幂
+│       - 阻塞/非阻塞/超时
+│       - Close 后已入队数据仍可读
+│
+└── 多路复用（Go select 语义）
+    └── 使用 TLockFreeSelector<T>
+        - 等待多个 channel 中第一个就绪
+        - 阻塞/超时两种等待模式
+        - 所有 case 必须使用相同类型 T
 ```
 
 ## 性能对比

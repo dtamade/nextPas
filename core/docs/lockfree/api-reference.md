@@ -411,6 +411,106 @@ end;
 
 ---
 
+## Channel (nextpas.core.lockfree.channel)
+
+有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+
+```pascal
+type
+  generic TLockFreeChannel<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    // 发送（阻塞/非阻塞/超时）
+    procedure Send(const AValue: T);               // 阻塞，closed 时抛 EInvalidOperationError
+    function TrySend(const AValue: T): Boolean;    // 非阻塞，closed/full 时返回 False
+    function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    // 接收（阻塞/非阻塞/超时）
+    function Receive(out AValue: T): Boolean;      // 阻塞，closed+空时返回 False
+    function TryReceive(out AValue: T): Boolean;   // 非阻塞
+    function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    // 控制
+    procedure Close;
+    function IsClosed: Boolean;
+    function ApproxLen: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**关键语义**:
+- `Send` 到已关闭 channel 抛 `EInvalidOperationError`（Go panic 对齐）
+- `TrySend` 到已关闭 channel 返回 `False`（Go select ok=false 对齐）
+- 已入队数据在 Close 后仍可读
+- 容量自动向上取整到 2 的幂
+
+---
+
+## Selector (nextpas.core.lockfree.selector)
+
+多路 Channel 复用器，Go `select` 语义的 Pascal 实现。
+
+```pascal
+type
+  TSelectResult = record
+    Index: PtrInt;      // 完成的 case 索引（从 0 开始）
+    Completed: Boolean; // True=有 case 完成，False=超时
+  end;
+
+  generic TLockFreeSelector<T> = class
+    constructor Create(const AExpectedCount: PtrUInt = 4);
+    // 注册 case
+    procedure AddRecv(const AChannel: TLockFreeChannelImpl<T>; var AOutValue: T);
+    procedure AddSend(const AChannel: TLockFreeChannelImpl<T>; const AValue: T);
+    // 等待
+    function Select: TSelectResult;                               // 阻塞
+    function SelectTimeout(const ATimeoutNs: Int64): TSelectResult; // 超时
+    // 管理
+    procedure Clear;
+    function CaseCount: PtrUInt;
+  end;
+```
+
+**与 Go select 的对应**:
+
+| Go | Pascal |
+|----|--------|
+| `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
+| `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
+| `select { ... }` | `LResult := LSelector.Select` |
+
+**使用示例**:
+```pascal
+var LSel: specialize TLockFreeSelector<Integer>;
+    LCh1, LCh2: specialize TLockFreeChannel<Integer>;
+    LResult: TSelectResult;
+    LVal: Integer;
+begin
+  LCh1 := specialize TLockFreeChannel<Integer>.Create(4);
+  LCh2 := specialize TLockFreeChannel<Integer>.Create(4);
+  LSel := specialize TLockFreeSelector<Integer>.Create;
+  try
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddSend(LCh2, 42);
+    LResult := LSel.Select;
+    if LResult.Completed then
+      case LResult.Index of
+        0: WriteLn('Received ', LVal, ' from Ch1');
+        1: WriteLn('Sent 42 to Ch2');
+      end;
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+```
+
+**设计约束**:
+- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
+- 不支持 `default` 分支（需要时直接 TrySend/TryReceive）
+- poll + backoff 策略（纯用户态轮询，不使用内核 wait address）
+- `AddSend` 存储值副本，Select 成功后才实际发送
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

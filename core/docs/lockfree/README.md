@@ -201,6 +201,61 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 - 统计计数器（GetOrUpdate）
 - 延迟初始化（GetOrInsertFn）
 
+## Channel
+
+`TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+
+**设计特点**:
+- 容量自动向上取整到 2 的幂（位运算优化）
+- 阻塞/非阻塞/超时三种发送和接收模式
+- Close 后已入队数据仍可读
+- Send 到已关闭 channel 抛异常，TrySend 返回 False（Go 对齐）
+
+**API 概览**:
+
+| 方法 | 说明 |
+|------|------|
+| Send | 阻塞发送（closed 时抛 EInvalidOperationError） |
+| TrySend | 非阻塞发送（full/closed 时返回 False） |
+| SendTimeout | 带超时发送 |
+| Receive | 阻塞接收（closed+空时返回 False） |
+| TryReceive | 非阻塞接收 |
+| ReceiveTimeout | 带超时接收 |
+| Close | 关闭 channel，唤醒所有等待者 |
+
+## Selector
+
+`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现。
+
+**设计特点**:
+- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
+- poll + backoff 策略（纯用户态轮询）
+- 支持阻塞和超时两种等待模式
+- AddSend 存储值副本，Select 成功后才实际发送
+
+**使用示例**:
+```pascal
+var LSel: specialize TLockFreeSelector<Integer>;
+    LCh1, LCh2: specialize TLockFreeChannel<Integer>;
+    LResult: TSelectResult;
+    LVal: Integer;
+begin
+  LSel := specialize TLockFreeSelector<Integer>.Create;
+  try
+    LSel.AddRecv(LCh1, LVal);   // case v := <-LCh1
+    LSel.AddSend(LCh2, 42);     // case LCh2 <- 42
+    LResult := LSel.Select;
+    if LResult.Completed then
+      case LResult.Index of
+        0: WriteLn('Received ', LVal);
+        1: WriteLn('Sent');
+      end;
+  finally
+    LSel.Free;
+  end;
+end;
+```
+
 ## Hazard Pointer
 
 `THazardDomain` 是基于 Michael & Scott 算法的 Hazard Pointer 内存回收域。与 EBR 互补，适用于需要精确保护特定指针的场景。

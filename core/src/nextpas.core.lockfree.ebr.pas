@@ -60,7 +60,8 @@ type
     procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
     {** @desc 尝试回收所有退休项（ActiveCount=0 时生效） }
     procedure Collect;
-    {** @desc 当前活跃临界区数 }
+    {** @desc 当前活跃临界区数（O(1) 原子读，无锁）
+      @note 与 THazardDomain.ActiveThreads（O(n) 遍历链表）不同，此方法是 O(1) 原子操作。 }
     function ActiveCount: PtrUInt;
     {** @desc 当前退休待回收数 }
     function RetiredCount: PtrUInt;
