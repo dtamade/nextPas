@@ -113,6 +113,22 @@ B15  可用性改进 (2026-07-05)                               ✅
   B15.5  D08: xlang 解析器诊断输出                          ✅
   B15.6  D12: HasRegression 简化                            ✅
   B15.7  E05: 测试框架统一迁移                              ✅
+
+B16  边界验证修复 (2026-07-06)                               ✅
+  B16.1  C-25: RemoveByName 未找到时抛异常                  ✅
+  B16.2  C-26: SetTimeout 负值验证                          ✅
+  B16.3  C-27: HasRegression 阈值验证                       ✅
+  B16.4  C-12/C-13: SetTimeout(TDuration) 重载              ✅
+
+B17  Phase 5: 统计能力深化 (2026-07-06)                      ⬜
+  B17.1  单样本 K-S 检验 (Kolmogorov-Smirnov)              ⬜
+  B17.2  两样本 K-S 检验                                    ⬜
+  B17.3  Xoroshiro128+ PRNG 升级                            ⬜
+  B17.4  BCa Bootstrap (偏差修正加速)                       ⬜
+  B17.5  Bootstrap 假设检验                                 ⬜
+  B17.6  正态-正态共轭贝叶斯估计                            ⬜
+  B17.7  贝叶斯可信区间                                     ⬜
+  B17.8  先验融合 (历史数据作为先验)                        ⬜
 ```
 
 ## 测试套件分布
