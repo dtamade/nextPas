@@ -127,6 +127,9 @@ fpc_* signatures, type memory layouts, calling conventions, and stability commit
 This is the authoritative input for compiler integration (S9) and runtime implementation (S10).
 The API reference lives in `api-reference.md`; it is the developer quick-reference
 for all types, functions, and facades exported by the system kernel.
+The design decisions live in `design-decisions.md`; it records 15 key architectural
+decisions with background, options, choices, and consequences to prevent future
+developers from repeating mistakes or making contradictory changes.
 
 ## Boundaries
 
