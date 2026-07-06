@@ -301,6 +301,270 @@ begin
   Check(not VarIsClear(V), 'VarIsClear should return False for assigned variant');
 end;
 
+{ === FillByte/FillDWord/FillQWord Tests === }
+
+procedure TestFillByte;
+var
+  LBuf: array[0..7] of Byte;
+begin
+  FillByte(LBuf, SizeOf(LBuf), $AA);
+  CheckEqual(Int64($AA), Int64(LBuf[0]), 'FillByte should fill first byte');
+  CheckEqual(Int64($AA), Int64(LBuf[7]), 'FillByte should fill last byte');
+end;
+
+procedure TestFillDWord;
+var
+  LBuf: array[0..3] of DWord;
+begin
+  FillDWord(LBuf, Length(LBuf), $12345678);
+  CheckEqual(Int64($12345678), Int64(LBuf[0]), 'FillDWord should fill first element');
+  CheckEqual(Int64($12345678), Int64(LBuf[3]), 'FillDWord should fill last element');
+end;
+
+procedure TestFillQWord;
+var
+  LBuf: array[0..1] of QWord;
+begin
+  FillQWord(LBuf, Length(LBuf), $0102030405060708);
+  CheckEqual($0102030405060708, LBuf[0], 'FillQWord should fill first element');
+  CheckEqual($0102030405060708, LBuf[1], 'FillQWord should fill last element');
+end;
+
+{ === IndexChar/IndexByte/IndexWord/IndexDWord/IndexQWord Tests === }
+
+procedure TestIndexChar;
+var
+  LBuf: array[0..4] of AnsiChar;
+begin
+  LBuf := 'Hello';
+  CheckEqual(Int64(0), Int64(IndexChar(LBuf, 5, 'H')), 'IndexChar should find H at 0');
+  CheckEqual(Int64(4), Int64(IndexChar(LBuf, 5, 'o')), 'IndexChar should find o at 4');
+  CheckEqual(Int64(-1), Int64(IndexChar(LBuf, 5, 'X')), 'IndexChar should return -1 for missing');
+end;
+
+procedure TestIndexByte;
+var
+  LBuf: array[0..4] of Byte = (10, 20, 30, 40, 50);
+begin
+  CheckEqual(Int64(0), Int64(IndexByte(LBuf, 5, 10)), 'IndexByte should find 10 at 0');
+  CheckEqual(Int64(4), Int64(IndexByte(LBuf, 5, 50)), 'IndexByte should find 50 at 4');
+  CheckEqual(Int64(-1), Int64(IndexByte(LBuf, 5, 99)), 'IndexByte should return -1 for missing');
+end;
+
+procedure TestIndexWord;
+var
+  LBuf: array[0..2] of Word = ($1234, $5678, $9ABC);
+begin
+  CheckEqual(Int64(0), Int64(IndexWord(LBuf, 3, $1234)), 'IndexWord should find $1234 at 0');
+  CheckEqual(Int64(2), Int64(IndexWord(LBuf, 3, $9ABC)), 'IndexWord should find $9ABC at 2');
+  CheckEqual(Int64(-1), Int64(IndexWord(LBuf, 3, $FFFF)), 'IndexWord should return -1 for missing');
+end;
+
+procedure TestIndexDWord;
+var
+  LBuf: array[0..1] of DWord = ($12345678, $9ABCDEF0);
+begin
+  CheckEqual(Int64(0), Int64(IndexDWord(LBuf, 2, $12345678)), 'IndexDWord should find $12345678 at 0');
+  CheckEqual(Int64(1), Int64(IndexDWord(LBuf, 2, $9ABCDEF0)), 'IndexDWord should find $9ABCDEF0 at 1');
+  CheckEqual(Int64(-1), Int64(IndexDWord(LBuf, 2, $FFFFFFFF)), 'IndexDWord should return -1 for missing');
+end;
+
+procedure TestIndexQWord;
+var
+  LBuf: array[0..1] of QWord = ($0102030405060708, $090A0B0C0D0E0F10);
+begin
+  CheckEqual(Int64(0), Int64(IndexQWord(LBuf, 2, $0102030405060708)), 'IndexQWord should find first');
+  CheckEqual(Int64(1), Int64(IndexQWord(LBuf, 2, $090A0B0C0D0E0F10)), 'IndexQWord should find second');
+  CheckEqual(Int64(-1), Int64(IndexQWord(LBuf, 2, $FFFFFFFFFFFFFFFF)), 'IndexQWord should return -1 for missing');
+end;
+
+{ === CompareChar/CompareByte/CompareWord/CompareDWord Tests === }
+
+procedure TestCompareChar;
+var
+  LBuf1, LBuf2: array[0..4] of AnsiChar;
+begin
+  LBuf1 := 'Hello';
+  LBuf2 := 'Hello';
+  CheckEqual(Int64(0), Int64(CompareChar(LBuf1, LBuf2, 5)), 'CompareChar should return 0 for equal');
+  LBuf2 := 'Hellp';
+  Check(CompareChar(LBuf1, LBuf2, 5) <> 0, 'CompareChar should return non-zero for different');
+end;
+
+procedure TestCompareByte;
+var
+  LBuf1: array[0..2] of Byte = (1, 2, 3);
+  LBuf2: array[0..2] of Byte = (1, 2, 3);
+  LBuf3: array[0..2] of Byte = (1, 2, 4);
+begin
+  CheckEqual(Int64(0), Int64(CompareByte(LBuf1, LBuf2, 3)), 'CompareByte should return 0 for equal');
+  Check(CompareByte(LBuf1, LBuf3, 3) <> 0, 'CompareByte should return non-zero for different');
+end;
+
+procedure TestCompareWord;
+var
+  LBuf1: array[0..1] of Word = ($1234, $5678);
+  LBuf2: array[0..1] of Word = ($1234, $5678);
+  LBuf3: array[0..1] of Word = ($1234, $5679);
+begin
+  CheckEqual(Int64(0), Int64(CompareWord(LBuf1, LBuf2, 2)), 'CompareWord should return 0 for equal');
+  Check(CompareWord(LBuf1, LBuf3, 2) <> 0, 'CompareWord should return non-zero for different');
+end;
+
+procedure TestCompareDWord;
+var
+  LBuf1: array[0..0] of DWord = ($12345678);
+  LBuf2: array[0..0] of DWord = ($12345678);
+  LBuf3: array[0..0] of DWord = ($12345679);
+begin
+  CheckEqual(Int64(0), Int64(CompareDWord(LBuf1, LBuf2, 1)), 'CompareDWord should return 0 for equal');
+  Check(CompareDWord(LBuf1, LBuf3, 1) <> 0, 'CompareDWord should return non-zero for different');
+end;
+
+{ === MoveChar0 Test === }
+
+procedure TestMoveChar0;
+var
+  LSrc: array[0..5] of AnsiChar;
+  LDst: array[0..9] of AnsiChar;
+  I: Integer;
+begin
+  { Source with null terminator in the middle }
+  LSrc[0] := 'H';
+  LSrc[1] := 'i';
+  LSrc[2] := #0;
+  LSrc[3] := 'X';
+  LSrc[4] := 'Y';
+  LSrc[5] := 'Z';
+  for I := 0 to 9 do
+    LDst[I] := 'A';
+  MoveChar0(LSrc, LDst, 5);
+  CheckEqual(AnsiChar('H'), LDst[0], 'MoveChar0 should copy first char');
+  CheckEqual(AnsiChar('i'), LDst[1], 'MoveChar0 should copy second char');
+  { MoveChar0 stops at null but doesn't copy the null }
+  CheckEqual(AnsiChar('A'), LDst[2], 'MoveChar0 should stop before null');
+  CheckEqual(AnsiChar('A'), LDst[3], 'MoveChar0 should not copy after null');
+end;
+
+{ === MemPos Test === }
+
+procedure TestMemPos;
+var
+  LHaystack: array[0..9] of Byte = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+  LNeedle1: array[0..2] of Byte = (3, 4, 5);
+  LNeedle2: array[0..1] of Byte = (9, 10);
+  LNeedle3: array[0..1] of Byte = (11, 12);
+begin
+  CheckEqual(Int64(2), Int64(MemPos(@LNeedle1[0], 3, @LHaystack[0], 10)),
+    'MemPos should find needle at position 2');
+  CheckEqual(Int64(8), Int64(MemPos(@LNeedle2[0], 2, @LHaystack[0], 10)),
+    'MemPos should find needle at end');
+  CheckEqual(Int64(-1), Int64(MemPos(@LNeedle3[0], 2, @LHaystack[0], 10)),
+    'MemPos should return -1 for missing needle');
+  CheckEqual(Int64(-1), Int64(MemPos(nil, 0, @LHaystack[0], 10)),
+    'MemPos should return -1 for empty needle');
+end;
+
+{ === StackTop Test === }
+
+procedure TestStackTop;
+var
+  LTop: Pointer;
+begin
+  LTop := StackTop;
+  Check(LTop <> nil, 'StackTop should return non-nil pointer');
+end;
+
+{ === Memory Management Tests === }
+
+procedure TestGetMemFreeMem;
+var
+  LP: Pointer;
+begin
+  LP := GetMem(100);
+  Check(LP <> nil, 'GetMem should return non-nil pointer');
+  FreeMem(LP);
+end;
+
+procedure TestGetMemZeroSize;
+var
+  LP: Pointer;
+begin
+  { FPC's GetMem(0) may return a valid pointer; just verify it doesn't crash }
+  LP := GetMem(0);
+  if LP <> nil then
+    FreeMem(LP);
+end;
+
+procedure TestAllocMem;
+var
+  LP: PByte;
+  I: Integer;
+begin
+  LP := PByte(AllocMem(100));
+  Check(LP <> nil, 'AllocMem should return non-nil pointer');
+  { AllocMem should zero-initialize }
+  for I := 0 to 99 do
+    CheckEqual(Int64(0), Int64(LP[I]), 'AllocMem should zero-initialize memory');
+  FreeMem(LP);
+end;
+
+procedure TestReAllocMem;
+var
+  LP: Pointer;
+begin
+  LP := GetMem(50);
+  Check(LP <> nil, 'GetMem should return non-nil');
+  ReAllocMem(LP, 100);
+  Check(LP <> nil, 'ReAllocMem should keep pointer non-nil');
+  FreeMem(LP);
+end;
+
+procedure TestReAllocMemNil;
+var
+  LP: Pointer;
+begin
+  LP := nil;
+  ReAllocMem(LP, 100);
+  Check(LP <> nil, 'ReAllocMem(nil, 100) should act like GetMem');
+  FreeMem(LP);
+end;
+
+procedure TestMemSize;
+var
+  LP: Pointer;
+begin
+  LP := GetMem(100);
+  Check(MemSize(LP) >= 100, 'MemSize should return at least requested size');
+  FreeMem(LP);
+  CheckEqual(Int64(0), Int64(MemSize(nil)), 'MemSize(nil) should return 0');
+end;
+
+{ === Assigned Tests === }
+
+procedure TestAssignedPointer;
+var
+  LP: Pointer;
+begin
+  LP := GetMem(10);
+  Check(Assigned(LP), 'Assigned should return True for non-nil pointer');
+  FreeMem(LP);
+  Check(not Assigned(Pointer(nil)), 'Assigned should return False for nil pointer');
+end;
+
+procedure TestAssignedObject;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    Check(Assigned(LObj), 'Assigned should return True for non-nil object');
+  finally
+    LObj.Free;
+  end;
+  Check(not Assigned(TObject(nil)), 'Assigned should return False for nil object');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system kernel');
 
@@ -340,6 +604,45 @@ begin
   T.Test('VarIsClear(empty)', @TestVarIsClearEmpty);
   T.Test('VarIsClear(null)', @TestVarIsClearNull);
   T.Test('VarIsClear(assigned)', @TestVarIsClearAssigned);
+
+  { FillByte/FillDWord/FillQWord tests }
+  T.Test('FillByte', @TestFillByte);
+  T.Test('FillDWord', @TestFillDWord);
+  T.Test('FillQWord', @TestFillQWord);
+
+  { Index tests }
+  T.Test('IndexChar', @TestIndexChar);
+  T.Test('IndexByte', @TestIndexByte);
+  T.Test('IndexWord', @TestIndexWord);
+  T.Test('IndexDWord', @TestIndexDWord);
+  T.Test('IndexQWord', @TestIndexQWord);
+
+  { Compare tests }
+  T.Test('CompareChar', @TestCompareChar);
+  T.Test('CompareByte', @TestCompareByte);
+  T.Test('CompareWord', @TestCompareWord);
+  T.Test('CompareDWord', @TestCompareDWord);
+
+  { MoveChar0 test }
+  T.Test('MoveChar0', @TestMoveChar0);
+
+  { MemPos test }
+  T.Test('MemPos', @TestMemPos);
+
+  { StackTop test }
+  T.Test('StackTop', @TestStackTop);
+
+  { Memory management tests }
+  T.Test('GetMem/FreeMem', @TestGetMemFreeMem);
+  T.Test('GetMem zero size', @TestGetMemZeroSize);
+  T.Test('AllocMem', @TestAllocMem);
+  T.Test('ReAllocMem', @TestReAllocMem);
+  T.Test('ReAllocMem nil', @TestReAllocMemNil);
+  T.Test('MemSize', @TestMemSize);
+
+  { Assigned tests }
+  T.Test('Assigned(pointer)', @TestAssignedPointer);
+  T.Test('Assigned(object)', @TestAssignedObject);
 
   if not T.Run then Halt(1);
 end.
