@@ -53,6 +53,7 @@ type
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterOwnedRuntimeStrVar(const AName: string);
     procedure RegisterBorrowedRuntimeStrVar(const AName: string);
+    function IsRuntimeStrVar(const AName: string): Boolean;
     function IsOwnedRuntimeStrVar(const AName: string): Boolean;
     function IsBorrowedRuntimeStrVar(const AName: string): Boolean;
     function GetOwnedRuntimeStrVarNames: TStringArray;
@@ -91,6 +92,7 @@ type
 
     procedure RegisterVarParam(const AName: string);
     function IsVarParam(const AName: string): Boolean;
+    procedure Reset;
     function GetVarParamCount: SizeInt;
     function GetVarParamAt(AIndex: SizeInt): string;
 
@@ -176,6 +178,16 @@ begin
   NextIndex := Length(FBorrowedRuntimeStrVarNames);
   SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
   FBorrowedRuntimeStrVarNames[NextIndex] := AName;
+end;
+
+function TSemaRuntimeVarRegistry.IsRuntimeStrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
+    if SameText(FRuntimeStrVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
 end;
 
 function TSemaRuntimeVarRegistry.IsOwnedRuntimeStrVar(const AName: string): Boolean;
@@ -469,6 +481,29 @@ begin
     if SameText(FVarParamNames[Idx], AName) then
       Exit(True);
   Result := False;
+end;
+
+procedure TSemaRuntimeVarRegistry.Reset;
+begin
+  SetLength(FRuntimeVarNames, 0);
+  SetLength(FRuntimeStrVarNames, 0);
+  SetLength(FOwnedRuntimeStrVarNames, 0);
+  SetLength(FBorrowedRuntimeStrVarNames, 0);
+  SetLength(FOwnedStringReturnFuncNames, 0);
+  ClearPendingStringTempReleases;
+  SetLength(FRuntimeArrVarNames, 0);
+  SetLength(FBorrowedRuntimeArrVarNames, 0);
+  SetLength(FClassVarNames, 0);
+  SetLength(FClassVarTypes, 0);
+  SetLength(FRecordVarNames, 0);
+  SetLength(FRecordVarTypes, 0);
+  SetLength(FManagedRecordVarNames, 0);
+  SetLength(FManagedRecordVarTypes, 0);
+  SetLength(FPointerVarNames, 0);
+  SetLength(FPointerVarTypes, 0);
+  FVarParamNames.Clear;
+  SetLength(FPtrReturnFuncs, 0);
+  SetLength(FPtrReturnTypes, 0);
 end;
 
 function TSemaRuntimeVarRegistry.GetVarParamCount: SizeInt;

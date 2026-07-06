@@ -74,31 +74,11 @@ type
     FCurrentProcessingUnitId: string;
     FBreakLabels: TStringVec;
     FContinueLabels: TStringVec;
-    FRuntimeVarNames: array of string;
-    FRuntimeStrVarNames: array of string;
-    FOwnedRuntimeStrVarNames: array of string;
-    FBorrowedRuntimeStrVarNames: array of string;
-    FOwnedStringReturnFuncNames: array of string;
-    FPendingStringTempNames: array of string;
-    FPendingStringTempSources: array of string;
     FBuiltinRegistry: TBuiltinRegistry;
     FRuntimeVars: TSemaRuntimeVarRegistry;
-    FRuntimeArrVarNames: array of string;
-    FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
     FCurrentOwnedStringReturn: Boolean;
-    FClassVarNames: array of string;
-    FClassVarTypes: array of string;
-    FRecordVarNames: array of string;
-    FRecordVarTypes: array of string;
-    FManagedRecordVarNames: array of string;
-    FManagedRecordVarTypes: array of string;
-    FPointerVarNames: array of string;
-    FPointerVarTypes: array of string;
-    FVarParamNames: TStringVec;
-    FPtrReturnFuncs: array of string;
-    FPtrReturnTypes: array of string;
     FImportedUnitTrees: array of TGreenTree;
     FImportedUnitOwners: array of string;
     procedure RegisterRuntimeVar(const AName: string);
@@ -709,7 +689,7 @@ begin
   FCurrentScopeId := 0;
   FBreakLabels := specialize TVec<string>.Create;
   FContinueLabels := specialize TVec<string>.Create;
-  FVarParamNames := specialize TVec<string>.Create;
+  { FVarParamNames now managed by FRuntimeVars }
   FInliningStack := specialize TVec<string>.Create;
   FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
@@ -754,14 +734,13 @@ end;
 
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
-  Idx: LongInt;
   SymId: LongInt;
   TypeId: LongInt;
   TypeName: string;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
+  { Check registered runtime string vars via FRuntimeVars }
+  if FRuntimeVars.IsRuntimeStrVar(AName) then
+    Exit(True);
   { Also accept any string-typed variable — they hold safe string values }
   SymId := FModel.FindSymbolByName(AName);
   if SymId > 0 then
@@ -806,11 +785,15 @@ end;
 procedure TSemanticAnalyzer.EmitPendingStringTempReleases;
 var
   I: LongInt;
+  TempNames: TStringArray;
+  TempSources: TStringArray;
 begin
-  for I := High(FPendingStringTempNames) downto 0 do
+  TempNames := FRuntimeVars.GetPendingStringTempNames;
+  TempSources := FRuntimeVars.GetPendingStringTempSources;
+  for I := High(TempNames) downto 0 do
     FModel.AddTypedHirNode('string-temp-release-runtime',
-      FPendingStringTempSources[I], 0, 0, FPendingStringTempNames[I]);
-  ClearPendingStringTempReleases;
+      TempSources[I], 0, 0, TempNames[I]);
+  FRuntimeVars.ClearPendingStringTempReleases;
 end;
 
 procedure TSemanticAnalyzer.RegisterConcatOwnedStringReturnConsumers(
@@ -2214,10 +2197,12 @@ procedure TSemanticAnalyzer.EmitOwnedStringCleanupNodes(const AExceptName: strin
 var
   I: LongInt;
   VarName: string;
+  OwnedNames: TStringArray;
 begin
-  for I := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
+  OwnedNames := FRuntimeVars.GetOwnedRuntimeStrVarNames;
+  for I := 0 to Length(OwnedNames) - 1 do
   begin
-    VarName := FOwnedRuntimeStrVarNames[I];
+    VarName := OwnedNames[I];
     if (VarName = '') or IsBorrowedRuntimeStrVar(VarName) or
       SameText(VarName, AExceptName) then
       Continue;
@@ -2235,10 +2220,12 @@ procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
 var
   I: LongInt;
   VarName: string;
+  ArrNames: TStringArray;
 begin
-  for I := 0 to Length(FRuntimeArrVarNames) - 1 do
+  ArrNames := FRuntimeVars.GetRuntimeArrVarNames;
+  for I := 0 to Length(ArrNames) - 1 do
   begin
-    VarName := FRuntimeArrVarNames[I];
+    VarName := ArrNames[I];
     if (VarName = '') or IsBorrowedRuntimeArrVar(VarName) or
       IsStaticRuntimeArrVar(VarName) then
       Continue;
@@ -2283,11 +2270,15 @@ var
   VarName, TypeName, Blob: string;
   Meta: TTypeMetadata;
   NeedCleanup: Boolean;
+  MgrNames: TStringArray;
+  MgrTypes: TStringArray;
 begin
-  for I := 0 to Length(FManagedRecordVarNames) - 1 do
+  MgrNames := FRuntimeVars.GetManagedRecordVarNames;
+  MgrTypes := FRuntimeVars.GetManagedRecordVarTypes;
+  for I := 0 to Length(MgrNames) - 1 do
   begin
-    VarName := FManagedRecordVarNames[I];
-    TypeName := FManagedRecordVarTypes[I];
+    VarName := MgrNames[I];
+    TypeName := MgrTypes[I];
     if not FModel.GetTypeMetaByName(TypeName, Meta) then
       Continue;
     Blob := VarName + #9 + TypeName;
@@ -2791,7 +2782,7 @@ begin
     FImportedUnitTrees[Index].Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
-  FVarParamNames.Free;
+  { FVarParamNames now managed by FRuntimeVars }
   FInliningStack.Free;
   FGenericCache.Free;
   FBuiltinRegistry.Free;
@@ -16555,15 +16546,7 @@ begin
             );
             { RAII: 如果 record 含 managed 字段, 注册为 managed record }
             if IsManagedRecord(Decl.ChildAt(0).Text) then
-            begin
-              SetLength(FManagedRecordVarNames,
-                Length(FManagedRecordVarNames) + 1);
-              FManagedRecordVarNames[High(FManagedRecordVarNames)] := Decl.Text;
-              SetLength(FManagedRecordVarTypes,
-                Length(FManagedRecordVarTypes) + 1);
-              FManagedRecordVarTypes[High(FManagedRecordVarTypes)] :=
-                Decl.ChildAt(0).Text;
-            end;
+              FRuntimeVars.RegisterManagedRecordVar(Decl.Text, Decl.ChildAt(0).Text);
           end
           else
           begin
@@ -16711,19 +16694,7 @@ begin
       Continue;
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
-    FVarParamNames.Clear;
-    SetLength(FRuntimeVarNames, 0);
-    SetLength(FRuntimeArrVarNames, 0);
-    SetLength(FBorrowedRuntimeArrVarNames, 0);
-    SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FOwnedRuntimeStrVarNames, 0);
-    SetLength(FBorrowedRuntimeStrVarNames, 0);
-    SetLength(FClassVarNames, 0);
-    SetLength(FClassVarTypes, 0);
-    SetLength(FRecordVarNames, 0);
-    SetLength(FRecordVarTypes, 0);
-    SetLength(FPointerVarNames, 0);
-    SetLength(FPointerVarTypes, 0);
+    FRuntimeVars.Reset;
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
@@ -17063,19 +17034,7 @@ begin
     SavedMethodClass := FCurrentMethodClass;
 
     // Reset for void function with no params — 全部 13 个 tracker 清零
-    FVarParamNames.Clear;
-    SetLength(FRuntimeVarNames, 0);
-    SetLength(FRuntimeArrVarNames, 0);
-    SetLength(FBorrowedRuntimeArrVarNames, 0);
-    SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FOwnedRuntimeStrVarNames, 0);
-    SetLength(FBorrowedRuntimeStrVarNames, 0);
-    SetLength(FClassVarNames, 0);
-    SetLength(FClassVarTypes, 0);
-    SetLength(FRecordVarNames, 0);
-    SetLength(FRecordVarTypes, 0);
-    SetLength(FPointerVarNames, 0);
-    SetLength(FPointerVarTypes, 0);
+    FRuntimeVars.Reset;
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentBlockTerminated := False;
