@@ -44,6 +44,11 @@ type
   function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
 
   {**
+   * 检查声明是否接受指定数量的参数
+   *}
+  function DeclAcceptsArgCount(const ADecl: TGreenNode; const AArgCount: LongInt): Boolean;
+
+  {**
    * 名称重整：AName + '$' + ParamCount
    * 对标：FPC 的 mangled name 约定
    *}
@@ -101,6 +106,16 @@ begin
       Exit;
     end;
   end;
+end;
+
+function DeclAcceptsArgCount(const ADecl: TGreenNode; const AArgCount: LongInt): Boolean;
+var
+  MaxParamCount: LongInt;
+  MinParamCount: LongInt;
+begin
+  MaxParamCount := CountDeclParams(ADecl);
+  MinParamCount := CountRequiredDeclParams(ADecl);
+  Result := (AArgCount >= MinParamCount) and (AArgCount <= MaxParamCount);
 end;
 
 function MangledName(const AName: string; AParamCount: LongInt): string;

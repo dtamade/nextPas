@@ -65,6 +65,9 @@ function NextClassAncestorName(const AModel: TSemanticModel; const ATypeName: st
 
 function TypeMetaInterfaces(const AModel: TSemanticModel; const ATypeName: string): string;
 
+function IsIntrinsicExprName(const AName: string): Boolean;
+function TypeIdIsManagedString(const AModel: TSemanticModel; const ATypeId: LongInt): Boolean;
+
 implementation
 
 uses
@@ -243,6 +246,33 @@ begin
     Exit(Meta.Interfaces);
   if not AModel.LookupStringConstValue(ATypeName + '$interfaces', Result) then
     Result := '';
+end;
+
+function IsIntrinsicExprName(const AName: string): Boolean;
+begin
+  Result := SameText(AName, 'SizeOf') or SameText(AName, 'High') or
+    SameText(AName, 'Low') or SameText(AName, 'Length') or
+    SameText(AName, 'Ord') or SameText(AName, 'Pred') or
+    SameText(AName, 'Succ') or SameText(AName, 'Chr') or
+    SameText(AName, 'Assigned') or SameText(AName, 'Abs') or
+    SameText(AName, 'Sqr') or SameText(AName, 'Sqrt') or
+    SameText(AName, 'Round') or SameText(AName, 'Trunc') or
+    SameText(AName, 'Default') or
+    SameText(AName, 'Min') or SameText(AName, 'Max') or
+    SameText(AName, 'Floor') or SameText(AName, 'Ceil') or
+    SameText(AName, 'Supports') or SameText(AName, 'IsFinite');
+end;
+
+function TypeIdIsManagedString(const AModel: TSemanticModel;
+  const ATypeId: LongInt): Boolean;
+var
+  TypeName: string;
+begin
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > AModel.TypeCount) then
+    Exit;
+  TypeName := AModel.TypeAt(ATypeId - 1).Name;
+  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
 end;
 
 end.
