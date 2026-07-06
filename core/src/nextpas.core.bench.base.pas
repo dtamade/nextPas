@@ -133,6 +133,15 @@ type
   {** 基线数组 }
   TBaselineArray = array of TBaselineData;
 
+  {** K-S 检验结果 (Phase A: Kolmogorov-Smirnov) }
+  TKSTestResult = record
+    Statistic: Double;      // K-S 统计量 D
+    PValue: Double;         // p-value
+    IsSignificant: Boolean; // 在 α=0.05 水平下是否显著
+    SampleSize1: Integer;   // 第一个样本大小
+    SampleSize2: Integer;   // 第二个样本大小（单样本检验时为 0）
+  end;
+
   {** 多基线对比矩阵 — 超越 Go/Rust 的独有能力 }
 
   {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比。

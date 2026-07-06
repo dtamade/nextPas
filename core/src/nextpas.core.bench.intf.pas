@@ -395,6 +395,15 @@ type
     {** 批量计算百分位（一次排序，多次查询）
      *  E03: 避免在同一数据上重复排序 }
     function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
+
+    {** 单样本 K-S 检验：检验数据是否来自正态分布 N(AMean, AStdDev²)
+     *  @edge 空数组返回 D=0, p=1；样本数=1 时 D=0, p=1 }
+    function KolmogorovSmirnovNormalTest(const AData: TDoubleArray;
+      AMean, AStdDev: Double): TKSTestResult;
+
+    {** 两样本 K-S 检验：检验两个样本是否来自同一分布
+     *  @edge 任一数组为空返回 D=0, p=1；任一数组大小=1 时使用近似 }
+    function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
   end;
 
   {** 报告生成器接口

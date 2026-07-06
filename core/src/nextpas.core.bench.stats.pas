@@ -97,6 +97,13 @@ type
     {** 批量计算百分位（一次排序，多次查询）
      *  E03: 避免在同一数据上重复排序 }
     function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
+
+    {** 单样本 K-S 检验：检验数据是否来自正态分布 N(AMean, AStdDev²) }
+    function KolmogorovSmirnovNormalTest(const AData: TDoubleArray;
+      AMean, AStdDev: Double): TKSTestResult;
+
+    {** 两样本 K-S 检验：检验两个样本是否来自同一分布 }
+    function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
   end;
 
 implementation
@@ -775,6 +782,254 @@ begin
   Result.P75 := Percentile(LSorted, 75.0);
   Result.P95 := Percentile(LSorted, 95.0);
   Result.P99 := Percentile(LSorted, 99.0);
+end;
+
+{ K-S 检验辅助函数 }
+
+{** 标准正态分布 CDF（使用误差函数近似）
+ *  Abramowitz & Stegun 近似公式，精度 ~1.5e-7
+ *  CDF(x) = 0.5 * (1 + erf(x / sqrt(2))) }
+function NormalCDF(X: Double): Double;
+var
+  LAbsX: Double;
+  LT, LResult: Double;
+  LA1, LA2, LA3, LA4, LA5: Double;
+  LP: Double;
+begin
+  // 常数
+  LA1 := 0.254829592;
+  LA2 := -0.284496736;
+  LA3 := 1.421413741;
+  LA4 := -1.453152027;
+  LA5 := 1.061405429;
+  LP := 0.3275911;
+
+  // 计算 erf(x / sqrt(2))
+  LAbsX := Abs(X) / System.Sqrt(2.0);
+  LT := 1.0 / (1.0 + LP * LAbsX);
+  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * System.Exp(-LAbsX * LAbsX);
+
+  // 转换为 CDF
+  if X >= 0 then
+    Result := 0.5 * (1.0 + LResult)
+  else
+    Result := 0.5 * (1.0 - LResult);
+end;
+
+{** Kolmogorov 分布 CDF
+ *  K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
+ *  输入 x = √n * D（其中 D 是 K-S 统计量，n 是样本大小） }
+function KolmogorovCDF(AX: Double): Double;
+var
+  LK: Integer;
+  LSum, LTerm: Double;
+  LK2: Double;
+begin
+  if AX <= 0 then
+  begin
+    Result := 0.0;
+    Exit;
+  end;
+
+  // 对于 x > 2，CDF 接近 1
+  if AX > 2.0 then
+  begin
+    Result := 1.0;
+    Exit;
+  end;
+
+  // Kolmogorov 分布: K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
+  // 使用前 20 项求和（足够精确）
+  LSum := 0.0;
+  for LK := 1 to 20 do
+  begin
+    LK2 := LK * LK;
+    LTerm := Exp(-2.0 * LK2 * AX * AX);
+    if LK mod 2 = 1 then
+      LSum := LSum + LTerm
+    else
+      LSum := LSum - LTerm;
+  end;
+
+  Result := 1.0 - 2.0 * LSum;
+  if Result < 0 then
+    Result := 0;
+  if Result > 1 then
+    Result := 1;
+end;
+
+function TBenchStatsAnalyzer.KolmogorovSmirnovNormalTest(
+  const AData: TDoubleArray; AMean, AStdDev: Double): TKSTestResult;
+var
+  LN: Integer;
+  LSorted: TDoubleArray;
+  LI: Integer;
+  LEmpiricalCDF: Double;
+  LTheoreticalCDF: Double;
+  LD, LMaxD: Double;
+  LZ: Double;
+begin
+  Result := Default(TKSTestResult);
+
+  LN := Length(AData);
+  Result.SampleSize1 := LN;
+  Result.SampleSize2 := 0;
+
+  // 边界条件
+  if LN = 0 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  if LN = 1 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 标准差为 0 时无法检验
+  if AStdDev <= 0 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 排序数据
+  LSorted := Copy(AData);
+  SortDoubleArray(LSorted);
+
+  // 计算 K-S 统计量 D = max|Fn(x) - F0(x)|
+  LMaxD := 0.0;
+  for LI := 0 to LN - 1 do
+  begin
+    // 经验分布函数 Fn(x) = (i+1) / n
+    LEmpiricalCDF := (LI + 1) / LN;
+
+    // 理论分布函数 F0(x) = Φ((x - μ) / σ)
+    LZ := (LSorted[LI] - AMean) / AStdDev;
+    LTheoreticalCDF := NormalCDF(LZ);
+
+    // 计算 |Fn(x) - F0(x)|
+    LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
+    if LD > LMaxD then
+      LMaxD := LD;
+
+    // 也检查 Fn(x-) 的情况
+    LEmpiricalCDF := LI / LN;
+    LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
+    if LD > LMaxD then
+      LMaxD := LD;
+  end;
+
+  Result.Statistic := LMaxD;
+
+  // 计算 p-value（使用渐近分布）
+  // 对于大样本，√n * D 服从 Kolmogorov 分布
+  Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LN) * LMaxD);
+
+  // 判断是否显著（α=0.05）
+  Result.IsSignificant := Result.PValue < 0.05;
+end;
+
+function TBenchStatsAnalyzer.KolmogorovSmirnovTwoSampleTest(
+  const A, B: TDoubleArray): TKSTestResult;
+var
+  LN1, LN2: Integer;
+  LSorted1, LSorted2: TDoubleArray;
+  LI, LJ: Integer;
+  LCDF1, LCDF2: Double;
+  LD, LMaxD: Double;
+  LCombinedN: Double;
+begin
+  Result := Default(TKSTestResult);
+
+  LN1 := Length(A);
+  LN2 := Length(B);
+  Result.SampleSize1 := LN1;
+  Result.SampleSize2 := LN2;
+
+  // 边界条件
+  if (LN1 = 0) or (LN2 = 0) then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 排序两个样本
+  LSorted1 := Copy(A);
+  LSorted2 := Copy(B);
+  SortDoubleArray(LSorted1);
+  SortDoubleArray(LSorted2);
+
+  // 计算 K-S 统计量 D = max|F1(x) - F2(x)|
+  LMaxD := 0.0;
+  LI := 0;
+  LJ := 0;
+
+  // 合并遍历两个排序数组
+  while (LI < LN1) and (LJ < LN2) do
+  begin
+    if LSorted1[LI] <= LSorted2[LJ] then
+    begin
+      // 在 x = LSorted1[LI] 处计算两个经验分布函数
+      LCDF1 := (LI + 1) / LN1;
+      LCDF2 := LJ / LN2;  // F2(x-) = j/n2
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      Inc(LI);
+    end
+    else
+    begin
+      // 在 x = LSorted2[LJ] 处计算两个经验分布函数
+      LCDF1 := LI / LN1;  // F1(x-) = i/n1
+      LCDF2 := (LJ + 1) / LN2;
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      Inc(LJ);
+    end;
+  end;
+
+  // 处理剩余元素
+  while LI < LN1 do
+  begin
+    LCDF1 := (LI + 1) / LN1;
+    LCDF2 := 1.0;
+    LD := Abs(LCDF1 - LCDF2);
+    if LD > LMaxD then
+      LMaxD := LD;
+    Inc(LI);
+  end;
+
+  while LJ < LN2 do
+  begin
+    LCDF1 := 1.0;
+    LCDF2 := (LJ + 1) / LN2;
+    LD := Abs(LCDF1 - LCDF2);
+    if LD > LMaxD then
+      LMaxD := LD;
+    Inc(LJ);
+  end;
+
+  Result.Statistic := LMaxD;
+
+  // 计算 p-value（使用渐近分布）
+  // 有效样本大小: n_eff = (n1 * n2) / (n1 + n2)
+  LCombinedN := (LN1 * LN2) / (LN1 + LN2);
+  Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LCombinedN) * LMaxD);
+
+  // 判断是否显著（α=0.05）
+  Result.IsSignificant := Result.PValue < 0.05;
 end;
 
 end.
