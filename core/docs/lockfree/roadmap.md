@@ -40,8 +40,9 @@
 | `lockfree.hashmap` | 分片并发 HashMap | ✅ 完成 | 10 |
 | `lockfree.skiplist` | 并发跳表 | ✅ 完成 | 26 |
 | `lockfree.btree` | 并发 B-Tree | ✅ 完成 | 17 |
+| `lockfree.hashset` | 并发 HashSet | ✅ 完成 | 9 |
 
-**规模**: 22 文件, ~12000 行, 136 测试
+**规模**: 23 文件, ~12400 行, 145 测试
 
 ---
 
@@ -57,7 +58,8 @@
 | test_lockfree_stress | 16 | ✅ 全绿 |
 | test_lockfree_skiplist | 26 | ✅ 全绿 |
 | test_lockfree_btree | 17 | ✅ 全绿 |
-| **总计** | **248** | **✅ 全绿** |
+| test_lockfree_hashset | 9 | ✅ 全绿 |
+| **总计** | **257** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
