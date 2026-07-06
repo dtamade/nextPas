@@ -17,6 +17,7 @@ uses
   nextpas.core.lockfree.channel.spsc,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.skiplist,
+  nextpas.core.lockfree.btree,
   nextpas.core.lockfree.segqueue,
   nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.selector,
@@ -92,6 +93,14 @@ type
     @see TConcurrentSkipListImpl 详细文档和示例
   }
   generic TConcurrentSkipList<TKey, TValue> = class(specialize TConcurrentSkipListImpl<TKey, TValue>)
+  end;
+
+  {** @desc 并发 B-Tree
+    @details 使用读写锁实现并发安全，支持有序键值对存储和高效范围查询。
+      读操作使用无锁读，写操作使用写锁独占访问。
+    @see TConcurrentBTreeImpl 详细文档和示例
+  }
+  generic TConcurrentBTree<TKey, TValue> = class(specialize TConcurrentBTreeImpl<TKey, TValue>)
   end;
 
 implementation

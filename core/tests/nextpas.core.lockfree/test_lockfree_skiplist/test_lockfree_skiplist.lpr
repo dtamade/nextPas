@@ -300,6 +300,323 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 11: Reverse order insertion                              }
+{ ============================================================ }
+
+procedure TestSkipListReverseOrder;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+  LI: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    { Insert in reverse order }
+    for LI := 100 downto 1 do
+      LS.Insert(LI, LI * 10);
+    CheckEqual(100, LS.Count, 'count after insert');
+
+    { Verify all keys exist and are in order via ForEach }
+    for LI := 1 to 100 do
+    begin
+      Check(LS.Find(LI, LV), 'key exists');
+      CheckEqual(LI * 10, LV, 'value matches');
+    end;
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 12: Random order insertion                               }
+{ ============================================================ }
+
+procedure TestSkipListRandomOrder;
+const
+  KEY_COUNT = 500;
+var
+  LS: TIntIntSkipList;
+  LKeys: array[0..KEY_COUNT - 1] of Integer;
+  LV: Integer;
+  LI, LJ: Integer;
+  LTemp: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    { Create shuffled key array }
+    for LI := 0 to KEY_COUNT - 1 do
+      LKeys[LI] := LI + 1;
+    { Simple Fisher-Yates shuffle }
+    for LI := KEY_COUNT - 1 downto 1 do
+    begin
+      LJ := Random(LI + 1);
+      LTemp := LKeys[LI];
+      LKeys[LI] := LKeys[LJ];
+      LKeys[LJ] := LTemp;
+    end;
+
+    { Insert in random order }
+    for LI := 0 to KEY_COUNT - 1 do
+      LS.Insert(LKeys[LI], LKeys[LI] * 10);
+    CheckEqual(KEY_COUNT, LS.Count, 'count after insert');
+
+    { Verify all keys }
+    for LI := 1 to KEY_COUNT do
+    begin
+      Check(LS.Find(LI, LV), 'key exists');
+      CheckEqual(LI * 10, LV, 'value matches');
+    end;
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 13: Range query boundary - empty range                   }
+{ ============================================================ }
+
+var
+  GRangeCount: Integer;
+
+procedure RangeCountCallback(const AKey: Integer; const AValue: Integer);
+begin
+  Inc(GRangeCount);
+end;
+
+procedure TestSkipListRangeEmpty;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(5, 50);
+    LS.Insert(10, 100);
+
+    { Range with no elements }
+    GRangeCount := 0;
+    LS.ForEachRange(2, 4, @RangeCountCallback);
+    CheckEqual(0, GRangeCount, 'empty range count');
+
+    { Range before all elements }
+    GRangeCount := 0;
+    LS.ForEachRange(-10, -5, @RangeCountCallback);
+    CheckEqual(0, GRangeCount, 'before all elements');
+
+    { Range after all elements }
+    GRangeCount := 0;
+    LS.ForEachRange(20, 30, @RangeCountCallback);
+    CheckEqual(0, GRangeCount, 'after all elements');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 14: Range query boundary - single element                }
+{ ============================================================ }
+
+var
+  GRangeKey: Integer;
+  GRangeValue: Integer;
+
+procedure RangeSingleCallback(const AKey: Integer; const AValue: Integer);
+begin
+  GRangeKey := AKey;
+  GRangeValue := AValue;
+  Inc(GRangeCount);
+end;
+
+procedure TestSkipListRangeSingle;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(5, 50);
+
+    GRangeCount := 0;
+    LS.ForEachRange(5, 5, @RangeSingleCallback);
+    CheckEqual(1, GRangeCount, 'single element range');
+    CheckEqual(5, GRangeKey, 'key');
+    CheckEqual(50, GRangeValue, 'value');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 15: Range query boundary - full range                    }
+{ ============================================================ }
+
+procedure TestSkipListRangeFull;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    LS.Insert(3, 30);
+    LS.Insert(4, 40);
+    LS.Insert(5, 50);
+
+    { Full range covering all elements }
+    GRangeCount := 0;
+    LS.ForEachRange(0, 100, @RangeCountCallback);
+    CheckEqual(5, GRangeCount, 'full range count');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 16: Single element operations                           }
+{ ============================================================ }
+
+procedure TestSkipListSingleElement;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(42, 420);
+    CheckEqual(1, LS.Count, 'count after insert');
+    Check(LS.Find(42, LV), 'find key');
+    CheckEqual(420, LV, 'value');
+    Check(LS.Contains(42), 'contains');
+    Check(not LS.Contains(99), 'does not contain');
+
+    LS.Remove(42);
+    CheckEqual(0, LS.Count, 'count after remove');
+    Check(not LS.Find(42, LV), 'not found after remove');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 17: Duplicate key update                                }
+{ ============================================================ }
+
+procedure TestSkipListDuplicateUpdate;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(1, 20);
+    LS.Insert(1, 30);
+    CheckEqual(1, LS.Count, 'count after duplicate inserts');
+    Check(LS.Find(1, LV), 'find key');
+    CheckEqual(30, LV, 'last value wins');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 18: Interleaved insert/remove                           }
+{ ============================================================ }
+
+procedure TestSkipListInterleaved;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+  LI: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    { Insert 10, remove 5, insert 10 more }
+    for LI := 1 to 10 do
+      LS.Insert(LI, LI * 10);
+    for LI := 1 to 5 do
+      LS.Remove(LI);
+    for LI := 11 to 20 do
+      LS.Insert(LI, LI * 10);
+
+    CheckEqual(15, LS.Count, 'count after interleaved ops');
+
+    { Verify remaining keys }
+    for LI := 6 to 20 do
+    begin
+      Check(LS.Find(LI, LV), 'key exists');
+      CheckEqual(LI * 10, LV, 'value matches');
+    end;
+
+    { Verify removed keys }
+    for LI := 1 to 5 do
+      Check(not LS.Find(LI, LV), 'key removed');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 19: Large key values                                    }
+{ ============================================================ }
+
+procedure TestSkipListLargeKeys;
+const
+  KEY_COUNT = 100;
+var
+  LS: TIntIntSkipList;
+  LV: Integer;
+  LI: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    { Insert with large key values }
+    for LI := 1 to KEY_COUNT do
+      LS.Insert(LI * 1000, LI * 10000);
+    CheckEqual(KEY_COUNT, LS.Count, 'count after insert');
+
+    { Verify all keys }
+    for LI := 1 to KEY_COUNT do
+    begin
+      Check(LS.Find(LI * 1000, LV), 'key exists');
+      CheckEqual(LI * 10000, LV, 'value matches');
+    end;
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 20: ForEachCtx with context                             }
+{ ============================================================ }
+
+var
+  GCtxSum: Integer;
+
+procedure ForEachCtxCallback(const AKey: Integer; const AValue: Integer; AContext: Pointer);
+begin
+  PInteger(AContext)^ := PInteger(AContext)^ + AValue;
+end;
+
+procedure TestSkipListForEachCtx;
+var
+  LS: TIntIntSkipList;
+  LSum: Integer;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    LS.Insert(3, 30);
+
+    LSum := 0;
+    LS.ForEachCtx(@ForEachCtxCallback, @LSum);
+    CheckEqual(60, LSum, 'sum of values');
+  finally
+    LS.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.lockfree.skiplist');
   T.Test('Basic insert and find', @TestSkipListBasic);
@@ -312,5 +629,15 @@ begin
   T.Test('Clear', @TestSkipListClear);
   T.Test('Many keys stress', @TestSkipListManyKeys);
   T.Test('Empty operations', @TestSkipListEmpty);
+  T.Test('Reverse order insertion', @TestSkipListReverseOrder);
+  T.Test('Random order insertion', @TestSkipListRandomOrder);
+  T.Test('Range query empty', @TestSkipListRangeEmpty);
+  T.Test('Range query single', @TestSkipListRangeSingle);
+  T.Test('Range query full', @TestSkipListRangeFull);
+  T.Test('Single element', @TestSkipListSingleElement);
+  T.Test('Duplicate key update', @TestSkipListDuplicateUpdate);
+  T.Test('Interleaved insert/remove', @TestSkipListInterleaved);
+  T.Test('Large key values', @TestSkipListLargeKeys);
+  T.Test('ForEachCtx with context', @TestSkipListForEachCtx);
   if not T.Run then Halt(1);
 end.

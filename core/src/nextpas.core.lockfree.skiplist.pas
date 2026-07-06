@@ -328,9 +328,9 @@ begin
   LNext := LCurrent^.Next[0];
   if (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) = 0) then
   begin
-    NodeReadLock(LNext^);
+    { Lock-free read: just read the value directly }
+    { The value is written atomically by Insert/Update, so we can read it safely }
     AValue := LNext^.Value;
-    NodeReadUnlock(LNext^);
     Result := True;
   end
   else
@@ -389,9 +389,8 @@ begin
   LNode := FHead^.Next[0];
   while LNode <> FTail do
   begin
-    NodeReadLock(LNode^);
+    { Lock-free read: just read the key and value directly }
     ACallback(LNode^.Key, LNode^.Value);
-    NodeReadUnlock(LNode^);
     LNode := LNode^.Next[0];
   end;
 end;
@@ -403,9 +402,8 @@ begin
   LNode := FHead^.Next[0];
   while LNode <> FTail do
   begin
-    NodeReadLock(LNode^);
+    { Lock-free read: just read the key and value directly }
     ACallback(LNode^.Key, LNode^.Value, AContext);
-    NodeReadUnlock(LNode^);
     LNode := LNode^.Next[0];
   end;
 end;
@@ -432,9 +430,8 @@ begin
   LCurrent := LCurrent^.Next[0];
   while (LCurrent <> FTail) and (CompareKeys(LCurrent^.Key, ATo) <= 0) do
   begin
-    NodeReadLock(LCurrent^);
+    { Lock-free read: just read the key and value directly }
     ACallback(LCurrent^.Key, LCurrent^.Value);
-    NodeReadUnlock(LCurrent^);
     LCurrent := LCurrent^.Next[0];
   end;
 end;
