@@ -15,7 +15,8 @@ interface
 
 uses
   SysUtils,
-  np_diagnostics_sink;
+  np_diagnostics_sink,
+  np_base_types;
 
 { === 错误代码体系 === }
 

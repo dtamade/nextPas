@@ -22,6 +22,8 @@ type
   TMirValueId = LongInt;
   {** MIR 基本块 ID }
   TMirBlockId = LongInt;
+  {** MIR 基本块 ID 动态数组 }
+  TMirBlockIdArray = array of TMirBlockId;
   {** MIR 函数 ID }
   TMirFuncId = LongInt;
 

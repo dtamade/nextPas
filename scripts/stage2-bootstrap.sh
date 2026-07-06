@@ -33,7 +33,7 @@ COMPILER_MODULES=(
   "compiler/frontend/np_compilation_session.pas"
   "compiler/frontend/np_workspace_model.pas"
   "compiler/frontend/np_unit_graph.pas"
-  "compiler/frontend/np_ast_facade.pas"
+  "compiler/syntax/np_ast_facade.pas"
   "compiler/frontend/np_source_database.pas"
   "compiler/syntax/np_green_tree.pas"
   "compiler/syntax/np_lexer.pas"

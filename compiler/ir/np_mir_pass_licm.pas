@@ -101,7 +101,7 @@ end;
 function DetectLoopBlocks(
   const AFunc: TMirFunction;
   const AHeaderBlockId: TMirBlockId;
-  out ALoopBlocks: array of TMirBlockId
+  var ALoopBlocks: TMirBlockIdArray
 ): Boolean;
 var
   BI, Idx: LongInt;
@@ -160,7 +160,7 @@ var
   FuncIdx, BlkIdx, StmtIdx, LoopBlkIdx: LongInt;
   Fn: TMirFunction;
   Stmt: TMirStmt;
-  LoopBlocks: array of TMirBlockId;
+  LoopBlocks: TMirBlockIdArray;
   HoistedCount: LongInt;
   Hoisted: Boolean;
 begin
