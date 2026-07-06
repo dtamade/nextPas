@@ -191,7 +191,7 @@ end;
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
   case ACode of
-    PLATFORM_ERR_INVALID:
+    PLATFORM_ERR_INVALID, PLATFORM_ERR_PATH_TOO_LONG:
       Exit(ecInvalidArgument);
     PLATFORM_ERR_UNSUPPORTED:
       Exit(ecNotSupported);
@@ -202,6 +202,12 @@ begin
       Exit(ecWouldBlock);
     PLATFORM_ERR_BADF:
       Exit(ecIO);
+    PLATFORM_ERR_ENOENT:
+      Exit(ecNotFound);
+    PLATFORM_ERR_EEXIST:
+      Exit(ecAlreadyExists);
+    PLATFORM_ERR_ENOTDIR:
+      Exit(ecNotFound);
   end;
 
   case ACode of

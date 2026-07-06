@@ -259,6 +259,30 @@ begin
     'code 0 maps to ecNone');
 end;
 
+procedure TestCategoryEnoent;
+begin
+  Check(platform_error_category(PLATFORM_ERR_ENOENT) = ecNotFound,
+    'ENOENT maps to ecNotFound');
+end;
+
+procedure TestCategoryEexist;
+begin
+  Check(platform_error_category(PLATFORM_ERR_EEXIST) = ecAlreadyExists,
+    'EEXIST maps to ecAlreadyExists');
+end;
+
+procedure TestCategoryEnotdir;
+begin
+  Check(platform_error_category(PLATFORM_ERR_ENOTDIR) = ecNotFound,
+    'ENOTDIR maps to ecNotFound');
+end;
+
+procedure TestCategoryPathTooLong;
+begin
+  Check(platform_error_category(PLATFORM_ERR_PATH_TOO_LONG) = ecInvalidArgument,
+    'PATH_TOO_LONG maps to ecInvalidArgument');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.error');
   T.Test('ENOENT message', @TestENOENT);
@@ -281,5 +305,9 @@ begin
   T.Test('BUSY maps to ecWouldBlock', @TestCategoryBusy);
   T.Test('BADF maps to ecIO', @TestCategoryBadf);
   T.Test('code 0 maps to ecNone', @TestCategoryZero);
+  T.Test('ENOENT maps to ecNotFound', @TestCategoryEnoent);
+  T.Test('EEXIST maps to ecAlreadyExists', @TestCategoryEexist);
+  T.Test('ENOTDIR maps to ecNotFound', @TestCategoryEnotdir);
+  T.Test('PATH_TOO_LONG maps to ecInvalidArgument', @TestCategoryPathTooLong);
   if not T.Run then Halt(1);
 end.
