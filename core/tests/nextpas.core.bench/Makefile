@@ -5,7 +5,8 @@ PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_xlang test_bench_invalid_parameters_heaptrc \
             test_bench_matrix test_bench_mannwhitney \
             test_bench_ks \
-            test_bench_self_bench
+            test_bench_self_bench \
+            test_bench_phase_b
 
 .PHONY: test clean bench $(PROJECTS)
 

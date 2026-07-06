@@ -404,6 +404,15 @@ type
     {** 两样本 K-S 检验：检验两个样本是否来自同一分布
      *  @edge 任一数组为空返回 D=0, p=1；任一数组大小=1 时使用近似 }
     function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
+
+    {** Bootstrap 假设检验 (Phase B.3)
+     *  检验两组数据的均值是否有显著差异（Fisher 置换检验）
+     *  @param A 第一组数据
+     *  @param B 第二组数据
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time） }
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
   end;
 
   {** 报告生成器接口

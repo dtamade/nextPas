@@ -104,13 +104,18 @@ type
 
     {** 两样本 K-S 检验：检验两个样本是否来自同一分布 }
     function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
+
+    {** Bootstrap 假设检验 (Phase B.3) }
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
   end;
 
 implementation
 
 uses
   nextpas.core.math.trig,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.bench.stats.advanced; { Phase B.2: for TAdvancedStats }
 
 { TBenchStatsAnalyzer }
 
@@ -786,35 +791,7 @@ end;
 
 { K-S 检验辅助函数 }
 
-{** 标准正态分布 CDF（使用误差函数近似）
- *  Abramowitz & Stegun 近似公式，精度 ~1.5e-7
- *  CDF(x) = 0.5 * (1 + erf(x / sqrt(2))) }
-function NormalCDF(X: Double): Double;
-var
-  LAbsX: Double;
-  LT, LResult: Double;
-  LA1, LA2, LA3, LA4, LA5: Double;
-  LP: Double;
-begin
-  // 常数
-  LA1 := 0.254829592;
-  LA2 := -0.284496736;
-  LA3 := 1.421413741;
-  LA4 := -1.453152027;
-  LA5 := 1.061405429;
-  LP := 0.3275911;
-
-  // 计算 erf(x / sqrt(2))
-  LAbsX := Abs(X) / System.Sqrt(2.0);
-  LT := 1.0 / (1.0 + LP * LAbsX);
-  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * System.Exp(-LAbsX * LAbsX);
-
-  // 转换为 CDF
-  if X >= 0 then
-    Result := 0.5 * (1.0 + LResult)
-  else
-    Result := 0.5 * (1.0 - LResult);
-end;
+{ NormalCDF and NormalQuantile are now in nextpas.core.bench.base }
 
 {** Kolmogorov 分布 CDF
  *  K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
@@ -1030,6 +1007,23 @@ begin
 
   // 判断是否显著（α=0.05）
   Result.IsSignificant := Result.PValue < 0.05;
+end;
+
+function TBenchStatsAnalyzer.BootstrapTestDifference(const A, B: TDoubleArray;
+  AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
+{ Note: BootstrapTestDifference doesn't need instance data, but we need an instance
+  to call the method. We use dummy data since the method only uses A and B params. }
+var
+  LDummy: TDoubleArray;
+  LAdvanced: TAdvancedStats;
+begin
+  SetLength(LDummy, 1);
+  LAdvanced := TAdvancedStats.Create(LDummy);
+  try
+    Result := LAdvanced.BootstrapTestDifference(A, B, AIterations, ASeed);
+  finally
+    LAdvanced.Free;
+  end;
 end;
 
 end.

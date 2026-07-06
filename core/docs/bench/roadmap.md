@@ -238,12 +238,12 @@
 
 ### 实施阶段
 
-| Phase | 任务 | 时间 | 测试 |
-|-------|------|------|------|
-| Phase A | K-S 检验 | 5h | 21 tests |
-| Phase B | Bootstrap 改进 | 6h | 19 tests |
-| Phase C | 贝叶斯估计 | 5h | 19 tests |
-| **合计** | | **16h** | **59 tests** |
+| Phase | 任务 | 时间 | 测试 | 状态 |
+|-------|------|------|------|------|
+| Phase A | K-S 检验 | 5h | 12 tests | ✅ 完成 |
+| Phase B | Bootstrap 改进 | 6h | 13 tests | ✅ 完成 |
+| Phase C | 贝叶斯估计 | 5h | 19 tests | 待开始 |
+| **合计** | | **16h** | **44 tests** | |
 
 ### 验收标准
 
