@@ -4006,64 +4006,15 @@ begin
 end;
 
 function TSemanticAnalyzer.CallArgumentCount(const ACallNode: TGreenNode): LongInt;
-var
-  InnerCall: TGreenNode;
 begin
-  Result := 0;
-  if ACallNode = nil then
-    Exit;
-
-  if ACallNode.NodeKind = gnkFunctionCall then
-  begin
-    if ACallNode.ChildCount > 0 then
-      Result := ACallNode.ChildCount - 1;
-    Exit;
-  end;
-
-  if ACallNode.NodeKind = gnkProcedureCallStatement then
-  begin
-    if (ACallNode.ChildCount = 1) and
-      (ACallNode.ChildAt(0) <> nil) and
-      (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
-    begin
-      InnerCall := ACallNode.ChildAt(0);
-      if InnerCall.ChildCount > 0 then
-        Result := InnerCall.ChildCount - 1;
-      Exit;
-    end;
-
-    Result := ACallNode.ChildCount;
-  end;
+  Result := np_sema_type_check.CallArgumentCount(ACallNode);
 end;
 
 function TSemanticAnalyzer.BareCallCalleeName(
   const ACallNode: TGreenNode
 ): string;
-var
-  CalleeNode: TGreenNode;
-  InnerCallNode: TGreenNode;
 begin
-  Result := '';
-  if ACallNode = nil then
-    Exit;
-  if ACallNode.ChildCount = 0 then
-    Exit(ACallNode.Text);
-
-  CalleeNode := ACallNode.ChildAt(0);
-  if (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier) then
-    Exit(CalleeNode.Text);
-
-  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
-    (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkFunctionCall) then
-  begin
-    InnerCallNode := CalleeNode;
-    if (InnerCallNode.ChildCount > 0) and
-      (InnerCallNode.ChildAt(0) <> nil) and
-      (InnerCallNode.ChildAt(0).NodeKind = gnkIdentifier) then
-      Exit(InnerCallNode.ChildAt(0).Text);
-  end;
-
-  Result := ACallNode.Text;
+  Result := np_sema_type_check.BareCallCalleeName(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsIntrinsicExprName(const AName: string): Boolean;
@@ -4133,89 +4084,21 @@ function TSemanticAnalyzer.IsWrappedCallChild(
   const AChild: TGreenNode
 ): Boolean;
 begin
-  Result := (AParent <> nil) and (AChild <> nil) and
-    (AParent.NodeKind = gnkProcedureCallStatement) and
-    (AChild.NodeKind = gnkFunctionCall) and
-    (AParent.ByteOffset = AChild.ByteOffset) and
-    SameText(AParent.Text, AChild.Text);
+  Result := np_sema_type_check.IsWrappedCallChild(AParent, AChild);
 end;
 
 function TSemanticAnalyzer.IsImplicitSelfCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
-var
-  CalleeNode: TGreenNode;
 begin
-  Result := False;
-  if ACallNode = nil then
-    Exit;
-
-  case ACallNode.NodeKind of
-    gnkIdentifier:
-      Exit(ACallNode.Text <> '');
-    gnkFunctionCall:
-      begin
-        if ACallNode.ChildCount <= 0 then
-          Exit(False);
-        CalleeNode := ACallNode.ChildAt(0);
-        Exit((CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier));
-      end;
-    gnkProcedureCallStatement:
-      begin
-        if ACallNode.ChildCount = 0 then
-          Exit(ACallNode.Text <> '');
-        CalleeNode := ACallNode.ChildAt(0);
-        if CalleeNode = nil then
-          Exit(False);
-        if CalleeNode.NodeKind = gnkIdentifier then
-          Exit(True);
-        if (CalleeNode.NodeKind = gnkFunctionCall) and
-          (CalleeNode.ChildCount > 0) and (CalleeNode.ChildAt(0) <> nil) and
-          (CalleeNode.ChildAt(0).NodeKind = gnkIdentifier) then
-          Exit(True);
-        Exit(False);
-      end;
-  end;
+  Result := np_sema_type_check.IsImplicitSelfCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsQualifiedCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
-var
-  CalleeNode: TGreenNode;
 begin
-  Result := False;
-  if (ACallNode = nil) or
-    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
-    (ACallNode.ChildCount = 0) then
-    Exit;
-
-  CalleeNode := ACallNode.ChildAt(0);
-  if CalleeNode = nil then
-    Exit;
-
-  if ACallNode.NodeKind = gnkFunctionCall then
-  begin
-    Result := CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
-      gnkDereference];
-    Exit;
-  end;
-
-  if CalleeNode.ByteOffset <> ACallNode.ByteOffset then
-    Exit;
-
-  if CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess, gnkDereference] then
-    Exit(True);
-
-  if (CalleeNode.NodeKind = gnkFunctionCall) and
-    SameText(ACallNode.Text, CalleeNode.Text) and
-    (CalleeNode.ChildCount > 0) then
-  begin
-    CalleeNode := CalleeNode.ChildAt(0);
-    Result := (CalleeNode <> nil) and
-      (CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
-       gnkDereference]);
-  end;
+  Result := np_sema_type_check.IsQualifiedCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.ExtractDirectMemberCall(
