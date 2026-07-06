@@ -237,6 +237,8 @@ begin
     sbRISCVV: Result := 'RISC-V V';
     sbLASX: Result := 'LoongArch LASX';
     sbWASM: Result := 'WebAssembly SIMD';
+    sbVSX: Result := 'POWER VSX';
+    sbMSA: Result := 'MIPS MSA';
   end;
 end;
 
@@ -256,6 +258,8 @@ begin
     sbRISCVV: Result := 'RISC-V Vector Extension (RVV) (experimental opt-in)';
     sbLASX: Result := 'LoongArch LASX 256-bit SIMD (experimental, requires hardware)';
     sbWASM: Result := 'WebAssembly SIMD128 (experimental, requires WASM runtime)';
+    sbVSX: Result := 'POWER VSX (experimental, requires POWER hardware)';
+    sbMSA: Result := 'MIPS MSA (experimental, requires MIPS hardware)';
   end;
 end;
 
