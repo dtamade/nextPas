@@ -1529,6 +1529,7 @@ var
   LCache: TTestCache;
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
+  LProcessed: array of Boolean;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -1593,6 +1594,7 @@ begin
   SetLength(LThreads, LTotal);
   SetLength(LRecs, LTotal);
   SetLength(LResults, LTotal);
+  SetLength(LProcessed, LTotal);
 
   { Pre-fill records — each thread gets its own result slot }
   for I := 0 to High(Tests) do
@@ -1601,13 +1603,15 @@ begin
       filtered tests are invisible, not counted as pass/fail/skip) }
     if not IsTestEligible(Tests[I], LConfig, LTagFilter, True) then
     begin
-      LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
+      LThreads[I] := 0;
+      LProcessed[I] := True;
       Continue;
     end;
     { Short mode — skip tests marked with ShortSkip (handle before thread spawn) }
     if LConfig.ShortMode and Tests[I].ShortSkip then
     begin
       LThreads[I] := 0;
+      LProcessed[I] := True;
       Inc(LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name, tsSkipped,
         'skipped: short mode', 0);
@@ -1616,11 +1620,14 @@ begin
       Continue;
     end;
 
-    { Cache lookup — skip thread spawn if cached result is valid }
+    { Cache lookup — skip thread spawn if cached result is valid.
+      Note: cache hit skips BeforeEach/AfterEach/EachCleanups — assumes
+      tests are independent and idempotent. }
     if LConfig.CacheEnabled and (LCacheKey <> '') and
        LCache.Get(LCacheKey, Tests[I].Name, LCacheEntry) then
     begin
       LThreads[I] := 0;
+      LProcessed[I] := True;
       IncByStatus(TTestStatus(LCacheEntry.Status), LPass, LFail, LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name,
         TTestStatus(LCacheEntry.Status), LCacheEntry.Message,
@@ -1660,17 +1667,15 @@ begin
 
   { Phase 1: Sequential tests — run serially before parallel batch.
     Go t.Parallel() inverse: tests with shared mutable state (DB, file,
-    global vars) run first, one at a time, before parallel tests start. }
+    global vars) run first, one at a time, before parallel tests start.
+    LProcessed[I] = true means: filter-excluded, ShortSkip, or cache-hit — skip. }
   for I := 0 to High(Tests) do
   begin
+    if LProcessed[I] then
+      Continue;
     if not Tests[I].Sequential then
       Continue;
-    if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
-      Continue;
-    if LConfig.ShortMode and Tests[I].ShortSkip then
-      Continue;
-    if (LRecs[I].Pass = nil) then
-      Continue; { filter-excluded }
+    LProcessed[I] := True;
     ParallelWorkerProc(@LRecs[I]);
     { Mark as "already processed" — result is in LResults[I],
       which the final collection loop will pick up via Name <> ''. }
@@ -1696,6 +1701,8 @@ begin
     LFirstEligible := -1;
     for I := LBatchStart to High(Tests) do
     begin
+      if LProcessed[I] then
+        Continue; { already processed: filter-excluded, ShortSkip, cache-hit, Phase 1 }
       if IsTestEligible(Tests[I], LConfig, LTagFilter) and
          not Tests[I].Sequential then
       begin
@@ -1711,10 +1718,13 @@ begin
     begin
       if LSpawned >= LMaxWorkers then
         Break;
+      if LProcessed[I] then
+        Continue; { already processed }
       if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Continue;
       if Tests[I].Sequential then
         Continue; { already ran in Phase 1 }
+      LProcessed[I] := True;
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
       begin

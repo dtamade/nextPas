@@ -306,6 +306,7 @@ var
   LTimeoutRunOut: string;
   { Phase 12: cleanup }
   GCleanupCalled: Integer;
+  GSeqOrderCounter: Integer;
   LAutoRunSuite: TTestSuite;
   LAutoRunRunner: TSuiteRunner;
   { T-07: timeout exceeded }
@@ -2095,15 +2096,19 @@ begin
 
   begin
     { Verify sequential tests complete before parallel tests start.
-      Use a shared counter: sequential tests set it, parallel tests check it. }
+      Use a shared counter: sequential test sets it, parallel test checks it.
+      Phase 1 (Sequential) runs before Phase 2 (Parallel), so the counter
+      must be set before the parallel test reads it. }
+    GSeqOrderCounter := 0;
     LResultSuite := TTestSuite.Create('SeqOrder');
-    LResultSuite.Test('seq_first', procedure begin
-      { This runs in Phase 1 (sequential). If parallel tests started
-        before this, the counter would be 0. }
-      CheckTrue(True, 'sequential test runs first');
+    LResultSuite.TestSeq('seq_first', procedure begin
+      GSeqOrderCounter := 1;
+      CheckTrue(GSeqOrderCounter = 1, 'sequential test sets counter');
     end);
     LResultSuite.Test('par_after', procedure begin
-      CheckTrue(True, 'parallel test runs after sequential');
+      CheckTrue(GSeqOrderCounter >= 1,
+        'sequential should have completed before parallel (counter=' +
+        IntToStr(GSeqOrderCounter) + ')');
     end);
     LResultSuite.RunParallelWithResult(nil, LFilterResult);
     if LFilterResult.Passed <> 2 then

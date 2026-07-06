@@ -916,12 +916,16 @@ begin
   LHash := 14695981039346656037; { FNV-1a offset basis }
   for I := 0 to High(ASources) do
   begin
-    if FileExists(ASources[I]) then
-    begin
-      LContent := ReadFileText(ASources[I]);
-      { Hash each byte }
-      for J := 1 to Length(LContent) do
-        LHash := (LHash xor Ord(LContent[J])) * 1099511628211; { FNV-1a prime }
+    try
+      if FileExists(ASources[I]) then
+      begin
+        LContent := ReadFileText(ASources[I]);
+        { Hash each byte }
+        for J := 1 to Length(LContent) do
+          LHash := (LHash xor Ord(LContent[J])) * 1099511628211; { FNV-1a prime }
+      end;
+    except
+      { TOCTOU: file may vanish between FileExists and ReadFileText — skip }
     end;
   end;
   { Hash compiler version }
@@ -950,7 +954,14 @@ begin
     LLines := ReadFileLines(LFile);
     if Length(LLines) < 3 then
       Exit;
-    AEntry.Status := StrToIntDef(LLines[0], 0);
+    { Validate first line is a valid integer — prevent corrupted cache from
+      returning tsPassed (0) by default }
+    AEntry.Status := StrToIntDef(LLines[0], -1);
+    if (AEntry.Status < 0) or (AEntry.Status > Ord(High(TTestStatus))) then
+    begin
+      Result := False;
+      Exit;
+    end;
     AEntry.Message := LLines[1];
     AEntry.Duration := StrToInt64Def(LLines[2], 0);
     if Length(LLines) >= 4 then
