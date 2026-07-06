@@ -125,6 +125,8 @@ and FPC System mapping table.
 The ABI specification lives in `abi-specification.md`; it defines VMT layout,
 fpc_* signatures, type memory layouts, calling conventions, and stability commitments.
 This is the authoritative input for compiler integration (S9) and runtime implementation (S10).
+The API reference lives in `api-reference.md`; it is the developer quick-reference
+for all types, functions, and facades exported by the system kernel.
 
 ## Boundaries
 
