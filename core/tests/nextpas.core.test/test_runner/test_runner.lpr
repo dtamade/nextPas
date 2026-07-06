@@ -2162,6 +2162,8 @@ begin
     { Non-existent entry should return False }
     if LCache.Get(LCacheKey1, 'nonexistent', LCacheGotEntry) then
       FailTest('CacheGet: should not find non-existent entry');
+    { Clean up test cache directory }
+    LCache.Invalidate;
     PassTest('TestCache');
   end;
 
@@ -2196,6 +2198,9 @@ begin
         IntToStr(LCacheRunCount));
     if LCacheRunResult2.Passed <> 1 then
       FailTest('Cache integration: second run should pass 1 test (from cache)');
+    { Clean up cache directory }
+    LCache := TTestCache.Create('../../../build/projects/nextpas.core.test/test_runner/cache');
+    LCache.Invalidate;
     PassTest('Cache integration in runner');
   end;
 

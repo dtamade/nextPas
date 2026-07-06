@@ -11,6 +11,7 @@ interface
 uses
   nextpas.core.test.base,
   nextpas.core.base,
+  nextpas.core.system,
   nextpas.core.text.conv;
 
 type
@@ -994,13 +995,31 @@ begin
 end;
 
 procedure TTestCache.Clean(AmaxAgeDays: Integer);
+var
+  LDir: string;
 begin
-  { No-op: cleaning handled by caller if needed }
+  LDir := CacheDir;
+  if (LDir = '') or not DirectoryExists(LDir) then
+    Exit;
+  { For now, Clean delegates to Invalidate — full age-based cleanup
+    would require iterating directory entries and checking modification time.
+    This is a TODO for when the fs module exposes a directory iterator. }
+  Invalidate;
 end;
 
 procedure TTestCache.Invalidate;
+var
+  LDir: string;
 begin
-  { No-op: removal handled by caller if needed }
+  LDir := CacheDir;
+  if (LDir = '') or not DirectoryExists(LDir) then
+    Exit;
+  try
+    RemoveAll(LDir);
+  except
+    on E: Exception do
+      { Silently ignore removal failures — cache invalidation is best-effort }
+  end;
 end;
 
 initialization

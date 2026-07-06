@@ -1530,6 +1530,7 @@ var
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
   LProcessed: array of Boolean;
+  LCacheHits: array of Boolean;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -1595,6 +1596,7 @@ begin
   SetLength(LRecs, LTotal);
   SetLength(LResults, LTotal);
   SetLength(LProcessed, LTotal);
+  SetLength(LCacheHits, LTotal);
 
   { Pre-fill records — each thread gets its own result slot }
   for I := 0 to High(Tests) do
@@ -1628,6 +1630,7 @@ begin
     begin
       LThreads[I] := 0;
       LProcessed[I] := True;
+      LCacheHits[I] := True;
       IncByStatus(TTestStatus(LCacheEntry.Status), LPass, LFail, LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name,
         TTestStatus(LCacheEntry.Status), LCacheEntry.Message,
@@ -1762,9 +1765,9 @@ begin
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
-    { Cache store — persist result for future runs }
+    { Cache store — persist result for future runs (skip cache-hit tests) }
     if LConfig.CacheEnabled and (LCacheKey <> '') and
-       (LResults[I].Name <> '') then
+       (LResults[I].Name <> '') and not LCacheHits[I] then
     begin
       LCacheEntry.Status := Ord(LResults[I].Status);
       LCacheEntry.Message := LResults[I].Message;
