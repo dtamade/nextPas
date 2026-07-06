@@ -531,7 +531,7 @@ begin
     end;
 
     if platform_random_bytes(@LRandBytes[0], 8) <> 0 then
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     for I := 0 to 7 do
     begin
       APathBuf[LPos] := HEX_CHARS[(LRandBytes[I] shr 4) and $F];
@@ -551,7 +551,7 @@ begin
     if Result = 0 then
       Exit(0);
   end;
-  Result := -1;
+  Result := PLATFORM_ERR_INVALID;
 end;
 
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;

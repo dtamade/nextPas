@@ -180,6 +180,134 @@ begin
 end;
 ```
 
+### 10. Memory-Mapped Files
+
+```pascal
+uses
+  nextpas.core.platform.mmap;
+
+var
+  LMap: TPlatformMappedFile;
+begin
+  if platform_mmap_file('/path/to/file', LMap) <> 0 then
+    Exit;
+  try
+    { access LMap.Data[0..LMap.Size-1] }
+  finally
+    platform_mmap_close(LMap);
+  end;
+end;
+```
+
+### 11. Environment Variables
+
+```pascal
+uses
+  nextpas.core.platform.env;
+
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
+begin
+  if platform_env_get('HOME', @LBuf[0], SizeOf(LBuf), LLen) = 0 then
+    { LBuf contains home directory }
+
+  if platform_env_set('MY_VAR', 'value') <> 0 then
+    { handle error };
+
+  platform_env_unset('MY_VAR');
+end;
+```
+
+### 12. Path Operations
+
+```pascal
+uses
+  nextpas.core.platform.path;
+
+var
+  LBuf: array[0..1023] of AnsiChar;
+begin
+  { Join paths }
+  platform_path_join('/home/user', 'file.txt', @LBuf[0], SizeOf(LBuf));
+
+  { Get directory }
+  platform_path_dirname('/home/user/file.txt', @LBuf[0], SizeOf(LBuf));
+
+  { Get filename }
+  platform_path_basename('/home/user/file.txt', @LBuf[0], SizeOf(LBuf));
+
+  { Check if absolute }
+  if platform_path_is_absolute('/home/user') then
+    { is absolute path };
+end;
+```
+
+### 13. Filesystem Operations
+
+```pascal
+uses
+  nextpas.core.platform.fs;
+
+var
+  LBuf: array[0..1023] of AnsiChar;
+  LLen: Int32;
+begin
+  { Get current directory }
+  if platform_fs_getcwd(@LBuf[0], SizeOf(LBuf), LLen) = 0 then
+    { LBuf contains current directory }
+
+  { Change directory }
+  if platform_fs_chdir('/tmp') <> 0 then
+    { handle error };
+
+  { Remove file }
+  if platform_fs_unlink('/tmp/file.txt') <> 0 then
+    { handle error };
+
+  { Rename file }
+  if platform_fs_rename('/tmp/old.txt', '/tmp/new.txt') <> 0 then
+    { handle error };
+end;
+```
+
+### 14. Thread Creation
+
+```pascal
+uses
+  nextpas.core.platform.thread;
+
+function MyThreadFunc(AArg: Pointer): Int32;
+begin
+  { thread work }
+  Result := 0;
+end;
+
+var
+  LThread: TPlatformThread;
+begin
+  if platform_thread_create(@MyThreadFunc, nil, LThread) <> 0 then
+    Exit;
+  platform_thread_join(LThread, -1);
+end;
+```
+
+### 15. Timer and Time
+
+```pascal
+uses
+  nextpas.core.platform.time;
+
+var
+  LStart, LEnd: UInt64;
+begin
+  LStart := platform_time_monotonic_us;
+  { do work }
+  LEnd := platform_time_monotonic_us;
+  { elapsed = LEnd - LStart microseconds }
+end;
+```
+
 ## Error Handling
 
 All functions return `Int32` error codes:
