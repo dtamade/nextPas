@@ -142,6 +142,31 @@ All functions return `Int32` error codes:
 
 Use `platform_error_message()` to get human-readable error text.
 
+### Error Handling Best Practices
+
+```pascal
+uses
+  nextpas.core.platform.error;
+
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
+begin
+  { Get error message }
+  LLen := platform_error_message(LR, @LBuf[0], SizeOf(LBuf));
+  if LLen > 0 then
+    { LBuf contains error message }
+
+  { Check error category }
+  case platform_error_category(LR) of
+    ecNotFound: { file not found };
+    ecPermission: { permission denied };
+    ecInvalidArgument: { invalid parameter };
+    ecTimeout: { operation timed out };
+  end;
+end;
+```
+
 ## Key Constants
 
 | Constant | Value | Description |
