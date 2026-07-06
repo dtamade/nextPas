@@ -1,592 +1,417 @@
 # nextpas.core.http 问题调研报告
 
 **调研日期**: 2026-07-05
-**最后更新**: 2026-07-06
-**调研范围**: 36 个源文件 + 31 个测试目录
-**调研方法**: 根因分析 + 同类方案对标 + 修复策略 + 风险评估
+**最后更新**: 2026-07-06 (v2 全量复核)
+**调研范围**: 36 个源文件 + 31 个测试目录 ~1447 测试
+**调研方法**: 根因分析 + 同类方案对标 (Go net/http / Rust hyper) + 修复策略 + 风险评估
 
 ---
 
-## 〇、修复状态更新 (2026-07-06)
+## 〇、已修复问题 (历史)
 
-| 问题 | 状态 | 修复 |
-|------|------|------|
-| P0-1: H2 测试编译失败 | ✅ 已修复 | test framework API 迁移 |
-| P0-2: IPv4 字节序错误 | ✅ 已修复 | `platform_sockaddr_from_ipv4` 添加 `htonl` |
-| P1-?: Connection:close 响应 | ✅ 已修复 | response parser `HPE_CLOSED_CONNECTION` 容忍额外数据 |
-| 新发现: Same-read tail 检测 | ✅ 已修复 | response parser pause + `FPending` 跨调用保留 |
-| 新发现: 信息响应字节丢失 | ✅ 已修复 | 1xx 跳过路径不再丢弃 `LPending` |
+| 问题 | 修复 |
+|------|------|
+| P0-1: H2 测试编译失败 (140 tests) | test framework API 迁移 |
+| P0-2: IPv4 字节序错误 | `platform_sockaddr_from_ipv4` 添加 `htonl` |
+| P1-1: H1/H2 连接池线程安全 | `FPoolLock` 临界区已加 (H1+H2) |
+| P1-2: FindFirst 双重遍历 | `NeedsNormalize` 快速路径已存在 |
+| P1-3: ParserErrorStatus case | `pekNone` 分支已存在 |
+| P1-5: PoolPut 池满未关闭 | 原判断有误，已正确处理 |
+| P2-4: timeout 命名误导 | `ResponseTimeMiddleware` + deprecated alias |
+| P2-5: IH2StreamControl 未暴露 | 门面已 re-export |
+| P2-9: websocket 自定义 LowerCase | 已改用标准库 |
+| Connection:close 响应 | response parser `HPE_CLOSED_CONNECTION` 容忍额外数据 |
+| Same-read tail 检测 | response parser pause + `FPending` 跨调用保留 |
+| 信息响应字节丢失 | 1xx 跳过路径不再丢弃 `LPending` |
 
-**当前测试**: 18 套件 599 pass / 7 fail (预存 source contract ENOENT) / 0 leak
-
----
-
-## 一、问题总览
-
-| 等级 | 数量 | 状态 |
-|------|------|------|
-| P0 | 2 | 需立即修复 |
-| P1 | 5 | 需短期修复 |
-| P2 | 15 | 需中期改进 |
-| P3 | 12 | 建议改进 |
+**当前测试**: 18 套件 599 pass / 7 fail (source contract ENOENT) / 0 leak
 
 ---
 
-## 二、P0 问题调研
-
-### P0-1: H2 测试套件编译失败（6 个文件，140 个测试）
-
-**根因分析**:
-- `test_http_h2_frame.lpr` 等 6 个文件使用旧版 test framework API
-- 旧版: `with TTestSuite.Create('name') do begin Run('test', @Proc); Summary; end;`
-- 新版: `T := TTestSuite.Create('name'); T.Test('test', @Proc); if not T.Run then Halt(1);`
-- 关键差异: 旧版 `Run` 有参数（注册+执行），新版 `Run` 无参数（仅执行）
-
-**受影响文件**:
-
-| 文件 | Run 调用数 | 测试数 |
-|------|-----------|--------|
-| test_http_h2_frame.lpr | 18 | 18 |
-| test_http_h2_hpack.lpr | 15 | 15 |
-| test_http_h2_hpack_block.lpr | 11 | 11 |
-| test_http_h2_types.lpr | 23 | 23 |
-| test_http_h2_stream.lpr | 36 | 36 |
-| test_http_h2_session.lpr | 37 | 37 |
-| **合计** | **140** | **140** |
-
-**修复策略**:
-```pascal
-// 旧版 (需替换)
-with TTestSuite.Create('name') do
-begin
-  Run('test1', @TestProc1);
-  Run('test2', @TestProc2);
-  Summary;
-end;
-
-// 新版 (目标)
-T := TTestSuite.Create('name');
-T.Test('test1', @TestProc1);
-T.Test('test2', @TestProc2);
-if not T.Run then Halt(1);
-```
-
-**风险评估**: 低风险，纯机械替换，不影响测试逻辑
-
-**对标**: Go testing 框架也经历过 API 演进，但保持向后兼容
-
----
-
-## 三、P1 问题调研
-
-### P1-1: H1/H2 连接池无线程安全保护
-
-**根因分析**:
-- `TH1ClientTransport` (h1.pas:1999-2045) 连接池操作无锁
-- `TH2ClientTransport` (h2.client.pas:1387-1451) 连接池操作无锁
-- 共享 `FPool` 数组和 `FPoolCount` 计数器
-- 多线程并发调用 `RoundTrip` 会导致数据竞争
-
-**影响范围**:
-- 所有使用共享 `IHttpClient` 的多线程场景
-- 高并发 HTTP 服务网关、代理服务器
-
-**对标方案**:
-
-| 语言/库 | 方案 | 性能影响 |
-|---------|------|---------|
-| Go net/http | `sync.Mutex` 保护 transport pool | 低（锁粒度小） |
-| Rust reqwest | `Arc<Mutex<Pool>>` 或 lock-free | 中等 |
-| Java HttpClient | `ConcurrentLinkedDeque` | 低 |
-
-**修复策略**:
-```pascal
-// 方案 A: 临界区保护 (推荐)
-TH1ClientTransport = class
-private
-  FPoolLock: TRTLCriticalSection;
-  FPool: array of TPoolEntry;
-  FPoolCount: Int32;
-  // ...
-end;
-
-constructor TH1ClientTransport.Create(...);
-begin
-  InitCriticalSection(FPoolLock);
-  // ...
-end;
-
-destructor TH1ClientTransport.Destroy;
-begin
-  PoolClear;
-  DoneCriticalSection(FPoolLock);
-  inherited;
-end;
-
-function TH1ClientTransport.PoolGet(...): ITcpStream;
-begin
-  EnterCriticalSection(FPoolLock);
-  try
-    // 原有逻辑
-  finally
-    LeaveCriticalSection(FPoolLock);
-  end;
-end;
-```
-
-**风险评估**: 中等风险
-- 需确保所有池操作路径都加锁
-- 需避免死锁（如 PoolGet 内调用 PooledConnectionIsReusable 可能阻塞）
-- 性能影响: 锁粒度小，影响可忽略
-
----
-
-### P1-2: FindFirst 双重遍历性能问题
-
-**根因分析**:
-- `THttpHeaders.FindFirst` (headers.pas:200-217) 先精确匹配，再 normalized 匹配
-- 如果调用方传入已 normalized 的名称（小写），第二次遍历是浪费
-- 大多数 HTTP 头部名称已是小写（parser 输出 normalized）
-
-**影响范围**:
-- 高频头部访问场景（如 `Content-Type`, `Authorization`）
-- 每个请求可能调用 10-20 次 `Get/Has`
-
-**对标方案**:
-
-| 语言/库 | 方案 |
-|---------|------|
-| Go net/http | CanonicalHeaderKey 预标准化 |
-| Rust hyper | HeaderName 类型保证 normalized |
-
-**修复策略**:
-```pascal
-// 方案: 记录已 normalized 状态
-function THttpHeaders.FindFirst(const AName: string): Int32;
-var
-  LNorm: string;
-  LI: Int32;
-begin
-  // 快速路径: 直接匹配
-  for LI := 0 to FCount - 1 do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
-
-  // 仅在需要时 normalized
-  if NeedsNormalize(AName) then
-  begin
-    LNorm := Normalize(AName);
-    for LI := 0 to FCount - 1 do
-      if FEntries[LI].Name = LNorm then
-        Exit(LI);
-  end;
-
-  Result := -1;
-end;
-```
-
-**风险评估**: 低风险，纯优化，不影响语义
-
----
-
-### P1-3: ParserErrorStatus case 不完整
-
-**根因分析**:
-- `ParserErrorStatus` (h1.pas:368-374) case 语句缺少 `pekNone` 分支
-- 编译器可能产生警告，运行时不会到达
-
-**修复策略**:
-```pascal
-function ParserErrorStatus(const AParser: IH1Parser): THttpStatus;
-begin
-  case AParser.ErrorKind of
-    pekNone: Result := HTTP_STATUS_BAD_REQUEST;  // 添加
-    pekUnsupportedTransferCoding:
-      Result := HTTP_STATUS_NOT_IMPLEMENTED;
-  else
-    Result := HTTP_STATUS_BAD_REQUEST;
-  end;
-end;
-```
-
-**风险评估**: 极低风险
-
----
+## 一、P1 问题 (1 项未修复)
 
 ### P1-4: 全局注册表并发风险
 
-**根因分析**:
-- `GClientFactories/GServerFactories` (registry.pas:57-60) 全局数组无保护
-- 注释说"必须在并发前调用"但无运行时检查
-- 如果动态注册 transport，可能读到半写状态
+**文件**: `core/src/nextpas.core.http.impl.registry.pas:57-60`
 
-**修复策略**:
+**根因**:
 ```pascal
-// 方案: InitOnce 保护
 var
-  GRegistryInitialized: Boolean;
-  GRegistryLock: TRTLCriticalSection;
-
-procedure EnsureRegistryInitialized;
-begin
-  if GRegistryInitialized then Exit;
-  EnterCriticalSection(GRegistryLock);
-  try
-    if not GRegistryInitialized then
-    begin
-      RegisterBuiltins;
-      GRegistryInitialized := True;
-    end;
-  finally
-    LeaveCriticalSection(GRegistryLock);
-  end;
-end;
+  GClientFactories: array[THttpVersion] of THttpClientTransportFactory;
+  GServerFactories: array[THttpVersion] of THttpServerTransportFactory;
+  GDefaultClientVersion: THttpVersion;
+  GDefaultServerVersion: THttpVersion;
 ```
+四个全局变量无同步保护。所有 `Register*`/`TryGet*`/`Resolve*` 函数无锁读写。
 
-**风险评估**: 低风险，当前仅在 initialization 段调用，实际竞争概率低
+**实际风险**: **低**。`RegisterBuiltins` 仅在 `initialization` 段调用 (单线程)。生产环境无运行时注册。但导出 API 是 footgun — 库消费者若在启动后注册会导致函数指针撕裂读。
 
----
+**对标**:
 
-### P1-5: PoolPut 池满时未关闭连接
+| 库 | 方案 |
+|----|------|
+| Go net/http | `sync.Mutex` + `init()` 注册 |
+| Rust hyper | 编译时静态注册，无运行时注册 |
+| Java HttpClient | `ServiceLoader` (类加载时) |
 
-**根因分析**:
-- `TH1ClientTransport.PoolPut` (h1.pas:2021-2024) 池满时调用 `AConn.Close` ✅
-- `TH2ClientTransport.PoolPut` (h2.client.pas:1424-1428) 池满时调用 `AConn.Close; AConn.Free` ✅
-- **实际已正确处理**，原 findings.md 判断有误
-
-**状态**: 无需修复
-
----
-
-## 四、P2 问题调研
-
-### P2-1: 中间件测试缺失
-
-**现状**:
-- `http.middleware.logger.pas` — 无独立测试
-- `http.middleware.recovery.pas` — 无独立测试
-- `http.middleware.timeout.pas` — 无独立测试
-- `test_http_middlewares` 目录存在但内容待查
-
-**对标**: Go 标准库每个 middleware 都有独立测试
-
-**修复策略**: 添加 3 个测试文件
-- `test_http_logger/test_http_logger.lpr`
-- `test_http_recovery/test_http_recovery.lpr`
-- `test_http_responstime/test_http_responstime.lpr`
-
-**风险评估**: 低风险，纯测试补充
-
----
-
-### P2-2: TLS 相关测试缺失
-
-**现状**:
-- `http.impl.h2.tls.pas` — 无测试
-- `http.impl.tls.stream.pas` — 无测试
-- 依赖真实 TLS 证书，测试环境搭建复杂
-
-**对标**: Go crypto/tls 有完整的 mock 测试
-
-**修复策略**:
-1. 使用自签名证书进行集成测试
-2. 或 mock `ISSLContext` 进行单元测试
-
-**风险评估**: 中等风险，需要测试基础设施支持
-
----
-
-### P2-3: CONTRACT.md 与代码不一致
-
-**现状**:
-- CONTRACT.md:14-27 定义的接口与实际代码不符
-- 如 `IHttpClient.Get` 返回 `THttpResponse`（应为 `IHttpResponse`）
-- 如 `IHttpServer.Get` 方法签名不同
-
-**修复策略**: 更新 CONTRACT.md 与实际代码同步
-
-**风险评估**: 极低风险，纯文档更新
-
----
-
-### P2-4: 命名误导 (timeout middleware)
-
-**现状**:
-- `http.middleware.timeout.pas` 实际功能是 ResponseTime
-- `TimeoutMiddleware` 已标记 deprecated
-- 文件名未改
-
-**修复策略**:
-1. 重命名为 `http.middleware.responstime.pas`
-2. 保留 `TimeoutMiddleware` 作为 deprecated alias
-
-**风险评估**: 低风险，需更新所有引用
-
----
-
-### P2-5: IH2StreamControl 未在门面暴露
-
-**现状**:
-- `http.intf.pas:180-185` 定义 `IH2StreamControl`
-- `http.pas` 门面未 re-export
-
-**修复策略**: 添加 re-export 或文档说明
-
-**风险评估**: 极低风险
-
----
-
-### P2-6: IsOriginAllowed 每次请求重新解析
-
-**现状**:
-- `http.middleware.cors.pas:31-59` 每次请求解析 `AllowOrigins` 字符串
-- 高并发下有性能开销
-
-**修复策略**:
+**修复策略**: 冻结模式 — 初始化后拒绝注册
 ```pascal
-TCorsMiddleware = class
-private
-  FOrigins: TStringArray;  // 预解析
-  FWildcard: Boolean;
-  // ...
+var
+  GFrozen: Boolean = False;
+
+procedure RegisterClientTransport(...);
+begin
+  if GFrozen then
+    raise EHttpError.Create('transport registry frozen after initialization');
+  // ... existing logic
 end;
+
+initialization
+  RegisterBuiltins;
+  GFrozen := True;
 ```
 
-**风险评估**: 低风险
+**风险**: 极低。零运行时开销，保护热路径 (`Resolve*`) 不加锁。
+
+---
+
+## 二、P2 问题 (10 项未修复)
+
+### P2-1: 中间件测试缺口
+
+**现状**: `test_http_middleware` (11 tests) + `test_http_middlewares` (13 tests) 存在，但覆盖不全。
+
+**缺口**:
+
+| 缺口 | 严重度 |
+|------|--------|
+| CORS 受限 origin 列表 (非 `*`) | **高** — `IsOriginAllowed` 路径未测试 |
+| CORS `Vary: Origin` 头 | 中 |
+| CORS 预检缺少 Origin | 中 |
+| CORS `MaxAge` 头 | 低 |
+| Logger 输出验证 (依赖 P2-15) | 中 |
+| Recovery 双 WriteHeader | 低 |
+| 并发中间件使用 | 中 |
+
+**修复策略**: 在 `test_http_middlewares` 添加 CORS 受限 origin 测试。
+
+---
+
+### P2-2: TLS 集成测试缺失
+
+**文件**: `http.impl.h2.tls.pas` (99 lines), `http.impl.tls.stream.pas` (328 lines)
+
+**缺口**:
+- `NewTlsClientTcpStream` nil 参数处理
+- ALPN `h2` 拒绝非 h2 连接
+- `TTlsTcpStream.Close` 幂等性
+- 超时转换正确性
+
+**修复策略**: Mock `ITcpStream` + `ISSLContext` 做单元测试。不需要真实 TLS 握手。
+
+**风险**: 中等。需要 mock 基础设施。
+
+---
+
+### P2-3: CONTRACT.md 与代码严重不一致
+
+**文件**: `core/docs/http/CONTRACT.md`
+
+**具体偏差**:
+
+| CONTRACT 说 | 实际代码 | 严重度 |
+|-------------|---------|--------|
+| `IHttpClient.Get` 返回 `THttpResponse` | 返回 `IHttpResponse` | **高** |
+| `IHttpClient` 有 `SetHeader`/`SetTimeout` | 不存在 | **高** |
+| `IHttpServer.Get(APath, AHandler: THttpHandler)` | `IHttpRouter.Get(APattern, AHttpHandlerFunc)` | **高** |
+| Body 是 `TBytes` | Body 是 `IReader` | 中 |
+| 错误类型 `ENetworkError`/`ETimeoutError` | 统一 `EHttpError` | 中 |
+| 线程安全 "单连接" | 连接池 | 中 |
+| 包含 `http.cookie`/`http.form` | 不存在 | 低 |
+
+**修复策略**: 重写 CONTRACT.md 对齐实际代码。
+
+---
+
+### P2-6: CORS 每次请求解析 (误报)
+
+**实际状态**: ✅ **无需修复**。`ParseOrigins` 在中间件创建时调用一次，结果被闭包捕获。`IsOriginAllowed` 每次请求只做 `LowerCase` 比较，无解析开销。
 
 ---
 
 ### P2-7: ServeFileContent 硬编码错误响应
 
-**现状**:
-- `http.static.pas:126-128` 返回硬编码 "Not Found"
-- 未设置 Content-Type
+**文件**: `core/src/nextpas.core.http.static.pas:124-138`
 
-**修复策略**: 统一错误响应格式
+**问题**:
+```pascal
+AW.GetHeaders.SetHeader('content-length', '9');
+AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+AW.Write(PAnsiChar('Not Found')^, 9);
+```
+- 硬编码字节长度，修改字符串需同步更新
+- 无 `content-type: text/plain`
+- 文件 I/O 异常未捕获，可能崩溃服务器循环
 
-**风险评估**: 极低风险
+**修复策略**: 提取 `WriteStaticError` 辅助函数 + try/except 包裹文件服务。
 
 ---
 
 ### P2-8: MatchNode 深度限制未文档化
 
-**现状**:
-- `http.router.pas:335` 限制 `MAX_MATCH_DEPTH`
-- 未返回 414 状态码
+**文件**: `core/src/nextpas.core.http.router.pas:322-335`
 
-**修复策略**: 文档化 + 考虑 414 响应
+**问题**: `MAX_MATCH_DEPTH = 128`，超出时静默返回 `nil` (404)，无日志。
 
-**风险评估**: 低风险
-
----
-
-### P2-9: websocket.pas 自定义 LowerCase
-
-**现状**:
-- `http.websocket.pas:111-121` 自定义 `LowerCase` 函数
-- 与 `nextpas.core.text.conv` 重复
-
-**修复策略**: 删除自定义实现，使用标准库
-
-**风险评估**: 极低风险
+**修复策略**: 添加注释 + 可选日志。
 
 ---
 
 ### P2-10: CloseRequestBody 接口覆盖不全
 
-**现状**:
-- `http.client.pas:100-120` 仅尝试 3 种接口
-- 可能遗漏其他可关闭接口
+**文件**: `core/src/nextpas.core.http.client.pas:100-120`
 
-**修复策略**: 统一使用 `ICloser` 标记接口
+**当前尝试**: `IReadCloser` → `ICloser` → `IStream`
 
-**风险评估**: 低风险
+**遗漏**: `IReadWriteCloser`/`IWriteCloser` 有 `Close` 但不匹配 `ICloser` GUID。
 
----
+**实际风险**: 低。TCP 流/TLS 流/chunked reader 都实现 `IReadCloser` 或 `IStream`，覆盖所有实际 body 类型。
 
-### P2-11: HttpStatusText 未知状态码处理
-
-**现状**:
-- `http.base.pas:220` 返回 "Unknown"
-- RFC 9110 未要求特定行为
-
-**修复策略**: 返回空字符串或 "XXX"
-
-**风险评估**: 极低风险
+**修复策略**: 可选添加 `IReadWriteCloser` 检查，防御性编码。
 
 ---
 
-### P2-12: UrlDecode 异常未捕获
+### P2-11: HttpStatusText 返回 "Unknown"
 
-**现状**:
-- `http.url.pas:92-100` 对不完整 percent 序列抛异常
-- `http.static.pas:176` 已捕获 ✅
+**文件**: `core/src/nextpas.core.http.base.pas:221`
 
-**状态**: 部分已处理
+**问题**: 未知状态码返回字面量 `"Unknown"`。缺少常用码: 102, 207, 418, 451, 504, 505, 511。
 
----
-
-### P2-13: ValidateValue TAB 字符未文档化
-
-**现状**:
-- `http.headers.pas:190-198` 允许 TAB (#9)
-- 符合 RFC 9110 但未注释
-
-**修复策略**: 添加 RFC 依据注释
-
-**风险评估**: 极低风险
+**修复策略**: 返回 `IntToStr(Ord(ACode))` + 补充缺失常用码。
 
 ---
 
-### P2-14: llhttp 文件过大
+### P2-13: ValidateValue TAB 缺少 RFC 注释
 
-**现状**:
-- `http.impl.h1.llhttp.pas` 676KB / 17884 行
-- 自动生成的绑定代码
+**文件**: `core/src/nextpas.core.http.headers.pas:190-198`
 
-**对标**: Go 的 http parser 也是单文件
+**状态**: 实现正确 (RFC 9110 §5.5 允许 HTAB)，但无注释。
 
-**修复策略**: 可考虑拆分但优先级低
-
-**风险评估**: 低风险
+**修复策略**: 添加 `{ Reject control chars except HTAB (#9) per RFC 9110 §5.5 }` 注释。
 
 ---
 
-### P2-15: logger middleware 使用 WriteLn
+### P2-14: llhttp 文件过大 (17884 行)
 
-**现状**:
-- `http.middleware.logger.pas:32` 使用 `WriteLn` 输出
-- 生产环境不适用
-
-**修复策略**: 改用 `nextpas.core.log` 或注入回调
-
-**风险评估**: 低风险
+**状态**: 自动生成绑定，不建议手动修改。低优先级。
 
 ---
 
-## 五、P3 问题调研
+### P2-15: Logger 使用 WriteLn
+
+**文件**: `core/src/nextpas.core.http.middleware.logger.pas:32`
+
+**问题**: `WriteLn` 输出到 stdout，不可重定向、无结构化、无线程安全。
+
+**对标**: Go 使用 `log.Printf`，Rust 使用 `tracing` crate。
+
+**修复策略**: 接受可选 `TLogger` 参数，使用 `nextpas.core.log` 结构化 API。保留无参重载向后兼容。
+
+```pascal
+function LoggerMiddleware(const ALogger: TLogger): IHttpMiddleware;
+// ... ALogger.Info^ .Str('method',...).Str('path',...).Int('status',...).Msg('request');
+function LoggerMiddleware: IHttpMiddleware; // 无参版本使用 DefaultLogger
+```
+
+---
+
+## 三、P3 问题 (12 项)
 
 ### P3-1: TPrefixedTcpStream 命名不清
-**建议**: 改为 `TTcpStreamWithPrefix`
 
-### P3-2: 门面单元缺文档注释
-**建议**: 添加 `@desc` 注释
+**文件**: `http.impl.h1.pas:42`，仅内部使用 (2 处调用)
 
-### P3-3: H1 实现文件缺架构注释
-**建议**: 在状态机处添加注释
+**建议**: 改为 `TReadPrependTcpStream`。单文件 rename。
 
-### P3-4: llhttp 指针转有符号整数警告
-**建议**: 使用 `SizeUInt`
+---
 
-### P3-5: GOAL_TREE.md 过时
-**建议**: 更新 HTTP/3 状态
+### P3-2: 门面缺文档注释
+
+**文件**: `http.pas` — 35 类型别名 + 29 函数无 `@desc`
+
+**建议**: 按组添加 `{** @desc ... *}` 注释。
+
+---
+
+### P3-3: H1 实现缺架构注释
+
+**文件**: `http.impl.h1.pas` (2397 lines) — 3 个隐式状态机无文档:
+1. `TH1ServerConnectionState` poll-driven 状态机 (parse → submit → drain → parse)
+2. `TH1ClientTransport` 连接池生命周期 (get → use → put/close)
+3. `TH1FastRequestSnapshot` 快速路径条件
+
+**建议**: 添加 ASCII 状态图 + 不变量注释。
+
+---
+
+### P3-4: llhttp 指针转有符号警告
+
+**文件**: `http.impl.h1.llhttp.pas` — `_current` 字段用 `Pointer(PtrInt(...))` 存整数状态
+
+**建议**: `_current` 改 `PtrUInt`。需更新数百处赋值/读取。机器生成文件，建议改 codegen。
+
+---
+
+### P3-5: GOAL_TREE 过时
+
+**文件**: `core/docs/http/GOAL_TREE.md`
+
+**需更新**: 测试计数、H2 测试缺口数字、最高价值切片日期。
+
+---
 
 ### P3-6: 缺少压力测试
-**建议**: 添加 bench_http_concurrent
+
+**现状**: 无并发 HTTP 测试。
+
+**建议**: 创建 `test_http_stress.lpr` — N 线程 × M 请求，验证无崩溃/无泄漏。
+
+---
 
 ### P3-7: 缺少 HTTPS 重定向测试
-**建议**: 补充场景
+
+**现状**: 30+ 重定向测试存在，但无 `http→https` 场景。
+
+**限制**: 客户端目前仅支持 `http://` scheme。需 TLS 传输层集成后补充。
+
+---
 
 ### P3-8: 缺少 Cookie 支持
-**建议**: 长期规划
+
+**现状**: 无 Cookie 解析/存储/管理代码。
+
+**需要**: `ParseSetCookie` + `ICookieJar` + 客户端集成。
+
+**依赖**: 无。可独立实现。
+
+---
 
 ### P3-9: 缺少 Form 支持
-**建议**: 长期规划
+
+**现状**: 无 `application/x-www-form-urlencoded` 或 `multipart/form-data` 编码。
+
+**需要**: `EncodeFormBody` + `TMultipartWriter`。
+
+**依赖**: `UrlEncode`/`EncodeQueryString` 已存在，可复用。
+
+---
 
 ### P3-10: 缺少 WebSocket 客户端
-**建议**: 长期规划
+
+**现状**: 仅服务端 WebSocket (`UpgradeWebSocket`)。无 `ConnectWebSocket`。
+
+**需要**: 客户端升级握手 + 帧掩码 + `wss://` TLS 支持。
+
+**依赖**: HTTP 客户端连接劫持。
+
+---
 
 ### P3-11: 缺少模糊测试
-**建议**: 添加 HTTP parser fuzz
+
+**现状**: 无 fuzz 测试。
+
+**建议**: 简单变异 fuzzer — 从有效 HTTP 消息随机腐蚀，验证 parser 不崩溃/不泄漏。
+
+---
 
 ### P3-12: 缺少跨语言互操作测试
-**建议**: 添加 Go/Rust 互测
+
+**现状**: Go/Rust 比较器存在但仅用于性能基准。
+
+**建议**: 扩展为正确性互测 — Pascal client ↔ Go/Rust server。
 
 ---
 
-## 六、实施规划
+## 四、实施规划
 
-### 阶段 1: 紧急修复（1-2 天）
+### Phase 1: 紧急修复 (1 天)
 
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| 迁移 6 个 H2 测试到新版 API | P0 | 无 | 2h |
-| 修复 ParserErrorStatus case | P1 | 无 | 15min |
+| 任务 | 优先级 | 工作量 | 依赖 |
+|------|--------|--------|------|
+| P1-4 注册表冻结 | P1 | 30min | 无 |
+| P2-3 CONTRACT.md 重写 | P2 | 2h | 无 |
+| P2-13 TAB 注释 | P2 | 5min | 无 |
+| P2-11 HttpStatusText 补全 | P2 | 15min | 无 |
 
-### 阶段 2: 线程安全（3-5 天）
+### Phase 2: 质量补全 (3-5 天)
 
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| H1 连接池添加临界区 | P1 | 无 | 2h |
-| H2 连接池添加临界区 | P1 | 无 | 2h |
-| 全局注册表添加保护 | P1 | 无 | 1h |
-| 并发测试验证 | P1 | 上述完成 | 4h |
+| 任务 | 优先级 | 工作量 | 依赖 |
+|------|--------|--------|------|
+| P2-1 CORS 受限 origin 测试 | P2 | 2h | 无 |
+| P2-7 ServeFileContent 提取辅助函数 | P2 | 1h | 无 |
+| P2-8 MatchNode 深度注释 | P2 | 15min | 无 |
+| P2-10 CloseRequestBody 防御补全 | P2 | 30min | 无 |
+| P2-15 Logger 改用 TLogger | P2 | 2h | 无 |
+| P2-2 TLS 集成 mock 测试 | P2 | 4h | 无 |
 
-### 阶段 3: 性能优化（1 周）
+### Phase 3: 文档与注释 (1 周)
 
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| FindFirst 优化 | P1 | 无 | 1h |
-| CORS 预解析 | P2 | 无 | 1h |
-| websocket.pas 删除重复函数 | P2 | 无 | 30min |
+| 任务 | 优先级 | 工作量 | 依赖 |
+|------|--------|--------|------|
+| P3-5 GOAL_TREE 更新 | P3 | 1h | Phase 1-2 完成 |
+| P3-2 门面文档注释 | P3 | 2h | 无 |
+| P3-3 H1 架构注释 | P3 | 3h | 无 |
+| P3-1 TPrefixedTcpStream 重命名 | P3 | 15min | 无 |
 
-### 阶段 4: 测试补充（1-2 周）
+### Phase 4: 测试加固 (1-2 周)
 
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| 中间件测试 (3 个) | P2 | 无 | 4h |
-| TLS 集成测试 | P2 | 测试基础设施 | 8h |
-| 压力测试 | P3 | 无 | 4h |
+| 任务 | 优先级 | 工作量 | 依赖 |
+|------|--------|--------|------|
+| P3-6 压力测试 | P3 | 4h | 无 |
+| P3-11 模糊测试 | P3 | 4h | 无 |
+| P3-7 HTTPS 重定向测试 | P3 | 2h | TLS 集成 |
+| P3-12 跨语言互操作 | P3 | 8h | Go/Rust 环境 |
 
-### 阶段 5: 文档与规范（持续）
+### Phase 5: 功能扩展 (按需)
 
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| CONTRACT.md 同步 | P2 | 无 | 2h |
-| 命名修正 | P2 | 无 | 1h |
-| 注释补充 | P2 | 无 | 2h |
-
-### 阶段 6: 长期规划（按需）
-
-| 任务 | 优先级 | 依赖 | 工作量 |
-|------|--------|------|--------|
-| Cookie 支持 | P3 | 无 | 1 周 |
-| Form 支持 | P3 | 无 | 1 周 |
-| WebSocket 客户端 | P3 | 无 | 1 周 |
-| HTTP/3 | P3 | QUIC 模块 | 1 月+ |
+| 任务 | 优先级 | 工作量 | 依赖 |
+|------|--------|--------|------|
+| P3-8 Cookie 支持 | P3 | 1 周 | 无 |
+| P3-9 Form 支持 | P3 | 1 周 | 无 |
+| P3-10 WebSocket 客户端 | P3 | 1 周 | 客户端劫持 |
+| P3-4 llhttp 指针警告 | P3 | 2h | codegen 更新 |
 
 ---
 
-## 七、风险矩阵
+## 五、风险矩阵
 
-| 风险 | 概率 | 影响 | 缓解措施 |
-|------|------|------|---------|
-| 线程安全修复引入死锁 | 低 | 高 | 代码审查 + 并发测试 |
-| 测试迁移遗漏 | 低 | 中 | 编译验证 + 运行验证 |
-| 性能优化引入回归 | 低 | 中 | 基准测试对比 |
-| TLS 测试环境搭建失败 | 中 | 低 | 使用 mock 或跳过 |
+| 风险 | 概率 | 影响 | 缓解 |
+|------|------|------|------|
+| 注册表冻结破坏运行时注册 | 极低 | 中 | 当前无运行时注册 |
+| CONTRACT.md 重写遗漏 | 低 | 低 | 对比源码逐项验证 |
+| Logger 改 TLogger 破坏兼容 | 低 | 低 | 保留无参重载 |
+| TLS mock 测试不充分 | 中 | 中 | 补充集成测试 |
+| 压力测试暴露竞态 | 中 | 高 | 恰恰需要发现 |
 
 ---
 
-## 八、验收标准
+## 六、验收标准
 
-### 阶段 1 验收
-- [ ] 6 个 H2 测试文件全部编译通过
-- [ ] 140 个测试全部运行通过
-- [ ] heaptrc 0 泄漏
+### Phase 1 验收
+- [ ] 注册表 `initialization` 后注册抛异常
+- [ ] CONTRACT.md 与实际代码一致
+- [ ] 全量测试通过，0 泄漏
 
-### 阶段 2 验收
-- [ ] 连接池操作无 data race (ThreadSanitizer 验证)
-- [ ] 并发 RoundTrip 压力测试通过
-- [ ] 性能无显著回退 (<5%)
+### Phase 2 验收
+- [ ] CORS 受限 origin 测试通过
+- [ ] ServeFileContent 有 content-type + 异常处理
+- [ ] Logger 输出通过 TLogger
+- [ ] TLS mock 测试覆盖 ALPN/nil/Close
 
-### 阶段 3 验收
-- [ ] FindFirst 性能提升可测量
-- [ ] 所有修改通过现有测试
-
-### 阶段 4 验收
-- [ ] 新增测试全部通过
-- [ ] 测试覆盖率提升
+### Phase 3-4 验收
+- [ ] GOAL_TREE 反映当前真实状态
+- [ ] 门面每个导出函数有 @desc
+- [ ] 压力测试 64 线程 × 1000 请求无崩溃无泄漏
 
 ---
 
