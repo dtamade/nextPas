@@ -120,15 +120,15 @@ B16  边界验证修复 (2026-07-06)                               ✅
   B16.3  C-27: HasRegression 阈值验证                       ✅
   B16.4  C-12/C-13: SetTimeout(TDuration) 重载              ✅
 
-B17  Phase 5: 统计能力深化 (2026-07-06)                      ⬜
+B17  Phase 5: 统计能力深化 (2026-07-06)                      ✅
   B17.1  单样本 K-S 检验 (Kolmogorov-Smirnov)              ✅
   B17.2  两样本 K-S 检验                                    ✅
   B17.3  Xoroshiro128+ PRNG 升级                            ✅
   B17.4  BCa Bootstrap (偏差修正加速)                       ✅
   B17.5  Bootstrap 假设检验                                 ✅
-  B17.6  正态-正态共轭贝叶斯估计                            ⬜
-  B17.7  贝叶斯可信区间                                     ⬜
-  B17.8  先验融合 (历史数据作为先验)                        ⬜
+  B17.6  正态-正态共轭贝叶斯估计                            ✅
+  B17.7  贝叶斯可信区间                                     ✅
+  B17.8  先验融合 (历史数据作为先验)                        ✅
 ```
 
 ## 测试套件分布
@@ -153,8 +153,9 @@ B17  Phase 5: 统计能力深化 (2026-07-06)                      ⬜
 | test_bench_matrix | 15 | ✅ 0 leaks | 多基线矩阵 + 图表 + JSON |
 | test_bench_ks | 12 | ✅ 0 leaks | K-S 检验 (Phase A) |
 | test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
+| test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
 | test_bench_self_bench | N/A | ✅ 0 leaks | 自基准测试 |
-| **合计** | **~345** | **17/17 通过** | |
+| **合计** | **~355** | **18/18 通过** | |
 
 ## 已解决的技术债务
 
