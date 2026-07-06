@@ -690,14 +690,6 @@ begin
     FError := False;
     FErrorMsg := '';
     Result := ConsumedUntilErrorPosition(ABuf, ALen);
-    // Check for extra bytes after message complete on non-keep-alive
-    if (Result < ALen) and (not ShouldKeepAlive) then
-    begin
-      FError := True;
-      FComplete := False;
-      FErrorKind := pekMalformed;
-      FErrorMsg := 'Data after close connection';
-    end;
     Exit;
   end;
   if (LErrno = HPE_CLOSED_CONNECTION) and FComplete then
