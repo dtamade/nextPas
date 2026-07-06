@@ -619,8 +619,7 @@ begin
     Exit(HPE_INVALID_VERSION);
   end;
   LSelf.FComplete := True;
-  if (LSelf.FParserType = ptRequest) and
-     (p0^.upgrade = 0) and
+  if (p0^.upgrade = 0) and
      (llhttp_should_keep_alive(p0) <> 0) then
     Exit(HPE_PAUSED);
   Result := 0;
@@ -691,6 +690,30 @@ begin
     FErrorMsg := '';
     Result := ConsumedUntilErrorPosition(ABuf, ALen);
     Exit;
+  end;
+  if (LErrno = HPE_CLOSED_CONNECTION) and FComplete then
+  begin
+    if FParserType = ptResponse then
+    begin
+      { Client-side: llhttp reports HPE_CLOSED_CONNECTION when data exists
+        after a Connection: close response. The response is already complete;
+        extra data is benign (e.g. trailing bytes). Consume silently. }
+      FError := False;
+      FErrorMsg := '';
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
+      Exit;
+    end
+    else
+    begin
+      { Server-side: extra bytes after a Connection: close request are
+        genuinely malformed — propagate as parser error. }
+      FError := True;
+      FComplete := False;
+      FErrorKind := pekMalformed;
+      FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
+      Result := ConsumedUntilErrorPosition(ABuf, ALen);
+      Exit;
+    end;
   end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
   begin

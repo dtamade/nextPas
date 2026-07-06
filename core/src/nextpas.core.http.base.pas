@@ -218,7 +218,7 @@ begin
     502: Result := 'Bad Gateway';
     503: Result := 'Service Unavailable';
   else
-    Result := 'Unknown';
+    Result := IntToStr(ACode);
   end;
 end;
 

@@ -534,6 +534,7 @@ begin
 end;
 
 begin
+  UnfreezeRegistry;
   T := TTestSuite.Create('nextpas.core.http.impl.registry');
   T.Test('ResolveClientTransport raises when version is missing',
     @TestResolveClientTransportRaisesWhenMissing);

@@ -1,4 +1,9 @@
 unit nextpas.core.http.impl.h1.llhttp;
+{**
+ * @desc Low-level llhttp C library bindings.
+ *       Provides the HTTP/1.1 state machine (llhttp_t) and callback registration.
+ *       Used by nextpas.core.http.impl.h1.parser for actual parsing.
+ *}
 
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}

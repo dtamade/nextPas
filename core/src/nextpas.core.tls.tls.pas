@@ -397,6 +397,7 @@ end;
 procedure TSSLConnector.ApplyClientOptions(AConn: ISSLConnection; const AServerName: string);
 var
   ClientConn: ISSLClientConnection;
+  ALPNConn: ISSLClientALPNConnection;
   SessionResumption: ISSLSessionResumption;
 begin
   if AConn = nil then
@@ -423,6 +424,9 @@ begin
       sslErrUnsupported,
       'TSSLConnector.ApplyClientOptions'
     );
+
+  if (FALPN <> '') and Supports(AConn, ISSLClientALPNConnection, ALPNConn) then
+    ALPNConn.SetALPNProtocols(FALPN);
 end;
 
 function TSSLConnector.TryQueueEarlyData(AConn: ISSLConnection): TSSLOperationResult;

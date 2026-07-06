@@ -50,6 +50,7 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
@@ -129,6 +130,9 @@ begin Result := nil; end;
 
 function TMockRequest.GetContentLength: Int64;
 begin Result := 0; end;
+
+function TMockRequest.GetTrailers: IHttpHeaders;
+begin Result := nil; end;
 
 function TMockRequest.GetRemoteAddr: string;
 begin Result := '127.0.0.1'; end;
@@ -299,7 +303,7 @@ begin
     [CorsMiddleware(TCorsOptions.Default)]
   );
   LReq := TMockRequest.Create(hmOptions, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
@@ -327,7 +331,7 @@ begin
     [CorsMiddleware(TCorsOptions.Default)]
   );
   LReq := TMockRequest.Create(hmGet, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
@@ -378,12 +382,159 @@ begin
     [CorsMiddleware(LOpts)]
   );
   LReq := TMockRequest.Create(hmGet, '/api');
-  LReq.GetHeaders.Set_('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
   LReqIntf := LReq;
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'), 'credentials header');
+end;
+
+procedure TestCorsSpecificOriginAllowed;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'https://trusted.com, https://other.com';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'https://trusted.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('https://trusted.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'specific origin echoed');
+  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for specific origin');
+end;
+
+procedure TestCorsSpecificOriginDenied;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'https://trusted.com';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'https://evil.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'disallowed origin gets no ACAO');
+end;
+
+procedure TestCorsCredentialsWildcardEchoesOrigin;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := '*';
+  LOpts.AllowCredentials := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('http://example.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'credentials+wildcard echoes concrete origin, not *');
+  CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'),
+    'credentials header present');
+  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for echoed origin');
+end;
+
+procedure TestCorsMaxAge;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.MaxAge := 3600;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('3600', LWObj.GetHeaders.Get('Access-Control-Max-Age'), 'MaxAge header');
+end;
+
+procedure TestCorsCustomMethodsHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowMethods := 'GET, POST, PATCH';
+  LOpts.AllowHeaders := 'Content-Type, X-Custom';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('GET, POST, PATCH', LWObj.GetHeaders.Get('Access-Control-Allow-Methods'),
+    'custom AllowMethods');
+  CheckEqual('Content-Type, X-Custom', LWObj.GetHeaders.Get('Access-Control-Allow-Headers'),
+    'custom AllowHeaders');
 end;
 
 { === Timeout Tests === }
@@ -400,7 +551,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(5))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/fast');
   LWObj := TMockResponseWriter.Create;
@@ -424,7 +575,7 @@ begin
       TSleep.ForDuration(TDuration.FromMilliseconds(50));
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromMilliseconds(10))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/slow');
   LWObj := TMockResponseWriter.Create;
@@ -448,7 +599,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware(TDuration.FromSeconds(1))]
+    [TimeoutMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/check');
   LWObj := TMockResponseWriter.Create;
@@ -475,6 +626,11 @@ begin
   T.Test('CORS: normal GET with Origin', @TestCorsNormalRequest);
   T.Test('CORS: no Origin → no CORS headers', @TestCorsNoOriginHeader);
   T.Test('CORS: AllowCredentials header', @TestCorsCredentials);
+  T.Test('CORS: specific origin allowed + Vary', @TestCorsSpecificOriginAllowed);
+  T.Test('CORS: specific origin denied', @TestCorsSpecificOriginDenied);
+  T.Test('CORS: credentials+wildcard echoes origin', @TestCorsCredentialsWildcardEchoesOrigin);
+  T.Test('CORS: MaxAge header', @TestCorsMaxAge);
+  T.Test('CORS: custom AllowMethods/AllowHeaders', @TestCorsCustomMethodsHeaders);
   { Timeout }
   T.Test('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
   T.Test('Timeout: slow handler still works', @TestTimeoutSlowHandler);
