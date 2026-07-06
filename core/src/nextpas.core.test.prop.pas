@@ -62,6 +62,12 @@ type
     function Name: string;
   end;
 
+  { ── Combinator function types ─────────────────────────────────────────────── }
+  TIntToString = reference to function(V: Int64): string;
+  TIntPred     = reference to function(V: Int64): Boolean;
+  TStringPred  = reference to function(const V: string): Boolean;
+  TBytesPred   = reference to function(const V: TBytes): Boolean;
+
 { ── Generator factories ───────────────────────────────────────────────────── }
 
 function GenString(AMinLen, AMaxLen: Integer): IStringGenerator; overload;
@@ -71,6 +77,20 @@ function GenInt(AMax: Int64 = MaxInt): IIntGenerator; overload;
 function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator; overload;
 function GenBytes(AMaxLen: Integer = 256): IBytesGenerator; overload;
 function GenBool: IBoolGenerator;
+
+{ ── Generator combinators ──────────────────────────────────────────────────── }
+
+{ Map: transform Int64 generator output to string }
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+
+{ Filter: reject Int64 values not matching predicate }
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+
+{ Filter: reject string values not matching predicate }
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+
+{ Filter: reject TBytes values not matching predicate }
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
 
 { ── Property test registration ─────────────────────────────────────────────── }
 
@@ -355,6 +375,258 @@ end;
 function GenBool: IBoolGenerator;
 begin
   Result := TBoolGenerator.Create;
+end;
+
+{ ── MapIntToStr combinator ─────────────────────────────────────────────────── }
+
+type
+  TMapIntToStrGenerator = class(TInterfacedObject, IStringGenerator)
+  private
+    FSource: IIntGenerator;
+    FMap: TIntToString;
+  public
+    constructor Create(ASource: IIntGenerator; AMap: TIntToString);
+    function Generate: string;
+    function Shrink(const AValue: string): specialize TArray<string>;
+    function Name: string;
+  end;
+
+constructor TMapIntToStrGenerator.Create(ASource: IIntGenerator; AMap: TIntToString);
+begin
+  inherited Create;
+  FSource := ASource;
+  FMap := AMap;
+end;
+
+function TMapIntToStrGenerator.Generate: string;
+begin
+  Result := FMap(FSource.Generate);
+end;
+
+function TMapIntToStrGenerator.Shrink(const AValue: string): specialize TArray<string>;
+var
+  LParsed: Int64;
+  LShrunk: specialize TArray<Int64>;
+  I, N: Integer;
+begin
+  { Try to reverse-map to Int64, shrink, then map forward }
+  Val(AValue, LParsed);
+  LShrunk := FSource.Shrink(LParsed);
+  N := 0;
+  SetLength(Result, Length(LShrunk));
+  for I := 0 to High(LShrunk) do
+  begin
+    Result[N] := FMap(LShrunk[I]);
+    if Result[N] <> AValue then
+      Inc(N);
+  end;
+  SetLength(Result, N);
+end;
+
+function TMapIntToStrGenerator.Name: string;
+begin
+  Result := 'MapIntToStr(' + FSource.Name + ')';
+end;
+
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+begin
+  Result := TMapIntToStrGenerator.Create(AGen, AMap);
+end;
+
+{ ── FilterInt combinator ───────────────────────────────────────────────────── }
+
+type
+  TFilterIntGenerator = class(TInterfacedObject, IIntGenerator)
+  private
+    FSource: IIntGenerator;
+    FPred: TIntPred;
+    FMaxRetries: Integer;
+  public
+    constructor Create(ASource: IIntGenerator; APred: TIntPred);
+    function Generate: Int64;
+    function Shrink(const AValue: Int64): specialize TArray<Int64>;
+    function Name: string;
+  end;
+
+constructor TFilterIntGenerator.Create(ASource: IIntGenerator; APred: TIntPred);
+begin
+  inherited Create;
+  FSource := ASource;
+  FPred := APred;
+  FMaxRetries := 100;
+end;
+
+function TFilterIntGenerator.Generate: Int64;
+var
+  I: Integer;
+begin
+  for I := 1 to FMaxRetries do
+  begin
+    Result := FSource.Generate;
+    if FPred(Result) then
+      Exit;
+  end;
+  { Fallback: return last generated value even if it doesn't match }
+  Result := FSource.Generate;
+end;
+
+function TFilterIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
+var
+  LShrunk: specialize TArray<Int64>;
+  I, N: Integer;
+begin
+  LShrunk := FSource.Shrink(AValue);
+  N := 0;
+  SetLength(Result, Length(LShrunk));
+  for I := 0 to High(LShrunk) do
+  begin
+    if FPred(LShrunk[I]) then
+    begin
+      Result[N] := LShrunk[I];
+      Inc(N);
+    end;
+  end;
+  SetLength(Result, N);
+end;
+
+function TFilterIntGenerator.Name: string;
+begin
+  Result := 'FilterInt(' + FSource.Name + ')';
+end;
+
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+begin
+  Result := TFilterIntGenerator.Create(AGen, APred);
+end;
+
+{ ── FilterString combinator ────────────────────────────────────────────────── }
+
+type
+  TFilterStringGenerator = class(TInterfacedObject, IStringGenerator)
+  private
+    FSource: IStringGenerator;
+    FPred: TStringPred;
+    FMaxRetries: Integer;
+  public
+    constructor Create(ASource: IStringGenerator; APred: TStringPred);
+    function Generate: string;
+    function Shrink(const AValue: string): specialize TArray<string>;
+    function Name: string;
+  end;
+
+constructor TFilterStringGenerator.Create(ASource: IStringGenerator; APred: TStringPred);
+begin
+  inherited Create;
+  FSource := ASource;
+  FPred := APred;
+  FMaxRetries := 100;
+end;
+
+function TFilterStringGenerator.Generate: string;
+var
+  I: Integer;
+begin
+  for I := 1 to FMaxRetries do
+  begin
+    Result := FSource.Generate;
+    if FPred(Result) then
+      Exit;
+  end;
+  Result := FSource.Generate;
+end;
+
+function TFilterStringGenerator.Shrink(const AValue: string): specialize TArray<string>;
+var
+  LShrunk: specialize TArray<string>;
+  I, N: Integer;
+begin
+  LShrunk := FSource.Shrink(AValue);
+  N := 0;
+  SetLength(Result, Length(LShrunk));
+  for I := 0 to High(LShrunk) do
+  begin
+    if FPred(LShrunk[I]) then
+    begin
+      Result[N] := LShrunk[I];
+      Inc(N);
+    end;
+  end;
+  SetLength(Result, N);
+end;
+
+function TFilterStringGenerator.Name: string;
+begin
+  Result := 'FilterString(' + FSource.Name + ')';
+end;
+
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+begin
+  Result := TFilterStringGenerator.Create(AGen, APred);
+end;
+
+{ ── FilterBytes combinator ─────────────────────────────────────────────────── }
+
+type
+  TFilterBytesGenerator = class(TInterfacedObject, IBytesGenerator)
+  private
+    FSource: IBytesGenerator;
+    FPred: TBytesPred;
+    FMaxRetries: Integer;
+  public
+    constructor Create(ASource: IBytesGenerator; APred: TBytesPred);
+    function Generate: TBytes;
+    function Shrink(const AValue: TBytes): specialize TArray<TBytes>;
+    function Name: string;
+  end;
+
+constructor TFilterBytesGenerator.Create(ASource: IBytesGenerator; APred: TBytesPred);
+begin
+  inherited Create;
+  FSource := ASource;
+  FPred := APred;
+  FMaxRetries := 100;
+end;
+
+function TFilterBytesGenerator.Generate: TBytes;
+var
+  I: Integer;
+begin
+  for I := 1 to FMaxRetries do
+  begin
+    Result := FSource.Generate;
+    if FPred(Result) then
+      Exit;
+  end;
+  Result := FSource.Generate;
+end;
+
+function TFilterBytesGenerator.Shrink(const AValue: TBytes): specialize TArray<TBytes>;
+var
+  LShrunk: specialize TArray<TBytes>;
+  I, N: Integer;
+begin
+  LShrunk := FSource.Shrink(AValue);
+  N := 0;
+  SetLength(Result, Length(LShrunk));
+  for I := 0 to High(LShrunk) do
+  begin
+    if FPred(LShrunk[I]) then
+    begin
+      Result[N] := LShrunk[I];
+      Inc(N);
+    end;
+  end;
+  SetLength(Result, N);
+end;
+
+function TFilterBytesGenerator.Name: string;
+begin
+  Result := 'FilterBytes(' + FSource.Name + ')';
+end;
+
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+begin
+  Result := TFilterBytesGenerator.Create(AGen, APred);
 end;
 
 { ── Shrinking helper ──────────────────────────────────────────────────────── }

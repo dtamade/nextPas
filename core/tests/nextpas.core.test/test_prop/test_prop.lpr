@@ -93,6 +93,65 @@ begin
     FailTest('Expected 50 runs, got ' + IntToStr(GTestCount));
 end;
 
+{ ── Combinator tests ──────────────────────────────────────────────────────── }
+
+procedure TestMapIntToStr;
+begin
+  GTestCount := 0;
+  Prop('MapIntToStr: digits only', procedure(const S: string)
+  begin
+    Inc(GTestCount);
+    { IntToStr produces only digit chars (and '-' for negatives) }
+    if Length(S) = 0 then
+      FailTest('Empty string from MapIntToStr');
+  end, MapIntToStr(GenInt(0, 9999), function(V: Int64): string begin Result := IntToStr(V) end),
+  50, True);
+  if GTestCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(GTestCount));
+end;
+
+procedure TestFilterInt;
+begin
+  GTestCount := 0;
+  Prop('FilterInt: even only', procedure(const V: Int64)
+  begin
+    Inc(GTestCount);
+    if V mod 2 <> 0 then
+      FailTest('Odd value: ' + IntToStr(V));
+  end, FilterInt(GenInt(0, 1000), function(V: Int64): Boolean begin Result := V mod 2 = 0 end),
+  50, True);
+  if GTestCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(GTestCount));
+end;
+
+procedure TestFilterString;
+begin
+  GTestCount := 0;
+  Prop('FilterString: non-empty', procedure(const S: string)
+  begin
+    Inc(GTestCount);
+    if Length(S) = 0 then
+      FailTest('Empty string');
+  end, FilterString(GenString(50), function(const V: string): Boolean begin Result := Length(V) > 0 end),
+  50, True);
+  if GTestCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(GTestCount));
+end;
+
+procedure TestFilterBytes;
+begin
+  GTestCount := 0;
+  Prop('FilterBytes: non-empty', procedure(const V: TBytes)
+  begin
+    Inc(GTestCount);
+    if Length(V) = 0 then
+      FailTest('Empty bytes');
+  end, FilterBytes(GenBytes(50), function(const V: TBytes): Boolean begin Result := Length(V) > 0 end),
+  50, True);
+  if GTestCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(GTestCount));
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
@@ -114,6 +173,22 @@ begin
   SectionHeader('TBytes properties');
   TestBytesProperty;
   PassTest('TBytes property passed');
+
+  SectionHeader('Combinator: MapIntToStr');
+  TestMapIntToStr;
+  PassTest('MapIntToStr passed');
+
+  SectionHeader('Combinator: FilterInt');
+  TestFilterInt;
+  PassTest('FilterInt passed');
+
+  SectionHeader('Combinator: FilterString');
+  TestFilterString;
+  PassTest('FilterString passed');
+
+  SectionHeader('Combinator: FilterBytes');
+  TestFilterBytes;
+  PassTest('FilterBytes passed');
 
   WriteLn;
   PassTest('test_prop');
