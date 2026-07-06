@@ -5802,6 +5802,10 @@ end;
 
 {$I nextpas.core.simd.sse2.batch.inc}
 
+// === SSE3/SSE4.1/SSE4.2 Extensions ===
+
+{$I nextpas.core.simd.sse34142.inc}
+
 // === Backend Registration ===
 
 {$I nextpas.core.simd.sse2.register.inc}
