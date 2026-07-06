@@ -1011,7 +1011,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 
 | 子任务 | 源位置 | 目标文件 | 预估行数 | 风险 |
 |--------|--------|---------|----------|------|
-| AL2.1a 提取 overload | 主文件 ~1,500 行重载解析 | `np_sema_overload.pas` | ~1,500 | 高（650 方法交叉依赖） |
+| AL2.1a 提取 overload [✅ 2026-07-06] | 主文件 ~1,500 行重载解析 | `np_sema_overload.pas` | 1,467 | 高（650 方法交叉依赖） |
 | AL2.1b 提取 type_check | 主文件 ~1,500 行类型检查 | `np_sema_type_check.pas` | ~1,500 | 高 |
 | AL2.1c 提取 hir_lowering | 主文件 ~3,000 行 AST→HIR | `np_sema_hir_lowering.pas` | ~3,000 | 高 |
 | AL2.1d 协调器收敛 | 剩余主文件 | `np_semantic_analyzer.pas` | ~11,678 | 中 |
