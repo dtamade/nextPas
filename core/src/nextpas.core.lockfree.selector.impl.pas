@@ -109,11 +109,13 @@ destructor TLockFreeSelectorImpl.Destroy;
 var
   LI: PtrUInt;
 begin
-  for LI := 0 to FCount - 1 do
-  begin
-    if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
-      Dispose(FCases[LI].SendValuePtr);
-  end;
+  // Guard: FCount is PtrUInt (unsigned), FCount-1 wraps to MaxPtrUInt when FCount=0
+  if FCount > 0 then
+    for LI := 0 to FCount - 1 do
+    begin
+      if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
+        Dispose(FCases[LI].SendValuePtr);
+    end;
   SetLength(FCases, 0);
   inherited;
 end;
@@ -238,14 +240,15 @@ procedure TLockFreeSelectorImpl.Clear;
 var
   LI: PtrUInt;
 begin
-  for LI := 0 to FCount - 1 do
-  begin
-    if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
+  if FCount > 0 then
+    for LI := 0 to FCount - 1 do
     begin
-      Dispose(FCases[LI].SendValuePtr);
-      FCases[LI].SendValuePtr := nil;
+      if FCases[LI].IsSend and (FCases[LI].SendValuePtr <> nil) then
+      begin
+        Dispose(FCases[LI].SendValuePtr);
+        FCases[LI].SendValuePtr := nil;
+      end;
     end;
-  end;
   FCount := 0;
 end;
 

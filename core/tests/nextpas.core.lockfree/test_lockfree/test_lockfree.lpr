@@ -3177,10 +3177,33 @@ begin
 end;
 
 procedure TestSelectorNilChannelReject;
+var
+  LSel: TIntSelector;
+  LVal: Integer;
+  LCaught: Boolean;
 begin
-  // NOTE: FPC 3.3.1-trunk 泛型中传 nil 给对象参数触发 EAccessViolation（编译器 bug）。
-  // nil 防御代码已存在于 AddRecv/AddSend（not Assigned 检查），此测试暂时跳过。
-  // 追踪：待 FPC 上游修复后恢复。
+  LSel := TIntSelector.Create;
+  try
+    LCaught := False;
+    try
+      LSel.AddRecv(TIntChannel(nil), LVal);
+    except
+      on E: EArgumentError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil channel recv raises EArgumentError');
+
+    LCaught := False;
+    try
+      LSel.AddSend(TIntChannel(nil), 42);
+    except
+      on E: EArgumentError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil channel send raises EArgumentError');
+  finally
+    LSel.Free;
+  end;
 end;
 
 procedure TestChannelCapacityEnforce;
