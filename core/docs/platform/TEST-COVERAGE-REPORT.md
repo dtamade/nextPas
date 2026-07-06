@@ -72,7 +72,7 @@
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
 | test_platform_resource | 10 | ✅ |
-| test_platform_signal | 8 | ✅ |
+| test_platform_signal | 9 | ✅ |
 | test_platform_signal_contract | 4 | ✅ |
 | test_platform_simulated_host_compile_matrix | 0 | ✅ (编译测试) |
 | test_platform_socket | 19 | ✅ |
