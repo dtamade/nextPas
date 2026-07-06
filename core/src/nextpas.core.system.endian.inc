@@ -47,6 +47,12 @@ function NtoLE(const AValue: DWord): DWord; inline;
 function NtoLE(const AValue: Int64): Int64; inline;
 function NtoLE(const AValue: QWord): QWord; inline;
 
+{ Network byte order (big-endian) }
+function HTonN(const AValue: Word): Word; inline;
+function HTonN(const AValue: LongWord): LongWord; inline;
+function NToHs(const AValue: Word): Word; inline;
+function NToHs(const AValue: LongWord): LongWord; inline;
+
 implementation
 
 { Byte swap implementation }
@@ -278,4 +284,25 @@ end;
 function NtoLE(const AValue: QWord): QWord;
 begin
   Result := LEtoN(AValue);
+end;
+
+{ Network byte order — network is big-endian }
+function HTonN(const AValue: Word): Word;
+begin
+  Result := NtoBE(AValue);
+end;
+
+function HTonN(const AValue: LongWord): LongWord;
+begin
+  Result := NtoBE(AValue);
+end;
+
+function NToHs(const AValue: Word): Word;
+begin
+  Result := BEtoN(AValue);
+end;
+
+function NToHs(const AValue: LongWord): LongWord;
+begin
+  Result := BEtoN(AValue);
 end;

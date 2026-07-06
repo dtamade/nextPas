@@ -132,6 +132,10 @@ decisions with background, options, choices, and consequences to prevent future
 developers from repeating mistakes or making contradictory changes.
 The usage guide lives in `usage-guide.md`; it guides developers on how to
 extend the kernel and use its types, functions, and facades in their code.
+Error handling guidance lives in `error-handling.md`; it covers exception
+hierarchy, error classification, propagation, and best practices.
+Thread safety guidance lives in `thread-safety.md`; it covers synchronization
+primitives, thread management, and concurrency best practices.
 
 ## Boundaries
 

@@ -60,9 +60,9 @@ Exit evidence:
 - [x] Add the minimal live `Trim` token-normalization slice for compiler generic parameter matching, delegating to the text owner.
 - [x] Expand TypInfo facade: PTypeData, TTypeData, GetPropInfo, GetEnumName, GetEnumValue (S8.11)
 - [x] Expand SysUtils facade: 40+ functions — StrToInt, FloatToStr, FileExists, ExtractFilePath, Now, Sleep, etc. (S8.12)
-- [ ] Decide whether broader Classes deserve `system.*` facade units. Classes already has a compatibility shim (TStream, TFileStream, TList, TInterfaceList, TStringList, TThread); broader Classes surface (THandleStream, TMemoryStream, TStringStream, TInterfacedObject) does not belong in system scope and stays with owner modules.
-- [ ] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy.
-- [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.
+- [x] Decide whether broader Classes deserve `system.*` facade units. Classes already has a compatibility shim (TStream, TFileStream, TList, TInterfaceList, TStringList, TThread); broader Classes surface (THandleStream, TMemoryStream, TStringStream, TInterfacedObject) does not belong in system scope and stays with owner modules. **Decision: No broader Classes facade. THandleStream/TMemoryStream/TStringStream stay with nextpas.core.io; TInterfacedObject stays with nextpas.core.base.**
+- [x] Add only tested aliases or forwarding functions for future compatibility slices; no broad historical copy. **Decision: Only add aliases with real consumer pressure and focused tests.**
+- [x] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules. **Decision: Confirmed. System only provides thin facades, never owns implementation.**
 - [x] Report `Needs Review` before exposing compatibility API with wide consumer impact.
 
 Current phase note:
@@ -352,7 +352,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 
 - [x] Add `SwapEndian` overloaded functions (SmallInt, Word, LongInt, DWord, Int64, QWord)
 - [x] Add `BEtoN`, `LEtoN`, `NtoBE`, `NtoLE` overloaded functions
-- [ ] Add `HTonN`, `NToHs` (network byte order) for socket support — deferred
+- [x] Add `HTonN`, `NToHs` (network byte order) for socket support
 
 ### S8.9 Barrier and Prefetch Support
 
