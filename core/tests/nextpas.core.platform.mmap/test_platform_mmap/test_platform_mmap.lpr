@@ -239,6 +239,64 @@ begin
     '_SC_PAGESIZE', 'generic Unix base must expose sysconf page-size selector');
 end;
 
+procedure TestFlushReadWriteMap;
+const
+  PATH = '/tmp/nextpas_mmap_flush_test.dat';
+  DATA = 'flush test data 1234567890';
+var
+  LMap: TPlatformMappedFile;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LRet: Int32;
+begin
+  { Create a file with enough data }
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 26, LWritten);
+  platform_file_close(H);
+
+  { Map the file }
+  LRet := platform_mmap_file(PATH, LMap);
+  Check(LRet = 0, 'mmap file for flush test');
+
+  { Flush should succeed (use actual mapped size) }
+  LRet := platform_mmap_flush(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'flush succeeds');
+
+  platform_mmap_close(LMap);
+  platform_file_unlink(PATH);
+end;
+
+procedure TestLockUnlockReadWriteMap;
+const
+  PATH = '/tmp/nextpas_mmap_lock_test.dat';
+  DATA = 'lock test data';
+var
+  LMap: TPlatformMappedFile;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LRet: Int32;
+begin
+  { Create a file and write data }
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 15, LWritten);
+  platform_file_close(H);
+
+  { Map the file }
+  LRet := platform_mmap_file(PATH, LMap);
+  Check(LRet = 0, 'mmap file for lock test');
+
+  { Lock should succeed }
+  LRet := platform_mmap_lock(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'lock succeeds');
+
+  { Unlock should succeed }
+  LRet := platform_mmap_unlock(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'unlock succeeds');
+
+  platform_mmap_close(LMap);
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -252,6 +310,8 @@ begin
   T.Test('read-write file map', @TestReadWriteFileMap);
   T.Test('shared memory create/open', @TestSharedMemoryCreateOpen);
   T.Test('Unix mmap page-size source contract', @TestUnixPageSizeSourceContract);
+  T.Test('flush read-write map', @TestFlushReadWriteMap);
+  T.Test('lock + unlock read-write map', @TestLockUnlockReadWriteMap);
   if not T.Run then Halt(1);
   Cleanup;
 end.

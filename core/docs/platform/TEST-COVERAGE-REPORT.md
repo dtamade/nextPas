@@ -58,7 +58,7 @@
 | test_platform_linux_subsystems_abi | 9 | ✅ |
 | test_platform_memory | 24 | ✅ |
 | test_platform_memory_wine | 1 | ✅ |
-| test_platform_mmap | 11 | ✅ |
+| test_platform_mmap | 13 | ✅ |
 | test_platform_mmap_wine | 1 | ✅ |
 | test_platform_net | 8 | ✅ |
 | test_platform_path | 24 | ✅ |
