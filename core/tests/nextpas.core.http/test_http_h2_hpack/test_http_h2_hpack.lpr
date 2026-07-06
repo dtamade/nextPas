@@ -614,6 +614,39 @@ begin
   CheckEqual('test-value', string(LDecoded[0].Value), 'large table value');
 end;
 
+procedure TestMultiByteIntegerEncoding;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..2] of THPackHeader;
+  LDecoded: array[0..2] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  { Test headers with values that trigger multi-byte integer encoding in
+    HPACK static table indices. Index 62+ requires multi-byte encoding.
+    Also test with custom headers to exercise literal encoding paths. }
+  LEncoder.Init;
+  LDecoder.Init;
+  { :method POST = static index 3 (single byte) }
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'POST';
+  { :path /long-path = static index 4 (single byte name, literal value) }
+  LHeaders[1].Name := ':path';
+  LHeaders[1].Value := '/a-very-long-path-that-exceeds-127-bytes-' +
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  { Custom header = literal name + literal value }
+  LHeaders[2].Name := 'x-custom-multi-byte';
+  LHeaders[2].Value := 'test';
+  LBlock := LEncoder.Encode(LHeaders);
+  Check(Length(LBlock) > 0, 'multi-byte encoding produces output');
+  Check(LDecoder.Decode(LBlock, LDecoded), 'multi-byte encoding decodes');
+  CheckEqual('POST', string(LDecoded[0].Value), 'static index value');
+  Check(LHeaders[1].Value = LDecoded[1].Value, 'long value roundtrips');
+  CheckEqual('x-custom-multi-byte', string(LDecoded[2].Name), 'custom name');
+  CheckEqual('test', string(LDecoded[2].Value), 'custom value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.hpack');
   { Roundtrip tests }
@@ -659,6 +692,7 @@ begin
   T.Test('Decoder indexed header field', @TestDecoderIndexedHeaderField);
   T.Test('Decoder literal header field', @TestDecoderLiteralHeaderField);
   T.Test('Encoder decoder large table size', @TestEncoderDecoderLargeTableSize);
+  T.Test('Multi-byte integer encoding', @TestMultiByteIntegerEncoding);
 
   if not T.Run then Halt(1);
 end.
