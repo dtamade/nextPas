@@ -20,6 +20,8 @@ type
     ['{A7B3D91E-4C6F-4A28-B5D8-9E1F3C7A2B54}']
     { Toggle negation: Not_.ToEqual('x') passes when value <> 'x'. }
     function Not_: IExpectation;
+    { Set a contextual message; prepended to all failure messages in this chain. }
+    function WithMessage(const AMessage: string): IExpectation;
     function ToEqual(const AExpected: string): IExpectation;
     function ToEqualInt(const AExpected: Int64): IExpectation;
     function ToEqualBool(AExpected: Boolean): IExpectation;
@@ -73,6 +75,10 @@ type
     { NaN checks }
     function ToBeNaN: IExpectation;
     function ToBeNotNaN: IExpectation;
+    { Byte array comparison: element-wise equality. }
+    function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    { Unconditional failure — use in conditional branches. }
+    procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
 { ── Expect (fluent factory) ───────────────────────────────────────────────── }
@@ -85,6 +91,7 @@ function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
+function ExpectBytes(const AValue: TBytes): IExpectation;
 
 implementation
 
@@ -97,7 +104,7 @@ uses
 
 type
   TExpectationKind = (
-    ekString, ekInt64, ekBool, ekPointer, ekProc, ekDouble
+    ekString, ekInt64, ekBool, ekPointer, ekProc, ekDouble, ekBytes
   );
 
   TExpectation = class(TInterfacedObject, IExpectation)
@@ -109,7 +116,9 @@ type
     FPtrValue   : Pointer;
     FProcValue  : TTestProc;
     FDoubleValue: Double;
+    FBytesValue : TBytes;
     FNegated    : Boolean;
+    FMessage    : string;
   public
     constructor CreateStr(const AValue: string);
     constructor CreateInt(const AValue: Int64);
@@ -117,6 +126,7 @@ type
     constructor CreatePtr(const AValue: Pointer);
     constructor CreateProc(AProc: TTestProc);
     constructor CreateDouble(const AValue: Double);
+    constructor CreateBytes(const AValue: TBytes);
 
     procedure RequireKind(AKind: TExpectationKind;
       const AMethod: string);
@@ -172,6 +182,10 @@ type
       const ARelEps: Double = 1e-9): IExpectation;
     function ToBeNaN: IExpectation;
     function ToBeNotNaN: IExpectation;
+    { New: WithMessage, ToEqualBytes, ToFailUnexpected }
+    function WithMessage(const AMessage: string): IExpectation;
+    function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
 constructor TExpectation.CreateStr(const AValue: string);
@@ -222,6 +236,14 @@ begin
   FNegated     := False;
 end;
 
+constructor TExpectation.CreateBytes(const AValue: TBytes);
+begin
+  inherited Create;
+  FKind      := ekBytes;
+  FBytesValue := AValue;
+  FNegated   := False;
+end;
+
 function TExpectation.Not_: IExpectation;
 var
   LCopy: TExpectation;
@@ -233,8 +255,10 @@ begin
     ekPointer: LCopy := TExpectation.CreatePtr(FPtrValue);
     ekProc:    LCopy := TExpectation.CreateProc(FProcValue);
     ekDouble:  LCopy := TExpectation.CreateDouble(FDoubleValue);
+    ekBytes:   LCopy := TExpectation.CreateBytes(FBytesValue);
   end;
   LCopy.FNegated := not FNegated;
+  LCopy.FMessage := FMessage;
   Result := LCopy;
 end;
 
@@ -242,11 +266,11 @@ procedure TExpectation.RequireKind(AKind: TExpectationKind;
   const AMethod: string);
 const
   KindNames: array[TExpectationKind] of string = (
-    'string', 'integer', 'boolean', 'pointer', 'proc', 'double'
+    'string', 'integer', 'boolean', 'pointer', 'proc', 'double', 'bytes'
   );
   FactoryHints: array[TExpectationKind] of string = (
     'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
-    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)'
+    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)', 'ExpectBytes(b)'
   );
 begin
   if FKind <> AKind then
@@ -261,12 +285,22 @@ begin
   if FNegated then
   begin
     if AIsMatch then
-      InternalFail(ANegMsg);
+    begin
+      if FMessage <> '' then
+        InternalFail(FMessage + ': ' + ANegMsg)
+      else
+        InternalFail(ANegMsg);
+    end;
   end
   else
   begin
     if not AIsMatch then
-      InternalFail(APosMsg);
+    begin
+      if FMessage <> '' then
+        InternalFail(FMessage + ': ' + APosMsg)
+      else
+        InternalFail(APosMsg);
+    end;
   end;
 end;
 
@@ -769,6 +803,87 @@ begin
   Result := Self;
 end;
 
+{ ── TExpectation: WithMessage, ToEqualBytes, ToFailUnexpected ───────────── }
+
+function TExpectation.WithMessage(const AMessage: string): IExpectation;
+var
+  LCopy: TExpectation;
+begin
+  case FKind of
+    ekString:  LCopy := TExpectation.CreateStr(FStrValue);
+    ekInt64:   LCopy := TExpectation.CreateInt(FIntValue);
+    ekBool:    LCopy := TExpectation.CreateBool(FBoolValue);
+    ekPointer: LCopy := TExpectation.CreatePtr(FPtrValue);
+    ekProc:    LCopy := TExpectation.CreateProc(FProcValue);
+    ekDouble:  LCopy := TExpectation.CreateDouble(FDoubleValue);
+    ekBytes:   LCopy := TExpectation.CreateBytes(FBytesValue);
+  end;
+  LCopy.FNegated := FNegated;
+  LCopy.FMessage := AMessage;
+  Result := LCopy;
+end;
+
+function TExpectation.ToEqualBytes(const AExpected: TBytes): IExpectation;
+var
+  I, LLen: NativeInt;
+  LMatch: Boolean;
+  LActLen, LExpLen: NativeInt;
+begin
+  RequireKind(ekBytes, 'ToEqualBytes');
+  LActLen := Length(FBytesValue);
+  LExpLen := Length(AExpected);
+  if LActLen <> LExpLen then
+  begin
+    CheckMatch(FNegated, { always fails for positive }
+      'Expected different byte array but both have length ' + IntToStr(LActLen),
+      'Expected ' + IntToStr(LExpLen) + ' bytes but got ' + IntToStr(LActLen));
+    Result := Self;
+    Exit;
+  end;
+  { Both empty — always equal }
+  if LActLen = 0 then
+  begin
+    CheckMatch(True, '', '');
+    Result := Self;
+    Exit;
+  end;
+  LMatch := True;
+  LLen := LActLen;
+  for I := 0 to LLen - 1 do
+    if FBytesValue[I] <> AExpected[I] then
+    begin
+      LMatch := False;
+      CheckMatch(LMatch,
+        'Expected different byte array but both are equal (' + IntToStr(LLen) + ' bytes)',
+        'Byte arrays differ at index ' + IntToStr(I) +
+          ': expected $' + IntToHex(AExpected[I], 2) +
+          ' but got $' + IntToHex(FBytesValue[I], 2));
+      Result := Self;
+      Exit;
+    end;
+  { All bytes match }
+  CheckMatch(True, '', '');
+  Result := Self;
+end;
+
+procedure TExpectation.ToFailUnexpected(const AMessage: string);
+begin
+  if FMessage <> '' then
+  begin
+    if AMessage <> '' then
+      InternalFail(FMessage + ': ' + AMessage)
+    else
+      InternalFail(FMessage + ': unexpected');
+  end
+  else
+  begin
+    if AMessage <> '' then
+      InternalFail(AMessage)
+    else
+      InternalFail('unexpected');
+  end;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -804,6 +919,11 @@ end;
 function ExpectProc(AProc: TTestProc): IExpectation;
 begin
   Result := TExpectation.CreateProc(AProc);
+end;
+
+function ExpectBytes(const AValue: TBytes): IExpectation;
+begin
+  Result := TExpectation.CreateBytes(AValue);
 end;
 
 end.

@@ -104,6 +104,7 @@ function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
+function ExpectBytes(const AValue: TBytes): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
 
