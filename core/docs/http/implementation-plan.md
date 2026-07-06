@@ -6,15 +6,15 @@
 
 ---
 
-## Phase 1: WebSocket 客户端 (11h)
+## Phase 1: WebSocket 客户端 ✅ (2026-07-06)
 
-### 1.1 修改 TWebSocketImpl 支持客户端模式 (2h)
+### 1.1 修改 TWebSocketImpl 支持客户端模式 ✅
 - 添加 `FIsClient: Boolean` 字段
 - 修改 `WriteFrame`: 客户端模式掩码，服务端模式不掩码
 - 修改 `ReadFrame`: 客户端模式不验证掩码，服务端模式验证掩码
 - 更新构造函数支持 `AIsClient` 参数
 
-### 1.2 实现 ConnectWebSocket 函数 (3h)
+### 1.2 实现 ConnectWebSocket 函数 ✅
 - 解析 URL 获取 host/port/path
 - 建立 TCP 连接 (ws://) 或 TLS 连接 (wss://)
 - 生成 16 字节随机 Sec-WebSocket-Key
@@ -23,11 +23,25 @@
 - 验证 Sec-WebSocket-Accept 值
 - 返回 IWebSocket 接口
 
-### 1.3 URL 解析 + 连接建立 (1h)
-- 扩展现有 URL 解析支持 ws:// 和 wss://
+### 1.3 URL 解析 + 连接建立 ✅
+- 使用 TUrl.Parse 支持 ws:// 和 wss://
 - 处理默认端口 (ws://80, wss://443)
 
-### 1.4 测试编写 (4h)
+### 1.4 测试编写 ✅
+- WebSocket client echoes text
+- WebSocket client handles ping/pong
+- WebSocket client rejects invalid scheme
+- 3 tests, 0 leaks
+
+### 1.5 文档更新 ✅
+- 更新 CONTRACT.md
+- 更新 GOAL_TREE.md
+
+**交付物**:
+- `core/src/nextpas.core.http.websocket.pas` (修改)
+- `core/src/nextpas.core.http.pas` (修改)
+- `core/tests/nextpas.core.http/test_http_websocket_client/` (新增)
+- 文档更新
 - 客户端握手成功 (ws://)
 - 客户端握手失败 (非 101)
 - 客户端掩码帧验证
@@ -49,7 +63,7 @@
 
 ---
 
-## Phase 2: 模糊测试 (8h)
+## Phase 2: 模糊测试 (8h) - 进行中
 
 ### 2.1 实现 TFuzzMutator (2h)
 - FlipBits: 随机翻转 1-4 位
