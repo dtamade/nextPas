@@ -2,6 +2,8 @@
  * np_sema_hir_lowering.pas
  *
  * AST→HIR 降级模块 — 从 TSemanticAnalyzer 提取
+ *
+ * 对标：rustc 的 hir_lowering, FPC 的 code generation
  *}
 
 unit np_sema_hir_lowering;
@@ -24,6 +26,7 @@ uses
   np_sema_overload;
 
 type
+  { HIR 降级上下文 }
   TSemaHirLoweringContext = record
     Model: TSemanticModel;
     UnitGraph: TUnitGraph;
@@ -42,10 +45,17 @@ type
     CurrentBlockTerminated: Boolean;
   end;
 
+{ 标签发射 }
 procedure EmitBlockLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
 procedure EmitGotoLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
 
+{ 运行时表达式附着 }
+procedure AttachRuntimeReturnExpr(const Ctx: TSemaHirLoweringContext;
+  const AHirNodeId: LongInt; const AReturnVarName: string);
+
 implementation
+
+{ === 标签发射 === }
 
 procedure EmitBlockLabel(var Ctx: TSemaHirLoweringContext; const ALabel: string);
 begin
@@ -59,6 +69,27 @@ begin
     Exit;
   Ctx.Model.AddTypedHirNode('br-runtime', ALabel, 0, 0, ALabel);
   Ctx.CurrentBlockTerminated := True;
+end;
+
+{ === 运行时表达式附着 === }
+
+procedure AttachRuntimeReturnExpr(const Ctx: TSemaHirLoweringContext;
+  const AHirNodeId: LongInt; const AReturnVarName: string);
+var
+  Children: array of LongInt;
+  ExprId, SymbolId: LongInt;
+begin
+  if (AHirNodeId <= 0) or (AReturnVarName = '') then
+    Exit;
+  SymbolId := Ctx.Model.FindSymbolByName(AReturnVarName);
+  if SymbolId <= 0 then
+    Exit;
+  SetLength(Children, 0);
+  ExprId := Ctx.Model.AddHirExpr(
+    shekSymbolValue, 0,
+    SymbolId, Children, 0, 0.0, '', '', 0, shvcScalar
+  );
+  Ctx.Model.SetTypedHirNodeExprId(AHirNodeId, ExprId);
 end;
 
 end.

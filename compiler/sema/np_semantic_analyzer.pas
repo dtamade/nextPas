@@ -12156,21 +12156,10 @@ end;
 
 procedure TSemanticAnalyzer.AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
   const AReturnVarName: string);
-var
-  Children: array of LongInt;
-  ExprId, SymbolId: LongInt;
+var Ctx: TSemaHirLoweringContext;
 begin
-  if (AHirNodeId <= 0) or (AReturnVarName = '') then
-    Exit;
-  SymbolId := FModel.FindSymbolByName(AReturnVarName);
-  if SymbolId <= 0 then
-    Exit;
-  SetLength(Children, 0);
-  ExprId := FModel.AddHirExpr(
-    shekSymbolValue, 0,
-    SymbolId, Children, 0, 0.0, '', '', 0, shvcScalar
-  );
-  FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+  Ctx.Model := FModel;
+  np_sema_hir_lowering.AttachRuntimeReturnExpr(Ctx, AHirNodeId, AReturnVarName);
 end;
 
 procedure TSemanticAnalyzer.AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
