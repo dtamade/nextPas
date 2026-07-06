@@ -746,15 +746,11 @@ L4 扩展层:  discovery.pas, mock.pas
 |------|------|
 | [README.md](README.md) | 模块总览、API 参考、架构 |
 | [CONTRACT.md](CONTRACT.md) | 代码契约 |
-| [roadmap.md](roadmap.md) | 阶段路线图 |
 | [ROADMAP-v7.md](ROADMAP-v7.md) | v7.x 路线图 |
 | [benchmark-comparison.md](benchmark-comparison.md) | 竞品对比 |
 | [test-framework-plan.md](test-framework-plan.md) | 框架实施方案 |
-| [test-findings.md](test-findings.md) | 当前审计发现 |
-| [test-findings-legacy.md](test-findings-legacy.md) | 历史审计发现 |
+| [test-findings.md](test-findings.md) | 审计发现 (29 findings, v7.0c) |
 | [contract-audit.md](contract-audit.md) | 契约审计报告 |
-| [codex-fix-plan.md](codex-fix-plan.md) | Codex 修复计划 |
-| [fix-plan.md](fix-plan.md) | 修复计划 |
 | [usability-research-report.md](usability-research-report.md) | 可用性研究报告 |
 | [usability-implementation-plan.md](usability-implementation-plan.md) | 可用性实施计划 |
 | [v7.0-research.md](v7.0-research.md) | v7.0 研究报告 |
