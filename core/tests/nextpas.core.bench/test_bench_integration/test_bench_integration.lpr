@@ -1651,6 +1651,31 @@ begin
   Check(LCaught, 'AddSimple(nil) should raise EBenchInvalidParam');
 end;
 
+{ F-10: TryRemoveByName }
+procedure TestTryRemoveByName;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryRemove')
+    .Add('A', @BenchFast)
+    .Add('B', @BenchFast)
+    .Add('C', @BenchFast);
+  Check(LSuite.TryRemoveByName('B'), 'TryRemoveByName(B) should return True');
+  Check(not LSuite.TryRemoveByName('NonExistent'), 'TryRemoveByName(NonExistent) should return False');
+  LSuite := nil;
+end;
+
+{ F-10: TryLoadBaseline }
+procedure TestTryLoadBaseline;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryLoad');
+  Check(not LSuite.TryLoadBaseline('/nonexistent/path/baseline.json'),
+    'TryLoadBaseline(nonexistent) should return False');
+  LSuite := nil;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1711,6 +1736,8 @@ begin
     T.Test('AddLoopWithContext (F-15)', @TestAddLoopWithContext);
     T.Test('AddSimple (F-03)', @TestAddSimple);
     T.Test('AddSimple_Nil (F-03)', @TestAddSimple_Nil);
+    T.Test('TryRemoveByName (F-10)', @TestTryRemoveByName);
+    T.Test('TryLoadBaseline (F-10)', @TestTryLoadBaseline);
     T.Run;
     T.Summary;
   finally

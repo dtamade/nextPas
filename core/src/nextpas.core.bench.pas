@@ -114,6 +114,7 @@ type
     function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
+    function TryRemoveByName(const AName: string): Boolean;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
     function SetMaxIterations(AIters: Int64): IBenchSuite;
     function SetMinSamples(ACount: Integer): IBenchSuite;
@@ -129,6 +130,7 @@ type
     function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
     function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
+    function TryLoadBaseline(const APath: string): Boolean;
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
@@ -539,6 +541,24 @@ begin
   raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
 end;
 
+function TBenchSuite.TryRemoveByName(const AName: string): Boolean;
+var
+  I, J: Integer;
+begin
+  GuardNotRun;
+  for I := 0 to FEntryCount - 1 do
+  begin
+    if FEntries[I].Name = AName then
+    begin
+      for J := I to FEntryCount - 2 do
+        FEntries[J] := FEntries[J + 1];
+      Dec(FEntryCount);
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
 function TBenchSuite.FindEntryIndex(const AName: string): Integer;
 var
   I: Integer;
@@ -685,6 +705,30 @@ begin
   // 将加载的基线添加到 suite（F-08: 保留完整字段）
   for I := 0 to High(LBaselines) do
     AddBaselineData(LBaselines[I]);
+end;
+
+function TBenchSuite.TryLoadBaseline(const APath: string): Boolean;
+var
+  LManager: TBaselineManager;
+  LBaselines: TBaselineArray;
+  I: Integer;
+begin
+  GuardNotRun;
+  Result := False;
+  try
+    LManager := TBaselineManager.Create;
+    try
+      LManager.LoadFromFile(APath);
+    except
+      Exit;
+    end;
+    LBaselines := LManager.GetAllBaselines;
+    for I := 0 to High(LBaselines) do
+      AddBaselineData(LBaselines[I]);
+    Result := True;
+  except
+    Exit;
+  end;
 end;
 
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;

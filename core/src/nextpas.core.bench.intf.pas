@@ -203,8 +203,13 @@ type
     {** 清空所有已注册条目 (DS-03) }
     function Clear: IBenchSuite;
 
-    {** 按名称移除条目 (DS-03) }
+    {** 按名称移除条目 (DS-03)
+     *  @raises EBenchInvalidParam 当条目不存在时 }
     function RemoveByName(const AName: string): IBenchSuite;
+
+    {** 安全移除条目（按名称），返回是否找到并移除
+     *  F-10: 与 TryGetByName 风格一致的安全版本 }
+    function TryRemoveByName(const AName: string): Boolean;
 
     {** 设置最小基准持续时间 }
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -259,6 +264,10 @@ type
      *  @raises EBenchBaselineNotFound 当文件不存在时
      *  @raises EBenchError 当文件格式错误时 }
     function LoadBaseline(const APath: string): IBenchSuite;
+
+    {** 安全加载基线文件，文件不存在或格式错误时返回 False
+     *  F-10: 与 TryGetByName 风格一致的安全版本 }
+    function TryLoadBaseline(const APath: string): Boolean;
 
     {** 设置过滤条件（子串匹配或 glob 模式）。
      *  包含 * 或 ? 时使用 glob 匹配（如 'Sort*'、'Hash??'），
