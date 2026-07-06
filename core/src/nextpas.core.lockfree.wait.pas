@@ -19,7 +19,7 @@ uses
   nextpas.core.platform.sync;
 
 const
-  SPIN_LIMIT = 4;
+  SPIN_LIMIT = 32;
 
 procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 begin

@@ -24,8 +24,11 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
+    { Cache line padding to avoid false sharing between producer and consumer }
     FSendPos: Int64;
+    FSendPad: array[0..47] of Byte; { Pad to 64 bytes }
     FRecvPos: Int64;
+    FRecvPad: array[0..47] of Byte; { Pad to 64 bytes }
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;

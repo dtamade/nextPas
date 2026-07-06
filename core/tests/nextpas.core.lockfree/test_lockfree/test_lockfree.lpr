@@ -11,6 +11,7 @@ uses
   nextpas.core.lockfree,
   nextpas.core.lockfree.wait,
   nextpas.core.lockfree.ebr,
+  nextpas.core.lockfree.channel.spsc,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.time;
@@ -24,6 +25,7 @@ type
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntChannelSpsc = specialize TLockFreeChannelSpsc<Integer>;
   TIntSelector = specialize TLockFreeSelector<Integer>;
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
@@ -4014,6 +4016,94 @@ begin
   end;
 end;
 
+procedure TestChannelSpscBasic;
+var
+  LCh: TIntChannelSpsc;
+  LVal: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    Check(LCh.TrySend(1), 'TrySend(1) should succeed');
+    Check(LCh.TrySend(2), 'TrySend(2) should succeed');
+    Check(LCh.TrySend(3), 'TrySend(3) should succeed');
+    Check(LCh.TrySend(4), 'TrySend(4) should succeed');
+    Check(not LCh.TrySend(5), 'TrySend(5) should fail (full)');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(1, LVal, 'First value should be 1');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(2, LVal, 'Second value should be 2');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(3, LVal, 'Third value should be 3');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(4, LVal, 'Fourth value should be 4');
+    Check(not LCh.TryReceive(LVal), 'TryReceive should fail (empty)');
+    Check(LCh.IsEmpty, 'Channel should be empty');
+    CheckEqual(4, Integer(LCh.Capacity), 'Capacity should be 4');
+  finally
+    LCh.Free;
+  end;
+end;
+
+var
+  GChannelSpscQ: TIntChannelSpsc;
+  GChannelSpscSum: Int64;
+  GChannelSpscIterations: Integer;
+
+function ChannelSpscProducerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  for LI := 1 to GChannelSpscIterations do
+  begin
+    while not GChannelSpscQ.TrySend(LI) do
+      CpuPause;
+  end;
+  Result := nil;
+end;
+
+function ChannelSpscConsumerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LVal: Integer;
+begin
+  for LI := 1 to GChannelSpscIterations do
+  begin
+    while not GChannelSpscQ.TryReceive(LVal) do
+      CpuPause;
+    AtomicFetchAdd64(GChannelSpscSum, Int64(LVal), moRelaxed);
+  end;
+  Result := nil;
+end;
+
+procedure TestChannelSpscStress;
+const
+  ITERATIONS = 100000;
+var
+  LCh: TIntChannelSpsc;
+  LProducer, LConsumer: TPlatformThreadHandle;
+  LProducerStarted, LConsumerStarted: Boolean;
+begin
+  LCh := TIntChannelSpsc.Create(64);
+  LProducerStarted := False;
+  LConsumerStarted := False;
+  try
+    AtomicStore64(GChannelSpscSum, 0, moRelaxed);
+    GChannelSpscQ := LCh;
+    GChannelSpscIterations := ITERATIONS;
+    StartThread(LProducer, @ChannelSpscProducerThread, nil, 'SPSC producer');
+    LProducerStarted := True;
+    StartThread(LConsumer, @ChannelSpscConsumerThread, nil, 'SPSC consumer');
+    LConsumerStarted := True;
+    JoinStartedThread(LProducer, LProducerStarted, 'SPSC producer');
+    JoinStartedThread(LConsumer, LConsumerStarted, 'SPSC consumer');
+    CheckEqual(Int64(ITERATIONS * (ITERATIONS + 1) div 2), AtomicLoad64(GChannelSpscSum, moRelaxed),
+      'SPSC stress sum mismatch');
+  finally
+    GChannelSpscQ := nil;
+    LCh.Free;
+  end;
+end;
+
 procedure TestSegQueueManagedReject;
 var
   LStrQ: specialize TSegQueue<AnsiString>;
@@ -5477,6 +5567,9 @@ begin
   T.Test('Selector TrySelect', @TestSelectorTrySelect);
   T.Test('Channel 4P+4C stress', @TestChannelStress);
   T.Test('Channel close while Send', @TestChannelCloseWhileSend);
+
+  T.Test('Channel SPSC basic', @TestChannelSpscBasic);
+  T.Test('Channel SPSC 1P1C stress', @TestChannelSpscStress);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Test('Managed type reject', @TestManagedTypeReject);
