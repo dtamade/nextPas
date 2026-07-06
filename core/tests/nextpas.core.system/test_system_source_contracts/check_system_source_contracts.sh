@@ -362,7 +362,49 @@ type EAssertionFailed
 function Format
 function SameText
 function IntToStr
+function Int64ToStr
+function StrToInt
+function StrToInt64
+function StrToFloat
+function FloatToStr
+function CurrToStr
 function Trim
+function TrimLeft
+function TrimRight
+function UpperCase
+function LowerCase
+function Pos
+function Now
+function Date
+function Time
+function DateTimeToStr
+function DateToStr
+function TimeToStr
+function FormatDateTime
+function FileExists
+function DirectoryExists
+function CreateDir
+function RemoveDir
+function ForceDirectories
+function DeleteFile
+function RenameFile
+function CopyFile
+function ExtractFilePath
+function ExtractFileName
+function ExtractFileExt
+function ExtractFileDir
+function ExtractFileDrive
+function ChangeFileExt
+function IncludeTrailingPathDelimiter
+function ExcludeTrailingPathDelimiter
+function GetCurrentDir
+function SetCurrentDir
+function ParamCount
+function ParamStr
+function GetEnvironmentVariable
+procedure Sleep
+function SysErrorMessage
+function GetLastOSError
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"
@@ -374,6 +416,8 @@ require_typinfo_facade_surface_allowlist() {
   expected="$(cat <<'EOF'
 type PTypeInfo
 type TTypeKind
+type PTypeData
+type TTypeData
 const tkInteger
 const tkChar
 const tkWChar
@@ -401,6 +445,10 @@ const tkProcVar
 procedure InitializeArray
 procedure FinalizeArray
 procedure CopyArray
+function GetPropInfo
+function GetPropInfo
+function GetEnumName
+function GetEnumValue
 EOF
 )"
   require_facade_surface_allowlist "typinfo facade" "$actual" "$expected"
@@ -1180,18 +1228,13 @@ require_token "src/nextpas.core.system.typinfo.pas" "System.InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
 require_typinfo_facade_surface_allowlist
-reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumName"
-reject_token "src/nextpas.core.system.typinfo.pas" "GetEnumValue"
-reject_token "src/nextpas.core.system.typinfo.pas" "GetPropInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetPropList"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "IsPublishedProp"
 reject_token "src/nextpas.core.system.typinfo.pas" "SetPropValue"
 reject_token "src/nextpas.core.system.typinfo.pas" "PropCount"
 reject_token "src/nextpas.core.system.typinfo.pas" "TPropInfo"
-reject_token "src/nextpas.core.system.typinfo.pas" "TTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
-reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "integer PTypeInfo identity compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "PTypeInfo kind consistency compile-truth"
 require_token "tests/nextpas.core.system/test_system_typinfo_minimal/test_system_typinfo_minimal.lpr" "structured kind aliases compile-truth"
@@ -1378,23 +1421,6 @@ require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
 require_sysutils_facade_surface_allowlist
-reject_token "src/nextpas.core.system.sysutils.pas" "FileExists"
-reject_token "src/nextpas.core.system.sysutils.pas" "DirectoryExists"
-reject_token "src/nextpas.core.system.sysutils.pas" "ForceDirectories"
-reject_token "src/nextpas.core.system.sysutils.pas" "FileSearch"
-reject_token "src/nextpas.core.system.sysutils.pas" "ExpandFileName"
-reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileDir"
-reject_token "src/nextpas.core.system.sysutils.pas" "ExtractFileName"
-reject_token "src/nextpas.core.system.sysutils.pas" "IncludeTrailingPathDelimiter"
-reject_token "src/nextpas.core.system.sysutils.pas" "ExcludeTrailingPathDelimiter"
-reject_token "src/nextpas.core.system.sysutils.pas" "GetEnvironmentVariable"
-reject_token "src/nextpas.core.system.sysutils.pas" "LowerCase"
-reject_token "src/nextpas.core.system.sysutils.pas" "UpperCase"
-reject_token "src/nextpas.core.system.sysutils.pas" "StrToInt"
-reject_token "src/nextpas.core.system.sysutils.pas" "Now"
-reject_token "src/nextpas.core.system.sysutils.pas" "FormatDateTime"
-reject_token "src/nextpas.core.system.sysutils.pas" "TFileStream"
-reject_token "src/nextpas.core.system.sysutils.pas" "TStringList"
 
 require_file "src/nextpas.core.system.errors.pas"
 require_token "src/nextpas.core.system.errors.pas" "unit nextpas.core.system.errors;"
