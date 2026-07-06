@@ -1,6 +1,6 @@
 # Platform 模块测试覆盖率报告
 
-**日期**: 2026-07-05
+**日期**: 2026-07-06
 **负责人**: Claude (AI)
 **工作目录**: .worktrees/platform
 
@@ -8,7 +8,7 @@
 
 ### 1.1 总体统计
 - **测试套件总数**: 50+
-- **测试总数**: 400+ (详见各套件统计)
+- **测试总数**: 450+ (详见各套件统计)
 - **通过率**: 100%
 - **失败数**: 0
 - **跳过数**: 0
@@ -27,12 +27,12 @@
 | test_platform_dl | 11 | ✅ |
 | test_platform_env | 14 | ✅ |
 | test_platform_env_wine | 1 | ✅ |
-| test_platform_error | 20 | ✅ |
+| test_platform_error | 46 | ✅ |
 | test_platform_facade_surface | 3 | ✅ |
 | test_platform_ffi_import_workflow | 2 | ✅ |
 | test_platform_ffi_owner_boundary | 2 | ✅ |
 | test_platform_ffi_source_evidence_index | 2 | ✅ |
-| test_platform_files | 42 | ✅ |
+| test_platform_files | 43 | ✅ |
 | test_platform_files_wine | 1 | ✅ |
 | test_platform_fmt | 23 | ✅ |
 | test_platform_fs | 13 | ✅ |
@@ -67,11 +67,11 @@
 | test_platform_posix_ffi_surface | 1 | ✅ |
 | test_platform_process | 17 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
-| test_platform_pty | 8 | ✅ |
+| test_platform_pty | 9 | ✅ |
 | test_platform_random | 6 | ✅ |
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
-| test_platform_resource | 5 | ✅ |
+| test_platform_resource | 10 | ✅ |
 | test_platform_signal | 8 | ✅ |
 | test_platform_signal_contract | 4 | ✅ |
 | test_platform_simulated_host_compile_matrix | 0 | ✅ (编译测试) |
@@ -95,7 +95,7 @@
 | test_platform_time_l0_boundary | 6 | ✅ |
 | test_platform_time_no_fpc_units | 1 | ✅ |
 | test_platform_time_wine | 3 | ✅ |
-| test_platform_watch | 6 | ✅ |
+| test_platform_watch | 7 | ✅ |
 | test_platform_which | 7 | ✅ |
 | test_platform_windows_utf16_compile_gate | 0 | ✅ (编译测试) |
 | test_platform_windows_utf16_contract | 4 | ✅ |
