@@ -89,7 +89,7 @@ var
 begin
   R := platform_error_message(17, @Buf[0], 256);
   Check(R > 0, 'EEXIST returns length > 0');
-  Check(StrContains(@Buf[0], 'file exists'), 'contains "file exists"');
+  Check(StrContains(@Buf[0], 'already exists'), 'contains "already exists"');
 end;
 
 procedure TestENOTDIR;

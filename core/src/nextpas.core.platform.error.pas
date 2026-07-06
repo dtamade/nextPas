@@ -75,21 +75,21 @@ begin
   Result := True;
   case ACode of
     PLATFORM_ERR_INVALID:
-      ALen := CopyPlatformErrorMessage('invalid', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('invalid argument', ABuf, ABufSize);
     PLATFORM_ERR_UNSUPPORTED:
-      ALen := CopyPlatformErrorMessage('unsupported', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('operation not supported', ABuf, ABufSize);
     PLATFORM_ERR_TIMEOUT:
-      ALen := CopyPlatformErrorMessage('timeout', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('operation timed out', ABuf, ABufSize);
     PLATFORM_ERR_AGAIN:
-      ALen := CopyPlatformErrorMessage('again', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('resource temporarily unavailable', ABuf, ABufSize);
     PLATFORM_ERR_BUSY:
-      ALen := CopyPlatformErrorMessage('busy', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('device or resource busy', ABuf, ABufSize);
     PLATFORM_ERR_BADF:
-      ALen := CopyPlatformErrorMessage('bad fd', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('bad file descriptor', ABuf, ABufSize);
     PLATFORM_ERR_EEXIST:
-      ALen := CopyPlatformErrorMessage('file exists', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('file already exists', ABuf, ABufSize);
     PLATFORM_ERR_ENOENT:
-      ALen := CopyPlatformErrorMessage('no such file', ABuf, ABufSize);
+      ALen := CopyPlatformErrorMessage('no such file or directory', ABuf, ABufSize);
     PLATFORM_ERR_ENOTDIR:
       ALen := CopyPlatformErrorMessage('not a directory', ABuf, ABufSize);
     PLATFORM_ERR_PATH_TOO_LONG:
