@@ -7,6 +7,7 @@ uses
   nextpas.core.platform.which,
   nextpas.core.platform.fs,
   nextpas.core.platform.env,
+  nextpas.core.platform.error,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
   nextpas.core.platform.thread,
@@ -41,7 +42,7 @@ var
   R: Int32;
 begin
   R := platform_which('nonexistent_tool_xyz_999', @Buf[0], 256);
-  Check(R = -1, 'not found returns -1');
+  Check(R = PLATFORM_ERR_ENOENT, 'not found returns PLATFORM_ERR_ENOENT');
 end;
 
 procedure TestAbsolutePath;
@@ -72,7 +73,7 @@ var
   R: Int32;
 begin
   R := platform_which('/nonexistent_xyz', @Buf[0], 256);
-  Check(R = -1, 'absolute non-existent returns -1');
+  Check(R = PLATFORM_ERR_ENOENT, 'absolute non-existent returns PLATFORM_ERR_ENOENT');
 end;
 
 {$IFDEF NEXTPAS_LINUX}

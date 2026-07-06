@@ -13,6 +13,7 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.path,
   nextpas.core.platform.fs,
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.ffi;
 
 const
@@ -77,7 +78,7 @@ var
   LPathLen, I, LStart, LDirLen, LNameLen: Int32;
 begin
   if (AName = nil) or (AName[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LNameLen := 0;
   while AName[LNameLen] <> #0 do Inc(LNameLen);
@@ -86,11 +87,11 @@ begin
   begin
     if IsExecutable(AName) then
       Exit(CopyFoundPath(AName, ABuf, ABufLen));
-    Exit(-1);
+    Exit(PLATFORM_ERR_ENOENT);
   end;
 
   if not LoadPathEnv(LPathBuf, LPathLen) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_ENOENT);
 
   I := 0;
   while I <= LPathLen do
@@ -113,7 +114,7 @@ begin
   end;
 
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_ENOENT;
 end;
 
 end.

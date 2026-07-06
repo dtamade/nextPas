@@ -371,6 +371,8 @@ var
   LSize: UInt64;
 begin
   ResetMap(AMap);
+  if APath = nil then
+    Exit(PLATFORM_MMAP_EINVAL);
   Result := FileStatSize(APath, LSize);
   if Result <> 0 then Exit;
   Result := platform_mmap_open_file(APath, pmaRead, [pmfPrivate], 0, 0, AMap);
