@@ -159,6 +159,58 @@ list_unit_facade_surface() {
 
 list_root_facade_surface() {
   list_unit_facade_surface "$CORE_ROOT/src/nextpas.core.system.pas"
+  list_inc_facade_surface "$CORE_ROOT/src/nextpas.core.system.fpc.inc"
+}
+
+list_inc_facade_surface() {
+  local unit_path="$1"
+  awk '
+    function trim(s) {
+      gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
+      return s
+    }
+    function strip_pascal_line(s) {
+      gsub(/\{[^}]*\}/, "", s)
+      sub(/\/\/.*/, "", s)
+      return trim(s)
+    }
+    BEGIN {
+      section = ""
+      type_depth = 0
+    }
+    {
+      line = strip_pascal_line($0)
+      if (line == "") {
+        next
+      }
+      lower_line = tolower(line)
+      if (type_depth > 0) {
+        if (lower_line ~ /^end[.;]?$/) {
+          type_depth--
+          if (type_depth < 0) {
+            type_depth = 0
+          }
+        }
+        next
+      }
+      if (lower_line == "const") {
+        section = "const"
+        next
+      }
+      if (lower_line == "type") {
+        section = "type"
+        next
+      }
+      if (section == "type" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "type " parts[1]
+        next
+      }
+      if (section == "const" && match(line, /^([A-Za-z_][A-Za-z0-9_]*)[ \t=]/, parts)) {
+        print "const " parts[1]
+        next
+      }
+    }
+  ' "$unit_path"
 }
 
 require_facade_surface_allowlist() {
@@ -188,12 +240,6 @@ const SIZE_8
 const SIZE_16
 const SIZE_32
 const SIZE_64
-type SizeInt
-type SizeUInt
-type PtrInt
-type PtrUInt
-type NativeInt
-type NativeUInt
 type TBytes
 type TByteSpan
 type THashCode
@@ -261,6 +307,43 @@ procedure CopyMem
 function CompareMem
 function Supports
 function Supports
+type TObject
+type TClass
+type TTypeKind
+type SizeInt
+type SizeUInt
+type PtrInt
+type PtrUInt
+type NativeInt
+type NativeUInt
+type PByte
+type PWord
+type PLongInt
+type PLongWord
+type PInt64
+type PQWord
+type PPointer
+type PSizeInt
+type PSizeUInt
+type ShortString
+type AnsiString
+type WideString
+type UnicodeString
+type Char
+type AnsiChar
+type WideChar
+type IUnknown
+type IInterface
+type TGUID
+type PGUID
+type PVmt
+type TVmt
+type PInterfaceEntry
+type TInterfaceEntry
+type TInterfaceEntryType
+type PInterfaceTable
+type TInterfaceTable
+type TMethod
 EOF
 )"
   require_facade_surface_allowlist "root facade" "$actual" "$expected"
@@ -1172,12 +1255,12 @@ require_token "src/nextpas.core.system.pas" "SIZE_8 = nextpas.core.base.SIZE_8;"
 require_token "src/nextpas.core.system.pas" "SIZE_16 = nextpas.core.base.SIZE_16;"
 require_token "src/nextpas.core.system.pas" "SIZE_32 = nextpas.core.base.SIZE_32;"
 require_token "src/nextpas.core.system.pas" "SIZE_64 = nextpas.core.base.SIZE_64;"
-require_token "src/nextpas.core.system.pas" "SizeInt = nextpas.core.base.SizeInt;"
-require_token "src/nextpas.core.system.pas" "SizeUInt = nextpas.core.base.SizeUInt;"
-require_token "src/nextpas.core.system.pas" "PtrInt = nextpas.core.base.PtrInt;"
-require_token "src/nextpas.core.system.pas" "PtrUInt = nextpas.core.base.PtrUInt;"
-require_token "src/nextpas.core.system.pas" "NativeInt = nextpas.core.base.NativeInt;"
-require_token "src/nextpas.core.system.pas" "NativeUInt = nextpas.core.base.NativeUInt;"
+require_token "src/nextpas.core.system.fpc.inc" "SizeInt = System.SizeInt;"
+require_token "src/nextpas.core.system.fpc.inc" "SizeUInt = System.SizeUInt;"
+require_token "src/nextpas.core.system.fpc.inc" "PtrInt = System.PtrInt;"
+require_token "src/nextpas.core.system.fpc.inc" "PtrUInt = System.PtrUInt;"
+require_token "src/nextpas.core.system.fpc.inc" "NativeInt = System.NativeInt;"
+require_token "src/nextpas.core.system.fpc.inc" "NativeUInt = System.NativeUInt;"
 require_token "src/nextpas.core.system.pas" "TBytes = nextpas.core.base.TBytes;"
 require_token "src/nextpas.core.system.pas" "TByteSpan = nextpas.core.base.TByteSpan;"
 require_token "src/nextpas.core.system.pas" "THashCode = nextpas.core.base.THashCode;"
