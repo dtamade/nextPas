@@ -236,6 +236,7 @@ begin
     sbNEON: Result := 'NEON';
     sbRISCVV: Result := 'RISC-V V';
     sbLASX: Result := 'LoongArch LASX';
+    sbWASM: Result := 'WebAssembly SIMD';
   end;
 end;
 
@@ -254,6 +255,7 @@ begin
     sbNEON: Result := 'ARM NEON 128-bit SIMD (default scalar fallback; asm opt-in)';
     sbRISCVV: Result := 'RISC-V Vector Extension (RVV) (experimental opt-in)';
     sbLASX: Result := 'LoongArch LASX 256-bit SIMD (experimental, requires hardware)';
+    sbWASM: Result := 'WebAssembly SIMD128 (experimental, requires WASM runtime)';
   end;
 end;
 
