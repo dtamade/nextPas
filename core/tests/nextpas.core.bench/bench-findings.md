@@ -2,20 +2,31 @@
 
 > **审查日期**: 2026-06-23
 > **最后更新**: 2026-07-06
-> **审查范围**: 11 源文件 + 14 测试文件 (~10,800 行)
+> **审查范围**: 11 源文件 + 18 测试文件 (~8,550 行)
 > **审查维度**: Correctness / Architecture / Performance / Test Coverage / API
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
 > **已排除**: 首次审查已标记"已修复"或"不修复/推迟"或"已知"的条目（C01-C03 已修复、D01/D02/D03 不修复、D07/D08/D09 已知）
 
 ---
 
-## 2026-07-06 可用性评估 + 防御性编程修复 (Round 9)
+## 2026-07-06 P2/P3 可用性改进 (Round 10)
 
-> **当前测试**: 18 suites / 356 tests / 0 failed / 0 leaks
-> **修复率**: 133 findings 中 131 项已修复 (98.5%)
+> **当前测试**: 18 suites / 377 tests / 0 failed / 0 leaks
+> **修复率**: 135 findings 中 133 项已修复 (98.5%)
 > **接口覆盖率**: 100%
-> **可用性评分**: 8.91/10（优秀）
+> **可用性评分**: 9.0/10（优秀）
 > **风险等级**: 低（无 P0/P1 风险）
+
+### P2 改进 (2026-07-06)
+
+1. **test_bench_invalid_parameters_heaptrc**: Halt→Check 模式, 12→19 tests (+7 assertions)
+2. **test_bench_parallel_heaptrc**: 1→5 tests (+4), 覆盖 no-leak/mixed/context/one-thread
+3. **test_bench_parallel_memtrack_heaptrc**: 2→5 tests (+3), 覆盖 combined/multi-alloc/peak
+
+### P3 改进 (2026-07-06)
+
+1. **TryRemoveByName**: 安全移除, 返回 Boolean, 与 TryGetByName 风格一致
+2. **TryLoadBaseline**: 安全加载, 文件不存在/格式错误返回 False
 
 ### 可用性评估修复 (2026-07-06)
 
