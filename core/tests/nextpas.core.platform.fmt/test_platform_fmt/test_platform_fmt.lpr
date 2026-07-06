@@ -158,6 +158,18 @@ begin
   Check(platform_str_lower('X', 1, @Buf[0], 64) = 1, 'returns length');
 end;
 
+procedure TestStrUpper;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_str_upper('hello world', 11, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'HELLO WORLD'), 'upper basic');
+  platform_str_upper('abc123', 6, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'ABC123'), 'upper mixed');
+  Check(platform_str_upper('x', 1, @Buf[0], 64) = 1, 'returns length');
+  platform_str_upper('', 0, @Buf[0], 64);
+  Check(BufEq(@Buf[0], ''), 'empty string');
+end;
+
 procedure TestStrTrim;
 var Buf: array[0..63] of AnsiChar;
 begin
@@ -273,6 +285,7 @@ begin
   T.Test('parse hex', @TestParseHex);
   T.Test('parse errors', @TestParseErrors);
   T.Test('str_lower', @TestStrLower);
+  T.Test('str_upper', @TestStrUpper);
   T.Test('str_trim', @TestStrTrim);
   T.Test('str_equal_nocase', @TestStrEqualNocase);
   T.Test('str_find', @TestStrFind);

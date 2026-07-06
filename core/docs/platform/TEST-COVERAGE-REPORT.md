@@ -34,7 +34,7 @@
 | test_platform_ffi_source_evidence_index | 2 | ✅ |
 | test_platform_files | 43 | ✅ |
 | test_platform_files_wine | 1 | ✅ |
-| test_platform_fmt | 23 | ✅ |
+| test_platform_fmt | 25 | ✅ |
 | test_platform_fs | 16 | ✅ |
 | test_platform_fs_copy_bench | 1 | ✅ |
 | test_platform_fs_toctou | 4 | ✅ |
@@ -44,7 +44,7 @@
 | test_platform_host_abi_wave10_posix_stat_hosts | 7 | ✅ |
 | test_platform_host_abi_wave5_env | 5 | ✅ |
 | test_platform_info | 5 | ✅ |
-| test_platform_io | 14 | ✅ |
+| test_platform_io | 15 | ✅ |
 | test_platform_io_wine | 1 | ✅ |
 | test_platform_io_windows_real | 1 | ✅ |
 | test_platform_linux_aarch64_compile | 0 | ✅ (编译测试) |
@@ -65,7 +65,7 @@
 | test_platform_path_wine | 8 | ✅ |
 | test_platform_pipe | 6 | ✅ |
 | test_platform_posix_ffi_surface | 1 | ✅ |
-| test_platform_process | 18 | ✅ |
+| test_platform_process | 21 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
 | test_platform_pty | 12 | ✅ |
 | test_platform_random | 6 | ✅ |
@@ -80,13 +80,13 @@
 | test_platform_socket_wine | 1 | ✅ |
 | test_platform_socket_types_abi | 13 | ✅ |
 | test_platform_struct_sizes | 12 | ✅ |
-| test_platform_sync | 14 | ✅ |
+| test_platform_sync | 16 | ✅ |
 | test_platform_sync_l0_boundary | 4 | ✅ |
 | test_platform_sync_no_fpc_units | 2 | ✅ |
 | test_platform_sync_sizes | 5 | ✅ |
 | test_platform_sync_stress | 7 | ✅ |
 | test_platform_sync_wine | 1 | ✅ |
-| test_platform_thread | 9 | ✅ |
+| test_platform_thread | 11 | ✅ |
 | test_platform_thread_host_ffi_surface | 1 | ✅ |
 | test_platform_thread_l0_boundary | 4 | ✅ |
 | test_platform_thread_no_fpc_units | 2 | ✅ |

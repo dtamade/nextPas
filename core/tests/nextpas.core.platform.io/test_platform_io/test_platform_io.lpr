@@ -203,6 +203,32 @@ begin
   platform_poller_close(P);
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestModify;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LEntries: array[0..3] of TPlatformPollEntry;
+  LCount: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  // Add write end watching for writable
+  Check(platform_poller_add(P, LPipeFd[1], [peWritable], nil) = 0, 'add writable');
+
+  // Modify to watch for readable instead
+  Check(platform_poller_modify(P, LPipeFd[1], [peReadable], nil) = 0, 'modify to readable');
+
+  // Write end has no data to read, so with 100ms timeout we should get timeout
+  Check(platform_poller_wait(P, @LEntries[0], 4, 100, LCount) = 0, 'wait after modify');
+  Check(LCount = 0, 'no readable events on write end');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+{$ENDIF}
+
 procedure TestUserData;
 var
   P: TPlatformPoller;
@@ -556,6 +582,9 @@ begin
   T.Test('pipe readable', @TestPipeReadable);
   T.Test('timeout zero', @TestTimeoutZero);
   T.Test('remove stops events', @TestRemove);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('modify events', @TestModify);
+  {$ENDIF}
   T.Test('userdata preserved', @TestUserData);
   T.Test('multiple fds', @TestMultipleFds);
   T.Test('wait capacity beyond 64', @TestWaitCapacityBeyondLegacy64);

@@ -173,6 +173,43 @@ begin
   Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
 end;
 
+function FastThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := Pointer(PtrUInt(99));
+end;
+
+procedure TestThreadTimedJoin;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LRet: Int32;
+begin
+  LRet := platform_thread_create(LHandle, @FastThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'create for timedjoin');
+
+  // Thread finishes quickly, so timedjoin with generous timeout should succeed
+  LRet := platform_thread_timedjoin(LHandle, 5000, LRetVal);
+  CheckEqual(Int64(0), Int64(LRet), 'timedjoin succeeds');
+  CheckEqual(Int64(99), Int64(PtrUInt(LRetVal)), 'timedjoin return value');
+end;
+
+procedure TestThreadTimedJoinTimeout;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LRet: Int32;
+begin
+  LRet := platform_thread_create(LHandle, @SlowThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'create for timeout');
+
+  // SlowThread sleeps 50ms, so 1ms timeout should fail
+  LRet := platform_thread_timedjoin(LHandle, 1, LRetVal);
+  Check(LRet <> 0, 'timedjoin should timeout');
+
+  // Clean up: wait for thread to finish
+  platform_thread_join(LHandle, LRetVal);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -184,5 +221,7 @@ begin
   T.Test('Thread yield', @TestThreadYield);
   T.Test('Thread sleep', @TestThreadSleep);
   T.Test('Thread is_alive', @TestThreadIsAlive);
+  T.Test('Thread timedjoin', @TestThreadTimedJoin);
+  T.Test('Thread timedjoin timeout', @TestThreadTimedJoinTimeout);
   if not T.Run then Halt(1);
 end.
