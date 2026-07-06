@@ -20,12 +20,12 @@
 | test_platform | 3 | ✅ |
 | test_platform_args | 5 | ✅ |
 | test_platform_bench | 7 | ✅ |
-| test_platform_console | 11 | ✅ |
+| test_platform_console | 12 | ✅ |
 | test_platform_console_raw | 5 | ✅ |
 | test_platform_cross_ci_matrix_contract | 3 | ✅ |
 | test_platform_ctypes_abi | 10 | ✅ |
 | test_platform_dl | 11 | ✅ |
-| test_platform_env | 14 | ✅ |
+| test_platform_env | 18 | ✅ |
 | test_platform_env_wine | 1 | ✅ |
 | test_platform_error | 46 | ✅ |
 | test_platform_facade_surface | 3 | ✅ |
@@ -65,7 +65,7 @@
 | test_platform_path_wine | 8 | ✅ |
 | test_platform_pipe | 6 | ✅ |
 | test_platform_posix_ffi_surface | 1 | ✅ |
-| test_platform_process | 17 | ✅ |
+| test_platform_process | 18 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
 | test_platform_pty | 12 | ✅ |
 | test_platform_random | 6 | ✅ |
@@ -86,7 +86,7 @@
 | test_platform_sync_sizes | 5 | ✅ |
 | test_platform_sync_stress | 7 | ✅ |
 | test_platform_sync_wine | 1 | ✅ |
-| test_platform_thread | 8 | ✅ |
+| test_platform_thread | 9 | ✅ |
 | test_platform_thread_host_ffi_surface | 1 | ✅ |
 | test_platform_thread_l0_boundary | 4 | ✅ |
 | test_platform_thread_no_fpc_units | 2 | ✅ |

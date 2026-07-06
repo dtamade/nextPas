@@ -403,6 +403,29 @@ begin
     'spawn_fds must report exec failure through preserved error pipe');
 end;
 
+procedure TestProcessSignal;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..2] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  { Spawn a process that exits quickly }
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '10';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Send SIGTERM }
+  LRet := platform_process_signal(LProc, 15);  { SIGTERM }
+  Check(LRet = 0, 'signal process');
+
+  { Process should exit }
+  LRet := platform_process_wait(LProc, LResult, 5000);
+  Check(LRet = 0, 'wait after signal');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -422,5 +445,6 @@ begin
   T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
   T.Test('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
   T.Test('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
+  T.Test('process signal', @TestProcessSignal);
   if not T.Run then Halt(1);
 end.

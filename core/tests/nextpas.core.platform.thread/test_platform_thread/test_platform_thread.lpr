@@ -147,6 +147,32 @@ begin
   Check(True, 'sleep did not crash');
 end;
 
+function SlowThread(AArg: Pointer): Pointer; cdecl;
+begin
+  platform_thread_sleep_ns(50000000);  { 50ms }
+  Result := nil;
+end;
+
+procedure TestThreadIsAlive;
+var
+  LRec: TPlatformThreadRecord;
+  LRet: Int32;
+  LWait: Integer;
+begin
+  LRet := platform_thread_spawn(LRec, @SlowThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'spawn');
+
+  { Thread should be alive right after spawn }
+  Check(platform_thread_is_alive(LRec), 'thread is alive after spawn');
+
+  { Wait for thread to finish }
+  LRet := platform_thread_wait(LRec);
+  CheckEqual(Int64(0), Int64(LRet), 'wait');
+
+  { Thread should not be alive after wait }
+  Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -157,5 +183,6 @@ begin
   T.Test('CPU count >= 1', @TestCpuCount);
   T.Test('Thread yield', @TestThreadYield);
   T.Test('Thread sleep', @TestThreadSleep);
+  T.Test('Thread is_alive', @TestThreadIsAlive);
   if not T.Run then Halt(1);
 end.
