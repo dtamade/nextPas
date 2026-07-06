@@ -3679,14 +3679,13 @@ function TSemanticAnalyzer.OwnerUnitAllowsProjectSourceDiagnostic(
   const AOwnerUnitId: string
 ): Boolean;
 var
-  ResolvedUnit: TResolvedUnit;
+  Ctx: TSemaImportContext;
 begin
-  Result := False;
-  if Trim(AOwnerUnitId) = '' then
-    Exit;
-  if not FUnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
-    Exit;
-  Result := SameText(ResolvedUnit.OriginClass, 'project-source');
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Result := np_sema_overload.OwnerUnitAllowsProjectSourceDiagnostic(Ctx, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.HasInstalledSourceImports: Boolean;
@@ -3708,51 +3707,13 @@ function TSemanticAnalyzer.UnitDirectlyImports(
   const AImportedUnitId: string
 ): Boolean;
 var
-  ImportId: string;
-  Index: LongInt;
-  OwnerUnitId: string;
-  UnitTree: TGreenTree;
-  UseIndex: LongInt;
+  Ctx: TSemaImportContext;
 begin
-  Result := False;
-  if (Trim(AOwnerUnitId) = '') or (Trim(AImportedUnitId) = '') then
-    Exit;
-
-  OwnerUnitId := NormalizeUnitIdentity(AOwnerUnitId);
-  ImportId := NormalizeUnitIdentity(AImportedUnitId);
-  if (OwnerUnitId = '') or (ImportId = '') then
-    Exit;
-
-  if SameText(OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) then
-  begin
-    for UseIndex := 0 to FRootAst.InterfaceUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(FRootAst.InterfaceUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    for UseIndex := 0 to FRootAst.ImplementationUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(FRootAst.ImplementationUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    Exit(False);
-  end;
-
-  for Index := 0 to Length(FImportedUnitTrees) - 1 do
-  begin
-    if not SameText(FImportedUnitOwners[Index], OwnerUnitId) then
-      Continue;
-    UnitTree := FImportedUnitTrees[Index];
-    if UnitTree = nil then
-      Exit(False);
-    for UseIndex := 0 to UnitTree.InterfaceUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(UnitTree.InterfaceUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    for UseIndex := 0 to UnitTree.ImplementationUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(
-        UnitTree.ImplementationUseAt(UseIndex)), ImportId) then
-        Exit(True);
-    Exit(False);
-  end;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Result := np_sema_overload.UnitDirectlyImports(Ctx, AOwnerUnitId, AImportedUnitId);
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(

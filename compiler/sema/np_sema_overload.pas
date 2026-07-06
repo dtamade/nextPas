@@ -3,13 +3,6 @@
  *
  * 重载解析模块 — 从 TSemanticAnalyzer 提取
  *
- * 职责：
- *   - 参数计数与签名（CountDeclParams, GetParamSignature 等）
- *   - 名称重整（MangledName, MangledNameSig）
- *   - 重载查找（HasOverload, LookupOverload, LookupCallBindingDeclaration）
- *   - 调用绑定（TryRegisterMemberCallBinding 等）
- *   - 调用合约（TryGetDirectCallContract 等）
- *
  * 对标：rustc 的 fn_ctxt/overload_resolution
  *}
 
@@ -21,7 +14,9 @@ interface
 
 uses
   SysUtils,
-  np_green_tree;
+  np_green_tree,
+  np_unit_graph,
+  np_ast_facade;
 
 type
   TProcedureBodyEntry = record
@@ -33,50 +28,40 @@ type
   end;
   TProcedureBodyArray = array of TProcedureBodyEntry;
   TTypeIdArray = array of LongInt;
-
   TStringArray = array of string;
-
-  { 参数签名结果 }
   TParamSignatureResult = record
     Signature: string;
     ParamCount: LongInt;
     RequiredParamCount: LongInt;
   end;
 
-  {**
-   * 统计声明中的参数数量
-   *}
-  function CountDeclParams(const ADecl: TGreenNode): LongInt;
+  { 单元导入查询上下文 }
+  TSemaImportContext = record
+    UnitGraph: TUnitGraph;
+    RootAst: TAstFacade;
+    ImportedUnitOwners: array of string;
+    ImportedUnitTrees: array of TGreenTree;
+  end;
 
-  {**
-   * 统计声明中必需的参数数量（排除有默认值的参数）
-   *}
-  function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
-
-  {**
-   * 检查声明是否接受指定数量的参数
-   *}
-  function DeclAcceptsArgCount(const ADecl: TGreenNode; const AArgCount: LongInt): Boolean;
-
-  {**
-   * 名称重整：AName + '$' + ParamCount
-   * 对标：FPC 的 mangled name 约定
-   *}
-  function MangledName(const AName: string; AParamCount: LongInt): string;
-
-  {**
-   * 名称重整：AName + '$' + Signature
-   *}
-  function MangledNameSig(const AName, ASig: string): string;
-
+function CountDeclParams(const ADecl: TGreenNode): LongInt;
+function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
+function DeclAcceptsArgCount(const ADecl: TGreenNode; const AArgCount: LongInt): Boolean;
+function MangledName(const AName: string; AParamCount: LongInt): string;
+function MangledNameSig(const AName, ASig: string): string;
 function HasOverload(const AName: string;
   const AProcedureBodies: TProcedureBodyArray): Boolean;
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyArray;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
-
 function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
 function GetParamIdentitySignature(const ADecl: TGreenNode): string;
+
+{ 单元导入查询 }
+function OwnerUnitAllowsProjectSourceDiagnostic(
+  const Ctx: TSemaImportContext; const AOwnerUnitId: string): Boolean;
+function UnitDirectlyImports(
+  const Ctx: TSemaImportContext;
+  const AOwnerUnitId, AImportedUnitId: string): Boolean;
 
 implementation
 
@@ -153,7 +138,6 @@ begin
     Result := AName + '$' + ASig;
 end;
 
-
 function HasOverload(const AName: string;
   const AProcedureBodies: TProcedureBodyArray): Boolean;
 var
@@ -184,7 +168,6 @@ begin
     end;
   Result := False;
 end;
-
 
 function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
 var
@@ -236,6 +219,70 @@ begin
       Inc(ParamIndex);
     end;
     Exit;
+  end;
+end;
+
+function OwnerUnitAllowsProjectSourceDiagnostic(
+  const Ctx: TSemaImportContext; const AOwnerUnitId: string): Boolean;
+var
+  ResolvedUnit: TResolvedUnit;
+begin
+  Result := False;
+  if Trim(AOwnerUnitId) = '' then
+    Exit;
+  if not Ctx.UnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
+    Exit;
+  Result := SameText(ResolvedUnit.OriginClass, 'project-source');
+end;
+
+function UnitDirectlyImports(
+  const Ctx: TSemaImportContext;
+  const AOwnerUnitId, AImportedUnitId: string): Boolean;
+var
+  ImportId: string;
+  Index: LongInt;
+  OwnerUnitId: string;
+  UnitTree: TGreenTree;
+  UseIndex: LongInt;
+begin
+  Result := False;
+  if (Trim(AOwnerUnitId) = '') or (Trim(AImportedUnitId) = '') then
+    Exit;
+
+  OwnerUnitId := NormalizeUnitIdentity(AOwnerUnitId);
+  ImportId := NormalizeUnitIdentity(AImportedUnitId);
+  if (OwnerUnitId = '') or (ImportId = '') then
+    Exit;
+
+  if SameText(OwnerUnitId, NormalizeUnitIdentity(Ctx.UnitGraph.RootName)) then
+  begin
+    for UseIndex := 0 to Ctx.RootAst.InterfaceUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(Ctx.RootAst.InterfaceUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    for UseIndex := 0 to Ctx.RootAst.ImplementationUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(Ctx.RootAst.ImplementationUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    Exit(False);
+  end;
+
+  for Index := 0 to Length(Ctx.ImportedUnitTrees) - 1 do
+  begin
+    if not SameText(Ctx.ImportedUnitOwners[Index], OwnerUnitId) then
+      Continue;
+    UnitTree := Ctx.ImportedUnitTrees[Index];
+    if UnitTree = nil then
+      Exit(False);
+    for UseIndex := 0 to UnitTree.InterfaceUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(UnitTree.InterfaceUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    for UseIndex := 0 to UnitTree.ImplementationUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(
+        UnitTree.ImplementationUseAt(UseIndex)), ImportId) then
+        Exit(True);
+    Exit(False);
   end;
 end;
 
