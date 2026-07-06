@@ -100,7 +100,7 @@ const
   BAND6_MIN   = 53248;
   BAND6_MAX   = 65536;
   BAND6_STEP  = 2048;
-  BAND6_COUNT = (BAND6_MAX - BAND6_MIN) div BAND6_STEP + 1;  // 6
+  BAND6_COUNT = (BAND6_MAX - BAND6_MIN) div BAND6_STEP + 1;  // 7
 
   { Cumulative index offsets. }
   BAND0_OFFSET = 0;
@@ -202,7 +202,7 @@ begin
     { Find which class this size falls into. }
     LIndex := -1;
     { Scan class table to find smallest class >= LSize.
-      Since table is sorted, we scan forward. For 62 entries this is fast.
+      Since table is sorted, we scan forward. For 69 entries this is fast.
       Called once at init, not on hot path. }
     for LBand := 0 to MEM_SIZECLASS_COUNT - 1 do
     begin
