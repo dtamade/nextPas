@@ -641,6 +641,60 @@ function OwnershipBridge_TypeMetaRetStr(const ACtx: Pointer;
 begin
   Result := TSemanticAnalyzer(ACtx).TypeMetaRetStr(ATypeName, AMethodName);
 end;
+function OwnershipBridge_IsRuntimeStrVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsRuntimeStrVar(AName);
+end;
+
+function OwnershipBridge_IsOwnedStringReturnFunc(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsOwnedStringReturnFunc(AName);
+end;
+
+procedure OwnershipBridge_RegisterOwnedStringReturnFunc(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterOwnedStringReturnFunc(AName);
+end;
+
+function OwnershipBridge_IsRuntimeVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsRuntimeVar(AName);
+end;
+
+procedure OwnershipBridge_RegisterRuntimeStrVar(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterRuntimeStrVar(AName);
+end;
+
+procedure OwnershipBridge_RegisterRuntimeVar(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterRuntimeVar(AName);
+end;
+
+function OwnershipBridge_HasOverload(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).HasOverload(AName);
+end;
+
+function OwnershipBridge_EncodeRuntimeIntExprFold(const ACtx: Pointer;
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).EncodeRuntimeIntExprFold(ANode, ABlob);
+end;
+
+function OwnershipBridge_IsVarParamAtPosition(const ACtx: Pointer;
+  const ADecl: TGreenNode; APosition: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsVarParamAtPosition(ADecl, APosition);
+end;
+
 
 procedure TSemanticAnalyzer.FillOwnershipContext(
   out Ctx: TSemaOwnershipContext);
@@ -663,6 +717,15 @@ begin
   Ctx.DeclReturnsString := @OwnershipBridge_DeclReturnsString;
   Ctx.LookupClassVar := @OwnershipBridge_LookupClassVar;
   Ctx.TypeMetaRetStr := @OwnershipBridge_TypeMetaRetStr;
+  Ctx.IsRuntimeStrVar := @OwnershipBridge_IsRuntimeStrVar;
+  Ctx.IsOwnedStringReturnFunc := @OwnershipBridge_IsOwnedStringReturnFunc;
+  Ctx.RegisterOwnedStringReturnFunc := @OwnershipBridge_RegisterOwnedStringReturnFunc;
+  Ctx.IsRuntimeVar := @OwnershipBridge_IsRuntimeVar;
+  Ctx.RegisterRuntimeStrVar := @OwnershipBridge_RegisterRuntimeStrVar;
+  Ctx.RegisterRuntimeVar := @OwnershipBridge_RegisterRuntimeVar;
+  Ctx.HasOverload := @OwnershipBridge_HasOverload;
+  Ctx.EncodeRuntimeIntExprFold := @OwnershipBridge_EncodeRuntimeIntExprFold;
+  Ctx.IsVarParamAtPosition := @OwnershipBridge_IsVarParamAtPosition;
 end;
 
 function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
@@ -862,12 +925,13 @@ end;
 
 function TSemanticAnalyzer.IsRootOwnedStringReturnCandidate(
   const AEntry: TProcedureBodyEntry; const AIsStrReturn: Boolean): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := AIsStrReturn and (AEntry.Body <> nil) and
-    (AEntry.Decl <> nil) and (AEntry.Decl.NodeKind = gnkFunctionDecl) and
-    (Pos('.', AEntry.Name) = 0) and
-    SameText(AEntry.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsRootOwnedStringReturnCandidate(Ctx, AEntry, AIsStrReturn);
 end;
+
 
 function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
 begin
@@ -920,272 +984,113 @@ end;
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnIdentifierTarget(
   const ATargetNode: TGreenNode): Boolean;
 var
-  LookupName, RetName: string;
-  Symbol: TSemanticSymbol;
-  SymbolId: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkIdentifier) then
-    Exit;
-
-  LookupName := ATargetNode.Text;
-  if LookupName = '' then
-    Exit;
-  if SameText(LookupName, 'Result') and (FCurrentRetVarName <> '') then
-    LookupName := FCurrentRetVarName;
-
-  SymbolId := FModel.LookupSymbol(LookupName, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(LookupName);
-  if SymbolId <= 0 then
-    Exit;
-
-  Symbol := FModel.SymbolAt(SymbolId - 1);
-  if SameText(Symbol.Kind, 'variable') then
-    Exit(TypeIdIsManagedString(Symbol.TypeId));
-
-  RetName := FCurrentRetVarName;
-  Result := SameText(Symbol.Kind, 'function') and (RetName <> '') and
-    SameText(LookupName, RetName) and TypeIdIsManagedString(Symbol.TypeId);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnIdentifierTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnStoreTarget(
   const ATargetNode: TGreenNode): Boolean;
 var
-  BaseNode, FieldNode: TGreenNode;
-  BaseName, ClassTypeName: string;
-  BaseSymbolId, BaseTypeId: LongInt;
-  FieldMeta: TFieldMeta;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkDotAccess) or
-    (ATargetNode.ChildCount < 2) then
-    Exit;
-
-  BaseNode := ATargetNode.ChildAt(0);
-  FieldNode := ATargetNode.ChildAt(1);
-  if (BaseNode = nil) or (FieldNode = nil) or
-    (BaseNode.NodeKind <> gnkIdentifier) or
-    (FieldNode.NodeKind <> gnkIdentifier) then
-    Exit;
-
-  BaseName := BaseNode.Text;
-  if BaseName = '' then
-    Exit;
-  if SameText(BaseName, 'Self') then
-  begin
-    if FCurrentMethodClass = '' then
-      Exit;
-    BaseTypeId := FModel.FindTypeByName(FCurrentMethodClass);
-  end
-  else
-  begin
-    BaseSymbolId := FModel.LookupSymbol(BaseName, FCurrentScopeId);
-    if BaseSymbolId <= 0 then
-      BaseSymbolId := FModel.FindSymbolByName(BaseName);
-    if BaseSymbolId <= 0 then
-      Exit;
-    BaseTypeId := FModel.SymbolTypeId(BaseSymbolId);
-  end;
-  if (BaseTypeId <= 0) or (BaseTypeId > FModel.TypeCount) then
-    Exit;
-
-  ClassTypeName := FModel.TypeAt(BaseTypeId - 1).Name;
-  if ClassTypeName = '' then
-    Exit;
-  { Accept both class and record field assignments as safe targets for
-    owned string returns. If type metadata is not fully resolved (e.g.
-    imported record types), trust the assignment as safe. }
-  if TypeMetaIsClass(ClassTypeName) or TypeMetaIsRecord(ClassTypeName) then
-  begin
-    if FModel.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
-      Exit(FieldMeta.IsString and TypeIdIsManagedString(FieldMeta.TypeId));
-  end;
-  { Type exists but metadata not fully resolved — accept as safe.
-    This handles imported record types whose field metadata is not yet
-    populated during C6-H4 pre-registration.
-    TODO: tighten once type metadata is fully populated for all imported
-    types during the pre-registration phase. Currently this fallback is
-    necessary because imported record field metadata may be incomplete. }
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnStoreTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnConsumerTarget(
   const ATargetNode: TGreenNode): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  { Accept any valid assignment target as a safe consumer for owned string
-    returns. The key invariant: if the node appears on the left side of an
-    assignment, the owned string temporary is transferred to the target,
-    which is always safe. }
-  Result := (ATargetNode <> nil) and
-    (ATargetNode.NodeKind in [gnkIdentifier, gnkDotAccess,
-      gnkArrayAccess]);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConsumerTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
   const AEntry: TProcedureBodyEntry): Boolean;
 var
-  DestNode, SourceNode: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  if IsSupportedOwnedStringReturnStoreTarget(DestNode) then
-    Exit(True);
-  // Accept local variable assignments in any function context.
-  // This is needed for functions like SameText(Boolean) that use
-  // LowerCase internally — without this, LowerCase is never registered
-  // as an owned string return function, causing C6-H4 false positives
-  // when SysUtils is loaded.
-  if IsSupportedOwnedStringReturnIdentifierTarget(DestNode) then
-    Exit(True);
-  if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
-    Exit;
-  Result := False;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.AssignmentOwnsStringReturn(Ctx, ANode, AEntry);
 end;
+
 
 function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
   const ANode: TGreenNode): Boolean;
 var
-  DestNode, SourceNode: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  Result := IsSupportedOwnedStringReturnConsumerTarget(DestNode);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.AssignmentOwnsTopLevelStringReturn(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.CallArgumentOwnsStringReturn(
   const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt;
   out AFuncName: string): Boolean;
 var
-  BodyNode, DeclNode, FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ACallNode = nil) or (AArgNode = nil) or
-    (ACallNode.NodeKind <> gnkFunctionCall) or
-    (AArgNode.NodeKind <> gnkFunctionCall) then
-    Exit;
-  if (ACallNode.Text = '') or HasOverload(ACallNode.Text) then
-    Exit;
-  if not LookupProcedureBody(ACallNode.Text, BodyNode, DeclNode) then
-    Exit;
-  if IsVarParamAtPosition(DeclNode, AArgPosition) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(AArgNode, AFuncName) then
-    Exit;
-  if HasOverload(AFuncName) then
-    Exit;
-  FuncNode := nil;
-  if AArgNode.ChildCount > 0 then
-    FuncNode := AArgNode.ChildAt(0);
-  Result := (FuncNode <> nil) and (FuncNode.NodeKind = gnkIdentifier) and
-    SameText(FuncNode.Text, AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CallArgumentOwnsStringReturn(Ctx, ACallNode, AArgNode, AArgPosition, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.DirectOwnedStringReturnAssignmentNode(
   const ANode: TGreenNode): Boolean;
 var
-  DestNode: TGreenNode;
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  if not StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) then
-    Exit;
-  Result := (DestNode <> nil) and IsOwnedStringReturnFunc(SourceName) and
-    IsSupportedOwnedStringReturnConsumerTarget(DestNode);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.DirectOwnedStringReturnAssignmentNode(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnArgument(
   const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt): Boolean;
 var
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CallArgumentOwnsStringReturn(
-    ACallNode, AArgNode, AArgPosition, SourceName) and
-    IsOwnedStringReturnFunc(SourceName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnArgument(Ctx, ACallNode, AArgNode, AArgPosition);
 end;
+
 
 function TSemanticAnalyzer.LengthArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode, ArgNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  ArgNode := ANode.ChildAt(1);
-  if (CalleeNode = nil) or (ArgNode = nil) or
-    (CalleeNode.NodeKind <> gnkIdentifier) or
-    (not SameText(CalleeNode.Text, 'Length')) then
-    Exit;
-  if (ArgNode.NodeKind <> gnkFunctionCall) or
-    (ArgNode.ChildCount < 1) or (ArgNode.ChildAt(0) = nil) or
-    (ArgNode.ChildAt(0).NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
-    Exit;
-  Result := not HasOverload(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.LengthArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnLengthArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := LengthArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnLengthArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringLengthTemp(const ANode: TGreenNode;
   out ABlob: string): Boolean;
 var
-  SourceName, TempName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ABlob := '';
-  Result := False;
-  if not IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(TempName);
-  RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-    TempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    TempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
-    'strvar ' + TempName + #10);
-  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
-    TempName);
-  ABlob := 'var ' + TempName + '$len' + #10;
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringLengthTemp(Ctx, ANode, ABlob);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringConcatLengthTemp(
   const ANode: TGreenNode; out ABlob: string): Boolean;
@@ -1228,114 +1133,62 @@ end;
 function TSemanticAnalyzer.CopyArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode, ArgNode, FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 4) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  ArgNode := ANode.ChildAt(1);
-  if (CalleeNode = nil) or (ArgNode = nil) or
-    (CalleeNode.NodeKind <> gnkIdentifier) or
-    (not SameText(CalleeNode.Text, 'Copy')) then
-    Exit;
-  if (ArgNode.NodeKind <> gnkFunctionCall) or
-    (ArgNode.ChildCount < 1) then
-    Exit;
-  FuncNode := ArgNode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CopyArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnCopyArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CopyArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCopyArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringCopyTemp(const ACopyNode: TGreenNode;
   const ADestName: string; out ATempName: string): Boolean;
 var
-  SourceName, StartBlob, LenBlob: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ATempName := '';
-  Result := False;
-  if (ADestName = '') or
-    (not IsSupportedOwnedStringReturnCopyArgument(ACopyNode, SourceName)) then
-    Exit;
-  if (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(2), StartBlob)) or
-    (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(3), LenBlob)) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  ATempName := '$str_cpy_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(ATempName);
-  RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
-    ATempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('tstring-copy-runtime', ADestName, 0, 0,
-    ADestName + #9 + ATempName + #9 + StartBlob + #9 + LenBlob);
-  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
-    ATempName);
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringCopyTemp(Ctx, ACopyNode, ADestName, ATempName);
 end;
+
 
 function TSemanticAnalyzer.WriteArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(CalleeNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.WriteArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnWriteArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := WriteArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnWriteArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringWriteTemp(
   const ANode: TGreenNode; out ATempName: string): Boolean;
 var
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ATempName := '';
-  Result := False;
-  if not IsSupportedOwnedStringReturnWriteArgument(ANode, SourceName) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  ATempName := '$str_wrt_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(ATempName);
-  RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
-    ATempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  QueuePendingStringTempRelease(ATempName, SourceName);
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringWriteTemp(Ctx, ANode, ATempName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringConcatWriteTemp(
   const ANode: TGreenNode; out ATempName: string): Boolean;
@@ -1368,27 +1221,22 @@ end;
 function TSemanticAnalyzer.ConcatOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  FuncNode := ANode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.ConcatOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnConcatOperand(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := ConcatOperandOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConcatOperand(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.ConcatExpressionConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
@@ -1420,28 +1268,22 @@ end;
 function TSemanticAnalyzer.CompareOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 1) then
-    Exit;
-  FuncNode := ANode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CompareOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnCompareOperand(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CompareOperandOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCompareOperand(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.BoolConditionHasSupportedOwnedStringCompare(
   const ANode: TGreenNode): Boolean;
