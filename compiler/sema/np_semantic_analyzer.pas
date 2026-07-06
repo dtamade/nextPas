@@ -14,6 +14,7 @@ uses
   np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
   np_sema_type_check, np_sema_hir_lowering, np_sema_runtime_vars,
+  np_sema_string_ownership,
   nextpas.core.collections.vec;
 
 type
@@ -196,6 +197,7 @@ type
     function EncodeCallStatementArgs(
       const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
     function NewBlockLabel(const APrefix: string): string;
+    procedure FillOwnershipContext(out Ctx: TSemaOwnershipContext);
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
     procedure RegisterProcedureBody(const AName: string;
@@ -614,6 +616,55 @@ var
   GImportedUnitCacheCount: LongInt = 0;
   GDiskCache: TDiskSymbolCache = nil;
 
+{ === Ownership bridge callbacks === }
+
+function OwnershipBridge_LookupProcedureBody(const ACtx: Pointer;
+  const AName: string; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).LookupProcedureBody(AName, ABody, ADecl);
+end;
+
+function OwnershipBridge_DeclReturnsString(const ACtx: Pointer;
+  const ADecl: TGreenNode): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).DeclReturnsString(ADecl);
+end;
+
+function OwnershipBridge_LookupClassVar(const ACtx: Pointer;
+  const AName: string): string;
+begin
+  Result := TSemanticAnalyzer(ACtx).LookupClassVar(AName);
+end;
+
+function OwnershipBridge_TypeMetaRetStr(const ACtx: Pointer;
+  const ATypeName, AMethodName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).TypeMetaRetStr(ATypeName, AMethodName);
+end;
+
+procedure TSemanticAnalyzer.FillOwnershipContext(
+  out Ctx: TSemaOwnershipContext);
+begin
+  Ctx.Model := FModel;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.CurrentMethodClass := FCurrentMethodClass;
+  Ctx.CurrentRetVarName := FCurrentRetVarName;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  Ctx.BlockLabelCounter := FBlockLabelCounter;
+  Ctx.Diagnostics := FDiagnostics;
+  Ctx.RootFileId := FRootFileId;
+  Ctx.RootAst := FRootAst;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.RuntimeVars := FRuntimeVars;
+  Ctx.CallbackCtx := @Self;
+  Ctx.LookupProcedureBody := @OwnershipBridge_LookupProcedureBody;
+  Ctx.DeclReturnsString := @OwnershipBridge_DeclReturnsString;
+  Ctx.LookupClassVar := @OwnershipBridge_LookupClassVar;
+  Ctx.TypeMetaRetStr := @OwnershipBridge_TypeMetaRetStr;
+end;
+
 function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
   I: LongInt;
@@ -832,116 +883,38 @@ end;
 function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
   const ANode: TGreenNode; out AName: string): Boolean;
 var
-  BodyNode, DeclNode: TGreenNode;
-  SymbolId, TypeId: LongInt;
-  TypeName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  AName := '';
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if ANode.NodeKind = gnkIdentifier then
-    AName := ANode.Text
-  else if (ANode.NodeKind = gnkFunctionCall) then
-    AName := ANode.Text;
-  if AName = '' then
-    Exit;
-  if LookupProcedureBody(AName, BodyNode, DeclNode) and
-    DeclReturnsString(DeclNode) then
-    Exit(True);
-  { Fallback: check semantic model for imported functions }
-  SymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(AName);
-  if SymbolId <= 0 then
-    Exit;
-  { Only accept actual function/procedure symbols — not parameters,
-    variables, constants, or fields. }
-  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
-    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
-    Exit;
-  TypeId := FModel.SymbolTypeId(SymbolId);
-  if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
-  begin
-    TypeName := FModel.TypeAt(TypeId - 1).Name;
-    Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
-      SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
-      SameText(TypeName, 'UnicodeString');
-  end;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.StringReturnFunctionNameFromNode(
+    Ctx, ANode, AName);
 end;
 
 function TSemanticAnalyzer.FunctionCallReturnsString(
   const ANode: TGreenNode): Boolean;
 var
-  BodyNode, DeclNode: TGreenNode;
-  SymbolId, TypeId: LongInt;
-  TypeName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.Text = '') then
-    Exit;
-  if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
-    Exit(DeclReturnsString(DeclNode));
-  SymbolId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(ANode.Text);
-  if SymbolId <= 0 then
-    Exit;
-  { Only accept actual function/procedure symbols }
-  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
-    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
-    Exit;
-  TypeId := FModel.SymbolTypeId(SymbolId);
-  if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
-    Exit;
-  TypeName := FModel.TypeAt(TypeId - 1).Name;
-  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.FunctionCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.MemberCallReturnsString(
   const ANode: TGreenNode): Boolean;
 var
-  CalleeNode, ReceiverNode, MemberNode: TGreenNode;
-  ReceiverTypeName: string;
-  ReceiverSymbolId, ReceiverTypeId: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkDotAccess) or
-    (CalleeNode.ChildCount < 2) then
-    Exit;
-  ReceiverNode := CalleeNode.ChildAt(0);
-  MemberNode := CalleeNode.ChildAt(1);
-  if (ReceiverNode = nil) or (MemberNode = nil) or
-    (ReceiverNode.NodeKind <> gnkIdentifier) or
-    (MemberNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if SameText(ReceiverNode.Text, 'Self') and (FCurrentMethodClass <> '') then
-    ReceiverTypeName := FCurrentMethodClass
-  else
-    ReceiverTypeName := LookupClassVar(ReceiverNode.Text);
-  if ReceiverTypeName = '' then
-  begin
-    ReceiverSymbolId := FModel.FindSymbolByName(ReceiverNode.Text);
-    if ReceiverSymbolId > 0 then
-    begin
-      ReceiverTypeId := FModel.SymbolTypeId(ReceiverSymbolId);
-      if (ReceiverTypeId > 0) and (ReceiverTypeId <= FModel.TypeCount) then
-        ReceiverTypeName := FModel.TypeAt(ReceiverTypeId - 1).Name;
-    end;
-  end;
-  Result := (ReceiverTypeName <> '') and
-    TypeMetaRetStr(ReceiverTypeName, MemberNode.Text);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.MemberCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.TypeIdIsManagedString(
   const ATypeId: LongInt): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := np_sema_type_check.TypeIdIsManagedString(FModel, ATypeId);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.TypeIdIsManagedString(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnIdentifierTarget(
