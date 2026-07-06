@@ -36,6 +36,7 @@ type
     FStub: TNode;
     FConstructed: Boolean;
     FClosed: Int32;
+    FCount: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
@@ -45,6 +46,8 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
+    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function TryDequeue(out AValue: T): Boolean;
     {** @desc 阻塞出队（**严格单消费者**：只能由一个线程调用） }
@@ -54,6 +57,8 @@ type
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
+    {** @desc 近似元素计数（原子快照，非线性化） }
+    function ApproxCount: PtrUInt;
   end;
 
   generic TMpscQueue<T> = class(specialize TMpscQueueImpl<T>)
@@ -91,6 +96,7 @@ begin
   FHead := @FStub;
   FTail := @FStub;
   FClosed := 0;
+  FCount := 0;
   FDataEpoch := 0;
   FDataWaiters := 0;
   FConstructed := True;
@@ -122,7 +128,16 @@ begin
   LNode^.Next := nil;
   LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
   AtomicStoreNode(LPrev^.Next, LNode, mo_release);
+  AtomicFetchAdd32(FCount, 1, moRelaxed);
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+end;
+
+function TMpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
+  Enqueue(AValue);
+  Result := True;
 end;
 
 function TMpscQueueImpl.TryDequeue(out AValue: T): Boolean;
@@ -144,6 +159,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
+    AtomicFetchSub32(FCount, 1, moRelaxed);
     Result := True;
     Exit;
   end;
@@ -158,6 +174,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
+    AtomicFetchSub32(FCount, 1, moRelaxed);
     Result := True;
     Exit;
   end;
@@ -225,6 +242,11 @@ begin
     Result := LNext = nil
   else
     Result := False;
+end;
+
+function TMpscQueueImpl.ApproxCount: PtrUInt;
+begin
+  Result := PtrUInt(AtomicLoad32(FCount, moRelaxed));
 end;
 
 end.

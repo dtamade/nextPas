@@ -12,6 +12,8 @@ uses
   nextpas.core.time.base;
 
 type
+  TChannelNotifier = procedure(AData: Pointer) of object;
+
   generic TLockFreeChannelImpl<T> = class
   private type
     TSlot = record
@@ -22,18 +24,30 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
+    { Cache line padding to avoid false sharing between producer and consumer }
     FSendPos: Int64;
+    FSendPad: array[0..47] of Byte; { Pad to 64 bytes }
     FRecvPos: Int64;
+    FRecvPad: array[0..47] of Byte; { Pad to 64 bytes }
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     FClosed: Int32;
+    FNotifier: TChannelNotifier;
+    FNotifierData: Pointer;
     procedure WakeAllWaiters;
+    procedure NotifyData;
+    procedure NotifySpace;
   public
     {** @desc 创建有界无锁 Channel }
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
+
+    {** @desc 设置状态变更通知器（供 Selector 使用）
+      @param ANotifier 通知回调
+      @param AData 通知器上下文数据 }
+    procedure SetNotifier(ANotifier: TChannelNotifier; AData: Pointer);
 
     {** @desc 阻塞发送，直到有空间或 channel 关闭
       @raises EInvalidOperationError 如果 channel 已关闭（与 Go 的 panic 语义对齐） }
@@ -55,6 +69,8 @@ type
     procedure Close;
     {** @desc Channel 是否已关闭 }
     function IsClosed: Boolean;
+    {** @desc Channel 是否为空 }
+    function IsEmpty: Boolean;
     {** @desc 近似队列长度 }
     function ApproxLen: PtrUInt;
     {** @desc Channel 容量 }
@@ -89,6 +105,8 @@ begin
   FSpaceWaiters := 0;
   FDataWaiters := 0;
   FClosed := 0;
+  FNotifier := nil;
+  FNotifierData := nil;
 end;
 
 destructor TLockFreeChannelImpl.Destroy;
@@ -104,6 +122,26 @@ procedure TLockFreeChannelImpl.WakeAllWaiters;
 begin
   LockFreeWakeAll(@FSpaceEpoch);
   LockFreeWakeAll(@FDataEpoch);
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.NotifyData;
+begin
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.NotifySpace;
+begin
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.SetNotifier(ANotifier: TChannelNotifier; AData: Pointer);
+begin
+  FNotifier := ANotifier;
+  FNotifierData := AData;
 end;
 
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
@@ -126,6 +164,7 @@ begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
         LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+        NotifyData;
         Exit(True);
       end;
     end
@@ -145,7 +184,7 @@ begin
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      raise EInvalidOperationError.Create('TLockFreeChannel.Send: channel closed');
+      raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [FCapacity]);
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TrySend(AValue) then
       Exit;
@@ -197,6 +236,7 @@ begin
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
         LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        NotifySpace;
         Exit(True);
       end;
     end
@@ -257,6 +297,11 @@ end;
 function TLockFreeChannelImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moRelaxed) <> 0;
+end;
+
+function TLockFreeChannelImpl.IsEmpty: Boolean;
+begin
+  Result := ApproxLen = 0;
 end;
 
 function TLockFreeChannelImpl.ApproxLen: PtrUInt;

@@ -156,11 +156,12 @@ begin
         { CAS failed — another producer won this slot }
         if LBackoff < 256 then
         begin
-          LI := LBackoff;
+          { Add variation based on position to reduce livelock }
+          LI := LBackoff + Integer(LPos and 3);
           repeat
             CpuPause;
             Dec(LI);
-          until LI = 0;
+          until LI <= 0;
           LBackoff := LBackoff * 2;
         end
         else
@@ -206,11 +207,12 @@ begin
       { CAS failed — another consumer won this slot }
       if LBackoff < 256 then
       begin
-        LI := LBackoff;
+        { Add variation based on position to reduce livelock }
+        LI := LBackoff + Integer(LPos and 3);
         repeat
           CpuPause;
           Dec(LI);
-        until LI = 0;
+        until LI <= 0;
         LBackoff := LBackoff * 2;
       end
       else
@@ -228,18 +230,12 @@ var
   LEpoch: Int32;
 begin
   if TryEnqueue(AValue) then
-  begin
-
     Exit(True);
-  end;
   while True do
   begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
@@ -251,18 +247,12 @@ var
   LEpoch: Int32;
 begin
   if TryDequeue(AValue) then
-  begin
-    
     Exit(True);
-  end;
   while True do
   begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      
       Exit(True);
-    end;
     if ClosedAndNoActiveEnqueues then
     begin
       if TryDequeue(AValue) then
@@ -280,10 +270,7 @@ var
   LRemaining: Int64;
 begin
   if TryEnqueue(AValue) then
-  begin
-    
     Exit(True);
-  end;
   LStart := TInstant.Now;
   while True do
   begin
@@ -292,10 +279,7 @@ begin
       Exit(TryEnqueue(AValue));
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
-    begin
-      
       Exit(True);
-    end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
@@ -309,10 +293,7 @@ var
   LRemaining: Int64;
 begin
   if TryDequeue(AValue) then
-  begin
-    
     Exit(True);
-  end;
   LStart := TInstant.Now;
   while True do
   begin
@@ -321,10 +302,7 @@ begin
       Exit(TryDequeue(AValue));
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
-    begin
-      
       Exit(True);
-    end;
     if ClosedAndNoActiveEnqueues then
     begin
       if TryDequeue(AValue) then
@@ -340,8 +318,6 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
-  
-  
 end;
 
 function TMpmcQueueImpl.IsClosed: Boolean;

@@ -14,6 +14,7 @@ uses
   nextpas.core.lockfree.ebr,
   nextpas.core.lockfree.hazard,
   nextpas.core.lockfree.channel,
+  nextpas.core.lockfree.channel.spsc,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.segqueue,
   nextpas.core.lockfree.spmc,
