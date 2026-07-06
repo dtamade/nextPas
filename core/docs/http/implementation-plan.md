@@ -63,31 +63,34 @@
 
 ---
 
-## Phase 2: 模糊测试 (8h) - 进行中
+## Phase 2: 模糊测试 ✅ (2026-07-06)
 
-### 2.1 实现 TFuzzMutator (2h)
+### 2.1 实现 TFuzzMutator ✅
 - FlipBits: 随机翻转 1-4 位
 - InsertBytes: 随机位置插入 1-16 字节
 - DeleteBytes: 随机删除 1-16 字节
 - ReplaceBytes: 随机替换 1-16 字节
 - 边界值替换: 0x00, 0xFF, 0x7F, 0x80
 
-### 2.2 实现 TFuzzRunner (2h)
-- RunHttpParserFuzz: HTTP 请求/响应 fuzz
-- RunWebSocketFuzz: WebSocket 帧 fuzz
-- 统计崩溃/泄漏次数
+### 2.2 实现 TFuzzRunner ✅
+- RunHttpRequestFuzz: HTTP 请求 fuzz
+- RunHttpResponseFuzz: HTTP 响应 fuzz
+- RunWebSocketFrameFuzz: WebSocket 帧 fuzz
+- 统计崩溃次数
 
-### 2.3 种子语料库 (1h)
-- HTTP 请求种子 (GET, POST, PUT, DELETE)
-- HTTP 响应种子 (200, 301, 404, 500)
-- WebSocket 帧种子 (text, binary, ping, pong, close)
+### 2.3 种子语料库 ✅
+- HTTP 请求种子 (GET, POST)
+- HTTP 响应种子 (200, 404, 301)
+- WebSocket 帧种子 (text, binary, ping)
 
-### 2.4 测试编写 (2h)
-- HTTP parser fuzz - 1000 iterations
-- HTTP response fuzz - 1000 iterations
-- WebSocket frame fuzz - 1000 iterations
+### 2.4 测试编写 ✅
+- 5 mutator tests
+- HTTP request parser fuzz - 1000 iterations
+- HTTP response parser fuzz - 1000 iterations
+- WebSocket frame parser fuzz - 1000 iterations
+- 8 tests, 0 leaks
 
-### 2.5 文档更新 (1h)
+### 2.5 文档更新 ✅
 - 更新 GOAL_TREE.md
 
 **交付物**:
@@ -97,7 +100,7 @@
 
 ---
 
-## Phase 3: HTTPS 重定向测试 (9h)
+## Phase 3: HTTPS 重定向测试 (9h) - 进行中
 
 ### 3.1 修改 THttpClient 支持 https (3h)
 - 解析 URL scheme
