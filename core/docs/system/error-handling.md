@@ -238,16 +238,16 @@ end;
 ### 6.1 fpc_* 异常函数
 
 ```pascal
-function fpc_setjmp(var S: jmp_buf): LongInt;      // 保存栈上下文
-procedure fpc_longjmp(var S: jmp_buf; Value: LongInt); // 恢复栈上下文
-function fpc_get_exception_address: Pointer;        // 获取异常地址
-function fpc_get_exception_object: Pointer;         // 获取异常对象
-function fpc_get_exception_class: TClass;           // 获取异常类
-function fpc_try_push(var S: ExceptionRecord): LongInt; // try 入栈
-procedure fpc_try_pop(S: ExceptionRecord);          // try 出栈
-procedure fpc_raise_exception(S: Exception);        // 抛出异常
-procedure fpc_finally_end;                          // finally 结束
-procedure fpc_except_end;                           // except 结束
+function np_setjmp(var S: jmp_buf): LongInt;      // 保存栈上下文
+procedure np_longjmp(var S: jmp_buf; Value: LongInt); // 恢复栈上下文
+function np_get_exception_address: Pointer;        // 获取异常地址
+function np_get_exception_object: Pointer;         // 获取异常对象
+function np_get_exception_class: TClass;           // 获取异常类
+function np_try_push(var S: ExceptionRecord): LongInt; // try 入栈
+procedure np_try_pop(S: ExceptionRecord);          // try 出栈
+procedure np_raise(S: Exception);        // 抛出异常
+procedure np_finally_end;                          // finally 结束
+procedure np_except_end;                           // except 结束
 ```
 
 ### 6.2 np.system.* 异常契约

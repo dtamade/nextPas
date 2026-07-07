@@ -198,8 +198,8 @@ end;
 ### 3.3 接口引用计数
 
 - `_AddRef` / `_Release` 由实现类负责
-- 赋值时编译器生成 `fpc_intf_assign`（旧引用 Release，新引用 AddRef）
-- 局部变量离开作用域时编译器生成 `fpc_intf_release`
+- 赋值时编译器生成 `np_intf_assign`（旧引用 Release，新引用 AddRef）
+- 局部变量离开作用域时编译器生成 `np_intf_release`
 
 ## 4. 异常模型
 
@@ -218,21 +218,21 @@ end;
 
 ```
 // try
-fpc_try_push(ExceptionRecord)  // 返回 0=首次进入, 非0=从 catch 恢复
+np_try_push(ExceptionRecord)  // 返回 0=首次进入, 非0=从 catch 恢复
 
 // except
-fpc_except_end                 // 清理异常状态
+np_except_end                 // 清理异常状态
 
 // finally
-fpc_finally_end                // 执行 finally 块
+np_finally_end                // 执行 finally 块
 
 // raise E.Create('msg')
-fpc_raise_exception(E)         // 抛出异常
+np_raise(E)         // 抛出异常
 ```
 
 ### 4.3 ExceptionRecord 布局
 
-运行时定义，编译器不直接访问字段，只通过 `fpc_try_push` / `fpc_try_pop` 操作。
+运行时定义，编译器不直接访问字段，只通过 `np_try_push` / `np_try_pop` 操作。
 
 ## 5. 内存管理器 ABI
 
@@ -247,195 +247,195 @@ TReAllocMem    = function(P: Pointer; Size: SizeInt): Pointer;
 TMemSize       = function(P: Pointer): SizeInt;
 ```
 
-### 5.2 fpc_* 内存函数 → 内存管理器映射
+### 5.2 np_* 内存函数 → 内存管理器映射
 
 | 编译器函数 | 内存管理器回调 | 备注 |
 |-----------|--------------|------|
-| `fpc_getmem(Size)` | `GetMem(Size)` | |
-| `fpc_freemem(P)` | `FreeMem(P)` | 返回释放的大小 |
-| `fpc_reallocmem(P, Size)` | `ReAllocMem(P, Size)` | |
-| `fpc_allocmem(Size)` | `AllocMem(Size)` | 零填充 |
-| `fpc_memsize(P)` | `MemSize(P)` | |
+| `np_getmem(Size)` | `GetMem(Size)` | |
+| `np_freemem(P)` | `FreeMem(P)` | 返回释放的大小 |
+| `np_reallocmem(P, Size)` | `ReAllocMem(P, Size)` | |
+| `np_allocmem(Size)` | `AllocMem(Size)` | 零填充 |
+| `np_memsize(P)` | `MemSize(P)` | |
 
 ### 5.3 对齐内存函数
 
 ```
-fpc_getmem_aligned(Size, Align) → Pointer
-fpc_freemem_aligned(P) → SizeInt
+np_getmem_aligned(Size, Align) → Pointer
+np_freemem_aligned(P) → SizeInt
 ```
 
 Align 必须是 2 的幂，≥ `SizeOf(Pointer)`。运行时负责对齐分配。
 
-## 6. 编译器内部函数 (fpc_*) 完整签名
+## 6. 编译器内部函数 (np_*) 完整签名
 
 ### 6.1 AnsiString 系列 (23 个)
 
 ```pascal
-function fpc_ansistr_incr_ref(S: Pointer): Pointer;
-function fpc_ansistr_decr_ref(S: Pointer): Pointer;
-function fpc_ansistr_assign(Dest, Src: Pointer): Pointer;
-function fpc_ansistr_concat(Dest: Pointer; const S1, S2: AnsiString): Pointer;
-function fpc_ansistr_compare(const S1, S2: AnsiString): SizeInt;
-function fpc_ansistr_compare_equal(const S1, S2: AnsiString): SizeInt;
-function fpc_ansistr_length(S: Pointer): SizeInt;
-function fpc_ansistr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
-function fpc_ansistr_unique(S: Pointer): Pointer;
-function fpc_ansistr_copy(const S: AnsiString; Index, Count: SizeInt): AnsiString;
-function fpc_ansistr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
-function fpc_ansistr_insert(S: Pointer; const Sub: AnsiString; Index: SizeInt): Pointer;
-function fpc_ansistr_pos(const Sub, S: AnsiString): SizeInt;
-function fpc_ansistr_char(S: Pointer; Index: SizeInt): AnsiChar;
-function fpc_ansistr_pchar(S: Pointer): PAnsiChar;
-function fpc_ansistr_to_shortstring(Dest: Pointer; const S: AnsiString): Pointer;
-function fpc_ansistr_from_shortstring(Dest: Pointer; const S: ShortString): Pointer;
-function fpc_ansistr_from_pchar(S: PAnsiChar): AnsiString;
-function fpc_ansistr_from_char(C: AnsiChar): AnsiString;
-function fpc_ansistr_from_widestring(const S: WideString): AnsiString;
-function fpc_ansistr_from_unicodestring(const S: UnicodeString): AnsiString;
-function fpc_ansistr_to_widestring(const S: AnsiString): WideString;
-function fpc_ansistr_to_unicodestring(const S: AnsiString): UnicodeString;
+function np_ansistr_incr_ref(S: Pointer): Pointer;
+function np_ansistr_decr_ref(S: Pointer): Pointer;
+function np_ansistr_assign(Dest, Src: Pointer): Pointer;
+function np_ansistr_concat(Dest: Pointer; const S1, S2: AnsiString): Pointer;
+function np_ansistr_compare(const S1, S2: AnsiString): SizeInt;
+function np_ansistr_compare_equal(const S1, S2: AnsiString): SizeInt;
+function np_ansistr_length(S: Pointer): SizeInt;
+function np_ansistr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
+function np_ansistr_unique(S: Pointer): Pointer;
+function np_ansistr_copy(const S: AnsiString; Index, Count: SizeInt): AnsiString;
+function np_ansistr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
+function np_ansistr_insert(S: Pointer; const Sub: AnsiString; Index: SizeInt): Pointer;
+function np_ansistr_pos(const Sub, S: AnsiString): SizeInt;
+function np_ansistr_char(S: Pointer; Index: SizeInt): AnsiChar;
+function np_ansistr_pchar(S: Pointer): PAnsiChar;
+function np_ansistr_to_shortstring(Dest: Pointer; const S: AnsiString): Pointer;
+function np_ansistr_from_shortstring(Dest: Pointer; const S: ShortString): Pointer;
+function np_ansistr_from_pchar(S: PAnsiChar): AnsiString;
+function np_ansistr_from_char(C: AnsiChar): AnsiString;
+function np_ansistr_from_widestring(const S: WideString): AnsiString;
+function np_ansistr_from_unicodestring(const S: UnicodeString): AnsiString;
+function np_ansistr_to_widestring(const S: AnsiString): WideString;
+function np_ansistr_to_unicodestring(const S: AnsiString): UnicodeString;
 ```
 
 ### 6.2 WideString 系列 (18 个)
 
 ```pascal
-function fpc_widestr_incr_ref(S: Pointer): Pointer;
-function fpc_widestr_decr_ref(S: Pointer): Pointer;
-function fpc_widestr_assign(Dest, Src: Pointer): Pointer;
-function fpc_widestr_concat(Dest: Pointer; const S1, S2: WideString): Pointer;
-function fpc_widestr_compare(const S1, S2: WideString): SizeInt;
-function fpc_widestr_compare_equal(const S1, S2: WideString): SizeInt;
-function fpc_widestr_length(S: Pointer): SizeInt;
-function fpc_widestr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
-function fpc_widestr_unique(S: Pointer): Pointer;
-function fpc_widestr_copy(const S: WideString; Index, Count: SizeInt): WideString;
-function fpc_widestr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
-function fpc_widestr_insert(S: Pointer; const Sub: WideString; Index: SizeInt): Pointer;
-function fpc_widestr_pos(const Sub, S: WideString): SizeInt;
-function fpc_widestr_char(S: Pointer; Index: SizeInt): WideChar;
-function fpc_widestr_pwidechar(S: Pointer): PWideChar;
-function fpc_widestr_to_ansistring(const S: WideString): AnsiString;
-function fpc_widestr_from_ansistring(const S: AnsiString): WideString;
-function fpc_widestr_from_unicodestring(const S: UnicodeString): WideString;
-function fpc_widestr_to_unicodestring(const S: WideString): UnicodeString;
+function np_widestr_incr_ref(S: Pointer): Pointer;
+function np_widestr_decr_ref(S: Pointer): Pointer;
+function np_widestr_assign(Dest, Src: Pointer): Pointer;
+function np_widestr_concat(Dest: Pointer; const S1, S2: WideString): Pointer;
+function np_widestr_compare(const S1, S2: WideString): SizeInt;
+function np_widestr_compare_equal(const S1, S2: WideString): SizeInt;
+function np_widestr_length(S: Pointer): SizeInt;
+function np_widestr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
+function np_widestr_unique(S: Pointer): Pointer;
+function np_widestr_copy(const S: WideString; Index, Count: SizeInt): WideString;
+function np_widestr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
+function np_widestr_insert(S: Pointer; const Sub: WideString; Index: SizeInt): Pointer;
+function np_widestr_pos(const Sub, S: WideString): SizeInt;
+function np_widestr_char(S: Pointer; Index: SizeInt): WideChar;
+function np_widestr_pwidechar(S: Pointer): PWideChar;
+function np_widestr_to_ansistring(const S: WideString): AnsiString;
+function np_widestr_from_ansistring(const S: AnsiString): WideString;
+function np_widestr_from_unicodestring(const S: UnicodeString): WideString;
+function np_widestr_to_unicodestring(const S: WideString): UnicodeString;
 ```
 
 ### 6.3 UnicodeString 系列 (18 个)
 
 ```pascal
-function fpc_unicodestr_incr_ref(S: Pointer): Pointer;
-function fpc_unicodestr_decr_ref(S: Pointer): Pointer;
-function fpc_unicodestr_assign(Dest, Src: Pointer): Pointer;
-function fpc_unicodestr_concat(Dest: Pointer; const S1, S2: UnicodeString): Pointer;
-function fpc_unicodestr_compare(const S1, S2: UnicodeString): SizeInt;
-function fpc_unicodestr_compare_equal(const S1, S2: UnicodeString): SizeInt;
-function fpc_unicodestr_length(S: Pointer): SizeInt;
-function fpc_unicodestr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
-function fpc_unicodestr_unique(S: Pointer): Pointer;
-function fpc_unicodestr_copy(const S: UnicodeString; Index, Count: SizeInt): UnicodeString;
-function fpc_unicodestr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
-function fpc_unicodestr_insert(S: Pointer; const Sub: UnicodeString; Index: SizeInt): Pointer;
-function fpc_unicodestr_pos(const Sub, S: UnicodeString): SizeInt;
-function fpc_unicodestr_char(S: Pointer; Index: SizeInt): WideChar;
-function fpc_unicodestr_pwidechar(S: Pointer): PWideChar;
-function fpc_unicodestr_to_ansistring(const S: UnicodeString): AnsiString;
-function fpc_unicodestr_to_widestring(const S: UnicodeString): WideString;
-function fpc_unicodestr_from_ansistring(const S: AnsiString): UnicodeString;
-function fpc_unicodestr_from_widestring(const S: WideString): UnicodeString;
+function np_unicodestr_incr_ref(S: Pointer): Pointer;
+function np_unicodestr_decr_ref(S: Pointer): Pointer;
+function np_unicodestr_assign(Dest, Src: Pointer): Pointer;
+function np_unicodestr_concat(Dest: Pointer; const S1, S2: UnicodeString): Pointer;
+function np_unicodestr_compare(const S1, S2: UnicodeString): SizeInt;
+function np_unicodestr_compare_equal(const S1, S2: UnicodeString): SizeInt;
+function np_unicodestr_length(S: Pointer): SizeInt;
+function np_unicodestr_setlength(S: Pointer; NewLen: SizeInt): Pointer;
+function np_unicodestr_unique(S: Pointer): Pointer;
+function np_unicodestr_copy(const S: UnicodeString; Index, Count: SizeInt): UnicodeString;
+function np_unicodestr_delete(S: Pointer; Index, Count: SizeInt): Pointer;
+function np_unicodestr_insert(S: Pointer; const Sub: UnicodeString; Index: SizeInt): Pointer;
+function np_unicodestr_pos(const Sub, S: UnicodeString): SizeInt;
+function np_unicodestr_char(S: Pointer; Index: SizeInt): WideChar;
+function np_unicodestr_pwidechar(S: Pointer): PWideChar;
+function np_unicodestr_to_ansistring(const S: UnicodeString): AnsiString;
+function np_unicodestr_to_widestring(const S: UnicodeString): WideString;
+function np_unicodestr_from_ansistring(const S: AnsiString): UnicodeString;
+function np_unicodestr_from_widestring(const S: WideString): UnicodeString;
 ```
 
 ### 6.4 Dynamic Array 系列 (12 个)
 
 ```pascal
-function fpc_dynarray_incr_ref(S: Pointer): Pointer;
-function fpc_dynarray_decr_ref(S: Pointer): Pointer;
-function fpc_dynarray_assign(Dest, Src: Pointer): Pointer;
-function fpc_dynarray_length(S: Pointer): SizeInt;
-function fpc_dynarray_setlength(S: Pointer; NewLen: SizeInt; TypeInfo: Pointer): Pointer;
-function fpc_dynarray_unique(S: Pointer): Pointer;
-function fpc_dynarray_copy(const S: Pointer; Index, Count: SizeInt; TypeInfo: Pointer): Pointer;
-function fpc_dynarray_delete(S: Pointer; Index, Count: SizeInt): Pointer;
-function fpc_dynarray_insert(S: Pointer; const Sub: Pointer; Index: SizeInt): Pointer;
-function fpc_dynarray_pos(const Sub, S: Pointer): SizeInt;
-function fpc_dynarray_get(S: Pointer; Index: SizeInt): Pointer;
-function fpc_dynarray_put(S: Pointer; Index: SizeInt; Value: Pointer): Pointer;
+function np_dynarray_incr_ref(S: Pointer): Pointer;
+function np_dynarray_decr_ref(S: Pointer): Pointer;
+function np_dynarray_assign(Dest, Src: Pointer): Pointer;
+function np_dynarray_length(S: Pointer): SizeInt;
+function np_dynarray_setlength(S: Pointer; NewLen: SizeInt; TypeInfo: Pointer): Pointer;
+function np_dynarray_unique(S: Pointer): Pointer;
+function np_dynarray_copy(const S: Pointer; Index, Count: SizeInt; TypeInfo: Pointer): Pointer;
+function np_dynarray_delete(S: Pointer; Index, Count: SizeInt): Pointer;
+function np_dynarray_insert(S: Pointer; const Sub: Pointer; Index: SizeInt): Pointer;
+function np_dynarray_pos(const Sub, S: Pointer): SizeInt;
+function np_dynarray_get(S: Pointer; Index: SizeInt): Pointer;
+function np_dynarray_put(S: Pointer; Index: SizeInt; Value: Pointer): Pointer;
 ```
 
 ### 6.5 Variant 系列 (18 个)
 
 ```pascal
-function fpc_variant_init(S: Pointer): Pointer;
-function fpc_variant_clear(S: Pointer): Pointer;
-function fpc_variant_assign(Dest, Src: Pointer): Pointer;
-function fpc_variant_copy(Dest, Src: Pointer): Pointer;
-function fpc_variant_cmp(const S1, S2: Variant): SizeInt;
-function fpc_variant_cmp_equal(const S1, S2: Variant): SizeInt;
-function fpc_variant_concat(Dest: Pointer; const S1, S2: Variant): Pointer;
-function fpc_variant_length(S: Pointer): SizeInt;
-function fpc_variant_type(S: Pointer): SizeInt;
-function fpc_variant_is_empty(S: Pointer): Boolean;
-function fpc_variant_is_null(S: Pointer): Boolean;
-function fpc_variant_is_numeric(S: Pointer): Boolean;
-function fpc_variant_is_string(S: Pointer): Boolean;
-function fpc_variant_to_int(const S: Variant): Int64;
-function fpc_variant_to_float(const S: Variant): Double;
-function fpc_variant_to_str(const S: Variant): AnsiString;
-function fpc_variant_from_int(Value: Int64): Variant;
-function fpc_variant_from_float(Value: Double): Variant;
-function fpc_variant_from_str(const Value: AnsiString): Variant;
+function np_variant_init(S: Pointer): Pointer;
+function np_variant_clear(S: Pointer): Pointer;
+function np_variant_assign(Dest, Src: Pointer): Pointer;
+function np_variant_copy(Dest, Src: Pointer): Pointer;
+function np_variant_cmp(const S1, S2: Variant): SizeInt;
+function np_variant_cmp_equal(const S1, S2: Variant): SizeInt;
+function np_variant_concat(Dest: Pointer; const S1, S2: Variant): Pointer;
+function np_variant_length(S: Pointer): SizeInt;
+function np_variant_type(S: Pointer): SizeInt;
+function np_variant_is_empty(S: Pointer): Boolean;
+function np_variant_is_null(S: Pointer): Boolean;
+function np_variant_is_numeric(S: Pointer): Boolean;
+function np_variant_is_string(S: Pointer): Boolean;
+function np_variant_to_int(const S: Variant): Int64;
+function np_variant_to_float(const S: Variant): Double;
+function np_variant_to_str(const S: Variant): AnsiString;
+function np_variant_from_int(Value: Int64): Variant;
+function np_variant_from_float(Value: Double): Variant;
+function np_variant_from_str(const Value: AnsiString): Variant;
 ```
 
 ### 6.6 Interface 系列 (10 个)
 
 ```pascal
-function fpc_intf_incr_ref(S: Pointer): Pointer;
-function fpc_intf_decr_ref(S: Pointer): Pointer;
-function fpc_intf_assign(Dest, Src: Pointer): Pointer;
-function fpc_intf_copy(Dest, Src: Pointer): Pointer;
-function fpc_intf_clear(S: Pointer): Pointer;
-function fpc_intf_is_nil(S: Pointer): Boolean;
-function fpc_intf_is_equal(const S1, S2: IUnknown): Boolean;
-function fpc_intf_query_interface(S: Pointer; const IID: TGUID; out Obj): LongInt;
-function fpc_intf_addref(S: Pointer): LongInt;
-function fpc_intf_release(S: Pointer): LongInt;
+function np_intf_incr_ref(S: Pointer): Pointer;
+function np_intf_decr_ref(S: Pointer): Pointer;
+function np_intf_assign(Dest, Src: Pointer): Pointer;
+function np_intf_copy(Dest, Src: Pointer): Pointer;
+function np_intf_clear(S: Pointer): Pointer;
+function np_intf_is_nil(S: Pointer): Boolean;
+function np_intf_is_equal(const S1, S2: IUnknown): Boolean;
+function np_intf_query_interface(S: Pointer; const IID: TGUID; out Obj): LongInt;
+function np_intf_addref(S: Pointer): LongInt;
+function np_intf_release(S: Pointer): LongInt;
 ```
 
 ### 6.7 Exception 系列 (10 个)
 
 ```pascal
-function fpc_setjmp(var S: jmp_buf): LongInt;
-procedure fpc_longjmp(var S: jmp_buf; Value: LongInt);
-function fpc_get_exception_address: Pointer;
-function fpc_get_exception_object: Pointer;
-function fpc_get_exception_class: TClass;
-function fpc_try_push(var S: ExceptionRecord): LongInt;
-procedure fpc_try_pop(S: ExceptionRecord);
-procedure fpc_raise_exception(S: Exception);
-procedure fpc_finally_end;
-procedure fpc_except_end;
+function np_setjmp(var S: jmp_buf): LongInt;
+procedure np_longjmp(var S: jmp_buf; Value: LongInt);
+function np_get_exception_address: Pointer;
+function np_get_exception_object: Pointer;
+function np_get_exception_class: TClass;
+function np_try_push(var S: ExceptionRecord): LongInt;
+procedure np_try_pop(S: ExceptionRecord);
+procedure np_raise(S: Exception);
+procedure np_finally_end;
+procedure np_except_end;
 ```
 
 ### 6.8 Memory 系列 (7 个)
 
 ```pascal
-function fpc_getmem(Size: SizeInt): Pointer;
-function fpc_freemem(P: Pointer): SizeInt;
-function fpc_reallocmem(P: Pointer; Size: SizeInt): Pointer;
-function fpc_getmem_aligned(Size: SizeInt; Align: SizeInt): Pointer;
-function fpc_freemem_aligned(P: Pointer): SizeInt;
-function fpc_allocmem(Size: SizeInt): Pointer;
-function fpc_memsize(P: Pointer): SizeInt;
+function np_getmem(Size: SizeInt): Pointer;
+function np_freemem(P: Pointer): SizeInt;
+function np_reallocmem(P: Pointer; Size: SizeInt): Pointer;
+function np_getmem_aligned(Size: SizeInt; Align: SizeInt): Pointer;
+function np_freemem_aligned(P: Pointer): SizeInt;
+function np_allocmem(Size: SizeInt): Pointer;
+function np_memsize(P: Pointer): SizeInt;
 ```
 
 ### 6.9 Halt/Exit 系列 (3 个)
 
 ```pascal
-procedure fpc_exit;
-procedure fpc_halt(Code: LongInt);
-procedure fpc_haltproc;
+procedure np_exit;
+procedure np_halt(Code: LongInt);
+procedure np_haltproc;
 ```
 
-**总计: 119 个 fpc_* 函数**
+**总计: 119 个 np_* 函数**
 
 ## 7. np.system.* 运行时契约
 
@@ -473,7 +473,7 @@ procedure fpc_haltproc;
 ### 8.2 特殊调用约定
 
 - **stdcall**: 接口方法（COM 兼容），参数从右到左压栈，调用方清理栈
-- **compilerproc**: fpc_* 系列函数，使用默认 register 约定，但编译器知道这些函数存在
+- **compilerproc**: np_* 系列函数，使用默认 register 约定，但编译器知道这些函数存在
 
 ### 8.3 栈对齐
 
@@ -597,7 +597,7 @@ TTypeKind = (
 - 在需要时生成对这些函数的调用
 - 这些函数的实现由运行时提供
 
-当前标注：所有 119 个 `fpc_*` 函数（在 `comp.inc` 中）。
+当前标注：所有 119 个 `np_*` 函数（在 `comp.inc` 中）。
 
 ## 11. 目标平台差异
 
@@ -622,7 +622,7 @@ TTypeKind = (
 | 区域 | 等级 | 承诺 |
 |------|------|------|
 | VMT 布局常量 | **冻结** | 不改变偏移值 |
-| fpc_* 签名 | **冻结** | 不改变参数类型和顺序 |
+| np_* 签名 | **冻结** | 不改变参数类型和顺序 |
 | TMemoryManager 回调 | **冻结** | 不改变回调签名 |
 | TTypeInfo/TTypeData 布局 | **冻结** | 不改变字段偏移 |
 | TTypeKind 枚举值 | **冻结** | 不改变数值，只追加 |

@@ -473,44 +473,81 @@ S9 让编译器从"不知道 system 内核存在"到"从内核读取所有根类
 
 S10 将内核从"签名桩"转变为"真实实现"。
 
-### S10.1 Compiler Internal Function Implementation
+> **架构原则**: nextPas 编译器生成 `np_*` 调用，不生成 `fpc_*` 调用。
+> `fpc_*` 是 FPC 的内部 ABI，nextPas 不实现 fpc_* 函数。
+> 双编译器架构：FPC 编译时用 FPC 的 fpc_*，nextPas 编译时用 nextPas 的 np_*。
 
-- [ ] fpc_* 系列函数的真实实现（comp.inc → runtime）
-- [ ] 优先实现：fpc_initialize/fpc_finalize（managed type lifecycle）
-- [ ] 优先实现：fpc_dynarray_*（dynamic array operations）
-- [ ] 优先实现：fpc_ansistr_*（AnsiString operations）
-- [ ] 验证 heaptrc 0 泄漏
+### S10.1 np_* Runtime Function Implementation
+
+编译器 LLVM emitter 已生成 48 个 np_* 函数调用，需要提供真实实现。
+
+**内存管理** (6):
+- [ ] np_alloc / np_realloc / np_free — 基础内存分配
+- [ ] np_memset / np_memmove / np_memcpy / np_memzero — 内存操作
+
+**对象生命周期** (3):
+- [ ] np_object_alloc — 对象分配
+- [ ] np_object_free_release — 对象释放
+- [ ] np_intf_addref / np_intf_release — 接口引用计数
+
+**字符串操作** (16):
+- [ ] np_tstring_init / np_tstring_fini — TString 生命周期
+- [ ] np_tstring_assign / np_tstring_move / np_tstring_copy — 赋值/拷贝
+- [ ] np_tstring_concat — 拼接
+- [ ] np_tstring_from_literal / np_tstring_from_int — 类型转换
+- [ ] np_tstring_ret_move / np_tstring_ret_copy — 返回值处理
+- [ ] np_tstring_field_assign / np_tstring_field_fini — record 字段管理
+- [ ] np_tstring_len / np_tstring_data / np_tstring_is_sso — 查询
+- [ ] np_tstring_create / np_tstring_compare / np_tstring_equal — 创建/比较
+- [ ] np_str_cmp / np_str_pos / np_str_concat — AnsiString 操作
+
+**动态数组** (3):
+- [ ] np_dynarray_resize — 动态数组调整大小
+- [ ] np_dynarray_release — 动态数组释放
+
+**异常处理** (5):
+- [ ] np_raise — 抛出异常
+- [ ] np_try_push / np_try_pop — try 帧管理
+- [ ] np_except_end / np_finally_end — 异常清理
+
+**程序生命周期** (4):
+- [ ] np_process_init / np_process_fini — 进程启动/关闭
+- [ ] np_unit_init_* / np_unit_fini_* — 单元初始化/终结化
+
+**错误处理** (3):
+- [ ] np_string_fault / np_dynarray_fault / np_allocator_fault — 运行时错误
 
 ### S10.2 Thread Implementation
 
-- [ ] TThread 真实实现（thread.inc → nextpas.core.sync）
+- [ ] TThread 真实实现（用 nextpas.core.sync 的 TThread）
 - [ ] BeginThread/EndThread 真实实现
-- [ ] TRTLCriticalSection 真实实现
-- [ ] InterlockedIncrement/Decrement/Exchange 真实实现
+- [ ] TRTLCriticalSection → nextpas.core.sync.TMutex
+- [ ] InterlockedIncrement/Decrement/Exchange → nextpas.core.sync.atomic
 - [ ] 验证多线程测试通过
 
 ### S10.3 I/O Implementation
 
-- [ ] AssignFile/Reset/Rewrite/Append/CloseFile 真实实现
-- [ ] Read/ReadLn/Write/WriteLn 真实实现
+- [ ] AssignFile/Reset/Rewrite/Append/CloseFile → nextpas.core.fs
+- [ ] Read/ReadLn/Write/WriteLn → nextpas.core.text + nextpas.core.fs
 - [ ] Text/File 类型的真实 I/O 操作
 - [ ] 验证文件读写测试通过
 
 ### S10.4 Memory Manager Integration
 
-- [ ] TMemoryManager 接口与 nextpas.core.mem 集成
+- [ ] TMemoryManager 接口 → nextpas.core.mem.TMemoryManager
 - [ ] GetMemoryManager/SetMemoryManager 真实实现
+- [ ] np_alloc/np_free/np_realloc → nextpas.core.mem 分配器
 - [ ] 验证内存管理器切换正常工作
 
 ### S10.5 Program Lifecycle Implementation
 
-- [ ] InitModule/FinalizeModule 真实执行器
-- [ ] process_init/process_fini 真实执行
-- [ ] 单元初始化/终结化顺序正确
+- [ ] np_process_init: 初始化内存管理器 + 调用所有单元 init
+- [ ] np_process_fini: 逆序调用所有单元 fini + 释放资源
+- [ ] 单元初始化/终结化顺序正确（依赖先 init，后 fini）
 - [ ] 验证程序启动/关闭测试通过
 
 **S10 Exit Criteria**:
-- 所有 fpc_* 函数有真实实现（不只是桩）
+- 所有 48 个 np_* 函数有真实实现（不只是桩）
 - TThread 能真实创建和管理线程
 - Read/Write 能真实读写文件
 - 内存管理器接口能切换分配器
@@ -568,7 +605,7 @@ S12 从"能跑"到"好用"。
 ### S12.1 ABI Stability
 
 - [ ] VMT 布局常量冻结
-- [ ] fpc_* 函数签名冻结
+- [ ] np_* 函数签名冻结
 - [ ] 内存管理器接口冻结
 - [ ] 文档化 ABI 稳定性承诺
 
@@ -623,6 +660,6 @@ S9 编译器集成 → S10 运行时实现 → S11 自举就绪 → S12 生产�
 
 **关键阻塞项**:
 - S9: 编译器识别 `{$compiler_root}` 指令
-- S10: fpc_* 真实实现 + TThread/I/O 真实实现
+- S10: np_* 真实实现 + TThread/I/O 真实实现
 - S11: Table-based exceptions + 单元生命周期执行器
 - S12: 跨平台 + 性能优化 + ABI 冻结

@@ -66,10 +66,10 @@ end;
 
 | 函数 | 语义 |
 |------|------|
-| `fpc_dynarray_incr_ref` | 递增引用计数 |
-| `fpc_dynarray_decr_ref` | 递减引用计数，如果为 0 则释放 |
-| `fpc_dynarray_unique` | 确保唯一引用（COW 前置） |
-| `fpc_dynarray_assign` | 赋值（释放旧的，递增新的） |
+| `np_dynarray_incr_ref` | 递增引用计数 |
+| `np_dynarray_decr_ref` | 递减引用计数，如果为 0 则释放 |
+| `np_dynarray_unique` | 确保唯一引用（COW 前置） |
+| `np_dynarray_assign` | 赋值（释放旧的，递增新的） |
 
 ## 3. 写时复制（COW）
 
@@ -97,7 +97,7 @@ begin
   B := A;                // A 和 B 共享数据
 
   // 此时修改 A 会触发 COW
-  A[0] := $FF;           // 编译器调用 fpc_dynarray_unique(A)
+  A[0] := $FF;           // 编译器调用 np_dynarray_unique(A)
                           // 复制数据，然后修改
 
   // B[0] 仍然是 0（未被修改）
@@ -186,7 +186,7 @@ end;  // LArr 离开作用域，自动释放
 ```pascal
 // SetLength(Arr, NewLen)
 // 编译为：
-fpc_dynarray_setlength(@Arr, NewLen, TypeInfo(T));
+np_dynarray_setlength(@Arr, NewLen, TypeInfo(T));
 ```
 
 ### 5.2 赋值
@@ -194,7 +194,7 @@ fpc_dynarray_setlength(@Arr, NewLen, TypeInfo(T));
 ```pascal
 // ArrB := ArrA
 // 编译为：
-fpc_dynarray_assign(@ArrB, @ArrA);
+np_dynarray_assign(@ArrB, @ArrA);
 ```
 
 ### 5.3 元素赋值
@@ -202,7 +202,7 @@ fpc_dynarray_assign(@ArrB, @ArrA);
 ```pascal
 // Arr[Index] := Value
 // 编译为：
-fpc_dynarray_unique(@Arr);  // 确保唯一引用
+np_dynarray_unique(@Arr);  // 确保唯一引用
 Arr[Index] := Value;
 ```
 
@@ -211,26 +211,26 @@ Arr[Index] := Value;
 ```pascal
 // Arr := nil
 // 编译为：
-fpc_dynarray_decr_ref(@Arr);
+np_dynarray_decr_ref(@Arr);
 Arr := nil;
 ```
 
-## 6. fpc_dynarray_* 函数参考
+## 6. np_dynarray_* 函数参考
 
 | 函数 | 签名 | 语义 |
 |------|------|------|
-| `fpc_dynarray_incr_ref` | `function(S: Pointer): Pointer` | 递增引用计数 |
-| `fpc_dynarray_decr_ref` | `function(S: Pointer): Pointer` | 递减引用计数，释放时返回 nil |
-| `fpc_dynarray_assign` | `function(Dest, Src: Pointer): Pointer` | 赋值（释放旧的，递增新的） |
-| `fpc_dynarray_length` | `function(S: Pointer): SizeInt` | 返回数组长度 |
-| `fpc_dynarray_setlength` | `function(S: Pointer; NewLen: SizeInt; TypeInfo: Pointer): Pointer` | 设置长度（可能触发 COW） |
-| `fpc_dynarray_unique` | `function(S: Pointer): Pointer` | 确保唯一引用 |
-| `fpc_dynarray_copy` | `function(S: Pointer; Index, Count: SizeInt; TypeInfo: Pointer): Pointer` | 复制子数组 |
-| `fpc_dynarray_delete` | `function(S: Pointer; Index, Count: SizeInt): Pointer` | 删除元素 |
-| `fpc_dynarray_insert` | `function(S: Pointer; Sub: Pointer; Index: SizeInt): Pointer` | 插入元素 |
-| `fpc_dynarray_pos` | `function(Sub, S: Pointer): SizeInt` | 查找元素位置 |
-| `fpc_dynarray_get` | `function(S: Pointer; Index: SizeInt): Pointer` | 获取元素指针 |
-| `fpc_dynarray_put` | `function(S: Pointer; Index: SizeInt; Value: Pointer): Pointer` | 设置元素 |
+| `np_dynarray_incr_ref` | `function(S: Pointer): Pointer` | 递增引用计数 |
+| `np_dynarray_decr_ref` | `function(S: Pointer): Pointer` | 递减引用计数，释放时返回 nil |
+| `np_dynarray_assign` | `function(Dest, Src: Pointer): Pointer` | 赋值（释放旧的，递增新的） |
+| `np_dynarray_length` | `function(S: Pointer): SizeInt` | 返回数组长度 |
+| `np_dynarray_setlength` | `function(S: Pointer; NewLen: SizeInt; TypeInfo: Pointer): Pointer` | 设置长度（可能触发 COW） |
+| `np_dynarray_unique` | `function(S: Pointer): Pointer` | 确保唯一引用 |
+| `np_dynarray_copy` | `function(S: Pointer; Index, Count: SizeInt; TypeInfo: Pointer): Pointer` | 复制子数组 |
+| `np_dynarray_delete` | `function(S: Pointer; Index, Count: SizeInt): Pointer` | 删除元素 |
+| `np_dynarray_insert` | `function(S: Pointer; Sub: Pointer; Index: SizeInt): Pointer` | 插入元素 |
+| `np_dynarray_pos` | `function(Sub, S: Pointer): SizeInt` | 查找元素位置 |
+| `np_dynarray_get` | `function(S: Pointer; Index: SizeInt): Pointer` | 获取元素指针 |
+| `np_dynarray_put` | `function(S: Pointer; Index: SizeInt; Value: Pointer): Pointer` | 设置元素 |
 
 ## 7. 常见问题
 
@@ -252,7 +252,7 @@ end;
 
 1. 使用 `Copy` 创建独立副本
 2. 先断开共享，再修改
-3. 使用 `fpc_dynarray_unique` 显式确保唯一引用
+3. 使用 `np_dynarray_unique` 显式确保唯一引用
 
 ### 7.3 空数组和 nil 的区别？
 
@@ -308,6 +308,6 @@ end;
 | 文档 | 用途 |
 |------|------|
 | `abi-specification.md` | 动态数组内存布局 |
-| `api-reference.md` | fpc_dynarray_* 函数清单 |
+| `api-reference.md` | np_dynarray_* 函数清单 |
 | `design-decisions.md` | DD-4 fpc_* 函数设计 |
 | `runtime-contracts.md` | np.system.dynarray_* 契约 |

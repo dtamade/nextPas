@@ -140,10 +140,10 @@ end;
 
 ```pascal
 // 在 comp.inc 中
-function fpc_ansistr_upper(S: Pointer): AnsiString; compilerproc;
+function np_ansistr_upper(S: Pointer): AnsiString; compilerproc;
 
 // 在 implementation 部分
-function fpc_ansistr_upper(S: Pointer): AnsiString;
+function np_ansistr_upper(S: Pointer): AnsiString;
 begin
   Result := '';  // 桩实现
 end;

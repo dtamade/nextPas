@@ -219,7 +219,7 @@ text 模块当前基于 FPC `AnsiString` (16 suites / 256 tests)。TString 集�
 | 当前编译器机制 | 变更类型 | 说明 |
 |---------------|----------|------|
 | `store_str_lit` intrinsic | 重写 | 字面量 emit 改为 SSO 内联 (≤15B) 或 CoW 堆 |
-| `string_release` intrinsic | 重写 | fpc_ansistr_decr_ref → CoW refcount decr |
+| `string_release` intrinsic | 重写 | np_ansistr_decr_ref → CoW refcount decr |
 | `string_owner_clear` intrinsic | 重写 | owned 清理 → CoW decr |
 | `hnkStringCleanupRuntime` | 重写 | ad-hoc cleanup → managed record fini |
 | 4-alloca 模型 `{ptr,len,owner,alloc_size}` | **全面迁移** | 从 4-tuple 改为 24B variant record |
@@ -472,7 +472,7 @@ TString 目标:
 
 **LLVM emitter intrinsics**:
 - `store_str_lit` — 字面量写入
-- `string_release` — 释放引用 (调用 fpc_ansistr_decr_ref)
+- `string_release` — 释放引用 (调用 np_ansistr_decr_ref)
 - `string_owner_clear` — 清除 owner
 - `string_owner_set` — 设置 owner
 
