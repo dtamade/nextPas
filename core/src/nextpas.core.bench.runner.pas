@@ -33,6 +33,7 @@ type
     FSkipReason: string;
     FName: string; { ST-03: benchmark name }
     FPausedNs: UInt64;  { StopTimer 记录暂停时刻 }
+    FCustomMetrics: TCustomMetricArray;
 
   public
     constructor Create;
@@ -51,6 +52,8 @@ type
     function GetBytesPerOp: Int64;
     function GetAllocsPerOp: Int64;
     function GetName: string; { ST-03 }
+    procedure SetCustomMetric(const AName: string; AValue: Double);
+    function GetCustomMetrics: TCustomMetricArray;
 
     {** 内部方法 }
     procedure Reset;
@@ -360,6 +363,33 @@ begin
   Result := FName;
 end;
 
+procedure TBenchContext.SetCustomMetric(const AName: string; AValue: Double);
+var
+  LLen: Integer;
+  I: Integer;
+begin
+  { 查找是否已存在 }
+  for I := 0 to High(FCustomMetrics) do
+  begin
+    if FCustomMetrics[I].Name = AName then
+    begin
+      FCustomMetrics[I].Value := AValue;
+      Exit;
+    end;
+  end;
+
+  { 新增 }
+  LLen := Length(FCustomMetrics);
+  SetLength(FCustomMetrics, LLen + 1);
+  FCustomMetrics[LLen].Name := AName;
+  FCustomMetrics[LLen].Value := AValue;
+end;
+
+function TBenchContext.GetCustomMetrics: TCustomMetricArray;
+begin
+  Result := FCustomMetrics;
+end;
+
 procedure TBenchContext.SetName(const AName: string);
 begin
   FName := AName;
@@ -375,6 +405,7 @@ begin
   FSkipped := False;
   FSkipReason := '';
   FPausedNs := 0;
+  FCustomMetrics := nil;
 end;
 
 procedure TBenchContext.IncrementIterations;
@@ -613,6 +644,9 @@ begin
         if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
       end;
+
+      { 复制自定义指标 }
+      Result.CustomMetrics := LContextObj.GetCustomMetrics;
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;

@@ -38,6 +38,8 @@ type
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
   TMatrixResult = nextpas.core.bench.base.TMatrixResult;
+  TCustomMetric = nextpas.core.bench.base.TCustomMetric;
+  TCustomMetricArray = nextpas.core.bench.base.TCustomMetricArray;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;

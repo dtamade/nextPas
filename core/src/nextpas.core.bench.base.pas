@@ -18,6 +18,15 @@ type
   {** 整数数组 }
   TInt64Array = array of Int64;
 
+  {** 自定义指标键值对 }
+  TCustomMetric = record
+    Name: string;
+    Value: Double;
+  end;
+
+  {** 自定义指标数组 }
+  TCustomMetricArray = array of TCustomMetric;
+
   {** 异常值严重度分级 }
   TOutlierSeverity = (
     osNone,      // 非异常值
@@ -48,6 +57,8 @@ type
     Outliers: Integer;
     SampleCount: Integer;
     RawSamples: TDoubleArray;
+    {** 自定义指标 }
+    CustomMetrics: TCustomMetricArray;
   end;
 
   {** 统计摘要 - 完整的统计分析结果 }

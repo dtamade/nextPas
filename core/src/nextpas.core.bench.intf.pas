@@ -100,6 +100,12 @@ type
     {** 获取当前基准名称 (ST-03) }
     function GetName: string;
 
+    {** 设置自定义指标 }
+    procedure SetCustomMetric(const AName: string; AValue: Double);
+
+    {** 获取自定义指标数组 }
+    function GetCustomMetrics: TCustomMetricArray;
+
     {** 属性访问 }
     property Iterations: Int64 read GetIterations;
     property Elapsed: TDuration read GetElapsed;
