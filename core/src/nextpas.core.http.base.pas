@@ -43,6 +43,22 @@ type
     function HasQueryParam(const AName: string): Boolean;
   end;
 
+  THttpRequestOptions = record
+    TimeoutMs: Int64;
+    HasTimeout: Boolean;
+    MaxRedirects: Int32;
+    HasMaxRedirects: Boolean;
+    FollowRedirects: Boolean;
+    HasFollowRedirects: Boolean;
+    function WithTimeout(const ATimeoutMs: Int64): THttpRequestOptions;
+    function WithMaxRedirects(const AMaxRedirects: Int32): THttpRequestOptions;
+    function WithFollowRedirects(
+      const AFollow: Boolean): THttpRequestOptions;
+    function EffectiveTimeout(const ADefault: Int64): Int64;
+    function EffectiveMaxRedirects(const ADefault: Int32): Int32;
+    function EffectiveFollowRedirects(const ADefault: Boolean): Boolean;
+  end;
+
   THttpClientOptions = record
     Timeout: Int64;
     MaxRedirects: Int32;
@@ -579,6 +595,58 @@ begin
       Exit(True);
     LStart := LEnd + 1;
   end;
+end;
+
+{ THttpRequestOptions }
+
+function THttpRequestOptions.WithTimeout(
+  const ATimeoutMs: Int64): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.TimeoutMs := ATimeoutMs;
+  Result.HasTimeout := True;
+end;
+
+function THttpRequestOptions.WithMaxRedirects(
+  const AMaxRedirects: Int32): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.MaxRedirects := AMaxRedirects;
+  Result.HasMaxRedirects := True;
+end;
+
+function THttpRequestOptions.WithFollowRedirects(
+  const AFollow: Boolean): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.FollowRedirects := AFollow;
+  Result.HasFollowRedirects := True;
+end;
+
+function THttpRequestOptions.EffectiveTimeout(const ADefault: Int64): Int64;
+begin
+  if HasTimeout then
+    Result := TimeoutMs
+  else
+    Result := ADefault;
+end;
+
+function THttpRequestOptions.EffectiveMaxRedirects(
+  const ADefault: Int32): Int32;
+begin
+  if HasMaxRedirects then
+    Result := MaxRedirects
+  else
+    Result := ADefault;
+end;
+
+function THttpRequestOptions.EffectiveFollowRedirects(
+  const ADefault: Boolean): Boolean;
+begin
+  if HasFollowRedirects then
+    Result := FollowRedirects
+  else
+    Result := ADefault;
 end;
 
 { THttpClientOptions }

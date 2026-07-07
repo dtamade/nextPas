@@ -22,6 +22,7 @@ type
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
+  THttpRequestOptions = nextpas.core.http.base.THttpRequestOptions;
 
   { Header callback for iteration }
   THeaderIterator = reference to procedure(const AName, AValue: string);
@@ -64,6 +65,14 @@ type
     property Body: IReader read GetBody;
     property ContentLength: Int64 read GetContentLength;
     property RemoteAddr: string read GetRemoteAddr;
+  end;
+
+  { Per-request options that override client defaults when present on a request }
+  IHttpRequestWithOptions = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010010}']
+    function GetRequestOptions: THttpRequestOptions;
+    procedure SetRequestOptions(const AOptions: THttpRequestOptions);
+    property RequestOptions: THttpRequestOptions read GetRequestOptions;
   end;
 
   IHttpResponse = interface
@@ -162,6 +171,9 @@ type
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }

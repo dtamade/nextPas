@@ -13,7 +13,7 @@ uses
   nextpas.core.http.url;
 
 type
-  THttpRequest = class(TInterfacedObject, IHttpRequest)
+  THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions)
   private
     type
       TPathParam = record
@@ -37,6 +37,7 @@ type
       FRemoteAddrFromNet: Boolean;
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
+      FRequestOptions: THttpRequestOptions;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -63,6 +64,8 @@ type
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
+    procedure SetRequestOptions(const AOptions: THttpRequestOptions);
+    function GetRequestOptions: THttpRequestOptions;
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -479,6 +482,16 @@ begin
     FQueryParsed := True;
   end;
   Result := QueryParamValue(FQueryParams, AName);
+end;
+
+procedure THttpRequest.SetRequestOptions(const AOptions: THttpRequestOptions);
+begin
+  FRequestOptions := AOptions;
+end;
+
+function THttpRequest.GetRequestOptions: THttpRequestOptions;
+begin
+  Result := FRequestOptions;
 end;
 
 { THttpResponse }

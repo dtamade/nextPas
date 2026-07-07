@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 16 — response charset auto-detection)
+> Last updated: 2026-07-07 (Phase 17 — per-request redirect/timeout override)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,16 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 17 (2026-07-07): Per-Request Redirect/Timeout Override**
+
+- **`IHttpRequestWithOptions`**: new interface on `THttpRequest` carrying per-request `THttpRequestOptions` (timeout, follow-redirects, max-redirects)
+- **`THttpRequestOptions`**: record with `Has*` flags and `Effective*(default)` accessors — cleanly distinguishes "not set" from explicit values
+- **`IHttpClient`**: added `WithTimeout(ms)`, `WithMaxRedirects(n)`, `WithFollowRedirects(bool)` — per-request decorator methods
+- **`TOptionsOverrideClient`**: new decorator that merges per-request overrides onto the request before delegating to the inner client
+- **`THttpClient.Send/DoRequest`**: now check `IHttpRequestWithOptions` on the request for redirect behavior overrides
+- **Chaining**: all decorator methods compose — `client.WithHeader('x', 'y').WithFollowRedirects(false).Get(url)` works correctly
+- **Tests**: 5 new tests (WithFollowRedirects(false), WithMaxRedirects(0), chained decorator, override client default, WithTimeout), 153 client total / 0 leaks
 
 **Phase 16 (2026-07-07): Response Charset Auto-Detection**
 
@@ -212,11 +222,13 @@ Already landed:
 - `DeleteJson` convenience for `application/json` DELETE requests
 - `WithBasicAuth`/`WithBearerAuth` auth decorator (returns new `IHttpClient` with automatic `authorization` header)
 - `WithHeader` generic header injection decorator (chains with auth: `WithBearerAuth(token).WithHeader('Accept', 'application/json')`)
+- `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
+- `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 
 Still intentionally not claimed:
 
 - a full fluent request builder
-- per-request redirect override
+- per-request timeout override at transport level (currently only controls redirect behavior; transport-level timeout requires IHttpTransport changes)
 - per-request timeout override
 - streaming/chunked request body ownership API
 - response charset decoding or sniffing
