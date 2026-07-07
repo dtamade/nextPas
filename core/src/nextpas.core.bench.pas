@@ -33,6 +33,7 @@ type
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+  TInt64Array = nextpas.core.bench.base.TInt64Array;
   TBaselineData = nextpas.core.bench.base.TBaselineData;
   {** @deprecated Use TBaselineData instead. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
@@ -854,7 +855,11 @@ begin
 
   { 确定线程数 }
   if AThreadCount <= 0 then
-    LThreadCount := GetCPUCount
+  begin
+    LThreadCount := GetCPUInfo.LogicalCores;
+    if LThreadCount <= 0 then
+      LThreadCount := BENCH_DEFAULT_PARALLEL_THREADS;
+  end
   else
     LThreadCount := AThreadCount;
 
