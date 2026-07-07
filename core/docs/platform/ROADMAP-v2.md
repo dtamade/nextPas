@@ -25,7 +25,7 @@
 | 平台 | 编译 | 运行 | 测试 | 证据层级 |
 |------|------|------|------|----------|
 | Linux x86_64 | ✅ | ✅ | 226 passed | focused-runtime |
-| Windows x86_64 (Wine) | ✅ | ✅ | 174 passed | wine-runtime-smoke |
+| Windows x86_64 (Wine) | ✅ | ✅ | 217 passed | wine-runtime-smoke |
 | Windows x86_64 (Real) | ✅ | ✅ | 26 tests | focused-runtime (io+socket) |
 | Linux aarch64 | ✅ | ⬜ | — | forced-compile |
 | Linux arm32 | ✅ | ⬜ | — | forced-compile |
@@ -183,7 +183,7 @@
 
 | 任务 | 优先级 | 工作量 |
 |------|--------|--------|
-| 测试覆盖补全 (signal/console/resource Windows) | P2 | 1-2 天 |
+| 测试覆盖补全 (signal/console/resource Windows) | P2 | 1-2 天 | ✅ 已完成 |
 | API 参考文档完善 | P2 | 1 天 | ✅ 已完成 |
 | 错误处理最佳实践文档 | P2 | 0.5 天 | ✅ 已完成 |
 
@@ -283,7 +283,7 @@
 ---
 
 **路线图维护**: 每月审查一次，根据进展调整优先级
-**最后更新**: 2026-07-06 (API 参考文档完成)
+**最后更新**: 2026-07-06 (Wine 测试覆盖完成: 25 模块 217 测试)
 **API 覆盖矩阵**: 见 [API-COVERAGE-MATRIX.md](API-COVERAGE-MATRIX.md)
 **错误处理指南**: 见 [ERROR-HANDLING.md](ERROR-HANDLING.md)
 **API 参考手册**: 见 [API-REFERENCE.md](API-REFERENCE.md)
