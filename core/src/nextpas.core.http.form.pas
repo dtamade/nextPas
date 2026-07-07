@@ -1,7 +1,7 @@
 unit nextpas.core.http.form;
 {**
- * @desc HTTP form data parsing for application/x-www-form-urlencoded and multipart/form-data.
- *       Provides ParseUrlEncodedForm and ParseMultipartFormData.
+ * @desc HTTP form data parsing and encoding for application/x-www-form-urlencoded and multipart/form-data.
+ *       Provides ParseUrlEncodedForm, ParseMultipartFormData, EncodeUrlEncodedForm, and EncodeMultipartFormData.
  *}
 {$I nextpas.core.settings.inc}
 
@@ -21,14 +21,22 @@ type
 function ParseUrlEncodedForm(const ABody: string): TFormFieldArray;
 function TryParseUrlEncodedForm(const ABody: string; out AFields: TFormFieldArray): Boolean;
 
+{ Encode application/x-www-form-urlencoded body (space as +) }
+function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
+
 { Parse multipart/form-data body with given boundary }
 function ParseMultipartFormData(const ABody, ABoundary: string): TMultipartFormData;
 function TryParseMultipartFormData(const ABody, ABoundary: string;
   out AData: TMultipartFormData): Boolean;
 
+{ Encode multipart/form-data body. ABoundary is generated if empty. }
+function EncodeMultipartFormData(const AFields: TFormFieldArray;
+  const AFiles: THttpFileArray; const ABoundary: string = ''): string;
+
 implementation
 
 uses
+  SysUtils,
   nextpas.core.http.url;
 
 { URL-decode a string, converting + to space }
@@ -325,6 +333,117 @@ begin
 
   SetLength(Result.Fields, LFieldCount);
   SetLength(Result.Files, LFileCount);
+end;
+
+{ URL-encode for form data: space as +, unreserved chars pass through }
+function FormUrlEncode(const S: string): string;
+var
+  I, Len, J: Integer;
+  B: Byte;
+const
+  HEX: array[0..15] of Char = '0123456789ABCDEF';
+begin
+  Len := Length(S);
+  if Len = 0 then
+    Exit('');
+  SetLength(Result, Len * 3);
+  J := 1;
+  for I := 1 to Len do
+  begin
+    B := Ord(S[I]);
+    case Chr(B) of
+      'A'..'Z', 'a'..'z', '0'..'9', '-', '_', '.', '~':
+        begin
+          Result[J] := Chr(B);
+          Inc(J);
+        end;
+      ' ':
+        begin
+          Result[J] := '+';
+          Inc(J);
+        end;
+    else
+      begin
+        Result[J]     := '%';
+        Result[J + 1] := HEX[B shr 4];
+        Result[J + 2] := HEX[B and $0F];
+        Inc(J, 3);
+      end;
+    end;
+  end;
+  SetLength(Result, J - 1);
+end;
+
+{ Encode application/x-www-form-urlencoded body }
+function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
+var
+  LI, LLen: Integer;
+  LParts: array of string;
+begin
+  LLen := Length(AFields);
+  if LLen = 0 then
+    Exit('');
+  SetLength(LParts, LLen);
+  for LI := 0 to LLen - 1 do
+    LParts[LI] := FormUrlEncode(AFields[LI].Name) + '=' + FormUrlEncode(AFields[LI].Value);
+  Result := LParts[0];
+  for LI := 1 to LLen - 1 do
+    Result := Result + '&' + LParts[LI];
+end;
+
+{ Generate a random boundary string }
+function GenerateBoundary: string;
+const
+  CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+var
+  LI: Integer;
+begin
+  SetLength(Result, 36);
+  for LI := 1 to 36 do
+    Result[LI] := CHARS[1 + Random(Length(CHARS))];
+end;
+
+{ Encode multipart/form-data body }
+function EncodeMultipartFormData(const AFields: TFormFieldArray;
+  const AFiles: THttpFileArray; const ABoundary: string): string;
+var
+  LBoundary: string;
+  LParts: array of string;
+  LCount, LI: Integer;
+
+  procedure AddPart(const S: string);
+  begin
+    if LCount >= Length(LParts) then
+      SetLength(LParts, LCount + 8);
+    LParts[LCount] := S;
+    Inc(LCount);
+  end;
+
+begin
+  if ABoundary <> '' then
+    LBoundary := ABoundary
+  else
+    LBoundary := GenerateBoundary;
+
+  LCount := 0;
+  SetLength(LParts, Length(AFields) + Length(AFiles) + 2);
+
+  for LI := 0 to High(AFields) do
+    AddPart('--' + LBoundary + #13#10 +
+            'Content-Disposition: form-data; name="' + AFields[LI].Name + '"' + #13#10 +
+            #13#10 + AFields[LI].Value + #13#10);
+
+  for LI := 0 to High(AFiles) do
+    AddPart('--' + LBoundary + #13#10 +
+            'Content-Disposition: form-data; name="' + AFiles[LI].FieldName + '"; filename="' + AFiles[LI].FileName + '"' + #13#10 +
+            'Content-Type: ' + AFiles[LI].ContentType + #13#10 +
+            #13#10 + AFiles[LI].Content + #13#10);
+
+  AddPart('--' + LBoundary + '--');
+
+  Result := LParts[0];
+  for LI := 1 to LCount - 1 do
+    Result := Result + LParts[LI];
 end;
 
 function TryParseMultipartFormData(const ABody, ABoundary: string;

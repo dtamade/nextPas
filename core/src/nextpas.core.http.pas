@@ -22,6 +22,7 @@ uses
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.message,
   nextpas.core.http.static,
+  nextpas.core.http.form,
   nextpas.core.http.websocket,
   nextpas.core.http.server,
   nextpas.core.http.client;
@@ -78,6 +79,13 @@ type
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
   TQueryParams = nextpas.core.http.url.TQueryParams;
+
+  { Re-export form types }
+  TFormField = nextpas.core.http.form.TFormField;
+  TFormFieldArray = nextpas.core.http.form.TFormFieldArray;
+  THttpFile = nextpas.core.http.form.THttpFile;
+  THttpFileArray = nextpas.core.http.form.THttpFileArray;
+  TMultipartFormData = nextpas.core.http.form.TMultipartFormData;
 
 { Status constants - re-export }
 const
@@ -299,6 +307,9 @@ function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
+function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
+function EncodeMultipartFormData(const AFields: TFormFieldArray;
+  const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
 
 implementation
 
@@ -766,6 +777,17 @@ end;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 begin
   Result := nextpas.core.http.client.HttpReadResponseBodyString(AResp);
+end;
+
+function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
+begin
+  Result := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+end;
+
+function EncodeMultipartFormData(const AFields: TFormFieldArray;
+  const AFiles: THttpFileArray; const ABoundary: string): string;
+begin
+  Result := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles, ABoundary);
 end;
 
 end.

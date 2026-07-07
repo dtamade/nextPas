@@ -163,6 +163,130 @@ begin
   CheckEqual('doc.pdf', LFile.FileName, 'GetFile filename');
 end;
 
+{ === Encoding tests === }
+
+procedure TestEncodeUrlEncodedBasic;
+var
+  LFields: TFormFieldArray;
+  LEncoded: string;
+begin
+  SetLength(LFields, 3);
+  LFields[0].Name := 'name';
+  LFields[0].Value := 'Alice';
+  LFields[1].Name := 'age';
+  LFields[1].Value := '30';
+  LFields[2].Name := 'city';
+  LFields[2].Value := 'NYC';
+  LEncoded := EncodeUrlEncodedForm(LFields);
+  CheckEqual('name=Alice&age=30&city=NYC', LEncoded, 'basic encode');
+end;
+
+procedure TestEncodeUrlEncodedEmpty;
+var
+  LFields: TFormFieldArray;
+begin
+  SetLength(LFields, 0);
+  CheckEqual('', EncodeUrlEncodedForm(LFields), 'empty fields');
+end;
+
+procedure TestEncodeUrlEncodedSpecialChars;
+var
+  LFields: TFormFieldArray;
+  LEncoded: string;
+begin
+  SetLength(LFields, 1);
+  LFields[0].Name := 'q';
+  LFields[0].Value := 'hello world&test=1';
+  LEncoded := EncodeUrlEncodedForm(LFields);
+  Check(LEncoded = 'q=hello+world%26test%3D1', 'special chars encoded: ' + LEncoded);
+end;
+
+procedure TestEncodeUrlEncodedRoundtrip;
+var
+  LOriginal: TFormFieldArray;
+  LEncoded: string;
+  LDecoded: TFormFieldArray;
+begin
+  SetLength(LOriginal, 2);
+  LOriginal[0].Name := 'key';
+  LOriginal[0].Value := 'value with spaces & special=chars';
+  LOriginal[1].Name := 'num';
+  LOriginal[1].Value := '42';
+  LEncoded := EncodeUrlEncodedForm(LOriginal);
+  LDecoded := ParseUrlEncodedForm(LEncoded);
+  CheckEqual(2, Length(LDecoded), 'roundtrip field count');
+  CheckEqual(LOriginal[0].Name, LDecoded[0].Name, 'roundtrip name 0');
+  CheckEqual(LOriginal[0].Value, LDecoded[0].Value, 'roundtrip value 0');
+  CheckEqual(LOriginal[1].Name, LDecoded[1].Name, 'roundtrip name 1');
+  CheckEqual(LOriginal[1].Value, LDecoded[1].Value, 'roundtrip value 1');
+end;
+
+procedure TestEncodeMultipartBasic;
+var
+  LFields: TFormFieldArray;
+  LEncoded: string;
+begin
+  SetLength(LFields, 2);
+  LFields[0].Name := 'username';
+  LFields[0].Value := 'alice';
+  LFields[1].Name := 'email';
+  LFields[1].Value := 'alice@example.com';
+  LEncoded := EncodeMultipartFormData(LFields, nil, 'testboundary');
+  Check(Pos('--testboundary' + #13#10, LEncoded) > 0, 'has boundary start');
+  Check(Pos('Content-Disposition: form-data; name="username"' + #13#10, LEncoded) > 0, 'has username disposition');
+  Check(Pos(#13#10 + 'alice' + #13#10, LEncoded) > 0, 'has username value');
+  Check(Pos('Content-Disposition: form-data; name="email"' + #13#10, LEncoded) > 0, 'has email disposition');
+  Check(Pos('--testboundary--', LEncoded) > 0, 'has boundary end');
+end;
+
+procedure TestEncodeMultipartWithFile;
+var
+  LFields: TFormFieldArray;
+  LFiles: THttpFileArray;
+  LEncoded: string;
+begin
+  SetLength(LFields, 1);
+  LFields[0].Name := 'desc';
+  LFields[0].Value := 'My file';
+  SetLength(LFiles, 1);
+  LFiles[0].FieldName := 'upload';
+  LFiles[0].FileName := 'test.txt';
+  LFiles[0].ContentType := 'text/plain';
+  LFiles[0].Content := 'file content';
+  LEncoded := EncodeMultipartFormData(LFields, LFiles, 'myboundary');
+  Check(Pos('name="desc"', LEncoded) > 0, 'has field disposition');
+  Check(Pos('name="upload"; filename="test.txt"', LEncoded) > 0, 'has file disposition');
+  Check(Pos('Content-Type: text/plain' + #13#10, LEncoded) > 0, 'has file content type');
+  Check(Pos('file content', LEncoded) > 0, 'has file content');
+end;
+
+procedure TestEncodeMultipartRoundtrip;
+var
+  LFields: TFormFieldArray;
+  LFiles: THttpFileArray;
+  LEncoded: string;
+  LDecoded: TMultipartFormData;
+begin
+  SetLength(LFields, 1);
+  LFields[0].Name := 'name';
+  LFields[0].Value := 'test value';
+  SetLength(LFiles, 1);
+  LFiles[0].FieldName := 'doc';
+  LFiles[0].FileName := 'readme.txt';
+  LFiles[0].ContentType := 'text/plain';
+  LFiles[0].Content := 'hello world';
+  LEncoded := EncodeMultipartFormData(LFields, LFiles, 'roundtrip');
+  LDecoded := ParseMultipartFormData(LEncoded, 'roundtrip');
+  CheckEqual(1, LDecoded.FieldCount, 'roundtrip field count');
+  CheckEqual('name', LDecoded.Fields[0].Name, 'roundtrip field name');
+  CheckEqual('test value', LDecoded.Fields[0].Value, 'roundtrip field value');
+  CheckEqual(1, LDecoded.FileCount, 'roundtrip file count');
+  CheckEqual('doc', LDecoded.Files[0].FieldName, 'roundtrip file field name');
+  CheckEqual('readme.txt', LDecoded.Files[0].FileName, 'roundtrip file name');
+  CheckEqual('text/plain', LDecoded.Files[0].ContentType, 'roundtrip file content type');
+  CheckEqual('hello world', LDecoded.Files[0].Content, 'roundtrip file content');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -176,5 +300,12 @@ begin
   T.Test('Multipart: file upload', @TestParseMultipartFile);
   T.Test('Multipart: mixed fields + files', @TestParseMultipartMixed);
   T.Test('TMultipartFormData helpers', @TestMultipartFormDataHelpers);
+  T.Test('Encode URL-encoded: basic', @TestEncodeUrlEncodedBasic);
+  T.Test('Encode URL-encoded: empty', @TestEncodeUrlEncodedEmpty);
+  T.Test('Encode URL-encoded: special chars', @TestEncodeUrlEncodedSpecialChars);
+  T.Test('Encode URL-encoded: roundtrip', @TestEncodeUrlEncodedRoundtrip);
+  T.Test('Encode Multipart: basic', @TestEncodeMultipartBasic);
+  T.Test('Encode Multipart: with file', @TestEncodeMultipartWithFile);
+  T.Test('Encode Multipart: roundtrip', @TestEncodeMultipartRoundtrip);
   if not T.Run then Halt(1);
 end.
