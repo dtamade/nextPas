@@ -31,6 +31,12 @@ type
     procedure Test_FFT_ForwardInverse;
     procedure Test_FFT_DC_Component;
     procedure Test_RealFft_Basic;
+    // P2 coverage
+    procedure Test_ResampleLinear_Basic;
+    procedure Test_PowerSpectrum_Basic;
+    procedure Test_MagnitudeSpectrum_Basic;
+    procedure Test_PowerToDecibel_Basic;
+    procedure Test_PreEmphasis_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -258,6 +264,90 @@ begin
   CheckTrue(NearEqual(LOutput[0].Im, 0.0, 0.1), 'RealFFT DC Im = 0');
   // Nyquist component (index N/2) should have Im = 0
   CheckTrue(NearEqual(LOutput[2].Im, 0.0, 0.1), 'RealFFT Nyquist Im = 0');
+end;
+
+{ ============================================================================
+  P2 Coverage: Resample, PowerSpectrum, etc.
+  ============================================================================ }
+
+procedure TTestCase_SimdSignal.Test_ResampleLinear_Basic;
+var
+  LSrc: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LDst: array[0..7] of Single;
+begin
+  // Upsample 4 → 8
+  ResampleLinearF32(@LSrc[0], 4, @LDst[0], 8);
+  // First and last should match
+  CheckTrue(NearEqual(LDst[0], 1.0, EPS), 'Resample [0]');
+  CheckTrue(NearEqual(LDst[7], 4.0, EPS), 'Resample [7]');
+  // Output should be monotonically increasing
+  CheckTrue(LDst[0] < LDst[4], 'Resample monotonic');
+  CheckTrue(LDst[4] < LDst[7], 'Resample monotonic');
+end;
+
+procedure TTestCase_SimdSignal.Test_PowerSpectrum_Basic;
+var
+  LData: array[0..3] of TSimdComplexF32;
+  LDst: array[0..3] of Single;
+  I: Integer;
+begin
+  // Constant signal [1,1,1,1] → DC=4, others=0
+  for I := 0 to 3 do
+  begin
+    LData[I].Re := 1.0;
+    LData[I].Im := 0.0;
+  end;
+  FftRadix2F32(@LData[0], 4, sfdForward);
+  PowerSpectrumF32(@LData[0], 4, @LDst[0]);
+  // DC power = |4|^2 = 16
+  CheckTrue(NearEqual(LDst[0], 16.0, 0.1), 'PowerSpectrum DC');
+  // Other bins should be near zero
+  CheckTrue(LDst[1] < 1.0, 'PowerSpectrum bin1');
+end;
+
+procedure TTestCase_SimdSignal.Test_MagnitudeSpectrum_Basic;
+var
+  LData: array[0..3] of TSimdComplexF32;
+  LDst: array[0..3] of Single;
+  I: Integer;
+begin
+  // Constant signal [1,1,1,1] → DC=4, others=0
+  for I := 0 to 3 do
+  begin
+    LData[I].Re := 1.0;
+    LData[I].Im := 0.0;
+  end;
+  FftRadix2F32(@LData[0], 4, sfdForward);
+  MagnitudeSpectrumF32(@LData[0], 4, @LDst[0]);
+  // DC magnitude = |4| = 4
+  CheckTrue(NearEqual(LDst[0], 4.0, 0.1), 'MagnitudeSpectrum DC');
+end;
+
+procedure TTestCase_SimdSignal.Test_PowerToDecibel_Basic;
+var
+  LSrc: array[0..3] of Single = (1.0, 10.0, 100.0, 1000.0);
+  LDst: array[0..3] of Single;
+begin
+  PowerToDecibelF32(@LSrc[0], @LDst[0], 4);
+  // 10*log10(1) = 0 dB
+  CheckTrue(NearEqual(LDst[0], 0.0, 0.1), 'PowerToDb 1');
+  // 10*log10(10) ≈ 10 dB
+  CheckTrue(NearEqual(LDst[1], 10.0, 0.1), 'PowerToDb 10');
+  // 10*log10(100) ≈ 20 dB
+  CheckTrue(NearEqual(LDst[2], 20.0, 0.1), 'PowerToDb 100');
+end;
+
+procedure TTestCase_SimdSignal.Test_PreEmphasis_Basic;
+var
+  LSrc: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LDst: array[0..3] of Single;
+begin
+  // coeff=0.97: dst[i] = src[i] - 0.97 * src[i-1]
+  PreEmphasisF32(@LSrc[0], @LDst[0], 4, 0.97);
+  // dst[0] = src[0] = 1.0 (no previous)
+  CheckTrue(NearEqual(LDst[0], 1.0, EPS), 'PreEmphasis [0]');
+  // dst[1] = 2 - 0.97*1 = 1.03
+  CheckTrue(NearEqual(LDst[1], 1.03, 0.01), 'PreEmphasis [1]');
 end;
 
 { ============================================================================
