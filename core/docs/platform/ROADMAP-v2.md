@@ -25,7 +25,7 @@
 | 平台 | 编译 | 运行 | 测试 | 证据层级 |
 |------|------|------|------|----------|
 | Linux x86_64 | ✅ | ✅ | 226 passed | focused-runtime |
-| Windows x86_64 (Wine) | ✅ | ✅ | 92 passed | wine-runtime-smoke |
+| Windows x86_64 (Wine) | ✅ | ✅ | 174 passed | wine-runtime-smoke |
 | Windows x86_64 (Real) | ✅ | ✅ | 26 tests | focused-runtime (io+socket) |
 | Linux aarch64 | ✅ | ⬜ | — | forced-compile |
 | Linux arm32 | ✅ | ⬜ | — | forced-compile |
@@ -47,6 +47,7 @@
 | P7 FFI Coverage Audit | ✅ | 评分 9/10, 6 个新 FFI 绑定 |
 | 可用性改进 v1-v6 | ✅ | 7.73 → 8.56 |
 | 跨平台修复 (字节序/InterlockedDecrement/LongBool/路径分隔符) | ✅ | 2026-07-06 |
+| Windows API 覆盖审计 | ✅ | 146 FFI 声明，覆盖完整 |
 
 ---
 
@@ -282,4 +283,5 @@
 ---
 
 **路线图维护**: 每月审查一次，根据进展调整优先级
-**最后更新**: 2026-07-06
+**最后更新**: 2026-07-06 (Windows API 审计完成)
+**API 覆盖矩阵**: 见 [API-COVERAGE-MATRIX.md](API-COVERAGE-MATRIX.md)
