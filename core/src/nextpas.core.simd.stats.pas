@@ -224,6 +224,7 @@ var
 begin
   if aCount = 0 then Exit(0);
   if aCount = 1 then Exit(aX[0]);
+  if aCount > SizeUInt(High(Integer)) then aCount := SizeUInt(High(Integer));
   if aP <= 0 then aP := 0;
   if aP >= 100 then aP := 100;
   LSorted := PSingle(SimdAlloc(aCount * SizeOf(Single)));
