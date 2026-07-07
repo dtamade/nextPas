@@ -307,6 +307,8 @@ function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
+function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
+function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
@@ -777,6 +779,16 @@ end;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 begin
   Result := nextpas.core.http.client.HttpReadResponseBodyString(AResp);
+end;
+
+function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
+end;
+
+function ExtractCharsetFromContentType(const AContentType: string): string;
+begin
+  Result := nextpas.core.http.client.ExtractCharsetFromContentType(AContentType);
 end;
 
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;

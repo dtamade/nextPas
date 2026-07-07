@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 15 — THttpClientOptions fluent methods)
+> Last updated: 2026-07-07 (Phase 16 — response charset auto-detection)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,13 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 16 (2026-07-07): Response Charset Auto-Detection**
+
+- **`HttpReadResponseBodyStringAuto(resp)`**: reads response body with charset auto-detection from Content-Type header
+- **`ExtractCharsetFromContentType(ct)`**: extracts charset parameter from Content-Type (handles quotes, semicolons)
+- **Charsets**: UTF-8, US-ASCII (default), ISO-8859-1/Latin-1/Windows-1252, fallback to raw bytes
+- **Tests**: 4 new tests (charset extraction, UTF-8 auto, Latin-1 auto, no-charset default), 148 client total / 0 leaks
 
 **Phase 15 (2026-07-07): THttpClientOptions Fluent Configuration**
 
@@ -195,6 +202,7 @@ Already landed:
 - URL string overloads for `NewRequest`
 - string / bytes request body helpers
 - string / bytes response body helpers
+- response charset auto-detection (`HttpReadResponseBodyStringAuto` — UTF-8, Latin-1, fallback)
 - explicit response body release helper
 - tighter redirect method/body/header ownership semantics
 - `PostForm` convenience for `application/x-www-form-urlencoded`
