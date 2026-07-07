@@ -105,6 +105,7 @@ type
     procedure RebuildFreeList;
     procedure FreeSegment(aIndex: SizeInt);
     procedure ShrinkToSegmentCount(ACount: SizeInt);
+    function IsSegmentFullyFree(aIndex: SizeInt): Boolean;
   public
     constructor Create(const aConfig: TGrowingBlockPoolConfig); overload;
     constructor Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
@@ -127,6 +128,10 @@ type
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
     function GetSegmentRegion(aIndex: SizeInt; out aStart, aEnd: PByte): Boolean;
+
+    { Memory reclaim: free segments where all blocks are unused.
+      Returns number of segments freed. Caller must hold external lock if concurrent. }
+    function TrimIdleSegments: SizeInt;
 
     property PeakAlloc: SizeUInt read FPeakAlloc;
     property TotalAllocs: QWord read FTotalAllocs;
@@ -493,6 +498,46 @@ begin
   SetLength(FSegments, ACount);
 end;
 
+function TGrowingBlockPool.IsSegmentFullyFree(aIndex: SizeInt): Boolean;
+var
+  LLen: SizeInt;
+  LIdx: SizeInt;
+begin
+  Result := False;
+  if (aIndex < 0) or (aIndex > High(FSegments)) then Exit;
+  if FSegments[aIndex].Blocks = 0 then Exit;
+
+  LLen := Length(FSegments[aIndex].FreeBits);
+  if LLen = 0 then Exit;
+
+  for LIdx := 0 to LLen - 1 do
+    if FSegments[aIndex].FreeBits[LIdx] <> QWord($FFFFFFFFFFFFFFFF) then
+      Exit;
+
+  Result := True;
+end;
+
+function TGrowingBlockPool.TrimIdleSegments: SizeInt;
+var
+  LIdx: SizeInt;
+begin
+  Result := 0;
+  // Walk segments in reverse; stop at first non-empty segment
+  // (segments sorted by Base, freeing from end avoids index shifts)
+  for LIdx := High(FSegments) downto 0 do
+  begin
+    if not IsSegmentFullyFree(LIdx) then
+      Break;
+    FreeSegment(LIdx);
+    Inc(Result);
+  end;
+  if Result > 0 then
+  begin
+    SetLength(FSegments, Length(FSegments) - Result);
+    RebuildFreeList;
+  end;
+end;
+
 constructor TGrowingBlockPool.Create(const aConfig: TGrowingBlockPoolConfig);
 var
   LAlign: SizeUInt;
@@ -689,8 +734,8 @@ begin
   if IsFreeBitSet(LSegIndex, LIdx) then
     raise EAllocError.Create(aeDoubleFree, 'TGrowingBlockPool.Release: double free detected');
 
-  {$IFDEF FAF_MEM_DEBUG}
-  FillMem((PByte(LSeg.Base) + LIdx * FBlockSize), FBlockSize, $A5);
+  {$IFDEF DEBUG}
+  FillMem((PByte(LSeg.Base) + LIdx * FBlockSize), FBlockSize, MEM_POISON_FREED);
   {$ENDIF}
 
   SetFreeBit(LSegIndex, LIdx);

@@ -99,6 +99,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.time,
   nextpas.core.tls.utils,  // Phase 3.2 - StringsToArray 统一实现
   nextpas.core.crypto.hash;
@@ -1375,7 +1376,7 @@ var
     I: Integer;
   begin
     Result := False;
-    Parts := S.Split(['.']);
+    Parts := StringsSplit(S, '.');
     if Length(Parts) <> 4 then
       Exit;
 

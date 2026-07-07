@@ -810,7 +810,7 @@ begin
   end;
 end;
 
-procedure TestAllocUnsafe;
+procedure TestAllocFast;
 var
   LArena: TVirtualArena;
   LP1, LP2: Pointer;
@@ -822,9 +822,9 @@ begin
     Check(LP1 <> nil, 'unsafe: pre-commit alloc');
     LArena.Reset;
 
-    { Now pages are committed — AllocUnsafe is safe }
-    LP1 := LArena.AllocUnsafe(64);
-    LP2 := LArena.AllocUnsafe(128);
+    { Now pages are committed — AllocFast is safe }
+    LP1 := LArena.AllocFast(64);
+    LP2 := LArena.AllocFast(128);
     Check(LP1 <> nil, 'unsafe: first alloc');
     Check(LP2 <> nil, 'unsafe: second alloc');
     Check(PtrUInt(LP2) >= PtrUInt(LP1) + 64, 'unsafe: sequential');
@@ -887,7 +887,7 @@ begin
   T.Test('aligned_non_power_of_two', @TestAllocAlignedNonPowerOfTwo);
   T.Test('multiple_resets', @TestMultipleResets);
   T.Test('reset_hard', @TestResetHard);
-  T.Test('alloc_unsafe', @TestAllocUnsafe);
+  T.Test('alloc_unsafe', @TestAllocFast);
 
   T.Run;
 

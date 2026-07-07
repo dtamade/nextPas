@@ -264,6 +264,8 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
+function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
+function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
 
 { WebSocket helper }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
@@ -649,6 +651,16 @@ end;
 function ServeDir(const ARoot: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeDir(ARoot);
+end;
+
+function ServeFileDownload(const APath: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeFileDownload(APath);
+end;
+
+function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
 end;
 
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;

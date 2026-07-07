@@ -436,6 +436,204 @@ begin
   end;
 end;
 
+{ ===== Test: ServeFile sets ETag header ===== }
+procedure TestServeFileETag;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('etag: "', LResp) > 0, 'ETag header present');
+    Check(Pos('last-modified: ', LResp) > 0, 'Last-Modified header present');
+    Check(Pos('cache-control: ', LResp) > 0, 'Cache-Control header present');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFile returns 304 for If-None-Match ===== }
+procedure TestServeFileNotModified;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LETagStart, LETagEnd: SizeInt;
+  LETag: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { First request to get ETag }
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    LETagStart := Pos('etag: "', LResp);
+    Check(LETagStart > 0, 'ETag present in first response');
+    Inc(LETagStart, 6);
+    LETagEnd := Pos('"', LResp, LETagStart + 1);
+    Check(LETagEnd > LETagStart, 'ETag closing quote found');
+    LETag := System.Copy(LResp, LETagStart, LETagEnd - LETagStart + 1);
+
+    { Second request with If-None-Match }
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'If-None-Match: ' + LETag + #13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 304', LResp) > 0, '304 Not Modified for matching ETag');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFile range request ===== }
+procedure TestServeFileRangeRequest;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Request bytes 0-2 (first 3 bytes: "bod") }
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=0-2'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, '206 Partial Content');
+    Check(Pos('content-range: bytes 0-2/6', LResp) > 0, 'Content-Range header');
+    Check(Pos('content-length: 3', LResp) > 0, 'Content-Length for range');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Check(LBodyPos > 0, 'header-body separator');
+    Inc(LBodyPos, 4);
+    Check(Length(LResp) >= LBodyPos + 2, 'body has 3 bytes');
+    Check(LResp[LBodyPos] = 'b', 'byte 0 is b');
+    Check(LResp[LBodyPos + 1] = 'o', 'byte 1 is o');
+    Check(LResp[LBodyPos + 2] = 'd', 'byte 2 is d');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFile range request suffix ===== }
+procedure TestServeFileRangeSuffix;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Request last 3 bytes: "y{}" }
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=-3'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, '206 Partial Content');
+    Check(Pos('content-range: bytes 3-5/6', LResp) > 0, 'Content-Range suffix');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Check(LBodyPos > 0, 'header-body separator');
+    Inc(LBodyPos, 4);
+    Check(Length(LResp) >= LBodyPos + 2, 'body has 3 bytes');
+    Check(LResp[LBodyPos] = 'y', 'byte 0 is y');
+    Check(LResp[LBodyPos + 1] = '{', 'byte 1 is {');
+    Check(LResp[LBodyPos + 2] = '}', 'byte 2 is }');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFile range not satisfiable ===== }
+procedure TestServeFileRangeNotSatisfiable;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Request range beyond file size }
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=100-200'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 416', LResp) > 0, '416 Range Not Satisfiable');
+    Check(Pos('content-range: bytes */6', LResp) > 0, 'Content-Range with total size');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFileDownload sets Content-Disposition ===== }
+procedure TestServeFileDownloadDisposition;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFileDownload(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200');
+    Check(Pos('content-disposition: attachment; filename="style.txt"', LResp) > 0,
+      'Content-Disposition with filename');
+    Check(Pos('body{}', LResp) > 0, 'file content in body');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+{ ===== Test: ServeFileDownload custom name ===== }
+procedure TestServeFileDownloadCustomName;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFileDownload(CTmpDir + '/style.txt', 'custom-name.css'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200');
+    Check(Pos('content-disposition: attachment; filename="custom-name.css"', LResp) > 0,
+      'Content-Disposition with custom name');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -459,6 +657,20 @@ begin
       @TestStaticFileUsesBinaryStreamTransfer);
     T.Test('ServeFile preserves binary body bytes',
       @TestServeFilePreservesBinaryBodyBytes);
+    T.Test('ServeFile sets ETag, Last-Modified, Cache-Control',
+      @TestServeFileETag);
+    T.Test('ServeFile returns 304 for If-None-Match',
+      @TestServeFileNotModified);
+    T.Test('ServeFile range request returns 206',
+      @TestServeFileRangeRequest);
+    T.Test('ServeFile range suffix request',
+      @TestServeFileRangeSuffix);
+    T.Test('ServeFile range not satisfiable returns 416',
+      @TestServeFileRangeNotSatisfiable);
+    T.Test('ServeFileDownload sets Content-Disposition',
+      @TestServeFileDownloadDisposition);
+    T.Test('ServeFileDownload custom filename',
+      @TestServeFileDownloadCustomName);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

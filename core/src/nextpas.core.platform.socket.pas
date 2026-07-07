@@ -10,6 +10,11 @@ uses
   nextpas.core.platform.error;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.base;
+{$ENDIF}
+
 const
 {$IFDEF NEXTPAS_WINDOWS}
   PLATFORM_AF_INET     = 2;
@@ -577,7 +582,6 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.error;
 

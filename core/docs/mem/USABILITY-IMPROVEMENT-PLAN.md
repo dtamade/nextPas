@@ -48,7 +48,7 @@
 需要分配内存？
 ├─ 通用场景 (malloc 替代) → DefaultAllocator
 ├─ 请求/帧级生命周期 → CreateDefaultArena
-├─ 高频小对象 → MakeFixedSlabPool
+├─ 高频小对象 → CreateFixedSlabPool
 ├─ 并发场景 → TSlabPoolConcurrent
 └─ 测试泄漏检测 → TTrackingAllocator
 ```

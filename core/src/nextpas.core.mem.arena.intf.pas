@@ -38,21 +38,8 @@ type
 
     {** 返回已分配字节数 }
     function UsedSize: SizeUInt;
-    {** 返回剩余可用字节数 }
-    function RemainingSize: SizeUInt;
     {** 返回统计信息 }
     function Stats: TArenaStats;
-  end;
-
-  {** IArenaCapacity - Arena 容量查询扩展接口
-   *
-   *  可选接口：Arena 实现可以选择性地支持容量查询。
-   *  调用方通过 `Supports(Arena, IArenaCapacity, Cap)` 检查是否支持。
-   *}
-  IArenaCapacity = interface
-    ['{A3E7D2F1-5B8C-4D6E-9F0A-1C2B3D4E5F6A}']
-    {** 返回 Arena 总容量（已提交 + 已预留的字节数） }
-    function TotalCapacity: SizeUInt;
   end;
 
 implementation

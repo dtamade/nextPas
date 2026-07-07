@@ -196,3 +196,198 @@ uses nextpas.core.mem.shuffle;
 ```
 
 > **原则**: 门面提供常用路径，子模块提供专业路径。不确定时用门面。
+
+---
+
+## 完整场景示例
+
+### 场景 1: HTTP 请求处理 (Arena per Request)
+
+每个请求分配一个 Arena，请求结束时 Reset 释放全部内存，零碎片。
+
+```pascal
+uses nextpas.core.mem, nextpas.core.mem.arena;
+
+procedure HandleRequest(ARequest: TRequest; AResponse: TResponse);
+var
+  LArena: IArena;
+  LBody, LHeaders: PByte;
+begin
+  LArena := CreateDefaultArena(64 * 1024);  // 64KB per request
+  try
+    // 解析阶段：从 Arena 分配临时缓冲区
+    LBody := LArena.Alloc(ARequest.ContentLength);
+    LHeaders := LArena.Alloc(4096);
+
+    // 处理业务逻辑...
+    ProcessBody(LBody, ARequest.ContentLength);
+    BuildResponse(LHeaders, AResponse);
+
+    // 请求结束，Arena 自动 Reset（IArena 引用计数归零时释放）
+  except
+    on E: Exception do
+      LogError(E.Message);
+  end;
+  // LArena 离开作用域 → Reset → 所有内存一次性释放
+end;
+```
+
+### 场景 2: 编译器 AST 节点分配 (Arena per Compilation Unit)
+
+编译器处理一个源文件时，所有 AST 节点从 Arena 分配，编译完成时整体释放。
+
+```pascal
+uses nextpas.core.mem, nextpas.core.mem.arena;
+
+type
+  PASTNode = ^TASTNode;
+  TASTNode = record
+    Kind: TNodeKind;
+    Left, Right: PASTNode;
+    Value: string;
+  end;
+
+function ParseUnit(const ASource: string): PASTNode;
+var
+  LArena: IArena;
+  LNode: PASTNode;
+begin
+  // 每个编译单元一个 Arena，几何增长
+  LArena := CreateChunkedArena(8192);
+  try
+    // 所有 AST 节点从 Arena 分配
+    LNode := LArena.Alloc(SizeOf(TASTNode));
+    LNode^.Kind := nkUnit;
+    LNode^.Left := LArena.Alloc(SizeOf(TASTNode));
+    LNode^.Right := LArena.Alloc(SizeOf(TASTNode));
+
+    // 递归解析...
+    ParseDeclarations(LArena, LNode);
+
+    Result := LNode;
+  except
+    // 解析失败时 Arena 自动释放
+    Result := nil;
+  end;
+end;
+```
+
+### 场景 3: 游戏实体对象池 (Fixed-Size Pool)
+
+游戏循环中频繁创建/销毁实体，使用固定大小池避免碎片。
+
+```pascal
+uses nextpas.core.mem, nextpas.core.mem.pool;
+
+type
+  PEntity = ^TEntity;
+  TEntity = record
+    X, Y, Z: Single;
+    Health: Integer;
+    Active: Boolean;
+  end;
+
+var
+  GEntityPool: IBlockPool;
+
+procedure InitEntityPool(AMaxEntities: Integer);
+begin
+  // 创建固定大小池：SizeOf(TEntity) 字节块，预分配 AMaxEntities 个
+  GEntityPool := CreateBlockPool(SizeOf(TEntity), AMaxEntities);
+end;
+
+function SpawnEntity: PEntity;
+begin
+  Result := GEntityPool.Acquire;
+  if Result <> nil then
+  begin
+    Result^.X := 0; Result^.Y := 0; Result^.Z := 0;
+    Result^.Health := 100;
+    Result^.Active := True;
+  end;
+end;
+
+procedure DestroyEntity(AEntity: PEntity);
+begin
+  if AEntity <> nil then
+    GEntityPool.Release(AEntity);  // O(1)，块回到池中
+end;
+```
+
+### 场景 4: 开发阶段泄漏检测 (Tracking Allocator)
+
+包装默认分配器，程序退出时报告所有未释放的内存。
+
+```pascal
+uses nextpas.core.mem, nextpas.core.mem.allocator.tracking;
+
+var
+  GTracker: TTrackingAllocator;
+
+procedure InitLeakDetection;
+begin
+  GTracker := TTrackingAllocator.Create(DefaultAllocator);
+end;
+
+procedure ReportLeaks;
+var
+  LReport: string;
+begin
+  if GTracker.HasLeaks then
+  begin
+    LReport := GTracker.ReportLeaks;
+    WriteLn('=== MEMORY LEAKS DETECTED ===');
+    WriteLn(LReport);
+  end
+  else
+    WriteLn('No memory leaks detected.');
+end;
+
+// 使用：用 GTracker 代替 DefaultAllocator
+var P := GTracker.GetMem(128);
+GTracker.SetTag('parser.buffer');  // 标记来源
+// ... 使用 P ...
+GTracker.FreeMem(P);              // 释放时自动清除标记
+
+// 程序退出时
+ReportLeaks;
+GTracker.Free;
+```
+
+### 场景 5: OOM 降级 (Fallback Allocator)
+
+主分配器（Arena）OOM 时自动降级到系统分配器，保证服务不中断。
+
+```pascal
+uses nextpas.core.mem, nextpas.core.mem.allocator.fallback;
+
+var
+  GFallback: TFallbackAllocator;
+
+procedure InitWithFallback;
+var
+  LArenaAllocator: IAllocator;
+begin
+  // Arena 包装为 IAllocator（只分配，不释放单块）
+  LArenaAllocator := CreateArenaAllocator(1024 * 1024);  // 1MB Arena
+  // Fallback：Arena 优先，OOM 时降级到默认分配器
+  GFallback := TFallbackAllocator.Create(LArenaAllocator, DefaultAllocator);
+end;
+
+procedure ProcessLargeData(const AData: TBytes);
+var
+  LBuf: Pointer;
+begin
+  // 小分配走 Arena（快速），大分配可能 OOM 走 fallback
+  LBuf := GFallback.GetMem(Length(AData));
+  if LBuf <> nil then
+  begin
+    Move(AData[0], LBuf^, Length(AData));
+    // ... 处理 ...
+    GFallback.FreeMem(LBuf);  // 自动从正确的分配器释放
+  end;
+end;
+
+// 统计降级次数
+WriteLn('Fallback count: ', GFallback.TotalFallbacks);
+```

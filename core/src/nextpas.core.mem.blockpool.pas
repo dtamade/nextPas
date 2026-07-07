@@ -544,9 +544,9 @@ begin
   if IsFreeBitSet(LIdx) then
     raise EAllocError.Create(aeDoubleFree, 'TBlockPool.Release: double free detected');
 
-  {$IFDEF FAF_MEM_DEBUG}
-  // 污化已释放内存，提升 UAF 暴露率
-  FillMem((PByte(FBuffer) + LIdx * FBlockSize), FBlockSize, $A5);
+  {$IFDEF DEBUG}
+  // Poison freed memory to expose use-after-free
+  FillMem((PByte(FBuffer) + LIdx * FBlockSize), FBlockSize, MEM_POISON_FREED);
   {$ENDIF}
 
   SetFreeBit(LIdx);

@@ -210,6 +210,97 @@ begin
   platform_thread_join(LHandle, LRetVal);
 end;
 
+{ Error path tests }
+procedure TestThreadTimedJoinZeroTimeout;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LRet: Int32;
+begin
+  LRet := platform_thread_create(LHandle, @SlowThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'create for zero timeout');
+
+  // SlowThread sleeps 50ms, so 0ms timeout should fail immediately
+  LRet := platform_thread_timedjoin(LHandle, 0, LRetVal);
+  Check(LRet <> 0, 'timedjoin with 0ms should timeout');
+
+  // Clean up: wait for thread to finish
+  platform_thread_join(LHandle, LRetVal);
+end;
+
+procedure TestTlsDestroyAndRecreate;
+var
+  LKey1, LKey2: TPlatformTLSKey;
+  LRet: Int32;
+begin
+  LRet := platform_tls_create(LKey1);
+  CheckEqual(Int64(0), Int64(LRet), 'tls create 1');
+
+  LRet := platform_tls_destroy(LKey1);
+  CheckEqual(Int64(0), Int64(LRet), 'tls destroy 1');
+
+  // Create a new key after destroying the old one
+  LRet := platform_tls_create(LKey2);
+  CheckEqual(Int64(0), Int64(LRet), 'tls create 2');
+
+  LRet := platform_tls_destroy(LKey2);
+  CheckEqual(Int64(0), Int64(LRet), 'tls destroy 2');
+end;
+
+procedure TestTlsSetGetNil;
+var
+  LKey: TPlatformTLSKey;
+  LRet: Int32;
+  LVal: Pointer;
+begin
+  LRet := platform_tls_create(LKey);
+  CheckEqual(Int64(0), Int64(LRet), 'tls create');
+
+  // Set nil value
+  LRet := platform_tls_set(LKey, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'tls set nil');
+
+  // Get should return nil
+  LVal := platform_tls_get(LKey);
+  Check(LVal = nil, 'tls get nil');
+
+  platform_tls_destroy(LKey);
+end;
+
+procedure TestThreadSpawnAndWait;
+var
+  LRec: TPlatformThreadRecord;
+  LRet: Int32;
+begin
+  LRet := platform_thread_spawn(LRec, @FastThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'spawn');
+
+  LRet := platform_thread_wait(LRec);
+  CheckEqual(Int64(0), Int64(LRet), 'wait');
+
+  // Thread should not be alive after wait
+  Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
+end;
+
+procedure TestThreadIsAliveAfterDetach;
+var
+  LRec: TPlatformThreadRecord;
+  LRet: Int32;
+begin
+  LRet := platform_thread_spawn(LRec, @SlowThread, nil);
+  CheckEqual(Int64(0), Int64(LRet), 'spawn');
+
+  // Thread should be alive right after spawn
+  Check(platform_thread_is_alive(LRec), 'thread is alive after spawn');
+
+  // Wait for thread to finish
+  LRet := platform_thread_wait(LRec);
+  CheckEqual(Int64(0), Int64(LRet), 'wait');
+
+  // Thread should not be alive after wait
+  Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -223,5 +314,10 @@ begin
   T.Test('Thread is_alive', @TestThreadIsAlive);
   T.Test('Thread timedjoin', @TestThreadTimedJoin);
   T.Test('Thread timedjoin timeout', @TestThreadTimedJoinTimeout);
+  T.Test('Thread timedjoin zero timeout', @TestThreadTimedJoinZeroTimeout);
+  T.Test('TLS destroy and recreate', @TestTlsDestroyAndRecreate);
+  T.Test('TLS set/get nil', @TestTlsSetGetNil);
+  T.Test('Thread spawn and wait', @TestThreadSpawnAndWait);
+  T.Test('Thread is alive after detach', @TestThreadIsAliveAfterDetach);
   if not T.Run then Halt(1);
 end.

@@ -234,7 +234,7 @@ begin
 
   for i := 0 to FCount - 1 do
   begin
-    if TConstantTime.CompareBytes(FEntries[i].Fingerprint, AFingerprint) = 1 then
+    if TConstantTime.CompareBytes(TBytes(@FEntries[i].Fingerprint[0]), AFingerprint) = 1 then
     begin
       Result := i;
       Exit;

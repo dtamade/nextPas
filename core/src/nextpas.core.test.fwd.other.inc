@@ -110,3 +110,60 @@ begin nextpas.core.test.prop.PropFail(AMsg); end;
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
 begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;
+
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer): IArrayGenerator;
+begin Result := nextpas.core.test.prop.GenArray(AGen, AMaxLen); end;
+
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator;
+begin Result := nextpas.core.test.prop.GenArray(AGen, AMinLen, AMaxLen); end;
+
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+begin Result := nextpas.core.test.prop.GenTuple(AGen1, AGen2); end;
+
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+begin Result := nextpas.core.test.prop.BindInt(AGen, AFn); end;
+
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
+begin nextpas.core.test.prop.PropArray(AName, ATest, AGen, ARuns, AShrink); end;
+
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer);
+begin nextpas.core.test.prop.PropTuple(AName, ATest, AGen, ARuns); end;
+
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer);
+begin nextpas.core.test.prop.Fuzz(AName, ATest, ACorpus, AMaxIterations); end;
+
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzString(AName, ATest, ACorpus, AMaxIterations); end;
+
+function FuzzGenBytes(ALen: Integer): TBytes;
+begin Result := nextpas.core.test.prop.FuzzGenBytes(ALen); end;
+
+function FuzzGenString(ALen: Integer): string;
+begin Result := nextpas.core.test.prop.FuzzGenString(ALen); end;
+
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
+
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzStringWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
+
+function CreateCoverageTracker: ICoverageTracker;
+begin Result := nextpas.core.test.prop.CreateCoverageTracker; end;
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
+  AGen: IIntGenerator; ACorpus: ICoverageTracker; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
+  AGen: IStringGenerator; ACorpus: ICoverageTracker; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
+
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
+begin nextpas.core.test.prop.FuzzParallel(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;

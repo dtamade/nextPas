@@ -95,7 +95,7 @@ type
     {** 分配 ASize 字节并清零 }
     function AllocZeroed(aSize: SizeUInt): Pointer;
     {** 极速分配（跳过所有检查，调用方保证容量足够且 aSize > 0）。仅限热路径。 }
-    function AllocUnsafe(aSize: SizeUInt): Pointer; inline;
+    function AllocFast(aSize: SizeUInt): Pointer; inline;
     {** 保存当前分配位置。
      *
      *  Large objects allocated through the direct mmap path stay live and are
@@ -589,7 +589,7 @@ begin
 end;
 
 {**
- * AllocUnsafe - 热路径快速分配（无清零）
+ * AllocFast - 热路径快速分配（无清零）
  *
  * @desc 不清零、不检查页面提交状态的快速分配路径。
  *       仅用于页面已提交的热路径中，不能在 ResetHard 后立即使用。
@@ -599,17 +599,17 @@ end;
  * @precondition 剩余容量 >= aSize
  *
  * @see Alloc (安全路径，自动提交页面)
- * @see ResetHard (会 decommit 所有页面，之后不能用 AllocUnsafe)
+ * @see ResetHard (会 decommit 所有页面，之后不能用 AllocFast)
  *}
-function TVirtualArena.AllocUnsafe(aSize: SizeUInt): Pointer;
+function TVirtualArena.AllocFast(aSize: SizeUInt): Pointer;
 var
   LNewEnd: PtrUInt;
 begin
   {$IFDEF DEBUG}
-  Assert(aSize > 0, 'AllocUnsafe: aSize must be > 0');
-  Assert(FFrontPtr <> nil, 'AllocUnsafe: arena not initialized');
+  Assert(aSize > 0, 'AllocFast: aSize must be > 0');
+  Assert(FFrontPtr <> nil, 'AllocFast: arena not initialized');
   Assert(PtrUInt(FFrontPtr) + PtrUInt(aSize) <= PtrUInt(FFrontEnd),
-    'AllocUnsafe: insufficient capacity');
+    'AllocFast: insufficient capacity');
   {$ENDIF}
   LNewEnd := PtrUInt(FFrontPtr) + PtrUInt(aSize);
   Result := Pointer(FFrontPtr);

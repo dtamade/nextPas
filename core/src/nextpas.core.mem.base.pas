@@ -9,7 +9,6 @@ uses
   nextpas.core.simd.bitops;
 
 const
-  MEM_DEFAULT_ALIGN = SizeOf(Pointer);
   MEM_CACHE_LINE_SIZE = 64;
   MEM_PAGE_SIZE = 4096;
 
@@ -22,6 +21,11 @@ const
     0xDE is chosen because: (1) recognisable in hex dumps, (2) unlikely valid pointer,
     (3) non-zero so dereference traps. }
   MEM_POISON_FREED = $DE;
+
+  { Debug-mode poison pattern written to newly allocated memory to detect
+    uninitialized reads. 0xAB is chosen to be distinct from MEM_POISON_FREED
+    and recognisable in hex dumps. }
+  MEM_POISON_ALLOC = $AB;
 
 type
   TAllocatorKind = (

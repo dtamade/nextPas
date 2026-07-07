@@ -7,6 +7,15 @@ unit nextpas.core.lockfree.btree;
  *       Placed in the lockfree namespace because it uses atomic primitives
  *       and follows the same concurrent data structure patterns.
  *
+ * @concurrency Thread-safe for single-writer multi-reader scenarios:
+ *   - Find/Contains/Count/ForEach/ForEachRange: lock-free reads
+ *   - Insert/Remove/Clear: serialized via root write lock
+ *
+ * @limitations NOT safe for concurrent writes from multiple threads.
+ *   The root pointer (FRoot) can change during Insert (root split),
+ *   which causes race conditions with lock-coupling approaches.
+ *   For true multi-writer concurrency, use TShardedHashMap instead.
+ *
  * @see libart (C) — Adaptive Radix Tree for comparison
  * @see lmdb (C) — B+Tree for comparison
  *}

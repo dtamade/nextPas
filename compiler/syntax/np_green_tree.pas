@@ -5522,6 +5522,9 @@ begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
     or (AChild = nil) then
     Exit;
+  { Prevent cyclic AST: reject appending self as child }
+  if (AChild.FOwner = FOwner) and (AChild.FIndex = FIndex) then
+    Exit;
   FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
   if D.ChildStart < 0 then
@@ -5619,7 +5622,12 @@ begin
     Exit(nil);
   ChildIdx := D.ChildStart + AIndex;
   if (ChildIdx >= 0) and (ChildIdx < FOwner.FFacades.Count) then
-    Result := FOwner.FFacades[ChildIdx]
+  begin
+    Result := FOwner.FFacades[ChildIdx];
+    { Guard against cyclic AST: if child is self, return nil to break recursion }
+    if (Result <> nil) and (Result.FOwner = FOwner) and (Result.FIndex = FIndex) then
+      Result := nil;
+  end
   else
     Result := nil;
 end;

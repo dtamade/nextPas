@@ -35,7 +35,7 @@ type
    *
    *  非线程安全。多线程环境请自行加锁。
    *}
-  TChunkedArena = class(TInterfacedObject, IArena, IArenaCapacity)
+  TChunkedArena = class(TInterfacedObject, IArena)
   private
     type
       TSegment = record
@@ -91,11 +91,11 @@ type
     procedure RestoreToMark(aMark: TArenaMark);
     procedure Reset;
     function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
 
-    { IArenaCapacity }
-    function TotalCapacity: SizeUInt;
+    { Compact: merge adjacent cached free segments to reduce fragmentation.
+      Returns the number of segments merged. }
+    function Compact: SizeInt;
 
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
@@ -550,7 +550,7 @@ end;
 
 function TChunkedArena.Alloc(aSize: SizeUInt): Pointer;
 begin
-  Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
+  Result := AllocAligned(aSize, DEFAULT_ALIGNMENT);
 end;
 
 function TChunkedArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -568,7 +568,7 @@ begin
 
   LAlign := aAlignment;
   if LAlign = 0 then
-    LAlign := MEM_DEFAULT_ALIGN;
+    LAlign := DEFAULT_ALIGNMENT;
   if (LAlign and (LAlign - 1)) <> 0 then
     Exit;
   if LAlign < SizeOf(Pointer) then
@@ -711,28 +711,20 @@ begin
   end;
 
   for LIdx := 0 to FSegmentCount - 1 do
-  begin
     FSegments[LIdx].Used := 0;
-    if LIdx > 0 then
-      FSegments[LIdx].StartOffset := 0;  // 会在 AddSegment 时按需重算
+  { Recalculate StartOffset chain so segments don't overlap }
+  FTotalSize := 0;
+  for LIdx := 0 to FSegmentCount - 1 do
+  begin
+    FSegments[LIdx].StartOffset := FTotalSize;
+    Inc(FTotalSize, FSegments[LIdx].Size);
   end;
-  FTotalSize := FSegments[0].Size;  // 重置为第一段容量
   FActive := 0;
 end;
 
 function TChunkedArena.UsedSize: SizeUInt;
 begin
   Result := CurrentUsed;
-end;
-
-function TChunkedArena.RemainingSize: SizeUInt;
-var
-  LUsed: SizeUInt;
-begin
-  LUsed := CurrentUsed;
-  if LUsed >= FTotalSize then
-    Exit(0);
-  Result := FTotalSize - LUsed;
 end;
 
 function TChunkedArena.Stats: TArenaStats;
@@ -743,14 +735,91 @@ begin
   Result.AllocCount := FTotalAllocs;
 end;
 
-function TChunkedArena.TotalCapacity: SizeUInt;
-begin
-  Result := FTotalSize;
-end;
-
 function TChunkedArena.SegmentCount: SizeUInt;
 begin
   Result := SizeUInt(FSegmentCount);
+end;
+
+function TChunkedArena.Compact: SizeInt;
+var
+  I, J: SizeInt;
+  LSegA, LSegB: PSegment;
+  LNewRaw: Pointer;
+  LNewSize: SizeUInt;
+  LTmp: TSegment;
+begin
+  Result := 0;
+  if FFreeCount < 2 then
+    Exit;
+
+  { Sort cached segments by base address for adjacency detection.
+    Simple insertion sort — cache is small (<= CHUNK_CACHE_LIMIT). }
+  for I := 1 to FFreeCount - 1 do
+  begin
+    J := I;
+    while (J > 0) and (PtrUInt(FFreeSegments[J - 1].Base) > PtrUInt(FFreeSegments[J].Base)) do
+    begin
+      LTmp := FFreeSegments[J];
+      FFreeSegments[J] := FFreeSegments[J - 1];
+      FFreeSegments[J - 1] := LTmp;
+      Dec(J);
+    end;
+  end;
+
+  { Merge adjacent segments. }
+  I := 0;
+  while I < FFreeCount - 1 do
+  begin
+    LSegA := @FFreeSegments[I];
+    LSegB := @FFreeSegments[I + 1];
+
+    { Check if A and B are adjacent in memory. }
+    if (LSegA^.Raw <> nil) and (LSegB^.Raw <> nil) and
+       (PByte(LSegA^.Raw) + LSegA^.RawSize = PByte(LSegB^.Raw)) then
+    begin
+      { Merge B into A: allocate a new combined block, copy both, free originals. }
+      LNewSize := LSegA^.RawSize + LSegB^.RawSize;
+      if FAllocator <> nil then
+        LNewRaw := FAllocator.GetMem(LNewSize)
+      else
+        LNewRaw := System.GetMem(LNewSize);
+      if LNewRaw <> nil then
+      begin
+        { Copy A's content }
+        Move(LSegA^.Raw^, LNewRaw^, LSegA^.RawSize);
+        { Copy B's content right after A }
+        Move(LSegB^.Raw^, PByte(LNewRaw)[LSegA^.RawSize], LSegB^.RawSize);
+
+        { Free originals }
+        if FAllocator <> nil then
+        begin
+          FAllocator.FreeMem(LSegA^.Raw);
+          FAllocator.FreeMem(LSegB^.Raw);
+        end
+        else
+        begin
+          System.FreeMem(LSegA^.Raw);
+          System.FreeMem(LSegB^.Raw);
+        end;
+
+        { Update A to be the merged segment }
+        LSegA^.Raw := LNewRaw;
+        LSegA^.RawSize := LNewSize;
+        LSegA^.Base := PByte(LNewRaw); { will be re-aligned on reuse }
+        LSegA^.Size := LNewSize;
+        LSegA^.Used := 0;
+
+        { Remove B from cache (shift remaining) }
+        for J := I + 1 to FFreeCount - 2 do
+          FFreeSegments[J] := FFreeSegments[J + 1];
+        Dec(FFreeCount);
+        Inc(Result);
+        { Don't increment I — check if the merged segment can merge with the next }
+        Continue;
+      end;
+    end;
+    Inc(I);
+  end;
 end;
 
 {$POP}

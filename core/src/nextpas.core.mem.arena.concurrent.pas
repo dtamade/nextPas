@@ -70,7 +70,6 @@ type
     procedure RestoreToMark(aMark: TArenaMark);
     procedure Reset;
     function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
 
     property Inner: IArena read FInner;
@@ -174,16 +173,6 @@ begin
   FLock.Acquire;
   try
     Result := FInner.UsedSize;
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TArenaConcurrent.RemainingSize: SizeUInt;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.RemainingSize;
   finally
     FLock.Release;
   end;

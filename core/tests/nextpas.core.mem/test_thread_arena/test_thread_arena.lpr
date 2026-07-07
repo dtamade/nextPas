@@ -326,11 +326,11 @@ begin
   LMgr := TThreadArenaManager.Create(DefaultThreadArenaConfig);
   try
     LT := TThreadArena.Create(LMgr.Get);
-    LRemaining := LT.RemainingSize;
+    LRemaining := LT.Arena.Stats.TotalAllocated - LT.Arena.Stats.TotalUsed;
     Check(LRemaining > 0, 'remaining > 0');
 
     LT.Alloc(256);
-    Check(LT.RemainingSize < LRemaining, 'remaining decreased');
+    Check(LT.Arena.Stats.TotalAllocated - LT.Arena.Stats.TotalUsed < LRemaining, 'remaining decreased');
     LMgr.DrainTLS;
   finally
     LMgr.Free;

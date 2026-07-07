@@ -51,6 +51,9 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Parallel opt-in | `t.Parallel()` | `#[serial]` | `TestSeq()` |
 | Test cache | `go test -cache` | — | `--cache` |
 | Property-based test | QuickCheck (3rd party) | proptest | **v7.1** GenString/GenInt/GenBool/GenBytes + Map/Filter combinators |
+| Coverage tracking | — | — | **v8.0b** ICoverageTracker bitset (4096 points) |
+| Structured fuzzing | — | — | **v8.0b** FuzzStructured + coverage-guided corpus |
+| Parallel fuzzing | — | — | **v8.0b** FuzzParallel 4 strategies |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -68,7 +71,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
 | `test_stress` | 高并发压力测试、大量测试注册、内存密集 | 1 |
-| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult | 15 |
+| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult + GenArray/GenTuple/BindInt + FuzzStructured/FuzzParallel/ICoverageTracker | 37 |
 
 ## 运行方式
 
@@ -291,6 +294,12 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.1**: Property-based Testing — QuickCheck 风格，4 种生成器 (GenString/GenInt/GenBool/GenBytes)，自动 shrinking (二分缩小)，`Prop()` 注册属性测试
 - **v7.1a**: Generator Combinators — `MapIntToStr` (类型转换)、`FilterInt`/`FilterString`/`FilterBytes` (谓词过滤)，shrink 时尊重 filter 约束
 - **v7.1b**: GenChoice/GenOneOf + Shrink 修复 — `GenChoiceInt`/`GenChoiceString`/`GenChoiceBool` (从数组随机选取)、`GenOneOfInt`/`GenOneOfString` (组合多个生成器)；修复 shrink 无限递归 (固定点检测)；修复 `Prop()` 中 `FailTest` 调用 `Halt(1)` 导致 shrink 失效的问题；新增 `PropFail()` (抛异常) 和 `PropWithResult()` (返回缩小值)；Int shrink 改进 (尊重 FMin 边界)
+- **v7.2a**: Mutation-based Fuzzing — 纯随机变异 fuzzing，无需编译器覆盖率插桩。6 种变异策略 (bit flip/byte replace/byte insert/byte delete/block dup/block swap)；`Fuzz()` / `FuzzString()` 入口；自动最小化失败输入 (binary shrink)；`FuzzGenBytes()` / `FuzzGenString()` 语料生成；20 测试 (15 Prop + 5 Fuzz)
+- **v7.3a**: Corpus Management — 持久化语料库管理。`TFuzzCorpus` 类支持从目录加载/保存语料；去重检测 (byte-by-byte comparison)；`FuzzWithCorpus()` / `FuzzStringWithCorpus()` 入口自动加载/保存语料；发现新输入时自动添加到语料库；27 测试 (15 Prop + 5 Fuzz + 7 Corpus)
+- **v8.0a**: Structured Generators + String Shrink — `GenArray` 随机长度 Int64 数组生成器；`GenTuple` (Int64, String) 元组生成器；`BindInt` FlatMap 组合器；String shrink 增强 (8 种策略)；`PropArray`/`PropTuple` 注册函数；32 测试
+- **v8.0b**: Structured Fuzzing + Coverage Tracking — `ICoverageTracker` bitset 覆盖追踪 (4096 点)；`FuzzStructured` 基于生成器的结构化 fuzzing，coverage-guided 语料库扩展；`FuzzParallel` 多策略并行 fuzzing (4 策略: BitFlip/ByteReplace/Havoc/Structured)；37 测试
+- **v8.0c**: Assertion + Error Messages — `CheckArrayEqual` for array of Int64 with diff reporting (first differing index + values)；`CheckIsNil`/`CheckIsNotNil` for IInterface nil checks；all with AMessage overloads；135 tests
+- **v8.0d**: Documentation + Examples — comprehensive property-testing-guide.md API reference covering generators, combinators, property testing, fuzzing, coverage tracking, assertions；386 total tests across 12 suites
 
 ## 路线图
 
@@ -299,6 +308,12 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 | **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | ✅ 已完成 | 无 |
 | **v7.1a** | Generator Combinators — Map/Filter 组合器 | ✅ 已完成 | v7.1 |
 | **v7.1b** | GenChoice/GenOneOf + Shrink 修复 | ✅ 已完成 | v7.1a |
+| **v7.2a** | Mutation-based Fuzzing — 纯随机变异 + 自动最小化 | ✅ 已完成 | v7.1b |
+| **v7.3a** | Corpus Management — 持久化语料库管理 | ✅ 已完成 | v7.2a |
+| **v8.0a** | Structured Generators — GenArray/GenTuple/BindInt + String Shrink | ✅ 已完成 | v7.3a |
+| **v8.0b** | Structured Fuzzing + Coverage Tracking | ✅ 已完成 | v8.0a |
+| **v8.0c** | Assertion + Error Messages + Timing | ✅ 已完成 | v8.0b |
+| **v8.0d** | Documentation + Examples | ✅ 已完成 | v8.0c |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
@@ -341,6 +356,87 @@ PropWithResult('name', @Test, Gen)   // 返回缩小后的值 (用于测试 shri
 - 自动 shrinking: 失败时递归二分缩小输入，找到最小复现
 - Filter 组合器在 shrink 时也尊重谓词约束
 - PropFail: 在 Prop 测试体内使用 (FailTest 调用 Halt(1) 会跳过 shrink)
+
+### v7.2a Mutation-based Fuzzing — 实际 API
+
+```pascal
+{ 基础用法: 字节 fuzzing }
+Fuzz('parser test', procedure(const Data: TBytes)
+begin
+  ParseSomething(Data);  { 如果抛异常，fuzzer 报告并最小化 }
+end, [SeedBytes1, SeedBytes2], 10000);
+
+{ 字符串 fuzzing }
+FuzzString('json test', procedure(const S: string)
+begin
+  JsonDecode(S);
+end, ['{"key": "value"}', '[]'], 10000);
+
+{ 生成语料 }
+FuzzGenBytes(100)    // 100 随机字节
+FuzzGenString(50)    // 50 可打印 ASCII 字符
+```
+
+- 6 种变异策略: bit flip (40%), byte replace (25%), byte insert (15%), byte delete (10%), block dup (5%), block swap (5%)
+- 自动最小化: 失败时先截断后半段，再逐字节删除，找到最小复现
+- 失败报告: hex dump 最小输入 + 迭代次数 + 失败计数
+- 无需编译器支持: 纯随机变异，适合测试 parser/deserializer
+
+### v7.3a Corpus Management — 实际 API
+
+```pascal
+{ 创建语料库管理器 }
+var Corpus: TFuzzCorpus;
+Corpus := TFuzzCorpus.Create('/path/to/corpus');
+
+{ 添加语料 }
+Corpus.Add(TBytes.Create($01, $02));  // 字节
+Corpus.AddString('hello');            // 字符串 (自动转 UTF-8)
+
+{ 保存/加载 }
+Corpus.Save;    // 保存到目录 (0.bin, 1.bin, ...)
+Corpus.Load;    // 从目录加载
+
+{ 查询 }
+Corpus.Count;           // 语料数量
+Corpus.GetItem(0);      // 获取字节
+Corpus.GetString(0);    // 获取字符串
+Corpus.HasFiles;        // 目录是否有 .bin 文件
+
+{ 带持久化的 fuzzing }
+FuzzWithCorpus('test', @TestProc, '/path/to/corpus', 10000);
+FuzzStringWithCorpus('test', @TestStrProc, '/path/to/corpus', 10000);
+```
+
+- 持久化: 语料保存到目录，下次运行自动加载
+- 去重: 相同内容不会重复添加
+- 自动种子: 如果目录为空，自动添加随机语料
+- 周期保存: 每 100 次迭代自动保存新语料
+- 失败保存: 发现失败输入时自动保存到语料库
+
+### v8.0a Structured Generators — 实际 API
+
+```pascal
+{ 数组生成器 }
+GenArray(GenInt(0, 100), 50)           // 随机长度 0..50 的 Int64 数组
+GenArray(GenInt(0, 100), 5, 15)        // 长度 5..15 的数组
+
+{ 元组生成器 }
+GenTuple(GenInt(0, 100), GenString(50))  // (Int64, String) 元组
+
+{ Bind/FlatMap 组合器 }
+BindInt(GenInt(0, 100), function(V: Int64): IIntGenerator
+  begin Result := GenInt(0, V) end)    // 第二个生成器依赖第一个输出
+
+{ 属性测试注册 }
+PropArray('array test', @TestArray, GenArray(GenInt(0, 100), 50), 100, True);
+PropTuple('tuple test', @TestTuple, GenTuple(GenInt(0, 100), GenString(50)), 100);
+```
+
+- GenArray: 随机长度数组 + shrink (缩短数组 + shrink 元素)
+- GenTuple: 元组生成器，分别生成两个分量
+- BindInt: FlatMap 组合器，链式生成器
+- String shrink: 8 种策略 (empty/half/remove/replace/remove-first/remove-mid/shorter/half-shorter)
 
 ### v7.2 Coverage-guided Fuzzing 前置条件
 

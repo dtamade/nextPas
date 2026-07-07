@@ -451,7 +451,7 @@ begin
   if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
     Exit;
   LMetadata := RequestMetadata(AParser);
-  Result := not LMetadata.HasHost;
+  Result := (not LMetadata.HasHost) or LMetadata.HasDuplicateHost;
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
@@ -602,6 +602,7 @@ begin
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HasDuplicateHost := AResult.HostRepeated;
   FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
   FRequestMetadata.HasContentLength := AResult.HasContentLength;
   FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
@@ -976,6 +977,7 @@ begin
   if (LFast.Version <> hvHttp11) or
      (LFast.ContentLength <> 0) or
      (not LFast.HasHost) or
+     LFast.HostRepeated or
      LFast.HasExpect or
      LFast.HasTransferEncoding then
     Exit(False);

@@ -96,6 +96,7 @@ type
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
     procedure EmitImtGlobals;
+    procedure EmitUnitDeclares;
     procedure EmitUnitInitCalls;
     procedure EmitUnitFiniCalls;
   public
@@ -1401,6 +1402,21 @@ begin
   Emit('}');
 end;
 
+procedure THIRLlvmEmitter.EmitUnitDeclares;
+var
+  I: LongInt;
+  LName: string;
+  LNormalizedUnitName: string;
+begin
+  for I := 0 to FModule.UnitInitOrderCount - 1 do
+  begin
+    LName := FModule.UnitInitOrderAt(I);
+    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
+    Emit('declare void @np_unit_init_' + LNormalizedUnitName + '()');
+    Emit('declare void @np_unit_fini_' + LNormalizedUnitName + '()');
+  end;
+end;
+
 procedure THIRLlvmEmitter.EmitUnitInitCalls;
 var
   I: LongInt;
@@ -1531,6 +1547,13 @@ begin
     Emit('');
     Emit('declare void @np_process_init()');
     Emit('declare void @np_process_fini()');
+  end;
+
+  { Emit declare for unit init/fini symbols so LLVM opt does not reject them as undefined }
+  if FModule.UnitInitOrderCount > 0 then
+  begin
+    Emit('');
+    EmitUnitDeclares;
   end;
 
   if FStrConstCount > 0 then

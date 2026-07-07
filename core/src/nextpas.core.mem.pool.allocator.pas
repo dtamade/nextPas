@@ -15,7 +15,7 @@ unit nextpas.core.mem.pool.allocator;
  *   var Pool: IAllocator;
  *       Map: ITreeMap<Integer, String>;
  *   begin
- *     Pool := MakePoolAllocator(SizeOf(TRedBlackTreeNode<Integer, String>), 10000);
+ *     Pool := CreatePoolAllocator(SizeOf(TRedBlackTreeNode<Integer, String>), 10000);
  *     Map := MakeTreeMap<Integer, String>(0, @IntCompare, Pool);
  *   end;
  *}
@@ -91,8 +91,8 @@ type
     // IAllocator
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
     function MemSize(APtr: Pointer): SizeUInt;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     procedure FreeAligned(APtr: Pointer);
@@ -110,7 +110,7 @@ type
   end;
 
 {**
- * MakePoolAllocator
+ * CreatePoolAllocator
  *
  * @desc 创建池分配器
  * @param ABlockSize 块大小
@@ -118,7 +118,7 @@ type
  * @param AFallback 后备分配器
  * @return IAllocator 池分配器接口
  *}
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator = nil): IAllocator;
+function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer; AFallback: IAllocator = nil): IAllocator;
 
 implementation
 
@@ -460,22 +460,22 @@ begin
     ZeroMem(Result, ASize);
 end;
 
-function TPoolAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LAlloc: TPoolAllocatorAlloc;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then
+  if APtr = nil then
     Exit(GetMem(ASize));
 
   if ASize = 0 then
   begin
-    FreeMem(ADst);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
-  if not MapGet(ADst, LAlloc) then
-    RaiseUnknownPointer(ADst, 'ReallocMem');
+  if not MapGet(APtr, LAlloc) then
+    RaiseUnknownPointer(APtr, 'ReallocMem');
 
   if LAlloc.Owner = paoPool then
   begin
@@ -487,8 +487,8 @@ begin
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        CopyMem(Result, ADst, LCopySize);
-      FreeMem(ADst);
+        CopyMem(Result, APtr, LCopySize);
+      FreeMem(APtr);
     end;
     Exit;
   end
@@ -503,35 +503,35 @@ begin
       else
         LCopySize := LAlloc.Size;
       if LCopySize > 0 then
-        CopyMem(Result, ADst, LCopySize);
-      FreeAligned(ADst);
+        CopyMem(Result, APtr, LCopySize);
+      FreeAligned(APtr);
     end;
   end
 
   else
   begin
-    Result := FFallback.ReallocMem(ADst, ASize);
+    Result := FFallback.ReallocMem(APtr, ASize);
     if Result <> nil then
-      UpdateTrackedAlloc(ADst, Result, ASize, 0, False);
+      UpdateTrackedAlloc(APtr, Result, ASize, 0, False);
   end;
 end;
 
-procedure TPoolAllocator.FreeMem(ADst: Pointer);
+procedure TPoolAllocator.FreeMem(APtr: Pointer);
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
-  if ADst = nil then
+  if APtr = nil then
     Exit;
 
-  if not UntrackAlloc(ADst, LAlloc) then
-    RaiseUnknownPointer(ADst, 'FreeMem');
+  if not UntrackAlloc(APtr, LAlloc) then
+    RaiseUnknownPointer(APtr, 'FreeMem');
 
   if LAlloc.Owner = paoPool then
-    FPool.ReleasePtr(ADst)
+    FPool.ReleasePtr(APtr)
   else if LAlloc.Aligned then
-    FFallback.FreeMem(PPointer(PByte(ADst) - SizeOf(Pointer))^)
+    FFallback.FreeMem(PPointer(PByte(APtr) - SizeOf(Pointer))^)
   else
-    FFallback.FreeMem(ADst);
+    FFallback.FreeMem(APtr);
 end;
 
 function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt;
@@ -623,7 +623,7 @@ end;
 
 { Factory function }
 
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
   AFallback: IAllocator): IAllocator;
 begin
   Result := TPoolAllocator.Create(ABlockSize, ACapacity, AFallback);

@@ -391,6 +391,249 @@ begin
     'PUSH_PROMISE min valid');
 end;
 
+{ -- New tests for H2 frame coverage gap -- }
+
+procedure TestGoawayRoundTrip;
+var
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+  LDebug: AnsiString;
+begin
+  Check(H2DecodeGoaway(H2EncodeGoaway(100, H2_ERR_NO_ERROR, ''),
+    LLastStreamID, LErrorCode, LDebug), 'GOAWAY empty debug decode');
+  CheckEqual(Int64(100), Int64(LLastStreamID), 'GOAWAY empty debug stream id');
+  CheckEqual(Int64(H2_ERR_NO_ERROR), Int64(LErrorCode), 'GOAWAY empty debug error');
+  CheckEqual('', string(LDebug), 'GOAWAY empty debug data');
+end;
+
+procedure TestGoawayWithDebugData;
+var
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+  LDebug: AnsiString;
+begin
+  Check(H2DecodeGoaway(H2EncodeGoaway(42, H2_ERR_ENHANCE_YOUR_CALM, 'too_many_streams'),
+    LLastStreamID, LErrorCode, LDebug), 'GOAWAY with debug decode');
+  CheckEqual(Int64(42), Int64(LLastStreamID), 'GOAWAY debug stream id');
+  CheckEqual(Int64(H2_ERR_ENHANCE_YOUR_CALM), Int64(LErrorCode), 'GOAWAY debug error');
+  CheckEqual('too_many_streams', string(LDebug), 'GOAWAY debug data');
+end;
+
+procedure TestGoawayTruncatedPayload;
+var
+  LLastStreamID: UInt32;
+  LErrorCode: UInt32;
+  LDebug: AnsiString;
+begin
+  Check(not H2DecodeGoaway(#0#0#0#0#0#0#0, LLastStreamID, LErrorCode, LDebug),
+    'GOAWAY truncated payload rejected');
+end;
+
+procedure TestWindowUpdateRoundTrip;
+var
+  LWindow: UInt32;
+begin
+  Check(H2DecodeWindowUpdate(H2EncodeWindowUpdate(1024), LWindow),
+    'WINDOW_UPDATE round trip');
+  CheckEqual(Int64(1024), Int64(LWindow), 'WINDOW_UPDATE value');
+end;
+
+procedure TestWindowUpdateMaxValue;
+var
+  LWindow: UInt32;
+begin
+  Check(H2DecodeWindowUpdate(H2EncodeWindowUpdate($7FFFFFFF), LWindow),
+    'WINDOW_UPDATE max value decode');
+  CheckEqual(Int64($7FFFFFFF), Int64(LWindow), 'WINDOW_UPDATE max value');
+end;
+
+procedure TestWindowUpdateTruncated;
+var
+  LWindow: UInt32;
+begin
+  Check(not H2DecodeWindowUpdate(#0#0#0, LWindow),
+    'WINDOW_UPDATE truncated rejected');
+end;
+
+procedure TestRstStreamRoundTrip;
+var
+  LErrorCode: UInt32;
+begin
+  Check(H2DecodeRstStream(H2EncodeRstStream(H2_ERR_PROTOCOL_ERROR), LErrorCode),
+    'RST_STREAM round trip');
+  CheckEqual(Int64(H2_ERR_PROTOCOL_ERROR), Int64(LErrorCode), 'RST_STREAM error');
+end;
+
+procedure TestRstStreamAllErrorCodes;
+var
+  LErrorCode: UInt32;
+begin
+  Check(H2DecodeRstStream(H2EncodeRstStream(H2_ERR_NO_ERROR), LErrorCode),
+    'RST_STREAM NO_ERROR');
+  CheckEqual(Int64(H2_ERR_NO_ERROR), Int64(LErrorCode), 'RST_STREAM NO_ERROR value');
+  Check(H2DecodeRstStream(H2EncodeRstStream(H2_ERR_INTERNAL_ERROR), LErrorCode),
+    'RST_STREAM INTERNAL_ERROR');
+  CheckEqual(Int64(H2_ERR_INTERNAL_ERROR), Int64(LErrorCode), 'RST_STREAM INTERNAL_ERROR value');
+  Check(H2DecodeRstStream(H2EncodeRstStream(H2_ERR_FLOW_CONTROL_ERROR), LErrorCode),
+    'RST_STREAM FLOW_CONTROL_ERROR');
+  CheckEqual(Int64(H2_ERR_FLOW_CONTROL_ERROR), Int64(LErrorCode), 'RST_STREAM FLOW_CONTROL_ERROR value');
+  Check(H2DecodeRstStream(H2EncodeRstStream(H2_ERR_HTTP_1_1_REQUIRED), LErrorCode),
+    'RST_STREAM HTTP_1_1_REQUIRED');
+  CheckEqual(Int64(H2_ERR_HTTP_1_1_REQUIRED), Int64(LErrorCode), 'RST_STREAM HTTP_1_1_REQUIRED value');
+end;
+
+procedure TestPingRoundTrip;
+var
+  LPing: UInt64;
+begin
+  Check(H2DecodePing(H2EncodePing(0), LPing), 'PING zero decode');
+  CheckEqual(Int64(0), Int64(LPing), 'PING zero value');
+  Check(H2DecodePing(H2EncodePing($FFFFFFFFFFFFFFFF), LPing), 'PING max decode');
+  CheckEqual(Int64($FFFFFFFFFFFFFFFF), Int64(LPing), 'PING max value');
+end;
+
+procedure TestPingTruncated;
+var
+  LPing: UInt64;
+begin
+  Check(not H2DecodePing(#0#0#0#0#0#0#0, LPing), 'PING truncated rejected');
+end;
+
+procedure TestErrorCodeNames;
+begin
+  CheckEqual('NO_ERROR', H2ErrorCodeName(H2_ERR_NO_ERROR), 'NO_ERROR name');
+  CheckEqual('PROTOCOL_ERROR', H2ErrorCodeName(H2_ERR_PROTOCOL_ERROR), 'PROTOCOL_ERROR name');
+  CheckEqual('INTERNAL_ERROR', H2ErrorCodeName(H2_ERR_INTERNAL_ERROR), 'INTERNAL_ERROR name');
+  CheckEqual('FLOW_CONTROL_ERROR', H2ErrorCodeName(H2_ERR_FLOW_CONTROL_ERROR), 'FLOW_CONTROL_ERROR name');
+  CheckEqual('SETTINGS_TIMEOUT', H2ErrorCodeName(H2_ERR_SETTINGS_TIMEOUT), 'SETTINGS_TIMEOUT name');
+  CheckEqual('STREAM_CLOSED', H2ErrorCodeName(H2_ERR_STREAM_CLOSED), 'STREAM_CLOSED name');
+  CheckEqual('FRAME_SIZE_ERROR', H2ErrorCodeName(H2_ERR_FRAME_SIZE_ERROR), 'FRAME_SIZE_ERROR name');
+  CheckEqual('REFUSED_STREAM', H2ErrorCodeName(H2_ERR_REFUSED_STREAM), 'REFUSED_STREAM name');
+  CheckEqual('CANCEL', H2ErrorCodeName(H2_ERR_CANCEL), 'CANCEL name');
+  CheckEqual('COMPRESSION_ERROR', H2ErrorCodeName(H2_ERR_COMPRESSION_ERROR), 'COMPRESSION_ERROR name');
+  CheckEqual('CONNECT_ERROR', H2ErrorCodeName(H2_ERR_CONNECT_ERROR), 'CONNECT_ERROR name');
+  CheckEqual('ENHANCE_YOUR_CALM', H2ErrorCodeName(H2_ERR_ENHANCE_YOUR_CALM), 'ENHANCE_YOUR_CALM name');
+  CheckEqual('INADEQUATE_SECURITY', H2ErrorCodeName(H2_ERR_INADEQUATE_SECURITY), 'INADEQUATE_SECURITY name');
+  CheckEqual('HTTP_1_1_REQUIRED', H2ErrorCodeName(H2_ERR_HTTP_1_1_REQUIRED), 'HTTP_1_1_REQUIRED name');
+end;
+
+procedure TestSettingsPayloadMultipleEntries;
+var
+  LEntries: TH2SettingEntries;
+  LDecoded: TH2SettingEntries;
+begin
+  SetLength(LEntries, 3);
+  LEntries[0].Identifier := H2_SETTINGS_HEADER_TABLE_SIZE;
+  LEntries[0].Value := 8192;
+  LEntries[1].Identifier := H2_SETTINGS_MAX_CONCURRENT_STREAMS;
+  LEntries[1].Value := 100;
+  LEntries[2].Identifier := H2_SETTINGS_INITIAL_WINDOW_SIZE;
+  LEntries[2].Value := 131072;
+  Check(H2DecodeSettingsPayload(H2EncodeSettingsPayload(LEntries), LDecoded),
+    'settings multiple entries decode');
+  CheckEqual(Int64(3), Int64(Length(LDecoded)), 'settings entry count');
+  CheckEqual(Int64(H2_SETTINGS_HEADER_TABLE_SIZE), Int64(LDecoded[0].Identifier),
+    'settings entry 0 id');
+  CheckEqual(Int64(8192), Int64(LDecoded[0].Value), 'settings entry 0 value');
+  CheckEqual(Int64(H2_SETTINGS_MAX_CONCURRENT_STREAMS), Int64(LDecoded[1].Identifier),
+    'settings entry 1 id');
+  CheckEqual(Int64(100), Int64(LDecoded[1].Value), 'settings entry 1 value');
+  CheckEqual(Int64(H2_SETTINGS_INITIAL_WINDOW_SIZE), Int64(LDecoded[2].Identifier),
+    'settings entry 2 id');
+  CheckEqual(Int64(131072), Int64(LDecoded[2].Value), 'settings entry 2 value');
+end;
+
+procedure TestSettingsPayloadEncodeExactBytes;
+var
+  LEntries: TH2SettingEntries;
+  LWire: AnsiString;
+begin
+  SetLength(LEntries, 1);
+  LEntries[0].Identifier := H2_SETTINGS_HEADER_TABLE_SIZE;
+  LEntries[0].Value := 4096;
+  LWire := H2EncodeSettingsPayload(LEntries);
+  CheckEqual(Int64(6), Int64(Length(LWire)), 'settings entry is 6 bytes');
+  CheckEqual(Int64($0001), Int64((Byte(LWire[1]) shl 8) or Byte(LWire[2])),
+    'settings identifier');
+  CheckEqual(Int64(4096), Int64((Byte(LWire[3]) shl 24) or (Byte(LWire[4]) shl 16) or
+    (Byte(LWire[5]) shl 8) or Byte(LWire[6])), 'settings value');
+end;
+
+procedure TestAllSettingIdentifiersValid;
+begin
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_HEADER_TABLE_SIZE),
+    'HEADER_TABLE_SIZE valid');
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_ENABLE_PUSH),
+    'ENABLE_PUSH valid');
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_MAX_CONCURRENT_STREAMS),
+    'MAX_CONCURRENT_STREAMS valid');
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_INITIAL_WINDOW_SIZE),
+    'INITIAL_WINDOW_SIZE valid');
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_MAX_FRAME_SIZE),
+    'MAX_FRAME_SIZE valid');
+  Check(H2IsValidSettingIdentifier(H2_SETTINGS_MAX_HEADER_LIST_SIZE),
+    'MAX_HEADER_LIST_SIZE valid');
+  Check(not H2IsValidSettingIdentifier(0), 'id 0 invalid');
+  Check(not H2IsValidSettingIdentifier(7), 'id 7 invalid');
+  Check(not H2IsValidSettingIdentifier($FFFF), 'id FFFF invalid');
+end;
+
+procedure TestFrameSizeValidationEdgeCases;
+begin
+  Check(H2IsValidFrameSize(0, H2_DEFAULT_MAX_FRAME_SIZE), 'zero size valid');
+  Check(H2IsValidFrameSize(1, H2_DEFAULT_MAX_FRAME_SIZE), 'one byte valid');
+  Check(H2IsValidFrameSize(H2_ABSOLUTE_MAX_FRAME_SIZE, H2_ABSOLUTE_MAX_FRAME_SIZE),
+    'absolute max valid');
+  Check(not H2IsValidFrameSize(H2_ABSOLUTE_MAX_FRAME_SIZE + 1, H2_ABSOLUTE_MAX_FRAME_SIZE),
+    'over absolute max rejected');
+  Check(not H2IsValidFrameSize(H2_DEFAULT_MAX_FRAME_SIZE + 1, H2_DEFAULT_MAX_FRAME_SIZE),
+    'over configured max rejected');
+end;
+
+procedure TestStreamIDEdgeCases;
+begin
+  Check(not H2IsValidStreamID(0), 'stream 0 invalid');
+  Check(H2IsValidStreamID(1), 'stream 1 valid');
+  Check(H2IsValidStreamID(2), 'stream 2 valid');
+  Check(H2IsValidStreamID($7FFFFFFF), 'max stream id valid');
+  Check(not H2IsValidStreamID($80000000), 'MSB set invalid');
+  Check(not H2IsValidStreamID($FFFFFFFF), 'all bits set invalid');
+end;
+
+procedure TestContinuationFrameValidation;
+begin
+  CheckFrameValid(NewFrame(H2_FRAME_CONTINUATION,
+    H2_FLAG_CONTINUATION_END_HEADERS, 1, 'abc'),
+    'CONTINUATION valid');
+  CheckFrameInvalid(NewFrame(H2_FRAME_CONTINUATION,
+    H2_FLAG_CONTINUATION_END_HEADERS, 0, 'abc'),
+    H2_ERR_PROTOCOL_ERROR, 'CONTINUATION stream id 0 rejected');
+end;
+
+procedure TestDataFrameValidation;
+begin
+  CheckFrameValid(NewFrame(H2_FRAME_DATA, 0, 1, 'abc'), 'DATA valid');
+  CheckFrameValid(NewFrame(H2_FRAME_DATA, H2_FLAG_DATA_END_STREAM, 1, 'abc'),
+    'DATA END_STREAM valid');
+  CheckFrameValid(NewFrame(H2_FRAME_DATA, H2_FLAG_DATA_PADDED, 1, #0'abc'),
+    'DATA padded valid');
+  CheckFrameInvalid(NewFrame(H2_FRAME_DATA, 0, 0, 'abc'),
+    H2_ERR_PROTOCOL_ERROR, 'DATA stream id 0 rejected');
+end;
+
+procedure TestHeadersFrameValidation;
+begin
+  CheckFrameValid(NewFrame(H2_FRAME_HEADERS,
+    H2_FLAG_HEADERS_END_HEADERS, 1, 'abc'),
+    'HEADERS valid');
+  CheckFrameValid(NewFrame(H2_FRAME_HEADERS,
+    H2_FLAG_HEADERS_END_STREAM or H2_FLAG_HEADERS_END_HEADERS, 1, 'abc'),
+    'HEADERS END_STREAM valid');
+  CheckFrameInvalid(NewFrame(H2_FRAME_HEADERS,
+    H2_FLAG_HEADERS_END_HEADERS, 0, 'abc'),
+    H2_ERR_PROTOCOL_ERROR, 'HEADERS stream id 0 rejected');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.frame');
   T.Test('Decode frame header masks reserved bit',
@@ -419,5 +662,24 @@ begin
   T.Test('Frame type names complete', @TestFrameTypesComplete);
   T.Test('Stream ID validation', @TestStreamIDValidation);
   T.Test('PUSH_PROMISE validation', @TestPUSH_PROMISEValidation);
+  T.Test('GOAWAY round trip', @TestGoawayRoundTrip);
+  T.Test('GOAWAY with debug data', @TestGoawayWithDebugData);
+  T.Test('GOAWAY truncated payload', @TestGoawayTruncatedPayload);
+  T.Test('WINDOW_UPDATE round trip', @TestWindowUpdateRoundTrip);
+  T.Test('WINDOW_UPDATE max value', @TestWindowUpdateMaxValue);
+  T.Test('WINDOW_UPDATE truncated', @TestWindowUpdateTruncated);
+  T.Test('RST_STREAM round trip', @TestRstStreamRoundTrip);
+  T.Test('RST_STREAM all error codes', @TestRstStreamAllErrorCodes);
+  T.Test('PING round trip', @TestPingRoundTrip);
+  T.Test('PING truncated', @TestPingTruncated);
+  T.Test('Error code names', @TestErrorCodeNames);
+  T.Test('Settings payload multiple entries', @TestSettingsPayloadMultipleEntries);
+  T.Test('Settings payload encode exact bytes', @TestSettingsPayloadEncodeExactBytes);
+  T.Test('All setting identifiers valid', @TestAllSettingIdentifiersValid);
+  T.Test('Frame size validation edge cases', @TestFrameSizeValidationEdgeCases);
+  T.Test('Stream ID edge cases', @TestStreamIDEdgeCases);
+  T.Test('CONTINUATION frame validation', @TestContinuationFrameValidation);
+  T.Test('DATA frame validation', @TestDataFrameValidation);
+  T.Test('HEADERS frame validation', @TestHeadersFrameValidation);
   if not T.Run then Halt(1);
 end.

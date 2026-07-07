@@ -505,6 +505,141 @@ begin
   CheckEqual(Int64(0), Int64(LRet), 'wake all 64 max value');
 end;
 
+{ Error path tests }
+procedure TestMutexUnlockWhenNotLocked;
+var
+  LMutex: TPlatformMutex;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex, PLATFORM_MUTEX_ERRORCHECK);
+
+  { Unlock on error-check mutex when not locked should return error }
+  LRet := platform_mutex_unlock(LMutex);
+  Check(LRet <> 0, 'unlock when not locked returns error');
+
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestMutexTryLockWhenAlreadyLocked;
+var
+  LMutex: TPlatformMutex;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex, PLATFORM_MUTEX_ERRORCHECK);
+
+  LRet := platform_mutex_lock(LMutex);
+  CheckEqual(Int64(0), Int64(LRet), 'lock');
+
+  { Try lock on error-check mutex when already locked should return busy }
+  LRet := platform_mutex_trylock(LMutex);
+  CheckEqual(Int64(PLATFORM_ERR_BUSY), Int64(LRet), 'trylock when locked returns busy');
+
+  platform_mutex_unlock(LMutex);
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestRwLockTryRdLockWhenWriteLocked;
+var
+  LRwLock: TPlatformRwLock;
+  LRet: Int32;
+begin
+  platform_rwlock_init(LRwLock);
+
+  LRet := platform_rwlock_wrlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'wrlock');
+
+  { Try rdlock when write locked should fail }
+  LRet := platform_rwlock_tryrdlock(LRwLock);
+  Check(LRet <> 0, 'tryrdlock when write locked fails');
+
+  platform_rwlock_wrunlock(LRwLock);
+  platform_rwlock_destroy(LRwLock);
+end;
+
+procedure TestRwLockTryWrLockWhenReadLocked;
+var
+  LRwLock: TPlatformRwLock;
+  LRet: Int32;
+begin
+  platform_rwlock_init(LRwLock);
+
+  LRet := platform_rwlock_rdlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'rdlock');
+
+  { Try wrlock when read locked should fail }
+  LRet := platform_rwlock_trywrlock(LRwLock);
+  Check(LRet <> 0, 'trywrlock when read locked fails');
+
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_destroy(LRwLock);
+end;
+
+procedure TestCondVarTimedWaitTimeout;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex);
+  platform_condvar_init(LCond);
+
+  platform_mutex_lock(LMutex);
+
+  { Timed wait with 1ms timeout should return timeout }
+  LRet := platform_condvar_timedwait(LCond, LMutex, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet), 'timedwait 1ms returns timeout');
+
+  platform_mutex_unlock(LMutex);
+  platform_condvar_destroy(LCond);
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestCondVarTimedWaitZeroTimeout;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex);
+  platform_condvar_init(LCond);
+
+  platform_mutex_lock(LMutex);
+
+  { Timed wait with 0 timeout should return timeout immediately }
+  LRet := platform_condvar_timedwait(LCond, LMutex, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet), 'timedwait 0 returns timeout');
+
+  platform_mutex_unlock(LMutex);
+  platform_condvar_destroy(LCond);
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestAddressWaitZeroTimeout;
+var
+  LValue: Int32;
+  LRet: Int32;
+begin
+  LValue := 42;
+
+  { Wait with 0 timeout should poll and return timeout when value = expected }
+  LRet := platform_wait_address32(@LValue, 42, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'wait32 with 0 timeout returns timeout when value = expected');
+end;
+
+procedure TestAddress64WaitZeroTimeout;
+var
+  LValue: Int64;
+  LRet: Int32;
+begin
+  LValue := 42;
+
+  { Wait with 0 timeout should poll and return timeout when value = expected }
+  LRet := platform_wait_address64(@LValue, 42, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'wait64 with 0 timeout returns timeout when value = expected');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -527,5 +662,13 @@ begin
   {$ENDIF}
   T.Test('Address64 basic', @TestAddress64Basic);
   T.Test('Address64 large values', @TestAddress64LargeValues);
+  T.Test('Mutex unlock when not locked', @TestMutexUnlockWhenNotLocked);
+  T.Test('Mutex trylock when already locked', @TestMutexTryLockWhenAlreadyLocked);
+  T.Test('RwLock tryrdlock when write locked', @TestRwLockTryRdLockWhenWriteLocked);
+  T.Test('RwLock trywrlock when read locked', @TestRwLockTryWrLockWhenReadLocked);
+  T.Test('CondVar timedwait timeout', @TestCondVarTimedWaitTimeout);
+  T.Test('CondVar timedwait zero timeout', @TestCondVarTimedWaitZeroTimeout);
+  T.Test('Address wait zero timeout', @TestAddressWaitZeroTimeout);
+  T.Test('Address64 wait zero timeout', @TestAddress64WaitZeroTimeout);
   if not T.Run then Halt(1);
 end.

@@ -29,8 +29,8 @@ type
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建 TVirtualArenaAllocator }
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
@@ -73,7 +73,6 @@ type
     procedure RestoreToMark(AMark: TArenaMark);
     procedure Reset;
     function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
 
     {** 直接访问内部 TVirtualArena }
@@ -106,13 +105,13 @@ begin
   Result := FArena.AllocZeroed(ASize);
 end;
 
-function TVirtualArenaAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
   raise EAllocError.Create(aeReallocNotSupported,
     'TVirtualArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
 end;
 
-procedure TVirtualArenaAllocator.DoFreeMem(ADst: Pointer);
+procedure TVirtualArenaAllocator.DoFreeMem(APtr: Pointer);
 begin
   { Arena 不支持单个释放 — no-op }
 end;
@@ -176,17 +175,6 @@ end;
 function TVirtualArenaAdapter.UsedSize: SizeUInt;
 begin
   Result := FArena.TotalUsed;
-end;
-
-function TVirtualArenaAdapter.RemainingSize: SizeUInt;
-var
-  LTotal: SizeUInt;
-begin
-  LTotal := FArena.TotalAllocated;
-  if LTotal > FArena.TotalUsed then
-    Result := LTotal - FArena.TotalUsed
-  else
-    Result := 0;
 end;
 
 function TVirtualArenaAdapter.Stats: TArenaStats;

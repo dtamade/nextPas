@@ -1219,6 +1219,9 @@ end;
 
 function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer;
 begin
+  if aCount = 0 then Exit(0);
+  if (aPtr1 = nil) or (aPtr2 = nil) then
+    raise EArgumentNil.Create('nextpas.core.mem.utils.Compare16: nil pointer');
   Result := System.CompareWord(aPtr1^, aPtr2^, aCount);
 end;
 
@@ -1261,8 +1264,9 @@ end;
 
 function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer;
 begin
-
-
+  if aCount = 0 then Exit(0);
+  if (aPtr1 = nil) or (aPtr2 = nil) then
+    raise EArgumentNil.Create('nextpas.core.mem.utils.Compare32: nil pointer');
   Result := System.CompareDWord(aPtr1^, aPtr2^, aCount);
 end;
 

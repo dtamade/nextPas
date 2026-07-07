@@ -513,10 +513,10 @@ var
 begin
   LArena := TChunkedArena.Create(4096);
   try
-    LBefore := LArena.RemainingSize;
+    LBefore := LArena.Stats.TotalAllocated - LArena.Stats.TotalUsed;
     Check(LBefore > 0, 'remaining: initially > 0');
     LArena.Alloc(1024);
-    LAfter := LArena.RemainingSize;
+    LAfter := LArena.Stats.TotalAllocated - LArena.Stats.TotalUsed;
     Check(LAfter < LBefore, 'remaining: decreased after alloc');
   finally
     LArena.Free;
@@ -606,6 +606,49 @@ begin
   end;
 end;
 
+{ ── Compact: merge adjacent cached segments ── }
+
+procedure TestCompactMergesCachedSegments;
+var
+  LConfig: TChunkedArenaConfig;
+  LArena: TChunkedArena;
+  LPtrs: array[0..3] of Pointer;
+  LMark: TArenaMark;
+  LMerged: SizeInt;
+  I: Integer;
+begin
+  LConfig := TChunkedArenaConfig.Default(4096);
+  LConfig.KeepSegments := False; { segments get cached on RestoreToMark }
+  LArena := TChunkedArena.Create(LConfig);
+  try
+    { Allocate enough to trigger multiple segments. }
+    for I := 0 to 3 do
+    begin
+      LPtrs[I] := LArena.Alloc(2048);
+      Check(LPtrs[I] <> nil, 'alloc ' + IntToStr(I));
+    end;
+    Check(LArena.SegmentCount >= 2, 'should have multiple segments');
+
+    { Save mark at the beginning. }
+    LMark := LArena.SaveMark;
+
+    { Allocate more to use more segments. }
+    for I := 0 to 3 do
+      LArena.Alloc(2048);
+
+    { Restore to mark — unused segments go to cache. }
+    LArena.RestoreToMark(LMark);
+
+    { Compact should merge adjacent cached segments. }
+    LMerged := LArena.Compact;
+    Check(LMerged >= 0, 'Compact returned ' + IntToStr(LMerged));
+
+    WriteLn('PASS: Compact merges cached segments (merged=' + IntToStr(LMerged) + ')');
+  finally
+    LArena.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.arena.chunked');
 
@@ -638,6 +681,7 @@ begin
   T.Test('segment_count_initial', @TestSegmentCountZero);
   T.Test('reset_keep_segments_restore_mark', @TestResetKeepSegmentsThenRestoreToMark);
   T.Test('custom_allocator_config', @TestCustomAllocatorConfig);
+  T.Test('compact_merges_cached_segments', @TestCompactMergesCachedSegments);
 
   T.Run;
 

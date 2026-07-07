@@ -17,8 +17,8 @@ type
   protected
     function  DoGetMem(ASize: SizeUInt): Pointer; override;
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -47,14 +47,14 @@ begin
   Result := System.AllocMem(ASize);
 end;
 
-function TRtlAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TRtlAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := System.ReallocMem(ADst, ASize);
+  Result := System.ReallocMem(APtr, ASize);
 end;
 
-procedure TRtlAllocator.DoFreeMem(ADst: Pointer);
+procedure TRtlAllocator.DoFreeMem(APtr: Pointer);
 begin
-  System.FreeMem(ADst);
+  System.FreeMem(APtr);
 end;
 
 function TRtlAllocator.Traits: TAllocatorTraits;

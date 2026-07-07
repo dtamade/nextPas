@@ -579,7 +579,14 @@ begin
     IncludeTrailingPathDelimiter(IntermediateRoot) + BaseName + '.o'
   );
   if SameText(OutputKindValue, 'object-file') then
-    PrimaryArtifactPath := ObjectArtifactPath
+  begin
+    if Trim(FOutputDirPath) <> '' then
+      ObjectArtifactPath := ExpandFileName(
+        IncludeTrailingPathDelimiter(FOutputDirPath) +
+        BaseName + '.o'
+      );
+    PrimaryArtifactPath := ObjectArtifactPath;
+  end
   else if Trim(FOutputDirPath) <> '' then
     PrimaryArtifactPath := ExpandFileName(
       IncludeTrailingPathDelimiter(FOutputDirPath) +

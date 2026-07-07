@@ -20,7 +20,7 @@ begin
     P := A.Alloc(64);
     Check(P <> nil, 'alloc 64 ok');
     Check(A.UsedSize >= 64, 'used >= 64');
-    Check(A.RemainingSize <= 1024 - 64, 'remaining <= 960');
+    Check(A.Stats.TotalAllocated - A.Stats.TotalUsed <= 1024 - 64, 'remaining <= 960');
   finally
     A.Free;
   end;
@@ -66,7 +66,7 @@ begin
     Check(A.UsedSize >= 100, 'used after alloc');
     A.Reset;
     Check(A.UsedSize = 0, 'used=0 after reset');
-    Check(A.RemainingSize = 128, 'remaining=total after reset');
+    Check(A.Stats.TotalAllocated - A.Stats.TotalUsed = 128, 'remaining=total after reset');
     P := A.Alloc(100);
     Check(P <> nil, 'can alloc after reset');
   finally
@@ -350,7 +350,7 @@ begin
   try
     P := A.Alloc(128);
     Check(P <> nil, 'exact capacity: should succeed');
-    Check(A.RemainingSize = 0, 'exact capacity: remaining should be 0');
+    Check(A.Stats.TotalAllocated - A.Stats.TotalUsed = 0, 'exact capacity: remaining should be 0');
   finally
     A.Free;
   end;
@@ -380,7 +380,7 @@ begin
     P := IA.Alloc(64);
     Check(P <> nil, 'IArena alloc: succeeded');
     Check(IA.UsedSize >= 64, 'IArena used: >= 64');
-    Check(IA.RemainingSize > 0, 'IArena remaining: > 0');
+    Check(IA.Stats.TotalAllocated - A.Stats.TotalUsed > 0, 'IArena remaining: > 0');
     IA.Reset;
     Check(IA.UsedSize = 0, 'IArena reset: used = 0');
   finally

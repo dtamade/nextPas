@@ -221,6 +221,15 @@ procedure SleepMs(AMilliseconds: Integer);
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 
+{ ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string); overload;
+
+{ ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
+procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
+procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
 function  GetLastTestTrace: string;
@@ -390,6 +399,68 @@ function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerato
 procedure PropFail(const AMsg: string);
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
+
+{ ── Re-exported structured generators from test.prop (v8.0a) ──────────────── }
+
+type
+  TIntArrayTest = nextpas.core.test.prop.TIntArrayTest;
+  TTupleTest = nextpas.core.test.prop.TTupleTest;
+  IArrayGenerator = nextpas.core.test.prop.IArrayGenerator;
+  ITupleGenerator = nextpas.core.test.prop.ITupleGenerator;
+  TIntToGenerator = nextpas.core.test.prop.TIntToGenerator;
+
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer = 100): IArrayGenerator; overload;
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator; overload;
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer = 100; AShrink: Boolean = True);
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer = 100);
+
+{ ── Re-exported fuzzing from test.prop (v7.2a) ───────────────────────────── }
+
+type
+  TFuzzBytesTest = nextpas.core.test.prop.TFuzzBytesTest;
+  TFuzzStringTest = nextpas.core.test.prop.TFuzzStringTest;
+
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer = 10000);
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer = 10000);
+function FuzzGenBytes(ALen: Integer): TBytes;
+function FuzzGenString(ALen: Integer): string;
+
+{ ── Re-exported corpus management from test.prop (v7.3a) ─────────────────── }
+
+type
+  TFuzzCorpus = nextpas.core.test.prop.TFuzzCorpus;
+
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+
+{ ── Re-exported coverage tracking from test.prop (v8.0b) ──────────────────── }
+
+type
+  ICoverageTracker = nextpas.core.test.prop.ICoverageTracker;
+  TFuzzStructuredIntTest = nextpas.core.test.prop.TFuzzStructuredIntTest;
+  TFuzzStructuredStringTest = nextpas.core.test.prop.TFuzzStructuredStringTest;
+  TFuzzStrategy = nextpas.core.test.prop.TFuzzStrategy;
+
+function CreateCoverageTracker: ICoverageTracker;
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
+  AGen: IIntGenerator; ACorpus: ICoverageTracker = nil;
+  AMaxIterations: Integer = 10000); overload;
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
+  AGen: IStringGenerator; ACorpus: ICoverageTracker = nil;
+  AMaxIterations: Integer = 10000); overload;
+
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer = 4;
+  AIterationsPerWorker: Integer = 2500);
 
 implementation
 
