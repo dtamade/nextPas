@@ -4,6 +4,12 @@
   call-count verification.  Not an interface proxy — callers record
   calls manually and retrieve configured return values.
 
+  Dual API Design (intentional, not redundant):
+  - String API: Mock.CalledWith(['a', 'b']) — quick, flexible, no type safety
+  - Typed API:  Mock.CalledWith([MockStr('a'), MockInt(42)]) — type-safe matching
+  Both APIs are actively used (30+ calls each in tests). The typed API prevents
+  subtle bugs where MockInt(42) ≠ MockStr('42').
+
   Thread safety: NOT thread-safe. TMockState uses unsynchronized
   dynamic arrays (FCalls, FSetups, FCallOrder). Use only within a
   single test; for parallel tests, each worker must have its own
@@ -238,6 +244,13 @@ type
     function GetReturnBool(const AMethodName: string;
       const AArgs: array of TMockValue): Boolean; overload;
 
+    { Get the configured return value as Double. Returns 0.0 if not configured. }
+    function GetReturnDouble(const AMethodName: string): Double; overload;
+    function GetReturnDouble(const AMethodName: string;
+      const AArgs: array of string): Double; overload;
+    function GetReturnDouble(const AMethodName: string;
+      const AArgs: array of TMockValue): Double; overload;
+
     { Get call count for a method }
     function CallCount(const AMethodName: string): Integer;
 
@@ -336,6 +349,52 @@ begin
 end;
 
 { ── Local helpers ──────────────────────────────────────────────────────────── }
+
+function FormatArgs(const AArgs: array of string): string;
+var I: Integer;
+begin
+  Result := '[';
+  for I := 0 to High(AArgs) do
+  begin
+    if I > 0 then Result := Result + ', ';
+    Result := Result + '"' + AArgs[I] + '"';
+  end;
+  Result := Result + ']';
+end;
+
+function FormatMockValue(const AV: TMockValue): string;
+begin
+  case AV.Kind of
+    mvString:  Result := 'MockStr("' + AV.StrVal + '")';
+    mvInt64:   Result := 'MockInt(' + IntToStr(AV.IntVal) + ')';
+    mvBool:    if AV.BoolVal then Result := 'MockBool(true)'
+               else Result := 'MockBool(false)';
+    mvDouble:  Result := 'MockDouble(' + FloatToStr(AV.DblVal) + ')';
+  else
+    Result := '?';
+  end;
+end;
+
+function FormatMockArgs(const AArgs: array of TMockValue): string;
+var I: Integer;
+begin
+  Result := '[';
+  for I := 0 to High(AArgs) do
+  begin
+    if I > 0 then Result := Result + ', ';
+    Result := Result + FormatMockValue(AArgs[I]);
+  end;
+  Result := Result + ']';
+end;
+
+function FindFirstCallArgs(AState: TMockState; const AMethod: string): string;
+var I: Integer;
+begin
+  for I := 0 to High(AState.Calls) do
+    if AState.Calls[I].MethodName = AMethod then
+      Exit(FormatArgs(AState.Calls[I].Args));
+  Result := '(none)';
+end;
 
 procedure InitCallRecord(out ACall: TMockCall; const AName: string);
 begin
@@ -759,7 +818,11 @@ function TMockSetup.InOrder: IMockSetup;
 begin
   { InOrder is a marker — call order tracking is always on.
     This method exists for fluent API readability:
-      Mock.Setup('Foo').InOrder.Returns('x'); }
+      Mock.Setup('Foo').InOrder.Returns('x');
+
+    TODO: Full ordered verification (CalledInOrder) is not yet implemented.
+    Currently, call order is tracked via TMockCall timestamps but the
+    CalledBefore/CalledAfter API only verifies pairwise ordering. }
   Result := Self;
 end;
 
@@ -989,9 +1052,10 @@ var
 begin
   LCount := FState.MatchingCallCount(FMethod, AArgs);
   if LCount = 0 then
-    InternalFail('Expected ' + FMethod + ' called with matching args, ' +
-      'but no matching call found (total calls: ' +
-      IntToStr(FState.CallCount(FMethod)) + ')');
+    InternalFail('Expected ' + FMethod + ' called with ' +
+      FormatArgs(AArgs) + ', but no matching call found' +
+      ' (first actual call: ' + FindFirstCallArgs(FState, FMethod) +
+      ', total calls: ' + IntToStr(FState.CallCount(FMethod)) + ')');
   Result := Self;
 end;
 
@@ -1003,8 +1067,8 @@ begin
   LCount := FState.MatchingCallCount(FMethod, AArgs);
   if LCount <> ACount then
     InternalFail('Expected ' + FMethod + ' called exactly ' +
-      IntToStr(ACount) + ' times with matching args, but was called ' +
-      IntToStr(LCount) + ' times');
+      IntToStr(ACount) + ' times with ' + FormatArgs(AArgs) +
+      ', but was called ' + IntToStr(LCount) + ' times');
   Result := Self;
 end;
 
@@ -1014,9 +1078,9 @@ var
 begin
   LCount := FState.MatchingCallCountTyped(FMethod, AArgs);
   if LCount = 0 then
-    InternalFail('Expected ' + FMethod + ' called with matching typed args, ' +
-      'but no matching call found (total calls: ' +
-      IntToStr(FState.CallCount(FMethod)) + ')');
+    InternalFail('Expected ' + FMethod + ' called with ' +
+      FormatMockArgs(AArgs) + ', but no matching call found' +
+      ' (total calls: ' + IntToStr(FState.CallCount(FMethod)) + ')');
   Result := Self;
 end;
 
@@ -1028,8 +1092,8 @@ begin
   LCount := FState.MatchingCallCountTyped(FMethod, AArgs);
   if LCount <> ACount then
     InternalFail('Expected ' + FMethod + ' called exactly ' +
-      IntToStr(ACount) + ' times with matching typed args, but was called ' +
-      IntToStr(LCount) + ' times');
+      IntToStr(ACount) + ' times with ' + FormatMockArgs(AArgs) +
+      ', but was called ' + IntToStr(LCount) + ' times');
   Result := Self;
 end;
 
@@ -1135,6 +1199,40 @@ begin
   if LTyped.Kind = mvBool then
     Exit(LTyped.BoolVal);
   Result := False;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string): Double;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, []);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string;
+  const AArgs: array of string): Double;
+var
+  LTypedArgs: TMockValues;
+  LTyped: TMockValue;
+begin
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LTyped := FState.GetReturnTyped(AMethodName, LTypedArgs);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
+end;
+
+function TMock.GetReturnDouble(const AMethodName: string;
+  const AArgs: array of TMockValue): Double;
+var
+  LTyped: TMockValue;
+begin
+  LTyped := FState.GetReturnTyped(AMethodName, AArgs);
+  if LTyped.Kind = mvDouble then
+    Exit(LTyped.DblVal);
+  Result := 0.0;
 end;
 
 function TMock.CallCount(const AMethodName: string): Integer;

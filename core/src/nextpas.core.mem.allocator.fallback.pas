@@ -480,6 +480,16 @@ begin
   end;
 end;
 
+{**
+ * AllocAligned - 对齐分配（支持 fallback 降级）
+ *
+ * @desc 先尝试从 Arena 分配，失败则通过 fallback 分配器 over-allocate + 手动对齐。
+ *
+ * @note fallback 路径约束：
+ *   - 必须通过 FreeFallbacks 释放，不支持单个释放
+ *   - 对齐要求过大时（如 4096），over-allocation 浪费可达 AAlign + SizeOf(Pointer) 字节
+ *   - 原始指针存储在 Result - SizeOf(Pointer) 处，用于 FreeFallbacks 正确释放
+ *}
 function TFallbackArena.AllocAligned(ASize, AAlign: SizeUInt): Pointer;
 var
   LRaw: Pointer;

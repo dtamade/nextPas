@@ -37,7 +37,7 @@ begin
   if LockFreeIsPow2(AValue) then
     Exit(AValue);
   if AValue > LockFreeMaxPowerOfTwo then
-    raise EArgumentError.Create('LockFreeNextPow2: capacity exceeds maximum power-of-two');
+    raise EArgumentError.CreateFmt('LockFreeNextPow2: capacity %d exceeds maximum power-of-two', [AValue]);
   Result := 1;
   while Result < AValue do
     Result := Result shl 1;

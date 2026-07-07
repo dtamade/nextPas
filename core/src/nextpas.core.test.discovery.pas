@@ -87,10 +87,11 @@ end;
   Each entry is 16 bytes (SizeOf(Pointer) * 2). }
 
 const
-  { Offsets into the VMT method table }
-  CEntrySize   = SizeOf(Pointer) * 2;           { 16 bytes per entry }
-  CCountSize   = SizeOf(DWord);                  { 4 bytes for count }
-  CEntriesOff  = CCountSize;                     { entries start right after count }
+  { Offsets into the VMT method table.
+    Each entry: [NamePtr: Pointer] [CodeAddr: Pointer] = 2 * SizeOf(Pointer) }
+  CEntrySize   = SizeOf(Pointer) * 2;
+  CCountSize   = SizeOf(DWord);
+  CEntriesOff  = CCountSize;
 
 function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string): TTestSuite;

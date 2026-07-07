@@ -30,7 +30,18 @@ type
     UserData: Pointer;
   end;
 
-  {** @desc Hazard Pointer 内存回收域（与 EBR 互补，适合读多写少场景） }
+  {** @desc Hazard Pointer 内存回收域（与 EBR 互补，适合读多写少场景）
+    @details **与 TEbrDomain 的关键区别**:
+    - TEbrDomain.Enter/Leave 是轻量级原子计数（O(1)），TEbrGuard 仅管理计数
+    - THazardDomain.RegisterThread 分配线程节点并加入链表，THazardGuard 会自动调用 RegisterThread/UnregisterThread
+    - TEbrDomain.ActiveCount 是 O(1) 原子读，THazardDomain.ActiveThreads 遍历链表 O(n)
+    - THazardDomain 保护单个指针（HP slot），TEbrDomain 保护整个临界区
+
+    **Guard 语义差异**:
+    - TEbrGuard.Acquire(Domain) → Domain.Enter（计数+1）
+    - THazardGuard.Acquire(Domain) → Domain.RegisterThread（分配线程节点）；Release → UnregisterThread
+    - 从 EBR 切换到 Hazard 时，Guard 的生命周期语义完全不同，必须重新评估使用模式
+  }
   THazardDomain = class
   private
     FHPCount: PtrUInt;
@@ -56,14 +67,52 @@ type
     procedure Clear(const AThreadId: PtrUInt; const AHPIndex: PtrUInt);
 
     {** @desc 退休指针（批量触发 Collect） }
-    procedure Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer = nil);
+    procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
     {** @desc 回收未被任何线程保护的退休指针 }
     procedure Collect(const AThreadId: PtrUInt);
 
-    {** @desc 活跃线程数 }
+    {** @desc 活跃线程数（O(n) 遍历链表，跳过已逻辑删除的线程）
+      @note 与 TEbrDomain.ActiveCount（O(1) 原子读）不同，此方法需要遍历整个线程链表。
+        高频调用场景应缓存结果或改用 TEbrDomain。 }
     function ActiveThreads: PtrUInt;
     {** @desc 退休待回收数 }
     function RetiredCount: PtrUInt;
+  end;
+
+  {** @desc Hazard Pointer RAII 守卫（自动 Register/Protect/Clear/Unregister）
+    @details 获取时注册线程并保护指针，释放时清除保护并注销线程。
+      重复 Release 安全（FActive 守卫）。
+
+      **与 TEbrGuard 的区别**:
+      - TEbrGuard.Acquire 仅调用 Domain.Enter（原子计数+1）
+      - THazardGuard.Acquire 调用 Domain.RegisterThread（分配线程节点加入链表）
+      - 因此 THazardGuard 的创建/销毁开销高于 TEbrGuard，但提供精确的指针级保护
+
+      **nil Domain 行为**: Acquire(nil) 返回 FActive=False 的空守卫，Protect 直接透传指针（不做保护），
+      Release 为空操作。用于需要统一代码路径但某些执行环境不需要内存保护的场景。
+    @example
+      var LGuard: THazardGuard;
+      LGuard := THazardGuard.Acquire(LDomain, 0);
+      try
+        LPtr := LGuard.Protect(LSrcPtr);
+        // 安全访问 LPtr
+      finally
+        LGuard.Release;
+      end;
+  }
+  THazardGuard = record
+  private
+    FDomain: THazardDomain;
+    FThreadId: PtrUInt;
+    FHPIndex: PtrUInt;
+    FActive: Boolean;
+  public
+    {** @desc 获取守卫：注册线程 + 设置 HP 索引 }
+    class function Acquire(const ADomain: THazardDomain; const AHPIndex: PtrUInt = 0): THazardGuard; static;
+    {** @desc 保护指针（返回 APtr，带 memory barrier） }
+    function Protect(const APtr: Pointer): Pointer;
+    {** @desc 释放守卫：清除保护 + 注销线程（重复调用安全） }
+    procedure Release;
   end;
 
 implementation
@@ -150,6 +199,12 @@ var
   LThread: PHazardThreadRec;
 begin
   LThread := PHazardThreadRec(AThreadId);
+  {$IFDEF DEBUG}
+  if LThread = nil then
+    raise EArgumentError.CreateFmt('THazardDomain.Protect: nil thread ID (HP index=%d)', [AHPIndex]);
+  if AHPIndex >= FHPCount then
+    raise EArgumentError.CreateFmt('THazardDomain.Protect: HP index %d out of bounds (max=%d)', [AHPIndex, FHPCount - 1]);
+  {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
   begin
     Result := APtr;
@@ -165,17 +220,21 @@ var
   LThread: PHazardThreadRec;
 begin
   LThread := PHazardThreadRec(AThreadId);
+  {$IFDEF DEBUG}
+  if LThread = nil then
+    raise EArgumentError.CreateFmt('THazardDomain.Clear: nil thread ID (HP index=%d)', [AHPIndex]);
+  if AHPIndex >= FHPCount then
+    raise EArgumentError.CreateFmt('THazardDomain.Clear: HP index %d out of bounds (max=%d)', [AHPIndex, FHPCount - 1]);
+  {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
     Exit;
   AtomicThreadFence(moSeqCst);
   LThread^.HP[AHPIndex] := nil;
 end;
 
-procedure THazardDomain.Retire(AData: Pointer; AReclaim: TLockFreeReclaimProc; AUserData: Pointer);
+procedure THazardDomain.Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
 var
   LNode: PHazardRetiredNode;
-  LThread: PHazardThreadRec;
-  LThreadId: PtrUInt;
 begin
   if AData = nil then
     Exit;
@@ -187,21 +246,8 @@ begin
     LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
   until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease) = LNode^.Next;
   AtomicFetchAdd32(FGlobalRetiredCount, 1, moRelaxed);
-  // 遍历线程触发批量回收（跳过已逻辑删除的线程）
-  LThread := FThreads;
-  while LThread <> nil do
-  begin
-    if AtomicLoad32(LThread^.Deleted, moAcquire) = 0 then
-    begin
-      LThreadId := PtrUInt(LThread);
-      if AtomicFetchAdd32(PHazardThreadRec(LThreadId)^.RetiredCount, 1, moRelaxed) >= HAZARD_RETIRE_BATCH then
-      begin
-        AtomicStore32(PHazardThreadRec(LThreadId)^.RetiredCount, 0, moRelaxed);
-        Collect(LThreadId);
-      end;
-    end;
-    LThread := LThread^.Next;
-  end;
+  // 不遍历线程链表触发 Collect（避免并发修改链表导致悬空指针）
+  // Collect 由调用者显式触发，或在 Destroy 中统一回收
 end;
 
 procedure THazardDomain.Collect(const AThreadId: PtrUInt);
@@ -356,6 +402,40 @@ begin
     SetLength(LNode^.HP, 0);
     FreeMem(LNode);
     LNode := LNext;
+  end;
+end;
+
+{ THazardGuard }
+
+class function THazardGuard.Acquire(const ADomain: THazardDomain; const AHPIndex: PtrUInt): THazardGuard;
+begin
+  Result.FDomain := ADomain;
+  Result.FHPIndex := AHPIndex;
+  Result.FActive := False;
+  if ADomain <> nil then
+  begin
+    Result.FThreadId := ADomain.RegisterThread;
+    Result.FActive := True;
+  end
+  else
+    Result.FThreadId := 0;
+end;
+
+function THazardGuard.Protect(const APtr: Pointer): Pointer;
+begin
+  if FActive and (FDomain <> nil) then
+    Result := FDomain.Protect(FThreadId, FHPIndex, APtr)
+  else
+    Result := APtr;
+end;
+
+procedure THazardGuard.Release;
+begin
+  if FActive and (FDomain <> nil) then
+  begin
+    FDomain.Clear(FThreadId, FHPIndex);
+    FDomain.UnregisterThread(FThreadId);
+    FActive := False;
   end;
 end;
 

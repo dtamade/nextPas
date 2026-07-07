@@ -3,11 +3,12 @@ program test_platform_linux_arm32_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+
   nextpas.core.platform.time,
   nextpas.core.platform.memory,
   nextpas.core.platform.thread,
-  nextpas.core.platform.sync;
+  nextpas.core.platform.sync,
+  nextpas.core.text.format;
 
 var
   Passed, Failed: Integer;
@@ -46,7 +47,7 @@ var
     T1 := platform_monotonic_ns;
     T2 := platform_monotonic_ns;
     Check('platform_monotonic_ns non-decreasing', T2 >= T1,
-      Format('T1=%d T2=%d', [T1, T2]));
+      TextFormat('T1=%d T2=%d', [T1, T2]));
   end;
 
   procedure TestTimeRealtime;
@@ -55,7 +56,7 @@ var
   begin
     T := platform_realtime_ns;
     Check('platform_realtime_ns returns value', T > 0,
-      Format('T=%d', [T]));
+      TextFormat('T=%d', [T]));
   end;
 
   procedure TestTimeResolution;
@@ -64,7 +65,7 @@ var
   begin
     R := platform_monotonic_resolution_ns;
     Check('platform_monotonic_resolution_ns returns value', R > 0,
-      Format('R=%d', [R]));
+      TextFormat('R=%d', [R]));
   end;
 
   { Memory smoke tests }
@@ -142,7 +143,7 @@ var
   procedure TestThreadSelf;
   begin
     Check('platform_thread_id returns value', platform_thread_id > 0,
-      Format('id=%d', [platform_thread_id]));
+      TextFormat('id=%d', [platform_thread_id]));
   end;
 
 begin

@@ -1,4 +1,9 @@
 unit nextpas.core.http.impl.h1.writer;
+{**
+ * @desc HTTP/1.1 response writer (IHttpResponseWriter implementation).
+ *       Manages status line, headers, chunked/Content-Length framing,
+ *       and connection hijacking for WebSocket upgrade.
+ *}
 
 {$I nextpas.core.settings.inc}
 

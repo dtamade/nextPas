@@ -497,7 +497,8 @@ begin
   if LInitSize = 0 then
     raise EAllocError.Create(aeInvalidLayout, 'TChunkedArena: initial size must be > 0');
   if (aConfig.MaxSize <> 0) and (LInitSize > aConfig.MaxSize) then
-    raise EAllocError.Create(aeInvalidLayout, 'TChunkedArena: initial size exceeds max size');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TChunkedArena: initial size exceeds max size (' + IntToStr(LInitSize) + ' > ' + IntToStr(aConfig.MaxSize) + ')');
 
   FGrowthKind := aConfig.GrowthKind;
   FGrowthFactor := aConfig.GrowthFactor;
@@ -639,7 +640,8 @@ var
 begin
   LMark := SizeUInt(aMark.FrontOffset);
   if LMark > FTotalSize then
-    raise EAllocError.Create(aeInvalidLayout, 'TChunkedArena.RestoreToMark: marker out of range');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TChunkedArena.RestoreToMark: marker out of range (' + IntToStr(LMark) + '/' + IntToStr(FTotalSize) + ')');
 
   if FSegmentCount = 0 then
     Exit;

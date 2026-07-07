@@ -3,8 +3,10 @@ program test_platform_env;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.env,
   nextpas.core.test;
 
@@ -12,17 +14,9 @@ var
   T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
-var
-  LLines: TStringList;
 begin
   Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(ARelativePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(ARelativePath);
 end;
 
 function ExtractFunctionBody(const ASource, AStartToken,
@@ -201,6 +195,81 @@ begin
   Check(not platform_env_exists('NEXTPAS_BAD=NAME'), 'equals exists name rejected');
 end;
 
+function EnvEnumerateCallback(const AEntry: PAnsiChar;
+  AData: Pointer): Boolean;
+var
+  LCount: PInt32;
+begin
+  LCount := PInt32(AData);
+  Inc(LCount^);
+  Result := True;  { continue }
+end;
+
+function EnvFindCallback(const AEntry: PAnsiChar;
+  AData: Pointer): Boolean;
+var
+  LFound: PBoolean;
+begin
+  LFound := PBoolean(AData);
+  if Pos('NEXTPAS_TEST_ENUM', string(AEntry)) = 1 then
+    LFound^ := True;
+  Result := True;  { continue }
+end;
+
+function EnvStopCallback(const AEntry: PAnsiChar;
+  AData: Pointer): Boolean;
+var
+  LCount: PInt32;
+begin
+  LCount := PInt32(AData);
+  Inc(LCount^);
+  Result := False;  { stop after first }
+end;
+
+procedure TestEnumerate;
+var
+  LCount: Int32;
+begin
+  LCount := 0;
+  Check(platform_env_enumerate(@EnvEnumerateCallback, @LCount) = 0, 'enumerate ok');
+  Check(LCount > 0, 'enumerated at least 1 env var');
+end;
+
+procedure TestEnumerateFindsSetVar;
+var
+  LFound: Boolean;
+begin
+  platform_env_set('NEXTPAS_TEST_ENUM', 'yes');
+  LFound := False;
+  Check(platform_env_enumerate(@EnvFindCallback, @LFound) = 0, 'enumerate ok');
+  Check(LFound, 'enumeration found NEXTPAS_TEST_ENUM');
+  platform_env_unset('NEXTPAS_TEST_ENUM');
+end;
+
+procedure TestEnumerateStopEarly;
+var
+  LCount: Int32;
+begin
+  LCount := 0;
+  Check(platform_env_enumerate(@EnvStopCallback, @LCount) = 0, 'enumerate ok');
+  Check(LCount = 1, 'stopped after first entry');
+end;
+
+procedure TestCaseSensitive;
+var
+  LResult: Boolean;
+begin
+  LResult := platform_env_names_case_sensitive;
+{$IFDEF NEXTPAS_LINUX}
+  Check(LResult, 'Linux env names are case-sensitive');
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(not LResult, 'Windows env names are case-insensitive');
+{$ENDIF}
+  { Just verify it returns without error on this platform }
+  Check(True, 'names_case_sensitive returned ok');
+end;
+
 procedure TestWindowsExistsClearsLastErrorSourceContract;
 var
   LSource, LWindowsBranch, LBody: string;
@@ -270,6 +339,10 @@ begin
   T.Test('special characters', @TestSpecialChars);
   T.Test('overwrite existing', @TestOverwrite);
   T.Test('invalid names', @TestInvalidNames);
+  T.Test('enumerate all env vars', @TestEnumerate);
+  T.Test('enumerate finds set var', @TestEnumerateFindsSetVar);
+  T.Test('enumerate stop early', @TestEnumerateStopEarly);
+  T.Test('names case sensitive', @TestCaseSensitive);
   T.Test('windows exists clears last-error source contract',
     @TestWindowsExistsClearsLastErrorSourceContract);
   T.Test('windows get clears last-error source contract',

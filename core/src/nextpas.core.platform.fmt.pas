@@ -4,12 +4,12 @@ unit nextpas.core.platform.fmt;
 
 interface
 
-function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
-function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
-function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
-function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int64): Int32;
 function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
@@ -33,16 +33,19 @@ function platform_str_ends_with(const AStr: PAnsiChar; ALen: Int32;
 
 implementation
 
-function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+uses
+  nextpas.core.platform.error;
+
+function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LTmp: array[0..19] of AnsiChar;
   LPos, LLen, I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then
   begin
-    if ABufLen >= 2 then
+    if ABufSize >= 2 then
     begin
       ABuf[0] := '0';
       ABuf[1] := #0;
@@ -59,11 +62,11 @@ begin
     AValue := AValue div 10;
   end;
   LLen := 20 - LPos;
-  if LLen >= ABufLen then
+  if LLen >= ABufSize then
   begin
-    for I := 0 to ABufLen - 2 do
+    for I := 0 to ABufSize - 2 do
       ABuf[I] := LTmp[LPos + I];
-    ABuf[ABufLen - 1] := #0;
+    ABuf[ABufSize - 1] := #0;
   end
   else
   begin
@@ -74,40 +77,40 @@ begin
   Result := LLen;
 end;
 
-function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if AValue < 0 then
   begin
-    if ABufLen < 2 then
+    if ABufSize < 2 then
     begin
       ABuf[0] := #0;
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     end;
     ABuf[0] := '-';
-    LLen := platform_fmt_uint(UInt64(-AValue), @ABuf[1], ABufLen - 1);
+    LLen := platform_fmt_uint(UInt64(-AValue), @ABuf[1], ABufSize - 1);
     if LLen < 0 then Exit(-1);
     Result := LLen + 1;
   end
   else
-    Result := platform_fmt_uint(UInt64(AValue), ABuf, ABufLen);
+    Result := platform_fmt_uint(UInt64(AValue), ABuf, ABufSize);
 end;
 
-function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 const
   HexChars: array[0..15] of AnsiChar = '0123456789ABCDEF';
 var
   LTmp: array[0..15] of AnsiChar;
   LPos, LLen, I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then
   begin
-    if ABufLen >= 2 then
+    if ABufSize >= 2 then
     begin
       ABuf[0] := '0';
       ABuf[1] := #0;
@@ -124,11 +127,11 @@ begin
     AValue := AValue shr 4;
   end;
   LLen := 16 - LPos;
-  if LLen >= ABufLen then
+  if LLen >= ABufSize then
   begin
-    for I := 0 to ABufLen - 2 do
+    for I := 0 to ABufSize - 2 do
       ABuf[I] := LTmp[LPos + I];
-    ABuf[ABufLen - 1] := #0;
+    ABuf[ABufSize - 1] := #0;
   end
   else
   begin
@@ -139,7 +142,7 @@ begin
   Result := LLen;
 end;
 
-function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LNeg: Boolean;
   LIntPart: UInt64;
@@ -150,8 +153,8 @@ var
   LFracBuf: array[0..31] of AnsiChar;
   LAbsVal: Double;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if ADecimals < 0 then ADecimals := 0;
   if ADecimals > 18 then ADecimals := 18;
 
@@ -177,18 +180,18 @@ begin
   LPos := 0;
   if LNeg then
   begin
-    if LPos >= ABufLen - 1 then begin ABuf[0] := #0; Exit(-1); end;
+    if LPos >= ABufSize - 1 then begin ABuf[0] := #0; Exit(PLATFORM_ERR_INVALID); end;
     ABuf[LPos] := '-'; Inc(LPos);
   end;
   for I := 0 to LIntLen - 1 do
   begin
-    if LPos >= ABufLen - 1 then Break;
+    if LPos >= ABufSize - 1 then Break;
     ABuf[LPos] := LIntBuf[I]; Inc(LPos);
   end;
 
   if ADecimals > 0 then
   begin
-    if LPos >= ABufLen - 1 then begin ABuf[LPos] := #0; Exit(LPos); end;
+    if LPos >= ABufSize - 1 then begin ABuf[LPos] := #0; Exit(LPos); end;
     ABuf[LPos] := '.'; Inc(LPos);
 
     platform_fmt_uint(LFracPart, @LFracBuf[0], 32);
@@ -197,12 +200,12 @@ begin
 
     for I := LIntLen to ADecimals - 1 do
     begin
-      if LPos >= ABufLen - 1 then Break;
+      if LPos >= ABufSize - 1 then Break;
       ABuf[LPos] := '0'; Inc(LPos);
     end;
     for I := 0 to LIntLen - 1 do
     begin
-      if LPos >= ABufLen - 1 then Break;
+      if LPos >= ABufSize - 1 then Break;
       ABuf[LPos] := LFracBuf[I]; Inc(LPos);
     end;
   end;
@@ -212,7 +215,7 @@ begin
 end;
 
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LFmtLen, LOut, LArgIdx, I, LTmpLen, LWidth, LPad, J: Int32;
   LTmp: array[0..63] of AnsiChar;
@@ -228,30 +231,30 @@ var
     if LPad < 0 then LPad := 0;
     if (not LLeftAlign) and (LPad > 0) then
       for K := 1 to LPad do
-        if LOut < ABufLen - 1 then
+        if LOut < ABufSize - 1 then
         begin
           if LZeroPad then ABuf[LOut] := '0' else ABuf[LOut] := ' ';
           Inc(LOut);
         end;
     for K := 0 to LTmpLen - 1 do
-      if LOut < ABufLen - 1 then
+      if LOut < ABufSize - 1 then
       begin ABuf[LOut] := LTmp[K]; Inc(LOut); end;
     if LLeftAlign and (LPad > 0) then
       for K := 1 to LPad do
-        if LOut < ABufLen - 1 then
+        if LOut < ABufSize - 1 then
         begin ABuf[LOut] := ' '; Inc(LOut); end;
   end;
 
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   LFmtLen := 0;
   if AFmt <> nil then
     while AFmt[LFmtLen] <> #0 do Inc(LFmtLen);
   LOut := 0;
   LArgIdx := 0;
   I := 0;
-  while (I < LFmtLen) and (LOut < ABufLen - 1) do
+  while (I < LFmtLen) and (LOut < ABufSize - 1) do
   begin
     if (AFmt[I] = '%') and (I + 1 < LFmtLen) then
     begin
@@ -332,12 +335,12 @@ begin
             if LPad < 0 then LPad := 0;
             if (not LLeftAlign) and (LPad > 0) then
               for J := 1 to LPad do
-                if LOut < ABufLen - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
+                if LOut < ABufSize - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
             for J := 0 to LTmpLen - 1 do
-              if LOut < ABufLen - 1 then begin ABuf[LOut] := LSrc[J]; Inc(LOut); end;
+              if LOut < ABufSize - 1 then begin ABuf[LOut] := LSrc[J]; Inc(LOut); end;
             if LLeftAlign and (LPad > 0) then
               for J := 1 to LPad do
-                if LOut < ABufLen - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
+                if LOut < ABufSize - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
             Inc(LArgIdx);
           end;
           Inc(I);

@@ -18,7 +18,7 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32 = 0): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 procedure platform_process_detach(var AProc: TPlatformProcess);
@@ -153,6 +153,8 @@ var
   LPid: pid_t;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LPid := fork;
   if LPid < 0 then
     Exit(platform_get_errno);
@@ -181,6 +183,9 @@ var
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
+
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
 
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
   begin
@@ -291,7 +296,7 @@ begin
 end;
 
 function platform_process_wait(const AProc: TPlatformProcess;
-  out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
+  out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
 var
   LStatus: Int32;
   LRet: pid_t;
@@ -395,6 +400,8 @@ var
 begin
   AOutLen := 0;
   AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LStdoutPipe[0] := -1;
   LStdoutPipe[1] := -1;
   LDevNullRead := -1;
@@ -525,7 +532,7 @@ begin
   Result := 0;
 end;
 
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
 var
   LExitCode, LTimeout, LWait: DWORD;
 begin
@@ -658,6 +665,10 @@ var
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
+
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   FillChar(LSI, SizeOf(LSI), 0);
   LSI.cb := SizeOf(LSI);
   LSI.dwFlags := STARTF_USESTDHANDLES;
@@ -704,6 +715,8 @@ var
 begin
   AOutLen := 0;
   AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LStdoutRd := HANDLE(PtrInt(-1));
   LStdoutWr := HANDLE(PtrInt(-1));
   LDevNullRead := HANDLE(PtrInt(-1));
@@ -782,27 +795,27 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
-begin FillChar(AProc, SizeOf(AProc), 0); Result := -1; end;
-function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int32): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+begin FillChar(AProc, SizeOf(AProc), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult; ATimeoutMs: Int64): Int32;
+begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 procedure platform_process_detach(var AProc: TPlatformProcess);
 begin FillChar(AProc, SizeOf(AProc), 0); end;
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
-begin AReadHandle := -1; AWriteHandle := -1; Result := -1; end;
+begin AReadHandle := -1; AWriteHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
-begin AHandle := -1; Result := -1; end;
+begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
-begin AHandle := -1; Result := -1; end;
+begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
-begin AOutLen := 0; AExitCode := -1; Result := -1; end;
+begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

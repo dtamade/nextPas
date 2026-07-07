@@ -3,8 +3,10 @@ program test_platform_fs;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -23,17 +25,9 @@ begin
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
-var
-  LLines: TStringList;
 begin
   Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(ARelativePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(ARelativePath);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -246,6 +240,52 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestReadFile;
+const
+  PATH = '/tmp/nextpas_read_file_test.dat';
+  DATA = 'hello dynamic read';
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  LData: Pointer;
+  LLen: PtrUInt;
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 18, W);
+  platform_file_close(H);
+
+  LData := nil;
+  LLen := 0;
+  Check(platform_fs_read_file(PATH, LData, LLen) = 0, 'read_file ok');
+  Check(LData <> nil, 'data not nil');
+  Check(LLen = 18, 'len = 18');
+  Check(PAnsiChar(LData)[0] = 'h', 'first byte');
+  Check(PAnsiChar(LData)[17] = 'd', 'last byte');
+  platform_fs_free_buf(LData);
+
+  platform_file_unlink(PATH);
+end;
+
+procedure TestReadFileNonExistent;
+var
+  LData: Pointer;
+  LLen: PtrUInt;
+begin
+  LData := nil;
+  LLen := 0;
+  Check(platform_fs_read_file('/tmp/nextpas_nonexistent_xyz_read', LData, LLen) <> 0,
+    'read non-existent fails');
+  Check(LData = nil, 'data remains nil on failure');
+end;
+
+procedure TestIsExecutable;
+begin
+  Check(platform_fs_is_executable('/bin/sh'), '/bin/sh is executable');
+  Check(not platform_fs_is_executable('/etc/hostname'), '/etc/hostname not executable');
+  Check(not platform_fs_is_executable('/tmp/nextpas_nonexistent_xyz_exec'), 'non-existent not executable');
+end;
+
 procedure TestFileIoContract;
 var
   LSource: string;
@@ -293,12 +333,12 @@ begin
     'full-read helper must advance after positive short reads');
   CheckContains(LSource, 'ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt',
     'read_file_into exposes caller-owned buffer contract');
-  CheckContains(LSource, 'if LSize > Int64(ABufCapacity) then',
+  CheckContains(LSource, 'PLATFORM_FS_SHORT_READ_ERROR',
     'read_file_into rejects undersized caller buffer');
-  CheckContains(LSource, 'ALen := LRead',
+  CheckContains(LSource, 'ALen := LTotal',
     'read_file_into returns actual bytes read');
-  CheckContains(LSource, 'LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead)',
-    'read_file must read the full stat-sized payload');
+  CheckContains(LSource, 'platform_fs_read_until_eof',
+    'read_file must use TOCTOU-safe dynamic read');
   CheckContains(LSource, 'LCloseR := platform_file_close(LH)',
     'read_file must check close failure');
   CheckContains(LSource, 'if (LR = 0) and (LCloseR <> 0) then',
@@ -333,6 +373,9 @@ begin
   T.Test('copy_file', @TestCopyFile);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
+  T.Test('read_file_dynamic', @TestReadFile);
+  T.Test('read_file non-existent', @TestReadFileNonExistent);
+  T.Test('is_executable', @TestIsExecutable);
   T.Test('file I/O contract', @TestFileIoContract);
   if not T.Run then Halt(1);
 end.

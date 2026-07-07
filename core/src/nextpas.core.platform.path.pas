@@ -15,43 +15,45 @@ const
   PLATFORM_EXT_SEP = '.';
 
 function platform_path_join(const ABase, AChild: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_join3(const A, B, C: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_dirname(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_basename(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_basename_ptr(const APath: PAnsiChar;
   out AStart: PAnsiChar; out ALen: Int32): Int32;
 function platform_path_extension(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_extension_ptr(const APath: PAnsiChar;
   out AStart: PAnsiChar; out ALen: Int32): Int32;
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
 function platform_path_is_root(const APath: PAnsiChar): Boolean;
 function platform_path_normalize(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_relative(const ABase, ATarget: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_resolve(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_ensure_sep(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_trim_sep(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_path_same_file_name(const ALeft, ARight: PAnsiChar): Boolean;
 
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16;
@@ -79,6 +81,7 @@ type
     Pos: Int32;
     Len: Int32;
   end;
+  PTPathPart = ^TPathPart;
 
   TPathPartArray = array of TPathPart;
 
@@ -310,15 +313,15 @@ begin
 end;
 
 function CopyToBuf(const ASrc: PAnsiChar; ASrcLen: Int32;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   L: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(ASrcLen);
   L := ASrcLen;
-  if L >= ABufLen then
-    L := ABufLen - 1;
+  if L >= ABufSize then
+    L := ABufSize - 1;
   if L > 0 then
     Move(ASrc^, ABuf^, L);
   ABuf[L] := #0;
@@ -344,7 +347,7 @@ begin
 end;
 
 function platform_path_join(const ABase, AChild: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LBaseLen, LChildLen, LChildFullLen, LChildStart, LTotal: Int32;
   LNeedSep: Boolean;
@@ -356,11 +359,11 @@ begin
   LChildLen := LChildFullLen;
   LChildStart := 0;
   if LBaseLen = 0 then
-    Exit(CopyToBuf(AChild, LChildLen, ABuf, ABufLen));
+    Exit(CopyToBuf(AChild, LChildLen, ABuf, ABufSize));
   if LChildLen = 0 then
-    Exit(CopyToBuf(ABase, LBaseLen, ABuf, ABufLen));
+    Exit(CopyToBuf(ABase, LBaseLen, ABuf, ABufSize));
   if platform_path_is_absolute(AChild) then
-    Exit(CopyToBuf(AChild, LChildLen, ABuf, ABufLen));
+    Exit(CopyToBuf(AChild, LChildLen, ABuf, ABufSize));
 {$IFDEF NEXTPAS_WINDOWS}
   LChildStart := PathJoinChildStart(AChild, LChildLen);
   if LChildStart > 0 then
@@ -368,7 +371,7 @@ begin
     Dec(LChildLen, LChildStart);
     LChildFullLen := LChildLen;
     if LChildLen = 0 then
-      Exit(CopyToBuf(ABase, LBaseLen, ABuf, ABufLen));
+      Exit(CopyToBuf(ABase, LBaseLen, ABuf, ABufSize));
   end;
 {$ENDIF}
 
@@ -389,26 +392,26 @@ begin
     end;
     Move(AChild[LChildStart], LTmp[LPos], LChildLen);
     LTmp[LTotal] := #0;
-    Result := CopyToBuf(@LTmp[0], LTotal, ABuf, ABufLen);
+    Result := CopyToBuf(@LTmp[0], LTotal, ABuf, ABufSize);
   end
   else
   begin
-    if (ABuf = nil) or (ABufLen <= 0) then
+    if (ABuf = nil) or (ABufSize <= 0) then
       Exit(LTotal);
     { Copy base prefix }
     LPos := LBaseLen;
-    if LPos >= ABufLen then LPos := ABufLen - 1;
+    if LPos >= ABufSize then LPos := ABufSize - 1;
     Move(ABase^, ABuf^, LPos);
     { Add separator if needed }
-    if LNeedSep and (LPos < ABufLen - 1) then
+    if LNeedSep and (LPos < ABufSize - 1) then
     begin
       ABuf[LPos] := PLATFORM_PATH_SEP;
       Inc(LPos);
     end;
     { Copy child portion — limited by remaining buffer and original child length }
-    if LPos < ABufLen - 1 then
+    if LPos < ABufSize - 1 then
     begin
-      LCopyLen := ABufLen - 1 - LPos;
+      LCopyLen := ABufSize - 1 - LPos;
       if LCopyLen > LChildFullLen then
         LCopyLen := LChildFullLen;
       Move(AChild[LChildStart], ABuf[LPos], LCopyLen);
@@ -420,7 +423,7 @@ begin
 end;
 
 function platform_path_join3(const A, B, C: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LStack: array[0..1023] of AnsiChar;
   LHeap: array of AnsiChar;
@@ -445,52 +448,52 @@ begin
       if LNeed < 0 then
         Exit(LNeed);
       if LNeed >= Length(LHeap) then
-        Exit(-1);
+        Exit(PLATFORM_ERR_INVALID);
     end;
     LJoined := @LHeap[0];
   end;
-  Result := platform_path_join(LJoined, C, ABuf, ABufLen);
+  Result := platform_path_join(LJoined, C, ABuf, ABufSize);
 end;
 
 function platform_path_dirname(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen, I: Int32;
   LRoot: TPlatformPathRoot;
 begin
   LLen := StrLen(APath);
   if LLen = 0 then
-    Exit(CopyToBuf(APath, 0, ABuf, ABufLen));
+    Exit(CopyToBuf(APath, 0, ABuf, ABufSize));
   LRoot := ClassifyPathRoot(APath, LLen);
   if (LRoot.Len > 0) and (LRoot.Len = PathNameLenWithoutTrailingSeparators(APath)) then
-    Exit(CopyToBuf(APath, LRoot.Len, ABuf, ABufLen));
+    Exit(CopyToBuf(APath, LRoot.Len, ABuf, ABufSize));
   I := LLen - 1;
   while (I > 0) and not IsSep(APath[I]) do
     Dec(I);
   if (LRoot.Len > 0) and (I < LRoot.Len) then
-    Exit(CopyToBuf(APath, LRoot.Len, ABuf, ABufLen));
+    Exit(CopyToBuf(APath, LRoot.Len, ABuf, ABufSize));
   if I = 0 then
   begin
     if IsSep(APath[0]) then
-      Exit(CopyToBuf(APath, 1, ABuf, ABufLen))
+      Exit(CopyToBuf(APath, 1, ABuf, ABufSize))
     else
-      Exit(CopyToBuf(PAnsiChar(''), 0, ABuf, ABufLen));
+      Exit(CopyToBuf(PAnsiChar(''), 0, ABuf, ABufSize));
   end;
   // Strip trailing separators from dirname (unless root)
   while (I > 1) and IsSep(APath[I - 1]) and
     not ((LRoot.Len > 0) and (I <= LRoot.Len)) do
     Dec(I);
-  Result := CopyToBuf(APath, I, ABuf, ABufLen);
+  Result := CopyToBuf(APath, I, ABuf, ABufSize);
 end;
 
 function platform_path_basename(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen, I: Int32;
 begin
   LLen := StrLen(APath);
   if LLen = 0 then
-    Exit(CopyToBuf(APath, 0, ABuf, ABufLen));
+    Exit(CopyToBuf(APath, 0, ABuf, ABufSize));
   I := LLen - 1;
   // Skip trailing separators
   while (I > 0) and IsSep(APath[I]) do
@@ -498,7 +501,7 @@ begin
   LLen := I + 1;
   while (I > 0) and not IsSep(APath[I - 1]) do
     Dec(I);
-  Result := CopyToBuf(@APath[I], LLen - I, ABuf, ABufLen);
+  Result := CopyToBuf(@APath[I], LLen - I, ABuf, ABufSize);
 end;
 
 function platform_path_basename_ptr(const APath: PAnsiChar;
@@ -523,7 +526,7 @@ begin
 end;
 
 function platform_path_extension(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen, I, LNameStart: Int32;
 begin
@@ -539,10 +542,10 @@ begin
   while I > LNameStart do
   begin
     if APath[I] = PLATFORM_EXT_SEP then
-      Exit(CopyToBuf(@APath[I], LLen - I, ABuf, ABufLen));
+      Exit(CopyToBuf(@APath[I], LLen - I, ABuf, ABufSize));
     Dec(I);
   end;
-  Result := CopyToBuf(PAnsiChar(''), 0, ABuf, ABufLen);
+  Result := CopyToBuf(PAnsiChar(''), 0, ABuf, ABufSize);
 end;
 
 function platform_path_extension_ptr(const APath: PAnsiChar;
@@ -575,7 +578,7 @@ begin
 end;
 
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen, I, LExtPos, LNewExtLen, LTotal, LNameStart: Int32;
   LCopyLen, LPos, LRemaining: Int32;
@@ -601,16 +604,16 @@ begin
     Dec(I);
   end;
   LTotal := LExtPos + LNewExtLen;
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(LTotal);
 
   LCopyLen := LExtPos;
-  if LCopyLen >= ABufLen then
-    LCopyLen := ABufLen - 1;
+  if LCopyLen >= ABufSize then
+    LCopyLen := ABufSize - 1;
   if LCopyLen > 0 then
     Move(APath^, ABuf^, LCopyLen);
   LPos := LCopyLen;
-  LRemaining := ABufLen - 1 - LPos;
+  LRemaining := ABufSize - 1 - LPos;
   if LRemaining > 0 then
   begin
     LCopyLen := LNewExtLen;
@@ -648,10 +651,14 @@ begin
 end;
 
 function platform_path_normalize(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
+const
+  MAX_STACK_PARTS = 32; { 大多数路径部分数 < 32 }
 var
   LLen, I, LStart: Int32;
-  LParts: array of TPathPart;
+  LStackParts: array[0..MAX_STACK_PARTS-1] of TPathPart;
+  LParts: PTPathPart;
+  LDynParts: TPathPartArray;
   LPartCount, J, LPrefixLen, LRequired, LBufPos, LCopyLen: Int32;
   LRoot: TPlatformPathRoot;
   LSep: AnsiChar;
@@ -664,8 +671,21 @@ var
 
   procedure AddPart(const APos, ALen: Int32);
   begin
-    if LPartCount >= Length(LParts) then
-      SetLength(LParts, LPartCount + 32);
+    if LPartCount >= MAX_STACK_PARTS then
+    begin
+      { 超出栈数组，回退到动态数组 }
+      if LDynParts = nil then
+      begin
+        SetLength(LDynParts, MAX_STACK_PARTS * 2);
+        Move(LStackParts[0], LDynParts[0], MAX_STACK_PARTS * SizeOf(TPathPart));
+        LParts := @LDynParts[0];
+      end
+      else if LPartCount >= Length(LDynParts) then
+      begin
+        SetLength(LDynParts, LPartCount + 32);
+        LParts := @LDynParts[0];
+      end;
+    end;
     LParts[LPartCount].Pos := APos;
     LParts[LPartCount].Len := ALen;
     Inc(LPartCount);
@@ -681,9 +701,9 @@ var
   var
     LRoom: Int32;
   begin
-    if (ABuf = nil) or (ABufLen <= 0) or (ALen <= 0) then
+    if (ABuf = nil) or (ABufSize <= 0) or (ALen <= 0) then
       Exit;
-    LRoom := ABufLen - 1 - LBufPos;
+    LRoom := ABufSize - 1 - LBufPos;
     if LRoom <= 0 then
       Exit;
     LCopyLen := ALen;
@@ -696,10 +716,12 @@ var
 begin
   LLen := StrLen(APath);
   if LLen = 0 then
-    Exit(CopyToBuf(PAnsiChar(''), 0, ABuf, ABufLen));
+    Exit(CopyToBuf(PAnsiChar(''), 0, ABuf, ABufSize));
 
   LRoot := ClassifyPathRoot(APath, LLen);
   LPartCount := 0;
+  LParts := @LStackParts[0];
+  LDynParts := nil;
   LPrefixLen := LRoot.Len;
   LSep := PLATFORM_PATH_SEP;
   I := LPrefixLen;
@@ -737,7 +759,7 @@ begin
     Inc(LRequired, LParts[J].Len);
   end;
 
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(LRequired);
 
   LBufPos := 0;
@@ -756,7 +778,7 @@ begin
 end;
 
 function platform_path_relative(const ABase, ATarget: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LBaseNorm, LTargetNorm, LRel: array of AnsiChar;
   LBaseLen, LTargetLen, LBaseCount, LTargetCount, LCommon: Int32;
@@ -825,19 +847,19 @@ begin
   LBaseLen := platform_path_normalize(ABase, nil, 0);
   LTargetLen := platform_path_normalize(ATarget, nil, 0);
   if (LBaseLen < 0) or (LTargetLen < 0) then
-    Exit(CopyToBuf(ATarget, StrLen(ATarget), ABuf, ABufLen));
+    Exit(CopyToBuf(ATarget, StrLen(ATarget), ABuf, ABufSize));
 
   SetLength(LBaseNorm, LBaseLen + 1);
   SetLength(LTargetNorm, LTargetLen + 1);
   LBaseLen := platform_path_normalize(ABase, @LBaseNorm[0], Length(LBaseNorm));
   LTargetLen := platform_path_normalize(ATarget, @LTargetNorm[0], Length(LTargetNorm));
   if (LBaseLen < 0) or (LTargetLen < 0) then
-    Exit(CopyToBuf(ATarget, StrLen(ATarget), ABuf, ABufLen));
+    Exit(CopyToBuf(ATarget, StrLen(ATarget), ABuf, ABufSize));
 
   LBaseRoot := ClassifyPathRoot(@LBaseNorm[0], LBaseLen);
   LTargetRoot := ClassifyPathRoot(@LTargetNorm[0], LTargetLen);
   if not PathRootsCompatible(@LBaseNorm[0], LBaseRoot, @LTargetNorm[0], LTargetRoot) then
-    Exit(CopyToBuf(@LTargetNorm[0], LTargetLen, ABuf, ABufLen));
+    Exit(CopyToBuf(@LTargetNorm[0], LTargetLen, ABuf, ABufSize));
 
   CollectParts(@LBaseNorm[0], LBaseLen, LBaseRoot.Len, LBaseParts, LBaseCount);
   CollectParts(@LTargetNorm[0], LTargetLen, LTargetRoot.Len, LTargetParts, LTargetCount);
@@ -851,7 +873,7 @@ begin
   LDownCount := LTargetCount - LCommon;
   LTotalParts := LUpCount + LDownCount;
   if LTotalParts = 0 then
-    Exit(CopyToBuf(PAnsiChar('.'), 1, ABuf, ABufLen));
+    Exit(CopyToBuf(PAnsiChar('.'), 1, ABuf, ABufSize));
 
   LRequired := 0;
   for I := 0 to LUpCount - 1 do
@@ -878,26 +900,26 @@ begin
     AppendTargetPart(LTargetParts[LPartIndex]);
   end;
   LRel[LPos] := #0;
-  Result := CopyToBuf(@LRel[0], LRequired, ABuf, ABufLen);
+  Result := CopyToBuf(@LRel[0], LRequired, ABuf, ABufSize);
 end;
 
 {$IFDEF NEXTPAS_UNIX}
 function platform_path_resolve(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LResolved: array[0..4095] of AnsiChar;
   LResult: PAnsiChar;
   LLen, I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   LResult := nextpas.core.platform.posix.ffi.realpath(APath, @LResolved[0]);
   if LResult = nil then
     Exit(-1);
   LLen := 0;
   while LResolved[LLen] <> #0 do Inc(LLen);
   I := LLen;
-  if I >= ABufLen then I := ABufLen - 1;
+  if I >= ABufSize then I := ABufSize - 1;
   if I > 0 then Move(LResolved[0], ABuf^, I);
   ABuf[I] := #0;
   Result := LLen;
@@ -906,15 +928,15 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 function platform_path_resolve(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LPath: UnicodeString;
   LBuf: array of WideChar;
   LLen: DWORD;
   LUtf8: AnsiString;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(-1);
 
@@ -929,37 +951,37 @@ begin
   LBuf[LLen] := #0;
   if not platform_windows_wide_to_utf8_checked(@LBuf[0], LUtf8) then
     Exit(-1);
-  Result := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
+  Result := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
 end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_path_resolve(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 begin
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 
 function platform_path_ensure_sep(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen, LTotal: Int32;
   LTmp: array of AnsiChar;
 begin
   LLen := StrLen(APath);
   if (LLen > 0) and IsSep(APath[LLen - 1]) then
-    Exit(CopyToBuf(APath, LLen, ABuf, ABufLen));
+    Exit(CopyToBuf(APath, LLen, ABuf, ABufSize));
 
   LTotal := LLen + 1;
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(LTotal);
-  if LTotal >= ABufLen then
+  if LTotal >= ABufSize then
   begin
-    if (LLen > 0) and (ABufLen > 1) then
-      Move(APath^, ABuf^, ABufLen - 1);
-    ABuf[ABufLen - 1] := #0;
+    if (LLen > 0) and (ABufSize > 1) then
+      Move(APath^, ABuf^, ABufSize - 1);
+    ABuf[ABufSize - 1] := #0;
     Exit(LTotal);
   end;
 
@@ -968,11 +990,11 @@ begin
     Move(APath^, LTmp[0], LLen);
   LTmp[LLen] := PLATFORM_PATH_SEP;
   LTmp[LTotal] := #0;
-  Result := CopyToBuf(@LTmp[0], LTotal, ABuf, ABufLen);
+  Result := CopyToBuf(@LTmp[0], LTotal, ABuf, ABufSize);
 end;
 
 function platform_path_trim_sep(const APath: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen: Int32;
   LRoot: TPlatformPathRoot;
@@ -987,7 +1009,7 @@ begin
       Break;
     Dec(LLen);
   end;
-  Result := CopyToBuf(APath, LLen, ABuf, ABufLen);
+  Result := CopyToBuf(APath, LLen, ABuf, ABufSize);
 end;
 
 function platform_path_same_file_name(const ALeft, ARight: PAnsiChar): Boolean;

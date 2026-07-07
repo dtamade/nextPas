@@ -34,6 +34,7 @@ type
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    FClosed: Int32;
   public
     {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
     constructor Create(const ACapacity: PtrUInt);
@@ -57,6 +58,10 @@ type
     function ApproxCount: PtrUInt;
     {** @desc 队列实际容量（2 的幂） }
     function Capacity: PtrUInt;
+    {** @desc 关闭队列（唤醒所有等待者，已入队数据仍可读） }
+    procedure Close;
+    {** @desc 队列是否已关闭 }
+    function IsClosed: Boolean;
   end;
 
   generic TSpmcQueue<T> = class(specialize TSpmcQueueImpl<T>)
@@ -86,6 +91,7 @@ begin
   FDataEpoch := 0;
   FSpaceWaiters := 0;
   FDataWaiters := 0;
+  FClosed := 0;
 end;
 
 function TSpmcQueueImpl.TryEnqueue(const AValue: T): Boolean;
@@ -94,6 +100,8 @@ var
   LIdx: PtrUInt;
   LSeq: Int64;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
   while True do
   begin
@@ -105,7 +113,9 @@ begin
       begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 2, moRelease);
-        LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
         Exit(True);
       end;
     end
@@ -134,7 +144,9 @@ begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+          LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Exit(True);
       end;
     end
@@ -153,6 +165,8 @@ begin
     Exit(True);
   while True do
   begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
       Exit(True);
@@ -168,6 +182,8 @@ begin
     Exit(True);
   while True do
   begin
+    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FEnqueuePos, moRelaxed) <= AtomicLoad64(FDequeuePos, moRelaxed)) then
+      Exit(False);
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
       Exit(True);
@@ -186,6 +202,8 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryEnqueue(AValue));
@@ -210,6 +228,8 @@ begin
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryDequeue(AValue));
+    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FEnqueuePos, moRelaxed) <= AtomicLoad64(FDequeuePos, moRelaxed)) then
+      Exit(False);
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
       Exit(True);
@@ -242,6 +262,18 @@ end;
 function TSpmcQueueImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
+end;
+
+procedure TSpmcQueueImpl.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+  LockFreeWakeAll(@FDataEpoch);
+  LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+function TSpmcQueueImpl.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
 end.

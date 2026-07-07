@@ -113,7 +113,7 @@ function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32)
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
@@ -129,9 +129,19 @@ function platform_sockaddr_loopback6(APort: UInt16;
 function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
   AAddr: PByte): Int32;
 
+{ IPv4 helpers for net layer }
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+function platform_ipv4_parse(const AAddr: string): UInt32;
+function platform_ipv4_to_string(AIP: UInt32): string;
+
 { Byte-order helpers }
 function platform_htons(AHost: UInt16): UInt16; inline;
 function platform_htonl(AHost: UInt32): UInt32; inline;
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+function platform_ntohl(ANet: UInt32): UInt32; inline;
 
 implementation
 
@@ -206,12 +216,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
   if LResult < 0 then
-  begin
-    ASent := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ASent := Int32(LResult);
@@ -224,12 +236,14 @@ function platform_socket_recv(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := recv(ASocket.Value, ABuf, size_t(ALen), AFlags);
   if LResult < 0 then
-  begin
-    ARecvd := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ARecvd := Int32(LResult);
@@ -261,6 +275,11 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen));
   if LResult < 0 then
   begin
@@ -280,6 +299,11 @@ function platform_socket_recvfrom(const ASocket: TPlatformSocket;
 var
   LResult: ssize_t;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := recvfrom(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin
@@ -327,7 +351,7 @@ begin
   Result := getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);
@@ -353,12 +377,12 @@ begin
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 var
   LTv: timeval;
 begin
-  LTv.tv_sec := AMs div 1000;
-  LTv.tv_usec := (AMs mod 1000) * 1000;
+  LTv.tv_sec := ATimeoutMs div 1000;
+  LTv.tv_usec := (ATimeoutMs mod 1000) * 1000;
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
     @LTv, SizeOf(LTv));
 end;
@@ -388,6 +412,92 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+begin
+  Result := platform_htons(ANet);
+end;
+
+function platform_ntohl(ANet: UInt32): UInt32; inline;
+begin
+  Result := platform_htonl(ANet);
+end;
+
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+begin
+  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+  ASockAddr.sin_family := AF_INET;
+  ASockAddr.sin_port := platform_htons(APort);
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
+  ALen := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+begin
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
+  APort := platform_ntohs(ASockAddr.sin_port);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+var
+  LPart: UInt32;
+  LShift: Integer;
+  LIdx, LLen, LStart: Integer;
+  LCh: Char;
+begin
+  Result := 0;
+  LLen := Length(AAddr);
+  if LLen = 0 then Exit;
+  LShift := 24;
+  LStart := 1;
+  for LIdx := 1 to LLen + 1 do
+  begin
+    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
+    begin
+      LPart := 0;
+      for LStart := LStart to LIdx - 1 do
+      begin
+        LCh := AAddr[LStart];
+        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
+        LPart := LPart * 10 + Ord(LCh) - Ord('0');
+      end;
+      if LPart > 255 then begin Result := 0; Exit; end;
+      Result := Result or (LPart shl LShift);
+      Dec(LShift, 8);
+      LStart := LIdx + 1;
+    end;
+  end;
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+
+  function OctetToStr(AVal: UInt32): string;
+  var
+    LBuf: array[0..3] of Char;
+    LLen, LI: Integer;
+    LDigit: UInt32;
+  begin
+    LLen := 0;
+    repeat
+      LDigit := AVal mod 10;
+      LBuf[LLen] := Chr(Ord('0') + LDigit);
+      Inc(LLen);
+      AVal := AVal div 10;
+    until AVal = 0;
+    SetLength(Result, LLen);
+    for LI := 0 to LLen - 1 do
+      Result[LI + 1] := LBuf[LLen - 1 - LI];
+  end;
+
+begin
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
+            OctetToStr((AIP shr 16) and $FF) + '.' +
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
+end;
+
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -397,7 +507,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := platform_htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -454,7 +564,7 @@ begin
   Result := getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);
@@ -541,12 +651,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_send(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-  begin
-    ASent := 0;
-    Result := WSAGetLastError;
-  end
+    Result := WSAGetLastError
   else
   begin
     ASent := LResult;
@@ -559,12 +671,14 @@ function platform_socket_recv(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_recv(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-  begin
-    ARecvd := 0;
-    Result := WSAGetLastError;
-  end
+    Result := WSAGetLastError
   else
   begin
     ARecvd := LResult;
@@ -614,6 +728,11 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ASent := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_sendto(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin
@@ -633,6 +752,11 @@ function platform_socket_recvfrom(const ASocket: TPlatformSocket;
 var
   LResult: LongInt;
 begin
+  ARecvd := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen <= 0 then
+    Exit(0);
   LResult := winsock_recvfrom(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
   if LResult < 0 then
   begin
@@ -680,7 +804,7 @@ begin
   Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   if LRes^.ai_addr <> nil then
@@ -705,11 +829,11 @@ begin
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
-  const AOptName: Int32; const AMs: UInt32): Int32;
+  const AOptName: Int32; const ATimeoutMs: Int64): Int32;
 var
   LMs: Int32;
 begin
-  LMs := Int32(AMs);
+  LMs := Int32(ATimeoutMs);
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
     @LMs, SizeOf(LMs));
 end;
@@ -739,6 +863,92 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+begin
+  Result := platform_htons(ANet);
+end;
+
+function platform_ntohl(ANet: UInt32): UInt32; inline;
+begin
+  Result := platform_htonl(ANet);
+end;
+
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+begin
+  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+  ASockAddr.sin_family := AF_INET;
+  ASockAddr.sin_port := platform_htons(APort);
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
+  ALen := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+begin
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
+  APort := platform_ntohs(ASockAddr.sin_port);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+var
+  LPart: UInt32;
+  LShift: Integer;
+  LIdx, LLen, LStart: Integer;
+  LCh: Char;
+begin
+  Result := 0;
+  LLen := Length(AAddr);
+  if LLen = 0 then Exit;
+  LShift := 24;
+  LStart := 1;
+  for LIdx := 1 to LLen + 1 do
+  begin
+    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
+    begin
+      LPart := 0;
+      for LStart := LStart to LIdx - 1 do
+      begin
+        LCh := AAddr[LStart];
+        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
+        LPart := LPart * 10 + Ord(LCh) - Ord('0');
+      end;
+      if LPart > 255 then begin Result := 0; Exit; end;
+      Result := Result or (LPart shl LShift);
+      Dec(LShift, 8);
+      LStart := LIdx + 1;
+    end;
+  end;
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+
+  function OctetToStr(AVal: UInt32): string;
+  var
+    LBuf: array[0..3] of Char;
+    LLen, LI: Integer;
+    LDigit: UInt32;
+  begin
+    LLen := 0;
+    repeat
+      LDigit := AVal mod 10;
+      LBuf[LLen] := Chr(Ord('0') + LDigit);
+      Inc(LLen);
+      AVal := AVal div 10;
+    until AVal = 0;
+    SetLength(Result, LLen);
+    for LI := 0 to LLen - 1 do
+      Result[LI + 1] := LBuf[LLen - 1 - LI];
+  end;
+
+begin
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
+            OctetToStr((AIP shr 16) and $FF) + '.' +
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
+end;
+
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -748,7 +958,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -805,7 +1015,7 @@ begin
   Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
-    if Result = 0 then Result := -1;
+    if Result = 0 then Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   LSa := Pointer(LRes^.ai_addr);
@@ -826,30 +1036,30 @@ finalization
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_socket_create(const ADomain, AType, AProtocol: Int32; out ASocket: TPlatformSocket): Int32; begin Result := -1; end;
-function platform_socket_close(var ASocket: TPlatformSocket): Int32; begin Result := -1; end;
-function platform_socket_bind(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := -1; end;
-function platform_socket_listen(const ASocket: TPlatformSocket; ABacklog: Int32): Int32; begin Result := -1; end;
-function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32; begin Result := -1; end;
-function platform_socket_connect(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := -1; end;
-function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32; begin ASent := 0; Result := -1; end;
-function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := -1; end;
-function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): Int32; begin Result := -1; end;
-function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := -1; end;
-function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
-function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
-function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := -1; end;
-function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := -1; end;
-function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := -1; end;
+function platform_socket_create(const ADomain, AType, AProtocol: Int32; out ASocket: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_close(var ASocket: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_bind(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_listen(const ASocket: TPlatformSocket; ABacklog: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_connect(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32; begin ASent := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
 function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
-function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
-function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
-function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte; AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
-function platform_sockaddr_loopback6(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
-function platform_socket_resolve_ipv6(const AHost: PAnsiChar; AAddr: PByte): Int32; begin FillChar(AAddr^, 16, 0); Result := -1; end;
+function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte; AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_sockaddr_loopback6(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_resolve_ipv6(const AHost: PAnsiChar; AAddr: PByte): Int32; begin FillChar(AAddr^, 16, 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

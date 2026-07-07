@@ -371,6 +371,8 @@ var
   LSize: UInt64;
 begin
   ResetMap(AMap);
+  if APath = nil then
+    Exit(PLATFORM_MMAP_EINVAL);
   Result := FileStatSize(APath, LSize);
   if Result <> 0 then Exit;
   Result := platform_mmap_open_file(APath, pmaRead, [pmfPrivate], 0, 0, AMap);
@@ -498,7 +500,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -524,7 +526,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -550,7 +552,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -576,7 +578,7 @@ begin
     Result := Int32(GetLastError);
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -736,7 +738,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 
@@ -846,7 +848,7 @@ begin
   Result := 0;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 {$ENDIF}
 end;
 

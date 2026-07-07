@@ -3,8 +3,10 @@ program test_platform_watch;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.watch,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -15,23 +17,16 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LSourcePath));
 end;
 
 function ExtractBetween(const ASource, AStartToken, AEndToken: string): string;
@@ -128,6 +123,152 @@ begin
   Check(platform_watch_close(W) <> 0, 'close second error');
 end;
 
+procedure TestAddWatchNilPath;
+var
+  W: TPlatformWatcher;
+begin
+  Check(platform_watch_create(W) = 0, 'create');
+  Check(platform_watch_add(W, nil) <> 0, 'nil path returns error');
+  platform_watch_close(W);
+end;
+
+procedure TestAddWatchNonExistent;
+var
+  W: TPlatformWatcher;
+begin
+  Check(platform_watch_create(W) = 0, 'create');
+  Check(platform_watch_add(W, '/tmp/nonexistent_watch_dir_12345') <> 0, 'nonexistent path returns error');
+  platform_watch_close(W);
+end;
+
+procedure TestDetectModify;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test4', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  platform_watch_add(W, '/tmp/nextpas_watch_test4');
+
+  // Create file first
+  platform_file_open('/tmp/nextpas_watch_test4/modify.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('initial'), 7, LWritten);
+  platform_file_close(H);
+
+  // Wait a bit then modify
+  platform_watch_poll(W, Evt, 100); // consume create event
+
+  platform_file_open('/tmp/nextpas_watch_test4/modify.txt', fomWriteOnly, fcmOpenExisting, H);
+  platform_file_write(H, PAnsiChar('modified'), 8, LWritten);
+  platform_file_close(H);
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got modify event');
+  Check(Evt.Modified, 'event is modified');
+
+  platform_watch_close(W);
+  platform_file_unlink('/tmp/nextpas_watch_test4/modify.txt');
+  platform_file_rmdir('/tmp/nextpas_watch_test4');
+end;
+
+procedure TestDetectDelete;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test5', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  platform_watch_add(W, '/tmp/nextpas_watch_test5');
+
+  // Create file
+  platform_file_open('/tmp/nextpas_watch_test5/delete.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H);
+
+  // Wait a bit then delete
+  platform_watch_poll(W, Evt, 100); // consume create event
+
+  platform_file_unlink('/tmp/nextpas_watch_test5/delete.txt');
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got delete event');
+  Check(Evt.Deleted, 'event is deleted');
+
+  platform_watch_close(W);
+  platform_file_rmdir('/tmp/nextpas_watch_test5');
+end;
+
+procedure TestDetectDirectoryCreate;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test6', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  platform_watch_add(W, '/tmp/nextpas_watch_test6');
+
+  platform_file_mkdir('/tmp/nextpas_watch_test6/subdir', 493);
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got directory create event');
+  Check(Evt.IsDir, 'event is directory');
+
+  platform_watch_close(W);
+  platform_file_rmdir('/tmp/nextpas_watch_test6/subdir');
+  platform_file_rmdir('/tmp/nextpas_watch_test6');
+end;
+
+procedure TestMultipleWatches;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test7a', 493);
+  platform_file_mkdir('/tmp/nextpas_watch_test7b', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  Check(platform_watch_add(W, '/tmp/nextpas_watch_test7a') >= 0, 'add first watch');
+  Check(platform_watch_add(W, '/tmp/nextpas_watch_test7b') >= 0, 'add second watch');
+
+  platform_file_open('/tmp/nextpas_watch_test7a/file.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H);
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got event from first watch');
+
+  platform_watch_close(W);
+  platform_file_unlink('/tmp/nextpas_watch_test7a/file.txt');
+  platform_file_rmdir('/tmp/nextpas_watch_test7a');
+  platform_file_rmdir('/tmp/nextpas_watch_test7b');
+end;
+
+procedure TestPollZeroTimeout;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test8', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  platform_watch_add(W, '/tmp/nextpas_watch_test8');
+
+  R := platform_watch_poll(W, Evt, 0);
+  Check(R = 0, 'zero timeout returns immediately');
+
+  platform_watch_close(W);
+  platform_file_rmdir('/tmp/nextpas_watch_test8');
+end;
+
 procedure TestWindowsWatchSourceContract;
 var
   LWatch: string;
@@ -154,6 +295,13 @@ begin
   T.Test('detect file create', @TestDetectCreate);
   T.Test('no event timeout', @TestNoEvent);
   T.Test('double close', @TestDoubleClose);
+  T.Test('add watch nil path', @TestAddWatchNilPath);
+  T.Test('add watch non-existent', @TestAddWatchNonExistent);
+  T.Test('detect modify', @TestDetectModify);
+  T.Test('detect delete', @TestDetectDelete);
+  T.Test('detect directory create', @TestDetectDirectoryCreate);
+  T.Test('multiple watches', @TestMultipleWatches);
+  T.Test('poll zero timeout', @TestPollZeroTimeout);
   T.Test('Windows watch source contract', @TestWindowsWatchSourceContract);
   if not T.Run then Halt(1);
 end.

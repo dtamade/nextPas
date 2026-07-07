@@ -22,19 +22,35 @@ type
   end;
 
   {** @desc 保守型内存回收域（Quiescent-State Based Reclamation, QSBR）
-    @details 设计为 "Zero-Active Reclamation"：仅当 FActiveCount=0 时回收所有退休节点。
-      不维护全局 epoch，不做 epoch 推进——依赖临界区极短（纳秒级）的使用场景。
+    @details **注意：这是 QSBR 变体，不是真正的 EBR（Epoch-Based Reclamation）。**
 
-      适用场景：SegQueue 等临界区仅包含几个原子操作的无锁数据结构。
-      不适用场景：长时间持有引用的读取端（应改用 THazardDomain）。
+    **算法特性**:
+    - 设计为 "Zero-Active Reclamation"
+    - 仅当 FActiveCount=0 时回收所有退休节点
+    - 不维护全局 epoch，不做 epoch 推进
+    - 依赖临界区极短（纳秒级）的使用场景
 
-      @see THazardDomain 用于读多写少、临界区较长的场景。
+    **适用场景**:
+    - SegQueue 等临界区仅包含几个原子操作的无锁数据结构
+    - 生产者-消费者模式，消费者处理极快
+
+    **不适用场景**:
+    - 长时间持有引用的读取端（应改用 THazardDomain）
+    - 需要精确控制回收时机的场景
+
+    **与真正 EBR 的区别**:
+    - 真正 EBR 维护全局 epoch，允许跨 epoch 的引用
+    - QSBR 仅检查当前是否有活跃线程，更保守但更简单
+
+    @see THazardDomain 用于读多写少、临界区较长的场景
   }
   TEbrDomain = class
   private
     FRetired: PEbrRetiredNode;
     FActiveCount: Int32;
     FRetiredCount: Int32;
+    FFreeList: PEbrRetiredNode;
+    FFreeListCount: Int32;
   public
     constructor Create;
     destructor Destroy; override;
@@ -46,13 +62,16 @@ type
     procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer = nil);
     {** @desc 尝试回收所有退休项（ActiveCount=0 时生效） }
     procedure Collect;
-    {** @desc 当前活跃临界区数 }
+    {** @desc 当前活跃临界区数（O(1) 原子读，无锁）
+      @note 与 THazardDomain.ActiveThreads（O(n) 遍历链表）不同，此方法是 O(1) 原子操作。 }
     function ActiveCount: PtrUInt;
     {** @desc 当前退休待回收数 }
     function RetiredCount: PtrUInt;
   end;
 
-  {** @desc EBR 哨兵守卫（RAII 自动 Leave） }
+  {** @desc QSBR 哨兵守卫（RAII 自动 Leave）
+    @details TEbrGuard 是 QSBR 的 RAII 守卫，用于自动管理临界区进入和离开。
+  }
   TEbrGuard = record
   private
     FDomain: TEbrDomain;
@@ -72,6 +91,8 @@ begin
   FRetired := nil;
   FActiveCount := 0;
   FRetiredCount := 0;
+  FFreeList := nil;
+  FFreeListCount := 0;
 end;
 
 destructor TEbrDomain.Destroy;
@@ -84,6 +105,13 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
+  LNode := FFreeList;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
     FreeMem(LNode);
     LNode := LNext;
   end;
@@ -106,7 +134,15 @@ var
 begin
   if AData = nil then
     Exit;
-  LNode := GetMem(SizeOf(TEbrRetiredNode));
+  { Try to reuse from freelist }
+  if (FFreeList <> nil) and (FFreeListCount > 0) then
+  begin
+    LNode := FFreeList;
+    FFreeList := LNode^.Next;
+    Dec(FFreeListCount);
+  end
+  else
+    LNode := GetMem(SizeOf(TEbrRetiredNode));
   LNode^.Data := AData;
   LNode^.Reclaim := AReclaim;
   LNode^.UserData := AUserData;
@@ -147,7 +183,15 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-    FreeMem(LNode);
+    { Add to freelist for reuse }
+    if FFreeListCount < 32 then
+    begin
+      LNode^.Next := FFreeList;
+      FFreeList := LNode;
+      Inc(FFreeListCount);
+    end
+    else
+      FreeMem(LNode);
     LNode := LNext;
   end;
   AtomicStore32(FRetiredCount, 0, moRelease);

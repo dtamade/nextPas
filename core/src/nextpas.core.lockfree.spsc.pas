@@ -215,8 +215,10 @@ end;
 function TSpscQueueImpl.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
   LTail, LAvail: Int64;
-  LI: PtrUInt;
   LCount: PtrUInt;
+  LStart: PtrUInt;
+  LContiguous: PtrUInt;
+  LWrap: PtrUInt;
 begin
   if Length(AValues) = 0 then
     Exit(0);
@@ -230,8 +232,16 @@ begin
   LCount := PtrUInt(Length(AValues));
   if LCount > PtrUInt(LAvail) then
     LCount := PtrUInt(LAvail);
-  for LI := 0 to LCount - 1 do
-    FSlots[(LTail + Int64(LI)) and Int64(FMask)] := AValues[LI];
+  LStart := PtrUInt(LTail) and FMask;
+  LContiguous := FCapacity - LStart;
+  if LCount <= LContiguous then
+    Move(AValues[0], FSlots[LStart], LCount * SizeOf(T))
+  else
+  begin
+    LWrap := LCount - LContiguous;
+    Move(AValues[0], FSlots[LStart], LContiguous * SizeOf(T));
+    Move(AValues[LContiguous], FSlots[0], LWrap * SizeOf(T));
+  end;
   FTail := LTail + Int64(LCount);
   AtomicStore64(FTailPublished, FTail, moRelease);
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
@@ -241,8 +251,10 @@ end;
 function TSpscQueueImpl.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
   LHead, LAvail: Int64;
-  LI: PtrUInt;
   LCount: PtrUInt;
+  LStart: PtrUInt;
+  LContiguous: PtrUInt;
+  LWrap: PtrUInt;
 begin
   if (AMaxCount = 0) or (Length(AValues) = 0) then
     Exit(0);
@@ -256,8 +268,16 @@ begin
     LCount := PtrUInt(LAvail);
   if LCount > PtrUInt(Length(AValues)) then
     LCount := PtrUInt(Length(AValues));
-  for LI := 0 to LCount - 1 do
-    AValues[LI] := FSlots[(LHead + Int64(LI)) and Int64(FMask)];
+  LStart := PtrUInt(LHead) and FMask;
+  LContiguous := FCapacity - LStart;
+  if LCount <= LContiguous then
+    Move(FSlots[LStart], AValues[0], LCount * SizeOf(T))
+  else
+  begin
+    LWrap := LCount - LContiguous;
+    Move(FSlots[LStart], AValues[0], LContiguous * SizeOf(T));
+    Move(FSlots[0], AValues[LContiguous], LWrap * SizeOf(T));
+  end;
   FHead := LHead + Int64(LCount);
   AtomicStore64(FHeadPublished, FHead, moRelease);
   LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);

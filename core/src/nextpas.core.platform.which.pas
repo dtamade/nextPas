@@ -5,7 +5,7 @@ unit nextpas.core.platform.which;
 interface
 
 function platform_which(const AName: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 implementation
 
@@ -13,6 +13,7 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.path,
   nextpas.core.platform.fs,
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.ffi;
 
 const
@@ -50,7 +51,7 @@ begin
 end;
 
 function CopyFoundPath(const APath: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32): Int32;
+  ABufSize: Int32): Int32;
 var
   LCopyLen: Int32;
 begin
@@ -58,26 +59,26 @@ begin
   while APath[Result] <> #0 do
     Inc(Result);
 
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit;
 
   LCopyLen := Result;
-  if LCopyLen >= ABufLen then
-    LCopyLen := ABufLen - 1;
+  if LCopyLen >= ABufSize then
+    LCopyLen := ABufSize - 1;
   if LCopyLen > 0 then
     Move(APath^, ABuf^, LCopyLen);
   ABuf[LCopyLen] := #0;
 end;
 
 function platform_which(const AName: PAnsiChar;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LCandidate: array[0..1023] of AnsiChar;
   LPathBuf: array of AnsiChar;
   LPathLen, I, LStart, LDirLen, LNameLen: Int32;
 begin
   if (AName = nil) or (AName[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LNameLen := 0;
   while AName[LNameLen] <> #0 do Inc(LNameLen);
@@ -85,12 +86,12 @@ begin
   if platform_path_is_absolute(AName) then
   begin
     if IsExecutable(AName) then
-      Exit(CopyFoundPath(AName, ABuf, ABufLen));
-    Exit(-1);
+      Exit(CopyFoundPath(AName, ABuf, ABufSize));
+    Exit(PLATFORM_ERR_ENOENT);
   end;
 
   if not LoadPathEnv(LPathBuf, LPathLen) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_ENOENT);
 
   I := 0;
   while I <= LPathLen do
@@ -109,11 +110,11 @@ begin
     LPathBuf[LStart + LDirLen] := PATH_SEP; // restore
 
     if IsExecutable(@LCandidate[0]) then
-      Exit(CopyFoundPath(@LCandidate[0], ABuf, ABufLen));
+      Exit(CopyFoundPath(@LCandidate[0], ABuf, ABufSize));
   end;
 
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_ENOENT;
 end;
 
 end.

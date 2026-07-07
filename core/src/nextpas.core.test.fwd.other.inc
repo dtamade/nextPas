@@ -53,3 +53,60 @@ begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
 
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
+
+{ ── Forward to test.prop ──────────────────────────────────────────────────── }
+
+function GenString(AMinLen, AMaxLen: Integer): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenString(AMinLen, AMaxLen); end;
+
+function GenString(AMaxLen: Integer): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenString(AMaxLen); end;
+
+function GenInt(AMin, AMax: Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenInt(AMin, AMax); end;
+
+function GenInt(AMax: Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenInt(AMax); end;
+
+function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator;
+begin Result := nextpas.core.test.prop.GenBytes(AMinLen, AMaxLen); end;
+
+function GenBytes(AMaxLen: Integer): IBytesGenerator;
+begin Result := nextpas.core.test.prop.GenBytes(AMaxLen); end;
+
+function GenBool: IBoolGenerator;
+begin Result := nextpas.core.test.prop.GenBool; end;
+
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+begin Result := nextpas.core.test.prop.MapIntToStr(AGen, AMap); end;
+
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+begin Result := nextpas.core.test.prop.FilterInt(AGen, APred); end;
+
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+begin Result := nextpas.core.test.prop.FilterString(AGen, APred); end;
+
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+begin Result := nextpas.core.test.prop.FilterBytes(AGen, APred); end;
+
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceInt(AValues); end;
+
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceString(AValues); end;
+
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+begin Result := nextpas.core.test.prop.GenChoiceBool(AValues); end;
+
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+begin Result := nextpas.core.test.prop.GenOneOfInt(AGens); end;
+
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+begin Result := nextpas.core.test.prop.GenOneOfString(AGens); end;
+
+procedure PropFail(const AMsg: string);
+begin nextpas.core.test.prop.PropFail(AMsg); end;
+
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
+begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;

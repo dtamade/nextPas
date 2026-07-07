@@ -1472,7 +1472,7 @@ begin
   var LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -1500,8 +1500,8 @@ begin
   var LBody: string;
   begin
     LBody := 'Hello, World!';
-    AW.GetHeaders.Set_('content-type', 'text/plain');
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -1561,7 +1561,7 @@ begin
   var LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -1647,8 +1647,8 @@ begin
     LBody: string;
   begin
     LBody := 'partial';
-    AW.GetHeaders.Set_('content-length', '7');
-    AW.GetHeaders.Set_('connection', 'close');
+    AW.GetHeaders.SetHeader('content-length', '7');
+    AW.GetHeaders.SetHeader('connection', 'close');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 7);
     AW.Flush;
@@ -1729,7 +1729,7 @@ begin
       if LHandlerCalls = 1 then
         LSeenFirstPath := AReq.Url.Path;
       LBody := 'ok';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
     end));
@@ -1963,7 +1963,7 @@ begin
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       Inc(LHandlerCalls);
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -2053,7 +2053,7 @@ begin
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       Inc(LHandlerCalls);
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -2151,7 +2151,7 @@ begin
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       Inc(LHandlerCalls);
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -2457,7 +2457,7 @@ begin
       Inc(LHandlerCalls);
       if LHandlerCalls = 1 then
         LFirstPath := AReq.Url.Path;
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -2582,7 +2582,7 @@ begin
         2: LSecondPath := AReq.Url.Path;
         3: LThirdPath := AReq.Url.Path;
       end;
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -2674,7 +2674,7 @@ begin
       Inc(LHandlerCalls);
       if LHandlerCalls = 1 then
         LFirstPath := AReq.Url.Path;
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(BODY[1], SizeUInt(Length(BODY)));
     end), LContext);
@@ -3428,7 +3428,7 @@ begin
     begin
       Inc(LHandlerCalls);
       LBody := 'ok';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
       LHandlerReturned := True;
@@ -3699,7 +3699,7 @@ begin
       if LHandlerCalls = 1 then
         LSeenFirstPath := AReq.Url.Path;
       LBody := 'ok';
-      AW.GetHeaders.Set_('content-length', '2');
+      AW.GetHeaders.SetHeader('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
       LHandlerReturned := True;
@@ -3758,7 +3758,7 @@ begin
   begin
     Inc(LHandlerCalls);
     platform_thread_sleep_ns(HANDLER_SLEEP_NS);
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(BODY))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(BODY))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(BODY[1], SizeUInt(Length(BODY)));
   end);
@@ -3865,7 +3865,7 @@ begin
     LI: Int32;
   begin
     Inc(LFirstCalls);
-    AW.GetHeaders.Set_('content-length', IntToStr(LTotalBodyLen));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LTotalBodyLen));
     AW.WriteHeader(HTTP_STATUS_OK);
     for LI := 1 to BODY_CHUNK_COUNT do
     begin
@@ -3880,7 +3880,7 @@ begin
   begin
     Inc(LSecondCalls);
     LBody := 'after';
-    AW.GetHeaders.Set_('content-length', '5');
+    AW.GetHeaders.SetHeader('content-length', '5');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 5);
   end);
@@ -3994,7 +3994,7 @@ begin
     LI: Int32;
   begin
     Inc(LFirstCalls);
-    AW.GetHeaders.Set_('content-length', IntToStr(LTotalBodyLen));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LTotalBodyLen));
     AW.WriteHeader(HTTP_STATUS_OK);
     for LI := 1 to BODY_CHUNK_COUNT do
       AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
@@ -4295,7 +4295,7 @@ begin
     LI: Int32;
   begin
     Inc(LFirstCalls);
-    AW.GetHeaders.Set_('content-length', IntToStr(LBodyLen));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(LBodyLen));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBodyPrefix[1], SizeUInt(Length(LBodyPrefix)));
     for LI := 1 to BODY_CHUNK_COUNT do
@@ -4570,7 +4570,7 @@ begin
   var LBody: string;
   begin
     LBody := 'received';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_CREATED);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -4658,7 +4658,7 @@ begin
   var LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -4705,7 +4705,7 @@ begin
     LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -4774,7 +4774,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'echo:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -4865,7 +4865,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -4936,7 +4936,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -5005,7 +5005,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -5094,7 +5094,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'echo:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -5187,7 +5187,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -6029,7 +6029,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -6235,7 +6235,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'echo:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -6337,7 +6337,7 @@ begin
   begin
     LHandlerCalled := True;
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -6534,7 +6534,7 @@ begin
         end;
       until LN = 0;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -6544,7 +6544,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -6613,7 +6613,7 @@ begin
         end;
       until LN = 0;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -6623,7 +6623,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -6669,7 +6669,7 @@ begin
   var LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -6716,7 +6716,7 @@ begin
   var LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -6762,7 +6762,7 @@ begin
       LN := AReq.Body.Read(LBuf[0], 4096);
       if LN > 0 then SetString(LBody, PAnsiChar(@LBuf[0]), LN);
     end;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     if Length(LBody) > 0 then
       AW.Write(LBody[1], SizeUInt(Length(LBody)));
@@ -6805,7 +6805,7 @@ begin
       until LN = 0;
     end;
     LReply := IntToStr(Int64(LTotal));
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LReply))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
@@ -7024,7 +7024,7 @@ begin
     LBody: string;
   begin
     LBody := 'pong';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -7233,7 +7233,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7296,7 +7296,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7358,7 +7358,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7368,7 +7368,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -7441,7 +7441,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7451,7 +7451,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -7519,7 +7519,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7576,7 +7576,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7639,7 +7639,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7701,7 +7701,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7711,7 +7711,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -7784,7 +7784,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7794,7 +7794,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -7862,7 +7862,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -7955,7 +7955,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8019,7 +8019,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8082,7 +8082,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8092,7 +8092,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -8166,7 +8166,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8176,7 +8176,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -8245,7 +8245,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8304,7 +8304,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8368,7 +8368,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8431,7 +8431,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8441,7 +8441,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -8515,7 +8515,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8525,7 +8525,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -8594,7 +8594,7 @@ begin
       until LN = 0;
     LGotBody := LBody;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8661,7 +8661,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8735,7 +8735,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8802,7 +8802,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8876,7 +8876,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8886,7 +8886,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -8969,7 +8969,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -8979,7 +8979,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9063,7 +9063,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9073,7 +9073,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9154,7 +9154,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9228,7 +9228,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9295,7 +9295,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9369,7 +9369,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9379,7 +9379,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9462,7 +9462,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9472,7 +9472,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9556,7 +9556,7 @@ begin
     LGotTrailerDecl := AReq.Headers.Get('Trailer');
     LGotTrailerValue := AReq.Headers.Get('X-Test');
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9566,7 +9566,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9642,7 +9642,7 @@ begin
         end;
       until LN = 0;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9652,7 +9652,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9723,7 +9723,7 @@ begin
         end;
       until LN = 0;
     LBody := 'upload:' + LBody;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9733,7 +9733,7 @@ begin
   begin
     LSeenNext := True;
     LBody := 'next';
-    AW.GetHeaders.Set_('content-length', '4');
+    AW.GetHeaders.SetHeader('content-length', '4');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 4);
   end);
@@ -9774,7 +9774,7 @@ begin
   var LBody: string;
   begin
     LBody := AReq.QueryParam('q') + ':' + AReq.QueryParam('page');
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9807,7 +9807,7 @@ begin
     LUrl := AReq.Url;
     LBody := LUrl.Scheme + '|' + LUrl.Host + '|' +
       IntToStr(Int64(LUrl.Port)) + '|' + LUrl.Path + '|' + LUrl.RawQuery;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9860,7 +9860,7 @@ begin
   var LBody: string;
   begin
     LBody := AReq.RemoteAddr;
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -9936,7 +9936,7 @@ begin
   var LBody: string;
   begin
     LBody := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 2);
   end);
@@ -9982,7 +9982,7 @@ begin
   begin
     LHandlerCalled := True;
     LBody := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 2);
   end);
@@ -10043,7 +10043,7 @@ begin
   begin
     LHandlerCalled := True;
     LBody := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 2);
   end);
@@ -10104,7 +10104,7 @@ begin
   begin
     LHandlerCalled := True;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -10213,7 +10213,7 @@ begin
       end;
     until LN = 0;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -10247,7 +10247,7 @@ begin
     LReply: string;
   begin
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -10982,7 +10982,7 @@ begin
       end;
     until LN = 0;
     LReply := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LReply[1], 2);
   end);
@@ -11025,7 +11025,7 @@ begin
   begin
     LBody := 'ok';
     LHandlerCalled := True;
-    AW.GetHeaders.Set_('content-length', '2');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 2);
   end);
@@ -11714,7 +11714,7 @@ begin
   LRouter.Get('/early', procedure(const AReq: IHttpRequest;
     const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('Link', '</style.css>; rel=preload');
+    AW.GetHeaders.SetHeader('Link', '</style.css>; rel=preload');
     AW.WriteHeader(HTTP_STATUS_EARLY_HINTS);
     AW.WriteHeader(HTTP_STATUS_OK);
     LBody := 'ok';
@@ -11813,7 +11813,7 @@ begin
     const AW: IHttpResponseWriter)
   begin
     LBody := 'hello';
-    AW.GetHeaders.Set_('content-length', '5');
+    AW.GetHeaders.SetHeader('content-length', '5');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
@@ -11866,7 +11866,7 @@ begin
   var LBody: string;
   begin
     LBody := 'fixed';
-    AW.GetHeaders.Set_('content-length', '5');
+    AW.GetHeaders.SetHeader('content-length', '5');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 5);
   end);

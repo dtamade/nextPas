@@ -3,10 +3,13 @@ program test_platform_process;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
+  nextpas.core.platform.thread,
   nextpas.core.process,
   nextpas.core.platform.unix.base,
   nextpas.core.platform.posix.ffi,
@@ -17,23 +20,16 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(LSourcePath);
 end;
 
 procedure SpawnWithPipes(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -408,6 +404,103 @@ begin
     'spawn_fds must report exec failure through preserved error pipe');
 end;
 
+procedure TestProcessSignal;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..2] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  { Spawn a process that exits quickly }
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '10';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Send SIGTERM }
+  LRet := platform_process_signal(LProc, 15);  { SIGTERM }
+  Check(LRet = 0, 'signal process');
+
+  { Process should exit }
+  LRet := platform_process_wait(LProc, LResult, 5000);
+  Check(LRet = 0, 'wait after signal');
+end;
+
+procedure TestProcessDetach;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..2] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '0.1';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn for detach');
+
+  { Detach: we promise not to wait }
+  platform_process_detach(LProc);
+
+  { After detach, the process should still run and exit on its own }
+  { We can't wait on it anymore, but we can verify detach didn't crash }
+  Check(True, 'detach completed without crash');
+
+  { Give it time to exit }
+  platform_thread_sleep_ns(200000000); { 200ms }
+end;
+
+procedure TestProcessCreatePipe;
+var
+  LRead, LWrite: PtrInt;
+  LRet: Int32;
+  LBuf: array[0..15] of AnsiChar;
+  LWritten: PtrInt;
+  LReadBytes: PtrInt;
+begin
+  LRet := platform_process_create_pipe(LRead, LWrite);
+  Check(LRet = 0, 'create pipe');
+  Check(LRead >= 0, 'read fd valid');
+  Check(LWrite >= 0, 'write fd valid');
+
+  { Write and read through the pipe }
+  LWritten := nextpas.core.platform.posix.ffi.write(LWrite, PAnsiChar('test'), 4);
+  Check(LWritten = 4, 'wrote 4 bytes');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LReadBytes := nextpas.core.platform.posix.ffi.read(LRead, @LBuf[0], 16);
+  Check(LReadBytes = 4, 'read 4 bytes');
+  Check(LBuf[0] = 't', 'data[0] = t');
+  Check(LBuf[3] = 't', 'data[3] = t');
+
+  platform_process_close_handle(LRead);
+  platform_process_close_handle(LWrite);
+end;
+
+procedure TestProcessOpenNull;
+var
+  LNullRead, LNullWrite: PtrInt;
+  LRet: Int32;
+begin
+  { Open /dev/null for reading }
+  LRet := platform_process_open_null(False, LNullRead);
+  Check(LRet = 0, 'open null for read');
+  Check(LNullRead >= 0, 'null read fd valid');
+
+  { Open /dev/null for writing }
+  LRet := platform_process_open_null(True, LNullWrite);
+  Check(LRet = 0, 'open null for write');
+  Check(LNullWrite >= 0, 'null write fd valid');
+
+  { Reading from /dev/null should return 0 (EOF) }
+  LRet := nextpas.core.platform.posix.ffi.read(LNullRead, nil, 1);
+  Check(LRet = 0, 'read from null returns EOF');
+
+  platform_process_close_handle(LNullRead);
+  platform_process_close_handle(LNullWrite);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -427,5 +520,9 @@ begin
   T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
   T.Test('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
   T.Test('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
+  T.Test('process signal', @TestProcessSignal);
+  T.Test('process detach', @TestProcessDetach);
+  T.Test('process create pipe', @TestProcessCreatePipe);
+  T.Test('process open null', @TestProcessOpenNull);
   if not T.Run then Halt(1);
 end.

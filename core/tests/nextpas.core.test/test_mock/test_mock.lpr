@@ -1,7 +1,28 @@
 { test_mock — TMock/TMockState tests
   =========================================================
   Validates: Setup, RecordCall, Verify, Returns variants,
-             ResetCalls, CallCount, unconfigured return }
+             ResetCalls, CallCount, unconfigured return
+
+  Usage pattern — Three-step mock workflow:
+    1. Create mock instance:
+       LMock := TMock.Create;
+
+    2. Configure behavior (optional):
+       LMock.When('MethodName').WithArgs([MockStr('input')]).ReturnStr('output');
+       LMock.When('MethodName').ReturnInt(42);      // default return for any args
+
+    3. Exercise + Verify:
+       LMock.Mock.Method('MethodName', [MockStr('input')]);
+       LMock.Verify('MethodName').CalledExactly(1);
+
+    ⚠ When/Returns/RecordCall all use string-based method names.
+       Typos in method names are NOT caught at compile time.
+       Verify calls CompareText (case-insensitive) — 'Foo' matches 'foo'.
+
+    ⚠ VerifyAll checks all methods that have When entries (not all recorded calls).
+       If you need to verify a method was called but don't need When, use:
+       LMock.Verify('MethodName').CalledExactly(1);  // explicit verify
+ }
 program test_mock;
 
 {$mode objfpc}{$H+}{$J-}

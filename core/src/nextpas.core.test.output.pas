@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.system,
+  nextpas.core.atomic,
   nextpas.core.platform.env,
   nextpas.core.platform.console,
   nextpas.core.test.base,
@@ -167,36 +168,38 @@ const
 var
   { Thread-safety: SetAnsiEnabled must be called BEFORE spawning worker threads.
     After that, GAnsiEnabled/GAnsiChecked are only read (via InitAnsi/Wrap).
-    No synchronization needed for Boolean reads under x86-64 TSO. }
-  GAnsiEnabled: Boolean = False;
-  GAnsiChecked: Boolean = False;
+    Using TAtomicBool for ARM safety — plain Boolean is safe on x86-64 TSO
+    but ARM has weaker memory ordering. }
+  GAnsiEnabled: TAtomicBool;
+  GAnsiChecked: TAtomicBool;
 
 procedure InitAnsi;
 begin
-  if not GAnsiChecked then
+  if not GAnsiChecked.Load(mo_acquire) then
   begin
-    GAnsiChecked := True;
+    GAnsiChecked.Store(True, mo_release);
     { Standard: https://no-color.org/ }
     if GetEnv('NO_COLOR') <> '' then
     begin
-      GAnsiEnabled := False;
+      GAnsiEnabled.Store(False, mo_release);
       Exit;
     end;
     {$IFDEF NEXTPAS_LINUX}
     { Enable ANSI if stdout is a TTY (terminal).
       When piped to a file or non-TTY, disable to avoid escape sequences. }
-    GAnsiEnabled := platform_console_is_terminal(1);
+    GAnsiEnabled.Store(platform_console_is_terminal(1), mo_release);
     {$ELSE}
-    GAnsiEnabled := (GetEnv('TERM') <> '') or
-                    (GetEnv('ANSICON') <> '') or
-                    (GetEnv('ConEmuANSI') = 'ON') or
-                    (GetEnv('WT_SESSION') <> '');
+    GAnsiEnabled.Store(
+      (GetEnv('TERM') <> '') or
+      (GetEnv('ANSICON') <> '') or
+      (GetEnv('ConEmuANSI') = 'ON') or
+      (GetEnv('WT_SESSION') <> ''), mo_release);
     {$ENDIF}
     { Override via NEXTPAS_COLOR: '1' forces on, '0' forces off }
     if GetEnv('NEXTPAS_COLOR') = '1' then
-      GAnsiEnabled := True
+      GAnsiEnabled.Store(True, mo_release)
     else if GetEnv('NEXTPAS_COLOR') = '0' then
-      GAnsiEnabled := False;
+      GAnsiEnabled.Store(False, mo_release);
   end;
 end;
 
@@ -211,7 +214,7 @@ begin
     amAuto: ; { fall through to auto-detect }
   end;
   InitAnsi;
-  Result := GAnsiEnabled;
+  Result := GAnsiEnabled.Load(mo_relaxed);
 end;
 
 function Wrap(const ACode, S: string; const AConfig: TTestConfig): string; overload;
@@ -289,8 +292,8 @@ end;
 
 procedure SetAnsiEnabled(AEnabled: Boolean);
 begin
-  GAnsiEnabled := AEnabled;
-  GAnsiChecked := True; { prevent InitAnsi from overwriting }
+  GAnsiEnabled.Store(AEnabled, mo_release);
+  GAnsiChecked.Store(True, mo_release); { prevent InitAnsi from overwriting }
   if AEnabled then
     SetDefaultAnsiMode(amOn)
   else

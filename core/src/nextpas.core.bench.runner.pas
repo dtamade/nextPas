@@ -96,6 +96,7 @@ type
     { F-01: bridge data as instance fields (was file-scope GBridgeData global) }
     FBridgeFunc: TBenchFunc;
     FBridgeParamFunc: TBenchParamFunc;
+    FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
 
     {** 热身 }
@@ -220,7 +221,9 @@ begin
   { F-01: runner instance accessed via file-scope GBridgeRunner }
   LRunner := GBridgeRunner;
   if (LRunner = nil) or
-     ((not Assigned(LRunner.FBridgeFunc)) and (not Assigned(LRunner.FBridgeParamFunc))) then
+     ((not Assigned(LRunner.FBridgeFunc)) and
+      (not Assigned(LRunner.FBridgeParamFunc)) and
+      (not Assigned(LRunner.FBridgeSimpleFunc))) then
     Exit;
 
   LContext := TBenchContext.Create;
@@ -228,7 +231,9 @@ begin
   for LIteration := 1 to AIterations do
   begin
     LContextObj.SetIterations(LIteration);
-    if Assigned(LRunner.FBridgeParamFunc) then
+    if Assigned(LRunner.FBridgeSimpleFunc) then
+      LRunner.FBridgeSimpleFunc
+    else if Assigned(LRunner.FBridgeParamFunc) then
       LRunner.FBridgeParamFunc(LContext, LRunner.FBridgeParamValue)
     else
       LRunner.FBridgeFunc(LContext);
@@ -241,9 +246,10 @@ begin
 
   if LRunner.FParallelContextsInitialized and
      (AThreadId >= 0) and
-     (AThreadId < Length(LRunner.FParallelContexts)) then
+     (AThreadId < Length(LRunner.FParallelContexts)) and
+     Assigned(LRunner.FParallelContexts[AThreadId]) then
   begin
-    LRunner.FParallelContexts[AThreadId] := TBenchContext.Create;
+    { F-01: write to pre-created context instead of creating new one }
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
     (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
@@ -446,8 +452,10 @@ var
   LIndex: Integer;
 begin
   SetLength(FParallelContexts, AThreadCount);
+  { F-01: pre-create all TBenchContext objects in main thread to avoid
+    concurrent object creation in worker threads. }
   for LIndex := 0 to AThreadCount - 1 do
-    FParallelContexts[LIndex] := nil;
+    FParallelContexts[LIndex] := TBenchContext.Create;
   FParallelContextsInitialized := True;
 end;
 
@@ -633,6 +641,7 @@ begin
     { F-01: bridge data stored in instance fields, not file-scope global }
     FBridgeFunc := FParallelBridgeFunc;
     FBridgeParamFunc := AEntry.ParamFunc;
+    FBridgeSimpleFunc := AEntry.SimpleFunc;
     FBridgeParamValue := AEntry.ParamValue;
     { F-16: 并发断言 — 检测是否已有另一个 RunOne 在执行并行 benchmark }
     if InterlockedCompareExchange(GBridgeBusy, 1, 0) <> 0 then
@@ -646,6 +655,7 @@ begin
     finally
       FBridgeFunc := nil;
       FBridgeParamFunc := nil;
+      FBridgeSimpleFunc := nil;
       FBridgeParamValue := 0;
       GBridgeRunner := nil;
       GBridgeBusy := 0;
@@ -711,7 +721,9 @@ begin
       for LIter := 1 to AIters do
       begin
         LContextObj.SetIterations(LIter);
-        if Assigned(AEntry.ParamFunc) then
+        if Assigned(AEntry.SimpleFunc) then
+          AEntry.SimpleFunc
+        else if Assigned(AEntry.ParamFunc) then
           AEntry.ParamFunc(LContext, AEntry.ParamValue)
         else
           AEntry.Func(LContext);
@@ -1070,7 +1082,7 @@ begin
     Result.P99 := LStats.P99;
     Result.Outliers := LStats.OutlierCount;
     Result.SampleCount := LStats.SampleCount;
-    if FConfig.CollectRawSamples then
+    if FConfig.CollectRawSamples or LEntry.CollectRawSamples then
       Result.RawSamples := LSamples;
 
     AddResult(Result);

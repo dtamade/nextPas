@@ -1,4 +1,9 @@
 unit nextpas.core.http.impl.h1.outbound;
+{**
+ * @desc Outbound buffer for HTTP/1.1 response writing.
+ *       Accumulates header + body bytes, drains to TCP stream with
+ *       resumable support for would-block (non-blocking I/O).
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -118,13 +123,17 @@ end;
 function TH1OutboundBuffer.DrainAllTo(const AWriter: IWriter): SizeUInt;
 var
   LWritten: SizeUInt;
+  LPending: SizeUInt;
 begin
   Result := 0;
   while PendingBytes > 0 do
   begin
-    LWritten := AWriter.Write(FBuf[FReadPos], PendingBytes);
+    LPending := PendingBytes;
+    LWritten := AWriter.Write(FBuf[FReadPos], LPending);
     if LWritten = 0 then
       RaiseDrainFailure;
+    if LWritten > LPending then
+      raise EIOError.Create('h1 outbound buffer: writer over-reported bytes written');
     Advance(LWritten);
     Inc(Result, LWritten);
   end;
@@ -132,15 +141,20 @@ end;
 
 function TH1OutboundBuffer.TryDrainTo(const ARuntime: ITcpStreamRuntime;
   out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LPending: SizeUInt;
 begin
   AWritten := 0;
   if PendingBytes = 0 then
     Exit(tsiorOk);
-  Result := ARuntime.TryWrite(FBuf[FReadPos], PendingBytes, AWritten);
+  LPending := PendingBytes;
+  Result := ARuntime.TryWrite(FBuf[FReadPos], LPending, AWritten);
   if Result = tsiorOk then
   begin
     if AWritten = 0 then
       RaiseDrainFailure;
+    if AWritten > LPending then
+      raise EIOError.Create('h1 outbound buffer: runtime over-reported bytes written');
     Advance(AWritten);
   end;
 end;

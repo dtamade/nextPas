@@ -52,6 +52,7 @@ implementation
 
 {$IFDEF NEXTPAS_LINUX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base,
@@ -60,6 +61,7 @@ uses
 
 {$IFDEF NEXTPAS_MACOS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.darwin.base,
@@ -68,6 +70,7 @@ uses
 
 {$IFDEF NEXTPAS_ANDROID}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.android.base,
@@ -76,6 +79,7 @@ uses
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.freebsd.base,
@@ -84,6 +88,7 @@ uses
 
 {$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.unix.base,
@@ -113,7 +118,7 @@ function platform_thread_host_state_create(out AState: PPlatformPThreadState; co
 begin
   AState := nil;
   if AStartRoutine = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   New(AState);
   FillChar(AState^, SizeOf(AState^), 0);
@@ -131,7 +136,7 @@ function platform_thread_host_state_join(const AState: PPlatformPThreadState; ou
 begin
   ARetVal := nil;
   if AState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
   Dispose(AState);
@@ -140,7 +145,7 @@ end;
 function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
 begin
   if AState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
   Dispose(AState);
@@ -161,7 +166,7 @@ begin
   ARetVal := nil;
   LState := PPlatformPThreadState(AHandle);
   if LState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   clock_gettime(CLOCK_REALTIME, @LNow);
   LAbsTime.tv_sec  := LNow.tv_sec + (ATimeoutMs div 1000);
@@ -184,7 +189,7 @@ begin
   end
   else
   begin
-    Result := -1; { Unexpected error }
+    Result := PLATFORM_ERR_INVALID; { Unexpected error }
   end;
 end;
 {$ELSE}
@@ -377,6 +382,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
@@ -449,7 +455,7 @@ function platform_thread_windows_state_create(
 begin
   AState := nil;
   if not Assigned(AProc) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   New(AState);
   AState^.Handle := nil;
@@ -473,7 +479,7 @@ function platform_thread_windows_state_join(
 begin
   ARetVal := nil;
   if AState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   Result := platform_thread_windows_wait_terminated(AState^.Handle);
   if Result = 0 then
@@ -489,7 +495,7 @@ function platform_thread_windows_state_detach(
   const AState: PPlatformWindowsThreadState): Int32; inline;
 begin
   if AState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   Result := platform_thread_windows_close_handle(AState^.Handle);
   if Result = 0 then
@@ -567,7 +573,7 @@ begin
   ARetVal := nil;
   LState := PPlatformWindowsThreadState(AHandle);
   if LState = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LWaitResult := WaitForSingleObject(LState^.Handle, DWORD(ATimeoutMs));
   if LWaitResult = WAIT_OBJECT_0 then
@@ -581,7 +587,7 @@ begin
   else if LWaitResult = WAIT_TIMEOUT then
     Result := 1
   else
-    Result := -1;
+    Result := PLATFORM_ERR_INVALID;
 end;
 
 function platform_thread_self: TPlatformThreadToken;
@@ -644,17 +650,17 @@ end;
 {$ENDIF}
 
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
-function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := -1; end;
-function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
-function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
-function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := -1; end;
+function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_thread_self: TPlatformThreadToken; begin Result := 0; end;
 function platform_thread_id: UInt64; begin Result := 0; end;
 procedure platform_thread_yield; begin end;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64); begin end;
-function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := -1; end;
-function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := -1; end;
-function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := -1; end;
+function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;
 {$ENDIF}{$ENDIF}
@@ -674,7 +680,7 @@ var
 begin
   if ARec.Handle = nil then
   begin
-    Result := -1;
+    Result := PLATFORM_ERR_INVALID;
     Exit;
   end;
   Result := platform_thread_join(ARec.Handle, LRet);

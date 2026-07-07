@@ -133,6 +133,56 @@ type
   {** 基线数组 }
   TBaselineArray = array of TBaselineData;
 
+  {** K-S 检验结果 (Phase A: Kolmogorov-Smirnov) }
+  TKSTestResult = record
+    Statistic: Double;      // K-S 统计量 D
+    PValue: Double;         // p-value
+    IsSignificant: Boolean; // 在 α=0.05 水平下是否显著
+    SampleSize1: Integer;   // 第一个样本大小
+    SampleSize2: Integer;   // 第二个样本大小（单样本检验时为 0）
+  end;
+
+  {** Xoroshiro128+ 伪随机数生成器 (Phase B.1)
+   *  周期 2^128-1，统计质量优于 PCG-LCG。
+   *  参考: Blackman & Vigna (2018), "Scrambled Linear Pseudorandom Number Generators" }
+  TXoroshiro128Plus = record
+    S0, S1: UInt64;
+    {** 用种子初始化状态（SplitMix64 扩展种子） }
+    procedure Init(ASeed: UInt64);
+    {** 生成下一个 UInt64 随机数 }
+    function Next: UInt64;
+    {** 生成 [0, AMaxExclusive) 范围内的随机整数 }
+    function NextInt(AMaxExclusive: Integer): Integer;
+  end;
+
+  {** Bootstrap 假设检验结果 (Phase B.3) }
+  TBootstrapTestResult = record
+    ObservedDiff: Double;     // 观测到的差异（均值差）
+    PValue: Double;           // bootstrap p-value
+    IsSignificant: Boolean;   // 在 α=0.05 水平下是否显著
+    Iterations: Integer;      // bootstrap 迭代次数
+  end;
+
+  {** 置信区间 (Phase B.2: moved from stats.advanced) }
+  TConfidenceInterval = record
+    Lower: Double;
+    Upper: Double;
+    Level: Double; // e.g., 0.95 for 95%
+  end;
+
+  {** 贝叶斯估计结果 (Phase C) }
+  TBayesianEstimate = record
+    PriorMean: Double;        // 先验均值
+    PriorStdDev: Double;      // 先验标准差
+    PosteriorMean: Double;    // 后验均值
+    PosteriorStdDev: Double;  // 后验标准差
+    SampleMean: Double;       // 样本均值
+    SampleSize: Integer;      // 样本大小
+    CredibleLower: Double;    // 可信区间下界
+    CredibleUpper: Double;    // 可信区间上界
+    CredibleLevel: Double;    // 可信水平
+  end;
+
   {** 多基线对比矩阵 — 超越 Go/Rust 的独有能力 }
 
   {** 矩阵单元格：一个 benchmark 对一个 baseline 的对比。
@@ -245,7 +295,66 @@ function IsDoubleNaN(const AValue: Double): Boolean; inline;
 {** Percentile 线性插值（输入必须已排序） }
 function PercentileSorted(const ASorted: TDoubleArray; APercent: Double): Double;
 
+{** 标准正态分布 CDF (Abramowitz & Stegun 近似，精度 ~1.5e-7) }
+function NormalCDF(X: Double): Double;
+
+{** 标准正态分位数函数（逆 CDF，Peter Acklam 逼近，精度 ~1.15e-9） }
+function NormalQuantile(AP: Double): Double;
+
 implementation
+
+uses
+  nextpas.core.math.scalar;
+
+{ ===== Xoroshiro128+ PRNG (Phase B.1) ===== }
+
+procedure TXoroshiro128Plus.Init(ASeed: UInt64);
+{ SplitMix64: 从单个 64 位种子扩展出两个 64 位状态 }
+var
+  LZ: UInt64;
+begin
+  LZ := ASeed + $9E3779B97F4A7C15;
+  LZ := (LZ xor (LZ shr 30)) * $BF58476D1CE4E5B9;
+  LZ := (LZ xor (LZ shr 27)) * $94D049BB133111EB;
+  S0 := LZ xor (LZ shr 31);
+  LZ := S0 + $9E3779B97F4A7C15;
+  LZ := (LZ xor (LZ shr 30)) * $BF58476D1CE4E5B9;
+  LZ := (LZ xor (LZ shr 27)) * $94D049BB133111EB;
+  S1 := LZ xor (LZ shr 31);
+  { 防止全零状态 }
+  if (S0 = 0) and (S1 = 0) then
+    S1 := 1;
+end;
+
+function TXoroshiro128Plus.Next: UInt64;
+{ 参考: https://prng.di.unimi.it/xoroshiro128plus.c }
+var
+  LResult: UInt64;
+begin
+  LResult := S0 + S1;
+  S1 := S1 xor S0;
+  S0 := ((S0 shl 24) or (S0 shr 40)) xor S1 xor (S1 shl 16);
+  S1 := (S1 shl 37) or (S1 shr 27);
+  Result := LResult;
+end;
+
+function TXoroshiro128Plus.NextInt(AMaxExclusive: Integer): Integer;
+{ Lemire's fast rejection method: 无偏映射 UInt64 → [0, AMaxExclusive) }
+var
+  LRange, LBound, LRemainder: UInt64;
+  LVal: UInt64;
+begin
+  LRange := UInt64(AMaxExclusive);
+  LVal := Next;
+  LRemainder := LVal mod LRange;
+  LBound := (not LRange + 1) mod LRange; { = (-LRange) mod LRange = 2^64 mod LRange }
+  while LVal < LBound do
+  begin
+    LVal := Next;
+    LRemainder := LVal mod LRange;
+  end;
+  Result := Integer(LRemainder);
+end;
 
 function TInvLookup(ADF: Double; const ATable: array of Double; AZScore: Double): Double;
 var
@@ -438,6 +547,88 @@ begin
   if LUpper >= LCount then
     Exit(ASorted[High(ASorted)]);
   Result := ASorted[LLower] + (LIndex - LLower) * (ASorted[LUpper] - ASorted[LLower]);
+end;
+
+{ ===== 标准正态分布函数 (Phase A/B) ===== }
+
+function NormalCDF(X: Double): Double;
+var
+  LAbsX: Double;
+  LT, LResult: Double;
+  LA1, LA2, LA3, LA4, LA5: Double;
+  LP: Double;
+begin
+  // Abramowitz & Stegun 近似公式
+  LA1 := 0.254829592;
+  LA2 := -0.284496736;
+  LA3 := 1.421413741;
+  LA4 := -1.453152027;
+  LA5 := 1.061405429;
+  LP := 0.3275911;
+
+  // 计算 erf(x / sqrt(2))
+  LAbsX := Abs(X) / Sqrt(2.0);
+  LT := 1.0 / (1.0 + LP * LAbsX);
+  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-LAbsX * LAbsX);
+
+  // 转换为 CDF
+  if X >= 0 then
+    Result := 0.5 * (1.0 + LResult)
+  else
+    Result := 0.5 * (1.0 - LResult);
+end;
+
+function NormalQuantile(AP: Double): Double;
+const
+  LA1 = -3.969683028665376e+01;
+  LA2 =  2.209460984245205e+02;
+  LA3 = -2.759285104469687e+02;
+  LA4 =  1.383577518672690e+02;
+  LA5 = -3.066479806614716e+01;
+  LA6 =  2.506628277459239e+00;
+  LB1 = -5.447609879822406e+01;
+  LB2 =  1.615858368580409e+02;
+  LB3 = -1.556989798598866e+02;
+  LB4 =  6.680131188771972e+01;
+  LB5 = -1.328068155288572e+01;
+  LC1 = -7.784894002430293e-03;
+  LC2 = -3.223964580411365e-01;
+  LC3 = -2.400758277161838e+00;
+  LC4 = -2.549732539343734e+00;
+  LC5 =  4.374664141464968e+00;
+  LC6 =  2.938163982698783e+00;
+  LD1 =  7.784695709041462e-03;
+  LD2 =  3.224671290700398e-01;
+  LD3 =  2.445134137142996e+00;
+  LD4 =  3.754408661907416e+00;
+  LP_LOW  = 0.02425;
+  LP_HIGH = 1.0 - LP_LOW;
+var
+  LQ, LR: Double;
+begin
+  if AP <= 0.0 then Exit(-1e30);
+  if AP >= 1.0 then Exit(1e30);
+  if AP = 0.5 then Exit(0.0);
+
+  if AP < LP_LOW then
+  begin
+    LQ := Sqrt(-2.0 * Ln(AP));
+    Result := (((((LC1 * LQ + LC2) * LQ + LC3) * LQ + LC4) * LQ + LC5) * LQ + LC6) /
+              ((((LD1 * LQ + LD2) * LQ + LD3) * LQ + LD4) * LQ + 1.0);
+  end
+  else if AP <= LP_HIGH then
+  begin
+    LQ := AP - 0.5;
+    LR := LQ * LQ;
+    Result := (((((LA1 * LR + LA2) * LR + LA3) * LR + LA4) * LR + LA5) * LR + LA6) * LQ /
+              (((((LB1 * LR + LB2) * LR + LB3) * LR + LB4) * LR + LB5) * LR + 1.0);
+  end
+  else
+  begin
+    LQ := Sqrt(-2.0 * Ln(1.0 - AP));
+    Result := -(((((LC1 * LQ + LC2) * LQ + LC3) * LQ + LC4) * LQ + LC5) * LQ + LC6) /
+               ((((LD1 * LQ + LD2) * LQ + LD3) * LQ + LD4) * LQ + 1.0);
+  end;
 end;
 
 { NaN 安全分区: 将 NaN 值移到数组末尾，返回非 NaN 元素个数 }

@@ -10,6 +10,7 @@ implementation
 
 {$IFDEF NEXTPAS_LINUX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.ffi;
 {$ENDIF}
@@ -39,7 +40,7 @@ begin
   end;
   if ABuf = nil then
   begin
-    AResult := -1;
+    AResult := PLATFORM_ERR_INVALID;
     Exit(True);
   end;
   Result := False;
@@ -123,7 +124,7 @@ var
 begin
   if platform_random_check_request(ABuf, ALen, LCheck) then
     Exit(LCheck);
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

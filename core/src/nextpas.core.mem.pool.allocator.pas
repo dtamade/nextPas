@@ -30,7 +30,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.utils,
-  nextpas.core.mem.pool.fixed;
+  nextpas.core.mem.pool.fixed,
+  nextpas.core.text;
 
 type
   {**
@@ -254,7 +255,8 @@ begin
   inherited Create;
 
   if ABlockSize > (High(SizeUInt) - 7) then
-    raise EAllocError.Create(aeInvalidLayout, 'TPoolAllocator.Create: block size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TPoolAllocator.Create: block size overflow (' + IntToStr(ABlockSize) + ')');
 
   // 确保块大小是 8 的倍数（指针对齐）
   LAlignedSize := (ABlockSize + 7) and not SizeUInt(7);

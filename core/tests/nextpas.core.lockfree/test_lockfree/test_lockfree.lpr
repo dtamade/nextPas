@@ -11,6 +11,7 @@ uses
   nextpas.core.lockfree,
   nextpas.core.lockfree.wait,
   nextpas.core.lockfree.ebr,
+  nextpas.core.lockfree.channel.spsc,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.time;
@@ -24,6 +25,8 @@ type
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
+  TIntChannelSpsc = specialize TLockFreeChannelSpsc<Integer>;
+  TIntSelector = specialize TLockFreeSelector<Integer>;
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 const
@@ -36,6 +39,9 @@ const
 
 var
   T: TTestSuite;
+  GForEachSum: Integer;
+  GForEachCount: Integer;
+  GComputeCallCount: Integer;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -1431,6 +1437,52 @@ begin
   LSt.Free;
 end;
 
+procedure TestStackClose;
+var
+  LSt: TIntStack;
+  LV: Integer;
+begin
+  LSt := TIntStack.Create(4);
+  try
+    Check(not LSt.IsClosed, 'stack not closed initially');
+    Check(LSt.TryPush(10), 'push before close');
+    Check(LSt.TryPush(20), 'push 2 before close');
+    LSt.Close;
+    Check(LSt.IsClosed, 'stack is closed after Close');
+    Check(not LSt.TryPush(30), 'push rejected after close');
+    Check(LSt.TryPop(LV), 'pop still works after close');
+    CheckEqual(Int64(20), Int64(LV), 'pop LIFO after close');
+    Check(LSt.TryPop(LV), 'pop 2 after close');
+    CheckEqual(Int64(10), Int64(LV), 'pop 2 LIFO after close');
+    Check(not LSt.TryPop(LV), 'empty after close');
+  finally
+    LSt.Free;
+  end;
+end;
+
+procedure TestDequeClose;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(4);
+  try
+    Check(not LD.IsClosed, 'deque not closed initially');
+    Check(LD.TryPush(10), 'push before close');
+    Check(LD.TryPush(20), 'push 2 before close');
+    LD.Close;
+    Check(LD.IsClosed, 'deque is closed after Close');
+    Check(not LD.TryPush(30), 'push rejected after close');
+    Check(LD.TryPop(LV), 'pop still works after close');
+    CheckEqual(Int64(20), Int64(LV), 'pop LIFO after close');
+    Check(LD.TryPop(LV), 'pop 2 after close');
+    CheckEqual(Int64(10), Int64(LV), 'pop 2 LIFO after close');
+    Check(not LD.TryPop(LV), 'empty after close');
+  finally
+    LD.Free;
+  end;
+end;
+
 { MPSC }
 
 var
@@ -2671,6 +2723,569 @@ begin
   end;
 end;
 
+procedure ForEachCallback(const AKey: Integer; const AValue: Integer);
+begin
+  Inc(GForEachSum, AValue);
+  Inc(GForEachCount);
+end;
+
+procedure TestHashMapForEach;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Insert(3, 30);
+    GForEachSum := 0;
+    GForEachCount := 0;
+    LM.ForEach(@ForEachCallback);
+    CheckEqual(Int64(3), Int64(GForEachCount), 'ForEach visited 3 items');
+    CheckEqual(Int64(60), Int64(GForEachSum), 'ForEach sum of values');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapForEachEmpty;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create;
+  try
+    GForEachCount := 0;
+    LM.ForEach(@ForEachCallback);
+    CheckEqual(Int64(0), Int64(GForEachCount), 'ForEach empty map visits 0');
+  finally
+    LM.Free;
+  end;
+end;
+
+type
+  PCtxSum = ^TCtxSum;
+  TCtxSum = record
+    Sum: Integer;
+    Count: Integer;
+  end;
+
+procedure ForEachCtxCallback(const AKey: Integer; const AValue: Integer; AContext: Pointer);
+var
+  LCtx: PCtxSum;
+begin
+  LCtx := PCtxSum(AContext);
+  Inc(LCtx^.Sum, AValue);
+  Inc(LCtx^.Count);
+end;
+
+procedure TestHashMapForEachCtx;
+var
+  LM: TIntIntMap;
+  LCtx: TCtxSum;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Insert(3, 30);
+    LCtx.Sum := 0;
+    LCtx.Count := 0;
+    LM.ForEachCtx(@ForEachCtxCallback, @LCtx);
+    CheckEqual(Int64(3), Int64(LCtx.Count), 'ForEachCtx visited 3 items');
+    CheckEqual(Int64(60), Int64(LCtx.Sum), 'ForEachCtx sum of values');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapGetOrInsert;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First insert - should not exist
+    LRes := LM.GetOrInsert(42, 100);
+    Check(not LRes.Existed, 'GetOrInsert first call: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsert first call: Value=100');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrInsert');
+
+    // Second call - should find existing
+    LRes := LM.GetOrInsert(42, 999);
+    Check(LRes.Existed, 'GetOrInsert second call: Existed=True');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsert second call: returns original value');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after second GetOrInsert');
+
+    // Different key
+    LRes := LM.GetOrInsert(43, 200);
+    Check(not LRes.Existed, 'GetOrInsert new key: Existed=False');
+    CheckEqual(Int64(200), Int64(LRes.Value), 'GetOrInsert new key: Value=200');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapClear;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    for LI := 1 to 100 do
+      LM.Insert(LI, LI);
+    CheckEqual(Int64(100), Int64(LM.Count), 'Count before Clear');
+    LM.Clear;
+    CheckEqual(Int64(0), Int64(LM.Count), 'Count after Clear');
+    for LI := 1 to 100 do
+      Check(not LM.Contains(LI), 'not Contains after Clear key ' + IntToStr(LI));
+
+    // Reuse after clear
+    LM.Insert(1, 999);
+    Check(LM.Contains(1), 'Contains after re-insert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after re-insert');
+  finally
+    LM.Free;
+  end;
+end;
+
+function ComputeDouble(const AKey: Integer): Integer;
+begin
+  Inc(GComputeCallCount);
+  Result := AKey * 2;
+end;
+
+procedure TestHashMapGetOrInsertFn;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First call - should compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(21, @ComputeDouble);
+    Check(not LRes.Existed, 'GetOrInsertFn first call: Existed=False');
+    CheckEqual(Int64(42), Int64(LRes.Value), 'GetOrInsertFn first call: Value=42');
+    CheckEqual(Int64(1), Int64(GComputeCallCount), 'GetOrInsertFn first call: compute invoked');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrInsertFn');
+
+    // Second call - should NOT compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(21, @ComputeDouble);
+    Check(LRes.Existed, 'GetOrInsertFn second call: Existed=True');
+    CheckEqual(Int64(42), Int64(LRes.Value), 'GetOrInsertFn second call: returns original');
+    CheckEqual(Int64(0), Int64(GComputeCallCount), 'GetOrInsertFn second call: compute NOT invoked');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after second GetOrInsertFn');
+
+    // Different key - should compute
+    GComputeCallCount := 0;
+    LRes := LM.GetOrInsertFn(50, @ComputeDouble);
+    Check(not LRes.Existed, 'GetOrInsertFn new key: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrInsertFn new key: Value=100');
+    CheckEqual(Int64(1), Int64(GComputeCallCount), 'GetOrInsertFn new key: compute invoked');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
+var
+  GSingleKeyMap: TIntIntMap;
+  GSingleKeyComputeCount: Int32;
+
+function SingleKeyCompute(const AKey: Integer): Integer;
+begin
+  InterlockedIncrement(GSingleKeyComputeCount);
+  // Simulate expensive computation
+  platform_thread_sleep_ns(5000000);
+  Result := AKey * 10;
+end;
+
+function SingleKeyRaceWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  Result := nil;
+  LRes := GSingleKeyMap.GetOrInsertFn(42, @SingleKeyCompute);
+  CheckEqual(Int64(420), Int64(LRes.Value), 'Single-key race: all threads must see value=420');
+end;
+
+procedure TestHashMapGetOrInsertFnSingleKeyRace;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+begin
+  GSingleKeyMap := TIntIntMap.Create;
+  GSingleKeyComputeCount := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LHandles[LI], @SingleKeyRaceWorker, nil,
+        'Single-key race worker ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'Single-key race worker');
+    CheckEqual(Int64(1), Int64(GSingleKeyMap.Count), 'Single-key race: exactly 1 entry');
+    CheckEqual(Int64(1), Int64(GSingleKeyComputeCount), 'Single-key race: compute called exactly once');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'Single-key race worker');
+    GSingleKeyMap.Free;
+  end;
+end;
+
+function IncrementValue(const AOld: Integer): Integer;
+begin
+  Result := AOld + 1;
+end;
+
+procedure TestHashMapGetOrUpdate;
+var
+  LM: TIntIntMap;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First call - key doesn't exist, inserts default=1
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(not LRes.Existed, 'GetOrUpdate first call: Existed=False');
+    CheckEqual(Int64(1), Int64(LRes.Value), 'GetOrUpdate first call: Value=1 (default)');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after first GetOrUpdate');
+
+    // Second call - key exists, increments
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(LRes.Existed, 'GetOrUpdate second call: Existed=True');
+    CheckEqual(Int64(2), Int64(LRes.Value), 'GetOrUpdate second call: Value=2 (incremented)');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+
+    // Third call - increments again
+    LRes := LM.GetOrUpdate(10, 1, @IncrementValue);
+    Check(LRes.Existed, 'GetOrUpdate third call: Existed=True');
+    CheckEqual(Int64(3), Int64(LRes.Value), 'GetOrUpdate third call: Value=3');
+
+    // Different key - inserts default
+    LRes := LM.GetOrUpdate(20, 100, @IncrementValue);
+    Check(not LRes.Existed, 'GetOrUpdate new key: Existed=False');
+    CheckEqual(Int64(100), Int64(LRes.Value), 'GetOrUpdate new key: Value=100 (default)');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second key');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapTryInsert;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    // First insert - should succeed
+    Check(LM.TryInsert(1, 100), 'TryInsert new key succeeds');
+    Check(LM.Find(1, LV), 'Find after TryInsert');
+    CheckEqual(Int64(100), Int64(LV), 'value after TryInsert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after TryInsert');
+
+    // Second insert same key - should fail
+    Check(not LM.TryInsert(1, 999), 'TryInsert existing key fails');
+    Check(LM.Find(1, LV), 'Find after failed TryInsert');
+    CheckEqual(Int64(100), Int64(LV), 'value unchanged after failed TryInsert');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged after failed TryInsert');
+
+    // Different key - should succeed
+    Check(LM.TryInsert(2, 200), 'TryInsert different key succeeds');
+    CheckEqual(Int64(2), Int64(LM.Count), 'Count after second TryInsert');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapRemoveWithOldValue;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 100);
+    LM.Insert(2, 200);
+
+    // Remove existing - returns old value
+    Check(LM.Remove(1, LV), 'Remove existing key');
+    CheckEqual(Int64(100), Int64(LV), 'returned old value');
+    Check(not LM.Contains(1), 'key removed');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count after Remove');
+
+    // Remove non-existing - returns false
+    Check(not LM.Remove(99, LV), 'Remove non-existing key returns false');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapReplace;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 100);
+
+    // Replace existing - returns old value
+    Check(LM.Replace(1, 200, LV), 'Replace existing key');
+    CheckEqual(Int64(100), Int64(LV), 'returned old value');
+    Check(LM.Find(1, LV), 'Find after Replace');
+    CheckEqual(Int64(200), Int64(LV), 'new value after Replace');
+    CheckEqual(Int64(1), Int64(LM.Count), 'Count unchanged');
+
+    // Replace non-existing - returns false
+    Check(not LM.Replace(99, 300, LV), 'Replace non-existing returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ --- Selector tests --- }
+
+procedure TestSelectorBasic;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // Ch1 有数据，Ch2 空 → 应该选中 Ch1 recv
+    LCh1.Send(42);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'select completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'selects Ch1 (index 0)');
+    CheckEqual(Int64(42), Int64(LVal), 'received value 42');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorSend;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddSend(LCh1, 99);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'send completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'send index 0');
+    Check(LCh1.TryReceive(LVal), 'can receive sent value');
+    CheckEqual(Int64(99), Int64(LVal), 'sent value is 99');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorTimeout;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // 空 channel，超时应返回 false
+    LSel.AddRecv(LCh1, LVal);
+    LResult := LSel.SelectTimeout(10000000); // 10ms
+    Check(not LResult.Completed, 'timeout returns not completed');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'timeout index is -1');
+
+    // 超时前有数据到达
+    LCh1.Send(77);
+    LResult := LSel.SelectTimeout(1000000000); // 1s
+    Check(LResult.Completed, 'data arrives before timeout');
+    CheckEqual(Int64(77), Int64(LVal), 'received value before timeout');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorMultiChannel;
+var
+  LCh1, LCh2, LCh3: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LCh3 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    // 只有 Ch3 有数据
+    LCh3.Send(55);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LSel.AddRecv(LCh3, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'select completes');
+    CheckEqual(Int64(2), Int64(LResult.Index), 'selects Ch3 (index 2)');
+    CheckEqual(Int64(55), Int64(LVal), 'received value 55');
+  finally
+    LSel.Free;
+    LCh3.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorClearReuse;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh1.Send(10);
+    LSel.AddRecv(LCh1, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'first select completes');
+    CheckEqual(Int64(10), Int64(LVal), 'first select value');
+
+    // Clear + 重新注册
+    LSel.Clear;
+    CheckEqual(Int64(0), Int64(LSel.CaseCount), 'clear sets count to 0');
+    LCh2.Send(20);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.Select;
+    Check(LResult.Completed, 'second select completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'second select index 0');
+    CheckEqual(Int64(20), Int64(LVal), 'second select value');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorSendFull;
+var
+  LCh1: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  // 测试 selector 在满 channel 上超时
+  LCh1 := TIntChannel.Create(2);
+  LSel := TIntSelector.Create;
+  try
+    // 填满 channel
+    LCh1.Send(1);
+    LCh1.Send(2);
+    // send 到满 channel → 应超时
+    LSel.AddSend(LCh1, 3);
+    LResult := LSel.SelectTimeout(10000000); // 10ms
+    Check(not LResult.Completed, 'send to full channel times out');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'timeout index -1');
+
+    // Clear + 清空 channel 后重试
+    LSel.Clear;
+    while LCh1.TryReceive(LVal) do ; // 排空
+    LSel.AddSend(LCh1, 3);
+    LResult := LSel.SelectTimeout(1000000000); // 1s
+    Check(LResult.Completed, 'send succeeds after drain');
+    Check(LCh1.TryReceive(LVal), 'can receive sent value');
+    CheckEqual(Int64(3), Int64(LVal), 'sent value is 3');
+  finally
+    LSel.Free;
+    LCh1.Free;
+  end;
+end;
+
+procedure TestSelectorNilChannelReject;
+var
+  LSel: TIntSelector;
+  LVal: Integer;
+  LCaught: Boolean;
+begin
+  LSel := TIntSelector.Create;
+  try
+    LCaught := False;
+    try
+      LSel.AddRecv(TIntChannel(nil), LVal);
+    except
+      on E: EArgumentError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil channel recv raises EArgumentError');
+
+    LCaught := False;
+    try
+      LSel.AddSend(TIntChannel(nil), 42);
+    except
+      on E: EArgumentError do
+        LCaught := True;
+    end;
+    Check(LCaught, 'nil channel send raises EArgumentError');
+  finally
+    LSel.Free;
+  end;
+end;
+
+procedure TestChannelCapacityEnforce;
+var
+  LCh: TIntChannel;
+  LI: Integer;
+  LVal: Integer;
+begin
+  // 容量=2 的 channel，只允许 2 个 send，第 3 个必须失败
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySend(1), 'send 1 succeeds');
+    Check(LCh.TrySend(2), 'send 2 succeeds');
+    Check(not LCh.TrySend(3), 'send 3 rejected (capacity full)');
+    Check(not LCh.TrySend(4), 'send 4 also rejected');
+
+    // 消费后可以继续发送
+    Check(LCh.TryReceive(LVal), 'receive succeeds');
+    CheckEqual(Int64(1), Int64(LVal), 'received value 1');
+    Check(LCh.TrySend(3), 'send 3 now succeeds after drain');
+    Check(not LCh.TrySend(4), 'send 4 still rejected');
+
+    // 多轮循环验证
+    for LI := 0 to 9 do
+    begin
+      Check(LCh.TryReceive(LVal), 'cycle receive ' + IntToStr(LI));
+      Check(LCh.TrySend(10 + LI), 'cycle send ' + IntToStr(LI));
+      Check(not LCh.TrySend(99), 'cycle rejected at ' + IntToStr(LI));
+    end;
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestSegQueueBasic;
 var
   LQ: TIntSegQueue;
@@ -2806,6 +3421,77 @@ begin
     CheckEqual(Int64(500500), LSum, 'SegQueue 4P sum 1+2+...+1000');
   finally
     JoinStartedThreads(LHandles, LHandleCount, 'SegQueue producer thread');
+    GSegQueueQ.Free;
+  end;
+end;
+
+var
+  GSegQueueMpmcSum: Int64;
+  GSegQueueMpmcCount: Int64;
+  GSegQueueMpmcStop: Int32;
+
+function SegQueueConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LSum: Int64;
+  LCount: Int64;
+begin
+  Result := nil;
+  LSum := 0;
+  LCount := 0;
+  while (AtomicLoad32(GSegQueueMpmcStop, moRelaxed) = 0) or (not GSegQueueQ.IsEmpty) do
+  begin
+    if GSegQueueQ.TryDequeue(LV) then
+    begin
+      Inc(LSum, Int64(LV));
+      Inc(LCount);
+    end
+    else
+      CpuPause;
+  end;
+  AtomicFetchAdd64(GSegQueueMpmcSum, LSum, moRelaxed);
+  AtomicFetchAdd64(GSegQueueMpmcCount, LCount, moRelaxed);
+end;
+
+procedure TestSegQueueMpmc;
+const
+  ITEMS_PER_PRODUCER = 250;
+  PRODUCER_COUNT = 4;
+  CONSUMER_COUNT = 4;
+var
+  LProducers: array[0..PRODUCER_COUNT - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..CONSUMER_COUNT - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LProducerCount, LConsumerCount: Integer;
+begin
+  GSegQueueQ := TIntSegQueue.Create;
+  AtomicStore64(GSegQueueMpmcSum, 0, moRelaxed);
+  AtomicStore64(GSegQueueMpmcCount, 0, moRelaxed);
+  AtomicStore32(GSegQueueMpmcStop, 0, moRelease);
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    for LI := 0 to CONSUMER_COUNT - 1 do
+    begin
+      StartThread(LConsumers[LI], @SegQueueConsumer, nil, 'SegQueue consumer thread');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to PRODUCER_COUNT - 1 do
+    begin
+      StartThread(LProducers[LI], @SegQueueProducer, Pointer(PtrInt(LI * ITEMS_PER_PRODUCER + 1)), 'SegQueue producer thread');
+      Inc(LProducerCount);
+    end;
+    JoinStartedThreads(LProducers, LProducerCount, 'SegQueue producer thread');
+    AtomicStore32(GSegQueueMpmcStop, 1, moRelease);
+    JoinStartedThreads(LConsumers, LConsumerCount, 'SegQueue consumer thread');
+    CheckEqual(Int64(PRODUCER_COUNT * ITEMS_PER_PRODUCER), AtomicLoad64(GSegQueueMpmcCount, moRelaxed),
+      'SegQueue MPMC total items consumed');
+    CheckEqual(Int64(500500), AtomicLoad64(GSegQueueMpmcSum, moRelaxed),
+      'SegQueue MPMC sum 1+2+...+1000');
+  finally
+    AtomicStore32(GSegQueueMpmcStop, 1, moRelease);
+    JoinStartedThreads(LProducers, LProducerCount, 'SegQueue producer thread');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'SegQueue consumer thread');
     GSegQueueQ.Free;
   end;
 end;
@@ -3190,6 +3876,734 @@ begin
     Check(not LQ.TryDequeue(LV), 'SPMC queue must be empty after DequeueTimeout consumed');
   finally
     LQ.Free;
+  end;
+end;
+
+{ MPSC TryEnqueue + ApproxCount }
+
+procedure TestMpscTryEnqueue;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(LQ.TryEnqueue(10), 'TryEnqueue 1');
+    Check(LQ.TryEnqueue(20), 'TryEnqueue 2');
+    CheckEqual(Int64(2), Int64(LQ.ApproxCount), 'ApproxCount 2');
+    LQ.Close;
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    CheckEqual(Int64(0), Int64(LQ.ApproxCount), 'ApproxCount 0 after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ SegQueue TryEnqueue + Close }
+
+procedure TestSegQueueTryEnqueueClose;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(not LQ.IsClosed, 'not closed initially');
+    Check(LQ.TryEnqueue(10), 'TryEnqueue 1');
+    Check(LQ.TryEnqueue(20), 'TryEnqueue 2');
+    LQ.Close;
+    Check(LQ.IsClosed, 'closed after Close');
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'empty after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ SPMC Close }
+
+procedure TestSpmcClose;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(4);
+  try
+    Check(not LQ.IsClosed, 'not closed initially');
+    Check(LQ.TryEnqueue(10), 'enqueue 1');
+    Check(LQ.TryEnqueue(20), 'enqueue 2');
+    LQ.Close;
+    Check(LQ.IsClosed, 'closed after Close');
+    Check(not LQ.TryEnqueue(30), 'TryEnqueue after close rejected');
+    Check(not LQ.EnqueueWait(30), 'EnqueueWait after close rejected');
+    Check(not LQ.EnqueueTimeout(30, 1000000), 'EnqueueTimeout after close rejected');
+    Check(LQ.TryDequeue(LV), 'drain 1');
+    CheckEqual(Int64(10), Int64(LV));
+    Check(LQ.TryDequeue(LV), 'drain 2');
+    CheckEqual(Int64(20), Int64(LV));
+    Check(not LQ.TryDequeue(LV), 'empty after drain');
+    Check(not LQ.DequeueWait(LV), 'DequeueWait on closed empty');
+    Check(not LQ.DequeueTimeout(LV, 1000000), 'DequeueTimeout on closed empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ Channel IsEmpty }
+
+procedure TestChannelIsEmpty;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.IsEmpty, 'empty initially');
+    LCh.TrySend(1);
+    Check(not LCh.IsEmpty, 'not empty after send');
+    LCh.TrySend(2);
+    Check(not LCh.IsEmpty, 'not empty with 2 items');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ Selector TrySelect }
+
+procedure TestSelectorTrySelect;
+var
+  LCh1, LCh2: TIntChannel;
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+  LVal: Integer;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+
+    // 空 channel → TrySelect 应返回 false
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'TrySelect on empty returns not completed');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'TrySelect on empty index -1');
+
+    // 有数据 → TrySelect 应返回 true
+    LCh2.Send(55);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'TrySelect with data completes');
+    CheckEqual(Int64(1), Int64(LResult.Index), 'TrySelect selects Ch2 (index 1)');
+    CheckEqual(Int64(55), Int64(LVal), 'TrySelect received value 55');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+{ Channel 4P+4C stress test }
+
+var
+  GChannelStressQ: TIntChannel;
+  GChannelStressSum: Int64;
+
+function ChannelStressProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + 249 do
+    GChannelStressQ.Send(LI);
+end;
+
+function ChannelStressConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+begin
+  Result := nil;
+  while GChannelStressQ.Receive(LV) do
+    InterlockedExchangeAdd64(GChannelStressSum, Int64(LV));
+end;
+
+procedure TestChannelStress;
+var
+  LProducers: array[0..3] of TPlatformThreadHandle;
+  LConsumers: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LExpected: Int64;
+  LProducerCount: Integer;
+  LConsumerCount: Integer;
+begin
+  GChannelStressQ := TIntChannel.Create(64);
+  GChannelStressSum := 0;
+  LProducerCount := 0;
+  LConsumerCount := 0;
+  try
+    for LI := 0 to 3 do
+    begin
+      StartThread(LConsumers[LI], @ChannelStressConsumer, nil, 'Channel stress consumer');
+      Inc(LConsumerCount);
+    end;
+    for LI := 0 to 3 do
+    begin
+      StartThread(LProducers[LI], @ChannelStressProducer, Pointer(PtrInt(LI * 250 + 1)), 'Channel stress producer');
+      Inc(LProducerCount);
+    end;
+    JoinStartedThreads(LProducers, LProducerCount, 'Channel stress producer');
+    platform_thread_sleep_ns(10000000);
+    GChannelStressQ.Close;
+    JoinStartedThreads(LConsumers, LConsumerCount, 'Channel stress consumer');
+    LExpected := Int64(1000) * 1001 div 2;
+    CheckEqual(LExpected, GChannelStressSum, 'Channel 4P+4C sum');
+  finally
+    GChannelStressQ.Close;
+    JoinStartedThreads(LProducers, LProducerCount, 'Channel stress producer');
+    JoinStartedThreads(LConsumers, LConsumerCount, 'Channel stress consumer');
+    GChannelStressQ.Free;
+  end;
+end;
+
+{ Channel Close-while-Send }
+
+var
+  GChannelCloseSendQ: TIntChannel;
+  GChannelCloseSendStarted: Int32;
+  GChannelCloseSendResult: Int32;
+
+function ChannelCloseSendBlockedProducer(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  AtomicStore32(GChannelCloseSendStarted, 1, moRelease);
+  if GChannelCloseSendQ.SendTimeout(42, 5000000000) then
+    AtomicStore32(GChannelCloseSendResult, 0, moRelease)
+  else
+    AtomicStore32(GChannelCloseSendResult, 1, moRelease);
+end;
+
+procedure TestChannelCloseWhileSend;
+var
+  LCh: TIntChannel;
+  LProducer: TPlatformThreadHandle;
+  LElapsedMs: QWord;
+  LSpin: Integer;
+  LProducerStarted: Boolean;
+  LResult: Int32;
+begin
+  LCh := TIntChannel.Create(1);
+  LProducerStarted := False;
+  try
+    Check(LCh.TrySend(1), 'fill channel before blocked send');
+    GChannelCloseSendQ := LCh;
+    AtomicStore32(GChannelCloseSendStarted, 0, moRelease);
+    AtomicStore32(GChannelCloseSendResult, -1, moRelease);
+    StartThread(LProducer, @ChannelCloseSendBlockedProducer, nil, 'Channel close-while-send producer');
+    LProducerStarted := True;
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(GChannelCloseSendStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GChannelCloseSendStarted, moAcquire)),
+      'blocked SendTimeout thread must start before close');
+    LElapsedMs := GetTickCount64;
+    LCh.Close;
+    JoinStartedThread(LProducer, LProducerStarted, 'Channel close-while-send producer');
+    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LResult := AtomicLoad32(GChannelCloseSendResult, moAcquire);
+    Check(LResult >= 0, 'blocked SendTimeout must complete after close (0=sent before close, 1=closed)');
+    Check(LElapsedMs < 1000, 'blocked SendTimeout should return promptly after close');
+  finally
+    if LProducerStarted then
+    begin
+      LCh.Close;
+      JoinStartedThread(LProducer, LProducerStarted, 'Channel close-while-send producer');
+    end;
+    GChannelCloseSendQ := nil;
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscBasic;
+var
+  LCh: TIntChannelSpsc;
+  LVal: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    Check(LCh.TrySend(1), 'TrySend(1) should succeed');
+    Check(LCh.TrySend(2), 'TrySend(2) should succeed');
+    Check(LCh.TrySend(3), 'TrySend(3) should succeed');
+    Check(LCh.TrySend(4), 'TrySend(4) should succeed');
+    Check(not LCh.TrySend(5), 'TrySend(5) should fail (full)');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(1, LVal, 'First value should be 1');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(2, LVal, 'Second value should be 2');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(3, LVal, 'Third value should be 3');
+    Check(LCh.TryReceive(LVal), 'TryReceive should succeed');
+    CheckEqual(4, LVal, 'Fourth value should be 4');
+    Check(not LCh.TryReceive(LVal), 'TryReceive should fail (empty)');
+    Check(LCh.IsEmpty, 'Channel should be empty');
+    CheckEqual(4, Integer(LCh.Capacity), 'Capacity should be 4');
+  finally
+    LCh.Free;
+  end;
+end;
+
+var
+  GChannelSpscQ: TIntChannelSpsc;
+  GChannelSpscSum: Int64;
+  GChannelSpscIterations: Integer;
+
+function ChannelSpscProducerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  for LI := 1 to GChannelSpscIterations do
+  begin
+    while not GChannelSpscQ.TrySend(LI) do
+      CpuPause;
+  end;
+  Result := nil;
+end;
+
+function ChannelSpscConsumerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LVal: Integer;
+begin
+  for LI := 1 to GChannelSpscIterations do
+  begin
+    while not GChannelSpscQ.TryReceive(LVal) do
+      CpuPause;
+    AtomicFetchAdd64(GChannelSpscSum, Int64(LVal), moRelaxed);
+  end;
+  Result := nil;
+end;
+
+procedure TestChannelSpscStress;
+const
+  ITERATIONS = 100000;
+var
+  LCh: TIntChannelSpsc;
+  LProducer, LConsumer: TPlatformThreadHandle;
+  LProducerStarted, LConsumerStarted: Boolean;
+begin
+  LCh := TIntChannelSpsc.Create(64);
+  LProducerStarted := False;
+  LConsumerStarted := False;
+  try
+    AtomicStore64(GChannelSpscSum, 0, moRelaxed);
+    GChannelSpscQ := LCh;
+    GChannelSpscIterations := ITERATIONS;
+    StartThread(LProducer, @ChannelSpscProducerThread, nil, 'SPSC producer');
+    LProducerStarted := True;
+    StartThread(LConsumer, @ChannelSpscConsumerThread, nil, 'SPSC consumer');
+    LConsumerStarted := True;
+    JoinStartedThread(LProducer, LProducerStarted, 'SPSC producer');
+    JoinStartedThread(LConsumer, LConsumerStarted, 'SPSC consumer');
+    CheckEqual(Int64(ITERATIONS * (ITERATIONS + 1) div 2), AtomicLoad64(GChannelSpscSum, moRelaxed),
+      'SPSC stress sum mismatch');
+  finally
+    GChannelSpscQ := nil;
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscTimeout;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  LStart, LElapsed: UInt64;
+begin
+  LCh := TIntChannelSpsc.Create(2);
+  try
+    { Fill the channel }
+    Check(LCh.TrySend(1), 'First send must succeed');
+    Check(LCh.TrySend(2), 'Second send must succeed');
+    Check(not LCh.TrySend(3), 'Third send must fail (full)');
+
+    { SendTimeout should timeout }
+    LStart := GetTickCount64;
+    Check(not LCh.SendTimeout(3, 10000000), 'SendTimeout must timeout (10ms)');
+    LElapsed := GetTickCount64 - LStart;
+    Check(LElapsed >= 8, 'SendTimeout must wait at least 8ms');
+
+    { Receive one item }
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(1, LV, 'Received value must be 1');
+
+    { Now SendTimeout should succeed }
+    Check(LCh.SendTimeout(3, 10000000), 'SendTimeout must succeed after receive');
+
+    { ReceiveTimeout on empty channel should timeout }
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(2, LV, 'Received value must be 2');
+    Check(LCh.TryReceive(LV), 'Receive must succeed');
+    CheckEqual(3, LV, 'Received value must be 3');
+
+    LStart := GetTickCount64;
+    Check(not LCh.ReceiveTimeout(LV, 10000000), 'ReceiveTimeout must timeout (10ms)');
+    LElapsed := GetTickCount64 - LStart;
+    Check(LElapsed >= 8, 'ReceiveTimeout must wait at least 8ms');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscClose;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    { Send some items before close }
+    Check(LCh.TrySend(10), 'Send before close must succeed');
+    Check(LCh.TrySend(20), 'Send before close must succeed');
+
+    { Close the channel }
+    LCh.Close;
+    Check(LCh.IsClosed, 'Channel must be closed');
+
+    { Cannot send after close }
+    Check(not LCh.TrySend(30), 'TrySend after close must fail');
+
+    { Can still receive pending items }
+    Check(LCh.TryReceive(LV), 'Receive pending item must succeed');
+    CheckEqual(10, LV, 'First pending value must be 10');
+    Check(LCh.TryReceive(LV), 'Receive pending item must succeed');
+    CheckEqual(20, LV, 'Second pending value must be 20');
+
+    { No more items }
+    Check(not LCh.TryReceive(LV), 'Receive after drain must fail');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscCapacity;
+var
+  LCh: TIntChannelSpsc;
+begin
+  LCh := TIntChannelSpsc.Create(8);
+  try
+    CheckEqual(8, LCh.Capacity, 'Capacity must be 8');
+    Check(LCh.IsEmpty, 'New channel must be empty');
+    CheckEqual(0, LCh.ApproxLen, 'ApproxLen must be 0');
+
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.TrySend(3);
+    Check(not LCh.IsEmpty, 'Channel with items must not be empty');
+    CheckEqual(3, LCh.ApproxLen, 'ApproxLen must be 3');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscWrapAround;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  I: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(4);
+  try
+    { Fill and drain multiple times to test wrap-around }
+    for I := 1 to 100 do
+    begin
+      Check(LCh.TrySend(I), 'Send must succeed');
+      Check(LCh.TryReceive(LV), 'Receive must succeed');
+      CheckEqual(I, LV, 'Value must match');
+    end;
+    Check(LCh.IsEmpty, 'Channel must be empty after drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: SPSC capacity=1                                    }
+{ ============================================================ }
+
+procedure TestSpscCapacityOne;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+begin
+  LQ := TIntSpsc.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LQ.Capacity), 'capacity=1');
+    Check(LQ.IsEmpty, 'initially empty');
+    Check(not LQ.IsFull, 'initially not full');
+    Check(LQ.TryEnqueue(42), 'enqueue to capacity=1');
+    Check(not LQ.TryEnqueue(99), 'enqueue to full capacity=1');
+    Check(LQ.IsFull, 'full after enqueue');
+    Check(LQ.TryDequeue(LV), 'dequeue from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LQ.IsEmpty, 'empty after dequeue');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: SPSC capacity=2                                    }
+{ ============================================================ }
+
+procedure TestSpscCapacityTwo;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+begin
+  LQ := TIntSpsc.Create(2);
+  try
+    CheckEqual(Int64(2), Int64(LQ.Capacity), 'capacity=2');
+    Check(LQ.TryEnqueue(1), 'enqueue first');
+    Check(LQ.TryEnqueue(2), 'enqueue second');
+    Check(not LQ.TryEnqueue(3), 'enqueue to full capacity=2');
+    Check(LQ.TryDequeue(LV), 'dequeue first');
+    CheckEqual(1, LV, 'first value');
+    Check(LQ.TryDequeue(LV), 'dequeue second');
+    CheckEqual(2, LV, 'second value');
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: MPMC capacity=1                                    }
+{ ============================================================ }
+
+procedure TestMpmcCapacityOne;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+begin
+  LQ := TIntMpmc.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LQ.Capacity), 'capacity=1');
+    Check(LQ.TryEnqueue(42), 'enqueue to capacity=1');
+    Check(not LQ.TryEnqueue(99), 'enqueue to full capacity=1');
+    Check(LQ.TryDequeue(LV), 'dequeue from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Stack capacity=1                                   }
+{ ============================================================ }
+
+procedure TestStackCapacityOne;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(1);
+  try
+    Check(LS.TryPush(42), 'push to capacity=1');
+    Check(not LS.TryPush(99), 'push to full capacity=1');
+    Check(LS.TryPop(LV), 'pop from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(not LS.TryPop(LV), 'pop from empty');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Deque capacity=1                                   }
+{ ============================================================ }
+
+procedure TestDequeCapacityOne;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(1);
+  try
+    Check(LD.TryPush(42), 'push to capacity=1');
+    Check(not LD.TryPush(99), 'push to full capacity=1');
+    Check(LD.TryPop(LV), 'pop from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+  finally
+    LD.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: HashMap single key stress                          }
+{ ============================================================ }
+
+procedure TestHashMapSingleKeyStress;
+const
+  OPS = 10000;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+  LV: Integer;
+  LFound: Boolean;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    { Repeatedly insert/update/remove the same key }
+    for LI := 1 to OPS do
+    begin
+      LM.Insert(1, LI);
+      LFound := LM.Find(1, LV);
+      Check(LFound, 'key must exist after insert');
+      CheckEqual(LI, LV, 'value must match');
+    end;
+    LM.Remove(1);
+    Check(not LM.Find(1, LV), 'key must not exist after remove');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: HashMap many keys stress                           }
+{ ============================================================ }
+
+procedure TestHashMapManyKeysStress;
+const
+  KEY_COUNT = 1000;
+var
+  LM: TIntIntMap;
+  LI: Integer;
+  LV: Integer;
+  LFound: Boolean;
+begin
+  LM := TIntIntMap.Create(16);
+  try
+    { Insert many keys }
+    for LI := 1 to KEY_COUNT do
+      LM.Insert(LI, LI * 10);
+    CheckEqual(PtrUInt(KEY_COUNT), LM.Count, 'count after insert');
+    { Verify all keys }
+    for LI := 1 to KEY_COUNT do
+    begin
+      LFound := LM.Find(LI, LV);
+      Check(LFound, 'key must exist');
+      CheckEqual(LI * 10, LV, 'value must match');
+    end;
+    { Remove all keys }
+    for LI := 1 to KEY_COUNT do
+      Check(LM.Remove(LI), 'remove must succeed');
+    CheckEqual(PtrUInt(0), LM.Count, 'count after remove all');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Channel capacity=2                                 }
+{ ============================================================ }
+
+procedure TestChannelCapacityTwo;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySend(42), 'send to capacity=2');
+    Check(LCh.TrySend(99), 'send second to capacity=2');
+    Check(not LCh.TrySend(100), 'send to full capacity=2');
+    Check(LCh.TryReceive(LV), 'receive from capacity=2');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.TryReceive(LV), 'receive second from capacity=2');
+    CheckEqual(99, LV, 'second value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Channel SPSC capacity=1                            }
+{ ============================================================ }
+
+procedure TestChannelSpscCapacityOne;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+begin
+  LCh := TIntChannelSpsc.Create(1);
+  try
+    Check(LCh.TrySend(42), 'send to capacity=1');
+    Check(not LCh.TrySend(99), 'send to full capacity=1');
+    Check(LCh.TryReceive(LV), 'receive from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: Selector with single channel                       }
+{ ============================================================ }
+
+procedure TestSelectorSingleChannel;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LV: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(8);
+  LSel := TIntSelector.Create;
+  try
+    LV := 0;
+    LSel.AddRecv(LCh, LV);
+    LCh.TrySend(42);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'select must succeed');
+    CheckEqual(42, LV, 'value must match');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Edge-case: EBR with many guards                               }
+{ ============================================================ }
+
+procedure TestEbrManyGuards;
+const
+  GUARD_COUNT = 100;
+var
+  LDomain: TEbrDomain;
+  LGuards: array[0..GUARD_COUNT - 1] of TEbrGuard;
+  LI: Integer;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    { Acquire many guards }
+    for LI := 0 to GUARD_COUNT - 1 do
+      LGuards[LI] := TEbrGuard.Acquire(LDomain);
+    { Release all guards }
+    for LI := 0 to GUARD_COUNT - 1 do
+      LGuards[LI].Release;
+  finally
+    LDomain.Free;
   end;
 end;
 
@@ -3669,7 +5083,7 @@ begin
     '`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.',
     'lockfree README must document single-slot MPMC support');
   CheckContains(LDocsReadme,
-    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
+    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.',
@@ -4196,14 +5610,14 @@ begin
   CheckContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress:',
     'goal tree must report lockfree by evidence level instead of broad completion wording');
-  CheckContains(LCoreGoalTree, 'lockfree stress 12/12',
+  CheckContains(LCoreGoalTree, 'lockfree stress 14/14',
     'goal tree evidence header must report the current lockfree stress count');
-  CheckNotContains(LCoreGoalTree, 'lockfree stress 11/11',
+  CheckNotContains(LCoreGoalTree, 'lockfree stress 13/13',
     'goal tree evidence header must not keep stale lockfree stress count');
   CheckNotContains(LCoreGoalTree,
     '| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成/强化中',
     'goal tree must not report lockfree as broad completion without evidence-level truth');
-  CheckContains(LChannelSource, 'EInvalidOperationError.Create(''TLockFreeChannel.Send: channel closed''',
+  CheckContains(LChannelSource, 'TLockFreeChannel.Send: channel closed',
     'channel Send on closed must raise EInvalidOperationError');
   CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
     'hashmap ShardLock must use AtomicExchange with moAcquire');
@@ -4417,7 +5831,7 @@ begin
   CheckContains(LDocsReadme,
     'Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged',
     'lockfree README must document the wait helper lost-wake guard');
-  CheckContains(LBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
+  CheckContains(LBenchSource, 'WriteLn(''Platform: '', OSName, ''/'', CPUName)',
     'lockfree benchmark must print the platform evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',
     'lockfree benchmark must print the compiler flags evidence field');
@@ -4573,6 +5987,7 @@ begin
   T.Test('MPMC timeout', @TestMpmcTimeout);
   T.Test('Stack basic', @TestStackBasic);
   T.Test('Stack query contract', @TestStackQueryContract);
+  T.Test('Stack close', @TestStackClose);
   T.Test('MPSC basic', @TestMpscBasic);
   T.Test('MPSC close producer contract', @TestMpscCloseProducerContract);
   T.Test('MPSC close wake timeout', @TestMpscCloseWakeTimeout);
@@ -4581,6 +5996,7 @@ begin
   T.Test('MPSC multi-producer', @TestMpscMultiProducer);
   T.Test('Deque basic', @TestDequeBasic);
   T.Test('Deque query contract', @TestDequeQueryContract);
+  T.Test('Deque close', @TestDequeClose);
   T.Test('SPSC capacity/empty/full', @TestSpscCapacity);
   T.Test('MPMC batch', @TestMpmcBatch);
   T.Test('MPMC batch partial progress', @TestMpmcBatchPartialProgress);
@@ -4610,6 +6026,25 @@ begin
   T.Test('HashMap multiple keys', @TestHashMapMultipleKeys);
   T.Test('HashMap zero count', @TestHashMapZeroCount);
   T.Test('HashMap resize', @TestHashMapResize);
+  T.Test('HashMap ForEach', @TestHashMapForEach);
+  T.Test('HashMap ForEach empty', @TestHashMapForEachEmpty);
+  T.Test('HashMap ForEachCtx', @TestHashMapForEachCtx);
+  T.Test('HashMap GetOrInsert', @TestHashMapGetOrInsert);
+  T.Test('HashMap GetOrInsertFn', @TestHashMapGetOrInsertFn);
+  T.Test('HashMap GetOrInsertFn single-key race', @TestHashMapGetOrInsertFnSingleKeyRace);
+  T.Test('HashMap GetOrUpdate', @TestHashMapGetOrUpdate);
+  T.Test('HashMap TryInsert', @TestHashMapTryInsert);
+  T.Test('HashMap Remove with old value', @TestHashMapRemoveWithOldValue);
+  T.Test('HashMap Replace', @TestHashMapReplace);
+  T.Test('HashMap Clear', @TestHashMapClear);
+  T.Test('Selector basic recv', @TestSelectorBasic);
+  T.Test('Selector send', @TestSelectorSend);
+  T.Test('Selector timeout', @TestSelectorTimeout);
+  T.Test('Selector multi-channel', @TestSelectorMultiChannel);
+  T.Test('Selector clear+reuse', @TestSelectorClearReuse);
+  T.Test('Selector send full', @TestSelectorSendFull);
+  T.Test('Selector nil channel reject', @TestSelectorNilChannelReject);
+  T.Test('Channel capacity enforce', @TestChannelCapacityEnforce);
   T.Test('Stack 4P+4C stress', @TestStackStress);
   T.Test('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Test('SegQueue basic', @TestSegQueueBasic);
@@ -4617,6 +6052,7 @@ begin
   T.Test('SegQueue empty', @TestSegQueueEmpty);
   T.Test('SegQueue approx count', @TestSegQueueApproxCount);
   T.Test('SegQueue multi-producer', @TestSegQueueMultiProducer);
+  T.Test('SegQueue 4P+4C MPMC', @TestSegQueueMpmc);
   T.Test('SegQueue destroy active segments', @TestSegQueueDestroyActiveSegments);
   T.Test('SPMC basic', @TestSpmcBasic);
   T.Test('SPMC capacity', @TestSpmcCapacity);
@@ -4630,10 +6066,37 @@ begin
   T.Test('SPMC dequeue wait wakes on data', @TestSpmcDequeueWaitWake);
   T.Test('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
+  T.Test('MPSC TryEnqueue + ApproxCount', @TestMpscTryEnqueue);
+  T.Test('SegQueue TryEnqueue + Close', @TestSegQueueTryEnqueueClose);
+  T.Test('SPMC Close', @TestSpmcClose);
+  T.Test('Channel IsEmpty', @TestChannelIsEmpty);
+  T.Test('Selector TrySelect', @TestSelectorTrySelect);
+  T.Test('Channel 4P+4C stress', @TestChannelStress);
+  T.Test('Channel close while Send', @TestChannelCloseWhileSend);
+
+  T.Test('Channel SPSC basic', @TestChannelSpscBasic);
+  T.Test('Channel SPSC 1P1C stress', @TestChannelSpscStress);
+  T.Test('Channel SPSC timeout', @TestChannelSpscTimeout);
+  T.Test('Channel SPSC close', @TestChannelSpscClose);
+  T.Test('Channel SPSC capacity', @TestChannelSpscCapacity);
+  T.Test('Channel SPSC wrap-around', @TestChannelSpscWrapAround);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
+
+  { Edge-case tests }
+  T.Test('SPSC capacity=1', @TestSpscCapacityOne);
+  T.Test('SPSC capacity=2', @TestSpscCapacityTwo);
+  T.Test('MPMC capacity=1', @TestMpmcCapacityOne);
+  T.Test('Stack capacity=1', @TestStackCapacityOne);
+  T.Test('Deque capacity=1', @TestDequeCapacityOne);
+  T.Test('HashMap single key stress', @TestHashMapSingleKeyStress);
+  T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
+  T.Test('Channel capacity=2', @TestChannelCapacityTwo);
+  T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
+  T.Test('Selector single channel', @TestSelectorSingleChannel);
+  T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);
 end.

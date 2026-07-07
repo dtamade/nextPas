@@ -1,6 +1,6 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-06-16
+> 更新: 2026-07-06
 
 ## 快速决策树
 
@@ -15,7 +15,7 @@
 ├── 单生产者 + 多消费者 (SPMC)
 │   └── 使用 TSpmcQueue<T>
 │       - 多消费者 CAS 竞争 dequeue
-│       - 支持 wait/timeout
+│       - 支持 wait/timeout/close
 │       - 性能: 2.6 M ops/s (1P+2C)
 │
 ├── 多生产者 + 多消费者 (MPMC)
@@ -27,13 +27,14 @@
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
 │       - 无界，多生产者安全
-│       - 支持 wait/timeout
+│       - 支持 wait/timeout/try-enqueue/close
 │       - 性能: 最高 (无 CAS enqueue)
 │
 └── 无界 MPSC (高吞吐)
     └── 使用 TSegQueue<T>
         - 分段设计，EBR 回收
         - 无界，自动扩展
+        - 支持 try-enqueue/close
         - 性能: 1.5 M ops/s (2P+2C)
 
 需要栈？
@@ -65,31 +66,64 @@
     - 分片锁 HashMap (16 shards)
     - Insert/Find/Remove/Contains/Count
     - 自动 resize
+
+需要 Channel（生产者-消费者通信）？
+├── 单向通信
+│   ├── 单生产者单消费者 (1P1C)
+│   │   └── 使用 TLockFreeChannelSpsc<T>
+│   │       - 专为 1P1C 优化，使用原子 load/store
+│   │       - 性能超越 Go channel (2.99x) 和 Rust (1.26x)
+│   │       - 阻塞/非阻塞/超时
+│   │
+│   └── 多生产者多消费者 (MPMC)
+│       └── 使用 TLockFreeChannel<T>
+│           - 有界，容量自动取整到 2 的幂
+│           - 阻塞/非阻塞/超时
+│           - Close 后已入队数据仍可读
+│
+└── 多路复用（Go select 语义）
+    └── 使用 TLockFreeSelector<T>
+        - 等待多个 channel 中第一个就绪
+        - 阻塞/超时两种等待模式
+        - 所有 case 必须使用相同类型 T
 ```
 
 ## 性能对比
 
 | 数据结构 | 场景 | 吞吐 (M ops/s) | 延迟 (ns/op) |
 |----------|------|---------------|-------------|
-| TSpscQueue | 1P+1C | 4.40 | 227 |
-| TSpmcQueue | 1P+2C | 2.60 | 385 |
-| TMpmcQueue | 2P+2C | 3.80 | 263 |
-| TMpscQueue | 4P+1C | ~3.0 | ~330 |
-| TSegQueue | 2P+2C | 1.50 | 667 |
-| TLockFreeStack | 4P+4C | ~5.0 | ~200 |
+| TSpscQueue | 1P+1C | 101 | 9.9 |
+| TSpmcQueue | 1P+2C | 75 | 13.4 |
+| TMpmcQueue | 2P+2C | 68 | 14.6 |
+| TMpscQueue | 4P+1C | ~68 | ~15 |
+| TSegQueue | 2P+2C | 17 | 59.1 |
+| TLockFreeStack | 4P+4C | ~67 | ~15 |
 | TWorkStealingDeque | 1 owner + 2 thieves | ~2.0 | ~500 |
+| **TLockFreeChannelSpsc** | **1P+1C** | **26.2** | **38.2** |
+| TLockFreeChannel | MPMC | 10.6 | 94.3 |
+
+### 跨语言对比 (1P1C Channel)
+
+| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
+|------|-------------|---------------|---------|
+| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
+| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
+| Go channel | 114.3 | 8.7 | 基准 |
+| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
 
 ## 线程安全契约
 
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|
 | TSpscQueue | 1 线程 | 1 线程 | ✅ |
-| TSpmcQueue | 1 线程 | N 线程 | N/A |
+| TSpmcQueue | 1 线程 | N 线程 | ✅ |
 | TMpmcQueue | N 线程 | N 线程 | ✅ |
 | TMpscQueue | N 线程 | 1 线程 | ✅ |
-| TSegQueue | N 线程 | N 线程 | N/A |
+| TSegQueue | N 线程 | N 线程 | ✅ |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
+| TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |
+| TLockFreeChannel | N 线程 | N 线程 | ✅ |
 
 ## 内存回收方案选择
 

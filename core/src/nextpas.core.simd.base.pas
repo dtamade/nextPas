@@ -327,7 +327,11 @@ type
     sbAVX2,
     sbAVX512,
     sbNEON,      // AArch64 default scalar fallback；NEON asm opt-in 需显式启用
-    sbRISCVV     // ⚠️ EXPERIMENTAL opt-in；not a stable public backend，API 可能变更
+    sbRISCVV,    // ⚠️ EXPERIMENTAL opt-in；not a stable public backend，API 可能变更
+    sbLASX,      // ⚠️ EXPERIMENTAL；LoongArch LASX 256-bit SIMD，需硬件支持
+    sbWASM,      // ⚠️ EXPERIMENTAL；WebAssembly SIMD128，需 WASM 运行时
+    sbVSX,       // ⚠️ EXPERIMENTAL；POWER VSX，需 POWER 硬件
+    sbMSA        // ⚠️ EXPERIMENTAL；MIPS MSA，需 MIPS 硬件
   );
 
   TSimdBackendArray = array of TSimdBackend;

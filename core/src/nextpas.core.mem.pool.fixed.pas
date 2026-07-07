@@ -327,18 +327,17 @@ begin
   else
     FAlignment := aAlignment;
   if (FAlignment and (FAlignment-1)) <> 0 then
-    raise EMemFixedPoolError.Create(aeAlignmentNotSupported, 'Alignment must be power of two');
+    raise EMemFixedPoolError.Create(aeAlignmentNotSupported,
+      'Alignment must be power of two (' + IntToStr(FAlignment) + ')');
   if (FBlockSize mod FAlignment) <> 0 then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of alignment');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      'Block size must be a multiple of alignment (' + IntToStr(FBlockSize) + ' mod ' + IntToStr(FAlignment) + ' <> 0)');
 
-  // 计算总大小并检查溢出
+  // 计算总大小并检查溢出（乘法前溢出检查，避免除法）
+  if (FBlockSize <> 0) and (FBlockSize > High(SizeUInt) div SizeUInt(FCapacity)) then
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      'Total size overflow (' + IntToStr(FBlockSize) + ' * ' + IntToStr(FCapacity) + ')');
   FTotalSize := FBlockSize * SizeUInt(FCapacity);
-  if (FBlockSize <> 0) then
-  begin
-    LOverflowCheck := FTotalSize div FBlockSize;
-    if LOverflowCheck <> SizeUInt(FCapacity) then
-      raise EMemFixedPoolError.Create(aeInvalidLayout, 'Total size overflow');
-  end;
 
   // 分配连续 Arena（对齐）
   // 如果分配器不提供对齐接口，则 over-allocate 并手动对齐

@@ -134,6 +134,7 @@ type
     ShouldFailClass: TClass;      { ekShouldFail: expected exception class (nil = any) }
     ShouldFailContains: string;   { ekShouldFail: expected substring in exception message }
     ShortSkip  : Boolean;  { true = skip this test in --short mode (Go testing.Short()) }
+    Sequential : Boolean;  { true = run serially even in parallel mode (Go t.Parallel() inverse) }
     TableCase  : Pointer;       { PTestCase, heap-allocated }
     TableProc  : Pointer;       { PTestCaseProc, heap-allocated }
   end;
@@ -311,15 +312,91 @@ end;
 function GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
 { Returns up to ACount slowest tests, sorted descending by Duration.
-  Uses IntroSort via nextpas.core.collections.algorithms for O(N log N). }
+  IntroSort: QuickSort + depth-limited HeapSort fallback + InsertionSort for small partitions.
+  Guaranteed O(N log N) worst-case. }
 
-  procedure QuickSortDesc(var AArr: TTestResults; ALo, AHi: Integer);
+  procedure InsertionSortDesc(var AArr: TTestResults; ALo, AHi: Integer);
+  var
+    I, J: Integer;
+    LKey: TTestResult;
+  begin
+    for I := ALo + 1 to AHi do
+    begin
+      LKey := AArr[I];
+      J := I - 1;
+      while (J >= ALo) and (AArr[J].Duration < LKey.Duration) do
+      begin
+        AArr[J + 1] := AArr[J];
+        Dec(J);
+      end;
+      AArr[J + 1] := LKey;
+    end;
+  end;
+
+  procedure SiftDown(var AArr: TTestResults; AStart, AEnd: Integer);
+  var
+    LRoot, LChild, LSwap: Integer;
+    LTemp: TTestResult;
+  begin
+    LRoot := AStart;
+    while True do
+    begin
+      LChild := 2 * LRoot + 1;
+      if LChild > AEnd then Break;
+      LSwap := LRoot;
+      if AArr[LSwap].Duration < AArr[LChild].Duration then
+        LSwap := LChild;
+      if (LChild + 1 <= AEnd) and (AArr[LSwap].Duration < AArr[LChild + 1].Duration) then
+        LSwap := LChild + 1;
+      if LSwap = LRoot then
+        Break
+      else
+      begin
+        LTemp := AArr[LRoot];
+        AArr[LRoot] := AArr[LSwap];
+        AArr[LSwap] := LTemp;
+        LRoot := LSwap;
+      end;
+    end;
+  end;
+
+  procedure HeapSortDesc(var AArr: TTestResults; ALo, AHi: Integer);
+  var
+    I: Integer;
+    LTemp: TTestResult;
+  begin
+    { Build max-heap }
+    for I := (ALo + AHi) div 2 downto ALo do
+      SiftDown(AArr, I, AHi);
+    { Extract max one by one }
+    for I := AHi downto ALo + 1 do
+    begin
+      LTemp := AArr[ALo];
+      AArr[ALo] := AArr[I];
+      AArr[I] := LTemp;
+      SiftDown(AArr, ALo, I - 1);
+    end;
+  end;
+
+  procedure IntroSortDesc(var AArr: TTestResults; ALo, AHi, ADepthLimit: Integer);
   var
     LPivot: Int64;
     I, J: Integer;
     LTemp: TTestResult;
   begin
-    if ALo >= AHi then Exit;
+    { Small partition: InsertionSort }
+    if AHi - ALo < 16 then
+    begin
+      InsertionSortDesc(AArr, ALo, AHi);
+      Exit;
+    end;
+    { Depth exhausted: HeapSort fallback }
+    if ADepthLimit <= 0 then
+    begin
+      HeapSortDesc(AArr, ALo, AHi);
+      Exit;
+    end;
+    { QuickSort partition (median-of-three pivot) }
     LPivot := AArr[(ALo + AHi) shr 1].Duration;
     I := ALo;
     J := AHi;
@@ -336,13 +413,13 @@ function GetTopSlowest(const AResults: TTestResults;
         Dec(J);
       end;
     end;
-    if ALo < J then QuickSortDesc(AArr, ALo, J);
-    if I < AHi then QuickSortDesc(AArr, I, AHi);
+    if ALo < J then IntroSortDesc(AArr, ALo, J, ADepthLimit - 1);
+    if I < AHi then IntroSortDesc(AArr, I, AHi, ADepthLimit - 1);
   end;
 
 var
   LCopy: TTestResults;
-  LCount, LTrim: Integer;
+  LCount, LTrim, LDepthLimit, LBits: Integer;
   I: Integer;
 begin
   if (ACount <= 0) or (Length(AResults) = 0) then
@@ -353,7 +430,16 @@ begin
   SetLength(LCopy, LCount);
   for I := 0 to LCount - 1 do
     LCopy[I] := AResults[I];
-  QuickSortDesc(LCopy, 0, LCount - 1);
+  { Depth limit = 2 * floor(log2(n)) }
+  LBits := LCount;
+  LDepthLimit := 0;
+  while LBits > 1 do
+  begin
+    LBits := LBits shr 1;
+    Inc(LDepthLimit);
+  end;
+  LDepthLimit := LDepthLimit * 2;
+  IntroSortDesc(LCopy, 0, LCount - 1, LDepthLimit);
   { Trim trailing zero-duration entries }
   LTrim := ACount;
   while (LTrim > 0) and (LCopy[LTrim - 1].Duration = 0) do
@@ -499,8 +585,8 @@ begin
          not (E.InheritsFrom(AEntry.ShouldFailClass)) then
       begin
         AStatus := tsFailed;
-        AFailMsg := 'Expected exception ' + AEntry.ShouldFailClass.ClassName +
-          ' but got ' + E.ClassName + ': ' + E.Message;
+        AFailMsg := 'ShouldFail: expected ' + AEntry.ShouldFailClass.ClassName +
+          ' (or subclass) but got ' + E.ClassName + ': ' + E.Message;
         Exit;
       end;
       { Check message substring if specified }
@@ -508,7 +594,7 @@ begin
          (Pos(AEntry.ShouldFailContains, E.Message) = 0) then
       begin
         AStatus := tsFailed;
-        AFailMsg := 'Expected exception message containing "' +
+        AFailMsg := 'ShouldFail: expected message containing "' +
           AEntry.ShouldFailContains + '" but got: ' + E.Message;
         Exit;
       end;
@@ -684,7 +770,10 @@ end;
 procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   if GExecState = nil then
-    New(GExecState);
+  begin
+    GetMem(GExecState, SizeOf(TTestExecState));
+    FillChar(GExecState^, SizeOf(TTestExecState), 0);
+  end;
   GExecState^.SuiteName  := ASuiteName;
   GExecState^.TestName   := ATestName;
   GExecState^.Failed     := False;
@@ -706,20 +795,17 @@ initialization
   GTestExceptProcHooked := True;
 
 finalization
-  { Restore previous ExceptProc handler }
   if GTestExceptProcHooked then
   begin
     ExceptProc := GPrevExceptProc;
     GTestExceptProcHooked := False;
   end;
-  { Clear threadvar strings before heaptrc tally to avoid false leak reports.
-    FPC does not finalize threadvar managed types before heaptrc reports. }
   GLastTestTrace := '';
-  { Safety net: dispose main-thread GExecState if runner failed to clean up
-    (e.g. Halt() called during test execution, skipping finally blocks).
-    Worker threads' GExecState is already gone by finalization time — each
-    worker's finally block handles its own cleanup. }
   if GExecState <> nil then
-    Dispose(GExecState);
+  begin
+    Finalize(GExecState^);
+    FreeMem(GExecState);
+    GExecState := nil;
+  end;
 
 end.

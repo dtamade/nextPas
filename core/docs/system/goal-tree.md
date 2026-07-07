@@ -217,3 +217,58 @@ behavior. Focus: close documentation gaps, fill test coverage, define self-hosti
 | Windows | 20 | tls (~18) |
 
 Future migration slices should reduce counts in `fpc_rtl_file_allowlist.txt`, not add new entries.
+
+## S7 System Kernel Implementation
+
+S7 implements the system kernel as the single source of truth for compiler root types.
+The kernel uses dual-compiler architecture: FPC uses `fpc.inc` (re-export FPC types),
+nextPas uses `kernel.inc` (full kernel definition).
+
+### S7.1 Dual-Compiler Fork Structure
+
+- [x] Create `nextpas.core.system.fpc.inc` — re-export FPC System types under FPC compilation.
+- [x] Create `nextpas.core.system.kernel.inc` — nextPas kernel entry point, includes sub-modules.
+- [x] Update `nextpas.core.system.pas` to use `{$IFDEF FPC}` / `{$ELSE}` fork.
+- [x] Verify FPC compilation works with new structure.
+
+### S7.2 Kernel Sub-Modules Implementation
+
+- [x] Create `nextpas.core.system.base.inc` — basic types (SizeInt, SizeUInt, TBytes, C ABI types).
+- [x] Create `nextpas.core.system.str.inc` — string types (ShortString, AnsiString, WideString, UnicodeString).
+- [x] Create `nextpas.core.system.intf.inc` — interface types (TGUID, IUnknown, TInterfaceEntry, TMethod).
+- [x] Create `nextpas.core.system.cls.inc` — class types (VMT constants, TVmt record, TObject, TClass).
+- [x] Create `nextpas.core.system.rtti.inc` — RTTI types (TTypeKind, TTypeInfo, managed type lifecycle).
+- [x] Create `nextpas.core.system.except.inc` — exception classes (Exception, EAbort, EConvertError, etc.).
+- [x] Create `nextpas.core.system.mem.inc` — memory operations (FreeAndNil, ZeroMem, Supports).
+- [x] Create `nextpas.core.system.comp.inc` — compiler internal functions (fpc_* series).
+
+### S7.3 Compiler Root Directives
+
+- [x] Add `{$compiler_root}` directive to TObject in `cls.inc`.
+- [x] Add `{$compiler_type_kind}` directive to TTypeKind in `rtti.inc`.
+- [x] Document directive usage in `kernel-design.md`.
+
+### S7.4 VMT Layout Definition
+
+- [x] Define VMT constants matching FPC layout (vmtInstanceSize=0, vmtParent=SizeOf(SizeInt)*2, etc.).
+- [x] Define TVmt record with all VMT slots.
+- [x] Implement TObject methods that use VMT layout (ClassName, ClassParent, InstanceSize, etc.).
+
+### S7.5 Compiler Internal Functions
+
+- [x] Define fpc_* series functions with `compilerproc` directive.
+- [x] Implement stubs for all compiler internal functions.
+- [x] Document that real implementations provided by runtime.
+
+**S7 is now complete**. Main deliverables:
+
+1. **Dual-compiler fork**: `fpc.inc` re-exports FPC types, `kernel.inc` defines nextPas kernel.
+2. **8 kernel sub-modules**: base, str, intf, cls, rtti, except, mem, comp.
+3. **Compiler directives**: `{$compiler_root}` and `{$compiler_type_kind}` directives.
+4. **VMT layout**: Constants and TVmt record matching FPC layout.
+5. **TObject implementation**: Full TObject class with all methods.
+6. **Compiler internal functions**: fpc_* series stubs for runtime integration.
+
+**Next Phase**: S7 completion clears the way for compiler integration. The kernel is ready
+for the compiler to recognize `{$compiler_root}` and `{$compiler_type_kind}` directives
+and read type information from the kernel.

@@ -3,7 +3,8 @@ program test_platform_memory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.platform.memory,
   nextpas.core.test;
 
@@ -354,6 +355,124 @@ begin
     'platform.memory must not perform raw Windows symbol lookup directly');
 end;
 
+{ Realloc error path tests }
+procedure TestReallocInvalidAlignmentReturnsNil;
+var
+  LPtr, LResult: PByte;
+begin
+  LPtr := PByte(platform_aligned_alloc(32, 64));
+  try
+    Check(LPtr <> nil, 'initial alloc returns non-nil');
+    LResult := PByte(platform_aligned_realloc(LPtr, 64, 0));
+    Check(LResult = nil, 'realloc with zero alignment returns nil');
+    LResult := PByte(platform_aligned_realloc(LPtr, 64, 3));
+    Check(LResult = nil, 'realloc with non-power-of-two alignment returns nil');
+    LResult := PByte(platform_aligned_realloc(LPtr, 64, SizeOf(Pointer) div 2));
+    Check(LResult = nil, 'realloc with sub-pointer alignment returns nil');
+  finally
+    platform_aligned_free(LPtr);
+  end;
+end;
+
+procedure TestReallocMismatchedAlignmentReturnsNil;
+var
+  LPtr, LResult: PByte;
+begin
+  LPtr := PByte(platform_aligned_alloc(32, 64));
+  try
+    Check(LPtr <> nil, 'initial alloc returns non-nil');
+    LResult := PByte(platform_aligned_realloc(LPtr, 64, 128));
+    Check(LResult = nil, 'realloc with mismatched alignment returns nil');
+  finally
+    platform_aligned_free(LPtr);
+  end;
+end;
+
+{ Virtual memory error path tests }
+procedure TestVirtualReserveZeroSizeReturnsNil;
+begin
+  Check(platform_virtual_reserve(0) = nil, 'virtual reserve with zero size returns nil');
+end;
+
+procedure TestVirtualCommitNilReturnsFalse;
+begin
+  Check(not platform_virtual_commit(nil, 4096), 'virtual commit with nil returns false');
+end;
+
+procedure TestVirtualCommitZeroSizeReturnsFalse;
+var
+  LPtr: Pointer;
+begin
+  LPtr := platform_virtual_reserve(4096);
+  try
+    Check(LPtr <> nil, 'virtual reserve returns non-nil');
+    Check(not platform_virtual_commit(LPtr, 0), 'virtual commit with zero size returns false');
+  finally
+    platform_virtual_release(LPtr, 4096);
+  end;
+end;
+
+procedure TestVirtualDecommitNilNoOp;
+begin
+  platform_virtual_decommit(nil, 4096);
+  Check(True, 'virtual decommit with nil is no-op');
+end;
+
+procedure TestVirtualDecommitZeroSizeNoOp;
+var
+  LPtr: Pointer;
+begin
+  LPtr := platform_virtual_reserve(4096);
+  try
+    Check(LPtr <> nil, 'virtual reserve returns non-nil');
+    platform_virtual_decommit(LPtr, 0);
+    Check(True, 'virtual decommit with zero size is no-op');
+  finally
+    platform_virtual_release(LPtr, 4096);
+  end;
+end;
+
+procedure TestVirtualReleaseNilNoOp;
+begin
+  platform_virtual_release(nil, 4096);
+  Check(True, 'virtual release with nil is no-op');
+end;
+
+procedure TestVirtualReleaseZeroSizeNoOp;
+var
+  LPtr: Pointer;
+begin
+  LPtr := platform_virtual_reserve(4096);
+  try
+    Check(LPtr <> nil, 'virtual reserve returns non-nil');
+    platform_virtual_release(LPtr, 0);
+    Check(True, 'virtual release with zero size is no-op');
+  finally
+    platform_virtual_release(LPtr, 4096);
+  end;
+end;
+
+{ Madvise error path tests }
+procedure TestMadviseThpNilNoOp;
+begin
+  platform_madvise_thp(nil, 4096);
+  Check(True, 'madvise thp with nil is no-op');
+end;
+
+procedure TestMadviseThpZeroSizeNoOp;
+var
+  LPtr: Pointer;
+begin
+  LPtr := platform_virtual_reserve(4096);
+  try
+    Check(LPtr <> nil, 'virtual reserve returns non-nil');
+    platform_madvise_thp(LPtr, 0);
+    Check(True, 'madvise thp with zero size is no-op');
+  finally
+    platform_virtual_release(LPtr, 4096);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.memory');
   T.Test('alloc aligned and writable', @TestAllocAlignedAndWritable);
@@ -369,5 +488,16 @@ begin
   T.Test('secure zero nil and zero-size no-op', @TestSecureZeroMemoryNilAndZeroSizeNoOp);
   T.Test('secure zero backend truth matches host', @TestSecureZeroBackendTruthMatchesHost);
   T.Test('secure zero source contracts', @TestSecureZeroSourceContracts);
+  T.Test('realloc invalid alignment returns nil', @TestReallocInvalidAlignmentReturnsNil);
+  T.Test('realloc mismatched alignment returns nil', @TestReallocMismatchedAlignmentReturnsNil);
+  T.Test('virtual reserve zero size returns nil', @TestVirtualReserveZeroSizeReturnsNil);
+  T.Test('virtual commit nil returns false', @TestVirtualCommitNilReturnsFalse);
+  T.Test('virtual commit zero size returns false', @TestVirtualCommitZeroSizeReturnsFalse);
+  T.Test('virtual decommit nil no-op', @TestVirtualDecommitNilNoOp);
+  T.Test('virtual decommit zero size no-op', @TestVirtualDecommitZeroSizeNoOp);
+  T.Test('virtual release nil no-op', @TestVirtualReleaseNilNoOp);
+  T.Test('virtual release zero size no-op', @TestVirtualReleaseZeroSizeNoOp);
+  T.Test('madvise thp nil no-op', @TestMadviseThpNilNoOp);
+  T.Test('madvise thp zero size no-op', @TestMadviseThpZeroSizeNoOp);
   if not T.Run then Halt(1);
 end.

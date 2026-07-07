@@ -3,12 +3,14 @@ program test_platform_which;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.platform.which,
   nextpas.core.platform.fs,
   nextpas.core.platform.env,
+  nextpas.core.platform.error,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
+  nextpas.core.platform.thread,
   nextpas.core.test;
 
 var
@@ -40,7 +42,7 @@ var
   R: Int32;
 begin
   R := platform_which('nonexistent_tool_xyz_999', @Buf[0], 256);
-  Check(R = -1, 'not found returns -1');
+  Check(R = PLATFORM_ERR_ENOENT, 'not found returns PLATFORM_ERR_ENOENT');
 end;
 
 procedure TestAbsolutePath;
@@ -71,7 +73,7 @@ var
   R: Int32;
 begin
   R := platform_which('/nonexistent_xyz', @Buf[0], 256);
-  Check(R = -1, 'absolute non-existent returns -1');
+  Check(R = PLATFORM_ERR_ENOENT, 'absolute non-existent returns PLATFORM_ERR_ENOENT');
 end;
 
 {$IFDEF NEXTPAS_LINUX}
@@ -100,7 +102,7 @@ var
 const
   TOOL_BODY = '#!/bin/sh' + #10 + 'exit 0' + #10;
 begin
-  LDir := '/tmp/nextpas-platform-which-long-path-' + IntToStr(GetProcessID);
+  LDir := '/tmp/nextpas-platform-which-long-path-' + IntToStr(platform_thread_id);
   LTool := LDir + '/npwhich_tail_tool';
   LHadOldPath := platform_env_get('PATH', nil, 0, LOldLen) = 0;
   if LHadOldPath then

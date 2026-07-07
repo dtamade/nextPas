@@ -3,8 +3,9 @@ program test_platform_resource;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base;
@@ -14,23 +15,16 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LSourcePath));
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -158,6 +152,123 @@ begin
     'platform.resource Android branch must call shared POSIX setrlimit');
 end;
 
+procedure TestGetStackSizeLimit;
+var
+  LLimit: TPlatformResourceLimit;
+  LError: Int32;
+begin
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkStackSize, LLimit);
+
+  {$IFDEF NEXTPAS_LINUX}
+  Check(LError = 0, 'Linux must get RLIMIT_STACK');
+  Check(LLimit.Current > 0, 'stack size limit must be positive');
+  {$ELSE}
+  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+    'unpromoted hosts must return unsupported');
+  {$ENDIF}
+end;
+
+procedure TestGetCoreFileSizeLimit;
+var
+  LLimit: TPlatformResourceLimit;
+  LError: Int32;
+begin
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkCoreFileSize, LLimit);
+
+  {$IFDEF NEXTPAS_LINUX}
+  Check(LError = 0, 'Linux must get RLIMIT_CORE');
+  { Core file size can be 0 (disabled) }
+  {$ELSE}
+  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+    'unpromoted hosts must return unsupported');
+  {$ENDIF}
+end;
+
+procedure TestGetProcessCountLimit;
+var
+  LLimit: TPlatformResourceLimit;
+  LError: Int32;
+begin
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkProcessCount, LLimit);
+
+  {$IFDEF NEXTPAS_LINUX}
+  Check(LError = 0, 'Linux must get RLIMIT_NPROC');
+  Check(LLimit.Current > 0, 'process count limit must be positive');
+  {$ELSE}
+  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+    'unpromoted hosts must return unsupported');
+  {$ENDIF}
+end;
+
+procedure TestInfinityLimit;
+var
+  LLimit: TPlatformResourceLimit;
+  LAfter: TPlatformResourceLimit;
+  LError: Int32;
+begin
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  FillChar(LAfter, SizeOf(LAfter), 0);
+
+  { First get current limit }
+  LError := platform_resource_get_limit(prlkOpenFiles, LLimit);
+  {$IFDEF NEXTPAS_LINUX}
+  Check(LError = 0, 'Linux must get open-file limit');
+
+  { Try to set to infinity (if allowed) }
+  LLimit.Maximum := PLATFORM_RESOURCE_LIMIT_INFINITY;
+  LError := platform_resource_set_limit(prlkOpenFiles, LLimit);
+  if LError = 0 then
+  begin
+    LError := platform_resource_get_limit(prlkOpenFiles, LAfter);
+    Check(LError = 0, 'must get limit after set');
+    Check(LAfter.Maximum = PLATFORM_RESOURCE_LIMIT_INFINITY,
+      'maximum must be infinity after setting');
+  end;
+  { If set failed, it's likely due to permissions - that's OK }
+  {$ELSE}
+  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+    'unpromoted hosts must return unsupported');
+  {$ENDIF}
+end;
+
+procedure TestSetMultipleResourceTypes;
+var
+  LLimit: TPlatformResourceLimit;
+  LError: Int32;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  { Test getting multiple resource types }
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkCpuTime, LLimit);
+  Check(LError = 0, 'must get CPU time limit');
+
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkFileSize, LLimit);
+  Check(LError = 0, 'must get file size limit');
+
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkDataSize, LLimit);
+  Check(LError = 0, 'must get data size limit');
+
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkAddressSpace, LLimit);
+  Check(LError = 0, 'must get address space limit');
+
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkLockedMemory, LLimit);
+  Check(LError = 0, 'must get locked memory limit');
+  {$ELSE}
+  { On unsupported platforms, all should return unsupported }
+  FillChar(LLimit, SizeOf(LLimit), 0);
+  LError := platform_resource_get_limit(prlkCpuTime, LLimit);
+  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+    'unpromoted hosts must return unsupported for CPU time');
+  {$ENDIF}
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.resource');
   T.Test('gets open-file resource limit', @TestGetOpenFilesLimit);
@@ -165,5 +276,10 @@ begin
   T.Test('rejects invalid resource limit kind', @TestInvalidLimitKind);
   T.Test('rejects invalid resource limit values', @TestInvalidLimitValues);
   T.Test('Android resource source contract', @TestAndroidResourceSourceContract);
+  T.Test('gets stack size limit', @TestGetStackSizeLimit);
+  T.Test('gets core file size limit', @TestGetCoreFileSizeLimit);
+  T.Test('gets process count limit', @TestGetProcessCountLimit);
+  T.Test('infinity limit handling', @TestInfinityLimit);
+  T.Test('multiple resource types', @TestSetMultipleResourceTypes);
   if not T.Run then Halt(1);
 end.

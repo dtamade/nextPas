@@ -29,7 +29,7 @@ function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 function platform_watch_add(var AWatcher: TPlatformWatcher;
   const APath: PAnsiChar): Int32;
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 
 implementation
@@ -38,6 +38,7 @@ implementation
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error,
   nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
 
@@ -55,6 +56,8 @@ function platform_watch_add(var AWatcher: TPlatformWatcher;
 var
   LWd: Int32;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   LWd := inotify_add_watch(AWatcher.Fd, APath,
     IN_MODIFY or IN_CREATE or IN_DELETE or IN_MOVED_FROM or IN_MOVED_TO);
   if LWd < 0 then
@@ -64,7 +67,7 @@ begin
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 type
   TInotifyEvent = packed record
     wd: Int32;
@@ -125,7 +128,7 @@ begin
     Result := 0;
   end
   else
-    Result := -1;
+    Result := PLATFORM_ERR_BADF;
 end;
 {$ENDIF}
 
@@ -163,6 +166,8 @@ var
   LFd: Int32;
   LChange: TKEvent;
 begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if AWatcher.WatchCount >= PLATFORM_WATCH_MAX_FDS then
     Exit(-1);
   LFd := open(APath, O_RDONLY, 0);
@@ -188,7 +193,7 @@ begin
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
-  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
   LEvent: TKEvent;
   LTimeout: TTimeSpec;
@@ -253,7 +258,7 @@ begin
   Result := Int32(ERROR_NOT_SUPPORTED);
 end;
 
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
   Result := -Int32(ERROR_NOT_SUPPORTED);
@@ -268,13 +273,13 @@ end;
 
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
-begin AWatcher.Fd := -1; Result := -1; end;
+begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
-begin Result := -1; end;
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

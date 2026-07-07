@@ -111,7 +111,8 @@ begin
     if (LBlock^.Magic <> MAP_BLOCK_MAGIC) or
        (LBlock^.TotalSize < HeaderSize) or
        (LBlock^.TotalSize > FReservationSize - LCurrentOffset) then
-      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: block chain corruption');
+      raise EAllocError.Create(aeInternalError,
+        'TMemoryMapAllocator: block chain corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
 
     if LPayloadOffset = LCurrentOffset + HeaderSize then
     begin
@@ -149,11 +150,13 @@ begin
   while LCurrentOffset <> NO_FREE_OFFSET do
   begin
     if LCurrentOffset >= FReservationSize then
-      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: free list offset out of range');
+      raise EAllocError.Create(aeInternalError,
+        'TMemoryMapAllocator: free list offset out of range (' + IntToStr(Int64(LCurrentOffset)) + '/' + IntToStr(Int64(FReservationSize)) + ')');
 
     LBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LBlock^.Magic <> MAP_BLOCK_MAGIC) or (LBlock^.State <> MAP_BLOCK_FREE) then
-      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: free list corruption');
+      raise EAllocError.Create(aeInternalError,
+        'TMemoryMapAllocator: free list corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
 
     if LBlock^.TotalSize >= LNeeded then
     begin
@@ -190,6 +193,18 @@ begin
   end;
 end;
 
+{**
+ * FreeLocked - 释放内存块并合并相邻空闲块
+ *
+ * @desc 释放指定指针对应的内存块，然后合并相邻的空闲块。
+ *
+ * @note 当前实现执行两次全扫描：
+ *   1. 合并相邻空闲块 (O(n))
+ *   2. 重建空闲链表 (O(n))
+ *   总复杂度 O(n)，n 是总块数。对于大量小分配的场景，性能退化严重。
+ *
+ * @see AllocateLocked
+ *}
 procedure TMemoryMapAllocator.FreeLocked(APtr: Pointer);
 var
   LHeaderOffset: UInt64;
@@ -222,7 +237,8 @@ begin
   begin
     LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
-      raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+      raise EAllocError.Create(aeInternalError,
+        'TMemoryMapAllocator: coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
 
     if LCurBlock^.State = MAP_BLOCK_FREE then
     begin
@@ -235,7 +251,8 @@ begin
       begin
         LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
         if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
-          raise EAllocError.Create(aeInternalError, 'TMemoryMapAllocator: coalesce scan corruption');
+          raise EAllocError.Create(aeInternalError,
+            'TMemoryMapAllocator: coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
         if LCurBlock^.State <> MAP_BLOCK_FREE then
           Break;
         Inc(LRunSize, LCurBlock^.TotalSize);
@@ -274,10 +291,12 @@ begin
   FLock.Init;
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
-    raise EAllocError.Create(aeInvalidLayout, 'TMemoryMapAllocator: invalid reservation size');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TMemoryMapAllocator: invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')');
   {$IF SizeOf(SizeUInt) < SizeOf(UInt64)}
   if aReservationSize > High(SizeUInt) then
-    raise EAllocError.Create(aeInvalidLayout, 'TMemoryMapAllocator: reservation size exceeds addressable range');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TMemoryMapAllocator: reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')');
   {$ENDIF}
 
   FMap := TMemoryMap.Create;

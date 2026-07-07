@@ -3,12 +3,13 @@
   Re-exports all public API from sub-modules:
     test.base, test.check, test.config, test.expect, test.output,
     test.output.tap, test.output.json, test.runner, test.discovery,
-    test.mock, test.helpers
+    test.mock, test.helpers, test.prop
   White-box modules (not re-exported — import directly for internals):
     test.runner.cli, test.runner.context, test.runner.parallel
   Dual API: procedural Check* + fluent IExpectation chain.
   Parallel execution, subtests, ANSI output, leak detection,
-  RTTI discovery, retry, TAP/JSON/JUnit output, mock framework. }
+  RTTI discovery, retry, TAP/JSON/JUnit output, mock framework,
+  property-based testing. }
 
 unit nextpas.core.test;
 
@@ -28,7 +29,8 @@ uses
   nextpas.core.test.runner,
   nextpas.core.test.discovery,
   nextpas.core.test.mock,
-  nextpas.core.test.helpers;
+  nextpas.core.test.helpers,
+  nextpas.core.test.prop;
 
 { ── Re-exported types from test.base ─────────────────────────────────────── }
 
@@ -62,6 +64,8 @@ type
   TBufferSink = nextpas.core.test.config.TBufferSink;
   TTestConfig = nextpas.core.test.config.TTestConfig;
   TTestConfigBuilder = nextpas.core.test.config.TTestConfigBuilder;
+  TCacheEntry = nextpas.core.test.config.TCacheEntry;
+  TTestCache = nextpas.core.test.config.TTestCache;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
@@ -102,6 +106,7 @@ function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
+function ExpectBytes(const AValue: TBytes): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
 
@@ -120,8 +125,14 @@ procedure CheckEqual(const AExpected, AActual: Int64;
 procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: string); overload;
+procedure CheckNotEqual(const AExpected, AActual: string;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Int64); overload;
+procedure CheckNotEqual(const AExpected, AActual: Int64;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
+procedure CheckNotEqual(const AExpected, AActual: Boolean;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
@@ -130,32 +141,66 @@ procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckNotNil(AValue: Pointer; const AMessage: string = '');
 procedure CheckContains(const AHaystack, ANeedle: string);
+procedure CheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 procedure CheckNotContains(const AHaystack, ANeedle: string);
+procedure CheckNotContains(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 procedure CheckStartsWith(const AStr, APrefix: string);
+procedure CheckStartsWith(const AStr, APrefix: string;
+  const AMessage: string); overload;
 procedure CheckEndsWith(const AStr, ASuffix: string);
+procedure CheckEndsWith(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 procedure CheckSame(const AExpected, AActual: Pointer; const AMessage: string = '');
 procedure CheckInRange(const AValue, ALow, AHigh: Int64);
+procedure CheckInRange(const AValue, ALow, AHigh: Int64;
+  const AMessage: string); overload;
 procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckGreaterThan(const AValue, AExpected: Int64);
-procedure CheckLessThan(const AValue, AExpected: Int64);
-procedure CheckGreaterOrEqual(const AValue, AExpected: Int64);
-procedure CheckLessOrEqual(const AValue, AExpected: Int64);
-procedure CheckGreaterThanD(const AValue, AExpected: Double;
+procedure CheckInRangeD(const AValue, ALow, AHigh: Double;
+  const AEpsilon: Double; const AMessage: string); overload;
+procedure CheckGreaterThan(const AValue, AThreshold: Int64);
+procedure CheckGreaterThan(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckLessThan(const AValue, AThreshold: Int64);
+procedure CheckLessThan(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
+procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64);
+procedure CheckLessOrEqual(const AValue, AThreshold: Int64;
+  const AMessage: string); overload;
+procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessThanD(const AValue, AExpected: Double;
+procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckGreaterOrEqualD(const AValue, AExpected: Double;
+procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
-procedure CheckLessOrEqualD(const AValue, AExpected: Double;
+procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double = 1e-10);
 procedure CheckContainsCI(const AHaystack, ANeedle: string);
+procedure CheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 procedure CheckNotContainsCI(const AHaystack, ANeedle: string);
+procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string); overload;
 procedure CheckStartsWithCI(const AStr, APrefix: string);
+procedure CheckStartsWithCI(const AStr, APrefix: string;
+  const AMessage: string); overload;
 procedure CheckEndsWithCI(const AStr, ASuffix: string);
+procedure CheckEndsWithCI(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 procedure CheckNotStartsWith(const AStr, APrefix: string);
+procedure CheckNotStartsWith(const AStr, APrefix: string;
+  const AMessage: string); overload;
 procedure CheckNotEndsWith(const AStr, ASuffix: string);
+procedure CheckNotEndsWith(const AStr, ASuffix: string;
+  const AMessage: string); overload;
 procedure CheckLength(const AExpected, AActual: NativeInt);
+procedure CheckLength(const AExpected, AActual: NativeInt;
+  const AMessage: string); overload;
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
@@ -229,6 +274,8 @@ procedure SetDefaultRunTimeoutSec(ATimeoutSec: Integer);
 procedure SetDefaultBenchEnabled(AEnabled: Boolean);
 procedure SetDefaultBenchTimeMs(ATimeMs: Integer);
 procedure SetDefaultBenchMem(ABenchMem: Boolean);
+procedure SetDefaultCacheEnabled(AEnabled: Boolean);
+procedure SetDefaultCacheDir(const ADir: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -243,6 +290,8 @@ function  GetRunTimeoutSec(const AConfig: TTestConfig): Integer;
 function  GetBenchEnabled(const AConfig: TTestConfig): Boolean;
 function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
+function  GetCacheEnabled(const AConfig: TTestConfig): Boolean;
+function  GetCacheDir(const AConfig: TTestConfig): string;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
@@ -305,6 +354,42 @@ procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+
+{ ── Re-exported types from test.prop ───────────────────────────────────────── }
+
+type
+  TStringTest = nextpas.core.test.prop.TStringTest;
+  TIntTest = nextpas.core.test.prop.TIntTest;
+  TBoolTest = nextpas.core.test.prop.TBoolTest;
+  TBytesTest = nextpas.core.test.prop.TBytesTest;
+  IStringGenerator = nextpas.core.test.prop.IStringGenerator;
+  IIntGenerator = nextpas.core.test.prop.IIntGenerator;
+  IBoolGenerator = nextpas.core.test.prop.IBoolGenerator;
+  IBytesGenerator = nextpas.core.test.prop.IBytesGenerator;
+  TIntToString = nextpas.core.test.prop.TIntToString;
+  TIntPred = nextpas.core.test.prop.TIntPred;
+  TStringPred = nextpas.core.test.prop.TStringPred;
+  TBytesPred = nextpas.core.test.prop.TBytesPred;
+
+function GenString(AMinLen, AMaxLen: Integer): IStringGenerator; overload;
+function GenString(AMaxLen: Integer = 256): IStringGenerator; overload;
+function GenInt(AMin, AMax: Int64): IIntGenerator; overload;
+function GenInt(AMax: Int64 = MaxInt): IIntGenerator; overload;
+function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator; overload;
+function GenBytes(AMaxLen: Integer = 256): IBytesGenerator; overload;
+function GenBool: IBoolGenerator;
+function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
+function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
+function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
+function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
+function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
+function GenChoiceString(const AValues: array of string): IStringGenerator;
+function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
+function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
+function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
+procedure PropFail(const AMsg: string);
+function PropWithResult(const AName: string; ATest: TIntTest;
+  AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
 implementation
 

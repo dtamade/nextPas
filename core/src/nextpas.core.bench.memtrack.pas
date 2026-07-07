@@ -328,8 +328,10 @@ begin
 
     // 重置统计
     if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
+    begin
       GGlobalTracker := TMemoryTracker.Create(True);
-    GGlobalTracker.Reset;
+      GGlobalTracker.Reset; { F-10: only reset in CAS winner branch }
+    end;
 
     // 启用跟踪
     GTrackingEnabled := True;

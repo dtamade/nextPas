@@ -13,7 +13,7 @@ uses
 type
   TBenchResult = nextpas.core.bench.base.TBenchResult;
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
-  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
   TBenchResults = nextpas.core.bench.TBenchResults;
 
 { 构造 TBenchResult 用于测试（不实际运行 benchmark） }
@@ -35,9 +35,9 @@ begin
 end;
 
 { 构造 TBaselineData }
-function MakeBaseline(const AName: string; ANsPerOp: Double): TBenchBaseline;
+function MakeBaseline(const AName: string; ANsPerOp: Double): TBaselineData;
 begin
-  Result := Default(TBenchBaseline);
+  Result := Default(TBaselineData);
   Result.Name := AName;
   Result.NsPerOp := ANsPerOp;
 end;
@@ -47,7 +47,7 @@ end;
 procedure TestMatrix_Basic3Baselines;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..2] of TBenchBaseline;
+  LBaselines: array[0..2] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -103,7 +103,7 @@ end;
 procedure TestMatrix_SingleBaseline;
 var
   LResults: array[0..0] of TBenchResult;
-  LBaselines: array[0..0] of TBenchBaseline;
+  LBaselines: array[0..0] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -150,7 +150,7 @@ end;
 procedure TestMatrix_SkippedResultsFiltered;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..0] of TBenchBaseline;
+  LBaselines: array[0..0] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -176,7 +176,7 @@ end;
 procedure TestMatrix_GeometricMeanAccuracy;
 var
   LResults: array[0..2] of TBenchResult;
-  LBaselines: array[0..0] of TBenchBaseline;
+  LBaselines: array[0..0] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
   LExpected: Double;
@@ -206,7 +206,7 @@ end;
 procedure TestMatrix_2x3;
 var
   LResults: array[0..2] of TBenchResult;
-  LBaselines: array[0..1] of TBenchBaseline;
+  LBaselines: array[0..1] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -239,7 +239,7 @@ end;
 procedure TestMatrix_ZeroBaseline;
 var
   LResults: array[0..0] of TBenchResult;
-  LBaselines: array[0..0] of TBenchBaseline;
+  LBaselines: array[0..0] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -264,7 +264,7 @@ end;
 procedure TestMatrix_ConsoleReport;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..1] of TBenchBaseline;
+  LBaselines: array[0..1] of TBaselineData;
   LRes: TBenchResults;
   LReport: string;
 begin
@@ -294,7 +294,7 @@ end;
 procedure TestMatrix_HTMLReport;
 var
   LResults: array[0..0] of TBenchResult;
-  LBaselines: array[0..1] of TBenchBaseline;
+  LBaselines: array[0..1] of TBaselineData;
   LRes: TBenchResults;
   LHTML: string;
 begin
@@ -325,7 +325,7 @@ end;
 procedure TestMatrix_ManyBaselines;
 var
   LResults: array[0..0] of TBenchResult;
-  LBaselines: array[0..9] of TBenchBaseline;
+  LBaselines: array[0..9] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
   I: Integer;
@@ -465,7 +465,7 @@ end;
 procedure TestMatrix_JSON;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..1] of TBenchBaseline;
+  LBaselines: array[0..1] of TBaselineData;
   LRes: TBenchResults;
   LJSON: string;
 begin

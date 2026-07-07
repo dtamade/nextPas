@@ -341,7 +341,8 @@ begin
 
   // 防止乘法溢出并分配内存
   if (FElementSize <> 0) and (FCapacity > MAX_SIZE_UINT div FElementSize) then
-    raise ERingBufferError.Create(aeInvalidLayout, 'Requested size exceeds addressable memory range');
+    raise ERingBufferError.Create(aeInvalidLayout,
+      'TRingBuffer: size exceeds addressable range (' + IntToStr(FCapacity) + ' * ' + IntToStr(FElementSize) + ')');
 
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then

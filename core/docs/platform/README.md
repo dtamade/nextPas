@@ -3,6 +3,7 @@
 This directory is the stable documentation entry point for
 `nextpas.core.platform`.
 
+- [Quick Start Guide](QUICKSTART.md) — Common patterns and examples for new developers
 - [Master spec](master-spec.md) defines owner boundaries, truth tiers, and
   readiness/completion separation.
 - [Goal tree](goal-tree.md) tracks phase state and evidence gaps.

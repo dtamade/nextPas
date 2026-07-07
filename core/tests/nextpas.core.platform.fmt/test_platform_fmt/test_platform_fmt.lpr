@@ -3,6 +3,7 @@ program test_platform_fmt;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.fmt,
   nextpas.core.test;
 
@@ -97,9 +98,9 @@ end;
 
 procedure TestNilBuffer;
 begin
-  Check(platform_fmt_int(42, nil, 0) = -1, 'nil returns -1');
-  Check(platform_fmt_uint(42, nil, 0) = -1, 'nil uint returns -1');
-  Check(platform_fmt_hex(42, nil, 0) = -1, 'nil hex returns -1');
+  Check(platform_fmt_int(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil returns PLATFORM_ERR_INVALID');
+  Check(platform_fmt_uint(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil uint returns PLATFORM_ERR_INVALID');
+  Check(platform_fmt_hex(42, nil, 0) = PLATFORM_ERR_INVALID, 'nil hex returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestParseUint;
@@ -155,6 +156,18 @@ begin
   platform_str_lower('ABC123', 6, @Buf[0], 64);
   Check(BufEq(@Buf[0], 'abc123'), 'lower mixed');
   Check(platform_str_lower('X', 1, @Buf[0], 64) = 1, 'returns length');
+end;
+
+procedure TestStrUpper;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_str_upper('hello world', 11, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'HELLO WORLD'), 'upper basic');
+  platform_str_upper('abc123', 6, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'ABC123'), 'upper mixed');
+  Check(platform_str_upper('x', 1, @Buf[0], 64) = 1, 'returns length');
+  platform_str_upper('', 0, @Buf[0], 64);
+  Check(BufEq(@Buf[0], ''), 'empty string');
 end;
 
 procedure TestStrTrim;
@@ -272,6 +285,7 @@ begin
   T.Test('parse hex', @TestParseHex);
   T.Test('parse errors', @TestParseErrors);
   T.Test('str_lower', @TestStrLower);
+  T.Test('str_upper', @TestStrUpper);
   T.Test('str_trim', @TestStrTrim);
   T.Test('str_equal_nocase', @TestStrEqualNocase);
   T.Test('str_find', @TestStrFind);

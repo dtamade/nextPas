@@ -27,6 +27,31 @@ var
   { R5-08: filter test variables }
   LFilterSuite: TTestSuite;
   LFilterResult: TTestRunResult;
+  { T-13: cache test variables }
+  LCache: TTestCache;
+  LCacheConfig1, LCacheConfig2, LCacheRunConfig: TTestConfig;
+  LCacheKey1, LCacheKey2, LCacheKey3: string;
+  LCacheEntry, LCacheGotEntry: TCacheEntry;
+  LCacheRunSuite: TTestSuite;
+  LCacheRunResult1, LCacheRunResult2: TTestRunResult;
+  LCacheRunCount: Integer;
+  { T-14: RepeatAllCount }
+  LRepeatSuite: TTestSuite;
+  LRepeatRunner: TSuiteRunner;
+  LRepeatResults: specialize TArray<TTestRunResult>;
+  LRepeatCount: Integer;
+  { T-15: FailFast + MaxFailures }
+  LFailFastSuite: TTestSuite;
+  LFailFastResult: TTestRunResult;
+  LFailFastCount: Integer;
+  { T-16: TestClosure }
+  LClosureSuite: TTestSuite;
+  LClosureResult: TTestRunResult;
+  LClosureCount: Integer;
+  { T-17: WithEachCleanup }
+  LCleanupSuite: TTestSuite;
+  LCleanupResult: TTestRunResult;
+  LCleanupCount: Integer;
 
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
@@ -298,6 +323,7 @@ var
   LTimeoutRunOut: string;
   { Phase 12: cleanup }
   GCleanupCalled: Integer;
+  GSeqOrderCounter: Integer;
   LAutoRunSuite: TTestSuite;
   LAutoRunRunner: TSuiteRunner;
   { T-07: timeout exceeded }
@@ -1057,7 +1083,21 @@ begin
     PassTest('Regular test captured log');
   end;
 
-  { ── ShouldFail (expected failure) ─────────────────────────────────────── }
+  { ── ShouldFail (expected failure) ──────────────────────────────────────────
+    Overload patterns:
+      ShouldFail(name, proc)                    — any exception = pass, no exception = fail
+      ShouldFail(name, proc, 'reason')          — same as above, with reason message
+      ShouldFail(name, proc, EAbort)            — only EAbort (or subclass) = pass
+      ShouldFail(name, proc, EAbort, 'substr')  — EAbort + message contains 'substr' = pass
+      ShouldFail(name, proc, 'substr', 0)       — any exception + message contains 'substr' = pass
+                                                     (0 is disambiguation dummy — FPC can't distinguish
+                                                      this from ShouldFail(name, proc, 'reason'))
+
+    ⚠ FPC overload resolution pitfall:
+      ShouldFail(name, proc, 'some text') → matches the 'reason' overload, NOT 'contains'.
+      To match by message substring without class check, use the 4-arg form with dummy=0:
+        ShouldFail(name, proc, 'substring', 0)
+   }
   WriteLn;
   SectionHeader('Phase 6: ShouldFail (expected failure)');
   begin
@@ -2061,6 +2101,228 @@ begin
     PassTest('ListMode outputs test names');
   end;
 
+  { ── T-12: TestSeq (Sequential in parallel mode) ───────────────────────── }
+
+  SectionHeader('T-12: TestSeq sequential opt-in');
+
+  begin
+    LResultSuite := TTestSuite.Create('SeqParallel');
+    LResultSuite.Test('par1', @TestSimplePass);
+    LResultSuite.TestSeq('seq1', @TestSimplePass2);
+    LResultSuite.Test('par2', @TestSimplePass);
+    LResultSuite.TestSeq('seq2', @TestSimplePass2);
+    LResultSuite.RunParallelWithResult(nil, LFilterResult);
+    if LFilterResult.Passed <> 4 then
+      FailTest('TestSeq: expected 4 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    if LFilterResult.Failed <> 0 then
+      FailTest('TestSeq: expected 0 failed, got ' +
+        IntToStr(LFilterResult.Failed));
+    PassTest('TestSeq sequential opt-in');
+  end;
+
+  { ── T-12b: TestSeq execution order (sequential before parallel) ──────── }
+
+  SectionHeader('T-12b: TestSeq execution order');
+
+  begin
+    { Verify sequential tests complete before parallel tests start.
+      Use a shared counter: sequential test sets it, parallel test checks it.
+      Phase 1 (Sequential) runs before Phase 2 (Parallel), so the counter
+      must be set before the parallel test reads it. }
+    GSeqOrderCounter := 0;
+    LResultSuite := TTestSuite.Create('SeqOrder');
+    LResultSuite.TestSeq('seq_first', procedure begin
+      GSeqOrderCounter := 1;
+      CheckTrue(GSeqOrderCounter = 1, 'sequential test sets counter');
+    end);
+    LResultSuite.Test('par_after', procedure begin
+      CheckTrue(GSeqOrderCounter >= 1,
+        'sequential should have completed before parallel (counter=' +
+        IntToStr(GSeqOrderCounter) + ')');
+    end);
+    LResultSuite.RunParallelWithResult(nil, LFilterResult);
+    if LFilterResult.Passed <> 2 then
+      FailTest('TestSeq order: expected 2 passed, got ' +
+        IntToStr(LFilterResult.Passed));
+    PassTest('TestSeq execution order');
+  end;
+
+  { ── T-13: TestCache ──────────────────────────────────────────────────── }
+
+  SectionHeader('T-13: TestCache');
+
+  begin
+    LCache := TTestCache.Create('.nextpas/test-cache-test');
+    LCacheConfig1 := DefaultConfig;
+    LCacheConfig2 := DefaultConfig;
+    LCacheKey1 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    LCacheKey2 := LCache.ComputeKey([], '3.3.1', LCacheConfig2);
+    if LCacheKey1 <> LCacheKey2 then
+      FailTest('CacheKey: same inputs should produce same key');
+    { Different compiler version should produce different key }
+    LCacheKey3 := LCache.ComputeKey([], '3.2.0', LCacheConfig1);
+    if LCacheKey1 = LCacheKey3 then
+      FailTest('CacheKey: different compiler version should produce different key');
+    { Test cache put/get }
+    LCacheEntry.Status := Ord(tsPassed);
+    LCacheEntry.Message := '';
+    LCacheEntry.Duration := 42;
+    LCacheEntry.Time := 1234567890;
+    LCache.Put(LCacheKey1, 'test_cache_put', LCacheEntry);
+    if not LCache.Get(LCacheKey1, 'test_cache_put', LCacheGotEntry) then
+      FailTest('CacheGet: should find cached entry');
+    if LCacheGotEntry.Status <> Ord(tsPassed) then
+      FailTest('CacheGet: status mismatch');
+    if LCacheGotEntry.Duration <> 42 then
+      FailTest('CacheGet: duration mismatch');
+    { Non-existent entry should return False }
+    if LCache.Get(LCacheKey1, 'nonexistent', LCacheGotEntry) then
+      FailTest('CacheGet: should not find non-existent entry');
+    { Clean up test cache directory }
+    LCache.Invalidate;
+    PassTest('TestCache');
+  end;
+
+  { ── T-13b: Cache integration in runner ─────────────────────────────────── }
+
+  SectionHeader('T-13b: Cache integration in runner');
+
+  begin
+    LCacheRunConfig := DefaultConfig;
+    LCacheRunConfig.CacheEnabled := True;
+    LCacheRunConfig.CacheDir := '../../../build/projects/nextpas.core.test/test_runner/cache';
+    LCacheRunCount := 0;
+    LCacheRunSuite := TTestSuite.Create('CacheRun');
+    LCacheRunSuite.Config := LCacheRunConfig;
+    LCacheRunSuite.Test('cached_test', procedure begin
+      Inc(LCacheRunCount);
+      CheckTrue(True, 'test runs');
+    end);
+    { First run: cache miss, test should execute }
+    LCacheRunCount := 0;
+    LCacheRunSuite.RunWithResult(LCacheRunResult1);
+    if LCacheRunCount <> 1 then
+      FailTest('Cache integration: first run should execute test, got count=' +
+        IntToStr(LCacheRunCount));
+    if LCacheRunResult1.Passed <> 1 then
+      FailTest('Cache integration: first run should pass 1 test');
+    { Second run: cache hit, test should NOT execute }
+    LCacheRunCount := 0;
+    LCacheRunSuite.RunWithResult(LCacheRunResult2);
+    if LCacheRunCount <> 0 then
+      FailTest('Cache integration: second run should use cache (count should be 0), got count=' +
+        IntToStr(LCacheRunCount));
+    if LCacheRunResult2.Passed <> 1 then
+      FailTest('Cache integration: second run should pass 1 test (from cache)');
+    { Clean up cache directory }
+    LCache := TTestCache.Create('../../../build/projects/nextpas.core.test/test_runner/cache');
+    LCache.Invalidate;
+    PassTest('Cache integration in runner');
+  end;
+
+  { ── T-14: RepeatAllCount (--count=N) ───────────────────────────────────── }
+
+  SectionHeader('T-14: RepeatAllCount (--count=N)');
+
+  begin
+    LRepeatCount := 0;
+    LRepeatSuite := TTestSuite.Create('RepeatSuite');
+    LRepeatSuite.Config.RepeatAllCount := 3;
+    LRepeatSuite.Test('repeat_test', procedure begin
+      Inc(LRepeatCount);
+      CheckTrue(True, 'test runs');
+    end);
+    LRepeatRunner := TSuiteRunner.Create('RepeatRunner');
+    LRepeatRunner.Add(LRepeatSuite);
+    LRepeatRunner.RunAllWithResult(LRepeatResults);
+    if LRepeatCount <> 3 then
+      FailTest('RepeatAllCount: expected 3 runs, got ' + IntToStr(LRepeatCount));
+    PassTest('RepeatAllCount (--count=N)');
+  end;
+
+  { ── T-15: FailFast + MaxFailures combination ────────────────────────────── }
+
+  SectionHeader('T-15: FailFast + MaxFailures');
+
+  begin
+    LFailFastCount := 0;
+    LFailFastSuite := TTestSuite.Create('FailFastSuite');
+    LFailFastSuite.Config.FailFast := True;
+    LFailFastSuite.Config.MaxFailures := 2;
+    LFailFastSuite.Test('ff_pass1', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(True, 'pass');
+    end);
+    LFailFastSuite.Test('ff_fail1', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(False, 'fail 1');
+    end);
+    LFailFastSuite.Test('ff_fail2', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(False, 'fail 2');
+    end);
+    LFailFastSuite.Test('ff_pass2', procedure begin
+      Inc(LFailFastCount);
+      CheckTrue(True, 'pass');
+    end);
+    LFailFastSuite.RunWithResult(LFailFastResult);
+    { FailFast stops after first failure, MaxFailures caps at 2 }
+    if LFailFastResult.Failed < 1 then
+      FailTest('FailFast+MaxFailures: expected at least 1 failure, got ' +
+        IntToStr(LFailFastResult.Failed));
+    if LFailFastCount >= 4 then
+      FailTest('FailFast+MaxFailures: should have stopped early, but ran all ' +
+        IntToStr(LFailFastCount) + ' tests');
+    PassTest('FailFast + MaxFailures');
+  end;
+
+  { ── T-16: Test with TTestClosure ────────────────────────────────────────── }
+
+  SectionHeader('T-16: Test with TTestClosure');
+
+  begin
+    LClosureCount := 0;
+    LClosureSuite := TTestSuite.Create('ClosureSuite');
+    LClosureSuite.Test('closure_test', procedure begin
+      Inc(LClosureCount);
+      CheckTrue(True, 'closure test');
+    end);
+    LClosureSuite.RunWithResult(LClosureResult);
+    if LClosureCount <> 1 then
+      FailTest('TestClosure: expected 1 call, got ' + IntToStr(LClosureCount));
+    PassTest('Test with TTestClosure');
+  end;
+
+  { ── T-17: WithEachCleanup ──────────────────────────────────────────────── }
+
+  SectionHeader('T-17: WithEachCleanup');
+
+  begin
+    LCleanupCount := 0;
+    LCleanupSuite := TTestSuite.Create('CleanupSuite');
+    LCleanupSuite := LCleanupSuite.WithEachCleanup(procedure begin
+      Inc(LCleanupCount);
+    end);
+    LCleanupSuite.Test('cleanup_test1', procedure begin
+      CheckTrue(True, 'test 1');
+    end);
+    LCleanupSuite.Test('cleanup_test2', procedure begin
+      CheckTrue(True, 'test 2');
+    end);
+    LCleanupSuite.Test('cleanup_test3', procedure begin
+      CheckTrue(True, 'test 3');
+    end);
+    LCleanupSuite.RunWithResult(LCleanupResult);
+    if LCleanupCount <> 3 then
+      FailTest('WithEachCleanup: expected 3 cleanups, got ' +
+        IntToStr(LCleanupCount));
+    if LCleanupResult.Passed <> 3 then
+      FailTest('WithEachCleanup: expected 3 passed, got ' +
+        IntToStr(LCleanupResult.Passed));
+    PassTest('WithEachCleanup');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2089,9 +2351,15 @@ begin
   LJsonSuite := Default(TTestSuite);
   LAutoRunSuite := Default(TTestSuite);
   LAutoRunRunner := Default(TSuiteRunner);
+  LCacheRunSuite := Default(TTestSuite);
   LJsonSink := nil;
   LVerbSuite := Default(TTestSuite);
   LVerbSink := nil;
   LRetrySuite := Default(TTestSuite);
   LIdempotentSuite := Default(TTestSuite);
+  LRepeatSuite := Default(TTestSuite);
+  LRepeatRunner := Default(TSuiteRunner);
+  LFailFastSuite := Default(TTestSuite);
+  LClosureSuite := Default(TTestSuite);
+  LCleanupSuite := Default(TTestSuite);
 end.

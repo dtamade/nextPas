@@ -12,7 +12,7 @@ uses
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = 32;
-  SEGQUEUE_FREE_POOL_LIMIT = 4;
+  SEGQUEUE_FREE_POOL_LIMIT = 8;
 
 type
   generic TSegQueueImpl<T> = class
@@ -30,7 +30,13 @@ type
     end;
   private
     FHead: PSegment;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadHead: TCacheLinePad;
+    {$POP}
     FTail: PSegment;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTail: TCacheLinePad;
+    {$POP}
     FEnqueuePos: Int64;
     {$PUSH} {$WARN 05029 OFF}
     FPadEnqueue: TCacheLinePad;
@@ -41,6 +47,7 @@ type
     {$POP}
     FFreePool: PSegment;
     FFreePoolCount: Integer;
+    FClosed: Int32;
     FEbr: TEbrDomain;
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     function AllocSegment(const AStartIndex: Int64): PSegment;
@@ -50,8 +57,14 @@ type
     destructor Destroy; override;
     {** @desc 无界入队；段不足时自动扩展 }
     procedure Enqueue(const AValue: T);
+    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 关闭队列（已入队数据仍可读出） }
+    procedure Close;
+    {** @desc 队列是否已关闭 }
+    function IsClosed: Boolean;
     {** @desc 近似空判断 }
     function IsEmpty: Boolean;
     {** @desc 近似计数 }
@@ -98,6 +111,7 @@ begin
   FDequeuePos := 0;
   FFreePool := nil;
   FFreePoolCount := 0;
+  FClosed := 0;
 end;
 
 destructor TSegQueueImpl.Destroy;
@@ -150,13 +164,20 @@ var
   LNext: PSegment;
   LNewSeg: PSegment;
   LGuard: TEbrGuard;
+  LTailSeg: PSegment;
 begin
   LPos := AtomicFetchAdd64(FEnqueuePos, 1, moRelaxed);
   LIdx := Integer(LPos mod SEGQUEUE_SEGMENT_CAPACITY);
 
   LGuard := TEbrGuard.Acquire(FEbr);
   try
-    LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
+    { Fast path: try starting from tail segment to avoid traversal from head }
+    LTailSeg := PSegment(AtomicLoadPtr(Pointer(FTail), moAcquire));
+    if (LTailSeg <> nil) and (LTailSeg^.StartIndex <= LPos) and
+       ((LTailSeg^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) > LPos) then
+      LSeg := LTailSeg
+    else
+      LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
 
     while (LSeg^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) <= LPos do
     begin
@@ -182,6 +203,24 @@ begin
   finally
     LGuard.Release;
   end;
+end;
+
+function TSegQueueImpl.TryEnqueue(const AValue: T): Boolean;
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
+  Enqueue(AValue);
+  Result := True;
+end;
+
+procedure TSegQueueImpl.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+end;
+
+function TSegQueueImpl.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
 function TSegQueueImpl.TryDequeue(out AValue: T): Boolean;

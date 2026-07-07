@@ -64,4 +64,4 @@ TLockFreeChannel<T> (Go channel 语义) | TLockFreeHashMap<TKey,TValue> (分片�
 | 模块 | 定位 | 证据 |
 |------|------|------|
 | `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime: atomic 43/43 |
-| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress: lockfree stress 12/12 |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress: lockfree stress 14/14 |

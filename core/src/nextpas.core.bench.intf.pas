@@ -47,6 +47,8 @@ type
   {** 从 base 模块 re-export 数组类型 }
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
+  {** 从 base 模块 re-export 基线数据类型 }
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
   {** @deprecated Use TBaselineData instead. Kept for backward compatibility. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
 
@@ -106,8 +108,12 @@ type
     property Name: string read GetName;
   end;
 
-  {** 基准函数类型 - 简单版本 }
+  {** 基准函数类型 - 简单版本（框架控制循环） }
   TBenchFunc = procedure(const ACtx: IBenchContext);
+
+  {** 基准函数类型 - 最简版本（无参数，框架控制循环）
+   *  F-03: 降低认知负担，类似 Go testing.B 的 func(b *B) }
+  TBenchSimpleFunc = procedure;
 
   {** 参数化基准函数类型 }
   TBenchParamFunc = procedure(const ACtx: IBenchContext; AParam: Int64);
@@ -138,6 +144,8 @@ type
     EnableParallel: Boolean; {< true 时使用 ParallelThreads 个线程并行执行 }
     ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
     TimeoutMs: Int64;        {< F-017: per-benchmark 超时(毫秒)，0 = 使用 suite 级超时 }
+    CollectRawSamples: Boolean; {< F-04: 强制收集原始样本，覆盖 config 级别设置 }
+    SimpleFunc: TBenchSimpleFunc; {< F-03: 最简版本函数（框架控制循环） }
   end;
 
   {** 基准套件接口 - Fluent Builder }
@@ -147,6 +155,11 @@ type
     {** 添加基准测试（简单版本）
      *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
+
+    {** 添加基准测试（最简版本，无参数）
+     *  F-03: 降低认知负担，框架控制循环，类似 Go testing.B
+     *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
+    function AddSimple(const AName: string; AFunc: TBenchSimpleFunc): IBenchSuite;
 
     {** 添加基准测试（带 setup/teardown）
      *  @raises EBenchInvalidParam 当 AFunc 为 nil 时 }
@@ -190,8 +203,13 @@ type
     {** 清空所有已注册条目 (DS-03) }
     function Clear: IBenchSuite;
 
-    {** 按名称移除条目 (DS-03) }
+    {** 按名称移除条目 (DS-03)
+     *  @raises EBenchInvalidParam 当条目不存在时 }
     function RemoveByName(const AName: string): IBenchSuite;
+
+    {** 安全移除条目（按名称），返回是否找到并移除
+     *  F-10: 与 TryGetByName 风格一致的安全版本 }
+    function TryRemoveByName(const AName: string): Boolean;
 
     {** 设置最小基准持续时间 }
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -215,6 +233,11 @@ type
 
     {** 启用原始样本收集 }
     function CollectRawSamples: IBenchSuite;
+
+    {** 设置指定条目的原始样本收集（覆盖 config 级别设置）
+     *  @raises EBenchInvalidParam 当条目不存在时 }
+    function SetEntryCollectRawSamples(const AName: string;
+      ACollect: Boolean): IBenchSuite;
 
     {** 设置安静模式 }
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
@@ -242,6 +265,10 @@ type
      *  @raises EBenchError 当文件格式错误时 }
     function LoadBaseline(const APath: string): IBenchSuite;
 
+    {** 安全加载基线文件，文件不存在或格式错误时返回 False
+     *  F-10: 与 TryGetByName 风格一致的安全版本 }
+    function TryLoadBaseline(const APath: string): Boolean;
+
     {** 设置过滤条件（子串匹配或 glob 模式）。
      *  包含 * 或 ? 时使用 glob 匹配（如 'Sort*'、'Hash??'），
      *  否则使用子串匹配（如 'Sort' 匹配所有含 'Sort' 的名称）。
@@ -250,8 +277,14 @@ type
 
     {** 设置整体超时（毫秒），超时后跳过剩余 benchmark (ST-04)。
      *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。
-     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。 }
-    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
+     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。
+     *  @deprecated 请使用 SetTimeout(ADuration: TDuration) 重载。 }
+    function SetTimeout(ATimeoutMs: Int64): IBenchSuite; deprecated 'use SetTimeout(TDuration)';
+
+    {** 设置整体超时（TDuration 便利重载）。
+     *  内部转换为毫秒存储。0 = 不超时（默认）。
+     *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
+    function SetTimeout(ADuration: TDuration): IBenchSuite;
 
     {** 运行基准测试 }
     function Run: IBenchResults;
@@ -315,19 +348,19 @@ type
 
     {** 多基线对比矩阵 (P2-1)：当前结果 vs N 个基线，返回矩阵 }
     function CompareMultipleBaselines(
-      const ABaselines: array of TBenchBaseline): TMatrixResult;
+      const ABaselines: array of TBaselineData): TMatrixResult;
 
     {** 多基线对比矩阵 — Console 报告 (P2-1) }
     function ToMatrixReport(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 多基线对比矩阵 — HTML 报告 (P2-1) }
     function ToMatrixHTML(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 多基线对比矩阵 — JSON 报告 (CI 消费) }
     function ToMatrixJSON(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
 
     {** 检测回归（返回 true 表示有回归） }
     function HasRegression(AThreshold: Double): Boolean;
@@ -340,7 +373,17 @@ type
     property Environment: TBenchEnvironment read GetEnvironment;
   end;
 
-  {** 统计分析器接口 }
+  {** 统计分析器接口
+   *
+   *  功能分组:
+   *    基础统计: ComputeStats, Mean, Median, StdDev, Percentile, ComputePercentiles
+   *    异常值检测: CountOutliers
+   *    假设检验: HasHeuristicDifference*, ComputeApproximatePValue, ComputeMannWhitneyPValue,
+   *              KolmogorovSmirnov*, BootstrapTestDifference
+   *    贝叶斯估计: BayesianEstimate, BayesianCredibleInterval
+   *    聚合: GeometricMean
+   *    正态性: LooksNormalHeuristic
+   *}
   IBenchStatsAnalyzer = interface
     ['{D4E5F6A7-B8C9-0D1E-2F3A-4B5C6D7E8F9A}']
 
@@ -381,12 +424,51 @@ type
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
     {** 几何均值（多 benchmark ratio 聚合的正确方法）
-     *  @edge 空数组返回 1.0；非正 ratio 返回 0.0（哨兵值，表示非法输入） }
+     *  @edge 空数组返回 1.0；非正 ratio 返回 NaN（调用方应检查 IsDoubleNaN） }
     function GeometricMean(const ARatios: TDoubleArray): Double;
 
     {** 批量计算百分位（一次排序，多次查询）
      *  E03: 避免在同一数据上重复排序 }
     function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
+
+    {** 单样本 K-S 检验：检验数据是否来自正态分布 N(AMean, AStdDev²)
+     *  @edge 空数组返回 D=0, p=1；样本数=1 时 D=0, p=1 }
+    function KolmogorovSmirnovNormalTest(const AData: TDoubleArray;
+      AMean, AStdDev: Double): TKSTestResult;
+
+    {** 两样本 K-S 检验：检验两个样本是否来自同一分布
+     *  @edge 任一数组为空返回 D=0, p=1；任一数组大小=1 时使用近似 }
+    function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
+
+    {** Bootstrap 假设检验 (Phase B.3)
+     *  检验两组数据的均值是否有显著差异（Fisher 置换检验）
+     *  @param A 第一组数据
+     *  @param B 第二组数据
+     *  @param AIterations 重采样次数（默认 10000）
+     *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time） }
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
+    {** 贝叶斯估计 (Phase C.1)
+     *  正态-正态共轭模型：给定先验和数据，计算后验分布
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianEstimate(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ASigma: Double = 0): TBayesianEstimate;
+
+    {** 贝叶斯可信区间 (Phase C.2)
+     *  计算贝叶斯可信区间（比频率学派置信区间更直观）
+     *  @param AData 观测数据
+     *  @param APriorMean 先验均值
+     *  @param APriorStdDev 先验标准差
+     *  @param ALevel 可信水平（默认 0.95）
+     *  @param ASigma 已知的总体标准差（默认 0 = 使用样本标准差） }
+    function BayesianCredibleInterval(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
   end;
 
   {** 报告生成器接口

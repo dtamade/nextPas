@@ -30,6 +30,8 @@ type
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+  TBaselineData = nextpas.core.bench.base.TBaselineData;
+  {** @deprecated Use TBaselineData instead. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
@@ -41,6 +43,7 @@ type
   IBenchStatsAnalyzer = nextpas.core.bench.intf.IBenchStatsAnalyzer;
 
   TBenchFunc = nextpas.core.bench.intf.TBenchFunc;
+  TBenchSimpleFunc = nextpas.core.bench.intf.TBenchSimpleFunc;
   TBenchParamFunc = nextpas.core.bench.intf.TBenchParamFunc;
   TBenchLoopFunc = nextpas.core.bench.intf.TBenchLoopFunc;
   TBenchLoopContextFunc = nextpas.core.bench.intf.TBenchLoopContextFunc;
@@ -58,7 +61,7 @@ type
     FEntryCapacity: Integer;
     FConfig: TBenchConfig;
     FFilter: string;
-    FBaselines: array of TBenchBaseline;
+    FBaselines: array of TBaselineData;
     FBaselineCount: Integer;
     FBaselineCapacity: Integer;
     FRunner: TBenchRunner;
@@ -82,6 +85,9 @@ type
     procedure GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
     procedure GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
 
+    {** F-04: 按名称查找条目索引，未找到返回 -1 }
+    function FindEntryIndex(const AName: string): Integer;
+
   public
     constructor Create(const ASuiteName: string);
     {** ST-11: 使用自定义配置创建基准套件 }
@@ -90,6 +96,7 @@ type
 
     {** IBenchSuite 实现 }
     function Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
+    function AddSimple(const AName: string; AFunc: TBenchSimpleFunc): IBenchSuite;
     function AddWithSetup(const AName: string; AFunc: TBenchFunc;
       ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
     function AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -107,6 +114,7 @@ type
     function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
     function Clear: IBenchSuite;
     function RemoveByName(const AName: string): IBenchSuite;
+    function TryRemoveByName(const AName: string): Boolean;
     function SetMinDuration(ADuration: TDuration): IBenchSuite;
     function SetMaxIterations(AIters: Int64): IBenchSuite;
     function SetMinSamples(ACount: Integer): IBenchSuite;
@@ -114,14 +122,18 @@ type
     function EnableMemoryTracking: IBenchSuite;
     function DisableMemoryTracking: IBenchSuite;
     function CollectRawSamples: IBenchSuite;
+    function SetEntryCollectRawSamples(const AName: string;
+      ACollect: Boolean): IBenchSuite;
     function SetQuiet(AQuiet: Boolean): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: Double): IBenchSuite;
     function AddBaseline(const AName: string; ANsPerOp: TDuration): IBenchSuite;
-    function AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
-    function AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+    function AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
+    function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
     function LoadBaseline(const APath: string): IBenchSuite;
+    function TryLoadBaseline(const APath: string): Boolean;
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
+    function SetTimeout(ADuration: TDuration): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -131,7 +143,7 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
-    FBaselines: array of TBenchBaseline;
+    FBaselines: array of TBaselineData;
     FBaselineCount: Integer;
     FReportGenerator: IBenchReportGenerator;
 
@@ -144,7 +156,7 @@ type
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
-      const ABaselines: array of TBenchBaseline);
+      const ABaselines: array of TBaselineData);
     destructor Destroy; override;
 
     {** IBenchResults 实现 }
@@ -165,13 +177,13 @@ type
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
     procedure AppendToTimeline(const APath: string);
     function CompareMultipleBaselines(
-      const ABaselines: array of TBenchBaseline): TMatrixResult;
+      const ABaselines: array of TBaselineData): TMatrixResult;
     function ToMatrixReport(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function ToMatrixHTML(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function ToMatrixJSON(
-      const ABaselines: array of TBenchBaseline): string;
+      const ABaselines: array of TBaselineData): string;
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -327,6 +339,26 @@ begin
   Inc(FEntryCount);
 end;
 
+function TBenchSuite.AddSimple(const AName: string;
+  AFunc: TBenchSimpleFunc): IBenchSuite;
+{ F-03: 存储 SimpleFunc，runner 直接调用 }
+var
+  LEntry: TBenchEntry;
+begin
+  GuardNotRun;
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchSuite.AddSimple: AFunc must not be nil');
+  Result := Self;
+  LEntry := Default(TBenchEntry);
+  LEntry.Name := AName;
+  LEntry.SimpleFunc := AFunc;
+  LEntry.Condition := True;
+
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := LEntry;
+  Inc(FEntryCount);
+end;
+
 function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
   ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
 var
@@ -396,6 +428,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -420,6 +454,8 @@ var
 begin
   GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
+  if Length(AParams) = 0 then
+    raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
   Result := Self;
   for LIndex := 0 to High(AParams) do
   begin
@@ -502,6 +538,49 @@ begin
       Exit;
     end;
   end;
+  raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
+end;
+
+function TBenchSuite.TryRemoveByName(const AName: string): Boolean;
+var
+  I, J: Integer;
+begin
+  GuardNotRun;
+  for I := 0 to FEntryCount - 1 do
+  begin
+    if FEntries[I].Name = AName then
+    begin
+      for J := I to FEntryCount - 2 do
+        FEntries[J] := FEntries[J + 1];
+      Dec(FEntryCount);
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+function TBenchSuite.FindEntryIndex(const AName: string): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to FEntryCount - 1 do
+    if FEntries[I].Name = AName then
+      Exit(I);
+  Result := -1;
+end;
+
+function TBenchSuite.SetEntryCollectRawSamples(const AName: string;
+  ACollect: Boolean): IBenchSuite;
+var
+  LIdx: Integer;
+begin
+  GuardNotRun;
+  Result := Self;
+  LIdx := FindEntryIndex(AName);
+  if LIdx < 0 then
+    raise EBenchInvalidParam.CreateFmt(
+      'TBenchSuite.SetEntryCollectRawSamples: entry "%s" not found', [AName]);
+  FEntries[LIdx].CollectRawSamples := ACollect;
 end;
 
 function TBenchSuite.SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -585,7 +664,7 @@ begin
 end;
 
 {** F-08: 完整基线数据重载 }
-function TBenchSuite.AddBaselineData(const ABaseline: TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselineData(const ABaseline: TBaselineData): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
@@ -594,7 +673,7 @@ begin
   Inc(FBaselineCount);
 end;
 
-function TBenchSuite.AddBaselines(const ABaselines: array of TBenchBaseline): IBenchSuite;
+function TBenchSuite.AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
 var
   I: Integer;
 begin
@@ -628,6 +707,30 @@ begin
     AddBaselineData(LBaselines[I]);
 end;
 
+function TBenchSuite.TryLoadBaseline(const APath: string): Boolean;
+var
+  LManager: TBaselineManager;
+  LBaselines: TBaselineArray;
+  I: Integer;
+begin
+  GuardNotRun;
+  Result := False;
+  try
+    LManager := TBaselineManager.Create;
+    try
+      LManager.LoadFromFile(APath);
+    except
+      Exit;
+    end;
+    LBaselines := LManager.GetAllBaselines;
+    for I := 0 to High(LBaselines) do
+      AddBaselineData(LBaselines[I]);
+    Result := True;
+  except
+    Exit;
+  end;
+end;
+
 function TBenchSuite.SetFilter(const AFilter: string): IBenchSuite;
 begin
   GuardNotRun;
@@ -639,7 +742,18 @@ function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
+  if ATimeoutMs < 0 then
+    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: timeout must be >= 0');
   FConfig.TimeoutMs := ATimeoutMs;
+end;
+
+function TBenchSuite.SetTimeout(ADuration: TDuration): IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+  if ADuration.AsMilliseconds < 0 then
+    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: duration must be >= 0');
+  FConfig.TimeoutMs := ADuration.AsMilliseconds;
 end;
 
 function TBenchSuite.Run: IBenchResults;
@@ -726,7 +840,7 @@ end;
 
 constructor TBenchResults.Create(const AResults: array of TBenchResult;
   const AEnvironment: TBenchEnvironment;
-  const ABaselines: array of TBenchBaseline);
+  const ABaselines: array of TBaselineData);
 var
   I: Integer;
 begin
@@ -743,8 +857,7 @@ begin
   SetLength(FBaselines, FBaselineCount);
   for I := 0 to FBaselineCount - 1 do
   begin
-    FBaselines[I].Name := ABaselines[I].Name;
-    FBaselines[I].NsPerOp := ABaselines[I].NsPerOp;
+    FBaselines[I] := ABaselines[I];
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;
@@ -1072,7 +1185,7 @@ end;
 { P2-1: 多基线对比矩阵 }
 
 function TBenchResults.CompareMultipleBaselines(
-  const ABaselines: array of TBenchBaseline): TMatrixResult;
+  const ABaselines: array of TBaselineData): TMatrixResult;
 var
   LAnalyzer: TBenchStatsAnalyzer;
   LNCols: Integer;
@@ -1166,7 +1279,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixReport(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin
@@ -1176,7 +1289,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixHTML(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin
@@ -1186,7 +1299,7 @@ begin
 end;
 
 function TBenchResults.ToMatrixJSON(
-  const ABaselines: array of TBenchBaseline): string;
+  const ABaselines: array of TBaselineData): string;
 var
   LMatrix: TMatrixResult;
 begin
@@ -1200,6 +1313,8 @@ var
   LComparisons: array of TBenchComparison;
   I: Integer;
 begin
+  if AThreshold <= 0 then
+    raise EBenchInvalidParam.Create('TBenchResults.HasRegression: threshold must be > 0');
   LComparisons := GenerateComparisons;
 
   for I := 0 to High(LComparisons) do

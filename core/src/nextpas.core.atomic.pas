@@ -389,6 +389,18 @@ function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; co
  * automatically derives a legal failure order so release/acq_rel are never
  * exposed on the failure path.
  *
+ * @memory_order_derivation_rules
+ * 单参数版本自动派生 failure order 的规则：
+ *
+ * | aOrder (success) | 派生的 failure order | 说明                    |
+ * |------------------|---------------------|------------------------|
+ * | mo_relaxed       | mo_relaxed          | 无同步要求              |
+ * | mo_consume       | mo_consume          | consume 语义保持        |
+ * | mo_acquire       | mo_acquire          | 获取语义保持            |
+ * | mo_release       | mo_relaxed          | release 不能用于失败路径 |
+ * | mo_acq_rel       | mo_acquire          | 失败时只需 acquire      |
+ * | mo_seq_cst       | mo_seq_cst          | 最强语义保持            |
+ *
  * @memory_order_usage
  * 此版本适用于不需要区分成功和失败内存序的常见场景：
  * - 使用 mo_seq_cst：最安全，适合大多数场景
@@ -412,7 +424,7 @@ function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; co
  *   if atomic_compare_exchange_strong(counter, expected, 1, mo_seq_cst) then
  *     WriteLn('CAS succeeded');
  *
- *   // 使用 acq_rel 进行同步
+ *   // 使用 acq_rel 进行同步（failure 自动降级为 acquire）
  *   if atomic_compare_exchange_strong(counter, expected, 2, mo_acq_rel) then
  *     WriteLn('CAS succeeded with acquire-release semantics');
  *

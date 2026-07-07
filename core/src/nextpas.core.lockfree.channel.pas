@@ -12,6 +12,8 @@ uses
   nextpas.core.time.base;
 
 type
+  TChannelNotifier = procedure(AData: Pointer) of object;
+
   generic TLockFreeChannelImpl<T> = class
   private type
     TSlot = record
@@ -22,24 +24,38 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
+    { Cache line padding to avoid false sharing between producer and consumer }
     FSendPos: Int64;
+    FSendPad: array[0..47] of Byte; { Pad to 64 bytes }
     FRecvPos: Int64;
+    FRecvPad: array[0..47] of Byte; { Pad to 64 bytes }
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     FClosed: Int32;
+    FNotifier: TChannelNotifier;
+    FNotifierData: Pointer;
     procedure WakeAllWaiters;
+    procedure NotifyData;
+    procedure NotifySpace;
   public
     {** @desc 创建有界无锁 Channel }
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
 
-    {** @desc 阻塞发送，直到有空间或 channel 关闭 }
+    {** @desc 设置状态变更通知器（供 Selector 使用）
+      @param ANotifier 通知回调
+      @param AData 通知器上下文数据 }
+    procedure SetNotifier(ANotifier: TChannelNotifier; AData: Pointer);
+
+    {** @desc 阻塞发送，直到有空间或 channel 关闭
+      @raises EInvalidOperationError 如果 channel 已关闭（与 Go 的 panic 语义对齐） }
     procedure Send(const AValue: T);
-    {** @desc 非阻塞发送，无空间时立即返回 False }
+    {** @desc 非阻塞发送，无空间或已关闭时立即返回 False
+      @note 关闭时返回 False 而非抛异常——与 Go 的 `ch <- v` (panic) vs `select { case ch <- v: }` (ok=false) 语义对齐 }
     function TrySend(const AValue: T): Boolean;
-    {** @desc 带超时发送，超时返回 False }
+    {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
     {** @desc 阻塞接收；channel 关闭且无数据时返回 False }
@@ -53,6 +69,8 @@ type
     procedure Close;
     {** @desc Channel 是否已关闭 }
     function IsClosed: Boolean;
+    {** @desc Channel 是否为空 }
+    function IsEmpty: Boolean;
     {** @desc 近似队列长度 }
     function ApproxLen: PtrUInt;
     {** @desc Channel 容量 }
@@ -87,6 +105,8 @@ begin
   FSpaceWaiters := 0;
   FDataWaiters := 0;
   FClosed := 0;
+  FNotifier := nil;
+  FNotifierData := nil;
 end;
 
 destructor TLockFreeChannelImpl.Destroy;
@@ -102,6 +122,26 @@ procedure TLockFreeChannelImpl.WakeAllWaiters;
 begin
   LockFreeWakeAll(@FSpaceEpoch);
   LockFreeWakeAll(@FDataEpoch);
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.NotifyData;
+begin
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.NotifySpace;
+begin
+  if Assigned(FNotifier) then
+    FNotifier(FNotifierData);
+end;
+
+procedure TLockFreeChannelImpl.SetNotifier(ANotifier: TChannelNotifier; AData: Pointer);
+begin
+  FNotifier := ANotifier;
+  FNotifierData := AData;
 end;
 
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
@@ -122,8 +162,11 @@ begin
       if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + 2, moRelease);
-        LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+        AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+        NotifyData;
         Exit(True);
       end;
     end
@@ -143,7 +186,7 @@ begin
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      raise EInvalidOperationError.Create('TLockFreeChannel.Send: channel closed');
+      raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [FCapacity]);
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TrySend(AValue) then
       Exit;
@@ -187,18 +230,21 @@ begin
     LPos := AtomicLoad64(FRecvPos, moRelaxed);
     LIdx := PtrUInt(LPos) and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    if LSeq = LPos + 2 then
+    if LSeq = LPos + 1 then
     begin
       if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        { Fast path: only notify if there are waiters }
+        if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+          LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+        NotifySpace;
         Exit(True);
       end;
     end
-    else if LSeq <= LPos + 1 then
+    else if LSeq < LPos + 1 then
       Exit(False)
     else
       CpuPause;
@@ -255,6 +301,11 @@ end;
 function TLockFreeChannelImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moRelaxed) <> 0;
+end;
+
+function TLockFreeChannelImpl.IsEmpty: Boolean;
+begin
+  Result := ApproxLen = 0;
 end;
 
 function TLockFreeChannelImpl.ApproxLen: PtrUInt;

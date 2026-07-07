@@ -24,6 +24,7 @@ uses
   nextpas.core.thread.intf,
   nextpas.core.collections.base,
   nextpas.core.platform.thread,
+  nextpas.core.time,
   nextpas.core.time.cpu;
 
 { ── Test Suite ────────────────────────────────────────────────────────────── }
@@ -57,6 +58,9 @@ type
     LastPass     : Integer;
     LastFail     : Integer;
     LastSkip     : Integer;
+    { Source files for cache key computation — if set, cache key includes
+      file contents so cache is invalidated when source changes. }
+    SourceFiles  : specialize TArray<string>;
 
     class function Create(const AName: string): TTestSuite; static;
     procedure Test(const AName: string; AProc: TTestProc); overload;
@@ -82,6 +86,18 @@ type
     procedure TestRepeat(const AName: string; AProc: TTestClosure;
       ARepeatCount: Integer);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
+    { TestTable: data-driven test with multiple input/output cases.
+      Each TTestCase provides input args and expected output. The test runs
+      once per case, reporting pass/fail per case.
+
+      NOTE: Most tests prefer Test() + closure for clarity. Use TestTable
+      when you have many input/output pairs that are cleaner as data than code.
+
+      Example:
+        TestTable('Add', [
+          TTestCase.Create(['1', '2'], '3'),
+          TTestCase.Create(['0', '0'], '0')
+        ], @AddProc); }
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
       AProc: TTestCaseProc);
@@ -114,6 +130,11 @@ type
       When ShortMode is off, the test runs normally. }
     procedure ShortSkip(const AName: string; AProc: TTestProc);
     procedure ShortSkip(const AName: string; AProc: TTestClosure);
+    { TestSeq: register a test that runs serially even in parallel mode.
+      Go t.Parallel() inverse — use for tests with shared mutable state
+      (DB, file system, global variables) that cannot run concurrently. }
+    procedure TestSeq(const AName: string; AProc: TTestProc);
+    procedure TestSeq(const AName: string; AProc: TTestClosure);
     procedure Skip(const AName: string; const AReason: string = '');
     procedure SetSetup(AProc: TTestProc);
     procedure SetSetup(AProc: TTestClosure);
@@ -335,6 +356,13 @@ begin
     Result := AEntry.DisplayName
   else
     Result := AEntry.Name;
+end;
+
+function GetCompilerVersion: string;
+const
+  cFPCVersion = {$I %FPCVERSION%};
+begin
+  Result := cFPCVersion;
 end;
 
 { Runner-level config: reads from the first suite's config.
@@ -641,8 +669,8 @@ var
 begin
   for I := 0 to High(ACases) do
   begin
-    { Heap-allocate case data and proc to avoid closure capture issues }
-    New(LPCase);
+    GetMem(LPCase, SizeOf(TTestCase));
+    FillChar(LPCase^, SizeOf(TTestCase), 0);
     LPCase^ := ACases[I];
     New(LPProc);
     LPProc^ := AProc;
@@ -750,6 +778,24 @@ var
 begin
   InitClosureEntry(LEntry, AName, AProc);
   LEntry.ShortSkip := True;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.TestSeq(const AName: string; AProc: TTestProc);
+var
+  LEntry: TTestEntry;
+begin
+  InitProcEntry(LEntry, AName, AProc);
+  LEntry.Sequential := True;
+  RegisterEntry(Tests, LEntry);
+end;
+
+procedure TTestSuite.TestSeq(const AName: string; AProc: TTestClosure);
+var
+  LEntry: TTestEntry;
+begin
+  InitClosureEntry(LEntry, AName, AProc);
+  LEntry.Sequential := True;
   RegisterEntry(Tests, LEntry);
 end;
 
@@ -915,7 +961,7 @@ var
   LGTestTimeoutMs: Integer;
   LTotalRetries: Integer;
   LRetriesLeft: Integer;
-  LStartMs: Int64;
+  LStart: TInstant;
   LRepeatCount: Integer;
   LRepeatI: Integer;
   LTagFilter: string;
@@ -924,8 +970,12 @@ var
   LProgressCurrent: Integer;
   LProgressPrefix: string;
   LIdx: Integer;
-  LRunStartMs: Int64;
-  LRunTimeoutMs: Int64;
+  LRunStart: TInstant;
+  LRunTimeout: TDuration;
+  LCache: TTestCache;
+  LCacheKey: string;
+  LCacheEntry: TCacheEntry;
+  LCacheHit: Boolean;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -940,6 +990,20 @@ begin
   LGTestTimeoutMs := GetTestTimeout(LConfig);
   LTagFilter := GetTagFilter(LConfig);
   LProgressCurrent := 0;
+  { Cache setup }
+  if LConfig.CacheEnabled then
+  begin
+    if LConfig.CacheDir <> '' then
+      LCache := TTestCache.Create(LConfig.CacheDir)
+    else
+      LCache := TTestCache.Create('.nextpas/test-cache');
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+  end
+  else
+  begin
+    LCache := Default(TTestCache);
+    LCacheKey := '';
+  end;
   { Pre-count eligible tests for progress display }
   if LConfig.ShowProgress then
   begin
@@ -952,11 +1016,11 @@ begin
     LProgressTotal := 0;
   try
 
-  LRunStartMs := GetTickCount64;
+  LRunStart := TInstant.Now;
   if LConfig.RunTimeoutSec > 0 then
-    LRunTimeoutMs := Int64(LConfig.RunTimeoutSec) * 1000
+    LRunTimeout := TDuration.FromSeconds(LConfig.RunTimeoutSec)
   else
-    LRunTimeoutMs := 0;
+    LRunTimeout := TDuration.Zero;
 
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, IntToStr(Length(Tests)) + ' tests',
@@ -993,8 +1057,8 @@ begin
     SetTestContext(Name, LEntry.Name);
 
     { Global run timeout check }
-    if (LRunTimeoutMs > 0) and
-       (GetTickCount64 - LRunStartMs >= LRunTimeoutMs) then
+    if (LRunTimeout > TDuration.Zero) and
+       (LRunStart.Elapsed >= LRunTimeout) then
     begin
       LOutSink.WriteLn(AnsiYellow(
         '  TIMEOUT: run exceeded ' + IntToStr(LConfig.RunTimeoutSec) +
@@ -1018,6 +1082,27 @@ begin
       EmitResult(tsSkipped, LEntry, 'skipped: short mode', LSkip,
         AResult.Results, LOutSink, LConfig);
       Continue;
+    end;
+
+    { Cache lookup — skip execution if cached result is valid }
+    LCacheHit := False;
+    if LConfig.CacheEnabled and (LCacheKey <> '') then
+    begin
+      LCacheHit := LCache.Get(LCacheKey, LEntry.Name, LCacheEntry);
+      if LCacheHit then
+      begin
+        LDisplayName := GetDisplayName(LEntry);
+        LStatus := TTestStatus(LCacheEntry.Status);
+        LLastFailMsg := LCacheEntry.Message;
+        IncByStatus(LStatus, LPass, LFail, LSkip);
+        LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
+          LCacheEntry.Duration);
+        AppendResult(AResult.Results, LTestResult);
+        WriteTestOutput(LStatus, LDisplayName + ' (cached)',
+          LLastFailMsg, LEntry.SkipReason,
+          LCacheEntry.Duration, LOutSink, LConfig);
+        Continue;
+      end;
     end;
 
     { Progress counter }
@@ -1059,7 +1144,7 @@ begin
       end;
     end;
 
-    LStartMs := GetTickCount64;
+    LStart := TInstant.Now;
     LDisplayName := GetDisplayName(LEntry);
     if LEntry.Kind = ekTest then
     begin
@@ -1132,7 +1217,7 @@ begin
         repeat
           LStatus := tsPassed;
           LLastFailMsg := '';
-          LStartMs := GetTickCount64;
+          LStart := TInstant.Now;
           try
             if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and
                (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
@@ -1217,17 +1302,27 @@ begin
 
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
-      GetTickCount64 - LStartMs);
+      LStart.Elapsed.AsMilliseconds);
     { Copy captured log lines on failure/error or verbose mode for report output }
     if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
        ((LStatus in [tsFailed, tsError]) or LConfig.VerboseMode) then
       LTestResult.CapturedLog := LSubCtx.FLogLines;
     AppendResult(AResult.Results, LTestResult);
 
+    { Cache store — persist result for future runs }
+    if LConfig.CacheEnabled and (LCacheKey <> '') then
+    begin
+      LCacheEntry.Status := Ord(LStatus);
+      LCacheEntry.Message := LLastFailMsg;
+      LCacheEntry.Duration := LStart.Elapsed.AsMilliseconds;
+      LCacheEntry.Time := 0;
+      LCache.Put(LCacheKey, LEntry.Name, LCacheEntry);
+    end;
+
     { Output per-test — use DisplayName + progress prefix }
     WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
       LLastFailMsg, LEntry.SkipReason,
-      GetTickCount64 - LStartMs, LOutSink, LConfig);
+      LStart.Elapsed.AsMilliseconds, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
@@ -1262,13 +1357,10 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
-    { Dispose thread-local GExecState allocated by SetTestContext.
-      Must be inside finally — Exit (setup failure) skips code after finally.
-      Matches the parallel worker's cleanup in its finally block
-      (runner.parallel.pas:494-501). }
     if GExecState <> nil then
     begin
-      Dispose(GExecState);
+      Finalize(GExecState^);
+      FreeMem(GExecState);
       GExecState := nil;
     end;
   end;
@@ -1444,6 +1536,11 @@ var
   LBatchStart, LSpawned, LFirstEligible: Integer;
   LProgressCounter: Integer;
   LProgressTotal: Integer;
+  LCache: TTestCache;
+  LCacheKey: string;
+  LCacheEntry: TCacheEntry;
+  LProcessed: array of Boolean;
+  LCacheHits: array of Boolean;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
@@ -1455,6 +1552,20 @@ begin
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
   LTagFilter := GetTagFilter(LConfig);
+  { Cache setup }
+  if LConfig.CacheEnabled then
+  begin
+    if LConfig.CacheDir <> '' then
+      LCache := TTestCache.Create(LConfig.CacheDir)
+    else
+      LCache := TTestCache.Create('.nextpas/test-cache');
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+  end
+  else
+  begin
+    LCache := Default(TTestCache);
+    LCacheKey := '';
+  end;
 
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, IntToStr(LTotal) + ' tests, parallel',
@@ -1494,6 +1605,8 @@ begin
   SetLength(LThreads, LTotal);
   SetLength(LRecs, LTotal);
   SetLength(LResults, LTotal);
+  SetLength(LProcessed, LTotal);
+  SetLength(LCacheHits, LTotal);
 
   { Pre-fill records — each thread gets its own result slot }
   for I := 0 to High(Tests) do
@@ -1502,18 +1615,39 @@ begin
       filtered tests are invisible, not counted as pass/fail/skip) }
     if not IsTestEligible(Tests[I], LConfig, LTagFilter, True) then
     begin
-      LThreads[I] := 0;  { no thread for this slot — also marks filter-excluded }
+      LThreads[I] := 0;
+      LProcessed[I] := True;
       Continue;
     end;
     { Short mode — skip tests marked with ShortSkip (handle before thread spawn) }
     if LConfig.ShortMode and Tests[I].ShortSkip then
     begin
       LThreads[I] := 0;
+      LProcessed[I] := True;
       Inc(LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name, tsSkipped,
         'skipped: short mode', 0);
       WriteTestOutput(tsSkipped, Tests[I].Name, '', 'short mode',
         0, LOutSink, LConfig);
+      Continue;
+    end;
+
+    { Cache lookup — skip thread spawn if cached result is valid.
+      Note: cache hit skips BeforeEach/AfterEach/EachCleanups — assumes
+      tests are independent and idempotent. }
+    if LConfig.CacheEnabled and (LCacheKey <> '') and
+       LCache.Get(LCacheKey, Tests[I].Name, LCacheEntry) then
+    begin
+      LThreads[I] := 0;
+      LProcessed[I] := True;
+      LCacheHits[I] := True;
+      IncByStatus(TTestStatus(LCacheEntry.Status), LPass, LFail, LSkip);
+      LResults[I] := MakeTestResult(Tests[I].Name,
+        TTestStatus(LCacheEntry.Status), LCacheEntry.Message,
+        LCacheEntry.Duration);
+      WriteTestOutput(TTestStatus(LCacheEntry.Status),
+        Tests[I].Name + ' (cached)', LCacheEntry.Message, '',
+        LCacheEntry.Duration, LOutSink, LConfig);
       Continue;
     end;
 
@@ -1544,7 +1678,24 @@ begin
       to avoid double-counting. See ParallelWorkerProc. }
   end;
 
-  { Use BeginThread to ensure FPC properly initializes per-thread state
+  { Phase 1: Sequential tests — run serially before parallel batch.
+    Go t.Parallel() inverse: tests with shared mutable state (DB, file,
+    global vars) run first, one at a time, before parallel tests start.
+    LProcessed[I] = true means: filter-excluded, ShortSkip, or cache-hit — skip. }
+  for I := 0 to High(Tests) do
+  begin
+    if LProcessed[I] then
+      Continue;
+    if not Tests[I].Sequential then
+      Continue;
+    LProcessed[I] := True;
+    ParallelWorkerProc(@LRecs[I]);
+    { Mark as "already processed" — result is in LResults[I],
+      which the final collection loop will pick up via Name <> ''. }
+  end;
+
+  { Phase 2: Parallel batch dispatch — skip Sequential tests (already done).
+    Use BeginThread to ensure FPC properly initializes per-thread state
     (exception handler chain, threadvar TLS, heap manager).
     Previously platform_thread_create (direct pthread_create) was used,
     which bypasses FPC init and caused intermittent SIGSEGV on thread exit.
@@ -1563,7 +1714,10 @@ begin
     LFirstEligible := -1;
     for I := LBatchStart to High(Tests) do
     begin
-      if IsTestEligible(Tests[I], LConfig, LTagFilter) then
+      if LProcessed[I] then
+        Continue; { already processed: filter-excluded, ShortSkip, cache-hit, Phase 1 }
+      if IsTestEligible(Tests[I], LConfig, LTagFilter) and
+         not Tests[I].Sequential then
       begin
         LFirstEligible := I;
         Break;
@@ -1577,8 +1731,13 @@ begin
     begin
       if LSpawned >= LMaxWorkers then
         Break;
+      if LProcessed[I] then
+        Continue; { already processed }
       if not IsTestEligible(Tests[I], LConfig, LTagFilter) then
         Continue;
+      if Tests[I].Sequential then
+        Continue; { already ran in Phase 1 }
+      LProcessed[I] := True;
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
       if LThreads[I] = 0 then
       begin
@@ -1612,10 +1771,23 @@ begin
     BeginThread-failed slots also have LThreads[I]=0 but have result data
     written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
+  begin
     if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
+    { Cache store — persist result for future runs (skip cache-hit tests) }
+    if LConfig.CacheEnabled and (LCacheKey <> '') and
+       (LResults[I].Name <> '') and not LCacheHits[I] then
+    begin
+      LCacheEntry.Status := Ord(LResults[I].Status);
+      LCacheEntry.Message := LResults[I].Message;
+      LCacheEntry.Duration := LResults[I].Duration;
+      LCacheEntry.Time := 0;
+      LCache.Put(LCacheKey, LResults[I].Name, LCacheEntry);
+    end;
+  end;
 
+  CleanupTableAllocations;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;
@@ -1669,7 +1841,8 @@ begin
     begin
       if Tests[I].TableCase <> nil then
       begin
-        Dispose(PTestCase(Tests[I].TableCase));
+        Finalize(PTestCase(Tests[I].TableCase)^);
+        FreeMem(Tests[I].TableCase);
         Tests[I].TableCase := nil;
       end;
       if Tests[I].TableProc <> nil then
@@ -1776,7 +1949,7 @@ var
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
-  LStartMs: Int64;
+  LStart: TInstant;
   LFailFast: Boolean;
   LMaxFailures: Integer;
 begin
@@ -1814,7 +1987,7 @@ begin
       TotalFail := 0;
       TotalSkip := 0;
     end;
-    LStartMs := GetTickCount64;
+    LStart := TInstant.Now;
     for I := 0 to High(Suites) do
     begin
       if AIsParallel then
@@ -1848,7 +2021,7 @@ begin
     if LRepeatAll > 1 then
       LOutSink.WriteLn(AnsiDim(
         '  Iteration ' + IntToStr(LIter) + ' completed in ' +
-        FormatDuration(GetTickCount64 - LStartMs), LConfig));
+        FormatDuration(LStart.Elapsed.AsMilliseconds), LConfig));
   end;
 
   for I := 0 to High(Suites) do

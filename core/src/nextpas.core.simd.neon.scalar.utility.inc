@@ -25,7 +25,7 @@ begin
   Result := ScalarInsertF32x4(a, value, index);
 end;
 
-{$I nextpas.core.simd.neon.facade_scalar.inc}
+{$I nextpas.core.simd.neon.facade.scalar.inc}
 
 // Saturating Arithmetic Scalar Fallback
 // 用于 FPC < 3.3.1 或非 ARM 平台

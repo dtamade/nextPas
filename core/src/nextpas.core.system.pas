@@ -1,6 +1,10 @@
 unit nextpas.core.system;
 {**
  * @desc Root RTL facade for the nextPas system module family.
+ *
+ * This unit provides the compiler kernel contract layer.
+ * Under FPC, it re-exports FPC System types via fpc.inc.
+ * Under nextPas, it provides the full kernel via kernel.inc.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -11,6 +15,12 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.system.errors;
+
+{$IFDEF FPC}
+{$I nextpas.core.system.fpc.inc}
+{$ELSE}
+{$I nextpas.core.system.kernel.inc}
+{$ENDIF}
 
 const
   NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';
@@ -24,13 +34,7 @@ const
   SIZE_64 = nextpas.core.base.SIZE_64;
 
 type
-  SizeInt = nextpas.core.base.SizeInt;
-  SizeUInt = nextpas.core.base.SizeUInt;
-  PtrInt = nextpas.core.base.PtrInt;
-  PtrUInt = nextpas.core.base.PtrUInt;
-  NativeInt = nextpas.core.base.NativeInt;
-  NativeUInt = nextpas.core.base.NativeUInt;
-
+  { Re-export base types }
   TBytes = nextpas.core.base.TBytes;
   TByteSpan = nextpas.core.base.TByteSpan;
   THashCode = nextpas.core.base.THashCode;

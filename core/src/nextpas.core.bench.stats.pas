@@ -97,13 +97,35 @@ type
     {** 批量计算百分位（一次排序，多次查询）
      *  E03: 避免在同一数据上重复排序 }
     function ComputePercentiles(const ASamples: TDoubleArray): TPercentileResult;
+
+    {** 单样本 K-S 检验：检验数据是否来自正态分布 N(AMean, AStdDev²) }
+    function KolmogorovSmirnovNormalTest(const AData: TDoubleArray;
+      AMean, AStdDev: Double): TKSTestResult;
+
+    {** 两样本 K-S 检验：检验两个样本是否来自同一分布 }
+    function KolmogorovSmirnovTwoSampleTest(const A, B: TDoubleArray): TKSTestResult;
+
+    {** Bootstrap 假设检验 (Phase B.3) }
+    function BootstrapTestDifference(const A, B: TDoubleArray;
+      AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
+    {** 贝叶斯估计 (Phase C.1) }
+    function BayesianEstimate(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ASigma: Double = 0): TBayesianEstimate;
+
+    {** 贝叶斯可信区间 (Phase C.2) }
+    function BayesianCredibleInterval(const AData: TDoubleArray;
+      APriorMean, APriorStdDev: Double;
+      ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
   end;
 
 implementation
 
 uses
   nextpas.core.math.trig,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.bench.stats.advanced; { Phase B.2: for TAdvancedStats }
 
 { TBenchStatsAnalyzer }
 
@@ -246,6 +268,7 @@ function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchS
 var
   LSorted: TDoubleArray;
   LLen: Integer;
+  LValidCount: Integer; { F-09: count of non-NaN samples }
   LMean, LVariance: Double;
   LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
@@ -253,29 +276,31 @@ var
 begin
   LLen := Length(ASamples);
   if LLen = 0 then
-  begin
-    Result := Default(TBenchStats);
-    Exit;
-  end;
+    raise EBenchInvalidParam.Create('ComputeStats: sample array must not be empty');
 
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
 
   { Welford's single-pass algorithm for numerically stable variance.
     Reference: Welford, B.P. (1962). "Note on a Method for Calculating
-    Corrected Sums of Squares and Products". Technometrics. }
+    Corrected Sums of Squares and Products". Technometrics.
+    F-09: Skip NaN samples to prevent NaN propagation. }
   LMean := 0.0;
   LM2 := 0.0;  { sum of squared deviations from current mean }
+  LValidCount := 0;
   for I := 0 to High(ASamples) do
   begin
+    if IsDoubleNaN(ASamples[I]) then
+      Continue;  { F-09: skip NaN samples }
+    Inc(LValidCount);
     LDelta := ASamples[I] - LMean;
-    LMean := LMean + LDelta / (I + 1);
+    LMean := LMean + LDelta / LValidCount;
     LDelta2 := ASamples[I] - LMean;
     LM2 := LM2 + LDelta * LDelta2;
   end;
 
-  if LLen > 1 then
-    LVariance := LM2 / (LLen - 1)  { sample variance }
+  if LValidCount > 1 then
+    LVariance := LM2 / (LValidCount - 1)  { sample variance, F-09: use valid count }
   else
     LVariance := 0.0;
 
@@ -294,17 +319,17 @@ begin
   Result.P99 := Percentile(LSorted, 99);
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
-  Result.SampleCount := LLen;
+  Result.SampleCount := LValidCount; { F-09: report valid sample count }
 
   // 95% 置信区间（使用 t 分布临界值）
-  if LLen > 1 then
+  if LValidCount > 1 then
   begin
-    LT95 := TInv0975(LLen - 1);
-    LT99 := TInv0995(LLen - 1);
-    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LLen);
+    LT95 := TInv0975(LValidCount - 1);
+    LT99 := TInv0995(LValidCount - 1);
+    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LValidCount);
   end
   else
   begin
@@ -778,6 +803,318 @@ begin
   Result.P75 := Percentile(LSorted, 75.0);
   Result.P95 := Percentile(LSorted, 95.0);
   Result.P99 := Percentile(LSorted, 99.0);
+end;
+
+{ K-S 检验辅助函数 }
+
+{ NormalCDF and NormalQuantile are now in nextpas.core.bench.base }
+
+{** Kolmogorov 分布 CDF
+ *  K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
+ *  输入 x = √n * D（其中 D 是 K-S 统计量，n 是样本大小） }
+function KolmogorovCDF(AX: Double): Double;
+var
+  LK: Integer;
+  LSum, LTerm: Double;
+  LK2: Double;
+begin
+  if AX <= 0 then
+  begin
+    Result := 0.0;
+    Exit;
+  end;
+
+  // 对于 x > 2，CDF 接近 1
+  if AX > 2.0 then
+  begin
+    Result := 1.0;
+    Exit;
+  end;
+
+  // Kolmogorov 分布: K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
+  // 使用前 20 项求和（足够精确）
+  LSum := 0.0;
+  for LK := 1 to 20 do
+  begin
+    LK2 := LK * LK;
+    LTerm := Exp(-2.0 * LK2 * AX * AX);
+    if LK mod 2 = 1 then
+      LSum := LSum + LTerm
+    else
+      LSum := LSum - LTerm;
+  end;
+
+  Result := 1.0 - 2.0 * LSum;
+  if Result < 0 then
+    Result := 0;
+  if Result > 1 then
+    Result := 1;
+end;
+
+function TBenchStatsAnalyzer.KolmogorovSmirnovNormalTest(
+  const AData: TDoubleArray; AMean, AStdDev: Double): TKSTestResult;
+var
+  LN: Integer;
+  LSorted: TDoubleArray;
+  LI: Integer;
+  LEmpiricalCDF: Double;
+  LTheoreticalCDF: Double;
+  LD, LMaxD: Double;
+  LZ: Double;
+begin
+  Result := Default(TKSTestResult);
+
+  LN := Length(AData);
+  Result.SampleSize1 := LN;
+  Result.SampleSize2 := 0;
+
+  // 边界条件
+  if LN = 0 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  if LN = 1 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 标准差为 0 时无法检验
+  if AStdDev <= 0 then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 排序数据
+  LSorted := Copy(AData);
+  SortDoubleArray(LSorted);
+
+  // 计算 K-S 统计量 D = max|Fn(x) - F0(x)|
+  LMaxD := 0.0;
+  for LI := 0 to LN - 1 do
+  begin
+    // 经验分布函数 Fn(x) = (i+1) / n
+    LEmpiricalCDF := (LI + 1) / LN;
+
+    // 理论分布函数 F0(x) = Φ((x - μ) / σ)
+    LZ := (LSorted[LI] - AMean) / AStdDev;
+    LTheoreticalCDF := NormalCDF(LZ);
+
+    // 计算 |Fn(x) - F0(x)|
+    LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
+    if LD > LMaxD then
+      LMaxD := LD;
+
+    // 也检查 Fn(x-) 的情况
+    LEmpiricalCDF := LI / LN;
+    LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
+    if LD > LMaxD then
+      LMaxD := LD;
+  end;
+
+  Result.Statistic := LMaxD;
+
+  // 计算 p-value（使用渐近分布）
+  // 对于大样本，√n * D 服从 Kolmogorov 分布
+  Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LN) * LMaxD);
+
+  // 判断是否显著（α=0.05）
+  Result.IsSignificant := Result.PValue < 0.05;
+end;
+
+function TBenchStatsAnalyzer.KolmogorovSmirnovTwoSampleTest(
+  const A, B: TDoubleArray): TKSTestResult;
+var
+  LN1, LN2: Integer;
+  LSorted1, LSorted2: TDoubleArray;
+  LI, LJ: Integer;
+  LCDF1, LCDF2: Double;
+  LD, LMaxD: Double;
+  LCombinedN: Double;
+begin
+  Result := Default(TKSTestResult);
+
+  LN1 := Length(A);
+  LN2 := Length(B);
+  Result.SampleSize1 := LN1;
+  Result.SampleSize2 := LN2;
+
+  // 边界条件
+  if (LN1 = 0) or (LN2 = 0) then
+  begin
+    Result.Statistic := 0.0;
+    Result.PValue := 1.0;
+    Result.IsSignificant := False;
+    Exit;
+  end;
+
+  // 排序两个样本
+  LSorted1 := Copy(A);
+  LSorted2 := Copy(B);
+  SortDoubleArray(LSorted1);
+  SortDoubleArray(LSorted2);
+
+  // 计算 K-S 统计量 D = max|F1(x) - F2(x)|
+  LMaxD := 0.0;
+  LI := 0;
+  LJ := 0;
+
+  // 合并遍历两个排序数组
+  while (LI < LN1) and (LJ < LN2) do
+  begin
+    if LSorted1[LI] <= LSorted2[LJ] then
+    begin
+      // 在 x = LSorted1[LI] 处计算两个经验分布函数
+      LCDF1 := (LI + 1) / LN1;
+      LCDF2 := LJ / LN2;  // F2(x-) = j/n2
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      Inc(LI);
+    end
+    else
+    begin
+      // 在 x = LSorted2[LJ] 处计算两个经验分布函数
+      LCDF1 := LI / LN1;  // F1(x-) = i/n1
+      LCDF2 := (LJ + 1) / LN2;
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      Inc(LJ);
+    end;
+  end;
+
+  // 处理剩余元素
+  while LI < LN1 do
+  begin
+    LCDF1 := (LI + 1) / LN1;
+    LCDF2 := 1.0;
+    LD := Abs(LCDF1 - LCDF2);
+    if LD > LMaxD then
+      LMaxD := LD;
+    Inc(LI);
+  end;
+
+  while LJ < LN2 do
+  begin
+    LCDF1 := 1.0;
+    LCDF2 := (LJ + 1) / LN2;
+    LD := Abs(LCDF1 - LCDF2);
+    if LD > LMaxD then
+      LMaxD := LD;
+    Inc(LJ);
+  end;
+
+  Result.Statistic := LMaxD;
+
+  // 计算 p-value（使用渐近分布）
+  // 有效样本大小: n_eff = (n1 * n2) / (n1 + n2)
+  LCombinedN := (LN1 * LN2) / (LN1 + LN2);
+  Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LCombinedN) * LMaxD);
+
+  // 判断是否显著（α=0.05）
+  Result.IsSignificant := Result.PValue < 0.05;
+end;
+
+function TBenchStatsAnalyzer.BootstrapTestDifference(const A, B: TDoubleArray;
+  AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
+{ F-09: 直接调用独立函数，无需创建 TAdvancedStats 实例 }
+begin
+  Result := nextpas.core.bench.stats.advanced.BootstrapTestDifference(A, B, AIterations, ASeed);
+end;
+
+{ ===== 贝叶斯估计 (Phase C) ===== }
+
+function TBenchStatsAnalyzer.BayesianEstimate(const AData: TDoubleArray;
+  APriorMean, APriorStdDev: Double; ASigma: Double): TBayesianEstimate;
+{ 正态-正态共轭模型
+  先验: μ ~ N(μ0, σ0²)
+  似然: x_i ~ N(μ, σ²)
+  后验: μ|x ~ N(μ_n, σ_n²)
+
+  σ_n² = 1 / (1/σ0² + n/σ²)
+  μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
+var
+  LN: Integer;
+  LSampleMean: Double;
+  LSigma: Double;
+  LPriorVar, LDataVar: Double;
+  LPosteriorVar: Double;
+  LZ: Double;
+begin
+  LN := Length(AData);
+
+  Result.PriorMean := APriorMean;
+  Result.PriorStdDev := APriorStdDev;
+  Result.SampleSize := LN;
+
+  if LN = 0 then
+  begin
+    { 无数据：后验 = 先验 }
+    Result.PosteriorMean := APriorMean;
+    Result.PosteriorStdDev := APriorStdDev;
+    Result.SampleMean := 0;
+    Result.CredibleLower := APriorMean - 1.96 * APriorStdDev;
+    Result.CredibleUpper := APriorMean + 1.96 * APriorStdDev;
+    Result.CredibleLevel := 0.95;
+    Exit;
+  end;
+
+  { 计算样本均值 }
+  LSampleMean := Mean(AData);
+  Result.SampleMean := LSampleMean;
+
+  { 确定 σ }
+  if ASigma > 0 then
+    LSigma := ASigma
+  else
+    LSigma := StdDev(AData);
+
+  { 防止 σ = 0 }
+  if LSigma < 1e-10 then
+    LSigma := 1e-10;
+
+  { 计算后验参数 }
+  LPriorVar := APriorStdDev * APriorStdDev;
+  LDataVar := LSigma * LSigma / LN; { σ²/n }
+
+  { σ_n² = 1 / (1/σ0² + n/σ²) }
+  LPosteriorVar := 1.0 / (1.0 / LPriorVar + LN / (LSigma * LSigma));
+  Result.PosteriorStdDev := Sqrt(LPosteriorVar);
+
+  { μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
+  Result.PosteriorMean := LPosteriorVar * (APriorMean / LPriorVar + LN * LSampleMean / (LSigma * LSigma));
+
+  { 95% 可信区间 }
+  LZ := NormalQuantile(0.975); { F-03: use NormalQuantile instead of hardcoded 1.96 }
+  Result.CredibleLower := Result.PosteriorMean - LZ * Result.PosteriorStdDev;
+  Result.CredibleUpper := Result.PosteriorMean + LZ * Result.PosteriorStdDev;
+  Result.CredibleLevel := 0.95;
+end;
+
+function TBenchStatsAnalyzer.BayesianCredibleInterval(const AData: TDoubleArray;
+  APriorMean, APriorStdDev: Double; ALevel: Double; ASigma: Double): TConfidenceInterval;
+var
+  LEstimate: TBayesianEstimate;
+  LZ: Double;
+begin
+  LEstimate := BayesianEstimate(AData, APriorMean, APriorStdDev, ASigma);
+
+  { 使用正态分位数函数计算指定水平的 z 值 }
+  LZ := NormalQuantile(1.0 - (1.0 - ALevel) / 2.0);
+
+  Result.Lower := LEstimate.PosteriorMean - LZ * LEstimate.PosteriorStdDev;
+  Result.Upper := LEstimate.PosteriorMean + LZ * LEstimate.PosteriorStdDev;
+  Result.Level := ALevel;
 end;
 
 end.

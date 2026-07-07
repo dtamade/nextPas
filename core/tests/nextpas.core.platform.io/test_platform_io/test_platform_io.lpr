@@ -3,8 +3,11 @@ program test_platform_io;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
   nextpas.core.platform.posix.ffi,
@@ -15,28 +18,21 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LSourcePath));
 end;
 
 function ExtractFunctionSource(const ASource, AName: string): string;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine: string;
   LFound: Boolean;
   LHasBody: Boolean;
@@ -44,43 +40,38 @@ var
   LDeleteLen: Integer;
 begin
   Result := '';
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ASource;
-    LFound := False;
-    LHasBody := False;
-    for LIndex := 0 to LLines.Count - 1 do
+  LLines := StringsSplit(ASource, #10);
+  LFound := False;
+  LHasBody := False;
+  for LIndex := 0 to High(LLines) do
+  begin
+    LLine := TrimLeft(LLines[LIndex]);
+    if not LFound then
     begin
-      LLine := TrimLeft(LLines[LIndex]);
-      if not LFound then
+      if Pos('function ' + AName + '(', LowerCase(LLine)) = 1 then
       begin
-        if Pos('function ' + AName + '(', LowerCase(LLine)) = 1 then
-        begin
-          Result := LLines[LIndex];
-          LFound := True;
-        end;
-        Continue;
+        Result := LLines[LIndex];
+        LFound := True;
       end;
-
-      if Result <> '' then
-        Result := Result + LineEnding;
-      Result := Result + LLines[LIndex];
-
-      if Pos('begin', LowerCase(LLine)) > 0 then
-        LHasBody := True
-      else if LHasBody and
-        ((Pos('function ', LowerCase(LLine)) = 1) or
-         (Pos('procedure ', LowerCase(LLine)) = 1)) then
-      begin
-        LDeleteLen := Length(LLines[LIndex]);
-        if Result <> '' then
-          Inc(LDeleteLen, Length(LineEnding));
-        Delete(Result, Length(Result) - LDeleteLen + 1, LDeleteLen);
-        Break;
-      end;
+      Continue;
     end;
-  finally
-    LLines.Free;
+
+    if Result <> '' then
+      Result := Result + LineEnding;
+    Result := Result + LLines[LIndex];
+
+    if Pos('begin', LowerCase(LLine)) > 0 then
+      LHasBody := True
+    else if LHasBody and
+      ((Pos('function ', LowerCase(LLine)) = 1) or
+       (Pos('procedure ', LowerCase(LLine)) = 1)) then
+    begin
+      LDeleteLen := Length(LLines[LIndex]);
+      if Result <> '' then
+        Inc(LDeleteLen, Length(LineEnding));
+      Delete(Result, Length(Result) - LDeleteLen + 1, LDeleteLen);
+      Break;
+    end;
   end;
   Check(LFound, 'function source should exist: ' + AName);
 end;
@@ -211,6 +202,32 @@ begin
   close(LPipeFd[1]);
   platform_poller_close(P);
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestModify;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LEntries: array[0..3] of TPlatformPollEntry;
+  LCount: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  // Add write end watching for writable
+  Check(platform_poller_add(P, LPipeFd[1], [peWritable], nil) = 0, 'add writable');
+
+  // Modify to watch for readable instead
+  Check(platform_poller_modify(P, LPipeFd[1], [peReadable], nil) = 0, 'modify to readable');
+
+  // Write end has no data to read, so with 100ms timeout we should get timeout
+  Check(platform_poller_wait(P, @LEntries[0], 4, 100, LCount) = 0, 'wait after modify');
+  Check(LCount = 0, 'no readable events on write end');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+{$ENDIF}
 
 procedure TestUserData;
 var
@@ -565,6 +582,9 @@ begin
   T.Test('pipe readable', @TestPipeReadable);
   T.Test('timeout zero', @TestTimeoutZero);
   T.Test('remove stops events', @TestRemove);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('modify events', @TestModify);
+  {$ENDIF}
   T.Test('userdata preserved', @TestUserData);
   T.Test('multiple fds', @TestMultipleFds);
   T.Test('wait capacity beyond 64', @TestWaitCapacityBeyondLegacy64);

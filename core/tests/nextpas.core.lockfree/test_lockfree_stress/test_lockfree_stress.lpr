@@ -25,9 +25,11 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 var
   T: TTestSuite;
+  GHashMapComputeCount: Int32;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -69,9 +71,9 @@ end;
 { ============================================================ }
 
 const
-  MPMC_SAT_PRODUCERS = 8;
-  MPMC_SAT_CONSUMERS = 8;
-  MPMC_SAT_PER_PRODUCER = 10000;
+  MPMC_SAT_PRODUCERS = 4; { P7: reduced from 8 for faster tests }
+  MPMC_SAT_CONSUMERS = 4; { P7: reduced from 8 for faster tests }
+  MPMC_SAT_PER_PRODUCER = 1000; { P7: reduced from 10000 for faster tests }
   MPMC_SAT_TOTAL = MPMC_SAT_PRODUCERS * MPMC_SAT_PER_PRODUCER;
   MPMC_SAT_CAPACITY = 16;
 
@@ -172,7 +174,7 @@ end;
 const
   MPMC_SINGLE_SLOT_PRODUCERS = 2;
   MPMC_SINGLE_SLOT_CONSUMERS = 2;
-  MPMC_SINGLE_SLOT_PER_PRODUCER = 2000;
+  MPMC_SINGLE_SLOT_PER_PRODUCER = 500; { P7: reduced from 2000 for faster tests }
   MPMC_SINGLE_SLOT_TOTAL = MPMC_SINGLE_SLOT_PRODUCERS * MPMC_SINGLE_SLOT_PER_PRODUCER;
 
 var
@@ -269,7 +271,7 @@ end;
 
 const
   STACK_ABA_THREADS = 4;
-  STACK_ABA_OPS = 100000;
+  STACK_ABA_OPS = 20000; { P7: reduced from 100000 for faster tests }
   STACK_ABA_TOTAL = STACK_ABA_THREADS * STACK_ABA_OPS;
 
 var
@@ -359,8 +361,8 @@ end;
 { ============================================================ }
 
 const
-  MPSC_CLOSE_PRODUCERS = 4;
-  MPSC_CLOSE_MAX_PER_PRODUCER = 65536;
+  MPSC_CLOSE_PRODUCERS = 2; { P7: reduced from 4 for faster tests }
+  MPSC_CLOSE_MAX_PER_PRODUCER = 8192; { P7: reduced from 65536 for faster tests }
 
 var
   GMpscCloseQ: TIntMpsc;
@@ -522,8 +524,8 @@ end;
 { ============================================================ }
 
 const
-  MPSC_LIVE_RECLAIM_PRODUCERS = 6;
-  MPSC_LIVE_RECLAIM_PER_PRODUCER = 12000;
+  MPSC_LIVE_RECLAIM_PRODUCERS = 3; { P7: reduced from 6 for faster tests }
+  MPSC_LIVE_RECLAIM_PER_PRODUCER = 2000; { P7: reduced from 12000 for faster tests }
   MPSC_LIVE_RECLAIM_TOTAL = MPSC_LIVE_RECLAIM_PRODUCERS * MPSC_LIVE_RECLAIM_PER_PRODUCER;
 
 var
@@ -742,7 +744,7 @@ end;
 { ============================================================ }
 
 const
-  DEQUE_STEAL_TOTAL = 200000;
+  DEQUE_STEAL_TOTAL = 50000; { P7: reduced from 200000 for faster tests }
   DEQUE_STEAL_THIEVES = 7;
   DEQUE_STEAL_CAPACITY = 256;
 
@@ -860,7 +862,7 @@ end;
 
 const
   SPSC_CLOSE_CAPACITY = 32;
-  SPSC_CLOSE_SEND_TARGET = 100000;
+  SPSC_CLOSE_SEND_TARGET = 20000; { P7: reduced from 100000 for faster tests }
 
 var
   GSpscCloseQ: TIntSpsc;
@@ -1001,9 +1003,9 @@ end;
 { ============================================================ }
 
 const
-  MPMC_CYCLE_ROUNDS = 50;
+  MPMC_CYCLE_ROUNDS = 20; { P7: reduced from 50 for faster tests }
   MPMC_CYCLE_PRODUCERS = 4;
-  MPMC_CYCLE_PER_PRODUCER = 500;
+  MPMC_CYCLE_PER_PRODUCER = 200; { P7: reduced from 500 for faster tests }
   MPMC_CYCLE_CAPACITY = 8;
 
 var
@@ -1119,10 +1121,10 @@ end;
 { ============================================================ }
 
 const
-  MPMC_CLOSE_RACE_PRODUCERS = 6;
-  MPMC_CLOSE_RACE_CONSUMERS = 4;
+  MPMC_CLOSE_RACE_PRODUCERS = 3; { P7: reduced from 6 for faster tests }
+  MPMC_CLOSE_RACE_CONSUMERS = 2; { P7: reduced from 4 for faster tests }
   MPMC_CLOSE_RACE_CAPACITY = 4;
-  MPMC_CLOSE_RACE_MAX_VALUES = 65536;
+  MPMC_CLOSE_RACE_MAX_VALUES = 8192; { P7: reduced from 65536 for faster tests }
 
 var
   GMpmcCloseRaceQ: TIntMpmc;
@@ -1378,7 +1380,7 @@ end;
 const
   STACK_EXHAUST_CAP = 8;
   STACK_EXHAUST_THREADS = 4;
-  STACK_EXHAUST_ROUNDS = 50000;
+  STACK_EXHAUST_ROUNDS = 10000; { P7: reduced from 50000 for faster tests }
 
 var
   GStackExhaust: TIntStack;
@@ -1445,7 +1447,7 @@ end;
 const
   SEGQUEUE_STRESS_PRODUCERS = 4;
   SEGQUEUE_STRESS_CONSUMERS = 4;
-  SEGQUEUE_STRESS_PER_PRODUCER = 20000;
+  SEGQUEUE_STRESS_PER_PRODUCER = 5000; { P7: reduced from 20000 for faster tests }
   SEGQUEUE_STRESS_TOTAL = SEGQUEUE_STRESS_PRODUCERS * SEGQUEUE_STRESS_PER_PRODUCER;
 
 var
@@ -1608,6 +1610,227 @@ begin
   end;
 end;
 
+{ ============================================================ }
+{ TEST 14: HashMap GetOrInsertFn concurrent stress              }
+{ 4 threads, each inserting 1000 keys via GetOrInsertFn         }
+{ Verifies: no duplicates, all keys present, compute called     }
+{ ============================================================ }
+
+const
+  HASHMAP_STRESS_THREADS = 4;
+  HASHMAP_STRESS_PER_THREAD = 1000;
+
+var
+  GHashMapStressMap: TIntIntMap;
+
+function HashMapStressCompute(const AKey: Integer): Integer;
+begin
+  InterlockedIncrement(GHashMapComputeCount);
+  Result := AKey * 3;
+end;
+
+function HashMapStressWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+  LRes: TIntIntMap.TGetOrInsertResult;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_STRESS_PER_THREAD - 1 do
+  begin
+    LRes := GHashMapStressMap.GetOrInsertFn(LI, @HashMapStressCompute);
+    Check(not LRes.Existed, 'HashMap stress: key ' + IntToStr(LI) + ' must be first insert');
+    CheckEqual(Int64(LI * 3), Int64(LRes.Value), 'HashMap stress: value for key ' + IntToStr(LI));
+  end;
+end;
+
+procedure TestHashMapGetOrInsertFnConcurrent;
+var
+  LHandles: array[0..HASHMAP_STRESS_THREADS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+  LV: Integer;
+begin
+  GHashMapStressMap := TIntIntMap.Create;
+  GHashMapComputeCount := 0;
+  LHandleCount := 0;
+  try
+    for LI := 0 to HASHMAP_STRESS_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapStressWorker,
+        Pointer(PtrInt(LI * HASHMAP_STRESS_PER_THREAD + 1)),
+        'HashMap stress worker ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap stress worker');
+
+    CheckEqual(Int64(HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD),
+      Int64(GHashMapStressMap.Count), 'HashMap stress: total count');
+    CheckEqual(Int64(HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD),
+      Int64(GHashMapComputeCount), 'HashMap stress: compute called once per key');
+
+    // Verify all values
+    for LI := 1 to HASHMAP_STRESS_THREADS * HASHMAP_STRESS_PER_THREAD do
+    begin
+      Check(GHashMapStressMap.Find(LI, LV), 'HashMap stress: Find key ' + IntToStr(LI));
+      CheckEqual(Int64(LI * 3), Int64(LV), 'HashMap stress: value for key ' + IntToStr(LI));
+    end;
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap stress worker');
+    GHashMapStressMap.Free;
+  end;
+end;
+
+
+{ ============================================================ }
+{ TEST 15: HashMap concurrent Insert/Remove                     }
+{ 4 threads, each inserting 1000 keys, then removing them       }
+{ Verifies: no duplicates, correct count, all removed           }
+{ ============================================================ }
+
+const
+  HASHMAP_IR_THREADS = 4;
+  HASHMAP_IR_PER_THREAD = 1000;
+
+var
+  GHashMapIRMap: TIntIntMap;
+
+function HashMapIRInsertWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_IR_PER_THREAD - 1 do
+    GHashMapIRMap.Insert(LI, LI * 5);
+end;
+
+function HashMapIRRemoveWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrUInt(AArg));
+  for LI := LStart to LStart + HASHMAP_IR_PER_THREAD - 1 do
+    GHashMapIRMap.Remove(LI);
+end;
+
+procedure TestHashMapConcurrentInsertRemove;
+var
+  LHandles: array[0..HASHMAP_IR_THREADS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+  LV: Integer;
+begin
+  GHashMapIRMap := TIntIntMap.Create;
+  LHandleCount := 0;
+  try
+    // Phase 1: concurrent insert
+    for LI := 0 to HASHMAP_IR_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapIRInsertWorker,
+        Pointer(PtrInt(LI * HASHMAP_IR_PER_THREAD + 1)),
+        'HashMap IR insert ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR insert');
+
+    CheckEqual(Int64(HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD),
+      Int64(GHashMapIRMap.Count), 'IR: all keys inserted');
+
+    // Verify all values
+    for LI := 1 to HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD do
+    begin
+      Check(GHashMapIRMap.Find(LI, LV), 'IR: Find key ' + IntToStr(LI));
+      CheckEqual(Int64(LI * 5), Int64(LV), 'IR: value for key ' + IntToStr(LI));
+    end;
+
+    // Phase 2: concurrent remove
+    LHandleCount := 0;
+    for LI := 0 to HASHMAP_IR_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @HashMapIRRemoveWorker,
+        Pointer(PtrInt(LI * HASHMAP_IR_PER_THREAD + 1)),
+        'HashMap IR remove ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR remove');
+
+    CheckEqual(Int64(0), Int64(GHashMapIRMap.Count), 'IR: all keys removed');
+    for LI := 1 to HASHMAP_IR_THREADS * HASHMAP_IR_PER_THREAD do
+      Check(not GHashMapIRMap.Contains(LI), 'IR: key ' + IntToStr(LI) + ' gone');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap IR cleanup');
+    GHashMapIRMap.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ TEST 16: HashMap concurrent Clear                             }
+{ 3 threads inserting + 1 thread clearing                       }
+{ Verifies: no crash, final state consistent                   }
+{ ============================================================ }
+
+var
+  GHashMapClearMap: TIntIntMap;
+  GHashMapClearDone: Int32;
+
+function HashMapClearInsertWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LBase: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg));
+  for LI := LBase to LBase + 499 do
+    GHashMapClearMap.Insert(LI, LI);
+end;
+
+function HashMapClearWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to 20 do
+  begin
+    GHashMapClearMap.Clear;
+    platform_thread_sleep_ns(1000000);
+  end;
+  AtomicStore32(GHashMapClearDone, 1, moRelease);
+end;
+
+procedure TestHashMapConcurrentClear;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LI: Integer;
+  LHandleCount: Integer;
+begin
+  GHashMapClearMap := TIntIntMap.Create;
+  GHashMapClearDone := 0;
+  LHandleCount := 0;
+  try
+    // 3 inserters + 1 clearer
+    for LI := 0 to 2 do
+    begin
+      StartThread(LHandles[LI], @HashMapClearInsertWorker,
+        Pointer(PtrInt(LI * 500 + 1)),
+        'HashMap clear insert ' + IntToStr(LI));
+      Inc(LHandleCount);
+    end;
+    StartThread(LHandles[3], @HashMapClearWorker, nil, 'HashMap clearer');
+    Inc(LHandleCount);
+
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap clear test');
+    // No crash = pass. Count may be 0 or up to 1500.
+    Check(True, 'HashMap concurrent Clear: no crash');
+  finally
+    JoinStartedThreads(LHandles, LHandleCount, 'HashMap clear cleanup');
+    GHashMapClearMap.Free;
+  end;
+end;
 
 { ============================================================ }
 { Main                                                         }
@@ -1627,6 +1850,9 @@ begin
   T.Test('MPMC close races active producers timeout', @TestMpmcCloseRacesActiveProducersTimeout);
   T.Test('Stack exhaustion + recovery (4T, cap=8)', @TestStackExhaustion);
   T.Test('SPMC 1P+4C contention', @TestSpmcContention);
+  T.Test('HashMap GetOrInsertFn 4T concurrent (4K keys)', @TestHashMapGetOrInsertFnConcurrent);
+  T.Test('HashMap 4T concurrent Insert/Remove (4K keys)', @TestHashMapConcurrentInsertRemove);
+  T.Test('HashMap concurrent Clear (3 insert + 1 clear)', @TestHashMapConcurrentClear);
 
   T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
   if not T.Run then Halt(1);

@@ -18,8 +18,9 @@ const
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
   PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
   PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
+  PLATFORM_ERR_PATH_TOO_LONG = -7;  { Path exceeds PLATFORM_FS_MAX_PATH }
 
-function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_error_category(ACode: Int32): TErrorCategory;
 procedure platform_fatal(const AMsg: PAnsiChar);
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
@@ -50,18 +51,18 @@ uses
 {$ENDIF}
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;
-  ABufLen: Int32): Int32;
+  ABufSize: Int32): Int32;
 var
   LLen: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
 
   LLen := 0;
   while AMessage[LLen] <> #0 do
     Inc(LLen);
-  if LLen >= ABufLen then
-    LLen := ABufLen - 1;
+  if LLen >= ABufSize then
+    LLen := ABufSize - 1;
   if LLen > 0 then
     Move(AMessage^, ABuf^, LLen);
   ABuf[LLen] := #0;
@@ -69,22 +70,30 @@ begin
 end;
 
 function TryPlatformErrorTokenMessage(ACode: Int32; ABuf: PAnsiChar;
-  ABufLen: Int32; out ALen: Int32): Boolean;
+  ABufSize: Int32; out ALen: Int32): Boolean;
 begin
   Result := True;
   case ACode of
     PLATFORM_ERR_INVALID:
-      ALen := CopyPlatformErrorMessage('invalid', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('invalid argument', ABuf, ABufSize);
     PLATFORM_ERR_UNSUPPORTED:
-      ALen := CopyPlatformErrorMessage('unsupported', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('operation not supported', ABuf, ABufSize);
     PLATFORM_ERR_TIMEOUT:
-      ALen := CopyPlatformErrorMessage('timeout', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('operation timed out', ABuf, ABufSize);
     PLATFORM_ERR_AGAIN:
-      ALen := CopyPlatformErrorMessage('again', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('resource temporarily unavailable', ABuf, ABufSize);
     PLATFORM_ERR_BUSY:
-      ALen := CopyPlatformErrorMessage('busy', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('device or resource busy', ABuf, ABufSize);
     PLATFORM_ERR_BADF:
-      ALen := CopyPlatformErrorMessage('bad fd', ABuf, ABufLen);
+      ALen := CopyPlatformErrorMessage('bad file descriptor', ABuf, ABufSize);
+    PLATFORM_ERR_EEXIST:
+      ALen := CopyPlatformErrorMessage('file already exists', ABuf, ABufSize);
+    PLATFORM_ERR_ENOENT:
+      ALen := CopyPlatformErrorMessage('no such file or directory', ABuf, ABufSize);
+    PLATFORM_ERR_ENOTDIR:
+      ALen := CopyPlatformErrorMessage('not a directory', ABuf, ABufSize);
+    PLATFORM_ERR_PATH_TOO_LONG:
+      ALen := CopyPlatformErrorMessage('path too long', ABuf, ABufSize);
   else
     Result := False;
     ALen := -1;
@@ -92,15 +101,15 @@ begin
 end;
 
 {$IFDEF NEXTPAS_UNIX}
-function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LMsg: PAnsiChar;
   LLen: Int32;
 begin
-  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufSize, Result) then
     Exit;
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   LMsg := strerror(ACode);
   if LMsg = nil then
   begin
@@ -110,8 +119,8 @@ begin
   LLen := 0;
   while LMsg[LLen] <> #0 do
     Inc(LLen);
-  if LLen >= ABufLen then
-    LLen := ABufLen - 1;
+  if LLen >= ABufSize then
+    LLen := ABufSize - 1;
   if LLen > 0 then
     Move(LMsg^, ABuf^, LLen);
   ABuf[LLen] := #0;
@@ -120,18 +129,18 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
-function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen: DWORD;
   I: Int32;
 begin
-  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufSize, Result) then
     Exit;
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   LLen := FormatMessageA(
     FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,
-    nil, DWORD(ACode), 0, ABuf, DWORD(ABufLen), nil);
+    nil, DWORD(ACode), 0, ABuf, DWORD(ABufSize), nil);
   if LLen = 0 then
   begin
     ABuf[0] := #0;
@@ -147,12 +156,12 @@ end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
 begin
-  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufLen, Result) then
+  if TryPlatformErrorTokenMessage(ACode, ABuf, ABufSize, Result) then
     Exit;
   if ABuf <> nil then ABuf[0] := #0;
-  Result := -1;
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 
@@ -182,7 +191,7 @@ end;
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
   case ACode of
-    PLATFORM_ERR_INVALID:
+    PLATFORM_ERR_INVALID, PLATFORM_ERR_PATH_TOO_LONG:
       Exit(ecInvalidArgument);
     PLATFORM_ERR_UNSUPPORTED:
       Exit(ecNotSupported);
@@ -193,6 +202,12 @@ begin
       Exit(ecWouldBlock);
     PLATFORM_ERR_BADF:
       Exit(ecIO);
+    PLATFORM_ERR_ENOENT:
+      Exit(ecNotFound);
+    PLATFORM_ERR_EEXIST:
+      Exit(ecAlreadyExists);
+    PLATFORM_ERR_ENOTDIR:
+      Exit(ecNotFound);
   end;
 
   case ACode of

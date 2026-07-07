@@ -26,13 +26,13 @@ function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenM
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
@@ -52,7 +52,7 @@ function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Bool
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
@@ -140,16 +140,18 @@ begin
 end;
 
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
 var
   LResult: PtrInt;
 begin
-  LResult := read(AHandle.Value, ABuf, ACount);
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
+  LResult := read(AHandle.Value, ABuf, ALen);
   if LResult < 0 then
-  begin
-    ABytesRead := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesRead := PtrUInt(LResult);
@@ -158,16 +160,18 @@ begin
 end;
 
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 var
   LResult: PtrInt;
 begin
-  LResult := write(AHandle.Value, ABuf, ACount);
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
+  LResult := write(AHandle.Value, ABuf, ALen);
   if LResult < 0 then
-  begin
-    ABytesWritten := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesWritten := PtrUInt(LResult);
@@ -176,16 +180,18 @@ begin
 end;
 
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
 var
   LResult: PtrInt;
 begin
-  LResult := pread(AHandle.Value, ABuf, ACount, AOffset);
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
+  LResult := pread(AHandle.Value, ABuf, ALen, AOffset);
   if LResult < 0 then
-  begin
-    ABytesRead := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesRead := PtrUInt(LResult);
@@ -194,16 +200,18 @@ begin
 end;
 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
 var
   LResult: PtrInt;
 begin
-  LResult := pwrite(AHandle.Value, ABuf, ACount, AOffset);
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
+  LResult := pwrite(AHandle.Value, ABuf, ALen, AOffset);
   if LResult < 0 then
-  begin
-    ABytesWritten := 0;
-    Result := platform_get_errno;
-  end
+    Result := platform_get_errno
   else
   begin
     ABytesWritten := PtrUInt(LResult);
@@ -489,6 +497,8 @@ end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
 begin
+  if (ABuf = nil) or (ASize = 0) then
+    Exit(nil);
   Result := getcwd(ABuf, ASize);
 end;
 
@@ -548,7 +558,7 @@ begin
     Result := platform_get_errno;
 end;
 
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 var
   LStat: TPlatformFileStat;
   LResult: PtrInt;
@@ -557,8 +567,8 @@ begin
   ALen := 0;
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   Result := platform_file_lstat(APath, LStat);
   if Result <> 0 then
     Exit;
@@ -568,8 +578,8 @@ begin
     Exit(-1);
   ALen := Int32(LStat.Size);
   LCopyLen := ALen;
-  if LCopyLen >= ABufLen then
-    LCopyLen := ABufLen - 1;
+  if LCopyLen >= ABufSize then
+    LCopyLen := ABufSize - 1;
   if LCopyLen <= 0 then
   begin
     ABuf[0] := #0;
@@ -835,83 +845,91 @@ begin
 end;
 
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
 var
   LRead: DWORD;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
   LRead := 0;
-  if ReadFile(AHandle.Value, ABuf, DWORD(ACount), @LRead, nil) then
+  if ReadFile(AHandle.Value, ABuf, DWORD(ALen), @LRead, nil) then
   begin
     ABytesRead := LRead;
     Result := 0;
   end
   else
-  begin
-    ABytesRead := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
 var
   LWritten: DWORD;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
   LWritten := 0;
-  if WriteFile(AHandle.Value, ABuf, DWORD(ACount), @LWritten, nil) then
+  if WriteFile(AHandle.Value, ABuf, DWORD(ALen), @LWritten, nil) then
   begin
     ABytesWritten := LWritten;
     Result := 0;
   end
   else
-  begin
-    ABytesWritten := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
 var
   LOvl: OVERLAPPED;
   LRead: DWORD;
 begin
+  ABytesRead := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
   FillChar(LOvl, SizeOf(LOvl), 0);
   LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
   LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
   LRead := 0;
-  if ReadFile(AHandle.Value, ABuf, DWORD(ACount), @LRead, @LOvl) then
+  if ReadFile(AHandle.Value, ABuf, DWORD(ALen), @LRead, @LOvl) then
   begin
     ABytesRead := LRead;
     Result := 0;
   end
   else
-  begin
-    ABytesRead := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
-  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+  ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
 var
   LOvl: OVERLAPPED;
   LWritten: DWORD;
 begin
+  ABytesWritten := 0;
+  if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
   FillChar(LOvl, SizeOf(LOvl), 0);
   LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
   LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
   LWritten := 0;
-  if WriteFile(AHandle.Value, ABuf, DWORD(ACount), @LWritten, @LOvl) then
+  if WriteFile(AHandle.Value, ABuf, DWORD(ALen), @LWritten, @LOvl) then
   begin
     ABytesWritten := LWritten;
     Result := 0;
   end
   else
-  begin
-    ABytesWritten := 0;
     Result := Int32(GetLastError);
-  end;
 end;
 
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
@@ -1182,7 +1200,7 @@ begin
     Result := 0;
 end;
 
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 var
   LHandle: HANDLE;
   LBytesReturned: DWORD;
@@ -1192,8 +1210,8 @@ var
   LStart: Int32;
 begin
   ALen := 0;
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   LHandle := CreateFileW(PWideChar(LPath), 0,
@@ -1214,7 +1232,7 @@ begin
     LStart := 4;
   if LStart > 0 then
     Delete(LUtf8, 1, LStart);
-  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
+  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
   Result := 0;
 end;
 
@@ -1311,35 +1329,35 @@ end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
-function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
-function platform_file_close(var AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
-function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := -1; end;
-function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := -1; end;
-function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := -1; end;
-function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := -1; end;
-function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := -1; end;
-function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
-function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := -1; end;
-function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
-function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
-function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
-function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := -1; end;
-function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := -1; end;
-function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := -1; end;
-function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
-function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := -1; end;
-function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_close(var AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar; begin Result := nil; end;
-function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
-function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
-function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
-function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
-function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := -1; end;
-function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := -1; end;
-function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := -1; end;
+function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
-function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := -1; end;
+function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

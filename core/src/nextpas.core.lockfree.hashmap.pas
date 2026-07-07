@@ -17,7 +17,8 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.platform.thread;
 
 const
   HASHMAP_DEFAULT_SHARD_COUNT = 16;
@@ -41,6 +42,20 @@ type
    * @see collections.hashmap.pas 中的 THashMap 用于单线程场景
    *}
   generic TShardedHashMapImpl<TKey, TValue> = class
+  public type
+    {** @desc ForEach 回调类型 }
+    TForEachCallback = procedure(const AKey: TKey; const AValue: TValue);
+    {** @desc ForEachCtx 带上下文的回调类型 }
+    TForEachCtxCallback = procedure(const AKey: TKey; const AValue: TValue; AContext: Pointer);
+    {** @desc GetOrInsert 返回结果 }
+    TGetOrInsertResult = record
+      Value: TValue;
+      Existed: Boolean;
+    end;
+    {** @desc GetOrInsertFn 延迟计算回调类型 }
+    TComputeCallback = function(const AKey: TKey): TValue;
+    {** @desc GetOrUpdate 更新回调类型（接收旧值，返回新值） }
+    TUpdateCallback = function(const AOldValue: TValue): TValue;
   private type
     TEntryState = (esEmpty, esOccupied, esDeleted);
     TEntry = record
@@ -50,7 +65,10 @@ type
     end;
     PShard = ^TShard;
     TShard = record
+      {** 读写锁: 0=无锁, >0=读锁计数, -1=写锁 }
       Lock: Int32;
+      {** 版本号: 用于无锁读路径，奇数表示正在写，偶数表示稳定状态 }
+      Version: Int32;
       Entries: array of TEntry;
       Count: PtrUInt;
       Capacity: PtrUInt;
@@ -63,6 +81,10 @@ type
     function ShardIndex(const AKey: TKey): PtrUInt;
     procedure ShardLock(var AShard: TShard);
     procedure ShardUnlock(var AShard: TShard);
+    procedure ShardReadLock(var AShard: TShard);
+    procedure ShardReadUnlock(var AShard: TShard);
+    procedure ShardWriteLock(var AShard: TShard);
+    procedure ShardWriteUnlock(var AShard: TShard);
     procedure ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
     procedure ShardResize(var AShard: TShard);
     function ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
@@ -77,10 +99,57 @@ type
     function Find(const AKey: TKey; out AValue: TValue): Boolean;
     {** @desc 删除键 }
     function Remove(const AKey: TKey): Boolean;
+    {** @desc 删除键并返回旧值；不存在返回 False }
+    function Remove(const AKey: TKey; out AValue: TValue): Boolean;
+    {** @desc 仅在键不存在时插入；已存在返回 False（CAS 语义） }
+    function TryInsert(const AKey: TKey; const AValue: TValue): Boolean;
+    {** @desc 原子替换：已存在则替换并返回旧值，不存在返回 False }
+    function Replace(const AKey: TKey; const ANewValue: TValue; out AOldValue: TValue): Boolean;
     {** @desc 检查键是否存在 }
     function Contains(const AKey: TKey): Boolean;
-    {** @desc 总元素数（近似值） }
+    {** @desc 总元素数（逐 shard 加锁累加的快照，非线性化）
+      @note 返回值是各 shard 计数之和。在并发 Insert/Remove 下，
+            与 ForEach 看到的元素集合可能不一致（各自是独立快照）。 }
     function Count: PtrUInt;
+
+    {** @desc 遍历所有元素（持锁，回调期间其他操作阻塞）
+      @param ACallback 回调函数，接收 key 和 value
+      @note 逐 shard 遍历，每个 shard 持锁期间回调。
+            与 Count 各自是独立快照，在并发修改下可能不一致。
+      @warning 不可在回调中调用本 HashMap 的其他方法（死锁） }
+    procedure ForEach(const ACallback: TForEachCallback);
+
+    {** @desc 遍历所有元素（带上下文指针）
+      @param ACallback 回调函数，接收 key、value 和上下文指针
+      @param AContext 透传给回调的上下文指针
+      @note 同 ForEach，持锁期间调用，不可重入 }
+    procedure ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
+
+    {** @desc 获取指定键的值；不存在则插入默认值并返回
+      @param AKey 要查找或插入的键
+      @param ADefault 不存在时插入的默认值
+      @return 结果记录：Value=找到的值或默认值，Existed=是否已存在
+      @note 原子操作，仅加锁一次 }
+    function GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+
+    {** @desc 获取指定键的值；不存在则通过回调延迟计算并插入
+      @param AKey 要查找或插入的键
+      @param ACompute 不存在时调用的计算函数（仅在需要时调用）
+      @return 结果记录：Value=找到的值或计算值，Existed=是否已存在
+      @note 原子操作，仅加锁一次；回调在持锁期间调用，应尽快返回 }
+    function GetOrInsertFn(const AKey: TKey; const ACompute: TComputeCallback): TGetOrInsertResult;
+
+    {** @desc 获取并更新：已存在则用回调更新，不存在则插入默认值
+      @param AKey 要查找或插入的键
+      @param ADefault 不存在时插入的默认值
+      @param AUpdate 已存在时调用的更新函数（接收旧值，返回新值）
+      @return 结果记录：Value=新值，Existed=更新前是否已存在
+      @note 原子操作，仅加锁一次；回调在持锁期间调用
+      @example 原子计数器: map.GetOrUpdate(key, 1, function(old) begin Result := old + 1 end) }
+    function GetOrUpdate(const AKey: TKey; const ADefault: TValue; const AUpdate: TUpdateCallback): TGetOrInsertResult;
+
+    {** @desc 清空所有元素 }
+    procedure Clear;
   end;
 
   generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
@@ -96,26 +165,143 @@ var
 begin
   LPtr := @AKey;
   LH := 14695981039346656037;
-  for LI := 0 to SizeOf(TKey) - 1 do
-  begin
-    LH := LH xor PtrUInt(LPtr[LI]);
-    LH := LH * 1099511628211;
+  { Fast path for common small key sizes }
+  case SizeOf(TKey) of
+    1: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+    end;
+    2: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+    end;
+    4: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[2])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[3])) * 1099511628211;
+    end;
+    8: begin
+      LH := (LH xor PtrUInt(LPtr[0])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[1])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[2])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[3])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[4])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[5])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[6])) * 1099511628211;
+      LH := (LH xor PtrUInt(LPtr[7])) * 1099511628211;
+    end;
+  else
+    { Generic path for other sizes }
+    for LI := 0 to SizeOf(TKey) - 1 do
+    begin
+      LH := LH xor PtrUInt(LPtr[LI]);
+      LH := LH * 1099511628211;
+    end;
   end;
   Result := LH;
 end;
 
 function TShardedHashMapImpl.ShardIndex(const AKey: TKey): PtrUInt;
 begin
-  Result := HashKey(AKey) mod FShardCount;
+  { Use bitmask instead of mod for power-of-2 shard count }
+  Result := HashKey(AKey) and (FShardCount - 1);
 end;
 
 procedure TShardedHashMapImpl.ShardLock(var AShard: TShard);
+var
+  LSpins: Int32;
 begin
+  LSpins := 0;
   while AtomicExchange32(AShard.Lock, 1, moAcquire) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  end;
 end;
 
 procedure TShardedHashMapImpl.ShardUnlock(var AShard: TShard);
+begin
+  AtomicStore32(AShard.Lock, 0, moRelease);
+end;
+
+{** 获取读锁: 允许多个读者并发
+  @note 使用 exponential backoff 减少 CAS 循环的 CPU 浪费 }
+procedure TShardedHashMapImpl.ShardReadLock(var AShard: TShard);
+var
+  LLock: Int32;
+  LSpins: Int32;
+  LBackoff: Int32;
+begin
+  LSpins := 0;
+  LBackoff := 1;
+  repeat
+    LLock := AtomicLoad32(AShard.Lock, moRelaxed);
+    if LLock >= 0 then
+    begin
+      { 尝试增加读锁计数 }
+      if AtomicCompareExchange32(AShard.Lock, LLock, LLock + 1, moAcquire) = LLock then
+        Exit;
+    end;
+    { 有写锁，等待 }
+    Inc(LSpins);
+    if LSpins < 8 then
+      CpuPause
+    else if LSpins < 64 then
+    begin
+      { Exponential backoff: 减少 CAS 频率 }
+      CpuPause;
+      if LSpins mod LBackoff = 0 then
+      begin
+        LBackoff := LBackoff * 2;
+        if LBackoff > 16 then
+          LBackoff := 16;
+      end;
+    end
+    else
+    begin
+      LSpins := 0;
+      LBackoff := 1;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+{** 释放读锁 }
+procedure TShardedHashMapImpl.ShardReadUnlock(var AShard: TShard);
+begin
+  AtomicFetchSub32(AShard.Lock, 1, moRelease);
+end;
+
+{** 获取写锁: 独占访问 }
+procedure TShardedHashMapImpl.ShardWriteLock(var AShard: TShard);
+var
+  LSpins: Int32;
+begin
+  LSpins := 0;
+  repeat
+    { 尝试从 0 变为 -1 (写锁) }
+    if AtomicCompareExchange32(AShard.Lock, 0, -1, moAcquire) = 0 then
+      Exit;
+    { 有读者或写者，等待 }
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+{** 释放写锁 }
+procedure TShardedHashMapImpl.ShardWriteUnlock(var AShard: TShard);
 begin
   AtomicStore32(AShard.Lock, 0, moRelease);
 end;
@@ -125,6 +311,7 @@ var
   LI: PtrUInt;
 begin
   AShard.Lock := 0;
+  AShard.Version := 0;  { 初始化版本号为 0 (偶数 = 稳定状态) }
   AShard.Capacity := ACapacity;
   AShard.Mask := ACapacity - 1;
   AShard.Count := 0;
@@ -188,6 +375,8 @@ var
 begin
   if IsManagedType(TKey) or IsManagedType(TValue) then
     raise EArgumentError.Create('TShardedHashMap: TKey and TValue must be unmanaged');
+  if SizeOf(TKey) = 0 then
+    raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;
   LCap := AInitialCapacity;
   if LCap < 4 then
@@ -215,14 +404,18 @@ var
   LFoundIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
     if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
       ShardResize(FShards[LShardIdx]);
     LFound := ShardFind(FShards[LShardIdx], AKey, LFoundIdx);
     if LFound then
     begin
       FShards[LShardIdx].Entries[LFoundIdx].Value := AValue;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
       Exit;
     end;
     LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
@@ -232,8 +425,10 @@ begin
     FShards[LShardIdx].Entries[LIdx].Value := AValue;
     FShards[LShardIdx].Entries[LIdx].State := esOccupied;
     Inc(FShards[LShardIdx].Count);
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -241,16 +436,28 @@ function TShardedHashMapImpl.Find(const AKey: TKey; out AValue: TValue): Boolean
 var
   LShardIdx: PtrUInt;
   LIdx: PtrUInt;
+  LVersion1, LVersion2: Int32;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
-  try
+  { 无锁乐观读: 使用版本号验证一致性 }
+  repeat
+    LVersion1 := AtomicLoad32(FShards[LShardIdx].Version, moAcquire);
+    { 如果版本号是奇数，表示正在写，等待 }
+    if LVersion1 and 1 <> 0 then
+    begin
+      CpuPause;
+      Continue;
+    end;
+    { 乐观读: 不加锁直接读取 }
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
       AValue := FShards[LShardIdx].Entries[LIdx].Value;
-  finally
-    ShardUnlock(FShards[LShardIdx]);
-  end;
+    { 验证版本号是否一致 }
+    LVersion2 := AtomicLoad32(FShards[LShardIdx].Version, moAcquire);
+    if LVersion1 = LVersion2 then
+      Exit;  { 版本一致，读取有效 }
+    { 版本不一致，重试 }
+  until False;
 end;
 
 function TShardedHashMapImpl.Remove(const AKey: TKey): Boolean;
@@ -259,8 +466,10 @@ var
   LIdx: PtrUInt;
 begin
   LShardIdx := ShardIndex(AKey);
-  ShardLock(FShards[LShardIdx]);
+  ShardWriteLock(FShards[LShardIdx]);
   try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
     begin
@@ -269,8 +478,93 @@ begin
       FShards[LShardIdx].Entries[LIdx].Value := Default(TValue);
       Dec(FShards[LShardIdx].Count);
     end;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
   finally
-    ShardUnlock(FShards[LShardIdx]);
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.Remove(const AKey: TKey; out AValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if Result then
+    begin
+      AValue := FShards[LShardIdx].Entries[LIdx].Value;
+      FShards[LShardIdx].Entries[LIdx].State := esDeleted;
+      FShards[LShardIdx].Entries[LIdx].Key := Default(TKey);
+      FShards[LShardIdx].Entries[LIdx].Value := Default(TValue);
+      Dec(FShards[LShardIdx].Count);
+    end;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.TryInsert(const AKey: TKey; const AValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFoundIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    if ShardFind(FShards[LShardIdx], AKey, LFoundIdx) then
+    begin
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      Exit(False);
+    end;
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := AValue;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result := True;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.Replace(const AKey: TKey; const ANewValue: TValue; out AOldValue: TValue): Boolean;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if Result then
+    begin
+      AOldValue := FShards[LShardIdx].Entries[LIdx].Value;
+      FShards[LShardIdx].Entries[LIdx].Value := ANewValue;
+    end;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
   end;
 end;
 
@@ -288,9 +582,193 @@ begin
   Result := 0;
   for LI := 0 to FShardCount - 1 do
   begin
-    ShardLock(FShards[LI]);
+    ShardReadLock(FShards[LI]);
     Inc(Result, FShards[LI].Count);
-    ShardUnlock(FShards[LI]);
+    ShardReadUnlock(FShards[LI]);
+  end;
+end;
+
+procedure TShardedHashMapImpl.ForEach(const ACallback: TForEachCallback);
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardReadLock(FShards[LShardIdx]);
+    try
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
+          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value);
+      end;
+    finally
+      ShardReadUnlock(FShards[LShardIdx]);
+    end;
+  end;
+end;
+
+procedure TShardedHashMapImpl.ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardReadLock(FShards[LShardIdx]);
+    try
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
+          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value, AContext);
+      end;
+    finally
+      ShardReadUnlock(FShards[LShardIdx]);
+    end;
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrInsert(const AKey: TKey; const ADefault: TValue): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      Exit;
+    end;
+    // Not found - insert default
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ADefault;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := ADefault;
+    Result.Existed := False;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrInsertFn(const AKey: TKey; const ACompute: TComputeCallback): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      Exit;
+    end;
+    // Not found - compute value via callback
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ACompute(AKey);
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+    Result.Existed := False;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+function TShardedHashMapImpl.GetOrUpdate(const AKey: TKey; const ADefault: TValue; const AUpdate: TUpdateCallback): TGetOrInsertResult;
+var
+  LShardIdx: PtrUInt;
+  LIdx: PtrUInt;
+  LFound: Boolean;
+begin
+  LShardIdx := ShardIndex(AKey);
+  ShardWriteLock(FShards[LShardIdx]);
+  try
+    { 标记写开始: 版本号+1 变为奇数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
+    if LFound then
+    begin
+      FShards[LShardIdx].Entries[LIdx].Value := AUpdate(FShards[LShardIdx].Entries[LIdx].Value);
+      Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
+      Result.Existed := True;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      Exit;
+    end;
+    // Not found - insert default
+    if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
+      ShardResize(FShards[LShardIdx]);
+    LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
+    while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+      LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+    FShards[LShardIdx].Entries[LIdx].Key := AKey;
+    FShards[LShardIdx].Entries[LIdx].Value := ADefault;
+    FShards[LShardIdx].Entries[LIdx].State := esOccupied;
+    Inc(FShards[LShardIdx].Count);
+    Result.Value := ADefault;
+    Result.Existed := False;
+    { 标记写结束: 版本号+1 变回偶数 }
+    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+  finally
+    ShardWriteUnlock(FShards[LShardIdx]);
+  end;
+end;
+
+procedure TShardedHashMapImpl.Clear;
+var
+  LShardIdx: PtrUInt;
+  LEntryIdx: PtrUInt;
+begin
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    ShardWriteLock(FShards[LShardIdx]);
+    try
+      { 标记写开始: 版本号+1 变为奇数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
+      begin
+        FShards[LShardIdx].Entries[LEntryIdx].State := esEmpty;
+        FShards[LShardIdx].Entries[LEntryIdx].Key := Default(TKey);
+        FShards[LShardIdx].Entries[LEntryIdx].Value := Default(TValue);
+      end;
+      FShards[LShardIdx].Count := 0;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    finally
+      ShardWriteUnlock(FShards[LShardIdx]);
+    end;
   end;
 end;
 

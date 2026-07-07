@@ -43,13 +43,9 @@ type
   {** Slab 池配置参数 *}
   TSlabConfig = record
     MinShift: SizeUInt;            // 默认 3 (8B)
-    {** @deprecated 兼容字段，当前未用，未来可能移除。请勿在新代码中设置此字段。 }
-    EnablePageMerging: Boolean;
     MaxAllocSize: SizeUInt;        // 0=不限制；>0 时限制单次分配（超过返回 nil）
     EnablePerfMonitoring: Boolean; // 仅统计调用次数；L0 core 不直接采样时间
     EnableDebug: Boolean;          // 调试开关（预留）
-    {** @deprecated 兼容字段，当前未用，未来可能移除。请勿在新代码中设置此字段。 }
-    PageSize: SizeUInt;
   end;
 
   {** Fallback 分配记录（超大/高对齐分配）*}
@@ -257,8 +253,6 @@ type
 
 {** 创建默认 Slab 配置 *}
 function CreateDefaultSlabConfig: TSlabConfig;
-{** 创建启用了页合并的 Slab 配置 *}
-function CreateSlabConfigWithPageMerging: TSlabConfig;
 implementation
 
 uses
@@ -272,17 +266,9 @@ const
 function CreateDefaultSlabConfig: TSlabConfig;
 begin
   Result.MinShift := 3;
-  Result.EnablePageMerging := False;
   Result.MaxAllocSize := 0; // unlimited by default
   Result.EnablePerfMonitoring := True;
   Result.EnableDebug := False;
-  Result.PageSize := 4096;
-end;
-
-function CreateSlabConfigWithPageMerging: TSlabConfig;
-begin
-  Result := CreateDefaultSlabConfig;
-  Result.EnablePageMerging := True;
 end;
 
 function TSlabPool.IsOversize(const ASize: SizeUInt): Boolean; inline;
@@ -916,8 +902,6 @@ begin
     FConfig := CreateDefaultSlabConfig;
     FConfig.MinShift := aMinShift;
   end;
-  if FConfig.PageSize = 0 then
-    FConfig.PageSize := 4096;
 
 
   FInitialCapacity:=aCapacity; FMinShift:=aMinShift; FActive:=0;
@@ -943,7 +927,6 @@ end;
 
 constructor TSlabPool.Create(aCapacity: SizeUInt; const aConfig: TSlabConfig; aAllocator: IAllocator);
 begin
-  // 忽略 aConfig.EnablePageMerging（兼容字段）
   // MinShift 和 MaxAllocSize 采纳
   FConfig := aConfig;
   if FConfig.MinShift=0 then FConfig.MinShift := 3;

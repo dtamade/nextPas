@@ -3,7 +3,7 @@ program test_platform_linux_modern;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, BaseUnix,
+ BaseUnix,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern;

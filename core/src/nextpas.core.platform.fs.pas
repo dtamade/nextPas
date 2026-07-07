@@ -44,15 +44,17 @@ const
   PLATFORM_WALK_BADARGS   = -1;
   PLATFORM_WALK_MAX_DEPTH = 256;
   PLATFORM_FS_SHORT_READ_ERROR = -6;
+  PLATFORM_FS_PATH_TOO_LONG = -7;  { Also defined as PLATFORM_ERR_PATH_TOO_LONG in error.pas }
+  PLATFORM_FS_READ_CHUNK_SIZE = 65536; { 64KB initial chunk for dynamic read }
 
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
-function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fs_temp_dir(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32; deprecated 'Use platform_fs_mktemp_handle instead';
 function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -73,7 +75,14 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random;
+  nextpas.core.platform.random,
+  nextpas.core.platform.error
+{$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.linux.ffi
+{$ENDIF}
+  ;
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;
@@ -117,6 +126,77 @@ begin
       Exit(PLATFORM_FS_SHORT_READ_ERROR);
     Inc(ABytesRead, LChunk);
   end;
+  Result := 0;
+end;
+
+{**
+ * platform_fs_read_until_eof - Read file until EOF with dynamic buffer
+ *
+ * Eliminates TOCTOU race: no stat() before read(), buffer grows as needed.
+ * Caller must FreeMem the returned buffer on success.
+ *
+ * @param AHandle  Open file handle (read-only)
+ * @param AData    Receives allocated buffer (nil on error)
+ * @param ALen     Receives actual bytes read (0 on error)
+ * @return 0 on success, error code on failure
+ *}
+function platform_fs_read_until_eof(const AHandle: TPlatformFileHandle;
+  out AData: Pointer; out ALen: PtrUInt): Int32;
+var
+  LBuf: Pointer;
+  LBufSize, LTotal, LChunk: PtrUInt;
+  LNewBuf: Pointer;
+  LNewSize: PtrUInt;
+begin
+  AData := nil;
+  ALen := 0;
+
+  { Start with a reasonable chunk size }
+  LBufSize := PLATFORM_FS_READ_CHUNK_SIZE;
+  GetMem(LBuf, LBufSize);
+  if LBuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
+  LTotal := 0;
+  repeat
+    { Grow buffer if nearly full (leave room for NUL terminator) }
+    if LBufSize - LTotal < 4096 then
+    begin
+      LNewSize := LBufSize * 2;
+      if LNewSize < LBufSize then { overflow check }
+      begin
+        FreeMem(LBuf);
+        Exit(PLATFORM_ERR_INVALID);
+      end;
+      GetMem(LNewBuf, LNewSize);
+      if LNewBuf = nil then
+      begin
+        FreeMem(LBuf);
+        Exit(PLATFORM_ERR_INVALID);
+      end;
+      Move(LBuf^, LNewBuf^, LTotal);
+      FreeMem(LBuf);
+      LBuf := LNewBuf;
+      LBufSize := LNewSize;
+    end;
+
+    { Read chunk }
+    Result := platform_file_read(AHandle,
+      Pointer(PtrUInt(LBuf) + LTotal), LBufSize - LTotal - 1, LChunk);
+    if Result <> 0 then
+    begin
+      FreeMem(LBuf);
+      Exit;
+    end;
+    if LChunk = 0 then
+      Break; { EOF }
+    Inc(LTotal, LChunk);
+  until False;
+
+  { NUL-terminate }
+  PAnsiChar(LBuf)[LTotal] := #0;
+  AData := LBuf;
+  ALen := LTotal;
   Result := 0;
 end;
 
@@ -166,42 +246,42 @@ begin
     ASize := LStat.Size;
 end;
 
-function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fs_temp_dir(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LLen: Int32;
   LResult: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
 {$IFDEF NEXTPAS_WINDOWS}
-  LResult := platform_env_get('TEMP', ABuf, ABufLen, LLen);
+  LResult := platform_env_get('TEMP', ABuf, ABufSize, LLen);
   if LResult <> 0 then
-    LResult := platform_env_get('TMP', ABuf, ABufLen, LLen);
+    LResult := platform_env_get('TMP', ABuf, ABufSize, LLen);
   if LResult <> 0 then
   begin
-    if ABufLen >= 4 then
+    if ABufSize >= 4 then
     begin
       ABuf[0] := 'C'; ABuf[1] := ':'; ABuf[2] := '\';
       ABuf[3] := #0;
       Exit(3);
     end;
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   Result := LLen;
 {$ELSE}
-  LResult := platform_env_get('TMPDIR', ABuf, ABufLen, LLen);
+  LResult := platform_env_get('TMPDIR', ABuf, ABufSize, LLen);
   if LResult = 0 then
     Result := LLen
   else
   begin
-    if ABufLen >= 5 then
+    if ABufSize >= 5 then
     begin
       ABuf[0] := '/'; ABuf[1] := 't'; ABuf[2] := 'm'; ABuf[3] := 'p';
       ABuf[4] := #0;
       Result := 4;
     end
     else
-      Result := -1;
+      Result := PLATFORM_ERR_INVALID;
   end;
 {$ENDIF}
 end;
@@ -213,7 +293,7 @@ var
   LR: Int32;
 begin
   if (APath = nil) or (APath[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LLen := 0;
   while (LLen < 4095) and (APath[LLen] <> #0) do
   begin
@@ -263,6 +343,12 @@ var
   LBuf: array[0..8191] of Byte;
   LRead: PtrUInt;
   LR, LCloseR: Int32;
+{$IFDEF NEXTPAS_LINUX}
+  LStat: TPlatformFileStat;
+  LTotal: Int64;
+  LSent: ssize_t;
+  LNewPos: Int64;
+{$ENDIF}
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
   if LR <> 0 then Exit(LR);
@@ -272,11 +358,48 @@ begin
     platform_file_close(LSrcH);
     Exit(LR);
   end;
+
+{$IFDEF NEXTPAS_LINUX}
+  { Linux: try sendfile for zero-copy transfer }
+  LR := -1;
+  if platform_file_fstat(LSrcH, LStat) = 0 then
+  begin
+    LTotal := 0;
+    while LTotal < LStat.Size do
+    begin
+      LSent := nextpas.core.platform.linux.ffi.sendfile(
+        LDstH.Value, LSrcH.Value, nil, size_t(LStat.Size - LTotal));
+      if LSent < 0 then
+      begin
+        LR := platform_get_errno;
+        Break;
+      end;
+      if LSent = 0 then
+        Break;
+      Inc(LTotal, LSent);
+    end;
+    if LTotal = LStat.Size then
+      LR := 0;
+  end;
+
+  { Fallback to read/write if sendfile failed }
+  if LR <> 0 then
+  begin
+    platform_file_seek(LSrcH, 0, fsoBegin, LNewPos);
+    platform_file_seek(LDstH, 0, fsoBegin, LNewPos);
+{$ENDIF}
+
+  { Standard read/write loop }
   repeat
     LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
+
+{$IFDEF NEXTPAS_LINUX}
+  end;
+{$ENDIF}
+
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;
@@ -299,7 +422,7 @@ var
   LRand: array[0..5] of Byte;
 begin
   if (APath = nil) or (APath[0] = #0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LBaseLen := 0;
   { Invariant: 1024 buffer - 1(dot) - 12(hex) - 1(NUL) = 1010 max base path }
   while (LBaseLen < 1010) and (APath[LBaseLen] <> #0) do
@@ -371,7 +494,7 @@ var
 begin
   AHandle := PLATFORM_FILE_INVALID_HANDLE;
   if (APathBuf = nil) or (APathBufLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LTmpLen := platform_fs_temp_dir(@LTmpDir[0], SizeOf(LTmpDir));
   if LTmpLen < 0 then
@@ -386,7 +509,7 @@ begin
     while ASuffix[LSuffixLen] <> #0 do Inc(LSuffixLen);
 
   if LTmpLen + 1 + LPrefixLen + 16 + LSuffixLen + 1 > APathBufLen then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   for LAttempt := 0 to MAX_ATTEMPTS - 1 do
   begin
@@ -408,7 +531,7 @@ begin
     end;
 
     if platform_random_bytes(@LRandBytes[0], 8) <> 0 then
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     for I := 0 to 7 do
     begin
       APathBuf[LPos] := HEX_CHARS[(LRandBytes[I] shr 4) and $F];
@@ -428,11 +551,11 @@ begin
     if Result = 0 then
       Exit(0);
   end;
-  Result := -1;
+  Result := PLATFORM_ERR_INVALID;
 end;
 
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
-  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+  APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32; deprecated 'Use platform_fs_mktemp_handle instead';
 var
   LHandle: TPlatformFileHandle;
 begin
@@ -458,68 +581,67 @@ function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
 var
   LH: TPlatformFileHandle;
-  LSize: Int64;
-  LRead: PtrUInt;
   LR, LCloseR: Int32;
 begin
   AData := nil;
   ALen := 0;
-  LR := platform_fs_file_size(APath, LSize);
-  if LR <> 0 then Exit(LR);
-  if LSize = 0 then
-  begin
-    GetMem(AData, 1);
-    PAnsiChar(AData)[0] := #0;
-    ALen := 0;
-    Exit(0);
-  end;
   LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
-  if LR <> 0 then Exit(LR);
-  GetMem(AData, PtrUInt(LSize) + 1);
-  LR := platform_fs_read_all(LH, AData, PtrUInt(LSize), LRead);
+  if LR <> 0 then
+    Exit(LR);
+  { Read until EOF — no TOCTOU race (no stat before read) }
+  LR := platform_fs_read_until_eof(LH, AData, ALen);
   LCloseR := platform_file_close(LH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;
   if LR <> 0 then
   begin
-    FreeMem(AData);
+    if AData <> nil then
+      FreeMem(AData);
     AData := nil;
-    Exit(LR);
+    ALen := 0;
   end;
-  PAnsiChar(AData)[LRead] := #0;
-  ALen := LRead;
-  Result := 0;
+  Result := LR;
 end;
 
 function platform_fs_read_file_into(const APath: PAnsiChar;
   ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
 var
   LH: TPlatformFileHandle;
-  LSize: Int64;
-  LRead: PtrUInt;
+  LTotal, LChunk: PtrUInt;
   LR, LCloseR: Int32;
 begin
   ALen := 0;
-  LR := platform_fs_file_size(APath, LSize);
-  if LR <> 0 then
-    Exit(LR);
-  if LSize = 0 then
-    Exit(0);
-  if LSize > Int64(ABufCapacity) then
-  begin
-    ALen := PtrUInt(LSize);
-    Exit(PLATFORM_FS_SHORT_READ_ERROR);
-  end;
   if ABuf = nil then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
+  if ABufCapacity = 0 then
+    Exit(PLATFORM_FS_SHORT_READ_ERROR);
+
   LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
   if LR <> 0 then
     Exit(LR);
-  LR := platform_fs_read_all(LH, ABuf, PtrUInt(LSize), LRead);
+
+  { Read until EOF or buffer full — no TOCTOU race }
+  LTotal := 0;
+  repeat
+    if LTotal >= ABufCapacity then
+    begin
+      { Buffer full but file has more data }
+      LR := PLATFORM_FS_SHORT_READ_ERROR;
+      Break;
+    end;
+    LR := platform_file_read(LH,
+      Pointer(PtrUInt(ABuf) + LTotal), ABufCapacity - LTotal, LChunk);
+    if LR <> 0 then
+      Break;
+    if LChunk = 0 then
+      Break; { EOF }
+    Inc(LTotal, LChunk);
+  until False;
+
   LCloseR := platform_file_close(LH);
   if (LR = 0) and (LCloseR <> 0) then
     LR := LCloseR;
-  ALen := LRead;
+  ALen := LTotal;
   Result := LR;
 end;
 
@@ -600,7 +722,24 @@ begin
     LNameLen := LDirEntry.NameLen;
     LChildLen := APathLen + 1 + LNameLen;
     if LChildLen >= 4095 then
+    begin
+      { Path too long — report error via callback, don't silently skip }
+      FillChar(LEntry, SizeOf(LEntry), 0);
+      LEntry.Path := APathBuf;
+      LEntry.PathLen := APathLen;
+      LEntry.Name := @LDirEntry.Name[0];
+      LEntry.NameLen := LNameLen;
+      LEntry.FileType := LDirEntry.FileType;
+      LEntry.Depth := ADepth + 1;
+      LEntry.ErrorCode := PLATFORM_FS_PATH_TOO_LONG;
+      LAction := ACallback(LEntry, AUserData);
+      if LAction = pwaStop then
+      begin
+        platform_dir_close(LHandle);
+        Exit(PLATFORM_WALK_STOPPED);
+      end;
       Continue;
+    end;
 
   {$IFDEF NEXTPAS_WINDOWS}
     APathBuf[APathLen] := '\';

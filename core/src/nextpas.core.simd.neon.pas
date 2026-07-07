@@ -2328,22 +2328,22 @@ end;
 
 {$I nextpas.core.simd.neon.compare.inc}
 
-{$I nextpas.core.simd.neon.facade_asm.inc}
+{$I nextpas.core.simd.neon.facade.asm.inc}
 
 {$ENDIF} // NEXTPAS_SIMD_NEON_ASM_ENABLED
 
-{$I nextpas.core.simd.neon.scalar_fallback.inc}
+{$I nextpas.core.simd.neon.scalar.fallback.inc}
 
 {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}
-{$I nextpas.core.simd.neon.shared_utility.inc}
+{$I nextpas.core.simd.neon.shared.utility.inc}
 {$ENDIF}
 {$I nextpas.core.simd.neon.scalar.autowrap.inc}
 
 {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}
-{$I nextpas.core.simd.neon.shared_wide_memory_asm.inc}
+{$I nextpas.core.simd.neon.shared.wide.memory.asm.inc}
 {$ENDIF}
 
-{$I nextpas.core.simd.neon.facade_platform.inc}
+{$I nextpas.core.simd.neon.facade.platform.inc}
 
 {$I nextpas.core.simd.neon.dot.inc}
 

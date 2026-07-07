@@ -3,10 +3,15 @@ program test_platform_console;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.console,
   nextpas.core.platform.pipe,
+  {$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.ffi,
+  {$ENDIF}
   nextpas.core.test;
 
 var
@@ -14,23 +19,16 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LSourcePath));
 end;
 
 function SliceBetween(const ASource, AStartToken, AEndToken: string): string;
@@ -101,6 +99,72 @@ begin
   platform_pipe_close(P);
 end;
 
+procedure TestGetSizeFd;
+var
+  Size: TPlatformConsoleSize;
+  R: Int32;
+begin
+  R := platform_console_get_size_fd(1, Size);
+  if platform_console_is_terminal(1) then
+  begin
+    Check(R = 0, 'get_size_fd(1) returns 0 on terminal');
+    Check(Size.Cols > 0, 'cols > 0');
+    Check(Size.Rows > 0, 'rows > 0');
+  end
+  else
+    Check(True, 'not a terminal, skip size check');
+end;
+
+procedure TestSetRawRestore;
+var
+  LMode: TPlatformConsoleMode;
+begin
+  // set_raw on non-terminal should fail gracefully
+  if not platform_console_is_terminal(0) then
+  begin
+    Check(platform_console_set_raw(0, LMode) <> 0, 'set_raw on non-terminal fails');
+    Check(True, 'set_raw on non-terminal handled gracefully');
+  end
+  else
+  begin
+    // On terminal: set_raw then restore
+    Check(platform_console_set_raw(0, LMode) = 0, 'set_raw succeeds');
+    Check(platform_console_restore_raw(0, LMode) = 0, 'restore_raw succeeds');
+  end;
+end;
+
+procedure TestWriteStdout;
+var
+  LBuf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  LBuf[0] := 't'; LBuf[1] := 'e'; LBuf[2] := 's'; LBuf[3] := 't';
+  R := platform_console_write(1, @LBuf[0], 4);
+  Check(R = 4, 'write to stdout returns 4');
+end;
+
+procedure TestWriteInvalidFd;
+var
+  LBuf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  LBuf[0] := 't'; LBuf[1] := 'e'; LBuf[2] := 's'; LBuf[3] := 't';
+  R := platform_console_write(-1, @LBuf[0], 4);
+  Check(R <> 0, 'write to invalid fd fails');
+end;
+
+procedure TestWaitReadablePipe;
+var
+  P: TPlatformPipe;
+  LWait: TPlatformConsoleWait;
+begin
+  Check(platform_pipe_create(P) = 0, 'create pipe');
+  // No data available, should timeout quickly
+  LWait := platform_console_wait_readable(P.ReadFd, 10);
+  Check(LWait = cwTimeout, 'wait with timeout returns cwTimeout');
+  platform_pipe_close(P);
+end;
+
 procedure TestWindowsConsoleSourceContract;
 var
   LConsole: string;
@@ -138,6 +202,31 @@ begin
     'Windows console branch must not document raw/io/wait as stubs');
 end;
 
+procedure TestReadFromPipe;
+var
+  LPipe: TPlatformPipe;
+  LBuf: array[0..31] of AnsiChar;
+  LWritten: PtrInt;
+  LRead: Int32;
+begin
+  Check(platform_pipe_create(LPipe) = 0, 'create pipe');
+
+  { Write data to pipe using low-level write }
+{$IFDEF NEXTPAS_UNIX}
+  LWritten := write(Int32(LPipe.WriteFd), PAnsiChar('test'), 4);
+  Check(LWritten = 4, 'wrote 4 bytes to pipe');
+{$ENDIF}
+
+  { Read from pipe using console_read }
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := platform_console_read(LPipe.ReadFd, @LBuf[0], 4);
+  Check(LRead = 4, 'console_read returns 4 bytes');
+  Check(LBuf[0] = 't', 'first byte = t');
+  Check(LBuf[3] = 't', 'last byte = t');
+
+  platform_pipe_close(LPipe);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.console');
   T.Test('is_terminal stdout', @TestIsTerminalStdout);
@@ -146,5 +235,11 @@ begin
   T.Test('enable ansi', @TestEnableAnsi);
   T.Test('pipe not terminal', @TestPipeNotTerminal);
   T.Test('Windows console source contract', @TestWindowsConsoleSourceContract);
+  T.Test('get size fd', @TestGetSizeFd);
+  T.Test('set raw / restore raw', @TestSetRawRestore);
+  T.Test('write stdout', @TestWriteStdout);
+  T.Test('write invalid fd', @TestWriteInvalidFd);
+  T.Test('wait readable pipe', @TestWaitReadablePipe);
+  T.Test('read from pipe', @TestReadFromPipe);
   if not T.Run then Halt(1);
 end.

@@ -36,7 +36,7 @@ type
     InitialSize: SizeUInt;       // 初始大小
     MaxSize: SizeUInt;           // 最大大小（0 = 无限制）
     GrowthKind: TArenaGrowthKind; // 增长策略
-    GrowthFactor: Double;        // 几何增长因子（>= 1.1，推荐 2.0）
+    GrowthFactor: Double;        // 几何增长因子（>= 1.1，推荐 2.0；< 1.1 自动重置为 2.0）
     GrowthStep: SizeUInt;        // 线性增长步长
     Alignment: SizeUInt;         // 对齐（0 = DEFAULT_ALIGNMENT）
     KeepSegments: Boolean;       // Reset 时是否保留已分配的段

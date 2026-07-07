@@ -23,7 +23,7 @@ function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 implementation
 
@@ -62,6 +62,7 @@ function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
+  { nil path = load self (dlopen(NULL, ...) semantics) }
   ALib.Handle := dlopen(APath, MapFlags(AFlags));
   if ALib.Handle = nil then
     Result := PLATFORM_ERR_ENOENT // caller uses platform_dl_error for details
@@ -74,6 +75,8 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
 begin
   AAddr := nil;
   if ALib.Handle = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if AName = nil then
     Exit(PLATFORM_ERR_INVALID);
   dlerror; // clear previous error
   AAddr := dlsym(ALib.Handle, AName);
@@ -99,12 +102,12 @@ begin
   ALib.Handle := nil;
 end;
 
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LMsg: PAnsiChar;
   LLen, I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(-1);
   LMsg := dlerror;
   if LMsg = nil then
@@ -115,8 +118,8 @@ begin
   LLen := 0;
   while LMsg[LLen] <> #0 do
     Inc(LLen);
-  if LLen >= ABufLen then
-    LLen := ABufLen - 1;
+  if LLen >= ABufSize then
+    LLen := ABufSize - 1;
   for I := 0 to LLen - 1 do
     ABuf[I] := LMsg[I];
   ABuf[LLen] := #0;
@@ -126,6 +129,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16;
@@ -136,6 +140,8 @@ var
   LPath: UnicodeString;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID); { Windows: nil path is invalid }
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));
@@ -151,6 +157,8 @@ begin
   AAddr := nil;
   if ALib.Handle = 0 then
     Exit(Int32(87)); // ERROR_INVALID_PARAMETER
+  if AName = nil then
+    Exit(PLATFORM_ERR_INVALID);
   AAddr := Pointer(GetProcAddress(HMODULE(ALib.Handle), AName));
   if AAddr = nil then
     Result := Int32(GetLastError)
@@ -169,13 +177,13 @@ begin
   ALib.Handle := 0;
 end;
 
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 var
   LErr: DWORD;
   LLen: DWORD;
   I: Int32;
 begin
-  if (ABuf = nil) or (ABufLen <= 0) then
+  if (ABuf = nil) or (ABufSize <= 0) then
     Exit(-1);
   LErr := GetLastError;
   if LErr = 0 then
@@ -185,7 +193,7 @@ begin
   end;
   LLen := FormatMessageA(
     FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,
-    nil, LErr, 0, ABuf, DWORD(ABufLen), nil);
+    nil, LErr, 0, ABuf, DWORD(ABufSize), nil);
   if LLen = 0 then
   begin
     ABuf[0] := #0;
@@ -202,14 +210,14 @@ end;
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
-begin FillChar(ALib, SizeOf(ALib), 0); Result := -1; end;
+begin FillChar(ALib, SizeOf(ALib), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
-begin AAddr := nil; Result := -1; end;
+begin AAddr := nil; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
-begin Result := -1; end;
-function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
-begin if ABuf <> nil then ABuf[0] := #0; Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+begin if ABuf <> nil then ABuf[0] := #0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

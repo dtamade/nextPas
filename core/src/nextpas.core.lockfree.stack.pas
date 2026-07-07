@@ -19,7 +19,14 @@ type
     FSlots: array of TSlot;
     FCapacity: Int32;
     FTop: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTop: TCacheLinePad;
+    {$POP}
     FFreeHead: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadFree: TCacheLinePad;
+    {$POP}
+    FClosed: Int32;
     function PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
     function UnpackIdx(ATagged: Int64): Int32; inline;
     function UnpackTag(ATagged: Int64): UInt32; inline;
@@ -27,6 +34,8 @@ type
     constructor Create(const ACapacity: PtrUInt);
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
     function IsEmpty: Boolean;
     function ApproxCount: PtrUInt;
   end;
@@ -73,6 +82,7 @@ begin
   FSlots[FCapacity - 1].Next := -1;
   FTop := PackTagIdx(-1, 0);
   FFreeHead := PackTagIdx(0, 0);
+  FClosed := 0;
 end;
 
 function TLockFreeStackImpl.TryPush(const AValue: T): Boolean;
@@ -80,6 +90,8 @@ var
   LOldFree, LNewFree, LOldTop, LNewTop: Int64;
   LIdx: Int32;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   repeat
     LOldFree := AtomicLoad64(FFreeHead, moAcquire);
     LIdx := UnpackIdx(LOldFree);
@@ -125,6 +137,16 @@ end;
 function TLockFreeStackImpl.IsEmpty: Boolean;
 begin
   Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
+end;
+
+procedure TLockFreeStackImpl.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+end;
+
+function TLockFreeStackImpl.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
 function TLockFreeStackImpl.ApproxCount: PtrUInt;

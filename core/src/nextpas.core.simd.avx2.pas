@@ -3187,6 +3187,9 @@ end;
 // === Batch Array Operations (AVX2 256-bit) ===
 {$I nextpas.core.simd.avx2.batch.inc}
 
+// === AVX-512 Extensions ===
+{$I nextpas.core.simd.avx512.ext.inc}
+
 // === Backend Registration ===
 
 {$I nextpas.core.simd.avx2.register.inc}

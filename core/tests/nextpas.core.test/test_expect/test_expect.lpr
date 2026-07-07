@@ -1,4 +1,24 @@
-{ test_expect — Validates IExpectation fluent API }
+{ test_expect — Validates IExpectation fluent API
+
+  API Recommendation — Factory function selection:
+    Type-safe factory (preferred):
+      ExpectStr(s)      — string, enables ToEqual/ToContain/ToStartWith/ToEndWith/ToHaveLength
+      ExpectInt(n)      — Int64, enables ToEqualInt/ToBeGreaterThan/ToBeLessThan/ToBeInRange/ToBePositive/ToBeNegative
+      ExpectBool(b)     — Boolean, enables ToBeTrue/ToBeFalse
+      ExpectDouble(d)   — Double, enables ToEqualDouble/ToBeNear/ToBeGreaterThan/ToBeLessThan
+      ExpectPtr(p)      — Pointer, enables ToBeNil/ToNotBeNil
+      ExpectProc(p)     — TTestProc, enables ToRaise/ToNotRaise
+
+    Convenience factory (string only):
+      Expect(s)         — equivalent to ExpectStr(s)
+      ⚠ Do NOT pass non-string to Expect(): compiles via implicit conversion
+        but creates wrong expectation kind, causing RequireKind to panic.
+
+    Example:
+      ExpectStr(name).ToEqual('Alice');          ✓ clear, type-safe
+      Expect(name).ToEqual('Alice');             ✓ also fine for strings
+      Expect(42).ToEqualInt(42);                 ✗ compiles but wrong kind! Use ExpectInt(42)
+ }
 program test_expect;
 
 {$mode objfpc}{$H+}{$J-}
@@ -7,7 +27,9 @@ program test_expect;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.bytes,
   nextpas.core.math,
   nextpas.core.test;
 
@@ -301,22 +323,22 @@ end;
 
 procedure TestTypeMismatchIntToEqual;
 begin
-  ExpectFail(procedure begin ExpectInt(42).ToEqual('hello'); end, 'non-string');
+  ExpectFail(procedure begin ExpectInt(42).ToEqual('hello'); end, 'requires string expectation');
 end;
 
 procedure TestTypeMismatchStrToEqualInt;
 begin
-  ExpectFail(procedure begin Expect('hello').ToEqualInt(42); end, 'non-integer');
+  ExpectFail(procedure begin Expect('hello').ToEqualInt(42); end, 'requires integer expectation');
 end;
 
 procedure TestTypeMismatchStrToBeNil;
 begin
-  ExpectFail(procedure begin Expect('hello').ToBeNil; end, 'non-pointer');
+  ExpectFail(procedure begin Expect('hello').ToBeNil; end, 'requires pointer expectation');
 end;
 
 procedure TestTypeMismatchStrToRaise;
 begin
-  ExpectFail(procedure begin Expect('hello').ToRaise(Exception); end, 'non-proc');
+  ExpectFail(procedure begin Expect('hello').ToRaise(Exception); end, 'requires proc expectation');
 end;
 
 { ── F12: Not_ positive pass paths ─────────────────────────────────────────── }
@@ -418,6 +440,18 @@ begin
   end;
 end;
 
+{ ── Double comparison semantics ──────────────────────────────────────────────
+  ToBeNear(actual, tolerance):
+    if tolerance > 0: uses IsNear(actual, expected, tolerance) — true when
+      |actual - expected| <= tolerance (relative/absolute hybrid)
+    if tolerance = 0: uses IsExact — IEEE bitwise comparison, only true for
+      exact same bits (distinguishes +0.0/-0.0, NaN patterns, etc.)
+
+  ⚠ IsExact(tolerance=0) is NOT "very tight tolerance" — it's bitwise identity.
+     Use tolerance > 0 for normal floating-point comparisons.
+     Example: ExpectDouble(0.3).ToBeNear(0.3, 0.0) might FAIL on some platforms
+              because 0.3 cannot be represented exactly in IEEE 754.
+ }
 procedure TestExpectDouble;
 begin
   ExpectDouble(1.0).ToBeNear(1.0);
@@ -458,7 +492,7 @@ end;
 
 procedure TestExpectDoubleTypeMismatch;
 begin
-  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualInt(1); end, 'non-integer');
+  ExpectFail(procedure begin ExpectDouble(1.0).ToEqualInt(1); end, 'requires integer expectation');
 end;
 
 { ── R2-F15: NaN/Infinity/Int64 boundary ────────────────────────────────────── }
@@ -565,13 +599,13 @@ end;
 procedure TestExpectIntToBeNearTypeMismatch;
 begin
   { ExpectInt creates ekInt, ToBeNear requires ekDouble → type mismatch }
-  ExpectFail(procedure begin ExpectInt(42).ToBeNear(42.0, 1.0); end, LowerCase('non-double'));
+  ExpectFail(procedure begin ExpectInt(42).ToBeNear(42.0, 1.0); end, 'requires double expectation');
 end;
 
 procedure TestExpectPtrToEqualIntTypeMismatch;
 begin
   { ExpectPtr creates ekPtr, ToEqualInt requires ekInt → type mismatch }
-  ExpectFail(procedure begin ExpectPtr(nil).ToEqualInt(0); end, LowerCase('non-integer'));
+  ExpectFail(procedure begin ExpectPtr(nil).ToEqualInt(0); end, 'requires integer expectation');
 end;
 
 { R6-45: Not_.ToBeNear combination }
@@ -821,6 +855,9 @@ begin
   { Diff slightly less than epsilon — should pass }
   ExpectDouble(1.0).ToEqualD(1.0 + 9.99e-11, 1e-10);
   ExpectDouble(1.0).ToEqualD(1.0 - 9.99e-11, 1e-10);
+  { Diff exactly equal to epsilon — test with integer multiples to avoid FP rounding }
+  ExpectDouble(100.0).ToEqualD(100.0 + 1e-6, 1e-6);
+  ExpectDouble(100.0).ToEqualD(100.0 - 1e-6, 1e-6);
   { Diff > epsilon → should fail }
   ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
 end;
@@ -922,6 +959,114 @@ begin
   CheckTrue(LExp.ToBeTrue = LExp, 'ToBeTrue should return self');
   LExp := ExpectDouble(1.0);
   CheckTrue(LExp.ToBeNear(1.0) = LExp, 'ToBeNear should return self');
+end;
+
+{ ── WithMessage, ToEqualBytes, ToFailUnexpected ─────────────────────────── }
+
+procedure TestExpectWithMessageFail;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('greeting').ToEqual('world');
+    end, 'greeting');
+end;
+
+procedure TestExpectWithMessagePass;
+begin
+  { WithMessage should not affect passing assertions }
+  ExpectStr('hello').WithMessage('greeting').ToEqual('hello');
+end;
+
+procedure TestExpectWithMessageNot;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('neg').Not_.ToEqual('hello');
+    end, 'neg');
+end;
+
+procedure TestExpectWithMessageChain;
+begin
+  { WithMessage persists through the chain }
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('chain').ToContain('xyz');
+    end, 'chain');
+end;
+
+procedure TestExpectToEqualBytesPass;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02, $03);
+  LB := TBytes.Create($01, $02, $03);
+  ExpectBytes(LA).ToEqualBytes(LB);
+end;
+
+procedure TestExpectToEqualBytesFail;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02, $03);
+  LB := TBytes.Create($01, $FF, $03);
+  ExpectFail(
+    procedure begin
+      ExpectBytes(LA).ToEqualBytes(LB);
+    end, 'index');
+end;
+
+procedure TestExpectToEqualBytesDiffLen;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02);
+  LB := TBytes.Create($01, $02, $03);
+  ExpectFail(
+    procedure begin
+      ExpectBytes(LA).ToEqualBytes(LB);
+    end, 'bytes');
+end;
+
+procedure TestExpectToEqualBytesEmpty;
+var
+  LA, LB: TBytes;
+begin
+  SetLength(LA, 0);
+  SetLength(LB, 0);
+  ExpectBytes(LA).ToEqualBytes(LB);
+end;
+
+procedure TestExpectToEqualBytesNot;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02);
+  LB := TBytes.Create($03, $04);
+  ExpectBytes(LA).Not_.ToEqualBytes(LB);
+end;
+
+procedure TestExpectToFailUnexpected;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').ToFailUnexpected('boom');
+    end, 'boom');
+end;
+
+procedure TestExpectToFailUnexpectedDefault;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').ToFailUnexpected;
+    end, 'unexpected');
+end;
+
+procedure TestExpectToFailUnexpectedWithMessage;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').WithMessage('ctx').ToFailUnexpected('boom');
+    end, 'ctx');
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -1096,6 +1241,20 @@ begin
   LSuite.Test('Not_.ToBeNaN',                  @TestExpectToBeNaNNot);
   LSuite.Test('Not_.ToBeNotNaN',               @TestExpectToBeNotNaNNot);
   LSuite.Test('Chaining returns self',         @TestExpectChainingReturnsSelf);
+
+  { WithMessage, ToEqualBytes, ToFailUnexpected }
+  LSuite.Test('WithMessage fail prefix',      @TestExpectWithMessageFail);
+  LSuite.Test('WithMessage pass',             @TestExpectWithMessagePass);
+  LSuite.Test('Not_.WithMessage',             @TestExpectWithMessageNot);
+  LSuite.Test('WithMessage chain',            @TestExpectWithMessageChain);
+  LSuite.Test('ToEqualBytes pass',            @TestExpectToEqualBytesPass);
+  LSuite.Test('ToEqualBytes fail',            @TestExpectToEqualBytesFail);
+  LSuite.Test('ToEqualBytes diff len',        @TestExpectToEqualBytesDiffLen);
+  LSuite.Test('ToEqualBytes empty',           @TestExpectToEqualBytesEmpty);
+  LSuite.Test('Not_.ToEqualBytes',            @TestExpectToEqualBytesNot);
+  LSuite.Test('ToFailUnexpected message',     @TestExpectToFailUnexpected);
+  LSuite.Test('ToFailUnexpected default',     @TestExpectToFailUnexpectedDefault);
+  LSuite.Test('ToFailUnexpected+WithMessage', @TestExpectToFailUnexpectedWithMessage);
 
   if not LSuite.Run then
   begin

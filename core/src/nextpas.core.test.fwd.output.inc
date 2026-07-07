@@ -178,6 +178,18 @@ begin Result := nextpas.core.test.config.GetBenchTimeMs(AConfig); end;
 function GetBenchMem(const AConfig: TTestConfig): Boolean;
 begin Result := nextpas.core.test.config.GetBenchMem(AConfig); end;
 
+procedure SetDefaultCacheEnabled(AEnabled: Boolean);
+begin nextpas.core.test.config.SetDefaultCacheEnabled(AEnabled); end;
+
+procedure SetDefaultCacheDir(const ADir: string);
+begin nextpas.core.test.config.SetDefaultCacheDir(ADir); end;
+
+function GetCacheEnabled(const AConfig: TTestConfig): Boolean;
+begin Result := nextpas.core.test.config.GetCacheEnabled(AConfig); end;
+
+function GetCacheDir(const AConfig: TTestConfig): string;
+begin Result := nextpas.core.test.config.GetCacheDir(AConfig); end;
+
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;
 

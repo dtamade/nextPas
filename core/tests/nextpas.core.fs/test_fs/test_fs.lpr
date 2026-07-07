@@ -468,18 +468,12 @@ begin
     'FsRemove missing path returns True');
 end;
 
-procedure TestRemoveAllMissingPathRaisesNotFound;
+procedure TestRemoveAllMissingPathReturnsTrue;
 var
-  LGot: Boolean;
+  LResult: Boolean;
 begin
-  LGot := False;
-  try
-    FsRemoveAll(GTmpDir + '/missing-removeall-path');
-  except
-    on E: ENotFoundError do
-      LGot := True;
-  end;
-  Check(LGot, 'FsRemoveAll missing path raises ENotFoundError');
+  LResult := FsRemoveAll(GTmpDir + '/missing-removeall-path');
+  Check(LResult, 'FsRemoveAll missing path returns True (nothing to remove)');
 end;
 
 procedure TestRemoveAllUnsafeRootGuardRaisesInvalidOperation;
@@ -1729,8 +1723,8 @@ begin
       @TestRemoveNonEmptyDirRaisesInvalidOperation);
     T.Test('Remove missing path returns true',
       @TestRemoveMissingPathReturnsTrue);
-    T.Test('RemoveAll missing path raises not found',
-      @TestRemoveAllMissingPathRaisesNotFound);
+    T.Test('RemoveAll missing path returns true',
+      @TestRemoveAllMissingPathReturnsTrue);
     T.Test('RemoveAll unsafe root guard raises invalid operation',
       @TestRemoveAllUnsafeRootGuardRaisesInvalidOperation);
     T.Test('RemoveAll', @TestRemoveAll);

@@ -9,7 +9,10 @@ unit nextpas.core.test.config;
 interface
 
 uses
-  nextpas.core.test.base;
+  nextpas.core.test.base,
+  nextpas.core.base,
+  nextpas.core.system,
+  nextpas.core.text.conv;
 
 type
   TAnsiMode = (amAuto, amOn, amOff);
@@ -89,6 +92,8 @@ type
     RunPattern    : string;  { --run: exact test name match (case-insensitive) }
     BenchSaveFile : string;  { --benchsave=<file>: save benchmark results to JSON }
     BenchCompareFile: string; { --benchcompare=<file>: compare against baseline JSON }
+    CacheEnabled  : Boolean; { true = use test result cache (--cache) }
+    CacheDir      : string;  { cache directory (default .nextpas/test-cache/) }
   end;
 
   {** Fluent builder for TTestConfig
@@ -130,6 +135,8 @@ type
     function WithRunPattern(const APattern: string): TTestConfigBuilder;
     function WithBenchSave(const AFile: string): TTestConfigBuilder;
     function WithBenchCompare(const AFile: string): TTestConfigBuilder;
+    function WithCache(AEnabled: Boolean = True): TTestConfigBuilder;
+    function WithCacheDir(const ADir: string): TTestConfigBuilder;
     function Build: TTestConfig;
   end;
 
@@ -163,6 +170,8 @@ procedure SetDefaultBenchMem(ABenchMem: Boolean);
 procedure SetDefaultRunPattern(const APattern: string);
 procedure SetDefaultBenchSaveFile(const AFile: string);
 procedure SetDefaultBenchCompareFile(const AFile: string);
+procedure SetDefaultCacheEnabled(AEnabled: Boolean);
+procedure SetDefaultCacheDir(const ADir: string);
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -180,8 +189,38 @@ function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  GetRunPattern(const AConfig: TTestConfig): string;
 function  GetBenchSaveFile(const AConfig: TTestConfig): string;
 function  GetBenchCompareFile(const AConfig: TTestConfig): string;
+function  GetCacheEnabled(const AConfig: TTestConfig): Boolean;
+function  GetCacheDir(const AConfig: TTestConfig): string;
+
+{ ── Test Cache ────────────────────────────────────────────────────────────── }
+
+type
+  TCacheEntry = record
+    Status  : Integer;  { Ord(TTestStatus) }
+    Message : string;
+    Duration: Int64;
+    Time    : Int64;    { Unix timestamp }
+  end;
+
+  TTestCache = record
+    CacheDir: string;
+
+    class function Create(const ACacheDir: string): TTestCache; static;
+    function  ComputeKey(const ASources: array of string;
+                const ACompilerVersion: string;
+                const AConfig: TTestConfig): string;
+    function  Get(const AKey: string; ATestName: string;
+                out AEntry: TCacheEntry): Boolean;
+    procedure Put(const AKey: string; ATestName: string;
+                const AEntry: TCacheEntry);
+    procedure Clean(AmaxAgeDays: Integer = 30);
+    procedure Invalidate;
+  end;
 
 implementation
+
+uses
+  nextpas.core.fs;
 
 var
   GDefaultConfig: TTestConfig;
@@ -214,6 +253,8 @@ begin
   Result.RunPattern    := '';
   Result.BenchSaveFile := '';
   Result.BenchCompareFile := '';
+  Result.CacheEnabled  := False;
+  Result.CacheDir      := '.nextpas/test-cache';
 end;
 
 function DefaultConfig: TTestConfig;
@@ -238,6 +279,8 @@ begin
     Result.BenchSaveFile := LDefaults.BenchSaveFile;
   if Result.BenchCompareFile = '' then
     Result.BenchCompareFile := LDefaults.BenchCompareFile;
+  if Result.CacheDir = '' then
+    Result.CacheDir := LDefaults.CacheDir;
   { Numeric fields: merge if zero (zero-value check is sufficient) }
   if Result.TimeoutMs = 0 then
     Result.TimeoutMs := LDefaults.TimeoutMs;
@@ -281,6 +324,7 @@ begin
     Result.BenchEnabled := Result.BenchEnabled or LDefaults.BenchEnabled;
   if not (ckBenchMem in GExplicit) then
     Result.BenchMem := Result.BenchMem or LDefaults.BenchMem;
+  Result.CacheEnabled := Result.CacheEnabled or LDefaults.CacheEnabled;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -455,6 +499,16 @@ begin
   Include(GExplicit, ckBenchCompare);
 end;
 
+procedure SetDefaultCacheEnabled(AEnabled: Boolean);
+begin
+  GDefaultConfig.CacheEnabled := AEnabled;
+end;
+
+procedure SetDefaultCacheDir(const ADir: string);
+begin
+  GDefaultConfig.CacheDir := ADir;
+end;
+
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 begin
   Result := ResolveConfig(AConfig).RepeatAllCount;
@@ -538,6 +592,16 @@ end;
 function GetBenchCompareFile(const AConfig: TTestConfig): string;
 begin
   Result := ResolveConfig(AConfig).BenchCompareFile;
+end;
+
+function GetCacheEnabled(const AConfig: TTestConfig): Boolean;
+begin
+  Result := ResolveConfig(AConfig).CacheEnabled;
+end;
+
+function GetCacheDir(const AConfig: TTestConfig): string;
+begin
+  Result := ResolveConfig(AConfig).CacheDir;
 end;
 
 procedure TStdoutSink.Write(const AText: string);
@@ -816,12 +880,154 @@ begin
   Result.FConfig.BenchCompareFile := AFile;
 end;
 
+function TTestConfigBuilder.WithCache(AEnabled: Boolean): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.CacheEnabled := AEnabled;
+end;
+
+function TTestConfigBuilder.WithCacheDir(const ADir: string): TTestConfigBuilder;
+begin
+  Result := Self;
+  Result.FConfig.CacheDir := ADir;
+end;
+
 function TTestConfigBuilder.Build: TTestConfig;
 begin
   Result := FConfig;
 end;
 
+{ ═════════════════════════════════════════════════════════════════════════════ }
+{ TTestCache                                                                   }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+class function TTestCache.Create(const ACacheDir: string): TTestCache;
+begin
+  Result.CacheDir := ACacheDir;
+end;
+
+function TTestCache.ComputeKey(const ASources: array of string;
+  const ACompilerVersion: string; const AConfig: TTestConfig): string;
+var
+  LHash: UInt64;
+  I, J: Integer;
+  LContent: string;
+begin
+  { Simple hash: combine source file contents + compiler version + config flags }
+  LHash := 14695981039346656037; { FNV-1a offset basis }
+  for I := 0 to High(ASources) do
+  begin
+    try
+      if FileExists(ASources[I]) then
+      begin
+        LContent := ReadFileText(ASources[I]);
+        { Hash each byte }
+        for J := 1 to Length(LContent) do
+          LHash := (LHash xor Ord(LContent[J])) * 1099511628211; { FNV-1a prime }
+      end;
+    except
+      { TOCTOU: file may vanish between FileExists and ReadFileText — skip }
+    end;
+  end;
+  { Hash compiler version }
+  for I := 1 to Length(ACompilerVersion) do
+    LHash := (LHash xor Ord(ACompilerVersion[I])) * 1099511628211;
+  { Hash config flags that affect test behavior }
+  LHash := (LHash xor Ord(AConfig.ShuffleSeed <> 0)) * 1099511628211;
+  LHash := (LHash xor Ord(AConfig.ShortMode)) * 1099511628211;
+  LHash := (LHash xor Ord(AConfig.VerboseMode)) * 1099511628211;
+  LHash := (LHash xor Ord(AConfig.FilterPattern <> '')) * 1099511628211;
+  Result := IntToHex(LHash, 16);
+end;
+
+function TTestCache.Get(const AKey: string; ATestName: string;
+  out AEntry: TCacheEntry): Boolean;
+var
+  LDir, LFile: string;
+  LLines: TStringArray;
+begin
+  Result := False;
+  LDir := CacheDir + '/' + AKey;
+  LFile := LDir + '/' + ATestName + '.cache';
+  if not FileExists(LFile) then
+    Exit;
+  try
+    LLines := ReadFileLines(LFile);
+    if Length(LLines) < 3 then
+      Exit;
+    { Validate first line is a valid integer — prevent corrupted cache from
+      returning tsPassed (0) by default }
+    AEntry.Status := StrToIntDef(LLines[0], -1);
+    if (AEntry.Status < 0) or (AEntry.Status > Ord(High(TTestStatus))) then
+    begin
+      Result := False;
+      Exit;
+    end;
+    AEntry.Message := LLines[1];
+    AEntry.Duration := StrToInt64Def(LLines[2], 0);
+    if Length(LLines) >= 4 then
+      AEntry.Time := StrToInt64Def(LLines[3], 0)
+    else
+      AEntry.Time := 0;
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+procedure TTestCache.Put(const AKey: string; ATestName: string;
+  const AEntry: TCacheEntry);
+var
+  LDir, LFile: string;
+begin
+  LDir := CacheDir + '/' + AKey;
+  ForceDirectories(LDir);
+  LFile := LDir + '/' + ATestName + '.cache';
+  try
+    WriteFileText(LFile,
+      IntToStr(AEntry.Status) + LineEnding +
+      AEntry.Message + LineEnding +
+      IntToStr(AEntry.Duration) + LineEnding +
+      IntToStr(AEntry.Time));
+  except
+    { Silently ignore cache write failures }
+  end;
+end;
+
+procedure TTestCache.Clean(AmaxAgeDays: Integer);
+var
+  LDir: string;
+begin
+  LDir := CacheDir;
+  if (LDir = '') or not DirectoryExists(LDir) then
+    Exit;
+  { For now, Clean delegates to Invalidate — full age-based cleanup
+    would require iterating directory entries and checking modification time.
+    This is a TODO for when the fs module exposes a directory iterator. }
+  Invalidate;
+end;
+
+procedure TTestCache.Invalidate;
+var
+  LDir: string;
+begin
+  LDir := CacheDir;
+  if (LDir = '') or not DirectoryExists(LDir) then
+    Exit;
+  try
+    RemoveAll(LDir);
+  except
+    on E: Exception do
+      { Silently ignore removal failures — cache invalidation is best-effort }
+  end;
+end;
+
 initialization
   ResetDefaultConfig;
+
+finalization
+  GDefaultConfig.OutSink := nil;
+  GDefaultConfig.ErrSink := nil;
+  Finalize(GDefaultConfig);
 
 end.

@@ -5,7 +5,8 @@ unit nextpas.core.mem.base;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.simd.bitops;
 
 const
   MEM_DEFAULT_ALIGN = SizeOf(Pointer);
@@ -105,16 +106,12 @@ end;
 {$POP}
 
 function Log2UInt(const AValue: SizeUInt): SizeUInt;
-var
-  LVal: SizeUInt;
 begin
-  Result := 0;
-  LVal := AValue;
-  while LVal > 1 do
-  begin
-    Inc(Result);
-    LVal := LVal shr 1;
-  end;
+  { Delegate to bitops Bsr — native BSR/CLZ instruction, no loop. }
+  if SizeOf(SizeUInt) = 8 then
+    Result := SizeUInt(Bsr64(UInt64(AValue)))
+  else
+    Result := SizeUInt(Bsr32(UInt32(AValue)));
 end;
 
 end.

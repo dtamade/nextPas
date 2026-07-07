@@ -4,7 +4,6 @@ program test_platform_sync;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;
@@ -447,6 +446,65 @@ begin
 end;
 {$ENDIF}
 
+procedure TestAddress64Basic;
+var
+  LValue: Int64;
+  LRet: Int32;
+begin
+  LRet := platform_wait_address64(nil, 0, 0);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wait address64 should be invalid');
+
+  LRet := platform_wake_address_one64(nil);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wake-one address64 should be invalid');
+
+  LRet := platform_wake_address_all64(nil);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wake-all address64 should be invalid');
+
+  LValue := 42;
+
+  // value != expected: should return EAGAIN immediately
+  LRet := platform_wait_address64(@LValue, 99, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'wait64 should return EAGAIN when value <> expected');
+
+  // value = expected, no wake: should timeout
+  LRet := platform_wait_address64(@LValue, 42, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'wait64 should timeout when value = expected and no wake');
+
+  LRet := platform_wake_address_one64(@LValue);
+  CheckEqual(Int64(0), Int64(LRet), 'wake one 64');
+
+  LRet := platform_wake_address_all64(@LValue);
+  CheckEqual(Int64(0), Int64(LRet), 'wake all 64');
+end;
+
+procedure TestAddress64LargeValues;
+var
+  LValue: Int64;
+  LRet: Int32;
+begin
+  // Test with values that don't fit in 32 bits
+  LValue := $100000000; // 2^32
+  LRet := platform_wait_address64(@LValue, 0, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'wait64 with large value mismatch returns EAGAIN');
+
+  LValue := High(Int64);
+  LRet := platform_wait_address64(@LValue, High(Int64), 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'wait64 with max int64 times out');
+
+  LRet := platform_wake_address_one64(@LValue);
+  CheckEqual(Int64(0), Int64(LRet), 'wake one 64 max value');
+
+  LRet := platform_wake_address_all64(@LValue);
+  CheckEqual(Int64(0), Int64(LRet), 'wake all 64 max value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -467,5 +525,7 @@ begin
   T.Test('Address wake one releases waiter', @TestAddressWakeOneReleasesWaiter);
   T.Test('Address wake all releases waiters', @TestAddressWakeAllReleasesWaiters);
   {$ENDIF}
+  T.Test('Address64 basic', @TestAddress64Basic);
+  T.Test('Address64 large values', @TestAddress64LargeValues);
   if not T.Run then Halt(1);
 end.

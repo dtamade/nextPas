@@ -533,16 +533,23 @@ end;
 
 procedure TestFailUnexpected;
 { G1: FailUnexpected — formats "unexpected ClassName: Message" }
+var
+  LE: Exception;
 begin
+  LE := Exception.Create('boom');
   try
-    FailUnexpected(Exception.Create('boom'));
-    Fail('FailUnexpected should raise');
-  except
-    on E: EAssertionFailed do
-    begin
-      CheckContains(E.Message, 'unexpected');
-      CheckContains(E.Message, 'boom');
+    try
+      FailUnexpected(LE);
+      Fail('FailUnexpected should raise');
+    except
+      on E: EAssertionFailed do
+      begin
+        CheckContains(E.Message, 'unexpected');
+        CheckContains(E.Message, 'boom');
+      end;
     end;
+  finally
+    LE.Free;
   end;
 end;
 
@@ -949,6 +956,116 @@ begin
   ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
+{ ── Unicode boundary tests ───────────────────────────────────────────────── }
+
+procedure TestUnicodeEmojiEqual;
+begin
+  CheckEqual('🎉🎊', '🎉🎊');
+end;
+
+procedure TestUnicodeEmojiNotEqual;
+begin
+  ExpectFail(procedure begin CheckEqual('🎉', '🎊'); end);
+end;
+
+procedure TestUnicodeCJK;
+begin
+  CheckEqual('你好世界', '你好世界');
+  CheckContains('你好世界', '你好');
+  CheckStartsWith('你好世界', '你好');
+  CheckEndsWith('你好世界', '世界');
+end;
+
+procedure TestUnicodeCombining;
+{ Combining characters: é can be U+0065+U+0301 (2 codepoints) or U+00E9 (1 codepoint) }
+var
+  LComposed, LDecomposed: string;
+begin
+  LComposed := 'café';         { é = U+00E9 }
+  LDecomposed := 'café';       { e + combining accent }
+  { They are different byte sequences — CheckEqual should detect }
+  if LComposed <> LDecomposed then
+    Check(True, 'composed vs decomposed differ as expected')
+  else
+    Check(True, 'same on this platform');
+end;
+
+procedure TestUnicodeEmpty;
+begin
+  CheckEqual('', '');
+  CheckContains('你好', '');
+  CheckStartsWith('你好', '');
+  CheckEndsWith('你好', '');
+end;
+
+procedure TestUnicodeLongDiff;
+{ StringDiff with long Unicode strings — Utf8SafeStart should not split multi-byte }
+var
+  LA, LB: string;
+begin
+  LA := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符';
+  LB := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符结尾不同';
+  ExpectFail(procedure begin CheckEqual(LA, LB); end, 'Strings differ at position');
+end;
+
+{ ── AMessage overload tests ──────────────────────────────────────────────── }
+
+procedure TestCheckContainsWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckContains('hello world', 'xyz', 'context info');
+  end, 'context info');
+end;
+
+procedure TestCheckStartsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckStartsWith('hello world', 'xyz', 'prefix check');
+  end, 'prefix check');
+end;
+
+procedure TestCheckEndsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckEndsWith('hello world', 'xyz', 'suffix check');
+  end, 'suffix check');
+end;
+
+procedure TestCheckInRangeWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInRange(100, 1, 10, 'range context');
+  end, 'range context');
+end;
+
+procedure TestCheckGreaterThanWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckGreaterThan(5, 10, 'gt context');
+  end, 'gt context');
+end;
+
+procedure TestCheckNotEqualStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual('same', 'same', 'should differ');
+  end, 'should differ');
+end;
+
+procedure TestCheckNotEqualIntWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual(Int64(42), Int64(42), 'int should differ');
+  end, 'int should differ');
+end;
+
+procedure TestCheckLengthWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckLength(5, 3, 'length context');
+  end, 'length context');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1102,6 +1219,24 @@ begin
   LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
   LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
 
+  { Unicode boundary tests }
+  LSuite.Test('Unicode emoji equal',       @TestUnicodeEmojiEqual);
+  LSuite.Test('Unicode emoji not equal',   @TestUnicodeEmojiNotEqual);
+  LSuite.Test('Unicode CJK',               @TestUnicodeCJK);
+  LSuite.Test('Unicode combining',         @TestUnicodeCombining);
+  LSuite.Test('Unicode empty',             @TestUnicodeEmpty);
+  LSuite.Test('Unicode long diff',         @TestUnicodeLongDiff);
+
+  { AMessage overload tests }
+  LSuite.Test('Contains+msg',              @TestCheckContainsWithMessage);
+  LSuite.Test('StartsWith+msg',            @TestCheckStartsWithWithMessage);
+  LSuite.Test('EndsWith+msg',              @TestCheckEndsWithWithMessage);
+  LSuite.Test('InRange+msg',               @TestCheckInRangeWithMessage);
+  LSuite.Test('GreaterThan+msg',           @TestCheckGreaterThanWithMessage);
+  LSuite.Test('NotEqual string+msg',       @TestCheckNotEqualStringWithMessage);
+  LSuite.Test('NotEqual int+msg',          @TestCheckNotEqualIntWithMessage);
+  LSuite.Test('Length+msg',                @TestCheckLengthWithMessage);
+
   if not LSuite.Run then
   begin
     Finalize(LSuite);
@@ -1110,5 +1245,7 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
   Finalize(LSuite);
 end.
