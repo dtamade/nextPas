@@ -2,12 +2,9 @@ program test_simdgen_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  nextpas.core.thread.init,
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.base,
-  nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar,
-  nextpas.core.simd.generated.scalar;
+  nextpas.core.thread.init, nextpas.core.text.conv, Math,
+  nextpas.core.simd.base, nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar, nextpas.core.simd.generated.scalar;
 
 var
   GPassCount: Integer = 0;
@@ -381,28 +378,22 @@ begin
   CheckVecF32x4('StoreF32x4Aligned', CF4_Existing, CF4_Generated);
 
   // === Vector Math Parity ===
-  Check('DotF32x3',
-    nextpas.core.simd.scalar.ScalarDotF32x3(AF4, BF4),
+  Check('DotF32x3', nextpas.core.simd.scalar.ScalarDotF32x3(AF4, BF4),
     nextpas.core.simd.generated.scalar.ScalarDotF32x3(AF4, BF4));
 
-  CheckVecF32x4('CrossF32x3',
-    nextpas.core.simd.scalar.ScalarCrossF32x3(AF4, BF4),
+  CheckVecF32x4('CrossF32x3', nextpas.core.simd.scalar.ScalarCrossF32x3(AF4, BF4),
     nextpas.core.simd.generated.scalar.ScalarCrossF32x3(AF4, BF4));
 
-  Check('LengthF32x3',
-    nextpas.core.simd.scalar.ScalarLengthF32x3(AF4),
+  Check('LengthF32x3', nextpas.core.simd.scalar.ScalarLengthF32x3(AF4),
     nextpas.core.simd.generated.scalar.ScalarLengthF32x3(AF4));
 
-  Check('LengthF32x4',
-    nextpas.core.simd.scalar.ScalarLengthF32x4(AF4),
+  Check('LengthF32x4', nextpas.core.simd.scalar.ScalarLengthF32x4(AF4),
     nextpas.core.simd.generated.scalar.ScalarLengthF32x4(AF4));
 
-  CheckVecF32x4('NormalizeF32x3',
-    nextpas.core.simd.scalar.ScalarNormalizeF32x3(AF4),
+  CheckVecF32x4('NormalizeF32x3', nextpas.core.simd.scalar.ScalarNormalizeF32x3(AF4),
     nextpas.core.simd.generated.scalar.ScalarNormalizeF32x3(AF4));
 
-  CheckVecF32x4('NormalizeF32x4',
-    nextpas.core.simd.scalar.ScalarNormalizeF32x4(AF4),
+  CheckVecF32x4('NormalizeF32x4', nextpas.core.simd.scalar.ScalarNormalizeF32x4(AF4),
     nextpas.core.simd.generated.scalar.ScalarNormalizeF32x4(AF4));
 
   // === F32x8 Arithmetic Parity ===
@@ -464,12 +455,10 @@ begin
   CheckVecF64x4('SelectF64x4', CU64_Existing, CU64_Generated);
 
   // === Extract/Insert Parity ===
-  Check('ExtractF32x4',
-    nextpas.core.simd.scalar.ScalarExtractF32x4(AF4, -1),
+  Check('ExtractF32x4', nextpas.core.simd.scalar.ScalarExtractF32x4(AF4, -1),
     nextpas.core.simd.generated.scalar.ScalarExtractF32x4(AF4, -1));
 
-  CheckDouble('ExtractF64x2',
-    nextpas.core.simd.scalar.ScalarExtractF64x2(AD2, 9),
+  CheckDouble('ExtractF64x2', nextpas.core.simd.scalar.ScalarExtractF64x2(AD2, 9),
     nextpas.core.simd.generated.scalar.ScalarExtractF64x2(AD2, 9));
 
   if nextpas.core.simd.scalar.ScalarExtractI32x4(AI32, 99) =
@@ -480,12 +469,10 @@ begin
      nextpas.core.simd.generated.scalar.ScalarExtractI64x2(I64A2, 1) then Inc(GPassCount)
   else begin WriteLn('FAIL: ExtractI64x2 parity'); Inc(GFailCount); end;
 
-  Check('ExtractF32x8',
-    nextpas.core.simd.scalar.ScalarExtractF32x8(AF8, 6),
+  Check('ExtractF32x8', nextpas.core.simd.scalar.ScalarExtractF32x8(AF8, 6),
     nextpas.core.simd.generated.scalar.ScalarExtractF32x8(AF8, 6));
 
-  CheckDouble('ExtractF64x4',
-    nextpas.core.simd.scalar.ScalarExtractF64x4(AD4, 2),
+  CheckDouble('ExtractF64x4', nextpas.core.simd.scalar.ScalarExtractF64x4(AD4, 2),
     nextpas.core.simd.generated.scalar.ScalarExtractF64x4(AD4, 2));
 
   if nextpas.core.simd.scalar.ScalarExtractI32x8(I32A8, 7) =
@@ -496,52 +483,41 @@ begin
      nextpas.core.simd.generated.scalar.ScalarExtractI64x4(I64A4, -10) then Inc(GPassCount)
   else begin WriteLn('FAIL: ExtractI64x4 parity'); Inc(GFailCount); end;
 
-  Check('ExtractF32x16',
-    nextpas.core.simd.scalar.ScalarExtractF32x16(AF16, 15),
+  Check('ExtractF32x16', nextpas.core.simd.scalar.ScalarExtractF32x16(AF16, 15),
     nextpas.core.simd.generated.scalar.ScalarExtractF32x16(AF16, 15));
 
   if nextpas.core.simd.scalar.ScalarExtractI32x16(I32A16, 14) =
      nextpas.core.simd.generated.scalar.ScalarExtractI32x16(I32A16, 14) then Inc(GPassCount)
   else begin WriteLn('FAIL: ExtractI32x16 parity'); Inc(GFailCount); end;
 
-  CheckVecF32x4('InsertF32x4',
-    nextpas.core.simd.scalar.ScalarInsertF32x4(AF4, 77.0, 9),
+  CheckVecF32x4('InsertF32x4', nextpas.core.simd.scalar.ScalarInsertF32x4(AF4, 77.0, 9),
     nextpas.core.simd.generated.scalar.ScalarInsertF32x4(AF4, 77.0, 9));
 
-  CheckVecF64x2('InsertF64x2',
-    nextpas.core.simd.scalar.ScalarInsertF64x2(AD2, 99.5, -1),
+  CheckVecF64x2('InsertF64x2', nextpas.core.simd.scalar.ScalarInsertF64x2(AD2, 99.5, -1),
     nextpas.core.simd.generated.scalar.ScalarInsertF64x2(AD2, 99.5, -1));
 
-  CheckVecI32x4('InsertI32x4',
-    nextpas.core.simd.scalar.ScalarInsertI32x4(AI32, 999, 2),
+  CheckVecI32x4('InsertI32x4', nextpas.core.simd.scalar.ScalarInsertI32x4(AI32, 999, 2),
     nextpas.core.simd.generated.scalar.ScalarInsertI32x4(AI32, 999, 2));
 
-  CheckVecI64x2('InsertI64x2',
-    nextpas.core.simd.scalar.ScalarInsertI64x2(I64A2, -555, 1),
+  CheckVecI64x2('InsertI64x2', nextpas.core.simd.scalar.ScalarInsertI64x2(I64A2, -555, 1),
     nextpas.core.simd.generated.scalar.ScalarInsertI64x2(I64A2, -555, 1));
 
-  CheckVecF32x8('InsertF32x8',
-    nextpas.core.simd.scalar.ScalarInsertF32x8(AF8, 88.0, 7),
+  CheckVecF32x8('InsertF32x8', nextpas.core.simd.scalar.ScalarInsertF32x8(AF8, 88.0, 7),
     nextpas.core.simd.generated.scalar.ScalarInsertF32x8(AF8, 88.0, 7));
 
-  CheckVecF64x4('InsertF64x4',
-    nextpas.core.simd.scalar.ScalarInsertF64x4(AD4, 44.25, 5),
+  CheckVecF64x4('InsertF64x4', nextpas.core.simd.scalar.ScalarInsertF64x4(AD4, 44.25, 5),
     nextpas.core.simd.generated.scalar.ScalarInsertF64x4(AD4, 44.25, 5));
 
-  CheckVecI32x8('InsertI32x8',
-    nextpas.core.simd.scalar.ScalarInsertI32x8(I32A8, 880, 0),
+  CheckVecI32x8('InsertI32x8', nextpas.core.simd.scalar.ScalarInsertI32x8(I32A8, 880, 0),
     nextpas.core.simd.generated.scalar.ScalarInsertI32x8(I32A8, 880, 0));
 
-  CheckVecI64x4('InsertI64x4',
-    nextpas.core.simd.scalar.ScalarInsertI64x4(I64A4, -4444, 3),
+  CheckVecI64x4('InsertI64x4', nextpas.core.simd.scalar.ScalarInsertI64x4(I64A4, -4444, 3),
     nextpas.core.simd.generated.scalar.ScalarInsertI64x4(I64A4, -4444, 3));
 
-  CheckVecF32x16('InsertF32x16',
-    nextpas.core.simd.scalar.ScalarInsertF32x16(AF16, 123.5, 14),
+  CheckVecF32x16('InsertF32x16', nextpas.core.simd.scalar.ScalarInsertF32x16(AF16, 123.5, 14),
     nextpas.core.simd.generated.scalar.ScalarInsertF32x16(AF16, 123.5, 14));
 
-  CheckVecI32x16('InsertI32x16',
-    nextpas.core.simd.scalar.ScalarInsertI32x16(I32A16, 1600, 99),
+  CheckVecI32x16('InsertI32x16', nextpas.core.simd.scalar.ScalarInsertI32x16(I32A16, 1600, 99),
     nextpas.core.simd.generated.scalar.ScalarInsertI32x16(I32A16, 1600, 99));
 
   // === I16x32 Shift Boundary Parity ===
@@ -612,40 +588,31 @@ begin
   Utf8Incomplete[0] := $E2;
   Utf8Incomplete[1] := $82;
 
-  CheckLongBool('MemEqual/equal',
-    nextpas.core.simd.scalar.MemEqual_Scalar(@HelperA[0], @HelperB[0], 16),
+  CheckLongBool('MemEqual/equal', nextpas.core.simd.scalar.MemEqual_Scalar(@HelperA[0], @HelperB[0], 16),
     nextpas.core.simd.generated.scalar.MemEqual_Scalar(@HelperA[0], @HelperB[0], 16));
 
-  CheckLongBool('MemEqual/mismatch',
-    nextpas.core.simd.scalar.MemEqual_Scalar(@HelperA[0], @HelperC[0], 16),
+  CheckLongBool('MemEqual/mismatch', nextpas.core.simd.scalar.MemEqual_Scalar(@HelperA[0], @HelperC[0], 16),
     nextpas.core.simd.generated.scalar.MemEqual_Scalar(@HelperA[0], @HelperC[0], 16));
 
-  CheckLongBool('MemEqual/nil-nil',
-    nextpas.core.simd.scalar.MemEqual_Scalar(nil, nil, 16),
+  CheckLongBool('MemEqual/nil-nil', nextpas.core.simd.scalar.MemEqual_Scalar(nil, nil, 16),
     nextpas.core.simd.generated.scalar.MemEqual_Scalar(nil, nil, 16));
 
-  CheckLongBool('MemEqual/nil-nonzero',
-    nextpas.core.simd.scalar.MemEqual_Scalar(nil, @HelperA[0], 16),
+  CheckLongBool('MemEqual/nil-nonzero', nextpas.core.simd.scalar.MemEqual_Scalar(nil, @HelperA[0], 16),
     nextpas.core.simd.generated.scalar.MemEqual_Scalar(nil, @HelperA[0], 16));
 
-  CheckBool('AsciiIEqual/case-insensitive',
-    nextpas.core.simd.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiB[0], 4),
+  CheckBool('AsciiIEqual/case-insensitive', nextpas.core.simd.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiB[0], 4),
     nextpas.core.simd.generated.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiB[0], 4));
 
-  CheckBool('AsciiIEqual/mismatch',
-    nextpas.core.simd.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiC[0], 4),
+  CheckBool('AsciiIEqual/mismatch', nextpas.core.simd.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiC[0], 4),
     nextpas.core.simd.generated.scalar.AsciiIEqual_Scalar(@AsciiA[0], @AsciiC[0], 4));
 
-  CheckBool('AsciiIEqual/nil-nil',
-    nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, nil, 4),
+  CheckBool('AsciiIEqual/nil-nil', nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, nil, 4),
     nextpas.core.simd.generated.scalar.AsciiIEqual_Scalar(nil, nil, 4));
 
-  CheckBool('AsciiIEqual/nil-nonzero',
-    nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 4),
+  CheckBool('AsciiIEqual/nil-nonzero', nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 4),
     nextpas.core.simd.generated.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 4));
 
-  CheckBool('AsciiIEqual/zero-len',
-    nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 0),
+  CheckBool('AsciiIEqual/zero-len', nextpas.core.simd.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 0),
     nextpas.core.simd.generated.scalar.AsciiIEqual_Scalar(nil, @AsciiA[0], 0));
 
   HelperB[9] := 0;
@@ -678,76 +645,59 @@ begin
   nextpas.core.simd.generated.scalar.ToUpperAscii_Scalar(@AsciiC[0], 4);
   CheckBool('ToUpperAscii', True, SameByteBuffer(@AsciiB[0], @AsciiC[0], 4));
 
-  CheckBool('Utf8Validate/valid',
-    nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Valid[0], 6),
+  CheckBool('Utf8Validate/valid', nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Valid[0], 6),
     nextpas.core.simd.generated.scalar.Utf8Validate_Scalar(@Utf8Valid[0], 6));
 
-  CheckBool('Utf8Validate/overlong',
-    nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Overlong[0], 2),
+  CheckBool('Utf8Validate/overlong', nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Overlong[0], 2),
     nextpas.core.simd.generated.scalar.Utf8Validate_Scalar(@Utf8Overlong[0], 2));
 
-  CheckBool('Utf8Validate/incomplete',
-    nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Incomplete[0], 2),
+  CheckBool('Utf8Validate/incomplete', nextpas.core.simd.scalar.Utf8Validate_Scalar(@Utf8Incomplete[0], 2),
     nextpas.core.simd.generated.scalar.Utf8Validate_Scalar(@Utf8Incomplete[0], 2));
 
-  CheckBool('Utf8Validate/nil-nonzero',
-    nextpas.core.simd.scalar.Utf8Validate_Scalar(nil, 1),
+  CheckBool('Utf8Validate/nil-nonzero', nextpas.core.simd.scalar.Utf8Validate_Scalar(nil, 1),
     nextpas.core.simd.generated.scalar.Utf8Validate_Scalar(nil, 1));
 
-  CheckBool('Utf8Validate/zero-len',
-    nextpas.core.simd.scalar.Utf8Validate_Scalar(nil, 0),
+  CheckBool('Utf8Validate/zero-len', nextpas.core.simd.scalar.Utf8Validate_Scalar(nil, 0),
     nextpas.core.simd.generated.scalar.Utf8Validate_Scalar(nil, 0));
 
   // === Byte Aggregate Parity ===
-  CheckUInt64('SumBytes',
-    nextpas.core.simd.scalar.SumBytes_Scalar(@ByteStats[0], Length(ByteStats)),
+  CheckUInt64('SumBytes', nextpas.core.simd.scalar.SumBytes_Scalar(@ByteStats[0], Length(ByteStats)),
     nextpas.core.simd.generated.scalar.SumBytes_Scalar(@ByteStats[0], Length(ByteStats)));
 
-  CheckUInt64('SumBytes/zero',
-    UInt64(nextpas.core.simd.scalar.SumBytes_Scalar(nil, 0)),
+  CheckUInt64('SumBytes/zero', UInt64(nextpas.core.simd.scalar.SumBytes_Scalar(nil, 0)),
     UInt64(nextpas.core.simd.generated.scalar.SumBytes_Scalar(nil, 0)));
 
-  CheckUInt64('CountByte',
-    UInt64(nextpas.core.simd.scalar.CountByte_Scalar(@ByteStats[0], Length(ByteStats), 7)),
+  CheckUInt64('CountByte', UInt64(nextpas.core.simd.scalar.CountByte_Scalar(@ByteStats[0], Length(ByteStats), 7)),
     UInt64(nextpas.core.simd.generated.scalar.CountByte_Scalar(@ByteStats[0], Length(ByteStats), 7)));
 
-  CheckUInt64('CountByte/zero',
-    UInt64(nextpas.core.simd.scalar.CountByte_Scalar(nil, 0, 7)),
+  CheckUInt64('CountByte/zero', UInt64(nextpas.core.simd.scalar.CountByte_Scalar(nil, 0, 7)),
     UInt64(nextpas.core.simd.generated.scalar.CountByte_Scalar(nil, 0, 7)));
 
-  CheckUInt64('BitsetPopCount',
-    UInt64(nextpas.core.simd.scalar.BitsetPopCount_Scalar(@ByteStats[0], Length(ByteStats))),
+  CheckUInt64('BitsetPopCount', UInt64(nextpas.core.simd.scalar.BitsetPopCount_Scalar(@ByteStats[0], Length(ByteStats))),
     UInt64(nextpas.core.simd.generated.scalar.BitsetPopCount_Scalar(@ByteStats[0], Length(ByteStats))));
 
-  CheckUInt64('BitsetPopCount/zero',
-    UInt64(nextpas.core.simd.scalar.BitsetPopCount_Scalar(nil, 0)),
+  CheckUInt64('BitsetPopCount/zero', UInt64(nextpas.core.simd.scalar.BitsetPopCount_Scalar(nil, 0)),
     UInt64(nextpas.core.simd.generated.scalar.BitsetPopCount_Scalar(nil, 0)));
 
   // === Byte Search / Range Helper Parity ===
-  CheckPtrInt('MemFindByte/found',
-    nextpas.core.simd.scalar.MemFindByte_Scalar(@HelperA[0], 16, HelperA[7]),
+  CheckPtrInt('MemFindByte/found', nextpas.core.simd.scalar.MemFindByte_Scalar(@HelperA[0], 16, HelperA[7]),
     nextpas.core.simd.generated.scalar.MemFindByte_Scalar(@HelperA[0], 16, HelperA[7]));
 
-  CheckPtrInt('MemFindByte/not-found',
-    nextpas.core.simd.scalar.MemFindByte_Scalar(@HelperA[0], 16, $FF),
+  CheckPtrInt('MemFindByte/not-found', nextpas.core.simd.scalar.MemFindByte_Scalar(@HelperA[0], 16, $FF),
     nextpas.core.simd.generated.scalar.MemFindByte_Scalar(@HelperA[0], 16, $FF));
 
-  CheckPtrInt('MemFindByte/nil-zero',
-    nextpas.core.simd.scalar.MemFindByte_Scalar(nil, 0, $FF),
+  CheckPtrInt('MemFindByte/nil-zero', nextpas.core.simd.scalar.MemFindByte_Scalar(nil, 0, $FF),
     nextpas.core.simd.generated.scalar.MemFindByte_Scalar(nil, 0, $FF));
 
-  CheckBool('MemDiffRange/mismatch',
-    nextpas.core.simd.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperC[0], 16, FirstExisting, LastExisting),
+  CheckBool('MemDiffRange/mismatch', nextpas.core.simd.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperC[0], 16, FirstExisting, LastExisting),
     nextpas.core.simd.generated.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperC[0], 16, FirstGenerated, LastGenerated));
   CheckUInt64('MemDiffRange/mismatch-first', UInt64(FirstExisting), UInt64(FirstGenerated));
   CheckUInt64('MemDiffRange/mismatch-last', UInt64(LastExisting), UInt64(LastGenerated));
 
-  CheckBool('MemDiffRange/equal',
-    nextpas.core.simd.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperB[0], 16, FirstExisting, LastExisting),
+  CheckBool('MemDiffRange/equal', nextpas.core.simd.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperB[0], 16, FirstExisting, LastExisting),
     nextpas.core.simd.generated.scalar.MemDiffRange_Scalar(@HelperA[0], @HelperB[0], 16, FirstGenerated, LastGenerated));
 
-  CheckBool('MemDiffRange/nil-nonzero',
-    nextpas.core.simd.scalar.MemDiffRange_Scalar(nil, @HelperA[0], 16, FirstExisting, LastExisting),
+  CheckBool('MemDiffRange/nil-nonzero', nextpas.core.simd.scalar.MemDiffRange_Scalar(nil, @HelperA[0], 16, FirstExisting, LastExisting),
     nextpas.core.simd.generated.scalar.MemDiffRange_Scalar(nil, @HelperA[0], 16, FirstGenerated, LastGenerated));
   CheckUInt64('MemDiffRange/nil-first', UInt64(FirstExisting), UInt64(FirstGenerated));
   CheckUInt64('MemDiffRange/nil-last', UInt64(LastExisting), UInt64(LastGenerated));
@@ -762,57 +712,44 @@ begin
   CheckByte('MinMaxBytes/nil-min', MinExisting, MinGenerated);
   CheckByte('MinMaxBytes/nil-max', MaxExisting, MaxGenerated);
 
-  CheckPtrInt('BytesIndexOf/found',
-    nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[3], 3),
+  CheckPtrInt('BytesIndexOf/found', nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[3], 3),
     nextpas.core.simd.generated.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[3], 3));
 
-  CheckPtrInt('BytesIndexOf/not-found',
-    nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @ByteStats[1], 3),
+  CheckPtrInt('BytesIndexOf/not-found', nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @ByteStats[1], 3),
     nextpas.core.simd.generated.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @ByteStats[1], 3));
 
-  CheckPtrInt('BytesIndexOf/zero-needle',
-    nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[0], 0),
+  CheckPtrInt('BytesIndexOf/zero-needle', nextpas.core.simd.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[0], 0),
     nextpas.core.simd.generated.scalar.BytesIndexOf_Scalar(@HelperA[0], 16, @HelperA[0], 0));
 
-  CheckPtrInt('BytesIndexOf/nil-haystack',
-    nextpas.core.simd.scalar.BytesIndexOf_Scalar(nil, 16, @HelperA[0], 1),
+  CheckPtrInt('BytesIndexOf/nil-haystack', nextpas.core.simd.scalar.BytesIndexOf_Scalar(nil, 16, @HelperA[0], 1),
     nextpas.core.simd.generated.scalar.BytesIndexOf_Scalar(nil, 16, @HelperA[0], 1));
 
   // === Reduce Parity ===
-  Check('ReduceAddF32x4',
-    nextpas.core.simd.scalar.ScalarReduceAddF32x4(AF4),
+  Check('ReduceAddF32x4', nextpas.core.simd.scalar.ScalarReduceAddF32x4(AF4),
     nextpas.core.simd.generated.scalar.ScalarReduceAddF32x4(AF4));
 
-  Check('ReduceMinF32x4',
-    nextpas.core.simd.scalar.ScalarReduceMinF32x4(AF4),
+  Check('ReduceMinF32x4', nextpas.core.simd.scalar.ScalarReduceMinF32x4(AF4),
     nextpas.core.simd.generated.scalar.ScalarReduceMinF32x4(AF4));
 
-  Check('ReduceMaxF32x4',
-    nextpas.core.simd.scalar.ScalarReduceMaxF32x4(AF4),
+  Check('ReduceMaxF32x4', nextpas.core.simd.scalar.ScalarReduceMaxF32x4(AF4),
     nextpas.core.simd.generated.scalar.ScalarReduceMaxF32x4(AF4));
 
-  Check('ReduceSumF32',
-    nextpas.core.simd.scalar.ScalarReduceSumF32(@BatchA[0], Length(BatchA)),
+  Check('ReduceSumF32', nextpas.core.simd.scalar.ScalarReduceSumF32(@BatchA[0], Length(BatchA)),
     nextpas.core.simd.generated.scalar.ScalarReduceSumF32(@BatchA[0], Length(BatchA)));
 
-  Check('ReduceMinF32',
-    nextpas.core.simd.scalar.ScalarReduceMinF32(@BatchA[0], Length(BatchA)),
+  Check('ReduceMinF32', nextpas.core.simd.scalar.ScalarReduceMinF32(@BatchA[0], Length(BatchA)),
     nextpas.core.simd.generated.scalar.ScalarReduceMinF32(@BatchA[0], Length(BatchA)));
 
-  Check('ReduceMaxF32',
-    nextpas.core.simd.scalar.ScalarReduceMaxF32(@BatchA[0], Length(BatchA)),
+  Check('ReduceMaxF32', nextpas.core.simd.scalar.ScalarReduceMaxF32(@BatchA[0], Length(BatchA)),
     nextpas.core.simd.generated.scalar.ScalarReduceMaxF32(@BatchA[0], Length(BatchA)));
 
-  Check('ReduceDotF32',
-    nextpas.core.simd.scalar.ScalarReduceDotF32(@BatchA[0], @BatchB[0], Length(BatchA)),
+  Check('ReduceDotF32', nextpas.core.simd.scalar.ScalarReduceDotF32(@BatchA[0], @BatchB[0], Length(BatchA)),
     nextpas.core.simd.generated.scalar.ScalarReduceDotF32(@BatchA[0], @BatchB[0], Length(BatchA)));
 
-  Check('ReduceMinF32/zero',
-    nextpas.core.simd.scalar.ScalarReduceMinF32(@BatchA[0], 0),
+  Check('ReduceMinF32/zero', nextpas.core.simd.scalar.ScalarReduceMinF32(@BatchA[0], 0),
     nextpas.core.simd.generated.scalar.ScalarReduceMinF32(@BatchA[0], 0));
 
-  Check('ReduceMaxF32/zero',
-    nextpas.core.simd.scalar.ScalarReduceMaxF32(@BatchA[0], 0),
+  Check('ReduceMaxF32/zero', nextpas.core.simd.scalar.ScalarReduceMaxF32(@BatchA[0], 0),
     nextpas.core.simd.generated.scalar.ScalarReduceMaxF32(@BatchA[0], 0));
 
   // === Batch Array Arithmetic Parity ===

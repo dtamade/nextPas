@@ -3,24 +3,25 @@ program run_unit_tests_simple;
 {$mode objfpc}{$H+}
 
 uses
+  {$IFDEF UNIX}
+  nextpas.core.thread.init,
+  {$ENDIF}
   Classes, SysUtils,
-  fpcunit, testregistry,consoletestrunner,
-  // 测试框架
+  nextpas.core.test,
   test_base,
-  // 单元测试
   test_openssl_core_unit,
   test_openssl_async_unit;
 
 var
-  App: TSuiteRunner;
-
+  LRunner: TSuiteRunner;
 begin
-  App := TSuiteRunner.Create(nil);
-  try
-    App.Initialize;
-    App.Title := 'fafafa.ssl Unit Tests';
-    App.Run;
-  finally
-    App.Free;
-  end;
+  LRunner := TSuiteRunner.Create('fafafa.ssl Unit Tests');
+  LRunner.Add(DiscoverTests(TTestOpenSSLCore.Create, 'OpenSSLCore'));
+  LRunner.Add(DiscoverTests(TTestOpenSSLAsync.Create, 'OpenSSLAsync'));
+  LRunner.RunAll;
+  LRunner.Summary;
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
 end.

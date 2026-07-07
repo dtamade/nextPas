@@ -17,11 +17,11 @@ program test_simd_static;
 {$DEFINE SIMD_STATIC_SSE2}
 
 uses
-  nextpas.core.simd,
-  nextpas.core.test;
+  nextpas.core.simd, nextpas.core.test;
 
+{$M+}
 type
-  TTestSimdStatic = class(TTestCase)
+  TTestSimdStatic = class(TTestFixture)
   published
     procedure TestVecF32x4Add;
     procedure TestVecF32x4Sub;

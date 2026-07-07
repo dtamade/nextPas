@@ -9,11 +9,11 @@ unit nextpas.core.simd.nn.testcase;
 interface
 
 uses
-  Classes, fpcunit, testregistry,
-  nextpas.core.simd.nn;
+  nextpas.core.test, nextpas.core.simd.nn;
 
+{$M+}
 type
-  TTestCase_SimdNN = class(TTestCase)
+  TTestCase_SimdNN = class(TTestFixture)
   published
     procedure Test_Sigmoid_Basic;
     procedure Test_Sigmoid_Bounds;
@@ -668,10 +668,8 @@ procedure TTestCase_SimdNN.Test_MaxPool2D_Basic;
 var
   // 4x4 input, 2x2 kernel, stride 2
   LInput: array[0..15] of Single = (
-    1, 2, 3, 4,
-    5, 6, 7, 8,
-    9, 10, 11, 12,
-    13, 14, 15, 16);
+    1, 2, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16);
   LOutput: array[0..3] of Single;
 begin
   MaxPool2DF32(@LInput[0], @LOutput[0], 4, 4, 2, 2, 2, 2);
@@ -686,10 +684,8 @@ procedure TTestCase_SimdNN.Test_AvgPool2D_Basic;
 var
   // 4x4 input, 2x2 kernel, stride 2
   LInput: array[0..15] of Single = (
-    1, 2, 3, 4,
-    5, 6, 7, 8,
-    9, 10, 11, 12,
-    13, 14, 15, 16);
+    1, 2, 3, 4, 5, 6, 7, 8,
+    9, 10, 11, 12, 13, 14, 15, 16);
   LOutput: array[0..3] of Single;
 begin
   AvgPool2DF32(@LInput[0], @LOutput[0], 4, 4, 2, 2, 2, 2);
@@ -716,8 +712,5 @@ begin
   TanhF32(nil, nil, 0);
   CheckTrue(True, 'Nil safety passed');
 end;
-
-initialization
-  RegisterTest(TTestCase_SimdNN);
 
 end.

@@ -16,7 +16,7 @@ unit test_encoding;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   test_base, nextpas.core.tls.encoding, nextpas.core.tls.exceptions, nextpas.core.tls.base;
 
 type
@@ -25,7 +25,7 @@ type
   private
     FOpenSSLAvailable: Boolean;
   protected
-    procedure SetUp; override;
+    procedure BeforeEach; override;
   published
     // Hex encoding tests
     procedure Test_BytesToHex_EmptyArray;
@@ -85,9 +85,9 @@ uses
 
 { TTestEncoding }
 
-procedure TTestEncoding.SetUp;
+procedure TTestEncoding.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   // Check if OpenSSL is available for Base64 tests
   try
     if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
@@ -107,7 +107,7 @@ var
 begin
   SetLength(Data, 0);
   Result := TEncodingUtils.BytesToHex(Data);
-  AssertEquals('Empty array should produce empty string', '', Result);
+  CheckEqual('', Result, 'Empty array should produce empty string');
 end;
 
 procedure TTestEncoding.Test_BytesToHex_SingleByte;
@@ -116,13 +116,13 @@ var
 begin
   SetLength(Data, 1);
   Data[0] := $FF;
-  AssertEquals('Single byte FF', 'FF', TEncodingUtils.BytesToHex(Data));
+  CheckEqual('FF', TEncodingUtils.BytesToHex(Data), 'Single byte FF');
 
   Data[0] := $00;
-  AssertEquals('Single byte 00', '00', TEncodingUtils.BytesToHex(Data));
+  CheckEqual('00', TEncodingUtils.BytesToHex(Data), 'Single byte 00');
 
   Data[0] := $AB;
-  AssertEquals('Single byte AB', 'AB', TEncodingUtils.BytesToHex(Data));
+  CheckEqual('AB', TEncodingUtils.BytesToHex(Data), 'Single byte AB');
 end;
 
 procedure TTestEncoding.Test_BytesToHex_MultiByte;
@@ -133,7 +133,7 @@ begin
   Data[0] := $01;
   Data[1] := $23;
   Data[2] := $45;
-  AssertEquals('Multi-byte hex', '012345', TEncodingUtils.BytesToHex(Data));
+  CheckEqual('012345', TEncodingUtils.BytesToHex(Data), 'Multi-byte hex');
 end;
 
 procedure TTestEncoding.Test_BytesToHex_UpperCase;
@@ -143,7 +143,7 @@ begin
   SetLength(Data, 2);
   Data[0] := $AB;
   Data[1] := $CD;
-  AssertEquals('Upper case', 'ABCD', TEncodingUtils.BytesToHex(Data, True));
+  CheckEqual('ABCD', TEncodingUtils.BytesToHex(Data, True), 'Upper case');
 end;
 
 procedure TTestEncoding.Test_BytesToHex_LowerCase;
@@ -153,7 +153,7 @@ begin
   SetLength(Data, 2);
   Data[0] := $AB;
   Data[1] := $CD;
-  AssertEquals('Lower case', 'abcd', TEncodingUtils.BytesToHex(Data, False));
+  CheckEqual('abcd', TEncodingUtils.BytesToHex(Data, False), 'Lower case');
 end;
 
 procedure TTestEncoding.Test_BytesToHex_AllValues;
@@ -170,7 +170,7 @@ begin
     Data[I] := Byte(I);
     Expected := Expected + IntToHex(I, 2);
   end;
-  AssertEquals('All byte values', Expected, TEncodingUtils.BytesToHex(Data));
+  CheckEqual(Expected, TEncodingUtils.BytesToHex(Data), 'All byte values');
 end;
 
 { Hex Decoding Tests }
@@ -180,7 +180,7 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('');
-  AssertEquals('Empty string should produce empty array', 0, Length(Result));
+  CheckEqual(0, Length(Result), 'Empty string should produce empty array');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_SingleByte;
@@ -188,11 +188,11 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('FF');
-  AssertEquals('Single byte length', 1, Length(Result));
-  AssertEquals('Single byte value', $FF, Result[0]);
+  CheckEqual(1, Length(Result), 'Single byte length');
+  CheckEqual($FF, Result[0], 'Single byte value');
 
   Result := TEncodingUtils.HexToBytes('00');
-  AssertEquals('Zero byte value', $00, Result[0]);
+  CheckEqual($00, Result[0], 'Zero byte value');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_MultiByte;
@@ -200,15 +200,15 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('0123456789ABCDEF');
-  AssertEquals('Multi-byte length', 8, Length(Result));
-  AssertEquals('Byte 0', $01, Result[0]);
-  AssertEquals('Byte 1', $23, Result[1]);
-  AssertEquals('Byte 2', $45, Result[2]);
-  AssertEquals('Byte 3', $67, Result[3]);
-  AssertEquals('Byte 4', $89, Result[4]);
-  AssertEquals('Byte 5', $AB, Result[5]);
-  AssertEquals('Byte 6', $CD, Result[6]);
-  AssertEquals('Byte 7', $EF, Result[7]);
+  CheckEqual(8, Length(Result), 'Multi-byte length');
+  CheckEqual($01, Result[0], 'Byte 0');
+  CheckEqual($23, Result[1], 'Byte 1');
+  CheckEqual($45, Result[2], 'Byte 2');
+  CheckEqual($67, Result[3], 'Byte 3');
+  CheckEqual($89, Result[4], 'Byte 4');
+  CheckEqual($AB, Result[5], 'Byte 5');
+  CheckEqual($CD, Result[6], 'Byte 6');
+  CheckEqual($EF, Result[7], 'Byte 7');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_UpperCase;
@@ -216,8 +216,8 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('ABCD');
-  AssertEquals('Upper case', $AB, Result[0]);
-  AssertEquals('Upper case', $CD, Result[1]);
+  CheckEqual($AB, Result[0], 'Upper case');
+  CheckEqual($CD, Result[1], 'Upper case');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_LowerCase;
@@ -225,8 +225,8 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('abcd');
-  AssertEquals('Lower case', $AB, Result[0]);
-  AssertEquals('Lower case', $CD, Result[1]);
+  CheckEqual($AB, Result[0], 'Lower case');
+  CheckEqual($CD, Result[1], 'Lower case');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_MixedCase;
@@ -234,8 +234,8 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.HexToBytes('AbCd');
-  AssertEquals('Mixed case', $AB, Result[0]);
-  AssertEquals('Mixed case', $CD, Result[1]);
+  CheckEqual($AB, Result[0], 'Mixed case');
+  CheckEqual($CD, Result[1], 'Mixed case');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_OddLength;
@@ -249,7 +249,7 @@ begin
     on E: ESSLException do
       ExceptionRaised := True;
   end;
-  AssertTrue('Odd length should raise exception', ExceptionRaised);
+  CheckTrue(ExceptionRaised, 'Odd length should raise exception');
 end;
 
 procedure TTestEncoding.Test_HexToBytes_InvalidChar;
@@ -263,7 +263,7 @@ begin
     on E: ESSLException do
       ExceptionRaised := True;
   end;
-  AssertTrue('Invalid chars should raise exception', ExceptionRaised);
+  CheckTrue(ExceptionRaised, 'Invalid chars should raise exception');
 end;
 
 { Try Hex Variants }
@@ -276,24 +276,24 @@ begin
   SetLength(Data, 2);
   Data[0] := $AB;
   Data[1] := $CD;
-  AssertTrue('TryBytesToHex should succeed', TEncodingUtils.TryBytesToHex(Data, Result));
-  AssertEquals('TryBytesToHex result', 'ABCD', Result);
+  CheckTrue(TEncodingUtils.TryBytesToHex(Data, Result), 'TryBytesToHex should succeed');
+  CheckEqual('ABCD', Result, 'TryBytesToHex result');
 end;
 
 procedure TTestEncoding.Test_TryHexToBytes_Success;
 var
   Result: TBytes;
 begin
-  AssertTrue('TryHexToBytes should succeed', TEncodingUtils.TryHexToBytes('ABCD', Result));
-  AssertEquals('TryHexToBytes length', 2, Length(Result));
+  CheckTrue(TEncodingUtils.TryHexToBytes('ABCD', Result), 'TryHexToBytes should succeed');
+  CheckEqual(2, Length(Result), 'TryHexToBytes length');
 end;
 
 procedure TTestEncoding.Test_TryHexToBytes_Failure;
 var
   Result: TBytes;
 begin
-  AssertFalse('TryHexToBytes should fail for odd length', TEncodingUtils.TryHexToBytes('ABC', Result));
-  AssertEquals('Result should be empty on failure', 0, Length(Result));
+  CheckFalse(TEncodingUtils.TryHexToBytes('ABC', Result), 'TryHexToBytes should fail for odd length');
+  CheckEqual(0, Length(Result), 'Result should be empty on failure');
 end;
 
 { Base64 Encoding Tests }
@@ -305,7 +305,7 @@ var
 begin
   SetLength(Data, 0);
   Result := TEncodingUtils.Base64Encode(Data);
-  AssertEquals('Empty array should produce empty string', '', Result);
+  CheckEqual('', Result, 'Empty array should produce empty string');
 end;
 
 procedure TTestEncoding.Test_Base64Encode_SingleByte;
@@ -315,14 +315,14 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   SetLength(Data, 1);
   Data[0] := $00;
   Result := TEncodingUtils.Base64Encode(Data);
-  AssertEquals('Single zero byte', 'AA==', Result);
+  CheckEqual('AA==', Result, 'Single zero byte');
 end;
 
 procedure TTestEncoding.Test_Base64Encode_ShortData;
@@ -332,7 +332,7 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
@@ -340,7 +340,7 @@ begin
   Data[0] := $01;
   Data[1] := $02;
   Result := TEncodingUtils.Base64Encode(Data);
-  AssertEquals('Two bytes', 'AQI=', Result);
+  CheckEqual('AQI=', Result, 'Two bytes');
 end;
 
 procedure TTestEncoding.Test_Base64Encode_HelloWorld;
@@ -350,14 +350,14 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   // "Hello World" in bytes
   Data := TEncoding.UTF8.GetBytes('Hello World');
   Result := TEncodingUtils.Base64Encode(Data);
-  AssertEquals('Hello World', 'SGVsbG8gV29ybGQ=', Result);
+  CheckEqual('SGVsbG8gV29ybGQ=', Result, 'Hello World');
 end;
 
 procedure TTestEncoding.Test_Base64Encode_BinaryData;
@@ -368,7 +368,7 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
@@ -378,9 +378,9 @@ begin
     Data[I] := Byte(I);
 
   Result := TEncodingUtils.Base64Encode(Data);
-  AssertTrue('Base64 result should not be empty', Length(Result) > 0);
+  CheckTrue(Length(Result) > 0, 'Base64 result should not be empty');
   // Base64 output is ~4/3 of input, 256 bytes -> ~344 chars
-  AssertTrue('Base64 result should be reasonable length', Length(Result) < 400);
+  CheckTrue(Length(Result) < 400, 'Base64 result should be reasonable length');
 end;
 
 procedure TTestEncoding.Test_Base64Encode_String;
@@ -389,12 +389,12 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   Result := TEncodingUtils.Base64Encode('Hello');
-  AssertEquals('String input', 'SGVsbG8=', Result);
+  CheckEqual('SGVsbG8=', Result, 'String input');
 end;
 
 { Base64 Decoding Tests }
@@ -404,7 +404,7 @@ var
   Result: TBytes;
 begin
   Result := TEncodingUtils.Base64Decode('');
-  AssertEquals('Empty string should produce empty array', 0, Length(Result));
+  CheckEqual(0, Length(Result), 'Empty string should produce empty array');
 end;
 
 procedure TTestEncoding.Test_Base64Decode_HelloWorld;
@@ -414,13 +414,13 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   Result := TEncodingUtils.Base64Decode('SGVsbG8gV29ybGQ=');
   ResultStr := TEncoding.UTF8.GetString(Result);
-  AssertEquals('Hello World', 'Hello World', ResultStr);
+  CheckEqual('Hello World', ResultStr, 'Hello World');
 end;
 
 procedure TTestEncoding.Test_Base64Decode_Padding1;
@@ -430,14 +430,14 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   // Single = padding (2 bytes input mod 3 = 2)
   Result := TEncodingUtils.Base64Decode('SGk=');
   ResultStr := TEncoding.UTF8.GetString(Result);
-  AssertEquals('Padding 1', 'Hi', ResultStr);
+  CheckEqual('Hi', ResultStr, 'Padding 1');
 end;
 
 procedure TTestEncoding.Test_Base64Decode_Padding2;
@@ -447,14 +447,14 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   // Double == padding (1 byte input mod 3 = 1)
   Result := TEncodingUtils.Base64Decode('QQ==');
   ResultStr := TEncoding.UTF8.GetString(Result);
-  AssertEquals('Padding 2', 'A', ResultStr);
+  CheckEqual('A', ResultStr, 'Padding 2');
 end;
 
 procedure TTestEncoding.Test_Base64Decode_NoPadding;
@@ -464,14 +464,14 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   // No padding (3 bytes input mod 3 = 0)
   Result := TEncodingUtils.Base64Decode('QWJj');
   ResultStr := TEncoding.UTF8.GetString(Result);
-  AssertEquals('No padding', 'Abc', ResultStr);
+  CheckEqual('Abc', ResultStr, 'No padding');
 end;
 
 { Base64 Try Variants }
@@ -483,13 +483,13 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
   Data := TEncoding.UTF8.GetBytes('Test');
-  AssertTrue('TryBase64Encode should succeed', TEncodingUtils.TryBase64Encode(Data, Result));
-  AssertEquals('TryBase64Encode result', 'VGVzdA==', Result);
+  CheckTrue(TEncodingUtils.TryBase64Encode(Data, Result), 'TryBase64Encode should succeed');
+  CheckEqual('VGVzdA==', Result, 'TryBase64Encode result');
 end;
 
 procedure TTestEncoding.Test_TryBase64Decode_Success;
@@ -499,13 +499,13 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
-  AssertTrue('TryBase64Decode should succeed', TEncodingUtils.TryBase64Decode('VGVzdA==', Result));
+  CheckTrue(TEncodingUtils.TryBase64Decode('VGVzdA==', Result), 'TryBase64Decode should succeed');
   ResultStr := TEncoding.UTF8.GetString(Result);
-  AssertEquals('TryBase64Decode result', 'Test', ResultStr);
+  CheckEqual('Test', ResultStr, 'TryBase64Decode result');
 end;
 
 { Roundtrip Tests }
@@ -527,9 +527,9 @@ begin
   DecodedData := TEncodingUtils.HexToBytes(Hex);
 
   // Verify
-  AssertEquals('Roundtrip length', Length(OriginalData), Length(DecodedData));
+  CheckEqual(Length(OriginalData), Length(DecodedData), 'Roundtrip length');
   for I := 0 to High(OriginalData) do
-    AssertEquals('Roundtrip byte ' + IntToStr(I), OriginalData[I], DecodedData[I]);
+    CheckEqual(OriginalData[I], DecodedData[I], 'Roundtrip byte ' + IntToStr(I));
 end;
 
 procedure TTestEncoding.Test_Base64Roundtrip;
@@ -541,7 +541,7 @@ var
 begin
   if not FOpenSSLAvailable then
   begin
-    Ignore('OpenSSL not available');
+    Skip('OpenSSL not available');
     Exit;
   end;
 
@@ -555,9 +555,9 @@ begin
   DecodedData := TEncodingUtils.Base64Decode(B64);
 
   // Verify
-  AssertEquals('Roundtrip length', Length(OriginalData), Length(DecodedData));
+  CheckEqual(Length(OriginalData), Length(DecodedData), 'Roundtrip length');
   for I := 0 to High(OriginalData) do
-    AssertEquals('Roundtrip byte ' + IntToStr(I), OriginalData[I], DecodedData[I]);
+    CheckEqual(OriginalData[I], DecodedData[I], 'Roundtrip byte ' + IntToStr(I));
 end;
 
 { String Helper Tests }
@@ -568,7 +568,7 @@ var
 begin
   Result := TEncodingUtils.StringToHex('AB');
   // 'A' = $41, 'B' = $42
-  AssertEquals('StringToHex', '4142', Result);
+  CheckEqual('4142', Result, 'StringToHex');
 end;
 
 procedure TTestEncoding.Test_HexToString;
@@ -576,11 +576,7 @@ var
   Result: string;
 begin
   Result := TEncodingUtils.HexToString('4142');
-  AssertEquals('HexToString', 'AB', Result);
+  CheckEqual('AB', Result, 'HexToString');
 end;
-
-initialization
-  Randomize;
-  RegisterTest(TTestEncoding);
 
 end.

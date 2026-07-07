@@ -9,11 +9,11 @@ unit nextpas.core.simd.stats.testcase;
 interface
 
 uses
-  Classes, fpcunit, testregistry,
-  nextpas.core.simd.stats;
+  nextpas.core.test, nextpas.core.simd.stats;
 
+{$M+}
 type
-  TTestCase_SimdStats = class(TTestCase)
+  TTestCase_SimdStats = class(TTestFixture)
   published
     procedure Test_WeightedSum_Basic;
     procedure Test_WeightedMean_Basic;
@@ -410,8 +410,5 @@ begin
   CheckTrue(NearEqual(VarianceF32(nil, 0, True), 0.0, EPS), 'Nil Variance');
   CheckTrue(True, 'Nil safety passed');
 end;
-
-initialization
-  RegisterTest(TTestCase_SimdStats);
 
 end.

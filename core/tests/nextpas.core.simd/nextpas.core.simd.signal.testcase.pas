@@ -9,12 +9,12 @@ unit nextpas.core.simd.signal.testcase;
 interface
 
 uses
-  Classes, fpcunit, testregistry,
-  nextpas.core.simd.signal,
+  nextpas.core.test, nextpas.core.simd.signal,
   nextpas.core.simd.base;
 
+{$M+}
 type
-  TTestCase_SimdSignal = class(TTestCase)
+  TTestCase_SimdSignal = class(TTestFixture)
   published
     procedure Test_HannWindow_Basic;
     procedure Test_HannWindow_Symmetry;
@@ -362,8 +362,5 @@ begin
   RmsF32(nil, 0);
   CheckTrue(True, 'Nil safety passed');
 end;
-
-initialization
-  RegisterTest(TTestCase_SimdSignal);
 
 end.

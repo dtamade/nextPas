@@ -2,8 +2,7 @@ program test_simdgen_compile;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.base,
+  nextpas.core.text.conv, Math, nextpas.core.simd.base,
   nextpas.core.simd.generated.scalar;
 
 var

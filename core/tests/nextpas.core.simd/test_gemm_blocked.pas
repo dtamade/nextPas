@@ -4,12 +4,9 @@ program test_gemm_blocked;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc,
-  nextpas.core.simd.arrays.typed,
-  nextpas.core.simd.linalg,
-  nextpas.core.simd.linalg.gemm;
+  nextpas.core.text.conv, nextpas.core.simd,
+  nextpas.core.simd.alloc, nextpas.core.simd.arrays.typed,
+  nextpas.core.simd.linalg, nextpas.core.simd.linalg.gemm;
 
 var
   GPass, GFail: Integer;

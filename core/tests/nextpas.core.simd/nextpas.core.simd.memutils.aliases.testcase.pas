@@ -9,17 +9,16 @@ unit nextpas.core.simd.memutils.aliases.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.errors,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc,
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.errors,
+  nextpas.core.simd, nextpas.core.simd.alloc,
   nextpas.core.simd.memutils;
 
+{$M+}
 type
   TTestProc = reference to procedure;
 
   // Aligned 内存工具测试（memutils）
-  TTestCase_Memutils = class(TTestCase)
+  TTestCase_Memutils = class(TTestFixture)
   private
     procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
     procedure ExpectOutOfMemory(const AName: string; const AProc: TTestProc);
@@ -45,7 +44,7 @@ type
   end;
 
   // Rust 风格类型别名测试
-  TTestCase_RustStyleAliases = class(TTestCase)
+  TTestCase_RustStyleAliases = class(TTestFixture)
   published
     procedure Test_f32x4_Alias_SameSize;
     procedure Test_f32x4_Alias_Usable;
@@ -89,7 +88,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue(AName + ' should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, AName + ' should raise EArgumentError');
 end;
 
 procedure TTestCase_Memutils.ExpectOutOfMemory(const AName: string; const AProc: TTestProc);
@@ -103,7 +102,7 @@ begin
     on EOutOfMemory do
       LRaised := True;
   end;
-  AssertTrue(AName + ' should raise EOutOfMemory', LRaised);
+  CheckTrue(LRaised, AName + ' should raise EOutOfMemory');
 end;
 
 procedure TTestCase_Memutils.Test_AlignedAlloc_AlignedAndWritable;
@@ -113,13 +112,13 @@ var
 begin
   LPtr := AlignedAlloc(128, SIMD_ALIGN_32);
   try
-    AssertTrue('AlignedAlloc should return non-nil', LPtr <> nil);
-    AssertTrue('Pointer should be 32-byte aligned', IsAligned(LPtr, SIMD_ALIGN_32));
+    CheckTrue(LPtr <> nil, 'AlignedAlloc should return non-nil');
+    CheckTrue(IsAligned(LPtr, SIMD_ALIGN_32), 'Pointer should be 32-byte aligned');
     // Write and read back a simple pattern
     for LIndex := 0 to 127 do
       LPtr[LIndex] := Byte(LIndex and $FF);
     for LIndex := 0 to 127 do
-      AssertEquals('Written data must round-trip', Byte(LIndex and $FF), LPtr[LIndex]);
+      CheckEqual(Byte(LIndex and $FF), LPtr[LIndex], 'Written data must round-trip');
   finally
     AlignedFree(LPtr);
   end;
@@ -132,14 +131,12 @@ var
 begin
   LPtr := AlignedAlloc(256, SIMD_ALIGN_64);
   try
-    AssertTrue('AlignedAlloc should return non-nil', LPtr <> nil);
-    AssertTrue('Pointer should be 64-byte aligned for AVX-512 storage',
-      IsAligned(LPtr, SIMD_ALIGN_64));
+    CheckTrue(LPtr <> nil, 'AlignedAlloc should return non-nil');
+    CheckTrue(IsAligned(LPtr, SIMD_ALIGN_64), 'Pointer should be 64-byte aligned for AVX-512 storage');
     for LIndex := 0 to 255 do
       LPtr[LIndex] := Byte((LIndex * 3) and $FF);
     for LIndex := 0 to 255 do
-      AssertEquals('Written 64-byte aligned data must round-trip',
-        Byte((LIndex * 3) and $FF), LPtr[LIndex]);
+      CheckEqual(Byte((LIndex * 3) and $FF), LPtr[LIndex], 'Written 64-byte aligned data must round-trip');
   finally
     AlignedFree(LPtr);
   end;
@@ -147,18 +144,15 @@ end;
 
 procedure TTestCase_Memutils.Test_AlignedAlloc_InvalidAlignment_FailClose;
 begin
-  ExpectArgumentError('AlignedAlloc alignment=0',
-    procedure
+  ExpectArgumentError('AlignedAlloc alignment=0', procedure
     begin
       AlignedAlloc(16, 0);
     end);
-  ExpectArgumentError('AlignedAlloc alignment=24',
-    procedure
+  ExpectArgumentError('AlignedAlloc alignment=24', procedure
     begin
       AlignedAlloc(16, 24);
     end);
-  ExpectArgumentError('AlignedAlloc alignment below pointer size',
-    procedure
+  ExpectArgumentError('AlignedAlloc alignment below pointer size', procedure
     begin
       AlignedAlloc(16, SizeOf(Pointer) shr 1);
     end);
@@ -166,8 +160,7 @@ end;
 
 procedure TTestCase_Memutils.Test_AlignedAlloc_ZeroSize_ReturnsNil;
 begin
-  AssertTrue('AlignedAlloc(0, valid alignment) should return nil',
-    AlignedAlloc(0, SIMD_ALIGN_16) = nil);
+  CheckTrue(AlignedAlloc(0, SIMD_ALIGN_16) = nil, 'AlignedAlloc(0, valid alignment) should return nil');
 end;
 
 procedure TTestCase_Memutils.Test_TAlignedArray_64ByteAligned;
@@ -179,16 +172,13 @@ var
 begin
   LArray := TByteAlignedArray.Create(128, SIMD_ALIGN_64);
   try
-    AssertTrue('TAlignedArray should own non-nil storage', LArray.Data <> nil);
-    AssertEquals('TAlignedArray should record requested 64-byte alignment',
-      SIMD_ALIGN_64, LArray.Alignment);
-    AssertTrue('TAlignedArray data should be 64-byte aligned',
-      IsAligned(LArray.Data, SIMD_ALIGN_64));
+    CheckTrue(LArray.Data <> nil, 'TAlignedArray should own non-nil storage');
+    CheckEqual(SIMD_ALIGN_64, LArray.Alignment, 'TAlignedArray should record requested 64-byte alignment');
+    CheckTrue(IsAligned(LArray.Data, SIMD_ALIGN_64), 'TAlignedArray data should be 64-byte aligned');
     for LIndex := 0 to 127 do
       LArray[LIndex] := Byte((LIndex + 17) and $FF);
     for LIndex := 0 to 127 do
-      AssertEquals('TAlignedArray 64-byte data must round-trip',
-        Byte((LIndex + 17) and $FF), LArray[LIndex]);
+      CheckEqual(Byte((LIndex + 17) and $FF), LArray[LIndex], 'TAlignedArray 64-byte data must round-trip');
   finally
     LArray.Free;
   end;
@@ -198,13 +188,11 @@ procedure TTestCase_Memutils.Test_TAlignedArray_InvalidAlignment_FailClose;
 type
   TByteAlignedArray = specialize TAlignedArray<Byte>;
 begin
-  ExpectArgumentError('TAlignedArray.Create alignment=0',
-    procedure
+  ExpectArgumentError('TAlignedArray.Create alignment=0', procedure
     begin
       TByteAlignedArray.Create(4, 0);
     end);
-  ExpectArgumentError('TAlignedArray.FromPointer alignment=24',
-    procedure
+  ExpectArgumentError('TAlignedArray.FromPointer alignment=24', procedure
     var
       LStorage: array[0..15] of Byte;
     begin
@@ -219,14 +207,12 @@ var
 begin
   LPtr := PByte(SimdAlloc(256, sa64));
   try
-    AssertTrue('SimdAlloc(sa64) should return non-nil', LPtr <> nil);
-    AssertTrue('SimdAlloc(sa64) should return 64-byte aligned storage',
-      IsAligned(LPtr, SIMD_ALIGN_64));
+    CheckTrue(LPtr <> nil, 'SimdAlloc(sa64) should return non-nil');
+    CheckTrue(IsAligned(LPtr, SIMD_ALIGN_64), 'SimdAlloc(sa64) should return 64-byte aligned storage');
     for LIndex := 0 to 255 do
       LPtr[LIndex] := Byte((255 - LIndex) and $FF);
     for LIndex := 0 to 255 do
-      AssertEquals('SimdAlloc(sa64) data must round-trip',
-        Byte((255 - LIndex) and $FF), LPtr[LIndex]);
+      CheckEqual(Byte((255 - LIndex) and $FF), LPtr[LIndex], 'SimdAlloc(sa64) data must round-trip');
   finally
     SimdFree(LPtr);
   end;
@@ -234,30 +220,26 @@ end;
 
 procedure TTestCase_Memutils.Test_SimdAlloc_ZeroSizeAndNilFree_Semantics;
 begin
-  AssertTrue('SimdAlloc(0) should return nil', SimdAlloc(0, sa16) = nil);
-  AssertTrue('SimdRealloc(nil, 0) should return nil', SimdRealloc(nil, 0, sa64) = nil);
+  CheckTrue(SimdAlloc(0, sa16) = nil, 'SimdAlloc(0) should return nil');
+  CheckTrue(SimdRealloc(nil, 0, sa64) = nil, 'SimdRealloc(nil, 0) should return nil');
   SimdFree(nil);
 end;
 
 procedure TTestCase_Memutils.Test_SimdAlloc_SizeOverflow_FailClose;
 begin
-  ExpectOutOfMemory('SimdAlloc(saAuto) size overflow',
-    procedure
+  ExpectOutOfMemory('SimdAlloc(saAuto) size overflow', procedure
     begin
       SimdAlloc(High(SizeUInt), saAuto);
     end);
-  ExpectOutOfMemory('SimdAlloc(sa16) size overflow',
-    procedure
+  ExpectOutOfMemory('SimdAlloc(sa16) size overflow', procedure
     begin
       SimdAlloc(High(SizeUInt), sa16);
     end);
-  ExpectOutOfMemory('SimdAlloc(sa32) size overflow',
-    procedure
+  ExpectOutOfMemory('SimdAlloc(sa32) size overflow', procedure
     begin
       SimdAlloc(High(SizeUInt), sa32);
     end);
-  ExpectOutOfMemory('SimdAlloc(sa64) size overflow',
-    procedure
+  ExpectOutOfMemory('SimdAlloc(sa64) size overflow', procedure
     begin
       SimdAlloc(High(SizeUInt), sa64);
     end);
@@ -286,8 +268,8 @@ procedure TTestCase_Memutils.Test_SimdRealloc_SizeOverflow_FailClose;
           SimdFree(LResultPtr);
         LPtr := nil; // Legacy behavior may already have freed the pointer.
       end;
-      AssertTrue(AName + ' should raise EOutOfMemory', LRaised);
-      AssertEquals(AName + ' must not free original pointer first', Byte(77), LPtr[0]);
+      CheckTrue(LRaised, AName + ' should raise EOutOfMemory');
+      CheckEqual(Byte(77), LPtr[0], AName + ' must not free original pointer first');
     finally
       if LPtr <> nil then
         SimdFree(LPtr);
@@ -315,10 +297,10 @@ begin
     LReallocPtr := AlignedRealloc(LPtr, 64, SIMD_ALIGN_32);
     // After realloc, p should no longer be used
     LPtr := nil;
-    AssertTrue('Realloc result should be non-nil', LReallocPtr <> nil);
-    AssertTrue('Realloc result should be 32-byte aligned', IsAligned(LReallocPtr, SIMD_ALIGN_32));
+    CheckTrue(LReallocPtr <> nil, 'Realloc result should be non-nil');
+    CheckTrue(IsAligned(LReallocPtr, SIMD_ALIGN_32), 'Realloc result should be 32-byte aligned');
     for LIndex := 0 to 15 do
-      AssertEquals('Prefix bytes must be preserved after grow', Byte(LIndex + 10), LReallocPtr[LIndex]);
+      CheckEqual(Byte(LIndex + 10), LReallocPtr[LIndex], 'Prefix bytes must be preserved after grow');
   finally
     if LReallocPtr <> nil then
       AlignedFree(LReallocPtr);
@@ -341,10 +323,10 @@ begin
       LPtr[LIndex] := Byte(255 - LIndex);
     LReallocPtr := AlignedRealloc(LPtr, 16, SIMD_ALIGN_32);
     LPtr := nil;
-    AssertTrue('Realloc result should be non-nil', LReallocPtr <> nil);
-    AssertTrue('Realloc result should be 32-byte aligned', IsAligned(LReallocPtr, SIMD_ALIGN_32));
+    CheckTrue(LReallocPtr <> nil, 'Realloc result should be non-nil');
+    CheckTrue(IsAligned(LReallocPtr, SIMD_ALIGN_32), 'Realloc result should be 32-byte aligned');
     for LIndex := 0 to 15 do
-      AssertEquals('Prefix bytes must be preserved after shrink', Byte(255 - LIndex), LReallocPtr[LIndex]);
+      CheckEqual(Byte(255 - LIndex), LReallocPtr[LIndex], 'Prefix bytes must be preserved after shrink');
   finally
     if LReallocPtr <> nil then
       AlignedFree(LReallocPtr);
@@ -362,13 +344,13 @@ begin
   // realloc(nil, N) behaves like malloc(N)
   LPtr := AlignedRealloc(nil, 32, SIMD_ALIGN_16);
   try
-    AssertTrue('Realloc(nil, N) should allocate', LPtr <> nil);
-    AssertTrue('Allocated pointer should be aligned', IsAligned(LPtr, SIMD_ALIGN_16));
+    CheckTrue(LPtr <> nil, 'Realloc(nil, N) should allocate');
+    CheckTrue(IsAligned(LPtr, SIMD_ALIGN_16), 'Allocated pointer should be aligned');
 
     // realloc(p, 0) behaves like free(p) and returns nil
     LResultPtr := AlignedRealloc(LPtr, 0, SIMD_ALIGN_16);
     LPtr := nil;
-    AssertTrue('Realloc(p, 0) should return nil', LResultPtr = nil);
+    CheckTrue(LResultPtr = nil, 'Realloc(p, 0) should return nil');
   finally
     if LResultPtr <> nil then
       AlignedFree(LResultPtr);
@@ -382,8 +364,7 @@ var
   LPtr: PByte;
   LRaised: Boolean;
 begin
-  ExpectArgumentError('AlignedRealloc(nil, N, alignment=0)',
-    procedure
+  ExpectArgumentError('AlignedRealloc(nil, N, alignment=0)', procedure
     begin
       AlignedRealloc(nil, 16, 0);
     end);
@@ -400,8 +381,8 @@ begin
     end;
     if not LRaised then
       LPtr := nil; // Legacy behavior may already have freed the pointer.
-    AssertTrue('AlignedRealloc(p, 0, invalid alignment) should raise EArgumentError', LRaised);
-    AssertEquals('Invalid realloc must not free original pointer first', Byte(123), LPtr[0]);
+    CheckTrue(LRaised, 'AlignedRealloc(p, 0, invalid alignment) should raise EArgumentError');
+    CheckEqual(Byte(123), LPtr[0], 'Invalid realloc must not free original pointer first');
   finally
     if LPtr <> nil then
       AlignedFree(LPtr);
@@ -412,18 +393,15 @@ procedure TTestCase_Memutils.Test_AlignmentUtilities_InvalidAlignment_FailClose;
 var
   LStorage: array[0..31] of Byte;
 begin
-  ExpectArgumentError('IsAligned alignment=0',
-    procedure
+  ExpectArgumentError('IsAligned alignment=0', procedure
     begin
       IsAligned(@LStorage[0], 0);
     end);
-  ExpectArgumentError('AlignUp alignment=24',
-    procedure
+  ExpectArgumentError('AlignUp alignment=24', procedure
     begin
       AlignUp(@LStorage[0], 24);
     end);
-  ExpectArgumentError('AlignUpSize alignment below pointer size',
-    procedure
+  ExpectArgumentError('AlignUpSize alignment below pointer size', procedure
     begin
       AlignUpSize(16, SizeOf(Pointer) shr 1);
     end);
@@ -431,8 +409,7 @@ end;
 
 procedure TTestCase_Memutils.Test_AlignUp_Overflow_FailClose;
 begin
-  ExpectOutOfMemory('AlignUp pointer overflow',
-    procedure
+  ExpectOutOfMemory('AlignUp pointer overflow', procedure
     begin
       AlignUp(Pointer(High(NativeUInt)), SIMD_ALIGN_16);
     end);
@@ -443,8 +420,7 @@ var
   LSize: NativeUInt;
 begin
   LSize := High(NativeUInt);
-  ExpectOutOfMemory('AlignUpSize overflow',
-    procedure
+  ExpectOutOfMemory('AlignUpSize overflow', procedure
     begin
       AlignUpSize(LSize, SIMD_ALIGN_16);
     end);
@@ -458,13 +434,11 @@ begin
   FillChar(LSrc, SizeOf(LSrc), 42);
   FillChar(LDst, SizeOf(LDst), 0);
 
-  ExpectArgumentError('AlignedMemCopy alignment=0',
-    procedure
+  ExpectArgumentError('AlignedMemCopy alignment=0', procedure
     begin
       AlignedMemCopy(@LSrc[0], @LDst[0], SizeOf(LSrc), 0);
     end);
-  ExpectArgumentError('AlignedMemFill alignment=24',
-    procedure
+  ExpectArgumentError('AlignedMemFill alignment=24', procedure
     begin
       AlignedMemFill(@LDst[0], SizeOf(LDst), 17, 24);
     end);
@@ -474,8 +448,8 @@ end;
 
 procedure TTestCase_RustStyleAliases.Test_f32x4_Alias_SameSize;
 begin
-  AssertEquals('f32x4 should have same size as TVecF32x4', SizeOf(TVecF32x4), SizeOf(f32x4));
-  AssertEquals('f32x4 size should be 16 bytes', 16, SizeOf(f32x4));
+  CheckEqual(SizeOf(TVecF32x4), SizeOf(f32x4), 'f32x4 should have same size as TVecF32x4');
+  CheckEqual(16, SizeOf(f32x4), 'f32x4 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f32x4_Alias_Usable;
@@ -490,13 +464,13 @@ begin
   LVec.f[3] := 4.0;
 
   for LIndex := 0 to 3 do
-    AssertEquals('Element ' + IntToStr(LIndex), Single(LIndex + 1), LVec.f[LIndex], 0.0001);
+    CheckNear(Single(LIndex + 1), LVec.f[LIndex], 0.0001, 'Element ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f64x2_Alias_SameSize;
 begin
-  AssertEquals('f64x2 should have same size as TVecF64x2', SizeOf(TVecF64x2), SizeOf(f64x2));
-  AssertEquals('f64x2 size should be 16 bytes', 16, SizeOf(f64x2));
+  CheckEqual(SizeOf(TVecF64x2), SizeOf(f64x2), 'f64x2 should have same size as TVecF64x2');
+  CheckEqual(16, SizeOf(f64x2), 'f64x2 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f64x2_Alias_Usable;
@@ -506,14 +480,14 @@ begin
   LVec.d[0] := 1.5;
   LVec.d[1] := 2.5;
 
-  AssertEquals('Element 0', 1.5, LVec.d[0], 0.0001);
-  AssertEquals('Element 1', 2.5, LVec.d[1], 0.0001);
+  CheckNear(1.5, LVec.d[0], 0.0001, 'Element 0');
+  CheckNear(2.5, LVec.d[1], 0.0001, 'Element 1');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i32x4_Alias_SameSize;
 begin
-  AssertEquals('i32x4 should have same size as TVecI32x4', SizeOf(TVecI32x4), SizeOf(i32x4));
-  AssertEquals('i32x4 size should be 16 bytes', 16, SizeOf(i32x4));
+  CheckEqual(SizeOf(TVecI32x4), SizeOf(i32x4), 'i32x4 should have same size as TVecI32x4');
+  CheckEqual(16, SizeOf(i32x4), 'i32x4 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i32x4_Alias_Usable;
@@ -525,85 +499,85 @@ begin
     LVec.i[LIndex] := LIndex * 10;
 
   for LIndex := 0 to 3 do
-    AssertEquals('Element ' + IntToStr(LIndex), LIndex * 10, LVec.i[LIndex]);
+    CheckEqual(LIndex * 10, LVec.i[LIndex], 'Element ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i64x2_Alias_SameSize;
 begin
-  AssertEquals('i64x2 should have same size as TVecI64x2', SizeOf(TVecI64x2), SizeOf(i64x2));
-  AssertEquals('i64x2 size should be 16 bytes', 16, SizeOf(i64x2));
+  CheckEqual(SizeOf(TVecI64x2), SizeOf(i64x2), 'i64x2 should have same size as TVecI64x2');
+  CheckEqual(16, SizeOf(i64x2), 'i64x2 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i16x8_Alias_SameSize;
 begin
-  AssertEquals('i16x8 should have same size as TVecI16x8', SizeOf(TVecI16x8), SizeOf(i16x8));
-  AssertEquals('i16x8 size should be 16 bytes', 16, SizeOf(i16x8));
+  CheckEqual(SizeOf(TVecI16x8), SizeOf(i16x8), 'i16x8 should have same size as TVecI16x8');
+  CheckEqual(16, SizeOf(i16x8), 'i16x8 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i8x16_Alias_SameSize;
 begin
-  AssertEquals('i8x16 should have same size as TVecI8x16', SizeOf(TVecI8x16), SizeOf(i8x16));
-  AssertEquals('i8x16 size should be 16 bytes', 16, SizeOf(i8x16));
+  CheckEqual(SizeOf(TVecI8x16), SizeOf(i8x16), 'i8x16 should have same size as TVecI8x16');
+  CheckEqual(16, SizeOf(i8x16), 'i8x16 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_u32x4_Alias_SameSize;
 begin
-  AssertEquals('u32x4 should have same size as TVecU32x4', SizeOf(TVecU32x4), SizeOf(u32x4));
-  AssertEquals('u32x4 size should be 16 bytes', 16, SizeOf(u32x4));
+  CheckEqual(SizeOf(TVecU32x4), SizeOf(u32x4), 'u32x4 should have same size as TVecU32x4');
+  CheckEqual(16, SizeOf(u32x4), 'u32x4 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_u64x2_Alias_SameSize;
 begin
-  AssertEquals('u64x2 should have same size as TVecU64x2', SizeOf(TVecU64x2), SizeOf(u64x2));
-  AssertEquals('u64x2 size should be 16 bytes', 16, SizeOf(u64x2));
+  CheckEqual(SizeOf(TVecU64x2), SizeOf(u64x2), 'u64x2 should have same size as TVecU64x2');
+  CheckEqual(16, SizeOf(u64x2), 'u64x2 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_u16x8_Alias_SameSize;
 begin
-  AssertEquals('u16x8 should have same size as TVecU16x8', SizeOf(TVecU16x8), SizeOf(u16x8));
-  AssertEquals('u16x8 size should be 16 bytes', 16, SizeOf(u16x8));
+  CheckEqual(SizeOf(TVecU16x8), SizeOf(u16x8), 'u16x8 should have same size as TVecU16x8');
+  CheckEqual(16, SizeOf(u16x8), 'u16x8 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_u8x16_Alias_SameSize;
 begin
-  AssertEquals('u8x16 should have same size as TVecU8x16', SizeOf(TVecU8x16), SizeOf(u8x16));
-  AssertEquals('u8x16 size should be 16 bytes', 16, SizeOf(u8x16));
+  CheckEqual(SizeOf(TVecU8x16), SizeOf(u8x16), 'u8x16 should have same size as TVecU8x16');
+  CheckEqual(16, SizeOf(u8x16), 'u8x16 size should be 16 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f32x8_Alias_SameSize;
 begin
-  AssertEquals('f32x8 should have same size as TVecF32x8', SizeOf(TVecF32x8), SizeOf(f32x8));
-  AssertEquals('f32x8 size should be 32 bytes', 32, SizeOf(f32x8));
+  CheckEqual(SizeOf(TVecF32x8), SizeOf(f32x8), 'f32x8 should have same size as TVecF32x8');
+  CheckEqual(32, SizeOf(f32x8), 'f32x8 size should be 32 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f64x4_Alias_SameSize;
 begin
-  AssertEquals('f64x4 should have same size as TVecF64x4', SizeOf(TVecF64x4), SizeOf(f64x4));
-  AssertEquals('f64x4 size should be 32 bytes', 32, SizeOf(f64x4));
+  CheckEqual(SizeOf(TVecF64x4), SizeOf(f64x4), 'f64x4 should have same size as TVecF64x4');
+  CheckEqual(32, SizeOf(f64x4), 'f64x4 size should be 32 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i32x8_Alias_SameSize;
 begin
-  AssertEquals('i32x8 should have same size as TVecI32x8', SizeOf(TVecI32x8), SizeOf(i32x8));
-  AssertEquals('i32x8 size should be 32 bytes', 32, SizeOf(i32x8));
+  CheckEqual(SizeOf(TVecI32x8), SizeOf(i32x8), 'i32x8 should have same size as TVecI32x8');
+  CheckEqual(32, SizeOf(i32x8), 'i32x8 size should be 32 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f32x16_Alias_SameSize;
 begin
-  AssertEquals('f32x16 should have same size as TVecF32x16', SizeOf(TVecF32x16), SizeOf(f32x16));
-  AssertEquals('f32x16 size should be 64 bytes', 64, SizeOf(f32x16));
+  CheckEqual(SizeOf(TVecF32x16), SizeOf(f32x16), 'f32x16 should have same size as TVecF32x16');
+  CheckEqual(64, SizeOf(f32x16), 'f32x16 size should be 64 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_f64x8_Alias_SameSize;
 begin
-  AssertEquals('f64x8 should have same size as TVecF64x8', SizeOf(TVecF64x8), SizeOf(f64x8));
-  AssertEquals('f64x8 size should be 64 bytes', 64, SizeOf(f64x8));
+  CheckEqual(SizeOf(TVecF64x8), SizeOf(f64x8), 'f64x8 should have same size as TVecF64x8');
+  CheckEqual(64, SizeOf(f64x8), 'f64x8 size should be 64 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_i32x16_Alias_SameSize;
 begin
-  AssertEquals('i32x16 should have same size as TVecI32x16', SizeOf(TVecI32x16), SizeOf(i32x16));
-  AssertEquals('i32x16 size should be 64 bytes', 64, SizeOf(i32x16));
+  CheckEqual(SizeOf(TVecI32x16), SizeOf(i32x16), 'i32x16 should have same size as TVecI32x16');
+  CheckEqual(64, SizeOf(i32x16), 'i32x16 size should be 64 bytes');
 end;
 
 procedure TTestCase_RustStyleAliases.Test_Alias_InteropWithOriginal;
@@ -619,7 +593,7 @@ begin
   LAlias := LOriginal;  // 直接赋值
 
   for LIndex := 0 to 3 do
-    AssertEquals('Element ' + IntToStr(LIndex), LOriginal.f[LIndex], LAlias.f[LIndex], 0.0001);
+    CheckNear(LOriginal.f[LIndex], LAlias.f[LIndex], 0.0001, 'Element ' + IntToStr(LIndex));
 
   // 反向赋值
   for LIndex := 0 to 3 do
@@ -628,11 +602,8 @@ begin
   LOriginal := LAlias;
 
   for LIndex := 0 to 3 do
-    AssertEquals('Reverse element ' + IntToStr(LIndex), LAlias.f[LIndex], LOriginal.f[LIndex], 0.0001);
+    CheckNear(LAlias.f[LIndex], LOriginal.f[LIndex], 0.0001, 'Reverse element ' + IntToStr(LIndex));
 end;
 
-initialization
-  RegisterTest(TTestCase_Memutils);
-  RegisterTest(TTestCase_RustStyleAliases);
 
 end.

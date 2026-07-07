@@ -3,10 +3,8 @@ program test_cnn_inference;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc,
-  nextpas.core.simd.nn;
+  nextpas.core.text.conv, nextpas.core.simd,
+  nextpas.core.simd.alloc, nextpas.core.simd.nn;
 
 var
   LPass, LFail: Integer;
@@ -101,12 +99,10 @@ begin
   // === Forward pass ===
 
   // Layer 1: Conv2D (1ch → 4ch, 3x3) + BN + ReLU + MaxPool(2x2, stride 2)
-  Conv2DMultiChannelF32(LInput, LConv1W, LConv1B, LConv1Out,
-    IN_C, IN_H, IN_W, C1_KH, C1_KW, C1_F);
+  Conv2DMultiChannelF32(LInput, LConv1W, LConv1B, LConv1Out, IN_C, IN_H, IN_W, C1_KH, C1_KW, C1_F);
   Check('Conv1 output non-zero', LConv1Out[0] <> 0);
 
-  BatchNorm2DInferF32(LConv1Out, LBN1Out, C1_F, C1_OH, C1_OW,
-    LBN1G, LBN1B, LBN1M, LBN1V, 1e-5);
+  BatchNorm2DInferF32(LConv1Out, LBN1Out, C1_F, C1_OH, C1_OW, LBN1G, LBN1B, LBN1M, LBN1V, 1e-5);
   Check('BN1 output matches conv1', System.Abs(LBN1Out[0] - LConv1Out[0]) < 0.01);
 
   ArrayReLUF32(LBN1Out, LBN1Out, C1_F * C1_OH * C1_OW);
@@ -114,17 +110,14 @@ begin
 
   // MaxPool each channel: 6x6 → 3x3 with kernel 2x2, stride 2
   for i := 0 to C1_F - 1 do
-    MaxPool2DF32(@LBN1Out[i * C1_OH * C1_OW], @LPool1Out[i * P1_OH * P1_OW],
-      C1_OH, C1_OW, 2, 2, 2, 2);
+    MaxPool2DF32(@LBN1Out[i * C1_OH * C1_OW], @LPool1Out[i * P1_OH * P1_OW], C1_OH, C1_OW, 2, 2, 2, 2);
   Check('Pool1 output valid', LPool1Out[0] > 0);
 
   // Layer 2: Conv2D (4ch → 8ch, 3x3) + BN + ReLU
-  Conv2DMultiChannelF32(LPool1Out, LConv2W, LConv2B, LConv2Out,
-    C1_F, P1_OH, P1_OW, C2_KH, C2_KW, C2_F);
+  Conv2DMultiChannelF32(LPool1Out, LConv2W, LConv2B, LConv2Out, C1_F, P1_OH, P1_OW, C2_KH, C2_KW, C2_F);
   Check('Conv2 output non-zero', LConv2Out[0] <> 0);
 
-  BatchNorm2DInferF32(LConv2Out, LBN2Out, C2_F, C2_OH, C2_OW,
-    LBN2G, LBN2B, LBN2M, LBN2V, 1e-5);
+  BatchNorm2DInferF32(LConv2Out, LBN2Out, C2_F, C2_OH, C2_OW, LBN2G, LBN2B, LBN2M, LBN2V, 1e-5);
   ArrayReLUF32(LBN2Out, LBN2Out, C2_F * C2_OH * C2_OW);
 
   // Global Average Pooling: 8ch × 1×1 → 8-dim vector

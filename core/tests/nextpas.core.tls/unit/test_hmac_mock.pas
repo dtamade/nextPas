@@ -16,12 +16,12 @@ unit test_hmac_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   openssl_hmac_interface;
 
 type
   { TTestHMACMock - Test suite for HMAC mock }
-  TTestHMACMock = class(TTestCase)
+  TTestHMACMock = class(TTestFixture)
   private
     FHMAC: IHMAC;
     FMock: THMACMock;
@@ -29,8 +29,8 @@ type
     function GetTestKey(aSize: Integer): TBytes;
     function GetTestData(aSize: Integer): TBytes;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // Single-shot HMAC tests
     procedure TestCompute_ShouldSucceed_WithSHA256;
@@ -91,18 +91,18 @@ end;
 
 { Setup and teardown }
 
-procedure TTestHMACMock.SetUp;
+procedure TTestHMACMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FMock := THMACMock.Create;
   FHMAC := FMock as IHMAC;
 end;
 
-procedure TTestHMACMock.TearDown;
+procedure TTestHMACMock.AfterEach;
 begin
   FHMAC := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 { Single-shot HMAC tests }
@@ -120,9 +120,9 @@ begin
   LResult := FHMAC.Compute(haSHA256, LKey, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes', 32, Length(LResult.MAC));
-  AssertEquals('Compute call count', 1, FMock.GetComputeCallCount);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.MAC), 'Should return 32 bytes');
+  CheckEqual(1, FMock.GetComputeCallCount, 'Compute call count');
 end;
 
 procedure TTestHMACMock.TestCompute_ShouldSucceed_WithSHA512;
@@ -138,8 +138,8 @@ begin
   LResult := FHMAC.Compute(haSHA512, LKey, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.MAC));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.MAC), 'Should return 64 bytes');
 end;
 
 procedure TTestHMACMock.TestCompute_ShouldSucceed_WithSHA1;
@@ -155,8 +155,8 @@ begin
   LResult := FHMAC.Compute(haSHA1, LKey, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 20 bytes', 20, Length(LResult.MAC));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(20, Length(LResult.MAC), 'Should return 20 bytes');
 end;
 
 procedure TTestHMACMock.TestCompute_ShouldSucceed_WithSM3;
@@ -172,8 +172,8 @@ begin
   LResult := FHMAC.Compute(haSM3, LKey, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes (SM3)', 32, Length(LResult.MAC));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.MAC), 'Should return 32 bytes (SM3)');
 end;
 
 procedure TTestHMACMock.TestCompute_ShouldReturnCorrectSize_ForAllAlgorithms;
@@ -187,16 +187,16 @@ begin
   
   // Act & Assert
   LResult := FHMAC.Compute(haMD5, LKey, LData);
-  AssertEquals('MD5 size', 16, Length(LResult.MAC));
+  CheckEqual(16, Length(LResult.MAC), 'MD5 size');
   
   LResult := FHMAC.Compute(haSHA1, LKey, LData);
-  AssertEquals('SHA1 size', 20, Length(LResult.MAC));
+  CheckEqual(20, Length(LResult.MAC), 'SHA1 size');
   
   LResult := FHMAC.Compute(haSHA256, LKey, LData);
-  AssertEquals('SHA256 size', 32, Length(LResult.MAC));
+  CheckEqual(32, Length(LResult.MAC), 'SHA256 size');
   
   LResult := FHMAC.Compute(haSHA512, LKey, LData);
-  AssertEquals('SHA512 size', 64, Length(LResult.MAC));
+  CheckEqual(64, Length(LResult.MAC), 'SHA512 size');
 end;
 
 { Incremental HMAC tests }
@@ -213,9 +213,9 @@ begin
   LResult := FHMAC.Init(haSHA256, LKey);
   
   // Assert
-  AssertTrue('Should return true', LResult);
-  AssertTrue('Should be initialized', FMock.IsInitialized);
-  AssertEquals('Init call count', 1, FMock.GetInitCallCount);
+  CheckTrue(LResult, 'Should return true');
+  CheckTrue(FMock.IsInitialized, 'Should be initialized');
+  CheckEqual(1, FMock.GetInitCallCount, 'Init call count');
 end;
 
 procedure TTestHMACMock.TestInit_ShouldStoreKey;
@@ -229,7 +229,7 @@ begin
   FHMAC.Init(haSHA256, LKey);
   
   // Assert
-  AssertEquals('Key size should be stored', 32, FHMAC.GetKeySize);
+  CheckEqual(32, FHMAC.GetKeySize, 'Key size should be stored');
 end;
 
 procedure TTestHMACMock.TestUpdate_ShouldReturnFalse_WhenNotInitialized;
@@ -244,7 +244,7 @@ begin
   LResult := FHMAC.Update(LData);
   
   // Assert
-  AssertFalse('Should return false when not initialized', LResult);
+  CheckFalse(LResult, 'Should return false when not initialized');
 end;
 
 procedure TTestHMACMock.TestUpdate_ShouldAccumulateData;
@@ -262,8 +262,8 @@ begin
   FHMAC.Update(LData2);
   
   // Assert
-  AssertEquals('Should accumulate data', 80, FMock.GetAccumulatedDataSize);
-  AssertEquals('Update count', 2, FHMAC.GetUpdateCount);
+  CheckEqual(80, FMock.GetAccumulatedDataSize, 'Should accumulate data');
+  CheckEqual(2, FHMAC.GetUpdateCount, 'Update count');
 end;
 
 procedure TTestHMACMock.TestFinal_ShouldComputeMAC_FromAccumulatedData;
@@ -281,10 +281,10 @@ begin
   LResult := FHMAC.Final;
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return MAC', 32, Length(LResult.MAC));
-  AssertEquals('Final call count', 1, FMock.GetFinalCallCount);
-  AssertFalse('Should clear initialized state', FMock.IsInitialized);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.MAC), 'Should return MAC');
+  CheckEqual(1, FMock.GetFinalCallCount, 'Final call count');
+  CheckFalse(FMock.IsInitialized, 'Should clear initialized state');
 end;
 
 procedure TTestHMACMock.TestIncrementalEqualsOneShot;
@@ -314,14 +314,13 @@ begin
   LIncrementalResult := FHMAC.Final;
   
   // Assert
-  AssertTrue('One-shot should succeed', LOneShotResult.Success);
-  AssertTrue('Incremental should succeed', LIncrementalResult.Success);
-  AssertEquals('MAC sizes should match', Length(LOneShotResult.MAC), Length(LIncrementalResult.MAC));
+  CheckTrue(LOneShotResult.Success, 'One-shot should succeed');
+  CheckTrue(LIncrementalResult.Success, 'Incremental should succeed');
+  CheckEqual(Length(LOneShotResult.MAC), Length(LIncrementalResult.MAC), 'MAC sizes should match');
   
   // Compare MACs byte by byte
   for i := 0 to High(LOneShotResult.MAC) do
-    AssertEquals('MAC byte ' + IntToStr(i) + ' should match',
-                 LOneShotResult.MAC[i], LIncrementalResult.MAC[i]);
+    CheckEqual(LOneShotResult.MAC[i], LIncrementalResult.MAC[i], 'MAC byte ' + IntToStr(i) + ' should match');
 end;
 
 { Key management tests }
@@ -337,7 +336,7 @@ begin
   FHMAC.SetKey(haSHA512, LKey);
   
   // Assert
-  AssertEquals('Key size should be stored', 64, FHMAC.GetKeySize);
+  CheckEqual(64, FHMAC.GetKeySize, 'Key size should be stored');
 end;
 
 procedure TTestHMACMock.TestGetKeySize_ShouldReturnCorrectSize;
@@ -349,7 +348,7 @@ begin
   FHMAC.SetKey(haSHA384, LKey);
   
   // Act & Assert
-  AssertEquals('Should return key size', 48, FHMAC.GetKeySize);
+  CheckEqual(48, FHMAC.GetKeySize, 'Should return key size');
 end;
 
 { Verification tests }
@@ -369,8 +368,8 @@ begin
   LVerified := FHMAC.Verify(haSHA256, LKey, LData, LComputedMAC.MAC);
   
   // Assert
-  AssertTrue('Should verify correct MAC', LVerified);
-  AssertEquals('Verify call count', 1, FMock.GetVerifyCallCount);
+  CheckTrue(LVerified, 'Should verify correct MAC');
+  CheckEqual(1, FMock.GetVerifyCallCount, 'Verify call count');
 end;
 
 procedure TTestHMACMock.TestVerify_ShouldReturnFalse_WithIncorrectMAC;
@@ -390,7 +389,7 @@ begin
   LVerified := FHMAC.Verify(haSHA256, LKey, LData, LWrongMAC);
   
   // Assert
-  AssertFalse('Should fail with incorrect MAC', LVerified);
+  CheckFalse(LVerified, 'Should fail with incorrect MAC');
 end;
 
 { Error handling tests }
@@ -409,9 +408,9 @@ begin
   LResult := FHMAC.Compute(haSHA256, LKey, LData);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated HMAC failure', LResult.ErrorMessage);
-  AssertEquals('MAC should be empty', 0, Length(LResult.MAC));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated HMAC failure', LResult.ErrorMessage, 'Error message');
+  CheckEqual(0, Length(LResult.MAC), 'MAC should be empty');
 end;
 
 procedure TTestHMACMock.TestInit_ShouldFail_WhenConfigured;
@@ -427,26 +426,26 @@ begin
   LResult := FHMAC.Init(haSHA256, LKey);
   
   // Assert
-  AssertFalse('Should fail', LResult);
-  AssertFalse('Should not be initialized', FMock.IsInitialized);
+  CheckFalse(LResult, 'Should fail');
+  CheckFalse(FMock.IsInitialized, 'Should not be initialized');
 end;
 
 { Algorithm queries }
 
 procedure TTestHMACMock.TestGetMACSize_ShouldReturnCorrectSize;
 begin
-  AssertEquals('HMAC-MD5 size', 16, FHMAC.GetMACSize(haMD5));
-  AssertEquals('HMAC-SHA1 size', 20, FHMAC.GetMACSize(haSHA1));
-  AssertEquals('HMAC-SHA256 size', 32, FHMAC.GetMACSize(haSHA256));
-  AssertEquals('HMAC-SHA512 size', 64, FHMAC.GetMACSize(haSHA512));
-  AssertEquals('HMAC-SM3 size', 32, FHMAC.GetMACSize(haSM3));
+  CheckEqual(16, FHMAC.GetMACSize(haMD5), 'HMAC-MD5 size');
+  CheckEqual(20, FHMAC.GetMACSize(haSHA1), 'HMAC-SHA1 size');
+  CheckEqual(32, FHMAC.GetMACSize(haSHA256), 'HMAC-SHA256 size');
+  CheckEqual(64, FHMAC.GetMACSize(haSHA512), 'HMAC-SHA512 size');
+  CheckEqual(32, FHMAC.GetMACSize(haSM3), 'HMAC-SM3 size');
 end;
 
 procedure TTestHMACMock.TestGetAlgorithmName_ShouldReturnCorrectName;
 begin
-  AssertEquals('SHA256 name', 'HMAC-SHA256', FHMAC.GetAlgorithmName(haSHA256));
-  AssertEquals('SHA512 name', 'HMAC-SHA512', FHMAC.GetAlgorithmName(haSHA512));
-  AssertEquals('SM3 name', 'HMAC-SM3', FHMAC.GetAlgorithmName(haSM3));
+  CheckEqual('HMAC-SHA256', FHMAC.GetAlgorithmName(haSHA256), 'SHA256 name');
+  CheckEqual('HMAC-SHA512', FHMAC.GetAlgorithmName(haSHA512), 'SHA512 name');
+  CheckEqual('HMAC-SM3', FHMAC.GetAlgorithmName(haSM3), 'SM3 name');
 end;
 
 { Statistics tracking }
@@ -466,13 +465,10 @@ begin
   FHMAC.ResetStatistics;
   
   // Assert
-  AssertEquals('Operation count after reset', 0, FHMAC.GetOperationCount);
-  AssertEquals('Update count after reset', 0, FHMAC.GetUpdateCount);
-  AssertEquals('Compute call count after reset', 0, FMock.GetComputeCallCount);
-  AssertEquals('Init call count after reset', 0, FMock.GetInitCallCount);
+  CheckEqual(0, FHMAC.GetOperationCount, 'Operation count after reset');
+  CheckEqual(0, FHMAC.GetUpdateCount, 'Update count after reset');
+  CheckEqual(0, FMock.GetComputeCallCount, 'Compute call count after reset');
+  CheckEqual(0, FMock.GetInitCallCount, 'Init call count after reset');
 end;
-
-initialization
-  RegisterTest(TTestHMACMock);
 
 end.

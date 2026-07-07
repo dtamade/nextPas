@@ -5,12 +5,12 @@ unit nextpas.core.simd.algorithms.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd.base,
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.base,
   nextpas.core.simd.algorithms;
 
+{$M+}
 type
-  TTestCase_SimdAlgorithms = class(TTestCase)
+  TTestCase_SimdAlgorithms = class(TTestFixture)
   published
     procedure Test_ArrayAdd_Basic;
     procedure Test_ArrayAdd_OddCount;
@@ -46,7 +46,7 @@ begin
   end;
   SimdArrayAdd(@A[0], @B[0], @C[0], 16);
   for i := 0 to 15 do
-    AssertEquals('ArrayAdd[' + IntToStr(i) + ']', 15.0, C[i], EPS);
+    CheckNear(15.0, C[i], EPS, 'ArrayAdd[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ArrayAdd_OddCount;
@@ -61,7 +61,7 @@ begin
   end;
   SimdArrayAdd(@A[0], @B[0], @C[0], 7);
   for i := 0 to 6 do
-    AssertEquals('ArrayAdd odd[' + IntToStr(i) + ']', i + 11.0, C[i], EPS);
+    CheckNear(i + 11.0, C[i], EPS, 'ArrayAdd odd[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ArrayAdd_SingleElement;
@@ -71,7 +71,7 @@ begin
   A := 3.14;
   B := 2.71;
   SimdArrayAdd(@A, @B, @C, 1);
-  AssertEquals('ArrayAdd single', 5.85, C, EPS);
+  CheckNear(5.85, C, EPS, 'ArrayAdd single');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ArrayMul_Basic;
@@ -86,7 +86,7 @@ begin
   end;
   SimdArrayMul(@A[0], @B[0], @C[0], 8);
   for i := 0 to 7 do
-    AssertEquals('ArrayMul[' + IntToStr(i) + ']', (i + 1.0) * 2.0, C[i], EPS);
+    CheckNear((i + 1.0) * 2.0, C[i], EPS, 'ArrayMul[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ArrayMulScalar_Basic;
@@ -98,7 +98,7 @@ begin
     A[i] := i + 1.0;
   SimdArrayMulScalar(@A[0], @C[0], 10, 3.0);
   for i := 0 to 9 do
-    AssertEquals('MulScalar[' + IntToStr(i) + ']', (i + 1.0) * 3.0, C[i], EPS);
+    CheckNear((i + 1.0) * 3.0, C[i], EPS, 'MulScalar[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ArrayAxpy_Basic;
@@ -113,7 +113,7 @@ begin
   end;
   SimdArrayAxpy(2.0, @X[0], @Y[0], @D[0], 8);
   for i := 0 to 7 do
-    AssertEquals('Axpy[' + IntToStr(i) + ']', 2.0 * (i + 1.0) + 100.0, D[i], EPS);
+    CheckNear(2.0 * (i + 1.0) + 100.0, D[i], EPS, 'Axpy[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceSum_Basic;
@@ -125,7 +125,7 @@ begin
   for i := 0 to 7 do
     A[i] := 1.0;
   R := SimdReduceSum(@A[0], 8);
-  AssertEquals('ReduceSum 8x1.0', 8.0, R, EPS);
+  CheckNear(8.0, R, EPS, 'ReduceSum 8x1.0');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceSum_LargeArray;
@@ -141,7 +141,7 @@ begin
     Expected := Expected + A[i];
   end;
   R := SimdReduceSum(@A[0], 256);
-  AssertEquals('ReduceSum 256 elements', Expected, R, 0.1);
+  CheckNear(Expected, R, 0.1, 'ReduceSum 256 elements');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceDot_Basic;
@@ -152,7 +152,7 @@ begin
   A[0] := 1; A[1] := 2; A[2] := 3; A[3] := 4;
   B[0] := 5; B[1] := 6; B[2] := 7; B[3] := 8;
   R := SimdReduceDot(@A[0], @B[0], 4);
-  AssertEquals('Dot product', 1*5 + 2*6 + 3*7 + 4*8, R, EPS);
+  CheckNear(1*5 + 2*6 + 3*7 + 4*8, R, EPS, 'Dot product');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceDot_Orthogonal;
@@ -163,7 +163,7 @@ begin
   A[0] := 1; A[1] := 0; A[2] := 0; A[3] := 0;
   B[0] := 0; B[1] := 1; B[2] := 0; B[3] := 0;
   R := SimdReduceDot(@A[0], @B[0], 4);
-  AssertEquals('Orthogonal dot', 0.0, R, EPS);
+  CheckNear(0.0, R, EPS, 'Orthogonal dot');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceMin_Basic;
@@ -174,7 +174,7 @@ begin
   A[0] := 5; A[1] := 3; A[2] := 8; A[3] := 1;
   A[4] := 9; A[5] := 2; A[6] := 7; A[7] := 4;
   R := SimdReduceMin(@A[0], 8);
-  AssertEquals('ReduceMin', 1.0, R, EPS);
+  CheckNear(1.0, R, EPS, 'ReduceMin');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceMax_Basic;
@@ -185,7 +185,7 @@ begin
   A[0] := 5; A[1] := 3; A[2] := 8; A[3] := 1;
   A[4] := 9; A[5] := 2; A[6] := 7; A[7] := 4;
   R := SimdReduceMax(@A[0], 8);
-  AssertEquals('ReduceMax', 9.0, R, EPS);
+  CheckNear(9.0, R, EPS, 'ReduceMax');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_ReduceMinMax_SingleElement;
@@ -193,8 +193,8 @@ var
   A: Single;
 begin
   A := 42.0;
-  AssertEquals('Min single', 42.0, SimdReduceMin(@A, 1), EPS);
-  AssertEquals('Max single', 42.0, SimdReduceMax(@A, 1), EPS);
+  CheckNear(42.0, SimdReduceMin(@A, 1), EPS, 'Min single');
+  CheckNear(42.0, SimdReduceMax(@A, 1), EPS, 'Max single');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_NilSafety;
@@ -205,8 +205,8 @@ begin
   SimdArrayAdd(@A[0], nil, @A[0], 4);
   SimdArrayAdd(@A[0], @A[0], nil, 4);
   SimdArrayAdd(@A[0], @A[0], @A[0], 0);
-  AssertEquals('Nil safety sum', 0.0, SimdReduceSum(nil, 4), EPS);
-  AssertEquals('Zero count sum', 0.0, SimdReduceSum(@A[0], 0), EPS);
+  CheckNear(0.0, SimdReduceSum(nil, 4), EPS, 'Nil safety sum');
+  CheckNear(0.0, SimdReduceSum(@A[0], 0), EPS, 'Zero count sum');
 end;
 
 procedure TTestCase_SimdAlgorithms.Test_WidthStepping_Correctness;
@@ -226,13 +226,10 @@ begin
     for i := 0 to count - 1 do
     begin
       Expected := i * 0.5 + 1.0;
-      AssertEquals('Width step count=' + IntToStr(count) + ' i=' + IntToStr(i),
-        Expected, C[i], EPS);
+      CheckNear(Expected, C[i], EPS, 'Width step count=' + IntToStr(count) + ' i=' + IntToStr(i));
     end;
   end;
 end;
 
-initialization
-  RegisterTest(TTestCase_SimdAlgorithms);
 
 end.

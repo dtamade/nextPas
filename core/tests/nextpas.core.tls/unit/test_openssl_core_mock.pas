@@ -15,7 +15,7 @@ unit test_openssl_core_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   test_base,
   openssl_core_interface;
 
@@ -26,8 +26,8 @@ type
     FCore: IOpenSSLCore;
     FMock: TOpenSSLCoreMock;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // Library loading tests
     procedure TestLoad_ShouldReturnTrue_WhenSuccessful;
@@ -60,20 +60,20 @@ implementation
 
 { TTestOpenSSLCoreMock }
 
-procedure TTestOpenSSLCoreMock.SetUp;
+procedure TTestOpenSSLCoreMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   // Create mock instance
   FMock := TOpenSSLCoreMock.Create;
   FCore := FMock as IOpenSSLCore;
 end;
 
-procedure TTestOpenSSLCoreMock.TearDown;
+procedure TTestOpenSSLCoreMock.AfterEach;
 begin
   // Clean up
   FCore := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldReturnTrue_WhenSuccessful;
@@ -87,8 +87,8 @@ begin
   Result := FCore.LoadLibrary;
   
   // Then
-  AssertTrue('LoadLibrary should return True', Result);
-  AssertTrue('IsLoaded should be True after load', FCore.IsLoaded);
+  CheckTrue(Result, 'LoadLibrary should return True');
+  CheckTrue(FCore.IsLoaded, 'IsLoaded should be True after load');
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldReturnFalse_WhenConfiguredToFail;
@@ -102,8 +102,8 @@ begin
   Result := FCore.LoadLibrary;
   
   // Then
-  AssertFalse('LoadLibrary should return False when configured to fail', Result);
-  AssertFalse('IsLoaded should be False after failed load', FCore.IsLoaded);
+  CheckFalse(Result, 'LoadLibrary should return False when configured to fail');
+  CheckFalse(FCore.IsLoaded, 'IsLoaded should be False after failed load');
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldIncrementCallCount;
@@ -118,7 +118,7 @@ begin
   
   // Then
   CountAfter := FMock.GetLoadCallCount;
-  AssertEquals('Call count should increment by 1', CountBefore + 1, CountAfter);
+  CheckEqual(CountBefore + 1, CountAfter, 'Call count should increment by 1');
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldBeIdempotent;
@@ -130,9 +130,9 @@ begin
   SecondResult := FCore.LoadLibrary;
   
   // Then
-  AssertTrue('First load should succeed', FirstResult);
-  AssertTrue('Second load should succeed', SecondResult);
-  AssertEquals('Should be called twice', 2, FMock.GetLoadCallCount);
+  CheckTrue(FirstResult, 'First load should succeed');
+  CheckTrue(SecondResult, 'Second load should succeed');
+  CheckEqual(2, FMock.GetLoadCallCount, 'Should be called twice');
 end;
 
 procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnFalse_BeforeLoad;
@@ -141,7 +141,7 @@ begin
   // (Fresh mock, not loaded)
   
   // When & Then
-  AssertFalse('IsLoaded should return False before LoadLibrary', FCore.IsLoaded);
+  CheckFalse(FCore.IsLoaded, 'IsLoaded should return False before LoadLibrary');
 end;
 
 procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnTrue_AfterLoad;
@@ -150,7 +150,7 @@ begin
   FCore.LoadLibrary;
   
   // When & Then
-  AssertTrue('IsLoaded should return True after LoadLibrary', FCore.IsLoaded);
+  CheckTrue(FCore.IsLoaded, 'IsLoaded should return True after LoadLibrary');
 end;
 
 procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnFalse_AfterUnload;
@@ -162,7 +162,7 @@ begin
   FCore.UnloadLibrary;
   
   // Then
-  AssertFalse('IsLoaded should return False after UnloadLibrary', FCore.IsLoaded);
+  CheckFalse(FCore.IsLoaded, 'IsLoaded should return False after UnloadLibrary');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetVersion_ShouldReturnEmpty_WhenNotLoaded;
@@ -176,7 +176,7 @@ begin
   Version := FCore.GetVersionString;
   
   // Then
-  AssertEquals('Version should be empty when not loaded', '', Version);
+  CheckEqual('', Version, 'Version should be empty when not loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetVersion_ShouldReturnValue_WhenLoaded;
@@ -190,8 +190,8 @@ begin
   Version := FCore.GetVersionString;
   
   // Then
-  AssertTrue('Version should not be empty when loaded', Version <> '');
-  AssertTrue('Version should contain "Mock"', Pos('Mock', Version) > 0);
+  CheckTrue(Version <> '', 'Version should not be empty when loaded');
+  CheckTrue(Pos('Mock', Version) > 0, 'Version should contain "Mock"');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetVersion_ShouldReturnCustomValue_WhenSet;
@@ -207,7 +207,7 @@ begin
   Actual := FCore.GetVersionString;
   
   // Then
-  AssertEquals('Should return custom version', Expected, Actual);
+  CheckEqual(Expected, Actual, 'Should return custom version');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetCryptoHandle_ShouldReturnZero_WhenNotLoaded;
@@ -221,7 +221,7 @@ begin
   Handle := FCore.GetCryptoLibHandle;
   
   // Then
-  AssertEquals('Handle should be NilHandle when not loaded', NilHandle, Handle);
+  CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetCryptoHandle_ShouldReturnNonZero_WhenLoaded;
@@ -235,7 +235,7 @@ begin
   Handle := FCore.GetCryptoLibHandle;
   
   // Then
-  AssertTrue('Handle should be non-zero when loaded', Handle <> NilHandle);
+  CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetSSLHandle_ShouldReturnZero_WhenNotLoaded;
@@ -249,7 +249,7 @@ begin
   Handle := FCore.GetSSLLibHandle;
   
   // Then
-  AssertEquals('Handle should be NilHandle when not loaded', NilHandle, Handle);
+  CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestGetSSLHandle_ShouldReturnNonZero_WhenLoaded;
@@ -263,7 +263,7 @@ begin
   Handle := FCore.GetSSLLibHandle;
   
   // Then
-  AssertTrue('Handle should be non-zero when loaded', Handle <> NilHandle);
+  CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
 end;
 
 procedure TTestOpenSSLCoreMock.TestLoad_ShouldHandleMultipleFailures;
@@ -278,9 +278,9 @@ begin
   Result2 := FCore.LoadLibrary;
   
   // Then
-  AssertFalse('First load should fail', Result1);
-  AssertFalse('Second load should also fail', Result2);
-  AssertEquals('Should track both attempts', 2, FMock.GetLoadCallCount);
+  CheckFalse(Result1, 'First load should fail');
+  CheckFalse(Result2, 'Second load should also fail');
+  CheckEqual(2, FMock.GetLoadCallCount, 'Should track both attempts');
 end;
 
 procedure TTestOpenSSLCoreMock.TestUnload_ShouldAllowReload;
@@ -295,12 +295,9 @@ begin
   LoadResult2 := FCore.LoadLibrary;
   
   // Then
-  AssertTrue('First load should succeed', LoadResult1);
-  AssertTrue('Reload should succeed', LoadResult2);
-  AssertTrue('Should be loaded after reload', FCore.IsLoaded);
+  CheckTrue(LoadResult1, 'First load should succeed');
+  CheckTrue(LoadResult2, 'Reload should succeed');
+  CheckTrue(FCore.IsLoaded, 'Should be loaded after reload');
 end;
-
-initialization
-  RegisterTest(TTestOpenSSLCoreMock);
 
 end.

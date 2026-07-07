@@ -5,12 +5,9 @@ program test_static_avx2_misalignment;
 {$R-}{$Q-}
 
 uses
-  nextpas.core.base,
-  nextpas.core.exception,
-  nextpas.core.text.conv,
-  nextpas.core.simd.base,
-  nextpas.core.simd.cpuinfo,
-  nextpas.core.simd.static.avx2;
+  nextpas.core.base, nextpas.core.exception,
+  nextpas.core.text.conv, nextpas.core.simd.base,
+  nextpas.core.simd.cpuinfo, nextpas.core.simd.static.avx2;
 
 type
   PVecF32x4 = ^TVecF32x4;

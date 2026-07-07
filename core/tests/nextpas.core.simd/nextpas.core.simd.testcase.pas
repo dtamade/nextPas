@@ -12,43 +12,32 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  Classes, Math, nextpas.core.base, nextpas.core.exception, nextpas.core.math,
-  nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.base,
-  nextpas.core.simd.fixturehelpers,
-  nextpas.core.simd.utils,
-  nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar,
-  nextpas.core.simd.backend.consistency.testcase,
-  {$IFDEF CPUX86_64}
-  nextpas.core.simd.sse2,
-  nextpas.core.simd.avx2,
-  {$ENDIF}
-  nextpas.core.simd.cpuinfo,
-  nextpas.core.simd.cpuinfo.base,
-  nextpas.core.simd.memutils,
-  nextpas.core.simd.builder;
+  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.simd, nextpas.core.simd.base,
+  nextpas.core.simd.fixturehelpers, nextpas.core.simd.utils, nextpas.core.simd.dispatch, nextpas.core.simd.scalar,
+  nextpas.core.simd.backend.consistency.testcase, {$IFDEF CPUX86_64}
+  nextpas.core.simd.sse2, nextpas.core.simd.avx2, {$ENDIF}
+  nextpas.core.simd.cpuinfo, nextpas.core.simd.cpuinfo.base, nextpas.core.simd.memutils, nextpas.core.simd.builder;
 
+{$M+}
 type
-  TSimdBackendStatefulTestCase = class(TTestCase)
-  protected
+  TSimdBackendStatefulTestCase = class(TTestFixture)
+  public
     FSavedBackend: TSimdBackend;
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   end;
 
   TScalarBackendStatefulTestCase = class(TSimdBackendStatefulTestCase)
-  protected
-    procedure SetUp; override;
+  public
+    procedure BeforeEach; override;
   end;
 
   TSimdVectorAsmStatefulTestCase = class(TSimdBackendStatefulTestCase)
-  protected
+  public
     FSavedVectorAsm: Boolean;
     procedure RestoreVectorAsmState; virtual;
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   end;
 
   {$IFDEF UNIX}
@@ -58,7 +47,7 @@ type
     function GetVectorAsmTargetBackend: TSimdBackend; virtual; abstract;
     procedure RefreshVectorAsmBackendRegistration; virtual; abstract;
     procedure RestoreVectorAsmState; override;
-    procedure SetUp; override;
+    procedure BeforeEach; override;
   end;
   {$ENDIF}
   {$ENDIF}
@@ -108,7 +97,7 @@ type
 
   {$IFDEF CPUX86_64}
   // 后端一致性测试 - 确保所有后端对同一输入产生相同结果
-  TTestCase_BackendConsistency = class(TTestCase)
+  TTestCase_BackendConsistency = class(TTestFixture)
   published
     procedure Test_MemEqual_Consistency;
     procedure Test_MemFindByte_Consistency;
@@ -126,7 +115,7 @@ type
   end;
 
   // SIMD 向量运算一致性测试（跨后端 vs Scalar）
-  TTestCase_BackendVectorConsistency = class(TTestCase)
+  TTestCase_BackendVectorConsistency = class(TTestFixture)
   published
     procedure Test_VectorOps_BackendName_Coverage;
     procedure Test_VectorOps_Consistency;
@@ -161,7 +150,7 @@ type
 
   {$IFDEF CPUX86_64}
   // x86 后端谓词测试（纯逻辑，不依赖可执行的 AVX-512 后端）
-  TTestCase_X86BackendPredicates = class(TTestCase)
+  TTestCase_X86BackendPredicates = class(TTestFixture)
   published
     procedure Test_X86HasAVX512BackendRequiredFeatures_AVX512FOnly_Disabled;
     procedure Test_X86HasAVX512BackendRequiredFeatures_RequiresFMA;
@@ -172,8 +161,8 @@ type
   {$IFDEF SIMD_BACKEND_AVX512}
   // AVX-512 后端接线测试（依赖 backend 已编进当前构建）
   TTestCase_AVX512BackendRequirements = class(TSimdVectorAsmStatefulTestCase)
-  protected
-    procedure SetUp; override;
+  public
+    procedure BeforeEach; override;
   published
     procedure Test_AVX512Backend_RegisteredDispatchTable_IsAccessible;
     procedure Test_AVX512Backend_DispatchTable_Overrides512BitLoadStoreAndSelect;
@@ -427,7 +416,7 @@ type
   end;
 
   // Phase 1.1: 无符号向量类型测试
-  TTestCase_UnsignedVectorTypes = class(TTestCase)
+  TTestCase_UnsignedVectorTypes = class(TTestFixture)
   published
     // TVecU32x4 类型定义测试
     procedure Test_VecU32x4_TypeDef_Size;
@@ -743,31 +732,29 @@ end;
 
 { TSimdBackendStatefulTestCase }
 
-procedure TSimdBackendStatefulTestCase.SetUp;
+procedure TSimdBackendStatefulTestCase.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
   GetDispatchTable;
   FSavedBackend := GetCurrentBackend;
 end;
 
-procedure TSimdBackendStatefulTestCase.TearDown;
+procedure TSimdBackendStatefulTestCase.AfterEach;
 var
   LRestoredBackend: Boolean;
 begin
-  LRestoredBackend := RestoreSavedBackendStateAndVerify(FSavedBackend,
-    @GetCurrentBackend);
+  LRestoredBackend := RestoreSavedBackendStateAndVerify(FSavedBackend, @GetCurrentBackend);
 
-  inherited TearDown;
+  {{inherited TearDown; -- removed} -- removed}
 
-  AssertTrue(ClassName + ' should restore previous backend selection',
-    LRestoredBackend);
+  CheckTrue(LRestoredBackend, ClassName + ' should restore previous backend selection');
 end;
 
 { TScalarBackendStatefulTestCase }
 
-procedure TScalarBackendStatefulTestCase.SetUp;
+procedure TScalarBackendStatefulTestCase.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
   ForceBackend(sbScalar);
 end;
 
@@ -778,23 +765,22 @@ begin
   SetVectorAsmEnabled(FSavedVectorAsm);
 end;
 
-procedure TSimdVectorAsmStatefulTestCase.SetUp;
+procedure TSimdVectorAsmStatefulTestCase.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
   FSavedVectorAsm := IsVectorAsmEnabled;
 end;
 
-procedure TSimdVectorAsmStatefulTestCase.TearDown;
+procedure TSimdVectorAsmStatefulTestCase.AfterEach;
 var
   LRestoredVectorAsm: Boolean;
 begin
   RestoreVectorAsmState;
   LRestoredVectorAsm := IsVectorAsmEnabled = FSavedVectorAsm;
 
-  inherited TearDown;
+  {{inherited TearDown; -- removed} -- removed}
 
-  AssertTrue(ClassName + ' should restore previous vector asm state',
-    LRestoredVectorAsm);
+  CheckTrue(LRestoredVectorAsm, ClassName + ' should restore previous vector asm state');
 end;
 
 {$IFDEF UNIX}
@@ -807,9 +793,9 @@ begin
   RefreshVectorAsmBackendRegistration;
 end;
 
-procedure TSimdVectorAsmBackendStatefulTestCase.SetUp;
+procedure TSimdVectorAsmBackendStatefulTestCase.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
 
   // 强制开启 vector asm，并重新注册目标后端以刷新 dispatch table。
   SetVectorAsmEnabled(True);
@@ -835,22 +821,22 @@ begin
     buf2[i] := i;
   end;
   
-  AssertTrue('MemEqual should return True for equal buffers', MemEqual(@buf1[0], @buf2[0], 16));
+  CheckTrue(MemEqual(@buf1[0], @buf2[0], 16), 'MemEqual should return True for equal buffers');
   
   // 测试不相等的内存区域
   buf2[8] := 255;
-  AssertFalse('MemEqual should return False for different buffers', MemEqual(@buf1[0], @buf2[0], 16));
+  CheckFalse(MemEqual(@buf1[0], @buf2[0], 16), 'MemEqual should return False for different buffers');
 end;
 
 procedure TTestCase_Global.Test_MemEqual_Empty;
 begin
-  AssertTrue('MemEqual should return True for zero length', MemEqual(nil, nil, 0));
+  CheckTrue(MemEqual(nil, nil, 0), 'MemEqual should return True for zero length');
 end;
 
 procedure TTestCase_Global.Test_MemEqual_Nil;
 begin
-  AssertTrue('MemEqual should return True for both nil pointers', MemEqual(nil, nil, 10));
-  AssertFalse('MemEqual should return False for one nil pointer', MemEqual(@Self, nil, 10));
+  CheckTrue(MemEqual(nil, nil, 10), 'MemEqual should return True for both nil pointers');
+  CheckFalse(MemEqual(@Self, nil, 10), 'MemEqual should return False for one nil pointer');
 end;
 
 procedure TTestCase_Global.Test_MemFindByte;
@@ -861,9 +847,9 @@ begin
   for i := 0 to 15 do
     buf[i] := i;
     
-  AssertEquals('Should find byte at correct position', 5, MemFindByte(@buf[0], 16, 5));
-  AssertEquals('Should find first occurrence', 0, MemFindByte(@buf[0], 16, 0));
-  AssertEquals('Should find last occurrence', 15, MemFindByte(@buf[0], 16, 15));
+  CheckEqual(5, MemFindByte(@buf[0], 16, 5), 'Should find byte at correct position');
+  CheckEqual(0, MemFindByte(@buf[0], 16, 0), 'Should find first occurrence');
+  CheckEqual(15, MemFindByte(@buf[0], 16, 15), 'Should find last occurrence');
 end;
 
 procedure TTestCase_Global.Test_MemFindByte_NotFound;
@@ -874,12 +860,12 @@ begin
   for i := 0 to 15 do
     buf[i] := i;
     
-  AssertEquals('Should return -1 when byte not found', -1, MemFindByte(@buf[0], 16, 255));
+  CheckEqual(-1, MemFindByte(@buf[0], 16, 255), 'Should return -1 when byte not found');
 end;
 
 procedure TTestCase_Global.Test_MemFindByte_Empty;
 begin
-  AssertEquals('Should return -1 for empty buffer', -1, MemFindByte(nil, 0, 5));
+  CheckEqual(-1, MemFindByte(nil, 0, 5), 'Should return -1 for empty buffer');
 end;
 
 procedure TTestCase_Global.Test_MemDiffRange;
@@ -902,9 +888,9 @@ begin
   
   hasDiff := MemDiffRange(@buf1[0], @buf2[0], 16, firstDiff, lastDiff);
   
-  AssertTrue('Should detect differences', hasDiff);
-  AssertEquals('First difference should be at position 5', 5, firstDiff);
-  AssertEquals('Last difference should be at position 10', 10, lastDiff);
+  CheckTrue(hasDiff, 'Should detect differences');
+  CheckEqual(5, firstDiff, 'First difference should be at position 5');
+  CheckEqual(10, lastDiff, 'Last difference should be at position 10');
 end;
 
 procedure TTestCase_Global.Test_MemDiffRange_NoDiff;
@@ -922,7 +908,7 @@ begin
   
   hasDiff := MemDiffRange(@buf1[0], @buf2[0], 16, firstDiff, lastDiff);
   
-  AssertFalse('Should not detect differences in identical buffers', hasDiff);
+  CheckFalse(hasDiff, 'Should not detect differences in identical buffers');
 end;
 
 procedure TTestCase_Global.Test_MemCopy;
@@ -939,7 +925,7 @@ begin
   MemCopy(@src[0], @dst[0], 16);
   
   for i := 0 to 15 do
-    AssertEquals('Copied data should match source', src[i], dst[i]);
+    CheckEqual(src[i], dst[i], 'Copied data should match source');
 end;
 
 procedure TTestCase_Global.Test_MemSet;
@@ -954,7 +940,7 @@ begin
   MemSet(@buf[0], 16, 42);
   
   for i := 0 to 15 do
-    AssertEquals('All bytes should be set to 42', 42, buf[i]);
+    CheckEqual(42, buf[i], 'All bytes should be set to 42');
 end;
 
 procedure TTestCase_Global.Test_MemReverse;
@@ -968,7 +954,7 @@ begin
   MemReverse(@buf[0], 8);
   
   for i := 0 to 7 do
-    AssertEquals('Reversed buffer should have correct values', 7 - i, buf[i]);
+    CheckEqual(7 - i, buf[i], 'Reversed buffer should have correct values');
 end;
 
 // === 统计函数测试 ===
@@ -984,7 +970,7 @@ begin
   buf[3] := 4;
   
   sum := SumBytes(@buf[0], 4);
-  AssertEquals('Sum should be 10', 10, sum);
+  CheckEqual(10, sum, 'Sum should be 10');
 end;
 
 procedure TTestCase_Global.Test_SumBytes_Empty;
@@ -992,7 +978,7 @@ var
   sum: UInt64;
 begin
   sum := SumBytes(nil, 0);
-  AssertEquals('Sum of empty buffer should be 0', 0, sum);
+  CheckEqual(0, sum, 'Sum of empty buffer should be 0');
 end;
 
 procedure TTestCase_Global.Test_MinMaxBytes;
@@ -1008,8 +994,8 @@ begin
   
   MinMaxBytes(@buf[0], 5, minVal, maxVal);
   
-  AssertEquals('Min value should be 1', 1, minVal);
-  AssertEquals('Max value should be 20', 20, maxVal);
+  CheckEqual(1, minVal, 'Min value should be 1');
+  CheckEqual(20, maxVal, 'Max value should be 20');
 end;
 
 procedure TTestCase_Global.Test_MinMaxBytes_Single;
@@ -1021,8 +1007,8 @@ begin
   
   MinMaxBytes(@buf[0], 1, minVal, maxVal);
   
-  AssertEquals('Min value should be 42', 42, minVal);
-  AssertEquals('Max value should be 42', 42, maxVal);
+  CheckEqual(42, minVal, 'Min value should be 42');
+  CheckEqual(42, maxVal, 'Max value should be 42');
 end;
 
 procedure TTestCase_Global.Test_CountByte;
@@ -1040,7 +1026,7 @@ begin
   buf[7] := 5;
   
   count := CountByte(@buf[0], 8, 1);
-  AssertEquals('Should count 4 occurrences of byte 1', 4, count);
+  CheckEqual(4, count, 'Should count 4 occurrences of byte 1');
 end;
 
 procedure TTestCase_Global.Test_CountByte_None;
@@ -1053,7 +1039,7 @@ begin
     buf[i] := i;
     
   count := CountByte(@buf[0], 8, 255);
-  AssertEquals('Should count 0 occurrences of byte 255', 0, count);
+  CheckEqual(0, count, 'Should count 0 occurrences of byte 255');
 end;
 
 // === 文本处理函数测试 ===
@@ -1071,7 +1057,7 @@ begin
   validUtf8[4] := Ord('o');
 
   isValid := Utf8Validate(@validUtf8[0], 5);
-  AssertTrue('Valid ASCII should pass UTF-8 validation', isValid);
+  CheckTrue(isValid, 'Valid ASCII should pass UTF-8 validation');
 end;
 
 procedure TTestCase_Global.Test_Utf8Validate_Invalid;
@@ -1084,7 +1070,7 @@ begin
   invalidUtf8[1] := $80;
 
   isValid := Utf8Validate(@invalidUtf8[0], 2);
-  AssertFalse('Invalid UTF-8 sequence should fail validation', isValid);
+  CheckFalse(isValid, 'Invalid UTF-8 sequence should fail validation');
 end;
 
 procedure TTestCase_Global.Test_AsciiIEqual;
@@ -1106,7 +1092,7 @@ begin
   buf2[4] := Ord('O');
 
   isEqual := AsciiIEqual(@buf1[0], @buf2[0], 5);
-  AssertTrue('Case-insensitive comparison should return true', isEqual);
+  CheckTrue(isEqual, 'Case-insensitive comparison should return true');
 end;
 
 procedure TTestCase_Global.Test_AsciiIEqual_CaseDiff;
@@ -1127,7 +1113,7 @@ begin
   buf2[4] := Ord('d');
 
   isEqual := AsciiIEqual(@buf1[0], @buf2[0], 5);
-  AssertFalse('Different strings should return false', isEqual);
+  CheckFalse(isEqual, 'Different strings should return false');
 end;
 
 procedure TTestCase_Global.Test_ToLowerAscii;
@@ -1142,11 +1128,11 @@ begin
 
   ToLowerAscii(@buf[0], 5);
 
-  AssertEquals('H should become h', Ord('h'), buf[0]);
-  AssertEquals('E should become e', Ord('e'), buf[1]);
-  AssertEquals('L should become l', Ord('l'), buf[2]);
-  AssertEquals('L should become l', Ord('l'), buf[3]);
-  AssertEquals('O should become o', Ord('o'), buf[4]);
+  CheckEqual(Ord('h'), buf[0], 'H should become h');
+  CheckEqual(Ord('e'), buf[1], 'E should become e');
+  CheckEqual(Ord('l'), buf[2], 'L should become l');
+  CheckEqual(Ord('l'), buf[3], 'L should become l');
+  CheckEqual(Ord('o'), buf[4], 'O should become o');
 end;
 
 procedure TTestCase_Global.Test_ToUpperAscii;
@@ -1161,11 +1147,11 @@ begin
 
   ToUpperAscii(@buf[0], 5);
 
-  AssertEquals('h should become H', Ord('H'), buf[0]);
-  AssertEquals('e should become E', Ord('E'), buf[1]);
-  AssertEquals('l should become L', Ord('L'), buf[2]);
-  AssertEquals('l should become L', Ord('L'), buf[3]);
-  AssertEquals('o should become O', Ord('O'), buf[4]);
+  CheckEqual(Ord('H'), buf[0], 'h should become H');
+  CheckEqual(Ord('E'), buf[1], 'e should become E');
+  CheckEqual(Ord('L'), buf[2], 'l should become L');
+  CheckEqual(Ord('L'), buf[3], 'l should become L');
+  CheckEqual(Ord('O'), buf[4], 'o should become O');
 end;
 
 // === 搜索函数测试 ===
@@ -1187,7 +1173,7 @@ begin
   needle[2] := 5;
 
   index := BytesIndexOf(@haystack[0], 10, @needle[0], 3);
-  AssertEquals('Should find needle at position 3', 3, index);
+  CheckEqual(3, index, 'Should find needle at position 3');
 end;
 
 procedure TTestCase_Global.Test_BytesIndexOf_NotFound;
@@ -1205,7 +1191,7 @@ begin
   needle[2] := 22;
 
   index := BytesIndexOf(@haystack[0], 10, @needle[0], 3);
-  AssertEquals('Should return -1 when needle not found', -1, index);
+  CheckEqual(-1, index, 'Should return -1 when needle not found');
 end;
 
 procedure TTestCase_Global.Test_BytesIndexOf_Empty;
@@ -1214,7 +1200,7 @@ var
   index: PtrInt;
 begin
   index := BytesIndexOf(@haystack[0], 10, nil, 0);
-  AssertEquals('Should return -1 for empty needle', -1, index);
+  CheckEqual(-1, index, 'Should return -1 for empty needle');
 end;
 
 // === 位集函数测试 ===
@@ -1230,7 +1216,7 @@ begin
   buf[3] := $00;  // 00000000 = 0 bits
 
   count := BitsetPopCount(@buf[0], 4);
-  AssertEquals('Should count 16 set bits total', 16, count);
+  CheckEqual(16, count, 'Should count 16 set bits total');
 end;
 
 procedure TTestCase_Global.Test_BitsetPopCount_Empty;
@@ -1238,7 +1224,7 @@ var
   count: SizeUInt;
 begin
   count := BitsetPopCount(nil, 0);
-  AssertEquals('Empty bitset should have 0 bits set', 0, count);
+  CheckEqual(0, count, 'Empty bitset should have 0 bits set');
 end;
 
 procedure TTestCase_Global.Test_BitsetPopCount_AllSet;
@@ -1250,7 +1236,7 @@ begin
   buf[1] := $FF;
 
   count := BitsetPopCount(@buf[0], 2);
-  AssertEquals('All bits set should count 16', 16, count);
+  CheckEqual(16, count, 'All bits set should count 16');
 end;
 
 {$IFDEF CPUX86_64}
@@ -1286,10 +1272,10 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertTrue('Scalar should return true for equal buffers', resScalar);
-  AssertEquals('SSE2 should match Scalar (equal)', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar (equal)', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar (equal)', resScalar, resAVX512);
+  CheckTrue(resScalar, 'Scalar should return true for equal buffers');
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar (equal)');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (equal)');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar (equal)');
   
   // 测试不等情况
   buf2[128] := 255;
@@ -1308,10 +1294,10 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertFalse('Scalar should return false for different buffers', resScalar);
-  AssertEquals('SSE2 should match Scalar (different)', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar (different)', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar (different)', resScalar, resAVX512);
+  CheckFalse(resScalar, 'Scalar should return false for different buffers');
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar (different)');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (different)');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar (different)');
 end;
 
 procedure TTestCase_BackendConsistency.Test_MemFindByte_Consistency;
@@ -1339,9 +1325,9 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertEquals('SSE2 should match Scalar (found)', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar (found)', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar (found)', resScalar, resAVX512);
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar (found)');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (found)');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar (found)');
   
   // 查找不存在的字节
   resScalar := MemFindByte_Scalar(@buf[0], 256, 200);
@@ -1359,9 +1345,9 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertEquals('SSE2 should match Scalar (not found)', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar (not found)', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar (not found)', resScalar, resAVX512);
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar (not found)');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (not found)');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar (not found)');
 end;
 
 procedure TTestCase_BackendConsistency.Test_SumBytes_Consistency;
@@ -1389,10 +1375,10 @@ begin
   {$ENDIF}
   
   // 0+1+2+...+255 = 255*256/2 = 32640
-  AssertEquals('Scalar sum should be 32640', 32640, resScalar);
-  AssertEquals('SSE2 should match Scalar', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar', resScalar, resAVX512);
+  CheckEqual(32640, resScalar, 'Scalar sum should be 32640');
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar');
 end;
 
 procedure TTestCase_BackendConsistency.Test_CountByte_Consistency;
@@ -1419,10 +1405,10 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertEquals('Scalar count should be 16', 16, resScalar);
-  AssertEquals('SSE2 should match Scalar', resScalar, resSSE2);
-  AssertEquals('AVX2 should match Scalar', resScalar, resAVX2);
-  AssertEquals('AVX512 should match Scalar', resScalar, resAVX512);
+  CheckEqual(16, resScalar, 'Scalar count should be 16');
+  CheckEqual(resScalar, resSSE2, 'SSE2 should match Scalar');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar');
+  CheckEqual(resScalar, resAVX512, 'AVX512 should match Scalar');
 end;
 
 procedure TTestCase_BackendConsistency.Test_MinMaxBytes_Consistency;
@@ -1455,10 +1441,10 @@ begin
   maxAVX512 := maxScalar;
   {$ENDIF}
   
-  AssertEquals('AVX2 min should match Scalar', minScalar, minAVX2);
-  AssertEquals('AVX2 max should match Scalar', maxScalar, maxAVX2);
-  AssertEquals('AVX512 min should match Scalar', minScalar, minAVX512);
-  AssertEquals('AVX512 max should match Scalar', maxScalar, maxAVX512);
+  CheckEqual(minScalar, minAVX2, 'AVX2 min should match Scalar');
+  CheckEqual(maxScalar, maxAVX2, 'AVX2 max should match Scalar');
+  CheckEqual(minScalar, minAVX512, 'AVX512 min should match Scalar');
+  CheckEqual(maxScalar, maxAVX512, 'AVX512 max should match Scalar');
 end;
 
 procedure TTestCase_BackendConsistency.Test_BitsetPopCount_Consistency;
@@ -1485,8 +1471,8 @@ begin
   resAVX512 := resScalar;
   {$ENDIF}
   
-  AssertEquals('AVX2 popcount should match Scalar', resScalar, resAVX2);
-  AssertEquals('AVX512 popcount should match Scalar', resScalar, resAVX512);
+  CheckEqual(resScalar, resAVX2, 'AVX2 popcount should match Scalar');
+  CheckEqual(resScalar, resAVX512, 'AVX512 popcount should match Scalar');
 end;
 
 procedure TTestCase_BackendConsistency.Test_Utf8Validate_Consistency;
@@ -1512,8 +1498,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@ValidASCII[0], 5)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for valid ASCII', resScalar, resAVX2);
-  AssertTrue('Valid ASCII should pass', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for valid ASCII');
+  CheckTrue(resScalar, 'Valid ASCII should pass');
   
   // 测试 2: 有效 2 字节 UTF-8
   resScalar := Utf8Validate_Scalar(@Valid2Byte[0], 2);
@@ -1521,8 +1507,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@Valid2Byte[0], 2)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for valid 2-byte', resScalar, resAVX2);
-  AssertTrue('Valid 2-byte should pass', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for valid 2-byte');
+  CheckTrue(resScalar, 'Valid 2-byte should pass');
   
   // 测试 3: 有效 3 字节 UTF-8
   resScalar := Utf8Validate_Scalar(@Valid3Byte[0], 3);
@@ -1530,8 +1516,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@Valid3Byte[0], 3)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for valid 3-byte', resScalar, resAVX2);
-  AssertTrue('Valid 3-byte should pass', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for valid 3-byte');
+  CheckTrue(resScalar, 'Valid 3-byte should pass');
   
   // 测试 4: 有效 4 字节 UTF-8
   resScalar := Utf8Validate_Scalar(@Valid4Byte[0], 4);
@@ -1539,8 +1525,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@Valid4Byte[0], 4)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for valid 4-byte', resScalar, resAVX2);
-  AssertTrue('Valid 4-byte should pass', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for valid 4-byte');
+  CheckTrue(resScalar, 'Valid 4-byte should pass');
   
   // 测试 5: 无效超长编码
   resScalar := Utf8Validate_Scalar(@InvalidOverlong[0], 2);
@@ -1548,8 +1534,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@InvalidOverlong[0], 2)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for invalid overlong', resScalar, resAVX2);
-  AssertFalse('Invalid overlong should fail', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for invalid overlong');
+  CheckFalse(resScalar, 'Invalid overlong should fail');
   
   // 测试 6: 不完整序列
   resScalar := Utf8Validate_Scalar(@InvalidIncomplete[0], 1);
@@ -1557,8 +1543,8 @@ begin
     resAVX2 := Utf8Validate_AVX2(@InvalidIncomplete[0], 1)
   else
     resAVX2 := resScalar;
-  AssertEquals('AVX2 should match Scalar for incomplete', resScalar, resAVX2);
-  AssertFalse('Incomplete sequence should fail', resScalar);
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for incomplete');
+  CheckFalse(resScalar, 'Incomplete sequence should fail');
 end;
 
 procedure TTestCase_BackendConsistency.Test_MemReverse_Consistency;
@@ -1580,8 +1566,7 @@ begin
     MemReverse_Scalar(@bufAVX2[0], 256);
   
   for i := 0 to 255 do
-    AssertEquals('AVX2 reverse should match Scalar at index ' + IntToStr(i), 
-                 bufScalar[i], bufAVX2[i]);
+    CheckEqual(bufScalar[i], bufAVX2[i], 'AVX2 reverse should match Scalar at index ' + IntToStr(i));
 end;
 
 procedure TTestCase_BackendConsistency.Test_AsciiIEqual_Consistency;
@@ -1603,8 +1588,8 @@ begin
   else
     resAVX2 := resScalar;
   
-  AssertTrue('Scalar should match case-insensitively', resScalar);
-  AssertEquals('AVX2 should match Scalar', resScalar, resAVX2);
+  CheckTrue(resScalar, 'Scalar should match case-insensitively');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar');
   
   // 测试 2: 不同字符串
   buf2[32] := Byte(48);  // '0' != 'q'
@@ -1614,8 +1599,8 @@ begin
   else
     resAVX2 := resScalar;
   
-  AssertFalse('Scalar should detect difference', resScalar);
-  AssertEquals('AVX2 should match Scalar for different', resScalar, resAVX2);
+  CheckFalse(resScalar, 'Scalar should detect difference');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for different');
 end;
 
 procedure TTestCase_BackendConsistency.Test_ToLowerAscii_Consistency;
@@ -1640,8 +1625,7 @@ begin
     ToLowerAscii_Scalar(@bufAVX2[0], 128);
   
   for i := 0 to 127 do
-    AssertEquals('AVX2 ToLower should match Scalar at index ' + IntToStr(i), 
-                 bufScalar[i], bufAVX2[i]);
+    CheckEqual(bufScalar[i], bufAVX2[i], 'AVX2 ToLower should match Scalar at index ' + IntToStr(i));
 end;
 
 procedure TTestCase_BackendConsistency.Test_ToUpperAscii_Consistency;
@@ -1666,8 +1650,7 @@ begin
     ToUpperAscii_Scalar(@bufAVX2[0], 128);
   
   for i := 0 to 127 do
-    AssertEquals('AVX2 ToUpper should match Scalar at index ' + IntToStr(i), 
-                 bufScalar[i], bufAVX2[i]);
+    CheckEqual(bufScalar[i], bufAVX2[i], 'AVX2 ToUpper should match Scalar at index ' + IntToStr(i));
 end;
 
 procedure TTestCase_BackendConsistency.Test_MemDiffRange_Consistency;
@@ -1699,10 +1682,10 @@ begin
     lastAVX2 := lastScalar;
   end;
   
-  AssertTrue('Scalar should detect differences', resScalar);
-  AssertEquals('AVX2 should match Scalar result', resScalar, resAVX2);
-  AssertEquals('AVX2 first diff should match Scalar', firstScalar, firstAVX2);
-  AssertEquals('AVX2 last diff should match Scalar', lastScalar, lastAVX2);
+  CheckTrue(resScalar, 'Scalar should detect differences');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar result');
+  CheckEqual(firstScalar, firstAVX2, 'AVX2 first diff should match Scalar');
+  CheckEqual(lastScalar, lastAVX2, 'AVX2 last diff should match Scalar');
   
   // 测试无差异情况
   for i := 0 to 255 do
@@ -1714,8 +1697,8 @@ begin
   else
     resAVX2 := resScalar;
   
-  AssertFalse('Scalar should not detect differences', resScalar);
-  AssertEquals('AVX2 should match Scalar for no diff', resScalar, resAVX2);
+  CheckFalse(resScalar, 'Scalar should not detect differences');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar for no diff');
 end;
 
 procedure TTestCase_BackendConsistency.Test_BytesIndexOf_Consistency;
@@ -1741,8 +1724,8 @@ begin
   else
     resAVX2 := resScalar;
   
-  AssertEquals('Scalar should find needle at 64', 64, resScalar);
-  AssertEquals('AVX2 should match Scalar (found)', resScalar, resAVX2);
+  CheckEqual(64, resScalar, 'Scalar should find needle at 64');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (found)');
   
   // 测试找不到的情况
   needle[0] := 200;
@@ -1756,8 +1739,8 @@ begin
   else
     resAVX2 := resScalar;
   
-  AssertEquals('Scalar should not find needle', -1, resScalar);
-  AssertEquals('AVX2 should match Scalar (not found)', resScalar, resAVX2);
+  CheckEqual(-1, resScalar, 'Scalar should not find needle');
+  CheckEqual(resScalar, resAVX2, 'AVX2 should match Scalar (not found)');
 end;
 
 procedure TTestCase_BackendVectorConsistency.Test_VectorOps_BackendName_Coverage;
@@ -1768,18 +1751,14 @@ begin
   for LBackendIndex := Low(CONSISTENCY_BACKENDS) to High(CONSISTENCY_BACKENDS) do
   begin
     LBackend := CONSISTENCY_BACKENDS[LBackendIndex];
-    AssertTrue('Backend consistency name helper should not return Unknown for backend=' +
-      GetConsistencyBackendName(LBackend), GetConsistencyBackendName(LBackend) <> 'Unknown');
+    CheckTrue(GetConsistencyBackendName(LBackend) <> 'Unknown', 'Backend consistency name helper should not return Unknown for backend=' +
+      GetConsistencyBackendName(LBackend));
   end;
 
-  AssertEquals('SSE4.1 backend consistency name mismatch', 'SSE4.1',
-    GetConsistencyBackendName(sbSSE41));
-  AssertEquals('SSE4.2 backend consistency name mismatch', 'SSE4.2',
-    GetConsistencyBackendName(sbSSE42));
-  AssertEquals('AVX-512 backend consistency name mismatch', 'AVX-512',
-    GetConsistencyBackendName(sbAVX512));
-  AssertEquals('RISC-V V backend consistency name mismatch', 'RISC-V V',
-    GetConsistencyBackendName(sbRISCVV));
+  CheckEqual('SSE4.1', GetConsistencyBackendName(sbSSE41), 'SSE4.1 backend consistency name mismatch');
+  CheckEqual('SSE4.2', GetConsistencyBackendName(sbSSE42), 'SSE4.2 backend consistency name mismatch');
+  CheckEqual('AVX-512', GetConsistencyBackendName(sbAVX512), 'AVX-512 backend consistency name mismatch');
+  CheckEqual('RISC-V V', GetConsistencyBackendName(sbRISCVV), 'RISC-V V backend consistency name mismatch');
 end;
 
 procedure TTestCase_BackendVectorConsistency.Test_VectorOps_Consistency;
@@ -1808,10 +1787,8 @@ begin
     if failMsg <> '' then
       Fail(failMsg);
   finally
-    LRestoredBackend := RestoreSavedBackendStateAndVerify(LOriginalBackend,
-      @GetCurrentBackend);
-    AssertTrue('Backend vector consistency wrapper should restore previous backend selection',
-      LRestoredBackend);
+    LRestoredBackend := RestoreSavedBackendStateAndVerify(LOriginalBackend, @GetCurrentBackend);
+    CheckTrue(LRestoredBackend, 'Backend vector consistency wrapper should restore previous backend selection');
   end;
 end;
 
@@ -1830,11 +1807,9 @@ begin
     if GetBestDispatchableBackend = sbScalar then
       Exit;
 
-    AssertTrue('Scalar force setup should succeed before helper restore test',
-      TrySetActiveBackend(sbScalar));
+    CheckTrue(TrySetActiveBackend(sbScalar), 'Scalar force setup should succeed before helper restore test');
     LOriginalBackend := GetCurrentBackend;
-    AssertEquals('Scalar should be active before helper restore test',
-      Ord(sbScalar), Ord(LOriginalBackend));
+    CheckEqual(Ord(sbScalar), Ord(LOriginalBackend), 'Scalar should be active before helper restore test');
 
     LFoundBackend := False;
     for LIndex := Low(CONSISTENCY_BACKENDS) to High(CONSISTENCY_BACKENDS) do
@@ -1849,21 +1824,15 @@ begin
       end;
     end;
 
-    AssertTrue('At least one non-scalar backend should be available for helper restore test',
-      LFoundBackend);
-    AssertTrue('Scalar should be re-forced before helper restore test',
-      TrySetActiveBackend(sbScalar));
-    AssertEquals('Scalar should remain forced before helper restore test executes',
-      Ord(LOriginalBackend), Ord(GetCurrentBackend));
+    CheckTrue(LFoundBackend, 'At least one non-scalar backend should be available for helper restore test');
+    CheckTrue(TrySetActiveBackend(sbScalar), 'Scalar should be re-forced before helper restore test');
+    CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Scalar should remain forced before helper restore test executes');
 
     LResult := TestF32x4Arithmetic(LTargetBackend);
-    AssertTrue(Format('Standalone helper sanity check failed for backend %s: %s',
-      [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]), LResult.Passed);
-    AssertEquals('Standalone backend consistency helper should preserve previous forced backend selection',
-      Ord(LOriginalBackend), Ord(GetCurrentBackend));
+    CheckTrue(LResult.Passed, Format('Standalone helper sanity check failed for backend %s: %s', [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]));
+    CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Standalone backend consistency helper should preserve previous forced backend selection');
   finally
-    AssertTrue('Backend vector consistency helper meta-test should restore entry backend selection',
-      RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend));
+    CheckTrue(RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend), 'Backend vector consistency helper meta-test should restore entry backend selection');
   end;
 end;
 
@@ -1878,19 +1847,15 @@ begin
     if GetBestDispatchableBackend = sbScalar then
       Exit;
 
-    AssertTrue('Scalar force setup should succeed before backend consistency wrapper restore test',
-      TrySetActiveBackend(sbScalar));
+    CheckTrue(TrySetActiveBackend(sbScalar), 'Scalar force setup should succeed before backend consistency wrapper restore test');
     LOriginalBackend := GetCurrentBackend;
-    AssertEquals('Scalar should be active before backend consistency wrapper restore test',
-      Ord(sbScalar), Ord(LOriginalBackend));
+    CheckEqual(Ord(sbScalar), Ord(LOriginalBackend), 'Scalar should be active before backend consistency wrapper restore test');
 
     Test_VectorOps_Consistency;
 
-    AssertEquals('Backend consistency wrapper should preserve previous forced backend selection',
-      Ord(LOriginalBackend), Ord(GetCurrentBackend));
+    CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Backend consistency wrapper should preserve previous forced backend selection');
   finally
-    AssertTrue('Backend vector consistency wrapper meta-test should restore entry backend selection',
-      RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend));
+    CheckTrue(RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend), 'Backend vector consistency wrapper meta-test should restore entry backend selection');
   end;
 end;
 
@@ -1913,61 +1878,61 @@ begin
   v := VecF32x4Load(@src[0]);
 
   sum := VecF32x4ReduceAdd(v);
-  AssertEquals('ReduceAdd should be 10', 10.0, sum, 0.0001);
+  CheckNear(10.0, sum, 0.0001, 'ReduceAdd should be 10');
 
   dot := VecF32x4Dot(v, VecF32x4Splat(1.0));
-  AssertEquals('Dot(v, splat(1)) should be 10', 10.0, dot, 0.0001);
+  CheckNear(10.0, dot, 0.0001, 'Dot(v, splat(1)) should be 10');
 
   w := VecF32x4Add(v, VecF32x4Splat(1.0));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Add[0]', 2.0, dst[0], 0.0001);
-  AssertEquals('Store/Add[1]', 3.0, dst[1], 0.0001);
-  AssertEquals('Store/Add[2]', 4.0, dst[2], 0.0001);
-  AssertEquals('Store/Add[3]', 5.0, dst[3], 0.0001);
+  CheckNear(2.0, dst[0], 0.0001, 'Store/Add[0]');
+  CheckNear(3.0, dst[1], 0.0001, 'Store/Add[1]');
+  CheckNear(4.0, dst[2], 0.0001, 'Store/Add[2]');
+  CheckNear(5.0, dst[3], 0.0001, 'Store/Add[3]');
 
   w := VecF32x4Sub(v, VecF32x4Splat(1.0));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Sub[0]', 0.0, dst[0], 0.0001);
-  AssertEquals('Store/Sub[1]', 1.0, dst[1], 0.0001);
-  AssertEquals('Store/Sub[2]', 2.0, dst[2], 0.0001);
-  AssertEquals('Store/Sub[3]', 3.0, dst[3], 0.0001);
+  CheckNear(0.0, dst[0], 0.0001, 'Store/Sub[0]');
+  CheckNear(1.0, dst[1], 0.0001, 'Store/Sub[1]');
+  CheckNear(2.0, dst[2], 0.0001, 'Store/Sub[2]');
+  CheckNear(3.0, dst[3], 0.0001, 'Store/Sub[3]');
 
   w := VecF32x4Mul(v, VecF32x4Splat(2.0));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Mul[0]', 2.0, dst[0], 0.0001);
-  AssertEquals('Store/Mul[1]', 4.0, dst[1], 0.0001);
-  AssertEquals('Store/Mul[2]', 6.0, dst[2], 0.0001);
-  AssertEquals('Store/Mul[3]', 8.0, dst[3], 0.0001);
+  CheckNear(2.0, dst[0], 0.0001, 'Store/Mul[0]');
+  CheckNear(4.0, dst[1], 0.0001, 'Store/Mul[1]');
+  CheckNear(6.0, dst[2], 0.0001, 'Store/Mul[2]');
+  CheckNear(8.0, dst[3], 0.0001, 'Store/Mul[3]');
 
   // Div: v / 2 = (0.5, 1.0, 1.5, 2.0)
   w := VecF32x4Div(v, VecF32x4Splat(2.0));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Div[0]', 0.5, dst[0], 0.0001);
-  AssertEquals('Store/Div[1]', 1.0, dst[1], 0.0001);
-  AssertEquals('Store/Div[2]', 1.5, dst[2], 0.0001);
-  AssertEquals('Store/Div[3]', 2.0, dst[3], 0.0001);
+  CheckNear(0.5, dst[0], 0.0001, 'Store/Div[0]');
+  CheckNear(1.0, dst[1], 0.0001, 'Store/Div[1]');
+  CheckNear(1.5, dst[2], 0.0001, 'Store/Div[2]');
+  CheckNear(2.0, dst[3], 0.0001, 'Store/Div[3]');
 
   // Min: min(v, splat(2.5)) = (1, 2, 2.5, 2.5)
   w := VecF32x4Min(v, VecF32x4Splat(2.5));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Min[0]', 1.0, dst[0], 0.0001);
-  AssertEquals('Store/Min[1]', 2.0, dst[1], 0.0001);
-  AssertEquals('Store/Min[2]', 2.5, dst[2], 0.0001);
-  AssertEquals('Store/Min[3]', 2.5, dst[3], 0.0001);
+  CheckNear(1.0, dst[0], 0.0001, 'Store/Min[0]');
+  CheckNear(2.0, dst[1], 0.0001, 'Store/Min[1]');
+  CheckNear(2.5, dst[2], 0.0001, 'Store/Min[2]');
+  CheckNear(2.5, dst[3], 0.0001, 'Store/Min[3]');
 
   // Max: max(v, splat(2.5)) = (2.5, 2.5, 3, 4)
   w := VecF32x4Max(v, VecF32x4Splat(2.5));
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Max[0]', 2.5, dst[0], 0.0001);
-  AssertEquals('Store/Max[1]', 2.5, dst[1], 0.0001);
-  AssertEquals('Store/Max[2]', 3.0, dst[2], 0.0001);
-  AssertEquals('Store/Max[3]', 4.0, dst[3], 0.0001);
+  CheckNear(2.5, dst[0], 0.0001, 'Store/Max[0]');
+  CheckNear(2.5, dst[1], 0.0001, 'Store/Max[1]');
+  CheckNear(3.0, dst[2], 0.0001, 'Store/Max[2]');
+  CheckNear(4.0, dst[3], 0.0001, 'Store/Max[3]');
 
   // Abs: abs((-1, 2, -3, 4)) = (1, 2, 3, 4)
   src[0] := -1.0; src[1] := 2.0; src[2] := -3.0; src[3] := 4.0;
@@ -1975,10 +1940,10 @@ begin
   w := VecF32x4Abs(v);
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Abs[0]', 1.0, dst[0], 0.0001);
-  AssertEquals('Store/Abs[1]', 2.0, dst[1], 0.0001);
-  AssertEquals('Store/Abs[2]', 3.0, dst[2], 0.0001);
-  AssertEquals('Store/Abs[3]', 4.0, dst[3], 0.0001);
+  CheckNear(1.0, dst[0], 0.0001, 'Store/Abs[0]');
+  CheckNear(2.0, dst[1], 0.0001, 'Store/Abs[1]');
+  CheckNear(3.0, dst[2], 0.0001, 'Store/Abs[2]');
+  CheckNear(4.0, dst[3], 0.0001, 'Store/Abs[3]');
 
   // Sqrt: sqrt((1, 4, 9, 16)) = (1, 2, 3, 4)
   src[0] := 1.0; src[1] := 4.0; src[2] := 9.0; src[3] := 16.0;
@@ -1986,118 +1951,118 @@ begin
   w := VecF32x4Sqrt(v);
   VecF32x4Store(@dst[0], w);
 
-  AssertEquals('Store/Sqrt[0]', 1.0, dst[0], 0.0001);
-  AssertEquals('Store/Sqrt[1]', 2.0, dst[1], 0.0001);
-  AssertEquals('Store/Sqrt[2]', 3.0, dst[2], 0.0001);
-  AssertEquals('Store/Sqrt[3]', 4.0, dst[3], 0.0001);
+  CheckNear(1.0, dst[0], 0.0001, 'Store/Sqrt[0]');
+  CheckNear(2.0, dst[1], 0.0001, 'Store/Sqrt[1]');
+  CheckNear(3.0, dst[2], 0.0001, 'Store/Sqrt[2]');
+  CheckNear(4.0, dst[3], 0.0001, 'Store/Sqrt[3]');
 
   // CmpEq: (1,2,3,4) == (1,2,5,4) -> mask = 0b1011 = $B
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
   v := VecF32x4Load(@src[0]);
   src[0] := 1.0; src[1] := 2.0; src[2] := 5.0; src[3] := 4.0;
   w := VecF32x4Load(@src[0]);
-  AssertEquals('CmpEq mask', $B, VecF32x4CmpEq(v, w));
+  CheckEqual($B, VecF32x4CmpEq(v, w), 'CmpEq mask');
 
   // CmpLt: (1,2,3,4) < (2,2,2,5) -> mask = 0b1001 = $9
   src[0] := 2.0; src[1] := 2.0; src[2] := 2.0; src[3] := 5.0;
   w := VecF32x4Load(@src[0]);
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('CmpLt mask', $9, VecF32x4CmpLt(v, w));
+  CheckEqual($9, VecF32x4CmpLt(v, w), 'CmpLt mask');
 
   // CmpGt: (1,2,3,4) > (0,2,2,5) -> mask = 0b0101 = $5
   src[0] := 0.0; src[1] := 2.0; src[2] := 2.0; src[3] := 5.0;
   w := VecF32x4Load(@src[0]);
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('CmpGt mask', $5, VecF32x4CmpGt(v, w));
+  CheckEqual($5, VecF32x4CmpGt(v, w), 'CmpGt mask');
 
   // ReduceMin: min(5, 2, 8, 3) = 2
   src[0] := 5.0; src[1] := 2.0; src[2] := 8.0; src[3] := 3.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('ReduceMin', 2.0, VecF32x4ReduceMin(v), 0.0001);
+  CheckNear(2.0, VecF32x4ReduceMin(v), 0.0001, 'ReduceMin');
 
   // ReduceMax: max(5, 2, 8, 3) = 8
-  AssertEquals('ReduceMax', 8.0, VecF32x4ReduceMax(v), 0.0001);
+  CheckNear(8.0, VecF32x4ReduceMax(v), 0.0001, 'ReduceMax');
 
   // ReduceMul: 1 * 2 * 3 * 4 = 24
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('ReduceMul', 24.0, VecF32x4ReduceMul(v), 0.0001);
+  CheckNear(24.0, VecF32x4ReduceMul(v), 0.0001, 'ReduceMul');
 
   // Fma: a*b+c = (2,2,2,2)*(3,3,3,3)+(4,4,4,4) = (10,10,10,10)
   v := VecF32x4Splat(2.0);
   w := VecF32x4Splat(3.0);
   w := VecF32x4Fma(v, w, VecF32x4Splat(4.0));
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Fma[0]', 10.0, dst[0], 0.0001);
-  AssertEquals('Fma[1]', 10.0, dst[1], 0.0001);
+  CheckNear(10.0, dst[0], 0.0001, 'Fma[0]');
+  CheckNear(10.0, dst[1], 0.0001, 'Fma[1]');
 
   // Rcp: 1/4 = 0.25
   v := VecF32x4Splat(4.0);
   w := VecF32x4Rcp(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Rcp[0]', 0.25, dst[0], 0.01);
+  CheckNear(0.25, dst[0], 0.01, 'Rcp[0]');
 
   // Rsqrt: 1/sqrt(4) = 0.5
   w := VecF32x4Rsqrt(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Rsqrt[0]', 0.5, dst[0], 0.01);
+  CheckNear(0.5, dst[0], 0.01, 'Rsqrt[0]');
 
   // Floor: floor(2.7) = 2, floor(-2.3) = -3
   src[0] := 2.7; src[1] := -2.3; src[2] := 3.0; src[3] := -3.0;
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Floor(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Floor[0]', 2.0, dst[0], 0.0001);
-  AssertEquals('Floor[1]', -3.0, dst[1], 0.0001);
+  CheckNear(2.0, dst[0], 0.0001, 'Floor[0]');
+  CheckNear(-3.0, dst[1], 0.0001, 'Floor[1]');
 
   // Ceil: ceil(2.3) = 3, ceil(-2.7) = -2
   src[0] := 2.3; src[1] := -2.7; src[2] := 3.0; src[3] := -3.0;
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Ceil(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Ceil[0]', 3.0, dst[0], 0.0001);
-  AssertEquals('Ceil[1]', -2.0, dst[1], 0.0001);
+  CheckNear(3.0, dst[0], 0.0001, 'Ceil[0]');
+  CheckNear(-2.0, dst[1], 0.0001, 'Ceil[1]');
 
   // Round: round(2.4) = 2, round(2.6) = 3
   src[0] := 2.4; src[1] := 2.6; src[2] := -2.4; src[3] := -2.6;
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Round(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Round[0]', 2.0, dst[0], 0.0001);
-  AssertEquals('Round[1]', 3.0, dst[1], 0.0001);
+  CheckNear(2.0, dst[0], 0.0001, 'Round[0]');
+  CheckNear(3.0, dst[1], 0.0001, 'Round[1]');
 
   // Trunc: trunc(2.9) = 2, trunc(-2.9) = -2
   src[0] := 2.9; src[1] := -2.9; src[2] := 3.0; src[3] := -3.0;
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Trunc(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Trunc[0]', 2.0, dst[0], 0.0001);
-  AssertEquals('Trunc[1]', -2.0, dst[1], 0.0001);
+  CheckNear(2.0, dst[0], 0.0001, 'Trunc[0]');
+  CheckNear(-2.0, dst[1], 0.0001, 'Trunc[1]');
 
   // Clamp: clamp((-5, 5, 15, 0), 0, 10) = (0, 5, 10, 0)
   src[0] := -5.0; src[1] := 5.0; src[2] := 15.0; src[3] := 0.0;
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Clamp(v, VecF32x4Splat(0.0), VecF32x4Splat(10.0));
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Clamp[0]', 0.0, dst[0], 0.0001);
-  AssertEquals('Clamp[1]', 5.0, dst[1], 0.0001);
-  AssertEquals('Clamp[2]', 10.0, dst[2], 0.0001);
+  CheckNear(0.0, dst[0], 0.0001, 'Clamp[0]');
+  CheckNear(5.0, dst[1], 0.0001, 'Clamp[1]');
+  CheckNear(10.0, dst[2], 0.0001, 'Clamp[2]');
 
   // 3D Dot: (1,2,3) · (4,5,6) = 4+10+18 = 32
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 999.0;
   v := VecF32x4Load(@src[0]);
   src[0] := 4.0; src[1] := 5.0; src[2] := 6.0; src[3] := 999.0;
   w := VecF32x4Load(@src[0]);
-  AssertEquals('Dot3', 32.0, VecF32x3Dot(v, w), 0.0001);
+  CheckNear(32.0, VecF32x3Dot(v, w), 0.0001, 'Dot3');
 
   // 4D Dot: (1,2,3,4) · (2,3,4,5) = 2+6+12+20 = 40
   src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
   v := VecF32x4Load(@src[0]);
   src[0] := 2.0; src[1] := 3.0; src[2] := 4.0; src[3] := 5.0;
   w := VecF32x4Load(@src[0]);
-  AssertEquals('Dot4', 40.0, VecF32x4Dot(v, w), 0.0001);
+  CheckNear(40.0, VecF32x4Dot(v, w), 0.0001, 'Dot4');
 
   // Cross: X × Y = Z
   src[0] := 1.0; src[1] := 0.0; src[2] := 0.0; src[3] := 0.0;
@@ -2106,28 +2071,28 @@ begin
   w := VecF32x4Load(@src[0]);
   w := VecF32x3Cross(v, w);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Cross X', 0.0, dst[0], 0.0001);
-  AssertEquals('Cross Y', 0.0, dst[1], 0.0001);
-  AssertEquals('Cross Z', 1.0, dst[2], 0.0001);
+  CheckNear(0.0, dst[0], 0.0001, 'Cross X');
+  CheckNear(0.0, dst[1], 0.0001, 'Cross Y');
+  CheckNear(1.0, dst[2], 0.0001, 'Cross Z');
 
   // Length3: |(3,4,0)| = 5
   src[0] := 3.0; src[1] := 4.0; src[2] := 0.0; src[3] := 999.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('Length3', 5.0, VecF32x3Length(v), 0.0001);
+  CheckNear(5.0, VecF32x3Length(v), 0.0001, 'Length3');
 
   // Length4: |(1,1,1,1)| = 2
   src[0] := 1.0; src[1] := 1.0; src[2] := 1.0; src[3] := 1.0;
   v := VecF32x4Load(@src[0]);
-  AssertEquals('Length4', 2.0, VecF32x4Length(v), 0.0001);
+  CheckNear(2.0, VecF32x4Length(v), 0.0001, 'Length4');
 
   // Normalize3: (3,4,0) / 5 = (0.6, 0.8, 0)
   src[0] := 3.0; src[1] := 4.0; src[2] := 0.0; src[3] := 999.0;
   v := VecF32x4Load(@src[0]);
   w := VecF32x3Normalize(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Normalize3 X', 0.6, dst[0], 0.0001);
-  AssertEquals('Normalize3 Y', 0.8, dst[1], 0.0001);
-  AssertEquals('Normalize3 Z', 0.0, dst[2], 0.0001);
+  CheckNear(0.6, dst[0], 0.0001, 'Normalize3 X');
+  CheckNear(0.8, dst[1], 0.0001, 'Normalize3 Y');
+  CheckNear(0.0, dst[2], 0.0001, 'Normalize3 Z');
 
   // Normalize4: (3,0,0,0) / 3 = (1,0,0,0)
   // NOTE: SSE3/SSSE3/SSE41 use rsqrtps (~12-bit precision) for fast normalize
@@ -2136,8 +2101,8 @@ begin
   v := VecF32x4Load(@src[0]);
   w := VecF32x4Normalize(v);
   VecF32x4Store(@dst[0], w);
-  AssertEquals('Normalize4 X', 1.0, dst[0], 0.001);  // Relaxed for rsqrtps
-  AssertEquals('Normalize4 Y', 0.0, dst[1], 0.0001);
+  CheckNear(1.0, dst[0], 0.001, 'Normalize4 X');  // Relaxed for rsqrtps
+  CheckNear(0.0, dst[1], 0.0001, 'Normalize4 Y');
 end;
 
 procedure TTestCase_BackendSmoke.Test_VectorAsmEnabled_Toggle_Roundtrip;
@@ -2149,23 +2114,23 @@ begin
   oldValue := IsVectorAsmEnabled;
 
   SetVectorAsmEnabled(not oldValue);
-  AssertEquals('Vector asm should toggle at runtime', not oldValue, IsVectorAsmEnabled);
+  CheckEqual(not oldValue, IsVectorAsmEnabled, 'Vector asm should toggle at runtime');
 
   SetVectorAsmEnabled(oldValue);
-  AssertEquals('Vector asm should restore to original value', oldValue, IsVectorAsmEnabled);
+  CheckEqual(oldValue, IsVectorAsmEnabled, 'Vector asm should restore to original value');
 end;
 
 procedure TTestCase_BackendSmoke.Test_DefaultBackend_VecF32x4_Smoke;
 begin
   // 自动选择 backend 的情况下，基础向量操作不应崩溃，且结果应正确
-  AssertTrue('Dispatch table should be assigned', GetDispatchTable <> nil);
+  CheckTrue(GetDispatchTable <> nil, 'Dispatch table should be assigned');
   RunVecF32x4Smoke;
 end;
 
 procedure TTestCase_BackendSmoke.Test_ForceScalar_VecF32x4_Smoke;
 begin
   ForceBackend(sbScalar);
-  AssertEquals('Active backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Active backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2173,9 +2138,9 @@ procedure TTestCase_BackendSmoke.Test_ForceSSE2_VecF32x4_Smoke;
 begin
   ForceBackend(sbSSE2);
   if IsBackendDispatchable(sbSSE2) then
-    AssertEquals('Active backend should be SSE2', Ord(sbSSE2), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbSSE2), Ord(GetCurrentBackend), 'Active backend should be SSE2')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2183,9 +2148,9 @@ procedure TTestCase_BackendSmoke.Test_ForceSSE3_VecF32x4_Smoke;
 begin
   ForceBackend(sbSSE3);
   if IsBackendDispatchable(sbSSE3) then
-    AssertEquals('Active backend should be SSE3', Ord(sbSSE3), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbSSE3), Ord(GetCurrentBackend), 'Active backend should be SSE3')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2193,9 +2158,9 @@ procedure TTestCase_BackendSmoke.Test_ForceSSSE3_VecF32x4_Smoke;
 begin
   ForceBackend(sbSSSE3);
   if IsBackendDispatchable(sbSSSE3) then
-    AssertEquals('Active backend should be SSSE3', Ord(sbSSSE3), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbSSSE3), Ord(GetCurrentBackend), 'Active backend should be SSSE3')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2203,9 +2168,9 @@ procedure TTestCase_BackendSmoke.Test_ForceSSE41_VecF32x4_Smoke;
 begin
   ForceBackend(sbSSE41);
   if IsBackendDispatchable(sbSSE41) then
-    AssertEquals('Active backend should be SSE4.1', Ord(sbSSE41), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbSSE41), Ord(GetCurrentBackend), 'Active backend should be SSE4.1')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2213,9 +2178,9 @@ procedure TTestCase_BackendSmoke.Test_ForceSSE42_VecF32x4_Smoke;
 begin
   ForceBackend(sbSSE42);
   if IsBackendDispatchable(sbSSE42) then
-    AssertEquals('Active backend should be SSE4.2', Ord(sbSSE42), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbSSE42), Ord(GetCurrentBackend), 'Active backend should be SSE4.2')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2287,9 +2252,9 @@ procedure TTestCase_BackendSmoke.Test_ForceAVX2_VecF32x4_Smoke;
 begin
   ForceBackend(sbAVX2);
   if IsBackendDispatchable(sbAVX2) then
-    AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2297,9 +2262,9 @@ procedure TTestCase_BackendSmoke.Test_ForceAVX512_VecF32x4_Smoke;
 begin
   ForceBackend(sbAVX512);
   if IsBackendDispatchable(sbAVX512) then
-    AssertEquals('Active backend should be AVX-512', Ord(sbAVX512), Ord(GetCurrentBackend))
+    CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX-512')
   else
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
   RunVecF32x4Smoke;
 end;
 
@@ -2317,19 +2282,17 @@ begin
   F.HasAVX512F := True;
 
   // Missing AVX512BW
-  AssertFalse('AVX-512 backend should require AVX512BW', X86HasAVX512BackendRequiredFeatures(F));
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should require AVX512BW');
 
   // Still missing POPCNT
   F.HasAVX512BW := True;
-  AssertFalse('AVX-512 backend should require POPCNT', X86HasAVX512BackendRequiredFeatures(F));
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should require POPCNT');
 
   F.HasPOPCNT := True;
-  AssertFalse('AVX-512 backend should still require FMA after AVX2 + AVX512F + AVX512BW + POPCNT are present',
-    X86HasAVX512BackendRequiredFeatures(F));
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should still require FMA after AVX2 + AVX512F + AVX512BW + POPCNT are present');
 
   F.HasFMA := True;
-  AssertTrue('AVX-512 backend should be usable with AVX2 + AVX512F + AVX512BW + POPCNT + FMA',
-    X86HasAVX512BackendRequiredFeatures(F));
+  CheckTrue(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should be usable with AVX2 + AVX512F + AVX512BW + POPCNT + FMA');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86HasAVX512BackendRequiredFeatures_RequiresFMA;
@@ -2344,12 +2307,10 @@ begin
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := True;
 
-  AssertFalse('AVX-512 backend should require FMA because AVX512FmaF32x16/F64x8 use vfmadd* directly',
-    X86HasAVX512BackendRequiredFeatures(LF));
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(LF), 'AVX-512 backend should require FMA because AVX512FmaF32x16/F64x8 use vfmadd* directly');
 
   LF.HasFMA := True;
-  AssertTrue('AVX-512 backend should become usable once FMA is also present',
-    X86HasAVX512BackendRequiredFeatures(LF));
+  CheckTrue(X86HasAVX512BackendRequiredFeatures(LF), 'AVX-512 backend should become usable once FMA is also present');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86SupportsAVX512BackendOnCPU_RequiresUsable512AndBackendFeatureSet;
@@ -2363,32 +2324,25 @@ begin
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := True;
 
-  AssertFalse('AVX-512 backend should remain unsupported when usable 512-bit state is absent',
-    X86SupportsAVX512BackendOnCPU(LF, False));
-  AssertFalse('AVX-512 backend should still require FMA even when usable 512-bit state is present',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, False), 'AVX-512 backend should remain unsupported when usable 512-bit state is absent');
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should still require FMA even when usable 512-bit state is present');
 
   LF.HasFMA := True;
-  AssertTrue('AVX-512 backend should be supported when usable 512-bit state and backend features are present',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckTrue(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should be supported when usable 512-bit state and backend features are present');
 
   LF.HasAVX512BW := False;
-  AssertFalse('AVX-512 backend should require AVX512BW even when 512-bit usable state is present',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should require AVX512BW even when 512-bit usable state is present');
 
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := False;
-  AssertFalse('AVX-512 backend should require POPCNT even when 512-bit usable state is present',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should require POPCNT even when 512-bit usable state is present');
 
   LF.HasPOPCNT := True;
   LF.HasFMA := False;
-  AssertFalse('AVX-512 backend should require FMA even when 512-bit usable state is present',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should require FMA even when 512-bit usable state is present');
 
   LF.HasFMA := True;
-  AssertTrue('AVX-512 backend should become supported once FMA is present and 512-bit state is usable',
-    X86SupportsAVX512BackendOnCPU(LF, True));
+  CheckTrue(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should become supported once FMA is present and 512-bit state is usable');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86DirectAVX512ExecutionGate_RequiresBackendSupportedPredicate;
@@ -2399,27 +2353,24 @@ begin
 
   LF.HasAVX512F := True;
 
-  AssertFalse('Direct AVX-512 execution gates must require backend-supported feature set, not just raw usable AVX512F',
-    X86AllowsDirectAVX512Execution(LF, True));
+  CheckFalse(X86AllowsDirectAVX512Execution(LF, True), 'Direct AVX-512 execution gates must require backend-supported feature set, not just raw usable AVX512F');
 
   LF.HasAVX2 := True;
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := True;
-  AssertFalse('Direct AVX-512 execution gates must still require FMA',
-    X86AllowsDirectAVX512Execution(LF, True));
+  CheckFalse(X86AllowsDirectAVX512Execution(LF, True), 'Direct AVX-512 execution gates must still require FMA');
 
   LF.HasFMA := True;
-  AssertTrue('Direct AVX-512 execution gates should allow execution once backend-required features are all present',
-    X86AllowsDirectAVX512Execution(LF, True));
+  CheckTrue(X86AllowsDirectAVX512Execution(LF, True), 'Direct AVX-512 execution gates should allow execution once backend-required features are all present');
 end;
 
 {$IFDEF SIMD_BACKEND_AVX512}
 
 { TTestCase_AVX512BackendRequirements }
 
-procedure TTestCase_AVX512BackendRequirements.SetUp;
+procedure TTestCase_AVX512BackendRequirements.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
   SetVectorAsmEnabled(True);
   RegisterAVX512Backend;
 end;
@@ -2429,9 +2380,8 @@ var
   dt: TSimdDispatchTable;
 begin
   // NOTE: This test must not execute any AVX-512 instructions.
-  AssertTrue('AVX-512 backend dispatch table should be registered',
-             TryGetRegisteredBackendDispatchTable(sbAVX512, dt));
-  AssertEquals('AVX-512 dispatch table should report backend sbAVX512', Ord(sbAVX512), Ord(dt.Backend));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, dt), 'AVX-512 backend dispatch table should be registered');
+  CheckEqual(Ord(sbAVX512), Ord(dt.Backend), 'AVX-512 dispatch table should report backend sbAVX512');
 end;
 
 procedure TTestCase_AVX512BackendRequirements.Test_AVX512Backend_DispatchTable_Overrides512BitLoadStoreAndSelect;
@@ -2440,23 +2390,22 @@ var
 begin
   if not IsVectorAsmEnabled then Exit;
   // NOTE: This test must not execute any AVX-512 instructions.
-  AssertTrue('AVX-512 backend dispatch table should be registered',
-             TryGetRegisteredBackendDispatchTable(sbAVX512, dt));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, dt), 'AVX-512 backend dispatch table should be registered');
 
   // 512-bit Load/Store/Splat/Zero
-  AssertTrue('LoadF32x16 should be overridden', dt.LoadF32x16 <> @ScalarLoadF32x16);
-  AssertTrue('StoreF32x16 should be overridden', dt.StoreF32x16 <> @ScalarStoreF32x16);
-  AssertTrue('SplatF32x16 should be overridden', dt.SplatF32x16 <> @ScalarSplatF32x16);
-  AssertTrue('ZeroF32x16 should be overridden', dt.ZeroF32x16 <> @ScalarZeroF32x16);
+  CheckTrue(dt.LoadF32x16 <> @ScalarLoadF32x16, 'LoadF32x16 should be overridden');
+  CheckTrue(dt.StoreF32x16 <> @ScalarStoreF32x16, 'StoreF32x16 should be overridden');
+  CheckTrue(dt.SplatF32x16 <> @ScalarSplatF32x16, 'SplatF32x16 should be overridden');
+  CheckTrue(dt.ZeroF32x16 <> @ScalarZeroF32x16, 'ZeroF32x16 should be overridden');
 
-  AssertTrue('LoadF64x8 should be overridden', dt.LoadF64x8 <> @ScalarLoadF64x8);
-  AssertTrue('StoreF64x8 should be overridden', dt.StoreF64x8 <> @ScalarStoreF64x8);
-  AssertTrue('SplatF64x8 should be overridden', dt.SplatF64x8 <> @ScalarSplatF64x8);
-  AssertTrue('ZeroF64x8 should be overridden', dt.ZeroF64x8 <> @ScalarZeroF64x8);
+  CheckTrue(dt.LoadF64x8 <> @ScalarLoadF64x8, 'LoadF64x8 should be overridden');
+  CheckTrue(dt.StoreF64x8 <> @ScalarStoreF64x8, 'StoreF64x8 should be overridden');
+  CheckTrue(dt.SplatF64x8 <> @ScalarSplatF64x8, 'SplatF64x8 should be overridden');
+  CheckTrue(dt.ZeroF64x8 <> @ScalarZeroF64x8, 'ZeroF64x8 should be overridden');
 
   // 512-bit Select
-  AssertTrue('SelectF32x16 should be overridden', dt.SelectF32x16 <> @ScalarSelectF32x16);
-  AssertTrue('SelectF64x8 should be overridden', dt.SelectF64x8 <> @ScalarSelectF64x8);
+  CheckTrue(dt.SelectF32x16 <> @ScalarSelectF32x16, 'SelectF32x16 should be overridden');
+  CheckTrue(dt.SelectF64x8 <> @ScalarSelectF64x8, 'SelectF64x8 should be overridden');
 end;
 
 procedure TTestCase_AVX512BackendRequirements.Test_AVX512Backend_DispatchTable_Overrides512BitFloatCompare;
@@ -2465,24 +2414,23 @@ var
 begin
   if not IsVectorAsmEnabled then Exit;
   // NOTE: This test must not execute any AVX-512 instructions.
-  AssertTrue('AVX-512 backend dispatch table should be registered',
-             TryGetRegisteredBackendDispatchTable(sbAVX512, dt));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, dt), 'AVX-512 backend dispatch table should be registered');
 
   // F32x16 (512-bit)
-  AssertTrue('CmpEqF32x16 should be overridden', dt.CmpEqF32x16 <> @ScalarCmpEqF32x16);
-  AssertTrue('CmpLtF32x16 should be overridden', dt.CmpLtF32x16 <> @ScalarCmpLtF32x16);
-  AssertTrue('CmpLeF32x16 should be overridden', dt.CmpLeF32x16 <> @ScalarCmpLeF32x16);
-  AssertTrue('CmpGtF32x16 should be overridden', dt.CmpGtF32x16 <> @ScalarCmpGtF32x16);
-  AssertTrue('CmpGeF32x16 should be overridden', dt.CmpGeF32x16 <> @ScalarCmpGeF32x16);
-  AssertTrue('CmpNeF32x16 should be overridden', dt.CmpNeF32x16 <> @ScalarCmpNeF32x16);
+  CheckTrue(dt.CmpEqF32x16 <> @ScalarCmpEqF32x16, 'CmpEqF32x16 should be overridden');
+  CheckTrue(dt.CmpLtF32x16 <> @ScalarCmpLtF32x16, 'CmpLtF32x16 should be overridden');
+  CheckTrue(dt.CmpLeF32x16 <> @ScalarCmpLeF32x16, 'CmpLeF32x16 should be overridden');
+  CheckTrue(dt.CmpGtF32x16 <> @ScalarCmpGtF32x16, 'CmpGtF32x16 should be overridden');
+  CheckTrue(dt.CmpGeF32x16 <> @ScalarCmpGeF32x16, 'CmpGeF32x16 should be overridden');
+  CheckTrue(dt.CmpNeF32x16 <> @ScalarCmpNeF32x16, 'CmpNeF32x16 should be overridden');
 
   // F64x8 (512-bit)
-  AssertTrue('CmpEqF64x8 should be overridden', dt.CmpEqF64x8 <> @ScalarCmpEqF64x8);
-  AssertTrue('CmpLtF64x8 should be overridden', dt.CmpLtF64x8 <> @ScalarCmpLtF64x8);
-  AssertTrue('CmpLeF64x8 should be overridden', dt.CmpLeF64x8 <> @ScalarCmpLeF64x8);
-  AssertTrue('CmpGtF64x8 should be overridden', dt.CmpGtF64x8 <> @ScalarCmpGtF64x8);
-  AssertTrue('CmpGeF64x8 should be overridden', dt.CmpGeF64x8 <> @ScalarCmpGeF64x8);
-  AssertTrue('CmpNeF64x8 should be overridden', dt.CmpNeF64x8 <> @ScalarCmpNeF64x8);
+  CheckTrue(dt.CmpEqF64x8 <> @ScalarCmpEqF64x8, 'CmpEqF64x8 should be overridden');
+  CheckTrue(dt.CmpLtF64x8 <> @ScalarCmpLtF64x8, 'CmpLtF64x8 should be overridden');
+  CheckTrue(dt.CmpLeF64x8 <> @ScalarCmpLeF64x8, 'CmpLeF64x8 should be overridden');
+  CheckTrue(dt.CmpGtF64x8 <> @ScalarCmpGtF64x8, 'CmpGtF64x8 should be overridden');
+  CheckTrue(dt.CmpGeF64x8 <> @ScalarCmpGeF64x8, 'CmpGeF64x8 should be overridden');
+  CheckTrue(dt.CmpNeF64x8 <> @ScalarCmpNeF64x8, 'CmpNeF64x8 should be overridden');
 end;
 
 procedure TTestCase_AVX512BackendRequirements.Test_AVX512Backend_DispatchTable_Inherits_AVX2_I64x2_U64x2;
@@ -2490,51 +2438,50 @@ var
   LAVX512, LAVX2: TSimdDispatchTable;
   LHasAVX2: Boolean;
 begin
-  AssertTrue('AVX-512 backend dispatch table should be registered',
-             TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512), 'AVX-512 backend dispatch table should be registered');
 
-  AssertTrue('AVX-512 AndNotI64x2 should be assigned', Assigned(LAVX512.AndNotI64x2));
-  AssertTrue('AVX-512 ShiftLeftI64x2 should be assigned', Assigned(LAVX512.ShiftLeftI64x2));
-  AssertTrue('AVX-512 ShiftRightI64x2 should be assigned', Assigned(LAVX512.ShiftRightI64x2));
-  AssertTrue('AVX-512 ShiftRightArithI64x2 should be assigned', Assigned(LAVX512.ShiftRightArithI64x2));
-  AssertTrue('AVX-512 MinI64x2 should be assigned', Assigned(LAVX512.MinI64x2));
-  AssertTrue('AVX-512 MaxI64x2 should be assigned', Assigned(LAVX512.MaxI64x2));
+  CheckTrue(Assigned(LAVX512.AndNotI64x2), 'AVX-512 AndNotI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.ShiftLeftI64x2), 'AVX-512 ShiftLeftI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.ShiftRightI64x2), 'AVX-512 ShiftRightI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.ShiftRightArithI64x2), 'AVX-512 ShiftRightArithI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.MinI64x2), 'AVX-512 MinI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.MaxI64x2), 'AVX-512 MaxI64x2 should be assigned');
 
-  AssertTrue('AVX-512 AddU64x2 should be assigned', Assigned(LAVX512.AddU64x2));
-  AssertTrue('AVX-512 SubU64x2 should be assigned', Assigned(LAVX512.SubU64x2));
-  AssertTrue('AVX-512 AndU64x2 should be assigned', Assigned(LAVX512.AndU64x2));
-  AssertTrue('AVX-512 OrU64x2 should be assigned', Assigned(LAVX512.OrU64x2));
-  AssertTrue('AVX-512 XorU64x2 should be assigned', Assigned(LAVX512.XorU64x2));
-  AssertTrue('AVX-512 NotU64x2 should be assigned', Assigned(LAVX512.NotU64x2));
-  AssertTrue('AVX-512 AndNotU64x2 should be assigned', Assigned(LAVX512.AndNotU64x2));
-  AssertTrue('AVX-512 CmpEqU64x2 should be assigned', Assigned(LAVX512.CmpEqU64x2));
-  AssertTrue('AVX-512 CmpLtU64x2 should be assigned', Assigned(LAVX512.CmpLtU64x2));
-  AssertTrue('AVX-512 CmpGtU64x2 should be assigned', Assigned(LAVX512.CmpGtU64x2));
-  AssertTrue('AVX-512 MinU64x2 should be assigned', Assigned(LAVX512.MinU64x2));
-  AssertTrue('AVX-512 MaxU64x2 should be assigned', Assigned(LAVX512.MaxU64x2));
+  CheckTrue(Assigned(LAVX512.AddU64x2), 'AVX-512 AddU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.SubU64x2), 'AVX-512 SubU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.AndU64x2), 'AVX-512 AndU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.OrU64x2), 'AVX-512 OrU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.XorU64x2), 'AVX-512 XorU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.NotU64x2), 'AVX-512 NotU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.AndNotU64x2), 'AVX-512 AndNotU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CmpEqU64x2), 'AVX-512 CmpEqU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CmpLtU64x2), 'AVX-512 CmpLtU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CmpGtU64x2), 'AVX-512 CmpGtU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.MinU64x2), 'AVX-512 MinU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.MaxU64x2), 'AVX-512 MaxU64x2 should be assigned');
 
   LHasAVX2 := TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2);
   if LHasAVX2 then
   begin
-    AssertEquals('AVX-512 should inherit AVX2 AndNotI64x2', PtrUInt(LAVX2.AndNotI64x2), PtrUInt(LAVX512.AndNotI64x2));
-    AssertEquals('AVX-512 should inherit AVX2 ShiftLeftI64x2', PtrUInt(LAVX2.ShiftLeftI64x2), PtrUInt(LAVX512.ShiftLeftI64x2));
-    AssertEquals('AVX-512 should inherit AVX2 ShiftRightI64x2', PtrUInt(LAVX2.ShiftRightI64x2), PtrUInt(LAVX512.ShiftRightI64x2));
-    AssertEquals('AVX-512 should inherit AVX2 ShiftRightArithI64x2', PtrUInt(LAVX2.ShiftRightArithI64x2), PtrUInt(LAVX512.ShiftRightArithI64x2));
-    AssertEquals('AVX-512 should inherit AVX2 MinI64x2', PtrUInt(LAVX2.MinI64x2), PtrUInt(LAVX512.MinI64x2));
-    AssertEquals('AVX-512 should inherit AVX2 MaxI64x2', PtrUInt(LAVX2.MaxI64x2), PtrUInt(LAVX512.MaxI64x2));
+    CheckEqual(PtrUInt(LAVX2.AndNotI64x2), PtrUInt(LAVX512.AndNotI64x2), 'AVX-512 should inherit AVX2 AndNotI64x2');
+    CheckEqual(PtrUInt(LAVX2.ShiftLeftI64x2), PtrUInt(LAVX512.ShiftLeftI64x2), 'AVX-512 should inherit AVX2 ShiftLeftI64x2');
+    CheckEqual(PtrUInt(LAVX2.ShiftRightI64x2), PtrUInt(LAVX512.ShiftRightI64x2), 'AVX-512 should inherit AVX2 ShiftRightI64x2');
+    CheckEqual(PtrUInt(LAVX2.ShiftRightArithI64x2), PtrUInt(LAVX512.ShiftRightArithI64x2), 'AVX-512 should inherit AVX2 ShiftRightArithI64x2');
+    CheckEqual(PtrUInt(LAVX2.MinI64x2), PtrUInt(LAVX512.MinI64x2), 'AVX-512 should inherit AVX2 MinI64x2');
+    CheckEqual(PtrUInt(LAVX2.MaxI64x2), PtrUInt(LAVX512.MaxI64x2), 'AVX-512 should inherit AVX2 MaxI64x2');
 
-    AssertEquals('AVX-512 should inherit AVX2 AddU64x2', PtrUInt(LAVX2.AddU64x2), PtrUInt(LAVX512.AddU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 SubU64x2', PtrUInt(LAVX2.SubU64x2), PtrUInt(LAVX512.SubU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 AndU64x2', PtrUInt(LAVX2.AndU64x2), PtrUInt(LAVX512.AndU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 OrU64x2', PtrUInt(LAVX2.OrU64x2), PtrUInt(LAVX512.OrU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 XorU64x2', PtrUInt(LAVX2.XorU64x2), PtrUInt(LAVX512.XorU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 NotU64x2', PtrUInt(LAVX2.NotU64x2), PtrUInt(LAVX512.NotU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 AndNotU64x2', PtrUInt(LAVX2.AndNotU64x2), PtrUInt(LAVX512.AndNotU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 CmpEqU64x2', PtrUInt(LAVX2.CmpEqU64x2), PtrUInt(LAVX512.CmpEqU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 CmpLtU64x2', PtrUInt(LAVX2.CmpLtU64x2), PtrUInt(LAVX512.CmpLtU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 CmpGtU64x2', PtrUInt(LAVX2.CmpGtU64x2), PtrUInt(LAVX512.CmpGtU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 MinU64x2', PtrUInt(LAVX2.MinU64x2), PtrUInt(LAVX512.MinU64x2));
-    AssertEquals('AVX-512 should inherit AVX2 MaxU64x2', PtrUInt(LAVX2.MaxU64x2), PtrUInt(LAVX512.MaxU64x2));
+    CheckEqual(PtrUInt(LAVX2.AddU64x2), PtrUInt(LAVX512.AddU64x2), 'AVX-512 should inherit AVX2 AddU64x2');
+    CheckEqual(PtrUInt(LAVX2.SubU64x2), PtrUInt(LAVX512.SubU64x2), 'AVX-512 should inherit AVX2 SubU64x2');
+    CheckEqual(PtrUInt(LAVX2.AndU64x2), PtrUInt(LAVX512.AndU64x2), 'AVX-512 should inherit AVX2 AndU64x2');
+    CheckEqual(PtrUInt(LAVX2.OrU64x2), PtrUInt(LAVX512.OrU64x2), 'AVX-512 should inherit AVX2 OrU64x2');
+    CheckEqual(PtrUInt(LAVX2.XorU64x2), PtrUInt(LAVX512.XorU64x2), 'AVX-512 should inherit AVX2 XorU64x2');
+    CheckEqual(PtrUInt(LAVX2.NotU64x2), PtrUInt(LAVX512.NotU64x2), 'AVX-512 should inherit AVX2 NotU64x2');
+    CheckEqual(PtrUInt(LAVX2.AndNotU64x2), PtrUInt(LAVX512.AndNotU64x2), 'AVX-512 should inherit AVX2 AndNotU64x2');
+    CheckEqual(PtrUInt(LAVX2.CmpEqU64x2), PtrUInt(LAVX512.CmpEqU64x2), 'AVX-512 should inherit AVX2 CmpEqU64x2');
+    CheckEqual(PtrUInt(LAVX2.CmpLtU64x2), PtrUInt(LAVX512.CmpLtU64x2), 'AVX-512 should inherit AVX2 CmpLtU64x2');
+    CheckEqual(PtrUInt(LAVX2.CmpGtU64x2), PtrUInt(LAVX512.CmpGtU64x2), 'AVX-512 should inherit AVX2 CmpGtU64x2');
+    CheckEqual(PtrUInt(LAVX2.MinU64x2), PtrUInt(LAVX512.MinU64x2), 'AVX-512 should inherit AVX2 MinU64x2');
+    CheckEqual(PtrUInt(LAVX2.MaxU64x2), PtrUInt(LAVX512.MaxU64x2), 'AVX-512 should inherit AVX2 MaxU64x2');
   end;
 end;
 
@@ -4712,16 +4659,16 @@ var
 begin
   if not HasAVX2 then
   begin
-    AssertEquals('Fallback backend should be Scalar', Ord(sbScalar), Ord(GetCurrentBackend));
+    CheckEqual(Ord(sbScalar), Ord(GetCurrentBackend), 'Fallback backend should be Scalar');
     Exit;
   end;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.FmaF32x4 should be assigned', Assigned(dt^.FmaF32x4));
-  AssertTrue('FmaF32x4 should not be scalar when vector asm enabled', dt^.FmaF32x4 <> @ScalarFmaF32x4);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.FmaF32x4), 'Dispatch.FmaF32x4 should be assigned');
+  CheckTrue(dt^.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
 
   // 构造一个“只有 fused FMA 才会得到非零”的经典用例：
   // a = b = 1 + 2^-23 (float32 的下一个可表示数)
@@ -4740,7 +4687,7 @@ begin
     expected := 0.0;
 
   for i := 0 to 3 do
-    AssertEquals('Fma element ' + IntToStr(i), expected, VecF32x4Extract(r, i), 0.0);
+    CheckNear(expected, VecF32x4Extract(r, i), 0.0, 'Fma element ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x8_AddSubMulDiv_RandomConsistency;
@@ -4754,20 +4701,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF32x8 should be assigned', Assigned(dt^.AddF32x8));
-  AssertTrue('Dispatch.SubF32x8 should be assigned', Assigned(dt^.SubF32x8));
-  AssertTrue('Dispatch.MulF32x8 should be assigned', Assigned(dt^.MulF32x8));
-  AssertTrue('Dispatch.DivF32x8 should be assigned', Assigned(dt^.DivF32x8));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF32x8 should not be scalar when vector asm enabled', dt^.AddF32x8 <> @ScalarAddF32x8);
-  AssertTrue('SubF32x8 should not be scalar when vector asm enabled', dt^.SubF32x8 <> @ScalarSubF32x8);
-  AssertTrue('MulF32x8 should not be scalar when vector asm enabled', dt^.MulF32x8 <> @ScalarMulF32x8);
-  AssertTrue('DivF32x8 should not be scalar when vector asm enabled', dt^.DivF32x8 <> @ScalarDivF32x8);
+  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 12345;
@@ -4787,25 +4734,25 @@ begin
     expV := ScalarAddF32x8(a, b);
     actV := dt^.AddF32x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('Add elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Add elem ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x8(a, b);
     actV := dt^.SubF32x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('Sub elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Sub elem ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x8(a, b);
     actV := dt^.MulF32x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('Mul elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Mul elem ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x8(a, b);
     actV := dt^.DivF32x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('Div elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Div elem ' + IntToStr(i));
   end;
 end;
 
@@ -4820,12 +4767,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' elem ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' elem ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -4833,20 +4780,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF32x8 should be assigned', Assigned(dt^.AddF32x8));
-  AssertTrue('Dispatch.SubF32x8 should be assigned', Assigned(dt^.SubF32x8));
-  AssertTrue('Dispatch.MulF32x8 should be assigned', Assigned(dt^.MulF32x8));
-  AssertTrue('Dispatch.DivF32x8 should be assigned', Assigned(dt^.DivF32x8));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF32x8 should not be scalar when vector asm enabled', dt^.AddF32x8 <> @ScalarAddF32x8);
-  AssertTrue('SubF32x8 should not be scalar when vector asm enabled', dt^.SubF32x8 <> @ScalarSubF32x8);
-  AssertTrue('MulF32x8 should not be scalar when vector asm enabled', dt^.MulF32x8 <> @ScalarMulF32x8);
-  AssertTrue('DivF32x8 should not be scalar when vector asm enabled', dt^.DivF32x8 <> @ScalarDivF32x8);
+  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   // 构造包含 NaN/Inf/±0 的输入，确保在 AVX2 vector-asm 路径下与 scalar 参考结果一致。
   a.f[0] := SingleFromBits($80000000); // -0
@@ -4915,20 +4862,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF64x2 should be assigned', Assigned(dt^.AddF64x2));
-  AssertTrue('Dispatch.SubF64x2 should be assigned', Assigned(dt^.SubF64x2));
-  AssertTrue('Dispatch.MulF64x2 should be assigned', Assigned(dt^.MulF64x2));
-  AssertTrue('Dispatch.DivF64x2 should be assigned', Assigned(dt^.DivF64x2));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF64x2 should not be scalar when vector asm enabled', dt^.AddF64x2 <> @ScalarAddF64x2);
-  AssertTrue('SubF64x2 should not be scalar when vector asm enabled', dt^.SubF64x2 <> @ScalarSubF64x2);
-  AssertTrue('MulF64x2 should not be scalar when vector asm enabled', dt^.MulF64x2 <> @ScalarMulF64x2);
-  AssertTrue('DivF64x2 should not be scalar when vector asm enabled', dt^.DivF64x2 <> @ScalarDivF64x2);
+  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   eps := 1e-12;
   RandSeed := 20251224;
@@ -4947,25 +4894,25 @@ begin
     expV := ScalarAddF64x2(a, b);
     actV := dt^.AddF64x2(a, b);
     for i := 0 to 1 do
-      AssertEquals('F64x2 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF64x2(a, b);
     actV := dt^.SubF64x2(a, b);
     for i := 0 to 1 do
-      AssertEquals('F64x2 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF64x2(a, b);
     actV := dt^.MulF64x2(a, b);
     for i := 0 to 1 do
-      AssertEquals('F64x2 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF64x2(a, b);
     actV := dt^.DivF64x2(a, b);
     for i := 0 to 1 do
-      AssertEquals('F64x2 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -4980,12 +4927,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Double);
   begin
     if IsNaNDouble(expVal) then
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' should be NaN', IsNaNDouble(actVal))
+      CheckTrue(IsNaNDouble(actVal), op + ' lane ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromDouble(expVal);
       actBits := BitsFromDouble(actVal);
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' lane ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -4993,20 +4940,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF64x2 should be assigned', Assigned(dt^.AddF64x2));
-  AssertTrue('Dispatch.SubF64x2 should be assigned', Assigned(dt^.SubF64x2));
-  AssertTrue('Dispatch.MulF64x2 should be assigned', Assigned(dt^.MulF64x2));
-  AssertTrue('Dispatch.DivF64x2 should be assigned', Assigned(dt^.DivF64x2));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF64x2 should not be scalar when vector asm enabled', dt^.AddF64x2 <> @ScalarAddF64x2);
-  AssertTrue('SubF64x2 should not be scalar when vector asm enabled', dt^.SubF64x2 <> @ScalarSubF64x2);
-  AssertTrue('MulF64x2 should not be scalar when vector asm enabled', dt^.MulF64x2 <> @ScalarMulF64x2);
-  AssertTrue('DivF64x2 should not be scalar when vector asm enabled', dt^.DivF64x2 <> @ScalarDivF64x2);
+  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   // 特殊值：±0 / ±Inf / qNaN
   a.d[0] := DoubleFromBits(QWord($8000000000000000)); // -0
@@ -5055,18 +5002,18 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddI32x4 should be assigned', Assigned(dt^.AddI32x4));
-  AssertTrue('Dispatch.SubI32x4 should be assigned', Assigned(dt^.SubI32x4));
-  AssertTrue('Dispatch.MulI32x4 should be assigned', Assigned(dt^.MulI32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddI32x4 should not be scalar when vector asm enabled', dt^.AddI32x4 <> @ScalarAddI32x4);
-  AssertTrue('SubI32x4 should not be scalar when vector asm enabled', dt^.SubI32x4 <> @ScalarSubI32x4);
-  AssertTrue('MulI32x4 should not be scalar when vector asm enabled', dt^.MulI32x4 <> @ScalarMulI32x4);
+  CheckTrue(dt^.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251225;
 
@@ -5083,19 +5030,19 @@ begin
     expV := ScalarAddI32x4(a, b);
     actV := dt^.AddI32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('I32x4 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x4 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubI32x4(a, b);
     actV := dt^.SubI32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('I32x4 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x4 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulI32x4(a, b);
     actV := dt^.MulI32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('I32x4 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x4 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -5109,13 +5056,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddI32x4 should be assigned', Assigned(dt^.AddI32x4));
-  AssertTrue('Dispatch.SubI32x4 should be assigned', Assigned(dt^.SubI32x4));
-  AssertTrue('Dispatch.MulI32x4 should be assigned', Assigned(dt^.MulI32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
 
   // Add/Sub：边界但不溢出
   a.i[0] := High(Int32) - 1; b.i[0] := 1;  // -> High(Int32)
@@ -5126,12 +5073,12 @@ begin
   expV := ScalarAddI32x4(a, b);
   actV := dt^.AddI32x4(a, b);
   for i := 0 to 3 do
-    AssertEquals('I32x4 Add boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x4 Add boundary lane ' + IntToStr(i));
 
   expV := ScalarSubI32x4(a, b);
   actV := dt^.SubI32x4(a, b);
   for i := 0 to 3 do
-    AssertEquals('I32x4 Sub boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x4 Sub boundary lane ' + IntToStr(i));
 
   // Mul：使用 46340 保证 32-bit signed 乘法不溢出。
   a.i[0] := 46340;  b.i[0] := 46340;
@@ -5142,7 +5089,7 @@ begin
   expV := ScalarMulI32x4(a, b);
   actV := dt^.MulI32x4(a, b);
   for i := 0 to 3 do
-    AssertEquals('I32x4 Mul boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x4 Mul boundary lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x4_Compare_SpecialValues_Consistency;
@@ -5165,24 +5112,24 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CmpEqF32x4 should be assigned', Assigned(dt^.CmpEqF32x4));
-  AssertTrue('Dispatch.CmpLtF32x4 should be assigned', Assigned(dt^.CmpLtF32x4));
-  AssertTrue('Dispatch.CmpLeF32x4 should be assigned', Assigned(dt^.CmpLeF32x4));
-  AssertTrue('Dispatch.CmpGtF32x4 should be assigned', Assigned(dt^.CmpGtF32x4));
-  AssertTrue('Dispatch.CmpGeF32x4 should be assigned', Assigned(dt^.CmpGeF32x4));
-  AssertTrue('Dispatch.CmpNeF32x4 should be assigned', Assigned(dt^.CmpNeF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('CmpEqF32x4 should not be scalar when vector asm enabled', dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4);
-  AssertTrue('CmpLtF32x4 should not be scalar when vector asm enabled', dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4);
-  AssertTrue('CmpLeF32x4 should not be scalar when vector asm enabled', dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4);
-  AssertTrue('CmpGtF32x4 should not be scalar when vector asm enabled', dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4);
-  AssertTrue('CmpGeF32x4 should not be scalar when vector asm enabled', dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4);
-  AssertTrue('CmpNeF32x4 should not be scalar when vector asm enabled', dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4);
+  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   // 设计点：比较指令在 NaN 场景下会触发 InvalidOp（若未屏蔽异常），
   // 这里临时屏蔽所有 FPU 异常，避免测试运行被中断。
@@ -5205,32 +5152,32 @@ begin
     // Eq: NaN==x false; Inf==Inf true; -0==+0 true
     expMask := Mask4Of(False, False, True, True);
     actMask := dt^.CmpEqF32x4(a, b);
-    AssertEquals('CmpEq mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpEq mask');
 
     // Ne: NaN!=x true (unordered); Inf!=Inf false; -0!=+0 false
     expMask := Mask4Of(True, True, False, False);
     actMask := dt^.CmpNeF32x4(a, b);
-    AssertEquals('CmpNe mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpNe mask');
 
     // Lt: NaN comparisons false; Inf<Inf false; -0<+0 false
     expMask := Mask4Of(False, False, False, False);
     actMask := dt^.CmpLtF32x4(a, b);
-    AssertEquals('CmpLt mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpLt mask');
 
     // Le: NaN comparisons false; Inf<=Inf true; -0<=+0 true
     expMask := Mask4Of(False, False, True, True);
     actMask := dt^.CmpLeF32x4(a, b);
-    AssertEquals('CmpLe mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpLe mask');
 
     // Gt: NaN comparisons false; Inf>Inf false; -0>+0 false
     expMask := Mask4Of(False, False, False, False);
     actMask := dt^.CmpGtF32x4(a, b);
-    AssertEquals('CmpGt mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpGt mask');
 
     // Ge: NaN comparisons false; Inf>=Inf true; -0>=+0 true
     expMask := Mask4Of(False, False, True, True);
     actMask := dt^.CmpGeF32x4(a, b);
-    AssertEquals('CmpGe mask', expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpGe mask');
   finally
     SetExceptionMask(savedMask);
   end;
@@ -5256,24 +5203,24 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CmpEqF32x4 should be assigned', Assigned(dt^.CmpEqF32x4));
-  AssertTrue('Dispatch.CmpLtF32x4 should be assigned', Assigned(dt^.CmpLtF32x4));
-  AssertTrue('Dispatch.CmpLeF32x4 should be assigned', Assigned(dt^.CmpLeF32x4));
-  AssertTrue('Dispatch.CmpGtF32x4 should be assigned', Assigned(dt^.CmpGtF32x4));
-  AssertTrue('Dispatch.CmpGeF32x4 should be assigned', Assigned(dt^.CmpGeF32x4));
-  AssertTrue('Dispatch.CmpNeF32x4 should be assigned', Assigned(dt^.CmpNeF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('CmpEqF32x4 should not be scalar when vector asm enabled', dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4);
-  AssertTrue('CmpLtF32x4 should not be scalar when vector asm enabled', dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4);
-  AssertTrue('CmpLeF32x4 should not be scalar when vector asm enabled', dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4);
-  AssertTrue('CmpGtF32x4 should not be scalar when vector asm enabled', dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4);
-  AssertTrue('CmpGeF32x4 should not be scalar when vector asm enabled', dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4);
-  AssertTrue('CmpNeF32x4 should not be scalar when vector asm enabled', dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4);
+  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251216;
 
@@ -5298,27 +5245,27 @@ begin
 
     expMask := Mask4Of(a.f[0] = b.f[0], a.f[1] = b.f[1], a.f[2] = b.f[2], a.f[3] = b.f[3]);
     actMask := dt^.CmpEqF32x4(a, b);
-    AssertEquals('CmpEq iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpEq iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] <> b.f[0], a.f[1] <> b.f[1], a.f[2] <> b.f[2], a.f[3] <> b.f[3]);
     actMask := dt^.CmpNeF32x4(a, b);
-    AssertEquals('CmpNe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpNe iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] < b.f[0], a.f[1] < b.f[1], a.f[2] < b.f[2], a.f[3] < b.f[3]);
     actMask := dt^.CmpLtF32x4(a, b);
-    AssertEquals('CmpLt iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpLt iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] <= b.f[0], a.f[1] <= b.f[1], a.f[2] <= b.f[2], a.f[3] <= b.f[3]);
     actMask := dt^.CmpLeF32x4(a, b);
-    AssertEquals('CmpLe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpLe iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] > b.f[0], a.f[1] > b.f[1], a.f[2] > b.f[2], a.f[3] > b.f[3]);
     actMask := dt^.CmpGtF32x4(a, b);
-    AssertEquals('CmpGt iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpGt iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] >= b.f[0], a.f[1] >= b.f[1], a.f[2] >= b.f[2], a.f[3] >= b.f[3]);
     actMask := dt^.CmpGeF32x4(a, b);
-    AssertEquals('CmpGe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'CmpGe iter ' + IntToStr(iter));
   end;
 end;
 
@@ -5333,20 +5280,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF32x4 should be assigned', Assigned(dt^.AddF32x4));
-  AssertTrue('Dispatch.SubF32x4 should be assigned', Assigned(dt^.SubF32x4));
-  AssertTrue('Dispatch.MulF32x4 should be assigned', Assigned(dt^.MulF32x4));
-  AssertTrue('Dispatch.DivF32x4 should be assigned', Assigned(dt^.DivF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.DivF32x4), 'Dispatch.DivF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF32x4 should not be scalar when vector asm enabled', dt^.AddF32x4 <> @ScalarAddF32x4);
-  AssertTrue('SubF32x4 should not be scalar when vector asm enabled', dt^.SubF32x4 <> @ScalarSubF32x4);
-  AssertTrue('MulF32x4 should not be scalar when vector asm enabled', dt^.MulF32x4 <> @ScalarMulF32x4);
-  AssertTrue('DivF32x4 should not be scalar when vector asm enabled', dt^.DivF32x4 <> @ScalarDivF32x4);
+  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 54321;
@@ -5365,25 +5312,25 @@ begin
     expV := ScalarAddF32x4(a, b);
     actV := dt^.AddF32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('Add elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Add elem ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x4(a, b);
     actV := dt^.SubF32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('Sub elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Sub elem ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x4(a, b);
     actV := dt^.MulF32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('Mul elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Mul elem ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x4(a, b);
     actV := dt^.DivF32x4(a, b);
     for i := 0 to 3 do
-      AssertEquals('Div elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Div elem ' + IntToStr(i));
   end;
 end;
 
@@ -5398,12 +5345,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' elem ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' elem ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -5411,20 +5358,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF32x4 should be assigned', Assigned(dt^.AddF32x4));
-  AssertTrue('Dispatch.SubF32x4 should be assigned', Assigned(dt^.SubF32x4));
-  AssertTrue('Dispatch.MulF32x4 should be assigned', Assigned(dt^.MulF32x4));
-  AssertTrue('Dispatch.DivF32x4 should be assigned', Assigned(dt^.DivF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.DivF32x4), 'Dispatch.DivF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('AddF32x4 should not be scalar when vector asm enabled', dt^.AddF32x4 <> @ScalarAddF32x4);
-  AssertTrue('SubF32x4 should not be scalar when vector asm enabled', dt^.SubF32x4 <> @ScalarSubF32x4);
-  AssertTrue('MulF32x4 should not be scalar when vector asm enabled', dt^.MulF32x4 <> @ScalarMulF32x4);
-  AssertTrue('DivF32x4 should not be scalar when vector asm enabled', dt^.DivF32x4 <> @ScalarDivF32x4);
+  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
 
   a.f[0] := SingleFromBits($80000000); // -0
   b.f[0] := SingleFromBits($00000000); // +0
@@ -5479,13 +5426,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AbsF32x4 should be assigned', Assigned(dt^.AbsF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
 
-  AssertTrue('AbsF32x4 should not be scalar when vector asm enabled', dt^.AbsF32x4 <> @ScalarAbsF32x4);
+  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 24680;
 
@@ -5501,7 +5448,7 @@ begin
     begin
       expBits := BitsFromSingle(expV.f[i]);
       actBits := BitsFromSingle(actV.f[i]);
-      AssertTrue('Abs elem ' + IntToStr(i) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, 'Abs elem ' + IntToStr(i) + ' bits should match');
     end;
   end;
 end;
@@ -5517,12 +5464,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' elem ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' elem ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -5530,13 +5477,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AbsF32x4 should be assigned', Assigned(dt^.AbsF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
 
-  AssertTrue('AbsF32x4 should not be scalar when vector asm enabled', dt^.AbsF32x4 <> @ScalarAbsF32x4);
+  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
 
   a.f[0] := SingleFromBits($80000000); // -0
   a.f[1] := SingleFromBits($FF800000); // -Inf
@@ -5561,13 +5508,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.SqrtF32x4 should be assigned', Assigned(dt^.SqrtF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
 
-  AssertTrue('SqrtF32x4 should not be scalar when vector asm enabled', dt^.SqrtF32x4 <> @ScalarSqrtF32x4);
+  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 13579;
@@ -5581,7 +5528,7 @@ begin
     actV := dt^.SqrtF32x4(a);
 
     for i := 0 to 3 do
-      AssertEquals('Sqrt elem ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Sqrt elem ' + IntToStr(i));
   end;
 end;
 
@@ -5597,12 +5544,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' elem ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' elem ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -5610,13 +5557,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.SqrtF32x4 should be assigned', Assigned(dt^.SqrtF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
 
-  AssertTrue('SqrtF32x4 should not be scalar when vector asm enabled', dt^.SqrtF32x4 <> @ScalarSqrtF32x4);
+  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   savedMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
@@ -5647,15 +5594,15 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MinF32x4 should be assigned', Assigned(dt^.MinF32x4));
-  AssertTrue('Dispatch.MaxF32x4 should be assigned', Assigned(dt^.MaxF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
 
-  AssertTrue('MinF32x4 should not be scalar when vector asm enabled', dt^.MinF32x4 <> @ScalarMinF32x4);
-  AssertTrue('MaxF32x4 should not be scalar when vector asm enabled', dt^.MaxF32x4 <> @ScalarMaxF32x4);
+  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 112233;
 
@@ -5674,7 +5621,7 @@ begin
     begin
       expBits := BitsFromSingle(expV.f[i]);
       actBits := BitsFromSingle(actV.f[i]);
-      AssertTrue('Min elem ' + IntToStr(i) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, 'Min elem ' + IntToStr(i) + ' bits should match');
     end;
 
     // Max
@@ -5684,7 +5631,7 @@ begin
     begin
       expBits := BitsFromSingle(expV.f[i]);
       actBits := BitsFromSingle(actV.f[i]);
-      AssertTrue('Max elem ' + IntToStr(i) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, 'Max elem ' + IntToStr(i) + ' bits should match');
     end;
   end;
 end;
@@ -5701,12 +5648,12 @@ var
   procedure AssertSameElementBits(const op: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' elem ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' elem ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' elem ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -5714,15 +5661,15 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MinF32x4 should be assigned', Assigned(dt^.MinF32x4));
-  AssertTrue('Dispatch.MaxF32x4 should be assigned', Assigned(dt^.MaxF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
 
-  AssertTrue('MinF32x4 should not be scalar when vector asm enabled', dt^.MinF32x4 <> @ScalarMinF32x4);
-  AssertTrue('MaxF32x4 should not be scalar when vector asm enabled', dt^.MaxF32x4 <> @ScalarMaxF32x4);
+  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   savedMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
@@ -5768,12 +5715,12 @@ var
   procedure AssertSameSingleBits(const op: string; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' bits should match');
     end;
   end;
 
@@ -5781,19 +5728,19 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ReduceAddF32x4 should be assigned', Assigned(dt^.ReduceAddF32x4));
-  AssertTrue('Dispatch.ReduceMinF32x4 should be assigned', Assigned(dt^.ReduceMinF32x4));
-  AssertTrue('Dispatch.ReduceMaxF32x4 should be assigned', Assigned(dt^.ReduceMaxF32x4));
-  AssertTrue('Dispatch.ReduceMulF32x4 should be assigned', Assigned(dt^.ReduceMulF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMinF32x4), 'Dispatch.ReduceMinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMaxF32x4), 'Dispatch.ReduceMaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMulF32x4), 'Dispatch.ReduceMulF32x4 should be assigned');
 
-  AssertTrue('ReduceAddF32x4 should not be scalar when vector asm enabled', dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4);
-  AssertTrue('ReduceMinF32x4 should not be scalar when vector asm enabled', dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4);
-  AssertTrue('ReduceMaxF32x4 should not be scalar when vector asm enabled', dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4);
-  AssertTrue('ReduceMulF32x4 should not be scalar when vector asm enabled', dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4);
+  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
 
   // ReduceAdd/ReduceMul 的求和/求积顺序可能在不同实现间不同（浮点非结合律），
   // 这里用小范围随机值 + 适度 eps 进行一致性验证。
@@ -5811,17 +5758,17 @@ begin
     expS := ScalarReduceAddF32x4(a);
     actS := dt^.ReduceAddF32x4(a);
     if IsNaNSingle(expS) then
-      AssertTrue('ReduceAdd iter ' + IntToStr(iter) + ' should be NaN', IsNaNSingle(actS))
+      CheckTrue(IsNaNSingle(actS), 'ReduceAdd iter ' + IntToStr(iter) + ' should be NaN')
     else
-      AssertEquals('ReduceAdd iter ' + IntToStr(iter), expS, actS, epsAdd);
+      CheckNear(expS, actS, epsAdd, 'ReduceAdd iter ' + IntToStr(iter));
 
     // ReduceMul
     expS := ScalarReduceMulF32x4(a);
     actS := dt^.ReduceMulF32x4(a);
     if IsNaNSingle(expS) then
-      AssertTrue('ReduceMul iter ' + IntToStr(iter) + ' should be NaN', IsNaNSingle(actS))
+      CheckTrue(IsNaNSingle(actS), 'ReduceMul iter ' + IntToStr(iter) + ' should be NaN')
     else
-      AssertEquals('ReduceMul iter ' + IntToStr(iter), expS, actS, epsMul);
+      CheckNear(expS, actS, epsMul, 'ReduceMul iter ' + IntToStr(iter));
 
     // ReduceMin
     expS := ScalarReduceMinF32x4(a);
@@ -5846,12 +5793,12 @@ var
   procedure AssertSameSingleBits(const op: string; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' bits should match');
     end;
   end;
 
@@ -5859,19 +5806,19 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ReduceAddF32x4 should be assigned', Assigned(dt^.ReduceAddF32x4));
-  AssertTrue('Dispatch.ReduceMinF32x4 should be assigned', Assigned(dt^.ReduceMinF32x4));
-  AssertTrue('Dispatch.ReduceMaxF32x4 should be assigned', Assigned(dt^.ReduceMaxF32x4));
-  AssertTrue('Dispatch.ReduceMulF32x4 should be assigned', Assigned(dt^.ReduceMulF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMinF32x4), 'Dispatch.ReduceMinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMaxF32x4), 'Dispatch.ReduceMaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceMulF32x4), 'Dispatch.ReduceMulF32x4 should be assigned');
 
-  AssertTrue('ReduceAddF32x4 should not be scalar when vector asm enabled', dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4);
-  AssertTrue('ReduceMinF32x4 should not be scalar when vector asm enabled', dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4);
-  AssertTrue('ReduceMaxF32x4 should not be scalar when vector asm enabled', dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4);
-  AssertTrue('ReduceMulF32x4 should not be scalar when vector asm enabled', dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4);
+  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
 
   // ReduceMin/Max 在 NaN/±0 场景下很容易出现“选择了哪个操作数”的差异。
   // 为避免某些 CPU/FPU 设置下触发 InvalidOp，这里局部屏蔽异常。
@@ -5895,16 +5842,16 @@ begin
     expS := ScalarReduceAddF32x4(a);
     actS := dt^.ReduceAddF32x4(a);
     if IsNaNSingle(expS) then
-      AssertTrue('ReduceAdd NaN-position case should be NaN', IsNaNSingle(actS))
+      CheckTrue(IsNaNSingle(actS), 'ReduceAdd NaN-position case should be NaN')
     else
-      AssertEquals('ReduceAdd NaN-position case', expS, actS, 0.0);
+      CheckNear(expS, actS, 0.0, 'ReduceAdd NaN-position case');
 
     expS := ScalarReduceMulF32x4(a);
     actS := dt^.ReduceMulF32x4(a);
     if IsNaNSingle(expS) then
-      AssertTrue('ReduceMul NaN-position case should be NaN', IsNaNSingle(actS))
+      CheckTrue(IsNaNSingle(actS), 'ReduceMul NaN-position case should be NaN')
     else
-      AssertEquals('ReduceMul NaN-position case', expS, actS, 0.0);
+      CheckNear(expS, actS, 0.0, 'ReduceMul NaN-position case');
 
     // Case 2: 更强的 Max 反例（NaN 在中间会让 scalar 顺序 fold 丢掉早期的极大值）
     a.f[0] := 100.0;
@@ -5948,7 +5895,7 @@ var
     j: Integer;
   begin
     for j := 0 to count - 1 do
-      AssertEquals(msg + ' byte ' + IntToStr(j), expectedPtr[j], actualPtr[j]);
+      CheckEqual(expectedPtr[j], actualPtr[j], msg + ' byte ' + IntToStr(j));
   end;
 
   procedure AssertAllBytesAre(const msg: string; p: PByte; count: Integer; value: Byte);
@@ -5956,26 +5903,26 @@ var
     j: Integer;
   begin
     for j := 0 to count - 1 do
-      AssertEquals(msg + ' byte ' + IntToStr(j), value, p[j]);
+      CheckEqual(value, p[j], msg + ' byte ' + IntToStr(j));
   end;
 
 begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.LoadF32x4 should be assigned', Assigned(dt^.LoadF32x4));
-  AssertTrue('Dispatch.StoreF32x4 should be assigned', Assigned(dt^.StoreF32x4));
-  AssertTrue('Dispatch.LoadF32x4Aligned should be assigned', Assigned(dt^.LoadF32x4Aligned));
-  AssertTrue('Dispatch.StoreF32x4Aligned should be assigned', Assigned(dt^.StoreF32x4Aligned));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
 
-  AssertTrue('LoadF32x4 should not be scalar when vector asm enabled', dt^.LoadF32x4 <> @ScalarLoadF32x4);
-  AssertTrue('StoreF32x4 should not be scalar when vector asm enabled', dt^.StoreF32x4 <> @ScalarStoreF32x4);
-  AssertTrue('LoadF32x4Aligned should not be scalar when vector asm enabled', dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned);
-  AssertTrue('StoreF32x4Aligned should not be scalar when vector asm enabled', dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned);
+  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   rawSrc := GetMem(64);
   rawDst := GetMem(64);
@@ -5989,8 +5936,8 @@ begin
     pAlignedSrc := PByte(alignedRaw) + SIMD_ALIGN_16;
     pAlignedDst := PByte(alignedRaw) + 64;
 
-    AssertTrue('pAlignedSrc should be 16-byte aligned', IsAligned(pAlignedSrc, SIMD_ALIGN_16));
-    AssertTrue('pAlignedDst should be 16-byte aligned', IsAligned(pAlignedDst, SIMD_ALIGN_16));
+    CheckTrue(IsAligned(pAlignedSrc, SIMD_ALIGN_16), 'pAlignedSrc should be 16-byte aligned');
+    CheckTrue(IsAligned(pAlignedDst, SIMD_ALIGN_16), 'pAlignedDst should be 16-byte aligned');
 
     RandSeed := 424242;
 
@@ -6017,7 +5964,7 @@ begin
       Move(expBytes[0], pSrc^, 16);
       v := dt^.LoadF32x4(PSingle(pSrc));
       for i := 0 to 3 do
-        AssertEquals('LoadF32x4 elem ' + IntToStr(i) + ' bits', BitsFromSingle(src[i]), BitsFromSingle(v.f[i]));
+        CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4 elem ' + IntToStr(i) + ' bits');
 
       // --- Aligned store ---
       FillChar(PByte(alignedRaw)^, 128, $EF);
@@ -6031,7 +5978,7 @@ begin
       Move(expBytes[0], pAlignedSrc^, 16);
       v := dt^.LoadF32x4Aligned(PSingle(pAlignedSrc));
       for i := 0 to 3 do
-        AssertEquals('LoadF32x4Aligned elem ' + IntToStr(i) + ' bits', BitsFromSingle(src[i]), BitsFromSingle(v.f[i]));
+        CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4Aligned elem ' + IntToStr(i) + ' bits');
     end;
   finally
     FreeMem(rawSrc);
@@ -6057,26 +6004,26 @@ var
     j: Integer;
   begin
     for j := 0 to count - 1 do
-      AssertEquals(msg + ' byte ' + IntToStr(j), expectedPtr[j], actualPtr[j]);
+      CheckEqual(expectedPtr[j], actualPtr[j], msg + ' byte ' + IntToStr(j));
   end;
 
 begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.LoadF32x4 should be assigned', Assigned(dt^.LoadF32x4));
-  AssertTrue('Dispatch.StoreF32x4 should be assigned', Assigned(dt^.StoreF32x4));
-  AssertTrue('Dispatch.LoadF32x4Aligned should be assigned', Assigned(dt^.LoadF32x4Aligned));
-  AssertTrue('Dispatch.StoreF32x4Aligned should be assigned', Assigned(dt^.StoreF32x4Aligned));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
 
-  AssertTrue('LoadF32x4 should not be scalar when vector asm enabled', dt^.LoadF32x4 <> @ScalarLoadF32x4);
-  AssertTrue('StoreF32x4 should not be scalar when vector asm enabled', dt^.StoreF32x4 <> @ScalarStoreF32x4);
-  AssertTrue('LoadF32x4Aligned should not be scalar when vector asm enabled', dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned);
-  AssertTrue('StoreF32x4Aligned should not be scalar when vector asm enabled', dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned);
+  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   // 特殊值：±0 / ±Inf / qNaN
   src[0] := SingleFromBits($00000000); // +0
@@ -6098,8 +6045,8 @@ begin
     pAlignedSrc := PByte(alignedRaw) + SIMD_ALIGN_16;
     pAlignedDst := PByte(alignedRaw) + 64;
 
-    AssertTrue('pAlignedSrc should be 16-byte aligned', IsAligned(pAlignedSrc, SIMD_ALIGN_16));
-    AssertTrue('pAlignedDst should be 16-byte aligned', IsAligned(pAlignedDst, SIMD_ALIGN_16));
+    CheckTrue(IsAligned(pAlignedSrc, SIMD_ALIGN_16), 'pAlignedSrc should be 16-byte aligned');
+    CheckTrue(IsAligned(pAlignedDst, SIMD_ALIGN_16), 'pAlignedDst should be 16-byte aligned');
 
     // Store unaligned
     FillChar(rawDst^, 64, $CD);
@@ -6111,7 +6058,7 @@ begin
     Move(expBytes[0], pSrc^, 16);
     v := dt^.LoadF32x4(PSingle(pSrc));
     for i := 0 to 3 do
-      AssertEquals('LoadF32x4 special-values elem ' + IntToStr(i) + ' bits', BitsFromSingle(src[i]), BitsFromSingle(v.f[i]));
+      CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4 special-values elem ' + IntToStr(i) + ' bits');
 
     // Store aligned
     FillChar(PByte(alignedRaw)^, 128, $EF);
@@ -6123,7 +6070,7 @@ begin
     Move(expBytes[0], pAlignedSrc^, 16);
     v := dt^.LoadF32x4Aligned(PSingle(pAlignedSrc));
     for i := 0 to 3 do
-      AssertEquals('LoadF32x4Aligned special-values elem ' + IntToStr(i) + ' bits', BitsFromSingle(src[i]), BitsFromSingle(v.f[i]));
+      CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4Aligned special-values elem ' + IntToStr(i) + ' bits');
   finally
     FreeMem(rawSrc);
     FreeMem(rawDst);
@@ -6144,13 +6091,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.SelectF32x4 should be assigned', Assigned(dt^.SelectF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.SelectF32x4), 'Dispatch.SelectF32x4 should be assigned');
 
-  AssertTrue('SelectF32x4 should not be scalar when vector asm enabled', dt^.SelectF32x4 <> @ScalarSelectF32x4);
+  CheckTrue(dt^.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 911911;
 
@@ -6176,8 +6123,7 @@ begin
     actV := dt^.SelectF32x4(mask, a, b);
 
     for i := 0 to 3 do
-      AssertEquals('Select iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expV.f[i]), BitsFromSingle(actV.f[i]));
+      CheckEqual(BitsFromSingle(expV.f[i]), BitsFromSingle(actV.f[i]), 'Select iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -6193,15 +6139,15 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ExtractF32x4 should be assigned', Assigned(dt^.ExtractF32x4));
-  AssertTrue('Dispatch.InsertF32x4 should be assigned', Assigned(dt^.InsertF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ExtractF32x4), 'Dispatch.ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.InsertF32x4), 'Dispatch.InsertF32x4 should be assigned');
 
-  AssertTrue('ExtractF32x4 should not be scalar when vector asm enabled', dt^.ExtractF32x4 <> @ScalarExtractF32x4);
-  AssertTrue('InsertF32x4 should not be scalar when vector asm enabled', dt^.InsertF32x4 <> @ScalarInsertF32x4);
+  CheckTrue(dt^.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 12211221;
 
@@ -6217,8 +6163,7 @@ begin
     idx := Random(4);
 
     extracted := dt^.ExtractF32x4(a, idx);
-    AssertEquals('Extract iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits',
-                 BitsFromSingle(a.f[idx]), BitsFromSingle(extracted));
+    CheckEqual(BitsFromSingle(a.f[idx]), BitsFromSingle(extracted), 'Extract iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits');
 
     bits := DWord(Random($10000)) or (DWord(Random($10000)) shl 16);
     value := SingleFromBits(bits);
@@ -6227,15 +6172,12 @@ begin
 
     for i := 0 to 3 do
       if i = idx then
-        AssertEquals('Insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' lane bits',
-                     BitsFromSingle(value), BitsFromSingle(v.f[i]))
+        CheckEqual(BitsFromSingle(value), BitsFromSingle(v.f[i]), 'Insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' lane bits')
       else
-        AssertEquals('Insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' other lane ' + IntToStr(i) + ' bits',
-                     BitsFromSingle(a.f[i]), BitsFromSingle(v.f[i]));
+        CheckEqual(BitsFromSingle(a.f[i]), BitsFromSingle(v.f[i]), 'Insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' other lane ' + IntToStr(i) + ' bits');
 
     extracted := dt^.ExtractF32x4(v, idx);
-    AssertEquals('Extract-after-insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits',
-                 BitsFromSingle(value), BitsFromSingle(extracted));
+    CheckEqual(BitsFromSingle(value), BitsFromSingle(extracted), 'Extract-after-insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits');
   end;
 
   // 额外覆盖：确保 -0 的符号位不会在 Extract/Insert 中丢失。
@@ -6245,9 +6187,9 @@ begin
   a.f[3] := 4.0;
   value := SingleFromBits($80000000); // -0
   v := dt^.InsertF32x4(a, value, 1);
-  AssertEquals('Insert signed-zero lane bits', DWord($80000000), BitsFromSingle(v.f[1]));
+  CheckEqual(DWord($80000000), BitsFromSingle(v.f[1]), 'Insert signed-zero lane bits');
   extracted := dt^.ExtractF32x4(v, 1);
-  AssertEquals('Extract signed-zero lane bits', DWord($80000000), BitsFromSingle(extracted));
+  CheckEqual(DWord($80000000), BitsFromSingle(extracted), 'Extract signed-zero lane bits');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x4_SplatZero_BitExact;
@@ -6263,22 +6205,22 @@ var
     j: Integer;
   begin
     for j := 0 to 3 do
-      AssertEquals(msg + ' lane ' + IntToStr(j) + ' bits', expectedBits, BitsFromSingle(vec.f[j]));
+      CheckEqual(expectedBits, BitsFromSingle(vec.f[j]), msg + ' lane ' + IntToStr(j) + ' bits');
   end;
 
 begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.SplatF32x4 should be assigned', Assigned(dt^.SplatF32x4));
-  AssertTrue('Dispatch.ZeroF32x4 should be assigned', Assigned(dt^.ZeroF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.SplatF32x4), 'Dispatch.SplatF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ZeroF32x4), 'Dispatch.ZeroF32x4 should be assigned');
 
-  AssertTrue('SplatF32x4 should not be scalar when vector asm enabled', dt^.SplatF32x4 <> @ScalarSplatF32x4);
-  AssertTrue('ZeroF32x4 should not be scalar when vector asm enabled', dt^.ZeroF32x4 <> @ScalarZeroF32x4);
+  CheckTrue(dt^.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
 
   // Zero：必须是 +0（全 0 bit），不能是 -0。
   v := dt^.ZeroF32x4();
@@ -6293,8 +6235,7 @@ begin
 
     v := dt^.SplatF32x4(value);
     for i := 0 to 3 do
-      AssertEquals('Splat iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   bits, BitsFromSingle(v.f[i]));
+      CheckEqual(bits, BitsFromSingle(v.f[i]), 'Splat iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // 特殊：-0 / qNaN payload
@@ -6320,17 +6261,17 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.RcpF32x4 should be assigned', Assigned(dt^.RcpF32x4));
-  AssertTrue('Dispatch.RsqrtF32x4 should be assigned', Assigned(dt^.RsqrtF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.RcpF32x4), 'Dispatch.RcpF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.RsqrtF32x4), 'Dispatch.RsqrtF32x4 should be assigned');
 
   // 这个 suite 目标是验证 --vector-asm 路径：这里强制确保 AVX2 backend
   // 在 vector asm 打开时不会退回到 scalar reference。
-  AssertTrue('RcpF32x4 should not be scalar when vector asm enabled', dt^.RcpF32x4 <> @ScalarRcpF32x4);
-  AssertTrue('RsqrtF32x4 should not be scalar when vector asm enabled', dt^.RsqrtF32x4 <> @ScalarRsqrtF32x4);
+  CheckTrue(dt^.RcpF32x4 <> @ScalarRcpF32x4, 'RcpF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.RsqrtF32x4 <> @ScalarRsqrtF32x4, 'RsqrtF32x4 should not be scalar when vector asm enabled');
 
   // Rcp/Rsqrt 可能是近似实现，这里选取温和输入范围并用 eps 做一致性验证。
   // 输入范围 [0.5..2.0]：避免 1/x 过大、以及 rsqrt 的负数/零域。
@@ -6347,13 +6288,13 @@ begin
     expV := ScalarRcpF32x4(a);
     actV := dt^.RcpF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Rcp iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Rcp iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Rsqrt
     expV := ScalarRsqrtF32x4(a);
     actV := dt^.RsqrtF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Rsqrt iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Rsqrt iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -6368,16 +6309,16 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.FloorF32x4 should be assigned', Assigned(dt^.FloorF32x4));
-  AssertTrue('Dispatch.CeilF32x4 should be assigned', Assigned(dt^.CeilF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.FloorF32x4), 'Dispatch.FloorF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CeilF32x4), 'Dispatch.CeilF32x4 should be assigned');
 
   // 同样要求：vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('FloorF32x4 should not be scalar when vector asm enabled', dt^.FloorF32x4 <> @ScalarFloorF32x4);
-  AssertTrue('CeilF32x4 should not be scalar when vector asm enabled', dt^.CeilF32x4 <> @ScalarCeilF32x4);
+  CheckTrue(dt^.FloorF32x4 <> @ScalarFloorF32x4, 'FloorF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CeilF32x4 <> @ScalarCeilF32x4, 'CeilF32x4 should not be scalar when vector asm enabled');
 
   // 选择一个结果可精确表示的范围（避免超出 float32 的整数精度）。
   RandSeed := 778866;
@@ -6391,13 +6332,13 @@ begin
     expV := ScalarFloorF32x4(a);
     actV := dt^.FloorF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Floor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+      CheckNear(expV.f[i], actV.f[i], 0.0, 'Floor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Ceil
     expV := ScalarCeilF32x4(a);
     actV := dt^.CeilF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Ceil iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+      CheckNear(expV.f[i], actV.f[i], 0.0, 'Ceil iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -6412,16 +6353,16 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.RoundF32x4 should be assigned', Assigned(dt^.RoundF32x4));
-  AssertTrue('Dispatch.TruncF32x4 should be assigned', Assigned(dt^.TruncF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.RoundF32x4), 'Dispatch.RoundF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.TruncF32x4), 'Dispatch.TruncF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('RoundF32x4 should not be scalar when vector asm enabled', dt^.RoundF32x4 <> @ScalarRoundF32x4);
-  AssertTrue('TruncF32x4 should not be scalar when vector asm enabled', dt^.TruncF32x4 <> @ScalarTruncF32x4);
+  CheckTrue(dt^.RoundF32x4 <> @ScalarRoundF32x4, 'RoundF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.TruncF32x4 <> @ScalarTruncF32x4, 'TruncF32x4 should not be scalar when vector asm enabled');
 
   // 先用确定性 case 覆盖“0.5 ties to even”语义。
   a.f[0] := 2.5;
@@ -6432,7 +6373,7 @@ begin
   expV := ScalarRoundF32x4(a);
   actV := dt^.RoundF32x4(a);
   for i := 0 to 3 do
-    AssertEquals('Round tie-even lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+    CheckNear(expV.f[i], actV.f[i], 0.0, 'Round tie-even lane ' + IntToStr(i));
 
   // Random：范围同样限制在可精确表示整数的区间
   RandSeed := 889977;
@@ -6446,13 +6387,13 @@ begin
     expV := ScalarRoundF32x4(a);
     actV := dt^.RoundF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Round iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+      CheckNear(expV.f[i], actV.f[i], 0.0, 'Round iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Trunc
     expV := ScalarTruncF32x4(a);
     actV := dt^.TruncF32x4(a);
     for i := 0 to 3 do
-      AssertEquals('Trunc iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+      CheckNear(expV.f[i], actV.f[i], 0.0, 'Trunc iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -6468,12 +6409,12 @@ var
   procedure AssertSameLaneBits(const msg: string; idx: Integer; expVal, actVal: Single);
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(msg + ' lane ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), msg + ' lane ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(msg + ' lane ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, msg + ' lane ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -6481,14 +6422,14 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ClampF32x4 should be assigned', Assigned(dt^.ClampF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ClampF32x4), 'Dispatch.ClampF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('ClampF32x4 should not be scalar when vector asm enabled', dt^.ClampF32x4 <> @ScalarClampF32x4);
+  CheckTrue(dt^.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
 
   // Clamp 内部会触发浮点比较（NaN 场景会触发 InvalidOp），这里局部屏蔽异常。
   savedMask := GetExceptionMask;
@@ -6540,14 +6481,14 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.DotF32x4 should be assigned', Assigned(dt^.DotF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.DotF32x4), 'Dispatch.DotF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('DotF32x4 should not be scalar when vector asm enabled', dt^.DotF32x4 <> @ScalarDotF32x4);
+  CheckTrue(dt^.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
 
   // 选择小整数，保证乘加结果在 float32 精确可表示的范围内，避免“求和顺序”带来的舍入差异。
   RandSeed := 20251217;
@@ -6563,7 +6504,7 @@ begin
     expS := ScalarDotF32x4(a, b);
     actS := dt^.DotF32x4(a, b);
 
-    AssertEquals('Dot iter ' + IntToStr(iter), expS, actS, 0.0);
+    CheckNear(expS, actS, 0.0, 'Dot iter ' + IntToStr(iter));
   end;
 end;
 
@@ -6577,14 +6518,14 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.DotF32x3 should be assigned', Assigned(dt^.DotF32x3));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.DotF32x3), 'Dispatch.DotF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('DotF32x3 should not be scalar when vector asm enabled', dt^.DotF32x3 <> @ScalarDotF32x3);
+  CheckTrue(dt^.DotF32x3 <> @ScalarDotF32x3, 'DotF32x3 should not be scalar when vector asm enabled');
 
   RandSeed := 20251218;
 
@@ -6602,7 +6543,7 @@ begin
     expS := ScalarDotF32x3(a, b);
     actS := dt^.DotF32x3(a, b);
 
-    AssertEquals('Dot3 iter ' + IntToStr(iter), expS, actS, 0.0);
+    CheckNear(expS, actS, 0.0, 'Dot3 iter ' + IntToStr(iter));
   end;
 end;
 
@@ -6616,14 +6557,14 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CrossF32x3 should be assigned', Assigned(dt^.CrossF32x3));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CrossF32x3), 'Dispatch.CrossF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('CrossF32x3 should not be scalar when vector asm enabled', dt^.CrossF32x3 <> @ScalarCrossF32x3);
+  CheckTrue(dt^.CrossF32x3 <> @ScalarCrossF32x3, 'CrossF32x3 should not be scalar when vector asm enabled');
 
   RandSeed := 20251219;
 
@@ -6643,9 +6584,9 @@ begin
     actV := dt^.CrossF32x3(a, b);
 
     for i := 0 to 2 do
-      AssertEquals('Cross3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+      CheckNear(expV.f[i], actV.f[i], 0.0, 'Cross3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
-    AssertEquals('Cross3 w should be +0', DWord(0), BitsFromSingle(actV.f[3]));
+    CheckEqual(DWord(0), BitsFromSingle(actV.f[3]), 'Cross3 w should be +0');
   end;
 end;
 
@@ -6660,20 +6601,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.LengthF32x4 should be assigned', Assigned(dt^.LengthF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.LengthF32x4), 'Dispatch.LengthF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('LengthF32x4 should not be scalar when vector asm enabled', dt^.LengthF32x4 <> @ScalarLengthF32x4);
+  CheckTrue(dt^.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
 
   // 确定性：3-4-0-0 -> 5
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expS := ScalarLengthF32x4(a);
   actS := dt^.LengthF32x4(a);
-  AssertEquals('Length(3,4,0,0)', expS, actS, 0.0);
+  CheckNear(expS, actS, 0.0, 'Length(3,4,0,0)');
 
   // 随机一致性：避免极端值
   eps := 1e-4;
@@ -6687,7 +6628,7 @@ begin
     expS := ScalarLengthF32x4(a);
     actS := dt^.LengthF32x4(a);
 
-    AssertEquals('Length iter ' + IntToStr(iter), expS, actS, eps);
+    CheckNear(expS, actS, eps, 'Length iter ' + IntToStr(iter));
   end;
 end;
 
@@ -6702,20 +6643,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.LengthF32x3 should be assigned', Assigned(dt^.LengthF32x3));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.LengthF32x3), 'Dispatch.LengthF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('LengthF32x3 should not be scalar when vector asm enabled', dt^.LengthF32x3 <> @ScalarLengthF32x3);
+  CheckTrue(dt^.LengthF32x3 <> @ScalarLengthF32x3, 'LengthF32x3 should not be scalar when vector asm enabled');
 
   // 确定性：|(3,4,0)| -> 5（w ignored）
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 999.0;
   expS := ScalarLengthF32x3(a);
   actS := dt^.LengthF32x3(a);
-  AssertEquals('Length3(3,4,0)', expS, actS, 0.0);
+  CheckNear(expS, actS, 0.0, 'Length3(3,4,0)');
 
   eps := 1e-4;
   RandSeed := 20251221;
@@ -6729,7 +6670,7 @@ begin
     expS := ScalarLengthF32x3(a);
     actS := dt^.LengthF32x3(a);
 
-    AssertEquals('Length3 iter ' + IntToStr(iter), expS, actS, eps);
+    CheckNear(expS, actS, eps, 'Length3 iter ' + IntToStr(iter));
   end;
 end;
 
@@ -6744,21 +6685,21 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.NormalizeF32x4 should be assigned', Assigned(dt^.NormalizeF32x4));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.NormalizeF32x4), 'Dispatch.NormalizeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('NormalizeF32x4 should not be scalar when vector asm enabled', dt^.NormalizeF32x4 <> @ScalarNormalizeF32x4);
+  CheckTrue(dt^.NormalizeF32x4 <> @ScalarNormalizeF32x4, 'NormalizeF32x4 should not be scalar when vector asm enabled');
 
   // 确定性：Normalize(3,0,0,0) -> (1,0,0,0)
   a.f[0] := 3.0; a.f[1] := 0.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expV := ScalarNormalizeF32x4(a);
   actV := dt^.NormalizeF32x4(a);
   for i := 0 to 3 do
-    AssertEquals('Normalize(3,0,0,0) lane ' + IntToStr(i), expV.f[i], actV.f[i], 0.0);
+    CheckNear(expV.f[i], actV.f[i], 0.0, 'Normalize(3,0,0,0) lane ' + IntToStr(i));
 
   eps := 1e-4;
   RandSeed := 20251222;
@@ -6772,7 +6713,7 @@ begin
     actV := dt^.NormalizeF32x4(a);
 
     for i := 0 to 3 do
-      AssertEquals('Normalize iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'Normalize iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -6787,14 +6728,14 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.NormalizeF32x3 should be assigned', Assigned(dt^.NormalizeF32x3));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.NormalizeF32x3), 'Dispatch.NormalizeF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('NormalizeF32x3 should not be scalar when vector asm enabled', dt^.NormalizeF32x3 <> @ScalarNormalizeF32x3);
+  CheckTrue(dt^.NormalizeF32x3 <> @ScalarNormalizeF32x3, 'NormalizeF32x3 should not be scalar when vector asm enabled');
 
   // 确定性：Normalize3(3,4,0,w) -> (0.6,0.8,0,w=0)
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 999.0;
@@ -6802,8 +6743,8 @@ begin
   actV := dt^.NormalizeF32x3(a);
   eps := 1e-4;
   for i := 0 to 2 do
-    AssertEquals('Normalize3(3,4,0) lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
-  AssertEquals('Normalize3 w should be +0', DWord(0), BitsFromSingle(actV.f[3]));
+    CheckNear(expV.f[i], actV.f[i], eps, 'Normalize3(3,4,0) lane ' + IntToStr(i));
+  CheckEqual(DWord(0), BitsFromSingle(actV.f[3]), 'Normalize3 w should be +0');
 
   RandSeed := 20251223;
 
@@ -6817,8 +6758,8 @@ begin
     actV := dt^.NormalizeF32x3(a);
 
     for i := 0 to 2 do
-      AssertEquals('Normalize3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
-    AssertEquals('Normalize3 iter ' + IntToStr(iter) + ' w should be +0', DWord(0), BitsFromSingle(actV.f[3]));
+      CheckNear(expV.f[i], actV.f[i], eps, 'Normalize3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
+    CheckEqual(DWord(0), BitsFromSingle(actV.f[3]), 'Normalize3 iter ' + IntToStr(iter) + ' w should be +0');
   end;
 end;
 
@@ -6834,20 +6775,20 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // 选择 3 个代表性的“返回 Single”的操作做 ABI 保护：Dot / Length / ReduceAdd。
-  AssertTrue('Dispatch.DotF32x4 should be assigned', Assigned(dt^.DotF32x4));
-  AssertTrue('Dispatch.LengthF32x4 should be assigned', Assigned(dt^.LengthF32x4));
-  AssertTrue('Dispatch.ReduceAddF32x4 should be assigned', Assigned(dt^.ReduceAddF32x4));
+  CheckTrue(Assigned(dt^.DotF32x4), 'Dispatch.DotF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.LengthF32x4), 'Dispatch.LengthF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
 
   // 要求：vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  AssertTrue('DotF32x4 should not be scalar when vector asm enabled', dt^.DotF32x4 <> @ScalarDotF32x4);
-  AssertTrue('LengthF32x4 should not be scalar when vector asm enabled', dt^.LengthF32x4 <> @ScalarLengthF32x4);
-  AssertTrue('ReduceAddF32x4 should not be scalar when vector asm enabled', dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4);
+  CheckTrue(dt^.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
 
   // Dot：用小整数保证精确可比。
   RandSeed := 20251226;
@@ -6861,8 +6802,8 @@ begin
 
     expected := ScalarDotF32x4(a, b);
     ok := AbiCall_TwoVecToSingle_CheckCalleeSaved(Pointer(dt^.DotF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (Dot) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI Dot iter ' + IntToStr(iter), expected, actual, 0.0);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (Dot) iter ' + IntToStr(iter));
+    CheckNear(expected, actual, 0.0, 'ABI Dot iter ' + IntToStr(iter));
   end;
 
   // ReduceAdd：同样用小整数精确可比。
@@ -6874,17 +6815,17 @@ begin
 
     expected := ScalarReduceAddF32x4(a);
     ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.ReduceAddF32x4), a, actual);
-    AssertTrue('ABI callee-saved should be preserved (ReduceAdd) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI ReduceAdd iter ' + IntToStr(iter), expected, actual, 0.0);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (ReduceAdd) iter ' + IntToStr(iter));
+    CheckNear(expected, actual, 0.0, 'ABI ReduceAdd iter ' + IntToStr(iter));
   end;
 
   // Length：包含 sqrt，使用可精确表示的 case + eps。
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expected := ScalarLengthF32x4(a);
   ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.LengthF32x4), a, actual);
-  AssertTrue('ABI callee-saved should be preserved (Length)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (Length)');
   eps := 1e-6;
-  AssertEquals('ABI Length(3,4,0,0)', expected, actual, eps);
+  CheckNear(expected, actual, eps, 'ABI Length(3,4,0,0)');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x4_ABI_CalleeSavedRegisters_Preserved_VectorReturn;
@@ -6897,22 +6838,22 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AddF32x4 should be assigned', Assigned(dt^.AddF32x4));
-  AssertTrue('Dispatch.SubF32x4 should be assigned', Assigned(dt^.SubF32x4));
-  AssertTrue('Dispatch.MulF32x4 should be assigned', Assigned(dt^.MulF32x4));
-  AssertTrue('Dispatch.MinF32x4 should be assigned', Assigned(dt^.MinF32x4));
-  AssertTrue('Dispatch.MaxF32x4 should be assigned', Assigned(dt^.MaxF32x4));
+  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
 
-  AssertTrue('AddF32x4 should not be scalar when vector asm enabled', dt^.AddF32x4 <> @ScalarAddF32x4);
-  AssertTrue('SubF32x4 should not be scalar when vector asm enabled', dt^.SubF32x4 <> @ScalarSubF32x4);
-  AssertTrue('MulF32x4 should not be scalar when vector asm enabled', dt^.MulF32x4 <> @ScalarMulF32x4);
-  AssertTrue('MinF32x4 should not be scalar when vector asm enabled', dt^.MinF32x4 <> @ScalarMinF32x4);
-  AssertTrue('MaxF32x4 should not be scalar when vector asm enabled', dt^.MaxF32x4 <> @ScalarMaxF32x4);
+  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251228;
 
@@ -6928,42 +6869,37 @@ begin
     // Add
     expected := ScalarAddF32x4(a, b);
     ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.AddF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (AddF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (AddF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
-      AssertEquals('ABI AddF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI AddF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Sub
     expected := ScalarSubF32x4(a, b);
     ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.SubF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (SubF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SubF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
-      AssertEquals('ABI SubF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SubF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Mul
     expected := ScalarMulF32x4(a, b);
     ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MulF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MulF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MulF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
-      AssertEquals('ABI MulF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MulF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Min
     expected := ScalarMinF32x4(a, b);
     ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MinF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MinF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MinF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
-      AssertEquals('ABI MinF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MinF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Max
     expected := ScalarMaxF32x4(a, b);
     ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MaxF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MaxF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MaxF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
-      AssertEquals('ABI MaxF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MaxF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -6978,16 +6914,16 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AbsF32x4 should be assigned', Assigned(dt^.AbsF32x4));
-  AssertTrue('Dispatch.SqrtF32x4 should be assigned', Assigned(dt^.SqrtF32x4));
+  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
 
-  AssertTrue('AbsF32x4 should not be scalar when vector asm enabled', dt^.AbsF32x4 <> @ScalarAbsF32x4);
-  AssertTrue('SqrtF32x4 should not be scalar when vector asm enabled', dt^.SqrtF32x4 <> @ScalarSqrtF32x4);
+  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   // Abs: bit-exact
   RandSeed := 20251229;
@@ -6998,11 +6934,10 @@ begin
 
     expected := ScalarAbsF32x4(a);
     ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.AbsF32x4), a, actual);
-    AssertTrue('ABI callee-saved should be preserved (AbsF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (AbsF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI AbsF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI AbsF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // Sqrt: perfect squares (bit-exact)
@@ -7017,11 +6952,10 @@ begin
 
     expected := ScalarSqrtF32x4(a);
     ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.SqrtF32x4), a, actual);
-    AssertTrue('ABI callee-saved should be preserved (SqrtF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SqrtF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI SqrtF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SqrtF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7035,16 +6969,16 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.FmaF32x4 should be assigned', Assigned(dt^.FmaF32x4));
-  AssertTrue('Dispatch.ClampF32x4 should be assigned', Assigned(dt^.ClampF32x4));
+  CheckTrue(Assigned(dt^.FmaF32x4), 'Dispatch.FmaF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.ClampF32x4), 'Dispatch.ClampF32x4 should be assigned');
 
-  AssertTrue('FmaF32x4 should not be scalar when vector asm enabled', dt^.FmaF32x4 <> @ScalarFmaF32x4);
-  AssertTrue('ClampF32x4 should not be scalar when vector asm enabled', dt^.ClampF32x4 <> @ScalarClampF32x4);
+  CheckTrue(dt^.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
 
   // Fma: choose small integers => bit-exact whether fused or not
   RandSeed := 20260101;
@@ -7059,11 +6993,10 @@ begin
 
     expected := ScalarFmaF32x4(a, b, c);
     ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.FmaF32x4), a, b, c, actual);
-    AssertTrue('ABI callee-saved should be preserved (FmaF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (FmaF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI FmaF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI FmaF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // Clamp: also 3 vectors => ABI guard for passing 3x TVecF32x4
@@ -7079,11 +7012,10 @@ begin
 
     expected := ScalarClampF32x4(a, b, c);
     ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.ClampF32x4), a, b, c, actual);
-    AssertTrue('ABI callee-saved should be preserved (ClampF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (ClampF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI ClampF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI ClampF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7099,16 +7031,16 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.LoadF32x4 should be assigned', Assigned(dt^.LoadF32x4));
-  AssertTrue('Dispatch.LoadF32x4Aligned should be assigned', Assigned(dt^.LoadF32x4Aligned));
+  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
 
-  AssertTrue('LoadF32x4 should not be scalar when vector asm enabled', dt^.LoadF32x4 <> @ScalarLoadF32x4);
-  AssertTrue('LoadF32x4Aligned should not be scalar when vector asm enabled', dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned);
+  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
 
   // Unaligned load
   RandSeed := 20260103;
@@ -7119,11 +7051,10 @@ begin
 
     expected := ScalarLoadF32x4(@buf[0]);
     ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.LoadF32x4), @buf[0], actual);
-    AssertTrue('ABI callee-saved should be preserved (LoadF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (LoadF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI LoadF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI LoadF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // Aligned load
@@ -7137,11 +7068,10 @@ begin
 
     expected := ScalarLoadF32x4Aligned(pAligned);
     ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.LoadF32x4Aligned), pAligned, actual);
-    AssertTrue('ABI callee-saved should be preserved (LoadF32x4Aligned) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (LoadF32x4Aligned) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI LoadF32x4Aligned iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI LoadF32x4Aligned iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7163,7 +7093,7 @@ var
     j: Integer;
   begin
     for j := 0 to count - 1 do
-      AssertEquals(msg + ' byte ' + IntToStr(j), expectedPtr[j], actualPtr[j]);
+      CheckEqual(expectedPtr[j], actualPtr[j], msg + ' byte ' + IntToStr(j));
   end;
 
   procedure AssertAllBytesAre(const msg: string; p: PByte; count: Integer; value: Byte);
@@ -7171,23 +7101,23 @@ var
     j: Integer;
   begin
     for j := 0 to count - 1 do
-      AssertEquals(msg + ' byte ' + IntToStr(j), value, p[j]);
+      CheckEqual(value, p[j], msg + ' byte ' + IntToStr(j));
   end;
 
 begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.StoreF32x4 should be assigned', Assigned(dt^.StoreF32x4));
-  AssertTrue('Dispatch.StoreF32x4Aligned should be assigned', Assigned(dt^.StoreF32x4Aligned));
+  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
 
-  AssertTrue('StoreF32x4 should not be scalar when vector asm enabled', dt^.StoreF32x4 <> @ScalarStoreF32x4);
-  AssertTrue('StoreF32x4Aligned should not be scalar when vector asm enabled', dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned);
+  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   rawDst := GetMem(64);
   alignedRaw := AlignedAlloc(128, SIMD_ALIGN_16);
@@ -7197,7 +7127,7 @@ begin
 
     // 选择一个 16-byte 对齐的目的地址（避免与 header 重叠，并留足哨兵区）
     pAlignedDst := PByte(alignedRaw) + 64;
-    AssertTrue('pAlignedDst should be 16-byte aligned', IsAligned(pAlignedDst, SIMD_ALIGN_16));
+    CheckTrue(IsAligned(pAlignedDst, SIMD_ALIGN_16), 'pAlignedDst should be 16-byte aligned');
 
     RandSeed := 20260105;
 
@@ -7214,7 +7144,7 @@ begin
       // --- Unaligned store ---
       FillChar(rawDst^, 64, $CD);
       ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.StoreF32x4), PSingle(pDst), a);
-      AssertTrue('ABI callee-saved should be preserved (StoreF32x4) iter ' + IntToStr(iter), ok);
+      CheckTrue(ok, 'ABI callee-saved should be preserved (StoreF32x4) iter ' + IntToStr(iter));
 
       AssertAllBytesAre('StoreF32x4 prefix sentinel', rawDst, 3, $CD);
       AssertBytesEqual('StoreF32x4 payload', @expBytes[0], pDst, 16);
@@ -7223,7 +7153,7 @@ begin
       // --- Aligned store ---
       FillChar(PByte(alignedRaw)^, 128, $EF);
       ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.StoreF32x4Aligned), PSingle(pAlignedDst), a);
-      AssertTrue('ABI callee-saved should be preserved (StoreF32x4Aligned) iter ' + IntToStr(iter), ok);
+      CheckTrue(ok, 'ABI callee-saved should be preserved (StoreF32x4Aligned) iter ' + IntToStr(iter));
 
       AssertAllBytesAre('StoreF32x4Aligned prefix sentinel', PByte(alignedRaw), 64, $EF);
       AssertBytesEqual('StoreF32x4Aligned payload', @expBytes[0], pAlignedDst, 16);
@@ -7247,13 +7177,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.InsertF32x4 should be assigned', Assigned(dt^.InsertF32x4));
-  AssertTrue('InsertF32x4 should not be scalar when vector asm enabled', dt^.InsertF32x4 <> @ScalarInsertF32x4);
+  CheckTrue(Assigned(dt^.InsertF32x4), 'Dispatch.InsertF32x4 should be assigned');
+  CheckTrue(dt^.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260106;
 
@@ -7273,11 +7203,10 @@ begin
 
     expected := ScalarInsertF32x4(a, value, idx);
     ok := AbiCall_VecSingleI32ToVec_CheckCalleeSaved(Pointer(dt^.InsertF32x4), a, value, idx, actual);
-    AssertTrue('ABI callee-saved should be preserved (InsertF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (InsertF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI InsertF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI InsertF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7293,13 +7222,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.ExtractF32x4 should be assigned', Assigned(dt^.ExtractF32x4));
-  AssertTrue('ExtractF32x4 should not be scalar when vector asm enabled', dt^.ExtractF32x4 <> @ScalarExtractF32x4);
+  CheckTrue(Assigned(dt^.ExtractF32x4), 'Dispatch.ExtractF32x4 should be assigned');
+  CheckTrue(dt^.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260107;
 
@@ -7316,8 +7245,8 @@ begin
 
     expected := ScalarExtractF32x4(a, idx);
     ok := AbiCall_VecI32ToSingle_CheckCalleeSaved(Pointer(dt^.ExtractF32x4), a, idx, actual);
-    AssertTrue('ABI callee-saved should be preserved (ExtractF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI ExtractF32x4 iter ' + IntToStr(iter) + ' bits', BitsFromSingle(expected), BitsFromSingle(actual));
+    CheckTrue(ok, 'ABI callee-saved should be preserved (ExtractF32x4) iter ' + IntToStr(iter));
+    CheckEqual(BitsFromSingle(expected), BitsFromSingle(actual), 'ABI ExtractF32x4 iter ' + IntToStr(iter) + ' bits');
   end;
 end;
 
@@ -7332,24 +7261,24 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.CmpEqF32x4 should be assigned', Assigned(dt^.CmpEqF32x4));
-  AssertTrue('Dispatch.CmpLtF32x4 should be assigned', Assigned(dt^.CmpLtF32x4));
-  AssertTrue('Dispatch.CmpLeF32x4 should be assigned', Assigned(dt^.CmpLeF32x4));
-  AssertTrue('Dispatch.CmpGtF32x4 should be assigned', Assigned(dt^.CmpGtF32x4));
-  AssertTrue('Dispatch.CmpGeF32x4 should be assigned', Assigned(dt^.CmpGeF32x4));
-  AssertTrue('Dispatch.CmpNeF32x4 should be assigned', Assigned(dt^.CmpNeF32x4));
+  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
 
-  AssertTrue('CmpEqF32x4 should not be scalar when vector asm enabled', dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4);
-  AssertTrue('CmpLtF32x4 should not be scalar when vector asm enabled', dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4);
-  AssertTrue('CmpLeF32x4 should not be scalar when vector asm enabled', dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4);
-  AssertTrue('CmpGtF32x4 should not be scalar when vector asm enabled', dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4);
-  AssertTrue('CmpGeF32x4 should not be scalar when vector asm enabled', dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4);
-  AssertTrue('CmpNeF32x4 should not be scalar when vector asm enabled', dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4);
+  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251231;
 
@@ -7363,33 +7292,33 @@ begin
 
     expected := ScalarCmpEqF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpEqF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpEqF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpEqF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpEqF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpEqF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpLtF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpLtF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpLtF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpLtF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpLtF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpLtF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpLeF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpLeF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpLeF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpLeF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpLeF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpLeF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpGtF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpGtF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpGtF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpGtF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpGtF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpGtF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpGeF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpGeF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpGeF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpGeF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpGeF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpGeF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpNeF32x4(a, b);
     ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpNeF32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (CmpNeF32x4) iter ' + IntToStr(iter), ok);
-    AssertEquals('ABI CmpNeF32x4 iter ' + IntToStr(iter), expected, actual);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (CmpNeF32x4) iter ' + IntToStr(iter));
+    CheckEqual(expected, actual, 'ABI CmpNeF32x4 iter ' + IntToStr(iter));
   end;
 end;
 
@@ -7403,19 +7332,19 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.ZeroF32x4 should be assigned', Assigned(dt^.ZeroF32x4));
-  AssertTrue('ZeroF32x4 should not be scalar when vector asm enabled', dt^.ZeroF32x4 <> @ScalarZeroF32x4);
+  CheckTrue(Assigned(dt^.ZeroF32x4), 'Dispatch.ZeroF32x4 should be assigned');
+  CheckTrue(dt^.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
 
   ok := AbiCall_NoArgsToVec_CheckCalleeSaved(Pointer(dt^.ZeroF32x4), actual);
-  AssertTrue('ABI callee-saved should be preserved (ZeroF32x4)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (ZeroF32x4)');
 
   for i := 0 to 3 do
-    AssertEquals('ABI ZeroF32x4 lane ' + IntToStr(i) + ' bits', DWord(0), BitsFromSingle(actual.f[i]));
+    CheckEqual(DWord(0), BitsFromSingle(actual.f[i]), 'ABI ZeroF32x4 lane ' + IntToStr(i) + ' bits');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x4_ABI_CalleeSavedRegisters_Preserved_Splat;
@@ -7430,13 +7359,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.SplatF32x4 should be assigned', Assigned(dt^.SplatF32x4));
-  AssertTrue('SplatF32x4 should not be scalar when vector asm enabled', dt^.SplatF32x4 <> @ScalarSplatF32x4);
+  CheckTrue(Assigned(dt^.SplatF32x4), 'Dispatch.SplatF32x4 should be assigned');
+  CheckTrue(dt^.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260108;
 
@@ -7446,27 +7375,26 @@ begin
     value := SingleFromBits(bits);
 
     ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
-    AssertTrue('ABI callee-saved should be preserved (SplatF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI SplatF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   bits, BitsFromSingle(actual.f[i]));
+      CheckEqual(bits, BitsFromSingle(actual.f[i]), 'ABI SplatF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // Special: -0 / qNaN payload
   bits := $80000000;
   value := SingleFromBits(bits);
   ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
-  AssertTrue('ABI callee-saved should be preserved (SplatF32x4 -0)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4 -0)');
   for i := 0 to 3 do
-    AssertEquals('ABI SplatF32x4 -0 lane ' + IntToStr(i) + ' bits', bits, BitsFromSingle(actual.f[i]));
+    CheckEqual(bits, BitsFromSingle(actual.f[i]), 'ABI SplatF32x4 -0 lane ' + IntToStr(i) + ' bits');
 
   bits := $7FC12345;
   value := SingleFromBits(bits);
   ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
-  AssertTrue('ABI callee-saved should be preserved (SplatF32x4 NaN payload)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4 NaN payload)');
   for i := 0 to 3 do
-    AssertEquals('ABI SplatF32x4 NaN lane ' + IntToStr(i) + ' bits', bits, BitsFromSingle(actual.f[i]));
+    CheckEqual(bits, BitsFromSingle(actual.f[i]), 'ABI SplatF32x4 NaN lane ' + IntToStr(i) + ' bits');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_VecF32x4_ABI_CalleeSavedRegisters_Preserved_Select;
@@ -7482,13 +7410,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.SelectF32x4 should be assigned', Assigned(dt^.SelectF32x4));
-  AssertTrue('SelectF32x4 should not be scalar when vector asm enabled', dt^.SelectF32x4 <> @ScalarSelectF32x4);
+  CheckTrue(Assigned(dt^.SelectF32x4), 'Dispatch.SelectF32x4 should be assigned');
+  CheckTrue(dt^.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260109;
 
@@ -7511,11 +7439,10 @@ begin
         expected.f[i] := b.f[i];
 
     ok := AbiCall_TwoVecMaskToVec_CheckCalleeSaved(Pointer(dt^.SelectF32x4), a, b, mask, actual);
-    AssertTrue('ABI callee-saved should be preserved (SelectF32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SelectF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI SelectF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SelectF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7532,22 +7459,22 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AddF32x8 should be assigned', Assigned(dt^.AddF32x8));
-  AssertTrue('AddF32x8 should not be scalar when vector asm enabled', dt^.AddF32x8 <> @ScalarAddF32x8);
+  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
+  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.SubF32x8 should be assigned', Assigned(dt^.SubF32x8));
-  AssertTrue('SubF32x8 should not be scalar when vector asm enabled', dt^.SubF32x8 <> @ScalarSubF32x8);
+  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
+  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.MulF32x8 should be assigned', Assigned(dt^.MulF32x8));
-  AssertTrue('MulF32x8 should not be scalar when vector asm enabled', dt^.MulF32x8 <> @ScalarMulF32x8);
+  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
+  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.DivF32x8 should be assigned', Assigned(dt^.DivF32x8));
-  AssertTrue('DivF32x8 should not be scalar when vector asm enabled', dt^.DivF32x8 <> @ScalarDivF32x8);
+  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
+  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   RandSeed := 20260110;
 
@@ -7562,27 +7489,24 @@ begin
 
     expected := ScalarAddF32x8(a, b);
     ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.AddF32x8), @a, @b, actual);
-    AssertTrue('ABI callee-saved should be preserved (AddF32x8) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (AddF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
-      AssertEquals('ABI AddF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI AddF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarSubF32x8(a, b);
     ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.SubF32x8), @a, @b, actual);
-    AssertTrue('ABI callee-saved should be preserved (SubF32x8) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SubF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
-      AssertEquals('ABI SubF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SubF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarMulF32x8(a, b);
     ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.MulF32x8), @a, @b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MulF32x8) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MulF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
-      AssertEquals('ABI MulF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MulF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Div：使用 2^k 作为除数，保证结果在 float32 下 bit-exact。
     for i := 0 to 7 do
@@ -7594,11 +7518,10 @@ begin
 
     expected := ScalarDivF32x8(aDiv, bDiv);
     ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.DivF32x8), @aDiv, @bDiv, actual);
-    AssertTrue('ABI callee-saved should be preserved (DivF32x8) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (DivF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
-      AssertEquals('ABI DivF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]));
+      CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI DivF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7615,22 +7538,22 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AddF64x2 should be assigned', Assigned(dt^.AddF64x2));
-  AssertTrue('AddF64x2 should not be scalar when vector asm enabled', dt^.AddF64x2 <> @ScalarAddF64x2);
+  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
+  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.SubF64x2 should be assigned', Assigned(dt^.SubF64x2));
-  AssertTrue('SubF64x2 should not be scalar when vector asm enabled', dt^.SubF64x2 <> @ScalarSubF64x2);
+  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
+  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.MulF64x2 should be assigned', Assigned(dt^.MulF64x2));
-  AssertTrue('MulF64x2 should not be scalar when vector asm enabled', dt^.MulF64x2 <> @ScalarMulF64x2);
+  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
+  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.DivF64x2 should be assigned', Assigned(dt^.DivF64x2));
-  AssertTrue('DivF64x2 should not be scalar when vector asm enabled', dt^.DivF64x2 <> @ScalarDivF64x2);
+  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
+  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   RandSeed := 20260111;
 
@@ -7645,27 +7568,24 @@ begin
 
     expected := ScalarAddF64x2(a, b);
     ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.AddF64x2), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (AddF64x2) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (AddF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
-      AssertEquals('ABI AddF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]));
+      CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI AddF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarSubF64x2(a, b);
     ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.SubF64x2), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (SubF64x2) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SubF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
-      AssertEquals('ABI SubF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]));
+      CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI SubF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarMulF64x2(a, b);
     ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.MulF64x2), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MulF64x2) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MulF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
-      AssertEquals('ABI MulF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]));
+      CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI MulF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Div：使用 2^k 作为除数，保证结果在 double 下 bit-exact。
     for i := 0 to 1 do
@@ -7677,11 +7597,10 @@ begin
 
     expected := ScalarDivF64x2(aDiv, bDiv);
     ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.DivF64x2), aDiv, bDiv, actual);
-    AssertTrue('ABI callee-saved should be preserved (DivF64x2) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (DivF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
-      AssertEquals('ABI DivF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits',
-                   BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]));
+      CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI DivF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 end;
 
@@ -7695,19 +7614,19 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AddI32x4 should be assigned', Assigned(dt^.AddI32x4));
-  AssertTrue('AddI32x4 should not be scalar when vector asm enabled', dt^.AddI32x4 <> @ScalarAddI32x4);
+  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
+  CheckTrue(dt^.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.SubI32x4 should be assigned', Assigned(dt^.SubI32x4));
-  AssertTrue('SubI32x4 should not be scalar when vector asm enabled', dt^.SubI32x4 <> @ScalarSubI32x4);
+  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
+  CheckTrue(dt^.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
 
-  AssertTrue('Dispatch.MulI32x4 should be assigned', Assigned(dt^.MulI32x4));
-  AssertTrue('MulI32x4 should not be scalar when vector asm enabled', dt^.MulI32x4 <> @ScalarMulI32x4);
+  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
+  CheckTrue(dt^.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260112;
 
@@ -7722,24 +7641,24 @@ begin
 
     expected := ScalarAddI32x4(a, b);
     ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.AddI32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (AddI32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (AddI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI AddI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expected.i[i], actual.i[i]);
+      CheckEqual(expected.i[i], actual.i[i], 'ABI AddI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expected := ScalarSubI32x4(a, b);
     ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.SubI32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (SubI32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (SubI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI SubI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expected.i[i], actual.i[i]);
+      CheckEqual(expected.i[i], actual.i[i], 'ABI SubI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expected := ScalarMulI32x4(a, b);
     ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.MulI32x4), a, b, actual);
-    AssertTrue('ABI callee-saved should be preserved (MulI32x4) iter ' + IntToStr(iter), ok);
+    CheckTrue(ok, 'ABI callee-saved should be preserved (MulI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
-      AssertEquals('ABI MulI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expected.i[i], actual.i[i]);
+      CheckEqual(expected.i[i], actual.i[i], 'ABI MulI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -7754,13 +7673,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.MemEqual should be assigned', Assigned(dt^.MemEqual));
-  AssertTrue('MemEqual should not be scalar when vector asm enabled', dt^.MemEqual <> @MemEqual_Scalar);
+  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
+  CheckTrue(dt^.MemEqual <> @MemEqual_Scalar, 'MemEqual should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -7772,8 +7691,8 @@ begin
 
   actual := False;
   ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
-  AssertTrue('ABI callee-saved should be preserved (MemEqual equal)', ok);
-  AssertEquals('ABI MemEqual equal result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual equal)');
+  CheckEqual(expected, actual, 'ABI MemEqual equal result');
 
   // different
   buf2[17] := 255;
@@ -7781,8 +7700,8 @@ begin
 
   actual := False;
   ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
-  AssertTrue('ABI callee-saved should be preserved (MemEqual different)', ok);
-  AssertEquals('ABI MemEqual different result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual different)');
+  CheckEqual(expected, actual, 'ABI MemEqual different result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_SumBytes_ABI_CalleeSavedRegisters_Preserved;
@@ -7796,13 +7715,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.SumBytes should be assigned', Assigned(dt^.SumBytes));
-  AssertTrue('SumBytes should not be scalar when vector asm enabled', dt^.SumBytes <> @SumBytes_Scalar);
+  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
+  CheckTrue(dt^.SumBytes <> @SumBytes_Scalar, 'SumBytes should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i);
@@ -7811,8 +7730,8 @@ begin
 
   actual := 0;
   ok := AbiCall_SumBytes_CheckCalleeSaved(Pointer(dt^.SumBytes), @buf[0], SizeUInt(Length(buf)), actual);
-  AssertTrue('ABI callee-saved should be preserved (SumBytes)', ok);
-  AssertEquals('ABI SumBytes result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (SumBytes)');
+  CheckEqual(expected, actual, 'ABI SumBytes result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_CountByte_ABI_CalleeSavedRegisters_Preserved;
@@ -7826,13 +7745,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.CountByte should be assigned', Assigned(dt^.CountByte));
-  AssertTrue('CountByte should not be scalar when vector asm enabled', dt^.CountByte <> @CountByte_Scalar);
+  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
+  CheckTrue(dt^.CountByte <> @CountByte_Scalar, 'CountByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $0F);
@@ -7841,8 +7760,8 @@ begin
 
   actual := 0;
   ok := AbiCall_CountByte_CheckCalleeSaved(Pointer(dt^.CountByte), @buf[0], SizeUInt(Length(buf)), 5, actual);
-  AssertTrue('ABI callee-saved should be preserved (CountByte)', ok);
-  AssertEquals('ABI CountByte result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (CountByte)');
+  CheckEqual(expected, actual, 'ABI CountByte result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_BitsetPopCount_ABI_CalleeSavedRegisters_Preserved;
@@ -7856,13 +7775,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.BitsetPopCount should be assigned', Assigned(dt^.BitsetPopCount));
-  AssertTrue('BitsetPopCount should not be scalar when vector asm enabled', dt^.BitsetPopCount <> @BitsetPopCount_Scalar);
+  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
+  CheckTrue(dt^.BitsetPopCount <> @BitsetPopCount_Scalar, 'BitsetPopCount should not be scalar when vector asm enabled');
 
   // 构造确定性位模式
   for i := 0 to High(buf) do
@@ -7872,8 +7791,8 @@ begin
 
   actual := 0;
   ok := AbiCall_BitsetPopCount_CheckCalleeSaved(Pointer(dt^.BitsetPopCount), @buf[0], SizeUInt(Length(buf)), actual);
-  AssertTrue('ABI callee-saved should be preserved (BitsetPopCount)', ok);
-  AssertEquals('ABI BitsetPopCount result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (BitsetPopCount)');
+  CheckEqual(expected, actual, 'ABI BitsetPopCount result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_Utf8Validate_ABI_CalleeSavedRegisters_Preserved;
@@ -7888,29 +7807,29 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.Utf8Validate should be assigned', Assigned(dt^.Utf8Validate));
-  AssertTrue('Utf8Validate should not be scalar when vector asm enabled', dt^.Utf8Validate <> @Utf8Validate_Scalar);
+  CheckTrue(Assigned(dt^.Utf8Validate), 'Dispatch.Utf8Validate should be assigned');
+  CheckTrue(dt^.Utf8Validate <> @Utf8Validate_Scalar, 'Utf8Validate should not be scalar when vector asm enabled');
 
   // valid
   expected := Utf8Validate_Scalar(@ValidASCII[0], SizeUInt(Length(ValidASCII)));
 
   actual := False;
   ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @ValidASCII[0], SizeUInt(Length(ValidASCII)), actual);
-  AssertTrue('ABI callee-saved should be preserved (Utf8Validate valid)', ok);
-  AssertEquals('ABI Utf8Validate valid result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate valid)');
+  CheckEqual(expected, actual, 'ABI Utf8Validate valid result');
 
   // invalid
   expected := Utf8Validate_Scalar(@InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)));
 
   actual := False;
   ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)), actual);
-  AssertTrue('ABI callee-saved should be preserved (Utf8Validate invalid)', ok);
-  AssertEquals('ABI Utf8Validate invalid result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate invalid)');
+  CheckEqual(expected, actual, 'ABI Utf8Validate invalid result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_AsciiIEqual_ABI_CalleeSavedRegisters_Preserved;
@@ -7926,29 +7845,29 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.AsciiIEqual should be assigned', Assigned(dt^.AsciiIEqual));
-  AssertTrue('AsciiIEqual should not be scalar when vector asm enabled', dt^.AsciiIEqual <> @AsciiIEqual_Scalar);
+  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
+  CheckTrue(dt^.AsciiIEqual <> @AsciiIEqual_Scalar, 'AsciiIEqual should not be scalar when vector asm enabled');
 
   // equal (case-insensitive)
   expected := AsciiIEqual_Scalar(@A1[0], @B1[0], SizeUInt(Length(A1)));
 
   actual := False;
   ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B1[0], SizeUInt(Length(A1)), actual);
-  AssertTrue('ABI callee-saved should be preserved (AsciiIEqual equal)', ok);
-  AssertEquals('ABI AsciiIEqual equal result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual equal)');
+  CheckEqual(expected, actual, 'ABI AsciiIEqual equal result');
 
   // different
   expected := AsciiIEqual_Scalar(@A1[0], @B2[0], SizeUInt(Length(A1)));
 
   actual := False;
   ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B2[0], SizeUInt(Length(A1)), actual);
-  AssertTrue('ABI callee-saved should be preserved (AsciiIEqual different)', ok);
-  AssertEquals('ABI AsciiIEqual different result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual different)');
+  CheckEqual(expected, actual, 'ABI AsciiIEqual different result');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_ToLowerAscii_ABI_CalleeSavedRegisters_Preserved;
@@ -7961,13 +7880,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.ToLowerAscii should be assigned', Assigned(dt^.ToLowerAscii));
-  AssertTrue('ToLowerAscii should not be scalar when vector asm enabled', dt^.ToLowerAscii <> @ToLowerAscii_Scalar);
+  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
+  CheckTrue(dt^.ToLowerAscii <> @ToLowerAscii_Scalar, 'ToLowerAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -7984,10 +7903,10 @@ begin
   ToLowerAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
   ok := AbiCall_ToLowerAscii_CheckCalleeSaved(Pointer(dt^.ToLowerAscii), @actual[0], SizeUInt(Length(actual)));
-  AssertTrue('ABI callee-saved should be preserved (ToLowerAscii)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (ToLowerAscii)');
 
   for i := 0 to High(actual) do
-    AssertEquals('ABI ToLowerAscii byte ' + IntToStr(i), expected[i], actual[i]);
+    CheckEqual(expected[i], actual[i], 'ABI ToLowerAscii byte ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_ToUpperAscii_ABI_CalleeSavedRegisters_Preserved;
@@ -8000,13 +7919,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.ToUpperAscii should be assigned', Assigned(dt^.ToUpperAscii));
-  AssertTrue('ToUpperAscii should not be scalar when vector asm enabled', dt^.ToUpperAscii <> @ToUpperAscii_Scalar);
+  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
+  CheckTrue(dt^.ToUpperAscii <> @ToUpperAscii_Scalar, 'ToUpperAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -8023,10 +7942,10 @@ begin
   ToUpperAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
   ok := AbiCall_ToUpperAscii_CheckCalleeSaved(Pointer(dt^.ToUpperAscii), @actual[0], SizeUInt(Length(actual)));
-  AssertTrue('ABI callee-saved should be preserved (ToUpperAscii)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (ToUpperAscii)');
 
   for i := 0 to High(actual) do
-    AssertEquals('ABI ToUpperAscii byte ' + IntToStr(i), expected[i], actual[i]);
+    CheckEqual(expected[i], actual[i], 'ABI ToUpperAscii byte ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_MemDiffRange_ABI_CalleeSavedRegisters_Preserved;
@@ -8042,13 +7961,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.MemDiffRange should be assigned', Assigned(dt^.MemDiffRange));
-  AssertTrue('MemDiffRange should not be scalar when vector asm enabled', dt^.MemDiffRange <> @MemDiffRange_Scalar);
+  CheckTrue(Assigned(dt^.MemDiffRange), 'Dispatch.MemDiffRange should be assigned');
+  CheckTrue(dt^.MemDiffRange <> @MemDiffRange_Scalar, 'MemDiffRange should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -8061,19 +7980,18 @@ begin
   buf2[40] := 254;
 
   expectedRes := MemDiffRange_Scalar(@buf1[0], @buf2[0], SizeUInt(Length(buf1)), expectedFirst, expectedLast);
-  AssertTrue('Scalar MemDiffRange should detect differences', expectedRes);
+  CheckTrue(expectedRes, 'Scalar MemDiffRange should detect differences');
 
   actualFirst := 0;
   actualLast := 0;
   actualRes := False;
 
-  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.MemDiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)),
-                                             actualFirst, actualLast, actualRes);
-  AssertTrue('ABI callee-saved should be preserved (MemDiffRange)', ok);
+  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.MemDiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actualFirst, actualLast, actualRes);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemDiffRange)');
 
-  AssertEquals('ABI MemDiffRange result', expectedRes, actualRes);
-  AssertEquals('ABI MemDiffRange first diff', expectedFirst, actualFirst);
-  AssertEquals('ABI MemDiffRange last diff', expectedLast, actualLast);
+  CheckEqual(expectedRes, actualRes, 'ABI MemDiffRange result');
+  CheckEqual(expectedFirst, actualFirst, 'ABI MemDiffRange first diff');
+  CheckEqual(expectedLast, actualLast, 'ABI MemDiffRange last diff');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_MemFindByte_ABI_CalleeSavedRegisters_Preserved;
@@ -8087,13 +8005,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.MemFindByte should be assigned', Assigned(dt^.MemFindByte));
-  AssertTrue('MemFindByte should not be scalar when vector asm enabled', dt^.MemFindByte <> @MemFindByte_Scalar);
+  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
+  CheckTrue(dt^.MemFindByte <> @MemFindByte_Scalar, 'MemFindByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $7F);
@@ -8104,15 +8022,15 @@ begin
 
   actual := 0;
   ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 200, actual);
-  AssertTrue('ABI callee-saved should be preserved (MemFindByte)', ok);
-  AssertEquals('ABI MemFindByte result', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte)');
+  CheckEqual(expected, actual, 'ABI MemFindByte result');
 
   expected := MemFindByte_Scalar(@buf[0], SizeUInt(Length(buf)), 255);
 
   actual := 0;
   ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 255, actual);
-  AssertTrue('ABI callee-saved should be preserved (MemFindByte not found)', ok);
-  AssertEquals('ABI MemFindByte not found', expected, actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte not found)');
+  CheckEqual(expected, actual, 'ABI MemFindByte not found');
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_MemCopy_ABI_CalleeSavedRegisters_Preserved;
@@ -8128,12 +8046,12 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.MemCopy should be assigned', Assigned(dt^.MemCopy));
+  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
   // Note: AVX2 now has its own MemCopy implementation (MemCopy_AVX2) which is correct
 
   for i := 0 to High(src) do
@@ -8146,10 +8064,10 @@ begin
   MemCopy_Scalar(@src[0], @expected[0], SizeUInt(CopyLen));
 
   ok := AbiCall_MemCopy_CheckCalleeSaved(Pointer(dt^.MemCopy), @src[0], @actual[0], SizeUInt(CopyLen));
-  AssertTrue('ABI callee-saved should be preserved (MemCopy)', ok);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (MemCopy)');
 
   for i := 0 to High(actual) do
-    AssertEquals('ABI MemCopy dst byte ' + IntToStr(i), expected[i], actual[i]);
+    CheckEqual(expected[i], actual[i], 'ABI MemCopy dst byte ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX2VectorAsm.Test_Facade_BytesIndexOf_ABI_CalleeSavedRegisters_Preserved;
@@ -8164,13 +8082,13 @@ begin
   if not HasAVX2 then
     Exit;
 
-  AssertEquals('Active backend should be AVX2', Ord(sbAVX2), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX2), Ord(GetCurrentBackend), 'Active backend should be AVX2');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  AssertTrue('Dispatch.BytesIndexOf should be assigned', Assigned(dt^.BytesIndexOf));
-  AssertTrue('BytesIndexOf should not be scalar when vector asm enabled', dt^.BytesIndexOf <> @BytesIndexOf_Scalar);
+  CheckTrue(Assigned(dt^.BytesIndexOf), 'Dispatch.BytesIndexOf should be assigned');
+  CheckTrue(dt^.BytesIndexOf <> @BytesIndexOf_Scalar, 'BytesIndexOf should not be scalar when vector asm enabled');
 
   for i := 0 to High(haystack) do
     haystack[i] := Byte(i and $7F);
@@ -8182,10 +8100,9 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)),
-                                             @needle[0], SizeUInt(Length(needle)), actual);
-  AssertTrue('ABI callee-saved should be preserved (BytesIndexOf)', ok);
-  AssertEquals('ABI BytesIndexOf result', expected, actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf)');
+  CheckEqual(expected, actual, 'ABI BytesIndexOf result');
 
   // not found
   needle[0] := 200;
@@ -8195,10 +8112,9 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)),
-                                             @needle[0], SizeUInt(Length(needle)), actual);
-  AssertTrue('ABI callee-saved should be preserved (BytesIndexOf not found)', ok);
-  AssertEquals('ABI BytesIndexOf not found', expected, actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf not found)');
+  CheckEqual(expected, actual, 'ABI BytesIndexOf not found');
 end;
 
 {$IFDEF SIMD_BACKEND_AVX512}
@@ -8225,20 +8141,20 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF32x16 should be assigned', Assigned(dt^.AddF32x16));
-  AssertTrue('Dispatch.SubF32x16 should be assigned', Assigned(dt^.SubF32x16));
-  AssertTrue('Dispatch.MulF32x16 should be assigned', Assigned(dt^.MulF32x16));
-  AssertTrue('Dispatch.DivF32x16 should be assigned', Assigned(dt^.DivF32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF32x16), 'Dispatch.AddF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.SubF32x16), 'Dispatch.SubF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.MulF32x16), 'Dispatch.MulF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.DivF32x16), 'Dispatch.DivF32x16 should be assigned');
 
   // vector asm 打开时，AVX-512 backend 不应退回到 scalar reference。
-  AssertTrue('AddF32x16 should not be scalar', dt^.AddF32x16 <> @ScalarAddF32x16);
-  AssertTrue('SubF32x16 should not be scalar', dt^.SubF32x16 <> @ScalarSubF32x16);
-  AssertTrue('MulF32x16 should not be scalar', dt^.MulF32x16 <> @ScalarMulF32x16);
-  AssertTrue('DivF32x16 should not be scalar', dt^.DivF32x16 <> @ScalarDivF32x16);
+  CheckTrue(dt^.AddF32x16 <> @ScalarAddF32x16, 'AddF32x16 should not be scalar');
+  CheckTrue(dt^.SubF32x16 <> @ScalarSubF32x16, 'SubF32x16 should not be scalar');
+  CheckTrue(dt^.MulF32x16 <> @ScalarMulF32x16, 'MulF32x16 should not be scalar');
+  CheckTrue(dt^.DivF32x16 <> @ScalarDivF32x16, 'DivF32x16 should not be scalar');
 
   eps := 1e-5;
   RandSeed := 20260101;
@@ -8257,25 +8173,25 @@ begin
     expV := ScalarAddF32x16(a, b);
     actV := dt^.AddF32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('F32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x16(a, b);
     actV := dt^.SubF32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('F32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x16(a, b);
     actV := dt^.MulF32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('F32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x16(a, b);
     actV := dt^.DivF32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('F32x16 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.f[i], actV.f[i], eps);
+      CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8291,12 +8207,12 @@ var
     expBits, actBits: DWord;
   begin
     if IsNaNSingle(expVal) then
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' should be NaN', IsNaNSingle(actVal))
+      CheckTrue(IsNaNSingle(actVal), op + ' lane ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromSingle(expVal);
       actBits := BitsFromSingle(actVal);
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' lane ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -8304,10 +8220,10 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // Fill test patterns: ±0, ±Inf, NaN interspersed with normal values
   a.f[0] := SingleFromBits($80000000); b.f[0] := SingleFromBits($00000000); // -0, +0
@@ -8366,19 +8282,19 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddF64x8 should be assigned', Assigned(dt^.AddF64x8));
-  AssertTrue('Dispatch.SubF64x8 should be assigned', Assigned(dt^.SubF64x8));
-  AssertTrue('Dispatch.MulF64x8 should be assigned', Assigned(dt^.MulF64x8));
-  AssertTrue('Dispatch.DivF64x8 should be assigned', Assigned(dt^.DivF64x8));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddF64x8), 'Dispatch.AddF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.SubF64x8), 'Dispatch.SubF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.MulF64x8), 'Dispatch.MulF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.DivF64x8), 'Dispatch.DivF64x8 should be assigned');
 
-  AssertTrue('AddF64x8 should not be scalar', dt^.AddF64x8 <> @ScalarAddF64x8);
-  AssertTrue('SubF64x8 should not be scalar', dt^.SubF64x8 <> @ScalarSubF64x8);
-  AssertTrue('MulF64x8 should not be scalar', dt^.MulF64x8 <> @ScalarMulF64x8);
-  AssertTrue('DivF64x8 should not be scalar', dt^.DivF64x8 <> @ScalarDivF64x8);
+  CheckTrue(dt^.AddF64x8 <> @ScalarAddF64x8, 'AddF64x8 should not be scalar');
+  CheckTrue(dt^.SubF64x8 <> @ScalarSubF64x8, 'SubF64x8 should not be scalar');
+  CheckTrue(dt^.MulF64x8 <> @ScalarMulF64x8, 'MulF64x8 should not be scalar');
+  CheckTrue(dt^.DivF64x8 <> @ScalarDivF64x8, 'DivF64x8 should not be scalar');
 
   eps := 1e-10;
   RandSeed := 20260102;
@@ -8397,25 +8313,25 @@ begin
     expV := ScalarAddF64x8(a, b);
     actV := dt^.AddF64x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('F64x8 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF64x8(a, b);
     actV := dt^.SubF64x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('F64x8 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF64x8(a, b);
     actV := dt^.MulF64x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('F64x8 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF64x8(a, b);
     actV := dt^.DivF64x8(a, b);
     for i := 0 to 7 do
-      AssertEquals('F64x8 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.d[i], actV.d[i], eps);
+      CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8431,12 +8347,12 @@ var
     expBits, actBits: QWord;
   begin
     if IsNaNDouble(expVal) then
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' should be NaN', IsNaNDouble(actVal))
+      CheckTrue(IsNaNDouble(actVal), op + ' lane ' + IntToStr(idx) + ' should be NaN')
     else
     begin
       expBits := BitsFromDouble(expVal);
       actBits := BitsFromDouble(actVal);
-      AssertTrue(op + ' lane ' + IntToStr(idx) + ' bits should match', expBits = actBits);
+      CheckTrue(expBits = actBits, op + ' lane ' + IntToStr(idx) + ' bits should match');
     end;
   end;
 
@@ -8444,10 +8360,10 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // Special values: ±0, ±Inf, NaN
   a.d[0] := DoubleFromBits(QWord($8000000000000000)); // -0
@@ -8505,17 +8421,17 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AddI32x16 should be assigned', Assigned(dt^.AddI32x16));
-  AssertTrue('Dispatch.SubI32x16 should be assigned', Assigned(dt^.SubI32x16));
-  AssertTrue('Dispatch.MulI32x16 should be assigned', Assigned(dt^.MulI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AddI32x16), 'Dispatch.AddI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.SubI32x16), 'Dispatch.SubI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.MulI32x16), 'Dispatch.MulI32x16 should be assigned');
 
-  AssertTrue('AddI32x16 should not be scalar', dt^.AddI32x16 <> @ScalarAddI32x16);
-  AssertTrue('SubI32x16 should not be scalar', dt^.SubI32x16 <> @ScalarSubI32x16);
-  AssertTrue('MulI32x16 should not be scalar', dt^.MulI32x16 <> @ScalarMulI32x16);
+  CheckTrue(dt^.AddI32x16 <> @ScalarAddI32x16, 'AddI32x16 should not be scalar');
+  CheckTrue(dt^.SubI32x16 <> @ScalarSubI32x16, 'SubI32x16 should not be scalar');
+  CheckTrue(dt^.MulI32x16 <> @ScalarMulI32x16, 'MulI32x16 should not be scalar');
 
   RandSeed := 20260103;
 
@@ -8531,19 +8447,19 @@ begin
     expV := ScalarAddI32x16(a, b);
     actV := dt^.AddI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubI32x16(a, b);
     actV := dt^.SubI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulI32x16(a, b);
     actV := dt^.MulI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8557,10 +8473,10 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // Add/Sub boundary: avoid overflow
   a.i[0] := High(Int32) - 1; b.i[0] := 1;
@@ -8574,12 +8490,12 @@ begin
   expV := ScalarAddI32x16(a, b);
   actV := dt^.AddI32x16(a, b);
   for i := 0 to 15 do
-    AssertEquals('I32x16 Add boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x16 Add boundary lane ' + IntToStr(i));
 
   expV := ScalarSubI32x16(a, b);
   actV := dt^.SubI32x16(a, b);
   for i := 0 to 15 do
-    AssertEquals('I32x16 Sub boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x16 Sub boundary lane ' + IntToStr(i));
 
   // Mul with safe range
   for i := 0 to 15 do
@@ -8597,7 +8513,7 @@ begin
   expV := ScalarMulI32x16(a, b);
   actV := dt^.MulI32x16(a, b);
   for i := 0 to 15 do
-    AssertEquals('I32x16 Mul boundary lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+    CheckEqual(expV.i[i], actV.i[i], 'I32x16 Mul boundary lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX512VectorAsm.Test_VecI32x16_BitwiseOps_RandomConsistency;
@@ -8610,15 +8526,15 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AndI32x16 should be assigned', Assigned(dt^.AndI32x16));
-  AssertTrue('Dispatch.OrI32x16 should be assigned', Assigned(dt^.OrI32x16));
-  AssertTrue('Dispatch.XorI32x16 should be assigned', Assigned(dt^.XorI32x16));
-  AssertTrue('Dispatch.NotI32x16 should be assigned', Assigned(dt^.NotI32x16));
-  AssertTrue('Dispatch.AndNotI32x16 should be assigned', Assigned(dt^.AndNotI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AndI32x16), 'Dispatch.AndI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.OrI32x16), 'Dispatch.OrI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.XorI32x16), 'Dispatch.XorI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.NotI32x16), 'Dispatch.NotI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.AndNotI32x16), 'Dispatch.AndNotI32x16 should be assigned');
 
   RandSeed := 20260104;
 
@@ -8633,27 +8549,27 @@ begin
     expV := ScalarAndI32x16(a, b);
     actV := dt^.AndI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 And iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 And iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarOrI32x16(a, b);
     actV := dt^.OrI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Or iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Or iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarXorI32x16(a, b);
     actV := dt^.XorI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Xor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Xor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarNotI32x16(a);
     actV := dt^.NotI32x16(a);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Not iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Not iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarAndNotI32x16(a, b);
     actV := dt^.AndNotI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 AndNot iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 AndNot iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8667,13 +8583,13 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ShiftLeftI32x16 should be assigned', Assigned(dt^.ShiftLeftI32x16));
-  AssertTrue('Dispatch.ShiftRightI32x16 should be assigned', Assigned(dt^.ShiftRightI32x16));
-  AssertTrue('Dispatch.ShiftRightArithI32x16 should be assigned', Assigned(dt^.ShiftRightArithI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ShiftLeftI32x16), 'Dispatch.ShiftLeftI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.ShiftRightI32x16), 'Dispatch.ShiftRightI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.ShiftRightArithI32x16), 'Dispatch.ShiftRightArithI32x16 should be assigned');
 
   RandSeed := 20260105;
 
@@ -8687,17 +8603,17 @@ begin
     expV := ScalarShiftLeftI32x16(a, shift);
     actV := dt^.ShiftLeftI32x16(a, shift);
     for i := 0 to 15 do
-      AssertEquals('I32x16 SHL ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 SHL ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarShiftRightI32x16(a, shift);
     actV := dt^.ShiftRightI32x16(a, shift);
     for i := 0 to 15 do
-      AssertEquals('I32x16 SHR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 SHR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarShiftRightArithI32x16(a, shift);
     actV := dt^.ShiftRightArithI32x16(a, shift);
     for i := 0 to 15 do
-      AssertEquals('I32x16 SAR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 SAR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8711,13 +8627,13 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CmpEqI32x16 should be assigned', Assigned(dt^.CmpEqI32x16));
-  AssertTrue('Dispatch.CmpLtI32x16 should be assigned', Assigned(dt^.CmpLtI32x16));
-  AssertTrue('Dispatch.CmpGtI32x16 should be assigned', Assigned(dt^.CmpGtI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CmpEqI32x16), 'Dispatch.CmpEqI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CmpLtI32x16), 'Dispatch.CmpLtI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGtI32x16), 'Dispatch.CmpGtI32x16 should be assigned');
 
   RandSeed := 20260106;
 
@@ -8736,17 +8652,17 @@ begin
     // CmpEq
     expMask := ScalarCmpEqI32x16(a, b);
     actMask := dt^.CmpEqI32x16(a, b);
-    AssertEquals('I32x16 CmpEq iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpEq iter ' + IntToStr(iter));
 
     // CmpLt
     expMask := ScalarCmpLtI32x16(a, b);
     actMask := dt^.CmpLtI32x16(a, b);
-    AssertEquals('I32x16 CmpLt iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpLt iter ' + IntToStr(iter));
 
     // CmpGt
     expMask := ScalarCmpGtI32x16(a, b);
     actMask := dt^.CmpGtI32x16(a, b);
-    AssertEquals('I32x16 CmpGt iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpGt iter ' + IntToStr(iter));
   end;
 end;
 
@@ -8760,12 +8676,12 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MinI32x16 should be assigned', Assigned(dt^.MinI32x16));
-  AssertTrue('Dispatch.MaxI32x16 should be assigned', Assigned(dt^.MaxI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MinI32x16), 'Dispatch.MinI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.MaxI32x16), 'Dispatch.MaxI32x16 should be assigned');
 
   RandSeed := 20260107;
 
@@ -8780,12 +8696,12 @@ begin
     expV := ScalarMinI32x16(a, b);
     actV := dt^.MinI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Min iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Min iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarMaxI32x16(a, b);
     actV := dt^.MaxI32x16(a, b);
     for i := 0 to 15 do
-      AssertEquals('I32x16 Max iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I32x16 Max iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8799,13 +8715,13 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CmpLeI32x16 should be assigned', Assigned(dt^.CmpLeI32x16));
-  AssertTrue('Dispatch.CmpGeI32x16 should be assigned', Assigned(dt^.CmpGeI32x16));
-  AssertTrue('Dispatch.CmpNeI32x16 should be assigned', Assigned(dt^.CmpNeI32x16));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CmpLeI32x16), 'Dispatch.CmpLeI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CmpGeI32x16), 'Dispatch.CmpGeI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CmpNeI32x16), 'Dispatch.CmpNeI32x16 should be assigned');
 
   RandSeed := 20260108;
 
@@ -8823,17 +8739,17 @@ begin
     // CmpLe
     expMask := ScalarCmpLeI32x16(a, b);
     actMask := dt^.CmpLeI32x16(a, b);
-    AssertEquals('I32x16 CmpLe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpLe iter ' + IntToStr(iter));
 
     // CmpGe
     expMask := ScalarCmpGeI32x16(a, b);
     actMask := dt^.CmpGeI32x16(a, b);
-    AssertEquals('I32x16 CmpGe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpGe iter ' + IntToStr(iter));
 
     // CmpNe
     expMask := ScalarCmpNeI32x16(a, b);
     actMask := dt^.CmpNeI32x16(a, b);
-    AssertEquals('I32x16 CmpNe iter ' + IntToStr(iter), expMask, actMask);
+    CheckEqual(expMask, actMask, 'I32x16 CmpNe iter ' + IntToStr(iter));
   end;
 end;
 
@@ -8847,12 +8763,12 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.I8x16SatAdd should be assigned', Assigned(dt^.I8x16SatAdd));
-  AssertTrue('Dispatch.I8x16SatSub should be assigned', Assigned(dt^.I8x16SatSub));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.I8x16SatAdd), 'Dispatch.I8x16SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.I8x16SatSub), 'Dispatch.I8x16SatSub should be assigned');
 
   RandSeed := 20260109;
 
@@ -8868,13 +8784,13 @@ begin
     expV := ScalarI8x16SatAdd(a, b);
     actV := dt^.I8x16SatAdd(a, b);
     for i := 0 to 15 do
-      AssertEquals('I8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarI8x16SatSub(a, b);
     actV := dt^.I8x16SatSub(a, b);
     for i := 0 to 15 do
-      AssertEquals('I8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8888,12 +8804,12 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.I16x8SatAdd should be assigned', Assigned(dt^.I16x8SatAdd));
-  AssertTrue('Dispatch.I16x8SatSub should be assigned', Assigned(dt^.I16x8SatSub));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.I16x8SatAdd), 'Dispatch.I16x8SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.I16x8SatSub), 'Dispatch.I16x8SatSub should be assigned');
 
   RandSeed := 20260110;
 
@@ -8909,13 +8825,13 @@ begin
     expV := ScalarI16x8SatAdd(a, b);
     actV := dt^.I16x8SatAdd(a, b);
     for i := 0 to 7 do
-      AssertEquals('I16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarI16x8SatSub(a, b);
     actV := dt^.I16x8SatSub(a, b);
     for i := 0 to 7 do
-      AssertEquals('I16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.i[i], actV.i[i]);
+      CheckEqual(expV.i[i], actV.i[i], 'I16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8929,12 +8845,12 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.U8x16SatAdd should be assigned', Assigned(dt^.U8x16SatAdd));
-  AssertTrue('Dispatch.U8x16SatSub should be assigned', Assigned(dt^.U8x16SatSub));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.U8x16SatAdd), 'Dispatch.U8x16SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.U8x16SatSub), 'Dispatch.U8x16SatSub should be assigned');
 
   RandSeed := 20260111;
 
@@ -8950,13 +8866,13 @@ begin
     expV := ScalarU8x16SatAdd(a, b);
     actV := dt^.U8x16SatAdd(a, b);
     for i := 0 to 15 do
-      AssertEquals('U8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.u[i], actV.u[i]);
+      CheckEqual(expV.u[i], actV.u[i], 'U8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarU8x16SatSub(a, b);
     actV := dt^.U8x16SatSub(a, b);
     for i := 0 to 15 do
-      AssertEquals('U8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.u[i], actV.u[i]);
+      CheckEqual(expV.u[i], actV.u[i], 'U8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -8970,12 +8886,12 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.U16x8SatAdd should be assigned', Assigned(dt^.U16x8SatAdd));
-  AssertTrue('Dispatch.U16x8SatSub should be assigned', Assigned(dt^.U16x8SatSub));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.U16x8SatAdd), 'Dispatch.U16x8SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.U16x8SatSub), 'Dispatch.U16x8SatSub should be assigned');
 
   RandSeed := 20260112;
 
@@ -8991,13 +8907,13 @@ begin
     expV := ScalarU16x8SatAdd(a, b);
     actV := dt^.U16x8SatAdd(a, b);
     for i := 0 to 7 do
-      AssertEquals('U16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.u[i], actV.u[i]);
+      CheckEqual(expV.u[i], actV.u[i], 'U16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarU16x8SatSub(a, b);
     actV := dt^.U16x8SatSub(a, b);
     for i := 0 to 7 do
-      AssertEquals('U16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i), expV.u[i], actV.u[i]);
+      CheckEqual(expV.u[i], actV.u[i], 'U16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
 end;
 
@@ -9011,11 +8927,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MemEqual should be assigned', Assigned(dt^.MemEqual));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
 
   RandSeed := 20260113;
 
@@ -9031,14 +8947,14 @@ begin
     // Test equal buffers
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
     actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
-    AssertEquals('MemEqual equal iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'MemEqual equal iter ' + IntToStr(iter));
 
     // Create a difference at random position
     buf2[Random(512)] := buf2[Random(512)] xor $FF;
 
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
     actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
-    AssertEquals('MemEqual diff iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'MemEqual diff iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9053,11 +8969,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MemFindByte should be assigned', Assigned(dt^.MemFindByte));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
 
   RandSeed := 20260114;
 
@@ -9070,13 +8986,13 @@ begin
     searchByte := Byte(Random(128));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
     actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
-    AssertEquals('MemFindByte iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'MemFindByte iter ' + IntToStr(iter));
 
     // Find non-existing byte
     searchByte := Byte(200 + Random(56));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
     actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
-    AssertEquals('MemFindByte not found iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'MemFindByte not found iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9090,11 +9006,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.SumBytes should be assigned', Assigned(dt^.SumBytes));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
 
   RandSeed := 20260115;
 
@@ -9105,7 +9021,7 @@ begin
 
     expSum := SumBytes_Scalar(@buf[0], 512);
     actSum := dt^.SumBytes(@buf[0], 512);
-    AssertEquals('SumBytes iter ' + IntToStr(iter), expSum, actSum);
+    CheckEqual(expSum, actSum, 'SumBytes iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9120,11 +9036,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.CountByte should be assigned', Assigned(dt^.CountByte));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
 
   RandSeed := 20260116;
 
@@ -9136,7 +9052,7 @@ begin
     searchByte := Byte(Random(32));
     expCnt := CountByte_Scalar(@buf[0], 512, searchByte);
     actCnt := dt^.CountByte(@buf[0], 512, searchByte);
-    AssertEquals('CountByte iter ' + IntToStr(iter), expCnt, actCnt);
+    CheckEqual(expCnt, actCnt, 'CountByte iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9150,11 +9066,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MinMaxBytes should be assigned', Assigned(dt^.MinMaxBytes));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MinMaxBytes), 'Dispatch.MinMaxBytes should be assigned');
 
   RandSeed := 20260117;
 
@@ -9165,8 +9081,8 @@ begin
 
     MinMaxBytes_Scalar(@buf[0], 512, expMin, expMax);
     dt^.MinMaxBytes(@buf[0], 512, actMin, actMax);
-    AssertEquals('MinMaxBytes min iter ' + IntToStr(iter), expMin, actMin);
-    AssertEquals('MinMaxBytes max iter ' + IntToStr(iter), expMax, actMax);
+    CheckEqual(expMin, actMin, 'MinMaxBytes min iter ' + IntToStr(iter));
+    CheckEqual(expMax, actMax, 'MinMaxBytes max iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9180,11 +9096,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.BitsetPopCount should be assigned', Assigned(dt^.BitsetPopCount));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
 
   RandSeed := 20260118;
 
@@ -9195,7 +9111,7 @@ begin
 
     expCnt := BitsetPopCount_Scalar(@buf[0], 256);
     actCnt := dt^.BitsetPopCount(@buf[0], 256);
-    AssertEquals('BitsetPopCount iter ' + IntToStr(iter), expCnt, actCnt);
+    CheckEqual(expCnt, actCnt, 'BitsetPopCount iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9208,11 +9124,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MemCopy should be assigned', Assigned(dt^.MemCopy));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
 
   RandSeed := 20260119;
 
@@ -9229,7 +9145,7 @@ begin
     dt^.MemCopy(@src[0], @dstAct[0], 512);
 
     for i := 0 to 511 do
-      AssertEquals('MemCopy iter ' + IntToStr(iter) + ' byte ' + IntToStr(i), dstExp[i], dstAct[i]);
+      CheckEqual(dstExp[i], dstAct[i], 'MemCopy iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
   end;
 end;
 
@@ -9243,11 +9159,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.MemSet should be assigned', Assigned(dt^.MemSet));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.MemSet), 'Dispatch.MemSet should be assigned');
 
   RandSeed := 20260120;
 
@@ -9265,7 +9181,7 @@ begin
     dt^.MemSet(@dstAct[0], 512, setValue);
 
     for i := 0 to 511 do
-      AssertEquals('MemSet iter ' + IntToStr(iter) + ' byte ' + IntToStr(i), dstExp[i], dstAct[i]);
+      CheckEqual(dstExp[i], dstAct[i], 'MemSet iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
   end;
 end;
 
@@ -9278,11 +9194,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ToLowerAscii should be assigned', Assigned(dt^.ToLowerAscii));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
 
   RandSeed := 20260121;
 
@@ -9298,7 +9214,7 @@ begin
     dt^.ToLowerAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
-      AssertEquals('ToLowerAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i), bufExp[i], bufAct[i]);
+      CheckEqual(bufExp[i], bufAct[i], 'ToLowerAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
   end;
 end;
 
@@ -9311,11 +9227,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.ToUpperAscii should be assigned', Assigned(dt^.ToUpperAscii));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
 
   RandSeed := 20260122;
 
@@ -9331,7 +9247,7 @@ begin
     dt^.ToUpperAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
-      AssertEquals('ToUpperAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i), bufExp[i], bufAct[i]);
+      CheckEqual(bufExp[i], bufAct[i], 'ToUpperAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
   end;
 end;
 
@@ -9345,11 +9261,11 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
-  AssertTrue('Dispatch.AsciiIEqual should be assigned', Assigned(dt^.AsciiIEqual));
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
+  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
 
   RandSeed := 20260123;
 
@@ -9371,13 +9287,13 @@ begin
 
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
     actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
-    AssertEquals('AsciiIEqual same iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'AsciiIEqual same iter ' + IntToStr(iter));
 
     // Make them differ
     buf2[Random(128)] := Byte(48 + Random(10));
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
     actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
-    AssertEquals('AsciiIEqual diff iter ' + IntToStr(iter), expRes, actRes);
+    CheckEqual(expRes, actRes, 'AsciiIEqual diff iter ' + IntToStr(iter));
   end;
 end;
 
@@ -9390,10 +9306,10 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // 初始化测试数据
   for i := 0 to 15 do
@@ -9406,22 +9322,22 @@ begin
   resultV := dt^.AddF32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('F32x16 Add result lane ' + IntToStr(i), a.f[i] + b.f[i], resultV.f[i], 1e-5);
+    CheckNear(a.f[i] + b.f[i], resultV.f[i], 1e-5, 'F32x16 Add result lane ' + IntToStr(i));
 
   resultV := dt^.SubF32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('F32x16 Sub result lane ' + IntToStr(i), a.f[i] - b.f[i], resultV.f[i], 1e-5);
+    CheckNear(a.f[i] - b.f[i], resultV.f[i], 1e-5, 'F32x16 Sub result lane ' + IntToStr(i));
 
   resultV := dt^.MulF32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('F32x16 Mul result lane ' + IntToStr(i), a.f[i] * b.f[i], resultV.f[i], 1e-5);
+    CheckNear(a.f[i] * b.f[i], resultV.f[i], 1e-5, 'F32x16 Mul result lane ' + IntToStr(i));
 
   resultV := dt^.DivF32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('F32x16 Div result lane ' + IntToStr(i), a.f[i] / b.f[i], resultV.f[i], 1e-5);
+    CheckNear(a.f[i] / b.f[i], resultV.f[i], 1e-5, 'F32x16 Div result lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_AVX512VectorAsm.Test_VecI32x16_ABI_CalleeSavedRegisters_Preserved;
@@ -9433,10 +9349,10 @@ begin
   if not AVX512BackendDispatchableForVectorAsmTests then
     Exit;
 
-  AssertEquals('Active backend should be AVX512', Ord(sbAVX512), Ord(GetCurrentBackend));
+  CheckEqual(Ord(sbAVX512), Ord(GetCurrentBackend), 'Active backend should be AVX512');
 
   dt := GetDispatchTable;
-  AssertTrue('Dispatch table should be assigned', dt <> nil);
+  CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // 初始化测试数据
   for i := 0 to 15 do
@@ -9449,27 +9365,27 @@ begin
   resultV := dt^.AddI32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('I32x16 Add result lane ' + IntToStr(i), a.i[i] + b.i[i], resultV.i[i]);
+    CheckEqual(a.i[i] + b.i[i], resultV.i[i], 'I32x16 Add result lane ' + IntToStr(i));
 
   resultV := dt^.SubI32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('I32x16 Sub result lane ' + IntToStr(i), a.i[i] - b.i[i], resultV.i[i]);
+    CheckEqual(a.i[i] - b.i[i], resultV.i[i], 'I32x16 Sub result lane ' + IntToStr(i));
 
   resultV := dt^.MulI32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('I32x16 Mul result lane ' + IntToStr(i), a.i[i] * b.i[i], resultV.i[i]);
+    CheckEqual(a.i[i] * b.i[i], resultV.i[i], 'I32x16 Mul result lane ' + IntToStr(i));
 
   resultV := dt^.AndI32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('I32x16 And result lane ' + IntToStr(i), a.i[i] and b.i[i], resultV.i[i]);
+    CheckEqual(a.i[i] and b.i[i], resultV.i[i], 'I32x16 And result lane ' + IntToStr(i));
 
   resultV := dt^.OrI32x16(a, b);
 
   for i := 0 to 15 do
-    AssertEquals('I32x16 Or result lane ' + IntToStr(i), a.i[i] or b.i[i], resultV.i[i]);
+    CheckEqual(a.i[i] or b.i[i], resultV.i[i], 'I32x16 Or result lane ' + IntToStr(i));
 end;
 
 {$ENDIF}  // SIMD_BACKEND_AVX512
@@ -9486,10 +9402,10 @@ begin
   b := VecF32x4Splat(2.0);
   c := VecF32x4Add(a, b);
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Sub;
@@ -9500,10 +9416,10 @@ begin
   b := VecF32x4Splat(2.0);
   c := VecF32x4Sub(a, b);
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Mul;
@@ -9514,10 +9430,10 @@ begin
   b := VecF32x4Splat(4.0);
   c := VecF32x4Mul(a, b);
   
-  AssertEquals('Element 0 should be 12.0', 12.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 12.0', 12.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 12.0', 12.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 12.0', 12.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(12.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 12.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Div;
@@ -9528,10 +9444,10 @@ begin
   b := VecF32x4Splat(4.0);
   c := VecF32x4Div(a, b);
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Sqrt;
@@ -9541,10 +9457,10 @@ begin
   a := VecF32x4Splat(16.0);
   c := VecF32x4Sqrt(a);
   
-  AssertEquals('Sqrt(16) should be 4.0', 4.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Sqrt(16) should be 4.0', 4.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Sqrt(16) should be 4.0', 4.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Sqrt(16) should be 4.0', 4.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(4.0, VecF32x4Extract(c, 0), 0.0001, 'Sqrt(16) should be 4.0');
+  CheckNear(4.0, VecF32x4Extract(c, 1), 0.0001, 'Sqrt(16) should be 4.0');
+  CheckNear(4.0, VecF32x4Extract(c, 2), 0.0001, 'Sqrt(16) should be 4.0');
+  CheckNear(4.0, VecF32x4Extract(c, 3), 0.0001, 'Sqrt(16) should be 4.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Min;
@@ -9555,8 +9471,8 @@ begin
   b := VecF32x4Splat(3.0);
   c := VecF32x4Min(a, b);
   
-  AssertEquals('Min(5,3) should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Min(5,3) should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Min(5,3) should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Min(5,3) should be 3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Max;
@@ -9567,8 +9483,8 @@ begin
   b := VecF32x4Splat(3.0);
   c := VecF32x4Max(a, b);
   
-  AssertEquals('Max(5,3) should be 5.0', 5.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Max(5,3) should be 5.0', 5.0, VecF32x4Extract(c, 1), 0.0001);
+  CheckNear(5.0, VecF32x4Extract(c, 0), 0.0001, 'Max(5,3) should be 5.0');
+  CheckNear(5.0, VecF32x4Extract(c, 1), 0.0001, 'Max(5,3) should be 5.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Abs;
@@ -9578,10 +9494,10 @@ begin
   a := VecF32x4Splat(-5.0);
   c := VecF32x4Abs(a);
   
-  AssertEquals('Abs(-5) should be 5.0', 5.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Abs(-5) should be 5.0', 5.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Abs(-5) should be 5.0', 5.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Abs(-5) should be 5.0', 5.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(5.0, VecF32x4Extract(c, 0), 0.0001, 'Abs(-5) should be 5.0');
+  CheckNear(5.0, VecF32x4Extract(c, 1), 0.0001, 'Abs(-5) should be 5.0');
+  CheckNear(5.0, VecF32x4Extract(c, 2), 0.0001, 'Abs(-5) should be 5.0');
+  CheckNear(5.0, VecF32x4Extract(c, 3), 0.0001, 'Abs(-5) should be 5.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_ReduceAdd;
@@ -9598,7 +9514,7 @@ begin
   a := VecF32x4Load(@arr[0]);
   sum := VecF32x4ReduceAdd(a);
   
-  AssertEquals('Sum should be 10.0', 10.0, sum, 0.0001);
+  CheckNear(10.0, sum, 0.0001, 'Sum should be 10.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_ReduceMin;
@@ -9615,7 +9531,7 @@ begin
   a := VecF32x4Load(@arr[0]);
   minVal := VecF32x4ReduceMin(a);
   
-  AssertEquals('Min should be 2.0', 2.0, minVal, 0.0001);
+  CheckNear(2.0, minVal, 0.0001, 'Min should be 2.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_ReduceMax;
@@ -9632,7 +9548,7 @@ begin
   a := VecF32x4Load(@arr[0]);
   maxVal := VecF32x4ReduceMax(a);
   
-  AssertEquals('Max should be 8.0', 8.0, maxVal, 0.0001);
+  CheckNear(8.0, maxVal, 0.0001, 'Max should be 8.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Splat;
@@ -9641,10 +9557,10 @@ var
 begin
   a := VecF32x4Splat(42.5);
   
-  AssertEquals('Element 0 should be 42.5', 42.5, VecF32x4Extract(a, 0), 0.0001);
-  AssertEquals('Element 1 should be 42.5', 42.5, VecF32x4Extract(a, 1), 0.0001);
-  AssertEquals('Element 2 should be 42.5', 42.5, VecF32x4Extract(a, 2), 0.0001);
-  AssertEquals('Element 3 should be 42.5', 42.5, VecF32x4Extract(a, 3), 0.0001);
+  CheckNear(42.5, VecF32x4Extract(a, 0), 0.0001, 'Element 0 should be 42.5');
+  CheckNear(42.5, VecF32x4Extract(a, 1), 0.0001, 'Element 1 should be 42.5');
+  CheckNear(42.5, VecF32x4Extract(a, 2), 0.0001, 'Element 2 should be 42.5');
+  CheckNear(42.5, VecF32x4Extract(a, 3), 0.0001, 'Element 3 should be 42.5');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_LoadStore;
@@ -9660,10 +9576,10 @@ begin
   a := VecF32x4Load(@src[0]);
   VecF32x4Store(@dst[0], a);
   
-  AssertEquals('dst[0] should match src[0]', src[0], dst[0], 0.0001);
-  AssertEquals('dst[1] should match src[1]', src[1], dst[1], 0.0001);
-  AssertEquals('dst[2] should match src[2]', src[2], dst[2], 0.0001);
-  AssertEquals('dst[3] should match src[3]', src[3], dst[3], 0.0001);
+  CheckNear(src[0], dst[0], 0.0001, 'dst[0] should match src[0]');
+  CheckNear(src[1], dst[1], 0.0001, 'dst[1] should match src[1]');
+  CheckNear(src[2], dst[2], 0.0001, 'dst[2] should match src[2]');
+  CheckNear(src[3], dst[3], 0.0001, 'dst[3] should match src[3]');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_UtilityFacade_Basic;
@@ -9674,10 +9590,10 @@ var
   LMask4: TMask4;
 begin
   LZero := VecF32x4Zero;
-  AssertEquals('VecF32x4Zero lane 0', 0.0, LZero.f[0], 0.0);
-  AssertEquals('VecF32x4Zero lane 1', 0.0, LZero.f[1], 0.0);
-  AssertEquals('VecF32x4Zero lane 2', 0.0, LZero.f[2], 0.0);
-  AssertEquals('VecF32x4Zero lane 3', 0.0, LZero.f[3], 0.0);
+  CheckNear(0.0, LZero.f[0], 0.0, 'VecF32x4Zero lane 0');
+  CheckNear(0.0, LZero.f[1], 0.0, 'VecF32x4Zero lane 1');
+  CheckNear(0.0, LZero.f[2], 0.0, 'VecF32x4Zero lane 2');
+  CheckNear(0.0, LZero.f[3], 0.0, 'VecF32x4Zero lane 3');
 
   LVecA.f[0] := 1.0;
   LVecA.f[1] := 2.0;
@@ -9690,21 +9606,20 @@ begin
   LMask4 := TMask4($5); // lane0/2 -> a, lane1/3 -> b
 
   LSelected := VecF32x4Select(LMask4, LVecA, LVecB);
-  AssertEquals('VecF32x4Select lane 0', 1.0, LSelected.f[0], 0.0001);
-  AssertEquals('VecF32x4Select lane 1', 8.0, LSelected.f[1], 0.0001);
-  AssertEquals('VecF32x4Select lane 2', 3.0, LSelected.f[2], 0.0001);
-  AssertEquals('VecF32x4Select lane 3', 6.0, LSelected.f[3], 0.0001);
+  CheckNear(1.0, LSelected.f[0], 0.0001, 'VecF32x4Select lane 0');
+  CheckNear(8.0, LSelected.f[1], 0.0001, 'VecF32x4Select lane 1');
+  CheckNear(3.0, LSelected.f[2], 0.0001, 'VecF32x4Select lane 2');
+  CheckNear(6.0, LSelected.f[3], 0.0001, 'VecF32x4Select lane 3');
 
-  AssertEquals('VecF32x4Extract lane 2', 3.0, VecF32x4Extract(LVecA, 2), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(LVecA, 2), 0.0001, 'VecF32x4Extract lane 2');
   LInserted := VecF32x4Insert(LVecA, 42.5, 1);
-  AssertEquals('VecF32x4Insert lane 1', 42.5, LInserted.f[1], 0.0001);
-  AssertEquals('VecF32x4Insert keep lane 2', 3.0, LInserted.f[2], 0.0001);
+  CheckNear(42.5, LInserted.f[1], 0.0001, 'VecF32x4Insert lane 1');
+  CheckNear(3.0, LInserted.f[2], 0.0001, 'VecF32x4Insert keep lane 2');
 
   LAligned := nextpas.core.simd.AllocateAligned(SizeOf(Single) * 8, 32);
-  AssertTrue('AllocateAligned should return non-nil', LAligned <> nil);
+  CheckTrue(LAligned <> nil, 'AllocateAligned should return non-nil');
   try
-    AssertTrue('AllocateAligned should return aligned pointer',
-      nextpas.core.simd.IsPointerAligned(LAligned, 32));
+    CheckTrue(nextpas.core.simd.IsPointerAligned(LAligned, 32), 'AllocateAligned should return aligned pointer');
     LAlignedF32 := PSingle(LAligned);
     LAlignedF32[0] := 10.0;
     LAlignedF32[1] := 20.0;
@@ -9712,16 +9627,16 @@ begin
     LAlignedF32[3] := 40.0;
 
     LLoaded := VecF32x4LoadAligned(LAlignedF32);
-    AssertEquals('VecF32x4LoadAligned lane 0', 10.0, LLoaded.f[0], 0.0001);
-    AssertEquals('VecF32x4LoadAligned lane 1', 20.0, LLoaded.f[1], 0.0001);
-    AssertEquals('VecF32x4LoadAligned lane 2', 30.0, LLoaded.f[2], 0.0001);
-    AssertEquals('VecF32x4LoadAligned lane 3', 40.0, LLoaded.f[3], 0.0001);
+    CheckNear(10.0, LLoaded.f[0], 0.0001, 'VecF32x4LoadAligned lane 0');
+    CheckNear(20.0, LLoaded.f[1], 0.0001, 'VecF32x4LoadAligned lane 1');
+    CheckNear(30.0, LLoaded.f[2], 0.0001, 'VecF32x4LoadAligned lane 2');
+    CheckNear(40.0, LLoaded.f[3], 0.0001, 'VecF32x4LoadAligned lane 3');
 
     VecF32x4StoreAligned(LAlignedF32, LSelected);
-    AssertEquals('VecF32x4StoreAligned lane 0', 1.0, LAlignedF32[0], 0.0001);
-    AssertEquals('VecF32x4StoreAligned lane 1', 8.0, LAlignedF32[1], 0.0001);
-    AssertEquals('VecF32x4StoreAligned lane 2', 3.0, LAlignedF32[2], 0.0001);
-    AssertEquals('VecF32x4StoreAligned lane 3', 6.0, LAlignedF32[3], 0.0001);
+    CheckNear(1.0, LAlignedF32[0], 0.0001, 'VecF32x4StoreAligned lane 0');
+    CheckNear(8.0, LAlignedF32[1], 0.0001, 'VecF32x4StoreAligned lane 1');
+    CheckNear(3.0, LAlignedF32[2], 0.0001, 'VecF32x4StoreAligned lane 2');
+    CheckNear(6.0, LAlignedF32[3], 0.0001, 'VecF32x4StoreAligned lane 3');
   finally
     nextpas.core.simd.FreeAligned(LAligned);
   end;
@@ -9735,14 +9650,14 @@ begin
   a := VecF32x4Splat(5.0);
   b := VecF32x4Splat(5.0);
   mask := VecF32x4CmpEq(a, b);
-  AssertTrue('Equal vectors should produce all-true mask', mask = $F);
+  CheckTrue(mask = $F, 'Equal vectors should produce all-true mask');
   
   b := VecF32x4Splat(3.0);
   mask := VecF32x4CmpGt(a, b);
-  AssertTrue('5 > 3 should produce all-true mask', mask = $F);
+  CheckTrue(mask = $F, '5 > 3 should produce all-true mask');
   
   mask := VecF32x4CmpLt(a, b);
-  AssertTrue('5 < 3 should produce all-false mask', mask = 0);
+  CheckTrue(mask = 0, '5 < 3 should produce all-false mask');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Fma;
@@ -9755,10 +9670,10 @@ begin
   c := VecF32x4Splat(4.0);
   r := VecF32x4Fma(a, b, c);
   
-  AssertEquals('FMA(2,3,4) should be 10.0', 10.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('FMA(2,3,4) should be 10.0', 10.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('FMA(2,3,4) should be 10.0', 10.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('FMA(2,3,4) should be 10.0', 10.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(10.0, VecF32x4Extract(r, 0), 0.0001, 'FMA(2,3,4) should be 10.0');
+  CheckNear(10.0, VecF32x4Extract(r, 1), 0.0001, 'FMA(2,3,4) should be 10.0');
+  CheckNear(10.0, VecF32x4Extract(r, 2), 0.0001, 'FMA(2,3,4) should be 10.0');
+  CheckNear(10.0, VecF32x4Extract(r, 3), 0.0001, 'FMA(2,3,4) should be 10.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Rcp;
@@ -9768,10 +9683,10 @@ begin
   a := VecF32x4Splat(4.0);
   r := VecF32x4Rcp(a);
   
-  AssertEquals('Rcp(4) should be 0.25', 0.25, VecF32x4Extract(r, 0), 0.01);
-  AssertEquals('Rcp(4) should be 0.25', 0.25, VecF32x4Extract(r, 1), 0.01);
-  AssertEquals('Rcp(4) should be 0.25', 0.25, VecF32x4Extract(r, 2), 0.01);
-  AssertEquals('Rcp(4) should be 0.25', 0.25, VecF32x4Extract(r, 3), 0.01);
+  CheckNear(0.25, VecF32x4Extract(r, 0), 0.01, 'Rcp(4) should be 0.25');
+  CheckNear(0.25, VecF32x4Extract(r, 1), 0.01, 'Rcp(4) should be 0.25');
+  CheckNear(0.25, VecF32x4Extract(r, 2), 0.01, 'Rcp(4) should be 0.25');
+  CheckNear(0.25, VecF32x4Extract(r, 3), 0.01, 'Rcp(4) should be 0.25');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Rsqrt;
@@ -9782,10 +9697,10 @@ begin
   r := VecF32x4Rsqrt(a);
   
   // 1/sqrt(4) = 0.5
-  AssertEquals('Rsqrt(4) should be 0.5', 0.5, VecF32x4Extract(r, 0), 0.01);
-  AssertEquals('Rsqrt(4) should be 0.5', 0.5, VecF32x4Extract(r, 1), 0.01);
-  AssertEquals('Rsqrt(4) should be 0.5', 0.5, VecF32x4Extract(r, 2), 0.01);
-  AssertEquals('Rsqrt(4) should be 0.5', 0.5, VecF32x4Extract(r, 3), 0.01);
+  CheckNear(0.5, VecF32x4Extract(r, 0), 0.01, 'Rsqrt(4) should be 0.5');
+  CheckNear(0.5, VecF32x4Extract(r, 1), 0.01, 'Rsqrt(4) should be 0.5');
+  CheckNear(0.5, VecF32x4Extract(r, 2), 0.01, 'Rsqrt(4) should be 0.5');
+  CheckNear(0.5, VecF32x4Extract(r, 3), 0.01, 'Rsqrt(4) should be 0.5');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Floor;
@@ -9800,10 +9715,10 @@ begin
   a := VecF32x4Load(@arr[0]);
   r := VecF32x4Floor(a);
   
-  AssertEquals('Floor(2.7) should be 2.0', 2.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('Floor(-2.7) should be -3.0', -3.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('Floor(3.0) should be 3.0', 3.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('Floor(-3.0) should be -3.0', -3.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(2.0, VecF32x4Extract(r, 0), 0.0001, 'Floor(2.7) should be 2.0');
+  CheckNear(-3.0, VecF32x4Extract(r, 1), 0.0001, 'Floor(-2.7) should be -3.0');
+  CheckNear(3.0, VecF32x4Extract(r, 2), 0.0001, 'Floor(3.0) should be 3.0');
+  CheckNear(-3.0, VecF32x4Extract(r, 3), 0.0001, 'Floor(-3.0) should be -3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Ceil;
@@ -9818,10 +9733,10 @@ begin
   a := VecF32x4Load(@arr[0]);
   r := VecF32x4Ceil(a);
   
-  AssertEquals('Ceil(2.3) should be 3.0', 3.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('Ceil(-2.3) should be -2.0', -2.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('Ceil(3.0) should be 3.0', 3.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('Ceil(-3.0) should be -3.0', -3.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(r, 0), 0.0001, 'Ceil(2.3) should be 3.0');
+  CheckNear(-2.0, VecF32x4Extract(r, 1), 0.0001, 'Ceil(-2.3) should be -2.0');
+  CheckNear(3.0, VecF32x4Extract(r, 2), 0.0001, 'Ceil(3.0) should be 3.0');
+  CheckNear(-3.0, VecF32x4Extract(r, 3), 0.0001, 'Ceil(-3.0) should be -3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Round;
@@ -9836,10 +9751,10 @@ begin
   a := VecF32x4Load(@arr[0]);
   r := VecF32x4Round(a);
   
-  AssertEquals('Round(2.3) should be 2.0', 2.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('Round(2.7) should be 3.0', 3.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('Round(-2.3) should be -2.0', -2.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('Round(-2.7) should be -3.0', -3.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(2.0, VecF32x4Extract(r, 0), 0.0001, 'Round(2.3) should be 2.0');
+  CheckNear(3.0, VecF32x4Extract(r, 1), 0.0001, 'Round(2.7) should be 3.0');
+  CheckNear(-2.0, VecF32x4Extract(r, 2), 0.0001, 'Round(-2.3) should be -2.0');
+  CheckNear(-3.0, VecF32x4Extract(r, 3), 0.0001, 'Round(-2.7) should be -3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Trunc;
@@ -9854,10 +9769,10 @@ begin
   a := VecF32x4Load(@arr[0]);
   r := VecF32x4Trunc(a);
   
-  AssertEquals('Trunc(2.7) should be 2.0', 2.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('Trunc(-2.7) should be -2.0', -2.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('Trunc(3.0) should be 3.0', 3.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('Trunc(-3.0) should be -3.0', -3.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(2.0, VecF32x4Extract(r, 0), 0.0001, 'Trunc(2.7) should be 2.0');
+  CheckNear(-2.0, VecF32x4Extract(r, 1), 0.0001, 'Trunc(-2.7) should be -2.0');
+  CheckNear(3.0, VecF32x4Extract(r, 2), 0.0001, 'Trunc(3.0) should be 3.0');
+  CheckNear(-3.0, VecF32x4Extract(r, 3), 0.0001, 'Trunc(-3.0) should be -3.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Clamp;
@@ -9874,10 +9789,10 @@ begin
   maxV := VecF32x4Splat(10.0);
   r := VecF32x4Clamp(a, minV, maxV);
   
-  AssertEquals('Clamp(-5) to [0,10] should be 0.0', 0.0, VecF32x4Extract(r, 0), 0.0001);
-  AssertEquals('Clamp(5) to [0,10] should be 5.0', 5.0, VecF32x4Extract(r, 1), 0.0001);
-  AssertEquals('Clamp(15) to [0,10] should be 10.0', 10.0, VecF32x4Extract(r, 2), 0.0001);
-  AssertEquals('Clamp(0) to [0,10] should be 0.0', 0.0, VecF32x4Extract(r, 3), 0.0001);
+  CheckNear(0.0, VecF32x4Extract(r, 0), 0.0001, 'Clamp(-5) to [0,10] should be 0.0');
+  CheckNear(5.0, VecF32x4Extract(r, 1), 0.0001, 'Clamp(5) to [0,10] should be 5.0');
+  CheckNear(10.0, VecF32x4Extract(r, 2), 0.0001, 'Clamp(15) to [0,10] should be 10.0');
+  CheckNear(0.0, VecF32x4Extract(r, 3), 0.0001, 'Clamp(0) to [0,10] should be 0.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Dot;
@@ -9893,7 +9808,7 @@ begin
   b := VecF32x4Load(@arr2[0]);
   
   dot := VecF32x4Dot(a, b);
-  AssertEquals('Dot product should be 40.0', 40.0, dot, 0.0001);
+  CheckNear(40.0, dot, 0.0001, 'Dot product should be 40.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x3_Dot;
@@ -9909,7 +9824,7 @@ begin
   b := VecF32x4Load(@arr2[0]);
   
   dot := VecF32x3Dot(a, b);
-  AssertEquals('3D Dot product should be 32.0', 32.0, dot, 0.0001);
+  CheckNear(32.0, dot, 0.0001, '3D Dot product should be 32.0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x3_Cross;
@@ -9925,9 +9840,9 @@ begin
   
   c := VecF32x3Cross(a, b);
   
-  AssertEquals('X cross Y: X component should be 0', 0.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('X cross Y: Y component should be 0', 0.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('X cross Y: Z component should be 1', 1.0, VecF32x4Extract(c, 2), 0.0001);
+  CheckNear(0.0, VecF32x4Extract(c, 0), 0.0001, 'X cross Y: X component should be 0');
+  CheckNear(0.0, VecF32x4Extract(c, 1), 0.0001, 'X cross Y: Y component should be 0');
+  CheckNear(1.0, VecF32x4Extract(c, 2), 0.0001, 'X cross Y: Z component should be 1');
   
   // (1,2,3) x (4,5,6) = (2*6-3*5, 3*4-1*6, 1*5-2*4) = (12-15, 12-6, 5-8) = (-3, 6, -3)
   arr1[0] := 1.0; arr1[1] := 2.0; arr1[2] := 3.0; arr1[3] := 0.0;
@@ -9937,9 +9852,9 @@ begin
   
   c := VecF32x3Cross(a, b);
   
-  AssertEquals('Cross X should be -3', -3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Cross Y should be 6', 6.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Cross Z should be -3', -3.0, VecF32x4Extract(c, 2), 0.0001);
+  CheckNear(-3.0, VecF32x4Extract(c, 0), 0.0001, 'Cross X should be -3');
+  CheckNear(6.0, VecF32x4Extract(c, 1), 0.0001, 'Cross Y should be 6');
+  CheckNear(-3.0, VecF32x4Extract(c, 2), 0.0001, 'Cross Z should be -3');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Length;
@@ -9952,13 +9867,13 @@ begin
   arr[0] := 3.0; arr[1] := 0.0; arr[2] := 0.0; arr[3] := 0.0;
   a := VecF32x4Load(@arr[0]);
   len := VecF32x4Length(a);
-  AssertEquals('Length of (3,0,0,0) should be 3', 3.0, len, 0.0001);
+  CheckNear(3.0, len, 0.0001, 'Length of (3,0,0,0) should be 3');
   
   // length of (1,1,1,1) = 2
   arr[0] := 1.0; arr[1] := 1.0; arr[2] := 1.0; arr[3] := 1.0;
   a := VecF32x4Load(@arr[0]);
   len := VecF32x4Length(a);
-  AssertEquals('Length of (1,1,1,1) should be 2', 2.0, len, 0.0001);
+  CheckNear(2.0, len, 0.0001, 'Length of (1,1,1,1) should be 2');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x3_Length;
@@ -9971,7 +9886,7 @@ begin
   arr[0] := 3.0; arr[1] := 4.0; arr[2] := 0.0; arr[3] := 999.0; // w ignored
   a := VecF32x4Load(@arr[0]);
   len := VecF32x3Length(a);
-  AssertEquals('Length of (3,4,0) should be 5', 5.0, len, 0.0001);
+  CheckNear(5.0, len, 0.0001, 'Length of (3,4,0) should be 5');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x4_Normalize;
@@ -9985,14 +9900,14 @@ begin
   a := VecF32x4Load(@arr[0]);
   n := VecF32x4Normalize(a);
   
-  AssertEquals('Normalized X should be 1', 1.0, VecF32x4Extract(n, 0), 0.0001);
-  AssertEquals('Normalized Y should be 0', 0.0, VecF32x4Extract(n, 1), 0.0001);
-  AssertEquals('Normalized Z should be 0', 0.0, VecF32x4Extract(n, 2), 0.0001);
-  AssertEquals('Normalized W should be 0', 0.0, VecF32x4Extract(n, 3), 0.0001);
+  CheckNear(1.0, VecF32x4Extract(n, 0), 0.0001, 'Normalized X should be 1');
+  CheckNear(0.0, VecF32x4Extract(n, 1), 0.0001, 'Normalized Y should be 0');
+  CheckNear(0.0, VecF32x4Extract(n, 2), 0.0001, 'Normalized Z should be 0');
+  CheckNear(0.0, VecF32x4Extract(n, 3), 0.0001, 'Normalized W should be 0');
   
   // Check length of normalized vector is 1
   len := VecF32x4Length(n);
-  AssertEquals('Length of normalized vector should be 1', 1.0, len, 0.0001);
+  CheckNear(1.0, len, 0.0001, 'Length of normalized vector should be 1');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF32x3_Normalize;
@@ -10006,13 +9921,13 @@ begin
   a := VecF32x4Load(@arr[0]);
   n := VecF32x3Normalize(a);
   
-  AssertEquals('Normalized X should be 0.6', 0.6, VecF32x4Extract(n, 0), 0.0001);
-  AssertEquals('Normalized Y should be 0.8', 0.8, VecF32x4Extract(n, 1), 0.0001);
-  AssertEquals('Normalized Z should be 0', 0.0, VecF32x4Extract(n, 2), 0.0001);
+  CheckNear(0.6, VecF32x4Extract(n, 0), 0.0001, 'Normalized X should be 0.6');
+  CheckNear(0.8, VecF32x4Extract(n, 1), 0.0001, 'Normalized Y should be 0.8');
+  CheckNear(0.0, VecF32x4Extract(n, 2), 0.0001, 'Normalized Z should be 0');
   
   // Check 3D length of normalized vector is 1
   len := VecF32x3Length(n);
-  AssertEquals('Length of normalized 3D vector should be 1', 1.0, len, 0.0001);
+  CheckNear(1.0, len, 0.0001, 'Length of normalized 3D vector should be 1');
 end;
 
 // ✅ F64x2 扩展函数测试 (2026-02-05)
@@ -10027,15 +9942,15 @@ begin
   a.d[1] := -2.3;
   r := VecF64x2Floor(a);
 
-  AssertEquals('Floor(2.7) should be 2', 2.0, r.d[0], 0.0001);
-  AssertEquals('Floor(-2.3) should be -3', -3.0, r.d[1], 0.0001);
+  CheckNear(2.0, r.d[0], 0.0001, 'Floor(2.7) should be 2');
+  CheckNear(-3.0, r.d[1], 0.0001, 'Floor(-2.3) should be -3');
 
   // Test with integers (should not change)
   a.d[0] := 5.0;
   a.d[1] := -7.0;
   r := VecF64x2Floor(a);
-  AssertEquals('Floor(5.0) should be 5', 5.0, r.d[0], 0.0001);
-  AssertEquals('Floor(-7.0) should be -7', -7.0, r.d[1], 0.0001);
+  CheckNear(5.0, r.d[0], 0.0001, 'Floor(5.0) should be 5');
+  CheckNear(-7.0, r.d[1], 0.0001, 'Floor(-7.0) should be -7');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF64x2_Ceil;
@@ -10047,15 +9962,15 @@ begin
   a.d[1] := -2.7;
   r := VecF64x2Ceil(a);
 
-  AssertEquals('Ceil(2.3) should be 3', 3.0, r.d[0], 0.0001);
-  AssertEquals('Ceil(-2.7) should be -2', -2.0, r.d[1], 0.0001);
+  CheckNear(3.0, r.d[0], 0.0001, 'Ceil(2.3) should be 3');
+  CheckNear(-2.0, r.d[1], 0.0001, 'Ceil(-2.7) should be -2');
 
   // Test with integers
   a.d[0] := 5.0;
   a.d[1] := -7.0;
   r := VecF64x2Ceil(a);
-  AssertEquals('Ceil(5.0) should be 5', 5.0, r.d[0], 0.0001);
-  AssertEquals('Ceil(-7.0) should be -7', -7.0, r.d[1], 0.0001);
+  CheckNear(5.0, r.d[0], 0.0001, 'Ceil(5.0) should be 5');
+  CheckNear(-7.0, r.d[1], 0.0001, 'Ceil(-7.0) should be -7');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF64x2_Round;
@@ -10067,15 +9982,15 @@ begin
   a.d[1] := 2.6;
   r := VecF64x2Round(a);
 
-  AssertEquals('Round(2.4) should be 2', 2.0, r.d[0], 0.0001);
-  AssertEquals('Round(2.6) should be 3', 3.0, r.d[1], 0.0001);
+  CheckNear(2.0, r.d[0], 0.0001, 'Round(2.4) should be 2');
+  CheckNear(3.0, r.d[1], 0.0001, 'Round(2.6) should be 3');
 
   // Test with negative values
   a.d[0] := -2.4;
   a.d[1] := -2.6;
   r := VecF64x2Round(a);
-  AssertEquals('Round(-2.4) should be -2', -2.0, r.d[0], 0.0001);
-  AssertEquals('Round(-2.6) should be -3', -3.0, r.d[1], 0.0001);
+  CheckNear(-2.0, r.d[0], 0.0001, 'Round(-2.4) should be -2');
+  CheckNear(-3.0, r.d[1], 0.0001, 'Round(-2.6) should be -3');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF64x2_Trunc;
@@ -10087,15 +10002,15 @@ begin
   a.d[1] := -2.9;
   r := VecF64x2Trunc(a);
 
-  AssertEquals('Trunc(2.9) should be 2', 2.0, r.d[0], 0.0001);
-  AssertEquals('Trunc(-2.9) should be -2', -2.0, r.d[1], 0.0001);
+  CheckNear(2.0, r.d[0], 0.0001, 'Trunc(2.9) should be 2');
+  CheckNear(-2.0, r.d[1], 0.0001, 'Trunc(-2.9) should be -2');
 
   // Test boundary values
   a.d[0] := 0.999;
   a.d[1] := -0.999;
   r := VecF64x2Trunc(a);
-  AssertEquals('Trunc(0.999) should be 0', 0.0, r.d[0], 0.0001);
-  AssertEquals('Trunc(-0.999) should be 0', 0.0, r.d[1], 0.0001);
+  CheckNear(0.0, r.d[0], 0.0001, 'Trunc(0.999) should be 0');
+  CheckNear(0.0, r.d[1], 0.0001, 'Trunc(-0.999) should be 0');
 end;
 
 procedure TTestCase_VectorOps.Test_VecF64x2_Fma;
@@ -10109,8 +10024,8 @@ begin
   c.d[0] := 4.0; c.d[1] := 2.0;
   r := VecF64x2Fma(a, b, c);
 
-  AssertEquals('FMA(2.0, 3.0, 4.0) should be 10', 10.0, r.d[0], 0.0001);
-  AssertEquals('FMA(1.5, 4.0, 2.0) should be 8', 8.0, r.d[1], 0.0001);
+  CheckNear(10.0, r.d[0], 0.0001, 'FMA(2.0, 3.0, 4.0) should be 10');
+  CheckNear(8.0, r.d[1], 0.0001, 'FMA(1.5, 4.0, 2.0) should be 8');
 
   // Test with negative values
   a.d[0] := -2.0; a.d[1] := 3.0;
@@ -10118,8 +10033,8 @@ begin
   c.d[0] := 10.0; c.d[1] := 10.0;
   r := VecF64x2Fma(a, b, c);
 
-  AssertEquals('FMA(-2.0, 3.0, 10.0) should be 4', 4.0, r.d[0], 0.0001);
-  AssertEquals('FMA(3.0, -2.0, 10.0) should be 4', 4.0, r.d[1], 0.0001);
+  CheckNear(4.0, r.d[0], 0.0001, 'FMA(-2.0, 3.0, 10.0) should be 4');
+  CheckNear(4.0, r.d[1], 0.0001, 'FMA(3.0, -2.0, 10.0) should be 4');
 end;
 
 { TTestCase_IntegerFacadeGuards }
@@ -10140,10 +10055,10 @@ begin
 
   LResult := VecI32x4AndNot(LVecA, LVecB);
 
-  AssertEquals('VecI32x4AndNot lane 0', UInt32($F0F0F0F0), UInt32(LResult.i[0]));
-  AssertEquals('VecI32x4AndNot lane 1', UInt32(0), UInt32(LResult.i[1]));
-  AssertEquals('VecI32x4AndNot lane 2', UInt32($FFFFFFFF), UInt32(LResult.i[2]));
-  AssertEquals('VecI32x4AndNot lane 3', UInt32($55555555), UInt32(LResult.i[3]));
+  CheckEqual(UInt32($F0F0F0F0), UInt32(LResult.i[0]), 'VecI32x4AndNot lane 0');
+  CheckEqual(UInt32(0), UInt32(LResult.i[1]), 'VecI32x4AndNot lane 1');
+  CheckEqual(UInt32($FFFFFFFF), UInt32(LResult.i[2]), 'VecI32x4AndNot lane 2');
+  CheckEqual(UInt32($55555555), UInt32(LResult.i[3]), 'VecI32x4AndNot lane 3');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI32x4_Compare_Basic;
@@ -10168,12 +10083,12 @@ begin
   LMaskGe := VecI32x4CmpGe(LVecA, LVecB);
   LMaskNe := VecI32x4CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI32x4CmpEq mask', Integer(TMask4($5)), Integer(LMaskEq));
-  AssertEquals('VecI32x4CmpLt mask', Integer(TMask4($2)), Integer(LMaskLt));
-  AssertEquals('VecI32x4CmpGt mask', Integer(TMask4($8)), Integer(LMaskGt));
-  AssertEquals('VecI32x4CmpLe mask', Integer(TMask4($7)), Integer(LMaskLe));
-  AssertEquals('VecI32x4CmpGe mask', Integer(TMask4($D)), Integer(LMaskGe));
-  AssertEquals('VecI32x4CmpNe mask', Integer(TMask4($A)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask4($5)), Integer(LMaskEq), 'VecI32x4CmpEq mask');
+  CheckEqual(Integer(TMask4($2)), Integer(LMaskLt), 'VecI32x4CmpLt mask');
+  CheckEqual(Integer(TMask4($8)), Integer(LMaskGt), 'VecI32x4CmpGt mask');
+  CheckEqual(Integer(TMask4($7)), Integer(LMaskLe), 'VecI32x4CmpLe mask');
+  CheckEqual(Integer(TMask4($D)), Integer(LMaskGe), 'VecI32x4CmpGe mask');
+  CheckEqual(Integer(TMask4($A)), Integer(LMaskNe), 'VecI32x4CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI32x4_RemainingOps_Basic;
@@ -10215,52 +10130,43 @@ begin
   LShiftRightResult := VecI32x4ShiftRight(LVecA, C_SHIFT_RIGHT);
   LShiftRightArithResult := VecI32x4ShiftRightArith(LVecA, C_SHIFT_RIGHT_ARITH);
 
-  AssertEquals('VecI32x4Extract lane 3', LVecA.i[3], VecI32x4Extract(LVecA, 3));
+  CheckEqual(LVecA.i[3], VecI32x4Extract(LVecA, 3), 'VecI32x4Extract lane 3');
   LInserted := VecI32x4Insert(LVecA, 999, 1);
-  AssertEquals('VecI32x4Insert lane 1', 999, LInserted.i[1]);
-  AssertEquals('VecI32x4Insert keep lane 0', LVecA.i[0], LInserted.i[0]);
-  AssertEquals('VecI32x4Insert keep lane 2', LVecA.i[2], LInserted.i[2]);
+  CheckEqual(999, LInserted.i[1], 'VecI32x4Insert lane 1');
+  CheckEqual(LVecA.i[0], LInserted.i[0], 'VecI32x4Insert keep lane 0');
+  CheckEqual(LVecA.i[2], LInserted.i[2], 'VecI32x4Insert keep lane 2');
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI32x4Add lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]));
-    AssertEquals('VecI32x4Sub lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]), 'VecI32x4Add lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]), 'VecI32x4Sub lane ' + IntToStr(LIndex));
 
     LExpectedMul := UInt32(Int64(LVecA.i[LIndex]) * Int64(LVecB.i[LIndex]));
-    AssertEquals('VecI32x4Mul lane ' + IntToStr(LIndex), LExpectedMul, UInt32(LMulResult.i[LIndex]));
+    CheckEqual(LExpectedMul, UInt32(LMulResult.i[LIndex]), 'VecI32x4Mul lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x4And lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]));
-    AssertEquals('VecI32x4Or lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]));
-    AssertEquals('VecI32x4Xor lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]));
-    AssertEquals('VecI32x4Not lane ' + IntToStr(LIndex),
-      UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]), 'VecI32x4And lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]), 'VecI32x4Or lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]), 'VecI32x4Xor lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]), 'VecI32x4Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI32x4Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI32x4Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x4Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI32x4Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI32x4Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI32x4Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x4Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI32x4Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x4ShiftLeft lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI32x4ShiftRight lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]), 'VecI32x4ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]), 'VecI32x4ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := not Int32(UInt32(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH)
     else
       LExpectedSar := Int32(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI32x4ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI32x4ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10301,7 +10207,7 @@ begin
   for LIndex := 0 to High(LResult.i) do
   begin
     LExpected := UInt32(not LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]);
-    AssertEquals('VecI32x8AndNot lane ' + IntToStr(LIndex), LExpected, UInt32(LResult.i[LIndex]));
+    CheckEqual(LExpected, UInt32(LResult.i[LIndex]), 'VecI32x8AndNot lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10339,12 +10245,12 @@ begin
   LMaskGe := VecI32x8CmpGe(LVecA, LVecB);
   LMaskNe := VecI32x8CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI32x8CmpEq mask', Integer(TMask8($49)), Integer(LMaskEq));
-  AssertEquals('VecI32x8CmpLt mask', Integer(TMask8($92)), Integer(LMaskLt));
-  AssertEquals('VecI32x8CmpGt mask', Integer(TMask8($24)), Integer(LMaskGt));
-  AssertEquals('VecI32x8CmpLe mask', Integer(TMask8($DB)), Integer(LMaskLe));
-  AssertEquals('VecI32x8CmpGe mask', Integer(TMask8($6D)), Integer(LMaskGe));
-  AssertEquals('VecI32x8CmpNe mask', Integer(TMask8($B6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask8($49)), Integer(LMaskEq), 'VecI32x8CmpEq mask');
+  CheckEqual(Integer(TMask8($92)), Integer(LMaskLt), 'VecI32x8CmpLt mask');
+  CheckEqual(Integer(TMask8($24)), Integer(LMaskGt), 'VecI32x8CmpGt mask');
+  CheckEqual(Integer(TMask8($DB)), Integer(LMaskLe), 'VecI32x8CmpLe mask');
+  CheckEqual(Integer(TMask8($6D)), Integer(LMaskGe), 'VecI32x8CmpGe mask');
+  CheckEqual(Integer(TMask8($B6)), Integer(LMaskNe), 'VecI32x8CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI32x8_RemainingOps_Basic;
@@ -10400,52 +10306,43 @@ begin
   LShiftRightResult := VecI32x8ShiftRight(LVecA, C_SHIFT_RIGHT);
   LShiftRightArithResult := VecI32x8ShiftRightArith(LVecA, C_SHIFT_RIGHT_ARITH);
 
-  AssertEquals('VecI32x8Extract lane 6', LVecA.i[6], VecI32x8Extract(LVecA, 6));
+  CheckEqual(LVecA.i[6], VecI32x8Extract(LVecA, 6), 'VecI32x8Extract lane 6');
   LInserted := VecI32x8Insert(LVecA, -2026, 5);
-  AssertEquals('VecI32x8Insert lane 5', -2026, LInserted.i[5]);
-  AssertEquals('VecI32x8Insert keep lane 4', LVecA.i[4], LInserted.i[4]);
-  AssertEquals('VecI32x8Insert keep lane 6', LVecA.i[6], LInserted.i[6]);
+  CheckEqual(-2026, LInserted.i[5], 'VecI32x8Insert lane 5');
+  CheckEqual(LVecA.i[4], LInserted.i[4], 'VecI32x8Insert keep lane 4');
+  CheckEqual(LVecA.i[6], LInserted.i[6], 'VecI32x8Insert keep lane 6');
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI32x8Add lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]));
-    AssertEquals('VecI32x8Sub lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]), 'VecI32x8Add lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]), 'VecI32x8Sub lane ' + IntToStr(LIndex));
 
     LExpectedMul := UInt32(Int64(LVecA.i[LIndex]) * Int64(LVecB.i[LIndex]));
-    AssertEquals('VecI32x8Mul lane ' + IntToStr(LIndex), LExpectedMul, UInt32(LMulResult.i[LIndex]));
+    CheckEqual(LExpectedMul, UInt32(LMulResult.i[LIndex]), 'VecI32x8Mul lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x8And lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]));
-    AssertEquals('VecI32x8Or lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]));
-    AssertEquals('VecI32x8Xor lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]));
-    AssertEquals('VecI32x8Not lane ' + IntToStr(LIndex),
-      UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]), 'VecI32x8And lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]), 'VecI32x8Or lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]), 'VecI32x8Xor lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]), 'VecI32x8Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI32x8Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI32x8Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x8Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI32x8Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI32x8Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI32x8Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x8Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI32x8Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x8ShiftLeft lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI32x8ShiftRight lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]), 'VecI32x8ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]), 'VecI32x8ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := not Int32(UInt32(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH)
     else
       LExpectedSar := Int32(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI32x8ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI32x8ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10461,8 +10358,8 @@ begin
 
   LResult := VecI64x2AndNot(LVecA, LVecB);
 
-  AssertEquals('VecI64x2AndNot lane 0', QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]));
-  AssertEquals('VecI64x2AndNot lane 1', QWord(0), QWord(LResult.i[1]));
+  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x2AndNot lane 0');
+  CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x2AndNot lane 1');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x2_Compare_Basic;
@@ -10482,12 +10379,12 @@ begin
   LMaskGe := VecI64x2CmpGe(LVecA, LVecB);
   LMaskNe := VecI64x2CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI64x2CmpEq case1', Integer(TMask2($1)), Integer(LMaskEq));
-  AssertEquals('VecI64x2CmpLt case1', Integer(TMask2($2)), Integer(LMaskLt));
-  AssertEquals('VecI64x2CmpGt case1', Integer(TMask2($0)), Integer(LMaskGt));
-  AssertEquals('VecI64x2CmpLe case1', Integer(TMask2($3)), Integer(LMaskLe));
-  AssertEquals('VecI64x2CmpGe case1', Integer(TMask2($1)), Integer(LMaskGe));
-  AssertEquals('VecI64x2CmpNe case1', Integer(TMask2($2)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskEq), 'VecI64x2CmpEq case1');
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskLt), 'VecI64x2CmpLt case1');
+  CheckEqual(Integer(TMask2($0)), Integer(LMaskGt), 'VecI64x2CmpGt case1');
+  CheckEqual(Integer(TMask2($3)), Integer(LMaskLe), 'VecI64x2CmpLe case1');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskGe), 'VecI64x2CmpGe case1');
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskNe), 'VecI64x2CmpNe case1');
 
   LVecA.i[0] := 100;
   LVecA.i[1] := -10;
@@ -10501,12 +10398,12 @@ begin
   LMaskGe := VecI64x2CmpGe(LVecA, LVecB);
   LMaskNe := VecI64x2CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI64x2CmpEq case2', Integer(TMask2($2)), Integer(LMaskEq));
-  AssertEquals('VecI64x2CmpLt case2', Integer(TMask2($0)), Integer(LMaskLt));
-  AssertEquals('VecI64x2CmpGt case2', Integer(TMask2($1)), Integer(LMaskGt));
-  AssertEquals('VecI64x2CmpLe case2', Integer(TMask2($2)), Integer(LMaskLe));
-  AssertEquals('VecI64x2CmpGe case2', Integer(TMask2($3)), Integer(LMaskGe));
-  AssertEquals('VecI64x2CmpNe case2', Integer(TMask2($1)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskEq), 'VecI64x2CmpEq case2');
+  CheckEqual(Integer(TMask2($0)), Integer(LMaskLt), 'VecI64x2CmpLt case2');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskGt), 'VecI64x2CmpGt case2');
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskLe), 'VecI64x2CmpLe case2');
+  CheckEqual(Integer(TMask2($3)), Integer(LMaskGe), 'VecI64x2CmpGe case2');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskNe), 'VecI64x2CmpNe case2');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x2_RemainingOps_Basic;
@@ -10542,47 +10439,38 @@ begin
   LShiftRightResult := VecI64x2ShiftRight(LVecA, C_SHIFT_RIGHT);
   LShiftRightArithResult := VecI64x2ShiftRightArith(LVecA, C_SHIFT_RIGHT_ARITH);
 
-  AssertEquals('VecI64x2Extract lane 1', LVecA.i[1], VecI64x2Extract(LVecA, 1));
+  CheckEqual(LVecA.i[1], VecI64x2Extract(LVecA, 1), 'VecI64x2Extract lane 1');
   LInserted := VecI64x2Insert(LVecA, Int64(55555), 0);
-  AssertEquals('VecI64x2Insert lane 0', Int64(55555), LInserted.i[0]);
-  AssertEquals('VecI64x2Insert keep lane 1', LVecA.i[1], LInserted.i[1]);
+  CheckEqual(Int64(55555), LInserted.i[0], 'VecI64x2Insert lane 0');
+  CheckEqual(LVecA.i[1], LInserted.i[1], 'VecI64x2Insert keep lane 1');
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI64x2Add lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]));
-    AssertEquals('VecI64x2Sub lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]));
-    AssertEquals('VecI64x2And lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]));
-    AssertEquals('VecI64x2Or lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]));
-    AssertEquals('VecI64x2Xor lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]));
-    AssertEquals('VecI64x2Not lane ' + IntToStr(LIndex),
-      QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]));
+    CheckEqual(QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]), 'VecI64x2Add lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]), 'VecI64x2Sub lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]), 'VecI64x2And lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]), 'VecI64x2Or lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]), 'VecI64x2Xor lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]), 'VecI64x2Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI64x2Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI64x2Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI64x2Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI64x2Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI64x2Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI64x2Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI64x2Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI64x2Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI64x2ShiftLeft lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) shl C_SHIFT_LEFT, QWord(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI64x2ShiftRight lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, QWord(LShiftRightResult.i[LIndex]));
+    CheckEqual(QWord(LVecA.i[LIndex]) shl C_SHIFT_LEFT, QWord(LShiftLeftResult.i[LIndex]), 'VecI64x2ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, QWord(LShiftRightResult.i[LIndex]), 'VecI64x2ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := not Int64(QWord(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH)
     else
       LExpectedSar := Int64(QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI64x2ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI64x2ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10602,10 +10490,10 @@ begin
 
   LResult := VecI64x4AndNot(LVecA, LVecB);
 
-  AssertEquals('VecI64x4AndNot lane 0', QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]));
-  AssertEquals('VecI64x4AndNot lane 1', QWord(0), QWord(LResult.i[1]));
-  AssertEquals('VecI64x4AndNot lane 2', QWord($3333333333333333), QWord(LResult.i[2]));
-  AssertEquals('VecI64x4AndNot lane 3', QWord($4444444444444444), QWord(LResult.i[3]));
+  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x4AndNot lane 0');
+  CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x4AndNot lane 1');
+  CheckEqual(QWord($3333333333333333), QWord(LResult.i[2]), 'VecI64x4AndNot lane 2');
+  CheckEqual(QWord($4444444444444444), QWord(LResult.i[3]), 'VecI64x4AndNot lane 3');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x4_Compare_Basic;
@@ -10630,12 +10518,12 @@ begin
   LMaskGe := VecI64x4CmpGe(LVecA, LVecB);
   LMaskNe := VecI64x4CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI64x4CmpEq mask', Integer(TMask4($9)), Integer(LMaskEq));
-  AssertEquals('VecI64x4CmpLt mask', Integer(TMask4($2)), Integer(LMaskLt));
-  AssertEquals('VecI64x4CmpGt mask', Integer(TMask4($4)), Integer(LMaskGt));
-  AssertEquals('VecI64x4CmpLe mask', Integer(TMask4($B)), Integer(LMaskLe));
-  AssertEquals('VecI64x4CmpGe mask', Integer(TMask4($D)), Integer(LMaskGe));
-  AssertEquals('VecI64x4CmpNe mask', Integer(TMask4($6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask4($9)), Integer(LMaskEq), 'VecI64x4CmpEq mask');
+  CheckEqual(Integer(TMask4($2)), Integer(LMaskLt), 'VecI64x4CmpLt mask');
+  CheckEqual(Integer(TMask4($4)), Integer(LMaskGt), 'VecI64x4CmpGt mask');
+  CheckEqual(Integer(TMask4($B)), Integer(LMaskLe), 'VecI64x4CmpLe mask');
+  CheckEqual(Integer(TMask4($D)), Integer(LMaskGe), 'VecI64x4CmpGe mask');
+  CheckEqual(Integer(TMask4($6)), Integer(LMaskNe), 'VecI64x4CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x4_RemainingOps_Basic;
@@ -10673,29 +10561,20 @@ begin
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI64x4Add lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]));
-    AssertEquals('VecI64x4Sub lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]));
-    AssertEquals('VecI64x4And lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]));
-    AssertEquals('VecI64x4Or lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]));
-    AssertEquals('VecI64x4Xor lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]));
-    AssertEquals('VecI64x4Not lane ' + IntToStr(LIndex),
-      QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]));
-    AssertEquals('VecI64x4ShiftLeft lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) shl C_SHIFT_LEFT, QWord(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI64x4ShiftRight lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, QWord(LShiftRightResult.i[LIndex]));
+    CheckEqual(QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]), 'VecI64x4Add lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]), 'VecI64x4Sub lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]), 'VecI64x4And lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]), 'VecI64x4Or lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]), 'VecI64x4Xor lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]), 'VecI64x4Not lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) shl C_SHIFT_LEFT, QWord(LShiftLeftResult.i[LIndex]), 'VecI64x4ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, QWord(LShiftRightResult.i[LIndex]), 'VecI64x4ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := not Int64(QWord(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH)
     else
       LExpectedSar := Int64(QWord(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI64x4ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI64x4ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10711,8 +10590,8 @@ begin
 
   LResult := VecU64x2AndNot(LVecA, LVecB);
 
-  AssertEquals('VecU64x2AndNot lane 0', QWord($F0F0F0F0F0F0F0F0), LResult.u[0]);
-  AssertEquals('VecU64x2AndNot lane 1', QWord($123456789ABCDEF0), LResult.u[1]);
+  CheckEqual(QWord($F0F0F0F0F0F0F0F0), LResult.u[0], 'VecU64x2AndNot lane 0');
+  CheckEqual(QWord($123456789ABCDEF0), LResult.u[1], 'VecU64x2AndNot lane 1');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x2_Compare_Unsigned;
@@ -10729,9 +10608,9 @@ begin
   LMaskLt := VecU64x2CmpLt(LVecA, LVecB);
   LMaskGt := VecU64x2CmpGt(LVecA, LVecB);
 
-  AssertEquals('VecU64x2CmpEq case1', Integer(TMask2($2)), Integer(LMaskEq));
-  AssertEquals('VecU64x2CmpLt case1', Integer(TMask2($1)), Integer(LMaskLt));
-  AssertEquals('VecU64x2CmpGt case1', Integer(TMask2($0)), Integer(LMaskGt));
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskEq), 'VecU64x2CmpEq case1');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskLt), 'VecU64x2CmpLt case1');
+  CheckEqual(Integer(TMask2($0)), Integer(LMaskGt), 'VecU64x2CmpGt case1');
 
   LVecA.u[0] := High(QWord);
   LVecA.u[1] := 0;
@@ -10742,9 +10621,9 @@ begin
   LMaskLt := VecU64x2CmpLt(LVecA, LVecB);
   LMaskGt := VecU64x2CmpGt(LVecA, LVecB);
 
-  AssertEquals('VecU64x2CmpEq case2', Integer(TMask2($2)), Integer(LMaskEq));
-  AssertEquals('VecU64x2CmpLt case2', Integer(TMask2($0)), Integer(LMaskLt));
-  AssertEquals('VecU64x2CmpGt case2', Integer(TMask2($1)), Integer(LMaskGt));
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskEq), 'VecU64x2CmpEq case2');
+  CheckEqual(Integer(TMask2($0)), Integer(LMaskLt), 'VecU64x2CmpLt case2');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskGt), 'VecU64x2CmpGt case2');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x2_RemainingOps_Basic;
@@ -10772,28 +10651,22 @@ begin
 
   for LIndex := 0 to High(LVecA.u) do
   begin
-    AssertEquals('VecU64x2Add lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex]);
-    AssertEquals('VecU64x2Sub lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex]);
-    AssertEquals('VecU64x2And lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex]);
-    AssertEquals('VecU64x2Or lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex]);
-    AssertEquals('VecU64x2Xor lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex]);
-    AssertEquals('VecU64x2Not lane ' + IntToStr(LIndex),
-      not LVecA.u[LIndex], LNotResult.u[LIndex]);
+    CheckEqual(LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex], 'VecU64x2Add lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex], 'VecU64x2Sub lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex], 'VecU64x2And lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex], 'VecU64x2Or lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex], 'VecU64x2Xor lane ' + IntToStr(LIndex));
+    CheckEqual(not LVecA.u[LIndex], LNotResult.u[LIndex], 'VecU64x2Not lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] < LVecB.u[LIndex] then
-      AssertEquals('VecU64x2Min lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMinResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMinResult.u[LIndex], 'VecU64x2Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU64x2Min lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMinResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMinResult.u[LIndex], 'VecU64x2Min lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] > LVecB.u[LIndex] then
-      AssertEquals('VecU64x2Max lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMaxResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMaxResult.u[LIndex], 'VecU64x2Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU64x2Max lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMaxResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMaxResult.u[LIndex], 'VecU64x2Max lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10834,7 +10707,7 @@ begin
   for LIndex := 0 to High(LResult.i) do
   begin
     LExpected := UInt32(not LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]);
-    AssertEquals('VecI32x16AndNot lane ' + IntToStr(LIndex), LExpected, UInt32(LResult.i[LIndex]));
+    CheckEqual(LExpected, UInt32(LResult.i[LIndex]), 'VecI32x16AndNot lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -10872,12 +10745,12 @@ begin
   LMaskGe := nextpas.core.simd.VecI32x16CmpGe(LVecA, LVecB);
   LMaskNe := nextpas.core.simd.VecI32x16CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI32x16CmpEq mask', LongInt(TMask16($9249)), LongInt(LMaskEq));
-  AssertEquals('VecI32x16CmpLt mask', LongInt(TMask16($2492)), LongInt(LMaskLt));
-  AssertEquals('VecI32x16CmpGt mask', LongInt(TMask16($4924)), LongInt(LMaskGt));
-  AssertEquals('VecI32x16CmpLe mask', LongInt(TMask16($B6DB)), LongInt(LMaskLe));
-  AssertEquals('VecI32x16CmpGe mask', LongInt(TMask16($DB6D)), LongInt(LMaskGe));
-  AssertEquals('VecI32x16CmpNe mask', LongInt(TMask16($6DB6)), LongInt(LMaskNe));
+  CheckEqual(LongInt(TMask16($9249)), LongInt(LMaskEq), 'VecI32x16CmpEq mask');
+  CheckEqual(LongInt(TMask16($2492)), LongInt(LMaskLt), 'VecI32x16CmpLt mask');
+  CheckEqual(LongInt(TMask16($4924)), LongInt(LMaskGt), 'VecI32x16CmpGt mask');
+  CheckEqual(LongInt(TMask16($B6DB)), LongInt(LMaskLe), 'VecI32x16CmpLe mask');
+  CheckEqual(LongInt(TMask16($DB6D)), LongInt(LMaskGe), 'VecI32x16CmpGe mask');
+  CheckEqual(LongInt(TMask16($6DB6)), LongInt(LMaskNe), 'VecI32x16CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI32x16_RemainingOps_Basic;
@@ -10933,52 +10806,43 @@ begin
   LShiftRightResult := VecI32x16ShiftRight(LVecA, C_SHIFT_RIGHT);
   LShiftRightArithResult := VecI32x16ShiftRightArith(LVecA, C_SHIFT_RIGHT_ARITH);
 
-  AssertEquals('VecI32x16Extract lane 6', LVecA.i[6], VecI32x16Extract(LVecA, 6));
+  CheckEqual(LVecA.i[6], VecI32x16Extract(LVecA, 6), 'VecI32x16Extract lane 6');
   LInserted := VecI32x16Insert(LVecA, -31415926, 9);
-  AssertEquals('VecI32x16Insert lane 9', -31415926, LInserted.i[9]);
-  AssertEquals('VecI32x16Insert keep lane 8', LVecA.i[8], LInserted.i[8]);
-  AssertEquals('VecI32x16Insert keep lane 10', LVecA.i[10], LInserted.i[10]);
+  CheckEqual(-31415926, LInserted.i[9], 'VecI32x16Insert lane 9');
+  CheckEqual(LVecA.i[8], LInserted.i[8], 'VecI32x16Insert keep lane 8');
+  CheckEqual(LVecA.i[10], LInserted.i[10], 'VecI32x16Insert keep lane 10');
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI32x16Add lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]));
-    AssertEquals('VecI32x16Sub lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex] + LVecB.i[LIndex]), UInt32(LAddResult.i[LIndex]), 'VecI32x16Add lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex] - LVecB.i[LIndex]), UInt32(LSubResult.i[LIndex]), 'VecI32x16Sub lane ' + IntToStr(LIndex));
 
     LExpectedMul := UInt32(Int64(LVecA.i[LIndex]) * Int64(LVecB.i[LIndex]));
-    AssertEquals('VecI32x16Mul lane ' + IntToStr(LIndex), LExpectedMul, UInt32(LMulResult.i[LIndex]));
+    CheckEqual(LExpectedMul, UInt32(LMulResult.i[LIndex]), 'VecI32x16Mul lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x16And lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]));
-    AssertEquals('VecI32x16Or lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]));
-    AssertEquals('VecI32x16Xor lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]));
-    AssertEquals('VecI32x16Not lane ' + IntToStr(LIndex),
-      UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) and UInt32(LVecB.i[LIndex]), UInt32(LAndResult.i[LIndex]), 'VecI32x16And lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) or UInt32(LVecB.i[LIndex]), UInt32(LOrResult.i[LIndex]), 'VecI32x16Or lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) xor UInt32(LVecB.i[LIndex]), UInt32(LXorResult.i[LIndex]), 'VecI32x16Xor lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(not LVecA.i[LIndex]), UInt32(LNotResult.i[LIndex]), 'VecI32x16Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI32x16Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI32x16Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x16Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI32x16Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI32x16Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI32x16Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI32x16Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI32x16Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI32x16ShiftLeft lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI32x16ShiftRight lane ' + IntToStr(LIndex),
-      UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shl C_SHIFT_LEFT, UInt32(LShiftLeftResult.i[LIndex]), 'VecI32x16ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, UInt32(LShiftRightResult.i[LIndex]), 'VecI32x16ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := not Int32(UInt32(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH)
     else
       LExpectedSar := Int32(UInt32(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI32x16ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI32x16ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11019,7 +10883,7 @@ begin
   for LIndex := 0 to High(LResult.u) do
   begin
     LExpected := (not LVecA.u[LIndex]) and LVecB.u[LIndex];
-    AssertEquals('VecU32x16AndNot lane ' + IntToStr(LIndex), LExpected, LResult.u[LIndex]);
+    CheckEqual(LExpected, LResult.u[LIndex], 'VecU32x16AndNot lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11057,12 +10921,12 @@ begin
   LMaskGe := VecU32x16CmpGe(LVecA, LVecB);
   LMaskNe := VecU32x16CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecU32x16CmpEq mask', LongInt(TMask16($9249)), LongInt(LMaskEq));
-  AssertEquals('VecU32x16CmpLt mask', LongInt(TMask16($2492)), LongInt(LMaskLt));
-  AssertEquals('VecU32x16CmpGt mask', LongInt(TMask16($4924)), LongInt(LMaskGt));
-  AssertEquals('VecU32x16CmpLe mask', LongInt(TMask16($B6DB)), LongInt(LMaskLe));
-  AssertEquals('VecU32x16CmpGe mask', LongInt(TMask16($DB6D)), LongInt(LMaskGe));
-  AssertEquals('VecU32x16CmpNe mask', LongInt(TMask16($6DB6)), LongInt(LMaskNe));
+  CheckEqual(LongInt(TMask16($9249)), LongInt(LMaskEq), 'VecU32x16CmpEq mask');
+  CheckEqual(LongInt(TMask16($2492)), LongInt(LMaskLt), 'VecU32x16CmpLt mask');
+  CheckEqual(LongInt(TMask16($4924)), LongInt(LMaskGt), 'VecU32x16CmpGt mask');
+  CheckEqual(LongInt(TMask16($B6DB)), LongInt(LMaskLe), 'VecU32x16CmpLe mask');
+  CheckEqual(LongInt(TMask16($DB6D)), LongInt(LMaskGe), 'VecU32x16CmpGe mask');
+  CheckEqual(LongInt(TMask16($6DB6)), LongInt(LMaskNe), 'VecU32x16CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU32x16_RemainingOps_Basic;
@@ -11112,37 +10976,29 @@ begin
 
   for LIndex := 0 to High(LVecA.u) do
   begin
-    AssertEquals('VecU32x16Add lane ' + IntToStr(LIndex),
-      UInt32(LVecA.u[LIndex] + LVecB.u[LIndex]), LAddResult.u[LIndex]);
-    AssertEquals('VecU32x16Sub lane ' + IntToStr(LIndex),
-      UInt32(LVecA.u[LIndex] - LVecB.u[LIndex]), LSubResult.u[LIndex]);
+    CheckEqual(UInt32(LVecA.u[LIndex] + LVecB.u[LIndex]), LAddResult.u[LIndex], 'VecU32x16Add lane ' + IntToStr(LIndex));
+    CheckEqual(UInt32(LVecA.u[LIndex] - LVecB.u[LIndex]), LSubResult.u[LIndex], 'VecU32x16Sub lane ' + IntToStr(LIndex));
 
     LExpectedMul := UInt32(QWord(LVecA.u[LIndex]) * QWord(LVecB.u[LIndex]));
-    AssertEquals('VecU32x16Mul lane ' + IntToStr(LIndex), LExpectedMul, LMulResult.u[LIndex]);
+    CheckEqual(LExpectedMul, LMulResult.u[LIndex], 'VecU32x16Mul lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecU32x16And lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex]);
-    AssertEquals('VecU32x16Or lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex]);
-    AssertEquals('VecU32x16Xor lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex]);
-    AssertEquals('VecU32x16Not lane ' + IntToStr(LIndex),
-      not LVecA.u[LIndex], LNotResult.u[LIndex]);
+    CheckEqual(LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex], 'VecU32x16And lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex], 'VecU32x16Or lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex], 'VecU32x16Xor lane ' + IntToStr(LIndex));
+    CheckEqual(not LVecA.u[LIndex], LNotResult.u[LIndex], 'VecU32x16Not lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] < LVecB.u[LIndex] then
-      AssertEquals('VecU32x16Min lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMinResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMinResult.u[LIndex], 'VecU32x16Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU32x16Min lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMinResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMinResult.u[LIndex], 'VecU32x16Min lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] > LVecB.u[LIndex] then
-      AssertEquals('VecU32x16Max lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMaxResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMaxResult.u[LIndex], 'VecU32x16Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU32x16Max lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMaxResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMaxResult.u[LIndex], 'VecU32x16Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecU32x16ShiftLeft lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex]);
-    AssertEquals('VecU32x16ShiftRight lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex]);
+    CheckEqual(LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex], 'VecU32x16ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex], 'VecU32x16ShiftRight lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11180,12 +11036,12 @@ begin
   LMaskGe := VecU64x4CmpGe(LVecA, LVecB);
   LMaskNe := VecU64x4CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecU64x4CmpEq mask', Integer(TMask4($9)), Integer(LMaskEq));
-  AssertEquals('VecU64x4CmpLt mask', Integer(TMask4($2)), Integer(LMaskLt));
-  AssertEquals('VecU64x4CmpGt mask', Integer(TMask4($4)), Integer(LMaskGt));
-  AssertEquals('VecU64x4CmpLe mask', Integer(TMask4($B)), Integer(LMaskLe));
-  AssertEquals('VecU64x4CmpGe mask', Integer(TMask4($D)), Integer(LMaskGe));
-  AssertEquals('VecU64x4CmpNe mask', Integer(TMask4($6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask4($9)), Integer(LMaskEq), 'VecU64x4CmpEq mask');
+  CheckEqual(Integer(TMask4($2)), Integer(LMaskLt), 'VecU64x4CmpLt mask');
+  CheckEqual(Integer(TMask4($4)), Integer(LMaskGt), 'VecU64x4CmpGt mask');
+  CheckEqual(Integer(TMask4($B)), Integer(LMaskLe), 'VecU64x4CmpLe mask');
+  CheckEqual(Integer(TMask4($D)), Integer(LMaskGe), 'VecU64x4CmpGe mask');
+  CheckEqual(Integer(TMask4($6)), Integer(LMaskNe), 'VecU64x4CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x4_RemainingOps_Basic;
@@ -11220,22 +11076,14 @@ begin
 
   for LIndex := 0 to High(LVecA.u) do
   begin
-    AssertEquals('VecU64x4Add lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex]);
-    AssertEquals('VecU64x4Sub lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex]);
-    AssertEquals('VecU64x4And lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex]);
-    AssertEquals('VecU64x4Or lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex]);
-    AssertEquals('VecU64x4Xor lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex]);
-    AssertEquals('VecU64x4Not lane ' + IntToStr(LIndex),
-      not LVecA.u[LIndex], LNotResult.u[LIndex]);
-    AssertEquals('VecU64x4ShiftLeft lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex]);
-    AssertEquals('VecU64x4ShiftRight lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex]);
+    CheckEqual(LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex], 'VecU64x4Add lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex], 'VecU64x4Sub lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex], 'VecU64x4And lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex], 'VecU64x4Or lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex], 'VecU64x4Xor lane ' + IntToStr(LIndex));
+    CheckEqual(not LVecA.u[LIndex], LNotResult.u[LIndex], 'VecU64x4Not lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex], 'VecU64x4ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex], 'VecU64x4ShiftRight lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11273,12 +11121,12 @@ begin
   LMaskGe := VecI64x8CmpGe(LVecA, LVecB);
   LMaskNe := VecI64x8CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecI64x8CmpEq mask', Integer(TMask8($49)), Integer(LMaskEq));
-  AssertEquals('VecI64x8CmpLt mask', Integer(TMask8($92)), Integer(LMaskLt));
-  AssertEquals('VecI64x8CmpGt mask', Integer(TMask8($24)), Integer(LMaskGt));
-  AssertEquals('VecI64x8CmpLe mask', Integer(TMask8($DB)), Integer(LMaskLe));
-  AssertEquals('VecI64x8CmpGe mask', Integer(TMask8($6D)), Integer(LMaskGe));
-  AssertEquals('VecI64x8CmpNe mask', Integer(TMask8($B6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask8($49)), Integer(LMaskEq), 'VecI64x8CmpEq mask');
+  CheckEqual(Integer(TMask8($92)), Integer(LMaskLt), 'VecI64x8CmpLt mask');
+  CheckEqual(Integer(TMask8($24)), Integer(LMaskGt), 'VecI64x8CmpGt mask');
+  CheckEqual(Integer(TMask8($DB)), Integer(LMaskLe), 'VecI64x8CmpLe mask');
+  CheckEqual(Integer(TMask8($6D)), Integer(LMaskGe), 'VecI64x8CmpGe mask');
+  CheckEqual(Integer(TMask8($B6)), Integer(LMaskNe), 'VecI64x8CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x8_RemainingOps_Basic;
@@ -11317,18 +11165,12 @@ begin
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI64x8Add lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]));
-    AssertEquals('VecI64x8Sub lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]));
-    AssertEquals('VecI64x8And lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]));
-    AssertEquals('VecI64x8Or lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]));
-    AssertEquals('VecI64x8Xor lane ' + IntToStr(LIndex),
-      QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]));
-    AssertEquals('VecI64x8Not lane ' + IntToStr(LIndex),
-      QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]));
+    CheckEqual(QWord(LVecA.i[LIndex]) + QWord(LVecB.i[LIndex]), QWord(LAddResult.i[LIndex]), 'VecI64x8Add lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) - QWord(LVecB.i[LIndex]), QWord(LSubResult.i[LIndex]), 'VecI64x8Sub lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) and QWord(LVecB.i[LIndex]), QWord(LAndResult.i[LIndex]), 'VecI64x8And lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) or QWord(LVecB.i[LIndex]), QWord(LOrResult.i[LIndex]), 'VecI64x8Or lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(LVecA.i[LIndex]) xor QWord(LVecB.i[LIndex]), QWord(LXorResult.i[LIndex]), 'VecI64x8Xor lane ' + IntToStr(LIndex));
+    CheckEqual(QWord(not LVecA.i[LIndex]), QWord(LNotResult.i[LIndex]), 'VecI64x8Not lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11366,12 +11208,12 @@ begin
   LMaskGe := VecU64x8CmpGe(LVecA, LVecB);
   LMaskNe := VecU64x8CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecU64x8CmpEq mask', Integer(TMask8($49)), Integer(LMaskEq));
-  AssertEquals('VecU64x8CmpLt mask', Integer(TMask8($92)), Integer(LMaskLt));
-  AssertEquals('VecU64x8CmpGt mask', Integer(TMask8($24)), Integer(LMaskGt));
-  AssertEquals('VecU64x8CmpLe mask', Integer(TMask8($DB)), Integer(LMaskLe));
-  AssertEquals('VecU64x8CmpGe mask', Integer(TMask8($6D)), Integer(LMaskGe));
-  AssertEquals('VecU64x8CmpNe mask', Integer(TMask8($B6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask8($49)), Integer(LMaskEq), 'VecU64x8CmpEq mask');
+  CheckEqual(Integer(TMask8($92)), Integer(LMaskLt), 'VecU64x8CmpLt mask');
+  CheckEqual(Integer(TMask8($24)), Integer(LMaskGt), 'VecU64x8CmpGt mask');
+  CheckEqual(Integer(TMask8($DB)), Integer(LMaskLe), 'VecU64x8CmpLe mask');
+  CheckEqual(Integer(TMask8($6D)), Integer(LMaskGe), 'VecU64x8CmpGe mask');
+  CheckEqual(Integer(TMask8($B6)), Integer(LMaskNe), 'VecU64x8CmpNe mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x8_RemainingOps_Basic;
@@ -11416,22 +11258,14 @@ begin
 
   for LIndex := 0 to High(LVecA.u) do
   begin
-    AssertEquals('VecU64x8Add lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex]);
-    AssertEquals('VecU64x8Sub lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex]);
-    AssertEquals('VecU64x8And lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex]);
-    AssertEquals('VecU64x8Or lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex]);
-    AssertEquals('VecU64x8Xor lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex]);
-    AssertEquals('VecU64x8Not lane ' + IntToStr(LIndex),
-      not LVecA.u[LIndex], LNotResult.u[LIndex]);
-    AssertEquals('VecU64x8ShiftLeft lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex]);
-    AssertEquals('VecU64x8ShiftRight lane ' + IntToStr(LIndex),
-      LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex]);
+    CheckEqual(LVecA.u[LIndex] + LVecB.u[LIndex], LAddResult.u[LIndex], 'VecU64x8Add lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] - LVecB.u[LIndex], LSubResult.u[LIndex], 'VecU64x8Sub lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] and LVecB.u[LIndex], LAndResult.u[LIndex], 'VecU64x8And lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] or LVecB.u[LIndex], LOrResult.u[LIndex], 'VecU64x8Or lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] xor LVecB.u[LIndex], LXorResult.u[LIndex], 'VecU64x8Xor lane ' + IntToStr(LIndex));
+    CheckEqual(not LVecA.u[LIndex], LNotResult.u[LIndex], 'VecU64x8Not lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] shl C_SHIFT_LEFT, LShiftLeftResult.u[LIndex], 'VecU64x8ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(LVecA.u[LIndex] shr C_SHIFT_RIGHT, LShiftRightResult.u[LIndex], 'VecU64x8ShiftRight lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11472,7 +11306,7 @@ begin
   for LIndex := 0 to High(LResult.i) do
   begin
     LExpected := Word(not LVecA.i[LIndex]) and Word(LVecB.i[LIndex]);
-    AssertEquals('VecI16x32AndNot lane ' + IntToStr(LIndex), LExpected, Word(LResult.i[LIndex]));
+    CheckEqual(LExpected, Word(LResult.i[LIndex]), 'VecI16x32AndNot lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11519,9 +11353,9 @@ begin
   LMaskLt := VecI16x32CmpLt(LVecA, LVecB);
   LMaskGt := VecI16x32CmpGt(LVecA, LVecB);
 
-  AssertEquals('VecI16x32CmpEq mask', QWord(LExpectedEq), QWord(LMaskEq));
-  AssertEquals('VecI16x32CmpLt mask', QWord(LExpectedLt), QWord(LMaskLt));
-  AssertEquals('VecI16x32CmpGt mask', QWord(LExpectedGt), QWord(LMaskGt));
+  CheckEqual(QWord(LExpectedEq), QWord(LMaskEq), 'VecI16x32CmpEq mask');
+  CheckEqual(QWord(LExpectedLt), QWord(LMaskLt), 'VecI16x32CmpLt mask');
+  CheckEqual(QWord(LExpectedGt), QWord(LMaskGt), 'VecI16x32CmpGt mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI16x32_RemainingOps_Basic;
@@ -11572,40 +11406,31 @@ begin
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI16x32Add lane ' + IntToStr(LIndex),
-      Word(SmallInt(LVecA.i[LIndex] + LVecB.i[LIndex])), Word(LAddResult.i[LIndex]));
-    AssertEquals('VecI16x32Sub lane ' + IntToStr(LIndex),
-      Word(SmallInt(LVecA.i[LIndex] - LVecB.i[LIndex])), Word(LSubResult.i[LIndex]));
-    AssertEquals('VecI16x32And lane ' + IntToStr(LIndex),
-      Word(LVecA.i[LIndex]) and Word(LVecB.i[LIndex]), Word(LAndResult.i[LIndex]));
-    AssertEquals('VecI16x32Or lane ' + IntToStr(LIndex),
-      Word(LVecA.i[LIndex]) or Word(LVecB.i[LIndex]), Word(LOrResult.i[LIndex]));
-    AssertEquals('VecI16x32Xor lane ' + IntToStr(LIndex),
-      Word(LVecA.i[LIndex]) xor Word(LVecB.i[LIndex]), Word(LXorResult.i[LIndex]));
-    AssertEquals('VecI16x32Not lane ' + IntToStr(LIndex),
-      Word(not LVecA.i[LIndex]), Word(LNotResult.i[LIndex]));
+    CheckEqual(Word(SmallInt(LVecA.i[LIndex] + LVecB.i[LIndex])), Word(LAddResult.i[LIndex]), 'VecI16x32Add lane ' + IntToStr(LIndex));
+    CheckEqual(Word(SmallInt(LVecA.i[LIndex] - LVecB.i[LIndex])), Word(LSubResult.i[LIndex]), 'VecI16x32Sub lane ' + IntToStr(LIndex));
+    CheckEqual(Word(LVecA.i[LIndex]) and Word(LVecB.i[LIndex]), Word(LAndResult.i[LIndex]), 'VecI16x32And lane ' + IntToStr(LIndex));
+    CheckEqual(Word(LVecA.i[LIndex]) or Word(LVecB.i[LIndex]), Word(LOrResult.i[LIndex]), 'VecI16x32Or lane ' + IntToStr(LIndex));
+    CheckEqual(Word(LVecA.i[LIndex]) xor Word(LVecB.i[LIndex]), Word(LXorResult.i[LIndex]), 'VecI16x32Xor lane ' + IntToStr(LIndex));
+    CheckEqual(Word(not LVecA.i[LIndex]), Word(LNotResult.i[LIndex]), 'VecI16x32Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI16x32Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI16x32Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI16x32Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI16x32Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI16x32Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI16x32Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI16x32Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI16x32Max lane ' + IntToStr(LIndex));
 
-    AssertEquals('VecI16x32ShiftLeft lane ' + IntToStr(LIndex),
-      Word(Word(LVecA.i[LIndex]) shl C_SHIFT_LEFT), Word(LShiftLeftResult.i[LIndex]));
-    AssertEquals('VecI16x32ShiftRight lane ' + IntToStr(LIndex),
-      Word(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, Word(LShiftRightResult.i[LIndex]));
+    CheckEqual(Word(Word(LVecA.i[LIndex]) shl C_SHIFT_LEFT), Word(LShiftLeftResult.i[LIndex]), 'VecI16x32ShiftLeft lane ' + IntToStr(LIndex));
+    CheckEqual(Word(LVecA.i[LIndex]) shr C_SHIFT_RIGHT, Word(LShiftRightResult.i[LIndex]), 'VecI16x32ShiftRight lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < 0 then
       LExpectedSar := SmallInt(not Word(Word(not LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH))
     else
       LExpectedSar := SmallInt(Word(LVecA.i[LIndex]) shr C_SHIFT_RIGHT_ARITH);
-    AssertEquals('VecI16x32ShiftRightArith lane ' + IntToStr(LIndex),
-      LExpectedSar, LShiftRightArithResult.i[LIndex]);
+    CheckEqual(LExpectedSar, LShiftRightArithResult.i[LIndex], 'VecI16x32ShiftRightArith lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11646,7 +11471,7 @@ begin
   for LIndex := 0 to High(LResult.i) do
   begin
     LExpected := Byte(not LVecA.i[LIndex]) and Byte(LVecB.i[LIndex]);
-    AssertEquals('VecI8x64AndNot lane ' + IntToStr(LIndex), LExpected, Byte(LResult.i[LIndex]));
+    CheckEqual(LExpected, Byte(LResult.i[LIndex]), 'VecI8x64AndNot lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11693,9 +11518,9 @@ begin
   LMaskLt := VecI8x64CmpLt(LVecA, LVecB);
   LMaskGt := VecI8x64CmpGt(LVecA, LVecB);
 
-  AssertEquals('VecI8x64CmpEq mask', QWord(LExpectedEq), QWord(LMaskEq));
-  AssertEquals('VecI8x64CmpLt mask', QWord(LExpectedLt), QWord(LMaskLt));
-  AssertEquals('VecI8x64CmpGt mask', QWord(LExpectedGt), QWord(LMaskGt));
+  CheckEqual(QWord(LExpectedEq), QWord(LMaskEq), 'VecI8x64CmpEq mask');
+  CheckEqual(QWord(LExpectedLt), QWord(LMaskLt), 'VecI8x64CmpLt mask');
+  CheckEqual(QWord(LExpectedGt), QWord(LMaskGt), 'VecI8x64CmpGt mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI8x64_RemainingOps_Basic;
@@ -11737,28 +11562,22 @@ begin
 
   for LIndex := 0 to High(LVecA.i) do
   begin
-    AssertEquals('VecI8x64Add lane ' + IntToStr(LIndex),
-      Byte(ShortInt(LVecA.i[LIndex] + LVecB.i[LIndex])), Byte(LAddResult.i[LIndex]));
-    AssertEquals('VecI8x64Sub lane ' + IntToStr(LIndex),
-      Byte(ShortInt(LVecA.i[LIndex] - LVecB.i[LIndex])), Byte(LSubResult.i[LIndex]));
-    AssertEquals('VecI8x64And lane ' + IntToStr(LIndex),
-      Byte(LVecA.i[LIndex]) and Byte(LVecB.i[LIndex]), Byte(LAndResult.i[LIndex]));
-    AssertEquals('VecI8x64Or lane ' + IntToStr(LIndex),
-      Byte(LVecA.i[LIndex]) or Byte(LVecB.i[LIndex]), Byte(LOrResult.i[LIndex]));
-    AssertEquals('VecI8x64Xor lane ' + IntToStr(LIndex),
-      Byte(LVecA.i[LIndex]) xor Byte(LVecB.i[LIndex]), Byte(LXorResult.i[LIndex]));
-    AssertEquals('VecI8x64Not lane ' + IntToStr(LIndex),
-      Byte(not LVecA.i[LIndex]), Byte(LNotResult.i[LIndex]));
+    CheckEqual(Byte(ShortInt(LVecA.i[LIndex] + LVecB.i[LIndex])), Byte(LAddResult.i[LIndex]), 'VecI8x64Add lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(ShortInt(LVecA.i[LIndex] - LVecB.i[LIndex])), Byte(LSubResult.i[LIndex]), 'VecI8x64Sub lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.i[LIndex]) and Byte(LVecB.i[LIndex]), Byte(LAndResult.i[LIndex]), 'VecI8x64And lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.i[LIndex]) or Byte(LVecB.i[LIndex]), Byte(LOrResult.i[LIndex]), 'VecI8x64Or lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.i[LIndex]) xor Byte(LVecB.i[LIndex]), Byte(LXorResult.i[LIndex]), 'VecI8x64Xor lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(not LVecA.i[LIndex]), Byte(LNotResult.i[LIndex]), 'VecI8x64Not lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] < LVecB.i[LIndex] then
-      AssertEquals('VecI8x64Min lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMinResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMinResult.i[LIndex], 'VecI8x64Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI8x64Min lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMinResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMinResult.i[LIndex], 'VecI8x64Min lane ' + IntToStr(LIndex));
 
     if LVecA.i[LIndex] > LVecB.i[LIndex] then
-      AssertEquals('VecI8x64Max lane ' + IntToStr(LIndex), LVecA.i[LIndex], LMaxResult.i[LIndex])
+      CheckEqual(LVecA.i[LIndex], LMaxResult.i[LIndex], 'VecI8x64Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecI8x64Max lane ' + IntToStr(LIndex), LVecB.i[LIndex], LMaxResult.i[LIndex]);
+      CheckEqual(LVecB.i[LIndex], LMaxResult.i[LIndex], 'VecI8x64Max lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11805,9 +11624,9 @@ begin
   LMaskLt := VecU8x64CmpLt(LVecA, LVecB);
   LMaskGt := VecU8x64CmpGt(LVecA, LVecB);
 
-  AssertEquals('VecU8x64CmpEq mask', QWord(LExpectedEq), QWord(LMaskEq));
-  AssertEquals('VecU8x64CmpLt mask', QWord(LExpectedLt), QWord(LMaskLt));
-  AssertEquals('VecU8x64CmpGt mask', QWord(LExpectedGt), QWord(LMaskGt));
+  CheckEqual(QWord(LExpectedEq), QWord(LMaskEq), 'VecU8x64CmpEq mask');
+  CheckEqual(QWord(LExpectedLt), QWord(LMaskLt), 'VecU8x64CmpLt mask');
+  CheckEqual(QWord(LExpectedGt), QWord(LMaskGt), 'VecU8x64CmpGt mask');
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU8x64_RemainingOps_Basic;
@@ -11847,28 +11666,22 @@ begin
 
   for LIndex := 0 to High(LVecA.u) do
   begin
-    AssertEquals('VecU8x64Add lane ' + IntToStr(LIndex),
-      Byte(LVecA.u[LIndex] + LVecB.u[LIndex]), LAddResult.u[LIndex]);
-    AssertEquals('VecU8x64Sub lane ' + IntToStr(LIndex),
-      Byte(LVecA.u[LIndex] - LVecB.u[LIndex]), LSubResult.u[LIndex]);
-    AssertEquals('VecU8x64And lane ' + IntToStr(LIndex),
-      Byte(LVecA.u[LIndex] and LVecB.u[LIndex]), LAndResult.u[LIndex]);
-    AssertEquals('VecU8x64Or lane ' + IntToStr(LIndex),
-      Byte(LVecA.u[LIndex] or LVecB.u[LIndex]), LOrResult.u[LIndex]);
-    AssertEquals('VecU8x64Xor lane ' + IntToStr(LIndex),
-      Byte(LVecA.u[LIndex] xor LVecB.u[LIndex]), LXorResult.u[LIndex]);
-    AssertEquals('VecU8x64Not lane ' + IntToStr(LIndex),
-      Byte(not LVecA.u[LIndex]), LNotResult.u[LIndex]);
+    CheckEqual(Byte(LVecA.u[LIndex] + LVecB.u[LIndex]), LAddResult.u[LIndex], 'VecU8x64Add lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.u[LIndex] - LVecB.u[LIndex]), LSubResult.u[LIndex], 'VecU8x64Sub lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.u[LIndex] and LVecB.u[LIndex]), LAndResult.u[LIndex], 'VecU8x64And lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.u[LIndex] or LVecB.u[LIndex]), LOrResult.u[LIndex], 'VecU8x64Or lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(LVecA.u[LIndex] xor LVecB.u[LIndex]), LXorResult.u[LIndex], 'VecU8x64Xor lane ' + IntToStr(LIndex));
+    CheckEqual(Byte(not LVecA.u[LIndex]), LNotResult.u[LIndex], 'VecU8x64Not lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] < LVecB.u[LIndex] then
-      AssertEquals('VecU8x64Min lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMinResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMinResult.u[LIndex], 'VecU8x64Min lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU8x64Min lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMinResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMinResult.u[LIndex], 'VecU8x64Min lane ' + IntToStr(LIndex));
 
     if LVecA.u[LIndex] > LVecB.u[LIndex] then
-      AssertEquals('VecU8x64Max lane ' + IntToStr(LIndex), LVecA.u[LIndex], LMaxResult.u[LIndex])
+      CheckEqual(LVecA.u[LIndex], LMaxResult.u[LIndex], 'VecU8x64Max lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecU8x64Max lane ' + IntToStr(LIndex), LVecB.u[LIndex], LMaxResult.u[LIndex]);
+      CheckEqual(LVecB.u[LIndex], LMaxResult.u[LIndex], 'VecU8x64Max lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -11892,14 +11705,14 @@ begin
   LMulResult := nextpas.core.simd.VecF64x2Mul(LVecA, LVecB);
   LDivResult := nextpas.core.simd.VecF64x2Div(LVecA, LVecB);
 
-  AssertEquals('VecF64x2Add lane 0', 3.25, LAddResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Add lane 1', -8.0, LAddResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x2Sub lane 0', -0.75, LSubResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Sub lane 1', -9.0, LSubResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x2Mul lane 0', 2.5, LMulResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Mul lane 1', -4.25, LMulResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x2Div lane 0', 0.625, LDivResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Div lane 1', -17.0, LDivResult.d[1], C_EPSILON);
+  CheckNear(3.25, LAddResult.d[0], C_EPSILON, 'VecF64x2Add lane 0');
+  CheckNear(-8.0, LAddResult.d[1], C_EPSILON, 'VecF64x2Add lane 1');
+  CheckNear(-0.75, LSubResult.d[0], C_EPSILON, 'VecF64x2Sub lane 0');
+  CheckNear(-9.0, LSubResult.d[1], C_EPSILON, 'VecF64x2Sub lane 1');
+  CheckNear(2.5, LMulResult.d[0], C_EPSILON, 'VecF64x2Mul lane 0');
+  CheckNear(-4.25, LMulResult.d[1], C_EPSILON, 'VecF64x2Mul lane 1');
+  CheckNear(0.625, LDivResult.d[0], C_EPSILON, 'VecF64x2Div lane 0');
+  CheckNear(-17.0, LDivResult.d[1], C_EPSILON, 'VecF64x2Div lane 1');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x2_CompareReduceSelect_Basic;
@@ -11924,12 +11737,12 @@ begin
   LMaskGe := nextpas.core.simd.VecF64x2CmpGe(LVecA, LVecB);
   LMaskNe := nextpas.core.simd.VecF64x2CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecF64x2CmpEq case1 mask', Integer(TMask2($1)), Integer(LMaskEq));
-  AssertEquals('VecF64x2CmpLt case1 mask', Integer(TMask2($2)), Integer(LMaskLt));
-  AssertEquals('VecF64x2CmpLe case1 mask', Integer(TMask2($3)), Integer(LMaskLe));
-  AssertEquals('VecF64x2CmpGt case1 mask', Integer(TMask2($0)), Integer(LMaskGt));
-  AssertEquals('VecF64x2CmpGe case1 mask', Integer(TMask2($1)), Integer(LMaskGe));
-  AssertEquals('VecF64x2CmpNe case1 mask', Integer(TMask2($2)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskEq), 'VecF64x2CmpEq case1 mask');
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskLt), 'VecF64x2CmpLt case1 mask');
+  CheckEqual(Integer(TMask2($3)), Integer(LMaskLe), 'VecF64x2CmpLe case1 mask');
+  CheckEqual(Integer(TMask2($0)), Integer(LMaskGt), 'VecF64x2CmpGt case1 mask');
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskGe), 'VecF64x2CmpGe case1 mask');
+  CheckEqual(Integer(TMask2($2)), Integer(LMaskNe), 'VecF64x2CmpNe case1 mask');
 
   LVecA.d[0] := 10.0;
   LVecA.d[1] := -7.0;
@@ -11938,16 +11751,16 @@ begin
 
   LMaskGt := nextpas.core.simd.VecF64x2CmpGt(LVecA, LVecB);
   LMaskGe := nextpas.core.simd.VecF64x2CmpGe(LVecA, LVecB);
-  AssertEquals('VecF64x2CmpGt case2 mask', Integer(TMask2($1)), Integer(LMaskGt));
-  AssertEquals('VecF64x2CmpGe case2 mask', Integer(TMask2($3)), Integer(LMaskGe));
+  CheckEqual(Integer(TMask2($1)), Integer(LMaskGt), 'VecF64x2CmpGt case2 mask');
+  CheckEqual(Integer(TMask2($3)), Integer(LMaskGe), 'VecF64x2CmpGe case2 mask');
 
   LVecA.d[0] := 10.0;
   LVecA.d[1] := 11.0;
   LVecB.d[0] := 20.0;
   LVecB.d[1] := 21.0;
   LSelectResult := nextpas.core.simd.VecF64x2Select(TMask2($1), LVecA, LVecB);
-  AssertEquals('VecF64x2Select lane 0', 10.0, LSelectResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Select lane 1', 21.0, LSelectResult.d[1], C_EPSILON);
+  CheckNear(10.0, LSelectResult.d[0], C_EPSILON, 'VecF64x2Select lane 0');
+  CheckNear(21.0, LSelectResult.d[1], C_EPSILON, 'VecF64x2Select lane 1');
 
   LReduceInput.d[0] := 2.0;
   LReduceInput.d[1] := -3.5;
@@ -11956,11 +11769,11 @@ begin
   LReduceMax := nextpas.core.simd.VecF64x2ReduceMax(LReduceInput);
   LReduceMul := nextpas.core.simd.VecF64x2ReduceMul(LReduceInput);
 
-  AssertEquals('VecF64x2ReduceAdd', -1.5, LReduceAdd, C_EPSILON);
-  AssertEquals('VecF64x2ReduceMin', -3.5, LReduceMin, C_EPSILON);
-  AssertEquals('VecF64x2ReduceMax', 2.0, LReduceMax, C_EPSILON);
-  AssertEquals('VecF64x2ReduceMul', -7.0, LReduceMul, C_EPSILON);
-  AssertEquals('VecF64x2Dot', -33.5, nextpas.core.simd.VecF64x2Dot(LReduceInput, LVecB), C_EPSILON);
+  CheckNear(-1.5, LReduceAdd, C_EPSILON, 'VecF64x2ReduceAdd');
+  CheckNear(-3.5, LReduceMin, C_EPSILON, 'VecF64x2ReduceMin');
+  CheckNear(2.0, LReduceMax, C_EPSILON, 'VecF64x2ReduceMax');
+  CheckNear(-7.0, LReduceMul, C_EPSILON, 'VecF64x2ReduceMul');
+  CheckNear(-33.5, nextpas.core.simd.VecF64x2Dot(LReduceInput, LVecB), C_EPSILON, 'VecF64x2Dot');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x2_ExtendedMathAndLoadStore_Basic;
@@ -11976,42 +11789,42 @@ begin
   LVecC := nextpas.core.simd.VecF64x2Splat(0.5);
 
   LResult := nextpas.core.simd.VecF64x2Fma(LVecA, LVecB, LVecC);
-  AssertEquals('VecF64x2Fma lane 0', 3.5, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Fma lane 1', -3.5, LResult.d[1], C_EPSILON);
+  CheckNear(3.5, LResult.d[0], C_EPSILON, 'VecF64x2Fma lane 0');
+  CheckNear(-3.5, LResult.d[1], C_EPSILON, 'VecF64x2Fma lane 1');
 
   LInput.d[0] := 1.2;
   LInput.d[1] := -2.8;
 
   LResult := nextpas.core.simd.VecF64x2Floor(LInput);
-  AssertEquals('VecF64x2Floor lane 0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Floor lane 1', -3.0, LResult.d[1], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x2Floor lane 0');
+  CheckNear(-3.0, LResult.d[1], C_EPSILON, 'VecF64x2Floor lane 1');
 
   LResult := nextpas.core.simd.VecF64x2Ceil(LInput);
-  AssertEquals('VecF64x2Ceil lane 0', 2.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Ceil lane 1', -2.0, LResult.d[1], C_EPSILON);
+  CheckNear(2.0, LResult.d[0], C_EPSILON, 'VecF64x2Ceil lane 0');
+  CheckNear(-2.0, LResult.d[1], C_EPSILON, 'VecF64x2Ceil lane 1');
 
   LResult := nextpas.core.simd.VecF64x2Round(LInput);
-  AssertEquals('VecF64x2Round lane 0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Round lane 1', -3.0, LResult.d[1], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x2Round lane 0');
+  CheckNear(-3.0, LResult.d[1], C_EPSILON, 'VecF64x2Round lane 1');
 
   LResult := nextpas.core.simd.VecF64x2Trunc(LInput);
-  AssertEquals('VecF64x2Trunc lane 0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Trunc lane 1', -2.0, LResult.d[1], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x2Trunc lane 0');
+  CheckNear(-2.0, LResult.d[1], C_EPSILON, 'VecF64x2Trunc lane 1');
 
   LSource[0] := 0.125;
   LSource[1] := -9.5;
   LResult := nextpas.core.simd.VecF64x2Load(@LSource[0]);
   nextpas.core.simd.VecF64x2Store(@LRoundtrip[0], LResult);
-  AssertEquals('VecF64x2LoadStore lane 0', 0.125, LRoundtrip[0], C_EPSILON);
-  AssertEquals('VecF64x2LoadStore lane 1', -9.5, LRoundtrip[1], C_EPSILON);
+  CheckNear(0.125, LRoundtrip[0], C_EPSILON, 'VecF64x2LoadStore lane 0');
+  CheckNear(-9.5, LRoundtrip[1], C_EPSILON, 'VecF64x2LoadStore lane 1');
 
   LResult := nextpas.core.simd.VecF64x2Splat(6.5);
-  AssertEquals('VecF64x2Splat lane 0', 6.5, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Splat lane 1', 6.5, LResult.d[1], C_EPSILON);
+  CheckNear(6.5, LResult.d[0], C_EPSILON, 'VecF64x2Splat lane 0');
+  CheckNear(6.5, LResult.d[1], C_EPSILON, 'VecF64x2Splat lane 1');
 
   LResult := nextpas.core.simd.VecF64x2Zero;
-  AssertEquals('VecF64x2Zero lane 0', 0.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Zero lane 1', 0.0, LResult.d[1], C_EPSILON);
+  CheckNear(0.0, LResult.d[0], C_EPSILON, 'VecF64x2Zero lane 0');
+  CheckNear(0.0, LResult.d[1], C_EPSILON, 'VecF64x2Zero lane 1');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x2_RemainingMathAndExtractInsert_Basic;
@@ -12024,14 +11837,14 @@ begin
   LVecA.d[0] := -0.75;
   LVecA.d[1] := 2.25;
   LAbsResult := nextpas.core.simd.VecF64x2Abs(LVecA);
-  AssertEquals('VecF64x2Abs lane 0', 0.75, LAbsResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Abs lane 1', 2.25, LAbsResult.d[1], C_EPSILON);
+  CheckNear(0.75, LAbsResult.d[0], C_EPSILON, 'VecF64x2Abs lane 0');
+  CheckNear(2.25, LAbsResult.d[1], C_EPSILON, 'VecF64x2Abs lane 1');
 
   LVecB.d[0] := 0.25;
   LVecB.d[1] := 12.25;
   LSqrtResult := nextpas.core.simd.VecF64x2Sqrt(LVecB);
-  AssertEquals('VecF64x2Sqrt lane 0', 0.5, LSqrtResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Sqrt lane 1', 3.5, LSqrtResult.d[1], C_EPSILON);
+  CheckNear(0.5, LSqrtResult.d[0], C_EPSILON, 'VecF64x2Sqrt lane 0');
+  CheckNear(3.5, LSqrtResult.d[1], C_EPSILON, 'VecF64x2Sqrt lane 1');
 
   LVecA.d[0] := 1.0;
   LVecA.d[1] := 10.0;
@@ -12039,15 +11852,15 @@ begin
   LVecB.d[1] := 5.0;
   LMinResult := nextpas.core.simd.VecF64x2Min(LVecA, LVecB);
   LMaxResult := nextpas.core.simd.VecF64x2Max(LVecA, LVecB);
-  AssertEquals('VecF64x2Min lane 0', 1.0, LMinResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Min lane 1', 5.0, LMinResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x2Max lane 0', 2.0, LMaxResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Max lane 1', 10.0, LMaxResult.d[1], C_EPSILON);
+  CheckNear(1.0, LMinResult.d[0], C_EPSILON, 'VecF64x2Min lane 0');
+  CheckNear(5.0, LMinResult.d[1], C_EPSILON, 'VecF64x2Min lane 1');
+  CheckNear(2.0, LMaxResult.d[0], C_EPSILON, 'VecF64x2Max lane 0');
+  CheckNear(10.0, LMaxResult.d[1], C_EPSILON, 'VecF64x2Max lane 1');
 
-  AssertEquals('VecF64x2Extract lane 1', LVecA.d[1], nextpas.core.simd.VecF64x2Extract(LVecA, 1), C_EPSILON);
+  CheckNear(LVecA.d[1], nextpas.core.simd.VecF64x2Extract(LVecA, 1), C_EPSILON, 'VecF64x2Extract lane 1');
   LInserted := nextpas.core.simd.VecF64x2Insert(LVecA, 42.125, 0);
-  AssertEquals('VecF64x2Insert lane 0', 42.125, LInserted.d[0], C_EPSILON);
-  AssertEquals('VecF64x2Insert keep lane 1', LVecA.d[1], LInserted.d[1], C_EPSILON);
+  CheckNear(42.125, LInserted.d[0], C_EPSILON, 'VecF64x2Insert lane 0');
+  CheckNear(LVecA.d[1], LInserted.d[1], C_EPSILON, 'VecF64x2Insert keep lane 1');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF32x16_Arithmetic_Basic;
@@ -12071,14 +11884,10 @@ begin
 
   for LIndex := 0 to High(LVecA.f) do
   begin
-    AssertEquals('VecF32x16Add lane ' + IntToStr(LIndex),
-      LVecA.f[LIndex] + LVecB.f[LIndex], LAddResult.f[LIndex], C_EPSILON);
-    AssertEquals('VecF32x16Sub lane ' + IntToStr(LIndex),
-      LVecA.f[LIndex] - LVecB.f[LIndex], LSubResult.f[LIndex], C_EPSILON);
-    AssertEquals('VecF32x16Mul lane ' + IntToStr(LIndex),
-      LVecA.f[LIndex] * LVecB.f[LIndex], LMulResult.f[LIndex], C_EPSILON);
-    AssertEquals('VecF32x16Div lane ' + IntToStr(LIndex),
-      LVecA.f[LIndex] / LVecB.f[LIndex], LDivResult.f[LIndex], C_EPSILON);
+    CheckNear(LVecA.f[LIndex] + LVecB.f[LIndex], LAddResult.f[LIndex], C_EPSILON, 'VecF32x16Add lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.f[LIndex] - LVecB.f[LIndex], LSubResult.f[LIndex], C_EPSILON, 'VecF32x16Sub lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.f[LIndex] * LVecB.f[LIndex], LMulResult.f[LIndex], C_EPSILON, 'VecF32x16Mul lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.f[LIndex] / LVecB.f[LIndex], LDivResult.f[LIndex], C_EPSILON, 'VecF32x16Div lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -12121,12 +11930,12 @@ begin
   LMaskGe := nextpas.core.simd.VecF32x16CmpGe_Mask(LVecA, LVecB);
   LMaskNe := nextpas.core.simd.VecF32x16CmpNe_Mask(LVecA, LVecB);
 
-  AssertEquals('VecF32x16CmpEq_Mask mask', LongInt(TMask16($9249)), LongInt(LMaskEq));
-  AssertEquals('VecF32x16CmpLt_Mask mask', LongInt(TMask16($2492)), LongInt(LMaskLt));
-  AssertEquals('VecF32x16CmpLe_Mask mask', LongInt(TMask16($B6DB)), LongInt(LMaskLe));
-  AssertEquals('VecF32x16CmpGt_Mask mask', LongInt(TMask16($4924)), LongInt(LMaskGt));
-  AssertEquals('VecF32x16CmpGe_Mask mask', LongInt(TMask16($DB6D)), LongInt(LMaskGe));
-  AssertEquals('VecF32x16CmpNe_Mask mask', LongInt(TMask16($6DB6)), LongInt(LMaskNe));
+  CheckEqual(LongInt(TMask16($9249)), LongInt(LMaskEq), 'VecF32x16CmpEq_Mask mask');
+  CheckEqual(LongInt(TMask16($2492)), LongInt(LMaskLt), 'VecF32x16CmpLt_Mask mask');
+  CheckEqual(LongInt(TMask16($B6DB)), LongInt(LMaskLe), 'VecF32x16CmpLe_Mask mask');
+  CheckEqual(LongInt(TMask16($4924)), LongInt(LMaskGt), 'VecF32x16CmpGt_Mask mask');
+  CheckEqual(LongInt(TMask16($DB6D)), LongInt(LMaskGe), 'VecF32x16CmpGe_Mask mask');
+  CheckEqual(LongInt(TMask16($6DB6)), LongInt(LMaskNe), 'VecF32x16CmpNe_Mask mask');
 
   for LIndex := 0 to High(LVecA.f) do
   begin
@@ -12137,9 +11946,9 @@ begin
   for LIndex := 0 to High(LSelectResult.f) do
   begin
     if (LIndex and 1) = 0 then
-      AssertEquals('VecF32x16Select even lane ' + IntToStr(LIndex), 10.0 + LIndex, LSelectResult.f[LIndex], C_EPSILON)
+      CheckNear(10.0 + LIndex, LSelectResult.f[LIndex], C_EPSILON, 'VecF32x16Select even lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecF32x16Select odd lane ' + IntToStr(LIndex), 20.0 + LIndex, LSelectResult.f[LIndex], C_EPSILON);
+      CheckNear(20.0 + LIndex, LSelectResult.f[LIndex], C_EPSILON, 'VecF32x16Select odd lane ' + IntToStr(LIndex));
   end;
 
   for LIndex := 0 to High(LReduceInput.f) do
@@ -12154,10 +11963,10 @@ begin
   LReduceMax := nextpas.core.simd.VecF32x16ReduceMax(LReduceInput);
   LReduceMul := nextpas.core.simd.VecF32x16ReduceMul(LReduceInput);
 
-  AssertEquals('VecF32x16ReduceAdd', 13.5, LReduceAdd, C_EPSILON);
-  AssertEquals('VecF32x16ReduceMin', -4.0, LReduceMin, C_EPSILON);
-  AssertEquals('VecF32x16ReduceMax', 3.0, LReduceMax, C_EPSILON);
-  AssertEquals('VecF32x16ReduceMul', -12.0, LReduceMul, C_EPSILON);
+  CheckNear(13.5, LReduceAdd, C_EPSILON, 'VecF32x16ReduceAdd');
+  CheckNear(-4.0, LReduceMin, C_EPSILON, 'VecF32x16ReduceMin');
+  CheckNear(3.0, LReduceMax, C_EPSILON, 'VecF32x16ReduceMax');
+  CheckNear(-12.0, LReduceMul, C_EPSILON, 'VecF32x16ReduceMul');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF32x16_ExtendedMathAndLoadStore_Basic;
@@ -12176,16 +11985,13 @@ begin
 
   LResult := nextpas.core.simd.VecF32x16Fma(LVecA, LVecB, LVecC);
   for LIndex := 0 to High(LResult.f) do
-    AssertEquals('VecF32x16Fma lane ' + IntToStr(LIndex),
-      (LIndex + 0.25) * 2.0 + 1.0, LResult.f[LIndex], C_EPSILON);
+    CheckNear((LIndex + 0.25) * 2.0 + 1.0, LResult.f[LIndex], C_EPSILON, 'VecF32x16Fma lane ' + IntToStr(LIndex));
 
-  LResult := nextpas.core.simd.VecF32x16Clamp(LResult,
-    nextpas.core.simd.VecF32x16Splat(3.0),
-    nextpas.core.simd.VecF32x16Splat(20.0));
+  LResult := nextpas.core.simd.VecF32x16Clamp(LResult, nextpas.core.simd.VecF32x16Splat(3.0), nextpas.core.simd.VecF32x16Splat(20.0));
   for LIndex := 0 to High(LResult.f) do
   begin
-    AssertTrue('VecF32x16Clamp min lane ' + IntToStr(LIndex), LResult.f[LIndex] >= 3.0);
-    AssertTrue('VecF32x16Clamp max lane ' + IntToStr(LIndex), LResult.f[LIndex] <= 20.0);
+    CheckTrue(LResult.f[LIndex] >= 3.0, 'VecF32x16Clamp min lane ' + IntToStr(LIndex));
+    CheckTrue(LResult.f[LIndex] <= 20.0, 'VecF32x16Clamp max lane ' + IntToStr(LIndex));
   end;
 
   LInput := nextpas.core.simd.VecF32x16Zero;
@@ -12195,43 +12001,43 @@ begin
   LInput.f[3] := -2.8;
 
   LResult := nextpas.core.simd.VecF32x16Floor(LInput);
-  AssertEquals('VecF32x16Floor lane0', 1.0, LResult.f[0], C_EPSILON);
-  AssertEquals('VecF32x16Floor lane1', -2.0, LResult.f[1], C_EPSILON);
-  AssertEquals('VecF32x16Floor lane2', 2.0, LResult.f[2], C_EPSILON);
-  AssertEquals('VecF32x16Floor lane3', -3.0, LResult.f[3], C_EPSILON);
+  CheckNear(1.0, LResult.f[0], C_EPSILON, 'VecF32x16Floor lane0');
+  CheckNear(-2.0, LResult.f[1], C_EPSILON, 'VecF32x16Floor lane1');
+  CheckNear(2.0, LResult.f[2], C_EPSILON, 'VecF32x16Floor lane2');
+  CheckNear(-3.0, LResult.f[3], C_EPSILON, 'VecF32x16Floor lane3');
 
   LResult := nextpas.core.simd.VecF32x16Ceil(LInput);
-  AssertEquals('VecF32x16Ceil lane0', 2.0, LResult.f[0], C_EPSILON);
-  AssertEquals('VecF32x16Ceil lane1', -1.0, LResult.f[1], C_EPSILON);
-  AssertEquals('VecF32x16Ceil lane2', 3.0, LResult.f[2], C_EPSILON);
-  AssertEquals('VecF32x16Ceil lane3', -2.0, LResult.f[3], C_EPSILON);
+  CheckNear(2.0, LResult.f[0], C_EPSILON, 'VecF32x16Ceil lane0');
+  CheckNear(-1.0, LResult.f[1], C_EPSILON, 'VecF32x16Ceil lane1');
+  CheckNear(3.0, LResult.f[2], C_EPSILON, 'VecF32x16Ceil lane2');
+  CheckNear(-2.0, LResult.f[3], C_EPSILON, 'VecF32x16Ceil lane3');
 
   LResult := nextpas.core.simd.VecF32x16Round(LInput);
-  AssertEquals('VecF32x16Round lane0', 1.0, LResult.f[0], C_EPSILON);
-  AssertEquals('VecF32x16Round lane1', -1.0, LResult.f[1], C_EPSILON);
-  AssertEquals('VecF32x16Round lane2', 3.0, LResult.f[2], C_EPSILON);
-  AssertEquals('VecF32x16Round lane3', -3.0, LResult.f[3], C_EPSILON);
+  CheckNear(1.0, LResult.f[0], C_EPSILON, 'VecF32x16Round lane0');
+  CheckNear(-1.0, LResult.f[1], C_EPSILON, 'VecF32x16Round lane1');
+  CheckNear(3.0, LResult.f[2], C_EPSILON, 'VecF32x16Round lane2');
+  CheckNear(-3.0, LResult.f[3], C_EPSILON, 'VecF32x16Round lane3');
 
   LResult := nextpas.core.simd.VecF32x16Trunc(LInput);
-  AssertEquals('VecF32x16Trunc lane0', 1.0, LResult.f[0], C_EPSILON);
-  AssertEquals('VecF32x16Trunc lane1', -1.0, LResult.f[1], C_EPSILON);
-  AssertEquals('VecF32x16Trunc lane2', 2.0, LResult.f[2], C_EPSILON);
-  AssertEquals('VecF32x16Trunc lane3', -2.0, LResult.f[3], C_EPSILON);
+  CheckNear(1.0, LResult.f[0], C_EPSILON, 'VecF32x16Trunc lane0');
+  CheckNear(-1.0, LResult.f[1], C_EPSILON, 'VecF32x16Trunc lane1');
+  CheckNear(2.0, LResult.f[2], C_EPSILON, 'VecF32x16Trunc lane2');
+  CheckNear(-2.0, LResult.f[3], C_EPSILON, 'VecF32x16Trunc lane3');
 
   for LIndex := 0 to High(LSource) do
     LSource[LIndex] := LIndex + 0.5;
   LResult := nextpas.core.simd.VecF32x16Load(@LSource[0]);
   nextpas.core.simd.VecF32x16Store(@LRoundtrip[0], LResult);
   for LIndex := 0 to High(LRoundtrip) do
-    AssertEquals('VecF32x16LoadStore lane ' + IntToStr(LIndex), LSource[LIndex], LRoundtrip[LIndex], C_EPSILON);
+    CheckNear(LSource[LIndex], LRoundtrip[LIndex], C_EPSILON, 'VecF32x16LoadStore lane ' + IntToStr(LIndex));
 
   LResult := nextpas.core.simd.VecF32x16Splat(3.25);
   for LIndex := 0 to High(LResult.f) do
-    AssertEquals('VecF32x16Splat lane ' + IntToStr(LIndex), 3.25, LResult.f[LIndex], C_EPSILON);
+    CheckNear(3.25, LResult.f[LIndex], C_EPSILON, 'VecF32x16Splat lane ' + IntToStr(LIndex));
 
   LResult := nextpas.core.simd.VecF32x16Zero;
   for LIndex := 0 to High(LResult.f) do
-    AssertEquals('VecF32x16Zero lane ' + IntToStr(LIndex), 0.0, LResult.f[LIndex], C_EPSILON);
+    CheckNear(0.0, LResult.f[LIndex], C_EPSILON, 'VecF32x16Zero lane ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF32x16_RemainingMathAndExtractInsert_Basic;
@@ -12253,7 +12059,7 @@ begin
 
   LAbsResult := nextpas.core.simd.VecF32x16Abs(LVecA);
   for LIndex := 0 to High(LAbsResult.f) do
-    AssertEquals('VecF32x16Abs lane ' + IntToStr(LIndex), LIndex + 1.5, LAbsResult.f[LIndex], C_EPSILON);
+    CheckNear(LIndex + 1.5, LAbsResult.f[LIndex], C_EPSILON, 'VecF32x16Abs lane ' + IntToStr(LIndex));
 
   LVecB := nextpas.core.simd.VecF32x16Zero;
   LVecB.f[0] := 0.0;
@@ -12274,22 +12080,22 @@ begin
   LVecB.f[15] := 90.25;
 
   LSqrtResult := nextpas.core.simd.VecF32x16Sqrt(LVecB);
-  AssertEquals('VecF32x16Sqrt lane 0', 0.0, LSqrtResult.f[0], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 1', 1.0, LSqrtResult.f[1], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 2', 2.0, LSqrtResult.f[2], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 3', 3.0, LSqrtResult.f[3], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 4', 4.0, LSqrtResult.f[4], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 5', 5.0, LSqrtResult.f[5], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 6', 1.5, LSqrtResult.f[6], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 7', 2.5, LSqrtResult.f[7], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 8', 0.5, LSqrtResult.f[8], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 9', 3.5, LSqrtResult.f[9], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 10', 4.5, LSqrtResult.f[10], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 11', 5.5, LSqrtResult.f[11], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 12', 6.5, LSqrtResult.f[12], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 13', 7.5, LSqrtResult.f[13], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 14', 8.5, LSqrtResult.f[14], C_EPSILON);
-  AssertEquals('VecF32x16Sqrt lane 15', 9.5, LSqrtResult.f[15], C_EPSILON);
+  CheckNear(0.0, LSqrtResult.f[0], C_EPSILON, 'VecF32x16Sqrt lane 0');
+  CheckNear(1.0, LSqrtResult.f[1], C_EPSILON, 'VecF32x16Sqrt lane 1');
+  CheckNear(2.0, LSqrtResult.f[2], C_EPSILON, 'VecF32x16Sqrt lane 2');
+  CheckNear(3.0, LSqrtResult.f[3], C_EPSILON, 'VecF32x16Sqrt lane 3');
+  CheckNear(4.0, LSqrtResult.f[4], C_EPSILON, 'VecF32x16Sqrt lane 4');
+  CheckNear(5.0, LSqrtResult.f[5], C_EPSILON, 'VecF32x16Sqrt lane 5');
+  CheckNear(1.5, LSqrtResult.f[6], C_EPSILON, 'VecF32x16Sqrt lane 6');
+  CheckNear(2.5, LSqrtResult.f[7], C_EPSILON, 'VecF32x16Sqrt lane 7');
+  CheckNear(0.5, LSqrtResult.f[8], C_EPSILON, 'VecF32x16Sqrt lane 8');
+  CheckNear(3.5, LSqrtResult.f[9], C_EPSILON, 'VecF32x16Sqrt lane 9');
+  CheckNear(4.5, LSqrtResult.f[10], C_EPSILON, 'VecF32x16Sqrt lane 10');
+  CheckNear(5.5, LSqrtResult.f[11], C_EPSILON, 'VecF32x16Sqrt lane 11');
+  CheckNear(6.5, LSqrtResult.f[12], C_EPSILON, 'VecF32x16Sqrt lane 12');
+  CheckNear(7.5, LSqrtResult.f[13], C_EPSILON, 'VecF32x16Sqrt lane 13');
+  CheckNear(8.5, LSqrtResult.f[14], C_EPSILON, 'VecF32x16Sqrt lane 14');
+  CheckNear(9.5, LSqrtResult.f[15], C_EPSILON, 'VecF32x16Sqrt lane 15');
 
   for LIndex := 0 to High(LVecA.f) do
   begin
@@ -12302,23 +12108,23 @@ begin
   begin
     if LVecA.f[LIndex] < LVecB.f[LIndex] then
     begin
-      AssertEquals('VecF32x16Min lane ' + IntToStr(LIndex), LVecA.f[LIndex], LMinResult.f[LIndex], C_EPSILON);
-      AssertEquals('VecF32x16Max lane ' + IntToStr(LIndex), LVecB.f[LIndex], LMaxResult.f[LIndex], C_EPSILON);
+      CheckNear(LVecA.f[LIndex], LMinResult.f[LIndex], C_EPSILON, 'VecF32x16Min lane ' + IntToStr(LIndex));
+      CheckNear(LVecB.f[LIndex], LMaxResult.f[LIndex], C_EPSILON, 'VecF32x16Max lane ' + IntToStr(LIndex));
     end
     else
     begin
-      AssertEquals('VecF32x16Min lane ' + IntToStr(LIndex), LVecB.f[LIndex], LMinResult.f[LIndex], C_EPSILON);
-      AssertEquals('VecF32x16Max lane ' + IntToStr(LIndex), LVecA.f[LIndex], LMaxResult.f[LIndex], C_EPSILON);
+      CheckNear(LVecB.f[LIndex], LMinResult.f[LIndex], C_EPSILON, 'VecF32x16Min lane ' + IntToStr(LIndex));
+      CheckNear(LVecA.f[LIndex], LMaxResult.f[LIndex], C_EPSILON, 'VecF32x16Max lane ' + IntToStr(LIndex));
     end;
   end;
 
   LExtracted := nextpas.core.simd.VecF32x16Extract(LVecA, 10);
-  AssertEquals('VecF32x16Extract lane 10', LVecA.f[10], LExtracted, C_EPSILON);
+  CheckNear(LVecA.f[10], LExtracted, C_EPSILON, 'VecF32x16Extract lane 10');
 
   LInserted := nextpas.core.simd.VecF32x16Insert(LVecA, 99.5, 11);
-  AssertEquals('VecF32x16Insert lane 11', 99.5, LInserted.f[11], C_EPSILON);
-  AssertEquals('VecF32x16Insert keep lane 10', LVecA.f[10], LInserted.f[10], C_EPSILON);
-  AssertEquals('VecF32x16Insert keep lane 12', LVecA.f[12], LInserted.f[12], C_EPSILON);
+  CheckNear(99.5, LInserted.f[11], C_EPSILON, 'VecF32x16Insert lane 11');
+  CheckNear(LVecA.f[10], LInserted.f[10], C_EPSILON, 'VecF32x16Insert keep lane 10');
+  CheckNear(LVecA.f[12], LInserted.f[12], C_EPSILON, 'VecF32x16Insert keep lane 12');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x8_Arithmetic_Basic;
@@ -12342,14 +12148,10 @@ begin
 
   for LIndex := 0 to High(LVecA.d) do
   begin
-    AssertEquals('VecF64x8Add lane ' + IntToStr(LIndex),
-      LVecA.d[LIndex] + LVecB.d[LIndex], LAddResult.d[LIndex], C_EPSILON);
-    AssertEquals('VecF64x8Sub lane ' + IntToStr(LIndex),
-      LVecA.d[LIndex] - LVecB.d[LIndex], LSubResult.d[LIndex], C_EPSILON);
-    AssertEquals('VecF64x8Mul lane ' + IntToStr(LIndex),
-      LVecA.d[LIndex] * LVecB.d[LIndex], LMulResult.d[LIndex], C_EPSILON);
-    AssertEquals('VecF64x8Div lane ' + IntToStr(LIndex),
-      LVecA.d[LIndex] / LVecB.d[LIndex], LDivResult.d[LIndex], C_EPSILON);
+    CheckNear(LVecA.d[LIndex] + LVecB.d[LIndex], LAddResult.d[LIndex], C_EPSILON, 'VecF64x8Add lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.d[LIndex] - LVecB.d[LIndex], LSubResult.d[LIndex], C_EPSILON, 'VecF64x8Sub lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.d[LIndex] * LVecB.d[LIndex], LMulResult.d[LIndex], C_EPSILON, 'VecF64x8Mul lane ' + IntToStr(LIndex));
+    CheckNear(LVecA.d[LIndex] / LVecB.d[LIndex], LDivResult.d[LIndex], C_EPSILON, 'VecF64x8Div lane ' + IntToStr(LIndex));
   end;
 end;
 
@@ -12392,12 +12194,12 @@ begin
   LMaskGe := nextpas.core.simd.VecF64x8CmpGe(LVecA, LVecB);
   LMaskNe := nextpas.core.simd.VecF64x8CmpNe(LVecA, LVecB);
 
-  AssertEquals('VecF64x8CmpEq mask', Integer(TMask8($49)), Integer(LMaskEq));
-  AssertEquals('VecF64x8CmpLt mask', Integer(TMask8($92)), Integer(LMaskLt));
-  AssertEquals('VecF64x8CmpLe mask', Integer(TMask8($DB)), Integer(LMaskLe));
-  AssertEquals('VecF64x8CmpGt mask', Integer(TMask8($24)), Integer(LMaskGt));
-  AssertEquals('VecF64x8CmpGe mask', Integer(TMask8($6D)), Integer(LMaskGe));
-  AssertEquals('VecF64x8CmpNe mask', Integer(TMask8($B6)), Integer(LMaskNe));
+  CheckEqual(Integer(TMask8($49)), Integer(LMaskEq), 'VecF64x8CmpEq mask');
+  CheckEqual(Integer(TMask8($92)), Integer(LMaskLt), 'VecF64x8CmpLt mask');
+  CheckEqual(Integer(TMask8($DB)), Integer(LMaskLe), 'VecF64x8CmpLe mask');
+  CheckEqual(Integer(TMask8($24)), Integer(LMaskGt), 'VecF64x8CmpGt mask');
+  CheckEqual(Integer(TMask8($6D)), Integer(LMaskGe), 'VecF64x8CmpGe mask');
+  CheckEqual(Integer(TMask8($B6)), Integer(LMaskNe), 'VecF64x8CmpNe mask');
 
   for LIndex := 0 to High(LVecA.d) do
   begin
@@ -12408,9 +12210,9 @@ begin
   for LIndex := 0 to High(LSelectResult.d) do
   begin
     if (LIndex and 1) = 0 then
-      AssertEquals('VecF64x8Select even lane ' + IntToStr(LIndex), 10.0 + LIndex, LSelectResult.d[LIndex], C_EPSILON)
+      CheckNear(10.0 + LIndex, LSelectResult.d[LIndex], C_EPSILON, 'VecF64x8Select even lane ' + IntToStr(LIndex))
     else
-      AssertEquals('VecF64x8Select odd lane ' + IntToStr(LIndex), 20.0 + LIndex, LSelectResult.d[LIndex], C_EPSILON);
+      CheckNear(20.0 + LIndex, LSelectResult.d[LIndex], C_EPSILON, 'VecF64x8Select odd lane ' + IntToStr(LIndex));
   end;
 
   for LIndex := 0 to High(LReduceInput.d) do
@@ -12425,10 +12227,10 @@ begin
   LReduceMax := nextpas.core.simd.VecF64x8ReduceMax(LReduceInput);
   LReduceMul := nextpas.core.simd.VecF64x8ReduceMul(LReduceInput);
 
-  AssertEquals('VecF64x8ReduceAdd', 5.5, LReduceAdd, C_EPSILON);
-  AssertEquals('VecF64x8ReduceMin', -4.0, LReduceMin, C_EPSILON);
-  AssertEquals('VecF64x8ReduceMax', 3.0, LReduceMax, C_EPSILON);
-  AssertEquals('VecF64x8ReduceMul', -12.0, LReduceMul, C_EPSILON);
+  CheckNear(5.5, LReduceAdd, C_EPSILON, 'VecF64x8ReduceAdd');
+  CheckNear(-4.0, LReduceMin, C_EPSILON, 'VecF64x8ReduceMin');
+  CheckNear(3.0, LReduceMax, C_EPSILON, 'VecF64x8ReduceMax');
+  CheckNear(-12.0, LReduceMul, C_EPSILON, 'VecF64x8ReduceMul');
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x8_ExtendedMathAndLoadStore_Basic;
@@ -12447,16 +12249,13 @@ begin
 
   LResult := nextpas.core.simd.VecF64x8Fma(LVecA, LVecB, LVecC);
   for LIndex := 0 to High(LResult.d) do
-    AssertEquals('VecF64x8Fma lane ' + IntToStr(LIndex),
-      (LIndex + 0.5) * 3.0 + 2.0, LResult.d[LIndex], C_EPSILON);
+    CheckNear((LIndex + 0.5) * 3.0 + 2.0, LResult.d[LIndex], C_EPSILON, 'VecF64x8Fma lane ' + IntToStr(LIndex));
 
-  LResult := nextpas.core.simd.VecF64x8Clamp(LResult,
-    nextpas.core.simd.VecF64x8Splat(4.0),
-    nextpas.core.simd.VecF64x8Splat(20.0));
+  LResult := nextpas.core.simd.VecF64x8Clamp(LResult, nextpas.core.simd.VecF64x8Splat(4.0), nextpas.core.simd.VecF64x8Splat(20.0));
   for LIndex := 0 to High(LResult.d) do
   begin
-    AssertTrue('VecF64x8Clamp min lane ' + IntToStr(LIndex), LResult.d[LIndex] >= 4.0);
-    AssertTrue('VecF64x8Clamp max lane ' + IntToStr(LIndex), LResult.d[LIndex] <= 20.0);
+    CheckTrue(LResult.d[LIndex] >= 4.0, 'VecF64x8Clamp min lane ' + IntToStr(LIndex));
+    CheckTrue(LResult.d[LIndex] <= 20.0, 'VecF64x8Clamp max lane ' + IntToStr(LIndex));
   end;
 
   LInput := nextpas.core.simd.VecF64x8Zero;
@@ -12466,43 +12265,43 @@ begin
   LInput.d[3] := -2.8;
 
   LResult := nextpas.core.simd.VecF64x8Floor(LInput);
-  AssertEquals('VecF64x8Floor lane0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x8Floor lane1', -2.0, LResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x8Floor lane2', 2.0, LResult.d[2], C_EPSILON);
-  AssertEquals('VecF64x8Floor lane3', -3.0, LResult.d[3], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x8Floor lane0');
+  CheckNear(-2.0, LResult.d[1], C_EPSILON, 'VecF64x8Floor lane1');
+  CheckNear(2.0, LResult.d[2], C_EPSILON, 'VecF64x8Floor lane2');
+  CheckNear(-3.0, LResult.d[3], C_EPSILON, 'VecF64x8Floor lane3');
 
   LResult := nextpas.core.simd.VecF64x8Ceil(LInput);
-  AssertEquals('VecF64x8Ceil lane0', 2.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x8Ceil lane1', -1.0, LResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x8Ceil lane2', 3.0, LResult.d[2], C_EPSILON);
-  AssertEquals('VecF64x8Ceil lane3', -2.0, LResult.d[3], C_EPSILON);
+  CheckNear(2.0, LResult.d[0], C_EPSILON, 'VecF64x8Ceil lane0');
+  CheckNear(-1.0, LResult.d[1], C_EPSILON, 'VecF64x8Ceil lane1');
+  CheckNear(3.0, LResult.d[2], C_EPSILON, 'VecF64x8Ceil lane2');
+  CheckNear(-2.0, LResult.d[3], C_EPSILON, 'VecF64x8Ceil lane3');
 
   LResult := nextpas.core.simd.VecF64x8Round(LInput);
-  AssertEquals('VecF64x8Round lane0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x8Round lane1', -1.0, LResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x8Round lane2', 3.0, LResult.d[2], C_EPSILON);
-  AssertEquals('VecF64x8Round lane3', -3.0, LResult.d[3], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x8Round lane0');
+  CheckNear(-1.0, LResult.d[1], C_EPSILON, 'VecF64x8Round lane1');
+  CheckNear(3.0, LResult.d[2], C_EPSILON, 'VecF64x8Round lane2');
+  CheckNear(-3.0, LResult.d[3], C_EPSILON, 'VecF64x8Round lane3');
 
   LResult := nextpas.core.simd.VecF64x8Trunc(LInput);
-  AssertEquals('VecF64x8Trunc lane0', 1.0, LResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x8Trunc lane1', -1.0, LResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x8Trunc lane2', 2.0, LResult.d[2], C_EPSILON);
-  AssertEquals('VecF64x8Trunc lane3', -2.0, LResult.d[3], C_EPSILON);
+  CheckNear(1.0, LResult.d[0], C_EPSILON, 'VecF64x8Trunc lane0');
+  CheckNear(-1.0, LResult.d[1], C_EPSILON, 'VecF64x8Trunc lane1');
+  CheckNear(2.0, LResult.d[2], C_EPSILON, 'VecF64x8Trunc lane2');
+  CheckNear(-2.0, LResult.d[3], C_EPSILON, 'VecF64x8Trunc lane3');
 
   for LIndex := 0 to High(LSource) do
     LSource[LIndex] := LIndex + 0.125;
   LResult := nextpas.core.simd.VecF64x8Load(@LSource[0]);
   nextpas.core.simd.VecF64x8Store(@LRoundtrip[0], LResult);
   for LIndex := 0 to High(LRoundtrip) do
-    AssertEquals('VecF64x8LoadStore lane ' + IntToStr(LIndex), LSource[LIndex], LRoundtrip[LIndex], C_EPSILON);
+    CheckNear(LSource[LIndex], LRoundtrip[LIndex], C_EPSILON, 'VecF64x8LoadStore lane ' + IntToStr(LIndex));
 
   LResult := nextpas.core.simd.VecF64x8Splat(6.5);
   for LIndex := 0 to High(LResult.d) do
-    AssertEquals('VecF64x8Splat lane ' + IntToStr(LIndex), 6.5, LResult.d[LIndex], C_EPSILON);
+    CheckNear(6.5, LResult.d[LIndex], C_EPSILON, 'VecF64x8Splat lane ' + IntToStr(LIndex));
 
   LResult := nextpas.core.simd.VecF64x8Zero;
   for LIndex := 0 to High(LResult.d) do
-    AssertEquals('VecF64x8Zero lane ' + IntToStr(LIndex), 0.0, LResult.d[LIndex], C_EPSILON);
+    CheckNear(0.0, LResult.d[LIndex], C_EPSILON, 'VecF64x8Zero lane ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_FloatFacadeGuards.Test_VecF64x8_RemainingMath_Basic;
@@ -12523,7 +12322,7 @@ begin
 
   LAbsResult := nextpas.core.simd.VecF64x8Abs(LVecA);
   for LIndex := 0 to High(LAbsResult.d) do
-    AssertEquals('VecF64x8Abs lane ' + IntToStr(LIndex), LIndex + 0.75, LAbsResult.d[LIndex], C_EPSILON);
+    CheckNear(LIndex + 0.75, LAbsResult.d[LIndex], C_EPSILON, 'VecF64x8Abs lane ' + IntToStr(LIndex));
 
   LVecB.d[0] := 0.0;
   LVecB.d[1] := 1.0;
@@ -12534,14 +12333,14 @@ begin
   LVecB.d[6] := 30.25;
   LVecB.d[7] := 42.25;
   LSqrtResult := nextpas.core.simd.VecF64x8Sqrt(LVecB);
-  AssertEquals('VecF64x8Sqrt lane 0', 0.0, LSqrtResult.d[0], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 1', 1.0, LSqrtResult.d[1], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 2', 2.0, LSqrtResult.d[2], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 3', 3.0, LSqrtResult.d[3], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 4', 3.5, LSqrtResult.d[4], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 5', 4.5, LSqrtResult.d[5], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 6', 5.5, LSqrtResult.d[6], C_EPSILON);
-  AssertEquals('VecF64x8Sqrt lane 7', 6.5, LSqrtResult.d[7], C_EPSILON);
+  CheckNear(0.0, LSqrtResult.d[0], C_EPSILON, 'VecF64x8Sqrt lane 0');
+  CheckNear(1.0, LSqrtResult.d[1], C_EPSILON, 'VecF64x8Sqrt lane 1');
+  CheckNear(2.0, LSqrtResult.d[2], C_EPSILON, 'VecF64x8Sqrt lane 2');
+  CheckNear(3.0, LSqrtResult.d[3], C_EPSILON, 'VecF64x8Sqrt lane 3');
+  CheckNear(3.5, LSqrtResult.d[4], C_EPSILON, 'VecF64x8Sqrt lane 4');
+  CheckNear(4.5, LSqrtResult.d[5], C_EPSILON, 'VecF64x8Sqrt lane 5');
+  CheckNear(5.5, LSqrtResult.d[6], C_EPSILON, 'VecF64x8Sqrt lane 6');
+  CheckNear(6.5, LSqrtResult.d[7], C_EPSILON, 'VecF64x8Sqrt lane 7');
 
   for LIndex := 0 to High(LVecA.d) do
   begin
@@ -12554,13 +12353,13 @@ begin
   begin
     if LVecA.d[LIndex] < LVecB.d[LIndex] then
     begin
-      AssertEquals('VecF64x8Min lane ' + IntToStr(LIndex), LVecA.d[LIndex], LMinResult.d[LIndex], C_EPSILON);
-      AssertEquals('VecF64x8Max lane ' + IntToStr(LIndex), LVecB.d[LIndex], LMaxResult.d[LIndex], C_EPSILON);
+      CheckNear(LVecA.d[LIndex], LMinResult.d[LIndex], C_EPSILON, 'VecF64x8Min lane ' + IntToStr(LIndex));
+      CheckNear(LVecB.d[LIndex], LMaxResult.d[LIndex], C_EPSILON, 'VecF64x8Max lane ' + IntToStr(LIndex));
     end
     else
     begin
-      AssertEquals('VecF64x8Min lane ' + IntToStr(LIndex), LVecB.d[LIndex], LMinResult.d[LIndex], C_EPSILON);
-      AssertEquals('VecF64x8Max lane ' + IntToStr(LIndex), LVecA.d[LIndex], LMaxResult.d[LIndex], C_EPSILON);
+      CheckNear(LVecB.d[LIndex], LMinResult.d[LIndex], C_EPSILON, 'VecF64x8Min lane ' + IntToStr(LIndex));
+      CheckNear(LVecA.d[LIndex], LMaxResult.d[LIndex], C_EPSILON, 'VecF64x8Max lane ' + IntToStr(LIndex));
     end;
   end;
 end;
@@ -12584,11 +12383,11 @@ begin
       buf2[i] := Byte(i mod 256);
     end;
     
-    AssertTrue('1MB equal buffers should return True', MemEqual(buf1, buf2, SIZE));
+    CheckTrue(MemEqual(buf1, buf2, SIZE), '1MB equal buffers should return True');
     
     // 在末尾制造差异
     buf2[SIZE - 1] := buf2[SIZE - 1] xor $FF;
-    AssertFalse('1MB buffers with last byte diff should return False', MemEqual(buf1, buf2, SIZE));
+    CheckFalse(MemEqual(buf1, buf2, SIZE), '1MB buffers with last byte diff should return False');
   finally
     FreeMem(buf1);
     FreeMem(buf2);
@@ -12616,7 +12415,7 @@ begin
     // 1MB = 4096 * 256 字节
     expectedSum := UInt64(32640) * 4096;
     
-    AssertEquals('1MB sum should match expected value', expectedSum, sum);
+    CheckEqual(expectedSum, sum, '1MB sum should match expected value');
   finally
     FreeMem(buf);
   end;
@@ -12639,16 +12438,16 @@ begin
     buf[SIZE - 1] := $FF;
     
     pos := MemFindByte(buf, SIZE, $FF);
-    AssertEquals('Should find byte at last position', SIZE - 1, pos);
+    CheckEqual(SIZE - 1, pos, 'Should find byte at last position');
     
     // 在中间放置目标字节
     buf[SIZE div 2] := $AA;
     pos := MemFindByte(buf, SIZE, $AA);
-    AssertEquals('Should find byte at middle position', SIZE div 2, pos);
+    CheckEqual(SIZE div 2, pos, 'Should find byte at middle position');
     
     // 查找不存在的字节
     pos := MemFindByte(buf, SIZE, $BB);
-    AssertEquals('Should return -1 for not found', -1, pos);
+    CheckEqual(-1, pos, 'Should return -1 for not found');
   finally
     FreeMem(buf);
   end;
@@ -12673,9 +12472,9 @@ begin
       unaligned[i] := Byte(i);
     
     // 测试各种函数在非对齐数据上的正确性
-    AssertEquals('SumBytes on unaligned should work', UInt64(32640), SumBytes(unaligned, 256));
-    AssertEquals('MemFindByte on unaligned should work', 128, MemFindByte(unaligned, 256, 128));
-    AssertEquals('CountByte on unaligned should work', SizeUInt(1), CountByte(unaligned, 256, 100));
+    CheckEqual(UInt64(32640), SumBytes(unaligned, 256), 'SumBytes on unaligned should work');
+    CheckEqual(128, MemFindByte(unaligned, 256, 128), 'MemFindByte on unaligned should work');
+    CheckEqual(SizeUInt(1), CountByte(unaligned, 256, 100), 'CountByte on unaligned should work');
   finally
     FreeMem(buf);
   end;
@@ -12698,22 +12497,19 @@ begin
   for size := 1 to 100 do
   begin
     // MemEqual
-    AssertTrue('MemEqual size=' + IntToStr(size) + ' should work',
-               MemEqual(@buf1[0], @buf2[0], size));
+    CheckTrue(MemEqual(@buf1[0], @buf2[0], size), 'MemEqual size=' + IntToStr(size) + ' should work');
     
     // SumBytes
     sum := 0;
     for i := 0 to size - 1 do
       sum := sum + buf1[i];
-    AssertEquals('SumBytes size=' + IntToStr(size) + ' should work',
-                 sum, SumBytes(@buf1[0], size));
+    CheckEqual(sum, SumBytes(@buf1[0], size), 'SumBytes size=' + IntToStr(size) + ' should work');
   end;
   
   // 测试边界大小: 15, 16, 17, 31, 32, 33, 63, 64, 65
   for size in [15, 16, 17, 31, 32, 33, 63, 64, 65] do
   begin
-    AssertTrue('MemEqual boundary size=' + IntToStr(size),
-               MemEqual(@buf1[0], @buf2[0], size));
+    CheckTrue(MemEqual(@buf1[0], @buf2[0], size), 'MemEqual boundary size=' + IntToStr(size));
   end;
 end;
 
@@ -12725,7 +12521,7 @@ procedure TTestCase_UnsignedVectorTypes.Test_VecU32x4_TypeDef_Size;
 var
   v: TVecU32x4;
 begin
-  AssertEquals('TVecU32x4 should be 16 bytes', 16, SizeOf(v));
+  CheckEqual(16, SizeOf(v), 'TVecU32x4 should be 16 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU32x4_TypeDef_Layout;
@@ -12737,10 +12533,10 @@ begin
   v.u[2] := $00000000;
   v.u[3] := $DEADBEEF;
   
-  AssertEquals('u[0] should be $FFFFFFFF', UInt32($FFFFFFFF), v.u[0]);
-  AssertEquals('u[1] should be $12345678', UInt32($12345678), v.u[1]);
-  AssertEquals('u[2] should be $00000000', UInt32($00000000), v.u[2]);
-  AssertEquals('u[3] should be $DEADBEEF', UInt32($DEADBEEF), v.u[3]);
+  CheckEqual(UInt32($FFFFFFFF), v.u[0], 'u[0] should be $FFFFFFFF');
+  CheckEqual(UInt32($12345678), v.u[1], 'u[1] should be $12345678');
+  CheckEqual(UInt32($00000000), v.u[2], 'u[2] should be $00000000');
+  CheckEqual(UInt32($DEADBEEF), v.u[3], 'u[3] should be $DEADBEEF');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU32x4_TypeDef_RawAccess;
@@ -12749,10 +12545,10 @@ var
 begin
   v.u[0] := $04030201;
   // raw 数组应该能按小端序访问
-  AssertEquals('raw[0] should be $01', $01, v.raw[0]);
-  AssertEquals('raw[1] should be $02', $02, v.raw[1]);
-  AssertEquals('raw[2] should be $03', $03, v.raw[2]);
-  AssertEquals('raw[3] should be $04', $04, v.raw[3]);
+  CheckEqual($01, v.raw[0], 'raw[0] should be $01');
+  CheckEqual($02, v.raw[1], 'raw[1] should be $02');
+  CheckEqual($03, v.raw[2], 'raw[2] should be $03');
+  CheckEqual($04, v.raw[3], 'raw[3] should be $04');
 end;
 
 // === TVecU16x8 测试 ===
@@ -12761,7 +12557,7 @@ procedure TTestCase_UnsignedVectorTypes.Test_VecU16x8_TypeDef_Size;
 var
   v: TVecU16x8;
 begin
-  AssertEquals('TVecU16x8 should be 16 bytes', 16, SizeOf(v));
+  CheckEqual(16, SizeOf(v), 'TVecU16x8 should be 16 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU16x8_TypeDef_Layout;
@@ -12773,8 +12569,7 @@ begin
     v.u[i] := UInt16(i * 1000);
   
   for i := 0 to 7 do
-    AssertEquals('u[' + IntToStr(i) + '] should be ' + IntToStr(i * 1000), 
-                 UInt16(i * 1000), v.u[i]);
+    CheckEqual(UInt16(i * 1000), v.u[i], 'u[' + IntToStr(i) + '] should be ' + IntToStr(i * 1000));
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU16x8_TypeDef_RawAccess;
@@ -12782,8 +12577,8 @@ var
   v: TVecU16x8;
 begin
   v.u[0] := $0201;  // 小端序: raw[0]=01, raw[1]=02
-  AssertEquals('raw[0] should be $01', $01, v.raw[0]);
-  AssertEquals('raw[1] should be $02', $02, v.raw[1]);
+  CheckEqual($01, v.raw[0], 'raw[0] should be $01');
+  CheckEqual($02, v.raw[1], 'raw[1] should be $02');
 end;
 
 // === TVecU8x16 测试 ===
@@ -12792,7 +12587,7 @@ procedure TTestCase_UnsignedVectorTypes.Test_VecU8x16_TypeDef_Size;
 var
   v: TVecU8x16;
 begin
-  AssertEquals('TVecU8x16 should be 16 bytes', 16, SizeOf(v));
+  CheckEqual(16, SizeOf(v), 'TVecU8x16 should be 16 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU8x16_TypeDef_Layout;
@@ -12804,8 +12599,7 @@ begin
     v.u[i] := Byte(i * 10);
   
   for i := 0 to 15 do
-    AssertEquals('u[' + IntToStr(i) + '] should be ' + IntToStr(i * 10), 
-                 Byte(i * 10), v.u[i]);
+    CheckEqual(Byte(i * 10), v.u[i], 'u[' + IntToStr(i) + '] should be ' + IntToStr(i * 10));
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU8x16_TypeDef_RawAccess;
@@ -12815,8 +12609,8 @@ begin
   v.u[0] := $AA;
   v.u[15] := $BB;
   // 对于 UInt8，u 和 raw 应该是相同的布局
-  AssertEquals('raw[0] should equal u[0]', v.u[0], v.raw[0]);
-  AssertEquals('raw[15] should equal u[15]', v.u[15], v.raw[15]);
+  CheckEqual(v.u[0], v.raw[0], 'raw[0] should equal u[0]');
+  CheckEqual(v.u[15], v.raw[15], 'raw[15] should equal u[15]');
 end;
 
 // === TVecU64x2 测试 ===
@@ -12825,7 +12619,7 @@ procedure TTestCase_UnsignedVectorTypes.Test_VecU64x2_TypeDef_Size;
 var
   v: TVecU64x2;
 begin
-  AssertEquals('TVecU64x2 should be 16 bytes', 16, SizeOf(v));
+  CheckEqual(16, SizeOf(v), 'TVecU64x2 should be 16 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU64x2_TypeDef_Layout;
@@ -12835,8 +12629,8 @@ begin
   v.u[0] := High(UInt64);  // max UInt64 = $FFFFFFFFFFFFFFFF
   v.u[1] := QWord($123456789ABCDEF0);
   
-  AssertEquals('u[0] should be max UInt64', High(UInt64), v.u[0]);
-  AssertEquals('u[1] should be $123456789ABCDEF0', QWord($123456789ABCDEF0), v.u[1]);
+  CheckEqual(High(UInt64), v.u[0], 'u[0] should be max UInt64');
+  CheckEqual(QWord($123456789ABCDEF0), v.u[1], 'u[1] should be $123456789ABCDEF0');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU64x2_TypeDef_RawAccess;
@@ -12845,9 +12639,9 @@ var
 begin
   v.u[0] := $0807060504030201;
   // raw 数组应该能按小端序访问
-  AssertEquals('raw[0] should be $01', $01, v.raw[0]);
-  AssertEquals('raw[1] should be $02', $02, v.raw[1]);
-  AssertEquals('raw[7] should be $08', $08, v.raw[7]);
+  CheckEqual($01, v.raw[0], 'raw[0] should be $01');
+  CheckEqual($02, v.raw[1], 'raw[1] should be $02');
+  CheckEqual($08, v.raw[7], 'raw[7] should be $08');
 end;
 
 // === 256-bit 无符号向量类型测试 ===
@@ -12856,7 +12650,7 @@ procedure TTestCase_UnsignedVectorTypes.Test_VecU32x8_TypeDef_Size;
 var
   v: TVecU32x8;
 begin
-  AssertEquals('TVecU32x8 should be 32 bytes', 32, SizeOf(v));
+  CheckEqual(32, SizeOf(v), 'TVecU32x8 should be 32 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU32x8_TypeDef_LoHi;
@@ -12875,17 +12669,17 @@ begin
   v.hi.u[3] := $88888888;
   
   // 验证通过 u[] 访问
-  AssertEquals('u[0] should match lo.u[0]', UInt32($11111111), v.u[0]);
-  AssertEquals('u[3] should match lo.u[3]', UInt32($44444444), v.u[3]);
-  AssertEquals('u[4] should match hi.u[0]', UInt32($55555555), v.u[4]);
-  AssertEquals('u[7] should match hi.u[3]', UInt32($88888888), v.u[7]);
+  CheckEqual(UInt32($11111111), v.u[0], 'u[0] should match lo.u[0]');
+  CheckEqual(UInt32($44444444), v.u[3], 'u[3] should match lo.u[3]');
+  CheckEqual(UInt32($55555555), v.u[4], 'u[4] should match hi.u[0]');
+  CheckEqual(UInt32($88888888), v.u[7], 'u[7] should match hi.u[3]');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU16x16_TypeDef_Size;
 var
   v: TVecU16x16;
 begin
-  AssertEquals('TVecU16x16 should be 32 bytes', 32, SizeOf(v));
+  CheckEqual(32, SizeOf(v), 'TVecU16x16 should be 32 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU16x16_TypeDef_LoHi;
@@ -12899,15 +12693,14 @@ begin
     v.hi.u[i] := UInt16(i + 8);
   
   for i := 0 to 15 do
-    AssertEquals('u[' + IntToStr(i) + '] should be ' + IntToStr(i), 
-                 UInt16(i), v.u[i]);
+    CheckEqual(UInt16(i), v.u[i], 'u[' + IntToStr(i) + '] should be ' + IntToStr(i));
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU8x32_TypeDef_Size;
 var
   v: TVecU8x32;
 begin
-  AssertEquals('TVecU8x32 should be 32 bytes', 32, SizeOf(v));
+  CheckEqual(32, SizeOf(v), 'TVecU8x32 should be 32 bytes');
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU8x32_TypeDef_LoHi;
@@ -12921,8 +12714,7 @@ begin
     v.hi.u[i] := Byte(i + 16);
   
   for i := 0 to 31 do
-    AssertEquals('u[' + IntToStr(i) + '] should be ' + IntToStr(i), 
-                 Byte(i), v.u[i]);
+    CheckEqual(Byte(i), v.u[i], 'u[' + IntToStr(i) + '] should be ' + IntToStr(i));
 end;
 
 { TTestCase_OperatorOverloads }
@@ -12935,10 +12727,10 @@ begin
   b := VecF32x4Splat(2.0);
   c := a + b;  // 使用运算符重载
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_Sub;
@@ -12949,10 +12741,10 @@ begin
   b := VecF32x4Splat(2.0);
   c := a - b;  // 使用运算符重载
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_Mul;
@@ -12963,10 +12755,10 @@ begin
   b := VecF32x4Splat(4.0);
   c := a * b;  // 使用运算符重载
   
-  AssertEquals('Element 0 should be 12.0', 12.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 12.0', 12.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 12.0', 12.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 12.0', 12.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(12.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 12.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_Div;
@@ -12977,10 +12769,10 @@ begin
   b := VecF32x4Splat(4.0);
   c := a / b;  // 使用运算符重载
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_Neg;
@@ -12990,10 +12782,10 @@ begin
   a := VecF32x4Splat(5.0);
   c := -a;  // 使用一元负运算符
   
-  AssertEquals('Element 0 should be -5.0', -5.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be -5.0', -5.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be -5.0', -5.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be -5.0', -5.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(-5.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be -5.0');
+  CheckNear(-5.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be -5.0');
+  CheckNear(-5.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be -5.0');
+  CheckNear(-5.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be -5.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF64x2_Op_Add;
@@ -13004,8 +12796,8 @@ begin
   b.d[0] := 3.0; b.d[1] := 4.0;
   c := a + b;
   
-  AssertEquals('d[0] should be 4.0', 4.0, c.d[0], 0.0001);
-  AssertEquals('d[1] should be 6.0', 6.0, c.d[1], 0.0001);
+  CheckNear(4.0, c.d[0], 0.0001, 'd[0] should be 4.0');
+  CheckNear(6.0, c.d[1], 0.0001, 'd[1] should be 6.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF64x2_Op_Sub;
@@ -13016,8 +12808,8 @@ begin
   b.d[0] := 2.0; b.d[1] := 3.0;
   c := a - b;
   
-  AssertEquals('d[0] should be 3.0', 3.0, c.d[0], 0.0001);
-  AssertEquals('d[1] should be 4.0', 4.0, c.d[1], 0.0001);
+  CheckNear(3.0, c.d[0], 0.0001, 'd[0] should be 3.0');
+  CheckNear(4.0, c.d[1], 0.0001, 'd[1] should be 4.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF64x2_Op_Mul;
@@ -13028,8 +12820,8 @@ begin
   b.d[0] := 2.0; b.d[1] := 5.0;
   c := a * b;
   
-  AssertEquals('d[0] should be 6.0', 6.0, c.d[0], 0.0001);
-  AssertEquals('d[1] should be 20.0', 20.0, c.d[1], 0.0001);
+  CheckNear(6.0, c.d[0], 0.0001, 'd[0] should be 6.0');
+  CheckNear(20.0, c.d[1], 0.0001, 'd[1] should be 20.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF64x2_Op_Div;
@@ -13040,8 +12832,8 @@ begin
   b.d[0] := 2.0;  b.d[1] := 4.0;
   c := a / b;
   
-  AssertEquals('d[0] should be 5.0', 5.0, c.d[0], 0.0001);
-  AssertEquals('d[1] should be 5.0', 5.0, c.d[1], 0.0001);
+  CheckNear(5.0, c.d[0], 0.0001, 'd[0] should be 5.0');
+  CheckNear(5.0, c.d[1], 0.0001, 'd[1] should be 5.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecI32x4_Op_Add;
@@ -13052,10 +12844,10 @@ begin
   b.i[0] := 10; b.i[1] := 20; b.i[2] := 30; b.i[3] := 40;
   c := a + b;
   
-  AssertEquals('i[0] should be 11', 11, c.i[0]);
-  AssertEquals('i[1] should be 22', 22, c.i[1]);
-  AssertEquals('i[2] should be 33', 33, c.i[2]);
-  AssertEquals('i[3] should be 44', 44, c.i[3]);
+  CheckEqual(11, c.i[0], 'i[0] should be 11');
+  CheckEqual(22, c.i[1], 'i[1] should be 22');
+  CheckEqual(33, c.i[2], 'i[2] should be 33');
+  CheckEqual(44, c.i[3], 'i[3] should be 44');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecI32x4_Op_Sub;
@@ -13066,10 +12858,10 @@ begin
   b.i[0] := 1; b.i[1] := 2; b.i[2] := 3; b.i[3] := 4;
   c := a - b;
   
-  AssertEquals('i[0] should be 9', 9, c.i[0]);
-  AssertEquals('i[1] should be 18', 18, c.i[1]);
-  AssertEquals('i[2] should be 27', 27, c.i[2]);
-  AssertEquals('i[3] should be 36', 36, c.i[3]);
+  CheckEqual(9, c.i[0], 'i[0] should be 9');
+  CheckEqual(18, c.i[1], 'i[1] should be 18');
+  CheckEqual(27, c.i[2], 'i[2] should be 27');
+  CheckEqual(36, c.i[3], 'i[3] should be 36');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecI32x4_Op_Neg;
@@ -13079,10 +12871,10 @@ begin
   a.i[0] := 1; a.i[1] := -2; a.i[2] := 3; a.i[3] := -4;
   c := -a;
   
-  AssertEquals('i[0] should be -1', -1, c.i[0]);
-  AssertEquals('i[1] should be 2', 2, c.i[1]);
-  AssertEquals('i[2] should be -3', -3, c.i[2]);
-  AssertEquals('i[3] should be 4', 4, c.i[3]);
+  CheckEqual(-1, c.i[0], 'i[0] should be -1');
+  CheckEqual(2, c.i[1], 'i[1] should be 2');
+  CheckEqual(-3, c.i[2], 'i[2] should be -3');
+  CheckEqual(4, c.i[3], 'i[3] should be 4');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU32x4_Op_All;
@@ -13101,31 +12893,31 @@ begin
 
   expected := VecU32x4Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Add lane ' + IntToStr(i));
 
   expected := VecU32x4Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Sub lane ' + IntToStr(i));
 
   expected := VecU32x4Mul(a, b); actual := a * b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Mul lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Mul lane ' + IntToStr(i));
 
   expected := VecU32x4And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4And lane ' + IntToStr(i));
 
   expected := VecU32x4Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Or lane ' + IntToStr(i));
 
   expected := VecU32x4Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Xor lane ' + IntToStr(i));
 
   expected := VecU32x4Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x4Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x4Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU64x2_Op_All;
@@ -13140,27 +12932,27 @@ begin
 
   expected := VecU64x2Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2Add lane ' + IntToStr(i));
 
   expected := VecU64x2Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2Sub lane ' + IntToStr(i));
 
   expected := VecU64x2And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2And lane ' + IntToStr(i));
 
   expected := VecU64x2Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2Or lane ' + IntToStr(i));
 
   expected := VecU64x2Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2Xor lane ' + IntToStr(i));
 
   expected := VecU64x2Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x2Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x2Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU16x8_Op_All;
@@ -13176,31 +12968,31 @@ begin
 
   expected := VecU16x8Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Add lane ' + IntToStr(i));
 
   expected := VecU16x8Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Sub lane ' + IntToStr(i));
 
   expected := VecU16x8Mul(a, b); actual := a * b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Mul lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Mul lane ' + IntToStr(i));
 
   expected := VecU16x8And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8And lane ' + IntToStr(i));
 
   expected := VecU16x8Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Or lane ' + IntToStr(i));
 
   expected := VecU16x8Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Xor lane ' + IntToStr(i));
 
   expected := VecU16x8Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU16x8Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU16x8Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU8x16_Op_All;
@@ -13216,27 +13008,27 @@ begin
 
   expected := VecU8x16Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16Add lane ' + IntToStr(i));
 
   expected := VecU8x16Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16Sub lane ' + IntToStr(i));
 
   expected := VecU8x16And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16And lane ' + IntToStr(i));
 
   expected := VecU8x16Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16Or lane ' + IntToStr(i));
 
   expected := VecU8x16Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16Xor lane ' + IntToStr(i));
 
   expected := VecU8x16Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x16Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x16Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU32x8_Op_All;
@@ -13252,31 +13044,31 @@ begin
 
   expected := VecU32x8Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Add lane ' + IntToStr(i));
 
   expected := VecU32x8Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Sub lane ' + IntToStr(i));
 
   expected := VecU32x8Mul(a, b); actual := a * b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Mul lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Mul lane ' + IntToStr(i));
 
   expected := VecU32x8And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8And lane ' + IntToStr(i));
 
   expected := VecU32x8Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Or lane ' + IntToStr(i));
 
   expected := VecU32x8Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Xor lane ' + IntToStr(i));
 
   expected := VecU32x8Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x8Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x8Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU64x4_Op_All;
@@ -13292,27 +13084,27 @@ begin
 
   expected := VecU64x4Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4Add lane ' + IntToStr(i));
 
   expected := VecU64x4Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4Sub lane ' + IntToStr(i));
 
   expected := VecU64x4And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4And lane ' + IntToStr(i));
 
   expected := VecU64x4Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4Or lane ' + IntToStr(i));
 
   expected := VecU64x4Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4Xor lane ' + IntToStr(i));
 
   expected := VecU64x4Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x4Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x4Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU32x16_Op_All;
@@ -13328,31 +13120,31 @@ begin
 
   expected := VecU32x16Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Add lane ' + IntToStr(i));
 
   expected := VecU32x16Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Sub lane ' + IntToStr(i));
 
   expected := VecU32x16Mul(a, b); actual := a * b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Mul lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Mul lane ' + IntToStr(i));
 
   expected := VecU32x16And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16And lane ' + IntToStr(i));
 
   expected := VecU32x16Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Or lane ' + IntToStr(i));
 
   expected := VecU32x16Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Xor lane ' + IntToStr(i));
 
   expected := VecU32x16Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU32x16Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU32x16Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU64x8_Op_All;
@@ -13368,27 +13160,27 @@ begin
 
   expected := VecU64x8Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8Add lane ' + IntToStr(i));
 
   expected := VecU64x8Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8Sub lane ' + IntToStr(i));
 
   expected := VecU64x8And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8And lane ' + IntToStr(i));
 
   expected := VecU64x8Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8Or lane ' + IntToStr(i));
 
   expected := VecU64x8Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8Xor lane ' + IntToStr(i));
 
   expected := VecU64x8Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU64x8Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU64x8Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecU8x64_Op_All;
@@ -13404,27 +13196,27 @@ begin
 
   expected := VecU8x64Add(a, b); actual := a + b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64Add lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64Add lane ' + IntToStr(i));
 
   expected := VecU8x64Sub(a, b); actual := a - b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64Sub lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64Sub lane ' + IntToStr(i));
 
   expected := VecU8x64And(a, b); actual := a and b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64And lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64And lane ' + IntToStr(i));
 
   expected := VecU8x64Or(a, b); actual := a or b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64Or lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64Or lane ' + IntToStr(i));
 
   expected := VecU8x64Xor(a, b); actual := a xor b;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64Xor lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64Xor lane ' + IntToStr(i));
 
   expected := VecU8x64Not(a); actual := not a;
   for i := 0 to High(actual.u) do
-    AssertEquals('VecU8x64Not lane ' + IntToStr(i), expected.u[i], actual.u[i]);
+    CheckEqual(expected.u[i], actual.u[i], 'VecU8x64Not lane ' + IntToStr(i));
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_ScalarMul;
@@ -13436,10 +13228,10 @@ begin
   s := 4.0;
   c := a * s;  // 向量 * 标量
   
-  AssertEquals('Element 0 should be 12.0', 12.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 12.0', 12.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 12.0', 12.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 12.0', 12.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(12.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 12.0');
+  CheckNear(12.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 12.0');
 end;
 
 procedure TTestCase_OperatorOverloads.Test_VecF32x4_Op_ScalarDiv;
@@ -13451,10 +13243,10 @@ begin
   s := 4.0;
   c := a / s;  // 向量 / 标量
   
-  AssertEquals('Element 0 should be 3.0', 3.0, VecF32x4Extract(c, 0), 0.0001);
-  AssertEquals('Element 1 should be 3.0', 3.0, VecF32x4Extract(c, 1), 0.0001);
-  AssertEquals('Element 2 should be 3.0', 3.0, VecF32x4Extract(c, 2), 0.0001);
-  AssertEquals('Element 3 should be 3.0', 3.0, VecF32x4Extract(c, 3), 0.0001);
+  CheckNear(3.0, VecF32x4Extract(c, 0), 0.0001, 'Element 0 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 1), 0.0001, 'Element 1 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 2), 0.0001, 'Element 2 should be 3.0');
+  CheckNear(3.0, VecF32x4Extract(c, 3), 0.0001, 'Element 3 should be 3.0');
 end;
 
 { TTestCase_VectorMaskTypes }
@@ -13463,7 +13255,7 @@ procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_TypeDef_Size;
 var
   m: TMaskF32x4;
 begin
-  AssertEquals('TMaskF32x4 should be 16 bytes', 16, SizeOf(m));
+  CheckEqual(16, SizeOf(m), 'TMaskF32x4 should be 16 bytes');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_AllTrue;
@@ -13471,10 +13263,10 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4AllTrue;
-  AssertEquals('m[0] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[0]);
-  AssertEquals('m[1] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[1]);
-  AssertEquals('m[2] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[2]);
-  AssertEquals('m[3] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[3]);
+  CheckEqual(UInt32($FFFFFFFF), m.m[0], 'm[0] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[1], 'm[1] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[2], 'm[2] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[3], 'm[3] should be $FFFFFFFF');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_AllFalse;
@@ -13482,10 +13274,10 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4AllFalse;
-  AssertEquals('m[0] should be 0', UInt32(0), m.m[0]);
-  AssertEquals('m[1] should be 0', UInt32(0), m.m[1]);
-  AssertEquals('m[2] should be 0', UInt32(0), m.m[2]);
-  AssertEquals('m[3] should be 0', UInt32(0), m.m[3]);
+  CheckEqual(UInt32(0), m.m[0], 'm[0] should be 0');
+  CheckEqual(UInt32(0), m.m[1], 'm[1] should be 0');
+  CheckEqual(UInt32(0), m.m[2], 'm[2] should be 0');
+  CheckEqual(UInt32(0), m.m[3], 'm[3] should be 0');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Mixed;
@@ -13493,10 +13285,10 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4Set(True, False, True, False);
-  AssertEquals('m[0] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[0]);
-  AssertEquals('m[1] should be 0', UInt32(0), m.m[1]);
-  AssertEquals('m[2] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[2]);
-  AssertEquals('m[3] should be 0', UInt32(0), m.m[3]);
+  CheckEqual(UInt32($FFFFFFFF), m.m[0], 'm[0] should be $FFFFFFFF');
+  CheckEqual(UInt32(0), m.m[1], 'm[1] should be 0');
+  CheckEqual(UInt32($FFFFFFFF), m.m[2], 'm[2] should be $FFFFFFFF');
+  CheckEqual(UInt32(0), m.m[3], 'm[3] should be 0');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Test;
@@ -13504,10 +13296,10 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4Set(True, False, True, False);
-  AssertTrue('Test(0) should be True', MaskF32x4Test(m, 0));
-  AssertFalse('Test(1) should be False', MaskF32x4Test(m, 1));
-  AssertTrue('Test(2) should be True', MaskF32x4Test(m, 2));
-  AssertFalse('Test(3) should be False', MaskF32x4Test(m, 3));
+  CheckTrue(MaskF32x4Test(m, 0), 'Test(0) should be True');
+  CheckFalse(MaskF32x4Test(m, 1), 'Test(1) should be False');
+  CheckTrue(MaskF32x4Test(m, 2), 'Test(2) should be True');
+  CheckFalse(MaskF32x4Test(m, 3), 'Test(3) should be False');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_ToBitmask;
@@ -13517,15 +13309,15 @@ var
 begin
   m := MaskF32x4AllTrue;
   bm := MaskF32x4ToBitmask(m);
-  AssertEquals('AllTrue bitmask should be $F', $F, bm);
+  CheckEqual($F, bm, 'AllTrue bitmask should be $F');
   
   m := MaskF32x4AllFalse;
   bm := MaskF32x4ToBitmask(m);
-  AssertEquals('AllFalse bitmask should be 0', 0, bm);
+  CheckEqual(0, bm, 'AllFalse bitmask should be 0');
   
   m := MaskF32x4Set(True, False, True, False);
   bm := MaskF32x4ToBitmask(m);
-  AssertEquals('Mixed bitmask should be $5', $5, bm);  // bits 0,2 set = 0101
+  CheckEqual($5, bm, 'Mixed bitmask should be $5');  // bits 0,2 set = 0101
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Any;
@@ -13533,13 +13325,13 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4AllTrue;
-  AssertTrue('AllTrue.Any should be True', MaskF32x4Any(m));
+  CheckTrue(MaskF32x4Any(m), 'AllTrue.Any should be True');
   
   m := MaskF32x4AllFalse;
-  AssertFalse('AllFalse.Any should be False', MaskF32x4Any(m));
+  CheckFalse(MaskF32x4Any(m), 'AllFalse.Any should be False');
   
   m := MaskF32x4Set(False, False, False, True);
-  AssertTrue('OnlyLast.Any should be True', MaskF32x4Any(m));
+  CheckTrue(MaskF32x4Any(m), 'OnlyLast.Any should be True');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_All;
@@ -13547,13 +13339,13 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4AllTrue;
-  AssertTrue('AllTrue.All should be True', MaskF32x4All(m));
+  CheckTrue(MaskF32x4All(m), 'AllTrue.All should be True');
   
   m := MaskF32x4AllFalse;
-  AssertFalse('AllFalse.All should be False', MaskF32x4All(m));
+  CheckFalse(MaskF32x4All(m), 'AllFalse.All should be False');
   
   m := MaskF32x4Set(True, True, True, False);
-  AssertFalse('Almost all.All should be False', MaskF32x4All(m));
+  CheckFalse(MaskF32x4All(m), 'Almost all.All should be False');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_None;
@@ -13561,13 +13353,13 @@ var
   m: TMaskF32x4;
 begin
   m := MaskF32x4AllTrue;
-  AssertFalse('AllTrue.None should be False', MaskF32x4None(m));
+  CheckFalse(MaskF32x4None(m), 'AllTrue.None should be False');
   
   m := MaskF32x4AllFalse;
-  AssertTrue('AllFalse.None should be True', MaskF32x4None(m));
+  CheckTrue(MaskF32x4None(m), 'AllFalse.None should be True');
   
   m := MaskF32x4Set(False, False, False, True);
-  AssertFalse('OnlyLast.None should be False', MaskF32x4None(m));
+  CheckFalse(MaskF32x4None(m), 'OnlyLast.None should be False');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Op_And;
@@ -13578,10 +13370,10 @@ begin
   b := MaskF32x4Set(True, False, True, False);
   c := a and b;
   
-  AssertTrue('(T and T) should be T', MaskF32x4Test(c, 0));
-  AssertFalse('(T and F) should be F', MaskF32x4Test(c, 1));
-  AssertFalse('(F and T) should be F', MaskF32x4Test(c, 2));
-  AssertFalse('(F and F) should be F', MaskF32x4Test(c, 3));
+  CheckTrue(MaskF32x4Test(c, 0), '(T and T) should be T');
+  CheckFalse(MaskF32x4Test(c, 1), '(T and F) should be F');
+  CheckFalse(MaskF32x4Test(c, 2), '(F and T) should be F');
+  CheckFalse(MaskF32x4Test(c, 3), '(F and F) should be F');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Op_Or;
@@ -13592,10 +13384,10 @@ begin
   b := MaskF32x4Set(True, False, True, False);
   c := a or b;
   
-  AssertTrue('(T or T) should be T', MaskF32x4Test(c, 0));
-  AssertTrue('(T or F) should be T', MaskF32x4Test(c, 1));
-  AssertTrue('(F or T) should be T', MaskF32x4Test(c, 2));
-  AssertFalse('(F or F) should be F', MaskF32x4Test(c, 3));
+  CheckTrue(MaskF32x4Test(c, 0), '(T or T) should be T');
+  CheckTrue(MaskF32x4Test(c, 1), '(T or F) should be T');
+  CheckTrue(MaskF32x4Test(c, 2), '(F or T) should be T');
+  CheckFalse(MaskF32x4Test(c, 3), '(F or F) should be F');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Op_Xor;
@@ -13606,10 +13398,10 @@ begin
   b := MaskF32x4Set(True, False, True, False);
   c := a xor b;
   
-  AssertFalse('(T xor T) should be F', MaskF32x4Test(c, 0));
-  AssertTrue('(T xor F) should be T', MaskF32x4Test(c, 1));
-  AssertTrue('(F xor T) should be T', MaskF32x4Test(c, 2));
-  AssertFalse('(F xor F) should be F', MaskF32x4Test(c, 3));
+  CheckFalse(MaskF32x4Test(c, 0), '(T xor T) should be F');
+  CheckTrue(MaskF32x4Test(c, 1), '(T xor F) should be T');
+  CheckTrue(MaskF32x4Test(c, 2), '(F xor T) should be T');
+  CheckFalse(MaskF32x4Test(c, 3), '(F xor F) should be F');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Op_Not;
@@ -13619,17 +13411,17 @@ begin
   a := MaskF32x4Set(True, False, True, False);
   c := not a;
   
-  AssertFalse('(not T) should be F', MaskF32x4Test(c, 0));
-  AssertTrue('(not F) should be T', MaskF32x4Test(c, 1));
-  AssertFalse('(not T) should be F', MaskF32x4Test(c, 2));
-  AssertTrue('(not F) should be T', MaskF32x4Test(c, 3));
+  CheckFalse(MaskF32x4Test(c, 0), '(not T) should be F');
+  CheckTrue(MaskF32x4Test(c, 1), '(not F) should be T');
+  CheckFalse(MaskF32x4Test(c, 2), '(not T) should be F');
+  CheckTrue(MaskF32x4Test(c, 3), '(not F) should be T');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskI32x4_TypeDef_Size;
 var
   m: TMaskI32x4;
 begin
-  AssertEquals('TMaskI32x4 should be 16 bytes', 16, SizeOf(m));
+  CheckEqual(16, SizeOf(m), 'TMaskI32x4 should be 16 bytes');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskI32x4_AllTrue;
@@ -13637,10 +13429,10 @@ var
   m: TMaskI32x4;
 begin
   m := MaskI32x4AllTrue;
-  AssertEquals('m[0] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[0]);
-  AssertEquals('m[1] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[1]);
-  AssertEquals('m[2] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[2]);
-  AssertEquals('m[3] should be $FFFFFFFF', UInt32($FFFFFFFF), m.m[3]);
+  CheckEqual(UInt32($FFFFFFFF), m.m[0], 'm[0] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[1], 'm[1] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[2], 'm[2] should be $FFFFFFFF');
+  CheckEqual(UInt32($FFFFFFFF), m.m[3], 'm[3] should be $FFFFFFFF');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskI32x4_ToBitmask;
@@ -13650,18 +13442,18 @@ var
 begin
   m := MaskI32x4AllTrue;
   bm := MaskI32x4ToBitmask(m);
-  AssertEquals('AllTrue bitmask should be $F', $F, bm);
+  CheckEqual($F, bm, 'AllTrue bitmask should be $F');
   
   m := MaskI32x4AllFalse;
   bm := MaskI32x4ToBitmask(m);
-  AssertEquals('AllFalse bitmask should be 0', 0, bm);
+  CheckEqual(0, bm, 'AllFalse bitmask should be 0');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF64x2_TypeDef_Size;
 var
   m: TMaskF64x2;
 begin
-  AssertEquals('TMaskF64x2 should be 16 bytes', 16, SizeOf(m));
+  CheckEqual(16, SizeOf(m), 'TMaskF64x2 should be 16 bytes');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF64x2_AllTrue;
@@ -13669,8 +13461,8 @@ var
   m: TMaskF64x2;
 begin
   m := MaskF64x2AllTrue;
-  AssertEquals('m[0] should be max UInt64', High(UInt64), m.m[0]);
-  AssertEquals('m[1] should be max UInt64', High(UInt64), m.m[1]);
+  CheckEqual(High(UInt64), m.m[0], 'm[0] should be max UInt64');
+  CheckEqual(High(UInt64), m.m[1], 'm[1] should be max UInt64');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF64x2_ToBitmask;
@@ -13680,11 +13472,11 @@ var
 begin
   m := MaskF64x2AllTrue;
   bm := MaskF64x2ToBitmask(m);
-  AssertEquals('AllTrue bitmask should be $3', $3, bm);
+  CheckEqual($3, bm, 'AllTrue bitmask should be $3');
   
   m := MaskF64x2AllFalse;
   bm := MaskF64x2ToBitmask(m);
-  AssertEquals('AllFalse bitmask should be 0', 0, bm);
+  CheckEqual(0, bm, 'AllFalse bitmask should be 0');
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF32x4_Select;
@@ -13702,10 +13494,10 @@ begin
   r := MaskF32x4Select(m, a, b);
   
   // result should be [1, 20, 3, 40]
-  AssertEquals('r[0] should be 1.0 (from a)', 1.0, r.f[0], 0.0001);
-  AssertEquals('r[1] should be 20.0 (from b)', 20.0, r.f[1], 0.0001);
-  AssertEquals('r[2] should be 3.0 (from a)', 3.0, r.f[2], 0.0001);
-  AssertEquals('r[3] should be 40.0 (from b)', 40.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'r[0] should be 1.0 (from a)');
+  CheckNear(20.0, r.f[1], 0.0001, 'r[1] should be 20.0 (from b)');
+  CheckNear(3.0, r.f[2], 0.0001, 'r[2] should be 3.0 (from a)');
+  CheckNear(40.0, r.f[3], 0.0001, 'r[3] should be 40.0 (from b)');
 end;
 
 { TTestCase_TypeConversion }
@@ -13722,10 +13514,10 @@ begin
   f.f[3] := 1.0;
   i := VecF32x4IntoBits(f);
   
-  AssertEquals('1.0 bit pattern should be $3F800000', Int32($3F800000), i.i[0]);
-  AssertEquals('Element 1 should match', Int32($3F800000), i.i[1]);
-  AssertEquals('Element 2 should match', Int32($3F800000), i.i[2]);
-  AssertEquals('Element 3 should match', Int32($3F800000), i.i[3]);
+  CheckEqual(Int32($3F800000), i.i[0], '1.0 bit pattern should be $3F800000');
+  CheckEqual(Int32($3F800000), i.i[1], 'Element 1 should match');
+  CheckEqual(Int32($3F800000), i.i[2], 'Element 2 should match');
+  CheckEqual(Int32($3F800000), i.i[3], 'Element 3 should match');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI32x4_FromBitsF32;
@@ -13741,10 +13533,10 @@ begin
   
   f := VecI32x4FromBitsF32(i);
   
-  AssertEquals('$3F800000 as float should be 1.0', 1.0, f.f[0], 0.0001);
-  AssertEquals('Element 1 should be 1.0', 1.0, f.f[1], 0.0001);
-  AssertEquals('Element 2 should be 1.0', 1.0, f.f[2], 0.0001);
-  AssertEquals('Element 3 should be 1.0', 1.0, f.f[3], 0.0001);
+  CheckNear(1.0, f.f[0], 0.0001, '$3F800000 as float should be 1.0');
+  CheckNear(1.0, f.f[1], 0.0001, 'Element 1 should be 1.0');
+  CheckNear(1.0, f.f[2], 0.0001, 'Element 2 should be 1.0');
+  CheckNear(1.0, f.f[3], 0.0001, 'Element 3 should be 1.0');
 end;
 
 procedure TTestCase_TypeConversion.Test_IntoBits_FromBits_Roundtrip;
@@ -13760,10 +13552,10 @@ begin
   bits := VecF32x4IntoBits(original);
   restored := VecI32x4FromBitsF32(bits);
   
-  AssertEquals('Roundtrip [0]', original.f[0], restored.f[0], 0.0001);
-  AssertEquals('Roundtrip [1]', original.f[1], restored.f[1], 0.0001);
-  AssertEquals('Roundtrip [2]', original.f[2], restored.f[2], 0.0001);
-  AssertEquals('Roundtrip [3]', original.f[3], restored.f[3], 0.0001);
+  CheckNear(original.f[0], restored.f[0], 0.0001, 'Roundtrip [0]');
+  CheckNear(original.f[1], restored.f[1], 0.0001, 'Roundtrip [1]');
+  CheckNear(original.f[2], restored.f[2], 0.0001, 'Roundtrip [2]');
+  CheckNear(original.f[3], restored.f[3], 0.0001, 'Roundtrip [3]');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecF64x2_IntoBits;
@@ -13776,8 +13568,8 @@ begin
   f.d[1] := 1.0;
   i := VecF64x2IntoBits(f);
   
-  AssertEquals('1.0 double bit pattern', Int64($3FF0000000000000), i.i[0]);
-  AssertEquals('Element 1 should match', Int64($3FF0000000000000), i.i[1]);
+  CheckEqual(Int64($3FF0000000000000), i.i[0], '1.0 double bit pattern');
+  CheckEqual(Int64($3FF0000000000000), i.i[1], 'Element 1 should match');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI64x2_FromBitsF64;
@@ -13790,8 +13582,8 @@ begin
   
   f := VecI64x2FromBitsF64(i);
   
-  AssertEquals('$3FF... as double should be 1.0', 1.0, f.d[0], 0.0001);
-  AssertEquals('$400... as double should be 2.0', 2.0, f.d[1], 0.0001);
+  CheckNear(1.0, f.d[0], 0.0001, '$3FF... as double should be 1.0');
+  CheckNear(2.0, f.d[1], 0.0001, '$400... as double should be 2.0');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecF32x4_CastToI32x4;
@@ -13806,10 +13598,10 @@ begin
   
   i := VecF32x4CastToI32x4(f);
   
-  AssertEquals('1.9 truncates to 1', 1, i.i[0]);
-  AssertEquals('-2.9 truncates to -2', -2, i.i[1]);
-  AssertEquals('0.0 truncates to 0', 0, i.i[2]);
-  AssertEquals('100.5 truncates to 100', 100, i.i[3]);
+  CheckEqual(1, i.i[0], '1.9 truncates to 1');
+  CheckEqual(-2, i.i[1], '-2.9 truncates to -2');
+  CheckEqual(0, i.i[2], '0.0 truncates to 0');
+  CheckEqual(100, i.i[3], '100.5 truncates to 100');
 
   f.f[0] := -1.1;
   f.f[1] := 2.999;
@@ -13818,10 +13610,10 @@ begin
 
   i := VecF32x4CastToI32x4(f);
 
-  AssertEquals('-1.1 truncates to -1', -1, i.i[0]);
-  AssertEquals('2.999 truncates to 2', 2, i.i[1]);
-  AssertEquals('-0.99 truncates to 0', 0, i.i[2]);
-  AssertEquals('42.01 truncates to 42', 42, i.i[3]);
+  CheckEqual(-1, i.i[0], '-1.1 truncates to -1');
+  CheckEqual(2, i.i[1], '2.999 truncates to 2');
+  CheckEqual(0, i.i[2], '-0.99 truncates to 0');
+  CheckEqual(42, i.i[3], '42.01 truncates to 42');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI32x4_CastToF32x4;
@@ -13836,10 +13628,10 @@ begin
   
   f := VecI32x4CastToF32x4(i);
   
-  AssertEquals('1 converts to 1.0', 1.0, f.f[0], 0.0001);
-  AssertEquals('-2 converts to -2.0', -2.0, f.f[1], 0.0001);
-  AssertEquals('0 converts to 0.0', 0.0, f.f[2], 0.0001);
-  AssertEquals('100 converts to 100.0', 100.0, f.f[3], 0.0001);
+  CheckNear(1.0, f.f[0], 0.0001, '1 converts to 1.0');
+  CheckNear(-2.0, f.f[1], 0.0001, '-2 converts to -2.0');
+  CheckNear(0.0, f.f[2], 0.0001, '0 converts to 0.0');
+  CheckNear(100.0, f.f[3], 0.0001, '100 converts to 100.0');
 
   i.i[0] := -123;
   i.i[1] := 456;
@@ -13848,10 +13640,10 @@ begin
 
   f := VecI32x4CastToF32x4(i);
 
-  AssertEquals('-123 converts to -123.0', -123.0, f.f[0], 0.0001);
-  AssertEquals('456 converts to 456.0', 456.0, f.f[1], 0.0001);
-  AssertEquals('-789 converts to -789.0', -789.0, f.f[2], 0.0001);
-  AssertEquals('2048 converts to 2048.0', 2048.0, f.f[3], 0.0001);
+  CheckNear(-123.0, f.f[0], 0.0001, '-123 converts to -123.0');
+  CheckNear(456.0, f.f[1], 0.0001, '456 converts to 456.0');
+  CheckNear(-789.0, f.f[2], 0.0001, '-789 converts to -789.0');
+  CheckNear(2048.0, f.f[3], 0.0001, '2048 converts to 2048.0');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecF64x2_CastToI64x2;
@@ -13864,8 +13656,8 @@ begin
   
   i := VecF64x2CastToI64x2(f);
   
-  AssertEquals('1.9 truncates to 1', Int64(1), i.i[0]);
-  AssertEquals('-2.9 truncates to -2', Int64(-2), i.i[1]);
+  CheckEqual(Int64(1), i.i[0], '1.9 truncates to 1');
+  CheckEqual(Int64(-2), i.i[1], '-2.9 truncates to -2');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI64x2_CastToF64x2;
@@ -13878,8 +13670,8 @@ begin
   
   f := VecI64x2CastToF64x2(i);
   
-  AssertEquals('1 converts to 1.0', 1.0, f.d[0], 0.0001);
-  AssertEquals('-2 converts to -2.0', -2.0, f.d[1], 0.0001);
+  CheckNear(1.0, f.d[0], 0.0001, '1 converts to 1.0');
+  CheckNear(-2.0, f.d[1], 0.0001, '-2 converts to -2.0');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI16x8_WidenLo_I32x4;
@@ -13896,10 +13688,10 @@ begin
   
   r := VecI16x8WidenLoI32x4(a);
   
-  AssertEquals('Widen lo[0]', Int32(100), r.i[0]);
-  AssertEquals('Widen lo[1] with sign', Int32(-100), r.i[1]);
-  AssertEquals('Widen lo[2] max', Int32(32767), r.i[2]);
-  AssertEquals('Widen lo[3] min', Int32(-32768), r.i[3]);
+  CheckEqual(Int32(100), r.i[0], 'Widen lo[0]');
+  CheckEqual(Int32(-100), r.i[1], 'Widen lo[1] with sign');
+  CheckEqual(Int32(32767), r.i[2], 'Widen lo[2] max');
+  CheckEqual(Int32(-32768), r.i[3], 'Widen lo[3] min');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI16x8_WidenHi_I32x4;
@@ -13916,10 +13708,10 @@ begin
   
   r := VecI16x8WidenHiI32x4(a);
   
-  AssertEquals('Widen hi[0]', Int32(200), r.i[0]);
-  AssertEquals('Widen hi[1] with sign', Int32(-200), r.i[1]);
-  AssertEquals('Widen hi[2] max', Int32(32767), r.i[2]);
-  AssertEquals('Widen hi[3] min', Int32(-32768), r.i[3]);
+  CheckEqual(Int32(200), r.i[0], 'Widen hi[0]');
+  CheckEqual(Int32(-200), r.i[1], 'Widen hi[1] with sign');
+  CheckEqual(Int32(32767), r.i[2], 'Widen hi[2] max');
+  CheckEqual(Int32(-32768), r.i[3], 'Widen hi[3] min');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecI32x4_NarrowToI16x8;
@@ -13942,15 +13734,15 @@ begin
   r := VecI32x4NarrowToI16x8(a, b);
   
   // 低 4 个元素来自 a
-  AssertEquals('Narrow[0] from a', Int16(100), r.i[0]);
-  AssertEquals('Narrow[1] from a', Int16(-100), r.i[1]);
-  AssertEquals('Narrow[2] from a', Int16(32767), r.i[2]);
-  AssertEquals('Narrow[3] from a', Int16(-32768), r.i[3]);
+  CheckEqual(Int16(100), r.i[0], 'Narrow[0] from a');
+  CheckEqual(Int16(-100), r.i[1], 'Narrow[1] from a');
+  CheckEqual(Int16(32767), r.i[2], 'Narrow[2] from a');
+  CheckEqual(Int16(-32768), r.i[3], 'Narrow[3] from a');
   // 高 4 个元素来自 b
-  AssertEquals('Narrow[4] from b', Int16(1), r.i[4]);
-  AssertEquals('Narrow[5] from b', Int16(2), r.i[5]);
-  AssertEquals('Narrow[6] from b', Int16(3), r.i[6]);
-  AssertEquals('Narrow[7] from b', Int16(4), r.i[7]);
+  CheckEqual(Int16(1), r.i[4], 'Narrow[4] from b');
+  CheckEqual(Int16(2), r.i[5], 'Narrow[5] from b');
+  CheckEqual(Int16(3), r.i[6], 'Narrow[6] from b');
+  CheckEqual(Int16(4), r.i[7], 'Narrow[7] from b');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecF32x4_ToF64x2_Lo;
@@ -13965,8 +13757,8 @@ begin
   
   r := VecF32x4ToF64x2Lo(a);
   
-  AssertEquals('F32->F64 [0]', 1.5, r.d[0], 0.0001);
-  AssertEquals('F32->F64 [1]', -2.5, r.d[1], 0.0001);
+  CheckNear(1.5, r.d[0], 0.0001, 'F32->F64 [0]');
+  CheckNear(-2.5, r.d[1], 0.0001, 'F32->F64 [1]');
 end;
 
 procedure TTestCase_TypeConversion.Test_VecF64x2_ToF32x4;
@@ -13984,10 +13776,10 @@ begin
   
   r := VecF64x2ToF32x4(a, b);
   
-  AssertEquals('F64->F32 [0] from a', 1.5, r.f[0], 0.0001);
-  AssertEquals('F64->F32 [1] from a', -2.5, r.f[1], 0.0001);
-  AssertEquals('F64->F32 [2] from b', 3.5, r.f[2], 0.0001);
-  AssertEquals('F64->F32 [3] from b', 4.5, r.f[3], 0.0001);
+  CheckNear(1.5, r.f[0], 0.0001, 'F64->F32 [0] from a');
+  CheckNear(-2.5, r.f[1], 0.0001, 'F64->F32 [1] from a');
+  CheckNear(3.5, r.f[2], 0.0001, 'F64->F32 [2] from b');
+  CheckNear(4.5, r.f[3], 0.0001, 'F64->F32 [3] from b');
 end;
 
 { TTestCase_Builder }
@@ -13998,10 +13790,10 @@ var
 begin
   v := TVecF32x4Builder.FromValues(1.0, 2.0, 3.0, 4.0).Build;
   
-  AssertEquals('Element 0', 1.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 2.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 3.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 4.0, v.f[3], 0.0001);
+  CheckNear(1.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(2.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(3.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(4.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Create_Splat;
@@ -14010,10 +13802,10 @@ var
 begin
   v := TVecF32x4Builder.Splat(42.0).Build;
   
-  AssertEquals('Element 0', 42.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 42.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 42.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 42.0, v.f[3], 0.0001);
+  CheckNear(42.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(42.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(42.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(42.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Create_Load;
@@ -14024,10 +13816,10 @@ begin
   arr[0] := 10.0; arr[1] := 20.0; arr[2] := 30.0; arr[3] := 40.0;
   v := TVecF32x4Builder.Load(@arr[0]).Build;
   
-  AssertEquals('Element 0', 10.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 20.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 30.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 40.0, v.f[3], 0.0001);
+  CheckNear(10.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(20.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(30.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(40.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Chain_Add;
@@ -14039,10 +13831,10 @@ begin
          .Add(TVecF32x4Builder.FromValues(10.0, 20.0, 30.0, 40.0).Build)
          .Build;
   
-  AssertEquals('Element 0', 11.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 22.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 33.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 44.0, v.f[3], 0.0001);
+  CheckNear(11.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(22.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(33.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(44.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Chain_MulAdd;
@@ -14055,10 +13847,10 @@ begin
          .AddScalar(10.0)
          .Build;
   
-  AssertEquals('Element 0', 12.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 14.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 16.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 18.0, v.f[3], 0.0001);
+  CheckNear(12.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(14.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(16.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(18.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Chain_Normalize;
@@ -14071,14 +13863,14 @@ begin
          .Normalize
          .Build;
   
-  AssertEquals('Element 0', 1.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 0.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 0.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 0.0, v.f[3], 0.0001);
+  CheckNear(1.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(0.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(0.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(0.0, v.f[3], 0.0001, 'Element 3');
   
   // 验证长度为 1
   len := VecF32x4Length(v);
-  AssertEquals('Length should be 1', 1.0, len, 0.0001);
+  CheckNear(1.0, len, 0.0001, 'Length should be 1');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Chain_Clamp;
@@ -14090,10 +13882,10 @@ begin
          .Clamp(0.0, 10.0)
          .Build;
   
-  AssertEquals('Element 0', 0.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 5.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 10.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 0.0, v.f[3], 0.0001);
+  CheckNear(0.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(5.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(10.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(0.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Build;
@@ -14102,10 +13894,10 @@ var
 begin
   v := TVecF32x4Builder.FromValues(1.0, 2.0, 3.0, 4.0).Build;
   
-  AssertEquals('Element 0', 1.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 2.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 3.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 4.0, v.f[3], 0.0001);
+  CheckNear(1.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(2.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(3.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(4.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 procedure TTestCase_Builder.Test_Builder_ReduceAdd;
@@ -14113,7 +13905,7 @@ var
   sum: Single;
 begin
   sum := TVecF32x4Builder.FromValues(1.0, 2.0, 3.0, 4.0).ReduceAdd;
-  AssertEquals('Sum should be 10', 10.0, sum, 0.0001);
+  CheckNear(10.0, sum, 0.0001, 'Sum should be 10');
 end;
 
 procedure TTestCase_Builder.Test_Builder_ReduceMin;
@@ -14121,7 +13913,7 @@ var
   minVal: Single;
 begin
   minVal := TVecF32x4Builder.FromValues(5.0, 2.0, 8.0, 3.0).ReduceMin;
-  AssertEquals('Min should be 2', 2.0, minVal, 0.0001);
+  CheckNear(2.0, minVal, 0.0001, 'Min should be 2');
 end;
 
 procedure TTestCase_Builder.Test_Builder_ReduceMax;
@@ -14129,7 +13921,7 @@ var
   maxVal: Single;
 begin
   maxVal := TVecF32x4Builder.FromValues(5.0, 2.0, 8.0, 3.0).ReduceMax;
-  AssertEquals('Max should be 8', 8.0, maxVal, 0.0001);
+  CheckNear(8.0, maxVal, 0.0001, 'Max should be 8');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Complex_DotProduct;
@@ -14141,7 +13933,7 @@ begin
            .Mul(TVecF32x4Builder.FromValues(2.0, 3.0, 4.0, 5.0).Build)
            .ReduceAdd;
   
-  AssertEquals('Dot product should be 40', 40.0, dot, 0.0001);
+  CheckNear(40.0, dot, 0.0001, 'Dot product should be 40');
 end;
 
 procedure TTestCase_Builder.Test_Builder_Complex_Lerp;
@@ -14153,10 +13945,10 @@ begin
          .Lerp(TVecF32x4Builder.Splat(10.0).Build, 0.3)
          .Build;
   
-  AssertEquals('Element 0', 3.0, v.f[0], 0.0001);
-  AssertEquals('Element 1', 3.0, v.f[1], 0.0001);
-  AssertEquals('Element 2', 3.0, v.f[2], 0.0001);
-  AssertEquals('Element 3', 3.0, v.f[3], 0.0001);
+  CheckNear(3.0, v.f[0], 0.0001, 'Element 0');
+  CheckNear(3.0, v.f[1], 0.0001, 'Element 1');
+  CheckNear(3.0, v.f[2], 0.0001, 'Element 2');
+  CheckNear(3.0, v.f[3], 0.0001, 'Element 3');
 end;
 
 { TTestCase_GatherScatter }
@@ -14180,10 +13972,10 @@ begin
   
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather[0]', 10.0, r.f[0], 0.0001);
-  AssertEquals('Gather[1]', 20.0, r.f[1], 0.0001);
-  AssertEquals('Gather[2]', 30.0, r.f[2], 0.0001);
-  AssertEquals('Gather[3]', 40.0, r.f[3], 0.0001);
+  CheckNear(10.0, r.f[0], 0.0001, 'Gather[0]');
+  CheckNear(20.0, r.f[1], 0.0001, 'Gather[1]');
+  CheckNear(30.0, r.f[2], 0.0001, 'Gather[2]');
+  CheckNear(40.0, r.f[3], 0.0001, 'Gather[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_Stride;
@@ -14204,10 +13996,10 @@ begin
   
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather stride[0]', 10.0, r.f[0], 0.0001);
-  AssertEquals('Gather stride[1]', 30.0, r.f[1], 0.0001);
-  AssertEquals('Gather stride[2]', 50.0, r.f[2], 0.0001);
-  AssertEquals('Gather stride[3]', 70.0, r.f[3], 0.0001);
+  CheckNear(10.0, r.f[0], 0.0001, 'Gather stride[0]');
+  CheckNear(30.0, r.f[1], 0.0001, 'Gather stride[1]');
+  CheckNear(50.0, r.f[2], 0.0001, 'Gather stride[2]');
+  CheckNear(70.0, r.f[3], 0.0001, 'Gather stride[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_Random;
@@ -14228,10 +14020,10 @@ begin
   
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather random[0]', 80.0, r.f[0], 0.0001);
-  AssertEquals('Gather random[1]', 10.0, r.f[1], 0.0001);
-  AssertEquals('Gather random[2]', 160.0, r.f[2], 0.0001);
-  AssertEquals('Gather random[3]', 40.0, r.f[3], 0.0001);
+  CheckNear(80.0, r.f[0], 0.0001, 'Gather random[0]');
+  CheckNear(10.0, r.f[1], 0.0001, 'Gather random[1]');
+  CheckNear(160.0, r.f[2], 0.0001, 'Gather random[2]');
+  CheckNear(40.0, r.f[3], 0.0001, 'Gather random[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_DuplicateIndices_DuplicateValues;
@@ -14251,10 +14043,10 @@ begin
 
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
 
-  AssertEquals('Gather duplicate[0]', 40.0, r.f[0], 0.0001);
-  AssertEquals('Gather duplicate[1]', 20.0, r.f[1], 0.0001);
-  AssertEquals('Gather duplicate[2]', 40.0, r.f[2], 0.0001);
-  AssertEquals('Gather duplicate[3]', 20.0, r.f[3], 0.0001);
+  CheckNear(40.0, r.f[0], 0.0001, 'Gather duplicate[0]');
+  CheckNear(20.0, r.f[1], 0.0001, 'Gather duplicate[1]');
+  CheckNear(40.0, r.f[2], 0.0001, 'Gather duplicate[2]');
+  CheckNear(20.0, r.f[3], 0.0001, 'Gather duplicate[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Gather_Sequential;
@@ -14274,10 +14066,10 @@ begin
   
   r := nextpas.core.simd.VecI32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather[0]', 100, r.i[0]);
-  AssertEquals('Gather[1]', 200, r.i[1]);
-  AssertEquals('Gather[2]', 300, r.i[2]);
-  AssertEquals('Gather[3]', 400, r.i[3]);
+  CheckEqual(100, r.i[0], 'Gather[0]');
+  CheckEqual(200, r.i[1], 'Gather[1]');
+  CheckEqual(300, r.i[2], 'Gather[2]');
+  CheckEqual(400, r.i[3], 'Gather[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Gather_Negative;
@@ -14297,10 +14089,10 @@ begin
   
   r := nextpas.core.simd.VecI32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather negative[0]', -8, r.i[0]);
-  AssertEquals('Gather negative[1]', 0, r.i[1]);
-  AssertEquals('Gather negative[2]', 7, r.i[2]);
-  AssertEquals('Gather negative[3]', -4, r.i[3]);
+  CheckEqual(-8, r.i[0], 'Gather negative[0]');
+  CheckEqual(0, r.i[1], 'Gather negative[1]');
+  CheckEqual(7, r.i[2], 'Gather negative[2]');
+  CheckEqual(-4, r.i[3], 'Gather negative[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Scatter_Sequential;
@@ -14328,12 +14120,12 @@ begin
   
   nextpas.core.simd.VecF32x4Scatter(@data[0], indices, values);
   
-  AssertEquals('Scatter[0]', 11.0, data[0], 0.0001);
-  AssertEquals('Scatter[1]', 22.0, data[1], 0.0001);
-  AssertEquals('Scatter[2]', 33.0, data[2], 0.0001);
-  AssertEquals('Scatter[3]', 44.0, data[3], 0.0001);
+  CheckNear(11.0, data[0], 0.0001, 'Scatter[0]');
+  CheckNear(22.0, data[1], 0.0001, 'Scatter[1]');
+  CheckNear(33.0, data[2], 0.0001, 'Scatter[2]');
+  CheckNear(44.0, data[3], 0.0001, 'Scatter[3]');
   // 确保其它位置未被修改
-  AssertEquals('Scatter[4] unchanged', 0.0, data[4], 0.0001);
+  CheckNear(0.0, data[4], 0.0001, 'Scatter[4] unchanged');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Scatter_Stride;
@@ -14359,13 +14151,13 @@ begin
   
   nextpas.core.simd.VecF32x4Scatter(@data[0], indices, values);
   
-  AssertEquals('Scatter stride[0]', 100.0, data[0], 0.0001);
-  AssertEquals('Scatter stride[4]', 200.0, data[4], 0.0001);
-  AssertEquals('Scatter stride[8]', 300.0, data[8], 0.0001);
-  AssertEquals('Scatter stride[12]', 400.0, data[12], 0.0001);
+  CheckNear(100.0, data[0], 0.0001, 'Scatter stride[0]');
+  CheckNear(200.0, data[4], 0.0001, 'Scatter stride[4]');
+  CheckNear(300.0, data[8], 0.0001, 'Scatter stride[8]');
+  CheckNear(400.0, data[12], 0.0001, 'Scatter stride[12]');
   // 确保中间位置未被修改
-  AssertEquals('Scatter[1] unchanged', 0.0, data[1], 0.0001);
-  AssertEquals('Scatter[5] unchanged', 0.0, data[5], 0.0001);
+  CheckNear(0.0, data[1], 0.0001, 'Scatter[1] unchanged');
+  CheckNear(0.0, data[5], 0.0001, 'Scatter[5] unchanged');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Scatter_Sequential;
@@ -14390,12 +14182,12 @@ begin
   
   nextpas.core.simd.VecI32x4Scatter(@data[0], indices, values);
   
-  AssertEquals('Scatter[5]', 111, data[5]);
-  AssertEquals('Scatter[10]', 222, data[10]);
-  AssertEquals('Scatter[2]', 333, data[2]);
-  AssertEquals('Scatter[15]', 444, data[15]);
+  CheckEqual(111, data[5], 'Scatter[5]');
+  CheckEqual(222, data[10], 'Scatter[10]');
+  CheckEqual(333, data[2], 'Scatter[2]');
+  CheckEqual(444, data[15], 'Scatter[15]');
   // 确保其它位置未被修改
-  AssertEquals('Scatter[0] unchanged', 0, data[0]);
+  CheckEqual(0, data[0], 'Scatter[0] unchanged');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Scatter_DuplicateIndices_LastLaneWins;
@@ -14420,9 +14212,9 @@ begin
 
   nextpas.core.simd.VecI32x4Scatter(@data[0], indices, values);
 
-  AssertEquals('Scatter duplicate last lane wins[5]', 444, data[5]);
-  AssertEquals('Scatter duplicate preserved unrelated write[2]', 222, data[2]);
-  AssertEquals('Scatter duplicate untouched[0]', -1, data[0]);
+  CheckEqual(444, data[5], 'Scatter duplicate last lane wins[5]');
+  CheckEqual(222, data[2], 'Scatter duplicate preserved unrelated write[2]');
+  CheckEqual(-1, data[0], 'Scatter duplicate untouched[0]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
@@ -14448,10 +14240,10 @@ begin
 
   r := nextpas.core.simd.VecF32x4GatherSelect(@data[0], TMask4($05), indices, orVal);
 
-  AssertEquals('GatherSelect f32 enabled[0]', 10.0, r.f[0], 0.0001);
-  AssertEquals('GatherSelect f32 masked[1]', -2.0, r.f[1], 0.0001);
-  AssertEquals('GatherSelect f32 enabled[2]', 30.0, r.f[2], 0.0001);
-  AssertEquals('GatherSelect f32 masked[3]', -4.0, r.f[3], 0.0001);
+  CheckNear(10.0, r.f[0], 0.0001, 'GatherSelect f32 enabled[0]');
+  CheckNear(-2.0, r.f[1], 0.0001, 'GatherSelect f32 masked[1]');
+  CheckNear(30.0, r.f[2], 0.0001, 'GatherSelect f32 enabled[2]');
+  CheckNear(-4.0, r.f[3], 0.0001, 'GatherSelect f32 masked[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_Preserves_OrValue_On_Masked_Lanes;
@@ -14477,10 +14269,10 @@ begin
 
   r := nextpas.core.simd.VecI32x4GatherSelect(@data[0], TMask4($0A), indices, orVal);
 
-  AssertEquals('GatherSelect i32 masked[0]', -10, r.i[0]);
-  AssertEquals('GatherSelect i32 enabled[1]', 200, r.i[1]);
-  AssertEquals('GatherSelect i32 masked[2]', -30, r.i[2]);
-  AssertEquals('GatherSelect i32 enabled[3]', 100, r.i[3]);
+  CheckEqual(-10, r.i[0], 'GatherSelect i32 masked[0]');
+  CheckEqual(200, r.i[1], 'GatherSelect i32 enabled[1]');
+  CheckEqual(-30, r.i[2], 'GatherSelect i32 masked[2]');
+  CheckEqual(100, r.i[3], 'GatherSelect i32 enabled[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_Skips_Disabled_Lanes;
@@ -14505,10 +14297,10 @@ begin
 
   nextpas.core.simd.VecF32x4ScatterSelect(@data[0], TMask4($09), indices, values);
 
-  AssertEquals('ScatterSelect f32 enabled[0]', 11.0, data[0], 0.0001);
-  AssertEquals('ScatterSelect f32 masked[1]', -4.0, data[3], 0.0001);
-  AssertEquals('ScatterSelect f32 masked[2]', -6.0, data[5], 0.0001);
-  AssertEquals('ScatterSelect f32 enabled[3]', 44.0, data[7], 0.0001);
+  CheckNear(11.0, data[0], 0.0001, 'ScatterSelect f32 enabled[0]');
+  CheckNear(-4.0, data[3], 0.0001, 'ScatterSelect f32 masked[1]');
+  CheckNear(-6.0, data[5], 0.0001, 'ScatterSelect f32 masked[2]');
+  CheckNear(44.0, data[7], 0.0001, 'ScatterSelect f32 enabled[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_ScatterSelect_Skips_Disabled_Lanes;
@@ -14533,10 +14325,10 @@ begin
 
   nextpas.core.simd.VecI32x4ScatterSelect(@data[0], TMask4($06), indices, values);
 
-  AssertEquals('ScatterSelect i32 masked[0]', -20, data[1]);
-  AssertEquals('ScatterSelect i32 enabled[1]', 222, data[2]);
-  AssertEquals('ScatterSelect i32 enabled[2]', 333, data[4]);
-  AssertEquals('ScatterSelect i32 masked[3]', -70, data[6]);
+  CheckEqual(-20, data[1], 'ScatterSelect i32 masked[0]');
+  CheckEqual(222, data[2], 'ScatterSelect i32 enabled[1]');
+  CheckEqual(333, data[4], 'ScatterSelect i32 enabled[2]');
+  CheckEqual(-70, data[6], 'ScatterSelect i32 masked[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_DuplicateIndices_LastEnabledLaneWins;
@@ -14561,9 +14353,9 @@ begin
 
   nextpas.core.simd.VecF32x4ScatterSelect(@data[0], TMask4($0D), indices, values);
 
-  AssertEquals('ScatterSelect duplicate last enabled lane wins[4]', 30.0, data[4], 0.0001);
-  AssertEquals('ScatterSelect duplicate enabled tail[6]', 40.0, data[6], 0.0001);
-  AssertEquals('ScatterSelect duplicate untouched[0]', -1.0, data[0], 0.0001);
+  CheckNear(30.0, data[4], 0.0001, 'ScatterSelect duplicate last enabled lane wins[4]');
+  CheckNear(40.0, data[6], 0.0001, 'ScatterSelect duplicate enabled tail[6]');
+  CheckNear(-1.0, data[0], 0.0001, 'ScatterSelect duplicate untouched[0]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Gather_NilBase_Raises_EArgumentNil;
@@ -14581,7 +14373,7 @@ begin
     on E: Exception do
       Fail('VecF32x4Gather nil base raised ' + E.ClassName);
   end;
-  AssertTrue('VecF32x4Gather nil base should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecF32x4Gather nil base should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Gather_NilBase_Raises_EArgumentNil;
@@ -14599,7 +14391,7 @@ begin
     on E: Exception do
       Fail('VecI32x4Gather nil base raised ' + E.ClassName);
   end;
-  AssertTrue('VecI32x4Gather nil base should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecI32x4Gather nil base should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_Scatter_NilBase_Raises_EArgumentNil;
@@ -14619,7 +14411,7 @@ begin
     on E: Exception do
       Fail('VecF32x4Scatter nil base raised ' + E.ClassName);
   end;
-  AssertTrue('VecF32x4Scatter nil base should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecF32x4Scatter nil base should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_Scatter_NilBase_Raises_EArgumentNil;
@@ -14639,7 +14431,7 @@ begin
     on E: Exception do
       Fail('VecI32x4Scatter nil base raised ' + E.ClassName);
   end;
-  AssertTrue('VecI32x4Scatter nil base should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecI32x4Scatter nil base should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
@@ -14653,10 +14445,10 @@ begin
 
   r := nextpas.core.simd.VecF32x4GatherSelect(nil, TMask4($00), indices, orVal);
 
-  AssertEquals('GatherSelect f32 nil base all-disabled[0]', -1.0, r.f[0], 0.0001);
-  AssertEquals('GatherSelect f32 nil base all-disabled[1]', -2.0, r.f[1], 0.0001);
-  AssertEquals('GatherSelect f32 nil base all-disabled[2]', -3.0, r.f[2], 0.0001);
-  AssertEquals('GatherSelect f32 nil base all-disabled[3]', -4.0, r.f[3], 0.0001);
+  CheckNear(-1.0, r.f[0], 0.0001, 'GatherSelect f32 nil base all-disabled[0]');
+  CheckNear(-2.0, r.f[1], 0.0001, 'GatherSelect f32 nil base all-disabled[1]');
+  CheckNear(-3.0, r.f[2], 0.0001, 'GatherSelect f32 nil base all-disabled[2]');
+  CheckNear(-4.0, r.f[3], 0.0001, 'GatherSelect f32 nil base all-disabled[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_NilBase_AllDisabled_Returns_OrValue;
@@ -14670,10 +14462,10 @@ begin
 
   r := nextpas.core.simd.VecI32x4GatherSelect(nil, TMask4($00), indices, orVal);
 
-  AssertEquals('GatherSelect i32 nil base all-disabled[0]', -10, r.i[0]);
-  AssertEquals('GatherSelect i32 nil base all-disabled[1]', -20, r.i[1]);
-  AssertEquals('GatherSelect i32 nil base all-disabled[2]', -30, r.i[2]);
-  AssertEquals('GatherSelect i32 nil base all-disabled[3]', -40, r.i[3]);
+  CheckEqual(-10, r.i[0], 'GatherSelect i32 nil base all-disabled[0]');
+  CheckEqual(-20, r.i[1], 'GatherSelect i32 nil base all-disabled[1]');
+  CheckEqual(-30, r.i[2], 'GatherSelect i32 nil base all-disabled[2]');
+  CheckEqual(-40, r.i[3], 'GatherSelect i32 nil base all-disabled[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
@@ -14693,7 +14485,7 @@ begin
     on E: Exception do
       Fail('VecF32x4GatherSelect nil base with enabled lane raised ' + E.ClassName);
   end;
-  AssertTrue('VecF32x4GatherSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecF32x4GatherSelect nil base with enabled lane should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_GatherSelect_NilBase_EnabledLane_Raises_EArgumentNil;
@@ -14713,7 +14505,7 @@ begin
     on E: Exception do
       Fail('VecI32x4GatherSelect nil base with enabled lane raised ' + E.ClassName);
   end;
-  AssertTrue('VecI32x4GatherSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecI32x4GatherSelect nil base with enabled lane should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecF32x4_ScatterSelect_NilBase_AllDisabled_Is_NoOp;
@@ -14763,7 +14555,7 @@ begin
     on E: Exception do
       Fail('VecF32x4ScatterSelect nil base with enabled lane raised ' + E.ClassName);
   end;
-  AssertTrue('VecF32x4ScatterSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecF32x4ScatterSelect nil base with enabled lane should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_VecI32x4_ScatterSelect_NilBase_EnabledLane_Raises_EArgumentNil;
@@ -14783,7 +14575,7 @@ begin
     on E: Exception do
       Fail('VecI32x4ScatterSelect nil base with enabled lane raised ' + E.ClassName);
   end;
-  AssertTrue('VecI32x4ScatterSelect nil base with enabled lane should raise EArgumentNil', raisedArgumentNil);
+  CheckTrue(raisedArgumentNil, 'VecI32x4ScatterSelect nil base with enabled lane should raise EArgumentNil');
 end;
 
 procedure TTestCase_GatherScatter.Test_Gather_ZeroIndex;
@@ -14805,10 +14597,10 @@ begin
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
   // 所有结果应该都是 data[0]
-  AssertEquals('Gather zero[0]', 0.0, r.f[0], 0.0001);
-  AssertEquals('Gather zero[1]', 0.0, r.f[1], 0.0001);
-  AssertEquals('Gather zero[2]', 0.0, r.f[2], 0.0001);
-  AssertEquals('Gather zero[3]', 0.0, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'Gather zero[0]');
+  CheckNear(0.0, r.f[1], 0.0001, 'Gather zero[1]');
+  CheckNear(0.0, r.f[2], 0.0001, 'Gather zero[2]');
+  CheckNear(0.0, r.f[3], 0.0001, 'Gather zero[3]');
 end;
 
 procedure TTestCase_GatherScatter.Test_Gather_LargeStride;
@@ -14829,10 +14621,10 @@ begin
   
   r := nextpas.core.simd.VecF32x4Gather(@data[0], indices);
   
-  AssertEquals('Gather large[0]', 0.0, r.f[0], 0.0001);
-  AssertEquals('Gather large[1]', 256.0, r.f[1], 0.0001);
-  AssertEquals('Gather large[2]', 512.0, r.f[2], 0.0001);
-  AssertEquals('Gather large[3]', 1023.0, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'Gather large[0]');
+  CheckNear(256.0, r.f[1], 0.0001, 'Gather large[1]');
+  CheckNear(512.0, r.f[2], 0.0001, 'Gather large[2]');
+  CheckNear(1023.0, r.f[3], 0.0001, 'Gather large[3]');
 end;
 
 { TTestCase_ShuffleSWizzle }
@@ -14840,13 +14632,13 @@ end;
 procedure TTestCase_ShuffleSWizzle.Test_MM_SHUFFLE;
 begin
   // MM_SHUFFLE(3,2,1,0) = identity = 0xE4
-  AssertEquals('MM_SHUFFLE(3,2,1,0) = 0xE4', $E4, MM_SHUFFLE(3, 2, 1, 0));
+  CheckEqual($E4, MM_SHUFFLE(3, 2, 1, 0), 'MM_SHUFFLE(3,2,1,0) = 0xE4');
   // MM_SHUFFLE(0,1,2,3) = reverse = 0x1B
-  AssertEquals('MM_SHUFFLE(0,1,2,3) = 0x1B', $1B, MM_SHUFFLE(0, 1, 2, 3));
+  CheckEqual($1B, MM_SHUFFLE(0, 1, 2, 3), 'MM_SHUFFLE(0,1,2,3) = 0x1B');
   // MM_SHUFFLE(0,0,0,0) = broadcast 0 = 0x00
-  AssertEquals('MM_SHUFFLE(0,0,0,0) = 0x00', $00, MM_SHUFFLE(0, 0, 0, 0));
+  CheckEqual($00, MM_SHUFFLE(0, 0, 0, 0), 'MM_SHUFFLE(0,0,0,0) = 0x00');
   // MM_SHUFFLE(2,2,2,2) = broadcast 2 = 0xAA
-  AssertEquals('MM_SHUFFLE(2,2,2,2) = 0xAA', $AA, MM_SHUFFLE(2, 2, 2, 2));
+  CheckEqual($AA, MM_SHUFFLE(2, 2, 2, 2), 'MM_SHUFFLE(2,2,2,2) = 0xAA');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Shuffle_Identity;
@@ -14858,10 +14650,10 @@ begin
   // 恒等 shuffle: MM_SHUFFLE(3,2,1,0) = 0xE4
   r := VecF32x4Shuffle(a, $E4);
   
-  AssertEquals('Identity[0]', 1.0, r.f[0], 0.0001);
-  AssertEquals('Identity[1]', 2.0, r.f[1], 0.0001);
-  AssertEquals('Identity[2]', 3.0, r.f[2], 0.0001);
-  AssertEquals('Identity[3]', 4.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'Identity[0]');
+  CheckNear(2.0, r.f[1], 0.0001, 'Identity[1]');
+  CheckNear(3.0, r.f[2], 0.0001, 'Identity[2]');
+  CheckNear(4.0, r.f[3], 0.0001, 'Identity[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Shuffle_Reverse;
@@ -14873,10 +14665,10 @@ begin
   // 反转 shuffle: MM_SHUFFLE(0,1,2,3) = 0x1B
   r := VecF32x4Shuffle(a, $1B);
   
-  AssertEquals('Reverse[0]', 4.0, r.f[0], 0.0001);
-  AssertEquals('Reverse[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('Reverse[2]', 2.0, r.f[2], 0.0001);
-  AssertEquals('Reverse[3]', 1.0, r.f[3], 0.0001);
+  CheckNear(4.0, r.f[0], 0.0001, 'Reverse[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'Reverse[1]');
+  CheckNear(2.0, r.f[2], 0.0001, 'Reverse[2]');
+  CheckNear(1.0, r.f[3], 0.0001, 'Reverse[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Shuffle_Broadcast;
@@ -14888,10 +14680,10 @@ begin
   // 广播元素 2: MM_SHUFFLE(2,2,2,2) = 0xAA
   r := VecF32x4Shuffle(a, $AA);
   
-  AssertEquals('Broadcast2[0]', 3.0, r.f[0], 0.0001);
-  AssertEquals('Broadcast2[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('Broadcast2[2]', 3.0, r.f[2], 0.0001);
-  AssertEquals('Broadcast2[3]', 3.0, r.f[3], 0.0001);
+  CheckNear(3.0, r.f[0], 0.0001, 'Broadcast2[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'Broadcast2[1]');
+  CheckNear(3.0, r.f[2], 0.0001, 'Broadcast2[2]');
+  CheckNear(3.0, r.f[3], 0.0001, 'Broadcast2[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_Shuffle;
@@ -14903,17 +14695,17 @@ begin
   // 跳跃 shuffle: MM_SHUFFLE(1,0,3,2) = 0x4E
   r := VecI32x4Shuffle(a, $4E);
   
-  AssertEquals('Swap[0]', 30, r.i[0]);
-  AssertEquals('Swap[1]', 40, r.i[1]);
-  AssertEquals('Swap[2]', 10, r.i[2]);
-  AssertEquals('Swap[3]', 20, r.i[3]);
+  CheckEqual(30, r.i[0], 'Swap[0]');
+  CheckEqual(40, r.i[1], 'Swap[1]');
+  CheckEqual(10, r.i[2], 'Swap[2]');
+  CheckEqual(20, r.i[3], 'Swap[3]');
 
   r := VecI32x4Shuffle(a, $FF);
 
-  AssertEquals('Broadcast hi[0]', 40, r.i[0]);
-  AssertEquals('Broadcast hi[1]', 40, r.i[1]);
-  AssertEquals('Broadcast hi[2]', 40, r.i[2]);
-  AssertEquals('Broadcast hi[3]', 40, r.i[3]);
+  CheckEqual(40, r.i[0], 'Broadcast hi[0]');
+  CheckEqual(40, r.i[1], 'Broadcast hi[1]');
+  CheckEqual(40, r.i[2], 'Broadcast hi[2]');
+  CheckEqual(40, r.i[3], 'Broadcast hi[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Shuffle2;
@@ -14926,17 +14718,17 @@ begin
   // 低2来自a的[0,1], 高2来自b的[0,1]: MM_SHUFFLE(1,0,1,0) = 0x44
   r := VecF32x4Shuffle2(a, b, $44);
   
-  AssertEquals('Shuffle2[0] from a', 1.0, r.f[0], 0.0001);
-  AssertEquals('Shuffle2[1] from a', 2.0, r.f[1], 0.0001);
-  AssertEquals('Shuffle2[2] from b', 10.0, r.f[2], 0.0001);
-  AssertEquals('Shuffle2[3] from b', 20.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'Shuffle2[0] from a');
+  CheckNear(2.0, r.f[1], 0.0001, 'Shuffle2[1] from a');
+  CheckNear(10.0, r.f[2], 0.0001, 'Shuffle2[2] from b');
+  CheckNear(20.0, r.f[3], 0.0001, 'Shuffle2[3] from b');
 
   r := VecF32x4Shuffle2(a, b, $EE);
 
-  AssertEquals('Shuffle2 hi[0] from a', 3.0, r.f[0], 0.0001);
-  AssertEquals('Shuffle2 hi[1] from a', 4.0, r.f[1], 0.0001);
-  AssertEquals('Shuffle2 hi[2] from b', 30.0, r.f[2], 0.0001);
-  AssertEquals('Shuffle2 hi[3] from b', 40.0, r.f[3], 0.0001);
+  CheckNear(3.0, r.f[0], 0.0001, 'Shuffle2 hi[0] from a');
+  CheckNear(4.0, r.f[1], 0.0001, 'Shuffle2 hi[1] from a');
+  CheckNear(30.0, r.f[2], 0.0001, 'Shuffle2 hi[2] from b');
+  CheckNear(40.0, r.f[3], 0.0001, 'Shuffle2 hi[3] from b');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Blend;
@@ -14949,17 +14741,17 @@ begin
   // mask = 0b0101 = 5: 元素0和2来自b
   r := VecF32x4Blend(a, b, 5);
   
-  AssertEquals('Blend[0] from b', 10.0, r.f[0], 0.0001);
-  AssertEquals('Blend[1] from a', 2.0, r.f[1], 0.0001);
-  AssertEquals('Blend[2] from b', 30.0, r.f[2], 0.0001);
-  AssertEquals('Blend[3] from a', 4.0, r.f[3], 0.0001);
+  CheckNear(10.0, r.f[0], 0.0001, 'Blend[0] from b');
+  CheckNear(2.0, r.f[1], 0.0001, 'Blend[1] from a');
+  CheckNear(30.0, r.f[2], 0.0001, 'Blend[2] from b');
+  CheckNear(4.0, r.f[3], 0.0001, 'Blend[3] from a');
 
   r := VecF32x4Blend(a, b, 10);
 
-  AssertEquals('Blend alt[0] from a', 1.0, r.f[0], 0.0001);
-  AssertEquals('Blend alt[1] from b', 20.0, r.f[1], 0.0001);
-  AssertEquals('Blend alt[2] from a', 3.0, r.f[2], 0.0001);
-  AssertEquals('Blend alt[3] from b', 40.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'Blend alt[0] from a');
+  CheckNear(20.0, r.f[1], 0.0001, 'Blend alt[1] from b');
+  CheckNear(3.0, r.f[2], 0.0001, 'Blend alt[2] from a');
+  CheckNear(40.0, r.f[3], 0.0001, 'Blend alt[3] from b');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF64x2_Blend;
@@ -14972,13 +14764,13 @@ begin
   // mask = 0b01 = 1: 元素0来自b
   r := VecF64x2Blend(a, b, 1);
   
-  AssertEquals('Blend[0] from b', 10.0, r.d[0], 0.0001);
-  AssertEquals('Blend[1] from a', 2.0, r.d[1], 0.0001);
+  CheckNear(10.0, r.d[0], 0.0001, 'Blend[0] from b');
+  CheckNear(2.0, r.d[1], 0.0001, 'Blend[1] from a');
 
   r := VecF64x2Blend(a, b, 2);
 
-  AssertEquals('Blend alt[0] from a', 1.0, r.d[0], 0.0001);
-  AssertEquals('Blend alt[1] from b', 20.0, r.d[1], 0.0001);
+  CheckNear(1.0, r.d[0], 0.0001, 'Blend alt[0] from a');
+  CheckNear(20.0, r.d[1], 0.0001, 'Blend alt[1] from b');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_Blend;
@@ -14991,17 +14783,17 @@ begin
   // mask = 0b1010 = 10: 元素1和3来自b
   r := VecI32x4Blend(a, b, 10);
   
-  AssertEquals('Blend[0] from a', 1, r.i[0]);
-  AssertEquals('Blend[1] from b', 20, r.i[1]);
-  AssertEquals('Blend[2] from a', 3, r.i[2]);
-  AssertEquals('Blend[3] from b', 40, r.i[3]);
+  CheckEqual(1, r.i[0], 'Blend[0] from a');
+  CheckEqual(20, r.i[1], 'Blend[1] from b');
+  CheckEqual(3, r.i[2], 'Blend[2] from a');
+  CheckEqual(40, r.i[3], 'Blend[3] from b');
 
   r := VecI32x4Blend(a, b, 15);
 
-  AssertEquals('Blend all[0] from b', 10, r.i[0]);
-  AssertEquals('Blend all[1] from b', 20, r.i[1]);
-  AssertEquals('Blend all[2] from b', 30, r.i[2]);
-  AssertEquals('Blend all[3] from b', 40, r.i[3]);
+  CheckEqual(10, r.i[0], 'Blend all[0] from b');
+  CheckEqual(20, r.i[1], 'Blend all[1] from b');
+  CheckEqual(30, r.i[2], 'Blend all[2] from b');
+  CheckEqual(40, r.i[3], 'Blend all[3] from b');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_UnpackLo;
@@ -15014,10 +14806,10 @@ begin
   r := VecF32x4UnpackLo(a, b);
   
   // 结果: [a0, b0, a1, b1]
-  AssertEquals('UnpackLo[0]', 1.0, r.f[0], 0.0001);
-  AssertEquals('UnpackLo[1]', 10.0, r.f[1], 0.0001);
-  AssertEquals('UnpackLo[2]', 2.0, r.f[2], 0.0001);
-  AssertEquals('UnpackLo[3]', 20.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'UnpackLo[0]');
+  CheckNear(10.0, r.f[1], 0.0001, 'UnpackLo[1]');
+  CheckNear(2.0, r.f[2], 0.0001, 'UnpackLo[2]');
+  CheckNear(20.0, r.f[3], 0.0001, 'UnpackLo[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_UnpackHi;
@@ -15030,10 +14822,10 @@ begin
   r := VecF32x4UnpackHi(a, b);
   
   // 结果: [a2, b2, a3, b3]
-  AssertEquals('UnpackHi[0]', 3.0, r.f[0], 0.0001);
-  AssertEquals('UnpackHi[1]', 30.0, r.f[1], 0.0001);
-  AssertEquals('UnpackHi[2]', 4.0, r.f[2], 0.0001);
-  AssertEquals('UnpackHi[3]', 40.0, r.f[3], 0.0001);
+  CheckNear(3.0, r.f[0], 0.0001, 'UnpackHi[0]');
+  CheckNear(30.0, r.f[1], 0.0001, 'UnpackHi[1]');
+  CheckNear(4.0, r.f[2], 0.0001, 'UnpackHi[2]');
+  CheckNear(40.0, r.f[3], 0.0001, 'UnpackHi[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_Unpack;
@@ -15046,15 +14838,15 @@ begin
   rLo := VecI32x4UnpackLo(a, b);
   rHi := VecI32x4UnpackHi(a, b);
   
-  AssertEquals('UnpackLo[0]', 1, rLo.i[0]);
-  AssertEquals('UnpackLo[1]', 10, rLo.i[1]);
-  AssertEquals('UnpackLo[2]', 2, rLo.i[2]);
-  AssertEquals('UnpackLo[3]', 20, rLo.i[3]);
+  CheckEqual(1, rLo.i[0], 'UnpackLo[0]');
+  CheckEqual(10, rLo.i[1], 'UnpackLo[1]');
+  CheckEqual(2, rLo.i[2], 'UnpackLo[2]');
+  CheckEqual(20, rLo.i[3], 'UnpackLo[3]');
   
-  AssertEquals('UnpackHi[0]', 3, rHi.i[0]);
-  AssertEquals('UnpackHi[1]', 30, rHi.i[1]);
-  AssertEquals('UnpackHi[2]', 4, rHi.i[2]);
-  AssertEquals('UnpackHi[3]', 40, rHi.i[3]);
+  CheckEqual(3, rHi.i[0], 'UnpackHi[0]');
+  CheckEqual(30, rHi.i[1], 'UnpackHi[1]');
+  CheckEqual(4, rHi.i[2], 'UnpackHi[2]');
+  CheckEqual(40, rHi.i[3], 'UnpackHi[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Broadcast;
@@ -15065,10 +14857,10 @@ begin
   
   r := VecF32x4Broadcast(a, 2);
   
-  AssertEquals('Broadcast[0]', 3.0, r.f[0], 0.0001);
-  AssertEquals('Broadcast[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('Broadcast[2]', 3.0, r.f[2], 0.0001);
-  AssertEquals('Broadcast[3]', 3.0, r.f[3], 0.0001);
+  CheckNear(3.0, r.f[0], 0.0001, 'Broadcast[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'Broadcast[1]');
+  CheckNear(3.0, r.f[2], 0.0001, 'Broadcast[2]');
+  CheckNear(3.0, r.f[3], 0.0001, 'Broadcast[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_Broadcast;
@@ -15079,10 +14871,10 @@ begin
   
   r := VecI32x4Broadcast(a, 1);
   
-  AssertEquals('Broadcast[0]', 20, r.i[0]);
-  AssertEquals('Broadcast[1]', 20, r.i[1]);
-  AssertEquals('Broadcast[2]', 20, r.i[2]);
-  AssertEquals('Broadcast[3]', 20, r.i[3]);
+  CheckEqual(20, r.i[0], 'Broadcast[0]');
+  CheckEqual(20, r.i[1], 'Broadcast[1]');
+  CheckEqual(20, r.i[2], 'Broadcast[2]');
+  CheckEqual(20, r.i[3], 'Broadcast[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Reverse;
@@ -15093,10 +14885,10 @@ begin
   
   r := VecF32x4Reverse(a);
   
-  AssertEquals('Reverse[0]', 4.0, r.f[0], 0.0001);
-  AssertEquals('Reverse[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('Reverse[2]', 2.0, r.f[2], 0.0001);
-  AssertEquals('Reverse[3]', 1.0, r.f[3], 0.0001);
+  CheckNear(4.0, r.f[0], 0.0001, 'Reverse[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'Reverse[1]');
+  CheckNear(2.0, r.f[2], 0.0001, 'Reverse[2]');
+  CheckNear(1.0, r.f[3], 0.0001, 'Reverse[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_Reverse;
@@ -15107,10 +14899,10 @@ begin
   
   r := VecI32x4Reverse(a);
   
-  AssertEquals('Reverse[0]', 40, r.i[0]);
-  AssertEquals('Reverse[1]', 30, r.i[1]);
-  AssertEquals('Reverse[2]', 20, r.i[2]);
-  AssertEquals('Reverse[3]', 10, r.i[3]);
+  CheckEqual(40, r.i[0], 'Reverse[0]');
+  CheckEqual(30, r.i[1], 'Reverse[1]');
+  CheckEqual(20, r.i[2], 'Reverse[2]');
+  CheckEqual(10, r.i[3], 'Reverse[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_RotateLeft;
@@ -15121,15 +14913,15 @@ begin
   
   // 左旋 1: [2,3,4,1]
   r := VecF32x4RotateLeft(a, 1);
-  AssertEquals('RotL1[0]', 2.0, r.f[0], 0.0001);
-  AssertEquals('RotL1[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('RotL1[2]', 4.0, r.f[2], 0.0001);
-  AssertEquals('RotL1[3]', 1.0, r.f[3], 0.0001);
+  CheckNear(2.0, r.f[0], 0.0001, 'RotL1[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'RotL1[1]');
+  CheckNear(4.0, r.f[2], 0.0001, 'RotL1[2]');
+  CheckNear(1.0, r.f[3], 0.0001, 'RotL1[3]');
   
   // 左旋 2: [3,4,1,2]
   r := VecF32x4RotateLeft(a, 2);
-  AssertEquals('RotL2[0]', 3.0, r.f[0], 0.0001);
-  AssertEquals('RotL2[3]', 2.0, r.f[3], 0.0001);
+  CheckNear(3.0, r.f[0], 0.0001, 'RotL2[0]');
+  CheckNear(2.0, r.f[3], 0.0001, 'RotL2[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_RotateLeft;
@@ -15140,10 +14932,10 @@ begin
   
   // 左旋 3: [40,10,20,30]
   r := VecI32x4RotateLeft(a, 3);
-  AssertEquals('RotL3[0]', 40, r.i[0]);
-  AssertEquals('RotL3[1]', 10, r.i[1]);
-  AssertEquals('RotL3[2]', 20, r.i[2]);
-  AssertEquals('RotL3[3]', 30, r.i[3]);
+  CheckEqual(40, r.i[0], 'RotL3[0]');
+  CheckEqual(10, r.i[1], 'RotL3[1]');
+  CheckEqual(20, r.i[2], 'RotL3[2]');
+  CheckEqual(30, r.i[3], 'RotL3[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_Insert;
@@ -15154,10 +14946,10 @@ begin
   
   r := VecF32x4Insert(a, 99.0, 2);
   
-  AssertEquals('Insert[0]', 1.0, r.f[0], 0.0001);
-  AssertEquals('Insert[1]', 2.0, r.f[1], 0.0001);
-  AssertEquals('Insert[2]', 99.0, r.f[2], 0.0001);
-  AssertEquals('Insert[3]', 4.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'Insert[0]');
+  CheckNear(2.0, r.f[1], 0.0001, 'Insert[1]');
+  CheckNear(99.0, r.f[2], 0.0001, 'Insert[2]');
+  CheckNear(4.0, r.f[3], 0.0001, 'Insert[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecF32x4_ExtractFunc;
@@ -15166,10 +14958,10 @@ var
 begin
   a.f[0] := 1.0; a.f[1] := 2.0; a.f[2] := 3.0; a.f[3] := 4.0;
   
-  AssertEquals('Extract[0]', 1.0, VecF32x4Extract(a, 0), 0.0001);
-  AssertEquals('Extract[1]', 2.0, VecF32x4Extract(a, 1), 0.0001);
-  AssertEquals('Extract[2]', 3.0, VecF32x4Extract(a, 2), 0.0001);
-  AssertEquals('Extract[3]', 4.0, VecF32x4Extract(a, 3), 0.0001);
+  CheckNear(1.0, VecF32x4Extract(a, 0), 0.0001, 'Extract[0]');
+  CheckNear(2.0, VecF32x4Extract(a, 1), 0.0001, 'Extract[1]');
+  CheckNear(3.0, VecF32x4Extract(a, 2), 0.0001, 'Extract[2]');
+  CheckNear(4.0, VecF32x4Extract(a, 3), 0.0001, 'Extract[3]');
 end;
 
 procedure TTestCase_ShuffleSWizzle.Test_VecI32x4_InsertExtract;
@@ -15180,13 +14972,13 @@ begin
   
   r := VecI32x4Insert(a, 999, 1);
   
-  AssertEquals('Insert[0]', 10, r.i[0]);
-  AssertEquals('Insert[1]', 999, r.i[1]);
-  AssertEquals('Insert[2]', 30, r.i[2]);
-  AssertEquals('Insert[3]', 40, r.i[3]);
+  CheckEqual(10, r.i[0], 'Insert[0]');
+  CheckEqual(999, r.i[1], 'Insert[1]');
+  CheckEqual(30, r.i[2], 'Insert[2]');
+  CheckEqual(40, r.i[3], 'Insert[3]');
   
-  AssertEquals('Extract[0]', 10, VecI32x4Extract(a, 0));
-  AssertEquals('Extract[3]', 40, VecI32x4Extract(a, 3));
+  CheckEqual(10, VecI32x4Extract(a, 0), 'Extract[0]');
+  CheckEqual(40, VecI32x4Extract(a, 3), 'Extract[3]');
 end;
 
 { TTestCase_MathFunctions }
@@ -15204,10 +14996,10 @@ begin
   
   r := VecF32x4Sin(a);
   
-  AssertEquals('sin(0)', 0.0, r.f[0], 0.0001);
-  AssertEquals('sin(PI/6)', 0.5, r.f[1], 0.0001);
-  AssertEquals('sin(PI/2)', 1.0, r.f[2], 0.0001);
-  AssertEquals('sin(PI)', 0.0, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'sin(0)');
+  CheckNear(0.5, r.f[1], 0.0001, 'sin(PI/6)');
+  CheckNear(1.0, r.f[2], 0.0001, 'sin(PI/2)');
+  CheckNear(0.0, r.f[3], 0.0001, 'sin(PI)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Cos;
@@ -15223,10 +15015,10 @@ begin
   
   r := VecF32x4Cos(a);
   
-  AssertEquals('cos(0)', 1.0, r.f[0], 0.0001);
-  AssertEquals('cos(PI/3)', 0.5, r.f[1], 0.0001);
-  AssertEquals('cos(PI/2)', 0.0, r.f[2], 0.0001);
-  AssertEquals('cos(PI)', -1.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'cos(0)');
+  CheckNear(0.5, r.f[1], 0.0001, 'cos(PI/3)');
+  CheckNear(0.0, r.f[2], 0.0001, 'cos(PI/2)');
+  CheckNear(-1.0, r.f[3], 0.0001, 'cos(PI)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_SinCos;
@@ -15243,16 +15035,16 @@ begin
   VecF32x4SinCos(a, s, c);
   
   // sin
-  AssertEquals('sin(0)', 0.0, s.f[0], 0.0001);
-  AssertEquals('sin(PI/4)', 0.7071, s.f[1], 0.001);
-  AssertEquals('sin(PI/2)', 1.0, s.f[2], 0.0001);
-  AssertEquals('sin(PI)', 0.0, s.f[3], 0.0001);
+  CheckNear(0.0, s.f[0], 0.0001, 'sin(0)');
+  CheckNear(0.7071, s.f[1], 0.001, 'sin(PI/4)');
+  CheckNear(1.0, s.f[2], 0.0001, 'sin(PI/2)');
+  CheckNear(0.0, s.f[3], 0.0001, 'sin(PI)');
   
   // cos
-  AssertEquals('cos(0)', 1.0, c.f[0], 0.0001);
-  AssertEquals('cos(PI/4)', 0.7071, c.f[1], 0.001);
-  AssertEquals('cos(PI/2)', 0.0, c.f[2], 0.0001);
-  AssertEquals('cos(PI)', -1.0, c.f[3], 0.0001);
+  CheckNear(1.0, c.f[0], 0.0001, 'cos(0)');
+  CheckNear(0.7071, c.f[1], 0.001, 'cos(PI/4)');
+  CheckNear(0.0, c.f[2], 0.0001, 'cos(PI/2)');
+  CheckNear(-1.0, c.f[3], 0.0001, 'cos(PI)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Tan;
@@ -15268,10 +15060,10 @@ begin
   
   r := VecF32x4Tan(a);
   
-  AssertEquals('tan(0)', 0.0, r.f[0], 0.0001);
-  AssertEquals('tan(PI/4)', 1.0, r.f[1], 0.0001);
-  AssertEquals('tan(-PI/4)', -1.0, r.f[2], 0.0001);
-  AssertEquals('tan(PI/6)', 0.5774, r.f[3], 0.001);
+  CheckNear(0.0, r.f[0], 0.0001, 'tan(0)');
+  CheckNear(1.0, r.f[1], 0.0001, 'tan(PI/4)');
+  CheckNear(-1.0, r.f[2], 0.0001, 'tan(-PI/4)');
+  CheckNear(0.5774, r.f[3], 0.001, 'tan(PI/6)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Exp;
@@ -15285,10 +15077,10 @@ begin
   
   r := VecF32x4Exp(a);
   
-  AssertEquals('exp(0)', 1.0, r.f[0], 0.0001);
-  AssertEquals('exp(1)', 2.71828, r.f[1], 0.001);
-  AssertEquals('exp(2)', 7.389, r.f[2], 0.01);
-  AssertEquals('exp(-1)', 0.3679, r.f[3], 0.001);
+  CheckNear(1.0, r.f[0], 0.0001, 'exp(0)');
+  CheckNear(2.71828, r.f[1], 0.001, 'exp(1)');
+  CheckNear(7.389, r.f[2], 0.01, 'exp(2)');
+  CheckNear(0.3679, r.f[3], 0.001, 'exp(-1)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Exp2;
@@ -15302,10 +15094,10 @@ begin
   
   r := VecF32x4Exp2(a);
   
-  AssertEquals('2^0', 1.0, r.f[0], 0.0001);
-  AssertEquals('2^1', 2.0, r.f[1], 0.0001);
-  AssertEquals('2^3', 8.0, r.f[2], 0.0001);
-  AssertEquals('2^-1', 0.5, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, '2^0');
+  CheckNear(2.0, r.f[1], 0.0001, '2^1');
+  CheckNear(8.0, r.f[2], 0.0001, '2^3');
+  CheckNear(0.5, r.f[3], 0.0001, '2^-1');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Log;
@@ -15319,10 +15111,10 @@ begin
   
   r := VecF32x4Log(a);
   
-  AssertEquals('ln(1)', 0.0, r.f[0], 0.0001);
-  AssertEquals('ln(e)', 1.0, r.f[1], 0.001);
-  AssertEquals('ln(e^2)', 2.0, r.f[2], 0.01);
-  AssertEquals('ln(1/e)', -1.0, r.f[3], 0.01);
+  CheckNear(0.0, r.f[0], 0.0001, 'ln(1)');
+  CheckNear(1.0, r.f[1], 0.001, 'ln(e)');
+  CheckNear(2.0, r.f[2], 0.01, 'ln(e^2)');
+  CheckNear(-1.0, r.f[3], 0.01, 'ln(1/e)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Log2;
@@ -15336,10 +15128,10 @@ begin
   
   r := VecF32x4Log2(a);
   
-  AssertEquals('log2(1)', 0.0, r.f[0], 0.0001);
-  AssertEquals('log2(2)', 1.0, r.f[1], 0.0001);
-  AssertEquals('log2(8)', 3.0, r.f[2], 0.0001);
-  AssertEquals('log2(0.5)', -1.0, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'log2(1)');
+  CheckNear(1.0, r.f[1], 0.0001, 'log2(2)');
+  CheckNear(3.0, r.f[2], 0.0001, 'log2(8)');
+  CheckNear(-1.0, r.f[3], 0.0001, 'log2(0.5)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Log10;
@@ -15353,10 +15145,10 @@ begin
   
   r := VecF32x4Log10(a);
   
-  AssertEquals('log10(1)', 0.0, r.f[0], 0.0001);
-  AssertEquals('log10(10)', 1.0, r.f[1], 0.0001);
-  AssertEquals('log10(100)', 2.0, r.f[2], 0.0001);
-  AssertEquals('log10(0.1)', -1.0, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'log10(1)');
+  CheckNear(1.0, r.f[1], 0.0001, 'log10(10)');
+  CheckNear(2.0, r.f[2], 0.0001, 'log10(100)');
+  CheckNear(-1.0, r.f[3], 0.0001, 'log10(0.1)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Pow;
@@ -15370,10 +15162,10 @@ begin
   
   r := VecF32x4Pow(base, exp);
   
-  AssertEquals('2^3', 8.0, r.f[0], 0.0001);
-  AssertEquals('3^2', 9.0, r.f[1], 0.0001);
-  AssertEquals('10^0', 1.0, r.f[2], 0.0001);
-  AssertEquals('4^0.5', 2.0, r.f[3], 0.0001);
+  CheckNear(8.0, r.f[0], 0.0001, '2^3');
+  CheckNear(9.0, r.f[1], 0.0001, '3^2');
+  CheckNear(1.0, r.f[2], 0.0001, '10^0');
+  CheckNear(2.0, r.f[3], 0.0001, '4^0.5');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Asin;
@@ -15389,10 +15181,10 @@ begin
   
   r := VecF32x4Asin(a);
   
-  AssertEquals('asin(0)', 0.0, r.f[0], 0.0001);
-  AssertEquals('asin(0.5)', PI/6, r.f[1], 0.0001);
-  AssertEquals('asin(1)', PI/2, r.f[2], 0.0001);
-  AssertEquals('asin(-0.5)', -PI/6, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'asin(0)');
+  CheckNear(PI/6, r.f[1], 0.0001, 'asin(0.5)');
+  CheckNear(PI/2, r.f[2], 0.0001, 'asin(1)');
+  CheckNear(-PI/6, r.f[3], 0.0001, 'asin(-0.5)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Acos;
@@ -15408,10 +15200,10 @@ begin
   
   r := VecF32x4Acos(a);
   
-  AssertEquals('acos(1)', 0.0, r.f[0], 0.0001);
-  AssertEquals('acos(0.5)', PI/3, r.f[1], 0.0001);
-  AssertEquals('acos(0)', PI/2, r.f[2], 0.0001);
-  AssertEquals('acos(-1)', PI, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'acos(1)');
+  CheckNear(PI/3, r.f[1], 0.0001, 'acos(0.5)');
+  CheckNear(PI/2, r.f[2], 0.0001, 'acos(0)');
+  CheckNear(PI, r.f[3], 0.0001, 'acos(-1)');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Atan;
@@ -15427,10 +15219,10 @@ begin
   
   r := VecF32x4Atan(a);
   
-  AssertEquals('atan(0)', 0.0, r.f[0], 0.0001);
-  AssertEquals('atan(1)', PI/4, r.f[1], 0.0001);
-  AssertEquals('atan(-1)', -PI/4, r.f[2], 0.0001);
-  AssertEquals('atan(sqrt(3))', PI/3, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'atan(0)');
+  CheckNear(PI/4, r.f[1], 0.0001, 'atan(1)');
+  CheckNear(-PI/4, r.f[2], 0.0001, 'atan(-1)');
+  CheckNear(PI/3, r.f[3], 0.0001, 'atan(sqrt(3))');
 end;
 
 procedure TTestCase_MathFunctions.Test_VecF32x4_Atan2;
@@ -15447,10 +15239,10 @@ begin
   
   r := VecF32x4Atan2(y, x);
   
-  AssertEquals('atan2(0,1)', 0.0, r.f[0], 0.0001);
-  AssertEquals('atan2(1,1)', PI/4, r.f[1], 0.0001);
-  AssertEquals('atan2(1,0)', PI/2, r.f[2], 0.0001);
-  AssertEquals('atan2(-1,-1)', -3*PI/4, r.f[3], 0.0001);
+  CheckNear(0.0, r.f[0], 0.0001, 'atan2(0,1)');
+  CheckNear(PI/4, r.f[1], 0.0001, 'atan2(1,1)');
+  CheckNear(PI/2, r.f[2], 0.0001, 'atan2(1,0)');
+  CheckNear(-3*PI/4, r.f[3], 0.0001, 'atan2(-1,-1)');
 end;
 
 { TTestCase_AdvancedAlgorithms }
@@ -15465,10 +15257,10 @@ begin
   
   r := SortNet4I32(a, True);  // 升序
   
-  AssertEquals('Sorted[0]', 1, r.i[0]);
-  AssertEquals('Sorted[1]', 2, r.i[1]);
-  AssertEquals('Sorted[2]', 3, r.i[2]);
-  AssertEquals('Sorted[3]', 4, r.i[3]);
+  CheckEqual(1, r.i[0], 'Sorted[0]');
+  CheckEqual(2, r.i[1], 'Sorted[1]');
+  CheckEqual(3, r.i[2], 'Sorted[2]');
+  CheckEqual(4, r.i[3], 'Sorted[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_SortNet4_I32_Descending;
@@ -15479,10 +15271,10 @@ begin
   
   r := SortNet4I32(a, False);  // 降序
   
-  AssertEquals('Sorted[0]', 4, r.i[0]);
-  AssertEquals('Sorted[1]', 3, r.i[1]);
-  AssertEquals('Sorted[2]', 2, r.i[2]);
-  AssertEquals('Sorted[3]', 1, r.i[3]);
+  CheckEqual(4, r.i[0], 'Sorted[0]');
+  CheckEqual(3, r.i[1], 'Sorted[1]');
+  CheckEqual(2, r.i[2], 'Sorted[2]');
+  CheckEqual(1, r.i[3], 'Sorted[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_SortNet4_F32_Ascending;
@@ -15493,10 +15285,10 @@ begin
   
   r := SortNet4F32(a, True);
   
-  AssertEquals('Sorted[0]', 1.2, r.f[0], 0.0001);
-  AssertEquals('Sorted[1]', 2.1, r.f[1], 0.0001);
-  AssertEquals('Sorted[2]', 3.5, r.f[2], 0.0001);
-  AssertEquals('Sorted[3]', 4.8, r.f[3], 0.0001);
+  CheckNear(1.2, r.f[0], 0.0001, 'Sorted[0]');
+  CheckNear(2.1, r.f[1], 0.0001, 'Sorted[1]');
+  CheckNear(3.5, r.f[2], 0.0001, 'Sorted[2]');
+  CheckNear(4.8, r.f[3], 0.0001, 'Sorted[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_SortNet4_F32_WithNegatives;
@@ -15507,10 +15299,10 @@ begin
   
   r := SortNet4F32(a, True);
   
-  AssertEquals('Sorted[0]', -3.0, r.f[0], 0.0001);
-  AssertEquals('Sorted[1]', -1.0, r.f[1], 0.0001);
-  AssertEquals('Sorted[2]', 2.0, r.f[2], 0.0001);
-  AssertEquals('Sorted[3]', 5.0, r.f[3], 0.0001);
+  CheckNear(-3.0, r.f[0], 0.0001, 'Sorted[0]');
+  CheckNear(-1.0, r.f[1], 0.0001, 'Sorted[1]');
+  CheckNear(2.0, r.f[2], 0.0001, 'Sorted[2]');
+  CheckNear(5.0, r.f[3], 0.0001, 'Sorted[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_SortNet8_I32;
@@ -15522,14 +15314,14 @@ begin
   
   r := SortNet8I32(a, True);
   
-  AssertEquals('Sorted[0]', 1, r.i[0]);
-  AssertEquals('Sorted[1]', 2, r.i[1]);
-  AssertEquals('Sorted[2]', 3, r.i[2]);
-  AssertEquals('Sorted[3]', 4, r.i[3]);
-  AssertEquals('Sorted[4]', 5, r.i[4]);
-  AssertEquals('Sorted[5]', 6, r.i[5]);
-  AssertEquals('Sorted[6]', 7, r.i[6]);
-  AssertEquals('Sorted[7]', 8, r.i[7]);
+  CheckEqual(1, r.i[0], 'Sorted[0]');
+  CheckEqual(2, r.i[1], 'Sorted[1]');
+  CheckEqual(3, r.i[2], 'Sorted[2]');
+  CheckEqual(4, r.i[3], 'Sorted[3]');
+  CheckEqual(5, r.i[4], 'Sorted[4]');
+  CheckEqual(6, r.i[5], 'Sorted[5]');
+  CheckEqual(7, r.i[6], 'Sorted[6]');
+  CheckEqual(8, r.i[7], 'Sorted[7]');
 end;
 
 // === 前缀和测试 ===
@@ -15543,10 +15335,10 @@ begin
   r := PrefixSumI32x4(a, True);  // inclusive
   
   // [1, 1+2, 1+2+3, 1+2+3+4] = [1, 3, 6, 10]
-  AssertEquals('PrefixSum[0]', 1, r.i[0]);
-  AssertEquals('PrefixSum[1]', 3, r.i[1]);
-  AssertEquals('PrefixSum[2]', 6, r.i[2]);
-  AssertEquals('PrefixSum[3]', 10, r.i[3]);
+  CheckEqual(1, r.i[0], 'PrefixSum[0]');
+  CheckEqual(3, r.i[1], 'PrefixSum[1]');
+  CheckEqual(6, r.i[2], 'PrefixSum[2]');
+  CheckEqual(10, r.i[3], 'PrefixSum[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_PrefixSum_I32x4_Exclusive;
@@ -15558,10 +15350,10 @@ begin
   r := PrefixSumI32x4(a, False);  // exclusive
   
   // [0, 1, 1+2, 1+2+3] = [0, 1, 3, 6]
-  AssertEquals('PrefixSum[0]', 0, r.i[0]);
-  AssertEquals('PrefixSum[1]', 1, r.i[1]);
-  AssertEquals('PrefixSum[2]', 3, r.i[2]);
-  AssertEquals('PrefixSum[3]', 6, r.i[3]);
+  CheckEqual(0, r.i[0], 'PrefixSum[0]');
+  CheckEqual(1, r.i[1], 'PrefixSum[1]');
+  CheckEqual(3, r.i[2], 'PrefixSum[2]');
+  CheckEqual(6, r.i[3], 'PrefixSum[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_PrefixSum_F32x4_Inclusive;
@@ -15572,10 +15364,10 @@ begin
   
   r := PrefixSumF32x4(a, True);
   
-  AssertEquals('PrefixSum[0]', 1.0, r.f[0], 0.0001);
-  AssertEquals('PrefixSum[1]', 3.0, r.f[1], 0.0001);
-  AssertEquals('PrefixSum[2]', 6.0, r.f[2], 0.0001);
-  AssertEquals('PrefixSum[3]', 10.0, r.f[3], 0.0001);
+  CheckNear(1.0, r.f[0], 0.0001, 'PrefixSum[0]');
+  CheckNear(3.0, r.f[1], 0.0001, 'PrefixSum[1]');
+  CheckNear(6.0, r.f[2], 0.0001, 'PrefixSum[2]');
+  CheckNear(10.0, r.f[3], 0.0001, 'PrefixSum[3]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_PrefixSum_Array_I32;
@@ -15588,9 +15380,9 @@ begin
   PrefixSumArrayI32(@arr[0], @result[0], 8);
   
   // [1, 3, 6, 10, 15, 21, 28, 36]
-  AssertEquals('PrefixSum[0]', 1, result[0]);
-  AssertEquals('PrefixSum[3]', 10, result[3]);
-  AssertEquals('PrefixSum[7]', 36, result[7]);
+  CheckEqual(1, result[0], 'PrefixSum[0]');
+  CheckEqual(10, result[3], 'PrefixSum[3]');
+  CheckEqual(36, result[7], 'PrefixSum[7]');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_PrefixSum_Array_F32;
@@ -15601,10 +15393,10 @@ begin
   
   PrefixSumArrayF32(@arr[0], @result[0], 4);
   
-  AssertEquals('PrefixSum[0]', 1.5, result[0], 0.0001);
-  AssertEquals('PrefixSum[1]', 4.0, result[1], 0.0001);
-  AssertEquals('PrefixSum[2]', 7.5, result[2], 0.0001);
-  AssertEquals('PrefixSum[3]', 12.0, result[3], 0.0001);
+  CheckNear(1.5, result[0], 0.0001, 'PrefixSum[0]');
+  CheckNear(4.0, result[1], 0.0001, 'PrefixSum[1]');
+  CheckNear(7.5, result[2], 0.0001, 'PrefixSum[2]');
+  CheckNear(12.0, result[3], 0.0001, 'PrefixSum[3]');
 end;
 
 // === 向量化字符串搜索测试 ===
@@ -15618,7 +15410,7 @@ begin
   
   pos := StrFindChar(@s[1], Length(s), Ord('W'));
   
-  AssertEquals('Should find W at position 7', 7, pos);
+  CheckEqual(7, pos, 'Should find W at position 7');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_StrFind_NotFound;
@@ -15630,7 +15422,7 @@ begin
   
   pos := StrFindChar(@s[1], Length(s), Ord('X'));
   
-  AssertEquals('Should return -1 for not found', -1, pos);
+  CheckEqual(-1, pos, 'Should return -1 for not found');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_StrFind_AtStart;
@@ -15642,7 +15434,7 @@ begin
   
   pos := StrFindChar(@s[1], Length(s), Ord('H'));
   
-  AssertEquals('Should find H at position 0', 0, pos);
+  CheckEqual(0, pos, 'Should find H at position 0');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_StrFind_AtEnd;
@@ -15654,7 +15446,7 @@ begin
   
   pos := StrFindChar(@s[1], Length(s), Ord('!'));
   
-  AssertEquals('Should find ! at last position', 12, pos);
+  CheckEqual(12, pos, 'Should find ! at last position');
 end;
 
 procedure TTestCase_AdvancedAlgorithms.Test_StrFind_Empty;
@@ -15663,44 +15455,9 @@ var
 begin
   pos := StrFindChar(nil, 0, Ord('A'));
   
-  AssertEquals('Should return -1 for empty string', -1, pos);
+  CheckEqual(-1, pos, 'Should return -1 for empty string');
 end;
 
-
-
-
-initialization
-  RegisterTest(TTestCase_Global);
-  {$IFDEF CPUX86_64}
-  RegisterTest(TTestCase_BackendConsistency);
-  RegisterTest(TTestCase_BackendVectorConsistency);
-  RegisterTest(TTestCase_X86BackendPredicates);
-  {$IFDEF SIMD_BACKEND_AVX512}
-  RegisterTest(TTestCase_AVX512BackendRequirements);
-  {$ENDIF}
-  {$ENDIF}
-  RegisterTest(TTestCase_BackendSmoke);
-  {$IFDEF UNIX}
-  {$IFDEF CPUX86_64}
-  RegisterTest(TTestCase_AVX2VectorAsm);
-  {$IFDEF SIMD_BACKEND_AVX512}
-  RegisterTest(TTestCase_AVX512VectorAsm);
-  {$ENDIF}
-  {$ENDIF}
-  {$ENDIF}
-  RegisterTest(TTestCase_VectorOps);
-  RegisterTest(TTestCase_IntegerFacadeGuards);
-  RegisterTest(TTestCase_FloatFacadeGuards);
-  RegisterTest(TTestCase_LargeData);
-  RegisterTest(TTestCase_UnsignedVectorTypes);
-  RegisterTest(TTestCase_OperatorOverloads);
-  RegisterTest(TTestCase_VectorMaskTypes);
-  RegisterTest(TTestCase_TypeConversion);
-  RegisterTest(TTestCase_Builder);
-  RegisterTest(TTestCase_GatherScatter);
-  RegisterTest(TTestCase_ShuffleSWizzle);
-  RegisterTest(TTestCase_MathFunctions);
-  RegisterTest(TTestCase_AdvancedAlgorithms);
 
 
 end.

@@ -15,18 +15,18 @@ unit test_rand_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   openssl_rand_interface;
 
 type
   { TTestRandomMock - Test suite for Random mock }
-  TTestRandomMock = class(TTestCase)
+  TTestRandomMock = class(TTestFixture)
   private
     FRandom: IRandom;
     FMock: TRandomMock;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // Basic generation tests
     procedure TestGenerateBytes_ShouldSucceed_WithValidLength;
@@ -80,18 +80,18 @@ implementation
 
 { Setup and teardown }
 
-procedure TTestRandomMock.SetUp;
+procedure TTestRandomMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FMock := TRandomMock.Create;
   FRandom := FMock as IRandom;
 end;
 
-procedure TTestRandomMock.TearDown;
+procedure TTestRandomMock.AfterEach;
 begin
   FRandom := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 { Basic generation tests }
@@ -104,9 +104,9 @@ begin
   LResult := FRandom.GenerateBytes(16);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 16 bytes', 16, Length(LResult.Data));
-  AssertEquals('Error message should be empty', '', LResult.ErrorMessage);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Data), 'Should return 16 bytes');
+  CheckEqual('', LResult.ErrorMessage, 'Error message should be empty');
 end;
 
 procedure TTestRandomMock.TestGenerateBytes_ShouldReturnEmptyArray_WithZeroLength;
@@ -117,8 +117,8 @@ begin
   LResult := FRandom.GenerateBytes(0);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return empty array', 0, Length(LResult.Data));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(0, Length(LResult.Data), 'Should return empty array');
 end;
 
 procedure TTestRandomMock.TestGenerateBytes_ShouldFail_WithNegativeLength;
@@ -129,8 +129,8 @@ begin
   LResult := FRandom.GenerateBytes(-1);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'Length cannot be negative', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Length cannot be negative', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestRandomMock.TestGenerateBytes_ShouldIncrementStatistics;
@@ -145,8 +145,8 @@ begin
   FRandom.GenerateBytes(20);
   
   // Assert
-  AssertEquals('Call count should increase', LInitialCallCount + 2, FRandom.GetGenerateCallCount);
-  AssertEquals('Bytes generated should be 30', 30, FRandom.GetBytesGeneratedCount);
+  CheckEqual(LInitialCallCount + 2, FRandom.GetGenerateCallCount, 'Call count should increase');
+  CheckEqual(30, FRandom.GetBytesGeneratedCount, 'Bytes generated should be 30');
 end;
 
 { Deterministic mode tests }
@@ -168,12 +168,11 @@ begin
   LResult2 := FRandom.GenerateBytes(32);
   
   // Assert
-  AssertTrue('First generation should succeed', LResult1.Success);
-  AssertTrue('Second generation should succeed', LResult2.Success);
+  CheckTrue(LResult1.Success, 'First generation should succeed');
+  CheckTrue(LResult2.Success, 'Second generation should succeed');
   
   for i := 0 to 31 do
-    AssertEquals('Byte ' + IntToStr(i) + ' should match',
-                 LResult1.Data[i], LResult2.Data[i]);
+    CheckEqual(LResult1.Data[i], LResult2.Data[i], 'Byte ' + IntToStr(i) + ' should match');
 end;
 
 procedure TTestRandomMock.TestDeterministicMode_ShouldUseCustomSequence;
@@ -193,9 +192,9 @@ begin
   LResult := FRandom.GenerateBytes(8);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
+  CheckTrue(LResult.Success, 'Should succeed');
   for i := 0 to 7 do
-    AssertEquals('Byte ' + IntToStr(i), $AA + i, LResult.Data[i]);
+    CheckEqual($AA + i, LResult.Data[i], 'Byte ' + IntToStr(i));
 end;
 
 procedure TTestRandomMock.TestDeterministicMode_ShouldWrapAroundSequence;
@@ -216,15 +215,15 @@ begin
   LResult := FRandom.GenerateBytes(8);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Byte 0', $11, LResult.Data[0]);
-  AssertEquals('Byte 1', $22, LResult.Data[1]);
-  AssertEquals('Byte 2', $33, LResult.Data[2]);
-  AssertEquals('Byte 3', $44, LResult.Data[3]);
-  AssertEquals('Byte 4 (wrapped)', $11, LResult.Data[4]);
-  AssertEquals('Byte 5 (wrapped)', $22, LResult.Data[5]);
-  AssertEquals('Byte 6 (wrapped)', $33, LResult.Data[6]);
-  AssertEquals('Byte 7 (wrapped)', $44, LResult.Data[7]);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual($11, LResult.Data[0], 'Byte 0');
+  CheckEqual($22, LResult.Data[1], 'Byte 1');
+  CheckEqual($33, LResult.Data[2], 'Byte 2');
+  CheckEqual($44, LResult.Data[3], 'Byte 3');
+  CheckEqual($11, LResult.Data[4], 'Byte 4 (wrapped)');
+  CheckEqual($22, LResult.Data[5], 'Byte 5 (wrapped)');
+  CheckEqual($33, LResult.Data[6], 'Byte 6 (wrapped)');
+  CheckEqual($44, LResult.Data[7], 'Byte 7 (wrapped)');
 end;
 
 { Pseudo-random mode tests }
@@ -243,7 +242,7 @@ begin
   LResult := FRandom.GenerateBytes(100);
   
   // Assert - 检查不是所有字节都相同
-  AssertTrue('Should succeed', LResult.Success);
+  CheckTrue(LResult.Success, 'Should succeed');
   LAllSame := True;
   for i := 1 to 99 do
   begin
@@ -254,7 +253,7 @@ begin
     end;
   end;
   
-  AssertFalse('Not all bytes should be the same', LAllSame);
+  CheckFalse(LAllSame, 'Not all bytes should be the same');
 end;
 
 procedure TTestRandomMock.TestPseudoRandomMode_WithSameSeed_ShouldProduceSameSequence;
@@ -274,12 +273,11 @@ begin
   LResult2 := FRandom.GenerateBytes(32);
   
   // Assert
-  AssertTrue('First should succeed', LResult1.Success);
-  AssertTrue('Second should succeed', LResult2.Success);
+  CheckTrue(LResult1.Success, 'First should succeed');
+  CheckTrue(LResult2.Success, 'Second should succeed');
   
   for i := 0 to 31 do
-    AssertEquals('Byte ' + IntToStr(i) + ' should match',
-                 LResult1.Data[i], LResult2.Data[i]);
+    CheckEqual(LResult1.Data[i], LResult2.Data[i], 'Byte ' + IntToStr(i) + ' should match');
 end;
 
 procedure TTestRandomMock.TestPseudoRandomMode_WithDifferentSeed_ShouldProduceDifferentSequence;
@@ -309,7 +307,7 @@ begin
     end;
   end;
   
-  AssertFalse('Sequences with different seeds should differ', LAllMatch);
+  CheckFalse(LAllMatch, 'Sequences with different seeds should differ');
 end;
 
 { Integer generation tests }
@@ -326,7 +324,7 @@ begin
   for i := 1 to 20 do
   begin
     LValue := FRandom.GenerateInteger(100);
-    AssertTrue('Value ' + IntToStr(i) + ' should be < 100', LValue < 100);
+    CheckTrue(LValue < 100, 'Value ' + IntToStr(i) + ' should be < 100');
   end;
 end;
 
@@ -338,7 +336,7 @@ begin
   LValue := FRandom.GenerateInteger(0);
   
   // Assert
-  AssertEquals('Should return 0', 0, LValue);
+  CheckEqual(0, LValue, 'Should return 0');
 end;
 
 procedure TTestRandomMock.TestGenerateInteger_ShouldBeDeterministic_WithSameSeed;
@@ -353,7 +351,7 @@ begin
   LValue2 := FRandom.GenerateInteger(1000);
   
   // Assert
-  AssertEquals('Values should match', LValue1, LValue2);
+  CheckEqual(LValue1, LValue2, 'Values should match');
 end;
 
 { Float generation tests }
@@ -370,8 +368,8 @@ begin
   for i := 1 to 20 do
   begin
     LValue := FRandom.GenerateFloat;
-    AssertTrue('Value ' + IntToStr(i) + ' should be >= 0.0', LValue >= 0.0);
-    AssertTrue('Value ' + IntToStr(i) + ' should be <= 1.0', LValue <= 1.0);
+    CheckTrue(LValue >= 0.0, 'Value ' + IntToStr(i) + ' should be >= 0.0');
+    CheckTrue(LValue <= 1.0, 'Value ' + IntToStr(i) + ' should be <= 1.0');
   end;
 end;
 
@@ -387,7 +385,7 @@ begin
   LValue2 := FRandom.GenerateFloat;
   
   // Assert
-  AssertEquals('Values should match', LValue1, LValue2, 0.0001);
+  CheckNear(LValue1, LValue2, 0.0001, 'Values should match');
 end;
 
 { Seeding tests }
@@ -416,7 +414,7 @@ begin
     end;
   end;
   
-  AssertTrue('Sequences should be different', LDifferent);
+  CheckTrue(LDifferent, 'Sequences should be different');
 end;
 
 procedure TTestRandomMock.TestGetSeed_ShouldReturnSetSeed;
@@ -427,7 +425,7 @@ begin
   FRandom.SetSeed(CTestSeed);
   
   // Assert
-  AssertEquals('Should return set seed', CTestSeed, FRandom.GetSeed);
+  CheckEqual(CTestSeed, FRandom.GetSeed, 'Should return set seed');
 end;
 
 procedure TTestRandomMock.TestReseed_ShouldChangeSequence;
@@ -448,7 +446,7 @@ begin
   
   // Assert - 种子应该不同（基于时间戳）
   // 注意：这个测试有小概率失败，如果两次Reseed在同一毫秒内
-  AssertTrue('Seeds should likely be different', LSeed1 <> LSeed2);
+  CheckTrue(LSeed1 <> LSeed2, 'Seeds should likely be different');
 end;
 
 procedure TTestRandomMock.TestIsSeeded_ShouldReturnTrue_AfterSetSeed;
@@ -457,7 +455,7 @@ begin
   FRandom.SetSeed(12345);
   
   // Assert
-  AssertTrue('Should be seeded', FRandom.IsSeeded);
+  CheckTrue(FRandom.IsSeeded, 'Should be seeded');
 end;
 
 { Mode tests }
@@ -468,20 +466,20 @@ begin
   FRandom.SetMode(rmDeterministic);
   
   // Assert
-  AssertEquals('Should be in deterministic mode', Ord(rmDeterministic), Ord(FRandom.GetMode));
+  CheckEqual(Ord(rmDeterministic), Ord(FRandom.GetMode), 'Should be in deterministic mode');
   
   // Act
   FRandom.SetMode(rmPseudoRandom);
   
   // Assert
-  AssertEquals('Should be in pseudo-random mode', Ord(rmPseudoRandom), Ord(FRandom.GetMode));
+  CheckEqual(Ord(rmPseudoRandom), Ord(FRandom.GetMode), 'Should be in pseudo-random mode');
 end;
 
 procedure TTestRandomMock.TestGetMode_ShouldReturnCurrentMode;
 begin
   // Arrange - Mock默认是伪随机模式
   // Assert
-  AssertEquals('Default should be pseudo-random', Ord(rmPseudoRandom), Ord(FRandom.GetMode));
+  CheckEqual(Ord(rmPseudoRandom), Ord(FRandom.GetMode), 'Default should be pseudo-random');
 end;
 
 procedure TTestRandomMock.TestSetDeterministicSequence_ShouldSwitchToDeterministicMode;
@@ -495,7 +493,7 @@ begin
   FRandom.SetDeterministicSequence(LSequence);
   
   // Assert
-  AssertEquals('Should switch to deterministic mode', Ord(rmDeterministic), Ord(FRandom.GetMode));
+  CheckEqual(Ord(rmDeterministic), Ord(FRandom.GetMode), 'Should switch to deterministic mode');
 end;
 
 { Status tests }
@@ -507,17 +505,17 @@ begin
   // Test deterministic mode
   FRandom.SetMode(rmDeterministic);
   LStatus := FRandom.GetStatus;
-  AssertTrue('Status should contain "Deterministic"', Pos('Deterministic', LStatus) > 0);
+  CheckTrue(Pos('Deterministic', LStatus) > 0, 'Status should contain "Deterministic"');
   
   // Test pseudo-random mode
   FRandom.SetMode(rmPseudoRandom);
   LStatus := FRandom.GetStatus;
-  AssertTrue('Status should contain "Pseudo-random"', Pos('Pseudo-random', LStatus) > 0);
+  CheckTrue(Pos('Pseudo-random', LStatus) > 0, 'Status should contain "Pseudo-random"');
   
   // Test with seed
   FRandom.SetSeed(11111);
   LStatus := FRandom.GetStatus;
-  AssertTrue('Status should contain seed info', Pos('11111', LStatus) > 0);
+  CheckTrue(Pos('11111', LStatus) > 0, 'Status should contain seed info');
 end;
 
 { Error handling tests }
@@ -533,9 +531,9 @@ begin
   LResult := FRandom.GenerateBytes(16);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated failure', LResult.ErrorMessage);
-  AssertEquals('Data should be empty', 0, Length(LResult.Data));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated failure', LResult.ErrorMessage, 'Error message');
+  CheckEqual(0, Length(LResult.Data), 'Data should be empty');
 end;
 
 { Statistics tests }
@@ -548,7 +546,7 @@ begin
   FRandom.GenerateBytes(30);
   
   // Assert
-  AssertEquals('Should track total bytes', 60, FRandom.GetBytesGeneratedCount);
+  CheckEqual(60, FRandom.GetBytesGeneratedCount, 'Should track total bytes');
 end;
 
 procedure TTestRandomMock.TestStatistics_ShouldTrackCallCount;
@@ -560,7 +558,7 @@ begin
   FRandom.GenerateFloat;         // 内部调用GenerateBytes
   
   // Assert
-  AssertEquals('Should track call count', 4, FRandom.GetGenerateCallCount);
+  CheckEqual(4, FRandom.GetGenerateCallCount, 'Should track call count');
 end;
 
 procedure TTestRandomMock.TestResetStatistics_ShouldClearCounters;
@@ -573,11 +571,8 @@ begin
   FRandom.ResetStatistics;
   
   // Assert
-  AssertEquals('Bytes count should be 0', 0, FRandom.GetBytesGeneratedCount);
-  AssertEquals('Call count should be 0', 0, FRandom.GetGenerateCallCount);
+  CheckEqual(0, FRandom.GetBytesGeneratedCount, 'Bytes count should be 0');
+  CheckEqual(0, FRandom.GetGenerateCallCount, 'Call count should be 0');
 end;
-
-initialization
-  RegisterTest(TTestRandomMock);
 
 end.

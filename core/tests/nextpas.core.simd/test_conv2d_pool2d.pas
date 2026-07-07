@@ -3,8 +3,7 @@ program test_conv2d_pool2d;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.nn;
+  nextpas.core.text.conv, Math, nextpas.core.simd.nn;
 
 var
   LPass, LFail: Integer;
@@ -58,8 +57,7 @@ begin
       for ky := 0 to 2 do
         for kx := 0 to 2 do
           LExpected := LExpected + LInput[(i + ky) * 5 + (j + kx)];
-      Check('Conv2D[' + IntToStr(i) + ',' + IntToStr(j) + ']',
-        LOutput[i * 3 + j], LExpected);
+      Check('Conv2D[' + IntToStr(i) + ',' + IntToStr(j) + ']', LOutput[i * 3 + j], LExpected);
     end;
 
   // Test Conv2DStridedF32: stride=2 → 2x2 output
@@ -72,8 +70,7 @@ begin
       for ky := 0 to 2 do
         for kx := 0 to 2 do
           LExpected := LExpected + LInput[(i*2 + ky) * 5 + (j*2 + kx)];
-      Check('Conv2DStrided[' + IntToStr(i) + ',' + IntToStr(j) + ']',
-        LOutput[i * 2 + j], LExpected);
+      Check('Conv2DStrided[' + IntToStr(i) + ',' + IntToStr(j) + ']', LOutput[i * 2 + j], LExpected);
     end;
 
   // Test MaxPool2DF32: 4x4 input, 2x2 kernel, stride 2 → 2x2 output
@@ -106,8 +103,7 @@ begin
       for ky := 0 to 2 do
         for kx := 0 to 2 do
           LExpected := LExpected + LInput[(i + ky) * 5 + (j + kx)] * LKernel[ky * 3 + kx];
-      Check('Conv2D_Sobel[' + IntToStr(i) + ',' + IntToStr(j) + ']',
-        LOutput[i * 3 + j], LExpected);
+      Check('Conv2D_Sobel[' + IntToStr(i) + ',' + IntToStr(j) + ']', LOutput[i * 3 + j], LExpected);
     end;
 
   // Edge case: kernel same size as input

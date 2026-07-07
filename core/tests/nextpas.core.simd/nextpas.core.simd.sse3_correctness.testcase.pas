@@ -6,10 +6,8 @@ unit nextpas.core.simd.sse3_correctness.testcase;
 interface
 
 uses
-  fpcunit, testregistry,
-  nextpas.core.simd.base,
-  nextpas.core.simd.dispatch,
-  nextpas.core.simd.testcase;
+  nextpas.core.test, nextpas.core.simd.base,
+  nextpas.core.simd.dispatch, nextpas.core.simd.testcase;
 
 type
   TTestCase_SSE3Correctness = class(TSimdVectorAsmStatefulTestCase)
@@ -30,8 +28,7 @@ type
 implementation
 
 uses
-  nextpas.core.simd,
-  nextpas.core.simd.sse2,
+  nextpas.core.simd, nextpas.core.simd.sse2,
   nextpas.core.simd.ssse3;
 
 const
@@ -55,37 +52,37 @@ begin
   rScalar := VecF32x4Add(a, b);
   SetActiveBackend(aBackend);
   r := VecF32x4Add(a, b);
-  AssertTrue(aLabel + ' Add[0]', Abs(r.f[0] - rScalar.f[0]) < EPS);
-  AssertTrue(aLabel + ' Add[1]', Abs(r.f[1] - rScalar.f[1]) < EPS);
-  AssertTrue(aLabel + ' Add[2]', Abs(r.f[2] - rScalar.f[2]) < EPS);
-  AssertTrue(aLabel + ' Add[3]', Abs(r.f[3] - rScalar.f[3]) < EPS);
+  CheckTrue(Abs(r.f[0] - rScalar.f[0]) < EPS, aLabel + ' Add[0]');
+  CheckTrue(Abs(r.f[1] - rScalar.f[1]) < EPS, aLabel + ' Add[1]');
+  CheckTrue(Abs(r.f[2] - rScalar.f[2]) < EPS, aLabel + ' Add[2]');
+  CheckTrue(Abs(r.f[3] - rScalar.f[3]) < EPS, aLabel + ' Add[3]');
 
   SetActiveBackend(sbScalar);
   rScalar := VecF32x4Sub(a, b);
   SetActiveBackend(aBackend);
   r := VecF32x4Sub(a, b);
-  AssertTrue(aLabel + ' Sub[0]', Abs(r.f[0] - rScalar.f[0]) < EPS);
-  AssertTrue(aLabel + ' Sub[1]', Abs(r.f[1] - rScalar.f[1]) < EPS);
-  AssertTrue(aLabel + ' Sub[2]', Abs(r.f[2] - rScalar.f[2]) < EPS);
-  AssertTrue(aLabel + ' Sub[3]', Abs(r.f[3] - rScalar.f[3]) < EPS);
+  CheckTrue(Abs(r.f[0] - rScalar.f[0]) < EPS, aLabel + ' Sub[0]');
+  CheckTrue(Abs(r.f[1] - rScalar.f[1]) < EPS, aLabel + ' Sub[1]');
+  CheckTrue(Abs(r.f[2] - rScalar.f[2]) < EPS, aLabel + ' Sub[2]');
+  CheckTrue(Abs(r.f[3] - rScalar.f[3]) < EPS, aLabel + ' Sub[3]');
 
   SetActiveBackend(sbScalar);
   rScalar := VecF32x4Mul(a, b);
   SetActiveBackend(aBackend);
   r := VecF32x4Mul(a, b);
-  AssertTrue(aLabel + ' Mul[0]', Abs(r.f[0] - rScalar.f[0]) < EPS);
-  AssertTrue(aLabel + ' Mul[1]', Abs(r.f[1] - rScalar.f[1]) < EPS);
-  AssertTrue(aLabel + ' Mul[2]', Abs(r.f[2] - rScalar.f[2]) < EPS);
-  AssertTrue(aLabel + ' Mul[3]', Abs(r.f[3] - rScalar.f[3]) < EPS);
+  CheckTrue(Abs(r.f[0] - rScalar.f[0]) < EPS, aLabel + ' Mul[0]');
+  CheckTrue(Abs(r.f[1] - rScalar.f[1]) < EPS, aLabel + ' Mul[1]');
+  CheckTrue(Abs(r.f[2] - rScalar.f[2]) < EPS, aLabel + ' Mul[2]');
+  CheckTrue(Abs(r.f[3] - rScalar.f[3]) < EPS, aLabel + ' Mul[3]');
 
   SetActiveBackend(sbScalar);
   rScalar := VecF32x4Div(a, b);
   SetActiveBackend(aBackend);
   r := VecF32x4Div(a, b);
-  AssertTrue(aLabel + ' Div[0]', Abs(r.f[0] - rScalar.f[0]) < EPS);
-  AssertTrue(aLabel + ' Div[1]', Abs(r.f[1] - rScalar.f[1]) < EPS);
-  AssertTrue(aLabel + ' Div[2]', Abs(r.f[2] - rScalar.f[2]) < EPS);
-  AssertTrue(aLabel + ' Div[3]', Abs(r.f[3] - rScalar.f[3]) < EPS);
+  CheckTrue(Abs(r.f[0] - rScalar.f[0]) < EPS, aLabel + ' Div[0]');
+  CheckTrue(Abs(r.f[1] - rScalar.f[1]) < EPS, aLabel + ' Div[1]');
+  CheckTrue(Abs(r.f[2] - rScalar.f[2]) < EPS, aLabel + ' Div[2]');
+  CheckTrue(Abs(r.f[3] - rScalar.f[3]) < EPS, aLabel + ' Div[3]');
 end;
 
 procedure TTestCase_SSE3Correctness.VerifyF32x4CompareForBackend(
@@ -106,13 +103,13 @@ begin
   mScalar := VecF32x4CmpEq(a, b);
   SetActiveBackend(aBackend);
   mTarget := VecF32x4CmpEq(a, b);
-  AssertEquals(aLabel + ' CmpEq mask', Integer(mScalar), Integer(mTarget));
+  CheckEqual(Integer(mScalar), Integer(mTarget), aLabel + ' CmpEq mask');
 
   SetActiveBackend(sbScalar);
   mScalar := VecF32x4CmpLt(a, b);
   SetActiveBackend(aBackend);
   mTarget := VecF32x4CmpLt(a, b);
-  AssertEquals(aLabel + ' CmpLt mask', Integer(mScalar), Integer(mTarget));
+  CheckEqual(Integer(mScalar), Integer(mTarget), aLabel + ' CmpLt mask');
 end;
 
 procedure TTestCase_SSE3Correctness.Test_SSE3_F32x4_Arithmetic;
@@ -145,7 +142,5 @@ begin
   VerifyF32x4CompareForBackend(sbSSE41, 'SSE4.1');
 end;
 
-initialization
-  RegisterTest(TTestCase_SSE3Correctness);
 
 end.

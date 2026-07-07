@@ -9,11 +9,11 @@ unit nextpas.core.simd.arrays.testcase;
 interface
 
 uses
-  Classes, fpcunit, testregistry,
-  nextpas.core.simd.arrays;
+  nextpas.core.test, nextpas.core.simd.arrays;
 
+{$M+}
 type
-  TTestCase_SimdArrays = class(TTestCase)
+  TTestCase_SimdArrays = class(TTestFixture)
   published
     procedure Test_SumF32;
     procedure Test_SumF64;
@@ -408,8 +408,5 @@ begin
   CheckTrue(NearEqualF32(SimdArrayMaxF32(@LSingleF32, 1), 42.0, EPS_F32), 'Single max F32');
   CheckTrue(NearEqualF32(SimdArrayMeanF32(@LSingleF32, 1), 42.0, EPS_F32), 'Single mean F32');
 end;
-
-initialization
-  RegisterTest(TTestCase_SimdArrays);
 
 end.

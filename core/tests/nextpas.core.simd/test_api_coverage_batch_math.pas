@@ -4,10 +4,8 @@ program test_api_coverage_batch_math;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.text.conv,
-  Math,
-  nextpas.core.simd,
-  nextpas.core.simd.api_coverage.support;
+  nextpas.core.text.conv, Math,
+  nextpas.core.simd, nextpas.core.simd.api_coverage.support;
 
 procedure TestArrayF64;
 var

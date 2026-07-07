@@ -7,8 +7,8 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes,
-  fpcunit, testregistry,
+  Classes, SysUtils,
+  nextpas.core.test,
   nextpas.core.simd.testcase,
   nextpas.core.simd.memutils.aliases.testcase,
   nextpas.core.simd.narrowintegerops.testcase,
@@ -36,7 +36,7 @@ uses
   nextpas.core.simd.sse3_correctness.testcase,
   {$ENDIF}
   nextpas.core.simd.intrinsics.avx2.testcase,
-  nextpas.core.simd.concurrent.testcase,  // ✅ Phase 5.4: Concurrent SIMD tests (12 tests)
+  nextpas.core.simd.concurrent.testcase,
   nextpas.core.simd.algorithms.testcase,
   nextpas.core.simd.linalg.testcase,
   nextpas.core.simd.arrays.testcase,
@@ -64,32 +64,15 @@ uses
   ;
 
 var
-  testResult: TTestResult;
-  testSuite: TTestSuite;
-  i: Integer;
-  failure: TTestFailure;
-  suiteFilters: TStringList;
-  doBench: Boolean;
-  benchOnly: Boolean;
-  pauseAtEnd: Boolean;
-  vectorAsmEnabled: Boolean;
-  exitEarly: Boolean;
-  exitEarlyCode: Integer;
-  exitEarlyShowUsage: Boolean;
-  exitEarlyListSuites: Boolean;
-  exitEarlyError: string;
+  LRunner: TSuiteRunner;
+  LDoBench: Boolean;
+  LBenchOnly: Boolean;
+  LPauseAtEnd: Boolean;
+  LVectorAsmEnabled: Boolean;
 
-procedure ProcessAllSuites(const aListOnly: Boolean; aTargetSuite: TTestSuite); forward;
-
-function LocalTrim(const AValue: string): string;
-var
-  L, R: Integer;
+procedure AddFixture(AFixture: TTestFixture; const ASuiteName: string);
 begin
-  L := 1;
-  R := Length(AValue);
-  while (L <= R) and (AValue[L] <= ' ') do Inc(L);
-  while (R >= L) and (AValue[R] <= ' ') do Dec(R);
-  Result := Copy(AValue, L, R - L + 1);
+  LRunner.Add(DiscoverTests(AFixture, ASuiteName));
 end;
 
 {$IF DEFINED(NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND) OR DEFINED(NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND)}
@@ -136,373 +119,184 @@ begin
     end;
   WriteLn('Usage: ', LExe, ' [options]');
   WriteLn('Options:');
-  WriteLn('  --suite=<TestCaseClass>[,<TestCaseClass>...]   Run only selected suites (repeatable)');
-  WriteLn('  --suite <TestCaseClass>                       Same as above');
-  WriteLn('  --list-suites                                 List available suites');
-  WriteLn('  --bench                                       Run performance benchmarks after tests');
-  WriteLn('  --bench-only                                  Run benchmarks only');
-  WriteLn('  --no-bench                                    Do not run benchmarks (default)');
-  WriteLn('  --vector-asm                                  Enable experimental SIMD vector ops (unsafe)');
-  WriteLn('  --no-vector-asm                               Disable experimental SIMD vector ops (default)');
-  WriteLn('  --pause                                       Pause and wait for Enter before exiting');
-  WriteLn('  -h, --help                                    Show this help');
+  WriteLn('  --filter=<substring>   Run only tests whose name contains substring');
+  WriteLn('  --list                 List available test suites');
+  WriteLn('  --bench                Run performance benchmarks after tests');
+  WriteLn('  --bench-only           Run benchmarks only');
+  WriteLn('  --no-bench             Do not run benchmarks (default)');
+  WriteLn('  --vector-asm           Enable experimental SIMD vector ops (unsafe)');
+  WriteLn('  --no-vector-asm        Disable experimental SIMD vector ops (default)');
+  WriteLn('  --pause                Pause and wait for Enter before exiting');
+  WriteLn('  -h, --help             Show this help');
 end;
 
-procedure PrintAvailableSuites;
+procedure RegisterAllSuites;
 begin
-  WriteLn('Available suites:');
-  ProcessAllSuites(True, nil);
-end;
-
-procedure AddSuiteFilter(const value: string);
-var
-  parts: TStringList;
-  j: Integer;
-  s: string;
-begin
-  if value = '' then Exit;
-
-  parts := TStringList.Create;
-  try
-    parts.StrictDelimiter := True;
-    parts.Delimiter := ',';
-    parts.DelimitedText := value;
-
-    for j := 0 to parts.Count - 1 do
-    begin
-      s := LocalTrim(parts[j]);
-      if s <> '' then
-        suiteFilters.Add(s);
-    end;
-  finally
-    parts.Free;
-  end;
-end;
-
-function ShouldRunSuite(const suiteName: string): Boolean;
-begin
-  if (suiteFilters = nil) or (suiteFilters.Count = 0) then
-    Exit(True);
-  Result := suiteFilters.IndexOf(suiteName) >= 0;
-end;
-
-procedure HandleSuite(const aName: string; aTestCaseClass: TTestCaseClass;
-  const aListOnly: Boolean; aTargetSuite: TTestSuite);
-var
-  LSuite: TTest;
-begin
-  if aListOnly then
-  begin
-    WriteLn('  ', aName);
-    Exit;
-  end;
-
-  if aTestCaseClass = nil then
-    Exit;
-
-  LSuite := aTestCaseClass.Suite;
-  if (aTargetSuite <> nil) and ShouldRunSuite(aName) then
-    aTargetSuite.AddTest(LSuite)
-  else if LSuite <> nil then
-    LSuite.Free;
-end;
-
-procedure ProcessAllSuites(const aListOnly: Boolean; aTargetSuite: TTestSuite);
-begin
-  HandleSuite('TTestCase_ImageProc', TTestCase_ImageProc, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Global', TTestCase_Global, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_ImageProc.Create, 'TTestCase_ImageProc');
+  AddFixture(TTestCase_Global.Create, 'TTestCase_Global');
   {$IFDEF CPUX86_64}
-  HandleSuite('TTestCase_BackendConsistency', TTestCase_BackendConsistency, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_BackendVectorConsistency', TTestCase_BackendVectorConsistency, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_X86BackendPredicates', TTestCase_X86BackendPredicates, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_BackendConsistency.Create, 'TTestCase_BackendConsistency');
+  AddFixture(TTestCase_BackendVectorConsistency.Create, 'TTestCase_BackendVectorConsistency');
+  AddFixture(TTestCase_X86BackendPredicates.Create, 'TTestCase_X86BackendPredicates');
   {$ENDIF}
-  HandleSuite('TTestCase_BackendSmoke', TTestCase_BackendSmoke, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_BackendSmoke.Create, 'TTestCase_BackendSmoke');
   {$IFDEF CPUX86_64}
   {$IFDEF SIMD_BACKEND_AVX512}
-  HandleSuite('TTestCase_AVX512BackendRequirements', TTestCase_AVX512BackendRequirements, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_AVX512BackendRequirements.Create, 'TTestCase_AVX512BackendRequirements');
   {$ENDIF}
   {$ENDIF}
   {$IFDEF UNIX}
   {$IFDEF CPUX86_64}
-  HandleSuite('TTestCase_AVX2VectorAsm', TTestCase_AVX2VectorAsm, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_AVX2VectorAsm.Create, 'TTestCase_AVX2VectorAsm');
   {$IFDEF SIMD_BACKEND_AVX512}
-  HandleSuite('TTestCase_AVX512VectorAsm', TTestCase_AVX512VectorAsm, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_AVX512VectorAsm.Create, 'TTestCase_AVX512VectorAsm');
   {$ENDIF}
   {$ENDIF}
   {$ENDIF}
-  HandleSuite('TTestCase_VectorOps', TTestCase_VectorOps, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_IntegerFacadeGuards', TTestCase_IntegerFacadeGuards, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_FloatFacadeGuards', TTestCase_FloatFacadeGuards, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_LargeData', TTestCase_LargeData, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_UnsignedVectorTypes', TTestCase_UnsignedVectorTypes, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_OperatorOverloads', TTestCase_OperatorOverloads, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_VectorMaskTypes', TTestCase_VectorMaskTypes, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_TypeConversion', TTestCase_TypeConversion, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Builder', TTestCase_Builder, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_GatherScatter', TTestCase_GatherScatter, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_ShuffleSWizzle', TTestCase_ShuffleSWizzle, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_MathFunctions', TTestCase_MathFunctions, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_AdvancedAlgorithms', TTestCase_AdvancedAlgorithms, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_EdgeCases', TTestCase_EdgeCases, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Vec512Types', TTestCase_Vec512Types, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Vec512MaskFacadeGuards', TTestCase_Vec512MaskFacadeGuards, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Memutils', TTestCase_Memutils, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_RustStyleAliases', TTestCase_RustStyleAliases, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SaturatingArithmetic', TTestCase_SaturatingArithmetic, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_NarrowIntegerOps', TTestCase_NarrowIntegerOps, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Narrow512Ops', TTestCase_Narrow512Ops, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_Alignment', TTestCase_Alignment, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_VecI32x8', TTestCase_VecI32x8, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_VecU32x8', TTestCase_VecU32x8, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_VecF32x8', TTestCase_VecF32x8, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_VecF64x4', TTestCase_VecF64x4, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_IEEE754_F64', TTestCase_IEEE754_F64, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_IEEE754EdgeCases', TTestCase_IEEE754EdgeCases, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_AVX2RoundTruncIEEE754', TTestCase_AVX2RoundTruncIEEE754, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_NonX86IEEE754', TTestCase_NonX86IEEE754, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_NonX86BackendParity', TTestCase_NonX86BackendParity, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_DispatchAPI', TTestCase_DispatchAPI, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SSE2Contracts', TTestCase_SSE2Contracts, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_DataPlane', TTestCase_DataPlane, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_RuntimeAPI', TTestCase_RuntimeAPI, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_X86MaskedFmaContract', TTestCase_X86MaskedFmaContract, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_RISCVVMaskedOpsContract', TTestCase_RISCVVMaskedOpsContract, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_RISCVFallbackDispatchContract', TTestCase_RISCVFallbackDispatchContract, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_DispatchAllSlots', TTestCase_DispatchAllSlots, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_PublicAbi', TTestCase_PublicAbi, aListOnly, aTargetSuite);
-  //   HandleSuite('TTestCase_PublicApiV2Facade', TTestCase_PublicApiV2Facade, aListOnly, aTargetSuite); // disabled: api.v2 removed
+  AddFixture(TTestCase_VectorOps.Create, 'TTestCase_VectorOps');
+  AddFixture(TTestCase_IntegerFacadeGuards.Create, 'TTestCase_IntegerFacadeGuards');
+  AddFixture(TTestCase_FloatFacadeGuards.Create, 'TTestCase_FloatFacadeGuards');
+  AddFixture(TTestCase_LargeData.Create, 'TTestCase_LargeData');
+  AddFixture(TTestCase_UnsignedVectorTypes.Create, 'TTestCase_UnsignedVectorTypes');
+  AddFixture(TTestCase_OperatorOverloads.Create, 'TTestCase_OperatorOverloads');
+  AddFixture(TTestCase_VectorMaskTypes.Create, 'TTestCase_VectorMaskTypes');
+  AddFixture(TTestCase_TypeConversion.Create, 'TTestCase_TypeConversion');
+  AddFixture(TTestCase_Builder.Create, 'TTestCase_Builder');
+  AddFixture(TTestCase_GatherScatter.Create, 'TTestCase_GatherScatter');
+  AddFixture(TTestCase_ShuffleSWizzle.Create, 'TTestCase_ShuffleSWizzle');
+  AddFixture(TTestCase_MathFunctions.Create, 'TTestCase_MathFunctions');
+  AddFixture(TTestCase_AdvancedAlgorithms.Create, 'TTestCase_AdvancedAlgorithms');
+  AddFixture(TTestCase_EdgeCases.Create, 'TTestCase_EdgeCases');
+  AddFixture(TTestCase_Vec512Types.Create, 'TTestCase_Vec512Types');
+  AddFixture(TTestCase_Vec512MaskFacadeGuards.Create, 'TTestCase_Vec512MaskFacadeGuards');
+  AddFixture(TTestCase_Memutils.Create, 'TTestCase_Memutils');
+  AddFixture(TTestCase_RustStyleAliases.Create, 'TTestCase_RustStyleAliases');
+  AddFixture(TTestCase_SaturatingArithmetic.Create, 'TTestCase_SaturatingArithmetic');
+  AddFixture(TTestCase_NarrowIntegerOps.Create, 'TTestCase_NarrowIntegerOps');
+  AddFixture(TTestCase_Narrow512Ops.Create, 'TTestCase_Narrow512Ops');
+  AddFixture(TTestCase_Alignment.Create, 'TTestCase_Alignment');
+  AddFixture(TTestCase_VecI32x8.Create, 'TTestCase_VecI32x8');
+  AddFixture(TTestCase_VecU32x8.Create, 'TTestCase_VecU32x8');
+  AddFixture(TTestCase_VecF32x8.Create, 'TTestCase_VecF32x8');
+  AddFixture(TTestCase_VecF64x4.Create, 'TTestCase_VecF64x4');
+  AddFixture(TTestCase_IEEE754_F64.Create, 'TTestCase_IEEE754_F64');
+  AddFixture(TTestCase_IEEE754EdgeCases.Create, 'TTestCase_IEEE754EdgeCases');
+  AddFixture(TTestCase_AVX2RoundTruncIEEE754.Create, 'TTestCase_AVX2RoundTruncIEEE754');
+  AddFixture(TTestCase_NonX86IEEE754.Create, 'TTestCase_NonX86IEEE754');
+  AddFixture(TTestCase_NonX86BackendParity.Create, 'NonX86BackendParity');
+  AddFixture(TTestCase_DispatchAPI.Create, 'TTestCase_DispatchAPI');
+  AddFixture(TTestCase_SSE2Contracts.Create, 'TTestCase_SSE2Contracts');
+  AddFixture(TTestCase_DataPlane.Create, 'TTestCase_DataPlane');
+  AddFixture(TTestCase_RuntimeAPI.Create, 'TTestCase_RuntimeAPI');
+  AddFixture(TTestCase_X86MaskedFmaContract.Create, 'TTestCase_X86MaskedFmaContract');
+  AddFixture(TTestCase_RISCVVMaskedOpsContract.Create, 'TTestCase_RISCVVMaskedOpsContract');
+  AddFixture(TTestCase_RISCVFallbackDispatchContract.Create, 'TTestCase_RISCVFallbackDispatchContract');
+  AddFixture(TTestCase_DispatchAllSlots.Create, 'TTestCase_DispatchAllSlots');
+  AddFixture(TTestCase_PublicAbi.Create, 'TTestCase_PublicAbi');
   {$IFDEF SIMD_X86_AVAILABLE}
-  HandleSuite('TTestCase_DirectDispatch', TTestCase_DirectDispatch, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_DirectDispatchConcurrent', TTestCase_DirectDispatchConcurrent, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_DirectDispatch.Create, 'TTestCase_DirectDispatch');
+  AddFixture(TTestCase_DirectDispatchConcurrent.Create, 'TTestCase_DirectDispatchConcurrent');
   {$ENDIF}
-  HandleSuite('TTestCase_AVX2IntrinsicsFallback', TTestCase_AVX2IntrinsicsFallback, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdConcurrent', TTestCase_SimdConcurrent, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdConcurrentPublicAbi', TTestCase_SimdConcurrentPublicAbi, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdConcurrentFramework', TTestCase_SimdConcurrentFramework, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdConcurrentRegistration', TTestCase_SimdConcurrentRegistration, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdAlgorithms', TTestCase_SimdAlgorithms, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdLinalg', TTestCase_SimdLinalg, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdArrays', TTestCase_SimdArrays, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdNN', TTestCase_SimdNN, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdSignal', TTestCase_SimdSignal, aListOnly, aTargetSuite);
-  HandleSuite('TTestCase_SimdStats', TTestCase_SimdStats, aListOnly, aTargetSuite);
-  HandleSuite('TRVVParityTestCase', TRVVParityTestCase, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_AVX2IntrinsicsFallback.Create, 'TTestCase_AVX2IntrinsicsFallback');
+  AddFixture(TTestCase_SimdConcurrent.Create, 'TTestCase_SimdConcurrent');
+  AddFixture(TTestCase_SimdConcurrentPublicAbi.Create, 'TTestCase_SimdConcurrentPublicAbi');
+  AddFixture(TTestCase_SimdConcurrentFramework.Create, 'TTestCase_SimdConcurrentFramework');
+  AddFixture(TTestCase_SimdConcurrentRegistration.Create, 'TTestCase_SimdConcurrentRegistration');
+  AddFixture(TTestCase_SimdAlgorithms.Create, 'TTestCase_SimdAlgorithms');
+  AddFixture(TTestCase_SimdLinalg.Create, 'TTestCase_SimdLinalg');
+  AddFixture(TTestCase_SimdArrays.Create, 'TTestCase_SimdArrays');
+  AddFixture(TTestCase_SimdNN.Create, 'TTestCase_SimdNN');
+  AddFixture(TTestCase_SimdSignal.Create, 'TTestCase_SimdSignal');
+  AddFixture(TTestCase_SimdStats.Create, 'TTestCase_SimdStats');
+  AddFixture(TTestCase_RVVParity.Create, 'TTestCase_RVVParity');
   {$IFDEF CPUX86_64}
-  HandleSuite('TTestCase_SSE3Correctness', TTestCase_SSE3Correctness, aListOnly, aTargetSuite);
+  AddFixture(TTestCase_SSE3Correctness.Create, 'TTestCase_SSE3Correctness');
   {$ENDIF}
 end;
 
-procedure ParseArgs;
+procedure ParseCustomArgs;
 var
-  argIndex: Integer;
-  arg, value: string;
+  LArgIndex: Integer;
+  LArg: string;
 begin
-  doBench := False;
-  benchOnly := False;
-  pauseAtEnd := False;
-  vectorAsmEnabled := False;
+  LDoBench := False;
+  LBenchOnly := False;
+  LPauseAtEnd := False;
+  LVectorAsmEnabled := False;
 
-  exitEarly := False;
-  exitEarlyCode := 0;
-  exitEarlyShowUsage := False;
-  exitEarlyListSuites := False;
-  exitEarlyError := '';
-
-  suiteFilters := TStringList.Create;
-  suiteFilters.CaseSensitive := False;
-
-  argIndex := 1;
-  while argIndex <= ParamCount do
+  LArgIndex := 1;
+  while LArgIndex <= ParamCount do
   begin
-    arg := ParamStr(argIndex);
+    LArg := ParamStr(LArgIndex);
 
-    if arg = '--bench' then
-      doBench := True
-    else if arg = '--no-bench' then
-      doBench := False
-    else if arg = '--bench-only' then
+    if LArg = '--bench' then
+      LDoBench := True
+    else if LArg = '--no-bench' then
+      LDoBench := False
+    else if LArg = '--bench-only' then
     begin
-      doBench := True;
-      benchOnly := True;
+      LDoBench := True;
+      LBenchOnly := True;
     end
-    else if (arg = '--help') or (arg = '-h') then
+    else if LArg = '--pause' then
+      LPauseAtEnd := True
+    else if LArg = '--vector-asm' then
+      LVectorAsmEnabled := True
+    else if LArg = '--no-vector-asm' then
+      LVectorAsmEnabled := False
+    else if (LArg = '--help') or (LArg = '-h') then
     begin
-      exitEarly := True;
-      exitEarlyCode := 0;
-      exitEarlyShowUsage := True;
-      Exit;
-    end
-    else if arg = '--list-suites' then
-    begin
-      exitEarly := True;
-      exitEarlyCode := 0;
-      exitEarlyListSuites := True;
-      Exit;
-    end
-    else if arg = '--pause' then
-      pauseAtEnd := True
-    else if arg = '--vector-asm' then
-      vectorAsmEnabled := True
-    else if arg = '--no-vector-asm' then
-      vectorAsmEnabled := False
-    else if arg = '--suite' then
-    begin
-      Inc(argIndex);
-      if argIndex > ParamCount then
-      begin
-        exitEarly := True;
-        exitEarlyCode := 2;
-        exitEarlyShowUsage := True;
-        exitEarlyError := 'Error: --suite requires a value';
-        Exit;
-      end;
-      AddSuiteFilter(ParamStr(argIndex));
-    end
-    else if Copy(arg, 1, 8) = '--suite=' then
-    begin
-      value := Copy(arg, 9, MaxInt);
-      AddSuiteFilter(value);
-    end
-    else
-    begin
-      exitEarly := True;
-      exitEarlyCode := 2;
-      exitEarlyShowUsage := True;
-      exitEarlyError := 'Unknown argument: ' + arg;
-      Exit;
+      PrintUsage;
+      Halt(0);
     end;
 
-    Inc(argIndex);
+    Inc(LArgIndex);
   end;
 end;
 
 begin
-  ParseArgs;
+  ParseCustomArgs;
 
-  try
-    if exitEarly then
-    begin
-      if exitEarlyError <> '' then
-        WriteLn(exitEarlyError);
-      if exitEarlyShowUsage then
-        PrintUsage;
-      if exitEarlyListSuites then
-        PrintAvailableSuites;
+  WriteLn('=== nextpas.core.simd Test Suite ===');
+  WriteLn('Starting SIMD facade function tests...');
+  WriteLn;
 
-      ExitCode := exitEarlyCode;
+  SetVectorAsmEnabled(LVectorAsmEnabled);
+  {$IF DEFINED(NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND) OR DEFINED(NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND)}
+  RegisterTestOptInBackends;
+  {$ENDIF}
 
-      if pauseAtEnd then
-      begin
-        WriteLn('Press Enter to exit...');
-        ReadLn;
-      end;
+  WriteLn('CPU Features:');
+  WriteLn('  SSE2: ', HasSSE2);
+  WriteLn('  AVX2: ', HasAVX2);
+  WriteLn('  Active Backend: ', Ord(GetActiveBackend));
+  WriteLn('  VectorAsm: ', IsVectorAsmEnabled);
+  WriteLn('  Benchmarks: ', LDoBench);
+  WriteLn;
 
-      Exit;
-    end;
-
-    WriteLn('=== nextpas.core.simd Test Suite ===');
-    WriteLn('Starting SIMD facade function tests...');
-    WriteLn;
-
-    // Display backend info
-    // Apply experimental toggles (must happen before backend selection is queried)
-    SetVectorAsmEnabled(vectorAsmEnabled);
-    {$IF DEFINED(NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND) OR DEFINED(NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND)}
-    RegisterTestOptInBackends;
-    {$ENDIF}
-
-    WriteLn('CPU Features:');
-    WriteLn('  SSE2: ', HasSSE2);
-    WriteLn('  AVX2: ', HasAVX2);
-    WriteLn('  Active Backend: ', Ord(GetActiveBackend));
-    WriteLn('  VectorAsm: ', IsVectorAsmEnabled);
-    WriteLn('  Benchmarks: ', doBench);
-    WriteLn;
-
-    if benchOnly then
-    begin
-      RunBenchmarks;
-      ExitCode := 0;
-      Exit;
-    end;
-
-    // Create test suite
-    testSuite := TTestSuite.Create('SIMD Tests');
-    try
-      // Add test cases (single source of truth shared with --list-suites)
-      ProcessAllSuites(False, testSuite);
-
-      // Create test result
-      testResult := TTestResult.Create;
-      try
-        // Run tests
-        testSuite.Run(testResult);
-
-        // Display results
-        WriteLn;
-        WriteLn('=== Test Results ===');
-        WriteLn('Tests run: ', testResult.RunTests);
-        WriteLn('Failures: ', testResult.NumberOfFailures);
-        WriteLn('Errors: ', testResult.NumberOfErrors);
-
-        // Show failures
-        if testResult.NumberOfFailures > 0 then
-        begin
-          WriteLn;
-          WriteLn('=== Failures ===');
-          for i := 0 to testResult.Failures.Count - 1 do
-          begin
-            failure := TTestFailure(testResult.Failures[i]);
-            WriteLn('  [', i+1, '] ', failure.AsString);
-          end;
-        end;
-
-        // Show errors
-        if testResult.NumberOfErrors > 0 then
-        begin
-          WriteLn;
-          WriteLn('=== Errors ===');
-          for i := 0 to testResult.Errors.Count - 1 do
-          begin
-            failure := TTestFailure(testResult.Errors[i]);
-            WriteLn('  [', i+1, '] ', failure.AsString);
-          end;
-        end;
-
-        if (suiteFilters <> nil) and (suiteFilters.Count > 0) and (testResult.RunTests = 0) then
-        begin
-          WriteLn('ERROR: suite filter matched no tests.');
-          PrintAvailableSuites;
-          ExitCode := 2;
-        end
-        else if (testResult.NumberOfFailures = 0) and (testResult.NumberOfErrors = 0) then
-        begin
-          WriteLn('All tests passed!');
-          ExitCode := 0;
-
-          if doBench then
-          begin
-            WriteLn;
-            RunBenchmarks;
-          end;
-        end
-        else
-        begin
-          WriteLn('Some tests failed!');
-          ExitCode := 1;
-        end;
-
-      finally
-        testResult.Free;
-      end;
-    finally
-      testSuite.Free;
-    end;
-  finally
-    suiteFilters.Free;
+  if LBenchOnly then
+  begin
+    RunBenchmarks;
+    Halt(0);
   end;
 
-  if pauseAtEnd then
+  LRunner := TSuiteRunner.Create('SIMD Tests');
+  RegisterAllSuites;
+  LRunner.RunAll;
+  LRunner.Summary;
+
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
+
+  if LDoBench and (ExitCode = 0) then
+  begin
+    WriteLn;
+    RunBenchmarks;
+  end;
+
+  if LPauseAtEnd then
   begin
     WriteLn('Press Enter to exit...');
     ReadLn;

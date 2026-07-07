@@ -5,13 +5,12 @@ unit nextpas.core.simd.linalg.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd.base,
-  nextpas.core.simd.arrays.typed,
-  nextpas.core.simd.linalg;
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.base,
+  nextpas.core.simd.arrays.typed, nextpas.core.simd.linalg;
 
+{$M+}
 type
-  TTestCase_SimdLinalg = class(TTestCase)
+  TTestCase_SimdLinalg = class(TTestFixture)
   published
     procedure Test_MatMul_Identity;
     procedure Test_MatMul_2x3_3x2;
@@ -48,9 +47,9 @@ begin
       for i := 0 to 2 do
         for j := 0 to 2 do
           if i = j then
-            AssertEquals('I*I[' + IntToStr(i) + ',' + IntToStr(j) + ']', 1.0, C.Get(i, j), EPS)
+            CheckNear(1.0, C.Get(i, j), EPS, 'I*I[' + IntToStr(i) + ',' + IntToStr(j) + ']')
           else
-            AssertEquals('I*I[' + IntToStr(i) + ',' + IntToStr(j) + ']', 0.0, C.Get(i, j), EPS);
+            CheckNear(0.0, C.Get(i, j), EPS, 'I*I[' + IntToStr(i) + ',' + IntToStr(j) + ']');
     finally
       C.Free;
     end;
@@ -75,10 +74,10 @@ begin
   try
     C := MatMulF32(A, B);
     try
-      AssertEquals('MatMul[0,0]', 1*7 + 2*9 + 3*11, C.Get(0, 0), EPS);
-      AssertEquals('MatMul[0,1]', 1*8 + 2*10 + 3*12, C.Get(0, 1), EPS);
-      AssertEquals('MatMul[1,0]', 4*7 + 5*9 + 6*11, C.Get(1, 0), EPS);
-      AssertEquals('MatMul[1,1]', 4*8 + 5*10 + 6*12, C.Get(1, 1), EPS);
+      CheckNear(1*7 + 2*9 + 3*11, C.Get(0, 0), EPS, 'MatMul[0,0]');
+      CheckNear(1*8 + 2*10 + 3*12, C.Get(0, 1), EPS, 'MatMul[0,1]');
+      CheckNear(4*7 + 5*9 + 6*11, C.Get(1, 0), EPS, 'MatMul[1,0]');
+      CheckNear(4*8 + 5*10 + 6*12, C.Get(1, 1), EPS, 'MatMul[1,1]');
     finally
       C.Free;
     end;
@@ -103,8 +102,8 @@ begin
   try
     w := MatVecMulF32(A, v);
     try
-      AssertEquals('MatVecMul[0]', 1*1 + 2*2 + 3*3, w.Data[0], EPS);
-      AssertEquals('MatVecMul[1]', 4*1 + 5*2 + 6*3, w.Data[1], EPS);
+      CheckNear(1*1 + 2*2 + 3*3, w.Data[0], EPS, 'MatVecMul[0]');
+      CheckNear(4*1 + 5*2 + 6*3, w.Data[1], EPS, 'MatVecMul[1]');
     finally
       w.Free;
     end;
@@ -125,11 +124,11 @@ begin
   try
     B := A.Transpose;
     try
-      AssertEquals('Transpose.Rows', 3, B.Rows);
-      AssertEquals('Transpose.Cols', 2, B.Cols);
-      AssertEquals('Transpose[0,0]', 1, B.Get(0, 0), EPS);
-      AssertEquals('Transpose[1,0]', 2, B.Get(1, 0), EPS);
-      AssertEquals('Transpose[2,1]', 6, B.Get(2, 1), EPS);
+      CheckEqual(3, B.Rows, 'Transpose.Rows');
+      CheckEqual(2, B.Cols, 'Transpose.Cols');
+      CheckNear(1, B.Get(0, 0), EPS, 'Transpose[0,0]');
+      CheckNear(2, B.Get(1, 0), EPS, 'Transpose[1,0]');
+      CheckNear(6, B.Get(2, 1), EPS, 'Transpose[2,1]');
     finally
       B.Free;
     end;
@@ -153,10 +152,10 @@ begin
   try
     C := MatAddF32(A, B);
     try
-      AssertEquals('MatAdd[0,0]', 6, C.Get(0, 0), EPS);
-      AssertEquals('MatAdd[0,1]', 8, C.Get(0, 1), EPS);
-      AssertEquals('MatAdd[1,0]', 10, C.Get(1, 0), EPS);
-      AssertEquals('MatAdd[1,1]', 12, C.Get(1, 1), EPS);
+      CheckNear(6, C.Get(0, 0), EPS, 'MatAdd[0,0]');
+      CheckNear(8, C.Get(0, 1), EPS, 'MatAdd[0,1]');
+      CheckNear(10, C.Get(1, 0), EPS, 'MatAdd[1,0]');
+      CheckNear(12, C.Get(1, 1), EPS, 'MatAdd[1,1]');
     finally
       C.Free;
     end;
@@ -177,10 +176,10 @@ begin
   try
     C := MatScaleF32(A, 3.0);
     try
-      AssertEquals('MatScale[0,0]', 3, C.Get(0, 0), EPS);
-      AssertEquals('MatScale[0,1]', 6, C.Get(0, 1), EPS);
-      AssertEquals('MatScale[1,0]', 9, C.Get(1, 0), EPS);
-      AssertEquals('MatScale[1,1]', 12, C.Get(1, 1), EPS);
+      CheckNear(3, C.Get(0, 0), EPS, 'MatScale[0,0]');
+      CheckNear(6, C.Get(0, 1), EPS, 'MatScale[0,1]');
+      CheckNear(9, C.Get(1, 0), EPS, 'MatScale[1,0]');
+      CheckNear(12, C.Get(1, 1), EPS, 'MatScale[1,1]');
     finally
       C.Free;
     end;
@@ -199,7 +198,7 @@ begin
   A.Put(2, 0, 7); A.Put(2, 1, 8); A.Put(2, 2, 9);
 
   try
-    AssertEquals('Trace', 15, MatTraceF32(A), EPS);
+    CheckNear(15, MatTraceF32(A), EPS, 'Trace');
   finally
     A.Free;
   end;
@@ -214,7 +213,7 @@ begin
   A.Put(1, 0, 3); A.Put(1, 1, 4);
 
   try
-    AssertEquals('FrobeniusNorm', Sqrt(1 + 4 + 9 + 16), MatFrobeniusNormF32(A), EPS);
+    CheckNear(Sqrt(1 + 4 + 9 + 16), MatFrobeniusNormF32(A), EPS, 'FrobeniusNorm');
   finally
     A.Free;
   end;
@@ -232,13 +231,13 @@ begin
     L := TSimdF32Matrix.Create(2, 2);
     U := TSimdF32Matrix.Create(2, 2);
     try
-      AssertTrue('LU success', LUDecomposeF32(A, L, U));
+      CheckTrue(LUDecomposeF32(A, L, U), 'LU success');
       // L should be lower triangular, U upper triangular
-      AssertEquals('L[0,0]', 1, L.Get(0, 0), EPS);
-      AssertEquals('L[1,0]', 2, L.Get(1, 0), EPS);
-      AssertEquals('U[0,0]', 2, U.Get(0, 0), EPS);
-      AssertEquals('U[0,1]', 1, U.Get(0, 1), EPS);
-      AssertEquals('U[1,1]', 1, U.Get(1, 1), EPS);
+      CheckNear(1, L.Get(0, 0), EPS, 'L[0,0]');
+      CheckNear(2, L.Get(1, 0), EPS, 'L[1,0]');
+      CheckNear(2, U.Get(0, 0), EPS, 'U[0,0]');
+      CheckNear(1, U.Get(0, 1), EPS, 'U[0,1]');
+      CheckNear(1, U.Get(1, 1), EPS, 'U[1,1]');
     finally
       L.Free;
       U.Free;
@@ -264,8 +263,8 @@ begin
   try
     x := SolveLinearF32(A, b);
     try
-      AssertEquals('x[0]', 2, x.Data[0], EPS);
-      AssertEquals('x[1]', 1, x.Data[1], EPS);
+      CheckNear(2, x.Data[0], EPS, 'x[0]');
+      CheckNear(1, x.Data[1], EPS, 'x[1]');
     finally
       x.Free;
     end;
@@ -289,10 +288,10 @@ begin
       // A * A^-1 should be identity
       C := MatMulF32(A, AInv);
       try
-        AssertEquals('A*A^-1[0,0]', 1, C.Get(0, 0), EPS);
-        AssertEquals('A*A^-1[0,1]', 0, C.Get(0, 1), EPS);
-        AssertEquals('A*A^-1[1,0]', 0, C.Get(1, 0), EPS);
-        AssertEquals('A*A^-1[1,1]', 1, C.Get(1, 1), EPS);
+        CheckNear(1, C.Get(0, 0), EPS, 'A*A^-1[0,0]');
+        CheckNear(0, C.Get(0, 1), EPS, 'A*A^-1[0,1]');
+        CheckNear(0, C.Get(1, 0), EPS, 'A*A^-1[1,0]');
+        CheckNear(1, C.Get(1, 1), EPS, 'A*A^-1[1,1]');
       finally
         C.Free;
       end;
@@ -314,7 +313,7 @@ begin
 
   try
     // det = 4*6 - 7*2 = 24 - 14 = 10
-    AssertEquals('Determinant', 10, MatDeterminantF32(A), EPS);
+    CheckNear(10, MatDeterminantF32(A), EPS, 'Determinant');
   finally
     A.Free;
   end;
@@ -334,12 +333,12 @@ begin
   try
     C := OuterProductF32(u, v);
     try
-      AssertEquals('Outer[0,0]', 3, C.Get(0, 0), EPS);
-      AssertEquals('Outer[0,1]', 4, C.Get(0, 1), EPS);
-      AssertEquals('Outer[0,2]', 5, C.Get(0, 2), EPS);
-      AssertEquals('Outer[1,0]', 6, C.Get(1, 0), EPS);
-      AssertEquals('Outer[1,1]', 8, C.Get(1, 1), EPS);
-      AssertEquals('Outer[1,2]', 10, C.Get(1, 2), EPS);
+      CheckNear(3, C.Get(0, 0), EPS, 'Outer[0,0]');
+      CheckNear(4, C.Get(0, 1), EPS, 'Outer[0,1]');
+      CheckNear(5, C.Get(0, 2), EPS, 'Outer[0,2]');
+      CheckNear(6, C.Get(1, 0), EPS, 'Outer[1,0]');
+      CheckNear(8, C.Get(1, 1), EPS, 'Outer[1,1]');
+      CheckNear(10, C.Get(1, 2), EPS, 'Outer[1,2]');
     finally
       C.Free;
     end;
@@ -364,10 +363,10 @@ begin
   try
     C := MatHadamardF32(A, B);
     try
-      AssertEquals('Hadamard[0,0]', 5, C.Get(0, 0), EPS);
-      AssertEquals('Hadamard[0,1]', 12, C.Get(0, 1), EPS);
-      AssertEquals('Hadamard[1,0]', 21, C.Get(1, 0), EPS);
-      AssertEquals('Hadamard[1,1]', 32, C.Get(1, 1), EPS);
+      CheckNear(5, C.Get(0, 0), EPS, 'Hadamard[0,0]');
+      CheckNear(12, C.Get(0, 1), EPS, 'Hadamard[0,1]');
+      CheckNear(21, C.Get(1, 0), EPS, 'Hadamard[1,0]');
+      CheckNear(32, C.Get(1, 1), EPS, 'Hadamard[1,1]');
     finally
       C.Free;
     end;
@@ -389,8 +388,8 @@ begin
   try
     s := MatSumRowsF32(A);
     try
-      AssertEquals('SumRows[0]', 6, s.Data[0], EPS);
-      AssertEquals('SumRows[1]', 15, s.Data[1], EPS);
+      CheckNear(6, s.Data[0], EPS, 'SumRows[0]');
+      CheckNear(15, s.Data[1], EPS, 'SumRows[1]');
     finally
       s.Free;
     end;
@@ -411,9 +410,9 @@ begin
   try
     s := MatSumColsF32(A);
     try
-      AssertEquals('SumCols[0]', 5, s.Data[0], EPS);
-      AssertEquals('SumCols[1]', 7, s.Data[1], EPS);
-      AssertEquals('SumCols[2]', 9, s.Data[2], EPS);
+      CheckNear(5, s.Data[0], EPS, 'SumCols[0]');
+      CheckNear(7, s.Data[1], EPS, 'SumCols[1]');
+      CheckNear(9, s.Data[2], EPS, 'SumCols[2]');
     finally
       s.Free;
     end;
@@ -422,7 +421,5 @@ begin
   end;
 end;
 
-initialization
-  RegisterTest(TTestCase_SimdLinalg);
 
 end.
