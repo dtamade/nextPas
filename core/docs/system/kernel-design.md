@@ -132,12 +132,26 @@ vmtGetInterfaceStrong = SizeOf(SizeInt) * 27  ← 最后一个槽位
 
 ### 当前状态
 
-**S8 Kernel Surface Completeness 全部完成** (2026-07-06):
+**S8 Kernel Surface Completeness 全部完成** (2026-07-07):
 
 1. **内核完整性**: 17 个 .inc 子模块覆盖 FPC System 全部表面
 2. **门面完整性**: TypInfo (7 symbols) + SysUtils (40+ 函数) + Errors (56 aliases)
-3. **测试覆盖**: source-contracts + typinfo-minimal + sysutils-minimal 全通过
+3. **测试覆盖**: 126 测试（kernel 92 + facade 19 + typinfo 9 + sysutils 6），0 泄漏
 4. **总代码量**: 3391 行内核 + 4 个门面文件
+
+kernel 测试覆盖 (92 tests):
+- Swap (6): Word/SmallInt/DWord/LongInt/QWord/Int64
+- Endian (30): SwapEndian(6) + HTonN/NToHs(4) + BEtoN/LEtoN/NtoBE/NtoLE for Word/DWord/LongInt/Int64/QWord (20)
+- Variant (11): VarType(4) + VarIsNull(2) + VarIsEmpty(2) + VarIsClear(3)
+- Intrinsics (8): FillByte/FillDWord/FillQWord(3) + IndexChar/Byte/Word/DWord/QWord(5)
+- Compare (4): CompareChar/Byte/Word/DWord
+- Memory (12): MoveChar0 + MemPos + StackTop + GetMem/FreeMem + GetMem zero + AllocMem + ReAllocMem + ReAllocMem nil + MemSize + FillMem + CopyMem + CompareMem(2)
+- Assigned (3): pointer + object + interface nil
+- Thread (4): CriticalSection lifecycle/TryEnter/reentrancy + TRTLCriticalSection size
+- Interlocked (5): Increment/Decrement/Exchange/CompareExchange/ExchangeAdd
+- IO (1): fmClosed/fmInput/fmOutput/fmInOut constants
+- Type sizes (5): Base types + TGUID + TVarData size + TVarData layout + Variant type constants
+- SafeFree (2): object + nil
 
 ### 下一步
 

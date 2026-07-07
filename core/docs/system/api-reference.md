@@ -7,7 +7,7 @@
 | 门面 | 路径 | 职责 |
 |------|------|------|
 | `nextpas.core.system` | `core/src/nextpas.core.system.pas` | 根门面：re-export 基础类型、常量、内核子模块 |
-| `nextpas.core.system.typinfo` | `core/src/nextpas.core.system.typinfo.pas` | RTTI 门面：PTypeInfo/TTypeKind/GetPropInfo/GetEnumName/GetEnumValue |
+| `nextpas.core.system.typinfo` | `core/src/nextpas.core.system.typinfo.pas` | RTTI 门面：PTypeInfo/TTypeKind/PPropInfo/PPropList/GetPropInfo/GetPropList/GetEnumName/GetEnumValue |
 | `nextpas.core.system.sysutils` | `core/src/nextpas.core.system.sysutils.pas` | SysUtils 门面：40+ 函数委托给 owner 模块 |
 | `nextpas.core.system.errors` | `core/src/nextpas.core.system.errors.pas` | 异常分类门面：38 exception + 18 error category |
 
@@ -434,9 +434,12 @@ uses nextpas.core.system.typinfo;
 
 // 类型
 PTypeInfo, TTypeInfo, PPTypeInfo, PTypeData, TTypeData, TTypeKind
+PPropInfo, PPropList
 
 // 函数
 function GetPropInfo(AInstance: TObject; const APropName: string): PPropInfo;
+function GetPropList(ATypeInfo: PTypeInfo; out APropList: PPropList): SizeInt;
+function GetPropList(AClass: TClass; out APropList: PPropList): Integer;
 function GetEnumName(ATypeInfo: PTypeInfo; AValue: SizeInt): ShortString;
 function GetEnumValue(ATypeInfo: PTypeInfo; const AName: string): SizeInt;
 ```

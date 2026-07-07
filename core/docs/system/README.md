@@ -19,7 +19,7 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 - 对框架消费者：提供少量稳定、低层、可测试的 RTL root facade。
 - 对 owner 模块：不绕过已有实现所有权，不复制平台、内存、文本、文件、时间、IO 等模块。
 
-**当前状态**: S8 Kernel Surface Completeness 全部完成。内核包含 17 个 .inc 子模块 + 4 个 .pas 门面文件，总计 3391 行。覆盖 Variant、Thread、I/O、Memory Manager、Endian、Barrier、Intrinsics、TypInfo、SysUtils 等完整 FPC System 表面。
+**当前状态**: S8 Kernel Surface Completeness 全部完成。内核包含 17 个 .inc 子模块 + 4 个 .pas 门面文件，总计 3391 行。覆盖 Variant、Thread、I/O、Memory Manager、Endian、Barrier、Intrinsics、TypInfo、SysUtils 等完整 FPC System 表面。测试覆盖 126 个测试（kernel 92 + facade 19 + typinfo 9 + sysutils 6），0 泄漏。
 
 ### 内核架构 (S7-S8)
 

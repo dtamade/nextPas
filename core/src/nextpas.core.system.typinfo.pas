@@ -23,6 +23,8 @@ type
   TTypeKind = TypInfo.TTypeKind;
   PTypeData = TypInfo.PTypeData;
   TTypeData = TypInfo.TTypeData;
+  PPropInfo = TypInfo.PPropInfo;
+  PPropList = TypInfo.PPropList;
 
 const
   tkInteger = TypInfo.tkInteger;
@@ -58,6 +60,8 @@ procedure CopyArray(ADest, ASrc: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt)
 { Property reflection }
 function GetPropInfo(AInstance: TObject; const APropName: string): PPropInfo;
 function GetPropInfo(ATypeInfo: PTypeInfo; const APropName: string): PPropInfo;
+function GetPropList(ATypeInfo: PTypeInfo; out APropList: PPropList): SizeInt;
+function GetPropList(AClass: TClass; out APropList: PPropList): Integer;
 
 { Enum reflection }
 function GetEnumName(ATypeInfo: PTypeInfo; AValue: Integer): string;
@@ -88,6 +92,16 @@ end;
 function GetPropInfo(ATypeInfo: PTypeInfo; const APropName: string): PPropInfo;
 begin
   Result := TypInfo.GetPropInfo(ATypeInfo, APropName);
+end;
+
+function GetPropList(ATypeInfo: PTypeInfo; out APropList: PPropList): SizeInt;
+begin
+  Result := TypInfo.GetPropList(ATypeInfo, APropList);
+end;
+
+function GetPropList(AClass: TClass; out APropList: PPropList): Integer;
+begin
+  Result := TypInfo.GetPropList(AClass, APropList);
 end;
 
 function GetEnumName(ATypeInfo: PTypeInfo; AValue: Integer): string;

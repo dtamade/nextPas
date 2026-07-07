@@ -22,6 +22,16 @@ type
     Value: Integer;
   end;
 
+  { Test class for GetPropList }
+  TPropTestObj = class
+  private
+    FIntProp: Integer;
+    FStrProp: string;
+  published
+    property IntProp: Integer read FIntProp write FIntProp;
+    property StrProp: string read FStrProp write FStrProp;
+  end;
+
   ISystemTypInfoProbe = interface
     ['{A1980734-1B05-44E2-AC4B-D15C65E96483}']
     function Value: Integer;
@@ -409,6 +419,19 @@ begin
   end;
 end;
 
+procedure TestGetPropList;
+var
+  LPropList: nextpas.core.system.typinfo.PPropList;
+  LCount: Integer;
+begin
+  LPropList := nil;
+  LCount := nextpas.core.system.typinfo.GetPropList(TPropTestObj, LPropList);
+  CheckEqual(Int64(2), Int64(LCount), 'GetPropList should find 2 published properties');
+  Check(LPropList <> nil, 'GetPropList should allocate prop list');
+  if LPropList <> nil then
+    FreeMem(LPropList);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.typinfo');
   T.Test('TypeInfo and GetTypeKind compile-truth', @TestTypeInfoAndGetTypeKindCompileTruth);
@@ -420,5 +443,6 @@ begin
   T.Test('collection kind aliases compile-truth', @TestCollectionKindAliasesCompileTruth);
   T.Test('managed interface array lifecycle helpers',
     @TestManagedInterfaceArrayLifecycleHelpers);
+  T.Test('GetPropList', @TestGetPropList);
   if not T.Run then Halt(1);
 end.

@@ -208,6 +208,200 @@ begin
   {$ENDIF}
 end;
 
+{ === Endian DWord/LongInt/Int64/QWord Tests === }
+
+procedure TestBEtoNDWord;
+var
+  LValue: DWord;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($78563412), Int64(BEtoN(LValue)), 'BEtoN(DWord) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($12345678), Int64(BEtoN(LValue)), 'BEtoN(DWord) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestLEtoNDWord;
+var
+  LValue: DWord;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($12345678), Int64(LEtoN(LValue)), 'LEtoN(DWord) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($78563412), Int64(LEtoN(LValue)), 'LEtoN(DWord) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoBEDWord;
+var
+  LValue: DWord;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($78563412), Int64(NtoBE(LValue)), 'NtoBE(DWord) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($12345678), Int64(NtoBE(LValue)), 'NtoBE(DWord) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoLEDWord;
+var
+  LValue: DWord;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($12345678), Int64(NtoLE(LValue)), 'NtoLE(DWord) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($78563412), Int64(NtoLE(LValue)), 'NtoLE(DWord) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestBEtoNLongInt;
+var
+  LValue: LongInt;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64(LongInt($78563412)), Int64(BEtoN(LValue)), 'BEtoN(LongInt) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($12345678), Int64(BEtoN(LValue)), 'BEtoN(LongInt) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestLEtoNLongInt;
+var
+  LValue: LongInt;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($12345678), Int64(LEtoN(LValue)), 'LEtoN(LongInt) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64(LongInt($78563412)), Int64(LEtoN(LValue)), 'LEtoN(LongInt) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoBELongInt;
+var
+  LValue: LongInt;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64(LongInt($78563412)), Int64(NtoBE(LValue)), 'NtoBE(LongInt) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64($12345678), Int64(NtoBE(LValue)), 'NtoBE(LongInt) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoLELongInt;
+var
+  LValue: LongInt;
+begin
+  LValue := $12345678;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(Int64($12345678), Int64(NtoLE(LValue)), 'NtoLE(LongInt) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(Int64(LongInt($78563412)), Int64(NtoLE(LValue)), 'NtoLE(LongInt) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestBEtoNInt64;
+var
+  LValue: Int64;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual($0807060504030201, BEtoN(LValue), 'BEtoN(Int64) should swap on little-endian');
+  {$ELSE}
+  CheckEqual($0102030405060708, BEtoN(LValue), 'BEtoN(Int64) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestLEtoNInt64;
+var
+  LValue: Int64;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual($0102030405060708, LEtoN(LValue), 'LEtoN(Int64) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual($0807060504030201, LEtoN(LValue), 'LEtoN(Int64) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoBEInt64;
+var
+  LValue: Int64;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual($0807060504030201, NtoBE(LValue), 'NtoBE(Int64) should swap on little-endian');
+  {$ELSE}
+  CheckEqual($0102030405060708, NtoBE(LValue), 'NtoBE(Int64) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoLEInt64;
+var
+  LValue: Int64;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual($0102030405060708, NtoLE(LValue), 'NtoLE(Int64) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual($0807060504030201, NtoLE(LValue), 'NtoLE(Int64) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestBEtoNQWord;
+var
+  LValue: QWord;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(QWord($0807060504030201), BEtoN(LValue), 'BEtoN(QWord) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(QWord($0102030405060708), BEtoN(LValue), 'BEtoN(QWord) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestLEtoNQWord;
+var
+  LValue: QWord;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(QWord($0102030405060708), LEtoN(LValue), 'LEtoN(QWord) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(QWord($0807060504030201), LEtoN(LValue), 'LEtoN(QWord) should swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoBEQWord;
+var
+  LValue: QWord;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(QWord($0807060504030201), NtoBE(LValue), 'NtoBE(QWord) should swap on little-endian');
+  {$ELSE}
+  CheckEqual(QWord($0102030405060708), NtoBE(LValue), 'NtoBE(QWord) should not swap on big-endian');
+  {$ENDIF}
+end;
+
+procedure TestNtoLEQWord;
+var
+  LValue: QWord;
+begin
+  LValue := $0102030405060708;
+  {$IFDEF ENDIAN_LITTLE}
+  CheckEqual(QWord($0102030405060708), NtoLE(LValue), 'NtoLE(QWord) should not swap on little-endian');
+  {$ELSE}
+  CheckEqual(QWord($0807060504030201), NtoLE(LValue), 'NtoLE(QWord) should swap on big-endian');
+  {$ENDIF}
+end;
+
 { === Variant Tests === }
 
 procedure TestVarTypeEmpty;
@@ -372,10 +566,12 @@ end;
 procedure TestIndexQWord;
 var
   LBuf: array[0..1] of QWord = ($0102030405060708, $090A0B0C0D0E0F10);
+  LResult: Int64;
 begin
   CheckEqual(Int64(0), Int64(IndexQWord(LBuf, 2, $0102030405060708)), 'IndexQWord should find first');
   CheckEqual(Int64(1), Int64(IndexQWord(LBuf, 2, $090A0B0C0D0E0F10)), 'IndexQWord should find second');
-  CheckEqual(Int64(-1), Int64(IndexQWord(LBuf, 2, $FFFFFFFFFFFFFFFF)), 'IndexQWord should return -1 for missing');
+  LResult := IndexQWord(LBuf, 2, $FFFFFFFFFFFFFFFF);
+  CheckEqual(Int64(-1), LResult, 'IndexQWord should return -1 for missing');
 end;
 
 { === CompareChar/CompareByte/CompareWord/CompareDWord Tests === }
@@ -667,6 +863,169 @@ begin
   CheckEqual(Int64(12), Int64(LValue), 'InterlockedExchangeAdd should subtract from value');
 end;
 
+{ === IO Constants Tests === }
+
+procedure TestIOFileModeConstants;
+begin
+  { fmClosed/fmInput/fmOutput/fmInOut are defined in kernel.inc (nextPas path only) }
+  { Under FPC, these come from System unit and have the same values }
+  CheckEqual(Int64($D7B0), Int64(fmClosed), 'fmClosed should be $D7B0');
+  CheckEqual(Int64($D7B1), Int64(fmInput), 'fmInput should be $D7B1');
+  CheckEqual(Int64($D7B2), Int64(fmOutput), 'fmOutput should be $D7B2');
+  CheckEqual(Int64($D7B3), Int64(fmInOut), 'fmInOut should be $D7B3');
+end;
+
+{ === Thread Record Size Tests === }
+
+procedure TestTRTLCriticalSectionSize;
+begin
+  { TRTLCriticalSection should be a fixed-size record for mutex }
+  Check(SizeOf(TRTLCriticalSection) >= 4, 'TRTLCriticalSection should be at least 4 bytes');
+end;
+
+{ === Base Type Size Verification Tests === }
+
+procedure TestBaseTypeSizes;
+begin
+  CheckEqual(Int64(8), Int64(SizeOf(SizeInt)), 'SizeOf(SizeInt) should be 8');
+  CheckEqual(Int64(8), Int64(SizeOf(SizeUInt)), 'SizeOf(SizeUInt) should be 8');
+  CheckEqual(Int64(8), Int64(SizeOf(PtrInt)), 'SizeOf(PtrInt) should be 8');
+  CheckEqual(Int64(8), Int64(SizeOf(PtrUInt)), 'SizeOf(PtrUInt) should be 8');
+  CheckEqual(Int64(8), Int64(SizeOf(Pointer)), 'SizeOf(Pointer) should be 8');
+  CheckEqual(Int64(1), Int64(SizeOf(Boolean)), 'SizeOf(Boolean) should be 1');
+  CheckEqual(Int64(1), Int64(SizeOf(Byte)), 'SizeOf(Byte) should be 1');
+  CheckEqual(Int64(2), Int64(SizeOf(Word)), 'SizeOf(Word) should be 2');
+  CheckEqual(Int64(4), Int64(SizeOf(DWord)), 'SizeOf(DWord) should be 4');
+  CheckEqual(Int64(4), Int64(SizeOf(LongInt)), 'SizeOf(LongInt) should be 4');
+  CheckEqual(Int64(4), Int64(SizeOf(LongWord)), 'SizeOf(LongWord) should be 4');
+  CheckEqual(Int64(8), Int64(SizeOf(Int64)), 'SizeOf(Int64) should be 8');
+  CheckEqual(Int64(8), Int64(SizeOf(QWord)), 'SizeOf(QWord) should be 8');
+  CheckEqual(Int64(1), Int64(SizeOf(AnsiChar)), 'SizeOf(AnsiChar) should be 1');
+  CheckEqual(Int64(2), Int64(SizeOf(WideChar)), 'SizeOf(WideChar) should be 2');
+end;
+
+{ === TVarData Layout Tests === }
+
+procedure TestTVarDataSize;
+begin
+  { FPC's TVarData is 24 bytes on x86_64 }
+  CheckEqual(Int64(24), Int64(SizeOf(TVarData)), 'SizeOf(TVarData) should be 24');
+end;
+
+procedure TestTVarDataLayout;
+var
+  LData: TVarData;
+begin
+  FillChar(LData, SizeOf(LData), 0);
+  LData.VType := varInteger;
+  CheckEqual(Int64(varInteger), Int64(LData.VType), 'TVarData.VType should be accessible');
+end;
+
+procedure TestVariantTypeConstants;
+begin
+  CheckEqual(Int64(0), Int64(varEmpty), 'varEmpty should be 0');
+  CheckEqual(Int64(1), Int64(varNull), 'varNull should be 1');
+  CheckEqual(Int64(2), Int64(varSmallint), 'varSmallint should be 2');
+  CheckEqual(Int64(3), Int64(varInteger), 'varInteger should be 3');
+  CheckEqual(Int64(4), Int64(varSingle), 'varSingle should be 4');
+  CheckEqual(Int64(5), Int64(varDouble), 'varDouble should be 5');
+  CheckEqual(Int64(6), Int64(varCurrency), 'varCurrency should be 6');
+  CheckEqual(Int64(7), Int64(varDate), 'varDate should be 7');
+  CheckEqual(Int64(8), Int64(varOleStr), 'varOleStr should be 8');
+  CheckEqual(Int64(9), Int64(varDispatch), 'varDispatch should be 9');
+  CheckEqual(Int64(10), Int64(varError), 'varError should be 10');
+  CheckEqual(Int64(11), Int64(varBoolean), 'varBoolean should be 11');
+  CheckEqual(Int64(12), Int64(varVariant), 'varVariant should be 12');
+  CheckEqual(Int64(13), Int64(varUnknown), 'varUnknown should be 13');
+  CheckEqual(Int64(14), Int64(varDecimal), 'varDecimal should be 14');
+  CheckEqual(Int64(16), Int64(varShortInt), 'varShortInt should be 16');
+  CheckEqual(Int64(17), Int64(varByte), 'varByte should be 17');
+  CheckEqual(Int64(18), Int64(varWord), 'varWord should be 18');
+  CheckEqual(Int64(19), Int64(varLongWord), 'varLongWord should be 19');
+  CheckEqual(Int64(20), Int64(varInt64), 'varInt64 should be 20');
+  CheckEqual(Int64(21), Int64(varQWord), 'varQWord should be 21');
+  CheckEqual(Int64($0100), Int64(varString), 'varString should be $0100');
+  CheckEqual(Int64($0101), Int64(varAny), 'varAny should be $0101');
+  CheckEqual(Int64($0102), Int64(varUString), 'varUString should be $0102');
+end;
+
+{ === FillMem/CopyMem/CompareMem Tests === }
+
+procedure TestFillMem;
+var
+  LBuf: array[0..7] of Byte;
+begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  FillMem(@LBuf[0], 8, $AB);
+  CheckEqual(Int64($AB), Int64(LBuf[0]), 'FillMem should fill first byte');
+  CheckEqual(Int64($AB), Int64(LBuf[7]), 'FillMem should fill last byte');
+end;
+
+procedure TestCopyMem;
+var
+  LSrc: array[0..3] of Byte = ($11, $22, $33, $44);
+  LDst: array[0..3] of Byte;
+begin
+  FillChar(LDst, SizeOf(LDst), 0);
+  CopyMem(@LDst[0], @LSrc[0], 4);
+  CheckEqual(Int64($11), Int64(LDst[0]), 'CopyMem should copy first byte');
+  CheckEqual(Int64($44), Int64(LDst[3]), 'CopyMem should copy last byte');
+end;
+
+procedure TestCompareMemEqual;
+var
+  LA: array[0..3] of Byte = ($AA, $BB, $CC, $DD);
+  LB: array[0..3] of Byte = ($AA, $BB, $CC, $DD);
+begin
+  CheckTrue(CompareMem(@LA[0], @LB[0], 4), 'CompareMem should return true for equal blocks');
+end;
+
+procedure TestCompareMemNotEqual;
+var
+  LA: array[0..3] of Byte = ($AA, $BB, $CC, $DD);
+  LB: array[0..3] of Byte = ($AA, $BB, $CC, $EE);
+begin
+  CheckFalse(CompareMem(@LA[0], @LB[0], 4), 'CompareMem should return false for different blocks');
+end;
+
+{ === SafeFree Test === }
+
+procedure TestSafeFree;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  SafeFree(LObj);
+  CheckTrue(LObj = nil, 'SafeFree should set reference to nil');
+end;
+
+procedure TestSafeFreeNil;
+var
+  LObj: TObject;
+begin
+  LObj := nil;
+  SafeFree(LObj);
+  CheckTrue(LObj = nil, 'SafeFree(nil) should stay nil');
+end;
+
+{ === Assigned(IUnknown) Test === }
+
+procedure TestAssignedInterfaceNil;
+var
+  LIntf: IUnknown;
+begin
+  LIntf := nil;
+  CheckFalse(Assigned(LIntf), 'Assigned(nil interface) should return false');
+end;
+
+{ === TGUID Tests === }
+
+procedure TestTGUIDSize;
+begin
+  { TGUID should be 16 bytes: D1(4) + D2(2) + D3(2) + D4(8) }
+  CheckEqual(Int64(16), Int64(SizeOf(TGUID)), 'SizeOf(TGUID) should be 16');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system kernel');
 
@@ -693,6 +1052,24 @@ begin
   T.Test('LEtoN(Word)', @TestLEtoNWord);
   T.Test('NtoBE(Word)', @TestNtoBEWord);
   T.Test('NtoLE(Word)', @TestNtoLEWord);
+
+  { Endian DWord/LongInt/Int64/QWord tests }
+  T.Test('BEtoN(DWord)', @TestBEtoNDWord);
+  T.Test('LEtoN(DWord)', @TestLEtoNDWord);
+  T.Test('NtoBE(DWord)', @TestNtoBEDWord);
+  T.Test('NtoLE(DWord)', @TestNtoLEDWord);
+  T.Test('BEtoN(LongInt)', @TestBEtoNLongInt);
+  T.Test('LEtoN(LongInt)', @TestLEtoNLongInt);
+  T.Test('NtoBE(LongInt)', @TestNtoBELongInt);
+  T.Test('NtoLE(LongInt)', @TestNtoLELongInt);
+  T.Test('BEtoN(Int64)', @TestBEtoNInt64);
+  T.Test('LEtoN(Int64)', @TestLEtoNInt64);
+  T.Test('NtoBE(Int64)', @TestNtoBEInt64);
+  T.Test('NtoLE(Int64)', @TestNtoLEInt64);
+  T.Test('BEtoN(QWord)', @TestBEtoNQWord);
+  T.Test('LEtoN(QWord)', @TestLEtoNQWord);
+  T.Test('NtoBE(QWord)', @TestNtoBEQWord);
+  T.Test('NtoLE(QWord)', @TestNtoLEQWord);
 
   { Variant tests }
   T.Test('VarType(empty)', @TestVarTypeEmpty);
@@ -757,6 +1134,36 @@ begin
   T.Test('InterlockedExchange', @TestInterlockedExchange);
   T.Test('InterlockedCompareExchange', @TestInterlockedCompareExchange);
   T.Test('InterlockedExchangeAdd', @TestInterlockedExchangeAdd);
+
+  { IO constants tests }
+  T.Test('IO file mode constants', @TestIOFileModeConstants);
+
+  { Thread record size tests }
+  T.Test('TRTLCriticalSection size', @TestTRTLCriticalSectionSize);
+
+  { Base type size tests }
+  T.Test('Base type sizes', @TestBaseTypeSizes);
+
+  { TVarData layout tests }
+  T.Test('TVarData size', @TestTVarDataSize);
+  T.Test('TVarData layout', @TestTVarDataLayout);
+  T.Test('Variant type constants', @TestVariantTypeConstants);
+
+  { FillMem/CopyMem/CompareMem tests }
+  T.Test('FillMem', @TestFillMem);
+  T.Test('CopyMem', @TestCopyMem);
+  T.Test('CompareMem equal', @TestCompareMemEqual);
+  T.Test('CompareMem not equal', @TestCompareMemNotEqual);
+
+  { SafeFree tests }
+  T.Test('SafeFree', @TestSafeFree);
+  T.Test('SafeFree nil', @TestSafeFreeNil);
+
+  { Assigned interface test }
+  T.Test('Assigned(interface nil)', @TestAssignedInterfaceNil);
+
+  { TGUID tests }
+  T.Test('TGUID size', @TestTGUIDSize);
 
   if not T.Run then Halt(1);
 end.

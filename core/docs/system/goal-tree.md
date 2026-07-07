@@ -379,7 +379,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - [x] Add `GetPropInfo` for property RTTI
 - [x] Add `GetEnumName`, `GetEnumValue` for enum RTTI
 - [ ] Add `GetTypeKind` compiler intrinsic — deferred (compiler built-in, not in TypInfo unit)
-- [ ] Add `PropInfo`, `PropList` for property RTTI — deferred
+- [x] Add `PropInfo`, `PropList` for property RTTI — PPropInfo/PPropList type aliases + GetPropList forwarding
 
 ### S8.12 SysUtils Facade Completeness
 
@@ -408,7 +408,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - All fpc_* stubs in comp.inc have correct signatures
 - TypInfo facade covers all RTTI types used by core modules
 - SysUtils facade covers all functions used by core modules
-- `make -C core/tests/nextpas.core.system clean test` passes
+- `make -C core/tests/nextpas.core.system clean test` passes (126 tests, 0 leaks)
 - `fpc -Mobjfpc core/src/nextpas.core.system.pas` compiles cleanly
 
 **S8 Completion** (S8.2-S8.12 all done):
@@ -425,7 +425,7 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 10. **TypInfo facade**: PTypeData/TTypeData + GetPropInfo/GetEnumName/GetEnumValue
 11. **SysUtils facade**: 40+ functions (StrToInt/FloatToStr/FileExists/ExtractFilePath/Now/Sleep etc.)
 
-**S8 is now complete**. All kernel surface items addressed.
+**S8 is now complete**. All kernel surface items addressed. 126 tests (kernel 92 + source 19 + typinfo 9 + sysutils 6), 0 leaks.
 
 **Next Phase**: S8 completion clears the way for compiler integration. The kernel is ready
 for the compiler to recognize `{$compiler_root}` and `{$compiler_type_kind}` directives

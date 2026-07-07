@@ -67,14 +67,26 @@ ElSize 来自 TypeInfo，数组元素对齐 = `SizeOf(Element)`（最大 16，si
 
 ### 1.4 Variant 内存布局
 
-`TVarData` 是 16 字节 packed record：
+`TVarData` 在 FPC x86_64 上是 24 字节 packed record：
 ```
 offset 0:  VType (2 bytes, TVarType = Word)
-offset 2:  Reserved (6 bytes)
-offset 8:  Payload (8 bytes, 类型取决于 VType)
+offset 2:  Reserved1 (2 bytes, alignment/padding)
+offset 4:  Reserved2 (4 bytes)
+offset 8:  Payload (8 bytes, 类型取决于 VType — VDouble/VCurrency/VDate/VString/VBoolean 等)
+offset 16: Reserved3 (8 bytes)
 ```
 
-`VType` 值定义见 `base.inc`（`varEmpty`=0, `varNull`=1, ..., `varUString`=$0102）。
+注意：FPC 的 `TVarData` 在 x86_64 上是 24 字节（含对齐填充），比 COM VARIANT 的 16 字节大。
+kernel.inc 中的 `TVarData` 定义应与 FPC 保持一致（24 字节）。
+
+`VType` 值定义见 `base.inc`：
+- `varEmpty`=0, `varNull`=1, `varSmallint`=2, `varInteger`=3
+- `varSingle`=4, `varDouble`=5, `varCurrency`=6, `varDate`=7
+- `varOleStr`=8, `varDispatch`=9, `varError`=10, `varBoolean`=11
+- `varVariant`=12, `varUnknown`=13, `varDecimal`=14
+- `varShortInt`=16, `varByte`=17, `varWord`=18, `varLongWord`=19
+- `varInt64`=20, `varQWord`=21
+- `varString`=$0100, `varAny`=$0101, `varUString`=$0102
 
 ### 1.5 TGUID 内存布局
 
