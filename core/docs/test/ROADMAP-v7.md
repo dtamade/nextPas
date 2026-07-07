@@ -140,8 +140,8 @@ type
 | 阶段 | 内容 | 预估工作量 | 依赖 | 状态 |
 |------|------|-----------|------|------|
 | Phase 1 | 清理死代码 | 小 | 无 | ✅ 完成 |
-| Phase 2 | CheckEqualMsg | 小 | 无 | ⏭️ 未开始 |
-| Phase 3 | 编译失败修复 | 中 | Phase 1 | ⏭️ 未开始 |
+| Phase 2 | CheckEqualMsg | 小 | 无 | ✅ 完成 (UInt64 已有专用重载，无歧义) |
+| Phase 3 | 编译失败修复 | 中 | Phase 1 | ⏭️ 跨模块 (不在 test 模块范围) |
 | Phase 4 | 命名统一 | 中 | Phase 1 | ✅ 完成 (TSuiteRunner 已是标准) |
 | Phase 5 | 测试隔离 | 小 | 无 | ✅ 完成 (三层清理正确) |
 | Phase 6 | 自动发现 | 大 | Phase 4 | ⏭️ 未开始 |
