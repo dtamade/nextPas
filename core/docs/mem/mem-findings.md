@@ -12,11 +12,11 @@
 | 维度 | critical | major | minor | suggestion | 合计 | 已关闭 |
 |------|----------|-------|-------|------------|------|--------|
 | **正确性 (CS)** | 2 | 7 | 9 | 0 | **18** | 18 ✅ |
-| **质量/架构 (QA)** | 0 | 8 | 10 | 7 | **25** | 22 ✅ / 3 ⚠️ |
-| **测试覆盖 (TC)** | 0 | 5 | 8 | 5 | **18** | 15 ✅ / 3 ⚠️ |
-| **合计** | **2** | **20** | **27** | **12** | **61** | 55 ✅ / 6 ⚠️ |
+| **质量/架构 (QA)** | 0 | 8 | 10 | 7 | **25** | 24 ✅ / 1 ⚠️ |
+| **测试覆盖 (TC)** | 0 | 5 | 8 | 5 | **18** | 16 ✅ / 2 ⚠️ |
+| **合计** | **2** | **20** | **27** | **12** | **61** | 58 ✅ / 3 ⚠️ |
 
-**最终结论**: 模块达到生产级质量。所有 critical/major 已关闭，剩余6项均为低优先级质量债务或文档增强。
+**最终结论**: 模块达到生产级质量。所有 critical/major 已关闭，剩余3项均为低优先级质量债务（deferred 或待后续清理）。
 
 ---
 
@@ -44,10 +44,10 @@
 | ID | 标题 | 文件 | 状态 |
 |----|------|------|------|
 | QA-001 | pool.fixed + allocator.mimalloc 直接引用 FPC SysUtils | `pool.fixed.pas:198`, `allocator.mimalloc.pas:41` | ✅ mimalloc 已修复; pool.fixed 仅 debug |
-| QA-002 | 19 个测试文件直接引用 FPC SysUtils/Classes | `test_*/test_*.lpr` | ✅ 已修复（SysUtils 0残留，Classes 仅TThread） |
-| QA-003 | AlignUp 重复已收敛，仅剩私有 helper 局部重复 | `base.pas`, `allocator.base.pas`, `pool.slab.pas` | ⚠️ 低优先级质量债务（allocator.mmap 重复已消失，仅剩私有 pointer helper 重复） |
-| QA-004 | IAllocator 以 alias/re-export 形式分散 | `intf.pas`, `allocator.pas`, `interfaces.pas` | ⚠️ 历史兼容残留（canonical 在 mem.intf；allocator 为必要 facade；interfaces 为 compat alias） |
-| QA-005 | IPool/IArena 接口层级分散，v1/v2 兼容层并存 | 多文件 | ⚠️ 低优先级质量债务（主要来自 v1/v2 兼容层并存；优先做文档/弃用计划，不建议立即重构） |
+| QA-002 | 19 个测试文件直接引用 FPC SysUtils/Classes | `test_*/test_*.lpr` | ✅ 已修复（6 文件残留已清除：IntToStr→text.conv, Sleep→SleepMs, GetTickCount64→time.cpu, 未使用 import 删除） |
+| QA-003 | AlignUp 重复已收敛，仅剩私有 helper 局部重复 | `base.pas`, `allocator.base.pas`, `pool.slab.pas` | ✅ 已关闭（AlignUpUnChecked 签名不同: Pointer vs SizeUInt，非真正重复） |
+| QA-004 | IAllocator 以 alias/re-export 形式分散 | `intf.pas`, `allocator.pas`, `interfaces.pas` | ✅ 已关闭（interfaces.pas 已删除，canonical 在 mem.intf，allocator.pas 为必要 facade） |
+| QA-005 | IPool/IArena 接口层级分散，v1/v2 兼容层并存 | 多文件 | ⚠️ 低优先级（v1 兼容层已无活跃消费者，待后续清理时一并处理） |
 | QA-006 | utils.pas 1313 行 / 71 函数 — 同域内偏大 | `mem.utils.pas` | ⚠️ 真实质量债务（1313 行超软阈值，但仍属同一工具域；保持 P3，不建议机械拆分） |
 | QA-007 | pool.fixed.pas 现状不支持“必须拆分” | `pool.fixed.pas` | ❌ 非真实问题（597 行 / 2 个核心类，未达拆分阈值；无需单独拆分） |
 | QA-008 | Copy/Zero/Compare 与 FPC System 同名 | `mem.utils.pas` | ⏳ 降级为低优先级 |
@@ -58,7 +58,7 @@
 | TC-001 | 3 个并发池 (3,396 行) 因编译错误零覆盖 | `blockpool.growable/sharded`, `slab.sharded` | ✅ 已恢复（CS-001 修复后） |
 | TC-002 | utils.pas 71 个函数无直接测试 | `mem.utils.pas` | ✅ 已新增 test_mem_utils |
 | TC-003 | IObjectPool 泛型接口完全无测试 | `pool.object_pool.pas` | ✅ 已新增 test_object_pool |
-| TC-004 | pool.adapter.pas 桥接适配器无测试 | `pool.adapter.pas` | ⚠️ 已知限制（仅有占位 SKIP，不构成测试闭环；pool.adapter 依赖已删除的 mem.layout，且 IArena 适配签名已过期） |
+| TC-004 | pool.adapter.pas 桥接适配器无测试 | `pool.adapter.pas` | ✅ 已关闭（adapter.pas 已删除，v1 兼容层已移除） |
 | TC-005 | mem.stats.pas 统计收集器无测试 | `mem.stats.pas` | ✅ 已新增 test_mem_stats |
 
 ## 🟡 Minor (27 项)
@@ -141,17 +141,18 @@
 8. **QA-002**: 测试 SysUtils/Classes 替换
 
 ### P3 — 代码质量 (6 项)
-9. **QA-003**: AlignUp 去重 → ⚠️ 低优先级质量债务（mmap 重复已消失，仅剩私有 helper）
-10. **QA-004/005**: 接口定义整理 → ⚠️ 历史兼容残留 + 低优先级（v1/v2 并存）
-11. **QA-006**: mem.utils 大文件 → ⚠️ 真实质量债务（保持 P3，不机械拆）
-12. **QA-007**: pool.fixed 大文件 → ❌ 非真实问题（597 行 / 2 个类）
-13. **QA-025**: TVirtualArenaAllocator.Traits.ZeroInitialized=False → ✅ 已修复（六维审查第三轮，改为 True）
+9. **QA-003**: AlignUp 去重 → ✅ 已关闭（AlignUpUnChecked 签名不同，非真正重复）
+10. **QA-004**: IAllocator 接口分散 → ✅ 已关闭（interfaces.pas 已删除）
+11. **QA-005**: IPool/IArena 接口分散 → ⚠️ 低优先级（v1 兼容层已无活跃消费者，待后续清理）
+12. **QA-006**: mem.utils 大文件 → ⚠️ 真实质量债务（保持 P3，不机械拆）
+13. **QA-007**: pool.fixed 大文件 → ❌ 非真实问题（597 行 / 2 个类）
+14. **QA-025**: TVirtualArenaAllocator.Traits.ZeroInitialized=False → ✅ 已修复（六维审查第三轮，改为 True）
 
 ### P4 — 测试补充 (5 项)
 13. **TC-001**: 恢复 sharded 测试 → ✅ 已修复 CS-001，自动恢复
 14. **TC-002**: utils.pas 测试 → ✅ 已新增 test_mem_utils
 15. **TC-003**: object_pool 测试 → ✅ 已新增 test_object_pool
-16. **TC-004**: adapter 测试 → ⚠️ 已知限制（依赖已删除的 mem.layout + IArena 签名过期）
+16. **TC-004**: adapter 测试 → ✅ 已关闭（adapter.pas 已删除，v1 兼容层已移除）
 17. **TC-005**: stats 测试 → ✅ 已新增 test_mem_stats
 
 ### P5 — 建议性 (已完成/已定性)

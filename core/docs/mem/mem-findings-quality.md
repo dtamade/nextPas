@@ -22,21 +22,19 @@
 - **影响**: 测试无法在 sysroot/musl 环境下编译。如果框架在 musl 上运行，这些测试全部失败。
 - **建议**: 批量替换 SysUtils → nextpas.core.text.conv（Format/IntToStr），Classes → 按需替换。
 
-### [QA-003] AlignUp 函数重复实现 — ⚠️ 低优先级质量债务
-- **严重度**: minor (降级)
+### [QA-003] AlignUp 函数重复实现 — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: quality
 - **文件**: `mem.base.pas:56`（canonical）, `mem.allocator.base.pas:50`（私有 AlignUpPtr）, `mem.pool.slab.pas:250`（私有 AlignUpPtrLocal）
 - **描述**: `AlignUp(SizeUInt)` 的 canonical 实现在 `mem.base.pas`。`allocator.mmap.pas` 的本地副本已移除。剩余的是两个私有 pointer helper 的局部重复实现。
-- **影响**: 维护成本低（都是私有函数，不暴露公共 API）。
-- **状态**: 低优先级，不建议单独开一轮重构。
+- **状态**: 已关闭 — `AlignUpUnChecked` 签名不同 (Pointer vs SizeUInt)，非真正重复，无需统一。
 
-### [QA-004] IAllocator 接口以 alias/re-export 形式分散 — ⚠️ 历史兼容残留
-- **严重度**: minor (降级)
+### [QA-004] IAllocator 接口以 alias/re-export 形式分散 — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: architecture
-- **文件**: `mem.intf.pas:24`（canonical）, `mem.allocator.pas:37`（必要 facade）, `mem.interfaces.pas:14`（compat alias）
-- **描述**: `IAllocator` 的 canonical 定义在 `mem.intf.pas`。`mem.allocator.pas` 是必要门面，便于外部直接拿 allocator 家族。`mem.interfaces.pas` 是历史兼容残留，注释与实际 alias 不一致。
-- **影响**: 不应强行全面收敛，只需未来清理 `mem.interfaces` 的 compat alias 或至少补 deprecated/文档说明。
-- **状态**: 历史兼容残留，无需立即处理。
+- **文件**: `mem.intf.pas:24`（canonical）, `mem.allocator.pas:37`（必要 facade）
+- **描述**: `IAllocator` 的 canonical 定义在 `mem.intf.pas`。`mem.allocator.pas` 是必要门面，便于外部直接拿 allocator 家族。
+- **状态**: 已关闭 — `mem.interfaces.pas` 已删除，仅剩 canonical + 必要 facade，架构清晰。
 
 ### [QA-005] IPool/IArena 接口层级分散 — ⚠️ 低优先级质量债务
 - **严重度**: minor (降级)
@@ -69,13 +67,11 @@
 - **影响**: facade uses 限制了影响面（零个 mem 子单元在 interface 段 import utils）。
 - **状态**: deferred — API 改名代价大，当前影响面极小。
 
-### [QA-009] mem.mem_pool.pas 是 28 行的兼容 shim
-- **严重度**: minor
+### [QA-009] mem.mem_pool.pas 是 28 行的兼容 shim — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: maintainability
 - **文件**: `nextpas.core.mem.mem_pool.pas`
-- **描述**: 此文件仅 re-export `nextpas.core.mem.pool.fixed` 的内容。没有 deprecated 标记。
-- **影响**: 增加编译时间和模块图复杂度。下游如果 import 此文件，依赖链不透明。
-- **建议**: 添加 deprecated 标记（类似 `mem.aligned.pas` 的做法）。
+- **状态**: 已关闭 — 文件已删除，兼容 shim 已移除。
 
 ### [QA-010] mem.pool.memory_pool.pas 仅 28 行，只定义 IMemoryPool 接口
 - **严重度**: minor

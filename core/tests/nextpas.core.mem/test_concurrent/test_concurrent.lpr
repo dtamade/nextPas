@@ -3,7 +3,7 @@ program test_concurrent;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
@@ -106,7 +106,7 @@ begin
         Break;
       end;
     if not LAllDone then
-      Sleep(1);
+      SleepMs(1);
   until LAllDone;
 
   { Join threads }
@@ -158,7 +158,7 @@ begin
         Break;
       end;
     if not LAllDone then
-      Sleep(1);
+      SleepMs(1);
   until LAllDone;
 
   for LI := 0 to NUM_THREADS - 1 do
@@ -203,7 +203,7 @@ begin
         Break;
       end;
     if not LAllDone then
-      Sleep(1);
+      SleepMs(1);
   until LAllDone;
 
   for LI := 0 to 7 do
@@ -266,7 +266,7 @@ begin
   try
     { Wait for allocator to finish }
     while not LData^.Done do
-      Sleep(1);
+      SleepMs(1);
     { Free all from different thread }
     for LI := 0 to LData^.Count - 1 do
       LData^.Alloc.FreeMem(LData^.Ptrs[LI], 64);

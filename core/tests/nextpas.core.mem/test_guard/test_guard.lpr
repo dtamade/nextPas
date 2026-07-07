@@ -2,7 +2,7 @@ program test_guard;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,

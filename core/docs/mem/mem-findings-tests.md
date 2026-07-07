@@ -69,12 +69,11 @@
 - **维度**: coverage
 - **状态**: test_object_pool 已存在，12 tests 覆盖泛型实例化/Create/Destroy/复用/OOM。
 
-### [TC-004] pool.adapter.pas 桥接适配器无测试 — ⚠️ 已知限制
-- **严重度**: major → 已知限制 (降级)
+### [TC-004] pool.adapter.pas 桥接适配器无测试 — ✅ 已关闭
+- **严重度**: major → 已关闭
 - **维度**: coverage
-- **文件**: `nextpas.core.mem.pool.adapter.pas` (426 行)
-- **描述**: `test_pool_adapter` 目前是占位 SKIP 记录，不构成测试闭环。pool.adapter 依赖已删除的 `nextpas.core.mem.layout`，且 `TStackPoolToArenaAdapter` 还在实现旧形态的 `IArena`（签名 `Alloc(TMemLayout): TAllocResult`），而当前 `IArena` 已经是 `Alloc(SizeUInt): Pointer` / `AllocAligned(...)`。
-- **状态**: 已知限制 / 过期 compat 代码未闭环。需要决定 pool.adapter 是否值得继续维护，或应标记为 deprecated。
+- **文件**: `nextpas.core.mem.pool.adapter.pas`
+- **状态**: 已关闭 — adapter.pas 已删除，v1 兼容层已移除，测试问题自然消除。
 
 ### [TC-005] mem.stats.pas 统计收集器无测试 — ⏳ 低优先级
 - **严重度**: major → minor (降级)
@@ -82,13 +81,12 @@
 - **描述**: TSlabPoolStats 等统计类无专门测试，但通过 test_slab_pool 和 test_contracts 间接验证。
 - **状态**: 低优先级，通过间接测试覆盖。
 
-### [TC-006] 测试几乎全部使用 FPC SysUtils 而非框架模块
-- **严重度**: minor
+### [TC-006] 测试使用 FPC SysUtils/Classes — ✅ 已修复
+- **严重度**: minor → 已关闭
 - **维度**: quality
-- **文件**: 19 个测试 .lpr 文件
-- **描述**: 19 个测试 import SysUtils（用于 Format/IntToStr/Writeln），3 个 import Classes（用于 TStringList）。bench 模块审查时已将同类问题全部修复（改用 nextpas.core.text.conv 等）。
-- **影响**: 测试在 sysroot/musl 环境下无法编译。
-- **建议**: 批量替换为框架等价物（与 QA-002 重叠）。
+- **文件**: 6 个测试 .lpr 文件
+- **描述**: 6 个测试 import SysUtils 或 Classes（IntToStr/Sleep/GetTickCount64/未使用 import）。
+- **状态**: 已修复 — IntToStr→text.conv.IntToStr, Sleep→SleepMs, GetTickCount64→time.cpu.GetTickCount64, 未使用 import 已删除。SysUtils/Classes 残留清零。
 
 ### [TC-007] 测试不使用 nextpas.core.test 框架 — ✅ 已修复
 - **严重度**: minor → 已关闭

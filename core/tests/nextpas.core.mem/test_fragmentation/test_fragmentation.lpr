@@ -2,7 +2,6 @@ program test_fragmentation;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.mem.base,
   nextpas.core.mem.sizeclass,
   nextpas.core.mem.central,

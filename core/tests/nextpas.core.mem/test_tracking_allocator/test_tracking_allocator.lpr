@@ -7,7 +7,6 @@ uses
   cthreads,
   {$ENDIF}
   nextpas.core.text.conv,
-  Classes,
   nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,

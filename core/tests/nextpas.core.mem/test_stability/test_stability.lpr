@@ -3,7 +3,7 @@ program test_stability;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.sizeclass,
@@ -407,7 +407,7 @@ begin
     LAllDone := True;
     for LI := 0 to CONC_THREADS - 1 do
       if not LWorkers[LI].Done then begin LAllDone := False; Break; end;
-    if not LAllDone then Sleep(1);
+    if not LAllDone then SleepMs(1);
   until LAllDone;
   for LI := 0 to CONC_THREADS - 1 do
     WaitForThreadTerminate(LThreads[LI], 0);
@@ -530,7 +530,7 @@ begin
     LAllDone := True;
     for LI := 0 to SCAV_THREADS do
       if not LWorkers[LI].Done then begin LAllDone := False; Break; end;
-    if not LAllDone then Sleep(1);
+    if not LAllDone then SleepMs(1);
   until LAllDone;
   for LI := 0 to SCAV_THREADS do
     WaitForThreadTerminate(LThreads[LI], 0);
