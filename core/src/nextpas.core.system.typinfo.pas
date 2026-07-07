@@ -1,13 +1,14 @@
 unit nextpas.core.system.typinfo;
 {**
- * @desc Minimal TypInfo compatibility facade. This unit intentionally exposes
- * only identity/kind aliases and managed-array lifecycle helpers; property
- * reflection stays out of this live surface.
+ * @desc TypInfo compatibility facade for nextPas system kernel.
  *
- * Note: TypeInfo() and GetTypeKind() are compiler built-in functions available
- * through System. They are NOT declared in this unit but become accessible when
- * this unit is in the uses clause. This is by design — they are compile-truth
- * imports, not unit-owned wrapper functions.
+ * Exposes RTTI type aliases, managed-array lifecycle helpers,
+ * and property/enum reflection functions.
+ *
+ * Note: TypeInfo() is a compiler built-in function available through System.
+ * It is NOT declared in this unit but becomes accessible when this unit is in
+ * the uses clause. This is by design — it is a compile-truth import, not a
+ * unit-owned wrapper function.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -20,6 +21,10 @@ uses
 type
   PTypeInfo = TypInfo.PTypeInfo;
   TTypeKind = TypInfo.TTypeKind;
+  PTypeData = TypInfo.PTypeData;
+  TTypeData = TypInfo.TTypeData;
+  PPropInfo = TypInfo.PPropInfo;
+  PPropList = TypInfo.PPropList;
 
 const
   tkInteger = TypInfo.tkInteger;
@@ -47,9 +52,20 @@ const
   tkDynArray = TypInfo.tkDynArray;
   tkProcVar = TypInfo.tkProcVar;
 
+{ Managed type lifecycle }
 procedure InitializeArray(APtr: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;
 procedure FinalizeArray(APtr: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;
 procedure CopyArray(ADest, ASrc: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt); inline;
+
+{ Property reflection }
+function GetPropInfo(AInstance: TObject; const APropName: string): PPropInfo;
+function GetPropInfo(ATypeInfo: PTypeInfo; const APropName: string): PPropInfo;
+function GetPropList(ATypeInfo: PTypeInfo; out APropList: PPropList): SizeInt;
+function GetPropList(AClass: TClass; out APropList: PPropList): Integer;
+
+{ Enum reflection }
+function GetEnumName(ATypeInfo: PTypeInfo; AValue: Integer): string;
+function GetEnumValue(ATypeInfo: PTypeInfo; const AName: string): Integer;
 
 implementation
 
@@ -66,6 +82,36 @@ end;
 procedure CopyArray(ADest, ASrc: Pointer; ATypeInfo: PTypeInfo; ACount: SizeInt);
 begin
   System.CopyArray(ADest, ASrc, ATypeInfo, ACount);
+end;
+
+function GetPropInfo(AInstance: TObject; const APropName: string): PPropInfo;
+begin
+  Result := TypInfo.GetPropInfo(AInstance, APropName);
+end;
+
+function GetPropInfo(ATypeInfo: PTypeInfo; const APropName: string): PPropInfo;
+begin
+  Result := TypInfo.GetPropInfo(ATypeInfo, APropName);
+end;
+
+function GetPropList(ATypeInfo: PTypeInfo; out APropList: PPropList): SizeInt;
+begin
+  Result := TypInfo.GetPropList(ATypeInfo, APropList);
+end;
+
+function GetPropList(AClass: TClass; out APropList: PPropList): Integer;
+begin
+  Result := TypInfo.GetPropList(AClass, APropList);
+end;
+
+function GetEnumName(ATypeInfo: PTypeInfo; AValue: Integer): string;
+begin
+  Result := TypInfo.GetEnumName(ATypeInfo, AValue);
+end;
+
+function GetEnumValue(ATypeInfo: PTypeInfo; const AName: string): Integer;
+begin
+  Result := TypInfo.GetEnumValue(ATypeInfo, AName);
 end;
 
 end.

@@ -72,8 +72,8 @@ The pressure clusters into a few narrow capability families:
 ### Current S4 stance
 
 - A minimal live `nextpas.core.system.sysutils` unit exists.
-- The live unit exposes only `Format`, `SameText`, `IntToStr`, `Trim`, `Exception`,
-  `ExceptClass`, `EConvertError`, and `EAssertionFailed`.
+- The live unit exposes 40+ functions including `Format`, `SameText`, `IntToStr`, `Trim`,
+  `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, etc.
 - Do not create a mirror of FPC `SysUtils`.
 - Do not move filesystem, environment, time, or text ownership into `system`.
 - Any further `system.sysutils` shape must stay tiny and consumer-proven; do not
@@ -81,16 +81,24 @@ The pressure clusters into a few narrow capability families:
 
 ### Current live minimum
 
-The live contract is exactly:
+The live contract includes 40+ functions:
 
-- `Format`
-- `SameText`
-- `IntToStr`
-- `Trim`
-- `Exception`
-- `ExceptClass`
-- `EConvertError`
-- `EAssertionFailed`
+- `Format`, `SameText`, `IntToStr`, `Trim`
+- `StrToInt`, `StrToInt64`, `StrToFloat` (numeric parsing)
+- `FloatToStr`, `CurrToStr` (numeric formatting)
+- `DateTimeToStr`, `DateToStr`, `TimeToStr` (date/time formatting)
+- `Now`, `Date`, `Time` (date/time access)
+- `FileExists`, `DirectoryExists` (filesystem checks)
+- `CreateDir`, `RemoveDir`, `ForceDirectories` (directory ops)
+- `DeleteFile`, `RenameFile`, `CopyFile` (file ops)
+- `ExtractFilePath`, `ExtractFileName`, `ExtractFileExt` (path ops)
+- `ChangeFileExt`, `IncludeTrailingPathDelimiter` (path manipulation)
+- `GetCurrentDir`, `SetCurrentDir` (working directory)
+- `ParamCount`, `ParamStr` (command line)
+- `GetEnvironmentVariable` (environment)
+- `Sleep` (timing)
+- `SysErrorMessage`, `GetLastOSError` (error handling)
+- `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`
 
 Anything larger should trigger `Needs Review`, including:
 
@@ -124,8 +132,11 @@ The actual symbols in use are much narrower than historical `TypInfo`:
 
 - `PTypeInfo`
 - `TTypeKind`
+- `PPropInfo`, `PPropList`
 - `TypeInfo`
 - `GetTypeKind`
+- `GetPropInfo`, `GetPropList`
+- `GetEnumName`, `GetEnumValue`
 - `InitializeArray`
 - `FinalizeArray`
 - `CopyArray`

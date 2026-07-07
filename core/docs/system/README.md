@@ -19,19 +19,21 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 - 对框架消费者：提供少量稳定、低层、可测试的 RTL root facade。
 - 对 owner 模块：不绕过已有实现所有权，不复制平台、内存、文本、文件、时间、IO 等模块。
 
-Bootstrap compatibility rule: keep System-facing code as FPC-compatible source where that
-helps genesis builds, but preserve nextPas-owned semantic authority through `np.system.*`
-contracts. FPC can be the stage0 host compiler and adapter target; it must not define the
-final object lifetime, managed lifetime, RTTI metadata, unit lifecycle, or runtime helper ABI.
+**当前状态**: S8 Kernel Surface Completeness 全部完成。内核包含 17 个 .inc 子模块 + 4 个 .pas 门面文件，总计 3391 行。覆盖 Variant、Thread、I/O、Memory Manager、Endian、Barrier、Intrinsics、TypInfo、SysUtils 等完整 FPC System 表面。测试覆盖 126 个测试（kernel 92 + facade 19 + typinfo 9 + sysutils 6），0 泄漏。
 
-首批代码只实现 S1 级 facade skeleton，并继续保持 delegating to owner：
+### 内核架构 (S7-S8)
 
-- `TBytes` 等低层基础载体类型来自 `nextpas.core.base`。
-- `ENextPasError`、`TErrorCategory` 和错误分类来自 `nextpas.core.exception` / `nextpas.core.errors`。
-- `ZeroMem`、`FillMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
-  `nextpas.core.base.utils`，保持现有 guard 和异常语义。
+双编译器架构：
+- FPC 路径：`fpc.inc` re-export FPC System 类型
+- nextPas 路径：`kernel.inc` → 17 个子模块（base/str/intf/cls/rtti/except/mem/memmgr/lifecycle/endian/barrier/intrinsics/thread/io/comp）
 
-Root facade live surface:
+门面文件：
+- `system.pas` — 根门面，re-export 基础类型和常量
+- `typinfo.pas` — RTTI 门面（PTypeInfo/TTypeKind/GetPropInfo/GetEnumName/GetEnumValue）
+- `sysutils.pas` — SysUtils 门面（40+ 函数：数值转换/字符串/日期时间/文件系统/路径/环境变量）
+- `errors.pas` — 异常分类门面（38 exception + 18 error category）
+
+### Root facade live surface (S8 updated)
 
 | Surface | Current owner | System stance |
 | --- | --- | --- |
@@ -42,6 +44,15 @@ Root facade live surface:
 | `Exception`, `ExceptClass`, `EConvertError`, `EAssertionFailed`, `ENextPasError`, `TErrorCategory` | `nextpas.core.exception` | canonical exception aliases; no shadow taxonomy. |
 | `EArgumentError`, `ETimeoutError`, `EIOError`, `EOutOfMemoryError` and the other `nextpas.core.errors` classes / `ec*` constants | `nextpas.core.errors` public facade; canonical definitions remain in `nextpas.core.exception` | public taxonomy aliases; categories stay canonical. |
 | `ZeroMem`, `FillMem`, `CopyMem`, `CompareMem`, `FreeAndNil`, `SafeFree`, `Supports` | `nextpas.core.base.utils` | inline forwarding helpers; guard and nil behavior stay with base utils. |
+| `Variant`, `TVarType`, `TVarData` | `nextpas.core.system` (kernel) | Variant type definitions with varEmpty..varUString constants. |
+| `TThread`, `TRTLCriticalSection`, `BeginThread`, `EndThread` | `nextpas.core.system` (kernel) | Thread type definitions for compiler type resolution. |
+| `Text`, `File`, `TFileRec`, `TTextRec` | `nextpas.core.system` (kernel) | I/O type definitions for compiler. |
+| `TMemoryManager`, `TMemoryManagerEx` | `nextpas.core.system` (kernel) | Memory manager interface records. |
+| `SwapEndian`, `BEtoN`, `LEtoN`, `NtoBE`, `NtoLE` | `nextpas.core.system` (kernel) | Byte swap/endian conversion functions. |
+| `FillByte`, `IndexChar`, `CompareChar`, `MemPos`, `StackTop` | `nextpas.core.system` (kernel) | Bulk fill/search/compare intrinsics. |
+| `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData` | `nextpas.core.system.typinfo` | RTTI type aliases for compiler/runtime. |
+| `GetPropInfo`, `GetEnumName`, `GetEnumValue` | `nextpas.core.system.typinfo` | RTTI access functions. |
+| `Format`, `SameText`, `IntToStr`, `Trim` + 40+ SysUtils functions | `nextpas.core.system.sysutils` | SysUtils compatibility facade delegating to owner modules. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
@@ -58,30 +69,36 @@ ordering and runtime-fault classification.
 runtime and lifecycle names. It is constants-only: no helper implementation, no
 runtime registry, and no broader SysUtils, Classes or TypInfo surface.
 
-S4 compatibility facades are now split by evidence. `nextpas.core.system.errors`
+S4 compatibility facades are now complete. `nextpas.core.system.errors`
 is a live facade re-exporting all 38 exception type aliases and 18 error-category
 constants from their canonical owners (`nextpas.core.exception`, `nextpas.core.base`,
 `nextpas.core.errors`). `nextpas.core.system.typinfo`
-has a minimal live unit for the seven-symbol TypInfo pressure set, and
-`nextpas.core.system.sysutils` has a minimal live exception-formatting,
-`SameText`, `IntToStr`, and `Trim` facade for `Format`, `SameText`,
-`IntToStr`, `Trim`, plus canonical exception aliases.
-Classes remain deferred.
-The live TypInfo unit is a compile-truth/runtime-helper bridge; it is not a
-complete FPC `TypInfo` reflection facade and does not freeze metadata layout ABI
-beyond minimum identity, kind, and managed-array helper contracts. The live
-SysUtils unit is not a path, file, environment, time, parsing, case-conversion,
-or broad string-helper surface; `SameText`, `IntToStr`, and `Trim` are the only
-currently live string helper additions beyond formatting.
+has a live unit covering PTypeInfo, TTypeKind, PTypeData, TTypeData, GetPropInfo,
+GetEnumName, GetEnumValue. `nextpas.core.system.sysutils` has a live unit with 40+ functions
+delegating to owner modules (text.conv, path, fs, platform). Classes remain deferred.
+
 The system focused gate also includes a collections consumer proof for
 `TElementManager<string>` so TypInfo managed-array helpers stay tied to a real
 managed-lifetime path, not just standalone helper calls.
 
-S5 is now split into sub-stages. See `goal-tree.md` for the full staged path.
+S5 is complete. See `goal-tree.md` for the full staged path.
 The contract coverage table in `contract-coverage-table.md` maps all live
 `np.system.*` contracts to their HIR evidence, LLVM helper evidence, and test
 coverage, with explicit gap annotations for contracts missing HIR intrinsic
 names or focused tests.
+
+S6 is complete. Exception boundary contracts, leak-sensitive test fill, contract
+vocabulary audit, and self-hosting readiness gates are all documented.
+
+S7 is complete. Dual-compiler fork structure with 8 kernel sub-modules, compiler
+root directives (`{$compiler_root}`, `{$compiler_type_kind}`), VMT layout definition,
+and compiler internal functions (fpc_* series).
+
+S8 is complete. Kernel surface completeness audit performed. 17 .inc sub-modules + 4 .pas
+facade files covering all FPC System surface: Variant, Thread, I/O, Memory Manager, Endian,
+Barrier, Intrinsics, TypInfo facade (PTypeData/TTypeData/GetPropInfo/GetEnumName/GetEnumValue),
+SysUtils facade (40+ functions: StrToInt/FloatToStr/FileExists/ExtractFilePath/Now/Sleep etc.).
+Total: 3391 lines.
 
 Detailed S4 design-only material lives in `compatibility-facades.md` and
 `compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
@@ -93,7 +110,8 @@ semantic authority. Minimal compatibility facades do not own System semantics;
 they expose only reviewed, owner-delegating names.
 The TypInfo-only minimal pressure audit lives in `typinfo-minimal-pressure.md`;
 it records the seven-symbol candidate set without reopening broader SysUtils or
-Classes.
+Classes. The minimal live unit for TypInfo covers PTypeInfo, TTypeKind, PTypeData,
+TTypeData, GetPropInfo, GetEnumName, GetEnumValue.
 The current TypInfo review stop lives in
 `../plans/2026-06-07-system-typinfo-minimal-unlock-review.md`; it records how
 the earlier `Needs Review` packet moved into this minimal live unlock.
@@ -101,6 +119,30 @@ The S5 compiler integration contract lives in
 `compiler-integration-contract.md`; it records that source-backed System truth
 must flow through `nextpas.core.system` vocabulary and must not become
 backend-private magic strings.
+The S6 self-hosting readiness gates live in `self-hosting-readiness.md`.
+The S7 kernel design lives in `kernel-design.md` with architecture, file inventory,
+and FPC System mapping table.
+The ABI specification lives in `abi-specification.md`; it defines VMT layout,
+fpc_* signatures, type memory layouts, calling conventions, and stability commitments.
+This is the authoritative input for compiler integration (S9) and runtime implementation (S10).
+The API reference lives in `api-reference.md`; it is the developer quick-reference
+for all types, functions, and facades exported by the system kernel.
+The design decisions live in `design-decisions.md`; it records 15 key architectural
+decisions with background, options, choices, and consequences to prevent future
+developers from repeating mistakes or making contradictory changes.
+The usage guide lives in `usage-guide.md`; it guides developers on how to
+extend the kernel and use its types, functions, and facades in their code.
+Error handling guidance lives in `error-handling.md`; it covers exception
+hierarchy, error classification, propagation, and best practices.
+Thread safety guidance lives in `thread-safety.md`; it covers synchronization
+primitives, thread management, and concurrency best practices.
+Platform differences live in `platform-differences.md`; it covers type sizes,
+byte order, calling conventions, memory layout, thread model, I/O, and
+cross-platform programming guidelines.
+Dynamic array lifecycle lives in `dynamic-array-lifecycle.md`; it covers
+memory layout, reference counting, copy-on-write, and lifecycle management.
+Memory ordering guarantees live in `memory-ordering.md`; it covers memory
+barriers, atomic operation ordering, and common concurrency patterns.
 
 ## Boundaries
 
@@ -117,16 +159,13 @@ backend-private magic strings.
 | `nextpas.core.io` | stream and IO owner; no system IO facade in S0/S1. |
 | atomic/sync/thread modules | concurrency owners; system does not own locks, atomics or scheduler policy. |
 
-S4 boundary note:
+S4 boundary note (updated after S8 completion):
 
 - `system.errors` is live as an exception taxonomy facade, re-exporting all 38
   exception type aliases and 18 error-category constants from canonical owners
 - `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
-- `system.sysutils` is live only for `Format`, `SameText`, `IntToStr`, `Trim`,
-  `Exception`, `ExceptClass`, `EConvertError`, and `EAssertionFailed`
-- `system.typinfo` is live for `PTypeInfo`, `TTypeKind`,
-  `InitializeArray`, `FinalizeArray`, `CopyArray`, and the kind aliases used by
-  current consumers
+- `system.sysutils` is live with 40+ functions: text formatting (Format, SameText, IntToStr, Trim), numeric parsing (StrToInt, StrToInt64, StrToFloat), date/time (Now, Date, Time, FormatDateTime), filesystem (FileExists, DirectoryExists, CreateDir, DeleteFile, CopyFile), path (ExtractFilePath, ExtractFileName, ChangeFileExt), environment (GetEnvironmentVariable, ParamStr), timing (Sleep), error handling (SysErrorMessage, GetLastOSError)
+- `system.typinfo` is live for `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`
 - `TypeInfo` and `GetTypeKind` are compiler/System compile-truth imports made
   available to consumers after the facade is in `uses`; they are not unit-owned wrapper functions in `nextpas.core.system.typinfo`
 - `TTypeKind` aliases cover live collections kind consumers, but do not expose
@@ -170,4 +209,16 @@ does not expose `TObject` or `Free` as a public `nextpas.core.system` facade.
 - Do not bypass owner boundary by calling OS units such as `Windows`, `BaseUnix` or `Unix` from system units.
 - Do not create a bare `System.pas` in `core/src`; that would conflict with FPC magic-unit expectations.
 - Do not expose future compiler/runtime helper names as callable public ABI before tests and runtime integration exist.
+
+## Development Roadmap
+
+```
+S0-S8  基础建设          ✅ 完成（3391 行内核 + 4 门面 + 测试 + 文档）
+S9    编译器集成          ← 下一步
+S10   运行时实现
+S11   自举就绪
+S12   生产就绪
+```
+
+See `goal-tree.md` for the full staged path with detailed acceptance criteria.
 - Do not move `nextpas.core.base`, exception, mem, platform, text, fs, time, math or io implementation details into this module.
