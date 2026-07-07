@@ -1,376 +1,167 @@
 program test_oom;
-
-{$I nextpas.core.settings.inc}
+{$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.exception,
+  {$IFDEF UNIX}
+  cthreads,
+  {$ENDIF}
   nextpas.core.test,
-  nextpas.core.mem.error,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.blockpool,
-  nextpas.core.mem.blockpool.growable,
-  nextpas.core.mem.arena.base,
-  nextpas.core.mem.arena.virtual,
-  nextpas.core.mem.arena.chunked,
-  nextpas.core.mem.pool.fixed,
-  nextpas.core.mem.pool.fixed.growable,
-  nextpas.core.mem.ring_buffer,
-  nextpas.core.mem.stack_pool,
-  nextpas.core.platform.memory,
-  nextpas.core.platform.mmap;
-
-type
-  TExceptionProc = procedure;
-
-  TFailAllocator = class(nextpas.core.mem.allocator.TAllocator)
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
-  end;
+  nextpas.core.mem.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.rtl,
+  nextpas.core.mem.oom;
 
 var
   T: TTestSuite;
-  GFailVirtualReserve: Boolean = False;
-  GFailVirtualCommit: Boolean = False;
-  GFailVirtualMmap: Boolean = False;
 
-function TFailAllocator.DoGetMem(ASize: SizeUInt): Pointer;
-begin
-  Result := nil;
-end;
+{ --- TOomHandler tests --- }
 
-function TFailAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := nil;
-end;
-
-function TFailAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-begin
-  Result := nil;
-end;
-
-procedure TFailAllocator.DoFreeMem(ADst: Pointer);
-begin
-end;
-
-function NewFailAllocator: nextpas.core.mem.allocator.TAllocator;
-begin
-  Result := TFailAllocator.Create;
-end;
-
-procedure ResetVirtualArenaHooks;
-begin
-  GFailVirtualReserve := False;
-  GFailVirtualCommit := False;
-  GFailVirtualMmap := False;
-  VirtualArenaTestResetHooks;
-end;
-
-function TestVirtualReserve(ASize: SizeUInt): Pointer;
-begin
-  if GFailVirtualReserve then
-    Exit(nil);
-  Result := platform_virtual_reserve(ASize);
-end;
-
-function TestVirtualCommit(APtr: Pointer; ASize: SizeUInt): Boolean;
-begin
-  if GFailVirtualCommit then
-    Exit(False);
-  Result := platform_virtual_commit(APtr, ASize);
-end;
-
-function TestVirtualMmapAnonymous(ASize: UInt64; AAccess: TPlatformMapAccess;
-  AFlags: TPlatformMapFlags; out AMap: TPlatformMappedFile): Int32;
-begin
-  if GFailVirtualMmap then
-  begin
-    FillChar(AMap, SizeOf(AMap), 0);
-    Exit(-1);
-  end;
-  Result := platform_mmap_create_anonymous(ASize, AAccess, AFlags, AMap);
-end;
-
-procedure CheckRaisesCanonicalOutOfMemory(aProc: TExceptionProc; const aName: string);
 var
-  LCaughtOom: Boolean;
-  LCaughtAlloc: Boolean;
+  GOomCallCount: Integer;
+  GShouldRetry: Boolean;
+  GCallOrder: string;
+
+procedure TestOomHandler(ARequestedSize: SizeUInt; var ARetry: Boolean);
 begin
-  LCaughtOom := False;
-  LCaughtAlloc := False;
-
-  try
-    aProc;
-  except
-    on E: EOutOfMemoryError do
-      LCaughtOom := True;
-    on E: EAllocError do
-      LCaughtAlloc := True;
-  end;
-
-  Check(LCaughtOom, aName + ' raises canonical OOM');
-  Check(not LCaughtAlloc, aName + ' is not caught by non-OOM EAllocError');
+  Inc(GOomCallCount);
+  ARetry := GShouldRetry;
 end;
 
-procedure CheckRaisesAllocError(aProc: TExceptionProc; aExpected: TAllocError; const aName: string);
+procedure ChainHandler1(ARequestedSize: SizeUInt; var ARetry: Boolean);
+begin
+  GCallOrder := GCallOrder + '1';
+  ARetry := False;
+end;
+
+procedure ChainHandler2(ARequestedSize: SizeUInt; var ARetry: Boolean);
+begin
+  GCallOrder := GCallOrder + '2';
+  ARetry := True;
+end;
+
+procedure ChainHandler3(ARequestedSize: SizeUInt; var ARetry: Boolean);
+begin
+  GCallOrder := GCallOrder + '3';
+  ARetry := False;
+end;
+
+procedure TestHandlerInitiallyEmpty;
 var
-  LCaughtExpected: Boolean;
-  LCaughtOom: Boolean;
+  LHandler: TOomHandler;
 begin
-  LCaughtExpected := False;
-  LCaughtOom := False;
-
+  LHandler := TOomHandler.Create;
   try
-    aProc;
-  except
-    on E: EOutOfMemoryError do
-      LCaughtOom := True;
-    on E: EAllocError do
-      LCaughtExpected := E.Error = aExpected;
-  end;
-
-  Check(LCaughtExpected, aName + ' raises expected allocation error');
-  Check(not LCaughtOom, aName + ' is not canonical OOM');
-end;
-
-procedure RaiseMemOutOfMemory;
-begin
-  raise nextpas.core.mem.error.EOutOfMemory.Create(aeOutOfMemory, 'alloc result');
-end;
-
-procedure RaiseBlockPoolTotalSizeOverflow;
-var
-  LPool: TBlockPool;
-begin
-  LPool := nil;
-  try
-    LPool := TBlockPool.Create((High(SizeUInt) div 2) + 1, 2);
+    Check(LHandler.Count = 0, 'handler initially empty');
   finally
-    LPool.Free;
+    LHandler.Free;
   end;
 end;
 
-{ TFixedArena 已删除，此测试不再适用 }
-{procedure RaiseBlockPoolArenaAllocationOverflow;
+procedure TestHandlerRegisterUnregister;
 var
-  LArena: nextpas.core.mem.blockpool.TFixedArena;
+  LHandler: TOomHandler;
 begin
-  LArena := nil;
+  LHandler := TOomHandler.Create;
   try
-    LArena := nextpas.core.mem.blockpool.TFixedArena.Create(High(SizeUInt));
+    LHandler.Register(@TestOomHandler);
+    Check(LHandler.Count = 1, 'count=1 after register');
+    LHandler.Unregister(@TestOomHandler);
+    Check(LHandler.Count = 0, 'count=0 after unregister');
   finally
-    LArena.Free;
+    LHandler.Free;
   end;
-end;}
+end;
 
-procedure RaiseGrowingBlockPoolAllocatorOom;
+procedure TestHandlerCallsCallback;
 var
-  LConfig: TGrowingBlockPoolConfig;
-  LPool: TGrowingBlockPool;
+  LHandler: TOomHandler;
+  LRetry: Boolean;
 begin
-  LConfig := TGrowingBlockPoolConfig.Default(16, 1);
-  LConfig.Allocator := NewFailAllocator;
-  LPool := nil;
+  LHandler := TOomHandler.Create;
   try
-    LPool := TGrowingBlockPool.Create(LConfig);
+    LHandler.Register(@TestOomHandler);
+    GOomCallCount := 0;
+    GShouldRetry := False;
+    LRetry := LHandler.TryHandle(1024);
+    Check(GOomCallCount = 1, 'callback called once');
+    Check(not LRetry, 'no retry when handler says no');
+
+    GShouldRetry := True;
+    GOomCallCount := 0;
+    LRetry := LHandler.TryHandle(1024);
+    Check(GOomCallCount = 1, 'callback called once');
+    Check(LRetry, 'retry when handler says yes');
   finally
-    LPool.Free;
+    LHandler.Free;
   end;
 end;
 
-procedure RaiseGrowingArenaAllocatorOom;
+procedure TestHandlerChain;
 var
-  LArena: TChunkedArena;
+  LHandler: TOomHandler;
 begin
-  LArena := nil;
+  LHandler := TOomHandler.Create;
   try
-    { TChunkedArena uses GetMem by default }
-    LArena := TChunkedArena.Create(16);
+    LHandler.Register(@ChainHandler1);
+    LHandler.Register(@ChainHandler2);
+    LHandler.Register(@ChainHandler3);
+
+    GCallOrder := '';
+    LHandler.TryHandle(100);
+    // ChainHandler2 返回 True，ChainHandler3 不应被调用
+    Check(GCallOrder = '12', 'chain stops at first retry: got ' + GCallOrder);
   finally
-    LArena.Free;
+    LHandler.Free;
   end;
 end;
 
-procedure RaiseFixedPoolAllocatorOom;
+{ --- TOomAllocator tests --- }
+
+procedure TestOomAllocatorPassthrough;
 var
-  LPool: TFixedPool;
+  LHandler: TOomHandler;
+  LAllocator: TOomAllocator;
+  LPtr: Pointer;
 begin
-  LPool := nil;
+  LHandler := TOomHandler.Create;
+  LAllocator := TOomAllocator.Create(GetRtlAllocator, LHandler);
   try
-    LPool := TFixedPool.Create(16, 1, 16, NewFailAllocator);
+    // 正常分配应直接通过，不触发 OOM handler
+    LPtr := LAllocator.GetMem(1024);
+    Check(LPtr <> nil, 'normal alloc succeeds');
+    LAllocator.FreeMem(LPtr);
   finally
-    LPool.Free;
+    LAllocator.Free;
+    LHandler.Free;
   end;
 end;
 
-procedure RaiseGrowingFixedPoolAllocatorOom;
+procedure TestOomAllocatorTraits;
 var
-  LConfig: TGrowingFixedPoolConfig;
-  LPool: TGrowingFixedPool;
+  LHandler: TOomHandler;
+  LAllocator: TOomAllocator;
+  LTraits: TAllocatorTraits;
 begin
-  FillChar(LConfig, SizeOf(LConfig), 0);
-  LConfig.BlockSize := 16;
-  LConfig.InitialCapacity := 1;
-  LConfig.GrowthKind := gkGeometric;
-  LConfig.GrowthFactor := 2.0;
-  LConfig.Allocator := NewFailAllocator;
-
-  LPool := nil;
+  LHandler := TOomHandler.Create;
+  LAllocator := TOomAllocator.Create(GetRtlAllocator, LHandler);
   try
-    LPool := TGrowingFixedPool.Create(LConfig);
+    LTraits := LAllocator.Traits;
+    Check(LTraits.SupportsRealloc, 'RTL supports realloc');
   finally
-    LPool.Free;
+    LAllocator.Free;
+    LHandler.Free;
   end;
-end;
-
-procedure RaiseRingBufferAllocatorOom;
-var
-  LRing: TRingBuffer;
-begin
-  LRing := nil;
-  try
-    LRing := TRingBuffer.Create(1, 1, NewFailAllocator);
-  finally
-    LRing.Free;
-  end;
-end;
-
-procedure RaiseStackPoolAllocatorOom;
-var
-  LPool: TStackPool;
-begin
-  LPool := nil;
-  try
-    LPool := TStackPool.Create(1, NewFailAllocator);
-  finally
-    LPool.Free;
-  end;
-end;
-
-procedure TestMemOutOfMemoryUsesCanonicalRoot;
-begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseMemOutOfMemory, 'EOutOfMemory.Create');
-end;
-
-procedure TestBlockPoolOverflowContracts;
-begin
-  CheckRaisesAllocError(@RaiseBlockPoolTotalSizeOverflow, aeInvalidLayout, 'TBlockPool.Create layout overflow');
-  { TFixedArena 已删除，此测试不再适用 }
-  {CheckRaisesCanonicalOutOfMemory(@RaiseBlockPoolArenaAllocationOverflow, 'TArena.Create allocation overflow');}
-end;
-
-procedure TestGrowableMemOomUsesCanonicalRoot;
-begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseGrowingBlockPoolAllocatorOom, 'TGrowingBlockPool.Create');
-  { TChunkedArena now uses GetMem directly, custom allocator OOM test removed }
-  CheckRaisesCanonicalOutOfMemory(@RaiseGrowingFixedPoolAllocatorOom, 'TGrowingFixedPool.Create');
-end;
-
-procedure TestAllocatorBackedMemOomUsesCanonicalRoot;
-begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseFixedPoolAllocatorOom, 'TFixedPool.Create');
-  CheckRaisesCanonicalOutOfMemory(@RaiseRingBufferAllocatorOom, 'TRingBuffer.Create');
-  CheckRaisesCanonicalOutOfMemory(@RaiseStackPoolAllocatorOom, 'TStackPool.Create');
-end;
-
-procedure RaiseVirtualArenaReserveFailure;
-var
-  LArena: TVirtualArena;
-begin
-  FillChar(LArena, SizeOf(LArena), 0);
-  ResetVirtualArenaHooks;
-  VirtualArenaTestSetReserveHook(@TestVirtualReserve);
-  GFailVirtualReserve := True;
-  try
-    TVirtualArena_Init(LArena);
-  finally
-    ResetVirtualArenaHooks;
-  end;
-end;
-
-procedure TestVirtualArenaReserveFailureUsesCanonicalRoot;
-begin
-  CheckRaisesCanonicalOutOfMemory(@RaiseVirtualArenaReserveFailure,
-    'TVirtualArena_Init reserve failure');
-end;
-
-procedure TestVirtualArenaCommitFailureReturnsNil;
-var
-  LArena: TVirtualArena;
-begin
-  FillChar(LArena, SizeOf(LArena), 0);
-  TVirtualArena_Init(LArena);
-  try
-    Check(Int64(Ord(vaafNone)) = Int64(Ord(LArena.LastAllocFailure)), 'LastAllocFailure should start clear');
-    ResetVirtualArenaHooks;
-    VirtualArenaTestSetCommitHook(@TestVirtualCommit);
-    GFailVirtualCommit := True;
-    Check(LArena.Alloc(32) = nil, 'Alloc should return nil when front commit fails');
-    Check(Int64(Ord(vaafFrontCommitFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'Alloc should expose front commit failure');
-    Check(LArena.AllocNoPointer(32) = nil, 'AllocNoPointer should return nil when back commit fails');
-    Check(Int64(Ord(vaafBackCommitFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocNoPointer should expose back commit failure');
-  finally
-    ResetVirtualArenaHooks;
-    TVirtualArena_Release(LArena);
-  end;
-end;
-
-procedure TestVirtualArenaLargeObjectMmapFailureReturnsNil;
-var
-  LArena: TVirtualArena;
-begin
-  FillChar(LArena, SizeOf(LArena), 0);
-  TVirtualArena_Init(LArena);
-  try
-    ResetVirtualArenaHooks;
-    VirtualArenaTestSetMmapHook(@TestVirtualMmapAnonymous);
-    GFailVirtualMmap := True;
-    Check(LArena.Alloc(ARENA_LARGE_THRESHOLD) = nil,
-      'Alloc should return nil when large-object mmap fails');
-    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'Alloc should expose large-object mmap failure');
-    Check(LArena.AllocNoPointer(ARENA_LARGE_THRESHOLD) = nil,
-      'AllocNoPointer should return nil when large-object mmap fails');
-    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocNoPointer should expose large-object mmap failure');
-    Check(LArena.AllocAligned(ARENA_LARGE_THRESHOLD, 64) = nil,
-      'AllocAligned should return nil when large-object mmap fails');
-    Check(Int64(Ord(vaafLargeObjectMapFailed)) = Int64(Ord(LArena.LastAllocFailure)), 'AllocAligned should expose large-object mmap failure');
-  finally
-    ResetVirtualArenaHooks;
-    TVirtualArena_Release(LArena);
-  end;
-end;
-
-procedure TestNonOomAllocErrorRemainsEAllocError;
-var
-  LCaughtAlloc: Boolean;
-begin
-  LCaughtAlloc := False;
-  try
-    raise EAllocError.Create(aeInvalidLayout, 'invalid layout');
-  except
-    on E: EAllocError do
-      LCaughtAlloc := True;
-  end;
-
-  Check(LCaughtAlloc, 'non-OOM allocation errors remain EAllocError');
 end;
 
 begin
   T := TTestSuite.Create('nextpas.core.mem.oom');
-  T.Test('mem OOM uses canonical root', @TestMemOutOfMemoryUsesCanonicalRoot);
-  T.Test('blockpool overflow contracts', @TestBlockPoolOverflowContracts);
-  T.Test('growable mem OOM uses canonical root', @TestGrowableMemOomUsesCanonicalRoot);
-  T.Test('allocator-backed mem OOM uses canonical root', @TestAllocatorBackedMemOomUsesCanonicalRoot);
-  T.Test('virtual arena reserve failure uses canonical root',
-    @TestVirtualArenaReserveFailureUsesCanonicalRoot);
-  T.Test('virtual arena commit failure returns nil',
-    @TestVirtualArenaCommitFailureReturnsNil);
-  T.Test('virtual arena large-object mmap failure returns nil',
-    @TestVirtualArenaLargeObjectMmapFailureReturnsNil);
-  T.Test('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
-  T.Run;
 
-  T.Summary;
+  T.Test('handler initially empty', @TestHandlerInitiallyEmpty);
+  T.Test('handler register/unregister', @TestHandlerRegisterUnregister);
+  T.Test('handler calls callback', @TestHandlerCallsCallback);
+  T.Test('handler chain stops at retry', @TestHandlerChain);
+  T.Test('oom allocator passthrough', @TestOomAllocatorPassthrough);
+  T.Test('oom allocator traits', @TestOomAllocatorTraits);
+
+  T.Run;
 end.

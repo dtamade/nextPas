@@ -1,0 +1,203 @@
+{******************************************************************************
+  nextpas.core.mem.allocator.scoped — 作用域分配器
+
+  核心设计:
+    1. 包装任意 IAllocator，记录所有分配
+    2. 析构时自动释放所有未释放的分配（RAII 风格）
+    3. 支持 Reset 提前释放（不销毁分配器）
+    4. 线程安全（原子计数 + 临界区保护分配记录）
+
+  使用模式:
+    var LScoped: TScopedAllocator;
+    LScoped := TScopedAllocator.Create(DefaultAllocator);
+    try
+      LPtr := LScoped.GetMem(1024);
+      // 不需要手动 FreeMem，析构时自动释放
+    finally
+      LScoped.Free;  // 自动释放所有分配
+    end;
+
+  性能目标:
+    - GetMem/FreeMem 额外开销 < 20ns（记录指针到数组）
+    - Reset: O(n) 遍历释放
+******************************************************************************}
+unit nextpas.core.mem.allocator.scoped;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.mem.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base;
+
+type
+  {** TScopedAllocator
+   *
+   *  作用域分配器：析构时自动释放所有未释放的分配。
+   *  内部维护分配记录数组，FreeMem 时移除记录。
+   *  析构时遍历剩余记录并释放。
+   *}
+  TScopedAllocator = class(TAllocator)
+  private
+    FInner: IAllocator;
+    FLock: TRTLCriticalSection;
+    FPointers: array of Pointer;
+    FCount: Integer;
+    FActiveBytes: SizeUInt;
+    procedure Track(APtr: Pointer);
+    procedure Untrack(APtr: Pointer);
+  protected
+    function DoGetMem(ASize: SizeUInt): Pointer; override;
+    function DoAllocMem(ASize: SizeUInt): Pointer; override;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
+  public
+    constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
+
+    {** 提前释放所有已跟踪的分配（不销毁分配器） }
+    procedure Reset;
+
+    {** 当前跟踪的分配数 }
+    function TrackedCount: Integer;
+    {** 当前跟踪的总字节数（近似值） }
+    function TrackedBytes: SizeUInt;
+
+    function Traits: TAllocatorTraits; override;
+  end;
+
+implementation
+
+{ TScopedAllocator }
+
+constructor TScopedAllocator.Create(AInner: IAllocator);
+begin
+  inherited Create;
+  FInner := AInner;
+  InitCriticalSection(FLock);
+  FPointers := nil;
+  FCount := 0;
+  FActiveBytes := 0;
+end;
+
+destructor TScopedAllocator.Destroy;
+begin
+  Reset;
+  DoneCriticalSection(FLock);
+  FInner := nil;
+  inherited Destroy;
+end;
+
+procedure TScopedAllocator.Track(APtr: Pointer);
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FCount >= Length(FPointers) then
+      SetLength(FPointers, FCount + 16);
+    FPointers[FCount] := APtr;
+    Inc(FCount);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TScopedAllocator.Untrack(APtr: Pointer);
+var
+  LI, LJ: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    for LI := 0 to FCount - 1 do
+    begin
+      if FPointers[LI] = APtr then
+      begin
+        for LJ := LI to FCount - 2 do
+          FPointers[LJ] := FPointers[LJ + 1];
+        Dec(FCount);
+        FPointers[FCount] := nil;
+        Break;
+      end;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TScopedAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+begin
+  Result := FInner.GetMem(ASize);
+  if Result <> nil then
+  begin
+    Track(Result);
+    InterlockedExchangeAdd64(FActiveBytes, Int64(ASize));
+  end;
+end;
+
+function TScopedAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+begin
+  Result := FInner.AllocMem(ASize);
+  if Result <> nil then
+  begin
+    Track(Result);
+    InterlockedExchangeAdd64(FActiveBytes, Int64(ASize));
+  end;
+end;
+
+function TScopedAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+begin
+  // Realloc: 旧指针 untrack，新指针 track
+  if APtr <> nil then
+    Untrack(APtr);
+  Result := FInner.ReallocMem(APtr, ASize);
+  if Result <> nil then
+    Track(Result);
+end;
+
+procedure TScopedAllocator.DoFreeMem(APtr: Pointer);
+begin
+  if APtr <> nil then
+    Untrack(APtr);
+  FInner.FreeMem(APtr);
+end;
+
+procedure TScopedAllocator.Reset;
+var
+  LI: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    // 从后往前释放（LIFO 顺序，对 arena 友好）
+    for LI := FCount - 1 downto 0 do
+      FInner.FreeMem(FPointers[LI]);
+    FCount := 0;
+    FActiveBytes := 0;
+    FillChar(FPointers[0], Length(FPointers) * SizeOf(Pointer), 0);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TScopedAllocator.TrackedCount: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    Result := FCount;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TScopedAllocator.TrackedBytes: SizeUInt;
+begin
+  Result := SizeUInt(FActiveBytes);
+end;
+
+function TScopedAllocator.Traits: TAllocatorTraits;
+begin
+  Result := FInner.Traits;
+end;
+
+end.

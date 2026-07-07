@@ -1,2 +1,2 @@
-PROGRAM := test_oom
+PROGRAM := test_budget
 include ../../common.mk
