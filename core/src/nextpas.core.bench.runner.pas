@@ -1203,6 +1203,13 @@ begin
     Result.P99 := LStats.P99;
     Result.Outliers := LStats.OutlierCount;
     Result.SampleCount := LStats.SampleCount;
+    { B22: Outlier-aware statistics }
+    Result.OutlierMethod := LStats.OutlierMethod;
+    Result.OutlierThreshold := LStats.OutlierThreshold;
+    Result.FilteredMean := LStats.FilteredMean;
+    Result.FilteredStdDev := LStats.FilteredStdDev;
+    Result.FilteredMedian := LStats.FilteredMedian;
+    Result.FilteredCount := LStats.FilteredCount;
     if FConfig.CollectRawSamples or LEntry.CollectRawSamples then
       Result.RawSamples := LSamples;
 

@@ -59,6 +59,13 @@ type
     RawSamples: TDoubleArray;
     {** 自定义指标 }
     CustomMetrics: TCustomMetricArray;
+    {** B22: Outlier-aware statistics }
+    OutlierMethod: string;
+    OutlierThreshold: Double;
+    FilteredMean: Double;
+    FilteredStdDev: Double;
+    FilteredMedian: Double;
+    FilteredCount: Integer;
   end;
 
   {** 统计摘要 - 完整的统计分析结果 }
@@ -80,6 +87,13 @@ type
     Confidence99Low: Double;
     Confidence99High: Double;
     SampleCount: Integer;
+    {** B22: Outlier-aware statistics }
+    OutlierMethod: string;       // e.g., 'Tukey', 'ZScore', 'ModifiedZScore'
+    OutlierThreshold: Double;    // e.g., 1.5 for Tukey, 3.0 for ZScore
+    FilteredMean: Double;        // Mean excluding outliers
+    FilteredStdDev: Double;      // StdDev excluding outliers
+    FilteredMedian: Double;      // Median excluding outliers
+    FilteredCount: Integer;      // Sample count excluding outliers
   end;
 
   {** 基线对比 - 与基线性能的对比结果 }

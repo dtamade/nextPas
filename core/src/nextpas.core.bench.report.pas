@@ -471,6 +471,13 @@ begin
        FormatTime(FResults[I].P99),
        FResults[I].Outliers,
        FResults[I].SampleCount]));
+    { B22: Show filtered stats when outliers present }
+    if FResults[I].Outliers > 0 then
+      BufferAddLine(LLines, TextFormat('  Filtered: %s mean, %s stddev, %d samples (excl %d outliers)',
+        [FormatTime(FResults[I].FilteredMean),
+         FormatTime(FResults[I].FilteredStdDev),
+         FResults[I].FilteredCount,
+         FResults[I].Outliers]));
     if (FResults[I].BytesPerOp > 0) and (FResults[I].NsPerOp > 0) then
       BufferAddLine(LLines, TextFormat('  Throughput: %s  (%d B/op)',
         [FormatThroughput(FResults[I].BytesPerOp * 1e9 / FResults[I].NsPerOp),
