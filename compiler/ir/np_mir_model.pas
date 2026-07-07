@@ -59,6 +59,8 @@ type
     mskLoad,       // Dst := *Ptr
     mskStore,      // *Ptr := Src
     mskGetFieldPtr,// Dst := &(Base.FieldIndex)
+    mskInsertField, // Dst := insertvalue Base, Value, FieldIndex
+    mskExtractField,// Dst := extractvalue Base, FieldIndex
     mskUnary,      // Dst := Op Src
     mskBinary      // Dst := Lhs Op Rhs
   );

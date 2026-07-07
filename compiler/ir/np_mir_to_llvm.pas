@@ -197,6 +197,20 @@ begin
         '* %' + IntToStr(AStmt.Src.Value) +
         ', i32 0, i32 ' + IntToStr(AStmt.FieldIndex));
 
+    mskExtractField:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = extractvalue ' +
+        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        ' %' + IntToStr(AStmt.Src.Value) +
+        ', ' + IntToStr(AStmt.FieldIndex));
+
+    mskInsertField:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = insertvalue ' +
+        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        ' %' + IntToStr(AStmt.Src.Value) + ', ' +
+        LlvmTypeName(AStmt.Rhs.BitWidth, AStmt.Rhs.IsSigned) +
+        ' %' + IntToStr(AStmt.Rhs.Value) +
+        ', ' + IntToStr(AStmt.FieldIndex));
+
     mskUnary:
       begin
         Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
