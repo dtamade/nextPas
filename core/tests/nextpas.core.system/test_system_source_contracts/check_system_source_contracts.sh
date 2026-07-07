@@ -426,6 +426,8 @@ type PTypeInfo
 type TTypeKind
 type PTypeData
 type TTypeData
+type PPropInfo
+type PPropList
 const tkInteger
 const tkChar
 const tkWChar
@@ -455,6 +457,8 @@ procedure FinalizeArray
 procedure CopyArray
 function GetPropInfo
 function GetPropInfo
+function GetPropList
+function GetPropList
 function GetEnumName
 function GetEnumValue
 EOF
@@ -1236,7 +1240,6 @@ require_token "src/nextpas.core.system.typinfo.pas" "System.InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
 require_typinfo_facade_surface_allowlist
-reject_token "src/nextpas.core.system.typinfo.pas" "GetPropList"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "IsPublishedProp"
 reject_token "src/nextpas.core.system.typinfo.pas" "SetPropValue"
