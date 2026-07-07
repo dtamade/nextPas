@@ -43,6 +43,18 @@ type
     class function Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer = 0): TShardedBlockPoolConfig; static;
   end;
 
+  {** Pool utilization and hit-rate statistics. }
+  TBlockPoolStats = record
+    TotalAcquires: QWord;   // total Acquire calls
+    CacheHits: QWord;       // acquires served from thread cache
+    SegmentAllocs: QWord;   // acquires that triggered segment growth
+    Capacity: QWord;        // total block capacity
+    InUse: QWord;           // blocks currently in use
+    Available: QWord;       // blocks available
+    function CacheHitRate: Double;   // CacheHits / TotalAcquires (0..1)
+    function Utilization: Double;    // InUse / Capacity (0..1)
+  end;
+
   {**
    * TShardedBlockPool
    *
@@ -126,6 +138,9 @@ type
 
     // fast statistics (atomic, approximate under heavy contention but monotonic)
     FTotalCapacity: Int64; // blocks
+    FTotalAcquires: Int64;  // total Acquire calls
+    FCacheHits: Int64;     // acquires served from thread cache
+    FSegmentAllocs: Int64; // acquires that triggered segment growth
   private
     function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
@@ -188,6 +203,9 @@ type
     function TrimIdleSegments: SizeInt;
 
     function ShardCount: Integer; inline;
+
+    { Pool utilization and hit-rate statistics. }
+    function GetStats: TBlockPoolStats;
   end;
 
 implementation
@@ -1062,6 +1080,9 @@ var
   FThreadCacheCheckDoubleFree := AConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := AConfig.TrackInUse;
   FTotalCapacity := 0;
+  FTotalAcquires := 0;
+  FCacheHits := 0;
+  FSegmentAllocs := 0;
 
   FConfig := AConfig.Pool;
   LShardCount := NormalizeShardCount(AConfig.ShardCount);
@@ -1231,9 +1252,11 @@ var
   LShard: Integer;
   LNode: PThreadCacheNode;
   LCachedShard: Integer;
+  LOldCap: SizeUInt;
 begin
   Result := nil;
   if FShardCount <= 0 then Exit(nil);
+  InterlockedExchangeAdd64(FTotalAcquires, 1);
 
   if FThreadCacheCapacity > 0 then
   begin
@@ -1245,6 +1268,7 @@ begin
       LCachedShard := LNode^.Shard;
       if FTrackInUse and (LCachedShard >= 0) and (LCachedShard < FShardCount) then
         InterlockedExchangeAdd64(FShards[LCachedShard].InUseCount, 1);
+      InterlockedExchangeAdd64(FCacheHits, 1);
       Exit;
     end;
 
@@ -1258,9 +1282,14 @@ begin
   FShards[LShard].Lock.Acquire;
   try
     FlushRemoteFreesLocked(LShard);
+    LOldCap := FShards[LShard].Pool.Capacity;
     Result := FShards[LShard].Pool.Acquire;
     if Result <> nil then
+    begin
       IndexShardNewSegmentsLocked(LShard);
+      if FShards[LShard].Pool.Capacity > LOldCap then
+        InterlockedExchangeAdd64(FSegmentAllocs, 1);
+    end;
   finally
     FShards[LShard].Lock.Release;
   end;
@@ -1587,6 +1616,32 @@ end;
 function TShardedBlockPool.ShardCount: Integer;
 begin
   Result := FShardCount;
+end;
+
+function TShardedBlockPool.GetStats: TBlockPoolStats;
+begin
+  Result.TotalAcquires := QWord(FTotalAcquires);
+  Result.CacheHits := QWord(FCacheHits);
+  Result.SegmentAllocs := QWord(FSegmentAllocs);
+  Result.Capacity := Capacity;
+  Result.InUse := InUse;
+  Result.Available := Available;
+end;
+
+{ TBlockPoolStats }
+
+function TBlockPoolStats.CacheHitRate: Double;
+begin
+  if TotalAcquires = 0 then
+    Exit(0.0);
+  Result := Double(CacheHits) / Double(TotalAcquires);
+end;
+
+function TBlockPoolStats.Utilization: Double;
+begin
+  if Capacity = 0 then
+    Exit(0.0);
+  Result := Double(InUse) / Double(Capacity);
 end;
 
 {$POP}
