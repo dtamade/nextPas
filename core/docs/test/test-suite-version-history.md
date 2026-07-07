@@ -51,6 +51,9 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Parallel opt-in | `t.Parallel()` | `#[serial]` | `TestSeq()` |
 | Test cache | `go test -cache` | — | `--cache` |
 | Property-based test | QuickCheck (3rd party) | proptest | **v7.1** GenString/GenInt/GenBool/GenBytes + Map/Filter combinators |
+| Coverage tracking | — | — | **v8.0b** ICoverageTracker bitset (4096 points) |
+| Structured fuzzing | — | — | **v8.0b** FuzzStructured + coverage-guided corpus |
+| Parallel fuzzing | — | — | **v8.0b** FuzzParallel 4 strategies |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -68,7 +71,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
 | `test_stress` | 高并发压力测试、大量测试注册、内存密集 | 1 |
-| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult | 15 |
+| `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult + GenArray/GenTuple/BindInt + FuzzStructured/FuzzParallel/ICoverageTracker | 37 |
 
 ## 运行方式
 
@@ -294,6 +297,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.2a**: Mutation-based Fuzzing — 纯随机变异 fuzzing，无需编译器覆盖率插桩。6 种变异策略 (bit flip/byte replace/byte insert/byte delete/block dup/block swap)；`Fuzz()` / `FuzzString()` 入口；自动最小化失败输入 (binary shrink)；`FuzzGenBytes()` / `FuzzGenString()` 语料生成；20 测试 (15 Prop + 5 Fuzz)
 - **v7.3a**: Corpus Management — 持久化语料库管理。`TFuzzCorpus` 类支持从目录加载/保存语料；去重检测 (byte-by-byte comparison)；`FuzzWithCorpus()` / `FuzzStringWithCorpus()` 入口自动加载/保存语料；发现新输入时自动添加到语料库；27 测试 (15 Prop + 5 Fuzz + 7 Corpus)
 - **v8.0a**: Structured Generators + String Shrink — `GenArray` 随机长度 Int64 数组生成器；`GenTuple` (Int64, String) 元组生成器；`BindInt` FlatMap 组合器；String shrink 增强 (8 种策略)；`PropArray`/`PropTuple` 注册函数；32 测试
+- **v8.0b**: Structured Fuzzing + Coverage Tracking — `ICoverageTracker` bitset 覆盖追踪 (4096 点)；`FuzzStructured` 基于生成器的结构化 fuzzing，coverage-guided 语料库扩展；`FuzzParallel` 多策略并行 fuzzing (4 策略: BitFlip/ByteReplace/Havoc/Structured)；37 测试
 
 ## 路线图
 
@@ -305,7 +309,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 | **v7.2a** | Mutation-based Fuzzing — 纯随机变异 + 自动最小化 | ✅ 已完成 | v7.1b |
 | **v7.3a** | Corpus Management — 持久化语料库管理 | ✅ 已完成 | v7.2a |
 | **v8.0a** | Structured Generators — GenArray/GenTuple/BindInt + String Shrink | ✅ 已完成 | v7.3a |
-| **v8.0b** | Structured Fuzzing + Coverage Tracking | 🔴 计划中 | v8.0a |
+| **v8.0b** | Structured Fuzzing + Coverage Tracking | ✅ 已完成 | v8.0a |
 | **v8.0c** | Assertion + Error Messages + Timing | 🔴 计划中 | v8.0a |
 | **v8.0d** | Documentation + Examples | 🔴 计划中 | v8.0c |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
