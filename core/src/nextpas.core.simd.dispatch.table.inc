@@ -263,6 +263,9 @@
     CmpEqI16x32: function(const a, b: TVecI16x32): TMask32;
     CmpLtI16x32: function(const a, b: TVecI16x32): TMask32;
     CmpGtI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpLeI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpGeI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpNeI16x32: function(const a, b: TVecI16x32): TMask32;
     MinI16x32: function(const a, b: TVecI16x32): TVecI16x32;
     MaxI16x32: function(const a, b: TVecI16x32): TVecI16x32;
 
@@ -277,6 +280,9 @@
     CmpEqI8x64: function(const a, b: TVecI8x64): TMask64;
     CmpLtI8x64: function(const a, b: TVecI8x64): TMask64;
     CmpGtI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpLeI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpGeI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpNeI8x64: function(const a, b: TVecI8x64): TMask64;
     MinI8x64: function(const a, b: TVecI8x64): TVecI8x64;
     MaxI8x64: function(const a, b: TVecI8x64): TVecI8x64;
 
@@ -290,6 +296,9 @@
     CmpEqU8x64: function(const a, b: TVecU8x64): TMask64;
     CmpLtU8x64: function(const a, b: TVecU8x64): TMask64;
     CmpGtU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpLeU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpGeU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpNeU8x64: function(const a, b: TVecU8x64): TMask64;
     MinU8x64: function(const a, b: TVecU8x64): TVecU8x64;
     MaxU8x64: function(const a, b: TVecU8x64): TVecU8x64;
 

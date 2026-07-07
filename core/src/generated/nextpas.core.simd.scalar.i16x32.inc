@@ -79,6 +79,33 @@ begin
       Result := Result or TMask32(DWord(1) shl i);
 end;
 
+function ScalarCmpLeI16x32(const a, b: TVecI16x32): TMask32;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 31 do
+    if a.i[i] <= b.i[i] then
+      Result := Result or TMask32(DWord(1) shl i);
+end;
+
+function ScalarCmpGeI16x32(const a, b: TVecI16x32): TMask32;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 31 do
+    if a.i[i] >= b.i[i] then
+      Result := Result or TMask32(DWord(1) shl i);
+end;
+
+function ScalarCmpNeI16x32(const a, b: TVecI16x32): TMask32;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 31 do
+    if a.i[i] <> b.i[i] then
+      Result := Result or TMask32(DWord(1) shl i);
+end;
+
 function ScalarMinI16x32(const a, b: TVecI16x32): TVecI16x32;
 var i: Integer;
 begin

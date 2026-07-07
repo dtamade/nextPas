@@ -274,7 +274,65 @@ begin
   Result := TMask32(LMask);
 end;
 
-function AVX512MinI16x32(const a, b: TVecI16x32): TVecI16x32;
+function AVX512CmpLeI16x32(const a, b: TVecI16x32): TMask32;
+var
+  LPa, LPb: Pointer;
+  LMask: DWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpw  k1, zmm0, [rcx], 2
+    kmovd   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask32(LMask);
+end;
+
+function AVX512CmpGeI16x32(const a, b: TVecI16x32): TMask32;
+var
+  LPa, LPb: Pointer;
+  LMask: DWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpw  k1, zmm0, [rcx], 5
+    kmovd   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask32(LMask);
+end;
+
+function AVX512CmpNeI16x32(const a, b: TVecI16x32): TMask32;
+var
+  LPa, LPb: Pointer;
+  LMask: DWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpw  k1, zmm0, [rcx], 4
+    kmovd   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask32(LMask);
+end;(const a, b: TVecI16x32): TVecI16x32;
 var
   LPa, LPb, LPr: Pointer;
 begin

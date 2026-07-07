@@ -254,6 +254,9 @@ begin
   dispatchTable.CmpEqI16x32 := @ScalarCmpEqI16x32;
   dispatchTable.CmpLtI16x32 := @ScalarCmpLtI16x32;
   dispatchTable.CmpGtI16x32 := @ScalarCmpGtI16x32;
+  dispatchTable.CmpLeI16x32 := @ScalarCmpLeI16x32;
+  dispatchTable.CmpGeI16x32 := @ScalarCmpGeI16x32;
+  dispatchTable.CmpNeI16x32 := @ScalarCmpNeI16x32;
   dispatchTable.MinI16x32 := @ScalarMinI16x32;
   dispatchTable.MaxI16x32 := @ScalarMaxI16x32;
   // === Arithmetic operations - I8x64 (512-bit) ===
@@ -267,6 +270,9 @@ begin
   dispatchTable.CmpEqI8x64 := @ScalarCmpEqI8x64;
   dispatchTable.CmpLtI8x64 := @ScalarCmpLtI8x64;
   dispatchTable.CmpGtI8x64 := @ScalarCmpGtI8x64;
+  dispatchTable.CmpLeI8x64 := @ScalarCmpLeI8x64;
+  dispatchTable.CmpGeI8x64 := @ScalarCmpGeI8x64;
+  dispatchTable.CmpNeI8x64 := @ScalarCmpNeI8x64;
   dispatchTable.MinI8x64 := @ScalarMinI8x64;
   dispatchTable.MaxI8x64 := @ScalarMaxI8x64;
   // === Arithmetic operations - U8x64 (512-bit) ===
@@ -279,6 +285,9 @@ begin
   dispatchTable.CmpEqU8x64 := @ScalarCmpEqU8x64;
   dispatchTable.CmpLtU8x64 := @ScalarCmpLtU8x64;
   dispatchTable.CmpGtU8x64 := @ScalarCmpGtU8x64;
+  dispatchTable.CmpLeU8x64 := @ScalarCmpLeU8x64;
+  dispatchTable.CmpGeU8x64 := @ScalarCmpGeU8x64;
+  dispatchTable.CmpNeU8x64 := @ScalarCmpNeU8x64;
   dispatchTable.MinU8x64 := @ScalarMinU8x64;
   dispatchTable.MaxU8x64 := @ScalarMaxU8x64;
   // === Arithmetic operations - F32x16 (512-bit AVX-512) ===

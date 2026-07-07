@@ -72,6 +72,33 @@ begin
       Result := Result or (TMask64(1) shl i);
 end;
 
+function ScalarCmpLeU8x64(const a, b: TVecU8x64): TMask64;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 63 do
+    if a.u[i] <= b.u[i] then
+      Result := Result or (TMask64(1) shl i);
+end;
+
+function ScalarCmpGeU8x64(const a, b: TVecU8x64): TMask64;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 63 do
+    if a.u[i] >= b.u[i] then
+      Result := Result or (TMask64(1) shl i);
+end;
+
+function ScalarCmpNeU8x64(const a, b: TVecU8x64): TMask64;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to 63 do
+    if a.u[i] <> b.u[i] then
+      Result := Result or (TMask64(1) shl i);
+end;
+
 function ScalarMinU8x64(const a, b: TVecU8x64): TVecU8x64;
 var i: Integer;
 begin
