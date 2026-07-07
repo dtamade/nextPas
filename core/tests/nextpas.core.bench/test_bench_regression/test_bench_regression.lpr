@@ -261,6 +261,38 @@ begin
 end;
 
 {*
+ * 测试并行执行
+ *}
+procedure Test_RunParallel;
+var
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+begin
+  WriteLn('  + run_parallel');
+
+  LResults := TBenchSuite.Create('ParallelTest')
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(3)
+    .Add('Benchmark1', @BenchExample)
+    .Add('Benchmark2', @BenchExample)
+    .Add('Benchmark3', @BenchExample)
+    .RunParallel(2);
+
+  LAll := LResults.GetAll;
+
+  { 验证所有条目都执行了 }
+  Check(Length(LAll) = 3, 'Should have 3 results');
+  Check(LAll[0].Executed, 'Benchmark1 should be executed');
+  Check(LAll[1].Executed, 'Benchmark2 should be executed');
+  Check(LAll[2].Executed, 'Benchmark3 should be executed');
+
+  { 验证统计数据有效 }
+  Check(LAll[0].NsPerOp > 0, 'Benchmark1 ns/op should be > 0');
+  Check(LAll[1].NsPerOp > 0, 'Benchmark2 ns/op should be > 0');
+  Check(LAll[2].NsPerOp > 0, 'Benchmark3 ns/op should be > 0');
+end;
+
+{*
  * 主测试套件
  *}
 begin
@@ -275,6 +307,7 @@ begin
   Test_Timeline_Append;
   Test_Benchstat_Format;
   Test_HTML_Report;
+  Test_RunParallel;
 
   WriteLn;
   WriteLn(Format('  %d passed, %d failed, 0 skipped', [GPassCount, GFailCount]));

@@ -26,6 +26,7 @@ uses
 type
   {** 重新导出类型 }
   TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchStats = nextpas.core.bench.base.TBenchStats;
   TBenchComparison = nextpas.core.bench.base.TBenchComparison;
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
@@ -237,7 +238,7 @@ begin
 end;
 
 procedure InitWorkerThread(var AWorker: TBenchWorkerThread;
-  const AEntries: array of TBenchEntry; AEntryCount: Integer;
+  const ASrcEntries: array of TBenchEntry; ASrcOffset, AEntryCount: Integer;
   const AConfig: TBenchConfig);
 var
   I: Integer;
@@ -245,7 +246,7 @@ begin
   AWorker.EntryCount := AEntryCount;
   SetLength(AWorker.Entries, AEntryCount);
   for I := 0 to AEntryCount - 1 do
-    AWorker.Entries[I] := AEntries[I];
+    AWorker.Entries[I] := ASrcEntries[ASrcOffset + I];
 
   AWorker.Config := AConfig;
   AWorker.Runner := TBenchRunner.Create;
@@ -880,7 +881,7 @@ begin
     if I < LRemainder then
       Inc(LCount);
 
-    InitWorkerThread(LWorkers[I], FEntries[LStartIdx], LCount, FConfig);
+    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, FConfig);
     Inc(LStartIdx, LCount);
   end;
 
