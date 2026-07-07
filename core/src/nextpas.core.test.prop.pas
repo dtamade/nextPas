@@ -1631,10 +1631,10 @@ end;
 procedure PropArray(const AName: string; ATest: TIntArrayTest;
   AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
 var
-  I, J, K: Integer;
+  I, J: Integer;
   LValue: specialize TArray<Int64>;
   LShrunk: specialize TArray<specialize TArray<Int64>>;
-  LFailed, LSame: Boolean;
+  LFailed: Boolean;
 begin
   for I := 1 to ARuns do
   begin
@@ -1655,14 +1655,7 @@ begin
               { Skip if candidate is identical to current value }
               if Length(LShrunk[J]) = Length(LValue) then
               begin
-                LSame := True;
-                for K := 0 to High(LValue) do
-                  if LShrunk[J][K] <> LValue[K] then
-                  begin
-                    LSame := False;
-                    Break;
-                  end;
-                if LSame then
+                if (Length(LValue) = 0) or CompareMem(@LShrunk[J][0], @LValue[0], Length(LValue) * SizeOf(Int64)) then
                   Continue;
               end;
               try
@@ -1753,6 +1746,27 @@ begin
   if GFuzzRng = nil then
     GFuzzRng := TRandomGen.Create(0);
   Result := GFuzzRng;
+end;
+
+{ Convert bytes to hex string efficiently (pre-allocates) }
+function BytesToHexStr(const AData: TBytes): string;
+var
+  I, LLen: Integer;
+begin
+  LLen := Length(AData);
+  if LLen = 0 then
+  begin
+    Result := '';
+    Exit;
+  end;
+  SetLength(Result, LLen * 3 - 1);
+  for I := 0 to LLen - 1 do
+  begin
+    if I > 0 then
+      Result[I * 3] := ' ';
+    Result[I * 3 + 1] := IntToHex(AData[I], 2)[1];
+    Result[I * 3 + 2] := IntToHex(AData[I], 2)[2];
+  end;
 end;
 
 { Mutate a byte array randomly. Strategy is chosen weighted-random:
@@ -1935,13 +1949,7 @@ begin
         { Minimize the failing input }
         LMin := FuzzMinimize(LInput, ATest);
         { Convert to hex for display }
-        LHex := '';
-        for J := 0 to High(LMin) do
-        begin
-          if J > 0 then
-            LHex := LHex + ' ';
-          LHex := LHex + IntToHex(LMin[J], 2);
-        end;
+        LHex := BytesToHexStr(LMin);
         FailTest('Fuzz "' + AName + '" found failure after ' + IntToStr(I) +
           ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
           'minimal input (' + IntToStr(Length(LMin)) + ' bytes): ' + LHex);
@@ -2209,13 +2217,7 @@ begin
           LCorpus.Add(LMin);
           LCorpus.Save;
           { Convert to hex for display }
-          LHex := '';
-          for J := 0 to High(LMin) do
-          begin
-            if J > 0 then
-              LHex := LHex + ' ';
-            LHex := LHex + IntToHex(LMin[J], 2);
-          end;
+          LHex := BytesToHexStr(LMin);
           FailTest('Fuzz "' + AName + '" found failure after ' + IntToStr(I) +
             ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
             'minimal input (' + IntToStr(Length(LMin)) + ' bytes): ' + LHex);
@@ -2677,13 +2679,7 @@ begin
         begin
           Inc(LFailCount);
           LMin := FuzzMinimize(LInput, ATest);
-          LHex := '';
-          for I := 0 to High(LMin) do
-          begin
-            if I > 0 then
-              LHex := LHex + ' ';
-            LHex := LHex + IntToHex(LMin[I], 2);
-          end;
+          LHex := BytesToHexStr(LMin);
           FailTest('FuzzParallel "' + AName + '" worker ' + IntToStr(W) +
             ' (' + IntToStr(Ord(LStrategy)) + ') found failure after ' +
             IntToStr(J) + ' iterations, minimal input (' +
