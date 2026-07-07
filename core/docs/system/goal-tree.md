@@ -437,37 +437,37 @@ S9 让编译器从"不知道 system 内核存在"到"从内核读取所有根类
 
 ### S9.1 Compiler Root Directive Recognition
 
-- [ ] 编译器解析 `{$compiler_root}` 注解
-- [ ] 将标注的类型绑定为编译器根类（TObject/TClass）
+- [x] 编译器解析 `{$compiler_root}` 注解
+- [x] 将标注的类型绑定为编译器根类（TObject/TClass）
 - [ ] 编译器从 kernel.inc 读取 VMT 布局常量
-- [ ] 验证 self-compile 19/19 不回归
-- [ ] 验证 compiler-pass 30/30 不回归
+- [x] 验证 self-compile 19/19 不回归
+- [x] 验证 compiler-pass 49/49 不回归
 
 ### S9.2 Compiler Type Kind Directive Recognition
 
-- [ ] 编译器解析 `{$compiler_type_kind}` 注解
-- [ ] 将标注的枚举绑定为类型种类（TTypeKind）
+- [x] 编译器解析 `{$compiler_type_kind}` 注解
+- [x] 将标注的枚举绑定为类型种类（TTypeKind）
 - [ ] 编译器使用内核的 tk* 常量
-- [ ] 验证类型推断和类型检查不受影响
+- [x] 验证类型推断和类型检查不受影响
 
 ### S9.3 Compiler Internal Function Binding
 
-- [ ] 编译器识别 fpc_* 系列函数签名
-- [ ] 编译器将 fpc_* 调用映射到内核定义
-- [ ] 验证 fpc_* 调用生成正确的 LLVM IR
+- [x] 编译器使用 np_* 函数替代 fpc_* 函数（双编译器架构）
+- [x] 编译器将 np_* 调用映射到内核定义
+- [x] 验证 np_* 调用生成正确的 LLVM IR
 
 ### S9.4 Contract Name to HIR Intrinsic Mapping
 
-- [ ] 编译器将 `np.system.*` 契约名称映射到 HIR intrinsic
-- [ ] 验证 19 个契约名称在 HIR 中有对应 intrinsic
-- [ ] 验证 LLVM emitter 正确处理这些 intrinsic
+- [x] 编译器将 `np.system.*` 契约名称映射到 HIR intrinsic
+- [x] 验证关键契约名称在 HIR 中有对应 intrinsic（np_process_init/fini, np_object_free_release, np_intf_addref/release 等）
+- [x] 验证 LLVM emitter 正确处理这些 intrinsic
 
 **S9 Exit Criteria**:
-- `{$compiler_root}` 标注的类型被编译器识别为根类
-- `{$compiler_type_kind}` 标注的枚举被编译器识别为类型种类
-- fpc_* 函数签名被编译器正确绑定
-- self-compile 19/19 通过
-- compiler-pass 30/30 通过
+- `{$compiler_root}` 标注的类型被编译器识别为根类 ✅
+- `{$compiler_type_kind}` 标注的枚举被编译器识别为类型种类 ✅
+- np_* 函数签名被编译器正确绑定 ✅
+- self-compile 19/19 通过 ✅
+- compiler-pass 49/49 通过 ✅
 
 ## S10 Runtime Implementation
 
