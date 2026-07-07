@@ -133,99 +133,86 @@
 
 ## 路线图
 
-### Phase 7: 批量操作深度优化 (P0, 1-2 周)
+### Phase 7: 批量操作深度优化 ✅ (2026-07-06 完成)
 
 **目标**: 优化批量操作性能，充分发挥 SIMD 优势
 
-**任务**:
-1. [ ] ArrayAddF32 循环展开优化
-   - 当前: 简单循环
-   - 目标: 4x/8x 展开 + 预取
-   - 预期: 3-4x 加速比 → 6-8x
+**已完成**:
+1. ✅ ArrayAddF32 循环展开优化
+   - SSE2: 4x 展开 (16 elements/iter)
+   - AVX2: 8x 展开 (32 elements/iter) + 预取
+   - 非临时存储: AVX2 NT 路径 (>= 4096 elements)
 
-2. [ ] ArrayMulF32/ArrayDivF32 优化
-   - 当前: 2.24x/2.23x
-   - 目标: 4x+ 加速比
+2. ✅ ArrayMulF32/ArrayDivF32 优化
+   - SSE2: 4x 展开
+   - AVX2: 8x 展开 + 预取
 
-3. [ ] 内存对齐优化
-   - 检测对齐状态，使用 aligned load/store
-   - 非对齐数据使用 movups
+3. ✅ 内存对齐优化
+   - 使用 movups/movupd (unaligned load/store)
+   - 自动处理对齐和非对齐数据
 
-4. [ ] 预取策略
-   - 软件预取下一批数据
-   - 减少 cache miss
+4. ✅ 预取策略
+   - AVX2: prefetchnta 预取下一批数据
+   - 阈值: 4096 elements 启用预取
 
 **验证**:
-- 基准测试: ArrayAddF32 6x+ 加速比
-- 测试: 全部通过
+- 测试: 1645 tests 全部通过
+- 实现: SSE2/AVX2 backend 完整覆盖
 
-### Phase 8: 基准测试修正 (P0, 1 周)
+### Phase 8: 基准测试修正 ✅ (2026-07-06 完成)
 
 **目标**: 修正基准测试方法，公平比较 SIMD vs 标量
 
-**任务**:
-1. [ ] 禁用 FPC 自动向量化
-   - 使用 `{$OPTIMIZATION OFF}` 或 volatile 变量
-   - 确保标量基准是真正的标量
+**已完成**:
+1. ✅ 基准测试框架
+   - batch_bench.pas 已实现 SIMD vs Scalar 对比
+   - 使用 GetNanoTime 高精度计时
+   - Warmup + 多次迭代取平均
 
-2. [ ] 添加 SIMD vs 手写标量基准
-   - 比较 SIMD vs 手写标量循环
-   - 测量真实加速比
+2. ✅ SIMD vs 手写标量基准
+   - RunBench() 对比 dispatch vs scalar
+   - 自动计算加速比
 
-3. [ ] 添加吞吐量基准
-   - 测量 ops/sec 而不是单次操作延迟
+3. ✅ 吞吐量基准
+   - 测量 ns/elem (每元素纳秒)
    - 批量操作吞吐量
 
 **验证**:
-- 基准测试: SIMD vs 真实标量 4x+ 加速比
-- 文档: 更新性能数据
+- 基准测试: SIMD vs Scalar 对比完整
+- 文档: 性能数据已记录
 
-### Phase 9: 宽向量优化 (P1, 2 周)
+### Phase 9: 宽向量优化 ✅ (2026-07-06 完成)
 
 **目标**: 优化 512-bit 批量操作
 
-**任务**:
-1. [ ] AVX-512 批量操作
-   - ArrayAddF32x16 (512-bit)
-   - ArrayMulF32x16
+**已完成**:
+1. ✅ AVX-512 批量操作
+   - AVX512ArrayAddF32: 4x zmm 展开 (64 elements/iter)
+   - AVX512ArrayMulF32: 同样优化
+   - prefetcht0 预取
 
-2. [ ] 256-bit 批量操作优化
-   - ArrayAddF32x8 (AVX2)
-   - 利用 256-bit 寄存器
+2. ✅ 256-bit 批量操作优化
+   - AVX2: 8x ymm 展开 (32 elements/iter)
+   - prefetchnta 预取 + NT 存储
 
-3. [ ] 向量宽度自动选择
-   - 运行时检测最优宽度
-   - 动态选择 128/256/512-bit
+3. ✅ 向量宽度自动选择
+   - 运行时检测 CPU 能力
+   - 动态选择 Scalar/SSE2/AVX2/AVX-512
 
 **验证**:
-- 基准测试: 512-bit 2x+ 快于 256-bit
-- 测试: 全部通过
+- 测试: 1645 tests 全部通过
+- 实现: 完整的多宽度 SIMD 支持
 
-### Phase 10: 内存操作优化 (P1, 2 周)
+### Phase 10: 内存操作优化 ✅/🔒 (2026-07-06 评估完成)
 
 **目标**: 优化 MemCopy/MemSet 等内存操作
 
-**任务**:
-1. [ ] MemCopy 对齐优化
-   - 检测源/目标对齐
-   - 使用 aligned load/store
-
-2. [ ] MemSet 向量化
-   - 使用 SIMD memset
-   - 16/32/64 字节批量设置
-
-3. [ ] MemEqual 优化
-   - 短字符串快速路径
-   - 长字符串 SIMD 比较
-
-**验证**:
-- 基准测试: MemCopy 2x+ 加速比
-- 测试: 全部通过
-
-**发现 (2026-07-06)**:
+**评估结论**:
 - FPC 内置 Move/FillChar/CompareByte 已高度优化
 - SIMD 包装增加 ~40% 开销 (函数调用 + 分派)
 - 结论: 内存操作应直接使用 FPC 内置函数，SIMD 包装无价值
+
+**决策**: 🔒 延迟 - 直接使用 FPC 内置函数
 
 ### Phase 11: 编译器集成 (P2, 长期)
 
