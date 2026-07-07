@@ -559,18 +559,18 @@ S11 让编译器能用 nextPas 编译自己，不依赖 FPC System。
 - ✅ 小块 (<64K): bump pointer + free list + coalesce
 - ✅ 大块 (>=64K): mmap with 16-byte prelude
 
-### S11.5 Exception Unwind Gate
+### S11.5 Exception Unwind Gate ✅
 
-- [ ] np_raise/np_try_push/np_try_pop 运行时验证
-- [ ] 异常展开正确恢复栈
-- [ ] 异常清理正确释放资源
-- [ ] 验证异常测试通过
+- ✅ np_raise/np_try_push/np_try_pop 运行时实现（setjmp/longjmp）
+- ✅ np_finally_end/np_except_end 运行时实现
+- ✅ 异常展开正确恢复栈（control_flow_pass.pas 验证）
+- ✅ 验证异常测试通过（compiler-pass 49/49，含 try/except）
 
-**S11 Exit Criteria**:
-- nextPas 编译器能编译 nextPas 编译器
-- 不 uses FPC System
-- 所有 19 个自举测试通过
-- 5 个自举就绪门: 4/5 已通过 (S11.1 ✅, S11.2 ✅, S11.3 ✅, S11.4 ✅), 1/5 待验证 (S11.5)
+**S11 Exit Criteria** (全部满足 ✅):
+- ✅ nextPas 编译器能编译 nextPas 编译器（self-compile 19/19）
+- ✅ 不 uses FPC System（双编译器架构）
+- ✅ 所有 19 个自举测试通过
+- ✅ 5 个自举就绪门全部通过 (S11.1 ✅, S11.2 ✅, S11.3 ✅, S11.4 ✅, S11.5 ✅)
 
 ## S12 Production Readiness
 
@@ -623,15 +623,14 @@ S12 从"能跑"到"好用"。
 S0-S8  基础建设          ✅ 完成（3391 行内核 + 4 门面 + 测试 + 文档）
 S9    编译器集成          ✅ 完成（126 tests, compiler_root/compiler_type_kind 指令）
 S10   运行时实现          ✅ 完成（48 np_* 函数 + 生命周期 + 分配器）
-S11   自举就绪            ← 下一步（3/5 门已通过, S11.1 RTTI + S11.5 异常待验证）
-S12   生产就绪
+S11   自举就绪            ✅ 完成（5/5 门全部通过, 49 compiler-pass, self-compile 19/19）
+S12   生产就绪            ← 下一步
 ```
 
 **关键依赖链**:
 ```
-S9 编译器集成 ✅ → S10 运行时实现 ✅ → S11 自举就绪 → S12 生产就绪
+S9 编译器集成 ✅ → S10 运行时实现 ✅ → S11 自举就绪 ✅ → S12 生产就绪
 ```
 
 **关键阻塞项**:
-- S11: S11.1 RTTI Drift Detection + S11.5 Exception Unwind Gate
 - S12: 跨平台 + 性能优化 + ABI 冻结
