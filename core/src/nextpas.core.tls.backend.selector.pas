@@ -292,6 +292,7 @@ function ValidateRequirements(
 var
   ErrorList: TStringArray;
 begin
+  ErrorList := nil;
   // 检查协议版本
   if ARequirements.RequiredProtocols = [] then
     ErrorList.Add('至少需要指定一个 TLS 协议版本');
