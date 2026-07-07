@@ -513,10 +513,10 @@ var
 begin
   LArena := TChunkedArena.Create(4096);
   try
-    LBefore := LArena.RemainingSize;
+    LBefore := LArena.Stats.TotalAllocated - LArena.Stats.TotalUsed;
     Check(LBefore > 0, 'remaining: initially > 0');
     LArena.Alloc(1024);
-    LAfter := LArena.RemainingSize;
+    LAfter := LArena.Stats.TotalAllocated - LArena.Stats.TotalUsed;
     Check(LAfter < LBefore, 'remaining: decreased after alloc');
   finally
     LArena.Free;

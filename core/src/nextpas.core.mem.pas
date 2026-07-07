@@ -6,7 +6,7 @@ unit nextpas.core.mem;
  *   - 通用场景 → DefaultAllocator (IAllocator)
  *   - 请求/帧级生命周期 → CreateDefaultArena (IArena)，用 Reset 一次性释放
  *   - 需要 IAllocator 接口的 Arena → CreateArenaAllocator（仅分配不释放）
- *   - 高频固定大小对象 → MakeFixedSlabPool / TFixedSlabPool / TLocalBlockPool
+ *   - 高频固定大小对象 → CreateFixedSlabPool / TFixedSlabPool / TLocalBlockPool
  *     （Acquire/Release API，O(1) 分配释放，位图 double-free 检测）
  *   - 高频可变大小对象 → TSlabPool / TSizeClassPool
  *     （GetMem/FreeMem API，size-class 路由，O(1) 分配释放）
@@ -84,7 +84,6 @@ type
 
   // === Arena 子系统 ===
   IArena = nextpas.core.mem.arena.intf.IArena;
-  IArenaCapacity = nextpas.core.mem.arena.intf.IArenaCapacity;
   TArenaMark = nextpas.core.mem.arena.base.TArenaMark;
   TArenaGrowthKind = nextpas.core.mem.arena.base.TArenaGrowthKind;
   TArenaStats = nextpas.core.mem.arena.base.TArenaStats;
@@ -148,14 +147,14 @@ function DefaultAllocator: IAllocator; inline;
 {** 全局分配函数 - 直接调用 DefaultAllocator **}
 function GetMem(ASize: SizeUInt): Pointer; inline;
 function AllocMem(ASize: SizeUInt): Pointer; inline;
-function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; inline;
-procedure FreeMem(ADst: Pointer); inline;
+function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+procedure FreeMem(APtr: Pointer); inline;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; inline;
+function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
   AFallback: IAllocator = nil): IAllocator; inline;
 
 {** 创建默认 Arena（TLocalArena，指定容量） }
@@ -187,14 +186,14 @@ begin
   Result := DefaultAllocator.AllocMem(ASize);
 end;
 
-function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := DefaultAllocator.ReallocMem(ADst, ASize);
+  Result := DefaultAllocator.ReallocMem(APtr, ASize);
 end;
 
-procedure FreeMem(ADst: Pointer);
+procedure FreeMem(APtr: Pointer);
 begin
-  DefaultAllocator.FreeMem(ADst);
+  DefaultAllocator.FreeMem(APtr);
 end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
@@ -215,15 +214,15 @@ begin
   Result := AAllocator.AllocMem(LTotal);
 end;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
 begin
-  Result := nextpas.core.mem.pool.MakeFixedSlabPool(ACapacity);
+  Result := nextpas.core.mem.pool.CreateFixedSlabPool(ACapacity);
 end;
 
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
   AFallback: IAllocator): IAllocator;
 begin
-  Result := nextpas.core.mem.pool.allocator.MakePoolAllocator(ABlockSize, ACapacity, AFallback);
+  Result := nextpas.core.mem.pool.allocator.CreatePoolAllocator(ABlockSize, ACapacity, AFallback);
 end;
 
 function CreateDefaultArena(ACapacity: SizeUInt): IArena;

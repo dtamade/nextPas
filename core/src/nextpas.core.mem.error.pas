@@ -119,7 +119,7 @@ function AllocErrorToString(aError: TAllocError): string;
 function SanitizeRuntimeAlignment(AAlignment: SizeUInt): SizeUInt;
 
 {** SanitizeConfigAlignment: for config/constructor alignment parameters.
-    0→DEFAULT_ALIGNMENT, validate power-of-two, clamp to MEM_DEFAULT_ALIGN.
+    0→DEFAULT_ALIGNMENT, validate power-of-two, clamp to DEFAULT_ALIGNMENT.
     Raises EAllocError(aeAlignmentNotSupported) if not power of two.
     Use this for TArenaConfig/TChunkedArenaConfig/constructor alignment args. }
 function SanitizeConfigAlignment(AAlignment: SizeUInt): SizeUInt;
@@ -211,8 +211,8 @@ begin
     Exit(DEFAULT_ALIGNMENT);
   if (AAlignment and (AAlignment - 1)) <> 0 then
     raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of 2');
-  if AAlignment < MEM_DEFAULT_ALIGN then
-    AAlignment := MEM_DEFAULT_ALIGN;
+  if AAlignment < DEFAULT_ALIGNMENT then
+    AAlignment := DEFAULT_ALIGNMENT;
   Result := AAlignment;
 end;
 

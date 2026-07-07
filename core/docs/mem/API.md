@@ -399,7 +399,7 @@ function Alloc(ASize: SizeUInt): Pointer;
 function AllocNoPointer(ASize: SizeUInt): Pointer;
 function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 function AllocZeroed(ASize: SizeUInt): Pointer;
-function AllocUnsafe(ASize: SizeUInt): Pointer;
+function AllocFast(ASize: SizeUInt): Pointer;
 function SaveMark: TArenaMark;
 procedure RestoreToMark(AMark: TArenaMark);
 procedure Reset;
@@ -415,7 +415,7 @@ function AllocCount: SizeUInt;
 
 - `Alloc` 从前向 bump pointer 分配
 - `AllocNoPointer` 从后向 bump pointer 分配，适合 pointer-free payload
-- `AllocUnsafe` 跳过安全检查，不更新统计，也不保证对齐
+- `AllocFast` 跳过安全检查，不更新统计，也不保证对齐
 - `Reset` 保留 reserved range 和已经 committed 的页面
 - `ResetHard` 会 decommit 已提交页面，但保留 reserved virtual address range
 - 大对象（`>= ARENA_LARGE_THRESHOLD`）走独立 mmap，`Reset` / `RestoreToMark` 不回收，只有 `Release` 才统一释放
@@ -485,8 +485,8 @@ function SaveMark: TArenaMark;
 procedure RestoreToMark(AMark: TArenaMark);
 procedure Reset;
 function UsedSize: SizeUInt;
-function RemainingSize: SizeUInt;
 function PeakUsed: SizeUInt;
+function Stats: TArenaStats;
 property Arena: TLocalArena read FArena;
 ```
 
@@ -495,6 +495,21 @@ property Arena: TLocalArena read FArena;
 - 当前实现通过 `threadvar` 缓存每线程 arena
 - 线程结束前需要显式调用 `DrainTLS`
 - 当前代码没有自动 threadvar cleanup hook
+
+**使用示例**:
+```pascal
+var
+  LArena: TLocalArena;
+  LThread: TThreadArena;
+  LPtr: Pointer;
+begin
+  LArena := TLocalArena.Create(64 * 1024);
+  LThread := TThreadArena.Create(LArena);
+  LPtr := LThread.Alloc(256);
+  // 帧级重置
+  LThread.Reset;
+end;
+```
 
 ## 门面 helper
 
@@ -505,8 +520,8 @@ function DefaultAllocator: IAllocator;
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 
-function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
-function MakePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
+function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
   AFallback: IAllocator = nil): IAllocator;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);
@@ -565,6 +580,20 @@ procedure ResetStats;
 constructor Create(APrimary: IAllocator; AFallback: IAllocator);
 ```
 
+**使用示例**:
+```pascal
+var
+  LPrimary, LFallback, LAllocator: IAllocator;
+begin
+  LPrimary := GetRtlAllocator;
+  LFallback := CreateAnonymousMemoryMapAllocator(64 * 1024 * 1024);
+  LAllocator := TFallbackAllocator.Create(LPrimary, LFallback);
+  // 如果 LPrimary.GetMem 返回 nil（OOM），自动尝试 LFallback
+end;
+```
+
+**TFallbackArena**: 包装 IArena 的 fallback 版本，Reset 时同时重置主 arena 和 fallback arena。
+
 ### `TMimallocAllocator`
 
 mimalloc 动态加载后端。需要运行时可找到 mimalloc 共享库。
@@ -603,6 +632,16 @@ function CreateAnonymousMemoryMapAllocator(AReservationSize: UInt64): IAllocator
 ### `TBlockPoolConcurrent` / `TShardedBlockPool`
 
 并发/分片块池。`TShardedBlockPool` 按线程分片减少争用。
+
+**关键方法**:
+- `Acquire: Pointer` — 获取一个块
+- `Release(aPtr: Pointer)` — 归还一个块
+- `TrimIdleSegments: SizeInt` — 回收空闲段内存（段尾全空闲的段会被释放）
+- `FlushThreadCache` — 刷新当前线程缓存（短线程生命周期优化）
+
+**DEBUG 模式特性**:
+- 释放后内存被 `$DE` 毒化（use-after-free 检测）
+- 新分配内存被 `$AB` 毒化（未初始化读取检测）
 
 ### `TStackPool`
 

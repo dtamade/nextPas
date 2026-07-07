@@ -108,8 +108,8 @@ type
     // IMemoryPool
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
     function MemSize(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
@@ -774,7 +774,7 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TSlabPoolSharded.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LShard: Integer;
   LIsFallback: Boolean;
@@ -782,21 +782,21 @@ var
   LNewAlign: SizeUInt;
   LNewIsFallback: Boolean;
 begin
-  if ADst = nil then Exit(GetMem(ASize));
+  if APtr = nil then Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    FreeMem(ADst);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
-  if not TryRouteShardIndex(ADst, LShard, LIsFallback) then
+  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   FShards[LShard].Lock.Acquire;
   try
-    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(ADst)) then
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(APtr)) then
       raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
-    Result := FShards[LShard].Pool.ReallocMem(ADst, ASize);
+    Result := FShards[LShard].Pool.ReallocMem(APtr, ASize);
     if Result <> nil then
     begin
       IndexShardNewSegmentsLocked(LShard);
@@ -806,7 +806,7 @@ begin
         FRoutingLock.AcquireWrite;
         try
           if LIsFallback then
-            FbMapDelete(ADst);
+            FbMapDelete(APtr);
           if LNewIsFallback then
             FbMapInsert(Result, LShard);
         finally
@@ -819,27 +819,27 @@ begin
   end;
 end;
 
-procedure TSlabPoolSharded.FreeMem(ADst: Pointer);
+procedure TSlabPoolSharded.FreeMem(APtr: Pointer);
 var
   LShard: Integer;
   LIsFallback: Boolean;
 begin
-  if ADst = nil then Exit;
+  if APtr = nil then Exit;
 
-  if not TryRouteShardIndex(ADst, LShard, LIsFallback) then
+  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   FShards[LShard].Lock.Acquire;
   try
-    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(ADst)) then
+    if (not LIsFallback) and (not FShards[LShard].Pool.Owns(APtr)) then
       raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
-    FShards[LShard].Pool.FreeMem(ADst);
+    FShards[LShard].Pool.FreeMem(APtr);
     if LIsFallback then
     begin
       FRoutingLock.AcquireWrite;
       try
-        FbMapDelete(ADst);
+        FbMapDelete(APtr);
       finally
         FRoutingLock.ReleaseWrite;
       end;

@@ -134,10 +134,10 @@ type
     procedure RestoreToMark(AMark: TArenaMark);
     {** 重置 Arena，仅重置主 Arena 部分，fallback 内存不受影响 *}
     procedure Reset;
+    {** 重置 Arena 并释放所有 fallback 分配的内存 *}
+    procedure ResetAll;
     {** 返回主 Arena 的已用大小 *}
     function UsedSize: SizeUInt;
-    {** 返回主 Arena 的剩余可用大小 *}
-    function RemainingSize: SizeUInt;
     {** 返回主 Arena 的统计信息 *}
     function Stats: TArenaStats;
 
@@ -355,7 +355,12 @@ end;
 
 function TFallbackAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FPrimary.GetMem(ASize);
+  try
+    Result := FPrimary.GetMem(ASize);
+  except
+    on E: EOutOfMemory do
+      Result := nil;
+  end;
   if Result = nil then begin
     Result := FFallback.GetMem(ASize);
     if Result <> nil then
@@ -368,7 +373,12 @@ end;
 
 function TFallbackAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := FPrimary.AllocMem(ASize);
+  try
+    Result := FPrimary.AllocMem(ASize);
+  except
+    on E: EOutOfMemory do
+      Result := nil;
+  end;
   if Result = nil then begin
     Result := FFallback.AllocMem(ASize);
     if Result <> nil then
@@ -405,7 +415,14 @@ begin
     { ReallocMem 失败时 Result = nil，原指针仍有效，保留原记录 }
   end
   else
-    Result := FPrimary.ReallocMem(APtr, ASize);
+  begin
+    try
+      Result := FPrimary.ReallocMem(APtr, ASize);
+    except
+      on E: EOutOfMemory do
+        Result := nil;
+    end;
+  end;
 end;
 
 procedure TFallbackAllocator.FreeMem(APtr: Pointer);
@@ -543,14 +560,15 @@ begin
   FArena.Reset;
 end;
 
+procedure TFallbackArena.ResetAll;
+begin
+  FreeFallbacks;
+  FArena.Reset;
+end;
+
 function TFallbackArena.UsedSize: SizeUInt;
 begin
   Result := FArena.UsedSize;
-end;
-
-function TFallbackArena.RemainingSize: SizeUInt;
-begin
-  Result := FArena.RemainingSize;
 end;
 
 function TFallbackArena.Stats: TArenaStats;

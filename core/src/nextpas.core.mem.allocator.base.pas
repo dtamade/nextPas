@@ -31,13 +31,13 @@ type
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; virtual; abstract;
     function DoAllocMem(ASize: SizeUInt): Pointer; virtual; abstract;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; virtual; abstract;
-    procedure DoFreeMem(ADst: Pointer); virtual; abstract;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; virtual; abstract;
+    procedure DoFreeMem(APtr: Pointer); virtual; abstract;
   public
     function  GetMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  AllocMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    procedure FreeMem(ADst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    procedure FreeMem(APtr: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     function  Traits: TAllocatorTraits; virtual;
   end;
 
@@ -62,6 +62,10 @@ begin
   if ASize = 0 then
     Exit(nil);
   Result := DoGetMem(ASize);
+  {$IFDEF DEBUG}
+  if Result <> nil then
+    FillChar(Result^, ASize, MEM_POISON_ALLOC);
+  {$ENDIF}
 end;
 
 function TAllocator.AllocMem(ASize: SizeUInt): Pointer;
@@ -71,30 +75,32 @@ begin
   Result := DoAllocMem(ASize);
 end;
 
-function TAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then
   begin
-    if ADst <> nil then
-      DoFreeMem(ADst);
+    if APtr <> nil then
+      DoFreeMem(APtr);
     Exit(nil);
   end;
-  if ADst = nil then
+  if APtr = nil then
     Exit(GetMem(ASize));
-  Result := DoReallocMem(ADst, ASize);
+  Result := DoReallocMem(APtr, ASize);
 end;
 
-procedure TAllocator.FreeMem(ADst: Pointer);
+procedure TAllocator.FreeMem(APtr: Pointer);
 begin
-  if ADst = nil then
+  if APtr = nil then
   begin
     {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
-    Assert(False, 'TAllocator.FreeMem: ADst must not be nil');
+    Assert(False, 'TAllocator.FreeMem: APtr must not be nil');
     {$ELSE}
     Exit;
     {$ENDIF}
   end;
-  DoFreeMem(ADst);
+  // Note: No poison here — subclasses with known block size (TFixedPool, TGrowingBlockPool)
+  // poison freed memory in their own Release/FreeMem for better accuracy.
+  DoFreeMem(APtr);
 end;
 
 {$POP}

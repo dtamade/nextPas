@@ -22,8 +22,8 @@ type
   protected
     function  DoGetMem(ASize: SizeUInt): Pointer; override;
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 查询 mimalloc 分配的实际可用大小（独立方法，非 IAllocator 接口） }
     function  UsableSize(APtr: Pointer): SizeUInt;
@@ -147,19 +147,19 @@ begin
   Result := _mi_calloc(1, ASize);
 end;
 
-function TMimallocAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TMimallocAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
-  Result := _mi_realloc(ADst, ASize);
+  Result := _mi_realloc(APtr, ASize);
 end;
 
-procedure TMimallocAllocator.DoFreeMem(ADst: Pointer);
+procedure TMimallocAllocator.DoFreeMem(APtr: Pointer);
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError,
       'TMimallocAllocator.FreeMem: mimalloc library unavailable (was previously loaded)');
-  _mi_free(ADst);
+  _mi_free(APtr);
 end;
 
 function TMimallocAllocator.UsableSize(APtr: Pointer): SizeUInt;

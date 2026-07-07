@@ -28,8 +28,8 @@ type
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor CreateAnonymous(aReservationSize: UInt64);
     destructor Destroy; override;
@@ -355,7 +355,7 @@ begin
   end;
 end;
 
-function TMemoryMapAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TMemoryMapAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LHeaderOffset: UInt64;
   LOldBlockPtr: Pointer;
@@ -364,7 +364,7 @@ var
 begin
   FLock.Acquire;
   try
-    if not FindBlockForPayload(ADst, LOldBlockPtr, LHeaderOffset) then
+    if not FindBlockForPayload(APtr, LOldBlockPtr, LHeaderOffset) then
       raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: pointer not owned');
 
     LOldBlock := PMemoryMapBlockHeader(LOldBlockPtr);
@@ -374,7 +374,7 @@ begin
     if ASize <= (LOldBlock^.TotalSize - HeaderSize) then
     begin
       LOldBlock^.RequestedSize := ASize;
-      Exit(ADst);
+      Exit(APtr);
     end;
 
     Result := AllocateLocked(ASize);
@@ -382,18 +382,18 @@ begin
 
     LCopySize := MinSizeUInt(LOldBlock^.RequestedSize, ASize);
     if LCopySize > 0 then
-      CopyMem(Result, ADst, LCopySize);
-    FreeLocked(ADst);
+      CopyMem(Result, APtr, LCopySize);
+    FreeLocked(APtr);
   finally
     FLock.Release;
   end;
 end;
 
-procedure TMemoryMapAllocator.DoFreeMem(ADst: Pointer);
+procedure TMemoryMapAllocator.DoFreeMem(APtr: Pointer);
 begin
   FLock.Acquire;
   try
-    FreeLocked(ADst);
+    FreeLocked(APtr);
   finally
     FLock.Release;
   end;

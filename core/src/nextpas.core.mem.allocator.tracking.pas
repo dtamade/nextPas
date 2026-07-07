@@ -47,8 +47,8 @@ type
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
@@ -322,20 +322,20 @@ begin
   end;
 end;
 
-function TTrackingAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TTrackingAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
 begin
-  Result := FInner.ReallocMem(ADst, ASize);
+  Result := FInner.ReallocMem(APtr, ASize);
   FLock.Acquire;
   try
     if Result <> nil then
     begin
-      if ADst <> nil then
+      if APtr <> nil then
       begin
         { Update: delete old, insert new }
-        MapDelete(PtrUInt(ADst), LOldSize, LOldAllocId);
+        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId);
         MapInsert(PtrUInt(Result), ASize, LOldAllocId);
       end
       else
@@ -349,23 +349,23 @@ begin
   end;
 end;
 
-procedure TTrackingAllocator.DoFreeMem(ADst: Pointer);
+procedure TTrackingAllocator.DoFreeMem(APtr: Pointer);
 var
   LSize: SizeUInt;
   LAllocId: QWord;
 begin
-  if ADst = nil then
+  if APtr = nil then
     Exit;
   FLock.Acquire;
   try
-    if not MapDelete(PtrUInt(ADst), LSize, LAllocId) then
+    if not MapDelete(PtrUInt(APtr), LSize, LAllocId) then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
     try
-      FInner.FreeMem(ADst);
+      FInner.FreeMem(APtr);
     except
       { Restore tracking record so double-free detection still works. }
-      MapInsert(PtrUInt(ADst), LSize, LAllocId);
+      MapInsert(PtrUInt(APtr), LSize, LAllocId);
       raise;
     end;
   finally

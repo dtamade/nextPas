@@ -35,7 +35,7 @@ type
    *
    *  非线程安全。多线程环境请自行加锁。
    *}
-  TChunkedArena = class(TInterfacedObject, IArena, IArenaCapacity)
+  TChunkedArena = class(TInterfacedObject, IArena)
   private
     type
       TSegment = record
@@ -91,11 +91,7 @@ type
     procedure RestoreToMark(aMark: TArenaMark);
     procedure Reset;
     function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
-
-    { IArenaCapacity }
-    function TotalCapacity: SizeUInt;
 
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
@@ -550,7 +546,7 @@ end;
 
 function TChunkedArena.Alloc(aSize: SizeUInt): Pointer;
 begin
-  Result := AllocAligned(aSize, MEM_DEFAULT_ALIGN);
+  Result := AllocAligned(aSize, DEFAULT_ALIGNMENT);
 end;
 
 function TChunkedArena.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -568,7 +564,7 @@ begin
 
   LAlign := aAlignment;
   if LAlign = 0 then
-    LAlign := MEM_DEFAULT_ALIGN;
+    LAlign := DEFAULT_ALIGNMENT;
   if (LAlign and (LAlign - 1)) <> 0 then
     Exit;
   if LAlign < SizeOf(Pointer) then
@@ -711,12 +707,14 @@ begin
   end;
 
   for LIdx := 0 to FSegmentCount - 1 do
-  begin
     FSegments[LIdx].Used := 0;
-    if LIdx > 0 then
-      FSegments[LIdx].StartOffset := 0;  // 会在 AddSegment 时按需重算
+  { Recalculate StartOffset chain so segments don't overlap }
+  FTotalSize := 0;
+  for LIdx := 0 to FSegmentCount - 1 do
+  begin
+    FSegments[LIdx].StartOffset := FTotalSize;
+    Inc(FTotalSize, FSegments[LIdx].Size);
   end;
-  FTotalSize := FSegments[0].Size;  // 重置为第一段容量
   FActive := 0;
 end;
 
@@ -725,27 +723,12 @@ begin
   Result := CurrentUsed;
 end;
 
-function TChunkedArena.RemainingSize: SizeUInt;
-var
-  LUsed: SizeUInt;
-begin
-  LUsed := CurrentUsed;
-  if LUsed >= FTotalSize then
-    Exit(0);
-  Result := FTotalSize - LUsed;
-end;
-
 function TChunkedArena.Stats: TArenaStats;
 begin
   Result.TotalAllocated := FTotalSize;
   Result.TotalUsed := CurrentUsed;
   Result.PeakUsed := FPeakUsed;
   Result.AllocCount := FTotalAllocs;
-end;
-
-function TChunkedArena.TotalCapacity: SizeUInt;
-begin
-  Result := FTotalSize;
 end;
 
 function TChunkedArena.SegmentCount: SizeUInt;

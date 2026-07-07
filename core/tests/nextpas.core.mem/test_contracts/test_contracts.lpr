@@ -495,8 +495,8 @@ begin
   LBaseSource := ReadSourceText(ResolveSourcePath(
     MEM_BASE_SOURCE_PATH_FROM_TEST,
     MEM_BASE_SOURCE_PATH_FROM_ROOT));
-  CheckContains(LBaseSource, 'mem_default_align',
-    'mem.base should own MEM_DEFAULT_ALIGN');
+  CheckContains(LBaseSource, 'default_alignment',
+    'mem.base should own DEFAULT_ALIGNMENT');
   CheckContains(LBaseSource, 'mem_cache_line_size',
     'mem.base should own MEM_CACHE_LINE_SIZE');
   CheckContains(LBaseSource, 'mem_page_size',

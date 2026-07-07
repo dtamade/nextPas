@@ -64,8 +64,8 @@ type
     // IMemoryPool
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
     function MemSize(APtr: Pointer): SizeUInt;
     // IAllocator aligned allocation
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -311,33 +311,33 @@ begin
     FillChar(Result^, ASize, 0);
 end;
 
-function TSlabPoolConcurrent.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TSlabPoolConcurrent.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  if ADst = nil then Exit(GetMem(ASize));
-  if ASize = 0 then begin FreeMem(ADst); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
 
   { Realloc 需要精确的旧大小和数据拷贝，走全局池路径 }
   FLock.Acquire;
   try
-    Result := FInner.ReallocMem(ADst, ASize);
+    Result := FInner.ReallocMem(APtr, ASize);
   finally
     FLock.Release;
   end;
 end;
 
-procedure TSlabPoolConcurrent.FreeMem(ADst: Pointer);
+procedure TSlabPoolConcurrent.FreeMem(APtr: Pointer);
 begin
-  if ADst = nil then Exit;
+  if APtr = nil then Exit;
 
   { 热路径：尝试放回 TLS 缓存（零锁）。FreeMem 条目 size=0，仅作为待归还暂存。 }
-  if TlsCachePush(GTlsSlabCache, ADst, 0, Pointer(Self)) then
+  if TlsCachePush(GTlsSlabCache, APtr, 0, Pointer(Self)) then
     Exit;
 
   { 冷路径：TLS 缓存已满，批量归还全局池 }
   FLock.Acquire;
   try
     TlsCacheFlushPoolEntries(GTlsSlabCache, Pointer(Self), FInner);
-    FInner.FreeMem(ADst);
+    FInner.FreeMem(APtr);
   finally
     FLock.Release;
   end;
