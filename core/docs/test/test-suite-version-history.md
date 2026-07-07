@@ -298,6 +298,8 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.3a**: Corpus Management — 持久化语料库管理。`TFuzzCorpus` 类支持从目录加载/保存语料；去重检测 (byte-by-byte comparison)；`FuzzWithCorpus()` / `FuzzStringWithCorpus()` 入口自动加载/保存语料；发现新输入时自动添加到语料库；27 测试 (15 Prop + 5 Fuzz + 7 Corpus)
 - **v8.0a**: Structured Generators + String Shrink — `GenArray` 随机长度 Int64 数组生成器；`GenTuple` (Int64, String) 元组生成器；`BindInt` FlatMap 组合器；String shrink 增强 (8 种策略)；`PropArray`/`PropTuple` 注册函数；32 测试
 - **v8.0b**: Structured Fuzzing + Coverage Tracking — `ICoverageTracker` bitset 覆盖追踪 (4096 点)；`FuzzStructured` 基于生成器的结构化 fuzzing，coverage-guided 语料库扩展；`FuzzParallel` 多策略并行 fuzzing (4 策略: BitFlip/ByteReplace/Havoc/Structured)；37 测试
+- **v8.0c**: Assertion + Error Messages — `CheckArrayEqual` for array of Int64 with diff reporting (first differing index + values)；`CheckIsNil`/`CheckIsNotNil` for IInterface nil checks；all with AMessage overloads；135 tests
+- **v8.0d**: Documentation + Examples — comprehensive property-testing-guide.md API reference covering generators, combinators, property testing, fuzzing, coverage tracking, assertions；386 total tests across 12 suites
 
 ## 路线图
 
@@ -310,8 +312,8 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 | **v7.3a** | Corpus Management — 持久化语料库管理 | ✅ 已完成 | v7.2a |
 | **v8.0a** | Structured Generators — GenArray/GenTuple/BindInt + String Shrink | ✅ 已完成 | v7.3a |
 | **v8.0b** | Structured Fuzzing + Coverage Tracking | ✅ 已完成 | v8.0a |
-| **v8.0c** | Assertion + Error Messages + Timing | 🔴 计划中 | v8.0a |
-| **v8.0d** | Documentation + Examples | 🔴 计划中 | v8.0c |
+| **v8.0c** | Assertion + Error Messages + Timing | ✅ 已完成 | v8.0b |
+| **v8.0d** | Documentation + Examples | ✅ 已完成 | v8.0c |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
