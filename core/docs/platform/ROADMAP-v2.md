@@ -168,10 +168,12 @@
 
 | 任务 | 优先级 | 复杂度 | 说明 |
 |------|--------|--------|------|
-| API 参考文档完善 | P2 | 低 | 补充缺失的 API 文档 |
-| 错误处理最佳实践 | P2 | 低 | PLATFORM_ERR_* 使用指南 |
-| 跨平台移植指南 | P3 | 中 | 从 Linux 移植到 Windows/macOS 的注意事项 |
-| 性能调优指南 | P3 | 中 | 平台特定的性能优化建议 |
+| API 参考文档完善 | P2 | 低 | 补充缺失的 API 文档 | ✅ |
+| 错误处理最佳实践 | P2 | 低 | PLATFORM_ERR_* 使用指南 | ✅ |
+| 跨平台移植指南 | P3 | 中 | 从 Linux 移植到 Windows/macOS 的注意事项 | ✅ |
+| 性能调优指南 | P3 | 中 | 平台特定的性能优化建议 | ✅ |
+| 平台特定最佳实践文档 | P3 | 低 | Linux/Windows/macOS/FreeBSD 开发最佳实践 | ✅ |
+| 示例代码库 | P3 | 低 | 常见场景的跨平台代码示例 | ✅ |
 
 **预期时间**: 持续进行
 
@@ -279,6 +281,22 @@
 - **每月审查**: 检查进度，调整优先级
 - **季度评估**: 评估里程碑完成情况，更新路线图
 - **年度回顾**: 总结成果，规划下一年目标
+
+---
+
+## 8. 参考文档
+
+| 文档 | 说明 |
+|------|------|
+| [API-REFERENCE.md](API-REFERENCE.md) | 24 模块 ~489 API 完整参考 |
+| [ERROR-HANDLING.md](ERROR-HANDLING.md) | 错误处理最佳实践 (9 章节) |
+| [PORTING-GUIDE.md](PORTING-GUIDE.md) | 跨平台移植指南 (14 章节) |
+| [PERFORMANCE-TUNING.md](PERFORMANCE-TUNING.md) | 性能调优指南 (10 章节) |
+| [BEST-PRACTICES.md](BEST-PRACTICES.md) | 平台特定最佳实践 |
+| [EXAMPLES.md](EXAMPLES.md) | 示例代码库 (12 场景) |
+| [API-COVERAGE-MATRIX.md](API-COVERAGE-MATRIX.md) | Windows API 覆盖审计 |
+| [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md) | 25 模块 217 Wine 测试 |
+| [README.md](README.md) | 模块入口文档 |
 
 ---
 
