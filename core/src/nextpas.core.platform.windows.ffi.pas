@@ -28,8 +28,10 @@ function TlsFree(dwTlsIndex: DWORD): BOOL; stdcall; external 'kernel32' name 'Tl
 function TlsSetValue(dwTlsIndex: DWORD; lpTlsValue: Pointer): BOOL; stdcall; external 'kernel32' name 'TlsSetValue';
 function TlsGetValue(dwTlsIndex: DWORD): Pointer; stdcall; external 'kernel32' name 'TlsGetValue';
 
-function InterlockedDecrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedDecrement';
-function InterlockedIncrement(var Addend: Int32): Int32; stdcall; external 'kernel32' name 'InterlockedIncrement';
+{ InterlockedDecrement/Increment are provided by FPC's System unit as
+  compiler intrinsics (FPC_INTERLOCKEDDECREMENT etc.). Declaring them
+  from kernel32 breaks Wine compatibility since Wine doesn't export
+  these functions from kernel32.dll. }
 
 procedure InitializeSRWLock(SRWLock: Pointer); stdcall; external 'kernel32' name 'InitializeSRWLock';
 procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32' name 'AcquireSRWLockExclusive';
