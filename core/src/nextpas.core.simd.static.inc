@@ -49,6 +49,19 @@
 {$ENDIF}
 
 {
+  Phase A: Compile-time validation for STATIC_BACKEND.
+
+  If SIMD_STATIC_BACKEND is defined directly (without specifying a backend),
+  emit a compile error guiding the user to use the correct defines.
+}
+
+{$IFDEF SIMD_STATIC_BACKEND}
+  {$IF NOT DEFINED(SIMD_STATIC_HAS_SSE2) AND NOT DEFINED(SIMD_STATIC_HAS_AVX2) AND NOT DEFINED(SIMD_STATIC_HAS_AVX512) AND NOT DEFINED(SIMD_STATIC_HAS_NEON) AND NOT DEFINED(SIMD_STATIC_HAS_SCALAR)}
+    {$ERROR SIMD_STATIC_BACKEND requires a specific backend: define SIMD_STATIC_SSE2, SIMD_STATIC_AVX2, SIMD_STATIC_AVX512, SIMD_STATIC_NEON, or SIMD_STATIC_SCALAR}
+  {$ENDIF}
+{$ENDIF}
+
+{
   Static dispatch macros for vector operations.
 
   These macros replace the runtime dispatch with direct function calls.
