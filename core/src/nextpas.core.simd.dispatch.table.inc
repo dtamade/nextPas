@@ -770,6 +770,9 @@
     ArrayAddScalarF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
     ArrayClampF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
     ArrayLinearF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+    ArrayMinF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+    ArrayMaxF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+    ArrayFmaF64: procedure(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 
     // === Batch Array Operations - Transcendental F32 ===
     ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);

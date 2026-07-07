@@ -74,6 +74,9 @@ procedure ScalarArrayMulScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar
 procedure ScalarArrayAddScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
 procedure ScalarArrayClampF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
 procedure ScalarArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 // === Batch Array Operations - Transcendental F32 ===
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);

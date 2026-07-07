@@ -349,6 +349,9 @@ begin
   dispatchTable.ArrayAddScalarF64 := @AVX512ArrayAddScalarF64;
   dispatchTable.ArrayClampF64 := @AVX512ArrayClampF64;
   dispatchTable.ArrayLinearF64 := @AVX512ArrayLinearF64;
+  dispatchTable.ArrayMinF64 := @AVX512ArrayMinF64;
+  dispatchTable.ArrayMaxF64 := @AVX512ArrayMaxF64;
+  dispatchTable.ArrayFmaF64 := @AVX512ArrayFmaF64;
 
   // === Integer Batch (512-bit / 16 x Int32) ===
   dispatchTable.ArrayAddI32 := @AVX512ArrayAddI32;

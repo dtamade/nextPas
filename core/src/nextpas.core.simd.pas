@@ -1296,10 +1296,10 @@ function VecF64x4Make(x, y, z, w: Double): TVecF64x4; inline;
 {** Linear interpolation. @returns(result[i] = a[i] + t * (b[i] - a[i])) *}
 function VecF64x4Lerp(const a, b: TVecF64x4; t: Double): TVecF64x4; inline;
 
-// Batch Array F64 Extensions (inline facade, no dispatch slot)
-procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt); inline;
-procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
-procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
+// Batch Array F64 Extensions (dispatch-through)
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt);
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
@@ -1870,6 +1870,27 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   Result := LDispatch^.ReduceMaxF64(aSrc, aCount);
+end;
+
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst, aCount);
+end;
+
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMinF64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMaxF64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 // === Transcendental F32 Batch Implementation ===

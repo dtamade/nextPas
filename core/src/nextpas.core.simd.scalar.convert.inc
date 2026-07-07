@@ -334,6 +334,36 @@ begin
     aDst[i] := aSrc[i] * aScale + aBias;
 end;
 
+procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if aCount = 0 then Exit;
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] < aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
+end;
+
+procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if aCount = 0 then Exit;
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] > aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
+end;
+
+procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if aCount = 0 then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aA[i] * aB[i] + aC[i];
+end;
+
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin

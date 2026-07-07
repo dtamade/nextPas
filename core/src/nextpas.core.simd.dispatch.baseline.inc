@@ -735,4 +735,7 @@ begin
   dispatchTable.ArrayAddScalarF64 := @ScalarArrayAddScalarF64;
   dispatchTable.ArrayClampF64 := @ScalarArrayClampF64;
   dispatchTable.ArrayLinearF64 := @ScalarArrayLinearF64;
+  dispatchTable.ArrayMinF64 := @ScalarArrayMinF64;
+  dispatchTable.ArrayMaxF64 := @ScalarArrayMaxF64;
+  dispatchTable.ArrayFmaF64 := @ScalarArrayFmaF64;
 end;

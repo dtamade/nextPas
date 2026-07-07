@@ -517,6 +517,9 @@ begin
   dispatchTable.ReduceDotF64 := @AVX2ReduceDotF64;
   dispatchTable.ReduceMinF64 := @AVX2ReduceMinF64;
   dispatchTable.ReduceMaxF64 := @AVX2ReduceMaxF64;
+  dispatchTable.ArrayMinF64 := @AVX2ArrayMinF64;
+  dispatchTable.ArrayMaxF64 := @AVX2ArrayMaxF64;
+  dispatchTable.ArrayFmaF64 := @AVX2ArrayFmaF64;
 
   // Integer batch
   dispatchTable.ArrayAddI32 := @AVX2ArrayAddI32;
