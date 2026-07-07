@@ -141,7 +141,8 @@ function DefaultStatsCollector: TAllocStatsCollector;
 implementation
 
 uses
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.base.utils;
 
 var
   GDefaultCollector: TAllocStatsCollector = nil;
@@ -444,5 +445,10 @@ function TAllocStatsAllocator.Traits: TAllocatorTraits;
 begin
   Result := FInner.Traits;
 end;
+
+initialization
+
+finalization
+  FreeAndNil(GDefaultCollector);
 
 end.

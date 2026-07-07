@@ -401,7 +401,7 @@ procedure TestCollectorAggregates;
 var
   LCollector: TAllocStatsCollector;
   LStats1, LStats2: TAllocStatsAllocator;
-  LPtr1, LPtr2: Pointer;
+  LPtr1, LPtr2, LPtr3: Pointer;
   LSnap: TAllocSnapshot;
 begin
   LCollector := TAllocStatsCollector.Create;
@@ -411,7 +411,7 @@ begin
     try
       LPtr1 := LStats1.GetMem(100);
       LPtr2 := LStats2.GetMem(200);
-      LStats1.GetMem(300);
+      LPtr3 := LStats1.GetMem(300);
 
       LSnap := LCollector.Collect;
       Check(LSnap.TotalAllocs = 3, 'collector: TotalAllocs=3');
@@ -419,12 +419,12 @@ begin
 
       LStats1.FreeMem(LPtr1);
       LStats2.FreeMem(LPtr2);
+      LStats1.FreeMem(LPtr3);
 
       LSnap := LCollector.Collect;
-      Check(LSnap.TotalFrees = 2, 'collector: TotalFrees=2');
-      Check(LSnap.ActiveAllocs = 1, 'collector: ActiveAllocs=1');
+      Check(LSnap.TotalFrees = 3, 'collector: TotalFrees=3');
+      Check(LSnap.ActiveAllocs = 0, 'collector: ActiveAllocs=0');
 
-      LStats1.FreeMem(LStats1.GetMem(0)); // nil, no effect
       LStats2.Free;
       LStats1.Free;
     except
