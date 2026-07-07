@@ -160,17 +160,38 @@ var
   LBuf: array[0..255] of AnsiChar;
   LRes: Int32;
   LR: string;
+{$IFDEF NEXTPAS_WINDOWS}
+  LSep: Char;
+{$ENDIF}
 begin
+{$IFDEF NEXTPAS_WINDOWS}
+  LSep := '\';
+{$ELSE}
   { Test with forward slashes (Unix-style) }
+{$ENDIF}
   LRes := platform_path_normalize('/foo/./bar', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
+{$IFDEF NEXTPAS_WINDOWS}
+  { Windows: "/foo/./bar" has root "/" (prkWindowsRootedRelative), normalized to "/foo\bar" }
+  Check((LR = 'foo' + LSep + 'bar') or (LR = LSep + 'foo' + LSep + 'bar') or
+    (LR = '/' + 'foo' + LSep + 'bar'),
+    'normalize "/foo/./bar" should yield "foo\bar" or "\foo\bar" or "/foo\bar", got "' + LR + '"');
+{$ELSE}
   Check((LR = 'foo/bar') or (LR = '/foo/bar'),
     'normalize "/foo/./bar" should yield "foo/bar" or "/foo/bar", got "' + LR + '"');
+{$ENDIF}
 
   LRes := platform_path_normalize('/foo/bar/../baz', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
+{$IFDEF NEXTPAS_WINDOWS}
+  { Windows: "/foo/bar/../baz" has root "/", normalized to "/foo\baz" }
+  Check((LR = 'foo' + LSep + 'baz') or (LR = LSep + 'foo' + LSep + 'baz') or
+    (LR = '/' + 'foo' + LSep + 'baz'),
+    'normalize "/foo/bar/../baz" should yield "foo\baz" or "\foo\baz" or "/foo\baz", got "' + LR + '"');
+{$ELSE}
   Check((LR = 'foo/baz') or (LR = '/foo/baz'),
     'normalize "/foo/bar/../baz" should yield "foo/baz" or "/foo/baz", got "' + LR + '"');
+{$ENDIF}
 
   LRes := platform_path_normalize('foo/../bar', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
@@ -178,8 +199,15 @@ begin
 
   LRes := platform_path_normalize('/../foo', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
+{$IFDEF NEXTPAS_WINDOWS}
+  { Windows: "/../foo" — "/" is root, .. blocked by root, result is "/foo" }
+  Check((LR = '..' + LSep + 'foo') or (LR = 'foo') or (LR = LSep + 'foo') or
+    (LR = '/' + 'foo'),
+    'normalize "/../foo" should yield ..\foo or foo or \foo or /foo, got "' + LR + '"');
+{$ELSE}
   Check((LR = '../foo') or (LR = 'foo') or (LR = '/foo'),
     'normalize "/../foo" should yield ../foo or foo or /foo, got "' + LR + '"');
+{$ENDIF}
 
   LRes := platform_path_normalize('.', @LBuf[0], 256);
   LR := string(PAnsiChar(@LBuf[0]));
