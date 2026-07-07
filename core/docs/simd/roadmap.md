@@ -203,16 +203,35 @@
 - 测试: 1645 tests 全部通过
 - 实现: 完整的多宽度 SIMD 支持
 
-### Phase 10: 内存操作优化 ✅/🔒 (2026-07-06 评估完成)
+### Phase 10: 内存操作优化 ⚠️ (架构约束调整)
 
-**目标**: 优化 MemCopy/MemSet 等内存操作
+**目标**: 通过 nextpas.core 抽象层优化内存操作
 
-**评估结论**:
-- FPC 内置 Move/FillChar/CompareByte 已高度优化
-- SIMD 包装增加 ~40% 开销 (函数调用 + 分派)
-- 结论: 内存操作应直接使用 FPC 内置函数，SIMD 包装无价值
+**架构约束**:
+- 仅 `nextpas.core.system` 可直接引用 FPC RTL
+- 其他模块必须通过 `nextpas.core.mem.utils` 抽象层
+- SIMD 优化需在框架内提供，不能绕过抽象层
 
-**决策**: 🔒 延迟 - 直接使用 FPC 内置函数
+**当前状态**:
+- `nextpas.core.mem.utils`: Copy/Fill/Compare 抽象层 ✅
+- `nextpas.core.simd.memutils`: AlignedMemCopy/AlignedMemFill (目前仅包装 FPC) ⚠️
+
+**待实现**:
+1. [ ] SIMD 优化的 AlignedMemCopy
+   - 使用 vmovdqa/vmovntdq 实现对齐拷贝
+   - 大块数据使用 non-temporal 存储
+
+2. [ ] SIMD 优化的 AlignedMemFill
+   - 使用 SIMD 寄存器批量填充
+   - 16/32/64 字节对齐填充
+
+3. [ ] 集成到 mem.utils 抽象层
+   - 通过条件编译或运行时检测选择后端
+   - 保持 API 兼容性
+
+**验证**:
+- 通过 nextpas.core.mem.utils.Copy 调用 SIMD 优化
+- 测试: 全部通过
 
 ### Phase 11: 编译器集成 (P2, 长期)
 
