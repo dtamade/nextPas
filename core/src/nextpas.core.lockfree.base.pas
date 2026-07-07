@@ -14,6 +14,11 @@ type
 function LockFreeNextPow2(const AValue: PtrUInt): PtrUInt;
 function LockFreeIsPow2(const AValue: PtrUInt): Boolean;
 
+{** @desc 预取内存地址到缓存（x86_64 专用）
+  @param AAddr 要预取的内存地址
+  @note 使用 prefetchnta 指令，减少对缓存的污染 }
+procedure LockFreePrefetch(const AAddr: Pointer); inline;
+
 implementation
 
 uses
@@ -41,6 +46,16 @@ begin
   Result := 1;
   while Result < AValue do
     Result := Result shl 1;
+end;
+
+procedure LockFreePrefetch(const AAddr: Pointer); inline;
+begin
+  {$IFDEF CPUX86_64}
+  {$ASMMODE intel}
+  asm
+    prefetchnta [AAddr]
+  end;
+  {$ENDIF}
 end;
 
 end.

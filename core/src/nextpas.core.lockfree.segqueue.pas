@@ -193,7 +193,8 @@ begin
           LNext := PSegment(AtomicLoadPtr(Pointer(LSeg^.Next), moAcquire));
         end;
       end;
-
+      { Prefetch next segment for better cache locality }
+      LockFreePrefetch(LNext);
       AtomicCompareExchangePtr(Pointer(FTail), LSeg, LNext, moRelease);
       LSeg := LNext;
     end;
@@ -248,6 +249,8 @@ begin
           Result := False;
           Exit;
         end;
+        { Prefetch next segment for better cache locality }
+        LockFreePrefetch(LNext);
         if AtomicCompareExchangePtr(Pointer(FHead), LOldHead, LNext, moAcqRel) = LOldHead then
         begin
           AtomicCompareExchangePtr(Pointer(FTail), LOldHead, LNext, moRelease);
