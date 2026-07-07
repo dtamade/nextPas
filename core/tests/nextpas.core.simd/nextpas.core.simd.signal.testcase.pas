@@ -102,15 +102,15 @@ procedure TTestCase_SimdSignal.Test_Convolve1D_Basic;
 var
   LSignal: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
   LKernel: array[0..1] of Single = (1.0, 1.0);
-  LDst: array[0..4] of Single;
+  LDst: array[0..3] of Single;
 begin
-  // Full convolution: [1, 3, 5, 7, 4]
+  // Convolve1DF32 does "same" convolution with zero-padding
+  // LHalf = 1, output: [1, 3, 5, 7]
   Convolve1DF32(@LSignal[0], 4, @LKernel[0], 2, @LDst[0]);
   CheckTrue(NearEqual(LDst[0], 1.0, EPS), 'Conv [0]');
   CheckTrue(NearEqual(LDst[1], 3.0, EPS), 'Conv [1]');
   CheckTrue(NearEqual(LDst[2], 5.0, EPS), 'Conv [2]');
   CheckTrue(NearEqual(LDst[3], 7.0, EPS), 'Conv [3]');
-  CheckTrue(NearEqual(LDst[4], 4.0, EPS), 'Conv [4]');
 end;
 
 procedure TTestCase_SimdSignal.Test_Convolve1D_Impulse;

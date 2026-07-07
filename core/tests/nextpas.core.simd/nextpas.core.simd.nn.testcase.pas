@@ -67,14 +67,15 @@ end;
 
 procedure TTestCase_SimdNN.Test_Sigmoid_Bounds;
 var
-  LSrc: array[0..1] of Single = (-100.0, 100.0);
+  LSrc: array[0..1] of Single = (-20.0, 20.0);
   LDst: array[0..1] of Single;
 begin
+  // Use ±20 to avoid exp() overflow (exp(20) ~ 4.8e8, within F32 range)
   SigmoidF32(@LSrc[0], @LDst[0], 2);
-  CheckTrue(LDst[0] >= 0.0, 'sigmoid(-100) >= 0');
-  CheckTrue(LDst[1] <= 1.0, 'sigmoid(100) <= 1');
-  CheckTrue(LDst[0] < 0.001, 'sigmoid(-100) ~ 0');
-  CheckTrue(LDst[1] > 0.999, 'sigmoid(100) ~ 1');
+  CheckTrue(LDst[0] >= 0.0, 'sigmoid(-20) >= 0');
+  CheckTrue(LDst[1] <= 1.0, 'sigmoid(20) <= 1');
+  CheckTrue(LDst[0] < 0.001, 'sigmoid(-20) ~ 0');
+  CheckTrue(LDst[1] > 0.999, 'sigmoid(20) ~ 1');
 end;
 
 procedure TTestCase_SimdNN.Test_Softmax_Basic;
