@@ -1,10 +1,10 @@
 # nextpas.core.mem 代码契约
 
-**模块路径**：`core/src/nextpas.core.mem*.pas`（58 个源文件）
+**模块路径**：`core/src/nextpas.core.mem*.pas`（66 个源文件）
 **层级**：L0-L3（内部分层）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-06
-**版本**：1.4
+**最后更新**：2026-07-08
+**版本**：1.5
 
 ---
 
@@ -373,3 +373,4 @@ IArena 实现：
 | 2026-07-01 | 1.2 | 同步 main：57 源文件 + 39 测试套件 | Claude |
 | 2026-07-03 | 1.3 | 可用性审计修复：IAllocator 定义同步、nil/0 契约文档化、TAllocatorTraits 精简、IArenaCapacity 扩展接口 | Claude |
 | 2026-07-06 | 1.4 | 测试矩阵同步：44 suites / 639 tests，反映实际测试状态 | Claude |
+| 2026-07-08 | 1.5 | 演化路线图完成：66 源文件 / 58 测试目录 / 688 测试，新增 IBatchAllocator 接口 | Claude |
