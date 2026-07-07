@@ -59,6 +59,8 @@ function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAns
   APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+function platform_fs_move_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+function platform_fs_remove_file(const APath: PAnsiChar): Int32;
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 function platform_fs_read_file(const APath: PAnsiChar;
@@ -845,4 +847,20 @@ begin
     AFollowSymlinks, 0);
 end;
 
+{ Move file - rename or copy+delete }
+function platform_fs_move_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+begin
+  Result := platform_file_rename(ASrc, ADst);
+  if Result = 0 then Exit;
+  Result := platform_fs_copy_file(ASrc, ADst);
+  if Result = 0 then
+    platform_fs_remove_file(ASrc);
+end;
+
+{ Remove file }
+function platform_fs_remove_file(const APath: PAnsiChar): Int32;
+begin
+  Result := platform_file_unlink(APath);
+end;
 end.
+
