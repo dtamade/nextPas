@@ -16,7 +16,9 @@ program test_soak;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
+  nextpas.core.time.cpu,
   nextpas.core.test,
   nextpas.core.mem,
   nextpas.core.mem.allocator.tracking;
@@ -123,7 +125,7 @@ begin
 
   LStartTime := GetTickCount64;
   repeat
-    Sleep(100);
+    SleepMs(100);
     LElapsed := GetTickCount64 - LStartTime;
   until LElapsed >= LDuration;
 

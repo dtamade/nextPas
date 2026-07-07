@@ -52,7 +52,7 @@ uses
   nextpas.core.mem.pool.slab,
   nextpas.core.mem.pool.slab.concurrent,
   nextpas.core.mem.pool.slab.sharded,
-  nextpas.core.mem.pool.memory_pool,
+  nextpas.core.mem.pool.base,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.concurrent,
   nextpas.core.mem.blockpool.sharded,
@@ -110,7 +110,7 @@ type
   TMimallocAllocator = nextpas.core.mem.allocator.mimalloc.TMimallocAllocator;
 
   // === Pool 子系统 ===
-  IMemoryPool = nextpas.core.mem.pool.memory_pool.IMemoryPool;
+  IMemoryPool = nextpas.core.mem.pool.base.IMemoryPool;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
   TSizeClassPool = nextpas.core.mem.pool.sizeclass.TSizeClassPool;

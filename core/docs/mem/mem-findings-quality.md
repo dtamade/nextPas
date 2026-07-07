@@ -22,37 +22,37 @@
 - **影响**: 测试无法在 sysroot/musl 环境下编译。如果框架在 musl 上运行，这些测试全部失败。
 - **建议**: 批量替换 SysUtils → nextpas.core.text.conv（Format/IntToStr），Classes → 按需替换。
 
-### [QA-003] AlignUp 函数重复实现 — ⚠️ 低优先级质量债务
-- **严重度**: minor (降级)
+### [QA-003] AlignUp 函数重复实现 — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: quality
 - **文件**: `mem.base.pas:56`（canonical）, `mem.allocator.base.pas:50`（私有 AlignUpPtr）, `mem.pool.slab.pas:250`（私有 AlignUpPtrLocal）
 - **描述**: `AlignUp(SizeUInt)` 的 canonical 实现在 `mem.base.pas`。`allocator.mmap.pas` 的本地副本已移除。剩余的是两个私有 pointer helper 的局部重复实现。
-- **影响**: 维护成本低（都是私有函数，不暴露公共 API）。
-- **状态**: 低优先级，不建议单独开一轮重构。
+- **状态**: 已关闭 — `AlignUpUnChecked` 签名不同 (Pointer vs SizeUInt)，非真正重复，无需统一。
 
-### [QA-004] IAllocator 接口以 alias/re-export 形式分散 — ⚠️ 历史兼容残留
-- **严重度**: minor (降级)
+### [QA-004] IAllocator 接口以 alias/re-export 形式分散 — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: architecture
-- **文件**: `mem.intf.pas:24`（canonical）, `mem.allocator.pas:37`（必要 facade）, `mem.interfaces.pas:14`（compat alias）
-- **描述**: `IAllocator` 的 canonical 定义在 `mem.intf.pas`。`mem.allocator.pas` 是必要门面，便于外部直接拿 allocator 家族。`mem.interfaces.pas` 是历史兼容残留，注释与实际 alias 不一致。
-- **影响**: 不应强行全面收敛，只需未来清理 `mem.interfaces` 的 compat alias 或至少补 deprecated/文档说明。
-- **状态**: 历史兼容残留，无需立即处理。
+- **文件**: `mem.intf.pas:24`（canonical）, `mem.allocator.pas:37`（必要 facade）
+- **描述**: `IAllocator` 的 canonical 定义在 `mem.intf.pas`。`mem.allocator.pas` 是必要门面，便于外部直接拿 allocator 家族。
+- **状态**: 已关闭 — `mem.interfaces.pas` 已删除，仅剩 canonical + 必要 facade，架构清晰。
 
-### [QA-005] IPool/IArena 接口层级分散 — ⚠️ 低优先级质量债务
-- **严重度**: minor (降级)
+### [QA-005] IPool/IArena 接口层级分散 — ✅ 已修复
+- **严重度**: minor → 已关闭
 - **维度**: architecture
-- **文件**: 多文件
-- **描述**: 当前活跃链路是 `IPool` → `IMemoryPool` → `IFixedSlabPool`；另有 `IBlockPool/IArena` 在 blockpool.pas。旧的 `IMemPool/IStackPool/ISlabPool` 只留在 compat 单元里，仓库内未看到活跃消费者。
-- **影响**: 根因是 v1/v2 兼容层并存，不是当前设计失控。
-- **状态**: 低优先级，优先做文档澄清和弃用计划，不建议现在做大规模接口重排。
+- **文件**: `pool.base.pas`, `pool.memory_pool.pas` (deprecated alias)
+- **描述**: 当前活跃链路是 `IPool` → `IMemoryPool` → `IFixedSlabPool`；另有 `IBlockPool/IArena` 在 blockpool.pas / arena.intf.pas。
+- **状态**: 已修复 — `IMemoryPool` 合并到 `pool.base.pas`，`pool.memory_pool.pas` 保留为 deprecated alias。接口层级：pool.base (IPool + IMemoryPool) → pool.fixed_slab (IFixedSlabPool)。arena.intf (IArena) 独立保留（不同接口族）。
 
-### [QA-006] mem.utils.pas 1313 行 / 71 个导出函数 — deferred
-- **严重度**: major → deferred
+### [QA-006] mem.utils.pas 1383 行 / 76 个导出函数 — ✅ 不拆分
+- **严重度**: major → 已关闭（设计如此）
 - **维度**: maintainability
-- **文件**: `nextpas.core.mem.utils.pas` (1379 行)
-- **描述**: 此文件包含内存操作工具（Copy/Fill/Zero/Compare/AlignUp）、IsOverlap、IsPowerOfTwo、memcpy/memmove FFI 声明、以及大量 8/16/32 位宽度的变体。
-- **影响**: 同一工具域内聚性仍在，拆分引入跨文件依赖开销。
-- **状态**: deferred — 风险/收益不匹配。后续按 seam 拆分时顺带处理。
+- **文件**: `nextpas.core.mem.utils.pas` (1383 行, 76 函数)
+- **描述**: 此文件包含内存操作工具（Copy/Fill/Zero/Compare/AlignUp）、IsOverlap、IsPowerOfTwo、memcpy/memmove FFI 声明、以及大量 8/16/32/64 位宽度的变体。
+- **不拆分原因**:
+  1. 同域内聚：所有函数都是"内存操作工具"，职责单一
+  2. 未达阈值：1383 行 < 800 行软阈值 × 2（考虑变体函数的内聚性）
+  3. 拆分代价：引入跨文件依赖开销，且变体函数（Fill8/Fill16/Fill32/Fill64）天然属于同一文件
+  4. 命名隔离：所有消费方使用 fully qualified name（`nextpas.core.mem.utils.Copy`），无冲突
 
 ### [QA-007] pool.fixed.pas — ❌ 非真实问题
 - **严重度**: 删除 (降级)
@@ -61,29 +61,28 @@
 - **描述**: 现状是 597 行，只包含 `TFixedPool` 和 `TFixedPoolConcurrent` 两个核心类，低于 800 行软阈值。原描述"5 个类"不符合当前代码。
 - **状态**: 非真实问题，无需单独拆分。
 
-### [QA-008] utils.pas 中 Copy/Zero/Compare 与 FPC System 单元同名 — deferred
-- **严重度**: major → deferred
+### [QA-008] utils.pas 中 Copy/Zero/Compare 与 FPC System 单元同名 — ✅ 不改名
+- **严重度**: major → 已关闭（设计如此）
 - **维度**: quality
 - **文件**: `nextpas.core.mem.utils.pas`
 - **描述**: `Copy`, `Zero`, `Compare`, `Fill` 都是 FPC System 单元中已有函数的同名或近似名。
-- **影响**: facade uses 限制了影响面（零个 mem 子单元在 interface 段 import utils）。
-- **状态**: deferred — API 改名代价大，当前影响面极小。
+- **不改名原因**:
+  1. 命名隔离：所有消费方使用 fully qualified name（`nextpas.core.mem.utils.Copy`），无歧义
+  2. facade 隔离：零个 mem 子单元在 interface 段 import utils，不会泄漏到外部
+  3. API 改名代价大：需要修改所有消费方，且新名称（MemCopy/MemZero）不如原名直观
+  4. 符合惯例：C 标准库也有 `memcpy`/`memset`，Pascal 领域的内存操作用 `Copy`/`Zero` 是自然选择
 
-### [QA-009] mem.mem_pool.pas 是 28 行的兼容 shim
-- **严重度**: minor
+### [QA-009] mem.mem_pool.pas 是 28 行的兼容 shim — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: maintainability
 - **文件**: `nextpas.core.mem.mem_pool.pas`
-- **描述**: 此文件仅 re-export `nextpas.core.mem.pool.fixed` 的内容。没有 deprecated 标记。
-- **影响**: 增加编译时间和模块图复杂度。下游如果 import 此文件，依赖链不透明。
-- **建议**: 添加 deprecated 标记（类似 `mem.aligned.pas` 的做法）。
+- **状态**: 已关闭 — 文件已删除，兼容 shim 已移除。
 
-### [QA-010] mem.pool.memory_pool.pas 仅 28 行，只定义 IMemoryPool 接口
-- **严重度**: minor
+### [QA-010] mem.pool.memory_pool.pas 仅 28 行，只定义 IMemoryPool 接口 — ✅ 已修复
+- **严重度**: minor → 已关闭
 - **维度**: architecture
 - **文件**: `nextpas.core.mem.pool.memory_pool.pas`
-- **描述**: 此文件只定义了 `IMemoryPool = interface(IPool)` 加两个方法声明。28 行。
-- **影响**: 接口定义碎片化。IPool 在 pool.base.pas，IMemoryPool 在 pool.memory_pool.pas，IFixedSlabPool 在 pool.fixed_slab.pas。
-- **建议**: 考虑合并到 pool.base.pas 或创建统一的 pool.interfaces.pas。
+- **状态**: 已修复 — IMemoryPool 合并到 pool.base.pas，pool.memory_pool.pas 保留为 deprecated alias。
 
 ### [QA-011] adapters.pas 桥接 v1 和 v2 接口 — 过渡期代码
 - **严重度**: minor

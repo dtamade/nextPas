@@ -10,14 +10,13 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.base,
-  nextpas.core.mem.pool.memory_pool,
   nextpas.core.base.utils,
   nextpas.core.text,
   nextpas.core.mem.pool.fixed_slab;
 
 type
   IPool = nextpas.core.mem.pool.base.IPool;
-  IMemoryPool = nextpas.core.mem.pool.memory_pool.IMemoryPool;
+  IMemoryPool = nextpas.core.mem.pool.base.IMemoryPool;
   IFixedSlabPool = nextpas.core.mem.pool.fixed_slab.IFixedSlabPool;
   TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
 
