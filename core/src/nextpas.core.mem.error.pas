@@ -77,7 +77,10 @@ type
     aeSentinelCorrupted,
 
     {** 元数据校验和失败 | Metadata checksum failure *}
-    aeChecksumFailure
+    aeChecksumFailure,
+
+    {** 栈溢出（递归分配深度超限）| Stack overflow (recursion depth exceeded) *}
+    aeStackOverflow
   );
 
   {**
@@ -108,6 +111,7 @@ type
   EInvalidLayout = class(EAllocError);
   EInvalidPointer = class(EAllocError);
   EDoubleFree = class(EAllocError);
+  EStackOverflow = class(EAllocError);
 
 {**
  * AllocErrorToString
@@ -146,7 +150,8 @@ const
     'Pool closed',
     'Internal error',
     'Sentinel corrupted (buffer overflow)',
-    'Metadata checksum failure'
+    'Metadata checksum failure',
+    'Stack overflow (recursion depth exceeded)'
   );
 
 function AllocErrorToString(aError: TAllocError): string;
@@ -163,7 +168,7 @@ begin
       Result := ecInvalidArgument;
     aeInvalidPointer, aeDoubleFree, aePoolClosed, aeReallocNotSupported:
       Result := ecInvalidOperation;
-    aeSentinelCorrupted, aeChecksumFailure:
+    aeSentinelCorrupted, aeChecksumFailure, aeStackOverflow:
       Result := ecInvalidOperation;
     aeInternalError:
       Result := ecInternal;

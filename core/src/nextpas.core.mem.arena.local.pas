@@ -63,6 +63,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.stack_guard;
+
 { TLocalArena }
 
 constructor TLocalArena.Create(const ACapacity: SizeUInt);
@@ -109,16 +112,23 @@ begin
   Result := nil;
   if (ASize = 0) or (FBacking = nil) then
     Exit;
-  if FOffset > FCapacity then
-    Exit;
-  LRemaining := FCapacity - FOffset;
-  if ASize > LRemaining then
-    Exit;
-  Result := Pointer(PtrUInt(FBacking) + FOffset);
-  Inc(FOffset, ASize);
-  Inc(FTotalAllocs);
-  if FOffset > FPeakUsed then
-    FPeakUsed := FOffset;
+  if not TStackGuard.Enter then
+    raise EStackOverflow.Create(aeStackOverflow,
+      'TLocalArena.Alloc: recursion depth exceeded');
+  try
+    if FOffset > FCapacity then
+      Exit;
+    LRemaining := FCapacity - FOffset;
+    if ASize > LRemaining then
+      Exit;
+    Result := Pointer(PtrUInt(FBacking) + FOffset);
+    Inc(FOffset, ASize);
+    Inc(FTotalAllocs);
+    if FOffset > FPeakUsed then
+      FPeakUsed := FOffset;
+  finally
+    TStackGuard.Leave;
+  end;
 end;
 
 function TLocalArena.AllocAligned(ASize, AAlign: SizeUInt): Pointer;
