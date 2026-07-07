@@ -215,6 +215,10 @@ function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
+{** @desc GET url, ensure 2xx, return body as string. Raises on non-2xx. }
+function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
+{** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
+function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -2077,6 +2081,34 @@ begin
       IntToStr(Int64(AResp.StatusCode)) + ' ' +
       nextpas.core.http.base.HttpStatusText(AResp.StatusCode));
   Result := AResp;
+end;
+
+function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Get(AUrl);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Get(AUrl);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyBytes(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
 end;
 
 end.

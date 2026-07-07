@@ -322,6 +322,10 @@ function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
+{** @desc GET url, ensure 2xx, return body as string. Raises on non-2xx. }
+function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
+{** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
+function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -826,6 +830,16 @@ end;
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
   Result := nextpas.core.http.client.HttpEnsureSuccess(AResp);
+end;
+
+function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
+begin
+  Result := nextpas.core.http.client.HttpGetString(AClient, AUrl);
+end;
+
+function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;
