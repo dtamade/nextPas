@@ -244,6 +244,45 @@ end.
 - [交互式教程](tutorial.md) - 从入门到精通
 - [最佳实践指南](best-practices.md) - 编写可靠的基准测试
 
+## CI 集成
+
+### GitHub Actions
+
+项目已配置 GitHub Actions 自动化基准测试：
+
+- **主分支**: 自动生成基线并上传
+- **PR**: 自动与基线比较，检测回归
+- **报告**: 自动生成 benchmark 报告并评论 PR
+
+### 本地 CI 脚本
+
+```bash
+# 运行所有测试
+./scripts/bench-ci.sh test
+
+# 生成基线
+./scripts/bench-ci.sh baseline
+
+# 与基线比较
+./scripts/bench-ci.sh compare
+
+# 自定义基线文件
+./scripts/bench-ci.sh baseline my-baseline.json
+./scripts/bench-ci.sh compare my-baseline.json
+```
+
+### 回归检测
+
+```bash
+# 自动检测 5% 回归
+./scripts/bench-ci.sh compare bench-baseline.json
+
+# 如果检测到回归，脚本会：
+# 1. 输出详细的比较结果
+# 2. 返回非零退出码
+# 3. 生成 JSON 报告供 CI 系统解析
+```
+
 ## 测试
 
 ```bash
