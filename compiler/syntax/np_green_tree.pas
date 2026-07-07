@@ -5619,7 +5619,12 @@ begin
     Exit(nil);
   ChildIdx := D.ChildStart + AIndex;
   if (ChildIdx >= 0) and (ChildIdx < FOwner.FFacades.Count) then
-    Result := FOwner.FFacades[ChildIdx]
+  begin
+    Result := FOwner.FFacades[ChildIdx];
+    { Guard against cyclic AST: if child is self, return nil to break recursion }
+    if (Result <> nil) and (Result.FOwner = FOwner) and (Result.FIndex = FIndex) then
+      Result := nil;
+  end
   else
     Result := nil;
 end;
