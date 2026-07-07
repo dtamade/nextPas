@@ -98,6 +98,8 @@ type
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
+    { Phase 3: 对象池支持 }
+    FUseObjectPool: Boolean;
 
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
@@ -175,6 +177,9 @@ type
     function GetConfig: TBenchConfig;
     procedure SetFilter(const AFilter: string);
 
+    {** Phase 3: 启用对象池以减少分配开销 }
+    procedure EnableObjectPool(AEnabled: Boolean = True);
+
     {** 便利方法：运行单个基准并累积结果（旧 API 兼容）。
      *  AFunc 是 TBenchLoopFunc，内部循环由框架控制。 }
     procedure Run(const AName: string; AFunc: TBenchLoopFunc);
@@ -196,7 +201,8 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel;
+  nextpas.core.bench.parallel,
+  nextpas.core.bench.pool;
 
 {** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
@@ -422,6 +428,7 @@ begin
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
+  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
   LoadConfigFromEnv;
@@ -435,6 +442,7 @@ begin
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
+  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
   FConfig := DefaultBenchConfig;
@@ -700,13 +708,25 @@ var
   LContextObj: TBenchContext;
   LMemoryStats: TMemoryStats;
   LIter: Int64;
+  LFromPool: Boolean;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
   Result.Name := AEntry.Name;
 
-  LContext := TBenchContext.Create;
-  LContextObj := LContext as TBenchContext;
+  { Phase 3: 从对象池获取或创建新对象 }
+  LFromPool := FUseObjectPool and (GBenchContextPool <> nil);
+  if LFromPool then
+  begin
+    LContextObj := GBenchContextPool.Acquire;
+    LContext := LContextObj;
+  end
+  else
+  begin
+    LContext := TBenchContext.Create;
+    LContextObj := LContext as TBenchContext;
+  end;
+
   LContextObj.SetName(AEntry.Name);
   try
     if ATrackMemory then
@@ -751,7 +771,11 @@ begin
         DisableGlobalMemoryTracking;
     end;
   finally
-    LContext := nil;
+    { Phase 3: 归还到对象池或释放 }
+    if LFromPool then
+      GBenchContextPool.Release(LContextObj)
+    else
+      LContext := nil;
   end;
 end;
 
@@ -1146,6 +1170,13 @@ procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
+end;
+
+procedure TBenchRunner.EnableObjectPool(AEnabled: Boolean);
+begin
+  FUseObjectPool := AEnabled;
+  if AEnabled then
+    InitGlobalPool;
 end;
 
 procedure TBenchRunner.Run(const AName: string; AFunc: TBenchLoopFunc);

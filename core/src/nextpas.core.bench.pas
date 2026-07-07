@@ -134,6 +134,7 @@ type
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
+    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
     function Run: IBenchResults;
   end;
 
@@ -754,6 +755,13 @@ begin
   if ADuration.AsMilliseconds < 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: duration must be >= 0');
   FConfig.TimeoutMs := ADuration.AsMilliseconds;
+end;
+
+function TBenchSuite.EnableObjectPool(AEnabled: Boolean): IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+  FRunner.EnableObjectPool(AEnabled);
 end;
 
 function TBenchSuite.Run: IBenchResults;

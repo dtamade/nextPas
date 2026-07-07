@@ -286,6 +286,11 @@ type
      *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
     function SetTimeout(ADuration: TDuration): IBenchSuite;
 
+    {** Phase 3: 启用对象池以减少分配开销。
+     *  启用后，TBenchContext 对象会被复用而不是每次创建新对象。
+     *  适用于高频基准测试场景。 }
+    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
+
     {** 运行基准测试 }
     function Run: IBenchResults;
   end;
