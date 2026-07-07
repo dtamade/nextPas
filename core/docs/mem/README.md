@@ -184,6 +184,14 @@ end;
 
 ## 版本历史
 
+- v8.0 (2026-07-08): 演化路线图 Phase 1-4 全部完成 — 生产级内存管理平台
+  - P1-4: TLeakReportAllocator 增强泄漏报告（调用栈+时间戳+标签聚合）
+  - P2-3: TSentinelAllocator 哨兵守卫分配器（双端哨兵+延迟释放+校验和）
+  - P4-2: IBatchAllocator 批量分配接口
+  - P4-3: TNumaAllocator NUMA 感知分配器（拓扑检测+节点路由）
+  - P4-4: TPredictionAllocator 分配预测器（频率跟踪+预分配）
+  - 修复: L0 边界违规（stats/oom/scoped 改用 TMemMutex）
+  - 66 源文件 / 58 测试目录 / 688 测试 / 0 失败 / 0 泄漏
 - v7.2 (2026-06-27): Phase F 基准测试 + Go 对照
   - 新增: `bench_pool_family` 9 基准覆盖 TBlockPool/TFixedPool/TStackPool/TRingBuffer
   - Go 对照: TBlockPool (15.6ns) 快于 sync.Pool (18.0ns)，TRingBuffer (31.8ns) 2x 快于 chan (63.7ns)
