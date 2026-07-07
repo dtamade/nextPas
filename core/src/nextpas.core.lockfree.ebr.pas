@@ -120,35 +120,29 @@ var
   GEbrTlsKey: pthread_key_t;
   {** 是否已初始化 }
   GEbrTlsInitialized: Boolean = False;
+  {** 全局 orphaned 列表：线程退出时 domain 已销毁的 retired nodes }
+  GEbrOrphanedRetired: PEbrRetiredNode = nil;
 
-{** @desc pthread 析构函数：线程退出时自动 flush 缓冲区 }
+{** @desc pthread 析构函数：线程退出时 flush 到 orphaned 列表（不访问 domain）
+  @note 不访问 domain 避免 use-after-free（domain 可能已销毁）。
+        orphaned 节点在 Collect/Destroy 中被回收。 }
 procedure EbrThreadBufferDestructor(AValue: Pointer); cdecl;
 var
   LBuffer: PEbrThreadBuffer;
-  LDomain: TEbrDomain;
   LHead, LLast, LNode: PEbrRetiredNode;
   LI: Int32;
 begin
   LBuffer := PEbrThreadBuffer(AValue);
   if LBuffer = nil then
     Exit;
-  LDomain := LBuffer^.Domain;
-  if (LDomain <> nil) and (LBuffer^.Count > 0) then
+  if LBuffer^.Count > 0 then
   begin
-    { 构建本地链表 }
+    { 构建本地链表（不复用 freelist，避免访问 domain） }
     LHead := nil;
     LLast := nil;
     for LI := LBuffer^.Count - 1 downto 0 do
     begin
-      { Try to reuse from freelist }
-      if (LDomain.FFreeList <> nil) and (LDomain.FFreeListCount > 0) then
-      begin
-        LNode := LDomain.FFreeList;
-        LDomain.FFreeList := LNode^.Next;
-        Dec(LDomain.FFreeListCount);
-      end
-      else
-        LNode := GetMem(SizeOf(TEbrRetiredNode));
+      LNode := GetMem(SizeOf(TEbrRetiredNode));
       LNode^.Data := LBuffer^.Entries[LI].Data;
       LNode^.Reclaim := LBuffer^.Entries[LI].Reclaim;
       LNode^.UserData := LBuffer^.Entries[LI].UserData;
@@ -157,13 +151,13 @@ begin
       if LLast = nil then
         LLast := LNode;
     end;
-    { 批量 CAS: 整条链表一次提交 }
+    { CAS 到全局 orphaned 列表（而非 domain.FRetired） }
     if LHead <> nil then
     begin
       repeat
-        LLast^.Next := PEbrRetiredNode(atomic_load(PPointer(@LDomain.FRetired)^, moRelaxed));
+        LLast^.Next := PEbrRetiredNode(atomic_load(PPointer(@GEbrOrphanedRetired)^, moRelaxed));
       until atomic_compare_exchange_strong(
-          PPointer(@LDomain.FRetired)^, PPointer(@LLast^.Next)^, LHead, moRelease, moRelaxed);
+          PPointer(@GEbrOrphanedRetired)^, PPointer(@LLast^.Next)^, LHead, moRelease, moRelaxed);
     end;
   end;
   FreeMem(LBuffer);
@@ -173,6 +167,9 @@ end;
 function GetThreadBuffer(ADomain: TEbrDomain): PEbrThreadBuffer;
 var
   LBuffer: PEbrThreadBuffer;
+  LDomain: TEbrDomain;
+  LHead, LLast, LNode: PEbrRetiredNode;
+  LI: Int32;
 begin
   if not GEbrTlsInitialized then
     Exit(nil);
@@ -186,12 +183,37 @@ begin
   end
   else if LBuffer^.Domain <> ADomain then
   begin
-    { domain 变更: 先 flush 旧 domain 的缓冲区 }
-    if (LBuffer^.Domain <> nil) and (LBuffer^.Count > 0) then
+    { domain 变更: flush 旧 domain 的缓冲区（旧 domain 一定还活着） }
+    LDomain := LBuffer^.Domain;
+    if (LDomain <> nil) and (LBuffer^.Count > 0) then
     begin
-      EbrThreadBufferDestructor(LBuffer);
-      LBuffer := GetMem(SizeOf(TEbrThreadBuffer));
-      pthread_setspecific(GEbrTlsKey, LBuffer);
+      LHead := nil;
+      LLast := nil;
+      for LI := LBuffer^.Count - 1 downto 0 do
+      begin
+        if (LDomain.FFreeList <> nil) and (LDomain.FFreeListCount > 0) then
+        begin
+          LNode := LDomain.FFreeList;
+          LDomain.FFreeList := LNode^.Next;
+          Dec(LDomain.FFreeListCount);
+        end
+        else
+          LNode := GetMem(SizeOf(TEbrRetiredNode));
+        LNode^.Data := LBuffer^.Entries[LI].Data;
+        LNode^.Reclaim := LBuffer^.Entries[LI].Reclaim;
+        LNode^.UserData := LBuffer^.Entries[LI].UserData;
+        LNode^.Next := LHead;
+        LHead := LNode;
+        if LLast = nil then
+          LLast := LNode;
+      end;
+      if LHead <> nil then
+      begin
+        repeat
+          LLast^.Next := PEbrRetiredNode(atomic_load(PPointer(@LDomain.FRetired)^, moRelaxed));
+        until atomic_compare_exchange_strong(
+            PPointer(@LDomain.FRetired)^, PPointer(@LLast^.Next)^, LHead, moRelease, moRelaxed);
+      end;
     end;
     LBuffer^.Domain := ADomain;
     LBuffer^.Count := 0;
@@ -262,6 +284,16 @@ var
 begin
   { Flush 当前线程的缓冲区 }
   FlushThreadBuffer(Self);
+  { 回收 orphaned 节点（线程退出时 domain 已销毁的遗留节点） }
+  LNode := PEbrRetiredNode(atomic_exchange(PPointer(@GEbrOrphanedRetired)^, nil, moAcqRel));
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    if Assigned(LNode^.Reclaim) then
+      LNode^.Reclaim(LNode^.Data, LNode^.UserData);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
   LNode := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
   while LNode <> nil do
   begin
@@ -343,6 +375,17 @@ var
 begin
   { 先 flush 当前线程的缓冲区 }
   FlushThreadBuffer(Self);
+  { 回收 orphaned 节点（线程退出时 domain 已销毁的遗留节点） }
+  LList := PEbrRetiredNode(atomic_exchange(PPointer(@GEbrOrphanedRetired)^, nil, moAcqRel));
+  LNode := LList;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    if Assigned(LNode^.Reclaim) then
+      LNode^.Reclaim(LNode^.Data, LNode^.UserData);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
   if AtomicLoad32(FActiveCount, moAcquire) <> 0 then
     Exit;
   LList := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
@@ -422,6 +465,22 @@ begin
     GEbrTlsInitialized := True;
 end;
 
+{** @desc 释放 orphaned 节点 }
+procedure EbrFreeOrphanedNodes;
+var
+  LNode, LNext: PEbrRetiredNode;
+begin
+  LNode := PEbrRetiredNode(atomic_exchange(PPointer(@GEbrOrphanedRetired)^, nil, moAcqRel));
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    if Assigned(LNode^.Reclaim) then
+      LNode^.Reclaim(LNode^.Data, LNode^.UserData);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
+end;
+
 initialization
   InitEbrTls;
 
@@ -433,5 +492,7 @@ finalization
     pthread_setspecific(GEbrTlsKey, nil);
     pthread_key_delete(GEbrTlsKey);
   end;
+  { 释放 orphaned 节点 }
+  EbrFreeOrphanedNodes;
 
 end.
