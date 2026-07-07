@@ -1085,7 +1085,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 > AL2 收敛期已进入。退出条件 7 大类，按依赖关系和风险排序。
 > 核心原则：测试先行、小步验证、每步可回滚。
 
-### AL2-D1: 测试覆盖率提升 [🔄 部分]（预估 8 天，P0 优先级）
+### AL2-D1: 测试覆盖率提升 [✅ 2026-07-07]（预估 8 天，P0 优先级）
 
 **为什么先做**: 测试是所有后续重构的安全网。test/production 比当前 0.55x，目标 >1.0x。
 
@@ -1093,7 +1093,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 |--------|------|------|
 | D1.1 MIR pass 单元测试 | 13 fixtures, 6 passes 全部覆盖 | ✅ |
 | D1.2 sema 单元测试扩展 | 31→100, 覆盖 overload/type_check/hir_lowering/string_ownership | ✅ |
-| D1.3 增量编译回归测试 | 全量 vs 增量产物 diff 一致性验证套件 | 🔄 |
+| D1.3 增量编译回归测试 | 全量 vs 增量产物 diff 一致性验证套件 | ✅ |
 
 **当前指标**: mir 13/13, semantic 100/100, compiler-pass 32/34, test/prod 比 0.55x
 
