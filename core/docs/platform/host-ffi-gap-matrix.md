@@ -1,0 +1,326 @@
+# Platform Host FFI Gap Matrix
+
+This document records the current platform host ABI surface for
+`nextpas.core.platform`. It is a source-surface guard companion, not runtime
+proof. Runtime behavior tests cover the unified public contracts in
+`platform.time`, `platform.sync`, and `platform.thread`; raw OS APIs such as
+`clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, POSIX `read` / `write` /
+`lseek`, POSIX `explicit_bzero`, POSIX host `stat`, `lstat`, and `fstat`,
+`WaitOnAddress`,
+`CreateProcessA/W`, `QueryPerformanceCounter`, and `GetSystemTimeAsFileTime`
+are accepted from FPC source or documented OS/libc header fallback, copied into
+host-owned declarations, and guarded through source-surface integration checks
+and compile-only gates.
+
+The source evidence route for those declarations is tracked in
+`docs/platform-ffi-source-evidence-index.md`. Keep that index, this gap matrix,
+and the official verification routes synchronized: FPC source evidence explains
+where ABI truth comes from; this matrix records what nextPas currently owns and
+which gaps are still deliberate.
+
+The import workflow for expanding this matrix is tracked in
+`docs/platform-ffi-import-workflow.md`. Use that workflow before adding a new API
+surface or closing a known gap.
+
+## Host Base/FFI Ownership Matrix
+
+Host `base` units own ABI constants, record shapes, opaque carriers, scalar
+aliases, syscall numbers, errno values, and capability tokens. Host/shared
+`ffi` units own raw external declarations only. They must not contain inline
+helpers, wrapper bodies, errno readers, timeout math, syscall projections, or
+convenience APIs. Feature modules are unified platform function layers and
+should not create `platform.time.ffi`, `platform.sync.ffi`, or
+`platform.thread.ffi`; they directly consume host/shared `base` + raw `ffi`.
+
+| Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability | File / status / resource ABI |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `linux_errno_location`, Linux `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI; Linux raw `syscall` plus `FUTEX_*` tokens support futex wait/wake in `platform.sync` | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations, shared POSIX `explicit_bzero`, Linux `statx` syscall number, Linux traditional stat records and raw libc wrappers; `platform.resource` consumes Linux `RLIMIT_*`, `TRLimit`, and raw `prlimit64` for current-process rlimit get/set |
+| Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `android_errno_location`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97`; raw `sysconf` lives in shared POSIX FFI | raw `gettid`; `pthread_self` is the self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O and mmap declarations plus shared POSIX `explicit_bzero`; Android traditional stat records and raw `ANDROID_SYSCALL_NEWFSTATAT`, `ANDROID_SYSCALL_FSTAT`, and `ANDROID_SYSCALL_GETDENTS64` route tokens consumed by `platform.files` and `platform.mmap`; Android `RLIMIT_*` and `TPlatformAndroidRLimit` consumed by `platform.resource` through shared POSIX `getrlimit` / `setrlimit` |
+| Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime token plus raw Mach monotonic declarations: `mach_absolute_time` / `mach_timebase_info` | `darwin_errno_location`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_threadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; Darwin `$INODE64` stat records and raw libc bindings |
+| FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `freebsd_errno_location`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58`; raw `sysconf` lives in shared POSIX FFI | raw `pthread_getthreadid_np`; `pthread_self` is the optional self-token fallback input | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; FreeBSD traditional stat records and raw libc bindings |
+| generic Unix | `nextpas.core.platform.unix.base` | `nextpas.core.platform.unix.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`; raw `clock_gettime` / `clock_getres` live in shared POSIX FFI | `unix_errno_location`, generic `PLATFORM_POSIX_E*` fallback values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = -1`; raw `sysconf` lives in shared POSIX FFI | native thread id explicitly falls back to raw `pthread_self` token until a concrete host API is promoted | raw `pthread_create`, `pthread_join`, `pthread_detach` live in shared POSIX FFI | raw `pthread_key_*` live in shared POSIX FFI | raw `pthread_*` sync declarations live in shared POSIX FFI | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX raw file descriptor / I/O declarations plus shared POSIX `explicit_bzero`; generic stat remains deferred |
+| Windows | `nextpas.core.platform.windows.base` | `nextpas.core.platform.windows.ffi` | Windows kernel32 raw entries: `QueryPerformanceCounter`, `QueryPerformanceFrequency`, and `GetSystemTimeAsFileTime` | raw `GetLastError` plus Windows error tokens in base | raw `GetSystemInfo` | raw `GetCurrentThreadId` | raw `CreateThread`, `WaitForSingleObject`, `CloseHandle`, and `InterlockedDecrement` | raw `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue` | raw `InitializeSRWLock`, `CONDITION_VARIABLE`, and `WaitOnAddress` entrypoints | timeout and wait/error tokens live in base; conversion/classification belongs in unified modules | Windows kernel32 raw file I/O and file status entrypoints |
+
+## Known Gaps
+
+- `platform.memory` secure-zero now consumes shared POSIX `explicit_bzero`
+  through `nextpas.core.platform.posix.ffi` and reports native POSIX backend
+  truth. Linux has focused runtime proof through `test_platform_memory`; other
+  Unix hosts remain source/compile proof until host runtime evidence exists.
+  Windows secure-zero remains fallback/deferred because direct
+  `RtlSecureZeroMemory` promotion still needs a separate host-owned
+  dynamic-loading or raw symbol seam.
+- Platform Host ABI Completeness Wave 15 corrects the FFI boundary: all
+  host/shared `.ffi` files are raw external declaration owners only. The earlier
+  Wave 13/14 helper-name direction is superseded; wrapper/projection logic now
+  belongs in unified platform function layers such as `platform.time.host`,
+  `platform.sync`, and `platform.thread`, or future explicit unified modules
+  such as `platform.file`, `platform.path`, `platform.env`, or
+  `platform.process`.
+- `platform.resource` promotes a narrow public resource-limit contract for
+  current-process rlimit get/set. Linux is runtime-backed through host-owned
+  `RLIMIT_*`, `TRLimit`, and raw `prlimit64`; Android has compile/source proof
+  through host-owned `RLIMIT_*`, `TPlatformAndroidRLimit`, and shared POSIX
+  `getrlimit` / `setrlimit`; Windows and other unpromoted Unix hosts return a
+  stable unsupported code until their host resource-limit ABI and public
+  semantics are proven. This does not create `platform.resource.ffi`.
+- Android `platform.files` now has a forced Android compile gate in
+  `test_platform_files`; it proves the unified files facade consumes
+  Android-owned open/stat constants, `TPlatformAndroidStat`,
+  `ANDROID_SYSCALL_NEWFSTATAT`, and `ANDROID_SYSCALL_FSTAT` for
+  stat/lstat/fstat, plus `ANDROID_SYSCALL_GETDENTS64` for directory
+  enumeration through the shared Linux `dirent64` parsing path. This is
+  compile/source evidence, not Android device runtime proof.
+- Android `platform.mmap` now has a forced Android compile gate in
+  `test_platform_mmap`; it proves the unified mmap facade can compile through
+  the Android `platform.files` size path before shared POSIX `mmap`. This is
+  compile/source evidence, not Android device runtime proof.
+- Platform Host ABI Completeness Wave 11 covers POSIX signal-control raw ABI
+  inventory for host `base/ffi` owners. Linux now carries
+  `TPlatformLinuxSignalSet`, `PPlatformLinuxSignalSet`,
+  `TPlatformLinuxSigAction`, `PPlatformLinuxSigAction`, signal action/mask
+  tokens, `LINUX_SYSCALL_RT_SIGACTION`, and `LINUX_SYSCALL_RT_SIGPROCMASK`;
+  raw signal syscalls are invoked through `linux_syscall` by a future unified
+  consumer. Android now carries the
+  Android equivalents plus `ANDROID_SYSCALL_RT_SIGACTION`,
+  `ANDROID_SYSCALL_RT_SIGPROCMASK`; raw signal syscalls are invoked through
+  `android_syscall` by a future unified consumer. Darwin now carries `TPlatformDarwinSignalSet`,
+  `TPlatformDarwinSigAction`, `darwin_sigaction`, `darwin_sigprocmask`, and
+  `darwin_pthread_sigmask`. FreeBSD now carries
+  `TPlatformFreeBSDSignalSet`, `TPlatformFreeBSDSigAction`,
+  `freebsd_sigaction`, `freebsd_sigprocmask`, and
+  `freebsd_pthread_sigmask`. Generic Unix carries only a conservative
+  libc-backed `TPlatformUnixSignalSet`, `TPlatformUnixSigAction`,
+  `unix_sigaction`, and `unix_sigprocmask`. FPC evidence starts in
+  `rtl/linux/signal.inc`, `rtl/linux/ossysc.inc`,
+  `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
+  `rtl/darwin/signal.inc`, `rtl/freebsd/signal.inc`,
+  `rtl/unix/oscdeclh.inc`, and `rtl/unix/gensigset.inc`. This remains
+  source-surface and compile evidence with no public platform.signal contract
+  and no public platform.process contract.
+- Shared POSIX signal-control remains deferred: `nextpas.core.platform.posix.base`
+  does not carry a universal `TPlatformPosixSignalSet` or
+  `TPlatformPosixSigAction`, and `nextpas.core.platform.posix.ffi` does not
+  expose shared `sigaction` or `sigprocmask` bindings. FPC records
+  host-specific signal set widths and action record layouts, so host owners
+  remain the only correct place for this raw ABI.
+
+- Platform Host ABI Completeness Wave 10 covers Darwin / FreeBSD / Android traditional stat
+  raw ABI inventory for host `base/ffi` owners. Darwin now
+  carries `TPlatformDarwinStat`, `PPlatformDarwinStat`, `darwin_stat`,
+  `darwin_lstat`, and `darwin_fstat` using FPC's `$INODE64` symbol policy.
+  Path/fd helper projections are intentionally absent from `.ffi`. FreeBSD now
+  carries `TPlatformFreeBSDStat`, `PPlatformFreeBSDStat`, `freebsd_stat`,
+  `freebsd_lstat`, and `freebsd_fstat`. Android now carries
+  `TPlatformAndroidStat`, `PPlatformAndroidStat`, `PLATFORM_ANDROID_AT_FDCWD`,
+  `PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW`, `ANDROID_SYSCALL_NEWFSTATAT`,
+  `ANDROID_SYSCALL_FSTAT`, `ANDROID_SYSCALL_GETDENTS64`, and
+  `android_syscall`. Android stat path/fd and directory enumeration helper
+  projections are intentionally absent from `.ffi`. FPC evidence starts in
+  `rtl/bsd/ostypes.inc`,
+  `rtl/darwin/ptypes.inc`, `rtl/freebsd/ptypes.inc`,
+  `rtl/unix/oscdeclh.inc`, `rtl/android/Makefile`,
+  `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
+  `rtl/linux/ossysc.inc`, and `rtl/linux/bunxsysc.inc`. This remains
+  source-surface and compile evidence, not Android device runtime proof or a
+  new feature-specific platform.file.ffi contract.
+- Generic Unix remains deferred: shared POSIX owners still do not carry a
+  generic `TPlatformStat`, `stat`, `lstat`, or `fstat`, and generic Unix does
+  not invent `TPlatformUnixStat`.
+- Platform Host ABI Completeness Wave 9 covers Linux traditional stat raw ABI
+  inventory for Linux host `base/ffi` owners. Linux now carries
+  `TPlatformLinuxStat`, `PPlatformLinuxStat`, CPU-specific
+  `PLATFORM_LINUX_STAT_VERSION`, `linux_xstat`, `linux_lxstat`, and
+  `linux_fxstat`. Linux stat path/fd helper projections are intentionally
+  absent from `.ffi`. FPC evidence starts in
+  `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/stat.inc`,
+  `rtl/linux/aarch64/stat.inc`, and `rtl/linux/osmacro.inc`. This remains
+  source-surface and compile evidence, not a new public platform.file contract.
+- Linux traditional stat is promoted, but shared POSIX stat remains deferred:
+  `rtl/unix/oscdeclh.inc` records the broader Unix suffix boundary, and Darwin,
+  FreeBSD, Android, and generic Unix traditional stat owners still need their
+  own host-specific waves.
+- Platform Host ABI Completeness Wave 8 covers the file I/O continuation raw
+  ABI inventory for host `base/ffi` owners. POSIX shared owners now carry
+  `size_t`, `ssize_t`, `off_t`, `TPlatformFileOffset`, `read`, `write`,
+  `lseek`, `fsync`, and `ftruncate`. POSIX file I/O helper projections are
+  intentionally absent from shared and host `.ffi` files. POSIX host `base`
+  units now carry `SEEK_SET`,
+  `SEEK_CUR`, and `SEEK_END` as `PLATFORM_SEEK_SET`,
+  `PLATFORM_SEEK_CURRENT`, and `PLATFORM_SEEK_END`. Windows now carries `LONG`, `PLONG`,
+  `PINT64`, `LARGE_INTEGER`, `FILE_BEGIN`, `FILE_CURRENT`, `FILE_END`,
+  `INVALID_SET_FILE_POINTER`, `GetFileSize`, `SetFilePointer`,
+  `FlushFileBuffers`, `SetEndOfFile`, `GetFileSizeEx`,
+  `SetFilePointerEx`. Windows file helper projections are intentionally absent
+  from `.ffi`. This
+  remains source-surface and compile evidence, not a new public platform.file
+  contract.
+- Wave 8 source evidence tokens are synchronized with the evidence index:
+  `read`, `write`, `lseek`, `fsync`, `ftruncate`, `SEEK_SET`, `SEEK_CUR`,
+  `SEEK_END`, `GetFileSize`, `SetFilePointer`, `FlushFileBuffers`,
+  `SetEndOfFile`, `GetFileSizeEx`, and `SetFilePointerEx`.
+- Platform Host ABI Completeness Wave 6 covers the process-control raw ABI inventory for
+  host `base/ffi` owners. Shared POSIX FFI now owns raw `fork`, `execve`,
+  `waitpid`, `_exit`, and `kill` declarations only; POSIX host `ffi` units must
+  not expose `platform_process_*` helpers in this wave. FPC Unix source directly
+  declares those libc bindings through `FpFork`, `FpExecve`, `FpWaitpid`,
+  `FpExit`, and `FpKill`. Windows now carries `PROCESS_INFORMATION`, `STARTUPINFOA`,
+  `STARTUPINFOW`, `SECURITY_ATTRIBUTES`, Windows ABI aliases, process creation flags and priority class tokens,
+  `CreateProcessA`, `CreateProcessW`, `GetStartupInfoA`, `GetStartupInfoW`,
+  `TerminateProcess`, `GetExitCodeProcess`, and `ExitProcess` as raw FPC-shaped
+  declarations. This remains an integration and compile-coherence guard with no
+  public platform.process contract. There is no public platform.process
+  contract in this wave.
+- Wave 6 source evidence tokens are synchronized with the evidence index:
+  `fork`, `execve`, `waitpid`, `_exit`, `kill`, `PROCESS_INFORMATION`,
+  `STARTUPINFOA`, `STARTUPINFOW`, `CreateProcessA`, `CreateProcessW`,
+  `GetStartupInfoA`, `GetStartupInfoW`, `TerminateProcess`,
+  `GetExitCodeProcess`, and `ExitProcess`.
+- Platform Host ABI Completeness Wave 7 covers the process wait-status raw ABI
+  inventory for host `base` owners and shared POSIX math helpers. POSIX host
+  `base` units now carry `WNOHANG`, `WUNTRACED`, `SIGHUP`, `SIGINT`, `SIGKILL`,
+  `SIGTERM`, and host-specific `SIGCHLD` as
+  `PLATFORM_WAIT_NOHANG`, `PLATFORM_WAIT_UNTRACED`,
+  `PLATFORM_SIGNAL_HANGUP`, `PLATFORM_SIGNAL_INTERRUPT`,
+  `PLATFORM_SIGNAL_KILL`, `PLATFORM_SIGNAL_TERMINATE`, and
+  `PLATFORM_SIGNAL_CHILD`. Linux and Android use `SIGCHLD = 17`; Darwin and
+  FreeBSD use `SIGCHLD = 20`; generic Unix keeps the Linux-style fallback until
+  a specific host is promoted. Shared POSIX math now owns FPC wait-status macro
+  projections for `WEXITSTATUS`, `WTERMSIG`, `WSTOPSIG`, `WIFEXITED`,
+  `WIFSIGNALED`, `WIFSTOPPED`, `WCOREDUMP`, `W_EXITCODE`, and `W_STOPCODE`.
+  Windows base now carries `WAIT_TIMEOUT`, `WAIT_FAILED`, `STILL_ACTIVE`,
+  `SYNCHRONIZE`, `PROCESS_TERMINATE`, and `DUPLICATE_SAME_ACCESS`. This remains
+  source-surface and compile evidence with no public platform.process contract.
+- Wave 7 source evidence tokens are synchronized with the evidence index:
+  `WNOHANG`, `WUNTRACED`, `WEXITSTATUS`, `WTERMSIG`, `WSTOPSIG`,
+  `WIFEXITED`, `WIFSIGNALED`, `WIFSTOPPED`, `WCOREDUMP`, `W_EXITCODE`,
+  `W_STOPCODE`, `SIGHUP`, `SIGINT`, `SIGKILL`, `SIGTERM`, `SIGCHLD`,
+  `WAIT_TIMEOUT`, `WAIT_FAILED`, `STILL_ACTIVE`, `SYNCHRONIZE`,
+  `PROCESS_TERMINATE`, and `DUPLICATE_SAME_ACCESS`.
+- Platform Host ABI Completeness Wave 5 covers the environment ABI raw inventory for
+  host `ffi` owners. Shared POSIX FFI now owns raw `getenv`, `setenv`,
+  `unsetenv`, and `putenv` declarations only. FPC Unix source directly declares `getenv`;
+  `setenv`, `unsetenv`, and `putenv` are recorded as POSIX libc/header fallback
+  declarations because current FPC Unix units do not expose them. Windows now
+  carries `GetEnvironmentVariableA`, `GetEnvironmentVariableW`,
+  `SetEnvironmentVariableA`, `SetEnvironmentVariableW`,
+  `GetEnvironmentStringsA`, `GetEnvironmentStringsW`,
+  `FreeEnvironmentStringsA`, `FreeEnvironmentStringsW`,
+  `ExpandEnvironmentStringsA`, and `ExpandEnvironmentStringsW`. Windows
+  environment helper projections are intentionally absent from `.ffi`. This remains source-surface and compile evidence with no public
+  platform.env contract. There is no public platform.env contract in this wave.
+- Wave 5 source evidence tokens are synchronized with the evidence index:
+  `getenv`, `setenv`, `unsetenv`, `putenv`, POSIX libc/header fallback,
+  `GetEnvironmentVariableA`, `GetEnvironmentVariableW`,
+  `SetEnvironmentVariableA`, `SetEnvironmentVariableW`,
+  `GetEnvironmentStringsA`, `GetEnvironmentStringsW`,
+  `FreeEnvironmentStringsA`, `FreeEnvironmentStringsW`,
+  `ExpandEnvironmentStringsA`, and `ExpandEnvironmentStringsW`.
+- Platform Host ABI Completeness Wave 4 covers the directory/path ABI raw inventory for
+  host `base/ffi` owners. POSIX hosts now carry `F_OK`, `X_OK`,
+  `W_OK`, `R_OK` access tokens plus raw `mkdir`, `rmdir`, `unlink`, `rename`,
+  `access`, `getcwd`, and `chdir` declarations. Windows now carries
+  `LPSTR`, `LPWSTR`, `PLPSTR`, `PLPWSTR`, `CreateDirectoryA`,
+  `CreateDirectoryW`, `RemoveDirectoryA`, `RemoveDirectoryW`, `DeleteFileA`,
+  `DeleteFileW`, `MoveFileA`, `MoveFileW`, `GetCurrentDirectoryA`,
+  `GetCurrentDirectoryW`, `SetCurrentDirectoryA`, `SetCurrentDirectoryW`,
+  `GetFullPathNameA`, and `GetFullPathNameW`. Path helper projections are
+  intentionally absent from `.ffi`. This remains
+  source-surface and compile evidence with no public platform.file contract.
+- Wave 4 source evidence tokens are synchronized with the evidence index:
+  `mkdir`, `rmdir`, `unlink`, `rename`, `access`, `getcwd`, `chdir`, `F_OK`,
+  `X_OK`, `W_OK`, `R_OK`, `CreateDirectoryA`, `CreateDirectoryW`,
+  `RemoveDirectoryA`, `RemoveDirectoryW`, `DeleteFileA`, `DeleteFileW`,
+  `MoveFileA`, `MoveFileW`, `GetCurrentDirectoryA`, `GetCurrentDirectoryW`,
+  `SetCurrentDirectoryA`, `SetCurrentDirectoryW`, `GetFullPathNameA`, and
+  `GetFullPathNameW`.
+- Platform Host ABI Completeness Wave 1 covers process id, `timeval`, mmap, and
+  dynamic loader inventory for host `base/ffi` owners. POSIX hosts now carry
+  `pid_t`, RTLD constants, raw process-id declarations, raw mmap declarations,
+  and raw dynamic-loader declarations; Windows carries process id,
+  `LoadLibraryA`, `GetProcAddress`, `FreeLibrary`, `VirtualAlloc`,
+  `VirtualFree`, and `VirtualProtect` inventory. Process-id, mmap, and
+  dynamic-loader helper projections are intentionally absent from `.ffi`. This
+  is source-surface and compile evidence, not a new public `platform.process`
+  or `platform.memory` contract.
+- Wave 1 source evidence tokens are synchronized with the evidence index:
+  `getpid`, `getppid`, `fpmmap`, `fpmunmap`, `dlopen`, `dlsym`,
+  `LoadLibraryA`, `GetProcAddress`, and `VirtualAlloc`.
+- Historical Wave 1 marker: `stat/open/fcntl deferred`. Wave 2 resolves the
+  `open` / `fcntl` part of that marker and keeps only `stat` as the remaining
+  deferred file-family risk.
+- Platform Host ABI Completeness Wave 2 covers the file ABI raw inventory for
+  host `base/ffi` owners. POSIX hosts now carry file descriptor aliases,
+  `open`, `close`, `fcntl`, basic open/access flags, fcntl command tokens,
+  and raw `open`, `close`, and `fcntl` declarations. File helper projections are
+  intentionally absent from host/shared `.ffi`. Windows now carries `GENERIC_READ`,
+  `GENERIC_WRITE`, `FILE_SHARE_READ`, `FILE_SHARE_WRITE`,
+  `FILE_SHARE_DELETE`, `CREATE_ALWAYS`, `OPEN_EXISTING`,
+  `FILE_ATTRIBUTE_NORMAL`, `CreateFileA`, `CreateFileW`, `ReadFile`,
+  `WriteFile`, and a file close helper that delegates to the existing
+  `CloseHandle` owner. This remains source-surface and compile evidence, not a
+  new public `platform.file` contract.
+- Wave 2 source evidence tokens are synchronized with the evidence index:
+  `open`, `close`, `fcntl`, `O_CLOEXEC`, `F_DUPFD`, `F_GETFD`, `F_SETFD`,
+  `F_GETFL`, `F_SETFL`, `FD_CLOEXEC`, `CreateFileA`, `CreateFileW`,
+  `ReadFile`, and `WriteFile`.
+- Platform Host ABI Completeness Wave 3 covers the file status ABI raw inventory
+  for host `base/ffi` owners. Linux now carries `statx` records,
+  `STATX_BASIC_STATS`, `AT_FDCWD`, `AT_SYMLINK_NOFOLLOW`, `AT_EMPTY_PATH`,
+  and `LINUX_SYSCALL_STATX`. Raw `linux_syscall` is the only Linux FFI syscall
+  entrypoint; statx path/fd helper projections are intentionally absent from
+  `.ffi`. Windows now carries `GET_FILEEX_INFO_LEVELS`,
+  `WIN32_FILE_ATTRIBUTE_DATA`, `BY_HANDLE_FILE_INFORMATION`, expanded
+  `FILE_ATTRIBUTE_*` constants, `GetFileAttributesExA`,
+  `GetFileAttributesExW`, and `GetFileInformationByHandle`. Windows file-status
+  helper projections are intentionally absent from `.ffi`.
+  This remains source-surface and compile evidence, not a new public
+  `platform.file` contract.
+- Wave 3 source evidence tokens are synchronized with the evidence index:
+  `statx`, `__xstat`, `__lxstat`, `__fxstat`, Darwin `$INODE64`,
+  `GetFileAttributesExA`, `GetFileAttributesExW`,
+  `GetFileInformationByHandle`, `WIN32_FILE_ATTRIBUTE_DATA`, and
+  `BY_HANDLE_FILE_INFORMATION`.
+- The older Wave 2 marker `stat remains deferred` remains intentionally present
+  as route-truth compatibility. Wave 3 refines that marker to the narrower
+  `posix stat record remains deferred` decision below.
+- `posix stat record remains deferred`: traditional POSIX `stat`, `fstat`, and
+  `lstat` record import is still out of the shared POSIX owner because record
+  layouts, symbol suffixes, large-file policy, and 32/64-bit behavior differ by
+  host. Linux `statx` and Windows file status are host-owned raw ABI inventory,
+  not proof of a unified file-status contract.
+- Darwin has `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, so pthread
+  condition-variable timeout policy uses the host-owned realtime clock token.
+- Darwin has `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`. The unsupported
+  timedlock decision is implemented in the unified `platform.sync` function
+  layer, not as a Darwin `.ffi` stub.
+- generic Unix has `PLATFORM_SYSCONF_NPROCESSORS_ONLN = -1`. CPU-count fallback
+  policy belongs in `platform.thread`; the token deliberately records that
+  there is no proven host-specific sysconf id yet.
+- generic Unix native thread id falls back to raw `pthread_self`. This is a
+  documented fallback, not proof that the pthread token equals a kernel thread
+  id on every Unix.
+- generic Unix has `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`. The
+  unsupported timedlock decision belongs in `platform.sync` until a real host
+  ABI is proven from source evidence.
+- Windows is not a POSIX branch. It uses the Windows kernel32 path for
+  `WaitOnAddress`, SRW locks, condition variables, thread lifecycle, TLS, QPC,
+  and FILETIME.
+
+## Verification Boundary
+
+The official host gap matrix check is a source-surface integration guard. It
+checks that the document, host `base/ffi` tokens, known gap markers, and
+feature-FFI absence stay synchronized. It is not runtime proof for Darwin,
+Android, FreeBSD, generic Unix, or Windows, and it is not a correctness proof
+for FPC's raw ABI definitions.
+
+Current evidence classes should be read separately:
+
+- Linux behavior tests are runtime proof for the Linux host.
+- Win64 checks are compile-only proof for the Windows branch.
+- Simulated Darwin, Android, FreeBSD, and generic Unix checks are compile-only
+  proof for branch selection and unit surface coherence.
+- Source-surface checks keep ownership boundaries from drifting between host
+  `base`, raw host/shared `ffi`, shared POSIX math helpers, and unified feature
+  contracts.
