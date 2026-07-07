@@ -16,6 +16,7 @@ nextpas.core.bench.baseline    ← 基线管理（JSON 序列化/回归检测）
 nextpas.core.bench.memtrack    ← 内存追踪（MemoryManager hook + 原子计数）
 nextpas.core.bench.parallel    ← 并行基准（TThread + 聚合结果）
 nextpas.core.bench.run         ← 线程安全执行器（原子结果收集，EBR 就绪）
+nextpas.core.bench.resultpool  ← 缓冲区池（预分配，原子借用）
 nextpas.core.bench.runner      ← 执行器（校准/采样/统计流水线）
 nextpas.core.bench.report      ← 报告生成（Console/JSON/TSV/HTML/SVG）
 nextpas.core.bench.xlang       ← 跨语言解析（Go/Rust/FPC 输出）
@@ -235,10 +236,10 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 21 |
-| 框架级测试 | ~370 |
+| 测试套件 | 22 |
+| 框架级测试 | ~377 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 15/15 套件全部启用 -gh，零泄漏 |
+| heaptrc | 16/16 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |

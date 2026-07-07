@@ -135,11 +135,17 @@ B18  线程安全执行器 (2026-07-06)                             ✅
   B18.2  AllocBenchResult/FreeBenchResult 堆分配              ✅
   B18.3  并发 RunAll (platform_thread_create/join)            ✅
   B18.4  test_bench_run 13 tests (heaptrc 0 leaks)           ✅
+
+B19  缓冲区池 (2026-07-07)                                   ✅
+  B19.1  TBenchResultPool 预分配缓冲区                        ✅
+  B19.2  原子索引无锁借用 (AtomicFetchAdd32)                  ✅
+  B19.3  池满回退到直接分配                                    ✅
+  B19.4  test_bench_resultpool 7 tests (0 leaks)              ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-06
+> **最后更新**: 2026-07-07
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
@@ -161,8 +167,9 @@ B18  线程安全执行器 (2026-07-06)                             ✅
 | test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
 | test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
 | test_bench_run | 13 | ✅ 0 leaks | TBenchRun 线程安全执行器 |
+| test_bench_resultpool | 7 | ✅ 0 leaks | TBenchResultPool 缓冲区池 |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
-| **合计** | **~370** | **21/21 通过** | |
+| **合计** | **~377** | **22/22 通过** | |
 
 ## 已解决的技术债务
 
