@@ -5522,6 +5522,9 @@ begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
     or (AChild = nil) then
     Exit;
+  { Prevent cyclic AST: reject appending self as child }
+  if (AChild.FOwner = FOwner) and (AChild.FIndex = FIndex) then
+    Exit;
   FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
   if D.ChildStart < 0 then
