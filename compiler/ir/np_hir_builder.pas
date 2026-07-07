@@ -536,9 +536,9 @@ begin
       end;
     shekField:
       Result := (Length(AExpr.Children) >= 1) and
-        (AExpr.TypeId > 0) and (AExpr.ValueClass = shvcAddress) and
+        (AExpr.TypeId > 0) and (AExpr.ValueClass in [shvcScalar, shvcAddress]) and
         (AExpr.LiteralInt >= 0) and
-        CanLowerExprAsAddress(AExpr.Children[0]);
+        CanLowerExpr(AExpr.Children[0]);
     shekArrayElem:
       begin
         Result := (AExpr.TypeId > 0) and
@@ -1076,16 +1076,15 @@ function THIRBuilder.LowerFieldExpr(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
   Base: THIRExprResult;
-  FieldPtr, FieldIndexValue: THIRValueId;
-  HirType: THIRTypeId;
+  BaseExpr: TSemanticHirExpr;
+  SemType: TSemanticType;
+  FieldPtr, FieldIndexValue, BaseValue: THIRValueId;
+  HirType, BaseHirType: THIRTypeId;
   Instr: THIRInstr;
+  StructName: string;
 begin
   InitExprResult(AResult);
   if (Length(AExpr.Children) < 1) or (AExpr.LiteralInt < 0) then
-    Exit(False);
-  if not LowerExprAddress(AExpr.Children[0], Base) then
-    Exit(False);
-  if Base.AddressValueId = 0 then
     Exit(False);
 
   HirType := ExprHirTypeId(AExpr);
@@ -1093,19 +1092,71 @@ begin
   if FieldIndexValue = 0 then
     Exit(False);
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'gep_i64';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeTypedOperand(Base.AddressValueId, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(FieldIndexValue, GetIntType);
-  EmitInstr(Instr);
-  FieldPtr := Instr.ResultId;
+  // Lower base expression first to determine value class
+  if not LowerExpr(AExpr.Children[0], Base) then
+    Exit(False);
 
-  SetExprAddress(AResult, FieldPtr, HirType);
-  Result := AResult.AddressValueId <> 0;
+  // Detect if base is a value-type record → use extractvalue instead of GEP
+  BaseExpr := FSemaModel.HirExprAt(AExpr.Children[0] - 1);
+  if (BaseExpr.TypeId > 0) and (BaseExpr.TypeId <= FSemaModel.TypeCount) then
+  begin
+    SemType := FSemaModel.TypeAt(BaseExpr.TypeId - 1);
+    if SameText(SemType.Kind, 'record') then
+      StructName := SemType.Name;
+  end;
+
+  if (StructName <> '') and (Base.ValueClass = shvcAddress) then
+  begin
+    // Value-type record via address: load the whole struct first, then extractvalue
+    if Base.AddressValueId = 0 then
+      Exit(False);
+    BaseHirType := FModule.Types.FindByName(StructName);
+    // Fall back to GEP if the struct type hasn't been registered in HIR type table yet
+    if BaseHirType <> 0 then
+    begin
+      BaseValue := EmitLoad(BaseHirType, Base.AddressValueId);
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikExtractField;
+      Instr.TypeId := HirType;
+      Instr.FieldIndex := AExpr.LiteralInt;
+      Instr.StructTypeName := StructName;
+      SetLength(Instr.Operands, 1);
+      Instr.Operands[0] := MakeTypedOperand(BaseValue, BaseHirType);
+      EmitInstr(Instr);
+      SetExprValue(AResult, Instr.ResultId, HirType, shvcScalar);
+      Result := AResult.ValueId <> 0;
+      Exit;
+    end
+    else
+      StructName := '';
+  end;
+
+  if (StructName <> '') then
+  begin
+    // Struct type found but not registered in HIR type table, or value path not taken:
+    // fall through to GEP
+  end;
+
+  if (StructName = '') then
+  begin
+    // Pointer path: GEP (class field access, or record fallback)
+    if Base.AddressValueId = 0 then
+      Exit(False);
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeTypedOperand(Base.AddressValueId, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(FieldIndexValue, GetIntType);
+    EmitInstr(Instr);
+    FieldPtr := Instr.ResultId;
+    SetExprAddress(AResult, FieldPtr, HirType);
+    Result := AResult.AddressValueId <> 0;
+  end;
 end;
 
 function THIRBuilder.LowerArrayElemExpr(const AExpr: TSemanticHirExpr;
