@@ -155,6 +155,8 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }

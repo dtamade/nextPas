@@ -52,6 +52,40 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
+  end;
+
+  { Decorator that adds Authorization header to every request }
+  TAuthClient = class(TInterfacedObject, IHttpClient)
+  private
+    FInner: IHttpClient;
+    FAuthHeader: string;
+    function DoBodyRequest(const AMethod: THttpMethod;
+      const AUrl, AContentType, ABody: string): IHttpResponse;
+  public
+    constructor Create(const AInner: IHttpClient; const AAuthHeader: string);
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
+    function Get(const AUrl: string): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Delete(const AUrl: string): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -75,6 +109,7 @@ uses
   nextpas.core.io,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
+  nextpas.core.encoding,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
@@ -855,6 +890,180 @@ function THttpClient.PatchJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := Patch(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function THttpClient.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
+end;
+
+{ TAuthClient }
+
+constructor TAuthClient.Create(const AInner: IHttpClient; const AAuthHeader: string);
+begin
+  FInner := AInner;
+  FAuthHeader := AAuthHeader;
+end;
+
+function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
+begin
+  AReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(AReq);
+end;
+
+procedure TAuthClient.CloseIdleConnections;
+begin
+  FInner.CloseIdleConnections;
+end;
+
+function TAuthClient.Get(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.DoBodyRequest(const AMethod: THttpMethod;
+  const AUrl, AContentType, ABody: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
+end;
+
+function TAuthClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
+end;
+
+function TAuthClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Delete(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
+end;
+
+function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Head(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Options(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded', EncodeUrlEncodedForm(AFields));
+end;
+
+function TAuthClient.PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TAuthClient.PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TAuthClient.PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TAuthClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(FInner, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function TAuthClient.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(FInner, 'Bearer ' + AToken);
 end;
 
 { Factory functions }
