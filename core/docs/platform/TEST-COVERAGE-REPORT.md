@@ -103,6 +103,7 @@
 | test_platform_time_no_fpc_units | 1 | ✅ |
 | test_platform_time_wine | 3 | ✅ |
 | test_platform_watch | 13 | ✅ |
+| test_platform_watch_wine | 8 | ✅ |
 | test_platform_which | 7 | ✅ |
 | test_platform_windows_utf16_compile_gate | 0 | ✅ (编译测试) |
 | test_platform_windows_utf16_contract | 4 | ✅ |
