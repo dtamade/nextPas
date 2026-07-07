@@ -31,7 +31,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex;
 
 type
   {** TScopedAllocator
@@ -43,7 +44,7 @@ type
   TScopedAllocator = class(TAllocator)
   private
     FInner: IAllocator;
-    FLock: TRTLCriticalSection;
+    FLock: TMemMutex;
     FPointers: array of Pointer;
     FCount: Integer;
     FActiveBytes: SizeUInt;
@@ -77,7 +78,7 @@ constructor TScopedAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
   FInner := AInner;
-  InitCriticalSection(FLock);
+  FLock.Init;
   FPointers := nil;
   FCount := 0;
   FActiveBytes := 0;
@@ -86,21 +87,21 @@ end;
 destructor TScopedAllocator.Destroy;
 begin
   Reset;
-  DoneCriticalSection(FLock);
+  FLock.Done;
   FInner := nil;
   inherited Destroy;
 end;
 
 procedure TScopedAllocator.Track(APtr: Pointer);
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FCount >= Length(FPointers) then
       SetLength(FPointers, FCount + 16);
     FPointers[FCount] := APtr;
     Inc(FCount);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -108,7 +109,7 @@ procedure TScopedAllocator.Untrack(APtr: Pointer);
 var
   LI, LJ: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     for LI := 0 to FCount - 1 do
     begin
@@ -122,7 +123,7 @@ begin
       end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -167,7 +168,7 @@ procedure TScopedAllocator.Reset;
 var
   LI: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     // 从后往前释放（LIFO 顺序，对 arena 友好）
     for LI := FCount - 1 downto 0 do
@@ -176,17 +177,17 @@ begin
     FActiveBytes := 0;
     FillChar(FPointers[0], Length(FPointers) * SizeOf(Pointer), 0);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TScopedAllocator.TrackedCount: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
