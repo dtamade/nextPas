@@ -145,6 +145,10 @@ type
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
     function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
+    {** B21: 启用自适应预热 }
+    function SetAdaptiveWarmup(AEnabled: Boolean;
+      ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+      AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS): IBenchSuite;
     function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
@@ -833,6 +837,22 @@ begin
   GuardNotRun;
   Result := Self;
   FRunner.EnableObjectPool(AEnabled);
+end;
+
+function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;
+  ACVThreshold: Double; AMaxIterations: Integer): IBenchSuite;
+var
+  LConfig: TBenchConfig;
+begin
+  GuardNotRun;
+  Result := Self;
+  LConfig := FRunner.Config;
+  LConfig.AdaptiveWarmup := AEnabled;
+  if ACVThreshold > 0 then
+    LConfig.WarmupCVThreshold := ACVThreshold;
+  if AMaxIterations > 0 then
+    LConfig.WarmupMaxIterations := AMaxIterations;
+  FRunner.Config := LConfig;
 end;
 
 function TBenchSuite.RunParallel(AThreadCount: Integer): IBenchResults;

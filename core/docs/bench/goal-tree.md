@@ -146,9 +146,16 @@ B20  跨语言性能对照 (2026-07-08)                              ✅
   B20.1  Go 基准测试 (Fibonacci/Sort/String/Memory/Map)       ✅
   B20.2  Rust 基准测试 (Cargo项目, rand依赖)                  ✅
   B20.3  C 基准测试 (clock_gettime高精度)                     ✅
-  B20.4  Pascal 基准测试 (GetTickCount64)                     ✅
+  B20.4  Pascal 基准测试 (GetTickCount64→fpgettimeofday)      ✅
   B20.5  run_all.sh 自动化脚本 + 对比表格                     ✅
   B20.6  COMPARISON.md 性能对比报告                           ✅
+
+B21  自适应预热 (2026-07-08)                                  ✅
+  B21.1  TBenchConfig 新增 AdaptiveWarmup/CVThreshold/MaxIters ✅
+  B21.2  WarmupEntry 自适应逻辑 (CV<阈值自动停止)             ✅
+  B21.3  TBenchSuite.SetAdaptiveWarmup 配置方法               ✅
+  B21.4  TBenchRunner.SetAdaptiveWarmup 配置方法              ✅
+  B21.5  test_bench_adaptive_warmup 4 tests (0 leaks)         ✅
 ```
 
 ## 测试套件分布
@@ -177,7 +184,8 @@ B20  跨语言性能对照 (2026-07-08)                              ✅
 | test_bench_run | 13 | ✅ 0 leaks | TBenchRun 线程安全执行器 |
 | test_bench_resultpool | 7 | ✅ 0 leaks | TBenchResultPool 缓冲区池 |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
-| **合计** | **~377** | **22/22 通过** | |
+| test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
+| **合计** | **~381** | **23/23 通过** | |
 
 ### 跨语言基准对照 (benchmarks/)
 

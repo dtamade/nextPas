@@ -121,6 +121,12 @@ type
     EnableParallel: Boolean;
     {** 并行线程数，0=自动检测 CPU 核心数 }
     ParallelThreads: Integer;
+    {** B21: 启用自适应预热（根据方差自动停止） }
+    AdaptiveWarmup: Boolean;
+    {** B21: 自适应预热 CV 阈值（默认 5%），当 StdDev/Mean < Threshold 时停止 }
+    WarmupCVThreshold: Double;
+    {** B21: 自适应预热最大迭代次数（防止死循环） }
+    WarmupMaxIterations: Integer;
   end;
 
   {** 基准结果数组 }
@@ -230,6 +236,10 @@ const
   BENCH_DEFAULT_MIN_SAMPLES = 30;
   BENCH_DEFAULT_WARMUP_ITERATIONS = 5;
   BENCH_DEFAULT_PARALLEL_THREADS = 4;
+  {** B21: 自适应预热常量 }
+  BENCH_DEFAULT_ADAPTIVE_WARMUP = False;
+  BENCH_DEFAULT_WARMUP_CV_THRESHOLD = 0.05;  // 5%
+  BENCH_DEFAULT_WARMUP_MAX_ITERATIONS = 100;
 
   {** 统一显著性阈值常量 }
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
@@ -834,6 +844,10 @@ begin
   Result.CollectRawSamples := False;
   Result.Quiet := False;
   Result.MaxDetailCount := 5;
+  { B21: 自适应预热默认值 }
+  Result.AdaptiveWarmup := BENCH_DEFAULT_ADAPTIVE_WARMUP;
+  Result.WarmupCVThreshold := BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+  Result.WarmupMaxIterations := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
 end;
 
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;

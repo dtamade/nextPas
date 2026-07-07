@@ -236,13 +236,14 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 22 |
-| 框架级测试 | ~377 |
+| 测试套件 | 23 |
+| 框架级测试 | ~381 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 16/16 套件全部启用 -gh，零泄漏 |
+| heaptrc | 23/23 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
+| 自适应预热 | `AdaptiveWarmup` 根据 CV 阈值自动停止预热 |
 
 ## 竞争力矩阵（vs Go/Rust）
 

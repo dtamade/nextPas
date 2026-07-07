@@ -183,6 +183,11 @@ type
     {** Phase 3: 启用对象池以减少分配开销 }
     procedure EnableObjectPool(AEnabled: Boolean = True);
 
+    {** B21: 启用自适应预热 }
+    procedure SetAdaptiveWarmup(AEnabled: Boolean;
+      ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+      AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS);
+
     {** 便利方法：运行单个基准并累积结果（旧 API 兼容）。
      *  AFunc 是 TBenchLoopFunc，内部循环由框架控制。 }
     procedure Run(const AName: string; AFunc: TBenchLoopFunc);
@@ -911,15 +916,70 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  I: Integer;
+  I, J, LMaxIters: Integer;
   LResult: TBenchResult;
+  LSamples: TDoubleArray;
+  LMean, LStdDev, LCV, LDiff: Double;
+  LN: Integer;
 begin
-  for I := 1 to FConfig.WarmupIterations do
+  { B21: Adaptive warmup - measure CV and stop when variance stabilizes }
+  if FConfig.AdaptiveWarmup then
   begin
-    LResult := ExecuteEntry(AEntry, 1, False);
-    { F-06: if warmup is skipped, stop early }
-    if LResult.Skipped then
-      Break;
+    LMaxIters := FConfig.WarmupMaxIterations;
+    if LMaxIters <= 0 then
+      LMaxIters := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
+
+    SetLength(LSamples, LMaxIters);
+    LN := 0;
+
+    for I := 1 to LMaxIters do
+    begin
+      LResult := ExecuteEntry(AEntry, 1, False);
+      if LResult.Skipped then
+        Break;
+
+      LSamples[LN] := LResult.NsPerOp;
+      Inc(LN);
+
+      { Need at least 5 samples before checking CV }
+      if LN >= 5 then
+      begin
+        { Compute mean and stddev of current samples }
+        LMean := 0;
+        for J := 0 to LN - 1 do
+          LMean := LMean + LSamples[J];
+        LMean := LMean / LN;
+
+        LStdDev := 0;
+        for J := 0 to LN - 1 do
+        begin
+          LDiff := LSamples[J] - LMean;
+          LStdDev := LStdDev + LDiff * LDiff;
+        end;
+        LStdDev := Sqrt(LStdDev / LN);
+
+        { CV = StdDev / Mean }
+        if LMean > 0 then
+          LCV := LStdDev / LMean
+        else
+          LCV := 0;
+
+        { Stop if CV below threshold }
+        if LCV < FConfig.WarmupCVThreshold then
+          Break;
+      end;
+    end;
+  end
+  else
+  begin
+    { Fixed warmup iterations (original behavior) }
+    for I := 1 to FConfig.WarmupIterations do
+    begin
+      LResult := ExecuteEntry(AEntry, 1, False);
+      { F-06: if warmup is skipped, stop early }
+      if LResult.Skipped then
+        Break;
+    end;
   end;
 end;
 
@@ -1217,6 +1277,16 @@ begin
   FUseObjectPool := AEnabled;
   if AEnabled then
     InitGlobalPool;
+end;
+
+procedure TBenchRunner.SetAdaptiveWarmup(AEnabled: Boolean;
+  ACVThreshold: Double; AMaxIterations: Integer);
+begin
+  FConfig.AdaptiveWarmup := AEnabled;
+  if ACVThreshold > 0 then
+    FConfig.WarmupCVThreshold := ACVThreshold;
+  if AMaxIterations > 0 then
+    FConfig.WarmupMaxIterations := AMaxIterations;
 end;
 
 procedure TBenchRunner.Run(const AName: string; AFunc: TBenchLoopFunc);
