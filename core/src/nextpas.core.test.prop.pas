@@ -1,7 +1,7 @@
-{ nextpas.core.test.prop — Property-based Testing (v7.1)
+{ nextpas.core.test.prop — Property-based Testing (v8.0b)
   =========================================================
-  QuickCheck-style property testing with structured generators
-  and automatic shrinking on failure.
+  QuickCheck-style property testing with structured generators,
+  coverage-guided fuzzing, and automatic shrinking on failure.
 
   Usage:
     procedure TestRoundtrip(const S: string);
@@ -9,10 +9,7 @@
       CheckEqual(S, JsonDecode(JsonEncode(S)));
     end;
 
-    Prop('JSON roundtrip', @TestRoundtrip)
-      .WithGen(GenString(1..1000))
-      .Runs(1000)
-      .ShrinkOnFail; }
+    Prop('JSON roundtrip', @TestRoundtrip, GenString(1000), 1000, True); }
 
 unit nextpas.core.test.prop;
 
@@ -1985,32 +1982,20 @@ end;
 
 function FuzzGenBytes(ALen: Integer): TBytes;
 var
-  LRng: TRandomGen;
   I: Integer;
 begin
-  LRng := TRandomGen.Create(0);
-  try
-    SetLength(Result, ALen);
-    for I := 0 to ALen - 1 do
-      Result[I] := Byte(LRng.NextIntRange(0, 255));
-  finally
-    LRng.Free;
-  end;
+  SetLength(Result, ALen);
+  for I := 0 to ALen - 1 do
+    Result[I] := Byte(GetFuzzRng.NextIntRange(0, 255));
 end;
 
 function FuzzGenString(ALen: Integer): string;
 var
-  LRng: TRandomGen;
   I: Integer;
 begin
-  LRng := TRandomGen.Create(0);
-  try
-    SetLength(Result, ALen);
-    for I := 1 to ALen do
-      Result[I] := Char(32 + LRng.NextIntRange(0, 95));
-  finally
-    LRng.Free;
-  end;
+  SetLength(Result, ALen);
+  for I := 1 to ALen do
+    Result[I] := Char(32 + GetFuzzRng.NextIntRange(0, 95)); { printable ASCII }
 end;
 
 { ── Corpus Management (v7.3a) ───────────────────────────────────────────── }

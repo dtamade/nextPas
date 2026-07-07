@@ -1154,7 +1154,6 @@ begin
     if AMessage <> '' then
       LMsg := AMessage + ': ' + LMsg;
     InternalFail(LMsg);
-    Exit;
   end;
 
   LMin := Length(AExpected);
