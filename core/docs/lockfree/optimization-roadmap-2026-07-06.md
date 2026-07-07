@@ -14,6 +14,7 @@
 | Phase 4 | P0 | 架构优化 | 16h | 读路径无锁 | ✅ 完成 |
 | Phase 5 | 安全审计 | 并发安全 | 6h | 文档+审计 | ✅ 审计完成 |
 | Phase 6 | EBR 优化 | retire buffer | 2h | 评估+文档 | ❌ threadvar 限制 |
+| Phase 7 | EBR pthread_key | per-thread buffer | 4h | 实现+测试 | ✅ 完成 |
 
 **实际完成**:
 - 测试覆盖: 248 → 257 tests (23 数据结构)

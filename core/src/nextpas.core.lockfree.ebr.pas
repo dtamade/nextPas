@@ -30,6 +30,13 @@ type
     - 不维护全局 epoch，不做 epoch 推进
     - 依赖临界区极短（纳秒级）的使用场景
 
+    **Per-thread Retire Buffer (Phase 7)**:
+    - 使用 pthread_key_create + 析构函数实现线程安全的 per-thread 缓冲区
+    - 每个线程维护本地 retire 缓冲区 (16 slots)
+    - 缓冲区满时批量 CAS 提交到全局链表
+    - 线程退出时析构函数自动 flush 剩余缓冲区
+    - 减少 ~94% 的 CAS 操作（16 次 retire → 1 次 CAS）
+
     **适用场景**:
     - SegQueue 等临界区仅包含几个原子操作的无锁数据结构
     - 生产者-消费者模式，消费者处理极快
@@ -51,6 +58,8 @@ type
     FRetiredCount: Int32;
     FFreeList: PEbrRetiredNode;
     FFreeListCount: Int32;
+    {** @desc 直接 CAS 提交（TLS 不可用时的 fallback） }
+    procedure RetireDirect(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
   public
     constructor Create;
     destructor Destroy; override;
@@ -85,6 +94,158 @@ type
 
 implementation
 
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
+
+const
+  {** Per-thread retire buffer 大小 }
+  EBR_RETIRE_BUFFER_SIZE = 16;
+
+type
+  {** Per-thread retire buffer }
+  PEbrThreadBuffer = ^TEbrThreadBuffer;
+  TEbrThreadBuffer = record
+    Domain: TEbrDomain;
+    Count: Int32;
+    Entries: array[0..EBR_RETIRE_BUFFER_SIZE - 1] of record
+      Data: Pointer;
+      Reclaim: TLockFreeReclaimProc;
+      UserData: Pointer;
+    end;
+  end;
+
+var
+  {** pthread_key for per-thread buffer }
+  GEbrTlsKey: pthread_key_t;
+  {** 是否已初始化 }
+  GEbrTlsInitialized: Boolean = False;
+
+{** @desc pthread 析构函数：线程退出时自动 flush 缓冲区 }
+procedure EbrThreadBufferDestructor(AValue: Pointer); cdecl;
+var
+  LBuffer: PEbrThreadBuffer;
+  LDomain: TEbrDomain;
+  LHead, LLast, LNode: PEbrRetiredNode;
+  LI: Int32;
+begin
+  LBuffer := PEbrThreadBuffer(AValue);
+  if LBuffer = nil then
+    Exit;
+  LDomain := LBuffer^.Domain;
+  if (LDomain <> nil) and (LBuffer^.Count > 0) then
+  begin
+    { 构建本地链表 }
+    LHead := nil;
+    LLast := nil;
+    for LI := LBuffer^.Count - 1 downto 0 do
+    begin
+      { Try to reuse from freelist }
+      if (LDomain.FFreeList <> nil) and (LDomain.FFreeListCount > 0) then
+      begin
+        LNode := LDomain.FFreeList;
+        LDomain.FFreeList := LNode^.Next;
+        Dec(LDomain.FFreeListCount);
+      end
+      else
+        LNode := GetMem(SizeOf(TEbrRetiredNode));
+      LNode^.Data := LBuffer^.Entries[LI].Data;
+      LNode^.Reclaim := LBuffer^.Entries[LI].Reclaim;
+      LNode^.UserData := LBuffer^.Entries[LI].UserData;
+      LNode^.Next := LHead;
+      LHead := LNode;
+      if LLast = nil then
+        LLast := LNode;
+    end;
+    { 批量 CAS: 整条链表一次提交 }
+    if LHead <> nil then
+    begin
+      repeat
+        LLast^.Next := PEbrRetiredNode(atomic_load(PPointer(@LDomain.FRetired)^, moRelaxed));
+      until atomic_compare_exchange_strong(
+          PPointer(@LDomain.FRetired)^, PPointer(@LLast^.Next)^, LHead, moRelease, moRelaxed);
+    end;
+  end;
+  FreeMem(LBuffer);
+end;
+
+{** @desc 获取或创建当前线程的 buffer }
+function GetThreadBuffer(ADomain: TEbrDomain): PEbrThreadBuffer;
+var
+  LBuffer: PEbrThreadBuffer;
+begin
+  if not GEbrTlsInitialized then
+    Exit(nil);
+  LBuffer := PEbrThreadBuffer(pthread_getspecific(GEbrTlsKey));
+  if LBuffer = nil then
+  begin
+    LBuffer := GetMem(SizeOf(TEbrThreadBuffer));
+    LBuffer^.Domain := ADomain;
+    LBuffer^.Count := 0;
+    pthread_setspecific(GEbrTlsKey, LBuffer);
+  end
+  else if LBuffer^.Domain <> ADomain then
+  begin
+    { domain 变更: 先 flush 旧 domain 的缓冲区 }
+    if (LBuffer^.Domain <> nil) and (LBuffer^.Count > 0) then
+    begin
+      EbrThreadBufferDestructor(LBuffer);
+      LBuffer := GetMem(SizeOf(TEbrThreadBuffer));
+      pthread_setspecific(GEbrTlsKey, LBuffer);
+    end;
+    LBuffer^.Domain := ADomain;
+    LBuffer^.Count := 0;
+  end;
+  Result := LBuffer;
+end;
+
+{** @desc Flush 当前线程的缓冲区到全局链表 }
+procedure FlushThreadBuffer(ADomain: TEbrDomain);
+var
+  LBuffer: PEbrThreadBuffer;
+  LHead, LLast, LNode: PEbrRetiredNode;
+  LI: Int32;
+begin
+  if not GEbrTlsInitialized then
+    Exit;
+  LBuffer := PEbrThreadBuffer(pthread_getspecific(GEbrTlsKey));
+  if (LBuffer = nil) or (LBuffer^.Count <= 0) then
+    Exit;
+  { 构建本地链表 }
+  LHead := nil;
+  LLast := nil;
+  for LI := LBuffer^.Count - 1 downto 0 do
+  begin
+    { Try to reuse from freelist }
+    if (ADomain.FFreeList <> nil) and (ADomain.FFreeListCount > 0) then
+    begin
+      LNode := ADomain.FFreeList;
+      ADomain.FFreeList := LNode^.Next;
+      Dec(ADomain.FFreeListCount);
+    end
+    else
+      LNode := GetMem(SizeOf(TEbrRetiredNode));
+    LNode^.Data := LBuffer^.Entries[LI].Data;
+    LNode^.Reclaim := LBuffer^.Entries[LI].Reclaim;
+    LNode^.UserData := LBuffer^.Entries[LI].UserData;
+    LNode^.Next := LHead;
+    LHead := LNode;
+    if LLast = nil then
+      LLast := LNode;
+  end;
+  { 批量 CAS: 整条链表一次提交 }
+  if LHead <> nil then
+  begin
+    repeat
+      LLast^.Next := PEbrRetiredNode(atomic_load(PPointer(@ADomain.FRetired)^, moRelaxed));
+    until atomic_compare_exchange_strong(
+        PPointer(@ADomain.FRetired)^, PPointer(@LLast^.Next)^, LHead, moRelease, moRelaxed);
+  end;
+  LBuffer^.Count := 0;
+end;
+
+{ TEbrDomain }
+
 constructor TEbrDomain.Create;
 begin
   inherited Create;
@@ -99,6 +260,8 @@ destructor TEbrDomain.Destroy;
 var
   LNode, LNext: PEbrRetiredNode;
 begin
+  { Flush 当前线程的缓冲区 }
+  FlushThreadBuffer(Self);
   LNode := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
   while LNode <> nil do
   begin
@@ -130,10 +293,31 @@ end;
 
 procedure TEbrDomain.Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
 var
-  LNode: PEbrRetiredNode;
+  LBuffer: PEbrThreadBuffer;
 begin
   if AData = nil then
     Exit;
+  { 尝试使用 per-thread buffer }
+  LBuffer := GetThreadBuffer(Self);
+  if LBuffer <> nil then
+  begin
+    LBuffer^.Entries[LBuffer^.Count].Data := AData;
+    LBuffer^.Entries[LBuffer^.Count].Reclaim := AReclaim;
+    LBuffer^.Entries[LBuffer^.Count].UserData := AUserData;
+    Inc(LBuffer^.Count);
+    AtomicFetchAdd32(FRetiredCount, 1, moRelaxed);
+    if LBuffer^.Count >= EBR_RETIRE_BUFFER_SIZE then
+      FlushThreadBuffer(Self);
+    Exit;
+  end;
+  { Fallback: 直接 CAS (TLS 不可用) }
+  RetireDirect(AData, AReclaim, AUserData);
+end;
+
+procedure TEbrDomain.RetireDirect(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
+var
+  LNode: PEbrRetiredNode;
+begin
   { Try to reuse from freelist }
   if (FFreeList <> nil) and (FFreeListCount > 0) then
   begin
@@ -157,6 +341,8 @@ var
   LList: PEbrRetiredNode;
   LNode, LNext: PEbrRetiredNode;
 begin
+  { 先 flush 当前线程的缓冲区 }
+  FlushThreadBuffer(Self);
   if AtomicLoad32(FActiveCount, moAcquire) <> 0 then
     Exit;
   LList := PEbrRetiredNode(atomic_exchange(PPointer(@FRetired)^, nil, moAcqRel));
@@ -226,5 +412,26 @@ begin
     FActive := False;
   end;
 end;
+
+{ 初始化 pthread_key }
+procedure InitEbrTls;
+begin
+  if GEbrTlsInitialized then
+    Exit;
+  if pthread_key_create(@GEbrTlsKey, @EbrThreadBufferDestructor) = 0 then
+    GEbrTlsInitialized := True;
+end;
+
+initialization
+  InitEbrTls;
+
+finalization
+  { Flush 主线程的 buffer }
+  if GEbrTlsInitialized then
+  begin
+    EbrThreadBufferDestructor(pthread_getspecific(GEbrTlsKey));
+    pthread_setspecific(GEbrTlsKey, nil);
+    pthread_key_delete(GEbrTlsKey);
+  end;
 
 end.
