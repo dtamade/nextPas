@@ -25,6 +25,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.math,
+  nextpas.core.base,
   nextpas.core.test,
   nextpas.core.test.prop;
 
@@ -103,6 +104,73 @@ begin
   except
     on E: EAssertionFailed do CheckContains(LowerCase(E.Message), 'differ');
     on E: Exception do FailUnexpected(E);
+  end;
+end;
+
+procedure TestCheckEqualUInt64;
+begin
+  CheckEqual(UInt64(0), UInt64(0));
+  CheckEqual(UInt64($FFFFFFFFFFFFFFFF), UInt64($FFFFFFFFFFFFFFFF));
+  CheckEqual(UInt64(42), UInt64(42));
+  ExpectFail(procedure begin CheckEqual(UInt64(1), UInt64(2)); end, '1');
+end;
+
+procedure TestCheckNotEqualUInt64;
+begin
+  CheckNotEqual(UInt64(1), UInt64(2));
+  CheckNotEqual(UInt64(0), UInt64($FFFFFFFFFFFFFFFF));
+  ExpectFail(procedure begin CheckNotEqual(UInt64(99), UInt64(99)); end, '99');
+end;
+
+procedure TestCheckEqualTBytes;
+var
+  LA, LB: TBytes;
+begin
+  SetLength(LA, 3); LA[0] := 1; LA[1] := 2; LA[2] := 3;
+  SetLength(LB, 3); LB[0] := 1; LB[1] := 2; LB[2] := 3;
+  CheckEqual(LA, LB);
+  { empty arrays }
+  SetLength(LA, 0); SetLength(LB, 0);
+  CheckEqual(LA, LB);
+  { different values }
+  SetLength(LA, 2); LA[0] := 1; LA[1] := 2;
+  SetLength(LB, 2); LB[0] := 1; LB[1] := 9;
+  try
+    CheckEqual(LA, LB);
+    Fail('expected TBytes equal fail');
+  except
+    on E: EAssertionFailed do CheckContains(E.Message, 'index');
+  end;
+  { different lengths }
+  SetLength(LA, 3); LA[0] := 1; LA[1] := 2; LA[2] := 3;
+  SetLength(LB, 2); LB[0] := 1; LB[1] := 2;
+  try
+    CheckEqual(LA, LB);
+    Fail('expected TBytes length fail');
+  except
+    on E: EAssertionFailed do CheckContains(E.Message, 'length');
+  end;
+end;
+
+procedure TestCheckNotEqualTBytes;
+var
+  LA, LB: TBytes;
+begin
+  SetLength(LA, 2); LA[0] := 1; LA[1] := 2;
+  SetLength(LB, 2); LB[0] := 1; LB[1] := 9;
+  CheckNotEqual(LA, LB);
+  { different lengths }
+  SetLength(LA, 1); LA[0] := 1;
+  SetLength(LB, 2); LB[0] := 1; LB[1] := 2;
+  CheckNotEqual(LA, LB);
+  { same arrays should fail }
+  SetLength(LA, 2); LA[0] := $AB; LA[1] := $CD;
+  SetLength(LB, 2); LB[0] := $AB; LB[1] := $CD;
+  try
+    CheckNotEqual(LA, LB);
+    Fail('expected TBytes not-equal fail');
+  except
+    on E: EAssertionFailed do CheckContains(E.Message, 'differ');
   end;
 end;
 
@@ -1177,6 +1245,10 @@ begin
   LSuite.Test('CheckNotEqual',         @TestCheckNotEqual);
   LSuite.Test('CheckNotEqual (bool)',  @TestCheckNotEqualBool);
   LSuite.Test('CheckNotEqual (ptr)',   @TestCheckNotEqualPtr);
+  LSuite.Test('CheckEqual (uint64)',   @TestCheckEqualUInt64);
+  LSuite.Test('CheckNotEqual (u64)',   @TestCheckNotEqualUInt64);
+  LSuite.Test('CheckEqual (TBytes)',   @TestCheckEqualTBytes);
+  LSuite.Test('CheckNotEqual (bytes)', @TestCheckNotEqualTBytes);
   LSuite.Test('CheckTrue/False',       @TestCheckTrueFalse);
   LSuite.Test('CheckNil/NotNil',       @TestCheckNilNotNil);
   LSuite.Test('CheckContains',         @TestCheckContains);

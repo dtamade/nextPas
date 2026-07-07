@@ -115,6 +115,8 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckEqual(const AExpected, AActual: TBytes); overload;
 procedure CheckEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 { 3-arg overloads: prepend AMessage on failure (backward compat). }
@@ -134,6 +136,8 @@ procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckNotEqual(const AExpected, AActual: TBytes); overload;
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
