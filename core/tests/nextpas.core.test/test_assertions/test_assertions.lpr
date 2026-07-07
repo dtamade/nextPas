@@ -24,7 +24,8 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.math,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 
@@ -1066,6 +1067,77 @@ begin
   end, 'length context');
 end;
 
+{ ── v8.0c: Array Comparison Tests ─────────────────────────────────────────── }
+
+procedure TestCheckArrayEqualPass;
+begin
+  CheckArrayEqual([1, 2, 3], [1, 2, 3]);
+end;
+
+procedure TestCheckArrayEqualFailLength;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3], [1, 2]);
+  end, 'length');
+end;
+
+procedure TestCheckArrayEqualFailValue;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3], [1, 99, 3]);
+  end, 'index 1');
+end;
+
+procedure TestCheckArrayEqualEmpty;
+begin
+  CheckArrayEqual([], []);
+end;
+
+procedure TestCheckArrayEqualWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([10, 20], [10, 30], 'my array');
+  end, 'my array');
+end;
+
+{ ── v8.0c: Interface Nil Check Tests ──────────────────────────────────────── }
+
+procedure TestCheckIsNilPass;
+var
+  LI: IInterface;
+begin
+  LI := nil;
+  CheckIsNil(LI);
+end;
+
+procedure TestCheckIsNilFail;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  ExpectFail(procedure begin
+    CheckIsNil(LTracker);
+  end, 'non-nil');
+end;
+
+procedure TestCheckIsNotNilPass;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  CheckIsNotNil(LTracker);
+end;
+
+procedure TestCheckIsNotNilFail;
+var
+  LI: IInterface;
+begin
+  LI := nil;
+  ExpectFail(procedure begin
+    CheckIsNotNil(LI);
+  end, 'nil');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1236,6 +1308,19 @@ begin
   LSuite.Test('NotEqual string+msg',       @TestCheckNotEqualStringWithMessage);
   LSuite.Test('NotEqual int+msg',          @TestCheckNotEqualIntWithMessage);
   LSuite.Test('Length+msg',                @TestCheckLengthWithMessage);
+
+  { v8.0c: Array comparison }
+  LSuite.Test('ArrayEqual pass',           @TestCheckArrayEqualPass);
+  LSuite.Test('ArrayEqual fail length',    @TestCheckArrayEqualFailLength);
+  LSuite.Test('ArrayEqual fail value',     @TestCheckArrayEqualFailValue);
+  LSuite.Test('ArrayEqual empty',          @TestCheckArrayEqualEmpty);
+  LSuite.Test('ArrayEqual+msg',            @TestCheckArrayEqualWithMessage);
+
+  { v8.0c: Interface nil checks }
+  LSuite.Test('IsNil pass',               @TestCheckIsNilPass);
+  LSuite.Test('IsNil fail',               @TestCheckIsNilFail);
+  LSuite.Test('IsNotNil pass',            @TestCheckIsNotNilPass);
+  LSuite.Test('IsNotNil fail',            @TestCheckIsNotNilFail);
 
   if not LSuite.Run then
   begin
