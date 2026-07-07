@@ -7835,6 +7835,152 @@ begin
   HttpReleaseResponseBody(LResp);
 end;
 
+{ THttpRequestBuilder tests }
+
+procedure TestBuilderGetRequest;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test').Build;
+  Check(LReq <> nil, 'builder Build returns non-nil request');
+  CheckEqual(Int64(hmGet), Int64(LReq.Method), 'builder sets GET method');
+  CheckEqual('/test', LReq.Path, 'builder sets path');
+  LResp := LClient.Send(LReq);
+  Check(LResp <> nil, 'builder GET request sent successfully');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestBuilderPostWithBody;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
+    .ContentType('application/json')
+    .Body('{"key":"value"}')
+    .Build;
+  CheckEqual(Int64(hmPost), Int64(LReq.Method), 'builder sets POST method');
+  Check(LReq.Headers.Has('content-type'), 'builder sets content-type header');
+  CheckEqual('application/json', LReq.Headers.Get('content-type'),
+    'builder content-type value');
+  LResp := LClient.Send(LReq);
+  Check(LResp <> nil, 'builder POST request sent successfully');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestBuilderHeadersAndAuth;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test')
+    .Header('Accept', 'application/json')
+    .Header('X-Custom', 'phase18')
+    .BearerAuth('my-token')
+    .Build;
+  CheckEqual('application/json', LReq.Headers.Get('accept'),
+    'builder sets Accept header');
+  CheckEqual('phase18', LReq.Headers.Get('x-custom'),
+    'builder sets custom header');
+  CheckEqual('Bearer my-token', LReq.Headers.Get('authorization'),
+    'builder sets Bearer auth header');
+end;
+
+procedure TestBuilderBasicAuth;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test')
+    .BasicAuth('user', 'pass')
+    .Build;
+  Check(LReq.Headers.Has('authorization'),
+    'builder BasicAuth sets authorization header');
+  CheckEqual('Basic', System.Copy(LReq.Headers.Get('authorization'), 1, 5),
+    'builder BasicAuth prefix');
+end;
+
+procedure TestBuilderQueryParams;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/search')
+    .QueryParam('q', 'hello')
+    .QueryParam('page', '1')
+    .Build;
+  Check(Pos('q=hello', LReq.Url.RawQuery) > 0,
+    'builder QueryParam contains q=hello');
+  Check(Pos('page=1', LReq.Url.RawQuery) > 0,
+    'builder QueryParam contains page=1');
+end;
+
+procedure TestBuilderQueryParamsExistingQuery;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/search?existing=yes')
+    .QueryParam('new', 'value')
+    .Build;
+  Check(Pos('existing=yes', LReq.Url.RawQuery) > 0,
+    'builder preserves existing query');
+  Check(Pos('new=value', LReq.Url.RawQuery) > 0,
+    'builder appends new query param');
+end;
+
+procedure TestBuilderPerRequestOptions;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/orig')
+    .FollowRedirects(False)
+    .Build;
+  LResp := LClient.Send(LReq);
+  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
+    'builder FollowRedirects(false) prevents redirect');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestBuilderChaining;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmPut, 'http://localhost/api/item')
+    .ContentType('application/json')
+    .BearerAuth('token123')
+    .Header('Accept', 'application/json')
+    .QueryParam('verbose', 'true')
+    .Body('{"update":true}')
+    .Timeout(3000)
+    .Build;
+  CheckEqual(Int64(hmPut), Int64(LReq.Method), 'chained builder method');
+  CheckEqual('application/json', LReq.Headers.Get('content-type'),
+    'chained builder content-type');
+  CheckEqual('Bearer token123', LReq.Headers.Get('authorization'),
+    'chained builder auth');
+  CheckEqual('application/json', LReq.Headers.Get('accept'),
+    'chained builder accept header');
+  Check(Pos('verbose=true', LReq.Url.RawQuery) > 0,
+    'chained builder query param');
+end;
+
 { Main }
 
 begin
@@ -8107,5 +8253,13 @@ begin
     @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
+  T.Test('Builder creates GET request', @TestBuilderGetRequest);
+  T.Test('Builder POST with body and content-type', @TestBuilderPostWithBody);
+  T.Test('Builder headers and BearerAuth', @TestBuilderHeadersAndAuth);
+  T.Test('Builder BasicAuth', @TestBuilderBasicAuth);
+  T.Test('Builder query parameters', @TestBuilderQueryParams);
+  T.Test('Builder preserves existing query', @TestBuilderQueryParamsExistingQuery);
+  T.Test('Builder per-request FollowRedirects(false)', @TestBuilderPerRequestOptions);
+  T.Test('Builder full chaining', @TestBuilderChaining);
   if not T.Run then Halt(1);
 end.

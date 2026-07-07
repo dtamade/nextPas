@@ -144,12 +144,49 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
 
+type
+  { Fluent builder for HTTP requests.
+    Usage: THttpRequestBuilder.Create(hmGet, 'http://example.com')
+             .Header('Accept', 'application/json')
+             .BearerAuth('token')
+             .QueryParam('page', '1')
+             .Build }
+  THttpRequestBuilder = record
+  private
+    FMethod: THttpMethod;
+    FUrl: string;
+    FHeaders: IHttpHeaders;
+    FBodyReader: IReader;
+    FBodyString: string;
+    FBodyBytes: TBytes;
+    FHasBody: Boolean;
+    FContentType: string;
+    FQueryParams: TQueryParams;
+    FQueryCount: Int32;
+    FRequestOptions: THttpRequestOptions;
+  public
+    constructor Create(const AMethod: THttpMethod; const AUrl: string);
+    function Header(const AName, AValue: string): THttpRequestBuilder;
+    function BasicAuth(const AUsername, APassword: string): THttpRequestBuilder;
+    function BearerAuth(const AToken: string): THttpRequestBuilder;
+    function ContentType(const AContentType: string): THttpRequestBuilder;
+    function Body(const ABody: string): THttpRequestBuilder; overload;
+    function Body(const ABody: TBytes): THttpRequestBuilder; overload;
+    function Body(const ABody: IReader): THttpRequestBuilder; overload;
+    function QueryParam(const AName, AValue: string): THttpRequestBuilder;
+    function Timeout(const ATimeoutMs: Int64): THttpRequestBuilder;
+    function MaxRedirects(const AMaxRedirects: Int32): THttpRequestBuilder;
+    function FollowRedirects(const AFollow: Boolean): THttpRequestBuilder;
+    function Build: IHttpRequest;
+  end;
+
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
+  nextpas.core.encoding,
   nextpas.core.http.headers;
 
 function BytesBodyReader(const ABodyBytes: TBytes): IReader;
@@ -766,6 +803,181 @@ begin
   AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
   AW.WriteHeader(AStatus);
   Result := WriteAllResponseBodyString(AW, ABody);
+end;
+
+{ THttpRequestBuilder }
+
+constructor THttpRequestBuilder.Create(const AMethod: THttpMethod;
+  const AUrl: string);
+begin
+  FMethod := AMethod;
+  FUrl := AUrl;
+  FHeaders := nil;
+  FBodyReader := nil;
+  FBodyString := '';
+  FBodyBytes := nil;
+  FHasBody := False;
+  FContentType := '';
+  FQueryCount := 0;
+  FRequestOptions := Default(THttpRequestOptions);
+end;
+
+function THttpRequestBuilder.Header(const AName,
+  AValue: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  if Result.FHeaders = nil then
+    Result.FHeaders := NewHttpHeaders;
+  Result.FHeaders.SetHeader(AName, AValue);
+end;
+
+function THttpRequestBuilder.BasicAuth(const AUsername,
+  APassword: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  if Result.FHeaders = nil then
+    Result.FHeaders := NewHttpHeaders;
+  Result.FHeaders.SetHeader('authorization',
+    'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function THttpRequestBuilder.BearerAuth(
+  const AToken: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  if Result.FHeaders = nil then
+    Result.FHeaders := NewHttpHeaders;
+  Result.FHeaders.SetHeader('authorization', 'Bearer ' + AToken);
+end;
+
+function THttpRequestBuilder.ContentType(
+  const AContentType: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FContentType := AContentType;
+end;
+
+function THttpRequestBuilder.Body(
+  const ABody: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FBodyString := ABody;
+  Result.FBodyReader := nil;
+  Result.FBodyBytes := nil;
+  Result.FHasBody := True;
+end;
+
+function THttpRequestBuilder.Body(
+  const ABody: TBytes): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FBodyBytes := ABody;
+  Result.FBodyString := '';
+  Result.FBodyReader := nil;
+  Result.FHasBody := True;
+end;
+
+function THttpRequestBuilder.Body(
+  const ABody: IReader): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FBodyReader := ABody;
+  Result.FBodyString := '';
+  Result.FBodyBytes := nil;
+  Result.FHasBody := True;
+end;
+
+function THttpRequestBuilder.QueryParam(const AName,
+  AValue: string): THttpRequestBuilder;
+begin
+  Result := Self;
+  if Result.FQueryCount >= Length(Result.FQueryParams) then
+    SetLength(Result.FQueryParams, Result.FQueryCount + 4);
+  Result.FQueryParams[Result.FQueryCount].Name := AName;
+  Result.FQueryParams[Result.FQueryCount].Value := AValue;
+  Inc(Result.FQueryCount);
+end;
+
+function THttpRequestBuilder.Timeout(
+  const ATimeoutMs: Int64): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.TimeoutMs := ATimeoutMs;
+  Result.FRequestOptions.HasTimeout := True;
+end;
+
+function THttpRequestBuilder.MaxRedirects(
+  const AMaxRedirects: Int32): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.MaxRedirects := AMaxRedirects;
+  Result.FRequestOptions.HasMaxRedirects := True;
+end;
+
+function THttpRequestBuilder.FollowRedirects(
+  const AFollow: Boolean): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.FollowRedirects := AFollow;
+  Result.FRequestOptions.HasFollowRedirects := True;
+end;
+
+function THttpRequestBuilder.Build: IHttpRequest;
+var
+  LUrl: string;
+  LHeaders: IHttpHeaders;
+  LQueryStr: string;
+  LQuerySlice: TQueryParams;
+  LBody: IReader;
+  LBodyString: string;
+  LBodyBytes: TBytes;
+begin
+  LUrl := FUrl;
+  if FQueryCount > 0 then
+  begin
+    SetLength(LQuerySlice, FQueryCount);
+    Move(FQueryParams[0], LQuerySlice[0], FQueryCount * SizeOf(TQueryParam));
+    LQueryStr := EncodeQueryString(LQuerySlice);
+    if LQueryStr <> '' then
+    begin
+      if Pos('?', LUrl) > 0 then
+        LUrl := LUrl + '&' + LQueryStr
+      else
+        LUrl := LUrl + '?' + LQueryStr;
+    end;
+  end;
+
+  LHeaders := FHeaders;
+  if LHeaders = nil then
+    LHeaders := NewHttpHeaders;
+  if FContentType <> '' then
+    LHeaders.SetHeader('content-type', FContentType);
+
+  if FHasBody then
+  begin
+    if FBodyReader <> nil then
+      Result := NewRequest(FMethod, LUrl, LHeaders, FBodyReader, 0)
+    else if FBodyString <> '' then
+    begin
+      LBodyString := FBodyString;
+      LBody := StringBodyReader(LBodyString);
+      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyString)));
+    end
+    else if FBodyBytes <> nil then
+    begin
+      LBodyBytes := FBodyBytes;
+      LBody := BytesBodyReader(LBodyBytes);
+      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyBytes)));
+    end
+    else
+      Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
+  end
+  else
+    Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
+
+  if FRequestOptions.HasTimeout or FRequestOptions.HasMaxRedirects or
+    FRequestOptions.HasFollowRedirects then
+    (Result as IHttpRequestWithOptions).SetRequestOptions(FRequestOptions);
 end;
 
 end.

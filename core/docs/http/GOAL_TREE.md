@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 17 — per-request redirect/timeout override)
+> Last updated: 2026-07-07 (Phase 18 — fluent request builder)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,15 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 18 (2026-07-07): Fluent Request Builder**
+
+- **`THttpRequestBuilder`**: record type with fluent API for constructing `IHttpRequest` objects
+- **Methods**: `Header`, `BasicAuth`, `BearerAuth`, `ContentType`, `Body` (string/TBytes/IReader), `QueryParam`, `Timeout`, `MaxRedirects`, `FollowRedirects`, `Build`
+- **Query handling**: accumulates params and encodes via `EncodeQueryString` on `Build()`, preserves existing query in URL
+- **Per-request options**: integrates with Phase 17's `IHttpRequestWithOptions` — `FollowRedirects(false)` etc. on the builder
+- **Re-exported**: `THttpRequestBuilder` available from `nextpas.core.http` facade
+- **Tests**: 8 new tests (GET, POST+body, headers+auth, BasicAuth, query params, existing query, per-request options, full chaining), 161 client total / 0 leaks
 
 **Phase 17 (2026-07-07): Per-Request Redirect/Timeout Override**
 
@@ -224,14 +233,12 @@ Already landed:
 - `WithHeader` generic header injection decorator (chains with auth: `WithBearerAuth(token).WithHeader('Accept', 'application/json')`)
 - `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
+- `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
 
 Still intentionally not claimed:
 
-- a full fluent request builder
 - per-request timeout override at transport level (currently only controls redirect behavior; transport-level timeout requires IHttpTransport changes)
-- per-request timeout override
 - streaming/chunked request body ownership API
-- response charset decoding or sniffing
 
 Those can land later, but only after the contract shape is clear enough to stay stable.
 
