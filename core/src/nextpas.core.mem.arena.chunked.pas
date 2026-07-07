@@ -93,6 +93,10 @@ type
     function UsedSize: SizeUInt;
     function Stats: TArenaStats;
 
+    { Compact: merge adjacent cached free segments to reduce fragmentation.
+      Returns the number of segments merged. }
+    function Compact: SizeInt;
+
     { Diagnostics }
     function SegmentCount: SizeUInt; inline;
     property PeakUsed: SizeUInt read FPeakUsed;
@@ -734,6 +738,88 @@ end;
 function TChunkedArena.SegmentCount: SizeUInt;
 begin
   Result := SizeUInt(FSegmentCount);
+end;
+
+function TChunkedArena.Compact: SizeInt;
+var
+  I, J: SizeInt;
+  LSegA, LSegB: PSegment;
+  LNewRaw: Pointer;
+  LNewSize: SizeUInt;
+  LTmp: TSegment;
+begin
+  Result := 0;
+  if FFreeCount < 2 then
+    Exit;
+
+  { Sort cached segments by base address for adjacency detection.
+    Simple insertion sort — cache is small (<= CHUNK_CACHE_LIMIT). }
+  for I := 1 to FFreeCount - 1 do
+  begin
+    J := I;
+    while (J > 0) and (PtrUInt(FFreeSegments[J - 1].Base) > PtrUInt(FFreeSegments[J].Base)) do
+    begin
+      LTmp := FFreeSegments[J];
+      FFreeSegments[J] := FFreeSegments[J - 1];
+      FFreeSegments[J - 1] := LTmp;
+      Dec(J);
+    end;
+  end;
+
+  { Merge adjacent segments. }
+  I := 0;
+  while I < FFreeCount - 1 do
+  begin
+    LSegA := @FFreeSegments[I];
+    LSegB := @FFreeSegments[I + 1];
+
+    { Check if A and B are adjacent in memory. }
+    if (LSegA^.Raw <> nil) and (LSegB^.Raw <> nil) and
+       (PByte(LSegA^.Raw) + LSegA^.RawSize = PByte(LSegB^.Raw)) then
+    begin
+      { Merge B into A: allocate a new combined block, copy both, free originals. }
+      LNewSize := LSegA^.RawSize + LSegB^.RawSize;
+      if FAllocator <> nil then
+        LNewRaw := FAllocator.GetMem(LNewSize)
+      else
+        LNewRaw := System.GetMem(LNewSize);
+      if LNewRaw <> nil then
+      begin
+        { Copy A's content }
+        Move(LSegA^.Raw^, LNewRaw^, LSegA^.RawSize);
+        { Copy B's content right after A }
+        Move(LSegB^.Raw^, PByte(LNewRaw)[LSegA^.RawSize], LSegB^.RawSize);
+
+        { Free originals }
+        if FAllocator <> nil then
+        begin
+          FAllocator.FreeMem(LSegA^.Raw);
+          FAllocator.FreeMem(LSegB^.Raw);
+        end
+        else
+        begin
+          System.FreeMem(LSegA^.Raw);
+          System.FreeMem(LSegB^.Raw);
+        end;
+
+        { Update A to be the merged segment }
+        LSegA^.Raw := LNewRaw;
+        LSegA^.RawSize := LNewSize;
+        LSegA^.Base := PByte(LNewRaw); { will be re-aligned on reuse }
+        LSegA^.Size := LNewSize;
+        LSegA^.Used := 0;
+
+        { Remove B from cache (shift remaining) }
+        for J := I + 1 to FFreeCount - 2 do
+          FFreeSegments[J] := FFreeSegments[J + 1];
+        Dec(FFreeCount);
+        Inc(Result);
+        { Don't increment I — check if the merged segment can merge with the next }
+        Continue;
+      end;
+    end;
+    Inc(I);
+  end;
 end;
 
 {$POP}
