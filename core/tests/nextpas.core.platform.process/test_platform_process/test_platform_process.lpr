@@ -13,6 +13,7 @@ uses
   nextpas.core.process,
   nextpas.core.platform.unix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error,
   nextpas.core.test;
 
 var
@@ -501,6 +502,132 @@ begin
   platform_process_close_handle(LNullWrite);
 end;
 
+{ Error path tests }
+procedure TestSpawnNilPath;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn(nil, @LArgv[0], nil, LProc);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet), 'spawn nil path returns invalid');
+end;
+
+procedure TestSpawnFdsNilPath;
+var
+  LProc: TPlatformProcess;
+  LFailStage: TPlatformProcessSpawnStage;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn_fds(nil, @LArgv[0], nil, nil, -1, -1, -1, LProc, LFailStage);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet), 'spawn_fds nil path returns invalid');
+end;
+
+procedure TestRunNilPath;
+var
+  LBuf: array[0..63] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LRet: Int32;
+begin
+  LRet := platform_process_run(nil, nil, nil, @LBuf[0], 64, LOutLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet), 'run nil path returns invalid');
+end;
+
+procedure TestCloseHandleAlreadyClosed;
+var
+  LHandle: PtrInt;
+  LRet: Int32;
+begin
+  LHandle := -1;
+  LRet := platform_process_close_handle(LHandle);
+  CheckEqual(Int64(0), Int64(LRet), 'close already-closed handle returns 0');
+  CheckEqual(Int64(-1), Int64(LHandle), 'handle remains -1');
+end;
+
+procedure TestWaitTimeout;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..2] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '10';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Wait with 1ms timeout should return timeout }
+  LRet := platform_process_wait(LProc, LResult, 1);
+  Check(LRet <> 0, 'wait with timeout returns error');
+  Check(LResult.Status = psRunning, 'process still running after timeout');
+
+  { Clean up }
+  platform_process_kill(LProc);
+  platform_process_wait(LProc, LResult);
+end;
+
+procedure TestTryWaitOnExitedProcess;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn('/bin/true', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn true');
+
+  { Use try_wait to check if process is still running }
+  LRet := platform_process_try_wait(LProc, LResult);
+  Check(LRet = 0, 'try_wait returns 0');
+
+  { Process may have already exited or still running }
+  if LResult.Status = psRunning then
+  begin
+    { Process still running, wait for it }
+    LRet := platform_process_wait(LProc, LResult);
+    Check(LRet = 0, 'wait for true');
+    Check(LResult.Status = psExited, 'true exited');
+    Check(LResult.ExitCode = 0, 'true exit code 0');
+  end
+  else
+  begin
+    { Process already exited }
+    Check(LResult.Status = psExited, 'true exited');
+    Check(LResult.ExitCode = 0, 'true exit code 0');
+  end;
+end;
+
+procedure TestSignalVariousSignals;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..2] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '10';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Send SIGTERM (15) }
+  LRet := platform_process_signal(LProc, 15);
+  Check(LRet = 0, 'signal SIGTERM');
+
+  { Process should exit }
+  LRet := platform_process_wait(LProc, LResult, 5000);
+  Check(LRet = 0, 'wait after SIGTERM');
+  Check(LResult.Status = psSignaled, 'process signaled');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -524,5 +651,12 @@ begin
   T.Test('process detach', @TestProcessDetach);
   T.Test('process create pipe', @TestProcessCreatePipe);
   T.Test('process open null', @TestProcessOpenNull);
+  T.Test('spawn nil path returns invalid', @TestSpawnNilPath);
+  T.Test('spawn_fds nil path returns invalid', @TestSpawnFdsNilPath);
+  T.Test('run nil path returns invalid', @TestRunNilPath);
+  T.Test('close handle already closed', @TestCloseHandleAlreadyClosed);
+  T.Test('wait timeout', @TestWaitTimeout);
+  T.Test('try_wait on exited process', @TestTryWaitOnExitedProcess);
+  T.Test('signal various signals', @TestSignalVariousSignals);
   if not T.Run then Halt(1);
 end.
