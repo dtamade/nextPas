@@ -129,6 +129,33 @@ procedure Prop(const AName: string; ATest: TBytesTest;
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
+{ ── Mutation-based Fuzzing (v7.2a) ───────────────────────────────────────── }
+
+type
+  { Test procedure that receives raw bytes }
+  TFuzzBytesTest = reference to procedure(const Data: TBytes);
+
+  { Test procedure that receives a string }
+  TFuzzStringTest = reference to procedure(const S: string);
+
+{ Fuzz test with raw bytes corpus.
+  Randomly mutates corpus items and runs ATest on each.
+  If ATest raises EAssertionFailed, reports the minimal failing input.
+  AMaxIterations: total mutations to try (default 10000). }
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer = 10000);
+
+{ Fuzz test with string corpus.
+  Strings are encoded to UTF-8 bytes for mutation, then decoded back. }
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer = 10000);
+
+{ Generate random bytes for seed corpus }
+function FuzzGenBytes(ALen: Integer): TBytes;
+
+{ Generate random printable ASCII string for seed corpus }
+function FuzzGenString(ALen: Integer): string;
+
 implementation
 
 uses
@@ -1236,5 +1263,270 @@ begin
   end;
   PassTest('Property "' + AName + '" passed ' + IntToStr(ARuns) + ' runs');
 end;
+
+{ ── Mutation-based Fuzzing (v7.2a) ───────────────────────────────────────── }
+
+var
+  GFuzzRng: TRandomGen = nil;
+
+function GetFuzzRng: TRandomGen;
+begin
+  if GFuzzRng = nil then
+    GFuzzRng := TRandomGen.Create(0);
+  Result := GFuzzRng;
+end;
+
+{ Mutate a byte array randomly. Strategy is chosen weighted-random:
+  40% bit flip, 25% byte replace, 15% byte insert, 10% byte delete,
+  5% block dup, 5% block swap }
+function FuzzMutate(const AData: TBytes): TBytes;
+var
+  LRng: TRandomGen;
+  LLen, LPos, LPos2, LBlockLen, LStrategy, I, LTmp: Integer;
+begin
+  LRng := GetFuzzRng;
+  LLen := Length(AData);
+
+  { Empty input → insert a random byte }
+  if LLen = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := Byte(LRng.NextIntRange(0, 255));
+    Exit;
+  end;
+
+  LStrategy := LRng.NextIntRange(0, 99);
+  LPos := LRng.NextIntRange(0, LLen - 1);
+
+  if LStrategy < 40 then
+  begin
+    { Bit flip: flip 1-3 random bits in one byte }
+    Result := Copy(AData);
+    Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+    if LRng.NextIntRange(0, 2) = 0 then
+      Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+  end
+  else if LStrategy < 65 then
+  begin
+    { Byte replace: replace with random byte }
+    Result := Copy(AData);
+    Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+  end
+  else if LStrategy < 80 then
+  begin
+    { Byte insert: insert random byte at position }
+    SetLength(Result, LLen + 1);
+    if LPos > 0 then
+      Move(AData[0], Result[0], LPos);
+    Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+    if LPos < LLen then
+      Move(AData[LPos], Result[LPos + 1], LLen - LPos);
+  end
+  else if LStrategy < 90 then
+  begin
+    { Byte delete: remove one byte }
+    SetLength(Result, LLen - 1);
+    if LPos > 0 then
+      Move(AData[0], Result[0], LPos);
+    if LPos < LLen - 1 then
+      Move(AData[LPos + 1], Result[LPos], LLen - 1 - LPos);
+  end
+  else if LStrategy < 95 then
+  begin
+    { Block duplicate: duplicate a random block (1-16 bytes) }
+    if 15 < LLen - 1 then
+      LBlockLen := 1 + LRng.NextIntRange(0, 15)
+    else
+      LBlockLen := 1 + LRng.NextIntRange(0, LLen - 1);
+    if LPos + LBlockLen > LLen then
+      LBlockLen := LLen - LPos;
+    SetLength(Result, LLen + LBlockLen);
+    Move(AData[0], Result[0], LLen);  { copy original }
+    Move(AData[LPos], Result[LLen], LBlockLen);  { append block }
+  end
+  else
+  begin
+    { Block swap: swap two random positions (1-8 bytes) }
+    Result := Copy(AData);
+    if 7 < LLen div 2 then
+      LBlockLen := 1 + LRng.NextIntRange(0, 7)
+    else
+      LBlockLen := 1 + LRng.NextIntRange(0, LLen div 2);
+    LPos2 := LRng.NextIntRange(0, LLen - LBlockLen);
+    if LPos + LBlockLen <= LLen then
+    begin
+      { Swap bytes at LPos and LPos2 }
+      for I := 0 to LBlockLen - 1 do
+      begin
+        LTmp := Result[LPos + I];
+        Result[LPos + I] := Result[LPos2 + I];
+        Result[LPos2 + I] := LTmp;
+      end;
+    end;
+  end;
+end;
+
+{ Minimize a failing input by progressively removing bytes }
+function FuzzMinimize(const AData: TBytes; ATest: TFuzzBytesTest): TBytes;
+var
+  LLen, LHalf, I: Integer;
+  LChunk: TBytes;
+  LFailed: Boolean;
+begin
+  Result := Copy(AData);
+  LLen := Length(Result);
+
+  { Try removing progressively larger chunks from the end }
+  while LLen > 1 do
+  begin
+    LHalf := LLen div 2;
+    LFailed := False;
+    SetLength(LChunk, LLen - LHalf);
+    Move(Result[0], LChunk[0], LLen - LHalf);
+    try
+      ATest(LChunk);
+    except
+      on E: EAssertionFailed do
+      begin
+        Result := LChunk;
+        LLen := Length(Result);
+        LFailed := True;
+      end;
+    end;
+    if not LFailed then
+      Break;
+  end;
+
+  { Try removing individual bytes from the front }
+  I := 0;
+  while I < Length(Result) do
+  begin
+    if Length(Result) <= 1 then
+      Break;
+    SetLength(LChunk, Length(Result) - 1);
+    if I > 0 then
+      Move(Result[0], LChunk[0], I);
+    if I < Length(Result) - 1 then
+      Move(Result[I + 1], LChunk[I], Length(Result) - 1 - I);
+    try
+      ATest(LChunk);
+    except
+      on E: EAssertionFailed do
+      begin
+        Result := LChunk;
+        Continue;  { retry same index }
+      end;
+    end;
+    Inc(I);
+  end;
+end;
+
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer);
+var
+  LCorpus: array of TBytes;
+  LLen, I, J, LIdx, LFailCount: Integer;
+  LInput, LMin: TBytes;
+  LHex: string;
+begin
+  { Build corpus array }
+  LLen := Length(ACorpus);
+  if LLen = 0 then
+  begin
+    FailTest('Fuzz "' + AName + '": corpus is empty');
+    Exit;
+  end;
+  SetLength(LCorpus, LLen);
+  for I := 0 to LLen - 1 do
+    LCorpus[I] := Copy(ACorpus[I]);
+
+  LFailCount := 0;
+  for I := 1 to AMaxIterations do
+  begin
+    { Pick random corpus item and mutate }
+    LIdx := GetFuzzRng.NextIntRange(0, High(LCorpus));
+    LInput := FuzzMutate(LCorpus[LIdx]);
+
+    try
+      ATest(LInput);
+    except
+      on E: EAssertionFailed do
+      begin
+        Inc(LFailCount);
+        { Minimize the failing input }
+        LMin := FuzzMinimize(LInput, ATest);
+        { Convert to hex for display }
+        LHex := '';
+        for J := 0 to High(LMin) do
+        begin
+          if J > 0 then
+            LHex := LHex + ' ';
+          LHex := LHex + IntToHex(LMin[J], 2);
+        end;
+        FailTest('Fuzz "' + AName + '" found failure after ' + IntToStr(I) +
+          ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
+          'minimal input (' + IntToStr(Length(LMin)) + ' bytes): ' + LHex);
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('Fuzz "' + AName + '" passed ' + IntToStr(AMaxIterations) +
+    ' iterations, 0 failures');
+end;
+
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer);
+var
+  LBytesCorpus: array of TBytes;
+  LLen, I: Integer;
+begin
+  LLen := Length(ACorpus);
+  if LLen = 0 then
+  begin
+    FailTest('FuzzString "' + AName + '": corpus is empty');
+    Exit;
+  end;
+  SetLength(LBytesCorpus, LLen);
+  for I := 0 to LLen - 1 do
+    LBytesCorpus[I] := StringToUTF8Bytes(ACorpus[I]);
+
+  Fuzz(AName, procedure(const Data: TBytes)
+  begin
+    ATest(UTF8BytesToString(Data));
+  end, LBytesCorpus, AMaxIterations);
+end;
+
+function FuzzGenBytes(ALen: Integer): TBytes;
+var
+  LRng: TRandomGen;
+  I: Integer;
+begin
+  LRng := TRandomGen.Create(0);
+  try
+    SetLength(Result, ALen);
+    for I := 0 to ALen - 1 do
+      Result[I] := Byte(LRng.NextIntRange(0, 255));
+  finally
+    LRng.Free;
+  end;
+end;
+
+function FuzzGenString(ALen: Integer): string;
+var
+  LRng: TRandomGen;
+  I: Integer;
+begin
+  LRng := TRandomGen.Create(0);
+  try
+    SetLength(Result, ALen);
+    for I := 1 to ALen do
+      Result[I] := Char(32 + LRng.NextIntRange(0, 95));
+  finally
+    LRng.Free;
+  end;
+end;
+
+finalization
+  FreeAndNil(GFuzzRng);
 
 end.

@@ -391,6 +391,19 @@ procedure PropFail(const AMsg: string);
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
+{ ── Re-exported fuzzing from test.prop (v7.2a) ───────────────────────────── }
+
+type
+  TFuzzBytesTest = nextpas.core.test.prop.TFuzzBytesTest;
+  TFuzzStringTest = nextpas.core.test.prop.TFuzzStringTest;
+
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer = 10000);
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer = 10000);
+function FuzzGenBytes(ALen: Integer): TBytes;
+function FuzzGenString(ALen: Integer): string;
+
 implementation
 
 {$I nextpas.core.test.fwd.expect.inc}
