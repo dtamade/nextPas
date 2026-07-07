@@ -19,6 +19,7 @@
 |----------|----------|------|
 | test_platform | 3 | ✅ |
 | test_platform_args | 5 | ✅ |
+| test_platform_args_wine | 8 | ✅ |
 | test_platform_bench | 7 | ✅ |
 | test_platform_console | 12 | ✅ |
 | test_platform_console_raw | 5 | ✅ |
