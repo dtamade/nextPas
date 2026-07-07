@@ -273,6 +273,11 @@ var
   LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
   I: Integer;
+  { B22: Outlier-aware variables }
+  LFiltered: TDoubleArray;
+  LQ1, LQ3, LFenceLow, LFenceHigh: Double;
+  LFilteredCount: Integer;
+  LSum, LSumSq, LDiff: Double;
 begin
   LLen := Length(ASamples);
   if LLen = 0 then
@@ -320,6 +325,69 @@ begin
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
   Result.SampleCount := LValidCount; { F-09: report valid sample count }
+
+  { B22: Outlier-aware statistics - compute filtered stats excluding outliers }
+  Result.OutlierMethod := 'Tukey';
+  Result.OutlierThreshold := OUTLIER_MULTIPLIER;
+  if (Result.OutlierCount > 0) and (LValidCount > Result.OutlierCount) then
+  begin
+    LQ1 := Result.P25;
+    LQ3 := Result.P75;
+    LFenceLow := LQ1 - OUTLIER_MULTIPLIER * Result.IQR;
+    LFenceHigh := LQ3 + OUTLIER_MULTIPLIER * Result.IQR;
+    SetLength(LFiltered, LValidCount);
+    LFilteredCount := 0;
+    for I := 0 to High(ASamples) do
+    begin
+      if IsDoubleNaN(ASamples[I]) then
+        Continue;
+      if (ASamples[I] >= LFenceLow) and (ASamples[I] <= LFenceHigh) then
+      begin
+        LFiltered[LFilteredCount] := ASamples[I];
+        Inc(LFilteredCount);
+      end;
+    end;
+    SetLength(LFiltered, LFilteredCount);
+    if LFilteredCount > 0 then
+    begin
+      Result.FilteredCount := LFilteredCount;
+      // Compute filtered mean
+      LSum := 0;
+      for I := 0 to LFilteredCount - 1 do
+        LSum := LSum + LFiltered[I];
+      Result.FilteredMean := LSum / LFilteredCount;
+      // Compute filtered stddev
+      if LFilteredCount > 1 then
+      begin
+        LSumSq := 0;
+        for I := 0 to LFilteredCount - 1 do
+        begin
+          LDiff := LFiltered[I] - Result.FilteredMean;
+          LSumSq := LSumSq + LDiff * LDiff;
+        end;
+        Result.FilteredStdDev := Sqrt(LSumSq / (LFilteredCount - 1));
+      end
+      else
+        Result.FilteredStdDev := 0;
+      // Compute filtered median
+      SortDoubleArray(LFiltered);
+      Result.FilteredMedian := Percentile(LFiltered, 50);
+    end
+    else
+    begin
+      Result.FilteredMean := LMean;
+      Result.FilteredStdDev := Result.StdDev;
+      Result.FilteredMedian := Result.Median;
+      Result.FilteredCount := LValidCount;
+    end;
+  end
+  else
+  begin
+    Result.FilteredMean := LMean;
+    Result.FilteredStdDev := Result.StdDev;
+    Result.FilteredMedian := Result.Median;
+    Result.FilteredCount := LValidCount;
+  end;
 
   // 95% 置信区间（使用 t 分布临界值）
   if LValidCount > 1 then

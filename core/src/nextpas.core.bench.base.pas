@@ -18,6 +18,15 @@ type
   {** 整数数组 }
   TInt64Array = array of Int64;
 
+  {** 自定义指标键值对 }
+  TCustomMetric = record
+    Name: string;
+    Value: Double;
+  end;
+
+  {** 自定义指标数组 }
+  TCustomMetricArray = array of TCustomMetric;
+
   {** 异常值严重度分级 }
   TOutlierSeverity = (
     osNone,      // 非异常值
@@ -48,6 +57,15 @@ type
     Outliers: Integer;
     SampleCount: Integer;
     RawSamples: TDoubleArray;
+    {** 自定义指标 }
+    CustomMetrics: TCustomMetricArray;
+    {** B22: Outlier-aware statistics }
+    OutlierMethod: string;
+    OutlierThreshold: Double;
+    FilteredMean: Double;
+    FilteredStdDev: Double;
+    FilteredMedian: Double;
+    FilteredCount: Integer;
   end;
 
   {** 统计摘要 - 完整的统计分析结果 }
@@ -69,6 +87,13 @@ type
     Confidence99Low: Double;
     Confidence99High: Double;
     SampleCount: Integer;
+    {** B22: Outlier-aware statistics }
+    OutlierMethod: string;       // e.g., 'Tukey', 'ZScore', 'ModifiedZScore'
+    OutlierThreshold: Double;    // e.g., 1.5 for Tukey, 3.0 for ZScore
+    FilteredMean: Double;        // Mean excluding outliers
+    FilteredStdDev: Double;      // StdDev excluding outliers
+    FilteredMedian: Double;      // Median excluding outliers
+    FilteredCount: Integer;      // Sample count excluding outliers
   end;
 
   {** 基线对比 - 与基线性能的对比结果 }
@@ -91,6 +116,13 @@ type
     Timestamp: string;
   end;
 
+  {** B23: Progress callback procedure type }
+  TBenchProgressCallback = procedure(
+    const AName: string;       // Current benchmark name
+    AProgress: Double;         // Progress 0.0..1.0
+    AEstimatedRemainingMs: Int64  // Estimated remaining time in ms
+  );
+
   {** 基准配置 - 基准运行参数 }
   TBenchConfig = record
     MinDurationNs: UInt64;
@@ -110,6 +142,14 @@ type
     EnableParallel: Boolean;
     {** 并行线程数，0=自动检测 CPU 核心数 }
     ParallelThreads: Integer;
+    {** B21: 启用自适应预热（根据方差自动停止） }
+    AdaptiveWarmup: Boolean;
+    {** B21: 自适应预热 CV 阈值（默认 5%），当 StdDev/Mean < Threshold 时停止 }
+    WarmupCVThreshold: Double;
+    {** B21: 自适应预热最大迭代次数（防止死循环） }
+    WarmupMaxIterations: Integer;
+    {** B23: Progress callback }
+    OnProgress: TBenchProgressCallback;
   end;
 
   {** 基准结果数组 }
@@ -219,6 +259,10 @@ const
   BENCH_DEFAULT_MIN_SAMPLES = 30;
   BENCH_DEFAULT_WARMUP_ITERATIONS = 5;
   BENCH_DEFAULT_PARALLEL_THREADS = 4;
+  {** B21: 自适应预热常量 }
+  BENCH_DEFAULT_ADAPTIVE_WARMUP = False;
+  BENCH_DEFAULT_WARMUP_CV_THRESHOLD = 0.05;  // 5%
+  BENCH_DEFAULT_WARMUP_MAX_ITERATIONS = 100;
 
   {** 统一显著性阈值常量 }
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
@@ -823,6 +867,10 @@ begin
   Result.CollectRawSamples := False;
   Result.Quiet := False;
   Result.MaxDetailCount := 5;
+  { B21: 自适应预热默认值 }
+  Result.AdaptiveWarmup := BENCH_DEFAULT_ADAPTIVE_WARMUP;
+  Result.WarmupCVThreshold := BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+  Result.WarmupMaxIterations := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
 end;
 
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;

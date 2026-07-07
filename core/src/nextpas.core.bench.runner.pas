@@ -33,6 +33,7 @@ type
     FSkipReason: string;
     FName: string; { ST-03: benchmark name }
     FPausedNs: UInt64;  { StopTimer 记录暂停时刻 }
+    FCustomMetrics: TCustomMetricArray;
 
   public
     constructor Create;
@@ -51,6 +52,8 @@ type
     function GetBytesPerOp: Int64;
     function GetAllocsPerOp: Int64;
     function GetName: string; { ST-03 }
+    procedure SetCustomMetric(const AName: string; AValue: Double);
+    function GetCustomMetrics: TCustomMetricArray;
 
     {** 内部方法 }
     procedure Reset;
@@ -98,6 +101,8 @@ type
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
+    { Phase 3: 对象池支持 }
+    FUseObjectPool: Boolean;
 
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
@@ -175,6 +180,14 @@ type
     function GetConfig: TBenchConfig;
     procedure SetFilter(const AFilter: string);
 
+    {** Phase 3: 启用对象池以减少分配开销 }
+    procedure EnableObjectPool(AEnabled: Boolean = True);
+
+    {** B21: 启用自适应预热 }
+    procedure SetAdaptiveWarmup(AEnabled: Boolean;
+      ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+      AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS);
+
     {** 便利方法：运行单个基准并累积结果（旧 API 兼容）。
      *  AFunc 是 TBenchLoopFunc，内部循环由框架控制。 }
     procedure Run(const AName: string; AFunc: TBenchLoopFunc);
@@ -196,7 +209,8 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel;
+  nextpas.core.bench.parallel,
+  nextpas.core.bench.pool;
 
 {** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
@@ -354,6 +368,33 @@ begin
   Result := FName;
 end;
 
+procedure TBenchContext.SetCustomMetric(const AName: string; AValue: Double);
+var
+  LLen: Integer;
+  I: Integer;
+begin
+  { 查找是否已存在 }
+  for I := 0 to High(FCustomMetrics) do
+  begin
+    if FCustomMetrics[I].Name = AName then
+    begin
+      FCustomMetrics[I].Value := AValue;
+      Exit;
+    end;
+  end;
+
+  { 新增 }
+  LLen := Length(FCustomMetrics);
+  SetLength(FCustomMetrics, LLen + 1);
+  FCustomMetrics[LLen].Name := AName;
+  FCustomMetrics[LLen].Value := AValue;
+end;
+
+function TBenchContext.GetCustomMetrics: TCustomMetricArray;
+begin
+  Result := FCustomMetrics;
+end;
+
 procedure TBenchContext.SetName(const AName: string);
 begin
   FName := AName;
@@ -369,6 +410,7 @@ begin
   FSkipped := False;
   FSkipReason := '';
   FPausedNs := 0;
+  { 注意：不重置 FCustomMetrics，因为指标在多次迭代中累积 }
 end;
 
 procedure TBenchContext.IncrementIterations;
@@ -422,6 +464,7 @@ begin
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
+  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
   LoadConfigFromEnv;
@@ -435,6 +478,7 @@ begin
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
+  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
   FConfig := DefaultBenchConfig;
@@ -605,6 +649,9 @@ begin
         if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
       end;
+
+      { 复制自定义指标 }
+      Result.CustomMetrics := LContextObj.GetCustomMetrics;
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
@@ -700,13 +747,25 @@ var
   LContextObj: TBenchContext;
   LMemoryStats: TMemoryStats;
   LIter: Int64;
+  LFromPool: Boolean;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
   Result.Name := AEntry.Name;
 
-  LContext := TBenchContext.Create;
-  LContextObj := LContext as TBenchContext;
+  { Phase 3: 从对象池获取或创建新对象 }
+  LFromPool := FUseObjectPool and (GBenchContextPool <> nil);
+  if LFromPool then
+  begin
+    LContextObj := GBenchContextPool.Acquire;
+    LContext := LContextObj;
+  end
+  else
+  begin
+    LContext := TBenchContext.Create;
+    LContextObj := LContext as TBenchContext;
+  end;
+
   LContextObj.SetName(AEntry.Name);
   try
     if ATrackMemory then
@@ -746,12 +805,19 @@ begin
         if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
       end;
+
+      { 复制自定义指标 }
+      Result.CustomMetrics := LContextObj.GetCustomMetrics;
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
     end;
   finally
-    LContext := nil;
+    { Phase 3: 归还到对象池或释放 }
+    if LFromPool then
+      GBenchContextPool.Release(LContextObj)
+    else
+      LContext := nil;
   end;
 end;
 
@@ -850,15 +916,70 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  I: Integer;
+  I, J, LMaxIters: Integer;
   LResult: TBenchResult;
+  LSamples: TDoubleArray;
+  LMean, LStdDev, LCV, LDiff: Double;
+  LN: Integer;
 begin
-  for I := 1 to FConfig.WarmupIterations do
+  { B21: Adaptive warmup - measure CV and stop when variance stabilizes }
+  if FConfig.AdaptiveWarmup then
   begin
-    LResult := ExecuteEntry(AEntry, 1, False);
-    { F-06: if warmup is skipped, stop early }
-    if LResult.Skipped then
-      Break;
+    LMaxIters := FConfig.WarmupMaxIterations;
+    if LMaxIters <= 0 then
+      LMaxIters := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
+
+    SetLength(LSamples, LMaxIters);
+    LN := 0;
+
+    for I := 1 to LMaxIters do
+    begin
+      LResult := ExecuteEntry(AEntry, 1, False);
+      if LResult.Skipped then
+        Break;
+
+      LSamples[LN] := LResult.NsPerOp;
+      Inc(LN);
+
+      { Need at least 5 samples before checking CV }
+      if LN >= 5 then
+      begin
+        { Compute mean and stddev of current samples }
+        LMean := 0;
+        for J := 0 to LN - 1 do
+          LMean := LMean + LSamples[J];
+        LMean := LMean / LN;
+
+        LStdDev := 0;
+        for J := 0 to LN - 1 do
+        begin
+          LDiff := LSamples[J] - LMean;
+          LStdDev := LStdDev + LDiff * LDiff;
+        end;
+        LStdDev := Sqrt(LStdDev / LN);
+
+        { CV = StdDev / Mean }
+        if LMean > 0 then
+          LCV := LStdDev / LMean
+        else
+          LCV := 0;
+
+        { Stop if CV below threshold }
+        if LCV < FConfig.WarmupCVThreshold then
+          Break;
+      end;
+    end;
+  end
+  else
+  begin
+    { Fixed warmup iterations (original behavior) }
+    for I := 1 to FConfig.WarmupIterations do
+    begin
+      LResult := ExecuteEntry(AEntry, 1, False);
+      { F-06: if warmup is skipped, stop early }
+      if LResult.Skipped then
+        Break;
+    end;
   end;
 end;
 
@@ -1082,8 +1203,18 @@ begin
     Result.P99 := LStats.P99;
     Result.Outliers := LStats.OutlierCount;
     Result.SampleCount := LStats.SampleCount;
+    { B22: Outlier-aware statistics }
+    Result.OutlierMethod := LStats.OutlierMethod;
+    Result.OutlierThreshold := LStats.OutlierThreshold;
+    Result.FilteredMean := LStats.FilteredMean;
+    Result.FilteredStdDev := LStats.FilteredStdDev;
+    Result.FilteredMedian := LStats.FilteredMedian;
+    Result.FilteredCount := LStats.FilteredCount;
     if FConfig.CollectRawSamples or LEntry.CollectRawSamples then
       Result.RawSamples := LSamples;
+
+    { 复制自定义指标 }
+    Result.CustomMetrics := LMeasurement.CustomMetrics;
 
     AddResult(Result);
 
@@ -1100,16 +1231,38 @@ end;
 
 procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
-  I: Integer;
+  I, LTotal: Integer;
+  LProgress: Double;
+  LStartNs, LNowNs, LEstRemainingMs: UInt64;
 begin
   if not FConfig.Quiet then
     WriteLn('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
+  LTotal := Length(AEntries);
+  if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    LStartNs := platform_monotonic_ns;
+
   for I := 0 to High(AEntries) do
   begin
+    { B23: Call progress callback before each benchmark }
+    if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    begin
+      LProgress := I / LTotal;
+      LNowNs := platform_monotonic_ns;
+      if I > 0 then
+        LEstRemainingMs := ((LNowNs - LStartNs) * (LTotal - I)) div (I * 1000000)
+      else
+        LEstRemainingMs := 0;
+      FConfig.OnProgress(AEntries[I].Name, LProgress, LEstRemainingMs);
+    end;
+
     if AEntries[I].Condition then
       RunOne(AEntries[I]);
   end;
+
+  { B23: Final progress callback }
+  if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    FConfig.OnProgress('', 1.0, 0);
 
   if not FConfig.Quiet then
     Summary;
@@ -1146,6 +1299,23 @@ procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
+end;
+
+procedure TBenchRunner.EnableObjectPool(AEnabled: Boolean);
+begin
+  FUseObjectPool := AEnabled;
+  if AEnabled then
+    InitGlobalPool;
+end;
+
+procedure TBenchRunner.SetAdaptiveWarmup(AEnabled: Boolean;
+  ACVThreshold: Double; AMaxIterations: Integer);
+begin
+  FConfig.AdaptiveWarmup := AEnabled;
+  if ACVThreshold > 0 then
+    FConfig.WarmupCVThreshold := ACVThreshold;
+  if AMaxIterations > 0 then
+    FConfig.WarmupMaxIterations := AMaxIterations;
 end;
 
 procedure TBenchRunner.Run(const AName: string; AFunc: TBenchLoopFunc);

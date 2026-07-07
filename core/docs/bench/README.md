@@ -15,6 +15,8 @@ nextpas.core.bench             ← 门面：TBenchSuite/TBenchResults
 nextpas.core.bench.baseline    ← 基线管理（JSON 序列化/回归检测）
 nextpas.core.bench.memtrack    ← 内存追踪（MemoryManager hook + 原子计数）
 nextpas.core.bench.parallel    ← 并行基准（TThread + 聚合结果）
+nextpas.core.bench.run         ← 线程安全执行器（原子结果收集，EBR 就绪）
+nextpas.core.bench.resultpool  ← 缓冲区池（预分配，原子借用）
 nextpas.core.bench.runner      ← 执行器（校准/采样/统计流水线）
 nextpas.core.bench.report      ← 报告生成（Console/JSON/TSV/HTML/SVG）
 nextpas.core.bench.xlang       ← 跨语言解析（Go/Rust/FPC 输出）
@@ -157,6 +159,40 @@ end.
 | `SetFilter(Pattern)` | 名称过滤（子串匹配） |
 | `Config` | 读写 `TBenchConfig` 配置 |
 
+## TBenchRun 线程安全执行器
+
+`TBenchRun` 是 `TBenchRunner` 的线程安全替代品，使用原子计数器实现无锁结果收集。
+
+```pascal
+uses
+  nextpas.core.bench;
+
+var
+  LRun: TBenchRun;
+  LResults: TBenchResultArray;
+begin
+  LRun := TBenchRun.Create;
+  try
+    LResults := LRun.RunAll([Entry1, Entry2, Entry3], 4); // 4 工作线程
+  finally
+    LRun.Free;
+  end;
+end.
+```
+
+| 方法 | 说明 |
+|------|------|
+| `Create` | 创建执行器（默认配置） |
+| `Create(Config)` | 创建执行器（自定义配置） |
+| `RunAll(Entries, ThreadCount)` | 并发运行所有基准，返回结果数组 |
+| `SubmitResult(Ptr)` | 无锁提交堆分配结果 |
+| `CollectResults(out Results)` | 收集所有已提交结果 |
+| `Count` | 当前已提交结果数 |
+
+**与 TBenchRunner 的区别**:
+- `TBenchRun` 线程安全：多线程可并发提交结果
+- `TBenchRunner` 非线程安全：单线程使用
+
 ## 统计流水线
 
 ```
@@ -200,13 +236,14 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 15 |
-| 框架级测试 | ~296 |
+| 测试套件 | 23 |
+| 框架级测试 | ~381 |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 15/15 套件全部启用 -gh，零泄漏 |
+| heaptrc | 23/23 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
+| 自适应预热 | `AdaptiveWarmup` 根据 CV 阈值自动停止预热 |
 
 ## 竞争力矩阵（vs Go/Rust）
 
@@ -227,6 +264,61 @@ end.
 | Shapiro-Wilk 正态性（启发式） | ✅ | ❌ | ❌ |
 | 内存追踪集成 | ✅ | ❌ | ❌ |
 | 并行基准 | ✅ | ❌ | ❌ |
+
+## 示例
+
+查看 `core/examples/bench/` 目录中的完整示例：
+
+- `quick_start.pas` - 5 分钟入门
+- `advanced_stats.pas` - 高级统计
+- `parallel_benchmark.pas` - 并行基准
+- `ci_integration.pas` - CI 集成
+- `custom_metrics.pas` - 自定义指标
+- `performance_tuning.pas` - 性能调优
+
+## 教程
+
+- [交互式教程](tutorial.md) - 从入门到精通
+- [最佳实践指南](best-practices.md) - 编写可靠的基准测试
+
+## CI 集成
+
+### GitHub Actions
+
+项目已配置 GitHub Actions 自动化基准测试：
+
+- **主分支**: 自动生成基线并上传
+- **PR**: 自动与基线比较，检测回归
+- **报告**: 自动生成 benchmark 报告并评论 PR
+
+### 本地 CI 脚本
+
+```bash
+# 运行所有测试
+./scripts/bench-ci.sh test
+
+# 生成基线
+./scripts/bench-ci.sh baseline
+
+# 与基线比较
+./scripts/bench-ci.sh compare
+
+# 自定义基线文件
+./scripts/bench-ci.sh baseline my-baseline.json
+./scripts/bench-ci.sh compare my-baseline.json
+```
+
+### 回归检测
+
+```bash
+# 自动检测 5% 回归
+./scripts/bench-ci.sh compare bench-baseline.json
+
+# 如果检测到回归，脚本会：
+# 1. 输出详细的比较结果
+# 2. 返回非零退出码
+# 3. 生成 JSON 报告供 CI 系统解析
+```
 
 ## 测试
 
@@ -251,6 +343,7 @@ make -C core/tests/nextpas.core.bench/test_bench_parallel_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_parallel_memtrack_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
+make -C core/tests/nextpas.core.bench/test_bench_run clean test
 ```
 
 ## 环境变量
@@ -264,6 +357,23 @@ make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
 | `NEXTPAS_BENCH_WARMUP` | 热身次数 |
 | `NEXTPAS_BENCH_QUIET` | 安静模式（=1） |
 | `NEXTPAS_BENCH_MEMTRACK` | 内存追踪（=0 禁用，默认启用） |
+
+## 跨语言基准对照
+
+`benchmarks/` 目录包含 Go/Rust/C/Pascal 四语言基准测试：
+
+```bash
+# 运行所有语言基准测试并生成对比表格
+cd benchmarks && ./run_all.sh
+
+# 单独运行
+cd benchmarks/go && go run main.go
+cd benchmarks/rust && cargo run --release
+cd benchmarks/c && gcc -O2 main.c -lm && ./a.out
+cd benchmarks/pascal && fpc -O2 bench_cross_language.lpr && ./bench_cross_language
+```
+
+对比结果见 `benchmarks/COMPARISON.md`。
 
 ## 线程安全
 

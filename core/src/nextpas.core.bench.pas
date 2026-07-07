@@ -14,10 +14,12 @@ unit nextpas.core.bench;
 interface
 
 uses
+  SysUtils,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
   nextpas.core.bench.runner,
+  nextpas.core.bench.run,
   nextpas.core.bench.report,
   nextpas.core.time.base,
   nextpas.core.platform.time;
@@ -25,17 +27,21 @@ uses
 type
   {** 重新导出类型 }
   TBenchResult = nextpas.core.bench.base.TBenchResult;
+  TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBenchStats = nextpas.core.bench.base.TBenchStats;
   TBenchComparison = nextpas.core.bench.base.TBenchComparison;
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
   TBenchConfig = nextpas.core.bench.base.TBenchConfig;
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
+  TInt64Array = nextpas.core.bench.base.TInt64Array;
   TBaselineData = nextpas.core.bench.base.TBaselineData;
   {** @deprecated Use TBaselineData instead. }
   TBenchBaseline = nextpas.core.bench.base.TBaselineData;
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
   TMatrixResult = nextpas.core.bench.base.TMatrixResult;
+  TCustomMetric = nextpas.core.bench.base.TCustomMetric;
+  TCustomMetricArray = nextpas.core.bench.base.TCustomMetricArray;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;
@@ -52,6 +58,10 @@ type
 
   {** 重新导出执行器（旧 API 兼容：TBenchRunner.Run + Summary） }
   TBenchRunner = nextpas.core.bench.runner.TBenchRunner;
+
+  {** 线程安全执行器（原子结果收集，多线程并发） }
+  TBenchRun = nextpas.core.bench.run.TBenchRun;
+  PBenchRunResult = nextpas.core.bench.run.PBenchRunResult;
 
   {** 基准套件 - Fluent Builder 实现 }
   TBenchSuite = class(TInterfacedObject, IBenchSuite)
@@ -134,6 +144,14 @@ type
     function SetFilter(const AFilter: string): IBenchSuite;
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
+    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
+    {** B21: 启用自适应预热 }
+    function SetAdaptiveWarmup(AEnabled: Boolean;
+      ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+      AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS): IBenchSuite;
+    {** B23: Set progress callback }
+    function SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
+    function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
 
@@ -169,6 +187,7 @@ type
     function ToTSV: string;
     function ToHTML: string;
     function ToBenchstat: string;
+    function ToSummary: string;
     procedure SaveToJSON(const APath: string);
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
@@ -194,13 +213,72 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.text.builder,
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
   nextpas.core.json.writer,
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo,
-  nextpas.core.collections.hashmap.swiss.str;
+  nextpas.core.collections.hashmap.swiss.str,
+  nextpas.core.platform.thread;
+
+{ TBenchWorkerThread - 并行执行辅助线程 }
+
+type
+  TBenchWorkerThread = record
+    Entries: array of TBenchEntry;
+    EntryCount: Integer;
+    Results: array of TBenchResult;
+    ResultCount: Integer;
+    Config: TBenchConfig;
+    Runner: TBenchRunner;
+    Handle: TPlatformThreadHandle;
+  end;
+
+  PBenchWorkerThread = ^TBenchWorkerThread;
+
+function BenchWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LWorker: PBenchWorkerThread;
+  I: Integer;
+begin
+  Result := nil;
+  LWorker := PBenchWorkerThread(AArg);
+  for I := 0 to LWorker^.EntryCount - 1 do
+  begin
+    LWorker^.Results[I] := LWorker^.Runner.RunOne(LWorker^.Entries[I]);
+    if LWorker^.Results[I].Executed then
+      Inc(LWorker^.ResultCount);
+  end;
+end;
+
+procedure InitWorkerThread(var AWorker: TBenchWorkerThread;
+  const ASrcEntries: array of TBenchEntry; ASrcOffset, AEntryCount: Integer;
+  const AConfig: TBenchConfig);
+var
+  I: Integer;
+begin
+  AWorker.EntryCount := AEntryCount;
+  SetLength(AWorker.Entries, AEntryCount);
+  for I := 0 to AEntryCount - 1 do
+    AWorker.Entries[I] := ASrcEntries[ASrcOffset + I];
+
+  AWorker.Config := AConfig;
+  AWorker.Runner := TBenchRunner.CreateNoEnv;
+  AWorker.Runner.SetConfig(AConfig);
+
+  AWorker.ResultCount := 0;
+  SetLength(AWorker.Results, AEntryCount);
+end;
+
+procedure FiniWorkerThread(var AWorker: TBenchWorkerThread);
+begin
+  AWorker.Runner.Free;
+  AWorker.Runner := nil;
+  SetLength(AWorker.Entries, 0);
+  SetLength(AWorker.Results, 0);
+end;
 
 { TBenchSuite }
 
@@ -756,6 +834,147 @@ begin
   FConfig.TimeoutMs := ADuration.AsMilliseconds;
 end;
 
+function TBenchSuite.EnableObjectPool(AEnabled: Boolean): IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+  FRunner.EnableObjectPool(AEnabled);
+end;
+
+function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;
+  ACVThreshold: Double; AMaxIterations: Integer): IBenchSuite;
+var
+  LConfig: TBenchConfig;
+begin
+  GuardNotRun;
+  Result := Self;
+  LConfig := FRunner.Config;
+  LConfig.AdaptiveWarmup := AEnabled;
+  if ACVThreshold > 0 then
+    LConfig.WarmupCVThreshold := ACVThreshold;
+  if AMaxIterations > 0 then
+    LConfig.WarmupMaxIterations := AMaxIterations;
+  FRunner.Config := LConfig;
+end;
+
+function TBenchSuite.SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
+var
+  LConfig: TBenchConfig;
+begin
+  GuardNotRun;
+  Result := Self;
+  LConfig := FRunner.Config;
+  LConfig.OnProgress := ACallback;
+  FRunner.Config := LConfig;
+end;
+
+function TBenchSuite.RunParallel(AThreadCount: Integer): IBenchResults;
+var
+  LResults: array of TBenchResult;
+  LResultCount: Integer;
+  LEnvironment: TBenchEnvironment;
+  LThreadCount: Integer;
+  LWorkers: array of TBenchWorkerThread;
+  LEntriesPerThread: Integer;
+  LRemainder: Integer;
+  LStartIdx: Integer;
+  LCount: Integer;
+  LThreadResults: TBenchResultArray;
+  LRetVal: Pointer;
+  LWorkerConfig: TBenchConfig;
+  I, J: Integer;
+begin
+  FHasRun := True;
+
+  { 确定线程数 }
+  if AThreadCount <= 0 then
+  begin
+    LThreadCount := GetCPUInfo.LogicalCores;
+    if LThreadCount <= 0 then
+      LThreadCount := BENCH_DEFAULT_PARALLEL_THREADS;
+  end
+  else
+    LThreadCount := AThreadCount;
+
+  { 限制线程数不超过条目数 }
+  if LThreadCount > FEntryCount then
+    LThreadCount := FEntryCount;
+
+  { 单条目时退化为串行 }
+  if LThreadCount <= 1 then
+  begin
+    SetLength(LResults, FEntryCount);
+    LResultCount := 0;
+    LEnvironment := GetEnvironment;
+    for I := 0 to FEntryCount - 1 do
+    begin
+      LResults[I] := FRunner.RunOne(FEntries[I]);
+      if LResults[I].Executed then
+        Inc(LResultCount);
+    end;
+    Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+    Exit;
+  end;
+
+  { 创建工作线程 — 禁用内存追踪以避免全局状态竞争，静默模式避免 WriteLn 死锁 }
+  LWorkerConfig := FConfig;
+  LWorkerConfig.EnableMemoryTracking := False;
+  LWorkerConfig.Quiet := True;
+
+  LEntriesPerThread := FEntryCount div LThreadCount;
+  LRemainder := FEntryCount mod LThreadCount;
+
+  SetLength(LWorkers, LThreadCount);
+  LStartIdx := 0;
+
+  for I := 0 to LThreadCount - 1 do
+  begin
+    LCount := LEntriesPerThread;
+    if I < LRemainder then
+      Inc(LCount);
+
+    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, LWorkerConfig);
+    Inc(LStartIdx, LCount);
+  end;
+
+  { 启动所有线程 }
+  for I := 0 to LThreadCount - 1 do
+    platform_thread_create(LWorkers[I].Handle, @BenchWorkerProc, @LWorkers[I]);
+
+  { 等待所有线程完成 }
+  for I := 0 to LThreadCount - 1 do
+    platform_thread_join(LWorkers[I].Handle, LRetVal);
+
+  { 收集结果 }
+  LResultCount := 0;
+  for I := 0 to LThreadCount - 1 do
+    Inc(LResultCount, LWorkers[I].ResultCount);
+
+  SetLength(LResults, LResultCount);
+  LResultCount := 0;
+
+  for I := 0 to LThreadCount - 1 do
+  begin
+    LThreadResults := LWorkers[I].Results;
+    for J := 0 to LWorkers[I].ResultCount - 1 do
+    begin
+      LResults[LResultCount] := LThreadResults[J];
+      Inc(LResultCount);
+    end;
+  end;
+
+  { 释放工作线程资源 }
+  for I := 0 to LThreadCount - 1 do
+    FiniWorkerThread(LWorkers[I]);
+  SetLength(LWorkers, 0);
+
+  { 获取环境信息 }
+  LEnvironment := GetEnvironment;
+
+  { 构建结果对象 }
+  Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+end;
+
 function TBenchSuite.Run: IBenchResults;
 var
   LResults: array of TBenchResult;
@@ -1040,6 +1259,44 @@ end;
 function TBenchResults.ToBenchstat: string;
 begin
   Result := FReportGenerator.ToBenchstat;
+end;
+
+function TBenchResults.ToSummary: string;
+var
+  LAll: TBenchResultArray;
+  LLines: array of string;
+  I: Integer;
+begin
+  LAll := GetAll;
+  SetLength(LLines, Length(LAll) + 1);
+
+  LLines[0] := TextFormat('Benchmarks: %d results', [Length(LAll)]);
+
+  for I := 0 to High(LAll) do
+  begin
+    if LAll[I].Executed and not LAll[I].Skipped then
+    begin
+      if LAll[I].StdDev > 0 then
+        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
+          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec,
+           LAll[I].StdDev / LAll[I].NsPerOp * 100])
+      else
+        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s',
+          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec]);
+    end
+    else if LAll[I].Skipped then
+      LLines[I + 1] := TextFormat('  %s: SKIPPED (%s)', [LAll[I].Name, LAll[I].SkipReason])
+    else
+      LLines[I + 1] := TextFormat('  %s: NOT EXECUTED', [LAll[I].Name]);
+  end;
+
+  Result := '';
+  for I := 0 to High(LLines) do
+  begin
+    if I > 0 then
+      Result := Result + LineEnding;
+    Result := Result + LLines[I];
+  end;
 end;
 
 procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);

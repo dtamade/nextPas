@@ -129,11 +129,49 @@ B17  Phase 5: 统计能力深化 (2026-07-06)                      ✅
   B17.6  正态-正态共轭贝叶斯估计                            ✅
   B17.7  贝叶斯可信区间                                     ✅
   B17.8  先验融合 (历史数据作为先验)                        ✅
+
+B18  线程安全执行器 (2026-07-06)                             ✅
+  B18.1  TBenchRun 原子结果收集 (AtomicFetchAdd32)           ✅
+  B18.2  AllocBenchResult/FreeBenchResult 堆分配              ✅
+  B18.3  并发 RunAll (platform_thread_create/join)            ✅
+  B18.4  test_bench_run 13 tests (heaptrc 0 leaks)           ✅
+
+B19  缓冲区池 (2026-07-07)                                   ✅
+  B19.1  TBenchResultPool 预分配缓冲区                        ✅
+  B19.2  原子索引无锁借用 (AtomicFetchAdd32)                  ✅
+  B19.3  池满回退到直接分配                                    ✅
+  B19.4  test_bench_resultpool 7 tests (0 leaks)              ✅
+
+B20  跨语言性能对照 (2026-07-08)                              ✅
+  B20.1  Go 基准测试 (Fibonacci/Sort/String/Memory/Map)       ✅
+  B20.2  Rust 基准测试 (Cargo项目, rand依赖)                  ✅
+  B20.3  C 基准测试 (clock_gettime高精度)                     ✅
+  B20.4  Pascal 基准测试 (GetTickCount64→fpgettimeofday)      ✅
+  B20.5  run_all.sh 自动化脚本 + 对比表格                     ✅
+  B20.6  COMPARISON.md 性能对比报告                           ✅
+
+B21  自适应预热 (2026-07-08)                                  ✅
+  B21.1  TBenchConfig 新增 AdaptiveWarmup/CVThreshold/MaxIters ✅
+  B21.2  WarmupEntry 自适应逻辑 (CV<阈值自动停止)             ✅
+  B21.3  TBenchSuite.SetAdaptiveWarmup 配置方法               ✅
+  B21.4  TBenchRunner.SetAdaptiveWarmup 配置方法              ✅
+  B21.5  test_bench_adaptive_warmup 4 tests (0 leaks)         ✅
+
+B22  异常值感知报告 (2026-07-08)                              ✅
+  B22.1  TBenchStats/TBenchResult 新增 FilteredMean/StdDev/Median/Count ✅
+  B22.2  ComputeStats 自动计算排除异常值后的统计              ✅
+  B22.3  PrintToConsole 异常值行显示 (Filtered: ...)          ✅
+
+B23  进度回调 (2026-07-08)                                    ✅
+  B23.1  TBenchProgressCallback 类型定义                      ✅
+  B23.2  TBenchConfig.OnProgress 字段                         ✅
+  B23.3  TBenchSuite.SetOnProgress 配置方法                   ✅
+  B23.4  RunAll 调用回调 (platform_monotonic_ns 计时)         ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-06
+> **最后更新**: 2026-07-07
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
@@ -154,8 +192,22 @@ B17  Phase 5: 统计能力深化 (2026-07-06)                      ✅
 | test_bench_ks | 12 | ✅ 0 leaks | K-S 检验 (Phase A) |
 | test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
 | test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
-| test_bench_self_bench | N/A | ✅ 0 leaks | 自基准测试 |
-| **合计** | **~355** | **18/18 通过** | |
+| test_bench_run | 13 | ✅ 0 leaks | TBenchRun 线程安全执行器 |
+| test_bench_resultpool | 7 | ✅ 0 leaks | TBenchResultPool 缓冲区池 |
+| test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
+| test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
+| **合计** | **~381** | **23/23 通过** | |
+
+### 跨语言基准对照 (benchmarks/)
+
+| 语言 | 基准测试 | 说明 |
+|------|----------|------|
+| Go | benchmarks/go/main.go | Fibonacci/Sort/StringConcat/MapOps/MemoryAlloc |
+| Rust | benchmarks/rust/main.rs + Cargo.toml | 同上 + rand 依赖 |
+| C | benchmarks/c/main.c | 同上 + clock_gettime 高精度 |
+| Pascal | benchmarks/pascal/bench_cross_language.lpr | 同上 + GetTickCount64 |
+| 自动化 | benchmarks/run_all.sh | 编译运行 + 对比表格 |
+| 报告 | benchmarks/COMPARISON.md | 性能对比分析 |
 
 ## 已解决的技术债务
 

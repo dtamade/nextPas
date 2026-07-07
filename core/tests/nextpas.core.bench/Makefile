@@ -7,7 +7,9 @@ PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_ks \
             test_bench_self_bench \
             test_bench_phase_b \
-            test_bench_phase_c
+            test_bench_phase_c \
+            test_bench_regression \
+            test_bench_run
 
 .PHONY: test clean bench $(PROJECTS)
 

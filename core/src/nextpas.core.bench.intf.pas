@@ -100,6 +100,12 @@ type
     {** 获取当前基准名称 (ST-03) }
     function GetName: string;
 
+    {** 设置自定义指标 }
+    procedure SetCustomMetric(const AName: string; AValue: Double);
+
+    {** 获取自定义指标数组 }
+    function GetCustomMetrics: TCustomMetricArray;
+
     {** 属性访问 }
     property Iterations: Int64 read GetIterations;
     property Elapsed: TDuration read GetElapsed;
@@ -286,6 +292,17 @@ type
      *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
     function SetTimeout(ADuration: TDuration): IBenchSuite;
 
+    {** Phase 3: 启用对象池以减少分配开销。
+     *  启用后，TBenchContext 对象会被复用而不是每次创建新对象。
+     *  适用于高频基准测试场景。 }
+    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
+
+    {** Phase 3: 批量并行运行独立基准。
+     *  独立基准（非并行基准）可以在多个线程中同时运行。
+     *  AThreadCount: 并行线程数，默认为 CPU 核心数。
+     *  注意：并行运行的基准不能使用内存追踪。 }
+    function RunParallel(AThreadCount: Integer = 0): IBenchResults;
+
     {** 运行基准测试 }
     function Run: IBenchResults;
   end;
@@ -321,6 +338,9 @@ type
 
     {** 生成 benchstat 兼容格式 (Go benchstat 工具可直接解析) }
     function ToBenchstat: string;
+
+    {** 生成简洁摘要报告（适合 CI/CD） }
+    function ToSummary: string;
 
     {** 导出到 JSON 文件 }
     procedure SaveToJSON(const APath: string);
