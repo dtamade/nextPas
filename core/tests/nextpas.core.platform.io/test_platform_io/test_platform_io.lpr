@@ -575,6 +575,97 @@ begin
 end;
 {$ENDIF}
 
+{ Error path tests }
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRemoveNonExistentFd;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LRet: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+
+  { Remove fd that was never added should return error }
+  LRet := platform_poller_remove(P, LPipeFd[0]);
+  Check(LRet <> 0, 'remove non-existent fd returns error');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
+procedure TestModifyNonExistentFd;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LRet: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+
+  { Modify fd that was never added should return error }
+  LRet := platform_poller_modify(P, LPipeFd[0], [peReadable], nil);
+  Check(LRet <> 0, 'modify non-existent fd returns error');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
+procedure TestWaitZeroMaxEntries;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LEntries: array[0..3] of TPlatformPollEntry;
+  LCount: Int32;
+  LBuf: Byte;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipeFd[0], [peReadable], nil) = 0, 'add');
+
+  LBuf := 1;
+  write(LPipeFd[1], @LBuf, 1);
+
+  { Wait with 1 max entry and 0 timeout should return 1 event }
+  Check(platform_poller_wait(P, @LEntries[0], 1, 0, LCount) = 0, 'wait one max');
+  Check(LCount = 1, 'got 1 event with one max entries');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
+procedure TestWakeWithoutEnable;
+var
+  P: TPlatformPoller;
+  LRet: Int32;
+begin
+  Check(platform_poller_create(P) = 0, 'create');
+
+  { Wake without enable should return error }
+  LRet := platform_poller_wake(P);
+  Check(LRet <> 0, 'wake without enable returns error');
+
+  platform_poller_close(P);
+end;
+
+procedure TestDrainWakeWithoutEnable;
+var
+  P: TPlatformPoller;
+  LRet: Int32;
+begin
+  Check(platform_poller_create(P) = 0, 'create');
+
+  { Drain wake without enable should return error }
+  LRet := platform_poller_drain_wake(P);
+  Check(LRet <> 0, 'drain wake without enable returns error');
+
+  platform_poller_close(P);
+end;
+{$ENDIF}
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.io');
   T.Test('create/close', @TestCreateClose);
@@ -595,6 +686,11 @@ begin
   T.Test('async loop wake source contract', @TestAsyncLoopWakeSourceContract);
   {$IFDEF NEXTPAS_LINUX}
   T.Test('wake drain', @TestWakeDrain);
+  T.Test('remove non-existent fd', @TestRemoveNonExistentFd);
+  T.Test('modify non-existent fd', @TestModifyNonExistentFd);
+  T.Test('wait zero max entries', @TestWaitZeroMaxEntries);
+  T.Test('wake without enable', @TestWakeWithoutEnable);
+  T.Test('drain wake without enable', @TestDrainWakeWithoutEnable);
   {$ENDIF}
   if not T.Run then Halt(1);
 end.

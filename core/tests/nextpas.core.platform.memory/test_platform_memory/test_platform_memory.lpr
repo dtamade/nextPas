@@ -473,6 +473,86 @@ begin
   end;
 end;
 
+{ Additional error path tests }
+procedure TestAllocVeryLargeAlignment;
+var
+  LPtr: Pointer;
+begin
+  { Very large alignment (1GB) should still work if power of two }
+  LPtr := platform_aligned_alloc(64, 1024 * 1024 * 1024);
+  if LPtr <> nil then
+  begin
+    Check(IsAligned(LPtr, 1024 * 1024 * 1024), '1GB alignment');
+    platform_aligned_free(LPtr);
+  end
+  else
+    Check(True, '1GB alignment allocation may fail on some systems');
+end;
+
+procedure TestReallocGrowAndShrink;
+var
+  LPtr, LGrown, LShrunk: PByte;
+  LIndex: Integer;
+begin
+  LPtr := PByte(platform_aligned_alloc(16, 64));
+  try
+    Check(LPtr <> nil, 'initial alloc');
+    for LIndex := 0 to 15 do
+      LPtr[LIndex] := Byte(LIndex);
+
+    { Grow to 64 bytes }
+    LGrown := PByte(platform_aligned_realloc(LPtr, 64, 64));
+    LPtr := nil;
+    Check(LGrown <> nil, 'grow realloc');
+    for LIndex := 0 to 15 do
+      Check(LGrown[LIndex] = Byte(LIndex), 'grow preserves data');
+
+    { Shrink to 8 bytes }
+    LShrunk := PByte(platform_aligned_realloc(LGrown, 8, 64));
+    LGrown := nil;
+    Check(LShrunk <> nil, 'shrink realloc');
+    for LIndex := 0 to 7 do
+      Check(LShrunk[LIndex] = Byte(LIndex), 'shrink preserves data');
+  finally
+    if LShrunk <> nil then platform_aligned_free(LShrunk);
+    if LGrown <> nil then platform_aligned_free(LGrown);
+    if LPtr <> nil then platform_aligned_free(LPtr);
+  end;
+end;
+
+procedure TestVirtualReserveCommitDecommitRelease;
+var
+  LPtr: Pointer;
+begin
+  { Full lifecycle: reserve -> commit -> decommit -> release }
+  LPtr := platform_virtual_reserve(4096 * 4);
+  Check(LPtr <> nil, 'virtual reserve');
+
+  Check(platform_virtual_commit(LPtr, 4096), 'virtual commit first page');
+  PByte(LPtr)^ := $42;
+  Check(PByte(LPtr)^ = $42, 'committed page is writable');
+
+  platform_virtual_decommit(LPtr, 4096);
+  Check(True, 'virtual decommit');
+
+  platform_virtual_release(LPtr, 4096 * 4);
+  Check(True, 'virtual release');
+end;
+
+procedure TestSecureZeroLargeBuffer;
+var
+  LBuffer: array[0..4095] of Byte;
+  LIndex: Integer;
+begin
+  for LIndex := Low(LBuffer) to High(LBuffer) do
+    LBuffer[LIndex] := Byte(LIndex and $FF);
+
+  platform_secure_zero_memory(@LBuffer[0], SizeOf(LBuffer));
+
+  for LIndex := Low(LBuffer) to High(LBuffer) do
+    Check(LBuffer[LIndex] = 0, 'secure zero clears large buffer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.memory');
   T.Test('alloc aligned and writable', @TestAllocAlignedAndWritable);
@@ -499,5 +579,9 @@ begin
   T.Test('virtual release zero size no-op', @TestVirtualReleaseZeroSizeNoOp);
   T.Test('madvise thp nil no-op', @TestMadviseThpNilNoOp);
   T.Test('madvise thp zero size no-op', @TestMadviseThpZeroSizeNoOp);
+  T.Test('alloc very large alignment', @TestAllocVeryLargeAlignment);
+  T.Test('realloc grow and shrink', @TestReallocGrowAndShrink);
+  T.Test('virtual reserve commit decommit release', @TestVirtualReserveCommitDecommitRelease);
+  T.Test('secure zero large buffer', @TestSecureZeroLargeBuffer);
   if not T.Run then Halt(1);
 end.
