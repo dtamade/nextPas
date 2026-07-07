@@ -342,10 +342,23 @@ begin
       end
       else if LEntry.Kind = ekTableTest then
       begin
-        PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
-        WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          LOutSink, FConfig);
-        Inc(FSubPass);
+        { Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+          has disposed TableCase/TableProc. Skip gracefully on re-run. }
+        if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+        begin
+          LStatus := tsSkipped;
+          LMsg := 'table data already disposed (--count re-run)';
+          WriteSubtestStatus(tsSkipped, LEntry.Name, '', LMsg, '',
+            LOutSink, FConfig);
+          Inc(FSubSkip);
+        end
+        else
+        begin
+          PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+            LOutSink, FConfig);
+          Inc(FSubPass);
+        end;
       end
       else if LEntry.Kind = ekShouldFail then
       begin
