@@ -6654,7 +6654,7 @@ begin
       TypeName := Copy(TypeName, 15, Length(TypeName));
       TypeKind := 'class';
     end
-    else if Copy(TypeName, 18, 1) = ':' then
+    else if Copy(TypeName, 1, 18) = 'compiler_type_kind:' then
     begin
       TypeName := Copy(TypeName, 19, Length(TypeName));
       TypeKind := 'enum';
@@ -9701,7 +9701,7 @@ begin
       DeclName := TypeDeclNode.Text;
       if Copy(DeclName, 1, 14) = 'compiler_root:' then
         DeclName := Copy(DeclName, 15, Length(DeclName))
-      else if Copy(DeclName, 18, 1) = ':' then
+      else if Copy(DeclName, 1, 18) = 'compiler_type_kind:' then
         DeclName := Copy(DeclName, 19, Length(DeclName));
       if not SameText(DeclName, ATypeName) then
         Continue;
