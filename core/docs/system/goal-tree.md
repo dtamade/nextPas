@@ -532,11 +532,11 @@ S10 将内核从"签名桩"转变为"真实实现"。
 
 S11 让编译器能用 nextPas 编译自己，不依赖 FPC System。
 
-### S11.1 RTTI Drift Detection Gate
+### S11.1 RTTI Drift Detection Gate ✅
 
-- [ ] 内核 TTypeKind 与编译器一致
-- [ ] 自动检测 RTTI 定义漂移
-- [ ] 验证编译器和内核的 TTypeKind 枚举值完全匹配
+- ✅ 内核 TTypeKind 与 FPC 完全一致（30 个枚举值）
+- ✅ 自动检测 RTTI 定义漂移（source-contracts 测试）
+- ✅ 验证编译器和内核的 TTypeKind 枚举值完全匹配
 
 ### S11.2 Unit Lifecycle Gate ✅
 
@@ -570,7 +570,7 @@ S11 让编译器能用 nextPas 编译自己，不依赖 FPC System。
 - nextPas 编译器能编译 nextPas 编译器
 - 不 uses FPC System
 - 所有 19 个自举测试通过
-- 5 个自举就绪门: 3/5 已通过 (S11.2 ✅, S11.3 ✅, S11.4 ✅), 2/5 待验证 (S11.1, S11.5)
+- 5 个自举就绪门: 4/5 已通过 (S11.1 ✅, S11.2 ✅, S11.3 ✅, S11.4 ✅), 1/5 待验证 (S11.5)
 
 ## S12 Production Readiness
 
