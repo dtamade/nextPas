@@ -24,6 +24,7 @@ uses
   nextpas.core.http.server,
   nextpas.core.http.impl.h1,
   nextpas.core.http.client,
+  nextpas.core.http.form.base,
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -373,6 +374,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1918,6 +1920,12 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.PostForm(const AUrl: string;
+  const AFields: TFormFieldArray): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -2940,6 +2948,45 @@ begin
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmOptions, 'server received OPTIONS');
     CheckEqual('GET, HEAD, OPTIONS', LResp.Headers.Get('allow'), 'allow header present');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientPostFormEncodesFields;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LFields: TFormFieldArray;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmPost, '/submit', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    SetLength(LFields, 2);
+    LFields[0].Name := 'user';
+    LFields[0].Value := 'alice';
+    LFields[1].Name := 'pass';
+    LFields[1].Value := 'secret';
+    LClient := NewHttpClient;
+    LResp := LClient.PostForm('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/submit', LFields);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmPost, 'server received POST');
+    CheckEqual('application/x-www-form-urlencoded', LGotContentType, 'content-type set');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -7244,6 +7291,7 @@ begin
   T.Test('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
   T.Test('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Test('Client OPTIONS sends OPTIONS and exposes Allow header', @TestClientOptionsSendsOptions);
+  T.Test('Client PostForm encodes fields with correct content-type', @TestClientPostFormEncodesFields);
   T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',
