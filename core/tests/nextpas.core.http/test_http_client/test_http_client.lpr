@@ -382,6 +382,7 @@ type
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
+    function WithHeader(const AName, AValue: string): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1961,6 +1962,11 @@ begin
   Result := Self;
 end;
 
+function TDownloadClient.WithHeader(const AName, AValue: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -3116,6 +3122,136 @@ begin
     LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api');
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     CheckEqual('Bearer mytoken123', LGotAuth, 'bearer token set');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithHeaderSetsCustomHeader;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotUA: string;
+begin
+  LGotUA := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotUA := AReq.Headers.Get('user-agent');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient.WithHeader('user-agent', 'nextPasTest/1.0');
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/test');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('nextPasTest/1.0', LGotUA, 'custom header set');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithHeaderChainsWithAuth;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotAuth: string;
+  LGotAccept: string;
+begin
+  LGotAuth := '';
+  LGotAccept := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/api', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotAuth := AReq.Headers.Get('authorization');
+    LGotAccept := AReq.Headers.Get('accept');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient
+      .WithBearerAuth('mytoken')
+      .WithHeader('accept', 'application/json');
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('Bearer mytoken', LGotAuth, 'auth header from chain');
+    CheckEqual('application/json', LGotAccept, 'accept header from chain');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithHeaderMultipleHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotUA: string;
+  LGotAccept: string;
+begin
+  LGotUA := '';
+  LGotAccept := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/multi', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotUA := AReq.Headers.Get('user-agent');
+    LGotAccept := AReq.Headers.Get('accept');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient
+      .WithHeader('user-agent', 'nextPas/2.0')
+      .WithHeader('accept', 'text/html');
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/multi');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('nextPas/2.0', LGotUA, 'user-agent from chain');
+    CheckEqual('text/html', LGotAccept, 'accept from chain');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithHeaderDoesNotAffectOriginalClient;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOriginal: IHttpClient;
+  LDecorated: IHttpClient;
+  LResp: IHttpResponse;
+  LGotUA: string;
+begin
+  LGotUA := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/orig', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotUA := AReq.Headers.Get('user-agent');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LOriginal := NewHttpClient;
+    LDecorated := LOriginal.WithHeader('user-agent', 'decorated/1.0');
+    LResp := LOriginal.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/orig');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'original status 200');
+    Check(LGotUA <> 'decorated/1.0', 'original client unaffected');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -7424,6 +7560,10 @@ begin
   T.Test('Client PostJson sends JSON with correct content-type', @TestClientPostJsonSendsJson);
   T.Test('Client WithBasicAuth sets Authorization header', @TestClientWithBasicAuthSetsHeader);
   T.Test('Client WithBearerAuth sets Authorization header', @TestClientWithBearerAuthSetsHeader);
+  T.Test('Client WithHeader sets custom header', @TestClientWithHeaderSetsCustomHeader);
+  T.Test('Client WithHeader chains with auth', @TestClientWithHeaderChainsWithAuth);
+  T.Test('Client WithHeader multiple headers', @TestClientWithHeaderMultipleHeaders);
+  T.Test('Client WithHeader does not affect original client', @TestClientWithHeaderDoesNotAffectOriginalClient);
   T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',
