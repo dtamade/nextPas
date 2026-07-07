@@ -1336,7 +1336,7 @@ begin
   end;
 
   PreparePlanContext(
-    'llvm-ir-opt-llc-link',
+    'llvm-ir-opt-llc',
     'llvm-backend',
     ExecutableSet.Id
   );
@@ -1421,6 +1421,13 @@ begin
     'object-file',
     ExpandFileName(ObjectArtifactPath)
   );
+
+  { For object-file (unit) outputs, skip the link step: compilation stops at .o }
+  if SameText(OutputKindValue, 'object-file') then
+  begin
+    FPlan.MarkReady;
+    Exit;
+  end;
 
   LinkStep := FPlan.AddStep(
     'llvm-link',
