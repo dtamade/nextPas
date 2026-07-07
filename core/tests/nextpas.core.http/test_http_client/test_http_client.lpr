@@ -25,6 +25,8 @@ uses
   nextpas.core.http.impl.h1,
   nextpas.core.http.client,
   nextpas.core.http.form.base,
+  nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -375,6 +377,9 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1926,6 +1931,24 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.PostJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.PutJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -2987,6 +3010,41 @@ begin
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmPost, 'server received POST');
     CheckEqual('application/x-www-form-urlencoded', LGotContentType, 'content-type set');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientPostJsonSendsJson;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LDoc: IJsonDocument;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmPost, '/api', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LDoc := JsonParse('{"name":"alice","age":30}');
+    LClient := NewHttpClient;
+    LResp := LClient.PostJson('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api', LDoc.Root);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmPost, 'server received POST');
+    CheckEqual('application/json', LGotContentType, 'content-type is application/json');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -7292,6 +7350,7 @@ begin
   T.Test('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Test('Client OPTIONS sends OPTIONS and exposes Allow header', @TestClientOptionsSendsOptions);
   T.Test('Client PostForm encodes fields with correct content-type', @TestClientPostFormEncodesFields);
+  T.Test('Client PostJson sends JSON with correct content-type', @TestClientPostJsonSendsJson);
   T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',

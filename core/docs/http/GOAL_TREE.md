@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 9)
+> Last updated: 2026-07-07 (Phase 10)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,12 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 10 (2026-07-07): Client JSON Convenience**
+
+- **`IHttpClient`**: added `PostJson`/`PutJson`/`PatchJson(url, body: TJsonValue)` — auto-serializes JSON + sets `application/json` content-type
+- **`nextpas.core.http.intf`**: added `TJsonValue` type alias, `nextpas.core.json.value` dependency
+- **Tests**: 1 new integration test (PostJson content-type + method verification), 136 client total / 0 leaks
 
 **Phase 9 (2026-07-07): Client PostForm Convenience**
 
@@ -162,13 +168,13 @@ Already landed:
 - tighter redirect method/body/header ownership semantics
 - `PostForm` convenience for `application/x-www-form-urlencoded`
 - form encoding (`EncodeUrlEncodedForm`, `EncodeMultipartFormData`)
+- `PostJson`/`PutJson`/`PatchJson` convenience for `application/json`
 
 Still intentionally not claimed:
 
 - a full fluent request builder
 - per-request redirect override
 - per-request timeout override
-- json helper families
 - streaming/chunked request body ownership API
 - response charset decoding or sniffing
 
