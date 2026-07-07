@@ -199,8 +199,8 @@ end;
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P4-1 | TLS cache 优化 | P1 | 自适应 TLS cache 大小（基于分配频率） |
-| P4-2 | Batch allocation 增强 | P1 | IBatchAllocator: 批量分配接口（已部分实现） |
+| P4-1 | TLS cache 优化 | P1 | 自适应 TLS cache 大小（基于分配频率） | ✅ (已有 per-band 自适应 batch/max size) |
+| P4-2 | Batch allocation 增强 | P1 | IBatchAllocator: 批量分配接口（已部分实现） | ✅ |
 | P4-3 | NUMA-aware 深化 | P2 | 跨 NUMA 节点的分配策略优化 |
 | P4-4 | Allocation 预测 | P2 | 基于历史模式的预分配策略 |
 
@@ -220,6 +220,25 @@ end;
 - 每 N 次分配评估 hit rate
 - hit rate < 90% → 扩大 cache
 - hit rate > 98% → 缩小 cache（节省内存）
+
+**已实现**: `nextpas.core.mem.cache.thread` 已有 per-band 自适应：
+- Band 0-1 (≤1KB): batch=32, max=128
+- Band 2-3 (≤8KB): batch=16, max=64
+- Band 4 (≤16KB): batch=8, max=32
+- Band 5 (≤53KB): batch=4, max=16
+
+### P4-2: Batch Allocation 增强
+
+**已实现**: `IBatchAllocator` 接口定义在 `nextpas.core.mem.intf.pas`。
+
+```pascal
+IBatchAllocator = interface
+  function BatchGetMem(ASize: SizeUInt; ACount: Word; ABlocks: PPointer): Word;
+  procedure BatchFreeMem(ASize: SizeUInt; ACount: Word; ABlocks: PPointer);
+end;
+```
+
+`TGrowingAllocator` 已有完整 batch 实现（TLS refill/flush 摊销开销）。
 
 ---
 
