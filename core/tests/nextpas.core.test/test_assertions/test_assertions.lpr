@@ -13,6 +13,7 @@
   ⚠ Float comparison: CheckEqual(expected, actual, epsilon) delegates to
      CheckNear — epsilon=0 means bitwise identity, not "very tight".
      For normal floating-point comparisons, always use epsilon > 0.
+     Error messages use "eps" as abbreviation for epsilon.
  }
 program test_assertions;
 
@@ -570,7 +571,7 @@ end;
 procedure TestCheckGreaterThanDEqEps;
 begin
   { Equal within epsilon — should fail (strict >, not >=) }
-  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0 + 1e-11, 1e-10); end, 'epsilon');
+  ExpectFail(procedure begin CheckGreaterThanD(5.0, 5.0 + 1e-11, 1e-10); end, 'eps');
 end;
 
 procedure TestCheckLessThanDPass;
@@ -586,7 +587,7 @@ end;
 
 procedure TestCheckLessThanDEqEps;
 begin
-  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0 - 1e-11, 1e-10); end, 'epsilon');
+  ExpectFail(procedure begin CheckLessThanD(5.0, 5.0 - 1e-11, 1e-10); end, 'eps');
 end;
 
 procedure TestCheckGreaterOrEqualDPass;
