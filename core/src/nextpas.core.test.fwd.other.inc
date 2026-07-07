@@ -111,6 +111,26 @@ function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
 begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;
 
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer): IArrayGenerator;
+begin Result := nextpas.core.test.prop.GenArray(AGen, AMaxLen); end;
+
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator;
+begin Result := nextpas.core.test.prop.GenArray(AGen, AMinLen, AMaxLen); end;
+
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+begin Result := nextpas.core.test.prop.GenTuple(AGen1, AGen2); end;
+
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+begin Result := nextpas.core.test.prop.BindInt(AGen, AFn); end;
+
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
+begin nextpas.core.test.prop.PropArray(AName, ATest, AGen, ARuns, AShrink); end;
+
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer);
+begin nextpas.core.test.prop.PropTuple(AName, ATest, AGen, ARuns); end;
+
 procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AMaxIterations: Integer);
 begin nextpas.core.test.prop.Fuzz(AName, ATest, ACorpus, AMaxIterations); end;

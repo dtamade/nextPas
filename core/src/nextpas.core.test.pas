@@ -391,6 +391,24 @@ procedure PropFail(const AMsg: string);
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer = 100; AShrink: Boolean = True): string;
 
+{ ── Re-exported structured generators from test.prop (v8.0a) ──────────────── }
+
+type
+  TIntArrayTest = nextpas.core.test.prop.TIntArrayTest;
+  TTupleTest = nextpas.core.test.prop.TTupleTest;
+  IArrayGenerator = nextpas.core.test.prop.IArrayGenerator;
+  ITupleGenerator = nextpas.core.test.prop.ITupleGenerator;
+  TIntToGenerator = nextpas.core.test.prop.TIntToGenerator;
+
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer = 100): IArrayGenerator; overload;
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator; overload;
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer = 100; AShrink: Boolean = True);
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer = 100);
+
 { ── Re-exported fuzzing from test.prop (v7.2a) ───────────────────────────── }
 
 type

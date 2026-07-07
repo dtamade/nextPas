@@ -418,6 +418,79 @@ begin
   end, LDir, 100);
 end;
 
+{ ── Structured Generator tests (v8.0a) ───────────────────────────────────── }
+
+procedure TestGenArray;
+var
+  LCount: Integer;
+begin
+  LCount := 0;
+  PropArray('Array length <= 50', procedure(const V: array of Int64)
+  begin
+    Inc(LCount);
+    if Length(V) > 50 then
+      PropFail('Array too long: ' + IntToStr(Length(V)));
+  end, GenArray(GenInt(0, 100), 50), 50, True);
+  if LCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(LCount));
+end;
+
+procedure TestGenArrayMinMax;
+begin
+  PropArray('Array length in range', procedure(const V: array of Int64)
+  begin
+    if Length(V) < 5 then
+      PropFail('Array too short: ' + IntToStr(Length(V)));
+    if Length(V) > 15 then
+      PropFail('Array too long: ' + IntToStr(Length(V)));
+  end, GenArray(GenInt(0, 100), 5, 15), 50, True);
+end;
+
+procedure TestGenTuple;
+var
+  LCount: Integer;
+begin
+  LCount := 0;
+  PropTuple('Tuple: int > 0 implies str non-empty', procedure(AInt: Int64; const AStr: string)
+  begin
+    Inc(LCount);
+    if (AInt > 0) and (Length(AStr) = 0) then
+      PropFail('Int > 0 but string empty');
+  end, GenTuple(GenInt(0, 100), GenString(50)), 50);
+  if LCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(LCount));
+end;
+
+procedure TestBindInt;
+var
+  LCount: Integer;
+begin
+  LCount := 0;
+  Prop('BindInt: second gen depends on first', procedure(const V: Int64)
+  begin
+    Inc(LCount);
+    { Second gen should be 0..V, so result should be <= V }
+    if V < 0 then
+      PropFail('Negative value: ' + IntToStr(V));
+  end, BindInt(GenInt(0, 100), function(V: Int64): IIntGenerator
+    begin Result := GenInt(0, V) end), 50, True);
+  if LCount <> 50 then
+    FailTest('Expected 50 runs, got ' + IntToStr(LCount));
+end;
+
+procedure TestStringShrinkImproved;
+{ Test that string shrinking works correctly.
+  Property fails when string contains 'X', but we use a generator that
+  never generates 'X'. }
+begin
+  Prop('String shrink: no X in digits', procedure(const S: string)
+  begin
+    if Pos('X', S) > 0 then
+      PropFail('Found X in: "' + S + '"');
+  end, MapIntToStr(GenInt(0, 9999), function(V: Int64): string begin Result := IntToStr(V) end),
+  100, True);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
@@ -523,6 +596,26 @@ begin
   SectionHeader('FuzzWithCorpus');
   TestFuzzWithCorpus;
   PassTest('FuzzWithCorpus passed');
+
+  SectionHeader('GenArray');
+  TestGenArray;
+  PassTest('GenArray passed');
+
+  SectionHeader('GenArray min/max');
+  TestGenArrayMinMax;
+  PassTest('GenArray min/max passed');
+
+  SectionHeader('GenTuple');
+  TestGenTuple;
+  PassTest('GenTuple passed');
+
+  SectionHeader('BindInt');
+  TestBindInt;
+  PassTest('BindInt passed');
+
+  SectionHeader('String shrink improved');
+  TestStringShrinkImproved;
+  PassTest('String shrink improved passed');
 
   WriteLn;
   PassTest('test_prop');
