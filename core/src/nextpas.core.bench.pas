@@ -19,6 +19,7 @@ uses
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
   nextpas.core.bench.runner,
+  nextpas.core.bench.run,
   nextpas.core.bench.report,
   nextpas.core.time.base,
   nextpas.core.platform.time;
@@ -56,6 +57,10 @@ type
 
   {** 重新导出执行器（旧 API 兼容：TBenchRunner.Run + Summary） }
   TBenchRunner = nextpas.core.bench.runner.TBenchRunner;
+
+  {** 线程安全执行器（原子结果收集，多线程并发） }
+  TBenchRun = nextpas.core.bench.run.TBenchRun;
+  PBenchRunResult = nextpas.core.bench.run.PBenchRunResult;
 
   {** 基准套件 - Fluent Builder 实现 }
   TBenchSuite = class(TInterfacedObject, IBenchSuite)

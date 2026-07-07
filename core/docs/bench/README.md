@@ -15,6 +15,7 @@ nextpas.core.bench             ← 门面：TBenchSuite/TBenchResults
 nextpas.core.bench.baseline    ← 基线管理（JSON 序列化/回归检测）
 nextpas.core.bench.memtrack    ← 内存追踪（MemoryManager hook + 原子计数）
 nextpas.core.bench.parallel    ← 并行基准（TThread + 聚合结果）
+nextpas.core.bench.run         ← 线程安全执行器（原子结果收集，EBR 就绪）
 nextpas.core.bench.runner      ← 执行器（校准/采样/统计流水线）
 nextpas.core.bench.report      ← 报告生成（Console/JSON/TSV/HTML/SVG）
 nextpas.core.bench.xlang       ← 跨语言解析（Go/Rust/FPC 输出）
@@ -157,6 +158,40 @@ end.
 | `SetFilter(Pattern)` | 名称过滤（子串匹配） |
 | `Config` | 读写 `TBenchConfig` 配置 |
 
+## TBenchRun 线程安全执行器
+
+`TBenchRun` 是 `TBenchRunner` 的线程安全替代品，使用原子计数器实现无锁结果收集。
+
+```pascal
+uses
+  nextpas.core.bench;
+
+var
+  LRun: TBenchRun;
+  LResults: TBenchResultArray;
+begin
+  LRun := TBenchRun.Create;
+  try
+    LResults := LRun.RunAll([Entry1, Entry2, Entry3], 4); // 4 工作线程
+  finally
+    LRun.Free;
+  end;
+end.
+```
+
+| 方法 | 说明 |
+|------|------|
+| `Create` | 创建执行器（默认配置） |
+| `Create(Config)` | 创建执行器（自定义配置） |
+| `RunAll(Entries, ThreadCount)` | 并发运行所有基准，返回结果数组 |
+| `SubmitResult(Ptr)` | 无锁提交堆分配结果 |
+| `CollectResults(out Results)` | 收集所有已提交结果 |
+| `Count` | 当前已提交结果数 |
+
+**与 TBenchRunner 的区别**:
+- `TBenchRun` 线程安全：多线程可并发提交结果
+- `TBenchRunner` 非线程安全：单线程使用
+
 ## 统计流水线
 
 ```
@@ -200,8 +235,8 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 15 |
-| 框架级测试 | ~296 |
+| 测试套件 | 21 |
+| 框架级测试 | ~370 |
 | 框架 | 全部使用 `nextpas.core.test` |
 | heaptrc | 15/15 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
@@ -306,6 +341,7 @@ make -C core/tests/nextpas.core.bench/test_bench_parallel_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_parallel_memtrack_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clean test
 make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
+make -C core/tests/nextpas.core.bench/test_bench_run clean test
 ```
 
 ## 环境变量
