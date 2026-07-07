@@ -1414,7 +1414,7 @@ begin
     try
       ATest(LShrunk[I]);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         Result := ShrinkInt(AGen, LShrunk[I], ATest);
         Exit;
@@ -1438,7 +1438,7 @@ begin
     try
       ATest(LShrunk[I]);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         Result := ShrinkBool(AGen, LShrunk[I], ATest);
         Exit;
@@ -1472,7 +1472,7 @@ begin
     try
       ATest(LShrunk[I]);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         Result := ShrinkBytes(AGen, LShrunk[I], ATest);
         Exit;
