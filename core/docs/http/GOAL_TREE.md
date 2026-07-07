@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 8)
+> Last updated: 2026-07-07 (Phase 9)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,13 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 9 (2026-07-07): Client PostForm Convenience**
+
+- **`IHttpClient`**: added `PostForm(url, fields)` — encodes `TFormFieldArray` as `application/x-www-form-urlencoded` and POSTs
+- **`THttpClient`**: implementation delegates to `Post` with encoded body
+- **`nextpas.core.http.intf`**: added `TFormFieldArray` type alias, `nextpas.core.http.form.base` dependency
+- **Tests**: 1 new integration test (content-type + method verification), 135 client total / 0 leaks
 
 **Phase 8 (2026-07-07): Form Encoding — Bidirectional Form Data**
 
@@ -153,13 +160,15 @@ Already landed:
 - string / bytes response body helpers
 - explicit response body release helper
 - tighter redirect method/body/header ownership semantics
+- `PostForm` convenience for `application/x-www-form-urlencoded`
+- form encoding (`EncodeUrlEncodedForm`, `EncodeMultipartFormData`)
 
 Still intentionally not claimed:
 
 - a full fluent request builder
 - per-request redirect override
 - per-request timeout override
-- form/json helper families
+- json helper families
 - streaming/chunked request body ownership API
 - response charset decoding or sniffing
 

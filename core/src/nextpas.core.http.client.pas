@@ -13,6 +13,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
   nextpas.core.http.base,
+  nextpas.core.http.form.base,
   nextpas.core.http.intf;
 
 type
@@ -46,6 +47,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -71,6 +73,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.http.headers,
   nextpas.core.http.message,
+  nextpas.core.http.form,
   nextpas.core.http.impl.registry;
 
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
@@ -820,6 +823,15 @@ begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmOptions, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
   Result := Send(LReq);
+end;
+
+function THttpClient.PostForm(const AUrl: string;
+  const AFields: TFormFieldArray): IHttpResponse;
+var
+  LBody: string;
+begin
+  LBody := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+  Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
 end;
 
 { Factory functions }

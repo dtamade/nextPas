@@ -11,10 +11,12 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
   nextpas.core.net.server.intf,
-  nextpas.core.http.base;
+  nextpas.core.http.base,
+  nextpas.core.http.form.base;
 
 type
   TStringArray = nextpas.core.base.TStringArray;
+  TFormFieldArray = nextpas.core.http.form.base.TFormFieldArray;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
@@ -147,6 +149,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
   end;
 
   { Transport layer — protocol implementations register these }
