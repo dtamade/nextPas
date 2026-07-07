@@ -146,6 +146,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
   end;
 
   { Transport layer — protocol implementations register these }

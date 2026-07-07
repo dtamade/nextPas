@@ -45,6 +45,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -808,6 +809,16 @@ var
 begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Send(LReq);
+end;
+
+function THttpClient.Options(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmOptions, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
   Result := Send(LReq);
 end;
 
