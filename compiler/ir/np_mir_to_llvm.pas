@@ -246,8 +246,7 @@ begin
       EmitLn('  %' + IntToStr(AStmt.Dst) + ' = insertvalue ' +
         LlvmTypeForOperand(AStmt.Src) +
         ' %' + IntToStr(AStmt.Src.Value) + ', ' +
-        LlvmTypeForOperand(AStmt.Rhs) +
-        ' %' + IntToStr(AStmt.Rhs.Value) +
+        OpStr(AStmt.Rhs) +
         ', ' + IntToStr(AStmt.FieldIndex));
 
     mskUnary:
@@ -357,4 +356,3 @@ begin
   CloseFile(F);
 end;
 end.
-
