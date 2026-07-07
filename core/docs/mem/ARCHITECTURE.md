@@ -198,6 +198,11 @@ type
 - **Free-list shuffle** (`shuffle.pas`): 释放时随机插入位置，防止 heap spraying
 - **Double-free detection**: GUARD_MAGIC header 检测
 - **Scan/NoScan separation**: 指针类型和纯数据分开存储
+- **DEBUG poison** (`{$IFDEF DEBUG}`):
+  - `MEM_POISON_FREED` ($DE): 释放后内存毒化，暴露 use-after-free
+  - `MEM_POISON_ALLOC` ($AB): 新分配内存毒化，暴露未初始化读取
+  - 池层 (TFixedPool, TGrowingBlockPool, TBlockPool) 在 Release/FreeMem 时毒化
+  - 分配器基类 (TAllocator) 在 GetMem 时毒化
 
 ## 四类 arena 的定位
 
@@ -230,7 +235,7 @@ type
 - 前后双向 bump pointer
 - 大对象直接走独立 mmap
 
-这是最偏性能和虚拟内存控制的 arena。它暴露 `Reset`、`ResetHard`、`AllocUnsafe` 这些 `IArena` 不适合承载的低层语义。
+这是最偏性能和虚拟内存控制的 arena。它暴露 `Reset`、`ResetHard`、`AllocFast` 这些 `IArena` 不适合承载的低层语义。
 
 ### `TArenaConcurrent` 和 `TThreadArena*`
 

@@ -1,10 +1,10 @@
 # nextpas.core.mem 代码契约
 
-**模块路径**：`core/src/nextpas.core.mem*.pas`（57 个源文件）
+**模块路径**：`core/src/nextpas.core.mem*.pas`（58 个源文件）
 **层级**：L0-L3（内部分层）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-03
-**版本**：1.3
+**最后更新**：2026-07-06
+**版本**：1.4
 
 ---
 
@@ -284,49 +284,51 @@ IArena 实现：
 
 | 子系统 | 测试文件 | 套件数 | 测试数 | 失败数 |
 |--------|----------|--------|--------|--------|
-| Allocator 基础 | test_allocator_foundation | 1 | 8 | 0 |
-| Allocator CRT | test_allocator_crt | 1 | 5 | 0 |
-| Allocator 默认 | test_default_allocator | 1 | 4 | 0 |
-| Allocator 增长 | test_growing_allocator | 1 | 13 | 0 |
-| Allocator 跟踪 | test_tracking_allocator | 1 | 20 | 0 |
-| Allocator 守卫 | test_guard | 1 | 9 | 0 |
-| Allocator Fallback | test_fallback_allocator | 1 | 15 | 0 |
-| Allocator 基准 | test_mem | 1 | — | 0 |
-| Arena 基础 | test_arena | 1 | 15 | 0 |
-| Arena 分段 | test_arena_chunked | 1 | 10 | 0 |
-| Arena 类 | test_arena_class | 1 | 6 | 0 |
-| Arena 编译器 | test_arena_compiler | 1 | 5 | 0 |
-| Arena 线程 | test_thread_arena | 1 | 26 | 0 |
-| Central | test_central | 1 | — | 0 |
-| Concurrent | test_concurrent | 1 | 4 | 0 |
-| Concurrent 包装 | test_concurrent_wrappers | 1 | 6 | 0 |
-| Fragmentation | test_fragmentation | 1 | — | 0 |
-| Pool 基础 | test_pool | 1 | 8 | 0 |
-| Pool 固定 | test_pool_allocator | 1 | 6 | 0 |
-| Pool Slab | test_slab_pool | 1 | 16 | 0 |
-| Pool Slab 分片 | test_sharded_pools | 1 | 9 | 0 |
-| Pool SizeClass | test_sizeclass | 1 | 15 | 0 |
-| Pool SizeClass 池 | test_sizeclass_pool | 1 | 6 | 0 |
-| Pool 增长固定 | test_growing_fixed_pool | 1 | 8 | 0 |
-| Pool 对象 | test_object_pool | 1 | 12 | 0 |
-| BlockPool | test_blockpool | 1 | 15 | 0 |
-| BlockPool 增长 | test_growing_block_pool | 1 | 8 | 0 |
-| Stack Pool | test_stack_pool | 1 | 15 | 0 |
-| Ring Buffer | test_ring_buffer | 1 | 30 | 0 |
-| Scavenger | test_scavenger | 1 | 5 | 0 |
-| Shuffle | test_shuffle | 1 | 4 | 0 |
-| SizeClass | test_sizeclass | 1 | 15 | 0 |
-| Span | test_span | 1 | 7 | 0 |
-| 稳定性 | test_stability | 1 | 16 | 0 |
-| Thread Cache | test_thread_cache | 1 | 7 | 0 |
-| 契约 | test_contracts | 1 | 22 | 0 |
-| L0 边界 | test_l0_dependency_boundaries | 1 | 1 | 0 |
-| OOM | test_oom | 1 | 5 | 0 |
-| Utils | test_mem_utils | 1 | 8 | 0 |
-| Secure | test_mem_secure | 1 | 6 | 0 |
-| Memory Map | test_memory_map_allocator | 1 | 4 | 0 |
-| Mapped Slab | test_mapped_slab_pool | 1 | 5 | 0 |
-| **合计** | **48 个测试套件** | **48** | **602** | **0** |
+| Allocator CRT | allocator.crt | 1 | 2 | 0 |
+| Allocator Foundation | allocator.foundation | 1 | 3 | 0 |
+| Allocator Fallback | allocator.fallback | 1 | 20 | 0 |
+| Allocator Growing | growing_allocator | 1 | 15 | 0 |
+| Allocator Tracking | allocator.tracking | 1 | 19 | 0 |
+| Allocator Guard | test_guard | 1 | 13 | 0 |
+| Allocator 默认 | default_allocator | 1 | 2 | 0 |
+| Arena 基础 | arena | 1 | 15 | 0 |
+| Arena 分段 | arena.chunked | 1 | 27 | 0 |
+| Arena 类 | arena_class | 1 | 21 | 0 |
+| Arena 虚拟 | arena.virtual | 1 | 41 | 0 |
+| Arena 线程 | arena.thread | 1 | 26 | 0 |
+| BlockPool | blockpool | 1 | 15 | 0 |
+| BlockPool 增长 | blockpool.growable | 1 | 12 | 0 |
+| Central | central | 1 | 15 | 0 |
+| Concurrent | test_concurrent | 1 | 6 | 0 |
+| Concurrent 包装 | concurrent_wrappers | 1 | 16 | 0 |
+| 契约 | contracts | 1 | 25 | 0 |
+| Facade | facade | 1 | 12 | 0 |
+| Fixed Slab | fixed_slab | 1 | 14 | 0 |
+| Fuzz | fuzz | 1 | 7 | 0 |
+| Mapped Slab | mapped_slab_pool | 1 | 6 | 0 |
+| Memory Map | memory_map_allocator | 1 | 6 | 0 |
+| OOM | oom | 1 | 8 | 0 |
+| Platform Virtual | platform_virtual | 1 | 23 | 0 |
+| Pool 基础 | pool | 1 | 15 | 0 |
+| Pool Allocator | pool_allocator | 1 | 6 | 0 |
+| Pool Fixed 增长 | pool.fixed.growable | 1 | 12 | 0 |
+| Pool Object | pool.object_pool | 1 | 12 | 0 |
+| Pool SizeClass | pool.sizeclass | 1 | 16 | 0 |
+| Ring Buffer | ring_buffer | 1 | 31 | 0 |
+| Scavenger | scavenger | 1 | 7 | 0 |
+| Secure | secure | 1 | 7 | 0 |
+| Sharded Pools | sharded_pools | 1 | 12 | 0 |
+| Shared Memory | shared_memory | 1 | 8 | 0 |
+| Shuffle | shuffle | 1 | 7 | 0 |
+| SizeClass | sizeclass | 1 | 16 | 0 |
+| Slab Pool | slab_pool | 1 | 19 | 0 |
+| Slab Thread Safety | slab_thread_safety | 1 | 2 | 0 |
+| Span | span | 1 | 21 | 0 |
+| Stack Pool | stack_pool | 1 | 16 | 0 |
+| 稳定性 | stability | 1 | 17 | 0 |
+| Thread Cache | thread_cache | 1 | 7 | 0 |
+| Utils | utils | 1 | 42 | 0 |
+| **合计** | **44 个测试套件** | **44** | **639** | **0** |
 
 注：另有 5 个 compile-gate 测试（test_memory_map_compile_gate, test_mem_secure_windows_compile_gate, test_platform_virtual, test_shared_memory, test_mem），仅验证编译通过。
 
@@ -350,6 +352,8 @@ IArena 实现：
 | 分片 | test_sharded_pools | ✅ |
 | 碎片化 | test_fragmentation | ✅ |
 | Central 分配器 | test_central | ✅ |
+| 段回收 (TrimIdleSegments) | test_sharded_pools | ✅ |
+| 并发压力测试 | test_sharded_pools (16T x 500 iter) | ✅ |
 
 ### 6.3 覆盖率目标
 
@@ -368,3 +372,4 @@ IArena 实现：
 | 2026-07-01 | 1.1 | 修正：移除不存在的辅助函数引用、修正测试矩阵匹配实际代码 | Claude |
 | 2026-07-01 | 1.2 | 同步 main：57 源文件 + 39 测试套件 | Claude |
 | 2026-07-03 | 1.3 | 可用性审计修复：IAllocator 定义同步、nil/0 契约文档化、TAllocatorTraits 精简、IArenaCapacity 扩展接口 | Claude |
+| 2026-07-06 | 1.4 | 测试矩阵同步：44 suites / 639 tests，反映实际测试状态 | Claude |

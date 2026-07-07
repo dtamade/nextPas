@@ -19,7 +19,7 @@ begin
   try
     Check(Int64(1024) = Int64(LA.Capacity), 'total size');
     Check(Int64(0) = Int64(LA.UsedSize), 'used size');
-    Check(Int64(1024) = Int64(LA.RemainingSize), 'remaining size');
+    Check(Int64(1024) = Int64(LA.Stats.TotalAllocated - LA.Stats.TotalUsed), 'remaining size');
   finally
     LA.Free;
   end;
@@ -156,7 +156,7 @@ begin
 
     LA.Reset;
     Check(Int64(0) = Int64(LA.UsedSize), 'reset clears');
-    CheckEqual(Int64(256), Int64(LA.RemainingSize));
+    CheckEqual(Int64(256), Int64(LA.Stats.TotalAllocated - LA.Stats.TotalUsed));
 
     Check(LA.Alloc(256) <> nil, 'can reuse after reset');
   finally

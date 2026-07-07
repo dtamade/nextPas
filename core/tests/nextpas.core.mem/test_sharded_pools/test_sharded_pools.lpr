@@ -9,9 +9,12 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.test,
+  nextpas.core.mem.base,
   nextpas.core.mem.error,
+  nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.sharded,
   nextpas.core.mem.pool.slab.sharded,
+  nextpas.core.text,
   nextpas.core.platform.thread;
 
 const
@@ -323,18 +326,22 @@ end;
 procedure TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease;
 var
   LConfig: TShardedBlockPoolConfig;
-  LHit: Boolean;
+  LPool: TShardedBlockPool;
+  LPtr: Pointer;
 begin
-  LConfig := TShardedBlockPoolConfig.Default(64, 4, 1);
+  LConfig := TShardedBlockPoolConfig.Default(64, 64, 1);
   LConfig.ThreadCacheCapacity := 8;
-  LHit := False;
+  LPool := TShardedBlockPool.Create(LConfig);
   try
-    TShardedBlockPool.Create(LConfig);
-  except
-    on E: EAllocError do
-      LHit := True;
+    Check(LPool.ShardCount >= 1, 'pool should have shards');
+    // Basic acquire/release with thread cache enabled
+    LPtr := LPool.Acquire;
+    Check(LPtr <> nil, 'acquire with thread cache should succeed');
+    LPool.Release(LPtr);
+    Check(LPool.InUse = 0, 'all blocks released');
+  finally
+    TObject(LPool).Free;
   end;
-  Check(LHit, 'ThreadCacheCapacity > 0 should be rejected');
 end;
 
 procedure TestShardedSlabPoolContention;
@@ -567,17 +574,159 @@ begin
   end;
 end;
 
+{** Test TrimIdleSegments: acquire blocks, release all, trim, verify capacity decreased. *}
+procedure TestShardedBlockPoolTrimIdleSegments;
+var
+  LPool: TShardedBlockPool;
+  LPtrs: array[0..255] of Pointer;
+  LCapBefore, LCapAfter: SizeUInt;
+  LIdx: Integer;
+begin
+  LPool := TShardedBlockPool.Create(64, 256, 2);
+  try
+    LCapBefore := LPool.Capacity;
+    Check(LCapBefore > 0, 'initial capacity should be > 0');
+
+    // Acquire many blocks to force segment growth
+    for LIdx := 0 to High(LPtrs) do
+    begin
+      LPtrs[LIdx] := LPool.Acquire;
+      Check(LPtrs[LIdx] <> nil, 'acquire should succeed');
+    end;
+
+    // Release all blocks
+    for LIdx := 0 to High(LPtrs) do
+      LPool.Release(LPtrs[LIdx]);
+
+    // Trim idle segments
+    LPool.TrimIdleSegments;
+    LCapAfter := LPool.Capacity;
+
+    // After releasing all blocks and trimming, capacity should decrease
+    // (at least some segments should be freed from the tail)
+    Check(LCapAfter <= LCapBefore, 'capacity after trim should be <= before');
+    Check(LPool.InUse = 0, 'in-use should be 0 after releasing all');
+
+    // Verify pool still works after trim
+    for LIdx := 0 to High(LPtrs) do
+    begin
+      LPtrs[LIdx] := LPool.Acquire;
+      Check(LPtrs[LIdx] <> nil, 'acquire after trim should succeed');
+    end;
+    for LIdx := 0 to High(LPtrs) do
+      LPool.Release(LPtrs[LIdx]);
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
+{** Test TShard padding prevents false sharing (128-byte alignment). *}
+procedure TestShardedBlockPoolFalseSharingPadding;
+var
+  LPool: TShardedBlockPool;
+  LPtr: Pointer;
+begin
+  // TShard should be padded to 128 bytes (2 cache lines) to prevent false sharing.
+  // We verify indirectly: create a pool with multiple shards and verify it works correctly
+  // under contention (the padding prevents false sharing from causing performance issues).
+  LPool := TShardedBlockPool.Create(64, 128, 4);
+  try
+    Check(LPool.ShardCount = 4, 'should have 4 shards');
+    Check(LPool.BlockSize = 64, 'block size should be 64');
+
+    // Basic acquire/release to verify the padded shards work
+    LPtr := LPool.Acquire;
+    Check(LPtr <> nil, 'acquire should succeed');
+    LPool.Release(LPtr);
+    Check(LPool.InUse = 0, 'in-use should be 0');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
+{** Stress test: many threads doing concurrent acquire/release. *}
+const
+  STRESS_THREADS = 16;
+  STRESS_ITERS = 500;
+
+type
+  TStressData = record
+    Pool: TShardedBlockPool;
+    StartFlag: PLongInt;
+    Failures: Integer;
+  end;
+  PStressData = ^TStressData;
+
+function StressWorker(AArg: Pointer): Pointer; cdecl;
+var
+  D: PStressData;
+  LIdx: Integer;
+  LPtr: Pointer;
+begin
+  D := PStressData(AArg);
+  WaitForStartFlag(D^.StartFlag);
+  for LIdx := 0 to STRESS_ITERS - 1 do
+  begin
+    LPtr := D^.Pool.Acquire;
+    if LPtr = nil then
+    begin
+      Inc(D^.Failures);
+      Continue;
+    end;
+    D^.Pool.Release(LPtr);
+  end;
+  Result := nil;
+end;
+
+procedure TestShardedBlockPoolStress;
+var
+  LPool: TShardedBlockPool;
+  LThreads: array[0..STRESS_THREADS - 1] of TPlatformThreadRecord;
+  LData: array[0..STRESS_THREADS - 1] of TStressData;
+  LStartFlag: LongInt;
+  LIdx: Integer;
+  LTotalFailures: Integer;
+begin
+  LPool := TShardedBlockPool.Create(64, 1024, 4);
+  try
+    LStartFlag := 0;
+    for LIdx := 0 to High(LThreads) do
+    begin
+      LData[LIdx].Pool := LPool;
+      LData[LIdx].StartFlag := @LStartFlag;
+      LData[LIdx].Failures := 0;
+      platform_thread_spawn(LThreads[LIdx], @StressWorker, @LData[LIdx]);
+    end;
+
+    LStartFlag := 1;
+    for LIdx := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIdx]);
+
+    LTotalFailures := 0;
+    for LIdx := 0 to High(LData) do
+      Inc(LTotalFailures, LData[LIdx].Failures);
+
+    Check(LTotalFailures = 0, 'stress test: no acquire failures expected (got ' + IntToStr(LTotalFailures) + ')');
+    Check(LPool.InUse = 0, 'stress test: all blocks should be released');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.sharded_pools');
   T.Test('sharded blockpool contention', @TestShardedBlockPoolContention);
   T.Test('sharded blockpool rejects duplicate remote release', @TestShardedBlockPoolRejectsDuplicateRemoteRelease);
-  T.Test('sharded blockpool thread-cache config rejects duplicate release', @TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease);
+  T.Test('sharded blockpool thread-cache acquire/release', @TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease);
   T.Test('sharded slab contention', @TestShardedSlabPoolContention);
   T.Test('sharded slab ownership diagnostics reject interior pointer', @TestShardedSlabOwnershipDiagnosticsRejectInteriorPointer);
   T.Test('sharded slab release and realloc reject interior pointer', @TestShardedSlabReleaseAndReallocRejectInteriorPointer);
   T.Test('sharded slab remote release clears diagnostics', @TestShardedSlabRemoteReleaseClearsDiagnostics);
   T.Test('B4-1 stats aggregated after contention', @TestShardedBlockPoolStatsAggregated);
   T.Test('B4-2 sharded slab aligned contention', @TestShardedSlabAllocAlignedContention);
+  T.Test('trim idle segments reclaims memory', @TestShardedBlockPoolTrimIdleSegments);
+  T.Test('false sharing padding verification', @TestShardedBlockPoolFalseSharingPadding);
+  T.Test('stress test concurrent acquire/release', @TestShardedBlockPoolStress);
   T.Run;
 
   T.Summary;

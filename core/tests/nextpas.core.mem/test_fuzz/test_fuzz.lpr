@@ -155,7 +155,7 @@ begin
         LCount := 0;
       end;
     end;
-    Check(LArena.UsedSize <= LArena.TotalCapacity, 'fuzz chunked: used <= total');
+    Check(LArena.UsedSize <= LArena.Stats.TotalAllocated, 'fuzz chunked: used <= total');
     WriteLn('PASS: fuzz TChunkedArena (', FUZZ_ITERATIONS, ' iterations, segs=',
       LArena.SegmentCount, ')');
   finally

@@ -31,8 +31,8 @@ type
     ['{1CEB691D-D538-48D2-A5C4-A4F0A1B98928}']
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
     function Traits: TAllocatorTraits;
   end;
 

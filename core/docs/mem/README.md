@@ -16,7 +16,7 @@
 
 | 场景            | 推荐                           | 原因                        |
 | --------------- | ------------------------------ | --------------------------- |
-| 编译器热路径    | TVirtualArena + AllocUnsafe    | 2ns, 476M ops/s             |
+| 编译器热路径    | TVirtualArena + AllocFast    | 2ns, 476M ops/s             |
 | 请求/帧生命周期 | TLocalArena                    | 固定容量, 3ns, 307M ops/s   |
 | 动态增长批量    | TChunkedArena                  | Go-style chunk cache, 15ns  |
 | 多线程共享      | TArenaConcurrent               | mutex-protected IArena 包装 |
@@ -51,7 +51,7 @@
 - 预留 256MB 虚拟地址空间
 - 双向 bump pointer（指针对象从前往后，无指针从后往前）
 - 大对象（>=64KB）独立 mmap
-- `AllocUnsafe`: 纯 bump pointer, 2ns（前提：页面已提交）
+- `AllocFast`: 纯 bump pointer, 2ns（前提：页面已提交）
 
 ### TLocalArena (class, IArena)
 
@@ -80,7 +80,7 @@
 64B alloc, Reset+Reuse:
 | 分配器 | ns/op | ops/s |
 |--------|-------|-------|
-| VirtualArena AllocUnsafe | 2 | 476M |
+| VirtualArena AllocFast | 2 | 476M |
 | LocalArena | 3 | 307M |
 | ChunkedArena | 15 | 68M |
 | VirtualArena Alloc | 37 | 27M |
@@ -108,7 +108,7 @@ begin
 end;
 ```
 
-### VirtualArena + AllocUnsafe
+### VirtualArena + AllocFast
 
 ```pascal
 uses nextpas.core.mem.arena.virtual;
@@ -121,7 +121,7 @@ begin
   try
     LP := LArena.Alloc(4096);   // 首次分配提交页面
     LArena.Reset;                // Reset 不释放页面
-    LP := LArena.AllocUnsafe(64); // 纯 bump, 2ns
+    LP := LArena.AllocFast(64); // 纯 bump, 2ns
   finally
     TVirtualArena_Release(LArena);
   end;
@@ -158,7 +158,7 @@ end;
 ## 关键约定
 
 - **Arena 不支持单个释放**：需要 `Reset` 一次性释放全部
-- **AllocUnsafe 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
+- **AllocFast 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
 - **大对象生命周期**：不受 mark/reset 影响；`FLargeBlocks` metadata 与对象映射同生命周期，只在 `Release` 时统一释放/关闭
 - **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
 - `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
