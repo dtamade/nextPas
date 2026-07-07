@@ -249,6 +249,74 @@ procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
 procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
   const ACorpusDir: string; AMaxIterations: Integer = 10000);
 
+{ ── Coverage Tracking (v8.0b) ──────────────────────────────────────────────── }
+
+type
+  { Coverage tracker for guided fuzzing.
+    Users mark coverage points with Hit(); the tracker records which inputs
+    trigger new coverage, and only those inputs are added to the corpus. }
+  ICoverageTracker = interface
+    { Mark a coverage point. AId is an arbitrary integer identifying the point. }
+    procedure Hit(AId: Integer);
+
+    { Check if the current input triggered new coverage since last ResetNewCoverage.
+      Returns True if any new coverage points were hit. }
+    function HasNewCoverage: Boolean;
+
+    { Reset the "new coverage" flag. Call before each fuzz iteration. }
+    procedure ResetNewCoverage;
+
+    { Total unique coverage points hit so far }
+    function CoverageCount: Integer;
+
+    { Total hit count (including duplicates) }
+    function TotalHits: Integer;
+  end;
+
+function CreateCoverageTracker: ICoverageTracker;
+
+{ ── Structured Fuzzing (v8.0b) ─────────────────────────────────────────────── }
+
+type
+  { Test procedure for structured fuzzing — receives an Int64 value }
+  TFuzzStructuredIntTest = reference to procedure(const V: Int64; ACoverage: ICoverageTracker);
+
+{ Fuzz using an Int64 generator for structured input.
+  Mutates in generator space (generate → mutate value → test).
+  ACoverage tracks which inputs trigger new coverage — only those
+  are added to the corpus for further mutation. }
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
+  AGen: IIntGenerator; ACorpus: ICoverageTracker;
+  AMaxIterations: Integer = 10000); overload;
+
+{ Fuzz using a string generator for structured input. }
+type
+  TFuzzStructuredStringTest = reference to procedure(const S: string; ACoverage: ICoverageTracker);
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
+  AGen: IStringGenerator; ACorpus: ICoverageTracker;
+  AMaxIterations: Integer = 10000); overload;
+
+{ ── Parallel Fuzzing (v8.0b) ───────────────────────────────────────────────── }
+
+type
+  { Fuzzer strategy: each worker uses a different mutation approach }
+  TFuzzStrategy = (
+    fsBitFlip,      { Bit-level mutations }
+    fsByteReplace,  { Byte-level replacements }
+    fsHavoc,        { Mixed heavy mutations (insert/delete/dup/swap) }
+    fsStructured    { Generator-based structured mutations }
+  );
+
+{ Run multiple fuzzing workers sequentially, each with a different strategy.
+  Shared corpus: workers share discoveries. Uses coverage tracking to
+  only keep inputs that expand coverage.
+  AWorkers: number of workers (1-4, each gets a different strategy).
+  AIterationsPerWorker: iterations per worker. }
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer = 4;
+  AIterationsPerWorker: Integer = 2500);
+
 implementation
 
 uses
@@ -2134,6 +2202,449 @@ begin
   begin
     ATest(UTF8BytesToString(Data));
   end, ACorpusDir, AMaxIterations);
+end;
+
+{ ── Coverage Tracking (v8.0b) ──────────────────────────────────────────────── }
+
+type
+  TCoverageTracker = class(TInterfacedObject, ICoverageTracker)
+  private
+    { Bitset for coverage points — supports up to 4096 coverage IDs }
+    FCoverage: array[0..511] of Byte;  { 4096 bits }
+    FNewCoverage: Boolean;
+    FCoverageCount: Integer;
+    FTotalHits: Integer;
+  public
+    constructor Create;
+    procedure Hit(AId: Integer);
+    function HasNewCoverage: Boolean;
+    procedure ResetNewCoverage;
+    function CoverageCount: Integer;
+    function TotalHits: Integer;
+  end;
+
+constructor TCoverageTracker.Create;
+begin
+  inherited Create;
+  FillChar(FCoverage[0], SizeOf(FCoverage), 0);
+  FNewCoverage := False;
+  FCoverageCount := 0;
+  FTotalHits := 0;
+end;
+
+procedure TCoverageTracker.Hit(AId: Integer);
+var
+  LByteIdx, LBitIdx: Integer;
+begin
+  Inc(FTotalHits);
+  if (AId < 0) or (AId > 4095) then
+    Exit;
+  LByteIdx := AId shr 3;
+  LBitIdx := AId and 7;
+  if (FCoverage[LByteIdx] and (1 shl LBitIdx)) = 0 then
+  begin
+    FCoverage[LByteIdx] := FCoverage[LByteIdx] or Byte(1 shl LBitIdx);
+    FNewCoverage := True;
+    Inc(FCoverageCount);
+  end;
+end;
+
+function TCoverageTracker.HasNewCoverage: Boolean;
+begin
+  Result := FNewCoverage;
+end;
+
+procedure TCoverageTracker.ResetNewCoverage;
+begin
+  FNewCoverage := False;
+end;
+
+function TCoverageTracker.CoverageCount: Integer;
+begin
+  Result := FCoverageCount;
+end;
+
+function TCoverageTracker.TotalHits: Integer;
+begin
+  Result := FTotalHits;
+end;
+
+function CreateCoverageTracker: ICoverageTracker;
+begin
+  Result := TCoverageTracker.Create;
+end;
+
+{ ── Structured Fuzzing (v8.0b) ─────────────────────────────────────────────── }
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
+  AGen: IIntGenerator; ACorpus: ICoverageTracker;
+  AMaxIterations: Integer);
+var
+  LCorpus: array of Int64;
+  LCorpusCount: Integer;
+  I, LIdx, LFailCount: Integer;
+  LValue, LMin: Int64;
+  LShrunk: specialize TArray<Int64>;
+  LTracker: ICoverageTracker;
+begin
+  LTracker := ACorpus;
+  if LTracker = nil then
+    LTracker := CreateCoverageTracker;
+
+  { Seed corpus with generator values }
+  SetLength(LCorpus, 8);
+  LCorpusCount := 0;
+  for I := 0 to 7 do
+  begin
+    LCorpus[LCorpusCount] := AGen.Generate;
+    Inc(LCorpusCount);
+  end;
+
+  LFailCount := 0;
+  for I := 1 to AMaxIterations do
+  begin
+    { Pick random corpus item and mutate }
+    LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+    LValue := LCorpus[LIdx];
+
+    { Mutate: apply generator shrink to get variants, or generate fresh }
+    if GetFuzzRng.NextIntRange(0, 3) = 0 then
+    begin
+      { 25% chance: generate fresh value }
+      LValue := AGen.Generate;
+    end
+    else
+    begin
+      { 75% chance: shrink existing value to get mutation }
+      LShrunk := AGen.Shrink(LValue);
+      if Length(LShrunk) > 0 then
+        LValue := LShrunk[GetFuzzRng.NextIntRange(0, High(LShrunk))];
+    end;
+
+    try
+      LTracker.ResetNewCoverage;
+      ATest(LValue, LTracker);
+
+      { If test passes and triggered new coverage, add to corpus }
+      if LTracker.HasNewCoverage then
+      begin
+        if LCorpusCount >= Length(LCorpus) then
+          SetLength(LCorpus, LCorpusCount + 16);
+        LCorpus[LCorpusCount] := LValue;
+        Inc(LCorpusCount);
+      end;
+    except
+      on E: EAssertionFailed do
+      begin
+        Inc(LFailCount);
+        { Minimize: try shrinking the failing value }
+        LMin := LValue;
+        LShrunk := AGen.Shrink(LMin);
+        LIdx := 0;
+        while LIdx <= High(LShrunk) do
+        begin
+          try
+            LTracker.ResetNewCoverage;
+            ATest(LShrunk[LIdx], LTracker);
+            Inc(LIdx);
+          except
+            on E2: EAssertionFailed do
+            begin
+              LMin := LShrunk[LIdx];
+              LShrunk := AGen.Shrink(LMin);
+              LIdx := 0;  { restart from beginning with smaller value }
+            end;
+          end;
+        end;
+        FailTest('FuzzStructured "' + AName + '" found failure after ' +
+          IntToStr(I) + ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
+          'minimal input: ' + IntToStr(LMin) +
+          ', coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('FuzzStructured "' + AName + '" passed ' + IntToStr(AMaxIterations) +
+    ' iterations, 0 failures, corpus: ' + IntToStr(LCorpusCount) +
+    ' items, coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
+end;
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
+  AGen: IStringGenerator; ACorpus: ICoverageTracker;
+  AMaxIterations: Integer);
+var
+  LCorpus: array of string;
+  LCorpusCount: Integer;
+  I, LIdx, LFailCount: Integer;
+  LValue, LMin: string;
+  LShrunk: specialize TArray<string>;
+  LTracker: ICoverageTracker;
+begin
+  LTracker := ACorpus;
+  if LTracker = nil then
+    LTracker := CreateCoverageTracker;
+
+  { Seed corpus with generator values }
+  SetLength(LCorpus, 8);
+  LCorpusCount := 0;
+  for I := 0 to 7 do
+  begin
+    LCorpus[LCorpusCount] := AGen.Generate;
+    Inc(LCorpusCount);
+  end;
+
+  LFailCount := 0;
+  for I := 1 to AMaxIterations do
+  begin
+    LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+    LValue := LCorpus[LIdx];
+
+    if GetFuzzRng.NextIntRange(0, 3) = 0 then
+      LValue := AGen.Generate
+    else
+    begin
+      LShrunk := AGen.Shrink(LValue);
+      if Length(LShrunk) > 0 then
+        LValue := LShrunk[GetFuzzRng.NextIntRange(0, High(LShrunk))];
+    end;
+
+    try
+      LTracker.ResetNewCoverage;
+      ATest(LValue, LTracker);
+
+      if LTracker.HasNewCoverage then
+      begin
+        if LCorpusCount >= Length(LCorpus) then
+          SetLength(LCorpus, LCorpusCount + 16);
+        LCorpus[LCorpusCount] := LValue;
+        Inc(LCorpusCount);
+      end;
+    except
+      on E: EAssertionFailed do
+      begin
+        Inc(LFailCount);
+        LMin := LValue;
+        LShrunk := AGen.Shrink(LMin);
+        LIdx := 0;
+        while LIdx <= High(LShrunk) do
+        begin
+          try
+            LTracker.ResetNewCoverage;
+            ATest(LShrunk[LIdx], LTracker);
+            Inc(LIdx);
+          except
+            on E2: EAssertionFailed do
+            begin
+              LMin := LShrunk[LIdx];
+              LShrunk := AGen.Shrink(LMin);
+              LIdx := 0;
+            end;
+          end;
+        end;
+        FailTest('FuzzStructured "' + AName + '" found failure after ' +
+          IntToStr(I) + ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
+          'minimal input: ''' + LMin + '''' +
+          ', coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('FuzzStructured "' + AName + '" passed ' + IntToStr(AMaxIterations) +
+    ' iterations, 0 failures, corpus: ' + IntToStr(LCorpusCount) +
+    ' items, coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
+end;
+
+{ ── Parallel Fuzzing (v8.0b) ───────────────────────────────────────────────── }
+
+{ Mutate with a specific strategy }
+function FuzzMutateStrategy(const AData: TBytes; AStrategy: TFuzzStrategy): TBytes;
+var
+  LRng: TRandomGen;
+  LLen, LPos, LPos2, LBlockLen, I, LTmp: Integer;
+begin
+  LRng := GetFuzzRng;
+  LLen := Length(AData);
+
+  if LLen = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := Byte(LRng.NextIntRange(0, 255));
+    Exit;
+  end;
+
+  case AStrategy of
+    fsBitFlip:
+    begin
+      { Pure bit flips: 1-3 bits }
+      Result := Copy(AData);
+      LPos := LRng.NextIntRange(0, LLen - 1);
+      Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+      if LRng.NextIntRange(0, 2) = 0 then
+        Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+    end;
+    fsByteReplace:
+    begin
+      { Byte replacements: replace 1-4 bytes }
+      Result := Copy(AData);
+      for I := 1 to 1 + LRng.NextIntRange(0, 3) do
+      begin
+        LPos := LRng.NextIntRange(0, LLen - 1);
+        Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+      end;
+    end;
+    fsHavoc:
+    begin
+      { Heavy mutations: insert, delete, dup, swap }
+      case LRng.NextIntRange(0, 3) of
+        0: begin { Insert }
+          LPos := LRng.NextIntRange(0, LLen);
+          SetLength(Result, LLen + 1);
+          if LPos > 0 then
+            Move(AData[0], Result[0], LPos);
+          Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+          if LPos < LLen then
+            Move(AData[LPos], Result[LPos + 1], LLen - LPos);
+        end;
+        1: begin { Delete }
+          if LLen <= 1 then
+          begin
+            Result := Copy(AData);
+            Exit;
+          end;
+          LPos := LRng.NextIntRange(0, LLen - 1);
+          SetLength(Result, LLen - 1);
+          if LPos > 0 then
+            Move(AData[0], Result[0], LPos);
+          if LPos < LLen - 1 then
+            Move(AData[LPos + 1], Result[LPos], LLen - 1 - LPos);
+        end;
+        2: begin { Block duplicate }
+          if 7 < LLen then
+            LBlockLen := 1 + LRng.NextIntRange(0, 7)
+          else
+            LBlockLen := 1 + LRng.NextIntRange(0, LLen - 1);
+          LPos := LRng.NextIntRange(0, LLen - 1);
+          if LPos + LBlockLen > LLen then
+            LBlockLen := LLen - LPos;
+          SetLength(Result, LLen + LBlockLen);
+          Move(AData[0], Result[0], LLen);
+          Move(AData[LPos], Result[LLen], LBlockLen);
+        end;
+        3: begin { Block swap }
+          Result := Copy(AData);
+          if 3 < LLen div 2 then
+            LBlockLen := 1 + LRng.NextIntRange(0, 3)
+          else
+            LBlockLen := 1 + LRng.NextIntRange(0, LLen div 2);
+          if LLen - LBlockLen < 0 then
+            LBlockLen := LLen;
+          LPos := LRng.NextIntRange(0, LLen - LBlockLen);
+          LPos2 := LRng.NextIntRange(0, LLen - LBlockLen);
+          for I := 0 to LBlockLen - 1 do
+          begin
+            LTmp := Result[LPos + I];
+            Result[LPos + I] := Result[LPos2 + I];
+            Result[LPos2 + I] := LTmp;
+          end;
+        end;
+      end;
+    end;
+    fsStructured:
+    begin
+      { Structured: use existing FuzzMutate }
+      Result := FuzzMutate(AData);
+    end;
+  end;
+end;
+
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
+var
+  LCorpus: array of TBytes;
+  LCorpusCount, LLen, I, J, W, LIdx, LFailCount: Integer;
+  LInput, LMin: TBytes;
+  LHex: string;
+  LTracker: ICoverageTracker;
+  LStrategy: TFuzzStrategy;
+  LStrategies: array of TFuzzStrategy;
+begin
+  { Clamp workers }
+  if AWorkers < 1 then AWorkers := 1;
+  if AWorkers > 4 then AWorkers := 4;
+
+  { Build strategy list }
+  SetLength(LStrategies, AWorkers);
+  case AWorkers of
+    1: LStrategies[0] := fsStructured;
+    2: begin LStrategies[0] := fsBitFlip; LStrategies[1] := fsHavoc; end;
+    3: begin LStrategies[0] := fsBitFlip; LStrategies[1] := fsByteReplace; LStrategies[2] := fsHavoc; end;
+    4: begin LStrategies[0] := fsBitFlip; LStrategies[1] := fsByteReplace; LStrategies[2] := fsHavoc; LStrategies[3] := fsStructured; end;
+  end;
+
+  { Build shared corpus }
+  LLen := Length(ACorpus);
+  if LLen = 0 then
+  begin
+    FailTest('FuzzParallel "' + AName + '": corpus is empty');
+    Exit;
+  end;
+  SetLength(LCorpus, LLen + 16);
+  LCorpusCount := LLen;
+  for I := 0 to LLen - 1 do
+    LCorpus[I] := Copy(ACorpus[I]);
+
+  LTracker := CreateCoverageTracker;
+  LFailCount := 0;
+
+  { Run workers sequentially, each with its strategy }
+  for W := 0 to AWorkers - 1 do
+  begin
+    LStrategy := LStrategies[W];
+    for J := 1 to AIterationsPerWorker do
+    begin
+      { Pick random corpus item and mutate with strategy }
+      LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+      LInput := FuzzMutateStrategy(LCorpus[LIdx], LStrategy);
+
+      try
+        LTracker.ResetNewCoverage;
+        ATest(LInput);
+
+        { If triggered new coverage, add to shared corpus }
+        if LTracker.HasNewCoverage then
+        begin
+          if LCorpusCount >= Length(LCorpus) then
+            SetLength(LCorpus, LCorpusCount + 16);
+          LCorpus[LCorpusCount] := Copy(LInput);
+          Inc(LCorpusCount);
+        end;
+      except
+        on E: EAssertionFailed do
+        begin
+          Inc(LFailCount);
+          LMin := FuzzMinimize(LInput, ATest);
+          LHex := '';
+          for I := 0 to High(LMin) do
+          begin
+            if I > 0 then
+              LHex := LHex + ' ';
+            LHex := LHex + IntToHex(LMin[I], 2);
+          end;
+          FailTest('FuzzParallel "' + AName + '" worker ' + IntToStr(W) +
+            ' (' + IntToStr(Ord(LStrategy)) + ') found failure after ' +
+            IntToStr(J) + ' iterations, minimal input (' +
+            IntToStr(Length(LMin)) + ' bytes): ' + LHex);
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
+  PassTest('FuzzParallel "' + AName + '" passed ' +
+    IntToStr(AWorkers * AIterationsPerWorker) + ' iterations (' +
+    IntToStr(AWorkers) + ' workers), 0 failures, corpus: ' +
+    IntToStr(LCorpusCount) + ' items, coverage: ' +
+    IntToStr(LTracker.CoverageCount) + ' points');
 end;
 
 finalization

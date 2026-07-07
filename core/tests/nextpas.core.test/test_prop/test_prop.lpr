@@ -9,6 +9,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.test.prop;
 
@@ -393,7 +394,7 @@ var
   LCorpus: TFuzzCorpus;
   LDir: string;
 begin
-  LDir := '/tmp/test_corpus_hasfiles_' + IntToStr(Random(100000));
+  LDir := '/tmp/test_corpus_hasfiles_' + IntToStr(Random(1000000000));
   LCorpus := TFuzzCorpus.Create(LDir);
   try
     if LCorpus.HasFiles then
@@ -411,7 +412,7 @@ procedure TestFuzzWithCorpus;
 var
   LDir: string;
 begin
-  LDir := '/tmp/test_fuzz_with_corpus';
+  LDir := '/tmp/test_fuzz_with_corpus_' + IntToStr(Random(1000000000));
   FuzzWithCorpus('corpus test', procedure(const Data: TBytes)
   begin
     { always passes }
@@ -491,11 +492,117 @@ begin
   100, True);
 end;
 
+{ ── Coverage tracker tests (v8.0b) ────────────────────────────────────────── }
+
+procedure TestCoverageTracker;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  CheckEqual(0, LTracker.CoverageCount, 'Initial coverage count');
+  CheckEqual(0, LTracker.TotalHits, 'Initial total hits');
+  CheckTrue(not LTracker.HasNewCoverage, 'No initial new coverage');
+
+  LTracker.Hit(1);
+  CheckTrue(LTracker.HasNewCoverage, 'Has new coverage after first hit');
+  CheckEqual(1, LTracker.CoverageCount, 'Coverage count after first hit');
+  CheckEqual(1, LTracker.TotalHits, 'Total hits after first hit');
+
+  LTracker.Hit(1);  { duplicate }
+  CheckEqual(1, LTracker.CoverageCount, 'Coverage count unchanged for duplicate');
+  CheckEqual(2, LTracker.TotalHits, 'Total hits incremented for duplicate');
+
+  LTracker.Hit(5);
+  CheckEqual(2, LTracker.CoverageCount, 'Coverage count after new hit');
+  CheckEqual(3, LTracker.TotalHits, 'Total hits after new hit');
+
+  LTracker.ResetNewCoverage;
+  CheckTrue(not LTracker.HasNewCoverage, 'No new coverage after reset');
+
+  LTracker.Hit(5);  { duplicate after reset }
+  CheckTrue(not LTracker.HasNewCoverage, 'No new coverage for duplicate after reset');
+
+  LTracker.Hit(100);
+  CheckTrue(LTracker.HasNewCoverage, 'New coverage for fresh hit');
+  CheckEqual(3, LTracker.CoverageCount, 'Final coverage count');
+end;
+
+{ ── Structured fuzzing tests (v8.0b) ──────────────────────────────────────── }
+
+procedure TestFuzzStructuredInt;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  FuzzStructured('Int in range', procedure(const V: Int64; ACoverage: ICoverageTracker)
+  begin
+    { Mark coverage based on value ranges }
+    if V < 0 then ACoverage.Hit(0)
+    else if V < 100 then ACoverage.Hit(1)
+    else if V < 1000 then ACoverage.Hit(2)
+    else ACoverage.Hit(3);
+
+    if V < 0 then
+      PropFail('Negative: ' + IntToStr(V));
+  end, GenInt(0, 1000), LTracker, 500);
+end;
+
+procedure TestFuzzStructuredString;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  FuzzStructured('String length', procedure(const S: string; ACoverage: ICoverageTracker)
+  begin
+    { Mark coverage based on string properties }
+    if Length(S) = 0 then ACoverage.Hit(0)
+    else if Length(S) < 5 then ACoverage.Hit(1)
+    else if Length(S) < 20 then ACoverage.Hit(2)
+    else ACoverage.Hit(3);
+
+    { Always-passes property: length is non-negative }
+    if Length(S) < 0 then
+      PropFail('Negative length');
+  end, MapIntToStr(GenInt(0, 9999), function(V: Int64): string begin Result := IntToStr(V) end),
+  LTracker, 500);
+end;
+
+{ ── Parallel fuzzing tests (v8.0b) ────────────────────────────────────────── }
+
+procedure TestFuzzParallel;
+begin
+  FuzzParallel('Parallel bytes', procedure(const Data: TBytes)
+  begin
+    { Always-passes property: data is accessible }
+    if Length(Data) < 0 then
+      PropFail('Negative length');
+  end, [TBytes.Create(1, 2, 3), TBytes.Create(65, 66, 67)], 2, 250);
+end;
+
+procedure TestFuzzParallelCoverage;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  { FuzzParallel uses its own internal tracker, this just verifies it works }
+  FuzzParallel('Coverage parallel', procedure(const Data: TBytes)
+  begin
+    if Length(Data) > 0 then
+    begin
+      if Data[0] < 128 then
+        LTracker.Hit(0)
+      else
+        LTracker.Hit(1);
+    end;
+  end, [TBytes.Create(0), TBytes.Create(255)], 4, 100);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
   WriteLn('=== Property-based Testing Framework ===');
   WriteLn;
+  Randomize;
 
   SectionHeader('String properties');
   TestStringProperty;
@@ -616,6 +723,26 @@ begin
   SectionHeader('String shrink improved');
   TestStringShrinkImproved;
   PassTest('String shrink improved passed');
+
+  SectionHeader('Coverage tracker');
+  TestCoverageTracker;
+  PassTest('Coverage tracker passed');
+
+  SectionHeader('FuzzStructured int');
+  TestFuzzStructuredInt;
+  PassTest('FuzzStructured int passed');
+
+  SectionHeader('FuzzStructured string');
+  TestFuzzStructuredString;
+  PassTest('FuzzStructured string passed');
+
+  SectionHeader('FuzzParallel');
+  TestFuzzParallel;
+  PassTest('FuzzParallel passed');
+
+  SectionHeader('FuzzParallel coverage');
+  TestFuzzParallelCoverage;
+  PassTest('FuzzParallel coverage passed');
 
   WriteLn;
   PassTest('test_prop');
