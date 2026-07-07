@@ -2341,7 +2341,8 @@ begin
         LMin := LValue;
         LShrunk := AGen.Shrink(LMin);
         LIdx := 0;
-        while LIdx <= High(LShrunk) do
+        LFailCount := 0;  { reuse as shrink iteration counter }
+        while (LIdx <= High(LShrunk)) and (LFailCount < 100) do
         begin
           try
             LTracker.ResetNewCoverage;
@@ -2350,15 +2351,23 @@ begin
           except
             on E2: EAssertionFailed do
             begin
-              LMin := LShrunk[LIdx];
-              LShrunk := AGen.Shrink(LMin);
-              LIdx := 0;  { restart from beginning with smaller value }
+              if LShrunk[LIdx] = LMin then
+              begin
+                { Fixed point — no further shrinking possible }
+                Inc(LFailCount);
+                Inc(LIdx);
+              end
+              else
+              begin
+                LMin := LShrunk[LIdx];
+                LShrunk := AGen.Shrink(LMin);
+                LIdx := 0;
+              end;
             end;
           end;
         end;
         FailTest('FuzzStructured "' + AName + '" found failure after ' +
-          IntToStr(I) + ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
-          'minimal input: ' + IntToStr(LMin) +
+          IntToStr(I) + ' iterations, minimal input: ' + IntToStr(LMin) +
           ', coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
         Exit;
       end;
@@ -2422,11 +2431,11 @@ begin
     except
       on E: EAssertionFailed do
       begin
-        Inc(LFailCount);
         LMin := LValue;
         LShrunk := AGen.Shrink(LMin);
         LIdx := 0;
-        while LIdx <= High(LShrunk) do
+        LFailCount := 0;
+        while (LIdx <= High(LShrunk)) and (LFailCount < 100) do
         begin
           try
             LTracker.ResetNewCoverage;
@@ -2435,15 +2444,22 @@ begin
           except
             on E2: EAssertionFailed do
             begin
-              LMin := LShrunk[LIdx];
-              LShrunk := AGen.Shrink(LMin);
-              LIdx := 0;
+              if LShrunk[LIdx] = LMin then
+              begin
+                Inc(LFailCount);
+                Inc(LIdx);
+              end
+              else
+              begin
+                LMin := LShrunk[LIdx];
+                LShrunk := AGen.Shrink(LMin);
+                LIdx := 0;
+              end;
             end;
           end;
         end;
         FailTest('FuzzStructured "' + AName + '" found failure after ' +
-          IntToStr(I) + ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
-          'minimal input: ''' + LMin + '''' +
+          IntToStr(I) + ' iterations, minimal input: ''' + LMin + '''' +
           ', coverage: ' + IntToStr(LTracker.CoverageCount) + ' points');
         Exit;
       end;
