@@ -267,6 +267,12 @@ procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
 
+function ReadFileContents(const APath: string; out AContents: string): Boolean;
+begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents); end;
+
+procedure WriteFileContents(const APath, AContents: string);
+begin nextpas.core.test.check.WriteFileContents(APath, AContents); end;
+
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64);
 begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual); end;
 

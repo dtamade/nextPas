@@ -161,6 +161,12 @@ procedure CheckSnapshot(const AActual: string;
   If the file exists and differs, fails with a diff message.
   Set NEXTPAS_UPDATE_SNAPSHOTS=1 environment variable to auto-update. }
 
+function ReadFileContents(const APath: string; out AContents: string): Boolean;
+{ Read entire file to string. Returns False if file doesn't exist or is empty. }
+
+procedure WriteFileContents(const APath, AContents: string);
+{ Write string to file, creating directories if needed. }
+
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
 
 { Compare two Int64 arrays element-by-element.
@@ -1077,8 +1083,16 @@ end;
 
 function ReadFileContents(const APath: string; out AContents: string): Boolean;
 begin
-  AContents := ReadFileText(APath);
-  Result := AContents <> '';
+  try
+    AContents := ReadFileText(APath);
+    Result := AContents <> '';
+  except
+    on E: Exception do
+    begin
+      AContents := '';
+      Result := False;
+    end;
+  end;
 end;
 
 procedure WriteFileContents(const APath, AContents: string);

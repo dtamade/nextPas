@@ -220,6 +220,8 @@ procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
+function ReadFileContents(const APath: string; out AContents: string): Boolean;
+procedure WriteFileContents(const APath, AContents: string);
 
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
