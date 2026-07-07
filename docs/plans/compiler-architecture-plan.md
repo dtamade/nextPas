@@ -1183,8 +1183,10 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 
 | 项 | 内容 |
 |----|------|
-| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI） |
-| **内容** | HIR 目前只有 TypeId（整数），MIR 需要 StructTypeName（字符串）。需要在 HIR→MIR lowering 中注入类型名称查找回调，或将类型名添加到 HIR model |
+| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI，sema 层） |
+| **内容** | HIR model 已添加 StructTypeName 字段，HIR→MIR lowering 已传播。剩余工作：sema 在生成 field access HIR 指令时填入 StructTypeName |
+| **完成** | HIR model + HIR→MIR lowering 部分 ✅ (commit `9427fa118`) |
+| **待做** | sema 层填入 StructTypeName（依赖 SeedCallBindings 修复） |
 
 #### P3: Stage2-B — Link Compiler .o Files [🔲]
 
