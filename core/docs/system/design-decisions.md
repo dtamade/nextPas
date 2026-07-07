@@ -188,10 +188,10 @@ FPC 使用 `fpc_*` 系列函数作为编译器内部函数（compilerproc），�
 
 | fpc_* 函数 | np.system.* 契约 |
 |-----------|----------------|
-| `fpc_ansistr_incr_ref` | `np.system.string_fini` (部分) |
-| `fpc_dynarray_setlength` | `np.system.dynarray_set_length` |
-| `fpc_raise_exception` | `np.system.exception_raise` |
-| `fpc_halt` | `np.system.halt` |
+| `np_ansistr_incr_ref` | `np.system.string_fini` (部分) |
+| `np_dynarray_setlength` | `np.system.dynarray_set_length` |
+| `np_raise` | `np.system.exception_raise` |
+| `np_halt` | `np.system.halt` |
 
 ---
 
@@ -411,8 +411,8 @@ end;
 
 ### 当前状态
 
-- fpc_setjmp/fpc_longjmp 已定义（comp.inc）
-- fpc_try_push/fpc_try_pop 已定义
+- np_setjmp/np_longjmp 已定义（comp.inc）
+- np_try_push/np_try_pop 已定义
 - 运行时实现待 S10
 
 ---
@@ -509,11 +509,11 @@ end;  // 编译器插入 _Release
 // LIntf := TMyClass.Create;
 // 编译为：
 LIntf := TMyClass.Create;
-fpc_intf_incr_ref(Pointer(LIntf));  // _AddRef
+np_intf_addref(Pointer(LIntf));  // _AddRef
 
 // 作用域结束
 // 编译为：
-fpc_intf_release(Pointer(LIntf));   // _Release
+np_intf_release(Pointer(LIntf));   // _Release
 LIntf := nil;
 ```
 
