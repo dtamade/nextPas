@@ -221,6 +221,15 @@ procedure SleepMs(AMilliseconds: Integer);
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 
+{ ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string); overload;
+
+{ ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
+procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
+procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
 function  GetLastTestTrace: string;

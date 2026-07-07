@@ -266,3 +266,16 @@ begin nextpas.core.test.base.SleepMs(AMilliseconds); end;
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual); end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual, AMessage); end;
+
+procedure CheckIsNil(const AValue: IInterface; const AMessage: string);
+begin nextpas.core.test.check.CheckIsNil(AValue, AMessage); end;
+
+procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string);
+begin nextpas.core.test.check.CheckIsNotNil(AValue, AMessage); end;

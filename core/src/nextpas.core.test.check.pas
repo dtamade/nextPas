@@ -161,6 +161,24 @@ procedure CheckSnapshot(const AActual: string;
   If the file exists and differs, fails with a diff message.
   Set NEXTPAS_UPDATE_SNAPSHOTS=1 environment variable to auto-update. }
 
+{ ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
+
+{ Compare two Int64 arrays element-by-element.
+  Reports length mismatch or first differing index with values. }
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
+
+{ Compare two Int64 arrays with custom message. }
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string); overload;
+
+{ ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
+
+{ Check that an interface reference is nil. }
+procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
+
+{ Check that an interface reference is not nil. }
+procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
 implementation
 
 uses
@@ -1099,6 +1117,75 @@ begin
     {$I+}
     { Ignore MkDir error if directory already exists }
     WriteFileContents(LPath, AActual);
+  end;
+end;
+
+{ ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
+
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64);
+begin
+  CheckArrayEqual(AExpected, AActual, '');
+end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string);
+var
+  I, LMin, LDiffIdx: Integer;
+  LMsg: string;
+begin
+  if Length(AExpected) <> Length(AActual) then
+  begin
+    LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(AActual));
+    if AMessage <> '' then
+      LMsg := AMessage + ': ' + LMsg;
+    InternalFail(LMsg);
+    Exit;
+  end;
+
+  LMin := Length(AExpected);
+  LDiffIdx := -1;
+  for I := 0 to LMin - 1 do
+  begin
+    if AExpected[I] <> AActual[I] then
+    begin
+      LDiffIdx := I;
+      Break;
+    end;
+  end;
+
+  if LDiffIdx >= 0 then
+  begin
+    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
+      ': expected ' + IntToStr(AExpected[LDiffIdx]) +
+      ' but got ' + IntToStr(AActual[LDiffIdx]);
+    if AMessage <> '' then
+      LMsg := AMessage + ': ' + LMsg;
+    InternalFail(LMsg);
+  end;
+end;
+
+{ ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
+
+procedure CheckIsNil(const AValue: IInterface; const AMessage: string);
+begin
+  if AValue <> nil then
+  begin
+    if AMessage <> '' then
+      InternalFail(AMessage + ': expected nil interface but got non-nil')
+    else
+      InternalFail('Expected nil interface but got non-nil');
+  end;
+end;
+
+procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string);
+begin
+  if AValue = nil then
+  begin
+    if AMessage <> '' then
+      InternalFail(AMessage + ': expected non-nil interface but got nil')
+    else
+      InternalFail('Expected non-nil interface but got nil');
   end;
 end;
 
