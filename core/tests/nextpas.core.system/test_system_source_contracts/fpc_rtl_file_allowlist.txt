@@ -171,3 +171,5 @@ SysUtils|nextpas.core.tls.freepascal.connection.pas
 SysUtils|nextpas.core.tls.freepascal.engine.pas
 SysUtils|nextpas.core.tls.mbedtls.session.pas
 SysUtils|nextpas.core.system.sysutils.pas
+SysUtils|nextpas.core.bench.parallel.pas
+SysUtils|nextpas.core.http.fuzz.pas

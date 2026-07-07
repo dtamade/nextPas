@@ -426,6 +426,8 @@ type PTypeInfo
 type TTypeKind
 type PTypeData
 type TTypeData
+type PPropInfo
+type PPropList
 const tkInteger
 const tkChar
 const tkWChar
@@ -455,6 +457,8 @@ procedure FinalizeArray
 procedure CopyArray
 function GetPropInfo
 function GetPropInfo
+function GetPropList
+function GetPropList
 function GetEnumName
 function GetEnumValue
 EOF
@@ -1236,7 +1240,6 @@ require_token "src/nextpas.core.system.typinfo.pas" "System.InitializeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.FinalizeArray"
 require_token "src/nextpas.core.system.typinfo.pas" "System.CopyArray"
 require_typinfo_facade_surface_allowlist
-reject_token "src/nextpas.core.system.typinfo.pas" "GetPropList"
 reject_token "src/nextpas.core.system.typinfo.pas" "GetTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "IsPublishedProp"
 reject_token "src/nextpas.core.system.typinfo.pas" "SetPropValue"
@@ -1553,5 +1556,72 @@ require_no_new_fpc_rtl_debt() {
 }
 
 require_no_new_fpc_rtl_debt
+
+# ============================================================================
+# SECTION: TTypeKind drift detection (S11.1)
+# ============================================================================
+
+check_ttypekind_consistency() {
+  local kernel_rtti="$CORE_ROOT/src/nextpas.core.system.rtti.inc"
+
+  if [ ! -f "$kernel_rtti" ]; then
+    echo "[SKIP] kernel rtti.inc not found"
+    return
+  fi
+
+  # Extract kernel TTypeKind enum values (between {$compiler_type_kind} and the closing paren)
+  local kernel_values
+  kernel_values=$(awk '/\{\$compiler_type_kind\}/,/\);/' "$kernel_rtti" \
+    | grep -oP 'tk\w+' | sort -u)
+
+  # FPC TTypeKind values (canonical order from rtl/inc/rttih.inc)
+  local fpc_values="tkUnknown
+tkInteger
+tkChar
+tkEnumeration
+tkFloat
+tkSet
+tkMethod
+tkSString
+tkLString
+tkAString
+tkWString
+tkVariant
+tkArray
+tkRecord
+tkInterface
+tkClass
+tkObject
+tkWChar
+tkBool
+tkInt64
+tkQWord
+tkDynArray
+tkInterfaceRaw
+tkProcVar
+tkUString
+tkUChar
+tkHelper
+tkFile
+tkClassRef
+tkPointer"
+
+  local fpc_sorted
+  fpc_sorted=$(echo "$fpc_values" | sort -u)
+
+  # Compare
+  local diff_result
+  diff_result=$(diff <(echo "$kernel_values") <(echo "$fpc_sorted") 2>&1 || true)
+
+  if [ -n "$diff_result" ]; then
+    echo "[FAIL] TTypeKind drift detected between kernel and FPC:"
+    echo "$diff_result"
+    fail "TTypeKind drift — kernel rtti.inc must match FPC rttih.inc"
+  else
+    echo "[PASS] TTypeKind consistency: kernel matches FPC ($(echo "$kernel_values" | wc -l) values)"
+  fi
+}
+
+check_ttypekind_consistency
 
 echo "[PASS] nextpas.core.system source contracts"
