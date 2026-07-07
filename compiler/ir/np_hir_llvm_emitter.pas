@@ -1213,6 +1213,46 @@ begin
       Emit('  ' + ValueRef(AInstr.ResultId) + ' = fadd double 0.0, ' +
         FormatFloat('0.0################', AInstr.FloatValue));
     end;
+
+    hikGetFieldPtr:
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.StructTypeName <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = getelementptr %' +
+            AInstr.StructTypeName + ', %' + AInstr.StructTypeName + '* ' +
+            ValueRef(AInstr.Operands[0].ValueId) +
+            ', i32 0, i32 ' + IntToStr(AInstr.FieldIndex))
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = getelementptr ' +
+            LlvmType + ', ' + LlvmType + '* ' +
+            ValueRef(AInstr.Operands[0].ValueId) +
+            ', i32 0, i32 ' + IntToStr(AInstr.FieldIndex));
+      end;
+
+    hikExtractField:
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.StructTypeName <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = extractvalue %' +
+            AInstr.StructTypeName + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) +
+            ', ' + IntToStr(AInstr.FieldIndex))
+        else
+          Emit('  ; hikExtractField: no struct type name');
+      end;
+
+    hikInsertField:
+      if Length(AInstr.Operands) >= 2 then
+      begin
+        if AInstr.StructTypeName <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = insertvalue %' +
+            AInstr.StructTypeName + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ' +
+            LlvmType + ' ' + ValueRef(AInstr.Operands[1].ValueId) +
+            ', ' + IntToStr(AInstr.FieldIndex))
+        else
+          Emit('  ; hikInsertField: no struct type name');
+      end;
   end;
 end;
 
@@ -1394,6 +1434,7 @@ procedure THIRLlvmEmitter.EmitModule;
 var
   I: LongInt;
   G: THIRGlobal;
+  GType: THIRTypeRec;
   LFunc: THIRFunction;
   LAlreadyEmitted: Boolean;
   J: LongInt;
@@ -1428,6 +1469,23 @@ begin
   Emit('target datalayout = "' + FLlvmDataLayout + '"');
   Emit('');
   Emit('%TString = type [24 x i8]');
+
+  for I := 0 to FModule.Types.Count - 1 do
+  begin
+    GType := FModule.Types.GetType(I);
+    if GType.Kind = htkRecord then
+    begin
+      Emit('');
+      Emit('%' + GType.Name + ' = type {');
+      for J := 0 to High(GType.Fields) do
+      begin
+        if J > 0 then Emit(', ');
+        Emit(TypeToLlvm(GType.Fields[J].TypeId));
+      end;
+      Emit('}');
+    end;
+  end;
+  Emit('');
 
   for I := 0 to FModule.GlobalCount - 1 do
   begin
