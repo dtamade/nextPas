@@ -156,6 +156,17 @@ B21  自适应预热 (2026-07-08)                                  ✅
   B21.3  TBenchSuite.SetAdaptiveWarmup 配置方法               ✅
   B21.4  TBenchRunner.SetAdaptiveWarmup 配置方法              ✅
   B21.5  test_bench_adaptive_warmup 4 tests (0 leaks)         ✅
+
+B22  异常值感知报告 (2026-07-08)                              ✅
+  B22.1  TBenchStats/TBenchResult 新增 FilteredMean/StdDev/Median/Count ✅
+  B22.2  ComputeStats 自动计算排除异常值后的统计              ✅
+  B22.3  PrintToConsole 异常值行显示 (Filtered: ...)          ✅
+
+B23  进度回调 (2026-07-08)                                    ✅
+  B23.1  TBenchProgressCallback 类型定义                      ✅
+  B23.2  TBenchConfig.OnProgress 字段                         ✅
+  B23.3  TBenchSuite.SetOnProgress 配置方法                   ✅
+  B23.4  RunAll 调用回调 (platform_monotonic_ns 计时)         ✅
 ```
 
 ## 测试套件分布
