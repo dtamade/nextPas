@@ -372,6 +372,7 @@ type
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1912,6 +1913,11 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.Options(const AUrl: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -2903,6 +2909,37 @@ begin
       'head response preserves content-length header');
     LBody := ReadBodyStr(LResp);
     CheckEqual('', LBody, 'head response body is empty');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientOptionsSendsOptions;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+begin
+  LGotMethod := hmGet;
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmOptions, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    AW.GetHeaders.SetHeader('allow', 'GET, HEAD, OPTIONS');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Options('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmOptions, 'server received OPTIONS');
+    CheckEqual('GET, HEAD, OPTIONS', LResp.Headers.Get('allow'), 'allow header present');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -7206,6 +7243,7 @@ begin
     @TestClientPatchBytesBodyOverload);
   T.Test('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
   T.Test('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
+  T.Test('Client OPTIONS sends OPTIONS and exposes Allow header', @TestClientOptionsSendsOptions);
   T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',
