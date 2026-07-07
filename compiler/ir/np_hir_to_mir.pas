@@ -142,8 +142,8 @@ begin
     hikCall:         begin AStmtKind := mskCall;   AOp := moAdd; end;
     hikIndirectCall: begin AStmtKind := mskCall;   AOp := moAdd; end;
     hikIntrinsic:    begin AStmtKind := mskCall;   AOp := moAdd; end;
-    hikInsertField, hikExtractField:
-                     begin AStmtKind := mskGetFieldPtr; AOp := moAdd; end;
+    hikInsertField:  begin AStmtKind := mskInsertField; AOp := moAdd; end;
+    hikExtractField: begin AStmtKind := mskExtractField; AOp := moAdd; end;
     hikPhi:          begin AStmtKind := mskAssign; AOp := moAdd; end;
     hikTryBegin, hikTryEnd, hikFinallyBegin, hikFinallyEnd,
     hikExceptBegin, hikExceptEnd, hikRaise:
@@ -250,7 +250,10 @@ begin
         end;
 
       mskAlloca:
+        begin
         MirStmt.BitWidth := HirTypeWidth(AHirBlock.Instrs[I].TypeId);
+        MirStmt.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
+        end;
 
       mskLoad, mskStore:
         if OpCount >= 1 then
@@ -261,6 +264,25 @@ begin
           if OpCount >= 1 then
             MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
           MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
+          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
+        end;
+
+      mskExtractField:
+        begin
+          if OpCount >= 1 then
+            MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
+          MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
+          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
+        end;
+
+      mskInsertField:
+        begin
+          if OpCount >= 1 then
+            MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
+          if OpCount >= 2 then
+            MirStmt.Rhs := MapOperand(AHirBlock.Instrs[I].Operands[1]);
+          MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
+          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
         end;
     end;
 

@@ -413,7 +413,10 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv, nextpas.core.collections.vec;
+
+type
+  TStringVec = specialize TVec<string>;
 
 constructor TSemanticModel.Create;
 begin
@@ -675,7 +678,7 @@ procedure TSemanticModel.AppendTypeConstraint(const ATypeId: LongInt;
 var
   Idx, ParamIdx, CommaCount: LongInt;
   Params: string;
-  Parts: array of string;
+  Parts: TStringVec;
   I, J: LongInt;
 begin
   Idx := ATypeId - 1;
@@ -700,7 +703,7 @@ begin
   end;
   if ParamIdx < 0 then
     Exit;
-  SetLength(Parts, 0);
+  Parts := TStringVec.Create;
   I := 1;
   while I <= Length(FTypes[Idx].TypeConstraints) do
   begin
@@ -708,23 +711,20 @@ begin
     while (J <= Length(FTypes[Idx].TypeConstraints)) and
       (FTypes[Idx].TypeConstraints[J] <> ',') do
       Inc(J);
-    SetLength(Parts, Length(Parts) + 1);
-    Parts[High(Parts)] := Copy(FTypes[Idx].TypeConstraints, I, J - I);
+    Parts.Push(Copy(FTypes[Idx].TypeConstraints, I, J - I));
     I := J + 1;
   end;
-  while Length(Parts) <= ParamIdx do
-  begin
-    SetLength(Parts, Length(Parts) + 1);
-    Parts[High(Parts)] := '';
-  end;
+  while Parts.Count <= ParamIdx do
+    Parts.Push('');
   Parts[ParamIdx] := AConstraint;
   FTypes[Idx].TypeConstraints := '';
-  for I := 0 to High(Parts) do
+  for I := 0 to Parts.Count - 1 do
   begin
     if I > 0 then
       FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + ',';
     FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + Parts[I];
   end;
+  Parts.Free;
 end;
 
 function TSemanticModel.IsTypeDescendantOf(const ATypeId: LongInt;

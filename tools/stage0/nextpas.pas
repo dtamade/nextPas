@@ -31,6 +31,7 @@ var
   OptionName: string;
   NoFold: Boolean;
   Incremental: Boolean;
+  DiagnosticsFormat: string;
   FoldSeen: Boolean;
   NoFoldSeen: Boolean;
 
@@ -395,6 +396,7 @@ begin
   OutDirOverride := '';
   NoFold := True;
   Incremental := False;
+  DiagnosticsFormat := '';
   FoldSeen := False;
   NoFoldSeen := False;
   SetLength(UnitRootOverrides, 0);
@@ -411,6 +413,15 @@ begin
         Fail(State, 'conflicting-option: --no-fold after --fold', True);
       NoFoldSeen := True;
       NoFold := True;
+    end
+    else if OptionName = '--diagnostics' then
+    begin
+      if Index = ParamCount then
+        Fail(State, 'invalid-arguments', True);
+      Inc(Index);
+      if ParamStr(Index) <> 'json' then
+        Fail(State, 'unsupported-diagnostics-format: ' + ParamStr(Index), True);
+      State.DiagnosticsFormat := 'json';
     end
     else if OptionName = '--incremental' then
     begin
@@ -483,6 +494,7 @@ begin
     UnitRootOverrides,
     OutDirOverride,
     NoFold,
-    Incremental
+    Incremental,
+    DiagnosticsFormat
   );
 end.

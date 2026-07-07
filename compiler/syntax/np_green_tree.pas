@@ -675,6 +675,77 @@ begin
     Inc(ACursor);
 end;
 
+function ParseCompilerDirective(const ALexeme: string;
+  out ADirective: string): Boolean;
+var
+  Content: string;
+begin
+  Result := False;
+  ADirective := '';
+  if Length(ALexeme) < 3 then Exit;
+  if (ALexeme[1] = '{') and (ALexeme[2] = '$') then
+  begin
+    Content := Copy(ALexeme, 3, Length(ALexeme) - 3);
+    if (Content <> '') and (Content[Length(Content)] = '}') then
+      SetLength(Content, Length(Content) - 1);
+  end
+  else if (Length(ALexeme) >= 4) and (ALexeme[1] = '(') and
+    (ALexeme[2] = '*') and (ALexeme[3] = '$') then
+    Content := Copy(ALexeme, 4, Length(ALexeme) - 5)
+  else
+    Exit;
+  Content := Trim(Content);
+  if Content = '' then Exit;
+  ADirective := LowerCase(Content);
+  Result := True;
+end;
+
+function CheckCompilerRootDirective(const ALexer: TLexerResult;
+  var ACursor: LongInt): Boolean;
+var
+  Dir: string;
+  SavedCursor: LongInt;
+begin
+  Result := False;
+  SavedCursor := ACursor;
+  while (ACursor < ALexer.TokenCount) and
+    (ALexer.TokenAt(ACursor).Kind = tkCompilerDirective) do
+  begin
+    if ParseCompilerDirective(ALexer.TokenAt(ACursor).Lexeme, Dir) and
+      (Dir = 'compiler_root') then
+    begin
+      Inc(ACursor);
+      Result := True;
+      Exit;
+    end;
+    Inc(ACursor);
+  end;
+  ACursor := SavedCursor;
+end;
+
+function CheckCompilerTypeKindDirective(const ALexer: TLexerResult;
+  var ACursor: LongInt): Boolean;
+var
+  Dir: string;
+  SavedCursor: LongInt;
+begin
+  Result := False;
+  SavedCursor := ACursor;
+  while (ACursor < ALexer.TokenCount) and
+    (ALexer.TokenAt(ACursor).Kind = tkCompilerDirective) do
+  begin
+    if ParseCompilerDirective(ALexer.TokenAt(ACursor).Lexeme, Dir) and
+      (Dir = 'compiler_type_kind') then
+    begin
+      Inc(ACursor);
+      Result := True;
+      Exit;
+    end;
+    Inc(ACursor);
+  end;
+  ACursor := SavedCursor;
+end;
+
 function CurrentToken(const ALexer: TLexerResult; const ACursor: LongInt): TToken;
 begin
   Result := ALexer.TokenAt(ACursor);
@@ -2448,6 +2519,8 @@ var
   UsedOriginalTypeNode: Boolean;
   Nesting: LongInt;
   MethodModifiers: string;
+  IsCompilerRoot: Boolean;
+  IsCompilerTypeKind: Boolean;
 
   function CloneTypeNode(const ANode: TGreenNode): TGreenNode;
   var
@@ -2476,6 +2549,9 @@ begin
 
   while True do
   begin
+    { Check for {$compiler_root} or {$compiler_type_kind} directive }
+    IsCompilerRoot := CheckCompilerRootDirective(ALexer, ACursor);
+    IsCompilerTypeKind := CheckCompilerTypeKindDirective(ALexer, ACursor);
     SkipDirectives(ALexer, ACursor);
     if (ACursor >= ALexer.TokenCount) or
       ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
@@ -2491,8 +2567,16 @@ begin
       (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
       Break;
     NameToken := CurrentToken(ALexer, ACursor);
-    Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
-      NameToken.Lexeme);
+    { Store directive info in node text }
+    if IsCompilerRoot then
+      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+        'compiler_root:' + NameToken.Lexeme)
+    else if IsCompilerTypeKind then
+      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+        'compiler_type_kind:' + NameToken.Lexeme)
+    else
+      Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
+        NameToken.Lexeme);
     Section.AppendChild(Decl);
     Inc(ATree.FNodeCount);
     Inc(ACursor);

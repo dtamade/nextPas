@@ -31,7 +31,7 @@ FPC compatibility is a build vehicle, not the architecture authority. `stage0`
 | -------- | ------------------------------ | -------------------------------------------------------------- | ------------------------------ |
 | `stage0` | nextPas 仓库形状与对外构建规范 | FreePascal 编译并执行第一条 `nextpas` 路径                     | ✅ 已完成（Batch 1-10）        |
 | `stage1` | nextPas 自有前端与控制面模块   | FreePascal 仍托管最外层构建路径，但 nextPas 接管更多编译器逻辑 | ✅ 已完成（Batch 11-35）       |
-| `stage2` | 可选的自托管调查               | nextPas 探索替换外层宿主编译器依赖                             | 📋 准备评估可行性              |
+| `stage2` | 自举编译                       | nextPas 编译 nextPas 编译器自身                                | 🔄 进行中 (22/22 模块，前端验证通过) |
 
 第一阶段的完成条件，是把 `stage0` 基线文档化、执行化、验证化。超出 `stage0`
 的升级是后续决策，不是完成第一版基线后的自动后果。

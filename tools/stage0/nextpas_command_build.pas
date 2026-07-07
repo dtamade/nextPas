@@ -21,7 +21,8 @@ procedure RunBuild(
   const UnitRootOverrides: TStringArray;
   const OutDirOverride: string;
   const NoFold: Boolean;
-  const Incremental: Boolean
+  const Incremental: Boolean;
+  const DiagnosticsFormat: string
 );
 
 implementation
@@ -76,7 +77,8 @@ procedure RunBuild(
   const UnitRootOverrides: TStringArray;
   const OutDirOverride: string;
   const NoFold: Boolean;
-  const Incremental: Boolean
+  const Incremental: Boolean;
+  const DiagnosticsFormat: string
 );
 var
   CompilerExitCode: LongInt;
@@ -308,6 +310,10 @@ begin
 
     if CompilerExitCode <> 0 then
     begin
+      if DiagnosticsFormat = 'json' then
+      begin
+        WriteLn('diagnostics-json=' + Session.DiagnosticsJson);
+      end;
       Fail(AState, Session.PrimaryToolFailureMapping + ': compiler exit code ' + IntToStr(CompilerExitCode));
     end;
 
@@ -337,6 +343,10 @@ begin
       False
     );
     WriteLn('human-summary=build succeeded');
+    if DiagnosticsFormat = 'json' then
+    begin
+      WriteLn('diagnostics-json=' + Session.DiagnosticsJson);
+    end;
   finally
     Session.Free;
     WorkspaceModel.Free;
