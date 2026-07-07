@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 7)
+> Last updated: 2026-07-07 (Phase 8)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,12 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 8 (2026-07-07): Form Encoding — Bidirectional Form Data**
+
+- **`nextpas.core.http.form`**: added `EncodeUrlEncodedForm` (space-as-+, roundtrip-safe) and `EncodeMultipartFormData` (auto boundary generation, field+file support)
+- **`nextpas.core.http` facade**: re-exported form types (`TFormField`, `TFormFieldArray`, `THttpFile`, `THttpFileArray`, `TMultipartFormData`) and encoding functions
+- **Tests**: 8 new encoding tests (basic, empty, special chars, roundtrip for both URL-encoded and multipart), 16 total / 0 leaks
 
 **Phase 7 (2026-07-07): GOAL_TREE Alignment**
 - **TLS runtime proof**: marked as ✅ — `test_http_tls_real` (5 tests) proves self-signed cert, handshake, stream wrapper, H2 transport creation
