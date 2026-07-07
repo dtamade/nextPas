@@ -1231,16 +1231,38 @@ end;
 
 procedure TBenchRunner.RunAll(const AEntries: array of TBenchEntry);
 var
-  I: Integer;
+  I, LTotal: Integer;
+  LProgress: Double;
+  LStartNs, LNowNs, LEstRemainingMs: UInt64;
 begin
   if not FConfig.Quiet then
     WriteLn('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
+  LTotal := Length(AEntries);
+  if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    LStartNs := platform_monotonic_ns;
+
   for I := 0 to High(AEntries) do
   begin
+    { B23: Call progress callback before each benchmark }
+    if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    begin
+      LProgress := I / LTotal;
+      LNowNs := platform_monotonic_ns;
+      if I > 0 then
+        LEstRemainingMs := ((LNowNs - LStartNs) * (LTotal - I)) div (I * 1000000)
+      else
+        LEstRemainingMs := 0;
+      FConfig.OnProgress(AEntries[I].Name, LProgress, LEstRemainingMs);
+    end;
+
     if AEntries[I].Condition then
       RunOne(AEntries[I]);
   end;
+
+  { B23: Final progress callback }
+  if Assigned(FConfig.OnProgress) and (LTotal > 0) then
+    FConfig.OnProgress('', 1.0, 0);
 
   if not FConfig.Quiet then
     Summary;

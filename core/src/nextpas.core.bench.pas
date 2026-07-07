@@ -149,6 +149,8 @@ type
     function SetAdaptiveWarmup(AEnabled: Boolean;
       ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
       AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS): IBenchSuite;
+    {** B23: Set progress callback }
+    function SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
     function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
@@ -852,6 +854,17 @@ begin
     LConfig.WarmupCVThreshold := ACVThreshold;
   if AMaxIterations > 0 then
     LConfig.WarmupMaxIterations := AMaxIterations;
+  FRunner.Config := LConfig;
+end;
+
+function TBenchSuite.SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
+var
+  LConfig: TBenchConfig;
+begin
+  GuardNotRun;
+  Result := Self;
+  LConfig := FRunner.Config;
+  LConfig.OnProgress := ACallback;
   FRunner.Config := LConfig;
 end;
 

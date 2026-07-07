@@ -116,6 +116,13 @@ type
     Timestamp: string;
   end;
 
+  {** B23: Progress callback procedure type }
+  TBenchProgressCallback = procedure(
+    const AName: string;       // Current benchmark name
+    AProgress: Double;         // Progress 0.0..1.0
+    AEstimatedRemainingMs: Int64  // Estimated remaining time in ms
+  );
+
   {** 基准配置 - 基准运行参数 }
   TBenchConfig = record
     MinDurationNs: UInt64;
@@ -141,6 +148,8 @@ type
     WarmupCVThreshold: Double;
     {** B21: 自适应预热最大迭代次数（防止死循环） }
     WarmupMaxIterations: Integer;
+    {** B23: Progress callback }
+    OnProgress: TBenchProgressCallback;
   end;
 
   {** 基准结果数组 }
