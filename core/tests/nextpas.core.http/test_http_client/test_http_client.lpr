@@ -380,6 +380,8 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1949,6 +1951,16 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -3045,6 +3057,65 @@ begin
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmPost, 'server received POST');
     CheckEqual('application/json', LGotContentType, 'content-type is application/json');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithBasicAuthSetsHeader;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotAuth: string;
+begin
+  LGotAuth := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/secret', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotAuth := AReq.Headers.Get('authorization');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient.WithBasicAuth('admin', 's3cret');
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/secret');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(Pos('Basic ', LGotAuth) = 1, 'authorization starts with Basic');
+    Check(Length(LGotAuth) > 6, 'authorization has value');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientWithBearerAuthSetsHeader;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotAuth: string;
+begin
+  LGotAuth := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/api', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotAuth := AReq.Headers.Get('authorization');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient.WithBearerAuth('mytoken123');
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('Bearer mytoken123', LGotAuth, 'bearer token set');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -7351,6 +7422,8 @@ begin
   T.Test('Client OPTIONS sends OPTIONS and exposes Allow header', @TestClientOptionsSendsOptions);
   T.Test('Client PostForm encodes fields with correct content-type', @TestClientPostFormEncodesFields);
   T.Test('Client PostJson sends JSON with correct content-type', @TestClientPostJsonSendsJson);
+  T.Test('Client WithBasicAuth sets Authorization header', @TestClientWithBasicAuthSetsHeader);
+  T.Test('Client WithBearerAuth sets Authorization header', @TestClientWithBearerAuthSetsHeader);
   T.Test('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',

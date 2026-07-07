@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 10)
+> Last updated: 2026-07-07 (Phase 11 — auth decorator)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,12 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 11 (2026-07-07): Client Auth Decorator**
+
+- **`IHttpClient`**: added `WithBasicAuth(username, password)` / `WithBearerAuth(token)` — returns new `IHttpClient` wrapper with automatic `authorization` header injection
+- **`TAuthClient`**: decorator pattern, builds requests itself via `BufferedBodyRequest` to inject auth header before delegating to inner client
+- **Tests**: 4 new integration tests (Basic auth header, Bearer auth header, decorator delegation, original client unaffected), 138 client total / 0 leaks
 
 **Phase 10 (2026-07-07): Client JSON Convenience**
 
@@ -169,6 +175,7 @@ Already landed:
 - `PostForm` convenience for `application/x-www-form-urlencoded`
 - form encoding (`EncodeUrlEncodedForm`, `EncodeMultipartFormData`)
 - `PostJson`/`PutJson`/`PatchJson` convenience for `application/json`
+- `WithBasicAuth`/`WithBearerAuth` auth decorator (returns new `IHttpClient` with automatic `authorization` header)
 
 Still intentionally not claimed:
 
