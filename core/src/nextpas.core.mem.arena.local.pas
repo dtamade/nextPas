@@ -22,7 +22,7 @@ type
    *
    *  非线程安全。适用于请求/帧/文档等有限生命周期的场景。
    *}
-  TLocalArena = class(TInterfacedObject, IArena, IArenaCapacity)
+  TLocalArena = class(TInterfacedObject, IArena)
   private
     FBacking: Pointer;
     FCapacity: SizeUInt;
@@ -46,11 +46,7 @@ type
     procedure RestoreToMark(AMark: TArenaMark);
     procedure Reset;
     function UsedSize: SizeUInt;
-    function RemainingSize: SizeUInt;
     function Stats: TArenaStats;
-
-    { IArenaCapacity }
-    function TotalCapacity: SizeUInt;
 
     {** 快速分配（无检查版本，极致性能）。 }
     function AllocFast(ASize: SizeUInt): Pointer; inline;
@@ -137,7 +133,7 @@ begin
   if (ASize = 0) or (FBacking = nil) then
     Exit;
   if AAlign = 0 then
-    AAlign := MEM_DEFAULT_ALIGN;
+    AAlign := DEFAULT_ALIGNMENT;
   if not IsPowerOfTwo(AAlign) then
     Exit;
   if FOffset > FCapacity then
@@ -241,24 +237,12 @@ begin
   Result := FOffset;
 end;
 
-function TLocalArena.RemainingSize: SizeUInt;
-begin
-  if FOffset >= FCapacity then
-    Exit(0);
-  Result := FCapacity - FOffset;
-end;
-
 function TLocalArena.Stats: TArenaStats;
 begin
   Result.TotalAllocated := FCapacity;
   Result.TotalUsed := FOffset;
   Result.PeakUsed := FPeakUsed;
   Result.AllocCount := FTotalAllocs;
-end;
-
-function TLocalArena.TotalCapacity: SizeUInt;
-begin
-  Result := FCapacity;
 end;
 
 end.

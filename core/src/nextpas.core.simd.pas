@@ -15,14 +15,8 @@ uses
   nextpas.core.simd.utils      // Shuffle, Blend, Convert operations
 {$IFDEF CPUX86_64}  // x86-64 SIMD backends use 64-bit assembly
   , nextpas.core.simd.sse2
-  , nextpas.core.simd.sse3      // SSE3: horizontal ops (HADDPS, HSUBPS)
   , nextpas.core.simd.ssse3     // SSSE3: byte shuffle (PSHUFB), integer abs (PABS)
-  , nextpas.core.simd.sse41     // SSE4.1: dot product (DPPS), rounding, PMULLD
-  , nextpas.core.simd.sse42     // SSE4.2: CRC32, string ops, PCMPGTQ
   , nextpas.core.simd.avx2
-  {$IFDEF SIMD_BACKEND_AVX512}
-  , nextpas.core.simd.avx512
-  {$ENDIF}
 {$ENDIF}
 {$IFDEF CPUI386}  // i386 SSE2 backend uses 32-bit assembly
   , nextpas.core.simd.sse2.i386
@@ -1428,6 +1422,9 @@ uses
   nextpas.core.simd.dataplane,
   nextpas.core.simd.memutils;
 
+// Include static dispatch macros (must be before any static dispatch usage)
+{$I nextpas.core.simd.static.inc}
+
 type
   TVecF32x4AddFunc = function(const a, b: TVecF32x4): TVecF32x4;
   TVecF32x4CmpEqFunc = function(const a, b: TVecF32x4): TMask4;
@@ -1525,6 +1522,12 @@ begin
     Exit;
   Result := RebindAndFetchDispatch;
 end;
+
+// Static dispatch implementations (when SIMD_STATIC_BACKEND is defined)
+{$I nextpas.core.simd.impl.static.inc}
+
+{$IFNDEF SIMD_STATIC_BACKEND}
+// Runtime dispatch implementations (default path)
 
 {$I nextpas.core.simd.impl.core.inc}
 {$I nextpas.core.simd.impl.wide.inc}
@@ -2173,6 +2176,8 @@ function VecF32x4CastToI32x4(const a: TVecF32x4): TVecI32x4;
 begin
   Result := nextpas.core.simd.utils.VecF32x4CastToI32x4(a);
 end;
+
+{$ENDIF} // SIMD_STATIC_BACKEND
 
 {$I nextpas.core.simd.framework.impl.inc}
 {$I nextpas.core.simd.public_abi.impl.inc}

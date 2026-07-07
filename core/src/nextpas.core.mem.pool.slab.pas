@@ -235,9 +235,9 @@ type
     {** 分配零初始化的内存块 *}
     function AllocMem(ASize: SizeUInt): Pointer;
     {** 重新分配内存块，自动拷贝旧数据 *}
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     {** 释放内存块，指针不属于本池时抛出 ESlabPoolCorruption *}
-    procedure FreeMem(ADst: Pointer);
+    procedure FreeMem(APtr: Pointer);
     {** 返回指针对应的分配大小（MemSizeOf 别名）*}
     function MemSize(APtr: Pointer): SizeUInt;
     // 兼容统计
@@ -1110,32 +1110,32 @@ begin
   end;
 end;
 
-function TSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TSlabPool.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
   LOldSize, LCopySize: SizeUInt;
   LAlloc: TSlabFallbackAlloc;
   LNew: Pointer;
 begin
-  if ADst=nil then Exit(GetMem(ASize));
-  if ASize=0 then begin FreeMem(ADst); Exit(nil); end;
+  if APtr=nil then Exit(GetMem(ASize));
+  if ASize=0 then begin FreeMem(APtr); Exit(nil); end;
   if IsOversize(ASize) then Exit(nil);
-  LIndex:=FindOwnerSegment(ADst);
+  LIndex:=FindOwnerSegment(APtr);
   if LIndex>=0 then
   begin
-    Result:=FSegments[LIndex].ReallocMem(ADst,ASize);
+    Result:=FSegments[LIndex].ReallocMem(APtr,ASize);
     if Result<>nil then Exit;
     // 跨段：安全拷贝再释放旧指针
     Result := GetMem(ASize);
     if Result=nil then Exit(nil);
-    LOldSize := FSegments[LIndex].MemSizeOf(ADst);
+    LOldSize := FSegments[LIndex].MemSizeOf(APtr);
     if LOldSize > ASize then LCopySize := ASize else LCopySize := LOldSize;
-    if LCopySize>0 then CopyMem(Result, ADst, LCopySize);
-    FSegments[LIndex].FreeMem(ADst);
+    if LCopySize>0 then CopyMem(Result, APtr, LCopySize);
+    FSegments[LIndex].FreeMem(APtr);
     Exit;
   end;
   // Fallback 路径：只有本池创建的 fallback 指针才允许被 Realloc
-  if not TryGetFallbackAlloc(ADst, LAlloc) then
+  if not TryGetFallbackAlloc(APtr, LAlloc) then
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 
   // 尽可能保持对齐语义（复用原分配时的 Alignment）
@@ -1143,23 +1143,23 @@ begin
   if LNew = nil then Exit(nil); // 失败时不修改原指针
 
   if LAlloc.Size > ASize then LCopySize := ASize else LCopySize := LAlloc.Size;
-  if LCopySize > 0 then CopyMem(LNew, ADst, LCopySize);
+  if LCopySize > 0 then CopyMem(LNew, APtr, LCopySize);
 
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
-  if TryUntrackFallbackAlloc(ADst, LAlloc) then
+  if TryUntrackFallbackAlloc(APtr, LAlloc) then
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);
 
   Result := LNew;
 end;
 
-procedure TSlabPool.FreeMem(ADst: Pointer);
+procedure TSlabPool.FreeMem(APtr: Pointer);
 var
   LIndex: Integer;
   LAlloc: TSlabFallbackAlloc;
   LPerfEnabled: Boolean;
 begin
-  if ADst=nil then Exit;
+  if APtr=nil then Exit;
   {$IFDEF DEBUG}
   if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
     raise EAllocError.Create(aeInvalidLayout,
@@ -1168,14 +1168,14 @@ begin
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
     Inc(FPerf.FreeCalls);
-  LIndex:=FindOwnerSegment(ADst);
+  LIndex:=FindOwnerSegment(APtr);
   if LIndex>=0 then
   begin
-    FSegments[LIndex].FreeMem(ADst);
+    FSegments[LIndex].FreeMem(APtr);
     PushAvail(LIndex);
     Inc(FTotalFrees);
   end
-  else if TryUntrackFallbackAlloc(ADst, LAlloc) then
+  else if TryUntrackFallbackAlloc(APtr, LAlloc) then
   begin
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
       FAllocator.FreeMem(LAlloc.RawPtr);

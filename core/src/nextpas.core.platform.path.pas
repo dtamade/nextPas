@@ -81,6 +81,7 @@ type
     Pos: Int32;
     Len: Int32;
   end;
+  PTPathPart = ^TPathPart;
 
   TPathPartArray = array of TPathPart;
 
@@ -651,9 +652,13 @@ end;
 
 function platform_path_normalize(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+const
+  MAX_STACK_PARTS = 32; { 大多数路径部分数 < 32 }
 var
   LLen, I, LStart: Int32;
-  LParts: array of TPathPart;
+  LStackParts: array[0..MAX_STACK_PARTS-1] of TPathPart;
+  LParts: PTPathPart;
+  LDynParts: TPathPartArray;
   LPartCount, J, LPrefixLen, LRequired, LBufPos, LCopyLen: Int32;
   LRoot: TPlatformPathRoot;
   LSep: AnsiChar;
@@ -666,8 +671,21 @@ var
 
   procedure AddPart(const APos, ALen: Int32);
   begin
-    if LPartCount >= Length(LParts) then
-      SetLength(LParts, LPartCount + 32);
+    if LPartCount >= MAX_STACK_PARTS then
+    begin
+      { 超出栈数组，回退到动态数组 }
+      if LDynParts = nil then
+      begin
+        SetLength(LDynParts, MAX_STACK_PARTS * 2);
+        Move(LStackParts[0], LDynParts[0], MAX_STACK_PARTS * SizeOf(TPathPart));
+        LParts := @LDynParts[0];
+      end
+      else if LPartCount >= Length(LDynParts) then
+      begin
+        SetLength(LDynParts, LPartCount + 32);
+        LParts := @LDynParts[0];
+      end;
+    end;
     LParts[LPartCount].Pos := APos;
     LParts[LPartCount].Len := ALen;
     Inc(LPartCount);
@@ -702,6 +720,8 @@ begin
 
   LRoot := ClassifyPathRoot(APath, LLen);
   LPartCount := 0;
+  LParts := @LStackParts[0];
+  LDynParts := nil;
   LPrefixLen := LRoot.Len;
   LSep := PLATFORM_PATH_SEP;
   I := LPrefixLen;

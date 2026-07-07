@@ -47,6 +47,7 @@ type
     ExplicitUnitRoots: TStringArray;
     NoFold: Boolean;
     Incremental: Boolean;
+    OptLevel: string;  { O0/O1/O2 — MIR optimization level }
   end;
 
   TToolStatusEventRecord = record

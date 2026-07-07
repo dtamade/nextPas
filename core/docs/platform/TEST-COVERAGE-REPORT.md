@@ -1,6 +1,6 @@
 # Platform 模块测试覆盖率报告
 
-**日期**: 2026-07-05
+**日期**: 2026-07-06
 **负责人**: Claude (AI)
 **工作目录**: .worktrees/platform
 
@@ -8,7 +8,7 @@
 
 ### 1.1 总体统计
 - **测试套件总数**: 50+
-- **测试总数**: 400+ (详见各套件统计)
+- **测试总数**: 450+ (详见各套件统计)
 - **通过率**: 100%
 - **失败数**: 0
 - **跳过数**: 0
@@ -20,22 +20,22 @@
 | test_platform | 3 | ✅ |
 | test_platform_args | 5 | ✅ |
 | test_platform_bench | 7 | ✅ |
-| test_platform_console | 6 | ✅ |
+| test_platform_console | 12 | ✅ |
 | test_platform_console_raw | 5 | ✅ |
 | test_platform_cross_ci_matrix_contract | 3 | ✅ |
 | test_platform_ctypes_abi | 10 | ✅ |
 | test_platform_dl | 11 | ✅ |
-| test_platform_env | 14 | ✅ |
+| test_platform_env | 18 | ✅ |
 | test_platform_env_wine | 1 | ✅ |
-| test_platform_error | 20 | ✅ |
+| test_platform_error | 46 | ✅ |
 | test_platform_facade_surface | 3 | ✅ |
 | test_platform_ffi_import_workflow | 2 | ✅ |
 | test_platform_ffi_owner_boundary | 2 | ✅ |
 | test_platform_ffi_source_evidence_index | 2 | ✅ |
-| test_platform_files | 42 | ✅ |
+| test_platform_files | 43 | ✅ |
 | test_platform_files_wine | 1 | ✅ |
-| test_platform_fmt | 23 | ✅ |
-| test_platform_fs | 13 | ✅ |
+| test_platform_fmt | 25 | ✅ |
+| test_platform_fs | 16 | ✅ |
 | test_platform_fs_copy_bench | 1 | ✅ |
 | test_platform_fs_toctou | 4 | ✅ |
 | test_platform_fs_walk | 14 | ✅ |
@@ -44,7 +44,7 @@
 | test_platform_host_abi_wave10_posix_stat_hosts | 7 | ✅ |
 | test_platform_host_abi_wave5_env | 5 | ✅ |
 | test_platform_info | 5 | ✅ |
-| test_platform_io | 14 | ✅ |
+| test_platform_io | 15 | ✅ |
 | test_platform_io_wine | 1 | ✅ |
 | test_platform_io_windows_real | 1 | ✅ |
 | test_platform_linux_aarch64_compile | 0 | ✅ (编译测试) |
@@ -58,35 +58,35 @@
 | test_platform_linux_subsystems_abi | 9 | ✅ |
 | test_platform_memory | 24 | ✅ |
 | test_platform_memory_wine | 1 | ✅ |
-| test_platform_mmap | 11 | ✅ |
+| test_platform_mmap | 13 | ✅ |
 | test_platform_mmap_wine | 1 | ✅ |
 | test_platform_net | 8 | ✅ |
-| test_platform_path | 20 | ✅ |
+| test_platform_path | 24 | ✅ |
 | test_platform_path_wine | 8 | ✅ |
 | test_platform_pipe | 6 | ✅ |
 | test_platform_posix_ffi_surface | 1 | ✅ |
-| test_platform_process | 17 | ✅ |
+| test_platform_process | 21 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
-| test_platform_pty | 8 | ✅ |
+| test_platform_pty | 12 | ✅ |
 | test_platform_random | 6 | ✅ |
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
-| test_platform_resource | 5 | ✅ |
-| test_platform_signal | 8 | ✅ |
+| test_platform_resource | 10 | ✅ |
+| test_platform_signal | 9 | ✅ |
 | test_platform_signal_contract | 4 | ✅ |
 | test_platform_simulated_host_compile_matrix | 0 | ✅ (编译测试) |
-| test_platform_socket | 19 | ✅ |
+| test_platform_socket | 21 | ✅ |
 | test_platform_socket_windows_real | 1 | ✅ |
 | test_platform_socket_wine | 1 | ✅ |
 | test_platform_socket_types_abi | 13 | ✅ |
 | test_platform_struct_sizes | 12 | ✅ |
-| test_platform_sync | 14 | ✅ |
+| test_platform_sync | 16 | ✅ |
 | test_platform_sync_l0_boundary | 4 | ✅ |
 | test_platform_sync_no_fpc_units | 2 | ✅ |
 | test_platform_sync_sizes | 5 | ✅ |
 | test_platform_sync_stress | 7 | ✅ |
 | test_platform_sync_wine | 1 | ✅ |
-| test_platform_thread | 8 | ✅ |
+| test_platform_thread | 11 | ✅ |
 | test_platform_thread_host_ffi_surface | 1 | ✅ |
 | test_platform_thread_l0_boundary | 4 | ✅ |
 | test_platform_thread_no_fpc_units | 2 | ✅ |
@@ -95,7 +95,7 @@
 | test_platform_time_l0_boundary | 6 | ✅ |
 | test_platform_time_no_fpc_units | 1 | ✅ |
 | test_platform_time_wine | 3 | ✅ |
-| test_platform_watch | 6 | ✅ |
+| test_platform_watch | 13 | ✅ |
 | test_platform_which | 7 | ✅ |
 | test_platform_windows_utf16_compile_gate | 0 | ✅ (编译测试) |
 | test_platform_windows_utf16_contract | 4 | ✅ |

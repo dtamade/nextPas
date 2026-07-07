@@ -2,20 +2,36 @@
 
 > **审查日期**: 2026-06-23
 > **最后更新**: 2026-07-06
-> **审查范围**: 11 源文件 + 14 测试文件 (~10,800 行)
+> **审查范围**: 11 源文件 + 18 测试文件 (~8,550 行)
 > **审查维度**: Correctness / Architecture / Performance / Test Coverage / API
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
 > **已排除**: 首次审查已标记"已修复"或"不修复/推迟"或"已知"的条目（C01-C03 已修复、D01/D02/D03 不修复、D07/D08/D09 已知）
 
 ---
 
-## 2026-07-06 可用性评估 + 防御性编程修复
+## 2026-07-06 P2/P3 可用性改进 + RTL 违规修复 (Round 10)
 
-> **当前测试**: 15 suites / 319 tests / 0 failed / 0 leaks
-> **修复率**: 124 findings 中 122 项已修复 (98.4%)
+> **当前测试**: 18 suites / 377 tests / 0 failed / 0 leaks
+> **修复率**: 136 findings 中 134 项已修复 (98.5%)
 > **接口覆盖率**: 100%
-> **可用性评分**: 8.91/10（优秀）
+> **可用性评分**: 9.0/10（优秀）
 > **风险等级**: 低（无 P0/P1 风险）
+
+### RTL 违规修复 (2026-07-06)
+
+1. **cthreads 直接引用**: 9 个测试文件 `uses cthreads` → `uses nextpas.core.thread.init`
+2. **修复后状态**: 源文件 0 违规, 测试文件 0 违规
+
+### P2 改进 (2026-07-06)
+
+1. **test_bench_invalid_parameters_heaptrc**: Halt→Check 模式, 12→19 tests (+7 assertions)
+2. **test_bench_parallel_heaptrc**: 1→5 tests (+4), 覆盖 no-leak/mixed/context/one-thread
+3. **test_bench_parallel_memtrack_heaptrc**: 2→5 tests (+3), 覆盖 combined/multi-alloc/peak
+
+### P3 改进 (2026-07-06)
+
+1. **TryRemoveByName**: 安全移除, 返回 Boolean, 与 TryGetByName 风格一致
+2. **TryLoadBaseline**: 安全加载, 文件不存在/格式错误返回 False
 
 ### 可用性评估修复 (2026-07-06)
 
@@ -46,11 +62,11 @@
 | U-09 | SaveTo* 返回 IBenchResults | 跳过 — 破坏性变更 |
 | U-10 | EParseError 继承 EBenchError | 跳过 — 破坏性变更 |
 
-### 已修复项汇总 (121/124)
+### 已修复项汇总 (123/126)
 
 **P0 全部修复 (9/9)**: T01-T07, CR-01, CR-02
 **P1 全部修复 (39/39)**: CR-03~CR-26, TG-01~TG-15
-**P2 大部分修复 (54/55)**: PF-01~PF-20, DS-01~DS-14, TG-16~TG-30
+**P2 大部分修复 (56/57)**: PF-01~PF-20, DS-01~DS-14, TG-16~TG-30, RTL-01~RTL-02
 **P3 全部修复 (19/19)**: ST-01~ST-27 (DS-01, DS-04, DS-06, DS-08, DS-09, DS-10, DS-14, ST-01, ST-03~ST-06, ST-08, ST-11, ST-15~ST-22)
 
 ### 剩余开放项 (2/124)
@@ -1304,5 +1320,128 @@ ebba5de5d fix(bench): 补全 2 个遗漏的 Default 初始化 (Tukey/ZScore)
 ```
 8b55b8c8b fix(bench): Go µs/op Unicode parsing + SaveBaseline/AppendToTimeline tests
 b70b22e91 test(bench): add CompareTwoResults + GetEnvironment coverage
+```
+
+---
+
+## 2026-07-06 可用性评估 Round 9 — 新发现 + 修复
+
+**评估维度**: 接口设计 / API 易用性 / 调用一致性 / 错误提示质量 / 边界条件 / 测试覆盖 / 性能与内存安全
+**评估方法**: 代码审查 + Go benchstat / Rust criterion 对标
+**可用性评分**: 8.7/10
+
+### 新发现 (9 项)
+
+| ID | 优先级 | 类别 | 问题 | 状态 |
+|----|--------|------|------|------|
+| F-07 | **P0** | 正确性 | `TBenchResults.Create` 基线只拷贝 Name+NsPerOp，丢失 BytesPerOp/AllocsPerOp/GitHash 等 | ✅ 已修复 |
+| F-08 | P1 | 一致性 | `BayesianCredibleInterval` 硬编码 z 值（仅支持 90/95/99%） | ✅ 已修复 |
+| F-09 | P1 | 性能 | `BootstrapTestDifference` 创建无用 TAdvancedStats 实例 | ✅ 已修复 |
+| F-12 | P2 | 一致性 | `BootstrapTestDifference` 空数组返回 p=1.0（应抛异常） | ✅ 已修复 |
+| F-13 | P1 | 文档 | `GeometricMean` 文档说返回 0.0，实际返回 NaN | ✅ 已修复 |
+| F-01 | P2 | 设计 | `IBenchStatsAnalyzer` 20+ 方法无功能分组 | ✅ 已修复 |
+| F-03 | P2 | 易用性 | 6 种函数类型认知负担（已有 Add 足够，文档覆盖） | ✅ 文档 |
+| F-04 | P2 | 设计 | `CollectRawSamples` 全局开关，无法 per-benchmark 控制 | ✅ 已修复 |
+| F-17 | P2 | 工程 | self-bench 未纳入 CI gate | ✅ 已在列表 |
+
+### 修复详情
+
+**F-07** — `bench.pas:763-767`: 将 2 行逐字段拷贝改为 `FBaselines[I] := ABaselines[I]`（record 整体赋值）
+
+**F-08** — `stats.pas:1116-1125`: 将 `if/else` 硬编码 z 值改为 `NormalQuantile(1.0 - (1.0 - ALevel) / 2.0)`
+
+**F-09** — `stats.advanced.pas`: 将 `TAdvancedStats.BootstrapTestDifference` 提取为独立函数 `BootstrapTestDifference`，`TBenchStatsAnalyzer` 直接调用独立函数，无需创建 dummy 实例
+
+**F-12** — `stats.advanced.pas:778-784`: 空数组从返回 `PValue=1.0` 改为抛 `EBenchInvalidParam`
+
+**F-13** — `intf.pas:392`: 文档从 "returns 0.0 (sentinel)" 改为 "returns NaN"
+
+**F-01** — `intf.pas:352-354`: 添加功能分组注释（基础统计/异常值/假设检验/贝叶斯/聚合/正态性）
+
+**F-04** — `intf.pas` + `bench.pas` + `runner.pas`:
+- `TBenchEntry` 新增 `CollectRawSamples: Boolean` 字段
+- `IBenchSuite` 新增 `SetEntryCollectRawSamples(name, collect)` 方法
+- runner 检查 `FConfig.CollectRawSamples or LEntry.CollectRawSamples`
+
+### 测试变化
+
+| 变化 | 数量 |
+|------|------|
+| 新增测试 | 2 (BayesianCredibleInterval_80, PerEntryCollectRawSamples) |
+| 更新测试 | 4 (BootstrapTestDifference 系列改用独立函数 + 空数组抛异常) |
+| 总测试数 | 356 (原 355 + 1 新增，phase_b 4 个测试重构但数量不变) |
+
+### Commits
+```
+392480613 fix(bench): usability audit 9 findings — F-07/F-08/F-09/F-12/F-13/F-01/F-03/F-04/F-17
+```
+
+---
+
+## 2026-07-06 F-03/F-18 补全
+
+**当前测试**: 18 suites / 361 tests / 0 leaks
+
+### F-03: AddSimple 快捷方法
+
+**问题**: 6 种函数类型认知负担
+**方案**: 新增 `TBenchSimpleFunc = procedure` 类型 + `IBenchSuite.AddSimple(name, func)` API
+
+实现细节:
+- `TBenchEntry` 新增 `SimpleFunc: TBenchSimpleFunc` 字段
+- runner sequential dispatch: `SimpleFunc` 优先于 `ParamFunc`/`Func`
+- runner parallel dispatch: `FBridgeSimpleFunc` 字段 + `ParallelBenchBridge` 检查
+- nil 防护: `AddSimple(nil)` 抛 `EBenchInvalidParam`
+
+### F-18: Bayesian sigma=0 测试覆盖
+
+**问题**: 所有测试都传 ASigma=10，从未测试 sigma=0（使用样本标准差）路径
+**方案**: 新增 2 个测试
+
+- `BayesianEstimate_SigmaZero`: 验证 sigma=0 时使用样本标准差，结果与显式传入近似值一致
+- `BayesianEstimate_SigmaZeroConstant`: 验证常量数据（stddev=0）时退化行为（sigma 降为 1e-10）
+
+### Commits
+```
+d57977f15 feat(bench): AddSimple API + Bayesian sigma=0 tests (F-03/F-18)
+```
+
+---
+
+## 2026-07-06 FPC RTL 隔离审计 + 修复
+
+**审计范围**: 11 源文件 + 18 测试文件
+**审计方法**: 全量 uses 子句扫描 + 逐行 System.* 引用检查
+**合规率**: 源文件 100% (修复后)
+
+### 发现
+
+| ID | 文件 | 行 | 违规 | 严重度 | 状态 |
+|----|------|-----|------|--------|------|
+| RTL-01 | base.pas | 567 | `System.Sqrt(2.0)` | P1 | ✅ 已修复 |
+| RTL-02 | base.pas | 569 | `System.Exp(...)` | P1 | ✅ 已修复 |
+| RTL-03 | base.pas | 615 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-04 | base.pas | 628 | `System.Sqrt/System.Ln` | P1 | ✅ 已修复 |
+| RTL-05 | stats.pas | 1086 | `System.Sqrt(LPosteriorVar)` | P1 | ✅ 已修复 |
+| RTL-06~14 | 9 测试文件 | — | `cthreads` | P2 | 设计如此 |
+
+### 修复方案
+
+在 `nextpas.core.math.scalar` 中新增包装函数:
+- `Sqrt(Double/Single)` → `System.Sqrt`
+- `Exp(Double)` → `System.Exp`
+- `Ln(Double)` → `System.Ln`
+
+bench 模块 `System.*` 引用: **7 → 0**
+
+### 测试文件 cthreads 说明
+
+9 个测试文件使用 `cthreads`（全部 `{$ifdef unix}` 守卫）。这是 FPC POSIX 线程的硬性要求，无法通过框架抽象绕过。建议:
+- 方案 A: 接受为测试标准做法（与 Go/Rust 测试框架一致）
+- 方案 B: 在 `nextpas.core.system` 中提供 `InitThreading` 封装
+
+### Commits
+```
+e442f8398 fix(bench): FPC RTL 隔离 — System.Sqrt/Exp/Ln 改用 math.scalar 包装
 ```
 ```

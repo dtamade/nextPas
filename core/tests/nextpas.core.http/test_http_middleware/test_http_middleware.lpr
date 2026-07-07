@@ -44,6 +44,7 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
@@ -138,6 +139,11 @@ end;
 function TMockRequest.GetContentLength: Int64;
 begin
   Result := 0;
+end;
+
+function TMockRequest.GetTrailers: IHttpHeaders;
+begin
+  Result := nil;
 end;
 
 function TMockRequest.PathParam(const AName: string): string;

@@ -4,7 +4,7 @@
   High-throughput concurrent IBlockPool:
   - Shards: per-shard TGrowingBlockPool + per-shard mutex
   - Routing: global segment table (range -> shard) protected by RWLock
-  - Optional lock-free remote frees (disabled under FAF_MEM_DEBUG)
+  - Optional lock-free remote frees (disabled under DEBUG)
 }
 unit nextpas.core.mem.blockpool.sharded;
 
@@ -43,6 +43,18 @@ type
     class function Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer = 0): TShardedBlockPoolConfig; static;
   end;
 
+  {** Pool utilization and hit-rate statistics. }
+  TBlockPoolStats = record
+    TotalAcquires: QWord;   // total Acquire calls
+    CacheHits: QWord;       // acquires served from thread cache
+    SegmentAllocs: QWord;   // acquires that triggered segment growth
+    Capacity: QWord;        // total block capacity
+    InUse: QWord;           // blocks currently in use
+    Available: QWord;       // blocks available
+    function CacheHitRate: Double;   // CacheHits / TotalAcquires (0..1)
+    function Utilization: Double;    // InUse / Capacity (0..1)
+  end;
+
   {**
    * TShardedBlockPool
    *
@@ -62,6 +74,12 @@ type
         KnownSegmentCount: SizeInt;
         InUseCount: Int64; // blocks in-use by callers (per-shard, atomic)
         RemoteFreeHead: Pointer;
+        { Padding to 128 bytes (2 cache lines) to prevent false sharing
+          between adjacent shards. Hot fields (InUseCount, RemoteFreeHead)
+          are isolated from neighboring shards' Lock/Pool. }
+        _Pad: array[0..127 - SizeOf(TGrowingBlockPool) - SizeOf(TMemMutex)
+                    - SizeOf(SizeUInt) - SizeOf(SizeInt) - SizeOf(Int64)
+                    - SizeOf(Pointer) - 1] of Byte;
       end;
       TRoute = record
         Base: PByte;
@@ -120,6 +138,9 @@ type
 
     // fast statistics (atomic, approximate under heavy contention but monotonic)
     FTotalCapacity: Int64; // blocks
+    FTotalAcquires: Int64;  // total Acquire calls
+    FCacheHits: Int64;     // acquires served from thread cache
+    FSegmentAllocs: Int64; // acquires that triggered segment growth
   private
     function NormalizeShardCount(aShardCount: Integer): Integer;
     function ChooseShardIndex: Integer; inline;
@@ -177,22 +198,102 @@ type
     // Flush current thread cache back to shard (optional helper for short-lived threads)
     procedure FlushThreadCache;
 
+    { Reclaim memory: free segments where all blocks are unused across all shards.
+      Returns total segments freed. Thread-safe (acquires each shard lock). }
+    function TrimIdleSegments: SizeInt;
+
     function ShardCount: Integer; inline;
+
+    { Pool utilization and hit-rate statistics. }
+    function GetStats: TBlockPoolStats;
   end;
 
 implementation
 
 uses
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.text,
+  nextpas.core.atomic;
 
 var
   GShardedBlockPoolIdGen: UInt64 = 0;
 
-{ Spin-hint placeholder: PAUSE/YIELD is an optimization, not a correctness
-  requirement. This keeps the source free of inline assembly for nextPas. }
-procedure cpu_pause; inline;
+{ Thread-exit cleanup infrastructure:
+  - GPoolRegistry: global linked list of live TShardedBlockPool instances
+  - GPoolRegistryLock: protects the registry
+  - GThreadExitKey: pthread_key with destructor callback
+  - When a thread exits, the destructor walks GShardedBlockPoolThreadCacheHead
+    and flushes caches for pools still in the registry. }
+
+type
+  PPoolRegistryEntry = ^TPoolRegistryEntry;
+  TPoolRegistryEntry = record
+    Pool: Pointer;          // weak ref to TShardedBlockPool
+    PoolId: UInt64;
+    Next: PPoolRegistryEntry;
+  end;
+
+var
+  GPoolRegistryHead: PPoolRegistryEntry = nil;
+  GPoolRegistryLock: TMemMutex;
+  GThreadExitKeyInitialized: Boolean = False;
+
+procedure PoolRegistryRegister(APool: Pointer; APoolId: UInt64);
+var
+  LEntry: PPoolRegistryEntry;
 begin
-  { intentionally empty — PAUSE instruction is an optimization hint only }
+  New(LEntry);
+  LEntry^.Pool := APool;
+  LEntry^.PoolId := APoolId;
+  LEntry^.Next := GPoolRegistryHead;
+  GPoolRegistryHead := LEntry;
+end;
+
+procedure PoolRegistryUnregister(APool: Pointer);
+var
+  LCur, LPrev: PPoolRegistryEntry;
+begin
+  LCur := GPoolRegistryHead;
+  LPrev := nil;
+  while LCur <> nil do
+  begin
+    if LCur^.Pool = APool then
+    begin
+      if LPrev = nil then
+        GPoolRegistryHead := LCur^.Next
+      else
+        LPrev^.Next := LCur^.Next;
+      Dispose(LCur);
+      Exit;
+    end;
+    LPrev := LCur;
+    LCur := LCur^.Next;
+  end;
+end;
+
+function PoolRegistryIsLive(APool: Pointer): Boolean;
+var
+  LCur: PPoolRegistryEntry;
+begin
+  LCur := GPoolRegistryHead;
+  while LCur <> nil do
+  begin
+    if LCur^.Pool = APool then
+      Exit(True);
+    LCur := LCur^.Next;
+  end;
+  Result := False;
+end;
+
+{ Thread-exit destructor: flush all thread cache nodes for pools still alive.
+  Forward declaration; implementation is after threadvar block. }
+procedure ThreadExitDestructor(AData: Pointer); cdecl; forward;
+
+procedure EnsureThreadExitKey;
+begin
+  if GThreadExitKeyInitialized then Exit;
+  GPoolRegistryLock.Init;
+  GThreadExitKeyInitialized := True;
 end;
 
 type
@@ -233,6 +334,46 @@ const
 function NextShardedBlockPoolId: UInt64; inline;
 begin
   Result := UInt64(InterlockedExchangeAdd64(PInt64(@GShardedBlockPoolIdGen)^, 1)) + 1;
+end;
+
+{ Thread-exit destructor implementation (forward-declared above). }
+procedure ThreadExitDestructor(AData: Pointer); cdecl;
+var
+  LNode: TShardedBlockPool.PThreadCacheNode;
+  LNext: TShardedBlockPool.PThreadCacheNode;
+  LPool: TShardedBlockPool;
+begin
+  LNode := GShardedBlockPoolThreadCacheHead;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    if LNode^.PoolPtr <> nil then
+    begin
+      GPoolRegistryLock.Acquire;
+      try
+        if PoolRegistryIsLive(LNode^.PoolPtr) then
+        begin
+          LPool := TShardedBlockPool(LNode^.PoolPtr);
+          if (LNode^.Count > 0) and (LNode^.Shard >= 0) and (LNode^.Shard < LPool.FShardCount) then
+          begin
+            LPool.FShards[LNode^.Shard].Lock.Acquire;
+            try
+              LPool.FlushRemoteFreesLocked(LNode^.Shard);
+              LPool.FlushThreadCacheLocked(LNode^.Shard, LNode, LNode^.Count);
+            finally
+              LPool.FShards[LNode^.Shard].Lock.Release;
+            end;
+          end;
+          LPool.FlushThreadRemoteBuffers(LNode);
+        end;
+      finally
+        GPoolRegistryLock.Release;
+      end;
+    end;
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
+  GShardedBlockPoolThreadCacheHead := nil;
 end;
 
 class function TShardedBlockPoolConfig.Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer): TShardedBlockPoolConfig;
@@ -283,7 +424,7 @@ begin
     LState := FRoutingState;
     if (LState and (ROUTING_WRITE_BIT or ROUTING_WAIT_BIT)) <> 0 then
     begin
-      platform_thread_yield;
+      cpu_pause;
       Inc(LSpins);
       if (LSpins and 1023) = 0 then
         platform_thread_yield;
@@ -335,7 +476,7 @@ begin
       Continue;
     end;
 
-    platform_thread_yield;
+    cpu_pause;
     Inc(LSpins);
     if (LSpins and 1023) = 0 then
       platform_thread_yield;
@@ -929,16 +1070,19 @@ var
 
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
-  // Disable the old per-thread cache until it has generation ownership and
-  // thread-exit cleanup. Otherwise duplicate frees can be hidden in TLS state
-  // and cache nodes leak after pool destruction.
-  if AConfig.ThreadCacheCapacity > 0 then
+  EnsureThreadExitKey;
+  // ThreadCache is now supported with thread-exit cleanup via pthread_key destructor.
+  // Limit capacity to prevent excessive memory use.
+  if AConfig.ThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
     raise EAllocError.Create(aeInvalidLayout,
-      'TShardedBlockPool: ThreadCacheCapacity > 0 not supported (missing thread-exit cleanup)');
-  FThreadCacheCapacity := 0;
+      'TShardedBlockPool: ThreadCacheCapacity max is ' + IntToStr(SHARDED_BLOCKPOOL_THREADCACHE_MAX));
+  FThreadCacheCapacity := AConfig.ThreadCacheCapacity;
   FThreadCacheCheckDoubleFree := AConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := AConfig.TrackInUse;
   FTotalCapacity := 0;
+  FTotalAcquires := 0;
+  FCacheHits := 0;
+  FSegmentAllocs := 0;
 
   FConfig := AConfig.Pool;
   LShardCount := NormalizeShardCount(AConfig.ShardCount);
@@ -1029,6 +1173,14 @@ var
     if FShards[LIdx].Pool <> nil then
       Inc(LTotalCap, Int64(FShards[LIdx].Pool.Capacity));
   FTotalCapacity := LTotalCap;
+
+  // Register pool for thread-exit cleanup
+  GPoolRegistryLock.Acquire;
+  try
+    PoolRegistryRegister(Pointer(Self), FPoolId);
+  finally
+    GPoolRegistryLock.Release;
+  end;
 end;
 
 constructor TShardedBlockPool.Create(const AConfig: TGrowingBlockPoolConfig; aShardCount: Integer);
@@ -1082,6 +1234,16 @@ var
   for LIdx := 0 to High(FShards) do
     FShards[LIdx].Lock.Done;
 
+  // Unregister pool so thread-exit destructor stops flushing for this pool
+  GPoolRegistryLock.Acquire;
+  try
+    PoolRegistryUnregister(Pointer(Self));
+  finally
+    GPoolRegistryLock.Release;
+  end;
+  // Invalidate epoch so remaining thread cache nodes are stale
+  Inc(FCacheEpoch);
+
     inherited Destroy;
   end;
 
@@ -1090,9 +1252,11 @@ var
   LShard: Integer;
   LNode: PThreadCacheNode;
   LCachedShard: Integer;
+  LOldCap: SizeUInt;
 begin
   Result := nil;
   if FShardCount <= 0 then Exit(nil);
+  InterlockedExchangeAdd64(FTotalAcquires, 1);
 
   if FThreadCacheCapacity > 0 then
   begin
@@ -1104,6 +1268,7 @@ begin
       LCachedShard := LNode^.Shard;
       if FTrackInUse and (LCachedShard >= 0) and (LCachedShard < FShardCount) then
         InterlockedExchangeAdd64(FShards[LCachedShard].InUseCount, 1);
+      InterlockedExchangeAdd64(FCacheHits, 1);
       Exit;
     end;
 
@@ -1117,9 +1282,14 @@ begin
   FShards[LShard].Lock.Acquire;
   try
     FlushRemoteFreesLocked(LShard);
+    LOldCap := FShards[LShard].Pool.Capacity;
     Result := FShards[LShard].Pool.Acquire;
     if Result <> nil then
+    begin
       IndexShardNewSegmentsLocked(LShard);
+      if FShards[LShard].Pool.Capacity > LOldCap then
+        InterlockedExchangeAdd64(FSegmentAllocs, 1);
+    end;
   finally
     FShards[LShard].Lock.Release;
   end;
@@ -1373,11 +1543,111 @@ begin
   FlushThreadRemoteBuffers(LNode);
 end;
 
+function TShardedBlockPool.TrimIdleSegments: SizeInt;
+var
+  LIdx: Integer;
+  LTrimmed: SizeInt;
+  LSegIdx: SizeInt;
+  LStart, LEnd: PByte;
+  LNewCap: SizeUInt;
+  LRouteIdx: SizeInt;
+  LWrite: SizeInt;
+begin
+  Result := 0;
+  if FShardCount <= 0 then Exit;
+
+  for LIdx := 0 to FShardCount - 1 do
+  begin
+    FShards[LIdx].Lock.Acquire;
+    try
+      FlushRemoteFreesLocked(LIdx);
+      if FShards[LIdx].Pool <> nil then
+      begin
+        LTrimmed := FShards[LIdx].Pool.TrimIdleSegments;
+        if LTrimmed > 0 then
+        begin
+          Inc(Result, LTrimmed);
+          // Rebuild routing for this shard (segments removed from end)
+          RouteWriteLock;
+          try
+            // Remove all routing entries for this shard
+            LWrite := 0;
+            for LRouteIdx := 0 to High(FRoutes) do
+              if FRoutes[LRouteIdx].Shard <> LIdx then
+              begin
+                if LWrite <> LRouteIdx then
+                  FRoutes[LWrite] := FRoutes[LRouteIdx];
+                Inc(LWrite);
+              end;
+            SetLength(FRoutes, LWrite);
+
+            // Re-add current segments
+            for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
+              if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
+              begin
+                RouteInsert(LStart, LEnd, LIdx);
+                IndexSegmentPagesLocked(LIdx, LStart, LEnd);
+              end;
+          finally
+            RouteWriteUnlock;
+          end;
+
+          // Update known state
+          LNewCap := FShards[LIdx].Pool.Capacity;
+          FShards[LIdx].KnownCapacity := LNewCap;
+          FShards[LIdx].KnownSegmentCount := SizeInt(FShards[LIdx].Pool.SegmentCount);
+        end;
+      end;
+    finally
+      FShards[LIdx].Lock.Release;
+    end;
+  end;
+
+  // Recalculate total capacity
+  if Result > 0 then
+  begin
+    FTotalCapacity := 0;
+    for LIdx := 0 to FShardCount - 1 do
+      if FShards[LIdx].Pool <> nil then
+        InterlockedExchangeAdd64(FTotalCapacity, Int64(FShards[LIdx].Pool.Capacity));
+  end;
+end;
+
 function TShardedBlockPool.ShardCount: Integer;
 begin
   Result := FShardCount;
 end;
 
+function TShardedBlockPool.GetStats: TBlockPoolStats;
+begin
+  Result.TotalAcquires := QWord(FTotalAcquires);
+  Result.CacheHits := QWord(FCacheHits);
+  Result.SegmentAllocs := QWord(FSegmentAllocs);
+  Result.Capacity := Capacity;
+  Result.InUse := InUse;
+  Result.Available := Available;
+end;
+
+{ TBlockPoolStats }
+
+function TBlockPoolStats.CacheHitRate: Double;
+begin
+  if TotalAcquires = 0 then
+    Exit(0.0);
+  Result := Double(CacheHits) / Double(TotalAcquires);
+end;
+
+function TBlockPoolStats.Utilization: Double;
+begin
+  if Capacity = 0 then
+    Exit(0.0);
+  Result := Double(InUse) / Double(Capacity);
+end;
+
 {$POP}
+
+finalization
+  if GThreadExitKeyInitialized then
+    GPoolRegistryLock.Done;
 
 end.

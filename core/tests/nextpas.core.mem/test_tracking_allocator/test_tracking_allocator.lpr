@@ -399,6 +399,94 @@ begin
   end;
 end;
 
+{ --- Tag tests --- }
+
+procedure TestSetTag;
+var
+  LTracker: TTrackingAllocator;
+  LPtr: Pointer;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LTracker.SetTag('test-tag');
+    LPtr := LTracker.GetMem(64);
+    Check(LPtr <> nil, 'tag: alloc succeeds');
+    Check(LTracker.ActiveAllocCount = 1, 'tag: count = 1');
+    { Release }
+    LTracker.FreeMem(LPtr);
+    Check(LTracker.ActiveAllocCount = 0, 'tag: count = 0 after free');
+  finally
+    LTracker.Free;
+  end;
+end;
+
+procedure TestTagInLeakReport;
+var
+  LTracker: TTrackingAllocator;
+  LPtr1, LPtr2: Pointer;
+  LReport: string;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LTracker.SetTag('http-request');
+    LPtr1 := LTracker.GetMem(128);
+    LTracker.SetTag('parser-buffer');
+    LPtr2 := LTracker.GetMem(256);
+    { Both should appear in leak report with tags }
+    LReport := LTracker.ReportLeaks;
+    Check(Pos('http-request', LReport) > 0, 'tag report: http-request found');
+    Check(Pos('parser-buffer', LReport) > 0, 'tag report: parser-buffer found');
+    Check(Pos('size=128', LReport) > 0, 'tag report: size=128 found');
+    Check(Pos('size=256', LReport) > 0, 'tag report: size=256 found');
+    { Clean up }
+    LTracker.FreeMem(LPtr1);
+    LTracker.FreeMem(LPtr2);
+  finally
+    LTracker.Free;
+  end;
+end;
+
+procedure TestTagClearOnFree;
+var
+  LTracker: TTrackingAllocator;
+  LPtr: Pointer;
+  LReport: string;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LTracker.SetTag('temp');
+    LPtr := LTracker.GetMem(64);
+    LTracker.FreeMem(LPtr);
+    { No leaks, no tag in report }
+    LReport := LTracker.ReportLeaks;
+    Check(Pos('temp', LReport) = 0, 'tag clear: temp not in report');
+    Check(Pos('No leaks', LReport) > 0, 'tag clear: no leaks');
+  finally
+    LTracker.Free;
+  end;
+end;
+
+procedure TestTagWithRealloc;
+var
+  LTracker: TTrackingAllocator;
+  LPtr: Pointer;
+  LReport: string;
+begin
+  LTracker := TTrackingAllocator.Create(GetRtlAllocator);
+  try
+    LTracker.SetTag('realloc-test');
+    LPtr := LTracker.GetMem(64);
+    { Realloc should preserve tag }
+    LPtr := LTracker.ReallocMem(LPtr, 128);
+    LReport := LTracker.ReportLeaks;
+    Check(Pos('realloc-test', LReport) > 0, 'tag realloc: tag preserved');
+    Check(Pos('size=128', LReport) > 0, 'tag realloc: new size');
+    LTracker.FreeMem(LPtr);
+  finally
+    LTracker.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.allocator.tracking');
 
@@ -430,6 +518,12 @@ begin
   T.Test('realloc_to_zero_is_free', @TestReallocToZeroIsFree);
   T.Test('report_no_leaks', @TestReportNoLeaks);
   T.Test('traits forwards inner allocator', @TestTraitsForwardsInnerAllocator);
+
+  { Tag tests }
+  T.Test('set_tag', @TestSetTag);
+  T.Test('tag_in_leak_report', @TestTagInLeakReport);
+  T.Test('tag_clear_on_free', @TestTagClearOnFree);
+  T.Test('tag_with_realloc', @TestTagWithRealloc);
 
   T.Run;
 

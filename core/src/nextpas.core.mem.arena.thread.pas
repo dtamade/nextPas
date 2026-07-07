@@ -134,8 +134,6 @@ TThreadArenaManager = class
 
     {** 已使用字节数 }
     function UsedSize: SizeUInt;
-    {** 剩余可用字节数 }
-    function RemainingSize: SizeUInt;
     {** 峰值使用量 }
     function PeakUsed: SizeUInt;
 
@@ -460,11 +458,6 @@ end;
 function TThreadArena.UsedSize: SizeUInt;
 begin
   Result := FArena.UsedSize;
-end;
-
-function TThreadArena.RemainingSize: SizeUInt;
-begin
-  Result := FArena.RemainingSize;
 end;
 
 function TThreadArena.PeakUsed: SizeUInt;

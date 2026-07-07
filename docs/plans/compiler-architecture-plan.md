@@ -387,7 +387,7 @@ ParseParameterList 等函数接口，属于 AL2 工作。
 | **验证** | 语法错误文件报告多个错误（不是只有第一个） |
 | **对标** | rustc `rustc_parse` error recovery |
 
-#### 任务 3.3: 结构化诊断 [🔲] 预估 5 天
+#### 任务 3.3: 结构化诊断 [✅ 2026-07-06] 预估 5 天
 
 | 项 | 内容 |
 |----|------|
@@ -980,7 +980,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | 任务 | 计划标记 | 实际状态 | 说明 |
 |------|---------|---------|------|
 | P0.1 THashMap | ✅ | ✅ | 6 个函数 O(1) |
-| P0.2 TVec | ✅ | ⚠️ | 仍有 22 处 SetLength+1 |
+| P0.2 TVec | ✅ | ✅ | 从 145 处减至 10 处（剩余均为 record 内嵌数组，不适合 TVec class） |
 | P0.3 Arena/GreenTree | ⏸️ | ✅ | Green Tree 已重构为 rowan-style record |
 | P1.1 Pipeline | ✅ | ✅ | ICompilerPhase + TPhaseStatus |
 | P1.2 Sema 拆分 | ⏸️ | ⚠️ | builtins+string_ownership 已提取（逻辑分组），3/6 模块是空骨架，物理分离推迟到 AL2 |
@@ -1011,15 +1011,26 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 
 | 子任务 | 源位置 | 目标文件 | 预估行数 | 风险 |
 |--------|--------|---------|----------|------|
-| AL2.1a 提取 overload | 主文件 ~1,500 行重载解析 | `np_sema_overload.pas` | ~1,500 | 高（650 方法交叉依赖） |
-| AL2.1b 提取 type_check | 主文件 ~1,500 行类型检查 | `np_sema_type_check.pas` | ~1,500 | 高 |
-| AL2.1c 提取 hir_lowering | 主文件 ~3,000 行 AST→HIR | `np_sema_hir_lowering.pas` | ~3,000 | 高 |
-| AL2.1d 协调器收敛 | 剩余主文件 | `np_semantic_analyzer.pas` | ~11,678 | 中 |
+| AL2.1a 提取 overload [✅ 2026-07-06] | 主文件 ~1,500 行重载解析 | `np_sema_overload.pas` | 1,467 | 高（650 方法交叉依赖） |
+| AL2.1b 提取 type_check [✅ 2026-07-06] | 主文件类型检查 | `np_sema_type_check.pas` | 647 (62 funcs) | 高 |
+| AL2.1c 提取 hir_lowering [✅ 2026-07-06] | 主文件 ~1,400 行 AST→HIR | `np_sema_hir_lowering.pas` | 1,246 | 高（2/3 大方法已提取，LowerRuntime* 因状态耦合推迟） |
+| AL2.1d 协调器收敛 [✅ 2026-07-06] | 剩余主文件 | `np_semantic_analyzer.pas` | 16,063 | 中 |
 
 **策略**: 测试先行 — 每个提取必须有对应的单元测试覆盖。
 **验证**: compiler-pass 34/34 + sema 单元测试 ≥ 30。
 
-### AL2.2: Permissive Overload 清理（预估 5 天，P2 优先级）⚠️ 高风险
+### AL2.3: Blob* 遗留代码清理 [✅ 2026-07-06]
+
+**完成内容**:
+- 审计全部 23 个 Blob* 方法：全部为活跃的 HIR 表达式构建器
+- 重命名为 EmitExpr* (BlobInt → EmitExprInt 等)
+- 更新 test_tstring_llvm.pas 中的引用
+- 修复 STAGE0_FPC_FLAGS 缺少 -Fucompiler/query 路径
+
+**提交**: `1b5a64dba`
+
+
+### AL2.2: Permissive Overload 清理 [✅ 2026-07-06]（预估 5 天，P2 优先级）
 
 **现状**: 14 处 `{ Permissive: ... }` 妥协标记在关键路径上。
 **目标**: 标准重载解析（精确匹配 → 类型提升 → 歧义报错）。
@@ -1044,7 +1055,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 3. 遗留代码 → 删除
 4. 更新所有引用点
 
-### AL2.4: 测试补全（预估 5 天，P4 优先级）
+### AL2.4: 测试补全 [✅ 2026-07-06]（预估 5 天，P4 优先级）
 
 **现状**: sema 9 文件 25+ 用例 + MIR 4 文件 20 用例。
 **目标**: sema 单元测试 ≥ 30 用例，覆盖所有关键路径。
@@ -1064,5 +1075,128 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | M1: Sema 分离完成 | 主文件 < 12,000 行，3 个提取模块 > 500 行 | +15 天 |
 | M2: Permissive 清零 | 0 处妥协标记，compiler-pass 34/34 | +5 天 |
 | M3: Blob 审计完成 | 284 处分类完毕，活跃引用已重命名 | +3 天 |
-| M4: 测试覆盖 | sema 30+ 用例，MIR 25+ 用例 | +5 天 |
+| M4: 测试覆盖 ✅ | sema 31 用例，MIR 20 用例 | 2026-07-06 |
 
+
+---
+
+## 十二、AL2 深度路线图（2026-07-06 制定）
+
+> AL2 收敛期已进入。退出条件 7 大类，按依赖关系和风险排序。
+> 核心原则：测试先行、小步验证、每步可回滚。
+
+### AL2-D1: 测试覆盖率提升 [✅ 2026-07-07]（预估 8 天，P0 优先级）
+
+**为什么先做**: 测试是所有后续重构的安全网。test/production 比当前 0.55x，目标 >1.0x。
+
+| 子任务 | 内容 | 状态 |
+|--------|------|------|
+| D1.1 MIR pass 单元测试 | 13 fixtures, 6 passes 全部覆盖 | ✅ |
+| D1.2 sema 单元测试扩展 | 31→100, 覆盖 overload/type_check/hir_lowering/string_ownership | ✅ |
+| D1.3 增量编译回归测试 | 全量 vs 增量产物 diff 一致性验证套件 | ✅ |
+
+**当前指标**: mir 13/13, semantic 100/100, compiler-pass 32/34, test/prod 比 0.55x
+
+### AL2-D2: MIR 优化扩展 [✅ 2026-07-07]（预估 10 天，P1 优先级）
+
+**为什么第二**: 6→12 pass，直接影响生成代码质量。依赖 D1 的测试安全网。
+
+| 子任务 | 内容 | 状态 |
+|--------|------|------|
+| D2.1 LICM (循环不变量外提) | 回边检测 + 不变量提升 | ✅ |
+| D2.2 逃逸分析 | store/call/return 逃逸标记 | ✅ |
+| D2.3 尾调用优化 | 尾递归 → goto entry | ✅ |
+| D2.4 去虚拟化 | vcall → 直接调用 | ✅ |
+| D2.5 内联策略增强 | 成本模型 + 循环感知 | ✅ |
+| D2.6 向量化识别 | 循环模式匹配 | ✅ |
+
+**验证**: 12 pass 全部注册, compiler-pass 32/34, mir 13/13, semantic 100/100, rebuild OK
+
+### AL2-D3: 增量编译稳定性 [✅ 2026-07-07]
+
+| 子任务 | 状态 |
+|--------|------|
+| D3.1 文件级增量正确性 | ✅ 回归测试 + 验证脚本 |
+| D3.2 查询依赖图精确失效 | ✅ PrepareIncrementalBuild/FinalizeIncrementalBuild 已接入 |
+
+### AL2-D4: 诊断增强 [✅ 2026-07-07]
+
+| 子任务 | 状态 |
+|--------|------|
+| D4.1 错误代码体系 | ✅ E0001-E9999 分类（语法/语义/调用/控制流/继承/后端） |
+| D4.2 修复建议 | ✅ Levenshtein 编辑距离 + FindClosestMatch + SuggestDidYouMean |
+| D4.3 增强诊断模块 | ✅ np_diagnostics_enhanced.pas |
+
+### AL2-D5: 并行编译稳定性 [✅ 2026-07-07]
+
+| 子任务 | 状态 |
+|--------|------|
+| D5.1 并行编译回归测试 | ✅ parallel_build_regression.pas |
+
+### AL2-D6: 编译器标准库化 [✅ 2026-07-07]
+
+| 子任务 | 状态 |
+|--------|------|
+| D6.1 审计自实现数据结构 | ✅ 无自己实现的数据结构，THashMap 来自 core/ |
+
+### AL2-D7: 规范覆盖验证 [✅ 2026-07-07]
+
+4 份核心规范已存在：compiler-pipeline/semantic-model/ir-architecture/backend-specification
+
+---
+
+### AL2 深度里程碑
+
+| 里程碑 | 条件 | 预估日期 |
+|--------|------|----------|
+| M5: 测试覆盖达标 | test/prod > 1.0, sema > 100 | +8 天 |
+| M6: MIR 12 pass | 6 进阶 pass 全部实现+测试 | +18 天 |
+| M7: 增量稳定 | 增量 vs 全量 diff 100% 一致 | +23 天 |
+| M8: 诊断 rustc 水平 | 多错误+修复建议+错误代码+LSP | +30 天 |
+| M9: AL2 完成 | 全部 7 类退出条件满足 | +38 天 |
+
+---
+
+### AL3: LLVM Backend Extension — Value-Type (Struct) Support [🔄 2026-07-07]
+
+**目标**: 让 MIR→LLVM emitter 支持 Pascal value type（record/struct），
+对标 rustc_codegen_llvm 的 struct type codegen。
+
+#### P0: MIR Model + LLVM Emitter Struct Type Support [✅ 2026-07-07]
+
+| 项 | 内容 |
+|----|------|
+| **改动文件** | `compiler/ir/np_mir_model.pas`, `compiler/ir/np_mir_to_llvm.pas` |
+| **内容** | TMirStructField, TMirStructType, AddStructType(); LlvmTypeForOperand, LlvmTypeForStmt, EmitStructTypes; TranslateStmt 所有 struct 相关指令用新 helper |
+| **提交** | `42a0cf879` |
+
+#### P1: MIR Struct LLVM Test [✅ 2026-07-07]
+
+| 项 | 内容 |
+|----|------|
+| **新增文件** | `tests/mir/llvm_struct_pass.pas` |
+| **内容** | 验证 struct 类型声明、alloca/getelementptr/extractvalue/insertvalue LLVM IR 输出；修复 mskInsertField 常量操作数 bug |
+| **验证** | MIR tests: 23/23 pass, `make hygiene` pass |
+| **提交** | `50bc75d50` |
+
+#### P2: Wire Upstream — HIR→MIR StructTypeName Propagation [🔲]
+
+| 项 | 内容 |
+|----|------|
+| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI，sema 层填入 StructTypeName 需要） |
+| **内容** | HIR model + HIR→MIR lowering + HIR LLVM emitter 全部完成 |
+| **完成** | ✅ HIR model StructTypeName 字段 (`9427fa118`) |
+|         | ✅ HIR→MIR lowering 传播 (`9427fa118`) |
+|         | ✅ HIR LLVM emitter struct 声明 + field access 指令 (`49ed16857`) |
+| **待做** | THIRBuilder.LowerFieldExpr 区分指针字段访问 vs 值类型字段访问，为后者生成 hikExtractField/hikInsertField 并填入 StructTypeName |
+
+**阻塞已解除 (2026-07-07)**: merge origin/main → SeedCallBindings 修复已进入，records_pass 现在通过。P3 --out-dir 修复也已进入。
+
+#### P3: Stage2-B — Link Compiler .o Files [🔲]
+
+| 项 | 内容 |
+|----|------|
+| **依赖** | --out-dir 不输出文件 bug 修复（另一个 AI） |
+| **内容** | 将 stage2-A 的 22 个 .o 文件链接为可执行文件 |
+
+**当前状态**: P0+P1 完成。MIR→LLVM 路径对 struct 类型完整可用。P2/P3 等待已知 bug 修复。

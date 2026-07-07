@@ -54,11 +54,12 @@ type
     ITcpStream, ITlsTcpStreamInfo)
   private
     FInner: ITcpStream;
+    FIStream: IStream;
     FStream: TSSLStream;
     FClosed: Boolean;
     function TimeoutMsFromDeadline(const ADeadline: TDeadline): Integer;
   public
-    constructor Create(const AInner: ITcpStream; const AStream: TSSLStream);
+    constructor Create(const AInner: ITcpStream; const AStream: IStream);
     destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -101,7 +102,7 @@ begin
   if AALPNProtocols <> '' then
     LConnector := LConnector.WithALPN(AALPNProtocols);
   LTlsStream := LConnector.ConnectStream(LTransport, AServerName);
-  Result := TTlsTcpStream.Create(AConn, LTlsStream as TSSLStream);
+  Result := TTlsTcpStream.Create(AConn, LTlsStream);
 end;
 
 function NewTlsServerTcpStream(const AConn: ITcpStream;
@@ -118,7 +119,7 @@ begin
   LTransport := TTlsTransportStream.Create(AConn);
   LAcceptor := TSSLAcceptor.FromContext(AContext);
   LTlsStream := LAcceptor.AcceptStream(LTransport);
-  Result := TTlsTcpStream.Create(AConn, LTlsStream as TSSLStream);
+  Result := TTlsTcpStream.Create(AConn, LTlsStream);
 end;
 
 function TlsTcpStreamSelectedALPN(const AConn: ITcpStream): string;
@@ -184,7 +185,7 @@ end;
 { TTlsTcpStream }
 
 constructor TTlsTcpStream.Create(const AInner: ITcpStream;
-  const AStream: TSSLStream);
+  const AStream: IStream);
 begin
   inherited Create;
   if AInner = nil then
@@ -192,14 +193,16 @@ begin
   if AStream = nil then
     raise EArgumentError.Create('TLS stream requires TLS transport');
   FInner := AInner;
-  FStream := AStream;
+  FIStream := AStream;
+  FStream := AStream as TSSLStream;
   FClosed := False;
 end;
 
 destructor TTlsTcpStream.Destroy;
 begin
   Close;
-  FreeAndNil(FStream);
+  FStream := nil;
+  FIStream := nil;
   FInner := nil;
   inherited Destroy;
 end;

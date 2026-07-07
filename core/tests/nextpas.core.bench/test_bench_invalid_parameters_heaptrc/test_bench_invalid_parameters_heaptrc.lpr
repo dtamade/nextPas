@@ -4,7 +4,7 @@ program test_bench_invalid_parameters_heaptrc;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.exception,
   nextpas.core.bench,
@@ -12,469 +12,364 @@ uses
   nextpas.core.time.base,
   nextpas.core.test;
 
-procedure ExpectSetMinDurationRaised;
+{ === Suite Config Validation === }
+
+procedure Test_SetMinDuration_Zero;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetMinDuration(TDuration.FromNanoseconds(0));
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetMinDuration(TDuration.FromNanoseconds(0));
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetMinDuration');
-    Halt(2);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetMinDuration (expected EBenchInvalidParam)');
-    Halt(102);
-  end;
+  Check(LRaised, 'SetMinDuration(0) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectSetMaxIterationsRaised;
+procedure Test_SetMaxIterations_Zero;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetMaxIterations(0);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetMaxIterations(0);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetMaxIterations');
-    Halt(3);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetMaxIterations (expected EBenchInvalidParam)');
-    Halt(103);
-  end;
+  Check(LRaised, 'SetMaxIterations(0) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectSetMinSamplesRaised;
+procedure Test_SetMinSamples_Zero;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetMinSamples(0);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetMinSamples(0);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetMinSamples');
-    Halt(4);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetMinSamples (expected EBenchInvalidParam)');
-    Halt(104);
-  end;
+  Check(LRaised, 'SetMinSamples(0) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectAddParallelRaised;
+procedure Test_SetWarmupIters_Negative;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.AddParallel('BadParallel', nil, 0);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetWarmupIters(-1);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=AddParallel');
-    Halt(5);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=AddParallel (expected EBenchInvalidParam)');
-    Halt(105);
-  end;
+  Check(LRaised, 'SetWarmupIters(-1) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectSetWarmupItersRaised;
+procedure Test_SetTimeout_NegativeMs;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetWarmupIters(-1);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetTimeout(-100);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetWarmupIters');
-    Halt(6);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetWarmupIters (expected EBenchInvalidParam)');
-    Halt(106);
-  end;
+  Check(LRaised, 'SetTimeout(-100) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectAddNilFuncRaised;
+procedure Test_SetTimeout_NegativeDuration;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.Add('NilFunc', nil);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.SetTimeout(TDuration.FromMilliseconds(-500));
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=Add(nil)');
-    Halt(7);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=Add(nil) (expected EBenchInvalidParam)');
-    Halt(107);
-  end;
+  Check(LRaised, 'SetTimeout(TDuration<0) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectAddLoopNilFuncRaised;
+{ === Nil Function Guards === }
+
+procedure Test_Add_Nil;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.AddLoop('NilLoop', nil);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.Add('NilFunc', nil);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=AddLoop(nil)');
-    Halt(8);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=AddLoop(nil) (expected EBenchInvalidParam)');
-    Halt(108);
-  end;
+  Check(LRaised, 'Add(nil) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectAddRangeNilFuncRaised;
+procedure Test_AddSimple_Nil;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.AddRange('NilRange', nil, [1, 2, 3]);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.AddSimple('NilSimple', nil);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=AddRange(nil)');
-    Halt(9);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=AddRange(nil) (expected EBenchInvalidParam)');
-    Halt(109);
-  end;
+  Check(LRaised, 'AddSimple(nil) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectSetTimeoutNegativeRaised;
+procedure Test_AddLoop_Nil;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetTimeout(-100);
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.AddLoop('NilLoop', nil);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetTimeout(-100)');
-    Halt(11);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetTimeout(-100) (expected EBenchInvalidParam)');
-    Halt(111);
-  end;
+  Check(LRaised, 'AddLoop(nil) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectSetTimeoutDurationNegativeRaised;
+procedure Test_AddRange_Nil;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.SetTimeout(TDuration.FromMilliseconds(-500));
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.AddRange('NilRange', nil, [1, 2, 3]);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=SetTimeout(TDuration<0)');
-    Halt(12);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=SetTimeout(TDuration<0) (expected EBenchInvalidParam)');
-    Halt(112);
-  end;
+  Check(LRaised, 'AddRange(nil) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectRemoveByNameNotFoundRaised;
+procedure Test_AddParallel_Nil;
 var
-  LRaised: Boolean;
-  LCorrectType: Boolean;
   LSuite: IBenchSuite;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
-  LSuite := TBenchSuite.Create('Invalid');
+  LSuite := TBenchSuite.Create('X');
   try
-    try
-      LSuite.RemoveByName('NonExistent');
-    except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
-    end;
-  finally
-    LSuite := nil;
+    LSuite.AddParallel('BadParallel', nil, 0);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=RemoveByName(NonExistent)');
-    Halt(13);
-  end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=RemoveByName(NonExistent) (expected EBenchInvalidParam)');
-    Halt(113);
-  end;
+  Check(LRaised, 'AddParallel(nil,0) should raise EBenchInvalidParam');
+  LSuite := nil;
 end;
 
-procedure ExpectRunOneNilFuncRaised;
+{ === Not-Found Guards === }
+
+procedure Test_RemoveByName_NotFound;
 var
+  LSuite: IBenchSuite;
   LRaised: Boolean;
-  LCorrectType: Boolean;
+begin
+  LRaised := False;
+  LSuite := TBenchSuite.Create('X');
+  try
+    LSuite.RemoveByName('NonExistent');
+  except
+    on E: EBenchInvalidParam do LRaised := True;
+  end;
+  Check(LRaised, 'RemoveByName(NonExistent) should raise EBenchInvalidParam');
+  LSuite := nil;
+end;
+
+procedure Test_SetEntryCollectRawSamples_NotFound;
+var
+  LSuite: IBenchSuite;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LSuite := TBenchSuite.Create('X');
+  try
+    LSuite.SetEntryCollectRawSamples('NonExistent', True);
+  except
+    on E: EBenchInvalidParam do LRaised := True;
+  end;
+  Check(LRaised, 'SetEntryCollectRawSamples(NonExistent) should raise EBenchInvalidParam');
+  LSuite := nil;
+end;
+
+{ === TBenchRunner Guards === }
+
+procedure Test_RunOne_Nil;
+var
   LRunner: TBenchRunner;
+  LRaised: Boolean;
 begin
   LRaised := False;
-  LCorrectType := False;
   LRunner := TBenchRunner.Create;
   try
     try
       LRunner.RunOne('NilFunc', nil);
     except
-      on E: EBenchInvalidParam do
-      begin
-        LRaised := True;
-        LCorrectType := True;
-      end;
-      on E: Exception do
-        LRaised := True;
+      on E: EBenchInvalidParam do LRaised := True;
     end;
   finally
     LRunner.Free;
   end;
+  Check(LRaised, 'RunOne(nil) should raise EBenchInvalidParam');
+end;
 
-  if not LRaised then
-  begin
-    WriteLn('MISSING_EXCEPTION=RunOne(nil)');
-    Halt(10);
+{ === Suite Name Validation === }
+
+procedure Test_Create_EmptyName;
+var
+  LSuite: IBenchSuite;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LSuite := nil;
+  try
+    LSuite := TBenchSuite.Create('');
+  except
+    on E: EBenchInvalidParam do LRaised := True;
   end;
-  if not LCorrectType then
-  begin
-    WriteLn('WRONG_EXCEPTION_TYPE=RunOne(nil) (expected EBenchInvalidParam)');
-    Halt(110);
+  Check(LRaised, 'Create(empty name) should raise EBenchInvalidParam');
+  LSuite := nil;
+end;
+
+{ === F-10: TryRemoveByName === }
+
+procedure BenchFast(const ACtx: IBenchContext);
+begin
+end;
+
+procedure Test_TryRemoveByName_Found;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryRemove')
+    .Add('A', @BenchFast)
+    .Add('B', @BenchFast);
+  Check(LSuite.TryRemoveByName('A'), 'TryRemoveByName(A) should return True');
+  LSuite := nil;
+end;
+
+procedure Test_TryRemoveByName_NotFound;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryRemove')
+    .Add('A', @BenchFast);
+  Check(not LSuite.TryRemoveByName('NonExistent'), 'TryRemoveByName(NonExistent) should return False');
+  LSuite := nil;
+end;
+
+{ === F-10: TryLoadBaseline === }
+
+procedure Test_TryLoadBaseline_FileNotFound;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryLoad');
+  Check(not LSuite.TryLoadBaseline('/nonexistent/path/baseline.json'),
+    'TryLoadBaseline(nonexistent) should return False');
+  LSuite := nil;
+end;
+
+{ === Post-Run Guard === }
+
+procedure Test_GuardNotRun;
+var
+  LSuite: IBenchSuite;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  LSuite := TBenchSuite.Create('Guard')
+    .SetMinDuration(TDuration.FromMilliseconds(1))
+    .SetMaxIterations(10)
+    .SetMinSamples(1)
+    .SetWarmupIters(0);
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Run;
+
+  try
+    LSuite.Add('New', @BenchFast);
+  except
+    on E: EBenchError do
+      LRaised := True;
   end;
+  Check(LRaised, 'Adding entry after Run should raise EBenchError');
+  LSuite := nil;
 end;
 
 var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.bench.invalid_parameters.heaptrc');
-  T.Test('SetMinDuration(0) raises EBenchInvalidParam', @ExpectSetMinDurationRaised);
-  T.Test('SetMaxIterations(0) raises EBenchInvalidParam', @ExpectSetMaxIterationsRaised);
-  T.Test('SetMinSamples(0) raises EBenchInvalidParam', @ExpectSetMinSamplesRaised);
-  T.Test('AddParallel(nil,0) raises EBenchInvalidParam', @ExpectAddParallelRaised);
-  T.Test('SetWarmupIters(-1) raises EBenchInvalidParam', @ExpectSetWarmupItersRaised);
-  T.Test('Add(nil) raises EBenchInvalidParam', @ExpectAddNilFuncRaised);
-  T.Test('AddLoop(nil) raises EBenchInvalidParam', @ExpectAddLoopNilFuncRaised);
-  T.Test('AddRange(nil) raises EBenchInvalidParam', @ExpectAddRangeNilFuncRaised);
-  T.Test('RunOne(nil) raises EBenchInvalidParam', @ExpectRunOneNilFuncRaised);
-  T.Test('SetTimeout(-100) raises EBenchInvalidParam', @ExpectSetTimeoutNegativeRaised);
-  T.Test('SetTimeout(TDuration<0) raises EBenchInvalidParam', @ExpectSetTimeoutDurationNegativeRaised);
-  T.Test('RemoveByName(NonExistent) raises EBenchInvalidParam', @ExpectRemoveByNameNotFoundRaised);
+
+  { Suite Config Validation (6) }
+  T.Test('SetMinDuration(0) raises EBenchInvalidParam', @Test_SetMinDuration_Zero);
+  T.Test('SetMaxIterations(0) raises EBenchInvalidParam', @Test_SetMaxIterations_Zero);
+  T.Test('SetMinSamples(0) raises EBenchInvalidParam', @Test_SetMinSamples_Zero);
+  T.Test('SetWarmupIters(-1) raises EBenchInvalidParam', @Test_SetWarmupIters_Negative);
+  T.Test('SetTimeout(-100) raises EBenchInvalidParam', @Test_SetTimeout_NegativeMs);
+  T.Test('SetTimeout(TDuration<0) raises EBenchInvalidParam', @Test_SetTimeout_NegativeDuration);
+
+  { Nil Function Guards (5) }
+  T.Test('Add(nil) raises EBenchInvalidParam', @Test_Add_Nil);
+  T.Test('AddSimple(nil) raises EBenchInvalidParam', @Test_AddSimple_Nil);
+  T.Test('AddLoop(nil) raises EBenchInvalidParam', @Test_AddLoop_Nil);
+  T.Test('AddRange(nil) raises EBenchInvalidParam', @Test_AddRange_Nil);
+  T.Test('AddParallel(nil,0) raises EBenchInvalidParam', @Test_AddParallel_Nil);
+
+  { Not-Found Guards (2) }
+  T.Test('RemoveByName(NonExistent) raises EBenchInvalidParam', @Test_RemoveByName_NotFound);
+  T.Test('SetEntryCollectRawSamples(NonExistent) raises EBenchInvalidParam', @Test_SetEntryCollectRawSamples_NotFound);
+
+  { TBenchRunner Guards (1) }
+  T.Test('RunOne(nil) raises EBenchInvalidParam', @Test_RunOne_Nil);
+
+  { Suite Name Validation (1) }
+  T.Test('Create(empty name) raises EBenchInvalidParam', @Test_Create_EmptyName);
+
+  { F-10: TryRemoveByName (2) }
+  T.Test('TryRemoveByName found', @Test_TryRemoveByName_Found);
+  T.Test('TryRemoveByName not found', @Test_TryRemoveByName_NotFound);
+
+  { F-10: TryLoadBaseline (1) }
+  T.Test('TryLoadBaseline file not found', @Test_TryLoadBaseline_FileNotFound);
+
+  { Post-Run Guard (1) }
+  T.Test('GuardNotRun prevents mutation', @Test_GuardNotRun);
+
   T.Run;
   T.Summary;
-
-  WriteLn('INVALID_PARAMETERS_OK');
-  WriteLn('ALL_EXCEPTION_TYPES_VERIFIED');
 end.

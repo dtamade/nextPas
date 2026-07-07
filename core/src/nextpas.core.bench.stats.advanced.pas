@@ -184,6 +184,16 @@ type
     function Count: Integer;
   end;
 
+{** Bootstrap 假设检验（独立函数，无需 TAdvancedStats 实例）
+ *  检验两组数据的均值是否有显著差异（Fisher 置换检验）
+ *  @param A 第一组数据
+ *  @param B 第二组数据
+ *  @param AIterations 重采样次数（默认 10000）
+ *  @param ASeed PRNG 种子（默认 0 = 使用 monotonic time）
+ *  @raises EBenchInvalidParam 当任一数组为空时 }
+function BootstrapTestDifference(const A, B: TDoubleArray;
+  AIterations: Integer = 10000; ASeed: UInt64 = 0): TBootstrapTestResult;
+
 implementation
 
 uses
@@ -754,6 +764,12 @@ end;
 
 function TAdvancedStats.BootstrapTestDifference(const A, B: TDoubleArray;
   AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
+begin
+  Result := nextpas.core.bench.stats.advanced.BootstrapTestDifference(A, B, AIterations, ASeed);
+end;
+
+function BootstrapTestDifference(const A, B: TDoubleArray;
+  AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
 { Bootstrap 假设检验: 检验两组数据的均值差异是否显著
   方法: Fisher 置换检验
   1. 合并两组数据
@@ -776,13 +792,7 @@ begin
   LNB := Length(B);
 
   if (LNA = 0) or (LNB = 0) then
-  begin
-    Result.ObservedDiff := 0.0;
-    Result.PValue := 1.0;
-    Result.IsSignificant := False;
-    Result.Iterations := 0;
-    Exit;
-  end;
+    raise EBenchInvalidParam.Create('BootstrapTestDifference: input arrays must not be empty');
 
   // 计算观测差异
   LMeanA := 0.0;

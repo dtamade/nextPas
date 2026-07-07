@@ -95,7 +95,7 @@ begin
   CheckEqual('Expectation Failed', HttpStatusText(417), '417');
   CheckEqual('Bad Gateway', HttpStatusText(502), '502');
   CheckEqual('Service Unavailable', HttpStatusText(503), '503');
-  CheckEqual('Unknown', HttpStatusText(999), '999 unknown');
+  CheckEqual('999', HttpStatusText(999), '999 unknown');
 end;
 
 procedure TestHttpStatusClassHelpers;

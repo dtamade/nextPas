@@ -504,10 +504,10 @@ def main() -> int:
     backend_files = {
         "scalar": dispatch_file,
         "sse2": repo_root / "src" / "nextpas.core.simd.sse2.pas",
-        "sse3": repo_root / "src" / "nextpas.core.simd.sse3.pas",
+        "sse3": repo_root / "src" / "nextpas.core.simd.sse2.pas",
         "ssse3": repo_root / "src" / "nextpas.core.simd.ssse3.pas",
-        "sse41": repo_root / "src" / "nextpas.core.simd.sse41.pas",
-        "sse42": repo_root / "src" / "nextpas.core.simd.sse42.pas",
+        "sse41": repo_root / "src" / "nextpas.core.simd.sse2.pas",
+        "sse42": repo_root / "src" / "nextpas.core.simd.sse2.pas",
         "avx2": repo_root / "src" / "nextpas.core.simd.avx2.pas",
         "avx512": repo_root / "src" / "nextpas.core.simd.avx512.pas",
         "neon": repo_root / "src" / "nextpas.core.simd.neon.pas",

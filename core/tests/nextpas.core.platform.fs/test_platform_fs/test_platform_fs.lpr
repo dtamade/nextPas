@@ -240,6 +240,52 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestReadFile;
+const
+  PATH = '/tmp/nextpas_read_file_test.dat';
+  DATA = 'hello dynamic read';
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  LData: Pointer;
+  LLen: PtrUInt;
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 18, W);
+  platform_file_close(H);
+
+  LData := nil;
+  LLen := 0;
+  Check(platform_fs_read_file(PATH, LData, LLen) = 0, 'read_file ok');
+  Check(LData <> nil, 'data not nil');
+  Check(LLen = 18, 'len = 18');
+  Check(PAnsiChar(LData)[0] = 'h', 'first byte');
+  Check(PAnsiChar(LData)[17] = 'd', 'last byte');
+  platform_fs_free_buf(LData);
+
+  platform_file_unlink(PATH);
+end;
+
+procedure TestReadFileNonExistent;
+var
+  LData: Pointer;
+  LLen: PtrUInt;
+begin
+  LData := nil;
+  LLen := 0;
+  Check(platform_fs_read_file('/tmp/nextpas_nonexistent_xyz_read', LData, LLen) <> 0,
+    'read non-existent fails');
+  Check(LData = nil, 'data remains nil on failure');
+end;
+
+procedure TestIsExecutable;
+begin
+  Check(platform_fs_is_executable('/bin/sh'), '/bin/sh is executable');
+  Check(not platform_fs_is_executable('/etc/hostname'), '/etc/hostname not executable');
+  Check(not platform_fs_is_executable('/tmp/nextpas_nonexistent_xyz_exec'), 'non-existent not executable');
+end;
+
 procedure TestFileIoContract;
 var
   LSource: string;
@@ -327,6 +373,9 @@ begin
   T.Test('copy_file', @TestCopyFile);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
+  T.Test('read_file_dynamic', @TestReadFile);
+  T.Test('read_file non-existent', @TestReadFileNonExistent);
+  T.Test('is_executable', @TestIsExecutable);
   T.Test('file I/O contract', @TestFileIoContract);
   if not T.Run then Halt(1);
 end.

@@ -303,6 +303,9 @@ function NormalQuantile(AP: Double): Double;
 
 implementation
 
+uses
+  nextpas.core.math.scalar;
+
 { ===== Xoroshiro128+ PRNG (Phase B.1) ===== }
 
 procedure TXoroshiro128Plus.Init(ASeed: UInt64);
@@ -564,9 +567,9 @@ begin
   LP := 0.3275911;
 
   // 计算 erf(x / sqrt(2))
-  LAbsX := Abs(X) / System.Sqrt(2.0);
+  LAbsX := Abs(X) / Sqrt(2.0);
   LT := 1.0 / (1.0 + LP * LAbsX);
-  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * System.Exp(-LAbsX * LAbsX);
+  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-LAbsX * LAbsX);
 
   // 转换为 CDF
   if X >= 0 then
@@ -609,7 +612,7 @@ begin
 
   if AP < LP_LOW then
   begin
-    LQ := System.Sqrt(-2.0 * System.Ln(AP));
+    LQ := Sqrt(-2.0 * Ln(AP));
     Result := (((((LC1 * LQ + LC2) * LQ + LC3) * LQ + LC4) * LQ + LC5) * LQ + LC6) /
               ((((LD1 * LQ + LD2) * LQ + LD3) * LQ + LD4) * LQ + 1.0);
   end
@@ -622,7 +625,7 @@ begin
   end
   else
   begin
-    LQ := System.Sqrt(-2.0 * System.Ln(1.0 - AP));
+    LQ := Sqrt(-2.0 * Ln(1.0 - AP));
     Result := -(((((LC1 * LQ + LC2) * LQ + LC3) * LQ + LC4) * LQ + LC5) * LQ + LC6) /
                ((((LD1 * LQ + LD2) * LQ + LD3) * LQ + LD4) * LQ + 1.0);
   end;

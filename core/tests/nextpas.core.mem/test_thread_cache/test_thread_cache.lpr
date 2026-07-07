@@ -13,13 +13,16 @@ uses
 var
   T: TTestSuite;
 
-{ Simple backing store: pre-allocated blocks for refill/flush. }
+{ Simple backing store: pre-allocated blocks for refill/flush.
+  Each block is SizeOf(Pointer) bytes (intrusive free-list node).
+  BLOCK_SPACING bytes between block starts to avoid false sharing. }
 const
-  BACKING_BLOCK_SIZE = 256;
+  BLOCK_SPACING = SizeOf(Pointer);
   BACKING_POOL_SIZE = 128;
 
 var
-  GPools: array[0..MEM_SIZECLASS_COUNT - 1] of array[0..BACKING_POOL_SIZE - 1] of Byte;
+  { Each class pool holds BACKING_POOL_SIZE pointer-sized blocks. }
+  GPools: array[0..MEM_SIZECLASS_COUNT - 1] of array[0..BACKING_POOL_SIZE * BLOCK_SPACING - 1] of Byte;
   GAllocCount: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
   GFreeCount: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
 
@@ -32,8 +35,8 @@ begin
   begin
     if GAllocCount[AIndex] >= BACKING_POOL_SIZE then
       Break;
-    PPointer(PByte(@GPools[AIndex]) + GAllocCount[AIndex] * BACKING_BLOCK_SIZE)^ := nil;
-    ABlocks^ := @GPools[AIndex][GAllocCount[AIndex] * BACKING_BLOCK_SIZE];
+    PPointer(PByte(@GPools[AIndex]) + GAllocCount[AIndex] * BLOCK_SPACING)^ := nil;
+    ABlocks^ := @GPools[AIndex][GAllocCount[AIndex] * BLOCK_SPACING];
     Inc(ABlocks);
     Inc(GAllocCount[AIndex]);
     Inc(Result);

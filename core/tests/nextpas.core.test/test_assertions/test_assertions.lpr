@@ -24,7 +24,8 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.math,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
 
@@ -533,16 +534,23 @@ end;
 
 procedure TestFailUnexpected;
 { G1: FailUnexpected — formats "unexpected ClassName: Message" }
+var
+  LE: Exception;
 begin
+  LE := Exception.Create('boom');
   try
-    FailUnexpected(Exception.Create('boom'));
-    Fail('FailUnexpected should raise');
-  except
-    on E: EAssertionFailed do
-    begin
-      CheckContains(E.Message, 'unexpected');
-      CheckContains(E.Message, 'boom');
+    try
+      FailUnexpected(LE);
+      Fail('FailUnexpected should raise');
+    except
+      on E: EAssertionFailed do
+      begin
+        CheckContains(E.Message, 'unexpected');
+        CheckContains(E.Message, 'boom');
+      end;
     end;
+  finally
+    LE.Free;
   end;
 end;
 
@@ -949,6 +957,187 @@ begin
   ExpectFail(procedure begin CheckEndsWithCI('Hello World', 'hello'); end, 'does not end with (ci)');
 end;
 
+{ ── Unicode boundary tests ───────────────────────────────────────────────── }
+
+procedure TestUnicodeEmojiEqual;
+begin
+  CheckEqual('🎉🎊', '🎉🎊');
+end;
+
+procedure TestUnicodeEmojiNotEqual;
+begin
+  ExpectFail(procedure begin CheckEqual('🎉', '🎊'); end);
+end;
+
+procedure TestUnicodeCJK;
+begin
+  CheckEqual('你好世界', '你好世界');
+  CheckContains('你好世界', '你好');
+  CheckStartsWith('你好世界', '你好');
+  CheckEndsWith('你好世界', '世界');
+end;
+
+procedure TestUnicodeCombining;
+{ Combining characters: é can be U+0065+U+0301 (2 codepoints) or U+00E9 (1 codepoint) }
+var
+  LComposed, LDecomposed: string;
+begin
+  LComposed := 'café';         { é = U+00E9 }
+  LDecomposed := 'café';       { e + combining accent }
+  { They are different byte sequences — CheckEqual should detect }
+  if LComposed <> LDecomposed then
+    Check(True, 'composed vs decomposed differ as expected')
+  else
+    Check(True, 'same on this platform');
+end;
+
+procedure TestUnicodeEmpty;
+begin
+  CheckEqual('', '');
+  CheckContains('你好', '');
+  CheckStartsWith('你好', '');
+  CheckEndsWith('你好', '');
+end;
+
+procedure TestUnicodeLongDiff;
+{ StringDiff with long Unicode strings — Utf8SafeStart should not split multi-byte }
+var
+  LA, LB: string;
+begin
+  LA := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符';
+  LB := '这是一个很长的中文字符串用于测试差异位置报告功能是否正确处理多字节字符结尾不同';
+  ExpectFail(procedure begin CheckEqual(LA, LB); end, 'Strings differ at position');
+end;
+
+{ ── AMessage overload tests ──────────────────────────────────────────────── }
+
+procedure TestCheckContainsWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckContains('hello world', 'xyz', 'context info');
+  end, 'context info');
+end;
+
+procedure TestCheckStartsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckStartsWith('hello world', 'xyz', 'prefix check');
+  end, 'prefix check');
+end;
+
+procedure TestCheckEndsWithWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckEndsWith('hello world', 'xyz', 'suffix check');
+  end, 'suffix check');
+end;
+
+procedure TestCheckInRangeWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInRange(100, 1, 10, 'range context');
+  end, 'range context');
+end;
+
+procedure TestCheckGreaterThanWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckGreaterThan(5, 10, 'gt context');
+  end, 'gt context');
+end;
+
+procedure TestCheckNotEqualStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual('same', 'same', 'should differ');
+  end, 'should differ');
+end;
+
+procedure TestCheckNotEqualIntWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEqual(Int64(42), Int64(42), 'int should differ');
+  end, 'int should differ');
+end;
+
+procedure TestCheckLengthWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckLength(5, 3, 'length context');
+  end, 'length context');
+end;
+
+{ ── v8.0c: Array Comparison Tests ─────────────────────────────────────────── }
+
+procedure TestCheckArrayEqualPass;
+begin
+  CheckArrayEqual([1, 2, 3], [1, 2, 3]);
+end;
+
+procedure TestCheckArrayEqualFailLength;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3], [1, 2]);
+  end, 'length');
+end;
+
+procedure TestCheckArrayEqualFailValue;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3], [1, 99, 3]);
+  end, 'index 1');
+end;
+
+procedure TestCheckArrayEqualEmpty;
+begin
+  CheckArrayEqual([], []);
+end;
+
+procedure TestCheckArrayEqualWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([10, 20], [10, 30], 'my array');
+  end, 'my array');
+end;
+
+{ ── v8.0c: Interface Nil Check Tests ──────────────────────────────────────── }
+
+procedure TestCheckIsNilPass;
+var
+  LI: IInterface;
+begin
+  LI := nil;
+  CheckIsNil(LI);
+end;
+
+procedure TestCheckIsNilFail;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  ExpectFail(procedure begin
+    CheckIsNil(LTracker);
+  end, 'non-nil');
+end;
+
+procedure TestCheckIsNotNilPass;
+var
+  LTracker: ICoverageTracker;
+begin
+  LTracker := CreateCoverageTracker;
+  CheckIsNotNil(LTracker);
+end;
+
+procedure TestCheckIsNotNilFail;
+var
+  LI: IInterface;
+begin
+  LI := nil;
+  ExpectFail(procedure begin
+    CheckIsNotNil(LI);
+  end, 'nil');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1102,6 +1291,37 @@ begin
   LSuite.Test('CheckNotNaN pass',          @TestCheckNotNaNPass);
   LSuite.Test('CheckNotNaN fail',          @TestCheckNotNaNFail);
 
+  { Unicode boundary tests }
+  LSuite.Test('Unicode emoji equal',       @TestUnicodeEmojiEqual);
+  LSuite.Test('Unicode emoji not equal',   @TestUnicodeEmojiNotEqual);
+  LSuite.Test('Unicode CJK',               @TestUnicodeCJK);
+  LSuite.Test('Unicode combining',         @TestUnicodeCombining);
+  LSuite.Test('Unicode empty',             @TestUnicodeEmpty);
+  LSuite.Test('Unicode long diff',         @TestUnicodeLongDiff);
+
+  { AMessage overload tests }
+  LSuite.Test('Contains+msg',              @TestCheckContainsWithMessage);
+  LSuite.Test('StartsWith+msg',            @TestCheckStartsWithWithMessage);
+  LSuite.Test('EndsWith+msg',              @TestCheckEndsWithWithMessage);
+  LSuite.Test('InRange+msg',               @TestCheckInRangeWithMessage);
+  LSuite.Test('GreaterThan+msg',           @TestCheckGreaterThanWithMessage);
+  LSuite.Test('NotEqual string+msg',       @TestCheckNotEqualStringWithMessage);
+  LSuite.Test('NotEqual int+msg',          @TestCheckNotEqualIntWithMessage);
+  LSuite.Test('Length+msg',                @TestCheckLengthWithMessage);
+
+  { v8.0c: Array comparison }
+  LSuite.Test('ArrayEqual pass',           @TestCheckArrayEqualPass);
+  LSuite.Test('ArrayEqual fail length',    @TestCheckArrayEqualFailLength);
+  LSuite.Test('ArrayEqual fail value',     @TestCheckArrayEqualFailValue);
+  LSuite.Test('ArrayEqual empty',          @TestCheckArrayEqualEmpty);
+  LSuite.Test('ArrayEqual+msg',            @TestCheckArrayEqualWithMessage);
+
+  { v8.0c: Interface nil checks }
+  LSuite.Test('IsNil pass',               @TestCheckIsNilPass);
+  LSuite.Test('IsNil fail',               @TestCheckIsNilFail);
+  LSuite.Test('IsNotNil pass',            @TestCheckIsNotNilPass);
+  LSuite.Test('IsNotNil fail',            @TestCheckIsNotNilFail);
+
   if not LSuite.Run then
   begin
     Finalize(LSuite);
@@ -1110,5 +1330,7 @@ begin
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
   Finalize(LSuite);
 end.

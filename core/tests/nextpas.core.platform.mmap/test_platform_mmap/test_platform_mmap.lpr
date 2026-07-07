@@ -239,6 +239,186 @@ begin
     '_SC_PAGESIZE', 'generic Unix base must expose sysconf page-size selector');
 end;
 
+procedure TestFlushReadWriteMap;
+const
+  PATH = '/tmp/nextpas_mmap_flush_test.dat';
+  DATA = 'flush test data 1234567890';
+var
+  LMap: TPlatformMappedFile;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LRet: Int32;
+begin
+  { Create a file with enough data }
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 26, LWritten);
+  platform_file_close(H);
+
+  { Map the file }
+  LRet := platform_mmap_file(PATH, LMap);
+  Check(LRet = 0, 'mmap file for flush test');
+
+  { Flush should succeed (use actual mapped size) }
+  LRet := platform_mmap_flush(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'flush succeeds');
+
+  platform_mmap_close(LMap);
+  platform_file_unlink(PATH);
+end;
+
+procedure TestLockUnlockReadWriteMap;
+const
+  PATH = '/tmp/nextpas_mmap_lock_test.dat';
+  DATA = 'lock test data';
+var
+  LMap: TPlatformMappedFile;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LRet: Int32;
+begin
+  { Create a file and write data }
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), 15, LWritten);
+  platform_file_close(H);
+
+  { Map the file }
+  LRet := platform_mmap_file(PATH, LMap);
+  Check(LRet = 0, 'mmap file for lock test');
+
+  { Lock should succeed }
+  LRet := platform_mmap_lock(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'lock succeeds');
+
+  { Unlock should succeed }
+  LRet := platform_mmap_unlock(LMap, 0, LMap.Size);
+  Check(LRet = 0, 'unlock succeeds');
+
+  platform_mmap_close(LMap);
+  platform_file_unlink(PATH);
+end;
+
+{ Error path tests }
+procedure TestDoubleCloseReturnsError;
+var
+  M: TPlatformMappedFile;
+begin
+  CreateTestFile;
+  Check(platform_mmap_file(TEST_PATH, M) = 0, 'mmap');
+  Check(platform_mmap_close(M) = 0, 'close first');
+  Check(platform_mmap_close(M) <> 0, 'close second returns error');
+  platform_file_unlink(TEST_PATH);
+end;
+
+procedure TestFlushAfterClose;
+var
+  M: TPlatformMappedFile;
+  LRet: Int32;
+begin
+  CreateTestFile;
+  Check(platform_mmap_file(TEST_PATH, M) = 0, 'mmap');
+  Check(platform_mmap_close(M) = 0, 'close');
+
+  { Flush after close should return error }
+  LRet := platform_mmap_flush(M, 0, 1);
+  Check(LRet <> 0, 'flush after close returns error');
+
+  platform_file_unlink(TEST_PATH);
+end;
+
+procedure TestLockAfterClose;
+var
+  M: TPlatformMappedFile;
+  LRet: Int32;
+begin
+  CreateTestFile;
+  Check(platform_mmap_file(TEST_PATH, M) = 0, 'mmap');
+  Check(platform_mmap_close(M) = 0, 'close');
+
+  { Lock after close should return error }
+  LRet := platform_mmap_lock(M, 0, 1);
+  Check(LRet <> 0, 'lock after close returns error');
+
+  platform_file_unlink(TEST_PATH);
+end;
+
+procedure TestUnlockAfterClose;
+var
+  M: TPlatformMappedFile;
+  LRet: Int32;
+begin
+  CreateTestFile;
+  Check(platform_mmap_file(TEST_PATH, M) = 0, 'mmap');
+  Check(platform_mmap_close(M) = 0, 'close');
+
+  { Unlock after close should return error }
+  LRet := platform_mmap_unlock(M, 0, 1);
+  Check(LRet <> 0, 'unlock after close returns error');
+
+  platform_file_unlink(TEST_PATH);
+end;
+
+procedure TestShmOpenNonExistent;
+var
+  B: TPlatformMappedFile;
+  LRet: Int32;
+begin
+  LRet := platform_shm_open('/nextpas_nonexistent_shm_xyz_999', pmaReadWrite, B);
+  Check(LRet <> 0, 'open non-existent shared memory returns error');
+end;
+
+procedure TestAnonymousMapReadWrite;
+var
+  M: TPlatformMappedFile;
+  LIndex: Integer;
+begin
+  Check(platform_mmap_create_anonymous(4096, pmaReadWrite, [pmfPrivate], M) = 0,
+    'anonymous map');
+  Check(M.Addr <> nil, 'anonymous addr');
+
+  { Write pattern }
+  for LIndex := 0 to 255 do
+    PByte(PtrUInt(M.Addr) + PtrUInt(LIndex))^ := Byte(LIndex);
+
+  { Read pattern }
+  for LIndex := 0 to 255 do
+    Check(PByte(PtrUInt(M.Addr) + PtrUInt(LIndex))^ = Byte(LIndex),
+      'anonymous byte ' + IntToStr(LIndex));
+
+  Check(platform_mmap_close(M) = 0, 'anonymous close');
+end;
+
+procedure TestMapLargeFileIntegrity;
+const
+  PATH = '/tmp/nextpas_mmap_large_integrity.dat';
+  SIZE = 1024 * 1024; { 1MB }
+var
+  H: TPlatformFileHandle;
+  M: TPlatformMappedFile;
+  LWritten: PtrUInt;
+  LIndex: Integer;
+  LBuf: array[0..4095] of Byte;
+begin
+  { Create 1MB file with pattern }
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  for LIndex := 0 to 255 do
+  begin
+    FillChar(LBuf, 4096, Byte(LIndex));
+    platform_file_write(H, @LBuf[0], 4096, LWritten);
+  end;
+  platform_file_close(H);
+
+  { Map and verify }
+  Check(platform_mmap_file(PATH, M) = 0, 'mmap 1MB');
+  Check(M.Size = SIZE, 'size = 1MB');
+
+  { Verify first and last bytes }
+  Check(PByte(M.Addr)^ = 0, 'first byte');
+  Check(PByte(PtrUInt(M.Addr) + M.Size - 1)^ = 255, 'last byte');
+
+  platform_mmap_close(M);
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -252,6 +432,15 @@ begin
   T.Test('read-write file map', @TestReadWriteFileMap);
   T.Test('shared memory create/open', @TestSharedMemoryCreateOpen);
   T.Test('Unix mmap page-size source contract', @TestUnixPageSizeSourceContract);
+  T.Test('flush read-write map', @TestFlushReadWriteMap);
+  T.Test('lock + unlock read-write map', @TestLockUnlockReadWriteMap);
+  T.Test('double close returns error', @TestDoubleCloseReturnsError);
+  T.Test('flush after close', @TestFlushAfterClose);
+  T.Test('lock after close', @TestLockAfterClose);
+  T.Test('unlock after close', @TestUnlockAfterClose);
+  T.Test('open non-existent shared memory', @TestShmOpenNonExistent);
+  T.Test('anonymous map read/write', @TestAnonymousMapReadWrite);
+  T.Test('large file integrity', @TestMapLargeFileIntegrity);
   if not T.Run then Halt(1);
   Cleanup;
 end.

@@ -142,47 +142,63 @@ const
   TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_SERVER;
   TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_HANDLER;
 
-{ Forwarding functions }
+{** @desc Convert HTTP method enum to/from string }
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;
 function HttpStrToMethod(const AStr: string): THttpMethod; inline;
+{** @desc Get reason phrase for status code; returns IntToStr for unknown codes }
 function HttpStatusText(const ACode: THttpStatus): string; inline;
+{** @desc Status code classification predicates (1xx/2xx/3xx/4xx/5xx) }
 function HttpStatusIsInformational(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsSuccess(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsRedirect(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsClientError(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsServerError(const ACode: THttpStatus): Boolean; inline;
+{** @desc Convert HTTP version enum to string (e.g. hvHttp11 → "HTTP/1.1") }
 function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
 
-{ Headers factory }
+{** @desc Create empty mutable headers container }
 function NewHeaders: IHttpHeaders; inline;
+{** @desc Set Basic/Digest Authorization header (base64-encoded user:pass) }
 procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string); inline;
+{** @desc Set Bearer Authorization header }
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string); inline;
 
-{ URL utilities }
+{** @desc Percent-encode/decode URL components (RFC 3986) }
 function UrlEncode(const AStr: string): string; inline;
 function UrlDecode(const AStr: string): string; inline;
+{** @desc Decode query string (+ → space, %XX → byte) }
 function UrlDecodeQuery(const AStr: string): string; inline;
+{** @desc Decode URL path (%XX → byte, preserve /) }
 function UrlDecodePath(const AStr: string): string; inline;
+{** @desc Parse "key=value&key2=value2" into TQueryParams array }
 function ParseQueryString(const AQuery: string): TQueryParams; inline;
+{** @desc Encode TQueryParams back to query string }
 function EncodeQueryString(const AParams: TQueryParams): string; inline;
+{** @desc Lookup query parameter value by name (empty string if missing) }
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string; inline;
+{** @desc Check if query parameter exists }
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean; inline;
 
-{ Router factory }
+{** @desc Create a new HTTP router (path-pattern → handler mapping) }
 function NewRouter: IHttpRouter; inline;
 
-{ Handler/Middleware helpers }
+{** @desc Wrap a function/method/proc as IHttpHandler }
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload; inline;
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload; inline;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload; inline;
+{** @desc Wrap a middleware function (next handler → wrapped handler) }
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; inline;
+{** @desc CORS middleware with origin allowlist, credentials, preflight handling }
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
+{** @desc Catch exceptions and return 500 }
 function RecoveryMiddleware: IHttpMiddleware; inline;
+{** @desc Add X-Response-Time header (duration in ms) }
 function ResponseTimeMiddleware: IHttpMiddleware; inline;
+{** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
-{ Message factories }
+{** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
@@ -248,10 +264,22 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
+function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
+function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
 
 { WebSocket helper }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
+
+{ WebSocket client }
+function ConnectWebSocket(const AUrl: string): IWebSocket; overload; inline;
+function ConnectWebSocket(const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string): IWebSocket; overload; inline;
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string;
   const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
 
 { Server/Client factories }
@@ -625,6 +653,16 @@ begin
   Result := nextpas.core.http.static.ServeDir(ARoot);
 end;
 
+function ServeFileDownload(const APath: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeFileDownload(APath);
+end;
+
+function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
+end;
+
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW);
@@ -634,6 +672,30 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW, AOptions);
+end;
+
+function ConnectWebSocket(const AUrl: string): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl);
+end;
+
+function ConnectWebSocket(const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl, AOptions);
+end;
+
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl);
+end;
+
+function ConnectWebSocket(const AClient: IHttpClient;
+  const AUrl: string;
+  const AOptions: TWebSocketOptions): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl, AOptions);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;

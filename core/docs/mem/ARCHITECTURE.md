@@ -65,7 +65,7 @@ Allocator 侧：
 
 Growing allocator 内部层（不单独对外暴露）：
 
-- `nextpas.core.mem.sizeclass` — 62 档位大小分类表（O(1) 查表）
+- `nextpas.core.mem.sizeclass` — 69 档位大小分类表（O(1) 查表）
 - `nextpas.core.mem.span` — Bitmap span（BSF 单指令分配）
 - `nextpas.core.mem.cache.thread` — TLS free list + batch refill/flush
 - `nextpas.core.mem.central` — Central span pool + spinlock + lock-free inbox
@@ -164,7 +164,7 @@ type
 ┌─────────────────────────────────────────────────┐
 │  Thread-Local Cache (cache.thread.pas)          │
 │  - threadvar TThreadCache per thread            │
-│  - 62 size classes, adaptive batch refill       │
+│  - 69 size classes, adaptive batch refill       │
 │  - Free list: intrusive singly-linked           │
 │  - Zero contention hot path                     │
 ├─────────────────────────────────────────────────┤
@@ -175,7 +175,7 @@ type
 │  - Scavenger: periodic OS memory release        │
 ├─────────────────────────────────────────────────┤
 │  Size Class Table (sizeclass.pas)               │
-│  - 62 classes across 6 bands                    │
+│  - 69 classes across 7 bands                    │
 │  - O(1) lookup via table                        │
 │  - Band 0-3: 8-256B (small), 4-5: medium/large  │
 └─────────────────────────────────────────────────┘
@@ -198,6 +198,11 @@ type
 - **Free-list shuffle** (`shuffle.pas`): 释放时随机插入位置，防止 heap spraying
 - **Double-free detection**: GUARD_MAGIC header 检测
 - **Scan/NoScan separation**: 指针类型和纯数据分开存储
+- **DEBUG poison** (`{$IFDEF DEBUG}`):
+  - `MEM_POISON_FREED` ($DE): 释放后内存毒化，暴露 use-after-free
+  - `MEM_POISON_ALLOC` ($AB): 新分配内存毒化，暴露未初始化读取
+  - 池层 (TFixedPool, TGrowingBlockPool, TBlockPool) 在 Release/FreeMem 时毒化
+  - 分配器基类 (TAllocator) 在 GetMem 时毒化
 
 ## 四类 arena 的定位
 
@@ -230,7 +235,7 @@ type
 - 前后双向 bump pointer
 - 大对象直接走独立 mmap
 
-这是最偏性能和虚拟内存控制的 arena。它暴露 `Reset`、`ResetHard`、`AllocUnsafe` 这些 `IArena` 不适合承载的低层语义。
+这是最偏性能和虚拟内存控制的 arena。它暴露 `Reset`、`ResetHard`、`AllocFast` 这些 `IArena` 不适合承载的低层语义。
 
 ### `TArenaConcurrent` 和 `TThreadArena*`
 

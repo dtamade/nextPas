@@ -474,6 +474,64 @@ begin
   platform_socket_close(S);
 end;
 
+{ 20. getpeername on connected pair }
+procedure TestGetPeerName;
+var
+  LServer, LClient, LAccepted: TPlatformSocket;
+  LAddr: TTestSockAddrIn;
+  LAddrLen: Int32;
+  LPort: Int32;
+  LPeerAddr: TTestSockAddrIn;
+  LPeerLen: Int32;
+begin
+  LServer.Value := PLATFORM_INVALID_SOCKET.Value;
+  LClient.Value := PLATFORM_INVALID_SOCKET.Value;
+  LAccepted.Value := PLATFORM_INVALID_SOCKET.Value;
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LServer) = 0, 'create server');
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  LAddr.Family := PLATFORM_AF_INET;
+  LAddr.Port := 0;
+  LAddr.Addr := 0;
+  Check(platform_socket_bind(LServer, @LAddr, SizeOf(LAddr)) = 0, 'bind');
+  Check(platform_socket_listen(LServer, 1) = 0, 'listen');
+
+  LAddrLen := SizeOf(LAddr);
+  Check(platform_socket_getsockname(LServer, @LAddr, @LAddrLen) = 0, 'getsockname');
+  LPort := TestNTOHS(LAddr.Port);
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LClient) = 0, 'create client');
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  LAddr.Family := PLATFORM_AF_INET;
+  LAddr.Port := TestHTONS(Word(LPort));
+  LAddr.Addr := TestHTONL($7F000001);
+  Check(platform_socket_connect(LClient, @LAddr, SizeOf(LAddr)) = 0, 'connect');
+
+  LAddrLen := SizeOf(LAddr);
+  Check(platform_socket_accept(LServer, @LAddr, @LAddrLen, LAccepted) = 0, 'accept');
+
+  { getpeername on client should return server addr }
+  LPeerLen := SizeOf(LPeerAddr);
+  FillChar(LPeerAddr, SizeOf(LPeerAddr), 0);
+  Check(platform_socket_getpeername(LClient, @LPeerAddr, @LPeerLen) = 0,
+    'getpeername on client');
+  Check(LPeerAddr.Family = PLATFORM_AF_INET, 'peer family = AF_INET');
+
+  platform_socket_close(LAccepted);
+  platform_socket_close(LClient);
+  platform_socket_close(LServer);
+end;
+
+{ 21. error_timed_out classification }
+procedure TestErrorTimedOut;
+begin
+  { ETIMEDOUT is typically 110 on Linux }
+  Check(platform_socket_error_timed_out(110), 'errno 110 is timed_out');
+  Check(not platform_socket_error_timed_out(0), 'errno 0 is not timed_out');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -505,6 +563,10 @@ begin
   { Extended socket options }
   T.Test('setsockopt SO_LINGER', @TestSockOptLinger);
   T.Test('setsockopt SO_REUSEPORT', @TestSockOptReusePort);
+
+  { API coverage }
+  T.Test('getpeername on connected pair', @TestGetPeerName);
+  T.Test('error_timed_out classification', @TestErrorTimedOut);
 
   if not T.Run then Halt(1);
 end.

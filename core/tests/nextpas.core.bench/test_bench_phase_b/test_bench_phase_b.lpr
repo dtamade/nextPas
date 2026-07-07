@@ -9,10 +9,11 @@ program test_bench_phase_b;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.test,
   nextpas.core.bench.base,
+  nextpas.core.bench.intf,
   nextpas.core.bench.stats.advanced;
 
 { ===== Xoroshiro128+ PRNG 测试 ===== }
@@ -174,8 +175,6 @@ var
   LA, LB: TDoubleArray;
   LResult: TBootstrapTestResult;
   LI: Integer;
-  LDummy: TDoubleArray;
-  LStats: TAdvancedStats;
 begin
   { 两组相同的数据 }
   SetLength(LA, 50);
@@ -186,16 +185,10 @@ begin
     LB[LI] := 100.0 + (LI mod 10);
   end;
 
-  SetLength(LDummy, 1);
-  LStats := TAdvancedStats.Create(LDummy);
-  try
-    LResult := LStats.BootstrapTestDifference(LA, LB, 10000, 12345);
-    Check(LResult.ObservedDiff = 0.0, 'Observed diff should be 0');
-    Check(not LResult.IsSignificant, 'Same data should not be significant');
-    Check(LResult.PValue > 0.5, 'p-value should be high for same data');
-  finally
-    LStats.Free;
-  end;
+  LResult := BootstrapTestDifference(LA, LB, 10000, 12345);
+  Check(LResult.ObservedDiff = 0.0, 'Observed diff should be 0');
+  Check(not LResult.IsSignificant, 'Same data should not be significant');
+  Check(LResult.PValue > 0.5, 'p-value should be high for same data');
 end;
 
 procedure Test_BootstrapTestDifference_Different;
@@ -203,8 +196,6 @@ var
   LA, LB: TDoubleArray;
   LResult: TBootstrapTestResult;
   LI: Integer;
-  LDummy: TDoubleArray;
-  LStats: TAdvancedStats;
   LMeanA, LMeanB: Double;
 begin
   { 两组明显不同的数据 }
@@ -222,37 +213,27 @@ begin
   LMeanA := LMeanA / 50;
   LMeanB := LMeanB / 50;
 
-  SetLength(LDummy, 1);
-  LStats := TAdvancedStats.Create(LDummy);
-  try
-    LResult := LStats.BootstrapTestDifference(LA, LB, 10000, 12345);
-    { 均值应该是 102 和 202，差为 100 }
-    Check(Abs(LResult.ObservedDiff - (LMeanA - LMeanB)) < 0.01, 'Observed diff should match mean difference');
-    Check(LResult.IsSignificant, 'Different data should be significant');
-    Check(LResult.PValue < 0.01, 'p-value should be very low');
-  finally
-    LStats.Free;
-  end;
+  LResult := BootstrapTestDifference(LA, LB, 10000, 12345);
+  { 均值应该是 102 和 202，差为 100 }
+  Check(Abs(LResult.ObservedDiff - (LMeanA - LMeanB)) < 0.01, 'Observed diff should match mean difference');
+  Check(LResult.IsSignificant, 'Different data should be significant');
+  Check(LResult.PValue < 0.01, 'p-value should be very low');
 end;
 
 procedure Test_BootstrapTestDifference_Empty;
 var
   LA, LB: TDoubleArray;
-  LResult: TBootstrapTestResult;
-  LDummy: TDoubleArray;
-  LStats: TAdvancedStats;
+  LCaught: Boolean;
 begin
   SetLength(LA, 0);
   SetLength(LB, 50);
-  SetLength(LDummy, 1);
-  LStats := TAdvancedStats.Create(LDummy);
+  LCaught := False;
   try
-    LResult := LStats.BootstrapTestDifference(LA, LB, 1000, 12345);
-    Check(LResult.PValue = 1.0, 'Empty data should return p=1');
-    Check(not LResult.IsSignificant, 'Empty data should not be significant');
-  finally
-    LStats.Free;
+    BootstrapTestDifference(LA, LB, 1000, 12345);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
   end;
+  Check(LCaught, 'Empty array should raise EBenchInvalidParam');
 end;
 
 procedure Test_BootstrapTestDifference_WeakDifference;
@@ -260,8 +241,6 @@ var
   LA, LB: TDoubleArray;
   LResult: TBootstrapTestResult;
   LI: Integer;
-  LDummy: TDoubleArray;
-  LStats: TAdvancedStats;
   LMeanA, LMeanB: Double;
 begin
   { 两组数据有微弱差异 }
@@ -279,16 +258,10 @@ begin
   LMeanA := LMeanA / 100;
   LMeanB := LMeanB / 100;
 
-  SetLength(LDummy, 1);
-  LStats := TAdvancedStats.Create(LDummy);
-  try
-    LResult := LStats.BootstrapTestDifference(LA, LB, 10000, 12345);
-    Check(Abs(LResult.ObservedDiff - (LMeanA - LMeanB)) < 0.01, 'Observed diff should match mean difference');
-    { 微弱差异可能不显著 }
-    Check(LResult.PValue > 0.0, 'p-value should be positive');
-  finally
-    LStats.Free;
-  end;
+  LResult := BootstrapTestDifference(LA, LB, 10000, 12345);
+  Check(Abs(LResult.ObservedDiff - (LMeanA - LMeanB)) < 0.01, 'Observed diff should match mean difference');
+  { 微弱差异可能不显著 }
+  Check(LResult.PValue > 0.0, 'p-value should be positive');
 end;
 
 { ===== 注册测试 ===== }

@@ -8,18 +8,19 @@ uses
   nextpas.core.base;
 
 const
-  { 62 size classes covering 16B - 57344B.
+  { 69 size classes covering 16B - 65536B.
     Bands (all boundaries aligned to step size):
       16B-256B    (16B step)   — 16 classes
       256B-1KB    (64B step)   — 13 classes
       1KB-4KB     (256B step)  — 13 classes
       4KB-8KB     (1KB step)   —  5 classes
       8KB-16KB    (2KB step)   —  5 classes
-      16KB-57KB   (4KB step)   — 10 classes
-    > 57344B → direct mmap (no size class).
+      16KB-53KB   (4KB step)   — 10 classes
+      53KB-65KB   (2KB step)   —  7 classes
+    > 65536B → direct mmap (no size class).
     Internal fragmentation (band 1+): worst 25% (4097→5120, 8193→10240). }
-  MEM_SIZECLASS_COUNT = 62;
-  MEM_SIZECLASS_MAX = 53248;
+  MEM_SIZECLASS_COUNT = 69;
+  MEM_SIZECLASS_MAX = 65536;
 
   { Minimum size class granularity. Allocations < 16B are rounded up to 16B. }
   MEM_SIZECLASS_MIN = 16;
@@ -31,13 +32,13 @@ type
   { Pre-computed size class table. }
   TSizeClassTable = array[0..MEM_SIZECLASS_COUNT - 1] of TSizeClassEntry;
 
-{** Return the size class index (0..59) for a given allocation size.
+{** Return the size class index (0..68) for a given allocation size.
     Sizes are rounded up to the nearest class boundary.
     Returns -1 if ASize > MEM_SIZECLASS_MAX (caller should use direct mmap).
     O(1): single table lookup. }
 function SizeClassIndex(ASize: SizeUInt): Int32;
 
-{** Return the usable size for a given class index (0..59).
+{** Return the usable size for a given class index (0..68).
     The returned size is >= the size passed to SizeClassIndex. }
 function SizeClassSize(AIndex: Int32): SizeUInt;
 
@@ -96,6 +97,11 @@ const
   BAND5_STEP  = 4096;
   BAND5_COUNT = (BAND5_MAX - BAND5_MIN) div BAND5_STEP + 1;  // 10
 
+  BAND6_MIN   = 53248;
+  BAND6_MAX   = 65536;
+  BAND6_STEP  = 2048;
+  BAND6_COUNT = (BAND6_MAX - BAND6_MIN) div BAND6_STEP + 1;  // 7
+
   { Cumulative index offsets. }
   BAND0_OFFSET = 0;
   BAND1_OFFSET = BAND0_COUNT;                           // 16
@@ -103,10 +109,11 @@ const
   BAND3_OFFSET = BAND2_OFFSET + BAND2_COUNT;            // 42
   BAND4_OFFSET = BAND3_OFFSET + BAND3_COUNT;            // 47
   BAND5_OFFSET = BAND4_OFFSET + BAND4_COUNT;            // 52
+  BAND6_OFFSET = BAND5_OFFSET + BAND5_COUNT;            // 62
 
   { Lookup table granularity: 8 bytes. 65536/8 = 8192 entries. }
   LOOKUP_GRANULARITY = 8;
-  LOOKUP_SIZE = MEM_SIZECLASS_MAX div LOOKUP_GRANULARITY;  // 8192
+  LOOKUP_SIZE = 65536 div LOOKUP_GRANULARITY;  // 8192
 
 type
   TSizeClassLookup = array[0..LOOKUP_SIZE - 1] of Byte;
@@ -169,6 +176,10 @@ begin
   { Band 5: 16384, 20480, 24576, ..., 49152, 53248 }
   for I := 0 to BAND5_COUNT - 1 do
     SizeClasses[BAND5_OFFSET + I] := BAND5_MIN + SizeUInt(I) * BAND5_STEP;
+
+  { Band 6: 53248, 55296, 57344, 59392, 61440, 63488, 65536 }
+  for I := 0 to BAND6_COUNT - 1 do
+    SizeClasses[BAND6_OFFSET + I] := BAND6_MIN + SizeUInt(I) * BAND6_STEP;
 end;
 
 procedure InitLookup;
@@ -191,7 +202,7 @@ begin
     { Find which class this size falls into. }
     LIndex := -1;
     { Scan class table to find smallest class >= LSize.
-      Since table is sorted, we scan forward. For 62 entries this is fast.
+      Since table is sorted, we scan forward. For 69 entries this is fast.
       Called once at init, not on hot path. }
     for LBand := 0 to MEM_SIZECLASS_COUNT - 1 do
     begin

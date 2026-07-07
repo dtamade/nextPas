@@ -37,8 +37,8 @@ type
   public
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
     function Traits: TAllocatorTraits; override;
   end;
 
@@ -132,15 +132,15 @@ begin
     FillChar(Result^, ASize, 0);
 end;
 
-function TGuardAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TGuardAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LHdr: PGuardHeader;
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
-  if ADst = nil then
+  if APtr = nil then
     Exit(DoGetMem(ASize));
-  LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
+  LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
     raise EAllocError.Create(aeInvalidPointer,
       'TGuardAllocator.ReallocMem: invalid guard magic (wild pointer)');
@@ -155,17 +155,17 @@ begin
   else
     LCopySize := ASize;
   if LCopySize > 0 then
-    Move(ADst^, Result^, LCopySize);
-  DoFreeMem(ADst);
+    Move(APtr^, Result^, LCopySize);
+  DoFreeMem(APtr);
 end;
 
-procedure TGuardAllocator.DoFreeMem(ADst: Pointer);
+procedure TGuardAllocator.DoFreeMem(APtr: Pointer);
 var
   LHdr: PGuardHeader;
 begin
-  if ADst = nil then
+  if APtr = nil then
     Exit;
-  LHdr := PGuardHeader(PtrUInt(ADst) - HeaderSize);
+  LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
     raise EAllocError.Create(aeInvalidPointer,
       'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');

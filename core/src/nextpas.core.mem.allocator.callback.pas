@@ -12,8 +12,8 @@ type
   // 自定义分配器的回调类型（与回调分配器同域，避免 base 膨胀）
   TGetMemCallback     = function(ASize: SizeUInt): Pointer;
   TAllocMemCallback   = function(ASize: SizeUInt): Pointer;
-  TReallocMemCallback = function(ADst: Pointer; ASize: SizeUInt): Pointer;
-  TFreeMemCallback    = procedure(ADst: Pointer);
+  TReallocMemCallback = function(APtr: Pointer; ASize: SizeUInt): Pointer;
+  TFreeMemCallback    = procedure(APtr: Pointer);
 
   {**
    * TCallbackAllocator
@@ -28,8 +28,8 @@ type
   protected
     function  DoGetMem(ASize: SizeUInt): Pointer; override;
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Init(aGetMem: TGetMemCallback; aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback);
     {** 回调分配器的线程安全性取决于回调函数实现，默认报告 False (保守策略)。
@@ -65,14 +65,14 @@ begin
   Result := FAllocMemCallback(ASize)
 end;
 
-function TCallbackAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TCallbackAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := FReallocMemCallback(ADst, ASize)
+  Result := FReallocMemCallback(APtr, ASize)
 end;
 
-procedure TCallbackAllocator.DoFreeMem(ADst: Pointer);
+procedure TCallbackAllocator.DoFreeMem(APtr: Pointer);
 begin
-  FFreeMemCallback(ADst)
+  FFreeMemCallback(APtr)
 end;
 
 function TCallbackAllocator.Traits: TAllocatorTraits;

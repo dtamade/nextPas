@@ -24,6 +24,8 @@ type
     procedure Emit(const AText: string);
     procedure EmitLn(const AText: string);
     function LlvmTypeName(ABitWidth: LongInt; AIsSigned: Boolean): string;
+    function LlvmTypeForOperand(const AOp: TMirOperand): string;
+    function LlvmTypeForStmt(const AStmt: TMirStmt): string;
     function OpStr(const AOp: TMirOperand): string;
     function OpcodeStr(AOp: TMirOp): string;
     procedure TranslateFunction(const AFunc: TMirFunction);
@@ -31,6 +33,7 @@ type
       const ABlock: TMirBlock);
     procedure TranslateStmt(const AStmt: TMirStmt);
     procedure TranslateTerminator(const ATerm: TMirTerminator);
+    procedure EmitStructTypes;
   public
     constructor Create(const AModule: TMirModule);
     function Translate: string;
@@ -74,14 +77,30 @@ begin
   end;
 end;
 
+function TMirToLlvmTranslator.LlvmTypeForOperand(const AOp: TMirOperand): string;
+begin
+  if AOp.StructTypeName <> '' then
+    Result := '%' + AOp.StructTypeName
+  else
+    Result := LlvmTypeName(AOp.BitWidth, AOp.IsSigned);
+end;
+
+function TMirToLlvmTranslator.LlvmTypeForStmt(const AStmt: TMirStmt): string;
+begin
+  if AStmt.StructTypeName <> '' then
+    Result := '%' + AStmt.StructTypeName
+  else
+    Result := LlvmTypeName(AStmt.BitWidth, False);
+end;
+
 function TMirToLlvmTranslator.OpStr(const AOp: TMirOperand): string;
 begin
   case AOp.Kind of
     mokConst:
-      Result := LlvmTypeName(AOp.BitWidth, AOp.IsSigned) + ' ' +
+      Result := LlvmTypeForOperand(AOp) + ' ' +
         IntToStr(AOp.ConstVal.IntVal);
     mokLocal, mokMove:
-      Result := LlvmTypeName(AOp.BitWidth, AOp.IsSigned) + ' %' +
+      Result := LlvmTypeForOperand(AOp) + ' %' +
         IntToStr(AOp.Value);
     else
       Result := 'i32 0';
@@ -122,6 +141,26 @@ begin
     moFPToUI: Result := 'fptoui';
     else     Result := 'add';
   end;
+end;
+
+procedure TMirToLlvmTranslator.EmitStructTypes;
+var
+  I, J: LongInt;
+  ST: TMirStructType;
+begin
+  for I := 0 to FModule.StructTypeCount - 1 do
+  begin
+    ST := FModule.StructTypeAt(I);
+    Emit('%' + ST.Name + ' = type {');
+    for J := 0 to High(ST.Fields) do
+    begin
+      if J > 0 then Emit(', ');
+      Emit(LlvmTypeName(ST.Fields[J].BitWidth, ST.Fields[J].IsSigned));
+    end;
+    EmitLn('}');
+  end;
+  if FModule.StructTypeCount > 0 then
+    EmitLn('');
 end;
 
 procedure TMirToLlvmTranslator.TranslateFunction(const AFunc: TMirFunction);
@@ -174,32 +213,45 @@ begin
 
     mskAlloca:
       begin
-        Ty := LlvmTypeName(AStmt.BitWidth, False);
+        Ty := LlvmTypeForStmt(AStmt);
         EmitLn('  %' + IntToStr(AStmt.Dst) + ' = alloca ' + Ty);
       end;
 
     mskLoad:
       begin
-        Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
+        Ty := LlvmTypeForOperand(AStmt.Src);
         EmitLn('  %' + IntToStr(AStmt.Dst) + ' = load ' + Ty +
           ', ' + Ty + '* %' + IntToStr(AStmt.Src.Value));
       end;
 
     mskStore:
       EmitLn('  store ' + OpStr(AStmt.Src) + ', ' +
-        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        LlvmTypeForOperand(AStmt.Src) +
         '* %' + IntToStr(AStmt.Dst));
 
     mskGetFieldPtr:
       EmitLn('  %' + IntToStr(AStmt.Dst) + ' = getelementptr ' +
-        LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
-        ', ' + LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned) +
+        LlvmTypeForOperand(AStmt.Src) +
+        ', ' + LlvmTypeForOperand(AStmt.Src) +
         '* %' + IntToStr(AStmt.Src.Value) +
         ', i32 0, i32 ' + IntToStr(AStmt.FieldIndex));
 
+    mskExtractField:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = extractvalue ' +
+        LlvmTypeForOperand(AStmt.Src) +
+        ' %' + IntToStr(AStmt.Src.Value) +
+        ', ' + IntToStr(AStmt.FieldIndex));
+
+    mskInsertField:
+      EmitLn('  %' + IntToStr(AStmt.Dst) + ' = insertvalue ' +
+        LlvmTypeForOperand(AStmt.Src) +
+        ' %' + IntToStr(AStmt.Src.Value) + ', ' +
+        OpStr(AStmt.Rhs) +
+        ', ' + IntToStr(AStmt.FieldIndex));
+
     mskUnary:
       begin
-        Ty := LlvmTypeName(AStmt.Src.BitWidth, AStmt.Src.IsSigned);
+        Ty := LlvmTypeForOperand(AStmt.Src);
         case AStmt.Op of
           moNeg:
             EmitLn('  %' + IntToStr(AStmt.Dst) + ' = sub ' + Ty +
@@ -220,7 +272,7 @@ begin
 
     mskBinary:
       begin
-        Ty := LlvmTypeName(AStmt.Lhs.BitWidth, AStmt.Lhs.IsSigned);
+        Ty := LlvmTypeForOperand(AStmt.Lhs);
         EmitLn('  %' + IntToStr(AStmt.Dst) + ' = ' +
           OpcodeStr(AStmt.Op) + ' ' + Ty + ' ' +
           '%' + IntToStr(AStmt.Lhs.Value) + ', %' +
@@ -286,10 +338,9 @@ begin
   EmitLn('; MIR → LLVM IR');
   EmitLn('; Module: ' + FModule.ModuleName);
   EmitLn('');
-
+  EmitStructTypes;
   for I := 0 to FModule.FunctionCount - 1 do
     TranslateFunction(FModule.FunctionAt(I));
-
   Result := FOutput;
 end;
 

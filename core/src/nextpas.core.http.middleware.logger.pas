@@ -5,9 +5,14 @@ unit nextpas.core.http.middleware.logger;
 interface
 
 uses
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.log;
 
+{ Default logger middleware — uses WriteLn to stderr }
 function LoggerMiddleware: IHttpMiddleware;
+
+{ Logger middleware with structured logging via TLogger }
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 
 implementation
 
@@ -19,18 +24,28 @@ uses
 
 function LoggerMiddleware: IHttpMiddleware;
 begin
+  Result := LoggerMiddlewareWith(DefaultLogger);
+end;
+
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
+begin
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LStart: TInstant;
       LDuration: TDuration;
+      LEvent: PLogEvent;
     begin
       LStart := TInstant.Now;
       ANext.ServeHTTP(AReq, AW);
       LDuration := LStart.Elapsed;
-      WriteLn(HttpMethodToStr(AReq.Method), ' ', AReq.Path,
-              ' ', AW.GetStatus, ' ', LDuration.ToString);
+      LEvent := ALogger.Info;
+      LEvent^.Str('method', HttpMethodToStr(AReq.Method));
+      LEvent^.Str('path', AReq.Path);
+      LEvent^.Int('status', Int64(AW.GetStatus));
+      LEvent^.Str('duration', LDuration.ToString);
+      LEvent^.Msg('http_request');
     end);
   end);
 end;

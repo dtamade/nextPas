@@ -18,6 +18,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.error,
   nextpas.core.mem.secure,
+  nextpas.core.text,
   nextpas.core.mem.pool.fixed_slab.nginx;
 
 type
@@ -103,9 +104,9 @@ type
 
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    procedure SecureFree(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
+    procedure SecureFree(APtr: Pointer);
     function MemSize(APtr: Pointer): SizeUInt;
 
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -183,24 +184,30 @@ begin
 
   n := NGX_SLAB_PAGE_SHIFT - FMinShift;
   if ACapacity > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: capacity overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: capacity overflow (' + IntToStr(ACapacity) + ')');
   desired_pages := (ACapacity + NGX_SLAB_PAGE_SIZE - 1) div NGX_SLAB_PAGE_SIZE;
   overhead_base := SizeOf(ngx_slab_pool_t) + n * (SizeOf(ngx_slab_page_t) + SizeOf(ngx_slab_stat_t));
   per_page_cost := SizeOf(ngx_slab_page_t) + NGX_SLAB_PAGE_SIZE;
   if (desired_pages <> 0) and (per_page_cost > High(SizeUInt) div desired_pages) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(desired_pages) + ' * ' + IntToStr(per_page_cost) + ')');
   page_payload_cost := desired_pages * per_page_cost;
   if overhead_base > High(SizeUInt) - page_payload_cost then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(overhead_base) + ' + ' + IntToStr(page_payload_cost) + ')');
   total_size := overhead_base + page_payload_cost;
   if total_size > High(SizeUInt) - NGX_SLAB_PAGE_SIZE then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: region size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: region size overflow (' + IntToStr(total_size) + ')');
   total_size := total_size + NGX_SLAB_PAGE_SIZE;
   if total_size > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: allocation size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: allocation size overflow (' + IntToStr(total_size) + ')');
   allocation_size := total_size + (NGX_SLAB_PAGE_SIZE - 1);
   if desired_pages > High(SizeUInt) div 16 then
-    raise EAllocError.Create(aeInvalidLayout, 'TFixedSlabPool.Create: ownership index overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TFixedSlabPool.Create: ownership index overflow (' + IntToStr(desired_pages) + ')');
   ownership_capacity := desired_pages * 16;
 
   FRaw := FAllocator.GetMem(allocation_size);
@@ -771,64 +778,64 @@ begin
   end;
 end;
 
-function TFixedSlabPool.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TFixedSlabPool.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   p: Pointer;
   oldSize, copySize: SizeUInt;
 begin
-  if ADst = nil then Exit(GetMem(ASize));
+  if APtr = nil then Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    FreeMem(ADst);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
-  ValidateTrackedLivePointer(ADst, 'ReallocMem', oldSize);
+  ValidateTrackedLivePointer(APtr, 'ReallocMem', oldSize);
   p := GetMem(ASize);
   if p = nil then Exit(nil);
 
   if oldSize > ASize then copySize := ASize else copySize := oldSize;
 
   {$IFDEF NEXTPAS_SLAB_TESTGUARD}
-  WriteLn('[Realloc] ADst=', PtrUInt(ADst):16, ', ASize=', ASize, ', oldSize=', oldSize, ', copySize=', copySize);
+  WriteLn('[Realloc] APtr=', PtrUInt(APtr):16, ', ASize=', ASize, ', oldSize=', oldSize, ', copySize=', copySize);
   {$ENDIF}
 
   if copySize > 0 then
-    CopyMem(p, ADst, copySize);
+    CopyMem(p, APtr, copySize);
 
-  FreeMem(ADst);
+  FreeMem(APtr);
   Result := p;
 end;
 
-procedure TFixedSlabPool.FreeMem(ADst: Pointer);
+procedure TFixedSlabPool.FreeMem(APtr: Pointer);
 var
   LIndex: SizeUInt;
   LSize: SizeUInt;
 begin
-  if ADst = nil then Exit;
+  if APtr = nil then Exit;
   if FCore = nil then
     raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.FreeMem: pool is not initialized');
-  ValidateTrackedLivePointer(ADst, 'FreeMem', LSize);
-  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), ADst);
-  if OwnershipLookup(PtrUInt(ADst), LIndex) then
+  ValidateTrackedLivePointer(APtr, 'FreeMem', LSize);
+  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), APtr);
+  if OwnershipLookup(PtrUInt(APtr), LIndex) then
   begin
     FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_RELEASED;
     FOwnSizes[LIndex] := LSize;
   end;
 end;
 
-procedure TFixedSlabPool.SecureFree(ADst: Pointer);
+procedure TFixedSlabPool.SecureFree(APtr: Pointer);
 var
   LIndex: SizeUInt;
   LSize: SizeUInt;
 begin
-  if ADst = nil then Exit;
+  if APtr = nil then Exit;
   if FCore = nil then
     raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.SecureFree: pool is not initialized');
-  ValidateTrackedLivePointer(ADst, 'SecureFree', LSize);
-  SecureZeroMemory(ADst, LSize);
-  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), ADst);
-  if OwnershipLookup(PtrUInt(ADst), LIndex) then
+  ValidateTrackedLivePointer(APtr, 'SecureFree', LSize);
+  SecureZeroMemory(APtr, LSize);
+  ngx_slab_free_locked(Pngx_slab_pool_t(FCore), APtr);
+  if OwnershipLookup(PtrUInt(APtr), LIndex) then
   begin
     FOwnStates[LIndex] := FIXED_SLAB_OWNERSHIP_RELEASED;
     FOwnSizes[LIndex] := LSize;

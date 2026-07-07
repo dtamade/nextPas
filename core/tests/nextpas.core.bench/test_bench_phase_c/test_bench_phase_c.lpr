@@ -9,7 +9,7 @@ program test_bench_phase_c;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.test,
   nextpas.core.bench.base,
@@ -287,6 +287,99 @@ begin
   end;
 end;
 
+procedure Test_BayesianCredibleInterval_80;
+{ F-08: 验证非标准水平（80%）使用 NormalQuantile 而非硬编码 z 值 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LCI95, LCI80: TConfidenceInterval;
+  LI: Integer;
+begin
+  SetLength(LData, 50);
+  for LI := 0 to 49 do
+    LData[LI] := 100.0 + (LI mod 10);
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    LCI95 := LStats.BayesianCredibleInterval(LData, 100.0, 10.0, 0.95);
+    LCI80 := LStats.BayesianCredibleInterval(LData, 100.0, 10.0, 0.80);
+
+    { 80% 区间应比 95% 区间窄 }
+    Check(LCI80.Upper - LCI80.Lower < LCI95.Upper - LCI95.Lower,
+      '80% CI should be narrower than 95% CI');
+    Check(Abs(LCI80.Level - 0.80) < 0.001, 'Level should be 0.80');
+  finally
+    LStats.Free;
+  end;
+end;
+
+{ ===== F-18: sigma=0 路径测试 ===== }
+
+procedure Test_BayesianEstimate_SigmaZero;
+{ F-18: 验证 ASigma=0 时使用样本标准差 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LEstimateWithSigma, LEstimateSigmaZero: TBayesianEstimate;
+  LI: Integer;
+begin
+  { 数据: 样本 stddev ~5.77 }
+  SetLength(LData, 30);
+  for LI := 0 to 29 do
+    LData[LI] := 100.0 + (LI mod 10);
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    { sigma=0: 使用样本标准差 }
+    LEstimateSigmaZero := LStats.BayesianEstimate(LData, 100.0, 10.0, 0);
+
+    { sigma=显式值: 使用样本标准差的近似值 }
+    LEstimateWithSigma := LStats.BayesianEstimate(LData, 100.0, 10.0, 5.77);
+
+    { 两者后验均值应接近 }
+    Check(Abs(LEstimateSigmaZero.PosteriorMean - LEstimateWithSigma.PosteriorMean) < 1.0,
+      'sigma=0 should use sample stddev, giving similar result');
+
+    { 后验标准差应小于先验 }
+    Check(LEstimateSigmaZero.PosteriorStdDev < 10.0,
+      'Posterior std should be < prior std');
+
+    { 样本大小应正确 }
+    Check(LEstimateSigmaZero.SampleSize = 30, 'Sample size should be 30');
+  finally
+    LStats.Free;
+  end;
+end;
+
+procedure Test_BayesianEstimate_SigmaZeroConstant;
+{ F-18: 验证常量数据时 sigma=0 的退化行为 }
+var
+  LStats: TBenchStatsAnalyzer;
+  LData: TDoubleArray;
+  LEstimate: TBayesianEstimate;
+  LI: Integer;
+begin
+  { 常量数据: stddev=0, 应退化为 1e-10 }
+  SetLength(LData, 20);
+  for LI := 0 to 19 do
+    LData[LI] := 100.0;
+
+  LStats := TBenchStatsAnalyzer.Create;
+  try
+    LEstimate := LStats.BayesianEstimate(LData, 100.0, 10.0, 0);
+
+    { 常量数据：后验均值应接近 100 }
+    Check(Abs(LEstimate.PosteriorMean - 100.0) < 0.01,
+      'Constant data: posterior mean should be ~100');
+
+    { 后验应存在（不崩溃） }
+    Check(LEstimate.PosteriorStdDev > 0, 'Posterior std should be positive');
+    Check(LEstimate.SampleSize = 20, 'Sample size should be 20');
+  finally
+    LStats.Free;
+  end;
+end;
+
 { ===== 注册测试 ===== }
 
 var
@@ -304,11 +397,16 @@ begin
   { 可信区间 }
   T.Test('BayesianCredibleInterval_95', @Test_BayesianCredibleInterval_95);
   T.Test('BayesianCredibleInterval_99', @Test_BayesianCredibleInterval_99);
+  T.Test('BayesianCredibleInterval_80', @Test_BayesianCredibleInterval_80);
   T.Test('BayesianCredibleInterval_EmptyData', @Test_BayesianCredibleInterval_EmptyData);
 
   { 先验融合 }
   T.Test('BayesianEstimate_PriorFusion', @Test_BayesianEstimate_PriorFusion);
   T.Test('BayesianEstimate_Convergence', @Test_BayesianEstimate_Convergence);
+
+  { F-18: sigma=0 路径 }
+  T.Test('BayesianEstimate_SigmaZero', @Test_BayesianEstimate_SigmaZero);
+  T.Test('BayesianEstimate_SigmaZeroConstant', @Test_BayesianEstimate_SigmaZeroConstant);
 
   T.Run;
   T.Summary;

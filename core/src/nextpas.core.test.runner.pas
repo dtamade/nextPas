@@ -24,6 +24,7 @@ uses
   nextpas.core.thread.intf,
   nextpas.core.collections.base,
   nextpas.core.platform.thread,
+  nextpas.core.time,
   nextpas.core.time.cpu;
 
 { ── Test Suite ────────────────────────────────────────────────────────────── }
@@ -85,6 +86,18 @@ type
     procedure TestRepeat(const AName: string; AProc: TTestClosure;
       ARepeatCount: Integer);
     procedure TestSubtest(const AName: string; AProc: TSubtestProc);
+    { TestTable: data-driven test with multiple input/output cases.
+      Each TTestCase provides input args and expected output. The test runs
+      once per case, reporting pass/fail per case.
+
+      NOTE: Most tests prefer Test() + closure for clarity. Use TestTable
+      when you have many input/output pairs that are cleaner as data than code.
+
+      Example:
+        TestTable('Add', [
+          TTestCase.Create(['1', '2'], '3'),
+          TTestCase.Create(['0', '0'], '0')
+        ], @AddProc); }
     procedure TestTable(const AName: string;
       ACases: specialize TArray<TTestCase>;
       AProc: TTestCaseProc);
@@ -656,8 +669,8 @@ var
 begin
   for I := 0 to High(ACases) do
   begin
-    { Heap-allocate case data and proc to avoid closure capture issues }
-    New(LPCase);
+    GetMem(LPCase, SizeOf(TTestCase));
+    FillChar(LPCase^, SizeOf(TTestCase), 0);
     LPCase^ := ACases[I];
     New(LPProc);
     LPProc^ := AProc;
@@ -948,7 +961,7 @@ var
   LGTestTimeoutMs: Integer;
   LTotalRetries: Integer;
   LRetriesLeft: Integer;
-  LStartMs: Int64;
+  LStart: TInstant;
   LRepeatCount: Integer;
   LRepeatI: Integer;
   LTagFilter: string;
@@ -957,8 +970,8 @@ var
   LProgressCurrent: Integer;
   LProgressPrefix: string;
   LIdx: Integer;
-  LRunStartMs: Int64;
-  LRunTimeoutMs: Int64;
+  LRunStart: TInstant;
+  LRunTimeout: TDuration;
   LCache: TTestCache;
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
@@ -1003,11 +1016,11 @@ begin
     LProgressTotal := 0;
   try
 
-  LRunStartMs := GetTickCount64;
+  LRunStart := TInstant.Now;
   if LConfig.RunTimeoutSec > 0 then
-    LRunTimeoutMs := Int64(LConfig.RunTimeoutSec) * 1000
+    LRunTimeout := TDuration.FromSeconds(LConfig.RunTimeoutSec)
   else
-    LRunTimeoutMs := 0;
+    LRunTimeout := TDuration.Zero;
 
   LOutSink.WriteLn('');
   WriteSuiteHeader(Name, IntToStr(Length(Tests)) + ' tests',
@@ -1044,8 +1057,8 @@ begin
     SetTestContext(Name, LEntry.Name);
 
     { Global run timeout check }
-    if (LRunTimeoutMs > 0) and
-       (GetTickCount64 - LRunStartMs >= LRunTimeoutMs) then
+    if (LRunTimeout > TDuration.Zero) and
+       (LRunStart.Elapsed >= LRunTimeout) then
     begin
       LOutSink.WriteLn(AnsiYellow(
         '  TIMEOUT: run exceeded ' + IntToStr(LConfig.RunTimeoutSec) +
@@ -1131,7 +1144,7 @@ begin
       end;
     end;
 
-    LStartMs := GetTickCount64;
+    LStart := TInstant.Now;
     LDisplayName := GetDisplayName(LEntry);
     if LEntry.Kind = ekTest then
     begin
@@ -1204,7 +1217,7 @@ begin
         repeat
           LStatus := tsPassed;
           LLastFailMsg := '';
-          LStartMs := GetTickCount64;
+          LStart := TInstant.Now;
           try
             if (LGTestTimeoutMs > 0) and (LEntry.Kind = ekTest) and
                (Assigned(LEntry.Proc) or Assigned(LEntry.Closure)) then
@@ -1289,7 +1302,7 @@ begin
 
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
-      GetTickCount64 - LStartMs);
+      LStart.Elapsed.AsMilliseconds);
     { Copy captured log lines on failure/error or verbose mode for report output }
     if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
        ((LStatus in [tsFailed, tsError]) or LConfig.VerboseMode) then
@@ -1301,7 +1314,7 @@ begin
     begin
       LCacheEntry.Status := Ord(LStatus);
       LCacheEntry.Message := LLastFailMsg;
-      LCacheEntry.Duration := GetTickCount64 - LStartMs;
+      LCacheEntry.Duration := LStart.Elapsed.AsMilliseconds;
       LCacheEntry.Time := 0;
       LCache.Put(LCacheKey, LEntry.Name, LCacheEntry);
     end;
@@ -1309,7 +1322,7 @@ begin
     { Output per-test — use DisplayName + progress prefix }
     WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
       LLastFailMsg, LEntry.SkipReason,
-      GetTickCount64 - LStartMs, LOutSink, LConfig);
+      LStart.Elapsed.AsMilliseconds, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
@@ -1344,13 +1357,10 @@ begin
     LSubCtxI := nil;
     LSubCtx := nil;
     LAppender.Free;
-    { Dispose thread-local GExecState allocated by SetTestContext.
-      Must be inside finally — Exit (setup failure) skips code after finally.
-      Matches the parallel worker's cleanup in its finally block
-      (runner.parallel.pas:494-501). }
     if GExecState <> nil then
     begin
-      Dispose(GExecState);
+      Finalize(GExecState^);
+      FreeMem(GExecState);
       GExecState := nil;
     end;
   end;
@@ -1777,6 +1787,7 @@ begin
     end;
   end;
 
+  CleanupTableAllocations;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;
@@ -1830,7 +1841,8 @@ begin
     begin
       if Tests[I].TableCase <> nil then
       begin
-        Dispose(PTestCase(Tests[I].TableCase));
+        Finalize(PTestCase(Tests[I].TableCase)^);
+        FreeMem(Tests[I].TableCase);
         Tests[I].TableCase := nil;
       end;
       if Tests[I].TableProc <> nil then
@@ -1937,7 +1949,7 @@ var
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
-  LStartMs: Int64;
+  LStart: TInstant;
   LFailFast: Boolean;
   LMaxFailures: Integer;
 begin
@@ -1975,7 +1987,7 @@ begin
       TotalFail := 0;
       TotalSkip := 0;
     end;
-    LStartMs := GetTickCount64;
+    LStart := TInstant.Now;
     for I := 0 to High(Suites) do
     begin
       if AIsParallel then
@@ -2009,7 +2021,7 @@ begin
     if LRepeatAll > 1 then
       LOutSink.WriteLn(AnsiDim(
         '  Iteration ' + IntToStr(LIter) + ' completed in ' +
-        FormatDuration(GetTickCount64 - LStartMs), LConfig));
+        FormatDuration(LStart.Elapsed.AsMilliseconds), LConfig));
   end;
 
   for I := 0 to High(Suites) do

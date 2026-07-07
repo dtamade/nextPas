@@ -351,7 +351,8 @@ begin
   if aCapacity = 0 then
     raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: capacity must be > 0');
   if aCapacity > SizeUInt(High(SizeInt)) then
-    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: capacity too large');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TBlockPool: capacity too large (' + IntToStr(aCapacity) + ')');
 
   LAlign := SanitizeConfigAlignment(aAlignment);
 
@@ -362,7 +363,8 @@ begin
   begin
     LMask := LAlign - 1;
     if aBlockSize > (High(SizeUInt) - LMask) then
-      raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: block size overflow');
+      raise EAllocError.Create(aeInvalidLayout,
+        'TBlockPool: block size overflow (' + IntToStr(aBlockSize) + ')');
     LActualBlockSize := (aBlockSize + LMask) and not LMask;
   end;
 
@@ -390,7 +392,8 @@ begin
   // 计算总大小并检查溢出
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
-    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: total size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      'TBlockPool: total size overflow (' + IntToStr(LActualBlockSize) + ' * ' + IntToStr(aCapacity) + ')');
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
@@ -541,9 +544,9 @@ begin
   if IsFreeBitSet(LIdx) then
     raise EAllocError.Create(aeDoubleFree, 'TBlockPool.Release: double free detected');
 
-  {$IFDEF FAF_MEM_DEBUG}
-  // 污化已释放内存，提升 UAF 暴露率
-  FillMem((PByte(FBuffer) + LIdx * FBlockSize), FBlockSize, $A5);
+  {$IFDEF DEBUG}
+  // Poison freed memory to expose use-after-free
+  FillMem((PByte(FBuffer) + LIdx * FBlockSize), FBlockSize, MEM_POISON_FREED);
   {$ENDIF}
 
   SetFreeBit(LIdx);

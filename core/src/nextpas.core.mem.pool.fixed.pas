@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.mem.base,           // MEM_POISON_FREED
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.mutex,
@@ -135,7 +136,7 @@ type
     constructor Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator = nil); overload;
     {** 使用 TFixedPoolConfig 记录创建池，支持 ZeroOnAlloc 选项 *}
     constructor Create(const aConfig: TFixedPoolConfig); overload;
-    {** 释放 arena 内存，FAF_MEM_DEBUG 下检测泄漏 *}
+    {** 释放 arena 内存，DEBUG 下检测泄漏 *}
     destructor Destroy; override;
   public
     // 固定块 API
@@ -327,13 +328,16 @@ begin
   else
     FAlignment := aAlignment;
   if (FAlignment and (FAlignment-1)) <> 0 then
-    raise EMemFixedPoolError.Create(aeAlignmentNotSupported, 'Alignment must be power of two');
+    raise EMemFixedPoolError.Create(aeAlignmentNotSupported,
+      'Alignment must be power of two (' + IntToStr(FAlignment) + ')');
   if (FBlockSize mod FAlignment) <> 0 then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of alignment');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      'Block size must be a multiple of alignment (' + IntToStr(FBlockSize) + ' mod ' + IntToStr(FAlignment) + ' <> 0)');
 
   // 计算总大小并检查溢出（乘法前溢出检查，避免除法）
   if (FBlockSize <> 0) and (FBlockSize > High(SizeUInt) div SizeUInt(FCapacity)) then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Total size overflow');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      'Total size overflow (' + IntToStr(FBlockSize) + ' * ' + IntToStr(FCapacity) + ')');
   FTotalSize := FBlockSize * SizeUInt(FCapacity);
 
   // 分配连续 Arena（对齐）
@@ -373,7 +377,7 @@ end;
 
 destructor TFixedPool.Destroy;
 begin
-  {$IFDEF FAF_MEM_DEBUG}
+  {$IFDEF DEBUG}
   if FAllocatedCount <> 0 then
     raise EMemFixedPoolError.Create(aeInternalError, FixedPoolLeakMessage(FAllocatedCount));
   {$ENDIF}
@@ -459,9 +463,9 @@ begin
   if FIsFree[LIdx] then
     raise EMemFixedPoolDoubleFree.Create(aeDoubleFree, 'Double free detected');
 
-  {$IFDEF FAF_MEM_DEBUG}
-  // 污化已释放内存，提升 UAF 暴露率
-  FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, $A5);
+  {$IFDEF DEBUG}
+  // Poison freed memory to expose use-after-free
+  FillMem(Pointer(PByte(FBuffer) + SizeUInt(LIdx) * FBlockSize), FBlockSize, MEM_POISON_FREED);
   {$ENDIF}
   FIsFree[LIdx] := True;
   Dec(FAllocatedCount);

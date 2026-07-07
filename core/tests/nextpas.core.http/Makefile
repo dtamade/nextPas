@@ -16,7 +16,14 @@ PROJECTS := \
 	test_http_server \
 	test_http_contract \
 	test_http_security \
-	test_http_registry
+	test_http_registry \
+	test_http_form \
+	test_http_middlewares \
+	test_http_stress \
+	test_http_websocket \
+	test_http_websocket_client \
+	test_http_fuzz \
+	test_http_https_redirect
 
 .PHONY: test clean $(PROJECTS)
 

@@ -17,8 +17,8 @@ type
   protected
     function  DoGetMem(ASize: SizeUInt): Pointer; override;
     function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
+    procedure DoFreeMem(APtr: Pointer); override;
   public
     function  Traits: TAllocatorTraits; override;
   end;
@@ -51,14 +51,14 @@ begin
   Result := crt_calloc(1, ASize);
 end;
 
-function TCrtAllocator.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TCrtAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := crt_realloc(ADst, ASize);
+  Result := crt_realloc(APtr, ASize);
 end;
 
-procedure TCrtAllocator.DoFreeMem(ADst: Pointer);
+procedure TCrtAllocator.DoFreeMem(APtr: Pointer);
 begin
-  crt_free(ADst);
+  crt_free(APtr);
 end;
 
 function TCrtAllocator.Traits: TAllocatorTraits;

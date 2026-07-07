@@ -13,7 +13,8 @@ uses
   np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
   np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer,
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
-  np_sema_type_check, np_sema_hir_lowering,
+  np_sema_type_check, np_sema_hir_lowering, np_sema_runtime_vars,
+  np_sema_string_ownership,
   nextpas.core.collections.vec;
 
 type
@@ -25,14 +26,6 @@ type
   end;
 
   TGenericCacheVec = specialize TVec<TGenericCacheEntry>;
-
-  TProcedureBodyEntry = record
-    Name: string;
-    Body: TGreenNode;
-    Decl: TGreenNode;
-    OwnerUnitId: string;
-    ScopeId: LongInt;
-  end;
 
   TParamSnapshot = record
     Name: string;
@@ -60,7 +53,7 @@ type
     FRootFileId: TSourceFileId;
     FNoFold: Boolean;
     FModel: TSemanticModel;
-    FProcedureBodies: array of TProcedureBodyEntry;
+    FProcedureBodies: TProcedureBodyArray;
     FCompilerProcNames: array of string;
     FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
@@ -74,30 +67,11 @@ type
     FCurrentProcessingUnitId: string;
     FBreakLabels: TStringVec;
     FContinueLabels: TStringVec;
-    FRuntimeVarNames: array of string;
-    FRuntimeStrVarNames: array of string;
-    FOwnedRuntimeStrVarNames: array of string;
-    FBorrowedRuntimeStrVarNames: array of string;
-    FOwnedStringReturnFuncNames: array of string;
-    FPendingStringTempNames: array of string;
-    FPendingStringTempSources: array of string;
     FBuiltinRegistry: TBuiltinRegistry;
-    FRuntimeArrVarNames: array of string;
-    FBorrowedRuntimeArrVarNames: array of string;
+    FRuntimeVars: TSemaRuntimeVarRegistry;
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
     FCurrentOwnedStringReturn: Boolean;
-    FClassVarNames: array of string;
-    FClassVarTypes: array of string;
-    FRecordVarNames: array of string;
-    FRecordVarTypes: array of string;
-    FManagedRecordVarNames: array of string;
-    FManagedRecordVarTypes: array of string;
-    FPointerVarNames: array of string;
-    FPointerVarTypes: array of string;
-    FVarParamNames: TStringVec;
-    FPtrReturnFuncs: array of string;
-    FPtrReturnTypes: array of string;
     FImportedUnitTrees: array of TGreenTree;
     FImportedUnitOwners: array of string;
     procedure RegisterRuntimeVar(const AName: string);
@@ -223,6 +197,7 @@ type
     function EncodeCallStatementArgs(
       const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
     function NewBlockLabel(const APrefix: string): string;
+    procedure FillOwnershipContext(out Ctx: TSemaOwnershipContext);
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
     procedure RegisterProcedureBody(const AName: string;
@@ -641,6 +616,202 @@ var
   GImportedUnitCacheCount: LongInt = 0;
   GDiskCache: TDiskSymbolCache = nil;
 
+{ === Ownership bridge callbacks === }
+
+function OwnershipBridge_LookupProcedureBody(const ACtx: Pointer;
+  const AName: string; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).LookupProcedureBody(AName, ABody, ADecl);
+end;
+
+function OwnershipBridge_DeclReturnsString(const ACtx: Pointer;
+  const ADecl: TGreenNode): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).DeclReturnsString(ADecl);
+end;
+
+function OwnershipBridge_LookupClassVar(const ACtx: Pointer;
+  const AName: string): string;
+begin
+  Result := TSemanticAnalyzer(ACtx).LookupClassVar(AName);
+end;
+
+function OwnershipBridge_TypeMetaRetStr(const ACtx: Pointer;
+  const ATypeName, AMethodName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).TypeMetaRetStr(ATypeName, AMethodName);
+end;
+function OwnershipBridge_IsRuntimeStrVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsRuntimeStrVar(AName);
+end;
+
+function OwnershipBridge_IsOwnedStringReturnFunc(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsOwnedStringReturnFunc(AName);
+end;
+
+procedure OwnershipBridge_RegisterOwnedStringReturnFunc(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterOwnedStringReturnFunc(AName);
+end;
+
+function OwnershipBridge_IsRuntimeVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsRuntimeVar(AName);
+end;
+
+procedure OwnershipBridge_RegisterRuntimeStrVar(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterRuntimeStrVar(AName);
+end;
+
+procedure OwnershipBridge_RegisterRuntimeVar(const ACtx: Pointer;
+  const AName: string);
+begin
+  TSemanticAnalyzer(ACtx).RegisterRuntimeVar(AName);
+end;
+
+function OwnershipBridge_HasOverload(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).HasOverload(AName);
+end;
+
+function OwnershipBridge_EncodeRuntimeIntExprFold(const ACtx: Pointer;
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).EncodeRuntimeIntExprFold(ANode, ABlob);
+end;
+
+function OwnershipBridge_IsVarParamAtPosition(const ACtx: Pointer;
+  const ADecl: TGreenNode; APosition: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsVarParamAtPosition(ADecl, APosition);
+end;
+
+function OwnershipBridge_DecodePascalStringLiteral(const ACtx: Pointer;
+  const AText: string): string;
+var
+  Raw: string;
+  Index: SizeInt;
+begin
+  Result := '';
+  if Length(AText) < 2 then
+    Exit;
+  if (AText[1] <> '''') or (AText[Length(AText)] <> '''') then
+    Exit;
+  Raw := Copy(AText, 2, Length(AText) - 2);
+  Index := 1;
+  while Index <= Length(Raw) do
+  begin
+    if (Raw[Index] = '''') and (Index < Length(Raw)) and (Raw[Index + 1] = '''') then
+    begin
+      Result := Result + '''';
+      Inc(Index, 2);
+    end
+    else
+    begin
+      Result := Result + Raw[Index];
+      Inc(Index);
+    end;
+  end;
+end;
+
+function OwnershipBridge_IsBorrowedRuntimeStrVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsBorrowedRuntimeStrVar(AName);
+end;
+
+function OwnershipBridge_IsBorrowedRuntimeArrVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsBorrowedRuntimeArrVar(AName);
+end;
+
+function OwnershipBridge_IsStaticRuntimeArrVar(const ACtx: Pointer;
+  const AName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).IsStaticRuntimeArrVar(AName);
+end;
+
+function OwnershipBridge_DynArrayElemSizeOfVar(const ACtx: Pointer;
+  const AName: string): Int64;
+begin
+  Result := TSemanticAnalyzer(ACtx).DynArrayElemSizeOfVar(AName);
+end;
+
+function OwnershipBridge_EvaluateStringConstant(const ACtx: Pointer;
+  const ANode: TGreenNode; out AValue: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).EvaluateStringConstant(ANode, AValue);
+end;
+
+function OwnershipBridge_TypeMetaFieldIndex(const ACtx: Pointer;
+  const ATypeName, AFieldName: string): Int64;
+begin
+  Result := TSemanticAnalyzer(ACtx).TypeMetaFieldIndex(ATypeName, AFieldName);
+end;
+
+function OwnershipBridge_TypeMetaFieldIsStr(const ACtx: Pointer;
+  const ATypeName, AFieldName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(ACtx).TypeMetaFieldIsStr(ATypeName, AFieldName);
+end;
+
+procedure OwnershipBridge_EmitSemaError(const ACtx: Pointer;
+  const ACode, AMessage: string; const AByteOffset: LongInt);
+begin
+  TSemanticAnalyzer(ACtx).EmitSemaError(ACode, AMessage, AByteOffset);
+end;
+
+procedure TSemanticAnalyzer.FillOwnershipContext(
+  out Ctx: TSemaOwnershipContext);
+begin
+  Ctx.Model := FModel;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.CurrentMethodClass := FCurrentMethodClass;
+  Ctx.CurrentRetVarName := FCurrentRetVarName;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  Ctx.BlockLabelCounter := FBlockLabelCounter;
+  Ctx.Diagnostics := FDiagnostics;
+  Ctx.RootFileId := FRootFileId;
+  Ctx.RootAst := FRootAst;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.RuntimeVars := FRuntimeVars;
+  Ctx.CallbackCtx := Pointer(Self);
+  Ctx.LookupProcedureBody := @OwnershipBridge_LookupProcedureBody;
+  Ctx.DeclReturnsString := @OwnershipBridge_DeclReturnsString;
+  Ctx.LookupClassVar := @OwnershipBridge_LookupClassVar;
+  Ctx.TypeMetaRetStr := @OwnershipBridge_TypeMetaRetStr;
+  Ctx.IsRuntimeStrVar := @OwnershipBridge_IsRuntimeStrVar;
+  Ctx.IsOwnedStringReturnFunc := @OwnershipBridge_IsOwnedStringReturnFunc;
+  Ctx.RegisterOwnedStringReturnFunc := @OwnershipBridge_RegisterOwnedStringReturnFunc;
+  Ctx.IsRuntimeVar := @OwnershipBridge_IsRuntimeVar;
+  Ctx.RegisterRuntimeStrVar := @OwnershipBridge_RegisterRuntimeStrVar;
+  Ctx.RegisterRuntimeVar := @OwnershipBridge_RegisterRuntimeVar;
+  Ctx.HasOverload := @OwnershipBridge_HasOverload;
+  Ctx.EncodeRuntimeIntExprFold := @OwnershipBridge_EncodeRuntimeIntExprFold;
+  Ctx.IsVarParamAtPosition := @OwnershipBridge_IsVarParamAtPosition;
+  Ctx.DecodePascalStringLiteral := @OwnershipBridge_DecodePascalStringLiteral;
+  Ctx.IsBorrowedRuntimeStrVar := @OwnershipBridge_IsBorrowedRuntimeStrVar;
+  Ctx.IsBorrowedRuntimeArrVar := @OwnershipBridge_IsBorrowedRuntimeArrVar;
+  Ctx.IsStaticRuntimeArrVar := @OwnershipBridge_IsStaticRuntimeArrVar;
+  Ctx.DynArrayElemSizeOfVar := @OwnershipBridge_DynArrayElemSizeOfVar;
+  Ctx.EvaluateStringConstant := @OwnershipBridge_EvaluateStringConstant;
+  Ctx.TypeMetaFieldIndex := @OwnershipBridge_TypeMetaFieldIndex;
+  Ctx.TypeMetaFieldIsStr := @OwnershipBridge_TypeMetaFieldIsStr;
+  Ctx.EmitSemaError := @OwnershipBridge_EmitSemaError;
+end;
+
 function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
   I: LongInt;
@@ -708,10 +879,11 @@ begin
   FCurrentScopeId := 0;
   FBreakLabels := specialize TVec<string>.Create;
   FContinueLabels := specialize TVec<string>.Create;
-  FVarParamNames := specialize TVec<string>.Create;
+  { FVarParamNames now managed by FRuntimeVars }
   FInliningStack := specialize TVec<string>.Create;
   FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
+  FRuntimeVars := TSemaRuntimeVarRegistry.Create;
 end;
 
 function TSemanticAnalyzer.NewBlockLabel(const APrefix: string): string;
@@ -721,96 +893,44 @@ begin
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeVarNames);
-  SetLength(FRuntimeVarNames, NextIndex + 1);
-  FRuntimeVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeVar(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRuntimeVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeStrVarNames);
-  SetLength(FRuntimeStrVarNames, NextIndex + 1);
-  FRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterOwnedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedRuntimeStrVarNames);
-  SetLength(FOwnedRuntimeStrVarNames, NextIndex + 1);
-  FOwnedRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterOwnedRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterBorrowedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeStrVarNames);
-  SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
-  FBorrowedRuntimeStrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterBorrowedRuntimeStrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterOwnedStringReturnFunc(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  if AName = '' then
-    Exit;
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedStringReturnFuncNames);
-  SetLength(FOwnedStringReturnFuncNames, NextIndex + 1);
-  FOwnedStringReturnFuncNames[NextIndex] := AName;
+  FRuntimeVars.RegisterOwnedStringReturnFunc(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
 var
-  Idx: LongInt;
   SymId: LongInt;
   TypeId: LongInt;
   TypeName: string;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
+  { Check registered runtime string vars via FRuntimeVars }
+  if FRuntimeVars.IsRuntimeStrVar(AName) then
+    Exit(True);
   { Also accept any string-typed variable — they hold safe string values }
   SymId := FModel.FindSymbolByName(AName);
   if SymId > 0 then
@@ -827,1471 +947,443 @@ begin
 end;
 
 function TSemanticAnalyzer.IsOwnedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsOwnedRuntimeStrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsBorrowedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsBorrowedRuntimeStrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsOwnedStringReturnFunc(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsOwnedStringReturnFunc(AName);
 end;
 
 procedure TSemanticAnalyzer.ClearPendingStringTempReleases;
 begin
-  SetLength(FPendingStringTempNames, 0);
-  SetLength(FPendingStringTempSources, 0);
+  FRuntimeVars.ClearPendingStringTempReleases;
 end;
 
 procedure TSemanticAnalyzer.QueuePendingStringTempRelease(
   const ATempName, ASourceName: string);
-var
-  NextIndex: SizeInt;
 begin
-  if (ATempName = '') or (ASourceName = '') then
-    Exit;
-  NextIndex := Length(FPendingStringTempNames);
-  SetLength(FPendingStringTempNames, NextIndex + 1);
-  SetLength(FPendingStringTempSources, NextIndex + 1);
-  FPendingStringTempNames[NextIndex] := ATempName;
-  FPendingStringTempSources[NextIndex] := ASourceName;
+  FRuntimeVars.QueuePendingStringTempRelease(ATempName, ASourceName);
 end;
 
 procedure TSemanticAnalyzer.EmitPendingStringTempReleases;
 var
   I: LongInt;
+  TempNames: TStringArray;
+  TempSources: TStringArray;
 begin
-  for I := High(FPendingStringTempNames) downto 0 do
+  TempNames := FRuntimeVars.GetPendingStringTempNames;
+  TempSources := FRuntimeVars.GetPendingStringTempSources;
+  for I := High(TempNames) downto 0 do
     FModel.AddTypedHirNode('string-temp-release-runtime',
-      FPendingStringTempSources[I], 0, 0, FPendingStringTempNames[I]);
-  ClearPendingStringTempReleases;
+      TempSources[I], 0, 0, TempNames[I]);
+  FRuntimeVars.ClearPendingStringTempReleases;
 end;
 
 procedure TSemanticAnalyzer.RegisterConcatOwnedStringReturnConsumers(
   const AConcatNode: TGreenNode; var AChanged: Boolean);
 var
-  I: LongInt;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  if (AConcatNode = nil) or (AConcatNode.NodeKind <> gnkBinaryExpression) or
-    (AConcatNode.Text <> '+') then
-    Exit;
-  for I := 0 to AConcatNode.ChildCount - 1 do
-  begin
-    if ConcatOperandOwnsStringReturn(AConcatNode.ChildAt(I), FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-    RegisterConcatOwnedStringReturnConsumers(AConcatNode.ChildAt(I), AChanged);
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.RegisterConcatOwnedStringReturnConsumers(Ctx, AConcatNode, AChanged);
 end;
+
 
 function TSemanticAnalyzer.IsRootOwnedStringReturnCandidate(
   const AEntry: TProcedureBodyEntry; const AIsStrReturn: Boolean): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := AIsStrReturn and (AEntry.Body <> nil) and
-    (AEntry.Decl <> nil) and (AEntry.Decl.NodeKind = gnkFunctionDecl) and
-    (Pos('.', AEntry.Name) = 0) and
-    SameText(AEntry.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsRootOwnedStringReturnCandidate(Ctx, AEntry, AIsStrReturn);
 end;
 
+
 function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
-var
-  I: LongInt;
-  Child: TGreenNode;
 begin
-  Result := False;
-  if ADecl = nil then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) and
-      (SameText(Child.Text, 'String') or SameText(Child.Text, 'AnsiString')) then
-      Exit(True);
-  end;
+  Result := np_sema_type_check.DeclReturnsString(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclaresStringLocal(const ADecl: TGreenNode;
   const AName: string): Boolean;
-var
-  I, J: LongInt;
-  Child, Decl, TypeChild: TGreenNode;
 begin
-  Result := False;
-  if (ADecl = nil) or (AName = '') then
-    Exit;
-  for I := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(I);
-    if (Child = nil) or (Child.NodeKind <> gnkVarSection) then
-      Continue;
-    for J := 0 to Child.ChildCount - 1 do
-    begin
-      Decl := Child.ChildAt(J);
-      if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
-        (not SameText(Decl.Text, AName)) or (Decl.ChildCount = 0) then
-        Continue;
-      TypeChild := Decl.ChildAt(0);
-      if (TypeChild <> nil) and
-        (SameText(TypeChild.Text, 'String') or
-         SameText(TypeChild.Text, 'AnsiString')) then
-        Exit(True);
-    end;
-  end;
+  Result := np_sema_type_check.DeclaresStringLocal(ADecl, AName);
 end;
 
 function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
   const ANode: TGreenNode; out AName: string): Boolean;
 var
-  BodyNode, DeclNode: TGreenNode;
-  SymbolId, TypeId: LongInt;
-  TypeName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  AName := '';
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if ANode.NodeKind = gnkIdentifier then
-    AName := ANode.Text
-  else if (ANode.NodeKind = gnkFunctionCall) then
-    AName := ANode.Text;
-  if AName = '' then
-    Exit;
-  if LookupProcedureBody(AName, BodyNode, DeclNode) and
-    DeclReturnsString(DeclNode) then
-    Exit(True);
-  { Fallback: check semantic model for imported functions }
-  SymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(AName);
-  if SymbolId <= 0 then
-    Exit;
-  { Only accept actual function/procedure symbols — not parameters,
-    variables, constants, or fields. }
-  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
-    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
-    Exit;
-  TypeId := FModel.SymbolTypeId(SymbolId);
-  if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
-  begin
-    TypeName := FModel.TypeAt(TypeId - 1).Name;
-    Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
-      SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
-      SameText(TypeName, 'UnicodeString');
-  end;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.StringReturnFunctionNameFromNode(
+    Ctx, ANode, AName);
 end;
 
 function TSemanticAnalyzer.FunctionCallReturnsString(
   const ANode: TGreenNode): Boolean;
 var
-  BodyNode, DeclNode: TGreenNode;
-  SymbolId, TypeId: LongInt;
-  TypeName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.Text = '') then
-    Exit;
-  if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
-    Exit(DeclReturnsString(DeclNode));
-  SymbolId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(ANode.Text);
-  if SymbolId <= 0 then
-    Exit;
-  { Only accept actual function/procedure symbols }
-  if not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'function') and
-    not SameText(FModel.SymbolAt(SymbolId - 1).Kind, 'procedure') then
-    Exit;
-  TypeId := FModel.SymbolTypeId(SymbolId);
-  if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
-    Exit;
-  TypeName := FModel.TypeAt(TypeId - 1).Name;
-  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.FunctionCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.MemberCallReturnsString(
   const ANode: TGreenNode): Boolean;
 var
-  CalleeNode, ReceiverNode, MemberNode: TGreenNode;
-  ReceiverTypeName: string;
-  ReceiverSymbolId, ReceiverTypeId: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkDotAccess) or
-    (CalleeNode.ChildCount < 2) then
-    Exit;
-  ReceiverNode := CalleeNode.ChildAt(0);
-  MemberNode := CalleeNode.ChildAt(1);
-  if (ReceiverNode = nil) or (MemberNode = nil) or
-    (ReceiverNode.NodeKind <> gnkIdentifier) or
-    (MemberNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if SameText(ReceiverNode.Text, 'Self') and (FCurrentMethodClass <> '') then
-    ReceiverTypeName := FCurrentMethodClass
-  else
-    ReceiverTypeName := LookupClassVar(ReceiverNode.Text);
-  if ReceiverTypeName = '' then
-  begin
-    ReceiverSymbolId := FModel.FindSymbolByName(ReceiverNode.Text);
-    if ReceiverSymbolId > 0 then
-    begin
-      ReceiverTypeId := FModel.SymbolTypeId(ReceiverSymbolId);
-      if (ReceiverTypeId > 0) and (ReceiverTypeId <= FModel.TypeCount) then
-        ReceiverTypeName := FModel.TypeAt(ReceiverTypeId - 1).Name;
-    end;
-  end;
-  Result := (ReceiverTypeName <> '') and
-    TypeMetaRetStr(ReceiverTypeName, MemberNode.Text);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.MemberCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.TypeIdIsManagedString(
   const ATypeId: LongInt): Boolean;
 var
-  TypeName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-  TypeName := FModel.TypeAt(ATypeId - 1).Name;
-  Result := SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString');
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.TypeIdIsManagedString(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnIdentifierTarget(
   const ATargetNode: TGreenNode): Boolean;
 var
-  LookupName, RetName: string;
-  Symbol: TSemanticSymbol;
-  SymbolId: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkIdentifier) then
-    Exit;
-
-  LookupName := ATargetNode.Text;
-  if LookupName = '' then
-    Exit;
-  if SameText(LookupName, 'Result') and (FCurrentRetVarName <> '') then
-    LookupName := FCurrentRetVarName;
-
-  SymbolId := FModel.LookupSymbol(LookupName, FCurrentScopeId);
-  if SymbolId <= 0 then
-    SymbolId := FModel.FindSymbolByName(LookupName);
-  if SymbolId <= 0 then
-    Exit;
-
-  Symbol := FModel.SymbolAt(SymbolId - 1);
-  if SameText(Symbol.Kind, 'variable') then
-    Exit(TypeIdIsManagedString(Symbol.TypeId));
-
-  RetName := FCurrentRetVarName;
-  Result := SameText(Symbol.Kind, 'function') and (RetName <> '') and
-    SameText(LookupName, RetName) and TypeIdIsManagedString(Symbol.TypeId);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnIdentifierTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnStoreTarget(
   const ATargetNode: TGreenNode): Boolean;
 var
-  BaseNode, FieldNode: TGreenNode;
-  BaseName, ClassTypeName: string;
-  BaseSymbolId, BaseTypeId: LongInt;
-  FieldMeta: TFieldMeta;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkDotAccess) or
-    (ATargetNode.ChildCount < 2) then
-    Exit;
-
-  BaseNode := ATargetNode.ChildAt(0);
-  FieldNode := ATargetNode.ChildAt(1);
-  if (BaseNode = nil) or (FieldNode = nil) or
-    (BaseNode.NodeKind <> gnkIdentifier) or
-    (FieldNode.NodeKind <> gnkIdentifier) then
-    Exit;
-
-  BaseName := BaseNode.Text;
-  if BaseName = '' then
-    Exit;
-  if SameText(BaseName, 'Self') then
-  begin
-    if FCurrentMethodClass = '' then
-      Exit;
-    BaseTypeId := FModel.FindTypeByName(FCurrentMethodClass);
-  end
-  else
-  begin
-    BaseSymbolId := FModel.LookupSymbol(BaseName, FCurrentScopeId);
-    if BaseSymbolId <= 0 then
-      BaseSymbolId := FModel.FindSymbolByName(BaseName);
-    if BaseSymbolId <= 0 then
-      Exit;
-    BaseTypeId := FModel.SymbolTypeId(BaseSymbolId);
-  end;
-  if (BaseTypeId <= 0) or (BaseTypeId > FModel.TypeCount) then
-    Exit;
-
-  ClassTypeName := FModel.TypeAt(BaseTypeId - 1).Name;
-  if ClassTypeName = '' then
-    Exit;
-  { Accept both class and record field assignments as safe targets for
-    owned string returns. If type metadata is not fully resolved (e.g.
-    imported record types), trust the assignment as safe. }
-  if TypeMetaIsClass(ClassTypeName) or TypeMetaIsRecord(ClassTypeName) then
-  begin
-    if FModel.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
-      Exit(FieldMeta.IsString and TypeIdIsManagedString(FieldMeta.TypeId));
-  end;
-  { Type exists but metadata not fully resolved — accept as safe.
-    This handles imported record types whose field metadata is not yet
-    populated during C6-H4 pre-registration.
-    TODO: tighten once type metadata is fully populated for all imported
-    types during the pre-registration phase. Currently this fallback is
-    necessary because imported record field metadata may be incomplete. }
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnStoreTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnConsumerTarget(
   const ATargetNode: TGreenNode): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  { Accept any valid assignment target as a safe consumer for owned string
-    returns. The key invariant: if the node appears on the left side of an
-    assignment, the owned string temporary is transferred to the target,
-    which is always safe. }
-  Result := (ATargetNode <> nil) and
-    (ATargetNode.NodeKind in [gnkIdentifier, gnkDotAccess,
-      gnkArrayAccess]);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConsumerTarget(Ctx, ATargetNode);
 end;
+
 
 function TSemanticAnalyzer.AssignmentOwnsStringReturn(const ANode: TGreenNode;
   const AEntry: TProcedureBodyEntry): Boolean;
 var
-  DestNode, SourceNode: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  if IsSupportedOwnedStringReturnStoreTarget(DestNode) then
-    Exit(True);
-  // Accept local variable assignments in any function context.
-  // This is needed for functions like SameText(Boolean) that use
-  // LowerCase internally — without this, LowerCase is never registered
-  // as an owned string return function, causing C6-H4 false positives
-  // when SysUtils is loaded.
-  if IsSupportedOwnedStringReturnIdentifierTarget(DestNode) then
-    Exit(True);
-  if not IsRootOwnedStringReturnCandidate(AEntry, DeclReturnsString(AEntry.Decl)) then
-    Exit;
-  Result := False;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.AssignmentOwnsStringReturn(Ctx, ANode, AEntry);
 end;
+
 
 function TSemanticAnalyzer.AssignmentOwnsTopLevelStringReturn(
   const ANode: TGreenNode): Boolean;
 var
-  DestNode, SourceNode: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  SourceNode := ANode.ChildAt(1);
-  if (DestNode = nil) or
-    (not StringReturnFunctionNameFromNode(SourceNode, FuncName)) then
-    Exit;
-  if HasOverload(FuncName) then
-    Exit;
-  Result := IsSupportedOwnedStringReturnConsumerTarget(DestNode);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.AssignmentOwnsTopLevelStringReturn(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.CallArgumentOwnsStringReturn(
   const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt;
   out AFuncName: string): Boolean;
 var
-  BodyNode, DeclNode, FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ACallNode = nil) or (AArgNode = nil) or
-    (ACallNode.NodeKind <> gnkFunctionCall) or
-    (AArgNode.NodeKind <> gnkFunctionCall) then
-    Exit;
-  if (ACallNode.Text = '') or HasOverload(ACallNode.Text) then
-    Exit;
-  if not LookupProcedureBody(ACallNode.Text, BodyNode, DeclNode) then
-    Exit;
-  if IsVarParamAtPosition(DeclNode, AArgPosition) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(AArgNode, AFuncName) then
-    Exit;
-  if HasOverload(AFuncName) then
-    Exit;
-  FuncNode := nil;
-  if AArgNode.ChildCount > 0 then
-    FuncNode := AArgNode.ChildAt(0);
-  Result := (FuncNode <> nil) and (FuncNode.NodeKind = gnkIdentifier) and
-    SameText(FuncNode.Text, AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CallArgumentOwnsStringReturn(Ctx, ACallNode, AArgNode, AArgPosition, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.DirectOwnedStringReturnAssignmentNode(
   const ANode: TGreenNode): Boolean;
 var
-  DestNode: TGreenNode;
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkAssignmentStatement) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  DestNode := ANode.ChildAt(0);
-  if not StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) then
-    Exit;
-  Result := (DestNode <> nil) and IsOwnedStringReturnFunc(SourceName) and
-    IsSupportedOwnedStringReturnConsumerTarget(DestNode);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.DirectOwnedStringReturnAssignmentNode(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnArgument(
   const ACallNode, AArgNode: TGreenNode; AArgPosition: LongInt): Boolean;
 var
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CallArgumentOwnsStringReturn(
-    ACallNode, AArgNode, AArgPosition, SourceName) and
-    IsOwnedStringReturnFunc(SourceName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnArgument(Ctx, ACallNode, AArgNode, AArgPosition);
 end;
+
 
 function TSemanticAnalyzer.LengthArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode, ArgNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 2) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  ArgNode := ANode.ChildAt(1);
-  if (CalleeNode = nil) or (ArgNode = nil) or
-    (CalleeNode.NodeKind <> gnkIdentifier) or
-    (not SameText(CalleeNode.Text, 'Length')) then
-    Exit;
-  if (ArgNode.NodeKind <> gnkFunctionCall) or
-    (ArgNode.ChildCount < 1) or (ArgNode.ChildAt(0) = nil) or
-    (ArgNode.ChildAt(0).NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
-    Exit;
-  Result := not HasOverload(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.LengthArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnLengthArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := LengthArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnLengthArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringLengthTemp(const ANode: TGreenNode;
   out ABlob: string): Boolean;
 var
-  SourceName, TempName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ABlob := '';
-  Result := False;
-  if not IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(TempName);
-  RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-    TempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    TempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
-    'strvar ' + TempName + #10);
-  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
-    TempName);
-  ABlob := 'var ' + TempName + '$len' + #10;
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringLengthTemp(Ctx, ANode, ABlob);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringConcatLengthTemp(
   const ANode: TGreenNode; out ABlob: string): Boolean;
 var
-  ConcatNode: TGreenNode;
-  LeftName, RightName, TempName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ABlob := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 2) or (ANode.ChildAt(0) = nil) or
-    (not SameText(ANode.ChildAt(0).Text, 'Length')) then
-    Exit;
-  ConcatNode := ANode.ChildAt(1);
-  if (ConcatNode = nil) or (ConcatNode.NodeKind <> gnkBinaryExpression) or
-    (ConcatNode.Text <> '+') or (ConcatNode.ChildCount < 2) or
-    (not ConcatTreeHasSupportedOwnedStringReturn(ConcatNode)) or
-    (not CanEmitStrConcatOperand(ConcatNode)) then
-    Exit;
-  LeftName := EmitStrConcatOperand(ConcatNode.ChildAt(0), '');
-  RightName := EmitStrConcatOperand(ConcatNode.ChildAt(1), '');
-  if (LeftName = '') or (RightName = '') then
-    Exit;
-  Inc(FBlockLabelCounter);
-  TempName := '$str_len_cat_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(TempName);
-  RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-    TempName);
-  FModel.AddTypedHirNode('assign-tstring-concat-runtime', TempName, 0, 0,
-    LeftName + #9 + RightName);
-  FModel.AddTypedHirNode('string-temp-length-runtime', TempName, 0, 0,
-    'strvar ' + TempName + #10);
-  QueuePendingStringTempRelease(TempName, TempName);
-  EmitPendingStringTempReleases;
-  ABlob := 'var ' + TempName + '$len' + #10;
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringConcatLengthTemp(Ctx, ANode, ABlob);
 end;
+
 
 function TSemanticAnalyzer.CopyArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode, ArgNode, FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 4) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  ArgNode := ANode.ChildAt(1);
-  if (CalleeNode = nil) or (ArgNode = nil) or
-    (CalleeNode.NodeKind <> gnkIdentifier) or
-    (not SameText(CalleeNode.Text, 'Copy')) then
-    Exit;
-  if (ArgNode.NodeKind <> gnkFunctionCall) or
-    (ArgNode.ChildCount < 1) then
-    Exit;
-  FuncNode := ArgNode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ArgNode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CopyArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnCopyArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CopyArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCopyArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringCopyTemp(const ACopyNode: TGreenNode;
   const ADestName: string; out ATempName: string): Boolean;
 var
-  SourceName, StartBlob, LenBlob: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ATempName := '';
-  Result := False;
-  if (ADestName = '') or
-    (not IsSupportedOwnedStringReturnCopyArgument(ACopyNode, SourceName)) then
-    Exit;
-  if (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(2), StartBlob)) or
-    (not EncodeRuntimeIntExprFold(ACopyNode.ChildAt(3), LenBlob)) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  ATempName := '$str_cpy_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(ATempName);
-  RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
-    ATempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  FModel.AddTypedHirNode('tstring-copy-runtime', ADestName, 0, 0,
-    ADestName + #9 + ATempName + #9 + StartBlob + #9 + LenBlob);
-  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
-    ATempName);
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringCopyTemp(Ctx, ACopyNode, ADestName, ATempName);
 end;
+
 
 function TSemanticAnalyzer.WriteArgumentOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  CalleeNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  CalleeNode := ANode.ChildAt(0);
-  if (CalleeNode = nil) or (CalleeNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(CalleeNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.WriteArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnWriteArgument(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := WriteArgumentOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnWriteArgument(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringWriteTemp(
   const ANode: TGreenNode; out ATempName: string): Boolean;
 var
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ATempName := '';
-  Result := False;
-  if not IsSupportedOwnedStringReturnWriteArgument(ANode, SourceName) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  ATempName := '$str_wrt_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(ATempName);
-  RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
-    ATempName);
-  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
-    'ptr len owner alloc_size');
-  QueuePendingStringTempRelease(ATempName, SourceName);
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringWriteTemp(Ctx, ANode, ATempName);
 end;
+
 
 function TSemanticAnalyzer.EmitOwnedStringConcatWriteTemp(
   const ANode: TGreenNode; out ATempName: string): Boolean;
 var
-  LeftName, RightName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ATempName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkBinaryExpression) or
-    (ANode.Text <> '+') or (ANode.ChildCount < 2) or
-    (not ConcatTreeHasSupportedOwnedStringReturn(ANode)) or
-    (not CanEmitStrConcatOperand(ANode)) then
-    Exit;
-  LeftName := EmitStrConcatOperand(ANode.ChildAt(0), '');
-  RightName := EmitStrConcatOperand(ANode.ChildAt(1), '');
-  if (LeftName = '') or (RightName = '') then
-    Exit;
-  Inc(FBlockLabelCounter);
-  ATempName := '$str_wrt_cat_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(ATempName);
-  RegisterRuntimeStrVar(ATempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
-    ATempName);
-  FModel.AddTypedHirNode('assign-tstring-concat-runtime', ATempName, 0, 0,
-    LeftName + #9 + RightName);
-  QueuePendingStringTempRelease(ATempName, ATempName);
-  Result := True;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitOwnedStringConcatWriteTemp(Ctx, ANode, ATempName);
 end;
+
 
 function TSemanticAnalyzer.ConcatOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount <> 1) then
-    Exit;
-  FuncNode := ANode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.ConcatOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnConcatOperand(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := ConcatOperandOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConcatOperand(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.ConcatExpressionConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode; const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
-  I: LongInt;
-  Child: TGreenNode;
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if IsSupportedOwnedStringReturnConcatOperand(ANode, SourceName) then
-    Exit(False);
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
-  begin
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if ConcatExpressionConsumesOwnedStringReturnDeferred(Child,
-        AInsideDirectOwnedAssignmentRhs) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-  Result := NodeConsumesOwnedStringReturnDeferred(ANode,
-    AInsideDirectOwnedAssignmentRhs);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.ConcatExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
 end;
+
 
 function TSemanticAnalyzer.CompareOperandOwnsStringReturn(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
 var
-  FuncNode: TGreenNode;
+  Ctx: TSemaOwnershipContext;
 begin
-  AFuncName := '';
-  Result := False;
-  if (ANode = nil) or (ANode.NodeKind <> gnkFunctionCall) or
-    (ANode.ChildCount < 1) then
-    Exit;
-  FuncNode := ANode.ChildAt(0);
-  if (FuncNode = nil) or (FuncNode.NodeKind <> gnkIdentifier) then
-    Exit;
-  if not StringReturnFunctionNameFromNode(ANode, AFuncName) then
-    Exit;
-  Result := SameText(FuncNode.Text, AFuncName) and
-    (not HasOverload(AFuncName));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CompareOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnCompareOperand(
   const ANode: TGreenNode; out AFuncName: string): Boolean;
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CompareOperandOwnsStringReturn(ANode, AFuncName) and
-    IsOwnedStringReturnFunc(AFuncName);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCompareOperand(Ctx, ANode, AFuncName);
 end;
+
 
 function TSemanticAnalyzer.BoolConditionHasSupportedOwnedStringCompare(
   const ANode: TGreenNode): Boolean;
 var
-  Dummy: string;
-
-  function CanEmitOwnedCompareOperand(const ALocalNode: TGreenNode): Boolean;
-  begin
-    Result := False;
-    if ALocalNode = nil then
-      Exit;
-    if (ALocalNode.NodeKind = gnkIdentifier) and
-      IsRuntimeStrVar(ALocalNode.Text) then
-      Exit(True);
-    if ALocalNode.NodeKind = gnkStringLiteral then
-      Exit(True);
-    if IsSupportedOwnedStringReturnCompareOperand(ALocalNode, Dummy) then
-      Exit(True);
-    if (ALocalNode.NodeKind = gnkBinaryExpression) and
-      (ALocalNode.Text = '+') and (ALocalNode.ChildCount >= 2) then
-      Exit(
-        ConcatTreeHasSupportedOwnedStringReturn(ALocalNode) and
-        CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
-        CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1)));
-  end;
-
-  function IsSupportedCompareNode(const ALocalNode: TGreenNode): Boolean;
-  begin
-    Result := False;
-    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkBinaryExpression) or
-      ((ALocalNode.Text <> '=') and (ALocalNode.Text <> '<>')) or
-      (ALocalNode.ChildCount < 2) then
-      Exit;
-    if not (CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
-      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1))) then
-      Exit;
-    Result :=
-      IsSupportedOwnedStringReturnCompareOperand(ALocalNode.ChildAt(0),
-        Dummy) or
-      IsSupportedOwnedStringReturnCompareOperand(ALocalNode.ChildAt(1),
-        Dummy) or
-      ConcatTreeHasSupportedOwnedStringReturn(ALocalNode.ChildAt(0)) or
-      ConcatTreeHasSupportedOwnedStringReturn(ALocalNode.ChildAt(1));
-  end;
-
-  function HasSupportedOwnedCompare(const ALocalNode: TGreenNode): Boolean;
-  begin
-    Result := False;
-    if ALocalNode = nil then
-      Exit;
-    if (ALocalNode.NodeKind = gnkUnaryExpression) and
-      SameText(ALocalNode.Text, 'not') and (ALocalNode.ChildCount >= 1) then
-      Exit(HasSupportedOwnedCompare(ALocalNode.ChildAt(0)));
-    if (ALocalNode.NodeKind = gnkBinaryExpression) and
-      (SameText(ALocalNode.Text, 'and') or SameText(ALocalNode.Text, 'or')) and
-      (ALocalNode.ChildCount >= 2) then
-      Exit(HasSupportedOwnedCompare(ALocalNode.ChildAt(0)) or
-        HasSupportedOwnedCompare(ALocalNode.ChildAt(1)));
-    Result := IsSupportedCompareNode(ALocalNode);
-  end;
-
-  function CanEmitOwnedBoolCondition(const ALocalNode: TGreenNode): Boolean;
-  begin
-    Result := False;
-    if ALocalNode = nil then
-      Exit;
-    if (ALocalNode.NodeKind = gnkUnaryExpression) and
-      SameText(ALocalNode.Text, 'not') and (ALocalNode.ChildCount >= 1) then
-      Exit(CanEmitOwnedBoolCondition(ALocalNode.ChildAt(0)));
-    if (ALocalNode.NodeKind = gnkIdentifier) and
-      (IsRuntimeVar(ALocalNode.Text) or SameText(ALocalNode.Text, 'True') or
-       SameText(ALocalNode.Text, 'False')) then
-      Exit(True);
-    if (ALocalNode.NodeKind = gnkBinaryExpression) and
-      (SameText(ALocalNode.Text, 'and') or SameText(ALocalNode.Text, 'or')) and
-      (ALocalNode.ChildCount >= 2) then
-      Exit(CanEmitOwnedBoolCondition(ALocalNode.ChildAt(0)) and
-        CanEmitOwnedBoolCondition(ALocalNode.ChildAt(1)));
-    Result :=
-      (ALocalNode.NodeKind = gnkBinaryExpression) and
-      ((ALocalNode.Text = '=') or (ALocalNode.Text = '<>')) and
-      (ALocalNode.ChildCount >= 2) and
-      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(0)) and
-      CanEmitOwnedCompareOperand(ALocalNode.ChildAt(1));
-  end;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := CanEmitOwnedBoolCondition(ANode) and
-    HasSupportedOwnedCompare(ANode);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.BoolConditionHasSupportedOwnedStringCompare(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.CompareExpressionConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode): Boolean;
 var
-  I: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if (ANode.NodeKind = gnkUnaryExpression) and SameText(ANode.Text, 'not') and
-    (ANode.ChildCount >= 1) then
-    Exit(CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)));
-  if (ANode.NodeKind = gnkBinaryExpression) and
-    (SameText(ANode.Text, 'and') or SameText(ANode.Text, 'or')) and
-    (ANode.ChildCount >= 2) then
-    Exit(CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)) or
-      CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(1)));
-  if (ANode.NodeKind <> gnkBinaryExpression) or
-    ((ANode.Text <> '=') and (ANode.Text <> '<>')) or
-    (ANode.ChildCount < 2) then
-  begin
-    { In compare expressions (if/while conditions), all sub-expressions are
-      consumed immediately. Temporaries from owned string returns are safe. }
-    for I := 0 to ANode.ChildCount - 1 do
-      if NodeConsumesOwnedStringReturnDeferred(ANode.ChildAt(I), True) then
-        Exit(True);
-    Exit(False);
-  end;
-  if CanEmitStrCompareOperand(ANode.ChildAt(0), True) and
-    CanEmitStrCompareOperand(ANode.ChildAt(1), True) then
-    Exit(False);
-  Result := NodeConsumesOwnedStringReturnDeferred(ANode, False);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CompareExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.NodeConsumesOwnedStringReturnDeferred(
   const ANode: TGreenNode;
   const AInsideDirectOwnedAssignmentRhs: Boolean): Boolean;
 var
-  I: LongInt;
-  BodyNode, Child, DeclNode, DestNode, SourceNode: TGreenNode;
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-
-  if (ANode.NodeKind = gnkProcedureDecl) or
-    (ANode.NodeKind = gnkFunctionDecl) then
-    Exit;
-
-  { Concatenation (+) is a safe context: temporaries live for the entire
-    expression evaluation. This handles patterns like FormatFloat(...) + 'x'
-    or 'a' + F() + 'b' where the owned string return is used in a concatenation. }
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
-  begin
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then Continue;
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  { Set constructors [...] are safe contexts: temporaries live for the entire
-    constructor evaluation. This handles patterns like TextFormat('...', [FormatFloat(...)])
-    where the owned string return is used inside a set constructor. }
-  if ANode.NodeKind = gnkSetConstructor then
-  begin
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then Continue;
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  if (ANode.NodeKind = gnkIfStatement) and (ANode.ChildCount >= 1) then
-  begin
-    if CompareExpressionConsumesOwnedStringReturnDeferred(ANode.ChildAt(0)) then
-      Exit(True);
-    for I := 1 to ANode.ChildCount - 1 do
-      if NodeConsumesOwnedStringReturnDeferred(
-        ANode.ChildAt(I), AInsideDirectOwnedAssignmentRhs) then
-        Exit(True);
-    Exit(False);
-  end;
-
-  if ((ANode.NodeKind = gnkWhileStatement) or
-    (ANode.NodeKind = gnkRepeatStatement)) and (ANode.ChildCount >= 2) then
-  begin
-    if ANode.NodeKind = gnkWhileStatement then
-    begin
-      Child := ANode.ChildAt(0);
-      BodyNode := ANode.ChildAt(1);
-    end
-    else
-    begin
-      BodyNode := ANode.ChildAt(0);
-      Child := ANode.ChildAt(1);
-    end;
-    if CompareExpressionConsumesOwnedStringReturnDeferred(Child) then
-      Exit(True);
-    if BoolConditionHasSupportedOwnedStringCompare(Child) then
-      Exit(NodeConsumesOwnedStringReturnDeferred(
-        BodyNode, AInsideDirectOwnedAssignmentRhs));
-  end;
-
-  if DirectOwnedStringReturnAssignmentNode(ANode) then
-  begin
-    if ANode.ChildCount >= 2 then
-    begin
-      for I := 0 to ANode.ChildAt(1).ChildCount - 1 do
-      begin
-        if (ANode.ChildAt(1).NodeKind = gnkFunctionCall) and (I = 0) then
-          Continue;
-        if (ANode.ChildAt(1).NodeKind = gnkFunctionCall) and
-          IsSupportedOwnedStringReturnArgument(ANode.ChildAt(1),
-            ANode.ChildAt(1).ChildAt(I), I - 1) then
-          Continue;
-        if NodeConsumesOwnedStringReturnDeferred(
-          ANode.ChildAt(1).ChildAt(I), False) then
-          Exit(True);
-      end;
-    end;
-    Exit(False);
-  end;
-
-  if ANode.NodeKind = gnkAssignmentStatement then
-  begin
-    if ANode.ChildCount >= 2 then
-    begin
-      DestNode := ANode.ChildAt(0);
-      SourceNode := ANode.ChildAt(1);
-      if (IsSupportedOwnedStringReturnStoreTarget(DestNode) or
-        IsSupportedOwnedStringReturnIdentifierTarget(DestNode)) and
-        StringReturnFunctionNameFromNode(SourceNode, SourceName) and
-        IsOwnedStringReturnFunc(SourceName) then
-        Exit(False);
-      if (DestNode <> nil) and (DestNode.NodeKind = gnkIdentifier) and
-        IsRuntimeStrVar(DestNode.Text) and
-        (SourceNode <> nil) and (SourceNode.NodeKind = gnkBinaryExpression) and
-        (SourceNode.Text = '+') then
-        Exit(ConcatExpressionConsumesOwnedStringReturnDeferred(SourceNode,
-          True));
-      Exit(NodeConsumesOwnedStringReturnDeferred(
-        SourceNode, {AInsideDirectOwnedAssignmentRhs=}True));
-    end;
-    Exit(False);
-  end;
-
-  if (ANode.NodeKind = gnkFunctionCall) and
-    ((SameText(ANode.Text, 'WriteLn')) or (SameText(ANode.Text, 'Write'))) then
-  begin
-    for I := 1 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then
-        Continue;
-      if IsSupportedOwnedStringReturnWriteArgument(Child, SourceName) then
-        Continue;
-      if (Child.NodeKind = gnkBinaryExpression) and (Child.Text = '+') and
-        ConcatTreeHasSupportedOwnedStringReturn(Child) and
-        CanEmitStrConcatOperand(Child) then
-        Continue;
-      { WriteLn/Write arguments are safe contexts: temporaries live for
-        the entire call duration. }
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  if (ANode.NodeKind = gnkFunctionCall) and
-    LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
-    (not FunctionCallReturnsString(ANode)) then
-  begin
-    for I := 1 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then
-        Continue;
-      if IsSupportedOwnedStringReturnArgument(ANode, Child, I - 1) then
-        Continue;
-      if NodeConsumesOwnedStringReturnDeferred(
-        Child, AInsideDirectOwnedAssignmentRhs) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  if IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
-    Exit(False);
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, 'Length') and
-    (ANode.ChildAt(1) <> nil) and
-    (ANode.ChildAt(1).NodeKind = gnkBinaryExpression) and
-    (ANode.ChildAt(1).Text = '+') and
-    ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(1)) and
-    CanEmitStrConcatOperand(ANode.ChildAt(1)) then
-    Exit(False);
-  if IsSupportedOwnedStringReturnCopyArgument(ANode, SourceName) then
-    Exit(False);
-
-  if StringReturnFunctionNameFromNode(ANode, SourceName) and
-    IsOwnedStringReturnFunc(SourceName) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
-  if MemberCallReturnsString(ANode) and
-    (not AInsideDirectOwnedAssignmentRhs) then
-    Exit(True);
-  { Note: FunctionCallReturnsString catch-all intentionally removed.
-    It was too broad — flagging ALL string-returning functions, not just
-    registered owned string return functions. The StringReturnFunctionNameFromNode
-    + IsOwnedStringReturnFunc check above correctly limits to registered
-    functions. }
-  if DirectOwnedStringReturnAssignmentNode(ANode) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), SourceName) and
-    HasOverload(SourceName) then
-    Exit(True);
-
-  { Exit(Expr) is equivalent to Result := Expr — the temporary lives for
-    the entire function scope. Treat as safe context.
-    Without this guard, Exit(F()) patterns where F is an imported function
-    (like ExpandFileName from nextpas.core.fs) would fall through to the
-    for-loop below, where the F() child would be flagged as a deferred
-    owned-string return. }
-  if ANode.NodeKind = gnkExitStatement then
-  begin
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if Child = nil then Continue;
-      { The owned string temporary from F() in Exit(F()) lives for the
-        entire duration of Exit — treat as safe context. }
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end;
-    Exit(False);
-  end;
-
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    { Owned string temporaries passed as arguments to a function call are
-      safe: the temporary lives for the entire enclosing call's duration.
-      This handles patterns like SameText(LowerCase(S), 'value') where the
-      outer call has overloads (preventing IsSupportedOwnedStringReturnArgument
-      from applying). Mark argument positions (I >= 1) as safe contexts. }
-    if (ANode.NodeKind = gnkFunctionCall) and (I >= 1) then
-    begin
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end
-    { Concatenation operands are safe: temporaries live for the entire
-      expression evaluation. }
-    else if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
-    begin
-      if NodeConsumesOwnedStringReturnDeferred(Child, True) then
-        Exit(True);
-    end
-    else if NodeConsumesOwnedStringReturnDeferred(
-      Child, AInsideDirectOwnedAssignmentRhs) then
-      Exit(True);
-  end;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.NodeConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
 end;
+
 
 procedure TSemanticAnalyzer.ScanOwnedStringReturnConsumers(
   const ANode: TGreenNode; const AEntry: TProcedureBodyEntry;
   var AChanged: Boolean);
 var
-  I, J: LongInt;
-  Child: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  if ANode = nil then
-    Exit;
-  if AssignmentOwnsStringReturn(ANode, AEntry) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
-    (not IsOwnedStringReturnFunc(FuncName)) then
-  begin
-    RegisterOwnedStringReturnFunc(FuncName);
-    AChanged := True;
-  end;
-  if ANode.NodeKind = gnkFunctionCall then
-  begin
-    for J := 1 to ANode.ChildCount - 1 do
-    begin
-      if CallArgumentOwnsStringReturn(
-        ANode, ANode.ChildAt(J), J - 1, FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-      if (SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write')) and
-        WriteArgumentOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-      if SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write') then
-        RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(J), AChanged);
-    end;
-    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-    if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
-      SameText(ANode.ChildAt(0).Text, 'Length') then
-      RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(1), AChanged);
-    if CopyArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
-  begin
-    for J := 0 to ANode.ChildCount - 1 do
-    begin
-      if ConcatOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    end;
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and
-    ((ANode.Text = '=') or (ANode.Text = '<>')) then
-  begin
-    for J := 0 to ANode.ChildCount - 1 do
-    begin
-      if CompareOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    end;
-  end;
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    if (Child <> nil) and
-      ((Child.NodeKind = gnkProcedureDecl) or
-       (Child.NodeKind = gnkFunctionDecl)) then
-      Continue;
-    ScanOwnedStringReturnConsumers(Child, AEntry, AChanged);
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.ScanOwnedStringReturnConsumers(Ctx, ANode, AEntry, AChanged);
 end;
+
 
 procedure TSemanticAnalyzer.ScanTopLevelOwnedStringReturnConsumers(
   const ANode: TGreenNode; var AChanged: Boolean);
 var
-  I, J: LongInt;
-  Child: TGreenNode;
-  FuncName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  if ANode = nil then
-    Exit;
-  if AssignmentOwnsTopLevelStringReturn(ANode) and
-    StringReturnFunctionNameFromNode(ANode.ChildAt(1), FuncName) and
-    (not IsOwnedStringReturnFunc(FuncName)) then
-  begin
-    RegisterOwnedStringReturnFunc(FuncName);
-    AChanged := True;
-  end;
-  if ANode.NodeKind = gnkFunctionCall then
-  begin
-    for J := 1 to ANode.ChildCount - 1 do
-    begin
-      if CallArgumentOwnsStringReturn(
-        ANode, ANode.ChildAt(J), J - 1, FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-      if (SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write')) and
-        WriteArgumentOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-      if SameText(ANode.Text, 'WriteLn') or SameText(ANode.Text, 'Write') then
-        RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(J), AChanged);
-    end;
-    if LengthArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-    if (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
-      SameText(ANode.ChildAt(0).Text, 'Length') then
-      RegisterConcatOwnedStringReturnConsumers(ANode.ChildAt(1), AChanged);
-    if CopyArgumentOwnsStringReturn(ANode, FuncName) and
-      (not IsOwnedStringReturnFunc(FuncName)) then
-    begin
-      RegisterOwnedStringReturnFunc(FuncName);
-      AChanged := True;
-    end;
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') then
-  begin
-    for J := 0 to ANode.ChildCount - 1 do
-    begin
-      if ConcatOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    end;
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and
-    ((ANode.Text = '=') or (ANode.Text = '<>')) then
-  begin
-    for J := 0 to ANode.ChildCount - 1 do
-    begin
-      if CompareOperandOwnsStringReturn(ANode.ChildAt(J), FuncName) and
-        (not IsOwnedStringReturnFunc(FuncName)) then
-      begin
-        RegisterOwnedStringReturnFunc(FuncName);
-        AChanged := True;
-      end;
-    end;
-  end;
-  for I := 0 to ANode.ChildCount - 1 do
-  begin
-    Child := ANode.ChildAt(I);
-    if (Child <> nil) and
-      ((Child.NodeKind = gnkProcedureDecl) or
-       (Child.NodeKind = gnkFunctionDecl)) then
-      Continue;
-    ScanTopLevelOwnedStringReturnConsumers(Child, AChanged);
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.ScanTopLevelOwnedStringReturnConsumers(Ctx, ANode, AChanged);
 end;
+
 
 procedure TSemanticAnalyzer.CheckDeferredOwnedStringReturnConsumers(
   const ANode: TGreenNode);
+var
+  Ctx: TSemaOwnershipContext;
 begin
-  if ANode = nil then
-    Exit;
-  if NodeConsumesOwnedStringReturnDeferred(ANode, False) then
-  begin
-    EmitSemaError(
-      'sema.c6h4-owned-string-return-deferred-consumer',
-      'C6-H4: owned string return used in deferred context; ' +
-      'assign to a local variable first',
-      ANode.ByteOffset);
-    Exit;
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.CheckDeferredOwnedStringReturnConsumers(Ctx, ANode);
 end;
+
 
 procedure TSemanticAnalyzer.PreRegisterOwnedStringReturnConsumers;
 var
-  I: LongInt;
-  Changed: Boolean;
-  Entry: TProcedureBodyEntry;
-  RootNode: TGreenNode;
-  SavedMethodClass, SavedRetVarName: string;
-  SavedScopeId: LongInt;
+  Ctx: TSemaOwnershipContext;
 begin
-  repeat
-    Changed := False;
-    if (FRootAst <> nil) and FRootAst.IsValid then
-    begin
-      RootNode := FRootAst.RootNode;
-      if RootNode <> nil then
-        ScanTopLevelOwnedStringReturnConsumers(RootNode, Changed);
-    end;
-    for I := 0 to Length(FProcedureBodies) - 1 do
-    begin
-      Entry := FProcedureBodies[I];
-      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
-        Continue;
-      SavedMethodClass := FCurrentMethodClass;
-      SavedRetVarName := FCurrentRetVarName;
-      SavedScopeId := FCurrentScopeId;
-      if Pos('.', Entry.Name) > 0 then
-        FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1)
-      else
-        FCurrentMethodClass := '';
-      FCurrentRetVarName := Entry.Name;
-      if Pos('.', FCurrentRetVarName) > 0 then
-        FCurrentRetVarName := Copy(FCurrentRetVarName,
-          Pos('.', FCurrentRetVarName) + 1, Length(FCurrentRetVarName));
-      if Entry.ScopeId > 0 then
-        FCurrentScopeId := Entry.ScopeId;
-      try
-        ScanOwnedStringReturnConsumers(Entry.Body, Entry, Changed);
-      finally
-        FCurrentMethodClass := SavedMethodClass;
-        FCurrentRetVarName := SavedRetVarName;
-        FCurrentScopeId := SavedScopeId;
-      end;
-    end;
-  until not Changed;
-  { Root-level C6-H4 check removed: procedure body loop below already covers
-    all root-unit bodies with OwnerUnitId filtering. The old root-level call
-    traversed imported units' code and caused false positives. }
-  if not FDiagnostics.HasErrors then
-  begin
-    for I := 0 to Length(FProcedureBodies) - 1 do
-    begin
-      Entry := FProcedureBodies[I];
-      if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
-        Continue;
-      // Skip C6-H4 check for procedure bodies in external (non-root) units.
-      // External units like SysUtils may use owned string returns in safe patterns
-      // that the C6-H4 check does not fully support.
-      if not SameText(NormalizeUnitIdentity(Entry.OwnerUnitId),
-        NormalizeUnitIdentity(FUnitGraph.RootName)) then
-        Continue;
-      SavedMethodClass := FCurrentMethodClass;
-      SavedRetVarName := FCurrentRetVarName;
-      SavedScopeId := FCurrentScopeId;
-      if Pos('.', Entry.Name) > 0 then
-        FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1)
-      else
-        FCurrentMethodClass := '';
-      FCurrentRetVarName := Entry.Name;
-      if Pos('.', FCurrentRetVarName) > 0 then
-        FCurrentRetVarName := Copy(FCurrentRetVarName,
-          Pos('.', FCurrentRetVarName) + 1, Length(FCurrentRetVarName));
-      if Entry.ScopeId > 0 then
-        FCurrentScopeId := Entry.ScopeId;
-      try
-        CheckDeferredOwnedStringReturnConsumers(Entry.Body);
-      finally
-        FCurrentMethodClass := SavedMethodClass;
-        FCurrentRetVarName := SavedRetVarName;
-        FCurrentScopeId := SavedScopeId;
-      end;
-      if FDiagnostics.HasErrors then
-        Exit;
-    end;
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.PreRegisterOwnedStringReturnConsumers(Ctx);
 end;
 
+
 procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeArrVarNames);
-  SetLength(FRuntimeArrVarNames, NextIndex + 1);
-  FRuntimeArrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterRuntimeArrVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterBorrowedRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeArrVarNames);
-  SetLength(FBorrowedRuntimeArrVarNames, NextIndex + 1);
-  FBorrowedRuntimeArrVarNames[NextIndex] := AName;
+  FRuntimeVars.RegisterBorrowedRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsBorrowedRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsBorrowedRuntimeArrVar(AName);
 end;
 
 function TSemanticAnalyzer.IsStaticRuntimeArrVar(const AName: string): Boolean;
@@ -2311,45 +1403,21 @@ end;
 
 procedure TSemanticAnalyzer.EmitOwnedStringCleanupNodes(const AExceptName: string);
 var
-  I: LongInt;
-  VarName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  for I := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-  begin
-    VarName := FOwnedRuntimeStrVarNames[I];
-    if (VarName = '') or IsBorrowedRuntimeStrVar(VarName) or
-      SameText(VarName, AExceptName) then
-      Continue;
-    FModel.AddTypedHirNode(
-      'tstring-cleanup-runtime',
-      VarName,
-      0,
-      0,
-      VarName
-    );
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.EmitOwnedStringCleanupNodes(Ctx, AExceptName);
 end;
+
 
 procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
 var
-  I: LongInt;
-  VarName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  for I := 0 to Length(FRuntimeArrVarNames) - 1 do
-  begin
-    VarName := FRuntimeArrVarNames[I];
-    if (VarName = '') or IsBorrowedRuntimeArrVar(VarName) or
-      IsStaticRuntimeArrVar(VarName) then
-      Continue;
-    FModel.AddTypedHirNode(
-      'dynarray-cleanup-runtime',
-      VarName,
-      0,
-      0,
-      VarName + #9 + 'int ' + IntToStr(DynArrayElemSizeOfVar(VarName)) + #10
-    );
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.EmitOwnedDynArrayCleanupNodes(Ctx);
 end;
+
 
 function TSemanticAnalyzer.IsManagedRecord(const ATypeName: string): Boolean;
 var
@@ -2378,139 +1446,52 @@ end;
 
 procedure TSemanticAnalyzer.EmitOwnedManagedRecordCleanupNodes;
 var
-  I, J: LongInt;
-  VarName, TypeName, Blob: string;
-  Meta: TTypeMetadata;
-  NeedCleanup: Boolean;
+  Ctx: TSemaOwnershipContext;
 begin
-  for I := 0 to Length(FManagedRecordVarNames) - 1 do
-  begin
-    VarName := FManagedRecordVarNames[I];
-    TypeName := FManagedRecordVarTypes[I];
-    if not FModel.GetTypeMetaByName(TypeName, Meta) then
-      Continue;
-    Blob := VarName + #9 + TypeName;
-    NeedCleanup := False;
-    for J := 0 to High(Meta.Fields) do
-    begin
-      if Meta.Fields[J].IsString then
-      begin
-        Blob := Blob + #9 + Meta.Fields[J].Name + ':s';
-        NeedCleanup := True;
-      end
-      else if Meta.Fields[J].IsDynArray then
-      begin
-        Blob := Blob + #9 + Meta.Fields[J].Name + ':d';
-        NeedCleanup := True;
-      end;
-    end;
-    if NeedCleanup then
-      FModel.AddTypedHirNode(
-        'managed-record-cleanup-runtime',
-        VarName,
-        0,
-        0,
-        Blob
-      );
-  end;
+  FillOwnershipContext(Ctx);
+  np_sema_string_ownership.EmitOwnedManagedRecordCleanupNodes(Ctx);
 end;
+
 
 procedure TSemanticAnalyzer.RegisterClassVar(const AName, AClassName: string);
 var
-  Idx: LongInt;
   V: Int64;
 begin
-  for Idx := 0 to Length(FClassVarNames) - 1 do
-    if SameText(FClassVarNames[Idx], AName) then
-    begin
-      if FModel.LookupConstValue(FClassVarTypes[Idx] + '$vmt_count', V) and
-        TypeMetaIsInterface(FClassVarTypes[Idx]) then
-        Exit;
-      FClassVarTypes[Idx] := AClassName;
-      Exit;
-    end;
-  Idx := Length(FClassVarNames);
-  SetLength(FClassVarNames, Idx + 1);
-  SetLength(FClassVarTypes, Idx + 1);
-  FClassVarNames[Idx] := AName;
-  FClassVarTypes[Idx] := AClassName;
+  if FModel.LookupConstValue(FRuntimeVars.LookupClassVar(AName) + '$vmt_count', V) and
+    TypeMetaIsInterface(FRuntimeVars.LookupClassVar(AName)) then
+    Exit;
+  FRuntimeVars.RegisterClassVar(AName, AClassName);
 end;
 
 function TSemanticAnalyzer.LookupClassVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FClassVarNames) - 1 do
-    if SameText(FClassVarNames[Idx], AName) then
-      Exit(FClassVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupClassVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterRecordVar(const AName, ATypeName: string);
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-    begin
-      FRecordVarTypes[Idx] := ATypeName;
-      Exit;
-    end;
-  Idx := Length(FRecordVarNames);
-  SetLength(FRecordVarNames, Idx + 1);
-  SetLength(FRecordVarTypes, Idx + 1);
-  FRecordVarNames[Idx] := AName;
-  FRecordVarTypes[Idx] := ATypeName;
+  FRuntimeVars.RegisterRecordVar(AName, ATypeName);
 end;
 
 procedure TSemanticAnalyzer.RegisterPointerVar(const AName,
   APointeeTypeName: string);
-var
-  Idx: LongInt;
 begin
-  if (AName = '') or (APointeeTypeName = '') then
-    Exit;
-  for Idx := 0 to Length(FPointerVarNames) - 1 do
-    if SameText(FPointerVarNames[Idx], AName) then
-    begin
-      FPointerVarTypes[Idx] := APointeeTypeName;
-      Exit;
-    end;
-  Idx := Length(FPointerVarNames);
-  SetLength(FPointerVarNames, Idx + 1);
-  SetLength(FPointerVarTypes, Idx + 1);
-  FPointerVarNames[Idx] := AName;
-  FPointerVarTypes[Idx] := APointeeTypeName;
+  FRuntimeVars.RegisterPointerVar(AName, APointeeTypeName);
 end;
 
 function TSemanticAnalyzer.IsRecordVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsRecordVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterVarParam(const AName: string);
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to FVarParamNames.Count - 1 do
-    if SameText(FVarParamNames[Idx], AName) then
-      Exit;
-  FVarParamNames.Push(AName);
+  FRuntimeVars.RegisterVarParam(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParam(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to FVarParamNames.Count - 1 do
-    if SameText(FVarParamNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := FRuntimeVars.IsVarParam(AName);
 end;
 
 function TSemanticAnalyzer.IsVarParamAtPosition(
@@ -2545,34 +1526,18 @@ begin
 end;
 
 function TSemanticAnalyzer.LookupRecordVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRecordVarNames) - 1 do
-    if SameText(FRecordVarNames[Idx], AName) then
-      Exit(FRecordVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupRecordVar(AName);
 end;
 
 function TSemanticAnalyzer.LookupPointerVar(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FPointerVarNames) - 1 do
-    if SameText(FPointerVarNames[Idx], AName) then
-      Exit(FPointerVarTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupPointerVar(AName);
 end;
 
 procedure TSemanticAnalyzer.RegisterPtrReturnFunc(const AName, AClassName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FPtrReturnFuncs);
-  SetLength(FPtrReturnFuncs, NextIndex + 1);
-  SetLength(FPtrReturnTypes, NextIndex + 1);
-  FPtrReturnFuncs[NextIndex] := AName;
-  FPtrReturnTypes[NextIndex] := AClassName;
+  FRuntimeVars.RegisterPtrReturnFunc(AName, AClassName);
 end;
 
 procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree;
@@ -2590,246 +1555,59 @@ begin
 end;
 
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FPtrReturnFuncs) - 1 do
-    if SameText(FPtrReturnFuncs[Idx], AName) then
-      Exit(FPtrReturnTypes[Idx]);
-  Result := '';
+  Result := FRuntimeVars.LookupPtrReturnFunc(AName);
 end;
 
 function TSemanticAnalyzer.EmitStrConcatOperand(const ANode: TGreenNode;
   const ADestVar: string): string;
 var
-  TempName, LitValue: string;
-  FieldIdx: Int64;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := '';
-  if ANode = nil then
-    Exit;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
-    Exit(ANode.Text);
-  if (ANode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') and
-    TypeMetaFieldIsStr(FCurrentMethodClass, ANode.Text) then
-  begin
-    FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text);
-    Inc(FBlockLabelCounter);
-    TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(TempName);
-    RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
-    FModel.AddTypedHirNode(
-      'assign-tstring-field-load-runtime', TempName, 0, 0,
-      TempName + #9 + IntToStr(FieldIdx)
-    );
-    Exit(TempName);
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
-    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
-    (ANode.ChildAt(1) <> nil) then
-  begin
-    LitValue := EmitStrConcatOperand(ANode.ChildAt(0), ADestVar);
-    if LitValue <> '' then
-    begin
-      TempName := EmitStrConcatOperand(ANode.ChildAt(1), ADestVar);
-      if TempName <> '' then
-      begin
-        Inc(FBlockLabelCounter);
-        Result := '$str_tmp_' + IntToStr(FBlockLabelCounter);
-        RegisterRuntimeVar(Result);
-        RegisterRuntimeStrVar(Result);
-        FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
-        FModel.AddTypedHirNode(
-          'assign-tstring-concat-runtime',
-          LitValue + #9 + TempName,
-          0, 0, Result
-        );
-        Exit;
-      end;
-    end;
-  end;
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and
-    SameText(ANode.ChildAt(0).Text, 'IntToStr') and
-    EncodeRuntimeIntExprFold(ANode.ChildAt(1), LitValue) then
-  begin
-    Inc(FBlockLabelCounter);
-    TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(TempName);
-    RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
-    FModel.AddTypedHirNode('tstring-from-int-runtime', TempName, 0, 0,
-      TempName + #9 + LitValue);
-    Exit(TempName);
-  end;
-  if IsSupportedOwnedStringReturnConcatOperand(ANode, LitValue) then
-  begin
-    Inc(FBlockLabelCounter);
-    TempName := '$str_cat_tmp_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(TempName);
-    RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-      TempName);
-    FModel.AddTypedHirNode('string-temp-owned-runtime', LitValue, 0, 0,
-      TempName + #9 + 'callee ' + LitValue + #9 +
-      'ptr len owner alloc_size');
-    QueuePendingStringTempRelease(TempName, LitValue);
-    Exit(TempName);
-  end;
-  if ANode.NodeKind = gnkStringLiteral then
-    LitValue := DecodePascalStringLiteral(ANode.Text)
-  else if not EvaluateStringConstant(ANode, LitValue) then
-    Exit;
-  Inc(FBlockLabelCounter);
-  TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
-  RegisterRuntimeVar(TempName);
-  RegisterRuntimeStrVar(TempName);
-  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
-  FModel.AddTypedHirNode('assign-tstring-literal-runtime', TempName, 0, 0, LitValue);
-  Result := TempName;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitStrConcatOperand(Ctx, ANode, ADestVar);
 end;
+
 
 function TSemanticAnalyzer.ConcatTreeHasSupportedOwnedStringReturn(
   const ANode: TGreenNode): Boolean;
 var
-  Dummy: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if IsSupportedOwnedStringReturnConcatOperand(ANode, Dummy) then
-    Exit(True);
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
-    (ANode.ChildCount >= 2) then
-    Exit(ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(0)) or
-      ConcatTreeHasSupportedOwnedStringReturn(ANode.ChildAt(1)));
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.ConcatTreeHasSupportedOwnedStringReturn(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.CanEmitStrConcatOperand(
   const ANode: TGreenNode): Boolean;
 var
-  Dummy: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
-    Exit(True);
-  if (ANode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') and
-    TypeMetaFieldIsStr(FCurrentMethodClass, ANode.Text) then
-    Exit(True);
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
-    (ANode.ChildCount >= 2) then
-    Exit(CanEmitStrConcatOperand(ANode.ChildAt(0)) and
-      CanEmitStrConcatOperand(ANode.ChildAt(1)));
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text,
-    'IntToStr') and EncodeRuntimeIntExprFold(ANode.ChildAt(1), Dummy) then
-    Exit(True);
-  if IsSupportedOwnedStringReturnConcatOperand(ANode, Dummy) then
-    Exit(True);
-  if ANode.NodeKind = gnkStringLiteral then
-    Exit(True);
-  Result := EvaluateStringConstant(ANode, Dummy);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CanEmitStrConcatOperand(Ctx, ANode);
 end;
+
 
 function TSemanticAnalyzer.CanEmitStrCompareOperand(const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean): Boolean;
 var
-  SourceName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
-    Exit(True);
-  { Any identifier can safely participate in string comparisons —
-    comparisons don't hold references to owned string returns. }
-  if (ANode.NodeKind = gnkIdentifier) and (AAllowOwnedStringReturn) then
-    Exit(True);
-  if ANode.NodeKind = gnkStringLiteral then
-    Exit(True);
-  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
-    (ANode.Text = '+') and ConcatTreeHasSupportedOwnedStringReturn(ANode) and
-    CanEmitStrConcatOperand(ANode) then
-    Exit(True);
-  if AAllowOwnedStringReturn and
-    IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
-    Exit(True);
-  { LowerCase/UpperCase are safe for comparisons even when overloaded }
-  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
-    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
-    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    (SameText(ANode.ChildAt(0).Text, 'LowerCase') or
-     SameText(ANode.ChildAt(0).Text, 'UpperCase')) then
-    Exit(True);
-  { Any function call returning a string is safe as a compare operand —
-    temporaries live for the entire comparison evaluation. This covers
-    imported functions like Trim, Copy, etc. that are not registered as
-    owned string return functions but still create safe temporaries. }
-  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkFunctionCall) and
-    FunctionCallReturnsString(ANode) then
-    Exit(True);
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.CanEmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn);
 end;
+
 
 function TSemanticAnalyzer.EmitStrCompareOperand(const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
 var
-  LeftName, RightName, SourceName, TempName: string;
+  Ctx: TSemaOwnershipContext;
 begin
-  ABlob := '';
-  Result := False;
-  if ANode = nil then
-    Exit;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
-  begin
-    ABlob := 'strvar ' + ANode.Text + #10;
-    Exit(True);
-  end;
-  if ANode.NodeKind = gnkStringLiteral then
-  begin
-    ABlob := 'strlit ' + ANode.Text + #10;
-    Exit(True);
-  end;
-  if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
-    (ANode.Text = '+') and (ANode.ChildCount >= 2) and
-    ConcatTreeHasSupportedOwnedStringReturn(ANode) and
-    CanEmitStrConcatOperand(ANode) then
-  begin
-    LeftName := EmitStrConcatOperand(ANode.ChildAt(0), '');
-    RightName := EmitStrConcatOperand(ANode.ChildAt(1), '');
-    if (LeftName = '') or (RightName = '') then
-      Exit(False);
-    Inc(FBlockLabelCounter);
-    TempName := '$str_cmp_cat_tmp_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(TempName);
-    RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-      TempName);
-    FModel.AddTypedHirNode('assign-tstring-concat-runtime', TempName, 0, 0,
-      LeftName + #9 + RightName);
-    QueuePendingStringTempRelease(TempName, TempName);
-    ABlob := 'strvar ' + TempName + #10;
-    Exit(True);
-  end;
-  if AAllowOwnedStringReturn and
-    IsSupportedOwnedStringReturnCompareOperand(ANode, SourceName) then
-  begin
-    Inc(FBlockLabelCounter);
-    TempName := '$str_cmp_tmp_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(TempName);
-    RegisterRuntimeStrVar(TempName);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
-      TempName);
-    FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-      TempName + #9 + 'callee ' + SourceName + #9 +
-      'ptr len owner alloc_size');
-    QueuePendingStringTempRelease(TempName, SourceName);
-    ABlob := 'strvar ' + TempName + #10;
-    Exit(True);
-  end;
+  FillOwnershipContext(Ctx);
+  Result := np_sema_string_ownership.EmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn, ABlob);
 end;
+
 
 function TSemanticAnalyzer.EncodeStrCallArgs(const ACallNode: TGreenNode;
   const ADestVar: string): string;
@@ -2948,17 +1726,21 @@ begin
 end;
 
 procedure TSemanticAnalyzer.EmitBlockLabel(const ALabel: string);
+var Ctx: TSemaHirLoweringContext;
 begin
-  FModel.AddTypedHirNode('block-label-runtime', ALabel, 0, 0, ALabel);
-  FCurrentBlockTerminated := False;
+  Ctx.Model := FModel;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  np_sema_hir_lowering.EmitBlockLabel(Ctx, ALabel);
+  FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 
 procedure TSemanticAnalyzer.EmitGotoLabel(const ALabel: string);
+var Ctx: TSemaHirLoweringContext;
 begin
-  if FCurrentBlockTerminated then
-    Exit;
-  FModel.AddTypedHirNode('br-runtime', ALabel, 0, 0, ALabel);
-  FCurrentBlockTerminated := True;
+  Ctx.Model := FModel;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  np_sema_hir_lowering.EmitGotoLabel(Ctx, ALabel);
+  FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 destructor TSemanticAnalyzer.Destroy;
 var
@@ -2968,10 +1750,11 @@ begin
     FImportedUnitTrees[Index].Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
-  FVarParamNames.Free;
+  { FVarParamNames now managed by FRuntimeVars }
   FInliningStack.Free;
   FGenericCache.Free;
   FBuiltinRegistry.Free;
+  FRuntimeVars.Free;
   FModel.Free;
   inherited Destroy;
 end;
@@ -3009,51 +1792,14 @@ begin
 end;
 
 function TSemanticAnalyzer.CountDeclParams(const ADecl: TGreenNode): LongInt;
-var
-  J, K: LongInt;
-  Child, ParamChild: TGreenNode;
 begin
-  Result := 0;
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
-          Inc(Result);
-      end;
-      Exit;
-    end;
-  end;
+  Result := np_sema_overload.CountDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.CountRequiredDeclParams(
   const ADecl: TGreenNode): LongInt;
-var
-  J, K: LongInt;
-  Child, ParamChild: TGreenNode;
 begin
-  Result := 0;
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) and
-          (ParamChild.ChildCount <= 1) then
-          Inc(Result);
-      end;
-      Exit;
-    end;
-  end;
+  Result := np_sema_overload.CountRequiredDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclReturnTypeId(const ADecl: TGreenNode;
@@ -3093,174 +1839,46 @@ end;
 
 function TSemanticAnalyzer.DeclAcceptsArgCount(const ADecl: TGreenNode;
   const AArgCount: LongInt): Boolean;
-var
-  MaxParamCount: LongInt;
-  MinParamCount: LongInt;
 begin
-  MaxParamCount := CountDeclParams(ADecl);
-  MinParamCount := CountRequiredDeclParams(ADecl);
-  Result := (AArgCount >= MinParamCount) and (AArgCount <= MaxParamCount);
+  Result := np_sema_overload.DeclAcceptsArgCount(ADecl, AArgCount);
 end;
 
 function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
-  const ADecl: TGreenNode;
-  const AArgSignature: string;
-  const AArgCount: LongInt
-): Boolean;
-var
-  I: LongInt;
-  ParamSignature: string;
+  const ADecl: TGreenNode; const AArgSignature: string; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  ParamSignature := GetParamSignature(ADecl);
-  if (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
-    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature) then
-    Exit(True);
-  { Char → String promotion: 'i' arg matches 's' param }
-  if (AArgCount > 0) and (Length(ParamSignature) >= AArgCount) then
-  begin
-    Result := True;
-    for I := 1 to AArgCount do
-    begin
-      if (ParamSignature[I] = 's') and (I <= Length(AArgSignature)) and
-        (AArgSignature[I] = 'i') then
-        Continue;
-      if (I <= Length(AArgSignature)) and
-        SameText(ParamSignature[I], AArgSignature[I]) then
-        Continue;
-      Result := False;
-      Break;
-    end;
-  end
-  else
-    Result := False;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamSignatureMatchesArgs(Ctx, ADecl, AArgSignature, AArgCount);
 end;
 
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
-var
-  J, K: LongInt;
-  Child, ParamChild, TypeChild: TGreenNode;
-  TypeId: LongInt;
-  TypeName: string;
-  Dummy: Int64;
-  LTypeId: LongInt;
-  TypeSig: string;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := '';
-  if ADecl = nil then Exit;
-  for J := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
-    begin
-      for K := 0 to Child.ChildCount - 1 do
-      begin
-        ParamChild := Child.ChildAt(K);
-        if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
-          Continue;
-        TypeName := '';
-        TypeChild := nil;
-        if ParamChild.ChildCount > 0 then
-        begin
-          TypeChild := ParamChild.ChildAt(0);
-          if TypeChild <> nil then
-            TypeName := LowerCase(TypeChild.Text);
-        end;
-        TypeId := 0;
-        if TypeChild <> nil then
-        begin
-          TypeId := ResolveTypeIdForOwner(
-            TypeChild.Text,
-            NormalizeUnitIdentity(FCurrentProcessingUnitId)
-          );
-          if TypeId <= 0 then
-            TypeId := ResolveTypeIdForOwner(
-              TypeChild.Text,
-              NormalizeUnitIdentity(FUnitGraph.RootName)
-            );
-          if TypeId <= 0 then
-            TypeId := ResolveTypeId(TypeChild.Text);
-        end;
-        TypeSig := TypeSignatureForTypeId(TypeId);
-        if TypeSig <> '' then
-          Result := Result + TypeSig
-        else if (TypeName = 'string') or (TypeName = 'ansistring') then
-          Result := Result + 's'
-        else if (TypeName = 'boolean') or (TypeName = 'bool') then
-          Result := Result + 'b'
-        else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
-          Result := Result + 'r'
-        else if (TypeChild <> nil) and TypeIsInterfaceByName(TypeChild.Text) then
-          Result := Result + 'f'
-        else if SameText(TypeName, 'integer') or SameText(TypeName, 'longint') or
-          SameText(TypeName, 'longword') or SameText(TypeName, 'cardinal') or
-          SameText(TypeName, 'smallint') or SameText(TypeName, 'word') or
-          SameText(TypeName, 'byte') or SameText(TypeName, 'shortint') or
-          SameText(TypeName, 'int64') or SameText(TypeName, 'qword') or
-          SameText(TypeName, 'uint64') or SameText(TypeName, 'sizeint') or
-          SameText(TypeName, 'sizeuint') or SameText(TypeName, 'uint32') or
-          SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') then
-          Result := Result + 'i'
-        else if (TypeChild <> nil) then
-        begin
-          LTypeId := FModel.FindTypeByName(TypeChild.Text);
-          if (LTypeId > 0) and
-            SameText(FModel.TypeAt(LTypeId - 1).Kind, 'class') then
-            Result := Result + 'c'
-          else if TypeMetaIsClass(TypeChild.Text) then
-            Result := Result + 'c'
-          else if TypeMetaSize(TypeChild.Text) > 0 then
-            Result := Result + 'p'
-          else
-            Result := Result + 'i';
-        end
-        else
-          Result := Result + 'i';
-      end;
-      Exit;
-    end;
-  end;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.GetParamSignature(Ctx, ADecl);
 end;
 
 function TSemanticAnalyzer.GetParamIdentitySignature(
   const ADecl: TGreenNode
 ): string;
-var
-  Child: TGreenNode;
-  Index: LongInt;
-  ParamChild: TGreenNode;
-  ParamIndex: LongInt;
-  TypeChild: TGreenNode;
-  TypeName: string;
 begin
-  Result := '';
-  if ADecl = nil then
-    Exit;
-  for Index := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(Index);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-    ParamIndex := 0;
-    while ParamIndex < Child.ChildCount do
-    begin
-      ParamChild := Child.ChildAt(ParamIndex);
-      if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
-      begin
-        TypeName := '';
-        if ParamChild.ChildCount > 0 then
-        begin
-          TypeChild := ParamChild.ChildAt(0);
-          if TypeChild <> nil then
-            TypeName := LowerCase(TypeChild.Text);
-        end;
-        if Result <> '' then
-          Result := Result + '|';
-        Result := Result + TypeName;
-      end;
-      Inc(ParamIndex);
-    end;
-    Exit;
-  end;
+  Result := np_sema_overload.GetParamIdentitySignature(ADecl);
 end;
 
 function TSemanticAnalyzer.GetSubstitutedParamSignature(
@@ -3381,19 +1999,13 @@ end;
 function TSemanticAnalyzer.MangledName(const AName: string;
   AParamCount: LongInt): string;
 begin
-  if AParamCount = 0 then
-    Result := AName
-  else
-    Result := AName + '$' + IntToStr(AParamCount);
+  Result := np_sema_overload.MangledName(AName, AParamCount);
 end;
 
 function TSemanticAnalyzer.MangledNameSig(const AName: string;
   const ASig: string): string;
 begin
-  if ASig = '' then
-    Result := AName
-  else
-    Result := AName + '$' + ASig;
+  Result := np_sema_overload.MangledNameSig(AName, ASig);
 end;
 
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
@@ -3471,26 +2083,19 @@ begin
 end;
 
 function TSemanticAnalyzer.ParamDeclTypeId(
-  const AParamDecl: TGreenNode;
-  const AOwnerUnitId: string
-): LongInt;
-var
-  TypeChild: TGreenNode;
+  const AParamDecl: TGreenNode; const AOwnerUnitId: string): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := 0;
-  if (AParamDecl = nil) or (AParamDecl.ChildCount <= 0) then
-    Exit;
-  TypeChild := AParamDecl.ChildAt(0);
-  if (TypeChild = nil) or (TypeChild.NodeKind <> gnkIdentifier) then
-    Exit;
-  Result := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
-  if Result <= 0 then
-    Result := ResolveTypeIdForOwner(
-      TypeChild.Text,
-      NormalizeUnitIdentity(FUnitGraph.RootName)
-    );
-  if Result <= 0 then
-    Result := ResolveTypeId(TypeChild.Text);
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ParamDeclTypeId(Ctx, AParamDecl, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -3511,517 +2116,50 @@ begin
 end;
 
 function TSemanticAnalyzer.HasOverload(const AName: string): Boolean;
-var
-  Index, Count: LongInt;
 begin
-  Count := 0;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
-      Inc(Count);
-  Result := Count > 1;
+  Result := np_sema_overload.HasOverload(AName, FProcedureBodies);
 end;
 
 function TSemanticAnalyzer.LookupOverload(const AName: string;
   AArgCount: LongInt; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
-var
-  Index: LongInt;
 begin
-  ABody := nil;
-  ADecl := nil;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) and
-      DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-    begin
-      ABody := FProcedureBodies[Index].Body;
-      ADecl := FProcedureBodies[Index].Decl;
-      Exit(True);
-    end;
-  Result := False;
+  Result := np_sema_overload.LookupOverload(AName, AArgCount, FProcedureBodies, ABody, ADecl);
 end;
 
 function TSemanticAnalyzer.LookupCallBindingDeclaration(
-  const AName: string;
-  const AArgCount: LongInt;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgSignature: string;
-  const AHasArgSignature: Boolean;
-  const AHasTypeMismatchEvidence: Boolean;
+  const AName: string; const AArgCount: LongInt;
+  const AArgTypeIds: TTypeIdArray; const AArgSignature: string;
+  const AHasArgSignature: Boolean; const AHasTypeMismatchEvidence: Boolean;
   out AResolutionFailureKind: string;
-  out ABody: TGreenNode;
-  out ADecl: TGreenNode;
-  out AOwnerUnitId: string
-): Boolean;
-var
-  DirectImportCompatibleMatchCount: LongInt;
-  DirectImportCompatibleMatchIndex: LongInt;
-  DirectImportExactMatchCount: LongInt;
-  DirectImportExactMatchIndex: LongInt;
-  HasArgTypeIds: Boolean;
-  Index: LongInt;
-  ImportedDiagnosticMatchCount: LongInt;
-  ImportedMatchCount: LongInt;
-  ImportedMatchIndex: LongInt;
-  ImportedDiagnosticNameCount: LongInt;
-  ImportedNameCount: LongInt;
-  ImportedCompatibleMatchCount: LongInt;
-  ImportedCompatibleMatchIndex: LongInt;
-  ImportedDiagnosticSignatureMatchCount: LongInt;
-  ImportedExactMatchCount: LongInt;
-  ImportedExactMatchIndex: LongInt;
-  ImportedSignatureMatchCount: LongInt;
-  ImportedSignatureMatchIndex: LongInt;
-  DirectImportMatchCount: LongInt;
-  DirectImportMatchIndex: LongInt;
-  KnownSymbolId: LongInt;
-  RootMatchCount: LongInt;
-  RootMatchIndex: LongInt;
-  RootNameCount: LongInt;
-  RootOwnerUnitId: string;
-  RootCompatibleMatchCount: LongInt;
-  RootCompatibleMatchIndex: LongInt;
-  RootExactMatchCount: LongInt;
-  RootExactMatchIndex: LongInt;
-  RootSignatureMatchCount: LongInt;
-  RootSignatureMatchIndex: LongInt;
+  out ABody: TGreenNode; out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  ABody := nil;
-  ADecl := nil;
-  AOwnerUnitId := '';
-  AResolutionFailureKind := '';
-  { 内建过程 (Write/WriteLn/Read/ReadLn 等) 可变参数，跳过重载解析 }
-  if IsBuiltinProcedure(AName) then
-    Exit(False);
-  ImportedDiagnosticMatchCount := 0;
-  ImportedMatchCount := 0;
-  ImportedMatchIndex := -1;
-  ImportedDiagnosticNameCount := 0;
-  ImportedDiagnosticSignatureMatchCount := 0;
-  ImportedNameCount := 0;
-  ImportedCompatibleMatchCount := 0;
-  ImportedCompatibleMatchIndex := -1;
-  ImportedExactMatchCount := 0;
-  ImportedExactMatchIndex := -1;
-  ImportedSignatureMatchCount := 0;
-  ImportedSignatureMatchIndex := -1;
-  DirectImportCompatibleMatchCount := 0;
-  DirectImportCompatibleMatchIndex := -1;
-  DirectImportExactMatchCount := 0;
-  DirectImportExactMatchIndex := -1;
-  DirectImportMatchCount := 0;
-  DirectImportMatchIndex := -1;
-  RootMatchCount := 0;
-  RootMatchIndex := -1;
-  RootNameCount := 0;
-  RootCompatibleMatchCount := 0;
-  RootCompatibleMatchIndex := -1;
-  RootExactMatchCount := 0;
-  RootExactMatchIndex := -1;
-  RootSignatureMatchCount := 0;
-  RootSignatureMatchIndex := -1;
-  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
-  HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
-    TypeIdArrayHasKnownTypes(AArgTypeIds);
-
-  for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
-    begin
-      if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or
-        SameText(FProcedureBodies[Index].OwnerUnitId,
-          FCurrentProcessingUnitId) then
-      begin
-        Inc(RootNameCount);
-        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-        begin
-          RootMatchIndex := Index;
-          Inc(RootMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            RootExactMatchIndex := Index;
-            Inc(RootExactMatchCount);
-          end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            RootCompatibleMatchIndex := Index;
-            Inc(RootCompatibleMatchCount);
-          end;
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(
-              FProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            RootSignatureMatchIndex := Index;
-            Inc(RootSignatureMatchCount);
-          end;
-        end;
-      end
-      else
-      begin
-        Inc(ImportedNameCount);
-        if OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[Index].OwnerUnitId
-        ) then
-          Inc(ImportedDiagnosticNameCount);
-        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-        begin
-          ImportedMatchIndex := Index;
-          Inc(ImportedMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedExactMatchIndex := Index;
-            Inc(ImportedExactMatchCount);
-          end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-            FProcedureBodies[Index].Decl,
-            FProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedCompatibleMatchIndex := Index;
-            Inc(ImportedCompatibleMatchCount);
-          end;
-          if UnitDirectlyImports(RootOwnerUnitId,
-            FProcedureBodies[Index].OwnerUnitId) then
-          begin
-            DirectImportMatchIndex := Index;
-            Inc(DirectImportMatchCount);
-            if HasArgTypeIds and DeclParamTypesExactMatch(
-              FProcedureBodies[Index].Decl,
-              FProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportExactMatchIndex := Index;
-              Inc(DirectImportExactMatchCount);
-            end
-            else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-              FProcedureBodies[Index].Decl,
-              FProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportCompatibleMatchIndex := Index;
-              Inc(DirectImportCompatibleMatchCount);
-            end;
-          end;
-          if OwnerUnitAllowsProjectSourceDiagnostic(
-            FProcedureBodies[Index].OwnerUnitId
-          ) then
-            Inc(ImportedDiagnosticMatchCount);
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(
-              FProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            ImportedSignatureMatchIndex := Index;
-            Inc(ImportedSignatureMatchCount);
-            if OwnerUnitAllowsProjectSourceDiagnostic(
-              FProcedureBodies[Index].OwnerUnitId
-            ) then
-              Inc(ImportedDiagnosticSignatureMatchCount);
-          end;
-        end;
-      end;
-    end;
-
-  if RootMatchCount > 0 then
-  begin
-    if HasArgTypeIds and
-      ((RootExactMatchCount > 0) or (RootCompatibleMatchCount > 0)) then
-    begin
-      if RootExactMatchCount = 1 then
-        RootSignatureMatchIndex := RootExactMatchIndex
-      else if RootExactMatchCount > 1 then
-      begin
-        { Permissive: pick first exact match instead of failing }
-        RootSignatureMatchIndex := RootExactMatchIndex;
-      end
-      else if RootCompatibleMatchCount = 1 then
-        RootSignatureMatchIndex := RootCompatibleMatchIndex
-      else if RootCompatibleMatchCount > 1 then
-      begin
-        { Permissive: pick first compatible match instead of failing }
-        RootSignatureMatchIndex := RootCompatibleMatchIndex;
-      end
-      else
-      begin
-        if AHasTypeMismatchEvidence then
-          AResolutionFailureKind := 'no-matching-overload';
-        Exit(False);
-      end;
-    end
-    else if RootMatchCount = 1 then
-    begin
-      if AHasArgSignature and
-        (not DeclParamSignatureMatchesArgs(
-          FProcedureBodies[RootMatchIndex].Decl,
-          AArgSignature,
-          AArgCount
-        )) then
-      begin
-        if AHasTypeMismatchEvidence then
-        begin
-          AResolutionFailureKind := 'type-mismatch';
-        end;
-        Exit(False);
-      end;
-      RootSignatureMatchIndex := RootMatchIndex
-    end
-    else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
-    begin
-      { Permissive: pick first signature match instead of failing }
-      if RootSignatureMatchCount > 0 then
-        RootSignatureMatchIndex := RootMatchIndex
-      else
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end;
-    end
-    else if RootSignatureMatchCount = 0 then
-    begin
-      if AHasTypeMismatchEvidence then
-        AResolutionFailureKind := 'no-matching-overload';
-      Exit(False);
-    end;
-
-    ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
-    ADecl := FProcedureBodies[RootSignatureMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[RootSignatureMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if RootNameCount > 0 then
-  begin
-    AResolutionFailureKind := 'wrong-argument-count';
-    Exit(False);
-  end;
-
-  if (RootNameCount = 0) and (ImportedNameCount = 0) then
-  begin
-    KnownSymbolId := FModel.LookupSymbolWithImports(AName, FCurrentScopeId);
-    if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
-      (FModel.FindTypeByName(AName) = 0) and
-      (not IsBuiltinProcedure(AName)) and
-      (not HasInstalledSourceImports) then
-      AResolutionFailureKind := 'unknown-callable';
-    Exit(False);
-  end;
-
-  if ImportedMatchCount = 0 then
-  begin
-    if ImportedDiagnosticNameCount > 0 then
-      AResolutionFailureKind := 'wrong-argument-count';
-    Exit(False);
-  end;
-
-  { Prefer direct imports over transitive imports (FPC-compatible).
-    When multiple imported units expose the same overload, a unit that
-    the current compilation unit directly uses takes priority.
-    Note: DirectImportMatchIndex always records the LAST matching direct
-    import. When DirectImportMatchCount > 1, the index may not point to
-    the "best" candidate — but we only use it when Count = 1, so this
-    is safe. If Count > 1, we fall through to the ambiguity check below. }
-  if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
-  begin
-    ABody := FProcedureBodies[DirectImportExactMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportExactMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportExactMatchCount > 1) then
-  begin
-    { Permissive: pick first direct import exact match }
-    ABody := FProcedureBodies[DirectImportExactMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportExactMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportExactMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) and
-    (DirectImportExactMatchCount = 0) then
-  begin
-    ABody := FProcedureBodies[DirectImportCompatibleMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount > 1) and
-    (DirectImportExactMatchCount = 0) then
-  begin
-    { Permissive: pick first direct import compatible match }
-    ABody := FProcedureBodies[DirectImportCompatibleMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
-  begin
-    if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
-      DirectImportMatchIndex := DirectImportExactMatchIndex
-    else if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) then
-      DirectImportMatchIndex := DirectImportCompatibleMatchIndex
-    else if HasArgTypeIds then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else if AHasArgSignature and
-      (not DeclParamSignatureMatchesArgs(
-        FProcedureBodies[DirectImportMatchIndex].Decl,
-        AArgSignature,
-        AArgCount
-      )) then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[DirectImportMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end;
-    ABody := FProcedureBodies[DirectImportMatchIndex].Body;
-    ADecl := FProcedureBodies[DirectImportMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[DirectImportMatchIndex].OwnerUnitId;
-    Exit(True);
-  end;
-
-  if ImportedMatchCount = 1 then
-  begin
-    if HasArgTypeIds and DeclParamTypesExactMatch(
-      FProcedureBodies[ImportedMatchIndex].Decl,
-      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
-      AArgTypeIds,
-      AArgCount
-    ) then
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-    else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-      FProcedureBodies[ImportedMatchIndex].Decl,
-      FProcedureBodies[ImportedMatchIndex].OwnerUnitId,
-      AArgTypeIds,
-      AArgCount
-    ) then
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-    else if HasArgTypeIds then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else if AHasArgSignature and
-      (not DeclParamSignatureMatchesArgs(
-        FProcedureBodies[ImportedMatchIndex].Decl,
-        AArgSignature,
-        AArgCount
-      )) then
-    begin
-      if AHasTypeMismatchEvidence and
-        OwnerUnitAllowsProjectSourceDiagnostic(
-          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
-        ) then
-        AResolutionFailureKind := 'type-mismatch';
-      Exit(False);
-    end
-    else
-      ImportedSignatureMatchIndex := ImportedMatchIndex
-  end
-  else if HasArgTypeIds and
-    ((ImportedExactMatchCount > 0) or (ImportedCompatibleMatchCount > 0)) then
-  begin
-    if ImportedExactMatchCount = 1 then
-      ImportedSignatureMatchIndex := ImportedExactMatchIndex
-    else if ImportedExactMatchCount > 1 then
-    begin
-      { Permissive: pick first imported exact match }
-      ImportedSignatureMatchIndex := ImportedExactMatchIndex;
-    end
-    else if ImportedCompatibleMatchCount = 1 then
-      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex
-    else if ImportedCompatibleMatchCount > 1 then
-    begin
-      { Permissive: pick first imported compatible match }
-      ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex;
-    end
-    else
-    begin
-      if AHasTypeMismatchEvidence and
-        (ImportedDiagnosticMatchCount = ImportedMatchCount) then
-        AResolutionFailureKind := 'no-matching-overload';
-      Exit(False);
-    end;
-  end
-  else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
-  begin
-    { Permissive: pick first imported signature match if available }
-    if ImportedSignatureMatchCount > 0 then
-    begin
-      { Fall through to use ImportedSignatureMatchIndex }
-    end
-    else
-    begin
-      if ((not AHasArgSignature) and (ImportedDiagnosticMatchCount > 1)) or
-        (ImportedDiagnosticSignatureMatchCount > 1) then
-        AResolutionFailureKind := 'ambiguous-overload';
-      Exit(False);
-    end;
-  end
-  else if ImportedSignatureMatchCount = 0 then
-  begin
-    if AHasTypeMismatchEvidence and
-      (ImportedDiagnosticMatchCount = ImportedMatchCount) then
-      AResolutionFailureKind := 'no-matching-overload';
-    Exit(False);
-  end;
-
-  ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
-  ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
-  AOwnerUnitId := FProcedureBodies[ImportedSignatureMatchIndex].OwnerUnitId;
-  Result := True;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.LookupCallBindingDeclaration(
+    Ctx, AName, AArgCount, AArgTypeIds, AArgSignature,
+    AHasArgSignature, AHasTypeMismatchEvidence,
+    AResolutionFailureKind, ABody, ADecl, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.OwnerUnitAllowsProjectSourceDiagnostic(
   const AOwnerUnitId: string
 ): Boolean;
 var
-  ResolvedUnit: TResolvedUnit;
+  Ctx: TSemaImportContext;
 begin
-  Result := False;
-  if Trim(AOwnerUnitId) = '' then
-    Exit;
-  if not FUnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
-    Exit;
-  Result := SameText(ResolvedUnit.OriginClass, 'project-source');
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Result := np_sema_overload.OwnerUnitAllowsProjectSourceDiagnostic(Ctx, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.HasInstalledSourceImports: Boolean;
@@ -4043,51 +2181,13 @@ function TSemanticAnalyzer.UnitDirectlyImports(
   const AImportedUnitId: string
 ): Boolean;
 var
-  ImportId: string;
-  Index: LongInt;
-  OwnerUnitId: string;
-  UnitTree: TGreenTree;
-  UseIndex: LongInt;
+  Ctx: TSemaImportContext;
 begin
-  Result := False;
-  if (Trim(AOwnerUnitId) = '') or (Trim(AImportedUnitId) = '') then
-    Exit;
-
-  OwnerUnitId := NormalizeUnitIdentity(AOwnerUnitId);
-  ImportId := NormalizeUnitIdentity(AImportedUnitId);
-  if (OwnerUnitId = '') or (ImportId = '') then
-    Exit;
-
-  if SameText(OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) then
-  begin
-    for UseIndex := 0 to FRootAst.InterfaceUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(FRootAst.InterfaceUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    for UseIndex := 0 to FRootAst.ImplementationUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(FRootAst.ImplementationUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    Exit(False);
-  end;
-
-  for Index := 0 to Length(FImportedUnitTrees) - 1 do
-  begin
-    if not SameText(FImportedUnitOwners[Index], OwnerUnitId) then
-      Continue;
-    UnitTree := FImportedUnitTrees[Index];
-    if UnitTree = nil then
-      Exit(False);
-    for UseIndex := 0 to UnitTree.InterfaceUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(UnitTree.InterfaceUseAt(UseIndex)),
-        ImportId) then
-        Exit(True);
-    for UseIndex := 0 to UnitTree.ImplementationUseCount - 1 do
-      if SameText(NormalizeUnitIdentity(
-        UnitTree.ImplementationUseAt(UseIndex)), ImportId) then
-        Exit(True);
-    Exit(False);
-  end;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Result := np_sema_overload.UnitDirectlyImports(Ctx, AOwnerUnitId, AImportedUnitId);
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
@@ -4245,79 +2345,20 @@ begin
 end;
 
 function TSemanticAnalyzer.CallArgumentCount(const ACallNode: TGreenNode): LongInt;
-var
-  InnerCall: TGreenNode;
 begin
-  Result := 0;
-  if ACallNode = nil then
-    Exit;
-
-  if ACallNode.NodeKind = gnkFunctionCall then
-  begin
-    if ACallNode.ChildCount > 0 then
-      Result := ACallNode.ChildCount - 1;
-    Exit;
-  end;
-
-  if ACallNode.NodeKind = gnkProcedureCallStatement then
-  begin
-    if (ACallNode.ChildCount = 1) and
-      (ACallNode.ChildAt(0) <> nil) and
-      (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
-    begin
-      InnerCall := ACallNode.ChildAt(0);
-      if InnerCall.ChildCount > 0 then
-        Result := InnerCall.ChildCount - 1;
-      Exit;
-    end;
-
-    Result := ACallNode.ChildCount;
-  end;
+  Result := np_sema_type_check.CallArgumentCount(ACallNode);
 end;
 
 function TSemanticAnalyzer.BareCallCalleeName(
   const ACallNode: TGreenNode
 ): string;
-var
-  CalleeNode: TGreenNode;
-  InnerCallNode: TGreenNode;
 begin
-  Result := '';
-  if ACallNode = nil then
-    Exit;
-  if ACallNode.ChildCount = 0 then
-    Exit(ACallNode.Text);
-
-  CalleeNode := ACallNode.ChildAt(0);
-  if (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier) then
-    Exit(CalleeNode.Text);
-
-  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
-    (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkFunctionCall) then
-  begin
-    InnerCallNode := CalleeNode;
-    if (InnerCallNode.ChildCount > 0) and
-      (InnerCallNode.ChildAt(0) <> nil) and
-      (InnerCallNode.ChildAt(0).NodeKind = gnkIdentifier) then
-      Exit(InnerCallNode.ChildAt(0).Text);
-  end;
-
-  Result := ACallNode.Text;
+  Result := np_sema_type_check.BareCallCalleeName(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsIntrinsicExprName(const AName: string): Boolean;
 begin
-  Result := SameText(AName, 'SizeOf') or SameText(AName, 'High') or
-    SameText(AName, 'Low') or SameText(AName, 'Length') or
-    SameText(AName, 'Ord') or SameText(AName, 'Pred') or
-    SameText(AName, 'Succ') or SameText(AName, 'Chr') or
-    SameText(AName, 'Assigned') or SameText(AName, 'Abs') or
-    SameText(AName, 'Sqr') or SameText(AName, 'Sqrt') or
-    SameText(AName, 'Round') or SameText(AName, 'Trunc') or
-    SameText(AName, 'Default') or
-    SameText(AName, 'Min') or SameText(AName, 'Max') or
-    SameText(AName, 'Floor') or SameText(AName, 'Ceil') or
-    SameText(AName, 'Supports') or SameText(AName, 'IsFinite');
+  Result := np_sema_type_check.IsIntrinsicExprName(AName);
 end;
 
 function TSemanticAnalyzer.TryGetTypeCastTargetTypeId(
@@ -4382,89 +2423,21 @@ function TSemanticAnalyzer.IsWrappedCallChild(
   const AChild: TGreenNode
 ): Boolean;
 begin
-  Result := (AParent <> nil) and (AChild <> nil) and
-    (AParent.NodeKind = gnkProcedureCallStatement) and
-    (AChild.NodeKind = gnkFunctionCall) and
-    (AParent.ByteOffset = AChild.ByteOffset) and
-    SameText(AParent.Text, AChild.Text);
+  Result := np_sema_type_check.IsWrappedCallChild(AParent, AChild);
 end;
 
 function TSemanticAnalyzer.IsImplicitSelfCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
-var
-  CalleeNode: TGreenNode;
 begin
-  Result := False;
-  if ACallNode = nil then
-    Exit;
-
-  case ACallNode.NodeKind of
-    gnkIdentifier:
-      Exit(ACallNode.Text <> '');
-    gnkFunctionCall:
-      begin
-        if ACallNode.ChildCount <= 0 then
-          Exit(False);
-        CalleeNode := ACallNode.ChildAt(0);
-        Exit((CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier));
-      end;
-    gnkProcedureCallStatement:
-      begin
-        if ACallNode.ChildCount = 0 then
-          Exit(ACallNode.Text <> '');
-        CalleeNode := ACallNode.ChildAt(0);
-        if CalleeNode = nil then
-          Exit(False);
-        if CalleeNode.NodeKind = gnkIdentifier then
-          Exit(True);
-        if (CalleeNode.NodeKind = gnkFunctionCall) and
-          (CalleeNode.ChildCount > 0) and (CalleeNode.ChildAt(0) <> nil) and
-          (CalleeNode.ChildAt(0).NodeKind = gnkIdentifier) then
-          Exit(True);
-        Exit(False);
-      end;
-  end;
+  Result := np_sema_type_check.IsImplicitSelfCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsQualifiedCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
-var
-  CalleeNode: TGreenNode;
 begin
-  Result := False;
-  if (ACallNode = nil) or
-    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
-    (ACallNode.ChildCount = 0) then
-    Exit;
-
-  CalleeNode := ACallNode.ChildAt(0);
-  if CalleeNode = nil then
-    Exit;
-
-  if ACallNode.NodeKind = gnkFunctionCall then
-  begin
-    Result := CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
-      gnkDereference];
-    Exit;
-  end;
-
-  if CalleeNode.ByteOffset <> ACallNode.ByteOffset then
-    Exit;
-
-  if CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess, gnkDereference] then
-    Exit(True);
-
-  if (CalleeNode.NodeKind = gnkFunctionCall) and
-    SameText(ACallNode.Text, CalleeNode.Text) and
-    (CalleeNode.ChildCount > 0) then
-  begin
-    CalleeNode := CalleeNode.ChildAt(0);
-    Result := (CalleeNode <> nil) and
-      (CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
-       gnkDereference]);
-  end;
+  Result := np_sema_type_check.IsQualifiedCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.ExtractDirectMemberCall(
@@ -4474,61 +2447,8 @@ function TSemanticAnalyzer.ExtractDirectMemberCall(
   out AMemberOffset: LongInt;
   out AArgCount: LongInt
 ): Boolean;
-var
-  CalleeNode: TGreenNode;
-  DotNode: TGreenNode;
-  InnerCallNode: TGreenNode;
-  MemberNode: TGreenNode;
-  ReceiverNode: TGreenNode;
 begin
-  Result := False;
-  AReceiverName := '';
-  AMemberName := '';
-  AMemberOffset := 0;
-  AArgCount := 0;
-  if (ACallNode = nil) or
-    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
-    (ACallNode.ChildCount = 0) then
-    Exit;
-
-  CalleeNode := ACallNode.ChildAt(0);
-  if CalleeNode = nil then
-    Exit;
-
-  DotNode := nil;
-  InnerCallNode := nil;
-  if CalleeNode.NodeKind = gnkDotAccess then
-    DotNode := CalleeNode
-  else if (CalleeNode.NodeKind = gnkFunctionCall) and
-    SameText(ACallNode.Text, CalleeNode.Text) and
-    (CalleeNode.ChildCount > 0) and
-    (CalleeNode.ChildAt(0) <> nil) and
-    (CalleeNode.ChildAt(0).NodeKind = gnkDotAccess) then
-  begin
-    DotNode := CalleeNode.ChildAt(0);
-    InnerCallNode := CalleeNode;
-  end;
-
-  if (DotNode = nil) or (DotNode.ChildCount < 2) then
-    Exit;
-
-  ReceiverNode := DotNode.ChildAt(0);
-  MemberNode := DotNode.ChildAt(1);
-  if (ReceiverNode = nil) or (MemberNode = nil) or
-    (ReceiverNode.NodeKind <> gnkIdentifier) or
-    (MemberNode.NodeKind <> gnkIdentifier) then
-    Exit;
-
-  AReceiverName := ReceiverNode.Text;
-  AMemberName := MemberNode.Text;
-  AMemberOffset := MemberNode.ByteOffset;
-  if ACallNode.NodeKind = gnkFunctionCall then
-    AArgCount := ACallNode.ChildCount - 1
-  else if InnerCallNode <> nil then
-    AArgCount := InnerCallNode.ChildCount - 1
-  else
-    AArgCount := 0;
-  Result := (AReceiverName <> '') and (AMemberName <> '');
+  Result := np_sema_type_check.ExtractDirectMemberCall(ACallNode, AReceiverName, AMemberName, AMemberOffset, AArgCount);
 end;
 
 function TSemanticAnalyzer.TypeIdForVariable(const AName: string): LongInt;
@@ -4609,7 +2529,7 @@ var
   Index: LongInt;
   MatchCount: LongInt;
   SeenIndex: LongInt;
-  SeenTypeIds: array of LongInt;
+  SeenTypeIds: specialize TVec<LongInt>;
   Symbol: TSemanticSymbol;
   TypeAlreadySeen: Boolean;
 begin
@@ -4620,7 +2540,7 @@ begin
     Exit;
 
   MatchCount := 0;
-  SetLength(SeenTypeIds, 0);
+  SeenTypeIds := specialize TVec<LongInt>.Create;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -4631,7 +2551,7 @@ begin
 
     CandidateTypeId := Symbol.TypeId;
     TypeAlreadySeen := False;
-    for SeenIndex := 0 to Length(SeenTypeIds) - 1 do
+    for SeenIndex := 0 to SeenTypeIds.Count - 1 do
       if SeenTypeIds[SeenIndex] = CandidateTypeId then
       begin
         TypeAlreadySeen := True;
@@ -4640,8 +2560,7 @@ begin
     if TypeAlreadySeen then
       Continue;
 
-    SetLength(SeenTypeIds, Length(SeenTypeIds) + 1);
-    SeenTypeIds[High(SeenTypeIds)] := CandidateTypeId;
+    SeenTypeIds.Push(CandidateTypeId);
 
     CandidateResolutionFailure := '';
     SetLength(Candidates, 0);
@@ -4667,6 +2586,7 @@ begin
     ATargetSymbolId := CandidateTargetSymbolId;
   end;
 
+  SeenTypeIds.Free;
   Result := MatchCount = 1;
 end;
 
@@ -4674,31 +2594,8 @@ function TSemanticAnalyzer.TypeSymbolForTypeId(
   const ATypeId: LongInt;
   out ASymbol: TSemanticSymbol
 ): Boolean;
-var
-  Index: LongInt;
-  Symbol: TSemanticSymbol;
 begin
-  ASymbol.SymbolId := 0;
-  ASymbol.Name := '';
-  ASymbol.Kind := '';
-  ASymbol.OwnerUnitId := '';
-  ASymbol.ScopeId := 0;
-  ASymbol.TypeId := 0;
-  ASymbol.ParamCount := -1;
-  ASymbol.ParamSignature := '';
-  ASymbol.ByteOffset := 0;
-  Result := False;
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-  for Index := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and (Symbol.TypeId = ATypeId) then
-    begin
-      ASymbol := Symbol;
-      Exit(True);
-    end;
-  end;
+  Result := np_sema_type_check.TypeSymbolForTypeId(FModel, ATypeId, ASymbol);
 end;
 
 function TSemanticAnalyzer.ClassTypeHasKnownNonMethodMember(
@@ -4729,275 +2626,123 @@ end;
 function TSemanticAnalyzer.TypeIdHasKnownClassLayout(
   const ATypeId: LongInt
 ): Boolean;
-var
-  ConstValue: Int64;
-  TypeSymbol: TSemanticSymbol;
-  Meta: TTypeMetadata;
 begin
-  Result := False;
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-  if FModel.GetTypeMeta(ATypeId, Meta) then
-  begin
-    Result := (not Meta.IsRecord) and (Meta.Size > 0);
-    Exit;
-  end;
-  if not TypeSymbolForTypeId(ATypeId, TypeSymbol) then
-    Exit;
-  Result := FModel.LookupConstValue(TypeSymbol.Name + '$vmt_count', ConstValue);
+  Result := np_sema_type_check.TypeIdHasKnownClassLayout(FModel, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsDeferredSystemObjectMember(
   const AMemberName: string
 ): Boolean;
 begin
-  { TObject methods that are genuinely deferred because System.pas is skipped }
-  Result := SameText(AMemberName, 'Free') or
-    SameText(AMemberName, 'Create') or
-    SameText(AMemberName, 'Destroy') or
-    SameText(AMemberName, 'CreateFmt') or
-    SameText(AMemberName, 'CreateRes') or
-    SameText(AMemberName, 'CreateResFmt') or
-    SameText(AMemberName, 'ClassName') or
-    SameText(AMemberName, 'ClassType') or
-    SameText(AMemberName, 'InheritsFrom') or
-    SameText(AMemberName, 'GetInterface') or
-    SameText(AMemberName, 'AfterConstruction') or
-    SameText(AMemberName, 'BeforeDestruction') or
-    { FPC System builtins that are methods }
-    SameText(AMemberName, '_AddRef') or
-    SameText(AMemberName, '_Release') or
-    { Interface methods that need deferred handling }
-    SameText(AMemberName, 'Write') or SameText(AMemberName, 'Read') or
-    SameText(AMemberName, 'Close') or SameText(AMemberName, 'Flush') or
-    SameText(AMemberName, 'Seek') or SameText(AMemberName, 'GetSize') or
-    SameText(AMemberName, 'SetSize') or
-    SameText(AMemberName, 'WriteByte') or SameText(AMemberName, 'ReadByte') or
-    SameText(AMemberName, 'Clone') or SameText(AMemberName, 'Reset') or
-    SameText(AMemberName, 'SetBlocking') or
-    SameText(AMemberName, 'CreateWithContext') or
-    SameText(AMemberName, 'Contains') or
-    SameText(AMemberName, 'Render');
+  Result := np_sema_type_check.IsDeferredSystemObjectMember(AMemberName);
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.Size);
-  if FModel.LookupConstValue(ATypeName + '$size', V) then Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaSize(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsRecord(const ATypeName: string): Boolean;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.IsRecord);
-  Result := FModel.LookupConstValue(ATypeName + '$record', V);
+  Result := np_sema_type_check.TypeMetaIsRecord(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsClass(const ATypeName: string): Boolean;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    Exit((not Meta.IsRecord) and (Meta.Size > 0));
-  Result := (not FModel.LookupConstValue(ATypeName + '$record', V)) and
-    FModel.LookupConstValue(ATypeName + '$size', V);
+  Result := np_sema_type_check.TypeMetaIsClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsInterface(const ATypeName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$interface', V);
+  Result := np_sema_type_check.TypeMetaIsInterface(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeIsInterfaceByName(const ATypeName: string): Boolean;
-var TypeId: LongInt;
 begin
-  if TypeMetaIsInterface(ATypeName) then
-    Exit(True);
-  TypeId := FModel.FindTypeByName(ATypeName);
-  Result := (TypeId > 0) and
-    SameText(FModel.TypeAt(TypeId - 1).Kind, 'interface');
+  Result := np_sema_type_check.TypeIsInterfaceByName(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIndex(
   const ATypeName, AFieldName: string): Int64;
-var Meta: TTypeMetadata; FM: TFieldMeta; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].Index);
-  if FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$idx', V) then
-    Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaFieldIndex(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsStr(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsString);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$str', V);
+  Result := np_sema_type_check.TypeMetaFieldIsStr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsPtr(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsPointer);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$ptr', V);
+  Result := np_sema_type_check.TypeMetaFieldIsPtr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsDynArray(
   const ATypeName, AFieldName: string): Boolean;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsDynArray);
-  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$arr', V);
+  Result := np_sema_type_check.TypeMetaFieldIsDynArray(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldDynArrayElemSize(
   const ATypeName, AFieldName: string): Int64;
 begin
-  if not FModel.LookupConstValue(
-    ATypeName + '.' + AFieldName + '$arr_elem_size', Result) then
-    Result := 8;
+  Result := np_sema_type_check.TypeMetaFieldDynArrayElemSize(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtSlot(
   const ATypeName, AMethodName: string): Int64;
-var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.VmtSlots) do
-      if SameText(Meta.VmtSlots[I].MethodName, AMethodName) then
-        Exit(Meta.VmtSlots[I].SlotIndex);
-  if FModel.LookupConstValue(ATypeName + '$vmt_slot_' + AMethodName, V) then
-    Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaVmtSlot(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetPtr(
   const ATypeName, AMethodName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$ret_ptr_' + AMethodName, V);
+  Result := np_sema_type_check.TypeMetaRetPtr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetStr(
   const ATypeName, AMethodName: string): Boolean;
-var V: Int64;
 begin
-  Result := FModel.LookupConstValue(ATypeName + '$ret_str_' + AMethodName, V);
+  Result := np_sema_type_check.TypeMetaRetStr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaParentClass(const ATypeName: string): string;
-var Meta: TTypeMetadata;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.ParentClassName <> '') then
-    Exit(Meta.ParentClassName);
-  if not FModel.LookupStringConstValue(ATypeName + '$parent_class', Result) then
-    Result := '';
+  Result := np_sema_type_check.TypeMetaParentClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.NextClassAncestorName(const ATypeName: string): string;
-var
-  TypeId: LongInt;
 begin
-  Result := '';
-  if ATypeName = '' then
-    Exit;
-
-  TypeId := FModel.FindTypeByName(ATypeName);
-  if (TypeId > 0) and (FModel.TypeAt(TypeId - 1).ParentTypeId > 0) then
-    Result := FModel.TypeAt(
-      FModel.TypeAt(TypeId - 1).ParentTypeId - 1).Name;
-  if Result = '' then
-    Result := TypeMetaParentClass(ATypeName);
-  if SameText(Result, ATypeName) then
-    Result := '';
+  Result := np_sema_type_check.NextClassAncestorName(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtCount(const ATypeName: string): Int64;
-var Meta: TTypeMetadata; V: Int64;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.VmtCount);
-  if FModel.LookupConstValue(ATypeName + '$vmt_count', V) then Exit(V);
-  Result := -1;
+  Result := np_sema_type_check.TypeMetaVmtCount(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaInterfaces(const ATypeName: string): string;
-var Meta: TTypeMetadata;
 begin
-  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Interfaces <> '') then
-    Exit(Meta.Interfaces);
-  if not FModel.LookupStringConstValue(ATypeName + '$interfaces', Result) then
-    Result := '';
+  Result := np_sema_type_check.TypeMetaInterfaces(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
-var
-  Fact: TSemanticScalarTypeFact;
-  TypeName: string;
-  TypeInfo: TSemanticType;
-  Dummy: Int64;
-  Meta: TTypeMetadata;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := '';
-  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
-    Exit;
-
-  TypeInfo := FModel.TypeAt(ATypeId - 1);
-  TypeName := TypeInfo.Name;
-  if (TypeName = '') then
-    Exit;
-  if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
-    SameText(TypeName, 'RawByteString') or
-    SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
-    SameText(TypeName, 'UnicodeString') then
-    Exit('s');
-  if SameText(TypeName, 'Boolean') then
-    Exit('b');
-  if SameText(TypeName, 'Integer') or SameText(TypeName, 'LongInt') or
-    SameText(TypeName, 'LongWord') or SameText(TypeName, 'Cardinal') or
-    SameText(TypeName, 'SmallInt') or SameText(TypeName, 'Word') or
-    SameText(TypeName, 'Byte') or SameText(TypeName, 'ShortInt') or
-    SameText(TypeName, 'Int64') or SameText(TypeName, 'QWord') or
-    SameText(TypeName, 'UInt64') or SameText(TypeName, 'SizeInt') or
-    SameText(TypeName, 'SizeUInt') or SameText(TypeName, 'UInt32') or
-    SameText(TypeName, 'PtrUInt') or SameText(TypeName, 'PtrInt') then
-    Exit('i');
-  if FModel.GetTypeScalarFact(ATypeId, Fact) and (Fact.Kind = sskPointer) then
-    Exit('p');
-  if FModel.GetTypeMeta(ATypeId, Meta) then
-  begin
-    if Meta.IsRecord then
-      Exit('r');
-    if TypeIsInterfaceByName(TypeName) then
-      Exit('f');
-    if SameText(TypeInfo.Kind, 'class') then
-      Exit('c');
-    Exit('p');
-  end;
-  if TypeMetaIsRecord(TypeName) then
-    Exit('r');
-  if TypeIsInterfaceByName(TypeName) then
-    Exit('f');
-  if TypeMetaIsClass(TypeName) then
-    Exit('c');
-  if TypeMetaSize(TypeName) > 0 then
-    Exit('p');
-  Result := 'i';
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.TypeSignatureForTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.TypeIdHasStableScalarFact(
@@ -5104,155 +2849,72 @@ end;
 function TSemanticAnalyzer.TypeIdArrayHasKnownTypes(
   const ATypeIds: TTypeIdArray
 ): Boolean;
-var
-  Index: LongInt;
 begin
-  Result := Length(ATypeIds) = 0;
-  if Result then
-    Exit;
-  for Index := 0 to Length(ATypeIds) - 1 do
-    if ATypeIds[Index] > 0 then
-      Exit(True);
-  Result := False;
+  Result := np_sema_overload.TypeIdArrayHasKnownTypes(ATypeIds);
 end;
 
 function TSemanticAnalyzer.CanonicalTypeId(const ATypeId: LongInt): LongInt;
-var
-  CurrentTypeId: LongInt;
-  Depth: LongInt;
-  Meta: TTypeMetadata;
+var Ctx: TSemaOverloadContext;
 begin
-  CurrentTypeId := ATypeId;
-  Depth := 0;
-  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) and
-    (Depth < 16) do
-  begin
-    if FModel.GetTypeMeta(CurrentTypeId, Meta) and
-      (Meta.AliasTargetTypeId > 0) and
-      (Meta.AliasTargetTypeId <> CurrentTypeId) then
-      CurrentTypeId := Meta.AliasTargetTypeId
-    else
-      Break;
-    Inc(Depth);
-  end;
-  Result := CurrentTypeId;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.CanonicalTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsPointerTypeId(const ATypeId: LongInt): Boolean;
-var
-  CurrentTypeId: LongInt;
-  Fact: TSemanticScalarTypeFact;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  CurrentTypeId := CanonicalTypeId(ATypeId);
-  while (CurrentTypeId > 0) and (CurrentTypeId <= FModel.TypeCount) do
-  begin
-    if FModel.GetTypeScalarFact(CurrentTypeId, Fact) and
-      (Fact.Kind = sskPointer) then
-      Exit(True);
-    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
-  end;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.IsPointerTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesExactMatch(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgCount: LongInt
-): Boolean;
-var
-  Child: TGreenNode;
-  ChildIndex: LongInt;
-  LeftFact: TSemanticScalarTypeFact;
-  RightFact: TSemanticScalarTypeFact;
-  ParamEntryIndex: LongInt;
-  ParamDecl: TGreenNode;
-  ParamIndex: LongInt;
-  ParamTypeId: LongInt;
+  const ADecl: TGreenNode; const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  if (ADecl = nil) or (AArgCount < 0) or
-    (Length(AArgTypeIds) <> AArgCount) then
-    Exit;
-
-  for ChildIndex := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(ChildIndex);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-
-    ParamIndex := 0;
-    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
-    begin
-      ParamDecl := Child.ChildAt(ParamEntryIndex);
-      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
-        Continue;
-      if ParamIndex >= AArgCount then
-        Break;
-      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
-      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
-        (CanonicalTypeId(ParamTypeId) <>
-         CanonicalTypeId(AArgTypeIds[ParamIndex])) then
-      begin
-        if not (
-          FModel.GetTypeScalarFact(CanonicalTypeId(ParamTypeId), LeftFact) and
-          FModel.GetTypeScalarFact(CanonicalTypeId(AArgTypeIds[ParamIndex]), RightFact) and
-          (LeftFact.Kind in [sskBool, sskInt, sskFloat]) and
-          (RightFact.Kind = LeftFact.Kind) and
-          (RightFact.BitWidth = LeftFact.BitWidth) and
-          (RightFact.Signed = LeftFact.Signed)
-        ) then
-          Exit(False);
-      end;
-      Inc(ParamIndex);
-    end;
-    Exit(ParamIndex = AArgCount);
-  end;
-  Result := AArgCount = 0;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamTypesExactMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesCompatibleMatch(
-  const ADecl: TGreenNode;
-  const AOwnerUnitId: string;
-  const AArgTypeIds: TTypeIdArray;
-  const AArgCount: LongInt
-): Boolean;
-var
-  Child: TGreenNode;
-  ChildIndex: LongInt;
-  ParamEntryIndex: LongInt;
-  ParamDecl: TGreenNode;
-  ParamIndex: LongInt;
-  ParamTypeId: LongInt;
+  const ADecl: TGreenNode; const AOwnerUnitId: string;
+  const AArgTypeIds: TTypeIdArray; const AArgCount: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := False;
-  if (ADecl = nil) or (AArgCount < 0) or
-    (Length(AArgTypeIds) <> AArgCount) then
-    Exit;
-
-  for ChildIndex := 0 to ADecl.ChildCount - 1 do
-  begin
-    Child := ADecl.ChildAt(ChildIndex);
-    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
-      Continue;
-
-    ParamIndex := 0;
-    for ParamEntryIndex := 0 to Child.ChildCount - 1 do
-    begin
-      ParamDecl := Child.ChildAt(ParamEntryIndex);
-      if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
-        Continue;
-      if ParamIndex >= AArgCount then
-        Break;
-      ParamTypeId := ParamDeclTypeId(ParamDecl, AOwnerUnitId);
-      if (ParamTypeId > 0) and (AArgTypeIds[ParamIndex] > 0) and
-        not AreTypesCompatible(ParamTypeId, AArgTypeIds[ParamIndex]) then
-        Exit(False);
-      Inc(ParamIndex);
-    end;
-    Exit(ParamIndex = AArgCount);
-  end;
-  Result := AArgCount = 0;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.DeclParamTypesCompatibleMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
@@ -5415,11 +3077,8 @@ begin
       ));
     if BodyExactMatchCount > 1 then
     begin
-      { Permissive: pick first exact match for method calls }
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyExactMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(0);
     end;
     if BodyCompatibleMatchCount = 1 then
       Exit(CallableSymbolIdForDeclaration(
@@ -5428,11 +3087,8 @@ begin
       ));
     if BodyCompatibleMatchCount > 1 then
     begin
-      { Permissive: pick first compatible match for method calls }
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyCompatibleMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(0);
     end;
   end;
   if SymbolMatchCount = 0 then
@@ -5494,8 +3150,8 @@ begin
         SymbolId := SameOwnerSymbolId
       else
       begin
-        { Permissive: pick first same-owner match }
-        SymbolId := SameOwnerSymbolId;
+        AResolutionFailureKind := 'ambiguous-overload';
+        SymbolId := 0;
       end;
     end
     else if not AHasArgSignature then
@@ -5549,9 +3205,11 @@ begin
     end
     else
     begin
-      { Permissive: pick first best match for method calls }
       if BestSymbolId > 0 then
-        SymbolId := BestSymbolId;
+      begin
+        AResolutionFailureKind := 'ambiguous-overload';
+        SymbolId := 0;
+      end;
       Exit;
     end;
   end;
@@ -6099,7 +3757,11 @@ begin
         MemberCandidates
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
       begin
-        { Permissive: suppress ambiguous-overload errors for C8 pass }
+        EmitSemaError(
+          'sema.ambiguous-overload',
+          'ambiguous call to overloaded function "' + MemberFailureName + '"',
+          MemberFailureOffset
+        );
       end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
       begin
@@ -6206,7 +3868,11 @@ begin
         if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'ambiguous-overload') then
         begin
-          { Permissive: suppress ambiguous-overload errors for C8 pass }
+          EmitSemaError(
+            'sema.ambiguous-overload',
+            'ambiguous call to overloaded function "' + MemberFailureName + '"',
+            MemberFailureOffset
+          );
         end
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'wrong-argument-count') then
@@ -6495,25 +4161,8 @@ begin
 end;
 
 function TSemanticAnalyzer.IsSimpleIdentifierName(const AName: string): Boolean;
-var
-  I: LongInt;
-  Ch: Char;
 begin
-  if AName = '' then
-    Exit(False);
-
-  Ch := AName[1];
-  if not (Ch in ['A'..'Z', 'a'..'z', '_']) then
-    Exit(False);
-
-  for I := 2 to Length(AName) do
-  begin
-    Ch := AName[I];
-    if not (Ch in ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
-      Exit(False);
-  end;
-
-  Result := True;
+  Result := np_sema_type_check.IsSimpleIdentifierName(AName);
 end;
 
 function TSemanticAnalyzer.RegisterSymbol(
@@ -6899,104 +4548,19 @@ begin
   end;
 end;
 
-function TSemanticAnalyzer.AreTypesCompatible(
-  const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
-var
-  IntIds: array[0..16] of LongInt;
-  StrIds: array[0..4] of LongInt;
-  I: LongInt;
-  LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
-  CharTypeId, WideCharTypeId: LongInt;
-  CanonicalLhsTypeId, CanonicalRhsTypeId: LongInt;
+function TSemanticAnalyzer.AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
+var Ctx: TSemaOverloadContext;
 begin
-  if ALhsTypeId = ARhsTypeId then
-    Exit(True);
-  if (ALhsTypeId = 0) or (ARhsTypeId = 0) then
-    Exit(True);
-
-  CanonicalLhsTypeId := CanonicalTypeId(ALhsTypeId);
-  CanonicalRhsTypeId := CanonicalTypeId(ARhsTypeId);
-  if CanonicalLhsTypeId = CanonicalRhsTypeId then
-    Exit(True);
-  if FModel.IsTypeDescendantOf(CanonicalRhsTypeId, CanonicalLhsTypeId) then
-    Exit(True);
-  if FModel.IsTypeDescendantOf(CanonicalLhsTypeId, CanonicalRhsTypeId) then
-    Exit(True);
-  if IsPointerTypeId(CanonicalLhsTypeId) and IsPointerTypeId(CanonicalRhsTypeId) then
-    Exit(True);
-
-  IntIds[0] := FModel.FindTypeByName('Byte');
-  IntIds[1] := FModel.FindTypeByName('Word');
-  IntIds[2] := FModel.FindTypeByName('LongInt');
-  IntIds[3] := FModel.FindTypeByName('Integer');
-  IntIds[4] := FModel.FindTypeByName('Int64');
-  IntIds[5] := FModel.FindTypeByName('QWord');
-  IntIds[6] := FModel.FindTypeByName('LongWord');
-  IntIds[7] := FModel.FindTypeByName('ShortInt');
-  IntIds[8] := FModel.FindTypeByName('SmallInt');
-  IntIds[9] := FModel.FindTypeByName('Int32');
-  IntIds[10] := FModel.FindTypeByName('UInt32');
-  IntIds[11] := FModel.FindTypeByName('UInt64');
-  IntIds[12] := FModel.FindTypeByName('WideChar');
-  IntIds[13] := FModel.FindTypeByName('Single');
-  IntIds[14] := FModel.FindTypeByName('Double');
-  IntIds[15] := FModel.FindTypeByName('AnsiChar');
-  IntIds[16] := FModel.FindTypeByName('Char');
-
-  LhsIsInt := False;
-  RhsIsInt := False;
-  for I := 0 to High(IntIds) do
-  begin
-    if CanonicalLhsTypeId = IntIds[I] then LhsIsInt := True;
-    if CanonicalRhsTypeId = IntIds[I] then RhsIsInt := True;
-  end;
-  if LhsIsInt and RhsIsInt then
-    Exit(True);
-
-  StrIds[0] := FModel.FindTypeByName('AnsiString');
-  StrIds[1] := FModel.FindTypeByName('ShortString');
-  StrIds[2] := FModel.FindTypeByName('WideString');
-  StrIds[3] := FModel.FindTypeByName('UnicodeString');
-  StrIds[4] := FModel.FindTypeByName('RawByteString');
-
-  LhsIsStr := False;
-  RhsIsStr := False;
-  for I := 0 to High(StrIds) do
-  begin
-    if CanonicalLhsTypeId = StrIds[I] then LhsIsStr := True;
-    if CanonicalRhsTypeId = StrIds[I] then RhsIsStr := True;
-  end;
-  if LhsIsStr and RhsIsStr then
-    Exit(True);
-
-  if CanonicalLhsTypeId = FModel.FindTypeByName('Boolean') then
-    Exit(CanonicalRhsTypeId = FModel.FindTypeByName('Boolean'));
-
-  CharTypeId := FModel.FindTypeByName('Char');
-  WideCharTypeId := FModel.FindTypeByName('WideChar');
-  if LhsIsStr and ((CanonicalRhsTypeId = CharTypeId) or
-    (CanonicalRhsTypeId = WideCharTypeId)) then
-    Exit(True);
-  if ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId)) and RhsIsStr then
-    Exit(True);
-  if ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId)) and
-    ((CanonicalRhsTypeId = CharTypeId) or
-     (CanonicalRhsTypeId = WideCharTypeId)) then
-    Exit(True);
-
-  { String literal → PAnsiChar / PChar implicit conversion }
-  if RhsIsStr and IsPointerTypeId(CanonicalLhsTypeId) then
-    Exit(True);
-
-  { Single-char string literal → Char/AnsiChar/WideChar implicit conversion }
-  if RhsIsStr and ((CanonicalLhsTypeId = CharTypeId) or
-    (CanonicalLhsTypeId = WideCharTypeId) or
-    (CanonicalLhsTypeId = FModel.FindTypeByName('AnsiChar'))) then
-    Exit(True);
-
-  Result := False;
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
 end;
 
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
@@ -7789,155 +5353,36 @@ begin
 end;
 
 function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  Result := ResolveTypeIdForOwner(ATypeName, '');
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ResolveTypeId(Ctx, ATypeName);
 end;
 
 function TSemanticAnalyzer.ResolveTypeIdForOwner(
   const ATypeName: string;
   const APreferredOwnerUnitId: string;
-  const AAllowDirectImportSearch: Boolean
-): LongInt;
-var
-  CandidateSeen: Boolean;
-  DirectImportMatchCount: LongInt;
-  DotPos: LongInt;
-  I: LongInt;
-  Index: LongInt;
-  NormalizedOwnerUnitId: string;
-  PreferredMatchCount: LongInt;
-  QualifiedOwnerUnitId: string;
-  ShortTypeName: string;
-  Symbol: TSemanticSymbol;
-  UniqueTypeId: LongInt;
+  const AAllowDirectImportSearch: Boolean): LongInt;
+var Ctx: TSemaOverloadContext;
 begin
-  if ATypeName = '' then
-    Exit(0);
-  if SameText(ATypeName, 'String') then
-    Exit(FModel.FindTypeByName('AnsiString'));
-  if SameText(ATypeName, 'Cardinal') then
-    Exit(FModel.FindTypeByName('LongWord'));
-  if SameText(ATypeName, 'Real') then
-    Exit(FModel.FindTypeByName('Double'));
-  if SameText(ATypeName, 'Extended') then
-    Exit(FModel.FindTypeByName('Double'));
-
-  DotPos := 0;
-  for I := Length(ATypeName) downto 1 do
-    if ATypeName[I] = '.' then
-    begin
-      DotPos := I;
-      Break;
-    end;
-  if (DotPos > 1) and (DotPos < Length(ATypeName)) then
-  begin
-    QualifiedOwnerUnitId := NormalizeUnitIdentity(
-      Copy(ATypeName, 1, DotPos - 1)
-    );
-    ShortTypeName := Copy(ATypeName, DotPos + 1, MaxInt);
-    if (QualifiedOwnerUnitId <> '') and (ShortTypeName <> '') then
-    begin
-      PreferredMatchCount := 0;
-      UniqueTypeId := 0;
-      for Index := 0 to FModel.SymbolCount - 1 do
-      begin
-        Symbol := FModel.SymbolAt(Index);
-        if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ShortTypeName) and
-          SameText(Symbol.OwnerUnitId, QualifiedOwnerUnitId) and
-          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-        begin
-          Inc(PreferredMatchCount);
-          if UniqueTypeId = 0 then
-            UniqueTypeId := Symbol.TypeId
-          else if UniqueTypeId <> Symbol.TypeId then
-          begin
-            if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-              UniqueTypeId := Symbol.TypeId
-            else if not (SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-              SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface')) then
-              Exit(0);
-          end;
-        end;
-      end;
-      if PreferredMatchCount >= 1 then
-        Exit(UniqueTypeId);
-    end;
-  end;
-
-  NormalizedOwnerUnitId := NormalizeUnitIdentity(APreferredOwnerUnitId);
-  if NormalizedOwnerUnitId <> '' then
-  begin
-    PreferredMatchCount := 0;
-    UniqueTypeId := 0;
-    for Index := 0 to FModel.SymbolCount - 1 do
-    begin
-      Symbol := FModel.SymbolAt(Index);
-      if SameText(Symbol.Kind, 'type') and
-        SameText(Symbol.Name, ATypeName) and
-        SameText(Symbol.OwnerUnitId, NormalizedOwnerUnitId) and
-        (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-      begin
-        Inc(PreferredMatchCount);
-        if UniqueTypeId = 0 then
-          UniqueTypeId := Symbol.TypeId
-        else if UniqueTypeId <> Symbol.TypeId then
-        begin
-          if SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(Symbol.TypeId - 1).Kind, 'interface') then
-            UniqueTypeId := Symbol.TypeId
-          else if SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'class') or
-            SameText(FModel.TypeAt(UniqueTypeId - 1).Kind, 'interface') then
-            { Keep existing class/interface UniqueTypeId }
-          else
-            { Neither is class/interface yet — prefer later entry }
-            UniqueTypeId := Symbol.TypeId;
-        end;
-      end;
-    end;
-    if PreferredMatchCount >= 1 then
-      Exit(UniqueTypeId);
-
-    if AAllowDirectImportSearch then
-    begin
-      DirectImportMatchCount := 0;
-      UniqueTypeId := 0;
-      for Index := 0 to FModel.SymbolCount - 1 do
-      begin
-        Symbol := FModel.SymbolAt(Index);
-        if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ATypeName) and
-          UnitDirectlyImports(NormalizedOwnerUnitId, Symbol.OwnerUnitId) and
-          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-        begin
-          Inc(DirectImportMatchCount);
-          { Prefer later entry (full definition over forward declaration) }
-          UniqueTypeId := Symbol.TypeId;
-        end;
-      end;
-      if DirectImportMatchCount >= 1 then
-        Exit(UniqueTypeId);
-    end;
-  end;
-
-  CandidateSeen := False;
-  UniqueTypeId := 0;
-  for Index := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
-      (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-    begin
-      { Prefer later type entry (full definition over forward declaration) }
-      UniqueTypeId := Symbol.TypeId;
-      CandidateSeen := True;
-    end;
-  end;
-  if CandidateSeen then
-    Exit(UniqueTypeId);
-
-  Result := FModel.FindTypeByName(ATypeName);
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Result := np_sema_overload.ResolveTypeIdForOwner(Ctx, ATypeName, APreferredOwnerUnitId, AAllowDirectImportSearch);
 end;
 
 function TSemanticAnalyzer.ImplicitSystemObjectParentTypeId(
@@ -8582,70 +6027,73 @@ function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
   IntfList: string;
-  SubConstraints: array of string;
+  SubConstraints: TStringVec;
   I, J: LongInt;
   SC: string;
 begin
   Result := True;
-  SetLength(SubConstraints, 0);
-  I := 1;
-  while I <= Length(AConstraint) do
-  begin
-    J := I;
-    while (J <= Length(AConstraint)) and (AConstraint[J] <> '|') do
-      Inc(J);
-    SetLength(SubConstraints, Length(SubConstraints) + 1);
-    SubConstraints[High(SubConstraints)] := Trim(Copy(AConstraint, I, J - I));
-    I := J + 1;
-  end;
-  for I := 0 to High(SubConstraints) do
-  begin
-    SC := SubConstraints[I];
-    if SC = '' then
-      Continue;
-    if SameText(SC, 'class') then
+  SubConstraints := TStringVec.Create;
+  try
+    I := 1;
+    while I <= Length(AConstraint) do
     begin
-      if not TypeMetaIsClass(AArgType) then
-      begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy constraint "class"');
-        Result := False;
-        Exit;
-      end;
-    end
-    else if SameText(SC, 'record') then
+      J := I;
+      while (J <= Length(AConstraint)) and (AConstraint[J] <> '|') do
+        Inc(J);
+      SubConstraints.Push(Trim(Copy(AConstraint, I, J - I)));
+      I := J + 1;
+    end;
+    for I := 0 to SubConstraints.Count - 1 do
     begin
-      if not TypeMetaIsRecord(AArgType) then
+      SC := SubConstraints[I];
+      if SC = '' then
+        Continue;
+      if SameText(SC, 'class') then
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy constraint "record"');
-        Result := False;
-        Exit;
-      end;
-    end
-    else
-    begin
-      if not TypeMetaIsClass(AArgType) then
+        if not TypeMetaIsClass(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy constraint "class"');
+          Result := False;
+          Exit;
+        end;
+      end
+      else if SameText(SC, 'record') then
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not satisfy interface constraint "' +
-          SC + '" (must be a class type)');
-        Result := False;
-        Exit;
-      end;
-      IntfList := TypeMetaInterfaces(AArgType);
-      if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
+        if not TypeMetaIsRecord(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy constraint "record"');
+          Result := False;
+          Exit;
+        end;
+      end
+      else
       begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + AArgType + ' does not implement interface "' + SC + '"');
-        Result := False;
-        Exit;
+        if not TypeMetaIsClass(AArgType) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not satisfy interface constraint "' +
+            SC + '" (must be a class type)');
+          Result := False;
+          Exit;
+        end;
+        IntfList := TypeMetaInterfaces(AArgType);
+        if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
+        begin
+          FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+            FRootFileId, 0,
+            'type ' + AArgType + ' does not implement interface "' + SC + '"');
+          Result := False;
+          Exit;
+        end;
       end;
     end;
+  finally
+    SubConstraints.Free;
   end;
 end;
 
@@ -8657,7 +6105,7 @@ var
   ParentName, ArgStr: string;
   ParentTypeId: LongInt;
   OwnerParams: string;
-  ArgNames: array of string;
+  ArgNames: TStringVec;
   ArgIndices: array of LongInt;
 begin
   LtPos := Pos('<', AParentSpec);
@@ -8701,7 +6149,7 @@ begin
 
   OwnerParams := FModel.TypeAt(ATypeId - 1).TypeParams;
 
-  SetLength(ArgNames, 0);
+  ArgNames := TStringVec.Create;
   I := 1;
   while I <= Length(ArgStr) do
   begin
@@ -8714,13 +6162,12 @@ begin
       else if (ArgStr[J] = ',') and (GtPos = 0) then Break;
       Inc(J);
     end;
-    SetLength(ArgNames, Length(ArgNames) + 1);
-    ArgNames[High(ArgNames)] := Trim(Copy(ArgStr, I, J - I));
+    ArgNames.Push(Trim(Copy(ArgStr, I, J - I)));
     I := J + 1;
   end;
 
-  SetLength(ArgIndices, Length(ArgNames));
-  for I := 0 to High(ArgNames) do
+  SetLength(ArgIndices, ArgNames.Count);
+  for I := 0 to ArgNames.Count - 1 do
   begin
     ArgIndices[I] := -1;
     J := 1;
@@ -8740,6 +6187,7 @@ begin
     end;
   end;
 
+  ArgNames.Free;
   FModel.SetTypeGenericParent(ATypeId, ParentTypeId, ArgIndices);
 end;
 
@@ -9369,9 +6817,9 @@ var
   NewSymbolId: LongInt;
   QualPrefix: string;
   ArgStr, ParamStr, ConstraintStr: string;
-  ArgTypes: array of string;
-  ParamNames: array of string;
-  Constraints: array of string;
+  ArgTypes: TStringVec;
+  ParamNames: TStringVec;
+  Constraints: TStringVec;
   MethodShortName: string;
   SubstSig: string;
   Decl: TGreenNode;
@@ -9436,7 +6884,7 @@ begin
     Exit;
   FModel.SetTypeInstantiatedFrom(AInstanceTypeId, GenericTypeId);
 
-  SetLength(ArgTypes, 0);
+  ArgTypes := TStringVec.Create;
   I := 1;
   while I <= Length(ArgStr) do
   begin
@@ -9452,53 +6900,50 @@ begin
         Break;
       Inc(J);
     end;
-    SetLength(ArgTypes, Length(ArgTypes) + 1);
-    ArgTypes[High(ArgTypes)] := Trim(Copy(ArgStr, I, J - I));
+    ArgTypes.Push(Trim(Copy(ArgStr, I, J - I)));
     I := J + 1;
   end;
 
-  SetLength(ParamNames, 0);
+  ParamNames := TStringVec.Create;
   I := 1;
   while I <= Length(ParamStr) do
   begin
     J := I;
     while (J <= Length(ParamStr)) and (ParamStr[J] <> ',') do
       Inc(J);
-    SetLength(ParamNames, Length(ParamNames) + 1);
-    ParamNames[High(ParamNames)] := Trim(Copy(ParamStr, I, J - I));
+    ParamNames.Push(Trim(Copy(ParamStr, I, J - I)));
     I := J + 1;
   end;
 
-  for I := 0 to High(ArgTypes) do
+  for I := 0 to ArgTypes.Count - 1 do
   begin
     if Pos('<', ArgTypes[I]) > 0 then
       ResolveOrInstantiateInlineGeneric(ArgTypes[I], AOwnerUnitId);
   end;
 
-  SetLength(Constraints, 0);
+  Constraints := TStringVec.Create;
   I := 1;
   while I <= Length(ConstraintStr) do
   begin
     J := I;
     while (J <= Length(ConstraintStr)) and (ConstraintStr[J] <> ',') do
       Inc(J);
-    SetLength(Constraints, Length(Constraints) + 1);
-    Constraints[High(Constraints)] := Trim(Copy(ConstraintStr, I, J - I));
+    Constraints.Push(Trim(Copy(ConstraintStr, I, J - I)));
     I := J + 1;
   end;
 
-  if (Length(ParamNames) > 0) and (Length(ArgTypes) <> Length(ParamNames)) then
+  if (ParamNames.Count > 0) and (ArgTypes.Count <> ParamNames.Count) then
   begin
     FDiagnostics.EmitError('sema.generic-arity-mismatch', 'sema',
       FRootFileId, 0,
-      'generic type ' + GenericName + ' expects ' + IntToStr(Length(ParamNames)) +
-      ' type argument(s), but ' + IntToStr(Length(ArgTypes)) + ' provided');
+      'generic type ' + GenericName + ' expects ' + IntToStr(ParamNames.Count) +
+      ' type argument(s), but ' + IntToStr(ArgTypes.Count) + ' provided');
     Exit;
   end;
 
-  for I := 0 to High(Constraints) do
+  for I := 0 to Constraints.Count - 1 do
   begin
-    if (Constraints[I] = '') or (I > High(ArgTypes)) then
+    if (Constraints[I] = '') or (I >= ArgTypes.Count) then
       Continue;
     if not CheckSingleConstraint(ArgTypes[I], Constraints[I]) then
       Exit;
@@ -9522,7 +6967,7 @@ begin
       FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
 
       SubstSig := '';
-      if (Length(ParamNames) > 0) and (Length(ArgTypes) >= Length(ParamNames)) then
+      if (ParamNames.Count > 0) and (ArgTypes.Count >= ParamNames.Count) then
       begin
         Decl := nil;
         for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
@@ -9534,7 +6979,7 @@ begin
           end;
         end;
         if Decl <> nil then
-          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames, ArgTypes)
+          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames.ToArray, ArgTypes.ToArray)
         else
         begin
           BodyIdx := Length(FPendingSignatures);
@@ -9543,11 +6988,11 @@ begin
           FPendingSignatures[BodyIdx].GenericName := GenericName;
           FPendingSignatures[BodyIdx].MethodShortName := MethodShortName;
           FPendingSignatures[BodyIdx].OwnerUnitId := AOwnerUnitId;
-          SetLength(FPendingSignatures[BodyIdx].ParamNames, Length(ParamNames));
-          for BodyIdx := 0 to High(ParamNames) do
+          SetLength(FPendingSignatures[BodyIdx].ParamNames, ParamNames.Count);
+          for BodyIdx := 0 to ParamNames.Count - 1 do
             FPendingSignatures[High(FPendingSignatures)].ParamNames[BodyIdx] := ParamNames[BodyIdx];
-          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, Length(ArgTypes));
-          for BodyIdx := 0 to High(ArgTypes) do
+          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, ArgTypes.Count);
+          for BodyIdx := 0 to ArgTypes.Count - 1 do
             FPendingSignatures[High(FPendingSignatures)].ArgTypes[BodyIdx] := ArgTypes[BodyIdx];
         end;
       end;
@@ -9602,7 +7047,7 @@ begin
         if I > 0 then
           SubstSig := SubstSig + ',';
         J := GenericType.GenericParent.ArgIndices[I];
-        if (J >= 0) and (J <= High(ArgTypes)) then
+        if (J >= 0) and (J < ArgTypes.Count) then
           SubstSig := SubstSig + ArgTypes[J]
         else
           SubstSig := SubstSig + '?';
@@ -9616,7 +7061,7 @@ begin
   if (GenericType.GenericParent.TemplateTypeId <= 0) or (GtPos < 0) then
   if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
-    for I := 0 to High(ParamNames) do
+    for I := 0 to ParamNames.Count - 1 do
     begin
       J := 1;
       while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
@@ -9679,7 +7124,7 @@ begin
   begin
     if Pos('<', SubstSig) > 0 then
     begin
-      for I := 0 to High(ParamNames) do
+      for I := 0 to ParamNames.Count - 1 do
       begin
         J := 1;
         while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
@@ -9703,6 +7148,9 @@ begin
   else
     FModel.AddStringConstValue(InstanceName + '$parent_class',
       FModel.TypeAt(GenericTypeId - 1).Name);
+  ArgTypes.Free;
+  ParamNames.Free;
+  Constraints.Free;
 end;
 
 function TSemanticAnalyzer.ResolveOrInstantiateInlineGeneric(
@@ -12841,908 +10289,164 @@ begin
     FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
 end;
 
+
+{ === SemaBridge functions — adapt TSemanticAnalyzer methods to callback pointers === }
+
+function SemaBridge_BuildTargetAddressExpr(const Ctx: Pointer; const ATargetNode: TGreenNode;
+  out AExprId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).BuildTargetAddressExpr(ATargetNode, AExprId);
+end;
+
+function SemaBridge_BuildClassBaseAddressExpr(const Ctx: Pointer; const ABaseName,
+  AClassName: string; out AExprId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).BuildClassBaseAddressExpr(ABaseName, AClassName, AExprId);
+end;
+
+function SemaBridge_BuildByRefArgumentAddressExpr(const Ctx: Pointer;
+  const AArgNode: TGreenNode; out AExprId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).BuildByRefArgumentAddressExpr(AArgNode, AExprId);
+end;
+
+function SemaBridge_BuildRuntimeArrayElementAddressHirExpr(const Ctx: Pointer;
+  const ANode: TGreenNode; out AExprId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).BuildRuntimeArrayElementAddressHirExpr(ANode, AExprId);
+end;
+
+function SemaBridge_EvaluateIntegerConstant(const Ctx: Pointer; const ANode: TGreenNode;
+  out AValue: Int64): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).EvaluateIntegerConstant(ANode, AValue);
+end;
+
+function SemaBridge_InferExpressionType(const Ctx: Pointer;
+  const ANode: TGreenNode): LongInt;
+begin
+  Result := TSemanticAnalyzer(Ctx).InferExpressionType(ANode);
+end;
+
+function SemaBridge_TypeIdForVariable(const Ctx: Pointer;
+  const AName: string): LongInt;
+begin
+  Result := TSemanticAnalyzer(Ctx).TypeIdForVariable(AName);
+end;
+
+function SemaBridge_TryGetDirectCallContract(const Ctx: Pointer; const ACallNode: TGreenNode;
+  out ACalleeName, AParamKinds: string; out AResultTypeId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).TryGetDirectCallContract(ACallNode, ACalleeName, AParamKinds, AResultTypeId);
+end;
+
+function SemaBridge_TryGetDispatchedMemberCallContract(const Ctx: Pointer;
+  const ACallNode: TGreenNode; out AExprKind: TSemanticHirExprKind;
+  out AReceiverVarName, ACalleeName, AParamKinds: string;
+  out ASlotIndex, AReturnTypeId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).TryGetDispatchedMemberCallContract(
+    ACallNode, AExprKind, AReceiverVarName, ACalleeName, AParamKinds, ASlotIndex, AReturnTypeId);
+end;
+
+function SemaBridge_TryGetOrdinaryMemberCallContract(const Ctx: Pointer;
+  const ACallNode: TGreenNode; out AReceiverVarName, ACalleeName,
+  AParamKinds: string; out AResultTypeId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).TryGetOrdinaryMemberCallContract(
+    ACallNode, AReceiverVarName, ACalleeName, AParamKinds, AResultTypeId);
+end;
+
+function SemaBridge_TryGetTypeCastTargetTypeId(const Ctx: Pointer;
+  const ACallNode: TGreenNode; out ATypeId: LongInt): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).TryGetTypeCastTargetTypeId(ACallNode, ATypeId);
+end;
+
+function SemaBridge_TryGetIntrinsicExprName(const Ctx: Pointer;
+  const ACallNode: TGreenNode; out AIntrinsicName: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).TryGetIntrinsicExprName(ACallNode, AIntrinsicName);
+end;
+
+function SemaBridge_ResolveTypeIdForOwner(const Ctx: Pointer; const ATypeName,
+  AOwnerUnitId: string): LongInt;
+begin
+  Result := TSemanticAnalyzer(Ctx).ResolveTypeIdForOwner(ATypeName, AOwnerUnitId);
+end;
+
+function SemaBridge_EncodeRuntimeIntExprFold(const Ctx: Pointer;
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).EncodeRuntimeIntExprFold(ANode, ABlob);
+end;
+
+function SemaBridge_CanEmitStrCompareOperand(const Ctx: Pointer;
+  const ANode: TGreenNode; AAllowOwned: Boolean): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).CanEmitStrCompareOperand(ANode, AAllowOwned);
+end;
+
+function SemaBridge_EmitStrCompareOperand(const Ctx: Pointer;
+  const ANode: TGreenNode; AAllowOwned: Boolean;
+  out ABlob: string): Boolean;
+begin
+  Result := TSemanticAnalyzer(Ctx).EmitStrCompareOperand(ANode, AAllowOwned, ABlob);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
-  Children: array of LongInt;
-  LeftExprId, RightExprId, SymbolId: LongInt;
-  LeftTypeId, RightTypeId, ResultTypeId, BoolTypeId: LongInt;
-  ArgExprId, ArgIndex, SlotIndex: LongInt;
-  Value: Int64;
-  ParseCode: Word;
-  Op, Pred, CalleeName, ParamKinds, ReceiverVarName: string;
-  DispatchExprKind: TSemanticHirExprKind;
-  CallNode: TGreenNode;
-
-  function ExprTypeId(const ALocalExprId: LongInt): LongInt;
-  var
-    Expr: TSemanticHirExpr;
-  begin
-    if (ALocalExprId <= 0) or (ALocalExprId > FModel.HirExprCount) then
-      Exit(0);
-    Expr := FModel.HirExprAt(ALocalExprId - 1);
-    Result := Expr.TypeId;
-  end;
-
-  function FindScalarTypeId(const AKind: TSemanticScalarKind;
-    const ABitWidth: LongInt; const ASigned: Boolean): LongInt;
-  var
-    I: LongInt;
-    Fact: TSemanticScalarTypeFact;
-  begin
-    for I := 0 to FModel.TypeCount - 1 do
-    begin
-      if FModel.GetTypeScalarFact(I + 1, Fact) and
-        (Fact.Kind = AKind) and (Fact.BitWidth = ABitWidth) and
-        (Fact.Signed = ASigned) then
-        Exit(I + 1);
-    end;
-    Result := 0;
-  end;
-
-  function NextSignedWidth(const ABitWidth: LongInt): LongInt;
-  begin
-    if ABitWidth < 32 then
-      Result := 32
-    else if ABitWidth < 64 then
-      Result := 64
-    else
-      Result := 0;
-  end;
-
-  function CommonIntegerTypeId(const ALeftTypeId,
-    ARightTypeId: LongInt): LongInt;
-  var
-    LeftFact, RightFact: TSemanticScalarTypeFact;
-    MaxWidth, CommonWidth: LongInt;
-    CommonSigned: Boolean;
-  begin
-    Result := 0;
-    if (ALeftTypeId <= 0) or (ARightTypeId <= 0) then
-      Exit;
-    if ALeftTypeId = ARightTypeId then
-      Exit(ALeftTypeId);
-    if (not FModel.GetTypeScalarFact(ALeftTypeId, LeftFact)) or
-      (not FModel.GetTypeScalarFact(ARightTypeId, RightFact)) then
-      Exit;
-    if (LeftFact.Kind <> sskInt) or (RightFact.Kind <> sskInt) then
-      Exit;
-
-    MaxWidth := LeftFact.BitWidth;
-    if RightFact.BitWidth > MaxWidth then
-      MaxWidth := RightFact.BitWidth;
-
-    if LeftFact.Signed = RightFact.Signed then
-      Exit(FindScalarTypeId(sskInt, MaxWidth, LeftFact.Signed));
-
-    CommonSigned := True;
-    if LeftFact.Signed and (LeftFact.BitWidth > RightFact.BitWidth) then
-      CommonWidth := LeftFact.BitWidth
-    else if RightFact.Signed and (RightFact.BitWidth > LeftFact.BitWidth) then
-      CommonWidth := RightFact.BitWidth
-    else
-      CommonWidth := NextSignedWidth(MaxWidth);
-
-    if CommonWidth = 0 then
-      Exit(0);
-    Result := FindScalarTypeId(sskInt, CommonWidth, CommonSigned);
-  end;
-
-  function CastExprToType(const ALocalExprId,
-    ATargetTypeId: LongInt): LongInt;
-  var
-    LocalChildren: array of LongInt;
-    LocalTypeId: LongInt;
-  begin
-    Result := 0;
-    LocalTypeId := ExprTypeId(ALocalExprId);
-    if (ALocalExprId <= 0) or (LocalTypeId <= 0) or (ATargetTypeId <= 0) then
-      Exit;
-    if LocalTypeId = ATargetTypeId then
-      Exit(ALocalExprId);
-    SetLength(LocalChildren, 1);
-    LocalChildren[0] := ALocalExprId;
-    Result := FModel.AddHirExpr(
-      shekCast, ATargetTypeId, 0,
-    LocalChildren, 0, 0.0, '', '', 0, shvcScalar
-    );
-  end;
-
-  function IsStructuredAddressableScalarType(const ATypeId: LongInt): Boolean;
-  var
-    Fact: TSemanticScalarTypeFact;
-  begin
-    if ATypeId <= 0 then
-      Exit(False);
-    if not FModel.GetTypeScalarFact(ATypeId, Fact) then
-      Exit(False);
-    Result := Fact.Kind in [sskBool, sskInt, sskFloat, sskPointer];
-  end;
-
-  function AddRuntimePointerSymbolValueExpr(const ASymbolName: string;
-    out ALocalExprId: LongInt): Boolean;
-  var
-    LocalChildren: array of LongInt;
-    LocalSymbolId, PointerTypeId: LongInt;
-  begin
-    ALocalExprId := 0;
-    if (ASymbolName = '') or (not IsRuntimeVar(ASymbolName)) then
-      Exit(False);
-    LocalSymbolId := FModel.FindSymbolByName(ASymbolName);
-    if LocalSymbolId <= 0 then
-      Exit(False);
-    PointerTypeId := FModel.FindTypeByName('Pointer');
-    if PointerTypeId <= 0 then
-      Exit(False);
-    SetLength(LocalChildren, 0);
-    ALocalExprId := FModel.AddHirExpr(
-      shekSymbolValue, PointerTypeId, LocalSymbolId, LocalChildren,
-      0,
-    0.0, '', '', 0, shvcScalar
-    );
-    Result := True;
-  end;
-
-  function BuildRuntimeMemberReceiverExpr(const AReceiverName: string;
-    out ALocalExprId: LongInt): Boolean;
-  var
-    ClassTypeId: LongInt;
-    ClassTypeName: string;
-  begin
-    ALocalExprId := 0;
-    if SameText(AReceiverName, 'self') and (FCurrentMethodClass <> '') then
-      Exit(BuildClassBaseAddressExpr('self', FCurrentMethodClass, ALocalExprId));
-    ClassTypeId := TypeIdForVariable(AReceiverName);
-    if (ClassTypeId > 0) and (ClassTypeId <= FModel.TypeCount) then
-    begin
-      ClassTypeName := FModel.TypeAt(ClassTypeId - 1).Name;
-      if ClassTypeName <> '' then
-        Exit(BuildClassBaseAddressExpr(AReceiverName, ClassTypeName, ALocalExprId));
-    end;
-    ClassTypeName := LookupClassVar(AReceiverName);
-    if ClassTypeName <> '' then
-      Exit(BuildClassBaseAddressExpr(AReceiverName, ClassTypeName, ALocalExprId));
-    Result := AddRuntimePointerSymbolValueExpr(AReceiverName, ALocalExprId);
-  end;
-
-  function TryRuntimePointerFieldNode(const ALocalNode: TGreenNode;
-    out APointerName, APointeeTypeName, AFieldName: string;
-    out AFieldMeta: TFieldMeta): Boolean;
-  var
-    BaseNode, DerefNode, FieldNode: TGreenNode;
-    Meta: TTypeMetadata;
-    I: LongInt;
-  begin
-    APointerName := '';
-    APointeeTypeName := '';
-    AFieldName := '';
-    AFieldMeta.Name := '';
-    AFieldMeta.Index := 0;
-    AFieldMeta.IsString := False;
-    AFieldMeta.IsPointer := False;
-    AFieldMeta.TypeId := 0;
-    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
-      (ALocalNode.ChildCount < 2) then
-      Exit(False);
-    DerefNode := ALocalNode.ChildAt(0);
-    FieldNode := ALocalNode.ChildAt(1);
-    if (DerefNode = nil) or (DerefNode.NodeKind <> gnkDereference) or
-      (DerefNode.ChildCount < 1) or (FieldNode = nil) or
-      (FieldNode.NodeKind <> gnkIdentifier) then
-      Exit(False);
-    BaseNode := DerefNode.ChildAt(0);
-    if (BaseNode = nil) or (BaseNode.NodeKind <> gnkIdentifier) then
-      Exit(False);
-    APointerName := BaseNode.Text;
-    APointeeTypeName := LookupPointerVar(APointerName);
-    if APointeeTypeName = '' then
-      Exit(False);
-    AFieldName := FieldNode.Text;
-    if not FModel.GetTypeMetaByName(APointeeTypeName, Meta) then
-      Exit(False);
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-      begin
-        AFieldMeta := Meta.Fields[I];
-        Exit(AFieldMeta.TypeId > 0);
-      end;
-    Result := False;
-  end;
-
-  function BuildRuntimePointerFieldAddressHirExpr(
-    const ALocalNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
-  var
-    LocalChildren: array of LongInt;
-    FieldExprId, PointeeTypeId, PointerExprId, PointerSymbolId: LongInt;
-    PointerTypeId: LongInt;
-    FieldMeta: TFieldMeta;
-    FieldName, PointerName, PointeeTypeName: string;
-  begin
-    ALocalExprId := 0;
-    if not TryRuntimePointerFieldNode(ALocalNode, PointerName, PointeeTypeName,
-      FieldName, FieldMeta) then
-      Exit(False);
-    PointerSymbolId := FModel.FindSymbolByName(PointerName);
-    PointerTypeId := FModel.FindTypeByName('Pointer');
-    PointeeTypeId := FModel.FindTypeByName(PointeeTypeName);
-    if (PointerSymbolId <= 0) or (PointerTypeId <= 0) or
-      (PointeeTypeId <= 0) then
-      Exit(False);
-
-    SetLength(LocalChildren, 0);
-    PointerExprId := FModel.AddHirExpr(
-      shekSymbolValue, PointerTypeId, PointerSymbolId, LocalChildren,
-      0,
-    0.0, '', '', 0, shvcScalar
-    );
-
-    SetLength(LocalChildren, 1);
-    LocalChildren[0] := PointerExprId;
-    FieldExprId := FModel.AddHirExpr(
-      shekDeref, PointeeTypeId, 0,
-    LocalChildren, 0, 0.0, '', '', 0, shvcAddress
-    );
-
-    SetLength(LocalChildren, 1);
-    LocalChildren[0] := FieldExprId;
-    ALocalExprId := FModel.AddHirExpr(
-      shekField, FieldMeta.TypeId, 0,
-    LocalChildren, FieldMeta.Index, 0.0,
-      FieldName, '', 0, shvcAddress
-    );
-    Result := ALocalExprId > 0;
-  end;
-
-  function BuildRuntimePointerHirExpr(const ALocalNode: TGreenNode;
-    out ALocalExprId: LongInt): Boolean;
-  var
-    LocalExpr: TSemanticHirExpr;
-  begin
-    ALocalExprId := 0;
-    if ALocalNode = nil then
-      Exit(False);
-
-    if ALocalNode.NodeKind = gnkIdentifier then
-      Exit(AddRuntimePointerSymbolValueExpr(ALocalNode.Text, ALocalExprId));
-
-    if not BuildRuntimeScalarHirExpr(ALocalNode, ALocalExprId) then
-      Exit(False);
-    if (ALocalExprId <= 0) or (ALocalExprId > FModel.HirExprCount) then
-      Exit(False);
-    LocalExpr := FModel.HirExprAt(ALocalExprId - 1);
-    Result := (LocalExpr.TypeId = FModel.FindTypeByName('Pointer')) and
-      (LocalExpr.ValueClass = shvcScalar);
-  end;
-
-  function HasArrayBackedBase(const ALocalNode: TGreenNode): Boolean;
-  begin
-    if ALocalNode = nil then
-      Exit(False);
-    case ALocalNode.NodeKind of
-      gnkArrayAccess:
-        Exit(True);
-      gnkDotAccess:
-        begin
-          if ALocalNode.ChildCount < 1 then
-            Exit(False);
-          Exit(HasArrayBackedBase(ALocalNode.ChildAt(0)));
-        end;
-    end;
-    Result := False;
-  end;
-
-  function TryBuildStructuredAddressBackedValueExpr(
-    const ALocalNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
-  var
-    LocalTypeId: LongInt;
-  begin
-    ALocalExprId := 0;
-    if not BuildTargetAddressExpr(ALocalNode, ALocalExprId) then
-      Exit(False);
-    LocalTypeId := ExprTypeId(ALocalExprId);
-    if not IsStructuredAddressableScalarType(LocalTypeId) then
-    begin
-      ALocalExprId := 0;
-      Exit(False);
-    end;
-    Result := True;
-  end;
-
-  function TryBuildTypeCastHirExpr(
-    const ALocalCallNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
-  var
-    SourceExprId, SourceTypeId, TargetTypeId: LongInt;
-  begin
-    ALocalExprId := 0;
-    if not TryGetTypeCastTargetTypeId(ALocalCallNode, TargetTypeId) then
-      Exit(False);
-    if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
-      Exit(False);
-    if not BuildRuntimeScalarHirExpr(ALocalCallNode.ChildAt(1), SourceExprId) then
-      Exit(False);
-    SourceTypeId := ExprTypeId(SourceExprId);
-    if (SourceTypeId <= 0) or (TargetTypeId <= 0) then
-      Exit(False);
-    if not IsStructuredAddressableScalarType(SourceTypeId) or
-      not IsStructuredAddressableScalarType(TargetTypeId) then
-      Exit(False);
-    ALocalExprId := CastExprToType(SourceExprId, TargetTypeId);
-    Result := ALocalExprId > 0;
-  end;
-
-  function TryBuildIntrinsicHirExpr(
-    const ALocalCallNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
-  var
-    IntrinsicName: string;
-    ArgNode: TGreenNode;
-    ArgTypeId, DefaultTypeId, LiteralTypeId, OperandExprId, ResultTypeId: LongInt;
-  begin
-    ALocalExprId := 0;
-    if not TryGetIntrinsicExprName(ALocalCallNode, IntrinsicName) then
-      Exit(False);
-
-    if SameText(IntrinsicName, 'Default') then
-    begin
-      if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
-        Exit(False);
-      ArgNode := ALocalCallNode.ChildAt(1);
-      DefaultTypeId := 0;
-      if ArgNode.NodeKind = gnkIdentifier then
-      begin
-        DefaultTypeId := ResolveTypeIdForOwner(
-          ArgNode.Text,
-          NormalizeUnitIdentity(FCurrentProcessingUnitId)
-        );
-        if DefaultTypeId <= 0 then
-          DefaultTypeId := ResolveTypeIdForOwner(
-            ArgNode.Text,
-            NormalizeUnitIdentity(FUnitGraph.RootName)
-          );
-      end;
-      if DefaultTypeId <= 0 then
-        DefaultTypeId := InferExpressionType(ArgNode);
-      if (DefaultTypeId > 0) and IsPointerTypeId(DefaultTypeId) then
-      begin
-        SetLength(Children, 0);
-        ALocalExprId := FModel.AddHirExpr(
-          shekNilLiteral, DefaultTypeId, 0,
-    Children, 0, 0.0,
-          '', '', ALocalCallNode.ByteOffset, shvcScalar
-        );
-        Exit(ALocalExprId > 0);
-      end;
-    end;
-
-    if EvaluateIntegerConstant(ALocalCallNode, Value) then
-    begin
-      LiteralTypeId := InferExpressionType(ALocalCallNode);
-      if LiteralTypeId <= 0 then
-        LiteralTypeId := FModel.FindTypeByName('Integer');
-      SetLength(Children, 0);
-      ALocalExprId := FModel.AddHirExpr(
-        shekIntLiteral, LiteralTypeId, 0,
-    Children, Value, 0.0,
-        '', '', ALocalCallNode.ByteOffset, shvcScalar
-      );
-      Exit(ALocalExprId > 0);
-    end;
-
-    if (ALocalCallNode.ChildCount < 2) or (ALocalCallNode.ChildAt(1) = nil) then
-      Exit(False);
-    if not BuildRuntimeScalarHirExpr(ALocalCallNode.ChildAt(1), OperandExprId) then
-      Exit(False);
-    ArgTypeId := ExprTypeId(OperandExprId);
-    if ArgTypeId <= 0 then
-      Exit(False);
-
-    if SameText(IntrinsicName, 'Ord') then
-    begin
-      ResultTypeId := FModel.FindTypeByName('Integer');
-      ALocalExprId := CastExprToType(OperandExprId, ResultTypeId);
-      Exit(ALocalExprId > 0);
-    end;
-
-    if SameText(IntrinsicName, 'Chr') then
-    begin
-      ResultTypeId := FModel.FindTypeByName('Char');
-      ALocalExprId := CastExprToType(OperandExprId, ResultTypeId);
-      Exit(ALocalExprId > 0);
-    end;
-
-    if SameText(IntrinsicName, 'Pred') or SameText(IntrinsicName, 'Succ') then
-    begin
-      ResultTypeId := InferExpressionType(ALocalCallNode);
-      if ResultTypeId <= 0 then
-        ResultTypeId := ArgTypeId;
-      SetLength(Children, 0);
-      LeftExprId := FModel.AddHirExpr(
-        shekIntLiteral, ResultTypeId, 0,
-    Children, 1, 0.0,
-        '', '', ALocalCallNode.ByteOffset, shvcScalar
-      );
-      if LeftExprId <= 0 then
-        Exit(False);
-      OperandExprId := CastExprToType(OperandExprId, ResultTypeId);
-      if OperandExprId <= 0 then
-        Exit(False);
-      SetLength(Children, 2);
-      Children[0] := OperandExprId;
-      Children[1] := LeftExprId;
-      if SameText(IntrinsicName, 'Pred') then
-        Op := '-'
-      else
-        Op := '+';
-      ALocalExprId := FModel.AddHirExpr(
-        shekBinaryOp, ResultTypeId, 0,
-    Children, 0, 0.0,
-        '', Op, ALocalCallNode.ByteOffset, shvcScalar
-      );
-      Exit(ALocalExprId > 0);
-    end;
-
-    Result := False;
-  end;
+  Ctx: TSemaHirLoweringContext;
 begin
-  AExprId := 0;
-  if ANode = nil then
-    Exit(False);
-
-  CallNode := ANode;
-  if (CallNode.NodeKind = gnkProcedureCallStatement) and
-    (CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
-    (CallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
-    CallNode := CallNode.ChildAt(0);
-
-  if (CallNode.NodeKind = gnkFunctionCall) and
-    (SameText(CallNode.Text, 'Length') or
-     ((CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
-      (CallNode.ChildAt(0).NodeKind = gnkIdentifier) and
-      SameText(CallNode.ChildAt(0).Text, 'Length'))) then
-    Exit(False);
-
-  if ANode.NodeKind = gnkIntegerLiteral then
-  begin
-    Val(ANode.Text, Value, ParseCode);
-    if ParseCode <> 0 then
-      Exit(False);
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Integer'), 0,
-    Children, Value, 0.0,
-      '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
-  begin
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Boolean'), 0,
-    Children, 1, 0.0,
-      '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
-  begin
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Boolean'), 0,
-    Children, 0, 0.0,
-      '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and
-    SameText(ANode.ChildAt(0).Text, 'Assigned') and
-    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
-  begin
-    LeftTypeId := FModel.FindTypeByName('Pointer');
-    BoolTypeId := FModel.FindTypeByName('Boolean');
-    if (LeftTypeId <= 0) or (BoolTypeId <= 0) then
-      Exit(False);
-    SymbolId := FModel.FindSymbolByName(ANode.ChildAt(1).Text);
-    if SymbolId <= 0 then
-      Exit(False);
-    SetLength(Children, 0);
-    LeftExprId := FModel.AddHirExpr(
-      shekSymbolValue, LeftTypeId, SymbolId, Children,
-      0,
-    0.0, '', '', ANode.ChildAt(1).ByteOffset, shvcScalar
-    );
-    if LeftExprId <= 0 then
-      Exit(False);
-    SetLength(Children, 0);
-    RightExprId := FModel.AddHirExpr(
-      shekNilLiteral, LeftTypeId, 0,
-    Children, 0, 0.0,
-      '', '', 0, shvcScalar
-    );
-    if RightExprId <= 0 then
-      Exit(False);
-    SetLength(Children, 2);
-    Children[0] := LeftExprId;
-    Children[1] := RightExprId;
-    AExprId := FModel.AddHirExpr(
-      shekCompareOp, BoolTypeId, 0,
-    Children, 0, 0.0,
-      '', 'ne', ANode.ByteOffset, shvcScalar
-    );
-    Exit(AExprId > 0);
-  end;
-
-  if (ANode.NodeKind = gnkIdentifier) and
-    FModel.LookupConstValue(ANode.Text, Value) then
-  begin
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Integer'), 0,
-    Children, Value, 0.0,
-      '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeVar(ANode.Text) then
-  begin
-    SymbolId := FModel.FindSymbolByName(ANode.Text);
-    if SymbolId <= 0 then
-      Exit(False);
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekSymbolValue, FModel.SymbolTypeId(SymbolId), SymbolId, Children,
-      0,
-    0.0, '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (CallNode.NodeKind = gnkFunctionCall) and
-    TryBuildTypeCastHirExpr(CallNode, AExprId) then
-    Exit(True);
-
-  if (CallNode.NodeKind = gnkFunctionCall) and
-    TryBuildIntrinsicHirExpr(CallNode, AExprId) then
-    Exit(True);
-
-  if TryGetDispatchedMemberCallContract(ANode, DispatchExprKind,
-    ReceiverVarName, CalleeName, ParamKinds, SlotIndex, ResultTypeId) then
-  begin
-    if not IsStructuredAddressableScalarType(ResultTypeId) then
-      Exit(False);
-    SetLength(Children, Length(ParamKinds));
-    if not BuildRuntimeMemberReceiverExpr(ReceiverVarName, ArgExprId) then
-      Exit(False);
-    Children[0] := ArgExprId;
-    for ArgIndex := 2 to Length(ParamKinds) do
-    begin
-      case ParamKinds[ArgIndex] of
-        'p':
-          begin
-            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'r':
-          begin
-            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'i':
-          begin
-            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-      else
-        Exit(False);
-      end;
-      Children[ArgIndex - 1] := ArgExprId;
-    end;
-    AExprId := FModel.AddHirExpr(
-      DispatchExprKind, ResultTypeId, 0,
-    Children, SlotIndex, 0.0, CalleeName,
-      ParamKinds, ANode.ByteOffset, shvcScalar
-    );
-    Exit(AExprId > 0);
-  end;
-
-  if TryGetOrdinaryMemberCallContract(ANode, ReceiverVarName, CalleeName,
-    ParamKinds, ResultTypeId) then
-  begin
-    if not IsStructuredAddressableScalarType(ResultTypeId) then
-      Exit(False);
-    SetLength(Children, Length(ParamKinds));
-    if not BuildRuntimeMemberReceiverExpr(ReceiverVarName, ArgExprId) then
-      Exit(False);
-    Children[0] := ArgExprId;
-    for ArgIndex := 2 to Length(ParamKinds) do
-    begin
-      case ParamKinds[ArgIndex] of
-        'p':
-          begin
-            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'r':
-          begin
-            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'i':
-          begin
-            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex - 1),
-              ArgExprId) then
-              Exit(False);
-          end;
-      else
-        Exit(False);
-      end;
-      Children[ArgIndex - 1] := ArgExprId;
-    end;
-    AExprId := FModel.AddHirExpr(
-      shekCall, ResultTypeId, 0,
-    Children, 0, 0.0, CalleeName, ParamKinds,
-      ANode.ByteOffset, shvcScalar
-    );
-    Exit(AExprId > 0);
-  end;
-
-  if (CallNode.NodeKind = gnkFunctionCall) and
-    TryGetDirectCallContract(ANode, CalleeName, ParamKinds, ResultTypeId) then
-  begin
-    if not IsStructuredAddressableScalarType(ResultTypeId) then
-      Exit(False);
-    SetLength(Children, Length(ParamKinds));
-    for ArgIndex := 1 to CallNode.ChildCount - 1 do
-    begin
-      case ParamKinds[ArgIndex] of
-        'p':
-          begin
-            if not BuildRuntimePointerHirExpr(CallNode.ChildAt(ArgIndex),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'r':
-          begin
-            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex),
-              ArgExprId) then
-              Exit(False);
-          end;
-        'i':
-          begin
-            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex),
-              ArgExprId) then
-              Exit(False);
-          end;
-      else
-        Exit(False);
-      end;
-      Children[ArgIndex - 1] := ArgExprId;
-    end;
-    AExprId := FModel.AddHirExpr(
-      shekCall, ResultTypeId, 0,
-    Children, 0, 0.0, CalleeName, ParamKinds,
-      ANode.ByteOffset, shvcScalar
-    );
-    Exit(AExprId > 0);
-  end;
-
-  if ANode.NodeKind = gnkArrayAccess then
-    Exit(TryBuildStructuredAddressBackedValueExpr(ANode, AExprId));
-
-  if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) and
-    (ANode.Text = '@') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkDotAccess) then
-    begin
-      if not BuildRuntimePointerFieldAddressHirExpr(ANode.ChildAt(0),
-        LeftExprId) then
-        Exit(False);
-      SetLength(Children, 1);
-      Children[0] := LeftExprId;
-      AExprId := FModel.AddHirExpr(
-        shekAddressOf, FModel.FindTypeByName('Pointer'), 0,
-    Children, 0, 0.0,
-        '', '', 0, shvcScalar
-      );
-      Exit(True);
-    end;
-
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkArrayAccess) then
-    begin
-      if not BuildRuntimeArrayElementAddressHirExpr(ANode.ChildAt(0),
-        LeftExprId) then
-        Exit(False);
-      SetLength(Children, 1);
-      Children[0] := LeftExprId;
-      AExprId := FModel.AddHirExpr(
-        shekAddressOf, FModel.FindTypeByName('Pointer'), 0,
-    Children, 0, 0.0,
-        '', '', 0, shvcScalar
-      );
-      Exit(True);
-    end;
-
-    if (ANode.ChildAt(0) = nil) or
-      (ANode.ChildAt(0).NodeKind <> gnkIdentifier) then
-      Exit(False);
-    if not IsRuntimeVar(ANode.ChildAt(0).Text) then
-      Exit(False);
-    SymbolId := FModel.FindSymbolByName(ANode.ChildAt(0).Text);
-    if SymbolId <= 0 then
-      Exit(False);
-    ResultTypeId := FModel.SymbolTypeId(SymbolId);
-    if not IsStructuredAddressableScalarType(ResultTypeId) then
-      Exit(False);
-    SetLength(Children, 0);
-    LeftExprId := FModel.AddHirExpr(
-      shekSymbolAddress, ResultTypeId, SymbolId, Children,
-      0,
-    0.0, '', '', 0, shvcAddress
-    );
-    SetLength(Children, 1);
-    Children[0] := LeftExprId;
-    AExprId := FModel.AddHirExpr(
-      shekAddressOf, FModel.FindTypeByName('Pointer'), 0,
-    Children, 0, 0.0,
-      '', '', 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkDereference) and (ANode.ChildCount >= 1) then
-  begin
-    if not BuildRuntimePointerHirExpr(ANode.ChildAt(0), LeftExprId) then
-      Exit(False);
-    SetLength(Children, 1);
-    Children[0] := LeftExprId;
-    AExprId := FModel.AddHirExpr(
-      shekDeref, FModel.FindTypeByName('Integer'), 0,
-    Children, 0, 0.0,
-      '', '', 0, shvcAddress
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) then
-  begin
-    if BuildRuntimePointerFieldAddressHirExpr(ANode, AExprId) then
-      Exit(True);
-    if HasArrayBackedBase(ANode.ChildAt(0)) and
-      TryBuildStructuredAddressBackedValueExpr(ANode, AExprId) then
-      Exit(True);
-    Exit(False);
-  end;
-
-  if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) then
-  begin
-    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
-      Exit(False);
-    if ANode.Text = '-' then
-      Op := '-'
-    else if SameText(ANode.Text, 'not') then
-      Op := 'not'
-    else
-      Exit(False);
-    SetLength(Children, 1);
-    Children[0] := LeftExprId;
-    ResultTypeId := ExprTypeId(LeftExprId);
-    if ResultTypeId <= 0 then
-      Exit(False);
-    if SameText(Op, 'not') and
-      (ResultTypeId <> FModel.FindTypeByName('Boolean')) then
-      Exit(False);
-    AExprId := FModel.AddHirExpr(
-      shekUnaryOp, ResultTypeId, 0,
-    Children, 0, 0.0, '', Op, 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if (ANode.NodeKind <> gnkBinaryExpression) or (ANode.ChildCount < 2) then
-    Exit(False);
-
-  Op := ANode.Text;
-  if (Op = '+') or (Op = '-') or (Op = '*') or SameText(Op, 'div') or
-    SameText(Op, 'mod') or SameText(Op, 'and') or SameText(Op, 'or') then
-  begin
-    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
-      Exit(False);
-    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
-      Exit(False);
-    LeftTypeId := ExprTypeId(LeftExprId);
-    RightTypeId := ExprTypeId(RightExprId);
-    if SameText(Op, 'and') or SameText(Op, 'or') then
-    begin
-      ResultTypeId := FModel.FindTypeByName('Boolean');
-      if (LeftTypeId <> ResultTypeId) or (RightTypeId <> ResultTypeId) then
-        Exit(False);
-    end
-    else
-    begin
-      ResultTypeId := CommonIntegerTypeId(LeftTypeId, RightTypeId);
-      if ResultTypeId <= 0 then
-        Exit(False);
-      LeftExprId := CastExprToType(LeftExprId, ResultTypeId);
-      RightExprId := CastExprToType(RightExprId, ResultTypeId);
-      if (LeftExprId <= 0) or (RightExprId <= 0) then
-        Exit(False);
-    end;
-    SetLength(Children, 2);
-    Children[0] := LeftExprId;
-    Children[1] := RightExprId;
-    AExprId := FModel.AddHirExpr(
-      shekBinaryOp, ResultTypeId, 0,
-    Children, 0, 0.0, '', Op, 0, shvcScalar
-    );
-    Exit(True);
-  end;
-
-  if Op = '=' then Pred := '='
-  else if Op = '<>' then Pred := '<>'
-  else if Op = '<' then Pred := '<'
-  else if Op = '<=' then Pred := '<='
-  else if Op = '>' then Pred := '>'
-  else if Op = '>=' then Pred := '>='
-  else
-    Exit(False);
-
-  if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
-    Exit(False);
-  if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
-    Exit(False);
-  LeftTypeId := ExprTypeId(LeftExprId);
-  RightTypeId := ExprTypeId(RightExprId);
-  BoolTypeId := FModel.FindTypeByName('Boolean');
-  if (LeftTypeId = BoolTypeId) and (RightTypeId = BoolTypeId) then
-    ResultTypeId := BoolTypeId
-  else
-  begin
-    ResultTypeId := CommonIntegerTypeId(LeftTypeId, RightTypeId);
-    if ResultTypeId <= 0 then
-      Exit(False);
-    LeftExprId := CastExprToType(LeftExprId, ResultTypeId);
-    RightExprId := CastExprToType(RightExprId, ResultTypeId);
-    if (LeftExprId <= 0) or (RightExprId <= 0) then
-      Exit(False);
-  end;
-  SetLength(Children, 2);
-  Children[0] := LeftExprId;
-  Children[1] := RightExprId;
-  AExprId := FModel.AddHirExpr(
-    shekCompareOp, BoolTypeId, 0,
-    Children, 0, 0.0, '', Pred, 0, shvcScalar
-  );
-  Result := True;
+  { Fill context }
+  Ctx.Model := FModel;
+  Ctx.UnitGraph := FUnitGraph;
+  Ctx.RootAst := FRootAst;
+  Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
+  Ctx.CurrentScopeId := FCurrentScopeId;
+  Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.ImportedUnitOwners := FImportedUnitOwners;
+  Ctx.ImportedUnitTrees := FImportedUnitTrees;
+  Ctx.BuiltinRegistry := FBuiltinRegistry;
+  Ctx.Diagnostics := FDiagnostics;
+  Ctx.RootFileId := FRootFileId;
+  Ctx.BlockLabelCounter := FBlockLabelCounter;
+  Ctx.CurrentMethodClass := FCurrentMethodClass;
+  Ctx.CurrentRetVarName := FCurrentRetVarName;
+  Ctx.RuntimeVars := FRuntimeVars;
+  Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
+  { Fill callbacks }
+  Ctx.CallbackCtx := Pointer(Self);
+  Ctx.BuildTargetAddressExpr := @SemaBridge_BuildTargetAddressExpr;
+  Ctx.BuildClassBaseAddressExpr := @SemaBridge_BuildClassBaseAddressExpr;
+  Ctx.BuildByRefArgumentAddressExpr := @SemaBridge_BuildByRefArgumentAddressExpr;
+  Ctx.BuildRuntimeArrayElementAddressHirExpr := @SemaBridge_BuildRuntimeArrayElementAddressHirExpr;
+  Ctx.EvaluateIntegerConstant := @SemaBridge_EvaluateIntegerConstant;
+  Ctx.InferExpressionType := @SemaBridge_InferExpressionType;
+  Ctx.TypeIdForVariable := @SemaBridge_TypeIdForVariable;
+  Ctx.TryGetDirectCallContract := @SemaBridge_TryGetDirectCallContract;
+  Ctx.TryGetDispatchedMemberCallContract := @SemaBridge_TryGetDispatchedMemberCallContract;
+  Ctx.TryGetOrdinaryMemberCallContract := @SemaBridge_TryGetOrdinaryMemberCallContract;
+  Ctx.TryGetTypeCastTargetTypeId := @SemaBridge_TryGetTypeCastTargetTypeId;
+  Ctx.TryGetIntrinsicExprName := @SemaBridge_TryGetIntrinsicExprName;
+  Ctx.ResolveTypeIdForOwner := @SemaBridge_ResolveTypeIdForOwner;
+  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
+  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
+  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  { Delegate }
+  Result := np_sema_hir_lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
+  { Sync mutable state back }
+  FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
+  FBlockLabelCounter := Ctx.BlockLabelCounter;
 end;
 
 procedure TSemanticAnalyzer.AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
   const AReturnVarName: string);
-var
-  Children: array of LongInt;
-  ExprId, SymbolId: LongInt;
+var Ctx: TSemaHirLoweringContext;
 begin
-  if (AHirNodeId <= 0) or (AReturnVarName = '') then
-    Exit;
-  SymbolId := FModel.FindSymbolByName(AReturnVarName);
-  if SymbolId <= 0 then
-    Exit;
-  SetLength(Children, 0);
-  ExprId := FModel.AddHirExpr(
-    shekSymbolValue, 0,
-    SymbolId, Children, 0, 0.0, '', '', 0, shvcScalar
-  );
-  FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+  Ctx.Model := FModel;
+  np_sema_hir_lowering.AttachRuntimeReturnExpr(Ctx, AHirNodeId, AReturnVarName);
 end;
 
 procedure TSemanticAnalyzer.AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
@@ -13785,143 +10489,16 @@ function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
   const ANode: TGreenNode; out ABlob: string;
   const AAllowOwnedStringCompare: Boolean): Boolean;
 var
-  LeftBlob, RightBlob, Op, Pred: string;
+  Ctx: TSemaHirLoweringContext;
 begin
-  ABlob := '';
-  if ANode = nil then
-    Exit(False);
-  if (ANode.NodeKind = gnkUnaryExpression) and
-    SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := 'int 1' + #10 + LeftBlob + 'zext' + #10 + 'sub' + #10 +
-      'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeVar(ANode.Text) then
-  begin
-    ABlob := 'var ' + ANode.Text + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
-  begin
-    ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
-  begin
-    ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkFunctionCall) or
-    ((ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2)) then
-  begin
-    if EncodeRuntimeIntExprFold(ANode, LeftBlob) then
-    begin
-      ABlob := LeftBlob + 'int 0' + #10 + 'cmp ne' + #10;
-      Exit(True);
-    end;
-  end;
-  if ANode.NodeKind <> gnkBinaryExpression then
-    Exit(False);
-  if ANode.ChildCount < 2 then
-    Exit(False);
-  Op := ANode.Text;
-  if Op = '=' then Pred := 'eq'
-  else if Op = '<>' then Pred := 'ne'
-  else if Op = '<' then Pred := 'slt'
-  else if Op = '<=' then Pred := 'sle'
-  else if Op = '>' then Pred := 'sgt'
-  else if Op = '>=' then Pred := 'sge'
-  else if SameText(Op, 'and') then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
-      'mul' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end
-  else if SameText(Op, 'or') then
-  begin
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob,
-      AAllowOwnedStringCompare) then
-      Exit(False);
-    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
-      'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-    Exit(True);
-  end
-  else if SameText(Op, 'is') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ANode.ChildAt(1) <> nil) and
-      (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
-    begin
-      if TypeMetaIsInterface(ANode.ChildAt(1).Text) then
-      begin
-        if (LookupClassVar(ANode.ChildAt(0).Text) <> '') and
-          (Pos(ANode.ChildAt(1).Text,
-            TypeMetaInterfaces(LookupClassVar(ANode.ChildAt(0).Text))) > 0) then
-          ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10
-        else
-          ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
-        Exit(True);
-      end;
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-        'is ' + ANode.ChildAt(1).Text + #10 +
-        'int 0' + #10 + 'cmp ne' + #10;
-      Exit(True);
-    end;
-    Exit(False);
-  end
-  else if SameText(Op, 'as') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ANode.ChildAt(1) <> nil) and
-      (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-      (TypeMetaIsInterface(ANode.ChildAt(1).Text)) then
-    begin
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10;
-      Exit(True);
-    end;
-    Exit(False);
-  end
-  else
-    Exit(False);
-  if (Op = '=') or (Op = '<>') then
-  begin
-    if CanEmitStrCompareOperand(ANode.ChildAt(0),
-      AAllowOwnedStringCompare) and
-      CanEmitStrCompareOperand(ANode.ChildAt(1),
-      AAllowOwnedStringCompare) then
-    begin
-      if EmitStrCompareOperand(ANode.ChildAt(0),
-        AAllowOwnedStringCompare, LeftBlob) and
-        EmitStrCompareOperand(ANode.ChildAt(1),
-        AAllowOwnedStringCompare, RightBlob) then
-      begin
-        ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
-          'int 0' + #10 + 'cmp ne' + #10;
-        Exit(True);
-      end;
-    end;
-  end;
-  if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
-    Exit(False);
-  if not EncodeRuntimeIntExprFold(ANode.ChildAt(1), RightBlob) then
-    Exit(False);
-  ABlob := LeftBlob + RightBlob + 'cmp ' + Pred + #10;
-  Result := True;
+  Ctx.Model := FModel;
+  Ctx.RuntimeVars := FRuntimeVars;
+  Ctx.CallbackCtx := Pointer(Self);
+  Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
+  Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
+  Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
+  Result := np_sema_hir_lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
+    AAllowOwnedStringCompare);
 end;
 
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
@@ -16731,15 +13308,7 @@ begin
             );
             { RAII: 如果 record 含 managed 字段, 注册为 managed record }
             if IsManagedRecord(Decl.ChildAt(0).Text) then
-            begin
-              SetLength(FManagedRecordVarNames,
-                Length(FManagedRecordVarNames) + 1);
-              FManagedRecordVarNames[High(FManagedRecordVarNames)] := Decl.Text;
-              SetLength(FManagedRecordVarTypes,
-                Length(FManagedRecordVarTypes) + 1);
-              FManagedRecordVarTypes[High(FManagedRecordVarTypes)] :=
-                Decl.ChildAt(0).Text;
-            end;
+              FRuntimeVars.RegisterManagedRecordVar(Decl.Text, Decl.ChildAt(0).Text);
           end
           else
           begin
@@ -16887,19 +13456,7 @@ begin
       Continue;
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
-    FVarParamNames.Clear;
-    SetLength(FRuntimeVarNames, 0);
-    SetLength(FRuntimeArrVarNames, 0);
-    SetLength(FBorrowedRuntimeArrVarNames, 0);
-    SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FOwnedRuntimeStrVarNames, 0);
-    SetLength(FBorrowedRuntimeStrVarNames, 0);
-    SetLength(FClassVarNames, 0);
-    SetLength(FClassVarTypes, 0);
-    SetLength(FRecordVarNames, 0);
-    SetLength(FRecordVarTypes, 0);
-    SetLength(FPointerVarNames, 0);
-    SetLength(FPointerVarTypes, 0);
+    FRuntimeVars.Reset;
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
@@ -17239,19 +13796,7 @@ begin
     SavedMethodClass := FCurrentMethodClass;
 
     // Reset for void function with no params — 全部 13 个 tracker 清零
-    FVarParamNames.Clear;
-    SetLength(FRuntimeVarNames, 0);
-    SetLength(FRuntimeArrVarNames, 0);
-    SetLength(FBorrowedRuntimeArrVarNames, 0);
-    SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FOwnedRuntimeStrVarNames, 0);
-    SetLength(FBorrowedRuntimeStrVarNames, 0);
-    SetLength(FClassVarNames, 0);
-    SetLength(FClassVarTypes, 0);
-    SetLength(FRecordVarNames, 0);
-    SetLength(FRecordVarTypes, 0);
-    SetLength(FPointerVarNames, 0);
-    SetLength(FPointerVarTypes, 0);
+    FRuntimeVars.Reset;
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentBlockTerminated := False;

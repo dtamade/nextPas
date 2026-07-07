@@ -187,6 +187,10 @@ begin
   end;
 end;
 
+{ RFC 9110 §5.5: Field value components MUST NOT include CR or LF
+  except when used within a quoted-string. HTAB (#9) is allowed.
+  This implementation rejects all control chars < #32 except HTAB,
+  and DEL (#127). }
 class procedure THttpHeaders.ValidateValue(const AValue: string);
 var
   LI: SizeInt;
@@ -281,22 +285,44 @@ begin
 end;
 
 procedure THttpHeaders.AddParsed(const AName, AValue: string);
+var
+  LLen: SizeInt;
 begin
   EnsureCapacity(FCount + 1);
   FEntries[FCount].Name := NormalizeParsedName(AName);
-  FEntries[FCount].Value := AValue;
+  // Trim trailing OWS (SP/HTAB) per RFC 9110 Section 5.5
+  LLen := Length(AValue);
+  while (LLen > 0) and (AValue[LLen] in [' ', #9]) do
+    Dec(LLen);
+  if LLen = Length(AValue) then
+    FEntries[FCount].Value := AValue
+  else if LLen = 0 then
+    FEntries[FCount].Value := ''
+  else
+    FEntries[FCount].Value := Copy(AValue, 1, LLen);
   Inc(FCount);
 end;
 
 procedure THttpHeaders.AddParsedSpans(const AName: PAnsiChar;
   const ANameLen: SizeUInt; const AValue: PAnsiChar; const AValueLen: SizeUInt);
+var
+  LTrimmedLen: SizeUInt;
 begin
   EnsureCapacity(FCount + 1);
   FEntries[FCount].Name := NormalizeParsedNameSpan(AName, ANameLen);
   if AValueLen = 0 then
     FEntries[FCount].Value := ''
   else
-    SetString(FEntries[FCount].Value, AValue, AValueLen);
+  begin
+    // Trim trailing OWS (SP/HTAB) per RFC 9110 Section 5.5
+    LTrimmedLen := AValueLen;
+    while (LTrimmedLen > 0) and (AValue[LTrimmedLen - 1] in [' ', #9]) do
+      Dec(LTrimmedLen);
+    if LTrimmedLen = 0 then
+      FEntries[FCount].Value := ''
+    else
+      SetString(FEntries[FCount].Value, AValue, LTrimmedLen);
+  end;
   Inc(FCount);
 end;
 

@@ -268,6 +268,7 @@ function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchS
 var
   LSorted: TDoubleArray;
   LLen: Integer;
+  LValidCount: Integer; { F-09: count of non-NaN samples }
   LMean, LVariance: Double;
   LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
@@ -282,19 +283,24 @@ begin
 
   { Welford's single-pass algorithm for numerically stable variance.
     Reference: Welford, B.P. (1962). "Note on a Method for Calculating
-    Corrected Sums of Squares and Products". Technometrics. }
+    Corrected Sums of Squares and Products". Technometrics.
+    F-09: Skip NaN samples to prevent NaN propagation. }
   LMean := 0.0;
   LM2 := 0.0;  { sum of squared deviations from current mean }
+  LValidCount := 0;
   for I := 0 to High(ASamples) do
   begin
+    if IsDoubleNaN(ASamples[I]) then
+      Continue;  { F-09: skip NaN samples }
+    Inc(LValidCount);
     LDelta := ASamples[I] - LMean;
-    LMean := LMean + LDelta / (I + 1);
+    LMean := LMean + LDelta / LValidCount;
     LDelta2 := ASamples[I] - LMean;
     LM2 := LM2 + LDelta * LDelta2;
   end;
 
-  if LLen > 1 then
-    LVariance := LM2 / (LLen - 1)  { sample variance }
+  if LValidCount > 1 then
+    LVariance := LM2 / (LValidCount - 1)  { sample variance, F-09: use valid count }
   else
     LVariance := 0.0;
 
@@ -313,17 +319,17 @@ begin
   Result.P99 := Percentile(LSorted, 99);
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
-  Result.SampleCount := LLen;
+  Result.SampleCount := LValidCount; { F-09: report valid sample count }
 
   // 95% 置信区间（使用 t 分布临界值）
-  if LLen > 1 then
+  if LValidCount > 1 then
   begin
-    LT95 := TInv0975(LLen - 1);
-    LT99 := TInv0995(LLen - 1);
-    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LLen);
-    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LLen);
+    LT95 := TInv0975(LValidCount - 1);
+    LT99 := TInv0995(LValidCount - 1);
+    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LValidCount);
   end
   else
   begin
@@ -1021,19 +1027,9 @@ end;
 
 function TBenchStatsAnalyzer.BootstrapTestDifference(const A, B: TDoubleArray;
   AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
-{ Note: BootstrapTestDifference doesn't need instance data, but we need an instance
-  to call the method. We use dummy data since the method only uses A and B params. }
-var
-  LDummy: TDoubleArray;
-  LAdvanced: TAdvancedStats;
+{ F-09: 直接调用独立函数，无需创建 TAdvancedStats 实例 }
 begin
-  SetLength(LDummy, 1);
-  LAdvanced := TAdvancedStats.Create(LDummy);
-  try
-    Result := LAdvanced.BootstrapTestDifference(A, B, AIterations, ASeed);
-  finally
-    LAdvanced.Free;
-  end;
+  Result := nextpas.core.bench.stats.advanced.BootstrapTestDifference(A, B, AIterations, ASeed);
 end;
 
 { ===== 贝叶斯估计 (Phase C) ===== }
@@ -1093,13 +1089,13 @@ begin
 
   { σ_n² = 1 / (1/σ0² + n/σ²) }
   LPosteriorVar := 1.0 / (1.0 / LPriorVar + LN / (LSigma * LSigma));
-  Result.PosteriorStdDev := System.Sqrt(LPosteriorVar);
+  Result.PosteriorStdDev := Sqrt(LPosteriorVar);
 
   { μ_n = σ_n² * (μ0/σ0² + n*x̄/σ²) }
   Result.PosteriorMean := LPosteriorVar * (APriorMean / LPriorVar + LN * LSampleMean / (LSigma * LSigma));
 
   { 95% 可信区间 }
-  LZ := 1.96; { z_{0.025} }
+  LZ := NormalQuantile(0.975); { F-03: use NormalQuantile instead of hardcoded 1.96 }
   Result.CredibleLower := Result.PosteriorMean - LZ * Result.PosteriorStdDev;
   Result.CredibleUpper := Result.PosteriorMean + LZ * Result.PosteriorStdDev;
   Result.CredibleLevel := 0.95;
@@ -1113,16 +1109,8 @@ var
 begin
   LEstimate := BayesianEstimate(AData, APriorMean, APriorStdDev, ASigma);
 
-  { 计算指定水平的 z 值 }
-  { 简化：使用正态近似 }
-  if ALevel >= 0.99 then
-    LZ := 2.576
-  else if ALevel >= 0.95 then
-    LZ := 1.96
-  else if ALevel >= 0.90 then
-    LZ := 1.645
-  else
-    LZ := 1.96; { 默认 95% }
+  { 使用正态分位数函数计算指定水平的 z 值 }
+  LZ := NormalQuantile(1.0 - (1.0 - ALevel) / 2.0);
 
   Result.Lower := LEstimate.PosteriorMean - LZ * LEstimate.PosteriorStdDev;
   Result.Upper := LEstimate.PosteriorMean + LZ * LEstimate.PosteriorStdDev;

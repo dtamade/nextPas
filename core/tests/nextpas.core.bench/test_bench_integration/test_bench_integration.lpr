@@ -6,7 +6,7 @@ program test_bench_integration;
 
 uses
   {$ifdef unix}
-  cthreads,
+  nextpas.core.thread.init,
   {$endif}
   nextpas.core.exception,
   nextpas.core.math.scalar,
@@ -1615,6 +1615,67 @@ begin
   Check(LResult.AllocsPerOp = 1, 'F-15: LoopWithContext AllocsPerOp = 1');
 end;
 
+{ F-03: AddSimple 最简版本 }
+procedure TestAddSimple;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  LSuite := TBenchSuite.Create('addsimple-test');
+  LSuite.AddSimple('SimpleBench', procedure
+  begin
+    { 空操作，验证框架能正常调用 }
+  end);
+
+  LResults := LSuite.Run;
+  Check(LResults.Count = 1, 'AddSimple: should produce 1 result');
+  LResult := LResults.GetAll[0];
+  Check(LResult.NsPerOp > 0, 'AddSimple: NsPerOp should be > 0');
+  Check(LResult.SampleCount > 0, 'AddSimple: should have samples');
+end;
+
+{ F-03: AddSimple nil 防护 }
+procedure TestAddSimple_Nil;
+var
+  LSuite: IBenchSuite;
+  LCaught: Boolean;
+begin
+  LSuite := TBenchSuite.Create('addsimple-nil-test');
+  LCaught := False;
+  try
+    LSuite.AddSimple('Nil', nil);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'AddSimple(nil) should raise EBenchInvalidParam');
+end;
+
+{ F-10: TryRemoveByName }
+procedure TestTryRemoveByName;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryRemove')
+    .Add('A', @BenchFast)
+    .Add('B', @BenchFast)
+    .Add('C', @BenchFast);
+  Check(LSuite.TryRemoveByName('B'), 'TryRemoveByName(B) should return True');
+  Check(not LSuite.TryRemoveByName('NonExistent'), 'TryRemoveByName(NonExistent) should return False');
+  LSuite := nil;
+end;
+
+{ F-10: TryLoadBaseline }
+procedure TestTryLoadBaseline;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('TryLoad');
+  Check(not LSuite.TryLoadBaseline('/nonexistent/path/baseline.json'),
+    'TryLoadBaseline(nonexistent) should return False');
+  LSuite := nil;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1673,6 +1734,10 @@ begin
     T.Test('GetEnvironment', @TestGetEnvironment);
     T.Test('Timeout_Combined (F-14)', @TestTimeout_Combined);
     T.Test('AddLoopWithContext (F-15)', @TestAddLoopWithContext);
+    T.Test('AddSimple (F-03)', @TestAddSimple);
+    T.Test('AddSimple_Nil (F-03)', @TestAddSimple_Nil);
+    T.Test('TryRemoveByName (F-10)', @TestTryRemoveByName);
+    T.Test('TryLoadBaseline (F-10)', @TestTryLoadBaseline);
     T.Run;
     T.Summary;
   finally

@@ -6,7 +6,7 @@
 
 打造 FreePascal 领域最优秀的编译器+标准库生态系统。
 
-**架构成熟度**: 当前 [AL1 骨架期] → 目标 [AL2 收敛期]
+**架构成熟度**: 当前 [AL2 收敛期] → 目标 [AL3 成熟期]
 **等级定义**: `docs/architecture/architecture-maturity-levels.md`
 
 ---

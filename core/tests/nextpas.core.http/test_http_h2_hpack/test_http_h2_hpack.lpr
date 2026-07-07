@@ -354,6 +354,299 @@ begin
     'Dynamic table size update integer overflow must be rejected');
 end;
 
+{ ---------- Encoder tests ---------- }
+
+procedure TestEncoderBasicRoundtrip;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..3] of THPackHeader;
+  LDecoded: array[0..3] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':path';
+  LHeaders[1].Value := '/index.html';
+  LHeaders[2].Name := ':scheme';
+  LHeaders[2].Value := 'https';
+  LHeaders[3].Name := ':authority';
+  LHeaders[3].Value := 'www.example.com';
+  LBlock := LEncoder.Encode(LHeaders);
+  Check(Length(LBlock) > 0, 'encoder produces non-empty block');
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'decoder accepts encoder block');
+  CheckEqual(':method', string(LDecoded[0].Name), 'decoded method name');
+  CheckEqual('GET', string(LDecoded[0].Value), 'decoded method value');
+  CheckEqual(':path', string(LDecoded[1].Name), 'decoded path name');
+  CheckEqual('/index.html', string(LDecoded[1].Value), 'decoded path value');
+end;
+
+procedure TestEncoderStaticTableLookup;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LDecoded: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'GET';
+  LBlock := LEncoder.Encode(LHeaders);
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'static table decode');
+  CheckEqual(':method', string(LDecoded[0].Name), 'static table method name');
+  CheckEqual('GET', string(LDecoded[0].Value), 'static table method value');
+end;
+
+procedure TestEncoderDynamicTableEviction;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LDecoded: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+  I: Int32;
+begin
+  LEncoder.Init(64);
+  LDecoder.Init(64);
+  for I := 0 to 9 do
+  begin
+    LHeaders[0].Name := AnsiString('x-custom-' + IntToStr(I));
+    LHeaders[0].Value := AnsiString('value-' + IntToStr(I));
+    LBlock := LEncoder.Encode(LHeaders);
+    Check(LDecoder.Decode(LBlock, LDecoded), 'eviction decode ' + IntToStr(I));
+    CheckEqual(string(LHeaders[0].Name), string(LDecoded[0].Name),
+      'eviction name ' + IntToStr(I));
+    CheckEqual(string(LHeaders[0].Value), string(LDecoded[0].Value),
+      'eviction value ' + IntToStr(I));
+  end;
+end;
+
+procedure TestEncoderSetDynamicTableSize;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LDecoded: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LEncoder.SetDynamicTableSize(256);
+  LDecoder.Init(256);
+  LHeaders[0].Name := 'x-custom';
+  LHeaders[0].Value := 'test';
+  LBlock := LEncoder.Encode(LHeaders);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'table size update decode');
+  CheckEqual('x-custom', string(LDecoded[0].Name), 'table size update name');
+  CheckEqual('test', string(LDecoded[0].Value), 'table size update value');
+end;
+
+procedure TestEncoderMultipleHeaders;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..4] of THPackHeader;
+  LDecoded: array[0..4] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'POST';
+  LHeaders[1].Name := ':path';
+  LHeaders[1].Value := '/api/data';
+  LHeaders[2].Name := 'content-type';
+  LHeaders[2].Value := 'application/json';
+  LHeaders[3].Name := 'authorization';
+  LHeaders[3].Value := 'Bearer token123';
+  LHeaders[4].Name := 'x-request-id';
+  LHeaders[4].Value := 'abc-123';
+  LBlock := LEncoder.Encode(LHeaders);
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'multiple headers decode');
+  CheckEqual(':method', string(LDecoded[0].Name), 'multiple header 0 name');
+  CheckEqual('POST', string(LDecoded[0].Value), 'multiple header 0 value');
+  CheckEqual('x-request-id', string(LDecoded[4].Name), 'multiple header 4 name');
+  CheckEqual('abc-123', string(LDecoded[4].Value), 'multiple header 4 value');
+end;
+
+procedure TestEncoderRepeatedHeaders;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..1] of THPackHeader;
+  LDecoded: array[0..1] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LHeaders[0].Name := 'set-cookie';
+  LHeaders[0].Value := 'a=1';
+  LHeaders[1].Name := 'set-cookie';
+  LHeaders[1].Value := 'b=2';
+  LBlock := LEncoder.Encode(LHeaders);
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'repeated headers decode');
+  CheckEqual('set-cookie', string(LDecoded[0].Name), 'repeated header 0 name');
+  CheckEqual('a=1', string(LDecoded[0].Value), 'repeated header 0 value');
+  CheckEqual('set-cookie', string(LDecoded[1].Name), 'repeated header 1 name');
+  CheckEqual('b=2', string(LDecoded[1].Value), 'repeated header 1 value');
+end;
+
+procedure TestDynamicTableOperations;
+var
+  LTable: THPackDynamicTable;
+  LName, LValue: AnsiString;
+begin
+  LTable.Init(256);
+  CheckEqual(Int64(256), Int64(LTable.Capacity), 'initial capacity');
+  CheckEqual(Int64(0), Int64(LTable.Count), 'initial count');
+  CheckEqual(Int64(0), Int64(LTable.TotalSize), 'initial total size');
+  LTable.Add('x-custom', 'value1');
+  CheckEqual(Int64(1), Int64(LTable.Count), 'count after add');
+  Check(LTable.Get(0, LName, LValue), 'get after add');
+  CheckEqual('x-custom', string(LName), 'get name');
+  CheckEqual('value1', string(LValue), 'get value');
+  LTable.Add('x-other', 'value2');
+  CheckEqual(Int64(2), Int64(LTable.Count), 'count after second add');
+  Check(LTable.Get(0, LName, LValue), 'get index 0 after second add');
+  CheckEqual('x-other', string(LName), 'get index 0 name');
+  CheckEqual('value2', string(LValue), 'get index 0 value');
+  Check(LTable.Get(1, LName, LValue), 'get index 1 after second add');
+  CheckEqual('x-custom', string(LName), 'get index 1 name');
+  CheckEqual('value1', string(LValue), 'get index 1 value');
+end;
+
+procedure TestDynamicTableResize;
+var
+  LTable: THPackDynamicTable;
+begin
+  LTable.Init(256);
+  LTable.Add('x-custom', 'value1');
+  Check(LTable.Count > 0, 'has entries before resize');
+  LTable.Resize(0);
+  CheckEqual(Int64(0), Int64(LTable.Count), 'count after resize to 0');
+  CheckEqual(Int64(0), Int64(LTable.Capacity), 'capacity after resize to 0');
+end;
+
+procedure TestDynamicTableGetName;
+var
+  LTable: THPackDynamicTable;
+  LName: AnsiString;
+begin
+  LTable.Init(256);
+  LTable.Add('x-custom', 'value1');
+  Check(LTable.GetName(0, LName), 'GetName after add');
+  CheckEqual('x-custom', string(LName), 'GetName value');
+end;
+
+procedure TestDynamicTableGetInvalidIndex;
+var
+  LTable: THPackDynamicTable;
+  LName, LValue: AnsiString;
+begin
+  LTable.Init(256);
+  Check(not LTable.Get(0, LName, LValue), 'Get on empty table');
+  Check(not LTable.GetName(0, LName), 'GetName on empty table');
+  LTable.Add('x-custom', 'value1');
+  Check(not LTable.Get(1, LName, LValue), 'Get out of bounds');
+  Check(not LTable.GetName(1, LName), 'GetName out of bounds');
+end;
+
+procedure TestHuffmanEdgeCases;
+var
+  LEncoded, LDecoded: AnsiString;
+begin
+  LEncoded := H2HuffmanEncode('');
+  CheckEqual(Int64(0), Int64(Length(LEncoded)), 'empty string encode');
+  LDecoded := H2HuffmanDecode('');
+  CheckEqual('', string(LDecoded), 'empty string decode');
+  LEncoded := H2HuffmanEncode(#0);
+  LDecoded := H2HuffmanDecode(LEncoded);
+  CheckEqual(#0, string(LDecoded), 'null byte roundtrip');
+  LEncoded := H2HuffmanEncode(#$FF);
+  LDecoded := H2HuffmanDecode(LEncoded);
+  CheckEqual(#$FF, string(LDecoded), 'max byte roundtrip');
+end;
+
+procedure TestDecoderIndexedHeaderField;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LDecoder.Init(HPACK_DEFAULT_DYNAMIC_TABLE_SIZE);
+  LBlock := AnsiString(#$82);
+  Check(LDecoder.Decode(LBlock, LHeaders), 'indexed header decode');
+  CheckEqual(':method', string(LHeaders[0].Name), 'indexed method name');
+  CheckEqual('GET', string(LHeaders[0].Value), 'indexed method value');
+end;
+
+procedure TestDecoderLiteralHeaderField;
+var
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LDecoder.Init(0);
+  LBlock := AnsiString(#0#3'foo'#3'bar');
+  Check(LDecoder.Decode(LBlock, LHeaders), 'literal header decode');
+  CheckEqual('foo', string(LHeaders[0].Name), 'literal name');
+  CheckEqual('bar', string(LHeaders[0].Value), 'literal value');
+end;
+
+procedure TestEncoderDecoderLargeTableSize;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..0] of THPackHeader;
+  LDecoded: array[0..0] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  LEncoder.Init(16384);
+  LDecoder.Init(16384);
+  LHeaders[0].Name := 'x-large-table';
+  LHeaders[0].Value := 'test-value';
+  LBlock := LEncoder.Encode(LHeaders);
+  Check(LDecoder.Decode(LBlock, LDecoded), 'large table decode');
+  CheckEqual('x-large-table', string(LDecoded[0].Name), 'large table name');
+  CheckEqual('test-value', string(LDecoded[0].Value), 'large table value');
+end;
+
+procedure TestMultiByteIntegerEncoding;
+var
+  LEncoder: THPackEncoder;
+  LDecoder: THPackDecoder;
+  LHeaders: array[0..2] of THPackHeader;
+  LDecoded: array[0..2] of THPackHeader;
+  LBlock: AnsiString;
+begin
+  { Test headers with values that trigger multi-byte integer encoding in
+    HPACK static table indices. Index 62+ requires multi-byte encoding.
+    Also test with custom headers to exercise literal encoding paths. }
+  LEncoder.Init;
+  LDecoder.Init;
+  { :method POST = static index 3 (single byte) }
+  LHeaders[0].Name := ':method';
+  LHeaders[0].Value := 'POST';
+  { :path /long-path = static index 4 (single byte name, literal value) }
+  LHeaders[1].Name := ':path';
+  LHeaders[1].Value := '/a-very-long-path-that-exceeds-127-bytes-' +
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' +
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  { Custom header = literal name + literal value }
+  LHeaders[2].Name := 'x-custom-multi-byte';
+  LHeaders[2].Value := 'test';
+  LBlock := LEncoder.Encode(LHeaders);
+  Check(Length(LBlock) > 0, 'multi-byte encoding produces output');
+  Check(LDecoder.Decode(LBlock, LDecoded), 'multi-byte encoding decodes');
+  CheckEqual('POST', string(LDecoded[0].Value), 'static index value');
+  Check(LHeaders[1].Value = LDecoded[1].Value, 'long value roundtrips');
+  CheckEqual('x-custom-multi-byte', string(LDecoded[2].Name), 'custom name');
+  CheckEqual('test', string(LDecoded[2].Value), 'custom value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.hpack');
   { Roundtrip tests }
@@ -377,6 +670,29 @@ begin
     @TestRejectsDynamicTableSizeUpdateAboveMax);
   T.Test('Reject dynamic table size update UInt32 overflow',
     @TestRejectsDynamicTableSizeUpdateUInt32Overflow);
+
+  { Encoder tests }
+  T.Test('Encoder basic roundtrip', @TestEncoderBasicRoundtrip);
+  T.Test('Encoder static table lookup', @TestEncoderStaticTableLookup);
+  T.Test('Encoder dynamic table eviction', @TestEncoderDynamicTableEviction);
+  T.Test('Encoder set dynamic table size', @TestEncoderSetDynamicTableSize);
+  T.Test('Encoder multiple headers', @TestEncoderMultipleHeaders);
+  T.Test('Encoder repeated headers', @TestEncoderRepeatedHeaders);
+
+  { Dynamic table tests }
+  T.Test('Dynamic table operations', @TestDynamicTableOperations);
+  T.Test('Dynamic table resize', @TestDynamicTableResize);
+  T.Test('Dynamic table GetName', @TestDynamicTableGetName);
+  T.Test('Dynamic table Get invalid index', @TestDynamicTableGetInvalidIndex);
+
+  { Huffman edge cases }
+  T.Test('Huffman edge cases', @TestHuffmanEdgeCases);
+
+  { Decoder tests }
+  T.Test('Decoder indexed header field', @TestDecoderIndexedHeaderField);
+  T.Test('Decoder literal header field', @TestDecoderLiteralHeaderField);
+  T.Test('Encoder decoder large table size', @TestEncoderDecoderLargeTableSize);
+  T.Test('Multi-byte integer encoding', @TestMultiByteIntegerEncoding);
 
   if not T.Run then Halt(1);
 end.

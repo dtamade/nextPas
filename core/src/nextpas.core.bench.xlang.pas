@@ -263,6 +263,8 @@ begin
     LName := Copy(LName, 1, I - 1);
 
   LIterations := StrToInt64Def(LParts[1], 0);
+  if LIterations < 0 then
+    LIterations := 0; { F-07: guard against negative iterations }
 
   // Go format: "1234 ns/op" or "1.234 us/op"
   // Parts are split: ["1234", "ns/op"] or ["1.234", "us/op"]

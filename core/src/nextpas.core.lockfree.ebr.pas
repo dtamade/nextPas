@@ -49,6 +49,8 @@ type
     FRetired: PEbrRetiredNode;
     FActiveCount: Int32;
     FRetiredCount: Int32;
+    FFreeList: PEbrRetiredNode;
+    FFreeListCount: Int32;
   public
     constructor Create;
     destructor Destroy; override;
@@ -89,6 +91,8 @@ begin
   FRetired := nil;
   FActiveCount := 0;
   FRetiredCount := 0;
+  FFreeList := nil;
+  FFreeListCount := 0;
 end;
 
 destructor TEbrDomain.Destroy;
@@ -101,6 +105,13 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
+    FreeMem(LNode);
+    LNode := LNext;
+  end;
+  LNode := FFreeList;
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
     FreeMem(LNode);
     LNode := LNext;
   end;
@@ -123,7 +134,15 @@ var
 begin
   if AData = nil then
     Exit;
-  LNode := GetMem(SizeOf(TEbrRetiredNode));
+  { Try to reuse from freelist }
+  if (FFreeList <> nil) and (FFreeListCount > 0) then
+  begin
+    LNode := FFreeList;
+    FFreeList := LNode^.Next;
+    Dec(FFreeListCount);
+  end
+  else
+    LNode := GetMem(SizeOf(TEbrRetiredNode));
   LNode^.Data := AData;
   LNode^.Reclaim := AReclaim;
   LNode^.UserData := AUserData;
@@ -164,7 +183,15 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-    FreeMem(LNode);
+    { Add to freelist for reuse }
+    if FFreeListCount < 32 then
+    begin
+      LNode^.Next := FFreeList;
+      FFreeList := LNode;
+      Inc(FFreeListCount);
+    end
+    else
+      FreeMem(LNode);
     LNode := LNext;
   end;
   AtomicStore32(FRetiredCount, 0, moRelease);

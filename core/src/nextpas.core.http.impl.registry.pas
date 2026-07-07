@@ -35,6 +35,9 @@ procedure SetDefaultClientVersion(const AVersion: THttpVersion);
 procedure SetDefaultServerVersion(const AVersion: THttpVersion);
 function GetDefaultClientVersion: THttpVersion;
 function GetDefaultServerVersion: THttpVersion;
+{ Testing escape hatch: unfreeze registry to allow runtime modification.
+  Only use in test setup; never call from production code. }
+procedure UnfreezeRegistry;
 function ResolveClientTransport(const AVersion: THttpVersion;
   const AOptions: THttpClientOptions): IHttpTransport;
 function ResolveServerTransport(const AVersion: THttpVersion;
@@ -58,6 +61,7 @@ var
   GServerFactories: array[THttpVersion] of THttpServerTransportFactory;
   GDefaultClientVersion: THttpVersion;
   GDefaultServerVersion: THttpVersion;
+  GFrozen: Boolean;
 
 function CreateH1ClientTransport(const AOptions: THttpClientOptions): IHttpTransport;
 var
@@ -120,19 +124,25 @@ begin
     Result := LInnerTransport;
 end;
 
-{ Note: must be called before any concurrent HTTP client/server creation. }
+{ Note: must be called before any concurrent HTTP client/server creation.
+  Raises EHttpError after registry is frozen (after initialization). }
 procedure RegisterClientTransport(const AVersion: THttpVersion;
   const AFactory: THttpClientTransportFactory);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
     raise EHttpError.Create('client transport factory must not be nil');
   GClientFactories[AVersion] := AFactory;
 end;
 
-{ Note: must be called before any concurrent HTTP client/server creation. }
+{ Note: must be called before any concurrent HTTP client/server creation.
+  Raises EHttpError after registry is frozen (after initialization). }
 procedure RegisterServerTransport(const AVersion: THttpVersion;
   const AFactory: THttpServerTransportFactory);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
     raise EHttpError.Create('server transport factory must not be nil');
   GServerFactories[AVersion] := AFactory;
@@ -140,11 +150,15 @@ end;
 
 procedure UnregisterClientTransport(const AVersion: THttpVersion);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
   GClientFactories[AVersion] := nil;
 end;
 
 procedure UnregisterServerTransport(const AVersion: THttpVersion);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
   GServerFactories[AVersion] := nil;
 end;
 
@@ -174,6 +188,8 @@ end;
 
 procedure SetDefaultClientVersion(const AVersion: THttpVersion);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot change default after initialization');
   if not HasClientTransport(AVersion) then
     raise EHttpError.Create('no client transport registered for ' +
       HttpVersionToStr(AVersion));
@@ -182,6 +198,8 @@ end;
 
 procedure SetDefaultServerVersion(const AVersion: THttpVersion);
 begin
+  if GFrozen then
+    raise EHttpError.Create('registry frozen: cannot change default after initialization');
   if not HasServerTransport(AVersion) then
     raise EHttpError.Create('no server transport registered for ' +
       HttpVersionToStr(AVersion));
@@ -196,6 +214,11 @@ end;
 function GetDefaultServerVersion: THttpVersion;
 begin
   Result := GDefaultServerVersion;
+end;
+
+procedure UnfreezeRegistry;
+begin
+  GFrozen := False;
 end;
 
 function ResolveClientTransport(const AVersion: THttpVersion;
@@ -242,6 +265,7 @@ begin
   RegisterServerTransport(hvHttp2, @CreateH2ServerTransport);
   GDefaultClientVersion := hvHttp11;
   GDefaultServerVersion := hvHttp11;
+  GFrozen := True;
 end;
 
 initialization

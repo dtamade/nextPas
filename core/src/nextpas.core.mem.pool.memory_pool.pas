@@ -35,8 +35,8 @@ type
     ['{6F6B4299-3B29-4C6F-917D-8D6B4B5E0E99}']
     function GetMem(ASize: SizeUInt): Pointer;
     function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
   end;
 
 implementation

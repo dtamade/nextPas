@@ -39,7 +39,7 @@ type
     Conn: ITcpStream;
   end;
 
-  TPrefixedTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
   private
     FInner: ITcpStream;
     FPrefix: string;
@@ -48,11 +48,7 @@ type
     constructor Create(const AInner: ITcpStream; const APrefix: string);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
     procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
     function LocalAddr: TNetAddress;
     function RemoteAddr: TNetAddress;
     procedure Shutdown;
@@ -101,6 +97,7 @@ type
     FPoolLock: TRTLCriticalSection;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
+    FPending: string;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
@@ -454,7 +451,7 @@ begin
   if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
     Exit;
   LMetadata := RequestMetadata(AParser);
-  Result := not LMetadata.HasHost;
+  Result := (not LMetadata.HasHost) or LMetadata.HasDuplicateHost;
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
@@ -510,9 +507,9 @@ begin
   Result := (E is ETimeoutError) or (E is ENetworkError);
 end;
 
-{ TPrefixedTcpStream }
+{ TReadPrependTcpStream }
 
-constructor TPrefixedTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
+constructor TReadPrependTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
 begin
   inherited Create;
   FInner := AInner;
@@ -520,7 +517,7 @@ begin
   FPrefixPos := 1;
 end;
 
-function TPrefixedTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TReadPrependTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LPtr: PByte;
   LCopy: SizeUInt;
@@ -547,67 +544,47 @@ begin
     Inc(Result, FInner.Read(LPtr^, ACount - Result));
 end;
 
-function TPrefixedTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+function TReadPrependTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := FInner.Write(ABuf, ACount);
 end;
 
-function TPrefixedTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-begin
-  Result := FInner.Seek(AOffset, AOrigin);
-end;
-
-procedure TPrefixedTcpStream.Close;
+procedure TReadPrependTcpStream.Close;
 begin
   FInner.Close;
 end;
 
-function TPrefixedTcpStream.GetSize: Int64;
-begin
-  Result := FInner.Size;
-end;
-
-function TPrefixedTcpStream.GetPosition: Int64;
-begin
-  Result := FInner.Position;
-end;
-
-procedure TPrefixedTcpStream.SetPosition(const AValue: Int64);
-begin
-  FInner.Position := AValue;
-end;
-
-function TPrefixedTcpStream.LocalAddr: TNetAddress;
+function TReadPrependTcpStream.LocalAddr: TNetAddress;
 begin
   Result := FInner.LocalAddr;
 end;
 
-function TPrefixedTcpStream.RemoteAddr: TNetAddress;
+function TReadPrependTcpStream.RemoteAddr: TNetAddress;
 begin
   Result := FInner.RemoteAddr;
 end;
 
-procedure TPrefixedTcpStream.Shutdown;
+procedure TReadPrependTcpStream.Shutdown;
 begin
   FInner.Shutdown;
 end;
 
-procedure TPrefixedTcpStream.SetNoDelay(const AValue: Boolean);
+procedure TReadPrependTcpStream.SetNoDelay(const AValue: Boolean);
 begin
   FInner.SetNoDelay(AValue);
 end;
 
-procedure TPrefixedTcpStream.SetKeepAlive(const AValue: Boolean);
+procedure TReadPrependTcpStream.SetKeepAlive(const AValue: Boolean);
 begin
   FInner.SetKeepAlive(AValue);
 end;
 
-procedure TPrefixedTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+procedure TReadPrependTcpStream.SetReadDeadline(const ADeadline: TDeadline);
 begin
   FInner.SetReadDeadline(ADeadline);
 end;
 
-procedure TPrefixedTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+procedure TReadPrependTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FInner.SetWriteDeadline(ADeadline);
 end;
@@ -625,6 +602,7 @@ begin
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HasDuplicateHost := AResult.HostRepeated;
   FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
   FRequestMetadata.HasContentLength := AResult.HasContentLength;
   FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
@@ -999,6 +977,7 @@ begin
   if (LFast.Version <> hvHttp11) or
      (LFast.ContentLength <> 0) or
      (not LFast.HasHost) or
+     LFast.HostRepeated or
      LFast.HasExpect or
      LFast.HasTransferEncoding then
     Exit(False);
@@ -1203,7 +1182,7 @@ begin
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
-      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+      LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
@@ -1230,6 +1209,7 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
+  except
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
@@ -1306,13 +1286,13 @@ begin
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
-      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+      LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-      LReq.Method = hmHead, not LKeepAlive);
+      LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
@@ -2180,7 +2160,8 @@ begin
   LHasResponseTail := False;
   LSkippedInformational := False;
   LCurrentResponseStarted := False;
-  LPending := '';
+  LPending := FPending;
+  FPending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     if LPending <> '' then
@@ -2234,7 +2215,8 @@ begin
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
-  LHasResponseTail := LPending <> '';
+  FPending := LPending;
+  LHasResponseTail := FPending <> '';
   AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail) and
     (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
@@ -2288,6 +2270,7 @@ begin
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
+  FPending := '';
   LConn := PoolGet(LPoolHostKey, LPort);
   LPooled := LConn <> nil;
   if not LPooled then
@@ -2306,7 +2289,7 @@ begin
     if LPooled then
     begin
       LConn.Close;
-      if (not LRequestWriteComplete) and (ExceptObject is EHttpError) then
+      if not LRequestWriteComplete then
         raise;
       if LResponseStarted then
         raise;

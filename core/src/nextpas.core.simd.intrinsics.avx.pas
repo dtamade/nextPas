@@ -625,6 +625,13 @@ initialization
   EnsureExperimentalIntrinsicsEnabled;
   EnsureExperimentalAvxTargetSupported;
 
+{
+  Fast-path AVX FP arithmetic with IEEE 754 special value handling.
+  These functions use real SIMD instructions while correctly handling
+  special values (NaN, Inf, -0.0).
+}
+{$I nextpas.core.simd.intrinsics.avx.fastpath.inc}
+
 end.
 
 

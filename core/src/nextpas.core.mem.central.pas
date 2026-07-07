@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.sizeclass,
-  nextpas.core.mem.span;
+  nextpas.core.mem.span,
+  nextpas.core.platform.memory;
 
 const
   { Default number of slots per span. }
@@ -25,6 +26,11 @@ const
   { Scavenger: max spans released per scavenge pass (bounds hold time). }
   SCAVENGER_MAX_RELEASE = 16;
 
+  { Scavenger: idle threshold for OS memory decommit (physical pages returned).
+    At ~10M ops/s, 1M ops ≈ 100ms idle. Longer than SCAVENGER_IDLE_THRESHOLD
+    to avoid premature decommit of frequently reused spans. }
+  SCAVENGER_DECOMMIT_THRESHOLD = 1000000;
+
 type
   {** Entry in the central span pool: a span + its memory region. }
   PCentralSpanEntry = ^TCentralSpanEntry;
@@ -34,6 +40,7 @@ type
     FMemorySize: SizeUInt;
     FLastFreeTick: UInt64; { Op counter when span became fully free (0 = not idle). }
     FOwnerThreadId: QWord; { Thread that allocated this span (for cross-thread free). }
+    FDecommitted: Boolean; { True if physical pages returned to OS (virtual reservation kept). }
   end;
 
   {** Central span pool for one size class. Manages partial and full spans.
@@ -235,6 +242,13 @@ begin
       LIdx := APool.FPartialHead;
       { Clear idle timestamp (span is being reused). }
       APool.FEntries[LIdx].FLastFreeTick := 0;
+      { Recommit memory if it was decommitted to OS. }
+      if APool.FEntries[LIdx].FDecommitted then
+      begin
+        platform_virtual_commit(APool.FEntries[LIdx].FMemory,
+          APool.FEntries[LIdx].FMemorySize);
+        APool.FEntries[LIdx].FDecommitted := False;
+      end;
       { Alloc from this span. }
       LPtr := SpanAlloc(APool.FEntries[LIdx].FSpan);
       if LPtr = nil then
@@ -428,12 +442,21 @@ begin
         FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
         APool.FEntries[I].FMemory := nil;
         APool.FEntries[I].FLastFreeTick := 0;
+        APool.FEntries[I].FDecommitted := False;
         APool.FEntries[I].FSpan.FBitmap := 0;
         APool.FEntries[I].FSpan.FFreeCount := 0;
         { Invalidate MRU cache if it points to the released span. }
         if APool.FLastHitIndex = I then
           APool.FLastHitIndex := -1;
         Inc(Result);
+      end
+      { OS memory decommit: return physical pages, keep virtual reservation. }
+      else if (LAge >= SCAVENGER_DECOMMIT_THRESHOLD) and
+              (not APool.FEntries[I].FDecommitted) then
+      begin
+        platform_virtual_decommit(APool.FEntries[I].FMemory,
+          APool.FEntries[I].FMemorySize);
+        APool.FEntries[I].FDecommitted := True;
       end;
     end;
   finally

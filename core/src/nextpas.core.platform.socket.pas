@@ -10,6 +10,11 @@ uses
   nextpas.core.platform.error;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.base;
+{$ENDIF}
+
 const
 {$IFDEF NEXTPAS_WINDOWS}
   PLATFORM_AF_INET     = 2;
@@ -129,9 +134,19 @@ function platform_sockaddr_loopback6(APort: UInt16;
 function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
   AAddr: PByte): Int32;
 
+{ IPv4 helpers for net layer }
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+function platform_ipv4_parse(const AAddr: string): UInt32;
+function platform_ipv4_to_string(AIP: UInt32): string;
+
 { Byte-order helpers }
 function platform_htons(AHost: UInt16): UInt16; inline;
 function platform_htonl(AHost: UInt32): UInt32; inline;
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+function platform_ntohl(ANet: UInt32): UInt32; inline;
 
 implementation
 
@@ -402,6 +417,92 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+begin
+  Result := platform_htons(ANet);
+end;
+
+function platform_ntohl(ANet: UInt32): UInt32; inline;
+begin
+  Result := platform_htonl(ANet);
+end;
+
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+begin
+  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+  ASockAddr.sin_family := AF_INET;
+  ASockAddr.sin_port := platform_htons(APort);
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
+  ALen := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+begin
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
+  APort := platform_ntohs(ASockAddr.sin_port);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+var
+  LPart: UInt32;
+  LShift: Integer;
+  LIdx, LLen, LStart: Integer;
+  LCh: Char;
+begin
+  Result := 0;
+  LLen := Length(AAddr);
+  if LLen = 0 then Exit;
+  LShift := 24;
+  LStart := 1;
+  for LIdx := 1 to LLen + 1 do
+  begin
+    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
+    begin
+      LPart := 0;
+      for LStart := LStart to LIdx - 1 do
+      begin
+        LCh := AAddr[LStart];
+        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
+        LPart := LPart * 10 + Ord(LCh) - Ord('0');
+      end;
+      if LPart > 255 then begin Result := 0; Exit; end;
+      Result := Result or (LPart shl LShift);
+      Dec(LShift, 8);
+      LStart := LIdx + 1;
+    end;
+  end;
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+
+  function OctetToStr(AVal: UInt32): string;
+  var
+    LBuf: array[0..3] of Char;
+    LLen, LI: Integer;
+    LDigit: UInt32;
+  begin
+    LLen := 0;
+    repeat
+      LDigit := AVal mod 10;
+      LBuf[LLen] := Chr(Ord('0') + LDigit);
+      Inc(LLen);
+      AVal := AVal div 10;
+    until AVal = 0;
+    SetLength(Result, LLen);
+    for LI := 0 to LLen - 1 do
+      Result[LI + 1] := LBuf[LLen - 1 - LI];
+  end;
+
+begin
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
+            OctetToStr((AIP shr 16) and $FF) + '.' +
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
+end;
+
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -411,7 +512,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := platform_htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;
@@ -481,7 +582,6 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.error;
 
@@ -767,6 +867,92 @@ begin
             ((AHost shr 24) and $FF);
 end;
 
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+begin
+  Result := platform_htons(ANet);
+end;
+
+function platform_ntohl(ANet: UInt32): UInt32; inline;
+begin
+  Result := platform_htonl(ANet);
+end;
+
+function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
+  out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+begin
+  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+  ASockAddr.sin_family := AF_INET;
+  ASockAddr.sin_port := platform_htons(APort);
+  ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
+  ALen := SizeOf(sockaddr_in);
+  Result := 0;
+end;
+
+procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
+  out AIP: UInt32; out APort: UInt16);
+begin
+  AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
+  APort := platform_ntohs(ASockAddr.sin_port);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+var
+  LPart: UInt32;
+  LShift: Integer;
+  LIdx, LLen, LStart: Integer;
+  LCh: Char;
+begin
+  Result := 0;
+  LLen := Length(AAddr);
+  if LLen = 0 then Exit;
+  LShift := 24;
+  LStart := 1;
+  for LIdx := 1 to LLen + 1 do
+  begin
+    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
+    begin
+      LPart := 0;
+      for LStart := LStart to LIdx - 1 do
+      begin
+        LCh := AAddr[LStart];
+        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
+        LPart := LPart * 10 + Ord(LCh) - Ord('0');
+      end;
+      if LPart > 255 then begin Result := 0; Exit; end;
+      Result := Result or (LPart shl LShift);
+      Dec(LShift, 8);
+      LStart := LIdx + 1;
+    end;
+  end;
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+
+  function OctetToStr(AVal: UInt32): string;
+  var
+    LBuf: array[0..3] of Char;
+    LLen, LI: Integer;
+    LDigit: UInt32;
+  begin
+    LLen := 0;
+    repeat
+      LDigit := AVal mod 10;
+      LBuf[LLen] := Chr(Ord('0') + LDigit);
+      Inc(LLen);
+      AVal := AVal div 10;
+    until AVal = 0;
+    SetLength(Result, LLen);
+    for LI := 0 to LLen - 1 do
+      Result[LI + 1] := LBuf[LLen - 1 - LI];
+  end;
+
+begin
+  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
+            OctetToStr((AIP shr 16) and $FF) + '.' +
+            OctetToStr((AIP shr 8) and $FF) + '.' +
+            OctetToStr(AIP and $FF);
+end;
+
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
 var
@@ -776,7 +962,7 @@ begin
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := htons(APort);
-  LAddr^.sin_addr.s_addr := AAddr;
+  LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
 end;

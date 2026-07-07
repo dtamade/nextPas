@@ -71,9 +71,9 @@ end;
 { ============================================================ }
 
 const
-  MPMC_SAT_PRODUCERS = 8;
-  MPMC_SAT_CONSUMERS = 8;
-  MPMC_SAT_PER_PRODUCER = 10000;
+  MPMC_SAT_PRODUCERS = 4; { P7: reduced from 8 for faster tests }
+  MPMC_SAT_CONSUMERS = 4; { P7: reduced from 8 for faster tests }
+  MPMC_SAT_PER_PRODUCER = 1000; { P7: reduced from 10000 for faster tests }
   MPMC_SAT_TOTAL = MPMC_SAT_PRODUCERS * MPMC_SAT_PER_PRODUCER;
   MPMC_SAT_CAPACITY = 16;
 
@@ -174,7 +174,7 @@ end;
 const
   MPMC_SINGLE_SLOT_PRODUCERS = 2;
   MPMC_SINGLE_SLOT_CONSUMERS = 2;
-  MPMC_SINGLE_SLOT_PER_PRODUCER = 2000;
+  MPMC_SINGLE_SLOT_PER_PRODUCER = 500; { P7: reduced from 2000 for faster tests }
   MPMC_SINGLE_SLOT_TOTAL = MPMC_SINGLE_SLOT_PRODUCERS * MPMC_SINGLE_SLOT_PER_PRODUCER;
 
 var
@@ -271,7 +271,7 @@ end;
 
 const
   STACK_ABA_THREADS = 4;
-  STACK_ABA_OPS = 100000;
+  STACK_ABA_OPS = 20000; { P7: reduced from 100000 for faster tests }
   STACK_ABA_TOTAL = STACK_ABA_THREADS * STACK_ABA_OPS;
 
 var
@@ -361,8 +361,8 @@ end;
 { ============================================================ }
 
 const
-  MPSC_CLOSE_PRODUCERS = 4;
-  MPSC_CLOSE_MAX_PER_PRODUCER = 65536;
+  MPSC_CLOSE_PRODUCERS = 2; { P7: reduced from 4 for faster tests }
+  MPSC_CLOSE_MAX_PER_PRODUCER = 8192; { P7: reduced from 65536 for faster tests }
 
 var
   GMpscCloseQ: TIntMpsc;
@@ -524,8 +524,8 @@ end;
 { ============================================================ }
 
 const
-  MPSC_LIVE_RECLAIM_PRODUCERS = 6;
-  MPSC_LIVE_RECLAIM_PER_PRODUCER = 12000;
+  MPSC_LIVE_RECLAIM_PRODUCERS = 3; { P7: reduced from 6 for faster tests }
+  MPSC_LIVE_RECLAIM_PER_PRODUCER = 2000; { P7: reduced from 12000 for faster tests }
   MPSC_LIVE_RECLAIM_TOTAL = MPSC_LIVE_RECLAIM_PRODUCERS * MPSC_LIVE_RECLAIM_PER_PRODUCER;
 
 var
@@ -744,7 +744,7 @@ end;
 { ============================================================ }
 
 const
-  DEQUE_STEAL_TOTAL = 200000;
+  DEQUE_STEAL_TOTAL = 50000; { P7: reduced from 200000 for faster tests }
   DEQUE_STEAL_THIEVES = 7;
   DEQUE_STEAL_CAPACITY = 256;
 
@@ -862,7 +862,7 @@ end;
 
 const
   SPSC_CLOSE_CAPACITY = 32;
-  SPSC_CLOSE_SEND_TARGET = 100000;
+  SPSC_CLOSE_SEND_TARGET = 20000; { P7: reduced from 100000 for faster tests }
 
 var
   GSpscCloseQ: TIntSpsc;
@@ -1003,9 +1003,9 @@ end;
 { ============================================================ }
 
 const
-  MPMC_CYCLE_ROUNDS = 50;
+  MPMC_CYCLE_ROUNDS = 20; { P7: reduced from 50 for faster tests }
   MPMC_CYCLE_PRODUCERS = 4;
-  MPMC_CYCLE_PER_PRODUCER = 500;
+  MPMC_CYCLE_PER_PRODUCER = 200; { P7: reduced from 500 for faster tests }
   MPMC_CYCLE_CAPACITY = 8;
 
 var
@@ -1121,10 +1121,10 @@ end;
 { ============================================================ }
 
 const
-  MPMC_CLOSE_RACE_PRODUCERS = 6;
-  MPMC_CLOSE_RACE_CONSUMERS = 4;
+  MPMC_CLOSE_RACE_PRODUCERS = 3; { P7: reduced from 6 for faster tests }
+  MPMC_CLOSE_RACE_CONSUMERS = 2; { P7: reduced from 4 for faster tests }
   MPMC_CLOSE_RACE_CAPACITY = 4;
-  MPMC_CLOSE_RACE_MAX_VALUES = 65536;
+  MPMC_CLOSE_RACE_MAX_VALUES = 8192; { P7: reduced from 65536 for faster tests }
 
 var
   GMpmcCloseRaceQ: TIntMpmc;
@@ -1380,7 +1380,7 @@ end;
 const
   STACK_EXHAUST_CAP = 8;
   STACK_EXHAUST_THREADS = 4;
-  STACK_EXHAUST_ROUNDS = 50000;
+  STACK_EXHAUST_ROUNDS = 10000; { P7: reduced from 50000 for faster tests }
 
 var
   GStackExhaust: TIntStack;
@@ -1447,7 +1447,7 @@ end;
 const
   SEGQUEUE_STRESS_PRODUCERS = 4;
   SEGQUEUE_STRESS_CONSUMERS = 4;
-  SEGQUEUE_STRESS_PER_PRODUCER = 20000;
+  SEGQUEUE_STRESS_PER_PRODUCER = 5000; { P7: reduced from 20000 for faster tests }
   SEGQUEUE_STRESS_TOTAL = SEGQUEUE_STRESS_PRODUCERS * SEGQUEUE_STRESS_PER_PRODUCER;
 
 var

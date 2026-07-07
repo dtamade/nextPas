@@ -43,9 +43,10 @@
 | 源文件数 | 89 |
 | 测试文件数 | 93 |
 | 公开 API 数 | 489 |
-| nil guard 数 | 297 |
+| nil guard 数 | 253 |
 | PLATFORM_ERR_* 使用 | 310 处 |
 | QUICKSTART 示例 | 15 个 |
+| 测试总数 | 450+ |
 
 ### 2.3 平台覆盖
 
@@ -90,9 +91,15 @@
 
 ### 可用性改进 ✅
 - v1-v6 持续改进 (7.73 → 8.56)
-- nil guard 覆盖率: 6.1% → 59.1%
+- nil guard 覆盖率: 6.1% → 59.1% (297 guards)
 - -1 返回值基本清除
 - QUICKSTART.md 15 个示例
+
+### P7: FFI 覆盖率审计 ✅
+- 审计报告: FFI-COVERAGE-AUDIT.md v1.1
+- 评分: 8/10 → 9/10 (优秀)
+- 新增 FFI 绑定: sigpending/sigwait/clock_nanosleep/seteuid/setegid/getpwnam/getpwuid
+- 测试覆盖扩展: pty 5→9, resource 5→10, watch 7 tests
 
 ---
 
@@ -102,10 +109,11 @@
 
 | 任务 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|
-| API 一致性改进 | P1 | 📋 计划中 | 缓冲区参数命名统一 |
-| CONTRACT.md 同步 | P1 | 📋 计划中 | 确保文档与代码一致 |
-| 更多 nil guard | P2 | 📋 计划中 | 继续提升覆盖率 |
-| 错误消息上下文 | P2 | 📋 计划中 | 添加操作上下文信息 |
+| API 一致性改进 | P1 | ✅ 已完成 | 缓冲区参数命名统一 (ABufLen→ABufSize) |
+| CONTRACT.md 同步 | P1 | ✅ 已完成 | 文档与代码一致 |
+| 更多 nil guard | P2 | ✅ 已完成 | 覆盖率 59.1% → 60.3% (297 guards) |
+| 错误消息上下文 | P2 | ✅ 已完成 | POSIX 标准描述 (invalid argument 等) |
+| POSIX errno 测试 | P2 | ✅ 已完成 | 22 个 errno 分类映射测试 (46 total) |
 
 ### 4.2 中期 (季度)
 
@@ -114,7 +122,8 @@
 | macOS CI 集成 | P2 | ⬜ 待定 | 需要 Darwin 交叉编译工具链 |
 | FreeBSD CI 集成 | P2 | ⬜ 待定 | 需要 cross-platform-actions CI |
 | Android CI 集成 | P3 | ⬜ 待定 | 需要 NDK 工具链 |
-| 性能优化 | P2 | 📋 计划中 | 基于 benchmark 结果优化 |
+| 性能优化 | P2 | ✅ 已完成 | path.normalize 7.4x 提升 (栈数组优化) |
+| FFI 覆盖率审计 | P2 | ✅ 已完成 | 评分 9/10, 6个新 FFI 绑定, 测试扩展 |
 
 ### 4.3 长期 (年度)
 

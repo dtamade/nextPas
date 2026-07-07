@@ -87,6 +87,7 @@ type
     FloatValue: Double;
     SourceLine: LongInt;
     SourceCol: LongInt;
+    StructTypeName: string;  // 非空时表示该指令操作的 struct 类型名 (hikGetFieldPtr/hikExtractField/hikInsertField)
   end;
 
   THIRSwitchCase = record

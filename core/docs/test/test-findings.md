@@ -275,7 +275,7 @@
 | **E-01** TimeoutWorker 结构 | ✅ FIXED | TTimeoutRec/PTimeoutRec 移入 implementation 段，减少 interface 暴露面 |
 | **E-03** Ctx() 错误信息 | ✅ FIXED | 错误信息扩展为 "No active test context — Ctx can only be called from within a running test..." |
 | **D-04** FExecMtx 命名 | ✅ FIXED | TThreadRec.Mtx 添加注释 `protects Pass/Fail/Skip counters + result output` |
-| **T-01** NaN/边界测试补全 | ✅ FIXED | 6 新测试: CheckEqualD NaN, CheckNotEqualD NaN, CheckNear epsilon, CheckSame nil=nil, CheckSame nil<>ptr, ToEqualD epsilon boundary |
+| **T-01** NaN/边界测试补全 | ✅ FIXED | 6 新测试: CheckEqualD NaN, CheckNotEqualD NaN, CheckNear epsilon, CheckSame nil=nil, CheckSame nil<>ptr, ToEqualD epsilon boundary; + diff==epsilon 精确边界 |
 | **P2 — ShouldFail 测试** | ✅ FIXED | 添加 G3 测试验证 ShouldFail pass/fail 路径 |
 | **P2 — Glob filter 边界** | ✅ FIXED | 添加 G4 测试验证空 pattern 和精确匹配 |
 | **P2 — 空 Suite 并行测试** | ✅ FIXED | 添加 G2 测试验证空 suite 并行执行不崩溃 |

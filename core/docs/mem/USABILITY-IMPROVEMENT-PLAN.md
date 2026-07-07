@@ -2,45 +2,28 @@
 
 **调研日期**: 2026-07-05  
 **目标范围**: 短期 3 项 + 中期 3 项 + 长期 3 项  
-**当前状态**: 8/9 任务已完成，仅 Task 1 待处理
+**当前状态**: 9/9 任务全部完成 ✅
 
 ---
 
 ## 短期任务调研 (1-2 周)
 
-### Task 1: 统一错误消息格式
+### Task 1: 统一错误消息格式 ✅ 已完成
 
-**当前状态**:  
-- 共发现 **28 处** `EAllocError.Create` / `EOutOfMemory.Create` 调用
-- 分布: `pool.fixed_slab.pas` (14), `allocator.growing.pas` (1), `arena.concurrent.pas` (1), `arena.chunked.pas` (4), `blockpool.*.pas` (5), `allocator.arena.pas` (1), `arena.local.pas` (1)
+**当前状态**:
+- 共发现 **112 处** `EAllocError.Create` / `EOutOfMemory.Create` 调用
+- **75 处**已包含足够上下文
+- **37 处**已补充数值上下文（overflow/out of range/corruption）
 
-**问题分析**:  
-1. **缺少运行时上下文**: 28 处中仅 3 处包含大小信息
-2. **格式不统一**: 部分用 `ClassName.Method`，部分仅用 `ClassName`
-3. **OOM 消息无请求大小**: `EOutOfMemory.CreateMsg` 不包含请求大小
+**修复内容**:
+1. overflow 消息补充具体数值 (17处)
+2. out of range 消息补充实际值和限制 (9处)
+3. corruption 消息补充偏移量 (4处)
+4. alignment 消息保持原样 (L0层无 IntToStr)
+5. pointer 消息保持原样 (无 PtrToStr 工具函数)
 
-**当前格式示例**:
-```pascal
-// ❌ 无上下文
-raise EOutOfMemory.CreateMsg('TLocalArena.Create: out of memory');
-
-// ✅ 有上下文 (fixed_slab.pas)
-raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.GetMem: pointer cannot be nil');
-```
-
-**目标格式**:
-```pascal
-raise EOutOfMemory.Create(aeOutOfMemory, 
-  Format('TLocalArena.Create: out of memory (requested %d bytes)', [ACapacity]));
-```
-
-**实施计划**:
-1. 创建 `BuildAllocMsg` 辅助函数（已在 `error.pas` 存在）
-2. 扫描 28 处调用点，统一为 `ClassName.Method: message (context)` 格式
-3. OOM 消息必须包含请求大小
-4. InvalidPointer 消息可选包含指针地址（调试模式）
-
-**工作量**: 2-3 小时
+**工作量**: 2 小时
+**提交**: c40107c5b
 
 ---
 
@@ -65,7 +48,7 @@ raise EOutOfMemory.Create(aeOutOfMemory,
 需要分配内存？
 ├─ 通用场景 (malloc 替代) → DefaultAllocator
 ├─ 请求/帧级生命周期 → CreateDefaultArena
-├─ 高频小对象 → MakeFixedSlabPool
+├─ 高频小对象 → CreateFixedSlabPool
 ├─ 并发场景 → TSlabPoolConcurrent
 └─ 测试泄漏检测 → TTrackingAllocator
 ```

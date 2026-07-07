@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-06-16
+> Last updated: 2026-07-07
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,14 +17,54 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3/G4 active hardening**:
+This lane is in **G2/G3/G4/G5 active hardening**:
 
 - G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
 - G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 181 focused tests. H2 is production-transport-ready, not just a foundation slice. Remaining work is test coverage hardening (client -33, frame -17, hpack -15 tests vs plan) and documentation alignment. Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
+- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 207 focused tests. H2 is production-transport-ready, not just a foundation slice. All H2 test coverage gaps closed (client 55, frame 37, hpack 30). Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
+- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket stable at 32 tests.
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
+
+### Recent Fixes (2026-07-07)
+
+**Phase 4 (2026-07-07): Static Graduation + Benchmark Truth**
+- **Range requests**: RFC 7233 support — `bytes=start-end`, suffix (`bytes=-N`), open-ended (`bytes=N-`)
+- **Conditional requests**: ETag + `If-None-Match` → 304, `Last-Modified` + `If-Modified-Since` → 304
+- **Cache headers**: `Cache-Control: public, max-age=0, must-revalidate`
+- **File downloads**: `ServeFileDownload()` with `Content-Disposition: attachment`
+- **416 Range Not Satisfiable**: Invalid ranges return proper error with `Content-Range: bytes */size`
+- **Benchmark CI**: `verify_benchmark_truth.sh` validates Rust/Go/Hyper/nextPas label correctness
+- **Static tests**: 14 → 21 (+7), all with 0 leaks
+
+### Recent Fixes (2026-07-06)
+
+**Phase 1 (2026-07-06):**
+- **P1-4 注册表冻结**: `GFrozen` 标志防止运行时注册表修改，`UnfreezeRegistry` 测试逃生口
+- **P2-3 CONTRACT.md v2.0**: 完全重写匹配实际代码接口（IHttpClient/IHttpServer/THttpRequest/THttpResponse）
+- **P2-11 HttpStatusText**: 未知状态码返回 `IntToStr(ACode)` 而非 `'Unknown'`
+- **P2-13 ValidateValue**: 添加 RFC 9110 §5.5 规范注释
+
+**Phase 2 (2026-07-06):**
+- **P2-1 CORS 测试**: 5 个新测试（特定来源/拒绝/凭证+通配符/MaxAge/自定义方法头），覆盖率从 4→9
+- **P2-7 ServeFileContent**: 错误响应添加 `Content-Type: text/plain` + 异常处理 → 500
+- **P2-15 Logger**: `WriteLn` → `TLogger.Info` 结构化日志，新增 `LoggerMiddlewareWith` 重载
+
+**Phase 3 (2026-07-06):**
+- **H2 Client 测试覆盖**: 30→55 tests (+25)，覆盖连接池限制/错误处理/流控/协议边界/请求构造
+- **H2 HPACK 测试覆盖**: 29→30 tests (+1)，多字节整数编码 roundtrip
+- **Duplicate Host header**: Parser 检测重复 Host 头返回 400（RFC 9112 §6.2）
+- **H2 Frame 测试**: 18→37 tests (+19)，覆盖 GOAWAY/WINDOW_UPDATE/RST_STREAM/PING/SETTINGS
+- **H2 HPACK 测试**: 15→29 tests (+14)，覆盖编码器/动态表/Huffman/索引头
+
+**Earlier Fixes:**
+- **IPv4 字节序修复**: `platform_sockaddr_from_ipv4` 缺少 `htonl` 导致 `bind(99)` — 根因修复影响所有 TCP 服务器
+- **Response parser pause**: `CbOnMessageComplete` 移除 `FParserType=ptRequest` 门控，response parser 在 keep-alive 连接上也暂停，防止同 TCP segment 多响应时错误池化连接
+- **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
+- **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
+
+**测试**: 23 suites ~752 pass / 0 leak
 
 ## Map
 
@@ -190,7 +230,7 @@ Design exclusions (by design, not gaps):
 - PRIORITY frame priority scheduling (parse, ignore — RFC permits)
 
 Remaining H2 hardening:
-- Test coverage vs h2-test-coverage-plan.md targets (client -33, frame -17, hpack -15); session gap closed
+- Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
 - Real TLS runtime proof (currently mock-based)
 - Documentation alignment (this document and ARCHITECTURE.md)
 

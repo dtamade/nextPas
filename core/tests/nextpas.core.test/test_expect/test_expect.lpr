@@ -27,7 +27,9 @@ program test_expect;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.base,
   nextpas.core.text.conv,
+  nextpas.core.bytes,
   nextpas.core.math,
   nextpas.core.test;
 
@@ -853,6 +855,9 @@ begin
   { Diff slightly less than epsilon — should pass }
   ExpectDouble(1.0).ToEqualD(1.0 + 9.99e-11, 1e-10);
   ExpectDouble(1.0).ToEqualD(1.0 - 9.99e-11, 1e-10);
+  { Diff exactly equal to epsilon — test with integer multiples to avoid FP rounding }
+  ExpectDouble(100.0).ToEqualD(100.0 + 1e-6, 1e-6);
+  ExpectDouble(100.0).ToEqualD(100.0 - 1e-6, 1e-6);
   { Diff > epsilon → should fail }
   ExpectFail(procedure begin ExpectDouble(1.0).ToEqualD(1.0 + 1.01e-10, 1e-10); end);
 end;
@@ -954,6 +959,114 @@ begin
   CheckTrue(LExp.ToBeTrue = LExp, 'ToBeTrue should return self');
   LExp := ExpectDouble(1.0);
   CheckTrue(LExp.ToBeNear(1.0) = LExp, 'ToBeNear should return self');
+end;
+
+{ ── WithMessage, ToEqualBytes, ToFailUnexpected ─────────────────────────── }
+
+procedure TestExpectWithMessageFail;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('greeting').ToEqual('world');
+    end, 'greeting');
+end;
+
+procedure TestExpectWithMessagePass;
+begin
+  { WithMessage should not affect passing assertions }
+  ExpectStr('hello').WithMessage('greeting').ToEqual('hello');
+end;
+
+procedure TestExpectWithMessageNot;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('neg').Not_.ToEqual('hello');
+    end, 'neg');
+end;
+
+procedure TestExpectWithMessageChain;
+begin
+  { WithMessage persists through the chain }
+  ExpectFail(
+    procedure begin
+      ExpectStr('hello').WithMessage('chain').ToContain('xyz');
+    end, 'chain');
+end;
+
+procedure TestExpectToEqualBytesPass;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02, $03);
+  LB := TBytes.Create($01, $02, $03);
+  ExpectBytes(LA).ToEqualBytes(LB);
+end;
+
+procedure TestExpectToEqualBytesFail;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02, $03);
+  LB := TBytes.Create($01, $FF, $03);
+  ExpectFail(
+    procedure begin
+      ExpectBytes(LA).ToEqualBytes(LB);
+    end, 'index');
+end;
+
+procedure TestExpectToEqualBytesDiffLen;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02);
+  LB := TBytes.Create($01, $02, $03);
+  ExpectFail(
+    procedure begin
+      ExpectBytes(LA).ToEqualBytes(LB);
+    end, 'bytes');
+end;
+
+procedure TestExpectToEqualBytesEmpty;
+var
+  LA, LB: TBytes;
+begin
+  SetLength(LA, 0);
+  SetLength(LB, 0);
+  ExpectBytes(LA).ToEqualBytes(LB);
+end;
+
+procedure TestExpectToEqualBytesNot;
+var
+  LA, LB: TBytes;
+begin
+  LA := TBytes.Create($01, $02);
+  LB := TBytes.Create($03, $04);
+  ExpectBytes(LA).Not_.ToEqualBytes(LB);
+end;
+
+procedure TestExpectToFailUnexpected;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').ToFailUnexpected('boom');
+    end, 'boom');
+end;
+
+procedure TestExpectToFailUnexpectedDefault;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').ToFailUnexpected;
+    end, 'unexpected');
+end;
+
+procedure TestExpectToFailUnexpectedWithMessage;
+begin
+  ExpectFail(
+    procedure begin
+      ExpectStr('x').WithMessage('ctx').ToFailUnexpected('boom');
+    end, 'ctx');
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -1128,6 +1241,20 @@ begin
   LSuite.Test('Not_.ToBeNaN',                  @TestExpectToBeNaNNot);
   LSuite.Test('Not_.ToBeNotNaN',               @TestExpectToBeNotNaNNot);
   LSuite.Test('Chaining returns self',         @TestExpectChainingReturnsSelf);
+
+  { WithMessage, ToEqualBytes, ToFailUnexpected }
+  LSuite.Test('WithMessage fail prefix',      @TestExpectWithMessageFail);
+  LSuite.Test('WithMessage pass',             @TestExpectWithMessagePass);
+  LSuite.Test('Not_.WithMessage',             @TestExpectWithMessageNot);
+  LSuite.Test('WithMessage chain',            @TestExpectWithMessageChain);
+  LSuite.Test('ToEqualBytes pass',            @TestExpectToEqualBytesPass);
+  LSuite.Test('ToEqualBytes fail',            @TestExpectToEqualBytesFail);
+  LSuite.Test('ToEqualBytes diff len',        @TestExpectToEqualBytesDiffLen);
+  LSuite.Test('ToEqualBytes empty',           @TestExpectToEqualBytesEmpty);
+  LSuite.Test('Not_.ToEqualBytes',            @TestExpectToEqualBytesNot);
+  LSuite.Test('ToFailUnexpected message',     @TestExpectToFailUnexpected);
+  LSuite.Test('ToFailUnexpected default',     @TestExpectToFailUnexpectedDefault);
+  LSuite.Test('ToFailUnexpected+WithMessage', @TestExpectToFailUnexpectedWithMessage);
 
   if not LSuite.Run then
   begin
