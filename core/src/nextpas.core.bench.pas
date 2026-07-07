@@ -203,7 +203,65 @@ uses
   nextpas.core.json.writer,
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo,
-  nextpas.core.collections.hashmap.swiss.str;
+  nextpas.core.collections.hashmap.swiss.str,
+  nextpas.core.platform.thread;
+
+{ TBenchWorkerThread - 并行执行辅助线程 }
+
+type
+  TBenchWorkerThread = record
+    Entries: array of TBenchEntry;
+    EntryCount: Integer;
+    Results: array of TBenchResult;
+    ResultCount: Integer;
+    Config: TBenchConfig;
+    Runner: TBenchRunner;
+    Handle: TPlatformThreadHandle;
+  end;
+
+  PBenchWorkerThread = ^TBenchWorkerThread;
+
+function BenchWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LWorker: PBenchWorkerThread;
+  I: Integer;
+begin
+  LWorker := PBenchWorkerThread(AArg);
+  for I := 0 to LWorker^.EntryCount - 1 do
+  begin
+    LWorker^.Results[I] := LWorker^.Runner.RunOne(LWorker^.Entries[I]);
+    if LWorker^.Results[I].Executed then
+      Inc(LWorker^.ResultCount);
+  end;
+  Result := nil;
+end;
+
+procedure InitWorkerThread(var AWorker: TBenchWorkerThread;
+  const AEntries: array of TBenchEntry; AEntryCount: Integer;
+  const AConfig: TBenchConfig);
+var
+  I: Integer;
+begin
+  AWorker.EntryCount := AEntryCount;
+  SetLength(AWorker.Entries, AEntryCount);
+  for I := 0 to AEntryCount - 1 do
+    AWorker.Entries[I] := AEntries[I];
+
+  AWorker.Config := AConfig;
+  AWorker.Runner := TBenchRunner.Create;
+  AWorker.Runner.SetConfig(AConfig);
+
+  AWorker.ResultCount := 0;
+  SetLength(AWorker.Results, AEntryCount);
+end;
+
+procedure FiniWorkerThread(var AWorker: TBenchWorkerThread);
+begin
+  AWorker.Runner.Free;
+  AWorker.Runner := nil;
+  SetLength(AWorker.Entries, 0);
+  SetLength(AWorker.Results, 0);
+end;
 
 { TBenchSuite }
 
@@ -772,10 +830,16 @@ var
   LResultCount: Integer;
   LEnvironment: TBenchEnvironment;
   LThreadCount: Integer;
-  I: Integer;
+  LWorkers: array of TBenchWorkerThread;
+  LEntriesPerThread: Integer;
+  LRemainder: Integer;
+  LStartIdx: Integer;
+  LCount: Integer;
+  LThreadResults: TBenchResultArray;
+  LRetVal: Pointer;
+  I, J: Integer;
 begin
   FHasRun := True;
-  FRunner.SetConfig(FConfig);
 
   { 确定线程数 }
   if AThreadCount <= 0 then
@@ -787,17 +851,72 @@ begin
   if LThreadCount > FEntryCount then
     LThreadCount := FEntryCount;
 
-  SetLength(LResults, FEntryCount);
-  LResultCount := 0;
-  LEnvironment := GetEnvironment;
-
-  { 串行运行条目（后续可以实现真正的并行） }
-  for I := 0 to FEntryCount - 1 do
+  { 单条目时退化为串行 }
+  if LThreadCount <= 1 then
   begin
-    LResults[I] := FRunner.RunOne(FEntries[I]);
-    if LResults[I].Executed then
-      Inc(LResultCount);
+    SetLength(LResults, FEntryCount);
+    LResultCount := 0;
+    LEnvironment := GetEnvironment;
+    for I := 0 to FEntryCount - 1 do
+    begin
+      LResults[I] := FRunner.RunOne(FEntries[I]);
+      if LResults[I].Executed then
+        Inc(LResultCount);
+    end;
+    Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+    Exit;
   end;
+
+  { 创建工作线程 }
+  LEntriesPerThread := FEntryCount div LThreadCount;
+  LRemainder := FEntryCount mod LThreadCount;
+
+  SetLength(LWorkers, LThreadCount);
+  LStartIdx := 0;
+
+  for I := 0 to LThreadCount - 1 do
+  begin
+    LCount := LEntriesPerThread;
+    if I < LRemainder then
+      Inc(LCount);
+
+    InitWorkerThread(LWorkers[I], FEntries[LStartIdx], LCount, FConfig);
+    Inc(LStartIdx, LCount);
+  end;
+
+  { 启动所有线程 }
+  for I := 0 to LThreadCount - 1 do
+    platform_thread_create(LWorkers[I].Handle, @BenchWorkerProc, @LWorkers[I]);
+
+  { 等待所有线程完成 }
+  for I := 0 to LThreadCount - 1 do
+    platform_thread_join(LWorkers[I].Handle, LRetVal);
+
+  { 收集结果 }
+  LResultCount := 0;
+  for I := 0 to LThreadCount - 1 do
+    Inc(LResultCount, LWorkers[I].ResultCount);
+
+  SetLength(LResults, LResultCount);
+  LResultCount := 0;
+
+  for I := 0 to LThreadCount - 1 do
+  begin
+    LThreadResults := LWorkers[I].Results;
+    for J := 0 to LWorkers[I].ResultCount - 1 do
+    begin
+      LResults[LResultCount] := LThreadResults[J];
+      Inc(LResultCount);
+    end;
+  end;
+
+  { 释放工作线程资源 }
+  for I := 0 to LThreadCount - 1 do
+    FiniWorkerThread(LWorkers[I]);
+  SetLength(LWorkers, 0);
+
+  { 获取环境信息 }
+  LEnvironment := GetEnvironment;
 
   { 构建结果对象 }
   Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
