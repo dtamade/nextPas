@@ -35,6 +35,16 @@ type
     procedure Test_OnlineStats_Add;
     procedure Test_OnlineStats_Batch;
     procedure Test_OnlineStats_Merge;
+    // F64 variants
+    procedure Test_VarianceF64_Basic;
+    procedure Test_StdDevF64_Basic;
+    procedure Test_CovarianceF64_Basic;
+    procedure Test_CorrelationF64_Perfect;
+    procedure Test_CosineSimilarityF64_Same;
+    procedure Test_WeightedSumF64_Basic;
+    procedure Test_WeightedMeanF64_Basic;
+    procedure Test_MinMaxNormalizeF64_Basic;
+    procedure Test_ZScoreNormalizeF64_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -44,6 +54,11 @@ const
   EPS = 1E-4;
 
 function NearEqual(A, B, AEps: Single): Boolean;
+begin
+  Result := Abs(A - B) <= AEps;
+end;
+
+function NearEqualF64(A, B, AEps: Double): Boolean;
 begin
   Result := Abs(A - B) <= AEps;
 end;
@@ -290,6 +305,98 @@ begin
   // Combined: [1,3,5,7], mean=4, var=20/3
   CheckTrue(NearEqual(LMerged.GetMean, 4.0, EPS), 'OnlineStats merge mean');
   CheckTrue(NearEqual(LMerged.GetVariance, 20.0/3.0, 0.1), 'OnlineStats merge var');
+end;
+
+{ ============================================================================
+  F64 Statistics
+  ============================================================================ }
+
+procedure TTestCase_SimdStats.Test_VarianceF64_Basic;
+var
+  LData: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+begin
+  // Sample variance of [1,2,3,4] = 5/3 ≈ 1.6667
+  CheckTrue(NearEqualF64(VarianceF64(@LData[0], 4, True), 5.0/3.0, 0.001), 'VarianceF64 sample');
+  // Population variance = 5/4 = 1.25
+  CheckTrue(NearEqualF64(VarianceF64(@LData[0], 4, False), 1.25, 0.001), 'VarianceF64 population');
+end;
+
+procedure TTestCase_SimdStats.Test_StdDevF64_Basic;
+var
+  LData: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+begin
+  // Sample std dev = sqrt(5/3) ≈ 1.2910
+  CheckTrue(NearEqualF64(StdDevF64(@LData[0], 4, True), System.Sqrt(5.0/3.0), 0.001), 'StdDevF64 sample');
+end;
+
+procedure TTestCase_SimdStats.Test_CovarianceF64_Basic;
+var
+  LX: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+  LY: array[0..3] of Double = (2.0, 4.0, 6.0, 8.0);
+begin
+  // Y = 2*X, so covariance = 2 * var(X) = 2 * 5/3 ≈ 3.3333
+  CheckTrue(NearEqualF64(CovarianceF64(@LX[0], @LY[0], 4, True), 10.0/3.0, 0.001), 'CovarianceF64');
+end;
+
+procedure TTestCase_SimdStats.Test_CorrelationF64_Perfect;
+var
+  LX: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+  LY: array[0..3] of Double = (2.0, 4.0, 6.0, 8.0);
+begin
+  // Y = 2*X, perfect positive correlation = 1.0
+  CheckTrue(NearEqualF64(CorrelationF64(@LX[0], @LY[0], 4), 1.0, 0.001), 'CorrelationF64 perfect');
+end;
+
+procedure TTestCase_SimdStats.Test_CosineSimilarityF64_Same;
+var
+  LX: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+begin
+  // Same vector, cosine similarity = 1.0
+  CheckTrue(NearEqualF64(CosineSimilarityF64(@LX[0], @LX[0], 4), 1.0, 0.001), 'CosineSimF64 same');
+end;
+
+procedure TTestCase_SimdStats.Test_WeightedSumF64_Basic;
+var
+  LValues: array[0..2] of Double = (1.0, 2.0, 3.0);
+  LWeights: array[0..2] of Double = (0.5, 0.3, 0.2);
+begin
+  // 1*0.5 + 2*0.3 + 3*0.2 = 0.5 + 0.6 + 0.6 = 1.7
+  CheckTrue(NearEqualF64(WeightedSumF64(@LValues[0], @LWeights[0], 3), 1.7, 0.001), 'WeightedSumF64');
+end;
+
+procedure TTestCase_SimdStats.Test_WeightedMeanF64_Basic;
+var
+  LValues: array[0..2] of Double = (1.0, 2.0, 3.0);
+  LWeights: array[0..2] of Double = (0.5, 0.3, 0.2);
+begin
+  // 1.7 / 1.0 = 1.7
+  CheckTrue(NearEqualF64(WeightedMeanF64(@LValues[0], @LWeights[0], 3), 1.7, 0.001), 'WeightedMeanF64');
+end;
+
+procedure TTestCase_SimdStats.Test_MinMaxNormalizeF64_Basic;
+var
+  LSrc: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+  LDst: array[0..3] of Double;
+begin
+  MinMaxNormalizeF64(@LSrc[0], @LDst[0], 4);
+  // Should map to [0, 1/3, 2/3, 1]
+  CheckTrue(NearEqualF64(LDst[0], 0.0, 0.001), 'MinMaxNormF64 [0]');
+  CheckTrue(NearEqualF64(LDst[3], 1.0, 0.001), 'MinMaxNormF64 [3]');
+end;
+
+procedure TTestCase_SimdStats.Test_ZScoreNormalizeF64_Basic;
+var
+  LSrc: array[0..3] of Double = (1.0, 2.0, 3.0, 4.0);
+  LDst: array[0..3] of Double;
+  LMean: Double;
+  I: Integer;
+begin
+  ZScoreNormalizeF64(@LSrc[0], @LDst[0], 4);
+  // Output should be zero-mean
+  LMean := 0.0;
+  for I := 0 to 3 do LMean := LMean + LDst[I];
+  LMean := LMean / 4.0;
+  CheckTrue(NearEqualF64(LMean, 0.0, 0.001), 'ZScoreNormF64 mean=0');
 end;
 
 { ============================================================================

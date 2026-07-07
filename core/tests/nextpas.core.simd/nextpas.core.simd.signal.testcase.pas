@@ -30,6 +30,7 @@ type
     procedure Test_AutoCorrelation_Basic;
     procedure Test_FFT_ForwardInverse;
     procedure Test_FFT_DC_Component;
+    procedure Test_RealFft_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -240,6 +241,23 @@ begin
   // Other bins should be near zero
   CheckTrue(Abs(LData[1].Re) < 0.1, 'FFT bin1 Re ~ 0');
   CheckTrue(Abs(LData[1].Im) < 0.1, 'FFT bin1 Im ~ 0');
+end;
+
+{ ============================================================================
+  RealFFT
+  ============================================================================ }
+
+procedure TTestCase_SimdSignal.Test_RealFft_Basic;
+var
+  LInput: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LOutput: array[0..2] of TSimdComplexF32;  // N/2+1 complex outputs
+begin
+  RealFftF32(@LInput[0], @LOutput[0], 4);
+  // DC component should be sum of all inputs = 10
+  CheckTrue(NearEqual(LOutput[0].Re, 10.0, 0.1), 'RealFFT DC = 10');
+  CheckTrue(NearEqual(LOutput[0].Im, 0.0, 0.1), 'RealFFT DC Im = 0');
+  // Nyquist component (index N/2) should have Im = 0
+  CheckTrue(NearEqual(LOutput[2].Im, 0.0, 0.1), 'RealFFT Nyquist Im = 0');
 end;
 
 { ============================================================================

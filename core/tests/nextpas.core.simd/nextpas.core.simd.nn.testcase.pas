@@ -36,6 +36,14 @@ type
     procedure Test_LayerNorm_WithGammaBeta;
     procedure Test_CrossEntropyLoss_Basic;
     procedure Test_Conv2D_Basic;
+    procedure Test_BatchNorm_Basic;
+    procedure Test_Dropout_Basic;
+    procedure Test_Conv2DBias_Basic;
+    procedure Test_Conv2DBiasReLU_Basic;
+    procedure Test_GlobalAvgPool_Basic;
+    procedure Test_RMSNorm_Basic;
+    procedure Test_LogSoftmax_Basic;
+    procedure Test_BatchNorm2DInfer_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -352,6 +360,172 @@ begin
   CheckTrue(NearEqual(LOutput[1], 8.0, EPS), 'Conv2D [0,1]');
   CheckTrue(NearEqual(LOutput[2], 12.0, EPS), 'Conv2D [1,0]');
   CheckTrue(NearEqual(LOutput[3], 14.0, EPS), 'Conv2D [1,1]');
+end;
+
+{ ============================================================================
+  BatchNorm
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_BatchNorm_Basic;
+var
+  // 2 samples, 3 features
+  LX: array[0..5] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+  LMean: array[0..2] of Single = (2.5, 3.5, 4.5);
+  LVar: array[0..2] of Single = (2.5, 2.5, 2.5);
+  LGamma: array[0..2] of Single = (1.0, 1.0, 1.0);
+  LBeta: array[0..2] of Single = (0.0, 0.0, 0.0);
+  LDst: array[0..5] of Single;
+begin
+  BatchNormF32(@LX[0], 2, 3, @LMean[0], @LVar[0], @LGamma[0], @LBeta[0], 1e-5, @LDst[0]);
+  // After normalization: output should be approximately zero-mean
+  // Check that values are in reasonable range
+  CheckTrue(Abs(LDst[0]) < 2.0, 'BatchNorm [0]');
+  CheckTrue(Abs(LDst[3]) < 2.0, 'BatchNorm [3]');
+end;
+
+{ ============================================================================
+  Dropout
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_Dropout_Basic;
+var
+  LSrc: array[0..7] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+  LDst: array[0..7] of Single;
+  LZeroCount, I: Integer;
+begin
+  // With 50% dropout rate
+  FillChar(LDst, SizeOf(LDst), 0);
+  DropoutF32(@LSrc[0], @LDst[0], 8, 0.5, 12345);
+  // Count zeroed elements (approximately half)
+  LZeroCount := 0;
+  for I := 0 to 7 do
+    if LDst[I] = 0.0 then Inc(LZeroCount);
+  // With 50% rate, expect roughly 4 zeros (allow 2-6)
+  CheckTrue(LZeroCount >= 2, 'Dropout: enough zeros');
+  CheckTrue(LZeroCount <= 6, 'Dropout: not too many zeros');
+  // Non-zero values should be scaled by 1/(1-0.5) = 2.0
+  for I := 0 to 7 do
+    if LDst[I] <> 0.0 then
+      CheckTrue(NearEqual(LDst[I], LSrc[I] * 2.0, EPS), 'Dropout: scaled value');
+end;
+
+{ ============================================================================
+  Conv2DBias / Conv2DBiasReLU
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_Conv2DBias_Basic;
+var
+  // 3x3 input, 1 filter, 2x2 kernel
+  LInput: array[0..8] of Single = (1, 2, 3, 4, 5, 6, 7, 8, 9);
+  LKernel: array[0..3] of Single = (1, 0, 0, 1);
+  LBias: array[0..0] of Single = (0.5);
+  LOutput: array[0..3] of Single;
+begin
+  Conv2DBiasF32(@LInput[0], @LKernel[0], @LBias[0], @LOutput[0], 3, 3, 2, 2, 1);
+  // Same as Conv2D but with bias added
+  CheckTrue(NearEqual(LOutput[0], 6.5, EPS), 'Conv2DBias [0,0]');
+  CheckTrue(NearEqual(LOutput[1], 8.5, EPS), 'Conv2DBias [0,1]');
+  CheckTrue(NearEqual(LOutput[2], 12.5, EPS), 'Conv2DBias [1,0]');
+  CheckTrue(NearEqual(LOutput[3], 14.5, EPS), 'Conv2DBias [1,1]');
+end;
+
+procedure TTestCase_SimdNN.Test_Conv2DBiasReLU_Basic;
+var
+  // 3x3 input, 1 filter, 2x2 kernel
+  LInput: array[0..8] of Single = (1, 2, 3, 4, 5, 6, 7, 8, 9);
+  LKernel: array[0..3] of Single = (1, 0, 0, 1);
+  LBias: array[0..0] of Single = (-10.0);  // Large negative bias
+  LOutput: array[0..3] of Single;
+begin
+  // Conv2D output: [6, 8, 12, 14]
+  // After bias: [-4, -2, 2, 4]
+  // After ReLU: [0, 0, 2, 4]
+  Conv2DBiasReLUF32(@LInput[0], @LKernel[0], @LBias[0], @LOutput[0], 3, 3, 2, 2, 1);
+  CheckTrue(NearEqual(LOutput[0], 0.0, EPS), 'Conv2DBiasReLU [0,0]');
+  CheckTrue(NearEqual(LOutput[1], 0.0, EPS), 'Conv2DBiasReLU [0,1]');
+  CheckTrue(NearEqual(LOutput[2], 2.0, EPS), 'Conv2DBiasReLU [1,0]');
+  CheckTrue(NearEqual(LOutput[3], 4.0, EPS), 'Conv2DBiasReLU [1,1]');
+end;
+
+{ ============================================================================
+  GlobalAvgPool2D
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_GlobalAvgPool_Basic;
+var
+  // 2 channels, 2x2 spatial
+  LInput: array[0..7] of Single = (1, 2, 3, 4, 5, 6, 7, 8);
+  LOutput: array[0..1] of Single;
+begin
+  GlobalAvgPool2DF32(@LInput[0], @LOutput[0], 2, 2, 2);
+  // Channel 0: avg(1,2,3,4) = 2.5
+  // Channel 1: avg(5,6,7,8) = 6.5
+  CheckTrue(NearEqual(LOutput[0], 2.5, EPS), 'GlobalAvgPool ch0');
+  CheckTrue(NearEqual(LOutput[1], 6.5, EPS), 'GlobalAvgPool ch1');
+end;
+
+{ ============================================================================
+  RMSNorm
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_RMSNorm_Basic;
+var
+  LX: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LGamma: array[0..3] of Single = (1.0, 1.0, 1.0, 1.0);
+  LDst: array[0..3] of Single;
+  LRms: Single;
+begin
+  RMSNormF32(@LX[0], @LGamma[0], @LDst[0], 4, 1e-5);
+  // RMS of input: sqrt((1+4+9+16)/4) = sqrt(7.5) ≈ 2.7386
+  LRms := System.Sqrt((1.0 + 4.0 + 9.0 + 16.0) / 4.0);
+  // Output should be x / rms * gamma
+  CheckTrue(NearEqual(LDst[0], LX[0] / LRms, 0.01), 'RMSNorm [0]');
+  CheckTrue(NearEqual(LDst[1], LX[1] / LRms, 0.01), 'RMSNorm [1]');
+  CheckTrue(NearEqual(LDst[2], LX[2] / LRms, 0.01), 'RMSNorm [2]');
+  CheckTrue(NearEqual(LDst[3], LX[3] / LRms, 0.01), 'RMSNorm [3]');
+end;
+
+{ ============================================================================
+  LogSoftmax
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_LogSoftmax_Basic;
+var
+  LSrc: array[0..2] of Single = (1.0, 2.0, 3.0);
+  LDst: array[0..2] of Single;
+  LSum: Single;
+  I: Integer;
+begin
+  LogSoftmaxF32(@LSrc[0], @LDst[0], 3);
+  // exp(log_softmax) should sum to 1.0
+  LSum := 0.0;
+  for I := 0 to 2 do
+    LSum := LSum + System.Exp(LDst[I]);
+  CheckTrue(NearEqual(LSum, 1.0, 0.01), 'LogSoftmax: exp sum = 1');
+  // Values should be in increasing order (log_softmax preserves order)
+  CheckTrue(LDst[0] < LDst[1], 'LogSoftmax: ordering [0] < [1]');
+  CheckTrue(LDst[1] < LDst[2], 'LogSoftmax: ordering [1] < [2]');
+end;
+
+{ ============================================================================
+  BatchNorm2DInfer
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_BatchNorm2DInfer_Basic;
+var
+  // 2 channels, 2x2 spatial
+  LInput: array[0..7] of Single = (1, 2, 3, 4, 5, 6, 7, 8);
+  LOutput: array[0..7] of Single;
+  LGamma: array[0..1] of Single = (1.0, 1.0);
+  LBeta: array[0..1] of Single = (0.0, 0.0);
+  LMean: array[0..1] of Single = (2.5, 6.5);
+  LVar: array[0..1] of Single = (1.25, 1.25);
+begin
+  BatchNorm2DInferF32(@LInput[0], @LOutput[0], 2, 2, 2, @LGamma[0], @LBeta[0], @LMean[0], @LVar[0], 1e-5);
+  // After normalization, output should be approximately zero-mean
+  // Check values are in reasonable range
+  CheckTrue(Abs(LOutput[0]) < 3.0, 'BatchNorm2D [0]');
+  CheckTrue(Abs(LOutput[4]) < 3.0, 'BatchNorm2D [4]');
 end;
 
 { ============================================================================
