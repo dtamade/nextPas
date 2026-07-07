@@ -44,6 +44,17 @@ type
     procedure Test_RMSNorm_Basic;
     procedure Test_LogSoftmax_Basic;
     procedure Test_BatchNorm2DInfer_Basic;
+    // P1 coverage
+    procedure Test_Softplus_Basic;
+    procedure Test_SELU_Basic;
+    procedure Test_GroupNorm_Basic;
+    procedure Test_InstanceNorm_Basic;
+    procedure Test_EmbeddingLookup_Basic;
+    procedure Test_BatchSoftmax_Basic;
+    procedure Test_AdaptiveAvgPool1D_Basic;
+    procedure Test_Conv1DStrided_Basic;
+    procedure Test_MaxPool2D_Basic;
+    procedure Test_AvgPool2D_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -526,6 +537,167 @@ begin
   // Check values are in reasonable range
   CheckTrue(Abs(LOutput[0]) < 3.0, 'BatchNorm2D [0]');
   CheckTrue(Abs(LOutput[4]) < 3.0, 'BatchNorm2D [4]');
+end;
+
+{ ============================================================================
+  P1 Coverage: Softplus, SELU, GroupNorm, InstanceNorm, etc.
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_Softplus_Basic;
+var
+  LSrc: array[0..3] of Single = (-1.0, 0.0, 1.0, 2.0);
+  LDst: array[0..3] of Single;
+begin
+  SoftplusF32(@LSrc[0], @LDst[0], 4);
+  // softplus(x) = ln(1 + exp(x)), always positive
+  CheckTrue(LDst[0] > 0.0, 'Softplus [-1] > 0');
+  CheckTrue(LDst[1] > 0.0, 'Softplus [0] > 0');
+  // softplus(0) = ln(2) ≈ 0.693
+  CheckTrue(NearEqual(LDst[1], 0.693, 0.01), 'Softplus [0] ≈ ln2');
+  // softplus(2) ≈ 2.127
+  CheckTrue(NearEqual(LDst[3], 2.127, 0.01), 'Softplus [2]');
+end;
+
+procedure TTestCase_SimdNN.Test_SELU_Basic;
+var
+  LSrc: array[0..3] of Single = (-1.0, 0.0, 1.0, 2.0);
+  LDst: array[0..3] of Single;
+  LAlpha, LLambda: Single;
+begin
+  SELUF32(@LSrc[0], @LDst[0], 4);
+  // SELU constants: alpha ≈ 1.6733, lambda ≈ 1.0507
+  LAlpha := 1.6732632423543772;
+  LLambda := 1.0507009873554805;
+  // SELU(0) = 0
+  CheckTrue(NearEqual(LDst[1], 0.0, EPS), 'SELU [0] = 0');
+  // SELU(1) = lambda * 1 ≈ 1.0507
+  CheckTrue(NearEqual(LDst[2], LLambda, 0.01), 'SELU [1]');
+  // SELU(-1) = lambda * alpha * (exp(-1) - 1) ≈ -1.111
+  CheckTrue(LDst[0] < 0.0, 'SELU [-1] < 0');
+end;
+
+procedure TTestCase_SimdNN.Test_GroupNorm_Basic;
+var
+  // 4 features, 2 groups of 2
+  LX: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LGamma: array[0..3] of Single = (1.0, 1.0, 1.0, 1.0);
+  LBeta: array[0..3] of Single = (0.0, 0.0, 0.0, 0.0);
+  LDst: array[0..3] of Single;
+begin
+  GroupNormF32(@LX[0], @LGamma[0], @LBeta[0], @LDst[0], 4, 2, 1e-5);
+  // Group 0: [1,2] normalized → approx [-1, 1]
+  // Group 1: [3,4] normalized → approx [-1, 1]
+  CheckTrue(NearEqual(LDst[0] + LDst[1], 0.0, 0.1), 'GroupNorm group0 mean≈0');
+  CheckTrue(NearEqual(LDst[2] + LDst[3], 0.0, 0.1), 'GroupNorm group1 mean≈0');
+end;
+
+procedure TTestCase_SimdNN.Test_InstanceNorm_Basic;
+var
+  // 2 channels, 2 elements each
+  LX: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LGamma: array[0..3] of Single = (1.0, 1.0, 1.0, 1.0);
+  LBeta: array[0..3] of Single = (0.0, 0.0, 0.0, 0.0);
+  LDst: array[0..3] of Single;
+begin
+  InstanceNormF32(@LX[0], @LGamma[0], @LBeta[0], @LDst[0], 2, 2, 1e-5);
+  // Each channel independently normalized
+  // Channel 0: [1,2] → [-1, 1]
+  // Channel 1: [3,4] → [-1, 1]
+  CheckTrue(NearEqual(LDst[0] + LDst[1], 0.0, 0.1), 'InstanceNorm ch0 mean≈0');
+  CheckTrue(NearEqual(LDst[2] + LDst[3], 0.0, 0.1), 'InstanceNorm ch1 mean≈0');
+end;
+
+procedure TTestCase_SimdNN.Test_EmbeddingLookup_Basic;
+var
+  // Embedding table: 4 vocab, 2 dim
+  LTable: array[0..7] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+  LIndices: array[0..1] of Int32 = (0, 2);
+  LDst: array[0..3] of Single;
+begin
+  EmbeddingLookupF32(@LTable[0], @LIndices[0], @LDst[0], 2, 2);
+  // Index 0 → [1, 2]
+  CheckTrue(NearEqual(LDst[0], 1.0, EPS), 'Embedding [0,0]');
+  CheckTrue(NearEqual(LDst[1], 2.0, EPS), 'Embedding [0,1]');
+  // Index 2 → [5, 6]
+  CheckTrue(NearEqual(LDst[2], 5.0, EPS), 'Embedding [1,0]');
+  CheckTrue(NearEqual(LDst[3], 6.0, EPS), 'Embedding [1,1]');
+end;
+
+procedure TTestCase_SimdNN.Test_BatchSoftmax_Basic;
+var
+  // 2 samples, 3 classes
+  LSrc: array[0..5] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0);
+  LDst: array[0..5] of Single;
+  LSum0, LSum1: Single;
+begin
+  BatchSoftmaxF32(@LSrc[0], @LDst[0], 2, 3);
+  // Each row should sum to 1.0
+  LSum0 := LDst[0] + LDst[1] + LDst[2];
+  LSum1 := LDst[3] + LDst[4] + LDst[5];
+  CheckTrue(NearEqual(LSum0, 1.0, 0.01), 'BatchSoftmax row0 sum=1');
+  CheckTrue(NearEqual(LSum1, 1.0, 0.01), 'BatchSoftmax row1 sum=1');
+end;
+
+procedure TTestCase_SimdNN.Test_AdaptiveAvgPool1D_Basic;
+var
+  LInput: array[0..7] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+  LOutput: array[0..1] of Single;
+begin
+  // 8 → 2: each output covers 4 inputs
+  AdaptiveAvgPool1DF32(@LInput[0], @LOutput[0], 8, 2);
+  // avg(1,2,3,4) = 2.5, avg(5,6,7,8) = 6.5
+  CheckTrue(NearEqual(LOutput[0], 2.5, 0.1), 'AdaptiveAvgPool [0]');
+  CheckTrue(NearEqual(LOutput[1], 6.5, 0.1), 'AdaptiveAvgPool [1]');
+end;
+
+procedure TTestCase_SimdNN.Test_Conv1DStrided_Basic;
+var
+  LInput: array[0..7] of Single = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
+  LKernel: array[0..1] of Single = (1.0, -1.0);
+  LOutput: array[0..3] of Single;
+begin
+  // stride=2: out[0]=1-2=-1, out[1]=3-4=-1, out[2]=5-6=-1, out[3]=7-8=-1
+  Conv1DStridedF32(@LInput[0], @LKernel[0], @LOutput[0], 8, 2, 2, 4);
+  CheckTrue(NearEqual(LOutput[0], -1.0, EPS), 'Conv1DStrided [0]');
+  CheckTrue(NearEqual(LOutput[1], -1.0, EPS), 'Conv1DStrided [1]');
+  CheckTrue(NearEqual(LOutput[2], -1.0, EPS), 'Conv1DStrided [2]');
+  CheckTrue(NearEqual(LOutput[3], -1.0, EPS), 'Conv1DStrided [3]');
+end;
+
+procedure TTestCase_SimdNN.Test_MaxPool2D_Basic;
+var
+  // 4x4 input, 2x2 kernel, stride 2
+  LInput: array[0..15] of Single = (
+    1, 2, 3, 4,
+    5, 6, 7, 8,
+    9, 10, 11, 12,
+    13, 14, 15, 16);
+  LOutput: array[0..3] of Single;
+begin
+  MaxPool2DF32(@LInput[0], @LOutput[0], 4, 4, 2, 2, 2, 2);
+  // max(1,2,5,6)=6, max(3,4,7,8)=8, max(9,10,13,14)=14, max(11,12,15,16)=16
+  CheckTrue(NearEqual(LOutput[0], 6.0, EPS), 'MaxPool2D [0]');
+  CheckTrue(NearEqual(LOutput[1], 8.0, EPS), 'MaxPool2D [1]');
+  CheckTrue(NearEqual(LOutput[2], 14.0, EPS), 'MaxPool2D [2]');
+  CheckTrue(NearEqual(LOutput[3], 16.0, EPS), 'MaxPool2D [3]');
+end;
+
+procedure TTestCase_SimdNN.Test_AvgPool2D_Basic;
+var
+  // 4x4 input, 2x2 kernel, stride 2
+  LInput: array[0..15] of Single = (
+    1, 2, 3, 4,
+    5, 6, 7, 8,
+    9, 10, 11, 12,
+    13, 14, 15, 16);
+  LOutput: array[0..3] of Single;
+begin
+  AvgPool2DF32(@LInput[0], @LOutput[0], 4, 4, 2, 2, 2, 2);
+  // avg(1,2,5,6)=3.5, avg(3,4,7,8)=5.5, avg(9,10,13,14)=11.5, avg(11,12,15,16)=13.5
+  CheckTrue(NearEqual(LOutput[0], 3.5, EPS), 'AvgPool2D [0]');
+  CheckTrue(NearEqual(LOutput[1], 5.5, EPS), 'AvgPool2D [1]');
+  CheckTrue(NearEqual(LOutput[2], 11.5, EPS), 'AvgPool2D [2]');
+  CheckTrue(NearEqual(LOutput[3], 13.5, EPS), 'AvgPool2D [3]');
 end;
 
 { ============================================================================
