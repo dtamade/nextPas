@@ -291,6 +291,12 @@ type
      *  适用于高频基准测试场景。 }
     function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
 
+    {** Phase 3: 批量并行运行独立基准。
+     *  独立基准（非并行基准）可以在多个线程中同时运行。
+     *  AThreadCount: 并行线程数，默认为 CPU 核心数。
+     *  注意：并行运行的基准不能使用内存追踪。 }
+    function RunParallel(AThreadCount: Integer = 0): IBenchResults;
+
     {** 运行基准测试 }
     function Run: IBenchResults;
   end;

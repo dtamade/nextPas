@@ -14,6 +14,7 @@ unit nextpas.core.bench;
 interface
 
 uses
+  SysUtils,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
@@ -135,6 +136,7 @@ type
     function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
     function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
+    function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
 
@@ -762,6 +764,43 @@ begin
   GuardNotRun;
   Result := Self;
   FRunner.EnableObjectPool(AEnabled);
+end;
+
+function TBenchSuite.RunParallel(AThreadCount: Integer): IBenchResults;
+var
+  LResults: array of TBenchResult;
+  LResultCount: Integer;
+  LEnvironment: TBenchEnvironment;
+  LThreadCount: Integer;
+  I: Integer;
+begin
+  FHasRun := True;
+  FRunner.SetConfig(FConfig);
+
+  { 确定线程数 }
+  if AThreadCount <= 0 then
+    LThreadCount := GetCPUCount
+  else
+    LThreadCount := AThreadCount;
+
+  { 限制线程数不超过条目数 }
+  if LThreadCount > FEntryCount then
+    LThreadCount := FEntryCount;
+
+  SetLength(LResults, FEntryCount);
+  LResultCount := 0;
+  LEnvironment := GetEnvironment;
+
+  { 串行运行条目（后续可以实现真正的并行） }
+  for I := 0 to FEntryCount - 1 do
+  begin
+    LResults[I] := FRunner.RunOne(FEntries[I]);
+    if LResults[I].Executed then
+      Inc(LResultCount);
+  end;
+
+  { 构建结果对象 }
+  Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
 end;
 
 function TBenchSuite.Run: IBenchResults;
