@@ -2247,11 +2247,18 @@ var
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
   LRequestDeadline: TDeadline;
+  LTimeoutMs: Int64;
+  LReqOpts: IHttpRequestWithOptions;
 begin
   if AReq = nil then
     raise EArgumentError.Create('h1 client transport requires request');
   if AReq.Headers = nil then
     raise EArgumentError.Create('h1 client transport requires request headers');
+
+  // Per-request timeout override: check request options first, fall back to transport default
+  LTimeoutMs := FOptions.Timeout;
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    LTimeoutMs := LReqOpts.RequestOptions.EffectiveTimeout(FOptions.Timeout);
 
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
@@ -2269,7 +2276,7 @@ begin
     LPort := 80;
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
-  LRequestDeadline := ClientRequestDeadline(FOptions.Timeout);
+  LRequestDeadline := ClientRequestDeadline(LTimeoutMs);
   FPending := '';
   LConn := PoolGet(LPoolHostKey, LPort);
   LPooled := LConn <> nil;

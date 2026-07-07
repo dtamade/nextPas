@@ -304,6 +304,17 @@ type
       read FTrackedBodyClosedBeforeReturn;
   end;
 
+  { Mock transport that records the timeout used in RoundTrip }
+  TTimeoutCaptureTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FCapturedTimeoutMs: Int64;
+    FDefaultTimeoutMs: Int64;
+  public
+    constructor Create(const ADefaultTimeoutMs: Int64);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property CapturedTimeoutMs: Int64 read FCapturedTimeoutMs;
+  end;
+
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
@@ -1731,6 +1742,31 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('content-length', '0');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, FResponseBody);
+end;
+
+{ TTimeoutCaptureTransport }
+
+constructor TTimeoutCaptureTransport.Create(const ADefaultTimeoutMs: Int64);
+begin
+  inherited Create;
+  FDefaultTimeoutMs := ADefaultTimeoutMs;
+  FCapturedTimeoutMs := -1;
+end;
+
+function TTimeoutCaptureTransport.RoundTrip(
+  const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+  LReqOpts: IHttpRequestWithOptions;
+begin
+  // Capture the timeout that would be used (same logic as TH1ClientTransport)
+  FCapturedTimeoutMs := FDefaultTimeoutMs;
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    FCapturedTimeoutMs := LReqOpts.RequestOptions.EffectiveTimeout(FDefaultTimeoutMs);
+
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
 constructor TRedirectBodyReleaseTransport.Create;
@@ -7846,6 +7882,48 @@ begin
   HttpReleaseResponseBody(LResp);
 end;
 
+procedure TestPerRequestTimeoutAtTransportLevel;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+begin
+  // Default timeout = 3000, per-request override = 8000
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+
+  // Test 1: No per-request override — should use transport default
+  LResp := LClient.Get('http://localhost/test');
+  CheckEqual(Int64(3000), LTransport.CapturedTimeoutMs,
+    'without per-request override, uses transport default');
+  HttpReleaseResponseBody(LResp);
+
+  // Test 2: WithTimeout overrides the transport default
+  LResp := LClient.WithTimeout(8000).Get('http://localhost/test');
+  CheckEqual(Int64(8000), LTransport.CapturedTimeoutMs,
+    'WithTimeout(8000) overrides transport default 3000');
+  HttpReleaseResponseBody(LResp);
+
+  // Test 3: Builder with per-request timeout
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test')
+    .Timeout(12000)
+    .Build;
+  LResp := LClient.Send(LReq);
+  CheckEqual(Int64(12000), LTransport.CapturedTimeoutMs,
+    'builder Timeout(12000) overrides transport default');
+  HttpReleaseResponseBody(LResp);
+
+  // Test 4: Direct request with IHttpRequestWithOptions
+  LReq := NewRequest(hmGet, 'http://localhost/test', NewHeaders);
+  (LReq as IHttpRequestWithOptions).SetRequestOptions(
+    Default(THttpRequestOptions).WithTimeout(15000));
+  LResp := LClient.Send(LReq);
+  CheckEqual(Int64(15000), LTransport.CapturedTimeoutMs,
+    'direct IHttpRequestWithOptions timeout 15000 overrides transport default');
+  HttpReleaseResponseBody(LResp);
+end;
+
 { THttpRequestBuilder tests }
 
 procedure TestBuilderGetRequest;
@@ -8365,6 +8443,8 @@ begin
     @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
+  T.Test('Per-request timeout overrides transport default',
+    @TestPerRequestTimeoutAtTransportLevel);
   T.Test('Builder creates GET request', @TestBuilderGetRequest);
   T.Test('Builder POST with body and content-type', @TestBuilderPostWithBody);
   T.Test('Builder headers and BearerAuth', @TestBuilderHeadersAndAuth);
