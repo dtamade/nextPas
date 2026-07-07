@@ -226,9 +226,23 @@ begin
     Dec(Result);
 end;
 
+function StrEndsWith(const AStr, ASuffix: string): Boolean;
+{ Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
+var
+  LStrLen, LSuffixLen: Integer;
+begin
+  LSuffixLen := Length(ASuffix);
+  if LSuffixLen = 0 then
+    Exit(True);
+  LStrLen := Length(AStr);
+  Result := (LStrLen >= LSuffixLen) and
+    (Copy(AStr, LStrLen - LSuffixLen + 1, LSuffixLen) = ASuffix);
+end;
+
 function StringDiff(const AExpected, AActual: string): string;
 var
   I, LMin, LStart, LEnd: Integer;
+  LActualStart: Integer;
 begin
   LMin := Length(AExpected);
   if Length(AActual) < LMin then
@@ -244,11 +258,12 @@ begin
   if LEnd > Length(AExpected) then LEnd := Length(AExpected);
   Result := 'Strings differ at position ' + IntToStr(I) + ':' + #10 +
     '  expected: ...' + Copy(AExpected, LStart, LEnd - LStart + 1) + '...' + #10;
+  LActualStart := Utf8SafeStart(AActual, I - 10);
   LEnd := I + 20;
   if LEnd > Length(AActual) then LEnd := Length(AActual);
   Result := Result +
-    '  actual:   ...' + Copy(AActual, Utf8SafeStart(AActual, I - 10),
-      LEnd - Utf8SafeStart(AActual, I - 10) + 1) + '...' + #10 +
+    '  actual:   ...' + Copy(AActual, LActualStart,
+      LEnd - LActualStart + 1) + '...' + #10 +
     '  (lengths: ' + IntToStr(Length(AExpected)) + ' vs ' + IntToStr(Length(AActual)) + ')';
 end;
 
@@ -604,27 +619,15 @@ begin
 end;
 
 procedure CheckEndsWith(const AStr, ASuffix: string);
-var
-  LLen: NativeInt;
 begin
-  LLen := Length(ASuffix);
-  if LLen = 0 then
-    Exit; { empty suffix matches everything (consistent with ToEndWith) }
-  if (Length(AStr) < LLen) or
-     (Copy(AStr, Length(AStr) - LLen + 1, LLen) <> ASuffix) then
+  if not StrEndsWith(AStr, ASuffix) then
     InternalFail('"' + AStr + '" does not end with "' + ASuffix + '"');
 end;
 
 procedure CheckEndsWith(const AStr, ASuffix: string;
   const AMessage: string);
-var
-  LLen: NativeInt;
 begin
-  LLen := Length(ASuffix);
-  if LLen = 0 then
-    Exit;
-  if (Length(AStr) < LLen) or
-     (Copy(AStr, Length(AStr) - LLen + 1, LLen) <> ASuffix) then
+  if not StrEndsWith(AStr, ASuffix) then
     FailPrepend(AMessage, '"' + AStr + '" does not end with "' + ASuffix + '"');
 end;
 
@@ -854,37 +857,27 @@ end;
 
 procedure CheckStartsWithCI(const AStr, APrefix: string);
 begin
-  if (Length(AStr) < Length(APrefix)) or
-     (LowerCase(Copy(AStr, 1, Length(APrefix))) <> LowerCase(APrefix)) then
+  if not StrStartsWith(LowerCase(AStr), LowerCase(APrefix)) then
     InternalFail('"' + AStr + '" does not start with (ci) "' + APrefix + '"');
 end;
 
 procedure CheckStartsWithCI(const AStr, APrefix: string;
   const AMessage: string);
 begin
-  if (Length(AStr) < Length(APrefix)) or
-     (LowerCase(Copy(AStr, 1, Length(APrefix))) <> LowerCase(APrefix)) then
+  if not StrStartsWith(LowerCase(AStr), LowerCase(APrefix)) then
     FailPrepend(AMessage, '"' + AStr + '" does not start with (ci) "' + APrefix + '"');
 end;
 
 procedure CheckEndsWithCI(const AStr, ASuffix: string);
 begin
-  if Length(ASuffix) = 0 then
-    Exit;
-  if (Length(AStr) < Length(ASuffix)) or
-     (LowerCase(Copy(AStr, Length(AStr) - Length(ASuffix) + 1,
-      Length(ASuffix))) <> LowerCase(ASuffix)) then
+  if not StrEndsWith(LowerCase(AStr), LowerCase(ASuffix)) then
     InternalFail('"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
 end;
 
 procedure CheckEndsWithCI(const AStr, ASuffix: string;
   const AMessage: string);
 begin
-  if Length(ASuffix) = 0 then
-    Exit;
-  if (Length(AStr) < Length(ASuffix)) or
-     (LowerCase(Copy(AStr, Length(AStr) - Length(ASuffix) + 1,
-      Length(ASuffix))) <> LowerCase(ASuffix)) then
+  if not StrEndsWith(LowerCase(AStr), LowerCase(ASuffix)) then
     FailPrepend(AMessage, '"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
 end;
 
@@ -909,8 +902,7 @@ procedure CheckNotEndsWith(const AStr, ASuffix: string);
 begin
   if Length(ASuffix) = 0 then
     Exit; { empty suffix matches everything — consistent with CheckEndsWith }
-  if (Length(AStr) >= Length(ASuffix)) and
-     (Copy(AStr, Length(AStr) - Length(ASuffix) + 1, Length(ASuffix)) = ASuffix) then
+  if StrEndsWith(AStr, ASuffix) then
     InternalFail('"' + AStr + '" should not end with "' + ASuffix + '"');
 end;
 
@@ -919,8 +911,7 @@ procedure CheckNotEndsWith(const AStr, ASuffix: string;
 begin
   if Length(ASuffix) = 0 then
     Exit;
-  if (Length(AStr) >= Length(ASuffix)) and
-     (Copy(AStr, Length(AStr) - Length(ASuffix) + 1, Length(ASuffix)) = ASuffix) then
+  if StrEndsWith(AStr, ASuffix) then
     FailPrepend(AMessage, '"' + AStr + '" should not end with "' + ASuffix + '"');
 end;
 
