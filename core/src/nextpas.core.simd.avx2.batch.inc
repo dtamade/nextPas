@@ -4445,6 +4445,10 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // NT stores require 32-byte aligned destination
+    test rcx, 31
+    jnz @unaligned_fallback
+
     cmp r8, 32
     jb @tail8
 
@@ -4480,6 +4484,43 @@ begin
     sub r8, 8
     cmp r8, 8
     jae @tail8
+    jmp @tail_scalar
+
+  @unaligned_fallback:
+    // Fallback: use regular stores when dst not 32-byte aligned
+    cmp r8, 32
+    jb @uf_tail8
+  @uf_loop32:
+    vmovups ymm0, [rax]
+    vaddps ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @uf_loop32
+  @uf_tail8:
+    cmp r8, 8
+    jb @tail_scalar
+    vmovups ymm0, [rax]
+    vaddps ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @uf_tail8
 
   @tail_scalar:
     test r8, r8
