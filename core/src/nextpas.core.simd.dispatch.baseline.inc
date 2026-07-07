@@ -583,6 +583,7 @@ begin
   dispatchTable.CmpGtU32x4 := @ScalarCmpGtU32x4;
   dispatchTable.CmpLeU32x4 := @ScalarCmpLeU32x4;
   dispatchTable.CmpGeU32x4 := @ScalarCmpGeU32x4;
+  dispatchTable.CmpNeU32x4 := @ScalarCmpNeU32x4;
   dispatchTable.MinU32x4 := @ScalarMinU32x4;
   dispatchTable.MaxU32x4 := @ScalarMaxU32x4;
   dispatchTable.AddU16x8 := @ScalarAddU16x8;

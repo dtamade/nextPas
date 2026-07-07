@@ -114,12 +114,19 @@ end;
 // === P1 Missing Functions: VecU32x4CmpNe ===
 
 function VecU32x4CmpNe(const a, b: TVecU32x4): TMask4;
+var dispatch: PSimdDispatchTable;
 begin
-  Result := 0;
-  if a.u[0] <> b.u[0] then Result := Result or 1;
-  if a.u[1] <> b.u[1] then Result := Result or 2;
-  if a.u[2] <> b.u[2] then Result := Result or 4;
-  if a.u[3] <> b.u[3] then Result := Result or 8;
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpNeU32x4) then
+    Result := dispatch^.CmpNeU32x4(a, b)
+  else
+  begin
+    Result := 0;
+    if a.u[0] <> b.u[0] then Result := Result or 1;
+    if a.u[1] <> b.u[1] then Result := Result or 2;
+    if a.u[2] <> b.u[2] then Result := Result or 4;
+    if a.u[3] <> b.u[3] then Result := Result or 8;
+  end;
 end;
 
 // === P1 Missing Functions: Make functions ===

@@ -639,6 +639,7 @@
     CmpGtU32x4: function(const a, b: TVecU32x4): TMask4;
     CmpLeU32x4: function(const a, b: TVecU32x4): TMask4;
     CmpGeU32x4: function(const a, b: TVecU32x4): TMask4;
+    CmpNeU32x4: function(const a, b: TVecU32x4): TMask4;
     MinU32x4: function(const a, b: TVecU32x4): TVecU32x4;
     MaxU32x4: function(const a, b: TVecU32x4): TVecU32x4;
 

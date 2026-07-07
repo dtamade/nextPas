@@ -433,7 +433,7 @@ begin
   dispatchTable.CmpGtU32x4 := @SSE2CmpGtU32x4;
   dispatchTable.CmpLeU32x4 := @SSE2CmpLeU32x4;
   dispatchTable.CmpGeU32x4 := @SSE2CmpGeU32x4;
-  // Note: CmpNeU32x4 not in dispatch table
+  dispatchTable.CmpNeU32x4 := @SSE2CmpNeU32x4;
   dispatchTable.MinU32x4 := @SSE2MinU32x4;
   dispatchTable.MaxU32x4 := @SSE2MaxU32x4;
 
