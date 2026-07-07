@@ -520,7 +520,7 @@ end;
 function platform_sockaddr_loopback4(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
 begin
-  Result := platform_sockaddr_ipv4(APort, platform_htonl($7F000001), AResult);
+  Result := platform_sockaddr_ipv4(APort, $7F000001, AResult);
 end;
 
 function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
@@ -970,7 +970,7 @@ end;
 function platform_sockaddr_loopback4(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
 begin
-  Result := platform_sockaddr_ipv4(APort, htonl($7F000001), AResult);
+  Result := platform_sockaddr_ipv4(APort, $7F000001, AResult);
 end;
 
 function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
