@@ -384,6 +384,9 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -1977,6 +1980,14 @@ end;
 function TDownloadClient.DeleteJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+begin
+  FSeenUrl := AUrl;
   Result := FResponse;
 end;
 
@@ -7981,6 +7992,107 @@ begin
     'chained builder query param');
 end;
 
+{ Streaming body tests }
+
+procedure TestNewStreamingRequestContentLength;
+var
+  LBody: TTrackedRequestBody;
+  LReq: IHttpRequest;
+begin
+  LBody := TTrackedRequestBody.Create('streaming-data');
+  LReq := NewStreamingRequest(hmPost, 'http://localhost/upload',
+    'application/octet-stream', LBody as IReader, 14);
+  Check(LReq <> nil, 'NewStreamingRequest returns non-nil');
+  CheckEqual(Int64(hmPost), Int64(LReq.Method), 'streaming request method');
+  CheckEqual('application/octet-stream', LReq.Headers.Get('content-type'),
+    'streaming request content-type');
+  CheckEqual('14', LReq.Headers.Get('content-length'),
+    'streaming request content-length');
+  Check(LReq.Body <> nil, 'streaming request has body');
+  Check(not LBody.Closed, 'streaming body NOT closed at creation');
+end;
+
+procedure TestSendStreamingBodyClosedAfterSend;
+var
+  LBody: TTrackedRequestBody;
+  LTransport: TRequestBodyCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LBody := TTrackedRequestBody.Create('upload-payload');
+  LTransport := TRequestBodyCaptureTransport.Create(LBody);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.SendStreaming(hmPost, 'http://localhost/upload',
+    'application/octet-stream', LBody as IReader, 14);
+  Check(LResp <> nil, 'SendStreaming returns response');
+  Check(LBody.Closed, 'streaming body closed after Send');
+  CheckEqual('upload-payload', LTransport.SeenBody,
+    'transport received streaming body data');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestSendStreamingBodyClosedOnError;
+var
+  LBody: TTrackedRequestBody;
+  LTransport: TRequestBodyCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LBody := TTrackedRequestBody.Create('error-payload', True);
+  LTransport := TRequestBodyCaptureTransport.Create(LBody);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    LClient.SendStreaming(hmPost, 'http://localhost/upload',
+      'application/octet-stream', LBody as IReader, 14);
+  except
+    on E: Exception do
+      LCaught := True;
+  end;
+  Check(LCaught, 'SendStreaming propagates body close error');
+end;
+
+procedure TestNewStreamingRequestWithHeaders;
+var
+  LBody: TTrackedRequestBody;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+begin
+  LBody := TTrackedRequestBody.Create('data');
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('x-custom', 'phase19');
+  LReq := NewStreamingRequest(hmPut, 'http://localhost/update',
+    LHeaders, LBody as IReader, 4);
+  CheckEqual('phase19', LReq.Headers.Get('x-custom'),
+    'streaming request preserves custom headers');
+  CheckEqual('4', LReq.Headers.Get('content-length'),
+    'streaming request sets content-length');
+end;
+
+procedure TestStreamingBodyOwnershipOnRedirect;
+var
+  LBody: TTrackedRequestBody;
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LBody := TTrackedRequestBody.Create('redirect-body');
+  LTransport := TRedirectCaptureTransport.Create(LBody);
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_TEMPORARY_REDIRECT;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    LClient.SendStreaming(hmPost, 'http://localhost/orig',
+      'text/plain', LBody as IReader, 14);
+  except
+    on E: EHttpError do
+      LCaught := Pos('not replayable', E.Message) > 0;
+  end;
+  Check(LCaught, 'non-seekable streaming body raises on redirect replay');
+  Check(LBody.Closed, 'streaming body closed even after redirect failure');
+end;
+
 { Main }
 
 begin
@@ -8261,5 +8373,15 @@ begin
   T.Test('Builder preserves existing query', @TestBuilderQueryParamsExistingQuery);
   T.Test('Builder per-request FollowRedirects(false)', @TestBuilderPerRequestOptions);
   T.Test('Builder full chaining', @TestBuilderChaining);
+  T.Test('NewStreamingRequest sets content-length',
+    @TestNewStreamingRequestContentLength);
+  T.Test('SendStreaming closes body after send',
+    @TestSendStreamingBodyClosedAfterSend);
+  T.Test('SendStreaming closes body on error',
+    @TestSendStreamingBodyClosedOnError);
+  T.Test('NewStreamingRequest preserves headers',
+    @TestNewStreamingRequestWithHeaders);
+  T.Test('Streaming body ownership on redirect',
+    @TestStreamingBodyOwnershipOnRedirect);
   if not T.Run then Halt(1);
 end.
