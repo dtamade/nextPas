@@ -367,6 +367,76 @@ begin
   end;
 end;
 
+{ --- TAllocStatsCollector tests --- }
+
+procedure TestCollectorInitiallyEmpty;
+var
+  LCollector: TAllocStatsCollector;
+begin
+  LCollector := TAllocStatsCollector.Create;
+  try
+    Check(LCollector.Count = 0, 'collector initially empty');
+  finally
+    LCollector.Free;
+  end;
+end;
+
+procedure TestCollectorRegisterUnregister;
+var
+  LCollector: TAllocStatsCollector;
+  LStats: TAllocStatsAllocator;
+begin
+  LCollector := TAllocStatsCollector.Create;
+  try
+    LStats := TAllocStatsAllocator.Create(GetRtlAllocator, False, LCollector);
+    Check(LCollector.Count = 1, 'count=1 after register');
+    LStats.Free;
+    Check(LCollector.Count = 0, 'count=0 after unregister');
+  finally
+    LCollector.Free;
+  end;
+end;
+
+procedure TestCollectorAggregates;
+var
+  LCollector: TAllocStatsCollector;
+  LStats1, LStats2: TAllocStatsAllocator;
+  LPtr1, LPtr2: Pointer;
+  LSnap: TAllocSnapshot;
+begin
+  LCollector := TAllocStatsCollector.Create;
+  try
+    LStats1 := TAllocStatsAllocator.Create(GetRtlAllocator, False, LCollector);
+    LStats2 := TAllocStatsAllocator.Create(GetRtlAllocator, False, LCollector);
+    try
+      LPtr1 := LStats1.GetMem(100);
+      LPtr2 := LStats2.GetMem(200);
+      LStats1.GetMem(300);
+
+      LSnap := LCollector.Collect;
+      Check(LSnap.TotalAllocs = 3, 'collector: TotalAllocs=3');
+      Check(LSnap.ActiveAllocs = 3, 'collector: ActiveAllocs=3');
+
+      LStats1.FreeMem(LPtr1);
+      LStats2.FreeMem(LPtr2);
+
+      LSnap := LCollector.Collect;
+      Check(LSnap.TotalFrees = 2, 'collector: TotalFrees=2');
+      Check(LSnap.ActiveAllocs = 1, 'collector: ActiveAllocs=1');
+
+      LStats1.FreeMem(LStats1.GetMem(0)); // nil, no effect
+      LStats2.Free;
+      LStats1.Free;
+    except
+      LStats2.Free;
+      LStats1.Free;
+      raise;
+    end;
+  finally
+    LCollector.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.stats');
 
@@ -383,6 +453,9 @@ begin
   T.Test('snapshot allocation rate', @TestSnapshotAllocationRate);
   T.Test('traits forwards', @TestTraitsForwards);
   T.Test('concurrent alloc', @TestConcurrentAlloc);
+  T.Test('collector initially empty', @TestCollectorInitiallyEmpty);
+  T.Test('collector register/unregister', @TestCollectorRegisterUnregister);
+  T.Test('collector aggregates', @TestCollectorAggregates);
 
   T.Run;
 end.

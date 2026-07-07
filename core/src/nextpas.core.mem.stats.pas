@@ -58,6 +58,34 @@ type
     function BucketLabel(AIndex: Integer): string;
   end;
 
+  TAllocStatsAllocator = class;
+
+  {** TAllocStatsCollector
+   *
+   *  从多个 TAllocStatsAllocator 实例收集统计。
+   *  每个 TAllocStatsAllocator 创建时注册，销毁时注销。
+   *  注册/注销走冷路径（临界区），热路径零开销。
+   *}
+  TAllocStatsCollector = class
+  private
+    FLock: TRTLCriticalSection;
+    FAllocators: array of TAllocStatsAllocator;
+    FCount: Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+
+    {** 注册一个 allocator（由 TAllocStatsAllocator.Create 调用） }
+    procedure Register(AAllocator: TAllocStatsAllocator);
+    {** 注销一个 allocator（由 TAllocStatsAllocator.Destroy 调用） }
+    procedure Unregister(AAllocator: TAllocStatsAllocator);
+
+    {** 收集所有已注册 allocator 的快照 }
+    function Collect: TAllocSnapshot;
+    {** 已注册 allocator 数量 }
+    function Count: Integer;
+  end;
+
   {** TAllocStatsAllocator
    *
    *  包装任意 IAllocator，收集分配统计信息。
@@ -70,6 +98,7 @@ type
   TAllocStatsAllocator = class(TAllocator)
   private
     FInner: IAllocator;
+    FCollector: TAllocStatsCollector;
     { 原子计数器 — 热路径 }
     FTotalAllocs: Int64;
     FTotalFrees: Int64;
@@ -88,7 +117,10 @@ type
     function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(APtr: Pointer); override;
   public
-    constructor Create(AInner: IAllocator; ATrackHistogram: Boolean = False);
+    {** 创建统计包装器。
+     *  ACollector 非 nil 时注册到该收集器，nil 时不注册。 }
+    constructor Create(AInner: IAllocator; ATrackHistogram: Boolean = False;
+      ACollector: TAllocStatsCollector = nil);
     destructor Destroy; override;
 
     {** 获取当前快照 }
@@ -103,10 +135,112 @@ type
     function Traits: TAllocatorTraits; override;
   end;
 
+{** 默认全局收集器 — 所有 TAllocStatsAllocator 默认注册到这里 }
+function DefaultStatsCollector: TAllocStatsCollector;
+
 implementation
 
 uses
   nextpas.core.mem.utils;
+
+var
+  GDefaultCollector: TAllocStatsCollector = nil;
+
+function DefaultStatsCollector: TAllocStatsCollector;
+begin
+  if GDefaultCollector = nil then
+    GDefaultCollector := TAllocStatsCollector.Create;
+  Result := GDefaultCollector;
+end;
+
+{ TAllocStatsCollector }
+
+constructor TAllocStatsCollector.Create;
+begin
+  inherited Create;
+  InitCriticalSection(FLock);
+  FAllocators := nil;
+  FCount := 0;
+end;
+
+destructor TAllocStatsCollector.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  FAllocators := nil;
+  inherited Destroy;
+end;
+
+procedure TAllocStatsCollector.Register(AAllocator: TAllocStatsAllocator);
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FCount >= Length(FAllocators) then
+      SetLength(FAllocators, FCount + 16);
+    FAllocators[FCount] := AAllocator;
+    Inc(FCount);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TAllocStatsCollector.Unregister(AAllocator: TAllocStatsAllocator);
+var
+  LI, LJ: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    for LI := 0 to FCount - 1 do
+    begin
+      if FAllocators[LI] = AAllocator then
+      begin
+        for LJ := LI to FCount - 2 do
+          FAllocators[LJ] := FAllocators[LJ + 1];
+        Dec(FCount);
+        FAllocators[FCount] := nil;
+        Break;
+      end;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TAllocStatsCollector.Collect: TAllocSnapshot;
+var
+  LSnap: TAllocSnapshot;
+  LI: Integer;
+begin
+  Result.TotalAllocs := 0;
+  Result.TotalFrees := 0;
+  Result.ActiveAllocs := 0;
+  Result.PeakAllocs := 0;
+  Result.TotalBytesAllocated := 0;
+  EnterCriticalSection(FLock);
+  try
+    for LI := 0 to FCount - 1 do
+    begin
+      LSnap := FAllocators[LI].Snapshot;
+      Result.TotalAllocs := Result.TotalAllocs + LSnap.TotalAllocs;
+      Result.TotalFrees := Result.TotalFrees + LSnap.TotalFrees;
+      Result.ActiveAllocs := Result.ActiveAllocs + LSnap.ActiveAllocs;
+      if LSnap.PeakAllocs > Result.PeakAllocs then
+        Result.PeakAllocs := LSnap.PeakAllocs;
+      Result.TotalBytesAllocated := Result.TotalBytesAllocated + LSnap.TotalBytesAllocated;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+function TAllocStatsCollector.Count: Integer;
+begin
+  EnterCriticalSection(FLock);
+  try
+    Result := FCount;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
 
 { TAllocSnapshot }
 
@@ -176,16 +310,23 @@ end;
 
 { TAllocStatsAllocator }
 
-constructor TAllocStatsAllocator.Create(AInner: IAllocator; ATrackHistogram: Boolean);
+constructor TAllocStatsAllocator.Create(AInner: IAllocator;
+  ATrackHistogram: Boolean; ACollector: TAllocStatsCollector);
 begin
   inherited Create;
   FInner := AInner;
   FTrackHistogram := ATrackHistogram;
+  FCollector := ACollector;
   ResetStats;
+  // 仅在显式传入 collector 时注册
+  if FCollector <> nil then
+    FCollector.Register(Self);
 end;
 
 destructor TAllocStatsAllocator.Destroy;
 begin
+  if FCollector <> nil then
+    FCollector.Unregister(Self);
   FInner := nil;
   inherited Destroy;
 end;
