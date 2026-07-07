@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 6)
+> Last updated: 2026-07-07 (Phase 7)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,10 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 7 (2026-07-07): GOAL_TREE Alignment**
+- **TLS runtime proof**: marked as ✅ — `test_http_tls_real` (5 tests) proves self-signed cert, handshake, stream wrapper, H2 transport creation
+- **H2 remaining hardening**: all items closed except documentation alignment
 
 **Phase 6 (2026-07-07): Client Ergonomics — Options Method**
 - **Options() convenience method**: `IHttpClient` now has full HTTP method coverage: Get, Post, Put, Delete, Patch, Head, Options
@@ -239,7 +243,7 @@ Design exclusions (by design, not gaps):
 
 Remaining H2 hardening:
 - Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
-- Real TLS runtime proof (currently mock-based)
+- Real TLS runtime proof: ✅ `test_http_tls_real` (5 tests, self-signed cert + handshake + stream wrapper + H2 transport creation); 9 unfreed blocks are in openssl backend layer, not HTTP
 - Documentation alignment (this document and ARCHITECTURE.md)
 
 H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.
