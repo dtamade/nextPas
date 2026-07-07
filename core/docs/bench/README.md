@@ -228,6 +228,22 @@ end.
 | 内存追踪集成 | ✅ | ❌ | ❌ |
 | 并行基准 | ✅ | ❌ | ❌ |
 
+## 示例
+
+查看 `core/examples/bench/` 目录中的完整示例：
+
+- `quick_start.pas` - 5 分钟入门
+- `advanced_stats.pas` - 高级统计
+- `parallel_benchmark.pas` - 并行基准
+- `ci_integration.pas` - CI 集成
+- `custom_metrics.pas` - 自定义指标
+- `performance_tuning.pas` - 性能调优
+
+## 教程
+
+- [交互式教程](tutorial.md) - 从入门到精通
+- [最佳实践指南](best-practices.md) - 编写可靠的基准测试
+
 ## 测试
 
 ```bash
