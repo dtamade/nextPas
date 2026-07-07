@@ -59,6 +59,9 @@ type
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
   end;
 
   { Decorator that adds Authorization header to every request }
@@ -96,6 +99,9 @@ type
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
   end;
 
   { Decorator that adds an arbitrary header to every request }
@@ -136,6 +142,51 @@ type
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+  end;
+
+  { Decorator that overrides per-request options (timeout, redirect behavior) }
+  TOptionsOverrideClient = class(TInterfacedObject, IHttpClient)
+  private
+    FInner: IHttpClient;
+    FRequestOptions: THttpRequestOptions;
+    procedure ApplyOptions(const AReq: IHttpRequest);
+    function DoBodyRequest(const AMethod: THttpMethod;
+      const AUrl, AContentType, ABody: string): IHttpResponse;
+  public
+    constructor Create(const AInner: IHttpClient;
+      const ARequestOptions: THttpRequestOptions);
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
+    function Get(const AUrl: string): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
+    function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -699,6 +750,8 @@ var
   LNewHeaders: IHttpHeaders;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
+  LReqOpts: IHttpRequestWithOptions;
+  LFollowRedirects: Boolean;
 begin
   LUrl := AReq.Url;
   CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
@@ -706,8 +759,14 @@ begin
   if LResp = nil then
     raise EHttpError.Create('HTTP transport returned no response');
 
+  // Determine redirect behavior: per-request override or client default
+  LFollowRedirects := FOptions.FollowRedirects;
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    LFollowRedirects := LReqOpts.RequestOptions.EffectiveFollowRedirects(
+      FOptions.FollowRedirects);
+
   // Handle redirects
-  if FOptions.FollowRedirects and
+  if LFollowRedirects and
      ((LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
       (LResp.StatusCode = HTTP_STATUS_FOUND) or
       (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) or
@@ -792,13 +851,22 @@ function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LRequestBodyCloseAttempted: Boolean;
   LResp: IHttpResponse;
+  LReqOpts: IHttpRequestWithOptions;
+  LMaxRedirects: Int32;
 begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
   LRequestBodyCloseAttempted := False;
   LResp := nil;
+
+  // Determine max redirects: per-request override or client default
+  LMaxRedirects := FOptions.MaxRedirects;
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    LMaxRedirects := LReqOpts.RequestOptions.EffectiveMaxRedirects(
+      FOptions.MaxRedirects);
+
   try
-    LResp := DoRequest(AReq, FOptions.MaxRedirects, LRequestBodyCloseAttempted);
+    LResp := DoRequest(AReq, LMaxRedirects, LRequestBodyCloseAttempted);
   except
     if not LRequestBodyCloseAttempted then
       try
@@ -978,6 +1046,24 @@ end;
 function THttpClient.WithHeader(const AName, AValue: string): IHttpClient;
 begin
   Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function THttpClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
+end;
+
+function THttpClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
+end;
+
+function THttpClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
 end;
 
 { TAuthClient }
@@ -1175,6 +1261,24 @@ end;
 function TAuthClient.WithHeader(const AName, AValue: string): IHttpClient;
 begin
   Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function TAuthClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
+end;
+
+function TAuthClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
+end;
+
+function TAuthClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
 end;
 
 { THeaderClient }
@@ -1394,6 +1498,298 @@ end;
 function THeaderClient.WithHeader(const AName, AValue: string): IHttpClient;
 begin
   Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function THeaderClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
+end;
+
+function THeaderClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
+end;
+
+function THeaderClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
+end;
+
+{ TOptionsOverrideClient }
+
+constructor TOptionsOverrideClient.Create(const AInner: IHttpClient;
+  const ARequestOptions: THttpRequestOptions);
+begin
+  FInner := AInner;
+  FRequestOptions := ARequestOptions;
+end;
+
+procedure TOptionsOverrideClient.ApplyOptions(const AReq: IHttpRequest);
+var
+  LReqWithOpts: IHttpRequestWithOptions;
+  LExisting: THttpRequestOptions;
+  LMerged: THttpRequestOptions;
+begin
+  if not Supports(AReq, IHttpRequestWithOptions, LReqWithOpts) then
+    Exit;
+  LExisting := LReqWithOpts.RequestOptions;
+  LMerged := LExisting;
+  if FRequestOptions.HasTimeout then
+  begin
+    LMerged.TimeoutMs := FRequestOptions.TimeoutMs;
+    LMerged.HasTimeout := True;
+  end;
+  if FRequestOptions.HasMaxRedirects then
+  begin
+    LMerged.MaxRedirects := FRequestOptions.MaxRedirects;
+    LMerged.HasMaxRedirects := True;
+  end;
+  if FRequestOptions.HasFollowRedirects then
+  begin
+    LMerged.FollowRedirects := FRequestOptions.FollowRedirects;
+    LMerged.HasFollowRedirects := True;
+  end;
+  LReqWithOpts.SetRequestOptions(LMerged);
+end;
+
+function TOptionsOverrideClient.DoBodyRequest(const AMethod: THttpMethod;
+  const AUrl, AContentType, ABody: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Send(const AReq: IHttpRequest): IHttpResponse;
+begin
+  ApplyOptions(AReq);
+  Result := FInner.Send(AReq);
+end;
+
+procedure TOptionsOverrideClient.CloseIdleConnections;
+begin
+  FInner.CloseIdleConnections;
+end;
+
+function TOptionsOverrideClient.Get(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
+end;
+
+function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
+end;
+
+function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Delete(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
+end;
+
+function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
+end;
+
+function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Head(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.Options(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function TOptionsOverrideClient.PostForm(const AUrl: string;
+  const AFields: TFormFieldArray): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded',
+    EncodeUrlEncodedForm(AFields));
+end;
+
+function TOptionsOverrideClient.PostJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TOptionsOverrideClient.PutJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TOptionsOverrideClient.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TOptionsOverrideClient.DeleteJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TOptionsOverrideClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function TOptionsOverrideClient.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
+end;
+
+function TOptionsOverrideClient.WithHeader(const AName, AValue: string): IHttpClient;
+begin
+  Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function TOptionsOverrideClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+var
+  LOpts: THttpRequestOptions;
+begin
+  LOpts := FRequestOptions;
+  LOpts.TimeoutMs := ATimeoutMs;
+  LOpts.HasTimeout := True;
+  Result := TOptionsOverrideClient.Create(FInner, LOpts);
+end;
+
+function TOptionsOverrideClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+var
+  LOpts: THttpRequestOptions;
+begin
+  LOpts := FRequestOptions;
+  LOpts.MaxRedirects := AMaxRedirects;
+  LOpts.HasMaxRedirects := True;
+  Result := TOptionsOverrideClient.Create(FInner, LOpts);
+end;
+
+function TOptionsOverrideClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+var
+  LOpts: THttpRequestOptions;
+begin
+  LOpts := FRequestOptions;
+  LOpts.FollowRedirects := AFollow;
+  LOpts.HasFollowRedirects := True;
+  Result := TOptionsOverrideClient.Create(FInner, LOpts);
 end;
 
 { Factory functions }

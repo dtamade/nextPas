@@ -387,6 +387,9 @@ type
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1988,6 +1991,21 @@ begin
 end;
 
 function TDownloadClient.WithHeader(const AName, AValue: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
 begin
   Result := Self;
 end;
@@ -7723,6 +7741,100 @@ begin
   LConn.Close;
 end;
 
+{ Per-request options override tests }
+
+procedure TestWithFollowRedirectsFalse;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithFollowRedirects(False).Get('http://localhost/orig');
+  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
+    'WithFollowRedirects(false) returns 302 instead of following');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithMaxRedirectsZero;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    LClient.WithMaxRedirects(0).Get('http://localhost/orig');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := Pos('too many redirects', E.Message) > 0;
+    end;
+  end;
+  Check(LCaught,
+    'WithMaxRedirects(0) raises too many redirects');
+end;
+
+procedure TestWithFollowRedirectsChain;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient
+    .WithHeader('x-test', 'phase17')
+    .WithFollowRedirects(False)
+    .Get('http://localhost/orig');
+  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
+    'chained WithFollowRedirects(false) + WithHeader returns 302');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithFollowRedirectsOverrideClientDefault;
+var
+  LTransport: TRedirectCaptureTransport;
+  LOptions: THttpClientOptions;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LOptions := THttpClientOptions.Default;
+  LOptions.FollowRedirects := True;
+  LClient := NewHttpClient(LTransport, LOptions);
+  LResp := LClient.WithFollowRedirects(False).Get('http://localhost/orig');
+  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
+    'per-request WithFollowRedirects(false) overrides client FollowRedirects=True');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithTimeoutDecorator;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectLocation := '/new';
+  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithTimeout(5000).Get('http://localhost/test');
+  Check(LResp <> nil, 'WithTimeout decorator does not crash');
+  HttpReleaseResponseBody(LResp);
+end;
+
 { Main }
 
 begin
@@ -7985,5 +8097,15 @@ begin
   T.Test('Client idle pool reuses case-equivalent authority host',
     @TestClientIdlePoolReusesCaseEquivalentAuthorityHost);
   T.Test('Connection reuse', @TestConnectionReuse);
+  T.Test('WithFollowRedirects(false) prevents redirect',
+    @TestWithFollowRedirectsFalse);
+  T.Test('WithMaxRedirects(0) raises too many redirects',
+    @TestWithMaxRedirectsZero);
+  T.Test('WithFollowRedirects chains with WithHeader',
+    @TestWithFollowRedirectsChain);
+  T.Test('WithFollowRedirects(false) overrides client default',
+    @TestWithFollowRedirectsOverrideClientDefault);
+  T.Test('WithTimeout decorator does not crash',
+    @TestWithTimeoutDecorator);
   if not T.Run then Halt(1);
 end.

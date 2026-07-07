@@ -35,10 +35,12 @@ type
   TTcpServerBackend = nextpas.core.http.base.TTcpServerBackend;
   TUrl = nextpas.core.http.base.TUrl;
   EHttpError = nextpas.core.http.base.EHttpError;
+  THttpRequestOptions = nextpas.core.http.base.THttpRequestOptions;
 
   { Re-export interfaces }
   IHttpHeaders = nextpas.core.http.intf.IHttpHeaders;
   IHttpRequest = nextpas.core.http.intf.IHttpRequest;
+  IHttpRequestWithOptions = nextpas.core.http.intf.IHttpRequestWithOptions;
   IHttpResponse = nextpas.core.http.intf.IHttpResponse;
   IHttpResponseWriter = nextpas.core.http.intf.IHttpResponseWriter;
   IHttpHandler = nextpas.core.http.intf.IHttpHandler;
