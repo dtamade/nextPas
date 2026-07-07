@@ -131,7 +131,10 @@ var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq: Int64;
+  LBackoff: Integer;
+  LI: Integer;
 begin
+  LBackoff := 1;
   while True do
   begin
     LPos := AtomicLoad64(FDequeuePos, moRelaxed);
@@ -149,6 +152,18 @@ begin
           LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Exit(True);
       end;
+      { CAS failed — another consumer won this slot }
+      if LBackoff < 256 then
+      begin
+        LI := LBackoff + Integer(LPos and 3);
+        repeat
+          CpuPause;
+          Dec(LI);
+        until LI <= 0;
+        LBackoff := LBackoff * 2;
+      end
+      else
+        CpuPause;
     end
     else if LSeq <= LPos + 1 then
       Exit(False)
