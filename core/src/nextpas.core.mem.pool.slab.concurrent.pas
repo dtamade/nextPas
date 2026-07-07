@@ -8,7 +8,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex,
-  nextpas.core.mem.pool.memory_pool,
+  nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.slab;
 
 type
