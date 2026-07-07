@@ -175,6 +175,7 @@ type
     function ToTSV: string;
     function ToHTML: string;
     function ToBenchstat: string;
+    function ToSummary: string;
     procedure SaveToJSON(const APath: string);
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
@@ -1209,6 +1210,44 @@ end;
 function TBenchResults.ToBenchstat: string;
 begin
   Result := FReportGenerator.ToBenchstat;
+end;
+
+function TBenchResults.ToSummary: string;
+var
+  LAll: TBenchResultArray;
+  LLines: array of string;
+  I: Integer;
+begin
+  LAll := GetAll;
+  SetLength(LLines, Length(LAll) + 1);
+
+  LLines[0] := Format('Benchmarks: %d results', [Length(LAll)]);
+
+  for I := 0 to High(LAll) do
+  begin
+    if LAll[I].Executed and not LAll[I].Skipped then
+    begin
+      if LAll[I].StdDev > 0 then
+        LLines[I + 1] := Format('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
+          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec,
+           LAll[I].StdDev / LAll[I].NsPerOp * 100])
+      else
+        LLines[I + 1] := Format('  %s: %.1f ns/op, %.0f ops/s',
+          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec]);
+    end
+    else if LAll[I].Skipped then
+      LLines[I + 1] := Format('  %s: SKIPPED (%s)', [LAll[I].Name, LAll[I].SkipReason])
+    else
+      LLines[I + 1] := Format('  %s: NOT EXECUTED', [LAll[I].Name]);
+  end;
+
+  Result := '';
+  for I := 0 to High(LLines) do
+  begin
+    if I > 0 then
+      Result := Result + LineEnding;
+    Result := Result + LLines[I];
+  end;
 end;
 
 procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);
