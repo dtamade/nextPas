@@ -145,7 +145,10 @@ type
     function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
@@ -155,6 +158,7 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;

@@ -42,7 +42,10 @@ type
     function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
@@ -52,6 +55,7 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -75,7 +79,10 @@ type
     function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
@@ -85,6 +92,7 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -111,7 +119,10 @@ type
     function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
@@ -121,6 +132,7 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -868,6 +880,21 @@ begin
   Result := Send(LReq);
 end;
 
+function THttpClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
+end;
+
+function THttpClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
+end;
+
+function THttpClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
+end;
+
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 begin
   Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
@@ -928,6 +955,12 @@ function THttpClient.PatchJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := Patch(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClient.DeleteJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Delete(AUrl, 'application/json', JsonStringify(ABody));
 end;
 
 function THttpClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -1038,6 +1071,29 @@ begin
   Result := FInner.Send(LReq);
 end;
 
+function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
+function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
+end;
+
+function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
+end;
+
 function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 var
   LReq: IHttpRequest;
@@ -1097,6 +1153,11 @@ end;
 function TAuthClient.PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
 begin
   Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TAuthClient.DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
 end;
 
 function TAuthClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -1220,6 +1281,29 @@ begin
   Result := FInner.Send(LReq);
 end;
 
+function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
+  InjectHeader(LReq);
+  Result := FInner.Send(LReq);
+end;
+
+function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
+end;
+
+function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
+  InjectHeader(LReq);
+  Result := FInner.Send(LReq);
+end;
+
 function THeaderClient.Patch(const AUrl, AContentType: string;
   const ABody: IReader): IHttpResponse;
 var
@@ -1287,6 +1371,12 @@ function THeaderClient.PatchJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THeaderClient.DeleteJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
 end;
 
 function THeaderClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;

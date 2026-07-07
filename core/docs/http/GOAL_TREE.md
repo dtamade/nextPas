@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 13 — TUrl query params)
+> Last updated: 2026-07-07 (Phase 14 — Delete body + DeleteJson)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,13 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 14 (2026-07-07): Delete Body Overloads + DeleteJson**
+
+- **`IHttpClient`**: added `Delete(url, contentType, body)` overloads (IReader, string, TBytes) — parity with Post/Put/Patch
+- **`IHttpClient`**: added `DeleteJson(url, body: TJsonValue)` — auto-serializes JSON + sets `application/json` content-type
+- **`TAuthClient`/`THeaderClient`**: all three decorator classes implement the new Delete overloads and DeleteJson
+- **Tests**: 2 new integration tests (Delete with body, DeleteJson), 144 client total / 0 leaks
 
 **Phase 13 (2026-07-07): TUrl Query Parameter Methods**
 
@@ -187,6 +194,8 @@ Already landed:
 - `PostForm` convenience for `application/x-www-form-urlencoded`
 - form encoding (`EncodeUrlEncodedForm`, `EncodeMultipartFormData`)
 - `PostJson`/`PutJson`/`PatchJson` convenience for `application/json`
+- `Delete` body overloads (IReader, string, TBytes) — parity with Post/Put/Patch
+- `DeleteJson` convenience for `application/json` DELETE requests
 - `WithBasicAuth`/`WithBearerAuth` auth decorator (returns new `IHttpClient` with automatic `authorization` header)
 - `WithHeader` generic header injection decorator (chains with auth: `WithBearerAuth(token).WithHeader('Accept', 'application/json')`)
 
