@@ -31,14 +31,14 @@ procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
-    platform_wake_address_one(AEpoch);
+    platform_wake_address_all(AEpoch);
 end;
 
 procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
-    platform_wake_address_one(AEpoch);
+    platform_wake_address_all(AEpoch);
 end;
 
 procedure LockFreeWaitEvent(AEpoch: PInt32; AWaiters: PInt32;
