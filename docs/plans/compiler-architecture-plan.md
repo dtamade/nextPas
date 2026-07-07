@@ -1154,3 +1154,43 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | M7: 增量稳定 | 增量 vs 全量 diff 100% 一致 | +23 天 |
 | M8: 诊断 rustc 水平 | 多错误+修复建议+错误代码+LSP | +30 天 |
 | M9: AL2 完成 | 全部 7 类退出条件满足 | +38 天 |
+
+---
+
+### AL3: LLVM Backend Extension — Value-Type (Struct) Support [🔄 2026-07-07]
+
+**目标**: 让 MIR→LLVM emitter 支持 Pascal value type（record/struct），
+对标 rustc_codegen_llvm 的 struct type codegen。
+
+#### P0: MIR Model + LLVM Emitter Struct Type Support [✅ 2026-07-07]
+
+| 项 | 内容 |
+|----|------|
+| **改动文件** | `compiler/ir/np_mir_model.pas`, `compiler/ir/np_mir_to_llvm.pas` |
+| **内容** | TMirStructField, TMirStructType, AddStructType(); LlvmTypeForOperand, LlvmTypeForStmt, EmitStructTypes; TranslateStmt 所有 struct 相关指令用新 helper |
+| **提交** | `42a0cf879` |
+
+#### P1: MIR Struct LLVM Test [✅ 2026-07-07]
+
+| 项 | 内容 |
+|----|------|
+| **新增文件** | `tests/mir/llvm_struct_pass.pas` |
+| **内容** | 验证 struct 类型声明、alloca/getelementptr/extractvalue/insertvalue LLVM IR 输出；修复 mskInsertField 常量操作数 bug |
+| **验证** | MIR tests: 23/23 pass, `make hygiene` pass |
+| **提交** | `50bc75d50` |
+
+#### P2: Wire Upstream — HIR→MIR StructTypeName Propagation [🔲]
+
+| 项 | 内容 |
+|----|------|
+| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI） |
+| **内容** | HIR 目前只有 TypeId（整数），MIR 需要 StructTypeName（字符串）。需要在 HIR→MIR lowering 中注入类型名称查找回调，或将类型名添加到 HIR model |
+
+#### P3: Stage2-B — Link Compiler .o Files [🔲]
+
+| 项 | 内容 |
+|----|------|
+| **依赖** | --out-dir 不输出文件 bug 修复（另一个 AI） |
+| **内容** | 将 stage2-A 的 22 个 .o 文件链接为可执行文件 |
+
+**当前状态**: P0+P1 完成。MIR→LLVM 路径对 struct 类型完整可用。P2/P3 等待已知 bug 修复。
