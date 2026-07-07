@@ -1138,12 +1138,33 @@ begin
   end, 'nil');
 end;
 
+{ ── File I/O Utility Tests ──────────────────────────────────────────────── }
+
+procedure TestReadWriteFileContents;
+var
+  LPath, LContent: string;
+begin
+  LPath := '/tmp/test_rw_contents_' + IntToStr(Random(1000000000)) + '.txt';
+  WriteFileContents(LPath, 'hello world');
+  CheckTrue(ReadFileContents(LPath, LContent), 'ReadFileContents should succeed');
+  CheckEqual('hello world', LContent, 'File content');
+end;
+
+procedure TestReadFileContentsNotFound;
+var
+  LContent: string;
+begin
+  CheckTrue(not ReadFileContents('/tmp/nonexistent_file_12345.txt', LContent),
+    'ReadFileContents should return False for missing file');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
 begin
   WriteLn('=== test_assertions ===');
+  Randomize;
   LSuite := TTestSuite.Create('Check* API');
 
   LSuite.Test('Check (pass)',          @TestCheckPass);
@@ -1321,6 +1342,10 @@ begin
   LSuite.Test('IsNil fail',               @TestCheckIsNilFail);
   LSuite.Test('IsNotNil pass',            @TestCheckIsNotNilPass);
   LSuite.Test('IsNotNil fail',            @TestCheckIsNotNilFail);
+
+  { Audit round 4: File I/O utilities }
+  LSuite.Test('ReadWriteFileContents',    @TestReadWriteFileContents);
+  LSuite.Test('ReadFileNotFound',         @TestReadFileContentsNotFound);
 
   if not LSuite.Run then
   begin

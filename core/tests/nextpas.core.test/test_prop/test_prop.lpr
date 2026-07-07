@@ -419,6 +419,17 @@ begin
   end, LDir, 100);
 end;
 
+procedure TestFuzzStringWithCorpus;
+var
+  LDir: string;
+begin
+  LDir := '/tmp/test_fuzz_string_corpus_' + IntToStr(Random(1000000000));
+  FuzzStringWithCorpus('string corpus test', procedure(const S: string)
+  begin
+    { always passes }
+  end, LDir, 100);
+end;
+
 { ── Structured Generator tests (v8.0a) ───────────────────────────────────── }
 
 procedure TestGenArray;
@@ -811,6 +822,10 @@ begin
   SectionHeader('FuzzWithCorpus');
   TestFuzzWithCorpus;
   PassTest('FuzzWithCorpus passed');
+
+  SectionHeader('FuzzStringWithCorpus');
+  TestFuzzStringWithCorpus;
+  PassTest('FuzzStringWithCorpus passed');
 
   SectionHeader('GenArray');
   TestGenArray;
