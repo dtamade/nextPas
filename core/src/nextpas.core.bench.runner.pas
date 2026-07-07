@@ -405,7 +405,7 @@ begin
   FSkipped := False;
   FSkipReason := '';
   FPausedNs := 0;
-  FCustomMetrics := nil;
+  { 注意：不重置 FCustomMetrics，因为指标在多次迭代中累积 }
 end;
 
 procedure TBenchContext.IncrementIterations;
@@ -800,6 +800,9 @@ begin
         if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
           Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
       end;
+
+      { 复制自定义指标 }
+      Result.CustomMetrics := LContextObj.GetCustomMetrics;
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
@@ -1142,6 +1145,9 @@ begin
     Result.SampleCount := LStats.SampleCount;
     if FConfig.CollectRawSamples or LEntry.CollectRawSamples then
       Result.RawSamples := LSamples;
+
+    { 复制自定义指标 }
+    Result.CustomMetrics := LMeasurement.CustomMetrics;
 
     AddResult(Result);
 

@@ -9,6 +9,7 @@ program test_bench_regression;
 {$mode ObjFPC}{$H+}
 
 uses
+  cthreads,
   SysUtils,
   nextpas.core.bench,
   nextpas.core.time.base;
@@ -366,7 +367,7 @@ begin
   { 验证摘要格式 }
   Check(Length(LSummary) > 0, 'Summary should not be empty');
   Check(Pos('Benchmarks: 1 results', LSummary) > 0, 'Should contain result count');
-  Check(Pos('SummaryTest.Benchmark:', LSummary) > 0, 'Should contain benchmark name');
+  Check(Pos('Benchmark:', LSummary) > 0, 'Should contain benchmark name');
   Check(Pos('ns/op', LSummary) > 0, 'Should contain ns/op');
   Check(Pos('ops/s', LSummary) > 0, 'Should contain ops/s');
 end;

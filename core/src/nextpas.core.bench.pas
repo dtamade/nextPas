@@ -231,6 +231,7 @@ var
   LWorker: PBenchWorkerThread;
   I: Integer;
 begin
+  Result := nil;
   LWorker := PBenchWorkerThread(AArg);
   for I := 0 to LWorker^.EntryCount - 1 do
   begin
@@ -238,7 +239,6 @@ begin
     if LWorker^.Results[I].Executed then
       Inc(LWorker^.ResultCount);
   end;
-  Result := nil;
 end;
 
 procedure InitWorkerThread(var AWorker: TBenchWorkerThread;
@@ -253,7 +253,7 @@ begin
     AWorker.Entries[I] := ASrcEntries[ASrcOffset + I];
 
   AWorker.Config := AConfig;
-  AWorker.Runner := TBenchRunner.Create;
+  AWorker.Runner := TBenchRunner.CreateNoEnv;
   AWorker.Runner.SetConfig(AConfig);
 
   AWorker.ResultCount := 0;
@@ -842,6 +842,7 @@ var
   LCount: Integer;
   LThreadResults: TBenchResultArray;
   LRetVal: Pointer;
+  LWorkerConfig: TBenchConfig;
   I, J: Integer;
 begin
   FHasRun := True;
@@ -872,7 +873,11 @@ begin
     Exit;
   end;
 
-  { 创建工作线程 }
+  { 创建工作线程 — 禁用内存追踪以避免全局状态竞争，静默模式避免 WriteLn 死锁 }
+  LWorkerConfig := FConfig;
+  LWorkerConfig.EnableMemoryTracking := False;
+  LWorkerConfig.Quiet := True;
+
   LEntriesPerThread := FEntryCount div LThreadCount;
   LRemainder := FEntryCount mod LThreadCount;
 
@@ -885,7 +890,7 @@ begin
     if I < LRemainder then
       Inc(LCount);
 
-    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, FConfig);
+    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, LWorkerConfig);
     Inc(LStartIdx, LCount);
   end;
 
