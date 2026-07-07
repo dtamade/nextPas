@@ -76,6 +76,7 @@
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
 | test_platform_resource | 10 | ✅ |
+| test_platform_resource_wine | 10 | ✅ |
 | test_platform_signal | 9 | ✅ |
 | test_platform_signal_contract | 4 | ✅ |
 | test_platform_signal_wine | 5 | ✅ |
