@@ -40,6 +40,9 @@ uses
   nextpas.core.simd.algorithms.testcase,
   nextpas.core.simd.linalg.testcase,
   nextpas.core.simd.arrays.testcase,
+  nextpas.core.simd.nn.testcase,
+  nextpas.core.simd.signal.testcase,
+  nextpas.core.simd.stats.testcase,
   nextpas.core.simd.rvvparity.testcase,
   nextpas.core.simd.bench,
   nextpas.core.simd.base,
@@ -280,6 +283,9 @@ begin
   HandleSuite('TTestCase_SimdAlgorithms', TTestCase_SimdAlgorithms, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdLinalg', TTestCase_SimdLinalg, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_SimdArrays', TTestCase_SimdArrays, aListOnly, aTargetSuite);
+  HandleSuite('TTestCase_SimdNN', TTestCase_SimdNN, aListOnly, aTargetSuite);
+  HandleSuite('TTestCase_SimdSignal', TTestCase_SimdSignal, aListOnly, aTargetSuite);
+  HandleSuite('TTestCase_SimdStats', TTestCase_SimdStats, aListOnly, aTargetSuite);
   HandleSuite('TRVVParityTestCase', TRVVParityTestCase, aListOnly, aTargetSuite);
   {$IFDEF CPUX86_64}
   HandleSuite('TTestCase_SSE3Correctness', TTestCase_SSE3Correctness, aListOnly, aTargetSuite);
