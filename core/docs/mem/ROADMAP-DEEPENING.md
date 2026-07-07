@@ -16,16 +16,16 @@
 
 | # | 项目 | 状态 | 说明 |
 |---|------|------|------|
-| P2-1 | Per-sizeclass stats | 待做 | TShardedBlockPool 命中率/碎片率统计 |
-| P2-2 | Arena Compact | 待做 | TChunkedArena 合并空闲段 |
-| P2-3 | SIMD zero | 待做 | AVX2/NEON FillChar 大块清零 |
+| P2-1 | Per-sizeclass stats | ✅ | TBlockPoolStats: TotalAcquires/CacheHits/Utilization |
+| P2-2 | Arena Compact | ✅ | TChunkedArena.Compact: 合并相邻缓存段 |
+| P2-3 | SIMD zero | ⏭️ | 跳过：FPC 内置 FillChar 已有 SSE2/AVX 优化 |
 
 ## Phase 3: 功能扩展
 
 | # | 项目 | 状态 | 说明 |
 |---|------|------|------|
-| P3-1 | ThreadArena auto-cleanup | 待做 | pthread_key 自动 DrainTLS |
-| P3-2 | Allocator composition | 待做 | 通用 fallback/pool/arena 组合器 |
+| P3-1 | ThreadArena auto-cleanup | ✅ | 已有 pthread_key 自动 DrainTLS (initialization 注册) |
+| P3-2 | Allocator composition | ✅ | 已有 TFallbackAllocator/TFallbackArena |
 
 ## Phase 4: 集成与文档
 
