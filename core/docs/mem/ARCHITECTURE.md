@@ -55,12 +55,16 @@ Allocator 侧：
 - `nextpas.core.mem.allocator.arena` — Arena → IAllocator 包装（`TVirtualArenaAllocator`）
 - `nextpas.core.mem.allocator.tracking` — 跟踪包装（统计 + 回调）
 - `nextpas.core.mem.allocator.leak_check` — 泄漏检测包装
+- `nextpas.core.mem.allocator.leak_report` — 增强泄漏报告（调用栈+时间戳+标签聚合）
 - `nextpas.core.mem.allocator.fallback` — 多后端 fallback 链
 - `nextpas.core.mem.allocator.mmap` — mmap 匿名映射后端
 - `nextpas.core.mem.allocator.mimalloc.loader` — mimalloc 动态库路径发现
 - `nextpas.core.mem.allocator.mimalloc` — mimalloc FFI 绑定 + allocator 语义
 - `nextpas.core.mem.allocator.guard` — Guard page 调试分配器（PROT_NONE 保护）
 - `nextpas.core.mem.allocator.growing` — **核心**: TLS + Central Pool 三层通用分配器
+- `nextpas.core.mem.allocator.sentinel` — 哨兵守卫分配器（双端哨兵+延迟释放+校验和）
+- `nextpas.core.mem.allocator.numa` — NUMA 感知分配器（拓扑检测+节点路由）
+- `nextpas.core.mem.allocator.prediction` — 分配预测器（频率跟踪+预分配）
 - `nextpas.core.mem.allocator` — Allocator 侧聚合门面
 
 Growing allocator 内部层（不单独对外暴露）：
