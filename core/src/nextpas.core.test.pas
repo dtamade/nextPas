@@ -404,6 +404,16 @@ procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
 function FuzzGenBytes(ALen: Integer): TBytes;
 function FuzzGenString(ALen: Integer): string;
 
+{ ── Re-exported corpus management from test.prop (v7.3a) ─────────────────── }
+
+type
+  TFuzzCorpus = nextpas.core.test.prop.TFuzzCorpus;
+
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+
 implementation
 
 {$I nextpas.core.test.fwd.expect.inc}

@@ -124,3 +124,11 @@ begin Result := nextpas.core.test.prop.FuzzGenBytes(ALen); end;
 
 function FuzzGenString(ALen: Integer): string;
 begin Result := nextpas.core.test.prop.FuzzGenString(ALen); end;
+
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
+
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzStringWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;

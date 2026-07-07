@@ -292,6 +292,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.1a**: Generator Combinators — `MapIntToStr` (类型转换)、`FilterInt`/`FilterString`/`FilterBytes` (谓词过滤)，shrink 时尊重 filter 约束
 - **v7.1b**: GenChoice/GenOneOf + Shrink 修复 — `GenChoiceInt`/`GenChoiceString`/`GenChoiceBool` (从数组随机选取)、`GenOneOfInt`/`GenOneOfString` (组合多个生成器)；修复 shrink 无限递归 (固定点检测)；修复 `Prop()` 中 `FailTest` 调用 `Halt(1)` 导致 shrink 失效的问题；新增 `PropFail()` (抛异常) 和 `PropWithResult()` (返回缩小值)；Int shrink 改进 (尊重 FMin 边界)
 - **v7.2a**: Mutation-based Fuzzing — 纯随机变异 fuzzing，无需编译器覆盖率插桩。6 种变异策略 (bit flip/byte replace/byte insert/byte delete/block dup/block swap)；`Fuzz()` / `FuzzString()` 入口；自动最小化失败输入 (binary shrink)；`FuzzGenBytes()` / `FuzzGenString()` 语料生成；20 测试 (15 Prop + 5 Fuzz)
+- **v7.3a**: Corpus Management — 持久化语料库管理。`TFuzzCorpus` 类支持从目录加载/保存语料；去重检测 (byte-by-byte comparison)；`FuzzWithCorpus()` / `FuzzStringWithCorpus()` 入口自动加载/保存语料；发现新输入时自动添加到语料库；27 测试 (15 Prop + 5 Fuzz + 7 Corpus)
 
 ## 路线图
 
@@ -301,6 +302,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 | **v7.1a** | Generator Combinators — Map/Filter 组合器 | ✅ 已完成 | v7.1 |
 | **v7.1b** | GenChoice/GenOneOf + Shrink 修复 | ✅ 已完成 | v7.1a |
 | **v7.2a** | Mutation-based Fuzzing — 纯随机变异 + 自动最小化 | ✅ 已完成 | v7.1b |
+| **v7.3a** | Corpus Management — 持久化语料库管理 | ✅ 已完成 | v7.2a |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
@@ -368,6 +370,38 @@ FuzzGenString(50)    // 50 可打印 ASCII 字符
 - 自动最小化: 失败时先截断后半段，再逐字节删除，找到最小复现
 - 失败报告: hex dump 最小输入 + 迭代次数 + 失败计数
 - 无需编译器支持: 纯随机变异，适合测试 parser/deserializer
+
+### v7.3a Corpus Management — 实际 API
+
+```pascal
+{ 创建语料库管理器 }
+var Corpus: TFuzzCorpus;
+Corpus := TFuzzCorpus.Create('/path/to/corpus');
+
+{ 添加语料 }
+Corpus.Add(TBytes.Create($01, $02));  // 字节
+Corpus.AddString('hello');            // 字符串 (自动转 UTF-8)
+
+{ 保存/加载 }
+Corpus.Save;    // 保存到目录 (0.bin, 1.bin, ...)
+Corpus.Load;    // 从目录加载
+
+{ 查询 }
+Corpus.Count;           // 语料数量
+Corpus.GetItem(0);      // 获取字节
+Corpus.GetString(0);    // 获取字符串
+Corpus.HasFiles;        // 目录是否有 .bin 文件
+
+{ 带持久化的 fuzzing }
+FuzzWithCorpus('test', @TestProc, '/path/to/corpus', 10000);
+FuzzStringWithCorpus('test', @TestStrProc, '/path/to/corpus', 10000);
+```
+
+- 持久化: 语料保存到目录，下次运行自动加载
+- 去重: 相同内容不会重复添加
+- 自动种子: 如果目录为空，自动添加随机语料
+- 周期保存: 每 100 次迭代自动保存新语料
+- 失败保存: 发现失败输入时自动保存到语料库
 
 ### v7.2 Coverage-guided Fuzzing 前置条件
 
