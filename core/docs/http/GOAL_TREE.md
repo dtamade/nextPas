@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 5)
+> Last updated: 2026-07-07 (Phase 6)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,10 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 6 (2026-07-07): Client Ergonomics — Options Method**
+- **Options() convenience method**: `IHttpClient` now has full HTTP method coverage: Get, Post, Put, Delete, Patch, Head, Options
+- **Client tests**: 133 → 134 (+1), all with 0 leaks
 
 **Phase 5 (2026-07-07): TLS Warning Fix + Test Audit**
 - **ErrorList warning**: `ValidateRequirements` in `tls.backend.selector.pas` — `TStringArray` local variable explicitly initialized to silence FPC managed-type warning across all HTTP test suites
@@ -68,7 +72,7 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
 - **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
 
-**测试**: 25 suites ~862 pass / 0 leak (36 epoll tests pre-existing failures on net layer)
+**测试**: 25 suites ~863 pass / 0 leak (36 epoll tests pre-existing failures on net layer)
 
 ## Map
 
