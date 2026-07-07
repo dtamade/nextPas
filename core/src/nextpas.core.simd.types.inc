@@ -62,5 +62,6 @@ type
   u32x16 = TVecU32x16;
   u64x8  = TVecU64x8;
   i16x32 = TVecI16x32;
+  u16x32 = TVecU16x32;
   i8x64  = TVecI8x64;
   u8x64  = TVecU8x64;

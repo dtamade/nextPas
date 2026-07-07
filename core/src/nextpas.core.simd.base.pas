@@ -228,6 +228,13 @@ type
       2: (raw: array[0..63] of Byte);
   end;
 
+  TVecU16x32 = record
+    case Integer of
+      0: (u: array[0..31] of UInt16);
+      1: (lo, hi: TVecU16x16);
+      2: (raw: array[0..63] of Byte);
+  end;
+
   TVecU8x64 = record
     case Integer of
       0: (u: array[0..63] of UInt8);

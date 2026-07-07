@@ -32,6 +32,10 @@ type
     procedure Test_AvgPool1D_Basic;
     procedure Test_LinearLayer_Basic;
     procedure Test_Conv1D_Basic;
+    procedure Test_LayerNorm_Basic;
+    procedure Test_LayerNorm_WithGammaBeta;
+    procedure Test_CrossEntropyLoss_Basic;
+    procedure Test_Conv2D_Basic;
     procedure Test_NilSafety;
   end;
 
@@ -269,6 +273,85 @@ begin
   CheckTrue(NearEqual(LOutput[1], -2.0, EPS), 'Conv1D [1]');
   CheckTrue(NearEqual(LOutput[2], -2.0, EPS), 'Conv1D [2]');
   CheckTrue(NearEqual(LOutput[3], -2.0, EPS), 'Conv1D [3]');
+end;
+
+{ ============================================================================
+  LayerNorm
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_LayerNorm_Basic;
+var
+  LX: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LDst: array[0..3] of Single;
+  LMean, LStd: Single;
+  I: Integer;
+begin
+  LayerNormF32(@LX[0], nil, nil, @LDst[0], 4, 1e-5);
+  // Output should be zero-mean, unit-variance
+  LMean := 0;
+  for I := 0 to 3 do LMean := LMean + LDst[I];
+  LMean := LMean / 4;
+  CheckTrue(NearEqual(LMean, 0.0, EPS), 'LayerNorm mean~0');
+  LStd := 0;
+  for I := 0 to 3 do LStd := LStd + LDst[I] * LDst[I];
+  LStd := System.Sqrt(LStd / 4);
+  CheckTrue(NearEqual(LStd, 1.0, 0.05), 'LayerNorm std~1');
+end;
+
+procedure TTestCase_SimdNN.Test_LayerNorm_WithGammaBeta;
+var
+  LX: array[0..1] of Single = (1.0, 2.0);
+  LGamma: array[0..1] of Single = (2.0, 2.0);
+  LBeta: array[0..1] of Single = (1.0, 1.0);
+  LDst: array[0..1] of Single;
+begin
+  // With gamma=2, beta=1: output = gamma * normalized + beta
+  LayerNormF32(@LX[0], @LGamma[0], @LBeta[0], @LDst[0], 2, 1e-5);
+  // normalized[0] = -1, normalized[1] = 1 (for 2 elements)
+  // dst[0] = 2*(-1) + 1 = -1, dst[1] = 2*1 + 1 = 3
+  CheckTrue(NearEqual(LDst[0], -1.0, 0.05), 'LayerNorm gamma beta [0]');
+  CheckTrue(NearEqual(LDst[1], 3.0, 0.05), 'LayerNorm gamma beta [1]');
+end;
+
+{ ============================================================================
+  CrossEntropyLoss
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_CrossEntropyLoss_Basic;
+var
+  // 2 samples, 3 classes
+  // Sample 0: logits [2.0, 1.0, 0.1], target = 0 (correct class)
+  // Sample 1: logits [0.5, 2.0, 0.3], target = 1 (correct class)
+  LLogits: array[0..5] of Single = (2.0, 1.0, 0.1, 0.5, 2.0, 0.3);
+  LTargets: array[0..1] of Int32 = (0, 1);
+  LLoss: Single;
+begin
+  LLoss := CrossEntropyLossF32(@LLogits[0], @LTargets[0], 2, 3);
+  // Loss should be positive and reasonable (< 2.0 for well-classified data)
+  CheckTrue(LLoss > 0.0, 'CrossEntropy > 0');
+  CheckTrue(LLoss < 2.0, 'CrossEntropy < 2');
+end;
+
+{ ============================================================================
+  Conv2D
+  ============================================================================ }
+
+procedure TTestCase_SimdNN.Test_Conv2D_Basic;
+var
+  // 3x3 input, 2x2 kernel → 2x2 output
+  LInput: array[0..8] of Single = (1, 2, 3, 4, 5, 6, 7, 8, 9);
+  LKernel: array[0..3] of Single = (1, 0, 0, 1);
+  LOutput: array[0..3] of Single;
+begin
+  // out[0,0] = 1*1 + 2*0 + 4*0 + 5*1 = 6
+  // out[0,1] = 2*1 + 3*0 + 5*0 + 6*1 = 8
+  // out[1,0] = 4*1 + 5*0 + 7*0 + 8*1 = 12
+  // out[1,1] = 5*1 + 6*0 + 8*0 + 9*1 = 14
+  Conv2DF32(@LInput[0], @LKernel[0], @LOutput[0], 3, 3, 2, 2);
+  CheckTrue(NearEqual(LOutput[0], 6.0, EPS), 'Conv2D [0,0]');
+  CheckTrue(NearEqual(LOutput[1], 8.0, EPS), 'Conv2D [0,1]');
+  CheckTrue(NearEqual(LOutput[2], 12.0, EPS), 'Conv2D [1,0]');
+  CheckTrue(NearEqual(LOutput[3], 14.0, EPS), 'Conv2D [1,1]');
 end;
 
 { ============================================================================

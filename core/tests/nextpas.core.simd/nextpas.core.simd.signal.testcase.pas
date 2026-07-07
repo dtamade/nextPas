@@ -28,6 +28,8 @@ type
     procedure Test_FirFilter_Basic;
     procedure Test_CrossCorrelation_Basic;
     procedure Test_AutoCorrelation_Basic;
+    procedure Test_FFT_ForwardInverse;
+    procedure Test_FFT_DC_Component;
     procedure Test_NilSafety;
   end;
 
@@ -48,7 +50,6 @@ end;
 procedure TTestCase_SimdSignal.Test_HannWindow_Basic;
 var
   LDst: array[0..7] of Single;
-  I: Integer;
 begin
   HannWindowF32(@LDst[0], 8);
   // Hann window should be 0 at endpoints
@@ -197,6 +198,48 @@ begin
   AutoCorrelationF32(@LSrc[0], 4, @LDst[0], 4);
   // Lag 0 should be the maximum (sum of squares)
   CheckTrue(LDst[0] >= LDst[1], 'AutoCorr lag0 >= lag1');
+end;
+
+{ ============================================================================
+  FFT
+  ============================================================================ }
+
+procedure TTestCase_SimdSignal.Test_FFT_ForwardInverse;
+var
+  LOrig: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+  LData: array[0..3] of TSimdComplexF32;
+  I: Integer;
+begin
+  // Input: [1, 2, 3, 4] (real), imaginary = 0
+  for I := 0 to 3 do
+  begin
+    LData[I].Re := LOrig[I];
+    LData[I].Im := 0.0;
+  end;
+  // Forward FFT → Inverse FFT should recover original
+  FftRadix2F32(@LData[0], 4, sfdForward);
+  FftRadix2F32(@LData[0], 4, sfdInverse);
+  for I := 0 to 3 do
+    CheckTrue(NearEqual(LData[I].Re, LOrig[I], 0.1), 'FFT IFFT roundtrip');
+end;
+
+procedure TTestCase_SimdSignal.Test_FFT_DC_Component;
+var
+  LData: array[0..3] of TSimdComplexF32;
+  I: Integer;
+begin
+  // Constant signal [3, 3, 3, 3] → DC component should be 3*4=12, others ~0
+  for I := 0 to 3 do
+  begin
+    LData[I].Re := 3.0;
+    LData[I].Im := 0.0;
+  end;
+  FftRadix2F32(@LData[0], 4, sfdForward);
+  // DC bin (index 0) should contain sum of all samples
+  CheckTrue(NearEqual(LData[0].Re, 12.0, 0.1), 'FFT DC = 12');
+  // Other bins should be near zero
+  CheckTrue(Abs(LData[1].Re) < 0.1, 'FFT bin1 Re ~ 0');
+  CheckTrue(Abs(LData[1].Im) < 0.1, 'FFT bin1 Im ~ 0');
 end;
 
 { ============================================================================

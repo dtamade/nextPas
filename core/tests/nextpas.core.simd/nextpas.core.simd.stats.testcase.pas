@@ -32,6 +32,9 @@ type
     procedure Test_CosineSimilarity_Same;
     procedure Test_CosineSimilarity_Orthogonal;
     procedure Test_Histogram_Basic;
+    procedure Test_OnlineStats_Add;
+    procedure Test_OnlineStats_Batch;
+    procedure Test_OnlineStats_Merge;
     procedure Test_NilSafety;
   end;
 
@@ -234,6 +237,59 @@ begin
   HistogramF32(@LSrc[0], 6, @LBins[0], @LCounts[0], 3, 0.0, 3.0);
   // Should have counts in each bin
   CheckTrue(LCounts[0] + LCounts[1] + LCounts[2] = 6, 'Histogram total=6');
+end;
+
+{ ============================================================================
+  OnlineStats (Welford)
+  ============================================================================ }
+
+procedure TTestCase_SimdStats.Test_OnlineStats_Add;
+var
+  LStats: TSimdF32OnlineStats;
+begin
+  LStats.Clear;
+  LStats.Add(2.0);
+  LStats.Add(4.0);
+  LStats.Add(4.0);
+  LStats.Add(4.0);
+  LStats.Add(5.0);
+  LStats.Add(5.0);
+  LStats.Add(7.0);
+  LStats.Add(9.0);
+  // Mean = 5.0, Variance = 32/7 ~ 4.571 (sample, N-1)
+  CheckTrue(NearEqual(LStats.GetMean, 5.0, EPS), 'OnlineStats mean=5');
+  CheckTrue(NearEqual(LStats.GetVariance, 32.0/7.0, 0.1), 'OnlineStats var=32/7');
+  CheckTrue(NearEqual(LStats.GetStdDev, System.Sqrt(32.0/7.0), 0.1), 'OnlineStats stddev');
+end;
+
+procedure TTestCase_SimdStats.Test_OnlineStats_Batch;
+var
+  LStats: TSimdF32OnlineStats;
+  LData: array[0..3] of Single = (1.0, 2.0, 3.0, 4.0);
+begin
+  LStats.Clear;
+  LStats.AddBatch(@LData[0], 4);
+  // Mean = 2.5, Variance = 5/3 ~ 1.667
+  CheckTrue(NearEqual(LStats.GetMean, 2.5, EPS), 'OnlineStats batch mean');
+  CheckTrue(NearEqual(LStats.GetVariance, 5.0/3.0, 0.1), 'OnlineStats batch var');
+end;
+
+procedure TTestCase_SimdStats.Test_OnlineStats_Merge;
+var
+  LA, LB, LMerged: TSimdF32OnlineStats;
+  LDataA: array[0..1] of Single = (1.0, 3.0);
+  LDataB: array[0..1] of Single = (5.0, 7.0);
+begin
+  LA.Clear;
+  LA.AddBatch(@LDataA[0], 2);
+  LB.Clear;
+  LB.AddBatch(@LDataB[0], 2);
+  LMerged.Clear;
+  LMerged.Merge(LA);
+  LMerged.Merge(LB);
+  // Combined: [1,3,5,7], mean=4, var=20/3
+  CheckTrue(NearEqual(LMerged.GetMean, 4.0, EPS), 'OnlineStats merge mean');
+  CheckTrue(NearEqual(LMerged.GetVariance, 20.0/3.0, 0.1), 'OnlineStats merge var');
 end;
 
 { ============================================================================
