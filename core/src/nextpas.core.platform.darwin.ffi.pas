@@ -9,10 +9,17 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 
+{ Mach kernel time }
 function mach_absolute_time: UInt64; cdecl; external 'c' name 'mach_absolute_time';
 function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; external 'c' name 'mach_timebase_info';
+
+{ Thread ID }
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
+
+{ Errno }
 function __error: PInt32; cdecl; external 'c' name '__error';
+
+{ Signal handling }
 function sigaction(
   const ASignal: Int32;
   ANewAction: PPlatformDarwinSigAction;
@@ -30,6 +37,8 @@ function pthread_sigmask(
   const AHow: Int32;
   ANewSet: PPlatformDarwinSignalSet;
   AOldSet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'pthread_sigmask';
+
+{ File status (macOS uses $INODE64 suffix) }
 function stat(
   const APath: PAnsiChar;
   var AStat: TPlatformDarwinStat): Int32; cdecl; external 'c' name 'stat$INODE64';
@@ -39,23 +48,37 @@ function lstat(
 function fstat(
   const AFileDescriptor: Int32;
   var AStat: TPlatformDarwinStat): Int32; cdecl; external 'c' name 'fstat$INODE64';
+
+{ Dynamic loading }
 function dlopen(Name: PAnsiChar; Flags: Int32): Pointer; cdecl; external 'c' name 'dlopen';
 function dlsym(Lib: Pointer; Name: PAnsiChar): Pointer; cdecl; external 'c' name 'dlsym';
 function dlclose(Lib: Pointer): Int32; cdecl; external 'c' name 'dlclose';
 function dlerror: PAnsiChar; cdecl; external 'c' name 'dlerror';
+
+{ kqueue event notification }
 function kqueue: Int32; cdecl; external 'c' name 'kqueue';
 function kevent(kq: Int32; changelist: PKEvent; nchanges: Int32; eventlist: PKEvent; nevents: Int32; timeout: Pointer): Int32; cdecl; external 'c' name 'kevent';
+
+{ File descriptors }
 function pipe(pipefd: Pointer): Int32; cdecl; external 'c' name 'pipe';
 function dup2(oldfd: Int32; newfd: Int32): Int32; cdecl; external 'c' name 'dup2';
+
+{ Links and permissions }
 function readlink(path: PAnsiChar; buf: PAnsiChar; bufsiz: PtrUInt): PtrInt; cdecl; external 'c' name 'readlink';
 function symlink(target: PAnsiChar; linkpath: PAnsiChar): Int32; cdecl; external 'c' name 'symlink';
 function chmod(path: PAnsiChar; mode: UInt32): Int32; cdecl; external 'c' name 'chmod';
 function chown(path: PAnsiChar; owner: UInt32; group: UInt32): Int32; cdecl; external 'c' name 'chown';
+
+{ User/group }
 function getuid: UInt32; cdecl; external 'c' name 'getuid';
 function geteuid: UInt32; cdecl; external 'c' name 'geteuid';
 function getgid: UInt32; cdecl; external 'c' name 'getgid';
 function getegid: UInt32; cdecl; external 'c' name 'getegid';
+
+{ Polling }
 function poll(fds: Pointer; nfds: UInt32; timeout: Int32): Int32; cdecl; external 'c' name 'poll';
+
+{ Socket operations }
 function socket(domain: Int32; xtype: Int32; protocol: Int32): Int32; cdecl; external 'c' name 'socket';
 function bind(sockfd: Int32; addr: Pointer; addrlen: UInt32): Int32; cdecl; external 'c' name 'bind';
 function listen(sockfd: Int32; backlog: Int32): Int32; cdecl; external 'c' name 'listen';
@@ -63,16 +86,55 @@ function accept(sockfd: Int32; addr: Pointer; addrlen: Pointer): Int32; cdecl; e
 function connect(sockfd: Int32; addr: Pointer; addrlen: UInt32): Int32; cdecl; external 'c' name 'connect';
 function send(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32): PtrInt; cdecl; external 'c' name 'send';
 function recv(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32): PtrInt; cdecl; external 'c' name 'recv';
+function sendto(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32; dest_addr: Pointer; addrlen: UInt32): PtrInt; cdecl; external 'c' name 'sendto';
+function recvfrom(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32; src_addr: Pointer; addrlen: Pointer): PtrInt; cdecl; external 'c' name 'recvfrom';
 function shutdown(sockfd: Int32; how: Int32): Int32; cdecl; external 'c' name 'shutdown';
+function getsockname(sockfd: Int32; addr: Pointer; addrlen: Pointer): Int32; cdecl; external 'c' name 'getsockname';
+function getpeername(sockfd: Int32; addr: Pointer; addrlen: Pointer): Int32; cdecl; external 'c' name 'getpeername';
+function getsockopt(sockfd: Int32; level: Int32; optname: Int32; optval: Pointer; optlen: Pointer): Int32; cdecl; external 'c' name 'getsockopt';
+function setsockopt(sockfd: Int32; level: Int32; optname: Int32; optval: Pointer; optlen: UInt32): Int32; cdecl; external 'c' name 'setsockopt';
+function socketpair(domain: Int32; xtype: Int32; protocol: Int32; sv: PInt32): Int32; cdecl; external 'c' name 'socketpair';
+
+{ DNS resolution }
 function getaddrinfo(node: PAnsiChar; service: PAnsiChar; hints: Pointer; res: Pointer): Int32; cdecl; external 'c' name 'getaddrinfo';
 procedure freeaddrinfo(res: Pointer); cdecl; external 'c' name 'freeaddrinfo';
 function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUInt; serv: PAnsiChar; servlen: PtrUInt; flags: Int32): Int32; cdecl; external 'c' name 'getnameinfo';
+
+{ Random }
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
+
+{ Directory reading }
 function getdirentries(fd: Int32; buf: PAnsiChar; nbytes: PtrUInt; basep: Pointer): PtrInt; cdecl; external 'c' name 'getdirentries';
 
 { PTY — in libc on macOS }
 function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'c' name 'openpty';
 function login_tty(AFd: cint): cint; cdecl; external 'c' name 'login_tty';
+
+{ sendfile — macOS has different signature than Linux }
+function sendfile(fd: cint; s: cint; offset: Int64; nbytes: Pointer; hdtr: Pointer; flags: Int32): Int32; cdecl; external 'c' name 'sendfile';
+
+{ Network interface enumeration }
+function if_nametoindex(ifname: PAnsiChar): cuint; cdecl; external 'c' name 'if_nametoindex';
+function if_indextoname(ifindex: cuint; ifname: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'if_indextoname';
+
+{ Filesystem }
+function statfs(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'statfs';
+function fstatfs(fd: cint; buf: Pointer): cint; cdecl; external 'c' name 'fstatfs';
+function getfsstat(buf: Pointer; bufsize: Int32; flags: Int32): Int32; cdecl; external 'c' name 'getfsstat';
+
+{ System information }
+function sysctlbyname(name: PAnsiChar; oldp: Pointer; oldlenp: Pointer; newp: Pointer; newlen: PtrUInt): Int32; cdecl; external 'c' name 'sysctlbyname';
+function sysctlnametomib(name: PAnsiChar; mibp: PInt32; sizep: Pointer): Int32; cdecl; external 'c' name 'sysctlnametomib';
+
+{ Copyfile — macOS file copy API }
+function copyfile(from: PAnsiChar; to_: PAnsiChar; state: Pointer; flags: UInt32): Int32; cdecl; external 'c' name 'copyfile';
+function fcopyfile(from: Int32; to_: Int32; state: Pointer; flags: UInt32): Int32; cdecl; external 'c' name 'fcopyfile';
+
+{ Misc POSIX }
+function ftruncate(fd: Int32; length: Int64): Int32; cdecl; external 'c' name 'ftruncate';
+function fsync(fd: Int32): Int32; cdecl; external 'c' name 'fsync';
+function fdatasync(fd: Int32): Int32; cdecl; external 'c' name 'fdatasync';
+function flock(fd: Int32; operation: Int32): Int32; cdecl; external 'c' name 'flock';
 
 implementation
 

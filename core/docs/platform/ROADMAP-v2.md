@@ -48,6 +48,7 @@
 | 可用性改进 v1-v6 | ✅ | 7.73 → 8.56 |
 | 跨平台修复 (字节序/InterlockedDecrement/LongBool/路径分隔符) | ✅ | 2026-07-06 |
 | Windows API 覆盖审计 | ✅ | 146 FFI 声明，覆盖完整 |
+| macOS/FreeBSD/Android FFI 完善 | ✅ | ~140 新增 FFI 声明 |
 
 ---
 

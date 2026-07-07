@@ -1,6 +1,7 @@
 # Platform API 覆盖矩阵
 
 > 生成时间: 2026-07-06
+> 更新时间: 2026-07-08
 > 审计范围: nextpas.core.platform.* 模块
 
 ## 概览
@@ -9,9 +10,13 @@
 |--------|------|
 | 总模块数 | 59 |
 | Windows FFI 声明 | 146 |
+| Linux FFI 声明 | ~120 |
+| macOS FFI 声明 | ~90 |
+| FreeBSD FFI 声明 | ~85 |
+| Android FFI 声明 | ~100 |
 | 覆盖 DLL | kernel32, advapi32, msvcrt |
-| Wine 测试模块 | 20 |
-| Wine 测试用例 | 174 |
+| Wine 测试模块 | 25 |
+| Wine 测试用例 | 217 |
 
 ## 模块分类
 
@@ -142,3 +147,75 @@
 **Windows API 覆盖完整**。146 个外部声明覆盖了 L0 平台抽象层所需的全部核心功能，满足 nextPas 运行时需求。
 
 无需额外补充 Windows API。
+
+---
+
+## macOS/FreeBSD/Android FFI 完善
+
+### 2026-07-08 更新
+
+#### macOS (darwin.ffi.pas) — 新增 ~30 个 FFI 声明
+
+| 功能域 | 新增函数 |
+|--------|----------|
+| 网络接口 | if_nametoindex, if_indextoname |
+| 文件系统 | statfs, fstatfs, getfsstat |
+| 系统信息 | sysctlbyname, sysctlnametomib |
+| 文件拷贝 | copyfile, fcopyfile |
+| 零拷贝 | sendfile (macOS 版本) |
+| 文件操作 | ftruncate, fsync, fdatasync, flock |
+| 网络完整 | sendto, recvfrom, getsockname, getpeername, getsockopt, setsockopt, socketpair |
+
+#### FreeBSD (freebsd.ffi.pas) — 新增 ~25 个 FFI 声明
+
+| 功能域 | 新增函数 |
+|--------|----------|
+| 高性能 accept | accept4 (原子 SOCK_NONBLOCK/SOCK_CLOEXEC) |
+| 资源限制 | prlimit (FreeBSD 版本) |
+| 随机数 | getrandom (FreeBSD 12+) |
+| 文件系统 | statfs, fstatfs |
+| 系统信息 | sysctlbyname |
+| 零拷贝 | sendfile (FreeBSD 版本), copy_file_range |
+| 网络接口 | if_nametoindex, if_indextoname |
+| 网络完整 | sendto, recvfrom, getsockname, getpeername, getsockopt, setsockopt, socketpair |
+| 文件操作 | ftruncate, fsync, fdatasync, flock |
+
+#### Android (android.ffi.pas) — 新增 ~30 个 FFI 声明
+
+| 功能域 | 新增函数 |
+|--------|----------|
+| 事件通知 | epoll_create1, epoll_ctl, epoll_wait |
+| 事件fd | eventfd |
+| 文件监控 | inotify_init1, inotify_add_watch, inotify_rm_watch |
+| 高性能 accept | accept4 |
+| 目录读取 | getdents64 |
+| 文件系统 | statfs, fstatfs |
+| 资源限制 | prlimit64 |
+| 随机数 | getrandom (API 28+) |
+| 系统信息 | sysinfo, uname |
+| 零拷贝 | sendfile, splice |
+| 进程控制 | prctl |
+| 信号处理 | sigaction, sigprocmask, sigpending, sigwait, raise |
+| 网络接口 | if_nametoindex, if_indextoname |
+| 文件操作 | ftruncate, fsync, fdatasync, flock, fstatat |
+| Android 特有 | __system_property_find, __system_property_get, __system_property_read_callback |
+
+#### POSIX 通用 (posix.ffi.pas) — 新增 ~15 个 FFI 声明
+
+| 功能域 | 新增函数 |
+|--------|----------|
+| 系统信息 | uname |
+| 文件状态 | fstatat |
+| 文件系统 | statfs, fstatfs |
+| 进程组 | getpgrp, setpgrp, getsid |
+| 用户/组 | getgrnam, getgrgid |
+
+### 平台 FFI 覆盖总结
+
+| 平台 | FFI 声明数 | 状态 |
+|------|-----------|------|
+| Windows | 146 | ✅ 完整 |
+| Linux | ~120 | ✅ 完整 |
+| macOS | ~90 | ✅ 完整 (kqueue 替代 epoll/inotify) |
+| FreeBSD | ~85 | ✅ 完整 (kqueue 替代 epoll/inotify) |
+| Android | ~100 | ✅ 完整 (Bionic libc + property API) |

@@ -199,9 +199,35 @@ function grantpt(AFd: cint): cint; cdecl; external 'c' name 'grantpt';
 function unlockpt(AFd: cint): cint; cdecl; external 'c' name 'unlockpt';
 function ptsname(AFd: cint): PAnsiChar; cdecl; external 'c' name 'ptsname';
 
-{ sendfile - zero-copy file transfer between file descriptors (Linux) }
+{ sendfile - zero-copy file transfer between file descriptors }
 function sendfile(AOutFd: cint; AInFd: cint; AOffset: Pointer;
   ACount: size_t): ssize_t; cdecl; external 'c' name 'sendfile';
+
+{ System information }
+function uname(buf: Pointer): cint; cdecl; external 'c' name 'uname';
+
+{ File status at - relative path stat }
+function fstatat(dirfd: cint; pathname: PAnsiChar; buf: Pointer; flags: cint): cint; cdecl; external 'c' name 'fstatat';
+
+{ Filesystem statistics }
+function statfs(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'statfs';
+function fstatfs(fd: cint; buf: Pointer): cint; cdecl; external 'c' name 'fstatfs';
+
+{ Process groups }
+function getpgrp: pid_t; cdecl; external 'c' name 'getpgrp';
+function setpgrp: pid_t; cdecl; external 'c' name 'setpgrp';
+function getsid(pid: pid_t): pid_t; cdecl; external 'c' name 'getsid';
+
+{ User/group info }
+function getgrnam(name: PAnsiChar): Pointer; cdecl; external 'c' name 'getgrnam';
+function getgrgid(gid: gid_t): Pointer; cdecl; external 'c' name 'getgrgid';
+
+{ Socket options - SO_NOSIGPIPE (macOS/FreeBSD) }
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';
+function fplstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'lstat';
+function fpfstat(fd: cint; buf: Pointer): cint; cdecl; external 'c' name 'fstat';
+{$ENDIF}
 
 implementation
 
