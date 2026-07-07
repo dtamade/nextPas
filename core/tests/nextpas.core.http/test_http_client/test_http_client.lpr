@@ -4338,6 +4338,121 @@ begin
   Check(LRaised, 'response body bytes helper rejects nil response');
 end;
 
+procedure TestExtractCharsetFromContentType;
+begin
+  CheckEqual('utf-8', ExtractCharsetFromContentType('text/html; charset=utf-8'),
+    'basic charset');
+  CheckEqual('UTF-8', ExtractCharsetFromContentType('text/html; charset=UTF-8'),
+    'preserves case');
+  CheckEqual('iso-8859-1', ExtractCharsetFromContentType('text/html; charset=iso-8859-1'),
+    'latin1');
+  CheckEqual('utf-8', ExtractCharsetFromContentType('application/json; charset=utf-8'),
+    'json charset');
+  CheckEqual('', ExtractCharsetFromContentType('text/html'),
+    'no charset');
+  CheckEqual('', ExtractCharsetFromContentType(''),
+    'empty content-type');
+  CheckEqual('utf-8', ExtractCharsetFromContentType('text/html; charset="utf-8"'),
+    'quoted charset');
+end;
+
+procedure TestHttpReadResponseBodyStringAutoUtf8;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/utf8', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LResponseBody: string;
+  begin
+    LResponseBody := 'héllo wörld';
+    AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/utf8');
+    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
+    CheckEqual('héllo wörld', LBody, 'utf-8 auto read');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpReadResponseBodyStringAutoLatin1;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/latin1', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LResponseBody: string;
+  begin
+    { Send raw Latin-1 bytes: é = 0xE9, ö = 0xF6 }
+    LResponseBody := 'h' + Chr($E9) + 'llo w' + Chr($F6) + 'rld';
+    AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=iso-8859-1');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/latin1');
+    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
+    Check(Pos(Chr($E9), LBody) > 0, 'latin1 é preserved');
+    Check(Pos(Chr($F6), LBody) > 0, 'latin1 ö preserved');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpReadResponseBodyStringAutoNoCharset;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/nocharset', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LResponseBody: string;
+  begin
+    LResponseBody := 'hello world';
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/nocharset');
+    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
+    CheckEqual('hello world', LBody, 'no charset defaults to utf-8');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestHttpReleaseResponseBodyClosesCloseCapableBody;
 var
   LHeaders: IHttpHeaders;
@@ -7715,6 +7830,10 @@ begin
     @TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails);
   T.Test('HttpReadResponseBodyBytes rejects nil response',
     @TestHttpReadResponseBodyBytesRejectsNilResponse);
+  T.Test('ExtractCharsetFromContentType', @TestExtractCharsetFromContentType);
+  T.Test('HttpReadResponseBodyStringAuto UTF-8', @TestHttpReadResponseBodyStringAutoUtf8);
+  T.Test('HttpReadResponseBodyStringAuto Latin-1', @TestHttpReadResponseBodyStringAutoLatin1);
+  T.Test('HttpReadResponseBodyStringAuto no charset', @TestHttpReadResponseBodyStringAutoNoCharset);
   T.Test('HttpReleaseResponseBody closes close-capable body',
     @TestHttpReleaseResponseBodyClosesCloseCapableBody);
   T.Test('HttpReleaseResponseBody drains plain reader',

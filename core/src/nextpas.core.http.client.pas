@@ -149,6 +149,8 @@ function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
+function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
+function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
 
@@ -1531,6 +1533,82 @@ begin
   SetLength(Result, Length(LBody));
   if Length(LBody) > 0 then
     Move(LBody[0], Result[1], Length(LBody));
+end;
+
+function ExtractCharsetFromContentType(const AContentType: string): string;
+var
+  LLower, LCharset: string;
+  LStart, LEnd: SizeInt;
+begin
+  Result := '';
+  if AContentType = '' then Exit;
+  LLower := LowerCase(AContentType);
+  LStart := Pos('charset=', LLower);
+  if LStart = 0 then Exit;
+  Inc(LStart, 8); { skip 'charset=' }
+  LEnd := LStart;
+  while (LEnd <= Length(AContentType)) and (AContentType[LEnd] <> ';') and
+    (AContentType[LEnd] <> ' ') do
+    Inc(LEnd);
+  SetLength(LCharset, LEnd - LStart);
+  if LEnd > LStart then
+    Move(AContentType[LStart], LCharset[1], LEnd - LStart);
+  { Remove surrounding quotes if present }
+  if (Length(LCharset) >= 2) and (LCharset[1] = '"') and
+    (LCharset[Length(LCharset)] = '"') then
+  begin
+    SetLength(Result, Length(LCharset) - 2);
+    if Length(Result) > 0 then
+      Move(LCharset[2], Result[1], Length(Result));
+  end
+  else
+    Result := LCharset;
+end;
+
+function BytesToLatin1String(const ABytes: TBytes): string;
+var
+  I, LLen: SizeInt;
+begin
+  LLen := Length(ABytes);
+  SetLength(Result, LLen);
+  for I := 0 to LLen - 1 do
+    Result[I + 1] := Chr(ABytes[I]);
+end;
+
+function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
+var
+  LBody: TBytes;
+  LContentType, LCharset: string;
+  LLowerCharset: string;
+begin
+  LBody := HttpReadResponseBodyBytes(AResp);
+  if Length(LBody) = 0 then
+    Exit('');
+
+  LContentType := '';
+  if AResp <> nil then
+    LContentType := AResp.Headers.Get('content-type');
+  LCharset := ExtractCharsetFromContentType(LContentType);
+  LLowerCharset := LowerCase(LCharset);
+
+  { Default to UTF-8 if no charset specified }
+  if (LLowerCharset = '') or (LLowerCharset = 'utf-8') or
+    (LLowerCharset = 'utf8') or (LLowerCharset = 'us-ascii') then
+  begin
+    Result := '';
+    SetLength(Result, Length(LBody));
+    Move(LBody[0], Result[1], Length(LBody));
+  end
+  else if (LLowerCharset = 'iso-8859-1') or (LLowerCharset = 'latin1') or
+    (LLowerCharset = 'latin-1') or (LLowerCharset = 'windows-1252') then
+    Result := BytesToLatin1String(LBody)
+  else
+  begin
+    { Unknown charset — fall back to raw bytes (UTF-8 compatible) }
+    Result := '';
+    SetLength(Result, Length(LBody));
+    Move(LBody[0], Result[1], Length(LBody));
+  end;
 end;
 
 end.
