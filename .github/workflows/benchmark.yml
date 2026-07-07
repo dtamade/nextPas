@@ -1,0 +1,105 @@
+name: Performance Benchmark
+
+on:
+  push:
+    branches: [ main, bench ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Free Pascal
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y fpc
+
+    - name: Cache FPC units
+      uses: actions/cache@v3
+      with:
+        path: |
+          core/build
+          core/tests/nextpas.core.bench/*/build
+        key: ${{ runner.os }}-fpc-${{ hashFiles('core/src/*.pas') }}
+        restore-keys: |
+          ${{ runner.os }}-fpc-
+
+    - name: Run Benchmark Tests
+      run: |
+        chmod +x scripts/bench-ci.sh
+        ./scripts/bench-ci.sh test
+
+    - name: Generate Baseline (main branch)
+      if: github.ref == 'refs/heads/main'
+      run: |
+        ./scripts/bench-ci.sh baseline bench-baseline-main.json
+
+    - name: Upload Baseline
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-baseline
+        path: bench-baseline-main.json
+
+    - name: Download Baseline (PR)
+      if: github.event_name == 'pull_request'
+      uses: actions/download-artifact@v3
+      with:
+        name: benchmark-baseline
+      continue-on-error: true
+
+    - name: Compare with Baseline (PR)
+      if: github.event_name == 'pull_request'
+      run: |
+        if [ -f bench-baseline-main.json ]; then
+          ./scripts/bench-ci.sh compare bench-baseline-main.json bench-ci-report.json
+        else
+          echo "No baseline found, skipping comparison"
+        fi
+
+    - name: Upload Benchmark Report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-report
+        path: bench-ci-report.json
+      continue-on-error: true
+
+    - name: Comment PR with Results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+
+          let report = '## Benchmark Results\n\n';
+
+          if (fs.existsSync('bench-ci-report.json')) {
+            const data = JSON.parse(fs.readFileSync('bench-ci-report.json', 'utf8'));
+
+            report += `| Metric | Value |\n|--------|-------|\n`;
+            report += `| Timestamp | ${data.timestamp || 'N/A'} |\n`;
+            report += `| Entries | ${data.entries ? data.entries.length : 0} |\n\n`;
+
+            if (data.entries && data.entries.length > 0) {
+              report += `| Name | ns/op | stddev | P95 | P99 |\n`;
+              report += `|------|-------|--------|-----|-----|\n`;
+
+              data.entries.forEach(entry => {
+                report += `| ${entry.name} | ${entry.mean_ns.toFixed(2)} | ${entry.stddev_ns.toFixed(2)} | ${entry.p95_ns.toFixed(2)} | ${entry.p99_ns.toFixed(2)} |\n`;
+              });
+            }
+          } else {
+            report += 'No benchmark report generated.\n';
+          }
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: report
+          });
