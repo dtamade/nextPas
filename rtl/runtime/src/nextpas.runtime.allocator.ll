@@ -191,3 +191,23 @@ free.insert:
 free.done:
   ret void
 }
+
+; ptr @np_realloc(ptr %raw, i64 %old_size, i64 %new_size)
+; Reallocate memory: alloc new, copy old data, free old.
+; If new_size <= old_size, returns raw unchanged (no-op shrink).
+define ptr @np_realloc(ptr %raw, i64 %old_size, i64 %new_size) {
+entry:
+  %shrink = icmp ule i64 %new_size, %old_size
+  br i1 %shrink, label %done, label %alloc
+alloc:
+  %newp = call ptr @np_alloc(i64 %new_size)
+  call void @np_memcpy(ptr %newp, ptr %raw, i64 %old_size)
+  call void @np_free(ptr %raw, i64 %old_size)
+  ret ptr %newp
+done:
+  ret ptr %raw
+}
+
+declare void @np_memcpy(ptr, ptr, i64)
+declare void @np_free(ptr, i64)
+declare ptr @np_alloc(i64)
