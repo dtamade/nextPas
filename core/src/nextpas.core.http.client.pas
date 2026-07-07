@@ -14,6 +14,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.http.base,
   nextpas.core.http.form.base,
+  nextpas.core.json.value,
   nextpas.core.http.intf;
 
 type
@@ -48,6 +49,9 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -74,6 +78,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
+  nextpas.core.json,
   nextpas.core.http.impl.registry;
 
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
@@ -832,6 +837,24 @@ var
 begin
   LBody := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
   Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
+end;
+
+function THttpClient.PostJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Post(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClient.PutJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Put(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClient.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Patch(AUrl, 'application/json', JsonStringify(ABody));
 end;
 
 { Factory functions }

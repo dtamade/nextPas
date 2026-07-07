@@ -12,11 +12,13 @@ uses
   nextpas.core.net.server.base,
   nextpas.core.net.server.intf,
   nextpas.core.http.base,
-  nextpas.core.http.form.base;
+  nextpas.core.http.form.base,
+  nextpas.core.json.value;
 
 type
   TStringArray = nextpas.core.base.TStringArray;
   TFormFieldArray = nextpas.core.http.form.base.TFormFieldArray;
+  TJsonValue = nextpas.core.json.value.TJsonValue;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
@@ -150,6 +152,9 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
   end;
 
   { Transport layer — protocol implementations register these }
