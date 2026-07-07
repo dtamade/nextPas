@@ -22,7 +22,8 @@ uses
   nextpas.core.lockfree.segqueue,
   nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.selector,
-  nextpas.core.lockfree.selector.impl;
+  nextpas.core.lockfree.selector.impl,
+  nextpas.core.lockfree.priority_queue;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -110,6 +111,14 @@ type
     @see TConcurrentHashSetImpl 详细文档和示例
   }
   generic TConcurrentHashSet<TKey> = class(specialize TConcurrentHashSetImpl<TKey>)
+  end;
+
+  {** @desc 并发优先队列
+    @details 基于二叉堆实现，使用互斥锁保证线程安全。
+      最小堆：优先级值最小的元素最先出队。
+    @see TConcurrentPriorityQueueImpl 详细文档和示例
+  }
+  generic TConcurrentPriorityQueue<T> = class(specialize TConcurrentPriorityQueueImpl<T>)
   end;
 
 implementation
