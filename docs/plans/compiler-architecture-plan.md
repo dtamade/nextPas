@@ -1188,7 +1188,9 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 | **完成** | ✅ HIR model StructTypeName 字段 (`9427fa118`) |
 |         | ✅ HIR→MIR lowering 传播 (`9427fa118`) |
 |         | ✅ HIR LLVM emitter struct 声明 + field access 指令 (`49ed16857`) |
-| **待做** | sema 层在生成 field access HIR 指令时填入 StructTypeName（依赖 SeedCallBindings 修复） |
+| **待做** | THIRBuilder.LowerFieldExpr 区分指针字段访问 vs 值类型字段访问，为后者生成 hikExtractField/hikInsertField 并填入 StructTypeName |
+
+**阻塞已解除 (2026-07-07)**: merge origin/main → SeedCallBindings 修复已进入，records_pass 现在通过。P3 --out-dir 修复也已进入。
 
 #### P3: Stage2-B — Link Compiler .o Files [🔲]
 
