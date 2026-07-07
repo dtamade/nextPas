@@ -242,7 +242,7 @@ begin
       Exit(True);
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
 end;
 
@@ -263,7 +263,7 @@ begin
         Exit(True);
       Exit(False);
     end;
-    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
 end;
 

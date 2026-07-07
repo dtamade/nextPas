@@ -219,7 +219,7 @@ begin
       AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
       try
         if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
-          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, -1);
+          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
       finally
         AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
       end;

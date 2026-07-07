@@ -148,7 +148,7 @@ begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TrySend(AValue) then
       Exit;
-    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
 end;
 
@@ -214,7 +214,7 @@ begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryReceive(AValue) then
       Exit(True);
-    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
 end;
 

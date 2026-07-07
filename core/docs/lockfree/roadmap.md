@@ -41,8 +41,9 @@
 | `lockfree.skiplist` | 并发跳表 | ✅ 完成 | 26 |
 | `lockfree.btree` | 并发 B-Tree | ✅ 完成 | 17 |
 | `lockfree.hashset` | 并发 HashSet | ✅ 完成 | 9 |
+| `lockfree.priority_queue` | 并发优先队列 | ✅ 完成 | 8 |
 
-**规模**: 23 文件, ~12400 行, 145 测试
+**规模**: 24 文件, ~13000 行, 265 测试
 
 ---
 
@@ -59,7 +60,8 @@
 | test_lockfree_skiplist | 26 | ✅ 全绿 |
 | test_lockfree_btree | 17 | ✅ 全绿 |
 | test_lockfree_hashset | 9 | ✅ 全绿 |
-| **总计** | **257** | **✅ 全绿** |
+| test_lockfree_priority_queue | 8 | ✅ 全绿 |
+| **总计** | **265** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
@@ -253,6 +255,24 @@ L3: nextpas.core.lockfree.* (数据结构)
 | 优化 | 内容 | 效果 |
 |------|------|------|
 | ShardIndex bitmask | 用位运算替代 mod | 减少除法开销 |
+
+### 4.14 Lost Wakeup 死锁修复 (2026-07-08)
+
+| 修复 | 内容 | 效果 |
+|------|------|------|
+| 有界超时 | 所有 WaitXxx(-1) 改为 WaitXxx(10ms) | 消除死锁 |
+| wake_all | Notify 使用 wake_all 替代 wake_one | 消除 LIFO 饥饿 |
+
+**根因**: Linux futex FUTEX_WAKE(LIFO) 导致线程饥饿，消费者带着旧 epoch 永久睡眠。
+**验证**: stress test 30/30 全通过 (修复前 25/30 hang)。
+
+### 4.15 并发优先队列 (2026-07-08)
+
+| 数据结构 | 类型 | 测试 |
+|----------|------|------|
+| TConcurrentPriorityQueue | 二叉堆 + 互斥锁 | 8 |
+
+**特性**: 最小堆/最大堆、自动扩容、20K 并发测试。
 
 ---
 

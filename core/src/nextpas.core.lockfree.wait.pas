@@ -4,6 +4,12 @@ unit nextpas.core.lockfree.wait;
 
 interface
 
+const
+  {** Default bounded timeout for lock-free wait operations (10ms).
+      Prevents lost-wakeup deadlocks when FUTEX_WAKE(LIFO) starves
+      a waiter whose expected epoch drifts far from the current value. }
+  LOCKFREE_WAIT_TIMEOUT_NS = 10000000;
+
 procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
   const AExpectedEpoch: Int32; const ATimeoutNs: Int64);
 procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
@@ -25,14 +31,14 @@ procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
-    platform_wake_address_one(AEpoch);
+    platform_wake_address_all(AEpoch);
 end;
 
 procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
-    platform_wake_address_one(AEpoch);
+    platform_wake_address_all(AEpoch);
 end;
 
 procedure LockFreeWaitEvent(AEpoch: PInt32; AWaiters: PInt32;
