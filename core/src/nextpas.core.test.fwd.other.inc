@@ -110,3 +110,17 @@ begin nextpas.core.test.prop.PropFail(AMsg); end;
 function PropWithResult(const AName: string; ATest: TIntTest;
   AGen: IIntGenerator; ARuns: Integer; AShrink: Boolean): string;
 begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;
+
+procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AMaxIterations: Integer);
+begin nextpas.core.test.prop.Fuzz(AName, ATest, ACorpus, AMaxIterations); end;
+
+procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
+  const ACorpus: array of string; AMaxIterations: Integer);
+begin nextpas.core.test.prop.FuzzString(AName, ATest, ACorpus, AMaxIterations); end;
+
+function FuzzGenBytes(ALen: Integer): TBytes;
+begin Result := nextpas.core.test.prop.FuzzGenBytes(ALen); end;
+
+function FuzzGenString(ALen: Integer): string;
+begin Result := nextpas.core.test.prop.FuzzGenString(ALen); end;

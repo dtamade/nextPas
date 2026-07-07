@@ -291,6 +291,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v7.1**: Property-based Testing — QuickCheck 风格，4 种生成器 (GenString/GenInt/GenBool/GenBytes)，自动 shrinking (二分缩小)，`Prop()` 注册属性测试
 - **v7.1a**: Generator Combinators — `MapIntToStr` (类型转换)、`FilterInt`/`FilterString`/`FilterBytes` (谓词过滤)，shrink 时尊重 filter 约束
 - **v7.1b**: GenChoice/GenOneOf + Shrink 修复 — `GenChoiceInt`/`GenChoiceString`/`GenChoiceBool` (从数组随机选取)、`GenOneOfInt`/`GenOneOfString` (组合多个生成器)；修复 shrink 无限递归 (固定点检测)；修复 `Prop()` 中 `FailTest` 调用 `Halt(1)` 导致 shrink 失效的问题；新增 `PropFail()` (抛异常) 和 `PropWithResult()` (返回缩小值)；Int shrink 改进 (尊重 FMin 边界)
+- **v7.2a**: Mutation-based Fuzzing — 纯随机变异 fuzzing，无需编译器覆盖率插桩。6 种变异策略 (bit flip/byte replace/byte insert/byte delete/block dup/block swap)；`Fuzz()` / `FuzzString()` 入口；自动最小化失败输入 (binary shrink)；`FuzzGenBytes()` / `FuzzGenString()` 语料生成；20 测试 (15 Prop + 5 Fuzz)
 
 ## 路线图
 
@@ -299,6 +300,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 | **v7.1** | Property-based Testing — 结构化随机生成 + 收缩 (shrinking) | ✅ 已完成 | 无 |
 | **v7.1a** | Generator Combinators — Map/Filter 组合器 | ✅ 已完成 | v7.1 |
 | **v7.1b** | GenChoice/GenOneOf + Shrink 修复 | ✅ 已完成 | v7.1a |
+| **v7.2a** | Mutation-based Fuzzing — 纯随机变异 + 自动最小化 | ✅ 已完成 | v7.1b |
 | **v7.2** | Coverage-guided Fuzzing — 编译器覆盖率插桩引导变异 | 🔴 等待 nextpas 编译器 | nextpas 覆盖率插桩 + sanitizer |
 | **v7.3** | Fuzzing corpus management — 语料库持久化、最小化、回归 | 🔴 等待 v7.2 | v7.2 |
 
@@ -341,6 +343,31 @@ PropWithResult('name', @Test, Gen)   // 返回缩小后的值 (用于测试 shri
 - 自动 shrinking: 失败时递归二分缩小输入，找到最小复现
 - Filter 组合器在 shrink 时也尊重谓词约束
 - PropFail: 在 Prop 测试体内使用 (FailTest 调用 Halt(1) 会跳过 shrink)
+
+### v7.2a Mutation-based Fuzzing — 实际 API
+
+```pascal
+{ 基础用法: 字节 fuzzing }
+Fuzz('parser test', procedure(const Data: TBytes)
+begin
+  ParseSomething(Data);  { 如果抛异常，fuzzer 报告并最小化 }
+end, [SeedBytes1, SeedBytes2], 10000);
+
+{ 字符串 fuzzing }
+FuzzString('json test', procedure(const S: string)
+begin
+  JsonDecode(S);
+end, ['{"key": "value"}', '[]'], 10000);
+
+{ 生成语料 }
+FuzzGenBytes(100)    // 100 随机字节
+FuzzGenString(50)    // 50 可打印 ASCII 字符
+```
+
+- 6 种变异策略: bit flip (40%), byte replace (25%), byte insert (15%), byte delete (10%), block dup (5%), block swap (5%)
+- 自动最小化: 失败时先截断后半段，再逐字节删除，找到最小复现
+- 失败报告: hex dump 最小输入 + 迭代次数 + 失败计数
+- 无需编译器支持: 纯随机变异，适合测试 parser/deserializer
 
 ### v7.2 Coverage-guided Fuzzing 前置条件
 
