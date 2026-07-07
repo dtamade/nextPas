@@ -6634,6 +6634,8 @@ var
   AliasTargetMeta: TTypeMetadata;
   AliasHasTargetMeta: Boolean;
   AliasLocalMeta: TTypeMetadata;
+  TypeName: string;
+  TypeKind: string;
 begin
   if ANode = nil then
     Exit;
@@ -6644,9 +6646,22 @@ begin
       Continue;
     if Child.Text = '' then
       Continue;
-    TypeId := FModel.AddType(Child.Text, 'declared');
+    { Handle {$compiler_root} and {$compiler_type_kind} directives }
+    TypeName := Child.Text;
+    TypeKind := 'declared';
+    if Copy(TypeName, 1, 14) = 'compiler_root:' then
+    begin
+      TypeName := Copy(TypeName, 15, Length(TypeName));
+      TypeKind := 'class';
+    end
+    else if Copy(TypeName, 18, 1) = ':' then
+    begin
+      TypeName := Copy(TypeName, 19, Length(TypeName));
+      TypeKind := 'enum';
+    end;
+    TypeId := FModel.AddType(TypeName, TypeKind);
     FModel.SetTypeOwner(TypeId, AOwnerUnitId);
-    SymbolId := FModel.AddSymbol(Child.Text, 'type', AOwnerUnitId, TypeId,
+    SymbolId := FModel.AddSymbol(TypeName, 'type', AOwnerUnitId, TypeId,
       Child.ByteOffset);
     if FCurrentScopeId > 0 then
       FModel.SetSymbolScope(SymbolId, FCurrentScopeId);
@@ -9665,6 +9680,7 @@ function TSemanticAnalyzer.FindTypeDeclNodeInRoot(const ARootNode: TGreenNode;
 var
   I, J, K: LongInt;
   SectionNode, TypeDeclNode, TypeBodyNode: TGreenNode;
+  DeclName: string;
 begin
   ATypeDeclNode := nil;
   ATypeBodyNode := nil;
@@ -9679,8 +9695,15 @@ begin
     for J := 0 to SectionNode.ChildCount - 1 do
     begin
       TypeDeclNode := SectionNode.ChildAt(J);
-      if (TypeDeclNode = nil) or (TypeDeclNode.NodeKind <> gnkTypeDecl) or
-        (not SameText(TypeDeclNode.Text, ATypeName)) then
+      if (TypeDeclNode = nil) or (TypeDeclNode.NodeKind <> gnkTypeDecl) then
+        Continue;
+      { Extract actual type name from directive-prefixed text }
+      DeclName := TypeDeclNode.Text;
+      if Copy(DeclName, 1, 14) = 'compiler_root:' then
+        DeclName := Copy(DeclName, 15, Length(DeclName))
+      else if Copy(DeclName, 18, 1) = ':' then
+        DeclName := Copy(DeclName, 19, Length(DeclName));
+      if not SameText(DeclName, ATypeName) then
         Continue;
       ATypeDeclNode := TypeDeclNode;
       for K := 0 to TypeDeclNode.ChildCount - 1 do
