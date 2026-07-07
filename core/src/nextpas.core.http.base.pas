@@ -101,7 +101,10 @@ const
   HTTP_STATUS_REQUEST_TIMEOUT       = THttpStatus(408);
   HTTP_STATUS_CONFLICT              = THttpStatus(409);
   HTTP_STATUS_GONE                  = THttpStatus(410);
+  HTTP_STATUS_LENGTH_REQUIRED       = THttpStatus(411);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
+  HTTP_STATUS_URI_TOO_LONG          = THttpStatus(414);
+  HTTP_STATUS_RANGE_NOT_SATISFIABLE = THttpStatus(416);
   HTTP_STATUS_EXPECTATION_FAILED    = THttpStatus(417);
   HTTP_STATUS_UNPROCESSABLE_ENTITY  = THttpStatus(422);
   HTTP_STATUS_TOO_MANY_REQUESTS     = THttpStatus(429);
@@ -208,6 +211,8 @@ begin
     409: Result := 'Conflict';
     410: Result := 'Gone';
     413: Result := 'Payload Too Large';
+    414: Result := 'URI Too Long';
+    416: Result := 'Range Not Satisfiable';
     417: Result := 'Expectation Failed';
     422: Result := 'Unprocessable Entity';
     429: Result := 'Too Many Requests';
