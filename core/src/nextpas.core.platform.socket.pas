@@ -134,6 +134,30 @@ function platform_sockaddr_loopback6(APort: UInt16;
 function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
   AAddr: PByte): Int32;
 
+{ Socket pair - create connected pair of sockets }
+function platform_socket_pair(ADomain, AType, AProtocol: Int32;
+  out ASocket1, ASocket2: TPlatformSocket): Int32;
+
+{ Get socket option }
+function platform_socket_getsockopt(const ASocket: TPlatformSocket;
+  ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32;
+
+{ Convenience: TCP_NODELAY }
+function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+
+{ Convenience: SO_REUSEADDR }
+function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+
+{ Convenience: SO_KEEPALIVE }
+function platform_socket_set_keepalive(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+
+{ Convenience: SO_LINGER }
+function platform_socket_set_linger(const ASocket: TPlatformSocket;
+  const AEnable: Boolean; const ALingerSec: Int32): Int32;
+
 { IPv4 helpers for net layer }
 function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
   out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
@@ -576,6 +600,72 @@ begin
   Move(LSa^.sin6_addr, AAddr^, 16);
   freeaddrinfo(LRes);
   Result := 0;
+end;
+
+function platform_socket_pair(ADomain, AType, AProtocol: Int32;
+  out ASocket1, ASocket2: TPlatformSocket): Int32;
+var
+  LSv: array[0..1] of cint;
+begin
+  if socketpair(ADomain, AType, AProtocol, @LSv[0]) <> 0 then
+  begin
+    ASocket1.Value := -1;
+    ASocket2.Value := -1;
+    Exit(platform_get_errno);
+  end;
+  ASocket1.Value := LSv[0];
+  ASocket2.Value := LSv[1];
+  Result := 0;
+end;
+
+function platform_socket_getsockopt(const ASocket: TPlatformSocket;
+  ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32;
+begin
+  if getsockopt(ASocket.Value, ALevel, AOptName, AOptVal, AOptLen) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: cint;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_IPPROTO_TCP,
+    PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: cint;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_keepalive(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: cint;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_linger(const ASocket: TPlatformSocket;
+  const AEnable: Boolean; const ALingerSec: Int32): Int32;
+var
+  LLinger: TLinger;
+begin
+  if AEnable then LLinger.l_onoff := 1 else LLinger.l_onoff := 0;
+  LLinger.l_linger := ALingerSec;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
 end;
 
 {$ENDIF}
@@ -1028,6 +1118,64 @@ begin
   Result := 0;
 end;
 
+function platform_socket_pair(ADomain, AType, AProtocol: Int32;
+  out ASocket1, ASocket2: TPlatformSocket): Int32;
+begin
+  { Windows doesn't have socketpair, use loopback connect }
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
+function platform_socket_getsockopt(const ASocket: TPlatformSocket;
+  ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32;
+begin
+  if winsock_getsockopt(TSocket(ASocket.Value), ALevel, AOptName,
+    PAnsiChar(AOptVal), AOptLen) = 0 then
+    Result := 0
+  else
+    Result := WSAGetLastError;
+end;
+
+function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: Int32;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_IPPROTO_TCP,
+    PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: Int32;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_REUSEADDR, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_keepalive(const ASocket: TPlatformSocket;
+  const AEnable: Boolean): Int32;
+var
+  LVal: Int32;
+begin
+  if AEnable then LVal := 1 else LVal := 0;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
+end;
+
+function platform_socket_set_linger(const ASocket: TPlatformSocket;
+  const AEnable: Boolean; const ALingerSec: Int32): Int32;
+var
+  LLinger: TLinger;
+begin
+  if AEnable then LLinger.l_onoff := 1 else LLinger.l_onoff := 0;
+  LLinger.l_linger := ALingerSec;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -1057,6 +1205,12 @@ function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const A
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_getsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_keepalive(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_linger(const ASocket: TPlatformSocket; const AEnable: Boolean; const ALingerSec: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
 function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
