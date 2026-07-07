@@ -253,7 +253,7 @@ begin
   if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then
     Exit(False);
   LMode := 0;
-  Result := GetConsoleMode(LHandle, @LMode) <> 0;
+  Result := GetConsoleMode(LHandle, @LMode) <> False;
 end;
 
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
@@ -270,14 +270,14 @@ begin
   if LHandle <> HANDLE(PtrInt(-1)) then
   begin
     LMode := 0;
-    if GetConsoleMode(LHandle, @LMode) <> 0 then
+    if GetConsoleMode(LHandle, @LMode) then
       SetConsoleMode(LHandle, LMode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
   end;
   LHandle := GetStdHandle(STD_ERROR_HANDLE);
   if LHandle <> HANDLE(PtrInt(-1)) then
   begin
     LMode := 0;
-    if GetConsoleMode(LHandle, @LMode) <> 0 then
+    if GetConsoleMode(LHandle, @LMode) then
       SetConsoleMode(LHandle, LMode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
   end;
   Result := 0;
@@ -292,7 +292,7 @@ begin
   ASize.Rows := 0;
   Result := WindowsConsoleHandleFromFd(AFd, LHandle);
   if Result <> 0 then Exit;
-  if GetConsoleScreenBufferInfo(LHandle, @LInfo) = 0 then
+  if not GetConsoleScreenBufferInfo(LHandle, @LInfo) then
     Exit(Int32(GetLastError));
   ASize.Cols := Int32(LInfo.srWindowRight - LInfo.srWindowLeft + 1);
   ASize.Rows := Int32(LInfo.srWindowBottom - LInfo.srWindowTop + 1);
@@ -308,14 +308,14 @@ begin
   Result := WindowsConsoleHandleFromFd(AFd, LHandle);
   if Result <> 0 then Exit;
   LSaved := 0;
-  if GetConsoleMode(LHandle, @LSaved) = 0 then
+  if not GetConsoleMode(LHandle, @LSaved) then
     Exit(Int32(GetLastError));
   Move(LSaved, AMode.Opaque[0], SizeOf(LSaved));
   LRaw := LSaved;
   LRaw := LRaw and not (ENABLE_LINE_INPUT or ENABLE_ECHO_INPUT or
     ENABLE_PROCESSED_INPUT);
   LRaw := LRaw or ENABLE_VIRTUAL_TERMINAL_INPUT;
-  if SetConsoleMode(LHandle, LRaw) = 0 then
+  if not SetConsoleMode(LHandle, LRaw) then
     Exit(Int32(GetLastError));
   Result := 0;
 end;
@@ -328,7 +328,7 @@ begin
   Result := WindowsConsoleHandleFromFd(AFd, LHandle);
   if Result <> 0 then Exit;
   Move(AMode.Opaque[0], LMode, SizeOf(LMode));
-  if SetConsoleMode(LHandle, LMode) = 0 then
+  if not SetConsoleMode(LHandle, LMode) then
     Exit(Int32(GetLastError));
   Result := 0;
 end;
@@ -342,7 +342,7 @@ begin
   if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
   if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
   LRead := 0;
-  if ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) = 0 then
+  if not ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) then
     Exit(-1);
   Result := Int32(LRead);
 end;
@@ -362,7 +362,7 @@ begin
   while LSent < ACount do
   begin
     LChunk := 0;
-    if WriteFile(LHandle, @LPtr[LSent], DWORD(ACount - LSent), @LChunk, nil) = 0 then
+    if not WriteFile(LHandle, @LPtr[LSent], DWORD(ACount - LSent), @LChunk, nil) then
       Exit(-1);
     LWritten := Int32(LChunk);
     if LWritten <= 0 then Exit(-1);
