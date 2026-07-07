@@ -101,6 +101,40 @@ function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenera
 { Filter: reject TBytes values not matching predicate }
 function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
 
+{ ── Structured Generators (v8.0a) ─────────────────────────────────────────── }
+
+type
+  { Array of Int64 generator }
+  TIntArrayTest = reference to procedure(const V: array of Int64);
+
+  IArrayGenerator = interface
+    function Generate: specialize TArray<Int64>;
+    function Shrink(const AValue: specialize TArray<Int64>): specialize TArray<specialize TArray<Int64>>;
+    function Name: string;
+  end;
+
+  { Tuple (Int64, String) generator }
+  TTupleTest = reference to procedure(AInt: Int64; const AStr: string);
+
+  ITupleGenerator = interface
+    function GenerateInt: Int64;
+    function GenerateString: string;
+    function Name: string;
+  end;
+
+{ Generate random-length array of Int64 values }
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer = 100): IArrayGenerator; overload;
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator; overload;
+
+{ Generate (Int64, String) tuple }
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+
+{ Bind/FlatMap: chain generators based on first output }
+type
+  TIntToGenerator = reference to function(V: Int64): IIntGenerator;
+
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+
 { ── Property test helpers ──────────────────────────────────────────────────── }
 
 { Raise EAssertionFailed — use inside Prop test bodies instead of FailTest }
@@ -123,6 +157,14 @@ procedure Prop(const AName: string; ATest: TBoolTest;
 { Register a property test with a TBytes generator }
 procedure Prop(const AName: string; ATest: TBytesTest;
   AGen: IBytesGenerator; ARuns: Integer = 100; AShrink: Boolean = True); overload;
+
+{ Register a property test with an array generator (v8.0a) }
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer = 100; AShrink: Boolean = True);
+
+{ Register a property test with a tuple generator (v8.0a) }
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer = 100);
 
 { Like Prop, but returns the shrunk value as string instead of calling FailTest.
   Returns '' if all runs pass. Raises EAssertionFailed on unexpected errors. }
@@ -262,13 +304,34 @@ begin
     SetLength(Result, 0);
     Exit;
   end;
-  SetLength(Result, 3);
+  SetLength(Result, 8);
   { Try empty }
   Result[0] := '';
   { Try half }
   Result[1] := Copy(AValue, 1, LLen div 2);
   { Try remove last char }
   Result[2] := Copy(AValue, 1, LLen - 1);
+  { Try replace all chars with 'a' }
+  Result[3] := StringOfChar('a', LLen);
+  { Try remove first char }
+  if LLen > 1 then
+    Result[4] := Copy(AValue, 2, LLen - 1)
+  else
+    Result[4] := '';
+  { Try remove middle char }
+  if LLen > 2 then
+    Result[5] := Copy(AValue, 1, LLen div 2) + Copy(AValue, LLen div 2 + 2, LLen)
+  else
+    Result[5] := '';
+  { Try shorter lengths }
+  if LLen > 3 then
+    Result[6] := StringOfChar('a', LLen - 1)
+  else
+    Result[6] := '';
+  if LLen > 5 then
+    Result[7] := StringOfChar('a', LLen div 2)
+  else
+    Result[7] := '';
 end;
 
 function TStringGenerator.Name: string;
@@ -1066,6 +1129,181 @@ begin
   Result := TOneOfStringGenerator.Create(AGens);
 end;
 
+{ ── Array Generator (v8.0a) ──────────────────────────────────────────────── }
+
+type
+  TArrayGenerator = class(TInterfacedObject, IArrayGenerator)
+  private
+    FGen: IIntGenerator;
+    FMinLen, FMaxLen: Integer;
+    FRng: TRandomGen;
+  public
+    constructor Create(AGen: IIntGenerator; AMinLen, AMaxLen: Integer);
+    destructor Destroy; override;
+    function Generate: specialize TArray<Int64>;
+    function Shrink(const AValue: specialize TArray<Int64>): specialize TArray<specialize TArray<Int64>>;
+    function Name: string;
+  end;
+
+constructor TArrayGenerator.Create(AGen: IIntGenerator; AMinLen, AMaxLen: Integer);
+begin
+  inherited Create;
+  FGen := AGen;
+  FMinLen := AMinLen;
+  FMaxLen := AMaxLen;
+  FRng := TRandomGen.Create(0);
+end;
+
+destructor TArrayGenerator.Destroy;
+begin
+  FRng.Free;
+  inherited;
+end;
+
+function TArrayGenerator.Generate: specialize TArray<Int64>;
+var
+  LLen, I: Integer;
+begin
+  LLen := FMinLen + FRng.NextIntRange(0, FMaxLen - FMinLen);
+  SetLength(Result, LLen);
+  for I := 0 to LLen - 1 do
+    Result[I] := FGen.Generate;
+end;
+
+function TArrayGenerator.Shrink(const AValue: specialize TArray<Int64>): specialize TArray<specialize TArray<Int64>>;
+var
+  LLen, LHalf, I: Integer;
+begin
+  LLen := Length(AValue);
+  if LLen = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+  SetLength(Result, 4);
+  { Try empty array }
+  SetLength(Result[0], 0);
+  { Try half length }
+  LHalf := LLen div 2;
+  SetLength(Result[1], LHalf);
+  for I := 0 to LHalf - 1 do
+    Result[1][I] := AValue[I];
+  { Try remove last element }
+  SetLength(Result[2], LLen - 1);
+  for I := 0 to LLen - 2 do
+    Result[2][I] := AValue[I];
+  { Try shrink each element }
+  SetLength(Result[3], LLen);
+  for I := 0 to LLen - 1 do
+    Result[3][I] := AValue[I] div 2;
+end;
+
+function TArrayGenerator.Name: string;
+begin
+  Result := 'GenArray(' + FGen.Name + ', ' + IntToStr(FMinLen) + '..' + IntToStr(FMaxLen) + ')';
+end;
+
+function GenArray(AGen: IIntGenerator; AMaxLen: Integer): IArrayGenerator;
+begin
+  Result := TArrayGenerator.Create(AGen, 0, AMaxLen);
+end;
+
+function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator;
+begin
+  Result := TArrayGenerator.Create(AGen, AMinLen, AMaxLen);
+end;
+
+{ ── Tuple Generator (v8.0a) ──────────────────────────────────────────────── }
+
+type
+  TTupleGenerator = class(TInterfacedObject, ITupleGenerator)
+  private
+    FGen1: IIntGenerator;
+    FGen2: IStringGenerator;
+  public
+    constructor Create(AGen1: IIntGenerator; AGen2: IStringGenerator);
+    function GenerateInt: Int64;
+    function GenerateString: string;
+    function Name: string;
+  end;
+
+constructor TTupleGenerator.Create(AGen1: IIntGenerator; AGen2: IStringGenerator);
+begin
+  inherited Create;
+  FGen1 := AGen1;
+  FGen2 := AGen2;
+end;
+
+function TTupleGenerator.GenerateInt: Int64;
+begin
+  Result := FGen1.Generate;
+end;
+
+function TTupleGenerator.GenerateString: string;
+begin
+  Result := FGen2.Generate;
+end;
+
+function TTupleGenerator.Name: string;
+begin
+  Result := 'GenTuple(' + FGen1.Name + ', ' + FGen2.Name + ')';
+end;
+
+function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
+begin
+  Result := TTupleGenerator.Create(AGen1, AGen2);
+end;
+
+{ ── Bind/FlatMap Generator (v8.0a) ───────────────────────────────────────── }
+
+type
+  TBindIntGenerator = class(TInterfacedObject, IIntGenerator)
+  private
+    FGen: IIntGenerator;
+    FFn: TIntToGenerator;
+  public
+    constructor Create(AGen: IIntGenerator; AFn: TIntToGenerator);
+    function Generate: Int64;
+    function Shrink(const AValue: Int64): specialize TArray<Int64>;
+    function Name: string;
+  end;
+
+constructor TBindIntGenerator.Create(AGen: IIntGenerator; AFn: TIntToGenerator);
+begin
+  inherited Create;
+  FGen := AGen;
+  FFn := AFn;
+end;
+
+function TBindIntGenerator.Generate: Int64;
+var
+  LFirst: Int64;
+  LSecond: IIntGenerator;
+begin
+  LFirst := FGen.Generate;
+  LSecond := FFn(LFirst);
+  Result := LSecond.Generate;
+end;
+
+function TBindIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
+begin
+  { Bind generators don't shrink directly — shrink the inner generator }
+  SetLength(Result, 3);
+  Result[0] := 0;
+  Result[1] := AValue div 2;
+  Result[2] := AValue - 1;
+end;
+
+function TBindIntGenerator.Name: string;
+begin
+  Result := 'BindInt(' + FGen.Name + ')';
+end;
+
+function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
+begin
+  Result := TBindIntGenerator.Create(AGen, AFn);
+end;
+
 { ── Shrinking helper ──────────────────────────────────────────────────────── }
 
 function ShrinkString(AGen: IStringGenerator; const AFailed: string;
@@ -1083,7 +1321,7 @@ begin
     try
       ATest(LShrunk[I]);
     except
-      on E: Exception do
+      on E: EAssertionFailed do
       begin
         Result := ShrinkString(AGen, LShrunk[I], ATest);
         Exit;
@@ -1281,6 +1519,89 @@ begin
           LValue := ShrinkBytes(AGen, LValue, ATest);
         FailTest('Property "' + AName + '" failed after ' + IntToStr(I) +
           ' runs with input: <' + IntToStr(Length(LValue)) + ' bytes> (' +
+          AGen.Name + ')');
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('Property "' + AName + '" passed ' + IntToStr(ARuns) + ' runs');
+end;
+
+{ ── PropArray (v8.0a) ─────────────────────────────────────────────────────── }
+
+procedure PropArray(const AName: string; ATest: TIntArrayTest;
+  AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
+var
+  I, J: Integer;
+  LValue: specialize TArray<Int64>;
+  LShrunk: specialize TArray<specialize TArray<Int64>>;
+  LFailed: Boolean;
+begin
+  for I := 1 to ARuns do
+  begin
+    LValue := AGen.Generate;
+    try
+      ATest(LValue);
+    except
+      on E: EAssertionFailed do
+      begin
+        if AShrink then
+        begin
+          { Try shrinking: first shorten array, then shrink elements }
+          repeat
+            LFailed := False;
+            LShrunk := AGen.Shrink(LValue);
+            for J := 0 to High(LShrunk) do
+            begin
+              if Length(LShrunk[J]) = Length(LValue) then
+              begin
+                { Same length — check if content changed }
+                if (Length(LValue) > 0) and (LShrunk[J][0] = LValue[0]) then
+                  Continue;
+              end;
+              try
+                ATest(LShrunk[J]);
+              except
+                on E2: EAssertionFailed do
+                begin
+                  LValue := LShrunk[J];
+                  LFailed := True;
+                  Break;
+                end;
+              end;
+            end;
+          until not LFailed or (Length(LValue) = 0);
+        end;
+        FailTest('Property "' + AName + '" failed after ' + IntToStr(I) +
+          ' runs with input: [' + IntToStr(Length(LValue)) + ' elements] (' +
+          AGen.Name + ')');
+        Exit;
+      end;
+    end;
+  end;
+  PassTest('Property "' + AName + '" passed ' + IntToStr(ARuns) + ' runs');
+end;
+
+{ ── PropTuple (v8.0a) ─────────────────────────────────────────────────────── }
+
+procedure PropTuple(const AName: string; ATest: TTupleTest;
+  AGen: ITupleGenerator; ARuns: Integer);
+var
+  I: Integer;
+  LInt: Int64;
+  LStr: string;
+begin
+  for I := 1 to ARuns do
+  begin
+    LInt := AGen.GenerateInt;
+    LStr := AGen.GenerateString;
+    try
+      ATest(LInt, LStr);
+    except
+      on E: EAssertionFailed do
+      begin
+        FailTest('Property "' + AName + '" failed after ' + IntToStr(I) +
+          ' runs with input: (' + IntToStr(LInt) + ', "' + LStr + '") (' +
           AGen.Name + ')');
         Exit;
       end;
