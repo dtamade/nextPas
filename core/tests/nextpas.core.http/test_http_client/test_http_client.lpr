@@ -370,7 +370,10 @@ type
     function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
@@ -380,6 +383,7 @@ type
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -1903,6 +1907,21 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 begin
   Result := FResponse;
@@ -1947,6 +1966,12 @@ begin
 end;
 
 function TDownloadClient.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.DeleteJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := FResponse;
@@ -3062,6 +3087,78 @@ begin
     LResp := LClient.PostJson('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api', LDoc.Root);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmPost, 'server received POST');
+    CheckEqual('application/json', LGotContentType, 'content-type is application/json');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientDeleteWithBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LGotBody: string;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmDelete, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    if AReq.Body <> nil then
+      LGotBody := ReadReaderStr(AReq.Body);
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Delete('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
+      'application/json', '{"id":42}');
+    Check(LGotMethod = hmDelete, 'server received DELETE');
+    CheckEqual('application/json', LGotContentType, 'content-type set');
+    CheckEqual('{"id":42}', LGotBody, 'body sent');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientDeleteJson;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LDoc: IJsonDocument;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmDelete, '/api', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LDoc := JsonParse('{"id":123}');
+    LClient := NewHttpClient;
+    LResp := LClient.DeleteJson('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/api', LDoc.Root);
+    Check(LGotMethod = hmDelete, 'server received DELETE');
     CheckEqual('application/json', LGotContentType, 'content-type is application/json');
   finally
     StopServer(LServer, LHandle);
@@ -7558,6 +7655,8 @@ begin
   T.Test('Client OPTIONS sends OPTIONS and exposes Allow header', @TestClientOptionsSendsOptions);
   T.Test('Client PostForm encodes fields with correct content-type', @TestClientPostFormEncodesFields);
   T.Test('Client PostJson sends JSON with correct content-type', @TestClientPostJsonSendsJson);
+  T.Test('Client DELETE sends body and content type', @TestClientDeleteWithBody);
+  T.Test('Client DeleteJson sends JSON with correct content-type', @TestClientDeleteJson);
   T.Test('Client WithBasicAuth sets Authorization header', @TestClientWithBasicAuthSetsHeader);
   T.Test('Client WithBearerAuth sets Authorization header', @TestClientWithBearerAuthSetsHeader);
   T.Test('Client WithHeader sets custom header', @TestClientWithHeaderSetsCustomHeader);
