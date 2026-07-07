@@ -597,6 +597,56 @@ begin
   end, [TBytes.Create(0), TBytes.Create(255)], 4, 100);
 end;
 
+{ ── Edge case tests (audit) ───────────────────────────────────────────────── }
+
+procedure TestGenIntLargeRange;
+var
+  LGen: IIntGenerator;
+  LVal: Int64;
+  I: Integer;
+begin
+  LGen := GenInt(0, MaxInt);
+  for I := 1 to 100 do
+  begin
+    LVal := LGen.Generate;
+    if (LVal < 0) or (LVal > MaxInt) then
+      PropFail('Value out of range: ' + IntToStr(LVal));
+  end;
+end;
+
+procedure TestGenIntSameMinMax;
+var
+  LGen: IIntGenerator;
+  I: Integer;
+begin
+  LGen := GenInt(42, 42);
+  for I := 1 to 10 do
+    CheckEqual(42, LGen.Generate, 'GenInt(42,42)');
+end;
+
+procedure TestGenStringEmpty;
+var
+  LGen: IStringGenerator;
+  I: Integer;
+begin
+  LGen := GenString(0);
+  for I := 1 to 10 do
+    CheckEqual(0, Length(LGen.Generate), 'GenString(0)');
+end;
+
+procedure TestGenArrayEmpty;
+var
+  LGen: IArrayGenerator;
+  LArr: specialize TArray<Int64>;
+  I: Integer;
+begin
+  LGen := GenArray(GenInt(0, 100), 0, 0);
+  for I := 1 to 10 do
+  begin
+    LArr := LGen.Generate;
+    CheckEqual(0, Length(LArr), 'GenArray(0,0)');
+  end;
+end;
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
@@ -743,6 +793,23 @@ begin
   SectionHeader('FuzzParallel coverage');
   TestFuzzParallelCoverage;
   PassTest('FuzzParallel coverage passed');
+
+  SectionHeader('GenInt large range');
+  TestGenIntLargeRange;
+  PassTest('GenInt large range passed');
+
+  SectionHeader('GenInt same min/max');
+  TestGenIntSameMinMax;
+  PassTest('GenInt same min/max passed');
+
+  SectionHeader('GenString empty');
+  TestGenStringEmpty;
+  PassTest('GenString empty passed');
+
+  SectionHeader('GenArray empty');
+  TestGenArrayEmpty;
+  PassTest('GenArray empty passed');
+
 
   WriteLn;
   PassTest('test_prop');
