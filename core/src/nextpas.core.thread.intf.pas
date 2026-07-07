@@ -16,6 +16,9 @@ type
     procedure Submit(const ATask: TThreadTask);
     { SubmitDirect: zero-closure submission. Caller ensures AData outlives the task. }
     procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
+    { SignalWorkers: wake N idle workers. Use after batch-submitting multiple
+      tasks when individual-Signal-per-Submit is insufficient. }
+    procedure SignalWorkers(const ACount: Integer);
     procedure Shutdown;
     procedure WaitAll;
     function GetWorkerCount: Integer;

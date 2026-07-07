@@ -44,6 +44,7 @@ type
     destructor Destroy; override;
     procedure Submit(const ATask: TThreadTask);
     procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
+    procedure SignalWorkers(const ACount: Integer);
     procedure Shutdown;
     procedure WaitAll;
     function GetWorkerCount: Integer;
@@ -184,7 +185,7 @@ begin
   FTail := LNode;
   Inc(FPendingTasks);
 
-  FCondVar.Broadcast;
+  FCondVar.Signal;
   FMutex.Release;
 end;
 
@@ -213,7 +214,17 @@ begin
   FTail := LNode;
   Inc(FPendingTasks);
 
-  FCondVar.Broadcast;
+  FCondVar.Signal;
+  FMutex.Release;
+end;
+
+procedure TThreadPool.SignalWorkers(const ACount: Integer);
+var
+  I: Integer;
+begin
+  FMutex.Acquire;
+  for I := 0 to ACount - 1 do
+    FCondVar.Signal;
   FMutex.Release;
 end;
 

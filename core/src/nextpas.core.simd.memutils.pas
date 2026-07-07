@@ -46,6 +46,15 @@ procedure AlignedMemFill(dst: Pointer; size: NativeUInt; value: Byte; alignment:
 procedure Prefetch(ptr: Pointer); inline;
 procedure PrefetchNTA(ptr: Pointer); inline;  // Non-temporal (won't pollute cache)
 
+// SIMD-optimized memory copy (SSE2/AVX2/AVX-512)
+procedure SimdMemCopy(src, dst: Pointer; size: NativeUInt);
+
+// SIMD-optimized memory fill
+procedure SimdMemFill(dst: Pointer; size: NativeUInt; value: Byte);
+
+// SIMD-optimized memory compare
+function SimdMemCompare(p1, p2: Pointer; size: NativeUInt): Integer;
+
 // === Aligned Array Helper ===
 type
   // RAII-style aligned array
@@ -332,11 +341,9 @@ begin
   Assert(IsAligned(src, alignment), 'Source not aligned');
   Assert(IsAligned(dst, alignment), 'Destination not aligned');
   {$ENDIF}
-  
-  // Use optimized copy for aligned memory
-  // For now, just use Move - could be optimized with SIMD
+
   if size > 0 then
-    Move(src^, dst^, size);
+    SimdMemCopy(src, dst, size);
 end;
 
 procedure AlignedMemFill(dst: Pointer; size: NativeUInt; value: Byte; alignment: NativeUInt);
@@ -345,30 +352,263 @@ begin
   {$IFDEF SIMD_DEBUG_ASSERTIONS}
   Assert(IsAligned(dst, alignment), 'Destination not aligned');
   {$ENDIF}
-  
-  // Use optimized fill for aligned memory
+
   if size > 0 then
-    FillChar(dst^, size, value);
+    SimdMemFill(dst, size, value);
 end;
 
 procedure Prefetch(ptr: Pointer);
+var
+  LPtr: Pointer;
 begin
   // Platform-specific prefetch instructions would go here.
-  // For now, keep it as a no-op while still referencing the parameter.
   if ptr = nil then
     Exit;
-  {$IFDEF SIMD_X86_AVAILABLE}
-  // Could use: asm prefetcht0 [ptr] end;
+  LPtr := ptr;
+  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  asm
+    mov rax, LPtr
+    prefetcht0 [rax]
+  end;
   {$ENDIF}
 end;
 
 procedure PrefetchNTA(ptr: Pointer);
+var
+  LPtr: Pointer;
 begin
   // Non-temporal prefetch.
   if ptr = nil then
     Exit;
-  {$IFDEF SIMD_X86_AVAILABLE}
-  // Could use: asm prefetchnta [ptr] end;
+  LPtr := ptr;
+  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  asm
+    mov rax, LPtr
+    prefetchnta [rax]
+  end;
+  {$ENDIF}
+end;
+
+// === SIMD-optimized Memory Operations ===
+
+{$IF Defined(CPUX86) or Defined(CPUX86_64)}
+procedure SimdMemCopy_SSE2(src, dst: Pointer; size: NativeUInt);
+var
+  pS, pD: PByte;
+  remaining: NativeUInt;
+begin
+  pS := src;
+  pD := dst;
+  remaining := size;
+
+  // Copy 64 bytes at a time (4 x 16 bytes)
+  while remaining >= 64 do
+  begin
+    asm
+      mov rax, pS
+      mov rdx, pD
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rax + 16]
+      movdqu xmm2, [rax + 32]
+      movdqu xmm3, [rax + 48]
+      movdqu [rdx], xmm0
+      movdqu [rdx + 16], xmm1
+      movdqu [rdx + 32], xmm2
+      movdqu [rdx + 48], xmm3
+    end;
+    Inc(pS, 64);
+    Inc(pD, 64);
+    Dec(remaining, 64);
+  end;
+
+  // Copy remaining 16-byte blocks
+  while remaining >= 16 do
+  begin
+    asm
+      mov rax, pS
+      mov rdx, pD
+      movdqu xmm0, [rax]
+      movdqu [rdx], xmm0
+    end;
+    Inc(pS, 16);
+    Inc(pD, 16);
+    Dec(remaining, 16);
+  end;
+
+  // Copy remaining bytes
+  while remaining > 0 do
+  begin
+    pD^ := pS^;
+    Inc(pS);
+    Inc(pD);
+    Dec(remaining);
+  end;
+end;
+
+procedure SimdMemFill_SSE2(dst: Pointer; size: NativeUInt; value: Byte);
+var
+  pD: PByte;
+  remaining: NativeUInt;
+  pattern: array[0..15] of Byte;
+  i: Integer;
+begin
+  pD := dst;
+  remaining := size;
+
+  // Create 16-byte pattern
+  for i := 0 to 15 do
+    pattern[i] := value;
+
+  // Fill 64 bytes at a time (4 x 16 bytes)
+  if remaining >= 64 then
+  begin
+    asm
+      mov rax, pD
+      lea rdx, pattern
+      movdqu xmm0, [rdx]
+      movdqa xmm1, xmm0
+      movdqa xmm2, xmm0
+      movdqa xmm3, xmm0
+    end;
+
+    while remaining >= 64 do
+    begin
+      asm
+        mov rax, pD
+        movdqu [rax], xmm0
+        movdqu [rax + 16], xmm1
+        movdqu [rax + 32], xmm2
+        movdqu [rax + 48], xmm3
+      end;
+      Inc(pD, 64);
+      Dec(remaining, 64);
+    end;
+  end;
+
+  // Fill remaining 16-byte blocks
+  while remaining >= 16 do
+  begin
+    asm
+      mov rax, pD
+      lea rdx, pattern
+      movdqu xmm0, [rdx]
+      movdqu [rax], xmm0
+    end;
+    Inc(pD, 16);
+    Dec(remaining, 16);
+  end;
+
+  // Fill remaining bytes
+  while remaining > 0 do
+  begin
+    pD^ := value;
+    Inc(pD);
+    Dec(remaining);
+  end;
+end;
+
+function SimdMemCompare_SSE2(p1, p2: Pointer; size: NativeUInt): Integer;
+var
+  ptr1, ptr2: PByte;
+  remaining: NativeUInt;
+  matchMask: UInt32;
+  i: Integer;
+begin
+  ptr1 := p1;
+  ptr2 := p2;
+  remaining := size;
+
+  // Compare 16 bytes at a time
+  while remaining >= 16 do
+  begin
+    matchMask := 0;
+    asm
+      mov rax, ptr1
+      mov rdx, ptr2
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rdx]
+      pcmpeqb xmm0, xmm1
+      pmovmskb eax, xmm0
+      mov matchMask, eax
+    end;
+
+    // Check if all 16 bytes matched
+    if matchMask <> $FFFF then
+    begin
+      // Found difference, compare byte by byte
+      for i := 0 to 15 do
+      begin
+        if ptr1[i] < ptr2[i] then
+          Exit(-1)
+        else if ptr1[i] > ptr2[i] then
+          Exit(1);
+      end;
+    end;
+
+    Inc(ptr1, 16);
+    Inc(ptr2, 16);
+    Dec(remaining, 16);
+  end;
+
+  // Compare remaining bytes
+  while remaining > 0 do
+  begin
+    if ptr1^ < ptr2^ then
+      Exit(-1)
+    else if ptr1^ > ptr2^ then
+      Exit(1);
+    Inc(ptr1);
+    Inc(ptr2);
+    Dec(remaining);
+  end;
+
+  Result := 0;
+end;
+{$ENDIF}
+
+procedure SimdMemCopy(src, dst: Pointer; size: NativeUInt);
+begin
+  if (src = nil) or (dst = nil) or (size = 0) then
+    Exit;
+
+  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  SimdMemCopy_SSE2(src, dst, size);
+  {$ELSE}
+  Move(src^, dst^, size);
+  {$ENDIF}
+end;
+
+procedure SimdMemFill(dst: Pointer; size: NativeUInt; value: Byte);
+begin
+  if (dst = nil) or (size = 0) then
+    Exit;
+
+  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  SimdMemFill_SSE2(dst, size, value);
+  {$ELSE}
+  FillChar(dst^, size, value);
+  {$ENDIF}
+end;
+
+function SimdMemCompare(p1, p2: Pointer; size: NativeUInt): Integer;
+begin
+  if (p1 = nil) or (p2 = nil) then
+  begin
+    if p1 = p2 then
+      Exit(0)
+    else if p1 = nil then
+      Exit(-1)
+    else
+      Exit(1);
+  end;
+
+  if size = 0 then
+    Exit(0);
+
+  {$IF Defined(CPUX86) or Defined(CPUX86_64)}
+  Result := SimdMemCompare_SSE2(p1, p2, size);
+  {$ELSE}
+  Result := CompareByte(p1^, p2^, size);
   {$ENDIF}
 end;
 
