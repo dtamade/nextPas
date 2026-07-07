@@ -362,32 +362,18 @@ begin
       end
       else if LEntry.Kind = ekShouldFail then
       begin
-        try
-          if Assigned(LEntry.Closure) then
-            LEntry.Closure()
-          else
-            LEntry.Proc;
-          { No exception = unexpected success }
-          LStatus := tsFailed;
-          if LEntry.ShouldFailMsg <> '' then
-            LMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
-              ') but test passed'
-          else
-            LMsg := 'Expected failure but test passed';
+        RunShouldFailEntry(LEntry, LStatus, LMsg);
+        if LStatus = tsSkipped then
+          HandleSubtestSkipped(LEntry.Name, LMsg,
+            LOutSink, FConfig, LStatus, LMsg, FSubSkip)
+        else if LStatus = tsFailed then
           RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
-            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
-        except
-          on E: ETestSkipped do
-            HandleSubtestSkipped(LEntry.Name, E.Message,
-              LOutSink, FConfig, LStatus, LMsg, FSubSkip);
-          on E: Exception do
-          begin
-            { Expected failure — subtest passes }
-            LStatus := tsPassed;
-            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-              LOutSink, FConfig);
-            Inc(FSubPass);
-          end;
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines)
+        else
+        begin
+          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+            LOutSink, FConfig);
+          Inc(FSubPass);
         end;
       end
       else
