@@ -196,7 +196,7 @@ begin
       Exit(True);
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(TryDequeue(AValue));
-    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
 end;
 

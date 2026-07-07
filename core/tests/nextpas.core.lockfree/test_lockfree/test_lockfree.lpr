@@ -5777,23 +5777,23 @@ begin
     'lockfree wait helper must skip blocking when the epoch already advanced');
   CheckContains(LWaitSource, 'platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);',
     'lockfree wait helper must wait on the caller-observed epoch');
-  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
     'SPSC blocking enqueue must pass the observed space epoch to wait helper');
-  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
     'SPSC blocking dequeue must pass the observed data epoch to wait helper');
   CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
     'SPSC timeout enqueue must pass the observed space epoch to wait helper');
   CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
     'SPSC timeout dequeue must pass the observed data epoch to wait helper');
-  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
     'MPMC blocking enqueue must pass the observed space epoch to wait helper');
-  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
     'MPMC blocking dequeue must pass the observed data epoch to wait helper');
   CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
     'MPMC timeout enqueue must pass the observed space epoch to wait helper');
   CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
     'MPMC timeout dequeue must pass the observed data epoch to wait helper');
-  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
     'MPSC blocking dequeue must pass the observed data epoch to wait helper');
   CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
     'MPSC timeout dequeue must pass the observed data epoch to wait helper');
