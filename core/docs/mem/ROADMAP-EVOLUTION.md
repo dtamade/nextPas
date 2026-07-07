@@ -21,7 +21,7 @@
 | P1-1 | Allocation snapshot | P0 | TAllocSnapshot: 当前分配状态快照（总分配/释放/峰值/活跃数） | ✅ |
 | P1-2 | Per-thread stats | P1 | TThreadAllocStats: 每线程分配统计（TLS 收集，全局汇总） | ✅ |
 | P1-3 | Allocation histogram | P1 | THistogram: 按大小分布的分配直方图（16B/64B/256B/1KB/4KB/16KB/64KB/256KB+） | ✅ |
-| P1-4 | Leak report 增强 | P2 | TLeakReport: 分配调用栈 + 生命周期 + 标签聚合 |
+| P1-4 | Leak report 增强 | P2 | TLeakReport: 分配调用栈 + 生命周期 + 标签聚合 | ✅ |
 
 ### P1-1: Allocation Snapshot
 
@@ -201,8 +201,8 @@ end;
 |---|------|--------|------|
 | P4-1 | TLS cache 优化 | P1 | 自适应 TLS cache 大小（基于分配频率） | ✅ (已有 per-band 自适应 batch/max size) |
 | P4-2 | Batch allocation 增强 | P1 | IBatchAllocator: 批量分配接口（已部分实现） | ✅ |
-| P4-3 | NUMA-aware 深化 | P2 | 跨 NUMA 节点的分配策略优化 |
-| P4-4 | Allocation 预测 | P2 | 基于历史模式的预分配策略 |
+| P4-3 | NUMA-aware 深化 | P2 | 跨 NUMA 节点的分配策略优化 | ✅ |
+| P4-4 | Allocation 预测 | P2 | 基于历史模式的预分配策略 | ✅ |
 
 ### P4-1: TLS Cache 优化
 
@@ -239,6 +239,39 @@ end;
 ```
 
 `TGrowingAllocator` 已有完整 batch 实现（TLS refill/flush 摊销开销）。
+
+### P4-3: NUMA-aware 深化
+
+**已实现**: `TNumaAllocator` — NUMA 感知分配器
+
+```pascal
+TNumaAllocator = class(TAllocator)
+  constructor Create(ADefault: IAllocator);
+  procedure SetNodeAllocator(ANode: Integer; AAlloc: IAllocator);
+  function IsNuma: Boolean;
+  property Topology: TNumaTopology read FTopology;
+end;
+```
+
+- `DetectNumaTopology`: 从 `/sys/devices/system/node/nodeN/cpulist` 读取拓扑
+- `getcpu` 系统调用获取当前 CPU/节点
+- 非 NUMA 系统自动降级为单一 fallback 分配器
+
+### P4-4: Allocation 预测
+
+**已实现**: `TPredictionAllocator` — 分配频率跟踪器
+
+```pascal
+TPredictionAllocator = class(TAllocator)
+  function Predict(ATopN: Integer = 8): TPredictionResult;
+  procedure PreAllocate(ATopN: Integer = 4; ACountPerClass: Word = 8);
+  procedure ResetStats;
+end;
+```
+
+- 按 size class 跟踪分配频率（69 个 size class）
+- `Predict`: 识别 top-N 热门分配大小
+- `PreAllocate`: 为热门大小预分配块（预热 TLS cache）
 
 ---
 
