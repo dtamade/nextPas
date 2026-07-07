@@ -245,6 +245,7 @@ Already landed:
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
 - `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
 - per-request timeout override at transport level (H1 transport checks `IHttpRequestWithOptions` to override `FOptions.Timeout`)
+- `HttpEnsureSuccess` response status guard (raises EHttpError on non-2xx, returns response for chaining)
 
 Still intentionally not claimed:
 
