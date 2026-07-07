@@ -18,6 +18,7 @@ type
   TH1ParserErrorKind = (pekNone, pekMalformed, pekUnsupportedTransferCoding);
   TH1RequestMetadata = record
     HasHost: Boolean;
+    HasDuplicateHost: Boolean;
     HasTransferEncoding: Boolean;
     HasContentLength: Boolean;
     DeclaredContentLength: Int64;
@@ -1006,7 +1007,10 @@ begin
   if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'host') then
   begin
     if FRequestMetadataSawHost then
+    begin
+      FPendingRequestMetadata.HasDuplicateHost := True;
       Exit;
+    end;
     FRequestMetadataSawHost := True;
     FPendingRequestMetadata.HasHost := CapturedHeaderValueIsNonEmpty(AValue,
       AValuePtr, AValueLen);

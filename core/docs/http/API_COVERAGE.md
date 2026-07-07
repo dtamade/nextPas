@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-06-12
+最近更新：2026-07-06
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 
@@ -11,7 +11,7 @@
 
 ## 当前结论
 
-- 2026-06-06 API 对标结论：
+- 2026-07-06 API 对标结论：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
     async runtime 细节泄漏到 public contract；handler / middleware / router
@@ -21,9 +21,15 @@
     extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
     family。
   - 已够稳：H2/H3 public surface 仍只保留 registry / transport seam 和规划文档。
-    当前 H2 只有内部 frame codec + type-specific validation / HPACK Huffman / header-block state HPACK
-    header-block codec foundation 和 focused proof；不创建伪 H2/H3 public API，
-    不用空实现制造“支持”假象。
+    当前 H2 已完整落地为 production-transport-ready 实现，包括：
+    - Frame codec (RFC 9113): 10 种帧类型、13 种错误码、帧验证、padded payload 处理
+    - HPACK (RFC 7541): 编码器/解码器、动态表 MRU 缓存、Huffman 编解码
+    - Stream 状态机: 7 状态、HEADERS/CONTINUATION 组装、trailer 处理
+    - Server session: 客户端 preface 验证、SETTINGS 握手、帧分发、MaxConcurrentStreams 强制、GOAWAY 分裂 last-stream 跟踪
+    - Client transport: 同步 RoundTrip、连接池 (MaxPoolSize-governed)、stale 连接重试、server push 拒绝、PING/GOAWAY 处理
+    - TLS 集成: ALPN `h2` 协商、SNI、session factory seam
+    - 测试: 207 个 focused tests 跨 7 个 suites，所有覆盖缺口已关闭
+    H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API，不用空实现制造”支持”假象。
   - 继续补齐：landed internal registry 现在也有 future-version positive proof。
     `test_http_registry` 直接锁住“调用方可注册 custom `hvHttp2` client transport /
     custom `hvHttp3` server transport，并把它们设为 default version 供 concrete

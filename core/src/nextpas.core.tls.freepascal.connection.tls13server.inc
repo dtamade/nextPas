@@ -1044,7 +1044,7 @@ begin
       LVerifyData,
       LTicketLifetime,
       LTicketAgeAdd,
-      Now,
+      DateTimeNow,
       FContext.GetSessionTimeout,
       LIssuedMaxEarlyDataSize
     );

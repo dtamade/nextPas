@@ -30,7 +30,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
   - TLS stream (`impl.tls.stream.pas`)：`TTlsTcpStream`（`ITcpStream` + `ISSLStream`）
   - RFC 9113 合规：HPACK table-size rules、MaxHeaderListSize enforcement、trailer handling、GOAWAY last-stream tracking、MaxConcurrentStreams enforcement
   - 性能：HPACK MRU cache、4-bit nibble Huffman decode、DecodeView zero-refcount path、TH2StreamMap RemoveByIndex
-  - 163 个 H2 focused tests 覆盖 frame/hpack/types/stream/session/client
+  - 207 个 H2 focused tests 覆盖 frame/hpack/types/stream/session/client
   - 跨语言 benchmark：HPACK encode/decode/frame 对照 Go 和 Rust
 - **H3 仍未进入实现**：仅有 `nextpas.core.tls.quic.crypto.pas`（QUIC v1 crypto primitives），
   无 QPACK/HTTP3 frame/stream 源码。H3 阻塞于 QUIC 独立模块。
@@ -431,8 +431,8 @@ Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真
 ```
 
 依赖：tls
-测试：163 个 H2 focused tests（frame/hpack/types/stream/session/client）+ Go/Rust benchmark 对照
-状态：transport 已完整落地，h2-test-coverage-plan.md 目标仍有缺口（client -33、session -18、frame -17、hpack -15）
+测试：207 个 H2 focused tests（frame/hpack/types/stream/session/client）+ Go/Rust benchmark 对照
+状态：transport 已完整落地，所有 H2 测试覆盖缺口已关闭（client 55/55、frame 37/35、hpack 30/30）
 
 ### Phase 3: HTTP/3
 
