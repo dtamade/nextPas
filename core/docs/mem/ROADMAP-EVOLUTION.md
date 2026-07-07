@@ -96,7 +96,7 @@ end;
 | P2-1 | OOM callback | P0 | TOomHandler: OOM 时回调（释放缓存/触发 GC/降级策略） | ✅ |
 | P2-2 | Memory pressure | P1 | TMemoryPressure: 系统内存压力检测 + 回调 | ✅ |
 | P2-3 | Double-free 检测增强 | P1 | 哨兵值 + 延迟释放队列 + 校验和 | ✅ |
-| P2-4 | Stack overflow guard | P2 | Arena 分配时栈深度检查（防止递归分配） |
+| P2-4 | Stack overflow guard | P2 | Arena 分配时栈深度检查（防止递归分配） | ✅ |
 
 ### P2-1: OOM Callback
 
