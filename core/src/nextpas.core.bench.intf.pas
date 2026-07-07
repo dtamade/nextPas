@@ -339,6 +339,9 @@ type
     {** 生成 benchstat 兼容格式 (Go benchstat 工具可直接解析) }
     function ToBenchstat: string;
 
+    {** 生成简洁摘要报告（适合 CI/CD） }
+    function ToSummary: string;
+
     {** 导出到 JSON 文件 }
     procedure SaveToJSON(const APath: string);
 

@@ -346,6 +346,32 @@ begin
 end;
 
 {*
+ * 测试 ToSummary 报告
+ *}
+procedure Test_ToSummary;
+var
+  LResults: IBenchResults;
+  LSummary: string;
+begin
+  WriteLn('  + to_summary');
+
+  LResults := TBenchSuite.Create('SummaryTest')
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(3)
+    .Add('Benchmark', @BenchExample)
+    .Run;
+
+  LSummary := LResults.ToSummary;
+
+  { 验证摘要格式 }
+  Check(Length(LSummary) > 0, 'Summary should not be empty');
+  Check(Pos('Benchmarks: 1 results', LSummary) > 0, 'Should contain result count');
+  Check(Pos('SummaryTest.Benchmark:', LSummary) > 0, 'Should contain benchmark name');
+  Check(Pos('ns/op', LSummary) > 0, 'Should contain ns/op');
+  Check(Pos('ops/s', LSummary) > 0, 'Should contain ops/s');
+end;
+
+{*
  * 主测试套件
  *}
 begin
@@ -362,6 +388,7 @@ begin
   Test_HTML_Report;
   Test_RunParallel;
   Test_Custom_Metrics;
+  Test_ToSummary;
 
   WriteLn;
   WriteLn(Format('  %d passed, %d failed, 0 skipped', [GPassCount, GFailCount]));
