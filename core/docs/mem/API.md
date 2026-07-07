@@ -8,6 +8,8 @@
 需要分配内存？
 ├─ 通用场景 (malloc 替代) → DefaultAllocator (IAllocator)
 │  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装
+│  └─ 需要增强泄漏报告 → TLeakReportAllocator（调用栈+时间戳+标签聚合）
+│  └─ 需要哨兵守卫 → TSentinelAllocator（双端哨兵+延迟释放+校验和）
 │
 ├─ 请求/帧级生命周期 → CreateDefaultArena (IArena)
 │  ├─ 固定容量 → TLocalArena
@@ -26,7 +28,10 @@
    ├─ 需要 IAllocator 接口的 Arena → CreateArenaAllocator
    ├─ 需要 fallback 链 → TFallbackAllocator
    ├─ 需要 mmap 匿名映射 → TMemoryMapAllocator
-   └─ 需要 mimalloc → TMimallocAllocator (动态库)
+   ├─ 需要 mimalloc → TMimallocAllocator (动态库)
+   ├─ 需要 NUMA 感知 → TNumaAllocator（拓扑检测+节点路由）
+   ├─ 需要分配预测 → TPredictionAllocator（频率跟踪+预分配）
+   └─ 需要批量分配 → IBatchAllocator 接口
 ```
 
 ### 性能特征
