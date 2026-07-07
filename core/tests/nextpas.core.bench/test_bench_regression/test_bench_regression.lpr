@@ -46,6 +46,25 @@ begin
 end;
 
 {*
+ * 带自定义指标的基准函数
+ *}
+procedure BenchWithMetrics(const ACtx: IBenchContext);
+var
+  LSum: Int64;
+  I: Integer;
+begin
+  LSum := 0;
+  for I := 1 to 1000 do
+    Inc(LSum, I);
+  if LSum < 0 then
+    WriteLn('Impossible');
+
+  { 设置自定义指标 }
+  ACtx.SetCustomMetric('cache_misses', 42.0);
+  ACtx.SetCustomMetric('cache_hits', 958.0);
+end;
+
+{*
  * 测试基线保存
  *}
 procedure Test_Baseline_Save;
@@ -293,6 +312,40 @@ begin
 end;
 
 {*
+ * 测试自定义指标
+ *}
+procedure Test_Custom_Metrics;
+var
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+  LFound: Boolean;
+  I: Integer;
+begin
+  WriteLn('  + custom_metrics');
+
+  LResults := TBenchSuite.Create('CustomMetricsTest')
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(3)
+    .Add('Benchmark', @BenchWithMetrics)
+    .Run;
+
+  LAll := LResults.GetAll;
+  Check(Length(LAll) = 1, 'Should have 1 result');
+
+  { 验证自定义指标已复制到结果 }
+  LFound := False;
+  for I := 0 to High(LAll[0].CustomMetrics) do
+  begin
+    if LAll[0].CustomMetrics[I].Name = 'cache_misses' then
+    begin
+      LFound := True;
+      Check(LAll[0].CustomMetrics[I].Value > 0, 'Cache misses should be > 0');
+    end;
+  end;
+  Check(LFound, 'Should have cache_misses metric');
+end;
+
+{*
  * 主测试套件
  *}
 begin
@@ -308,6 +361,7 @@ begin
   Test_Benchstat_Format;
   Test_HTML_Report;
   Test_RunParallel;
+  Test_Custom_Metrics;
 
   WriteLn;
   WriteLn(Format('  %d passed, %d failed, 0 skipped', [GPassCount, GFailCount]));
