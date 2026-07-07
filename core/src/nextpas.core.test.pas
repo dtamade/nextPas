@@ -432,6 +432,27 @@ procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
 procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
   const ACorpusDir: string; AMaxIterations: Integer = 10000);
 
+{ ── Re-exported coverage tracking from test.prop (v8.0b) ──────────────────── }
+
+type
+  ICoverageTracker = nextpas.core.test.prop.ICoverageTracker;
+  TFuzzStructuredIntTest = nextpas.core.test.prop.TFuzzStructuredIntTest;
+  TFuzzStructuredStringTest = nextpas.core.test.prop.TFuzzStructuredStringTest;
+  TFuzzStrategy = nextpas.core.test.prop.TFuzzStrategy;
+
+function CreateCoverageTracker: ICoverageTracker;
+
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
+  AGen: IIntGenerator; ACorpus: ICoverageTracker = nil;
+  AMaxIterations: Integer = 10000); overload;
+procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
+  AGen: IStringGenerator; ACorpus: ICoverageTracker = nil;
+  AMaxIterations: Integer = 10000); overload;
+
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer = 4;
+  AIterationsPerWorker: Integer = 2500);
+
 implementation
 
 {$I nextpas.core.test.fwd.expect.inc}
