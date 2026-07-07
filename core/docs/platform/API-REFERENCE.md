@@ -1,9 +1,10 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**版本**: v1.0
+**更新**: 2026-07-08
+**版本**: v1.1
 **模块数**: 24
-**API数**: ~489
+**API数**: ~1067
 
 ---
 
@@ -252,13 +253,19 @@
 | `platform_socket_recv(ASocket, ABuf, ASize): Int32` | 接收数据 |
 | `platform_socket_shutdown(ASocket, AHow): Int32` | 关闭连接 |
 | `platform_socket_setsockopt(ASocket, ALevel, AOptName, AOptVal, AOptLen): Int32` | 设置选项 |
+| `platform_socket_getsockopt(ASocket, ALevel, AOptName, AOptVal, AOptLen): Int32` | 获取选项 |
 | `platform_socket_sendto(ASocket, AData, ASize, AAddr): Int32` | 发送到地址 |
 | `platform_socket_recvfrom(ASocket, ABuf, ASize, out AAddr): Int32` | 从地址接收 |
 | `platform_socket_getsockname(ASocket, out AAddr): Int32` | 获取本地地址 |
 | `platform_socket_getpeername(ASocket, out AAddr): Int32` | 获取对端地址 |
 | `platform_socket_resolve_ipv4(AHost, out AAddr): Int32` | 解析 IPv4 地址 |
+| `platform_socket_pair(ADomain, AType, AProtocol, out AS1, out AS2): Int32` | 创建连接的 socket 对 |
 | `platform_socket_set_nonblocking(ASocket, ANonBlocking): Int32` | 设置非阻塞 |
 | `platform_socket_set_timeout(ASocket, ATimeoutMs): Int32` | 设置超时 |
+| `platform_socket_set_tcp_nodelay(ASocket, AEnable): Int32` | 设置 TCP_NODELAY |
+| `platform_socket_set_reuseaddr(ASocket, AEnable): Int32` | 设置 SO_REUSEADDR |
+| `platform_socket_set_keepalive(ASocket, AEnable): Int32` | 设置 SO_KEEPALIVE |
+| `platform_socket_set_linger(ASocket, AEnable, ALingerSec): Int32` | 设置 SO_LINGER |
 | `platform_socket_error_would_block(AError): Boolean` | 是否为阻塞错误 |
 | `platform_socket_error_timed_out(AError): Boolean` | 是否为超时错误 |
 | `platform_sockaddr_ipv4(APort, AAddr): TPlatformSockAddr` | 构造 IPv4 地址 |
@@ -287,6 +294,12 @@
 | `platform_condvar_signal(var ACondVar): Int32` | 唤醒一个等待者 |
 | `platform_condvar_broadcast(var ACondVar): Int32` | 唤醒所有等待者 |
 | `platform_wait_address32(AAddr, AExpected, ATimeoutNs): Int32` | 等待地址值变化 |
+| `platform_barrier_init(var ABarrier, ACount): Int32` | 初始化屏障 |
+| `platform_barrier_destroy(var ABarrier): Int32` | 销毁屏障 |
+| `platform_barrier_wait(var ABarrier): Int32` | 等待屏障 |
+| `platform_once_init(var AOnce): Int32` | 初始化 once |
+| `platform_once_destroy(var AOnce): Int32` | 销毁 once |
+| `platform_once_exec(var AOnce, AProc): Int32` | 执行一次性初始化 |
 
 ## 22. thread — 线程管理
 
