@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 12 — WithHeader decorator)
+> Last updated: 2026-07-07 (Phase 13 — TUrl query params)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,12 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 13 (2026-07-07): TUrl Query Parameter Methods**
+
+- **`TUrl`**: added `AddQuery(name, value)` (percent-encodes, appends), `WithQuery(raw)` (replaces), `GetQueryParam(name)` (reads), `HasQueryParam(name)` (checks)
+- **`nextpas.core.http.base`**: inline `PercentEncodeQueryValue` helper (space-as-+, RFC 3986 unreserved)
+- **Tests**: 12 new TUrl method tests (basic, multiple, encoding, existing, replace, clear, read, empty, no-value, has, no-query, field preservation), 33 URL total / 0 leaks
 
 **Phase 12 (2026-07-07): Client WithHeader Decorator**
 
