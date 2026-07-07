@@ -1183,10 +1183,12 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 
 | 项 | 内容 |
 |----|------|
-| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI，sema 层） |
-| **内容** | HIR model 已添加 StructTypeName 字段，HIR→MIR lowering 已传播。剩余工作：sema 在生成 field access HIR 指令时填入 StructTypeName |
-| **完成** | HIR model + HIR→MIR lowering 部分 ✅ (commit `9427fa118`) |
-| **待做** | sema 层填入 StructTypeName（依赖 SeedCallBindings 修复） |
+| **依赖** | SeedCallBindings 无限递归 bug 修复（另一个 AI，sema 层填入 StructTypeName 需要） |
+| **内容** | HIR model + HIR→MIR lowering + HIR LLVM emitter 全部完成 |
+| **完成** | ✅ HIR model StructTypeName 字段 (`9427fa118`) |
+|         | ✅ HIR→MIR lowering 传播 (`9427fa118`) |
+|         | ✅ HIR LLVM emitter struct 声明 + field access 指令 (`49ed16857`) |
+| **待做** | sema 层在生成 field access HIR 指令时填入 StructTypeName（依赖 SeedCallBindings 修复） |
 
 #### P3: Stage2-B — Link Compiler .o Files [🔲]
 
