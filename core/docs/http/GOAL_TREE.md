@@ -244,10 +244,11 @@ Already landed:
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
 - `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
+- per-request timeout override at transport level (H1 transport checks `IHttpRequestWithOptions` to override `FOptions.Timeout`)
 
 Still intentionally not claimed:
 
-- per-request timeout override at transport level (currently only controls redirect behavior; transport-level timeout requires IHttpTransport changes)
+- (none currently)
 
 Those can land later, but only after the contract shape is clear enough to stay stable.
 
