@@ -320,6 +320,8 @@ procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
+{** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -819,6 +821,11 @@ end;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 begin
   Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
+end;
+
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpEnsureSuccess(AResp);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;

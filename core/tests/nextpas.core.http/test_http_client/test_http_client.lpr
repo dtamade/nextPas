@@ -8171,6 +8171,86 @@ begin
   Check(LBody.Closed, 'streaming body closed even after redirect failure');
 end;
 
+{ HttpEnsureSuccess tests }
+
+procedure TestHttpEnsureSuccess200;
+var
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LResult: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
+  LResult := HttpEnsureSuccess(LResp);
+  Check(LResult = LResp, 'EnsureSuccess returns same response on 200');
+end;
+
+procedure TestHttpEnsureSuccess201;
+var
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  LResp := NewResponse(HTTP_STATUS_CREATED, LHeaders, nil);
+  HttpEnsureSuccess(LResp);
+  Check(True, 'EnsureSuccess passes on 201');
+end;
+
+procedure TestHttpEnsureSuccessRaisesOn404;
+var
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LCaught: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders, nil);
+  LCaught := False;
+  try
+    HttpEnsureSuccess(LResp);
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0) and (Pos('Not Found', E.Message) > 0);
+  end;
+  Check(LCaught, 'EnsureSuccess raises EHttpError on 404');
+end;
+
+procedure TestHttpEnsureSuccessRaisesOn500;
+var
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LCaught: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  LResp := NewResponse(HTTP_STATUS_INTERNAL_SERVER_ERROR, LHeaders, nil);
+  LCaught := False;
+  try
+    HttpEnsureSuccess(LResp);
+  except
+    on E: EHttpError do
+      LCaught := (Pos('500', E.Message) > 0) and
+        (Pos('Internal Server Error', E.Message) > 0);
+  end;
+  Check(LCaught, 'EnsureSuccess raises EHttpError on 500');
+end;
+
+procedure TestHttpEnsureSuccessRaisesOnNil;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    HttpEnsureSuccess(nil);
+  except
+    on E: EArgumentError do
+      LCaught := Pos('nil', E.Message) > 0;
+  end;
+  Check(LCaught, 'EnsureSuccess raises EArgumentError on nil');
+end;
+
 { Main }
 
 begin
@@ -8463,5 +8543,10 @@ begin
     @TestNewStreamingRequestWithHeaders);
   T.Test('Streaming body ownership on redirect',
     @TestStreamingBodyOwnershipOnRedirect);
+  T.Test('HttpEnsureSuccess passes on 200', @TestHttpEnsureSuccess200);
+  T.Test('HttpEnsureSuccess passes on 201', @TestHttpEnsureSuccess201);
+  T.Test('HttpEnsureSuccess raises on 404', @TestHttpEnsureSuccessRaisesOn404);
+  T.Test('HttpEnsureSuccess raises on 500', @TestHttpEnsureSuccessRaisesOn500);
+  T.Test('HttpEnsureSuccess raises on nil', @TestHttpEnsureSuccessRaisesOnNil);
   if not T.Run then Halt(1);
 end.
