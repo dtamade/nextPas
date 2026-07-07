@@ -141,6 +141,14 @@ B19  缓冲区池 (2026-07-07)                                   ✅
   B19.2  原子索引无锁借用 (AtomicFetchAdd32)                  ✅
   B19.3  池满回退到直接分配                                    ✅
   B19.4  test_bench_resultpool 7 tests (0 leaks)              ✅
+
+B20  跨语言性能对照 (2026-07-08)                              ✅
+  B20.1  Go 基准测试 (Fibonacci/Sort/String/Memory/Map)       ✅
+  B20.2  Rust 基准测试 (Cargo项目, rand依赖)                  ✅
+  B20.3  C 基准测试 (clock_gettime高精度)                     ✅
+  B20.4  Pascal 基准测试 (GetTickCount64)                     ✅
+  B20.5  run_all.sh 自动化脚本 + 对比表格                     ✅
+  B20.6  COMPARISON.md 性能对比报告                           ✅
 ```
 
 ## 测试套件分布
@@ -170,6 +178,17 @@ B19  缓冲区池 (2026-07-07)                                   ✅
 | test_bench_resultpool | 7 | ✅ 0 leaks | TBenchResultPool 缓冲区池 |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
 | **合计** | **~377** | **22/22 通过** | |
+
+### 跨语言基准对照 (benchmarks/)
+
+| 语言 | 基准测试 | 说明 |
+|------|----------|------|
+| Go | benchmarks/go/main.go | Fibonacci/Sort/StringConcat/MapOps/MemoryAlloc |
+| Rust | benchmarks/rust/main.rs + Cargo.toml | 同上 + rand 依赖 |
+| C | benchmarks/c/main.c | 同上 + clock_gettime 高精度 |
+| Pascal | benchmarks/pascal/bench_cross_language.lpr | 同上 + GetTickCount64 |
+| 自动化 | benchmarks/run_all.sh | 编译运行 + 对比表格 |
+| 报告 | benchmarks/COMPARISON.md | 性能对比分析 |
 
 ## 已解决的技术债务
 

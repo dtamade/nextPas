@@ -357,6 +357,23 @@ make -C core/tests/nextpas.core.bench/test_bench_run clean test
 | `NEXTPAS_BENCH_QUIET` | 安静模式（=1） |
 | `NEXTPAS_BENCH_MEMTRACK` | 内存追踪（=0 禁用，默认启用） |
 
+## 跨语言基准对照
+
+`benchmarks/` 目录包含 Go/Rust/C/Pascal 四语言基准测试：
+
+```bash
+# 运行所有语言基准测试并生成对比表格
+cd benchmarks && ./run_all.sh
+
+# 单独运行
+cd benchmarks/go && go run main.go
+cd benchmarks/rust && cargo run --release
+cd benchmarks/c && gcc -O2 main.c -lm && ./a.out
+cd benchmarks/pascal && fpc -O2 bench_cross_language.lpr && ./bench_cross_language
+```
+
+对比结果见 `benchmarks/COMPARISON.md`。
+
 ## 线程安全
 
 `TBenchSuite` 和 `TBenchRunner` **不是线程安全的**。所有方法必须从单个拥有线程调用。
