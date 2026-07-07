@@ -249,6 +249,130 @@ begin
   Check(not QueryParamHas(LParams, 'missing'), 'not has missing');
 end;
 
+procedure TestUrlAddQueryBasic;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path');
+  LUrl := LUrl.AddQuery('key', 'value');
+  CheckEqual('key=value', LUrl.RawQuery, 'raw query');
+  CheckEqual('http://example.com/path?key=value', LUrl.ToString, 'to string');
+end;
+
+procedure TestUrlAddQueryMultiple;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path');
+  LUrl := LUrl.AddQuery('a', '1').AddQuery('b', '2');
+  CheckEqual('a=1&b=2', LUrl.RawQuery, 'raw query');
+  CheckEqual('http://example.com/path?a=1&b=2', LUrl.ToString, 'to string');
+end;
+
+procedure TestUrlAddQueryEncodesSpecialChars;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/');
+  LUrl := LUrl.AddQuery('q', 'hello world&foo=bar');
+  Check(Pos('q=hello+world', LUrl.RawQuery) = 1, 'space encoded as +');
+  Check(Pos('%26', LUrl.RawQuery) > 0, '& encoded');
+  Check(Pos('%3D', LUrl.RawQuery) > 0, '= encoded');
+end;
+
+procedure TestUrlAddQueryToExisting;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?existing=1');
+  LUrl := LUrl.AddQuery('new', '2');
+  CheckEqual('existing=1&new=2', LUrl.RawQuery, 'appended');
+end;
+
+procedure TestUrlWithQuery;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?old=1');
+  LUrl := LUrl.WithQuery('new=2');
+  CheckEqual('new=2', LUrl.RawQuery, 'replaced');
+  CheckEqual('http://example.com/path?new=2', LUrl.ToString, 'to string');
+end;
+
+procedure TestUrlWithQueryEmpty;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?old=1');
+  LUrl := LUrl.WithQuery('');
+  CheckEqual('', LUrl.RawQuery, 'cleared');
+  CheckEqual('http://example.com/path', LUrl.ToString, 'no question mark');
+end;
+
+procedure TestUrlGetQueryParam;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?foo=bar&baz=qux');
+  CheckEqual('bar', LUrl.GetQueryParam('foo'), 'foo');
+  CheckEqual('qux', LUrl.GetQueryParam('baz'), 'baz');
+  CheckEqual('', LUrl.GetQueryParam('missing'), 'missing');
+end;
+
+procedure TestUrlGetQueryParamEmptyValue;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?empty=&full=x');
+  CheckEqual('', LUrl.GetQueryParam('empty'), 'empty value');
+  CheckEqual('x', LUrl.GetQueryParam('full'), 'full value');
+end;
+
+procedure TestUrlGetQueryParamNoValue;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?flag');
+  CheckEqual('', LUrl.GetQueryParam('flag'), 'flag no value');
+  Check(not LUrl.HasQueryParam('other'), 'other absent');
+end;
+
+procedure TestUrlHasQueryParam;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path?foo=bar&empty');
+  Check(LUrl.HasQueryParam('foo'), 'has foo');
+  Check(LUrl.HasQueryParam('empty'), 'has empty');
+  Check(not LUrl.HasQueryParam('missing'), 'not has missing');
+end;
+
+procedure TestUrlHasQueryParamNoQuery;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://example.com/path');
+  Check(not LUrl.HasQueryParam('foo'), 'no query string');
+end;
+
+procedure TestUrlAddQueryPreservesOtherFields;
+var
+  LUrl, LResult: TUrl;
+begin
+  LUrl.Scheme := 'https';
+  LUrl.Host := 'example.com';
+  LUrl.Port := 8443;
+  LUrl.Path := '/api';
+  LUrl.Fragment := 'section';
+  LResult := LUrl.AddQuery('token', 'abc');
+  CheckEqual('https', LResult.Scheme, 'scheme preserved');
+  CheckEqual('example.com', LResult.Host, 'host preserved');
+  Check(LResult.Port = 8443, 'port preserved');
+  CheckEqual('/api', LResult.Path, 'path preserved');
+  CheckEqual('section', LResult.Fragment, 'fragment preserved');
+  CheckEqual('token=abc', LResult.RawQuery, 'query set');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.url');
   T.Test('UrlEncode simple', @TestUrlEncodeSimple);
@@ -272,5 +396,17 @@ begin
   T.Test('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);
   T.Test('QueryParamValue', @TestQueryParamValue);
   T.Test('QueryParamHas', @TestQueryParamHas);
+  T.Test('TUrl.AddQuery basic', @TestUrlAddQueryBasic);
+  T.Test('TUrl.AddQuery multiple', @TestUrlAddQueryMultiple);
+  T.Test('TUrl.AddQuery encodes special chars', @TestUrlAddQueryEncodesSpecialChars);
+  T.Test('TUrl.AddQuery to existing', @TestUrlAddQueryToExisting);
+  T.Test('TUrl.WithQuery replaces', @TestUrlWithQuery);
+  T.Test('TUrl.WithQuery empty clears', @TestUrlWithQueryEmpty);
+  T.Test('TUrl.GetQueryParam', @TestUrlGetQueryParam);
+  T.Test('TUrl.GetQueryParam empty value', @TestUrlGetQueryParamEmptyValue);
+  T.Test('TUrl.GetQueryParam no value', @TestUrlGetQueryParamNoValue);
+  T.Test('TUrl.HasQueryParam', @TestUrlHasQueryParam);
+  T.Test('TUrl.HasQueryParam no query', @TestUrlHasQueryParamNoQuery);
+  T.Test('TUrl.AddQuery preserves other fields', @TestUrlAddQueryPreservesOtherFields);
   if not T.Run then Halt(1);
 end.

@@ -37,6 +37,10 @@ type
     class function ParseRequestTarget(const ARaw: string): TUrl; static;
     function ToString: string;
     function HostPort: string;
+    function AddQuery(const AName, AValue: string): TUrl;
+    function WithQuery(const ARawQuery: string): TUrl;
+    function GetQueryParam(const AName: string): string;
+    function HasQueryParam(const AName: string): Boolean;
   end;
 
   THttpClientOptions = record
@@ -452,6 +456,125 @@ begin
     Result := LHost + ':' + IntToStr(Int64(Port))
   else
     Result := LHost;
+end;
+
+function PercentEncodeQueryValue(const AStr: string): string;
+const
+  CHexDigits: array[0..15] of Char = '0123456789ABCDEF';
+var
+  LI, LJ, LLen: SizeInt;
+  LByte: Byte;
+begin
+  LLen := Length(AStr);
+  if LLen = 0 then Exit('');
+  SetLength(Result, LLen * 3);
+  LJ := 1;
+  for LI := 1 to LLen do
+  begin
+    case AStr[LI] of
+      'A'..'Z', 'a'..'z', '0'..'9', '-', '_', '.', '~':
+      begin
+        Result[LJ] := AStr[LI];
+        Inc(LJ);
+      end;
+      ' ':
+      begin
+        Result[LJ] := '+';
+        Inc(LJ);
+      end;
+    else
+      begin
+        LByte := Byte(Ord(AStr[LI]));
+        Result[LJ]     := '%';
+        Result[LJ + 1] := CHexDigits[LByte shr 4];
+        Result[LJ + 2] := CHexDigits[LByte and $0F];
+        Inc(LJ, 3);
+      end;
+    end;
+  end;
+  SetLength(Result, LJ - 1);
+end;
+
+function TUrl.AddQuery(const AName, AValue: string): TUrl;
+var
+  LEncoded: string;
+begin
+  Result := Self;
+  LEncoded := PercentEncodeQueryValue(AName) + '=' + PercentEncodeQueryValue(AValue);
+  if Result.RawQuery = '' then
+    Result.RawQuery := LEncoded
+  else
+    Result.RawQuery := Result.RawQuery + '&' + LEncoded;
+end;
+
+function TUrl.WithQuery(const ARawQuery: string): TUrl;
+begin
+  Result := Self;
+  Result.RawQuery := ARawQuery;
+end;
+
+function TUrl.GetQueryParam(const AName: string): string;
+var
+  LQuery: string;
+  LStart, LEnd, LEqPos, LLen: SizeInt;
+  LPair: string;
+begin
+  Result := '';
+  LQuery := RawQuery;
+  LLen := Length(LQuery);
+  if LLen = 0 then Exit;
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    LEnd := LStart;
+    while (LEnd <= LLen) and (LQuery[LEnd] <> '&') do
+      Inc(LEnd);
+    LPair := Copy(LQuery, LStart, LEnd - LStart);
+    LEqPos := Pos('=', LPair);
+    if LEqPos > 0 then
+    begin
+      if Copy(LPair, 1, LEqPos - 1) = AName then
+      begin
+        Result := Copy(LPair, LEqPos + 1, MaxInt);
+        Exit;
+      end;
+    end
+    else if LPair = AName then
+    begin
+      Result := '';
+      Exit;
+    end;
+    LStart := LEnd + 1;
+  end;
+end;
+
+function TUrl.HasQueryParam(const AName: string): Boolean;
+var
+  LQuery: string;
+  LStart, LEnd, LEqPos, LLen: SizeInt;
+  LPair: string;
+begin
+  Result := False;
+  LQuery := RawQuery;
+  LLen := Length(LQuery);
+  if LLen = 0 then Exit;
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    LEnd := LStart;
+    while (LEnd <= LLen) and (LQuery[LEnd] <> '&') do
+      Inc(LEnd);
+    LPair := Copy(LQuery, LStart, LEnd - LStart);
+    LEqPos := Pos('=', LPair);
+    if LEqPos > 0 then
+    begin
+      if Copy(LPair, 1, LEqPos - 1) = AName then
+        Exit(True);
+    end
+    else if LPair = AName then
+      Exit(True);
+    LStart := LEnd + 1;
+  end;
 end;
 
 { THttpClientOptions }
