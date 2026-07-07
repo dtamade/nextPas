@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 14 — Delete body + DeleteJson)
+> Last updated: 2026-07-07 (Phase 15 — THttpClientOptions fluent methods)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,12 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 15 (2026-07-07): THttpClientOptions Fluent Configuration**
+
+- **`THttpClientOptions`**: added `WithTimeout(ms)`, `WithMaxRedirects(n)`, `WithFollowRedirects(bool)`, `WithMaxPoolSize(n)` — chainable configuration methods
+- **Pattern**: `THttpClientOptions.Default.WithTimeout(10000).WithMaxRedirects(5).WithFollowRedirects(False)`
+- **Tests**: 5 new tests (WithTimeout, WithMaxRedirects, WithFollowRedirects, WithMaxPoolSize, fluent chain), 30 base total / 0 leaks
 
 **Phase 14 (2026-07-07): Delete Body Overloads + DeleteJson**
 
