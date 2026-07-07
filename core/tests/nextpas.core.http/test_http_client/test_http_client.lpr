@@ -8251,6 +8251,74 @@ begin
   Check(LCaught, 'EnsureSuccess raises EArgumentError on nil');
 end;
 
+{ HttpGetString / HttpGetBytes tests }
+
+procedure TestHttpGetStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  // TTimeoutCaptureTransport returns empty 200 — HttpGetString should return ''
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpGetString(LClient, 'http://localhost/test');
+  CheckEqual('', LBody, 'GetString returns empty body from 200');
+end;
+
+procedure TestHttpGetStringRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpGetString(LClient, 'http://localhost/missing');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0) and (Pos('Not Found', E.Message) > 0);
+  end;
+  Check(LCaught, 'GetString raises EHttpError on 404');
+end;
+
+procedure TestHttpGetBytesSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: TBytes;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpGetBytes(LClient, 'http://localhost/test');
+  CheckEqual(Int64(0), Int64(Length(LBody)), 'GetBytes returns empty bytes from 200');
+end;
+
+procedure TestHttpGetBytesRaisesOn500;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpGetBytes(LClient, 'http://localhost/error');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('500', E.Message) > 0) and
+        (Pos('Internal Server Error', E.Message) > 0);
+  end;
+  Check(LCaught, 'GetBytes raises EHttpError on 500');
+end;
+
 { Main }
 
 begin
@@ -8548,5 +8616,9 @@ begin
   T.Test('HttpEnsureSuccess raises on 404', @TestHttpEnsureSuccessRaisesOn404);
   T.Test('HttpEnsureSuccess raises on 500', @TestHttpEnsureSuccessRaisesOn500);
   T.Test('HttpEnsureSuccess raises on nil', @TestHttpEnsureSuccessRaisesOnNil);
+  T.Test('GetString returns body on 200', @TestHttpGetStringSuccess);
+  T.Test('GetString raises on 404', @TestHttpGetStringRaisesOn404);
+  T.Test('GetBytes returns body on 200', @TestHttpGetBytesSuccess);
+  T.Test('GetBytes raises on 500', @TestHttpGetBytesRaisesOn500);
   if not T.Run then Halt(1);
 end.
