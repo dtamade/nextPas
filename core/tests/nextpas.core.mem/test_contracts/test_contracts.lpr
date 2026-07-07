@@ -62,8 +62,6 @@ const
   MEM_RWLOCK_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.rwlock.pas';
   MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stack_scope_helpers.pas';
   MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stack_scope_helpers.pas';
-  MEM_STATS_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.stats.pas';
-  MEM_STATS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stats.pas';
   MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.pas';
   MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.pas';
   MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.guard.pas';
@@ -473,8 +471,6 @@ begin
     'mem.allocator.instrumentation should be removed');
   Check(not SourceExists(MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_TEST, MEM_ALLOCATOR_NUMA_SOURCE_PATH_FROM_ROOT),
     'mem.allocator.numa should be removed');
-  Check(not SourceExists(MEM_STATS_SOURCE_PATH_FROM_TEST, MEM_STATS_SOURCE_PATH_FROM_ROOT),
-    'mem.stats should be removed');
   Check(not SourceExists(MEM_ADAPTERS_SOURCE_PATH_FROM_TEST, MEM_ADAPTERS_SOURCE_PATH_FROM_ROOT),
     'mem.adapters should be removed');
   Check(not SourceExists(MEM_INTERFACES_SOURCE_PATH_FROM_TEST, MEM_INTERFACES_SOURCE_PATH_FROM_ROOT),

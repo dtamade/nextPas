@@ -71,7 +71,13 @@ type
     aePoolClosed,
 
     {** 内部错误 | Internal error *}
-    aeInternalError
+    aeInternalError,
+
+    {** 哨兵值被破坏（缓冲区溢出）| Sentinel corrupted (buffer overflow) *}
+    aeSentinelCorrupted,
+
+    {** 元数据校验和失败 | Metadata checksum failure *}
+    aeChecksumFailure
   );
 
   {**
@@ -138,7 +144,9 @@ const
     'Realloc not supported',
     'Size mismatch',
     'Pool closed',
-    'Internal error'
+    'Internal error',
+    'Sentinel corrupted (buffer overflow)',
+    'Metadata checksum failure'
   );
 
 function AllocErrorToString(aError: TAllocError): string;
@@ -154,6 +162,8 @@ begin
     aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
       Result := ecInvalidArgument;
     aeInvalidPointer, aeDoubleFree, aePoolClosed, aeReallocNotSupported:
+      Result := ecInvalidOperation;
+    aeSentinelCorrupted, aeChecksumFailure:
       Result := ecInvalidOperation;
     aeInternalError:
       Result := ecInternal;

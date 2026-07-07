@@ -28,7 +28,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex;
 
 type
   {** OOM 事件回调
@@ -44,7 +45,7 @@ type
    *}
   TOomHandler = class
   private
-    FLock: TRTLCriticalSection;
+    FLock: TMemMutex;
     FHandlers: array of TOomEvent;
     FCount: Integer;
   public
@@ -91,28 +92,28 @@ implementation
 constructor TOomHandler.Create;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock.Init;
   FHandlers := nil;
   FCount := 0;
 end;
 
 destructor TOomHandler.Destroy;
 begin
-  DoneCriticalSection(FLock);
+  FLock.Done;
   FHandlers := nil;
   inherited Destroy;
 end;
 
 procedure TOomHandler.Register(AHandler: TOomEvent);
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     if FCount >= Length(FHandlers) then
       SetLength(FHandlers, FCount + 8);
     FHandlers[FCount] := AHandler;
     Inc(FCount);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -120,7 +121,7 @@ procedure TOomHandler.Unregister(AHandler: TOomEvent);
 var
   LI, LJ: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     for LI := 0 to FCount - 1 do
     begin
@@ -134,7 +135,7 @@ begin
       end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -144,7 +145,7 @@ var
   LRetry: Boolean;
 begin
   Result := False;
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     for LI := 0 to FCount - 1 do
     begin
@@ -157,17 +158,17 @@ begin
       end;
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function TOomHandler.Count: Integer;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FCount;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 

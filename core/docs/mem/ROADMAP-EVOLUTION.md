@@ -93,7 +93,7 @@ end;
 |---|------|--------|------|
 | P2-1 | OOM callback | P0 | TOomHandler: OOM 时回调（释放缓存/触发 GC/降级策略） | ✅ |
 | P2-2 | Memory pressure | P1 | TMemoryPressure: 系统内存压力检测 + 回调 | ✅ |
-| P2-3 | Double-free 检测增强 | P1 | 哨兵值 + 延迟释放队列 + 校验和 |
+| P2-3 | Double-free 检测增强 | P1 | 哨兵值 + 延迟释放队列 + 校验和 | ✅ |
 | P2-4 | Stack overflow guard | P2 | Arena 分配时栈深度检查（防止递归分配） |
 
 ### P2-1: OOM Callback
@@ -126,6 +126,29 @@ end;
 - Linux: 读取 /proc/meminfo 或 cgroup memory.limit
 - 周期性检查（每次 N 次分配后）
 - 回调触发降级策略（释放缓存/减少预分配）
+
+### P2-3: Double-free 检测增强
+
+**实现**: `TSentinelAllocator` — 轻量级哨兵守卫分配器
+
+```pascal
+TSentinelAllocator = class(TAllocator)
+  constructor Create(AInner: IAllocator; AQuarantineDepth: Integer = 256);
+  function QuarantineCount: Integer;
+  procedure DrainQuarantine;
+end;
+```
+
+**特性**:
+- **哨兵值**: 每次分配前后写入 64-bit magic bytes ($DEADBEEFCAFEBABE / $BAADF00DDEADC0DE)
+- **延迟释放队列**: 释放的内存进入隔离区（可配置深度），检测 use-after-free
+- **校验和**: XOR-based 元数据完整性校验，检测内存踩踏
+- **释放后毒化**: 填充 $DD，加速 use-after-free 检测
+
+**布局**: `[Header 32B: PreSentinel+Size+AllocId+Checksum][User data...][PostSentinel 8B]`
+
+**源文件**: `core/src/nextpas.core.mem.allocator.sentinel.pas` (280 行)
+**测试**: `core/tests/nextpas.core.mem/test_sentinel/test_sentinel.lpr` (18 测试)
 
 ---
 
