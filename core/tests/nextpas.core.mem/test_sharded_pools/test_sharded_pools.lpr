@@ -713,6 +713,50 @@ begin
   end;
 end;
 
+{ ── GetStats: hit rate and utilization ── }
+
+procedure TestBlockPoolGetStats;
+var
+  LPool: TShardedBlockPool;
+  LStats: TBlockPoolStats;
+  LPtrs: array[0..63] of Pointer;
+  LI: Integer;
+begin
+  LPool := TShardedBlockPool.Create(64, 128, 2);
+  try
+    { Initial stats should be zero. }
+    LStats := LPool.GetStats;
+    Check(LStats.TotalAcquires = 0, 'initial TotalAcquires = 0');
+    Check(LStats.CacheHits = 0, 'initial CacheHits = 0');
+    Check(LStats.SegmentAllocs = 0, 'initial SegmentAllocs = 0');
+
+    { Acquire some blocks. }
+    for LI := 0 to 63 do
+    begin
+      LPtrs[LI] := LPool.Acquire;
+      Check(LPtrs[LI] <> nil, 'acquire ' + IntToStr(LI));
+    end;
+
+    LStats := LPool.GetStats;
+    Check(LStats.TotalAcquires = 64, 'TotalAcquires = 64');
+    Check(LStats.InUse = 64, 'InUse = 64');
+    Check(LStats.Capacity >= 64, 'Capacity >= 64');
+    Check(LStats.Utilization > 0.0, 'Utilization > 0');
+
+    { Release all. }
+    for LI := 0 to 63 do
+      LPool.Release(LPtrs[LI]);
+
+    LStats := LPool.GetStats;
+    Check(LStats.InUse = 0, 'InUse = 0 after release');
+    Check(LStats.Available = LStats.Capacity, 'Available = Capacity after release');
+
+    WriteLn('PASS: GetStats tracks acquires and utilization');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.sharded_pools');
   T.Test('sharded blockpool contention', @TestShardedBlockPoolContention);
@@ -727,6 +771,7 @@ begin
   T.Test('trim idle segments reclaims memory', @TestShardedBlockPoolTrimIdleSegments);
   T.Test('false sharing padding verification', @TestShardedBlockPoolFalseSharingPadding);
   T.Test('stress test concurrent acquire/release', @TestShardedBlockPoolStress);
+  T.Test('GetStats hit rate and utilization', @TestBlockPoolGetStats);
   T.Run;
 
   T.Summary;

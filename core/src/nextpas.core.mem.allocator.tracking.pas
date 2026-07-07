@@ -29,10 +29,12 @@ type
     FInner: IAllocator;
     FLock: TMemMutex;
     FNextAllocId: QWord;
-    { Open-addressing hash map: Ptr → (Size, AllocId) }
+    FCurrentTag: string;
+    { Open-addressing hash map: Ptr → (Size, AllocId, Tag) }
     FKeys: array of PtrUInt;     { 0 = empty, 1 = tombstone }
     FSizes: array of SizeUInt;
     FAllocIds: array of QWord;
+    FTags: array of string;
     FMask: SizeUInt;
     FHighShift: SizeUInt;
     FCount: SizeUInt;            { live entries }
@@ -41,9 +43,9 @@ type
     procedure MapInit(aMinCapacity: SizeUInt);
     procedure MapClear;
     procedure MapGrow;
-    function MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
-    procedure MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord);
-    function MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
+    function MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
+    procedure MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord; const aTag: string);
+    function MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; override;
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
@@ -53,13 +55,15 @@ type
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
 
+    {** 设置当前分配标签（后续分配将使用此标签） }
+    procedure SetTag(const ATag: string);
     {** 当前活跃分配数 }
     function ActiveAllocCount: SizeInt;
     {** 当前活跃分配字节 }
     function ActiveAllocBytes: SizeUInt;
     {** 是否有泄漏 }
     function HasLeaks: Boolean;
-    {** 生成泄漏报告（包含每个未释放块的地址和大小） }
+    {** 生成泄漏报告（包含每个未释放块的地址、大小和标签） }
     function ReportLeaks: string;
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
@@ -85,6 +89,7 @@ begin
     raise EArgumentNil.Create('TTrackingAllocator.Create: aInner cannot be nil');
   FInner := aInner;
   FNextAllocId := 1;
+  FCurrentTag := '';
   FLock.Init;
   MapInit(TRACK_MAP_MIN_CAP);
 end;
@@ -110,11 +115,13 @@ begin
   SetLength(FKeys, LCap);
   SetLength(FSizes, LCap);
   SetLength(FAllocIds, LCap);
+  SetLength(FTags, LCap);
   for LIdx := 0 to LCap - 1 do
   begin
     FKeys[LIdx] := 0;
     FSizes[LIdx] := 0;
     FAllocIds[LIdx] := 0;
+    FTags[LIdx] := '';
   end;
   FMask := LCap - 1;
   FHighShift := SizeUInt(64 - Log2UInt(LCap));
@@ -133,6 +140,7 @@ begin
     FKeys[LIdx] := 0;
     FSizes[LIdx] := 0;
     FAllocIds[LIdx] := 0;
+    FTags[LIdx] := '';
   end;
   FCount := 0;
   FFill := 0;
@@ -144,6 +152,7 @@ var
   LOldKeys: array of PtrUInt;
   LOldSizes: array of SizeUInt;
   LOldAllocIds: array of QWord;
+  LOldTags: array of string;
   LOldCap: SizeUInt;
   LIdx: SizeUInt;
   LKey: PtrUInt;
@@ -154,10 +163,12 @@ begin
   LOldKeys := FKeys;
   LOldSizes := FSizes;
   LOldAllocIds := FAllocIds;
+  LOldTags := FTags;
 
   SetLength(FKeys, LOldCap shl 1);
   SetLength(FSizes, LOldCap shl 1);
   SetLength(FAllocIds, LOldCap shl 1);
+  SetLength(FTags, LOldCap shl 1);
   FMask := (LOldCap shl 1) - 1;
   FHighShift := SizeUInt(64 - Log2UInt(FMask + 1));
 
@@ -166,6 +177,7 @@ begin
     FKeys[LIdx] := 0;
     FSizes[LIdx] := 0;
     FAllocIds[LIdx] := 0;
+    FTags[LIdx] := '';
   end;
   FCount := 0;
   FFill := 0;
@@ -183,6 +195,7 @@ begin
       FKeys[LPos] := LKey;
       FSizes[LPos] := LOldSizes[LIdx];
       FAllocIds[LPos] := LOldAllocIds[LIdx];
+      FTags[LPos] := LOldTags[LIdx];
       Inc(FCount);
       Inc(FFill);
       Inc(FTotalBytes, LOldSizes[LIdx]);
@@ -190,13 +203,14 @@ begin
   end;
 end;
 
-function TTrackingAllocator.MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
+function TTrackingAllocator.MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
 var
   LPos: SizeUInt;
   LHash: QWord;
 begin
   aSize := 0;
   aAllocId := 0;
+  aTag := '';
   if (aKey = 0) or (aKey = TRACK_TOMBSTONE) then Exit(False);
   if Length(FKeys) = 0 then Exit(False);
   LHash := MulHash64(aKey);
@@ -208,13 +222,14 @@ begin
     begin
       aSize := FSizes[LPos];
       aAllocId := FAllocIds[LPos];
+      aTag := FTags[LPos];
       Exit(True);
     end;
     LPos := (LPos + 1) and FMask;
   end;
 end;
 
-procedure TTrackingAllocator.MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord);
+procedure TTrackingAllocator.MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord; const aTag: string);
 var
   LPos: SizeUInt;
   LHash: QWord;
@@ -239,6 +254,7 @@ begin
         FTotalBytes := 0;
       FSizes[LPos] := aSize;
       FAllocIds[LPos] := aAllocId;
+      FTags[LPos] := aTag;
       Inc(FTotalBytes, aSize);
       Exit;
     end;
@@ -253,17 +269,19 @@ begin
   FKeys[LPos] := aKey;
   FSizes[LPos] := aSize;
   FAllocIds[LPos] := aAllocId;
+  FTags[LPos] := aTag;
   Inc(FCount);
   Inc(FTotalBytes, aSize);
 end;
 
-function TTrackingAllocator.MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord): Boolean;
+function TTrackingAllocator.MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
 var
   LPos: SizeUInt;
   LHash: QWord;
 begin
   aSize := 0;
   aAllocId := 0;
+  aTag := '';
   Result := False;
   if (aKey = 0) or (aKey = TRACK_TOMBSTONE) then Exit;
   if Length(FKeys) = 0 then Exit;
@@ -276,9 +294,11 @@ begin
     begin
       aSize := FSizes[LPos];
       aAllocId := FAllocIds[LPos];
+      aTag := FTags[LPos];
       FKeys[LPos] := TRACK_TOMBSTONE;
       FSizes[LPos] := 0;
       FAllocIds[LPos] := 0;
+      FTags[LPos] := '';
       if FCount > 0 then Dec(FCount);
       if aSize <= FTotalBytes then
         Dec(FTotalBytes, aSize)
@@ -299,7 +319,7 @@ begin
   begin
     FLock.Acquire;
     try
-      MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+      MapInsert(PtrUInt(Result), ASize, FNextAllocId, FCurrentTag);
       Inc(FNextAllocId);
     finally
       FLock.Release;
@@ -314,7 +334,7 @@ begin
   begin
     FLock.Acquire;
     try
-      MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+      MapInsert(PtrUInt(Result), ASize, FNextAllocId, FCurrentTag);
       Inc(FNextAllocId);
     finally
       FLock.Release;
@@ -326,6 +346,7 @@ function TTrackingAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointe
 var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
+  LOldTag: string;
 begin
   Result := FInner.ReallocMem(APtr, ASize);
   FLock.Acquire;
@@ -335,12 +356,12 @@ begin
       if APtr <> nil then
       begin
         { Update: delete old, insert new }
-        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId);
-        MapInsert(PtrUInt(Result), ASize, LOldAllocId);
+        MapDelete(PtrUInt(APtr), LOldSize, LOldAllocId, LOldTag);
+        MapInsert(PtrUInt(Result), ASize, LOldAllocId, LOldTag);
       end
       else
       begin
-        MapInsert(PtrUInt(Result), ASize, FNextAllocId);
+        MapInsert(PtrUInt(Result), ASize, FNextAllocId, FCurrentTag);
         Inc(FNextAllocId);
       end;
     end;
@@ -353,19 +374,20 @@ procedure TTrackingAllocator.DoFreeMem(APtr: Pointer);
 var
   LSize: SizeUInt;
   LAllocId: QWord;
+  LTag: string;
 begin
   if APtr = nil then
     Exit;
   FLock.Acquire;
   try
-    if not MapDelete(PtrUInt(APtr), LSize, LAllocId) then
+    if not MapDelete(PtrUInt(APtr), LSize, LAllocId, LTag) then
       raise EDoubleFree.Create(aeDoubleFree,
         'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
     try
       FInner.FreeMem(APtr);
     except
       { Restore tracking record so double-free detection still works. }
-      MapInsert(PtrUInt(APtr), LSize, LAllocId);
+      MapInsert(PtrUInt(APtr), LSize, LAllocId, LTag);
       raise;
     end;
   finally
@@ -433,12 +455,20 @@ begin
         Result := Result + '  [' + LLine + '] $';
         Result := Result + PtrToHexString(FKeys[LIdx]);
         Str(FSizes[LIdx], LLine);
-        Result := Result + ' size=' + LLine + #10;
+        Result := Result + ' size=' + LLine;
+        if FTags[LIdx] <> '' then
+          Result := Result + ' tag=' + FTags[LIdx];
+        Result := Result + #10;
       end;
     end;
   finally
     FLock.Release;
   end;
+end;
+
+procedure TTrackingAllocator.SetTag(const ATag: string);
+begin
+  FCurrentTag := ATag;
 end;
 
 function TTrackingAllocator.Traits: TAllocatorTraits;
