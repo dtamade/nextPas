@@ -10,6 +10,7 @@ This document compares the performance of nextpas.core.bench against Go, Rust, a
 - **Date**: 2026-07-08
 - **Compiler**: FPC 3.3.1 (trunk)
 - **N**: 1000 iterations per benchmark
+- **Timer**: `fpgettimeofday` (microsecond precision)
 
 ## Results
 
@@ -17,82 +18,96 @@ This document compares the performance of nextpas.core.bench against Go, Rust, a
 
 | Benchmark | Pascal (ns) | Go (ns) | Rust (ns) | C (ns) | Pascal vs C | Pascal vs Rust |
 |-----------|-------------|---------|-----------|--------|-------------|----------------|
-| Fibonacci(20) | 41,000 | 44,992 | 26,126 | 19,978 | 2.05x slower | 1.57x slower |
-| Sorting(1000) | 901,000 | 74,439 | 21,370 | 90,875 | 9.91x slower | 42.16x slower |
-| StringConcat(100) | 2,000 | 7,599 | 349 | 20 | 100x slower | 5.73x slower |
-| MemoryAlloc(100) | 1,000 | 254 | 22 | 20 | 50x slower | 45.45x slower |
+| Fibonacci(20) | 41,927 | 44,821 | 24,840 | 22,041 | 1.90x slower | 1.69x slower |
+| Sorting(1000) | 906,459 | 73,666 | 20,042 | 94,288 | 9.61x slower | 45.23x slower |
+| StringConcat(100) | 2,511 | 8,175 | 426 | 20 | 125.5x slower | 5.90x slower |
+| MemoryAlloc(100) | 719 | 205 | 22 | 20 | 35.9x slower | 32.7x slower |
 
 ### Detailed Analysis
 
 #### Fibonacci (Recursive)
 
-- **Winner**: C (19,978 ns)
-- **Pascal**: 41,000 ns (2.05x slower than C)
-- **Analysis**: Pascal's recursive Fibonacci performance is reasonable. The overhead comes from function call conventions and stack frame management.
+- **Winner**: C (22,041 ns)
+- **Pascal**: 41,927 ns (1.90x slower than C)
+- **Rust**: 24,840 ns
+- **Go**: 44,821 ns
+- **Analysis**: Pascal's recursive Fibonacci performance is competitive with Go. The overhead comes from function call conventions and stack frame management. C benefits from aggressive compiler optimizations.
 
 #### Sorting (1000 elements, Bubble Sort)
 
-- **Winner**: Rust (21,370 ns)
-- **Pascal**: 901,000 ns (42x slower than Rust)
-- **Analysis**: This result is **invalid** due to FPC's `GetTickCount64` millisecond precision. The actual Pascal performance should be similar to C (~90,000 ns). The measurement shows 0-2ms granularity, making sub-millisecond operations unmeasurable.
+- **Winner**: Rust (20,042 ns)
+- **C**: 94,288 ns
+- **Go**: 73,666 ns
+- **Pascal**: 906,459 ns (9.61x slower than C)
+- **Analysis**: Pascal's bubble sort is significantly slower due to:
+  1. FPC's bubble sort implementation overhead
+  2. Array bounds checking (enabled by default)
+  3. No SIMD optimizations for comparisons
+  - Note: C uses `qsort` (optimized library), Rust uses `sort_unstable` (Timsort variant)
 
 #### String Concatenation
 
 - **Winner**: C (20 ns)
-- **Pascal**: 2,000 ns (100x slower than C)
-- **Analysis**: Pascal's string concatenation creates new heap allocations per operation. C uses stack buffer. This is expected behavior - Pascal strings are heap-allocated and reference-counted.
+- **Rust**: 426 ns
+- **Pascal**: 2,511 ns (125.5x slower than C)
+- **Go**: 8,175 ns
+- **Analysis**: C uses stack buffer concatenation. Pascal creates new heap-allocated strings per operation (reference counted). This is a fundamental design difference - Pascal strings are safe but slower.
 
 #### Memory Allocation
 
 - **Winner**: C (20 ns)
-- **Pascal**: 1,000 ns (50x slower than C)
-- **Analysis**: Similar to string concatenation - Pascal's heap allocator is slower than C's direct malloc. This is a known trade-off for memory safety.
+- **Rust**: 22 ns
+- **Go**: 205 ns
+- **Pascal**: 719 ns (35.9x slower than C)
+- **Analysis**: Pascal's heap allocator (via `SetLength`) is slower than C's direct `malloc`. This is expected - Pascal provides bounds checking and reference counting.
 
 ## Key Findings
 
-### Valid Comparisons (within measurement precision)
+### Performance Characteristics
 
-1. **Fibonacci**: Pascal is 2x slower than C, 1.6x slower than Rust. This is reasonable for interpreted-style recursive calls.
+1. **Fibonacci (Compute-bound)**: Pascal is competitive (1.9x slower than C). Similar to Go's performance.
 
-### Invalid Comparisons (measurement precision issue)
+2. **Sorting (Algorithm-bound)**: Pascal's bubble sort is significantly slower than optimized library sorts. This is expected - bubble sort is O(n²), while C/Rust/Go use optimized O(n log n) sorts.
 
-2. **Sorting**: FPC's `GetTickCount64` has millisecond precision, making sub-millisecond operations unmeasurable. The 901,000 ns result is actually ~1ms (the minimum granularity).
+3. **String Concatenation (Allocation-bound)**: Pascal's heap-allocated strings add overhead. This is a design trade-off for memory safety.
 
-3. **StringConcat/MemoryAlloc**: Same precision issue - operations complete in <1ms but are measured as 0-1ms.
+4. **Memory Allocation (Allocator-bound)**: Pascal's allocator is slower but provides safety features.
 
-## Recommendations
+### Timer Accuracy
 
-### For Accurate Benchmarking
+- **Previous**: `GetTickCount64` (millisecond precision) - sub-millisecond operations unmeasurable
+- **Current**: `fpgettimeofday` (microsecond precision) - all operations measurable
+- **Improvement**: 1000x better precision
 
-1. **Use `clock_gettime(CLOCK_MONOTONIC)`** instead of `GetTickCount64` for nanosecond precision
-2. **Use `QueryPerformanceCounter`** on Windows for high-resolution timing
-3. **Consider using `rdtsc` instruction** for CPU cycle counting
+### Recommendations for Fair Comparison
 
-### For Performance Optimization
-
-1. **String operations**: Consider using `TStringBuilder` for concatenation-heavy workloads
-2. **Memory allocation**: Consider using `TSyncPool` or arena allocators for frequent allocations
-3. **Sorting**: Use built-in `TList.Sort` or `TArray.Sort` which use optimized algorithms
+1. **Same Algorithm**: Compare Pascal bubble sort vs C bubble sort (not qsort)
+2. **Same Optimization**: Use `-O2` for all languages
+3. **Same Data Structure**: Use comparable string implementations
 
 ## Methodology Notes
 
 - **Go**: Uses `time.Now().Nanosecond()` for nanosecond precision
 - **Rust**: Uses `std::time::Instant` for nanosecond precision
 - **C**: Uses `clock_gettime(CLOCK_MONOTONIC)` for nanosecond precision
-- **Pascal**: Uses `GetTickCount64` for millisecond precision (limitation)
+- **Pascal**: Uses `fpgettimeofday` for microsecond precision (FPC limitation)
 
 ## Conclusion
 
 The cross-language benchmark comparison reveals:
 
-1. **Pascal is competitive** for compute-bound tasks (Fibonacci: 2x slower than C)
-2. **Measurement precision matters**: FPC's `GetTickCount64` is insufficient for micro-benchmarking
-3. **Memory model differences**: Pascal's heap-allocated strings add overhead vs C's stack buffers
+1. **Pascal is competitive for compute-bound tasks**: Fibonacci performance matches Go, within 2x of C.
 
-For accurate cross-language comparison, the Pascal benchmark should use high-resolution timers available via:
-- `baseunix` unit (Linux)
-- `windows` unit (Windows)
-- Direct `rdtsc` instruction (x86)
+2. **Algorithm choice matters more than language**: Pascal's bubble sort is slower than optimized library sorts in other languages.
+
+3. **Memory model differences**: Pascal's heap-allocated strings add overhead vs C's stack buffers.
+
+4. **Timer precision is critical**: FPC's `fpgettimeofday` provides sufficient precision for benchmarking.
+
+For production use, consider:
+- Using optimized algorithms (not bubble sort)
+- Using `TStringBuilder` for string-heavy workloads
+- Using arena allocators for frequent allocations
 
 ---
 

@@ -2,7 +2,7 @@ program bench_cross_language;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, Math;
+  SysUtils, Classes, Math, baseunix, unix;
 
 type
   TBenchResult = record
@@ -17,6 +17,14 @@ type
     OpsPerSec: Double;
   end;
 
+function GetMicroTime: Int64;
+var
+  tv: ttimeval;
+begin
+  fpgettimeofday(@tv, nil);
+  Result := Int64(tv.tv_sec) * 1000000 + tv.tv_usec;
+end;
+
 function RunBenchmark(const AName: string; N: Integer; AProc: TProcedure): TBenchResult;
 var
   Times: array of Int64;
@@ -30,10 +38,10 @@ begin
 
   for I := 0 to N - 1 do
   begin
-    Start := GetTickCount64;
+    Start := GetMicroTime;
     AProc;
-    Stop := GetTickCount64;
-    Times[I] := (Stop - Start) * 1000000; // Convert ms to ns
+    Stop := GetMicroTime;
+    Times[I] := (Stop - Start) * 1000; // Convert us to ns
   end;
 
   // Sort - bubble sort for small arrays
