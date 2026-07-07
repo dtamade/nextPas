@@ -1,5 +1,8 @@
 # nextpas.core.system ABI Specification
 
+> **版本**: 1.0.0-frozen (2026-07-05)
+> **状态**: 冻结 — 所有 ABI 元素已锁定，不接受破坏性变更。
+
 本规范定义 nextPas system kernel 的 Application Binary Interface，是编译器集成（S9）和运行时实现（S10）的**唯一权威输入**。
 
 ## 1. 数据模型
@@ -633,3 +636,11 @@ TTypeKind = (
 - 内核 ABI 与 FPC 7.x System 兼容
 - 已编译的 FPC 二进制文件可以在 nextPas 运行时上运行
 - nextPas 编译的二进制文件可以在 FPC 运行时上运行（如果只使用兼容子集）
+
+## 13. 变更日志
+
+| 版本 | 日期 | 变更 |
+|------|------|------|
+| 1.0.0-frozen | 2026-07-05 | ABI 冻结：VMT 布局 + np_* 签名 + TMemoryManager + TTypeKind 全部锁定 |
+| 0.9.0 | 2026-07-05 | fpc_* → np_* 重命名（142 处），双编译器架构修正 |
+| 0.8.0 | 2026-07-05 | 初始 ABI 规范：VMT + 119 函数签名 + 内存布局 + 异常模型 |
