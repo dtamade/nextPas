@@ -201,6 +201,7 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.text.builder,
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
@@ -1221,24 +1222,24 @@ begin
   LAll := GetAll;
   SetLength(LLines, Length(LAll) + 1);
 
-  LLines[0] := Format('Benchmarks: %d results', [Length(LAll)]);
+  LLines[0] := TextFormat('Benchmarks: %d results', [Length(LAll)]);
 
   for I := 0 to High(LAll) do
   begin
     if LAll[I].Executed and not LAll[I].Skipped then
     begin
       if LAll[I].StdDev > 0 then
-        LLines[I + 1] := Format('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
+        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
           [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec,
            LAll[I].StdDev / LAll[I].NsPerOp * 100])
       else
-        LLines[I + 1] := Format('  %s: %.1f ns/op, %.0f ops/s',
+        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s',
           [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec]);
     end
     else if LAll[I].Skipped then
-      LLines[I + 1] := Format('  %s: SKIPPED (%s)', [LAll[I].Name, LAll[I].SkipReason])
+      LLines[I + 1] := TextFormat('  %s: SKIPPED (%s)', [LAll[I].Name, LAll[I].SkipReason])
     else
-      LLines[I + 1] := Format('  %s: NOT EXECUTED', [LAll[I].Name]);
+      LLines[I + 1] := TextFormat('  %s: NOT EXECUTED', [LAll[I].Name]);
   end;
 
   Result := '';
