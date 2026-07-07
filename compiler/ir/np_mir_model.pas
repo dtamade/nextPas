@@ -24,6 +24,19 @@ type
   TMirBlockId = LongInt;
   {** MIR 基本块 ID 动态数组 }
   TMirBlockIdArray = array of TMirBlockId;
+  {** MIR 结构体字段 }
+  TMirStructField = record
+    Name: string;
+    BitWidth: LongInt;
+    IsSigned: Boolean;
+  end;
+
+  {** MIR 结构体类型 }
+  TMirStructType = record
+    Name: string;
+    Fields: array of TMirStructField;
+  end;
+
   {** MIR 函数 ID }
   TMirFuncId = LongInt;
 
@@ -49,6 +62,7 @@ type
     ConstVal: TMirConst;   // mokConst: 常量值
     BitWidth: LongInt;     // 类型宽度（位），0 = void
     IsSigned: Boolean;     // 有符号标志
+    StructTypeName: string; // 非空时表示该操作数是此 struct 类型
   end;
 
   {** MIR 语句 }
@@ -87,6 +101,7 @@ type
     Args: array of TMirOperand;  // mskCall: 实参列表
     FieldIndex: LongInt;     // mskGetFieldPtr: 字段索引
     BitWidth: LongInt;       // mskAlloca: 分配宽度
+    StructTypeName: string;   // 非空时表示 alloca/操作的 struct 类型名
   end;
 
   {** MIR 终结符类型 }
@@ -155,9 +170,16 @@ type
     FNextValueId: TMirValueId;
     FNextBlockId: TMirBlockId;
     FNextFuncId: TMirFuncId;
+    FStructTypes: array of TMirStructType;
   public
     constructor Create(const AName: string);
     function ModuleName: string;
+
+    {** 注册结构体类型，返回类型索引 }
+    function AddStructType(const AName: string;
+      const AFields: array of TMirStructField): LongInt;
+    function StructTypeCount: LongInt;
+    function StructTypeAt(AIndex: LongInt): TMirStructType;
 
     {** 分配新的 SSA 虚拟寄存器 ID }
     function NewValue: TMirValueId;
@@ -268,11 +290,43 @@ begin
   FNextValueId := 1;
   FNextBlockId := 1;
   FNextFuncId := 1;
+  SetLength(FStructTypes, 0);
 end;
 
 function TMirModule.ModuleName: string;
 begin
   Result := FName;
+end;
+
+function TMirModule.AddStructType(const AName: string;
+  const AFields: array of TMirStructField): LongInt;
+var
+  I: LongInt;
+begin
+  I := Length(FStructTypes);
+  SetLength(FStructTypes, I + 1);
+  FStructTypes[I].Name := AName;
+  SetLength(FStructTypes[I].Fields, Length(AFields));
+  for I := 0 to High(AFields) do
+    FStructTypes[Length(FStructTypes) - 1].Fields[I] := AFields[I];
+  Result := I; { returns index before the SetLength, so use Length-1 below }
+  Result := Length(FStructTypes) - 1;
+end;
+
+function TMirModule.StructTypeCount: LongInt;
+begin
+  Result := Length(FStructTypes);
+end;
+
+function TMirModule.StructTypeAt(AIndex: LongInt): TMirStructType;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FStructTypes)) then
+    Result := FStructTypes[AIndex]
+  else
+  begin
+    Result.Name := '';
+    SetLength(Result.Fields, 0);
+  end;
 end;
 
 function TMirModule.NewValue: TMirValueId;
