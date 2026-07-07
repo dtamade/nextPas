@@ -395,6 +395,58 @@ begin
     'server WithVersion disables registry version');
 end;
 
+procedure TestHttpOptionsWithTimeout;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default.WithTimeout(5000);
+  Check(LOptions.Timeout = 5000, 'WithTimeout stores value');
+  Check(LOptions.MaxRedirects = 10, 'other fields preserved');
+end;
+
+procedure TestHttpOptionsWithMaxRedirects;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default.WithMaxRedirects(3);
+  Check(LOptions.MaxRedirects = 3, 'WithMaxRedirects stores value');
+  Check(LOptions.Timeout = 30000, 'other fields preserved');
+end;
+
+procedure TestHttpOptionsWithFollowRedirects;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default.WithFollowRedirects(False);
+  Check(not LOptions.FollowRedirects, 'WithFollowRedirects stores false');
+  LOptions := LOptions.WithFollowRedirects(True);
+  Check(LOptions.FollowRedirects, 'WithFollowRedirects stores true');
+end;
+
+procedure TestHttpOptionsWithMaxPoolSize;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default.WithMaxPoolSize(16);
+  Check(LOptions.MaxPoolSize = 16, 'WithMaxPoolSize stores value');
+  Check(LOptions.Timeout = 30000, 'other fields preserved');
+end;
+
+procedure TestHttpOptionsFluentChain;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default
+    .WithTimeout(10000)
+    .WithMaxRedirects(5)
+    .WithFollowRedirects(False)
+    .WithMaxPoolSize(32);
+  Check(LOptions.Timeout = 10000, 'timeout chained');
+  Check(LOptions.MaxRedirects = 5, 'max redirects chained');
+  Check(not LOptions.FollowRedirects, 'follow redirects chained');
+  Check(LOptions.MaxPoolSize = 32, 'max pool size chained');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.base');
   T.Test('HttpMethodToStr', @TestHttpMethodToStr);
@@ -422,5 +474,10 @@ begin
   T.Test('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
+  T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);
+  T.Test('HTTP options WithMaxRedirects', @TestHttpOptionsWithMaxRedirects);
+  T.Test('HTTP options WithFollowRedirects', @TestHttpOptionsWithFollowRedirects);
+  T.Test('HTTP options WithMaxPoolSize', @TestHttpOptionsWithMaxPoolSize);
+  T.Test('HTTP options fluent chain', @TestHttpOptionsFluentChain);
   if not T.Run then Halt(1);
 end.

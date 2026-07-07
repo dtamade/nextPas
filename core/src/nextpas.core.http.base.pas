@@ -52,6 +52,10 @@ type
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
     class function Default: THttpClientOptions; static;
+    function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
+    function WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
+    function WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
+    function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
@@ -588,6 +592,30 @@ begin
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
+end;
+
+function THttpClientOptions.WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
+begin
+  Result := Self;
+  Result.Timeout := ATimeoutMs;
+end;
+
+function THttpClientOptions.WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
+begin
+  Result := Self;
+  Result.MaxRedirects := AMaxRedirects;
+end;
+
+function THttpClientOptions.WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
+begin
+  Result := Self;
+  Result.FollowRedirects := AFollow;
+end;
+
+function THttpClientOptions.WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
+begin
+  Result := Self;
+  Result.MaxPoolSize := AMaxPoolSize;
 end;
 
 function THttpClientOptions.WithVersion(
