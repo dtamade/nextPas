@@ -77,6 +77,7 @@ type
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
+  THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
