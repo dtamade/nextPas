@@ -23,6 +23,7 @@
 | test_platform_bench | 7 | ✅ |
 | test_platform_console | 12 | ✅ |
 | test_platform_console_raw | 5 | ✅ |
+| test_platform_console_wine | 8 | ✅ |
 | test_platform_cross_ci_matrix_contract | 3 | ✅ |
 | test_platform_ctypes_abi | 10 | ✅ |
 | test_platform_dl | 11 | ✅ |
@@ -73,6 +74,7 @@
 | test_platform_process | 21 | ✅ |
 | test_platform_process_wine | 1 | ✅ |
 | test_platform_pty | 12 | ✅ |
+| test_platform_pty_wine | 4 | ✅ |
 | test_platform_random | 6 | ✅ |
 | test_platform_random_contract | 1 | ✅ |
 | test_platform_random_wine | 1 | ✅ |
