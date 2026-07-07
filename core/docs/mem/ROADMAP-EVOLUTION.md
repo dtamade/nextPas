@@ -135,8 +135,8 @@ end;
 |---|------|--------|------|
 | P3-1 | Arena allocator 传播 | P0 | IAllocator 自动传播到子分配（collections/http/json） | ✅ (已有 TVirtualArenaAllocator) |
 | P3-2 | Scoped allocator | P1 | TScopedAllocator: 作用域分配器（RAII 风格） | ✅ |
-| P3-3 | Allocator composition | P2 | TCompositeAllocator: 链式分配器（fallback/stats/tag） |
-| P3-4 | Memory budget | P2 | TMemoryBudget: 内存预算管理（软/硬限制） |
+| P3-3 | Allocator composition | P2 | TCompositeAllocator: 链式分配器（fallback/stats/tag） | ✅ (已有 TFallbackAllocator + 装饰器嵌套) |
+| P3-4 | Memory budget | P2 | TMemoryBudget: 内存预算管理（软/硬限制） | ✅ |
 
 ### P3-1: Arena Allocator 传播
 
