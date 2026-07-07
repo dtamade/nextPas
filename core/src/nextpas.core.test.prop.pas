@@ -341,6 +341,8 @@ type
 constructor TStringGenerator.Create(AMinLen, AMaxLen: Integer);
 begin
   inherited Create;
+  if AMinLen > AMaxLen then
+    raise EAssertionFailed.Create('GenString: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
   FRng := TRandomGen.Create(0);
@@ -425,6 +427,8 @@ type
 constructor TIntGenerator.Create(AMin, AMax: Int64);
 begin
   inherited Create;
+  if AMin > AMax then
+    raise EAssertionFailed.Create('GenInt: AMin must be <= AMax');
   FMin := AMin;
   FMax := AMax;
   FRng := TRandomGen.Create(0);
@@ -437,11 +441,20 @@ begin
 end;
 
 function TIntGenerator.Generate: Int64;
+var
+  LRange: UInt64;
+  LHi, LLo: UInt64;
 begin
   if FMin = FMax then
     Result := FMin
   else
-    Result := FMin + Int64(FRng.NextIntRange(0, Integer(FMax - FMin)));
+  begin
+    LRange := UInt64(FMax - FMin) + 1;
+    { Build 64-bit random from two 32-bit halves }
+    LHi := UInt64(FRng.NextIntRange(0, MaxInt));
+    LLo := UInt64(FRng.NextIntRange(0, MaxInt));
+    Result := FMin + Int64(((LHi shl 32) or LLo) mod LRange);
+  end;
 end;
 
 function TIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
@@ -533,6 +546,8 @@ type
 constructor TBytesGenerator.Create(AMinLen, AMaxLen: Integer);
 begin
   inherited Create;
+  if AMinLen > AMaxLen then
+    raise EAssertionFailed.Create('GenBytes: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
   FRng := TRandomGen.Create(0);
@@ -890,6 +905,8 @@ var
   I: Integer;
 begin
   inherited Create;
+  if Length(AValues) = 0 then
+    raise EAssertionFailed.Create('GenChoiceInt: empty values array');
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
@@ -955,6 +972,8 @@ var
   I: Integer;
 begin
   inherited Create;
+  if Length(AValues) = 0 then
+    raise EAssertionFailed.Create('GenChoiceString: empty values array');
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
@@ -1021,6 +1040,8 @@ var
   I: Integer;
 begin
   inherited Create;
+  if Length(AValues) = 0 then
+    raise EAssertionFailed.Create('GenChoiceBool: empty values array');
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
@@ -1074,6 +1095,8 @@ var
   I: Integer;
 begin
   inherited Create;
+  if Length(AGens) = 0 then
+    raise EAssertionFailed.Create('GenOneOfInt: empty generator array');
   SetLength(FGens, Length(AGens));
   for I := 0 to High(AGens) do
     FGens[I] := AGens[I];
@@ -1146,6 +1169,8 @@ var
   I: Integer;
 begin
   inherited Create;
+  if Length(AGens) = 0 then
+    raise EAssertionFailed.Create('GenOneOfString: empty generator array');
   SetLength(FGens, Length(AGens));
   for I := 0 to High(AGens) do
     FGens[I] := AGens[I];
@@ -1216,6 +1241,8 @@ type
 constructor TArrayGenerator.Create(AGen: IIntGenerator; AMinLen, AMaxLen: Integer);
 begin
   inherited Create;
+  if AMinLen > AMaxLen then
+    raise EAssertionFailed.Create('GenArray: AMinLen must be <= AMaxLen');
   FGen := AGen;
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
@@ -1359,7 +1386,11 @@ begin
   SetLength(Result, 3);
   Result[0] := 0;
   Result[1] := AValue div 2;
-  Result[2] := AValue - 1;
+  { Guard against Low(Int64) overflow }
+  if AValue > Low(Int64) then
+    Result[2] := AValue - 1
+  else
+    Result[2] := AValue + 1;
 end;
 
 function TBindIntGenerator.Name: string;
@@ -1600,10 +1631,10 @@ end;
 procedure PropArray(const AName: string; ATest: TIntArrayTest;
   AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
 var
-  I, J: Integer;
+  I, J, K: Integer;
   LValue: specialize TArray<Int64>;
   LShrunk: specialize TArray<specialize TArray<Int64>>;
-  LFailed: Boolean;
+  LFailed, LSame: Boolean;
 begin
   for I := 1 to ARuns do
   begin
@@ -1621,10 +1652,17 @@ begin
             LShrunk := AGen.Shrink(LValue);
             for J := 0 to High(LShrunk) do
             begin
+              { Skip if candidate is identical to current value }
               if Length(LShrunk[J]) = Length(LValue) then
               begin
-                { Same length — check if content changed }
-                if (Length(LValue) > 0) and (LShrunk[J][0] = LValue[0]) then
+                LSame := True;
+                for K := 0 to High(LValue) do
+                  if LShrunk[J][K] <> LValue[K] then
+                  begin
+                    LSame := False;
+                    Break;
+                  end;
+                if LSame then
                   Continue;
               end;
               try

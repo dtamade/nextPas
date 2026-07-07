@@ -647,6 +647,64 @@ begin
     CheckEqual(0, Length(LArr), 'GenArray(0,0)');
   end;
 end;
+
+{ ── Validation guard tests (audit round 3) ───────────────────────────────── }
+
+procedure TestGenIntMinMaxReversed;
+begin
+  ExpectFail(procedure begin
+    GenInt(100, 50);
+  end, 'AMin must be <= AMax');
+end;
+
+procedure TestGenChoiceIntEmpty;
+begin
+  ExpectFail(procedure begin
+    GenChoiceInt([]);
+  end, 'empty values array');
+end;
+
+procedure TestGenChoiceStringEmpty;
+begin
+  ExpectFail(procedure begin
+    GenChoiceString([]);
+  end, 'empty values array');
+end;
+
+procedure TestGenOneOfIntEmpty;
+begin
+  ExpectFail(procedure begin
+    GenOneOfInt([]);
+  end, 'empty generator array');
+end;
+
+procedure TestGenOneOfStringEmpty;
+begin
+  ExpectFail(procedure begin
+    GenOneOfString([]);
+  end, 'empty generator array');
+end;
+
+procedure TestGenStringMinMaxReversed;
+begin
+  ExpectFail(procedure begin
+    GenString(50, 10);
+  end, 'AMinLen must be <= AMaxLen');
+end;
+
+procedure TestGenBytesMinMaxReversed;
+begin
+  ExpectFail(procedure begin
+    GenBytes(50, 10);
+  end, 'AMinLen must be <= AMaxLen');
+end;
+
+procedure TestGenArrayMinMaxReversed;
+begin
+  ExpectFail(procedure begin
+    GenArray(GenInt(0, 100), 50, 10);
+  end, 'AMinLen must be <= AMaxLen');
+end;
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
@@ -809,6 +867,38 @@ begin
   SectionHeader('GenArray empty');
   TestGenArrayEmpty;
   PassTest('GenArray empty passed');
+
+  SectionHeader('GenInt min/max reversed');
+  TestGenIntMinMaxReversed;
+  PassTest('GenInt min/max reversed passed');
+
+  SectionHeader('GenChoiceInt empty');
+  TestGenChoiceIntEmpty;
+  PassTest('GenChoiceInt empty passed');
+
+  SectionHeader('GenChoiceString empty');
+  TestGenChoiceStringEmpty;
+  PassTest('GenChoiceString empty passed');
+
+  SectionHeader('GenOneOfInt empty');
+  TestGenOneOfIntEmpty;
+  PassTest('GenOneOfInt empty passed');
+
+  SectionHeader('GenOneOfString empty');
+  TestGenOneOfStringEmpty;
+  PassTest('GenOneOfString empty passed');
+
+  SectionHeader('GenString min/max reversed');
+  TestGenStringMinMaxReversed;
+  PassTest('GenString min/max reversed passed');
+
+  SectionHeader('GenBytes min/max reversed');
+  TestGenBytesMinMaxReversed;
+  PassTest('GenBytes min/max reversed passed');
+
+  SectionHeader('GenArray min/max reversed');
+  TestGenArrayMinMaxReversed;
+  PassTest('GenArray min/max reversed passed');
 
 
   WriteLn;
