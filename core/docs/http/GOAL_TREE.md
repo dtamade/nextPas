@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 18 — fluent request builder)
+> Last updated: 2026-07-07 (Phase 19 — streaming request body ownership API)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,6 +28,15 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
 
 ### Recent Fixes (2026-07-07)
+
+**Phase 19 (2026-07-07): Streaming Request Body Ownership API**
+
+- **`NewStreamingRequest`**: factory functions that create `IHttpRequest` with a non-buffered `IReader` body — the body is passed directly to the transport, not read into memory
+- **`IHttpClient.SendStreaming`**: sends a streaming request with explicit body ownership contract — `Send` takes ownership and closes the body after the round trip (success or error)
+- **Body ownership contract**: documented in `NewStreamingRequest` docstring — caller creates body, `Send` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
+- **Decorator support**: `TAuthClient`/`THeaderClient`/`TOptionsOverrideClient` all implement `SendStreaming` with correct header injection and options merging
+- **Re-exported**: `NewStreamingRequest` overloads available from `nextpas.core.http` facade
+- **Tests**: 5 new tests (content-length, body closed after send, body closed on error, headers preserved, redirect ownership), 166 client total / 0 leaks
 
 **Phase 18 (2026-07-07): Fluent Request Builder**
 
@@ -234,11 +243,11 @@ Already landed:
 - `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
+- `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
 
 Still intentionally not claimed:
 
 - per-request timeout override at transport level (currently only controls redirect behavior; transport-level timeout requires IHttpTransport changes)
-- streaming/chunked request body ownership API
 
 Those can land later, but only after the contract shape is clear enough to stay stable.
 

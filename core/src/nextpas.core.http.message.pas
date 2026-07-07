@@ -133,6 +133,20 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
+{** Create a request with a streaming body that is NOT buffered into memory.
+   The body reader is passed directly to the transport. The caller must ensure
+   the body remains valid until Send closes it. Content-Length must be known
+   and declared by the caller. If the body supports IStream seeking, redirect
+   retries will rewind automatically; otherwise redirects that change the body
+   (301/302/303) will close the stream and drop the body. }
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -742,6 +756,26 @@ begin
   LUrl := Default(TUrl);
   LUrl.Path := APath;
   Result := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+end;
+
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, nil, ABody, AContentLength);
+end;
+
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AHeaders, ABody, AContentLength);
+end;
+
+function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AContentType, ABody, AContentLength);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;

@@ -168,6 +168,13 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    {** Send a streaming request whose body is NOT buffered into memory.
+       The body reader is passed directly to the transport. Send takes ownership
+       of the body and closes it after the round trip (success or error).
+       Content-Length must be known and declared. }
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;

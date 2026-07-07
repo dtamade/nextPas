@@ -56,6 +56,9 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -96,6 +99,9 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -139,6 +145,9 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -181,6 +190,9 @@ type
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
     function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
@@ -1033,6 +1045,17 @@ begin
   Result := Delete(AUrl, 'application/json', JsonStringify(ABody));
 end;
 
+function THttpClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
+    AContentLength);
+  Result := Send(LReq);
+end;
+
 function THttpClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
 begin
   Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
@@ -1246,6 +1269,18 @@ end;
 function TAuthClient.DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
 begin
   Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TAuthClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
+    AContentLength);
+  LReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := FInner.Send(LReq);
 end;
 
 function TAuthClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -1483,6 +1518,18 @@ function THeaderClient.DeleteJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THeaderClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
+    AContentLength);
+  LReq.Headers.SetHeader(FHeaderName, FHeaderValue);
+  Result := FInner.Send(LReq);
 end;
 
 function THeaderClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -1745,6 +1792,18 @@ function TOptionsOverrideClient.DeleteJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
   Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TOptionsOverrideClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
+    AContentLength);
+  ApplyOptions(LReq);
+  Result := FInner.Send(LReq);
 end;
 
 function TOptionsOverrideClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
