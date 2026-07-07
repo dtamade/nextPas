@@ -156,10 +156,62 @@ function FuzzGenBytes(ALen: Integer): TBytes;
 { Generate random printable ASCII string for seed corpus }
 function FuzzGenString(ALen: Integer): string;
 
+{ ── Corpus Management (v7.3a) ─────────────────────────────────────────────── }
+
+type
+  { Corpus manager for persistent fuzzing campaigns.
+    Loads initial corpus from a directory, saves new inputs found during fuzzing. }
+  TFuzzCorpus = class
+  private
+    FDir: string;
+    FItems: array of TBytes;
+    FCount: Integer;
+    procedure EnsureDir;
+  public
+    { Create corpus manager. ADir is the directory to store corpus files.
+      Files are named by index: 0.bin, 1.bin, etc. }
+    constructor Create(const ADir: string);
+    destructor Destroy; override;
+
+    { Add an item to the corpus. Returns True if item is new (not duplicate). }
+    function Add(const AData: TBytes): Boolean;
+
+    { Add a string item (converted to UTF-8). Returns True if new. }
+    function AddString(const AData: string): Boolean;
+
+    { Get item by index }
+    function GetItem(AIndex: Integer): TBytes;
+
+    { Get string item by index }
+    function GetString(AIndex: Integer): string;
+
+    { Number of items in corpus }
+    function Count: Integer;
+
+    { Save all items to disk }
+    procedure Save;
+
+    { Load items from disk }
+    procedure Load;
+
+    { Check if corpus directory exists and has files }
+    function HasFiles: Boolean;
+  end;
+
+{ Fuzz with corpus management. Loads initial corpus from ACorpusDir,
+  saves new inputs found during fuzzing. }
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+
+{ Fuzz string with corpus management }
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer = 10000);
+
 implementation
 
 uses
-  nextpas.core.math.random;
+  nextpas.core.math.random,
+  nextpas.core.fs;
 
 { ── String Generator ──────────────────────────────────────────────────────── }
 
@@ -1524,6 +1576,243 @@ begin
   finally
     LRng.Free;
   end;
+end;
+
+{ ── Corpus Management (v7.3a) ───────────────────────────────────────────── }
+
+constructor TFuzzCorpus.Create(const ADir: string);
+begin
+  inherited Create;
+  FDir := ADir;
+  FCount := 0;
+  SetLength(FItems, 0);
+end;
+
+destructor TFuzzCorpus.Destroy;
+begin
+  SetLength(FItems, 0);
+  inherited;
+end;
+
+procedure TFuzzCorpus.EnsureDir;
+begin
+  if not DirectoryExists(FDir) then
+    ForceDirectories(FDir);
+end;
+
+function TFuzzCorpus.Add(const AData: TBytes): Boolean;
+var
+  I: Integer;
+  LDup: Boolean;
+begin
+  { Check for duplicates (simple byte-by-byte comparison) }
+  LDup := False;
+  for I := 0 to FCount - 1 do
+  begin
+    if Length(FItems[I]) = Length(AData) then
+    begin
+      if (Length(AData) = 0) or CompareMem(@FItems[I][0], @AData[0], Length(AData)) then
+      begin
+        LDup := True;
+        Break;
+      end;
+    end;
+  end;
+
+  if LDup then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  { Add new item }
+  if FCount >= Length(FItems) then
+    SetLength(FItems, FCount + 16);
+  FItems[FCount] := Copy(AData);
+  Inc(FCount);
+  Result := True;
+end;
+
+function TFuzzCorpus.AddString(const AData: string): Boolean;
+begin
+  Result := Add(StringToUTF8Bytes(AData));
+end;
+
+function TFuzzCorpus.GetItem(AIndex: Integer): TBytes;
+begin
+  if (AIndex >= 0) and (AIndex < FCount) then
+    Result := Copy(FItems[AIndex])
+  else
+    Result := nil;
+end;
+
+function TFuzzCorpus.GetString(AIndex: Integer): string;
+begin
+  if (AIndex >= 0) and (AIndex < FCount) then
+    Result := UTF8BytesToString(FItems[AIndex])
+  else
+    Result := '';
+end;
+
+function TFuzzCorpus.Count: Integer;
+begin
+  Result := FCount;
+end;
+
+procedure TFuzzCorpus.Save;
+var
+  I: Integer;
+  LPath: string;
+begin
+  EnsureDir;
+  for I := 0 to FCount - 1 do
+  begin
+    LPath := FDir + '/' + IntToStr(I) + '.bin';
+    WriteFile(LPath, FItems[I]);
+  end;
+end;
+
+procedure TFuzzCorpus.Load;
+var
+  LEntries: TDirEntryArray;
+  LPath: string;
+  LData: TBytes;
+  I, LIdx, LMaxIdx: Integer;
+  LIdxMap: array of Integer;
+begin
+  if not DirectoryExists(FDir) then
+    Exit;
+
+  { First pass: find max index }
+  LMaxIdx := -1;
+  LEntries := ReadDir(FDir);
+  for I := 0 to High(LEntries) do
+  begin
+    LPath := LEntries[I].Name;
+    if (Length(LPath) > 4) and (Copy(LPath, Length(LPath) - 3, 4) = '.bin') then
+    begin
+      LIdx := StrToIntDef(Copy(LPath, 1, Length(LPath) - 4), -1);
+      if LIdx > LMaxIdx then
+        LMaxIdx := LIdx;
+    end;
+  end;
+
+  if LMaxIdx < 0 then
+    Exit;
+
+  { Second pass: load by index }
+  for LIdx := 0 to LMaxIdx do
+  begin
+    LPath := FDir + '/' + IntToStr(LIdx) + '.bin';
+    if FileExists(LPath) then
+    begin
+      LData := ReadFile(LPath);
+      if Length(LData) > 0 then
+        Add(LData);
+    end;
+  end;
+end;
+
+function TFuzzCorpus.HasFiles: Boolean;
+var
+  LEntries: TDirEntryArray;
+  I: Integer;
+begin
+  if not DirectoryExists(FDir) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  LEntries := ReadDir(FDir);
+  for I := 0 to High(LEntries) do
+  begin
+    if (Length(LEntries[I].Name) > 4) and
+       (Copy(LEntries[I].Name, Length(LEntries[I].Name) - 3, 4) = '.bin') then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+  Result := False;
+end;
+
+procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+var
+  LCorpus: TFuzzCorpus;
+  I, J, LIdx, LFailCount: Integer;
+  LInput, LMin: TBytes;
+  LHex: string;
+  LNew: Boolean;
+begin
+  LCorpus := TFuzzCorpus.Create(ACorpusDir);
+  try
+    { Load existing corpus from disk }
+    LCorpus.Load;
+
+    { If no corpus loaded, seed with random data }
+    if LCorpus.Count = 0 then
+    begin
+      LCorpus.Add(FuzzGenBytes(8));
+      LCorpus.Add(FuzzGenBytes(16));
+      LCorpus.Add(FuzzGenBytes(32));
+    end;
+
+    LFailCount := 0;
+    for I := 1 to AMaxIterations do
+    begin
+      { Pick random corpus item and mutate }
+      LIdx := GetFuzzRng.NextIntRange(0, LCorpus.Count - 1);
+      LInput := FuzzMutate(LCorpus.GetItem(LIdx));
+
+      try
+        ATest(LInput);
+        { If test passes and input is "interesting" (new), add to corpus }
+        LNew := LCorpus.Add(LInput);
+        if LNew and (I mod 100 = 0) then
+          LCorpus.Save;  { Periodically save }
+      except
+        on E: EAssertionFailed do
+        begin
+          Inc(LFailCount);
+          { Minimize the failing input }
+          LMin := FuzzMinimize(LInput, ATest);
+          { Save failing input to corpus }
+          LCorpus.Add(LMin);
+          LCorpus.Save;
+          { Convert to hex for display }
+          LHex := '';
+          for J := 0 to High(LMin) do
+          begin
+            if J > 0 then
+              LHex := LHex + ' ';
+            LHex := LHex + IntToHex(LMin[J], 2);
+          end;
+          FailTest('Fuzz "' + AName + '" found failure after ' + IntToStr(I) +
+            ' iterations (' + IntToStr(LFailCount) + ' failures), ' +
+            'minimal input (' + IntToStr(Length(LMin)) + ' bytes): ' + LHex);
+          Exit;
+        end;
+      end;
+    end;
+
+    { Save final corpus }
+    LCorpus.Save;
+    PassTest('Fuzz "' + AName + '" passed ' + IntToStr(AMaxIterations) +
+      ' iterations, 0 failures, corpus: ' + IntToStr(LCorpus.Count) + ' items');
+  finally
+    LCorpus.Free;
+  end;
+end;
+
+procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
+  const ACorpusDir: string; AMaxIterations: Integer);
+begin
+  FuzzWithCorpus(AName, procedure(const Data: TBytes)
+  begin
+    ATest(UTF8BytesToString(Data));
+  end, ACorpusDir, AMaxIterations);
 end;
 
 finalization

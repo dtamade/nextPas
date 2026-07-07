@@ -304,6 +304,120 @@ begin
   end, LCorpus, 10);
 end;
 
+{ ── Corpus Management tests (v7.3a) ──────────────────────────────────────── }
+
+procedure TestCorpusCreate;
+var
+  LCorpus: TFuzzCorpus;
+begin
+  LCorpus := TFuzzCorpus.Create('/tmp/test_corpus_create');
+  try
+    if LCorpus.Count <> 0 then
+      FailTest('Expected 0 items, got ' + IntToStr(LCorpus.Count));
+  finally
+    LCorpus.Free;
+  end;
+end;
+
+procedure TestCorpusAdd;
+var
+  LCorpus: TFuzzCorpus;
+  LData: TBytes;
+begin
+  LCorpus := TFuzzCorpus.Create('/tmp/test_corpus_add');
+  try
+    LData := TBytes.Create($01, $02, $03);
+    if not LCorpus.Add(LData) then
+      FailTest('First add should return True');
+    if LCorpus.Add(LData) then
+      FailTest('Duplicate add should return False');
+    if LCorpus.Count <> 1 then
+      FailTest('Expected 1 item, got ' + IntToStr(LCorpus.Count));
+  finally
+    LCorpus.Free;
+  end;
+end;
+
+procedure TestCorpusAddString;
+var
+  LCorpus: TFuzzCorpus;
+begin
+  LCorpus := TFuzzCorpus.Create('/tmp/test_corpus_addstr');
+  try
+    if not LCorpus.AddString('hello') then
+      FailTest('First add should return True');
+    if LCorpus.AddString('hello') then
+      FailTest('Duplicate add should return False');
+    if LCorpus.Count <> 1 then
+      FailTest('Expected 1 item, got ' + IntToStr(LCorpus.Count));
+    if LCorpus.GetString(0) <> 'hello' then
+      FailTest('Expected "hello", got "' + LCorpus.GetString(0) + '"');
+  finally
+    LCorpus.Free;
+  end;
+end;
+
+procedure TestCorpusSaveLoad;
+var
+  LCorpus1, LCorpus2: TFuzzCorpus;
+  LDir: string;
+begin
+  LDir := '/tmp/test_corpus_saveload';
+  { Clean up from previous run }
+  LCorpus1 := TFuzzCorpus.Create(LDir);
+  try
+    LCorpus1.AddString('test1');
+    LCorpus1.AddString('test2');
+    LCorpus1.Save;
+  finally
+    LCorpus1.Free;
+  end;
+
+  { Load in new instance }
+  LCorpus2 := TFuzzCorpus.Create(LDir);
+  try
+    LCorpus2.Load;
+    if LCorpus2.Count <> 2 then
+      FailTest('Expected 2 items after load, got ' + IntToStr(LCorpus2.Count));
+    if LCorpus2.GetString(0) <> 'test1' then
+      FailTest('Expected "test1", got "' + LCorpus2.GetString(0) + '"');
+    if LCorpus2.GetString(1) <> 'test2' then
+      FailTest('Expected "test2", got "' + LCorpus2.GetString(1) + '"');
+  finally
+    LCorpus2.Free;
+  end;
+end;
+
+procedure TestCorpusHasFiles;
+var
+  LCorpus: TFuzzCorpus;
+  LDir: string;
+begin
+  LDir := '/tmp/test_corpus_hasfiles_' + IntToStr(Random(100000));
+  LCorpus := TFuzzCorpus.Create(LDir);
+  try
+    if LCorpus.HasFiles then
+      FailTest('Should not have files before save');
+    LCorpus.AddString('test');
+    LCorpus.Save;
+    if not LCorpus.HasFiles then
+      FailTest('Should have files after save');
+  finally
+    LCorpus.Free;
+  end;
+end;
+
+procedure TestFuzzWithCorpus;
+var
+  LDir: string;
+begin
+  LDir := '/tmp/test_fuzz_with_corpus';
+  FuzzWithCorpus('corpus test', procedure(const Data: TBytes)
+  begin
+    { always passes }
+  end, LDir, 100);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 begin
@@ -385,6 +499,30 @@ begin
   SectionHeader('Fuzz empty corpus');
   TestFuzzEmptyCorpus;
   PassTest('Fuzz empty corpus passed');
+
+  SectionHeader('Corpus create');
+  TestCorpusCreate;
+  PassTest('Corpus create passed');
+
+  SectionHeader('Corpus add');
+  TestCorpusAdd;
+  PassTest('Corpus add passed');
+
+  SectionHeader('Corpus add string');
+  TestCorpusAddString;
+  PassTest('Corpus add string passed');
+
+  SectionHeader('Corpus save/load');
+  TestCorpusSaveLoad;
+  PassTest('Corpus save/load passed');
+
+  SectionHeader('Corpus HasFiles');
+  TestCorpusHasFiles;
+  PassTest('Corpus HasFiles passed');
+
+  SectionHeader('FuzzWithCorpus');
+  TestFuzzWithCorpus;
+  PassTest('FuzzWithCorpus passed');
 
   WriteLn;
   PassTest('test_prop');
