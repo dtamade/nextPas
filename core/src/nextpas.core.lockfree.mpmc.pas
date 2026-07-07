@@ -343,36 +343,97 @@ end;
 
 function TMpmcQueueImpl.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
-  LI: PtrUInt;
+  LPos, LNewPos: Int64;
+  LCount, LI: PtrUInt;
+  LIdx: PtrUInt;
+  LDeqCache: Int64;
 begin
   if Length(AValues) = 0 then
     Exit(0);
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(0);
   Result := 0;
-  for LI := 0 to PtrUInt(High(AValues)) do
+  while Result < PtrUInt(Length(AValues)) do
   begin
-    if not TryEnqueue(AValues[LI]) then
-      Exit;
-    Inc(Result);
+    { Try to reserve multiple positions with one CAS }
+    LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
+    LDeqCache := AtomicLoad64(FDequeuePos, moRelaxed);
+    { Calculate how many positions we can reserve }
+    LCount := PtrUInt(Length(AValues)) - Result;
+    if LCount > FCapacity - PtrUInt(LPos - LDeqCache) then
+      LCount := FCapacity - PtrUInt(LPos - LDeqCache);
+    if LCount = 0 then
+      Exit; { Queue full }
+    { Try to reserve LCount positions at once }
+    LNewPos := LPos + Int64(LCount);
+    if AtomicCompareExchange64(FEnqueuePos, LPos, LNewPos, moRelaxed) <> LPos then
+    begin
+      { CAS failed — fall back to single enqueue }
+      if not TryEnqueue(AValues[Result]) then
+        Exit;
+      Inc(Result);
+      Continue;
+    end;
+    { Reserved LCount positions — fill them }
+    for LI := 0 to LCount - 1 do
+    begin
+      LIdx := PtrUInt(LPos + Int64(LI)) and FMask;
+      FSlots[LIdx].Value := AValues[Result + LI];
+      AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos + Int64(LI)), moRelease);
+    end;
+    { Notify waiters if needed }
+    if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+      LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+    Inc(Result, LCount);
   end;
 end;
 
 function TMpmcQueueImpl.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
-  LI, LCount: PtrUInt;
+  LPos, LNewPos: Int64;
+  LCount, LI, LLimit: PtrUInt;
+  LIdx: PtrUInt;
+  LEnqCache: Int64;
 begin
   if (AMaxCount = 0) or (Length(AValues) = 0) then
     Exit(0);
-  LCount := AMaxCount;
-  if LCount > PtrUInt(Length(AValues)) then
-    LCount := PtrUInt(Length(AValues));
+  LLimit := AMaxCount;
+  if LLimit > PtrUInt(Length(AValues)) then
+    LLimit := PtrUInt(Length(AValues));
   Result := 0;
-  for LI := 0 to LCount - 1 do
+  while Result < LLimit do
   begin
-    if not TryDequeue(AValues[LI]) then
-      Exit;
-    Inc(Result);
+    { Try to reserve multiple positions with one CAS }
+    LPos := AtomicLoad64(FDequeuePos, moRelaxed);
+    LEnqCache := AtomicLoad64(FEnqueuePos, moRelaxed);
+    { Calculate how many positions we can reserve }
+    LCount := LLimit - Result;
+    if LCount > PtrUInt(LEnqCache - LPos) then
+      LCount := PtrUInt(LEnqCache - LPos);
+    if LCount = 0 then
+      Exit; { Queue empty }
+    { Try to reserve LCount positions at once }
+    LNewPos := LPos + Int64(LCount);
+    if AtomicCompareExchange64(FDequeuePos, LPos, LNewPos, moRelaxed) <> LPos then
+    begin
+      { CAS failed — fall back to single dequeue }
+      if not TryDequeue(AValues[Result]) then
+        Exit;
+      Inc(Result);
+      Continue;
+    end;
+    { Reserved LCount positions — read them }
+    for LI := 0 to LCount - 1 do
+    begin
+      LIdx := PtrUInt(LPos + Int64(LI)) and FMask;
+      AValues[Result + LI] := FSlots[LIdx].Value;
+      FSlots[LIdx].Value := Default(T);
+      AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(LI) + Int64(FCapacity)), moRelease);
+    end;
+    { Notify waiters if needed }
+    if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+      LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+    Inc(Result, LCount);
   end;
 end;
 
