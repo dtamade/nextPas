@@ -1,6 +1,6 @@
 # mem 模块演化路线图 v2
 
-> **状态**: 规划中
+> **状态**: Phase 1-2 完成，Phase 3 进行中
 > **起始**: 2026-07-06
 > **基线**: 58 源文件 / 24169 行 / 50 测试目录 / 664 测试 / 1990 断言
 > **前序**: ROADMAP-DEEPENING.md 全部完成
@@ -18,9 +18,9 @@
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P1-1 | Allocation snapshot | P0 | TAllocSnapshot: 当前分配状态快照（总分配/释放/峰值/活跃数） |
-| P1-2 | Per-thread stats | P1 | TThreadAllocStats: 每线程分配统计（TLS 收集，全局汇总） |
-| P1-3 | Allocation histogram | P1 | THistogram: 按大小分布的分配直方图（16B/64B/256B/1KB/4KB/16KB/64KB/256KB+） |
+| P1-1 | Allocation snapshot | P0 | TAllocSnapshot: 当前分配状态快照（总分配/释放/峰值/活跃数） | ✅ |
+| P1-2 | Per-thread stats | P1 | TThreadAllocStats: 每线程分配统计（TLS 收集，全局汇总） | ✅ |
+| P1-3 | Allocation histogram | P1 | THistogram: 按大小分布的分配直方图（16B/64B/256B/1KB/4KB/16KB/64KB/256KB+） | ✅ |
 | P1-4 | Leak report 增强 | P2 | TLeakReport: 分配调用栈 + 生命周期 + 标签聚合 |
 
 ### P1-1: Allocation Snapshot
@@ -91,7 +91,7 @@ end;
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P2-1 | OOM callback | P0 | TOomHandler: OOM 时回调（释放缓存/触发 GC/降级策略） |
+| P2-1 | OOM callback | P0 | TOomHandler: OOM 时回调（释放缓存/触发 GC/降级策略） | ✅ |
 | P2-2 | Memory pressure | P1 | TMemoryPressure: 系统内存压力检测 + 回调 |
 | P2-3 | Double-free 检测增强 | P1 | 哨兵值 + 延迟释放队列 + 校验和 |
 | P2-4 | Stack overflow guard | P2 | Arena 分配时栈深度检查（防止递归分配） |
@@ -133,8 +133,8 @@ end;
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P3-1 | Arena allocator 传播 | P0 | IAllocator 自动传播到子分配（collections/http/json） |
-| P3-2 | Scoped allocator | P1 | TScopedAllocator: 作用域分配器（RAII 风格） |
+| P3-1 | Arena allocator 传播 | P0 | IAllocator 自动传播到子分配（collections/http/json） | ✅ (已有 TVirtualArenaAllocator) |
+| P3-2 | Scoped allocator | P1 | TScopedAllocator: 作用域分配器（RAII 风格） | ✅ |
 | P3-3 | Allocator composition | P2 | TCompositeAllocator: 链式分配器（fallback/stats/tag） |
 | P3-4 | Memory budget | P2 | TMemoryBudget: 内存预算管理（软/硬限制） |
 
