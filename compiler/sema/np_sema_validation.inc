@@ -138,6 +138,7 @@ var
   LhsSymId: LongInt;
   LhsSym: TSemanticSymbol;
   LhsTypeId, RhsTypeId: LongInt;
+  LhsTypeName, RhsTypeName: string;
 begin
   if ANode = nil then
     Exit;
@@ -183,11 +184,26 @@ begin
           Exit;
         if AreTypesCompatible(LhsTypeId, RhsTypeId) then
           Exit;
-        EmitSemaError(
-          'sema.type-mismatch',
-          'incompatible types: cannot assign to "' + LhsName + '"',
-          ANode.ByteOffset
-        );
+        { Include type names in error message }
+        LhsTypeName := '';
+        RhsTypeName := '';
+        if (LhsTypeId > 0) and (LhsTypeId <= FModel.TypeCount) then
+          LhsTypeName := FModel.TypeAt(LhsTypeId - 1).Name;
+        if (RhsTypeId > 0) and (RhsTypeId <= FModel.TypeCount) then
+          RhsTypeName := FModel.TypeAt(RhsTypeId - 1).Name;
+        if (LhsTypeName <> '') and (RhsTypeName <> '') then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'incompatible types: cannot assign ' + RhsTypeName +
+              ' to ' + LhsTypeName + ' variable "' + LhsName + '"',
+            ANode.ByteOffset
+          )
+        else
+          EmitSemaError(
+            'sema.type-mismatch',
+            'incompatible types: cannot assign to "' + LhsName + '"',
+            ANode.ByteOffset
+          );
       end;
     gnkProcedureCallStatement:
       begin
