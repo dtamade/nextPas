@@ -268,6 +268,70 @@ begin
   Check(platform_parse_float('', 0, V) <> 0, 'empty');
 end;
 
+procedure TestStrLowerEmpty;
+var
+  Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_lower('', 0, @Buf[0], 64);
+  Check(R = 0, 'empty source returns 0');
+  Check(Buf[0] = #0, 'empty result is null terminated');
+end;
+
+procedure TestStrUpperEmpty;
+var
+  Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_upper('', 0, @Buf[0], 64);
+  Check(R = 0, 'empty source returns 0');
+  Check(Buf[0] = #0, 'empty result is null terminated');
+end;
+
+procedure TestStrTrimEmpty;
+var
+  Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_trim('', 0, @Buf[0], 64);
+  Check(R = 0, 'empty source returns 0');
+  Check(Buf[0] = #0, 'empty result is null terminated');
+end;
+
+procedure TestFmtIntMaxMin;
+var Buf: array[0..31] of AnsiChar;
+begin
+  platform_fmt_int(High(Int64), @Buf[0], 32);
+  Check(BufEq(@Buf[0], '9223372036854775807'), 'max int64');
+  platform_fmt_int(Low(Int64), @Buf[0], 32);
+  Check(BufEq(@Buf[0], '-9223372036854775808'), 'min int64');
+end;
+
+procedure TestParseUintOverflow;
+var V: UInt64;
+begin
+  { 18446744073709551616 = max uint64 + 1 — should fail }
+  Check(platform_parse_uint('18446744073709551616', 20, V) <> 0, 'uint64 overflow rejected');
+end;
+
+procedure TestFmtHexZeroPad;
+var Buf: array[0..31] of AnsiChar;
+begin
+  platform_fmt_hex($00FF, @Buf[0], 32);
+  Check(BufEq(@Buf[0], 'FF'), 'hex no leading zeros');
+  platform_fmt_hex(0, @Buf[0], 32);
+  Check(BufEq(@Buf[0], '0'), 'hex zero');
+end;
+
+procedure TestParseHexLowerAndUpper;
+var V: UInt64;
+begin
+  Check(platform_parse_hex('abcdef', 6, V) = 0, 'parse lowercase hex');
+  Check(V = $ABCDEF, 'lowercase hex value');
+  Check(platform_parse_hex('ABCDEF', 6, V) = 0, 'parse uppercase hex');
+  Check(V = $ABCDEF, 'uppercase hex value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fmt');
   T.Test('int positive', @TestIntPositive);
@@ -294,5 +358,12 @@ begin
   T.Test('fmt_buf %f', @TestFmtBufFloat);
   T.Test('fmt_buf width/align', @TestFmtBufWidth);
   T.Test('parse_float', @TestParseFloat);
+  T.Test('str_lower empty', @TestStrLowerEmpty);
+  T.Test('str_upper empty', @TestStrUpperEmpty);
+  T.Test('str_trim empty', @TestStrTrimEmpty);
+  T.Test('int max/min', @TestFmtIntMaxMin);
+  T.Test('parse uint overflow', @TestParseUintOverflow);
+  T.Test('hex zero pad', @TestFmtHexZeroPad);
+  T.Test('parse hex case', @TestParseHexLowerAndUpper);
   if not T.Run then Halt(1);
 end.
