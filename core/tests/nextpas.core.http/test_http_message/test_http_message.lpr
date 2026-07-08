@@ -1971,6 +1971,31 @@ begin
   Check(LRaised, 'raises on nil writer');
 end;
 
+procedure TestResetContentSets205;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseResetContent(LW);
+  CheckEqual(Int64(205), Int64(LM.Status), 'status 205');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestResetContentNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseResetContent(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -2162,6 +2187,10 @@ begin
     @TestNotModifiedSets304);
   T.Test('NotModified: nil writer raises',
     @TestNotModifiedNilWriterRaises);
+  T.Test('ResetContent: sets 205 status',
+    @TestResetContentSets205);
+  T.Test('ResetContent: nil writer raises',
+    @TestResetContentNilWriterRaises);
   T.Test('Html: sets text/html content-type',
     @TestHtmlSetsContentType);
   T.Test('Html: writes status and body',
