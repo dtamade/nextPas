@@ -8,7 +8,7 @@
 
 | 任务 | 目标 | 预计工时 | 状态 |
 |------|------|----------|------|
-| NUMA 感知 | 针对 NUMA 架构优化内存分配和数据布局 | 40h | ✅ Phase 1 完成 |
+| NUMA 感知 | 针对 NUMA 架构优化内存分配和数据布局 | 40h | ✅ Phase 1-2 完成 |
 | 硬件事务内存 | Intel TSX 支持，提升并发性能 | 40h | ✅ Phase 1 完成 |
 | 形式化验证 | TLA+ 模型验证关键算法正确性 | 80h | ✅ Phase 1 完成 |
 
@@ -50,7 +50,7 @@ function NumaAllocOnNode(ASize: PtrUInt; ANode: Integer): Pointer;
 procedure NumaFreeOnNode(APtr: Pointer; ASize: PtrUInt; ANode: Integer);
 ```
 
-#### Phase 2: NUMA 感知数据结构 (16h)
+#### Phase 2: NUMA 感知数据结构 (16h) ✅
 
 修改 HashMap/SkipList/BTree 按 NUMA 节点分片：
 
@@ -64,6 +64,12 @@ type
     function GetShard(AKey: UInt64): Integer;  // 基于 key + 当前节点
   end;
 ```
+
+**实现**:
+- `nextpas.core.lockfree.hashnuma.pas`: NUMA 感知 HashMap
+- 按 NUMA 节点分片，每个节点独立的 HashMap 实例
+- 哈希值路由到对应节点，减少跨节点访问
+- 38 个测试全通过
 
 #### Phase 3: 线程亲和性 (8h)
 

@@ -346,8 +346,15 @@ L3: nextpas.core.lockfree.* (数据结构)
 | `nextpas.core.numa.pas` | NUMA 拓扑检测接口 | ✅ 完成 |
 | `nextpas.core.numa.linux.pas` | Linux 实现 | ✅ 完成 |
 | `nextpas.core.numa.windows.pas` | Windows 实现 | ✅ 完成 |
+| `nextpas.core.lockfree.hashmap.numa.pas` | NUMA 感知 HashMap | ✅ 完成 |
 
 **API**: NumaNodeCount, NumaGetNodeForCpu, NumaGetCurrentNode, NumaAllocOnNode, NumaFreeOnNode, NumaGetNodeInfo, NumaGetOptimalNode, NumaSetThreadAffinity
+
+**NUMA HashMap 特性**:
+- 按 NUMA 节点分片，每个节点独立的 HashMap 实例
+- 哈希值路由到对应节点，减少跨节点内存访问
+- 支持所有原有 API: Insert/Find/Remove/Contains/Count/ForEach/Reserve 等
+- 38 个测试全通过
 
 #### 硬件事务内存 (Intel TSX)
 
