@@ -55,7 +55,7 @@ type
     DoubleFreeDetected: UInt64;
   end;
 
-  TPool2Allocator = class(TAllocator)
+  TPool2Allocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FBlockSize: SizeUInt;
@@ -70,15 +70,15 @@ type
     FDoubleFreeCount: UInt64;
     FSequence: UInt32;
     procedure AllocatePool;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; ABlockSize: SizeUInt;
       AAlignment: SizeUInt = POOL2_DEFAULT_ALIGNMENT;
       ACapacity: SizeUInt = 256);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
     function GetStats: TPool2Stats;
     property BlockSize: SizeUInt read FBlockSize;
     property Alignment: SizeUInt read FAlignment;
@@ -154,7 +154,7 @@ begin
   Inc(FFreeCount, FCapacity);
 end;
 
-function TPool2Allocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TPool2Allocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LHeader: PPool2Header;
 begin
@@ -181,14 +181,14 @@ begin
   Result := Pointer(PByte(LHeader) + HEADER_SIZE);
 end;
 
-function TPool2Allocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TPool2Allocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TPool2Allocator.DoFreeMem(APtr: Pointer);
+procedure TPool2Allocator.FreeMem(APtr: Pointer); inline;
 var
   LHeader: PPool2Header;
 begin
@@ -212,28 +212,28 @@ begin
   Inc(FFreeCountTotal);
 end;
 
-function TPool2Allocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TPool2Allocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LCopySize: SizeUInt;
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize <= FBlockSize then
     Exit(APtr);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := FBlockSize;
   if LCopySize > ASize then
     LCopySize := ASize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TPool2Allocator.GetStats: TPool2Stats;
@@ -245,6 +245,13 @@ begin
   Result.AllocCount := FAllocCount;
   Result.FreeCount := FFreeCountTotal;
   Result.DoubleFreeDetected := FDoubleFreeCount;
+end;
+
+function TPool2Allocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
