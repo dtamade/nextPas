@@ -430,6 +430,33 @@ begin
   Check((LSize and (LSize - 1)) = 0, 'page size is power of 2');
 end;
 
+procedure TestAnonymousMapZeroSize;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_create_anonymous(0, pmaReadWrite, [pmfPrivate], M);
+  Check(R <> 0, 'zero-size anonymous map returns error');
+end;
+
+procedure TestMapNilPath;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_file(nil, M);
+  Check(R <> 0, 'nil path returns error');
+end;
+
+procedure TestFlushNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_flush(M, 0, 1) <> 0, 'flush on closed map returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -453,6 +480,9 @@ begin
   T.Test('anonymous map read/write', @TestAnonymousMapReadWrite);
   T.Test('large file integrity', @TestMapLargeFileIntegrity);
   T.Test('page size is valid power of 2', @TestPageSize);
+  T.Test('anonymous map zero size', @TestAnonymousMapZeroSize);
+  T.Test('map nil path', @TestMapNilPath);
+  T.Test('flush on closed map', @TestFlushNilMap);
   if not T.Run then Halt(1);
   Cleanup;
 end.

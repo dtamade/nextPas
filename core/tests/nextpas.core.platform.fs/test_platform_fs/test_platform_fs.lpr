@@ -484,6 +484,39 @@ begin
     'rename non-existent fails');
 end;
 
+procedure TestExistsNilPath;
+begin
+  Check(not platform_fs_exists(nil), 'exists nil returns false');
+end;
+
+procedure TestIsFileNilPath;
+begin
+  Check(not platform_fs_is_file(nil), 'is_file nil returns false');
+end;
+
+procedure TestIsDirNilPath;
+begin
+  Check(not platform_fs_is_dir(nil), 'is_dir nil returns false');
+end;
+
+procedure TestTempDirNotNil;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_fs_temp_dir(@Buf[0], 256);
+  Check(R > 0, 'temp_dir returns length > 0');
+  Check(Buf[0] <> #0, 'temp_dir not empty');
+end;
+
+procedure TestFileSizeNonExistent;
+var
+  LSize: Int64;
+begin
+  Check(platform_fs_file_size('/tmp/nextpas_nonexistent_size_xyz', LSize) <> 0,
+    'file_size non-existent returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fs');
   T.Test('exists file', @TestExistsFile);
@@ -512,5 +545,10 @@ begin
   T.Test('is_executable', @TestIsExecutable);
   T.Test('file I/O contract', @TestFileIoContract);
   T.Test('mktemp_handle creates file', @TestMktempHandle);
+  T.Test('exists nil path', @TestExistsNilPath);
+  T.Test('is_file nil path', @TestIsFileNilPath);
+  T.Test('is_dir nil path', @TestIsDirNilPath);
+  T.Test('temp_dir returns valid path', @TestTempDirNotNil);
+  T.Test('file_size non-existent', @TestFileSizeNonExistent);
   if not T.Run then Halt(1);
 end.
