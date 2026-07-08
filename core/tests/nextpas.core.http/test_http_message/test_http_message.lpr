@@ -1677,6 +1677,33 @@ begin
   Check(Pos('"code":"internal_error"', LM.Body) > 0, 'code is internal_error');
 end;
 
+procedure TestNoContentSets204;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseNoContent(LW);
+  CheckEqual(Int64(204), Int64(LM.Status), 'status 204');
+  CheckEqual('', LM.Body, 'no body written');
+  Check(LM.StatusWritten, 'WriteHeader was called');
+end;
+
+procedure TestNoContentNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseNoContent(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1838,5 +1865,9 @@ begin
     @TestErrorNotFound);
   T.Test('ErrorResponse 500 Internal',
     @TestErrorInternal);
+  T.Test('NoContent: sets 204 status',
+    @TestNoContentSets204);
+  T.Test('NoContent: nil writer raises',
+    @TestNoContentNilWriterRaises);
   if not T.Run then Halt(1);
 end.

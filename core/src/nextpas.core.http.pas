@@ -74,6 +74,7 @@ type
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
+  TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
@@ -218,6 +219,8 @@ function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; 
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
 {** @desc Catch exceptions and return 500 }
 function RecoveryMiddleware: IHttpMiddleware; inline;
+{** @desc Catch exceptions and return 500, calling AOnError for each exception. }
+function RecoveryMiddlewareWith(const AOnError: TRecoveryCallback): IHttpMiddleware; inline;
 {** @desc Add X-Response-Time header (duration in ms) }
 function ResponseTimeMiddleware: IHttpMiddleware; inline;
 {** @desc Reject requests with Content-Length > AMaxBytes (returns 413). }
@@ -320,6 +323,8 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
 function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType: string;
   const ABody: TBytes): SizeUInt; inline;
+{** @desc Write 204 No Content response. }
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -546,6 +551,11 @@ end;
 function RecoveryMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.recovery.RecoveryMiddleware;
+end;
+
+function RecoveryMiddlewareWith(const AOnError: TRecoveryCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.recovery.RecoveryMiddlewareWith(AOnError);
 end;
 
 function ResponseTimeMiddleware: IHttpMiddleware;
@@ -834,6 +844,11 @@ function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
 begin
   Result := nextpas.core.http.message.HttpWriteResponseBytes(AW, AStatus,
     AContentType, ABody);
+end;
+
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseNoContent(AW);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
