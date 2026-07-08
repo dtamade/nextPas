@@ -331,11 +331,52 @@ L3: nextpas.core.lockfree.* (数据结构)
 
 ### 5.3 长期 (3-6 月)
 
-| 任务 | 优先级 | 工时 | 说明 |
-|------|--------|------|------|
-| NUMA 感知 | 低 | 40h | 针对 NUMA 架构优化 |
-| 硬件事务内存 | 低 | 40h | Intel TSX 支持 |
-| 形式化验证 | 低 | 80h | 关键算法的形式化证明 |
+| 任务 | 优先级 | 工时 | 说明 | 状态 |
+|------|--------|------|------|------|
+| NUMA 感知 | 低 | 40h | 针对 NUMA 架构优化 | 🔄 进行中 |
+| 硬件事务内存 | 低 | 40h | Intel TSX 支持 | 🔄 进行中 |
+| 形式化验证 | 低 | 80h | 关键算法的形式化证明 | 🔄 进行中 |
+
+### 5.4 长期研究进展 (2026-07-08)
+
+#### NUMA 感知优化
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `nextpas.core.numa.pas` | NUMA 拓扑检测接口 | ✅ 完成 |
+| `nextpas.core.numa.linux.pas` | Linux 实现 | ✅ 完成 |
+| `nextpas.core.numa.windows.pas` | Windows 实现 | ✅ 完成 |
+
+**API**: NumaNodeCount, NumaGetNodeForCpu, NumaGetCurrentNode, NumaAllocOnNode, NumaFreeOnNode, NumaGetNodeInfo, NumaGetOptimalNode, NumaSetThreadAffinity
+
+#### 硬件事务内存 (Intel TSX)
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `nextpas.core.lockfree.rtm.pas` | RTM 内联汇编封装 | ✅ 完成 |
+
+**API**: RtmIsSupported, RtmBegin, RtmEnd, RtmAbort, RtmRetryCount
+
+#### 形式化验证
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `SpscQueue.tla` | SPSC 队列 TLA+ 模型 | ✅ 完成 |
+| `SpscQueue.cfg` | SPSC 队列配置 | ✅ 完成 |
+| `MpmcQueue.tla` | MPMC 队列 TLA+ 模型 | ✅ 完成 |
+| `MpmcQueue.cfg` | MPMC 队列配置 | ✅ 完成 |
+| `LockFreeChannel.tla` | Channel TLA+ 模型 | ✅ 完成 |
+| `LockFreeChannel.cfg` | Channel 配置 | ✅ 完成 |
+
+**验证属性**:
+- 无死锁 (Deadlock Freedom)
+- 无饥饿 (Starvation Freedom)
+- 线性化 (Linearizability)
+- FIFO 顺序 (FIFO Order)
+- ABA 安全 (ABA Safety)
+- Close 语义 (Close Semantics)
+- Select 公平性 (Select Fairness)
+- Resize 安全 (Resize Safety)
 
 ---
 
