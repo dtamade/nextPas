@@ -942,6 +942,12 @@ begin
     must produce different cache keys to avoid false cache hits }
   for I := 1 to Length(AConfig.FilterPattern) do
     LHash := (LHash xor Ord(AConfig.FilterPattern[I])) * 1099511628211;
+  { Hash tag filter — different tags select different tests, must affect cache key }
+  for I := 1 to Length(AConfig.TagFilter) do
+    LHash := (LHash xor Ord(AConfig.TagFilter[I])) * 1099511628211;
+  { Hash run pattern — different patterns select different tests, must affect cache key }
+  for I := 1 to Length(AConfig.RunPattern) do
+    LHash := (LHash xor Ord(AConfig.RunPattern[I])) * 1099511628211;
   Result := IntToHex(LHash, 16);
 end;
 
