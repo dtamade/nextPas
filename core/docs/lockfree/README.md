@@ -27,13 +27,14 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
 | `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
 | `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，基于分片锁的并发 HashMap。                                        |
+| `nextpas.core.lockfree.bag`      | `TLockFreeBag<T>`，基于 MPMC 队列的并发 Bag，允许重复元素。                                        |
 | `nextpas.core.lockfree.channel`  | `TLockFreeChannel<T>`，有界无锁 Channel，序列号驱动的 MPMC 通道。                                  |
 | `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`，单生产者单消费者有界 Channel，专为 1P1C 优化。                    |
 | `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
 
 `nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
 `TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
+`TLockFreeBag<T>`, `THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
 `TLockFreeSelector<T>` so consumers can use the public lockfree surface without
 importing implementation submodules directly.
 
@@ -93,6 +94,7 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
 `TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
+`TLockFreeBag<T>` permits multiple concurrent producers and consumers; based on MPMC queue, allows duplicate elements. FIFO order is preserved. `Close` prevents new additions but existing elements can still be retrieved.
 
 ## Linearization points
 

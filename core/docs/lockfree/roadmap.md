@@ -42,8 +42,9 @@
 | `lockfree.btree` | 并发 B-Tree | ✅ 完成 | 17 |
 | `lockfree.hashset` | 并发 HashSet | ✅ 完成 | 9 |
 | `lockfree.priority_queue` | 并发优先队列 | ✅ 完成 | 8 |
+| `lockfree.bag` | 并发 Bag（允许重复） | ✅ 完成 | 7 |
 
-**规模**: 24 文件, ~13000 行, 265 测试
+**规模**: 25 文件, ~13500 行, 272 测试
 
 ---
 
@@ -61,7 +62,8 @@
 | test_lockfree_btree | 17 | ✅ 全绿 |
 | test_lockfree_hashset | 9 | ✅ 全绿 |
 | test_lockfree_priority_queue | 8 | ✅ 全绿 |
-| **总计** | **265** | **✅ 全绿** |
+| test_lockfree_bag | 7 | ✅ 全绿 |
+| **总计** | **272** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

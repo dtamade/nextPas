@@ -23,7 +23,8 @@ uses
   nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.selector,
   nextpas.core.lockfree.selector.impl,
-  nextpas.core.lockfree.priority_queue;
+  nextpas.core.lockfree.priority_queue,
+  nextpas.core.lockfree.bag;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -119,6 +120,15 @@ type
     @see TConcurrentPriorityQueueImpl 详细文档和示例
   }
   generic TConcurrentPriorityQueue<T> = class(specialize TConcurrentPriorityQueueImpl<T>)
+  end;
+
+  {** @desc 无锁并发 Bag（允许重复元素）
+    @details 基于 MPMC 队列实现，允许重复元素。
+      支持 TryAdd/TryTake/Wait/Timeout/Close。
+      适用于任务队列、工作池等场景。
+    @see TLockFreeBagImpl 详细文档和示例
+  }
+  generic TLockFreeBag<T> = class(specialize TLockFreeBagImpl<T>)
   end;
 
 implementation

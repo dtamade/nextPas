@@ -69,6 +69,13 @@
     - Insert/Find/Remove/Contains/Count
     - 自动 resize
 
+需要 Bag（允许重复元素的并发集合）？
+└── 使用 TLockFreeBag<T>
+    - 基于 MPMC 队列，允许重复元素
+    - FIFO 顺序
+    - 阻塞/非阻塞/超时
+    - 适用: 任务队列、工作池
+
 需要 Channel（生产者-消费者通信）？
 ├── 单向通信
 │   ├── 单生产者单消费者 (1P1C)

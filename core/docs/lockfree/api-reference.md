@@ -600,6 +600,64 @@ end;
 
 ---
 
+## Bag (nextpas.core.lockfree.bag)
+
+```pascal
+type
+  TLockFreeBagAddResult = (arAdded, arFull, arClosed);
+
+  generic TLockFreeBag<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryAdd(const AValue: T): TLockFreeBagAddResult;
+    function TryTake(out AValue: T): Boolean;
+    function AddWait(const AValue: T): Boolean;
+    function TakeWait(out AValue: T): Boolean;
+    function AddTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    function TakeTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    function Capacity: PtrUInt;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+**特点**:
+- 基于 MPMC 队列实现，允许重复元素
+- FIFO 顺序（先进先出）
+- AddWait/TakeWait 阻塞等待
+- AddTimeout/TakeTimeout 超时等待
+- Close 后不能再添加，但可以取出已有元素
+- 适用于任务队列、工作池等场景
+
+**使用示例**:
+
+```pascal
+var
+  LBag: specialize TLockFreeBag<Integer>;
+  LValue: Integer;
+begin
+  LBag := specialize TLockFreeBag<Integer>.Create(1024);
+  try
+    // 添加元素（允许重复）
+    LBag.TryAdd(42);
+    LBag.TryAdd(42);  // 可以重复
+
+    // 取出元素
+    if LBag.TryTake(LValue) then
+      WriteLn('Got: ', LValue);  // 42
+
+    // 关闭
+    LBag.Close;
+  finally
+    LBag.Free;
+  end;
+end;
+```
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
