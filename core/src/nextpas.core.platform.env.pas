@@ -25,12 +25,14 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16;
@@ -61,10 +63,10 @@ var
 begin
   ALen := 0;
   if not platform_env_name_valid(AName) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   LVal := getenv(AName);
   if LVal = nil then
-    Exit(2); // ENOENT
+    Exit(PLATFORM_ERR_NOENT);
   while LVal[ALen] <> #0 do
     Inc(ALen);
   if (ABuf <> nil) and (ABufSize > 0) then
@@ -83,7 +85,7 @@ function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
 begin
   if (not platform_env_name_valid(AName)) or (AValue = nil) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   if setenv(AName, AValue, 1) = 0 then
     Result := 0
   else
@@ -93,7 +95,7 @@ end;
 function platform_env_unset(const AName: PAnsiChar): Int32;
 begin
   if not platform_env_name_valid(AName) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   if unsetenv(AName) = 0 then
     Result := 0
   else
@@ -113,7 +115,7 @@ var
   LCur: PPAnsiChar;
 begin
   if not Assigned(ACallback) then
-    Exit(22);
+    Exit(PLATFORM_ERR_INVALID);
   LCur := environ;
   if LCur = nil then
     Exit(0);

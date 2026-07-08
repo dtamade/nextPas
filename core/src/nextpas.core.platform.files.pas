@@ -131,7 +131,7 @@ end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 begin
   if AHandle.Value < 0 then
-    Exit(9);
+    Exit(PLATFORM_ERR_BADF);
   if close(AHandle.Value) = 0 then
     Result := 0
   else
