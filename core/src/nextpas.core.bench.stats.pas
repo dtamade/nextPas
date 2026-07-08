@@ -901,8 +901,7 @@ end;
 function KolmogorovCDF(AX: Double): Double;
 var
   LK: Integer;
-  LSum, LTerm: Double;
-  LK2: Double;
+  LSum, LTerm, LSqrTerm, LSign: Double;
 begin
   if AX <= 0 then
   begin
@@ -920,14 +919,13 @@ begin
   // Kolmogorov 分布: K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
   // 使用前 20 项求和（足够精确）
   LSum := 0.0;
+  LSqrTerm := -2.0 * Sqr(AX);
+  LSign := 1.0;
   for LK := 1 to 20 do
   begin
-    LK2 := LK * LK;
-    LTerm := Exp(-2.0 * LK2 * AX * AX);
-    if LK mod 2 = 1 then
-      LSum := LSum + LTerm
-    else
-      LSum := LSum - LTerm;
+    LTerm := Exp(LK * LK * LSqrTerm);
+    LSum := LSum + LSign * LTerm;
+    LSign := -LSign;
   end;
 
   Result := 1.0 - 2.0 * LSum;

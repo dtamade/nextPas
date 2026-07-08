@@ -813,10 +813,10 @@ begin
   begin
     LDiff := LObservedMean - LMeans[LIterationIndex];
     LDiffSqSum := LDiffSqSum + LDiff * LDiff;
-    LDiffCbSum := LDiffCbSum + LDiff * LDiff * LDiff;
+    LDiffCbSum := LDiffCbSum + Sqr(LDiff) * LDiff;
   end;
   if LDiffSqSum > 0 then
-    LA := LDiffCbSum / (6.0 * Power(LDiffSqSum, 1.5))
+    LA := LDiffCbSum / (6.0 * LDiffSqSum * Sqrt(LDiffSqSum))
   else
     LA := 0.0;
 
