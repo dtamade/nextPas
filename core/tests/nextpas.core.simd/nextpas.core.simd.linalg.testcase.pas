@@ -1,4 +1,5 @@
 {$I ../../src/nextpas.core.settings.inc}
+{$I ../../src/nextpas.core.simd.settings.inc}
 
 unit nextpas.core.simd.linalg.testcase;
 
@@ -6,7 +7,11 @@ interface
 
 uses
   Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.base,
-  nextpas.core.simd.arrays.typed, nextpas.core.simd.linalg;
+  nextpas.core.simd.arrays.typed, nextpas.core.simd.linalg,
+  {$IFDEF SIMD_X86_AVAILABLE}
+  nextpas.core.simd.linalg.gemm.sse2
+  {$ENDIF}
+  ;
 
 {$M+}
 type
@@ -28,6 +33,7 @@ type
     procedure Test_Hadamard;
     procedure Test_SumRows;
     procedure Test_SumCols;
+    procedure Test_SSE2_GEMM_Microkernel;
   end;
 
 implementation
@@ -420,6 +426,39 @@ begin
     A.Free;
   end;
 end;
+
+procedure TTestCase_SimdLinalg.Test_SSE2_GEMM_Microkernel;
+{$IFDEF SIMD_X86_AVAILABLE}
+var
+  A, B, C: array[0..15] of Single; // 4x4 matrices
+  i: Integer;
+begin
+  // A = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]
+  for i := 0 to 15 do
+    A[i] := Single(i + 1);
+  // B = identity
+  FillChar(B, SizeOf(B), 0);
+  B[0] := 1; B[5] := 1; B[10] := 1; B[15] := 1;
+  // C = zeros
+  FillChar(C, SizeOf(C), 0);
+
+  // Test Zero version: C = A * B (should equal A since B is identity)
+  GemmMicro4x4F32_SSE2_Zero(@A[0], @B[0], @C[0], 4, 16, 16);
+
+  for i := 0 to 15 do
+    CheckNear(Single(i + 1), C[i], EPS, 'SSE2 Zero[' + IntToStr(i) + ']');
+
+  // Test Accumulate version: C += A * B (should double C)
+  GemmMicro4x4F32_SSE2(@A[0], @B[0], @C[0], 4, 16, 16);
+
+  for i := 0 to 15 do
+    CheckNear(Single(i + 1) * 2, C[i], EPS, 'SSE2 Acc[' + IntToStr(i) + ']');
+end;
+{$ELSE}
+begin
+  // SSE2 not available on this platform, skip
+end;
+{$ENDIF}
 
 
 end.

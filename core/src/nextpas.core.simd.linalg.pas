@@ -107,7 +107,11 @@ implementation
 
 uses
   nextpas.core.simd,
-  nextpas.core.simd.linalg.gemm;
+  nextpas.core.simd.linalg.gemm,
+  {$IFDEF SIMD_X86_AVAILABLE}
+  nextpas.core.simd.linalg.gemm.sse2.blocked,
+  {$ENDIF}
+  nextpas.core.simd.cpuinfo;
 
 class function TSimdF32Matrix.Create(aRows, aCols: SizeUInt): TSimdF32Matrix;
 begin
@@ -253,8 +257,15 @@ begin
      (SizeUInt(aB.RowStride) = aB.Cols) and
      (SizeUInt(aC.RowStride) = aC.Cols) then
   begin
-    GemmBlockedF32(aA.Data, aB.Data, aC.Data,
-      aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, aC.Cols);
+    if HasAVX2 then
+      GemmBlockedF32(aA.Data, aB.Data, aC.Data,
+        aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, aC.Cols)
+    {$IFDEF SIMD_X86_AVAILABLE}
+    else
+      GemmBlockedF32_SSE2(aA.Data, aB.Data, aC.Data,
+        aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, aC.Cols)
+    {$ENDIF}
+    ;
     Exit;
   end;
 
@@ -686,8 +697,15 @@ begin
      (SizeUInt(aB.RowStride) = aB.Cols) and
      (SizeUInt(Result.RowStride) = Result.Cols) then
   begin
-    GemmBlockedF64(aA.Data, aB.Data, Result.Data,
-      aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, Result.Cols);
+    if HasAVX2 then
+      GemmBlockedF64(aA.Data, aB.Data, Result.Data,
+        aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, Result.Cols)
+    {$IFDEF SIMD_X86_AVAILABLE}
+    else
+      GemmBlockedF64_SSE2(aA.Data, aB.Data, Result.Data,
+        aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, Result.Cols)
+    {$ENDIF}
+    ;
     Exit;
   end;
 

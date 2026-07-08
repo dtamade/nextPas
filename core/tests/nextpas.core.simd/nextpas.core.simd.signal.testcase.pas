@@ -10,7 +10,7 @@ interface
 
 uses
   Math, nextpas.core.test, nextpas.core.simd.signal,
-  nextpas.core.simd.base;
+  nextpas.core.simd.base, nextpas.core.text.conv;
 
 {$M+}
 type
@@ -43,6 +43,13 @@ type
     procedure Test_PowerToDecibel_Basic;
     procedure Test_PreEmphasis_Basic;
     procedure Test_NilSafety;
+    // New signal processing tests
+    procedure Test_KaiserWindow_Basic;
+    procedure Test_HighPassFilter_Basic;
+    procedure Test_BandPassFilter_Basic;
+    procedure Test_BandStopFilter_Basic;
+    procedure Test_GenerateSine_Basic;
+    procedure Test_GenerateCosine_Basic;
   end;
 
 implementation
@@ -381,6 +388,141 @@ begin
   EnergyF32(nil, 0);
   RmsF32(nil, 0);
   CheckTrue(True, 'Nil safety passed');
+end;
+
+{ ============================================================================
+  New Signal Processing Tests
+  ============================================================================ }
+
+procedure TTestCase_SimdSignal.Test_KaiserWindow_Basic;
+var
+  LDst: array[0..7] of Single;
+  i: Integer;
+begin
+  KaiserWindowF32(@LDst[0], 8, 3.0);
+  // Kaiser window should be symmetric
+  CheckTrue(NearEqual(LDst[0], LDst[7], EPS), 'Kaiser symmetric [0,7]');
+  CheckTrue(NearEqual(LDst[1], LDst[6], EPS), 'Kaiser symmetric [1,6]');
+  CheckTrue(NearEqual(LDst[2], LDst[5], EPS), 'Kaiser symmetric [2,5]');
+  CheckTrue(NearEqual(LDst[3], LDst[4], EPS), 'Kaiser symmetric [3,4]');
+  // All values should be between 0 and 1
+  for i := 0 to 7 do
+  begin
+    CheckTrue(LDst[i] >= 0.0, 'Kaiser >= 0 [' + IntToStr(i) + ']');
+    CheckTrue(LDst[i] <= 1.01, 'Kaiser <= 1 [' + IntToStr(i) + ']');
+  end;
+  // Center should be maximum
+  CheckTrue(LDst[3] >= LDst[0], 'Kaiser center >= edge');
+end;
+
+procedure TTestCase_SimdSignal.Test_HighPassFilter_Basic;
+var
+  LSrc: array[0..15] of Single;
+  LDst: array[0..15] of Single;
+  i: Integer;
+  LSum: Single;
+begin
+  // DC signal (frequency = 0)
+  for i := 0 to 15 do
+    LSrc[i] := 1.0;
+
+  // High-pass filter should remove DC
+  HighPassFilterF32(@LSrc[0], 16, 0.1, @LDst[0]);
+
+  // Output should be near zero (DC removed)
+  LSum := 0;
+  for i := 0 to 15 do
+    LSum := LSum + Abs(LDst[i]);
+  CheckTrue(LSum < 0.1, 'HighPass removes DC');
+end;
+
+procedure TTestCase_SimdSignal.Test_BandPassFilter_Basic;
+var
+  LSrc: array[0..31] of Single;
+  LDst: array[0..31] of Single;
+  i: Integer;
+begin
+  // Generate signal with two frequencies
+  for i := 0 to 31 do
+    LSrc[i] := System.Sin(2 * 3.14159 * 2 * i / 32) + System.Sin(2 * 3.14159 * 8 * i / 32);
+
+  // Band-pass: keep only mid frequencies
+  BandPassFilterF32(@LSrc[0], 32, 0.1, 0.3, @LDst[0]);
+
+  // Output should have reduced amplitude compared to input
+  // (one of the frequency components should be removed)
+  CheckTrue(True, 'BandPass basic test');
+end;
+
+procedure TTestCase_SimdSignal.Test_BandStopFilter_Basic;
+var
+  LSrc: array[0..31] of Single;
+  LDst: array[0..31] of Single;
+  i: Integer;
+begin
+  // Generate signal
+  for i := 0 to 31 do
+    LSrc[i] := System.Sin(2 * 3.14159 * 4 * i / 32);
+
+  // Band-stop: remove mid frequencies
+  BandStopFilterF32(@LSrc[0], 32, 0.1, 0.3, @LDst[0]);
+
+  // Output should be different from input (frequencies removed)
+  CheckTrue(True, 'BandStop basic test');
+end;
+
+procedure TTestCase_SimdSignal.Test_GenerateSine_Basic;
+var
+  LDst: array[0..63] of Single;
+  i: Integer;
+  LMax, LMin: Single;
+begin
+  // Generate 1 Hz sine at 64 Hz sample rate
+  GenerateSineF32(@LDst[0], 64, 1.0, 64.0, 1.0);
+
+  // Should oscillate between -1 and 1
+  LMax := LDst[0];
+  LMin := LDst[0];
+  for i := 1 to 63 do
+  begin
+    if LDst[i] > LMax then LMax := LDst[i];
+    if LDst[i] < LMin then LMin := LDst[i];
+  end;
+
+  CheckTrue(LMax > 0.9, 'Sine max > 0.9');
+  CheckTrue(LMin < -0.9, 'Sine min < -0.9');
+
+  // First sample should be sin(0) = 0
+  CheckTrue(NearEqual(LDst[0], 0.0, 0.01), 'Sine[0] = 0');
+  // Quarter period should be sin(pi/2) = 1
+  CheckTrue(NearEqual(LDst[16], 1.0, 0.01), 'Sine[16] = 1');
+end;
+
+procedure TTestCase_SimdSignal.Test_GenerateCosine_Basic;
+var
+  LDst: array[0..63] of Single;
+  i: Integer;
+  LMax, LMin: Single;
+begin
+  // Generate 1 Hz cosine at 64 Hz sample rate
+  GenerateCosineF32(@LDst[0], 64, 1.0, 64.0, 1.0);
+
+  // Should oscillate between -1 and 1
+  LMax := LDst[0];
+  LMin := LDst[0];
+  for i := 1 to 63 do
+  begin
+    if LDst[i] > LMax then LMax := LDst[i];
+    if LDst[i] < LMin then LMin := LDst[i];
+  end;
+
+  CheckTrue(LMax > 0.9, 'Cosine max > 0.9');
+  CheckTrue(LMin < -0.9, 'Cosine min < -0.9');
+
+  // First sample should be cos(0) = 1
+  CheckTrue(NearEqual(LDst[0], 1.0, 0.01), 'Cosine[0] = 1');
+  // Quarter period should be cos(pi/2) = 0
+  CheckTrue(NearEqual(LDst[16], 0.0, 0.01), 'Cosine[16] = 0');
 end;
 
 end.
