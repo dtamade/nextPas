@@ -165,6 +165,48 @@ begin
   platform_dl_close(Lib);
 end;
 
+procedure TestLoadSameLibTwice;
+var
+  Lib1, Lib2: TPlatformLibrary;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib1) = 0, 'open 1');
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib2) = 0, 'open 2');
+  Check(Lib1.Handle <> nil, 'handle 1 not nil');
+  Check(Lib2.Handle <> nil, 'handle 2 not nil');
+  { Both should be valid }
+  platform_dl_close(Lib1);
+  platform_dl_close(Lib2);
+end;
+
+procedure TestSymAfterClose;
+var
+  Lib: TPlatformLibrary;
+  Addr: Pointer;
+  R: Int32;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib) = 0, 'open');
+  Check(platform_dl_close(Lib) = 0, 'close');
+  R := platform_dl_sym(Lib, 'strlen', Addr);
+  Check(R <> 0, 'sym after close returns error');
+  Check(Addr = nil, 'addr is nil after close');
+end;
+
+procedure TestErrorClearAfterSuccess;
+var
+  Lib: TPlatformLibrary;
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  { Trigger an error }
+  platform_dl_open('/nonexistent_lib_xyz.so', PLATFORM_DL_LAZY, Lib);
+  { Now succeed }
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib) = 0, 'open after error');
+  { Error should reflect the previous failure, not the success }
+  R := platform_dl_error(@Buf[0], 256);
+  Check(R >= 0, 'dl_error returns length');
+  platform_dl_close(Lib);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.dl');
   T.Test('load libc', @TestLoadLibc);
@@ -181,5 +223,8 @@ begin
   T.Test('sym nil name returns error', @TestSymNilName);
   T.Test('dl_error nil buffer', @TestErrorNilBuffer);
   T.Test('dl_error zero length', @TestErrorZeroLength);
+  T.Test('load same lib twice', @TestLoadSameLibTwice);
+  T.Test('sym after close', @TestSymAfterClose);
+  T.Test('error clears after success', @TestErrorClearAfterSuccess);
   if not T.Run then Halt(1);
 end.

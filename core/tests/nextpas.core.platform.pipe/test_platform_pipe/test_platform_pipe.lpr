@@ -219,6 +219,40 @@ begin
   { Close entire pipe should still succeed even though read already closed }
   Check(platform_pipe_close(P) = 0, 'close after partial close');
 end;
+
+procedure TestPipeLargeData;
+var
+  P: TPlatformPipe;
+  LSent, LBuf: array[0..4095] of Byte;
+  LWritten, LRead: PtrInt;
+  LTotalRead, I: Int32;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  { Fill pattern }
+  for I := 0 to 4095 do
+    LSent[I] := Byte(I and $FF);
+  { Write all }
+  LWritten := write(Int32(P.WriteFd), @LSent[0], 4096);
+  Check(LWritten = 4096, 'wrote 4096 bytes');
+  { Read all (may need multiple reads) }
+  LTotalRead := 0;
+  while LTotalRead < 4096 do
+  begin
+    LRead := read(Int32(P.ReadFd), @LBuf[LTotalRead], 4096 - LTotalRead);
+    if LRead <= 0 then Break;
+    Inc(LTotalRead, Int32(LRead));
+  end;
+  Check(LTotalRead = 4096, 'read all 4096 bytes');
+  { Verify pattern }
+  for I := 0 to 4095 do
+    if LBuf[I] <> Byte(I and $FF) then
+    begin
+      Check(False, 'data mismatch at offset ' + IntToStr(I));
+      Break;
+    end;
+  Check(True, 'large data integrity verified');
+  platform_pipe_close(P);
+end;
 {$ENDIF}
 
 begin
@@ -230,6 +264,7 @@ begin
   T.Test('dup2', @TestDup2);
   T.Test('dup2 same fd', @TestDup2SameFd);
   T.Test('pipe partial close', @TestPipePartialClose);
+  T.Test('pipe large data (4KB)', @TestPipeLargeData);
   {$ENDIF}
   T.Test('double close read', @TestDoubleCloseRead);
   T.Test('double close write', @TestDoubleCloseWrite);

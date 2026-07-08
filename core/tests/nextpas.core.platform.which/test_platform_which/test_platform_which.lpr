@@ -180,6 +180,26 @@ begin
   Check(R > 0, 'nil buffer returns required length');
 end;
 
+procedure TestNilName;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_which(nil, @Buf[0], 256);
+  Check(R = PLATFORM_ERR_INVALID, 'nil name returns PLATFORM_ERR_INVALID');
+end;
+
+procedure TestSmallBufferTruncates;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_which('ls', @Buf[0], 4);
+  Check(R > 0, 'small buffer returns required length');
+  Check(Buf[3] = #0, 'small buffer null terminated');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.which');
   T.Test('find sh', @TestFindSh);
@@ -195,5 +215,7 @@ begin
   T.Test('empty name', @TestEmptyName);
   T.Test('relative name via PATH', @TestRelativeName);
   T.Test('nil buffer returns length', @TestNilBufferReturnsLength);
+  T.Test('nil name returns error', @TestNilName);
+  T.Test('small buffer truncates', @TestSmallBufferTruncates);
   if not T.Run then Halt(1);
 end.
