@@ -330,18 +330,15 @@ begin
     Result.StdDev := Sqrt(LVariance)
   else
     Result.StdDev := 0.0;
-  Result.Median := Percentile(LSorted, 50);
+  { 直接在已排序的 LSorted 上查询百分位，避免 ComputePercentiles 再次排序 }
+  Result.Median := PercentileSorted(LSorted, 50);
   Result.Min := LSorted[0];
   Result.Max := LSorted[High(LSorted)];
-  { E03: 使用 ComputePercentiles 一次排序多次查询 }
-  with ComputePercentiles(ASamples) do
-  begin
-    Result.P5 := P5;
-    Result.P25 := P25;
-    Result.P75 := P75;
-    Result.P95 := P95;
-    Result.P99 := P99;
-  end;
+  Result.P5 := PercentileSorted(LSorted, 5.0);
+  Result.P25 := PercentileSorted(LSorted, 25.0);
+  Result.P75 := PercentileSorted(LSorted, 75.0);
+  Result.P95 := PercentileSorted(LSorted, 95.0);
+  Result.P99 := PercentileSorted(LSorted, 99.0);
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
   Result.SampleCount := LValidCount; { F-09: report valid sample count }
