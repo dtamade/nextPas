@@ -365,7 +365,7 @@ begin
   begin
     LDiff := FData[I] - LMean;
     LSum2 := LSum2 + LDiff * LDiff;
-    LSum4 := LSum4 + LDiff * LDiff * LDiff * LDiff;
+    LSum4 := LSum4 + Sqr(LDiff * LDiff);
   end;
 
   if LSum2 = 0 then Exit(0);
@@ -695,8 +695,9 @@ begin
     LSum := LSum + FData[LDataIndex];
   LObservedMean := LSum / LN;
 
-  // 生成 bootstrap 样本均值
+  // 生成 bootstrap 样本均值 + 同步计数 bias（合并两个 O(B) 循环）
   SetLength(LMeans, LIterations);
+  LCountBelow := 0;
   for LIterationIndex := 0 to LIterations - 1 do
   begin
     LSum := 0.0;
@@ -706,13 +707,11 @@ begin
       LSum := LSum + FData[LDataIndex];
     end;
     LMeans[LIterationIndex] := LSum / LN;
-  end;
-
-  // 步骤 1: 计算偏差修正因子 z0
-  LCountBelow := 0;
-  for LIterationIndex := 0 to LIterations - 1 do
     if LMeans[LIterationIndex] < LObservedMean then
       Inc(LCountBelow);
+  end;
+
+  // 步骤 1: 计算偏差修正因子 z0（LCountBelow 已在上面循环中累计）
   // z0 = Φ^(-1)(#(θ* < θ) / B)
   LZ0 := NormalQuantile((LCountBelow + 0.5) / (LIterations + 1));
 
@@ -781,7 +780,7 @@ var
   LMeanA, LMeanB, LObservedDiff: Double;
   LI, LJ, LSwap, LTmp: Integer;
   LCount: Integer;
-  LSumA, LSumB: Double;
+  LSumA, LSumB, LTotalSum: Double;
   LValJ, LValSwap: Double;
   LInvNA, LInvNB: Double;
 begin
@@ -835,16 +834,19 @@ begin
   // 优化: 在 shuffle 过程中增量更新分组和 LSumA/LSumB，
   // 避免 shuffle 后再做 O(N) 求和。
   // 初始状态: 前 LNA 个位置为 A 组，后 LNB 个位置为 B 组。
+  // F-12: 预计算总和，消除每迭代 O(LNA+LNB) 重复求和。
+  LTotalSum := 0.0;
+  for LI := 0 to LN - 1 do
+    LTotalSum := LTotalSum + LData[LI];
   LCount := 0;
   for LI := 0 to LIterations - 1 do
   begin
     // 初始化: 前 LNA 个 = A 组，后 LNB 个 = B 组
+    // 优化: 只求 LSumA，LSumB 从总和推导
     LSumA := 0.0;
     for LJ := 0 to LNA - 1 do
       LSumA := LSumA + LData[LPerm[LJ]];
-    LSumB := 0.0;
-    for LJ := LNA to LN - 1 do
-      LSumB := LSumB + LData[LPerm[LJ]];
+    LSumB := LTotalSum - LSumA;
 
     // Fisher-Yates shuffle: 随机打乱排列
     // 每次 swap 后增量更新分组和
