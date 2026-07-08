@@ -371,7 +371,7 @@ begin
       Result.FilteredMean := Mean(LFiltered);
       Result.FilteredStdDev := StdDev(LFiltered);
       SortDoubleArray(LFiltered);
-      Result.FilteredMedian := Percentile(LFiltered, 50);
+      Result.FilteredMedian := PercentileSorted(LFiltered, 50);
     end
     else
     begin
@@ -436,31 +436,36 @@ begin
   Result := HasHeuristicDifferenceAt(A, B, 0.05);
 end;
 
-function TBenchStatsAnalyzer.HasHeuristicDifferenceAt(const A, B: TBenchStats;
-  AAlpha: Double): Boolean;
+{** Welch's t-test 统计量和自由度计算（HasHeuristicDifference/ComputeApproximatePValue 共用）
+ *  @returns True 如果计算有效（样本充足、方差非零），False 表示无法检验 }
+function ComputeWelchTStat(const A, B: TBenchStats;
+  out ATStat, ADF: Double): Boolean;
 var
-  LTStat: Double;
-  LDF: Double;
   LVarA, LVarB: Double;
 begin
+  Result := False;
   if (A.SampleCount <= 1) or (B.SampleCount <= 1) then
-    Exit(False);
+    Exit;
 
   LVarA := Sqr(A.StdDev) / A.SampleCount;
   LVarB := Sqr(B.StdDev) / B.SampleCount;
 
-  // 避免除以零
   if (LVarA + LVarB) < 1e-10 then
-    Exit(False);
+    Exit;
 
-  // Welch's t-test 风格统计量，用于启发式比较
-  LTStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
-
-  // Welch-Satterthwaite 自由度
-  LDF := Sqr(LVarA + LVarB) /
+  ATStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
+  ADF := Sqr(LVarA + LVarB) /
          (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
+  Result := True;
+end;
 
-  // 比较 t 统计量与指定 alpha 的临界值
+function TBenchStatsAnalyzer.HasHeuristicDifferenceAt(const A, B: TBenchStats;
+  AAlpha: Double): Boolean;
+var
+  LTStat, LDF: Double;
+begin
+  if not ComputeWelchTStat(A, B, LTStat, LDF) then
+    Exit(False);
   Result := LTStat > TInvAlpha(LDF, AAlpha);
 end;
 
@@ -476,26 +481,10 @@ end;
  *  精确检验请使用 Mann-Whitney U（非参数，不依赖分布假设）。 }
 function TBenchStatsAnalyzer.ComputeApproximatePValue(const A, B: TBenchStats): Double;
 var
-  LTStat: Double;
-  LVarA, LVarB: Double;
-  LDF: Double;
+  LTStat, LDF: Double;
 begin
-  if (A.SampleCount <= 1) or (B.SampleCount <= 1) then
+  if not ComputeWelchTStat(A, B, LTStat, LDF) then
     Exit(1.0);
-
-  LVarA := Sqr(A.StdDev) / A.SampleCount;
-  LVarB := Sqr(B.StdDev) / B.SampleCount;
-
-  // 避免除以零
-  if (LVarA + LVarB) < 1e-10 then
-    Exit(1.0);
-
-  // Welch's t-test 风格统计量，用于近似评级
-  LTStat := Abs(A.Mean - B.Mean) / Sqrt(LVarA + LVarB);
-
-  // Welch-Satterthwaite 自由度
-  LDF := Sqr(LVarA + LVarB) /
-         (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
 
   // 使用正态近似 + 小样本 t 分布修正
   Result := ZToPValue(LTStat);
@@ -829,12 +818,13 @@ begin
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
 
-  Result.P5 := Percentile(LSorted, 5.0);
-  Result.P25 := Percentile(LSorted, 25.0);
-  Result.P50 := Percentile(LSorted, 50.0);
-  Result.P75 := Percentile(LSorted, 75.0);
-  Result.P95 := Percentile(LSorted, 95.0);
-  Result.P99 := Percentile(LSorted, 99.0);
+  // 直接在已排序的 LSorted 上查询百分位（跳过 Percentile 的范围校验，硬编码值已在 [0,100] 内）
+  Result.P5 := PercentileSorted(LSorted, 5.0);
+  Result.P25 := PercentileSorted(LSorted, 25.0);
+  Result.P50 := PercentileSorted(LSorted, 50.0);
+  Result.P75 := PercentileSorted(LSorted, 75.0);
+  Result.P95 := PercentileSorted(LSorted, 95.0);
+  Result.P99 := PercentileSorted(LSorted, 99.0);
 end;
 
 { K-S 检验辅助函数 }
