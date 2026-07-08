@@ -12,7 +12,7 @@ uses
   nextpas.core.mem.arena.intf,
   nextpas.core.platform.mmap,
   nextpas.core.base.utils,
-  nextpas.core.text,
+
   nextpas.core.platform.memory;
 
 type

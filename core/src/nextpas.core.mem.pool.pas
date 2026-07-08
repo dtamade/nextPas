@@ -11,7 +11,7 @@ uses
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,
-  nextpas.core.text,
+
   nextpas.core.mem.pool.fixed_slab;
 
 type

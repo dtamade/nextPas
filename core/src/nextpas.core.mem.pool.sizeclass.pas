@@ -23,7 +23,7 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.text,
+
   nextpas.core.mem.error;
 
 const

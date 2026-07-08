@@ -277,6 +277,14 @@ function HashPointer(const AValue: Pointer): THashCode;
 { C interop helpers }
 function StrComp(A, B: PAnsiChar): Integer;
 
+{ ============================================================ }
+{ Minimal integer-to-string conversions (L0 safe)             }
+{ ============================================================ }
+
+function IntToStr(AValue: Int64): string;
+function IntToStr(AValue: UInt64): string; overload;
+function HexStr(AValue: UInt64; ADigits: Integer = 0): string;
+
 implementation
 
 { Base validation exceptions }
@@ -679,6 +687,77 @@ begin
     Inc(B);
   end;
   Result := Ord(Byte(A^)) - Ord(Byte(B^));
+end;
+
+{ IntToStr / HexStr — minimal L0-safe implementations }
+
+const
+  HexDigits: array[0..15] of Char = '0123456789ABCDEF';
+
+function IntToStr(AValue: Int64): string;
+var
+  LBuf: array[0..31] of Char;
+  LNeg: Boolean;
+  LPos: Integer;
+  LDigit: Int64;
+begin
+  LNeg := AValue < 0;
+  if LNeg then
+    AValue := -AValue;
+  LPos := High(LBuf) + 1;
+  repeat
+    LDigit := AValue mod 10;
+    Dec(LPos);
+    LBuf[LPos] := Char(Ord('0') + LDigit);
+    AValue := AValue div 10;
+  until AValue = 0;
+  if LNeg then
+  begin
+    Dec(LPos);
+    LBuf[LPos] := '-';
+  end;
+  SetString(Result, @LBuf[LPos], High(LBuf) + 1 - LPos);
+end;
+
+function IntToStr(AValue: UInt64): string;
+var
+  LBuf: array[0..31] of Char;
+  LPos: Integer;
+  LDigit: UInt64;
+begin
+  LPos := High(LBuf) + 1;
+  repeat
+    LDigit := AValue mod 10;
+    Dec(LPos);
+    LBuf[LPos] := Char(Ord('0') + LDigit);
+    AValue := AValue div 10;
+  until AValue = 0;
+  SetString(Result, @LBuf[LPos], High(LBuf) + 1 - LPos);
+end;
+
+function HexStr(AValue: UInt64; ADigits: Integer): string;
+var
+  LBuf: array[0..15] of Char;
+  LPos: Integer;
+  LDigits: Integer;
+begin
+  LPos := High(LBuf) + 1;
+  repeat
+    Dec(LPos);
+    LBuf[LPos] := HexDigits[AValue and $F];
+    AValue := AValue shr 4;
+  until AValue = 0;
+  LDigits := High(LBuf) + 1 - LPos;
+  if ADigits > LDigits then
+  begin
+    while LDigits < ADigits do
+    begin
+      Dec(LPos);
+      LBuf[LPos] := '0';
+      Inc(LDigits);
+    end;
+  end;
+  SetString(Result, @LBuf[LPos], High(LBuf) + 1 - LPos);
 end;
 
 end.

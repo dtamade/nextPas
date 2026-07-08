@@ -28,7 +28,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
-  nextpas.core.text,
+
   nextpas.core.mem.arena.intf;
 
 type

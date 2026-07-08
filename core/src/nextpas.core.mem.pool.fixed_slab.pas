@@ -18,7 +18,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.error,
   nextpas.core.mem.secure,
-  nextpas.core.text,
+
   nextpas.core.mem.pool.fixed_slab.nginx;
 
 type

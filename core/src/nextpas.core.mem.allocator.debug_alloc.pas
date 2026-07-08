@@ -25,7 +25,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;

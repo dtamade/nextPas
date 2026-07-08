@@ -11,7 +11,7 @@ uses
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.mutex,
-  nextpas.core.text,
+
   nextpas.core.mem.error;        // EAllocError, TAllocError
 
 // 说明：

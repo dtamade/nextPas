@@ -31,7 +31,6 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.utils,
   nextpas.core.mem.pool.fixed,
-  nextpas.core.text;
 
 type
   {**

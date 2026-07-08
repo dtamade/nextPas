@@ -71,7 +71,6 @@ implementation
 
 uses
   nextpas.core.mem.error,
-  nextpas.core.text;
 
 const
   HEADER_SIZE = 128;

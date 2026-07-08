@@ -212,7 +212,7 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-  nextpas.core.text,
+
   nextpas.core.atomic;
 
 var

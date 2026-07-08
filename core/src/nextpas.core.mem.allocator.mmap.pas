@@ -9,7 +9,7 @@ uses
   nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.memory_map,
-  nextpas.core.text,
+
   nextpas.core.mem.mutex;
 
 type

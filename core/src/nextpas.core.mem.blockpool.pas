@@ -37,7 +37,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.pool.base,
   nextpas.core.base.utils,
-  nextpas.core.text,
+
   nextpas.core.mem.error;
 
 const

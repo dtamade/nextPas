@@ -62,7 +62,7 @@ function platform_shm_close(var AMap: TPlatformMappedFile): Int32;
 implementation
 
 uses
-  nextpas.core.text.conv,
+  SysUtils,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base
 {$IFDEF NEXTPAS_UNIX}
@@ -280,7 +280,7 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', True);
+  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';
