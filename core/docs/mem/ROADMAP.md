@@ -104,3 +104,14 @@
 | P22-4 | TSamplingAllocator | 采样分配器，1/N 采样记录 | 7 |
 
 **模块总计**: 84 allocator 文件 / ~1234 测试
+
+## Phase 23 — 诊断与平台分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P23-1 | TStatsAllocator | 统计包装器，跟踪分配指标 | 7 |
+| P23-2 | TLeakCheckAllocator | 泄漏检查工具函数 | 7 |
+| P23-3 | TDebugAllocator | 调试分配器，记录分配来源 | 7 |
+| P23-4 | TCrtAllocator | CRT 分配器，使用 C 运行时 | 7 |
+
+**模块总计**: 88 allocator 文件 / ~1262 测试
