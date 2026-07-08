@@ -37,9 +37,25 @@ const
   PLATFORM_ERR_ENOTDIR     = PLATFORM_ERR_NOTDIR;
   PLATFORM_ERR_TIMEOUT     = PLATFORM_ERR_TIMEDOUT;
 
+{** @desc 获取平台错误码对应的错误消息
+    @param ACode 错误码
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数 *}
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取错误码的错误类别
+    @param ACode 错误码
+    @return 错误类别枚举 *}
 function platform_error_category(ACode: Int32): TErrorCategory;
+
+{** @desc 输出致命错误消息并终止进程
+    @param AMsg 错误消息字符串 *}
 procedure platform_fatal(const AMsg: PAnsiChar);
+
+{** @desc 输出致命错误消息和错误码并终止进程
+    @param AMsg 错误消息字符串
+    @param ACode 错误码 *}
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
