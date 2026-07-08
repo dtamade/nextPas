@@ -143,8 +143,8 @@ type
     {** 计算每秒操作数 }
     function ComputeOpsPerSec(ANsPerOp: Double): Double;
 
-    {** 检查是否应该运行 }
-    function ShouldRun(const AName: string): Boolean;
+    {** 检查是否应该运行（ALowerName 为预计算的小写名称） }
+    function ShouldRun(const AName: string; const ALowerName: string): Boolean;
 
     {** 添加结果 }
     procedure AddResult(const AResult: TBenchResult);
@@ -238,6 +238,7 @@ var
   LContextObj: TBenchContext;
   LIteration: Int64;
   LRunner: TBenchRunner;
+  LTargetCtx: TBenchContext;
 begin
   { F-01: runner instance accessed via file-scope GBridgeRunner }
   LRunner := GBridgeRunner;
@@ -271,13 +272,14 @@ begin
      Assigned(LRunner.FParallelContexts[AThreadId]) then
   begin
     { F-01: write to pre-created context instead of creating new one }
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
+    LTargetCtx := LRunner.FParallelContexts[AThreadId] as TBenchContext;
+    LTargetCtx.SetIterations(LContextObj.GetIterations);
+    LTargetCtx.SetBytes(LContextObj.GetBytesPerOp);
+    LTargetCtx.SetAllocs(LContextObj.GetAllocsPerOp);
     if LContextObj.IsSkipped then
-      (LRunner.FParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
+      LTargetCtx.Skip(LContextObj.GetSkipReason);
     // CR-10: Propagate elapsed ns from bridge context to parallel context
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).FElapsedNs := LContextObj.GetElapsedNs;
+    LTargetCtx.FElapsedNs := LContextObj.GetElapsedNs;
   end;
 end;
 
@@ -678,6 +680,7 @@ var
   LParallelResult: TParallelBenchResult;
   LPerThreadIterations: Int64;
   I: SizeInt;
+  LCtx: TBenchContext;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -728,22 +731,27 @@ begin
     begin
       if Assigned(FParallelContexts[I]) then
       begin
-        if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
-          Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
-        if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
-          Result.AllocsPerOp := (FParallelContexts[I] as TBenchContext).GetAllocsPerOp;
+        LCtx := FParallelContexts[I] as TBenchContext;
+        if LCtx.GetBytesPerOp > Result.BytesPerOp then
+          Result.BytesPerOp := LCtx.GetBytesPerOp;
+        if LCtx.GetAllocsPerOp > Result.AllocsPerOp then
+          Result.AllocsPerOp := LCtx.GetAllocsPerOp;
       end;
     end;
 
     // 检查是否有任何线程跳过了
     for I := 0 to High(FParallelContexts) do
     begin
-      if Assigned(FParallelContexts[I]) and (FParallelContexts[I] as TBenchContext).IsSkipped then
+      if Assigned(FParallelContexts[I]) then
       begin
-        Result.Skipped := True;
-        Result.SkipReason := (FParallelContexts[I] as TBenchContext).GetSkipReason;
-        Result.Iterations := (FParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
-        Break;
+        LCtx := FParallelContexts[I] as TBenchContext;
+        if LCtx.IsSkipped then
+        begin
+          Result.Skipped := True;
+          Result.SkipReason := LCtx.GetSkipReason;
+          Result.Iterations := LCtx.GetIterations * AEntry.ParallelThreads;
+          Break;
+        end;
       end;
     end;
   finally
@@ -1076,15 +1084,15 @@ begin
     Result := 0.0;
 end;
 
-function TBenchRunner.ShouldRun(const AName: string): Boolean;
+function TBenchRunner.ShouldRun(const AName: string; const ALowerName: string): Boolean;
 begin
   if FFilterLower = '' then
     Exit(True);
   { Glob 模式：filter 包含 * 或 ? 时使用 GlobMatch }
   if (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0) then
-    Result := GlobMatch(FFilterLower, LowerCase(AName))
+    Result := GlobMatch(FFilterLower, ALowerName)
   else
-    Result := Pos(FFilterLower, LowerCase(AName)) > 0; { PF-08: 子串匹配 }
+    Result := Pos(FFilterLower, ALowerName) > 0; { PF-08: 子串匹配 }
 end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);
@@ -1118,12 +1126,14 @@ var
   LMeasurement: TBenchResult;
   LStartNs: UInt64;
   LTimeoutMs: Int64;
+  LLowerName: string;
 begin
   LEntry := AEntry;
   Result := Default(TBenchResult);
   Result.Name := LEntry.Name;
 
-  if not ShouldRun(LEntry.Name) then
+  LLowerName := LowerCase(LEntry.Name);
+  if not ShouldRun(LEntry.Name, LLowerName) then
   begin
     Exit;
   end;
