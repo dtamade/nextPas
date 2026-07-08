@@ -1069,6 +1069,65 @@ begin
     end, 'ctx');
 end;
 
+{ ── ToBeOneOf tests ─────────────────────────────────────────────────────── }
+
+procedure TestToBeOneOfPass;
+begin
+  ExpectStr('hello').ToBeOneOf(['hello', 'world', 'foo']);
+  ExpectStr('world').ToBeOneOf(['hello', 'world', 'foo']);
+end;
+
+procedure TestToBeOneOfFail;
+begin
+  ExpectFail(procedure begin
+    ExpectStr('baz').ToBeOneOf(['hello', 'world', 'foo']);
+  end, 'not one of');
+end;
+
+procedure TestToBeOneOfNotPass;
+begin
+  ExpectStr('baz').Not_.ToBeOneOf(['hello', 'world', 'foo']);
+end;
+
+procedure TestToBeOneOfNotFail;
+begin
+  ExpectFail(procedure begin
+    ExpectStr('hello').Not_.ToBeOneOf(['hello', 'world', 'foo']);
+  end, 'should not be one of');
+end;
+
+procedure TestToBeOneOfIntPass;
+begin
+  ExpectInt(42).ToBeOneOfInt([10, 20, 42, 50]);
+end;
+
+procedure TestToBeOneOfIntFail;
+begin
+  ExpectFail(procedure begin
+    ExpectInt(99).ToBeOneOfInt([10, 20, 42, 50]);
+  end, '99');
+end;
+
+procedure TestToBeOneOfBoolPass;
+begin
+  ExpectBool(True).ToBeOneOfBool([True, False]);
+  ExpectBool(False).ToBeOneOfBool([True, False]);
+end;
+
+procedure TestToBeOneOfBoolFail;
+begin
+  ExpectFail(procedure begin
+    ExpectBool(True).ToBeOneOfBool([False]);
+  end, 'True');
+end;
+
+procedure TestToBeOneOfWithMessage;
+begin
+  ExpectFail(procedure begin
+    ExpectStr('x').WithMessage('pick one').ToBeOneOf(['a', 'b']);
+  end, 'pick one');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1255,6 +1314,17 @@ begin
   LSuite.Test('ToFailUnexpected message',     @TestExpectToFailUnexpected);
   LSuite.Test('ToFailUnexpected default',     @TestExpectToFailUnexpectedDefault);
   LSuite.Test('ToFailUnexpected+WithMessage', @TestExpectToFailUnexpectedWithMessage);
+
+  { ToBeOneOf }
+  LSuite.Test('ToBeOneOf pass',              @TestToBeOneOfPass);
+  LSuite.Test('ToBeOneOf fail',              @TestToBeOneOfFail);
+  LSuite.Test('Not_.ToBeOneOf pass',         @TestToBeOneOfNotPass);
+  LSuite.Test('Not_.ToBeOneOf fail',         @TestToBeOneOfNotFail);
+  LSuite.Test('ToBeOneOfInt pass',           @TestToBeOneOfIntPass);
+  LSuite.Test('ToBeOneOfInt fail',           @TestToBeOneOfIntFail);
+  LSuite.Test('ToBeOneOfBool pass',          @TestToBeOneOfBoolPass);
+  LSuite.Test('ToBeOneOfBool fail',          @TestToBeOneOfBoolFail);
+  LSuite.Test('ToBeOneOf+WithMessage',       @TestToBeOneOfWithMessage);
 
   if not LSuite.Run then
   begin

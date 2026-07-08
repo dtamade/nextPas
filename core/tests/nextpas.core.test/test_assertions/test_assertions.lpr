@@ -1158,8 +1158,11 @@ begin
 end;
 
 procedure TestCheckArrayEqualEmpty;
+var
+  LA: array of Int64;
 begin
-  CheckArrayEqual([], []);
+  SetLength(LA, 0);
+  CheckArrayEqual(LA, LA);
 end;
 
 procedure TestCheckArrayEqualWithMessage;
@@ -1167,6 +1170,41 @@ begin
   ExpectFail(procedure begin
     CheckArrayEqual([10, 20], [10, 30], 'my array');
   end, 'my array');
+end;
+
+procedure TestCheckArrayEqualStringPass;
+begin
+  CheckArrayEqual(['a', 'b', 'c'], ['a', 'b', 'c']);
+end;
+
+procedure TestCheckArrayEqualStringFailLength;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['a', 'b'], ['a', 'b', 'c']);
+  end, 'length');
+end;
+
+procedure TestCheckArrayEqualStringFailValue;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['hello', 'world'], ['hello', 'wurld']);
+  end, 'differ');
+end;
+
+procedure TestCheckArrayEqualStringEmpty;
+var
+  LA, LB: array of string;
+begin
+  SetLength(LA, 0);
+  SetLength(LB, 0);
+  CheckArrayEqual(LA, LB);
+end;
+
+procedure TestCheckArrayEqualStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['a', 'b'], ['a', 'c'], 'my string array');
+  end, 'my string array');
 end;
 
 { ── v8.0c: Interface Nil Check Tests ──────────────────────────────────────── }
@@ -1409,6 +1447,11 @@ begin
   LSuite.Test('ArrayEqual fail value',     @TestCheckArrayEqualFailValue);
   LSuite.Test('ArrayEqual empty',          @TestCheckArrayEqualEmpty);
   LSuite.Test('ArrayEqual+msg',            @TestCheckArrayEqualWithMessage);
+  LSuite.Test('ArrayEqual string pass',    @TestCheckArrayEqualStringPass);
+  LSuite.Test('ArrayEqual string fail len',@TestCheckArrayEqualStringFailLength);
+  LSuite.Test('ArrayEqual string fail val',@TestCheckArrayEqualStringFailValue);
+  LSuite.Test('ArrayEqual string empty',   @TestCheckArrayEqualStringEmpty);
+  LSuite.Test('ArrayEqual string+msg',     @TestCheckArrayEqualStringWithMessage);
 
   { v8.0c: Interface nil checks }
   LSuite.Test('IsNil pass',               @TestCheckIsNilPass);

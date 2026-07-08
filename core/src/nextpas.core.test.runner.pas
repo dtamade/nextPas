@@ -211,6 +211,8 @@ type
     TotalFail: Integer;
     TotalSkip: Integer;
     HasRun   : Boolean;
+    LastResults: specialize TArray<TTestRunResult>;
+      { Stored by RunAllIterLoop for failure summary in Summary. }
 
     class function Create(const AName: string): TSuiteRunner; static;
     procedure Add(const ASuite: TTestSuite);
@@ -1903,6 +1905,7 @@ begin
   Result.TotalFail := 0;
   Result.TotalSkip := 0;
   Result.HasRun    := False;
+  Result.LastResults := nil;
 end;
 
 procedure TSuiteRunner.Add(const ASuite: TTestSuite);
@@ -2020,6 +2023,7 @@ begin
     Suites[I].CleanupTableAllocations;
 
   HasRun := True;
+  LastResults := AResults;
   Result := LAllPassed;
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
@@ -2043,6 +2047,9 @@ procedure TSuiteRunner.Summary;
 var
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
+  LSuite: TTestRunResult;
+  LRes: TTestResult;
+  I, J, LFailIdx: Integer;
 begin
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
@@ -2053,6 +2060,36 @@ begin
     '  Passed: ' + IntToStr(TotalPass) +
     ', Failed: ' + IntToStr(TotalFail) +
     ', Skipped: ' + IntToStr(TotalSkip));
+
+  { Failure summary: list all failed/error tests with details }
+  if (TotalFail > 0) and (Length(LastResults) > 0) then
+  begin
+    LOutSink.WriteLn('');
+    LOutSink.WriteLn(AnsiBold('=== Failures ===', LConfig));
+    LFailIdx := 0;
+    for I := 0 to High(LastResults) do
+    begin
+      LSuite := LastResults[I];
+      for J := 0 to High(LSuite.Results) do
+      begin
+        LRes := LSuite.Results[J];
+        if LRes.Status in [tsFailed, tsError] then
+        begin
+          Inc(LFailIdx);
+          LOutSink.WriteLn('');
+          LOutSink.WriteLn('  ' + AnsiBold(IntToStr(LFailIdx) + ')', LConfig) +
+            ' ' + AnsiCyan(LSuite.SuiteName, LConfig) +
+            ' > ' + AnsiRed(LRes.Name, LConfig));
+          if LRes.Message <> '' then
+            LOutSink.WriteLn('    ' + FormatFailDetail(LRes.Message, LConfig));
+        end;
+      end;
+    end;
+    LOutSink.WriteLn('');
+    LOutSink.WriteLn(
+      AnsiDim('  ' + IntToStr(LFailIdx) + ' failure(s) in ' +
+        IntToStr(TotalPass + TotalFail + TotalSkip) + ' tests', LConfig));
+  end;
 end;
 
 function TSuiteRunner.AllPassed: Boolean;

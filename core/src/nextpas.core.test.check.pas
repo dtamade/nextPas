@@ -177,6 +177,14 @@ procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
   const AMessage: string); overload;
 
+{ Compare two string arrays element-by-element.
+  Reports length mismatch or first differing index with values. }
+procedure CheckArrayEqual(const AExpected, AActual: array of string); overload;
+
+{ Compare two string arrays with custom message. }
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string); overload;
+
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 
 { Check that an interface reference is nil. }
@@ -1076,6 +1084,46 @@ procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string);
 begin
   if AValue = nil then
     FailPrepend(AMessage, 'Expected non-nil interface but got nil');
+end;
+
+{ ── String Array Comparison ────────────────────────────────────────────────── }
+
+procedure CheckArrayEqual(const AExpected, AActual: array of string);
+begin
+  CheckArrayEqual(AExpected, AActual, '');
+end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string);
+var
+  I, LMin, LDiffIdx: Integer;
+  LMsg: string;
+begin
+  if Length(AExpected) <> Length(AActual) then
+  begin
+    LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(AActual));
+    FailPrepend(AMessage, LMsg);
+  end;
+
+  LMin := Length(AExpected);
+  LDiffIdx := -1;
+  for I := 0 to LMin - 1 do
+  begin
+    if AExpected[I] <> AActual[I] then
+    begin
+      LDiffIdx := I;
+      Break;
+    end;
+  end;
+
+  if LDiffIdx >= 0 then
+  begin
+    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':'#10 +
+      '  expected: "' + AExpected[LDiffIdx] + '"'#10 +
+      '    actual: "' + AActual[LDiffIdx] + '"';
+    FailPrepend(AMessage, LMsg);
+  end;
 end;
 
 end.

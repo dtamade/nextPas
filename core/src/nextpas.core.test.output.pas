@@ -361,11 +361,26 @@ end;
 { FormatFailDetail — failure message with assertion-failed fallback }
 
 function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
+var
+  LBracketPos: Integer;
+  LMsg, LTrace: string;
 begin
-  if AMsg <> '' then
-    Result := AnsiRed(AMsg, AConfig)
+  if AMsg = '' then
+    Exit(AnsiRed('(assertion failed)', AConfig));
+  { Extract [file:line] trace appended by AppendTestTrace.
+    Pattern: 'message [file:line]' — find last ' [' and split. }
+  LBracketPos := Length(AMsg) - 1;
+  while (LBracketPos > 1) and not ((AMsg[LBracketPos] = ' ') and (AMsg[LBracketPos + 1] = '[')) do
+    Dec(LBracketPos);
+  if LBracketPos > 1 then
+  begin
+    LMsg := Copy(AMsg, 1, LBracketPos - 1);
+    LTrace := Copy(AMsg, LBracketPos + 1, MaxInt);
+    Result := AnsiRed(LMsg, AConfig) + #10 +
+      '    ' + AnsiDim(LTrace, AConfig);
+  end
   else
-    Result := AnsiRed('(assertion failed)', AConfig);
+    Result := AnsiRed(AMsg, AConfig);
 end;
 
 { WriteCapturedLog — print captured log lines on failure/error }

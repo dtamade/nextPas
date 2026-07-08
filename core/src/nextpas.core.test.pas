@@ -231,6 +231,9 @@ procedure WriteFileContents(const APath, AContents: string);
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
   const AMessage: string); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of string); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string); overload;
 
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');

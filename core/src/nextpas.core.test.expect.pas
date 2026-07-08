@@ -77,6 +77,10 @@ type
     function ToBeNotNaN: IExpectation;
     { Byte array comparison: element-wise equality. }
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    { Set membership: value must be one of the given values. }
+    function ToBeOneOf(const AValues: array of string): IExpectation;
+    function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+    function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -191,6 +195,9 @@ type
     { New: WithMessage, ToEqualBytes, ToFailUnexpected }
     function WithMessage(const AMessage: string): IExpectation;
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    function ToBeOneOf(const AValues: array of string): IExpectation;
+    function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+    function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -857,6 +864,72 @@ begin
     end;
   { All bytes match }
   CheckMatch(True, '', '');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOf(const AValues: array of string): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekString, 'ToBeOneOf');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AValues[I] + '"';
+    if FStrValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    '"' + FStrValue + '" should not be one of [' + LList + ']',
+    '"' + FStrValue + '" is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekInt64, 'ToBeOneOfInt');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AValues[I]);
+    if FIntValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    IntToStr(FIntValue) + ' should not be one of [' + LList + ']',
+    IntToStr(FIntValue) + ' is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekBool, 'ToBeOneOfBool');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + BoolToStr(AValues[I], 'True', 'False');
+    if FBoolValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    BoolToStr(FBoolValue, 'True', 'False') + ' should not be one of [' + LList + ']',
+    BoolToStr(FBoolValue, 'True', 'False') + ' is not one of [' + LList + ']');
   Result := Self;
 end;
 

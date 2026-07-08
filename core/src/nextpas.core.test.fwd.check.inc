@@ -280,6 +280,13 @@ procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
   const AMessage: string);
 begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual, AMessage); end;
 
+procedure CheckArrayEqual(const AExpected, AActual: array of string);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual); end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual, AMessage); end;
+
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string);
 begin nextpas.core.test.check.CheckIsNil(AValue, AMessage); end;
 
