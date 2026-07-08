@@ -36,8 +36,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   ALIGNED_DEFAULT_ALIGNMENT = 64;
@@ -51,23 +50,23 @@ type
     Alignment: SizeUInt;
   end;
 
-  TAlignedAllocator = class(TAllocator)
+  TAlignedAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FAlignment: SizeUInt;
     FAllocCount: UInt64;
     FFreeCount: UInt64;
     FActiveAllocs: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator;
       AAlignment: SizeUInt = ALIGNED_DEFAULT_ALIGNMENT);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
     function GetStats: TAlignedStats;
     property Alignment: SizeUInt read FAlignment;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -96,7 +95,7 @@ begin
   FActiveAllocs := 0;
 end;
 
-function TAlignedAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TAlignedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LRaw: Pointer;
   LAligned: Pointer;
@@ -120,14 +119,14 @@ begin
   Result := LAligned;
 end;
 
-function TAlignedAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TAlignedAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TAlignedAllocator.DoFreeMem(APtr: Pointer);
+procedure TAlignedAllocator.FreeMem(APtr: Pointer); inline;
 var
   LRaw: Pointer;
 begin
@@ -139,25 +138,25 @@ begin
   Dec(FActiveAllocs);
 end;
 
-function TAlignedAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TAlignedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LCopySize: SizeUInt;
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
 
   { We don't know old size, allocate new and copy }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := ASize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TAlignedAllocator.GetStats: TAlignedStats;
@@ -166,6 +165,13 @@ begin
   Result.FreeCount := FFreeCount;
   Result.ActiveAllocs := FActiveAllocs;
   Result.Alignment := FAlignment;
+end;
+
+function TAlignedAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
