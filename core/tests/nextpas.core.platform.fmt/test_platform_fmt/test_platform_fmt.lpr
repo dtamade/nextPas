@@ -332,6 +332,96 @@ begin
   Check(V = $ABCDEF, 'uppercase hex value');
 end;
 
+procedure TestFmtBufPercentEscape;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_buf('100%% done', [], @Buf[0], 64);
+  Check(BufEq(@Buf[0], '100% done'), 'percent escape');
+end;
+
+procedure TestFmtBufNoArgs;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_buf('no args here', [], @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'no args here'), 'no args passthrough');
+end;
+
+procedure TestFmtBufNilFormat;
+var Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_fmt_buf(nil, [], @Buf[0], 64);
+  Check(BufEq(@Buf[0], ''), 'nil format produces empty');
+  Check(R = 0, 'nil format returns 0');
+end;
+
+procedure TestFmtFloatNegative;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_float(-123.456, 2, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '-123.46'), '-123.456 rounds to -123.46');
+end;
+
+procedure TestParseFloatScientific;
+var V: Double;
+begin
+  Check(platform_parse_float('1.5e2', 5, V) = 0, 'parse 1.5e2');
+  Check((V > 149.9) and (V < 150.1), '1.5e2 = 150');
+  Check(platform_parse_float('3E-2', 4, V) = 0, 'parse 3E-2');
+  Check((V > 0.029) and (V < 0.031), '3E-2 = 0.03');
+end;
+
+procedure TestStrFindNilNeedle;
+begin
+  Check(platform_str_find('hello', 5, nil, 3) = 0, 'nil needle returns 0 (empty needle match)');
+end;
+
+procedure TestStrFindNilHaystack;
+begin
+  Check(platform_str_find(nil, 5, 'hello', 5) = -1, 'nil haystack returns -1');
+end;
+
+procedure TestStrStartsWithNilArgs;
+begin
+  Check(not platform_str_starts_with(nil, 5, 'hello', 5), 'nil str returns false');
+  Check(not platform_str_starts_with('hello', 5, nil, 5), 'nil prefix returns false');
+  Check(platform_str_starts_with('hello', 5, nil, 0), 'nil empty prefix returns true');
+end;
+
+procedure TestStrEndsWithNilArgs;
+begin
+  Check(not platform_str_ends_with(nil, 5, 'hello', 5), 'nil str returns false');
+  Check(not platform_str_ends_with('hello', 5, nil, 5), 'nil suffix returns false');
+  Check(platform_str_ends_with('hello', 5, nil, 0), 'nil empty suffix returns true');
+end;
+
+procedure TestStrLowerNilSource;
+var Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_lower(nil, 5, @Buf[0], 64);
+  Check(R = 0, 'nil source returns 0');
+  Check(Buf[0] = #0, 'nil source produces empty');
+end;
+
+procedure TestStrUpperNilSource;
+var Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_upper(nil, 5, @Buf[0], 64);
+  Check(R = 0, 'nil source returns 0');
+  Check(Buf[0] = #0, 'nil source produces empty');
+end;
+
+procedure TestStrTrimNilSource;
+var Buf: array[0..63] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_str_trim(nil, 5, @Buf[0], 64);
+  Check(R = 0, 'nil source returns 0');
+  Check(Buf[0] = #0, 'nil source produces empty');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fmt');
   T.Test('int positive', @TestIntPositive);
@@ -365,5 +455,17 @@ begin
   T.Test('parse uint overflow', @TestParseUintOverflow);
   T.Test('hex zero pad', @TestFmtHexZeroPad);
   T.Test('parse hex case', @TestParseHexLowerAndUpper);
+  T.Test('fmt_buf percent escape', @TestFmtBufPercentEscape);
+  T.Test('fmt_buf no args', @TestFmtBufNoArgs);
+  T.Test('fmt_buf nil format', @TestFmtBufNilFormat);
+  T.Test('float negative rounding', @TestFmtFloatNegative);
+  T.Test('parse float scientific', @TestParseFloatScientific);
+  T.Test('str_find nil needle', @TestStrFindNilNeedle);
+  T.Test('str_find nil haystack', @TestStrFindNilHaystack);
+  T.Test('str_starts_with nil args', @TestStrStartsWithNilArgs);
+  T.Test('str_ends_with nil args', @TestStrEndsWithNilArgs);
+  T.Test('str_lower nil source', @TestStrLowerNilSource);
+  T.Test('str_upper nil source', @TestStrUpperNilSource);
+  T.Test('str_trim nil source', @TestStrTrimNilSource);
   if not T.Run then Halt(1);
 end.
