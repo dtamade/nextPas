@@ -1208,7 +1208,7 @@ begin
   LSuite.Add('Sleep5ms_2', @BenchSleep5ms);
   LSuite.Add('Sleep5ms_3', @BenchSleep5ms);
   // ST-04: 15ms 超时 — Sleep20ms 本身就会超时，后续条目应被 skip
-  LSuite.SetTimeout(15);
+  LSuite.SetTimeout(TDuration.FromMilliseconds(15));
   LSuite.SetQuiet(True);
   LResults := LSuite.Run;
   Check(LResults.Count = 4, 'ST-04: All 4 entries present');
@@ -1557,7 +1557,7 @@ begin
 
   LSuite.Add('Sleep20ms_suite', @BenchSleep20ms);
   LSuite.Add('Sleep5ms_fast', @BenchSleep5ms);
-  LSuite.SetTimeout(50);  { suite 50ms timeout }
+  LSuite.SetTimeout(TDuration.FromMilliseconds(50));  { suite 50ms timeout }
   LSuite.SetQuiet(True);
 
   LResults := LSuite.Run;

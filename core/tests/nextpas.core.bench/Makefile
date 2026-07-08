@@ -10,7 +10,6 @@ PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_phase_c \
             test_bench_regression \
             test_bench_run \
-            test_bench_resultpool \
             test_bench_adaptive_warmup
 
 .PHONY: test clean bench $(PROJECTS)

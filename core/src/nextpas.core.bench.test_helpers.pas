@@ -1,8 +1,7 @@
 {**
  * @desc 基准测试通用辅助函数
  *
- * 提供 TBenchEntry 快速构建、通用 bench 函数、
- * TBenchStatsAnalyzer 工厂函数等测试辅助工具。
+ * 提供 TBenchEntry 快速构建和通用 bench 函数。
  *}
 unit nextpas.core.bench.test_helpers;
 
@@ -12,8 +11,7 @@ interface
 
 uses
   nextpas.core.bench.base,
-  nextpas.core.bench.intf,
-  nextpas.core.bench.stats;
+  nextpas.core.bench.intf;
 
 { --------------------------------------------------------------------- }
 {  通用 bench 函数 }
@@ -35,31 +33,7 @@ procedure AllocBench(const ACtx: IBenchContext);
 {** 创建简单 TBenchEntry（无参数、无循环） }
 function MakeBenchEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
 
-{** 创建带条件的 TBenchEntry }
-function MakeConditionalEntry(const AName: string; AFunc: TBenchFunc;
-  ACondition: Boolean): TBenchEntry;
-
-{ --------------------------------------------------------------------- }
-{  TBenchStatsAnalyzer 工厂 }
-{ --------------------------------------------------------------------- }
-
-{** 创建 TBenchStatsAnalyzer 实例（调用方负责 Free） }
-function NewStatsAnalyzer: TBenchStatsAnalyzer;
-
-{ --------------------------------------------------------------------- }
-{  测试数据生成 }
-{ --------------------------------------------------------------------- }
-
-{** 生成 [0, ARange) 范围的随机浮点数组 }
-function MakeRandomData(ACount: Integer; ARange: Double = 100.0): TDoubleArray;
-
-{** 生成固定序列 [1, 2, ..., N] }
-function MakeSequence(ACount: Integer): TDoubleArray;
-
 implementation
-
-uses
-  nextpas.core.bench.run;
 
 { --------------------------------------------------------------------- }
 {  通用 bench 函数 }
@@ -111,44 +85,6 @@ begin
   Result.TimeoutMs := 0;
   Result.CollectRawSamples := False;
   Result.SimpleFunc := nil;
-end;
-
-function MakeConditionalEntry(const AName: string; AFunc: TBenchFunc;
-  ACondition: Boolean): TBenchEntry;
-begin
-  Result := MakeBenchEntry(AName, AFunc);
-  Result.Condition := ACondition;
-end;
-
-{ --------------------------------------------------------------------- }
-{  TBenchStatsAnalyzer 工厂 }
-{ --------------------------------------------------------------------- }
-
-function NewStatsAnalyzer: TBenchStatsAnalyzer;
-begin
-  Result := TBenchStatsAnalyzer.Create;
-end;
-
-{ --------------------------------------------------------------------- }
-{  测试数据生成 }
-{ --------------------------------------------------------------------- }
-
-function MakeRandomData(ACount: Integer; ARange: Double): TDoubleArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, ACount);
-  for I := 0 to ACount - 1 do
-    Result[I] := Random * ARange;
-end;
-
-function MakeSequence(ACount: Integer): TDoubleArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, ACount);
-  for I := 0 to ACount - 1 do
-    Result[I] := I + 1;
 end;
 
 end.

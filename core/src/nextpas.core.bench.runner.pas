@@ -102,9 +102,6 @@ type
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
-    { Phase 3: 对象池支持 }
-    FUseObjectPool: Boolean;
-
     {** 公共初始化逻辑（Create/CreateNoEnv 共用） }
     procedure InitDefaults;
 
@@ -188,9 +185,6 @@ type
     function GetConfig: TBenchConfig;
     procedure SetFilter(const AFilter: string);
 
-    {** Phase 3: 启用对象池以减少分配开销 }
-    procedure EnableObjectPool(AEnabled: Boolean = True);
-
     {** B21: 启用自适应预热 }
     procedure SetAdaptiveWarmup(AEnabled: Boolean;
       ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
@@ -217,8 +211,7 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel,
-  nextpas.core.bench.pool;
+  nextpas.core.bench.parallel;
 
 {** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
@@ -473,7 +466,6 @@ begin
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
-  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
 end;
@@ -774,24 +766,13 @@ var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
   LIter: Int64;
-  LFromPool: Boolean;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
   Result.Name := AEntry.Name;
 
-  { Phase 3: 从对象池获取或创建新对象 }
-  LFromPool := FUseObjectPool and (GBenchContextPool <> nil);
-  if LFromPool then
-  begin
-    LContextObj := GBenchContextPool.Acquire;
-    LContext := LContextObj;
-  end
-  else
-  begin
-    LContext := TBenchContext.Create;
-    LContextObj := LContext as TBenchContext;
-  end;
+  LContextObj := TBenchContext.Create;
+  LContext := LContextObj;
 
   LContextObj.SetName(AEntry.Name);
   try
@@ -823,11 +804,7 @@ begin
         DisableGlobalMemoryTracking;
     end;
   finally
-    { Phase 3: 归还到对象池或释放 }
-    if LFromPool then
-      GBenchContextPool.Release(LContextObj)
-    else
-      LContext := nil;
+    LContext := nil;
   end;
 end;
 
@@ -1296,13 +1273,6 @@ begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
   FFilterIsGlob := (Pos('*', AFilter) > 0) or (Pos('?', AFilter) > 0);
-end;
-
-procedure TBenchRunner.EnableObjectPool(AEnabled: Boolean);
-begin
-  FUseObjectPool := AEnabled;
-  if AEnabled then
-    InitGlobalPool;
 end;
 
 procedure TBenchRunner.SetAdaptiveWarmup(AEnabled: Boolean;
