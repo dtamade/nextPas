@@ -1100,6 +1100,35 @@ type
 
 ---
 
+## Timer Wheel (nextpas.core.lockfree.timerwheel)
+
+```pascal
+type
+  TTimerCallback = procedure(AData: Pointer);
+  TLockFreeTimerResult = (twScheduled, twCancelled, twClosed, twNotFound);
+
+  TTimerWheel = class
+    constructor Create(const ASlotCount: Int64; const ATickIntervalNs: Int64);
+    function Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
+    function Cancel(const ATimerId: Int64): TLockFreeTimerResult;
+    procedure Tick;
+    procedure TickN(const AN: Int64);
+    function ProcessExpired: Int64;
+    function GetCurrentSlot: Int64;
+    function GetTotalTicks: Int64;
+    function GetTickIntervalNs: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 环形数组 + 轮次计数实现定时器
+- 每个 tick 推进一个槽位，到期执行回调
+- 适用场景：超时管理、心跳检测、定时任务调度
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

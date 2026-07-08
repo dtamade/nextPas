@@ -40,7 +40,8 @@ uses
   nextpas.core.lockfree.phaser,
   nextpas.core.lockfree.stampedlock,
   nextpas.core.lockfree.ringbuffer,
-  nextpas.core.lockfree.trie;
+  nextpas.core.lockfree.trie,
+  nextpas.core.lockfree.timerwheel;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -280,6 +281,14 @@ type
   generic TConcurrentTrie<TValue> = class(specialize TConcurrentTrieImpl<TValue>)
   end;
   TLockFreeTrieResult = nextpas.core.lockfree.trie.TLockFreeTrieResult;
+
+  {** @desc 并发定时器轮
+    @details 高效管理大量定时任务的数据结构。
+      支持 Schedule/Cancel/Tick/ProcessExpired。
+    @see TTimerWheel 详细文档和示例
+  }
+  TTimerWheel = nextpas.core.lockfree.timerwheel.TTimerWheel;
+  TLockFreeTimerResult = nextpas.core.lockfree.timerwheel.TLockFreeTimerResult;
 
 implementation
 
