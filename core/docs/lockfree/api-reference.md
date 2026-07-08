@@ -1182,6 +1182,33 @@ type
 
 ---
 
+## Snapshot Isolation (nextpas.core.lockfree.snapshot)
+
+```pascal
+type
+  TSnapshotResult = (srCommitted, srAborted, srConflict, srNotFound, srClosed);
+
+  generic TSnapshotIsolationImpl<TValue> = class
+    constructor Create;
+    function BeginSnapshot: Int64;
+    function Read(const AKey: string; const ASnapshotTs: Int64; out AValue: TValue): TSnapshotResult;
+    function Write(const AKey: string; const AValue: TValue; const ATransactionTs: Int64): TSnapshotResult;
+    function Commit(const ATransactionTs: Int64): TSnapshotResult;
+    function Abort(const ATransactionTs: Int64): TSnapshotResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetCurrentTimestamp: Int64;
+  end;
+```
+
+**特点**:
+- 每个事务看到数据库在事务开始时的快照
+- 支持多版本并发控制 (MVCC)
+- 读操作不阻塞写操作，写操作不阻塞读操作
+- 适用场景：数据库事务、并发状态管理
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

@@ -43,7 +43,8 @@ uses
   nextpas.core.lockfree.trie,
   nextpas.core.lockfree.timerwheel,
   nextpas.core.lockfree.timeoutqueue,
-  nextpas.core.lockfree.workstealing;
+  nextpas.core.lockfree.workstealing,
+  nextpas.core.lockfree.snapshot;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -308,6 +309,15 @@ type
   }
   TWorkStealingPool = nextpas.core.lockfree.workstealing.TWorkStealingPool;
   TLockFreeWorkStealingResult = nextpas.core.lockfree.workstealing.TLockFreeWorkStealingResult;
+
+  {** @desc 并发快照隔离
+    @details 每个事务看到数据库在事务开始时的快照。
+      支持多版本并发控制 (MVCC)。
+    @see TSnapshotIsolationImpl 详细文档和示例
+  }
+  generic TSnapshotIsolation<TValue> = class(specialize TSnapshotIsolationImpl<TValue>)
+  end;
+  TSnapshotResult = nextpas.core.lockfree.snapshot.TSnapshotResult;
 
 implementation
 
