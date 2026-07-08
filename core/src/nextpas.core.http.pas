@@ -24,6 +24,7 @@ uses
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.requestid,
+  nextpas.core.http.middleware.cachecontrol,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -232,6 +233,12 @@ function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
 function RequestIdMiddleware: IHttpMiddleware; inline;
 {** @desc Request ID middleware with custom header name. }
 function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware; inline;
+{** @desc Set Cache-Control header on every response. }
+function CacheControlMiddleware(const AValue: string): IHttpMiddleware; inline;
+{** @desc Cache-Control: no-cache, no-store, must-revalidate. }
+function NoCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Cache-Control: public, max-age=N. }
+function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -557,6 +564,21 @@ end;
 function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWith(AHeaderName);
+end;
+
+function CacheControlMiddleware(const AValue: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.CacheControlMiddleware(AValue);
+end;
+
+function NoCacheMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.NoCacheMiddleware;
+end;
+
+function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.MaxAgeMiddleware(ASeconds);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
