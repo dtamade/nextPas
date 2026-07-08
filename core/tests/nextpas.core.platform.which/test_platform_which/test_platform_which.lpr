@@ -152,6 +152,34 @@ begin
 end;
 {$ENDIF}
 
+procedure TestEmptyName;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_which('', @Buf[0], 256);
+  Check(R = PLATFORM_ERR_INVALID, 'empty name returns PLATFORM_ERR_INVALID');
+end;
+
+procedure TestRelativeName;
+var
+  Buf: array[0..511] of AnsiChar;
+  R: Int32;
+begin
+  { sh should be findable via PATH }
+  R := platform_which('sh', @Buf[0], 512);
+  Check(R > 0, 'relative name found via PATH');
+  Check(Buf[0] = '/', 'result is absolute path');
+end;
+
+procedure TestNilBufferReturnsLength;
+var
+  R: Int32;
+begin
+  R := platform_which('sh', nil, 0);
+  Check(R > 0, 'nil buffer returns required length');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.which');
   T.Test('find sh', @TestFindSh);
@@ -164,5 +192,8 @@ begin
 {$IFDEF NEXTPAS_LINUX}
   T.Test('long PATH finds tail entry', @TestLongPathFindsTailEntry);
 {$ENDIF}
+  T.Test('empty name', @TestEmptyName);
+  T.Test('relative name via PATH', @TestRelativeName);
+  T.Test('nil buffer returns length', @TestNilBufferReturnsLength);
   if not T.Run then Halt(1);
 end.

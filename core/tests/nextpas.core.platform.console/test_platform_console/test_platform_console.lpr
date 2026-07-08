@@ -227,6 +227,24 @@ begin
   platform_pipe_close(LPipe);
 end;
 
+procedure TestWriteNilBuffer;
+var
+  R: Int32;
+begin
+  R := platform_console_write(1, nil, 4);
+  Check(R <> 0, 'write nil buffer fails');
+end;
+
+procedure TestWriteZeroLength;
+var
+  LBuf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  LBuf[0] := 't';
+  R := platform_console_write(1, @LBuf[0], 0);
+  Check(R = 0, 'write zero length returns 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.console');
   T.Test('is_terminal stdout', @TestIsTerminalStdout);
@@ -241,5 +259,7 @@ begin
   T.Test('write invalid fd', @TestWriteInvalidFd);
   T.Test('wait readable pipe', @TestWaitReadablePipe);
   T.Test('read from pipe', @TestReadFromPipe);
+  T.Test('write nil buffer', @TestWriteNilBuffer);
+  T.Test('write zero length', @TestWriteZeroLength);
   if not T.Run then Halt(1);
 end.

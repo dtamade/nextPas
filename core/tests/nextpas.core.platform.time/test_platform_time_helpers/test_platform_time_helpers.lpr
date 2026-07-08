@@ -174,6 +174,44 @@ begin
   Check(LOffset mod 900 = 0, 'offset aligned to 15min');
 end;
 
+procedure TestBreakdownNegativeTime;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { Before epoch: the breakdown function handles negative time gracefully }
+  platform_time_breakdown_utc(-1000000000, LResult);
+  { Verify it doesn't crash and produces a valid month/day }
+  Check(LResult.Month >= 1, 'pre-epoch month >= 1');
+  Check(LResult.Month <= 12, 'pre-epoch month <= 12');
+  Check(LResult.Day >= 1, 'pre-epoch day >= 1');
+  Check(LResult.Day <= 31, 'pre-epoch day <= 31');
+end;
+
+procedure TestBreakdownYear2038;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2038-01-19 03:14:07 UTC = 2147483647 seconds (Y2038 boundary) }
+  platform_time_breakdown_utc(UInt64(2147483647) * 1000000000, LResult);
+  CheckEqual(Int64(2038), Int64(LResult.Year), 'Y2038 year');
+  CheckEqual(Int64(1), Int64(LResult.Month), 'Y2038 month');
+  CheckEqual(Int64(19), Int64(LResult.Day), 'Y2038 day');
+end;
+
+procedure TestBreakdownYear2000;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2000-01-01 00:00:00 UTC = 946684800 seconds }
+  platform_time_breakdown_utc(UInt64(946684800) * 1000000000, LResult);
+  CheckEqual(Int64(2000), Int64(LResult.Year), 'Y2000 year');
+  CheckEqual(Int64(1), Int64(LResult.Month), 'Y2000 month');
+  CheckEqual(Int64(1), Int64(LResult.Day), 'Y2000 day');
+  CheckEqual(Int64(0), Int64(LResult.Hour), 'Y2000 hour');
+  CheckEqual(Int64(0), Int64(LResult.Minute), 'Y2000 minute');
+  CheckEqual(Int64(0), Int64(LResult.Second), 'Y2000 second');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.time.helpers');
   T.Test('QPC to ns basic', @TestQpcToNsBasic);
@@ -192,5 +230,8 @@ begin
   T.Test('Breakdown leap year (2024-02-29)', @TestBreakdownLeapYear);
   T.Test('Breakdown end of day (23:59:59.999)', @TestBreakdownEndOfDay);
   T.Test('UTC offset reasonable', @TestUtcOffsetReasonable);
+  T.Test('Breakdown negative time (pre-epoch)', @TestBreakdownNegativeTime);
+  T.Test('Breakdown Y2038 boundary', @TestBreakdownYear2038);
+  T.Test('Breakdown Y2000', @TestBreakdownYear2000);
   if not T.Run then Halt(1);
 end.

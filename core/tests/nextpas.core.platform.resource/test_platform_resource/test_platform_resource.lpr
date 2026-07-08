@@ -162,6 +162,29 @@ begin
   end;
 end;
 
+procedure TestSetLimitInfinityCurrent;
+var
+  LLimit: TPlatformResourceLimit;
+begin
+  { Current = infinity should be accepted (treated as unlimited) }
+  LLimit.Current := PLATFORM_RESOURCE_LIMIT_INFINITY;
+  LLimit.Maximum := PLATFORM_RESOURCE_LIMIT_INFINITY;
+  { This may succeed or fail with EPERM, but should not crash }
+  platform_resource_set_limit(prlkOpenFiles, LLimit);
+  Check(True, 'set with infinity current does not crash');
+end;
+
+procedure TestGetLimitPreservesValues;
+var
+  LLimit1, LLimit2: TPlatformResourceLimit;
+begin
+  { Get limit twice, values should be consistent }
+  Check(platform_resource_get_limit(prlkOpenFiles, LLimit1) = 0, 'first get');
+  Check(platform_resource_get_limit(prlkOpenFiles, LLimit2) = 0, 'second get');
+  Check(LLimit1.Current = LLimit2.Current, 'current consistent');
+  Check(LLimit1.Maximum = LLimit2.Maximum, 'maximum consistent');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.resource');
   T.Test('get open files limit', @TestGetOpenFilesLimit);
@@ -179,5 +202,7 @@ begin
   T.Test('set infinity maximum accepted', @TestSetLimitInfinityMaximum);
   T.Test('get zeroes out record on success', @TestGetLimitZeroesOutOnSuccess);
   T.Test('all resource kinds succeed', @TestAllResourceKinds);
+  T.Test('set infinity current does not crash', @TestSetLimitInfinityCurrent);
+  T.Test('get limit preserves values', @TestGetLimitPreservesValues);
   if not T.Run then Halt(1);
 end.
