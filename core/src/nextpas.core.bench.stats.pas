@@ -333,11 +333,15 @@ begin
   Result.Median := Percentile(LSorted, 50);
   Result.Min := LSorted[0];
   Result.Max := LSorted[High(LSorted)];
-  Result.P5 := Percentile(LSorted, 5);
-  Result.P25 := Percentile(LSorted, 25);
-  Result.P75 := Percentile(LSorted, 75);
-  Result.P95 := Percentile(LSorted, 95);
-  Result.P99 := Percentile(LSorted, 99);
+  { E03: 使用 ComputePercentiles 一次排序多次查询 }
+  with ComputePercentiles(ASamples) do
+  begin
+    Result.P5 := P5;
+    Result.P25 := P25;
+    Result.P75 := P75;
+    Result.P95 := P95;
+    Result.P99 := P99;
+  end;
   Result.IQR := Result.P75 - Result.P25;
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
   Result.SampleCount := LValidCount; { F-09: report valid sample count }

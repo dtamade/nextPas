@@ -130,7 +130,11 @@ type
     {** 校准条目迭代次数 }
     function CalibrateEntryIterations(const AEntry: TBenchEntry): Int64;
 
-    {** 计算单次操作时间（纳秒） }
+    {** 从上下文和内存统计填充结果（公共逻辑） }
+    procedure PopulateResult(var AResult: TBenchResult;
+      const AContext: TBenchContext; ATrackMemory: Boolean);
+
+    {** 计算单操作时间（纳秒） }
     function ComputeNsPerOp(ATotalNs: UInt64; AIters: Int64): Double;
 
     {** 计算每秒操作数 }
@@ -605,12 +609,35 @@ begin
     Result := ExecuteSequentialEntry(AEntry, AIters, ATrackMemory);
 end;
 
+procedure TBenchRunner.PopulateResult(var AResult: TBenchResult;
+  const AContext: TBenchContext; ATrackMemory: Boolean);
+var
+  LMemoryStats: TMemoryStats;
+begin
+  AResult.Iterations := AContext.GetIterations;
+  AResult.TotalNs := platform_monotonic_ns - AContext.GetStartNs;
+  AResult.BytesPerOp := AContext.GetBytesPerOp;
+  AResult.AllocsPerOp := AContext.GetAllocsPerOp;
+  AResult.Skipped := AContext.IsSkipped;
+  AResult.SkipReason := AContext.GetSkipReason;
+
+  if ATrackMemory then
+  begin
+    LMemoryStats := GetGlobalMemoryStats;
+    if (AResult.Iterations > 0) and (AResult.BytesPerOp = 0) then
+      AResult.BytesPerOp := Ceil(LMemoryStats.AllocBytes / AResult.Iterations);
+    if (AResult.Iterations > 0) and (AResult.AllocsPerOp = 0) then
+      AResult.AllocsPerOp := Ceil(LMemoryStats.AllocCount / AResult.Iterations);
+  end;
+
+  AResult.CustomMetrics := AContext.GetCustomMetrics;
+end;
+
 function TBenchRunner.ExecuteLoopEntry(const AEntry: TBenchEntry; AIters: Int64;
   ATrackMemory: Boolean): TBenchResult;
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
-  LMemoryStats: TMemoryStats;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -634,24 +661,7 @@ begin
       else
         AEntry.LoopFunc(AIters);
 
-      Result.Iterations := AIters;
-      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
-      Result.BytesPerOp := LContextObj.GetBytesPerOp;
-      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
-      Result.Skipped := LContextObj.IsSkipped;
-      Result.SkipReason := LContextObj.GetSkipReason;
-
-      if ATrackMemory then
-      begin
-        LMemoryStats := GetGlobalMemoryStats;
-        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
-          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
-          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-      end;
-
-      { 复制自定义指标 }
-      Result.CustomMetrics := LContextObj.GetCustomMetrics;
+      PopulateResult(Result, LContextObj, ATrackMemory);
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
@@ -745,7 +755,6 @@ function TBenchRunner.ExecuteSequentialEntry(const AEntry: TBenchEntry; AIters: 
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
-  LMemoryStats: TMemoryStats;
   LIter: Int64;
   LFromPool: Boolean;
 begin
@@ -790,24 +799,7 @@ begin
           Break;
       end;
 
-      Result.Iterations := LContextObj.GetIterations;
-      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
-      Result.BytesPerOp := LContextObj.GetBytesPerOp;
-      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
-      Result.Skipped := LContextObj.IsSkipped;
-      Result.SkipReason := LContextObj.GetSkipReason;
-
-      if ATrackMemory then
-      begin
-        LMemoryStats := GetGlobalMemoryStats;
-        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
-          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
-          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-      end;
-
-      { 复制自定义指标 }
-      Result.CustomMetrics := LContextObj.GetCustomMetrics;
+      PopulateResult(Result, LContextObj, ATrackMemory);
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;

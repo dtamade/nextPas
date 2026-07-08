@@ -98,6 +98,9 @@ type
     {** F-04: 按名称查找条目索引，未找到返回 -1 }
     function FindEntryIndex(const AName: string): Integer;
 
+    {** 添加条目到内部数组（公共逻辑提取） }
+    procedure AppendEntry(const AEntry: TBenchEntry);
+
   public
     constructor Create(const ASuiteName: string);
     {** ST-11: 使用自定义配置创建基准套件 }
@@ -382,6 +385,13 @@ begin
   end;
 end;
 
+procedure TBenchSuite.AppendEntry(const AEntry: TBenchEntry);
+begin
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := AEntry;
+  Inc(FEntryCount);
+end;
+
 procedure TBenchSuite.GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
 begin
   if not Assigned(AFunc) then
@@ -411,10 +421,7 @@ begin
   LEntry.Name := AName;
   LEntry.Func := AFunc;
   LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddSimple(const AName: string;
@@ -431,10 +438,7 @@ begin
   LEntry.Name := AName;
   LEntry.SimpleFunc := AFunc;
   LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
@@ -451,10 +455,7 @@ begin
   LEntry.Setup := ASetup;
   LEntry.Teardown := ATeardown;
   LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -469,10 +470,7 @@ begin
   LEntry.Name := AName;
   LEntry.Func := AFunc;
   LEntry.Condition := ACondition;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
@@ -492,10 +490,7 @@ begin
   LEntry.Condition := True;
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddRange(const AName: string; AFunc: TBenchParamFunc;
@@ -516,10 +511,7 @@ begin
     LEntry.ParamFunc := AFunc;
     LEntry.ParamValue := AParams[LIndex];
     LEntry.Condition := True;
-
-    EnsureEntryCapacity;
-    FEntries[FEntryCount] := LEntry;
-    Inc(FEntryCount);
+    AppendEntry(LEntry);
   end;
 end;
 
@@ -544,10 +536,7 @@ begin
     LEntry.Setup := ASetup;
     LEntry.Teardown := ATeardown;
     LEntry.Condition := True;
-
-    EnsureEntryCapacity;
-    FEntries[FEntryCount] := LEntry;
-    Inc(FEntryCount);
+    AppendEntry(LEntry);
   end;
 end;
 
@@ -563,10 +552,7 @@ begin
   LEntry.Condition := True;
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 {** F-01: AddLoopWithContext — loop with IBenchContext access }
@@ -584,10 +570,7 @@ begin
   LEntry.Condition := True;
   LEntry.IsLoop := True;
   LEntry.LoopContextFunc := AFunc;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.Clear: IBenchSuite;
