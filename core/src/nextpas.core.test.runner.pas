@@ -1972,6 +1972,8 @@ begin
       TotalPass := 0;
       TotalFail := 0;
       TotalSkip := 0;
+      LAllPassed := True; { Reset for next iteration — stale False from prior iter
+        would trigger FailFast immediately, skipping all suites }
     end;
     LStart := TInstant.Now;
     for I := 0 to High(Suites) do
