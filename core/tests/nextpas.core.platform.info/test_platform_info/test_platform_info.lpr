@@ -99,6 +99,26 @@ begin
   Check(CurrentEndian = CurrentEndian, 'CurrentEndian is stable');
 end;
 
+procedure TestOSNameNoEmpty;
+var
+  I: Int32;
+  S: string;
+begin
+  S := OSName;
+  for I := 1 to Length(S) do
+    Check(S[I] <> #0, 'OSName has no embedded nulls');
+end;
+
+procedure TestCPUNameNoEmpty;
+var
+  I: Int32;
+  S: string;
+begin
+  S := CPUName;
+  for I := 1 to Length(S) do
+    Check(S[I] <> #0, 'CPUName has no embedded nulls');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.info');
   T.Test('CurrentOS', @TestCurrentOS);
@@ -109,5 +129,7 @@ begin
   T.Test('OSName matches CurrentOS', @TestOSNameMatchesCurrentOS);
   T.Test('CPUName matches CurrentCPU', @TestCPUNameMatchesCurrentCPU);
   T.Test('OS/CPU/Endian are stable', @TestOSAndCPUAreConstexpr);
+  T.Test('OSName has no embedded nulls', @TestOSNameNoEmpty);
+  T.Test('CPUName has no embedded nulls', @TestCPUNameNoEmpty);
   if not T.Run then Halt(1);
 end.
