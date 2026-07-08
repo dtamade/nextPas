@@ -68,6 +68,10 @@ function MatSumColsF32(const aA: TSimdF32Matrix): TSimdF32Array;
 function MatMaxRowsF32(const aA: TSimdF32Matrix): TSimdF32Array;
 procedure MatArgMaxRowsF32(const aA: TSimdF32Matrix; aIndices: PInt32);
 
+// Strided dot product for column vectors in row-major matrices
+function ReduceDotStridedF32(aSrc1: PSingle; aStride1: NativeInt;
+  aSrc2: PSingle; aStride2: NativeInt; aCount: SizeUInt): Single;
+
 // Matrix decompositions (Phase 11)
 function QRDecomposeF32(const aA: TSimdF32Matrix;
   var aQ, aR: TSimdF32Matrix): Boolean;
@@ -123,6 +127,26 @@ uses
   nextpas.core.simd.linalg.gemm.sse2.blocked,
   {$ENDIF}
   nextpas.core.simd.cpuinfo;
+
+// Strided dot product for column vectors in row-major matrices
+function ReduceDotStridedF32(aSrc1: PSingle; aStride1: NativeInt;
+  aSrc2: PSingle; aStride2: NativeInt; aCount: SizeUInt): Single;
+var
+  i: SizeUInt;
+  LSum: Single;
+  LP1, LP2: PSingle;
+begin
+  LSum := 0;
+  LP1 := aSrc1;
+  LP2 := aSrc2;
+  for i := 0 to aCount - 1 do
+  begin
+    LSum := LSum + LP1^ * LP2^;
+    LP1 := PSingle(PByte(LP1) + aStride1);
+    LP2 := PSingle(PByte(LP2) + aStride2);
+  end;
+  Result := LSum;
+end;
 
 class function TSimdF32Matrix.Create(aRows, aCols: SizeUInt): TSimdF32Matrix;
 begin
@@ -802,19 +826,22 @@ begin
     // Subtract projections onto previous Q columns
     for p := 0 to j - 1 do
     begin
-      LDot := 0;
-      for i := 0 to m - 1 do
-        LDot := LDot + aQ.Get(i, p) * aQ.Get(i, j);
+      // Use strided dot product for column vectors
+      LDot := ReduceDotStridedF32(
+        @aQ.Data[p], aQ.RowStride * SizeOf(Single),  // Column p
+        @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+        m);
       aR.Put(p, j, LDot);
+      // Update column j: Q[:,j] = Q[:,j] - LDot * Q[:,p]
       for i := 0 to m - 1 do
         aQ.Put(i, j, aQ.Get(i, j) - LDot * aQ.Get(i, p));
     end;
 
-    // Normalize
-    LNorm := 0;
-    for i := 0 to m - 1 do
-      LNorm := LNorm + aQ.Get(i, j) * aQ.Get(i, j);
-    LNorm := System.Sqrt(LNorm);
+    // Normalize using strided dot product
+    LNorm := System.Sqrt(ReduceDotStridedF32(
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      m));
     aR.Put(j, j, LNorm);
 
     if LNorm > 1e-10 then
@@ -834,18 +861,19 @@ begin
     // Orthogonalize against previous Q columns
     for p := 0 to j - 1 do
     begin
-      LDot := 0;
-      for i := 0 to m - 1 do
-        LDot := LDot + aQ.Get(i, p) * aQ.Get(i, j);
+      LDot := ReduceDotStridedF32(
+        @aQ.Data[p], aQ.RowStride * SizeOf(Single),  // Column p
+        @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+        m);
       for i := 0 to m - 1 do
         aQ.Put(i, j, aQ.Get(i, j) - LDot * aQ.Get(i, p));
     end;
 
     // Normalize
-    LNorm := 0;
-    for i := 0 to m - 1 do
-      LNorm := LNorm + aQ.Get(i, j) * aQ.Get(i, j);
-    LNorm := System.Sqrt(LNorm);
+    LNorm := System.Sqrt(ReduceDotStridedF32(
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      m));
     if LNorm > 1e-10 then
       for i := 0 to m - 1 do
         aQ.Put(i, j, aQ.Get(i, j) / LNorm);
@@ -923,15 +951,17 @@ begin
   // A^T A = V * Sigma^2 * V^T (eigenvalue decomposition)
   // U = A * V * Sigma^(-1)
 
-  // Step 1: Compute A^T A (n x n)
+  // Step 1: Compute A^T A (n x n) using strided dot product
   LAtA := TSimdF32Matrix.Zeros(n, n);
   for i := 0 to n - 1 do
-    for j := 0 to n - 1 do
+    for j := i to n - 1 do
     begin
-      LSum := 0;
-      for p := 0 to m - 1 do
-        LSum := LSum + aA.Get(p, i) * aA.Get(p, j);
+      LSum := ReduceDotStridedF32(
+        @aA.Data[i], aA.RowStride * SizeOf(Single),  // Column i
+        @aA.Data[j], aA.RowStride * SizeOf(Single),  // Column j
+        m);
       LAtA.Put(i, j, LSum);
+      LAtA.Put(j, i, LSum); // Symmetric
     end;
 
   // Step 2: Eigenvalue decomposition of A^T A using Jacobi
