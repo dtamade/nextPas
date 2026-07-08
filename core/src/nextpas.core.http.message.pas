@@ -222,6 +222,9 @@ procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
 {** @desc Write 304 Not Modified response with no body.
    Use for conditional requests where the resource hasn't changed. }
 procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+{** @desc Write 205 Reset Content response with no body.
+   Instructs client to reset the document view (e.g., clear a form). }
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1144,6 +1147,12 @@ procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+end;
+
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_RESET_CONTENT);
 end;
 
 { THttpRequestBuilder }
