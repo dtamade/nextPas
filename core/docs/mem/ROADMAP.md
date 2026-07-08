@@ -60,3 +60,14 @@
 | P18-4 | TStackAllocator | 栈式分配器，LIFO 顺序，零碎片 | 7 |
 
 **模块总计**: 68 allocator 文件 / ~1122 测试
+
+## Phase 19 — 高级策略分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P19-1 | TAlignedAllocator | 对齐分配包装器，保证指定对齐 | 7 |
+| P19-2 | TBumpAllocator | Bump/线性分配器，最快分配策略 | 7 |
+| P19-3 | TCascadeAllocator | 级联分配器，多后端顺序尝试 | 7 |
+| P19-4 | TCowAllocator | Copy-on-Write 分配器，共享内存 | 7 |
+
+**模块总计**: 72 allocator 文件 / ~1150 测试
