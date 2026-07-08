@@ -2759,7 +2759,7 @@ function MemEqual_SSE2(a, b: Pointer; len: SizeUInt): LongBool;
 var
   pa, pb: PByte;
   i: SizeUInt;
-  maskA, maskB: Integer;
+  LResult: Boolean;
 begin
   {$PUSH}{$Q-}{$R-}  // Disable overflow/range checks for SIMD loop
   if len = 0 then
@@ -2778,9 +2778,10 @@ begin
   pb := PByte(b);
   i := 0;
 
-  // Process 16 bytes at a time using SSE2
-  while i + 16 <= len do
+  // Process 32 bytes at a time using 2x SSE2 registers
+  while i + 32 <= len do
   begin
+    LResult := False;
     asm
       mov   rax, pa
       mov   rdx, pb
@@ -2789,11 +2790,49 @@ begin
       movdqu xmm0, [rax]
       movdqu xmm1, [rdx]
       pcmpeqb xmm0, xmm1
-      pmovmskb eax, xmm0
-      mov   maskA, eax
+      pmovmskb ecx, xmm0
+      cmp   ecx, $FFFF
+      jne   @not_equal_32
+
+      movdqu xmm2, [rax + 16]
+      movdqu xmm3, [rdx + 16]
+      pcmpeqb xmm2, xmm3
+      pmovmskb ecx, xmm2
+      cmp   ecx, $FFFF
+      jne   @not_equal_32
+      mov   byte ptr LResult, 1
+    @not_equal_32:
     end;
 
-    if maskA <> $FFFF then
+    if not LResult then
+    begin
+      Result := False;
+      Exit;
+    end;
+
+    Inc(i, 32);
+  end;
+
+  // Process remaining 16-byte chunk
+  if i + 16 <= len then
+  begin
+    LResult := False;
+    asm
+      mov   rax, pa
+      mov   rdx, pb
+      add   rax, i
+      add   rdx, i
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rdx]
+      pcmpeqb xmm0, xmm1
+      pmovmskb ecx, xmm0
+      cmp   ecx, $FFFF
+      jne   @not_equal_16
+      mov   byte ptr LResult, 1
+    @not_equal_16:
+    end;
+
+    if not LResult then
     begin
       Result := False;
       Exit;
