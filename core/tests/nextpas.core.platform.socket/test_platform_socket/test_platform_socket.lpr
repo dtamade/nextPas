@@ -642,6 +642,65 @@ begin
   platform_socket_close(S);
 end;
 
+{ 28. set_recvbuf }
+procedure TestSetRecvBuf;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_recvbuf(S, 65536) = 0, 'set recvbuf 64K');
+  platform_socket_close(S);
+end;
+
+{ 29. set_sendbuf }
+procedure TestSetSendBuf;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_sendbuf(S, 65536) = 0, 'set sendbuf 64K');
+  platform_socket_close(S);
+end;
+
+{ 30. get_error on fresh socket }
+procedure TestGetError;
+var
+  S: TPlatformSocket;
+  LErr: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_get_error(S, LErr) = 0, 'get_error succeeds');
+  Check(LErr = 0, 'fresh socket has no pending error');
+  platform_socket_close(S);
+end;
+
+{ 31. recvbuf/sendbuf round-trip verification }
+procedure TestRecvBufSendBufRoundTrip;
+var
+  S: TPlatformSocket;
+  LVal: Int32;
+  LLen: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_recvbuf(S, 32768) = 0, 'set recvbuf 32K');
+  Check(platform_socket_set_sendbuf(S, 32768) = 0, 'set sendbuf 32K');
+  { Verify via getsockopt }
+  LLen := SizeOf(LVal);
+  Check(platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_RCVBUF,
+    @LVal, @LLen) = 0, 'getsockopt RCVBUF');
+  { Linux doubles the value }
+  Check(LVal >= 32768, 'rcvbuf >= 32K');
+  LLen := SizeOf(LVal);
+  Check(platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_SNDBUF,
+    @LVal, @LLen) = 0, 'getsockopt SNDBUF');
+  Check(LVal >= 32768, 'sndbuf >= 32K');
+  platform_socket_close(S);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -685,6 +744,12 @@ begin
   T.Test('set_keepalive', @TestSetKeepAlive);
   T.Test('set_linger', @TestSetLinger);
   T.Test('getsockopt', @TestGetSockOpt);
+
+  { New convenience functions }
+  T.Test('set_recvbuf', @TestSetRecvBuf);
+  T.Test('set_sendbuf', @TestSetSendBuf);
+  T.Test('get_error', @TestGetError);
+  T.Test('recvbuf/sendbuf round-trip', @TestRecvBufSendBufRoundTrip);
 
   if not T.Run then Halt(1);
 end.
