@@ -482,6 +482,20 @@ function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string; inline;
 {** @desc HEAD url, ensure 2xx, return response (headers only). Raises on non-2xx. }
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc OPTIONS url, ensure 2xx, return response. Raises on non-2xx. }
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc POST JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PUT JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PATCH JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -1284,6 +1298,35 @@ end;
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
   Result := nextpas.core.http.client.HttpHead(AClient, AUrl);
+end;
+
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpOptions(AClient, AUrl);
+end;
+
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPostJson(AClient, AUrl, ABody);
+end;
+
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPutJson(AClient, AUrl, ABody);
+end;
+
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPatchJson(AClient, AUrl, ABody);
+end;
+
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;
