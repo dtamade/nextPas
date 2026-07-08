@@ -562,3 +562,12 @@
   - 所有 ExprId > 0 分支同步设置 AExprId
   - 2-param/3-param 重载均委托 Core
   - smoke + selfhost 全通过
+- 2026-07-08 Debt 1 批量迁移：辅助函数 + 10 种模式结构化
+  - 添加 6 个辅助函数: TryEmitIntLiteral/TryEmitStringLiteral/TryEmitNilLiteral/
+    TryEmitExcLoad/TryEmitSymbolValue/TryEmitFieldSelf
+  - 迁移 nil → shekNilLiteral, exc_load → shekIntrinsic('exc_load')
+  - 迁移 True/False → shekIntLiteral(1/0), char literal → shekIntLiteral
+  - 迁移 EvaluateIntegerConstant → shekIntLiteral
+  - 迁移 5 个 field self 模式 → shekField
+  - 非 ExprId blob 赋值: 109 → 63 (减少 42%)
+  - smoke + compiler-pass 49/49 全通过
