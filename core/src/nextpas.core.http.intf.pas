@@ -181,6 +181,10 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    {** @desc Returns a decorator that retries failed requests up to AMaxRetries times.
+       Retries on 5xx server errors with exponential backoff (100ms base, max 5s).
+       Does NOT retry on 4xx client errors. }
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }
