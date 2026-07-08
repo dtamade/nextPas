@@ -49,6 +49,10 @@ var
   Child: TGreenNode;
   SymId: LongInt;
   Name: string;
+  CandidateNames: array of string;
+  CandidateCount: LongInt;
+  Sym: TSemanticSymbol;
+  Suggestion: string;
 begin
   if ANode = nil then
     Exit;
@@ -62,11 +66,34 @@ begin
           if (SymId = 0) and (FModel.FindTypeByName(Name) = 0) and
             not IsBuiltinProcedure(Name) and
             not IsRuntimeVar(Name) then
-            EmitSemaError(
-              'sema.undeclared-identifier',
-              'identifier not found "' + Name + '"',
-              ANode.ByteOffset
-            );
+          begin
+            { Build candidate list for "Did you mean?" suggestion }
+            CandidateCount := 0;
+            SetLength(CandidateNames, FModel.SymbolCount);
+            for I := 0 to FModel.SymbolCount - 1 do
+            begin
+              Sym := FModel.SymbolAt(I);
+              if (Sym.ScopeId = FCurrentScopeId) and (Sym.Name <> '') then
+              begin
+                CandidateNames[CandidateCount] := Sym.Name;
+                Inc(CandidateCount);
+              end;
+            end;
+            SetLength(CandidateNames, CandidateCount);
+            Suggestion := SuggestDidYouMean(Name, CandidateNames, 3);
+            if Suggestion <> '' then
+              EmitSemaError(
+                'sema.undeclared-identifier',
+                'identifier not found "' + Name + '". ' + Suggestion,
+                ANode.ByteOffset
+              )
+            else
+              EmitSemaError(
+                'sema.undeclared-identifier',
+                'identifier not found "' + Name + '"',
+                ANode.ByteOffset
+              );
+          end;
         end;
       end;
     gnkStatementList, gnkBeginBlock, gnkIfStatement,

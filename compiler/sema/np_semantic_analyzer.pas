@@ -587,7 +587,7 @@ implementation
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.system.contracts, np_symbol_cache;
+  nextpas.core.system.contracts, np_symbol_cache, np_diagnostics_enhanced;
 
 type
   TStringArray = array of string;
