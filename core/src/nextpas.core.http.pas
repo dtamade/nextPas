@@ -329,6 +329,24 @@ function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inlin
 {** @desc Write a redirect response with Location header and HTML body. }
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string); inline;
+{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}. }
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt; inline;
+{** @desc Write 400 Bad Request JSON error response. }
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 401 Unauthorized JSON error response. }
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 403 Forbidden JSON error response. }
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 404 Not Found JSON error response. }
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 500 Internal Server Error JSON error response. }
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -837,6 +855,42 @@ procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
 begin
   nextpas.core.http.message.HttpRedirect(AW, AStatus, ALocation);
+end;
+
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorResponse(AW, AStatus, ACode, AMessage);
+end;
+
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorBadRequest(AW, AMessage);
+end;
+
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnauthorized(AW, AMessage);
+end;
+
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorForbidden(AW, AMessage);
+end;
+
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorNotFound(AW, AMessage);
+end;
+
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorInternal(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;

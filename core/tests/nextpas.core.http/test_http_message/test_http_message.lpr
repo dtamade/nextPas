@@ -1591,6 +1591,92 @@ begin
   CheckTrue(LRaised, 'raises on nil writer');
 end;
 
+{ HttpWriteErrorResponse tests }
+
+procedure TestErrorResponseSetsJsonContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST, 'invalid_input', 'Missing field');
+  CheckEqual('application/json', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
+end;
+
+procedure TestErrorResponseBodyFormat;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorResponse(LW, HTTP_STATUS_NOT_FOUND, 'not_found', 'Item not found');
+  Check(Pos('"code":"not_found"', LM.Body) > 0, 'body contains code');
+  Check(Pos('"message":"Item not found"', LM.Body) > 0, 'body contains message');
+end;
+
+procedure TestErrorBadRequest;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorBadRequest(LW, 'Invalid JSON');
+  CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
+  Check(Pos('"code":"bad_request"', LM.Body) > 0, 'code is bad_request');
+end;
+
+procedure TestErrorUnauthorized;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorUnauthorized(LW, 'Token expired');
+  CheckEqual(Int64(401), Int64(LM.Status), 'status 401');
+  Check(Pos('"code":"unauthorized"', LM.Body) > 0, 'code is unauthorized');
+end;
+
+procedure TestErrorForbidden;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorForbidden(LW, 'Access denied');
+  CheckEqual(Int64(403), Int64(LM.Status), 'status 403');
+  Check(Pos('"code":"forbidden"', LM.Body) > 0, 'code is forbidden');
+end;
+
+procedure TestErrorNotFound;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorNotFound(LW, 'User not found');
+  CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
+  Check(Pos('"code":"not_found"', LM.Body) > 0, 'code is not_found');
+end;
+
+procedure TestErrorInternal;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorInternal(LW, 'Something broke');
+  CheckEqual(Int64(500), Int64(LM.Status), 'status 500');
+  Check(Pos('"code":"internal_error"', LM.Body) > 0, 'code is internal_error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1738,5 +1824,19 @@ begin
     @TestRedirectEmptyLocationRaises);
   T.Test('Redirect nil writer raises',
     @TestRedirectNilWriterRaises);
+  T.Test('ErrorResponse sets JSON content-type',
+    @TestErrorResponseSetsJsonContentType);
+  T.Test('ErrorResponse body has code and message',
+    @TestErrorResponseBodyFormat);
+  T.Test('ErrorResponse 400 Bad Request',
+    @TestErrorBadRequest);
+  T.Test('ErrorResponse 401 Unauthorized',
+    @TestErrorUnauthorized);
+  T.Test('ErrorResponse 403 Forbidden',
+    @TestErrorForbidden);
+  T.Test('ErrorResponse 404 Not Found',
+    @TestErrorNotFound);
+  T.Test('ErrorResponse 500 Internal',
+    @TestErrorInternal);
   if not T.Run then Halt(1);
 end.
