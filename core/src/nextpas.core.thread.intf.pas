@@ -16,6 +16,9 @@ type
     procedure Submit(const ATask: TThreadTask);
     { SubmitDirect: zero-closure submission. Caller ensures AData outlives the task. }
     procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
+    { SubmitBatch: enqueue multiple tasks with a single mutex acquire + broadcast.
+      Eliminates per-task lock/broadcast overhead when dispatching N workers. }
+    procedure SubmitBatch(const ATasks: array of TThreadTask);
     { SignalWorkers: wake N idle workers. Use after batch-submitting multiple
       tasks when individual-Signal-per-Submit is insufficient. }
     procedure SignalWorkers(const ACount: Integer);
