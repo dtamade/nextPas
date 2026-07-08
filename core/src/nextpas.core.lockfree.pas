@@ -39,7 +39,8 @@ uses
   nextpas.core.lockfree.exchanger,
   nextpas.core.lockfree.phaser,
   nextpas.core.lockfree.stampedlock,
-  nextpas.core.lockfree.ringbuffer;
+  nextpas.core.lockfree.ringbuffer,
+  nextpas.core.lockfree.trie;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -269,6 +270,16 @@ type
   generic TRingBuffer<T> = class(specialize TRingBufferImpl<T>)
   end;
   TLockFreeRingBufferResult = nextpas.core.lockfree.ringbuffer.TLockFreeRingBufferResult;
+
+  {** @desc 并发 Trie 树
+    @details 基于前缀树的并发键值存储。
+      支持 Insert/Find/Delete/Contains/Count/Clear。
+      适用于前缀匹配、自动补全、IP 路由等场景。
+    @see TConcurrentTrieImpl 详细文档和示例
+  }
+  generic TConcurrentTrie<TValue> = class(specialize TConcurrentTrieImpl<TValue>)
+  end;
+  TLockFreeTrieResult = nextpas.core.lockfree.trie.TLockFreeTrieResult;
 
 implementation
 

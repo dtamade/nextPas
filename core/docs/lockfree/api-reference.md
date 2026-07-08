@@ -1073,6 +1073,33 @@ type
 
 ---
 
+## Concurrent Trie (nextpas.core.lockfree.trie)
+
+```pascal
+type
+  TLockFreeTrieResult = (trInserted, trUpdated, trDeleted, trNotFound, trClosed);
+
+  generic TConcurrentTrieImpl<TValue> = class
+    constructor Create;
+    function Insert(const AKey: string; const AValue: TValue): TLockFreeTrieResult;
+    function Find(const AKey: string; out AValue: TValue): Boolean;
+    function Delete(const AKey: string): TLockFreeTrieResult;
+    function Contains(const AKey: string): Boolean;
+    function GetCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 基于前缀树的并发键值存储
+- 每节点自旋锁保证并发安全
+- 支持前缀匹配、自动补全
+- 适用场景：IP 路由、字典、自动补全
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

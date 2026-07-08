@@ -58,8 +58,9 @@
 | `lockfree.phaser` | 并发相位同步器 | ✅ 完成 | 8 |
 | `lockfree.stampedlock` | 并发戳锁 | ✅ 完成 | 7 |
 | `lockfree.ringbuffer` | 并发环形缓冲区 | ✅ 完成 | 7 |
+| `lockfree.trie` | 并发 Trie 树 | ✅ 完成 | 8 |
 
-**规模**: 39 文件, ~18500 行, 498 测试
+**规模**: 40 文件, ~19000 行, 506 测试
 
 ---
 
@@ -93,7 +94,8 @@
 | test_lockfree_phaser | 8 | ✅ 全绿 |
 | test_lockfree_stampedlock | 7 | ✅ 全绿 |
 | test_lockfree_ringbuffer | 7 | ✅ 全绿 |
-| **总计** | **498** | **✅ 全绿** |
+| test_lockfree_trie | 8 | ✅ 全绿 |
+| **总计** | **506** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
