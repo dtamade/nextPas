@@ -35,8 +35,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   TAllocatorStats = record
@@ -53,7 +52,7 @@ type
     MaxAllocSize: SizeUInt;
   end;
 
-  TStatsAllocator = class(TAllocator)
+  TStatsAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FAllocCount: UInt64;
@@ -67,17 +66,17 @@ type
     FPeakAllocs: UInt64;
     FMinAllocSize: SizeUInt;
     FMaxAllocSize: SizeUInt;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
     procedure Reset;
     function GetStats: TAllocatorStats;
     property ActiveBytes: UInt64 read FActiveBytes;
     property PeakBytes: UInt64 read FPeakBytes;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -109,7 +108,7 @@ begin
   FMaxAllocSize := 0;
 end;
 
-function TStatsAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TStatsAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LPtr: PByte;
 begin
@@ -132,14 +131,14 @@ begin
   Result := Pointer(LPtr + STATS_HEADER_SIZE);
 end;
 
-function TStatsAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TStatsAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TStatsAllocator.DoFreeMem(APtr: Pointer);
+procedure TStatsAllocator.FreeMem(APtr: Pointer); inline;
 var
   LPtr: PByte;
   LSize: SizeUInt;
@@ -155,30 +154,26 @@ begin
   Dec(FActiveAllocs);
 end;
 
-function TStatsAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TStatsAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize, LCopySize: SizeUInt;
   LOldPtr: PByte;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   LOldPtr := PByte(APtr) - STATS_HEADER_SIZE;
   LOldSize := PSizeUInt(LOldPtr)^;
   if ASize <= LOldSize then
     Exit(APtr);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
   Inc(FReallocCount);
 end;
 
@@ -198,6 +193,13 @@ begin
   else
     Result.MinAllocSize := 0;
   Result.MaxAllocSize := FMaxAllocSize;
+end;
+
+function TStatsAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
