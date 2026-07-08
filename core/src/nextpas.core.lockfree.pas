@@ -38,7 +38,8 @@ uses
   nextpas.core.lockfree.condvar,
   nextpas.core.lockfree.exchanger,
   nextpas.core.lockfree.phaser,
-  nextpas.core.lockfree.stampedlock;
+  nextpas.core.lockfree.stampedlock,
+  nextpas.core.lockfree.ringbuffer;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -259,6 +260,15 @@ type
     @see TStampedLock 详细文档和示例
   }
   TStampedLock = nextpas.core.lockfree.stampedlock.TStampedLock;
+
+  {** @desc 并发环形缓冲区
+    @details 固定大小 FIFO 队列，基于数组实现。
+      支持 TryWrite/TryRead/Wait/Timeout。
+    @see TRingBufferImpl 详细文档和示例
+  }
+  generic TRingBuffer<T> = class(specialize TRingBufferImpl<T>)
+  end;
+  TLockFreeRingBufferResult = nextpas.core.lockfree.ringbuffer.TLockFreeRingBufferResult;
 
 implementation
 

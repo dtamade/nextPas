@@ -1042,6 +1042,37 @@ type
 
 ---
 
+## Ring Buffer (nextpas.core.lockfree.ringbuffer)
+
+```pascal
+type
+  TLockFreeRingBufferResult = (rbWritten, rbFull, rbEmpty, rbClosed);
+
+  generic TRingBufferImpl<T> = class
+    constructor Create(const ACapacity: Int64);
+    function TryWrite(const AValue: T): TLockFreeRingBufferResult;
+    function TryRead(out AValue: T): TLockFreeRingBufferResult;
+    function WriteWait(const AValue: T): TLockFreeRingBufferResult;
+    function ReadWait(out AValue: T): TLockFreeRingBufferResult;
+    function WriteTimeout(const AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function ReadTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function Count: Int64;
+    function GetCapacity: Int64;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 固定大小 FIFO 队列，基于数组
+- 容量自动取整到 2 的幂，位掩码取模
+- MPMC 安全，head/tail 双指针 CAS
+- 适用场景：生产者-消费者、日志缓冲、实时系统
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
