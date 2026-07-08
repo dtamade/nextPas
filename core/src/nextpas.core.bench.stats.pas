@@ -202,28 +202,44 @@ end;
 
 function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
 var
+  LLen: Integer;
   LSumSq, LCompensation, LNext, LTemp: Double;
+  LDiff: Double;
   I: Integer;
 begin
-  if Length(AData) <= 1 then
+  LLen := Length(AData);
+  if LLen <= 1 then
     Exit(0.0);
 
   {** NaN/Inf guard: avoid FPU exception 207 on NaN arithmetic }
   if IsNan(AMean) or IsInfinite(AMean) then
     Exit(0.0);
 
-  // Kahan compensated summation for Sqr(x - mean)
-  LSumSq := 0.0;
-  LCompensation := 0.0;
-  for I := 0 to High(AData) do
+  { Fast path: small arrays use simple summation (avoid Kahan overhead) }
+  if LLen <= 256 then
   begin
-    LNext := Sqr(AData[I] - AMean) - LCompensation;
-    LTemp := LSumSq + LNext;
-    LCompensation := (LTemp - LSumSq) - LNext;
-    LSumSq := LTemp;
+    LSumSq := 0.0;
+    for I := 0 to High(AData) do
+    begin
+      LDiff := AData[I] - AMean;
+      LSumSq := LSumSq + LDiff * LDiff;
+    end;
+    Result := LSumSq / (LLen - 1);
+  end
+  else
+  begin
+    { Kahan compensated summation for large arrays }
+    LSumSq := 0.0;
+    LCompensation := 0.0;
+    for I := 0 to High(AData) do
+    begin
+      LNext := Sqr(AData[I] - AMean) - LCompensation;
+      LTemp := LSumSq + LNext;
+      LCompensation := (LTemp - LSumSq) - LNext;
+      LSumSq := LTemp;
+    end;
+    Result := LSumSq / (LLen - 1);
   end;
-
-  Result := LSumSq / (Length(AData) - 1);  // 样本方差（除以 n-1）
 end;
 
 function TBenchStatsAnalyzer.ComputeStdDev(const AData: TDoubleArray; AMean: Double): Double;
@@ -620,7 +636,6 @@ var
   LCombined: TDoubleArray;
   LGroup: TInt64Array;   // 0=A, 1=B
   LSortedIdx: TInt64Array;
-  LRanks: TDoubleArray;
   LRankSum1: Double;
   LU1, LU2, LU: Double;
   LMU, LSigma: Double;
@@ -680,9 +695,9 @@ begin
   { IntroSort 间接排序（替换原插入排序，处理大样本更高效） }
   SortIndirect(LSortedIdx, LCombined);
 
-  { 3. 分配秩次（并列值取平均秩）+ 并列值修正一次完成 }
-  SetLength(LRanks, LN);
+  { 3. 分配秩次 + 并列值修正 + 秩和一次完成（消除 LRanks 数组） }
   LTieCorrection := 0.0;
+  LRankSum1 := 0.0;
   I := 0;
   while I < LN do
   begin
@@ -696,8 +711,11 @@ begin
     { 平均秩 = (run 开始位置 + run 结束位置 + 2) / 2
       位置从 0 开始，秩从 1 开始 }
     LAvgRank := (LRunStart + LRunEnd + 2) / 2.0;
+
+    { 直接累加组 A 的秩和，无需 LRanks 中间数组 }
     for K := LRunStart to LRunEnd do
-      LRanks[LSortedIdx[K]] := LAvgRank;
+      if LGroup[LSortedIdx[K]] = 0 then
+        LRankSum1 := LRankSum1 + LAvgRank;
 
     { 并列值修正：K>1 时累积 tie correction }
     K := LRunEnd - LRunStart + 1;
@@ -707,13 +725,7 @@ begin
     I := LRunEnd + 1;
   end;
 
-  { 4. 计算样本 A 的秩和 }
-  LRankSum1 := 0.0;
-  for I := 0 to LN - 1 do
-    if LGroup[I] = 0 then
-      LRankSum1 := LRankSum1 + LRanks[I];
-
-  { 5. 计算 U 统计量 }
+  { 4. 计算 U 统计量 }
   LU1 := LN1 * LN2 + LN1 * (LN1 + 1) / 2.0 - LRankSum1;
   LU2 := LN1 * LN2 - LU1;
   if LU1 < LU2 then
