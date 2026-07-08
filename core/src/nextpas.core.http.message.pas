@@ -219,6 +219,9 @@ procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
 {** @desc Write 202 Accepted response with no body. Sets status to 202 and writes empty body.
    Use for async operations that have been accepted for processing. }
 procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
+{** @desc Write 304 Not Modified response with no body.
+   Use for conditional requests where the resource hasn't changed. }
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1135,6 +1138,12 @@ procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_ACCEPTED);
+end;
+
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
 end;
 
 { THttpRequestBuilder }
