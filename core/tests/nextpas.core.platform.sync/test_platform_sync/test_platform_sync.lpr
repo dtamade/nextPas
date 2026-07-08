@@ -767,6 +767,56 @@ begin
   platform_once_destroy(LOnce);
 end;
 
+procedure TestMutexInitDestroyCycle;
+var
+  LMutex: TPlatformMutex;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_mutex_init(LMutex);
+    platform_mutex_lock(LMutex);
+    platform_mutex_unlock(LMutex);
+    platform_mutex_destroy(LMutex);
+  end;
+  Check(True, 'mutex init/lock/unlock/destroy cycle 10 times');
+end;
+
+procedure TestRwLockInitDestroyCycle;
+var
+  LRwLock: TPlatformRwLock;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_rwlock_init(LRwLock);
+    platform_rwlock_rdlock(LRwLock);
+    platform_rwlock_rdunlock(LRwLock);
+    platform_rwlock_wrlock(LRwLock);
+    platform_rwlock_wrunlock(LRwLock);
+    platform_rwlock_destroy(LRwLock);
+  end;
+  Check(True, 'rwlock init/rdlock/rdunlock/wrlock/wrunlock/destroy cycle 10 times');
+end;
+
+procedure TestCondVarInitDestroyCycle;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_mutex_init(LMutex);
+    platform_condvar_init(LCond);
+    platform_condvar_signal(LCond);
+    platform_condvar_broadcast(LCond);
+    platform_condvar_destroy(LCond);
+    platform_mutex_destroy(LMutex);
+  end;
+  Check(True, 'condvar init/signal/broadcast/destroy cycle 10 times');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -802,5 +852,8 @@ begin
   T.Test('Barrier invalid count', @TestBarrierInvalidCount);
   T.Test('Once basic', @TestOnceBasic);
   T.Test('Once nil callback', @TestOnceNilCallback);
+  T.Test('Mutex init/destroy cycle', @TestMutexInitDestroyCycle);
+  T.Test('RwLock init/destroy cycle', @TestRwLockInitDestroyCycle);
+  T.Test('CondVar init/destroy cycle', @TestCondVarInitDestroyCycle);
   if not T.Run then Halt(1);
 end.

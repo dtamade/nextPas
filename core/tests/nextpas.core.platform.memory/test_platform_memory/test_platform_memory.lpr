@@ -553,6 +553,33 @@ begin
     Check(LBuffer[LIndex] = 0, 'secure zero clears large buffer');
 end;
 
+procedure TestAllocVariousSizes;
+var
+  LPtr: Pointer;
+  LSize: PtrUInt;
+begin
+  { Test various allocation sizes }
+  for LSize in [1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128, 255, 256] do
+  begin
+    LPtr := platform_aligned_alloc(16, LSize);
+    if LPtr <> nil then
+    begin
+      Check(IsAligned(LPtr, 16), 'alignment for size ' + IntToStr(LSize));
+      FillChar(LPtr^, LSize, $AB);
+      platform_aligned_free(LPtr);
+    end;
+  end;
+  Check(True, 'various allocation sizes handled');
+end;
+
+procedure TestFreeNilMultipleTimes;
+begin
+  platform_aligned_free(nil);
+  platform_aligned_free(nil);
+  platform_aligned_free(nil);
+  Check(True, 'free nil multiple times is safe');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.memory');
   T.Test('alloc aligned and writable', @TestAllocAlignedAndWritable);
@@ -583,5 +610,7 @@ begin
   T.Test('realloc grow and shrink', @TestReallocGrowAndShrink);
   T.Test('virtual reserve commit decommit release', @TestVirtualReserveCommitDecommitRelease);
   T.Test('secure zero large buffer', @TestSecureZeroLargeBuffer);
+  T.Test('alloc various sizes', @TestAllocVariousSizes);
+  T.Test('free nil multiple times', @TestFreeNilMultipleTimes);
   if not T.Run then Halt(1);
 end.

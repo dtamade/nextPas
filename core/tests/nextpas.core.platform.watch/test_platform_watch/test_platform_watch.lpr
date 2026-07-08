@@ -288,6 +288,32 @@ begin
     'Windows watch branch must not remain bare -1 stubs');
 end;
 
+procedure TestWatchAddSameDirTwice;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test9', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  Check(platform_watch_add(W, '/tmp/nextpas_watch_test9') >= 0, 'add first');
+  { Adding same dir twice may succeed or return error }
+  platform_watch_add(W, '/tmp/nextpas_watch_test9');
+
+  platform_file_open('/tmp/nextpas_watch_test9/file.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H);
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got event after double add');
+
+  platform_watch_close(W);
+  platform_file_unlink('/tmp/nextpas_watch_test9/file.txt');
+  platform_file_rmdir('/tmp/nextpas_watch_test9');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.watch');
   T.Test('create/close', @TestCreateClose);
@@ -303,5 +329,6 @@ begin
   T.Test('multiple watches', @TestMultipleWatches);
   T.Test('poll zero timeout', @TestPollZeroTimeout);
   T.Test('Windows watch source contract', @TestWindowsWatchSourceContract);
+  T.Test('add same dir twice', @TestWatchAddSameDirTwice);
   if not T.Run then Halt(1);
 end.
