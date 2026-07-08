@@ -1591,6 +1591,67 @@ begin
   CheckTrue(LRaised, 'raises on nil writer');
 end;
 
+procedure TestRedirectMovedPermanently;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectMovedPermanently(LW, 'https://example.com/new');
+  CheckEqual(Int64(301), Int64(LM.Status), 'status 301');
+  CheckEqual('https://example.com/new', LM.GetHeaders.Get('location'), 'location header');
+  Check(Pos('Redirecting', LM.Body) > 0, 'body contains redirect html');
+end;
+
+procedure TestRedirectFound;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectFound(LW, '/other');
+  CheckEqual(Int64(302), Int64(LM.Status), 'status 302');
+  CheckEqual('/other', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectSeeOther;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectSeeOther(LW, '/result');
+  CheckEqual(Int64(303), Int64(LM.Status), 'status 303');
+  CheckEqual('/result', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectTemporaryRedirect;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectTemporaryRedirect(LW, '/temp');
+  CheckEqual(Int64(307), Int64(LM.Status), 'status 307');
+  CheckEqual('/temp', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectPermanentRedirect;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectPermanentRedirect(LW, '/perm');
+  CheckEqual(Int64(308), Int64(LM.Status), 'status 308');
+  CheckEqual('/perm', LM.GetHeaders.Get('location'), 'location header');
+end;
+
 { HttpWriteErrorResponse tests }
 
 procedure TestErrorResponseSetsJsonContentType;
@@ -1982,6 +2043,16 @@ begin
     @TestRedirectEmptyLocationRaises);
   T.Test('Redirect nil writer raises',
     @TestRedirectNilWriterRaises);
+  T.Test('Redirect: MovedPermanently 301',
+    @TestRedirectMovedPermanently);
+  T.Test('Redirect: Found 302',
+    @TestRedirectFound);
+  T.Test('Redirect: SeeOther 303',
+    @TestRedirectSeeOther);
+  T.Test('Redirect: TemporaryRedirect 307',
+    @TestRedirectTemporaryRedirect);
+  T.Test('Redirect: PermanentRedirect 308',
+    @TestRedirectPermanentRedirect);
   T.Test('ErrorResponse sets JSON content-type',
     @TestErrorResponseSetsJsonContentType);
   T.Test('ErrorResponse body has code and message',
