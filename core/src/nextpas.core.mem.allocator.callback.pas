@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   // 自定义分配器的回调类型（与回调分配器同域，避免 base 膨胀）
@@ -19,18 +19,23 @@ type
    * TCallbackAllocator
    * @desc 使用用户提供的回调函数进行内存管理的 TMemAllocator 具体类
    *}
-  TCallbackAllocator = class(TAllocator)
+  TCallbackAllocator = class(TInterfacedObject, IAllocator)
   private
     FGetMemCallback:     TGetMemCallback;
     FAllocMemCallback:   TAllocMemCallback;
     FReallocMemCallback: TReallocMemCallback;
     FFreeMemCallback:    TFreeMemCallback;
-  protected
-    function  DoGetMem(ASize: SizeUInt): Pointer; override;
-    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
+
+    function Traits: TAllocatorTraits; inline;
     constructor Init(aGetMem: TGetMemCallback; aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback);
     {** 回调分配器的线程安全性取决于回调函数实现，默认报告 False (保守策略)。
         如果回调指向线程安全的分配器，调用方可忽略此声明。 }
@@ -54,22 +59,22 @@ begin
   FFreeMemCallback    := aFreeMem;
 end;
 
-function TCallbackAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCallbackAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FGetMemCallback(ASize)
 end;
 
-function TCallbackAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCallbackAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FAllocMemCallback(ASize)
 end;
 
-function TCallbackAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCallbackAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := FReallocMemCallback(APtr, ASize)
 end;
 
-procedure TCallbackAllocator.DoFreeMem(APtr: Pointer);
+procedure TCallbackAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FFreeMemCallback(APtr)
 end;
@@ -78,6 +83,13 @@ function CreateCallbackAllocator(aGetMem: TGetMemCallback;
   aAllocMem: TAllocMemCallback; aReallocMem: TReallocMemCallback; aFreeMem: TFreeMemCallback): TCallbackAllocator;
 begin
   Result := TCallbackAllocator.Init(aGetMem, aAllocMem, aReallocMem, aFreeMem);
+end;
+
+
+function TCallbackAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
 end;
 
 end.
