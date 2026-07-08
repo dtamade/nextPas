@@ -4849,7 +4849,7 @@ begin
   if (PtrSlot = 0) or (LenSlot = 0) then Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrSlot);
-  OldLenVal := EmitLoad(GetIntType, LenSlot);
+  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4865,7 +4865,7 @@ begin
   NewPtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, NewPtrVal, PtrSlot);
-  EmitStore(GetIntType, NewLenVal, LenSlot);
+  EmitStore(GetIntTypeByWidth(32, True), NewLenVal, LenSlot);
 end;
 
 procedure THIRBuilder.ProcessDynArrayCleanup(const ANode: TTypedHirNode);
