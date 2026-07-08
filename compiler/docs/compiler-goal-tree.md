@@ -571,3 +571,8 @@
   - 迁移 5 个 field self 模式 → shekField
   - 非 ExprId blob 赋值: 109 → 63 (减少 42%)
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 前两刀：变量加载+声明类型传递
+  - EmitExprVar: 变量加载使用 FindAllocaType(AArg) 替代硬编码 GetIntType (i64)
+  - var-decl-runtime: 传递变量的 TypeId 给 HIR builder，用于正确创建 alloca 类型
+  - 确保变量 alloca 使用声明时的实际类型宽度（如 Integer→i32）
+  - smoke + compiler-pass 49/49 全通过
