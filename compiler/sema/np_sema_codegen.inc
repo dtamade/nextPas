@@ -1173,6 +1173,15 @@ begin
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
+function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
+  const ANode: TGreenNode; out ABlob: string; out AExprId: LongInt): Boolean;
+begin
+  AExprId := 0;
+  Result := EncodeRuntimeIntExprFold(ANode, ABlob);
+  if Result and (Length(ABlob) > 5) and (Copy(ABlob, 1, 5) = 'expr ') then
+    AExprId := StrToIntDef(Copy(ABlob, 6, Length(ABlob) - 5), 0);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeArrayElementAddressHirExpr(
   const ANode: TGreenNode; out AExprId: LongInt): Boolean;
 var

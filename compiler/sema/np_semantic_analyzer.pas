@@ -548,6 +548,9 @@ type
       out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
       out ABlob: string): Boolean;
+    { 带 ExprId 输出的重载：结构化表达式时返回 ExprId > 0 }
+    function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
+      out ABlob: string; out AExprId: LongInt): Boolean;
     function EncodeRuntimeBoolExprFold(const ANode: TGreenNode;
       out ABlob: string;
       const AAllowOwnedStringCompare: Boolean = False): Boolean;
