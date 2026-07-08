@@ -656,3 +656,7 @@
   - write_str_var 长度: 用 i32
   - tstring_copy: start/len 用 i32
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十七刀：全局变量类型使用 DeclType
+  - 全局变量声明: 使用 DeclType 替代 GetIntType
+  - 确保全局变量使用声明时的实际类型宽度
+  - smoke + compiler-pass 49/49 全通过
