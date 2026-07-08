@@ -688,7 +688,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/fast');
   LWObj := TMockResponseWriter.Create;
@@ -712,7 +712,7 @@ begin
       TSleep.ForDuration(TDuration.FromMilliseconds(50));
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/slow');
   LWObj := TMockResponseWriter.Create;
@@ -736,7 +736,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/check');
   LWObj := TMockResponseWriter.Create;

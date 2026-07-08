@@ -1,8 +1,7 @@
 unit nextpas.core.http.middleware.timeout;
 {**
  * @desc Response-time middleware. Records handler elapsed time in the
- *       X-Response-Time header. TimeoutMiddleware is kept as a deprecated
- *       alias for backward compatibility.
+ *       X-Response-Time header.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -13,7 +12,6 @@ uses
   nextpas.core.http.intf;
 
 function ResponseTimeMiddleware: IHttpMiddleware;
-function TimeoutMiddleware: IHttpMiddleware; deprecated 'use ResponseTimeMiddleware';
 
 implementation
 
@@ -39,11 +37,6 @@ begin
       AW.Headers.SetHeader('X-Response-Time', IntToStr(LMs) + 'ms');
     end);
   end);
-end;
-
-function TimeoutMiddleware: IHttpMiddleware;
-begin
-  Result := ResponseTimeMiddleware;
 end;
 
 end.
