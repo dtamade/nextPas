@@ -230,6 +230,87 @@ begin
   Check(Pos('detailed error info', LWObj.Body) = 0, 'body does not expose exception message');
 end;
 
+procedure TestRecoveryWithCallbackReceivesException;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCaughtMsg: string;
+  LCallbackCalled: Boolean;
+begin
+  LCaughtMsg := '';
+  LCallbackCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('boom');
+    end),
+    [RecoveryMiddlewareWith(procedure(E: Exception)
+    begin
+      LCaughtMsg := E.Message;
+      LCallbackCalled := True;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/err');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LCallbackCalled, 'callback was called');
+  CheckEqual('boom', LCaughtMsg, 'callback received exception message');
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'still returns 500');
+  CheckEqual('Internal Server Error', LWObj.Body, 'body is still generic');
+end;
+
+procedure TestRecoveryWithNilCallbackBehavesLikeSilent;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('should be swallowed');
+    end),
+    [RecoveryMiddlewareWith(nil)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/err');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'nil callback still returns 500');
+  CheckEqual('Internal Server Error', LWObj.Body, 'nil callback still generic body');
+end;
+
+procedure TestRecoveryWithSuccessPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCallbackCalled: Boolean;
+begin
+  LCallbackCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RecoveryMiddlewareWith(procedure(E: Exception)
+    begin
+      LCallbackCalled := True;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/ok');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(not LCallbackCalled, 'callback not called on success');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'success passes through');
+end;
+
 { === Logger Tests === }
 
 procedure TestLoggerCallsNext;
@@ -1165,6 +1246,9 @@ begin
   T.Test('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
   T.Test('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
   T.Test('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
+  T.Test('RecoveryWith: callback receives exception', @TestRecoveryWithCallbackReceivesException);
+  T.Test('RecoveryWith: nil callback behaves like silent', @TestRecoveryWithNilCallbackBehavesLikeSilent);
+  T.Test('RecoveryWith: success passes through', @TestRecoveryWithSuccessPassesThrough);
   { Logger }
   T.Test('Logger: calls next handler', @TestLoggerCallsNext);
   T.Test('Logger: preserves status', @TestLoggerPreservesStatus);

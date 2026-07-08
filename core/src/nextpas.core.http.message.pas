@@ -191,6 +191,8 @@ function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
 {** @desc Write 404 Not Found JSON error response. }
 function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 204 No Content response. Raises if body is non-empty. }
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1020,6 +1022,12 @@ function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', AMessage);
+end;
+
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
 end;
 
 { THttpRequestBuilder }
