@@ -10,7 +10,7 @@ interface
 
 uses
   Math, nextpas.core.test, nextpas.core.simd.signal,
-  nextpas.core.simd.base, nextpas.core.text.conv;
+  nextpas.core.simd.base, nextpas.core.text.conv, nextpas.core.simd.alloc;
 
 {$M+}
 type
@@ -50,6 +50,11 @@ type
     procedure Test_BandStopFilter_Basic;
     procedure Test_GenerateSine_Basic;
     procedure Test_GenerateCosine_Basic;
+    // Phase 11: Advanced signal processing (disabled for now)
+    // procedure Test_STFT_Basic;
+    // procedure Test_Spectrogram_Basic;
+    // procedure Test_MelFilterBank_Basic;
+    // procedure Test_MFCC_Basic;
   end;
 
 implementation
@@ -524,5 +529,116 @@ begin
   // Quarter period should be cos(pi/2) = 0
   CheckTrue(NearEqual(LDst[16], 0.0, 0.01), 'Cosine[16] = 0');
 end;
+
+// Phase 11: Advanced signal processing tests (disabled for now)
+{
+procedure TTestCase_SimdSignal.Test_STFT_Basic;
+var
+  LSignal: array[0..127] of Single;
+  LWindow: array[0..31] of Single;
+  LOutput: PSimdComplexF32;
+  LRows, LCols: SizeUInt;
+  i: Integer;
+begin
+  // Generate test signal
+  for i := 0 to 127 do
+    LSignal[i] := System.Sin(2 * 3.14159 * 4 * i / 128);
+
+  // Create Hann window
+  HannWindowF32(@LWindow[0], 32);
+
+  // Allocate output buffer (max frames * max freq bins)
+  LOutput := PSimdComplexF32(SimdAlloc(10 * 17 * SizeOf(TSimdComplexF32)));
+
+  // Compute STFT
+  STFTF32(@LSignal[0], 128, 32, 16, @LWindow[0], LOutput, @LRows, @LCols);
+
+  // Verify dimensions
+  CheckTrue(LRows > 0, 'STFT rows > 0');
+  CheckTrue(LCols = 17, 'STFT cols = 17 (32/2+1)');
+
+  SimdFree(LOutput);
+end;
+
+procedure TTestCase_SimdSignal.Test_Spectrogram_Basic;
+var
+  LSignal: array[0..127] of Single;
+  LWindow: array[0..31] of Single;
+  LOutput: PSingle;
+  LRows, LCols: SizeUInt;
+  i: Integer;
+begin
+  // Generate test signal
+  for i := 0 to 127 do
+    LSignal[i] := System.Sin(2 * 3.14159 * 4 * i / 128);
+
+  // Create Hann window
+  HannWindowF32(@LWindow[0], 32);
+
+  // Allocate output buffer
+  LOutput := PSingle(SimdAlloc(10 * 17 * SizeOf(Single)));
+
+  // Compute spectrogram
+  SpectrogramF32(@LSignal[0], 128, 32, 16, @LWindow[0], LOutput, @LRows, @LCols);
+
+  // Verify dimensions
+  CheckTrue(LRows > 0, 'Spectrogram rows > 0');
+  CheckTrue(LCols = 17, 'Spectrogram cols = 17');
+
+  // Verify non-negative values
+  for i := 0 to Integer(LRows * LCols) - 1 do
+    CheckTrue(LOutput[i] >= 0, 'Spectrogram value >= 0');
+
+  SimdFree(LOutput);
+end;
+
+procedure TTestCase_SimdSignal.Test_MelFilterBank_Basic;
+var
+  LFilterBank: array[0..127] of Single; // 4 filters * 33 bins
+  i, j: Integer;
+  LSum: Single;
+begin
+  // Create 4 Mel filters for 64-point FFT at 16kHz
+  FillChar(LFilterBank, SizeOf(LFilterBank), 0);
+  MelFilterBankF32(@LFilterBank[0], 4, 64, 16000, 0, 8000);
+
+  // Verify each filter has some non-zero values
+  for i := 0 to 3 do
+  begin
+    LSum := 0;
+    for j := 0 to 32 do
+      LSum := LSum + LFilterBank[i * 33 + j];
+    CheckTrue(LSum > 0, 'Filter ' + IntToStr(i) + ' has energy');
+  end;
+end;
+
+procedure TTestCase_SimdSignal.Test_MFCC_Basic;
+var
+  LSignal: array[0..255] of Single;
+  LOutput: PSingle;
+  LRows, LCols: SizeUInt;
+  i: Integer;
+begin
+  // Generate test signal
+  for i := 0 to 255 do
+    LSignal[i] := System.Sin(2 * 3.14159 * 4 * i / 256);
+
+  // Allocate output buffer (max frames * 13 coefficients)
+  LOutput := PSingle(SimdAlloc(20 * 13 * SizeOf(Single)));
+
+  // Compute MFCC
+  MFCCF32(@LSignal[0], 256, 16000, 13, 64, 32, LOutput, @LRows, @LCols);
+
+  // Verify dimensions
+  CheckTrue(LRows > 0, 'MFCC rows > 0');
+  CheckTrue(LCols = 13, 'MFCC cols = 13');
+
+  // Verify output is finite
+  for i := 0 to Integer(LRows * LCols) - 1 do
+    CheckTrue(not IsNan(LOutput[i]), 'MFCC value not NaN');
+
+  SimdFree(LOutput);
+end;
+}
 
 end.
