@@ -701,6 +701,49 @@ begin
   platform_socket_close(S);
 end;
 
+procedure TestIpv4Parse;
+begin
+  CheckEqual(Int64($01020304), Int64(platform_ipv4_parse('1.2.3.4')), '1.2.3.4');
+  CheckEqual(Int64($7F000001), Int64(platform_ipv4_parse('127.0.0.1')), '127.0.0.1');
+  CheckEqual(Int64($C0A80001), Int64(platform_ipv4_parse('192.168.0.1')), '192.168.0.1');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('')), 'empty string');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('0.0.0.0')), '0.0.0.0');
+end;
+
+procedure TestIpv4ToString;
+begin
+  Check(platform_ipv4_to_string($01020304) = '1.2.3.4', '0x01020304');
+  Check(platform_ipv4_to_string($7F000001) = '127.0.0.1', '0x7F000001');
+  Check(platform_ipv4_to_string($C0A80001) = '192.168.0.1', '0xC0A80001');
+  Check(platform_ipv4_to_string(0) = '0.0.0.0', 'zero');
+end;
+
+procedure TestIpv4RoundTrip;
+var
+  LIP: UInt32;
+begin
+  LIP := platform_ipv4_parse('10.0.0.1');
+  Check(platform_ipv4_to_string(LIP) = '10.0.0.1', 'round-trip 10.0.0.1');
+  LIP := platform_ipv4_parse('255.255.255.255');
+  Check(platform_ipv4_to_string(LIP) = '255.255.255.255', 'round-trip 255.255.255.255');
+end;
+
+procedure TestSockaddrIpv4RoundTrip;
+var
+  LSockAddr: sockaddr_in;
+  LLen: Int32;
+  LIP: UInt32;
+  LPort: UInt16;
+begin
+  Check(platform_sockaddr_from_ipv4($C0A80001, 8080, LSockAddr, LLen) = 0,
+    'from_ipv4 success');
+  Check(LLen = SizeOf(sockaddr_in), 'len = sizeof(sockaddr_in)');
+  Check(LSockAddr.sin_family = PLATFORM_AF_INET, 'family = AF_INET');
+  platform_sockaddr_to_ipv4(LSockAddr, LIP, LPort);
+  CheckEqual(Int64($C0A80001), Int64(LIP), 'IP round-trip');
+  CheckEqual(Int64(8080), Int64(LPort), 'port round-trip');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -750,6 +793,12 @@ begin
   T.Test('set_sendbuf', @TestSetSendBuf);
   T.Test('get_error', @TestGetError);
   T.Test('recvbuf/sendbuf round-trip', @TestRecvBufSendBufRoundTrip);
+
+  { IPv4 helper functions }
+  T.Test('ipv4_parse', @TestIpv4Parse);
+  T.Test('ipv4_to_string', @TestIpv4ToString);
+  T.Test('ipv4 parse+to_string round-trip', @TestIpv4RoundTrip);
+  T.Test('sockaddr_from/to_ipv4 round-trip', @TestSockaddrIpv4RoundTrip);
 
   if not T.Run then Halt(1);
 end.
