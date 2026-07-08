@@ -27,7 +27,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.memory_map;
 
 type
@@ -58,7 +57,7 @@ type
    *      LAlloc.Free;
    *    end;
    *}
-  TMappedFileAllocator = class(TAllocator)
+  TMappedFileAllocator = class(TInterfacedObject, IAllocator)
   private
     FMap: TMemoryMap;
     FFileName: string;
@@ -69,12 +68,15 @@ type
     FIsCreator: Boolean;
     procedure InitHeader;
     procedure LoadHeader;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     {** 创建映射文件分配器
      *  @param AFileName 文件路径
      *  @param ASize 映射大小（字节）
@@ -97,7 +99,7 @@ type
     {** 获取统计 }
     function GetStats: TMappedFileStats;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -181,7 +183,7 @@ begin
   FAllocCount := LHdr^.AllocCount;
 end;
 
-function TMappedFileAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TMappedFileAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAlignedSize: SizeUInt;
 begin
@@ -205,27 +207,27 @@ begin
   PMappedFileHeader(FBaseAddress)^.AllocCount := FAllocCount;
 end;
 
-function TMappedFileAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TMappedFileAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TMappedFileAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TMappedFileAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldOffset: UInt64;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
   { 简单实现：分配新块，复制 }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then Exit;
 
   { 复制旧数据（保守复制 ASize 字节） }
@@ -234,7 +236,7 @@ begin
   { 注意：旧块不释放（bump allocator 语义） }
 end;
 
-procedure TMappedFileAllocator.DoFreeMem(APtr: Pointer);
+procedure TMappedFileAllocator.FreeMem(APtr: Pointer); inline;
 begin
   { bump allocator 不支持释放 }
   { 未来可以实现 free list }
@@ -275,7 +277,7 @@ begin
   Result.AllocCount := FAllocCount;
 end;
 
-function TMappedFileAllocator.Traits: TAllocatorTraits;
+function TMappedFileAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
   Result.SupportsRealloc := True;
