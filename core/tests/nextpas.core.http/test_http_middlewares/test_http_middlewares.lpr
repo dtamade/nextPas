@@ -1975,6 +1975,112 @@ begin
   Check(LRaised, 'raises on nil collector');
 end;
 
+procedure TestMetricsWithCallbackInvoked;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+  LStatus: Int64;
+begin
+  LCalled := False;
+  LStatus := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LCalled := True;
+      LStatus := AStatus;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'callback invoked');
+  CheckEqual(200, LStatus, 'status passed to callback');
+end;
+
+procedure TestMetricsWithCallbackMultiple;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCount: Int32;
+  LI: Int32;
+begin
+  LCount := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      Inc(LCount);
+    end)]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(5, LCount, 'callback called 5 times');
+end;
+
+procedure TestMetricsWithCallbackDuration;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LDuration: Int64;
+begin
+  LDuration := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LDuration := ADurationUs;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LDuration >= 0, 'duration is non-negative');
+end;
+
+procedure TestMetricsWithNilCallbackRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddlewareWith(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil callback');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2060,5 +2166,9 @@ begin
   T.Test('Metrics: reset clears counters', @TestMetricsReset);
   T.Test('Metrics: tracks duration', @TestMetricsTracksDuration);
   T.Test('Metrics: nil collector raises', @TestMetricsNilCollectorRaises);
+  T.Test('MetricsWith: callback invoked', @TestMetricsWithCallbackInvoked);
+  T.Test('MetricsWith: callback called multiple times', @TestMetricsWithCallbackMultiple);
+  T.Test('MetricsWith: callback receives duration', @TestMetricsWithCallbackDuration);
+  T.Test('MetricsWith: nil callback raises', @TestMetricsWithNilCallbackRaises);
   if not T.Run then Halt(1);
 end.

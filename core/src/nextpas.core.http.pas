@@ -84,6 +84,7 @@ type
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
   IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
+  THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -271,6 +272,8 @@ function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware; inline;
 function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
 {** @desc Metrics middleware — records request counts and durations. }
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware; inline;
+{** @desc Metrics middleware with custom callback. }
+function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -474,6 +477,8 @@ function HttpPatchString(const AClient: IHttpClient;
 {** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string; inline;
+{** @desc HEAD url, ensure 2xx, return response (headers only). Raises on non-2xx. }
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -719,6 +724,11 @@ end;
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.metrics.MetricsMiddleware(ACollector);
+end;
+
+function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWith(ACallback);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
@@ -1261,6 +1271,11 @@ function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string;
 begin
   Result := nextpas.core.http.client.HttpDeleteString(AClient, AUrl);
+end;
+
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpHead(AClient, AUrl);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;

@@ -279,6 +279,9 @@ function HttpPatchString(const AClient: IHttpClient;
 {** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string;
+{** @desc HEAD url, ensure 2xx, return response (headers only, no body). Raises on non-2xx.
+   Useful for checking resource existence or reading Content-Length/ETag headers. }
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -2502,6 +2505,12 @@ begin
     HttpReleaseResponseBody(LResp);
     raise;
   end;
+end;
+
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := AClient.Head(AUrl);
+  HttpEnsureSuccess(Result);
 end;
 
 end.

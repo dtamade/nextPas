@@ -8575,6 +8575,41 @@ begin
   Check(LCaught, 'DeleteString raises EHttpError on 404');
 end;
 
+procedure TestHttpHeadSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := HttpHead(LClient, 'http://localhost/test');
+  Check(LResp <> nil, 'HttpHead returns response');
+  CheckEqual(200, LResp.StatusCode, 'HttpHead returns 200');
+end;
+
+procedure TestHttpHeadRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpHead(LClient, 'http://localhost/missing');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'HttpHead raises EHttpError on 404');
+end;
+
 { Main }
 
 begin
@@ -8890,5 +8925,7 @@ begin
   T.Test('PatchString returns body on 200', @TestHttpPatchStringSuccess);
   T.Test('DeleteString returns body on 200', @TestHttpDeleteStringSuccess);
   T.Test('DeleteString raises on 404', @TestHttpDeleteStringRaisesOn404);
+  T.Test('Head returns response on 200', @TestHttpHeadSuccess);
+  T.Test('Head raises on 404', @TestHttpHeadRaisesOn404);
   if not T.Run then Halt(1);
 end.
