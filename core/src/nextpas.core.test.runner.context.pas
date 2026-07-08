@@ -48,6 +48,7 @@ type
     FFailedNames: specialize TArray<string>;
     FLogLines : specialize TArray<string>;
     FCleanups : specialize TArray<TTestClosure>;
+    FTempDir  : string;  { lazy-created temp directory, auto-cleaned }
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
     destructor Destroy; override;
     procedure Run(const AName: string; AProc: TTestProc);
@@ -62,11 +63,21 @@ type
     procedure OnCleanup(AProc: TTestClosure);
     procedure ClearLog;
     property  LogLines: specialize TArray<string> read FLogLines;
+    { TempDir: lazy-created temporary directory for this test.
+      Created on first access, auto-cleaned when the test context is destroyed.
+      Each test gets its own isolated directory. }
+    function  GetTempDir: string;
+    property  TempDir: string read GetTempDir;
     procedure ExecuteSubtests;
     procedure RunCleanups;
   end;
 
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.platform.env,
+  nextpas.core.fs;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestResultAppender                                                          }
@@ -116,6 +127,12 @@ begin
   FOnResult := nil;
   FFailedNames := nil;
   FLogLines := nil;
+  { Safety net: remove temp dir if RunCleanups wasn't called }
+  if FTempDir <> '' then
+  begin
+    RemoveAll(FTempDir);
+    FTempDir := '';
+  end;
   inherited Destroy;
 end;
 
@@ -207,6 +224,34 @@ end;
 procedure TTestContext.ClearLog;
 begin
   FLogLines := nil;
+end;
+
+function TTestContext.GetTempDir: string;
+var
+  LBaseDir: string;
+begin
+  if FTempDir = '' then
+  begin
+    { Create under system temp dir with test name sanitised for filesystem }
+    LBaseDir := platform_env_get_str('TMPDIR');
+    if LBaseDir = '' then
+      LBaseDir := '/tmp';
+    LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+    FTempDir := LBaseDir + 'nextpas_test_' +
+      StringReplace(FTestName, '/', '_', [rfReplaceAll]) + '_' +
+      IntToStr(Int64(Pointer(Self)));  { unique per instance }
+    ForceDirectories(FTempDir);
+    { Register cleanup to remove temp dir after test }
+    OnCleanup(procedure
+    begin
+      if FTempDir <> '' then
+      begin
+        RemoveAll(FTempDir);
+        FTempDir := '';
+      end;
+    end);
+  end;
+  Result := FTempDir;
 end;
 
 { ── Internal helpers ────────────────────────────────────────────────────────── }

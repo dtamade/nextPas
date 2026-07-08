@@ -219,6 +219,11 @@ type
       Fails with a list of uncalled methods if any setup was never invoked. }
     procedure VerifyAll;
 
+    { Verify that every set-up method was called at least once AND no calls
+      were made to methods that were never set up.
+      Stricter than VerifyAll — catches unexpected/spurious calls. }
+    procedure VerifyNoMoreInteractions;
+
     { Record a method call (called by generated stubs or manual recording).
       Example: Mock.RecordCall('Foo', ['arg1', 'arg2']); }
     procedure RecordCall(const AMethodName: string;
@@ -923,25 +928,60 @@ begin
   FMethod := AMethod;
 end;
 
+function FormatCallDetail(AState: TMockState; const AMethod: string): string;
+{ Build a human-readable list of all calls to AMethod with their arguments.
+  Example: "  Foo('a', 'b')\n  Foo('c')" }
+var
+  I, J: Integer;
+  LCall: TMockCall;
+  LFound: Boolean;
+begin
+  Result := '';
+  LFound := False;
+  for I := 0 to High(AState.Calls) do
+  begin
+    LCall := AState.Calls[I];
+    if LCall.MethodName <> AMethod then
+      Continue;
+    if not LFound then
+    begin
+      Result := #10 + '  calls to ' + AMethod + ':';
+      LFound := True;
+    end;
+    Result := Result + #10 + '    ' + AMethod + '(';
+    for J := 0 to High(LCall.Args) do
+    begin
+      if J > 0 then Result := Result + ', ';
+      Result := Result + '"' + LCall.Args[J] + '"';
+    end;
+    Result := Result + ')';
+  end;
+  { Also list all calls if method was never called, to help spot typos }
+  if not LFound then
+  begin
+    for I := 0 to High(AState.Calls) do
+    begin
+      if I = 0 then
+        Result := #10 + '  all recorded calls:';
+      Result := Result + #10 + '    ' + AState.Calls[I].MethodName + '(';
+      for J := 0 to High(AState.Calls[I].Args) do
+      begin
+        if J > 0 then Result := Result + ', ';
+        Result := Result + '"' + AState.Calls[I].Args[J] + '"';
+      end;
+      Result := Result + ')';
+    end;
+  end;
+end;
+
 procedure TMockVerifier.CheckCount(AActual, AExpected: Integer;
   const AQualifier: string; APasses: Boolean);
-var
-  LHistory: string;
-  I: Integer;
 begin
   if not APasses then
-  begin
-    LHistory := '';
-    if Length(FState.Calls) > 0 then
-    begin
-      LHistory := '; actual calls:';
-      for I := 0 to High(FState.Calls) do
-        LHistory := LHistory + ' ' + FState.Calls[I].MethodName;
-    end;
     InternalFail('Expected ' + FMethod + ' called ' + AQualifier + ' ' +
       IntToStr(AExpected) + ' time(s), but was called ' +
-      IntToStr(AActual) + ' time(s)' + LHistory);
-  end;
+      IntToStr(AActual) + ' time(s)' +
+      FormatCallDetail(FState, FMethod));
 end;
 
 procedure TMockVerifier.CalledExactly(ACount: Integer);
@@ -1138,6 +1178,55 @@ begin
     end;
   if LUncalled <> '' then
     InternalFail('VerifyAll: set-up methods never called: ' + LUncalled);
+end;
+
+procedure TMock.VerifyNoMoreInteractions;
+var
+  LSetupNames: specialize TArray<string>;
+  LSetupSet: specialize TArray<Boolean>;
+  LUncalled, LUnexpected: string;
+  I, J: Integer;
+  LFound: Boolean;
+begin
+  LSetupNames := FState.GetSetupMethodNames;
+  { Check: all set-up methods were called }
+  LUncalled := '';
+  for I := 0 to High(LSetupNames) do
+    if FState.CallCount(LSetupNames[I]) = 0 then
+    begin
+      if LUncalled <> '' then LUncalled := LUncalled + ', ';
+      LUncalled := LUncalled + LSetupNames[I];
+    end;
+  { Check: no calls to un-set-up methods }
+  LUnexpected := '';
+  for I := 0 to High(FState.Calls) do
+  begin
+    LFound := False;
+    for J := 0 to High(LSetupNames) do
+      if FState.Calls[I].MethodName = LSetupNames[J] then
+      begin
+        LFound := True;
+        Break;
+      end;
+    if not LFound then
+    begin
+      if LUnexpected <> '' then LUnexpected := LUnexpected + ', ';
+      LUnexpected := LUnexpected + FState.Calls[I].MethodName;
+    end;
+  end;
+  { Report }
+  if (LUncalled <> '') or (LUnexpected <> '') then
+  begin
+    if (LUncalled <> '') and (LUnexpected <> '') then
+      InternalFail('VerifyNoMoreInteractions: set-up methods never called: ' +
+        LUncalled + '; unexpected calls: ' + LUnexpected)
+    else if LUncalled <> '' then
+      InternalFail('VerifyNoMoreInteractions: set-up methods never called: ' +
+        LUncalled)
+    else
+      InternalFail('VerifyNoMoreInteractions: unexpected calls to methods ' +
+        'not set up: ' + LUnexpected);
+  end;
 end;
 
 procedure TMock.RecordCall(const AMethodName: string;

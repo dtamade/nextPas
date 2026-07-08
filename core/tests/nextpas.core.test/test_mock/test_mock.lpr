@@ -1173,8 +1173,8 @@ begin
     LM.Setup('Baz').Returns('qux');
     LM.RecordCall('Foo', []);
     LM.RecordCall('Baz', []);
-    { Verify wrong count — error message should include actual calls }
-    ExpectFail(procedure begin LM.Verify('Foo').CalledExactly(5); end, 'actual calls');
+    { Verify wrong count — error message should include call details }
+    ExpectFail(procedure begin LM.Verify('Foo').CalledExactly(5); end, 'calls to Foo');
   finally
     LM.Free;
   end;
@@ -1336,6 +1336,78 @@ begin
   WithMock(@TestCalledExactlyWithMultipleTypedArgsImpl);
 end;
 
+{ ── R51: VerifyNoMoreInteractions ───────────────────────────────────────────── }
+
+procedure TestVerifyNoMoreInteractionsPass;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Baz', []);
+    { All set-up methods called, no unexpected calls }
+    LM.VerifyNoMoreInteractions;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailUncalled;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    { Baz was never called }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'never called');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailUnexpected;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Bar', []);  { Bar was never set up }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'unexpected');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailBoth;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Qux', []);  { Baz uncalled, Qux unexpected }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'never called');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1432,6 +1504,12 @@ begin
   Suite.Test('TestCalledWithDoubleType', @TestCalledWithDoubleType);
   Suite.Test('TestCalledWithDoubleTypeMismatch', @TestCalledWithDoubleTypeMismatch);
   Suite.Test('TestCalledExactlyWithMultipleTypedArgs', @TestCalledExactlyWithMultipleTypedArgs);
+
+  { R51: VerifyNoMoreInteractions }
+  Suite.Test('TestVerifyNoMoreInteractionsPass', @TestVerifyNoMoreInteractionsPass);
+  Suite.Test('TestVerifyNoMoreInteractionsFailUncalled', @TestVerifyNoMoreInteractionsFailUncalled);
+  Suite.Test('TestVerifyNoMoreInteractionsFailUnexpected', @TestVerifyNoMoreInteractionsFailUnexpected);
+  Suite.Test('TestVerifyNoMoreInteractionsFailBoth', @TestVerifyNoMoreInteractionsFailBoth);
 
   { G2: Mock type paths }
   Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);

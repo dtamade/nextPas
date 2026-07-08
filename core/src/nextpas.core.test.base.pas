@@ -35,6 +35,10 @@ type
     procedure LogF(const AFormat: string; const AArgs: array of const);
     procedure OnCleanup(AProc: TTestProc);
     procedure OnCleanup(AProc: TTestClosure);
+    { TempDir: lazy-created temporary directory for this test.
+      Created on first access, auto-cleaned when the test context is destroyed. }
+    function  GetTempDir: string;
+    property  TempDir: string read GetTempDir;
   end;
 
   TSubtestProc = procedure(constref Ctx: ITestContext);
