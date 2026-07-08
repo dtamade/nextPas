@@ -34,11 +34,13 @@ type
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     FClosed: Int32;
+    FResizing: Int32; { 0 = normal, 1 = resize in progress }
     FNotifier: TChannelNotifier;
     FNotifierData: Pointer;
     procedure WakeAllWaiters;
     procedure NotifyData;
     procedure NotifySpace;
+    procedure SpinWhileResizing; inline;
   public
     {** @desc 创建有界无锁 Channel }
     constructor Create(const ACapacity: PtrUInt);
@@ -75,6 +77,11 @@ type
     function ApproxLen: PtrUInt;
     {** @desc Channel 容量 }
     function Capacity: PtrUInt;
+    {** @desc 尝试动态调整 Channel 容量
+      @param ANewCapacity 新容量（会被向上对齐到 2 的幂）
+      @returns True 调整成功，False 调整失败（Channel 已关闭或正在调整中）
+      @note 非阻塞；调整期间 send/receive 会 spin 等待（<1μs） }
+    function TryResize(const ANewCapacity: PtrUInt): Boolean;
   end;
 
   generic TLockFreeChannel<T> = class(specialize TLockFreeChannelImpl<T>)
@@ -105,6 +112,7 @@ begin
   FSpaceWaiters := 0;
   FDataWaiters := 0;
   FClosed := 0;
+  FResizing := 0;
   FNotifier := nil;
   FNotifierData := nil;
 end;
@@ -144,6 +152,12 @@ begin
   FNotifierData := AData;
 end;
 
+procedure TLockFreeChannelImpl.SpinWhileResizing;
+begin
+  while AtomicLoad32(FResizing, moAcquire) <> 0 do
+    CpuPause;
+end;
+
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
 var
   LPos: Int64;
@@ -154,6 +168,7 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
+  SpinWhileResizing;
   LBackoff := 1;
   while True do
   begin
@@ -242,6 +257,7 @@ var
   LBackoff: Integer;
   LI: Integer;
 begin
+  SpinWhileResizing;
   LBackoff := 1;
   while True do
   begin
@@ -356,6 +372,58 @@ end;
 function TLockFreeChannelImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
+end;
+
+function TLockFreeChannelImpl.TryResize(const ANewCapacity: PtrUInt): Boolean;
+var
+  LNewCap: PtrUInt;
+  LNewMask: PtrUInt;
+  LNewSlots: array of TSlot;
+  LSend, LRecv: Int64;
+  LCount: PtrUInt;
+  LI: PtrUInt;
+  LOldIdx, LNewIdx: PtrUInt;
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
+  if ANewCapacity = 0 then
+    Exit(False);
+  { Acquire resize flag }
+  if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
+    Exit(False);
+  { Compute new capacity (power of 2, at least 1) }
+  LNewCap := LockFreeNextPow2(ANewCapacity);
+  if LNewCap < 1 then
+    LNewCap := 1;
+  LNewMask := LNewCap - 1;
+  { Allocate new slots }
+  SetLength(LNewSlots, LNewCap);
+  for LI := 0 to LNewCap - 1 do
+    LNewSlots[LI].Sequence := Int64(LI);
+  { Migrate existing data: read positions first }
+  LSend := AtomicLoad64(FSendPos, moRelaxed);
+  LRecv := AtomicLoad64(FRecvPos, moRelaxed);
+  if LSend > LRecv then
+  begin
+    LCount := PtrUInt(LSend - LRecv);
+    if LCount > LNewCap then
+      LCount := LNewCap;
+    for LI := 0 to LCount - 1 do
+    begin
+      LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
+      LNewIdx := PtrUInt(LRecv + Int64(LI)) and LNewMask;
+      LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
+      { Mark slot as ready for receive: sequence = position + 1 }
+      AtomicStore64(LNewSlots[LNewIdx].Sequence, LRecv + Int64(LI) + 1, moRelease);
+    end;
+  end;
+  { Swap buffer pointers }
+  FSlots := LNewSlots;
+  FCapacity := LNewCap;
+  FMask := LNewMask;
+  { Release resize flag }
+  AtomicStore32(FResizing, 0, moRelease);
+  Result := True;
 end;
 
 end.
