@@ -1810,6 +1810,31 @@ begin
   Check(Pos('Validation failed', LM.Body) > 0, 'message preserved');
 end;
 
+procedure TestOkSets200;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseOk(LW);
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestOkNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseOk(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1975,6 +2000,10 @@ begin
     @TestNoContentSets204);
   T.Test('NoContent: nil writer raises',
     @TestNoContentNilWriterRaises);
+  T.Test('Ok: sets 200 status',
+    @TestOkSets200);
+  T.Test('Ok: nil writer raises',
+    @TestOkNilWriterRaises);
   T.Test('Html: sets text/html content-type',
     @TestHtmlSetsContentType);
   T.Test('Html: writes status and body',

@@ -78,6 +78,7 @@ type
   TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
   TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
   TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
+  TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
@@ -239,6 +240,9 @@ function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
 function RequestIdMiddleware: IHttpMiddleware; inline;
 {** @desc Request ID middleware with custom header name. }
 function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware; inline;
+{** @desc Request ID middleware with custom header name and ID generator callback. }
+function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
+  const AGenerator: TRequestIdGenerator): IHttpMiddleware; inline;
 {** @desc Set Cache-Control header on every response. }
 function CacheControlMiddleware(const AValue: string): IHttpMiddleware; inline;
 {** @desc Cache-Control: no-cache, no-store, must-revalidate. }
@@ -339,6 +343,8 @@ function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ABody: string): SizeUInt; inline;
 {** @desc Write 204 No Content response. }
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter); inline;
+{** @desc Write 200 OK response with no body. }
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -615,6 +621,12 @@ end;
 function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWith(AHeaderName);
+end;
+
+function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
+  const AGenerator: TRequestIdGenerator): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWithGenerator(AHeaderName, AGenerator);
 end;
 
 function CacheControlMiddleware(const AValue: string): IHttpMiddleware;
@@ -895,6 +907,11 @@ end;
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 begin
   nextpas.core.http.message.HttpWriteResponseNoContent(AW);
+end;
+
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseOk(AW);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;

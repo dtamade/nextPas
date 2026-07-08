@@ -1133,6 +1133,129 @@ begin
     'different requests get different ids');
 end;
 
+procedure TestRequestIdWithGeneratorUsesCustom;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCallCount: Int32;
+begin
+  LCallCount := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      Inc(LCallCount);
+      Result := 'custom-id-' + IntToStr(LCallCount);
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('custom-id-1', LWObj.GetHeaders.Get('x-request-id'), 'uses custom generator');
+  CheckEqual(1, LCallCount, 'generator called once');
+end;
+
+procedure TestRequestIdWithGeneratorPreservesExisting;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGeneratorCalled: Boolean;
+begin
+  LGeneratorCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      LGeneratorCalled := True;
+      Result := 'should-not-be-used';
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('x-request-id', 'existing-id');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('existing-id', LWObj.GetHeaders.Get('x-request-id'), 'preserves existing');
+  Check(not LGeneratorCalled, 'generator not called when existing id present');
+end;
+
+procedure TestRequestIdWithGeneratorCustomHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-trace-id', function: string
+    begin
+      Result := 'trace-123';
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('trace-123', LWObj.GetHeaders.Get('x-trace-id'), 'custom header with custom generator');
+  CheckEqual('', LWObj.GetHeaders.Get('x-request-id'), 'default header not set');
+end;
+
+procedure TestRequestIdWithGeneratorUniquePerRequest;
+var
+  LHandler: IHttpHandler;
+  LW1, LW2: TMockResponseWriter;
+  LWIntf1, LWIntf2: IHttpResponseWriter;
+  LReq1, LReq2: TMockRequest;
+  LReqIntf1, LReqIntf2: IHttpRequest;
+  LCounter: Int32;
+begin
+  LCounter := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      Inc(LCounter);
+      Result := 'req-' + IntToStr(LCounter);
+    end)]
+  );
+  LReq1 := TMockRequest.Create(hmGet, '/a');
+  LReqIntf1 := LReq1;
+  LW1 := TMockResponseWriter.Create;
+  LWIntf1 := LW1;
+  LHandler.ServeHTTP(LReqIntf1, LWIntf1);
+  LReq2 := TMockRequest.Create(hmGet, '/b');
+  LReqIntf2 := LReq2;
+  LW2 := TMockResponseWriter.Create;
+  LWIntf2 := LW2;
+  LHandler.ServeHTTP(LReqIntf2, LWIntf2);
+  CheckEqual('req-1', LW1.GetHeaders.Get('x-request-id'), 'first request gets req-1');
+  CheckEqual('req-2', LW2.GetHeaders.Get('x-request-id'), 'second request gets req-2');
+end;
+
 { CacheControlMiddleware tests }
 
 procedure TestCacheControlSetsHeader;
@@ -1559,6 +1682,10 @@ begin
   T.Test('RequestId: preserves existing id', @TestRequestIdPreservesExisting);
   T.Test('RequestId: custom header name', @TestRequestIdCustomHeader);
   T.Test('RequestId: unique per request', @TestRequestIdUniquePerRequest);
+  T.Test('RequestIdWithGenerator: uses custom generator', @TestRequestIdWithGeneratorUsesCustom);
+  T.Test('RequestIdWithGenerator: preserves existing', @TestRequestIdWithGeneratorPreservesExisting);
+  T.Test('RequestIdWithGenerator: custom header', @TestRequestIdWithGeneratorCustomHeader);
+  T.Test('RequestIdWithGenerator: unique per request', @TestRequestIdWithGeneratorUniquePerRequest);
   { CacheControl }
   T.Test('CacheControl: sets header on response', @TestCacheControlSetsHeader);
   T.Test('CacheControl: NoCache convenience', @TestNoCacheMiddlewareSetsHeader);
