@@ -8,6 +8,7 @@ unit nextpas.core.platform.pty.base;
 interface
 
 type
+  {** @desc PTY 窗口大小 *}
   TPlatformPtySize = record
     FCols: UInt16;
     FRows: UInt16;
@@ -15,6 +16,7 @@ type
     FYPixel: UInt16;
   end;
 
+  {** @desc PTY 句柄（平台无关封装） *}
   TPlatformPty = record
   {$IFDEF NEXTPAS_UNIX}
     FMasterFd: Int32;
@@ -27,6 +29,7 @@ type
   {$ENDIF}
   end;
 
+  {** @desc PTY 启动失败阶段枚举 *}
   TPlatformPtySpawnStage = (
     ptssNone,
     ptssPipe,
