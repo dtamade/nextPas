@@ -646,7 +646,10 @@ begin
     FMutex.Release;
   end;
   if LPool <> nil then
+  begin
     LPool.Shutdown;
+    LPool.WaitAll;
+  end;
 end;
 
 function TTcpServerDefaultWorkerHandoff.Submit(const AWork: ITcpServerWork;
