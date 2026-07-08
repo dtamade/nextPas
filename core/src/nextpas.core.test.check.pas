@@ -226,19 +226,6 @@ begin
     Dec(Result);
 end;
 
-function StrEndsWith(const AStr, ASuffix: string): Boolean;
-{ Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
-var
-  LStrLen, LSuffixLen: Integer;
-begin
-  LSuffixLen := Length(ASuffix);
-  if LSuffixLen = 0 then
-    Exit(True);
-  LStrLen := Length(AStr);
-  Result := (LStrLen >= LSuffixLen) and
-    (Copy(AStr, LStrLen - LSuffixLen + 1, LSuffixLen) = ASuffix);
-end;
-
 function StringDiff(const AExpected, AActual: string): string;
 var
   I, LMin, LStart, LEnd: Integer;

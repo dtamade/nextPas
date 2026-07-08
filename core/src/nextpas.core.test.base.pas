@@ -223,6 +223,8 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
+function  StrEndsWith(const AStr, ASuffix: string): Boolean;
+  { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
 procedure IncByStatus(AStatus: TTestStatus;
   var APass, AFail, ASkip: Integer);
   { Increment the appropriate counter based on test status. }
@@ -736,6 +738,18 @@ begin
     Exit(True); { empty prefix matches everything — consistent with Contains/EndsWith }
   Result := (Length(S) >= Length(APrefix)) and
             (Copy(S, 1, Length(APrefix)) = APrefix);
+end;
+
+function StrEndsWith(const AStr, ASuffix: string): Boolean;
+var
+  LStrLen, LSuffixLen: Integer;
+begin
+  LSuffixLen := Length(ASuffix);
+  if LSuffixLen = 0 then
+    Exit(True);
+  LStrLen := Length(AStr);
+  Result := (LStrLen >= LSuffixLen) and
+    (Copy(AStr, LStrLen - LSuffixLen + 1, LSuffixLen) = ASuffix);
 end;
 
 procedure IncByStatus(AStatus: TTestStatus;

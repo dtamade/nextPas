@@ -394,18 +394,9 @@ begin
 end;
 
 function TExpectation.ToEndWith(const ASuffix: string): IExpectation;
-var
-  LMatch: Boolean;
-  LLen: Integer;
 begin
   RequireKind(ekString, 'ToEndWith');
-  LLen := Length(ASuffix);
-  if LLen = 0 then
-    LMatch := True
-  else
-    LMatch := (Length(FStrValue) >= LLen) and
-              (Copy(FStrValue, Length(FStrValue) - LLen + 1, LLen) = ASuffix);
-  CheckMatch(LMatch,
+  CheckMatch(StrEndsWith(FStrValue, ASuffix),
     '"' + FStrValue + '" should not end with "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with "' + ASuffix + '"');
   Result := Self;
@@ -686,10 +677,7 @@ end;
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToEndWithCI');
-  CheckMatch(
-    (Length(FStrValue) >= Length(ASuffix)) and
-    (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
-     Length(ASuffix))) = LowerCase(ASuffix)),
+  CheckMatch(StrEndsWith(LowerCase(FStrValue), LowerCase(ASuffix)),
     '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
   Result := Self;
