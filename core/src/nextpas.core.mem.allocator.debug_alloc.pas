@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 最大跟踪分配数 }
@@ -62,7 +61,7 @@ type
    *  使用方式:
    *    LPtr := LDebug.GetMemWithSource(1024, 'main.pas', 42);
    *}
-  TDebugAllocator = class(TAllocator)
+  TDebugAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     { 跟踪表：指针 → 来源 }
@@ -78,15 +77,15 @@ type
     function FindTracked(APtr: Pointer): Integer;
     procedure Track(APtr: Pointer; ASize: SizeUInt; const AFile: string; ALine: Integer);
     procedure Untrack(APtr: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建调试分配器 }
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 带来源信息的分配 }
     function GetMemWithSource(ASize: SizeUInt; const AFile: string; ALine: Integer): Pointer;
@@ -97,7 +96,7 @@ type
     {** 获取统计信息 }
     function GetStats: TDebugAllocStats;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -168,7 +167,7 @@ begin
   Dec(FTrackedCount);
 end;
 
-function TDebugAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TDebugAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
@@ -183,7 +182,7 @@ begin
   end;
 end;
 
-function TDebugAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TDebugAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
@@ -198,18 +197,14 @@ begin
   end;
 end;
 
-function TDebugAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TDebugAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize: SizeUInt;
   LIdx: Integer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   LIdx := FindTracked(APtr);
   if LIdx >= 0 then
@@ -227,7 +222,7 @@ begin
   end;
 end;
 
-procedure TDebugAllocator.DoFreeMem(APtr: Pointer);
+procedure TDebugAllocator.FreeMem(APtr: Pointer); inline;
 var
   LIdx: Integer;
   LSize: SizeUInt;
@@ -315,9 +310,10 @@ begin
   Result.TrackedCount := FTrackedCount;
 end;
 
-function TDebugAllocator.Traits: TAllocatorTraits;
+function TDebugAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 
