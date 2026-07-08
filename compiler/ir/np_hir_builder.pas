@@ -2056,12 +2056,7 @@ begin
 
   if FAllocaCount >= Length(FAllocas) then
     SetLength(FAllocas, FAllocaCount + 32);
-  FAllocas[FAllocaCount].Name := AName;
-  FAllocas[FAllocaCount].Value := Instr.ResultId;
-  FAllocas[FAllocaCount].TypeId := AType;
-  FAllocas[FAllocaCount].RecordSlots := 0;
-  FAllocas[FAllocaCount].IsVarParam := False;
-  Inc(FAllocaCount);
+  RegisterAllocaEntry(AName, Instr.ResultId, AType, False);
 end;
 
 procedure THIRBuilder.RegisterAllocaEntry(const AName: string;
@@ -6684,14 +6679,7 @@ begin
     FModule.AddInstr(FCurrentFuncId, FEntryBlockId, Instr)
   else
     EmitInstr(Instr);
-  if FAllocaCount >= Length(FAllocas) then
-    SetLength(FAllocas, FAllocaCount + 32);
-  FAllocas[FAllocaCount].Name := AName + '$ts';
-  FAllocas[FAllocaCount].Value := Instr.ResultId;
-  FAllocas[FAllocaCount].TypeId := GetPtrType;
-  FAllocas[FAllocaCount].RecordSlots := 0;
-  FAllocas[FAllocaCount].IsVarParam := False;
-  Inc(FAllocaCount);
+  RegisterAllocaEntry(AName + '$ts', Instr.ResultId, GetPtrType, False);
   { call tstring_init to zero-fill 24B }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.Kind := hikIntrinsic;
