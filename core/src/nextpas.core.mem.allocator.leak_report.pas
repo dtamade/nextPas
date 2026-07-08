@@ -27,7 +27,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 const
@@ -69,7 +68,7 @@ type
    *
    *  @warning 有内存和性能开销，仅用于测试/诊断场景。
    *}
-  TLeakReportAllocator = class(TAllocator)
+  TLeakReportAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FLock: TMemMutex;
@@ -97,12 +96,15 @@ type
       out aAllocId: QWord; out aTag: string; out aCaller: PtrUInt;
       out aTimeMs: QWord): Boolean;
     function NowMs: QWord;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
 
@@ -123,7 +125,7 @@ type
     {** 获取当前时间的毫秒数 (monotonic) }
     class function CurrentTimeMs: QWord;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -155,7 +157,7 @@ begin
   Result := QWord(LTime.tv_sec) * 1000 + QWord(LTime.tv_nsec) div 1000000;
 end;
 
-{ 获取调用者的调用者地址 (跳过 GetMem/DoGetMem 帧) }
+{ 获取调用者的调用者地址 (跳过 GetMem/GetMem 帧) }
 function GetCallerAddress: Pointer;
 begin
   Result := get_caller_addr(get_frame);
@@ -405,7 +407,7 @@ end;
 
 { --- IAllocator implementation --- }
 
-function TLeakReportAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TLeakReportAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LCaller: PtrUInt;
 begin
@@ -424,7 +426,7 @@ begin
   end;
 end;
 
-function TLeakReportAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TLeakReportAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 var
   LCaller: PtrUInt;
 begin
@@ -443,7 +445,7 @@ begin
   end;
 end;
 
-function TLeakReportAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TLeakReportAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
@@ -477,7 +479,7 @@ begin
   end;
 end;
 
-procedure TLeakReportAllocator.DoFreeMem(APtr: Pointer);
+procedure TLeakReportAllocator.FreeMem(APtr: Pointer); inline;
 var
   LSize: SizeUInt;
   LAllocId: QWord;
@@ -490,7 +492,7 @@ begin
   try
     if not MapDelete(PtrUInt(APtr), LSize, LAllocId, LTag, LCaller, LTime) then
       raise EDoubleFree.Create(aeDoubleFree,
-        'TLeakReportAllocator.DoFreeMem: pointer not tracked');
+        'TLeakReportAllocator.FreeMem: pointer not tracked');
     try
       FInner.FreeMem(APtr);
     except
@@ -631,7 +633,7 @@ begin
   end;
 end;
 
-function TLeakReportAllocator.Traits: TAllocatorTraits;
+function TLeakReportAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
