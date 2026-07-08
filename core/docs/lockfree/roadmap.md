@@ -361,8 +361,15 @@ L3: nextpas.core.lockfree.* (数据结构)
 | 文件 | 内容 | 状态 |
 |------|------|------|
 | `nextpas.core.lockfree.rtm.pas` | RTM 内联汇编封装 | ✅ 完成 |
+| `nextpas.core.lockfree.hashmap.rtm.pas` | RTM 优化 HashMap | ✅ 完成 |
 
 **API**: RtmIsSupported, RtmBegin, RtmEnd, RtmAbort, RtmRetryCount
+
+**RTM HashMap 特性**:
+- 读操作 (Find/Contains) 使用 RTM 事务内存，减少锁竞争
+- 写操作使用传统的分片锁
+- 自动检测 RTM 支持，不支持时退化为普通 HashMap
+- 37 个测试全通过
 
 #### 形式化验证
 
