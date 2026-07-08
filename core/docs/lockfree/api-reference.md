@@ -658,6 +658,67 @@ end;
 
 ---
 
+## MultiMap (nextpas.core.lockfree.multimap)
+
+```pascal
+type
+  TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
+
+  generic TLockFreeMultiMap<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt = 16);
+    function Add(const AKey: TKey; const AValue: TValue): TLockFreeMultiMapAddResult;
+    function Find(const AKey: TKey; out AValues: array of TValue): Integer;
+    function Contains(const AKey: TKey): Boolean;
+    function Remove(const AKey: TKey): Boolean;
+    function RemoveValue(const AKey: TKey; const AValue: TValue): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function Count: PtrUInt;
+    function KeyCount: PtrUInt;
+  end;
+```
+
+**特点**:
+- 基于分片锁 HashMap，每个键对应一个值列表
+- 支持一个键添加多个值
+- Remove 删除整个键，RemoveValue 删除特定值
+- Close 后不能添加，但可以读取和删除
+- 适用于索引、标签系统等场景
+
+**使用示例**:
+
+```pascal
+var
+  LMap: specialize TLockFreeMultiMap<String, Integer>;
+  LValues: array[0..9] of Integer;
+  LCount: Integer;
+begin
+  LMap := specialize TLockFreeMultiMap<String, Integer>.Create(16);
+  try
+    // 添加键值对（一个键可以有多个值）
+    LMap.Add('tag1', 100);
+    LMap.Add('tag1', 200);
+    LMap.Add('tag2', 300);
+
+    // 查找键的所有值
+    LCount := LMap.Find('tag1', LValues);
+    // LCount = 2, LValues[0] = 100, LValues[1] = 200
+
+    // 删除特定值
+    LMap.RemoveValue('tag1', 100);
+
+    // 删除整个键
+    LMap.Remove('tag2');
+  finally
+    LMap.Free;
+  end;
+end;
+```
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
