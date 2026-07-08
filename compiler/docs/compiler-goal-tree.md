@@ -54,8 +54,10 @@
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
 | **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | ✅ 2026-07-08 |
+| **D1-D8** | Phase 2：后自举时代 — 类型精确 + 调试信息 + 测试扩展 + 多平台（详见下方）                                                     | C8 | ⏳ |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
+**Phase 2 关键路径** = D1 → D3（调试信息）；D1 → D6 → D8（类型精确 → 性能基准）。
 
 ---
 
@@ -673,3 +675,73 @@
   - 结论: 这些场景中 GetIntType (i64) 作为默认值是合理的
   - Debt 2 核心目标已达成: 变量/常量/长度/元素大小等关键路径已修复
   - smoke + compiler-pass 49/49 全通过
+
+---
+
+## Phase 2：后自举时代（C8 之后）
+
+> C0-C8 完成了从"能编译"到"能自举"的跨越。Phase 2 的目标是让编译器从
+> "能用"变成"好用"——类型精确、可调试、高性能、多平台。
+
+### 已完成但目标树未反映的工作
+
+以下工作在 C8 前后已完成，但之前的目标树节点未记录：
+
+| 工作 | 完成时间 | 说明 |
+|------|----------|------|
+| sema 拆分 | 2026-07-06 | 14246→6632 行（-53%），提取 codegen/validation/declaration 三个 .inc |
+| 错误诊断增强 | 2026-07-06 | `np_diagnostics_enhanced`：未声明标识符 "Did you mean?"（Levenshtein ≤3）|
+| MIR pass manager | 2026-07-06 | HIR→MIR→passes→LLVM 管线贯通，13 个优化 pass |
+| 增量编译 | 2026-07-06 | 文件变更检测 + symbol cache + query DB，全量/增量产出二进制一致 |
+| 并行编译 | 已存在 | `np_parallel_scheduler` + `np_unit_graph` 拓扑排序 |
+| 包管理 | 已存在 | `np_package_manifest` + `np_package_lock` + `np_package_workflow` |
+| 多目标 IR | 2026-07-06 | linux-aarch64 目标配置，LLVM IR 正确生成 |
+| Debt 1 完成 | 2026-07-08 | 结构化表达式表全面迁移，非 ExprId blob 赋值 109→63（-42%）|
+| Debt 2 完成 | 2026-07-08 | 类型宽度传播 174→124（-29%），51 处修正 |
+
+### MIR 优化 pass 清单（已实现）
+
+| Pass | 文件 | 说明 |
+|------|------|------|
+| constfold | `np_mir_pass_constfold.pas` | 常量折叠 |
+| cse | `np_mir_pass_cse.pas` | 公共子表达式消除 |
+| dce | `np_mir_pass_dce.pas` | 死代码消除 |
+| deadarg | `np_mir_pass_deadarg.pas` | 死参数消除 |
+| devirt | `np_mir_pass_devirt.pas` | 去虚拟化 |
+| escape | `np_mir_pass_escape.pas` | 逃逸分析 |
+| inline | `np_mir_pass_inline.pas` | 函数内联 |
+| inline_heuristic | `np_mir_pass_inline_heuristic.pas` | 内联启发式 |
+| licm | `np_mir_pass_licm.pas` | 循环不变代码外提 |
+| registry | `np_mir_pass_registry.pas` | Pass 注册表 |
+| strength_red | `np_mir_pass_strength_red.pas` | 强度削减 |
+| tailcall | `np_mir_pass_tailcall.pas` | 尾调用优化 |
+| vectorize | `np_mir_pass_vectorize.pas` | 向量化 |
+
+### D 系列节点：类型精确 + 调试 + 测试 + 多平台
+
+| 节点 | 内容 | 依赖 | 状态 |
+|------|------|------|------|
+| **D1** | TypeToLlvm 精确化：`htkChar→i8`，`htkArray/htkRecord/htkClass/htkInterface/htkDynArray/htkSet/htkClassRef/htkFunc→ptr`，消除 `else→i64` 防御性回退 | C8 | ⏳ |
+| **D2** | 外部函数参数类型解析：`ProcessExternalFuncDecl` 使用语义模型 TypeId 替代 `GetIntType` 参数回退 | C8 | ⏳ |
+| **D3** | DWARF 调试信息：DICompileUnit + DISubprogram + DILocation，`-g` 选项驱动 | D1 | ⏳ |
+| **D4** | compiler-pass 测试扩展：补充 record 方法、泛型实例化、异常链、interface 委托等边界测试，目标 60+ | C8 | ⏳ |
+| **D5** | compiler-fail 测试扩展：补充类型不匹配、未声明符号、重载歧义等错误路径测试，目标 30+ | C8 | ⏳ |
+| **D6** | LLVM 后端类型审计收尾：审计 124 处 GetIntType 中可改进的 call ABI 返回类型（`LowerCallExpr`/`LowerMethodCallExpr`），用实际 ResultType 替代 i64 | D1 | ⏳ |
+| **D7** | 多平台 CI：macOS (aarch64) + FreeBSD (x86_64) 交叉编译验证 | D1 | ⏳ |
+| **D8** | 性能基准：编译器自编译时间、LLVM IR 质量（指令数/基本块数）、运行时性能对比 FPC | D4 | ⏳ |
+
+**关键路径** = D1 → D3（调试信息依赖类型精确）；D1 → D6 → D8（类型精确 → ABI 收尾 → 性能基准）。
+
+---
+
+## 战略能力矩阵（Phase 2 视角）
+
+| 维度 | 当前状态 | 目标 |
+|------|----------|------|
+| LLVM 优化 | ✅ O2/LTO + 13 MIR passes | 持续调优 pass pipeline |
+| 编译速度 | ✅ 增量编译 + 并行调度 | 基准测试 + 瓶颈分析 |
+| 错误体验 | ✅ "Did you mean?" + 类型名显示 | source span 精确到列 |
+| 现代扩展 | ⏳ 泛型已支持，类型推断/null safety 待做 | 渐进推进 |
+| 调试体验 | ❌ 零调试信息 | DWARF v5 |
+| 类型精确 | ⏳ Debt 2 完成 71%，D1/D6 继续 | 0 处不必要的 i64 |
+| 多平台 | ⏳ aarch64 IR 已验证 | macOS/FreeBSD CI |

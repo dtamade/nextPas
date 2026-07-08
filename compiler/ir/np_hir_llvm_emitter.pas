@@ -193,6 +193,7 @@ begin
   case T.Kind of
     htkVoid: Result := 'void';
     htkBool: Result := 'i1';
+    htkChar: Result := 'i8';
     htkInt: Result := 'i' + IntToStr(T.BitWidth);
     htkFloat:
       case T.FloatWidth of
@@ -202,8 +203,12 @@ begin
       end;
     htkPointer, htkUntypedPtr: Result := 'ptr';
     htkString: Result := 'ptr';
+    { Composite types are always passed by reference in LLVM IR }
+    htkArray, htkDynArray, htkSet,
+    htkRecord, htkClass, htkInterface, htkClassRef,
+    htkFunc: Result := 'ptr';
   else
-    Result := 'i64';
+    Result := 'ptr'; { defensive: unknown types default to ptr, not i64 }
   end;
 end;
 

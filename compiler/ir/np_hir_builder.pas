@@ -3922,26 +3922,40 @@ begin
 
   LBinding := FSemaModel.ForeignProcedureBindingAt(LBindingIdx);
 
-  { Determine return type from symbol }
+  { Determine return type and parameters from symbol }
   LReturnTypeId := GetIntType;
+  LParamCount := 0;
+  LSymbol.SymbolId := 0; { mark as invalid }
   if (LBinding.SymbolId > 0) and (LBinding.SymbolId <= FSemaModel.SymbolCount) then
   begin
     LSymbol := FSemaModel.SymbolAt(LBinding.SymbolId - 1);
     if LSymbol.TypeId > 0 then
       LReturnTypeId := SemanticTypeIdToHirTypeId(LSymbol.TypeId);
     LParamCount := LSymbol.ParamCount;
-  end
-  else
-    LParamCount := 0;
+  end;
 
   LFuncId := FModule.AddFunction(LBinding.PascalName, LReturnTypeId);
   FModule.SetFunctionExternal(LFuncId, True, LBinding.LibraryId,
     LBinding.ExternalSymbolName);
 
-  { Add parameters — use generic int type for now since detailed type
-    resolution for external FFI params is not yet implemented. }
+  { Add parameters — use ParamSignature to infer types where possible.
+    'p'→ptr, 's'→string, 'b'→bool, 'r'/'f'/'c'→ptr, 'i'→i64 fallback. }
   for I := 0 to LParamCount - 1 do
-    FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+  begin
+    if (LSymbol.SymbolId > 0) and (I < Length(LSymbol.ParamSignature)) then
+      case LSymbol.ParamSignature[I + 1] of
+        'p': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
+        's': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
+        'b': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetBoolType, False, False);
+        'r': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
+        'f': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
+        'c': FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
+      else
+        FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+      end
+    else
+      FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+  end;
 end;
 
 procedure THIRBuilder.ProcessRetRuntime(const ANode: TTypedHirNode);
