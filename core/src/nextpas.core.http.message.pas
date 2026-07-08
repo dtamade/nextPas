@@ -196,6 +196,8 @@ function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 204 No Content response. Raises if body is non-empty. }
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+{** @desc Write 200 OK response with no body. Sets status to 200 and writes empty body. }
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1064,6 +1066,12 @@ procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+end;
+
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_OK);
 end;
 
 { THttpRequestBuilder }
