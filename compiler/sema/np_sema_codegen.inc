@@ -5282,6 +5282,7 @@ var
   IsStr: Boolean;
   ArrOperand: string;
   Folded, Value: Int64;
+  LSymbolId, LTypeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -5361,9 +5362,17 @@ begin
           end;
         end
         else
+        begin
+          { 传递变量类型信息给 HIR builder，用于正确创建 alloca 类型 }
+          LSymbolId := FindSymbolByName(Decl.Text);
+          if LSymbolId > 0 then
+            LTypeId := FModel.SymbolTypeId(LSymbolId)
+          else
+            LTypeId := 0;
           FModel.AddTypedHirNode(
-            'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
+            'var-decl-runtime', Decl.Text, LSymbolId, LTypeId, Decl.Text
           );
+        end;
       end;
       Continue;
     end;
