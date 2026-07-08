@@ -290,6 +290,10 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 {** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
 function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt; inline;
+{** @desc Write binary response: sets content-type and content-length, writes TBytes body. }
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt; inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -734,6 +738,14 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteResponseJson(AW, AStatus, AValue);
+end;
+
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseBytes(AW, AStatus,
+    AContentType, ABody);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;

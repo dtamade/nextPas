@@ -161,6 +161,10 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 {** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
 function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+{** @desc Write binary response: sets content-type and content-length, writes TBytes body. }
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -854,6 +858,44 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
 begin
   Result := HttpWriteResponseString(AW, AStatus, 'application/json',
     JsonStringify(AValue));
+end;
+
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
+var
+  LLen: SizeUInt;
+  LTotal: SizeUInt;
+  LWritten: SizeUInt;
+begin
+  RequireResponseWriter(AW);
+  if HttpStatusIsInformational(AStatus) then
+    raise EHttpError.Create(
+      'HTTP response bytes helper requires a final response status');
+  if ResponseStatusMustNotHaveBody(AStatus) then
+  begin
+    if (ABody <> nil) and (Length(ABody) > 0) then
+      raise EHttpError.Create('HTTP response status must not include a body');
+    AW.WriteHeader(AStatus);
+    Exit(0);
+  end;
+
+  LLen := SizeUInt(Length(ABody));
+  if AContentType <> '' then
+    AW.GetHeaders.SetHeader('content-type', AContentType);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(LLen)));
+  AW.WriteHeader(AStatus);
+  LTotal := 0;
+  while LTotal < LLen do
+  begin
+    LWritten := AW.Write(ABody[LTotal], LLen - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('HTTP response writer made zero progress');
+    if LWritten > LLen - LTotal then
+      raise EIOError.Create('HTTP response writer over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
+  Result := LTotal;
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
