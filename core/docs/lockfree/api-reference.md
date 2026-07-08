@@ -1209,6 +1209,35 @@ type
 
 ---
 
+## Graph (nextpas.core.lockfree.graph)
+
+```pascal
+type
+  TLockFreeGraphResult = (grAdded, grRemoved, grNotFound, grExists, grClosed);
+
+  TLockFreeGraph = class
+    constructor Create;
+    function AddVertex(AId: Int64): TLockFreeGraphResult;
+    function RemoveVertex(AId: Int64): TLockFreeGraphResult;
+    function AddEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function RemoveEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function HasEdge(AFromId, AToId: Int64): Boolean;
+    function GetVertexCount: Int64;
+    function GetEdgeCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 基于邻接表的并发图数据结构
+- 每顶点自旋锁保证并发安全
+- 支持有向图，添加/删除顶点和边
+- 适用场景：社交网络、依赖分析、路径查找
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

@@ -44,7 +44,8 @@ uses
   nextpas.core.lockfree.timerwheel,
   nextpas.core.lockfree.timeoutqueue,
   nextpas.core.lockfree.workstealing,
-  nextpas.core.lockfree.snapshot;
+  nextpas.core.lockfree.snapshot,
+  nextpas.core.lockfree.graph;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -318,6 +319,14 @@ type
   generic TSnapshotIsolation<TValue> = class(specialize TSnapshotIsolationImpl<TValue>)
   end;
   TSnapshotResult = nextpas.core.lockfree.snapshot.TSnapshotResult;
+
+  {** @desc 并发无锁图
+    @details 基于邻接表的并发图数据结构。
+      支持 AddVertex/RemoveVertex/AddEdge/RemoveEdge/HasEdge。
+    @see TLockFreeGraph 详细文档和示例
+  }
+  TLockFreeGraph = nextpas.core.lockfree.graph.TLockFreeGraph;
+  TLockFreeGraphResult = nextpas.core.lockfree.graph.TLockFreeGraphResult;
 
 implementation
 

@@ -63,8 +63,9 @@
 | `lockfree.timeoutqueue` | 并发超时队列 | ✅ 完成 | 5 |
 | `lockfree.workstealing` | 并发工作窃取线程池 | ✅ 完成 | 4 |
 | `lockfree.snapshot` | 并发快照隔离 | ✅ 完成 | 6 |
+| `lockfree.graph` | 并发无锁图 | ✅ 完成 | 8 |
 
-**规模**: 44 文件, ~21000 行, 529 测试
+**规模**: 45 文件, ~21500 行, 537 测试
 
 ---
 
@@ -103,7 +104,8 @@
 | test_lockfree_timeoutqueue | 5 | ✅ 全绿 |
 | test_lockfree_workstealing | 4 | ✅ 全绿 |
 | test_lockfree_snapshot | 6 | ✅ 全绿 |
-| **总计** | **529** | **✅ 全绿** |
+| test_lockfree_graph | 8 | ✅ 全绿 |
+| **总计** | **537** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
