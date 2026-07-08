@@ -240,6 +240,9 @@ function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
 {** @desc Write 422 Unprocessable Entity JSON error response. }
 function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -302,6 +305,49 @@ begin
   if Length(ABodyText) > 0 then
     Move(ABodyText[1], LData[0], Length(ABodyText));
   Result := BytesBodyReader(LData);
+end;
+
+{ Escape a string for safe embedding in JSON. Handles ", \, and control chars. }
+function JsonEscapeStr(const AStr: string): string;
+var
+  LI, LJ, LLen: SizeInt;
+  LCh: Char;
+begin
+  LLen := Length(AStr);
+  if LLen = 0 then
+    Exit('');
+  SetLength(Result, LLen * 2); { worst case: every char is escaped }
+  LJ := 1;
+  for LI := 1 to LLen do
+  begin
+    LCh := AStr[LI];
+    case LCh of
+      '"': begin Result[LJ] := '\'; Result[LJ+1] := '"'; Inc(LJ, 2); end;
+      '\': begin Result[LJ] := '\'; Result[LJ+1] := '\'; Inc(LJ, 2); end;
+      #8:  begin Result[LJ] := '\'; Result[LJ+1] := 'b'; Inc(LJ, 2); end;
+      #9:  begin Result[LJ] := '\'; Result[LJ+1] := 't'; Inc(LJ, 2); end;
+      #10: begin Result[LJ] := '\'; Result[LJ+1] := 'n'; Inc(LJ, 2); end;
+      #12: begin Result[LJ] := '\'; Result[LJ+1] := 'f'; Inc(LJ, 2); end;
+      #13: begin Result[LJ] := '\'; Result[LJ+1] := 'r'; Inc(LJ, 2); end;
+    else
+      if Ord(LCh) < 32 then
+      begin
+        Result[LJ] := '\';
+        Result[LJ+1] := 'u';
+        Result[LJ+2] := '0';
+        Result[LJ+3] := '0';
+        Result[LJ+4] := Char(Ord('0') + (Ord(LCh) shr 4));
+        Result[LJ+5] := Char(Ord('0') + (Ord(LCh) and $0F));
+        Inc(LJ, 6);
+      end
+      else
+      begin
+        Result[LJ] := LCh;
+        Inc(LJ);
+      end;
+    end;
+  end;
+  SetLength(Result, LJ - 1);
 end;
 
 function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
@@ -1070,7 +1116,8 @@ function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
 var
   LJson: string;
 begin
-  LJson := '{"error":{"code":"' + ACode + '","message":"' + AMessage + '"}}';
+  LJson := '{"error":{"code":"' + JsonEscapeStr(ACode) +
+    '","message":"' + JsonEscapeStr(AMessage) + '"}}';
   Result := HttpWriteResponseString(AW, AStatus, 'application/json', LJson);
 end;
 
@@ -1120,6 +1167,13 @@ function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNPROCESSABLE_ENTITY, 'unprocessable_entity', AMessage);
+end;
+
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_PAYLOAD_TOO_LARGE, 'payload_too_large', AMessage);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
