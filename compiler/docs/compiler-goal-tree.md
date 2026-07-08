@@ -598,3 +598,8 @@
   - 替换 7 处 EmitConstIntOfType(0/1, GetIntType) 为 EmitConstIntSmart
   - 零值和一值使用最小足够类型
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第七刀：元素大小使用 i64 + 零值使用 EmitConstIntSmart
+  - 元素大小 (8 bytes) 使用 GetIntTypeByWidth(64, True) 替代 GetIntType
+  - 零值使用 EmitConstIntSmart 替代 EmitConstIntOfType(0, GetIntType)
+  - 确保元素大小和零值使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
