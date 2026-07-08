@@ -171,6 +171,10 @@ function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
 {** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+{** @desc Write a redirect response with Location header and optional HTML body.
+   AStatus should be a 3xx code (301/302/303/307/308). }
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
 
 type
   { Fluent builder for HTTP requests.
@@ -942,6 +946,22 @@ begin
   Result := JsonParse(LBody);
   if (Result <> nil) and Result.HasError then
     raise EHttpError.Create('HTTP request body contains invalid JSON');
+end;
+
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
+var
+  LBody: string;
+begin
+  RequireResponseWriter(AW);
+  if not HttpStatusIsRedirect(AStatus) then
+    raise EHttpError.Create('HttpRedirect requires a 3xx redirect status');
+  if ALocation = '' then
+    raise EArgumentError.Create('HttpRedirect location must not be empty');
+  AW.GetHeaders.SetHeader('location', ALocation);
+  LBody := '<html><body>Redirecting to <a href="' + ALocation + '">' +
+    ALocation + '</a></body></html>';
+  HttpWriteResponseString(AW, AStatus, 'text/html', LBody);
 end;
 
 { THttpRequestBuilder }

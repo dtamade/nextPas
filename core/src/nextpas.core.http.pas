@@ -22,8 +22,10 @@ uses
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
+  nextpas.core.http.middleware.logger,
   nextpas.core.http.message,
   nextpas.core.json,
+  nextpas.core.log,
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
@@ -84,6 +86,9 @@ type
 
   { Re-export JSON types }
   IJsonDocument = nextpas.core.json.IJsonDocument;
+
+  { Re-export log types }
+  TLogger = nextpas.core.log.TLogger;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -218,6 +223,10 @@ function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware; inline;
 {** @desc Reject POST/PUT/PATCH requests with unaccepted Content-Type (returns 415). }
 function ContentTypeMiddleware(
   const AAccepted: array of string): IHttpMiddleware; inline;
+{** @desc Request logging middleware using structured logger (method, path, status, duration). }
+function LoggerMiddleware: IHttpMiddleware; inline;
+{** @desc Request logging middleware with custom TLogger instance. }
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -305,6 +314,9 @@ function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string; inline;
 {** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inline;
+{** @desc Write a redirect response with Location header and HTML body. }
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string); inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -520,6 +532,16 @@ function ContentTypeMiddleware(
   const AAccepted: array of string): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.contenttype.ContentTypeMiddleware(AAccepted);
+end;
+
+function LoggerMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
+end;
+
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
@@ -772,6 +794,12 @@ end;
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
 begin
   Result := nextpas.core.http.message.HttpReadRequestBodyJson(AReq);
+end;
+
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirect(AW, AStatus, ALocation);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
