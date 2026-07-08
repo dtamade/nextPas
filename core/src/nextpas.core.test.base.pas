@@ -280,6 +280,7 @@ begin
   AEntry.ShouldFailClass := nil;
   AEntry.ShouldFailContains := '';
   AEntry.ShortSkip   := False;
+  AEntry.Sequential  := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
 end;
