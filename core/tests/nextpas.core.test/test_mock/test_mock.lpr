@@ -1273,6 +1273,69 @@ begin
   WithMock(@TestWhenResetAllClearsImpl);
 end;
 
+{ ── R48: Mock type safety - all types coverage ───────────────────────────── }
+
+procedure TestCalledWithBoolTypeImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Check', [MockBool(True)]);
+  AMock.Verify('Check').CalledWith([MockBool(True)]);
+end;
+
+procedure TestCalledWithBoolType;
+begin
+  WithMock(@TestCalledWithBoolTypeImpl);
+end;
+
+procedure TestCalledWithBoolTypeMismatchImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Check', [MockBool(True)]);
+  { MockStr('true') should NOT match MockBool(True) }
+  AMock.Verify('Check').CalledWith([MockStr('true')]);
+  CheckTrue(False, 'Should fail: MockStr(''true'') ≠ MockBool(True)');
+end;
+
+procedure TestCalledWithBoolTypeMismatch;
+begin
+  ExpectFailWithMock(@TestCalledWithBoolTypeMismatchImpl);
+end;
+
+procedure TestCalledWithDoubleTypeImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Calc', [MockDouble(3.14)]);
+  AMock.Verify('Calc').CalledWith([MockDouble(3.14)]);
+end;
+
+procedure TestCalledWithDoubleType;
+begin
+  WithMock(@TestCalledWithDoubleTypeImpl);
+end;
+
+procedure TestCalledWithDoubleTypeMismatchImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Calc', [MockDouble(3.14)]);
+  { MockStr('3.14') should NOT match MockDouble(3.14) }
+  AMock.Verify('Calc').CalledWith([MockStr('3.14')]);
+  CheckTrue(False, 'Should fail: MockStr(''3.14'') ≠ MockDouble(3.14)');
+end;
+
+procedure TestCalledWithDoubleTypeMismatch;
+begin
+  ExpectFailWithMock(@TestCalledWithDoubleTypeMismatchImpl);
+end;
+
+procedure TestCalledExactlyWithMultipleTypedArgsImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Op', [MockInt(1), MockStr('a')]);
+  AMock.RecordCallTyped('Op', [MockInt(1), MockStr('a')]);
+  AMock.RecordCallTyped('Op', [MockInt(2), MockStr('b')]);
+  AMock.Verify('Op').CalledExactlyWith(2, [MockInt(1), MockStr('a')]);
+end;
+
+procedure TestCalledExactlyWithMultipleTypedArgs;
+begin
+  WithMock(@TestCalledExactlyWithMultipleTypedArgsImpl);
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1362,6 +1425,13 @@ begin
   Suite.Test('TestCalledWithTypedDistinguishesTypes', @TestCalledWithTypedDistinguishesTypes);
   Suite.Test('TestCalledExactlyWithTypedSuccess', @TestCalledExactlyWithTypedSuccess);
   Suite.Test('TestCalledExactlyWithTypedFail', @TestCalledExactlyWithTypedFail);
+
+  { R48: Mock type safety - all types coverage }
+  Suite.Test('TestCalledWithBoolType', @TestCalledWithBoolType);
+  Suite.Test('TestCalledWithBoolTypeMismatch', @TestCalledWithBoolTypeMismatch);
+  Suite.Test('TestCalledWithDoubleType', @TestCalledWithDoubleType);
+  Suite.Test('TestCalledWithDoubleTypeMismatch', @TestCalledWithDoubleTypeMismatch);
+  Suite.Test('TestCalledExactlyWithMultipleTypedArgs', @TestCalledExactlyWithMultipleTypedArgs);
 
   { G2: Mock type paths }
   Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);
