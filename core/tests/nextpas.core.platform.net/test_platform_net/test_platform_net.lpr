@@ -254,6 +254,50 @@ begin
   platform_socket_close(LRecver);
 end;
 
+procedure TestCreateInvalidFamily;
+var
+  S: TPlatformSocket;
+begin
+  { Invalid address family should fail }
+  Check(platform_socket_create(999, PLATFORM_SOCK_STREAM, 0, S) <> 0,
+    'invalid family returns error');
+end;
+
+procedure TestCreateInvalidType;
+var
+  S: TPlatformSocket;
+begin
+  { Invalid socket type should fail }
+  Check(platform_socket_create(PLATFORM_AF_INET, 999, 0, S) <> 0,
+    'invalid type returns error');
+end;
+
+procedure TestShutdownInvalidSocket;
+var
+  S: TPlatformSocket;
+begin
+  { Shutdown on closed socket should fail gracefully }
+  S.Value := -1;
+  platform_socket_shutdown(S, PLATFORM_SHUT_WR);
+  Check(True, 'shutdown on invalid socket did not crash');
+end;
+
+procedure TestLoopback4Addr;
+var
+  LAddr: TPlatformSockAddr;
+begin
+  Check(platform_sockaddr_loopback4(8080, LAddr) = 0, 'loopback4 port 8080');
+  Check(LAddr.Len > 0, 'addr len > 0');
+end;
+
+procedure TestLoopback6Addr;
+var
+  LAddr: TPlatformSockAddr;
+begin
+  Check(platform_sockaddr_loopback6(9090, LAddr) = 0, 'loopback6 port 9090');
+  Check(LAddr.Len > 0, 'addr len > 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.net');
   T.Test('create/close TCP', @TestCreateClose);
@@ -265,5 +309,10 @@ begin
   T.Test('double close', @TestDoubleClose);
   T.Test('connect refused', @TestConnectRefused);
   T.Test('IPv6 UDP send/recv', @TestIpv6UdpSendRecv);
+  T.Test('create invalid family', @TestCreateInvalidFamily);
+  T.Test('create invalid type', @TestCreateInvalidType);
+  T.Test('shutdown invalid socket', @TestShutdownInvalidSocket);
+  T.Test('loopback4 addr', @TestLoopback4Addr);
+  T.Test('loopback6 addr', @TestLoopback6Addr);
   if not T.Run then Halt(1);
 end.
