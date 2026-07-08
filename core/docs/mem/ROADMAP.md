@@ -82,3 +82,14 @@
 | P20-4 | TPrefixAllocator | 前缀分配器，O(1) 大小查询 | 7 |
 
 **模块总计**: 76 allocator 文件 / ~1178 测试
+
+## Phase 21 — 高级诊断分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P21-1 | TScopedAllocator | 作用域分配器，析构自动释放 | 7 |
+| P21-2 | TSentinelAllocator | 哨兵分配器，溢出/double-free 检测 | 7 |
+| P21-3 | TSizeClassAllocator | 大小类分配器，16 级 freelist | 7 |
+| P21-4 | TPredictionAllocator | 预测分配器，热点分析 | 7 |
+
+**模块总计**: 80 allocator 文件 / ~1206 测试
