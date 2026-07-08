@@ -660,3 +660,14 @@
   - 全局变量声明: 使用 DeclType 替代 GetIntType
   - 确保全局变量使用声明时的实际类型宽度
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 审计完成：剩余 GetIntType 使用场景分析
+  - 剩余 125 处 GetIntType 主要是:
+    1. GEP 索引操作 — 正确使用 i64
+    2. Alloca 占位符 — 被 emitter 覆盖
+    3. 类型无关操作 — i64 作为安全默认值
+    4. 函数返回类型/参数类型 — 需要 ABI 信息
+    5. 原子操作 — 通常使用 i64
+    6. 内存操作 — 通常使用 i64
+  - 结论: 这些场景中 GetIntType (i64) 作为默认值是合理的
+  - Debt 2 核心目标已达成: 变量/常量/长度/元素大小等关键路径已修复
+  - smoke + compiler-pass 49/49 全通过
