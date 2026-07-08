@@ -25,8 +25,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 最大 CoW 引用数 }
@@ -62,7 +61,7 @@ type
    *    3. 写入共享引用时自动复制（通过 WriteNotify）
    *    4. Free 释放引用
    *}
-  TCowAllocator = class(TAllocator)
+  TCowAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     { 引用表 }
@@ -73,15 +72,15 @@ type
     FSharedAllocs: UInt64;
     FCopiedOnWrite: UInt64;
     function FindRef(APtr: Pointer): Integer;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建 CoW 分配器 }
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 创建共享引用（返回新指针，与原始共享数据） }
     function Share(APtr: Pointer): Pointer;
@@ -92,7 +91,7 @@ type
     {** 是否为共享引用 }
     function IsShared(APtr: Pointer): Boolean;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -146,7 +145,7 @@ begin
   Result := -1;
 end;
 
-function TCowAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCowAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LI: Integer;
 begin
@@ -155,7 +154,7 @@ begin
   while (LI < COW_MAX_REFS) and (FRefs[LI].OriginalPtr <> nil) do
     Inc(LI);
   if LI >= COW_MAX_REFS then
-    raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.DoGetMem: too many refs');
+    raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.GetMem: too many refs');
 
   { 从内部分配器分配数据 }
   FRefs[LI].DataPtr := FInner.GetMem(ASize);
@@ -174,42 +173,38 @@ begin
   Inc(FTotalAllocs);
 end;
 
-function TCowAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCowAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TCowAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCowAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LIdx: Integer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   LIdx := FindRef(APtr);
   if LIdx < 0 then
-    raise EAllocError.Create(aeInvalidPointer, 'TCowAllocator.DoReallocMem: unknown pointer');
+    raise EAllocError.Create(aeInvalidPointer, 'TCowAllocator.ReallocMem: unknown pointer');
 
   { 分配新块，复制数据 }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
   begin
     if FRefs[FindRef(Result)].DataSize < FRefs[LIdx].DataSize then
       Move(FRefs[LIdx].DataPtr^, Result^, FRefs[FindRef(Result)].DataSize)
     else
       Move(FRefs[LIdx].DataPtr^, Result^, FRefs[LIdx].DataSize);
-    DoFreeMem(APtr);
+    FreeMem(APtr);
   end;
 end;
 
-procedure TCowAllocator.DoFreeMem(APtr: Pointer);
+procedure TCowAllocator.FreeMem(APtr: Pointer); inline;
 var
   LIdx: Integer;
 begin
@@ -312,9 +307,10 @@ begin
   Result := (LIdx >= 0) and FRefs[LIdx].IsShared;
 end;
 
-function TCowAllocator.Traits: TAllocatorTraits;
+function TCowAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 
