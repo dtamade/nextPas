@@ -1,2 +1,2 @@
-PROGRAM := test_pool
+PROGRAM := test_stack
 include ../../common.mk
