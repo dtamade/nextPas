@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** 压缩事件回调
@@ -60,7 +59,7 @@ type
    *
    *  @warning 压缩期间分配器不可用（暂停所有分配）
    *}
-  TCompactAllocator = class(TAllocator)
+  TCompactAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FThreshold: Double;
@@ -78,11 +77,6 @@ type
     procedure GrowTracking;
     procedure TrackAlloc(APtr: Pointer; ASize: SizeUInt);
     procedure UntrackAlloc(APtr: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建碎片整理分配器
      *  @param AInner 内部分配器
@@ -90,6 +84,11 @@ type
      *}
     constructor Create(AInner: IAllocator; AThreshold: Double = 0.3);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 设置压缩回调 }
     procedure SetCompactHandler(AHandler: TCompactEvent; AUserData: Pointer);
@@ -104,7 +103,7 @@ type
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -185,32 +184,28 @@ begin
   end;
 end;
 
-function TCompactAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCompactAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
     TrackAlloc(Result, ASize);
 end;
 
-function TCompactAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCompactAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
     TrackAlloc(Result, ASize);
 end;
 
-function TCompactAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCompactAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize: SizeUInt;
   LI: SizeUInt;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   { 查找旧大小 }
   LOldSize := 0;
@@ -232,7 +227,7 @@ begin
   end;
 end;
 
-procedure TCompactAllocator.DoFreeMem(APtr: Pointer);
+procedure TCompactAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr = nil then Exit;
   UntrackAlloc(APtr);
@@ -312,7 +307,7 @@ begin
   Result.CurrentFragmentation := FragmentationRatio;
 end;
 
-function TCompactAllocator.Traits: TAllocatorTraits;
+function TCompactAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
