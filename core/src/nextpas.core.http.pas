@@ -20,6 +20,7 @@ uses
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.http.static,
@@ -210,6 +211,8 @@ function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
 function RecoveryMiddleware: IHttpMiddleware; inline;
 {** @desc Add X-Response-Time header (duration in ms) }
 function ResponseTimeMiddleware: IHttpMiddleware; inline;
+{** @desc Reject requests with Content-Length > AMaxBytes (returns 413). }
+function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -497,6 +500,11 @@ end;
 function ResponseTimeMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.timeout.ResponseTimeMiddleware;
+end;
+
+function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodylimit.BodyLimitMiddleware(AMaxBytes);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;

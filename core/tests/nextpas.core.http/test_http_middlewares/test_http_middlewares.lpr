@@ -15,6 +15,7 @@ uses
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.bodylimit,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -40,8 +41,10 @@ type
     FMethod: THttpMethod;
     FUrl: TUrl;
     FHeaders: IHttpHeaders;
+    FContentLength: Int64;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
+    procedure SetContentLength(const AValue: Int64);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
@@ -105,6 +108,12 @@ begin
   FUrl := Default(TUrl);
   FUrl.Path := APath;
   FHeaders := NewHttpHeaders;
+  FContentLength := 0;
+end;
+
+procedure TMockRequest.SetContentLength(const AValue: Int64);
+begin
+  FContentLength := AValue;
 end;
 
 function TMockRequest.GetMethod: THttpMethod;
@@ -129,7 +138,7 @@ function TMockRequest.GetBody: IReader;
 begin Result := nil; end;
 
 function TMockRequest.GetContentLength: Int64;
-begin Result := 0; end;
+begin Result := FContentLength; end;
 
 function TMockRequest.GetTrailers: IHttpHeaders;
 begin Result := nil; end;
@@ -609,6 +618,156 @@ begin
   Check(Pos('ms', LVal) > 0, 'X-Response-Time contains ms suffix');
 end;
 
+{ === BodyLimit Tests === }
+
+procedure TestBodyLimitUnderLimitPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(512);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'under limit passes through');
+end;
+
+procedure TestBodyLimitOverLimitRejects;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(2048);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'over limit returns 413');
+  Check(Pos('too large', LWObj.Body) > 0, 'body contains error message');
+end;
+
+procedure TestBodyLimitExactLimitPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(1024);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'exact limit passes through');
+end;
+
+procedure TestBodyLimitNoContentLengthPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'no content-length passes through');
+end;
+
+procedure TestBodyLimitZeroContentLengthPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(0);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'zero content-length passes through');
+end;
+
+procedure TestBodyLimitRejectsHandlerNotCalled;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(100)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(999);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'reject returns 413');
+  Check(not LHandlerCalled, 'handler not called when rejected');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -635,5 +794,12 @@ begin
   T.Test('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
   T.Test('Timeout: slow handler still works', @TestTimeoutSlowHandler);
   T.Test('Timeout: X-Response-Time has ms suffix', @TestTimeoutResponseTimeValue);
+  { BodyLimit }
+  T.Test('BodyLimit: under limit passes through', @TestBodyLimitUnderLimitPasses);
+  T.Test('BodyLimit: over limit returns 413', @TestBodyLimitOverLimitRejects);
+  T.Test('BodyLimit: exact limit passes through', @TestBodyLimitExactLimitPasses);
+  T.Test('BodyLimit: no content-length passes through', @TestBodyLimitNoContentLengthPasses);
+  T.Test('BodyLimit: zero content-length passes through', @TestBodyLimitZeroContentLengthPasses);
+  T.Test('BodyLimit: handler not called on reject', @TestBodyLimitRejectsHandlerNotCalled);
   if not T.Run then Halt(1);
 end.
