@@ -4,30 +4,132 @@ unit nextpas.core.platform.fmt;
 
 interface
 
+{** @desc 格式化有符号整数为字符串
+    @param AValue 整数值
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数（不含 null 终止符） *}
 function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 格式化无符号整数为字符串
+    @param AValue 无符号整数值
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数（不含 null 终止符） *}
 function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 格式化无符号整数为十六进制字符串
+    @param AValue 无符号整数值
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数（不含 null 终止符） *}
 function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 格式化浮点数为字符串
+    @param AValue 浮点数值
+    @param ADecimals 小数位数
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数（不含 null 终止符） *}
 function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 格式化缓冲区（简单 sprintf 替代）
+    @param AFmt 格式字符串
+    @param AArgs 参数数组
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数（不含 null 终止符） *}
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
+{** @desc 解析字符串为有符号整数
+    @param AStr 输入字符串
+    @param ALen 字符串长度
+    @param AValue 输出整数值
+    @return 0 成功，PLATFORM_ERR_INVALID 解析失败 *}
 function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int64): Int32;
+
+{** @desc 解析字符串为无符号整数
+    @param AStr 输入字符串
+    @param ALen 字符串长度
+    @param AValue 输出无符号整数值
+    @return 0 成功，PLATFORM_ERR_INVALID 解析失败 *}
 function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+
+{** @desc 解析十六进制字符串为无符号整数
+    @param AStr 输入字符串
+    @param ALen 字符串长度
+    @param AValue 输出无符号整数值
+    @return 0 成功，PLATFORM_ERR_INVALID 解析失败 *}
 function platform_parse_hex(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+
+{** @desc 解析字符串为浮点数
+    @param AStr 输入字符串
+    @param ALen 字符串长度
+    @param AValue 输出浮点数值
+    @return 0 成功，PLATFORM_ERR_INVALID 解析失败 *}
 function platform_parse_float(const AStr: PAnsiChar; ALen: Int32; out AValue: Double): Int32;
 
+{** @desc 转换字符串为小写
+    @param ASrc 源字符串
+    @param ALen 源字符串长度
+    @param ADst 输出缓冲区
+    @param ADstLen 缓冲区大小
+    @return 实际写入字节数 *}
 function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
+
+{** @desc 转换字符串为大写
+    @param ASrc 源字符串
+    @param ALen 源字符串长度
+    @param ADst 输出缓冲区
+    @param ADstLen 缓冲区大小
+    @return 实际写入字节数 *}
 function platform_str_upper(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
+
+{** @desc 去除字符串首尾空白
+    @param ASrc 源字符串
+    @param ALen 源字符串长度
+    @param ADst 输出缓冲区
+    @param ADstLen 缓冲区大小
+    @return 实际写入字节数 *}
 function platform_str_trim(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
+
+{** @desc 不区分大小写比较两个字符串
+    @param A 第一个字符串
+    @param ALen 第一个字符串长度
+    @param B 第二个字符串
+    @param BLen 第二个字符串长度
+    @return True 两字符串相等 *}
 function platform_str_equal_nocase(const A: PAnsiChar; ALen: Int32;
   const B: PAnsiChar; BLen: Int32): Boolean;
+
+{** @desc 在字符串中查找子串
+    @param AHaystack 被搜索字符串
+    @param AHLen 被搜索字符串长度
+    @param ANeedle 要查找的子串
+    @param ANLen 子串长度
+    @return 子串位置（0-based），未找到返回 -1 *}
 function platform_str_find(const AHaystack: PAnsiChar; AHLen: Int32;
   const ANeedle: PAnsiChar; ANLen: Int32): Int32;
+
+{** @desc 检查字符串是否以指定前缀开头
+    @param AStr 输入字符串
+    @param ALen 输入字符串长度
+    @param APrefix 前缀字符串
+    @param APLen 前缀长度
+    @return True 以指定前缀开头 *}
 function platform_str_starts_with(const AStr: PAnsiChar; ALen: Int32;
   const APrefix: PAnsiChar; APLen: Int32): Boolean;
+
+{** @desc 检查字符串是否以指定后缀结尾
+    @param AStr 输入字符串
+    @param ALen 输入字符串长度
+    @param ASuffix 后缀字符串
+    @param ASLen 后缀长度
+    @return True 以指定后缀结尾 *}
 function platform_str_ends_with(const AStr: PAnsiChar; ALen: Int32;
   const ASuffix: PAnsiChar; ASLen: Int32): Boolean;
 
