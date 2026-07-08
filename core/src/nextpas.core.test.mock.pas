@@ -1183,7 +1183,6 @@ end;
 procedure TMock.VerifyNoMoreInteractions;
 var
   LSetupNames: specialize TArray<string>;
-  LSetupSet: specialize TArray<Boolean>;
   LUncalled, LUnexpected: string;
   I, J: Integer;
   LFound: Boolean;
