@@ -721,10 +721,10 @@
 
 | 节点 | 内容 | 依赖 | 状态 |
 |------|------|------|------|
-| **D1** | TypeToLlvm 精确化：`htkChar→i8`，`htkArray/htkRecord/htkClass/htkInterface/htkDynArray/htkSet/htkClassRef/htkFunc→ptr`，消除 `else→i64` 防御性回退 | C8 | ⏳ |
-| **D2** | 外部函数参数类型解析：`ProcessExternalFuncDecl` 使用语义模型 TypeId 替代 `GetIntType` 参数回退 | C8 | ⏳ |
+| **D1** | TypeToLlvm 精确化：`htkChar→i8`，`htkArray/htkRecord/htkClass/htkInterface/htkDynArray/htkSet/htkClassRef/htkFunc→ptr`，消除 `else→i64` 防御性回退 | C8 | ✅ 2026-07-06 |
+| **D2** | 外部函数参数类型解析：`ProcessExternalFuncDecl` 使用 ParamSignature 推断参数类型（`p`/`s`/`r`/`f`/`c`→ptr, `b`→bool, `i`→i64） | C8 | ✅ 2026-07-06 |
 | **D3** | DWARF 调试信息：DICompileUnit + DISubprogram + DILocation，`-g` 选项驱动 | D1 | ⏳ |
-| **D4** | compiler-pass 测试扩展：补充 record 方法、泛型实例化、异常链、interface 委托等边界测试，目标 60+ | C8 | ⏳ |
+| **D4** | compiler-pass 测试扩展：新增 exception_handling + dynamic_array/set/enum 测试，目标 60+ | C8 | ✅ 2026-07-06 (51/51) |
 | **D5** | compiler-fail 测试扩展：补充类型不匹配、未声明符号、重载歧义等错误路径测试，目标 30+ | C8 | ⏳ |
 | **D6** | LLVM 后端类型审计收尾：审计 124 处 GetIntType 中可改进的 call ABI 返回类型（`LowerCallExpr`/`LowerMethodCallExpr`），用实际 ResultType 替代 i64 | D1 | ⏳ |
 | **D7** | 多平台 CI：macOS (aarch64) + FreeBSD (x86_64) 交叉编译验证 | D1 | ⏳ |
@@ -743,5 +743,5 @@
 | 错误体验 | ✅ "Did you mean?" + 类型名显示 | source span 精确到列 |
 | 现代扩展 | ⏳ 泛型已支持，类型推断/null safety 待做 | 渐进推进 |
 | 调试体验 | ❌ 零调试信息 | DWARF v5 |
-| 类型精确 | ⏳ Debt 2 完成 71%，D1/D6 继续 | 0 处不必要的 i64 |
+| 类型精确 | ✅ D1 TypeToLlvm 精确化 + D2 FFI 参数类型 + Debt 2 完成 | 0 处不必要的 i64 |
 | 多平台 | ⏳ aarch64 IR 已验证 | macOS/FreeBSD CI |
