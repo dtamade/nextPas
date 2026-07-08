@@ -3224,13 +3224,13 @@ begin
       end;
       V := FindAlloca(Arg + '$len');
       if V <> 0 then
-        S.Push(EmitLoad(GetIntType, V))
+        S.Push(EmitLoad(FindAllocaType(Arg + '$len'), V))
       else
       begin
         EnsureAlloca(Arg + '$len', GetIntType);
         V := FindAlloca(Arg + '$len');
         if V <> 0 then
-          S.Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(FindAllocaType(Arg + '$len'), V));
       end;
     end
     else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
