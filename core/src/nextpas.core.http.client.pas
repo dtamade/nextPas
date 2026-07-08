@@ -15,6 +15,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
+  nextpas.core.json,
   nextpas.core.http.intf;
 
 type
@@ -282,6 +283,21 @@ function HttpDeleteString(const AClient: IHttpClient;
 {** @desc HEAD url, ensure 2xx, return response (headers only, no body). Raises on non-2xx.
    Useful for checking resource existence or reading Content-Length/ETag headers. }
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+{** @desc OPTIONS url, ensure 2xx, return response. Raises on non-2xx.
+   Useful for CORS preflight or discovering allowed methods. }
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+{** @desc POST JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc PUT JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc PATCH JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -297,7 +313,6 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
-  nextpas.core.json,
   nextpas.core.http.impl.registry,
   nextpas.core.platform.thread;
 
@@ -2511,6 +2526,72 @@ function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse
 begin
   Result := AClient.Head(AUrl);
   HttpEnsureSuccess(Result);
+end;
+
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := AClient.Options(AUrl);
+  HttpEnsureSuccess(Result);
+end;
+
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Delete(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
 end;
 
 end.
