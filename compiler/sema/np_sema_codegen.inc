@@ -53,6 +53,117 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
     Result := AFieldIndex >= 0;
   end;
 
+  { 辅助：尝试创建结构化 int literal 表达式 }
+  function TryEmitIntLiteral(Value: Int64): Boolean;
+  var
+    LId: LongInt;
+  begin
+    LId := FModel.AddHirExpr(
+      shekIntLiteral, 0, 0, [], Value, 0.0, '', '', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
+  { 辅助：尝试创建结构化 string literal 表达式 }
+  function TryEmitStringLiteral(const AText: string): Boolean;
+  var
+    LId: LongInt;
+  begin
+    LId := FModel.AddHirExpr(
+      shekStringLiteral, 0, 0, [], 0, 0.0, AText, '', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
+  { 辅助：尝试创建结构化 nil literal 表达式 }
+  function TryEmitNilLiteral: Boolean;
+  var
+    LId: LongInt;
+  begin
+    LId := FModel.AddHirExpr(
+      shekNilLiteral, 0, 0, [], 0, 0.0, '', '', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
+  { 辅助：尝试创建结构化 exc_load intrinsic 表达式 }
+  function TryEmitExcLoad: Boolean;
+  var
+    LId: LongInt;
+  begin
+    LId := FModel.AddHirExpr(
+      shekIntrinsic, 0, 0, [], 0, 0.0, '', 'exc_load', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
+  { 辅助：尝试创建结构化 symbol value 表达式 }
+  function TryEmitSymbolValue(const AName: string): Boolean;
+  var
+    LSymbolId, LTypeId, LId: LongInt;
+  begin
+    LSymbolId := FindSymbolByName(AName);
+    if LSymbolId <= 0 then
+      Exit(False);
+    LTypeId := FModel.SymbolTypeId(LSymbolId);
+    LId := FModel.AddHirExpr(
+      shekSymbolValue, LTypeId, LSymbolId, [], 0, 0.0, '', '', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
+  { 辅助：尝试创建结构化 field self 表达式 }
+  function TryEmitFieldSelf(AFieldIndex: Int64; AIsPtr: Boolean): Boolean;
+  var
+    LSelfId, LSelfTypeId, LFieldExprId, LId: LongInt;
+    LPChildren: array of LongInt;
+  begin
+    LSelfId := FindSymbolByName('Self');
+    if LSelfId <= 0 then
+      Exit(False);
+    LSelfTypeId := FModel.SymbolTypeId(LSelfId);
+    LFieldExprId := FModel.AddHirExpr(
+      shekSymbolValue, LSelfTypeId, LSelfId, [], 0, 0.0, '', '', 0, shvcAddress);
+    if LFieldExprId <= 0 then
+      Exit(False);
+    SetLength(LPChildren, 1);
+    LPChildren[0] := LFieldExprId;
+    LId := FModel.AddHirExpr(
+      shekField, 0, 0, LPChildren, AFieldIndex, 0.0, '', '', 0, shvcScalar);
+    if LId > 0 then
+    begin
+      AExprId := LId;
+      ABlob := 'expr ' + IntToStr(LId) + #10;
+      Exit(True);
+    end;
+    Result := False;
+  end;
+
 var
   Folded: Int64;
   CharValue: LongInt;
@@ -72,87 +183,37 @@ begin
     Exit(True);
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'nil') then
   begin
-    { 迁移到结构化表达式: nil }
-    ExprId := FModel.AddHirExpr(
-      shekNilLiteral,
-      0, { TypeId }
-      0, { SymbolId }
-      [], { Children }
-      0, { LiteralInt }
-      0.0, { LiteralFloat }
-      '', { LiteralStr }
-      '', { Op }
-      0, { SourceOffset }
-      shvcScalar { ValueClass }
-    );
-    if ExprId > 0 then
-    begin
-      AExprId := ExprId;
-      ABlob := 'expr ' + IntToStr(ExprId) + #10;
+    if TryEmitNilLiteral then
       Exit(True);
-    end;
-    { Fallback }
     ABlob := 'null' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'ExceptObject') then
   begin
+    if TryEmitExcLoad then
+      Exit(True);
     ABlob := 'exc_load' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
     (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, 'ExceptObject') then
   begin
+    if TryEmitExcLoad then
+      Exit(True);
     ABlob := 'exc_load' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
   begin
-    { 迁移到结构化表达式: True -> int 1 }
-    ExprId := FModel.AddHirExpr(
-      shekIntLiteral,
-      0, { TypeId }
-      0, { SymbolId }
-      [], { Children }
-      1, { LiteralInt: True = 1 }
-      0.0, { LiteralFloat }
-      '', { LiteralStr }
-      '', { Op }
-      0, { SourceOffset }
-      shvcScalar { ValueClass }
-    );
-    if ExprId > 0 then
-    begin
-      AExprId := ExprId;
-      ABlob := 'expr ' + IntToStr(ExprId) + #10;
+    if TryEmitIntLiteral(1) then
       Exit(True);
-    end;
-    { Fallback }
     ABlob := 'int 1' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
   begin
-    { 迁移到结构化表达式: False -> int 0 }
-    ExprId := FModel.AddHirExpr(
-      shekIntLiteral,
-      0, { TypeId }
-      0, { SymbolId }
-      [], { Children }
-      0, { LiteralInt: False = 0 }
-      0.0, { LiteralFloat }
-      '', { LiteralStr }
-      '', { Op }
-      0, { SourceOffset }
-      shvcScalar { ValueClass }
-    );
-    if ExprId > 0 then
-    begin
-      AExprId := ExprId;
-      ABlob := 'expr ' + IntToStr(ExprId) + #10;
+    if TryEmitIntLiteral(0) then
       Exit(True);
-    end;
-    { Fallback }
     ABlob := 'int 0' + #10;
     Exit(True);
   end;
@@ -243,6 +304,8 @@ begin
     TypeMetaFieldIsStr(FCurrentMethodClass, ANode.ChildAt(1).Text) then
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(1).Text);
+    if TryEmitFieldSelf(Folded + 1, False) then
+      Exit(True);
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
@@ -255,6 +318,8 @@ begin
     TypeMetaFieldIsDynArray(FCurrentMethodClass, ANode.ChildAt(1).Text) then
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(1).Text);
+    if TryEmitFieldSelf(Folded + 1, False) then
+      Exit(True);
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
@@ -275,6 +340,8 @@ begin
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass,
       ANode.ChildAt(1).ChildAt(1).Text);
+    if TryEmitFieldSelf(Folded + 1, False) then
+      Exit(True);
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
@@ -315,33 +382,17 @@ begin
       (Length(ANode.ChildAt(1).Text) = 3) and
       (ANode.ChildAt(1).Text[1] = '''') then
     begin
-      { 迁移到结构化表达式: char literal }
       CharValue := Ord(ANode.ChildAt(1).Text[2]);
-      ExprId := FModel.AddHirExpr(
-        shekIntLiteral,
-        0, { TypeId }
-        0, { SymbolId }
-        [], { Children }
-        CharValue, { LiteralInt }
-        0.0, { LiteralFloat }
-        '', { LiteralStr }
-        '', { Op }
-        0, { SourceOffset }
-        shvcScalar { ValueClass }
-      );
-      if ExprId > 0 then
+      if TryEmitIntLiteral(CharValue) then
       begin
-        AExprId := ExprId;
-        ABlob := 'expr ' + IntToStr(ExprId) + #10;
         if SameText(ANode.ChildAt(0).Text, 'Pred') then
-          ABlob := ABlob + 'expr ' + IntToStr(ExprId) + #10 + 'int 1' + #10 + 'sub' + #10
+          ABlob := ABlob + 'expr ' + IntToStr(AExprId) + #10 + 'int 1' + #10 + 'sub' + #10
         else if SameText(ANode.ChildAt(0).Text, 'Succ') then
-          ABlob := ABlob + 'expr ' + IntToStr(ExprId) + #10 + 'int 1' + #10 + 'add' + #10
+          ABlob := ABlob + 'expr ' + IntToStr(AExprId) + #10 + 'int 1' + #10 + 'add' + #10
         else if SameText(ANode.ChildAt(0).Text, 'Abs') then
           ABlob := ABlob + 'abs' + #10;
         Exit(True);
       end;
-      { Fallback }
       ABlob := 'int ' + IntToStr(CharValue) + #10;
       if SameText(ANode.ChildAt(0).Text, 'Pred') then
         ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
@@ -680,26 +731,8 @@ begin
        FModel.LookupConstValue(ANode.Text, Folded)) then
       if EvaluateIntegerConstant(ANode, Folded) then
       begin
-        { 迁移到结构化表达式: 常量整数 }
-        ExprId := FModel.AddHirExpr(
-          shekIntLiteral,
-          0, { TypeId }
-          0, { SymbolId }
-          [], { Children }
-          Folded, { LiteralInt }
-          0.0, { LiteralFloat }
-          '', { LiteralStr }
-          '', { Op }
-          0, { SourceOffset }
-          shvcScalar { ValueClass }
-        );
-        if ExprId > 0 then
-        begin
-          AExprId := ExprId;
-          ABlob := 'expr ' + IntToStr(ExprId) + #10;
+        if TryEmitIntLiteral(Folded) then
           Exit(True);
-        end;
-        { Fallback }
         ABlob := 'int ' + IntToStr(Folded) + #10;
         Exit(True);
       end;
@@ -709,6 +742,8 @@ begin
     (TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text) >= 0) then
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text);
+    if TryEmitFieldSelf(Folded, TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.Text)) then
+      Exit(True);
     ABlob := 'field self ' + IntToStr(Folded);
     if TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.Text) then
       ABlob := ABlob + ' p' + #10
@@ -758,6 +793,8 @@ begin
   begin
     Folded := TypeMetaFieldIndex(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text,
       ANode.ChildAt(1).Text);
+    if TryEmitFieldSelf(Folded, False) then
+      Exit(True);
     ABlob := 'field self ' + IntToStr(Folded) + #10;
     Exit(True);
   end;
