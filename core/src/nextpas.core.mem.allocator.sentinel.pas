@@ -31,8 +31,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 默认隔离队列深度 }
@@ -46,7 +45,7 @@ type
    *
    *  @warning 有内存和性能开销，仅用于测试/诊断场景。
    *}
-  TSentinelAllocator = class(TAllocator)
+  TSentinelAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FNextAllocId: QWord;
@@ -59,11 +58,6 @@ type
     procedure DrainOldest;
     procedure QuarantinePush(APtr: Pointer; ASize: SizeUInt);
     procedure VerifySentinel(APtr: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建哨兵分配器
      *  @param AInner 内部分配器
@@ -72,12 +66,17 @@ type
       AQuarantineDepth: Integer = DEFAULT_QUARANTINE_DEPTH);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+
     {** 隔离队列中待释放的块数 }
     function QuarantineCount: Integer;
     {** 强制释放隔离队列中所有块 }
     procedure DrainQuarantine;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -214,7 +213,7 @@ begin
       'Checksum mismatch — metadata corrupted');
 end;
 
-function TSentinelAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TSentinelAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LTotalSize: SizeUInt;
   LHdr: PSentinelHeader;
@@ -247,22 +246,23 @@ begin
   Result := Pointer(PtrUInt(LUserPtr) + HEADER_SIZE);
 end;
 
-function TSentinelAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TSentinelAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TSentinelAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TSentinelAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LHdr: PSentinelHeader;
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
   LBasePtr: Pointer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
 
   { Verify old block sentinels before realloc }
   LBasePtr := Pointer(PtrUInt(APtr) - HEADER_SIZE);
@@ -271,7 +271,7 @@ begin
   LOldSize := LHdr^.UserSize;
 
   { Allocate new block }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then Exit;
 
   { Copy old data }
@@ -283,10 +283,10 @@ begin
     Move(APtr^, Result^, LCopySize);
 
   { Free old (through quarantine) }
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
-procedure TSentinelAllocator.DoFreeMem(APtr: Pointer);
+procedure TSentinelAllocator.FreeMem(APtr: Pointer); inline;
 var
   LBasePtr: Pointer;
   LHdr: PSentinelHeader;
@@ -318,7 +318,7 @@ begin
     DrainOldest;
 end;
 
-function TSentinelAllocator.Traits: TAllocatorTraits;
+function TSentinelAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
