@@ -127,7 +127,8 @@ begin
 
   if LLoaded then
   begin
-    LResults := TBenchSuite.Create('LoadTest')
+    LSuite := TBenchSuite.Create('LoadTest');
+    LResults := LSuite
       .Add('Benchmark', @BenchExample)
       .Run;
 
