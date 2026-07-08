@@ -165,6 +165,9 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
 function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType: string;
   const ABody: TBytes): SizeUInt;
+{** @desc Write HTML response: sets text/html content-type, writes string body. }
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -921,6 +924,12 @@ begin
     Inc(LTotal, LWritten);
   end;
   Result := LTotal;
+end;
+
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
+begin
+  Result := HttpWriteResponseString(AW, AStatus, 'text/html; charset=utf-8', ABody);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;

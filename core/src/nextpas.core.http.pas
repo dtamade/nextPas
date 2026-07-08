@@ -323,6 +323,9 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
 function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType: string;
   const ABody: TBytes): SizeUInt; inline;
+{** @desc Write HTML response: sets text/html content-type, writes string body. }
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt; inline;
 {** @desc Write 204 No Content response. }
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
@@ -844,6 +847,12 @@ function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
 begin
   Result := nextpas.core.http.message.HttpWriteResponseBytes(AW, AStatus,
     AContentType, ABody);
+end;
+
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseHtml(AW, AStatus, ABody);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);

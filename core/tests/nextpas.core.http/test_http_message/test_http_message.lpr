@@ -1704,6 +1704,73 @@ begin
   Check(LRaised, 'raises on nil writer');
 end;
 
+procedure TestHtmlSetsContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_OK, '<h1>Hello</h1>');
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('text/html; charset=utf-8', LM.GetHeaders.Get('content-type'), 'content-type is text/html');
+  CheckEqual('<h1>Hello</h1>', LM.Body, 'body is HTML');
+end;
+
+procedure TestHtmlWritesStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_NOT_FOUND, '<p>Not Found</p>');
+  CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
+  Check(Pos('text/html', LM.GetHeaders.Get('content-type')) > 0, 'content-type has text/html');
+end;
+
+procedure TestHtmlEmptyBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_OK, '');
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('', LM.Body, 'empty body');
+  CheckEqual('0', LM.GetHeaders.Get('content-length'), 'content-length 0');
+end;
+
+procedure TestHtmlNoBodyStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_NO_CONTENT, '');
+  CheckEqual(Int64(204), Int64(LM.Status), 'status 204');
+end;
+
+procedure TestHtmlNoBodyStatusWithBodyRaises;
+var
+  LRaised: Boolean;
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LRaised := False;
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  try
+    HttpWriteResponseHtml(LW, HTTP_STATUS_NO_CONTENT, '<p>oops</p>');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on no-body status with body');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1869,5 +1936,15 @@ begin
     @TestNoContentSets204);
   T.Test('NoContent: nil writer raises',
     @TestNoContentNilWriterRaises);
+  T.Test('Html: sets text/html content-type',
+    @TestHtmlSetsContentType);
+  T.Test('Html: writes status and body',
+    @TestHtmlWritesStatus);
+  T.Test('Html: empty body',
+    @TestHtmlEmptyBody);
+  T.Test('Html: no-body status',
+    @TestHtmlNoBodyStatus);
+  T.Test('Html: no-body status with body raises',
+    @TestHtmlNoBodyStatusWithBodyRaises);
   if not T.Run then Halt(1);
 end.
