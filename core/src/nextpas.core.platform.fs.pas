@@ -61,6 +61,13 @@ function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 function platform_fs_move_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 function platform_fs_remove_file(const APath: PAnsiChar): Int32;
+
+{ Convenience: remove empty directory }
+function platform_fs_remove_dir(const APath: PAnsiChar): Int32;
+
+{ Convenience: rename file or directory }
+function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 function platform_fs_read_file(const APath: PAnsiChar;
@@ -862,5 +869,18 @@ function platform_fs_remove_file(const APath: PAnsiChar): Int32;
 begin
   Result := platform_file_unlink(APath);
 end;
+
+{ Remove empty directory }
+function platform_fs_remove_dir(const APath: PAnsiChar): Int32;
+begin
+  Result := platform_file_rmdir(APath);
+end;
+
+{ Rename file or directory }
+function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+begin
+  Result := platform_file_rename(AOldPath, ANewPath);
+end;
+
 end.
 

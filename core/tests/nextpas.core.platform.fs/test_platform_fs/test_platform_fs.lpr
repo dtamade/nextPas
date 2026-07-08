@@ -417,6 +417,54 @@ begin
     'move non-existent fails');
 end;
 
+procedure TestRemoveDir;
+const
+  DIR = '/tmp/nextpas_test_rmdir';
+begin
+  platform_fs_mkdir_p(DIR, $1FF); { 0777 }
+  Check(platform_fs_is_dir(DIR), 'dir created');
+  Check(platform_fs_remove_dir(DIR) = 0, 'remove_dir succeeds');
+  Check(not platform_fs_exists(DIR), 'dir removed');
+end;
+
+procedure TestRemoveDirNonExistent;
+begin
+  Check(platform_fs_remove_dir('/tmp/nextpas_nonexistent_rmdir_xyz') <> 0,
+    'remove non-existent dir fails');
+end;
+
+procedure TestRename;
+const
+  SRC = '/tmp/nextpas_test_rename_src';
+  DST = '/tmp/nextpas_test_rename_dst';
+  DATA = 'rename test data';
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LSize: Int64;
+begin
+  { Create source file }
+  platform_file_open(SRC, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), Length(DATA), LWritten);
+  platform_file_close(H);
+  Check(platform_fs_exists(SRC), 'src exists before rename');
+  { Rename }
+  Check(platform_fs_rename(SRC, DST) = 0, 'rename succeeds');
+  Check(not platform_fs_exists(SRC), 'src gone after rename');
+  Check(platform_fs_exists(DST), 'dst exists after rename');
+  Check(platform_fs_file_size(DST, LSize) = 0, 'get dst size');
+  Check(LSize = Length(DATA), 'dst size matches');
+  { Cleanup }
+  platform_file_unlink(DST);
+end;
+
+procedure TestRenameNonExistent;
+begin
+  Check(platform_fs_rename('/tmp/nextpas_nonexistent_rename_xyz',
+    '/tmp/nextpas_rename_dst_xyz') <> 0,
+    'rename non-existent fails');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fs');
   T.Test('exists file', @TestExistsFile);
@@ -434,6 +482,10 @@ begin
   T.Test('remove_file non-existent', @TestRemoveFileNonExistent);
   T.Test('copy non-existent', @TestCopyNonExistent);
   T.Test('move non-existent', @TestMoveNonExistent);
+  T.Test('remove_dir', @TestRemoveDir);
+  T.Test('remove_dir non-existent', @TestRemoveDirNonExistent);
+  T.Test('rename', @TestRename);
+  T.Test('rename non-existent', @TestRenameNonExistent);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
   T.Test('read_file_dynamic', @TestReadFile);
