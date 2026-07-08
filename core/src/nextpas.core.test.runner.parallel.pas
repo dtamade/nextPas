@@ -331,16 +331,15 @@ begin
       on E: Exception do
       begin
         LStatus := tsError;
-        LFailMsg := E.Message;
+        LFailMsg := 'beforeEach failed: ' + E.Message;
         R^.Mtx.Acquire;
         try
-          LOutSink.WriteLn(
-            '  ' + FormatStatusLine(tsError, R^.Entry.Name,
-              'beforeEach failed: ' + E.Message, LConfig));
-          { Set Duration to 0 directly — no test ran, don't use TInstant.Now }
+          { Write result inside mutex; output will be written by the final block
+            below — don't write here to avoid duplicate output lines. }
           if R^.Res <> nil then
           begin
-            R^.Res^ := MakeTestResult(R^.Entry.Name, tsError, E.Message, 0);
+            R^.Res^ := MakeTestResult(R^.Entry.Name, tsError,
+              LFailMsg, 0);
             LResultWritten := True;
           end;
         finally
