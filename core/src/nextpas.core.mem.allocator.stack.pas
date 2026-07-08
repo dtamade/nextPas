@@ -27,8 +27,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 默认栈区域大小 }
@@ -68,7 +67,7 @@ type
    *  [used bytes...][free bytes...]
    *                  ^ next alloc position
    *}
-  TStackAllocator = class(TAllocator)
+  TStackAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FRegionSize: SizeUInt;
@@ -89,11 +88,6 @@ type
     FRestoreCountStat: UInt64;
     procedure GrowRegion;
     function InternalAlloc(ASize: SizeUInt): Pointer;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建栈式分配器
      *  @param AInner 内部分配器（用于获取内存区域）
@@ -102,6 +96,12 @@ type
     constructor Create(AInner: IAllocator;
       ARegionSize: SizeUInt = STACK_DEFAULT_REGION_SIZE);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
 
     {** 保存当前栈状态 }
     function Mark: TStackMark;
@@ -115,8 +115,6 @@ type
     property UsedBytes: SizeUInt read FTotalUsed;
     {** 区域数量 }
     property RegionCount: Integer read FRegionCount;
-
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -205,34 +203,34 @@ begin
   Inc(FAllocCount);
 end;
 
-function TStackAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TStackAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := InternalAlloc(ASize);
 end;
 
-function TStackAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TStackAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := InternalAlloc(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TStackAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TStackAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   { 栈式分配器不支持真正的 Realloc }
   { 简单实现：分配新块，复制旧数据 }
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
     Exit(nil);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     Move(APtr^, Result^, ASize);  { 保守复制 }
   { 注意：旧内存不会被释放（栈式分配器不支持单独释放） }
 end;
 
-procedure TStackAllocator.DoFreeMem(APtr: Pointer);
+procedure TStackAllocator.FreeMem(APtr: Pointer); inline;
 begin
   { 栈式分配器不支持单独释放 }
   { 只能通过 Mark/Restore 或 Reset 回滚 }
@@ -308,9 +306,10 @@ begin
   Result.RestoreCount := FRestoreCountStat;
 end;
 
-function TStackAllocator.Traits: TAllocatorTraits;
+function TStackAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe      := False;
   Result.SupportsRealloc := False;
 end;
 
