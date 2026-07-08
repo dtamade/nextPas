@@ -5,9 +5,11 @@ unit nextpas.core.platform.watch;
 interface
 
 const
+  {** @desc 最大监视文件描述符数量 *}
   PLATFORM_WATCH_MAX_FDS = 16;
 
 type
+  {** @desc 文件系统监视器（平台无关封装） *}
   TPlatformWatcher = record
     Fd: Int32;
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
@@ -16,6 +18,7 @@ type
   {$ENDIF}
   end;
 
+  {** @desc 文件系统监视事件 *}
   TPlatformWatchEvent = record
     Name: array[0..255] of AnsiChar;
     NameLen: Int32;
@@ -25,11 +28,29 @@ type
     Deleted: Boolean;
   end;
 
+{** @desc 创建文件系统监视器
+    @param AWatcher 输出监视器句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
+
+{** @desc 添加监视路径
+    @param AWatcher 监视器句柄
+    @param APath 要监视的路径
+    @return 0 成功，否则返回错误码 *}
 function platform_watch_add(var AWatcher: TPlatformWatcher;
   const APath: PAnsiChar): Int32;
+
+{** @desc 等待文件系统事件
+    @param AWatcher 监视器句柄
+    @param AEvent 输出事件信息
+    @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+
+{** @desc 关闭监视器
+    @param AWatcher 监视器句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 
 implementation

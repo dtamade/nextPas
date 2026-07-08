@@ -5,6 +5,7 @@ unit nextpas.core.platform.base;
 interface
 
 type
+  {** @desc 操作系统类型枚举 *}
   TOSKind = (
     osLinux,
     osMacOS,
@@ -15,6 +16,7 @@ type
     osUnknown
   );
 
+  {** @desc CPU 架构枚举 *}
   TCPUArch = (
     cpuX86_64,
     cpuAArch64,
@@ -23,12 +25,14 @@ type
     cpuUnknown
   );
 
+  {** @desc 字节序枚举 *}
   TEndianness = (
     endLittle,
     endBig
   );
 
 const
+  {** @desc 当前操作系统类型（编译时确定） *}
   {$IF defined(NEXTPAS_LINUX)}
   CURRENT_OS: TOSKind = osLinux;
   {$ELSEIF defined(NEXTPAS_MACOS)}
@@ -45,6 +49,7 @@ const
   CURRENT_OS: TOSKind = osUnknown;
   {$ENDIF}
 
+  {** @desc 当前 CPU 架构（编译时确定） *}
   {$IF defined(NEXTPAS_X86_64)}
   CURRENT_CPU: TCPUArch = cpuX86_64;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
@@ -57,6 +62,7 @@ const
   CURRENT_CPU: TCPUArch = cpuUnknown;
   {$ENDIF}
 
+  {** @desc 当前字节序（编译时确定） *}
   {$IF DEFINED(FPC_BIG_ENDIAN)}
   CURRENT_ENDIAN: TEndianness = endBig;
   {$ELSE}
@@ -64,14 +70,18 @@ const
   {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+  {** @desc 路径分隔符（Windows: \，Unix: /） *}
   PLATFORM_PATH_DELIM = '\';
+  {** @desc 路径列表分隔符（Windows: ;，Unix: :） *}
   PLATFORM_PATH_SEP = ';';
+  {** @desc 行尾符号（Windows: CRLF，Unix: LF） *}
   PLATFORM_LINE_ENDING = #13#10;
 {$ELSE}
   PLATFORM_PATH_DELIM = '/';
   PLATFORM_PATH_SEP = ':';
   PLATFORM_LINE_ENDING = #10;
 {$ENDIF}
+  {** @desc 扩展名分隔符 *}
   PLATFORM_EXT_SEP = '.';
 
 implementation

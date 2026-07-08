@@ -5,6 +5,7 @@ unit nextpas.core.platform.io.base;
 interface
 
 type
+  {** @desc I/O 多路复用事件类型枚举 *}
   TPlatformPollEvent = (
     peReadable,
     peWritable,
@@ -12,8 +13,10 @@ type
     peHangup,
     peReadHangup
   );
+  {** @desc I/O 多路复用事件集合 *}
   TPlatformPollEvents = set of TPlatformPollEvent;
 
+  {** @desc I/O 多路复用条目 *}
   TPlatformPollEntry = record
     Fd: PtrUInt;
     Events: TPlatformPollEvents;
@@ -22,6 +25,7 @@ type
   end;
   PPlatformPollEntry = ^TPlatformPollEntry;
 
+  {** @desc I/O 多路复用器（epoll/kqueue/IOCP 封装） *}
   TPlatformPoller = record
   {$IFDEF NEXTPAS_LINUX}
     EpollFd: Int32;

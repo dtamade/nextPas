@@ -17,6 +17,7 @@ unit nextpas.core.platform.socket.base;
 interface
 
 type
+  {** @desc 套接字句柄（平台无关封装） *}
   TPlatformSocket = record
   {$IFDEF NEXTPAS_WINDOWS}
     Value: PtrUInt;
@@ -25,6 +26,7 @@ type
   {$ENDIF}
   end;
 
+  {** @desc 通用套接字地址结构（128 字节存储 + 长度） *}
   TPlatformSockAddr = packed record
     Storage: array[0..127] of Byte;
     Len: Int32;
