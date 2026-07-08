@@ -769,18 +769,21 @@ function BootstrapTestDifference(const A, B: TDoubleArray;
   1. 合并两组数据
   2. 随机打乱顺序（Fisher-Yates shuffle）
   3. 前 LNA 个作为 A 组，其余作为 B 组，计算均值差异
-  4. 与实际差异比较，得到 p-value }
+  4. 与实际差异比较，得到 p-value
+
+  优化: shuffle 过程中增量更新分组和，消除独立的 O(N) 求和循环。 }
 var
   LNA, LNB, LN: Integer;
-  LMerged: TDoubleArray;
+  LData: TDoubleArray;
   LPerm: TInt64Array;
   LIterations: Integer;
   LPRNG: TXoroshiro128Plus;
   LMeanA, LMeanB, LObservedDiff: Double;
-  LI, LJ, LSwap, LIdx: Integer;
+  LI, LJ, LSwap, LTmp: Integer;
   LCount: Integer;
   LSumA, LSumB: Double;
-  LPermutedDiff: Double;
+  LValJ, LValSwap: Double;
+  LInvNA, LInvNB: Double;
 begin
   LNA := Length(A);
   LNB := Length(B);
@@ -802,16 +805,16 @@ begin
   LObservedDiff := LMeanA - LMeanB;
   Result.ObservedDiff := LObservedDiff;
 
-  // 合并数据
+  // 合并数据 + 初始化排列
   LN := LNA + LNB;
-  SetLength(LMerged, LN);
-  for LI := 0 to LNA - 1 do
-    LMerged[LI] := A[LI];
-  for LI := 0 to LNB - 1 do
-    LMerged[LNA + LI] := B[LI];
-
-  // 初始化排列索引
+  LInvNA := 1.0 / LNA;
+  LInvNB := 1.0 / LNB;
+  SetLength(LData, LN);
   SetLength(LPerm, LN);
+  for LI := 0 to LNA - 1 do
+    LData[LI] := A[LI];
+  for LI := 0 to LNB - 1 do
+    LData[LNA + LI] := B[LI];
   for LI := 0 to LN - 1 do
     LPerm[LI] := LI;
 
@@ -829,28 +832,50 @@ begin
     LIterations := 1;
 
   // Fisher permutation test
+  // 优化: 在 shuffle 过程中增量更新分组和 LSumA/LSumB，
+  // 避免 shuffle 后再做 O(N) 求和。
+  // 初始状态: 前 LNA 个位置为 A 组，后 LNB 个位置为 B 组。
   LCount := 0;
   for LI := 0 to LIterations - 1 do
   begin
+    // 初始化: 前 LNA 个 = A 组，后 LNB 个 = B 组
+    LSumA := 0.0;
+    for LJ := 0 to LNA - 1 do
+      LSumA := LSumA + LData[LPerm[LJ]];
+    LSumB := 0.0;
+    for LJ := LNA to LN - 1 do
+      LSumB := LSumB + LData[LPerm[LJ]];
+
     // Fisher-Yates shuffle: 随机打乱排列
+    // 每次 swap 后增量更新分组和
     for LJ := LN - 1 downto 1 do
     begin
       LSwap := LPRNG.NextInt(LJ + 1);
-      LIdx := LPerm[LJ];
+
+      // 取当前位置和 swap 目标的值
+      LValJ := LData[LPerm[LJ]];
+      LValSwap := LData[LPerm[LSwap]];
+
+      // 执行 swap
+      LTmp := LPerm[LJ];
       LPerm[LJ] := LPerm[LSwap];
-      LPerm[LSwap] := LIdx;
+      LPerm[LSwap] := LTmp;
+
+      // 增量更新分组和:
+      // 位置 LJ 从 LValJ → LValSwap
+      // 位置 LSwap 从 LValSwap → LValJ
+      if LJ < LNA then
+        LSumA := LSumA - LValJ + LValSwap
+      else
+        LSumB := LSumB - LValJ + LValSwap;
+
+      if LSwap < LNA then
+        LSumA := LSumA - LValSwap + LValJ
+      else
+        LSumB := LSumB - LValSwap + LValJ;
     end;
 
-    // 计算前 LNA 个元素的和（A 组）和后 LNB 个元素的和（B 组）
-    LSumA := 0.0;
-    for LJ := 0 to LNA - 1 do
-      LSumA := LSumA + LMerged[LPerm[LJ]];
-    LSumB := 0.0;
-    for LJ := LNA to LN - 1 do
-      LSumB := LSumB + LMerged[LPerm[LJ]];
-
-    LPermutedDiff := (LSumA / LNA) - (LSumB / LNB);
-    if Abs(LPermutedDiff) >= Abs(LObservedDiff) then
+    if Abs(LSumA * LInvNA - LSumB * LInvNB) >= Abs(LObservedDiff) then
       Inc(LCount);
   end;
 
