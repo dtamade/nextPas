@@ -462,6 +462,96 @@ begin
   if Result = 0 then
     AExitCode := LResult.ExitCode;
 end;
+
+function ReadPipeFully(AFd: Int32; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+var
+  LN: PtrInt;
+begin
+  ALen := 0;
+  if ABufLen <= 0 then
+    Exit(0);
+  repeat
+    LN := read(AFd, @ABuf[ALen], ABufLen - ALen);
+    if LN < 0 then
+    begin
+      if platform_get_errno = ESysEINTR then
+        Continue;
+      Exit(platform_get_errno);
+    end;
+    if LN > 0 then
+      Inc(ALen, Int32(LN));
+  until (LN = 0) or (ALen >= ABufLen);
+  if ALen < ABufLen then
+    ABuf[ALen] := #0;
+  Result := 0;
+end;
+
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
+  out AExitCode: Int32): Int32;
+var
+  LProc: TPlatformProcess;
+  LResult: TPlatformProcessResult;
+  LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+  LDevNullRead: Int32;
+  LFailStage: TPlatformProcessSpawnStage;
+begin
+  AStdoutLen := 0;
+  AStderrLen := 0;
+  AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
+  LStderrPipe[0] := -1; LStderrPipe[1] := -1;
+  LDevNullRead := -1;
+
+  if pipe(@LStdoutPipe[0]) <> 0 then
+    Exit(platform_get_errno);
+  if pipe(@LStderrPipe[0]) <> 0 then
+  begin
+    Result := platform_get_errno;
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    Exit;
+  end;
+  LDevNullRead := open('/dev/null', 0, 0);
+  if LDevNullRead < 0 then
+  begin
+    Result := platform_get_errno;
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    close(LStderrPipe[0]); close(LStderrPipe[1]);
+    Exit;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd, LDevNullRead,
+    LStdoutPipe[1], LStderrPipe[1], LProc, LFailStage);
+  close(LDevNullRead);
+  close(LStdoutPipe[1]);
+  close(LStderrPipe[1]);
+  if Result <> 0 then
+  begin
+    close(LStdoutPipe[0]);
+    close(LStderrPipe[0]);
+    Exit;
+  end;
+
+  try
+    Result := ReadPipeFully(LStdoutPipe[0], AStdoutBuf, AStdoutBufLen, AStdoutLen);
+    if Result <> 0 then
+      Exit;
+    Result := ReadPipeFully(LStderrPipe[0], AStderrBuf, AStderrBufLen, AStderrLen);
+    if Result <> 0 then
+      Exit;
+  finally
+    close(LStdoutPipe[0]);
+    close(LStderrPipe[0]);
+  end;
+
+  Result := platform_process_wait(LProc, LResult);
+  if Result = 0 then
+    AExitCode := LResult.ExitCode;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -791,6 +881,18 @@ begin
   if Result = 0 then
     AExitCode := LResult.ExitCode;
 end;
+
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
+  out AExitCode: Int32): Int32;
+begin
+  AStderrLen := 0;
+  AExitCode := -1;
+  Result := platform_process_run(APath, AArgv, ACwd,
+    AStdoutBuf, AStdoutBufLen, AStdoutLen, AExitCode);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -816,6 +918,10 @@ function platform_process_close_handle(var AHandle: PtrInt): Int32;
 begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
 begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AChildStdin, AChildStdout, AChildStderr: PtrInt; out AProc: TPlatformProcess; out AFailStage: TPlatformProcessSpawnStage): Int32;
+begin FillChar(AProc, SizeOf(AProc), 0); AFailStage := pssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32; AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32; out AExitCode: Int32): Int32;
+begin AStdoutLen := 0; AStderrLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.
