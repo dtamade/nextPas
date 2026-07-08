@@ -77,7 +77,6 @@ type
   private
     FShards: array of TShard;
     FShardCount: PtrUInt;
-    function HashKey(const AKey: TKey): PtrUInt;
     function ShardIndex(const AKey: TKey): PtrUInt;
     procedure ShardLock(var AShard: TShard);
     procedure ShardUnlock(var AShard: TShard);
@@ -89,6 +88,8 @@ type
     procedure ShardResize(var AShard: TShard);
     function ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
   public
+    {** @desc 计算键的哈希值 }
+    function HashKey(const AKey: TKey): PtrUInt;
     {** @desc 创建分片锁 HashMap }
     constructor Create(const AInitialCapacity: PtrUInt = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;
