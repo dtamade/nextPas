@@ -181,10 +181,9 @@ function BatchScaleOffsetSimdF32(const AInput: array of Single;
 implementation
 
 uses
-  Math,
+  nextpas.core.simd,
   nextpas.core.math.trig,
-  nextpas.core.math.scalar,
-  nextpas.core.simd;
+  nextpas.core.math.scalar;
 
 // -- SIMD-optimized implementations --
 // Each function processes 4 elements per SIMD iteration, scalar fallback for remaining elements.
@@ -231,12 +230,11 @@ begin
   Result := LCount;
 end;
 
-{ BatchSinCosSimdF32 — Scalar fallback using Math.SinCos for joint computation }
+{ BatchSinCosSimdF32 — Scalar fallback using Sin/Cos }
 function BatchSinCosSimdF32(const AInput: array of Single;
                             var ASinOutput, ACosOutput: array of Single): SizeInt;
 var
   i, LCount: SizeInt;
-  LS, LC: Single;
 begin
   LCount := Length(AInput);
   if LCount > Length(ASinOutput) then
@@ -245,9 +243,8 @@ begin
     LCount := Length(ACosOutput);
   for i := 0 to LCount - 1 do
   begin
-    Math.SinCos(AInput[i], LS, LC);
-    ASinOutput[i] := LS;
-    ACosOutput[i] := LC;
+    ASinOutput[i] := Sin(AInput[i]);
+    ACosOutput[i] := Cos(AInput[i]);
   end;
   Result := LCount;
 end;
