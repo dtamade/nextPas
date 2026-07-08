@@ -7,10 +7,24 @@ interface
 uses
   nextpas.core.platform.base;
 
+{** @desc 获取当前操作系统类型
+    @return TOSKind 枚举值 *}
 function CurrentOS: TOSKind; inline;
+
+{** @desc 获取当前 CPU 架构
+    @return TCPUArch 枚举值 *}
 function CurrentCPU: TCPUArch; inline;
+
+{** @desc 获取当前字节序
+    @return TEndianness 枚举值 *}
 function CurrentEndian: TEndianness; inline;
+
+{** @desc 获取操作系统名称字符串
+    @return 如 'Linux', 'macOS', 'Windows' *}
 function OSName: string; inline;
+
+{** @desc 获取 CPU 架构名称字符串
+    @return 如 'x86_64', 'aarch64' *}
 function CPUName: string; inline;
 
 implementation

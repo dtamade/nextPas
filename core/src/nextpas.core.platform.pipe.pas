@@ -5,6 +5,7 @@ unit nextpas.core.platform.pipe;
 interface
 
 type
+  {** @desc 管道句柄记录，封装平台相关的读写端 *}
   TPlatformPipe = record
     ReadFd: PtrInt;
     WriteFd: PtrInt;
@@ -14,10 +15,30 @@ type
   {$ENDIF}
   end;
 
+{** @desc 创建匿名管道
+    @param APipe 输出参数，返回创建的管道句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
+
+{** @desc 关闭管道读端
+    @param APipe 管道句柄
+    @return 0 成功，PLATFORM_ERR_BADF 管道无效 *}
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
+
+{** @desc 关闭管道写端
+    @param APipe 管道句柄
+    @return 0 成功，PLATFORM_ERR_BADF 管道无效 *}
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
+
+{** @desc 关闭管道两端
+    @param APipe 管道句柄
+    @return 0 成功 *}
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
+
+{** @desc 复制文件描述符（POSIX dup2 封装）
+    @param AOldFd 源文件描述符
+    @param ANewFd 目标文件描述符
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 
 implementation
@@ -76,6 +97,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
@@ -95,7 +117,7 @@ end;
 
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.ReadHandle = 0 then Exit(6);
+  if APipe.ReadHandle = 0 then Exit(PLATFORM_ERR_BADF);
   CloseHandle(HANDLE(APipe.ReadHandle));
   APipe.ReadHandle := 0;
   APipe.ReadFd := -1;
@@ -104,7 +126,7 @@ end;
 
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.WriteHandle = 0 then Exit(6);
+  if APipe.WriteHandle = 0 then Exit(PLATFORM_ERR_BADF);
   CloseHandle(HANDLE(APipe.WriteHandle));
   APipe.WriteHandle := 0;
   APipe.WriteFd := -1;
