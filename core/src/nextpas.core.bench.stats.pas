@@ -265,19 +265,47 @@ end;
 
 function TBenchStatsAnalyzer.CountOutliers(const ASorted: TDoubleArray;
   AQ1, AQ3, AMultiplier: Double): Integer;
+{ 已排序数据上的 O(log n) 异常值计数。
+  低于下界的异常值在数组头部，高于上界的在尾部，用两次二分查找定位。 }
 var
   LLower, LUpper: Double;
-  I: Integer;
+  LLen, LLeft, LRight, LMid: Integer;
+  LLowerCount, LUpperStart: Integer;
 begin
   LLower := AQ1 - AMultiplier * (AQ3 - AQ1);
   LUpper := AQ3 + AMultiplier * (AQ3 - AQ1);
+  LLen := Length(ASorted);
 
-  Result := 0;
-  for I := 0 to High(ASorted) do
+  if LLen = 0 then
+    Exit(0);
+
+  { 二分查找第一个 >= LLower 的位置 = 低于下界的异常值数量 }
+  LLeft := 0;
+  LRight := LLen;
+  while LLeft < LRight do
   begin
-    if (ASorted[I] < LLower) or (ASorted[I] > LUpper) then
-      Inc(Result);
+    LMid := (LLeft + LRight) div 2;
+    if ASorted[LMid] < LLower then
+      LLeft := LMid + 1
+    else
+      LRight := LMid;
   end;
+  LLowerCount := LLeft;
+
+  { 二分查找第一个 > LUpper 的位置 }
+  LLeft := 0;
+  LRight := LLen;
+  while LLeft < LRight do
+  begin
+    LMid := (LLeft + LRight) div 2;
+    if ASorted[LMid] <= LUpper then
+      LLeft := LMid + 1
+    else
+      LRight := LMid;
+  end;
+  LUpperStart := LLeft;
+
+  Result := LLowerCount + (LLen - LUpperStart);
 end;
 
   {** PF-01: Single-pass stats computation — sum/sum_sq + percentile samples merged.
@@ -586,7 +614,7 @@ var
   LMU, LSigma: Double;
   LTieCorrection: Double;
   LZ: Double;
-  LRunStart, LRunEnd, I, J, K: Integer;
+  LRunStart, LRunEnd, I, K: Integer;
   LAvgRank: Double;
 
 begin
@@ -744,11 +772,13 @@ end;
  }
 function TBenchStatsAnalyzer.ComputeOLSRegression(
   const AIterCounts, ATimes: TDoubleArray): TOLSRegression;
+{ 单循环实现：Σx, Σy, Σxy, Σx², Σy² 一次完成，
+  R² = (n*Σxy - Σx*Σy)² / ((n*Σx² - (Σx)²) * (n*Σy² - (Σy)²))
+  避免第二次循环计算 SS_tot 和 SS_res。 }
 var
   LN: Integer;
   LSX, LSY, LSXY, LSX2, LSY2: Double;
-  LMeanY, LSStot, SSres: Double;
-  LD: Double;
+  LNum, LD, LDenY: Double;
   I: Integer;
 begin
   Result := Default(TOLSRegression);
@@ -760,7 +790,7 @@ begin
     Exit;
   end;
 
-  { 累加统计量 }
+  { 单循环累加所有统计量 }
   LSX := 0; LSY := 0; LSXY := 0; LSX2 := 0; LSY2 := 0;
   for I := 0 to LN - 1 do
   begin
@@ -782,18 +812,12 @@ begin
   Result.Slope := (LN * LSXY - LSX * LSY) / LD;
   Result.Intercept := (LSY - Result.Slope * LSX) / LN;
 
-  { R² = 1 - SS_res / SS_tot }
-  LMeanY := LSY / LN;
-  LSStot := 0;
-  SSres := 0;
-  for I := 0 to LN - 1 do
-  begin
-    LSStot := LSStot + Sqr(ATimes[I] - LMeanY);
-    SSres := SSres + Sqr(ATimes[I] - (Result.Intercept + Result.Slope * AIterCounts[I]));
-  end;
-
-  if LSStot > 1e-10 then
-    Result.RSquared := 1.0 - SSres / LSStot
+  { R² = (n*Σxy - Σx*Σy)² / ((n*Σx² - (Σx)²) * (n*Σy² - (Σy)²))
+    与 1 - SS_res/SS_tot 数学等价，但无需第二次循环 }
+  LNum := LN * LSXY - LSX * LSY;
+  LDenY := LN * LSY2 - LSY * LSY;
+  if (Abs(LD) > 1e-10) and (Abs(LDenY) > 1e-10) then
+    Result.RSquared := (LNum * LNum) / (LD * LDenY)
   else
     Result.RSquared := 1.0; { 所有 y 相同 → 完美拟合 }
 
@@ -1065,7 +1089,7 @@ var
   LN: Integer;
   LSampleMean: Double;
   LSigma: Double;
-  LPriorVar, LDataVar: Double;
+  LPriorVar: Double;
   LPosteriorVar: Double;
   LZ: Double;
 begin
@@ -1103,7 +1127,6 @@ begin
 
   { 计算后验参数 }
   LPriorVar := APriorStdDev * APriorStdDev;
-  LDataVar := LSigma * LSigma / LN; { σ²/n }
 
   { σ_n² = 1 / (1/σ0² + n/σ²) }
   LPosteriorVar := 1.0 / (1.0 / LPriorVar + LN / (LSigma * LSigma));
