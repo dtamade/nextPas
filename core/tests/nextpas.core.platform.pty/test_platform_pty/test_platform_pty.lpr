@@ -4,6 +4,7 @@ program test_platform_pty;
 
 uses
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.platform.pty.base,
   nextpas.core.platform.pty
 {$IFDEF NEXTPAS_UNIX}
@@ -336,6 +337,39 @@ begin
   platform_pty_close(LPty);
   waitpid(LPid, nil, 0);
 end;
+
+procedure TestResizeMultiple;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  I: Int32;
+begin
+  Check(platform_pty_open(LSize, LPty) = 0, 'open');
+  for I := 0 to 9 do
+  begin
+    LSize.FCols := 80 + I;
+    LSize.FRows := 24 + I;
+    Check(platform_pty_resize(LPty, LSize) = 0, 'resize ' + IntToStr(I));
+  end;
+  platform_pty_close(LPty);
+end;
+
+procedure TestOpenCloseCycle;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  I: Int32;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  for I := 0 to 9 do
+  begin
+    Check(platform_pty_open(LSize, LPty) = 0, 'open ' + IntToStr(I));
+    platform_pty_close(LPty);
+  end;
+end;
 {$ELSE}
 function NeverRunShapeOnly: Boolean;
 begin
@@ -382,6 +416,8 @@ begin
   T.Test('TestResizeAfterClose', @TestResizeAfterClose);
   T.Test('TestSpawnWithEnv', @TestSpawnWithEnv);
   T.Test('TestSpawnLargeOutput', @TestSpawnLargeOutput);
+  T.Test('TestResizeMultiple', @TestResizeMultiple);
+  T.Test('TestOpenCloseCycle', @TestOpenCloseCycle);
 {$ELSE}
   T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}

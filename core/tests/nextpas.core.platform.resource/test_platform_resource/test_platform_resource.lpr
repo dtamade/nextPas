@@ -185,6 +185,37 @@ begin
   Check(LLimit1.Maximum = LLimit2.Maximum, 'maximum consistent');
 end;
 
+procedure TestSetLimitValidValues;
+var
+  LLimit, LSaved: TPlatformResourceLimit;
+  LRet: Int32;
+begin
+  { Get current limit }
+  Check(platform_resource_get_limit(prlkOpenFiles, LSaved) = 0, 'get current');
+  { Try to set to current value (should succeed or EPERM) }
+  LLimit.Current := LSaved.Current;
+  LLimit.Maximum := LSaved.Maximum;
+  LRet := platform_resource_set_limit(prlkOpenFiles, LLimit);
+  Check(LRet = 0, 'set to current value succeeds');
+end;
+
+procedure TestGetAllLimitsConsistent;
+var
+  LKind: TPlatformResourceLimitKind;
+  LLimit: TPlatformResourceLimit;
+begin
+  { All limits should have current <= maximum (unless unlimited) }
+  for LKind := Low(TPlatformResourceLimitKind) to High(TPlatformResourceLimitKind) do
+  begin
+    if platform_resource_get_limit(LKind, LLimit) = 0 then
+    begin
+      if (LLimit.Current <> PLATFORM_RESOURCE_LIMIT_INFINITY) and
+         (LLimit.Maximum <> PLATFORM_RESOURCE_LIMIT_INFINITY) then
+        Check(LLimit.Current <= LLimit.Maximum, 'current <= maximum for kind ' + IntToStr(Ord(LKind)));
+    end;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.resource');
   T.Test('get open files limit', @TestGetOpenFilesLimit);
@@ -204,5 +235,7 @@ begin
   T.Test('all resource kinds succeed', @TestAllResourceKinds);
   T.Test('set infinity current does not crash', @TestSetLimitInfinityCurrent);
   T.Test('get limit preserves values', @TestGetLimitPreservesValues);
+  T.Test('set limit valid values', @TestSetLimitValidValues);
+  T.Test('get all limits consistent', @TestGetAllLimitsConsistent);
   if not T.Run then Halt(1);
 end.

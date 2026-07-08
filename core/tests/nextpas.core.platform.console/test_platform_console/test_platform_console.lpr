@@ -282,6 +282,27 @@ begin
   Check(R <> 0, 'get_size on invalid fd fails');
 end;
 
+procedure TestSetRawInvalidFd;
+var
+  LMode: TPlatformConsoleMode;
+  R: Int32;
+begin
+  R := platform_console_set_raw(-1, LMode);
+  Check(R <> 0, 'set_raw on invalid fd fails');
+end;
+
+procedure TestWriteLargeBuffer;
+var
+  Buf: array[0..4095] of AnsiChar;
+  R: Int32;
+  I: Integer;
+begin
+  for I := 0 to 4095 do
+    Buf[I] := AnsiChar(Ord('A') + (I mod 26));
+  R := platform_console_write(1, @Buf[0], 4096);
+  Check(R >= 0, 'write large buffer succeeds');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.console');
   T.Test('is_terminal stdout', @TestIsTerminalStdout);
@@ -302,5 +323,7 @@ begin
   T.Test('read nil buffer', @TestReadNilBuffer);
   T.Test('wait readable invalid fd', @TestWaitReadableInvalidFd);
   T.Test('get size invalid fd', @TestGetSizeInvalidFd);
+  T.Test('set_raw invalid fd', @TestSetRawInvalidFd);
+  T.Test('write large buffer', @TestWriteLargeBuffer);
   if not T.Run then Halt(1);
 end.
