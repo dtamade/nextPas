@@ -63,6 +63,8 @@
 | Phase 10: 内存操作优化 | ✅ 100% | SimdMemCopy/Fill/Compare |
 | SSE2 GEMM 微内核 | ✅ 100% | 4×4 F32 + 2×2 F64 运行时分派 |
 | 信号处理扩展 | ✅ 100% | Kaiser 窗 + 滤波器 + 信号生成 |
+| Phase 11: 矩阵分解扩展 | ✅ 100% | QR/Cholesky/SVD + 秩 + 伪逆 |
+| Phase 11: 信号处理高级功能 | ✅ 100% | STFT/Spectrogram/Mel/MFCC |
 
 ### 进行中 (⚠️)
 
