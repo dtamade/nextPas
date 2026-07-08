@@ -1,5 +1,5 @@
-function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
-  const ANode: TGreenNode; out ABlob: string): Boolean;
+function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
+  const ANode: TGreenNode; out ABlob: string; out AExprId: LongInt): Boolean;
 
   function NeedsFoldFallback(const N: TGreenNode): Boolean;
   var
@@ -63,6 +63,7 @@ var
   Operand: string;
 begin
   ABlob := '';
+  AExprId := 0;
   if ANode = nil then
     Exit(False);
   if EmitOwnedStringConcatLengthTemp(ANode, ABlob) then
@@ -86,6 +87,7 @@ begin
     );
     if ExprId > 0 then
     begin
+      AExprId := ExprId;
       ABlob := 'expr ' + IntToStr(ExprId) + #10;
       Exit(True);
     end;
@@ -121,6 +123,7 @@ begin
     );
     if ExprId > 0 then
     begin
+      AExprId := ExprId;
       ABlob := 'expr ' + IntToStr(ExprId) + #10;
       Exit(True);
     end;
@@ -145,6 +148,7 @@ begin
     );
     if ExprId > 0 then
     begin
+      AExprId := ExprId;
       ABlob := 'expr ' + IntToStr(ExprId) + #10;
       Exit(True);
     end;
@@ -197,6 +201,7 @@ begin
       );
       if ExprId > 0 then
       begin
+        AExprId := ExprId;
         ABlob := 'expr ' + IntToStr(ExprId) + #10;
         Exit(True);
       end;
@@ -326,6 +331,7 @@ begin
       );
       if ExprId > 0 then
       begin
+        AExprId := ExprId;
         ABlob := 'expr ' + IntToStr(ExprId) + #10;
         if SameText(ANode.ChildAt(0).Text, 'Pred') then
           ABlob := ABlob + 'expr ' + IntToStr(ExprId) + #10 + 'int 1' + #10 + 'sub' + #10
@@ -689,6 +695,7 @@ begin
         );
         if ExprId > 0 then
         begin
+          AExprId := ExprId;
           ABlob := 'expr ' + IntToStr(ExprId) + #10;
           Exit(True);
         end;
@@ -1174,12 +1181,17 @@ begin
 end;
 
 function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
+  const ANode: TGreenNode; out ABlob: string): Boolean;
+var
+  LExprId: LongInt;
+begin
+  Result := EncodeRuntimeIntExprFoldCore(ANode, ABlob, LExprId);
+end;
+
+function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
   const ANode: TGreenNode; out ABlob: string; out AExprId: LongInt): Boolean;
 begin
-  AExprId := 0;
-  Result := EncodeRuntimeIntExprFold(ANode, ABlob);
-  if Result and (Length(ABlob) > 5) and (Copy(ABlob, 1, 5) = 'expr ') then
-    AExprId := StrToIntDef(Copy(ABlob, 6, Length(ABlob) - 5), 0);
+  Result := EncodeRuntimeIntExprFoldCore(ANode, ABlob, AExprId);
 end;
 
 function TSemanticAnalyzer.BuildRuntimeArrayElementAddressHirExpr(

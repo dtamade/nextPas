@@ -546,6 +546,9 @@ type
       out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
+    { 核心实现：同时产出 Blob 和 ExprId，避免从 Blob 解析 ExprId }
+    function EncodeRuntimeIntExprFoldCore(const ANode: TGreenNode;
+      out ABlob: string; out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
       out ABlob: string): Boolean;
     { 带 ExprId 输出的重载：结构化表达式时返回 ExprId > 0 }
