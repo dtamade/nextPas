@@ -2357,7 +2357,7 @@ begin
     Exit;
 
   S.PushTyped(DataPtr, GetPtrType);
-  S.PushTyped(LenVal, GetIntType);
+  S.PushTyped(LenVal, GetIntTypeByWidth(32, True));
 end;
 
 procedure THIRBuilder.EmitExprStrLit(var S: TExprStack; const AArg: string);
@@ -2374,9 +2374,9 @@ begin
   EmitInstr(Instr);
   S.PushTyped(Instr.ResultId, GetPtrType);
 
-  LenVal := EmitConstIntOfType(Length(AArg) - 2, GetIntType);
+  LenVal := EmitConstIntOfType(Length(AArg) - 2, GetIntTypeByWidth(32, True));
   if LenVal <> 0 then
-    S.PushTyped(LenVal, GetIntType);
+    S.PushTyped(LenVal, GetIntTypeByWidth(32, True));
 end;
 
 procedure THIRBuilder.EmitExprIs(var S: TExprStack; const AArg: string);
@@ -2626,14 +2626,14 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := GetIntTypeByWidth(32, True);
   Instr.IntrinsicName := 'str_cmp';
   Instr.CallTarget := AArg;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(APtr, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(ALen, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(ALen, GetIntTypeByWidth(32, True));
   Instr.Operands[2] := MakeTypedOperand(BPtr, GetPtrType);
-  Instr.Operands[3] := MakeTypedOperand(BLen, GetIntType);
+  Instr.Operands[3] := MakeTypedOperand(BLen, GetIntTypeByWidth(32, True));
   EmitInstr(Instr);
   ResultVal := Instr.ResultId;
 
@@ -2642,10 +2642,10 @@ begin
     OneVal := EmitConstIntSmart(1);
     if OneVal = 0 then
       Exit;
-    ResultVal := EmitBinOp(hikSub, GetIntType, OneVal, ResultVal);
+    ResultVal := EmitBinOp(hikSub, GetIntTypeByWidth(32, True), OneVal, ResultVal);
   end;
 
-  S.PushTyped(ResultVal, GetIntType);
+  S.PushTyped(ResultVal, GetIntTypeByWidth(32, True));
 end;
 
 procedure THIRBuilder.EmitExprZext(var S: TExprStack);
@@ -3224,13 +3224,13 @@ begin
       end;
       V := FindAlloca(Arg + '$len');
       if V <> 0 then
-        S.Push(EmitLoad(GetIntType, V))
+        S.Push(EmitLoad(GetIntTypeByWidth(32, True), V))
       else
       begin
-        EnsureAlloca(Arg + '$len', GetIntType);
+        EnsureAlloca(Arg + '$len', GetIntTypeByWidth(32, True));
         V := FindAlloca(Arg + '$len');
         if V <> 0 then
-          S.Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(GetIntTypeByWidth(32, True), V));
       end;
     end
     else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
@@ -3330,9 +3330,9 @@ begin
         SetLength(FGlobalTypes, FGlobalCount + 32);
       end;
       FGlobalNames[FGlobalCount] := ArrName + '$len';
-      FGlobalTypes[FGlobalCount] := GetIntType;
+      FGlobalTypes[FGlobalCount] := GetIntTypeByWidth(32, True);
       Inc(FGlobalCount);
-      FModule.AddGlobal(ArrName + '$len', GetIntType);
+      FModule.AddGlobal(ArrName + '$len', GetIntTypeByWidth(32, True));
       if IsStaticArray then
         EmitStaticArrayBacking(ArrName, ArrLength);
     end
@@ -3346,8 +3346,8 @@ begin
         EmitStore(GetPtrType, ParamValueId, FindAlloca(ArrName + '$ptr'));
         Inc(FPendingParamLlvmIdx);
         ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[FPendingParamLlvmIdx].ValueId;
-        EnsureAlloca(ArrName + '$len', GetIntType);
-        EmitStore(GetIntType, ParamValueId, FindAlloca(ArrName + '$len'));
+        EnsureAlloca(ArrName + '$len', GetIntTypeByWidth(32, True));
+        EmitStore(GetIntTypeByWidth(32, True), ParamValueId, FindAlloca(ArrName + '$len'));
         Dec(FPendingParamCount);
         Inc(FPendingParamLlvmIdx);
       end
