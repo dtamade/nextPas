@@ -13,7 +13,27 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.json;
+
+type
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
+    FBody: string;
+    FStatusWritten: Boolean;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    property Status: THttpStatus read FStatus;
+    property Body: string read FBody;
+    property StatusWritten: Boolean read FStatusWritten;
+  end;
 
 var
   T: TTestSuite;
@@ -1167,6 +1187,95 @@ begin
   Check(LRaised, 'invalid absolute request-target direct path raises EHttpError');
 end;
 
+{ TMockResponseWriter }
+
+constructor TMockResponseWriter.Create;
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+  FStatus := HTTP_STATUS_OK;
+  FStatusWritten := False;
+  FBody := '';
+end;
+
+procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
+begin
+  FStatus := AStatus;
+  FStatusWritten := True;
+end;
+
+function TMockResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
+end;
+
+function TMockResponseWriter.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LPrev: SizeInt;
+begin
+  LPrev := SizeInt(Length(FBody));
+  SetLength(FBody, LPrev + SizeInt(ACount));
+  Move(ABuf, FBody[LPrev + 1], ACount);
+  Result := ACount;
+end;
+
+procedure TMockResponseWriter.Flush;
+begin
+end;
+
+{ HttpWriteResponseJson tests }
+
+procedure TestWriteResponseJsonSetsContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+  LWritten: SizeUInt;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('{"key":"value"}');
+  LWritten := HttpWriteResponseJson(LW, HTTP_STATUS_OK, LDoc.Root);
+  Check(LM.StatusWritten, 'WriteResponseJson writes status');
+  CheckEqual(200, Int32(LM.Status), 'WriteResponseJson status is 200');
+  CheckEqual('application/json', LM.FHeaders.Get('content-type'),
+    'WriteResponseJson sets application/json content-type');
+  Check(LWritten > 0, 'WriteResponseJson returns non-zero bytes written');
+  Check(Pos('"key"', LM.Body) > 0, 'WriteResponseJson body contains JSON key');
+end;
+
+procedure TestWriteResponseJsonSerializesValue;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('[1,2,3]');
+  HttpWriteResponseJson(LW, HTTP_STATUS_CREATED, LDoc.Root);
+  CheckEqual(201, Int32(LM.Status), 'WriteResponseJson status is 201');
+  Check(Pos('[1,2,3]', LM.Body) > 0, 'WriteResponseJson serializes array');
+end;
+
+procedure TestWriteResponseJsonEmptyObject;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('{}');
+  HttpWriteResponseJson(LW, HTTP_STATUS_OK, LDoc.Root);
+  CheckEqual('{}', LM.Body, 'WriteResponseJson serializes empty object');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1266,5 +1375,11 @@ begin
     @TestRequestDirectPathAccessorTargetForms);
   T.Test('Request direct path/raw-query invalid absolute target raises',
     @TestRequestDirectPathAccessorInvalidAbsoluteTargetRaises);
+  T.Test('WriteResponseJson sets content-type and status',
+    @TestWriteResponseJsonSetsContentType);
+  T.Test('WriteResponseJson serializes value',
+    @TestWriteResponseJsonSerializesValue);
+  T.Test('WriteResponseJson empty object',
+    @TestWriteResponseJsonEmptyObject);
   if not T.Run then Halt(1);
 end.
