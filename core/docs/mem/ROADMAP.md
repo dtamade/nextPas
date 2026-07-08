@@ -115,3 +115,14 @@
 | P23-4 | TCrtAllocator | CRT 分配器，使用 C 运行时 | 7 |
 
 **模块总计**: 88 allocator 文件 / ~1262 测试
+
+## Phase 24 — 基础与高级分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P24-1 | TRtlAllocator | FPC RTL 分配器包装器 | 7 |
+| P24-2 | THotswapAllocator | 热切换分配器，运行时原子替换 | 8 |
+| P24-3 | TReplayAllocator | 回放分配器，录制/回放分配模式 | 10 |
+| P24-4 | TMappedFileAllocator | 内存映射文件分配器 | 7 |
+
+**模块总计**: 92 allocator 文件 / ~1294 测试
