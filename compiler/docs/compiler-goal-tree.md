@@ -608,3 +608,11 @@
   - 数组长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
   - 确保长度值使用正确的类型宽度 (i32)
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第九刀：deref 使用栈类型
+  - deref 操作使用 PopTyped 获取指针指向的类型
+  - 确保指针解引用使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十刀：动态数组长度使用 i32
+  - 动态数组长度加载/存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 确保动态数组长度操作使用正确的类型宽度 (i32)
+  - smoke + compiler-pass 49/49 全通过
