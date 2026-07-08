@@ -21,6 +21,7 @@ uses
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.message,
+  nextpas.core.json,
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
@@ -78,6 +79,9 @@ type
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+
+  { Re-export JSON types }
+  IJsonDocument = nextpas.core.json.IJsonDocument;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -283,6 +287,12 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 {** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
 function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt; inline;
+{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
+{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string; inline;
+{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -716,6 +726,21 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteResponseJson(AW, AStatus, AValue);
+end;
+
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyBytes(AReq);
+end;
+
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyString(AReq);
+end;
+
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyJson(AReq);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
