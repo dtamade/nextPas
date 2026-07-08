@@ -4697,8 +4697,8 @@ begin
   if TsSlot <> 0 then
   begin
     LenSlot := EmitTStringLen(TsSlot);
-    EnsureAlloca(TempName + '$len', GetIntType);
-    EmitStore(GetIntType, LenSlot, FindAlloca(TempName + '$len'));
+    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(32, True));
+    EmitStore(GetIntTypeByWidth(32, True), LenSlot, FindAlloca(TempName + '$len'));
   end;
 end;
 
@@ -4895,7 +4895,7 @@ begin
     Exit;
 
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  LenVal := EmitLoad(GetIntType, LenAlloca);
+  LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
   if ElemSizeBlob <> '' then
     ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
   else
