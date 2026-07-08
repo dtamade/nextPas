@@ -126,3 +126,12 @@
 | P24-4 | TMappedFileAllocator | 内存映射文件分配器 | 7 |
 
 **模块总计**: 92 allocator 文件 / ~1294 测试
+
+## Phase 25 — 基础与平台分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P25-1 | TAllocator (base) | 基类行为测试（mock 子类） | 7 |
+| P25-2 | TMimallocAllocator | mimalloc 不可用时的优雅降级 | 7 |
+
+**模块总计**: 92 allocator 文件 / ~1308 测试
