@@ -744,6 +744,44 @@ begin
   CheckEqual(Int64(8080), Int64(LPort), 'port round-trip');
 end;
 
+
+procedure TestSocketPairDataExchange;
+var
+  S1, S2: TPlatformSocket;
+  LSent, LRecvd: Int32;
+  LBuf: array[0..31] of AnsiChar;
+const
+  TEST_AF_UNIX = 1;
+begin
+  Check(platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2) = 0,
+    'socketpair');
+  Check(platform_socket_send(S1, PAnsiChar('pair_data'), 9, 0, LSent) = 0, 'send');
+  Check(LSent = 9, 'sent 9');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recv(S2, @LBuf[0], 32, 0, LRecvd) = 0, 'recv');
+  Check(LRecvd = 9, 'recv 9');
+  Check(LBuf[0] = 'p', 'data[0]');
+  Check(LBuf[8] = 'a', 'data[8]');
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
+
+procedure TestSocketPairShutdown;
+var
+  S1, S2: TPlatformSocket;
+  LRecvd: Int32;
+  LBuf: array[0..7] of Byte;
+const
+  TEST_AF_UNIX = 1;
+begin
+  Check(platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2) = 0,
+    'socketpair');
+  Check(platform_socket_shutdown(S1, PLATFORM_SHUT_WR) = 0, 'shutdown write');
+  Check(platform_socket_recv(S2, @LBuf[0], 8, 0, LRecvd) = 0, 'recv after shutdown');
+  Check(LRecvd = 0, 'recv returns 0 = EOF');
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -799,6 +837,10 @@ begin
   T.Test('ipv4_to_string', @TestIpv4ToString);
   T.Test('ipv4 parse+to_string round-trip', @TestIpv4RoundTrip);
   T.Test('sockaddr_from/to_ipv4 round-trip', @TestSockaddrIpv4RoundTrip);
+
+  { Socketpair data exchange }
+  T.Test('socketpair data exchange', @TestSocketPairDataExchange);
+  T.Test('socketpair shutdown', @TestSocketPairShutdown);
 
   if not T.Run then Halt(1);
 end.
