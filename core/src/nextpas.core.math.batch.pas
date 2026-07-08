@@ -173,291 +173,128 @@ function BatchScaleOffsetF32(const AInput: array of Single;
 implementation
 
 uses
-  nextpas.core.math.scalar,
-  nextpas.core.simd;
+  nextpas.core.math.batch.simd;
 
 { BatchSinF32 }
 function BatchSinF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Sin(AInput[i]);
-
-  Result := LCount;
+  Result := BatchSinSimdF32(AInput, AOutput);
 end;
 
 { BatchCosF32 }
 function BatchCosF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Cos(AInput[i]);
-
-  Result := LCount;
+  Result := BatchCosSimdF32(AInput, AOutput);
 end;
 
 { BatchTanF32 }
 function BatchTanF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Tan(AInput[i]);
-
-  Result := LCount;
+  Result := BatchTanSimdF32(AInput, AOutput);
 end;
 
 { BatchExpF32 }
 function BatchExpF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Exp(AInput[i]);
-
-  Result := LCount;
+  Result := BatchExpSimdF32(AInput, AOutput);
 end;
 
 { BatchLnF32 }
 function BatchLnF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Ln(AInput[i]);
-
-  Result := LCount;
+  Result := BatchLnSimdF32(AInput, AOutput);
 end;
 
 { BatchLog10F32 }
 function BatchLog10F32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Log10(AInput[i]);
-
-  Result := LCount;
+  Result := BatchLog10SimdF32(AInput, AOutput);
 end;
 
 { BatchLog2F32 }
 function BatchLog2F32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Log2(AInput[i]);
-
-  Result := LCount;
+  Result := BatchLog2SimdF32(AInput, AOutput);
 end;
 
 { BatchSqrtF32 }
 function BatchSqrtF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Sqrt(AInput[i]);
-
-  Result := LCount;
+  Result := BatchSqrtSimdF32(AInput, AOutput);
 end;
 
 { BatchAbsF32 }
 function BatchAbsF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Abs(AInput[i]);
-
-  Result := LCount;
+  Result := BatchAbsSimdF32(AInput, AOutput);
 end;
 
 { BatchNegF32 }
 function BatchNegF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := -AInput[i];
-
-  Result := LCount;
+  Result := BatchNegSimdF32(AInput, AOutput);
 end;
 
 { BatchCeilF32 }
 function BatchCeilF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Ceil(AInput[i]);
-
-  Result := LCount;
+  Result := BatchCeilSimdF32(AInput, AOutput);
 end;
 
 { BatchFloorF32 }
 function BatchFloorF32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Floor(AInput[i]);
-
-  Result := LCount;
+  Result := BatchFloorSimdF32(AInput, AOutput);
 end;
 
 { BatchRoundF32 }
 function BatchRoundF32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Round(AInput[i]);
-
-  Result := LCount;
+  Result := BatchRoundSimdF32(AInput, AOutput);
 end;
 
 { BatchTruncF32 }
 function BatchTruncF32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Trunc(AInput[i]);
-
-  Result := LCount;
+  Result := BatchTruncSimdF32(AInput, AOutput);
 end;
 
 { BatchLerpF32 }
 function BatchLerpF32(const AStart, AEnd: array of Single;
                       const AT: Single;
                       var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := AStart[i] + AT * (AEnd[i] - AStart[i]);
-
-  Result := LCount;
+  Result := BatchLerpSimdF32(AStart, AEnd, AT, AOutput);
 end;
 
 { BatchClampF32 }
 function BatchClampF32(const AInput: array of Single;
                        const AMin, AMax: Single;
                        var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-  begin
-    if AInput[i] < AMin then
-      AOutput[i] := AMin
-    else if AInput[i] > AMax then
-      AOutput[i] := AMax
-    else
-      AOutput[i] := AInput[i];
-  end;
-
-  Result := LCount;
+  Result := BatchClampSimdF32(AInput, AMin, AMax, AOutput);
 end;
 
 { BatchScaleOffsetF32 }
 function BatchScaleOffsetF32(const AInput: array of Single;
                              const AScale, AOffset: Single;
                              var AOutput: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-
-  for i := 0 to LCount - 1 do
-    AOutput[i] := AInput[i] * AScale + AOffset;
-
-  Result := LCount;
+  Result := BatchScaleOffsetSimdF32(AInput, AScale, AOffset, AOutput);
 end;
 
 end.
