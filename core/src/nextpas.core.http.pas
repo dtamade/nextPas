@@ -33,6 +33,7 @@ uses
   nextpas.core.http.middleware.bodycache,
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.compression,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -297,6 +298,13 @@ function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
 function ContextMiddleware: IHttpMiddleware; inline;
 {** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Response compression middleware (gzip/deflate). Compresses responses >= 1024 bytes. }
+function CompressionMiddleware: IHttpMiddleware; inline;
+{** @desc Response compression middleware with custom minimum body size. }
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -807,6 +815,22 @@ end;
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 begin
   Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
+end;
+
+function CompressionMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddleware;
+end;
+
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddlewareWith(AMinSize);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;

@@ -90,8 +90,7 @@ begin
 
       if not LFound then
       begin
-        HttpWriteResponseString(AW, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE,
-          'text/plain', 'Unsupported content type');
+        HttpWriteErrorUnsupportedMediaType(AW, 'Unsupported content type');
         Exit;
       end;
 

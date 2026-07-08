@@ -37,7 +37,8 @@ uses
   nextpas.core.io,
   nextpas.core.io.intf,
   nextpas.core.http.base,
-  nextpas.core.http.url;
+  nextpas.core.http.url,
+  nextpas.core.http.message;
 
 type
   TResponseWriterAdapter = class(TInterfacedObject, IWriter)
@@ -254,10 +255,8 @@ procedure SendRangeNotSatisfiable(AFileSize: Int64;
   const AW: IHttpResponseWriter);
 begin
   AW.GetHeaders.SetHeader('content-range', 'bytes */' + IntToStr(AFileSize));
-  AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
-  AW.GetHeaders.SetHeader('content-length', '16');
-  AW.WriteHeader(HTTP_STATUS_RANGE_NOT_SATISFIABLE);
-  AW.Write(PAnsiChar('Range Not Satisf')^, 16);
+  HttpWriteErrorResponse(AW, HTTP_STATUS_RANGE_NOT_SATISFIABLE,
+    'range_not_satisfiable', 'Range not satisfiable');
 end;
 
 { Copy file range to writer }
@@ -308,19 +307,13 @@ begin
   try
     if not nextpas.core.fs.Exists(AFilePath) then
     begin
-      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
-      AW.GetHeaders.SetHeader('content-length', '9');
-      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
-      AW.Write(PAnsiChar('Not Found')^, 9);
+      HttpWriteErrorNotFound(AW, 'File not found');
       Exit;
     end;
     LInfo := nextpas.core.fs.Stat(AFilePath);
     if LInfo.FileType <> ftRegular then
     begin
-      AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
-      AW.GetHeaders.SetHeader('content-length', '9');
-      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
-      AW.Write(PAnsiChar('Not Found')^, 9);
+      HttpWriteErrorNotFound(AW, 'File not found');
       Exit;
     end;
 
@@ -398,10 +391,7 @@ begin
       nextpas.core.io.Copy(LWriter, LFile);
     end;
   except
-    AW.GetHeaders.SetHeader('content-type', 'text/plain');
-    AW.GetHeaders.SetHeader('content-length', '21');
-    AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
-    AW.Write(PAnsiChar('Internal Server Error')^, 21);
+    HttpWriteErrorInternal(AW, 'Internal Server Error');
   end;
 end;
 
