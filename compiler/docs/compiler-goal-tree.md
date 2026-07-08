@@ -587,3 +587,9 @@
   - 大值 (-2147483648~2147483647) 使用 i32, 超大值使用 i64
   - 使用 PushTyped 传递类型信息到栈
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第五刀：ProcessAssign 使用语义模型类型
+  - ProcessAssign: 创建 alloca 时从语义模型查找变量类型
+  - 使用 FindSymbolByName 获取变量符号，再获取 TypeId
+  - 使用 SemanticTypeIdToHirTypeId 转换为 HIR 类型
+  - 确保变量 alloca 使用声明时的实际类型宽度
+  - smoke + compiler-pass 49/49 全通过
