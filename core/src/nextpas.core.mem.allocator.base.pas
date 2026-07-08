@@ -50,10 +50,10 @@ implementation
 function TAllocator.Traits: TAllocatorTraits;
 begin
   // 基类缺省值：
-  // - ThreadSafe=True: 大多数 RTL 分配器线程安全
+  // - ThreadSafe=False: 大多数中间件分配器无线程安全，需显式开启
   // - ZeroInitialized=False: GetMem 不保证零填充
   Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
+  Result.ThreadSafe      := False;
   Result.SupportsRealloc := True;
 end;
 

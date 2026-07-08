@@ -142,7 +142,6 @@ begin
     Result.ZeroInitialized := False;
     Result.SupportsRealloc := False;
   end;
-  Result.ThreadSafe := True;
 end;
 
 end.
