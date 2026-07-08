@@ -2049,17 +2049,29 @@ var
   LOutSink: IOutputSink;
   LSuite: TTestRunResult;
   LRes: TTestResult;
-  I, J, LFailIdx: Integer;
+  I, J, LFailIdx, LTotal: Integer;
+  LPassRate: Double;
 begin
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
+  LTotal := TotalPass + TotalFail + TotalSkip;
   LOutSink.WriteLn('');
   LOutSink.WriteLn(AnsiBold('=== Summary ===', LConfig));
   LOutSink.WriteLn('  Suites: ' + IntToStr(Length(Suites)));
-  LOutSink.WriteLn(
-    '  Passed: ' + IntToStr(TotalPass) +
-    ', Failed: ' + IntToStr(TotalFail) +
-    ', Skipped: ' + IntToStr(TotalSkip));
+  if LTotal > 0 then
+  begin
+    LPassRate := (TotalPass / LTotal) * 100.0;
+    LOutSink.WriteLn(
+      '  Passed: ' + IntToStr(TotalPass) +
+      ', Failed: ' + IntToStr(TotalFail) +
+      ', Skipped: ' + IntToStr(TotalSkip) +
+      ' (' + FormatFloat('0.0', LPassRate) + '% pass rate)');
+  end
+  else
+    LOutSink.WriteLn(
+      '  Passed: ' + IntToStr(TotalPass) +
+      ', Failed: ' + IntToStr(TotalFail) +
+      ', Skipped: ' + IntToStr(TotalSkip));
 
   { Failure summary: list all failed/error tests with details }
   if (TotalFail > 0) and (Length(LastResults) > 0) then

@@ -147,6 +147,19 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 { CheckNotNaN — passes if AValue is NOT NaN. }
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+
+{ ── Regex Matching ──────────────────────────────────────────────────────────── }
+
+{ Check that AStr matches regex APattern. Uses nextpas.core.regex for matching.
+  Fails with pattern/str details on mismatch. }
+procedure CheckMatch(const APattern, AStr: string); overload;
+procedure CheckMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+{ Check that AStr does NOT match regex APattern. }
+procedure CheckNotMatch(const APattern, AStr: string); overload;
+procedure CheckNotMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
@@ -198,7 +211,8 @@ implementation
 uses
   nextpas.core.math.scalar,     { IsNan for Double comparison NaN guards }
   nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
-  nextpas.core.fs;             { ReadFileText/WriteFileText for snapshot I/O }
+  nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
+  nextpas.core.regex;          { RegexIsMatch for CheckMatch }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -492,6 +506,36 @@ procedure CheckNotNaN(const AValue: Double; const AMessage: string);
 begin
   if IsNan(AValue) then
     FailPrepend(AMessage, 'Expected non-NaN but got NaN');
+end;
+
+{ ── Regex Matching ──────────────────────────────────────────────────────────── }
+
+procedure CheckMatch(const APattern, AStr: string);
+begin
+  if not RegexIsMatch(APattern, AStr) then
+    InternalFail('Expected string to match pattern "' + APattern + '"' +
+      #10 + '  actual: "' + AStr + '"');
+end;
+
+procedure CheckMatch(const APattern, AStr: string; const AMessage: string);
+begin
+  if not RegexIsMatch(APattern, AStr) then
+    FailPrepend(AMessage, 'Expected string to match pattern "' + APattern + '"' +
+      #10 + '  actual: "' + AStr + '"');
+end;
+
+procedure CheckNotMatch(const APattern, AStr: string);
+begin
+  if RegexIsMatch(APattern, AStr) then
+    InternalFail('Expected string NOT to match pattern "' + APattern + '"' +
+      #10 + '  actual: "' + AStr + '"');
+end;
+
+procedure CheckNotMatch(const APattern, AStr: string; const AMessage: string);
+begin
+  if RegexIsMatch(APattern, AStr) then
+    FailPrepend(AMessage, 'Expected string NOT to match pattern "' + APattern + '"' +
+      #10 + '  actual: "' + AStr + '"');
 end;
 
 procedure CheckEqual(const AExpected, AActual: Double;

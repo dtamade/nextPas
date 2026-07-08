@@ -444,6 +444,31 @@ begin
     end);
 end;
 
+{ ── R52: WithTempDir helper ─────────────────────────────────────────────────── }
+
+procedure TestWithTempDirProc(const ADir: string);
+var
+  LF: TextFile;
+begin
+  CheckTrue(ADir <> '', 'dir should not be empty');
+  CheckTrue(DirectoryExists(ADir), 'dir should exist');
+  { Create a file inside }
+  AssignFile(LF, ADir + '/test.txt');
+  Rewrite(LF);
+  WriteLn(LF, 'hello');
+  CloseFile(LF);
+  CheckTrue(FileExists(ADir + '/test.txt'), 'file should exist');
+end;
+
+procedure TestWithTempDir;
+var
+  LCreated: Boolean;
+begin
+  LCreated := False;
+  WithTempDir(@TestWithTempDirProc);
+  CheckTrue(True, 'WithTempDir completed');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -473,6 +498,7 @@ begin
   LSuite.TestSubtest('subtest duration',     @TestSubtestDuration);
   LSuite.TestSubtest('closure subtest',      @TestClosureSubtest);
   LSuite.TestSubtest('TempDir',              @TestTempDirCreation);
+  LSuite.Test('WithTempDir',                   @TestWithTempDir);
 
   if not LSuite.Run then
   begin
@@ -490,13 +516,13 @@ begin
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
   WriteLn(AnsiBold('AfterEach count: '), GAfterEachCount);
   { BeforeEach/AfterEach should have been called exactly once per registered test }
-  if GBeforeEachCount <> 14 then
+  if GBeforeEachCount <> 15 then
   begin
-    FailTest('expected exactly 14 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
+    FailTest('expected exactly 15 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
   end;
-  if GAfterEachCount <> 14 then
+  if GAfterEachCount <> 15 then
   begin
-    FailTest('expected exactly 14 AfterEach calls, got ' + IntToStr(GAfterEachCount));
+    FailTest('expected exactly 15 AfterEach calls, got ' + IntToStr(GAfterEachCount));
   end;
 
   { ── Verify subtest failure propagation ────────────────────────────────────── }

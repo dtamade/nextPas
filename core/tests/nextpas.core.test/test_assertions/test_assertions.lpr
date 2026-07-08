@@ -1265,6 +1265,39 @@ begin
     'ReadFileContents should return False for missing file');
 end;
 
+{ ── R52: CheckMatch / CheckNotMatch ────────────────────────────────────────── }
+
+procedure TestCheckMatchPass;
+begin
+  CheckMatch('\d+', 'hello123world');
+end;
+
+procedure TestCheckMatchFail;
+begin
+  ExpectFail(procedure begin
+    CheckMatch('^\d+$', 'hello');
+  end, 'match pattern');
+end;
+
+procedure TestCheckMatchWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckMatch('\d+', 'no digits here', 'should have digits');
+  end, 'should have digits');
+end;
+
+procedure TestCheckNotMatchPass;
+begin
+  CheckNotMatch('^\d+$', 'hello');
+end;
+
+procedure TestCheckNotMatchFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotMatch('\d+', 'hello123');
+  end, 'NOT to match');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1462,6 +1495,13 @@ begin
   { Audit round 4: File I/O utilities }
   LSuite.Test('ReadWriteFileContents',    @TestReadWriteFileContents);
   LSuite.Test('ReadFileNotFound',         @TestReadFileContentsNotFound);
+
+  { R52: Regex matching }
+  LSuite.Test('Match pass',              @TestCheckMatchPass);
+  LSuite.Test('Match fail',              @TestCheckMatchFail);
+  LSuite.Test('Match+msg',               @TestCheckMatchWithMessage);
+  LSuite.Test('NotMatch pass',           @TestCheckNotMatchPass);
+  LSuite.Test('NotMatch fail',           @TestCheckNotMatchFail);
 
   if not LSuite.Run then
   begin

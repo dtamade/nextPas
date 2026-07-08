@@ -251,6 +251,20 @@ begin nextpas.core.test.check.CheckNaN(AValue, AMessage); end;
 procedure CheckNotNaN(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNaN(AValue, AMessage); end;
 
+procedure CheckMatch(const APattern, AStr: string);
+begin nextpas.core.test.check.CheckMatch(APattern, AStr); end;
+
+procedure CheckMatch(const APattern, AStr: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckMatch(APattern, AStr, AMessage); end;
+
+procedure CheckNotMatch(const APattern, AStr: string);
+begin nextpas.core.test.check.CheckNotMatch(APattern, AStr); end;
+
+procedure CheckNotMatch(const APattern, AStr: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckNotMatch(APattern, AStr, AMessage); end;
+
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
 

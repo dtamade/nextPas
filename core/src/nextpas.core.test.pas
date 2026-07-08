@@ -218,6 +218,15 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+
+{ ── Regex Matching ──────────────────────────────────────────────────────────── }
+procedure CheckMatch(const APattern, AStr: string); overload;
+procedure CheckMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+procedure CheckNotMatch(const APattern, AStr: string); overload;
+procedure CheckNotMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
@@ -363,6 +372,7 @@ function MockDouble(const AValue: Double): TMockValue;
 
 type
   TMockProc = nextpas.core.test.helpers.TMockProc;
+  TTempDirProc = nextpas.core.test.helpers.TTempDirProc;
 
 { ── Re-exported functions from test.helpers ─────────────────────────────── }
 
@@ -372,6 +382,7 @@ procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+procedure WithTempDir(AProc: TTempDirProc);
 
 { ── Re-exported types from test.prop ───────────────────────────────────────── }
 

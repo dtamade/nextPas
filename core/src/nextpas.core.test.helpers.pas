@@ -21,6 +21,7 @@ uses
 
 type
   TMockProc = procedure(AMock: TMock);
+  TTempDirProc = procedure(const ADir: string);
 
 { Verify closure raises EAssertionFailed.
   Optional AContains: substring check on the message. }
@@ -39,7 +40,22 @@ procedure ExpectFailWithMock(AProc: TMockProc;
   Returns the sink so the caller can read captured output. }
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 
+{ Create a temporary directory, run AProc(dir), then delete it.
+  The directory is always cleaned up, even on exception.
+  Example:
+    WithTempDir(procedure(const Dir: string)
+    begin
+      WriteFileContents(Dir + '/test.txt', 'hello');
+      CheckTrue(FileExists(Dir + '/test.txt'));
+    end); }
+procedure WithTempDir(AProc: TTempDirProc);
+
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.platform.env;
 
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
@@ -90,6 +106,23 @@ begin
   Result.OutSink := ASink;
   Result.ErrSink := ASink;
   Result.AnsiMode := amOff;
+end;
+
+procedure WithTempDir(AProc: TTempDirProc);
+var
+  LBaseDir, LDir: string;
+begin
+  LBaseDir := platform_env_get_str('TMPDIR');
+  if LBaseDir = '' then
+    LBaseDir := '/tmp';
+  LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+  LDir := LBaseDir + 'nextpas_tmp_' + IntToStr(Int64(@AProc));
+  ForceDirectories(LDir);
+  try
+    AProc(LDir);
+  finally
+    RemoveAll(LDir);
+  end;
 end;
 
 end.
