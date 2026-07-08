@@ -41,8 +41,7 @@ uses
   nextpas.core.lockfree.stampedlock,
   nextpas.core.lockfree.ringbuffer,
   nextpas.core.lockfree.trie,
-  nextpas.core.lockfree.timerwheel,
-  nextpas.core.lockfree.timeoutqueue;
+  nextpas.core.lockfree.timerwheel;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -290,15 +289,6 @@ type
   }
   TTimerWheel = nextpas.core.lockfree.timerwheel.TTimerWheel;
   TLockFreeTimerResult = nextpas.core.lockfree.timerwheel.TLockFreeTimerResult;
-
-  {** @desc 并发超时队列
-    @details 元素带有过期时间的并发队列。
-      过期元素自动跳过，返回下一个有效元素。
-    @see TTimeoutQueueImpl 详细文档和示例
-  }
-  generic TTimeoutQueue<T> = class(specialize TTimeoutQueueImpl<T>)
-  end;
-  TLockFreeTimeoutQueueResult = nextpas.core.lockfree.timeoutqueue.TLockFreeTimeoutQueueResult;
 
 implementation
 
