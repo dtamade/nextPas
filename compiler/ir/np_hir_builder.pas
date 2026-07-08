@@ -6933,7 +6933,7 @@ begin
         Instr.CallTarget := PartBlob;
         EmitInstr(Instr);
         DataPtr := Instr.ResultId;
-        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntType);
+        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntTypeByWidth(32, True));
         if (DataPtr <> 0) and (LenVal <> 0) then
         begin
           if (ArgCount + 1) >= Length(ArgValues) then
@@ -6945,7 +6945,7 @@ begin
           ArgTypes[ArgCount] := GetPtrType;
           Inc(ArgCount);
           ArgValues[ArgCount] := LenVal;
-          ArgTypes[ArgCount] := GetIntType;
+          ArgTypes[ArgCount] := GetIntTypeByWidth(32, True);
           Inc(ArgCount);
         end;
       end
@@ -7162,7 +7162,7 @@ begin
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikLoad;
-    Instr.TypeId := GetIntType;
+    Instr.TypeId := GetIntTypeByWidth(32, True);
     Instr.IntrinsicName := 'const:' + IntToStr(Length(SrcName));
     EmitInstr(Instr);
     LenConst := Instr.ResultId;
@@ -7175,7 +7175,7 @@ begin
     Instr.Operands[1].ValueId := SrcPtr;
     Instr.Operands[1].TypeId := GetPtrType;
     Instr.Operands[2].ValueId := LenConst;
-    Instr.Operands[2].TypeId := GetIntType;
+    Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
     EmitInstr(Instr);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.Kind := hikIntrinsic;
