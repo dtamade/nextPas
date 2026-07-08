@@ -1276,6 +1276,138 @@ begin
   CheckEqual('{}', LM.Body, 'WriteResponseJson serializes empty object');
 end;
 
+{ HttpReadRequestBody* tests }
+
+procedure TestReadRequestBodyBytesReadsBody;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LData: TBytes;
+begin
+  SetLength(LData, 5);
+  Move('hello'[1], LData[0], 5);
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/octet-stream', LData);
+  LBody := HttpReadRequestBodyBytes(LReq);
+  CheckEqual(Int64(5), Int64(Length(LBody)), 'ReadRequestBodyBytes length');
+  CheckEqual(Byte(Ord('h')), LBody[0], 'ReadRequestBodyBytes first byte');
+  CheckEqual(Byte(Ord('o')), LBody[4], 'ReadRequestBodyBytes last byte');
+end;
+
+procedure TestReadRequestBodyStringReadsBody;
+var
+  LReq: IHttpRequest;
+  LBody: string;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'text/plain', 'hello world');
+  LBody := HttpReadRequestBodyString(LReq);
+  CheckEqual('hello world', LBody, 'ReadRequestBodyString content');
+end;
+
+procedure TestReadRequestBodyJsonParsesObject;
+var
+  LReq: IHttpRequest;
+  LDoc: IJsonDocument;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '{"key":"value"}');
+  LDoc := HttpReadRequestBodyJson(LReq);
+  Check(LDoc <> nil, 'ReadRequestBodyJson returns document');
+  Check(LDoc.Root.IsValid, 'ReadRequestBodyJson returns valid root');
+  CheckEqual('value', LDoc.Root.ObjectGet('key').AsStr.ToString,
+    'ReadRequestBodyJson parses key');
+end;
+
+procedure TestReadRequestBodyJsonParsesArray;
+var
+  LReq: IHttpRequest;
+  LDoc: IJsonDocument;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '[1,2,3]');
+  LDoc := HttpReadRequestBodyJson(LReq);
+  Check(LDoc <> nil, 'ReadRequestBodyJson array returns document');
+  Check(LDoc.Root.IsArray, 'ReadRequestBodyJson root is array');
+  CheckEqual(Int64(3), Int64(LDoc.Root.ArrayLen), 'ReadRequestBodyJson array length');
+end;
+
+procedure TestReadRequestBodyBytesNilBodyReturnsNil;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+begin
+  LReq := NewGetRequest('/no-body');
+  LBody := HttpReadRequestBodyBytes(LReq);
+  Check(LBody = nil, 'ReadRequestBodyBytes nil body returns nil');
+end;
+
+procedure TestReadRequestBodyStringNilBodyReturnsEmpty;
+var
+  LReq: IHttpRequest;
+  LBody: string;
+begin
+  LReq := NewGetRequest('/no-body');
+  LBody := HttpReadRequestBodyString(LReq);
+  CheckEqual('', LBody, 'ReadRequestBodyString nil body returns empty');
+end;
+
+procedure TestReadRequestBodyBytesNilRequestRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpReadRequestBodyBytes(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyBytes nil request raises');
+end;
+
+procedure TestReadRequestBodyStringNilRequestRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpReadRequestBodyString(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyString nil request raises');
+end;
+
+procedure TestReadRequestBodyJsonInvalidJsonRaises;
+var
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '{invalid');
+  LRaised := False;
+  try
+    HttpReadRequestBodyJson(LReq);
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyJson invalid JSON raises');
+end;
+
+procedure TestReadRequestBodyBytesEmptyBodyReturnsNil;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/octet-stream', '');
+  LBody := HttpReadRequestBodyBytes(LReq);
+  Check(LBody = nil, 'ReadRequestBodyBytes empty body returns nil');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1381,5 +1513,25 @@ begin
     @TestWriteResponseJsonSerializesValue);
   T.Test('WriteResponseJson empty object',
     @TestWriteResponseJsonEmptyObject);
+  T.Test('ReadRequestBodyBytes reads body',
+    @TestReadRequestBodyBytesReadsBody);
+  T.Test('ReadRequestBodyString reads body',
+    @TestReadRequestBodyStringReadsBody);
+  T.Test('ReadRequestBodyJson parses object',
+    @TestReadRequestBodyJsonParsesObject);
+  T.Test('ReadRequestBodyJson parses array',
+    @TestReadRequestBodyJsonParsesArray);
+  T.Test('ReadRequestBodyBytes nil body returns nil',
+    @TestReadRequestBodyBytesNilBodyReturnsNil);
+  T.Test('ReadRequestBodyString nil body returns empty',
+    @TestReadRequestBodyStringNilBodyReturnsEmpty);
+  T.Test('ReadRequestBodyBytes nil request raises',
+    @TestReadRequestBodyBytesNilRequestRaises);
+  T.Test('ReadRequestBodyString nil request raises',
+    @TestReadRequestBodyStringNilRequestRaises);
+  T.Test('ReadRequestBodyJson invalid JSON raises',
+    @TestReadRequestBodyJsonInvalidJsonRaises);
+  T.Test('ReadRequestBodyBytes empty body returns nil',
+    @TestReadRequestBodyBytesEmptyBodyReturnsNil);
   if not T.Run then Halt(1);
 end.

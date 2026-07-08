@@ -10,7 +10,8 @@ uses
   nextpas.core.net.base,
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.url;
+  nextpas.core.http.url,
+  nextpas.core.json;
 
 type
   THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions)
@@ -160,6 +161,12 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 {** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
 function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
 
 type
   { Fluent builder for HTTP requests.
@@ -204,8 +211,7 @@ uses
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.encoding,
-  nextpas.core.http.headers,
-  nextpas.core.json;
+  nextpas.core.http.headers;
 
 function BytesBodyReader(const ABodyBytes: TBytes): IReader;
 var
@@ -848,6 +854,52 @@ function HttpWriteResponseJson(const AW: IHttpResponseWriter;
 begin
   Result := HttpWriteResponseString(AW, AStatus, 'application/json',
     JsonStringify(AValue));
+end;
+
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+var
+  LBody: IReader;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LTotal: SizeUInt;
+begin
+  if AReq = nil then
+    raise EArgumentError.Create('HTTP request is nil');
+  LBody := AReq.Body;
+  if LBody = nil then
+    Exit(nil);
+  Result := nil;
+  LTotal := 0;
+  repeat
+    LN := LBody.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    if LN > 0 then
+    begin
+      SetLength(Result, LTotal + LN);
+      Move(LBuf[0], Result[LTotal], LN);
+      Inc(LTotal, LN);
+    end;
+  until LN = 0;
+end;
+
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+var
+  LBody: TBytes;
+begin
+  LBody := HttpReadRequestBodyBytes(AReq);
+  Result := '';
+  SetLength(Result, Length(LBody));
+  if Length(LBody) > 0 then
+    Move(LBody[0], Result[1], Length(LBody));
+end;
+
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+var
+  LBody: string;
+begin
+  LBody := HttpReadRequestBodyString(AReq);
+  Result := JsonParse(LBody);
+  if (Result <> nil) and Result.HasError then
+    raise EHttpError.Create('HTTP request body contains invalid JSON');
 end;
 
 { THttpRequestBuilder }
