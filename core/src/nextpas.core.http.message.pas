@@ -202,6 +202,12 @@ function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
 {** @desc Write 429 Too Many Requests JSON error response. }
 function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 409 Conflict JSON error response. }
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 422 Unprocessable Entity JSON error response. }
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -1040,6 +1046,18 @@ function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_TOO_MANY_REQUESTS, 'too_many_requests', AMessage);
+end;
+
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_CONFLICT, 'conflict', AMessage);
+end;
+
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNPROCESSABLE_ENTITY, 'unprocessable_entity', AMessage);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);

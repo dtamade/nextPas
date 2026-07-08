@@ -1784,6 +1784,32 @@ begin
   Check(Pos('Slow down', LM.Body) > 0, 'message preserved');
 end;
 
+procedure TestErrorConflict;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorConflict(LW, 'Resource already exists');
+  CheckEqual(Int64(409), Int64(LM.Status), 'status 409');
+  Check(Pos('"code":"conflict"', LM.Body) > 0, 'code is conflict');
+  Check(Pos('Resource already exists', LM.Body) > 0, 'message preserved');
+end;
+
+procedure TestErrorUnprocessableEntity;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorUnprocessableEntity(LW, 'Validation failed');
+  CheckEqual(Int64(422), Int64(LM.Status), 'status 422');
+  Check(Pos('"code":"unprocessable_entity"', LM.Body) > 0, 'code is unprocessable_entity');
+  Check(Pos('Validation failed', LM.Body) > 0, 'message preserved');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1961,5 +1987,9 @@ begin
     @TestHtmlNoBodyStatusWithBodyRaises);
   T.Test('ErrorResponse 429 Too Many Requests',
     @TestErrorTooManyRequests);
+  T.Test('ErrorResponse 409 Conflict',
+    @TestErrorConflict);
+  T.Test('ErrorResponse 422 Unprocessable Entity',
+    @TestErrorUnprocessableEntity);
   if not T.Run then Halt(1);
 end.
