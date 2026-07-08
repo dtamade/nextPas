@@ -392,6 +392,35 @@ begin
   Check(True, 'multiple yields complete without crash');
 end;
 
+procedure TestTlsMultipleKeys;
+var
+  LKey1, LKey2: TPlatformTLSKey;
+begin
+  Check(platform_tls_create(LKey1) = 0, 'create key1');
+  Check(platform_tls_create(LKey2) = 0, 'create key2');
+  Check(platform_tls_set(LKey1, Pointer(111)) = 0, 'set key1');
+  Check(platform_tls_set(LKey2, Pointer(222)) = 0, 'set key2');
+  CheckEqual(Int64(111), Int64(PtrUInt(platform_tls_get(LKey1))), 'get key1');
+  CheckEqual(Int64(222), Int64(PtrUInt(platform_tls_get(LKey2))), 'get key2');
+  platform_tls_destroy(LKey1);
+  platform_tls_destroy(LKey2);
+end;
+
+procedure TestThreadCreateNilProc;
+var
+  LHandle: TPlatformThreadHandle;
+  LRet: Int32;
+begin
+  LRet := platform_thread_create(LHandle, nil, nil);
+  Check(LRet <> 0, 'create with nil proc returns error');
+end;
+
+procedure TestThreadSleepNsShort;
+begin
+  platform_thread_sleep_ns(1000); { 1 microsecond }
+  Check(True, 'sleep_ns(1000) completes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -419,5 +448,8 @@ begin
   T.Test('sleep_ns(0)', @TestSleepNsZero);
   T.Test('sleep_ms(0)', @TestSleepMsZero);
   T.Test('yield multiple', @TestThreadYieldMultiple);
+  T.Test('TLS multiple keys', @TestTlsMultipleKeys);
+  T.Test('Thread create nil proc', @TestThreadCreateNilProc);
+  T.Test('sleep_ns short', @TestThreadSleepNsShort);
   if not T.Run then Halt(1);
 end.

@@ -873,6 +873,71 @@ begin
   Check(True, 'barrier init/destroy cycle 10 times');
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+var
+  GOnceFlag: Int32 = 0;
+
+procedure TestOnceCallback;
+begin
+  GOnceFlag := 1;
+end;
+
+function TestBarrierThread(AArg: Pointer): Pointer; cdecl;
+var
+  LBarrier: Pointer;
+begin
+  LBarrier := AArg;
+  platform_barrier_wait(TPlatformBarrier(LBarrier^));
+  Result := nil;
+end;
+
+procedure TestOnceExecWithCallback;
+var
+  LOnce: TPlatformOnce;
+begin
+  GOnceFlag := 0;
+  Check(platform_once_init(LOnce) = 0, 'once_init');
+  Check(platform_once_exec(LOnce, @TestOnceCallback) = 0, 'once_exec');
+  CheckEqual(Int64(1), Int64(GOnceFlag), 'callback was executed');
+  { Second exec should be no-op }
+  GOnceFlag := 99;
+  Check(platform_once_exec(LOnce, @TestOnceCallback) = 0, 'once_exec second time');
+  CheckEqual(Int64(99), Int64(GOnceFlag), 'callback not executed second time');
+  platform_once_destroy(LOnce);
+end;
+
+procedure TestBarrierCount2WithThread;
+var
+  LBarrier: TPlatformBarrier;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+begin
+  Check(platform_barrier_init(LBarrier, 2) = 0, 'barrier_init count=2');
+  Check(platform_thread_create(LHandle, @TestBarrierThread, @LBarrier) = 0, 'create thread');
+  { Both threads must reach barrier }
+  platform_barrier_wait(LBarrier);
+  Check(platform_thread_join(LHandle, LRetVal) = 0, 'join thread');
+  platform_barrier_destroy(LBarrier);
+  Check(True, 'barrier count=2 with thread');
+end;
+{$ENDIF}
+
+procedure TestAddressWaitNilAddress;
+var
+  LRet: Int32;
+begin
+  LRet := platform_wait_address32(nil, 0, 1000000);
+  Check(LRet <> 0, 'wait on nil address returns error');
+end;
+
+procedure TestAddress64WaitNilAddress;
+var
+  LRet: Int32;
+begin
+  LRet := platform_wait_address64(nil, 0, 1000000);
+  Check(LRet <> 0, 'wait64 on nil address returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -915,5 +980,11 @@ begin
   T.Test('RwLock multiple readers', @TestRwLockMultipleReaders);
   T.Test('CondVar signal no waiter', @TestCondVarSignalNoWaiter);
   T.Test('Barrier init/destroy cycle', @TestBarrierInitDestroyCycle);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('Once exec with callback', @TestOnceExecWithCallback);
+  T.Test('Barrier count=2 with thread', @TestBarrierCount2WithThread);
+  {$ENDIF}
+  T.Test('Address wait nil address', @TestAddressWaitNilAddress);
+  T.Test('Address64 wait nil address', @TestAddress64WaitNilAddress);
   if not T.Run then Halt(1);
 end.
