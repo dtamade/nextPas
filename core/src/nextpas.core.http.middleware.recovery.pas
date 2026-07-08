@@ -26,7 +26,8 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.http.base,
-  nextpas.core.http.middleware;
+  nextpas.core.http.middleware,
+  nextpas.core.http.message;
 
 function RecoveryMiddleware: IHttpMiddleware;
 begin
@@ -38,8 +39,6 @@ begin
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    var
-      LMsg: string;
     begin
       try
         ANext.ServeHTTP(AReq, AW);
@@ -47,10 +46,18 @@ begin
         on E: Exception do
         begin
           if Assigned(AOnError) then
-            AOnError(E);
-          LMsg := 'Internal Server Error';
-          AW.WriteHeader(HTTP_STATUS_INTERNAL_SERVER_ERROR);
-          AW.Write(LMsg[1], Length(LMsg));
+          begin
+            try
+              AOnError(E);
+            except
+              { Swallow callback errors — never let logging break the response }
+            end;
+          end;
+          try
+            HttpWriteErrorInternal(AW, 'Internal Server Error');
+          except
+            { Headers may already be sent — nothing we can do }
+          end;
         end;
       end;
     end);

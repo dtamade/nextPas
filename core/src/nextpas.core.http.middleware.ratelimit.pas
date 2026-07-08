@@ -55,10 +55,35 @@ type
 var
   GEntries: array of TLimitEntry;
   GEntriesLock: TRTLCriticalSection;
+  GCleanupCounter: Int32;
+
+const
+  CLEANUP_INTERVAL = 64;
 
 function NowEpoch: Int64;
 begin
   Result := Int64(DateTimeToUnix(Now));
+end;
+
+{ Remove entries whose window has expired. Called every CLEANUP_INTERVAL requests
+  to prevent unbounded memory growth. }
+procedure CleanupExpiredEntries(ANow: Int64; AWindowSec: Int32);
+var
+  LI, LWrite, LLen: Int32;
+begin
+  LLen := Length(GEntries);
+  LWrite := 0;
+  for LI := 0 to LLen - 1 do
+  begin
+    if ANow - GEntries[LI].WindowStart < Int64(AWindowSec) then
+    begin
+      if LWrite <> LI then
+        GEntries[LWrite] := GEntries[LI];
+      Inc(LWrite);
+    end;
+  end;
+  if LWrite < LLen then
+    SetLength(GEntries, LWrite);
 end;
 
 function ExtractClientIP(const AReq: IHttpRequest): string;
@@ -153,6 +178,15 @@ begin
         LReset := Int64(LWindow) - (LNow - GEntries[LIdx].WindowStart);
         if LReset < 0 then
           LReset := 0;
+
+        { Periodic cleanup: every CLEANUP_INTERVAL requests, evict expired entries
+          to prevent unbounded memory growth. }
+        Inc(GCleanupCounter);
+        if GCleanupCounter >= CLEANUP_INTERVAL then
+        begin
+          GCleanupCounter := 0;
+          CleanupExpiredEntries(LNow, LWindow);
+        end;
 
         AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(LMax)));
         AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));

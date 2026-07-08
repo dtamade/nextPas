@@ -27,6 +27,8 @@ uses
   nextpas.core.http.middleware.metrics,
   nextpas.core.http.middleware.methodguard,
   nextpas.core.http.middleware.bodycache,
+  nextpas.core.http.middleware.serverheader,
+  nextpas.core.http.middleware.context,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -197,7 +199,8 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500');
-  CheckEqual('Internal Server Error', LWObj.Body, 'recovery returns generic body');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'recovery returns JSON error code');
+  Check(Pos('Internal Server Error', LWObj.Body) > 0, 'recovery returns generic message');
   Check(Pos('password', LWObj.Body) = 0, 'body does not expose field names');
   Check(Pos('secret', LWObj.Body) = 0, 'body does not expose secret values');
 end;
@@ -246,7 +249,7 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500 for detailed error');
-  CheckEqual('Internal Server Error', LWObj.Body, 'recovery hides detailed body');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'recovery returns JSON error code');
   Check(Pos('detailed error info', LWObj.Body) = 0, 'body does not expose exception message');
 end;
 
@@ -279,7 +282,7 @@ begin
   Check(LCallbackCalled, 'callback was called');
   CheckEqual('boom', LCaughtMsg, 'callback received exception message');
   CheckEqual(Int64(500), Int64(LWObj.Status), 'still returns 500');
-  CheckEqual('Internal Server Error', LWObj.Body, 'body is still generic');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'body is JSON error');
 end;
 
 procedure TestRecoveryWithNilCallbackBehavesLikeSilent;
@@ -301,7 +304,7 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'nil callback still returns 500');
-  CheckEqual('Internal Server Error', LWObj.Body, 'nil callback still generic body');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'nil callback still returns JSON error');
 end;
 
 procedure TestRecoveryWithSuccessPassesThrough;
@@ -2337,6 +2340,141 @@ begin
   Check(LRaised, 'raises on nil callback');
 end;
 
+{ ServerHeader middleware tests }
+
+procedure TestServerHeaderDefault;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ServerHeaderMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual('nextpas', LWObj.FHeaders.Get('server'), 'default server header');
+end;
+
+procedure TestServerHeaderCustom;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ServerHeaderMiddlewareWith('myapp/1.0')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual('myapp/1.0', LWObj.FHeaders.Get('server'), 'custom server header');
+end;
+
+{ Context middleware tests }
+
+procedure TestContextMiddlewareCreatesContext;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCtxFound: Boolean;
+begin
+  LCtxFound := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LCtx: IHttpContext;
+    begin
+      LCtx := HttpContextOf(AReq);
+      LCtxFound := LCtx <> nil;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LCtxFound, 'context was created');
+end;
+
+procedure TestContextMiddlewareSetGetValue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LGotHas: Boolean;
+begin
+  LGotHas := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LCtx: IHttpContext;
+    begin
+      LCtx := HttpContextOf(AReq);
+      if LCtx <> nil then
+      begin
+        LCtx.SetValue('test_key', TObject(LCtx));
+        LGotHas := LCtx.Has('test_key');
+        LCtx.Remove('test_key');
+        LGotHas := LGotHas and (not LCtx.Has('test_key'));
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LGotHas, 'set/has/remove works');
+end;
+
+procedure TestContextMiddlewareNilWithoutContext;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := TMockRequest.Create(hmGet, '/test');
+  Check(HttpContextOf(LReq) = nil, 'returns nil without context middleware');
+end;
+
+procedure TestContextMiddlewareCleansUp;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(HttpContextOf(LReq) = nil, 'context cleaned up after handler');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2438,5 +2576,13 @@ begin
   { MetricsWithFields }
   T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
+  { ServerHeader }
+  T.Test('ServerHeader: default nextpas', @TestServerHeaderDefault);
+  T.Test('ServerHeader: custom name', @TestServerHeaderCustom);
+  { Context }
+  T.Test('Context: creates context', @TestContextMiddlewareCreatesContext);
+  T.Test('Context: set and get value', @TestContextMiddlewareSetGetValue);
+  T.Test('Context: nil without middleware', @TestContextMiddlewareNilWithoutContext);
+  T.Test('Context: cleans up after handler', @TestContextMiddlewareCleansUp);
   if not T.Run then Halt(1);
 end.

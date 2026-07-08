@@ -30,6 +30,8 @@ uses
   nextpas.core.http.middleware.metrics,
   nextpas.core.http.middleware.methodguard,
   nextpas.core.http.middleware.bodycache,
+  nextpas.core.http.middleware.serverheader,
+  nextpas.core.http.middleware.context,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -69,6 +71,7 @@ type
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IH2StreamControl = nextpas.core.http.intf.IH2StreamControl;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 
@@ -284,6 +287,14 @@ function BodyCacheMiddleware: IHttpMiddleware; inline;
 {** @desc Metrics middleware with structured fields (method, path, status, duration). }
 function MetricsMiddlewareWithFields(
   const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware; inline;
+{** @desc Add "Server: nextpas" header to every response. }
+function ServerHeaderMiddleware: IHttpMiddleware; inline;
+{** @desc Add "Server: <ACustomName>" header to every response. }
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware; inline;
+{** @desc Context middleware — wraps requests with IHttpContext for data propagation. }
+function ContextMiddleware: IHttpMiddleware; inline;
+{** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -771,6 +782,26 @@ function MetricsMiddlewareWithFields(
   const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWithFields(ACallback);
+end;
+
+function ServerHeaderMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddleware;
+end;
+
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddlewareWith(ACustomName);
+end;
+
+function ContextMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.context.ContextMiddleware;
+end;
+
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
