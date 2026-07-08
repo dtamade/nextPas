@@ -311,7 +311,6 @@ end;
 function TStackAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
   Result.SupportsRealloc := False;
 end;
 

@@ -264,7 +264,6 @@ end;
 function TArena2Allocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
   Result.SupportsRealloc := False;
 end;
 

@@ -176,7 +176,6 @@ function TBumpAllocator.Traits: TAllocatorTraits;
 begin
   Result := inherited Traits;
   Result.SupportsRealloc := False;
-  Result.ThreadSafe := False;
 end;
 
 procedure TBumpAllocator.DoFreeMem(APtr: Pointer);

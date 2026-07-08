@@ -921,7 +921,6 @@ end;
 function TSlabPool.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;   // AllocMem 保证零填充
-  Result.ThreadSafe      := False;  // 当前未加锁
   Result.SupportsRealloc := True;
 end;
 

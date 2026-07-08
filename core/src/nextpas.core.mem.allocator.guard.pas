@@ -39,7 +39,6 @@ type
     function DoAllocMem(ASize: SizeUInt): Pointer; override;
     function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
     procedure DoFreeMem(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -171,12 +170,6 @@ begin
       'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');
   LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
-end;
-
-function TGuardAllocator.Traits: TAllocatorTraits;
-begin
-  Result := inherited Traits;
-  Result.ThreadSafe := False;
 end;
 
 end.

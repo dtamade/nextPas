@@ -687,7 +687,6 @@ end;
 function TFixedSlabPool.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;
-  Result.ThreadSafe      := False;
   Result.SupportsRealloc := True;
 end;
 

@@ -361,7 +361,6 @@ end;
 function TSlabAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 

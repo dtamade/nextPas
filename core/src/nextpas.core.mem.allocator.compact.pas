@@ -321,7 +321,6 @@ begin
     Result.ZeroInitialized := False;
     Result.SupportsRealloc := False;
   end;
-  Result.ThreadSafe := False;
 end;
 
 end.

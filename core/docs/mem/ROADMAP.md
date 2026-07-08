@@ -167,3 +167,15 @@
 | P28-4 | test_fragmentation | 碎片化模式（已有）：holes/churn/RSS 测量 | — |
 
 **模块总计**: 92 allocator 文件 / ~1376 测试
+
+## Phase A — P0 Bug 修复 + ThreadSafe 修正 ✅
+
+| ID | 修复 | 描述 |
+|----|------|------|
+| P0-1 | TZeroedAllocator.DoReallocMem | ReallocMem 零填充覆盖旧数据 → 移除 FillChar |
+| P0-2 | TBumpAllocator.DoReallocMem | FRegionSize 作为 old size → OOB 读 → 标记 SupportsRealloc:=False |
+| P0-3 | growing.pas 毒化值 | 分配路径用 MEM_POISON_FREED → 改为 MEM_POISON_ALLOC |
+| P0-4 | 基类 ThreadSafe 默认值 | True → False，修复 33 个无锁 allocator 虚假声明 |
+| P0-5 | THugePageAllocator | 无锁但声明 ThreadSafe:=True → 移除 |
+| P0-6 | THotswapAllocator | 无锁但声明 ThreadSafe:=True → 移除 |
+| QA-1 | 12 个测试文件 | Assert → Check（统一断言 API） |
