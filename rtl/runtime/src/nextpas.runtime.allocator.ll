@@ -209,5 +209,3 @@ done:
 }
 
 declare void @np_memcpy(ptr, ptr, i64)
-declare void @np_free(ptr, i64)
-declare ptr @np_alloc(i64)
