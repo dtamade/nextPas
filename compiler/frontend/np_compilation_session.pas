@@ -992,7 +992,8 @@ begin
 
       Lowering := THirToMirLowering.Create(HirBuilder.Module);
       try
-        FMirModule := Lowering.Lower;
+        Lowering.Lower;
+        FMirModule := Lowering.DetachModule;
       finally
         Lowering.Free;
       end;
@@ -1047,7 +1048,8 @@ begin
     ArtifactRootPath,
     OutputDirPath,
     AstRootKindName,
-    FOptions.NoFold
+    FOptions.NoFold,
+    FOptions.OptLevel
   );
   try
     Planner.Plan;
