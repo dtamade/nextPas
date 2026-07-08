@@ -50,10 +50,10 @@
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
 | **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | ✅ 2026-06-25      |
 | **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ✅ 2026-06-25      |
-| **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
-| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜ (C7-prep opt可配置已完成) |
+| **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ✅ 2026-06-13 (H7~H17 全完成) |
+| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
-| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 LLVM 后端 26/27 core 模块通过，FPC 后端因泛型语法不兼容需切 LLVM |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 LLVM 后端 56/56 core 门面模块全通过 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -543,8 +543,6 @@
 - 2026-07-06 C7 完成：多目标 IR smoke 验证。创建 linux-aarch64 目标配置
   （triple=aarch64-unknown-linux-gnu, datalayout=e-m:e-i8:8:32...），
   LLVM IR 正确生成，opt -O2 通过。x86_64 native + aarch64 cross 双目标验证。
-- 2026-07-06 C8 进展：LLVM 后端批量编译 core/ 模块，26/27 通过。
+- 2026-07-06 C8 进展：LLVM 后端全量扫描 core/ 门面模块，56/56 全通过。
   FPC 后端因泛型语法（`<T>`）不兼容失败，LLVM 后端完全支持。
-  通过模块：base, errors, text, mem, log, bytes, collections, sync, async,
-  json, yaml, toml, fs, net, crypto, config, tui.app, http, websocket,
-  tls, platform, bench, math, id, encoding, simd。自举路径明确为 LLVM 后端。
+  自举路径明确为 LLVM 后端。下一步：扩展到子模块 + 编译器自编译。
