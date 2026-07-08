@@ -1379,6 +1379,138 @@ begin
   Check(LRaised, 'raises on zero window');
 end;
 
+{ WhenMiddleware tests }
+
+procedure TestWhenMiddlewareAppliesWhenTrue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := True;
+      end,
+      CacheControlMiddleware('no-cache')
+    )]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'), 'middleware applied when predicate true');
+end;
+
+procedure TestWhenMiddlewareSkipsWhenFalse;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := False;
+      end,
+      CacheControlMiddleware('no-cache')
+    )]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('cache-control'), 'middleware skipped when predicate false');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'handler still called');
+end;
+
+procedure TestWhenMiddlewarePathBased;
+var
+  LHandler: IHttpHandler;
+  LW1Obj, LW2Obj: TMockResponseWriter;
+  LW1, LW2: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := Pos('/api/', AReq.Path) = 1;
+      end,
+      CacheControlMiddleware('public, max-age=3600')
+    )]
+  );
+  { /api/ path — should apply }
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LW1Obj := TMockResponseWriter.Create;
+  LW1 := LW1Obj;
+  LHandler.ServeHTTP(LReqIntf, LW1);
+  CheckEqual('public, max-age=3600', LW1Obj.GetHeaders.Get('cache-control'), 'applied for /api/ path');
+  { /healthz path — should skip }
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LW2Obj := TMockResponseWriter.Create;
+  LW2 := LW2Obj;
+  LHandler.ServeHTTP(LReqIntf, LW2);
+  CheckEqual('', LW2Obj.GetHeaders.Get('cache-control'), 'skipped for /healthz path');
+end;
+
+procedure TestWhenMiddlewareNilPredicateRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    WhenMiddleware(nil, CacheControlMiddleware('no-cache'));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil predicate');
+end;
+
+procedure TestWhenMiddlewareNilMiddlewareRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := True;
+      end,
+      nil
+    );
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil middleware');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1440,5 +1572,11 @@ begin
   T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
   T.Test('RateLimit: negative max raises', @TestRateLimitNegativeMaxRaises);
   T.Test('RateLimit: zero window raises', @TestRateLimitZeroWindowRaises);
+  { WhenMiddleware }
+  T.Test('When: applies when predicate true', @TestWhenMiddlewareAppliesWhenTrue);
+  T.Test('When: skips when predicate false', @TestWhenMiddlewareSkipsWhenFalse);
+  T.Test('When: path-based conditional', @TestWhenMiddlewarePathBased);
+  T.Test('When: nil predicate raises', @TestWhenMiddlewareNilPredicateRaises);
+  T.Test('When: nil middleware raises', @TestWhenMiddlewareNilMiddlewareRaises);
   if not T.Run then Halt(1);
 end.

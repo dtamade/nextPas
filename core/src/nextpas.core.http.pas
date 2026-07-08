@@ -75,6 +75,7 @@ type
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
+  TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
   TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
   TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
@@ -250,6 +251,10 @@ function RateLimitMiddleware: IHttpMiddleware; inline;
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
+{** @desc Conditional middleware — apply AMiddleware only when APredicate returns True. }
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -640,6 +645,13 @@ end;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 begin
   Result := nextpas.core.http.middleware.Chain(AHandler, AMiddlewares);
+end;
+
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.WhenMiddleware(APredicate, AMiddleware);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
