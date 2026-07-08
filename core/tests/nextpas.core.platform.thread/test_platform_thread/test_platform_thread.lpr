@@ -421,6 +421,40 @@ begin
   Check(True, 'sleep_ns(1000) completes');
 end;
 
+procedure TestThreadWaitWithoutSpawn;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  FillChar(LRec, SizeOf(LRec), 0);
+  Check(platform_thread_wait(LRec) <> 0, 'wait without spawn returns error');
+end;
+
+procedure TestThreadIsAliveAfterWait;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  FillChar(LRec, SizeOf(LRec), 0);
+  Check(not platform_thread_is_alive(LRec), 'not alive before spawn');
+  Check(platform_thread_spawn(LRec, @FastThread, nil) = 0, 'spawn');
+  Check(platform_thread_is_alive(LRec), 'alive after spawn');
+  Check(platform_thread_wait(LRec) = 0, 'wait');
+  Check(not platform_thread_is_alive(LRec), 'not alive after wait');
+end;
+
+function NilArgThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Check(AArg = nil, 'arg is nil as expected');
+  Result := nil;
+end;
+
+procedure TestThreadSpawnNilArg;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  Check(platform_thread_spawn(LRec, @NilArgThread, nil) = 0, 'spawn with nil arg');
+  Check(platform_thread_wait(LRec) = 0, 'wait');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -451,5 +485,8 @@ begin
   T.Test('TLS multiple keys', @TestTlsMultipleKeys);
   T.Test('Thread create nil proc', @TestThreadCreateNilProc);
   T.Test('sleep_ns short', @TestThreadSleepNsShort);
+  T.Test('Thread wait without spawn', @TestThreadWaitWithoutSpawn);
+  T.Test('Thread is_alive after wait', @TestThreadIsAliveAfterWait);
+  T.Test('Thread spawn nil arg', @TestThreadSpawnNilArg);
   if not T.Run then Halt(1);
 end.
