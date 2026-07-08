@@ -27,8 +27,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** 大页大小 }
@@ -55,7 +54,7 @@ type
    *
    *  线程安全（继承自 TAllocator）。
    *}
-  THugePageAllocator = class(TAllocator)
+  THugePageAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FPageSize: THugePageSize;
@@ -67,12 +66,15 @@ type
     function HugePageSizeBytes: SizeUInt;
     function TryMmapHugePage(ASize: SizeUInt): Pointer;
     procedure FreeHugePage(APtr: Pointer; AAllocSize: SizeUInt);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     {** 创建大页分配器
      *  @param AInner 内部分配器（回退用）
      *  @param APageSize 大页大小（默认 2MB）
@@ -91,7 +93,7 @@ type
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -208,7 +210,7 @@ begin
 end;
 {$ENDIF}
 
-function THugePageAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function THugePageAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := nil;
   if ASize = 0 then Exit;
@@ -234,32 +236,32 @@ begin
   Result := FInner.GetMem(ASize);
 end;
 
-function THugePageAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function THugePageAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function THugePageAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function THugePageAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then Exit;
 
   { 保守复制：按新大小复制（旧块可能更大或更小） }
   Move(APtr^, Result^, ASize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
-procedure THugePageAllocator.DoFreeMem(APtr: Pointer);
+procedure THugePageAllocator.FreeMem(APtr: Pointer); inline;
 {$IFDEF NEXTPAS_LINUX}
 var
   LBase: Pointer;
@@ -298,7 +300,7 @@ begin
   Result.FallbackBytes := FFallbackBytes;
 end;
 
-function THugePageAllocator.Traits: TAllocatorTraits;
+function THugePageAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
