@@ -2187,14 +2187,28 @@ end;
 procedure THIRBuilder.EmitExprInt(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
+  Value: Int64;
+  Code: LongInt;
+  IntType: THIRTypeId;
 begin
+  Val(AArg, Value, Code);
+  if Code <> 0 then
+    IntType := GetIntType
+  else if (Value >= -128) and (Value <= 127) then
+    IntType := GetIntTypeByWidth(8, True)
+  else if (Value >= -32768) and (Value <= 32767) then
+    IntType := GetIntTypeByWidth(16, True)
+  else if (Value >= -2147483648) and (Value <= 2147483647) then
+    IntType := GetIntTypeByWidth(32, True)
+  else
+    IntType := GetIntType;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := IntType;
   Instr.IntrinsicName := 'const:' + AArg;
   EmitInstr(Instr);
-  S.Push(Instr.ResultId);
+  S.PushTyped(Instr.ResultId, IntType);
 end;
 
 procedure THIRBuilder.EmitExprNull(var S: TExprStack);
