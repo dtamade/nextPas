@@ -5,6 +5,7 @@ program test_http_middlewares;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
@@ -18,6 +19,7 @@ uses
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.requestid,
+  nextpas.core.http.middleware.cachecontrol,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -1043,6 +1045,118 @@ begin
     'different requests get different ids');
 end;
 
+{ CacheControlMiddleware tests }
+
+procedure TestCacheControlSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CacheControlMiddleware('public, max-age=3600')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('public, max-age=3600', LWObj.GetHeaders.Get('cache-control'), 'cache-control header');
+end;
+
+procedure TestNoCacheMiddlewareSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [NoCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('no-cache, no-store, must-revalidate', LWObj.GetHeaders.Get('cache-control'), 'no-cache header');
+end;
+
+procedure TestMaxAgeMiddlewareSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MaxAgeMiddleware(86400)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('public, max-age=86400', LWObj.GetHeaders.Get('cache-control'), 'max-age header');
+end;
+
+procedure TestMaxAgeNegativeRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MaxAgeMiddleware(-1);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on negative max-age');
+end;
+
+procedure TestCacheControlHandlerStillCalled;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CacheControlMiddleware('no-cache')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler still called');
+  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'), 'header set');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1088,5 +1202,11 @@ begin
   T.Test('RequestId: preserves existing id', @TestRequestIdPreservesExisting);
   T.Test('RequestId: custom header name', @TestRequestIdCustomHeader);
   T.Test('RequestId: unique per request', @TestRequestIdUniquePerRequest);
+  { CacheControl }
+  T.Test('CacheControl: sets header on response', @TestCacheControlSetsHeader);
+  T.Test('CacheControl: NoCache convenience', @TestNoCacheMiddlewareSetsHeader);
+  T.Test('CacheControl: MaxAge convenience', @TestMaxAgeMiddlewareSetsHeader);
+  T.Test('CacheControl: negative MaxAge raises', @TestMaxAgeNegativeRaises);
+  T.Test('CacheControl: handler still called', @TestCacheControlHandlerStillCalled);
   if not T.Run then Halt(1);
 end.
