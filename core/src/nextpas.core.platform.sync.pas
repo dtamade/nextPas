@@ -27,6 +27,7 @@ const
   PLATFORM_ERR_BUSY = nextpas.core.platform.error.PLATFORM_ERR_BUSY;
   PLATFORM_ERR_INVALID = nextpas.core.platform.error.PLATFORM_ERR_INVALID;
   PLATFORM_ERR_UNSUPPORTED = nextpas.core.platform.error.PLATFORM_ERR_UNSUPPORTED;
+  PLATFORM_ERR_TIMEDOUT = nextpas.core.platform.error.PLATFORM_ERR_TIMEDOUT;
   PLATFORM_ERR_TIMEOUT = nextpas.core.platform.error.PLATFORM_ERR_TIMEOUT;
 
 { Mutex }
