@@ -3300,9 +3300,9 @@ begin
         SetLength(FGlobalTypes, FGlobalCount + 32);
       end;
       FGlobalNames[FGlobalCount] := ANode.Operand;
-      FGlobalTypes[FGlobalCount] := GetIntType;
+      FGlobalTypes[FGlobalCount] := DeclType;
       Inc(FGlobalCount);
-      FModule.AddGlobal(ANode.Operand, GetIntType, ANode.IsThreadVar);
+      FModule.AddGlobal(ANode.Operand, DeclType, ANode.IsThreadVar);
     end
     else
       EnsureAlloca(ANode.Operand, DeclType);
