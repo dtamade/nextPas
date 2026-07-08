@@ -200,6 +200,35 @@ begin
   Check(Buf[3] = #0, 'small buffer null terminated');
 end;
 
+procedure TestFindMultipleCommands;
+var
+  Buf: array[0..511] of AnsiChar;
+  R1, R2: Int32;
+begin
+  R1 := platform_which('sh', @Buf[0], 512);
+  Check(R1 > 0, 'find sh');
+  FillChar(Buf, SizeOf(Buf), 0);
+  R2 := platform_which('ls', @Buf[0], 512);
+  Check(R2 > 0, 'find ls');
+  { Both should resolve to different paths }
+  Check(platform_fs_is_file(@Buf[0]), 'ls path exists');
+end;
+
+procedure TestWhichWithVeryLongName;
+var
+  Buf: array[0..511] of AnsiChar;
+  LongName: array[0..255] of AnsiChar;
+  I: Integer;
+  R: Int32;
+begin
+  { A 200-char name should not exist in PATH }
+  for I := 0 to 199 do
+    LongName[I] := AnsiChar(Ord('a') + (I mod 26));
+  LongName[200] := #0;
+  R := platform_which(@LongName[0], @Buf[0], 512);
+  Check(R = PLATFORM_ERR_ENOENT, 'very long name not found');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.which');
   T.Test('find sh', @TestFindSh);
@@ -217,5 +246,7 @@ begin
   T.Test('nil buffer returns length', @TestNilBufferReturnsLength);
   T.Test('nil name returns error', @TestNilName);
   T.Test('small buffer truncates', @TestSmallBufferTruncates);
+  T.Test('find multiple commands', @TestFindMultipleCommands);
+  T.Test('very long name not found', @TestWhichWithVeryLongName);
   if not T.Run then Halt(1);
 end.
