@@ -437,6 +437,10 @@ type
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
 
+    {** 变异系数 CV = StdDev / Mean（用于自适应预热收敛判断）
+     *  @returns CV 值；Mean <= 0 时返回 0 }
+    function CoefficientOfVariation(const AData: TDoubleArray): Double;
+
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 
