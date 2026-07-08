@@ -142,6 +142,14 @@ check_target "linux-aarch64" \
   "$TMPDIR/smoke.pas" \
   "basic"
 
+# FreeBSD x86_64 (LLVM cross — ELF)
+check_target "freebsd-x86_64" \
+  "x86_64-unknown-freebsd" \
+  "e-m:e-p270" \
+  "elf" \
+  "$TMPDIR/smoke.pas" \
+  "basic"
+
 # Windows x86_64 (LLVM cross — COFF)
 check_target "windows-x86_64" \
   "x86_64-pc-windows-msvc" \
