@@ -24,7 +24,7 @@ begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 65536);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -37,7 +37,7 @@ var
 begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 65536);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -51,9 +51,9 @@ begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 100);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'first alloc succeeds');
+    Check(LPtr1 <> nil, 'first alloc succeeds');
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 = nil, 'second alloc exceeds limit');
+    Check(LPtr2 = nil, 'second alloc exceeds limit');
     LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
@@ -68,7 +68,7 @@ begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 64);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'exact limit succeeds');
+    Check(LPtr <> nil, 'exact limit succeeds');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -85,10 +85,10 @@ begin
     LAlloc.GetMem(100);
     LAlloc.GetMem(200);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 2, 'alloc count = 2');
-    Assert(LStats.ActiveBytes = 300, 'active = 300');
-    Assert(LStats.PeakBytes = 300, 'peak = 300');
-    Assert(LStats.LimitBytes = 1000, 'limit = 1000');
+    Check(LStats.AllocCount = 2, 'alloc count = 2');
+    Check(LStats.ActiveBytes = 300, 'active = 300');
+    Check(LStats.PeakBytes = 300, 'peak = 300');
+    Check(LStats.LimitBytes = 1000, 'limit = 1000');
   finally
     LAlloc.Free;
   end;
@@ -102,12 +102,12 @@ begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 65536);
   try
     LPtr := LAlloc.GetMem(100);
-    Assert(LPtr <> nil, 'alloc before limit change');
+    Check(LPtr <> nil, 'alloc before limit change');
     LAlloc.FreeMem(LPtr);
 
     LAlloc.SetLimit(50);
     LPtr := LAlloc.GetMem(100);
-    Assert(LPtr = nil, 'alloc rejected after limit decrease');
+    Check(LPtr = nil, 'alloc rejected after limit decrease');
   finally
     LAlloc.Free;
   end;
@@ -122,10 +122,10 @@ begin
   try
     LPtr1 := LAlloc.GetMem(300);
     LPtr2 := LAlloc.GetMem(200);
-    Assert(LAlloc.PeakBytes = 500, 'peak = 500');
+    Check(LAlloc.PeakBytes = 500, 'peak = 500');
     LAlloc.FreeMem(LPtr2);
-    Assert(LAlloc.ActiveBytes = 300, 'active = 300 after free');
-    Assert(LAlloc.PeakBytes = 500, 'peak unchanged');
+    Check(LAlloc.ActiveBytes = 300, 'active = 300 after free');
+    Check(LAlloc.PeakBytes = 500, 'peak unchanged');
     LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;

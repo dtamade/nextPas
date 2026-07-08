@@ -24,10 +24,10 @@ begin
   LAlloc := TThreadSafeAllocator.Create(DefaultAllocator);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc 64B');
+    Check(LPtr1 <> nil, 'alloc 64B');
     LPtr2 := LAlloc.GetMem(128);
-    Assert(LPtr2 <> nil, 'alloc 128B');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 128B');
+    Check(LPtr1 <> LPtr2, 'different pointers');
     LAlloc.FreeMem(LPtr1);
     LAlloc.FreeMem(LPtr2);
   finally
@@ -41,7 +41,7 @@ var
 begin
   LAlloc := TThreadSafeAllocator.Create(DefaultAllocator);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -57,10 +57,10 @@ begin
   LAlloc := TThreadSafeAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.AllocMem(64);
-    Assert(LPtr <> nil, 'allocmem');
+    Check(LPtr <> nil, 'allocmem');
     LByte := PByte(LPtr);
     for I := 0 to 63 do
-      Assert(LByte[I] = 0, 'zero initialized');
+      Check(LByte[I] = 0, 'zero initialized');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -75,9 +75,9 @@ begin
   LAlloc := TThreadSafeAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'initial alloc');
+    Check(LPtr <> nil, 'initial alloc');
     LPtr := LAlloc.ReallocMem(LPtr, 256);
-    Assert(LPtr <> nil, 'realloc');
+    Check(LPtr <> nil, 'realloc');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -92,7 +92,7 @@ begin
   LAlloc := TThreadSafeAllocator.Create(DefaultAllocator);
   try
     LTraits := LAlloc.Traits;
-    Assert(LTraits.ThreadSafe = True, 'thread safe = true');
+    Check(LTraits.ThreadSafe = True, 'thread safe = true');
   finally
     LAlloc.Free;
   end;
@@ -109,7 +109,7 @@ begin
     for I := 0 to 99 do
     begin
       LPtrs[I] := LAlloc.GetMem(64);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
     end;
     for I := 0 to 99 do
       LAlloc.FreeMem(LPtrs[I]);
@@ -126,7 +126,7 @@ begin
   LOuter := TThreadSafeAllocator.Create(DefaultAllocator);
   try
     LPtr := LOuter.GetMem(64);
-    Assert(LPtr <> nil, 'alloc via thread-safe wrapper');
+    Check(LPtr <> nil, 'alloc via thread-safe wrapper');
     LOuter.FreeMem(LPtr);
   finally
     LOuter.Free;

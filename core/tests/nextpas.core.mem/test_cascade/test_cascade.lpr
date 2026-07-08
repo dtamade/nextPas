@@ -24,7 +24,7 @@ begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator]);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -37,7 +37,7 @@ var
 begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator]);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -51,9 +51,9 @@ begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator, DefaultAllocator]);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc #1');
+    Check(LPtr1 <> nil, 'alloc #1');
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 <> nil, 'alloc #2');
+    Check(LPtr2 <> nil, 'alloc #2');
     LAlloc.FreeMem(LPtr1);
     LAlloc.FreeMem(LPtr2);
   finally
@@ -71,9 +71,9 @@ begin
     LAlloc.GetMem(64);
     LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocAttempts = 2, 'attempts = 2');
-    Assert(LStats.AllocatorHits[0] = 2, 'hits[0] = 2');
-    Assert(LStats.AllocatorCount = 1, 'count = 1');
+    Check(LStats.AllocAttempts = 2, 'attempts = 2');
+    Check(LStats.AllocatorHits[0] = 2, 'hits[0] = 2');
+    Check(LStats.AllocatorCount = 1, 'count = 1');
   finally
     LAlloc.Free;
   end;
@@ -85,7 +85,7 @@ var
 begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator, DefaultAllocator, DefaultAllocator]);
   try
-    Assert(LAlloc.AllocatorCount = 3, 'count = 3');
+    Check(LAlloc.AllocatorCount = 3, 'count = 3');
   finally
     LAlloc.Free;
   end;
@@ -99,10 +99,10 @@ begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator]);
   try
     LPtr := LAlloc.GetMem(256);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
     LPtr := LAlloc.GetMem(256);
-    Assert(LPtr <> nil, 're-alloc after free');
+    Check(LPtr <> nil, 're-alloc after free');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -118,9 +118,9 @@ begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator]);
   try
     LPtr := LAlloc.AllocMem(64);
-    Assert(LPtr <> nil, 'allocmem');
+    Check(LPtr <> nil, 'allocmem');
     for I := 0 to 63 do
-      Assert(PByte(LPtr)[I] = 0, 'zero init');
+      Check(PByte(LPtr)[I] = 0, 'zero init');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;

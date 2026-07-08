@@ -21,10 +21,10 @@ begin
   LAlloc := TBitmapAllocator.Create(DefaultAllocator, 64, 128);
   try
     LPtr1 := LAlloc.GetMem(32);
-    Assert(LPtr1 <> nil, 'alloc 32B');
+    Check(LPtr1 <> nil, 'alloc 32B');
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 <> nil, 'alloc 64B');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 64B');
+    Check(LPtr1 <> LPtr2, 'different pointers');
   finally
     LAlloc.Free;
   end;
@@ -36,7 +36,7 @@ var
 begin
   LAlloc := TBitmapAllocator.Create(DefaultAllocator, 64, 128);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -48,7 +48,7 @@ var
 begin
   LAlloc := TBitmapAllocator.Create(DefaultAllocator, 64, 128);
   try
-    Assert(LAlloc.GetMem(128) = nil, 'oversized alloc returns nil');
+    Check(LAlloc.GetMem(128) = nil, 'oversized alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -62,10 +62,10 @@ begin
   LAlloc := TBitmapAllocator.Create(DefaultAllocator, 64, 128);
   try
     LPtr1 := LAlloc.GetMem(32);
-    Assert(LPtr1 <> nil, 'alloc');
+    Check(LPtr1 <> nil, 'alloc');
     LAlloc.FreeMem(LPtr1);
     LPtr2 := LAlloc.GetMem(32);
-    Assert(LPtr2 <> nil, 'reuse freed slot');
+    Check(LPtr2 <> nil, 'reuse freed slot');
   finally
     LAlloc.Free;
   end;
@@ -82,9 +82,9 @@ begin
     for I := 0 to 31 do
     begin
       LPtrs[I] := LAlloc.GetMem(32);
-      Assert(LPtrs[I] <> nil, 'slot ' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'slot ' + IntToStr(I));
     end;
-    Assert(LAlloc.GetMem(32) = nil, 'all slots exhausted');
+    Check(LAlloc.GetMem(32) = nil, 'all slots exhausted');
   finally
     for I := 0 to 31 do
       LAlloc.FreeMem(LPtrs[I]);
@@ -102,10 +102,10 @@ begin
     LAlloc.GetMem(32);
     LAlloc.GetMem(32);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 2, 'alloc count = 2');
-    Assert(LStats.UsedSlots = 2, 'used = 2');
-    Assert(LStats.FreeSlots = 126, 'free = 126');
-    Assert(LStats.SlotSize = 64, 'slot size = 64');
+    Check(LStats.AllocCount = 2, 'alloc count = 2');
+    Check(LStats.UsedSlots = 2, 'used = 2');
+    Check(LStats.FreeSlots = 126, 'free = 126');
+    Check(LStats.SlotSize = 64, 'slot size = 64');
   finally
     LAlloc.Free;
   end;
@@ -118,15 +118,15 @@ var
 begin
   LAlloc := TBitmapAllocator.Create(DefaultAllocator, 64, 128);
   try
-    Assert(LAlloc.UsedSlots = 0, 'initially 0');
+    Check(LAlloc.UsedSlots = 0, 'initially 0');
     LPtr1 := LAlloc.GetMem(32);
-    Assert(LAlloc.UsedSlots = 1, 'used = 1');
+    Check(LAlloc.UsedSlots = 1, 'used = 1');
     LPtr2 := LAlloc.GetMem(32);
-    Assert(LAlloc.UsedSlots = 2, 'used = 2');
+    Check(LAlloc.UsedSlots = 2, 'used = 2');
     LAlloc.FreeMem(LPtr1);
-    Assert(LAlloc.UsedSlots = 1, 'used = 1 after free');
+    Check(LAlloc.UsedSlots = 1, 'used = 1 after free');
     LAlloc.FreeMem(LPtr2);
-    Assert(LAlloc.UsedSlots = 0, 'used = 0 after both free');
+    Check(LAlloc.UsedSlots = 0, 'used = 0 after both free');
   finally
     LAlloc.Free;
   end;

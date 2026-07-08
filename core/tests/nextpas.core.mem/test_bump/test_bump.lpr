@@ -27,10 +27,10 @@ begin
   LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc 64B');
+    Check(LPtr1 <> nil, 'alloc 64B');
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 <> nil, 'alloc 64B #2');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 64B #2');
+    Check(LPtr1 <> LPtr2, 'different pointers');
   finally
     LAlloc.Free;
   end;
@@ -42,7 +42,7 @@ var
 begin
   LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -59,7 +59,7 @@ begin
     for I := 0 to 99 do
     begin
       LPtrs[I] := LAlloc.GetMem(64);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
     end;
   finally
     LAlloc.Free;
@@ -74,7 +74,7 @@ begin
   LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
   try
     LPtr := LAlloc.GetMem(128);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
     { bump allocator does not free individual allocations }
   finally
@@ -91,16 +91,16 @@ begin
   LAlloc := TBumpAllocator.Create(DefaultAllocator, 1024);
   try
     LPtr1 := LAlloc.GetMem(512);
-    Assert(LPtr1 <> nil, 'alloc before reset');
+    Check(LPtr1 <> nil, 'alloc before reset');
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 1, 'count before reset');
+    Check(LStats.AllocCount = 1, 'count before reset');
 
     LAlloc.Reset;
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 0, 'count after reset = 0');
+    Check(LStats.AllocCount = 0, 'count after reset = 0');
 
     LPtr2 := LAlloc.GetMem(512);
-    Assert(LPtr2 <> nil, 'alloc after reset');
+    Check(LPtr2 <> nil, 'alloc after reset');
   finally
     LAlloc.Free;
   end;
@@ -116,10 +116,10 @@ begin
     LAlloc.GetMem(100);
     LAlloc.GetMem(200);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 2, 'alloc count = 2');
-    Assert(LStats.TotalAllocated >= 300, 'total >= 300');
-    Assert(LStats.RegionCount >= 1, 'region count >= 1');
-    Assert(LStats.RegionSize = 4096, 'region size = 4096');
+    Check(LStats.AllocCount = 2, 'alloc count = 2');
+    Check(LStats.TotalAllocated >= 300, 'total >= 300');
+    Check(LStats.RegionCount >= 1, 'region count >= 1');
+    Check(LStats.RegionSize = 4096, 'region size = 4096');
   finally
     LAlloc.Free;
   end;
@@ -136,7 +136,7 @@ begin
     for I := 0 to 19 do
       LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
-    Assert(LStats.RegionCount >= 2, 'grew to multiple regions');
+    Check(LStats.RegionCount >= 2, 'grew to multiple regions');
   finally
     LAlloc.Free;
   end;

@@ -71,6 +71,7 @@ type
     destructor Destroy; override;
     procedure Reset;
     function GetStats: TBumpStats;
+    function Traits: TAllocatorTraits; override;
     property RegionSize: SizeUInt read FRegionSize;
     property RegionCount: Integer read FRegionCount;
   end;
@@ -154,7 +155,7 @@ end;
 
 function TBumpAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
-  LOldSize, LCopySize: SizeUInt;
+  LCopySize: SizeUInt;
 begin
   if ASize = 0 then
   begin
@@ -164,14 +165,18 @@ begin
   if APtr = nil then
     Exit(DoGetMem(ASize));
 
-  LOldSize := FRegionSize;
+  // Bump allocator does not track individual allocation sizes.
+  // We cannot safely copy old data — just allocate new and let caller
+  // handle data migration if needed. Mark SupportsRealloc := False
+  // so callers know this path is unreliable.
   Result := DoGetMem(ASize);
-  if LOldSize < ASize then
-    LCopySize := LOldSize
-  else
-    LCopySize := ASize;
-  if LCopySize > 0 then
-    Move(APtr^, Result^, LCopySize);
+end;
+
+function TBumpAllocator.Traits: TAllocatorTraits;
+begin
+  Result := inherited Traits;
+  Result.SupportsRealloc := False;
+  Result.ThreadSafe := False;
 end;
 
 procedure TBumpAllocator.DoFreeMem(APtr: Pointer);

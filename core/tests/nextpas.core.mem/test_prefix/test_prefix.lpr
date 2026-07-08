@@ -24,10 +24,10 @@ begin
   LAlloc := TPrefixAllocator.Create(DefaultAllocator);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc 64B');
+    Check(LPtr1 <> nil, 'alloc 64B');
     LPtr2 := LAlloc.GetMem(128);
-    Assert(LPtr2 <> nil, 'alloc 128B');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 128B');
+    Check(LPtr1 <> LPtr2, 'different pointers');
     LAlloc.FreeMem(LPtr1);
     LAlloc.FreeMem(LPtr2);
   finally
@@ -41,7 +41,7 @@ var
 begin
   LAlloc := TPrefixAllocator.Create(DefaultAllocator);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -55,7 +55,7 @@ begin
   LAlloc := TPrefixAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(100);
-    Assert(LAlloc.GetAllocationSize(LPtr) = 100, 'size = 100');
+    Check(LAlloc.GetAllocationSize(LPtr) = 100, 'size = 100');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -80,11 +80,11 @@ begin
     for I := 0 to 4 do
     begin
       LPtrs[I] := LAlloc.GetMem(LSizes[I]);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
     end;
 
     for I := 0 to 4 do
-      Assert(LAlloc.GetAllocationSize(LPtrs[I]) = LSizes[I],
+      Check(LAlloc.GetAllocationSize(LPtrs[I]) = LSizes[I],
         'size match #' + IntToStr(I));
 
     for I := 0 to 4 do
@@ -100,7 +100,7 @@ var
 begin
   LAlloc := TPrefixAllocator.Create(DefaultAllocator);
   try
-    Assert(LAlloc.GetAllocationSize(nil) = 0, 'nil size = 0');
+    Check(LAlloc.GetAllocationSize(nil) = 0, 'nil size = 0');
   finally
     LAlloc.Free;
   end;
@@ -116,15 +116,15 @@ begin
   try
     LPtr := LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 1, 'alloc count = 1');
-    Assert(LStats.ActiveAllocs = 1, 'active = 1');
-    Assert(LStats.TotalBytes = 100, 'total bytes = 100');
+    Check(LStats.AllocCount = 1, 'alloc count = 1');
+    Check(LStats.ActiveAllocs = 1, 'active = 1');
+    Check(LStats.TotalBytes = 100, 'total bytes = 100');
 
     LAlloc.FreeMem(LPtr);
     LStats := LAlloc.GetStats;
-    Assert(LStats.FreeCount = 1, 'free count = 1');
-    Assert(LStats.ActiveAllocs = 0, 'active = 0');
-    Assert(LStats.TotalBytes = 0, 'total bytes = 0');
+    Check(LStats.FreeCount = 1, 'free count = 1');
+    Check(LStats.ActiveAllocs = 0, 'active = 0');
+    Check(LStats.TotalBytes = 0, 'total bytes = 0');
   finally
     LAlloc.Free;
   end;
@@ -138,9 +138,9 @@ begin
   LAlloc := TPrefixAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LAlloc.GetAllocationSize(LPtr) = 64, 'initial size = 64');
+    Check(LAlloc.GetAllocationSize(LPtr) = 64, 'initial size = 64');
     LPtr := LAlloc.ReallocMem(LPtr, 256);
-    Assert(LAlloc.GetAllocationSize(LPtr) = 256, 'after realloc = 256');
+    Check(LAlloc.GetAllocationSize(LPtr) = 256, 'after realloc = 256');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;

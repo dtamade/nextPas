@@ -24,7 +24,7 @@ begin
   LAlloc := TBatchAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -41,9 +41,9 @@ begin
   LAlloc := TBatchAllocator.Create(DefaultAllocator);
   try
     LCount := LAlloc.BatchAlloc(64, 10, LBlocks);
-    Assert(LCount = 10, 'batch alloc 10 blocks');
+    Check(LCount = 10, 'batch alloc 10 blocks');
     for I := 0 to 9 do
-      Assert(LBlocks[I] <> nil, 'block #' + IntToStr(I));
+      Check(LBlocks[I] <> nil, 'block #' + IntToStr(I));
     LAlloc.BatchFree(LBlocks, LCount);
   finally
     LAlloc.Free;
@@ -59,7 +59,7 @@ begin
   LAlloc := TBatchAllocator.Create(DefaultAllocator);
   try
     LCount := LAlloc.BatchAlloc(64, 3, LBlocks);
-    Assert(LCount = 3, 'batch alloc 3 blocks');
+    Check(LCount = 3, 'batch alloc 3 blocks');
     LAlloc.BatchFree(LBlocks, LCount);
   finally
     LAlloc.Free;
@@ -76,13 +76,13 @@ begin
   try
     LAlloc.BatchAlloc(64, 5, LBlocks);
     LStats := LAlloc.GetStats;
-    Assert(LStats.BatchAllocCount = 1, 'batch alloc count = 1');
-    Assert(LStats.TotalBlocksAllocated = 5, 'total alloc = 5');
+    Check(LStats.BatchAllocCount = 1, 'batch alloc count = 1');
+    Check(LStats.TotalBlocksAllocated = 5, 'total alloc = 5');
 
     LAlloc.BatchFree(LBlocks, 5);
     LStats := LAlloc.GetStats;
-    Assert(LStats.BatchFreeCount = 1, 'batch free count = 1');
-    Assert(LStats.TotalBlocksFreed = 5, 'total free = 5');
+    Check(LStats.BatchFreeCount = 1, 'batch free count = 1');
+    Check(LStats.TotalBlocksFreed = 5, 'total free = 5');
   finally
     LAlloc.Free;
   end;
@@ -98,11 +98,11 @@ begin
   try
     LPtr := LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
-    Assert(LStats.SingleAllocCount = 1, 'single alloc = 1');
-    Assert(LStats.TotalBlocksAllocated = 1, 'total = 1');
+    Check(LStats.SingleAllocCount = 1, 'single alloc = 1');
+    Check(LStats.TotalBlocksAllocated = 1, 'total = 1');
     LAlloc.FreeMem(LPtr);
     LStats := LAlloc.GetStats;
-    Assert(LStats.SingleFreeCount = 1, 'single free = 1');
+    Check(LStats.SingleFreeCount = 1, 'single free = 1');
   finally
     LAlloc.Free;
   end;
@@ -121,9 +121,9 @@ begin
     LAlloc.BatchAlloc(64, 3, LBlocks);
 
     LStats := LAlloc.GetStats;
-    Assert(LStats.SingleAllocCount = 1, 'single = 1');
-    Assert(LStats.BatchAllocCount = 1, 'batch = 1');
-    Assert(LStats.TotalBlocksAllocated = 4, 'total = 4');
+    Check(LStats.SingleAllocCount = 1, 'single = 1');
+    Check(LStats.BatchAllocCount = 1, 'batch = 1');
+    Check(LStats.TotalBlocksAllocated = 4, 'total = 4');
 
     LAlloc.FreeMem(LPtr);
     LAlloc.BatchFree(LBlocks, 3);
@@ -142,9 +142,9 @@ begin
   LAlloc := TBatchAllocator.Create(DefaultAllocator);
   try
     LCount := LAlloc.BatchAlloc(0, 3, LBlocks);
-    Assert(LCount = 3, 'zero size batch succeeds');
+    Check(LCount = 3, 'zero size batch succeeds');
     for I := 0 to 2 do
-      Assert(LBlocks[I] = nil, 'zero size returns nil');
+      Check(LBlocks[I] = nil, 'zero size returns nil');
   finally
     LAlloc.Free;
   end;

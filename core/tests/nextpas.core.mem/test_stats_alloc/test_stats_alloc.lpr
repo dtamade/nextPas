@@ -24,7 +24,7 @@ begin
   LAlloc := TStatsAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc');
+    Check(LPtr <> nil, 'alloc');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -37,7 +37,7 @@ var
 begin
   LAlloc := TStatsAllocator.Create(DefaultAllocator);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -53,12 +53,12 @@ begin
   try
     LPtr := LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 1, 'alloc count = 1');
-    Assert(LStats.ActiveBytes = 100, 'active = 100');
-    Assert(LStats.PeakBytes = 100, 'peak = 100');
-    Assert(LStats.ActiveAllocs = 1, 'active allocs = 1');
-    Assert(LStats.MinAllocSize = 100, 'min = 100');
-    Assert(LStats.MaxAllocSize = 100, 'max = 100');
+    Check(LStats.AllocCount = 1, 'alloc count = 1');
+    Check(LStats.ActiveBytes = 100, 'active = 100');
+    Check(LStats.PeakBytes = 100, 'peak = 100');
+    Check(LStats.ActiveAllocs = 1, 'active allocs = 1');
+    Check(LStats.MinAllocSize = 100, 'min = 100');
+    Check(LStats.MaxAllocSize = 100, 'max = 100');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -77,11 +77,11 @@ begin
     LPtrs[1] := LAlloc.GetMem(100);
     LPtrs[2] := LAlloc.GetMem(200);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 3, 'alloc count = 3');
-    Assert(LStats.ActiveBytes = 350, 'active = 350');
-    Assert(LStats.PeakBytes = 350, 'peak = 350');
-    Assert(LStats.MinAllocSize = 50, 'min = 50');
-    Assert(LStats.MaxAllocSize = 200, 'max = 200');
+    Check(LStats.AllocCount = 3, 'alloc count = 3');
+    Check(LStats.ActiveBytes = 350, 'active = 350');
+    Check(LStats.PeakBytes = 350, 'peak = 350');
+    Check(LStats.MinAllocSize = 50, 'min = 50');
+    Check(LStats.MaxAllocSize = 200, 'max = 200');
     LAlloc.FreeMem(LPtrs[0]);
     LAlloc.FreeMem(LPtrs[1]);
     LAlloc.FreeMem(LPtrs[2]);
@@ -99,10 +99,10 @@ begin
   try
     LPtr1 := LAlloc.GetMem(300);
     LPtr2 := LAlloc.GetMem(200);
-    Assert(LAlloc.PeakBytes = 500, 'peak = 500');
+    Check(LAlloc.PeakBytes = 500, 'peak = 500');
     LAlloc.FreeMem(LPtr2);
-    Assert(LAlloc.ActiveBytes = 300, 'active = 300');
-    Assert(LAlloc.PeakBytes = 500, 'peak unchanged');
+    Check(LAlloc.ActiveBytes = 300, 'active = 300');
+    Check(LAlloc.PeakBytes = 500, 'peak unchanged');
     LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
@@ -118,12 +118,12 @@ begin
   try
     LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 1, 'before reset');
+    Check(LStats.AllocCount = 1, 'before reset');
 
     LAlloc.Reset;
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 0, 'after reset');
-    Assert(LStats.ActiveBytes = 0, 'active = 0');
+    Check(LStats.AllocCount = 0, 'after reset');
+    Check(LStats.ActiveBytes = 0, 'active = 0');
   finally
     LAlloc.Free;
   end;
@@ -140,9 +140,9 @@ begin
     LPtr := LAlloc.GetMem(100);
     LAlloc.FreeMem(LPtr);
     LStats := LAlloc.GetStats;
-    Assert(LStats.FreeCount = 1, 'free count = 1');
-    Assert(LStats.ActiveBytes = 0, 'active = 0');
-    Assert(LStats.TotalBytesFreed = 100, 'freed = 100');
+    Check(LStats.FreeCount = 1, 'free count = 1');
+    Check(LStats.ActiveBytes = 0, 'active = 0');
+    Check(LStats.TotalBytesFreed = 100, 'freed = 100');
   finally
     LAlloc.Free;
   end;

@@ -21,10 +21,10 @@ begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
     LPtr1 := LAlloc.GetMem(8);
-    Assert(LPtr1 <> nil, 'alloc 8B');
+    Check(LPtr1 <> nil, 'alloc 8B');
     LPtr2 := LAlloc.GetMem(16);
-    Assert(LPtr2 <> nil, 'alloc 16B');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 16B');
+    Check(LPtr1 <> LPtr2, 'different pointers');
   finally
     LAlloc.Free;
   end;
@@ -36,7 +36,7 @@ var
 begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -54,7 +54,7 @@ begin
     while LSize <= 32768 do
     begin
       LPtr := LAlloc.GetMem(LSize);
-      Assert(LPtr <> nil, 'alloc ' + IntToStr(LSize) + 'B');
+      Check(LPtr <> nil, 'alloc ' + IntToStr(LSize) + 'B');
       LSize := LSize * 2;
     end;
   finally
@@ -70,10 +70,10 @@ begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc 64B');
+    Check(LPtr1 <> nil, 'alloc 64B');
     LAlloc.FreeMem(LPtr1);
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 <> nil, 'reuse freed block');
+    Check(LPtr2 <> nil, 'reuse freed block');
   finally
     LAlloc.Free;
   end;
@@ -88,9 +88,9 @@ begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
     LPtr := LAlloc.GetMem(131072);
-    Assert(LPtr <> nil, 'large alloc succeeds');
+    Check(LPtr <> nil, 'large alloc succeeds');
     LStats := LAlloc.GetStats;
-    Assert(LStats.LargeAllocCount >= 1, 'delegated to inner');
+    Check(LStats.LargeAllocCount >= 1, 'delegated to inner');
   finally
     LAlloc.Free;
   end;
@@ -107,9 +107,9 @@ begin
     LAlloc.GetMem(16);
     LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
-    Assert(LStats.TotalAlloc >= 3, 'total alloc >= 3');
-    Assert(LStats.ClassSizes[0] = 8, 'class 0 = 8B');
-    Assert(LStats.ClassSizes[1] = 16, 'class 1 = 16B');
+    Check(LStats.TotalAlloc >= 3, 'total alloc >= 3');
+    Check(LStats.ClassSizes[0] = 8, 'class 0 = 8B');
+    Check(LStats.ClassSizes[1] = 16, 'class 1 = 16B');
   finally
     LAlloc.Free;
   end;
@@ -126,14 +126,14 @@ begin
     for I := 0 to 99 do
     begin
       LPtrs[I] := LAlloc.GetMem(32);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
     end;
     for I := 0 to 49 do
       LAlloc.FreeMem(LPtrs[I]);
     for I := 0 to 49 do
     begin
       LPtrs[I] := LAlloc.GetMem(32);
-      Assert(LPtrs[I] <> nil, 'realloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'realloc #' + IntToStr(I));
     end;
   finally
     LAlloc.Free;

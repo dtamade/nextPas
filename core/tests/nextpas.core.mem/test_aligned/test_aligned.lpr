@@ -24,10 +24,10 @@ begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 64);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'alloc 64B');
+    Check(LPtr1 <> nil, 'alloc 64B');
     LPtr2 := LAlloc.GetMem(128);
-    Assert(LPtr2 <> nil, 'alloc 128B');
-    Assert(LPtr1 <> LPtr2, 'different pointers');
+    Check(LPtr2 <> nil, 'alloc 128B');
+    Check(LPtr1 <> LPtr2, 'different pointers');
     LAlloc.FreeMem(LPtr1);
     LAlloc.FreeMem(LPtr2);
   finally
@@ -41,7 +41,7 @@ var
 begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 64);
   try
-    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+    Check(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
   finally
     LAlloc.Free;
   end;
@@ -55,8 +55,8 @@ begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 64);
   try
     LPtr := LAlloc.GetMem(100);
-    Assert(LPtr <> nil, 'alloc');
-    Assert(SizeUInt(LPtr) mod 64 = 0, '64B aligned');
+    Check(LPtr <> nil, 'alloc');
+    Check(SizeUInt(LPtr) mod 64 = 0, '64B aligned');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -71,8 +71,8 @@ begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 256);
   try
     LPtr := LAlloc.GetMem(100);
-    Assert(LPtr <> nil, 'alloc');
-    Assert(SizeUInt(LPtr) mod 256 = 0, '256B aligned');
+    Check(LPtr <> nil, 'alloc');
+    Check(SizeUInt(LPtr) mod 256 = 0, '256B aligned');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -87,8 +87,8 @@ begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 4096);
   try
     LPtr := LAlloc.GetMem(100);
-    Assert(LPtr <> nil, 'alloc');
-    Assert(SizeUInt(LPtr) mod 4096 = 0, '4KB aligned');
+    Check(LPtr <> nil, 'alloc');
+    Check(SizeUInt(LPtr) mod 4096 = 0, '4KB aligned');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -104,9 +104,9 @@ begin
   try
     LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
-    Assert(LStats.AllocCount = 1, 'alloc count = 1');
-    Assert(LStats.ActiveAllocs = 1, 'active = 1');
-    Assert(LStats.Alignment = 64, 'alignment = 64');
+    Check(LStats.AllocCount = 1, 'alloc count = 1');
+    Check(LStats.ActiveAllocs = 1, 'active = 1');
+    Check(LStats.Alignment = 64, 'alignment = 64');
     LAlloc.FreeMem(LAlloc.GetMem(100));
   finally
     LAlloc.Free;
@@ -124,8 +124,8 @@ begin
     for I := 0 to 9 do
     begin
       LPtrs[I] := LAlloc.GetMem(64);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
-      Assert(SizeUInt(LPtrs[I]) mod 128 = 0, 'aligned #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(SizeUInt(LPtrs[I]) mod 128 = 0, 'aligned #' + IntToStr(I));
     end;
     for I := 0 to 9 do
       LAlloc.FreeMem(LPtrs[I]);

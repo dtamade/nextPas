@@ -24,7 +24,7 @@ begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 0);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc succeeds');
+    Check(LPtr <> nil, 'alloc succeeds');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -39,11 +39,11 @@ begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 2);
   try
     LPtr1 := LAlloc.GetMem(64);
-    Assert(LPtr1 <> nil, 'first alloc succeeds');
+    Check(LPtr1 <> nil, 'first alloc succeeds');
     LPtr2 := LAlloc.GetMem(64);
-    Assert(LPtr2 = nil, 'second alloc fails');
+    Check(LPtr2 = nil, 'second alloc fails');
     LPtr3 := LAlloc.GetMem(64);
-    Assert(LPtr3 <> nil, 'third alloc succeeds');
+    Check(LPtr3 <> nil, 'third alloc succeeds');
     LAlloc.FreeMem(LPtr1);
     LAlloc.FreeMem(LPtr3);
   finally
@@ -59,7 +59,7 @@ begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 1);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr = nil, 'first alloc fails');
+    Check(LPtr = nil, 'first alloc fails');
   finally
     LAlloc.Free;
   end;
@@ -76,7 +76,7 @@ begin
     for I := 0 to 9 do
     begin
       LPtrs[I] := LAlloc.GetMem(64);
-      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+      Check(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
     end;
     for I := 0 to 9 do
       LAlloc.FreeMem(LPtrs[I]);
@@ -96,9 +96,9 @@ begin
     LAlloc.GetMem(64);
     LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
-    Assert(LStats.TotalAttempts = 3, 'total attempts = 3');
-    Assert(LStats.FailuresInjected = 1, 'failures = 1');
-    Assert(LStats.SuccessfulAllocs = 2, 'success = 2');
+    Check(LStats.TotalAttempts = 3, 'total attempts = 3');
+    Check(LStats.FailuresInjected = 1, 'failures = 1');
+    Check(LStats.SuccessfulAllocs = 2, 'success = 2');
   finally
     LAlloc.Free;
   end;
@@ -112,12 +112,12 @@ begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 0);
   try
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr <> nil, 'alloc before set');
+    Check(LPtr <> nil, 'alloc before set');
     LAlloc.FreeMem(LPtr);
 
     LAlloc.SetFailAt(1);
     LPtr := LAlloc.GetMem(64);
-    Assert(LPtr = nil, 'alloc fails after set');
+    Check(LPtr = nil, 'alloc fails after set');
   finally
     LAlloc.Free;
   end;
@@ -131,9 +131,9 @@ begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 2);
   try
     LPtr := LAlloc.AllocMem(64);
-    Assert(LPtr <> nil, 'first allocmem succeeds');
+    Check(LPtr <> nil, 'first allocmem succeeds');
     LPtr := LAlloc.AllocMem(64);
-    Assert(LPtr = nil, 'second allocmem fails');
+    Check(LPtr = nil, 'second allocmem fails');
   finally
     LAlloc.Free;
   end;
