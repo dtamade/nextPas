@@ -280,6 +280,9 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyBytes: TBytes): IHttpResponse; overload; inline;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt; inline;
+{** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -707,6 +710,12 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 begin
   Result := nextpas.core.http.message.HttpWriteResponseString(AW, AStatus,
     AContentType, ABody);
+end;
+
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseJson(AW, AStatus, AValue);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;

@@ -157,6 +157,9 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyBytes: TBytes): IHttpResponse; overload;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
+{** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
 
 type
   { Fluent builder for HTTP requests.
@@ -201,7 +204,8 @@ uses
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.encoding,
-  nextpas.core.http.headers;
+  nextpas.core.http.headers,
+  nextpas.core.json;
 
 function BytesBodyReader(const ABodyBytes: TBytes): IReader;
 var
@@ -837,6 +841,13 @@ begin
   AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
   AW.WriteHeader(AStatus);
   Result := WriteAllResponseBodyString(AW, ABody);
+end;
+
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+begin
+  Result := HttpWriteResponseString(AW, AStatus, 'application/json',
+    JsonStringify(AValue));
 end;
 
 { THttpRequestBuilder }
