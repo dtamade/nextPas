@@ -37,8 +37,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   TBumpStats = record
@@ -49,7 +48,7 @@ type
     RegionCount: Integer;
   end;
 
-  TBumpAllocator = class(TAllocator)
+  TBumpAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FRegionSize: SizeUInt;
@@ -61,17 +60,16 @@ type
     FTotalAllocated: UInt64;
     FAllocCount: UInt64;
     procedure GrowRegion(ASize: SizeUInt);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = 65536);
     destructor Destroy; override;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
     procedure Reset;
     function GetStats: TBumpStats;
-    function Traits: TAllocatorTraits; override;
     property RegionSize: SizeUInt read FRegionSize;
     property RegionCount: Integer read FRegionCount;
   end;
@@ -126,7 +124,7 @@ begin
   FCurrentCapacity := LNewSize;
 end;
 
-function TBumpAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TBumpAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAligned: SizeUInt;
 begin
@@ -146,39 +144,38 @@ begin
   Inc(FAllocCount);
 end;
 
-function TBumpAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TBumpAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TBumpAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
-var
-  LCopySize: SizeUInt;
+function TBumpAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
 
   // Bump allocator does not track individual allocation sizes.
   // We cannot safely copy old data — just allocate new and let caller
   // handle data migration if needed. Mark SupportsRealloc := False
   // so callers know this path is unreliable.
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
 end;
 
-function TBumpAllocator.Traits: TAllocatorTraits;
+function TBumpAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe      := False;
   Result.SupportsRealloc := False;
 end;
 
-procedure TBumpAllocator.DoFreeMem(APtr: Pointer);
+procedure TBumpAllocator.FreeMem(APtr: Pointer); inline;
 begin
   { bump allocator does not free individual allocations }
 end;
