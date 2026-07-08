@@ -775,6 +775,186 @@ end;
 
 ---
 
+## LRU Cache (nextpas.core.lockfree.lru)
+
+```pascal
+type
+  TLockFreeLruResult = (lrAdded, lrUpdated, lrFull, lrClosed);
+
+  generic TConcurrentLruCache<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function Get(const AKey: TKey; out AValue: TValue): Boolean;
+    function Put(const AKey: TKey; const AValue: TValue): TLockFreeLruResult;
+    function Remove(const AKey: TKey): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+---
+
+## Counter (nextpas.core.lockfree.counter)
+
+```pascal
+type
+  TConcurrentCounter = class
+    constructor Create(const AInitialValue: Int64 = 0);
+    function Increment: Int64;      // 返回新值
+    function Decrement: Int64;      // 返回新值
+    function Add(const AValue: Int64): Int64;
+    function Sub(const AValue: Int64): Int64;
+    function Load: Int64;
+    procedure Store(const AValue: Int64);
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## Semaphore (nextpas.core.lockfree.semaphore)
+
+```pascal
+type
+  TLockFreeSemaphoreAcquireResult = (saAcquired, saFull, saClosed, saTimeout);
+
+  TConcurrentSemaphore = class
+    constructor Create(const AMaxPermits: Int64);
+    function TryAcquire: Boolean;
+    function Acquire: Boolean;
+    function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Release;
+    procedure Close;
+    function IsClosed: Boolean;
+    function AvailablePermits: Int64;
+    function MaxPermits: Int64;
+  end;
+```
+
+---
+
+## Mutex (nextpas.core.lockfree.mutex)
+
+```pascal
+type
+  TLockFreeMutexLockResult = (mlLocked, mlClosed, mlTimeout);
+
+  TConcurrentMutex = class
+    constructor Create;
+    function TryLock: Boolean;
+    function Lock: Boolean;
+    function LockTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Unlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsLocked: Boolean;
+  end;
+```
+
+---
+
+## RwLock (nextpas.core.lockfree.rwlock)
+
+```pascal
+type
+  TConcurrentRwLock = class
+    constructor Create;
+    function TryReadLock: Boolean;
+    function ReadLock: Boolean;
+    function TryWriteLock: Boolean;
+    function WriteLock: Boolean;
+    procedure ReadUnlock;
+    procedure WriteUnlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+---
+
+## CountdownLatch (nextpas.core.lockfree.countdown)
+
+```pascal
+type
+  TCountDownLatch = class
+    constructor Create(const AInitialCount: Int64);
+    procedure Done;
+    procedure DoneN(const AN: Int64);
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function GetCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## CyclicBarrier (nextpas.core.lockfree.barrier)
+
+```pascal
+type
+  TCyclicBarrierWaitResult = (bwArrived, bwClosed, bwTimeout, bwBroken);
+
+  TCyclicBarrier = class
+    constructor Create(const AParties: Int64);
+    function Await: TCyclicBarrierWaitResult;
+    function AwaitTimeout(const ATimeoutNs: Int64): TCyclicBarrierWaitResult;
+    function GetParties: Int64;
+    function GetNumberWaiting: Int64;
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## Rate Limiter (nextpas.core.lockfree.ratelimit)
+
+```pascal
+type
+  TLockFreeRateLimiterResult = (rlAllowed, rlRejected, rlClosed);
+
+  TTokenBucketLimiter = class
+    constructor Create(const ARatePerSecond: Double; const ABurst: Double);
+    function TryAcquire: TLockFreeRateLimiterResult;
+    function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetRate: Double;
+    function GetBurst: Double;
+  end;
+```
+
+---
+
+## Condition Variable (nextpas.core.lockfree.condvar)
+
+```pascal
+type
+  TConditionVariableWaitResult = (cvSignaled, cvClosed, cvTimeout);
+
+  TConditionVariable = class
+    constructor Create;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): TConditionVariableWaitResult;
+    procedure Signal;
+    procedure Broadcast;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetWaiterCount: Int32;
+  end;
+```
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

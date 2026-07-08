@@ -45,8 +45,17 @@
 | `lockfree.bag` | 并发 Bag（允许重复） | ✅ 完成 | 7 |
 | `lockfree.multimap` | 并发 MultiMap（一键多值） | ✅ 完成 | 6 |
 | `lockfree.bloom` | 并发布隆过滤器 | ✅ 完成 | 7 |
+| `lockfree.lru` | 并发 LRU 缓存 | ✅ 完成 | 8 |
+| `lockfree.counter` | 并发计数器 | ✅ 完成 | 4 |
+| `lockfree.semaphore` | 并发信号量 | ✅ 完成 | 3 |
+| `lockfree.mutex` | 并发互斥锁 | ✅ 完成 | 3 |
+| `lockfree.rwlock` | 并发读写锁 | ✅ 完成 | 5 |
+| `lockfree.countdown` | 并发倒计时闩 | ✅ 完成 | 6 |
+| `lockfree.barrier` | 并发循环屏障 | ✅ 完成 | 5 |
+| `lockfree.ratelimit` | 并发令牌桶限流器 | ✅ 完成 | 4 |
+| `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
 
-**规模**: 27 文件, ~14500 行, 285 测试
+**规模**: 35 文件, ~16500 行, 473 测试
 
 ---
 
@@ -67,7 +76,16 @@
 | test_lockfree_bag | 7 | ✅ 全绿 |
 | test_lockfree_multimap | 6 | ✅ 全绿 |
 | test_lockfree_bloom | 7 | ✅ 全绿 |
-| **总计** | **285** | **✅ 全绿** |
+| test_lockfree_lru | 8 | ✅ 全绿 |
+| test_lockfree_counter | 4 | ✅ 全绿 |
+| test_lockfree_semaphore | 3 | ✅ 全绿 |
+| test_lockfree_mutex | 3 | ✅ 全绿 |
+| test_lockfree_rwlock | 5 | ✅ 全绿 |
+| test_lockfree_countdown | 6 | ✅ 全绿 |
+| test_lockfree_barrier | 5 | ✅ 全绿 |
+| test_lockfree_ratelimit | 4 | ✅ 全绿 |
+| test_lockfree_condvar | 5 | ✅ 全绿 |
+| **总计** | **473** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

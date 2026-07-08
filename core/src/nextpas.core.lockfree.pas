@@ -31,7 +31,11 @@ uses
   nextpas.core.lockfree.counter,
   nextpas.core.lockfree.semaphore,
   nextpas.core.lockfree.mutex,
-  nextpas.core.lockfree.rwlock;
+  nextpas.core.lockfree.rwlock,
+  nextpas.core.lockfree.countdown,
+  nextpas.core.lockfree.barrier,
+  nextpas.core.lockfree.ratelimit,
+  nextpas.core.lockfree.condvar;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -197,6 +201,37 @@ type
     @see TConcurrentRwLock 详细文档和示例
   }
   TConcurrentRwLock = nextpas.core.lockfree.rwlock.TConcurrentRwLock;
+
+  {** @desc 并发倒计时闩
+    @details 类似 Go sync.WaitGroup，等待 N 个事件完成。
+      支持 Done/DoneN/Wait/WaitTimeout。
+    @see TCountDownLatch 详细文档和示例
+  }
+  TCountDownLatch = nextpas.core.lockfree.countdown.TCountDownLatch;
+
+  {** @desc 并发循环屏障
+    @details N 个线程在屏障点同步，所有线程到达后一起继续。
+      支持 Await/AwaitTimeout/Reset。
+    @see TCyclicBarrier 详细文档和示例
+  }
+  TCyclicBarrier = nextpas.core.lockfree.barrier.TCyclicBarrier;
+  TCyclicBarrierWaitResult = nextpas.core.lockfree.barrier.TCyclicBarrierWaitResult;
+
+  {** @desc 并发令牌桶限流器
+    @details 以恒定速率生成令牌，请求消耗令牌。
+      支持 TryAcquire/TryAcquireN。
+    @see TTokenBucketLimiter 详细文档和示例
+  }
+  TTokenBucketLimiter = nextpas.core.lockfree.ratelimit.TTokenBucketLimiter;
+  TLockFreeRateLimiterResult = nextpas.core.lockfree.ratelimit.TLockFreeRateLimiterResult;
+
+  {** @desc 并发条件变量
+    @details 配合 TConcurrentMutex 使用，实现条件等待。
+      支持 Wait/WaitTimeout/Signal/Broadcast。
+    @see TConditionVariable 详细文档和示例
+  }
+  TConditionVariable = nextpas.core.lockfree.condvar.TConditionVariable;
+  TConditionVariableWaitResult = nextpas.core.lockfree.condvar.TConditionVariableWaitResult;
 
 implementation
 

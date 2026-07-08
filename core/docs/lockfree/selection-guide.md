@@ -88,6 +88,60 @@
     - 空间效率高
     - 适用于缓存、去重、快速成员检查
 
+需要 LRU Cache（最近最少使用缓存）？
+└── 使用 TConcurrentLruCache<TKey,TValue>
+    - 分片锁 HashMap + 访问计数
+    - 自动淘汰最久未访问的条目
+    - 适用于缓存、淘汰场景
+
+需要并发计数器？
+└── 使用 TConcurrentCounter
+    - 原子操作，无锁
+    - Increment/Decrement/Add/Sub/Load/Store
+    - 适用于统计、计数
+
+需要信号量（资源池限流）？
+└── 使用 TConcurrentSemaphore
+    - 原子 CAS 操作
+    - TryAcquire/Acquire/AcquireTimeout/Release
+    - 适用于资源池、限流
+
+需要互斥锁？
+└── 使用 TConcurrentMutex
+    - 原子 CAS 操作
+    - TryLock/Lock/LockTimeout/Unlock
+    - 适用于互斥访问
+
+需要读写锁？
+└── 使用 TConcurrentRwLock
+    - 单 Int32 状态编码 (0/-1/>0)
+    - 多读者并发，写者独占
+    - 适用于读多写少场景
+
+需要倒计时闩（WaitGroup）？
+└── 使用 TCountDownLatch
+    - 初始计数 N，Done 减 1
+    - Wait 阻塞直到计数归零
+    - 适用于等待一组任务完成
+
+需要循环屏障（Barrier）？
+└── 使用 TCyclicBarrier
+    - N 个线程在屏障点同步
+    - 可重复使用
+    - 适用于分阶段并行计算
+
+需要限流器（Rate Limiter）？
+└── 使用 TTokenBucketLimiter
+    - 令牌桶算法
+    - 恒定速率生成令牌
+    - 适用于 API 限流、请求整形
+
+需要条件变量？
+└── 使用 TConditionVariable
+    - 配合 TConcurrentMutex 使用
+    - Signal 唤醒一个，Broadcast 唤醒所有
+    - 适用于生产者-消费者、条件同步
+
 需要 Channel（生产者-消费者通信）？
 ├── 单向通信
 │   ├── 单生产者单消费者 (1P1C)
