@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** 采样记录 }
@@ -53,7 +52,7 @@ type
    *      LSampling.Free;
    *    end;
    *}
-  TSamplingAllocator = class(TAllocator)
+  TSamplingAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FSampleRate: UInt32;
@@ -65,11 +64,6 @@ type
     FSampleCapacity: UInt32;
     procedure GrowSamples;
     function NowMs: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建采样分配器
      *  @param AInner 内部分配器
@@ -77,6 +71,11 @@ type
      *}
     constructor Create(AInner: IAllocator; ASampleRate: UInt32 = 1000);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 总分配次数 }
     function TotalAllocs: UInt64;
@@ -91,7 +90,7 @@ type
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -155,7 +154,7 @@ begin
   Result := MonotonicMs;
 end;
 
-function TSamplingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TSamplingAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
@@ -175,7 +174,7 @@ begin
   end;
 end;
 
-function TSamplingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TSamplingAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
@@ -194,12 +193,14 @@ begin
   end;
 end;
 
-function TSamplingAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TSamplingAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   Result := FInner.ReallocMem(APtr, ASize);
 end;
 
-procedure TSamplingAllocator.DoFreeMem(APtr: Pointer);
+procedure TSamplingAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FInner.FreeMem(APtr);
 end;
@@ -228,7 +229,7 @@ begin
   FSampleCount := 0;
 end;
 
-function TSamplingAllocator.Traits: TAllocatorTraits;
+function TSamplingAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
