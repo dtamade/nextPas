@@ -50,7 +50,7 @@ type
     FreeCount: UInt64;
   end;
 
-  TBitmapAllocator = class(TAllocator)
+  TBitmapAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FSlotSize: SizeUInt;
@@ -64,15 +64,15 @@ type
     procedure SetBit(AIdx: Integer);
     procedure ClearBit(AIdx: Integer);
     function IsBitSet(AIdx: Integer): Boolean;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; ASlotSize: SizeUInt;
       ASlotCount: SizeUInt = 1024);
     destructor Destroy; override;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
     function GetStats: TBitmapStats;
     property SlotSize: SizeUInt read FSlotSize;
     property SlotCount: SizeUInt read FSlotCount;
@@ -162,7 +162,7 @@ begin
     (1 shl (AIdx mod BITS_PER_UINT32))) <> 0;
 end;
 
-function TBitmapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TBitmapAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LIdx: Integer;
 begin
@@ -179,14 +179,14 @@ begin
   Result := Pointer(FData + LIdx * FSlotSize);
 end;
 
-function TBitmapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TBitmapAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TBitmapAllocator.DoFreeMem(APtr: Pointer);
+procedure TBitmapAllocator.FreeMem(APtr: Pointer); inline;
 var
   LOffset: SizeUInt;
   LIdx: Integer;
@@ -207,26 +207,26 @@ begin
   Inc(FFreeCount);
 end;
 
-function TBitmapAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TBitmapAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LCopySize: SizeUInt;
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize <= FSlotSize then
     Exit(APtr);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := FSlotSize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TBitmapAllocator.GetStats: TBitmapStats;
@@ -237,6 +237,13 @@ begin
   Result.FreeSlots := FSlotCount - FUsedSlots;
   Result.AllocCount := FAllocCount;
   Result.FreeCount := FFreeCount;
+end;
+
+function TBitmapAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
