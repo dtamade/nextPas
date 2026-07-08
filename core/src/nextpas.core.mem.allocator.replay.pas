@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** 录制操作类型 }
@@ -79,7 +78,7 @@ type
    *      LReplay.Free;
    *    end;
    *}
-  TReplayAllocator = class(TAllocator)
+  TReplayAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FRecording: Boolean;
@@ -93,17 +92,17 @@ type
     FPeakBytes: SizeUInt;
     procedure GrowEntries;
     procedure RecordOp(AOp: TReplayOp; ASize: SizeUInt);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建录制分配器（无内部分配器，仅用于加载/回放） }
     constructor Create; overload;
     {** 创建录制分配器（包装内部分配器，用于录制） }
     constructor Create(AInner: IAllocator); overload;
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 开始录制 }
     procedure StartRecording;
@@ -128,7 +127,7 @@ type
     {** 回放到目标分配器 }
     procedure Replay(ATarget: IAllocator);
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -217,7 +216,7 @@ begin
   end;
 end;
 
-function TReplayAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TReplayAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := nil;
   if FInner <> nil then
@@ -225,7 +224,7 @@ begin
   RecordOp(roGetMem, ASize);
 end;
 
-function TReplayAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TReplayAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := nil;
   if FInner <> nil then
@@ -233,8 +232,10 @@ begin
   RecordOp(roAllocMem, ASize);
 end;
 
-function TReplayAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TReplayAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   Result := nil;
   if FInner <> nil then
     Result := FInner.ReallocMem(APtr, ASize);
@@ -244,7 +245,7 @@ begin
   RecordOp(roGetMem, ASize);
 end;
 
-procedure TReplayAllocator.DoFreeMem(APtr: Pointer);
+procedure TReplayAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if FInner <> nil then
     FInner.FreeMem(APtr);
@@ -410,7 +411,7 @@ begin
   SetLength(LPtrs, 0);
 end;
 
-function TReplayAllocator.Traits: TAllocatorTraits;
+function TReplayAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
