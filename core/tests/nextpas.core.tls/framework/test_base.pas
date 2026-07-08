@@ -5,17 +5,17 @@ unit test_base;
 interface
 
 uses
-  Classes, SysUtils, fpcunit;
+  Classes, SysUtils, nextpas.core.test;
 
 type
   { TTestBase - 所有单元测试的基类 }
-  TTestBase = class(TTestCase)
+  TTestBase = class(TTestFixture)
   protected
     // Setup - 在每个测试方法前调用
-    procedure SetUp; override;
+    procedure BeforeEach; override;
     
     // TearDown - 在每个测试方法后调用
-    procedure TearDown; override;
+    procedure AfterEach; override;
     
     // 辅助方法：比较字节数组
     procedure AssertBytesEqual(const Expected, Actual: array of Byte; const Msg: string = '');
@@ -35,16 +35,16 @@ implementation
 
 { TTestBase }
 
-procedure TTestBase.SetUp;
+procedure TTestBase.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   // 子类可以覆盖此方法进行自定义初始化
 end;
 
-procedure TTestBase.TearDown;
+procedure TTestBase.AfterEach;
 begin
   // 子类可以覆盖此方法进行自定义清理
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 procedure TTestBase.AssertBytesEqual(const Expected, Actual: array of Byte; const Msg: string);

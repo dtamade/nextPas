@@ -3,8 +3,7 @@ program test_image_simd;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.simd.image;
+  nextpas.core.text.conv, nextpas.core.simd.image;
 
 var
   LSrc, LDst: TSimdImage;

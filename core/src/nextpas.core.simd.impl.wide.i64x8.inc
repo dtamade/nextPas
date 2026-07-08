@@ -567,6 +567,30 @@ begin
   Result := LDispatch^.CmpGtI16x32(a, b);
 end;
 
+function VecI16x32CmpLe(const a, b: TVecI16x32): TMask32;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpLeI16x32(a, b);
+end;
+
+function VecI16x32CmpGe(const a, b: TVecI16x32): TMask32;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpGeI16x32(a, b);
+end;
+
+function VecI16x32CmpNe(const a, b: TVecI16x32): TMask32;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpNeI16x32(a, b);
+end;
+
 function VecI16x32Min(const a, b: TVecI16x32): TVecI16x32;
 var
   LDispatch: PSimdDispatchTable;
@@ -663,6 +687,30 @@ begin
   Result := LDispatch^.CmpGtI8x64(a, b);
 end;
 
+function VecI8x64CmpLe(const a, b: TVecI8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpLeI8x64(a, b);
+end;
+
+function VecI8x64CmpGe(const a, b: TVecI8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpGeI8x64(a, b);
+end;
+
+function VecI8x64CmpNe(const a, b: TVecI8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpNeI8x64(a, b);
+end;
+
 function VecI8x64Min(const a, b: TVecI8x64): TVecI8x64;
 var
   LDispatch: PSimdDispatchTable;
@@ -749,6 +797,30 @@ var
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   Result := LDispatch^.CmpGtU8x64(a, b);
+end;
+
+function VecU8x64CmpLe(const a, b: TVecU8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpLeU8x64(a, b);
+end;
+
+function VecU8x64CmpGe(const a, b: TVecU8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpGeU8x64(a, b);
+end;
+
+function VecU8x64CmpNe(const a, b: TVecU8x64): TMask64;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  Result := LDispatch^.CmpNeU8x64(a, b);
 end;
 
 function VecU8x64Min(const a, b: TVecU8x64): TVecU8x64;

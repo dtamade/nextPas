@@ -6,12 +6,9 @@ unit nextpas.core.simd.sse2contracts.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
-  nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar;
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base,
+  nextpas.core.simd.dispatch, nextpas.core.simd.scalar;
 
 type
   TTestCase_SSE2Contracts = class(TSimdVectorAsmStatefulTestCase)
@@ -44,77 +41,69 @@ begin
   Result := aSSE2Table.BackendInfo.Available;
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecF32x16Equals(const aMessage: string; const aExpected,
-  aActual: TVecF32x16; aDelta: Single);
+procedure TTestCase_SSE2Contracts.AssertVecF32x16Equals(const aMessage: string; const aExpected, aActual: TVecF32x16; aDelta: Single);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 15 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.f[LIndex], aActual.f[LIndex], aDelta);
+    CheckNear(aExpected.f[LIndex], aActual.f[LIndex], aDelta, aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecF64x8Equals(const aMessage: string; const aExpected,
-  aActual: TVecF64x8; aDelta: Double);
+procedure TTestCase_SSE2Contracts.AssertVecF64x8Equals(const aMessage: string; const aExpected, aActual: TVecF64x8; aDelta: Double);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 7 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.d[LIndex], aActual.d[LIndex], aDelta);
+    CheckNear(aExpected.d[LIndex], aActual.d[LIndex], aDelta, aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecI32x16Equals(const aMessage: string; const aExpected,
-  aActual: TVecI32x16);
+procedure TTestCase_SSE2Contracts.AssertVecI32x16Equals(const aMessage: string; const aExpected, aActual: TVecI32x16);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 15 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.i[LIndex], aActual.i[LIndex]);
+    CheckEqual(aExpected.i[LIndex], aActual.i[LIndex], aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecI64x4Equals(const aMessage: string; const aExpected,
-  aActual: TVecI64x4);
+procedure TTestCase_SSE2Contracts.AssertVecI64x4Equals(const aMessage: string; const aExpected, aActual: TVecI64x4);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 3 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.i[LIndex], aActual.i[LIndex]);
+    CheckEqual(aExpected.i[LIndex], aActual.i[LIndex], aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecU32x8Equals(const aMessage: string; const aExpected,
-  aActual: TVecU32x8);
+procedure TTestCase_SSE2Contracts.AssertVecU32x8Equals(const aMessage: string; const aExpected, aActual: TVecU32x8);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 7 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.u[LIndex], aActual.u[LIndex]);
+    CheckEqual(aExpected.u[LIndex], aActual.u[LIndex], aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecU64x4Equals(const aMessage: string; const aExpected,
-  aActual: TVecU64x4);
+procedure TTestCase_SSE2Contracts.AssertVecU64x4Equals(const aMessage: string; const aExpected, aActual: TVecU64x4);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 3 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), QWord(aExpected.u[LIndex]), QWord(aActual.u[LIndex]));
+    CheckEqual(QWord(aExpected.u[LIndex]), QWord(aActual.u[LIndex]), aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertVecI64x8Equals(const aMessage: string; const aExpected,
-  aActual: TVecI64x8);
+procedure TTestCase_SSE2Contracts.AssertVecI64x8Equals(const aMessage: string; const aExpected, aActual: TVecI64x8);
 var
   LIndex: Integer;
 begin
   for LIndex := 0 to 7 do
-    AssertEquals(aMessage + ' lane ' + IntToStr(LIndex), aExpected.i[LIndex], aActual.i[LIndex]);
+    CheckEqual(aExpected.i[LIndex], aActual.i[LIndex], aMessage + ' lane ' + IntToStr(LIndex));
 end;
 
-procedure TTestCase_SSE2Contracts.AssertByteArrayEquals(const aMessage: string; const aExpected,
-  aActual: array of Byte);
+procedure TTestCase_SSE2Contracts.AssertByteArrayEquals(const aMessage: string; const aExpected, aActual: array of Byte);
 var
   LIndex: Integer;
 begin
-  AssertEquals(aMessage + ' length', Length(aExpected), Length(aActual));
+  CheckEqual(Length(aExpected), Length(aActual), aMessage + ' length');
   for LIndex := 0 to High(aExpected) do
-    AssertEquals(aMessage + ' byte ' + IntToStr(LIndex), aExpected[LIndex], aActual[LIndex]);
+    CheckEqual(aExpected[LIndex], aActual[LIndex], aMessage + ' byte ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_SSE2Contracts.Test_SSE2_WideFloatSlots_Stay_BackendOwned_And_Keep_ScalarParity;
@@ -134,19 +123,19 @@ begin
   if not TryLoadSSE2AndScalarTables(LSSE2Table, LScalarTable) then
     Exit;
 
-  AssertTrue('SSE2 AddF32x16 should be assigned', Assigned(LSSE2Table.AddF32x16));
-  AssertTrue('SSE2 FmaF32x16 should be assigned', Assigned(LSSE2Table.FmaF32x16));
-  AssertTrue('SSE2 SelectF32x16 should be assigned', Assigned(LSSE2Table.SelectF32x16));
-  AssertTrue('SSE2 AddF64x8 should be assigned', Assigned(LSSE2Table.AddF64x8));
-  AssertTrue('SSE2 FmaF64x8 should be assigned', Assigned(LSSE2Table.FmaF64x8));
-  AssertTrue('SSE2 SelectF64x8 should be assigned', Assigned(LSSE2Table.SelectF64x8));
+  CheckTrue(Assigned(LSSE2Table.AddF32x16), 'SSE2 AddF32x16 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.FmaF32x16), 'SSE2 FmaF32x16 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.SelectF32x16), 'SSE2 SelectF32x16 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AddF64x8), 'SSE2 AddF64x8 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.FmaF64x8), 'SSE2 FmaF64x8 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.SelectF64x8), 'SSE2 SelectF64x8 should be assigned');
 
-  AssertTrue('SSE2 AddF32x16 should leave scalar slot', Pointer(LSSE2Table.AddF32x16) <> Pointer(LScalarTable.AddF32x16));
-  AssertTrue('SSE2 FmaF32x16 should leave scalar slot', Pointer(LSSE2Table.FmaF32x16) <> Pointer(LScalarTable.FmaF32x16));
-  AssertTrue('SSE2 SelectF32x16 should leave scalar slot', Pointer(LSSE2Table.SelectF32x16) <> Pointer(LScalarTable.SelectF32x16));
-  AssertTrue('SSE2 AddF64x8 should leave scalar slot', Pointer(LSSE2Table.AddF64x8) <> Pointer(LScalarTable.AddF64x8));
-  AssertTrue('SSE2 FmaF64x8 should leave scalar slot', Pointer(LSSE2Table.FmaF64x8) <> Pointer(LScalarTable.FmaF64x8));
-  AssertTrue('SSE2 SelectF64x8 should leave scalar slot', Pointer(LSSE2Table.SelectF64x8) <> Pointer(LScalarTable.SelectF64x8));
+  CheckTrue(Pointer(LSSE2Table.AddF32x16) <> Pointer(LScalarTable.AddF32x16), 'SSE2 AddF32x16 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.FmaF32x16) <> Pointer(LScalarTable.FmaF32x16), 'SSE2 FmaF32x16 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.SelectF32x16) <> Pointer(LScalarTable.SelectF32x16), 'SSE2 SelectF32x16 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AddF64x8) <> Pointer(LScalarTable.AddF64x8), 'SSE2 AddF64x8 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.FmaF64x8) <> Pointer(LScalarTable.FmaF64x8), 'SSE2 FmaF64x8 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.SelectF64x8) <> Pointer(LScalarTable.SelectF64x8), 'SSE2 SelectF64x8 should leave scalar slot');
 
   LMask16 := TMask16($A55A);
   LMask8 := TMask8($A5);
@@ -183,7 +172,7 @@ begin
   LSSE2Table.StoreF32x16(@LStoreF32SSE2[0], LActualF32);
   ScalarStoreF32x16(@LStoreF32Scalar[0], LExpectedF32);
   for LIndex := 0 to 15 do
-    AssertEquals('SSE2 StoreF32x16 scalar parity lane ' + IntToStr(LIndex), LStoreF32Scalar[LIndex], LStoreF32SSE2[LIndex], 0.0);
+    CheckNear(LStoreF32Scalar[LIndex], LStoreF32SSE2[LIndex], 0.0, 'SSE2 StoreF32x16 scalar parity lane ' + IntToStr(LIndex));
 
   LActualF64 := LSSE2Table.AddF64x8(LF64A, LF64B);
   LExpectedF64 := ScalarAddF64x8(LF64A, LF64B);
@@ -203,7 +192,7 @@ begin
   LSSE2Table.StoreF64x8(@LStoreF64SSE2[0], LActualF64);
   ScalarStoreF64x8(@LStoreF64Scalar[0], LExpectedF64);
   for LIndex := 0 to 7 do
-    AssertEquals('SSE2 StoreF64x8 scalar parity lane ' + IntToStr(LIndex), LStoreF64Scalar[LIndex], LStoreF64SSE2[LIndex], 0.0);
+    CheckNear(LStoreF64Scalar[LIndex], LStoreF64SSE2[LIndex], 0.0, 'SSE2 StoreF64x8 scalar parity lane ' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_SSE2Contracts.Test_SSE2_WideIntegerSlots_Stay_BackendOwned_And_Keep_ScalarParity;
@@ -220,17 +209,17 @@ begin
   if not TryLoadSSE2AndScalarTables(LSSE2Table, LScalarTable) then
     Exit;
 
-  AssertTrue('SSE2 AddI32x16 should be assigned', Assigned(LSSE2Table.AddI32x16));
-  AssertTrue('SSE2 AddI64x4 should be assigned', Assigned(LSSE2Table.AddI64x4));
-  AssertTrue('SSE2 AddU32x8 should be assigned', Assigned(LSSE2Table.AddU32x8));
-  AssertTrue('SSE2 AddU64x4 should be assigned', Assigned(LSSE2Table.AddU64x4));
-  AssertTrue('SSE2 AddI64x8 should be assigned', Assigned(LSSE2Table.AddI64x8));
+  CheckTrue(Assigned(LSSE2Table.AddI32x16), 'SSE2 AddI32x16 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AddI64x4), 'SSE2 AddI64x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AddU32x8), 'SSE2 AddU32x8 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AddU64x4), 'SSE2 AddU64x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AddI64x8), 'SSE2 AddI64x8 should be assigned');
 
-  AssertTrue('SSE2 AddI32x16 should leave scalar slot', Pointer(LSSE2Table.AddI32x16) <> Pointer(LScalarTable.AddI32x16));
-  AssertTrue('SSE2 AddI64x4 should leave scalar slot', Pointer(LSSE2Table.AddI64x4) <> Pointer(LScalarTable.AddI64x4));
-  AssertTrue('SSE2 AddU32x8 should leave scalar slot', Pointer(LSSE2Table.AddU32x8) <> Pointer(LScalarTable.AddU32x8));
-  AssertTrue('SSE2 AddU64x4 should leave scalar slot', Pointer(LSSE2Table.AddU64x4) <> Pointer(LScalarTable.AddU64x4));
-  AssertTrue('SSE2 AddI64x8 should leave scalar slot', Pointer(LSSE2Table.AddI64x8) <> Pointer(LScalarTable.AddI64x8));
+  CheckTrue(Pointer(LSSE2Table.AddI32x16) <> Pointer(LScalarTable.AddI32x16), 'SSE2 AddI32x16 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AddI64x4) <> Pointer(LScalarTable.AddI64x4), 'SSE2 AddI64x4 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AddU32x8) <> Pointer(LScalarTable.AddU32x8), 'SSE2 AddU32x8 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AddU64x4) <> Pointer(LScalarTable.AddU64x4), 'SSE2 AddU64x4 should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AddI64x8) <> Pointer(LScalarTable.AddI64x8), 'SSE2 AddI64x8 should leave scalar slot');
 
   for LIndex := 0 to 15 do
   begin
@@ -240,7 +229,7 @@ begin
   LI32Actual := LSSE2Table.AddI32x16(LI32A, LI32B);
   LI32Expected := ScalarAddI32x16(LI32A, LI32B);
   AssertVecI32x16Equals('SSE2 AddI32x16 scalar parity', LI32Expected, LI32Actual);
-  AssertEquals('SSE2 CmpNeI32x16 scalar parity', Integer(ScalarCmpNeI32x16(LI32A, LI32B)), Integer(LSSE2Table.CmpNeI32x16(LI32A, LI32B)));
+  CheckEqual(Integer(ScalarCmpNeI32x16(LI32A, LI32B)), Integer(LSSE2Table.CmpNeI32x16(LI32A, LI32B)), 'SSE2 CmpNeI32x16 scalar parity');
   LI32Actual := LSSE2Table.MinI32x16(LI32A, LI32B);
   LI32Expected := ScalarMinI32x16(LI32A, LI32B);
   AssertVecI32x16Equals('SSE2 MinI32x16 scalar parity', LI32Expected, LI32Actual);
@@ -258,7 +247,7 @@ begin
   LI64Actual := LSSE2Table.ShiftRightArithI64x4(LI64A, 3);
   LI64Expected := ScalarShiftRightArithI64x4(LI64A, 3);
   AssertVecI64x4Equals('SSE2 ShiftRightArithI64x4 scalar parity', LI64Expected, LI64Actual);
-  AssertEquals('SSE2 CmpLtI64x4 scalar parity', Integer(ScalarCmpLtI64x4(LI64A, LI64B)), Integer(LSSE2Table.CmpLtI64x4(LI64A, LI64B)));
+  CheckEqual(Integer(ScalarCmpLtI64x4(LI64A, LI64B)), Integer(LSSE2Table.CmpLtI64x4(LI64A, LI64B)), 'SSE2 CmpLtI64x4 scalar parity');
 
   for LIndex := 0 to 7 do
   begin
@@ -270,7 +259,7 @@ begin
   LU32Actual := LSSE2Table.AddU32x8(LU32A, LU32B);
   LU32Expected := ScalarAddU32x8(LU32A, LU32B);
   AssertVecU32x8Equals('SSE2 AddU32x8 scalar parity', LU32Expected, LU32Actual);
-  AssertEquals('SSE2 CmpNeU32x8 scalar parity', Integer(ScalarCmpNeU32x8(LU32A, LU32B)), Integer(LSSE2Table.CmpNeU32x8(LU32A, LU32B)));
+  CheckEqual(Integer(ScalarCmpNeU32x8(LU32A, LU32B)), Integer(LSSE2Table.CmpNeU32x8(LU32A, LU32B)), 'SSE2 CmpNeU32x8 scalar parity');
   LU32Actual := LSSE2Table.MinU32x8(LU32A, LU32B);
   LU32Expected := ScalarMinU32x8(LU32A, LU32B);
   AssertVecU32x8Equals('SSE2 MinU32x8 scalar parity', LU32Expected, LU32Actual);
@@ -281,12 +270,12 @@ begin
   LU64Actual := LSSE2Table.ShiftRightU64x4(LU64A, 4);
   LU64Expected := ScalarShiftRightU64x4(LU64A, 4);
   AssertVecU64x4Equals('SSE2 ShiftRightU64x4 scalar parity', LU64Expected, LU64Actual);
-  AssertEquals('SSE2 CmpNeU64x4 scalar parity', Integer(ScalarCmpNeU64x4(LU64A, LU64B)), Integer(LSSE2Table.CmpNeU64x4(LU64A, LU64B)));
+  CheckEqual(Integer(ScalarCmpNeU64x4(LU64A, LU64B)), Integer(LSSE2Table.CmpNeU64x4(LU64A, LU64B)), 'SSE2 CmpNeU64x4 scalar parity');
 
   LI64x8Actual := LSSE2Table.AddI64x8(LI64x8A, LI64x8B);
   LI64x8Expected := ScalarAddI64x8(LI64x8A, LI64x8B);
   AssertVecI64x8Equals('SSE2 AddI64x8 scalar parity', LI64x8Expected, LI64x8Actual);
-  AssertEquals('SSE2 CmpNeI64x8 scalar parity', Integer(ScalarCmpNeI64x8(LI64x8A, LI64x8B)), Integer(LSSE2Table.CmpNeI64x8(LI64x8A, LI64x8B)));
+  CheckEqual(Integer(ScalarCmpNeI64x8(LI64x8A, LI64x8B)), Integer(LSSE2Table.CmpNeI64x8(LI64x8A, LI64x8B)), 'SSE2 CmpNeI64x8 scalar parity');
 end;
 
 procedure TTestCase_SSE2Contracts.Test_SSE2_NarrowI64U64ScalarReuseSlots_Stay_On_BaseScalar;
@@ -296,9 +285,8 @@ var
 
   procedure AssertSlotReusesScalar(const aLabel: string; const aScalarSlot, aSSE2Slot: Pointer);
   begin
-    AssertTrue('SSE2 ' + aLabel + ' should stay assigned', aSSE2Slot <> nil);
-    AssertEquals('SSE2 ' + aLabel + ' should intentionally reuse the base scalar slot',
-      PtrUInt(aScalarSlot), PtrUInt(aSSE2Slot));
+    CheckTrue(aSSE2Slot <> nil, 'SSE2 ' + aLabel + ' should stay assigned');
+    CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aSSE2Slot), 'SSE2 ' + aLabel + ' should intentionally reuse the base scalar slot');
   end;
 begin
   if not TryLoadSSE2AndScalarTables(LSSE2Table, LScalarTable) then
@@ -344,21 +332,21 @@ begin
   if not TryLoadSSE2AndScalarTables(LSSE2Table, LScalarTable) then
     Exit;
 
-  AssertTrue('SSE2 MemDiffRange should be assigned', Assigned(LSSE2Table.MemDiffRange));
-  AssertTrue('SSE2 MemReverse should be assigned', Assigned(LSSE2Table.MemReverse));
-  AssertTrue('SSE2 ToLowerAscii should be assigned', Assigned(LSSE2Table.ToLowerAscii));
-  AssertTrue('SSE2 ToUpperAscii should be assigned', Assigned(LSSE2Table.ToUpperAscii));
-  AssertTrue('SSE2 AsciiIEqual should be assigned', Assigned(LSSE2Table.AsciiIEqual));
-  AssertTrue('SSE2 BytesIndexOf should be assigned', Assigned(LSSE2Table.BytesIndexOf));
-  AssertTrue('SSE2 Utf8Validate should be assigned', Assigned(LSSE2Table.Utf8Validate));
+  CheckTrue(Assigned(LSSE2Table.MemDiffRange), 'SSE2 MemDiffRange should be assigned');
+  CheckTrue(Assigned(LSSE2Table.MemReverse), 'SSE2 MemReverse should be assigned');
+  CheckTrue(Assigned(LSSE2Table.ToLowerAscii), 'SSE2 ToLowerAscii should be assigned');
+  CheckTrue(Assigned(LSSE2Table.ToUpperAscii), 'SSE2 ToUpperAscii should be assigned');
+  CheckTrue(Assigned(LSSE2Table.AsciiIEqual), 'SSE2 AsciiIEqual should be assigned');
+  CheckTrue(Assigned(LSSE2Table.BytesIndexOf), 'SSE2 BytesIndexOf should be assigned');
+  CheckTrue(Assigned(LSSE2Table.Utf8Validate), 'SSE2 Utf8Validate should be assigned');
 
-  AssertTrue('SSE2 MemDiffRange should leave scalar slot', Pointer(LSSE2Table.MemDiffRange) <> Pointer(LScalarTable.MemDiffRange));
-  AssertTrue('SSE2 MemReverse should leave scalar slot', Pointer(LSSE2Table.MemReverse) <> Pointer(LScalarTable.MemReverse));
-  AssertTrue('SSE2 ToLowerAscii should leave scalar slot', Pointer(LSSE2Table.ToLowerAscii) <> Pointer(LScalarTable.ToLowerAscii));
-  AssertTrue('SSE2 ToUpperAscii should leave scalar slot', Pointer(LSSE2Table.ToUpperAscii) <> Pointer(LScalarTable.ToUpperAscii));
-  AssertTrue('SSE2 AsciiIEqual should leave scalar slot', Pointer(LSSE2Table.AsciiIEqual) <> Pointer(LScalarTable.AsciiIEqual));
-  AssertTrue('SSE2 BytesIndexOf should leave scalar slot', Pointer(LSSE2Table.BytesIndexOf) <> Pointer(LScalarTable.BytesIndexOf));
-  AssertTrue('SSE2 Utf8Validate should leave scalar slot', Pointer(LSSE2Table.Utf8Validate) <> Pointer(LScalarTable.Utf8Validate));
+  CheckTrue(Pointer(LSSE2Table.MemDiffRange) <> Pointer(LScalarTable.MemDiffRange), 'SSE2 MemDiffRange should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.MemReverse) <> Pointer(LScalarTable.MemReverse), 'SSE2 MemReverse should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.ToLowerAscii) <> Pointer(LScalarTable.ToLowerAscii), 'SSE2 ToLowerAscii should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.ToUpperAscii) <> Pointer(LScalarTable.ToUpperAscii), 'SSE2 ToUpperAscii should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.AsciiIEqual) <> Pointer(LScalarTable.AsciiIEqual), 'SSE2 AsciiIEqual should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.BytesIndexOf) <> Pointer(LScalarTable.BytesIndexOf), 'SSE2 BytesIndexOf should leave scalar slot');
+  CheckTrue(Pointer(LSSE2Table.Utf8Validate) <> Pointer(LScalarTable.Utf8Validate), 'SSE2 Utf8Validate should leave scalar slot');
 
   for LIndex := 0 to High(LBufA) do
   begin
@@ -372,9 +360,9 @@ begin
 
   LBoolSSE2 := LSSE2Table.MemDiffRange(@LBufA[0], @LBufB[0], Length(LBufA), LFirstSSE2, LLastSSE2);
   LBoolScalar := MemDiffRange_Scalar(@LBufA[0], @LBufB[0], Length(LBufA), LFirstScalar, LLastScalar);
-  AssertEquals('SSE2 MemDiffRange scalar parity bool', LBoolScalar, LBoolSSE2);
-  AssertEquals('SSE2 MemDiffRange scalar parity first diff', LFirstScalar, LFirstSSE2);
-  AssertEquals('SSE2 MemDiffRange scalar parity last diff', LLastScalar, LLastSSE2);
+  CheckEqual(LBoolScalar, LBoolSSE2, 'SSE2 MemDiffRange scalar parity bool');
+  CheckEqual(LFirstScalar, LFirstSSE2, 'SSE2 MemDiffRange scalar parity first diff');
+  CheckEqual(LLastScalar, LLastSSE2, 'SSE2 MemDiffRange scalar parity last diff');
 
   LSSE2Table.MemReverse(@LRevSSE2[0], Length(LRevSSE2));
   MemReverse_Scalar(@LRevScalar[0], Length(LRevScalar));
@@ -386,7 +374,7 @@ begin
   UniqueString(LLowerScalar);
   LSSE2Table.ToLowerAscii(Pointer(LLowerSSE2), Length(LLowerSSE2));
   ToLowerAscii_Scalar(Pointer(LLowerScalar), Length(LLowerScalar));
-  AssertEquals('SSE2 ToLowerAscii scalar parity', string(LLowerScalar), string(LLowerSSE2));
+  CheckEqual(string(LLowerScalar), string(LLowerSSE2), 'SSE2 ToLowerAscii scalar parity');
 
   LUpperSSE2 := 'AbC-xyZ09';
   LUpperScalar := LUpperSSE2;
@@ -394,19 +382,15 @@ begin
   UniqueString(LUpperScalar);
   LSSE2Table.ToUpperAscii(Pointer(LUpperSSE2), Length(LUpperSSE2));
   ToUpperAscii_Scalar(Pointer(LUpperScalar), Length(LUpperScalar));
-  AssertEquals('SSE2 ToUpperAscii scalar parity', string(LUpperScalar), string(LUpperSSE2));
+  CheckEqual(string(LUpperScalar), string(LUpperSSE2), 'SSE2 ToUpperAscii scalar parity');
 
   LCaseA := 'SiMd-Case-123';
   LCaseB := 'sImD-cAsE-123';
-  AssertEquals('SSE2 AsciiIEqual scalar parity',
-    AsciiIEqual_Scalar(Pointer(LCaseA), Pointer(LCaseB), Length(LCaseA)),
-    LSSE2Table.AsciiIEqual(Pointer(LCaseA), Pointer(LCaseB), Length(LCaseA)));
+  CheckEqual(AsciiIEqual_Scalar(Pointer(LCaseA), Pointer(LCaseB), Length(LCaseA)), LSSE2Table.AsciiIEqual(Pointer(LCaseA), Pointer(LCaseB), Length(LCaseA)), 'SSE2 AsciiIEqual scalar parity');
 
   LHaystack := 'prefix-Case-suffix';
   LNeedle := 'Case';
-  AssertEquals('SSE2 BytesIndexOf scalar parity',
-    BytesIndexOf_Scalar(Pointer(LHaystack), Length(LHaystack), Pointer(LNeedle), Length(LNeedle)),
-    LSSE2Table.BytesIndexOf(Pointer(LHaystack), Length(LHaystack), Pointer(LNeedle), Length(LNeedle)));
+  CheckEqual(BytesIndexOf_Scalar(Pointer(LHaystack), Length(LHaystack), Pointer(LNeedle), Length(LNeedle)), LSSE2Table.BytesIndexOf(Pointer(LHaystack), Length(LHaystack), Pointer(LNeedle), Length(LNeedle)), 'SSE2 BytesIndexOf scalar parity');
 
   LValidUtf8[0] := Ord('A');
   LValidUtf8[1] := $E4;
@@ -419,12 +403,8 @@ begin
   LInvalidUtf8[1] := $82;
   LInvalidUtf8[2] := $41;
 
-  AssertEquals('SSE2 Utf8Validate valid scalar parity',
-    Utf8Validate_Scalar(@LValidUtf8[0], Length(LValidUtf8)),
-    LSSE2Table.Utf8Validate(@LValidUtf8[0], Length(LValidUtf8)));
-  AssertEquals('SSE2 Utf8Validate invalid scalar parity',
-    Utf8Validate_Scalar(@LInvalidUtf8[0], Length(LInvalidUtf8)),
-    LSSE2Table.Utf8Validate(@LInvalidUtf8[0], Length(LInvalidUtf8)));
+  CheckEqual(Utf8Validate_Scalar(@LValidUtf8[0], Length(LValidUtf8)), LSSE2Table.Utf8Validate(@LValidUtf8[0], Length(LValidUtf8)), 'SSE2 Utf8Validate valid scalar parity');
+  CheckEqual(Utf8Validate_Scalar(@LInvalidUtf8[0], Length(LInvalidUtf8)), LSSE2Table.Utf8Validate(@LInvalidUtf8[0], Length(LInvalidUtf8)), 'SSE2 Utf8Validate invalid scalar parity');
 end;
 
 procedure TTestCase_SSE2Contracts.Test_SSE2_VectorAsmRoundTrip_Rebuild_Preserves_Representative_Bindings;
@@ -440,45 +420,31 @@ begin
     Exit;
   if not LSSE2DisabledTable.BackendInfo.Available then
     Exit;
-  AssertTrue('TrySetActiveBackend(sbSSE2) should succeed with vector asm disabled', TrySetActiveBackend(sbSSE2));
-  AssertEquals('Current backend should be SSE2 with vector asm disabled', Ord(sbSSE2), Ord(GetCurrentBackend));
+  CheckTrue(TrySetActiveBackend(sbSSE2), 'TrySetActiveBackend(sbSSE2) should succeed with vector asm disabled');
+  CheckEqual(Ord(sbSSE2), Ord(GetCurrentBackend), 'Current backend should be SSE2 with vector asm disabled');
 
   SetVectorAsmEnabled(True);
-  AssertTrue('TryGetRegisteredBackendDispatchTable(sbSSE2) should succeed with vector asm enabled',
-    TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2EnabledTable));
-  AssertTrue('TrySetActiveBackend(sbSSE2) should succeed with vector asm enabled', TrySetActiveBackend(sbSSE2));
-  AssertEquals('Current backend should stay SSE2 with vector asm enabled', Ord(sbSSE2), Ord(GetCurrentBackend));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2EnabledTable), 'TryGetRegisteredBackendDispatchTable(sbSSE2) should succeed with vector asm enabled');
+  CheckTrue(TrySetActiveBackend(sbSSE2), 'TrySetActiveBackend(sbSSE2) should succeed with vector asm enabled');
+  CheckEqual(Ord(sbSSE2), Ord(GetCurrentBackend), 'Current backend should stay SSE2 with vector asm enabled');
 
   SetVectorAsmEnabled(False);
-  AssertTrue('TryGetRegisteredBackendDispatchTable(sbSSE2) should succeed after round-trip disable',
-    TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2DisabledAgainTable));
-  AssertTrue('TrySetActiveBackend(sbSSE2) should succeed after vector asm round-trip', TrySetActiveBackend(sbSSE2));
-  AssertEquals('Current backend should stay SSE2 after vector asm round-trip', Ord(sbSSE2), Ord(GetCurrentBackend));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2DisabledAgainTable), 'TryGetRegisteredBackendDispatchTable(sbSSE2) should succeed after round-trip disable');
+  CheckTrue(TrySetActiveBackend(sbSSE2), 'TrySetActiveBackend(sbSSE2) should succeed after vector asm round-trip');
+  CheckEqual(Ord(sbSSE2), Ord(GetCurrentBackend), 'Current backend should stay SSE2 after vector asm round-trip');
 
-  AssertTrue('SSE2 AddF32x16 binding should be stable across vector-asm rebuilds',
-    Pointer(LSSE2DisabledTable.AddF32x16) = Pointer(LSSE2EnabledTable.AddF32x16));
-  AssertTrue('SSE2 SelectF64x8 binding should be stable across vector-asm rebuilds',
-    Pointer(LSSE2DisabledTable.SelectF64x8) = Pointer(LSSE2EnabledTable.SelectF64x8));
-  AssertTrue('SSE2 AddI64x8 binding should be stable across vector-asm rebuilds',
-    Pointer(LSSE2DisabledTable.AddI64x8) = Pointer(LSSE2EnabledTable.AddI64x8));
-  AssertTrue('SSE2 MemDiffRange binding should be stable across vector-asm rebuilds',
-    Pointer(LSSE2DisabledTable.MemDiffRange) = Pointer(LSSE2EnabledTable.MemDiffRange));
-  AssertTrue('SSE2 Utf8Validate binding should be stable across vector-asm rebuilds',
-    Pointer(LSSE2DisabledTable.Utf8Validate) = Pointer(LSSE2EnabledTable.Utf8Validate));
+  CheckTrue(Pointer(LSSE2DisabledTable.AddF32x16) = Pointer(LSSE2EnabledTable.AddF32x16), 'SSE2 AddF32x16 binding should be stable across vector-asm rebuilds');
+  CheckTrue(Pointer(LSSE2DisabledTable.SelectF64x8) = Pointer(LSSE2EnabledTable.SelectF64x8), 'SSE2 SelectF64x8 binding should be stable across vector-asm rebuilds');
+  CheckTrue(Pointer(LSSE2DisabledTable.AddI64x8) = Pointer(LSSE2EnabledTable.AddI64x8), 'SSE2 AddI64x8 binding should be stable across vector-asm rebuilds');
+  CheckTrue(Pointer(LSSE2DisabledTable.MemDiffRange) = Pointer(LSSE2EnabledTable.MemDiffRange), 'SSE2 MemDiffRange binding should be stable across vector-asm rebuilds');
+  CheckTrue(Pointer(LSSE2DisabledTable.Utf8Validate) = Pointer(LSSE2EnabledTable.Utf8Validate), 'SSE2 Utf8Validate binding should be stable across vector-asm rebuilds');
 
-  AssertTrue('SSE2 AddF32x16 binding should round-trip back to the original slot',
-    Pointer(LSSE2DisabledTable.AddF32x16) = Pointer(LSSE2DisabledAgainTable.AddF32x16));
-  AssertTrue('SSE2 SelectF64x8 binding should round-trip back to the original slot',
-    Pointer(LSSE2DisabledTable.SelectF64x8) = Pointer(LSSE2DisabledAgainTable.SelectF64x8));
-  AssertTrue('SSE2 AddI64x8 binding should round-trip back to the original slot',
-    Pointer(LSSE2DisabledTable.AddI64x8) = Pointer(LSSE2DisabledAgainTable.AddI64x8));
-  AssertTrue('SSE2 MemDiffRange binding should round-trip back to the original slot',
-    Pointer(LSSE2DisabledTable.MemDiffRange) = Pointer(LSSE2DisabledAgainTable.MemDiffRange));
-  AssertTrue('SSE2 Utf8Validate binding should round-trip back to the original slot',
-    Pointer(LSSE2DisabledTable.Utf8Validate) = Pointer(LSSE2DisabledAgainTable.Utf8Validate));
+  CheckTrue(Pointer(LSSE2DisabledTable.AddF32x16) = Pointer(LSSE2DisabledAgainTable.AddF32x16), 'SSE2 AddF32x16 binding should round-trip back to the original slot');
+  CheckTrue(Pointer(LSSE2DisabledTable.SelectF64x8) = Pointer(LSSE2DisabledAgainTable.SelectF64x8), 'SSE2 SelectF64x8 binding should round-trip back to the original slot');
+  CheckTrue(Pointer(LSSE2DisabledTable.AddI64x8) = Pointer(LSSE2DisabledAgainTable.AddI64x8), 'SSE2 AddI64x8 binding should round-trip back to the original slot');
+  CheckTrue(Pointer(LSSE2DisabledTable.MemDiffRange) = Pointer(LSSE2DisabledAgainTable.MemDiffRange), 'SSE2 MemDiffRange binding should round-trip back to the original slot');
+  CheckTrue(Pointer(LSSE2DisabledTable.Utf8Validate) = Pointer(LSSE2DisabledAgainTable.Utf8Validate), 'SSE2 Utf8Validate binding should round-trip back to the original slot');
 end;
 
-initialization
-  RegisterTest(TTestCase_SSE2Contracts);
 
 end.

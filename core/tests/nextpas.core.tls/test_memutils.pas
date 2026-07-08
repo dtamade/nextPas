@@ -15,7 +15,7 @@ unit test_memutils;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   test_base, nextpas.core.tls.memutils;
 
 type
@@ -60,7 +60,7 @@ begin
 
   // Verify all bytes are zero
   for I := 0 to High(Buffer) do
-    AssertEquals('Buffer should be zeroed at position ' + IntToStr(I), 0, Buffer[I]);
+    CheckEqual(0, Buffer[I], 'Buffer should be zeroed at position ' + IntToStr(I));
 end;
 
 procedure TTestMemUtils.Test_SecureZeroMemory_LargeBuffer;
@@ -77,7 +77,7 @@ begin
 
   // Verify all bytes are zero
   for I := 0 to High(Buffer) do
-    AssertEquals('Large buffer should be zeroed at position ' + IntToStr(I), 0, Buffer[I]);
+    CheckEqual(0, Buffer[I], 'Large buffer should be zeroed at position ' + IntToStr(I));
 end;
 
 procedure TTestMemUtils.Test_SecureZeroMemory_SingleByte;
@@ -88,7 +88,7 @@ begin
 
   SecureZeroMemory(@Buffer, SizeOf(Buffer));
 
-  AssertEquals('Single byte should be zeroed', 0, Buffer);
+  CheckEqual(0, Buffer, 'Single byte should be zeroed');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroMemory_NilPointer;
@@ -97,7 +97,7 @@ begin
   SecureZeroMemory(nil, 100);
 
   // If we get here, the test passed (no crash)
-  AssertTrue('SecureZeroMemory should handle nil pointer gracefully', True);
+  CheckTrue(True, 'SecureZeroMemory should handle nil pointer gracefully');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroMemory_ZeroSize;
@@ -110,7 +110,7 @@ begin
   SecureZeroMemory(@Buffer, 0);
 
   // Buffer should remain unchanged
-  AssertEquals('Buffer should not be modified with zero size', $FF, Buffer);
+  CheckEqual($FF, Buffer, 'Buffer should not be modified with zero size');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroBytes_Basic;
@@ -125,7 +125,7 @@ begin
   SecureZeroBytes(Data);
 
   // After SecureZeroBytes, array length should be 0
-  AssertEquals('Array length should be 0 after SecureZeroBytes', 0, Length(Data));
+  CheckEqual(0, Length(Data), 'Array length should be 0 after SecureZeroBytes');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroBytes_EmptyArray;
@@ -137,7 +137,7 @@ begin
   // Should not crash with empty array
   SecureZeroBytes(Data);
 
-  AssertEquals('Empty array should remain empty', 0, Length(Data));
+  CheckEqual(0, Length(Data), 'Empty array should remain empty');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroBytes_LargeArray;
@@ -151,7 +151,7 @@ begin
 
   SecureZeroBytes(Data);
 
-  AssertEquals('Large array length should be 0 after SecureZeroBytes', 0, Length(Data));
+  CheckEqual(0, Length(Data), 'Large array length should be 0 after SecureZeroBytes');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroBytes_VerifyCleared;
@@ -186,7 +186,7 @@ begin
 
   // We can't guarantee the memory check due to potential reallocation,
   // but at minimum the length should be 0
-  AssertEquals('Array length should be 0', 0, Length(Data));
+  CheckEqual(0, Length(Data), 'Array length should be 0');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroString_Basic;
@@ -197,7 +197,7 @@ begin
 
   SecureZeroString(Str);
 
-  AssertEquals('String should be empty after SecureZeroString', '', Str);
+  CheckEqual('', Str, 'String should be empty after SecureZeroString');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroString_EmptyString;
@@ -209,7 +209,7 @@ begin
   // Should not crash with empty string
   SecureZeroString(Str);
 
-  AssertEquals('Empty string should remain empty', '', Str);
+  CheckEqual('', Str, 'Empty string should remain empty');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroString_LongString;
@@ -223,7 +223,7 @@ begin
 
   SecureZeroString(Str);
 
-  AssertEquals('Long string should be empty after SecureZeroString', '', Str);
+  CheckEqual('', Str, 'Long string should be empty after SecureZeroString');
 end;
 
 procedure TTestMemUtils.Test_SecureZeroString_VerifyCleared;
@@ -255,10 +255,7 @@ begin
   end;
 
   // At minimum the string should be empty
-  AssertEquals('String should be empty', '', Str);
+  CheckEqual('', Str, 'String should be empty');
 end;
-
-initialization
-  RegisterTest(TTestMemUtils);
 
 end.

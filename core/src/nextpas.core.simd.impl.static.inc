@@ -256,6 +256,71 @@ begin Result := SIMD_STATIC_VecI32x4Max(a, b); end;
 function VecI32x4CmpEq(const a, b: TVecI32x4): TMask4; inline;
 begin Result := SIMD_STATIC_VecI32x4CmpEq(a, b); end;
 
+// === I32x8 Operations (256-bit) ===
+
+function VecI32x8Extract(const a: TVecI32x8; index: Integer): Int32; inline;
+begin Result := SIMD_STATIC_VecI32x8Extract(a, index); end;
+
+function VecI32x8Insert(const a: TVecI32x8; value: Int32; index: Integer): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Insert(a, value, index); end;
+
+function VecI32x8Add(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Add(a, b); end;
+
+function VecI32x8Sub(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Sub(a, b); end;
+
+function VecI32x8Mul(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Mul(a, b); end;
+
+function VecI32x8And(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8And(a, b); end;
+
+function VecI32x8Or(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Or(a, b); end;
+
+function VecI32x8Xor(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Xor(a, b); end;
+
+function VecI32x8Not(const a: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Not(a); end;
+
+function VecI32x8AndNot(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8AndNot(a, b); end;
+
+function VecI32x8ShiftLeft(const a: TVecI32x8; count: Integer): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8ShiftLeft(a, count); end;
+
+function VecI32x8ShiftRight(const a: TVecI32x8; count: Integer): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8ShiftRight(a, count); end;
+
+function VecI32x8ShiftRightArith(const a: TVecI32x8; count: Integer): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8ShiftRightArith(a, count); end;
+
+function VecI32x8CmpEq(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpEq(a, b); end;
+
+function VecI32x8CmpLt(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpLt(a, b); end;
+
+function VecI32x8CmpGt(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpGt(a, b); end;
+
+function VecI32x8CmpLe(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpLe(a, b); end;
+
+function VecI32x8CmpGe(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpGe(a, b); end;
+
+function VecI32x8CmpNe(const a, b: TVecI32x8): TMask8; inline;
+begin Result := SIMD_STATIC_VecI32x8CmpNe(a, b); end;
+
+function VecI32x8Min(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Min(a, b); end;
+
+function VecI32x8Max(const a, b: TVecI32x8): TVecI32x8; inline;
+begin Result := SIMD_STATIC_VecI32x8Max(a, b); end;
+
 // === I64x2 Operations ===
 
 function VecI64x2Add(const a, b: TVecI64x2): TVecI64x2; inline;

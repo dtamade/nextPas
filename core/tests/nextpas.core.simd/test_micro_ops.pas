@@ -4,8 +4,7 @@ program test_micro_ops;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  nextpas.core.text.conv, Unix, BaseUnix,
-  nextpas.core.simd.base,
+  nextpas.core.text.conv, Unix, BaseUnix, nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
 function GetTimeNs: Int64;

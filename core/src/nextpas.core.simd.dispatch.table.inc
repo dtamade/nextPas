@@ -263,6 +263,9 @@
     CmpEqI16x32: function(const a, b: TVecI16x32): TMask32;
     CmpLtI16x32: function(const a, b: TVecI16x32): TMask32;
     CmpGtI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpLeI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpGeI16x32: function(const a, b: TVecI16x32): TMask32;
+    CmpNeI16x32: function(const a, b: TVecI16x32): TMask32;
     MinI16x32: function(const a, b: TVecI16x32): TVecI16x32;
     MaxI16x32: function(const a, b: TVecI16x32): TVecI16x32;
 
@@ -277,6 +280,9 @@
     CmpEqI8x64: function(const a, b: TVecI8x64): TMask64;
     CmpLtI8x64: function(const a, b: TVecI8x64): TMask64;
     CmpGtI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpLeI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpGeI8x64: function(const a, b: TVecI8x64): TMask64;
+    CmpNeI8x64: function(const a, b: TVecI8x64): TMask64;
     MinI8x64: function(const a, b: TVecI8x64): TVecI8x64;
     MaxI8x64: function(const a, b: TVecI8x64): TVecI8x64;
 
@@ -290,6 +296,9 @@
     CmpEqU8x64: function(const a, b: TVecU8x64): TMask64;
     CmpLtU8x64: function(const a, b: TVecU8x64): TMask64;
     CmpGtU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpLeU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpGeU8x64: function(const a, b: TVecU8x64): TMask64;
+    CmpNeU8x64: function(const a, b: TVecU8x64): TMask64;
     MinU8x64: function(const a, b: TVecU8x64): TVecU8x64;
     MaxU8x64: function(const a, b: TVecU8x64): TVecU8x64;
 
@@ -639,6 +648,7 @@
     CmpGtU32x4: function(const a, b: TVecU32x4): TMask4;
     CmpLeU32x4: function(const a, b: TVecU32x4): TMask4;
     CmpGeU32x4: function(const a, b: TVecU32x4): TMask4;
+    CmpNeU32x4: function(const a, b: TVecU32x4): TMask4;
     MinU32x4: function(const a, b: TVecU32x4): TVecU32x4;
     MaxU32x4: function(const a, b: TVecU32x4): TVecU32x4;
 
@@ -760,6 +770,9 @@
     ArrayAddScalarF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
     ArrayClampF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
     ArrayLinearF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+    ArrayMinF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+    ArrayMaxF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+    ArrayFmaF64: procedure(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 
     // === Batch Array Operations - Transcendental F32 ===
     ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);

@@ -2,12 +2,9 @@ program test_parallel;
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 uses
-  nextpas.core.thread.init,
-  nextpas.core.text.conv, Unix, BaseUnix,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc,
-  nextpas.core.simd.linalg.gemm,
-  nextpas.core.simd.linalg.gemm.parallel;
+  nextpas.core.thread.init, nextpas.core.text.conv, Unix, BaseUnix,
+  nextpas.core.simd, nextpas.core.simd.alloc,
+  nextpas.core.simd.linalg.gemm, nextpas.core.simd.linalg.gemm.parallel;
 
 function GetTimeUs: Int64;
 var LTs: TTimeVal;

@@ -542,6 +542,9 @@ begin
   GroupNormF32(aX, aGamma, aBeta, aDst, aChannels * aChannelSize, aChannels, aEpsilon);
 end;
 
+{ EmbeddingLookupF32 - lookup embeddings by index
+  NOTE: Caller must ensure all aIndices[i] are in [0, aTableSize/aEmbedDim).
+  No bounds checking is performed for performance. }
 procedure EmbeddingLookupF32(aTable: PSingle; aIndices: PInt32; aDst: PSingle;
   aEmbedDim, aNumIndices: SizeUInt);
 var i: SizeUInt;

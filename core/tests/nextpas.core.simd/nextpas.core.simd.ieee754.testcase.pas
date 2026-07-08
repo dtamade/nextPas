@@ -9,29 +9,25 @@ unit nextpas.core.simd.ieee754.testcase;
 interface
 
 uses
-  Math,
-  Classes, nextpas.core.text.conv, nextpas.core.math, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
-  nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar,
-  nextpas.core.simd.ops;
+  Math, Classes, nextpas.core.text.conv, nextpas.core.math, nextpas.core.test,
+  nextpas.core.simd, nextpas.core.simd.testcase,
+  nextpas.core.simd.base, nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar, nextpas.core.simd.ops;
 
 type
   TIEEE754MaskedVectorAsmStatefulTestCase = class(TSimdVectorAsmStatefulTestCase)
   protected
     FSavedExceptionMask: TFPUExceptionMask;
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   end;
 
   // ============================================================================
   // IEEE 754 F64 (双精度浮点) 特殊值专项测试
   // ============================================================================
   TTestCase_IEEE754_F64 = class(TIEEE754MaskedVectorAsmStatefulTestCase)
-  protected
-    procedure SetUp; override;
+  public
+    procedure BeforeEach; override;
   published
     // === Infinity 测试 ===
     procedure Test_F64_PositiveInfinity_Add;      // Inf + x = Inf
@@ -166,16 +162,16 @@ end;
 
 { TIEEE754MaskedVectorAsmStatefulTestCase }
 
-procedure TIEEE754MaskedVectorAsmStatefulTestCase.SetUp;
+procedure TIEEE754MaskedVectorAsmStatefulTestCase.BeforeEach;
 begin
-  inherited SetUp;
+  {inherited SetUp; -- removed}
   FSavedExceptionMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
 end;
 
-procedure TIEEE754MaskedVectorAsmStatefulTestCase.TearDown;
+procedure TIEEE754MaskedVectorAsmStatefulTestCase.AfterEach;
 begin
-  inherited TearDown;
+  {inherited TearDown; -- removed}
   SetExceptionMask(FSavedExceptionMask);
 end;
 
@@ -194,9 +190,9 @@ const
   // 最大有限数: (2 - 2^(-52)) * 2^1023 ≈ 1.798e+308
   MaxFiniteF64: Double = 1.7976931348623157e+308;
 
-procedure TTestCase_IEEE754_F64.SetUp;
+procedure TTestCase_IEEE754_F64.BeforeEach;
 begin
-  inherited SetUp;
+  {inherited SetUp; -- removed}
   // 强制使用 Scalar 后端以确保测试一致性
   SetActiveBackend(sbScalar);
 end;
@@ -215,17 +211,17 @@ begin
   b.d[1] := -1000000.0;
 
   r := ScalarAddF64x2(a, b);
-  AssertTrue('Inf + 1.0 should be Inf', IsInfinite(r.d[0]) and (r.d[0] > 0));
-  AssertTrue('Inf + (-1000000) should be Inf', IsInfinite(r.d[1]) and (r.d[1] > 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] > 0), 'Inf + 1.0 should be Inf');
+  CheckTrue(IsInfinite(r.d[1]) and (r.d[1] > 0), 'Inf + (-1000000) should be Inf');
 
   // 测试 F64x4
   a4.d[0] := PosInfF64; a4.d[1] := PosInfF64; a4.d[2] := PosInfF64; a4.d[3] := PosInfF64;
   b4.d[0] := 0.0; b4.d[1] := 1e308; b4.d[2] := -1e308; b4.d[3] := 42.0;
   r4 := ScalarAddF64x4(a4, b4);
-  AssertTrue('F64x4: Inf + 0 should be Inf', IsInfinite(r4.d[0]) and (r4.d[0] > 0));
-  AssertTrue('F64x4: Inf + 1e308 should be Inf', IsInfinite(r4.d[1]) and (r4.d[1] > 0));
-  AssertTrue('F64x4: Inf + (-1e308) should be Inf', IsInfinite(r4.d[2]) and (r4.d[2] > 0));
-  AssertTrue('F64x4: Inf + 42 should be Inf', IsInfinite(r4.d[3]) and (r4.d[3] > 0));
+  CheckTrue(IsInfinite(r4.d[0]) and (r4.d[0] > 0), 'F64x4: Inf + 0 should be Inf');
+  CheckTrue(IsInfinite(r4.d[1]) and (r4.d[1] > 0), 'F64x4: Inf + 1e308 should be Inf');
+  CheckTrue(IsInfinite(r4.d[2]) and (r4.d[2] > 0), 'F64x4: Inf + (-1e308) should be Inf');
+  CheckTrue(IsInfinite(r4.d[3]) and (r4.d[3] > 0), 'F64x4: Inf + 42 should be Inf');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NegativeInfinity_Add;
@@ -240,17 +236,17 @@ begin
   b.d[1] := 1000000.0;
 
   r := ScalarAddF64x2(a, b);
-  AssertTrue('-Inf + 1.0 should be -Inf', IsInfinite(r.d[0]) and (r.d[0] < 0));
-  AssertTrue('-Inf + 1000000 should be -Inf', IsInfinite(r.d[1]) and (r.d[1] < 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] < 0), '-Inf + 1.0 should be -Inf');
+  CheckTrue(IsInfinite(r.d[1]) and (r.d[1] < 0), '-Inf + 1000000 should be -Inf');
 
   // 测试 F64x4
   a4.d[0] := NegInfF64; a4.d[1] := NegInfF64; a4.d[2] := NegInfF64; a4.d[3] := NegInfF64;
   b4.d[0] := 0.0; b4.d[1] := MaxFiniteF64; b4.d[2] := -MaxFiniteF64; b4.d[3] := 42.0;
   r4 := ScalarAddF64x4(a4, b4);
-  AssertTrue('F64x4: -Inf + 0 should be -Inf', IsInfinite(r4.d[0]) and (r4.d[0] < 0));
-  AssertTrue('F64x4: -Inf + MaxFinite should be -Inf', IsInfinite(r4.d[1]) and (r4.d[1] < 0));
-  AssertTrue('F64x4: -Inf + (-MaxFinite) should be -Inf', IsInfinite(r4.d[2]) and (r4.d[2] < 0));
-  AssertTrue('F64x4: -Inf + 42 should be -Inf', IsInfinite(r4.d[3]) and (r4.d[3] < 0));
+  CheckTrue(IsInfinite(r4.d[0]) and (r4.d[0] < 0), 'F64x4: -Inf + 0 should be -Inf');
+  CheckTrue(IsInfinite(r4.d[1]) and (r4.d[1] < 0), 'F64x4: -Inf + MaxFinite should be -Inf');
+  CheckTrue(IsInfinite(r4.d[2]) and (r4.d[2] < 0), 'F64x4: -Inf + (-MaxFinite) should be -Inf');
+  CheckTrue(IsInfinite(r4.d[3]) and (r4.d[3] < 0), 'F64x4: -Inf + 42 should be -Inf');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_Infinity_Mul;
@@ -265,8 +261,8 @@ begin
   b.d[1] := -3.0;
 
   r := ScalarMulF64x2(a, b);
-  AssertTrue('Inf * 2.0 should be +Inf', IsInfinite(r.d[0]) and (r.d[0] > 0));
-  AssertTrue('Inf * (-3.0) should be -Inf', IsInfinite(r.d[1]) and (r.d[1] < 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] > 0), 'Inf * 2.0 should be +Inf');
+  CheckTrue(IsInfinite(r.d[1]) and (r.d[1] < 0), 'Inf * (-3.0) should be -Inf');
 
   // 测试 -Inf * positive/negative
   a.d[0] := NegInfF64;
@@ -274,8 +270,8 @@ begin
   b.d[0] := 2.0;
   b.d[1] := -3.0;
   r := ScalarMulF64x2(a, b);
-  AssertTrue('-Inf * 2.0 should be -Inf', IsInfinite(r.d[0]) and (r.d[0] < 0));
-  AssertTrue('-Inf * (-3.0) should be +Inf', IsInfinite(r.d[1]) and (r.d[1] > 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] < 0), '-Inf * 2.0 should be -Inf');
+  CheckTrue(IsInfinite(r.d[1]) and (r.d[1] > 0), '-Inf * (-3.0) should be +Inf');
 
   // 特殊情况: Inf * 0 = NaN
   a.d[0] := PosInfF64;
@@ -283,8 +279,8 @@ begin
   b.d[0] := 0.0;
   b.d[1] := 0.0;
   r := ScalarMulF64x2(a, b);
-  AssertTrue('Inf * 0 should be NaN', IsNaN(r.d[0]));
-  AssertTrue('-Inf * 0 should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'Inf * 0 should be NaN');
+  CheckTrue(IsNaN(r.d[1]), '-Inf * 0 should be NaN');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_Infinity_Div;
@@ -298,8 +294,8 @@ begin
   b.d[1] := PosInfF64;
 
   r := ScalarDivF64x2(a, b);
-  AssertEquals('1.0 / Inf should be 0', 0.0, r.d[0], 0.0);
-  AssertEquals('-1000000 / Inf should be 0', 0.0, Abs(r.d[1]), 0.0);  // 可能是 -0
+  CheckNear(0.0, r.d[0], 0.0, '1.0 / Inf should be 0');
+  CheckNear(0.0, Abs(r.d[1]), 0.0, '-1000000 / Inf should be 0');  // 可能是 -0
 
   // x / -Inf = -0 或 0 (符号取决于 x 的符号)
   b.d[0] := NegInfF64;
@@ -307,8 +303,8 @@ begin
   a.d[0] := 1.0;
   a.d[1] := -1.0;
   r := ScalarDivF64x2(a, b);
-  AssertTrue('1.0 / -Inf should be 0 (or -0)', r.d[0] = 0.0);
-  AssertTrue('-1.0 / -Inf should be 0 (or +0)', r.d[1] = 0.0);
+  CheckTrue(r.d[0] = 0.0, '1.0 / -Inf should be 0 (or -0)');
+  CheckTrue(r.d[1] = 0.0, '-1.0 / -Inf should be 0 (or +0)');
 
   // Inf / Inf = NaN
   a.d[0] := PosInfF64;
@@ -316,8 +312,8 @@ begin
   b.d[0] := PosInfF64;
   b.d[1] := NegInfF64;
   r := ScalarDivF64x2(a, b);
-  AssertTrue('Inf / Inf should be NaN', IsNaN(r.d[0]));
-  AssertTrue('-Inf / -Inf should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'Inf / Inf should be NaN');
+  CheckTrue(IsNaN(r.d[1]), '-Inf / -Inf should be NaN');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_InfinityMinusInfinity;
@@ -332,23 +328,23 @@ begin
   b.d[1] := NegInfF64;
 
   r := ScalarSubF64x2(a, b);
-  AssertTrue('Inf - Inf should be NaN', IsNaN(r.d[0]));
-  AssertTrue('-Inf - (-Inf) should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'Inf - Inf should be NaN');
+  CheckTrue(IsNaN(r.d[1]), '-Inf - (-Inf) should be NaN');
 
   // Inf - (-Inf) = Inf (不是 NaN)
   a.d[0] := PosInfF64;
   b.d[0] := NegInfF64;
   r := ScalarSubF64x2(a, b);
-  AssertTrue('Inf - (-Inf) should be +Inf', IsInfinite(r.d[0]) and (r.d[0] > 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] > 0), 'Inf - (-Inf) should be +Inf');
 
   // 测试 F64x4
   a4.d[0] := PosInfF64; a4.d[1] := NegInfF64; a4.d[2] := PosInfF64; a4.d[3] := NegInfF64;
   b4.d[0] := PosInfF64; b4.d[1] := NegInfF64; b4.d[2] := NegInfF64; b4.d[3] := PosInfF64;
   r4 := ScalarSubF64x4(a4, b4);
-  AssertTrue('F64x4: Inf - Inf should be NaN', IsNaN(r4.d[0]));
-  AssertTrue('F64x4: -Inf - (-Inf) should be NaN', IsNaN(r4.d[1]));
-  AssertTrue('F64x4: Inf - (-Inf) should be +Inf', IsInfinite(r4.d[2]) and (r4.d[2] > 0));
-  AssertTrue('F64x4: -Inf - Inf should be -Inf', IsInfinite(r4.d[3]) and (r4.d[3] < 0));
+  CheckTrue(IsNaN(r4.d[0]), 'F64x4: Inf - Inf should be NaN');
+  CheckTrue(IsNaN(r4.d[1]), 'F64x4: -Inf - (-Inf) should be NaN');
+  CheckTrue(IsInfinite(r4.d[2]) and (r4.d[2] > 0), 'F64x4: Inf - (-Inf) should be +Inf');
+  CheckTrue(IsInfinite(r4.d[3]) and (r4.d[3] < 0), 'F64x4: -Inf - Inf should be -Inf');
 end;
 
 // === NaN 测试 ===
@@ -365,12 +361,12 @@ begin
   b.d[1] := NaNF64;
 
   r := ScalarAddF64x2(a, b);
-  AssertTrue('NaN + 1.0 should be NaN', IsNaN(r.d[0]));
-  AssertTrue('1.0 + NaN should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'NaN + 1.0 should be NaN');
+  CheckTrue(IsNaN(r.d[1]), '1.0 + NaN should be NaN');
 
   // NaN - x = NaN
   r := ScalarSubF64x2(a, b);
-  AssertTrue('NaN - 1.0 should be NaN', IsNaN(r.d[0]));
+  CheckTrue(IsNaN(r.d[0]), 'NaN - 1.0 should be NaN');
 
   // NaN * x = NaN
   a.d[0] := NaNF64;
@@ -378,22 +374,22 @@ begin
   b.d[0] := 0.0;
   b.d[1] := PosInfF64;
   r := ScalarMulF64x2(a, b);
-  AssertTrue('NaN * 0 should be NaN', IsNaN(r.d[0]));
-  AssertTrue('NaN * Inf should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'NaN * 0 should be NaN');
+  CheckTrue(IsNaN(r.d[1]), 'NaN * Inf should be NaN');
 
   // NaN / x = NaN
   r := ScalarDivF64x2(a, b);
-  AssertTrue('NaN / 0 should be NaN', IsNaN(r.d[0]));
-  AssertTrue('NaN / Inf should be NaN', IsNaN(r.d[1]));
+  CheckTrue(IsNaN(r.d[0]), 'NaN / 0 should be NaN');
+  CheckTrue(IsNaN(r.d[1]), 'NaN / Inf should be NaN');
 
   // 测试 F64x4
   a4.d[0] := NaNF64; a4.d[1] := 1.0; a4.d[2] := NaNF64; a4.d[3] := 42.0;
   b4.d[0] := 1.0; b4.d[1] := NaNF64; b4.d[2] := NaNF64; b4.d[3] := 0.0;
   r4 := ScalarAddF64x4(a4, b4);
-  AssertTrue('F64x4: NaN + 1 should be NaN', IsNaN(r4.d[0]));
-  AssertTrue('F64x4: 1 + NaN should be NaN', IsNaN(r4.d[1]));
-  AssertTrue('F64x4: NaN + NaN should be NaN', IsNaN(r4.d[2]));
-  AssertEquals('F64x4: 42 + 0 should be 42', 42.0, r4.d[3], 0.0);
+  CheckTrue(IsNaN(r4.d[0]), 'F64x4: NaN + 1 should be NaN');
+  CheckTrue(IsNaN(r4.d[1]), 'F64x4: 1 + NaN should be NaN');
+  CheckTrue(IsNaN(r4.d[2]), 'F64x4: NaN + NaN should be NaN');
+  CheckNear(42.0, r4.d[3], 0.0, 'F64x4: 42 + 0 should be 42');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NaN_Comparison;
@@ -404,20 +400,20 @@ begin
   nanVal := NaNF64;
 
   // NaN 不等于自身
-  AssertFalse('NaN should not equal itself (IEEE 754)', nanVal = nanVal);
-  AssertTrue('NaN <> NaN should be true', nanVal <> nanVal);
+  CheckFalse(nanVal = nanVal, 'NaN should not equal itself (IEEE 754)');
+  CheckTrue(nanVal <> nanVal, 'NaN <> NaN should be true');
 
   // NaN 与其他值比较
-  AssertFalse('NaN < 0 should be false', nanVal < 0.0);
-  AssertFalse('NaN > 0 should be false', nanVal > 0.0);
-  AssertFalse('NaN <= 0 should be false', nanVal <= 0.0);
-  AssertFalse('NaN >= 0 should be false', nanVal >= 0.0);
-  AssertFalse('NaN = 0 should be false', nanVal = 0.0);
+  CheckFalse(nanVal < 0.0, 'NaN < 0 should be false');
+  CheckFalse(nanVal > 0.0, 'NaN > 0 should be false');
+  CheckFalse(nanVal <= 0.0, 'NaN <= 0 should be false');
+  CheckFalse(nanVal >= 0.0, 'NaN >= 0 should be false');
+  CheckFalse(nanVal = 0.0, 'NaN = 0 should be false');
 
   // NaN 与 Inf 比较
-  AssertFalse('NaN < Inf should be false', nanVal < PosInfF64);
-  AssertFalse('NaN > -Inf should be false', nanVal > NegInfF64);
-  AssertFalse('NaN = Inf should be false', nanVal = PosInfF64);
+  CheckFalse(nanVal < PosInfF64, 'NaN < Inf should be false');
+  CheckFalse(nanVal > NegInfF64, 'NaN > -Inf should be false');
+  CheckFalse(nanVal = PosInfF64, 'NaN = Inf should be false');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NaN_Min;
@@ -436,9 +432,9 @@ begin
   // 注意: 不同实现可能有不同行为
   // 这里验证结果不是 NaN 时应该是正确的最小值
   if not IsNaN(r.d[0]) then
-    AssertEquals('Min(NaN, 3.0) if not NaN should be 3.0', 3.0, r.d[0], 0.0);
+    CheckNear(3.0, r.d[0], 0.0, 'Min(NaN, 3.0) if not NaN should be 3.0');
   if not IsNaN(r.d[1]) then
-    AssertEquals('Min(5.0, NaN) if not NaN should be 5.0', 5.0, r.d[1], 0.0);
+    CheckNear(5.0, r.d[1], 0.0, 'Min(5.0, NaN) if not NaN should be 5.0');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NaN_Max;
@@ -454,9 +450,9 @@ begin
   r := ScalarMaxF64x2(a, b);
   // 验证结果不是 NaN 时应该是正确的最大值
   if not IsNaN(r.d[0]) then
-    AssertEquals('Max(NaN, 3.0) if not NaN should be 3.0', 3.0, r.d[0], 0.0);
+    CheckNear(3.0, r.d[0], 0.0, 'Max(NaN, 3.0) if not NaN should be 3.0');
   if not IsNaN(r.d[1]) then
-    AssertEquals('Max(5.0, NaN) if not NaN should be 5.0', 5.0, r.d[1], 0.0);
+    CheckNear(5.0, r.d[1], 0.0, 'Max(5.0, NaN) if not NaN should be 5.0');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_ReduceMinMax_SpecialCases;
@@ -469,33 +465,29 @@ begin
   LInput.d[1] := 3.0;
   LReduceMin := ScalarReduceMinF64x2(LInput);
   LReduceMax := ScalarReduceMaxF64x2(LInput);
-  AssertEquals('ReduceMin(NaN, 3.0) should match current scalar truth', 3.0, LReduceMin, 0.0);
-  AssertEquals('ReduceMax(NaN, 3.0) should match current scalar truth', 3.0, LReduceMax, 0.0);
+  CheckNear(3.0, LReduceMin, 0.0, 'ReduceMin(NaN, 3.0) should match current scalar truth');
+  CheckNear(3.0, LReduceMax, 0.0, 'ReduceMax(NaN, 3.0) should match current scalar truth');
 
   LInput.d[0] := 3.0;
   LInput.d[1] := NaNF64;
   LReduceMin := ScalarReduceMinF64x2(LInput);
   LReduceMax := ScalarReduceMaxF64x2(LInput);
-  AssertTrue('ReduceMin(3.0, NaN) should stay NaN in the current scalar truth', IsNaNDouble(LReduceMin));
-  AssertTrue('ReduceMax(3.0, NaN) should stay NaN in the current scalar truth', IsNaNDouble(LReduceMax));
+  CheckTrue(IsNaNDouble(LReduceMin), 'ReduceMin(3.0, NaN) should stay NaN in the current scalar truth');
+  CheckTrue(IsNaNDouble(LReduceMax), 'ReduceMax(3.0, NaN) should stay NaN in the current scalar truth');
 
   LInput.d[0] := 0.0;
   LInput.d[1] := NegZeroF64;
   LReduceMin := ScalarReduceMinF64x2(LInput);
   LReduceMax := ScalarReduceMaxF64x2(LInput);
-  AssertTrue('ReduceMin(+0, -0) should preserve the current scalar sign bit',
-    BitsFromDouble(LReduceMin) = BitsFromDouble(NegZeroF64));
-  AssertTrue('ReduceMax(+0, -0) should preserve the current scalar sign bit',
-    BitsFromDouble(LReduceMax) = BitsFromDouble(NegZeroF64));
+  CheckTrue(BitsFromDouble(LReduceMin) = BitsFromDouble(NegZeroF64), 'ReduceMin(+0, -0) should preserve the current scalar sign bit');
+  CheckTrue(BitsFromDouble(LReduceMax) = BitsFromDouble(NegZeroF64), 'ReduceMax(+0, -0) should preserve the current scalar sign bit');
 
   LInput.d[0] := NegZeroF64;
   LInput.d[1] := 0.0;
   LReduceMin := ScalarReduceMinF64x2(LInput);
   LReduceMax := ScalarReduceMaxF64x2(LInput);
-  AssertTrue('ReduceMin(-0, +0) should preserve the current scalar sign bit',
-    BitsFromDouble(LReduceMin) = BitsFromDouble(0.0));
-  AssertTrue('ReduceMax(-0, +0) should preserve the current scalar sign bit',
-    BitsFromDouble(LReduceMax) = BitsFromDouble(0.0));
+  CheckTrue(BitsFromDouble(LReduceMin) = BitsFromDouble(0.0), 'ReduceMin(-0, +0) should preserve the current scalar sign bit');
+  CheckTrue(BitsFromDouble(LReduceMax) = BitsFromDouble(0.0), 'ReduceMax(-0, +0) should preserve the current scalar sign bit');
 end;
 
 // === 负零测试 ===
@@ -512,28 +504,28 @@ begin
   b.d[1] := NegZeroF64;
 
   r := ScalarAddF64x2(a, b);
-  AssertEquals('-0 + 0 should be 0', 0.0, r.d[0], 0.0);
-  AssertEquals('0 + (-0) should be 0', 0.0, r.d[1], 0.0);
+  CheckNear(0.0, r.d[0], 0.0, '-0 + 0 should be 0');
+  CheckNear(0.0, r.d[1], 0.0, '0 + (-0) should be 0');
 
   // -0 + (-0) = -0
   a.d[0] := NegZeroF64;
   b.d[0] := NegZeroF64;
   r := ScalarAddF64x2(a, b);
-  AssertEquals('-0 + (-0) should be 0', 0.0, r.d[0], 0.0);
+  CheckNear(0.0, r.d[0], 0.0, '-0 + (-0) should be 0');
 
   // -0 + x = x (for nonzero x)
   a.d[0] := NegZeroF64;
   b.d[0] := 5.0;
   r := ScalarAddF64x2(a, b);
-  AssertEquals('-0 + 5.0 should be 5.0', 5.0, r.d[0], 0.0);
+  CheckNear(5.0, r.d[0], 0.0, '-0 + 5.0 should be 5.0');
 
   // 测试 F64x4
   a4.d[0] := NegZeroF64; a4.d[1] := 0.0; a4.d[2] := NegZeroF64; a4.d[3] := NegZeroF64;
   b4.d[0] := 0.0; b4.d[1] := NegZeroF64; b4.d[2] := 1.0; b4.d[3] := NegZeroF64;
   r4 := ScalarAddF64x4(a4, b4);
-  AssertEquals('F64x4: -0 + 0 should be 0', 0.0, r4.d[0], 0.0);
-  AssertEquals('F64x4: 0 + (-0) should be 0', 0.0, r4.d[1], 0.0);
-  AssertEquals('F64x4: -0 + 1 should be 1', 1.0, r4.d[2], 0.0);
+  CheckNear(0.0, r4.d[0], 0.0, 'F64x4: -0 + 0 should be 0');
+  CheckNear(0.0, r4.d[1], 0.0, 'F64x4: 0 + (-0) should be 0');
+  CheckNear(1.0, r4.d[2], 0.0, 'F64x4: -0 + 1 should be 1');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NegativeZero_Mul;
@@ -554,26 +546,26 @@ begin
   // -0.0 的位模式是 0x8000000000000000
   negZeroBits := QWord($8000000000000000);
   Move(r.d[0], resultBits, SizeOf(UInt64));
-  AssertEquals('-0 * 5.0 should be -0 (check value is zero)', 0.0, r.d[0], 0.0);
-  AssertEquals('-0 * 5.0 should have negative sign bit', negZeroBits, resultBits);
+  CheckNear(0.0, r.d[0], 0.0, '-0 * 5.0 should be -0 (check value is zero)');
+  CheckEqual(negZeroBits, resultBits, '-0 * 5.0 should have negative sign bit');
 
   // -0 * negative = +0
   Move(r.d[1], resultBits, SizeOf(UInt64));
-  AssertEquals('-0 * (-3.0) should be +0 (check value is zero)', 0.0, r.d[1], 0.0);
-  AssertEquals('-0 * (-3.0) should have positive sign (bits = 0)', UInt64(0), resultBits);
+  CheckNear(0.0, r.d[1], 0.0, '-0 * (-3.0) should be +0 (check value is zero)');
+  CheckEqual(UInt64(0), resultBits, '-0 * (-3.0) should have positive sign (bits = 0)');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_NegativeZero_Cmp;
 begin
   // IEEE 754: -0 == +0 应为 true
-  AssertTrue('-0 should equal +0', NegZeroF64 = 0.0);
-  AssertFalse('-0 should not be <> +0', NegZeroF64 <> 0.0);
+  CheckTrue(NegZeroF64 = 0.0, '-0 should equal +0');
+  CheckFalse(NegZeroF64 <> 0.0, '-0 should not be <> +0');
 
   // 比较测试
-  AssertFalse('-0 < +0 should be false', NegZeroF64 < 0.0);
-  AssertFalse('-0 > +0 should be false', NegZeroF64 > 0.0);
-  AssertTrue('-0 <= +0 should be true', NegZeroF64 <= 0.0);
-  AssertTrue('-0 >= +0 should be true', NegZeroF64 >= 0.0);
+  CheckFalse(NegZeroF64 < 0.0, '-0 < +0 should be false');
+  CheckFalse(NegZeroF64 > 0.0, '-0 > +0 should be false');
+  CheckTrue(NegZeroF64 <= 0.0, '-0 <= +0 should be true');
+  CheckTrue(NegZeroF64 >= 0.0, '-0 >= +0 should be true');
 end;
 
 // === Denormal (次正规数) 测试 ===
@@ -592,14 +584,14 @@ begin
 
   r := ScalarAddF64x2(a, b);
   // 结果应该仍是次正规数或非常小的正规数
-  AssertTrue('Denormal + Denormal should be small positive', r.d[0] > 0);
-  AssertTrue('2*Denormal + Denormal should be small positive', r.d[1] > 0);
+  CheckTrue(r.d[0] > 0, 'Denormal + Denormal should be small positive');
+  CheckTrue(r.d[1] > 0, '2*Denormal + Denormal should be small positive');
 
   // 次正规数 + 正规数 = 正规数（次正规数被吸收）
   a.d[0] := SmallestDenormalF64;
   b.d[0] := 1.0;
   r := ScalarAddF64x2(a, b);
-  AssertEquals('Denormal + 1.0 should be approximately 1.0', 1.0, r.d[0], 1e-15);
+  CheckNear(1.0, r.d[0], 1e-15, 'Denormal + 1.0 should be approximately 1.0');
 
   // 测试 F64x4
   a4.d[0] := SmallestDenormalF64; a4.d[1] := SmallestDenormalF64 * 10;
@@ -607,8 +599,8 @@ begin
   b4.d[0] := SmallestDenormalF64; b4.d[1] := SmallestDenormalF64;
   b4.d[2] := SmallestDenormalF64; b4.d[3] := 0.0;
   r4 := ScalarAddF64x4(a4, b4);
-  AssertTrue('F64x4: Denormal + Denormal should be positive', r4.d[0] > 0);
-  AssertEquals('F64x4: Denormal + 0 should be Denormal', SmallestDenormalF64, r4.d[3], 0.0);
+  CheckTrue(r4.d[0] > 0, 'F64x4: Denormal + Denormal should be positive');
+  CheckNear(SmallestDenormalF64, r4.d[3], 0.0, 'F64x4: Denormal + 0 should be Denormal');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_Denormal_Mul;
@@ -624,17 +616,17 @@ begin
 
   r := ScalarMulF64x2(a, b);
   // Denormal * Denormal 通常下溢到 0
-  AssertTrue('Denormal * Denormal should underflow to 0 or be very small', r.d[0] >= 0);
-  AssertEquals('Denormal * Denormal should be 0 (underflow)', 0.0, r.d[0], SmallestDenormalF64);
+  CheckTrue(r.d[0] >= 0, 'Denormal * Denormal should underflow to 0 or be very small');
+  CheckNear(0.0, r.d[0], SmallestDenormalF64, 'Denormal * Denormal should be 0 (underflow)');
 
   // 次正规数 * 0.5 可能仍是次正规数或下溢到 0
-  AssertTrue('Denormal * 0.5 should be >= 0', r.d[1] >= 0);
+  CheckTrue(r.d[1] >= 0, 'Denormal * 0.5 should be >= 0');
 
   // 次正规数 * 较大正数 = 正规数或次正规数
   a.d[0] := SmallestDenormalF64;
   b.d[0] := 1e100;
   r := ScalarMulF64x2(a, b);
-  AssertTrue('Denormal * 1e100 should be positive', r.d[0] > 0);
+  CheckTrue(r.d[0] > 0, 'Denormal * 1e100 should be positive');
 end;
 
 // === 溢出/下溢测试 ===
@@ -651,29 +643,29 @@ begin
   b.d[1] := 1e200;
 
   r := ScalarMulF64x2(a, b);
-  AssertTrue('MaxFinite * 2.0 should overflow to +Inf', IsInfinite(r.d[0]) and (r.d[0] > 0));
-  AssertTrue('1e200 * 1e200 should overflow to +Inf', IsInfinite(r.d[1]) and (r.d[1] > 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] > 0), 'MaxFinite * 2.0 should overflow to +Inf');
+  CheckTrue(IsInfinite(r.d[1]) and (r.d[1] > 0), '1e200 * 1e200 should overflow to +Inf');
 
   // 负数溢出产生 -Inf
   a.d[0] := -MaxFiniteF64;
   b.d[0] := 2.0;
   r := ScalarMulF64x2(a, b);
-  AssertTrue('-MaxFinite * 2.0 should overflow to -Inf', IsInfinite(r.d[0]) and (r.d[0] < 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] < 0), '-MaxFinite * 2.0 should overflow to -Inf');
 
   // 加法溢出
   a.d[0] := MaxFiniteF64;
   b.d[0] := MaxFiniteF64;
   r := ScalarAddF64x2(a, b);
-  AssertTrue('MaxFinite + MaxFinite should overflow to +Inf', IsInfinite(r.d[0]) and (r.d[0] > 0));
+  CheckTrue(IsInfinite(r.d[0]) and (r.d[0] > 0), 'MaxFinite + MaxFinite should overflow to +Inf');
 
   // 测试 F64x4
   a4.d[0] := MaxFiniteF64; a4.d[1] := 1e200; a4.d[2] := -1e200; a4.d[3] := MaxFiniteF64;
   b4.d[0] := 2.0; b4.d[1] := 1e200; b4.d[2] := 1e200; b4.d[3] := MaxFiniteF64;
   r4 := ScalarMulF64x4(a4, b4);
-  AssertTrue('F64x4: MaxFinite * 2 should be +Inf', IsInfinite(r4.d[0]) and (r4.d[0] > 0));
-  AssertTrue('F64x4: 1e200 * 1e200 should be +Inf', IsInfinite(r4.d[1]) and (r4.d[1] > 0));
-  AssertTrue('F64x4: -1e200 * 1e200 should be -Inf', IsInfinite(r4.d[2]) and (r4.d[2] < 0));
-  AssertTrue('F64x4: MaxFinite * MaxFinite should be +Inf', IsInfinite(r4.d[3]) and (r4.d[3] > 0));
+  CheckTrue(IsInfinite(r4.d[0]) and (r4.d[0] > 0), 'F64x4: MaxFinite * 2 should be +Inf');
+  CheckTrue(IsInfinite(r4.d[1]) and (r4.d[1] > 0), 'F64x4: 1e200 * 1e200 should be +Inf');
+  CheckTrue(IsInfinite(r4.d[2]) and (r4.d[2] < 0), 'F64x4: -1e200 * 1e200 should be -Inf');
+  CheckTrue(IsInfinite(r4.d[3]) and (r4.d[3] > 0), 'F64x4: MaxFinite * MaxFinite should be +Inf');
 end;
 
 procedure TTestCase_IEEE754_F64.Test_F64_Underflow;
@@ -689,26 +681,24 @@ begin
 
   r := ScalarMulF64x2(a, b);
   // SmallestNormal * SmallestNormal 应该下溢到 0 或 denormal
-  AssertTrue('SmallestNormal * SmallestNormal should underflow to 0 or denormal',
-             (r.d[0] = 0.0) or (r.d[0] < SmallestNormalF64));
-  AssertTrue('1e-200 * 1e-200 should underflow', (r.d[1] = 0.0) or (r.d[1] < SmallestNormalF64));
+  CheckTrue((r.d[0] = 0.0) or (r.d[0] < SmallestNormalF64), 'SmallestNormal * SmallestNormal should underflow to 0 or denormal');
+  CheckTrue((r.d[1] = 0.0) or (r.d[1] < SmallestNormalF64), '1e-200 * 1e-200 should underflow');
 
   // 除法下溢
   a.d[0] := SmallestNormalF64;
   b.d[0] := 1e308;
   r := ScalarDivF64x2(a, b);
-  AssertTrue('SmallestNormal / 1e308 should underflow',
-             (r.d[0] = 0.0) or (r.d[0] < SmallestNormalF64));
+  CheckTrue((r.d[0] = 0.0) or (r.d[0] < SmallestNormalF64), 'SmallestNormal / 1e308 should underflow');
 
   // 测试 F64x4
   a4.d[0] := SmallestNormalF64; a4.d[1] := 1e-200; a4.d[2] := SmallestDenormalF64; a4.d[3] := 1e-300;
   b4.d[0] := 1e-100; b4.d[1] := 1e-200; b4.d[2] := 0.1; b4.d[3] := 1e-100;
   r4 := ScalarMulF64x4(a4, b4);
   // 验证结果是 0 或非常小的正数
-  AssertTrue('F64x4: Underflow results should be >= 0', r4.d[0] >= 0);
-  AssertTrue('F64x4: Underflow results should be >= 0', r4.d[1] >= 0);
-  AssertTrue('F64x4: Denormal * 0.1 should be >= 0', r4.d[2] >= 0);
-  AssertTrue('F64x4: 1e-300 * 1e-100 should be >= 0', r4.d[3] >= 0);
+  CheckTrue(r4.d[0] >= 0, 'F64x4: Underflow results should be >= 0');
+  CheckTrue(r4.d[1] >= 0, 'F64x4: Underflow results should be >= 0');
+  CheckTrue(r4.d[2] >= 0, 'F64x4: Denormal * 0.1 should be >= 0');
+  CheckTrue(r4.d[3] >= 0, 'F64x4: 1e-300 * 1e-100 should be >= 0');
 end;
 
 { TTestCase_IEEE754EdgeCases - IEEE 754 特殊值边界测试 }
@@ -734,8 +724,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('NaN + 1.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'NaN + 1.0 should be NaN [' + IntToStr(i) + ']');
 
   // x + NaN = NaN
   a := VecF32x4Splat(2.5);
@@ -743,8 +732,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('2.5 + NaN should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '2.5 + NaN should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NaN_Sub;
@@ -758,8 +746,7 @@ begin
   r := VecF32x4Sub(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('NaN - 5.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'NaN - 5.0 should be NaN [' + IntToStr(i) + ']');
 
   // x - NaN = NaN
   a := VecF32x4Splat(10.0);
@@ -767,8 +754,7 @@ begin
   r := VecF32x4Sub(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('10.0 - NaN should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '10.0 - NaN should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NaN_Mul;
@@ -782,8 +768,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('NaN * 3.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'NaN * 3.0 should be NaN [' + IntToStr(i) + ']');
 
   // x * NaN = NaN
   a := VecF32x4Splat(7.0);
@@ -791,8 +776,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('7.0 * NaN should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '7.0 * NaN should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NaN_Div;
@@ -806,8 +790,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('NaN / 2.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'NaN / 2.0 should be NaN [' + IntToStr(i) + ']');
 
   // x / NaN = NaN
   a := VecF32x4Splat(8.0);
@@ -815,8 +798,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('8.0 / NaN should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '8.0 / NaN should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NaN_Min;
@@ -833,8 +815,7 @@ begin
 
   // 验证结果是 NaN 或 1.0（取决于实现）
   for i := 0 to 3 do
-    AssertTrue('Min(NaN, 1.0) should be NaN or 1.0 [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]) or (Abs(r.f[i] - 1.0) < 1e-6));
+    CheckTrue(IsNaNSingle(r.f[i]) or (Abs(r.f[i] - 1.0) < 1e-6), 'Min(NaN, 1.0) should be NaN or 1.0 [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NaN_Max;
@@ -850,8 +831,7 @@ begin
 
   // 验证结果是 NaN 或 5.0（取决于实现）
   for i := 0 to 3 do
-    AssertTrue('Max(NaN, 5.0) should be NaN or 5.0 [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]) or (Abs(r.f[i] - 5.0) < 1e-6));
+    CheckTrue(IsNaNSingle(r.f[i]) or (Abs(r.f[i] - 5.0) < 1e-6), 'Max(NaN, 5.0) should be NaN or 5.0 [' + IntToStr(i) + ']');
 end;
 
 // === Infinity 测试 (F32x4) ===
@@ -867,8 +847,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf + 100.0 should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] > 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] > 0), 'Inf + 100.0 should be Inf [' + IntToStr(i) + ']');
 
   // -Inf + x = -Inf
   a := VecF32x4Splat(NegInfF32);
@@ -876,8 +855,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('-Inf + 50.0 should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), '-Inf + 50.0 should be -Inf [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_Inf_Sub;
@@ -891,8 +869,7 @@ begin
   r := VecF32x4Sub(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf - Inf should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'Inf - Inf should be NaN [' + IntToStr(i) + ']');
 
   // -Inf - (-Inf) = NaN
   a := VecF32x4Splat(NegInfF32);
@@ -900,8 +877,7 @@ begin
   r := VecF32x4Sub(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('-Inf - (-Inf) should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '-Inf - (-Inf) should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_Inf_Mul;
@@ -915,8 +891,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf * 0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'Inf * 0 should be NaN [' + IntToStr(i) + ']');
 
   // Inf * positive = Inf
   a := VecF32x4Splat(PosInfF32);
@@ -924,8 +899,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf * 5.0 should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] > 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] > 0), 'Inf * 5.0 should be Inf [' + IntToStr(i) + ']');
 
   // Inf * negative = -Inf
   a := VecF32x4Splat(PosInfF32);
@@ -933,8 +907,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf * (-3.0) should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), 'Inf * (-3.0) should be -Inf [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_Inf_Div;
@@ -948,8 +921,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertEquals('100.0 / Inf should be 0 [' + IntToStr(i) + ']',
-                 0.0, r.f[i], 1e-10);
+    CheckNear(0.0, r.f[i], 1e-10, '100.0 / Inf should be 0 [' + IntToStr(i) + ']');
 
   // Inf / Inf = NaN
   a := VecF32x4Splat(PosInfF32);
@@ -957,8 +929,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('Inf / Inf should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'Inf / Inf should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NegInf;
@@ -972,8 +943,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('-Inf + 1000.0 should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), '-Inf + 1000.0 should be -Inf [' + IntToStr(i) + ']');
 
   // -Inf * positive = -Inf
   a := VecF32x4Splat(NegInfF32);
@@ -981,8 +951,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('-Inf * 2.0 should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), '-Inf * 2.0 should be -Inf [' + IntToStr(i) + ']');
 
   // -Inf * negative = Inf
   a := VecF32x4Splat(NegInfF32);
@@ -990,8 +959,7 @@ begin
   r := VecF32x4Mul(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('-Inf * (-4.0) should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] > 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] > 0), '-Inf * (-4.0) should be Inf [' + IntToStr(i) + ']');
 end;
 
 // === 零值测试 (F32x4) ===
@@ -1007,8 +975,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('1.0 / 0 should be +Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] > 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] > 0), '1.0 / 0 should be +Inf [' + IntToStr(i) + ']');
 
   // -x / 0 = -Inf (负数除以零)
   a := VecF32x4Splat(-1.0);
@@ -1016,8 +983,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('(-1.0) / 0 should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), '(-1.0) / 0 should be -Inf [' + IntToStr(i) + ']');
 
   // 0 / 0 = NaN
   a := VecF32x4Splat(0.0);
@@ -1025,8 +991,7 @@ begin
   r := VecF32x4Div(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('0 / 0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), '0 / 0 should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_NegZero;
@@ -1041,8 +1006,7 @@ begin
   r := VecF32x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertEquals('(-0) + 0 should be 0 [' + IntToStr(i) + ']',
-                 0.0, r.f[i], 0.0);
+    CheckNear(0.0, r.f[i], 0.0, '(-0) + 0 should be 0 [' + IntToStr(i) + ']');
 
   // -0 * positive = -0
   a := VecF32x4Splat(NegZeroF32);
@@ -1051,11 +1015,9 @@ begin
 
   for i := 0 to 3 do
   begin
-    AssertEquals('(-0) * 5.0 should be -0 [' + IntToStr(i) + ']',
-                 0.0, r.f[i], 0.0);
+    CheckNear(0.0, r.f[i], 0.0, '(-0) * 5.0 should be -0 [' + IntToStr(i) + ']');
     // 验证符号位（通过除法检查）
-    AssertTrue('Result should be -0 (negative zero) [' + IntToStr(i) + ']',
-               IsInfinite(1.0 / r.f[i]) and ((1.0 / r.f[i]) < 0));
+    CheckTrue(IsInfinite(1.0 / r.f[i]) and ((1.0 / r.f[i]) < 0), 'Result should be -0 (negative zero) [' + IntToStr(i) + ']');
   end;
 
   // -0 == 0 比较应为 true
@@ -1064,8 +1026,7 @@ begin
   mask := VecF32x4CmpEq(a, b);
 
   // 验证掩码表示相等（所有 4 位都设置）
-  AssertTrue('(-0) == 0 should be true (all bits set)',
-             mask = MASK4_ALL_SET);
+  CheckTrue(mask = MASK4_ALL_SET, '(-0) == 0 should be true (all bits set)');
 end;
 
 // === 舍入边界测试 (F32x4) ===
@@ -1080,8 +1041,7 @@ begin
   r := VecF32x4Floor(a);
 
   for i := 0 to 3 do
-    AssertTrue('Floor(NaN) should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'Floor(NaN) should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_Ceil_Inf;
@@ -1094,16 +1054,14 @@ begin
   r := VecF32x4Ceil(a);
 
   for i := 0 to 3 do
-    AssertTrue('Ceil(Inf) should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] > 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] > 0), 'Ceil(Inf) should be Inf [' + IntToStr(i) + ']');
 
   // Ceil(-Inf) = -Inf
   a := VecF32x4Splat(NegInfF32);
   r := VecF32x4Ceil(a);
 
   for i := 0 to 3 do
-    AssertTrue('Ceil(-Inf) should be -Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.f[i]) and (r.f[i] < 0));
+    CheckTrue(IsInfinite(r.f[i]) and (r.f[i] < 0), 'Ceil(-Inf) should be -Inf [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_Round_LargeValue;
@@ -1118,8 +1076,7 @@ begin
   r := VecF32x4Round(a);
 
   for i := 0 to 3 do
-    AssertEquals('Round(large value) should preserve value [' + IntToStr(i) + ']',
-                 largeValue, r.f[i], 0.0);
+    CheckNear(largeValue, r.f[i], 0.0, 'Round(large value) should preserve value [' + IntToStr(i) + ']');
 
   // 测试接近最大有限值的舍入
   largeValue := 3.4e38; // 接近 F32 最大值
@@ -1127,8 +1084,7 @@ begin
   r := VecF32x4Round(a);
 
   for i := 0 to 3 do
-    AssertTrue('Round(max value) should not overflow to Inf [' + IntToStr(i) + ']',
-               not IsInfinite(r.f[i]));
+    CheckTrue(not IsInfinite(r.f[i]), 'Round(max value) should not overflow to Inf [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_RoundTrunc_NaNInf_Scalar;
@@ -1144,15 +1100,15 @@ begin
   rRound := VecF32x4Round(a);
   rTrunc := VecF32x4Trunc(a);
 
-  AssertTrue('Scalar Round(NaN) should stay NaN', IsNaNSingle(rRound.f[0]));
-  AssertTrue('Scalar Round(+Inf) should stay +Inf', IsInfinite(rRound.f[1]) and (rRound.f[1] > 0));
-  AssertTrue('Scalar Round(-Inf) should stay -Inf', IsInfinite(rRound.f[2]) and (rRound.f[2] < 0));
-  AssertEquals('Scalar Round(-1.75)', -2.0, rRound.f[3], 0.0);
+  CheckTrue(IsNaNSingle(rRound.f[0]), 'Scalar Round(NaN) should stay NaN');
+  CheckTrue(IsInfinite(rRound.f[1]) and (rRound.f[1] > 0), 'Scalar Round(+Inf) should stay +Inf');
+  CheckTrue(IsInfinite(rRound.f[2]) and (rRound.f[2] < 0), 'Scalar Round(-Inf) should stay -Inf');
+  CheckNear(-2.0, rRound.f[3], 0.0, 'Scalar Round(-1.75)');
 
-  AssertTrue('Scalar Trunc(NaN) should stay NaN', IsNaNSingle(rTrunc.f[0]));
-  AssertTrue('Scalar Trunc(+Inf) should stay +Inf', IsInfinite(rTrunc.f[1]) and (rTrunc.f[1] > 0));
-  AssertTrue('Scalar Trunc(-Inf) should stay -Inf', IsInfinite(rTrunc.f[2]) and (rTrunc.f[2] < 0));
-  AssertEquals('Scalar Trunc(-1.75)', -1.0, rTrunc.f[3], 0.0);
+  CheckTrue(IsNaNSingle(rTrunc.f[0]), 'Scalar Trunc(NaN) should stay NaN');
+  CheckTrue(IsInfinite(rTrunc.f[1]) and (rTrunc.f[1] > 0), 'Scalar Trunc(+Inf) should stay +Inf');
+  CheckTrue(IsInfinite(rTrunc.f[2]) and (rTrunc.f[2] < 0), 'Scalar Trunc(-Inf) should stay -Inf');
+  CheckNear(-1.0, rTrunc.f[3], 0.0, 'Scalar Trunc(-1.75)');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x4_RoundTrunc_NaNInf_SSE2;
@@ -1172,15 +1128,15 @@ begin
   rRound := VecF32x4Round(a);
   rTrunc := VecF32x4Trunc(a);
 
-  AssertTrue('SSE2 Round(NaN) should stay NaN', IsNaNSingle(rRound.f[0]));
-  AssertTrue('SSE2 Round(+Inf) should stay +Inf', IsInfinite(rRound.f[1]) and (rRound.f[1] > 0));
-  AssertTrue('SSE2 Round(-Inf) should stay -Inf', IsInfinite(rRound.f[2]) and (rRound.f[2] < 0));
-  AssertEquals('SSE2 Round(-1.75)', -2.0, rRound.f[3], 0.0);
+  CheckTrue(IsNaNSingle(rRound.f[0]), 'SSE2 Round(NaN) should stay NaN');
+  CheckTrue(IsInfinite(rRound.f[1]) and (rRound.f[1] > 0), 'SSE2 Round(+Inf) should stay +Inf');
+  CheckTrue(IsInfinite(rRound.f[2]) and (rRound.f[2] < 0), 'SSE2 Round(-Inf) should stay -Inf');
+  CheckNear(-2.0, rRound.f[3], 0.0, 'SSE2 Round(-1.75)');
 
-  AssertTrue('SSE2 Trunc(NaN) should stay NaN', IsNaNSingle(rTrunc.f[0]));
-  AssertTrue('SSE2 Trunc(+Inf) should stay +Inf', IsInfinite(rTrunc.f[1]) and (rTrunc.f[1] > 0));
-  AssertTrue('SSE2 Trunc(-Inf) should stay -Inf', IsInfinite(rTrunc.f[2]) and (rTrunc.f[2] < 0));
-  AssertEquals('SSE2 Trunc(-1.75)', -1.0, rTrunc.f[3], 0.0);
+  CheckTrue(IsNaNSingle(rTrunc.f[0]), 'SSE2 Trunc(NaN) should stay NaN');
+  CheckTrue(IsInfinite(rTrunc.f[1]) and (rTrunc.f[1] > 0), 'SSE2 Trunc(+Inf) should stay +Inf');
+  CheckTrue(IsInfinite(rTrunc.f[2]) and (rTrunc.f[2] < 0), 'SSE2 Trunc(-Inf) should stay -Inf');
+  CheckNear(-1.0, rTrunc.f[3], 0.0, 'SSE2 Trunc(-1.75)');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_Wide_RoundTrunc_NaNInf_Scalar;
@@ -1200,43 +1156,43 @@ var
     case (aLane mod 8) of
       0:
       begin
-        AssertTrue(aPrefix + ' Round(NaN)', IsNaNSingle(aRound));
-        AssertTrue(aPrefix + ' Trunc(NaN)', IsNaNSingle(aTrunc));
+        CheckTrue(IsNaNSingle(aRound), aPrefix + ' Round(NaN)');
+        CheckTrue(IsNaNSingle(aTrunc), aPrefix + ' Trunc(NaN)');
       end;
       1:
       begin
-        AssertTrue(aPrefix + ' Round(+Inf)', IsInfinite(aRound) and (aRound > 0));
-        AssertTrue(aPrefix + ' Trunc(+Inf)', IsInfinite(aTrunc) and (aTrunc > 0));
+        CheckTrue(IsInfinite(aRound) and (aRound > 0), aPrefix + ' Round(+Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc > 0), aPrefix + ' Trunc(+Inf)');
       end;
       2:
       begin
-        AssertTrue(aPrefix + ' Round(-Inf)', IsInfinite(aRound) and (aRound < 0));
-        AssertTrue(aPrefix + ' Trunc(-Inf)', IsInfinite(aTrunc) and (aTrunc < 0));
+        CheckTrue(IsInfinite(aRound) and (aRound < 0), aPrefix + ' Round(-Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc < 0), aPrefix + ' Trunc(-Inf)');
       end;
       3:
       begin
-        AssertEquals(aPrefix + ' Round(1.75)', 2.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(1.75)', 1.0, aTrunc, 0.0);
+        CheckNear(2.0, aRound, 0.0, aPrefix + ' Round(1.75)');
+        CheckNear(1.0, aTrunc, 0.0, aPrefix + ' Trunc(1.75)');
       end;
       4:
       begin
-        AssertEquals(aPrefix + ' Round(-1.75)', -2.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-1.75)', -1.0, aTrunc, 0.0);
+        CheckNear(-2.0, aRound, 0.0, aPrefix + ' Round(-1.75)');
+        CheckNear(-1.0, aTrunc, 0.0, aPrefix + ' Trunc(-1.75)');
       end;
       5:
       begin
-        AssertEquals(aPrefix + ' Round(0.0)', 0.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(0.0)', 0.0, aTrunc, 0.0);
+        CheckNear(0.0, aRound, 0.0, aPrefix + ' Round(0.0)');
+        CheckNear(0.0, aTrunc, 0.0, aPrefix + ' Trunc(0.0)');
       end;
       6:
       begin
-        AssertEquals(aPrefix + ' Round(123456.75)', 123457.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(123456.75)', 123456.0, aTrunc, 0.0);
+        CheckNear(123457.0, aRound, 0.0, aPrefix + ' Round(123456.75)');
+        CheckNear(123456.0, aTrunc, 0.0, aPrefix + ' Trunc(123456.75)');
       end;
       7:
       begin
-        AssertEquals(aPrefix + ' Round(-123456.75)', -123457.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-123456.75)', -123456.0, aTrunc, 0.0);
+        CheckNear(-123457.0, aRound, 0.0, aPrefix + ' Round(-123456.75)');
+        CheckNear(-123456.0, aTrunc, 0.0, aPrefix + ' Trunc(-123456.75)');
       end;
     end;
   end;
@@ -1246,33 +1202,33 @@ var
     case (aLane mod 6) of
       0:
       begin
-        AssertTrue(aPrefix + ' Round(NaN)', IsNaNDouble(aRound));
-        AssertTrue(aPrefix + ' Trunc(NaN)', IsNaNDouble(aTrunc));
+        CheckTrue(IsNaNDouble(aRound), aPrefix + ' Round(NaN)');
+        CheckTrue(IsNaNDouble(aTrunc), aPrefix + ' Trunc(NaN)');
       end;
       1:
       begin
-        AssertTrue(aPrefix + ' Round(+Inf)', IsInfinite(aRound) and (aRound > 0));
-        AssertTrue(aPrefix + ' Trunc(+Inf)', IsInfinite(aTrunc) and (aTrunc > 0));
+        CheckTrue(IsInfinite(aRound) and (aRound > 0), aPrefix + ' Round(+Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc > 0), aPrefix + ' Trunc(+Inf)');
       end;
       2:
       begin
-        AssertTrue(aPrefix + ' Round(-Inf)', IsInfinite(aRound) and (aRound < 0));
-        AssertTrue(aPrefix + ' Trunc(-Inf)', IsInfinite(aTrunc) and (aTrunc < 0));
+        CheckTrue(IsInfinite(aRound) and (aRound < 0), aPrefix + ' Round(-Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc < 0), aPrefix + ' Trunc(-Inf)');
       end;
       3:
       begin
-        AssertEquals(aPrefix + ' Round(2.75)', 3.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(2.75)', 2.0, aTrunc, 0.0);
+        CheckNear(3.0, aRound, 0.0, aPrefix + ' Round(2.75)');
+        CheckNear(2.0, aTrunc, 0.0, aPrefix + ' Trunc(2.75)');
       end;
       4:
       begin
-        AssertEquals(aPrefix + ' Round(-2.75)', -3.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-2.75)', -2.0, aTrunc, 0.0);
+        CheckNear(-3.0, aRound, 0.0, aPrefix + ' Round(-2.75)');
+        CheckNear(-2.0, aTrunc, 0.0, aPrefix + ' Trunc(-2.75)');
       end;
       5:
       begin
-        AssertEquals(aPrefix + ' Round(1000000.75)', 1000001.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(1000000.75)', 1000000.0, aTrunc, 0.0);
+        CheckNear(1000001.0, aRound, 0.0, aPrefix + ' Round(1000000.75)');
+        CheckNear(1000000.0, aTrunc, 0.0, aPrefix + ' Trunc(1000000.75)');
       end;
     end;
   end;
@@ -1280,10 +1236,7 @@ var
 begin
   SetActiveBackend(sbScalar);
   LDispatch := GetDispatchTable;
-  AssertTrue('Scalar dispatch for wide Round/Trunc should exist',
-    (LDispatch <> nil) and
-    Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-    Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch for wide Round/Trunc should exist');
 
   for LIndex := 0 to 7 do
   begin
@@ -1379,43 +1332,43 @@ var
     case (aLane mod 8) of
       0:
       begin
-        AssertTrue(aPrefix + ' Round(NaN)', IsNaNSingle(aRound));
-        AssertTrue(aPrefix + ' Trunc(NaN)', IsNaNSingle(aTrunc));
+        CheckTrue(IsNaNSingle(aRound), aPrefix + ' Round(NaN)');
+        CheckTrue(IsNaNSingle(aTrunc), aPrefix + ' Trunc(NaN)');
       end;
       1:
       begin
-        AssertTrue(aPrefix + ' Round(+Inf)', IsInfinite(aRound) and (aRound > 0));
-        AssertTrue(aPrefix + ' Trunc(+Inf)', IsInfinite(aTrunc) and (aTrunc > 0));
+        CheckTrue(IsInfinite(aRound) and (aRound > 0), aPrefix + ' Round(+Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc > 0), aPrefix + ' Trunc(+Inf)');
       end;
       2:
       begin
-        AssertTrue(aPrefix + ' Round(-Inf)', IsInfinite(aRound) and (aRound < 0));
-        AssertTrue(aPrefix + ' Trunc(-Inf)', IsInfinite(aTrunc) and (aTrunc < 0));
+        CheckTrue(IsInfinite(aRound) and (aRound < 0), aPrefix + ' Round(-Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc < 0), aPrefix + ' Trunc(-Inf)');
       end;
       3:
       begin
-        AssertEquals(aPrefix + ' Round(1.75)', 2.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(1.75)', 1.0, aTrunc, 0.0);
+        CheckNear(2.0, aRound, 0.0, aPrefix + ' Round(1.75)');
+        CheckNear(1.0, aTrunc, 0.0, aPrefix + ' Trunc(1.75)');
       end;
       4:
       begin
-        AssertEquals(aPrefix + ' Round(-1.75)', -2.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-1.75)', -1.0, aTrunc, 0.0);
+        CheckNear(-2.0, aRound, 0.0, aPrefix + ' Round(-1.75)');
+        CheckNear(-1.0, aTrunc, 0.0, aPrefix + ' Trunc(-1.75)');
       end;
       5:
       begin
-        AssertEquals(aPrefix + ' Round(0.0)', 0.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(0.0)', 0.0, aTrunc, 0.0);
+        CheckNear(0.0, aRound, 0.0, aPrefix + ' Round(0.0)');
+        CheckNear(0.0, aTrunc, 0.0, aPrefix + ' Trunc(0.0)');
       end;
       6:
       begin
-        AssertEquals(aPrefix + ' Round(123456.75)', 123457.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(123456.75)', 123456.0, aTrunc, 0.0);
+        CheckNear(123457.0, aRound, 0.0, aPrefix + ' Round(123456.75)');
+        CheckNear(123456.0, aTrunc, 0.0, aPrefix + ' Trunc(123456.75)');
       end;
       7:
       begin
-        AssertEquals(aPrefix + ' Round(-123456.75)', -123457.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-123456.75)', -123456.0, aTrunc, 0.0);
+        CheckNear(-123457.0, aRound, 0.0, aPrefix + ' Round(-123456.75)');
+        CheckNear(-123456.0, aTrunc, 0.0, aPrefix + ' Trunc(-123456.75)');
       end;
     end;
   end;
@@ -1425,33 +1378,33 @@ var
     case (aLane mod 6) of
       0:
       begin
-        AssertTrue(aPrefix + ' Round(NaN)', IsNaNDouble(aRound));
-        AssertTrue(aPrefix + ' Trunc(NaN)', IsNaNDouble(aTrunc));
+        CheckTrue(IsNaNDouble(aRound), aPrefix + ' Round(NaN)');
+        CheckTrue(IsNaNDouble(aTrunc), aPrefix + ' Trunc(NaN)');
       end;
       1:
       begin
-        AssertTrue(aPrefix + ' Round(+Inf)', IsInfinite(aRound) and (aRound > 0));
-        AssertTrue(aPrefix + ' Trunc(+Inf)', IsInfinite(aTrunc) and (aTrunc > 0));
+        CheckTrue(IsInfinite(aRound) and (aRound > 0), aPrefix + ' Round(+Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc > 0), aPrefix + ' Trunc(+Inf)');
       end;
       2:
       begin
-        AssertTrue(aPrefix + ' Round(-Inf)', IsInfinite(aRound) and (aRound < 0));
-        AssertTrue(aPrefix + ' Trunc(-Inf)', IsInfinite(aTrunc) and (aTrunc < 0));
+        CheckTrue(IsInfinite(aRound) and (aRound < 0), aPrefix + ' Round(-Inf)');
+        CheckTrue(IsInfinite(aTrunc) and (aTrunc < 0), aPrefix + ' Trunc(-Inf)');
       end;
       3:
       begin
-        AssertEquals(aPrefix + ' Round(2.75)', 3.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(2.75)', 2.0, aTrunc, 0.0);
+        CheckNear(3.0, aRound, 0.0, aPrefix + ' Round(2.75)');
+        CheckNear(2.0, aTrunc, 0.0, aPrefix + ' Trunc(2.75)');
       end;
       4:
       begin
-        AssertEquals(aPrefix + ' Round(-2.75)', -3.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(-2.75)', -2.0, aTrunc, 0.0);
+        CheckNear(-3.0, aRound, 0.0, aPrefix + ' Round(-2.75)');
+        CheckNear(-2.0, aTrunc, 0.0, aPrefix + ' Trunc(-2.75)');
       end;
       5:
       begin
-        AssertEquals(aPrefix + ' Round(1000000.75)', 1000001.0, aRound, 0.0);
-        AssertEquals(aPrefix + ' Trunc(1000000.75)', 1000000.0, aTrunc, 0.0);
+        CheckNear(1000001.0, aRound, 0.0, aPrefix + ' Round(1000000.75)');
+        CheckNear(1000000.0, aTrunc, 0.0, aPrefix + ' Trunc(1000000.75)');
       end;
     end;
   end;
@@ -1463,10 +1416,7 @@ begin
   SetVectorAsmEnabled(True);
   SetActiveBackend(sbSSE2);
   LDispatch := GetDispatchTable;
-  AssertTrue('SSE2 dispatch for wide Round/Trunc should exist',
-    (LDispatch <> nil) and
-    Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-    Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch for wide Round/Trunc should exist');
 
   for LIndex := 0 to 7 do
   begin
@@ -1562,8 +1512,7 @@ begin
   r := VecF32x8Add(a, b);
 
   for i := 0 to 7 do
-    AssertTrue('F32x8: NaN + 1.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'F32x8: NaN + 1.0 should be NaN [' + IntToStr(i) + ']');
 
   // 混合 NaN 和正常值
   a.f[0] := 1.0;
@@ -1579,14 +1528,14 @@ begin
     b.f[i] := 10.0;
   r := VecF32x8Mul(a, b);
 
-  AssertEquals('F32x8: 1.0 * 10.0 [0]', 10.0, r.f[0], 1e-6);
-  AssertTrue('F32x8: NaN * 10.0 [1]', IsNaNSingle(r.f[1]));
-  AssertEquals('F32x8: 2.0 * 10.0 [2]', 20.0, r.f[2], 1e-6);
-  AssertTrue('F32x8: NaN * 10.0 [3]', IsNaNSingle(r.f[3]));
-  AssertEquals('F32x8: 3.0 * 10.0 [4]', 30.0, r.f[4], 1e-6);
-  AssertTrue('F32x8: NaN * 10.0 [5]', IsNaNSingle(r.f[5]));
-  AssertEquals('F32x8: 4.0 * 10.0 [6]', 40.0, r.f[6], 1e-6);
-  AssertTrue('F32x8: NaN * 10.0 [7]', IsNaNSingle(r.f[7]));
+  CheckNear(10.0, r.f[0], 1e-6, 'F32x8: 1.0 * 10.0 [0]');
+  CheckTrue(IsNaNSingle(r.f[1]), 'F32x8: NaN * 10.0 [1]');
+  CheckNear(20.0, r.f[2], 1e-6, 'F32x8: 2.0 * 10.0 [2]');
+  CheckTrue(IsNaNSingle(r.f[3]), 'F32x8: NaN * 10.0 [3]');
+  CheckNear(30.0, r.f[4], 1e-6, 'F32x8: 3.0 * 10.0 [4]');
+  CheckTrue(IsNaNSingle(r.f[5]), 'F32x8: NaN * 10.0 [5]');
+  CheckNear(40.0, r.f[6], 1e-6, 'F32x8: 4.0 * 10.0 [6]');
+  CheckTrue(IsNaNSingle(r.f[7]), 'F32x8: NaN * 10.0 [7]');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F64x4_Inf_Handling;
@@ -1604,8 +1553,7 @@ begin
   r := VecF64x4Add(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('F64x4: Inf + 100.0 should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.d[i]) and (r.d[i] > 0));
+    CheckTrue(IsInfinite(r.d[i]) and (r.d[i] > 0), 'F64x4: Inf + 100.0 should be Inf [' + IntToStr(i) + ']');
 
   // Inf - Inf = NaN
   for i := 0 to 3 do
@@ -1616,8 +1564,7 @@ begin
   r := VecF64x4Sub(a, b);
 
   for i := 0 to 3 do
-    AssertTrue('F64x4: Inf - Inf should be NaN [' + IntToStr(i) + ']',
-               IsNaNDouble(r.d[i]));
+    CheckTrue(IsNaNDouble(r.d[i]), 'F64x4: Inf - Inf should be NaN [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_IEEE754EdgeCases.Test_F32x8_Mixed_Special;
@@ -1640,14 +1587,14 @@ begin
   r := VecF32x8Mul(a, b);
 
   // 验证每个元素的行为
-  AssertEquals('1.0 * 2.0', 2.0, r.f[0], 1e-6);
-  AssertTrue('NaN * 2.0', IsNaNSingle(r.f[1]));
-  AssertTrue('Inf * 2.0', IsInfinite(r.f[2]) and (r.f[2] > 0));
-  AssertTrue('-Inf * 2.0', IsInfinite(r.f[3]) and (r.f[3] < 0));
-  AssertEquals('0.0 * 2.0', 0.0, r.f[4], 0.0);
-  AssertEquals('(-0) * 2.0', 0.0, r.f[5], 0.0);
-  AssertEquals('(-5.0) * 2.0', -10.0, r.f[6], 1e-6);
-  AssertEquals('1e-10 * 2.0', 2e-10, r.f[7], 1e-15);
+  CheckNear(2.0, r.f[0], 1e-6, '1.0 * 2.0');
+  CheckTrue(IsNaNSingle(r.f[1]), 'NaN * 2.0');
+  CheckTrue(IsInfinite(r.f[2]) and (r.f[2] > 0), 'Inf * 2.0');
+  CheckTrue(IsInfinite(r.f[3]) and (r.f[3] < 0), '-Inf * 2.0');
+  CheckNear(0.0, r.f[4], 0.0, '0.0 * 2.0');
+  CheckNear(0.0, r.f[5], 0.0, '(-0) * 2.0');
+  CheckNear(-10.0, r.f[6], 1e-6, '(-5.0) * 2.0');
+  CheckNear(2e-10, r.f[7], 1e-15, '1e-10 * 2.0');
 end;
 
 // === 512-bit 向量特殊值测试 ===
@@ -1667,8 +1614,7 @@ begin
   r := VecF32x16Add(a, b);
 
   for i := 0 to 15 do
-    AssertTrue('F32x16: NaN + 1.0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNSingle(r.f[i]));
+    CheckTrue(IsNaNSingle(r.f[i]), 'F32x16: NaN + 1.0 should be NaN [' + IntToStr(i) + ']');
 
   // 测试部分 NaN
   for i := 0 to 15 do
@@ -1686,11 +1632,9 @@ begin
   for i := 0 to 15 do
   begin
     if (i mod 2) = 0 then
-      AssertEquals('F32x16: normal * 10.0 [' + IntToStr(i) + ']',
-                   Single(i + 1) * 10.0, r.f[i], 1e-6)
+      CheckNear(Single(i + 1) * 10.0, r.f[i], 1e-6, 'F32x16: normal * 10.0 [' + IntToStr(i) + ']')
     else
-      AssertTrue('F32x16: NaN * 10.0 [' + IntToStr(i) + ']',
-                 IsNaNSingle(r.f[i]));
+      CheckTrue(IsNaNSingle(r.f[i]), 'F32x16: NaN * 10.0 [' + IntToStr(i) + ']');
   end;
 end;
 
@@ -1709,8 +1653,7 @@ begin
   r := VecF64x8Add(a, b);
 
   for i := 0 to 7 do
-    AssertTrue('F64x8: Inf + 1000.0 should be Inf [' + IntToStr(i) + ']',
-               IsInfinite(r.d[i]) and (r.d[i] > 0));
+    CheckTrue(IsInfinite(r.d[i]) and (r.d[i] > 0), 'F64x8: Inf + 1000.0 should be Inf [' + IntToStr(i) + ']');
 
   // Inf * 0 = NaN
   for i := 0 to 7 do
@@ -1721,8 +1664,7 @@ begin
   r := VecF64x8Mul(a, b);
 
   for i := 0 to 7 do
-    AssertTrue('F64x8: Inf * 0 should be NaN [' + IntToStr(i) + ']',
-               IsNaNDouble(r.d[i]));
+    CheckTrue(IsNaNDouble(r.d[i]), 'F64x8: Inf * 0 should be NaN [' + IntToStr(i) + ']');
 end;
 
 { TTestCase_AVX2RoundTruncIEEE754 }
@@ -1741,21 +1683,21 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
 begin
@@ -1806,10 +1748,7 @@ begin
   SetVectorAsmEnabled(False);
   SetActiveBackend(sbScalar);
   LDispatch := GetDispatchTable;
-  AssertTrue('Scalar dispatch should provide wide Round/Trunc',
-    (LDispatch <> nil) and
-    Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-    Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
   LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
   LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -1826,10 +1765,7 @@ begin
     SetVectorAsmEnabled(True);
     SetActiveBackend(sbSSE2);
     LDispatch := GetDispatchTable;
-    AssertTrue('SSE2 dispatch should provide wide Round/Trunc',
-      (LDispatch <> nil) and
-      Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-      Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
     LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
     LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -1848,10 +1784,7 @@ begin
     Exit;
 
   LDispatch := GetDispatchTable;
-  AssertTrue('AVX2 dispatch should provide wide Round/Trunc',
-    (LDispatch <> nil) and
-    Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-    Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
   LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
   LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -1864,61 +1797,45 @@ begin
 
   for LIndex := 0 to 7 do
   begin
-    AssertSingleSemantics('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']',
-      LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-    AssertSingleSemantics('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']',
-      LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+    AssertSingleSemantics('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']', LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+    AssertSingleSemantics('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']', LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
     if LHaveSSE2 then
     begin
-      AssertSingleSemantics('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']',
-        LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']',
-        LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']', LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']', LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
     end;
   end;
 
   for LIndex := 0 to 3 do
   begin
-    AssertDoubleSemantics('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']',
-      LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-    AssertDoubleSemantics('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']',
-      LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+    AssertDoubleSemantics('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']', LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+    AssertDoubleSemantics('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']', LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
     if LHaveSSE2 then
     begin
-      AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']',
-        LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']',
-        LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']', LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']', LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
     end;
   end;
 
   for LIndex := 0 to 15 do
   begin
-    AssertSingleSemantics('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']',
-      LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-    AssertSingleSemantics('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']',
-      LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+    AssertSingleSemantics('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']', LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+    AssertSingleSemantics('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']', LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
     if LHaveSSE2 then
     begin
-      AssertSingleSemantics('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']',
-        LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']',
-        LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']', LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']', LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
     end;
   end;
 
   for LIndex := 0 to 7 do
   begin
-    AssertDoubleSemantics('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']',
-      LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-    AssertDoubleSemantics('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']',
-      LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+    AssertDoubleSemantics('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']', LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+    AssertDoubleSemantics('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']', LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
     if LHaveSSE2 then
     begin
-      AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']',
-        LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']',
-        LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']', LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']', LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
     end;
   end;
 end;
@@ -1937,21 +1854,21 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
 begin
@@ -2000,10 +1917,7 @@ begin
   SetVectorAsmEnabled(False);
     SetActiveBackend(sbScalar);
     LDispatch := GetDispatchTable;
-    AssertTrue('Scalar dispatch should provide wide Floor/Ceil',
-      (LDispatch <> nil) and
-      Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-      Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
 
     LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
     LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2019,10 +1933,7 @@ begin
       SetVectorAsmEnabled(True);
       SetActiveBackend(sbSSE2);
       LDispatch := GetDispatchTable;
-      AssertTrue('SSE2 dispatch should provide wide Floor/Ceil',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-        Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
 
       LSSE2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
       LSSE2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2040,10 +1951,7 @@ begin
       Exit;
 
     LDispatch := GetDispatchTable;
-    AssertTrue('AVX2 dispatch should provide wide Floor/Ceil',
-      (LDispatch <> nil) and
-      Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-      Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
 
     LAVX2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
     LAVX2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2056,61 +1964,45 @@ begin
 
     for LIndex := 0 to 7 do
     begin
-      AssertSingleSemantics('AVX2 vs Scalar FloorF32x8[' + IntToStr(LIndex) + ']',
-        LScalarFloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs Scalar CeilF32x8[' + IntToStr(LIndex) + ']',
-        LScalarCeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar FloorF32x8[' + IntToStr(LIndex) + ']', LScalarFloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar CeilF32x8[' + IntToStr(LIndex) + ']', LScalarCeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertSingleSemantics('AVX2 vs SSE2 FloorF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2FloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
-        AssertSingleSemantics('AVX2 vs SSE2 CeilF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2CeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 FloorF32x8[' + IntToStr(LIndex) + ']', LSSE2FloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 CeilF32x8[' + IntToStr(LIndex) + ']', LSSE2CeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 3 do
     begin
-      AssertDoubleSemantics('AVX2 vs Scalar FloorF64x4[' + IntToStr(LIndex) + ']',
-        LScalarFloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs Scalar CeilF64x4[' + IntToStr(LIndex) + ']',
-        LScalarCeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar FloorF64x4[' + IntToStr(LIndex) + ']', LScalarFloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar CeilF64x4[' + IntToStr(LIndex) + ']', LScalarCeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertDoubleSemantics('AVX2 vs SSE2 FloorF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2FloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
-        AssertDoubleSemantics('AVX2 vs SSE2 CeilF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2CeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 FloorF64x4[' + IntToStr(LIndex) + ']', LSSE2FloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 CeilF64x4[' + IntToStr(LIndex) + ']', LSSE2CeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 15 do
     begin
-      AssertSingleSemantics('AVX2 vs Scalar FloorF32x16[' + IntToStr(LIndex) + ']',
-        LScalarFloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs Scalar CeilF32x16[' + IntToStr(LIndex) + ']',
-        LScalarCeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar FloorF32x16[' + IntToStr(LIndex) + ']', LScalarFloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar CeilF32x16[' + IntToStr(LIndex) + ']', LScalarCeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertSingleSemantics('AVX2 vs SSE2 FloorF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2FloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
-        AssertSingleSemantics('AVX2 vs SSE2 CeilF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2CeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 FloorF32x16[' + IntToStr(LIndex) + ']', LSSE2FloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 CeilF32x16[' + IntToStr(LIndex) + ']', LSSE2CeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 7 do
     begin
-      AssertDoubleSemantics('AVX2 vs Scalar FloorF64x8[' + IntToStr(LIndex) + ']',
-        LScalarFloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs Scalar CeilF64x8[' + IntToStr(LIndex) + ']',
-        LScalarCeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar FloorF64x8[' + IntToStr(LIndex) + ']', LScalarFloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar CeilF64x8[' + IntToStr(LIndex) + ']', LScalarCeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertDoubleSemantics('AVX2 vs SSE2 FloorF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2FloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
-        AssertDoubleSemantics('AVX2 vs SSE2 CeilF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2CeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 FloorF64x8[' + IntToStr(LIndex) + ']', LSSE2FloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 CeilF64x8[' + IntToStr(LIndex) + ']', LSSE2CeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
       end;
     end;
 end;
@@ -2177,43 +2069,43 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertFloorCeilInvariantSingle(const aPrefix: string; const aInput, aFloor, aCeil: Single);
   begin
     if IsNaNSingle(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertTrue(aPrefix + ' floor<=x', aFloor <= aInput + 1e-6);
-    AssertTrue(aPrefix + ' ceil>=x', aCeil + 1e-6 >= aInput);
-    AssertTrue(aPrefix + ' ceil-floor<=1', (aCeil - aFloor) <= 1.0 + 1e-6);
-    AssertEquals(aPrefix + ' floor is integral', 0.0, Frac(aFloor), 0.0);
-    AssertEquals(aPrefix + ' ceil is integral', 0.0, Frac(aCeil), 0.0);
+    CheckTrue(aFloor <= aInput + 1e-6, aPrefix + ' floor<=x');
+    CheckTrue(aCeil + 1e-6 >= aInput, aPrefix + ' ceil>=x');
+    CheckTrue((aCeil - aFloor) <= 1.0 + 1e-6, aPrefix + ' ceil-floor<=1');
+    CheckNear(0.0, Frac(aFloor), 0.0, aPrefix + ' floor is integral');
+    CheckNear(0.0, Frac(aCeil), 0.0, aPrefix + ' ceil is integral');
   end;
 
   procedure AssertFloorCeilInvariantDouble(const aPrefix: string; const aInput, aFloor, aCeil: Double);
   begin
     if IsNaNDouble(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertTrue(aPrefix + ' floor<=x', aFloor <= aInput + 1e-12);
-    AssertTrue(aPrefix + ' ceil>=x', aCeil + 1e-12 >= aInput);
-    AssertTrue(aPrefix + ' ceil-floor<=1', (aCeil - aFloor) <= 1.0 + 1e-12);
-    AssertEquals(aPrefix + ' floor is integral', 0.0, Frac(aFloor), 0.0);
-    AssertEquals(aPrefix + ' ceil is integral', 0.0, Frac(aCeil), 0.0);
+    CheckTrue(aFloor <= aInput + 1e-12, aPrefix + ' floor<=x');
+    CheckTrue(aCeil + 1e-12 >= aInput, aPrefix + ' ceil>=x');
+    CheckTrue((aCeil - aFloor) <= 1.0 + 1e-12, aPrefix + ' ceil-floor<=1');
+    CheckNear(0.0, Frac(aFloor), 0.0, aPrefix + ' floor is integral');
+    CheckNear(0.0, Frac(aCeil), 0.0, aPrefix + ' ceil is integral');
   end;
 
 begin
@@ -2237,10 +2129,7 @@ begin
       SetVectorAsmEnabled(False);
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      AssertTrue('Scalar dispatch should provide wide Floor/Ceil',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-        Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
 
       LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
       LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2256,10 +2145,7 @@ begin
         SetVectorAsmEnabled(True);
         SetActiveBackend(sbSSE2);
         LDispatch := GetDispatchTable;
-        AssertTrue('SSE2 dispatch should provide wide Floor/Ceil',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-          Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
 
         LSSE2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
         LSSE2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2277,10 +2163,7 @@ begin
         Exit;
 
       LDispatch := GetDispatchTable;
-      AssertTrue('AVX2 dispatch should provide wide Floor/Ceil',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-        Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
 
       LAVX2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
       LAVX2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -2293,69 +2176,49 @@ begin
 
       for LIndex := 0 to 7 do
       begin
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF32x8[' + IntToStr(LIndex) + ']',
-          LScalarFloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF32x8[' + IntToStr(LIndex) + ']',
-          LScalarCeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
-        AssertFloorCeilInvariantSingle('Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']',
-          LInF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF32x8[' + IntToStr(LIndex) + ']', LScalarFloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF32x8[' + IntToStr(LIndex) + ']', LScalarCeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
+        AssertFloorCeilInvariantSingle('Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']', LInF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF32x8[' + IntToStr(LIndex) + ']',
-            LSSE2FloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF32x8[' + IntToStr(LIndex) + ']',
-            LSSE2CeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF32x8[' + IntToStr(LIndex) + ']', LSSE2FloorF32x8.f[LIndex], LAVX2FloorF32x8.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF32x8[' + IntToStr(LIndex) + ']', LSSE2CeilF32x8.f[LIndex], LAVX2CeilF32x8.f[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 3 do
       begin
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF64x4[' + IntToStr(LIndex) + ']',
-          LScalarFloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF64x4[' + IntToStr(LIndex) + ']',
-          LScalarCeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
-        AssertFloorCeilInvariantDouble('Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']',
-          LInF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF64x4[' + IntToStr(LIndex) + ']', LScalarFloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF64x4[' + IntToStr(LIndex) + ']', LScalarCeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
+        AssertFloorCeilInvariantDouble('Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']', LInF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF64x4[' + IntToStr(LIndex) + ']',
-            LSSE2FloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF64x4[' + IntToStr(LIndex) + ']',
-            LSSE2CeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF64x4[' + IntToStr(LIndex) + ']', LSSE2FloorF64x4.d[LIndex], LAVX2FloorF64x4.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF64x4[' + IntToStr(LIndex) + ']', LSSE2CeilF64x4.d[LIndex], LAVX2CeilF64x4.d[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 15 do
       begin
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF32x16[' + IntToStr(LIndex) + ']',
-          LScalarFloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF32x16[' + IntToStr(LIndex) + ']',
-          LScalarCeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
-        AssertFloorCeilInvariantSingle('Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']',
-          LInF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF32x16[' + IntToStr(LIndex) + ']', LScalarFloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF32x16[' + IntToStr(LIndex) + ']', LScalarCeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
+        AssertFloorCeilInvariantSingle('Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']', LInF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF32x16[' + IntToStr(LIndex) + ']',
-            LSSE2FloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF32x16[' + IntToStr(LIndex) + ']',
-            LSSE2CeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF32x16[' + IntToStr(LIndex) + ']', LSSE2FloorF32x16.f[LIndex], LAVX2FloorF32x16.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF32x16[' + IntToStr(LIndex) + ']', LSSE2CeilF32x16.f[LIndex], LAVX2CeilF32x16.f[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 7 do
       begin
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF64x8[' + IntToStr(LIndex) + ']',
-          LScalarFloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF64x8[' + IntToStr(LIndex) + ']',
-          LScalarCeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
-        AssertFloorCeilInvariantDouble('Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']',
-          LInF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar FloorF64x8[' + IntToStr(LIndex) + ']', LScalarFloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar CeilF64x8[' + IntToStr(LIndex) + ']', LScalarCeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
+        AssertFloorCeilInvariantDouble('Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']', LInF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF64x8[' + IntToStr(LIndex) + ']',
-            LSSE2FloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF64x8[' + IntToStr(LIndex) + ']',
-            LSSE2CeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 FloorF64x8[' + IntToStr(LIndex) + ']', LSSE2FloorF64x8.d[LIndex], LAVX2FloorF64x8.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 CeilF64x8[' + IntToStr(LIndex) + ']', LSSE2CeilF64x8.d[LIndex], LAVX2CeilF64x8.d[LIndex]);
         end;
       end;
     end;
@@ -2433,40 +2296,40 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertRoundTruncInvariantSingle(const aPrefix: string; const aInput, aRound, aTrunc: Single);
   begin
     if IsNaNSingle(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertEquals(aPrefix + ' round integral', 0.0, Frac(aRound), 0.0);
-    AssertEquals(aPrefix + ' trunc integral', 0.0, Frac(aTrunc), 0.0);
-    AssertTrue(aPrefix + ' abs(round-x)<=0.5', Abs(aRound - aInput) <= 0.500001);
-    AssertTrue(aPrefix + ' abs(trunc)<=abs(x)', Abs(aTrunc) <= Abs(aInput) + 1e-6);
+    CheckNear(0.0, Frac(aRound), 0.0, aPrefix + ' round integral');
+    CheckNear(0.0, Frac(aTrunc), 0.0, aPrefix + ' trunc integral');
+    CheckTrue(Abs(aRound - aInput) <= 0.500001, aPrefix + ' abs(round-x)<=0.5');
+    CheckTrue(Abs(aTrunc) <= Abs(aInput) + 1e-6, aPrefix + ' abs(trunc)<=abs(x)');
     if aInput >= 0 then
     begin
-      AssertTrue(aPrefix + ' trunc<=x (x>=0)', aTrunc <= aInput + 1e-6);
-      AssertTrue(aPrefix + ' trunc>=0 (x>=0)', aTrunc >= -1e-6);
+      CheckTrue(aTrunc <= aInput + 1e-6, aPrefix + ' trunc<=x (x>=0)');
+      CheckTrue(aTrunc >= -1e-6, aPrefix + ' trunc>=0 (x>=0)');
     end
     else
     begin
-      AssertTrue(aPrefix + ' trunc>=x (x<0)', aTrunc + 1e-6 >= aInput);
-      AssertTrue(aPrefix + ' trunc<=0 (x<0)', aTrunc <= 1e-6);
+      CheckTrue(aTrunc + 1e-6 >= aInput, aPrefix + ' trunc>=x (x<0)');
+      CheckTrue(aTrunc <= 1e-6, aPrefix + ' trunc<=0 (x<0)');
     end;
   end;
 
@@ -2474,19 +2337,19 @@ var
   begin
     if IsNaNDouble(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertEquals(aPrefix + ' round integral', 0.0, Frac(aRound), 0.0);
-    AssertEquals(aPrefix + ' trunc integral', 0.0, Frac(aTrunc), 0.0);
-    AssertTrue(aPrefix + ' abs(round-x)<=0.5', Abs(aRound - aInput) <= 0.500000000001);
-    AssertTrue(aPrefix + ' abs(trunc)<=abs(x)', Abs(aTrunc) <= Abs(aInput) + 1e-12);
+    CheckNear(0.0, Frac(aRound), 0.0, aPrefix + ' round integral');
+    CheckNear(0.0, Frac(aTrunc), 0.0, aPrefix + ' trunc integral');
+    CheckTrue(Abs(aRound - aInput) <= 0.500000000001, aPrefix + ' abs(round-x)<=0.5');
+    CheckTrue(Abs(aTrunc) <= Abs(aInput) + 1e-12, aPrefix + ' abs(trunc)<=abs(x)');
     if aInput >= 0 then
     begin
-      AssertTrue(aPrefix + ' trunc<=x (x>=0)', aTrunc <= aInput + 1e-12);
-      AssertTrue(aPrefix + ' trunc>=0 (x>=0)', aTrunc >= -1e-12);
+      CheckTrue(aTrunc <= aInput + 1e-12, aPrefix + ' trunc<=x (x>=0)');
+      CheckTrue(aTrunc >= -1e-12, aPrefix + ' trunc>=0 (x>=0)');
     end
     else
     begin
-      AssertTrue(aPrefix + ' trunc>=x (x<0)', aTrunc + 1e-12 >= aInput);
-      AssertTrue(aPrefix + ' trunc<=0 (x<0)', aTrunc <= 1e-12);
+      CheckTrue(aTrunc + 1e-12 >= aInput, aPrefix + ' trunc>=x (x<0)');
+      CheckTrue(aTrunc <= 1e-12, aPrefix + ' trunc<=0 (x<0)');
     end;
   end;
 
@@ -2511,10 +2374,7 @@ begin
       SetVectorAsmEnabled(False);
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      AssertTrue('Scalar dispatch should provide wide Round/Trunc',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-        Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
       LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
       LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2530,10 +2390,7 @@ begin
         SetVectorAsmEnabled(True);
         SetActiveBackend(sbSSE2);
         LDispatch := GetDispatchTable;
-        AssertTrue('SSE2 dispatch should provide wide Round/Trunc',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-          Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
         LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
         LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2551,10 +2408,7 @@ begin
         Exit;
 
       LDispatch := GetDispatchTable;
-      AssertTrue('AVX2 dispatch should provide wide Round/Trunc',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-        Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
       LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
       LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2567,69 +2421,49 @@ begin
 
       for LIndex := 0 to 7 do
       begin
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']',
-          LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']',
-          LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
-        AssertRoundTruncInvariantSingle('Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']',
-          LInF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']', LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']', LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+        AssertRoundTruncInvariantSingle('Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']', LInF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']',
-            LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']',
-            LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']', LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']', LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 3 do
       begin
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']',
-          LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']',
-          LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
-        AssertRoundTruncInvariantDouble('Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']',
-          LInF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']', LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']', LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+        AssertRoundTruncInvariantDouble('Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']', LInF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']',
-            LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']',
-            LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']', LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']', LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 15 do
       begin
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']',
-          LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']',
-          LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
-        AssertRoundTruncInvariantSingle('Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']',
-          LInF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']', LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+        AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']', LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+        AssertRoundTruncInvariantSingle('Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']', LInF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']',
-            LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']',
-            LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']', LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+          AssertSingleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']', LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
         end;
       end;
 
       for LIndex := 0 to 7 do
       begin
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']',
-          LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']',
-          LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
-        AssertRoundTruncInvariantDouble('Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']',
-          LInF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']', LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+        AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']', LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+        AssertRoundTruncInvariantDouble('Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']', LInF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
         if LHaveSSE2 then
         begin
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']',
-            LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']',
-            LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']', LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+          AssertDoubleSemantics('Round ' + IntToStr(LRound) + ' AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']', LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
         end;
       end;
     end;
@@ -2649,33 +2483,33 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign', IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertSingleZeroSign(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+      CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign bit');
   end;
 
   procedure AssertDoubleZeroSign(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+      CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign bit');
   end;
 
 begin
@@ -2710,10 +2544,7 @@ begin
   SetVectorAsmEnabled(False);
     SetActiveBackend(sbScalar);
     LDispatch := GetDispatchTable;
-    AssertTrue('Scalar dispatch should provide wide Round/Trunc',
-      (LDispatch <> nil) and
-      Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-      Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
     LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
     LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2729,10 +2560,7 @@ begin
       SetVectorAsmEnabled(True);
       SetActiveBackend(sbSSE2);
       LDispatch := GetDispatchTable;
-      AssertTrue('SSE2 dispatch should provide wide Round/Trunc',
-        (LDispatch <> nil) and
-        Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-        Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
       LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
       LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2750,10 +2578,7 @@ begin
       Exit;
 
     LDispatch := GetDispatchTable;
-    AssertTrue('AVX2 dispatch should provide wide Round/Trunc',
-      (LDispatch <> nil) and
-      Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-      Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4));
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
     LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
     LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -2766,93 +2591,61 @@ begin
 
     for LIndex := 0 to 7 do
     begin
-      AssertSingleSemantics('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']',
-        LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']',
-        LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
-      AssertSingleZeroSign('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']',
-        LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-      AssertSingleZeroSign('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']',
-        LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']', LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']', LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+      AssertSingleZeroSign('AVX2 vs Scalar RoundF32x8[' + IntToStr(LIndex) + ']', LScalarRoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+      AssertSingleZeroSign('AVX2 vs Scalar TruncF32x8[' + IntToStr(LIndex) + ']', LScalarTruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertSingleSemantics('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-        AssertSingleSemantics('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
-        AssertSingleZeroSign('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
-        AssertSingleZeroSign('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']', LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']', LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
+        AssertSingleZeroSign('AVX2 vs SSE2 RoundF32x8[' + IntToStr(LIndex) + ']', LSSE2RoundF32x8.f[LIndex], LAVX2RoundF32x8.f[LIndex]);
+        AssertSingleZeroSign('AVX2 vs SSE2 TruncF32x8[' + IntToStr(LIndex) + ']', LSSE2TruncF32x8.f[LIndex], LAVX2TruncF32x8.f[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 3 do
     begin
-      AssertDoubleSemantics('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']',
-        LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']',
-        LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
-      AssertDoubleZeroSign('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']',
-        LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-      AssertDoubleZeroSign('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']',
-        LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']', LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']', LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+      AssertDoubleZeroSign('AVX2 vs Scalar RoundF64x4[' + IntToStr(LIndex) + ']', LScalarRoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+      AssertDoubleZeroSign('AVX2 vs Scalar TruncF64x4[' + IntToStr(LIndex) + ']', LScalarTruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-        AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
-        AssertDoubleZeroSign('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
-        AssertDoubleZeroSign('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']', LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']', LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
+        AssertDoubleZeroSign('AVX2 vs SSE2 RoundF64x4[' + IntToStr(LIndex) + ']', LSSE2RoundF64x4.d[LIndex], LAVX2RoundF64x4.d[LIndex]);
+        AssertDoubleZeroSign('AVX2 vs SSE2 TruncF64x4[' + IntToStr(LIndex) + ']', LSSE2TruncF64x4.d[LIndex], LAVX2TruncF64x4.d[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 15 do
     begin
-      AssertSingleSemantics('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']',
-        LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-      AssertSingleSemantics('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']',
-        LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
-      AssertSingleZeroSign('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']',
-        LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-      AssertSingleZeroSign('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']',
-        LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']', LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+      AssertSingleSemantics('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']', LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+      AssertSingleZeroSign('AVX2 vs Scalar RoundF32x16[' + IntToStr(LIndex) + ']', LScalarRoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+      AssertSingleZeroSign('AVX2 vs Scalar TruncF32x16[' + IntToStr(LIndex) + ']', LScalarTruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertSingleSemantics('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-        AssertSingleSemantics('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
-        AssertSingleZeroSign('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
-        AssertSingleZeroSign('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']', LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+        AssertSingleSemantics('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']', LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
+        AssertSingleZeroSign('AVX2 vs SSE2 RoundF32x16[' + IntToStr(LIndex) + ']', LSSE2RoundF32x16.f[LIndex], LAVX2RoundF32x16.f[LIndex]);
+        AssertSingleZeroSign('AVX2 vs SSE2 TruncF32x16[' + IntToStr(LIndex) + ']', LSSE2TruncF32x16.f[LIndex], LAVX2TruncF32x16.f[LIndex]);
       end;
     end;
 
     for LIndex := 0 to 7 do
     begin
-      AssertDoubleSemantics('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']',
-        LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-      AssertDoubleSemantics('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']',
-        LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
-      AssertDoubleZeroSign('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']',
-        LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-      AssertDoubleZeroSign('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']',
-        LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']', LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+      AssertDoubleSemantics('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']', LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+      AssertDoubleZeroSign('AVX2 vs Scalar RoundF64x8[' + IntToStr(LIndex) + ']', LScalarRoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+      AssertDoubleZeroSign('AVX2 vs Scalar TruncF64x8[' + IntToStr(LIndex) + ']', LScalarTruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
       if LHaveSSE2 then
       begin
-        AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-        AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
-        AssertDoubleZeroSign('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
-        AssertDoubleZeroSign('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']',
-          LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']', LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+        AssertDoubleSemantics('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']', LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
+        AssertDoubleZeroSign('AVX2 vs SSE2 RoundF64x8[' + IntToStr(LIndex) + ']', LSSE2RoundF64x8.d[LIndex], LAVX2RoundF64x8.d[LIndex]);
+        AssertDoubleZeroSign('AVX2 vs SSE2 TruncF64x8[' + IntToStr(LIndex) + ']', LSSE2TruncF64x8.d[LIndex], LAVX2TruncF64x8.d[LIndex]);
       end;
     end;
 end;
@@ -2878,35 +2671,33 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix, aExpected, aActual, 1e-6);
+      CheckNear(aExpected, aActual, 1e-6, aPrefix);
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix, aExpected, aActual, 1e-12);
+      CheckNear(aExpected, aActual, 1e-12, aPrefix);
   end;
 
   procedure AssertSingleZeroSign(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+      CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign bit');
   end;
 
   procedure AssertDoubleZeroSign(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+      CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign bit');
   end;
 begin
   LCheckedBackends := 0;
@@ -2937,13 +2728,9 @@ begin
     Inc(LCheckedBackends);
     try
       LDispatch := GetDispatchTable;
-      AssertNotNull('Dispatch table should be available', LDispatch);
-      AssertTrue('Round/Trunc/Floor/Ceil F32x4 should be assigned',
-        Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4) and
-        Assigned(LDispatch^.FloorF32x4) and Assigned(LDispatch^.CeilF32x4));
-      AssertTrue('Round/Trunc/Floor/Ceil F64x2 should be assigned',
-        Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and
-        Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2));
+      CheckNotNil(LDispatch, 'Dispatch table should be available');
+      CheckTrue(Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4) and Assigned(LDispatch^.FloorF32x4) and Assigned(LDispatch^.CeilF32x4), 'Round/Trunc/Floor/Ceil F32x4 should be assigned');
+      CheckTrue(Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
 
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
@@ -2977,44 +2764,28 @@ begin
 
       for LIndex := 0 to 3 do
       begin
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF32x4.f[LIndex], LActualRoundF32x4.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF32x4.f[LIndex], LActualTruncF32x4.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF32x4.f[LIndex], LActualFloorF32x4.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF32x4.f[LIndex], LActualCeilF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x4[' + IntToStr(LIndex) + ']', LExpectedRoundF32x4.f[LIndex], LActualRoundF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x4[' + IntToStr(LIndex) + ']', LExpectedTruncF32x4.f[LIndex], LActualTruncF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x4[' + IntToStr(LIndex) + ']', LExpectedFloorF32x4.f[LIndex], LActualFloorF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x4[' + IntToStr(LIndex) + ']', LExpectedCeilF32x4.f[LIndex], LActualCeilF32x4.f[LIndex]);
 
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x4.f[LIndex], LActualRoundSignedZeroF32x4.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x4.f[LIndex], LActualTruncSignedZeroF32x4.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x4.f[LIndex], LActualRoundSignedZeroF32x4.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x4.f[LIndex], LActualTruncSignedZeroF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x4[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x4.f[LIndex], LActualRoundSignedZeroF32x4.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x4[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x4.f[LIndex], LActualTruncSignedZeroF32x4.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x4[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x4.f[LIndex], LActualRoundSignedZeroF32x4.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x4[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x4.f[LIndex], LActualTruncSignedZeroF32x4.f[LIndex]);
       end;
 
       for LIndex := 0 to 1 do
       begin
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF64x2.d[LIndex], LActualRoundF64x2.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF64x2.d[LIndex], LActualTruncF64x2.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF64x2.d[LIndex], LActualFloorF64x2.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF64x2.d[LIndex], LActualCeilF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x2[' + IntToStr(LIndex) + ']', LExpectedRoundF64x2.d[LIndex], LActualRoundF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x2[' + IntToStr(LIndex) + ']', LExpectedTruncF64x2.d[LIndex], LActualTruncF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x2[' + IntToStr(LIndex) + ']', LExpectedFloorF64x2.d[LIndex], LActualFloorF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x2[' + IntToStr(LIndex) + ']', LExpectedCeilF64x2.d[LIndex], LActualCeilF64x2.d[LIndex]);
 
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x2.d[LIndex], LActualRoundSignedZeroF64x2.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x2.d[LIndex], LActualTruncSignedZeroF64x2.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x2.d[LIndex], LActualRoundSignedZeroF64x2.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x2[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x2.d[LIndex], LActualTruncSignedZeroF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x2[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x2.d[LIndex], LActualRoundSignedZeroF64x2.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x2[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x2.d[LIndex], LActualTruncSignedZeroF64x2.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x2[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x2.d[LIndex], LActualRoundSignedZeroF64x2.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x2[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x2.d[LIndex], LActualTruncSignedZeroF64x2.d[LIndex]);
       end;
     finally
       ResetToAutomaticBackend;
@@ -3022,7 +2793,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_NarrowF64x2_RoundTruncFloorCeil_Finite_IfAvailable;
@@ -3048,12 +2819,11 @@ var
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 begin
   LCheckedBackends := 0;
@@ -3077,14 +2847,12 @@ begin
       Inc(LCheckedBackends);
       try
         LDispatch := GetDispatchTable;
-        AssertNotNull('Dispatch table should be available', LDispatch);
-        AssertTrue('Round/Trunc/Floor/Ceil F64x2 should be assigned',
-          Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and
-          Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2));
+        CheckNotNil(LDispatch, 'Dispatch table should be available');
+        CheckTrue(Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
-        AssertNotNull('Scalar dispatch should be available', LDispatch);
+        CheckNotNil(LDispatch, 'Scalar dispatch should be available');
         for LCaseIndex := 0 to SAMPLE_CASE_COUNT - 1 do
         begin
           LExpectedRound[LCaseIndex] := LDispatch^.RoundF64x2(LInputs[LCaseIndex]);
@@ -3095,7 +2863,7 @@ begin
 
         SetActiveBackend(LBackend);
         LDispatch := GetDispatchTable;
-        AssertNotNull('Non-x86 dispatch should be available', LDispatch);
+        CheckNotNil(LDispatch, 'Non-x86 dispatch should be available');
         for LCaseIndex := 0 to SAMPLE_CASE_COUNT - 1 do
         begin
           LActualRound[LCaseIndex] := LDispatch^.RoundF64x2(LInputs[LCaseIndex]);
@@ -3108,17 +2876,13 @@ begin
           for LLaneIndex := 0 to 1 do
           begin
             AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Case ' + IntToStr(LCaseIndex) +
-              ' RoundF64x2[' + IntToStr(LLaneIndex) + ']',
-              LExpectedRound[LCaseIndex].d[LLaneIndex], LActualRound[LCaseIndex].d[LLaneIndex]);
+              ' RoundF64x2[' + IntToStr(LLaneIndex) + ']', LExpectedRound[LCaseIndex].d[LLaneIndex], LActualRound[LCaseIndex].d[LLaneIndex]);
             AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Case ' + IntToStr(LCaseIndex) +
-              ' TruncF64x2[' + IntToStr(LLaneIndex) + ']',
-              LExpectedTrunc[LCaseIndex].d[LLaneIndex], LActualTrunc[LCaseIndex].d[LLaneIndex]);
+              ' TruncF64x2[' + IntToStr(LLaneIndex) + ']', LExpectedTrunc[LCaseIndex].d[LLaneIndex], LActualTrunc[LCaseIndex].d[LLaneIndex]);
             AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Case ' + IntToStr(LCaseIndex) +
-              ' FloorF64x2[' + IntToStr(LLaneIndex) + ']',
-              LExpectedFloor[LCaseIndex].d[LLaneIndex], LActualFloor[LCaseIndex].d[LLaneIndex]);
+              ' FloorF64x2[' + IntToStr(LLaneIndex) + ']', LExpectedFloor[LCaseIndex].d[LLaneIndex], LActualFloor[LCaseIndex].d[LLaneIndex]);
             AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Case ' + IntToStr(LCaseIndex) +
-              ' CeilF64x2[' + IntToStr(LLaneIndex) + ']',
-              LExpectedCeil[LCaseIndex].d[LLaneIndex], LActualCeil[LCaseIndex].d[LLaneIndex]);
+              ' CeilF64x2[' + IntToStr(LLaneIndex) + ']', LExpectedCeil[LCaseIndex].d[LLaneIndex], LActualCeil[LCaseIndex].d[LLaneIndex]);
           end;
       finally
         ResetToAutomaticBackend;
@@ -3126,7 +2890,7 @@ begin
     end;
 
     if LCheckedBackends = 0 then
-      AssertTrue('No non-x86 backend available on this host (allowed)', True);
+      CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_RISCVV_WideClampF32_SpecialCases_IfAvailable;
@@ -3147,16 +2911,14 @@ var
   procedure AssertSingleParity(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign',
-          BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+        CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign');
     end;
   end;
 
@@ -3167,8 +2929,7 @@ var
     LExpectedF32x8 := LScalarTable.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
     LActualF32x8 := LRISCVVTable.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
     for LLocalLaneIndex := 0 to 7 do
-      AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']',
-        LExpectedF32x8.f[LLocalLaneIndex], LActualF32x8.f[LLocalLaneIndex]);
+      AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']', LExpectedF32x8.f[LLocalLaneIndex], LActualF32x8.f[LLocalLaneIndex]);
   end;
 
   procedure AssertVecParityF32x16(const aLabel: string);
@@ -3178,26 +2939,22 @@ var
     LExpectedF32x16 := LScalarTable.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
     LActualF32x16 := LRISCVVTable.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
     for LLocalLaneIndex := 0 to 15 do
-      AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']',
-        LExpectedF32x16.f[LLocalLaneIndex], LActualF32x16.f[LLocalLaneIndex]);
+      AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']', LExpectedF32x16.f[LLocalLaneIndex], LActualF32x16.f[LLocalLaneIndex]);
   end;
 begin
-  AssertTrue('Scalar dispatch table should be registered',
-    TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
-  AssertTrue('RISCVV opt-in test registration should be present',
-    TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV opt-in test registration should be present');
   {$ELSE}
   if not TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable) then
   begin
-    AssertTrue('RISCVV backend not registered on this host (allowed)', True);
+    CheckTrue(True, 'RISCVV backend not registered on this host (allowed)');
     Exit;
   end;
   {$ENDIF}
 
-  AssertTrue('RISCVV dispatch should provide wide F32 clamp helpers',
-    Assigned(LRISCVVTable.ClampF32x8) and Assigned(LRISCVVTable.ClampF32x16));
+  CheckTrue(Assigned(LRISCVVTable.ClampF32x8) and Assigned(LRISCVVTable.ClampF32x16), 'RISCVV dispatch should provide wide F32 clamp helpers');
 
   LInputF32x8.f[0] := NaNF32;
   LInputF32x8.f[1] := 3.0;
@@ -3362,16 +3119,14 @@ var
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign bit',
-          BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+        CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign bit');
     end;
   end;
 
@@ -3395,26 +3150,21 @@ var
     AssertDoubleSemantics('RISCVV direct DotF64x4 ' + aLabel, LExpected, LActual);
   end;
 begin
-  AssertTrue('Scalar dispatch table should be registered',
-    TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
-  AssertTrue('RISCVV opt-in test registration should be present',
-    TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV opt-in test registration should be present');
   {$ELSE}
   if not TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable) then
   begin
-    AssertTrue('RISCVV backend not registered on this host (allowed)', True);
+    CheckTrue(True, 'RISCVV backend not registered on this host (allowed)');
     Exit;
   end;
   {$ENDIF}
 
-  AssertTrue('RISCVV registered table should provide DotF64 slots',
-    Assigned(LRISCVVTable.DotF64x2) and Assigned(LRISCVVTable.DotF64x4));
+  CheckTrue(Assigned(LRISCVVTable.DotF64x2) and Assigned(LRISCVVTable.DotF64x4), 'RISCVV registered table should provide DotF64 slots');
 
-  AssertTrue('RISCVV DotF64 registered slots should stay backend-owned in the registered table',
-    (PtrUInt(LScalarTable.DotF64x2) <> PtrUInt(LRISCVVTable.DotF64x2)) and
-    (PtrUInt(LScalarTable.DotF64x4) <> PtrUInt(LRISCVVTable.DotF64x4)));
+  CheckTrue((PtrUInt(LScalarTable.DotF64x2) <> PtrUInt(LRISCVVTable.DotF64x2)) and (PtrUInt(LScalarTable.DotF64x4) <> PtrUInt(LRISCVVTable.DotF64x4)), 'RISCVV DotF64 registered slots should stay backend-owned in the registered table');
 
   LA2.d[0] := NegZeroF64;
   LA2.d[1] := 2.0;
@@ -3482,64 +3232,46 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign bit',
-          BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+        CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign bit');
     end;
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign bit',
-          BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+        CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign bit');
     end;
   end;
 begin
-  AssertTrue('Scalar dispatch table should be registered',
-    TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
-  AssertTrue('RISCVV opt-in test registration should be present',
-    TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV opt-in test registration should be present');
   {$ELSE}
   if not TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable) then
   begin
-    AssertTrue('RISCVV backend not registered on this host (allowed)', True);
+    CheckTrue(True, 'RISCVV backend not registered on this host (allowed)');
     Exit;
   end;
   {$ENDIF}
 
-  AssertTrue('RISCVV registered table should provide wide Round/Trunc',
-    Assigned(LRISCVVTable.RoundF32x8) and Assigned(LRISCVVTable.TruncF32x8) and
-    Assigned(LRISCVVTable.RoundF64x4) and Assigned(LRISCVVTable.TruncF64x4) and
-    Assigned(LRISCVVTable.RoundF32x16) and Assigned(LRISCVVTable.TruncF32x16) and
-    Assigned(LRISCVVTable.RoundF64x8) and Assigned(LRISCVVTable.TruncF64x8));
+  CheckTrue(Assigned(LRISCVVTable.RoundF32x8) and Assigned(LRISCVVTable.TruncF32x8) and Assigned(LRISCVVTable.RoundF64x4) and Assigned(LRISCVVTable.TruncF64x4) and Assigned(LRISCVVTable.RoundF32x16) and Assigned(LRISCVVTable.TruncF32x16) and Assigned(LRISCVVTable.RoundF64x8) and Assigned(LRISCVVTable.TruncF64x8), 'RISCVV registered table should provide wide Round/Trunc');
 
-  AssertTrue('RISCVV wide Round/Trunc should stay backend-owned in the registered table',
-    (PtrUInt(LScalarTable.RoundF32x8) <> PtrUInt(LRISCVVTable.RoundF32x8)) and
-    (PtrUInt(LScalarTable.TruncF32x8) <> PtrUInt(LRISCVVTable.TruncF32x8)) and
-    (PtrUInt(LScalarTable.RoundF64x4) <> PtrUInt(LRISCVVTable.RoundF64x4)) and
-    (PtrUInt(LScalarTable.TruncF64x4) <> PtrUInt(LRISCVVTable.TruncF64x4)) and
-    (PtrUInt(LScalarTable.RoundF32x16) <> PtrUInt(LRISCVVTable.RoundF32x16)) and
-    (PtrUInt(LScalarTable.TruncF32x16) <> PtrUInt(LRISCVVTable.TruncF32x16)) and
-    (PtrUInt(LScalarTable.RoundF64x8) <> PtrUInt(LRISCVVTable.RoundF64x8)) and
-    (PtrUInt(LScalarTable.TruncF64x8) <> PtrUInt(LRISCVVTable.TruncF64x8)));
+  CheckTrue((PtrUInt(LScalarTable.RoundF32x8) <> PtrUInt(LRISCVVTable.RoundF32x8)) and (PtrUInt(LScalarTable.TruncF32x8) <> PtrUInt(LRISCVVTable.TruncF32x8)) and (PtrUInt(LScalarTable.RoundF64x4) <> PtrUInt(LRISCVVTable.RoundF64x4)) and (PtrUInt(LScalarTable.TruncF64x4) <> PtrUInt(LRISCVVTable.TruncF64x4)) and (PtrUInt(LScalarTable.RoundF32x16) <> PtrUInt(LRISCVVTable.RoundF32x16)) and (PtrUInt(LScalarTable.TruncF32x16) <> PtrUInt(LRISCVVTable.TruncF32x16)) and (PtrUInt(LScalarTable.RoundF64x8) <> PtrUInt(LRISCVVTable.RoundF64x8)) and (PtrUInt(LScalarTable.TruncF64x8) <> PtrUInt(LRISCVVTable.TruncF64x8)), 'RISCVV wide Round/Trunc should stay backend-owned in the registered table');
 
   LInF32x8.f[0] := 0.0;
   LInF32x8.f[1] := NegZeroF32;
@@ -3601,34 +3333,26 @@ begin
 
   for LIndex := 0 to 7 do
   begin
-    AssertSingleSemantics('RISCVV direct RoundF32x8[' + IntToStr(LIndex) + ']',
-      LExpectedRoundF32x8.f[LIndex], LActualRoundF32x8.f[LIndex]);
-    AssertSingleSemantics('RISCVV direct TruncF32x8[' + IntToStr(LIndex) + ']',
-      LExpectedTruncF32x8.f[LIndex], LActualTruncF32x8.f[LIndex]);
+    AssertSingleSemantics('RISCVV direct RoundF32x8[' + IntToStr(LIndex) + ']', LExpectedRoundF32x8.f[LIndex], LActualRoundF32x8.f[LIndex]);
+    AssertSingleSemantics('RISCVV direct TruncF32x8[' + IntToStr(LIndex) + ']', LExpectedTruncF32x8.f[LIndex], LActualTruncF32x8.f[LIndex]);
   end;
 
   for LIndex := 0 to 3 do
   begin
-    AssertDoubleSemantics('RISCVV direct RoundF64x4[' + IntToStr(LIndex) + ']',
-      LExpectedRoundF64x4.d[LIndex], LActualRoundF64x4.d[LIndex]);
-    AssertDoubleSemantics('RISCVV direct TruncF64x4[' + IntToStr(LIndex) + ']',
-      LExpectedTruncF64x4.d[LIndex], LActualTruncF64x4.d[LIndex]);
+    AssertDoubleSemantics('RISCVV direct RoundF64x4[' + IntToStr(LIndex) + ']', LExpectedRoundF64x4.d[LIndex], LActualRoundF64x4.d[LIndex]);
+    AssertDoubleSemantics('RISCVV direct TruncF64x4[' + IntToStr(LIndex) + ']', LExpectedTruncF64x4.d[LIndex], LActualTruncF64x4.d[LIndex]);
   end;
 
   for LIndex := 0 to 15 do
   begin
-    AssertSingleSemantics('RISCVV direct RoundF32x16[' + IntToStr(LIndex) + ']',
-      LExpectedRoundF32x16.f[LIndex], LActualRoundF32x16.f[LIndex]);
-    AssertSingleSemantics('RISCVV direct TruncF32x16[' + IntToStr(LIndex) + ']',
-      LExpectedTruncF32x16.f[LIndex], LActualTruncF32x16.f[LIndex]);
+    AssertSingleSemantics('RISCVV direct RoundF32x16[' + IntToStr(LIndex) + ']', LExpectedRoundF32x16.f[LIndex], LActualRoundF32x16.f[LIndex]);
+    AssertSingleSemantics('RISCVV direct TruncF32x16[' + IntToStr(LIndex) + ']', LExpectedTruncF32x16.f[LIndex], LActualTruncF32x16.f[LIndex]);
   end;
 
   for LIndex := 0 to 7 do
   begin
-    AssertDoubleSemantics('RISCVV direct RoundF64x8[' + IntToStr(LIndex) + ']',
-      LExpectedRoundF64x8.d[LIndex], LActualRoundF64x8.d[LIndex]);
-    AssertDoubleSemantics('RISCVV direct TruncF64x8[' + IntToStr(LIndex) + ']',
-      LExpectedTruncF64x8.d[LIndex], LActualTruncF64x8.d[LIndex]);
+    AssertDoubleSemantics('RISCVV direct RoundF64x8[' + IntToStr(LIndex) + ']', LExpectedRoundF64x8.d[LIndex], LActualRoundF64x8.d[LIndex]);
+    AssertDoubleSemantics('RISCVV direct TruncF64x8[' + IntToStr(LIndex) + ']', LExpectedTruncF64x8.d[LIndex], LActualTruncF64x8.d[LIndex]);
   end;
 end;
 
@@ -3648,41 +3372,33 @@ var
   procedure AssertSingleParity(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign',
-          BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+        CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign');
     end;
   end;
 
   procedure AssertReduceParityF32x4(const aLabel: string; const aInput: TVecF32x4);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x4',
-      LScalarDispatch^.ReduceMinF32x4(aInput), LBackendDispatch^.ReduceMinF32x4(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x4',
-      LScalarDispatch^.ReduceMaxF32x4(aInput), LBackendDispatch^.ReduceMaxF32x4(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x4', LScalarDispatch^.ReduceMinF32x4(aInput), LBackendDispatch^.ReduceMinF32x4(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x4', LScalarDispatch^.ReduceMaxF32x4(aInput), LBackendDispatch^.ReduceMaxF32x4(aInput));
   end;
 
   procedure AssertReduceParityF32x8(const aLabel: string; const aInput: TVecF32x8);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x8',
-      LScalarDispatch^.ReduceMinF32x8(aInput), LBackendDispatch^.ReduceMinF32x8(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x8',
-      LScalarDispatch^.ReduceMaxF32x8(aInput), LBackendDispatch^.ReduceMaxF32x8(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x8', LScalarDispatch^.ReduceMinF32x8(aInput), LBackendDispatch^.ReduceMinF32x8(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x8', LScalarDispatch^.ReduceMaxF32x8(aInput), LBackendDispatch^.ReduceMaxF32x8(aInput));
   end;
 
   procedure AssertReduceParityF32x16(const aLabel: string; const aInput: TVecF32x16);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x16',
-      LScalarDispatch^.ReduceMinF32x16(aInput), LBackendDispatch^.ReduceMinF32x16(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x16',
-      LScalarDispatch^.ReduceMaxF32x16(aInput), LBackendDispatch^.ReduceMaxF32x16(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x16', LScalarDispatch^.ReduceMinF32x16(aInput), LBackendDispatch^.ReduceMinF32x16(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x16', LScalarDispatch^.ReduceMaxF32x16(aInput), LBackendDispatch^.ReduceMaxF32x16(aInput));
   end;
 
 begin
@@ -3700,19 +3416,13 @@ begin
     try
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
-      AssertNotNull('Scalar dispatch should be available', LScalarDispatch);
-      AssertTrue('Scalar dispatch should provide F32 reductions',
-        Assigned(LScalarDispatch^.ReduceMinF32x4) and Assigned(LScalarDispatch^.ReduceMaxF32x4) and
-        Assigned(LScalarDispatch^.ReduceMinF32x8) and Assigned(LScalarDispatch^.ReduceMaxF32x8) and
-        Assigned(LScalarDispatch^.ReduceMinF32x16) and Assigned(LScalarDispatch^.ReduceMaxF32x16));
+      CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
+      CheckTrue(Assigned(LScalarDispatch^.ReduceMinF32x4) and Assigned(LScalarDispatch^.ReduceMaxF32x4) and Assigned(LScalarDispatch^.ReduceMinF32x8) and Assigned(LScalarDispatch^.ReduceMaxF32x8) and Assigned(LScalarDispatch^.ReduceMinF32x16) and Assigned(LScalarDispatch^.ReduceMaxF32x16), 'Scalar dispatch should provide F32 reductions');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
-      AssertNotNull('Non-x86 dispatch should be available', LBackendDispatch);
-      AssertTrue('Non-x86 dispatch should provide F32 reductions',
-        Assigned(LBackendDispatch^.ReduceMinF32x4) and Assigned(LBackendDispatch^.ReduceMaxF32x4) and
-        Assigned(LBackendDispatch^.ReduceMinF32x8) and Assigned(LBackendDispatch^.ReduceMaxF32x8) and
-        Assigned(LBackendDispatch^.ReduceMinF32x16) and Assigned(LBackendDispatch^.ReduceMaxF32x16));
+      CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
+      CheckTrue(Assigned(LBackendDispatch^.ReduceMinF32x4) and Assigned(LBackendDispatch^.ReduceMaxF32x4) and Assigned(LBackendDispatch^.ReduceMinF32x8) and Assigned(LBackendDispatch^.ReduceMaxF32x8) and Assigned(LBackendDispatch^.ReduceMinF32x16) and Assigned(LBackendDispatch^.ReduceMaxF32x16), 'Non-x86 dispatch should provide F32 reductions');
 
       LInputF32x4.f[0] := NaNF32;
       LInputF32x4.f[1] := 3.0;
@@ -3855,7 +3565,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_F64_MinMaxReduce_SpecialCases_IfAvailable;
@@ -3875,16 +3585,14 @@ var
   procedure AssertDoubleParity(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign',
-          BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+        CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign');
     end;
   end;
 
@@ -3895,32 +3603,25 @@ var
     LLaneIndex: Integer;
   begin
     for LLaneIndex := 0 to 1 do
-      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']',
-        aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
+      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']', aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
   end;
 
   procedure AssertReduceParityF64x2(const aLabel: string; const aInput: TVecF64x2);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x2',
-      LScalarDispatch^.ReduceMinF64x2(aInput), LBackendDispatch^.ReduceMinF64x2(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x2',
-      LScalarDispatch^.ReduceMaxF64x2(aInput), LBackendDispatch^.ReduceMaxF64x2(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x2', LScalarDispatch^.ReduceMinF64x2(aInput), LBackendDispatch^.ReduceMinF64x2(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x2', LScalarDispatch^.ReduceMaxF64x2(aInput), LBackendDispatch^.ReduceMaxF64x2(aInput));
   end;
 
   procedure AssertReduceParityF64x4(const aLabel: string; const aInput: TVecF64x4);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x4',
-      LScalarDispatch^.ReduceMinF64x4(aInput), LBackendDispatch^.ReduceMinF64x4(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x4',
-      LScalarDispatch^.ReduceMaxF64x4(aInput), LBackendDispatch^.ReduceMaxF64x4(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x4', LScalarDispatch^.ReduceMinF64x4(aInput), LBackendDispatch^.ReduceMinF64x4(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x4', LScalarDispatch^.ReduceMaxF64x4(aInput), LBackendDispatch^.ReduceMaxF64x4(aInput));
   end;
 
   procedure AssertReduceParityF64x8(const aLabel: string; const aInput: TVecF64x8);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x8',
-      LScalarDispatch^.ReduceMinF64x8(aInput), LBackendDispatch^.ReduceMinF64x8(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x8',
-      LScalarDispatch^.ReduceMaxF64x8(aInput), LBackendDispatch^.ReduceMaxF64x8(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x8', LScalarDispatch^.ReduceMinF64x8(aInput), LBackendDispatch^.ReduceMinF64x8(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x8', LScalarDispatch^.ReduceMaxF64x8(aInput), LBackendDispatch^.ReduceMaxF64x8(aInput));
   end;
 
 begin
@@ -3938,42 +3639,30 @@ begin
     try
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
-      AssertNotNull('Scalar dispatch should be available', LScalarDispatch);
-      AssertTrue('Scalar dispatch should provide F64x2/F64x4/F64x8 min/max reductions',
-        Assigned(LScalarDispatch^.MinF64x2) and Assigned(LScalarDispatch^.MaxF64x2) and
-        Assigned(LScalarDispatch^.ReduceMinF64x2) and Assigned(LScalarDispatch^.ReduceMaxF64x2) and
-        Assigned(LScalarDispatch^.ReduceMinF64x4) and Assigned(LScalarDispatch^.ReduceMaxF64x4) and
-        Assigned(LScalarDispatch^.ReduceMinF64x8) and Assigned(LScalarDispatch^.ReduceMaxF64x8));
+      CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
+      CheckTrue(Assigned(LScalarDispatch^.MinF64x2) and Assigned(LScalarDispatch^.MaxF64x2) and Assigned(LScalarDispatch^.ReduceMinF64x2) and Assigned(LScalarDispatch^.ReduceMaxF64x2) and Assigned(LScalarDispatch^.ReduceMinF64x4) and Assigned(LScalarDispatch^.ReduceMaxF64x4) and Assigned(LScalarDispatch^.ReduceMinF64x8) and Assigned(LScalarDispatch^.ReduceMaxF64x8), 'Scalar dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
-      AssertNotNull('Non-x86 dispatch should be available', LBackendDispatch);
-      AssertTrue('Non-x86 dispatch should provide F64x2/F64x4/F64x8 min/max reductions',
-        Assigned(LBackendDispatch^.MinF64x2) and Assigned(LBackendDispatch^.MaxF64x2) and
-        Assigned(LBackendDispatch^.ReduceMinF64x2) and Assigned(LBackendDispatch^.ReduceMaxF64x2) and
-        Assigned(LBackendDispatch^.ReduceMinF64x4) and Assigned(LBackendDispatch^.ReduceMaxF64x4) and
-        Assigned(LBackendDispatch^.ReduceMinF64x8) and Assigned(LBackendDispatch^.ReduceMaxF64x8));
+      CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
+      CheckTrue(Assigned(LBackendDispatch^.MinF64x2) and Assigned(LBackendDispatch^.MaxF64x2) and Assigned(LBackendDispatch^.ReduceMinF64x2) and Assigned(LBackendDispatch^.ReduceMaxF64x2) and Assigned(LBackendDispatch^.ReduceMinF64x4) and Assigned(LBackendDispatch^.ReduceMaxF64x4) and Assigned(LBackendDispatch^.ReduceMinF64x8) and Assigned(LBackendDispatch^.ReduceMaxF64x8), 'Non-x86 dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
 
       LLeftF64x2.d[0] := NaNF64;
       LLeftF64x2.d[1] := 5.0;
       LRightF64x2.d[0] := 3.0;
       LRightF64x2.d[1] := NaNF64;
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MinF64x2',
-        LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MinF64x2', LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
         LBackendDispatch^.MinF64x2(LLeftF64x2, LRightF64x2));
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MaxF64x2',
-        LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MaxF64x2', LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
         LBackendDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2));
 
       LLeftF64x2.d[0] := 0.0;
       LLeftF64x2.d[1] := NegZeroF64;
       LRightF64x2.d[0] := NegZeroF64;
       LRightF64x2.d[1] := 0.0;
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MinF64x2',
-        LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MinF64x2', LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
         LBackendDispatch^.MinF64x2(LLeftF64x2, LRightF64x2));
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MaxF64x2',
-        LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MaxF64x2', LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
         LBackendDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2));
 
       LInputF64x2.d[0] := NaNF64;
@@ -4061,7 +3750,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_F32_WideMinMax_SpecialCases_IfAvailable;
@@ -4079,16 +3768,14 @@ var
   procedure AssertSingleParity(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign',
-          BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+        CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign');
     end;
   end;
 
@@ -4099,8 +3786,7 @@ var
     LLaneIndex: Integer;
   begin
     for LLaneIndex := 0 to 7 do
-      AssertSingleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']',
-        aExpected.f[LLaneIndex], aActual.f[LLaneIndex]);
+      AssertSingleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']', aExpected.f[LLaneIndex], aActual.f[LLaneIndex]);
   end;
 
   procedure AssertVecF32x16Parity(
@@ -4110,8 +3796,7 @@ var
     LLaneIndex: Integer;
   begin
     for LLaneIndex := 0 to 15 do
-      AssertSingleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']',
-        aExpected.f[LLaneIndex], aActual.f[LLaneIndex]);
+      AssertSingleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']', aExpected.f[LLaneIndex], aActual.f[LLaneIndex]);
   end;
 
 begin
@@ -4129,17 +3814,13 @@ begin
     try
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
-      AssertNotNull('Scalar dispatch should be available', LScalarDispatch);
-      AssertTrue('Scalar dispatch should provide wide F32 min/max',
-        Assigned(LScalarDispatch^.MinF32x8) and Assigned(LScalarDispatch^.MaxF32x8) and
-        Assigned(LScalarDispatch^.MinF32x16) and Assigned(LScalarDispatch^.MaxF32x16));
+      CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
+      CheckTrue(Assigned(LScalarDispatch^.MinF32x8) and Assigned(LScalarDispatch^.MaxF32x8) and Assigned(LScalarDispatch^.MinF32x16) and Assigned(LScalarDispatch^.MaxF32x16), 'Scalar dispatch should provide wide F32 min/max');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
-      AssertNotNull('Non-x86 dispatch should be available', LBackendDispatch);
-      AssertTrue('Non-x86 dispatch should provide wide F32 min/max',
-        Assigned(LBackendDispatch^.MinF32x8) and Assigned(LBackendDispatch^.MaxF32x8) and
-        Assigned(LBackendDispatch^.MinF32x16) and Assigned(LBackendDispatch^.MaxF32x16));
+      CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
+      CheckTrue(Assigned(LBackendDispatch^.MinF32x8) and Assigned(LBackendDispatch^.MaxF32x8) and Assigned(LBackendDispatch^.MinF32x16) and Assigned(LBackendDispatch^.MaxF32x16), 'Non-x86 dispatch should provide wide F32 min/max');
 
       LLeftF32x8.f[0] := NaNF32;
       LLeftF32x8.f[1] := 5.0;
@@ -4157,11 +3838,9 @@ begin
       LRightF32x8.f[5] := 4.0;
       LRightF32x8.f[6] := 0.0;
       LRightF32x8.f[7] := NegZeroF32;
-      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MinF32x8',
-        LScalarDispatch^.MinF32x8(LLeftF32x8, LRightF32x8),
+      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MinF32x8', LScalarDispatch^.MinF32x8(LLeftF32x8, LRightF32x8),
         LBackendDispatch^.MinF32x8(LLeftF32x8, LRightF32x8));
-      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x8',
-        LScalarDispatch^.MaxF32x8(LLeftF32x8, LRightF32x8),
+      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x8', LScalarDispatch^.MaxF32x8(LLeftF32x8, LRightF32x8),
         LBackendDispatch^.MaxF32x8(LLeftF32x8, LRightF32x8));
 
       LLeftF32x16.f[0] := NaNF32;
@@ -4196,11 +3875,9 @@ begin
       LRightF32x16.f[13] := NegZeroF32;
       LRightF32x16.f[14] := NaNF32;
       LRightF32x16.f[15] := 17.0;
-      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MinF32x16',
-        LScalarDispatch^.MinF32x16(LLeftF32x16, LRightF32x16),
+      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MinF32x16', LScalarDispatch^.MinF32x16(LLeftF32x16, LRightF32x16),
         LBackendDispatch^.MinF32x16(LLeftF32x16, LRightF32x16));
-      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x16',
-        LScalarDispatch^.MaxF32x16(LLeftF32x16, LRightF32x16),
+      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x16', LScalarDispatch^.MaxF32x16(LLeftF32x16, LRightF32x16),
         LBackendDispatch^.MaxF32x16(LLeftF32x16, LRightF32x16));
     finally
       ResetToAutomaticBackend;
@@ -4208,7 +3885,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_F64_WideMinMax_SpecialCases_IfAvailable;
@@ -4226,16 +3903,14 @@ var
   procedure AssertDoubleParity(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
     begin
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
       if aExpected = 0.0 then
-        AssertTrue(aPrefix + ' zero sign',
-          BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+        CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign');
     end;
   end;
 
@@ -4246,8 +3921,7 @@ var
     LLaneIndex: Integer;
   begin
     for LLaneIndex := 0 to 3 do
-      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']',
-        aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
+      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']', aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
   end;
 
   procedure AssertVecF64x8Parity(
@@ -4257,8 +3931,7 @@ var
     LLaneIndex: Integer;
   begin
     for LLaneIndex := 0 to 7 do
-      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']',
-        aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
+      AssertDoubleParity(aPrefix + '[' + IntToStr(LLaneIndex) + ']', aExpected.d[LLaneIndex], aActual.d[LLaneIndex]);
   end;
 
 begin
@@ -4276,17 +3949,13 @@ begin
     try
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
-      AssertNotNull('Scalar dispatch should be available', LScalarDispatch);
-      AssertTrue('Scalar dispatch should provide wide F64 min/max',
-        Assigned(LScalarDispatch^.MinF64x4) and Assigned(LScalarDispatch^.MaxF64x4) and
-        Assigned(LScalarDispatch^.MinF64x8) and Assigned(LScalarDispatch^.MaxF64x8));
+      CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
+      CheckTrue(Assigned(LScalarDispatch^.MinF64x4) and Assigned(LScalarDispatch^.MaxF64x4) and Assigned(LScalarDispatch^.MinF64x8) and Assigned(LScalarDispatch^.MaxF64x8), 'Scalar dispatch should provide wide F64 min/max');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
-      AssertNotNull('Non-x86 dispatch should be available', LBackendDispatch);
-      AssertTrue('Non-x86 dispatch should provide wide F64 min/max',
-        Assigned(LBackendDispatch^.MinF64x4) and Assigned(LBackendDispatch^.MaxF64x4) and
-        Assigned(LBackendDispatch^.MinF64x8) and Assigned(LBackendDispatch^.MaxF64x8));
+      CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
+      CheckTrue(Assigned(LBackendDispatch^.MinF64x4) and Assigned(LBackendDispatch^.MaxF64x4) and Assigned(LBackendDispatch^.MinF64x8) and Assigned(LBackendDispatch^.MaxF64x8), 'Non-x86 dispatch should provide wide F64 min/max');
 
       LLeftF64x4.d[0] := NaNF64;
       LLeftF64x4.d[1] := 5.0;
@@ -4296,11 +3965,9 @@ begin
       LRightF64x4.d[1] := NaNF64;
       LRightF64x4.d[2] := NegZeroF64;
       LRightF64x4.d[3] := 0.0;
-      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MinF64x4',
-        LScalarDispatch^.MinF64x4(LLeftF64x4, LRightF64x4),
+      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MinF64x4', LScalarDispatch^.MinF64x4(LLeftF64x4, LRightF64x4),
         LBackendDispatch^.MinF64x4(LLeftF64x4, LRightF64x4));
-      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x4',
-        LScalarDispatch^.MaxF64x4(LLeftF64x4, LRightF64x4),
+      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x4', LScalarDispatch^.MaxF64x4(LLeftF64x4, LRightF64x4),
         LBackendDispatch^.MaxF64x4(LLeftF64x4, LRightF64x4));
 
       LLeftF64x8.d[0] := NaNF64;
@@ -4319,11 +3986,9 @@ begin
       LRightF64x8.d[5] := 4.0;
       LRightF64x8.d[6] := 0.0;
       LRightF64x8.d[7] := NegZeroF64;
-      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MinF64x8',
-        LScalarDispatch^.MinF64x8(LLeftF64x8, LRightF64x8),
+      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MinF64x8', LScalarDispatch^.MinF64x8(LLeftF64x8, LRightF64x8),
         LBackendDispatch^.MinF64x8(LLeftF64x8, LRightF64x8));
-      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x8',
-        LScalarDispatch^.MaxF64x8(LLeftF64x8, LRightF64x8),
+      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x8', LScalarDispatch^.MaxF64x8(LLeftF64x8, LRightF64x8),
         LBackendDispatch^.MaxF64x8(LLeftF64x8, LRightF64x8));
     finally
       ResetToAutomaticBackend;
@@ -4331,7 +3996,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_Wide_RoundTruncFloorCeil_NaNInf_IfAvailable;
@@ -4364,35 +4029,33 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix, aExpected, aActual, 1e-6);
+      CheckNear(aExpected, aActual, 1e-6, aPrefix);
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix, aExpected, aActual, 1e-12);
+      CheckNear(aExpected, aActual, 1e-12, aPrefix);
   end;
 
   procedure AssertSingleZeroSign(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromSingle(aExpected) = BitsFromSingle(aActual));
+      CheckTrue(BitsFromSingle(aExpected) = BitsFromSingle(aActual), aPrefix + ' zero sign bit');
   end;
 
   procedure AssertDoubleZeroSign(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if (aExpected = 0.0) and (aActual = 0.0) then
-      AssertTrue(aPrefix + ' zero sign bit', BitsFromDouble(aExpected) = BitsFromDouble(aActual));
+      CheckTrue(BitsFromDouble(aExpected) = BitsFromDouble(aActual), aPrefix + ' zero sign bit');
   end;
 begin
   LCheckedBackends := 0;
@@ -4488,19 +4151,11 @@ begin
     Inc(LCheckedBackends);
     try
       LDispatch := GetDispatchTable;
-      AssertNotNull('Dispatch table should be available', LDispatch);
-      AssertTrue('Round/Trunc/Floor/Ceil F32x8 should be assigned',
-        Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-        Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8));
-      AssertTrue('Round/Trunc/Floor/Ceil F64x4 should be assigned',
-        Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and
-        Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4));
-      AssertTrue('Round/Trunc/Floor/Ceil F32x16 should be assigned',
-        Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and
-        Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16));
-      AssertTrue('Round/Trunc/Floor/Ceil F64x8 should be assigned',
-        Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8) and
-        Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8));
+      CheckNotNil(LDispatch, 'Dispatch table should be available');
+      CheckTrue(Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8), 'Round/Trunc/Floor/Ceil F32x8 should be assigned');
+      CheckTrue(Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Round/Trunc/Floor/Ceil F64x4 should be assigned');
+      CheckTrue(Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16), 'Round/Trunc/Floor/Ceil F32x16 should be assigned');
+      CheckTrue(Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Round/Trunc/Floor/Ceil F64x8 should be assigned');
 
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
@@ -4558,82 +4213,50 @@ begin
 
       for LIndex := 0 to 7 do
       begin
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF32x8.f[LIndex], LActualRoundF32x8.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF32x8.f[LIndex], LActualTruncF32x8.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF32x8.f[LIndex], LActualFloorF32x8.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF32x8.f[LIndex], LActualCeilF32x8.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x8.f[LIndex], LActualRoundSignedZeroF32x8.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x8.f[LIndex], LActualTruncSignedZeroF32x8.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x8.f[LIndex], LActualRoundSignedZeroF32x8.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x8.f[LIndex], LActualTruncSignedZeroF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x8[' + IntToStr(LIndex) + ']', LExpectedRoundF32x8.f[LIndex], LActualRoundF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x8[' + IntToStr(LIndex) + ']', LExpectedTruncF32x8.f[LIndex], LActualTruncF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x8[' + IntToStr(LIndex) + ']', LExpectedFloorF32x8.f[LIndex], LActualFloorF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x8[' + IntToStr(LIndex) + ']', LExpectedCeilF32x8.f[LIndex], LActualCeilF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x8[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x8.f[LIndex], LActualRoundSignedZeroF32x8.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x8[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x8.f[LIndex], LActualTruncSignedZeroF32x8.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x8[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x8.f[LIndex], LActualRoundSignedZeroF32x8.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x8[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x8.f[LIndex], LActualTruncSignedZeroF32x8.f[LIndex]);
       end;
 
       for LIndex := 0 to 3 do
       begin
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF64x4.d[LIndex], LActualRoundF64x4.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF64x4.d[LIndex], LActualTruncF64x4.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF64x4.d[LIndex], LActualFloorF64x4.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF64x4.d[LIndex], LActualCeilF64x4.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x4.d[LIndex], LActualRoundSignedZeroF64x4.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x4.d[LIndex], LActualTruncSignedZeroF64x4.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x4.d[LIndex], LActualRoundSignedZeroF64x4.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x4[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x4.d[LIndex], LActualTruncSignedZeroF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x4[' + IntToStr(LIndex) + ']', LExpectedRoundF64x4.d[LIndex], LActualRoundF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x4[' + IntToStr(LIndex) + ']', LExpectedTruncF64x4.d[LIndex], LActualTruncF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x4[' + IntToStr(LIndex) + ']', LExpectedFloorF64x4.d[LIndex], LActualFloorF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x4[' + IntToStr(LIndex) + ']', LExpectedCeilF64x4.d[LIndex], LActualCeilF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x4[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x4.d[LIndex], LActualRoundSignedZeroF64x4.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x4[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x4.d[LIndex], LActualTruncSignedZeroF64x4.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x4[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x4.d[LIndex], LActualRoundSignedZeroF64x4.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x4[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x4.d[LIndex], LActualTruncSignedZeroF64x4.d[LIndex]);
       end;
 
       for LIndex := 0 to 15 do
       begin
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF32x16.f[LIndex], LActualRoundF32x16.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF32x16.f[LIndex], LActualTruncF32x16.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF32x16.f[LIndex], LActualFloorF32x16.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF32x16.f[LIndex], LActualCeilF32x16.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x16.f[LIndex], LActualRoundSignedZeroF32x16.f[LIndex]);
-        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x16.f[LIndex], LActualTruncSignedZeroF32x16.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF32x16.f[LIndex], LActualRoundSignedZeroF32x16.f[LIndex]);
-        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x16[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF32x16.f[LIndex], LActualTruncSignedZeroF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' RoundF32x16[' + IntToStr(LIndex) + ']', LExpectedRoundF32x16.f[LIndex], LActualRoundF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' TruncF32x16[' + IntToStr(LIndex) + ']', LExpectedTruncF32x16.f[LIndex], LActualTruncF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' FloorF32x16[' + IntToStr(LIndex) + ']', LExpectedFloorF32x16.f[LIndex], LActualFloorF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' CeilF32x16[' + IntToStr(LIndex) + ']', LExpectedCeilF32x16.f[LIndex], LActualCeilF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x16[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x16.f[LIndex], LActualRoundSignedZeroF32x16.f[LIndex]);
+        AssertSingleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x16[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x16.f[LIndex], LActualTruncSignedZeroF32x16.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF32x16[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF32x16.f[LIndex], LActualRoundSignedZeroF32x16.f[LIndex]);
+        AssertSingleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF32x16[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF32x16.f[LIndex], LActualTruncSignedZeroF32x16.f[LIndex]);
       end;
 
       for LIndex := 0 to 7 do
       begin
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundF64x8.d[LIndex], LActualRoundF64x8.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncF64x8.d[LIndex], LActualTruncF64x8.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedFloorF64x8.d[LIndex], LActualFloorF64x8.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedCeilF64x8.d[LIndex], LActualCeilF64x8.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x8.d[LIndex], LActualRoundSignedZeroF64x8.d[LIndex]);
-        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x8.d[LIndex], LActualTruncSignedZeroF64x8.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedRoundSignedZeroF64x8.d[LIndex], LActualRoundSignedZeroF64x8.d[LIndex]);
-        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x8[' + IntToStr(LIndex) + ']',
-          LExpectedTruncSignedZeroF64x8.d[LIndex], LActualTruncSignedZeroF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' RoundF64x8[' + IntToStr(LIndex) + ']', LExpectedRoundF64x8.d[LIndex], LActualRoundF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' TruncF64x8[' + IntToStr(LIndex) + ']', LExpectedTruncF64x8.d[LIndex], LActualTruncF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' FloorF64x8[' + IntToStr(LIndex) + ']', LExpectedFloorF64x8.d[LIndex], LActualFloorF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' CeilF64x8[' + IntToStr(LIndex) + ']', LExpectedCeilF64x8.d[LIndex], LActualCeilF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x8[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x8.d[LIndex], LActualRoundSignedZeroF64x8.d[LIndex]);
+        AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x8[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x8.d[LIndex], LActualTruncSignedZeroF64x8.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero RoundF64x8[' + IntToStr(LIndex) + ']', LExpectedRoundSignedZeroF64x8.d[LIndex], LActualRoundSignedZeroF64x8.d[LIndex]);
+        AssertDoubleZeroSign(IEEE754BackendName(LBackend) + ' SignedZero TruncF64x8[' + IntToStr(LIndex) + ']', LExpectedTruncSignedZeroF64x8.d[LIndex], LActualTruncSignedZeroF64x8.d[LIndex]);
       end;
     finally
       ResetToAutomaticBackend;
@@ -4641,7 +4264,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_FloorCeil_PropertyLike_FixedSeed_IfAvailable;
@@ -4710,45 +4333,43 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertFloorCeilInvariantSingle(const aPrefix: string; const aInput, aFloor, aCeil: Single);
   begin
     if IsNaNSingle(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertTrue(aPrefix + ' floor<=x', aFloor <= aInput + 1e-6);
-    AssertTrue(aPrefix + ' ceil>=x', aCeil + 1e-6 >= aInput);
-    AssertTrue(aPrefix + ' ceil-floor<=1', (aCeil - aFloor) <= 1.0 + 1e-6);
-    AssertEquals(aPrefix + ' floor is integral', 0.0, Frac(aFloor), 0.0);
-    AssertEquals(aPrefix + ' ceil is integral', 0.0, Frac(aCeil), 0.0);
+    CheckTrue(aFloor <= aInput + 1e-6, aPrefix + ' floor<=x');
+    CheckTrue(aCeil + 1e-6 >= aInput, aPrefix + ' ceil>=x');
+    CheckTrue((aCeil - aFloor) <= 1.0 + 1e-6, aPrefix + ' ceil-floor<=1');
+    CheckNear(0.0, Frac(aFloor), 0.0, aPrefix + ' floor is integral');
+    CheckNear(0.0, Frac(aCeil), 0.0, aPrefix + ' ceil is integral');
   end;
 
   procedure AssertFloorCeilInvariantDouble(const aPrefix: string; const aInput, aFloor, aCeil: Double);
   begin
     if IsNaNDouble(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertTrue(aPrefix + ' floor<=x', aFloor <= aInput + 1e-12);
-    AssertTrue(aPrefix + ' ceil>=x', aCeil + 1e-12 >= aInput);
-    AssertTrue(aPrefix + ' ceil-floor<=1', (aCeil - aFloor) <= 1.0 + 1e-12);
-    AssertEquals(aPrefix + ' floor is integral', 0.0, Frac(aFloor), 0.0);
-    AssertEquals(aPrefix + ' ceil is integral', 0.0, Frac(aCeil), 0.0);
+    CheckTrue(aFloor <= aInput + 1e-12, aPrefix + ' floor<=x');
+    CheckTrue(aCeil + 1e-12 >= aInput, aPrefix + ' ceil>=x');
+    CheckTrue((aCeil - aFloor) <= 1.0 + 1e-12, aPrefix + ' ceil-floor<=1');
+    CheckNear(0.0, Frac(aFloor), 0.0, aPrefix + ' floor is integral');
+    CheckNear(0.0, Frac(aCeil), 0.0, aPrefix + ' ceil is integral');
   end;
 begin
   LCheckedBackends := 0;
@@ -4777,12 +4398,7 @@ begin
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
-        AssertTrue('Scalar dispatch should provide wide Floor/Ceil',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-          Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and
-          Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and
-          Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Scalar dispatch should provide wide Floor/Ceil');
 
         LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
         LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -4795,12 +4411,7 @@ begin
 
         SetActiveBackend(LBackend);
         LDispatch := GetDispatchTable;
-        AssertTrue('Non-x86 dispatch should provide wide Floor/Ceil',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and
-          Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and
-          Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and
-          Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Non-x86 dispatch should provide wide Floor/Ceil');
 
         LBackendFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
         LBackendCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
@@ -4813,42 +4424,30 @@ begin
 
         for LIndex := 0 to 7 do
         begin
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF32x8[' + IntToStr(LIndex) + ']',
-            LScalarFloorF32x8.f[LIndex], LBackendFloorF32x8.f[LIndex]);
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF32x8[' + IntToStr(LIndex) + ']',
-            LScalarCeilF32x8.f[LIndex], LBackendCeilF32x8.f[LIndex]);
-          AssertFloorCeilInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']',
-            LInF32x8.f[LIndex], LBackendFloorF32x8.f[LIndex], LBackendCeilF32x8.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF32x8[' + IntToStr(LIndex) + ']', LScalarFloorF32x8.f[LIndex], LBackendFloorF32x8.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF32x8[' + IntToStr(LIndex) + ']', LScalarCeilF32x8.f[LIndex], LBackendCeilF32x8.f[LIndex]);
+          AssertFloorCeilInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']', LInF32x8.f[LIndex], LBackendFloorF32x8.f[LIndex], LBackendCeilF32x8.f[LIndex]);
         end;
 
         for LIndex := 0 to 3 do
         begin
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF64x4[' + IntToStr(LIndex) + ']',
-            LScalarFloorF64x4.d[LIndex], LBackendFloorF64x4.d[LIndex]);
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF64x4[' + IntToStr(LIndex) + ']',
-            LScalarCeilF64x4.d[LIndex], LBackendCeilF64x4.d[LIndex]);
-          AssertFloorCeilInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']',
-            LInF64x4.d[LIndex], LBackendFloorF64x4.d[LIndex], LBackendCeilF64x4.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF64x4[' + IntToStr(LIndex) + ']', LScalarFloorF64x4.d[LIndex], LBackendFloorF64x4.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF64x4[' + IntToStr(LIndex) + ']', LScalarCeilF64x4.d[LIndex], LBackendCeilF64x4.d[LIndex]);
+          AssertFloorCeilInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']', LInF64x4.d[LIndex], LBackendFloorF64x4.d[LIndex], LBackendCeilF64x4.d[LIndex]);
         end;
 
         for LIndex := 0 to 15 do
         begin
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF32x16[' + IntToStr(LIndex) + ']',
-            LScalarFloorF32x16.f[LIndex], LBackendFloorF32x16.f[LIndex]);
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF32x16[' + IntToStr(LIndex) + ']',
-            LScalarCeilF32x16.f[LIndex], LBackendCeilF32x16.f[LIndex]);
-          AssertFloorCeilInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']',
-            LInF32x16.f[LIndex], LBackendFloorF32x16.f[LIndex], LBackendCeilF32x16.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF32x16[' + IntToStr(LIndex) + ']', LScalarFloorF32x16.f[LIndex], LBackendFloorF32x16.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF32x16[' + IntToStr(LIndex) + ']', LScalarCeilF32x16.f[LIndex], LBackendCeilF32x16.f[LIndex]);
+          AssertFloorCeilInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']', LInF32x16.f[LIndex], LBackendFloorF32x16.f[LIndex], LBackendCeilF32x16.f[LIndex]);
         end;
 
         for LIndex := 0 to 7 do
         begin
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF64x8[' + IntToStr(LIndex) + ']',
-            LScalarFloorF64x8.d[LIndex], LBackendFloorF64x8.d[LIndex]);
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF64x8[' + IntToStr(LIndex) + ']',
-            LScalarCeilF64x8.d[LIndex], LBackendCeilF64x8.d[LIndex]);
-          AssertFloorCeilInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']',
-            LInF64x8.d[LIndex], LBackendFloorF64x8.d[LIndex], LBackendCeilF64x8.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' FloorF64x8[' + IntToStr(LIndex) + ']', LScalarFloorF64x8.d[LIndex], LBackendFloorF64x8.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' CeilF64x8[' + IntToStr(LIndex) + ']', LScalarCeilF64x8.d[LIndex], LBackendCeilF64x8.d[LIndex]);
+          AssertFloorCeilInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']', LInF64x8.d[LIndex], LBackendFloorF64x8.d[LIndex], LBackendCeilF64x8.d[LIndex]);
         end;
       end;
     finally
@@ -4857,7 +4456,7 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
 procedure TTestCase_NonX86IEEE754.Test_NonX86_RoundTrunc_PropertyLike_FixedSeed_IfAvailable;
@@ -4934,42 +4533,40 @@ var
   procedure AssertSingleSemantics(const aPrefix: string; const aExpected, aActual: Single);
   begin
     if IsNaNSingle(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNSingle(aActual))
+      CheckTrue(IsNaNSingle(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertDoubleSemantics(const aPrefix: string; const aExpected, aActual: Double);
   begin
     if IsNaNDouble(aExpected) then
-      AssertTrue(aPrefix + ' expected NaN', IsNaNDouble(aActual))
+      CheckTrue(IsNaNDouble(aActual), aPrefix + ' expected NaN')
     else if IsInfinite(aExpected) then
-      AssertTrue(aPrefix + ' expected Inf sign',
-        IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)))
+      CheckTrue(IsInfinite(aActual) and ((aActual > 0) = (aExpected > 0)), aPrefix + ' expected Inf sign')
     else
-      AssertEquals(aPrefix + ' finite compare', aExpected, aActual, 0.0);
+      CheckNear(aExpected, aActual, 0.0, aPrefix + ' finite compare');
   end;
 
   procedure AssertRoundTruncInvariantSingle(const aPrefix: string; const aInput, aRound, aTrunc: Single);
   begin
     if IsNaNSingle(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertEquals(aPrefix + ' round integral', 0.0, Frac(aRound), 0.0);
-    AssertEquals(aPrefix + ' trunc integral', 0.0, Frac(aTrunc), 0.0);
-    AssertTrue(aPrefix + ' abs(round-x)<=0.5', Abs(aRound - aInput) <= 0.500001);
-    AssertTrue(aPrefix + ' abs(trunc)<=abs(x)', Abs(aTrunc) <= Abs(aInput) + 1e-6);
+    CheckNear(0.0, Frac(aRound), 0.0, aPrefix + ' round integral');
+    CheckNear(0.0, Frac(aTrunc), 0.0, aPrefix + ' trunc integral');
+    CheckTrue(Abs(aRound - aInput) <= 0.500001, aPrefix + ' abs(round-x)<=0.5');
+    CheckTrue(Abs(aTrunc) <= Abs(aInput) + 1e-6, aPrefix + ' abs(trunc)<=abs(x)');
     if aInput >= 0 then
     begin
-      AssertTrue(aPrefix + ' trunc<=x (x>=0)', aTrunc <= aInput + 1e-6);
-      AssertTrue(aPrefix + ' trunc>=0 (x>=0)', aTrunc >= -1e-6);
+      CheckTrue(aTrunc <= aInput + 1e-6, aPrefix + ' trunc<=x (x>=0)');
+      CheckTrue(aTrunc >= -1e-6, aPrefix + ' trunc>=0 (x>=0)');
     end
     else
     begin
-      AssertTrue(aPrefix + ' trunc>=x (x<0)', aTrunc + 1e-6 >= aInput);
-      AssertTrue(aPrefix + ' trunc<=0 (x<0)', aTrunc <= 1e-6);
+      CheckTrue(aTrunc + 1e-6 >= aInput, aPrefix + ' trunc>=x (x<0)');
+      CheckTrue(aTrunc <= 1e-6, aPrefix + ' trunc<=0 (x<0)');
     end;
   end;
 
@@ -4977,19 +4574,19 @@ var
   begin
     if IsNaNDouble(aInput) or IsInfinite(aInput) then
       Exit;
-    AssertEquals(aPrefix + ' round integral', 0.0, Frac(aRound), 0.0);
-    AssertEquals(aPrefix + ' trunc integral', 0.0, Frac(aTrunc), 0.0);
-    AssertTrue(aPrefix + ' abs(round-x)<=0.5', Abs(aRound - aInput) <= 0.500000000001);
-    AssertTrue(aPrefix + ' abs(trunc)<=abs(x)', Abs(aTrunc) <= Abs(aInput) + 1e-12);
+    CheckNear(0.0, Frac(aRound), 0.0, aPrefix + ' round integral');
+    CheckNear(0.0, Frac(aTrunc), 0.0, aPrefix + ' trunc integral');
+    CheckTrue(Abs(aRound - aInput) <= 0.500000000001, aPrefix + ' abs(round-x)<=0.5');
+    CheckTrue(Abs(aTrunc) <= Abs(aInput) + 1e-12, aPrefix + ' abs(trunc)<=abs(x)');
     if aInput >= 0 then
     begin
-      AssertTrue(aPrefix + ' trunc<=x (x>=0)', aTrunc <= aInput + 1e-12);
-      AssertTrue(aPrefix + ' trunc>=0 (x>=0)', aTrunc >= -1e-12);
+      CheckTrue(aTrunc <= aInput + 1e-12, aPrefix + ' trunc<=x (x>=0)');
+      CheckTrue(aTrunc >= -1e-12, aPrefix + ' trunc>=0 (x>=0)');
     end
     else
     begin
-      AssertTrue(aPrefix + ' trunc>=x (x<0)', aTrunc + 1e-12 >= aInput);
-      AssertTrue(aPrefix + ' trunc<=0 (x<0)', aTrunc <= 1e-12);
+      CheckTrue(aTrunc + 1e-12 >= aInput, aPrefix + ' trunc>=x (x<0)');
+      CheckTrue(aTrunc <= 1e-12, aPrefix + ' trunc<=0 (x<0)');
     end;
   end;
 begin
@@ -5019,12 +4616,7 @@ begin
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
-        AssertTrue('Scalar dispatch should provide wide Round/Trunc',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-          Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and
-          Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and
-          Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8), 'Scalar dispatch should provide wide Round/Trunc');
 
         LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
         LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -5037,12 +4629,7 @@ begin
 
         SetActiveBackend(LBackend);
         LDispatch := GetDispatchTable;
-        AssertTrue('Non-x86 dispatch should provide wide Round/Trunc',
-          (LDispatch <> nil) and
-          Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and
-          Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and
-          Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and
-          Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8));
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8), 'Non-x86 dispatch should provide wide Round/Trunc');
 
         LBackendRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
         LBackendTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
@@ -5055,42 +4642,30 @@ begin
 
         for LIndex := 0 to 7 do
         begin
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF32x8[' + IntToStr(LIndex) + ']',
-            LScalarRoundF32x8.f[LIndex], LBackendRoundF32x8.f[LIndex]);
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF32x8[' + IntToStr(LIndex) + ']',
-            LScalarTruncF32x8.f[LIndex], LBackendTruncF32x8.f[LIndex]);
-          AssertRoundTruncInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']',
-            LInF32x8.f[LIndex], LBackendRoundF32x8.f[LIndex], LBackendTruncF32x8.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF32x8[' + IntToStr(LIndex) + ']', LScalarRoundF32x8.f[LIndex], LBackendRoundF32x8.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF32x8[' + IntToStr(LIndex) + ']', LScalarTruncF32x8.f[LIndex], LBackendTruncF32x8.f[LIndex]);
+          AssertRoundTruncInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x8[' + IntToStr(LIndex) + ']', LInF32x8.f[LIndex], LBackendRoundF32x8.f[LIndex], LBackendTruncF32x8.f[LIndex]);
         end;
 
         for LIndex := 0 to 3 do
         begin
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF64x4[' + IntToStr(LIndex) + ']',
-            LScalarRoundF64x4.d[LIndex], LBackendRoundF64x4.d[LIndex]);
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF64x4[' + IntToStr(LIndex) + ']',
-            LScalarTruncF64x4.d[LIndex], LBackendTruncF64x4.d[LIndex]);
-          AssertRoundTruncInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']',
-            LInF64x4.d[LIndex], LBackendRoundF64x4.d[LIndex], LBackendTruncF64x4.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF64x4[' + IntToStr(LIndex) + ']', LScalarRoundF64x4.d[LIndex], LBackendRoundF64x4.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF64x4[' + IntToStr(LIndex) + ']', LScalarTruncF64x4.d[LIndex], LBackendTruncF64x4.d[LIndex]);
+          AssertRoundTruncInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x4[' + IntToStr(LIndex) + ']', LInF64x4.d[LIndex], LBackendRoundF64x4.d[LIndex], LBackendTruncF64x4.d[LIndex]);
         end;
 
         for LIndex := 0 to 15 do
         begin
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF32x16[' + IntToStr(LIndex) + ']',
-            LScalarRoundF32x16.f[LIndex], LBackendRoundF32x16.f[LIndex]);
-          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF32x16[' + IntToStr(LIndex) + ']',
-            LScalarTruncF32x16.f[LIndex], LBackendTruncF32x16.f[LIndex]);
-          AssertRoundTruncInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']',
-            LInF32x16.f[LIndex], LBackendRoundF32x16.f[LIndex], LBackendTruncF32x16.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF32x16[' + IntToStr(LIndex) + ']', LScalarRoundF32x16.f[LIndex], LBackendRoundF32x16.f[LIndex]);
+          AssertSingleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF32x16[' + IntToStr(LIndex) + ']', LScalarTruncF32x16.f[LIndex], LBackendTruncF32x16.f[LIndex]);
+          AssertRoundTruncInvariantSingle(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F32x16[' + IntToStr(LIndex) + ']', LInF32x16.f[LIndex], LBackendRoundF32x16.f[LIndex], LBackendTruncF32x16.f[LIndex]);
         end;
 
         for LIndex := 0 to 7 do
         begin
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF64x8[' + IntToStr(LIndex) + ']',
-            LScalarRoundF64x8.d[LIndex], LBackendRoundF64x8.d[LIndex]);
-          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF64x8[' + IntToStr(LIndex) + ']',
-            LScalarTruncF64x8.d[LIndex], LBackendTruncF64x8.d[LIndex]);
-          AssertRoundTruncInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']',
-            LInF64x8.d[LIndex], LBackendRoundF64x8.d[LIndex], LBackendTruncF64x8.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' RoundF64x8[' + IntToStr(LIndex) + ']', LScalarRoundF64x8.d[LIndex], LBackendRoundF64x8.d[LIndex]);
+          AssertDoubleSemantics(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' TruncF64x8[' + IntToStr(LIndex) + ']', LScalarTruncF64x8.d[LIndex], LBackendTruncF64x8.d[LIndex]);
+          AssertRoundTruncInvariantDouble(IEEE754BackendName(LBackend) + ' Round ' + IntToStr(LRound) + ' F64x8[' + IntToStr(LIndex) + ']', LInF64x8.d[LIndex], LBackendRoundF64x8.d[LIndex], LBackendTruncF64x8.d[LIndex]);
         end;
       end;
     finally
@@ -5099,13 +4674,8 @@ begin
   end;
 
   if LCheckedBackends = 0 then
-    AssertTrue('No non-x86 backend available on this host (allowed)', True);
+    CheckTrue(True, 'No non-x86 backend available on this host (allowed)');
 end;
 
-initialization
-  RegisterTest(TTestCase_IEEE754_F64);
-  RegisterTest(TTestCase_IEEE754EdgeCases);
-  RegisterTest(TTestCase_AVX2RoundTruncIEEE754);
-  RegisterTest(TTestCase_NonX86IEEE754);
 
 end.

@@ -8,34 +8,24 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
-  fpcunit, consoletestrunner, testregistry,
+  nextpas.core.test,
   nextpas.core.simd.cpuinfo.testcase,
   nextpas.core.simd.cpuinfo.lazy.testcase
   ;
 
 var
-  LApplication: TSuiteRunner;
-
+  LRunner: TSuiteRunner;
 begin
-  DefaultFormat := fPlain;
-  DefaultRunAllTests := True;
-
-  {$IFDEF SIMD_RISCV_AVAILABLE}
-  // RISC-V/qemu user-mode workaround: avoid teardown path that intermittently AVs
-  // after successful execution in consoletestrunner.
-  LApplication := TSuiteRunner.Create(nil);
-  LApplication.Initialize;
-  LApplication.Title := 'nextpas.core.simd.cpuinfo tests';
-  LApplication.Run;
-  Halt(ExitCode);
-  {$ELSE}
-  LApplication := TSuiteRunner.Create(nil);
-  try
-    LApplication.Initialize;
-    LApplication.Title := 'nextpas.core.simd.cpuinfo tests';
-    LApplication.Run;
-  finally
-    LApplication.Free;
-  end;
-  {$ENDIF}
+  LRunner := TSuiteRunner.Create('nextpas.core.simd.cpuinfo tests');
+  LRunner.Add(DiscoverTests(TTestFixture_Global.Create, 'TTestFixture_Global'));
+  LRunner.Add(DiscoverTests(TTestFixture_ThreadSafety.Create, 'TTestFixture_ThreadSafety'));
+  LRunner.Add(DiscoverTests(TTestFixture_PlatformSpecific.Create, 'TTestFixture_PlatformSpecific'));
+  LRunner.Add(DiscoverTests(TTestFixture_ErrorHandling.Create, 'TTestFixture_ErrorHandling'));
+  LRunner.Add(DiscoverTests(TTestFixture_LazyCPUInfo.Create, 'TTestFixture_LazyCPUInfo'));
+  LRunner.RunAll;
+  LRunner.Summary;
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
 end.

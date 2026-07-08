@@ -2,10 +2,8 @@ program test_sse2_raw_leaf_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  nextpas.core.thread.init,
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.intrinsics.base,
-  nextpas.core.simd.memutils,
+  nextpas.core.thread.init, nextpas.core.text.conv, Math,
+  nextpas.core.simd.intrinsics.base, nextpas.core.simd.memutils,
   nextpas.core.simd.intrinsics.x86.sse2;
 
 type
@@ -1962,8 +1960,7 @@ begin
   CheckI32('cvtsi128_si32', 42, simd_cvtsi128_si32(simd_set1_epi32(42)));
   A := simd_set_epi32(-1, 0, 0, -99);
   CheckI32('cvtsi128_si32 neg', -99, simd_cvtsi128_si32(A));
-  CheckI64('cvtsi128_si64', Int64($0102030405060708),
-    simd_cvtsi128_si64(simd_set1_epi64x(Int64($0102030405060708))));
+  CheckI64('cvtsi128_si64', Int64($0102030405060708), simd_cvtsi128_si64(simd_set1_epi64x(Int64($0102030405060708))));
   A := simd_set_epi64(-2, Int64(-1234567890123));
   CheckI64('cvtsi128_si64 neg', -1234567890123, simd_cvtsi128_si64(A));
 

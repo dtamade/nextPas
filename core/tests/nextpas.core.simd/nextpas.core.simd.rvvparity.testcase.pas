@@ -16,16 +16,15 @@ unit nextpas.core.simd.rvvparity.testcase;
 interface
 
 uses
-  Math, SysUtils, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.base,
-  nextpas.core.simd.scalar;
+  Math, SysUtils, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.base, nextpas.core.simd.scalar;
 
+{$M+}
 type
 
-  { TRVVParityTestCase }
+  { TTestCase_RVVParity }
 
-  TRVVParityTestCase = class(TTestCase)
+  TTestCase_RVVParity = class(TTestFixture)
   private
     // --- 128-bit test data ---
     function  MakeF32x4(const a0, a1, a2, a3: Single): TVecF32x4;
@@ -35,11 +34,9 @@ type
     function  MakeU32x4(const a0, a1, a2, a3: UInt32): TVecU32x4;
     function  MakeU64x2(const a0, a1: UInt64): TVecU64x2;
     function  MakeI16x8(const a0, a1, a2, a3, a4, a5, a6, a7: SmallInt): TVecI16x8;
-    function  MakeI8x16(const a0, a1, a2, a3, a4, a5, a6, a7,
-                         a8, a9, a10, a11, a12, a13, a14, a15: ShortInt): TVecI8x16;
+    function  MakeI8x16(const a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15: ShortInt): TVecI8x16;
     function  MakeU16x8(const a0, a1, a2, a3, a4, a5, a6, a7: Word): TVecU16x8;
-    function  MakeU8x16(const a0, a1, a2, a3, a4, a5, a6, a7,
-                         a8, a9, a10, a11, a12, a13, a14, a15: Byte): TVecU8x16;
+    function  MakeU8x16(const a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15: Byte): TVecU8x16;
 
     // --- 256-bit test data ---
     function  MakeF32x8(const a0, a1, a2, a3, a4, a5, a6, a7: Single): TVecF32x8;
@@ -437,40 +434,40 @@ const
 // 128-bit constructors
 // =============================================================
 
-function TRVVParityTestCase.MakeF32x4(const a0, a1, a2, a3: Single): TVecF32x4;
+function TTestCase_RVVParity.MakeF32x4(const a0, a1, a2, a3: Single): TVecF32x4;
 begin
   Result.f[0] := a0; Result.f[1] := a1;
   Result.f[2] := a2; Result.f[3] := a3;
 end;
 
-function TRVVParityTestCase.MakeF64x2(const a0, a1: Double): TVecF64x2;
+function TTestCase_RVVParity.MakeF64x2(const a0, a1: Double): TVecF64x2;
 begin
   Result.d[0] := a0; Result.d[1] := a1;
 end;
 
-function TRVVParityTestCase.MakeI32x4(const a0, a1, a2, a3: LongInt): TVecI32x4;
+function TTestCase_RVVParity.MakeI32x4(const a0, a1, a2, a3: LongInt): TVecI32x4;
 begin
   Result.i[0] := a0; Result.i[1] := a1;
   Result.i[2] := a2; Result.i[3] := a3;
 end;
 
-function TRVVParityTestCase.MakeI64x2(const a0, a1: Int64): TVecI64x2;
+function TTestCase_RVVParity.MakeI64x2(const a0, a1: Int64): TVecI64x2;
 begin
   Result.i[0] := a0; Result.i[1] := a1;
 end;
 
-function TRVVParityTestCase.MakeU32x4(const a0, a1, a2, a3: UInt32): TVecU32x4;
+function TTestCase_RVVParity.MakeU32x4(const a0, a1, a2, a3: UInt32): TVecU32x4;
 begin
   Result.u[0] := a0; Result.u[1] := a1;
   Result.u[2] := a2; Result.u[3] := a3;
 end;
 
-function TRVVParityTestCase.MakeU64x2(const a0, a1: UInt64): TVecU64x2;
+function TTestCase_RVVParity.MakeU64x2(const a0, a1: UInt64): TVecU64x2;
 begin
   Result.u[0] := a0; Result.u[1] := a1;
 end;
 
-function TRVVParityTestCase.MakeI16x8(const a0, a1, a2, a3, a4, a5, a6, a7: SmallInt): TVecI16x8;
+function TTestCase_RVVParity.MakeI16x8(const a0, a1, a2, a3, a4, a5, a6, a7: SmallInt): TVecI16x8;
 begin
   Result.i[0] := a0; Result.i[1] := a1;
   Result.i[2] := a2; Result.i[3] := a3;
@@ -478,8 +475,7 @@ begin
   Result.i[6] := a6; Result.i[7] := a7;
 end;
 
-function TRVVParityTestCase.MakeI8x16(const a0, a1, a2, a3, a4, a5, a6, a7,
-                                       a8, a9, a10, a11, a12, a13, a14, a15: ShortInt): TVecI8x16;
+function TTestCase_RVVParity.MakeI8x16(const a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15: ShortInt): TVecI8x16;
 begin
   Result.i[0]  := a0;  Result.i[1]  := a1;
   Result.i[2]  := a2;  Result.i[3]  := a3;
@@ -491,7 +487,7 @@ begin
   Result.i[14] := a14; Result.i[15] := a15;
 end;
 
-function TRVVParityTestCase.MakeU16x8(const a0, a1, a2, a3, a4, a5, a6, a7: Word): TVecU16x8;
+function TTestCase_RVVParity.MakeU16x8(const a0, a1, a2, a3, a4, a5, a6, a7: Word): TVecU16x8;
 begin
   Result.u[0] := a0; Result.u[1] := a1;
   Result.u[2] := a2; Result.u[3] := a3;
@@ -499,8 +495,7 @@ begin
   Result.u[6] := a6; Result.u[7] := a7;
 end;
 
-function TRVVParityTestCase.MakeU8x16(const a0, a1, a2, a3, a4, a5, a6, a7,
-                                       a8, a9, a10, a11, a12, a13, a14, a15: Byte): TVecU8x16;
+function TTestCase_RVVParity.MakeU8x16(const a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15: Byte): TVecU8x16;
 begin
   Result.u[0]  := a0;  Result.u[1]  := a1;
   Result.u[2]  := a2;  Result.u[3]  := a3;
@@ -516,7 +511,7 @@ end;
 // 256-bit constructors
 // =============================================================
 
-function TRVVParityTestCase.MakeF32x8(const a0, a1, a2, a3, a4, a5, a6, a7: Single): TVecF32x8;
+function TTestCase_RVVParity.MakeF32x8(const a0, a1, a2, a3, a4, a5, a6, a7: Single): TVecF32x8;
 begin
   Result.f[0] := a0; Result.f[1] := a1;
   Result.f[2] := a2; Result.f[3] := a3;
@@ -524,13 +519,13 @@ begin
   Result.f[6] := a6; Result.f[7] := a7;
 end;
 
-function TRVVParityTestCase.MakeF64x4(const a0, a1, a2, a3: Double): TVecF64x4;
+function TTestCase_RVVParity.MakeF64x4(const a0, a1, a2, a3: Double): TVecF64x4;
 begin
   Result.d[0] := a0; Result.d[1] := a1;
   Result.d[2] := a2; Result.d[3] := a3;
 end;
 
-function TRVVParityTestCase.MakeI32x8(const a0, a1, a2, a3, a4, a5, a6, a7: LongInt): TVecI32x8;
+function TTestCase_RVVParity.MakeI32x8(const a0, a1, a2, a3, a4, a5, a6, a7: LongInt): TVecI32x8;
 begin
   Result.i[0] := a0; Result.i[1] := a1;
   Result.i[2] := a2; Result.i[3] := a3;
@@ -538,13 +533,13 @@ begin
   Result.i[6] := a6; Result.i[7] := a7;
 end;
 
-function TRVVParityTestCase.MakeI64x4(const a0, a1, a2, a3: Int64): TVecI64x4;
+function TTestCase_RVVParity.MakeI64x4(const a0, a1, a2, a3: Int64): TVecI64x4;
 begin
   Result.i[0] := a0; Result.i[1] := a1;
   Result.i[2] := a2; Result.i[3] := a3;
 end;
 
-function TRVVParityTestCase.MakeU32x8(const a0, a1, a2, a3, a4, a5, a6, a7: UInt32): TVecU32x8;
+function TTestCase_RVVParity.MakeU32x8(const a0, a1, a2, a3, a4, a5, a6, a7: UInt32): TVecU32x8;
 begin
   Result.u[0] := a0; Result.u[1] := a1;
   Result.u[2] := a2; Result.u[3] := a3;
@@ -552,7 +547,7 @@ begin
   Result.u[6] := a6; Result.u[7] := a7;
 end;
 
-function TRVVParityTestCase.MakeU64x4(const a0, a1, a2, a3: UInt64): TVecU64x4;
+function TTestCase_RVVParity.MakeU64x4(const a0, a1, a2, a3: UInt64): TVecU64x4;
 begin
   Result.u[0] := a0; Result.u[1] := a1;
   Result.u[2] := a2; Result.u[3] := a3;
@@ -562,28 +557,28 @@ end;
 // 512-bit constructors
 // =============================================================
 
-function TRVVParityTestCase.MakeF32x16(const a: array of Single): TVecF32x16;
+function TTestCase_RVVParity.MakeF32x16(const a: array of Single): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
     if i < Length(a) then Result.f[i] := a[i] else Result.f[i] := 0.0;
 end;
 
-function TRVVParityTestCase.MakeF64x8(const a: array of Double): TVecF64x8;
+function TTestCase_RVVParity.MakeF64x8(const a: array of Double): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
     if i < Length(a) then Result.d[i] := a[i] else Result.d[i] := 0.0;
 end;
 
-function TRVVParityTestCase.MakeI32x16(const a: array of LongInt): TVecI32x16;
+function TTestCase_RVVParity.MakeI32x16(const a: array of LongInt): TVecI32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
     if i < Length(a) then Result.i[i] := a[i] else Result.i[i] := 0;
 end;
 
-function TRVVParityTestCase.MakeI64x8(const a: array of Int64): TVecI64x8;
+function TTestCase_RVVParity.MakeI64x8(const a: array of Int64): TVecI64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
@@ -594,80 +589,78 @@ end;
 // Check helpers
 // =============================================================
 
-procedure TRVVParityTestCase.CheckF32(const aName: string; aExpected, aActual: Single);
+procedure TTestCase_RVVParity.CheckF32(const aName: string; aExpected, aActual: Single);
 begin
-  AssertTrue(aName + ': expected ' + FloatToStr(aExpected) + ' got ' + FloatToStr(aActual),
-    Abs(aExpected - aActual) < EPS_SINGLE);
+  CheckTrue(Abs(aExpected - aActual) < EPS_SINGLE, aName + ': expected ' + FloatToStr(aExpected) + ' got ' + FloatToStr(aActual));
 end;
 
-procedure TRVVParityTestCase.CheckF64(const aName: string; aExpected, aActual: Double);
+procedure TTestCase_RVVParity.CheckF64(const aName: string; aExpected, aActual: Double);
 begin
-  AssertTrue(aName + ': expected ' + FloatToStr(aExpected) + ' got ' + FloatToStr(aActual),
-    Abs(aExpected - aActual) < EPS_DOUBLE);
+  CheckTrue(Abs(aExpected - aActual) < EPS_DOUBLE, aName + ': expected ' + FloatToStr(aExpected) + ' got ' + FloatToStr(aActual));
 end;
 
-procedure TRVVParityTestCase.CheckI32(const aName: string; aExpected, aActual: LongInt);
+procedure TTestCase_RVVParity.CheckI32(const aName: string; aExpected, aActual: LongInt);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckI64(const aName: string; aExpected, aActual: Int64);
+procedure TTestCase_RVVParity.CheckI64(const aName: string; aExpected, aActual: Int64);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckU32(const aName: string; aExpected, aActual: UInt32);
+procedure TTestCase_RVVParity.CheckU32(const aName: string; aExpected, aActual: UInt32);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckU64(const aName: string; aExpected, aActual: UInt64);
+procedure TTestCase_RVVParity.CheckU64(const aName: string; aExpected, aActual: UInt64);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckBool(const aName: string; aExpected, aActual: Boolean);
+procedure TTestCase_RVVParity.CheckBool(const aName: string; aExpected, aActual: Boolean);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckMask4(const aName: string; aExpected, aActual: TMask4);
+procedure TTestCase_RVVParity.CheckMask4(const aName: string; aExpected, aActual: TMask4);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckMask8(const aName: string; aExpected, aActual: TMask8);
+procedure TTestCase_RVVParity.CheckMask8(const aName: string; aExpected, aActual: TMask8);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckMask16(const aName: string; aExpected, aActual: TMask16);
+procedure TTestCase_RVVParity.CheckMask16(const aName: string; aExpected, aActual: TMask16);
 begin
-  AssertEquals(aName, aExpected, aActual);
+  CheckEqual(aExpected, aActual, aName);
 end;
 
-procedure TRVVParityTestCase.CheckF32x4(const aName: string; const aExpected, aActual: TVecF32x4);
+procedure TTestCase_RVVParity.CheckF32x4(const aName: string; const aExpected, aActual: TVecF32x4);
 var i: Integer;
 begin
   for i := 0 to 3 do
     CheckF32(Format('%s[%d]', [aName, i]), aExpected.f[i], aActual.f[i]);
 end;
 
-procedure TRVVParityTestCase.CheckF64x2(const aName: string; const aExpected, aActual: TVecF64x2);
+procedure TTestCase_RVVParity.CheckF64x2(const aName: string; const aExpected, aActual: TVecF64x2);
 var i: Integer;
 begin
   for i := 0 to 1 do
     CheckF64(Format('%s[%d]', [aName, i]), aExpected.d[i], aActual.d[i]);
 end;
 
-procedure TRVVParityTestCase.CheckI32x4(const aName: string; const aExpected, aActual: TVecI32x4);
+procedure TTestCase_RVVParity.CheckI32x4(const aName: string; const aExpected, aActual: TVecI32x4);
 var i: Integer;
 begin
   for i := 0 to 3 do
     CheckI32(Format('%s[%d]', [aName, i]), aExpected.i[i], aActual.i[i]);
 end;
 
-procedure TRVVParityTestCase.CheckU32x4(const aName: string; const aExpected, aActual: TVecU32x4);
+procedure TTestCase_RVVParity.CheckU32x4(const aName: string; const aExpected, aActual: TVecU32x4);
 var i: Integer;
 begin
   for i := 0 to 3 do
@@ -678,7 +671,7 @@ end;
 // 128-bit F32x4 arithmetic tests
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF32x4_Zero;
+procedure TTestCase_RVVParity.Test_AddF32x4_Zero;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(0.0, 0.0, 0.0, 0.0);
@@ -688,7 +681,7 @@ begin
   CheckF32x4('AddF32x4_Zero', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AddF32x4_AllOnes;
+procedure TTestCase_RVVParity.Test_AddF32x4_AllOnes;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 1.0, 1.0, 1.0);
@@ -698,7 +691,7 @@ begin
   CheckF32x4('AddF32x4_AllOnes', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AddF32x4_MaxValues;
+procedure TTestCase_RVVParity.Test_AddF32x4_MaxValues;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1e38, 1e38, 1e38, 1e38);
@@ -708,7 +701,7 @@ begin
   CheckF32x4('AddF32x4_MaxValues', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AddF32x4_Boundary;
+procedure TTestCase_RVVParity.Test_AddF32x4_Boundary;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(-0.0, 0.0, 1e38, -1e38);
@@ -718,7 +711,7 @@ begin
   CheckF32x4('AddF32x4_Boundary', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AddF32x4_Random;
+procedure TTestCase_RVVParity.Test_AddF32x4_Random;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(3.14, -2.71, 0.0, 1.618);
@@ -728,7 +721,7 @@ begin
   CheckF32x4('AddF32x4_Random', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubF32x4_Zero;
+procedure TTestCase_RVVParity.Test_SubF32x4_Zero;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.5, 2.5, 3.5, 4.5);
@@ -738,7 +731,7 @@ begin
   CheckF32x4('SubF32x4_Zero', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubF32x4_Boundary;
+procedure TTestCase_RVVParity.Test_SubF32x4_Boundary;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1e37, 0.0, -1e37, -0.0);
@@ -748,7 +741,7 @@ begin
   CheckF32x4('SubF32x4_Boundary', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubF32x4_Random;
+procedure TTestCase_RVVParity.Test_SubF32x4_Random;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(10.0, 20.0, 30.0, 40.0);
@@ -758,7 +751,7 @@ begin
   CheckF32x4('SubF32x4_Random', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x4_Zero;
+procedure TTestCase_RVVParity.Test_MulF32x4_Zero;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.5, 2.5, 3.5, 4.5);
@@ -768,7 +761,7 @@ begin
   CheckF32x4('MulF32x4_Zero', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x4_AllOnes;
+procedure TTestCase_RVVParity.Test_MulF32x4_AllOnes;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 1.0, 1.0, 1.0);
@@ -778,7 +771,7 @@ begin
   CheckF32x4('MulF32x4_AllOnes', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x4_Boundary;
+procedure TTestCase_RVVParity.Test_MulF32x4_Boundary;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(-1.0, 1e38, 0.0, 2.0);
@@ -788,7 +781,7 @@ begin
   CheckF32x4('MulF32x4_Boundary', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x4_Random;
+procedure TTestCase_RVVParity.Test_MulF32x4_Random;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(3.14, -2.71, 0.5, 1.618);
@@ -798,7 +791,7 @@ begin
   CheckF32x4('MulF32x4_Random', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_DivF32x4_AllOnes;
+procedure TTestCase_RVVParity.Test_DivF32x4_AllOnes;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(10.0, 20.0, 30.0, 40.0);
@@ -808,7 +801,7 @@ begin
   CheckF32x4('DivF32x4_AllOnes', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_DivF32x4_Boundary;
+procedure TTestCase_RVVParity.Test_DivF32x4_Boundary;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 1e-38, 1.0, -1.0);
@@ -818,7 +811,7 @@ begin
   CheckF32x4('DivF32x4_Boundary', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_DivF32x4_Random;
+procedure TTestCase_RVVParity.Test_DivF32x4_Random;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(6.0, 12.0, 20.0, 100.0);
@@ -828,7 +821,7 @@ begin
   CheckF32x4('DivF32x4_Random', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF32x4;
+procedure TTestCase_RVVParity.Test_AbsF32x4;
 var a, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(-1.0, 0.0, -3.14, 2.71);
@@ -837,7 +830,7 @@ begin
   CheckF32x4('AbsF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF32x4;
+procedure TTestCase_RVVParity.Test_SqrtF32x4;
 var a, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(4.0, 9.0, 16.0, 25.0);
@@ -846,7 +839,7 @@ begin
   CheckF32x4('SqrtF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MinF32x4;
+procedure TTestCase_RVVParity.Test_MinF32x4;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 5.0, -3.0, 0.0);
@@ -856,7 +849,7 @@ begin
   CheckF32x4('MinF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF32x4;
+procedure TTestCase_RVVParity.Test_MaxF32x4;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 5.0, -3.0, 0.0);
@@ -866,7 +859,7 @@ begin
   CheckF32x4('MaxF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_FmaF32x4;
+procedure TTestCase_RVVParity.Test_FmaF32x4;
 var a, b, c, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -877,7 +870,7 @@ begin
   CheckF32x4('FmaF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_RcpF32x4;
+procedure TTestCase_RVVParity.Test_RcpF32x4;
 var a, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 2.0, 4.0, 8.0);
@@ -886,7 +879,7 @@ begin
   CheckF32x4('RcpF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_RsqrtF32x4;
+procedure TTestCase_RVVParity.Test_RsqrtF32x4;
 var a, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 4.0, 16.0, 25.0);
@@ -899,7 +892,7 @@ end;
 // 128-bit F32x4 comparison tests
 // =============================================================
 
-procedure TRVVParityTestCase.Test_CmpEqF32x4;
+procedure TTestCase_RVVParity.Test_CmpEqF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -909,7 +902,7 @@ begin
   CheckMask4('CmpEqF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLtF32x4;
+procedure TTestCase_RVVParity.Test_CmpLtF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -919,7 +912,7 @@ begin
   CheckMask4('CmpLtF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLeF32x4;
+procedure TTestCase_RVVParity.Test_CmpLeF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -929,7 +922,7 @@ begin
   CheckMask4('CmpLeF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGtF32x4;
+procedure TTestCase_RVVParity.Test_CmpGtF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 5.0, 3.0, 0.0);
@@ -939,7 +932,7 @@ begin
   CheckMask4('CmpGtF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGeF32x4;
+procedure TTestCase_RVVParity.Test_CmpGeF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 5.0, 3.0, 4.0);
@@ -949,7 +942,7 @@ begin
   CheckMask4('CmpGeF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpNeF32x4;
+procedure TTestCase_RVVParity.Test_CmpNeF32x4;
 var a, b: TVecF32x4; rvv, scalar: TMask4;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -963,7 +956,7 @@ end;
 // 128-bit F32x4 reduction tests
 // =============================================================
 
-procedure TRVVParityTestCase.Test_ReduceAddF32x4;
+procedure TTestCase_RVVParity.Test_ReduceAddF32x4;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -972,7 +965,7 @@ begin
   CheckF32('ReduceAddF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMinF32x4;
+procedure TTestCase_RVVParity.Test_ReduceMinF32x4;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(3.0, 1.0, 4.0, 2.0);
@@ -981,7 +974,7 @@ begin
   CheckF32('ReduceMinF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMaxF32x4;
+procedure TTestCase_RVVParity.Test_ReduceMaxF32x4;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(3.0, 1.0, 4.0, 2.0);
@@ -990,7 +983,7 @@ begin
   CheckF32('ReduceMaxF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMulF32x4;
+procedure TTestCase_RVVParity.Test_ReduceMulF32x4;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(1.0, 2.0, 3.0, 4.0);
@@ -1003,7 +996,7 @@ end;
 // 128-bit F32x4 load/store/splat/zero
 // =============================================================
 
-procedure TRVVParityTestCase.Test_LoadStoreF32x4;
+procedure TTestCase_RVVParity.Test_LoadStoreF32x4;
 var src: array[0..3] of Single;
     dst: array[0..3] of Single;
     v: TVecF32x4; i: Integer;
@@ -1015,7 +1008,7 @@ begin
     CheckF32(Format('LoadStoreF32x4[%d]', [i]), src[i], dst[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SplatF32x4;
+procedure TTestCase_RVVParity.Test_SplatF32x4;
 var v, scalar: TVecF32x4; i: Integer;
 begin
   v := ScalarSplatF32x4(3.14);
@@ -1024,7 +1017,7 @@ begin
     CheckF32(Format('SplatF32x4[%d]', [i]), scalar.f[i], v.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_ZeroF32x4;
+procedure TTestCase_RVVParity.Test_ZeroF32x4;
 var v, scalar: TVecF32x4; i: Integer;
 begin
   v := ScalarZeroF32x4();
@@ -1037,7 +1030,7 @@ end;
 // 128-bit F32x4 select/clamp
 // =============================================================
 
-procedure TRVVParityTestCase.Test_SelectF32x4;
+procedure TTestCase_RVVParity.Test_SelectF32x4;
 var mask: TMask4; a, b, rvv, scalar: TVecF32x4;
 begin
   mask := $0A; // 1010: pick from a for lanes 1,3, from b for lanes 0,2
@@ -1048,7 +1041,7 @@ begin
   CheckF32x4('SelectF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ClampF32x4;
+procedure TTestCase_RVVParity.Test_ClampF32x4;
 var a, lo, hi, rvv, scalar: TVecF32x4;
 begin
   a  := MakeF32x4(-1.0, 5.0, 10.0, 0.5);
@@ -1063,7 +1056,7 @@ end;
 // 128-bit F64x2 arithmetic
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF64x2;
+procedure TTestCase_RVVParity.Test_AddF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(1.0, 2.0);
@@ -1073,7 +1066,7 @@ begin
   CheckF64x2('AddF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubF64x2;
+procedure TTestCase_RVVParity.Test_SubF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(5.0, 10.0);
@@ -1083,7 +1076,7 @@ begin
   CheckF64x2('SubF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulF64x2;
+procedure TTestCase_RVVParity.Test_MulF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(2.0, 3.0);
@@ -1093,7 +1086,7 @@ begin
   CheckF64x2('MulF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_DivF64x2;
+procedure TTestCase_RVVParity.Test_DivF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(10.0, 20.0);
@@ -1103,7 +1096,7 @@ begin
   CheckF64x2('DivF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF64x2;
+procedure TTestCase_RVVParity.Test_AbsF64x2;
 var a, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(-1.5, 0.0);
@@ -1112,7 +1105,7 @@ begin
   CheckF64x2('AbsF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF64x2;
+procedure TTestCase_RVVParity.Test_SqrtF64x2;
 var a, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(4.0, 9.0);
@@ -1121,7 +1114,7 @@ begin
   CheckF64x2('SqrtF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MinF64x2;
+procedure TTestCase_RVVParity.Test_MinF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(1.0, 5.0);
@@ -1131,7 +1124,7 @@ begin
   CheckF64x2('MinF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF64x2;
+procedure TTestCase_RVVParity.Test_MaxF64x2;
 var a, b, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(1.0, 5.0);
@@ -1141,7 +1134,7 @@ begin
   CheckF64x2('MaxF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_FmaF64x2;
+procedure TTestCase_RVVParity.Test_FmaF64x2;
 var a, b, c, rvv, scalar: TVecF64x2;
 begin
   a := MakeF64x2(1.0, 2.0);
@@ -1156,71 +1149,71 @@ end;
 // 128-bit F64x2 comparison
 // =============================================================
 
-procedure TRVVParityTestCase.Test_CmpEqF64x2;
+procedure TTestCase_RVVParity.Test_CmpEqF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(1.0, 2.0);
   b := MakeF64x2(1.0, 0.0);
   rvv := ScalarCmpEqF64x2(a, b);
   scalar := ScalarCmpEqF64x2(a, b);
-  AssertEquals('CmpEqF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpEqF64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpLtF64x2;
+procedure TTestCase_RVVParity.Test_CmpLtF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(1.0, 0.0);
   b := MakeF64x2(2.0, 0.0);
   rvv := ScalarCmpLtF64x2(a, b);
   scalar := ScalarCmpLtF64x2(a, b);
-  AssertEquals('CmpLtF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpLtF64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpLeF64x2;
+procedure TTestCase_RVVParity.Test_CmpLeF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(1.0, 2.0);
   b := MakeF64x2(1.0, 1.0);
   rvv := ScalarCmpLeF64x2(a, b);
   scalar := ScalarCmpLeF64x2(a, b);
-  AssertEquals('CmpLeF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpLeF64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpGtF64x2;
+procedure TTestCase_RVVParity.Test_CmpGtF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(5.0, 0.0);
   b := MakeF64x2(2.0, 0.0);
   rvv := ScalarCmpGtF64x2(a, b);
   scalar := ScalarCmpGtF64x2(a, b);
-  AssertEquals('CmpGtF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpGtF64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpGeF64x2;
+procedure TTestCase_RVVParity.Test_CmpGeF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(1.0, 2.0);
   b := MakeF64x2(1.0, 1.0);
   rvv := ScalarCmpGeF64x2(a, b);
   scalar := ScalarCmpGeF64x2(a, b);
-  AssertEquals('CmpGeF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpGeF64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpNeF64x2;
+procedure TTestCase_RVVParity.Test_CmpNeF64x2;
 var a, b: TVecF64x2; rvv, scalar: TMask2;
 begin
   a := MakeF64x2(1.0, 2.0);
   b := MakeF64x2(1.0, 0.0);
   rvv := ScalarCmpNeF64x2(a, b);
   scalar := ScalarCmpNeF64x2(a, b);
-  AssertEquals('CmpNeF64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpNeF64x2');
 end;
 
 // =============================================================
 // 128-bit F64x2 reduction
 // =============================================================
 
-procedure TRVVParityTestCase.Test_ReduceAddF64x2;
+procedure TTestCase_RVVParity.Test_ReduceAddF64x2;
 var a: TVecF64x2; rvv, scalar: Double;
 begin
   a := MakeF64x2(3.0, 4.0);
@@ -1229,7 +1222,7 @@ begin
   CheckF64('ReduceAddF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMinF64x2;
+procedure TTestCase_RVVParity.Test_ReduceMinF64x2;
 var a: TVecF64x2; rvv, scalar: Double;
 begin
   a := MakeF64x2(3.0, 1.0);
@@ -1238,7 +1231,7 @@ begin
   CheckF64('ReduceMinF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMaxF64x2;
+procedure TTestCase_RVVParity.Test_ReduceMaxF64x2;
 var a: TVecF64x2; rvv, scalar: Double;
 begin
   a := MakeF64x2(3.0, 1.0);
@@ -1247,7 +1240,7 @@ begin
   CheckF64('ReduceMaxF64x2', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMulF64x2;
+procedure TTestCase_RVVParity.Test_ReduceMulF64x2;
 var a: TVecF64x2; rvv, scalar: Double;
 begin
   a := MakeF64x2(3.0, 4.0);
@@ -1260,7 +1253,7 @@ end;
 // 128-bit F64x2 load/store/splat/zero
 // =============================================================
 
-procedure TRVVParityTestCase.Test_LoadStoreF64x2;
+procedure TTestCase_RVVParity.Test_LoadStoreF64x2;
 var src: array[0..1] of Double;
     dst: array[0..1] of Double;
     v: TVecF64x2; i: Integer;
@@ -1272,7 +1265,7 @@ begin
     CheckF64(Format('LoadStoreF64x2[%d]', [i]), src[i], dst[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SplatF64x2;
+procedure TTestCase_RVVParity.Test_SplatF64x2;
 var v, scalar: TVecF64x2; i: Integer;
 begin
   v := ScalarSplatF64x2(2.718);
@@ -1281,7 +1274,7 @@ begin
     CheckF64(Format('SplatF64x2[%d]', [i]), scalar.d[i], v.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_ZeroF64x2;
+procedure TTestCase_RVVParity.Test_ZeroF64x2;
 var v, scalar: TVecF64x2; i: Integer;
 begin
   v := ScalarZeroF64x2();
@@ -1294,7 +1287,7 @@ end;
 // 128-bit I32x4 arithmetic
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI32x4;
+procedure TTestCase_RVVParity.Test_AddI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(1, 2, -3, 0);
@@ -1304,7 +1297,7 @@ begin
   CheckI32x4('AddI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubI32x4;
+procedure TTestCase_RVVParity.Test_SubI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(10, 20, 0, -5);
@@ -1314,7 +1307,7 @@ begin
   CheckI32x4('SubI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulI32x4;
+procedure TTestCase_RVVParity.Test_MulI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(2, 3, -4, 0);
@@ -1324,7 +1317,7 @@ begin
   CheckI32x4('MulI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AndI32x4;
+procedure TTestCase_RVVParity.Test_AndI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4($FF, $0F, $F0, $AA);
@@ -1334,7 +1327,7 @@ begin
   CheckI32x4('AndI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_OrI32x4;
+procedure TTestCase_RVVParity.Test_OrI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4($FF, $0F, $F0, $AA);
@@ -1344,7 +1337,7 @@ begin
   CheckI32x4('OrI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_XorI32x4;
+procedure TTestCase_RVVParity.Test_XorI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4($FF, $0F, $F0, $AA);
@@ -1354,7 +1347,7 @@ begin
   CheckI32x4('XorI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_NotI32x4;
+procedure TTestCase_RVVParity.Test_NotI32x4;
 var a, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(0, -1, $FF, $AA55);
@@ -1363,7 +1356,7 @@ begin
   CheckI32x4('NotI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AndNotI32x4;
+procedure TTestCase_RVVParity.Test_AndNotI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4($FF, $0F, $F0, $AA);
@@ -1373,7 +1366,7 @@ begin
   CheckI32x4('AndNotI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MinI32x4;
+procedure TTestCase_RVVParity.Test_MinI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(1, 5, -3, 0);
@@ -1383,7 +1376,7 @@ begin
   CheckI32x4('MinI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MaxI32x4;
+procedure TTestCase_RVVParity.Test_MaxI32x4;
 var a, b, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(1, 5, -3, 0);
@@ -1397,7 +1390,7 @@ end;
 // 128-bit I32x4 comparison
 // =============================================================
 
-procedure TRVVParityTestCase.Test_CmpEqI32x4;
+procedure TTestCase_RVVParity.Test_CmpEqI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(1, 2, 3, 4);
@@ -1407,7 +1400,7 @@ begin
   CheckMask4('CmpEqI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLtI32x4;
+procedure TTestCase_RVVParity.Test_CmpLtI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(1, -1, 0, 5);
@@ -1417,7 +1410,7 @@ begin
   CheckMask4('CmpLtI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLeI32x4;
+procedure TTestCase_RVVParity.Test_CmpLeI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(1, 2, 3, 4);
@@ -1427,7 +1420,7 @@ begin
   CheckMask4('CmpLeI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGtI32x4;
+procedure TTestCase_RVVParity.Test_CmpGtI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(5, 0, 3, -1);
@@ -1437,7 +1430,7 @@ begin
   CheckMask4('CmpGtI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGeI32x4;
+procedure TTestCase_RVVParity.Test_CmpGeI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(1, 5, 3, 4);
@@ -1447,7 +1440,7 @@ begin
   CheckMask4('CmpGeI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpNeI32x4;
+procedure TTestCase_RVVParity.Test_CmpNeI32x4;
 var a, b: TVecI32x4; rvv, scalar: TMask4;
 begin
   a := MakeI32x4(1, 2, 3, 4);
@@ -1461,7 +1454,7 @@ end;
 // 128-bit I32x4 shift
 // =============================================================
 
-procedure TRVVParityTestCase.Test_ShiftLeftI32x4;
+procedure TTestCase_RVVParity.Test_ShiftLeftI32x4;
 var a, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(1, 2, 4, 8);
@@ -1470,7 +1463,7 @@ begin
   CheckI32x4('ShiftLeftI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ShiftRightI32x4;
+procedure TTestCase_RVVParity.Test_ShiftRightI32x4;
 var a, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(8, 16, 32, 64);
@@ -1479,7 +1472,7 @@ begin
   CheckI32x4('ShiftRightI32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ShiftRightArithI32x4;
+procedure TTestCase_RVVParity.Test_ShiftRightArithI32x4;
 var a, rvv, scalar: TVecI32x4;
 begin
   a := MakeI32x4(-8, -16, 32, -64);
@@ -1492,160 +1485,160 @@ end;
 // 128-bit I64x2
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI64x2;
+procedure TTestCase_RVVParity.Test_AddI64x2;
 var a, b, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(1, -1);
   b := MakeI64x2(10, 20);
   rvv := ScalarAddI64x2(a, b);
   scalar := ScalarAddI64x2(a, b);
-  AssertEquals('AddI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('AddI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'AddI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'AddI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_SubI64x2;
+procedure TTestCase_RVVParity.Test_SubI64x2;
 var a, b, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(10, 20);
   b := MakeI64x2(1, 2);
   rvv := ScalarSubI64x2(a, b);
   scalar := ScalarSubI64x2(a, b);
-  AssertEquals('SubI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('SubI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'SubI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'SubI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_AndI64x2;
+procedure TTestCase_RVVParity.Test_AndI64x2;
 var a, b, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2($FF, $0F);
   b := MakeI64x2($0F, $FF);
   rvv := ScalarAndI64x2(a, b);
   scalar := ScalarAndI64x2(a, b);
-  AssertEquals('AndI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('AndI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'AndI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'AndI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_OrI64x2;
+procedure TTestCase_RVVParity.Test_OrI64x2;
 var a, b, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2($FF, $0F);
   b := MakeI64x2($0F, $FF);
   rvv := ScalarOrI64x2(a, b);
   scalar := ScalarOrI64x2(a, b);
-  AssertEquals('OrI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('OrI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'OrI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'OrI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_XorI64x2;
+procedure TTestCase_RVVParity.Test_XorI64x2;
 var a, b, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2($FF, $0F);
   b := MakeI64x2($0F, $FF);
   rvv := ScalarXorI64x2(a, b);
   scalar := ScalarXorI64x2(a, b);
-  AssertEquals('XorI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('XorI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'XorI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'XorI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_NotI64x2;
+procedure TTestCase_RVVParity.Test_NotI64x2;
 var a, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(0, -1);
   rvv := ScalarNotI64x2(a);
   scalar := ScalarNotI64x2(a);
-  AssertEquals('NotI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('NotI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'NotI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'NotI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_ShiftLeftI64x2;
+procedure TTestCase_RVVParity.Test_ShiftLeftI64x2;
 var a, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(1, 2);
   rvv := ScalarShiftLeftI64x2(a, 3);
   scalar := ScalarShiftLeftI64x2(a, 3);
-  AssertEquals('ShiftLeftI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('ShiftLeftI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'ShiftLeftI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'ShiftLeftI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_ShiftRightI64x2;
+procedure TTestCase_RVVParity.Test_ShiftRightI64x2;
 var a, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(16, 32);
   rvv := ScalarShiftRightI64x2(a, 2);
   scalar := ScalarShiftRightI64x2(a, 2);
-  AssertEquals('ShiftRightI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('ShiftRightI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'ShiftRightI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'ShiftRightI64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_ShiftRightArithI64x2;
+procedure TTestCase_RVVParity.Test_ShiftRightArithI64x2;
 var a, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(-16, 32);
   rvv := ScalarShiftRightArithI64x2(a, 2);
   scalar := ScalarShiftRightArithI64x2(a, 2);
-  AssertEquals('ShiftRightArithI64x2[0]', scalar.i[0], rvv.i[0]);
-  AssertEquals('ShiftRightArithI64x2[1]', scalar.i[1], rvv.i[1]);
+  CheckEqual(scalar.i[0], rvv.i[0], 'ShiftRightArithI64x2[0]');
+  CheckEqual(scalar.i[1], rvv.i[1], 'ShiftRightArithI64x2[1]');
 end;
 
 // =============================================================
 // 128-bit I64x2 comparison
 // =============================================================
 
-procedure TRVVParityTestCase.Test_CmpEqI64x2;
+procedure TTestCase_RVVParity.Test_CmpEqI64x2;
 var a, b: TVecI64x2; rvv, scalar: TMask2;
 begin
   a := MakeI64x2(1, 2);
   b := MakeI64x2(1, 0);
   rvv := ScalarCmpEqI64x2(a, b);
   scalar := ScalarCmpEqI64x2(a, b);
-  AssertEquals('CmpEqI64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpEqI64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpLtI64x2;
+procedure TTestCase_RVVParity.Test_CmpLtI64x2;
 var a, b: TVecI64x2; rvv, scalar: TMask2;
 begin
   a := MakeI64x2(1, -1);
   b := MakeI64x2(2, 0);
   rvv := ScalarCmpLtI64x2(a, b);
   scalar := ScalarCmpLtI64x2(a, b);
-  AssertEquals('CmpLtI64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpLtI64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpLeI64x2;
+procedure TTestCase_RVVParity.Test_CmpLeI64x2;
 var a, b: TVecI64x2; rvv, scalar: TMask2;
 begin
   a := MakeI64x2(1, 2);
   b := MakeI64x2(1, 1);
   rvv := ScalarCmpLeI64x2(a, b);
   scalar := ScalarCmpLeI64x2(a, b);
-  AssertEquals('CmpLeI64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpLeI64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpGtI64x2;
+procedure TTestCase_RVVParity.Test_CmpGtI64x2;
 var a, b: TVecI64x2; rvv, scalar: TMask2;
 begin
   a := MakeI64x2(5, 0);
   b := MakeI64x2(2, 0);
   rvv := ScalarCmpGtI64x2(a, b);
   scalar := ScalarCmpGtI64x2(a, b);
-  AssertEquals('CmpGtI64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpGtI64x2');
 end;
 
-procedure TRVVParityTestCase.Test_CmpNeI64x2;
+procedure TTestCase_RVVParity.Test_CmpNeI64x2;
 var a, b: TVecI64x2; rvv, scalar: TMask2;
 begin
   a := MakeI64x2(1, 2);
   b := MakeI64x2(1, 0);
   rvv := ScalarCmpNeI64x2(a, b);
   scalar := ScalarCmpNeI64x2(a, b);
-  AssertEquals('CmpNeI64x2', scalar, rvv);
+  CheckEqual(scalar, rvv, 'CmpNeI64x2');
 end;
 
 // =============================================================
 // 128-bit U32x4
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU32x4;
+procedure TTestCase_RVVParity.Test_AddU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(1, 2, 0, $FFFFFFFF);
@@ -1655,7 +1648,7 @@ begin
   CheckU32x4('AddU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_SubU32x4;
+procedure TTestCase_RVVParity.Test_SubU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(10, 20, 5, 100);
@@ -1665,7 +1658,7 @@ begin
   CheckU32x4('SubU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MulU32x4;
+procedure TTestCase_RVVParity.Test_MulU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(2, 3, 0, 100);
@@ -1675,7 +1668,7 @@ begin
   CheckU32x4('MulU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_AndU32x4;
+procedure TTestCase_RVVParity.Test_AndU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4($FF, $0F, $F0, $AA);
@@ -1685,7 +1678,7 @@ begin
   CheckU32x4('AndU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_OrU32x4;
+procedure TTestCase_RVVParity.Test_OrU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4($FF, $0F, $F0, $AA);
@@ -1695,7 +1688,7 @@ begin
   CheckU32x4('OrU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_XorU32x4;
+procedure TTestCase_RVVParity.Test_XorU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4($FF, $0F, $F0, $AA);
@@ -1705,7 +1698,7 @@ begin
   CheckU32x4('XorU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_NotU32x4;
+procedure TTestCase_RVVParity.Test_NotU32x4;
 var a, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(0, $FFFFFFFF, $FF, $AA55);
@@ -1714,7 +1707,7 @@ begin
   CheckU32x4('NotU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MinU32x4;
+procedure TTestCase_RVVParity.Test_MinU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(1, 5, 10, 100);
@@ -1724,7 +1717,7 @@ begin
   CheckU32x4('MinU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_MaxU32x4;
+procedure TTestCase_RVVParity.Test_MaxU32x4;
 var a, b, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(1, 5, 10, 100);
@@ -1738,7 +1731,7 @@ end;
 // 128-bit U32x4 comparison
 // =============================================================
 
-procedure TRVVParityTestCase.Test_CmpEqU32x4;
+procedure TTestCase_RVVParity.Test_CmpEqU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(1, 2, 3, 4);
@@ -1748,7 +1741,7 @@ begin
   CheckMask4('CmpEqU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLtU32x4;
+procedure TTestCase_RVVParity.Test_CmpLtU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(1, 5, 0, 10);
@@ -1758,7 +1751,7 @@ begin
   CheckMask4('CmpLtU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpLeU32x4;
+procedure TTestCase_RVVParity.Test_CmpLeU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(1, 2, 3, 4);
@@ -1768,7 +1761,7 @@ begin
   CheckMask4('CmpLeU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGtU32x4;
+procedure TTestCase_RVVParity.Test_CmpGtU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(5, 0, 3, 10);
@@ -1778,7 +1771,7 @@ begin
   CheckMask4('CmpGtU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpGeU32x4;
+procedure TTestCase_RVVParity.Test_CmpGeU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(1, 5, 3, 4);
@@ -1788,7 +1781,7 @@ begin
   CheckMask4('CmpGeU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_CmpNeU32x4;
+procedure TTestCase_RVVParity.Test_CmpNeU32x4;
 var a, b: TVecU32x4; rvv, scalar: TMask4;
 begin
   a := MakeU32x4(1, 2, 3, 4);
@@ -1802,7 +1795,7 @@ end;
 // 128-bit U32x4 shift
 // =============================================================
 
-procedure TRVVParityTestCase.Test_ShiftLeftU32x4;
+procedure TTestCase_RVVParity.Test_ShiftLeftU32x4;
 var a, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(1, 2, 4, 8);
@@ -1811,7 +1804,7 @@ begin
   CheckU32x4('ShiftLeftU32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ShiftRightU32x4;
+procedure TTestCase_RVVParity.Test_ShiftRightU32x4;
 var a, rvv, scalar: TVecU32x4;
 begin
   a := MakeU32x4(8, 16, 32, 64);
@@ -1824,76 +1817,76 @@ end;
 // 128-bit U64x2
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU64x2;
+procedure TTestCase_RVVParity.Test_AddU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2(1, $FFFFFFFFFFFFFFFF);
   b := MakeU64x2(10, 1);
   rvv := ScalarAddU64x2(a, b);
   scalar := ScalarAddU64x2(a, b);
-  AssertEquals('AddU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('AddU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'AddU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'AddU64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_SubU64x2;
+procedure TTestCase_RVVParity.Test_SubU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2(10, 20);
   b := MakeU64x2(1, 2);
   rvv := ScalarSubU64x2(a, b);
   scalar := ScalarSubU64x2(a, b);
-  AssertEquals('SubU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('SubU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'SubU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'SubU64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_AndU64x2;
+procedure TTestCase_RVVParity.Test_AndU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2($FF, $0F);
   b := MakeU64x2($0F, $FF);
   rvv := ScalarAndU64x2(a, b);
   scalar := ScalarAndU64x2(a, b);
-  AssertEquals('AndU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('AndU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'AndU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'AndU64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_OrU64x2;
+procedure TTestCase_RVVParity.Test_OrU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2($FF, $0F);
   b := MakeU64x2($0F, $FF);
   rvv := ScalarOrU64x2(a, b);
   scalar := ScalarOrU64x2(a, b);
-  AssertEquals('OrU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('OrU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'OrU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'OrU64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_XorU64x2;
+procedure TTestCase_RVVParity.Test_XorU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2($FF, $0F);
   b := MakeU64x2($0F, $FF);
   rvv := ScalarXorU64x2(a, b);
   scalar := ScalarXorU64x2(a, b);
-  AssertEquals('XorU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('XorU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'XorU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'XorU64x2[1]');
 end;
 
-procedure TRVVParityTestCase.Test_NotU64x2;
+procedure TTestCase_RVVParity.Test_NotU64x2;
 var a, rvv, scalar: TVecU64x2;
 begin
   a := MakeU64x2(0, $FFFFFFFFFFFFFFFF);
   rvv := ScalarNotU64x2(a);
   scalar := ScalarNotU64x2(a);
-  AssertEquals('NotU64x2[0]', scalar.u[0], rvv.u[0]);
-  AssertEquals('NotU64x2[1]', scalar.u[1], rvv.u[1]);
+  CheckEqual(scalar.u[0], rvv.u[0], 'NotU64x2[0]');
+  CheckEqual(scalar.u[1], rvv.u[1], 'NotU64x2[1]');
 end;
 
 // =============================================================
 // 128-bit I16x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI16x8;
+procedure TTestCase_RVVParity.Test_AddI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(1, 2, 3, 4, -1, -2, -3, -4);
@@ -1904,7 +1897,7 @@ begin
     CheckI32(Format('AddI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI16x8;
+procedure TTestCase_RVVParity.Test_SubI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(10, 20, 30, 40, 5, 6, 7, 8);
@@ -1915,7 +1908,7 @@ begin
     CheckI32(Format('SubI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulI16x8;
+procedure TTestCase_RVVParity.Test_MulI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(2, 3, 4, 5, -1, -2, -3, -4);
@@ -1926,7 +1919,7 @@ begin
     CheckI32(Format('MulI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinI16x8;
+procedure TTestCase_RVVParity.Test_MinI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(1, 5, -3, 0, 10, 20, -5, -10);
@@ -1937,7 +1930,7 @@ begin
     CheckI32(Format('MinI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxI16x8;
+procedure TTestCase_RVVParity.Test_MaxI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(1, 5, -3, 0, 10, 20, -5, -10);
@@ -1948,7 +1941,7 @@ begin
     CheckI32(Format('MaxI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI16x8;
+procedure TTestCase_RVVParity.Test_AndI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8($FF, $0F, $F0, $AA, $55, $FF, $00, $0F);
@@ -1959,7 +1952,7 @@ begin
     CheckI32(Format('AndI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI16x8;
+procedure TTestCase_RVVParity.Test_OrI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8($FF, $0F, $F0, $AA, $55, $FF, $00, $0F);
@@ -1970,7 +1963,7 @@ begin
     CheckI32(Format('OrI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI16x8;
+procedure TTestCase_RVVParity.Test_XorI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8($FF, $0F, $F0, $AA, $55, $FF, $00, $0F);
@@ -1985,7 +1978,7 @@ end;
 // 128-bit I8x16
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI8x16;
+procedure TTestCase_RVVParity.Test_AddI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(1,2,3,4,5,6,7,8, -1,-2,-3,-4,-5,-6,-7,-8);
@@ -1996,7 +1989,7 @@ begin
     CheckI32(Format('AddI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI8x16;
+procedure TTestCase_RVVParity.Test_SubI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(10,20,30,40,50,60,70,80, 5,6,7,8,9,10,11,12);
@@ -2007,7 +2000,7 @@ begin
     CheckI32(Format('SubI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinI8x16;
+procedure TTestCase_RVVParity.Test_MinI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(1,5,-3,0,10,20,-5,-10, 0,1,2,3,4,5,6,7);
@@ -2018,7 +2011,7 @@ begin
     CheckI32(Format('MinI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxI8x16;
+procedure TTestCase_RVVParity.Test_MaxI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(1,5,-3,0,10,20,-5,-10, 0,1,2,3,4,5,6,7);
@@ -2029,7 +2022,7 @@ begin
     CheckI32(Format('MaxI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI8x16;
+procedure TTestCase_RVVParity.Test_AndI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2040,7 +2033,7 @@ begin
     CheckI32(Format('AndI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI8x16;
+procedure TTestCase_RVVParity.Test_OrI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2051,7 +2044,7 @@ begin
     CheckI32(Format('OrI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI8x16;
+procedure TTestCase_RVVParity.Test_XorI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2066,7 +2059,7 @@ end;
 // 128-bit U16x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU16x8;
+procedure TTestCase_RVVParity.Test_AddU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(1,2,3,4,100,200,300,400);
@@ -2077,7 +2070,7 @@ begin
     CheckU32(Format('AddU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubU16x8;
+procedure TTestCase_RVVParity.Test_SubU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(10,20,30,40,50,60,70,80);
@@ -2088,7 +2081,7 @@ begin
     CheckU32(Format('SubU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulU16x8;
+procedure TTestCase_RVVParity.Test_MulU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(2,3,4,5,6,7,8,9);
@@ -2099,7 +2092,7 @@ begin
     CheckU32(Format('MulU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinU16x8;
+procedure TTestCase_RVVParity.Test_MinU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(1,5,10,0,100,200,50,75);
@@ -2110,7 +2103,7 @@ begin
     CheckU32(Format('MinU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxU16x8;
+procedure TTestCase_RVVParity.Test_MaxU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(1,5,10,0,100,200,50,75);
@@ -2121,7 +2114,7 @@ begin
     CheckU32(Format('MaxU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndU16x8;
+procedure TTestCase_RVVParity.Test_AndU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2132,7 +2125,7 @@ begin
     CheckU32(Format('AndU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrU16x8;
+procedure TTestCase_RVVParity.Test_OrU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2143,7 +2136,7 @@ begin
     CheckU32(Format('OrU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorU16x8;
+procedure TTestCase_RVVParity.Test_XorU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2158,7 +2151,7 @@ end;
 // 128-bit U8x16
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU8x16;
+procedure TTestCase_RVVParity.Test_AddU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(1,2,3,4,5,6,7,8, 10,20,30,40,50,60,70,80);
@@ -2169,7 +2162,7 @@ begin
     CheckU32(Format('AddU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubU8x16;
+procedure TTestCase_RVVParity.Test_SubU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(10,20,30,40,50,60,70,80, 100,110,120,130,140,150,160,170);
@@ -2180,7 +2173,7 @@ begin
     CheckU32(Format('SubU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinU8x16;
+procedure TTestCase_RVVParity.Test_MinU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(1,5,10,0,100,200,50,75, 0,1,2,3,4,5,6,7);
@@ -2191,7 +2184,7 @@ begin
     CheckU32(Format('MinU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxU8x16;
+procedure TTestCase_RVVParity.Test_MaxU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(1,5,10,0,100,200,50,75, 0,1,2,3,4,5,6,7);
@@ -2202,7 +2195,7 @@ begin
     CheckU32(Format('MaxU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndU8x16;
+procedure TTestCase_RVVParity.Test_AndU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2213,7 +2206,7 @@ begin
     CheckU32(Format('AndU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrU8x16;
+procedure TTestCase_RVVParity.Test_OrU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2224,7 +2217,7 @@ begin
     CheckU32(Format('OrU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorU8x16;
+procedure TTestCase_RVVParity.Test_XorU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2239,7 +2232,7 @@ end;
 // 256-bit F32x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF32x8;
+procedure TTestCase_RVVParity.Test_AddF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
@@ -2250,7 +2243,7 @@ begin
     CheckF32(Format('AddF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubF32x8;
+procedure TTestCase_RVVParity.Test_SubF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0);
@@ -2261,7 +2254,7 @@ begin
     CheckF32(Format('SubF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x8;
+procedure TTestCase_RVVParity.Test_MulF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0);
@@ -2272,7 +2265,7 @@ begin
     CheckF32(Format('MulF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_DivF32x8;
+procedure TTestCase_RVVParity.Test_DivF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0);
@@ -2283,7 +2276,7 @@ begin
     CheckF32(Format('DivF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinF32x8;
+procedure TTestCase_RVVParity.Test_MinF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(1.0, 5.0, -3.0, 0.0, 10.0, 2.0, -5.0, 0.0);
@@ -2294,7 +2287,7 @@ begin
     CheckF32(Format('MinF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF32x8;
+procedure TTestCase_RVVParity.Test_MaxF32x8;
 var a, b, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(1.0, 5.0, -3.0, 0.0, 10.0, 2.0, -5.0, 0.0);
@@ -2305,7 +2298,7 @@ begin
     CheckF32(Format('MaxF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF32x8;
+procedure TTestCase_RVVParity.Test_AbsF32x8;
 var a, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(-1.0, 0.0, -3.14, 2.71, -0.5, 10.0, -7.0, 0.0);
@@ -2315,7 +2308,7 @@ begin
     CheckF32(Format('AbsF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF32x8;
+procedure TTestCase_RVVParity.Test_SqrtF32x8;
 var a, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(4.0, 9.0, 16.0, 25.0, 36.0, 49.0, 64.0, 81.0);
@@ -2325,7 +2318,7 @@ begin
     CheckF32(Format('SqrtF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_FmaF32x8;
+procedure TTestCase_RVVParity.Test_FmaF32x8;
 var a, b, c, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := MakeF32x8(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0);
@@ -2341,7 +2334,7 @@ end;
 // 256-bit F64x4
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF64x4;
+procedure TTestCase_RVVParity.Test_AddF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(1.0, 2.0, 3.0, 4.0);
@@ -2352,7 +2345,7 @@ begin
     CheckF64(Format('AddF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubF64x4;
+procedure TTestCase_RVVParity.Test_SubF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(10.0, 9.0, 8.0, 7.0);
@@ -2363,7 +2356,7 @@ begin
     CheckF64(Format('SubF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulF64x4;
+procedure TTestCase_RVVParity.Test_MulF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(2.0, 3.0, 4.0, 5.0);
@@ -2374,7 +2367,7 @@ begin
     CheckF64(Format('MulF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_DivF64x4;
+procedure TTestCase_RVVParity.Test_DivF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(10.0, 20.0, 30.0, 40.0);
@@ -2385,7 +2378,7 @@ begin
     CheckF64(Format('DivF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinF64x4;
+procedure TTestCase_RVVParity.Test_MinF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(1.0, 5.0, -3.0, 0.0);
@@ -2396,7 +2389,7 @@ begin
     CheckF64(Format('MinF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF64x4;
+procedure TTestCase_RVVParity.Test_MaxF64x4;
 var a, b, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(1.0, 5.0, -3.0, 0.0);
@@ -2407,7 +2400,7 @@ begin
     CheckF64(Format('MaxF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF64x4;
+procedure TTestCase_RVVParity.Test_AbsF64x4;
 var a, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(-1.0, 0.0, -3.14, 2.71);
@@ -2417,7 +2410,7 @@ begin
     CheckF64(Format('AbsF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF64x4;
+procedure TTestCase_RVVParity.Test_SqrtF64x4;
 var a, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(4.0, 9.0, 16.0, 25.0);
@@ -2427,7 +2420,7 @@ begin
     CheckF64(Format('SqrtF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_FmaF64x4;
+procedure TTestCase_RVVParity.Test_FmaF64x4;
 var a, b, c, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := MakeF64x4(1.0, 2.0, 3.0, 4.0);
@@ -2443,7 +2436,7 @@ end;
 // 256-bit I32x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI32x8;
+procedure TTestCase_RVVParity.Test_AddI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(1,2,3,4, -1,-2,-3,-4);
@@ -2454,7 +2447,7 @@ begin
     CheckI32(Format('AddI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI32x8;
+procedure TTestCase_RVVParity.Test_SubI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(10,20,30,40,50,60,70,80);
@@ -2465,7 +2458,7 @@ begin
     CheckI32(Format('SubI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulI32x8;
+procedure TTestCase_RVVParity.Test_MulI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(2,3,4,5, -1,-2,-3,-4);
@@ -2476,7 +2469,7 @@ begin
     CheckI32(Format('MulI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI32x8;
+procedure TTestCase_RVVParity.Test_AndI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2487,7 +2480,7 @@ begin
     CheckI32(Format('AndI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI32x8;
+procedure TTestCase_RVVParity.Test_OrI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2498,7 +2491,7 @@ begin
     CheckI32(Format('OrI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI32x8;
+procedure TTestCase_RVVParity.Test_XorI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2509,7 +2502,7 @@ begin
     CheckI32(Format('XorI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_NotI32x8;
+procedure TTestCase_RVVParity.Test_NotI32x8;
 var a, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(0,-1,$FF,$AA55, 0,0,0,0);
@@ -2519,7 +2512,7 @@ begin
     CheckI32(Format('NotI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinI32x8;
+procedure TTestCase_RVVParity.Test_MinI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(1,5,-3,0,10,20,-5,-10);
@@ -2530,7 +2523,7 @@ begin
     CheckI32(Format('MinI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxI32x8;
+procedure TTestCase_RVVParity.Test_MaxI32x8;
 var a, b, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(1,5,-3,0,10,20,-5,-10);
@@ -2545,7 +2538,7 @@ end;
 // 256-bit I64x4
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI64x4;
+procedure TTestCase_RVVParity.Test_AddI64x4;
 var a, b, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4(1, -1, 100, -100);
@@ -2556,7 +2549,7 @@ begin
     CheckI64(Format('AddI64x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI64x4;
+procedure TTestCase_RVVParity.Test_SubI64x4;
 var a, b, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4(10, 20, 30, 40);
@@ -2567,7 +2560,7 @@ begin
     CheckI64(Format('SubI64x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI64x4;
+procedure TTestCase_RVVParity.Test_AndI64x4;
 var a, b, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4($FF, $0F, $F0, $AA);
@@ -2578,7 +2571,7 @@ begin
     CheckI64(Format('AndI64x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI64x4;
+procedure TTestCase_RVVParity.Test_OrI64x4;
 var a, b, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4($FF, $0F, $F0, $AA);
@@ -2589,7 +2582,7 @@ begin
     CheckI64(Format('OrI64x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI64x4;
+procedure TTestCase_RVVParity.Test_XorI64x4;
 var a, b, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4($FF, $0F, $F0, $AA);
@@ -2600,7 +2593,7 @@ begin
     CheckI64(Format('XorI64x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_NotI64x4;
+procedure TTestCase_RVVParity.Test_NotI64x4;
 var a, rvv, scalar: TVecI64x4; i: Integer;
 begin
   a := MakeI64x4(0, -1, $FF, $AA55);
@@ -2614,7 +2607,7 @@ end;
 // 256-bit U32x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU32x8;
+procedure TTestCase_RVVParity.Test_AddU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8(1,2,3,4, 100,200,300,400);
@@ -2625,7 +2618,7 @@ begin
     CheckU32(Format('AddU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubU32x8;
+procedure TTestCase_RVVParity.Test_SubU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8(10,20,30,40, 50,60,70,80);
@@ -2636,7 +2629,7 @@ begin
     CheckU32(Format('SubU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulU32x8;
+procedure TTestCase_RVVParity.Test_MulU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8(2,3,4,5, 6,7,8,9);
@@ -2647,7 +2640,7 @@ begin
     CheckU32(Format('MulU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndU32x8;
+procedure TTestCase_RVVParity.Test_AndU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2658,7 +2651,7 @@ begin
     CheckU32(Format('AndU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrU32x8;
+procedure TTestCase_RVVParity.Test_OrU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2669,7 +2662,7 @@ begin
     CheckU32(Format('OrU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorU32x8;
+procedure TTestCase_RVVParity.Test_XorU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8($FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
@@ -2680,7 +2673,7 @@ begin
     CheckU32(Format('XorU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinU32x8;
+procedure TTestCase_RVVParity.Test_MinU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8(1,5,10,0,100,200,50,75);
@@ -2691,7 +2684,7 @@ begin
     CheckU32(Format('MinU32x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxU32x8;
+procedure TTestCase_RVVParity.Test_MaxU32x8;
 var a, b, rvv, scalar: TVecU32x8; i: Integer;
 begin
   a := MakeU32x8(1,5,10,0,100,200,50,75);
@@ -2706,7 +2699,7 @@ end;
 // 256-bit U64x4
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddU64x4;
+procedure TTestCase_RVVParity.Test_AddU64x4;
 var a, b, rvv, scalar: TVecU64x4; i: Integer;
 begin
   a := MakeU64x4(1, 100, $FFFFFFFF, 0);
@@ -2717,7 +2710,7 @@ begin
     CheckU64(Format('AddU64x4[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubU64x4;
+procedure TTestCase_RVVParity.Test_SubU64x4;
 var a, b, rvv, scalar: TVecU64x4; i: Integer;
 begin
   a := MakeU64x4(10, 20, 30, 40);
@@ -2728,7 +2721,7 @@ begin
     CheckU64(Format('SubU64x4[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndU64x4;
+procedure TTestCase_RVVParity.Test_AndU64x4;
 var a, b, rvv, scalar: TVecU64x4; i: Integer;
 begin
   a := MakeU64x4($FF, $0F, $F0, $AA);
@@ -2739,7 +2732,7 @@ begin
     CheckU64(Format('AndU64x4[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrU64x4;
+procedure TTestCase_RVVParity.Test_OrU64x4;
 var a, b, rvv, scalar: TVecU64x4; i: Integer;
 begin
   a := MakeU64x4($FF, $0F, $F0, $AA);
@@ -2750,7 +2743,7 @@ begin
     CheckU64(Format('OrU64x4[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorU64x4;
+procedure TTestCase_RVVParity.Test_XorU64x4;
 var a, b, rvv, scalar: TVecU64x4; i: Integer;
 begin
   a := MakeU64x4($FF, $0F, $F0, $AA);
@@ -2765,7 +2758,7 @@ end;
 // 512-bit F32x16
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF32x16;
+procedure TTestCase_RVVParity.Test_AddF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]);
@@ -2776,7 +2769,7 @@ begin
     CheckF32(Format('AddF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubF32x16;
+procedure TTestCase_RVVParity.Test_SubF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([10,9,8,7,6,5,4,3,2,1,0,11,12,13,14,15]);
@@ -2787,7 +2780,7 @@ begin
     CheckF32(Format('SubF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulF32x16;
+procedure TTestCase_RVVParity.Test_MulF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8]);
@@ -2798,7 +2791,7 @@ begin
     CheckF32(Format('MulF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_DivF32x16;
+procedure TTestCase_RVVParity.Test_DivF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160]);
@@ -2809,7 +2802,7 @@ begin
     CheckF32(Format('DivF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinF32x16;
+procedure TTestCase_RVVParity.Test_MinF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([1,5,-3,0,10,2,-5,0, 3,7,-2,1,11,3,-4,2]);
@@ -2820,7 +2813,7 @@ begin
     CheckF32(Format('MinF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF32x16;
+procedure TTestCase_RVVParity.Test_MaxF32x16;
 var a, b, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([1,5,-3,0,10,2,-5,0, 3,7,-2,1,11,3,-4,2]);
@@ -2831,7 +2824,7 @@ begin
     CheckF32(Format('MaxF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF32x16;
+procedure TTestCase_RVVParity.Test_AbsF32x16;
 var a, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([-1,0,-3.14,2.71,-0.5,10,-7,0, 1,-2,3,-4,5,-6,7,-8]);
@@ -2841,7 +2834,7 @@ begin
     CheckF32(Format('AbsF32x16[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF32x16;
+procedure TTestCase_RVVParity.Test_SqrtF32x16;
 var a, rvv, scalar: TVecF32x16; i: Integer;
 begin
   a := MakeF32x16([4,9,16,25,36,49,64,81, 100,121,144,169,196,225,256,289]);
@@ -2855,7 +2848,7 @@ end;
 // 512-bit F64x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddF64x8;
+procedure TTestCase_RVVParity.Test_AddF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([1,2,3,4,5,6,7,8]);
@@ -2866,7 +2859,7 @@ begin
     CheckF64(Format('AddF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubF64x8;
+procedure TTestCase_RVVParity.Test_SubF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([10,9,8,7,6,5,4,3]);
@@ -2877,7 +2870,7 @@ begin
     CheckF64(Format('SubF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulF64x8;
+procedure TTestCase_RVVParity.Test_MulF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([2,3,4,5,6,7,8,9]);
@@ -2888,7 +2881,7 @@ begin
     CheckF64(Format('MulF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_DivF64x8;
+procedure TTestCase_RVVParity.Test_DivF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([10,20,30,40,50,60,70,80]);
@@ -2899,7 +2892,7 @@ begin
     CheckF64(Format('DivF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinF64x8;
+procedure TTestCase_RVVParity.Test_MinF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([1,5,-3,0,10,2,-5,0]);
@@ -2910,7 +2903,7 @@ begin
     CheckF64(Format('MinF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxF64x8;
+procedure TTestCase_RVVParity.Test_MaxF64x8;
 var a, b, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([1,5,-3,0,10,2,-5,0]);
@@ -2921,7 +2914,7 @@ begin
     CheckF64(Format('MaxF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AbsF64x8;
+procedure TTestCase_RVVParity.Test_AbsF64x8;
 var a, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([-1,0,-3.14,2.71,-0.5,10,-7,0]);
@@ -2931,7 +2924,7 @@ begin
     CheckF64(Format('AbsF64x8[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SqrtF64x8;
+procedure TTestCase_RVVParity.Test_SqrtF64x8;
 var a, rvv, scalar: TVecF64x8; i: Integer;
 begin
   a := MakeF64x8([4,9,16,25,36,49,64,81]);
@@ -2945,7 +2938,7 @@ end;
 // 512-bit I32x16
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI32x16;
+procedure TTestCase_RVVParity.Test_AddI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([1,2,3,4,-1,-2,-3,-4, 10,20,30,40,-10,-20,-30,-40]);
@@ -2956,7 +2949,7 @@ begin
     CheckI32(Format('AddI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI32x16;
+procedure TTestCase_RVVParity.Test_SubI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([10,20,30,40,50,60,70,80, 100,110,120,130,140,150,160,170]);
@@ -2967,7 +2960,7 @@ begin
     CheckI32(Format('SubI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MulI32x16;
+procedure TTestCase_RVVParity.Test_MulI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([2,3,4,5,-1,-2,-3,-4, 1,2,3,4,5,6,7,8]);
@@ -2978,7 +2971,7 @@ begin
     CheckI32(Format('MulI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI32x16;
+procedure TTestCase_RVVParity.Test_AndI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -2989,7 +2982,7 @@ begin
     CheckI32(Format('AndI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI32x16;
+procedure TTestCase_RVVParity.Test_OrI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -3000,7 +2993,7 @@ begin
     CheckI32(Format('OrI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI32x16;
+procedure TTestCase_RVVParity.Test_XorI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -3011,7 +3004,7 @@ begin
     CheckI32(Format('XorI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MinI32x16;
+procedure TTestCase_RVVParity.Test_MinI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([1,5,-3,0,10,20,-5,-10, 3,7,-2,1,11,3,-4,2]);
@@ -3022,7 +3015,7 @@ begin
     CheckI32(Format('MinI32x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_MaxI32x16;
+procedure TTestCase_RVVParity.Test_MaxI32x16;
 var a, b, rvv, scalar: TVecI32x16; i: Integer;
 begin
   a := MakeI32x16([1,5,-3,0,10,20,-5,-10, 3,7,-2,1,11,3,-4,2]);
@@ -3037,7 +3030,7 @@ end;
 // 512-bit I64x8
 // =============================================================
 
-procedure TRVVParityTestCase.Test_AddI64x8;
+procedure TTestCase_RVVParity.Test_AddI64x8;
 var a, b, rvv, scalar: TVecI64x8; i: Integer;
 begin
   a := MakeI64x8([1,-1,100,-100,0,0,0,0]);
@@ -3048,7 +3041,7 @@ begin
     CheckI64(Format('AddI64x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SubI64x8;
+procedure TTestCase_RVVParity.Test_SubI64x8;
 var a, b, rvv, scalar: TVecI64x8; i: Integer;
 begin
   a := MakeI64x8([10,20,30,40,50,60,70,80]);
@@ -3059,7 +3052,7 @@ begin
     CheckI64(Format('SubI64x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_AndI64x8;
+procedure TTestCase_RVVParity.Test_AndI64x8;
 var a, b, rvv, scalar: TVecI64x8; i: Integer;
 begin
   a := MakeI64x8([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -3070,7 +3063,7 @@ begin
     CheckI64(Format('AndI64x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_OrI64x8;
+procedure TTestCase_RVVParity.Test_OrI64x8;
 var a, b, rvv, scalar: TVecI64x8; i: Integer;
 begin
   a := MakeI64x8([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -3081,7 +3074,7 @@ begin
     CheckI64(Format('OrI64x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_XorI64x8;
+procedure TTestCase_RVVParity.Test_XorI64x8;
 var a, b, rvv, scalar: TVecI64x8; i: Integer;
 begin
   a := MakeI64x8([$FF,$0F,$F0,$AA,$55,$FF,$00,$0F]);
@@ -3096,110 +3089,110 @@ end;
 // Mask operations
 // =============================================================
 
-procedure TRVVParityTestCase.Test_Mask4_AllAnyNone;
+procedure TTestCase_RVVParity.Test_Mask4_AllAnyNone;
 begin
-  AssertTrue('Mask4All($F)', ScalarMask4All($F));
-  AssertFalse('Mask4All($A)', ScalarMask4All($A));
-  AssertTrue('Mask4Any($A)', ScalarMask4Any($A));
-  AssertFalse('Mask4Any(0)', ScalarMask4Any(0));
-  AssertTrue('Mask4None(0)', ScalarMask4None(0));
-  AssertFalse('Mask4None($F)', ScalarMask4None($F));
+  CheckTrue(ScalarMask4All($F), 'Mask4All($F)');
+  CheckFalse(ScalarMask4All($A), 'Mask4All($A)');
+  CheckTrue(ScalarMask4Any($A), 'Mask4Any($A)');
+  CheckFalse(ScalarMask4Any(0), 'Mask4Any(0)');
+  CheckTrue(ScalarMask4None(0), 'Mask4None(0)');
+  CheckFalse(ScalarMask4None($F), 'Mask4None($F)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask4_PopCountFirstSet;
+procedure TTestCase_RVVParity.Test_Mask4_PopCountFirstSet;
 begin
-  AssertEquals('Mask4PopCount($F)', 4, ScalarMask4PopCount($F));
-  AssertEquals('Mask4PopCount($5)', 2, ScalarMask4PopCount($5));
-  AssertEquals('Mask4PopCount(0)', 0, ScalarMask4PopCount(0));
-  AssertEquals('Mask4FirstSet(0)', -1, ScalarMask4FirstSet(0));
-  AssertEquals('Mask4FirstSet($2)', 1, ScalarMask4FirstSet($2));
-  AssertEquals('Mask4FirstSet($8)', 3, ScalarMask4FirstSet($8));
+  CheckEqual(4, ScalarMask4PopCount($F), 'Mask4PopCount($F)');
+  CheckEqual(2, ScalarMask4PopCount($5), 'Mask4PopCount($5)');
+  CheckEqual(0, ScalarMask4PopCount(0), 'Mask4PopCount(0)');
+  CheckEqual(-1, ScalarMask4FirstSet(0), 'Mask4FirstSet(0)');
+  CheckEqual(1, ScalarMask4FirstSet($2), 'Mask4FirstSet($2)');
+  CheckEqual(3, ScalarMask4FirstSet($8), 'Mask4FirstSet($8)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask4_LogicalOps;
+procedure TTestCase_RVVParity.Test_Mask4_LogicalOps;
 begin
-  AssertEquals('Mask4And', $0A, $0F and $AA and $0F);
-  AssertEquals('Mask4Or', $0F, ($0F or $A0) and $0F);
-  AssertEquals('Mask4Xor', $05, ($0F xor $0A) and $0F);
-  AssertEquals('Mask4Not', $0A, (not $05) and $0F);
+  CheckEqual($0A, $0F and $AA and $0F, 'Mask4And');
+  CheckEqual($0F, ($0F or $A0) and $0F, 'Mask4Or');
+  CheckEqual($05, ($0F xor $0A) and $0F, 'Mask4Xor');
+  CheckEqual($0A, (not $05) and $0F, 'Mask4Not');
 end;
 
-procedure TRVVParityTestCase.Test_Mask8_AllAnyNone;
+procedure TTestCase_RVVParity.Test_Mask8_AllAnyNone;
 begin
-  AssertTrue('Mask8All($FF)', ScalarMask8All($FF));
-  AssertFalse('Mask8All($AA)', ScalarMask8All($AA));
-  AssertTrue('Mask8Any($01)', ScalarMask8Any($01));
-  AssertFalse('Mask8Any(0)', ScalarMask8Any(0));
-  AssertTrue('Mask8None(0)', ScalarMask8None(0));
-  AssertFalse('Mask8None($FF)', ScalarMask8None($FF));
+  CheckTrue(ScalarMask8All($FF), 'Mask8All($FF)');
+  CheckFalse(ScalarMask8All($AA), 'Mask8All($AA)');
+  CheckTrue(ScalarMask8Any($01), 'Mask8Any($01)');
+  CheckFalse(ScalarMask8Any(0), 'Mask8Any(0)');
+  CheckTrue(ScalarMask8None(0), 'Mask8None(0)');
+  CheckFalse(ScalarMask8None($FF), 'Mask8None($FF)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask8_PopCountFirstSet;
+procedure TTestCase_RVVParity.Test_Mask8_PopCountFirstSet;
 begin
-  AssertEquals('Mask8PopCount($FF)', 8, ScalarMask8PopCount($FF));
-  AssertEquals('Mask8PopCount($55)', 4, ScalarMask8PopCount($55));
-  AssertEquals('Mask8FirstSet(0)', -1, ScalarMask8FirstSet(0));
-  AssertEquals('Mask8FirstSet($04)', 2, ScalarMask8FirstSet($04));
+  CheckEqual(8, ScalarMask8PopCount($FF), 'Mask8PopCount($FF)');
+  CheckEqual(4, ScalarMask8PopCount($55), 'Mask8PopCount($55)');
+  CheckEqual(-1, ScalarMask8FirstSet(0), 'Mask8FirstSet(0)');
+  CheckEqual(2, ScalarMask8FirstSet($04), 'Mask8FirstSet($04)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask8_LogicalOps;
+procedure TTestCase_RVVParity.Test_Mask8_LogicalOps;
 begin
-  AssertEquals('Mask8And', $0F, $FF and $0F);
-  AssertEquals('Mask8Or', $FF, $F0 or $0F);
-  AssertEquals('Mask8Xor', $F0, $FF xor $0F);
-  AssertEquals('Mask8Not', Byte($F0), Byte(not $0F));
+  CheckEqual($0F, $FF and $0F, 'Mask8And');
+  CheckEqual($FF, $F0 or $0F, 'Mask8Or');
+  CheckEqual($F0, $FF xor $0F, 'Mask8Xor');
+  CheckEqual(Byte($F0), Byte(not $0F), 'Mask8Not');
 end;
 
-procedure TRVVParityTestCase.Test_Mask16_AllAnyNone;
+procedure TTestCase_RVVParity.Test_Mask16_AllAnyNone;
 begin
-  AssertTrue('Mask16All($FFFF)', ScalarMask16All($FFFF));
-  AssertFalse('Mask16All($AAAA)', ScalarMask16All($AAAA));
-  AssertTrue('Mask16Any($0001)', ScalarMask16Any($0001));
-  AssertFalse('Mask16Any(0)', ScalarMask16Any(0));
-  AssertTrue('Mask16None(0)', ScalarMask16None(0));
-  AssertFalse('Mask16None($FFFF)', ScalarMask16None($FFFF));
+  CheckTrue(ScalarMask16All($FFFF), 'Mask16All($FFFF)');
+  CheckFalse(ScalarMask16All($AAAA), 'Mask16All($AAAA)');
+  CheckTrue(ScalarMask16Any($0001), 'Mask16Any($0001)');
+  CheckFalse(ScalarMask16Any(0), 'Mask16Any(0)');
+  CheckTrue(ScalarMask16None(0), 'Mask16None(0)');
+  CheckFalse(ScalarMask16None($FFFF), 'Mask16None($FFFF)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask16_PopCountFirstSet;
+procedure TTestCase_RVVParity.Test_Mask16_PopCountFirstSet;
 begin
-  AssertEquals('Mask16PopCount($FFFF)', 16, ScalarMask16PopCount($FFFF));
-  AssertEquals('Mask16PopCount($5555)', 8, ScalarMask16PopCount($5555));
-  AssertEquals('Mask16FirstSet(0)', -1, ScalarMask16FirstSet(0));
-  AssertEquals('Mask16FirstSet($0010)', 4, ScalarMask16FirstSet($0010));
+  CheckEqual(16, ScalarMask16PopCount($FFFF), 'Mask16PopCount($FFFF)');
+  CheckEqual(8, ScalarMask16PopCount($5555), 'Mask16PopCount($5555)');
+  CheckEqual(-1, ScalarMask16FirstSet(0), 'Mask16FirstSet(0)');
+  CheckEqual(4, ScalarMask16FirstSet($0010), 'Mask16FirstSet($0010)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask16_LogicalOps;
+procedure TTestCase_RVVParity.Test_Mask16_LogicalOps;
 begin
-  AssertEquals('Mask16And', $00FF, $FFFF and $00FF);
-  AssertEquals('Mask16Or', $FFFF, $FF00 or $00FF);
-  AssertEquals('Mask16Xor', $FF00, $FFFF xor $00FF);
-  AssertEquals('Mask16Not', Word($F0F0), Word(not $0F0F));
+  CheckEqual($00FF, $FFFF and $00FF, 'Mask16And');
+  CheckEqual($FFFF, $FF00 or $00FF, 'Mask16Or');
+  CheckEqual($FF00, $FFFF xor $00FF, 'Mask16Xor');
+  CheckEqual(Word($F0F0), Word(not $0F0F), 'Mask16Not');
 end;
 
-procedure TRVVParityTestCase.Test_Mask2_AllAnyNone;
+procedure TTestCase_RVVParity.Test_Mask2_AllAnyNone;
 begin
-  AssertTrue('Mask2All($3)', ScalarMask2All($3));
-  AssertFalse('Mask2All($2)', ScalarMask2All($2));
-  AssertTrue('Mask2Any($2)', ScalarMask2Any($2));
-  AssertFalse('Mask2Any(0)', ScalarMask2Any(0));
-  AssertTrue('Mask2None(0)', ScalarMask2None(0));
-  AssertFalse('Mask2None($3)', ScalarMask2None($3));
+  CheckTrue(ScalarMask2All($3), 'Mask2All($3)');
+  CheckFalse(ScalarMask2All($2), 'Mask2All($2)');
+  CheckTrue(ScalarMask2Any($2), 'Mask2Any($2)');
+  CheckFalse(ScalarMask2Any(0), 'Mask2Any(0)');
+  CheckTrue(ScalarMask2None(0), 'Mask2None(0)');
+  CheckFalse(ScalarMask2None($3), 'Mask2None($3)');
 end;
 
-procedure TRVVParityTestCase.Test_Mask2_PopCountFirstSet;
+procedure TTestCase_RVVParity.Test_Mask2_PopCountFirstSet;
 begin
-  AssertEquals('Mask2PopCount($3)', 2, ScalarMask2PopCount($3));
-  AssertEquals('Mask2PopCount($1)', 1, ScalarMask2PopCount($1));
-  AssertEquals('Mask2PopCount(0)', 0, ScalarMask2PopCount(0));
-  AssertEquals('Mask2FirstSet(0)', -1, ScalarMask2FirstSet(0));
-  AssertEquals('Mask2FirstSet($2)', 1, ScalarMask2FirstSet($2));
+  CheckEqual(2, ScalarMask2PopCount($3), 'Mask2PopCount($3)');
+  CheckEqual(1, ScalarMask2PopCount($1), 'Mask2PopCount($1)');
+  CheckEqual(0, ScalarMask2PopCount(0), 'Mask2PopCount(0)');
+  CheckEqual(-1, ScalarMask2FirstSet(0), 'Mask2FirstSet(0)');
+  CheckEqual(1, ScalarMask2FirstSet($2), 'Mask2FirstSet($2)');
 end;
 
 // =============================================================
 // Saturated arithmetic
 // =============================================================
 
-procedure TRVVParityTestCase.Test_SatAddI8x16;
+procedure TTestCase_RVVParity.Test_SatAddI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(127, 50, -128, 0, 100, -100, 64, -64, 1,2,3,4,5,6,7,8);
@@ -3210,7 +3203,7 @@ begin
     CheckI32(Format('SatAddI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatSubI8x16;
+procedure TTestCase_RVVParity.Test_SatSubI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
   a := MakeI8x16(-128, 0, 127, 50, 0, 0, 0, 0, 0,0,0,0,0,0,0,0);
@@ -3221,7 +3214,7 @@ begin
     CheckI32(Format('SatSubI8x16[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatAddI16x8;
+procedure TTestCase_RVVParity.Test_SatAddI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(32767, 10000, -32768, 0, 0, 0, 0, 0);
@@ -3232,7 +3225,7 @@ begin
     CheckI32(Format('SatAddI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatSubI16x8;
+procedure TTestCase_RVVParity.Test_SatSubI16x8;
 var a, b, rvv, scalar: TVecI16x8; i: Integer;
 begin
   a := MakeI16x8(-32768, 0, 32767, 0, 0, 0, 0, 0);
@@ -3243,7 +3236,7 @@ begin
     CheckI32(Format('SatSubI16x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatAddU8x16;
+procedure TTestCase_RVVParity.Test_SatAddU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(255, 200, 0, 100, 0,0,0,0, 0,0,0,0,0,0,0,0);
@@ -3254,7 +3247,7 @@ begin
     CheckU32(Format('SatAddU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatSubU8x16;
+procedure TTestCase_RVVParity.Test_SatSubU8x16;
 var a, b, rvv, scalar: TVecU8x16; i: Integer;
 begin
   a := MakeU8x16(0, 10, 200, 50, 0,0,0,0, 0,0,0,0,0,0,0,0);
@@ -3265,7 +3258,7 @@ begin
     CheckU32(Format('SatSubU8x16[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatAddU16x8;
+procedure TTestCase_RVVParity.Test_SatAddU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(65535, 40000, 0, 10000, 0, 0, 0, 0);
@@ -3276,7 +3269,7 @@ begin
     CheckU32(Format('SatAddU16x8[%d]', [i]), scalar.u[i], rvv.u[i]);
 end;
 
-procedure TRVVParityTestCase.Test_SatSubU16x8;
+procedure TTestCase_RVVParity.Test_SatSubU16x8;
 var a, b, rvv, scalar: TVecU16x8; i: Integer;
 begin
   a := MakeU16x8(0, 10, 50000, 100, 0, 0, 0, 0);
@@ -3291,7 +3284,7 @@ end;
 // Insert operations
 // =============================================================
 
-procedure TRVVParityTestCase.Test_InsertF32x8;
+procedure TTestCase_RVVParity.Test_InsertF32x8;
 var a, rvv, scalar: TVecF32x8; i: Integer;
 begin
   a := ScalarZeroF32x8();
@@ -3301,7 +3294,7 @@ begin
     CheckF32(Format('InsertF32x8[%d]', [i]), scalar.f[i], rvv.f[i]);
 end;
 
-procedure TRVVParityTestCase.Test_InsertF64x4;
+procedure TTestCase_RVVParity.Test_InsertF64x4;
 var a, rvv, scalar: TVecF64x4; i: Integer;
 begin
   a := ScalarZeroF64x4();
@@ -3311,7 +3304,7 @@ begin
     CheckF64(Format('InsertF64x4[%d]', [i]), scalar.d[i], rvv.d[i]);
 end;
 
-procedure TRVVParityTestCase.Test_InsertI32x4;
+procedure TTestCase_RVVParity.Test_InsertI32x4;
 var a, rvv, scalar: TVecI32x4; i: Integer;
 begin
   a := MakeI32x4(0, 0, 0, 0);
@@ -3321,7 +3314,7 @@ begin
     CheckI32(Format('InsertI32x4[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_InsertI32x8;
+procedure TTestCase_RVVParity.Test_InsertI32x8;
 var a, rvv, scalar: TVecI32x8; i: Integer;
 begin
   a := MakeI32x8(0,0,0,0,0,0,0,0);
@@ -3331,7 +3324,7 @@ begin
     CheckI32(Format('InsertI32x8[%d]', [i]), scalar.i[i], rvv.i[i]);
 end;
 
-procedure TRVVParityTestCase.Test_InsertI64x2;
+procedure TTestCase_RVVParity.Test_InsertI64x2;
 var a, rvv, scalar: TVecI64x2;
 begin
   a := MakeI64x2(0, 0);
@@ -3345,7 +3338,7 @@ end;
 // Reduce wide
 // =============================================================
 
-procedure TRVVParityTestCase.Test_ReduceAddF32x8;
+procedure TTestCase_RVVParity.Test_ReduceAddF32x8;
 var a: TVecF32x8; rvv, scalar: Single;
 begin
   a := MakeF32x8(1,2,3,4,5,6,7,8);
@@ -3354,7 +3347,7 @@ begin
   CheckF32('ReduceAddF32x8', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMinF32x8;
+procedure TTestCase_RVVParity.Test_ReduceMinF32x8;
 var a: TVecF32x8; rvv, scalar: Single;
 begin
   a := MakeF32x8(3,1,4,2,7,0,5,6);
@@ -3363,7 +3356,7 @@ begin
   CheckF32('ReduceMinF32x8', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMaxF32x8;
+procedure TTestCase_RVVParity.Test_ReduceMaxF32x8;
 var a: TVecF32x8; rvv, scalar: Single;
 begin
   a := MakeF32x8(3,1,4,2,7,0,5,6);
@@ -3372,7 +3365,7 @@ begin
   CheckF32('ReduceMaxF32x8', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMulF32x8;
+procedure TTestCase_RVVParity.Test_ReduceMulF32x8;
 var a: TVecF32x8; rvv, scalar: Single;
 begin
   a := MakeF32x8(1,2,3,4,5,6,7,8);
@@ -3381,7 +3374,7 @@ begin
   CheckF32('ReduceMulF32x8', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceAddF64x4;
+procedure TTestCase_RVVParity.Test_ReduceAddF64x4;
 var a: TVecF64x4; rvv, scalar: Double;
 begin
   a := MakeF64x4(1,2,3,4);
@@ -3390,7 +3383,7 @@ begin
   CheckF64('ReduceAddF64x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMinF64x4;
+procedure TTestCase_RVVParity.Test_ReduceMinF64x4;
 var a: TVecF64x4; rvv, scalar: Double;
 begin
   a := MakeF64x4(3,1,4,2);
@@ -3399,7 +3392,7 @@ begin
   CheckF64('ReduceMinF64x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMaxF64x4;
+procedure TTestCase_RVVParity.Test_ReduceMaxF64x4;
 var a: TVecF64x4; rvv, scalar: Double;
 begin
   a := MakeF64x4(3,1,4,2);
@@ -3408,7 +3401,7 @@ begin
   CheckF64('ReduceMaxF64x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMulF64x4;
+procedure TTestCase_RVVParity.Test_ReduceMulF64x4;
 var a: TVecF64x4; rvv, scalar: Double;
 begin
   a := MakeF64x4(1,2,3,4);
@@ -3417,7 +3410,7 @@ begin
   CheckF64('ReduceMulF64x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceAddF32x16;
+procedure TTestCase_RVVParity.Test_ReduceAddF32x16;
 var a: TVecF32x16; rvv, scalar: Single;
 begin
   a := MakeF32x16([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]);
@@ -3426,7 +3419,7 @@ begin
   CheckF32('ReduceAddF32x16', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMinF32x16;
+procedure TTestCase_RVVParity.Test_ReduceMinF32x16;
 var a: TVecF32x16; rvv, scalar: Single;
 begin
   a := MakeF32x16([3,1,4,2,7,0,5,6, 9,8,11,10,13,12,15,14]);
@@ -3435,7 +3428,7 @@ begin
   CheckF32('ReduceMinF32x16', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMaxF32x16;
+procedure TTestCase_RVVParity.Test_ReduceMaxF32x16;
 var a: TVecF32x16; rvv, scalar: Single;
 begin
   a := MakeF32x16([3,1,4,2,7,0,5,6, 9,8,11,10,13,12,15,14]);
@@ -3444,7 +3437,7 @@ begin
   CheckF32('ReduceMaxF32x16', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_ReduceMulF32x16;
+procedure TTestCase_RVVParity.Test_ReduceMulF32x16;
 var a: TVecF32x16; rvv, scalar: Single;
 begin
   a := MakeF32x16([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]);
@@ -3457,7 +3450,7 @@ end;
 // Dot / Length
 // =============================================================
 
-procedure TRVVParityTestCase.Test_DotF32x4;
+procedure TTestCase_RVVParity.Test_DotF32x4;
 var a, b: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(1,2,3,4);
@@ -3467,7 +3460,7 @@ begin
   CheckF32('DotF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_DotF32x3;
+procedure TTestCase_RVVParity.Test_DotF32x3;
 var a, b: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(1,2,3,0);
@@ -3477,7 +3470,7 @@ begin
   CheckF32('DotF32x3', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_LengthF32x4;
+procedure TTestCase_RVVParity.Test_LengthF32x4;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(3,4,0,0);
@@ -3486,7 +3479,7 @@ begin
   CheckF32('LengthF32x4', scalar, rvv);
 end;
 
-procedure TRVVParityTestCase.Test_LengthF32x3;
+procedure TTestCase_RVVParity.Test_LengthF32x3;
 var a: TVecF32x4; rvv, scalar: Single;
 begin
   a := MakeF32x4(1,2,2,0);
@@ -3500,46 +3493,42 @@ end;
 // G16 Phase 2: RVV type layout + dispatch contract tests
 // =============================================================
 
-procedure TRVVParityTestCase.Test_RVVVector_Size;
+procedure TTestCase_RVVParity.Test_RVVVector_Size;
 begin
   {$IFDEF CPURISCV64}
-  AssertEquals('RVVVector size should be 64 bytes', 64, SizeOf(TRVVVector));
+  CheckEqual(64, SizeOf(TRVVVector), 'RVVVector size should be 64 bytes');
   {$ELSE}
-  AssertTrue('RVVVector type not available on this platform', True);
+  CheckTrue(True, 'RVVVector type not available on this platform');
   {$ENDIF}
 end;
 
-procedure TRVVParityTestCase.Test_RVVMask_Size;
+procedure TTestCase_RVVParity.Test_RVVMask_Size;
 begin
   {$IFDEF CPURISCV64}
-  AssertTrue('RVVMask size should be positive', SizeOf(TRVVMask) > 0);
+  CheckTrue(SizeOf(TRVVMask) > 0, 'RVVMask size should be positive');
   {$ELSE}
-  AssertTrue('RVVMask type not available on this platform', True);
+  CheckTrue(True, 'RVVMask type not available on this platform');
   {$ENDIF}
 end;
 
-procedure TRVVParityTestCase.Test_RVV_FeatureDetection_OnX86;
+procedure TTestCase_RVVParity.Test_RVV_FeatureDetection_OnX86;
 begin
   {$IFDEF CPUX86_64}
   // On x86, the RVV backend should not be registered/available
-  AssertFalse('RVV should not be available on x86',
-    GetBackendInfo(sbRISCVV).Available);
+  CheckFalse(GetBackendInfo(sbRISCVV).Available, 'RVV should not be available on x86');
   {$ELSE}
-  AssertTrue('RVV detection test - non-x86 placeholder', True);
+  CheckTrue(True, 'RVV detection test - non-x86 placeholder');
   {$ENDIF}
 end;
 
-procedure TRVVParityTestCase.Test_RVV_BackendPriority_Experimental;
+procedure TTestCase_RVVParity.Test_RVV_BackendPriority_Experimental;
 var
   LInfo: TSimdBackendInfo;
 begin
   LInfo := GetBackendInfo(sbRISCVV);
-  AssertTrue('RVV backend priority should be non-negative',
-    LInfo.Priority >= 0);
-  AssertTrue('RVV backend name should contain RVV or RISC-V',
-    (Pos('RVV', LInfo.Name) > 0) or (Pos('RISC', LInfo.Name) > 0));
+  CheckTrue(LInfo.Priority >= 0, 'RVV backend priority should be non-negative');
+  CheckTrue((Pos('RVV', LInfo.Name) > 0) or (Pos('RISC', LInfo.Name) > 0), 'RVV backend name should contain RVV or RISC-V');
 end;
 
-initialization
-  RegisterTest(TRVVParityTestCase);
+
 end.

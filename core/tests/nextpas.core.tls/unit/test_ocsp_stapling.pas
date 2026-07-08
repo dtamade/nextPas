@@ -20,7 +20,7 @@ unit test_ocsp_stapling;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   nextpas.core.tls.ocsp.cache,
   nextpas.core.tls.ocsp.stapling,
   nextpas.core.tls.ocsp,
@@ -33,14 +33,14 @@ type
   // ========================================================================
   
   { TOCSPCacheTest - 测试 OCSP 响应缓存 }
-  TOCSPCacheTest = class(TTestCase)
+  TOCSPCacheTest = class(TTestFixture)
   private
     FCache: TOCSPResponseCache;
     FTestResponse: TBytes;
     FTestSerialNumber: TBytes;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure TestCacheCreation;
     procedure TestCachePutAndGet;
@@ -57,13 +57,13 @@ type
   // ========================================================================
   
   { TOCSPStaplingConfigTest - 测试 Stapling 配置 }
-  TOCSPStaplingConfigTest = class(TTestCase)
+  TOCSPStaplingConfigTest = class(TTestFixture)
   published
     procedure TestDefaultConfig;
     procedure TestConfigCustomization;
   end;
 
-  TOCSPStaplingResultTest = class(TTestCase)
+  TOCSPStaplingResultTest = class(TTestFixture)
   published
     procedure TestIsValid;
     procedure TestNeedsRefreshWithoutNextUpdate;
@@ -77,14 +77,14 @@ type
   // ========================================================================
   
   { TOCSPStaplingClientTest - 测试客户端 Stapling }
-  TOCSPStaplingClientTest = class(TTestCase)
+  TOCSPStaplingClientTest = class(TTestFixture)
   private
     FClient: TOCSPStaplingClient;
     FCache: TOCSPResponseCache;
     FConfig: TOCSPStaplingConfig;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure TestClientCreation;
     procedure TestShouldRequestStapling;
@@ -100,14 +100,14 @@ type
   // ========================================================================
   
   { TOCSPStaplingServerTest - 测试服务端 Stapling }
-  TOCSPStaplingServerTest = class(TTestCase)
+  TOCSPStaplingServerTest = class(TTestFixture)
   private
     FServer: TOCSPStaplingServer;
     FCache: TOCSPResponseCache;
     FConfig: TOCSPStaplingConfig;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure TestServerCreation;
     procedure TestGetStapledResponse;
@@ -121,13 +121,13 @@ type
   // ========================================================================
   
   { TOCSPStaplingManagerTest - 测试统一管理器 }
-  TOCSPStaplingManagerTest = class(TTestCase)
+  TOCSPStaplingManagerTest = class(TTestFixture)
   private
     FManager: TOCSPStaplingManager;
     FConfig: TOCSPStaplingConfig;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure TestManagerCreation;
     procedure TestClientInterface;
@@ -144,7 +144,7 @@ uses
 // TOCSPCacheTest 实现
 // ========================================================================
 
-procedure TOCSPCacheTest.SetUp;
+procedure TOCSPCacheTest.BeforeEach;
 begin
   FCache := TOCSPResponseCache.Create;
   SetLength(FTestSerialNumber, 16);
@@ -153,15 +153,15 @@ begin
   FillChar(FTestResponse[0], 100, $AA);
 end;
 
-procedure TOCSPCacheTest.TearDown;
+procedure TOCSPCacheTest.AfterEach;
 begin
   FCache.Free;
 end;
 
 procedure TOCSPCacheTest.TestCacheCreation;
 begin
-  AssertNotNull('Cache should be created', FCache);
-  AssertEquals('Cache should be empty initially', 0, FCache.GetCount);
+  CheckNotNil(FCache, 'Cache should be created');
+  CheckEqual(0, FCache.GetCount, 'Cache should be empty initially');
 end;
 
 procedure TOCSPCacheTest.TestCachePutAndGet;
@@ -176,21 +176,17 @@ begin
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
   
   // 检查计数
-  AssertEquals('Cache should contain 1 entry', 1, FCache.GetCount);
+  CheckEqual(1, FCache.GetCount, 'Cache should contain 1 entry');
   
   // 检查是否存在
-  AssertTrue('Cache should contain the entry', 
-    FCache.Contains(FTestSerialNumber));
+  CheckTrue(FCache.Contains(FTestSerialNumber), 'Cache should contain the entry');
   
   // 获取响应
-  AssertTrue('Should retrieve cached response', 
-    FCache.Get(FTestSerialNumber, Retrieved));
+  CheckTrue(FCache.Get(FTestSerialNumber, Retrieved), 'Should retrieve cached response');
   
   // 验证内容
-  AssertEquals('Retrieved response length should match', 
-    Length(FTestResponse), Length(Retrieved));
-  AssertTrue('Retrieved response content should match',
-    CompareMem(@FTestResponse[0], @Retrieved[0], Length(FTestResponse)));
+  CheckEqual(Length(FTestResponse), Length(Retrieved), 'Retrieved response length should match');
+  CheckTrue(CompareMem(@FTestResponse[0], @Retrieved[0], Length(FTestResponse)), 'Retrieved response content should match');
 end;
 
 procedure TOCSPCacheTest.TestCacheExpiry;
@@ -205,15 +201,13 @@ begin
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
   
   // 立即获取应该成功
-  AssertTrue('Should retrieve before expiry', 
-    FCache.Get(FTestSerialNumber, Retrieved));
+  CheckTrue(FCache.Get(FTestSerialNumber, Retrieved), 'Should retrieve before expiry');
   
   // 等待过期
   Sleep(1500);
   
   // 过期后获取应该失败
-  AssertFalse('Should not retrieve after expiry', 
-    FCache.Get(FTestSerialNumber, Retrieved));
+  CheckFalse(FCache.Get(FTestSerialNumber, Retrieved), 'Should not retrieve after expiry');
 end;
 
 procedure TOCSPCacheTest.TestCacheRemove;
@@ -226,16 +220,14 @@ begin
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
-  AssertTrue('Should contain entry', FCache.Contains(FTestSerialNumber));
+  CheckTrue(FCache.Contains(FTestSerialNumber), 'Should contain entry');
   
   // 移除响应
   FCache.Remove(FTestSerialNumber);
   
   // 验证已移除
-  AssertFalse('Should not contain entry after removal', 
-    FCache.Contains(FTestSerialNumber));
-  AssertFalse('Should not retrieve after removal', 
-    FCache.Get(FTestSerialNumber, Retrieved));
+  CheckFalse(FCache.Contains(FTestSerialNumber), 'Should not contain entry after removal');
+  CheckFalse(FCache.Get(FTestSerialNumber, Retrieved), 'Should not retrieve after removal');
 end;
 
 procedure TOCSPCacheTest.TestCacheClear;
@@ -255,13 +247,13 @@ begin
   FillChar(TestSerial[0], 16, $03);
   FCache.Put(TestSerial, FTestResponse, ThisUpdate, NextUpdate);
   
-  AssertEquals('Cache should contain 3 entries', 3, FCache.GetCount);
+  CheckEqual(3, FCache.GetCount, 'Cache should contain 3 entries');
   
   // 清空缓存
   FCache.Clear;
   
   // 验证已清空
-  AssertEquals('Cache should be empty after clear', 0, FCache.GetCount);
+  CheckEqual(0, FCache.GetCount, 'Cache should be empty after clear');
 end;
 
 procedure TOCSPCacheTest.TestCacheStats;
@@ -288,9 +280,9 @@ begin
   // 获取统计
   Stats := FCache.GetStats;
   
-  AssertEquals('Total entries should be 1', 1, Stats.TotalEntries);
-  AssertEquals('Hits should be 1', 1, Stats.Hits);
-  AssertEquals('Misses should be 1', 1, Stats.Misses);
+  CheckEqual(1, Stats.TotalEntries, 'Total entries should be 1');
+  CheckEqual(1, Stats.Hits, 'Hits should be 1');
+  CheckEqual(1, Stats.Misses, 'Misses should be 1');
 end;
 
 procedure TOCSPCacheTest.TestCacheHitRate;
@@ -322,12 +314,11 @@ begin
   // 获取统计
   Stats := FCache.GetStats;
   
-  AssertEquals('Hits should be 10', 10, Stats.Hits);
-  AssertEquals('Misses should be 5', 5, Stats.Misses);
+  CheckEqual(10, Stats.Hits, 'Hits should be 10');
+  CheckEqual(5, Stats.Misses, 'Misses should be 5');
   
   // 命中率应该是 10/(10+5) = 66.67%
-  AssertTrue('Hit rate should be around 66.67%', 
-    Abs(Stats.HitRate - 66.67) < 0.1);
+  CheckTrue(Abs(Stats.HitRate - 66.67) < 0.1, 'Hit rate should be around 66.67%');
 end;
 
 procedure TOCSPCacheTest.TestCachePersistence;
@@ -346,20 +337,17 @@ begin
     FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
     
     // 保存到文件
-    AssertTrue('Should save to file', FCache.SaveToFile(TempFile));
+    CheckTrue(FCache.SaveToFile(TempFile), 'Should save to file');
     
     // 创建新缓存并加载
     NewCache := TOCSPResponseCache.Create;
     try
-      AssertTrue('Should load from file', NewCache.LoadFromFile(TempFile));
+      CheckTrue(NewCache.LoadFromFile(TempFile), 'Should load from file');
       
       // 验证数据
-      AssertEquals('Loaded cache should have same count', 
-        FCache.GetCount, NewCache.GetCount);
-      AssertTrue('Should retrieve from loaded cache', 
-        NewCache.Get(FTestSerialNumber, Retrieved));
-      AssertEquals('Retrieved response should match', 
-        Length(FTestResponse), Length(Retrieved));
+      CheckEqual(FCache.GetCount, NewCache.GetCount, 'Loaded cache should have same count');
+      CheckTrue(NewCache.Get(FTestSerialNumber, Retrieved), 'Should retrieve from loaded cache');
+      CheckEqual(Length(FTestResponse), Length(Retrieved), 'Retrieved response should match');
     finally
       NewCache.Free;
     end;
@@ -378,19 +366,14 @@ var
 begin
   Config := TOCSPStaplingConfig.Default;
   
-  AssertTrue('Client request should be enabled by default', 
-    Config.EnableClientRequest);
-  AssertTrue('Server stapling should be enabled by default', 
-    Config.EnableServerStapling);
-  AssertFalse('Stapling should not be required by default', 
-    Config.RequireStapling);
-  AssertTrue('Auto refresh should be enabled by default', 
-    Config.AutoRefresh);
-  AssertEquals('Refresh before expiry should be 3600', 
-    3600, Config.RefreshBeforeExpiry);
-  AssertEquals('Max retries should be 3', 3, Config.MaxRetries);
-  AssertEquals('Timeout should be 10 seconds', 10, Config.TimeoutSeconds);
-  AssertTrue('Cache should be enabled by default', Config.UseCache);
+  CheckTrue(Config.EnableClientRequest, 'Client request should be enabled by default');
+  CheckTrue(Config.EnableServerStapling, 'Server stapling should be enabled by default');
+  CheckFalse(Config.RequireStapling, 'Stapling should not be required by default');
+  CheckTrue(Config.AutoRefresh, 'Auto refresh should be enabled by default');
+  CheckEqual(3600, Config.RefreshBeforeExpiry, 'Refresh before expiry should be 3600');
+  CheckEqual(3, Config.MaxRetries, 'Max retries should be 3');
+  CheckEqual(10, Config.TimeoutSeconds, 'Timeout should be 10 seconds');
+  CheckTrue(Config.UseCache, 'Cache should be enabled by default');
 end;
 
 procedure TOCSPStaplingConfigTest.TestConfigCustomization;
@@ -407,13 +390,11 @@ begin
   Config.TimeoutSeconds := 30;
   
   // 验证自定义值
-  AssertFalse('Client request should be disabled', 
-    Config.EnableClientRequest);
-  AssertTrue('Stapling should be required', Config.RequireStapling);
-  AssertEquals('Refresh before expiry should be 7200', 
-    7200, Config.RefreshBeforeExpiry);
-  AssertEquals('Max retries should be 5', 5, Config.MaxRetries);
-  AssertEquals('Timeout should be 30 seconds', 30, Config.TimeoutSeconds);
+  CheckFalse(Config.EnableClientRequest, 'Client request should be disabled');
+  CheckTrue(Config.RequireStapling, 'Stapling should be required');
+  CheckEqual(7200, Config.RefreshBeforeExpiry, 'Refresh before expiry should be 7200');
+  CheckEqual(5, Config.MaxRetries, 'Max retries should be 5');
+  CheckEqual(30, Config.TimeoutSeconds, 'Timeout should be 30 seconds');
 end;
 
 procedure TOCSPStaplingResultTest.TestIsValid;
@@ -423,10 +404,10 @@ begin
   FillChar(LResult, SizeOf(LResult), 0);
   LResult.Status := ossVerified;
   LResult.CertStatus := ocspGood;
-  AssertTrue('Verified good response should be valid', LResult.IsValid);
+  CheckTrue(LResult.IsValid, 'Verified good response should be valid');
 
   LResult.Status := ossExpired;
-  AssertFalse('Expired response should not be valid', LResult.IsValid);
+  CheckFalse(LResult.IsValid, 'Expired response should not be valid');
 end;
 
 procedure TOCSPStaplingResultTest.TestNeedsRefreshWithoutNextUpdate;
@@ -435,7 +416,7 @@ var
 begin
   FillChar(LResult, SizeOf(LResult), 0);
   LResult.NextUpdate := 0;
-  AssertFalse('Missing nextUpdate should not request refresh', LResult.NeedsRefresh);
+  CheckFalse(LResult.NeedsRefresh, 'Missing nextUpdate should not request refresh');
 end;
 
 procedure TOCSPStaplingResultTest.TestNeedsRefreshWithinWindow;
@@ -444,7 +425,7 @@ var
 begin
   FillChar(LResult, SizeOf(LResult), 0);
   LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 1800);
-  AssertTrue('Response expiring within one hour should refresh', LResult.NeedsRefresh);
+  CheckTrue(LResult.NeedsRefresh, 'Response expiring within one hour should refresh');
 end;
 
 procedure TOCSPStaplingResultTest.TestNeedsRefreshWhenExpired;
@@ -453,7 +434,7 @@ var
 begin
   FillChar(LResult, SizeOf(LResult), 0);
   LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, -7200);
-  AssertTrue('Expired response should refresh even when long expired', LResult.NeedsRefresh);
+  CheckTrue(LResult.NeedsRefresh, 'Expired response should refresh even when long expired');
 end;
 
 procedure TOCSPStaplingResultTest.TestNeedsRefreshWhenFresh;
@@ -462,21 +443,21 @@ var
 begin
   FillChar(LResult, SizeOf(LResult), 0);
   LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 7200);
-  AssertFalse('Response expiring after the refresh window should stay fresh', LResult.NeedsRefresh);
+  CheckFalse(LResult.NeedsRefresh, 'Response expiring after the refresh window should stay fresh');
 end;
 
 // ========================================================================
 // TOCSPStaplingClientTest 实现
 // ========================================================================
 
-procedure TOCSPStaplingClientTest.SetUp;
+procedure TOCSPStaplingClientTest.BeforeEach;
 begin
   FConfig := TOCSPStaplingConfig.Default;
   FCache := TOCSPResponseCache.Create;
   FClient := TOCSPStaplingClient.Create(FConfig, FCache);
 end;
 
-procedure TOCSPStaplingClientTest.TearDown;
+procedure TOCSPStaplingClientTest.AfterEach;
 begin
   FClient.Free;
   FCache.Free;
@@ -484,20 +465,18 @@ end;
 
 procedure TOCSPStaplingClientTest.TestClientCreation;
 begin
-  AssertNotNull('Client should be created', FClient);
+  CheckNotNil(FClient, 'Client should be created');
 end;
 
 procedure TOCSPStaplingClientTest.TestShouldRequestStapling;
 begin
   // 默认配置应该请求 stapling
-  AssertTrue('Should request stapling by default', 
-    FClient.ShouldRequestStapling);
+  CheckTrue(FClient.ShouldRequestStapling, 'Should request stapling by default');
   
   // 禁用后不应该请求
   FConfig.EnableClientRequest := False;
   FClient.Config := FConfig;
-  AssertFalse('Should not request stapling when disabled', 
-    FClient.ShouldRequestStapling);
+  CheckFalse(FClient.ShouldRequestStapling, 'Should not request stapling when disabled');
 end;
 
 procedure TOCSPStaplingClientTest.TestProcessValidResponse;
@@ -518,12 +497,9 @@ begin
   LIssuerCert := TX509Certificate.Create;
   try
     LResult := FClient.ProcessStapledResponse(LResponse, LCert, LIssuerCert);
-    AssertTrue('Successful DER without matching cert should fail verification',
-      LResult.Status = ossVerificationFailed);
-    AssertTrue('Error message should mention certificate lookup',
-      Pos('Certificate', LResult.ErrorMessage) > 0);
-    AssertTrue('LastResult should track latest status',
-      FClient.LastResult.Status = LResult.Status);
+    CheckTrue(LResult.Status = ossVerificationFailed, 'Successful DER without matching cert should fail verification');
+    CheckTrue(Pos('Certificate', LResult.ErrorMessage) > 0, 'Error message should mention certificate lookup');
+    CheckTrue(FClient.LastResult.Status = LResult.Status, 'LastResult should track latest status');
   finally
     LCert.Free;
     LIssuerCert.Free;
@@ -544,10 +520,8 @@ begin
   IssuerCert := TX509Certificate.Create;
   try
     Result := FClient.ProcessStapledResponse(Response, Cert, IssuerCert);
-    AssertTrue('Status should be verification failed', 
-      Result.Status = ossVerificationFailed);
-    AssertTrue('Error message should not be empty', 
-      Result.ErrorMessage <> '');
+    CheckTrue(Result.Status = ossVerificationFailed, 'Status should be verification failed');
+    CheckTrue(Result.ErrorMessage <> '', 'Error message should not be empty');
   finally
     Cert.Free;
     IssuerCert.Free;
@@ -567,8 +541,7 @@ begin
   IssuerCert := TX509Certificate.Create;
   try
     Result := FClient.ProcessStapledResponse(Response, Cert, IssuerCert);
-    AssertTrue('Status should be not provided', 
-      Result.Status = ossNotProvided);
+    CheckTrue(Result.Status = ossNotProvided, 'Status should be not provided');
   finally
     Cert.Free;
     IssuerCert.Free;
@@ -580,14 +553,12 @@ begin
   // 不要求 stapling 时总是通过
   FConfig.RequireStapling := False;
   FClient.Config := FConfig;
-  AssertTrue('Should validate when not required', 
-    FClient.ValidateStaplingRequirement(False));
+  CheckTrue(FClient.ValidateStaplingRequirement(False), 'Should validate when not required');
   
   // 要求 stapling 但未提供时失败
   FConfig.RequireStapling := True;
   FClient.Config := FConfig;
-  AssertFalse('Should not validate when required but not provided', 
-    FClient.ValidateStaplingRequirement(False));
+  CheckFalse(FClient.ValidateStaplingRequirement(False), 'Should not validate when required but not provided');
 end;
 
 procedure TOCSPStaplingClientTest.TestResponseCaching;
@@ -607,14 +578,12 @@ begin
   LIssuerCert := TX509Certificate.Create;
   try
     LInvalidResult := FClient.ProcessStapledResponse(LInvalid, LCert, LIssuerCert);
-    AssertTrue('Invalid response should fail verification',
-      LInvalidResult.Status = ossVerificationFailed);
-    AssertEquals('Failed response should not be cached', 0, FCache.GetCount);
+    CheckTrue(LInvalidResult.Status = ossVerificationFailed, 'Invalid response should fail verification');
+    CheckEqual(0, FCache.GetCount, 'Failed response should not be cached');
 
     LEmptyResult := FClient.ProcessStapledResponse(LEmpty, LCert, LIssuerCert);
-    AssertTrue('Empty response should be marked as not provided',
-      LEmptyResult.Status = ossNotProvided);
-    AssertEquals('Empty response should not be cached', 0, FCache.GetCount);
+    CheckTrue(LEmptyResult.Status = ossNotProvided, 'Empty response should be marked as not provided');
+    CheckEqual(0, FCache.GetCount, 'Empty response should not be cached');
   finally
     Finalize(LEmptyResult);
     Finalize(LInvalidResult);
@@ -627,14 +596,14 @@ end;
 // TOCSPStaplingServerTest 实现
 // ========================================================================
 
-procedure TOCSPStaplingServerTest.SetUp;
+procedure TOCSPStaplingServerTest.BeforeEach;
 begin
   FConfig := TOCSPStaplingConfig.Default;
   FCache := TOCSPResponseCache.Create;
   FServer := TOCSPStaplingServer.Create(FConfig, FCache);
 end;
 
-procedure TOCSPStaplingServerTest.TearDown;
+procedure TOCSPStaplingServerTest.AfterEach;
 begin
   FServer.Free;
   FCache.Free;
@@ -642,7 +611,7 @@ end;
 
 procedure TOCSPStaplingServerTest.TestServerCreation;
 begin
-  AssertNotNull('Server should be created', FServer);
+  CheckNotNil(FServer, 'Server should be created');
 end;
 
 procedure TOCSPStaplingServerTest.TestGetStapledResponse;
@@ -660,7 +629,7 @@ begin
   LIssuerCert := TX509Certificate.Create;
   try
     LResponse := LServer.GetStapledResponse(LCert, LIssuerCert, False);
-    AssertEquals('Disabled stapling should return empty response', 0, Length(LResponse));
+    CheckEqual(0, Length(LResponse), 'Disabled stapling should return empty response');
   finally
     LCert.Free;
     LIssuerCert.Free;
@@ -676,8 +645,7 @@ begin
   LCert := TX509Certificate.Create;
   LIssuerCert := TX509Certificate.Create;
   try
-    AssertFalse('Refresh should fail when certificate has no OCSP URL',
-      FServer.RefreshResponse(LCert, LIssuerCert));
+    CheckFalse(FServer.RefreshResponse(LCert, LIssuerCert), 'Refresh should fail when certificate has no OCSP URL');
   finally
     LCert.Free;
     LIssuerCert.Free;
@@ -687,16 +655,13 @@ end;
 procedure TOCSPStaplingServerTest.TestAutoRefresh;
 begin
   // 测试自动刷新启用/禁用
-  AssertFalse('Auto refresh should be disabled initially', 
-    FServer.AutoRefreshEnabled);
+  CheckFalse(FServer.AutoRefreshEnabled, 'Auto refresh should be disabled initially');
   
   FServer.EnableAutoRefresh;
-  AssertTrue('Auto refresh should be enabled', 
-    FServer.AutoRefreshEnabled);
+  CheckTrue(FServer.AutoRefreshEnabled, 'Auto refresh should be enabled');
   
   FServer.DisableAutoRefresh;
-  AssertFalse('Auto refresh should be disabled', 
-    FServer.AutoRefreshEnabled);
+  CheckFalse(FServer.AutoRefreshEnabled, 'Auto refresh should be disabled');
 end;
 
 procedure TOCSPStaplingServerTest.TestCacheIntegration;
@@ -718,7 +683,7 @@ begin
   LThisUpdate := DateTimeUtcNow;
   LNextUpdate := DateTimeUtcNow + 1.0;
   FCache.Put(LSerial, LCachedResponse, LThisUpdate, LNextUpdate);
-  AssertEquals('Cache should contain preload entry', 1, FCache.GetCount);
+  CheckEqual(1, FCache.GetCount, 'Cache should contain preload entry');
 
   LConfig := TOCSPStaplingConfig.Default;
   LConfig.EnableServerStapling := False;
@@ -727,8 +692,8 @@ begin
   LIssuerCert := TX509Certificate.Create;
   try
     LReturned := LServer.GetStapledResponse(LCert, LIssuerCert, False);
-    AssertEquals('Disabled server should return empty response', 0, Length(LReturned));
-    AssertEquals('Cache entry should remain unchanged', 1, FCache.GetCount);
+    CheckEqual(0, Length(LReturned), 'Disabled server should return empty response');
+    CheckEqual(1, FCache.GetCount, 'Cache entry should remain unchanged');
   finally
     LCert.Free;
     LIssuerCert.Free;
@@ -740,29 +705,29 @@ end;
 // TOCSPStaplingManagerTest 实现
 // ========================================================================
 
-procedure TOCSPStaplingManagerTest.SetUp;
+procedure TOCSPStaplingManagerTest.BeforeEach;
 begin
   FConfig := TOCSPStaplingConfig.Default;
   FManager := TOCSPStaplingManager.Create(FConfig);
 end;
 
-procedure TOCSPStaplingManagerTest.TearDown;
+procedure TOCSPStaplingManagerTest.AfterEach;
 begin
   FManager.Free;
 end;
 
 procedure TOCSPStaplingManagerTest.TestManagerCreation;
 begin
-  AssertNotNull('Manager should be created', FManager);
-  AssertNotNull('Client should be created', FManager.Client);
-  AssertNotNull('Server should be created', FManager.Server);
-  AssertNotNull('Cache should be created', FManager.Cache);
+  CheckNotNil(FManager, 'Manager should be created');
+  CheckNotNil(FManager.Client, 'Client should be created');
+  CheckNotNil(FManager.Server, 'Server should be created');
+  CheckNotNil(FManager.Cache, 'Cache should be created');
 end;
 
 procedure TOCSPStaplingManagerTest.TestClientInterface;
 begin
   // 测试客户端接口
-  AssertTrue('Should request stapling', FManager.ClientShouldRequest);
+  CheckTrue(FManager.ClientShouldRequest, 'Should request stapling');
 end;
 
 procedure TOCSPStaplingManagerTest.TestServerInterface;
@@ -779,10 +744,8 @@ begin
   LIssuerCert := TX509Certificate.Create;
   try
     LResponse := LManager.ServerGetResponse(LCert, LIssuerCert);
-    AssertEquals('Server response should be empty when stapling disabled',
-      0, Length(LResponse));
-    AssertFalse('Server refresh should fail without OCSP URL',
-      LManager.ServerRefreshResponse(LCert, LIssuerCert));
+    CheckEqual(0, Length(LResponse), 'Server response should be empty when stapling disabled');
+    CheckFalse(LManager.ServerRefreshResponse(LCert, LIssuerCert), 'Server refresh should fail without OCSP URL');
   finally
     LCert.Free;
     LIssuerCert.Free;
@@ -796,24 +759,16 @@ var
 begin
   // 测试缓存管理
   Stats := FManager.GetCacheStats;
-  AssertEquals('Cache should be empty initially', 0, Stats.TotalEntries);
+  CheckEqual(0, Stats.TotalEntries, 'Cache should be empty initially');
   
   // 清空缓存
   FManager.ClearCache;
   Stats := FManager.GetCacheStats;
-  AssertEquals('Cache should be empty after clear', 0, Stats.TotalEntries);
+  CheckEqual(0, Stats.TotalEntries, 'Cache should be empty after clear');
 end;
 
 // ========================================================================
 // 注册测试
 // ========================================================================
-
-initialization
-  RegisterTest(TOCSPCacheTest);
-  RegisterTest(TOCSPStaplingConfigTest);
-  RegisterTest(TOCSPStaplingResultTest);
-  RegisterTest(TOCSPStaplingClientTest);
-  RegisterTest(TOCSPStaplingServerTest);
-  RegisterTest(TOCSPStaplingManagerTest);
 
 end.

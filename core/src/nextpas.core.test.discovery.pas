@@ -29,6 +29,13 @@ uses
 
 type
   TTestFixture = class(TObject)
+  public
+    { Called before each test method. Override for per-test setup (save state, etc).
+      Default implementation does nothing. }
+    procedure BeforeEach; virtual;
+    { Called after each test method. Override for per-test teardown (restore state, etc).
+      Default implementation does nothing. }
+    procedure AfterEach; virtual;
   end;
 
   TTestFixtureClass = class of TTestFixture;
@@ -74,6 +81,18 @@ begin
   begin
     InvokeMethod(AStub);
   end);
+end;
+
+{ ── TTestFixture defaults ─────────────────────────────────────────────────── }
+
+procedure TTestFixture.BeforeEach;
+begin
+  { default: do nothing }
+end;
+
+procedure TTestFixture.AfterEach;
+begin
+  { default: do nothing }
 end;
 
 { ── VMT Method Table Access ───────────────────────────────────────────────── }
@@ -149,6 +168,10 @@ begin
     the fixture and nils the GFixtureRegistry entry to prevent double-free.
     If the suite is never run, finalization frees any remaining entries. }
   RegisterFixture(Result, AFixture);
+
+  { Wire up BeforeEach/AfterEach virtual methods as suite hooks }
+  Result.OnBeforeEach(procedure begin AFixture.BeforeEach end);
+  Result.OnAfterEach(procedure begin AFixture.AfterEach end);
 end;
 
 end.

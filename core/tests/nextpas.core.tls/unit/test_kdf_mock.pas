@@ -14,12 +14,12 @@ unit test_kdf_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   openssl_kdf_interface;
 
 type
   { TTestKDFMock - Test suite for KDF mock }
-  TTestKDFMock = class(TTestCase)
+  TTestKDFMock = class(TTestFixture)
   private
     FKDF: IKDF;
     FMock: TKDFMock;
@@ -28,8 +28,8 @@ type
     function GetTestSalt(aSize: Integer): TBytes;
     function GetTestInfo(aSize: Integer): TBytes;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // PBKDF2 tests
     procedure TestPBKDF2_ShouldSucceed_WithSHA256;
@@ -108,18 +108,18 @@ end;
 
 { Setup and teardown }
 
-procedure TTestKDFMock.SetUp;
+procedure TTestKDFMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FMock := TKDFMock.Create;
   FKDF := FMock as IKDF;
 end;
 
-procedure TTestKDFMock.TearDown;
+procedure TTestKDFMock.AfterEach;
 begin
   FKDF := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 { PBKDF2 tests }
@@ -137,9 +137,9 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes', 32, Length(LResult.DerivedKey));
-  AssertEquals('Error message should be empty', '', LResult.ErrorMessage);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes');
+  CheckEqual('', LResult.ErrorMessage, 'Error message should be empty');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldSucceed_WithSHA512;
@@ -155,8 +155,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA512, LPassword, LSalt, 2000, 64);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldSucceed_WithSHA1;
@@ -172,8 +172,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA1, LPassword, LSalt, 1000, 20);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 20 bytes', 20, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(20, Length(LResult.DerivedKey), 'Should return 20 bytes');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldReturnCorrectLength;
@@ -189,8 +189,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 48);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return exactly 48 bytes', 48, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(48, Length(LResult.DerivedKey), 'Should return exactly 48 bytes');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldFail_WithEmptyPassword;
@@ -205,8 +205,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, nil, LSalt, 1000, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'Password cannot be empty', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Password cannot be empty', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldFail_WithZeroIterations;
@@ -222,8 +222,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 0, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'Iterations must be positive', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Iterations must be positive', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldFail_WithNegativeKeyLength;
@@ -239,8 +239,8 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, -1);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'Key length must be positive', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Key length must be positive', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestPBKDF2_ShouldBeDeterministic;
@@ -258,13 +258,12 @@ begin
   LResult2 := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   
   // Assert
-  AssertTrue('First call should succeed', LResult1.Success);
-  AssertTrue('Second call should succeed', LResult2.Success);
-  AssertEquals('Lengths should match', Length(LResult1.DerivedKey), Length(LResult2.DerivedKey));
+  CheckTrue(LResult1.Success, 'First call should succeed');
+  CheckTrue(LResult2.Success, 'Second call should succeed');
+  CheckEqual(Length(LResult1.DerivedKey), Length(LResult2.DerivedKey), 'Lengths should match');
   
   for i := 0 to High(LResult1.DerivedKey) do
-    AssertEquals('Byte ' + IntToStr(i) + ' should match',
-                 LResult1.DerivedKey[i], LResult2.DerivedKey[i]);
+    CheckEqual(LResult1.DerivedKey[i], LResult2.DerivedKey[i], 'Byte ' + IntToStr(i) + ' should match');
 end;
 
 { HKDF tests }
@@ -283,8 +282,8 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 48 bytes', 48, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(48, Length(LResult.DerivedKey), 'Should return 48 bytes');
 end;
 
 procedure TTestKDFMock.TestHKDF_ShouldSucceed_WithSHA512;
@@ -301,8 +300,8 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA512, LInputKey, LSalt, LInfo, 64);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
 end;
 
 procedure TTestKDFMock.TestHKDF_ShouldReturnCorrectLength;
@@ -319,8 +318,8 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 128);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return exactly 128 bytes', 128, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(128, Length(LResult.DerivedKey), 'Should return exactly 128 bytes');
 end;
 
 procedure TTestKDFMock.TestHKDF_ShouldFail_WithEmptyInputKey;
@@ -336,8 +335,8 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA256, nil, LSalt, LInfo, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'Input key cannot be empty', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Input key cannot be empty', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestHKDFExtract_ShouldReturnHashSize;
@@ -353,8 +352,8 @@ begin
   LResult := FKDF.HKDFExtract(kdHKDF_SHA256, LInputKey, LSalt);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes (SHA256 hash size)', 32, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes (SHA256 hash size)');
 end;
 
 procedure TTestKDFMock.TestHKDFExpand_ShouldExpandPRK;
@@ -374,9 +373,9 @@ begin
   LExpandResult := FKDF.HKDFExpand(kdHKDF_SHA256, LExtractResult.DerivedKey, LInfo, 64);
   
   // Assert
-  AssertTrue('Extract should succeed', LExtractResult.Success);
-  AssertTrue('Expand should succeed', LExpandResult.Success);
-  AssertEquals('Expand should return 64 bytes', 64, Length(LExpandResult.DerivedKey));
+  CheckTrue(LExtractResult.Success, 'Extract should succeed');
+  CheckTrue(LExpandResult.Success, 'Expand should succeed');
+  CheckEqual(64, Length(LExpandResult.DerivedKey), 'Expand should return 64 bytes');
 end;
 
 { Scrypt tests }
@@ -394,8 +393,8 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 16384, 8, 1, 32);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes', 32, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes');
 end;
 
 procedure TTestKDFMock.TestScrypt_ShouldSucceed_WithCustomParams;
@@ -411,8 +410,8 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 4, 2, 64);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.DerivedKey));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
 end;
 
 procedure TTestKDFMock.TestScrypt_ShouldFail_WithZeroN;
@@ -428,8 +427,8 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 0, 8, 1, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'N parameter must be non-zero', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('N parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestScrypt_ShouldFail_WithZeroR;
@@ -445,8 +444,8 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 0, 1, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'R parameter must be non-zero', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('R parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
 end;
 
 procedure TTestKDFMock.TestScrypt_ShouldFail_WithZeroP;
@@ -462,34 +461,34 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 8, 0, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Should have error message', 'P parameter must be non-zero', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('P parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
 end;
 
 { Algorithm info tests }
 
 procedure TTestKDFMock.TestGetAlgorithmName_ShouldReturnCorrectName;
 begin
-  AssertEquals('PBKDF2-SHA256 name', 'PBKDF2-SHA256', FKDF.GetAlgorithmName(kdPBKDF2_SHA256));
-  AssertEquals('HKDF-SHA512 name', 'HKDF-SHA512', FKDF.GetAlgorithmName(kdHKDF_SHA512));
-  AssertEquals('Scrypt name', 'Scrypt', FKDF.GetAlgorithmName(kdScrypt));
+  CheckEqual('PBKDF2-SHA256', FKDF.GetAlgorithmName(kdPBKDF2_SHA256), 'PBKDF2-SHA256 name');
+  CheckEqual('HKDF-SHA512', FKDF.GetAlgorithmName(kdHKDF_SHA512), 'HKDF-SHA512 name');
+  CheckEqual('Scrypt', FKDF.GetAlgorithmName(kdScrypt), 'Scrypt name');
 end;
 
 procedure TTestKDFMock.TestGetOutputSize_ShouldReturnCorrectSize;
 begin
-  AssertEquals('PBKDF2-SHA1 size', 20, FKDF.GetOutputSize(kdPBKDF2_SHA1));
-  AssertEquals('PBKDF2-SHA256 size', 32, FKDF.GetOutputSize(kdPBKDF2_SHA256));
-  AssertEquals('PBKDF2-SHA512 size', 64, FKDF.GetOutputSize(kdPBKDF2_SHA512));
-  AssertEquals('HKDF-SHA256 size', 32, FKDF.GetOutputSize(kdHKDF_SHA256));
-  AssertEquals('HKDF-SHA512 size', 64, FKDF.GetOutputSize(kdHKDF_SHA512));
-  AssertEquals('Scrypt default size', 32, FKDF.GetOutputSize(kdScrypt));
+  CheckEqual(20, FKDF.GetOutputSize(kdPBKDF2_SHA1), 'PBKDF2-SHA1 size');
+  CheckEqual(32, FKDF.GetOutputSize(kdPBKDF2_SHA256), 'PBKDF2-SHA256 size');
+  CheckEqual(64, FKDF.GetOutputSize(kdPBKDF2_SHA512), 'PBKDF2-SHA512 size');
+  CheckEqual(32, FKDF.GetOutputSize(kdHKDF_SHA256), 'HKDF-SHA256 size');
+  CheckEqual(64, FKDF.GetOutputSize(kdHKDF_SHA512), 'HKDF-SHA512 size');
+  CheckEqual(32, FKDF.GetOutputSize(kdScrypt), 'Scrypt default size');
 end;
 
 procedure TTestKDFMock.TestIsAlgorithmSupported_ShouldReturnTrue;
 begin
-  AssertTrue('PBKDF2-SHA256 should be supported', FKDF.IsAlgorithmSupported(kdPBKDF2_SHA256));
-  AssertTrue('HKDF-SHA512 should be supported', FKDF.IsAlgorithmSupported(kdHKDF_SHA512));
-  AssertTrue('Scrypt should be supported', FKDF.IsAlgorithmSupported(kdScrypt));
+  CheckTrue(FKDF.IsAlgorithmSupported(kdPBKDF2_SHA256), 'PBKDF2-SHA256 should be supported');
+  CheckTrue(FKDF.IsAlgorithmSupported(kdHKDF_SHA512), 'HKDF-SHA512 should be supported');
+  CheckTrue(FKDF.IsAlgorithmSupported(kdScrypt), 'Scrypt should be supported');
 end;
 
 { Error handling tests }
@@ -508,9 +507,9 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated PBKDF2 failure', LResult.ErrorMessage);
-  AssertEquals('Key should be empty', 0, Length(LResult.DerivedKey));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated PBKDF2 failure', LResult.ErrorMessage, 'Error message');
+  CheckEqual(0, Length(LResult.DerivedKey), 'Key should be empty');
 end;
 
 procedure TTestKDFMock.TestHKDF_ShouldFail_WhenConfigured;
@@ -528,8 +527,8 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated HKDF failure', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated HKDF failure', LResult.ErrorMessage, 'Error message');
 end;
 
 procedure TTestKDFMock.TestScrypt_ShouldFail_WhenConfigured;
@@ -546,8 +545,8 @@ begin
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 8, 1, 32);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated Scrypt failure', LResult.ErrorMessage);
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated Scrypt failure', LResult.ErrorMessage, 'Error message');
 end;
 
 { Custom key tests }
@@ -570,9 +569,9 @@ begin
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
+  CheckTrue(LResult.Success, 'Should succeed');
   for i := 0 to 31 do
-    AssertEquals('Byte ' + IntToStr(i) + ' should be $AA', $AA, LResult.DerivedKey[i]);
+    CheckEqual($AA, LResult.DerivedKey[i], 'Byte ' + IntToStr(i) + ' should be $AA');
 end;
 
 procedure TTestKDFMock.TestHKDF_ShouldUseCustomKey_WhenSet;
@@ -594,9 +593,9 @@ begin
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
+  CheckTrue(LResult.Success, 'Should succeed');
   for i := 0 to 47 do
-    AssertEquals('Byte ' + IntToStr(i) + ' should be $BB', $BB, LResult.DerivedKey[i]);
+    CheckEqual($BB, LResult.DerivedKey[i], 'Byte ' + IntToStr(i) + ' should be $BB');
 end;
 
 { Statistics tests }
@@ -619,10 +618,10 @@ begin
   FKDF.Scrypt(LPassword, LSalt, 1024, 8, 1, 32);
   
   // Assert
-  AssertEquals('Operation count', 4, FKDF.GetOperationCount);
-  AssertEquals('PBKDF2 call count', 2, FKDF.GetPBKDF2CallCount);
-  AssertEquals('HKDF call count', 1, FKDF.GetHKDFCallCount);
-  AssertEquals('Scrypt call count', 1, FKDF.GetScryptCallCount);
+  CheckEqual(4, FKDF.GetOperationCount, 'Operation count');
+  CheckEqual(2, FKDF.GetPBKDF2CallCount, 'PBKDF2 call count');
+  CheckEqual(1, FKDF.GetHKDFCallCount, 'HKDF call count');
+  CheckEqual(1, FKDF.GetScryptCallCount, 'Scrypt call count');
 end;
 
 procedure TTestKDFMock.TestResetStatistics_ShouldClearCounters;
@@ -639,13 +638,10 @@ begin
   FKDF.ResetStatistics;
   
   // Assert
-  AssertEquals('Operation count after reset', 0, FKDF.GetOperationCount);
-  AssertEquals('PBKDF2 call count after reset', 0, FKDF.GetPBKDF2CallCount);
-  AssertEquals('HKDF call count after reset', 0, FKDF.GetHKDFCallCount);
-  AssertEquals('Scrypt call count after reset', 0, FKDF.GetScryptCallCount);
+  CheckEqual(0, FKDF.GetOperationCount, 'Operation count after reset');
+  CheckEqual(0, FKDF.GetPBKDF2CallCount, 'PBKDF2 call count after reset');
+  CheckEqual(0, FKDF.GetHKDFCallCount, 'HKDF call count after reset');
+  CheckEqual(0, FKDF.GetScryptCallCount, 'Scrypt call count after reset');
 end;
-
-initialization
-  RegisterTest(TTestKDFMock);
 
 end.

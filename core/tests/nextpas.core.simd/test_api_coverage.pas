@@ -3,8 +3,7 @@ program test_api_coverage;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.base,
+  nextpas.core.text.conv, Math, nextpas.core.simd.base,
   nextpas.core.simd;
 
 var
@@ -23,14 +22,12 @@ end;
 
 procedure CheckFloat(actual, expected: Single; const msg: string; eps: Single = 1e-5);
 begin
-  Check(Abs(actual - expected) < eps,
-    msg + Format(' (got %g, exp %g)', [actual, expected]));
+  Check(Abs(actual - expected) < eps, msg + Format(' (got %g, exp %g)', [actual, expected]));
 end;
 
 procedure CheckDouble(actual, expected: Double; const msg: string; eps: Double = 1e-9);
 begin
-  Check(Abs(actual - expected) < eps,
-    msg + Format(' (got %g, exp %g)', [actual, expected]));
+  Check(Abs(actual - expected) < eps, msg + Format(' (got %g, exp %g)', [actual, expected]));
 end;
 
 // === Constructors (5) ===

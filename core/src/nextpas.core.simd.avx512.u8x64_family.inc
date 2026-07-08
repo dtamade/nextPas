@@ -172,7 +172,65 @@ begin
   Result := TMask64(LMask);
 end;
 
-function AVX512MinU8x64(const a, b: TVecU8x64): TVecU8x64;
+function AVX512CmpLeU8x64(const a, b: TVecU8x64): TMask64;
+var
+  LPa, LPb: Pointer;
+  LMask: QWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpub k1, zmm0, [rcx], 2
+    kmovq   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask64(LMask);
+end;
+
+function AVX512CmpGeU8x64(const a, b: TVecU8x64): TMask64;
+var
+  LPa, LPb: Pointer;
+  LMask: QWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpub k1, zmm0, [rcx], 5
+    kmovq   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask64(LMask);
+end;
+
+function AVX512CmpNeU8x64(const a, b: TVecU8x64): TMask64;
+var
+  LPa, LPb: Pointer;
+  LMask: QWord;
+begin
+  LPa := @a;
+  LPb := @b;
+
+  asm
+    mov     rdx, LPa
+    mov     rcx, LPb
+    vmovdqu64 zmm0, [rdx]
+    vpcmpub k1, zmm0, [rcx], 4
+    kmovq   LMask, k1
+    vzeroupper
+  end;
+
+  Result := TMask64(LMask);
+end;(const a, b: TVecU8x64): TVecU8x64;
 var
   LPa, LPb, LPr: Pointer;
 begin

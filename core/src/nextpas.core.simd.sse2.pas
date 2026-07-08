@@ -994,10 +994,11 @@ end;
 
 function SSE2NotI32x4(const a: TVecI32x4): TVecI32x4;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 
@@ -1208,8 +1209,8 @@ begin
     psrldq xmm3, 4
     pmuludq xmm2, xmm3
 
-    pshufd xmm0, xmm0, $08
-    pshufd xmm2, xmm2, $08
+    pshufd xmm0, xmm0, $D8
+    pshufd xmm2, xmm2, $D8
     punpckldq xmm0, xmm2
 
     movdqu [rcx], xmm0
@@ -1282,10 +1283,11 @@ end;
 
 function SSE2NotI16x8(const a: TVecI16x8): TVecI16x8;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 
@@ -1442,10 +1444,11 @@ end;
 
 function SSE2NotI8x16(const a: TVecI8x16): TVecI8x16;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 
@@ -1596,8 +1599,8 @@ begin
     psrldq  xmm3, 4
     pmuludq xmm2, xmm3
 
-    pshufd xmm0, xmm0, $08
-    pshufd xmm2, xmm2, $08
+    pshufd xmm0, xmm0, $D8
+    pshufd xmm2, xmm2, $D8
 
     punpckldq xmm0, xmm2
 
@@ -1637,10 +1640,11 @@ end;
 
 function SSE2NotU32x4(const a: TVecU32x4): TVecU32x4;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 
@@ -1862,10 +1866,11 @@ end;
 
 function SSE2NotU16x8(const a: TVecU16x8): TVecU16x8;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 
@@ -2056,10 +2061,11 @@ end;
 
 function SSE2NotU8x16(const a: TVecU8x16): TVecU8x16;
 var
-  LA, LR: TM128;
+  LA, LR, LOnes: TM128;
 begin
   Vec128ToRaw(a, LA);
-  LR := simd_xor_si128(LA, simd_setzero_si128);
+  LOnes := simd_cmpeq_epi32(simd_setzero_si128, simd_setzero_si128);
+  LR := simd_xor_si128(LA, LOnes);
   RawToVec128(LR, Result);
 end;
 

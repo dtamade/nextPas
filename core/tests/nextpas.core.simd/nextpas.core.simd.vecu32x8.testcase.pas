@@ -9,10 +9,8 @@ unit nextpas.core.simd.vecu32x8.testcase;
 interface
 
 uses
-  Classes, nextpas.core.exception, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base;
+  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base;
 
 type
   // ✅ TVecU32x8 (256-bit 无符号整数向量) 完整测试套件 (2026-02-05)
@@ -75,7 +73,7 @@ begin
   r := VecU32x8Add(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Add [' + IntToStr(i) + ']', UInt32(a.u[i] + b.u[i]), r.u[i]);
+    CheckEqual(UInt32(a.u[i] + b.u[i]), r.u[i], 'U32x8 Add [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Sub;
@@ -92,7 +90,7 @@ begin
   r := VecU32x8Sub(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Sub [' + IntToStr(i) + ']', UInt32(a.u[i] - b.u[i]), r.u[i]);
+    CheckEqual(UInt32(a.u[i] - b.u[i]), r.u[i], 'U32x8 Sub [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Mul;
@@ -109,7 +107,7 @@ begin
   r := VecU32x8Mul(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Mul [' + IntToStr(i) + ']', UInt32(a.u[i] * b.u[i]), r.u[i]);
+    CheckEqual(UInt32(a.u[i] * b.u[i]), r.u[i], 'U32x8 Mul [' + IntToStr(i) + ']');
 end;
 
 // === 位运算 ===
@@ -128,7 +126,7 @@ begin
   r := VecU32x8And(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 And [' + IntToStr(i) + ']', UInt32($0F000F00), r.u[i]);
+    CheckEqual(UInt32($0F000F00), r.u[i], 'U32x8 And [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Or;
@@ -145,7 +143,7 @@ begin
   r := VecU32x8Or(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Or [' + IntToStr(i) + ']', UInt32($FF00FF00), r.u[i]);
+    CheckEqual(UInt32($FF00FF00), r.u[i], 'U32x8 Or [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Xor;
@@ -162,7 +160,7 @@ begin
   r := VecU32x8Xor(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Xor [' + IntToStr(i) + ']', UInt32($F0F0F0F0), r.u[i]);
+    CheckEqual(UInt32($F0F0F0F0), r.u[i], 'U32x8 Xor [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Not;
@@ -176,7 +174,7 @@ begin
   r := VecU32x8Not(a);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Not [' + IntToStr(i) + ']', UInt32($F0F0F0F0), r.u[i]);
+    CheckEqual(UInt32($F0F0F0F0), r.u[i], 'U32x8 Not [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_AndNot;
@@ -193,7 +191,7 @@ begin
   r := VecU32x8AndNot(a, b);
 
   for LIndex := 0 to 7 do
-    AssertEquals('U32x8 AndNot [' + IntToStr(LIndex) + ']', UInt32($F0F0F0F0), r.u[LIndex]);
+    CheckEqual(UInt32($F0F0F0F0), r.u[LIndex], 'U32x8 AndNot [' + IntToStr(LIndex) + ']');
 end;
 
 // === 移位 ===
@@ -209,7 +207,7 @@ begin
   r := VecU32x8ShiftLeft(a, 8);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 ShiftLeft [' + IntToStr(i) + ']', UInt32(256), r.u[i]);
+    CheckEqual(UInt32(256), r.u[i], 'U32x8 ShiftLeft [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_ShiftRight;
@@ -223,7 +221,7 @@ begin
   r := VecU32x8ShiftRight(a, 4);
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 ShiftRight [' + IntToStr(i) + ']', UInt32(16), r.u[i]);
+    CheckEqual(UInt32(16), r.u[i], 'U32x8 ShiftRight [' + IntToStr(i) + ']');
 end;
 
 // === 比较 (无符号语义) ===
@@ -245,14 +243,14 @@ begin
 
   m := VecU32x8CmpEq(a, b);
 
-  AssertTrue('U32x8 CmpEq [0] should be true', (m and (1 shl 0)) <> 0);
-  AssertFalse('U32x8 CmpEq [1] should be false', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpEq [2] should be true', (m and (1 shl 2)) <> 0);
-  AssertFalse('U32x8 CmpEq [3] should be false', (m and (1 shl 3)) <> 0);
-  AssertTrue('U32x8 CmpEq [4] should be true', (m and (1 shl 4)) <> 0);
-  AssertFalse('U32x8 CmpEq [5] should be false', (m and (1 shl 5)) <> 0);
-  AssertTrue('U32x8 CmpEq [6] should be true', (m and (1 shl 6)) <> 0);
-  AssertFalse('U32x8 CmpEq [7] should be false', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'U32x8 CmpEq [0] should be true');
+  CheckFalse((m and (1 shl 1)) <> 0, 'U32x8 CmpEq [1] should be false');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpEq [2] should be true');
+  CheckFalse((m and (1 shl 3)) <> 0, 'U32x8 CmpEq [3] should be false');
+  CheckTrue((m and (1 shl 4)) <> 0, 'U32x8 CmpEq [4] should be true');
+  CheckFalse((m and (1 shl 5)) <> 0, 'U32x8 CmpEq [5] should be false');
+  CheckTrue((m and (1 shl 6)) <> 0, 'U32x8 CmpEq [6] should be true');
+  CheckFalse((m and (1 shl 7)) <> 0, 'U32x8 CmpEq [7] should be false');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_CmpLt;
@@ -272,14 +270,14 @@ begin
 
   m := VecU32x8CmpLt(a, b);
 
-  AssertTrue('U32x8 CmpLt [0]: 100 < 200', (m and (1 shl 0)) <> 0);
-  AssertFalse('U32x8 CmpLt [1]: 300 >= 200', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpLt [2]: 1 < $FFFFFFFF (unsigned)', (m and (1 shl 2)) <> 0);
-  AssertFalse('U32x8 CmpLt [3]: $FFFFFFFF >= 1 (unsigned)', (m and (1 shl 3)) <> 0);
-  AssertFalse('U32x8 CmpLt [4]: $80000000 >= 1 (unsigned)', (m and (1 shl 4)) <> 0);
-  AssertTrue('U32x8 CmpLt [5]: 0 < 1', (m and (1 shl 5)) <> 0);
-  AssertFalse('U32x8 CmpLt [6]: 100 = 100 (not less)', (m and (1 shl 6)) <> 0);
-  AssertTrue('U32x8 CmpLt [7]: $7FFFFFFF < $80000000 (unsigned)', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'U32x8 CmpLt [0]: 100 < 200');
+  CheckFalse((m and (1 shl 1)) <> 0, 'U32x8 CmpLt [1]: 300 >= 200');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpLt [2]: 1 < $FFFFFFFF (unsigned)');
+  CheckFalse((m and (1 shl 3)) <> 0, 'U32x8 CmpLt [3]: $FFFFFFFF >= 1 (unsigned)');
+  CheckFalse((m and (1 shl 4)) <> 0, 'U32x8 CmpLt [4]: $80000000 >= 1 (unsigned)');
+  CheckTrue((m and (1 shl 5)) <> 0, 'U32x8 CmpLt [5]: 0 < 1');
+  CheckFalse((m and (1 shl 6)) <> 0, 'U32x8 CmpLt [6]: 100 = 100 (not less)');
+  CheckTrue((m and (1 shl 7)) <> 0, 'U32x8 CmpLt [7]: $7FFFFFFF < $80000000 (unsigned)');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_CmpGt;
@@ -298,14 +296,14 @@ begin
 
   m := VecU32x8CmpGt(a, b);
 
-  AssertTrue('U32x8 CmpGt [0]: 300 > 200', (m and (1 shl 0)) <> 0);
-  AssertFalse('U32x8 CmpGt [1]: 100 <= 200', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpGt [2]: $FFFFFFFF > 1 (unsigned)', (m and (1 shl 2)) <> 0);
-  AssertFalse('U32x8 CmpGt [3]: 1 <= $FFFFFFFF (unsigned)', (m and (1 shl 3)) <> 0);
-  AssertTrue('U32x8 CmpGt [4]: $80000000 > 1 (unsigned)', (m and (1 shl 4)) <> 0);
-  AssertTrue('U32x8 CmpGt [5]: 1 > 0', (m and (1 shl 5)) <> 0);
-  AssertFalse('U32x8 CmpGt [6]: 100 = 100 (not greater)', (m and (1 shl 6)) <> 0);
-  AssertTrue('U32x8 CmpGt [7]: $80000000 > $7FFFFFFF (unsigned)', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'U32x8 CmpGt [0]: 300 > 200');
+  CheckFalse((m and (1 shl 1)) <> 0, 'U32x8 CmpGt [1]: 100 <= 200');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpGt [2]: $FFFFFFFF > 1 (unsigned)');
+  CheckFalse((m and (1 shl 3)) <> 0, 'U32x8 CmpGt [3]: 1 <= $FFFFFFFF (unsigned)');
+  CheckTrue((m and (1 shl 4)) <> 0, 'U32x8 CmpGt [4]: $80000000 > 1 (unsigned)');
+  CheckTrue((m and (1 shl 5)) <> 0, 'U32x8 CmpGt [5]: 1 > 0');
+  CheckFalse((m and (1 shl 6)) <> 0, 'U32x8 CmpGt [6]: 100 = 100 (not greater)');
+  CheckTrue((m and (1 shl 7)) <> 0, 'U32x8 CmpGt [7]: $80000000 > $7FFFFFFF (unsigned)');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_CmpLe;
@@ -324,14 +322,14 @@ begin
 
   m := VecU32x8CmpLe(a, b);
 
-  AssertTrue('U32x8 CmpLe [0]: 100 <= 200', (m and (1 shl 0)) <> 0);
-  AssertFalse('U32x8 CmpLe [1]: 300 > 200', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpLe [2]: 100 <= 100 (equal)', (m and (1 shl 2)) <> 0);
-  AssertTrue('U32x8 CmpLe [3]: 1 <= $FFFFFFFF', (m and (1 shl 3)) <> 0);
-  AssertTrue('U32x8 CmpLe [4]: $FFFFFFFF <= $FFFFFFFF', (m and (1 shl 4)) <> 0);
-  AssertTrue('U32x8 CmpLe [5]: 0 <= 0', (m and (1 shl 5)) <> 0);
-  AssertFalse('U32x8 CmpLe [6]: $80000000 > 1 (unsigned)', (m and (1 shl 6)) <> 0);
-  AssertTrue('U32x8 CmpLe [7]: 0 <= $FFFFFFFF', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'U32x8 CmpLe [0]: 100 <= 200');
+  CheckFalse((m and (1 shl 1)) <> 0, 'U32x8 CmpLe [1]: 300 > 200');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpLe [2]: 100 <= 100 (equal)');
+  CheckTrue((m and (1 shl 3)) <> 0, 'U32x8 CmpLe [3]: 1 <= $FFFFFFFF');
+  CheckTrue((m and (1 shl 4)) <> 0, 'U32x8 CmpLe [4]: $FFFFFFFF <= $FFFFFFFF');
+  CheckTrue((m and (1 shl 5)) <> 0, 'U32x8 CmpLe [5]: 0 <= 0');
+  CheckFalse((m and (1 shl 6)) <> 0, 'U32x8 CmpLe [6]: $80000000 > 1 (unsigned)');
+  CheckTrue((m and (1 shl 7)) <> 0, 'U32x8 CmpLe [7]: 0 <= $FFFFFFFF');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_CmpGe;
@@ -350,14 +348,14 @@ begin
 
   m := VecU32x8CmpGe(a, b);
 
-  AssertTrue('U32x8 CmpGe [0]: 300 >= 200', (m and (1 shl 0)) <> 0);
-  AssertFalse('U32x8 CmpGe [1]: 100 < 200', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpGe [2]: 100 >= 100 (equal)', (m and (1 shl 2)) <> 0);
-  AssertTrue('U32x8 CmpGe [3]: $FFFFFFFF >= 1', (m and (1 shl 3)) <> 0);
-  AssertTrue('U32x8 CmpGe [4]: $FFFFFFFF >= $FFFFFFFF', (m and (1 shl 4)) <> 0);
-  AssertTrue('U32x8 CmpGe [5]: 0 >= 0', (m and (1 shl 5)) <> 0);
-  AssertFalse('U32x8 CmpGe [6]: 1 < $80000000 (unsigned)', (m and (1 shl 6)) <> 0);
-  AssertTrue('U32x8 CmpGe [7]: $FFFFFFFF >= 0', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'U32x8 CmpGe [0]: 300 >= 200');
+  CheckFalse((m and (1 shl 1)) <> 0, 'U32x8 CmpGe [1]: 100 < 200');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpGe [2]: 100 >= 100 (equal)');
+  CheckTrue((m and (1 shl 3)) <> 0, 'U32x8 CmpGe [3]: $FFFFFFFF >= 1');
+  CheckTrue((m and (1 shl 4)) <> 0, 'U32x8 CmpGe [4]: $FFFFFFFF >= $FFFFFFFF');
+  CheckTrue((m and (1 shl 5)) <> 0, 'U32x8 CmpGe [5]: 0 >= 0');
+  CheckFalse((m and (1 shl 6)) <> 0, 'U32x8 CmpGe [6]: 1 < $80000000 (unsigned)');
+  CheckTrue((m and (1 shl 7)) <> 0, 'U32x8 CmpGe [7]: $FFFFFFFF >= 0');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_CmpNe;
@@ -376,14 +374,14 @@ begin
 
   m := VecU32x8CmpNe(a, b);
 
-  AssertFalse('U32x8 CmpNe [0]: 100 = 100', (m and (1 shl 0)) <> 0);
-  AssertTrue('U32x8 CmpNe [1]: 300 <> 200', (m and (1 shl 1)) <> 0);
-  AssertTrue('U32x8 CmpNe [2]: 1 <> $FFFFFFFF', (m and (1 shl 2)) <> 0);
-  AssertTrue('U32x8 CmpNe [3]: $FFFFFFFF <> 1', (m and (1 shl 3)) <> 0);
-  AssertFalse('U32x8 CmpNe [4]: 0 = 0', (m and (1 shl 4)) <> 0);
-  AssertFalse('U32x8 CmpNe [5]: 42 = 42', (m and (1 shl 5)) <> 0);
-  AssertTrue('U32x8 CmpNe [6]: $80000000 <> $7FFFFFFF', (m and (1 shl 6)) <> 0);
-  AssertTrue('U32x8 CmpNe [7]: 12345 <> 54321', (m and (1 shl 7)) <> 0);
+  CheckFalse((m and (1 shl 0)) <> 0, 'U32x8 CmpNe [0]: 100 = 100');
+  CheckTrue((m and (1 shl 1)) <> 0, 'U32x8 CmpNe [1]: 300 <> 200');
+  CheckTrue((m and (1 shl 2)) <> 0, 'U32x8 CmpNe [2]: 1 <> $FFFFFFFF');
+  CheckTrue((m and (1 shl 3)) <> 0, 'U32x8 CmpNe [3]: $FFFFFFFF <> 1');
+  CheckFalse((m and (1 shl 4)) <> 0, 'U32x8 CmpNe [4]: 0 = 0');
+  CheckFalse((m and (1 shl 5)) <> 0, 'U32x8 CmpNe [5]: 42 = 42');
+  CheckTrue((m and (1 shl 6)) <> 0, 'U32x8 CmpNe [6]: $80000000 <> $7FFFFFFF');
+  CheckTrue((m and (1 shl 7)) <> 0, 'U32x8 CmpNe [7]: 12345 <> 54321');
 end;
 
 // === Min/Max ===
@@ -403,14 +401,14 @@ begin
 
   r := VecU32x8Min(a, b);
 
-  AssertEquals('U32x8 Min [0]', UInt32(100), r.u[0]);
-  AssertEquals('U32x8 Min [1]', UInt32(250), r.u[1]);
-  AssertEquals('U32x8 Min [2] unsigned', UInt32(1), r.u[2]);
-  AssertEquals('U32x8 Min [3] unsigned', UInt32(1), r.u[3]);
-  AssertEquals('U32x8 Min [4] unsigned', UInt32(1), r.u[4]);
-  AssertEquals('U32x8 Min [5]', UInt32(0), r.u[5]);
-  AssertEquals('U32x8 Min [6] unsigned', UInt32($7FFFFFFF), r.u[6]);
-  AssertEquals('U32x8 Min [7] equal', UInt32(12345), r.u[7]);
+  CheckEqual(UInt32(100), r.u[0], 'U32x8 Min [0]');
+  CheckEqual(UInt32(250), r.u[1], 'U32x8 Min [1]');
+  CheckEqual(UInt32(1), r.u[2], 'U32x8 Min [2] unsigned');
+  CheckEqual(UInt32(1), r.u[3], 'U32x8 Min [3] unsigned');
+  CheckEqual(UInt32(1), r.u[4], 'U32x8 Min [4] unsigned');
+  CheckEqual(UInt32(0), r.u[5], 'U32x8 Min [5]');
+  CheckEqual(UInt32($7FFFFFFF), r.u[6], 'U32x8 Min [6] unsigned');
+  CheckEqual(UInt32(12345), r.u[7], 'U32x8 Min [7] equal');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Max;
@@ -428,14 +426,14 @@ begin
 
   r := VecU32x8Max(a, b);
 
-  AssertEquals('U32x8 Max [0]', UInt32(200), r.u[0]);
-  AssertEquals('U32x8 Max [1]', UInt32(300), r.u[1]);
-  AssertEquals('U32x8 Max [2] unsigned', UInt32($FFFFFFFF), r.u[2]);
-  AssertEquals('U32x8 Max [3] unsigned', UInt32($FFFFFFFF), r.u[3]);
-  AssertEquals('U32x8 Max [4] unsigned', UInt32($80000000), r.u[4]);
-  AssertEquals('U32x8 Max [5]', UInt32(0), r.u[5]);
-  AssertEquals('U32x8 Max [6] unsigned', UInt32($80000000), r.u[6]);
-  AssertEquals('U32x8 Max [7] equal', UInt32(12345), r.u[7]);
+  CheckEqual(UInt32(200), r.u[0], 'U32x8 Max [0]');
+  CheckEqual(UInt32(300), r.u[1], 'U32x8 Max [1]');
+  CheckEqual(UInt32($FFFFFFFF), r.u[2], 'U32x8 Max [2] unsigned');
+  CheckEqual(UInt32($FFFFFFFF), r.u[3], 'U32x8 Max [3] unsigned');
+  CheckEqual(UInt32($80000000), r.u[4], 'U32x8 Max [4] unsigned');
+  CheckEqual(UInt32(0), r.u[5], 'U32x8 Max [5]');
+  CheckEqual(UInt32($80000000), r.u[6], 'U32x8 Max [6] unsigned');
+  CheckEqual(UInt32(12345), r.u[7], 'U32x8 Max [7] equal');
 end;
 
 // === 工具函数 ===
@@ -450,14 +448,14 @@ begin
     r.u[i] := 42;
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Splat [' + IntToStr(i) + ']', UInt32(42), r.u[i]);
+    CheckEqual(UInt32(42), r.u[i], 'U32x8 Splat [' + IntToStr(i) + ']');
 
   // 测试大值
   for i := 0 to 7 do
     r.u[i] := $DEADBEEF;
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Splat large [' + IntToStr(i) + ']', UInt32($DEADBEEF), r.u[i]);
+    CheckEqual(UInt32($DEADBEEF), r.u[i], 'U32x8 Splat large [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_Zero;
@@ -474,15 +472,15 @@ begin
     r.u[i] := 0;
 
   for i := 0 to 7 do
-    AssertEquals('U32x8 Zero [' + IntToStr(i) + ']', UInt32(0), r.u[i]);
+    CheckEqual(UInt32(0), r.u[i], 'U32x8 Zero [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecU32x8.Test_VecU32x8_SizeOf;
 begin
   // TVecU32x8 应该是 256 位 = 32 字节
-  AssertEquals('TVecU32x8 should be 32 bytes', 32, SizeOf(TVecU32x8));
+  CheckEqual(32, SizeOf(TVecU32x8), 'TVecU32x8 should be 32 bytes');
   // 8 个 UInt32 元素
-  AssertEquals('TVecU32x8 should have 8 elements', 8 * SizeOf(UInt32), SizeOf(TVecU32x8));
+  CheckEqual(8 * SizeOf(UInt32), SizeOf(TVecU32x8), 'TVecU32x8 should have 8 elements');
 end;
 
 // === 边界测试 ===
@@ -508,7 +506,7 @@ begin
 
     // 无符号溢出应回绕到 0
     for i := 0 to 7 do
-      AssertEquals('U32x8 Add overflow wraps to 0 [' + IntToStr(i) + ']', UInt32(0), r.u[i]);
+      CheckEqual(UInt32(0), r.u[i], 'U32x8 Add overflow wraps to 0 [' + IntToStr(i) + ']');
 
     // 测试无符号减法下溢回绕
     for i := 0 to 7 do
@@ -521,7 +519,7 @@ begin
 
     // 无符号下溢应回绕到 MaxUInt32
     for i := 0 to 7 do
-      AssertEquals('U32x8 Sub underflow wraps to max [' + IntToStr(i) + ']', UInt32($FFFFFFFF), r.u[i]);
+      CheckEqual(UInt32($FFFFFFFF), r.u[i], 'U32x8 Sub underflow wraps to max [' + IntToStr(i) + ']');
   except
     on E: Exception do
       if E.ClassName <> 'ERangeError' then
@@ -545,35 +543,33 @@ begin
   // And with max = max
   r := VecU32x8And(a, b);
   for i := 0 to 7 do
-    AssertEquals('U32x8 And max [' + IntToStr(i) + ']', UInt32($FFFFFFFF), r.u[i]);
+    CheckEqual(UInt32($FFFFFFFF), r.u[i], 'U32x8 And max [' + IntToStr(i) + ']');
 
   // Or with max = max
   r := VecU32x8Or(a, b);
   for i := 0 to 7 do
-    AssertEquals('U32x8 Or max [' + IntToStr(i) + ']', UInt32($FFFFFFFF), r.u[i]);
+    CheckEqual(UInt32($FFFFFFFF), r.u[i], 'U32x8 Or max [' + IntToStr(i) + ']');
 
   // Xor with max = 0
   r := VecU32x8Xor(a, b);
   for i := 0 to 7 do
-    AssertEquals('U32x8 Xor max [' + IntToStr(i) + ']', UInt32(0), r.u[i]);
+    CheckEqual(UInt32(0), r.u[i], 'U32x8 Xor max [' + IntToStr(i) + ']');
 
   // Not of max = 0
   r := VecU32x8Not(a);
   for i := 0 to 7 do
-    AssertEquals('U32x8 Not max [' + IntToStr(i) + ']', UInt32(0), r.u[i]);
+    CheckEqual(UInt32(0), r.u[i], 'U32x8 Not max [' + IntToStr(i) + ']');
 
   // ShiftRight max by 1 = $7FFFFFFF
   r := VecU32x8ShiftRight(a, 1);
   for i := 0 to 7 do
-    AssertEquals('U32x8 ShiftRight max [' + IntToStr(i) + ']', UInt32($7FFFFFFF), r.u[i]);
+    CheckEqual(UInt32($7FFFFFFF), r.u[i], 'U32x8 ShiftRight max [' + IntToStr(i) + ']');
 
   // ShiftLeft max by 1 = $FFFFFFFE
   r := VecU32x8ShiftLeft(a, 1);
   for i := 0 to 7 do
-    AssertEquals('U32x8 ShiftLeft max [' + IntToStr(i) + ']', UInt32($FFFFFFFE), r.u[i]);
+    CheckEqual(UInt32($FFFFFFFE), r.u[i], 'U32x8 ShiftLeft max [' + IntToStr(i) + ']');
 end;
 
-initialization
-  RegisterTest(TTestCase_VecU32x8);
 
 end.

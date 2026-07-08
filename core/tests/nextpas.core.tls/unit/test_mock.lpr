@@ -7,8 +7,7 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   Classes, SysUtils,
-  fpcunit, testregistry, consoletestrunner,
-  // Test units
+  nextpas.core.test,
   test_base,
   test_openssl_core_mock,
   test_evp_cipher_mock,
@@ -18,17 +17,19 @@ uses
   test_rand_mock;
 
 var
-  App: TSuiteRunner;
+  LRunner: TSuiteRunner;
 begin
-  DefaultFormat := fPlain;
-  DefaultRunAllTests := True;
-  
-  App := TSuiteRunner.Create(nil);
-  try
-    App.Initialize;
-    App.Title := 'Mock Unit Tests';
-    App.Run;
-  finally
-    App.Free;
-  end;
+  LRunner := TSuiteRunner.Create('Mock Unit Tests');
+  LRunner.Add(DiscoverTests(TTestOpenSSLCoreMock.Create, 'OpenSSLCoreMock'));
+  LRunner.Add(DiscoverTests(TTestEVPCipherMock.Create, 'EVPCipherMock'));
+  LRunner.Add(DiscoverTests(TTestEVPDigestMock.Create, 'EVPDigestMock'));
+  LRunner.Add(DiscoverTests(TTestHMACMock.Create, 'HMACMock'));
+  LRunner.Add(DiscoverTests(TTestKDFMock.Create, 'KDFMock'));
+  LRunner.Add(DiscoverTests(TTestRandomMock.Create, 'RandomMock'));
+  LRunner.RunAll;
+  LRunner.Summary;
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
 end.
