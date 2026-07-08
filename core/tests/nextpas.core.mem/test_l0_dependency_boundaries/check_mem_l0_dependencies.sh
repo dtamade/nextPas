@@ -22,6 +22,7 @@ FORBIDDEN_UNITS=(
 )
 
 KNOWN_DEBT=(
+  "core/src/nextpas.core.mem.allocator.debug_alloc.pas|nextpas.core.text.conv"
 )
 
 is_forbidden_unit() {

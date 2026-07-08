@@ -1,0 +1,156 @@
+{ nextpas - test: bump allocator }
+
+{$I nextpas.core.settings.inc}
+
+program test_bump;
+
+uses
+  nextpas.core.text.conv,
+  nextpas.core.test,
+  nextpas.core.mem.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.bump;
+
+const
+  TEST_REGION_SIZE = 4096;
+
+var
+  T: TTestSuite;
+
+procedure TestBasicAlloc;
+var
+  LAlloc: TBumpAllocator;
+  LPtr1, LPtr2: Pointer;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
+  try
+    LPtr1 := LAlloc.GetMem(64);
+    Assert(LPtr1 <> nil, 'alloc 64B');
+    LPtr2 := LAlloc.GetMem(64);
+    Assert(LPtr2 <> nil, 'alloc 64B #2');
+    Assert(LPtr1 <> LPtr2, 'different pointers');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestZeroReturnsNil;
+var
+  LAlloc: TBumpAllocator;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
+  try
+    Assert(LAlloc.GetMem(0) = nil, 'zero alloc returns nil');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestManyAllocations;
+var
+  LAlloc: TBumpAllocator;
+  I: Integer;
+  LPtrs: array[0..99] of Pointer;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, 1024);
+  try
+    for I := 0 to 99 do
+    begin
+      LPtrs[I] := LAlloc.GetMem(64);
+      Assert(LPtrs[I] <> nil, 'alloc #' + IntToStr(I));
+    end;
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestFreeIsNoOp;
+var
+  LAlloc: TBumpAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, TEST_REGION_SIZE);
+  try
+    LPtr := LAlloc.GetMem(128);
+    Assert(LPtr <> nil, 'alloc');
+    LAlloc.FreeMem(LPtr);
+    { bump allocator does not free individual allocations }
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestReset;
+var
+  LAlloc: TBumpAllocator;
+  LPtr1, LPtr2: Pointer;
+  LStats: TBumpStats;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, 1024);
+  try
+    LPtr1 := LAlloc.GetMem(512);
+    Assert(LPtr1 <> nil, 'alloc before reset');
+    LStats := LAlloc.GetStats;
+    Assert(LStats.AllocCount = 1, 'count before reset');
+
+    LAlloc.Reset;
+    LStats := LAlloc.GetStats;
+    Assert(LStats.AllocCount = 0, 'count after reset = 0');
+
+    LPtr2 := LAlloc.GetMem(512);
+    Assert(LPtr2 <> nil, 'alloc after reset');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestStats;
+var
+  LAlloc: TBumpAllocator;
+  LStats: TBumpStats;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, 4096);
+  try
+    LAlloc.GetMem(100);
+    LAlloc.GetMem(200);
+    LStats := LAlloc.GetStats;
+    Assert(LStats.AllocCount = 2, 'alloc count = 2');
+    Assert(LStats.TotalAllocated >= 300, 'total >= 300');
+    Assert(LStats.RegionCount >= 1, 'region count >= 1');
+    Assert(LStats.RegionSize = 4096, 'region size = 4096');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestRegionGrowth;
+var
+  LAlloc: TBumpAllocator;
+  LStats: TBumpStats;
+  I: Integer;
+begin
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, 256);
+  try
+    for I := 0 to 19 do
+      LAlloc.GetMem(64);
+    LStats := LAlloc.GetStats;
+    Assert(LStats.RegionCount >= 2, 'grew to multiple regions');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+begin
+  T := TTestSuite.Create('test_bump');
+  T.Test('basic_alloc', @TestBasicAlloc);
+  T.Test('zero_returns_nil', @TestZeroReturnsNil);
+  T.Test('many_allocations', @TestManyAllocations);
+  T.Test('free_is_noop', @TestFreeIsNoOp);
+  T.Test('reset', @TestReset);
+  T.Test('stats', @TestStats);
+  T.Test('region_growth', @TestRegionGrowth);
+  T.Run;
+  T.Summary;
+end.
