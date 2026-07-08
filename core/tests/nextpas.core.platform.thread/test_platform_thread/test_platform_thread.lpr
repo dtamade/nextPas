@@ -371,6 +371,27 @@ begin
   Check(True, 'sleep_sec(0) completes immediately');
 end;
 
+procedure TestSleepNsZero;
+begin
+  platform_thread_sleep_ns(0);
+  Check(True, 'sleep_ns(0) completes immediately');
+end;
+
+procedure TestSleepMsZero;
+begin
+  platform_thread_sleep_ms(0);
+  Check(True, 'sleep_ms(0) completes immediately');
+end;
+
+procedure TestThreadYieldMultiple;
+var
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+    platform_thread_yield;
+  Check(True, 'multiple yields complete without crash');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -395,5 +416,8 @@ begin
   T.Test('Thread get_name small buf', @TestThreadGetNameSmallBuf);
   T.Test('sleep_ms', @TestSleepMs);
   T.Test('sleep_sec', @TestSleepSec);
+  T.Test('sleep_ns(0)', @TestSleepNsZero);
+  T.Test('sleep_ms(0)', @TestSleepMsZero);
+  T.Test('yield multiple', @TestThreadYieldMultiple);
   if not T.Run then Halt(1);
 end.

@@ -181,6 +181,46 @@ begin
   platform_pipe_close(P);
 end;
 
+procedure TestPipeCloseAlreadyClosed;
+var
+  P: TPlatformPipe;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  Check(platform_pipe_close(P) = 0, 'close');
+  { Second close returns 0 (safe no-op, fd already -1) }
+  Check(platform_pipe_close(P) = 0, 'double close returns 0 (safe no-op)');
+end;
+
+{$IFDEF NEXTPAS_UNIX}
+procedure TestDup2SameFd;
+var
+  P: TPlatformPipe;
+  LBuf: array[0..7] of AnsiChar;
+  LRead: PtrInt;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  { dup2 to same fd should be no-op and succeed }
+  Check(platform_dup2(P.WriteFd, P.WriteFd) = 0, 'dup2 same fd');
+  write(Int32(P.WriteFd), PAnsiChar('same'), 4);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := read(Int32(P.ReadFd), @LBuf[0], 8);
+  Check(LRead = 4, 'read 4 after dup2 same');
+  Check(LBuf[0] = 's', 'data');
+  platform_pipe_close(P);
+end;
+
+procedure TestPipePartialClose;
+var
+  P: TPlatformPipe;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  { Close read, then close entire pipe }
+  Check(platform_pipe_close_read(P) = 0, 'close read');
+  { Close entire pipe should still succeed even though read already closed }
+  Check(platform_pipe_close(P) = 0, 'close after partial close');
+end;
+{$ENDIF}
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.pipe');
   T.Test('create/close', @TestCreateClose);
@@ -188,9 +228,12 @@ begin
   T.Test('write + read', @TestWriteRead);
   T.Test('close write = EOF', @TestCloseWrite);
   T.Test('dup2', @TestDup2);
+  T.Test('dup2 same fd', @TestDup2SameFd);
+  T.Test('pipe partial close', @TestPipePartialClose);
   {$ENDIF}
   T.Test('double close read', @TestDoubleCloseRead);
   T.Test('double close write', @TestDoubleCloseWrite);
+  T.Test('pipe close already closed', @TestPipeCloseAlreadyClosed);
   T.Test('pipe write+read multiple chunks', @TestPipeWriteReadMultiple);
   T.Test('Windows pipe source contract', @TestWindowsPipeSourceContract);
   if not T.Run then Halt(1);

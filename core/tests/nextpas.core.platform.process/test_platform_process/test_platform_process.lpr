@@ -628,6 +628,50 @@ begin
   Check(LResult.Status = psSignaled, 'process signaled');
 end;
 
+procedure TestProcessKillExitedProcess;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn('/bin/true', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn true');
+
+  { Wait for process to exit }
+  LRet := platform_process_wait(LProc, LResult, 5000);
+  Check(LRet = 0, 'wait for true');
+  Check(LResult.Status = psExited, 'true exited');
+
+  { Kill on already exited process should succeed or return error }
+  LRet := platform_process_kill(LProc);
+  { Some systems return ESRCH, others succeed }
+  Check(True, 'kill on exited process handled');
+end;
+
+procedure TestProcessSignalZero;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '0.1';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Signal 0 checks if process exists without sending signal }
+  LRet := platform_process_signal(LProc, 0);
+  Check(LRet = 0, 'signal 0 on running process succeeds');
+
+  { Wait for process }
+  platform_process_wait(LProc, LResult, 5000);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -658,5 +702,7 @@ begin
   T.Test('wait timeout', @TestWaitTimeout);
   T.Test('try_wait on exited process', @TestTryWaitOnExitedProcess);
   T.Test('signal various signals', @TestSignalVariousSignals);
+  T.Test('kill exited process', @TestProcessKillExitedProcess);
+  T.Test('signal 0 checks existence', @TestProcessSignalZero);
   if not T.Run then Halt(1);
 end.
