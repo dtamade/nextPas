@@ -174,8 +174,7 @@ implementation
 
 uses
   nextpas.core.math.scalar,
-  nextpas.core.simd,
-  nextpas.core.simd.arrays;
+  nextpas.core.simd;
 
 { BatchSinF32 }
 function BatchSinF32(const AInput: array of Single;

@@ -147,6 +147,7 @@ ROOT_FACADE_ALLOWED_USES = {
     "nextpas.core.math.transform",
     "nextpas.core.math.easing",
     "nextpas.core.math.random",
+    "nextpas.core.math.batch",
 }
 REQUIRED_ROOT_FACADE_TYPE_ALIASES = {
     "tvec2f": "nextpas.core.math.vec.tvec2f",
@@ -1347,6 +1348,7 @@ CONSUMER_FACING_UNITS = {
     "nextpas.core.math.vec",
     "nextpas.core.math.vec.base",
     "nextpas.core.math.vec.batch",
+    "nextpas.core.math.vec.batch.simd",
     "nextpas.core.math.vec.compat",
     "nextpas.core.math.mat",
     "nextpas.core.math.mat.base",
@@ -1355,6 +1357,7 @@ CONSUMER_FACING_UNITS = {
     "nextpas.core.math.transform",
     "nextpas.core.math.easing",
     "nextpas.core.math.random",
+    "nextpas.core.math.batch",
 }
 INTERNAL_UNITS = {
     "nextpas.core.math.impl.scalar",
