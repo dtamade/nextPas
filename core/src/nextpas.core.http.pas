@@ -25,6 +25,7 @@ uses
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.requestid,
   nextpas.core.http.middleware.cachecontrol,
+  nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -75,6 +76,7 @@ type
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
   TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
+  TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
@@ -242,6 +244,10 @@ function CacheControlMiddleware(const AValue: string): IHttpMiddleware; inline;
 function NoCacheMiddleware: IHttpMiddleware; inline;
 {** @desc Cache-Control: public, max-age=N. }
 function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware; inline;
+{** @desc Rate limit middleware (100 req/60s per IP). }
+function RateLimitMiddleware: IHttpMiddleware; inline;
+{** @desc Rate limit middleware with custom options. }
+function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -354,6 +360,9 @@ function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 429 Too Many Requests JSON error response. }
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
@@ -610,6 +619,16 @@ end;
 function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.cachecontrol.MaxAgeMiddleware(ASeconds);
+end;
+
+function RateLimitMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddleware;
+end;
+
+function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddlewareWith(AOptions);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
@@ -915,6 +934,12 @@ function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteErrorInternal(AW, AMessage);
+end;
+
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorTooManyRequests(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;

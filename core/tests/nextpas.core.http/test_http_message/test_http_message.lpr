@@ -1771,6 +1771,19 @@ begin
   Check(LRaised, 'raises on no-body status with body');
 end;
 
+procedure TestErrorTooManyRequests;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorTooManyRequests(LW, 'Slow down');
+  CheckEqual(Int64(429), Int64(LM.Status), 'status 429');
+  Check(Pos('"code":"too_many_requests"', LM.Body) > 0, 'code is too_many_requests');
+  Check(Pos('Slow down', LM.Body) > 0, 'message preserved');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1946,5 +1959,7 @@ begin
     @TestHtmlNoBodyStatus);
   T.Test('Html: no-body status with body raises',
     @TestHtmlNoBodyStatusWithBodyRaises);
+  T.Test('ErrorResponse 429 Too Many Requests',
+    @TestErrorTooManyRequests);
   if not T.Run then Halt(1);
 end.
