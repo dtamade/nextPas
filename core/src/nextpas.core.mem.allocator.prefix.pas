@@ -36,8 +36,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   PREFIX_SIZE = SizeOf(SizeUInt);
@@ -50,23 +49,23 @@ type
     TotalBytes: UInt64;
   end;
 
-  TPrefixAllocator = class(TAllocator)
+  TPrefixAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FAllocCount: UInt64;
     FFreeCount: UInt64;
     FActiveAllocs: UInt64;
     FTotalBytes: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
     function GetAllocationSize(APtr: Pointer): SizeUInt;
     function GetStats: TPrefixStats;
     property ActiveAllocs: UInt64 read FActiveAllocs;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -83,7 +82,7 @@ begin
   FTotalBytes := 0;
 end;
 
-function TPrefixAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TPrefixAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LPtr: PByte;
 begin
@@ -101,14 +100,14 @@ begin
   Result := Pointer(LPtr + PREFIX_SIZE);
 end;
 
-function TPrefixAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TPrefixAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TPrefixAllocator.DoFreeMem(APtr: Pointer);
+procedure TPrefixAllocator.FreeMem(APtr: Pointer); inline;
 var
   LPtr: PByte;
   LSize: SizeUInt;
@@ -124,28 +123,28 @@ begin
   Dec(FTotalBytes, LSize);
 end;
 
-function TPrefixAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TPrefixAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize, LCopySize: SizeUInt;
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
 
   LOldSize := GetAllocationSize(APtr);
   if ASize <= LOldSize then
     Exit(APtr);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TPrefixAllocator.GetAllocationSize(APtr: Pointer): SizeUInt;
@@ -161,6 +160,13 @@ begin
   Result.FreeCount := FFreeCount;
   Result.ActiveAllocs := FActiveAllocs;
   Result.TotalBytes := FTotalBytes;
+end;
+
+function TPrefixAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
