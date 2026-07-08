@@ -354,6 +354,8 @@ procedure HttpWriteResponseOk(const AW: IHttpResponseWriter); inline;
 procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter); inline;
 {** @desc Write 202 Accepted response with no body. }
 procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter); inline;
+{** @desc Write 304 Not Modified response with no body. }
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -956,6 +958,11 @@ end;
 procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
 begin
   nextpas.core.http.message.HttpWriteResponseAccepted(AW);
+end;
+
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseNotModified(AW);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
