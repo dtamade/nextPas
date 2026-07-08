@@ -175,6 +175,25 @@ function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
    AStatus should be a 3xx code (301/302/303/307/308). }
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
+{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}.
+   Sets content-type application/json. }
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+{** @desc Write 400 Bad Request JSON error response. }
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 401 Unauthorized JSON error response. }
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 403 Forbidden JSON error response. }
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 404 Not Found JSON error response. }
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 500 Internal Server Error JSON error response. }
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -962,6 +981,45 @@ begin
   LBody := '<html><body>Redirecting to <a href="' + ALocation + '">' +
     ALocation + '</a></body></html>';
   HttpWriteResponseString(AW, AStatus, 'text/html', LBody);
+end;
+
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+var
+  LJson: string;
+begin
+  LJson := '{"error":{"code":"' + ACode + '","message":"' + AMessage + '"}}';
+  Result := HttpWriteResponseString(AW, AStatus, 'application/json', LJson);
+end;
+
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_BAD_REQUEST, 'bad_request', AMessage);
+end;
+
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNAUTHORIZED, 'unauthorized', AMessage);
+end;
+
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_FORBIDDEN, 'forbidden', AMessage);
+end;
+
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_NOT_FOUND, 'not_found', AMessage);
+end;
+
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', AMessage);
 end;
 
 { THttpRequestBuilder }
