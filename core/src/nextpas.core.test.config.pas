@@ -938,6 +938,10 @@ begin
   LHash := (LHash xor Ord(AConfig.ShuffleSeed <> 0)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.ShortMode)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.VerboseMode)) * 1099511628211;
+  { RetryCount/TimeoutMs affect pass/fail outcomes — different values may
+    produce different results, must affect cache key to avoid false hits }
+  LHash := (LHash xor AConfig.RetryCount) * 1099511628211;
+  LHash := (LHash xor Integer(AConfig.TimeoutMs and $7FFFFFFF)) * 1099511628211;
   { Hash filter pattern content, not just its existence — different patterns
     must produce different cache keys to avoid false cache hits }
   for I := 1 to Length(AConfig.FilterPattern) do
