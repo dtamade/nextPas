@@ -4087,7 +4087,7 @@ begin
         begin
           SetLength(ArgOps, ArgCount + 2);
           ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
-          ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntType);
+          ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
           Inc(ArgCount, 2);
         end;
       end;
@@ -4697,8 +4697,8 @@ begin
   if TsSlot <> 0 then
   begin
     LenSlot := EmitTStringLen(TsSlot);
-    EnsureAlloca(TempName + '$len', GetIntType);
-    EmitStore(GetIntType, LenSlot, FindAlloca(TempName + '$len'));
+    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(32, True));
+    EmitStore(GetIntTypeByWidth(32, True), LenSlot, FindAlloca(TempName + '$len'));
   end;
 end;
 
@@ -4759,9 +4759,9 @@ begin
   Instr.IntrinsicName := 'dynarray_resize';
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntType);
-  Instr.Operands[2] := MakeTypedOperand(SizeVal, GetIntType);
-  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[2] := MakeTypedOperand(SizeVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
   EmitInstr(Instr);
   PtrVal := Instr.ResultId;
 
@@ -4858,9 +4858,9 @@ begin
   Instr.IntrinsicName := 'dynarray_resize';
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntType);
-  Instr.Operands[2] := MakeTypedOperand(NewLenVal, GetIntType);
-  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[2] := MakeTypedOperand(NewLenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
   EmitInstr(Instr);
   NewPtrVal := Instr.ResultId;
 
@@ -4895,7 +4895,7 @@ begin
     Exit;
 
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  LenVal := EmitLoad(GetIntType, LenAlloca);
+  LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
   if ElemSizeBlob <> '' then
     ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
   else
@@ -4910,8 +4910,8 @@ begin
   Instr.IntrinsicName := 'dynarray_release';
   SetLength(Instr.Operands, 3);
   Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
-  Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
   EmitInstr(Instr);
 end;
 
@@ -5006,7 +5006,7 @@ begin
         Instr.IntrinsicName := 'dynarray_release';
         SetLength(Instr.Operands, 3);
         Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, PtrSlot), GetPtrType);
-        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntType, LenSlot), GetIntType);
+        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), LenSlot), GetIntTypeByWidth(32, True));
         Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
         EmitInstr(Instr);
       end;
@@ -5141,7 +5141,7 @@ begin
     Instr.IntrinsicName := 'string_release';
     SetLength(Instr.Operands, 2);
     Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
-    Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntType, AllocSizeSlot), GetIntType);
+    Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), AllocSizeSlot), GetIntTypeByWidth(32, True));
     EmitInstr(Instr);
 
     NullVal := EmitNullPtrValue;
@@ -5149,9 +5149,9 @@ begin
     if (NullVal <> 0) and (ZeroVal <> 0) then
     begin
       EmitStore(GetPtrType, NullVal, PtrSlot);
-      EmitStore(GetIntType, ZeroVal, LenSlot);
+      EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
       EmitStore(GetPtrType, NullVal, OwnerSlot);
-      EmitStore(GetIntType, ZeroVal, AllocSizeSlot);
+      EmitStore(GetIntTypeByWidth(32, True), ZeroVal, AllocSizeSlot);
     end;
   end;
 
@@ -5258,13 +5258,13 @@ begin
       Continue;
 
     PtrVal := EmitLoad(GetPtrType, PtrSlot);
-    LenVal := EmitLoad(GetIntType, LenSlot);
+    LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
     if not FSemaModel.LookupConstValue(
       AClassName + '.' + Meta.Fields[I].Name + '$arr_elem_size',
       ElemSize) then
-      ElemSizeVal := EmitConstIntOfType(8, GetIntType)
+      ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True))
     else
-      ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntType);
+      ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntTypeByWidth(64, True));
     if ElemSizeVal = 0 then
       Continue;
 
@@ -5275,8 +5275,8 @@ begin
     Instr.IntrinsicName := 'dynarray_release';
     SetLength(Instr.Operands, 3);
     Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-    Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
-    Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+    Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+    Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
     EmitInstr(Instr);
 
     FillChar(Instr, SizeOf(Instr), 0);
@@ -5288,7 +5288,7 @@ begin
     NullVal := Instr.ResultId;
     ZeroVal := EmitConstIntSmart(0);
     EmitStore(GetPtrType, NullVal, PtrSlot);
-    EmitStore(GetIntType, ZeroVal, LenSlot);
+    EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
   end;
 
   FillChar(Term, SizeOf(Term), 0);
@@ -5576,7 +5576,7 @@ begin
     if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 's') then
     begin
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
-      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntType, False, False);
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntTypeByWidth(32, True), False, False);
     end
     else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'v') then
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, True, False)
@@ -5651,7 +5651,7 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := GetIntTypeByWidth(64, True);
   Instr.IntrinsicName := 'const:' + ANode.DisplayName;
   EmitInstr(Instr);
   SizeVal := Instr.ResultId;
@@ -5720,7 +5720,7 @@ begin
         begin
           SetLength(ArgOps, ArgCount + 2);
           ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
-          ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntType);
+          ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
           Inc(ArgCount, 2);
         end;
       end;
@@ -6676,7 +6676,7 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := GetIntTypeByWidth(32, True);
   Instr.IntrinsicName := 'tstring_len';
   SetLength(Instr.Operands, 1);
   Instr.Operands[0].ValueId := AValue;
@@ -6722,11 +6722,11 @@ begin
   Instr.CallTarget := LitValue;
   EmitInstr(Instr);
   LitPtr := Instr.ResultId;
-  { Step 2: emit literal length as i64 constant }
+  { Step 2: emit literal length as i32 constant }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := GetIntTypeByWidth(32, True);
   Instr.IntrinsicName := 'const:' + IntToStr(Length(LitValue));
   EmitInstr(Instr);
   LenConst := Instr.ResultId;
@@ -6740,7 +6740,7 @@ begin
   Instr.Operands[1].ValueId := LitPtr;
   Instr.Operands[1].TypeId := GetPtrType;
   Instr.Operands[2].ValueId := LenConst;
-  Instr.Operands[2].TypeId := GetIntType;
+  Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
   EmitInstr(Instr);
 end;
 
