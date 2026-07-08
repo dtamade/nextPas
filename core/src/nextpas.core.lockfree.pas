@@ -26,7 +26,8 @@ uses
   nextpas.core.lockfree.priority_queue,
   nextpas.core.lockfree.bag,
   nextpas.core.lockfree.multimap,
-  nextpas.core.lockfree.bloom;
+  nextpas.core.lockfree.bloom,
+  nextpas.core.lockfree.lru;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -150,6 +151,15 @@ type
     @see TConcurrentBloomFilterImpl 详细文档和示例
   }
   generic TConcurrentBloomFilter<T> = class(specialize TConcurrentBloomFilterImpl<T>)
+  end;
+
+  {** @desc 并发 LRU 缓存
+    @details 基于分片锁 HashMap + 双向链表实现。
+      支持 Get/Put/Remove/Clear/Capacity/Count。
+      适用于缓存、淘汰等场景。
+    @see TConcurrentLruCacheImpl 详细文档和示例
+  }
+  generic TConcurrentLruCache<TKey, TValue> = class(specialize TConcurrentLruCacheImpl<TKey, TValue>)
   end;
 
 implementation
