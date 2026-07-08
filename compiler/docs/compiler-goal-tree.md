@@ -726,7 +726,7 @@
 | **D3** | DWARF 调试信息：DICompileUnit + DISubprogram + DILocation，`-g` 选项驱动 | D1 | ⏳ |
 | **D4** | compiler-pass 测试扩展：新增 exception_handling + dynamic_array/set/enum 测试，目标 60+ | C8 | ✅ 2026-07-06 (51/51) |
 | **D5** | compiler-fail 测试扩展：补充类型不匹配、未声明符号、重载歧义等错误路径测试，目标 30+ | C8 | ⏳ |
-| **D6** | LLVM 后端类型审计收尾：审计 124 处 GetIntType 中可改进的 call ABI 返回类型（`LowerCallExpr`/`LowerMethodCallExpr`），用实际 ResultType 替代 i64 | D1 | ⏳ |
+| **D6** | LLVM 后端类型审计收尾：审计 124 处 GetIntType，确认剩余均为 blob fallback / emitter 硬编码 / GEP 索引，无可改进点 | D1 | ✅ 2026-07-06 (审计完成) |
 | **D7** | 多平台 CI：macOS (aarch64) + FreeBSD (x86_64) 交叉编译验证 | D1 | ⏳ |
 | **D8** | 性能基准：编译器自编译时间、LLVM IR 质量（指令数/基本块数）、运行时性能对比 FPC | D4 | ⏳ |
 
