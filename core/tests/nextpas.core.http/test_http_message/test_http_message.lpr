@@ -22,6 +22,7 @@ type
     FHeaders: IHttpHeaders;
     FStatus: THttpStatus;
     FBody: string;
+    FBodyBytes: TBytes;
     FStatusWritten: Boolean;
   public
     constructor Create;
@@ -32,6 +33,7 @@ type
     procedure Flush;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
+    property BodyBytes: TBytes read FBodyBytes;
     property StatusWritten: Boolean read FStatusWritten;
   end;
 
@@ -1196,6 +1198,7 @@ begin
   FStatus := HTTP_STATUS_OK;
   FStatusWritten := False;
   FBody := '';
+  FBodyBytes := nil;
 end;
 
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -1217,10 +1220,14 @@ end;
 function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LPrev: SizeInt;
+  LPrevBytes: SizeUInt;
 begin
   LPrev := SizeInt(Length(FBody));
   SetLength(FBody, LPrev + SizeInt(ACount));
   Move(ABuf, FBody[LPrev + 1], ACount);
+  LPrevBytes := SizeUInt(Length(FBodyBytes));
+  SetLength(FBodyBytes, LPrevBytes + ACount);
+  Move(ABuf, FBodyBytes[LPrevBytes], ACount);
   Result := ACount;
 end;
 
@@ -1274,6 +1281,105 @@ begin
   LDoc := JsonParse('{}');
   HttpWriteResponseJson(LW, HTTP_STATUS_OK, LDoc.Root);
   CheckEqual('{}', LM.Body, 'WriteResponseJson serializes empty object');
+end;
+
+{ HttpWriteResponseBytes tests }
+
+procedure TestWriteResponseBytesSetsHeaders;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 3);
+  LData[0] := $DE; LData[1] := $AD; LData[2] := $BE;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  CheckEqual(HTTP_STATUS_OK, LM.Status, 'status');
+  CheckEqual('application/octet-stream', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual('3', LM.GetHeaders.Get('content-length'), 'content-length');
+  CheckTrue(LM.StatusWritten, 'header written');
+end;
+
+procedure TestWriteResponseBytesWritesBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 4);
+  LData[0] := $01; LData[1] := $02; LData[2] := $03; LData[3] := $04;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  CheckEqual(4, Length(LM.BodyBytes), 'body length');
+  CheckEqual($01, LM.BodyBytes[0], 'byte 0');
+  CheckEqual($02, LM.BodyBytes[1], 'byte 1');
+  CheckEqual($03, LM.BodyBytes[2], 'byte 2');
+  CheckEqual($04, LM.BodyBytes[3], 'byte 3');
+end;
+
+procedure TestWriteResponseBytesEmptyBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', nil);
+  CheckEqual('0', LM.GetHeaders.Get('content-length'), 'content-length');
+  CheckEqual(0, Length(LM.BodyBytes), 'empty body');
+end;
+
+procedure TestWriteResponseBytesNoBodyStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_NO_CONTENT, '', nil);
+  CheckEqual(HTTP_STATUS_NO_CONTENT, LM.Status, 'status');
+  CheckEqual('', LM.GetHeaders.Get('content-length'), 'no content-length');
+end;
+
+procedure TestWriteResponseBytesNoBodyStatusWithBodyRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 1);
+  LData[0] := $FF;
+  LRaised := False;
+  try
+    HttpWriteResponseBytes(LW, HTTP_STATUS_NO_CONTENT, '', LData);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on no-body status with body');
+end;
+
+procedure TestWriteResponseBytesNilWriterRaises;
+var
+  LData: TBytes;
+  LRaised: Boolean;
+begin
+  SetLength(LData, 1);
+  LData[0] := $00;
+  LRaised := False;
+  try
+    HttpWriteResponseBytes(nil, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on nil writer');
 end;
 
 { HttpReadRequestBody* tests }
@@ -1513,6 +1619,18 @@ begin
     @TestWriteResponseJsonSerializesValue);
   T.Test('WriteResponseJson empty object',
     @TestWriteResponseJsonEmptyObject);
+  T.Test('WriteResponseBytes sets headers',
+    @TestWriteResponseBytesSetsHeaders);
+  T.Test('WriteResponseBytes writes body',
+    @TestWriteResponseBytesWritesBody);
+  T.Test('WriteResponseBytes empty body',
+    @TestWriteResponseBytesEmptyBody);
+  T.Test('WriteResponseBytes no-body status',
+    @TestWriteResponseBytesNoBodyStatus);
+  T.Test('WriteResponseBytes no-body status with body raises',
+    @TestWriteResponseBytesNoBodyStatusWithBodyRaises);
+  T.Test('WriteResponseBytes nil writer raises',
+    @TestWriteResponseBytesNilWriterRaises);
   T.Test('ReadRequestBodyBytes reads body',
     @TestReadRequestBodyBytesReadsBody);
   T.Test('ReadRequestBodyString reads body',
