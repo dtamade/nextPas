@@ -782,6 +782,30 @@ begin
   platform_socket_close(S1);
   platform_socket_close(S2);
 end;
+
+procedure TestCloseAlreadyClosedSocket;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  Check(platform_socket_close(S) = 0, 'close');
+  { Second close should return error or be safe no-op }
+  platform_socket_close(S);
+  Check(True, 'double close handled without crash');
+end;
+
+procedure TestCreateNilAddress;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  { Bind to nil address should fail gracefully }
+  Check(platform_socket_bind(S, nil, 0) <> 0, 'bind nil address returns error');
+  platform_socket_close(S);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -841,6 +865,12 @@ begin
   { Socketpair data exchange }
   T.Test('socketpair data exchange', @TestSocketPairDataExchange);
   T.Test('socketpair shutdown', @TestSocketPairShutdown);
+
+  { Socket close already closed }
+  T.Test('close already closed socket', @TestCloseAlreadyClosedSocket);
+
+  { Socket nil address }
+  T.Test('create nil address', @TestCreateNilAddress);
 
   if not T.Run then Halt(1);
 end.

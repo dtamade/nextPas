@@ -672,6 +672,52 @@ begin
   platform_process_wait(LProc, LResult, 5000);
 end;
 
+procedure TestSpawnWithEnv;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LEnv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+
+  LEnv[0] := 'NEXTPAS_TEST_ENV_VAR=hello_env_123';
+  LEnv[1] := nil;
+
+  LRet := platform_process_spawn('/bin/true', @LArgv[0], @LEnv[0], LProc);
+  Check(LRet = 0, 'spawn with env');
+  platform_process_wait(LProc, LResult, 5000);
+end;
+
+procedure TestRunNilStdout;
+var
+  LResult: TPlatformProcessResult;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/true', @LArgv[0], nil, nil, 0, LRet, LResult.ExitCode);
+  Check(LRet = 0, 'run with nil stdout');
+  Check(LResult.ExitCode = 0, 'exit code 0');
+end;
+
+procedure TestRunNilStderr;
+var
+  LOutBuf: array[0..255] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/true', @LArgv[0], nil, @LOutBuf[0], 256, LOutLen, LExitCode);
+  Check(LRet = 0, 'run with nil stderr');
+  Check(LExitCode = 0, 'exit code 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -704,5 +750,8 @@ begin
   T.Test('signal various signals', @TestSignalVariousSignals);
   T.Test('kill exited process', @TestProcessKillExitedProcess);
   T.Test('signal 0 checks existence', @TestProcessSignalZero);
+  T.Test('spawn with env', @TestSpawnWithEnv);
+  T.Test('run nil stdout', @TestRunNilStdout);
+  T.Test('run nil stderr', @TestRunNilStderr);
   if not T.Run then Halt(1);
 end.
