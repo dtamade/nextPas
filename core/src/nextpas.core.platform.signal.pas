@@ -36,11 +36,15 @@ function platform_signal_reset(ASignal: Int32): Int32;
 function platform_signal_block(ASignal: Int32): Int32;
 function platform_signal_unblock(ASignal: Int32): Int32;
 
+{** @desc 向当前进程发送信号（POSIX raise / Windows GenerateConsoleCtrlEvent） *}
+function platform_signal_raise(ASignal: Int32): Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi,
   nextpas.core.platform.error;
@@ -147,6 +151,14 @@ begin
   else
     Result := 0;
 end;
+
+function platform_signal_raise(ASignal: Int32): Int32;
+begin
+  if kill(getpid, ASignal) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_MACOS}
@@ -217,6 +229,14 @@ begin
   FillChar(LSet, SizeOf(LSet), 0);
   LSet.Words[0] := UInt32(1) shl (ASignal - 1);
   if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
+
+function platform_signal_raise(ASignal: Int32): Int32;
+begin
+  if kill(getpid, ASignal) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -297,6 +317,14 @@ begin
   LBit := (ASignal - 1) mod 32;
   LSet.Words[LIdx] := Int32(1 shl LBit);
   if sigprocmask(SIG_UNBLOCK, @LSet, nil) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
+
+function platform_signal_raise(ASignal: Int32): Int32;
+begin
+  if kill(getpid, ASignal) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
@@ -470,6 +498,26 @@ function platform_signal_unblock(ASignal: Int32): Int32;
 begin
   Result := Int32(ERROR_NOT_SUPPORTED);
 end;
+
+function platform_signal_raise(ASignal: Int32): Int32;
+begin
+  if ASignal = PLATFORM_SIGINT then
+  begin
+    if GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
+  end
+  else if ASignal = PLATFORM_SIGBREAK then
+  begin
+    if GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, 0) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
+  end
+  else
+    Result := Int32(ERROR_NOT_SUPPORTED);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
@@ -483,6 +531,8 @@ begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_signal_block(ASignal: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_signal_unblock(ASignal: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_signal_raise(ASignal: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
