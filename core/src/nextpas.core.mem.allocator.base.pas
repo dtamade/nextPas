@@ -17,6 +17,10 @@ uses
   nextpas.core.mem.intf
   ;
 
+const
+  {** DEBUG 模式下追踪最近释放指针的环形缓冲区大小 }
+  FREED_PTR_RING_SIZE = 256;
+
 type
   TAllocatorTraits = nextpas.core.mem.intf.TAllocatorTraits;
   IAllocator = nextpas.core.mem.intf.IAllocator;
@@ -25,9 +29,20 @@ type
   {**
    * TAllocator
    *
-   * @desc 内存分配器的抽象基类, 实现了 IAllocator 接口
+   * @desc 内存分配器的抽象基类, 实现了 IAllocator 接口。
+   *
+   * DEBUG 模式特性：
+   * - 分配时填充 MEM_POISON_ALLOC（检测未初始化读取）
+   * - 环形缓冲区追踪最近释放的指针（检测 double-free）
    *}
   TAllocator = class(TInterfacedObject, IAllocator)
+  {$IFDEF DEBUG}
+  private
+    FFreedRing: array[0..FREED_PTR_RING_SIZE - 1] of Pointer;
+    FFreedRingPos: Integer;
+    function IsFreedPointer(APtr: Pointer): Boolean;
+    procedure RecordFreedPointer(APtr: Pointer);
+  {$ENDIF}
   protected
     function DoGetMem(ASize: SizeUInt): Pointer; virtual; abstract;
     function DoAllocMem(ASize: SizeUInt): Pointer; virtual; abstract;
@@ -44,8 +59,29 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.error;
+
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in aligned alloc helpers
+
+{$IFDEF DEBUG}
+function TAllocator.IsFreedPointer(APtr: Pointer): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to FREED_PTR_RING_SIZE - 1 do
+    if FFreedRing[I] = APtr then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TAllocator.RecordFreedPointer(APtr: Pointer);
+begin
+  FFreedRing[FFreedRingPos] := APtr;
+  FFreedRingPos := (FFreedRingPos + 1) mod FREED_PTR_RING_SIZE;
+end;
+{$ENDIF}
 
 function TAllocator.Traits: TAllocatorTraits;
 begin
@@ -98,9 +134,15 @@ begin
     Exit;
     {$ENDIF}
   end;
-  // Note: No poison here — subclasses with known block size (TFixedPool, TGrowingBlockPool)
-  // poison freed memory in their own Release/FreeMem for better accuracy.
+  {$IFDEF DEBUG}
+  if IsFreedPointer(APtr) then
+    raise EAllocError.Create(aeDoubleFree,
+      'TAllocator.FreeMem: double free detected at $' + HexStr(APtr));
+  {$ENDIF}
   DoFreeMem(APtr);
+  {$IFDEF DEBUG}
+  RecordFreedPointer(APtr);
+  {$ENDIF}
 end;
 
 {$POP}

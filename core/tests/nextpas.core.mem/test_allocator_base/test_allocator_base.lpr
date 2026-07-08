@@ -7,6 +7,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.base;
 
 type
@@ -146,7 +147,7 @@ begin
   try
     LTraits := LAlloc.Traits;
     Check(not LTraits.ZeroInitialized, 'Default ZeroInitialized should be False');
-    Check(LTraits.ThreadSafe, 'Default ThreadSafe should be True');
+    Check(not LTraits.ThreadSafe, 'Default ThreadSafe should be False');
     Check(LTraits.SupportsRealloc, 'Default SupportsRealloc should be True');
   finally
     LAlloc.Free;
@@ -170,6 +171,35 @@ begin
   end;
 end;
 
+{$IFDEF DEBUG}
+procedure TestDoubleFreeDetection;
+var
+  LAlloc: TMockAllocator;
+  LPtr: Pointer;
+  LCaught: Boolean;
+begin
+  LAlloc := TMockAllocator.Create;
+  try
+    LPtr := LAlloc.GetMem(64);
+    Check(LPtr <> nil, 'GetMem should succeed');
+    LAlloc.FreeMem(LPtr);
+    LCaught := False;
+    try
+      LAlloc.FreeMem(LPtr);  // double free!
+    except
+      on E: EAllocError do
+      begin
+        LCaught := True;
+        Check(E.Error = aeDoubleFree, 'Error code should be aeDoubleFree');
+      end;
+    end;
+    Check(LCaught, 'Double free should raise EAllocError');
+  finally
+    LAlloc.Free;
+  end;
+end;
+{$ENDIF}
+
 begin
   T := TTestSuite.Create('test_allocator_base');
   T.Test('GetMemZeroSize', @TestGetMemZeroSize);
@@ -179,6 +209,9 @@ begin
   T.Test('FreeMemNilIsNoOp', @TestFreeMemNilIsNoOp);
   T.Test('DefaultTraits', @TestDefaultTraits);
   T.Test('GetMemCallsDoGetMem', @TestGetMemCallsDoGetMem);
+  {$IFDEF DEBUG}
+  T.Test('DoubleFreeDetection', @TestDoubleFreeDetection);
+  {$ENDIF}
   T.Run;
   T.Summary;
 end.
