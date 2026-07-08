@@ -29,53 +29,130 @@ const
 
   GLX_ERR_LOAD_FAILED = -10;
 
-{ Runtime load/unload of libX11. Returns 0 on success. }
+{** @desc 加载 X11 动态库并解析符号（引用计数）
+    @return 0 成功，X11_ERR_LOAD_FAILED 加载失败 *}
 function x11_load: Int32;
+
+{** @desc 释放 X11 引用（引用计数归零时卸载） *}
 procedure x11_unload;
+
+{** @desc 检查 X11 是否已加载
+    @return True 已加载 *}
 function x11_is_loaded: Boolean;
 
-{ Runtime load/unload of libGL.so.1 (GLX symbols). Returns 0 on success.
-  Requires x11_load to have succeeded first. }
+{** @desc 加载 GLX 动态库并解析符号（引用计数）
+    @return 0 成功，GLX_ERR_LOAD_FAILED 加载失败 *}
 function glx_load: Int32;
+
+{** @desc 释放 GLX 引用（引用计数归零时卸载） *}
 procedure glx_unload;
+
+{** @desc 检查 GLX 是否已加载
+    @return True 已加载 *}
 function glx_is_loaded: Boolean;
 
 { --- Event field helpers (byte-offset access into flat TX11Event) --- }
 
-{ Common header fields (shared by all event types) }
+{** @desc 获取事件类型
+    @param AEvent X11 事件缓冲区
+    @return 事件类型值 *}
 function x11_event_type(const AEvent: TX11Event): Int32;
+
+{** @desc 获取事件关联的窗口
+    @param AEvent X11 事件缓冲区
+    @return 窗口 ID *}
 function x11_event_window(const AEvent: TX11Event): TX11Window;
 
-{ XKeyEvent / XButtonEvent / XMotionEvent time field }
+{** @desc 获取事件时间戳
+    @param AEvent X11 事件缓冲区
+    @return 时间戳（毫秒） *}
 function x11_event_time(const AEvent: TX11Event): UInt32;
 
-{ XKeyEvent sub-fields }
+{** @desc 获取键盘事件修饰键状态
+    @param AEvent X11 事件缓冲区
+    @return 修饰键掩码 *}
 function x11_key_event_state(const AEvent: TX11Event): UInt32;
+
+{** @desc 获取键盘事件键码
+    @param AEvent X11 事件缓冲区
+    @return 键码值 *}
 function x11_key_event_keycode(const AEvent: TX11Event): UInt32;
 
-{ XButtonEvent sub-fields }
+{** @desc 获取鼠标按钮事件按钮号
+    @param AEvent X11 事件缓冲区
+    @return 按钮号 *}
 function x11_button_event_button(const AEvent: TX11Event): UInt32;
+
+{** @desc 获取鼠标按钮事件 X 坐标
+    @param AEvent X11 事件缓冲区
+    @return X 坐标 *}
 function x11_button_event_x(const AEvent: TX11Event): Int32;
+
+{** @desc 获取鼠标按钮事件 Y 坐标
+    @param AEvent X11 事件缓冲区
+    @return Y 坐标 *}
 function x11_button_event_y(const AEvent: TX11Event): Int32;
 
-{ XMotionEvent sub-fields }
+{** @desc 获取鼠标移动事件 X 坐标
+    @param AEvent X11 事件缓冲区
+    @return X 坐标 *}
 function x11_motion_event_x(const AEvent: TX11Event): Int32;
+
+{** @desc 获取鼠标移动事件 Y 坐标
+    @param AEvent X11 事件缓冲区
+    @return Y 坐标 *}
 function x11_motion_event_y(const AEvent: TX11Event): Int32;
 
-{ XConfigureEvent sub-fields }
+{** @desc 获取窗口配置事件关联窗口
+    @param AEvent X11 事件缓冲区
+    @return 窗口 ID *}
 function x11_configure_event_window(const AEvent: TX11Event): TX11Window;
+
+{** @desc 获取窗口配置事件宽度
+    @param AEvent X11 事件缓冲区
+    @return 宽度（像素） *}
 function x11_configure_event_width(const AEvent: TX11Event): Int32;
+
+{** @desc 获取窗口配置事件高度
+    @param AEvent X11 事件缓冲区
+    @return 高度（像素） *}
 function x11_configure_event_height(const AEvent: TX11Event): Int32;
 
-{ XClientMessageEvent sub-fields }
+{** @desc 获取客户端消息事件第一个 long 数据
+    @param AEvent X11 事件缓冲区
+    @return 消息数据 *}
 function x11_client_message_l0(const AEvent: TX11Event): TX11Atom;
 
-{ Selection event sub-fields }
+{ --- Selection event helpers --- }
+
+{** @desc 获取选择请求事件的请求者窗口
+    @param AEvent X11 事件缓冲区
+    @return 请求者窗口 ID *}
 function x11_selreq_requestor(const AEvent: TX11Event): TX11Window;
+
+{** @desc 获取选择请求事件的选择原子
+    @param AEvent X11 事件缓冲区
+    @return 选择原子 *}
 function x11_selreq_selection(const AEvent: TX11Event): TX11Atom;
+
+{** @desc 获取选择请求事件的目标原子
+    @param AEvent X11 事件缓冲区
+    @return 目标原子 *}
 function x11_selreq_target(const AEvent: TX11Event): TX11Atom;
+
+{** @desc 获取选择请求事件的属性原子
+    @param AEvent X11 事件缓冲区
+    @return 属性原子 *}
 function x11_selreq_property(const AEvent: TX11Event): TX11Atom;
+
+{** @desc 获取选择通知事件的属性原子
+    @param AEvent X11 事件缓冲区
+    @return 属性原子 *}
 function x11_selnotify_property(const AEvent: TX11Event): TX11Atom;
+
+{** @desc 获取选择清除事件的选择原子
+    @param AEvent X11 事件缓冲区
+    @return 选择原子 *}
 function x11_selclear_selection(const AEvent: TX11Event): TX11Atom;
 
 implementation
@@ -88,9 +165,25 @@ var
   GGLLoaded: Boolean = False;
   GGLRefCount: Int32 = 0;
 
+{** @desc 尝试从已加载的动态库解析符号
+    @param AName 符号名称
+    @param APtr 输出符号指针
+    @return True 解析成功 *}
+function TryLoadSymbol(const AName: PAnsiChar; out APtr: Pointer): Boolean;
+begin
+  Result := platform_dl_sym(GLib, AName, APtr) = 0;
+end;
+
+{** @desc 尝试从已加载的 GL 动态库解析符号
+    @param AName 符号名称
+    @param APtr 输出符号指针
+    @return True 解析成功 *}
+function TryLoadGLSymbol(const AName: PAnsiChar; out APtr: Pointer): Boolean;
+begin
+  Result := platform_dl_sym(GGLLib, AName, APtr) = 0;
+end;
+
 function x11_load: Int32;
-var
-  LPtr: Pointer;
 begin
   if GLoaded then
   begin
@@ -102,139 +195,46 @@ begin
     Exit(X11_ERR_LOAD_FAILED);
 
   { Resolve required symbols. On any failure, unload and return error. }
-  if platform_dl_sym(GLib, 'XOpenDisplay', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XOpenDisplay) := LPtr;
-
-  if platform_dl_sym(GLib, 'XCloseDisplay', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XCloseDisplay) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDefaultRootWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDefaultRootWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDefaultScreen', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDefaultScreen) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDefaultVisual', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDefaultVisual) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDefaultColormap', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDefaultColormap) := LPtr;
-
-  if platform_dl_sym(GLib, 'XBlackPixel', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XBlackPixel) := LPtr;
-
-  if platform_dl_sym(GLib, 'XWhitePixel', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XWhitePixel) := LPtr;
-
-  if platform_dl_sym(GLib, 'XCreateSimpleWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XCreateSimpleWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XCreateWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XCreateWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDestroyWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDestroyWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XMapWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XMapWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XUnmapWindow', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XUnmapWindow) := LPtr;
-
-  if platform_dl_sym(GLib, 'XStoreName', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XStoreName) := LPtr;
-
-  if platform_dl_sym(GLib, 'XSelectInput', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XSelectInput) := LPtr;
-
-  if platform_dl_sym(GLib, 'XNextEvent', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XNextEvent) := LPtr;
-
-  if platform_dl_sym(GLib, 'XPending', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XPending) := LPtr;
-
-  if platform_dl_sym(GLib, 'XSync', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XSync) := LPtr;
-
-  if platform_dl_sym(GLib, 'XFlush', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XFlush) := LPtr;
-
-  if platform_dl_sym(GLib, 'XInternAtom', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XInternAtom) := LPtr;
-
-  if platform_dl_sym(GLib, 'XSetWMProtocols', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XSetWMProtocols) := LPtr;
-
-  if platform_dl_sym(GLib, 'XLookupString', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XLookupString) := LPtr;
+  if not TryLoadSymbol('XOpenDisplay', Pointer(XOpenDisplay)) or
+     not TryLoadSymbol('XCloseDisplay', Pointer(XCloseDisplay)) or
+     not TryLoadSymbol('XDefaultRootWindow', Pointer(XDefaultRootWindow)) or
+     not TryLoadSymbol('XDefaultScreen', Pointer(XDefaultScreen)) or
+     not TryLoadSymbol('XDefaultVisual', Pointer(XDefaultVisual)) or
+     not TryLoadSymbol('XDefaultColormap', Pointer(XDefaultColormap)) or
+     not TryLoadSymbol('XBlackPixel', Pointer(XBlackPixel)) or
+     not TryLoadSymbol('XWhitePixel', Pointer(XWhitePixel)) or
+     not TryLoadSymbol('XCreateSimpleWindow', Pointer(XCreateSimpleWindow)) or
+     not TryLoadSymbol('XCreateWindow', Pointer(XCreateWindow)) or
+     not TryLoadSymbol('XDestroyWindow', Pointer(XDestroyWindow)) or
+     not TryLoadSymbol('XMapWindow', Pointer(XMapWindow)) or
+     not TryLoadSymbol('XUnmapWindow', Pointer(XUnmapWindow)) or
+     not TryLoadSymbol('XStoreName', Pointer(XStoreName)) or
+     not TryLoadSymbol('XSelectInput', Pointer(XSelectInput)) or
+     not TryLoadSymbol('XNextEvent', Pointer(XNextEvent)) or
+     not TryLoadSymbol('XPending', Pointer(XPending)) or
+     not TryLoadSymbol('XSync', Pointer(XSync)) or
+     not TryLoadSymbol('XFlush', Pointer(XFlush)) or
+     not TryLoadSymbol('XInternAtom', Pointer(XInternAtom)) or
+     not TryLoadSymbol('XSetWMProtocols', Pointer(XSetWMProtocols)) or
+     not TryLoadSymbol('XLookupString', Pointer(XLookupString)) or
+     not TryLoadSymbol('XChangeProperty', Pointer(XChangeProperty)) or
+     not TryLoadSymbol('XSetSelectionOwner', Pointer(XSetSelectionOwner)) or
+     not TryLoadSymbol('XConvertSelection', Pointer(XConvertSelection)) or
+     not TryLoadSymbol('XGetWindowProperty', Pointer(XGetWindowProperty)) or
+     not TryLoadSymbol('XDeleteProperty', Pointer(XDeleteProperty)) or
+     not TryLoadSymbol('XSendEvent', Pointer(XSendEvent)) or
+     not TryLoadSymbol('XFree', Pointer(XFree)) or
+     not TryLoadSymbol('XGetSelectionOwner', Pointer(XGetSelectionOwner)) or
+     not TryLoadSymbol('XCreateColormap', Pointer(XCreateColormap)) or
+     not TryLoadSymbol('XFreeColormap', Pointer(XFreeColormap)) then
+  begin
+    x11_unload;
+    Exit(X11_ERR_LOAD_FAILED);
+  end;
 
   { XkbKeycodeToKeysym is optional -- fallback to XLookupString if absent. }
-  if platform_dl_sym(GLib, 'XkbKeycodeToKeysym', LPtr) = 0 then
-    Pointer(XkbKeycodeToKeysym) := LPtr
-  else
+  if not TryLoadSymbol('XkbKeycodeToKeysym', Pointer(XkbKeycodeToKeysym)) then
     Pointer(XkbKeycodeToKeysym) := nil;
-
-  if platform_dl_sym(GLib, 'XChangeProperty', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XChangeProperty) := LPtr;
-
-  if platform_dl_sym(GLib, 'XSetSelectionOwner', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XSetSelectionOwner) := LPtr;
-
-  if platform_dl_sym(GLib, 'XConvertSelection', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XConvertSelection) := LPtr;
-
-  if platform_dl_sym(GLib, 'XGetWindowProperty', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XGetWindowProperty) := LPtr;
-
-  if platform_dl_sym(GLib, 'XDeleteProperty', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XDeleteProperty) := LPtr;
-
-  if platform_dl_sym(GLib, 'XSendEvent', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XSendEvent) := LPtr;
-
-  if platform_dl_sym(GLib, 'XFree', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XFree) := LPtr;
-
-  if platform_dl_sym(GLib, 'XGetSelectionOwner', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XGetSelectionOwner) := LPtr;
-
-  if platform_dl_sym(GLib, 'XCreateColormap', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XCreateColormap) := LPtr;
-
-  if platform_dl_sym(GLib, 'XFreeColormap', LPtr) <> 0 then
-  begin x11_unload; Exit(X11_ERR_LOAD_FAILED); end;
-  Pointer(XFreeColormap) := LPtr;
 
   GLoaded := True;
   GRefCount := 1;
@@ -292,8 +292,6 @@ begin
 end;
 
 function glx_load: Int32;
-var
-  LPtr: Pointer;
 begin
   if GGLLoaded then
   begin
@@ -305,33 +303,17 @@ begin
     Exit(GLX_ERR_LOAD_FAILED);
 
   { Core GLX symbols -- all required. }
-  if platform_dl_sym(GGLLib, 'glXChooseFBConfig', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXChooseFBConfig) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXGetVisualFromFBConfig', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXGetVisualFromFBConfig) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXMakeCurrent', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXMakeCurrent) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXSwapBuffers', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXSwapBuffers) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXDestroyContext', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXDestroyContext) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXQueryExtension', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXQueryExtension) := LPtr;
-
-  if platform_dl_sym(GGLLib, 'glXGetProcAddress', LPtr) <> 0 then
-  begin glx_unload; Exit(GLX_ERR_LOAD_FAILED); end;
-  Pointer(glXGetProcAddress) := LPtr;
+  if not TryLoadGLSymbol('glXChooseFBConfig', Pointer(glXChooseFBConfig)) or
+     not TryLoadGLSymbol('glXGetVisualFromFBConfig', Pointer(glXGetVisualFromFBConfig)) or
+     not TryLoadGLSymbol('glXMakeCurrent', Pointer(glXMakeCurrent)) or
+     not TryLoadGLSymbol('glXSwapBuffers', Pointer(glXSwapBuffers)) or
+     not TryLoadGLSymbol('glXDestroyContext', Pointer(glXDestroyContext)) or
+     not TryLoadGLSymbol('glXQueryExtension', Pointer(glXQueryExtension)) or
+     not TryLoadGLSymbol('glXGetProcAddress', Pointer(glXGetProcAddress)) then
+  begin
+    glx_unload;
+    Exit(GLX_ERR_LOAD_FAILED);
+  end;
 
   { Extensions: resolved via GetProcAddress. }
   if @glXGetProcAddress <> nil then

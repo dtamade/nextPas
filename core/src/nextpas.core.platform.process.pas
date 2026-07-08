@@ -7,26 +7,95 @@ interface
 uses
   nextpas.core.platform.process.base;
 
+{** @desc 创建子进程
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param AEnvp 环境变量数组（nil 表示继承当前环境）
+    @param AProc 输出进程句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
+
+{** @desc 创建子进程并重定向标准 I/O
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param AEnvp 环境变量数组（nil 表示继承当前环境）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AChildStdin 子进程 stdin 文件描述符（-1 表示不重定向）
+    @param AChildStdout 子进程 stdout 文件描述符（-1 表示不重定向）
+    @param AChildStderr 子进程 stderr 文件描述符（-1 表示不重定向）
+    @param AProc 输出进程句柄
+    @param AFailStage 输出失败阶段
+    @return 0 成功，否则返回错误码 *}
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
   out AProc: TPlatformProcess;
   out AFailStage: TPlatformProcessSpawnStage): Int32;
+
+{** @desc 运行进程并捕获 stdout 输出
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AOutBuf 输出缓冲区
+    @param AOutBufLen 缓冲区长度
+    @param AOutLen 输出实际读取字节数
+    @param AExitCode 输出进程退出码
+    @return 0 成功，否则返回错误码 *}
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
+
+{** @desc 等待进程结束（可选超时）
+    @param AProc 进程句柄
+    @param AResult 输出进程结果
+    @param ATimeoutMs 超时时间（毫秒，0 表示无限等待）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
+
+{** @desc 非阻塞检查进程是否结束
+    @param AProc 进程句柄
+    @param AResult 输出进程结果
+    @return 0 成功（进程已结束或仍在运行） *}
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
+
+{** @desc 分离进程（不再等待其结束）
+    @param AProc 进程句柄（置为空） *}
 procedure platform_process_detach(var AProc: TPlatformProcess);
+
+{** @desc 向进程发送信号
+    @param AProc 进程句柄
+    @param ASignal 信号编号
+    @return 0 成功，否则返回错误码 *}
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
+
+{** @desc 强制终止进程（SIGKILL）
+    @param AProc 进程句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
+
+{** @desc 获取进程 ID
+    @param AProc 进程句柄
+    @return 进程 ID *}
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
+
+{** @desc 创建管道（用于进程间通信）
+    @param AReadHandle 输出读端文件描述符
+    @param AWriteHandle 输出写端文件描述符
+    @return 0 成功，否则返回错误码 *}
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+
+{** @desc 打开 /dev/null
+    @param AForWrite True 打开用于写入，False 打开用于读取
+    @param AHandle 输出文件描述符
+    @return 0 成功，否则返回错误码 *}
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+
+{** @desc 关闭文件描述符
+    @param AHandle 文件描述符（置为 -1）
+    @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
 implementation
