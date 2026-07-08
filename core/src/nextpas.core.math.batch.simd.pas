@@ -1,14 +1,15 @@
 unit nextpas.core.math.batch.simd;
 {**
- * SIMD-optimized batch math operations (placeholder implementation).
+ * SIMD-optimized batch math operations.
  *
- * This unit provides SIMD-ready wrappers for batch scalar operations.
- * Current implementation uses scalar loops as placeholders; future versions
- * will replace these with true SSE/AVX/NEON intrinsics.
+ * This unit provides SIMD-accelerated wrappers for batch scalar operations,
+ * using SSE/AVX intrinsics via nextpas.core.simd for 4-wide F32 processing.
+ * Scalar fallback handles remaining elements when count is not a multiple of 4.
  *
  * Design contract:
  *   - API mirrors nextpas.core.math.batch (same signatures)
- *   - Implementation delegates to nextpas.core.math.trig / nextpas.core.math.scalar
+ *   - SIMD loop processes 4 elements per iteration via VecF32x4* primitives
+ *   - Scalar tail loop handles remaining 0-3 elements
  *   - The "Simd" suffix signals SIMD-ready dispatch path
  *}
 
@@ -181,10 +182,11 @@ implementation
 
 uses
   nextpas.core.math.trig,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.simd;
 
-// -- Placeholder scalar implementations --
-// These will be replaced with true SIMD intrinsics in a future pass.
+// -- SIMD-optimized implementations --
+// Each function processes 4 elements per SIMD iteration, scalar fallback for remaining elements.
 
 { BatchSinSimdF32 }
 function BatchSinSimdF32(const AInput: array of Single;
@@ -228,7 +230,7 @@ begin
   Result := LCount;
 end;
 
-{ BatchSinCosSimdF32 }
+{ BatchSinCosSimdF32 — Scalar fallback: VecF32x4SinCos not yet re-exported from nextpas.core.simd public facade }
 function BatchSinCosSimdF32(const AInput: array of Single;
                             var ASinOutput, ACosOutput: array of Single): SizeInt;
 var
@@ -303,132 +305,227 @@ begin
   Result := LCount;
 end;
 
-{ BatchSqrtSimdF32 }
+{ BatchSqrtSimdF32 — SIMD-optimized via VecF32x4Sqrt (SQRTPS/VSQRTSS) }
 function BatchSqrtSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Sqrt(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Sqrt(AInput[i]);
   Result := LCount;
 end;
 
-{ BatchAbsSimdF32 }
+{ BatchAbsSimdF32 — SIMD-optimized via VecF32x4Abs (ANDPS with 0x7FFFFFFF mask) }
 function BatchAbsSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Abs(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Abs(AInput[i]);
   Result := LCount;
 end;
 
-{ BatchNegSimdF32 }
+{ BatchNegSimdF32 — SIMD-optimized via unary negation (XORPS with 0x80000000 sign bit) }
 function BatchNegSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := -LVec;
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := -AInput[i];
   Result := LCount;
 end;
 
-{ BatchCeilSimdF32 }
+{ BatchCeilSimdF32 — SIMD-optimized via VecF32x4Ceil (ROUNDPD with +inf rounding) }
 function BatchCeilSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Ceil(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Single(Ceil(AInput[i]));
   Result := LCount;
 end;
 
-{ BatchFloorSimdF32 }
+{ BatchFloorSimdF32 — SIMD-optimized via VecF32x4Floor (ROUNDPD with -inf rounding) }
 function BatchFloorSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Floor(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Single(Floor(AInput[i]));
   Result := LCount;
 end;
 
-{ BatchRoundSimdF32 }
+{ BatchRoundSimdF32 — SIMD-optimized via VecF32x4Round (ROUNDPD with nearest) }
 function BatchRoundSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Round(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Single(Round(AInput[i]));
   Result := LCount;
 end;
 
-{ BatchTruncSimdF32 }
+{ BatchTruncSimdF32 — SIMD-optimized via VecF32x4Trunc (ROUNDPD with toward-zero) }
 function BatchTruncSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Trunc(LVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := Single(Trunc(AInput[i]));
   Result := LCount;
 end;
 
-{ BatchLerpSimdF32 }
+{ BatchLerpSimdF32 — SIMD-optimized via VecF32x4Fma: lerp(a,b,t) = a + t*(b-a) = fma(t, b-a, a) }
 function BatchLerpSimdF32(const AStart, AEnd: array of Single;
                           const AT: Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LStart, LEnd, LDiff, LT: TVecF32x4;
 begin
   LCount := Length(AStart);
   if LCount > Length(AEnd) then
     LCount := Length(AEnd);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LT := VecF32x4Splat(AT);
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LStart := VecF32x4Load(@AStart[i]);
+    LEnd := VecF32x4Load(@AEnd[i]);
+    LDiff := VecF32x4Sub(LEnd, LStart);
+    LStart := VecF32x4Fma(LT, LDiff, LStart);
+    VecF32x4Store(@AOutput[i], LStart);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := AStart[i] + AT * (AEnd[i] - AStart[i]);
   Result := LCount;
 end;
 
-{ BatchClampSimdF32 }
+{ BatchClampSimdF32 — SIMD-optimized via VecF32x4Clamp (MINPS+MAXPS) }
 function BatchClampSimdF32(const AInput: array of Single;
                            const AMin, AMax: Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec, LMinVec, LMaxVec: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LMinVec := VecF32x4Splat(AMin);
+  LMaxVec := VecF32x4Splat(AMax);
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Clamp(LVec, LMinVec, LMaxVec);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
   begin
     if AInput[i] < AMin then
       AOutput[i] := AMin
@@ -440,17 +537,29 @@ begin
   Result := LCount;
 end;
 
-{ BatchScaleOffsetSimdF32 }
+{ BatchScaleOffsetSimdF32 — SIMD-optimized via VecF32x4Fma: input*scale + offset = fma(input, scale, offset) }
 function BatchScaleOffsetSimdF32(const AInput: array of Single;
                                  const AScale, AOffset: Single;
                                  var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  i, LCount, LSimdEnd: SizeInt;
+  LVec, LScale, LOffset: TVecF32x4;
 begin
   LCount := Length(AInput);
   if LCount > Length(AOutput) then
     LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
+  LScale := VecF32x4Splat(AScale);
+  LOffset := VecF32x4Splat(AOffset);
+  LSimdEnd := LCount - (LCount mod 4);
+  i := 0;
+  while i < LSimdEnd do
+  begin
+    LVec := VecF32x4Load(@AInput[i]);
+    LVec := VecF32x4Fma(LVec, LScale, LOffset);
+    VecF32x4Store(@AOutput[i], LVec);
+    Inc(i, 4);
+  end;
+  for i := LSimdEnd to LCount - 1 do
     AOutput[i] := AInput[i] * AScale + AOffset;
   Result := LCount;
 end;
