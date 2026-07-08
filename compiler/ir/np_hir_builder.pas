@@ -179,6 +179,7 @@ type
     function EmitConstFloat(const AValue: Double): THIRValueId;
     function GetFloatType: THIRTypeId;
     function EmitConstInt(const AValue: Int64): THIRValueId;
+    function EmitConstIntSmart(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
     function EmitNullPtrValue: THIRValueId;
@@ -733,6 +734,22 @@ begin
   Result := EmitConstIntOfType(AValue, GetIntType);
 end;
 
+{ 根据值范围推断类型的整数常量 }
+function THIRBuilder.EmitConstIntSmart(const AValue: Int64): THIRValueId;
+var
+  IntType: THIRTypeId;
+begin
+  if (AValue >= -128) and (AValue <= 127) then
+    IntType := GetIntTypeByWidth(8, True)
+  else if (AValue >= -32768) and (AValue <= 32767) then
+    IntType := GetIntTypeByWidth(16, True)
+  else if (AValue >= -2147483648) and (AValue <= 2147483647) then
+    IntType := GetIntTypeByWidth(32, True)
+  else
+    IntType := GetIntType;
+  Result := EmitConstIntOfType(AValue, IntType);
+end;
+
 function THIRBuilder.EmitConstIntOfType(const AValue: Int64;
   const ATypeId: THIRTypeId): THIRValueId;
 var
@@ -867,7 +884,7 @@ begin
   if (PtrSlot = 0) or (LenSlot = 0) then
     Exit;
   NullPtr := EmitNullPtrValue;
-  ZeroLen := EmitConstIntOfType(0, GetIntType);
+  ZeroLen := EmitConstIntSmart(0);
   if (NullPtr = 0) or (ZeroLen = 0) then
     Exit;
   EmitStore(GetPtrType, NullPtr, PtrSlot);
@@ -1599,7 +1616,7 @@ begin
 
   if AExpr.Kind = shekVirtualCall then
   begin
-    SlotValue := EmitConstIntOfType(0, GetIntType);
+    SlotValue := EmitConstIntSmart(0);
     if SlotValue = 0 then
       Exit(False);
 
@@ -2622,7 +2639,7 @@ begin
 
   if SameText(AArg, 'ne') then
   begin
-    OneVal := EmitConstIntOfType(1, GetIntType);
+    OneVal := EmitConstIntSmart(1);
     if OneVal = 0 then
       Exit;
     ResultVal := EmitBinOp(hikSub, GetIntType, OneVal, ResultVal);
@@ -4458,7 +4475,7 @@ begin
         Instr.TypeId := GetIntType;
         SetLength(Instr.Operands, 2);
         Instr.Operands[0] := MakeTypedOperand(FetchAddResult, GetIntType);
-        OneVal := EmitConstIntOfType(1, GetIntType);
+        OneVal := EmitConstIntSmart(1);
         Instr.Operands[1] := MakeTypedOperand(OneVal, GetIntType);
         EmitInstr(Instr);
       end;
@@ -4959,7 +4976,7 @@ begin
       if FieldPtr <> 0 then
         EmitTStringFini(FieldPtr);
 
-      ZeroVal := EmitConstIntOfType(0, GetIntType);
+      ZeroVal := EmitConstIntSmart(0);
       if ZeroVal <> 0 then
       begin
         for Offset := 0 to 2 do
