@@ -608,3 +608,51 @@
   - 数组长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
   - 确保长度值使用正确的类型宽度 (i32)
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第九刀：deref 使用栈类型
+  - deref token: 使用 PopTyped 获取操作数类型
+  - 如果操作数类型已知则使用，否则回退到 GetIntType
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十刀：动态数组长度使用 i32
+  - dynarray_resize/store/load: 长度使用 i32
+  - 确保动态数组长度使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十一刀：字符串临时长度使用 i32
+  - 字符串临时 alloca/store 使用 i32
+  - 确保字符串临时长度使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十二刀：变量长度加载使用 FindAllocaType
+  - 变量长度加载使用 FindAllocaType(Arg + '$len') 替代 GetIntType
+  - 确保变量长度加载使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十三刀：数组/字符串长度与元素大小类型修正
+  - dynarray_resize: 长度用 i32, 元素大小用 i64
+  - dynarray_release: 长度用 i32, 元素大小用 i64
+  - dynarray_cleanup_block: 长度加载/零值存储用 i32
+  - string_release: alloc_size 用 i32
+  - tstring_from_literal: 长度用 i32
+  - tstring_len: 返回值用 i32
+  - string temp len: alloca/store 用 i32
+  - function param _len: 用 i32
+  - class_alloc: size 用 i64
+  - string arg passing: len 用 i32
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十四刀：全局变量/字符串比较/字面量长度类型修正
+  - 全局数组长度: AddGlobal 用 i32
+  - 数组参数长度: alloca/store 用 i32
+  - 字符串比较 str_cmp: 长度参数和返回值用 i32
+  - 字符串字面量长度: 用 i32
+  - 字符串数据长度: PushTyped 用 i32
+  - 变量长度 alloca/store/load: 用 i32
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十五刀：字符串字面量/字段赋值长度类型修正
+  - emit_format_call: 字符串字面量长度用 i32
+  - tstring_field_assign_src: 字面量长度用 i32
+  - tstring_field_assign: tstring_from_literal 长度用 i32
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十六刀：数组长度 alloca/函数参数/字符串操作类型修正
+  - 数组长度 alloca: 用 i32
+  - 函数参数 _len: 用 i32 (两处)
+  - 字符串字面量参数长度: 用 i32
+  - write_str_var 长度: 用 i32
+  - tstring_copy: start/len 用 i32
+  - smoke + compiler-pass 49/49 全通过
