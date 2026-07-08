@@ -253,6 +253,28 @@ begin
   Check(True, 'large data integrity verified');
   platform_pipe_close(P);
 end;
+
+procedure TestDup2InvalidFd;
+var
+  LRet: Int32;
+begin
+  { dup2 with invalid fds should return error }
+  LRet := platform_dup2(-1, -1);
+  Check(LRet <> 0, 'dup2 with invalid fds returns error');
+end;
+
+procedure TestPipeWriteAfterCloseWrite;
+var
+  P: TPlatformPipe;
+  LWritten: PtrInt;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  Check(platform_pipe_close_write(P) = 0, 'close write');
+  { Write after close_write should fail }
+  LWritten := write(Int32(P.WriteFd), PAnsiChar('x'), 1);
+  Check(LWritten < 0, 'write after close_write fails');
+  platform_pipe_close(P);
+end;
 {$ENDIF}
 
 begin
@@ -265,6 +287,8 @@ begin
   T.Test('dup2 same fd', @TestDup2SameFd);
   T.Test('pipe partial close', @TestPipePartialClose);
   T.Test('pipe large data (4KB)', @TestPipeLargeData);
+  T.Test('dup2 invalid fd', @TestDup2InvalidFd);
+  T.Test('write after close_write', @TestPipeWriteAfterCloseWrite);
   {$ENDIF}
   T.Test('double close read', @TestDoubleCloseRead);
   T.Test('double close write', @TestDoubleCloseWrite);
