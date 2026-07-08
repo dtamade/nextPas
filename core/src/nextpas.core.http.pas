@@ -28,6 +28,7 @@ uses
   nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.middleware.healthcheck,
   nextpas.core.http.middleware.metrics,
+  nextpas.core.http.middleware.methodguard,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -274,6 +275,8 @@ function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware; inline;
 {** @desc Metrics middleware with custom callback. }
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
+{** @desc Method guard middleware — rejects disallowed methods with 405. }
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -729,6 +732,11 @@ end;
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWith(ACallback);
+end;
+
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.methodguard.MethodGuardMiddleware(AAllowed);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;

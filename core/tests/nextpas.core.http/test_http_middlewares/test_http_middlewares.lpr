@@ -23,6 +23,7 @@ uses
   nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.middleware.healthcheck,
   nextpas.core.http.middleware.metrics,
+  nextpas.core.http.middleware.methodguard,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -2081,6 +2082,137 @@ begin
   Check(LRaised, 'raises on nil callback');
 end;
 
+procedure TestMethodGuardAllowsGetMethod;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called for allowed method');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMethodGuardRejectsPostMethod;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LCalled, 'handler not called for disallowed method');
+  CheckEqual(405, LWObj.FStatus, 'status 405');
+end;
+
+procedure TestMethodGuardSetsAllowHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet, hmPost, hmPut])]
+  );
+  LReq := TMockRequest.Create(hmDelete, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(405, LWObj.FStatus, 'status 405');
+  Check(LWObj.FHeaders.Get('allow') <> '', 'Allow header set');
+  Check(Pos('GET', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains GET');
+  Check(Pos('POST', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains POST');
+  Check(Pos('PUT', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains PUT');
+end;
+
+procedure TestMethodGuardMultipleMethodsAllowed;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet, hmPost])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called for second allowed method');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMethodGuardOptionsMethodRejected;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(405, LWObj.FStatus, 'OPTIONS rejected with 405');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2170,5 +2302,11 @@ begin
   T.Test('MetricsWith: callback called multiple times', @TestMetricsWithCallbackMultiple);
   T.Test('MetricsWith: callback receives duration', @TestMetricsWithCallbackDuration);
   T.Test('MetricsWith: nil callback raises', @TestMetricsWithNilCallbackRaises);
+  { MethodGuard }
+  T.Test('MethodGuard: allows GET method', @TestMethodGuardAllowsGetMethod);
+  T.Test('MethodGuard: rejects POST method', @TestMethodGuardRejectsPostMethod);
+  T.Test('MethodGuard: sets Allow header on 405', @TestMethodGuardSetsAllowHeader);
+  T.Test('MethodGuard: multiple methods allowed', @TestMethodGuardMultipleMethodsAllowed);
+  T.Test('MethodGuard: OPTIONS rejected', @TestMethodGuardOptionsMethodRejected);
   if not T.Run then Halt(1);
 end.
