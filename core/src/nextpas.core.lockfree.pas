@@ -24,7 +24,8 @@ uses
   nextpas.core.lockfree.selector,
   nextpas.core.lockfree.selector.impl,
   nextpas.core.lockfree.priority_queue,
-  nextpas.core.lockfree.bag;
+  nextpas.core.lockfree.bag,
+  nextpas.core.lockfree.multimap;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -129,6 +130,15 @@ type
     @see TLockFreeBagImpl 详细文档和示例
   }
   generic TLockFreeBag<T> = class(specialize TLockFreeBagImpl<T>)
+  end;
+
+  {** @desc 并发 MultiMap（一个键可以有多个值）
+    @details 基于分片锁 HashMap 实现，每个键对应一个值列表。
+      支持 Add/Find/Remove/Contains/Count。
+      适用于索引、标签系统等场景。
+    @see TLockFreeMultiMapImpl 详细文档和示例
+  }
+  generic TLockFreeMultiMap<TKey, TValue> = class(specialize TLockFreeMultiMapImpl<TKey, TValue>)
   end;
 
 implementation
