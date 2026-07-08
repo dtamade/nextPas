@@ -807,6 +807,13 @@ function NormalizeShardCount(aShardCount, aCPUCount: Integer): Integer;
 {** 线程→分片路由: MulHash64(AThreadId) and mask. }
 function ChooseShardIndex(AThreadId: QWord; aShardMask: SizeUInt): Integer;
 
+{ Debug poison utilities }
+
+procedure DebugPoisonAlloc(APtr: Pointer; ASize: SizeUInt);
+procedure DebugPoisonFree(APtr: Pointer; ASize: SizeUInt);
+procedure DebugRecordFree(APtr: Pointer);
+function DebugIsDoubleFree(APtr: Pointer): Boolean;
+
 implementation
 
 uses
@@ -1348,6 +1355,43 @@ function ChooseShardIndex(AThreadId: QWord; aShardMask: SizeUInt): Integer;
 begin
   if aShardMask = 0 then Exit(0);
   Result := Integer(MulHash64(AThreadId) and QWord(aShardMask));
+end;
+
+{ Debug poison utilities }
+
+const
+  MEM_POISON_ALLOC = $AB;
+  MEM_POISON_FREED = $DE;
+  FREED_PTR_RING_SIZE = 256;
+
+var
+  GFreedRing: array[0..FREED_PTR_RING_SIZE - 1] of Pointer;
+  GFreedRingPos: Integer;
+
+procedure DebugPoisonAlloc(APtr: Pointer; ASize: SizeUInt);
+begin
+  FillChar(APtr^, ASize, MEM_POISON_ALLOC);
+end;
+
+procedure DebugPoisonFree(APtr: Pointer; ASize: SizeUInt);
+begin
+  FillChar(APtr^, ASize, MEM_POISON_FREED);
+end;
+
+procedure DebugRecordFree(APtr: Pointer);
+begin
+  GFreedRing[GFreedRingPos] := APtr;
+  GFreedRingPos := (GFreedRingPos + 1) mod FREED_PTR_RING_SIZE;
+end;
+
+function DebugIsDoubleFree(APtr: Pointer): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to FREED_PTR_RING_SIZE - 1 do
+    if GFreedRing[I] = APtr then
+      Exit(True);
+  Result := False;
 end;
 
 { Geometric growth calculation }
