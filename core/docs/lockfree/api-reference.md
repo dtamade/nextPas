@@ -1157,6 +1157,31 @@ type
 
 ---
 
+## Work Stealing Pool (nextpas.core.lockfree.workstealing)
+
+```pascal
+type
+  TWorkStealingTask = procedure(AData: Pointer);
+  TLockFreeWorkStealingResult = (wsSubmitted, wsStolen, wsEmpty, wsClosed);
+
+  TWorkStealingPool = class
+    constructor Create(const AWorkerCount: Int64);
+    function Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
+    function Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
+    function GetWorkerCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 每个工作线程有自己的双端队列
+- 本地任务 LIFO push/pop，窃取任务 FIFO steal
+- 最小化竞争，适合任务并行场景
+- 适用场景：任务调度、并行计算、fork-join
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

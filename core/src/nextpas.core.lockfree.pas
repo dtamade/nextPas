@@ -42,7 +42,8 @@ uses
   nextpas.core.lockfree.ringbuffer,
   nextpas.core.lockfree.trie,
   nextpas.core.lockfree.timerwheel,
-  nextpas.core.lockfree.timeoutqueue;
+  nextpas.core.lockfree.timeoutqueue,
+  nextpas.core.lockfree.workstealing;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -299,6 +300,14 @@ type
   generic TTimeoutQueue<T> = class(specialize TTimeoutQueueImpl<T>)
   end;
   TLockFreeTimeoutQueueResult = nextpas.core.lockfree.timeoutqueue.TLockFreeTimeoutQueueResult;
+
+  {** @desc 并发工作窃取线程池
+    @details 每个工作线程有自己的双端队列。
+      本地任务 LIFO push/pop，窃取任务 FIFO steal。
+    @see TWorkStealingPool 详细文档和示例
+  }
+  TWorkStealingPool = nextpas.core.lockfree.workstealing.TWorkStealingPool;
+  TLockFreeWorkStealingResult = nextpas.core.lockfree.workstealing.TLockFreeWorkStealingResult;
 
 implementation
 
