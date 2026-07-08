@@ -945,9 +945,14 @@ end;
 
 function ReadFileContents(const APath: string; out AContents: string): Boolean;
 begin
+  Result := FileExists(APath);
+  if not Result then
+  begin
+    AContents := '';
+    Exit;
+  end;
   try
     AContents := ReadFileText(APath);
-    Result := AContents <> '';
   except
     on E: Exception do
     begin
