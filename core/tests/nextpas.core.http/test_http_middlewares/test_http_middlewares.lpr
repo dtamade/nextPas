@@ -17,6 +17,7 @@ uses
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
+  nextpas.core.http.middleware.requestid,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -935,6 +936,113 @@ begin
   Check(LHandlerCalled, 'handler called when no content-type');
 end;
 
+{ RequestIdMiddleware tests }
+
+procedure TestRequestIdGeneratesId;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LRequestId: string;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LRequestId := LWObj.GetHeaders.Get('x-request-id');
+  Check(LRequestId <> '', 'request id is set');
+  Check(Length(LRequestId) = 36, 'request id is UUID format');
+end;
+
+procedure TestRequestIdPreservesExisting;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('x-request-id', 'my-trace-123');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('my-trace-123', LWObj.GetHeaders.Get('x-request-id'), 'preserves existing id');
+end;
+
+procedure TestRequestIdCustomHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LRequestId: string;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWith('x-correlation-id')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LRequestId := LWObj.GetHeaders.Get('x-correlation-id');
+  Check(LRequestId <> '', 'custom header is set');
+  CheckEqual('', LWObj.GetHeaders.Get('x-request-id'), 'default header not set');
+end;
+
+procedure TestRequestIdUniquePerRequest;
+var
+  LHandler: IHttpHandler;
+  LW1, LW2: TMockResponseWriter;
+  LWIntf1, LWIntf2: IHttpResponseWriter;
+  LReq1, LReq2: TMockRequest;
+  LReqIntf1, LReqIntf2: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq1 := TMockRequest.Create(hmGet, '/a');
+  LReqIntf1 := LReq1;
+  LW1 := TMockResponseWriter.Create;
+  LWIntf1 := LW1;
+  LHandler.ServeHTTP(LReqIntf1, LWIntf1);
+  LReq2 := TMockRequest.Create(hmGet, '/b');
+  LReqIntf2 := LReq2;
+  LW2 := TMockResponseWriter.Create;
+  LWIntf2 := LW2;
+  LHandler.ServeHTTP(LReqIntf2, LWIntf2);
+  Check(LW1.GetHeaders.Get('x-request-id') <> LW2.GetHeaders.Get('x-request-id'),
+    'different requests get different ids');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -975,5 +1083,10 @@ begin
   T.Test('ContentType: GET request skips check', @TestContentTypeGetSkipsCheck);
   T.Test('ContentType: empty accepted allows any', @TestContentTypeEmptyAllowsAny);
   T.Test('ContentType: missing content-type passes', @TestContentTypeMissingPasses);
+  { RequestId }
+  T.Test('RequestId: generates UUID id', @TestRequestIdGeneratesId);
+  T.Test('RequestId: preserves existing id', @TestRequestIdPreservesExisting);
+  T.Test('RequestId: custom header name', @TestRequestIdCustomHeader);
+  T.Test('RequestId: unique per request', @TestRequestIdUniquePerRequest);
   if not T.Run then Halt(1);
 end.
