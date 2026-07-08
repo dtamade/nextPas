@@ -27,7 +27,8 @@ uses
   nextpas.core.lockfree.bag,
   nextpas.core.lockfree.multimap,
   nextpas.core.lockfree.bloom,
-  nextpas.core.lockfree.lru;
+  nextpas.core.lockfree.lru,
+  nextpas.core.lockfree.counter;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -161,6 +162,14 @@ type
   }
   generic TConcurrentLruCache<TKey, TValue> = class(specialize TConcurrentLruCacheImpl<TKey, TValue>)
   end;
+
+  {** @desc 并发计数器
+    @details 基于原子操作的高性能计数器。
+      支持 Increment/Decrement/Add/Sub/Load/Store/Reset。
+      适用于统计、计数等场景。
+    @see TConcurrentCounter 详细文档和示例
+  }
+  TConcurrentCounter = nextpas.core.lockfree.counter.TConcurrentCounter;
 
 implementation
 
