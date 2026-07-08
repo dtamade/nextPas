@@ -2520,26 +2520,45 @@ procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
   const AIntrinsic: string);
 var
   Instr: THIRInstr;
+  OperandType: THIRTypeId;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := AKind;
-  Instr.TypeId := GetIntType;
+  Instr.Operands[0] := MakeTypedOperand(S.Pop, OperandType);
+  if OperandType <> 0 then
+    Instr.TypeId := OperandType
+  else
+    Instr.TypeId := GetIntType;
   if AIntrinsic <> '' then
     Instr.IntrinsicName := AIntrinsic;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(S.Pop);
   EmitInstr(Instr);
-  S.Push(Instr.ResultId);
+  S.PushTyped(Instr.ResultId, Instr.TypeId);
 end;
 
 procedure THIRBuilder.EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
 var
   Lhs, Rhs: THIRValueId;
+  LhsType, RhsType, ResultType: THIRTypeId;
 begin
-  Rhs := S.Pop;
-  Lhs := S.Pop;
-  S.Push(EmitBinOp(AKind, GetIntType, Lhs, Rhs));
+  Rhs := S.PopTyped(RhsType);
+  Lhs := S.PopTyped(LhsType);
+  { 使用操作数类型，优先选择更宽的类型 }
+  if (LhsType <> 0) and (RhsType <> 0) then
+  begin
+    if FModule.Types.GetType(LhsType).BitWidth >= FModule.Types.GetType(RhsType).BitWidth then
+      ResultType := LhsType
+    else
+      ResultType := RhsType;
+  end
+  else if LhsType <> 0 then
+    ResultType := LhsType
+  else if RhsType <> 0 then
+    ResultType := RhsType
+  else
+    ResultType := GetIntType;
+  S.PushTyped(EmitBinOp(AKind, ResultType, Lhs, Rhs), ResultType);
 end;
 
 procedure THIRBuilder.EmitExprCmp(var S: TExprStack; const AArg: string);
