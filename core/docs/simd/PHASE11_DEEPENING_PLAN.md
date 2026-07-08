@@ -3,7 +3,7 @@
 > 日期: 2026-07-08
 > 工作树: simd-next
 > 测试基线: 1696 tests, 0 failed
-> 最终测试: 1701 tests, 0 failed
+> 最终测试: 1705 tests, 0 failed
 
 ## 工作包
 
@@ -25,14 +25,16 @@
 
 | 函数 | 说明 | 测试 | 状态 |
 |------|------|------|------|
-| STFTF32 | 短时傅里叶变换 | 已知信号验证 | ✅ (测试禁用) |
-| SpectrogramF32 | 谱图计算 | STFT 幅度 | ✅ (测试禁用) |
-| MelFilterBankF32 | Mel 滤波器组 | 标准 Mel 尺度 | ✅ (测试禁用) |
-| MFCCF32 | Mel 频率倒谱系数 | 语音特征 | ✅ (测试禁用) |
+| STFTF32 | 短时傅里叶变换 | 已知信号验证 | ✅ |
+| SpectrogramF32 | 谱图计算 | STFT 幅度 | ✅ |
+| MelFilterBankF32 | Mel 滤波器组 | 标准 Mel 尺度 | ✅ |
+| MFCCF32 | Mel 频率倒谱系数 | 语音特征 | ✅ |
 
-**注意**: 接口和实现已完成，测试因段错误暂时禁用，待调试。
+**修复**: MelFilterBankF32 无符号整数下溢导致无限循环 (LCenter=0 时 LCenter-1 下溢到 High(SizeUInt))
 
-**提交**: `a49c7d123` - feat(simd): Phase 11 信号处理高级功能 - STFT/Spectrogram/Mel/MFCC
+**提交**:
+- `a49c7d123` - feat(simd): Phase 11 信号处理高级功能 - STFT/Spectrogram/Mel/MFCC
+- `55e6cd1fb` - fix(simd): 修复 MelFilterBankF32 无符号整数下溢导致无限循环
 
 ### C. 性能深度优化 ⏸️
 **目标**: 预取、循环展开、内存对齐
@@ -59,12 +61,11 @@
 ## 最终成果
 
 - 新增 9 个函数 (5 矩阵分解 + 4 信号处理)
-- 新增 5 个测试 (矩阵分解)
-- 总测试: 1701 tests, 0 failed
+- 新增 9 个测试 (5 矩阵分解 + 4 信号处理)
+- 总测试: 1705 tests, 0 failed
 - 代码质量: 无 TODO，无编译器警告
 
 ## 后续工作
 
-1. **信号处理测试调试**: 修复 STFT/Spectrogram/Mel/MFCC 测试的段错误
-2. **性能优化**: 添加预取指令、循环展开等优化
-3. **更多测试**: 为信号处理函数添加更多测试用例
+1. **性能优化**: 添加预取指令、循环展开等优化
+2. **更多测试**: 为信号处理函数添加更多测试用例
