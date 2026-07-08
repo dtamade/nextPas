@@ -1238,6 +1238,99 @@ type
 
 ---
 
+### TLockFreeMsQueue\<T\> (nextpas.core.lockfree.msqueue)
+
+```pascal
+type
+  generic TLockFreeMsQueue<T> = class
+    constructor Create(ACapacity: Int32 = 64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function ApproxCount: Int64;
+    function IsEmpty: Boolean;
+  end;
+```
+
+**特点**:
+- Michael-Scott 经典无锁无界 MPMC 队列
+- index-based 节点池，自动扩容
+- Sentinel 节点简化空队列边界处理
+- 适用场景：高吞吐消息队列、生产者-消费者模式
+
+---
+
+### TLockFreeForkJoinPool (nextpas.core.lockfree.forkjoin)
+
+```pascal
+type
+  TLockFreeForkJoinPool = class
+    constructor Create(AWorkerCount: Int32 = 4);
+    function Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
+    function PopOrSteal(AWorkerId: Int32; out ATask: TForkJoinTask): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function WorkerCount: Int32;
+    function ApproxPendingCount: Int64;
+    function ApproxCompletedCount: Int64;
+  end;
+```
+
+**特点**:
+- 类似 Java ForkJoinPool 的并行执行框架
+- 每个工作者有本地双端队列
+- 本地任务 LIFO 执行，窃取任务 FIFO 执行
+- 适用场景：递归分治、并行计算、MapReduce
+
+---
+
+### TCopyOnWriteArray\<T\> (nextpas.core.lockfree.cowarray)
+
+```pascal
+type
+  generic TCopyOnWriteArray<T> = class
+    function Get(AIndex: Int32; out AValue: T): TLockFreeCowArrayResult;
+    function Count: Int32;
+    function IsEmpty: Boolean;
+    function Append(const AValue: T): TLockFreeCowArrayResult;
+    function SetItem(AIndex: Int32; const AValue: T): TLockFreeCowArrayResult;
+    function Delete(AIndex: Int32): TLockFreeCowArrayResult;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Snapshot: TItems;
+  end;
+```
+
+**特点**:
+- 读无锁，写时复制整个数组
+- 线程安全的快照语义
+- 适用场景：读多写极少（配置列表、监听器列表）
+
+---
+
+### TLockFreeDisjointSet (nextpas.core.lockfree.disjointset)
+
+```pascal
+type
+  TLockFreeDisjointSet = class
+    constructor Create(ACapacity: Int32 = 64);
+    function MakeSet: Int32;
+    function Find(AIdx: Int32): Int32;
+    function Union(AIdx1, AIdx2: Int32): TLockFreeDisjointSetResult;
+    function Connected(AIdx1, AIdx2: Int32): Boolean;
+    function Count: Int32;
+  end;
+```
+
+**特点**:
+- 路径压缩 + 按秩合并，均摊 O(α(n)) ≈ O(1)
+- 自动扩容
+- 适用场景：动态连通性查询、聚类、图算法、Kruskal 最小生成树
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |

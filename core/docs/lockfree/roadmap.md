@@ -64,8 +64,12 @@
 | `lockfree.workstealing` | 并发工作窃取线程池 | ✅ 完成 | 4 |
 | `lockfree.snapshot` | 并发快照隔离 | ✅ 完成 | 6 |
 | `lockfree.graph` | 并发无锁图 | ✅ 完成 | 8 |
+| `lockfree.msqueue` | Michael-Scott 无锁无界队列 | ✅ 完成 | 20246 |
+| `lockfree.forkjoin` | ForkJoin 并行执行框架 | ✅ 完成 | 112 |
+| `lockfree.cowarray` | 写时复制数组 | ✅ 完成 | 72 |
+| `lockfree.disjointset` | 并查集 (Union-Find) | ✅ 完成 | 1030 |
 
-**规模**: 45 文件, ~21500 行, 537 测试
+**规模**: 49 文件, ~22500 行, 21537 测试
 
 ---
 
@@ -105,7 +109,11 @@
 | test_lockfree_workstealing | 4 | ✅ 全绿 |
 | test_lockfree_snapshot | 6 | ✅ 全绿 |
 | test_lockfree_graph | 8 | ✅ 全绿 |
-| **总计** | **537** | **✅ 全绿** |
+| test_lockfree_msqueue | 20246 | ✅ 全绿 |
+| test_lockfree_forkjoin | 112 | ✅ 全绿 |
+| test_lockfree_cowarray | 72 | ✅ 全绿 |
+| test_lockfree_disjointset | 1030 | ✅ 全绿 |
+| **总计** | **21537** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

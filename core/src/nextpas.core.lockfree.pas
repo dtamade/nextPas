@@ -45,7 +45,11 @@ uses
   nextpas.core.lockfree.timeoutqueue,
   nextpas.core.lockfree.workstealing,
   nextpas.core.lockfree.snapshot,
-  nextpas.core.lockfree.graph;
+  nextpas.core.lockfree.graph,
+  nextpas.core.lockfree.msqueue,
+  nextpas.core.lockfree.forkjoin,
+  nextpas.core.lockfree.cowarray,
+  nextpas.core.lockfree.disjointset;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -327,6 +331,43 @@ type
   }
   TLockFreeGraph = nextpas.core.lockfree.graph.TLockFreeGraph;
   TLockFreeGraphResult = nextpas.core.lockfree.graph.TLockFreeGraphResult;
+
+  {** @desc Michael-Scott 无锁无界 MPMC 队列
+    @details 经典无锁队列算法，使用 index-based 节点池。
+      入队 CAS 更新 tail.next，出队 CAS 移动 head。
+      Sentinel 节点简化空队列边界处理。支持自动扩容和 Close 语义。
+    @see TLockFreeMsQueueImpl 详细文档和示例
+  }
+  generic TLockFreeMsQueue<T> = class(specialize TLockFreeMsQueueImpl<T>)
+  end;
+  TLockFreeMsQueueResult = nextpas.core.lockfree.msqueue.TLockFreeMsQueueResult;
+
+  {** @desc ForkJoin 并行执行框架
+    @details 类似 Java ForkJoinPool，支持递归分治任务。
+      每个工作者有本地双端队列，本地 LIFO + 窃取 FIFO。
+    @see TLockFreeForkJoinPool 详细文档和示例
+  }
+  TLockFreeForkJoinPool = nextpas.core.lockfree.forkjoin.TLockFreeForkJoinPool;
+  TForkJoinTask = nextpas.core.lockfree.forkjoin.TForkJoinTask;
+  TForkJoinTaskProc = nextpas.core.lockfree.forkjoin.TForkJoinTaskProc;
+  TLockFreeForkJoinResult = nextpas.core.lockfree.forkjoin.TLockFreeForkJoinResult;
+
+  {** @desc 写时复制数组
+    @details 读无锁，写时复制整个数组。适合读多写极少场景。
+      线程安全的快照语义，支持索引访问、追加、替换、删除。
+    @see TCopyOnWriteArrayImpl 详细文档和示例
+  }
+  generic TCopyOnWriteArray<T> = class(specialize TCopyOnWriteArrayImpl<T>)
+  end;
+  TLockFreeCowArrayResult = nextpas.core.lockfree.cowarray.TLockFreeCowArrayResult;
+
+  {** @desc 并查集（不相交集合）
+    @details 支持路径压缩 + 按秩合并。均摊 O(α(n)) ≈ O(1)。
+      适用于动态连通性查询、聚类、图算法。
+    @see TLockFreeDisjointSet 详细文档和示例
+  }
+  TLockFreeDisjointSet = nextpas.core.lockfree.disjointset.TLockFreeDisjointSet;
+  TLockFreeDisjointSetResult = nextpas.core.lockfree.disjointset.TLockFreeDisjointSetResult;
 
 implementation
 

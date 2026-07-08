@@ -21,10 +21,15 @@
 │       - 性能: 2.6 M ops/s (1P+2C)
 │
 ├── 多生产者 + 多消费者 (MPMC)
-│   └── 使用 TMpmcQueue<T>
-│       - 通用但有 CAS 竞争开销
-│       - 支持 batch/wait/timeout/close
-│       - 性能: 1.3 M ops/s (2P+2C)
+│   ├── 使用 TMpmcQueue<T> (有界)
+│   │   - 通用但有 CAS 竞争开销
+│   │   - 支持 batch/wait/timeout/close
+│   │   - 性能: 1.3 M ops/s (2P+2C)
+│   │
+│   └── 使用 TLockFreeMsQueue<T> (无界)
+│       - Michael-Scott 经典算法
+│       - Sentinel 节点 + CAS
+│       - 自动扩容，无容量限制
 │
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
@@ -206,6 +211,32 @@
     - 支持有向图，添加/删除顶点和边
     - 适用场景：社交网络、依赖分析、路径查找
 
+需要 ForkJoin 并行执行？
+└── 使用 TLockFreeForkJoinPool
+    - 类似 Java ForkJoinPool
+    - 每个工作者有本地双端队列
+    - 本地 LIFO + 窃取 FIFO
+    - 适用场景：递归分治、并行计算、MapReduce
+
+需要写时复制数组（读多写极少）？
+└── 使用 TCopyOnWriteArray<T>
+    - 读无锁，写时复制整个数组
+    - 线程安全的快照语义
+    - 适用场景：配置列表、监听器列表、事件回调
+
+需要动态连通性查询？
+└── 使用 TLockFreeDisjointSet
+    - 路径压缩 + 按秩合并，均摊 O(1)
+    - 自动扩容
+    - 适用场景：连通分量、聚类、Kruskal 最小生成树
+
+需要无界 MPMC 队列？
+└── 使用 TLockFreeMsQueue<T>
+    - Michael-Scott 经典算法
+    - Sentinel 节点 + CAS
+    - 自动扩容，无容量限制
+    - 适用场景：高吞吐消息队列、生产者-消费者
+
 需要 Channel（生产者-消费者通信）？
 ├── 单向通信
 │   ├── 单生产者单消费者 (1P1C)
@@ -263,6 +294,10 @@
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
 | TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |
 | TLockFreeChannel | N 线程 | N 线程 | ✅ |
+| TLockFreeMsQueue | N 线程 | N 线程 | ✅ |
+| TLockFreeForkJoinPool | N 工作者 | N 工作者 | ✅ |
+| TCopyOnWriteArray | N 读 / 1 写 | N 读 | ✅ |
+| TLockFreeDisjointSet | N 线程 | N 线程 | N/A |
 
 ## 内存回收方案选择
 
