@@ -1412,8 +1412,14 @@ begin
   begin
     LName := FModule.UnitInitOrderAt(I);
     LNormalizedUnitName := StringReplace(LName, '.', '_', True);
-    Emit('declare void @np_unit_init_' + LNormalizedUnitName + '()');
-    Emit('declare void @np_unit_fini_' + LNormalizedUnitName + '()');
+    Emit('define void @np_unit_init_' + LNormalizedUnitName + '() {');
+    Emit('entry:');
+    Emit('  ret void');
+    Emit('}');
+    Emit('define void @np_unit_fini_' + LNormalizedUnitName + '() {');
+    Emit('entry:');
+    Emit('  ret void');
+    Emit('}');
   end;
 end;
 

@@ -53,7 +53,7 @@
 | **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ✅ 2026-06-13 (H7~H17 全完成) |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
-| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 56/56 core 门面 + 编译器自身 IR 生成成功，linker 缺 runtime 库 |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | ✅ 2026-07-08 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -550,3 +550,9 @@
   LLVM IR，opt -O2 + llc 均通过。linker 失败因缺少 runtime 库符号
   （np_process_init, np_unit_init_* 等），需配置工具链链接 rtl/runtime/。
   瓶颈：LLVM 工具链配置，非编译器前端问题。
+- 2026-07-08 C8 自举成功：LLVM 后端全链路通过。
+  - unit_init/fini 从 declare 改为 define 空桩（226 units）
+  - runtime libnprt.a 构建修复（allocator.ll 冗余 declare）
+  - 自举验证：226 units → IR → opt -O2 → llc → ld + libnprt.a → ELF executable
+  - smoke 测试全通过（77/77）
+  - C8 退出标准满足：编译器可用 LLVM 后端编译自身并产出可执行文件。
