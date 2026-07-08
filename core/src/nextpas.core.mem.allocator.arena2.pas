@@ -27,8 +27,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 默认页大小 }
@@ -60,7 +59,7 @@ type
    *  分配仅移动指针，无元数据，无碎片。
    *  不支持单个释放，只能整体 Reset。
    *}
-  TArena2Allocator = class(TAllocator)
+  TArena2Allocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FPageSize: SizeUInt;
@@ -77,11 +76,6 @@ type
     FAllocCount: UInt64;
     FWastedBytes: UInt64;
     procedure GrowPage;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建 Arena 分配器
      *  @param AInner 内部分配器（用于获取页）
@@ -93,6 +87,12 @@ type
       AAlignment: SizeUInt = ARENA2_DEFAULT_ALIGNMENT);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
+
     {** 重置 arena（释放所有页，保留第一页） }
     procedure Reset;
     {** 获取统计信息 }
@@ -101,8 +101,6 @@ type
     property UsedBytes: UInt64 read FUsedBytes;
     {** 页数量 }
     property PageCount: Integer read FPageCount;
-
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -173,7 +171,7 @@ begin
   FCurrentOffset := 0;
 end;
 
-function TArena2Allocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TArena2Allocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAlignedOffset: SizeUInt;
   LAlignedSize: SizeUInt;
@@ -194,7 +192,7 @@ begin
     { 当前页空间不足，需要新页 }
     if LAlignedSize > FPageSize then
       raise EAllocError.Create(aeOutOfMemory,
-        'TArena2Allocator.DoGetMem: allocation size exceeds page size');
+        'TArena2Allocator.GetMem: allocation size exceeds page size');
     GrowPage;
     LAlignedOffset := 0;
   end;
@@ -206,29 +204,29 @@ begin
   Inc(FAllocCount);
 end;
 
-function TArena2Allocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TArena2Allocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TArena2Allocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TArena2Allocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   { Arena 不支持真正的 Realloc，简单实现：分配新块 }
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
     Exit(nil);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   { 注意：无法确定旧块大小，保守复制 }
   if Result <> nil then
     Move(APtr^, Result^, ASize);
   { 旧内存不释放（Arena 不支持单个释放） }
 end;
 
-procedure TArena2Allocator.DoFreeMem(APtr: Pointer);
+procedure TArena2Allocator.FreeMem(APtr: Pointer); inline;
 begin
   { Arena 不支持单个释放，忽略 }
 end;
@@ -261,9 +259,10 @@ begin
   Result.WastedBytes := FWastedBytes;
 end;
 
-function TArena2Allocator.Traits: TAllocatorTraits;
+function TArena2Allocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe      := False;
   Result.SupportsRealloc := False;
 end;
 
