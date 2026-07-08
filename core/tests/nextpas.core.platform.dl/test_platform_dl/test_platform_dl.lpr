@@ -125,6 +125,34 @@ begin
   Check(Buf[3] = #0, 'null terminated');
 end;
 
+procedure TestSymNilName;
+var
+  Lib: TPlatformLibrary;
+  Addr: Pointer;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib) = 0, 'open');
+  Check(platform_dl_sym(Lib, nil, Addr) <> 0, 'nil name returns error');
+  Check(Addr = nil, 'addr is nil for nil name');
+  platform_dl_close(Lib);
+end;
+
+procedure TestErrorNilBuffer;
+var
+  R: Int32;
+begin
+  R := platform_dl_error(nil, 256);
+  Check(R < 0, 'nil buffer returns error');
+end;
+
+procedure TestErrorZeroLength;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_dl_error(@Buf[0], 0);
+  Check(R < 0, 'zero length returns error');
+end;
+
 procedure TestResolveMultiple;
 var
   Lib: TPlatformLibrary;
@@ -150,5 +178,8 @@ begin
   T.Test('load self (nil path)', @TestLoadSelf);
   T.Test('error small buffer', @TestErrorSmallBuffer);
   T.Test('resolve same sym twice', @TestResolveMultiple);
+  T.Test('sym nil name returns error', @TestSymNilName);
+  T.Test('dl_error nil buffer', @TestErrorNilBuffer);
+  T.Test('dl_error zero length', @TestErrorZeroLength);
   if not T.Run then Halt(1);
 end.

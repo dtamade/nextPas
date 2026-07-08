@@ -150,6 +150,37 @@ begin
     'Windows dup2 must not remain a bare -1 stub');
 end;
 
+procedure TestDoubleCloseWrite;
+var
+  P: TPlatformPipe;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  Check(platform_pipe_close_write(P) = 0, 'close write');
+  Check(platform_pipe_close_write(P) <> 0, 'double close write error');
+  platform_pipe_close_read(P);
+end;
+
+procedure TestPipeWriteReadMultiple;
+var
+  P: TPlatformPipe;
+  LBuf: array[0..31] of AnsiChar;
+  LWritten, LRead: PtrInt;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  {$IFDEF NEXTPAS_UNIX}
+  LWritten := write(Int32(P.WriteFd), PAnsiChar('abc'), 3);
+  Check(LWritten = 3, 'wrote 3');
+  LWritten := write(Int32(P.WriteFd), PAnsiChar('def'), 3);
+  Check(LWritten = 3, 'wrote 3 more');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := read(Int32(P.ReadFd), @LBuf[0], 32);
+  Check(LRead = 6, 'read 6 total');
+  Check(LBuf[0] = 'a', 'data[0]');
+  Check(LBuf[5] = 'f', 'data[5]');
+  {$ENDIF}
+  platform_pipe_close(P);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.pipe');
   T.Test('create/close', @TestCreateClose);
@@ -159,6 +190,8 @@ begin
   T.Test('dup2', @TestDup2);
   {$ENDIF}
   T.Test('double close read', @TestDoubleCloseRead);
+  T.Test('double close write', @TestDoubleCloseWrite);
+  T.Test('pipe write+read multiple chunks', @TestPipeWriteReadMultiple);
   T.Test('Windows pipe source contract', @TestWindowsPipeSourceContract);
   if not T.Run then Halt(1);
 end.

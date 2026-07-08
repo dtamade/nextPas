@@ -112,6 +112,29 @@ begin
   Check(platform_random_bytes(@Buf[0], 16) = 0, 'fill 16 bytes');
 end;
 
+procedure TestNonNilZeroLen;
+var
+  Buf: Byte;
+begin
+  Buf := $42;
+  Check(platform_random_bytes(@Buf, 0) = 0, 'non-nil zero len returns 0');
+  Check(Buf = $42, 'non-nil zero len does not modify buffer');
+end;
+
+procedure TestFillPageAligned;
+var
+  Buf: array[0..4095] of Byte;
+  I: Int32;
+  AllZero: Boolean;
+begin
+  FillChar(Buf, 4096, 0);
+  Check(platform_random_bytes(@Buf[0], 4096) = 0, 'fill page-aligned');
+  AllZero := True;
+  for I := 0 to 4095 do
+    if Buf[I] <> 0 then begin AllZero := False; Break; end;
+  Check(not AllZero, 'page-aligned fill not all zero');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.random');
   T.Test('fill 32 bytes non-zero', @TestFill32);
@@ -123,5 +146,7 @@ begin
   T.Test('fill 64 bytes aligned', @TestFill64Aligned);
   T.Test('repeated fills produce varying output', @TestRepeatedFillsProduceVaryingOutput);
   T.Test('fill 16 bytes', @TestFill16);
+  T.Test('non-nil zero len', @TestNonNilZeroLen);
+  T.Test('fill page-aligned (4096)', @TestFillPageAligned);
   if not T.Run then Halt(1);
 end.

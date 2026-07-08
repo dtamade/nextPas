@@ -50,6 +50,47 @@ begin
   Check(platform_args_exe_path(nil, 0) = PLATFORM_ERR_INVALID, 'nil buf exe returns PLATFORM_ERR_INVALID');
 end;
 
+procedure TestGetArg0SmallBuffer;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_args_get(0, @Buf[0], 4);
+  Check(R > 0, 'arg0 small buf returns actual length');
+  Check(Buf[3] = #0, 'arg0 small buf null-terminated');
+  Check(Buf[0] <> #0, 'arg0 small buf has content');
+end;
+
+procedure TestExePathSmallBuffer;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_args_exe_path(@Buf[0], 4);
+  Check(R > 0, 'exe_path small buf returns actual length');
+  Check(Buf[3] = #0, 'exe_path small buf null-terminated');
+  Check(Buf[0] <> #0, 'exe_path small buf has content');
+end;
+
+procedure TestCountConsistency;
+var
+  C1, C2: Int32;
+begin
+  C1 := platform_args_count;
+  C2 := platform_args_count;
+  Check(C1 = C2, 'count is stable across calls');
+end;
+
+procedure TestGetArg0LengthOnly;
+var
+  R: Int32;
+begin
+  R := platform_args_get(0, nil, 0);
+  Check(R = PLATFORM_ERR_INVALID, 'nil buf with zero size returns PLATFORM_ERR_INVALID');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.args');
   T.Test('count', @TestCount);
@@ -57,5 +98,9 @@ begin
   T.Test('get invalid index', @TestGetInvalid);
   T.Test('exe path', @TestExePath);
   T.Test('nil buffer', @TestNilBuf);
+  T.Test('arg0 small buffer truncation', @TestGetArg0SmallBuffer);
+  T.Test('exe_path small buffer truncation', @TestExePathSmallBuffer);
+  T.Test('count is consistent', @TestCountConsistency);
+  T.Test('arg0 length only (nil buf)', @TestGetArg0LengthOnly);
   if not T.Run then Halt(1);
 end.
