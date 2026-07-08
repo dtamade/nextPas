@@ -53,7 +53,7 @@
 | **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ✅ 2026-06-13 (H7~H17 全完成) |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
-| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 LLVM 后端 56/56 core 门面模块全通过 |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 56/56 core 门面 + 编译器自身 IR 生成成功，linker 缺 runtime 库 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -546,3 +546,7 @@
 - 2026-07-06 C8 进展：LLVM 后端全量扫描 core/ 门面模块，56/56 全通过。
   FPC 后端因泛型语法（`<T>`）不兼容失败，LLVM 后端完全支持。
   自举路径明确为 LLVM 后端。下一步：扩展到子模块 + 编译器自编译。
+- 2026-07-06 C8 自举探针：编译器自身（226 units, 1032 symbols）成功编译到
+  LLVM IR，opt -O2 + llc 均通过。linker 失败因缺少 runtime 库符号
+  （np_process_init, np_unit_init_* 等），需配置工具链链接 rtl/runtime/。
+  瓶颈：LLVM 工具链配置，非编译器前端问题。
