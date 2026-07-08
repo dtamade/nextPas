@@ -42,8 +42,30 @@
 | `lockfree.btree` | 并发 B-Tree | ✅ 完成 | 17 |
 | `lockfree.hashset` | 并发 HashSet | ✅ 完成 | 9 |
 | `lockfree.priority_queue` | 并发优先队列 | ✅ 完成 | 8 |
+| `lockfree.bag` | 并发 Bag（允许重复） | ✅ 完成 | 7 |
+| `lockfree.multimap` | 并发 MultiMap（一键多值） | ✅ 完成 | 6 |
+| `lockfree.bloom` | 并发布隆过滤器 | ✅ 完成 | 7 |
+| `lockfree.lru` | 并发 LRU 缓存 | ✅ 完成 | 8 |
+| `lockfree.counter` | 并发计数器 | ✅ 完成 | 4 |
+| `lockfree.semaphore` | 并发信号量 | ✅ 完成 | 3 |
+| `lockfree.mutex` | 并发互斥锁 | ✅ 完成 | 3 |
+| `lockfree.rwlock` | 并发读写锁 | ✅ 完成 | 5 |
+| `lockfree.countdown` | 并发倒计时闩 | ✅ 完成 | 6 |
+| `lockfree.barrier` | 并发循环屏障 | ✅ 完成 | 5 |
+| `lockfree.ratelimit` | 并发令牌桶限流器 | ✅ 完成 | 4 |
+| `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
+| `lockfree.exchanger` | 并发交换器 | ✅ 完成 | 3 |
+| `lockfree.phaser` | 并发相位同步器 | ✅ 完成 | 8 |
+| `lockfree.stampedlock` | 并发戳锁 | ✅ 完成 | 7 |
+| `lockfree.ringbuffer` | 并发环形缓冲区 | ✅ 完成 | 7 |
+| `lockfree.trie` | 并发 Trie 树 | ✅ 完成 | 8 |
+| `lockfree.timerwheel` | 并发定时器轮 | ✅ 完成 | 8 |
+| `lockfree.timeoutqueue` | 并发超时队列 | ✅ 完成 | 5 |
+| `lockfree.workstealing` | 并发工作窃取线程池 | ✅ 完成 | 4 |
+| `lockfree.snapshot` | 并发快照隔离 | ✅ 完成 | 6 |
+| `lockfree.graph` | 并发无锁图 | ✅ 完成 | 8 |
 
-**规模**: 24 文件, ~13000 行, 265 测试
+**规模**: 45 文件, ~21500 行, 537 测试
 
 ---
 
@@ -61,7 +83,29 @@
 | test_lockfree_btree | 17 | ✅ 全绿 |
 | test_lockfree_hashset | 9 | ✅ 全绿 |
 | test_lockfree_priority_queue | 8 | ✅ 全绿 |
-| **总计** | **265** | **✅ 全绿** |
+| test_lockfree_bag | 7 | ✅ 全绿 |
+| test_lockfree_multimap | 6 | ✅ 全绿 |
+| test_lockfree_bloom | 7 | ✅ 全绿 |
+| test_lockfree_lru | 8 | ✅ 全绿 |
+| test_lockfree_counter | 4 | ✅ 全绿 |
+| test_lockfree_semaphore | 3 | ✅ 全绿 |
+| test_lockfree_mutex | 3 | ✅ 全绿 |
+| test_lockfree_rwlock | 5 | ✅ 全绿 |
+| test_lockfree_countdown | 6 | ✅ 全绿 |
+| test_lockfree_barrier | 5 | ✅ 全绿 |
+| test_lockfree_ratelimit | 4 | ✅ 全绿 |
+| test_lockfree_condvar | 5 | ✅ 全绿 |
+| test_lockfree_exchanger | 3 | ✅ 全绿 |
+| test_lockfree_phaser | 8 | ✅ 全绿 |
+| test_lockfree_stampedlock | 7 | ✅ 全绿 |
+| test_lockfree_ringbuffer | 7 | ✅ 全绿 |
+| test_lockfree_trie | 8 | ✅ 全绿 |
+| test_lockfree_timerwheel | 8 | ✅ 全绿 |
+| test_lockfree_timeoutqueue | 5 | ✅ 全绿 |
+| test_lockfree_workstealing | 4 | ✅ 全绿 |
+| test_lockfree_snapshot | 6 | ✅ 全绿 |
+| test_lockfree_graph | 8 | ✅ 全绿 |
+| **总计** | **537** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

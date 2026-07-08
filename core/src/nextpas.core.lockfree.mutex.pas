@@ -1,0 +1,105 @@
+unit nextpas.core.lockfree.mutex;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.lockfree.base;
+
+type
+  TLockFreeMutexLockResult = (mlLocked, mlClosed, mlTimeout);
+
+  {** @desc 并发互斥锁
+    @details 基于原子操作的互斥锁实现。
+      支持 Lock/Unlock/TryLock/LockTimeout。
+      适用于需要互斥访问的场景。
+  }
+  TConcurrentMutex = class
+  private
+    FLocked: Int32;
+    FClosed: Int32;
+  public
+    constructor Create;
+    function TryLock: Boolean;
+    function Lock: Boolean;
+    function LockTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Unlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsLocked: Boolean;
+  end;
+
+implementation
+
+uses
+  nextpas.core.errors,
+  nextpas.core.atomic,
+  nextpas.core.time.base;
+
+constructor TConcurrentMutex.Create;
+begin
+  inherited Create;
+  FLocked := 0;
+  FClosed := 0;
+end;
+
+function TConcurrentMutex.TryLock: Boolean;
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
+  Result := AtomicCompareExchange32(FLocked, 0, 1) = 0;
+end;
+
+function TConcurrentMutex.Lock: Boolean;
+begin
+  while True do
+  begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    if AtomicCompareExchange32(FLocked, 0, 1) = 0 then
+      Exit(True);
+    CpuPause;
+  end;
+end;
+
+function TConcurrentMutex.LockTimeout(const ATimeoutNs: Int64): Boolean;
+var
+  LStart: TInstant;
+  LRemaining: Int64;
+begin
+  LStart := TInstant.Now;
+  while True do
+  begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    if AtomicCompareExchange32(FLocked, 0, 1) = 0 then
+      Exit(True);
+    LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
+    if LRemaining <= 0 then
+      Exit(False);
+    CpuPause;
+  end;
+end;
+
+procedure TConcurrentMutex.Unlock;
+begin
+  AtomicStore32(FLocked, 0, moRelease);
+end;
+
+procedure TConcurrentMutex.Close;
+begin
+  AtomicStore32(FClosed, 1, moRelease);
+end;
+
+function TConcurrentMutex.IsClosed: Boolean;
+begin
+  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+end;
+
+function TConcurrentMutex.IsLocked: Boolean;
+begin
+  Result := AtomicLoad32(FLocked, moAcquire) <> 0;
+end;
+
+end.
