@@ -1,8 +1,10 @@
 # mem 模块演化路线图 Phase 5
 
-> **状态**: 进行中
+> **状态**: Phase 5 全部完成 ✅
 > **起始**: 2026-07-08
+> **完成**: 2026-07-08
 > **基线**: 67 源文件 / 59 测试目录 / 695 测试
+> **当前**: 71 源文件 / 63 测试目录 / 728 测试 / 0 失败 / 0 泄漏
 > **前序**: Phase 1-4 全部完成
 
 ## 演化目标
@@ -18,10 +20,10 @@
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P5-1 | Huge page support | P0 | THugePageAllocator: 大页分配器（2MB/1GB，减少 TLB miss） |
-| P5-2 | Memory watermark | P0 | TMemoryWatermark: 高/低水位线监控 + 回调 |
-| P5-3 | Allocator registry | P1 | TAllocatorRegistry: 分配器注册表（按名称查找/切换） |
-| P5-4 | Allocation replay | P2 | TReplayAllocator: 分配模式录制/回放（调试用） |
+| P5-1 | Huge page support | P0 | THugePageAllocator: 大页分配器（2MB/1GB，减少 TLB miss） | ✅ |
+| P5-2 | Memory watermark | P0 | TMemoryWatermark: 高/低水位线监控 + 回调 | ✅ |
+| P5-3 | Allocator registry | P1 | TAllocatorRegistry: 分配器注册表（按名称查找/切换） | ✅ |
+| P5-4 | Allocation replay | P2 | TReplayAllocator: 分配模式录制/回放（调试用） | ✅ |
 
 ---
 
