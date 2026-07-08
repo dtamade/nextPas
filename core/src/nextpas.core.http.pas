@@ -21,6 +21,7 @@ uses
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.middleware.bodylimit,
+  nextpas.core.http.middleware.contenttype,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.http.static,
@@ -129,6 +130,7 @@ const
   HTTP_STATUS_CONFLICT = nextpas.core.http.base.HTTP_STATUS_CONFLICT;
   HTTP_STATUS_GONE = nextpas.core.http.base.HTTP_STATUS_GONE;
   HTTP_STATUS_PAYLOAD_TOO_LARGE = nextpas.core.http.base.HTTP_STATUS_PAYLOAD_TOO_LARGE;
+  HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = nextpas.core.http.base.HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE;
   HTTP_STATUS_EXPECTATION_FAILED = nextpas.core.http.base.HTTP_STATUS_EXPECTATION_FAILED;
   HTTP_STATUS_UNPROCESSABLE_ENTITY = nextpas.core.http.base.HTTP_STATUS_UNPROCESSABLE_ENTITY;
   HTTP_STATUS_TOO_MANY_REQUESTS = nextpas.core.http.base.HTTP_STATUS_TOO_MANY_REQUESTS;
@@ -213,6 +215,9 @@ function RecoveryMiddleware: IHttpMiddleware; inline;
 function ResponseTimeMiddleware: IHttpMiddleware; inline;
 {** @desc Reject requests with Content-Length > AMaxBytes (returns 413). }
 function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware; inline;
+{** @desc Reject POST/PUT/PATCH requests with unaccepted Content-Type (returns 415). }
+function ContentTypeMiddleware(
+  const AAccepted: array of string): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -509,6 +514,12 @@ end;
 function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.bodylimit.BodyLimitMiddleware(AMaxBytes);
+end;
+
+function ContentTypeMiddleware(
+  const AAccepted: array of string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.contenttype.ContentTypeMiddleware(AAccepted);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
