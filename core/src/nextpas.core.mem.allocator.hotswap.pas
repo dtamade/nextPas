@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** THotswapAllocator
@@ -47,16 +46,19 @@ type
    *      LHotswap.Free;
    *    end;
    *}
-  THotswapAllocator = class(TAllocator)
+  THotswapAllocator = class(TInterfacedObject, IAllocator)
   private
     FCurrent: IAllocator;
     FSwapCount: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     {** 创建热切换分配器
      *  @param AInitial 初始分配器
      *}
@@ -70,7 +72,7 @@ type
     {** 切换次数 }
     function SwapCount: UInt64;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -113,27 +115,27 @@ begin
   Result := FSwapCount;
 end;
 
-function THotswapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function THotswapAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FCurrent.GetMem(ASize);
 end;
 
-function THotswapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function THotswapAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FCurrent.AllocMem(ASize);
 end;
 
-function THotswapAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function THotswapAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := FCurrent.ReallocMem(APtr, ASize);
 end;
 
-procedure THotswapAllocator.DoFreeMem(APtr: Pointer);
+procedure THotswapAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FCurrent.FreeMem(APtr);
 end;
 
-function THotswapAllocator.Traits: TAllocatorTraits;
+function THotswapAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FCurrent <> nil then
     Result := FCurrent.Traits
