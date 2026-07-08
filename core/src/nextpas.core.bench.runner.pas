@@ -523,6 +523,7 @@ end;
 procedure TBenchRunner.LoadConfigFromEnv;
 var
   LValue: string;
+  LLower: string;
   LTmp: Int64;
 begin
   // 加载默认配置
@@ -562,14 +563,20 @@ begin
 
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
   if LValue <> '' then
-    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') or (LowerCase(LValue) = 'on') then
+  begin
+    LLower := LowerCase(LValue);
+    if (LValue = '1') or (LLower = 'true') or (LLower = 'yes') or (LLower = 'on') then
       FConfig.Quiet := True;
+  end;
 
   { DS-08: BENCH_ENV_MEMTRACK with positive semantics (1=yes, 0=no) }
   LValue := GetEnvironmentVariable(BENCH_ENV_MEMTRACK);
   if LValue <> '' then
-    if (LValue = '0') or (LowerCase(LValue) = 'false') or (LowerCase(LValue) = 'no') then
+  begin
+    LLower := LowerCase(LValue);
+    if (LValue = '0') or (LLower = 'false') or (LLower = 'no') then
       FConfig.EnableMemoryTracking := False;
+  end;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
   FFilterLower := LowerCase(FFilter); { PF-08 }
