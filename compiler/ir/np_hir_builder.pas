@@ -4741,7 +4741,7 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then
     Exit;
 
@@ -4837,7 +4837,7 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then Exit;
 
   PtrSlot := FieldSlotPtr(ReceiverPtr, FieldIdx);
@@ -4895,7 +4895,7 @@ begin
   if ElemSizeBlob <> '' then
     ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then
     Exit;
 
@@ -4994,7 +4994,7 @@ begin
       LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
       if (PtrSlot <> 0) and (LenSlot <> 0) then
       begin
-        ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+        ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
         FillChar(Instr, SizeOf(Instr), 0);
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikIntrinsic;
@@ -5141,7 +5141,7 @@ begin
     EmitInstr(Instr);
 
     NullVal := EmitNullPtrValue;
-    ZeroVal := EmitConstIntOfType(0, GetIntType);
+    ZeroVal := EmitConstIntSmart(0);
     if (NullVal <> 0) and (ZeroVal <> 0) then
     begin
       EmitStore(GetPtrType, NullVal, PtrSlot);
@@ -5282,7 +5282,7 @@ begin
     Instr.IntrinsicName := 'null';
     EmitInstr(Instr);
     NullVal := Instr.ResultId;
-    ZeroVal := EmitConstIntOfType(0, GetIntType);
+    ZeroVal := EmitConstIntSmart(0);
     EmitStore(GetPtrType, NullVal, PtrSlot);
     EmitStore(GetIntType, ZeroVal, LenSlot);
   end;
