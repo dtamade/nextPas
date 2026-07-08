@@ -663,9 +663,7 @@ var
   LMU, LSigma: Double;
   LTieCorrection: Double;
   LZ: Double;
-  LRunStart, LRunEnd, I, K: Integer;
-  LAvgRank: Double;
-
+  LRunStart, LRunEnd, I, K, LRunACount: Integer;
 begin
   LN1 := Length(A);
   LN2 := Length(B);
@@ -730,19 +728,19 @@ begin
           (LCombined[LSortedIdx[LRunEnd + 1]] = LCombined[LSortedIdx[LRunStart]]) do
       Inc(LRunEnd);
 
-    { 平均秩 = (run 开始位置 + run 结束位置 + 2) / 2
-      位置从 0 开始，秩从 1 开始 }
-    LAvgRank := (LRunStart + LRunEnd + 2) / 2.0;
-
-    { 直接累加组 A 的秩和，无需 LRanks 中间数组 }
-    for K := LRunStart to LRunEnd do
-      if LGroup[LSortedIdx[K]] = 0 then
-        LRankSum1 := LRankSum1 + LAvgRank;
-
     { 并列值修正：K>1 时累积 tie correction }
     K := LRunEnd - LRunStart + 1;
     if K > 1 then
       LTieCorrection := LTieCorrection + (K * K * K - K);
+
+    { 直接累加组 A 的秩和：乘法替代内循环
+      秩和 = (# of A elements in run) * avgRank，因为并列值秩相同 }
+    LRunACount := 0;
+    for K := LRunStart to LRunEnd do
+      if LGroup[LSortedIdx[K]] = 0 then
+        Inc(LRunACount);
+    if LRunACount > 0 then
+      LRankSum1 := LRankSum1 + LRunACount * (LRunStart + LRunEnd + 2) / 2.0;
 
     I := LRunEnd + 1;
   end;
@@ -948,7 +946,7 @@ var
   LEmpiricalCDF: Double;
   LTheoreticalCDF: Double;
   LD, LMaxD: Double;
-  LZ: Double;
+  LZ, LInvN, LInvStdDev: Double;
 begin
   Result := Default(TKSTestResult);
 
@@ -986,16 +984,20 @@ begin
   LSorted := Copy(AData);
   SortDoubleArray(LSorted);
 
+  { 预计算倒数，避免循环内除法 }
+  LInvN := 1.0 / LN;
+  LInvStdDev := 1.0 / AStdDev;
+
   // 计算 K-S 统计量 D = max|Fn(x) - F0(x)|
   LMaxD := 0.0;
   for LI := 0 to LN - 1 do
   begin
-    // 经验分布函数 Fn(x) = (i+1) / n
-    LEmpiricalCDF := (LI + 1) / LN;
-
     // 理论分布函数 F0(x) = Φ((x - μ) / σ)
-    LZ := (LSorted[LI] - AMean) / AStdDev;
+    LZ := (LSorted[LI] - AMean) * LInvStdDev;
     LTheoreticalCDF := NormalCDF(LZ);
+
+    // 经验分布函数 Fn(x) = (i+1) / n
+    LEmpiricalCDF := (LI + 1) * LInvN;
 
     // 计算 |Fn(x) - F0(x)|
     LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
@@ -1003,7 +1005,7 @@ begin
       LMaxD := LD;
 
     // 也检查 Fn(x-) 的情况
-    LEmpiricalCDF := LI / LN;
+    LEmpiricalCDF := LI * LInvN;
     LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
     if LD > LMaxD then
       LMaxD := LD;
@@ -1027,7 +1029,7 @@ var
   LI, LJ: Integer;
   LCDF1, LCDF2: Double;
   LD, LMaxD: Double;
-  LCombinedN: Double;
+  LCombinedN, LInvN1, LInvN2: Double;
 begin
   Result := Default(TKSTestResult);
 
@@ -1051,6 +1053,10 @@ begin
   SortDoubleArray(LSorted1);
   SortDoubleArray(LSorted2);
 
+  { 预计算倒数，避免循环内除法 }
+  LInvN1 := 1.0 / LN1;
+  LInvN2 := 1.0 / LN2;
+
   // 计算 K-S 统计量 D = max|F1(x) - F2(x)|
   LMaxD := 0.0;
   LI := 0;
@@ -1062,8 +1068,8 @@ begin
     if LSorted1[LI] <= LSorted2[LJ] then
     begin
       // 在 x = LSorted1[LI] 处计算两个经验分布函数
-      LCDF1 := (LI + 1) / LN1;
-      LCDF2 := LJ / LN2;  // F2(x-) = j/n2
+      LCDF1 := (LI + 1) * LInvN1;
+      LCDF2 := LJ * LInvN2;  // F2(x-) = j/n2
       LD := Abs(LCDF1 - LCDF2);
       if LD > LMaxD then
         LMaxD := LD;
@@ -1072,8 +1078,8 @@ begin
     else
     begin
       // 在 x = LSorted2[LJ] 处计算两个经验分布函数
-      LCDF1 := LI / LN1;  // F1(x-) = i/n1
-      LCDF2 := (LJ + 1) / LN2;
+      LCDF1 := LI * LInvN1;  // F1(x-) = i/n1
+      LCDF2 := (LJ + 1) * LInvN2;
       LD := Abs(LCDF1 - LCDF2);
       if LD > LMaxD then
         LMaxD := LD;
@@ -1084,7 +1090,7 @@ begin
   // 处理剩余元素
   while LI < LN1 do
   begin
-    LCDF1 := (LI + 1) / LN1;
+    LCDF1 := (LI + 1) * LInvN1;
     LCDF2 := 1.0;
     LD := Abs(LCDF1 - LCDF2);
     if LD > LMaxD then
@@ -1095,7 +1101,7 @@ begin
   while LJ < LN2 do
   begin
     LCDF1 := 1.0;
-    LCDF2 := (LJ + 1) / LN2;
+    LCDF2 := (LJ + 1) * LInvN2;
     LD := Abs(LCDF1 - LCDF2);
     if LD > LMaxD then
       LMaxD := LD;
