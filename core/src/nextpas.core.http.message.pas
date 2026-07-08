@@ -225,6 +225,9 @@ procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
 {** @desc Write 205 Reset Content response with no body.
    Instructs client to reset the document view (e.g., clear a form). }
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+{** @desc Write 410 Gone response with no body.
+   Indicates the resource has been permanently removed. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1153,6 +1156,12 @@ procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_RESET_CONTENT);
+end;
+
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_GONE);
 end;
 
 { THttpRequestBuilder }

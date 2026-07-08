@@ -1996,6 +1996,31 @@ begin
   Check(LRaised, 'raises on nil writer');
 end;
 
+procedure TestGoneSets410;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseGone(LW);
+  CheckEqual(Int64(410), Int64(LM.Status), 'status 410');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestGoneNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseGone(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -2207,5 +2232,7 @@ begin
     @TestErrorConflict);
   T.Test('ErrorResponse 422 Unprocessable Entity',
     @TestErrorUnprocessableEntity);
+  T.Test('Gone: sets 410 status', @TestGoneSets410);
+  T.Test('Gone: nil writer raises', @TestGoneNilWriterRaises);
   if not T.Run then Halt(1);
 end.

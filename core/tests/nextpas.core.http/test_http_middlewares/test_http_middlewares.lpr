@@ -12,6 +12,8 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http.middleware,
+  nextpas.core.http.message,
+  nextpas.core.io.memory,
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.cors,
@@ -24,6 +26,7 @@ uses
   nextpas.core.http.middleware.healthcheck,
   nextpas.core.http.middleware.metrics,
   nextpas.core.http.middleware.methodguard,
+  nextpas.core.http.middleware.bodycache,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -50,9 +53,11 @@ type
     FUrl: TUrl;
     FHeaders: IHttpHeaders;
     FContentLength: Int64;
+    FBodyReader: IReader;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
+    procedure SetBodyReader(const ABody: IReader);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
@@ -130,6 +135,11 @@ begin
   FContentLength := AValue;
 end;
 
+procedure TMockRequest.SetBodyReader(const ABody: IReader);
+begin
+  FBodyReader := ABody;
+end;
+
 function TMockRequest.GetMethod: THttpMethod;
 begin Result := FMethod; end;
 
@@ -149,7 +159,7 @@ function TMockRequest.GetHeaders: IHttpHeaders;
 begin Result := FHeaders; end;
 
 function TMockRequest.GetBody: IReader;
-begin Result := nil; end;
+begin Result := FBodyReader; end;
 
 function TMockRequest.GetContentLength: Int64;
 begin Result := FContentLength; end;
@@ -2213,6 +2223,120 @@ begin
   CheckEqual(405, LWObj.FStatus, 'OPTIONS rejected with 405');
 end;
 
+procedure TestBodyCacheMiddlewareCachesBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LReadBody: string;
+  LBodyBytes: TBytes;
+begin
+  LBodyBytes := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      // Read body twice — should work because BodyCacheMiddleware cached it
+      LReadBody := HttpReadRequestBodyString(AReq);
+      // Second read should also succeed
+      LReadBody := HttpReadRequestBodyString(AReq);
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetBodyReader(CreateBytesStreamFrom(LBodyBytes) as IReader);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello', LReadBody, 'body cached and readable');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestBodyCacheMiddlewareNilBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called with nil body');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMetricsWithFieldsCallbackInvoked;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+  LMethod: string;
+  LPath: string;
+  LStatus: Int64;
+begin
+  LCalled := False;
+  LMethod := '';
+  LPath := '';
+  LStatus := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWithFields(procedure(const AMethod: string; const APath: string;
+      const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LCalled := True;
+      LMethod := AMethod;
+      LPath := APath;
+      LStatus := AStatus;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'callback invoked');
+  CheckEqual('GET', LMethod, 'method passed');
+  CheckEqual('/api/users', LPath, 'path passed');
+  CheckEqual(200, LStatus, 'status passed');
+end;
+
+procedure TestMetricsWithFieldsNilCallbackRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddlewareWithFields(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil callback');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2308,5 +2432,11 @@ begin
   T.Test('MethodGuard: sets Allow header on 405', @TestMethodGuardSetsAllowHeader);
   T.Test('MethodGuard: multiple methods allowed', @TestMethodGuardMultipleMethodsAllowed);
   T.Test('MethodGuard: OPTIONS rejected', @TestMethodGuardOptionsMethodRejected);
+  { BodyCache }
+  T.Test('BodyCache: caches body for re-reading', @TestBodyCacheMiddlewareCachesBody);
+  T.Test('BodyCache: nil body passes through', @TestBodyCacheMiddlewareNilBody);
+  { MetricsWithFields }
+  T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
+  T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
   if not T.Run then Halt(1);
 end.

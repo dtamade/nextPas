@@ -29,6 +29,7 @@ uses
   nextpas.core.http.middleware.healthcheck,
   nextpas.core.http.middleware.metrics,
   nextpas.core.http.middleware.methodguard,
+  nextpas.core.http.middleware.bodycache,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -86,6 +87,7 @@ type
   THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
   IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
   THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
+  THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -277,6 +279,11 @@ function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddle
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
 {** @desc Method guard middleware — rejects disallowed methods with 405. }
 function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware; inline;
+{** @desc Body cache middleware — caches request body for re-reading. }
+function BodyCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Metrics middleware with structured fields (method, path, status, duration). }
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -371,6 +378,8 @@ procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter); inline;
 procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter); inline;
 {** @desc Write 205 Reset Content response with no body. }
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter); inline;
+{** @desc Write 410 Gone response with no body. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -753,6 +762,17 @@ begin
   Result := nextpas.core.http.middleware.methodguard.MethodGuardMiddleware(AAllowed);
 end;
 
+function BodyCacheMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddleware;
+end;
+
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWithFields(ACallback);
+end;
+
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
 begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
@@ -1019,6 +1039,11 @@ end;
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
 begin
   nextpas.core.http.message.HttpWriteResponseResetContent(AW);
+end;
+
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseGone(AW);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;

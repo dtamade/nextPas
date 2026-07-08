@@ -17,6 +17,12 @@ type
      AStatus is the HTTP status code, ADurationUs is request duration in microseconds. }
   THttpMetricsCallback = reference to procedure(const AStatus: Int64; const ADurationUs: Int64);
 
+  {** Callback for per-request metrics with structured fields.
+     AMethod is the HTTP method string (GET/POST/...), APath is the request path. }
+  THttpMetricsFieldsCallback = reference to procedure(
+    const AMethod: string; const APath: string;
+    const AStatus: Int64; const ADurationUs: Int64);
+
   {** Snapshot of collected HTTP metrics. }
   THttpMetrics = record
     TotalRequests: Int64;
@@ -46,6 +52,11 @@ function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddle
    status code and duration in microseconds. No collector needed; useful for
    pushing metrics to external systems (StatsD, Prometheus, logs). }
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
+
+{** @desc Create metrics middleware with structured fields callback.
+   Calls ACallback with method, path, status, and duration for each request.
+   Useful for structured logging systems (JSON logs, ELK stack). }
+function MetricsMiddlewareWithFields(const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
 
 implementation
 
@@ -168,6 +179,33 @@ begin
       ANext.ServeHTTP(AReq, AW);
       LDuration := LStart.Elapsed;
       LCallback(Int64(AW.GetStatus), LDuration.AsMicroseconds);
+    end);
+  end);
+end;
+
+function MetricsMiddlewareWithFields(const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
+var
+  LCallback: THttpMetricsFieldsCallback;
+begin
+  if not Assigned(ACallback) then
+    raise EArgumentError.Create('MetricsMiddlewareWithFields callback must not be nil');
+  LCallback := ACallback;
+
+  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  begin
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LStart: TInstant;
+      LDuration: TDuration;
+      LMethod: string;
+      LPath: string;
+    begin
+      LMethod := HttpMethodToStr(AReq.GetMethod);
+      LPath := AReq.GetPath;
+      LStart := TInstant.Now;
+      ANext.ServeHTTP(AReq, AW);
+      LDuration := LStart.Elapsed;
+      LCallback(LMethod, LPath, Int64(AW.GetStatus), LDuration.AsMicroseconds);
     end);
   end);
 end;
