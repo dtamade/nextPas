@@ -556,3 +556,9 @@
   - 自举验证：226 units → IR → opt -O2 → llc → ld + libnprt.a → ELF executable
   - smoke 测试全通过（77/77）
   - C8 退出标准满足：编译器可用 LLVM 后端编译自身并产出可执行文件。
+- 2026-07-08 Debt 1 架构升级：EncodeRuntimeIntExprFoldCore 直接产出 ExprId
+  - 提取 Core(ANode, out ABlob, out AExprId) 内部方法
+  - 消除从 blob 解析 ExprId 的 hack（原 3-param 重载用 StrToIntDef 解析）
+  - 所有 ExprId > 0 分支同步设置 AExprId
+  - 2-param/3-param 重载均委托 Core
+  - smoke + selfhost 全通过
