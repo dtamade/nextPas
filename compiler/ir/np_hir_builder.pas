@@ -3087,6 +3087,7 @@ var
   Instr: THIRInstr;
   ExprId: LongInt;
   ExprResult: THIRExprResult;
+  OperandType: THIRTypeId;
 begin
   Result := 0;
   ATypeId := 0;
@@ -3185,8 +3186,11 @@ begin
     else if Token = 'varref' then EmitExprVarRef(S, Arg)
     else if Token = 'deref' then
     begin
-      V := S.Pop;
-      S.Push(EmitLoad(GetIntType, V));
+      V := S.PopTyped(OperandType);
+      if OperandType <> 0 then
+        S.PushTyped(EmitLoad(OperandType, V), OperandType)
+      else
+        S.Push(EmitLoad(GetIntType, V));
     end
     else if Token = 'recvar' then EmitExprRecVar(S, Arg)
     else if Token = 'is' then EmitExprIs(S, Arg)
@@ -4746,7 +4750,7 @@ begin
     Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  OldLenVal := EmitLoad(GetIntType, LenAlloca);
+  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4762,7 +4766,7 @@ begin
   PtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, PtrVal, PtrAlloca);
-  EmitStore(GetIntType, SizeVal, LenAlloca);
+  EmitStore(GetIntTypeByWidth(32, True), SizeVal, LenAlloca);
 end;
 
 function THIRBuilder.FieldSlotPtr(AObjectPtr: THIRValueId;
