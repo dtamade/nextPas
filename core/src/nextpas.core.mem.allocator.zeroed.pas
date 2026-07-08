@@ -18,20 +18,19 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
-  TZeroedAllocator = class(TAllocator)
+  TZeroedAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -47,28 +46,24 @@ begin
   FInner := AInner;
 end;
 
-function TZeroedAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TZeroedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TZeroedAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TZeroedAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   // AllocMem already zero-initializes in most implementations
   Result := FInner.AllocMem(ASize);
 end;
 
-function TZeroedAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TZeroedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    FInner.FreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   // ReallocMem preserves old data — do NOT zero the result.
   // The old-size portion contains valid caller data; only the extension
@@ -76,9 +71,16 @@ begin
   Result := FInner.ReallocMem(APtr, ASize);
 end;
 
-procedure TZeroedAllocator.DoFreeMem(APtr: Pointer);
+procedure TZeroedAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FInner.FreeMem(APtr);
+end;
+
+function TZeroedAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
