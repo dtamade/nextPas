@@ -71,3 +71,14 @@
 | P19-4 | TCowAllocator | Copy-on-Write 分配器，共享内存 | 7 |
 
 **模块总计**: 72 allocator 文件 / ~1150 测试
+
+## Phase 20 — 工具分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P20-1 | TBoundedAllocator | 有界分配器，限制最大内存使用 | 7 |
+| P20-2 | TCallbackAllocator | 回调分配器，用户自定义分配逻辑 | 7 |
+| P20-3 | TFailAllocator | 失败分配器，OOM 故障注入测试 | 7 |
+| P20-4 | TPrefixAllocator | 前缀分配器，O(1) 大小查询 | 7 |
+
+**模块总计**: 76 allocator 文件 / ~1178 测试
