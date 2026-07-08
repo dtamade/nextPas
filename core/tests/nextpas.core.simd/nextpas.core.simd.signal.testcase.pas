@@ -50,11 +50,11 @@ type
     procedure Test_BandStopFilter_Basic;
     procedure Test_GenerateSine_Basic;
     procedure Test_GenerateCosine_Basic;
-    // Phase 11: Advanced signal processing (disabled for now)
-    // procedure Test_STFT_Basic;
-    // procedure Test_Spectrogram_Basic;
-    // procedure Test_MelFilterBank_Basic;
-    // procedure Test_MFCC_Basic;
+    // Phase 11: Advanced signal processing
+    procedure Test_STFT_Basic;
+    procedure Test_Spectrogram_Basic;
+    procedure Test_MelFilterBank_Basic;
+    procedure Test_MFCC_Basic;
   end;
 
 implementation
@@ -530,8 +530,7 @@ begin
   CheckTrue(NearEqual(LDst[16], 0.0, 0.01), 'Cosine[16] = 0');
 end;
 
-// Phase 11: Advanced signal processing tests (disabled for now)
-{
+// Phase 11: Advanced signal processing tests
 procedure TTestCase_SimdSignal.Test_STFT_Basic;
 var
   LSignal: array[0..127] of Single;
@@ -594,7 +593,7 @@ end;
 
 procedure TTestCase_SimdSignal.Test_MelFilterBank_Basic;
 var
-  LFilterBank: array[0..127] of Single; // 4 filters * 33 bins
+  LFilterBank: array[0..131] of Single; // 4 filters * 33 bins
   i, j: Integer;
   LSum: Single;
 begin
@@ -639,6 +638,5 @@ begin
 
   SimdFree(LOutput);
 end;
-}
 
 end.

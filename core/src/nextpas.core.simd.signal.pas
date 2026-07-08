@@ -1424,23 +1424,29 @@ begin
     if LStart >= aFftSize div 2 + 1 then Continue;
     if LEnd > aFftSize div 2 + 1 then LEnd := aFftSize div 2 + 1;
 
-    // Rising slope
-    for k := LStart to LCenter - 1 do
+    // Rising slope (check LCenter > LStart to avoid unsigned underflow)
+    if LCenter > LStart then
     begin
-      if k < aFftSize div 2 + 1 then
+      for k := LStart to LCenter - 1 do
       begin
-        LVal := (k - LStart) / (LCenter - LStart);
-        aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        if k < aFftSize div 2 + 1 then
+        begin
+          LVal := (k - LStart) / (LCenter - LStart);
+          aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        end;
       end;
     end;
 
-    // Falling slope
-    for k := LCenter to LEnd - 1 do
+    // Falling slope (check LEnd > LCenter to avoid unsigned underflow)
+    if LEnd > LCenter then
     begin
-      if k < aFftSize div 2 + 1 then
+      for k := LCenter to LEnd - 1 do
       begin
-        LVal := (LEnd - k) / (LEnd - LCenter);
-        aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        if k < aFftSize div 2 + 1 then
+        begin
+          LVal := (LEnd - k) / (LEnd - LCenter);
+          aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        end;
       end;
     end;
   end;
