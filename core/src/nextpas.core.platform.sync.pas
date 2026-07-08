@@ -64,6 +64,31 @@ function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const AT
 function platform_wake_address_one64(AAddr: PInt64): Int32;
 function platform_wake_address_all64(AAddr: PInt64): Int32;
 
+{ Barrier - synchronize N threads at a rendezvous point }
+type
+  TPlatformBarrier = record
+    Count: Int32;
+    Waiting: Int32;
+    Generation: UInt32;
+    Mutex: TPlatformMutex;
+    CondVar: TPlatformCondVar;
+  end;
+
+function platform_barrier_init(var ABarrier: TPlatformBarrier; ACount: Int32): Int32;
+function platform_barrier_destroy(var ABarrier: TPlatformBarrier): Int32;
+function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;
+
+{ Once - execute a function exactly once }
+type
+  TPlatformOnce = record
+    State: Int32; { 0=uninit, 1=running, 2=done }
+    Mutex: TPlatformMutex;
+  end;
+
+function platform_once_init(var AOnce: TPlatformOnce): Int32;
+function platform_once_destroy(var AOnce: TPlatformOnce): Int32;
+function platform_once_exec(var AOnce: TPlatformOnce; AProc: Pointer): Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -1546,5 +1571,105 @@ function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const AT
 function platform_wake_address_one64(AAddr: PInt64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_wake_address_all64(AAddr: PInt64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}{$ENDIF}
+
+{ Barrier implementation }
+
+function platform_barrier_init(var ABarrier: TPlatformBarrier; ACount: Int32): Int32;
+begin
+  if ACount < 1 then
+    Exit(PLATFORM_ERR_INVALID);
+  ABarrier.Count := ACount;
+  ABarrier.Waiting := 0;
+  ABarrier.Generation := 0;
+  Result := platform_mutex_init(ABarrier.Mutex);
+  if Result <> 0 then Exit;
+  Result := platform_condvar_init(ABarrier.CondVar);
+  if Result <> 0 then
+  begin
+    platform_mutex_destroy(ABarrier.Mutex);
+    Exit;
+  end;
+end;
+
+function platform_barrier_destroy(var ABarrier: TPlatformBarrier): Int32;
+begin
+  platform_condvar_destroy(ABarrier.CondVar);
+  Result := platform_mutex_destroy(ABarrier.Mutex);
+end;
+
+function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;
+var
+  LGen: UInt32;
+begin
+  Result := platform_mutex_lock(ABarrier.Mutex);
+  if Result <> 0 then Exit;
+  LGen := ABarrier.Generation;
+  Inc(ABarrier.Waiting);
+  if ABarrier.Waiting >= ABarrier.Count then
+  begin
+    ABarrier.Waiting := 0;
+    Inc(ABarrier.Generation);
+    platform_condvar_broadcast(ABarrier.CondVar);
+  end
+  else
+  begin
+    while ABarrier.Generation = LGen do
+    begin
+      Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
+      if Result <> 0 then Break;
+    end;
+  end;
+  platform_mutex_unlock(ABarrier.Mutex);
+end;
+
+{ Once implementation }
+
+function platform_once_init(var AOnce: TPlatformOnce): Int32;
+begin
+  AOnce.State := 0;
+  Result := platform_mutex_init(AOnce.Mutex);
+end;
+
+function platform_once_destroy(var AOnce: TPlatformOnce): Int32;
+begin
+  Result := platform_mutex_destroy(AOnce.Mutex);
+end;
+
+type
+  TOnceProc = procedure; cdecl;
+
+function platform_once_exec(var AOnce: TPlatformOnce; AProc: Pointer): Int32;
+var
+  LProc: TOnceProc;
+  LCond: TPlatformCondVar;
+begin
+  if AProc = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_mutex_lock(AOnce.Mutex);
+  if Result <> 0 then Exit;
+  if AOnce.State = 0 then
+  begin
+    AOnce.State := 1;
+    platform_mutex_unlock(AOnce.Mutex);
+    LProc := TOnceProc(AProc);
+    LProc;
+    platform_mutex_lock(AOnce.Mutex);
+    AOnce.State := 2;
+    { Wake any waiters }
+    platform_condvar_init(LCond);
+    platform_condvar_broadcast(LCond);
+    platform_condvar_destroy(LCond);
+  end
+  else if AOnce.State = 1 then
+  begin
+    { Another thread is executing, wait for it }
+    platform_condvar_init(LCond);
+    while AOnce.State = 1 do
+      platform_condvar_wait(LCond, AOnce.Mutex);
+    platform_condvar_destroy(LCond);
+  end;
+  platform_mutex_unlock(AOnce.Mutex);
+  Result := 0;
+end;
 
 end.
