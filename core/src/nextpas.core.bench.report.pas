@@ -160,6 +160,26 @@ begin
   Result := ABuf.Builder.ToString;
 end;
 
+{ 跨语言对比条目按名称排序（插入排序，数据量通常 <50 条，O(n²) 可接受） }
+procedure SortCrossLangEntriesByName(var AEntries: TCrossLangEntryArray);
+var
+  I: Integer;
+  J: Integer;
+  LEntry: TCrossLangEntry;
+begin
+  for I := 1 to High(AEntries) do
+  begin
+    LEntry := AEntries[I];
+    J := I - 1;
+    while (J >= 0) and (AEntries[J].Name > LEntry.Name) do
+    begin
+      AEntries[J + 1] := AEntries[J];
+      Dec(J);
+    end;
+    AEntries[J + 1] := LEntry;
+  end;
+end;
+
 
 { TSV 辅助：将 Tab/换行替换为空格，防止破坏 TSV 结构 }
 function SanitizeTSVField(const AStr: string): string;

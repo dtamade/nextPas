@@ -7,9 +7,7 @@ SRCS = $(PROGRAM).lpr \
        $(SRC_DIR)/nextpas.core.bench.memtrack.pas \
        $(SRC_DIR)/nextpas.core.bench.parallel.pas \
        $(SRC_DIR)/nextpas.core.bench.pas \
-       $(SRC_DIR)/nextpas.core.bench.pool.pas \
        $(SRC_DIR)/nextpas.core.bench.report.pas \
-       $(SRC_DIR)/nextpas.core.bench.resultpool.pas \
        $(SRC_DIR)/nextpas.core.bench.run.pas \
        $(SRC_DIR)/nextpas.core.bench.runner.pas \
        $(SRC_DIR)/nextpas.core.bench.stats.pas \
