@@ -27,6 +27,7 @@ uses
   nextpas.core.http.middleware.cachecontrol,
   nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.middleware.healthcheck,
+  nextpas.core.http.middleware.metrics,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -81,6 +82,8 @@ type
   TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
   TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
+  THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
+  IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -264,6 +267,10 @@ function WhenMiddleware(
 function HealthCheckMiddleware: IHttpMiddleware; inline;
 {** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
 function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware; inline;
+{** @desc Create a new thread-safe metrics collector. }
+function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
+{** @desc Metrics middleware — records request counts and durations. }
+function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -700,6 +707,16 @@ end;
 function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddlewareAt(APath);
+end;
+
+function NewHttpMetricsCollector: IHttpMetricsCollector;
+begin
+  Result := nextpas.core.http.middleware.metrics.NewHttpMetricsCollector;
+end;
+
+function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddleware(ACollector);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;

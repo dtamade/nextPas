@@ -22,6 +22,7 @@ uses
   nextpas.core.http.middleware.cachecontrol,
   nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.middleware.healthcheck,
+  nextpas.core.http.middleware.metrics,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -1789,6 +1790,191 @@ begin
   CheckEqual(Int64(200), Int64(LWObj.Status), 'empty path defaults to /healthz');
 end;
 
+{ Metrics tests }
+
+procedure TestMetricsCountsRequests;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request counted');
+  CheckEqual(1, LMetrics.Status2xx, 'one 2xx');
+  CheckEqual(0, LMetrics.Status4xx, 'zero 4xx');
+end;
+
+procedure TestMetricsCountsMultipleRequests;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+  LI: Int32;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(5, LMetrics.TotalRequests, 'five requests counted');
+  CheckEqual(5, LMetrics.Status2xx, 'five 2xx');
+end;
+
+procedure TestMetricsCountsByStatusClass;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+  LStatusCode: Int32;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LStatusCode := 404;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(THttpStatus(LStatusCode));
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  { 200 }
+  LStatusCode := 200;
+  LReq := TMockRequest.Create(hmGet, '/ok');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  { 404 }
+  LStatusCode := 404;
+  LReq := TMockRequest.Create(hmGet, '/not-found');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  { 500 }
+  LStatusCode := 500;
+  LReq := TMockRequest.Create(hmGet, '/error');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(3, LMetrics.TotalRequests, 'three requests');
+  CheckEqual(1, LMetrics.Status2xx, 'one 2xx');
+  CheckEqual(0, LMetrics.Status3xx, 'zero 3xx');
+  CheckEqual(1, LMetrics.Status4xx, 'one 4xx');
+  CheckEqual(1, LMetrics.Status5xx, 'one 5xx');
+end;
+
+procedure TestMetricsReset;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'before reset');
+  LCollector.Reset;
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(0, LMetrics.TotalRequests, 'after reset');
+  CheckEqual(0, LMetrics.Status2xx, '2xx reset');
+end;
+
+procedure TestMetricsTracksDuration;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/slow');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  Check(LMetrics.TotalDurationUs > 0, 'duration tracked');
+end;
+
+procedure TestMetricsNilCollectorRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddleware(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil collector');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1867,5 +2053,12 @@ begin
   T.Test('HealthCheck: custom path', @TestHealthCheckCustomPath);
   T.Test('HealthCheck: custom path ignores /healthz', @TestHealthCheckCustomPathDefaultPathPasses);
   T.Test('HealthCheck: empty path defaults to /healthz', @TestHealthCheckEmptyPathDefaults);
+  { Metrics }
+  T.Test('Metrics: counts requests', @TestMetricsCountsRequests);
+  T.Test('Metrics: counts multiple requests', @TestMetricsCountsMultipleRequests);
+  T.Test('Metrics: counts by status class', @TestMetricsCountsByStatusClass);
+  T.Test('Metrics: reset clears counters', @TestMetricsReset);
+  T.Test('Metrics: tracks duration', @TestMetricsTracksDuration);
+  T.Test('Metrics: nil collector raises', @TestMetricsNilCollectorRaises);
   if not T.Run then Halt(1);
 end.
