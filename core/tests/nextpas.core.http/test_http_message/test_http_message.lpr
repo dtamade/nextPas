@@ -1514,6 +1514,83 @@ begin
   Check(LBody = nil, 'ReadRequestBodyBytes empty body returns nil');
 end;
 
+{ HttpRedirect tests }
+
+procedure TestRedirectSetsLocationAndStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirect(LW, HTTP_STATUS_FOUND, '/new-page');
+  CheckEqual(Int64(302), Int64(LM.Status), 'status 302');
+  CheckEqual('/new-page', LM.GetHeaders.Get('location'), 'location header');
+  Check(Pos('/new-page', LM.Body) > 0, 'body contains location');
+end;
+
+procedure TestRedirect301Permanent;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirect(LW, HTTP_STATUS_MOVED_PERMANENTLY, 'https://example.com');
+  CheckEqual(Int64(301), Int64(LM.Status), 'status 301');
+  CheckEqual('https://example.com', LM.GetHeaders.Get('location'), 'location');
+end;
+
+procedure TestRedirectNonRedirectStatusRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LRaised := False;
+  try
+    HttpRedirect(LW, HTTP_STATUS_OK, '/page');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on non-redirect status');
+end;
+
+procedure TestRedirectEmptyLocationRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LRaised := False;
+  try
+    HttpRedirect(LW, HTTP_STATUS_FOUND, '');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on empty location');
+end;
+
+procedure TestRedirectNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpRedirect(nil, HTTP_STATUS_FOUND, '/page');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1651,5 +1728,15 @@ begin
     @TestReadRequestBodyJsonInvalidJsonRaises);
   T.Test('ReadRequestBodyBytes empty body returns nil',
     @TestReadRequestBodyBytesEmptyBodyReturnsNil);
+  T.Test('Redirect sets location and status',
+    @TestRedirectSetsLocationAndStatus);
+  T.Test('Redirect 301 permanent',
+    @TestRedirect301Permanent);
+  T.Test('Redirect non-redirect status raises',
+    @TestRedirectNonRedirectStatusRaises);
+  T.Test('Redirect empty location raises',
+    @TestRedirectEmptyLocationRaises);
+  T.Test('Redirect nil writer raises',
+    @TestRedirectNilWriterRaises);
   if not T.Run then Halt(1);
 end.
