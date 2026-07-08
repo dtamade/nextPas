@@ -666,6 +666,23 @@ begin
 end;
 {$ENDIF}
 
+procedure TestAddSameFdTwice;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LRet: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipeFd[0], [peReadable], nil) = 0, 'add first');
+  LRet := platform_poller_add(P, LPipeFd[0], [peReadable], nil);
+  Check(LRet <> 0, 'add same fd twice returns error');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.io');
   T.Test('create/close', @TestCreateClose);
@@ -691,6 +708,7 @@ begin
   T.Test('wait zero max entries', @TestWaitZeroMaxEntries);
   T.Test('wake without enable', @TestWakeWithoutEnable);
   T.Test('drain wake without enable', @TestDrainWakeWithoutEnable);
+  T.Test('add same fd twice', @TestAddSameFdTwice);
   {$ENDIF}
   if not T.Run then Halt(1);
 end.

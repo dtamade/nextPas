@@ -215,6 +215,45 @@ begin
   platform_socket_close(S);
 end;
 
+procedure TestIpv6UdpSendRecv;
+var
+  LSender, LRecver: TPlatformSocket;
+  LAddr, LRecvAddr: TPlatformSockAddr;
+  LBuf: array[0..31] of AnsiChar;
+  LSent, LRecvd: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET6, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LRecver) = 0, 'create ipv6 recver');
+  Check(platform_sockaddr_loopback6(0, LAddr) = 0, 'ipv6 addr');
+  if platform_socket_bind(LRecver, @LAddr.Storage, LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(LRecver);
+    Check(True, 'IPv6 not available, skipped');
+    Exit;
+  end;
+
+  LRecvAddr.Len := SizeOf(LRecvAddr.Storage);
+  FillChar(LRecvAddr.Storage, SizeOf(LRecvAddr.Storage), 0);
+  Check(platform_socket_getsockname(LRecver, @LRecvAddr.Storage,
+    @LRecvAddr.Len) = 0, 'getsockname ipv6');
+
+  Check(platform_socket_create(PLATFORM_AF_INET6, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LSender) = 0, 'create ipv6 sender');
+  LBuf := 'ipv6_udp';
+  Check(platform_socket_sendto(LSender, @LBuf[0], 8, 0,
+    @LRecvAddr.Storage, LRecvAddr.Len, LSent) = 0, 'sendto ipv6');
+  Check(LSent = 8, 'sent 8');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recvfrom(LRecver, @LBuf[0], 32, 0,
+    @LRecvAddr.Storage, @LRecvAddr.Len, LRecvd) = 0, 'recvfrom ipv6');
+  Check(LRecvd = 8, 'recv 8');
+  Check(LBuf[0] = 'i', 'data[0]');
+
+  platform_socket_close(LSender);
+  platform_socket_close(LRecver);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.net');
   T.Test('create/close TCP', @TestCreateClose);
@@ -225,5 +264,6 @@ begin
   T.Test('UDP send/recv', @TestUDPSendRecv);
   T.Test('double close', @TestDoubleClose);
   T.Test('connect refused', @TestConnectRefused);
+  T.Test('IPv6 UDP send/recv', @TestIpv6UdpSendRecv);
   if not T.Run then Halt(1);
 end.

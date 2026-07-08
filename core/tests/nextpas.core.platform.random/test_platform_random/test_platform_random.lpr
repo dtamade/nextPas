@@ -135,6 +135,30 @@ begin
   Check(not AllZero, 'page-aligned fill not all zero');
 end;
 
+procedure TestFill8Bytes;
+var
+  Buf: array[0..7] of Byte;
+begin
+  FillChar(Buf, 8, 0);
+  Check(platform_random_bytes(@Buf[0], 8) = 0, 'fill 8 bytes');
+  Check((Buf[0] or Buf[1] or Buf[2] or Buf[3] or Buf[4] or Buf[5] or Buf[6] or Buf[7]) <> 0,
+    '8 bytes not all zero');
+end;
+
+procedure TestFill128Bytes;
+var
+  Buf: array[0..127] of Byte;
+  I: Int32;
+  AllZero: Boolean;
+begin
+  FillChar(Buf, 128, 0);
+  Check(platform_random_bytes(@Buf[0], 128) = 0, 'fill 128 bytes');
+  AllZero := True;
+  for I := 0 to 127 do
+    if Buf[I] <> 0 then begin AllZero := False; Break; end;
+  Check(not AllZero, '128 bytes not all zero');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.random');
   T.Test('fill 32 bytes non-zero', @TestFill32);
@@ -148,5 +172,7 @@ begin
   T.Test('fill 16 bytes', @TestFill16);
   T.Test('non-nil zero len', @TestNonNilZeroLen);
   T.Test('fill page-aligned (4096)', @TestFillPageAligned);
+  T.Test('fill 8 bytes', @TestFill8Bytes);
+  T.Test('fill 128 bytes', @TestFill128Bytes);
   if not T.Run then Halt(1);
 end.
