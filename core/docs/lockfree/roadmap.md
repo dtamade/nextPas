@@ -55,8 +55,9 @@
 | `lockfree.ratelimit` | 并发令牌桶限流器 | ✅ 完成 | 4 |
 | `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
 | `lockfree.exchanger` | 并发交换器 | ✅ 完成 | 3 |
+| `lockfree.phaser` | 并发相位同步器 | ✅ 完成 | 8 |
 
-**规模**: 36 文件, ~17000 行, 476 测试
+**规模**: 37 文件, ~17500 行, 484 测试
 
 ---
 
@@ -87,7 +88,8 @@
 | test_lockfree_ratelimit | 4 | ✅ 全绿 |
 | test_lockfree_condvar | 5 | ✅ 全绿 |
 | test_lockfree_exchanger | 3 | ✅ 全绿 |
-| **总计** | **476** | **✅ 全绿** |
+| test_lockfree_phaser | 8 | ✅ 全绿 |
+| **总计** | **484** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

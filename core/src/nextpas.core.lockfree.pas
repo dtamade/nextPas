@@ -36,7 +36,8 @@ uses
   nextpas.core.lockfree.barrier,
   nextpas.core.lockfree.ratelimit,
   nextpas.core.lockfree.condvar,
-  nextpas.core.lockfree.exchanger;
+  nextpas.core.lockfree.exchanger,
+  nextpas.core.lockfree.phaser;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -242,6 +243,14 @@ type
   generic TExchanger<T> = class(specialize TExchangerImpl<T>)
   end;
   TLockFreeExchangeResult = nextpas.core.lockfree.exchanger.TLockFreeExchangeResult;
+
+  {** @desc 并发相位同步器
+    @details 灵活的同步屏障，支持动态注册/注销。
+      支持 Register/Arrive/ArriveAndAwaitAdvance/ArriveAndDeregister。
+    @see TPhaser 详细文档和示例
+  }
+  TPhaser = nextpas.core.lockfree.phaser.TPhaser;
+  TLockFreePhaserArriveResult = nextpas.core.lockfree.phaser.TLockFreePhaserArriveResult;
 
 implementation
 

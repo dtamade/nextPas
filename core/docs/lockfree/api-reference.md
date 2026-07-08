@@ -978,6 +978,39 @@ type
 
 ---
 
+## Phaser (nextpas.core.lockfree.phaser)
+
+```pascal
+type
+  TLockFreePhaserArriveResult = (paArrived, paAdvanced, paClosed, paTimeout);
+
+  TPhaser = class
+    constructor Create(const AParties: Int64 = 0);
+    function Register: Int64;
+    function Arrive: Int64;
+    function ArriveAndAwaitAdvance: Int64;
+    function ArriveAndDeregister: Int64;
+    function AwaitAdvance(const APhase: Int64): TLockFreePhaserArriveResult;
+    function AwaitAdvanceTimeout(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
+    function GetPhase: Int64;
+    function GetParties: Int64;
+    function GetArrived: Int64;
+    function GetUnarrived: Int64;
+    procedure Terminate;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsTerminated: Boolean;
+  end;
+```
+
+**特点**:
+- 灵活的同步屏障，支持动态注册/注销
+- 每个相位(phase)有 N 个参与方，所有到达后进入下一相位
+- 支持多相位连续同步
+- 适用场景：分阶段并行计算、动态任务分组
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
