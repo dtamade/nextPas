@@ -22,7 +22,7 @@ type
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
     ckBench, ckBenchTime, ckBenchMem, ckRun,
-    ckBenchSave, ckBenchCompare);
+    ckBenchSave, ckBenchCompare, ckCache);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -324,7 +324,8 @@ begin
     Result.BenchEnabled := Result.BenchEnabled or LDefaults.BenchEnabled;
   if not (ckBenchMem in GExplicit) then
     Result.BenchMem := Result.BenchMem or LDefaults.BenchMem;
-  Result.CacheEnabled := Result.CacheEnabled or LDefaults.CacheEnabled;
+  if not (ckCache in GExplicit) then
+    Result.CacheEnabled := Result.CacheEnabled or LDefaults.CacheEnabled;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -502,6 +503,7 @@ end;
 procedure SetDefaultCacheEnabled(AEnabled: Boolean);
 begin
   GDefaultConfig.CacheEnabled := AEnabled;
+  Include(GExplicit, ckCache);
 end;
 
 procedure SetDefaultCacheDir(const ADir: string);
