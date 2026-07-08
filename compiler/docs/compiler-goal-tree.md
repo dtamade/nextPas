@@ -530,3 +530,13 @@
   剩余 25 个 gaps（12 parser + 13 semantic）记录在
   `docs/plans/2026-06-26-c8-prep-gap-list.md`。
   16/16 compiler-pass 测试全绿，无回归。
+- 2026-07-06 架构调优：
+  - sema 拆分：14246→6632 行（-53%），提取 `np_sema_validation.inc`（501 行）、
+    `np_sema_codegen.inc`（5314 行）、`np_sema_declaration.inc`（1848 行）
+  - 错误诊断增强：`np_diagnostics_enhanced` 接入 sema，未声明标识符
+    "Did you mean?" 建议（Levenshtein ≤3）+ 类型不匹配错误显示类型名
+  - MIR pass manager 接入主管道：HIR→MIR→passes→LLVM 路径贯通，
+    `DetachModule` 修复 double-free，`OptLevel` 传递到 `RegisterMirPassesForLevel`
+  - 死代码清理：删除 `compiler/query/`（4 文件 952 行）
+  - 增量编译验证通过：全量/增量构建产出二进制一致
+  - 49/49 compiler-pass + 23/23 MIR + 11 groups smoke 全绿
