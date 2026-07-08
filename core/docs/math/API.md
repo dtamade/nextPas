@@ -140,6 +140,37 @@ Statistical helpers: `Sum`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDe
 
 Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (scalar batches).
 
+### SIMD Batch Operations
+
+`nextpas.core.math.batch.simd` provides SIMD-optimized variants of scalar batch operations.
+These use SSE/AVX intrinsics via `nextpas.core.simd` for 4-wide F32 processing, with scalar
+fallback for remaining elements when the count is not a multiple of 4.
+
+SIMD batch functions mirror the scalar batch signatures exactly:
+
+- `BatchSinSimdF32`, `BatchCosSimdF32`, `BatchTanSimdF32`
+- `BatchSinCosSimdF32` — computes both sin and cos in a single pass (two output arrays)
+- `BatchExpSimdF32`, `BatchLnSimdF32`, `BatchLog2SimdF32`, `BatchLog10SimdF32`
+- `BatchSqrtSimdF32` — uses `SQRTPS`/`VSQRTPS` hardware instruction
+- `BatchAbsSimdF32` — uses `ANDPS` with sign-bit mask
+- `BatchNegSimdF32` — uses `XORPS` with sign-bit mask
+- `BatchCeilSimdF32`, `BatchFloorSimdF32`, `BatchRoundSimdF32`, `BatchTruncSimdF32` — use SSE4.1 `ROUNDPS`
+- `BatchLerpSimdF32` — uses FMA where available (`fma(t, b-a, a)`)
+- `BatchClampSimdF32` — uses `MINPS`+`MAXPS`
+- `BatchScaleOffsetSimdF32` — uses FMA (`fma(input, scale, offset)`)
+
+The SIMD suffix signals the dispatch path; the public facade `nextpas.core.math` does not re-export
+these functions. They are available through direct import of `nextpas.core.math.batch.simd`.
+
+A benchmark harness (`bench_batch_simd`) compares SIMD vs scalar paths across array sizes
+(64, 1024, 16384). Operations with true SIMD intrinsics (Sqrt, Abs, Lerp, Clamp, Ceil, Floor,
+Round, Trunc, ScaleOffset) show measurable speedup; operations that delegate to scalar `Sin`/`Cos`/
+`Exp` in both paths (no SIMD transcendental approximation yet) show no gain. Run the benchmark with:
+
+```sh
+make -C core/tests/nextpas.core.math/bench_batch_simd clean run
+```
+
 `SumSquaredDeviations` is an alias for `TotalVariance` (sum of squared deviations from mean).
 
 Trig helpers:

@@ -178,6 +178,91 @@ function BatchScaleOffsetF32(const AInput: array of Single;
 ```
 Computes `input * scale + offset` for each element.
 
+### SIMD Batch Operations
+
+`nextpas.core.math.batch.simd` provides SIMD-optimized variants of the scalar batch operations above.
+These use SSE/AVX intrinsics via `nextpas.core.simd` for 4-wide F32 processing, with scalar fallback
+for remaining elements when the count is not a multiple of 4.
+
+SIMD batch functions mirror the scalar batch signatures exactly:
+
+#### BatchSinSimdF32 / BatchCosSimdF32 / BatchTanSimdF32
+```pascal
+function BatchSinSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+function BatchCosSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+function BatchTanSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+```
+SIMD-ready trigonometric batch operations.
+
+#### BatchSinCosSimdF32
+```pascal
+function BatchSinCosSimdF32(const AInput: array of Single;
+                            var ASinOutput, ACosOutput: array of Single): SizeInt;
+```
+Computes both sin and cos in a single pass, writing to two output arrays.
+
+#### BatchExpSimdF32 / BatchLnSimdF32 / BatchLog2SimdF32 / BatchLog10SimdF32
+```pascal
+function BatchExpSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+function BatchLnSimdF32(const AInput: array of Single;
+                        var AOutput: array of Single): SizeInt;
+function BatchLog2SimdF32(const AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+function BatchLog10SimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+```
+SIMD-ready exponential and logarithmic batch operations.
+
+#### BatchSqrtSimdF32 / BatchAbsSimdF32 / BatchNegSimdF32
+```pascal
+function BatchSqrtSimdF32(const AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+function BatchAbsSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+function BatchNegSimdF32(const AInput: array of Single;
+                         var AOutput: array of Single): SizeInt;
+```
+SIMD-ready sqrt (SQRTPS), abs (ANDPS sign mask), and negation (XORPS sign mask).
+
+#### BatchCeilSimdF32 / BatchFloorSimdF32 / BatchRoundSimdF32 / BatchTruncSimdF32
+```pascal
+function BatchCeilSimdF32(const AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+function BatchFloorSimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+function BatchRoundSimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+function BatchTruncSimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+```
+SIMD-ready rounding operations using SSE4.1 ROUNDPS.
+
+#### BatchLerpSimdF32
+```pascal
+function BatchLerpSimdF32(const AStart, AEnd: array of Single;
+                          const AT: Single;
+                          var AOutput: array of Single): SizeInt;
+```
+SIMD-ready linear interpolation using FMA: `fma(t, b-a, a)`.
+
+#### BatchClampSimdF32 / BatchScaleOffsetSimdF32
+```pascal
+function BatchClampSimdF32(const AInput: array of Single;
+                           const AMin, AMax: Single;
+                           var AOutput: array of Single): SizeInt;
+function BatchScaleOffsetSimdF32(const AInput: array of Single;
+                                 const AScale, AOffset: Single;
+                                 var AOutput: array of Single): SizeInt;
+```
+SIMD-ready clamp (MINPS+MAXPS) and scale+offset (FMA).
+
+**Note:** The SIMD suffix signals the dispatch path; the public facade `nextpas.core.math` does not
+re-export these functions. They are available through direct import of `nextpas.core.math.batch.simd`.
+
 ## Vector Types
 
 ### TVec2f
