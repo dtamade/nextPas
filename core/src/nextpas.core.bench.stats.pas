@@ -84,6 +84,10 @@ type
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
 
+    {** 变异系数 CV = StdDev / Mean（用于自适应预热收敛判断）
+     *  @returns CV 值；Mean <= 0 时返回 0 }
+    function CoefficientOfVariation(const AData: TDoubleArray): Double;
+
     {** Mann-Whitney U 检验 p-value（非参数，适用于右偏基准数据） }
     function ComputeMannWhitneyPValue(const A, B: TDoubleArray): Double;
 
@@ -236,6 +240,19 @@ begin
   Result := ComputeStdDev(AData, LMean);
 end;
 
+function TBenchStatsAnalyzer.CoefficientOfVariation(const AData: TDoubleArray): Double;
+var
+  LMean, LStdDev: Double;
+begin
+  if Length(AData) < 2 then
+    Exit(0.0);
+  LMean := Mean(AData);
+  if LMean <= 0 then
+    Exit(0.0);
+  LStdDev := ComputeStdDev(AData, LMean);
+  Result := LStdDev / LMean;
+end;
+
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 begin
   { PF-06: range validation — reject out-of-range percentiles }
@@ -277,7 +294,6 @@ var
   LFiltered: TDoubleArray;
   LQ1, LQ3, LFenceLow, LFenceHigh: Double;
   LFilteredCount: Integer;
-  LSum, LSumSq, LDiff: Double;
 begin
   LLen := Length(ASamples);
   if LLen = 0 then
@@ -351,25 +367,8 @@ begin
     if LFilteredCount > 0 then
     begin
       Result.FilteredCount := LFilteredCount;
-      // Compute filtered mean
-      LSum := 0;
-      for I := 0 to LFilteredCount - 1 do
-        LSum := LSum + LFiltered[I];
-      Result.FilteredMean := LSum / LFilteredCount;
-      // Compute filtered stddev
-      if LFilteredCount > 1 then
-      begin
-        LSumSq := 0;
-        for I := 0 to LFilteredCount - 1 do
-        begin
-          LDiff := LFiltered[I] - Result.FilteredMean;
-          LSumSq := LSumSq + LDiff * LDiff;
-        end;
-        Result.FilteredStdDev := Sqrt(LSumSq / (LFilteredCount - 1));
-      end
-      else
-        Result.FilteredStdDev := 0;
-      // Compute filtered median
+      Result.FilteredMean := Mean(LFiltered);
+      Result.FilteredStdDev := StdDev(LFiltered);
       SortDoubleArray(LFiltered);
       Result.FilteredMedian := Percentile(LFiltered, 50);
     end

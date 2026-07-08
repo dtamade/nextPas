@@ -916,11 +916,11 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  I, J, LMaxIters: Integer;
+  I, LMaxIters, LN: Integer;
   LResult: TBenchResult;
   LSamples: TDoubleArray;
-  LMean, LStdDev, LCV, LDiff: Double;
-  LN: Integer;
+  LCurrentSamples: TDoubleArray;
+  LCV: Double;
 begin
   { B21: Adaptive warmup - measure CV and stop when variance stabilizes }
   if FConfig.AdaptiveWarmup then
@@ -944,25 +944,10 @@ begin
       { Need at least 5 samples before checking CV }
       if LN >= 5 then
       begin
-        { Compute mean and stddev of current samples }
-        LMean := 0;
-        for J := 0 to LN - 1 do
-          LMean := LMean + LSamples[J];
-        LMean := LMean / LN;
-
-        LStdDev := 0;
-        for J := 0 to LN - 1 do
-        begin
-          LDiff := LSamples[J] - LMean;
-          LStdDev := LStdDev + LDiff * LDiff;
-        end;
-        LStdDev := Sqrt(LStdDev / LN);
-
-        { CV = StdDev / Mean }
-        if LMean > 0 then
-          LCV := LStdDev / LMean
-        else
-          LCV := 0;
+        { Use stats module's CoefficientOfVariation }
+        SetLength(LCurrentSamples, LN);
+        Move(LSamples[0], LCurrentSamples[0], LN * SizeOf(Double));
+        LCV := FStatsAnalyzer.CoefficientOfVariation(LCurrentSamples);
 
         { Stop if CV below threshold }
         if LCV < FConfig.WarmupCVThreshold then
