@@ -21,6 +21,7 @@ uses
   nextpas.core.http.middleware.requestid,
   nextpas.core.http.middleware.cachecontrol,
   nextpas.core.http.middleware.ratelimit,
+  nextpas.core.http.middleware.healthcheck,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -1634,6 +1635,160 @@ begin
   Check(LRaised, 'raises on nil middleware');
 end;
 
+{ HealthCheck tests }
+
+procedure TestHealthCheckDefaultPath;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'returns 200');
+  Check(Pos('"status":"ok"', LWObj.Body) > 0, 'body has status ok');
+  Check(Pos('application/json', LWObj.GetHeaders.Get('content-type')) > 0, 'content-type is json');
+end;
+
+procedure TestHealthCheckNonHealthPathPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for non-health path');
+  CheckEqual(Int64(404), Int64(LWObj.Status), 'status from handler');
+end;
+
+procedure TestHealthCheckPostMethodPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for POST /healthz');
+  CheckEqual(Int64(405), Int64(LWObj.Status), 'status from handler');
+end;
+
+procedure TestHealthCheckCustomPath;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('/ready')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/ready');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'returns 200 for custom path');
+  Check(Pos('"status":"ok"', LWObj.Body) > 0, 'body has status ok');
+end;
+
+procedure TestHealthCheckCustomPathDefaultPathPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('/ready')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for /healthz when custom path is /ready');
+end;
+
+procedure TestHealthCheckEmptyPathDefaults;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'empty path defaults to /healthz');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1705,5 +1860,12 @@ begin
   T.Test('When: path-based conditional', @TestWhenMiddlewarePathBased);
   T.Test('When: nil predicate raises', @TestWhenMiddlewareNilPredicateRaises);
   T.Test('When: nil middleware raises', @TestWhenMiddlewareNilMiddlewareRaises);
+  { HealthCheck }
+  T.Test('HealthCheck: default /healthz returns 200', @TestHealthCheckDefaultPath);
+  T.Test('HealthCheck: non-health path passes through', @TestHealthCheckNonHealthPathPassesThrough);
+  T.Test('HealthCheck: POST method passes through', @TestHealthCheckPostMethodPassesThrough);
+  T.Test('HealthCheck: custom path', @TestHealthCheckCustomPath);
+  T.Test('HealthCheck: custom path ignores /healthz', @TestHealthCheckCustomPathDefaultPathPasses);
+  T.Test('HealthCheck: empty path defaults to /healthz', @TestHealthCheckEmptyPathDefaults);
   if not T.Run then Halt(1);
 end.
