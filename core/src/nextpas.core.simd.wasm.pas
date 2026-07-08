@@ -221,8 +221,7 @@ end;
 procedure RegisterWASMBackend;
 begin
   {$IFDEF CPUWASM64}
-  // TODO: Register WASM backend with dispatch system
-  // This requires implementing the full dispatch table
+  {$NOTE SIMD-WASM: WASM SIMD128 backend registration deferred — blocked on FPC WASM32 compiler support}
   {$ENDIF}
 end;
 

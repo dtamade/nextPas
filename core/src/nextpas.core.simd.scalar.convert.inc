@@ -1,5 +1,7 @@
 // === Batch Array Operations (scalar reference implementations) ===
+// Note: {$VECTORIZE OFF} prevents FPC auto-vectorization for fair SIMD vs scalar benchmarks.
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -8,6 +10,7 @@ begin
     aDst[i] := aSrc1[i] + aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -16,6 +19,7 @@ begin
     aDst[i] := aSrc1[i] - aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -24,6 +28,7 @@ begin
     aDst[i] := aSrc1[i] * aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -32,6 +37,7 @@ begin
     aDst[i] := aSrc1[i] / aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -43,6 +49,7 @@ begin
       aDst[i] := aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -54,6 +61,7 @@ begin
       aDst[i] := aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
   i: SizeUInt;
@@ -67,6 +75,7 @@ begin
   end;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
   i: SizeUInt;
@@ -80,6 +89,7 @@ begin
   end;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -88,6 +98,7 @@ begin
     aDst[i] := Sqrt(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayRcpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -96,6 +107,7 @@ begin
     aDst[i] := 1.0 / aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayRsqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -104,6 +116,7 @@ begin
     aDst[i] := 1.0 / Sqrt(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayRcpRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -112,6 +125,7 @@ begin
     aDst[i] := 1.0 / aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayRsqrtRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -120,6 +134,7 @@ begin
     aDst[i] := 1.0 / Sqrt(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMulScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
 var i: SizeUInt;
 begin
@@ -128,6 +143,7 @@ begin
     aDst[i] := aSrc[i] * aScalar;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
 var i: SizeUInt;
 begin
@@ -136,6 +152,7 @@ begin
     aDst[i] := aSrc[i] + aScalar;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
 var
   i: SizeUInt;
@@ -151,6 +168,7 @@ begin
   end;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayFmaF32(aA, aB, aC, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -159,6 +177,7 @@ begin
     aDst[i] := aA[i] * aB[i] + aC[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -167,6 +186,7 @@ begin
     aDst[i] := aAlpha * aX[i] + aY[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceSumF32(aSrc: PSingle; aCount: SizeUInt): Single;
 var i: SizeUInt;
 begin
@@ -176,6 +196,7 @@ begin
     Result := Result + aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
 var i: SizeUInt;
 begin
@@ -185,6 +206,7 @@ begin
     Result := Result + aSrc1[i] * aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceMinF32(aSrc: PSingle; aCount: SizeUInt): Single;
 var i: SizeUInt;
 begin
@@ -194,6 +216,7 @@ begin
     if aSrc[i] < Result then Result := aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
 var i: SizeUInt;
 begin
@@ -205,6 +228,7 @@ end;
 
 // === Batch Array Operations - F64 (Scalar Reference) ===
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAddF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -213,6 +237,7 @@ begin
     aDst[i] := aSrc1[i] + aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySubF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -221,6 +246,7 @@ begin
     aDst[i] := aSrc1[i] - aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMulF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -229,6 +255,7 @@ begin
     aDst[i] := aSrc1[i] * aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayDivF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -237,6 +264,7 @@ begin
     aDst[i] := aSrc1[i] / aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceSumF64(aSrc: PDouble; aCount: SizeUInt): Double;
 var i: SizeUInt;
 begin
@@ -246,6 +274,7 @@ begin
     Result := Result + aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceDotF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
 var i: SizeUInt;
 begin
@@ -255,6 +284,7 @@ begin
     Result := Result + aSrc1[i] * aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceMinF64(aSrc: PDouble; aCount: SizeUInt): Double;
 var i: SizeUInt;
 begin
@@ -264,6 +294,7 @@ begin
     if aSrc[i] < Result then Result := aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 function ScalarReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
 var i: SizeUInt;
 begin
@@ -273,6 +304,7 @@ begin
     if aSrc[i] > Result then Result := aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAbsF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -281,6 +313,7 @@ begin
     aDst[i] := System.Abs(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayNegF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -289,6 +322,7 @@ begin
     aDst[i] := -aSrc[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -297,6 +331,7 @@ begin
     aDst[i] := System.Sqrt(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMulScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
 var i: SizeUInt;
 begin
@@ -305,6 +340,7 @@ begin
     aDst[i] := aSrc[i] * aScalar;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAddScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
 var i: SizeUInt;
 begin
@@ -313,6 +349,7 @@ begin
     aDst[i] := aSrc[i] + aScalar;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayClampF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
 var i: SizeUInt; v: Double;
 begin
@@ -326,6 +363,7 @@ begin
   end;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
 var i: SizeUInt;
 begin
@@ -334,6 +372,7 @@ begin
     aDst[i] := aSrc[i] * aScale + aBias;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -345,6 +384,7 @@ begin
       aDst[i] := aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -356,6 +396,7 @@ begin
       aDst[i] := aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -364,6 +405,7 @@ begin
     aDst[i] := aA[i] * aB[i] + aC[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -372,6 +414,7 @@ begin
     aDst[i] := Single(System.Exp(aSrc[i]));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -380,6 +423,7 @@ begin
     aDst[i] := Single(System.Ln(aSrc[i]));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayPowF32(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single);
 var i: SizeUInt;
 begin
@@ -388,6 +432,7 @@ begin
     aDst[i] := Single(SimdPowerF32(aSrc[i], aExponent));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -396,6 +441,7 @@ begin
     aDst[i] := Single(System.Sin(aSrc[i]));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -404,6 +450,7 @@ begin
     aDst[i] := Single(System.Cos(aSrc[i]));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -412,6 +459,7 @@ begin
     aDst[i] := aSrc1[i] + aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -420,6 +468,7 @@ begin
     aDst[i] := aSrc1[i] - aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -428,6 +477,7 @@ begin
     aDst[i] := Int16(Int32(aSrc1[i]) * Int32(aSrc2[i]));
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt);
 var
   i: SizeUInt;
@@ -443,6 +493,7 @@ begin
   end;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -451,6 +502,7 @@ begin
     aDst[i] := Round(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -459,6 +511,7 @@ begin
     aDst[i] := Single(aSrc[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -467,6 +520,7 @@ begin
     aDst[i] := aSrc1[i] and aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -475,6 +529,7 @@ begin
     aDst[i] := aSrc1[i] or aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -483,6 +538,7 @@ begin
     aDst[i] := aSrc1[i] xor aSrc2[i];
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
 var i: SizeUInt;
 begin
@@ -491,6 +547,7 @@ begin
     aDst[i] := aSrc[i] shl aShift;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
 var i: SizeUInt;
 begin
@@ -501,6 +558,7 @@ end;
 
 // === Fused Batch Operations ===
 
+{$VECTORIZE OFF}
 procedure ScalarArrayLinearF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
 var i: SizeUInt;
 begin
@@ -509,6 +567,7 @@ begin
     aDst[i] := aSrc[i] * aScale + aBias;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayAbsDiffF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -517,6 +576,7 @@ begin
     aDst[i] := System.Abs(aSrc1[i] - aSrc2[i]);
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayReLUF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
@@ -526,6 +586,7 @@ begin
     else aDst[i] := 0;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayNormF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMean, aInvStd: Single);
 var i: SizeUInt;
 begin
@@ -534,6 +595,7 @@ begin
     aDst[i] := (aSrc[i] - aMean) * aInvStd;
 end;
 
+{$VECTORIZE OFF}
 procedure ScalarArrayLinearReLUF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
 var i: SizeUInt; v: Single;
 begin

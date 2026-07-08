@@ -372,6 +372,13 @@ function AsciiIEqual_SSE2(a, b: Pointer; len: SizeUInt): Boolean;
 function BytesIndexOf_SSE2(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
 function Utf8Validate_SSE2(p: Pointer; len: SizeUInt): Boolean;
 
+// === SSE4.2 CRC32C Extensions ===
+function CRC32C_8(crc: UInt32; value: Byte): UInt32;
+function CRC32C_16(crc: UInt32; value: UInt16): UInt32;
+function CRC32C_32(crc: UInt32; value: UInt32): UInt32;
+function CRC32C_64(crc: UInt64; value: UInt64): UInt64;
+function CRC32C_Buffer(const data: Pointer; len: SizeUInt; initial: UInt32): UInt32;
+
 implementation
 
 uses
