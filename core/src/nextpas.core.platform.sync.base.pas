@@ -78,18 +78,21 @@ const
   {$ENDIF}
 
 type
+  {** @desc 互斥锁（平台无关封装，对齐到原生大小） *}
   TPlatformMutex = record
     case Integer of
       0: (FAlign: TPlatformMutexAlign);
       1: (FOpaque: array[0..PTHREAD_MUTEX_SIZE - 1] of Byte);
   end;
 
+  {** @desc 读写锁（平台无关封装，对齐到原生大小） *}
   TPlatformRwLock = record
     case Integer of
       0: (FAlign: TPlatformRwLockAlign);
       1: (FOpaque: array[0..PTHREAD_RWLOCK_SIZE - 1] of Byte);
   end;
 
+  {** @desc 条件变量（平台无关封装，对齐到原生大小） *}
   TPlatformCondVar = record
     case Integer of
       0: (FAlign: TPlatformCondVarAlign);
@@ -97,8 +100,11 @@ type
   end;
 
 const
+  {** @desc 普通互斥锁（不检测死锁） *}
   PLATFORM_MUTEX_NORMAL     = 0;
+  {** @desc 错误检查互斥锁（检测死锁） *}
   PLATFORM_MUTEX_ERRORCHECK = 1;
+  {** @desc 递归互斥锁（同一线程可重复加锁） *}
   PLATFORM_MUTEX_RECURSIVE  = 2;
 
 implementation
