@@ -1358,6 +1358,7 @@ CONSUMER_FACING_UNITS = {
     "nextpas.core.math.easing",
     "nextpas.core.math.random",
     "nextpas.core.math.batch",
+    "nextpas.core.math.batch.simd",
 }
 INTERNAL_UNITS = {
     "nextpas.core.math.impl.scalar",
