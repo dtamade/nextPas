@@ -435,46 +435,32 @@ begin
 end;
 
 { ── Generic array capacity growth ───────────────────────────────────────────── }
+{ Grow AArray capacity if needed. Returns old length (= insertion index).
+  FPC doesn't support generic standalone functions, so we need4 overloads.
+  Each body is identical — GrowCapacity computes geometric growth. }
 
 function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
-{ Grow AArray capacity if needed. Returns old length (= insertion index). }
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<TObject>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
