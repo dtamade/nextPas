@@ -35,8 +35,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   TBoundedStats = record
@@ -48,7 +47,7 @@ type
     LimitBytes: UInt64;
   end;
 
-  TBoundedAllocator = class(TAllocator)
+  TBoundedAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FLimitBytes: UInt64;
@@ -57,18 +56,18 @@ type
     FAllocCount: UInt64;
     FFreeCount: UInt64;
     FRejectedCount: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; ALimitBytes: UInt64);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
     procedure SetLimit(ALimitBytes: UInt64);
     function GetStats: TBoundedStats;
     property LimitBytes: UInt64 read FLimitBytes write SetLimit;
     property ActiveBytes: UInt64 read FActiveBytes;
     property PeakBytes: UInt64 read FPeakBytes;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -95,7 +94,7 @@ begin
   FLimitBytes := ALimitBytes;
 end;
 
-function TBoundedAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TBoundedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LPtr: PByte;
 begin
@@ -115,14 +114,14 @@ begin
   Result := Pointer(LPtr + HEADER_SIZE);
 end;
 
-function TBoundedAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TBoundedAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TBoundedAllocator.DoFreeMem(APtr: Pointer);
+procedure TBoundedAllocator.FreeMem(APtr: Pointer); inline;
 var
   LPtr: PByte;
   LSize: SizeUInt;
@@ -136,18 +135,14 @@ begin
   Inc(FFreeCount);
 end;
 
-function TBoundedAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TBoundedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize, LCopySize: SizeUInt;
   LOldPtr: PByte;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
-  if ASize = 0 then
-  begin
-    DoFreeMem(APtr);
-    Exit(nil);
-  end;
+    Exit(GetMem(ASize));
 
   LOldPtr := PByte(APtr) - HEADER_SIZE;
   LOldSize := PSizeUInt(LOldPtr)^;
@@ -160,12 +155,12 @@ begin
     Exit(nil);
   end;
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TBoundedAllocator.GetStats: TBoundedStats;
@@ -176,6 +171,13 @@ begin
   Result.ActiveBytes := FActiveBytes;
   Result.PeakBytes := FPeakBytes;
   Result.LimitBytes := FLimitBytes;
+end;
+
+function TBoundedAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.
