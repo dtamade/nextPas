@@ -419,6 +419,17 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestPageSize;
+var
+  LSize: UInt64;
+begin
+  LSize := platform_mmap_page_size;
+  Check(LSize >= 4096, 'page size >= 4096');
+  Check(LSize <= 65536, 'page size <= 65536');
+  { Must be power of 2 }
+  Check((LSize and (LSize - 1)) = 0, 'page size is power of 2');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -441,6 +452,7 @@ begin
   T.Test('open non-existent shared memory', @TestShmOpenNonExistent);
   T.Test('anonymous map read/write', @TestAnonymousMapReadWrite);
   T.Test('large file integrity', @TestMapLargeFileIntegrity);
+  T.Test('page size is valid power of 2', @TestPageSize);
   if not T.Run then Halt(1);
   Cleanup;
 end.

@@ -359,6 +359,25 @@ begin
     'read_file must not ignore close failure after full read');
 end;
 
+procedure TestMktempHandle;
+var
+  LPath: array[0..255] of AnsiChar;
+  LHandle: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  FillChar(LPath, SizeOf(LPath), 0);
+  R := platform_fs_mktemp_handle('npfstest_', '.tmp', @LPath[0], 256, LHandle);
+  Check(R = 0, 'mktemp_handle returns success');
+  Check(LPath[0] <> #0, 'path is filled');
+  Check(platform_fs_is_file(@LPath[0]), 'temp file exists');
+  { Write to handle to verify it's valid }
+  Check(platform_file_write(LHandle, @R, SizeOf(R), LWritten) = 0, 'write to handle');
+  Check(LWritten = SizeOf(R), 'wrote correct bytes');
+  Check(platform_file_close(LHandle) = 0, 'close handle');
+  platform_file_unlink(@LPath[0]);
+end;
+
 procedure TestMoveFile;
 var
   H: TPlatformFileHandle;
@@ -492,5 +511,6 @@ begin
   T.Test('read_file non-existent', @TestReadFileNonExistent);
   T.Test('is_executable', @TestIsExecutable);
   T.Test('file I/O contract', @TestFileIoContract);
+  T.Test('mktemp_handle creates file', @TestMktempHandle);
   if not T.Run then Halt(1);
 end.
