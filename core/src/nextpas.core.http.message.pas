@@ -213,6 +213,12 @@ function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 {** @desc Write 200 OK response with no body. Sets status to 200 and writes empty body. }
 procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+{** @desc Write 201 Created response with no body. Sets status to 201 and writes empty body.
+   Use for POST requests that successfully create a resource. }
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
+{** @desc Write 202 Accepted response with no body. Sets status to 202 and writes empty body.
+   Use for async operations that have been accepted for processing. }
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1117,6 +1123,18 @@ procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_OK);
+end;
+
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_CREATED);
+end;
+
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_ACCEPTED);
 end;
 
 { THttpRequestBuilder }

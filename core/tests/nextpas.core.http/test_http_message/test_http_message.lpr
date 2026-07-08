@@ -1896,6 +1896,56 @@ begin
   Check(LRaised, 'raises on nil writer');
 end;
 
+procedure TestCreatedSets201;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseCreated(LW);
+  CheckEqual(Int64(201), Int64(LM.Status), 'status 201');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestCreatedNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseCreated(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestAcceptedSets202;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseAccepted(LW);
+  CheckEqual(Int64(202), Int64(LM.Status), 'status 202');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestAcceptedNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseAccepted(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -2075,6 +2125,14 @@ begin
     @TestOkSets200);
   T.Test('Ok: nil writer raises',
     @TestOkNilWriterRaises);
+  T.Test('Created: sets 201 status',
+    @TestCreatedSets201);
+  T.Test('Created: nil writer raises',
+    @TestCreatedNilWriterRaises);
+  T.Test('Accepted: sets 202 status',
+    @TestAcceptedSets202);
+  T.Test('Accepted: nil writer raises',
+    @TestAcceptedNilWriterRaises);
   T.Test('Html: sets text/html content-type',
     @TestHtmlSetsContentType);
   T.Test('Html: writes status and body',
