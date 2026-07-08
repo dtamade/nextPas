@@ -36,8 +36,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   TFailStats = record
@@ -46,19 +45,24 @@ type
     SuccessfulAllocs: UInt64;
   end;
 
-  TFailAllocator = class(TAllocator)
+  TFailAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FFailAt: UInt64;
     FTotalAttempts: UInt64;
     FFailCount: UInt64;
     FSuccessCount: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
+
+    function Traits: TAllocatorTraits; inline;
     constructor Create(AInner: IAllocator; AFailAt: UInt64 = 0);
     procedure SetFailAt(AFailAt: UInt64);
     function GetStats: TFailStats;
@@ -85,7 +89,7 @@ begin
   FFailAt := AFailAt;
 end;
 
-function TFailAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TFailAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Inc(FTotalAttempts);
   if (FFailAt > 0) and (FTotalAttempts = FFailAt) then
@@ -98,7 +102,7 @@ begin
     Inc(FSuccessCount);
 end;
 
-function TFailAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TFailAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Inc(FTotalAttempts);
   if (FFailAt > 0) and (FTotalAttempts = FFailAt) then
@@ -111,12 +115,12 @@ begin
     Inc(FSuccessCount);
 end;
 
-procedure TFailAllocator.DoFreeMem(APtr: Pointer);
+procedure TFailAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FInner.FreeMem(APtr);
 end;
 
-function TFailAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TFailAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Inc(FTotalAttempts);
   if (FFailAt > 0) and (FTotalAttempts = FFailAt) then
@@ -132,6 +136,13 @@ begin
   Result.TotalAttempts := FTotalAttempts;
   Result.FailuresInjected := FFailCount;
   Result.SuccessfulAllocs := FSuccessCount;
+end;
+
+
+function TFailAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
 end;
 
 end.
