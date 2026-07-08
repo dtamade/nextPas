@@ -198,6 +198,28 @@ procedure CheckArrayEqual(const AExpected, AActual: array of string); overload;
 procedure CheckArrayEqual(const AExpected, AActual: array of string;
   const AMessage: string); overload;
 
+{ ── Array Containment ──────────────────────────────────────────────────────── }
+
+{ Check that AValue exists in AArray. }
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+
+{ Check that AValue does NOT exist in AArray. }
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 
 { Check that an interface reference is nil. }
@@ -1168,6 +1190,94 @@ begin
       '    actual: "' + AActual[LDiffIdx] + '"';
     FailPrepend(AMessage, LMsg);
   end;
+end;
+
+{ ── Array Containment ──────────────────────────────────────────────────────── }
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string);
+begin
+  CheckArrayContains(AArray, AValue, '');
+end;
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+var
+  I: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  { Not found — build list for error message }
+  LList := '';
+  for I := 0 to High(AArray) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AArray[I] + '"';
+  end;
+  FailPrepend(AMessage, 'Expected array to contain "' + AValue +
+    '" but it contains [' + LList + ']');
+end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin
+  CheckArrayContains(AArray, AValue, '');
+end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+var
+  I: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  { Not found — build list for error message }
+  LList := '';
+  for I := 0 to High(AArray) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AArray[I]);
+  end;
+  FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
+    ' but it contains [' + LList + ']');
+end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string);
+begin
+  CheckArrayNotContains(AArray, AValue, '');
+end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      FailPrepend(AMessage, 'Expected array NOT to contain "' + AValue +
+        '" but found at index ' + IntToStr(I));
+end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin
+  CheckArrayNotContains(AArray, AValue, '');
+end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      FailPrepend(AMessage, 'Expected array NOT to contain ' + IntToStr(AValue) +
+        ' but found at index ' + IntToStr(I));
 end;
 
 end.

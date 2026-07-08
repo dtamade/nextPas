@@ -210,6 +210,7 @@ type
     TotalPass: Integer;
     TotalFail: Integer;
     TotalSkip: Integer;
+    TotalDuration: Int64;  { total execution time in milliseconds }
     HasRun   : Boolean;
     LastResults: specialize TArray<TTestRunResult>;
       { Stored by RunAllIterLoop for failure summary in Summary. }
@@ -960,12 +961,14 @@ var
   LIdx: Integer;
   LRunStart: TInstant;
   LRunTimeout: TDuration;
+  LSuiteStart: TInstant;  { suite-level duration tracking }
   LCache: TTestCache;
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
   LCacheHit: Boolean;
 begin
   ApplyCLIArgs;
+  LSuiteStart := TInstant.Now;
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
   LFail := 0;
@@ -1364,6 +1367,7 @@ begin
     calls CleanupTableAllocations after the full run. }
   CleanupTableAllocations;
 
+  AResult.Duration := LSuiteStart.Elapsed.AsMilliseconds;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1904,6 +1908,7 @@ begin
   Result.TotalPass := 0;
   Result.TotalFail := 0;
   Result.TotalSkip := 0;
+  Result.TotalDuration := 0;
   Result.HasRun    := False;
   Result.LastResults := nil;
 end;
@@ -1999,6 +2004,7 @@ begin
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
       Inc(TotalSkip, Suites[I].LastSkip);
+      Inc(TotalDuration, LSuiteResult.Duration);
       if (not LAllPassed) and LFailFast then
       begin
         LOutSink.WriteLn(AnsiYellow(
@@ -2051,6 +2057,7 @@ var
   LRes: TTestResult;
   I, J, LFailIdx, LTotal: Integer;
   LPassRate: Double;
+  LPassRateStr: string;
 begin
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
@@ -2061,17 +2068,27 @@ begin
   if LTotal > 0 then
   begin
     LPassRate := (TotalPass / LTotal) * 100.0;
+    LPassRateStr := FormatFloat('0.0', LPassRate) + '%';
+    { Color-coded pass rate: green ≥90%, yellow ≥70%, red <70% }
+    if LPassRate >= 90.0 then
+      LPassRateStr := AnsiGreen(LPassRateStr, LConfig)
+    else if LPassRate >= 70.0 then
+      LPassRateStr := AnsiYellow(LPassRateStr, LConfig)
+    else
+      LPassRateStr := AnsiRed(LPassRateStr, LConfig);
     LOutSink.WriteLn(
       '  Passed: ' + IntToStr(TotalPass) +
       ', Failed: ' + IntToStr(TotalFail) +
       ', Skipped: ' + IntToStr(TotalSkip) +
-      ' (' + FormatFloat('0.0', LPassRate) + '% pass rate)');
+      ' (' + LPassRateStr + ' pass rate)');
   end
   else
     LOutSink.WriteLn(
       '  Passed: ' + IntToStr(TotalPass) +
       ', Failed: ' + IntToStr(TotalFail) +
       ', Skipped: ' + IntToStr(TotalSkip));
+  { Total duration }
+  LOutSink.WriteLn('  Duration: ' + FormatDuration(TotalDuration));
 
   { Failure summary: list all failed/error tests with details }
   if (TotalFail > 0) and (Length(LastResults) > 0) then

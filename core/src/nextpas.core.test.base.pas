@@ -88,6 +88,7 @@ type
     Failed    : Integer;
     Skipped   : Integer;
     AllPassed : Boolean;
+    Duration  : Int64;   { suite execution time in milliseconds }
     Results   : TTestResults;
     SlowTests : TTestResults;  { top N slowest tests, populated by runner }
     class function Create(const ASuiteName: string): TTestRunResult; static;
@@ -260,6 +261,7 @@ begin
   Result.Failed    := 0;
   Result.Skipped   := 0;
   Result.AllPassed := True;
+  Result.Duration  := 0;
   Result.Results   := nil;
   Result.SlowTests := nil;
 end;

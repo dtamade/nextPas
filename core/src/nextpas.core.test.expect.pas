@@ -81,6 +81,8 @@ type
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
     function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+    { Regex matching: value must match the pattern. }
+    function ToMatch(const APattern: string): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -100,7 +102,8 @@ function ExpectBytes(const AValue: TBytes): IExpectation;
 implementation
 
 uses
-  nextpas.core.math.scalar; { IsNan for Double comparison NaN guards }
+  nextpas.core.math.scalar, { IsNan for Double comparison NaN guards }
+  nextpas.core.regex;       { RegexIsMatch for ToMatch }
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
@@ -198,6 +201,7 @@ type
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
     function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+    function ToMatch(const APattern: string): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -930,6 +934,15 @@ begin
   CheckMatch(LFound,
     BoolToStr(FBoolValue, 'True', 'False') + ' should not be one of [' + LList + ']',
     BoolToStr(FBoolValue, 'True', 'False') + ' is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToMatch(const APattern: string): IExpectation;
+begin
+  RequireKind(ekString, 'ToMatch');
+  CheckMatch(RegexIsMatch(APattern, FStrValue),
+    '"' + FStrValue + '" should not match pattern "' + APattern + '"',
+    '"' + FStrValue + '" does not match pattern "' + APattern + '"');
   Result := Self;
 end;
 

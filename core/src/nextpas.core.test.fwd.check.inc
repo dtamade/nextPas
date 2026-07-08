@@ -306,3 +306,35 @@ begin nextpas.core.test.check.CheckIsNil(AValue, AMessage); end;
 
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string);
 begin nextpas.core.test.check.CheckIsNotNil(AValue, AMessage); end;
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue); end;
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue); end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;

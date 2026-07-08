@@ -244,6 +244,24 @@ procedure CheckArrayEqual(const AExpected, AActual: array of string); overload;
 procedure CheckArrayEqual(const AExpected, AActual: array of string;
   const AMessage: string); overload;
 
+{ ── Array Containment ──────────────────────────────────────────────────────── }
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
