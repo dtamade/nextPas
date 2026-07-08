@@ -93,3 +93,14 @@
 | P21-4 | TPredictionAllocator | 预测分配器，热点分析 | 7 |
 
 **模块总计**: 80 allocator 文件 / ~1206 测试
+
+## Phase 22 — 系统级分配器 ✅
+
+| ID | 类名 | 描述 | 测试数 |
+|----|------|------|--------|
+| P22-1 | THugePageAllocator | 大页分配器，减少 TLB miss | 7 |
+| P22-2 | TMmapAllocator | mmap 匿名映射分配器 | 7 |
+| P22-3 | TThreadSafeAllocator | 线程安全包装器 | 7 |
+| P22-4 | TSamplingAllocator | 采样分配器，1/N 采样记录 | 7 |
+
+**模块总计**: 84 allocator 文件 / ~1234 测试
