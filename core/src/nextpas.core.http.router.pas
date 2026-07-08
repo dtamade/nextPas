@@ -505,11 +505,12 @@ begin
   if LFound then
   begin
     AW.Headers.SetHeader('allow', LAllow);
-    AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
+    HttpWriteErrorResponse(AW, HTTP_STATUS_METHOD_NOT_ALLOWED,
+      'method_not_allowed', 'Method not allowed');
     Exit;
   end;
 
-  AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+  HttpWriteErrorNotFound(AW, 'Route not found');
 end;
 
 procedure THttpRouter.Get(const APattern: string; const AHandler: THttpHandlerFunc);
