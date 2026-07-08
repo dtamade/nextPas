@@ -364,6 +364,12 @@ function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
 {** @desc Write 429 Too Many Requests JSON error response. }
 function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 409 Conflict JSON error response. }
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 422 Unprocessable Entity JSON error response. }
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -940,6 +946,18 @@ function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteErrorTooManyRequests(AW, AMessage);
+end;
+
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorConflict(AW, AMessage);
+end;
+
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnprocessableEntity(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
