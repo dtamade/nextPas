@@ -576,3 +576,8 @@
   - var-decl-runtime: 传递变量的 TypeId 给 HIR builder，用于正确创建 alloca 类型
   - 确保变量 alloca 使用声明时的实际类型宽度（如 Integer→i32）
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第三刀：算术运算使用操作数类型
+  - EmitExprUnaryOp: 使用操作数类型替代硬编码 GetIntType
+  - EmitExprBinOp: 使用操作数类型，优先选择更宽的类型
+  - 确保算术运算结果类型与操作数匹配
+  - smoke + compiler-pass 49/49 全通过
