@@ -36,8 +36,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   CASCADE_MAX_ALLOCATORS = 8;
@@ -50,18 +49,23 @@ type
     AllocatorCount: Integer;
   end;
 
-  TCascadeAllocator = class(TAllocator)
+  TCascadeAllocator = class(TInterfacedObject, IAllocator)
   private
     FAllocators: array[0..CASCADE_MAX_ALLOCATORS-1] of IAllocator;
     FAllocatorCount: Integer;
     FAllocAttempts: UInt64;
     FAllocatorHits: array[0..CASCADE_MAX_ALLOCATORS-1] of UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
+
+    function Traits: TAllocatorTraits; inline;
     constructor Create(const AAllocators: array of IAllocator);
     function GetStats: TCascadeStats;
     property AllocatorCount: Integer read FAllocatorCount;
@@ -88,7 +92,7 @@ begin
   FAllocAttempts := 0;
 end;
 
-function TCascadeAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCascadeAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   I: Integer;
   LPtr: PByte;
@@ -107,14 +111,14 @@ begin
   Result := nil;
 end;
 
-function TCascadeAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCascadeAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TCascadeAllocator.DoFreeMem(APtr: Pointer);
+procedure TCascadeAllocator.FreeMem(APtr: Pointer); inline;
 var
   LPtr: PByte;
   LIdx: Integer;
@@ -127,17 +131,17 @@ begin
     FAllocators[LIdx].FreeMem(LPtr);
 end;
 
-function TCascadeAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCascadeAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldPtr: PByte;
   LIdx: Integer;
   LOldSize, LCopySize: SizeUInt;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
@@ -147,13 +151,13 @@ begin
     Exit(nil);
 
   { Allocate new block via cascade, copy, free old }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   { Copy old data — we don't know exact old size, copy up to new size }
   LCopySize := ASize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
 function TCascadeAllocator.GetStats: TCascadeStats;
@@ -164,6 +168,13 @@ begin
   Result.AllocatorCount := FAllocatorCount;
   for I := 0 to FAllocatorCount - 1 do
     Result.AllocatorHits[I] := FAllocatorHits[I];
+end;
+
+
+function TCascadeAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
 end;
 
 end.
