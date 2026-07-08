@@ -86,6 +86,8 @@ begin
     raise EArgumentError.Create('http server max body size must not be negative');
   if AOptions.ShutdownTimeout < 0 then
     raise EArgumentError.Create('http server shutdown timeout must not be negative');
+  if AOptions.MaxRequestsPerConnection < 0 then
+    raise EArgumentError.Create('http server max requests per connection must not be negative');
 end;
 
 constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;

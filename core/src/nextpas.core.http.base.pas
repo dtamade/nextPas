@@ -87,6 +87,9 @@ type
     { ShutdownTimeout: max milliseconds to wait for in-flight requests during
       graceful shutdown. 0 = wait forever (default for backward compat). }
     ShutdownTimeout: Int64;
+    { MaxRequestsPerConnection: max requests on a single keep-alive connection.
+      After this many requests, the server sends Connection: close. 0 = unlimited. }
+    MaxRequestsPerConnection: Int32;
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
@@ -98,6 +101,7 @@ type
     function WithMaxHeaderSize(const ABytes: Int32): THttpServerOptions;
     function WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
     function WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
+    function WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -727,6 +731,7 @@ begin
   Result.MaxHeaderSize := 8192;
   Result.MaxBodySize := 4194304;
   Result.ShutdownTimeout := 0;
+  Result.MaxRequestsPerConnection := 0;
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
@@ -774,6 +779,12 @@ function THttpServerOptions.WithShutdownTimeout(const AMs: Int64): THttpServerOp
 begin
   Result := Self;
   Result.ShutdownTimeout := AMs;
+end;
+
+function THttpServerOptions.WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxRequestsPerConnection := AMax;
 end;
 
 function THttpServerOptions.EffectiveVersion(

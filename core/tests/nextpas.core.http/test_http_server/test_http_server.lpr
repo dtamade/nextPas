@@ -12200,6 +12200,55 @@ begin
 end;
 {$ENDIF}
 
+procedure TestMaxRequestsPerConnection;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LReq: string;
+  LOptions: THttpServerOptions;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/test', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write('ok', 2);
+  end);
+  LOptions := THttpServerOptions.Default
+    .WithMaxRequestsPerConnection(2);
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOptions, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+
+      { First request — should succeed with keep-alive }
+      LReq := 'GET /test HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: keep-alive'#13#10#13#10;
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp) > 0, 'first request 200');
+      Check(Pos('connection: keep-alive', LowerCase(LResp)) > 0,
+        'first response has keep-alive');
+
+      { Second request — should succeed but with Connection: close }
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp) > 0, 'second request 200');
+      Check(Pos('connection: close', LowerCase(LResp)) > 0,
+        'second response has connection: close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -12705,5 +12754,6 @@ begin
   T.Test('Hijack exception does not write 500 or close handler connection',
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection);
   T.Test('Server options builder', @TestServerOptionsBuilder);
+  T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
   if not T.Run then Halt(1);
 end.
