@@ -532,6 +532,116 @@ begin
   Check(not platform_socket_error_timed_out(0), 'errno 0 is not timed_out');
 end;
 
+procedure TestSocketPair;
+var
+  S1, S2: TPlatformSocket;
+  LRet: Int32;
+const
+  { AF_UNIX = 1 on Linux }
+  TEST_AF_UNIX = 1;
+begin
+  LRet := platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2);
+  Check(LRet = 0, 'socketpair succeeds');
+  Check(SockIsValid(S1), 'socket1 valid');
+  Check(SockIsValid(S2), 'socket2 valid');
+  Check(S1.Value <> S2.Value, 'sockets are different');
+
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
+
+procedure TestSetTcpNoDelay;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_tcp_nodelay(S, True);
+  Check(LRet = 0, 'set_tcp_nodelay(true) succeeds');
+
+  LRet := platform_socket_set_tcp_nodelay(S, False);
+  Check(LRet = 0, 'set_tcp_nodelay(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetReuseAddr;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_reuseaddr(S, True);
+  Check(LRet = 0, 'set_reuseaddr(true) succeeds');
+
+  LRet := platform_socket_set_reuseaddr(S, False);
+  Check(LRet = 0, 'set_reuseaddr(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetKeepAlive;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_keepalive(S, True);
+  Check(LRet = 0, 'set_keepalive(true) succeeds');
+
+  LRet := platform_socket_set_keepalive(S, False);
+  Check(LRet = 0, 'set_keepalive(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetLinger;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_linger(S, True, 5);
+  Check(LRet = 0, 'set_linger(true, 5) succeeds');
+
+  LRet := platform_socket_set_linger(S, False, 0);
+  Check(LRet = 0, 'set_linger(false, 0) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestGetSockOpt;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+  LVal: Int32;
+  LLen: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  { Test getsockopt with SO_REUSEADDR }
+  LLen := SizeOf(Int32);
+  LRet := platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR,
+    @LVal, @LLen);
+  Check(LRet = 0, 'getsockopt SO_REUSEADDR succeeds');
+
+  platform_socket_close(S);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -567,6 +677,14 @@ begin
   { API coverage }
   T.Test('getpeername on connected pair', @TestGetPeerName);
   T.Test('error_timed_out classification', @TestErrorTimedOut);
+
+  { Convenience functions }
+  T.Test('socketpair', @TestSocketPair);
+  T.Test('set_tcp_nodelay', @TestSetTcpNoDelay);
+  T.Test('set_reuseaddr', @TestSetReuseAddr);
+  T.Test('set_keepalive', @TestSetKeepAlive);
+  T.Test('set_linger', @TestSetLinger);
+  T.Test('getsockopt', @TestGetSockOpt);
 
   if not T.Run then Halt(1);
 end.
