@@ -3419,6 +3419,8 @@ var
   VarName, Blob, RealName: string;
   V, Addr, PtrVal: THIRValueId;
   StoreType, ValueType: THIRTypeId;
+  LSymId: LongInt;
+  LTypeId: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
@@ -3444,7 +3446,18 @@ begin
   Addr := FindAlloca(VarName);
   if Addr = 0 then
   begin
-    EnsureAlloca(VarName, GetIntType);
+    { 尝试从语义模型获取变量类型 }
+    LSymId := FSemaModel.FindSymbolByName(VarName);
+    if LSymId > 0 then
+    begin
+      LTypeId := SemanticTypeIdToHirTypeId(FSemaModel.SymbolAt(LSymId - 1).TypeId);
+      if LTypeId <> 0 then
+        EnsureAlloca(VarName, LTypeId)
+      else
+        EnsureAlloca(VarName, GetIntType);
+    end
+    else
+      EnsureAlloca(VarName, GetIntType);
     Addr := FindAlloca(VarName);
   end;
   if (V <> 0) and (Addr <> 0) then
