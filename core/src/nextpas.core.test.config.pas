@@ -938,7 +938,10 @@ begin
   LHash := (LHash xor Ord(AConfig.ShuffleSeed <> 0)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.ShortMode)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.VerboseMode)) * 1099511628211;
-  LHash := (LHash xor Ord(AConfig.FilterPattern <> '')) * 1099511628211;
+  { Hash filter pattern content, not just its existence — different patterns
+    must produce different cache keys to avoid false cache hits }
+  for I := 1 to Length(AConfig.FilterPattern) do
+    LHash := (LHash xor Ord(AConfig.FilterPattern[I])) * 1099511628211;
   Result := IntToHex(LHash, 16);
 end;
 
