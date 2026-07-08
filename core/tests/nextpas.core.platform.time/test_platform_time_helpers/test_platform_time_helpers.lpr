@@ -263,6 +263,42 @@ begin
   CheckEqual(Int64(1000000000000000), Int64(LResult), '1M seconds = 1e15 ns');
 end;
 
+procedure TestBreakdownMidYear;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2024-07-04 15:30:00 UTC = 1720107000 seconds }
+  platform_time_breakdown_utc(UInt64(1720107000) * 1000000000, LResult);
+  CheckEqual(Int64(2024), Int64(LResult.Year), 'mid-year year');
+  CheckEqual(Int64(7), Int64(LResult.Month), 'mid-year month (jul)');
+  CheckEqual(Int64(4), Int64(LResult.Day), 'mid-year day');
+  CheckEqual(Int64(15), Int64(LResult.Hour), 'mid-year hour');
+  CheckEqual(Int64(30), Int64(LResult.Minute), 'mid-year minute');
+  CheckEqual(Int64(0), Int64(LResult.Second), 'mid-year second');
+end;
+
+procedure TestTimespecToNsMaxNsec;
+begin
+  { 0 seconds + 999999999 nanoseconds = just under 1 second }
+  CheckEqual(Int64(999999999), Int64(platform_timespec_to_ns(0, 999999999)), 'max nsec');
+  { 1 second + 999999999 nanoseconds }
+  CheckEqual(Int64(1999999999), Int64(platform_timespec_to_ns(1, 999999999)), '1s + max nsec');
+end;
+
+procedure TestMonotonicVsRealtime;
+var
+  LMono, LReal1, LReal2: UInt64;
+begin
+  { Monotonic and realtime should both be available and positive }
+  LMono := platform_monotonic_ns;
+  LReal1 := platform_realtime_ns;
+  LReal2 := platform_realtime_ns;
+  Check(LMono > 0, 'monotonic > 0');
+  Check(LReal1 > 0, 'realtime > 0');
+  { Realtime should not go backwards either (within this call sequence) }
+  Check(LReal2 >= LReal1, 'realtime does not go backward');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.time.helpers');
   T.Test('QPC to ns basic', @TestQpcToNsBasic);
@@ -289,5 +325,8 @@ begin
   T.Test('Monotonic resolution consistency', @TestMonotonicResolutionConsistency);
   T.Test('QPC to ns at 1Hz', @TestQpcToNsOneHz);
   T.Test('Timespec to ns max seconds', @TestTimespecToNsMaxSeconds);
+  T.Test('Breakdown mid-year (2024-07-04)', @TestBreakdownMidYear);
+  T.Test('Timespec to ns max nsec boundary', @TestTimespecToNsMaxNsec);
+  T.Test('Monotonic vs realtime ordering', @TestMonotonicVsRealtime);
   if not T.Run then Halt(1);
 end.

@@ -671,6 +671,62 @@ begin
   Check(platform_file_sync(H) <> 0, 'sync invalid handle returns error');
 end;
 
+procedure TestWriteLargeDataReadBack;
+var
+  H: TPlatformFileHandle;
+  LPath: AnsiString;
+  LWriteBuf, LReadBuf: array[0..8191] of Byte;
+  I: Integer;
+  LWritten, LReadBytes: PtrUInt;
+begin
+  LPath := '/tmp/nextpas_test_large_write_read';
+  Check(platform_file_open(PAnsiChar(LPath), fomWriteOnly, fcmCreateAlways, H) = 0, 'create');
+  for I := 0 to 8191 do
+    LWriteBuf[I] := Byte(I mod 256);
+  Check(platform_file_write(H, @LWriteBuf[0], 8192, LWritten) = 0, 'write ok');
+  Check(LWritten = 8192, 'wrote 8192 bytes');
+  platform_file_close(H);
+
+  Check(platform_file_open(PAnsiChar(LPath), fomReadOnly, fcmOpenExisting, H) = 0, 'open read');
+  FillChar(LReadBuf, SizeOf(LReadBuf), 0);
+  Check(platform_file_read(H, @LReadBuf[0], 8192, LReadBytes) = 0, 'read ok');
+  Check(LReadBytes = 8192, 'read 8192 bytes');
+  for I := 0 to 8191 do
+    Check(LReadBuf[I] = Byte(I mod 256), 'byte ' + IntToStr(I));
+  platform_file_close(H);
+  platform_file_unlink(PAnsiChar(LPath));
+end;
+
+procedure TestFileLockShared;
+var
+  H1, H2: TPlatformFileHandle;
+  LPath: AnsiString;
+  LWritten: PtrUInt;
+begin
+  LPath := '/tmp/nextpas_test_shared_lock';
+  Check(platform_file_open(PAnsiChar(LPath), fomWriteOnly, fcmCreateAlways, H1) = 0, 'create');
+  Check(platform_file_write(H1, PAnsiChar('x'), 1, LWritten) = 0, 'write');
+  Check(LWritten = 1, 'wrote 1 byte');
+
+  Check(platform_file_open(PAnsiChar(LPath), fomReadOnly, fcmOpenExisting, H2) = 0, 'open2');
+
+  { Two shared locks should coexist }
+  Check(platform_file_lock(H1, False) = 0, 'shared lock 1');
+  Check(platform_file_lock(H2, False) = 0, 'shared lock 2');
+
+  platform_file_unlock(H1);
+  platform_file_unlock(H2);
+  platform_file_close(H1);
+  platform_file_close(H2);
+  platform_file_unlink(PAnsiChar(LPath));
+end;
+
+procedure TestTruncatePathNonExistent;
+begin
+  Check(platform_file_truncate_path('/tmp/nextpas_noexist_trunc', 100) <> 0,
+    'truncate non-existent path returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.files');
   T.Test('open/create/close', @TestOpenCreateClose);
@@ -719,5 +775,8 @@ begin
   T.Test('fstat invalid handle returns error', @TestFstatInvalidHandleReturnsError);
   T.Test('truncate invalid handle returns error', @TestTruncateInvalidHandleReturnsError);
   T.Test('sync invalid handle returns error', @TestSyncInvalidHandleReturnsError);
+  T.Test('write large data read back', @TestWriteLargeDataReadBack);
+  T.Test('file lock shared', @TestFileLockShared);
+  T.Test('truncate_path non-existent', @TestTruncatePathNonExistent);
   if not T.Run then Halt(1);
 end.
