@@ -89,6 +89,7 @@ type
     FConfig: TBenchConfig;
     FFilter: string;
     FFilterLower: string; { PF-08: cached lowercase filter }
+    FFilterIsGlob: Boolean; { 预计算：filter 是否含 glob 字符 }
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
     FResultCount: Integer;
@@ -580,6 +581,7 @@ begin
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
   FFilterLower := LowerCase(FFilter); { PF-08 }
+  FFilterIsGlob := (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0);
 end;
 
 function TBenchRunner.MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
@@ -1095,8 +1097,7 @@ function TBenchRunner.ShouldRun(const AName: string; const ALowerName: string): 
 begin
   if FFilterLower = '' then
     Exit(True);
-  { Glob 模式：filter 包含 * 或 ? 时使用 GlobMatch }
-  if (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0) then
+  if FFilterIsGlob then
     Result := GlobMatch(FFilterLower, ALowerName)
   else
     Result := Pos(FFilterLower, ALowerName) > 0; { PF-08: 子串匹配 }
@@ -1294,6 +1295,7 @@ procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
+  FFilterIsGlob := (Pos('*', AFilter) > 0) or (Pos('?', AFilter) > 0);
 end;
 
 procedure TBenchRunner.EnableObjectPool(AEnabled: Boolean);

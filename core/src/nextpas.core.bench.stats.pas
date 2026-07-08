@@ -323,6 +323,7 @@ var
   LFiltered: TDoubleArray;
   LQ1, LQ3, LFenceLow, LFenceHigh: Double;
   LFilteredCount: Integer;
+  LFilteredMean, LFilteredM2, LDeltaF, LDelta2F: Double;
 begin
   LLen := Length(ASamples);
   if LLen = 0 then
@@ -372,7 +373,7 @@ begin
   Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
   Result.SampleCount := LValidCount; { F-09: report valid sample count }
 
-  { B22: Outlier-aware statistics - compute filtered stats excluding outliers }
+  { B22: Outlier-aware statistics — single-pass filtered mean/variance }
   Result.OutlierMethod := 'Tukey';
   Result.OutlierThreshold := OUTLIER_MULTIPLIER;
   if (Result.OutlierCount > 0) and (LValidCount > Result.OutlierCount) then
@@ -383,6 +384,9 @@ begin
     LFenceHigh := LQ3 + OUTLIER_MULTIPLIER * Result.IQR;
     SetLength(LFiltered, LValidCount);
     LFilteredCount := 0;
+    { Single pass: filter + accumulate sum/sum_sq for mean/stddev }
+    LFilteredMean := 0.0;
+    LFilteredM2 := 0.0;
     for I := 0 to High(ASamples) do
     begin
       if IsDoubleNaN(ASamples[I]) then
@@ -391,14 +395,22 @@ begin
       begin
         LFiltered[LFilteredCount] := ASamples[I];
         Inc(LFilteredCount);
+        { Welford online update on filtered subset }
+        LDeltaF := ASamples[I] - LFilteredMean;
+        LFilteredMean := LFilteredMean + LDeltaF / LFilteredCount;
+        LDelta2F := ASamples[I] - LFilteredMean;
+        LFilteredM2 := LFilteredM2 + LDeltaF * LDelta2F;
       end;
     end;
     SetLength(LFiltered, LFilteredCount);
     if LFilteredCount > 0 then
     begin
       Result.FilteredCount := LFilteredCount;
-      Result.FilteredMean := Mean(LFiltered);
-      Result.FilteredStdDev := ComputeStdDev(LFiltered, Result.FilteredMean);
+      Result.FilteredMean := LFilteredMean;
+      if LFilteredCount > 1 then
+        Result.FilteredStdDev := Sqrt(LFilteredM2 / (LFilteredCount - 1))
+      else
+        Result.FilteredStdDev := 0.0;
       SortDoubleArray(LFiltered);
       Result.FilteredMedian := PercentileSorted(LFiltered, 50);
     end

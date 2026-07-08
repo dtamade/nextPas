@@ -105,9 +105,30 @@ function SplitLines(const AText: string): TStringArray;
 var
   LNormalized: string;
   LLen, I, LOut: Integer;
+  LHasCR: Boolean;
 begin
-  // 单遍扫描：将 CR/LF 统一为 LF
   LLen := Length(AText);
+  if LLen = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
+  { Fast path: check if any CR exists; if not, split directly }
+  LHasCR := False;
+  for I := 1 to LLen do
+    if AText[I] = #13 then
+    begin
+      LHasCR := True;
+      Break;
+    end;
+  if not LHasCR then
+  begin
+    Result := StringsSplit(AText, #10);
+    Exit;
+  end;
+
+  // CR/LF normalization pass
   SetLength(LNormalized, LLen);
   LOut := 0;
   I := 1;
@@ -134,16 +155,20 @@ begin
   Result := StringsSplit(LNormalized, #10);
 end;
 
-{ Helper: Trim and check empty }
+{ Helper: Trim and check empty — avoid allocation for common case }
 
 function IsEmptyOrComment(const ALine: string): Boolean;
 var
-  LTrimmed: string;
+  LLen, LStart: Integer;
 begin
-  LTrimmed := Trim(ALine);
-  if LTrimmed = '' then
-    Exit(True);
-  Result := LTrimmed[1] = '#';
+  LLen := Length(ALine);
+  { Skip leading whitespace }
+  LStart := 1;
+  while (LStart <= LLen) and (ALine[LStart] in [' ', #9, #10, #13]) do
+    Inc(LStart);
+  if LStart > LLen then
+    Exit(True);  { empty or all-whitespace }
+  Result := ALine[LStart] = '#';
 end;
 
 function ParseLines(const AOutput: string;

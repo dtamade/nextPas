@@ -341,12 +341,25 @@ end;
 
 function TBenchReportGenerator.EscapeJSON(const AStr: string): string;
 var
-  I: Integer;
+  I, LLen: Integer;
   LBuilder: TStringBuilder;
+  LNeedsEscape: Boolean;
 begin
-  LBuilder.Init(Length(AStr) + 16);
+  LLen := Length(AStr);
+  { Fast path: check if any character needs escaping }
+  LNeedsEscape := False;
+  for I := 1 to LLen do
+    if AStr[I] in [#92, '"', #0, #8, #9, #10, #12, #13] then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+  if not LNeedsEscape then
+    Exit(AStr);
+
+  LBuilder.Init(LLen + 16);
   try
-    for I := 1 to Length(AStr) do
+    for I := 1 to LLen do
     begin
       case AStr[I] of
         '\': LBuilder.AppendStr('\\');
@@ -369,12 +382,25 @@ end;
 
 function TBenchReportGenerator.EscapeHTML(const AStr: string): string;
 var
-  I: Integer;
+  I, LLen: Integer;
   LBuilder: TStringBuilder;
+  LNeedsEscape: Boolean;
 begin
-  LBuilder.Init(Length(AStr) + 16);
+  LLen := Length(AStr);
+  { Fast path: check if any character needs escaping }
+  LNeedsEscape := False;
+  for I := 1 to LLen do
+    if AStr[I] in ['&', '<', '>', '"', #39] then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+  if not LNeedsEscape then
+    Exit(AStr);
+
+  LBuilder.Init(LLen + 16);
   try
-    for I := 1 to Length(AStr) do
+    for I := 1 to LLen do
     begin
       case AStr[I] of
         '&': LBuilder.AppendStr('&amp;');
