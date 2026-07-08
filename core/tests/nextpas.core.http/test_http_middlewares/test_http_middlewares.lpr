@@ -16,6 +16,7 @@ uses
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.timeout,
   nextpas.core.http.middleware.bodylimit,
+  nextpas.core.http.middleware.contenttype,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -768,6 +769,172 @@ begin
   Check(not LHandlerCalled, 'handler not called when rejected');
 end;
 
+{ ContentTypeMiddleware tests }
+
+procedure TestContentTypeAcceptedPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'application/json');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for accepted type');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestContentTypeRejectedReturns415;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'handler not called for rejected type');
+  CheckEqual(Int64(415), Int64(LWObj.Status), 'status 415');
+end;
+
+procedure TestContentTypeIgnoresParams;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'application/json; charset=utf-8');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when params match');
+end;
+
+procedure TestContentTypeGetSkipsCheck;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for GET even with wrong type');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestContentTypeEmptyAllowsAny;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware([])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'anything/at-all');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when accepted list empty');
+end;
+
+procedure TestContentTypeMissingPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when no content-type');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -801,5 +968,12 @@ begin
   T.Test('BodyLimit: no content-length passes through', @TestBodyLimitNoContentLengthPasses);
   T.Test('BodyLimit: zero content-length passes through', @TestBodyLimitZeroContentLengthPasses);
   T.Test('BodyLimit: handler not called on reject', @TestBodyLimitRejectsHandlerNotCalled);
+  { ContentType }
+  T.Test('ContentType: accepted type passes through', @TestContentTypeAcceptedPasses);
+  T.Test('ContentType: rejected type returns 415', @TestContentTypeRejectedReturns415);
+  T.Test('ContentType: ignores charset parameters', @TestContentTypeIgnoresParams);
+  T.Test('ContentType: GET request skips check', @TestContentTypeGetSkipsCheck);
+  T.Test('ContentType: empty accepted allows any', @TestContentTypeEmptyAllowsAny);
+  T.Test('ContentType: missing content-type passes', @TestContentTypeMissingPasses);
   if not T.Run then Halt(1);
 end.

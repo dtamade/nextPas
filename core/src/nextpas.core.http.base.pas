@@ -128,6 +128,7 @@ const
   HTTP_STATUS_LENGTH_REQUIRED       = THttpStatus(411);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
   HTTP_STATUS_URI_TOO_LONG          = THttpStatus(414);
+  HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = THttpStatus(415);
   HTTP_STATUS_RANGE_NOT_SATISFIABLE = THttpStatus(416);
   HTTP_STATUS_EXPECTATION_FAILED    = THttpStatus(417);
   HTTP_STATUS_UNPROCESSABLE_ENTITY  = THttpStatus(422);
@@ -236,6 +237,7 @@ begin
     410: Result := 'Gone';
     413: Result := 'Payload Too Large';
     414: Result := 'URI Too Long';
+    415: Result := 'Unsupported Media Type';
     416: Result := 'Range Not Satisfiable';
     417: Result := 'Expectation Failed';
     422: Result := 'Unprocessable Entity';
