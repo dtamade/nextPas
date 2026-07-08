@@ -178,6 +178,21 @@ function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
    AStatus should be a 3xx code (301/302/303/307/308). }
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
+{** @desc 301 Moved Permanently redirect. }
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 302 Found redirect (temporary, method may change to GET). }
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 303 See Other redirect (always changes method to GET). }
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 307 Temporary Redirect (preserves method and body). }
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 308 Permanent Redirect (preserves method and body). }
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
 {** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}.
    Sets content-type application/json. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
@@ -1003,6 +1018,36 @@ begin
   LBody := '<html><body>Redirecting to <a href="' + ALocation + '">' +
     ALocation + '</a></body></html>';
   HttpWriteResponseString(AW, AStatus, 'text/html', LBody);
+end;
+
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_MOVED_PERMANENTLY, ALocation);
+end;
+
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_FOUND, ALocation);
+end;
+
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_SEE_OTHER, ALocation);
+end;
+
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_TEMPORARY_REDIRECT, ALocation);
+end;
+
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_PERMANENT_REDIRECT, ALocation);
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;

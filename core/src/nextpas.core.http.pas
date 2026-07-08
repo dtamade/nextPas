@@ -354,6 +354,21 @@ function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inlin
 {** @desc Write a redirect response with Location header and HTML body. }
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string); inline;
+{** @desc 301 Moved Permanently redirect. }
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 302 Found redirect (temporary, method may change to GET). }
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 303 See Other redirect (always changes method to GET). }
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 307 Temporary Redirect (preserves method and body). }
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 308 Permanent Redirect (preserves method and body). }
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
 {** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt; inline;
@@ -933,6 +948,36 @@ procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
 begin
   nextpas.core.http.message.HttpRedirect(AW, AStatus, ALocation);
+end;
+
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectMovedPermanently(AW, ALocation);
+end;
+
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectFound(AW, ALocation);
+end;
+
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectSeeOther(AW, ALocation);
+end;
+
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectTemporaryRedirect(AW, ALocation);
+end;
+
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectPermanentRedirect(AW, ALocation);
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
