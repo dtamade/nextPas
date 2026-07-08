@@ -25,7 +25,8 @@ uses
   nextpas.core.lockfree.selector.impl,
   nextpas.core.lockfree.priority_queue,
   nextpas.core.lockfree.bag,
-  nextpas.core.lockfree.multimap;
+  nextpas.core.lockfree.multimap,
+  nextpas.core.lockfree.bloom;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -139,6 +140,16 @@ type
     @see TLockFreeMultiMapImpl 详细文档和示例
   }
   generic TLockFreeMultiMap<TKey, TValue> = class(specialize TLockFreeMultiMapImpl<TKey, TValue>)
+  end;
+
+  {** @desc 并发布隆过滤器
+    @details 基于多个哈希函数的概率数据结构。
+      支持 Add/Contains/Clear/Count。
+      适用于快速成员检查、去重等场景。
+      注意：可能存在假阳性（false positive），但不会有假阴性（false negative）。
+    @see TConcurrentBloomFilterImpl 详细文档和示例
+  }
+  generic TConcurrentBloomFilter<T> = class(specialize TConcurrentBloomFilterImpl<T>)
   end;
 
 implementation
