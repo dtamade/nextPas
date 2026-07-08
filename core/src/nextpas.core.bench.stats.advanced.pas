@@ -284,10 +284,7 @@ function TAdvancedStats.Variance: Double;
 var
   I: Integer;
   LMean: Double;
-  LSum: Double;
-  LCompensation: Double;
-  LDiff: Double;
-  LTemp: Double;
+  LSumSq, LCompensation, LNext, LTemp: Double;
 begin
   if Length(FData) < 2 then Exit(0);
 
@@ -296,20 +293,17 @@ begin
   if IsNaN(LMean) or IsInfinite(LMean) then
     Exit(0);
 
-  { F-09: Kahan 补偿求和，减少大数组浮点累积误差 }
-  LSum := 0;
-  LCompensation := 0;
+  { Kahan 补偿求和 for Sqr(x - mean) }
+  LSumSq := 0.0;
+  LCompensation := 0.0;
   for I := 0 to High(FData) do
   begin
-    LDiff := Sqr(FData[I] - LMean);
-    LTemp := LSum + LDiff;
-    if Abs(LSum) >= Abs(LDiff) then
-      LCompensation := LCompensation + ((LSum - LTemp) + LDiff)
-    else
-      LCompensation := LCompensation + ((LDiff - LTemp) + LSum);
-    LSum := LTemp;
+    LNext := Sqr(FData[I] - LMean) - LCompensation;
+    LTemp := LSumSq + LNext;
+    LCompensation := (LTemp - LSumSq) - LNext;
+    LSumSq := LTemp;
   end;
-  Result := (LSum + LCompensation) / (Length(FData) - 1);
+  Result := LSumSq / (Length(FData) - 1);
 end;
 
 function TAdvancedStats.Skewness: Double;

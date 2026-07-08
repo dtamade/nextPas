@@ -287,7 +287,7 @@ var
   LSorted: TDoubleArray;
   LLen: Integer;
   LValidCount: Integer; { F-09: count of non-NaN samples }
-  LMean, LVariance: Double;
+  LMean, LVariance, LStdErr: Double;
   LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
   I: Integer;
@@ -390,15 +390,16 @@ begin
     Result.FilteredCount := LValidCount;
   end;
 
-  // 95% 置信区间（使用 t 分布临界值）
+  // 95%/99% 置信区间（使用 t 分布临界值）
   if LValidCount > 1 then
   begin
     LT95 := TInv0975(LValidCount - 1);
     LT99 := TInv0995(LValidCount - 1);
-    Result.Confidence95Low := LMean - LT95 * Result.StdDev / Sqrt(LValidCount);
-    Result.Confidence95High := LMean + LT95 * Result.StdDev / Sqrt(LValidCount);
-    Result.Confidence99Low := LMean - LT99 * Result.StdDev / Sqrt(LValidCount);
-    Result.Confidence99High := LMean + LT99 * Result.StdDev / Sqrt(LValidCount);
+    LStdErr := Result.StdDev / Sqrt(LValidCount);
+    Result.Confidence95Low := LMean - LT95 * LStdErr;
+    Result.Confidence95High := LMean + LT95 * LStdErr;
+    Result.Confidence99Low := LMean - LT99 * LStdErr;
+    Result.Confidence99High := LMean + LT99 * LStdErr;
   end
   else
   begin
@@ -1094,7 +1095,7 @@ begin
   if ASigma > 0 then
     LSigma := ASigma
   else
-    LSigma := StdDev(AData);
+    LSigma := ComputeStdDev(AData, LSampleMean);
 
   { 防止 σ = 0 }
   if LSigma < 1e-10 then
