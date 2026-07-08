@@ -35,7 +35,8 @@ uses
   nextpas.core.lockfree.countdown,
   nextpas.core.lockfree.barrier,
   nextpas.core.lockfree.ratelimit,
-  nextpas.core.lockfree.condvar;
+  nextpas.core.lockfree.condvar,
+  nextpas.core.lockfree.exchanger;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -232,6 +233,15 @@ type
   }
   TConditionVariable = nextpas.core.lockfree.condvar.TConditionVariable;
   TConditionVariableWaitResult = nextpas.core.lockfree.condvar.TConditionVariableWaitResult;
+
+  {** @desc 并发交换器
+    @details 两个线程交换值的同步点。
+      支持 Exchange/ExchangeTimeout/Close。
+    @see TExchangerImpl 详细文档和示例
+  }
+  generic TExchanger<T> = class(specialize TExchangerImpl<T>)
+  end;
+  TLockFreeExchangeResult = nextpas.core.lockfree.exchanger.TLockFreeExchangeResult;
 
 implementation
 

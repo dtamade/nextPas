@@ -54,8 +54,9 @@
 | `lockfree.barrier` | 并发循环屏障 | ✅ 完成 | 5 |
 | `lockfree.ratelimit` | 并发令牌桶限流器 | ✅ 完成 | 4 |
 | `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
+| `lockfree.exchanger` | 并发交换器 | ✅ 完成 | 3 |
 
-**规模**: 35 文件, ~16500 行, 473 测试
+**规模**: 36 文件, ~17000 行, 476 测试
 
 ---
 
@@ -85,7 +86,8 @@
 | test_lockfree_barrier | 5 | ✅ 全绿 |
 | test_lockfree_ratelimit | 4 | ✅ 全绿 |
 | test_lockfree_condvar | 5 | ✅ 全绿 |
-| **总计** | **473** | **✅ 全绿** |
+| test_lockfree_exchanger | 3 | ✅ 全绿 |
+| **总计** | **476** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

@@ -955,6 +955,29 @@ type
 
 ---
 
+## Exchanger (nextpas.core.lockfree.exchanger)
+
+```pascal
+type
+  TLockFreeExchangeResult = (exExchanged, exClosed, exTimeout);
+
+  generic TExchangerImpl<T> = class
+    constructor Create;
+    function Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
+    function ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 两个线程交换值的同步点
+- 线程 A Exchange(A) 阻塞等待，线程 B Exchange(B) 阻塞等待
+- 两方到达后交换值，各自拿到对方的值
+- 适用场景：双线程管道、一对一通信
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
