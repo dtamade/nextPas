@@ -126,9 +126,11 @@ uses
   {$IFDEF SIMD_X86_AVAILABLE}
   nextpas.core.simd.linalg.gemm.sse2.blocked,
   {$ENDIF}
-  nextpas.core.simd.cpuinfo;
+  nextpas.core.simd.cpuinfo,
+  nextpas.core.simd.memutils;
 
 // Strided dot product for column vectors in row-major matrices
+// Optimized with prefetch hints
 function ReduceDotStridedF32(aSrc1: PSingle; aStride1: NativeInt;
   aSrc2: PSingle; aStride2: NativeInt; aCount: SizeUInt): Single;
 var
@@ -136,15 +138,30 @@ var
   LSum: Single;
   LP1, LP2: PSingle;
 begin
+  if aCount = 0 then Exit(0);
+
   LSum := 0;
   LP1 := aSrc1;
   LP2 := aSrc2;
+
+  // Prefetch first cache lines
+  Prefetch(LP1);
+  Prefetch(LP2);
+
   for i := 0 to aCount - 1 do
   begin
+    // Prefetch every 16 iterations
+    if (i and 15 = 0) and (i + 16 < aCount) then
+    begin
+      Prefetch(PSingle(PByte(LP1) + aStride1 * 16));
+      Prefetch(PSingle(PByte(LP2) + aStride2 * 16));
+    end;
+
     LSum := LSum + LP1^ * LP2^;
     LP1 := PSingle(PByte(LP1) + aStride1);
     LP2 := PSingle(PByte(LP2) + aStride2);
   end;
+
   Result := LSum;
 end;
 
@@ -252,38 +269,58 @@ procedure GemvF32(aAlpha: Single; const aA: TSimdF32Matrix;
   const aX: TSimdF32Array; aBeta: Single; var aY: TSimdF32Array);
 var
   r: SizeUInt;
-  LRow: TSimdF32Array;
   LDot: Single;
+  LRowPtr: PSingle;
 begin
   if aA.Rows = 0 then Exit;
-  if (aAlpha = 1.0) and (aBeta = 0.0) then
+
+  for r := 0 to aA.Rows - 1 do
   begin
-    for r := 0 to aA.Rows - 1 do
-    begin
-      LRow := aA.Row(r);
-      aY.Data[r] := LRow.Dot(aX);
-    end;
-  end
-  else
-  begin
-    for r := 0 to aA.Rows - 1 do
-    begin
-      LRow := aA.Row(r);
-      LDot := LRow.Dot(aX);
+    LRowPtr := @aA.Data[r * aA.RowStride];
+    if aX.IsContiguous then
+      LDot := ReduceDotF32(LRowPtr, aX.Data, aA.Cols)
+    else
+      LDot := ReduceDotStridedF32(LRowPtr, SizeOf(Single),
+        aX.Data, aX.Stride * SizeOf(Single), aA.Cols);
+
+    if (aAlpha = 1.0) and (aBeta = 0.0) then
+      aY.Data[r] := LDot
+    else if aBeta = 0.0 then
+      aY.Data[r] := aAlpha * LDot
+    else
       aY.Data[r] := aAlpha * LDot + aBeta * aY.Data[r];
-    end;
   end;
 end;
 
 procedure GemmF32(aAlpha: Single; const aA, aB: TSimdF32Matrix;
   aBeta: Single; var aC: TSimdF32Matrix);
 var
-  r, c: SizeUInt;
+  r, c, k: SizeUInt;
   LRowA: TSimdF32Array;
   LDot: Single;
   LBt: TSimdF32Matrix;
+  LSum: Single;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) or (aB.Cols = 0) then Exit;
+
+  // Fast path: small matrices (≤4x4) with direct computation
+  if (aA.Rows <= 4) and (aA.Cols <= 4) and (aB.Cols <= 4) then
+  begin
+    for r := 0 to aA.Rows - 1 do
+      for c := 0 to aB.Cols - 1 do
+      begin
+        LSum := 0;
+        for k := 0 to aA.Cols - 1 do
+          LSum := LSum + aA.Get(r, k) * aB.Get(k, c);
+        if (aAlpha = 1.0) and (aBeta = 0.0) then
+          aC.Put(r, c, LSum)
+        else if aBeta = 0.0 then
+          aC.Put(r, c, aAlpha * LSum)
+        else
+          aC.Put(r, c, aAlpha * LSum + aBeta * aC.Get(r, c));
+      end;
+    Exit;
+  end;
 
   // Fast path: large matrices with simple alpha=1, beta=0 and contiguous layout
   if (aA.Rows >= GEMM_MR) and (aB.Cols >= GEMM_NR) and (aA.Cols >= 8) and

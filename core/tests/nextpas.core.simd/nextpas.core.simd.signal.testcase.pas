@@ -59,6 +59,13 @@ type
     procedure Test_MelFilterBank_EdgeCases;
     procedure Test_MFCC_Basic;
     procedure Test_MFCC_LongerSignal;
+    // Phase 11: Boundary cases
+    procedure Test_FFT_PowerOfTwo;
+    procedure Test_FFT_NonPowerOfTwo;
+    procedure Test_STFT_NoOverlap;
+    procedure Test_Convolve1D_LargeKernel;
+    procedure Test_ResampleLinear_SameRate;
+    procedure Test_MelFilterBank_SingleFilter;
   end;
 
 implementation
@@ -773,5 +780,144 @@ begin
 
   SimdFree(LOutput);
 end;
+
+{ Phase 11: Boundary cases }
+
+procedure TTestCase_SimdSignal.Test_FFT_PowerOfTwo;
+var
+  LSrc: array[0..15] of Single;
+  LDst: array[0..15] of TSimdComplexF32;
+  i: Integer;
+begin
+  // Generate simple signal
+  for i := 0 to 15 do
+    LSrc[i] := System.Sin(2 * 3.14159 * 2 * i / 16);
+
+  // Compute FFT
+  RealFftF32(@LSrc[0], @LDst[0], 16);
+
+  // Verify DC component is finite
+  CheckTrue(not IsNan(LDst[0].Re), 'FFT DC real not NaN');
+  CheckTrue(not IsNan(LDst[0].Im), 'FFT DC imag not NaN');
+end;
+
+procedure TTestCase_SimdSignal.Test_FFT_NonPowerOfTwo;
+var
+  LSrc: array[0..9] of Single;
+  LDst: array[0..9] of TSimdComplexF32;
+  i: Integer;
+begin
+  // Generate simple signal
+  for i := 0 to 9 do
+    LSrc[i] := System.Sin(2 * 3.14159 * 2 * i / 10);
+
+  // Compute FFT (non-power of two should fallback to DFT)
+  RealFftF32(@LSrc[0], @LDst[0], 10);
+
+  // Verify output is finite
+  for i := 0 to 9 do
+  begin
+    CheckTrue(not IsNan(LDst[i].Re), 'FFT[' + IntToStr(i) + '] real not NaN');
+    CheckTrue(not IsNan(LDst[i].Im), 'FFT[' + IntToStr(i) + '] imag not NaN');
+  end;
+end;
+
+procedure TTestCase_SimdSignal.Test_STFT_NoOverlap;
+var
+  LSignal: array[0..63] of Single;
+  LWindow: array[0..15] of Single;
+  LOutput: PSimdComplexF32;
+  LRows, LCols: SizeUInt;
+  i: Integer;
+begin
+  // Generate test signal
+  for i := 0 to 63 do
+    LSignal[i] := System.Sin(2 * 3.14159 * 4 * i / 64);
+
+  // Create Hann window
+  HannWindowF32(@LWindow[0], 16);
+
+  // Allocate output buffer
+  LOutput := PSimdComplexF32(SimdAlloc(10 * 9 * SizeOf(TSimdComplexF32)));
+
+  // Compute STFT with hop=16 (no overlap)
+  STFTF32(@LSignal[0], 64, 16, 16, @LWindow[0], LOutput, @LRows, @LCols);
+
+  // Verify dimensions
+  CheckTrue(LRows > 0, 'STFT no overlap rows > 0');
+  CheckTrue(LCols = 9, 'STFT no overlap cols = 9 (16/2+1)');
+
+  SimdFree(LOutput);
+end;
+
+procedure TTestCase_SimdSignal.Test_Convolve1D_LargeKernel;
+var
+  LSignal: array[0..31] of Single;
+  LKernel: array[0..15] of Single;
+  LDst: array[0..47] of Single;
+  i: Integer;
+begin
+  // Generate simple signal
+  for i := 0 to 31 do
+    LSignal[i] := 1.0;
+
+  // Generate simple kernel (moving average)
+  for i := 0 to 15 do
+    LKernel[i] := 1.0 / 16.0;
+
+  // Compute convolution
+  Convolve1DF32(@LSignal[0], 32, @LKernel[0], 16, @LDst[0]);
+
+  // Verify output is finite
+  for i := 0 to 47 do
+    CheckTrue(not IsNan(LDst[i]), 'Convolve[' + IntToStr(i) + '] not NaN');
+end;
+
+procedure TTestCase_SimdSignal.Test_ResampleLinear_SameRate;
+var
+  LSrc: array[0..9] of Single;
+  LDst: array[0..9] of Single;
+  i: Integer;
+begin
+  // Generate simple signal
+  for i := 0 to 9 do
+    LSrc[i] := Single(i);
+
+  // Resample at same rate (same count)
+  ResampleLinearF32(@LSrc[0], 10, @LDst[0], 10);
+
+  // Verify values are preserved
+  for i := 0 to 9 do
+    CheckNear(LSrc[i], LDst[i], EPS, 'Resample[' + IntToStr(i) + ']');
+end;
+
+procedure TTestCase_SimdSignal.Test_MelFilterBank_SingleFilter;
+var
+  LBank: PSingle;
+  LFilterCount, LFftSize: SizeUInt;
+  LSampleRate: Single;
+  i: SizeUInt;
+  LSum: Single;
+begin
+  // Test with single filter
+  LFilterCount := 1;
+  LFftSize := 64;
+  LSampleRate := 16000.0;
+
+  LBank := PSingle(SimdAlloc(LFilterCount * (LFftSize div 2 + 1) * SizeOf(Single)));
+  try
+    FillChar(LBank^, LFilterCount * (LFftSize div 2 + 1) * SizeOf(Single), 0);
+    MelFilterBankF32(LBank, LFilterCount, LFftSize, LSampleRate, 0, LSampleRate / 2);
+
+    // The single filter should have some non-zero values
+    LSum := 0;
+    for i := 0 to LFftSize div 2 do
+      LSum := LSum + LBank[i];
+    CheckTrue(LSum > 0, 'Single filter should have non-zero energy');
+  finally
+    SimdFree(LBank);
+  end;
+end;
+
 
 end.
