@@ -29,6 +29,7 @@ uses
   nextpas.core.http.middleware.bodycache,
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.compression,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -40,6 +41,7 @@ type
   private
     FStatus: THttpStatus;
     FBody: string;
+    FBodyBytes: TBytes;
     FHeaders: IHttpHeaders;
   public
     constructor Create;
@@ -50,6 +52,7 @@ type
     procedure Flush;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
+    property BodyBytes: TBytes read FBodyBytes;
   end;
 
   TMockRequest = class(TInterfacedObject, IHttpRequest)
@@ -63,6 +66,7 @@ type
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
     procedure SetBodyReader(const ABody: IReader);
+    procedure SetHeader(const AName, AValue: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
@@ -84,6 +88,7 @@ begin
   inherited Create;
   FStatus := 0;
   FBody := '';
+  FBodyBytes := nil;
   FHeaders := NewHttpHeaders;
 end;
 
@@ -105,11 +110,17 @@ end;
 function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LStr: string;
+  LOldLen: SizeUInt;
 begin
   SetLength(LStr, ACount);
   if ACount > 0 then
     Move(ABuf, LStr[1], ACount);
   FBody := FBody + LStr;
+  { Also capture raw bytes for binary data verification }
+  LOldLen := SizeUInt(Length(FBodyBytes));
+  SetLength(FBodyBytes, LOldLen + ACount);
+  if ACount > 0 then
+    Move(ABuf, FBodyBytes[LOldLen], ACount);
   Result := ACount;
 end;
 
@@ -143,6 +154,11 @@ end;
 procedure TMockRequest.SetBodyReader(const ABody: IReader);
 begin
   FBodyReader := ABody;
+end;
+
+procedure TMockRequest.SetHeader(const AName, AValue: string);
+begin
+  FHeaders.SetHeader(AName, AValue);
 end;
 
 function TMockRequest.GetMethod: THttpMethod;
@@ -2556,6 +2572,197 @@ begin
   Check(Pos('payload_too_large', LWObj.Body) > 0, 'has error code');
 end;
 
+{ Compression middleware tests }
+
+procedure TestCompressionGzipCompressesLargeBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  { Build a large compressible body (> 1024 bytes) }
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+  CheckEqual('gzip', LWObj.FHeaders.Get('content-encoding'), 'has gzip encoding');
+  Check(Length(LWObj.BodyBytes) < Length(LBigBody), 'compressed body smaller');
+end;
+
+procedure TestCompressionSkipsSmallBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('small')^, 5);
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding for small body');
+end;
+
+procedure TestCompressionSkipsWithoutAcceptEncoding;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  { No Accept-Encoding header }
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding without Accept-Encoding');
+  CheckEqual(Length(LBigBody), Length(LWObj.BodyBytes), 'body uncompressed');
+end;
+
+procedure TestCompressionSkipsNonCompressibleType;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'binary data here!!! ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'image/png');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/image.png');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding for image/png');
+end;
+
+procedure TestCompressionDeflateSupported;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/html');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/page');
+  LReq.SetHeader('accept-encoding', 'deflate');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('deflate', LWObj.FHeaders.Get('content-encoding'), 'deflate encoding');
+  Check(Length(LWObj.BodyBytes) < Length(LBigBody), 'deflate body smaller');
+end;
+
+procedure TestContentTypeReturnsJson415;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api/data');
+  LReq.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(415), Int64(LWObj.Status), 'returns 415');
+  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
+  Check(Pos('unsupported_media_type', LWObj.Body) > 0, 'has error code');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2672,6 +2879,14 @@ begin
   T.Test('ErrorResponse: JSON escaping', @TestErrorResponseJsonEscaping);
   { BodyLimit JSON }
   T.Test('BodyLimit: returns JSON error', @TestBodyLimitReturnsJson);
+  { Compression }
+  T.Test('Compression: gzip compresses large body', @TestCompressionGzipCompressesLargeBody);
+  T.Test('Compression: skips small body', @TestCompressionSkipsSmallBody);
+  T.Test('Compression: skips without Accept-Encoding', @TestCompressionSkipsWithoutAcceptEncoding);
+  T.Test('Compression: skips non-compressible type', @TestCompressionSkipsNonCompressibleType);
+  T.Test('Compression: deflate supported', @TestCompressionDeflateSupported);
+  { ContentType JSON }
+  T.Test('ContentType: returns JSON 415', @TestContentTypeReturnsJson415);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

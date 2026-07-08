@@ -243,6 +243,9 @@ function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
 {** @desc Write 413 Payload Too Large JSON error response. }
 function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -1174,6 +1177,12 @@ function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_PAYLOAD_TOO_LARGE, 'payload_too_large', AMessage);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, 'unsupported_media_type', AMessage);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
