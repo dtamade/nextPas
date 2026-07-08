@@ -145,3 +145,14 @@
 | P26-3 | mem.error | 错误码、异常类型、对齐验证 | 8 |
 
 **模块总计**: 92 allocator 文件 / ~1332 测试
+
+## Phase 27 — 深化测试（压力/边界/并发） ✅
+
+| ID | 测试套件 | 描述 | 测试数 |
+|----|----------|------|--------|
+| P27-1 | test_arena_stress | Arena 压力：1000 次分配/重置循环、碎片化 | 7 |
+| P27-2 | test_pool_edge | Pool 边界：满池/空池/交错释放/增长 | 7 |
+| P27-3 | test_threadsafe_concurrent | 并发：4 线程 × 1000 轮 × 32 分配 | 4 |
+| P27-4 | test_oom_edge | OOM 边界：Bounded/Counting/Fail 极限条件 | 7 |
+
+**模块总计**: 92 allocator 文件 / ~1357 测试
