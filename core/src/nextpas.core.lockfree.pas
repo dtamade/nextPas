@@ -30,7 +30,8 @@ uses
   nextpas.core.lockfree.lru,
   nextpas.core.lockfree.counter,
   nextpas.core.lockfree.semaphore,
-  nextpas.core.lockfree.mutex;
+  nextpas.core.lockfree.mutex,
+  nextpas.core.lockfree.rwlock;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -188,6 +189,14 @@ type
     @see TConcurrentMutex 详细文档和示例
   }
   TConcurrentMutex = nextpas.core.lockfree.mutex.TConcurrentMutex;
+
+  {** @desc 并发读写锁
+    @details 基于原子操作的读写锁实现。
+      支持 ReadLock/WriteLock/Unlock/TryReadLock/TryWriteLock。
+      适用于读多写少的场景。
+    @see TConcurrentRwLock 详细文档和示例
+  }
+  TConcurrentRwLock = nextpas.core.lockfree.rwlock.TConcurrentRwLock;
 
 implementation
 
