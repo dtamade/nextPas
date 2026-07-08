@@ -44,8 +44,9 @@
 | `lockfree.priority_queue` | 并发优先队列 | ✅ 完成 | 8 |
 | `lockfree.bag` | 并发 Bag（允许重复） | ✅ 完成 | 7 |
 | `lockfree.multimap` | 并发 MultiMap（一键多值） | ✅ 完成 | 6 |
+| `lockfree.bloom` | 并发布隆过滤器 | ✅ 完成 | 7 |
 
-**规模**: 26 文件, ~14000 行, 278 测试
+**规模**: 27 文件, ~14500 行, 285 测试
 
 ---
 
@@ -65,7 +66,8 @@
 | test_lockfree_priority_queue | 8 | ✅ 全绿 |
 | test_lockfree_bag | 7 | ✅ 全绿 |
 | test_lockfree_multimap | 6 | ✅ 全绿 |
-| **总计** | **278** | **✅ 全绿** |
+| test_lockfree_bloom | 7 | ✅ 全绿 |
+| **总计** | **285** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

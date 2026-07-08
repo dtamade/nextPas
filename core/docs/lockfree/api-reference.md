@@ -719,6 +719,62 @@ end;
 
 ---
 
+## Bloom Filter (nextpas.core.lockfree.bloom)
+
+```pascal
+type
+  generic TConcurrentBloomFilter<T> = class
+    constructor Create(const AExpectedItems: PtrUInt = 10000; const AFalsePositiveRate: Double = 0.01);
+    function Add(const AValue: T): Boolean;
+    function Contains(const AValue: T): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function BitCount: PtrUInt;
+    function HashCount: Integer;
+  end;
+```
+
+**特点**:
+- 基于多个哈希函数的概率数据结构
+- 可能存在假阳性（false positive），但不会有假阴性（false negative）
+- 空间效率高，适合大规模数据去重
+- 适用于缓存、去重、快速成员检查等场景
+
+**使用示例**:
+
+```pascal
+var
+  LBloom: specialize TConcurrentBloomFilter<Integer>;
+begin
+  // 创建布隆过滤器：期望 10000 个元素，1% 假阳性率
+  LBloom := specialize TConcurrentBloomFilter<Integer>.Create(10000, 0.01);
+  try
+    // 添加元素
+    LBloom.Add(42);
+    LBloom.Add(100);
+
+    // 检查元素是否存在
+    if LBloom.Contains(42) then
+      WriteLn('42 might exist');  // 可能存在（假阳性可能）
+
+    // 检查不存在的元素
+    if not LBloom.Contains(999) then
+      WriteLn('999 definitely does not exist');  // 一定不存在
+  finally
+    LBloom.Free;
+  end;
+end;
+```
+
+**参数说明**:
+- `AExpectedItems`: 期望存储的元素数量
+- `AFalsePositiveRate`: 期望的假阳性率（0-1 之间）
+- 位数组大小和哈希函数数量会自动计算
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
