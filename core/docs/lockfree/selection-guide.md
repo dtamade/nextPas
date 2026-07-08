@@ -2,6 +2,8 @@
 
 > 更新: 2026-07-06
 
+[English](selection-guide.en.md)
+
 ## 快速决策树
 
 ```
