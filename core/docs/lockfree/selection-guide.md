@@ -155,6 +155,13 @@
     - 比 CyclicBarrier 更灵活
     - 适用于分阶段并行计算、动态任务分组
 
+需要乐观读锁（读多写少）？
+└── 使用 TStampedLock
+    - TryOptimisticRead 无锁读取
+    - Validate 验证一致性
+    - 读多写少场景比 RwLock 更高效
+    - 适用于缓存、配置读取等场景
+
 需要 Channel（生产者-消费者通信）？
 ├── 单向通信
 │   ├── 单生产者单消费者 (1P1C)

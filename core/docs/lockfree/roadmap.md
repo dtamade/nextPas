@@ -56,8 +56,9 @@
 | `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
 | `lockfree.exchanger` | 并发交换器 | ✅ 完成 | 3 |
 | `lockfree.phaser` | 并发相位同步器 | ✅ 完成 | 8 |
+| `lockfree.stampedlock` | 并发戳锁 | ✅ 完成 | 7 |
 
-**规模**: 37 文件, ~17500 行, 484 测试
+**规模**: 38 文件, ~18000 行, 491 测试
 
 ---
 
@@ -89,7 +90,8 @@
 | test_lockfree_condvar | 5 | ✅ 全绿 |
 | test_lockfree_exchanger | 3 | ✅ 全绿 |
 | test_lockfree_phaser | 8 | ✅ 全绿 |
-| **总计** | **484** | **✅ 全绿** |
+| test_lockfree_stampedlock | 7 | ✅ 全绿 |
+| **总计** | **491** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

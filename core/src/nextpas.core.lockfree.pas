@@ -37,7 +37,8 @@ uses
   nextpas.core.lockfree.ratelimit,
   nextpas.core.lockfree.condvar,
   nextpas.core.lockfree.exchanger,
-  nextpas.core.lockfree.phaser;
+  nextpas.core.lockfree.phaser,
+  nextpas.core.lockfree.stampedlock;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -251,6 +252,13 @@ type
   }
   TPhaser = nextpas.core.lockfree.phaser.TPhaser;
   TLockFreePhaserArriveResult = nextpas.core.lockfree.phaser.TLockFreePhaserArriveResult;
+
+  {** @desc 并发戳锁
+    @details 乐观读锁 + 悲观读写锁，读多写少场景比 RwLock 更高效。
+      支持 ReadLock/WriteLock/TryOptimisticRead/Validate。
+    @see TStampedLock 详细文档和示例
+  }
+  TStampedLock = nextpas.core.lockfree.stampedlock.TStampedLock;
 
 implementation
 

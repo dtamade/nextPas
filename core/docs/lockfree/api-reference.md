@@ -1011,6 +1011,37 @@ type
 
 ---
 
+## StampedLock (nextpas.core.lockfree.stampedlock)
+
+```pascal
+type
+  TStampedLock = class
+    constructor Create;
+    function ReadLock: Int64;
+    function TryReadLock: Int64;
+    function TryReadLockTimeout(const ATimeoutNs: Int64): Int64;
+    function WriteLock: Int64;
+    function TryWriteLock: Int64;
+    function TryWriteLockTimeout(const ATimeoutNs: Int64): Int64;
+    function TryOptimisticRead: Int64;
+    function Validate(const AStamp: Int64): Boolean;
+    procedure UnlockRead(const AStamp: Int64);
+    procedure UnlockWrite(const AStamp: Int64);
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+**特点**:
+- 乐观读锁 + 悲观读写锁
+- TryOptimisticRead 无锁读取，Validate 验证一致性
+- 读多写少场景比 RwLock 更高效
+- 单 Int64 状态编码（高32位=版本，低32位=锁状态）
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
