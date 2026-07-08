@@ -54,7 +54,7 @@
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
 | **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | ✅ 2026-07-08 |
-| **D1-D8** | Phase 2：后自举时代 — 类型精确 + 调试信息 + 测试扩展 + 多平台（详见下方）                                                     | C8 | ⏳ |
+| **D1-D8** | Phase 2：后自举时代 — 类型精确 + 调试信息 + 测试扩展 + 多平台（详见下方）                                                     | C8 | 6/8 完成 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 **Phase 2 关键路径** = D1 → D3（调试信息）；D1 → D6 → D8（类型精确 → 性能基准）。
@@ -725,7 +725,7 @@
 | **D2** | 外部函数参数类型解析：`ProcessExternalFuncDecl` 使用 ParamSignature 推断参数类型（`p`/`s`/`r`/`f`/`c`→ptr, `b`→bool, `i`→i64） | C8 | ✅ 2026-07-06 |
 | **D3** | DWARF 调试信息：DICompileUnit + DISubprogram + DILocation，Source Position Pipeline（ByteOffset→Line/Col）+ HIR 源码位置注入 + LLVM 元数据发射，`ADebugInfo` 参数驱动 | D1 | ✅ 2026-07-06 |
 | **D4** | compiler-pass 测试扩展：新增 exception_handling + dynamic_array/set/enum 测试，目标 60+ | C8 | ✅ 2026-07-06 (51/51) |
-| **D5** | compiler-fail 测试扩展：补充类型不匹配、未声明符号、重载歧义等错误路径测试，目标 30+ | C8 | ⏳ |
+| **D5** | compiler-fail 测试扩展：补充 unclosed_block、missing_then/do/of/begin 等语法错误路径测试 | C8 | ✅ 2026-07-06 (16/16) |
 | **D6** | LLVM 后端类型审计收尾：审计 124 处 GetIntType，确认剩余均为 blob fallback / emitter 硬编码 / GEP 索引，无可改进点 | D1 | ✅ 2026-07-06 (审计完成) |
 | **D7** | 多平台 CI：macOS (aarch64) + FreeBSD (x86_64) 交叉编译验证 | D1 | ⏳ |
 | **D8** | 性能基准：编译器自编译时间、LLVM IR 质量（指令数/基本块数）、运行时性能对比 FPC | D4 | ⏳ |
