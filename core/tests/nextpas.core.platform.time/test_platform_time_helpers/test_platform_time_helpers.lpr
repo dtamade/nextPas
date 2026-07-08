@@ -7,6 +7,7 @@ uses
   nextpas.core.fs.util,
   nextpas.core.text.conv,
   nextpas.core.test,
+  nextpas.core.platform.time.base,
   nextpas.core.platform.time;
 
 var
@@ -106,6 +107,73 @@ begin
   Check(LResolution >= 1, 'monotonic resolution must be at least 1ns');
 end;
 
+procedure TestBreakdownEpochZero;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  platform_time_breakdown_utc(0, LResult);
+  CheckEqual(Int64(1970), Int64(LResult.Year), 'epoch year');
+  CheckEqual(Int64(1), Int64(LResult.Month), 'epoch month');
+  CheckEqual(Int64(1), Int64(LResult.Day), 'epoch day');
+  CheckEqual(Int64(0), Int64(LResult.Hour), 'epoch hour');
+  CheckEqual(Int64(0), Int64(LResult.Minute), 'epoch minute');
+  CheckEqual(Int64(0), Int64(LResult.Second), 'epoch second');
+  CheckEqual(Int64(0), Int64(LResult.Millisecond), 'epoch ms');
+end;
+
+procedure TestBreakdownKnownTimestamp;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2024-01-15 12:30:45.123 UTC = 1705321845.123 * 1e9 }
+  platform_time_breakdown_utc(UInt64(1705321845) * 1000000000 + 123000000, LResult);
+  CheckEqual(Int64(2024), Int64(LResult.Year), '2024 year');
+  CheckEqual(Int64(1), Int64(LResult.Month), 'jan');
+  CheckEqual(Int64(15), Int64(LResult.Day), '15th');
+  CheckEqual(Int64(12), Int64(LResult.Hour), '12h');
+  CheckEqual(Int64(30), Int64(LResult.Minute), '30m');
+  CheckEqual(Int64(45), Int64(LResult.Second), '45s');
+  CheckEqual(Int64(123), Int64(LResult.Millisecond), '123ms');
+end;
+
+procedure TestBreakdownLeapYear;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2024-02-29 00:00:00 UTC = 1709164800 * 1e9 }
+  platform_time_breakdown_utc(UInt64(1709164800) * 1000000000, LResult);
+  CheckEqual(Int64(2024), Int64(LResult.Year), 'leap year');
+  CheckEqual(Int64(2), Int64(LResult.Month), 'feb');
+  CheckEqual(Int64(29), Int64(LResult.Day), 'leap day');
+end;
+
+procedure TestBreakdownEndOfDay;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 1970-01-01 23:59:59.999 UTC = 86399.999 * 1e9 }
+  platform_time_breakdown_utc(UInt64(86399) * 1000000000 + 999000000, LResult);
+  CheckEqual(Int64(1970), Int64(LResult.Year), 'year');
+  CheckEqual(Int64(1), Int64(LResult.Month), 'month');
+  CheckEqual(Int64(1), Int64(LResult.Day), 'day');
+  CheckEqual(Int64(23), Int64(LResult.Hour), '23h');
+  CheckEqual(Int64(59), Int64(LResult.Minute), '59m');
+  CheckEqual(Int64(59), Int64(LResult.Second), '59s');
+  CheckEqual(Int64(999), Int64(LResult.Millisecond), '999ms');
+end;
+
+procedure TestUtcOffsetReasonable;
+var
+  LOffset: Int32;
+begin
+  LOffset := platform_utc_offset_seconds;
+  { UTC offset must be between -12h and +14h }
+  Check(LOffset >= -43200, 'offset >= -12h');
+  Check(LOffset <= 50400, 'offset <= +14h');
+  { Must be aligned to 15-minute boundaries (900s) for all real timezones }
+  Check(LOffset mod 900 = 0, 'offset aligned to 15min');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.time.helpers');
   T.Test('QPC to ns basic', @TestQpcToNsBasic);
@@ -119,5 +187,10 @@ begin
   T.Test('Monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
   T.Test('Realtime clock is available', @TestRealtimeClockAvailable);
   T.Test('Monotonic resolution is available', @TestMonotonicResolutionAvailable);
+  T.Test('Breakdown epoch zero', @TestBreakdownEpochZero);
+  T.Test('Breakdown known timestamp (2024-01-15)', @TestBreakdownKnownTimestamp);
+  T.Test('Breakdown leap year (2024-02-29)', @TestBreakdownLeapYear);
+  T.Test('Breakdown end of day (23:59:59.999)', @TestBreakdownEndOfDay);
+  T.Test('UTC offset reasonable', @TestUtcOffsetReasonable);
   if not T.Run then Halt(1);
 end.

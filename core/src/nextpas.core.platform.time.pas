@@ -132,6 +132,8 @@ const
   DAYS_PER_100Y = 36524;
   DAYS_PER_4Y = 1461;
   MONTH_DAYS: array[0..11] of Int32 = (31,28,31,30,31,30,31,31,30,31,30,31);
+  { March-start month order for the civil calendar algorithm: Mar=0..Feb=11 }
+  MONTH_ORDER: array[0..11] of Int32 = (2,3,4,5,6,7,8,9,10,11,0,1);
 var
   LSec, LDay, LRem: Int64;
   LYear, LMonth, LLeap: Int32;
@@ -175,15 +177,15 @@ begin
   LMonth := 0;
   while LMonth < 11 do
   begin
-    if (LMonth = 1) and (LLeap = 1) then
+    if (MONTH_ORDER[LMonth] = 1) and (LLeap = 1) then
     begin
       if LDay < 29 then Break;
       Dec(LDay, 29);
     end
     else
     begin
-      if LDay < MONTH_DAYS[LMonth] then Break;
-      Dec(LDay, MONTH_DAYS[LMonth]);
+      if LDay < MONTH_DAYS[MONTH_ORDER[LMonth]] then Break;
+      Dec(LDay, MONTH_DAYS[MONTH_ORDER[LMonth]]);
     end;
     Inc(LMonth);
   end;
@@ -191,7 +193,7 @@ begin
   if LMonth >= 10 then
     Inc(LYear);
   AResult.Year := LYear;
-  AResult.Month := ((LMonth + 2) mod 12) + 1;
+  AResult.Month := MONTH_ORDER[LMonth] + 1;
   AResult.Day := Int32(LDay) + 1;
 end;
 

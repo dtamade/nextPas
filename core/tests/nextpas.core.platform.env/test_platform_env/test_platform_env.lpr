@@ -270,6 +270,24 @@ begin
   Check(True, 'names_case_sensitive returned ok');
 end;
 
+procedure TestEnvGetStr;
+var
+  LResult: AnsiString;
+begin
+  platform_env_set('NEXTPAS_TEST_GETSTR', 'hello_str');
+  LResult := platform_env_get_str('NEXTPAS_TEST_GETSTR');
+  Check(LResult = 'hello_str', 'get_str returns value');
+  platform_env_unset('NEXTPAS_TEST_GETSTR');
+end;
+
+procedure TestEnvGetStrNonExistent;
+var
+  LResult: AnsiString;
+begin
+  LResult := platform_env_get_str('NEXTPAS_NONEXISTENT_XYZ_999');
+  Check(LResult = '', 'get_str non-existent returns empty');
+end;
+
 procedure TestWindowsExistsClearsLastErrorSourceContract;
 var
   LSource, LWindowsBranch, LBody: string;
@@ -343,6 +361,8 @@ begin
   T.Test('enumerate finds set var', @TestEnumerateFindsSetVar);
   T.Test('enumerate stop early', @TestEnumerateStopEarly);
   T.Test('names case sensitive', @TestCaseSensitive);
+  T.Test('get_str returns value', @TestEnvGetStr);
+  T.Test('get_str non-existent returns empty', @TestEnvGetStrNonExistent);
   T.Test('windows exists clears last-error source contract',
     @TestWindowsExistsClearsLastErrorSourceContract);
   T.Test('windows get clears last-error source contract',
