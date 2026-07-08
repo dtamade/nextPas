@@ -867,9 +867,9 @@ begin
     EmitStore(GetPtrType, Instr.ResultId, PtrSlot);
   if LenSlot <> 0 then
   begin
-    LenValue := EmitConstIntOfType(ALength, GetIntType);
+    LenValue := EmitConstIntOfType(ALength, GetIntTypeByWidth(32, True));
     if LenValue <> 0 then
-      EmitStore(GetIntType, LenValue, LenSlot);
+      EmitStore(GetIntTypeByWidth(32, True), LenValue, LenSlot);
   end;
 end;
 
@@ -888,7 +888,7 @@ begin
   if (NullPtr = 0) or (ZeroLen = 0) then
     Exit;
   EmitStore(GetPtrType, NullPtr, PtrSlot);
-  EmitStore(GetIntType, ZeroLen, LenSlot);
+  EmitStore(GetIntTypeByWidth(32, True), ZeroLen, LenSlot);
 end;
 
 function THIRBuilder.NormalizeArrayIndexValue(const AArrayName: string;
