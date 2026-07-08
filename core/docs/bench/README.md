@@ -16,7 +16,6 @@ nextpas.core.bench.baseline    ← 基线管理（JSON 序列化/回归检测）
 nextpas.core.bench.memtrack    ← 内存追踪（MemoryManager hook + 原子计数）
 nextpas.core.bench.parallel    ← 并行基准（TThread + 聚合结果）
 nextpas.core.bench.run         ← 线程安全执行器（原子结果收集，EBR 就绪）
-nextpas.core.bench.resultpool  ← 缓冲区池（预分配，原子借用）
 nextpas.core.bench.runner      ← 执行器（校准/采样/统计流水线）
 nextpas.core.bench.report      ← 报告生成（Console/JSON/TSV/HTML/SVG）
 nextpas.core.bench.xlang       ← 跨语言解析（Go/Rust/FPC 输出）
@@ -86,7 +85,7 @@ LResults := TBenchSuite.Create('MySuite')
 | `AddBaselines(ArrayOfBaselines)` | 批量添加基线 |
 | `LoadBaseline(Path)` | 从文件加载基线 |
 | `SetFilter(Pattern)` | 名称过滤 |
-| `SetTimeout(Ms)` | 整体超时（超时后跳过剩余基准） |
+| `SetTimeout(Duration)` | 整体超时（TDuration，超时后跳过剩余基准） |
 
 ### IBenchContext 接口
 

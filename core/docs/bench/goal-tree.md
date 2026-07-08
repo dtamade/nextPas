@@ -140,7 +140,7 @@ B19  缓冲区池 (2026-07-07)                                   ✅
   B19.1  TBenchResultPool 预分配缓冲区                        ✅
   B19.2  原子索引无锁借用 (AtomicFetchAdd32)                  ✅
   B19.3  池满回退到直接分配                                    ✅
-  B19.4  test_bench_resultpool 7 tests (0 leaks)              ✅
+  B19.4  test_bench_resultpool 7 tests (0 leaks)              ❌ removed (dead code cleanup)
 
 B20  跨语言性能对照 (2026-07-08)                              ✅
   B20.1  Go 基准测试 (Fibonacci/Sort/String/Memory/Map)       ✅
@@ -193,7 +193,7 @@ B23  进度回调 (2026-07-08)                                    ✅
 | test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
 | test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
 | test_bench_run | 13 | ✅ 0 leaks | TBenchRun 线程安全执行器 |
-| test_bench_resultpool | 7 | ✅ 0 leaks | TBenchResultPool 缓冲区池 |
+| test_bench_resultpool | — | ❌ removed | 已删除（dead code cleanup） |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
 | test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
 | **合计** | **~381** | **23/23 通过** | |
