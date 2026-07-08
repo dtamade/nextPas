@@ -53,7 +53,7 @@
 | **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜ (C7-prep opt可配置已完成) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
-| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🏁 里程碑          |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🔄 LLVM 后端 26/27 core 模块通过，FPC 后端因泛型语法不兼容需切 LLVM |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -540,3 +540,11 @@
   - 死代码清理：删除 `compiler/query/`（4 文件 952 行）
   - 增量编译验证通过：全量/增量构建产出二进制一致
   - 49/49 compiler-pass + 23/23 MIR + 11 groups smoke 全绿
+- 2026-07-06 C7 完成：多目标 IR smoke 验证。创建 linux-aarch64 目标配置
+  （triple=aarch64-unknown-linux-gnu, datalayout=e-m:e-i8:8:32...），
+  LLVM IR 正确生成，opt -O2 通过。x86_64 native + aarch64 cross 双目标验证。
+- 2026-07-06 C8 进展：LLVM 后端批量编译 core/ 模块，26/27 通过。
+  FPC 后端因泛型语法（`<T>`）不兼容失败，LLVM 后端完全支持。
+  通过模块：base, errors, text, mem, log, bytes, collections, sync, async,
+  json, yaml, toml, fs, net, crypto, config, tui.app, http, websocket,
+  tls, platform, bench, math, id, encoding, simd。自举路径明确为 LLVM 后端。
