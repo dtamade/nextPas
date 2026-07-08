@@ -61,6 +61,8 @@
 | Phase 8: 基准测试修正 | ✅ 100% | SIMD vs Scalar 对比框架 |
 | Phase 9: 宽向量优化 | ✅ 100% | AVX-512 批量操作 |
 | Phase 10: 内存操作优化 | ✅ 100% | SimdMemCopy/Fill/Compare |
+| SSE2 GEMM 微内核 | ✅ 100% | 4×4 F32 + 2×2 F64 运行时分派 |
+| 信号处理扩展 | ✅ 100% | Kaiser 窗 + 滤波器 + 信号生成 |
 
 ### 进行中 (⚠️)
 

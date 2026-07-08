@@ -41,11 +41,18 @@ procedure Convolve1DF32(aSignal: PSingle; aSignalCount: SizeUInt;
 procedure HannWindowF32(aDst: PSingle; aCount: SizeUInt);
 procedure HammingWindowF32(aDst: PSingle; aCount: SizeUInt);
 procedure BlackmanWindowF32(aDst: PSingle; aCount: SizeUInt);
+procedure KaiserWindowF32(aDst: PSingle; aCount: SizeUInt; aAlpha: Single = 3.0);
 
 
 procedure RealFftF32(aInput: PSingle; aOutput: PSimdComplexF32; aCount: SizeUInt);
 procedure FirFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
   aCoeffs: PSingle; aCoeffCount: SizeUInt; aDst: PSingle);
+procedure HighPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aCutoff: Single; aDst: PSingle);
+procedure BandPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+procedure BandStopFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
 procedure ResampleLinearF32(aSrc: PSingle; aSrcCount: SizeUInt;
   aDst: PSingle; aDstCount: SizeUInt);
 procedure CrossCorrelationF32(aX, aY: PSingle; aCount: SizeUInt;
@@ -59,6 +66,12 @@ procedure PowerSpectrumF32(aComplex: PSimdComplexF32; aCount: SizeUInt; aDst: PS
 procedure MagnitudeSpectrumF32(aComplex: PSimdComplexF32; aCount: SizeUInt; aDst: PSingle);
 procedure PowerToDecibelF32(aSrc, aDst: PSingle; aCount: SizeUInt; aRefPower: Single = 1.0);
 procedure PreEmphasisF32(aSrc, aDst: PSingle; aCount: SizeUInt; aCoeff: Single = 0.97);
+
+// Signal generation
+procedure GenerateSineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+procedure GenerateCosineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
 
 implementation
 
@@ -853,6 +866,194 @@ begin
   SimdFree(LTmp);
   aDst[0] := 0.0;
   aDst[aCount - 1] := 0.0;
+end;
+
+// Kaiser window: w[n] = I0(alpha * sqrt(1 - ((2n/(N-1)) - 1)^2)) / I0(alpha)
+// Uses simplified Bessel function approximation
+procedure KaiserWindowF32(aDst: PSingle; aCount: SizeUInt; aAlpha: Single = 3.0);
+var
+  i, k: SizeUInt;
+  LScale, Lx, Ly: Single;
+  LI0alpha, LTmp, LTerm: Single;
+begin
+  if aCount = 0 then Exit;
+  if aCount = 1 then begin aDst[0] := 1.0; Exit; end;
+
+  // Compute I0(alpha) using series approximation
+  LTmp := 1.0;
+  LTerm := 1.0;
+  for k := 1 to 20 do
+  begin
+    LTerm := LTerm * (aAlpha / 2.0) * (aAlpha / 2.0) / (k * k);
+    LTmp := LTmp + LTerm;
+  end;
+  LI0alpha := LTmp;
+
+  LScale := 2.0 / (aCount - 1);
+  for i := 0 to aCount - 1 do
+  begin
+    Lx := LScale * i - 1.0; // [-1, 1]
+    Ly := aAlpha * System.Sqrt(1.0 - Lx * Lx);
+    // Compute I0(Ly) using series approximation
+    LTmp := 1.0;
+    LTerm := 1.0;
+    for k := 1 to 20 do
+    begin
+      LTerm := LTerm * (Ly / 2.0) * (Ly / 2.0) / (k * k);
+      LTmp := LTmp + LTerm;
+    end;
+    aDst[i] := LTmp / LI0alpha;
+  end;
+end;
+
+// High-pass filter using FFT: zero out low frequencies
+procedure HighPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LCutoffBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  // Use full complex FFT for proper filtering
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer (imaginary = 0)
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  // Forward FFT
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  // Calculate cutoff bin (normalized frequency)
+  LCutoffBin := SizeUInt(Trunc(aCutoff * aSignalCount));
+
+  // Zero out frequencies below cutoff
+  for k := 0 to LCutoffBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  // Inverse FFT
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  // Copy real part to output
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Band-pass filter: keep only frequencies between low and high cutoff
+procedure BandPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LLowBin, LHighBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  LLowBin := SizeUInt(Trunc(aLowCutoff * aSignalCount));
+  LHighBin := SizeUInt(Trunc(aHighCutoff * aSignalCount));
+
+  // Zero out frequencies outside band
+  for k := 0 to LLowBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+  for k := LHighBin to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Band-stop (notch) filter: zero out frequencies between low and high cutoff
+procedure BandStopFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LLowBin, LHighBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  LLowBin := SizeUInt(Trunc(aLowCutoff * aSignalCount));
+  LHighBin := SizeUInt(Trunc(aHighCutoff * aSignalCount));
+
+  // Zero out frequencies inside band
+  for k := LLowBin to LHighBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Generate sine wave: x[n] = amplitude * sin(2*pi*freq*n/sampleRate + phase)
+procedure GenerateSineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+var
+  i: SizeUInt;
+  LPhaseInc: Single;
+begin
+  LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aAmplitude * System.Sin(LPhaseInc * i + aPhase);
+end;
+
+// Generate cosine wave: x[n] = amplitude * cos(2*pi*freq*n/sampleRate + phase)
+procedure GenerateCosineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+var
+  i: SizeUInt;
+  LPhaseInc: Single;
+begin
+  LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aAmplitude * System.Cos(LPhaseInc * i + aPhase);
 end;
 
 
