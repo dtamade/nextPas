@@ -28,7 +28,8 @@ uses
   nextpas.core.lockfree.multimap,
   nextpas.core.lockfree.bloom,
   nextpas.core.lockfree.lru,
-  nextpas.core.lockfree.counter;
+  nextpas.core.lockfree.counter,
+  nextpas.core.lockfree.semaphore;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -170,6 +171,14 @@ type
     @see TConcurrentCounter 详细文档和示例
   }
   TConcurrentCounter = nextpas.core.lockfree.counter.TConcurrentCounter;
+
+  {** @desc 并发信号量
+    @details 基于原子操作的信号量实现。
+      支持 Acquire/Release/TryAcquire/AcquireTimeout。
+      适用于资源池、限流等场景。
+    @see TConcurrentSemaphore 详细文档和示例
+  }
+  TConcurrentSemaphore = nextpas.core.lockfree.semaphore.TConcurrentSemaphore;
 
 implementation
 
