@@ -125,7 +125,8 @@ type
 
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
-  out ASessionContext: ITcpServerSessionContext);
+  out ASessionContext: ITcpServerSessionContext;
+  const AShutdownTimeoutNs: Int64 = 0);
 function TryCreateTcpServerSession(const AHandler: ITcpServerHandler;
   const AConn: ITcpStream; const AContext: ITcpServerSessionContext;
   out ASession: ITcpServerSession): Boolean;
@@ -159,8 +160,9 @@ type
     FPool: IThreadPool;
     FMutex: IMutex;
     FShuttingDown: Boolean;
+    FShutdownTimeoutNs: Int64;
   public
-    constructor Create;
+    constructor Create(const AShutdownTimeoutNs: Int64 = 0);
     procedure Shutdown;
     function Submit(const AWork: ITcpServerWork;
       const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
@@ -623,12 +625,13 @@ begin
   FWork := nil;
 end;
 
-constructor TTcpServerDefaultWorkerHandoff.Create;
+constructor TTcpServerDefaultWorkerHandoff.Create(const AShutdownTimeoutNs: Int64);
 begin
   inherited Create;
   FPool := ThreadPool(0);
   FMutex := nextpas.core.sync.mutex.TMutex.Create;
   FShuttingDown := False;
+  FShutdownTimeoutNs := AShutdownTimeoutNs;
 end;
 
 procedure TTcpServerDefaultWorkerHandoff.Shutdown;
@@ -648,7 +651,10 @@ begin
   if LPool <> nil then
   begin
     LPool.Shutdown;
-    LPool.WaitAll;
+    if FShutdownTimeoutNs > 0 then
+      LPool.WaitAllTimeout(FShutdownTimeoutNs)
+    else
+      LPool.WaitAll;
   end;
 end;
 
@@ -700,9 +706,10 @@ end;
 
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
-  out ASessionContext: ITcpServerSessionContext);
+  out ASessionContext: ITcpServerSessionContext;
+  const AShutdownTimeoutNs: Int64 = 0);
 begin
-  AWorkerHandoff := TTcpServerDefaultWorkerHandoff.Create;
+  AWorkerHandoff := TTcpServerDefaultWorkerHandoff.Create(AShutdownTimeoutNs);
   ASessionContext := TTcpServerDefaultSessionContext.Create(AWorkerHandoff);
 end;
 

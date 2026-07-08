@@ -932,6 +932,48 @@ begin
   CheckEqual('items', GHandlerCalled, 'nested group route matched');
 end;
 
+procedure TestServeHTTPTrailingSlashNormalized;
+var
+  LRouter: IHttpRouter;
+  LW: TMockResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LRouter := NewRouter;
+  LRouter.Get('/api/users', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'users';
+  end);
+
+  { Trailing slash should be normalized away }
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/users/'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('users', GHandlerCalled, '/api/users/ matches /api/users');
+
+  { Multiple trailing slashes should also be normalized }
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/users//'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('users', GHandlerCalled, '/api/users// matches /api/users');
+
+  { Root path stays as / }
+  LRouter := NewRouter;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'root';
+  end);
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('root', GHandlerCalled, '/ matches root');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.router');
   T.Test('Static route match', @TestStaticRouteMatch);
@@ -965,5 +1007,6 @@ begin
   T.Test('Group: prefix applied', @TestRouterGroupPrefix);
   T.Test('Group: middleware applied', @TestRouterGroupWithMiddleware);
   T.Test('Group: nested prefix', @TestRouterGroupNested);
+  T.Test('ServeHTTP trailing slash normalized', @TestServeHTTPTrailingSlashNormalized);
   if not T.Run then Halt(1);
 end.

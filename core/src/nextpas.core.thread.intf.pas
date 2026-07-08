@@ -21,6 +21,9 @@ type
     procedure SignalWorkers(const ACount: Integer);
     procedure Shutdown;
     procedure WaitAll;
+    { WaitAllTimeout: wait up to ATimeoutNs nanoseconds for all tasks to complete.
+      Returns True if all tasks finished, False if timed out. }
+    function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
     function GetWorkerCount: Integer;
     property WorkerCount: Integer read GetWorkerCount;
   end;

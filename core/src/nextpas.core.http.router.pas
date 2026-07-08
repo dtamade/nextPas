@@ -84,6 +84,21 @@ begin
   end;
 end;
 
+{ Normalize request path: strip trailing slash, collapse duplicate slashes.
+  "/" stays as "/".  "/api/users//" → "/api/users". }
+function NormalizeRequestPath(const APath: string): string;
+var
+  LLen: SizeInt;
+begin
+  if APath = '' then
+    Exit('/');
+  LLen := Length(APath);
+  { Strip trailing slash (but keep root "/" as-is) }
+  while (LLen > 1) and (APath[LLen] = '/') do
+    Dec(LLen);
+  Result := Copy(APath, 1, LLen);
+end;
+
 { THttpRouter }
 
 function THttpRouter.NewNode(const APrefix: string; const AKind: TNodeKind): PRouteNode;
@@ -467,7 +482,7 @@ var
   end;
 begin
   LMethod := AReq.Method;
-  LPath := AReq.Path;
+  LPath := NormalizeRequestPath(AReq.Path);
   LParams := nil;
   LHandler := MatchNode(FTrees[LMethod], LPath, LParams);
   if LHandler <> nil then
