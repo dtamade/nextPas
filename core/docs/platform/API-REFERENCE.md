@@ -110,6 +110,8 @@
 | `platform_fs_write_all(AHandle, AData, ASize): Int32` | 写入全部数据 |
 | `platform_fs_read_all(AHandle, ABuf, ABufSize): Int32` | 读取全部数据 |
 | `platform_fs_read_until_eof(AHandle, out AData, out ASize): Int32` | 读取到 EOF |
+| `platform_fs_move_file(ASrc, ADst): Int32` | 移动文件（rename 或 copy+delete） |
+| `platform_fs_remove_file(APath): Int32` | 删除文件 |
 
 ## 9. info — 系统信息
 
@@ -318,6 +320,8 @@
 | `platform_tls_set(AKey, AValue): Int32` | 设置 TLS 值 |
 | `platform_tls_get(AKey): Pointer` | 获取 TLS 值 |
 | `platform_cpu_count: Int32` | 获取 CPU 核心数 |
+| `platform_thread_set_name(AName): Int32` | 设置当前线程名称（Linux prctl） |
+| `platform_thread_get_name(ABuf, ABufSize): Int32` | 获取当前线程名称 |
 
 ## 23. time — 时间操作
 

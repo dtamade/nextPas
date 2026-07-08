@@ -34,6 +34,10 @@ function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 { CPU }
 function platform_cpu_count: Int32;
 
+{ Thread naming - for debugging }
+function platform_thread_set_name(const AName: PAnsiChar): Int32;
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
 type
   {**
    * Lightweight thread wrapper around platform_thread_create/join/detach.
@@ -377,6 +381,62 @@ function platform_cpu_count: Int32;
 begin
   Result := platform_thread_host_cpu_count_i32;
 end;
+
+{ Thread naming }
+
+function platform_thread_set_name(const AName: PAnsiChar): Int32;
+{$IFDEF NEXTPAS_LINUX}
+var
+  LName: array[0..15] of AnsiChar;
+  LLen: Int32;
+begin
+  if AName = nil then Exit(PLATFORM_ERR_INVALID);
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    LName[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  LName[LLen] := #0;
+  Result := Int32(nextpas.core.platform.linux.ffi.prctl(
+    15 { PR_SET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
+  if Result <> 0 then Result := platform_get_errno;
+end;
+{$ELSE}
+begin
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+{$ENDIF}
+
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+{$IFDEF NEXTPAS_LINUX}
+var
+  LName: array[0..15] of AnsiChar;
+  LI: Int32;
+begin
+  if (ABuf = nil) or (ABufSize <= 0) then Exit(PLATFORM_ERR_INVALID);
+  Result := Int32(nextpas.core.platform.linux.ffi.prctl(
+    16 { PR_GET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
+  if Result <> 0 then
+  begin
+    Result := platform_get_errno;
+    Exit;
+  end;
+  LI := 0;
+  while (LI < 15) and (LI < ABufSize - 1) and (LName[LI] <> #0) do
+  begin
+    ABuf[LI] := LName[LI];
+    Inc(LI);
+  end;
+  ABuf[LI] := #0;
+  Result := 0;
+end;
+{$ELSE}
+begin
+  if (ABuf <> nil) and (ABufSize > 0) then ABuf[0] := #0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+{$ENDIF}
 
 {$ENDIF}
 

@@ -301,6 +301,55 @@ begin
   Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
 end;
 
+procedure TestThreadSetNameGetName;
+var
+  LRet: Int32;
+  LBuf: array[0..255] of AnsiChar;
+begin
+  LRet := platform_thread_set_name('test_thread');
+  {$IFDEF NEXTPAS_LINUX}
+  CheckEqual(Int64(0), Int64(LRet), 'set_name succeeds on Linux');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRet := platform_thread_get_name(@LBuf[0], 256);
+  CheckEqual(Int64(0), Int64(LRet), 'get_name succeeds on Linux');
+  Check(LBuf[0] <> #0, 'get_name returns non-empty');
+  {$ELSE}
+  Check(LRet <> 0, 'set_name returns unsupported on non-Linux');
+  {$ENDIF}
+end;
+
+procedure TestThreadSetNameNil;
+var
+  LRet: Int32;
+begin
+  LRet := platform_thread_set_name(nil);
+  Check(LRet <> 0, 'set_name(nil) returns error');
+end;
+
+procedure TestThreadGetNameNil;
+var
+  LRet: Int32;
+begin
+  LRet := platform_thread_get_name(nil, 256);
+  Check(LRet <> 0, 'get_name(nil buf) returns error');
+end;
+
+procedure TestThreadGetNameSmallBuf;
+var
+  LRet: Int32;
+  LBuf: array[0..3] of AnsiChar;
+begin
+  LRet := platform_thread_set_name('test_thread');
+  {$IFDEF NEXTPAS_LINUX}
+  CheckEqual(Int64(0), Int64(LRet), 'set_name');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRet := platform_thread_get_name(@LBuf[0], 4);
+  CheckEqual(Int64(0), Int64(LRet), 'get_name with small buf');
+  Check(LBuf[0] <> #0, 'get_name returns content');
+  Check(LBuf[3] = #0, 'get_name null-terminates within buf');
+  {$ENDIF}
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -319,5 +368,9 @@ begin
   T.Test('TLS set/get nil', @TestTlsSetGetNil);
   T.Test('Thread spawn and wait', @TestThreadSpawnAndWait);
   T.Test('Thread is alive after detach', @TestThreadIsAliveAfterDetach);
+  T.Test('Thread set_name/get_name', @TestThreadSetNameGetName);
+  T.Test('Thread set_name(nil)', @TestThreadSetNameNil);
+  T.Test('Thread get_name(nil)', @TestThreadGetNameNil);
+  T.Test('Thread get_name small buf', @TestThreadGetNameSmallBuf);
   if not T.Run then Halt(1);
 end.

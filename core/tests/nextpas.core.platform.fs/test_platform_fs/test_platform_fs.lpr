@@ -359,6 +359,50 @@ begin
     'read_file must not ignore close failure after full read');
 end;
 
+procedure TestMoveFile;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  Size: Int64;
+const
+  SRC = '/tmp/nextpas_move_src.txt';
+  DST = '/tmp/nextpas_move_dst.txt';
+begin
+  platform_file_unlink(SRC);
+  platform_file_unlink(DST);
+  platform_file_open(SRC, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('move me'), 7, W);
+  platform_file_close(H);
+  Check(platform_fs_move_file(SRC, DST) = 0, 'move_file succeeds');
+  Check(platform_fs_is_file(DST), 'dst exists');
+  Check(not platform_fs_exists(SRC), 'src removed');
+  Check(platform_fs_file_size(DST, Size) = 0, 'stat dst');
+  Check(Size = 7, 'dst size = 7');
+  platform_file_unlink(DST);
+end;
+
+procedure TestRemoveFile;
+const
+  PATH = '/tmp/nextpas_remove_test.txt';
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('bye'), 3, W);
+  platform_file_close(H);
+  Check(platform_fs_is_file(PATH), 'file exists before remove');
+  Check(platform_fs_remove_file(PATH) = 0, 'remove_file succeeds');
+  Check(not platform_fs_exists(PATH), 'file removed');
+end;
+
+procedure TestRemoveFileNonExistent;
+begin
+  Check(platform_fs_remove_file('/tmp/nextpas_nonexistent_rm_xyz') <> 0,
+    'remove non-existent fails');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fs');
   T.Test('exists file', @TestExistsFile);
@@ -371,6 +415,9 @@ begin
   T.Test('mktemp unique', @TestMktempUnique);
   T.Test('mkdir_p', @TestMkdirP);
   T.Test('copy_file', @TestCopyFile);
+  T.Test('move_file', @TestMoveFile);
+  T.Test('remove_file', @TestRemoveFile);
+  T.Test('remove_file non-existent', @TestRemoveFileNonExistent);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
   T.Test('read_file_dynamic', @TestReadFile);
