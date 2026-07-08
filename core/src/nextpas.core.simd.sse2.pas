@@ -379,6 +379,12 @@ function CRC32C_32(crc: UInt32; value: UInt32): UInt32;
 function CRC32C_64(crc: UInt64; value: UInt64): UInt64;
 function CRC32C_Buffer(const data: Pointer; len: SizeUInt; initial: UInt32): UInt32;
 
+// === SSE4.2 String Search Extensions ===
+function FindFirstOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+function FindFirstNotOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+
 implementation
 
 uses

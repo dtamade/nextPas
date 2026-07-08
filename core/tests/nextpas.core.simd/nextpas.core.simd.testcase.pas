@@ -139,6 +139,7 @@ type
     procedure Test_ForceSSE41_VecF32x4_Smoke;
     procedure Test_ForceSSE42_VecF32x4_Smoke;
     {$IFDEF CPUX86_64}
+    procedure Test_SSE42_StringSearchHelpers;
     procedure Test_SSE42_CRC32C_Contracts;
     {$ENDIF}
     procedure Test_ForceAVX2_VecF32x4_Smoke;
@@ -2182,8 +2183,34 @@ begin
 end;
 
 {$IFDEF CPUX86_64}
-// TODO: SSE4.2 string search helpers - BytesIndexOf_SSE42 not yet implemented (stub returns -1)
-// procedure TTestCase_BackendSmoke.Test_SSE42_StringSearchHelpers;
+procedure TTestCase_BackendSmoke.Test_SSE42_StringSearchHelpers;
+var
+  LHaystack: AnsiString;
+  LNeedles: AnsiString;
+  LChars: AnsiString;
+begin
+  if not HasSSE42 then
+    Skip('SSE4.2 not available');
+
+  LHaystack := 'abcdefghijklmnopQ';
+  LNeedles := 'Q';
+  CheckEqual(16, FindFirstOf_SSE42(PAnsiChar(LHaystack), Length(LHaystack), PAnsiChar(LNeedles), Length(LNeedles)),
+    'FindFirstOf_SSE42 should find a match across the 16-byte boundary');
+
+  CheckEqual(-1, FindFirstOf_SSE42(PAnsiChar(LHaystack), Length(LHaystack), nil, 0),
+    'FindFirstOf_SSE42 should return -1 for an empty needle set');
+
+  LHaystack := 'aaaaaab';
+  LChars := 'a';
+  CheckEqual(6, FindFirstNotOf_SSE42(PAnsiChar(LHaystack), Length(LHaystack), PAnsiChar(LChars), Length(LChars)),
+    'FindFirstNotOf_SSE42 should find the first byte outside the set');
+
+  LHaystack := 'aaaaa';
+  CheckEqual(-1, FindFirstNotOf_SSE42(PAnsiChar(LHaystack), Length(LHaystack), PAnsiChar(LChars), Length(LChars)),
+    'FindFirstNotOf_SSE42 should return -1 when every byte is in the set');
+  CheckEqual(0, FindFirstNotOf_SSE42(PAnsiChar(LHaystack), Length(LHaystack), nil, 0),
+    'FindFirstNotOf_SSE42 should return 0 for an empty set');
+end;
 
 procedure TTestCase_BackendSmoke.Test_SSE42_CRC32C_Contracts;
 var
