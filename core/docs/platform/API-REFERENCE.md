@@ -112,6 +112,8 @@
 | `platform_fs_read_until_eof(AHandle, out AData, out ASize): Int32` | 读取到 EOF |
 | `platform_fs_move_file(ASrc, ADst): Int32` | 移动文件（rename 或 copy+delete） |
 | `platform_fs_remove_file(APath): Int32` | 删除文件 |
+| `platform_fs_remove_dir(APath): Int32` | 删除空目录 |
+| `platform_fs_rename(AOldPath, ANewPath): Int32` | 重命名文件或目录 |
 
 ## 9. info — 系统信息
 
