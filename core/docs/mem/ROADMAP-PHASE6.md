@@ -1,8 +1,10 @@
 # mem 模块演化路线图 Phase 6
 
-> **状态**: 进行中
+> **状态**: Phase 6 全部完成 ✅
 > **起始**: 2026-07-08
+> **完成**: 2026-07-08
 > **基线**: 71 源文件 / 63 测试目录 / 728 测试
+> **当前**: 75 源文件 / 67 测试目录 / 757 测试 / 0 失败
 > **前序**: Phase 1-5 全部完成
 
 ## 演化目标
@@ -18,10 +20,10 @@
 
 | # | 项目 | 优先级 | 说明 |
 |---|------|--------|------|
-| P6-1 | Memory compaction | P0 | TCompactArena: 内存碎片整理（arena 内压缩） |
-| P6-2 | Allocator hotswap | P1 | THotswapAllocator: 运行时分配器切换（原子替换） |
-| P6-3 | Mapped file allocator | P2 | TMappedFileAllocator: 内存映射文件分配器（持久化） |
-| P6-4 | Allocation sampler | P2 | TSamplingAllocator: 采样分配器（1/N 采样记录） |
+| P6-1 | Memory compaction | P0 | TCompactArena: 内存碎片整理（arena 内压缩） | ✅ |
+| P6-2 | Allocator hotswap | P1 | THotswapAllocator: 运行时分配器切换（原子替换） | ✅ |
+| P6-3 | Mapped file allocator | P2 | TMappedFileAllocator: 内存映射文件分配器（持久化） | ✅ |
+| P6-4 | Allocation sampler | P2 | TSamplingAllocator: 采样分配器（1/N 采样记录） | ✅ |
 
 ---
 
