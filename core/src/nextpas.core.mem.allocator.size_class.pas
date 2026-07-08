@@ -38,8 +38,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   SIZE_CLASS_COUNT = 16;
@@ -55,7 +54,7 @@ type
     TotalFree: UInt64;
   end;
 
-  TSizeClassAllocator = class(TAllocator)
+  TSizeClassAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FClassSizes: array[0..SIZE_CLASS_COUNT-1] of SizeUInt;
@@ -66,13 +65,13 @@ type
     FLargeFreeCount: UInt64;
     function FindClass(ASize: SizeUInt): Integer;
     procedure GrowClass(AClassIdx: Integer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
     function GetStats: TSizeClassStats;
   end;
 
@@ -139,7 +138,7 @@ begin
   Inc(FFreeCounts[AClassIdx], GROW_COUNT);
 end;
 
-function TSizeClassAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TSizeClassAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LClassIdx: Integer;
   LHeader: PSizeClassHeader;
@@ -165,14 +164,14 @@ begin
   Result := Pointer(PByte(LHeader) + SIZE_CLASS_HEADER);
 end;
 
-function TSizeClassAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TSizeClassAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-procedure TSizeClassAllocator.DoFreeMem(APtr: Pointer);
+procedure TSizeClassAllocator.FreeMem(APtr: Pointer); inline;
 var
   LHeader: PSizeClassHeader;
   LClassIdx: Integer;
@@ -193,7 +192,7 @@ begin
     Inc(FLargeFreeCount);
 end;
 
-function TSizeClassAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TSizeClassAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize, LCopySize: SizeUInt;
   LHeader: PSizeClassHeader;
@@ -201,11 +200,11 @@ var
 begin
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
 
   LHeader := PSizeClassHeader(PByte(APtr) - SIZE_CLASS_HEADER);
   LClassIdx := LHeader^.ClassIdx;
@@ -217,12 +216,19 @@ begin
   if ASize <= LOldSize then
     Exit(APtr);
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
+end;
+
+function TSizeClassAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe      := False;
+  Result.SupportsRealloc := True;
 end;
 
 function TSizeClassAllocator.GetStats: TSizeClassStats;
