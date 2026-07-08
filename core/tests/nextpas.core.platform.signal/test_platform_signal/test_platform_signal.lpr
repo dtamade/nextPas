@@ -102,6 +102,29 @@ begin
   platform_signal_reset(PLATFORM_SIGUSR1);
 end;
 
+procedure TestInvalidSignalRange;
+begin
+  { Signal 0 is invalid }
+  Check(platform_signal_set(0, @MyHandler) <> 0, 'signal 0 rejected');
+  { Very large signal number should fail gracefully }
+  Check(platform_signal_set(999, @MyHandler) <> 0, 'signal 999 rejected');
+  Check(platform_signal_set(-1, @MyHandler) <> 0, 'signal -1 rejected');
+end;
+
+procedure TestBlockInvalidSignal;
+begin
+  Check(platform_signal_block(0) <> 0, 'block signal 0 rejected');
+  Check(platform_signal_block(999) <> 0, 'block signal 999 rejected');
+  Check(platform_signal_block(-1) <> 0, 'block signal -1 rejected');
+end;
+
+procedure TestUnblockInvalidSignal;
+begin
+  Check(platform_signal_unblock(0) <> 0, 'unblock signal 0 rejected');
+  Check(platform_signal_unblock(999) <> 0, 'unblock signal 999 rejected');
+  Check(platform_signal_unblock(-1) <> 0, 'unblock signal -1 rejected');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.signal');
   T.Test('set handler + deliver', @TestSetHandler);
@@ -113,5 +136,8 @@ begin
   T.Test('multiple signals', @TestMultipleSignals);
   T.Test('handler receives correct signal', @TestHandlerSignalArg);
   T.Test('ignore signal', @TestIgnoreSignal);
+  T.Test('invalid signal range', @TestInvalidSignalRange);
+  T.Test('block invalid signal', @TestBlockInvalidSignal);
+  T.Test('unblock invalid signal', @TestUnblockInvalidSignal);
   if not T.Run then Halt(1);
 end.
