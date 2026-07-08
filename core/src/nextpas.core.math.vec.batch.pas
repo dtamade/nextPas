@@ -77,7 +77,8 @@ function BatchClamp(const AVectors: array of TVec3f;
 implementation
 
 uses
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.math.vec.batch.simd;
 
 { BatchDot - TVec2f }
 function BatchDot(const ALeft, ARight: array of TVec2f;
@@ -98,33 +99,15 @@ end;
 { BatchDot - TVec3f }
 function BatchDot(const ALeft, ARight: array of TVec3f;
                   var AResults: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
-  for i := 0 to LCount - 1 do
-    AResults[i] := ALeft[i].Dot(ARight[i]);
-  Result := LCount;
+  Result := BatchDotSimd3f(ALeft, ARight, AResults);
 end;
 
 { BatchDot - TVec4f }
 function BatchDot(const ALeft, ARight: array of TVec4f;
                   var AResults: array of Single): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
-  for i := 0 to LCount - 1 do
-    AResults[i] := ALeft[i].Dot(ARight[i]);
-  Result := LCount;
+  Result := BatchDotSimd4f(ALeft, ARight, AResults);
 end;
 
 { BatchNormalize - TVec2f 原地 }
@@ -140,38 +123,21 @@ end;
 
 { BatchNormalize - TVec3f 原地 }
 function BatchNormalize(var AVectors: array of TVec3f): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AVectors);
-  for i := 0 to LCount - 1 do
-    AVectors[i] := AVectors[i].Normalize;
-  Result := LCount;
+  Result := BatchNormalizeSimd3f(AVectors);
 end;
 
 { BatchNormalize - TVec4f 原地 }
 function BatchNormalize(var AVectors: array of TVec4f): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AVectors);
-  for i := 0 to LCount - 1 do
-    AVectors[i] := AVectors[i].Normalize;
-  Result := LCount;
+  Result := BatchNormalizeSimd4f(AVectors);
 end;
 
 { BatchNormalize - TVec3f 带输出 }
 function BatchNormalize(const ASource: array of TVec3f;
                         var ADest: array of TVec3f): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
-  for i := 0 to LCount - 1 do
-    ADest[i] := ASource[i].Normalize;
-  Result := LCount;
+  Result := BatchNormalizeSimd3f(ASource, ADest);
 end;
 
 { BatchTransform - TMat3f * TVec2f }
@@ -193,51 +159,24 @@ end;
 function BatchTransform(const AMatrix: TMat4f;
                         const ASource: array of TVec3f;
                         var ADest: array of TVec3f): SizeInt;
-var
-  i, LCount: SizeInt;
-  LTemp: TVec4f;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
-  for i := 0 to LCount - 1 do
-  begin
-    LTemp := AMatrix * TVec4f.Create(ASource[i].X, ASource[i].Y, ASource[i].Z, 1.0);
-    ADest[i] := TVec3f.Create(LTemp.X, LTemp.Y, LTemp.Z);
-  end;
-  Result := LCount;
+  Result := BatchTransformSimd4f(AMatrix, ASource, ADest);
 end;
 
 { BatchLerp - TVec3f }
 function BatchLerp(const AStart, AEnd: array of TVec3f;
                    const AT: Single;
                    var ADest: array of TVec3f): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
-  for i := 0 to LCount - 1 do
-    ADest[i] := AStart[i].Lerp(AEnd[i], AT);
-  Result := LCount;
+  Result := BatchLerpSimd3f(AStart, AEnd, AT, ADest);
 end;
 
 { BatchClamp - TVec3f }
 function BatchClamp(const AVectors: array of TVec3f;
                     const AMin, AMax: TVec3f;
                     var ADest: array of TVec3f): SizeInt;
-var
-  i, LCount: SizeInt;
 begin
-  LCount := Length(AVectors);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
-  for i := 0 to LCount - 1 do
-    ADest[i] := AVectors[i].Clamp(AMin, AMax);
-  Result := LCount;
+  Result := BatchClampSimd3f(AVectors, AMin, AMax, ADest);
 end;
 
 end.
