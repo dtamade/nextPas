@@ -14,48 +14,123 @@ type
   TPlatformTLSKey = nextpas.core.platform.thread.base.TPlatformTLSKey;
 
 { Thread lifecycle }
+
+{** @desc 创建新线程
+    @param AHandle 输出线程句柄
+    @param AProc 线程入口函数
+    @param AArg 传递给线程的参数
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+
+{** @desc 等待线程结束并获取返回值
+    @param AHandle 线程句柄
+    @param ARetVal 输出线程返回值
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
-{ Timed join: returns 0 on success, 1 on timeout, <0 on error.
-  ATimeoutMs > 0: wait up to ATimeoutMs milliseconds. }
+
+{** @desc 带超时的等待线程结束
+    @param AHandle 线程句柄
+    @param ATimeoutMs 超时毫秒数（>0）
+    @param ARetVal 输出线程返回值
+    @return 0 成功，1 超时，<0 错误 *}
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+
+{** @desc 分离线程（线程结束后自动释放资源）
+    @param AHandle 线程句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
+
+{** @desc 获取当前线程 token
+    @return 线程 token *}
 function platform_thread_self: TPlatformThreadToken;
+
+{** @desc 获取当前线程 ID（用于调试）
+    @return 线程 ID *}
 function platform_thread_id: UInt64;
+
+{** @desc 让出 CPU 时间片 *}
 procedure platform_thread_yield;
+
+{** @desc 线程休眠（纳秒精度）
+    @param ANanoseconds 休眠纳秒数 *}
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 
-{ Convenience: sleep in milliseconds }
+{** @desc 线程休眠（毫秒）
+    @param AMilliseconds 休眠毫秒数 *}
 procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
 
-{ Convenience: sleep in seconds }
+{** @desc 线程休眠（秒）
+    @param ASeconds 休眠秒数 *}
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 
-{ TLS }
+{ TLS - Thread Local Storage }
+
+{** @desc 创建 TLS 键
+    @param AKey 输出 TLS 键
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
+
+{** @desc 销毁 TLS 键
+    @param AKey TLS 键
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
+
+{** @desc 设置 TLS 值
+    @param AKey TLS 键
+    @param AValue 要存储的值
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
+
+{** @desc 获取 TLS 值
+    @param AKey TLS 键
+    @return 存储的值（未设置返回 nil） *}
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 
 { CPU }
+
+{** @desc 获取可用 CPU 核心数
+    @return 核心数 *}
 function platform_cpu_count: Int32;
 
 { Thread naming - for debugging }
+
+{** @desc 设置当前线程名称（用于调试器显示）
+    @param AName 线程名称
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_set_name(const AName: PAnsiChar): Int32;
+
+{** @desc 获取当前线程名称
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 名称实际长度 *}
 function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 type
   {**
-   * Lightweight thread wrapper around platform_thread_create/join/detach.
-   * Does NOT inherit from TThread — zero FPC Classes dependency.
+   * @desc 轻量级线程包装器（不依赖 TThread/FPC Classes）
+   *
+   * 使用 platform_thread_create/join/detach 实现，提供更简洁的生命周期管理。
    *}
   TPlatformThreadRecord = record
     Handle: TPlatformThreadHandle;
   end;
 
+{** @desc 创建并启动线程
+    @param ARec 输出线程记录
+    @param AProc 线程入口函数
+    @param AArg 传递给线程的参数
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_spawn(out ARec: TPlatformThreadRecord;
   AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+
+{** @desc 等待线程结束
+    @param ARec 线程记录
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_thread_wait(var ARec: TPlatformThreadRecord): Int32;
+
+{** @desc 检查线程是否仍在运行
+    @param ARec 线程记录
+    @return True 线程仍在运行 *}
 function platform_thread_is_alive(const ARec: TPlatformThreadRecord): Boolean;
 
 implementation
