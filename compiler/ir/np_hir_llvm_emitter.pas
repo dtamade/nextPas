@@ -54,7 +54,22 @@ type
     FUnitInitCallsEmitted: Boolean;
     FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
+    { Debug info metadata }
+    FDebugInfoEnabled: Boolean;
+    FDebugMetadata: array of string;
+    FDebugMetadataCount: LongInt;
+    FCurrentDISubprogram: LongInt;  { metadata index of current function's DISubprogram }
+    FDIFileIndex: LongInt;          { metadata index of the DIFile }
+    FDICUIndex: LongInt;            { metadata index of the DICompileUnit }
+    function AddDebugMetadata(const AMetadata: string): LongInt;
+    function EmitDILocation(ALine, ACol: LongInt): LongInt;
+    procedure EmitDebugMetadataSection;
     procedure Emit(const S: string);
+  public
+    constructor Create(AModule: THIRModule); overload;
+    constructor Create(AModule: THIRModule;
+      const ALlvmTriple, ALlvmDataLayout: string;
+      ADebugInfo: Boolean = False); overload;
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function BlockEndsWithIntrinsicReturn(const ABlock: THIRBlock): Boolean;
@@ -99,10 +114,6 @@ type
     procedure EmitUnitDeclares;
     procedure EmitUnitInitCalls;
     procedure EmitUnitFiniCalls;
-  public
-    constructor Create(AModule: THIRModule); overload;
-    constructor Create(AModule: THIRModule;
-      const ALlvmTriple, ALlvmDataLayout: string); overload;
     procedure EmitModule;
     function AsText: string;
     procedure SaveToFile(const APath: string);
@@ -122,11 +133,11 @@ const
 
 constructor THIRLlvmEmitter.Create(AModule: THIRModule);
 begin
-  Create(AModule, DEFAULT_LLVM_TRIPLE, DEFAULT_LLVM_DATALAYOUT);
+  Create(AModule, DEFAULT_LLVM_TRIPLE, DEFAULT_LLVM_DATALAYOUT, False);
 end;
 
 constructor THIRLlvmEmitter.Create(AModule: THIRModule;
-  const ALlvmTriple, ALlvmDataLayout: string);
+  const ALlvmTriple, ALlvmDataLayout: string; ADebugInfo: Boolean);
 begin
   inherited Create;
   FModule := AModule;
@@ -163,6 +174,11 @@ begin
   FNeedsProcessLifecycle := False;
   FProcessFiniEmitted := False;
   FTryCounter := 0;
+  FDebugInfoEnabled := ADebugInfo;
+  FDebugMetadataCount := 0;
+  FCurrentDISubprogram := -1;
+  FDIFileIndex := -1;
+  FDICUIndex := -1;
   SetLength(FLines, 0);
 end;
 
@@ -172,6 +188,36 @@ begin
     SetLength(FLines, FLineCount + 128);
   FLines[FLineCount] := S;
   Inc(FLineCount);
+end;
+
+function THIRLlvmEmitter.AddDebugMetadata(const AMetadata: string): LongInt;
+begin
+  if FDebugMetadataCount >= Length(FDebugMetadata) then
+    SetLength(FDebugMetadata, FDebugMetadataCount + 32);
+  FDebugMetadata[FDebugMetadataCount] := AMetadata;
+  Result := FDebugMetadataCount;
+  Inc(FDebugMetadataCount);
+end;
+
+function THIRLlvmEmitter.EmitDILocation(ALine, ACol: LongInt): LongInt;
+begin
+  if FCurrentDISubprogram < 0 then
+    Exit(-1);
+  Result := AddDebugMetadata(
+    '!DILocation(line: ' + IntToStr(ALine) +
+    ', column: ' + IntToStr(ACol) +
+    ', scope: !' + IntToStr(FCurrentDISubprogram) + ')');
+end;
+
+procedure THIRLlvmEmitter.EmitDebugMetadataSection;
+var
+  I: LongInt;
+begin
+  if FDebugMetadataCount = 0 then
+    Exit;
+  Emit('');
+  for I := 0 to FDebugMetadataCount - 1 do
+    Emit('!' + IntToStr(I) + ' = ' + FDebugMetadata[I]);
 end;
 
 function THIRLlvmEmitter.ValueRef(AValueId: THIRValueId): string;
@@ -402,7 +448,7 @@ end;
 procedure THIRLlvmEmitter.EmitInstr(const AInstr: THIRInstr);
 var
   LlvmType, Op, LTruncVal: string;
-  I: LongInt;
+  I, LDbgIdx: LongInt;
 begin
   if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
     (SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) or
@@ -1260,6 +1306,16 @@ begin
           Emit('  ; hikInsertField: no struct type name');
       end;
   end;
+
+  { Append debug location metadata if available }
+  if FDebugInfoEnabled and (FCurrentDISubprogram >= 0) and
+    (AInstr.SourceLine > 0) and (FLineCount > 0) then
+  begin
+    LDbgIdx := EmitDILocation(AInstr.SourceLine, AInstr.SourceCol);
+    if LDbgIdx >= 0 then
+      FLines[FLineCount - 1] := FLines[FLineCount - 1] +
+        ', !dbg !' + IntToStr(LDbgIdx);
+  end;
 end;
 
 procedure THIRLlvmEmitter.EmitTerminator(const ATerm: THIRTerminator);
@@ -1386,6 +1442,20 @@ begin
   FCurrentReturnTypeId := AFunc.ReturnTypeId;
   FCurrentFuncIsTStringSret := AFunc.IsTStringReturnAbi;
 
+  { Emit DISubprogram metadata for debug info }
+  if FDebugInfoEnabled and (FDICUIndex >= 0) then
+  begin
+    FCurrentDISubprogram := AddDebugMetadata(
+      '!DISubprogram(name: "' + EscapeLlvmStr(AFunc.Name) +
+      '", scope: !' + IntToStr(FDIFileIndex) +
+      ', file: !' + IntToStr(FDIFileIndex) +
+      ', line: 1, type: !DISubroutineType(types: !{null}), ' +
+      'scopeLine: 1, spFlags: DISPFlagDefinition, unit: !' +
+      IntToStr(FDICUIndex) + ')');
+  end
+  else
+    FCurrentDISubprogram := -1;
+
   Emit('');
   if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
     (Pos('np_object_string_cleanup_', AFunc.Name) = 1) then
@@ -1495,6 +1565,22 @@ begin
   Emit('target triple = "' + FLlvmTriple + '"');
   Emit('target datalayout = "' + FLlvmDataLayout + '"');
   Emit('');
+
+  { Initialize debug info metadata if enabled }
+  if FDebugInfoEnabled then
+  begin
+    FDebugMetadataCount := 0;
+    { !0 = !DIFile }
+    FDIFileIndex := AddDebugMetadata(
+      '!DIFile(filename: "' + EscapeLlvmStr(FModule.ModuleName) +
+      '.pas", directory: ".")');
+    { !1 = !DICompileUnit }
+    FDICUIndex := AddDebugMetadata(
+      '!DICompileUnit(language: DW_LANG_Pascal, file: !' +
+      IntToStr(FDIFileIndex) +
+      ', producer: "nextPas", isOptimized: false, emissionKind: FullDebug)');
+  end;
+
   Emit('%TString = type [24 x i8]');
 
   for I := 0 to FModule.Types.Count - 1 do
@@ -1636,6 +1722,10 @@ begin
   begin
     // Phase 4: np_int_to_str 声明已在 EmitStringOwnershipHelpers 中 emit
   end;
+
+  { Emit debug info metadata section at the end of the module }
+  if FDebugInfoEnabled then
+    EmitDebugMetadataSection;
 end;
 
 procedure THIRLlvmEmitter.EmitWriteIntHelper;

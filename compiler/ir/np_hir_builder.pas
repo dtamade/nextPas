@@ -7,7 +7,7 @@ unit np_hir_builder;
 interface
 
 uses
-  np_semantic_model, np_hir_types, np_hir_model;
+  np_semantic_model, np_hir_types, np_hir_model, np_source_database;
 
 type
   TExprStack = record
@@ -92,6 +92,12 @@ type
     FIntTypeCache: array[0..3, 0..1] of THIRTypeId;
     FFloat32Type: THIRTypeId;
     FFloat64Type: THIRTypeId;
+
+    { Source position tracking for debug info }
+    FSourceDatabase: TSourceDatabase;
+    FCurrentSourceFileId: TSourceFileId;
+    FCurrentSourceLine: LongInt;
+    FCurrentSourceCol: LongInt;
 
     function EnsureBlock(const AName: string): THIRBlockId;
     function FindBlock(const AName: string): THIRBlockId;
@@ -293,8 +299,11 @@ type
     procedure EmitTStringAssign(ADst, ASrc: THIRValueId);
     function EmitTStringLen(AValue: THIRValueId): THIRValueId;
     function EmitTStringData(AValue: THIRValueId): THIRValueId;
+    procedure SetCurrentSourcePosFromSymbol(ASymbolId: LongInt);
   public
-    constructor Create(ASemaModel: TSemanticModel);
+    constructor Create(ASemaModel: TSemanticModel;
+      ASourceDatabase: TSourceDatabase = nil;
+      ASourceFileId: TSourceFileId = 0);
     destructor Destroy; override;
     function LowerExpr(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
@@ -384,12 +393,17 @@ begin
   Result := Trim(Copy(AExprArg, 5, NewlinePos - 5));
 end;
 
-constructor THIRBuilder.Create(ASemaModel: TSemanticModel);
+constructor THIRBuilder.Create(ASemaModel: TSemanticModel;
+  ASourceDatabase: TSourceDatabase; ASourceFileId: TSourceFileId);
 var
   I, J: LongInt;
 begin
   inherited Create;
   FSemaModel := ASemaModel;
+  FSourceDatabase := ASourceDatabase;
+  FCurrentSourceFileId := ASourceFileId;
+  FCurrentSourceLine := 0;
+  FCurrentSourceCol := 0;
   FModule := THIRModule.Create('main');
   FCurrentFuncId := 0;
   FCurrentBlockId := 0;
@@ -2127,10 +2141,40 @@ begin
   Result := False;
 end;
 
+procedure THIRBuilder.SetCurrentSourcePosFromSymbol(ASymbolId: LongInt);
+var
+  LSymbol: TSemanticSymbol;
+  LLineCol: TLineCol;
+begin
+  if (ASymbolId <= 0) or (FSemaModel = nil) then
+    Exit;
+  LSymbol := FSemaModel.SymbolAt(ASymbolId);
+  if (LSymbol.SymbolId <= 0) or (LSymbol.ByteOffset <= 0) then
+    Exit;
+  if (FSourceDatabase <> nil) and (FCurrentSourceFileId > 0) then
+  begin
+    LLineCol := FSourceDatabase.ByteOffsetToLineCol(
+      FCurrentSourceFileId, LSymbol.ByteOffset);
+    FCurrentSourceLine := LLineCol.Line;
+    FCurrentSourceCol := LLineCol.Column;
+  end;
+end;
+
 procedure THIRBuilder.EmitInstr(const AInstr: THIRInstr);
+var
+  LInstr: THIRInstr;
 begin
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
-    FModule.AddInstr(FCurrentFuncId, FCurrentBlockId, AInstr);
+  begin
+    LInstr := AInstr;
+    { Apply current source position to instruction for debug info }
+    if (FCurrentSourceLine > 0) and (LInstr.SourceLine = 0) then
+    begin
+      LInstr.SourceLine := FCurrentSourceLine;
+      LInstr.SourceCol := FCurrentSourceCol;
+    end;
+    FModule.AddInstr(FCurrentFuncId, FCurrentBlockId, LInstr);
+  end;
 end;
 
 function THIRBuilder.EmitBinOp(AKind: THIRInstrKind; AType: THIRTypeId;
@@ -6322,6 +6366,9 @@ begin
     (ANode.NodeKind <> hnkRetRuntime) and
     (ANode.NodeKind <> hnkRetTStringRuntime) then
     FlushPendingCleanupNodes;
+
+  { Set current source position from node's symbol for debug info }
+  SetCurrentSourcePosFromSymbol(ANode.SymbolId);
 
   case ANode.NodeKind of
     hnkVarDeclRuntime, hnkVarDeclArrRuntime,

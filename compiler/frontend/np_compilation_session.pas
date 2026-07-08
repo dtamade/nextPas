@@ -986,7 +986,7 @@ begin
   // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
   if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
   begin
-    HirBuilder := THIRBuilder.Create(FSemanticModel);
+    HirBuilder := THIRBuilder.Create(FSemanticModel, FSourceDatabase, FRootFileId);
     try
       HirBuilder.Build;
 
@@ -1013,7 +1013,7 @@ begin
   end
   else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
   begin
-    HirBuilder := THIRBuilder.Create(FSemanticModel);
+    HirBuilder := THIRBuilder.Create(FSemanticModel, FSourceDatabase, FRootFileId);
     try
       HirBuilder.Build;
       HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
