@@ -336,9 +336,8 @@ var
   LT95, LT99: Double;
   I: Integer;
   { B22: Outlier-aware variables }
-  LFiltered: TDoubleArray;
   LQ1, LQ3, LFenceLow, LFenceHigh: Double;
-  LFilteredCount: Integer;
+  LFilteredCount, LRunStart: Integer;
   LFilteredMean, LFilteredM2, LDeltaF, LDelta2F: Double;
 begin
   LLen := Length(ASamples);
@@ -398,9 +397,8 @@ begin
     LQ3 := Result.P75;
     LFenceLow := LQ1 - OUTLIER_MULTIPLIER * Result.IQR;
     LFenceHigh := LQ3 + OUTLIER_MULTIPLIER * Result.IQR;
-    SetLength(LFiltered, LValidCount);
     LFilteredCount := 0;
-    { Single pass: filter + accumulate sum/sum_sq for mean/stddev }
+    { Single pass: accumulate Welford mean/variance on filtered subset }
     LFilteredMean := 0.0;
     LFilteredM2 := 0.0;
     for I := 0 to High(ASamples) do
@@ -409,7 +407,6 @@ begin
         Continue;
       if (ASamples[I] >= LFenceLow) and (ASamples[I] <= LFenceHigh) then
       begin
-        LFiltered[LFilteredCount] := ASamples[I];
         Inc(LFilteredCount);
         { Welford online update on filtered subset }
         LDeltaF := ASamples[I] - LFilteredMean;
@@ -418,7 +415,6 @@ begin
         LFilteredM2 := LFilteredM2 + LDeltaF * LDelta2F;
       end;
     end;
-    SetLength(LFiltered, LFilteredCount);
     if LFilteredCount > 0 then
     begin
       Result.FilteredCount := LFilteredCount;
@@ -427,8 +423,30 @@ begin
         Result.FilteredStdDev := Sqrt(LFilteredM2 / (LFilteredCount - 1))
       else
         Result.FilteredStdDev := 0.0;
-      SortDoubleArray(LFiltered);
-      Result.FilteredMedian := PercentileSorted(LFiltered, 50);
+      { Filtered median: scan LSorted (already sorted) for values in [LFenceLow, LFenceHigh].
+        Avoids allocating + sorting a separate LFiltered array: O(N) vs O(N log N). }
+      LFilteredCount := 0;
+      I := 0;
+      { Skip values below the fence }
+      while (I <= High(LSorted)) and (LSorted[I] < LFenceLow) do
+        Inc(I);
+      { Count values within the fence — I is now the start index }
+      LRunStart := I;
+      while (I <= High(LSorted)) and (LSorted[I] <= LFenceHigh) do
+      begin
+        Inc(LFilteredCount);
+        Inc(I);
+      end;
+      if LFilteredCount > 0 then
+      begin
+        if LFilteredCount mod 2 = 1 then
+          Result.FilteredMedian := LSorted[LRunStart + LFilteredCount div 2]
+        else
+          Result.FilteredMedian := (LSorted[LRunStart + LFilteredCount div 2 - 1] +
+                                    LSorted[LRunStart + LFilteredCount div 2]) / 2.0;
+      end
+      else
+        Result.FilteredMedian := Result.Median;
     end
     else
     begin
