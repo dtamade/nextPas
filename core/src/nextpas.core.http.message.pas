@@ -246,6 +246,9 @@ function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
 {** @desc Write 415 Unsupported Media Type JSON error response. }
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 504 Gateway Timeout JSON error response. }
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -1183,6 +1186,12 @@ function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, 'unsupported_media_type', AMessage);
+end;
+
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_GATEWAY_TIMEOUT, 'gateway_timeout', AMessage);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);

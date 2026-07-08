@@ -30,6 +30,7 @@ uses
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.deadline,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -2763,6 +2764,74 @@ begin
   Check(Pos('unsupported_media_type', LWObj.Body) > 0, 'has error code');
 end;
 
+{ Deadline middleware tests }
+
+procedure TestDeadlineFastHandlerPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('fast')^, 4);
+    end),
+    [DeadlineMiddleware(5000)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/fast');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'fast handler returns 200');
+  CheckEqual('fast', LWObj.Body, 'fast handler body preserved');
+end;
+
+procedure TestDeadlineSlowHandlerTimesOut;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      { Simulate slow handler }
+      Sleep(200);
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('slow response')^, 13);
+    end),
+    [DeadlineMiddleware(50)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/slow');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(504), Int64(LWObj.Status), 'slow handler returns 504');
+  Check(Pos('gateway_timeout', LWObj.Body) > 0, 'has timeout error code');
+end;
+
+procedure TestDeadlineZeroRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    DeadlineMiddleware(0);
+  except
+    on E: EArgumentError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'zero timeout raises EArgumentError');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -2887,6 +2956,10 @@ begin
   T.Test('Compression: deflate supported', @TestCompressionDeflateSupported);
   { ContentType JSON }
   T.Test('ContentType: returns JSON 415', @TestContentTypeReturnsJson415);
+  { Deadline }
+  T.Test('Deadline: fast handler passes', @TestDeadlineFastHandlerPasses);
+  T.Test('Deadline: slow handler times out', @TestDeadlineSlowHandlerTimesOut);
+  T.Test('Deadline: zero timeout raises', @TestDeadlineZeroRaises);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

@@ -140,6 +140,7 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
   HTTP_STATUS_SERVICE_UNAVAILABLE   = THttpStatus(503);
+  HTTP_STATUS_GATEWAY_TIMEOUT       = THttpStatus(504);
 
   { TCP server backend aliases }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
@@ -248,6 +249,7 @@ begin
     501: Result := 'Not Implemented';
     502: Result := 'Bad Gateway';
     503: Result := 'Service Unavailable';
+    504: Result := 'Gateway Timeout';
   else
     Result := IntToStr(ACode);
   end;
