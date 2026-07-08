@@ -71,8 +71,10 @@
 | `lockfree.hashtable` | 无锁哈希表 (开放寻址) | ✅ 完成 | 3229 |
 | `lockfree.sortedset` | 并发有序集合 | ✅ 完成 | 2025 |
 | `lockfree.bitset` | 并发位集合 | ✅ 完成 | 10407 |
+| `lockfree.linkedlist` | 并发有序链表 | ✅ 完成 | 1034 |
+| `lockfree.statscounter` | 并发统计计数器 | ✅ 完成 | 42 |
 
-**规模**: 52 文件, ~23500 行, 37404 测试
+**规模**: 54 文件, ~24000 行, 38480 测试
 
 ---
 
@@ -119,7 +121,9 @@
 | test_lockfree_hashtable | 3229 | ✅ 全绿 |
 | test_lockfree_sortedset | 2025 | ✅ 全绿 |
 | test_lockfree_bitset | 10407 | ✅ 全绿 |
-| **总计** | **37404** | **✅ 全绿** |
+| test_lockfree_linkedlist | 1034 | ✅ 全绿 |
+| test_lockfree_statscounter | 42 | ✅ 全绿 |
+| **总计** | **38480** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

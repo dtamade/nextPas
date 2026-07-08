@@ -52,7 +52,9 @@ uses
   nextpas.core.lockfree.disjointset,
   nextpas.core.lockfree.hashtable,
   nextpas.core.lockfree.sortedset,
-  nextpas.core.lockfree.bitset;
+  nextpas.core.lockfree.bitset,
+  nextpas.core.lockfree.linkedlist,
+  nextpas.core.lockfree.statscounter;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -397,6 +399,22 @@ type
   }
   TConcurrentBitSet = nextpas.core.lockfree.bitset.TConcurrentBitSet;
   TLockFreeBitSetResult = nextpas.core.lockfree.bitset.TLockFreeBitSetResult;
+
+  {** @desc 并发有序链表
+    @details 基于读写锁的并发链表，支持有序插入和遍历。
+      保持升序排列，支持 Insert/Remove/Contains/Get/Clear。
+    @see TConcurrentLinkedListImpl 详细文档和示例
+  }
+  generic TConcurrentLinkedList<T> = class(specialize TConcurrentLinkedListImpl<T>)
+  end;
+  TLockFreeLinkedListResult = nextpas.core.lockfree.linkedlist.TLockFreeLinkedListResult;
+
+  {** @desc 并发统计计数器
+    @details 支持 min/max/sum/count/mean 的并发统计。
+      所有操作原子化，适用性能监控和指标收集。
+    @see TConcurrentStatsCounter 详细文档和示例
+  }
+  TConcurrentStatsCounter = nextpas.core.lockfree.statscounter.TConcurrentStatsCounter;
 
 implementation
 
