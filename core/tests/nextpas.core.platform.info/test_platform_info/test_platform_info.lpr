@@ -58,6 +58,47 @@ begin
   Check(S <> 'Unknown', 'CPUName is known');
 end;
 
+procedure TestOSNameMatchesCurrentOS;
+var
+  LName: string;
+begin
+  LName := OSName;
+  case CurrentOS of
+    osLinux: Check(LName = 'Linux', 'OSName matches Linux');
+    osMacOS: Check(LName = 'macOS', 'OSName matches macOS');
+    osFreeBSD: Check(LName = 'FreeBSD', 'OSName matches FreeBSD');
+    osWindows: Check(LName = 'Windows', 'OSName matches Windows');
+    osAndroid: Check(LName = 'Android', 'OSName matches Android');
+    osUnix: Check(LName = 'Unix', 'OSName matches Unix');
+  else
+    Check(False, 'Unknown OS kind');
+  end;
+end;
+
+procedure TestCPUNameMatchesCurrentCPU;
+var
+  LName: string;
+begin
+  LName := CPUName;
+  case CurrentCPU of
+    cpuX86_64: Check(LName = 'x86_64', 'CPUName matches x86_64');
+    cpuAArch64: Check(LName = 'aarch64', 'CPUName matches aarch64');
+    cpuRISCV64: Check(LName = 'riscv64', 'CPUName matches riscv64');
+    cpuARM32: Check(LName = 'arm', 'CPUName matches arm');
+    cpuUnknown: Check(LName = 'Unknown', 'CPUName matches Unknown');
+  else
+    Check(False, 'Unknown CPU arch');
+  end;
+end;
+
+procedure TestOSAndCPUAreConstexpr;
+begin
+  { These are inline functions — verify they return consistent values across calls }
+  Check(CurrentOS = CurrentOS, 'CurrentOS is stable');
+  Check(CurrentCPU = CurrentCPU, 'CurrentCPU is stable');
+  Check(CurrentEndian = CurrentEndian, 'CurrentEndian is stable');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.info');
   T.Test('CurrentOS', @TestCurrentOS);
@@ -65,5 +106,8 @@ begin
   T.Test('Endianness', @TestEndian);
   T.Test('OSName', @TestOSName);
   T.Test('CPUName', @TestCPUName);
+  T.Test('OSName matches CurrentOS', @TestOSNameMatchesCurrentOS);
+  T.Test('CPUName matches CurrentCPU', @TestCPUNameMatchesCurrentCPU);
+  T.Test('OS/CPU/Endian are stable', @TestOSAndCPUAreConstexpr);
   if not T.Run then Halt(1);
 end.
