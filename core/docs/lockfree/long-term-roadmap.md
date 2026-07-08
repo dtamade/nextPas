@@ -10,7 +10,7 @@
 |------|------|----------|------|
 | NUMA 感知 | 针对 NUMA 架构优化内存分配和数据布局 | 40h | ✅ Phase 1-2 完成 |
 | 硬件事务内存 | Intel TSX 支持，提升并发性能 | 40h | ✅ Phase 1-2 完成 |
-| 形式化验证 | TLA+ 模型验证关键算法正确性 | 80h | ✅ Phase 1 完成 |
+| 形式化验证 | TLA+ 模型验证关键算法正确性 | 80h | ✅ Phase 1-2 完成 |
 
 ---
 
@@ -199,26 +199,31 @@ FifoOrder == \A e1, e2 \in Enqueued:
   (e1.time < e2.time) => (e1.position < e2.position)
 ```
 
-#### Phase 2: MPMC 队列 TLA+ 模型 (20h)
+#### Phase 2: MPMC 队列 TLA+ 模型 (20h) ✅
 
 更复杂的模型，包含：
 - CAS 原子操作
 - ABA 问题检测
 - 内存回收 (EBR) 安全性
 
-#### Phase 3: Channel TLA+ 模型 (20h)
+#### Phase 3: Channel TLA+ 模型 (20h) ✅
 
 包含：
 - 阻塞/超时语义
 - Close 语义
 - Select 多路复用
 
-#### Phase 4: 测试生成 (20h)
+#### Phase 4: 测试生成 (20h) ✅
 
 从 TLA+ 模型生成 Pascal 测试用例，覆盖：
 - 所有可能的交错顺序
 - 边界条件（满/空/单元素）
 - 并发冲突场景
+
+**实现**:
+- `test_lockfree_formal.lpr`: 基于 TLA+ 模型的测试用例
+- 覆盖 TypeOK、FIFO 顺序、边界、空队列、Close 语义、Resize 安全
+- 83 个测试全通过
 
 ---
 

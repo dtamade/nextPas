@@ -381,6 +381,7 @@ L3: nextpas.core.lockfree.* (数据结构)
 | `MpmcQueue.cfg` | MPMC 队列配置 | ✅ 完成 |
 | `LockFreeChannel.tla` | Channel TLA+ 模型 | ✅ 完成 |
 | `LockFreeChannel.cfg` | Channel 配置 | ✅ 完成 |
+| `test_lockfree_formal.lpr` | TLA+ 模型生成的测试 | ✅ 完成 |
 
 **验证属性**:
 - 无死锁 (Deadlock Freedom)
@@ -391,6 +392,12 @@ L3: nextpas.core.lockfree.* (数据结构)
 - Close 语义 (Close Semantics)
 - Select 公平性 (Select Fairness)
 - Resize 安全 (Resize Safety)
+
+**测试覆盖**:
+- SPSC Queue: TypeOK、FIFO 顺序、边界、空队列
+- MPMC Queue: TypeOK、FIFO 顺序、边界、空队列
+- Channel: TypeOK、缓冲区边界、空通道、Close 语义、FIFO 顺序、Resize 安全
+- 83 个测试全通过
 
 ---
 
