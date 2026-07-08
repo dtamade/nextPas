@@ -457,6 +457,76 @@ begin
   Check(platform_mmap_flush(M, 0, 1) <> 0, 'flush on closed map returns error');
 end;
 
+procedure TestAnonymousMapMultiPage;
+var
+  M: TPlatformMappedFile;
+  LSize: UInt64;
+  I: Int32;
+begin
+  LSize := platform_mmap_page_size * 4;
+  Check(platform_mmap_create_anonymous(LSize, pmaReadWrite, [pmfPrivate], M) = 0,
+    'multi-page anonymous map');
+  Check(M.Addr <> nil, 'multi-page addr');
+  Check(M.Size = LSize, 'multi-page size');
+  { Write pattern across pages }
+  for I := 0 to 255 do
+    PByte(PtrUInt(M.Addr) + PtrUInt(I * 16))^ := Byte(I);
+  { Verify pattern }
+  for I := 0 to 255 do
+    Check(PByte(PtrUInt(M.Addr) + PtrUInt(I * 16))^ = Byte(I),
+      'multi-page byte ' + IntToStr(I));
+  Check(platform_mmap_close(M) = 0, 'multi-page close');
+end;
+
+procedure TestAnonymousMapReadOnly;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_create_anonymous(4096, pmaRead, [pmfPrivate], M);
+  Check(R = 0, 'read-only anonymous map');
+  Check(M.Addr <> nil, 'read-only addr');
+  { Read should succeed }
+  Check(PByte(M.Addr)^ = PByte(M.Addr)^, 'read succeeds');
+  Check(platform_mmap_close(M) = 0, 'read-only close');
+end;
+
+procedure TestShmCreateTwice;
+var
+  A, B: TPlatformMappedFile;
+  LName: string;
+begin
+  LName := 'nextpas_test_shm_twice_' + IntToStr(PtrUInt(@A));
+  Check(platform_shm_create(PAnsiChar(LName), 4096, pmaReadWrite, A) = 0,
+    'first create');
+  { Second create with same name may fail or succeed depending on implementation }
+  B.Addr := nil;
+  platform_shm_create(PAnsiChar(LName), 4096, pmaReadWrite, B);
+  { Cleanup }
+  if B.Addr <> nil then
+    platform_shm_close(B);
+  platform_shm_close(A);
+  Check(True, 'double shm_create handled without crash');
+end;
+
+procedure TestLockNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_lock(M, 0, 1) <> 0, 'lock on closed map returns error');
+end;
+
+procedure TestUnlockNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_unlock(M, 0, 1) <> 0, 'unlock on closed map returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -483,6 +553,11 @@ begin
   T.Test('anonymous map zero size', @TestAnonymousMapZeroSize);
   T.Test('map nil path', @TestMapNilPath);
   T.Test('flush on closed map', @TestFlushNilMap);
+  T.Test('anonymous map multi-page', @TestAnonymousMapMultiPage);
+  T.Test('anonymous map read-only', @TestAnonymousMapReadOnly);
+  T.Test('shm create twice', @TestShmCreateTwice);
+  T.Test('lock on closed map', @TestLockNilMap);
+  T.Test('unlock on closed map', @TestUnlockNilMap);
   if not T.Run then Halt(1);
   Cleanup;
 end.

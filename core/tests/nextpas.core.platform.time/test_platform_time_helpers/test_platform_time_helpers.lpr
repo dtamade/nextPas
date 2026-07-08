@@ -212,6 +212,57 @@ begin
   CheckEqual(Int64(0), Int64(LResult.Second), 'Y2000 second');
 end;
 
+procedure TestBreakdownMonthBoundary;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2024-02-01 00:00:00 UTC = 1706745600 seconds }
+  platform_time_breakdown_utc(UInt64(1706745600) * 1000000000, LResult);
+  CheckEqual(Int64(2024), Int64(LResult.Year), 'month boundary year');
+  CheckEqual(Int64(2), Int64(LResult.Month), 'month boundary month (feb)');
+  CheckEqual(Int64(1), Int64(LResult.Day), 'month boundary day');
+end;
+
+procedure TestBreakdownYearBoundary;
+var
+  LResult: TPlatformTimeBreakdown;
+begin
+  { 2024-12-31 23:59:59 UTC = 1735689599 seconds }
+  platform_time_breakdown_utc(UInt64(1735689599) * 1000000000, LResult);
+  CheckEqual(Int64(2024), Int64(LResult.Year), 'year boundary year');
+  CheckEqual(Int64(12), Int64(LResult.Month), 'year boundary month');
+  CheckEqual(Int64(31), Int64(LResult.Day), 'year boundary day');
+  CheckEqual(Int64(23), Int64(LResult.Hour), 'year boundary hour');
+  CheckEqual(Int64(59), Int64(LResult.Minute), 'year boundary minute');
+  CheckEqual(Int64(59), Int64(LResult.Second), 'year boundary second');
+end;
+
+procedure TestMonotonicResolutionConsistency;
+var
+  LR1, LR2: UInt64;
+begin
+  LR1 := platform_monotonic_resolution_ns;
+  LR2 := platform_monotonic_resolution_ns;
+  CheckEqual(Int64(LR1), Int64(LR2), 'resolution is consistent across calls');
+end;
+
+procedure TestQpcToNsOneHz;
+begin
+  { 1 Hz frequency: each tick is 1 second }
+  CheckEqual(Int64(1000000000), Int64(platform_qpc_to_ns(1, 1)), '1 tick at 1Hz');
+  CheckEqual(Int64(5000000000), Int64(platform_qpc_to_ns(5, 1)), '5 ticks at 1Hz');
+end;
+
+procedure TestTimespecToNsMaxSeconds;
+var
+  LResult: UInt64;
+begin
+  { Large seconds with zero nanoseconds }
+  LResult := platform_timespec_to_ns(1000000, 0);
+  Check(LResult > 0, 'large seconds produces positive result');
+  CheckEqual(Int64(1000000000000000), Int64(LResult), '1M seconds = 1e15 ns');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.time.helpers');
   T.Test('QPC to ns basic', @TestQpcToNsBasic);
@@ -233,5 +284,10 @@ begin
   T.Test('Breakdown negative time (pre-epoch)', @TestBreakdownNegativeTime);
   T.Test('Breakdown Y2038 boundary', @TestBreakdownYear2038);
   T.Test('Breakdown Y2000', @TestBreakdownYear2000);
+  T.Test('Breakdown month boundary (2024-02-01)', @TestBreakdownMonthBoundary);
+  T.Test('Breakdown year boundary (2024-12-31 23:59:59)', @TestBreakdownYearBoundary);
+  T.Test('Monotonic resolution consistency', @TestMonotonicResolutionConsistency);
+  T.Test('QPC to ns at 1Hz', @TestQpcToNsOneHz);
+  T.Test('Timespec to ns max seconds', @TestTimespecToNsMaxSeconds);
   if not T.Run then Halt(1);
 end.

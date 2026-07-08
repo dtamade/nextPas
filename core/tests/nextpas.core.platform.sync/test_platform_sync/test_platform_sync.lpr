@@ -817,6 +817,62 @@ begin
   Check(True, 'condvar init/signal/broadcast/destroy cycle 10 times');
 end;
 
+procedure TestMutexTryLockSuccess;
+var
+  LMutex: TPlatformMutex;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex);
+  LRet := platform_mutex_trylock(LMutex);
+  Check(LRet = 0, 'trylock on unlocked mutex succeeds');
+  platform_mutex_unlock(LMutex);
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestRwLockMultipleReaders;
+var
+  LRwLock: TPlatformRwLock;
+begin
+  platform_rwlock_init(LRwLock);
+  { Multiple read locks should succeed }
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'first rdlock');
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'second rdlock');
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'third rdlock');
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_destroy(LRwLock);
+  Check(True, 'multiple concurrent readers');
+end;
+
+procedure TestCondVarSignalNoWaiter;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+begin
+  platform_mutex_init(LMutex);
+  platform_condvar_init(LCond);
+  { Signal with no waiter should be no-op }
+  platform_condvar_signal(LCond);
+  platform_condvar_broadcast(LCond);
+  platform_condvar_destroy(LCond);
+  platform_mutex_destroy(LMutex);
+  Check(True, 'signal with no waiter is no-op');
+end;
+
+procedure TestBarrierInitDestroyCycle;
+var
+  LBarrier: TPlatformBarrier;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    Check(platform_barrier_init(LBarrier, 1) = 0, 'barrier_init');
+    platform_barrier_destroy(LBarrier);
+  end;
+  Check(True, 'barrier init/destroy cycle 10 times');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -855,5 +911,9 @@ begin
   T.Test('Mutex init/destroy cycle', @TestMutexInitDestroyCycle);
   T.Test('RwLock init/destroy cycle', @TestRwLockInitDestroyCycle);
   T.Test('CondVar init/destroy cycle', @TestCondVarInitDestroyCycle);
+  T.Test('Mutex trylock success', @TestMutexTryLockSuccess);
+  T.Test('RwLock multiple readers', @TestRwLockMultipleReaders);
+  T.Test('CondVar signal no waiter', @TestCondVarSignalNoWaiter);
+  T.Test('Barrier init/destroy cycle', @TestBarrierInitDestroyCycle);
   if not T.Run then Halt(1);
 end.
