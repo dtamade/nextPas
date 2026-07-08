@@ -318,6 +318,8 @@
 | `platform_thread_id: UInt64` | 获取线程 ID |
 | `platform_thread_yield` | 让出 CPU |
 | `platform_thread_sleep_ns(ANanoseconds)` | 纳秒级睡眠 |
+| `platform_thread_sleep_ms(AMilliseconds)` | 毫秒级睡眠 |
+| `platform_thread_sleep_sec(ASeconds)` | 秒级睡眠 |
 | `platform_tls_create(out AKey): Int32` | 创建 TLS key |
 | `platform_tls_destroy(AKey): Int32` | 销毁 TLS key |
 | `platform_tls_set(AKey, AValue): Int32` | 设置 TLS 值 |

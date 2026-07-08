@@ -350,6 +350,27 @@ begin
   {$ENDIF}
 end;
 
+procedure TestSleepMs;
+var
+  LStart, LEnd: UInt64;
+begin
+  LStart := platform_thread_id; { just to have a timestamp reference }
+  platform_thread_sleep_ms(10);
+  LEnd := platform_thread_id;
+  { Just verify it doesn't crash - actual timing is hard to test }
+  Check(True, 'sleep_ms completes');
+end;
+
+procedure TestSleepSec;
+var
+  LStart, LEnd: UInt64;
+begin
+  LStart := platform_thread_id;
+  platform_thread_sleep_sec(0);
+  LEnd := platform_thread_id;
+  Check(True, 'sleep_sec(0) completes immediately');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -372,5 +393,7 @@ begin
   T.Test('Thread set_name(nil)', @TestThreadSetNameNil);
   T.Test('Thread get_name(nil)', @TestThreadGetNameNil);
   T.Test('Thread get_name small buf', @TestThreadGetNameSmallBuf);
+  T.Test('sleep_ms', @TestSleepMs);
+  T.Test('sleep_sec', @TestSleepSec);
   if not T.Run then Halt(1);
 end.

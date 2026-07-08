@@ -25,6 +25,12 @@ function platform_thread_id: UInt64;
 procedure platform_thread_yield;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 
+{ Convenience: sleep in milliseconds }
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
+
+{ Convenience: sleep in seconds }
+procedure platform_thread_sleep_sec(const ASeconds: UInt64);
+
 { TLS }
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
@@ -353,6 +359,16 @@ begin
   platform_thread_host_sleep_ns(ANanoseconds);
 end;
 
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
+begin
+  platform_thread_host_sleep_ns(AMilliseconds * 1000000);
+end;
+
+procedure platform_thread_sleep_sec(const ASeconds: UInt64);
+begin
+  platform_thread_host_sleep_ns(ASeconds * 1000000000);
+end;
+
 { TLS }
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
@@ -671,6 +687,18 @@ begin
     Sleep(platform_thread_windows_sleep_ns_to_ms(ANanoseconds));
 end;
 
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
+begin
+  if AMilliseconds <> 0 then
+    Sleep(DWORD(AMilliseconds));
+end;
+
+procedure platform_thread_sleep_sec(const ASeconds: UInt64);
+begin
+  if ASeconds <> 0 then
+    Sleep(DWORD(ASeconds * 1000));
+end;
+
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 begin
   Result := platform_thread_windows_tls_create(AKey);
@@ -718,6 +746,8 @@ function platform_thread_self: TPlatformThreadToken; begin Result := 0; end;
 function platform_thread_id: UInt64; begin Result := 0; end;
 procedure platform_thread_yield; begin end;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64); begin end;
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64); begin end;
+procedure platform_thread_sleep_sec(const ASeconds: UInt64); begin end;
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
