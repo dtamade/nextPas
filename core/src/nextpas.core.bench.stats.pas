@@ -42,6 +42,7 @@ type
 
     {** Shapiro-Wilk 正态性检验辅助函数 }
     function ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
+    function ShapiroWilkStatistic(const ASorted: TDoubleArray; AMean: Double): Double;
 
     {** 计算 t 分布的临界值（95%，双侧） }
     function TInv0975(ADF: Double): Double;
@@ -369,7 +370,7 @@ begin
     begin
       Result.FilteredCount := LFilteredCount;
       Result.FilteredMean := Mean(LFiltered);
-      Result.FilteredStdDev := StdDev(LFiltered);
+      Result.FilteredStdDev := ComputeStdDev(LFiltered, Result.FilteredMean);
       SortDoubleArray(LFiltered);
       Result.FilteredMedian := PercentileSorted(LFiltered, 50);
     end
@@ -497,9 +498,13 @@ begin
 end;
 
 function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
+begin
+  Result := ShapiroWilkStatistic(ASorted, Mean(ASorted));
+end;
+
+function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray; AMean: Double): Double;
 var
   LN: Integer;
-  LMean: Double;
   LSumSq, LSumWeighted: Double;
   LNormFactor: Double;
   I: Integer;
@@ -511,7 +516,6 @@ begin
   if LN < 3 then
     Exit(1.0);
 
-  LMean := Mean(ASorted);
   LSumSq := 0.0;
   LSumWeighted := 0.0;
 
@@ -522,8 +526,8 @@ begin
 
   for I := 0 to LN - 1 do
   begin
-    LSumSq += Sqr(ASorted[I] - LMean);
-    LSumWeighted += (ASorted[I] - LMean) * (LN - 1 - 2 * I) / (LN - 1);
+    LSumSq += Sqr(ASorted[I] - AMean);
+    LSumWeighted += (ASorted[I] - AMean) * (LN - 1 - 2 * I) / (LN - 1);
   end;
 
   if LSumSq < 1e-10 then
@@ -537,18 +541,19 @@ end;
 function TBenchStatsAnalyzer.LooksNormalHeuristic(const ASamples: TDoubleArray): Boolean;
 var
   LSorted: TDoubleArray;
-  LW: Double;
+  LW, LMean: Double;
   LN: Integer;
 begin
   LN := Length(ASamples);
   if LN < 3 then
     Exit(True);  // 样本太少，无法判断
 
+  LMean := Mean(ASamples);
   LSorted := Copy(ASamples);
   SortDoubleArray(LSorted);
 
-  // Shapiro-Wilk 风格启发式
-  LW := ShapiroWilkStatistic(LSorted);
+  // Shapiro-Wilk 风格启发式（传入预计算均值，避免 ShapiroWilkStatistic 再算一次）
+  LW := ShapiroWilkStatistic(LSorted, LMean);
 
   // 简化的判断阈值（完整实现需要查表）
   // W 接近 1 表示正态分布
@@ -634,8 +639,9 @@ begin
   { IntroSort 间接排序（替换原插入排序，处理大样本更高效） }
   SortIndirect(LSortedIdx, LCombined);
 
-  { 3. 分配秩次（并列值取平均秩） }
+  { 3. 分配秩次（并列值取平均秩）+ 并列值修正一次完成 }
   SetLength(LRanks, LN);
+  LTieCorrection := 0.0;
   I := 0;
   while I < LN do
   begin
@@ -651,6 +657,11 @@ begin
     LAvgRank := (LRunStart + LRunEnd + 2) / 2.0;
     for K := LRunStart to LRunEnd do
       LRanks[LSortedIdx[K]] := LAvgRank;
+
+    { 并列值修正：K>1 时累积 tie correction }
+    K := LRunEnd - LRunStart + 1;
+    if K > 1 then
+      LTieCorrection := LTieCorrection + (K * K * K - K);
 
     I := LRunEnd + 1;
   end;
@@ -671,22 +682,6 @@ begin
 
   { 6. 正态近似计算 p-value }
   LMU := LN1 * LN2 / 2.0;
-
-  { 并列值修正（tie correction） }
-  LTieCorrection := 0.0;
-  I := 0;
-  while I < LN do
-  begin
-    LRunStart := I;
-    LRunEnd := I;
-    while (LRunEnd + 1 < LN) and
-          (LCombined[LSortedIdx[LRunEnd + 1]] = LCombined[LSortedIdx[LRunStart]]) do
-      Inc(LRunEnd);
-    K := LRunEnd - LRunStart + 1;
-    if K > 1 then
-      LTieCorrection := LTieCorrection + (K * K * K - K);
-    I := LRunEnd + 1;
-  end;
 
   LSigma := Sqrt(LN1 * LN2 / 12.0 *
     (LN + 1 - LTieCorrection / (LN * (LN - 1))));
