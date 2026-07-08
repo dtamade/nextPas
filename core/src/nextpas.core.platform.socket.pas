@@ -30,6 +30,9 @@ const
   PLATFORM_SO_LINGER   = $0080;
   PLATFORM_SO_RCVTIMEO = $1006;
   PLATFORM_SO_SNDTIMEO = $1005;
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
   PLATFORM_TCP_NODELAY  = $0001;
   PLATFORM_SHUT_RD     = 0;
   PLATFORM_SHUT_WR     = 1;
@@ -56,6 +59,19 @@ const
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
   PLATFORM_SO_RCVTIMEO = 20;
   PLATFORM_SO_SNDTIMEO = 21;
+{$IFDEF NEXTPAS_MACOS}
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
+{$ELSE}
+  PLATFORM_SO_RCVBUF   = 8;
+  PLATFORM_SO_SNDBUF   = 7;
+  PLATFORM_SO_ERROR    = 4;
+{$ENDIF}
   PLATFORM_TCP_NODELAY  = TCP_NODELAY;
   PLATFORM_SHUT_RD     = SHUT_RD;
   PLATFORM_SHUT_WR     = SHUT_WR;
@@ -157,6 +173,18 @@ function platform_socket_set_keepalive(const ASocket: TPlatformSocket;
 { Convenience: SO_LINGER }
 function platform_socket_set_linger(const ASocket: TPlatformSocket;
   const AEnable: Boolean; const ALingerSec: Int32): Int32;
+
+{ Convenience: SO_RCVBUF }
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+
+{ Convenience: SO_SNDBUF }
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+
+{ Convenience: SO_ERROR (get pending error) }
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
 
 { IPv4 helpers for net layer }
 function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
@@ -668,6 +696,30 @@ begin
     PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
 end;
 
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_RCVBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_SNDBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
+var
+  LLen: cint;
+begin
+  LLen := SizeOf(AError);
+  Result := platform_socket_getsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_ERROR, @AError, @LLen);
+end;
+
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -1176,6 +1228,30 @@ begin
     PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
 end;
 
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_RCVBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_SNDBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
+var
+  LLen: Int32;
+begin
+  LLen := SizeOf(AError);
+  Result := platform_socket_getsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_ERROR, @AError, @LLen);
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -1211,6 +1287,9 @@ function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const A
 function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_keepalive(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_linger(const ASocket: TPlatformSocket; const AEnable: Boolean; const ALingerSec: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket; ASize: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket; ASize: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_get_error(const ASocket: TPlatformSocket; out AError: Int32): Int32; begin AError := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
 function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

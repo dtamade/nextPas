@@ -268,6 +268,9 @@
 | `platform_socket_set_reuseaddr(ASocket, AEnable): Int32` | 设置 SO_REUSEADDR |
 | `platform_socket_set_keepalive(ASocket, AEnable): Int32` | 设置 SO_KEEPALIVE |
 | `platform_socket_set_linger(ASocket, AEnable, ALingerSec): Int32` | 设置 SO_LINGER |
+| `platform_socket_set_recvbuf(ASocket, ASize): Int32` | 设置 SO_RCVBUF 接收缓冲区 |
+| `platform_socket_set_sendbuf(ASocket, ASize): Int32` | 设置 SO_SNDBUF 发送缓冲区 |
+| `platform_socket_get_error(ASocket, out AError): Int32` | 获取 SO_ERROR 待处理错误 |
 | `platform_socket_error_would_block(AError): Boolean` | 是否为阻塞错误 |
 | `platform_socket_error_timed_out(AError): Boolean` | 是否为超时错误 |
 | `platform_sockaddr_ipv4(APort, AAddr): TPlatformSockAddr` | 构造 IPv4 地址 |
