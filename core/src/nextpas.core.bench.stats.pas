@@ -482,10 +482,6 @@ var
   LTStat: Double;
   LVarA, LVarB: Double;
   LDF: Double;
-  LX: Double;
-  LT: Double;
-  LP: Double;
-  LK: Double;
 begin
   if (A.SampleCount <= 1) or (B.SampleCount <= 1) then
     Exit(1.0);
@@ -504,27 +500,14 @@ begin
   LDF := Sqr(LVarA + LVarB) /
          (Sqr(LVarA) / (A.SampleCount - 1) + Sqr(LVarB) / (B.SampleCount - 1));
 
-  // 使用正态近似（df 较大时 t 分布接近正态）
-  // p-value ≈ 2 * (1 - Phi(|t|))，Phi 使用 Hastings 近似
-  LX := LTStat;
-  if LX > 6.0 then
-    Result := 0.001
-  else if LX < 0.01 then
-    Result := 1.0
-  else
-  begin
-    LT := 1.0 / (1.0 + 0.2316419 * LX);
-    LK := 0.3989422804014327 * Exp(-0.5 * LX * LX);
-    LP := LK * (LT * (0.319381530 + LT * (-0.356563782 + LT * (1.781477937 +
-          LT * (-1.821255978 + LT * 1.330274429)))));
-    if LDF < 30 then
-      LP := LP * (1.0 + 1.0 / (4.0 * LDF));
-    Result := 2.0 * LP;
-    if Result > 1.0 then
-      Result := 1.0;
-    if Result < 0.001 then
-      Result := 0.001;
-  end;
+  // 使用正态近似 + 小样本 t 分布修正
+  Result := ZToPValue(LTStat);
+  if LDF < 30 then
+    Result := Result * (1.0 + 1.0 / (4.0 * LDF));
+  if Result > 1.0 then
+    Result := 1.0;
+  if Result < 0.001 then
+    Result := 0.001;
 end;
 
 function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
@@ -613,25 +596,6 @@ var
   LZ: Double;
   LRunStart, LRunEnd, I, J, K: Integer;
   LAvgRank: Double;
-
-  { 从 z-score 计算双侧 p-value（Hastings 近似） }
-  function ZToPValue(AZ: Double): Double;
-  var
-    LT, LK, LP: Double;
-  begin
-    AZ := Abs(AZ);
-    if AZ > 6.0 then
-      Exit(0.000001)
-    else if AZ < 0.01 then
-      Exit(1.0);
-    LT := 1.0 / (1.0 + 0.2316419 * AZ);
-    LK := 0.3989422804014327 * Exp(-0.5 * AZ * AZ);
-    LP := LK * (LT * (0.319381530 + LT * (-0.356563782 + LT * (1.781477937 +
-          LT * (-1.821255978 + LT * 1.330274429)))));
-    Result := 2.0 * LP;
-    if Result > 1.0 then Result := 1.0;
-    if Result < 0.000001 then Result := 0.000001;
-  end;
 
 begin
   LN1 := Length(A);
