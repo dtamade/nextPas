@@ -1129,6 +1129,34 @@ type
 
 ---
 
+## Timeout Queue (nextpas.core.lockfree.timeoutqueue)
+
+```pascal
+type
+  TLockFreeTimeoutQueueResult = (tqDequeued, tqTimeout, tqEmpty, tqClosed);
+
+  generic TTimeoutQueueImpl<T> = class
+    constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeTimeoutQueueResult;
+    function GetCount: Int64;
+    function GetCapacity: Int64;
+    function GetTimeoutNs: Int64;
+    function IsEmpty: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 固定大小 MPMC 队列，支持超时等待
+- DequeueTimeout 支持超时返回
+- 适用场景：请求超时、任务调度、生产者-消费者
+
+---
+
 ## 内存顺序参考
 
 | Order | 语义 | 使用场景 |
