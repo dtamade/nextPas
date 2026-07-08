@@ -9,7 +9,6 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 type
@@ -24,7 +23,7 @@ type
    *  内部使用 open-addressing hash map (MulHash64 + 线性探测)
    *  实现 O(1) 平均查找/插入/删除。
    *}
-  TTrackingAllocator = class(TAllocator)
+  TTrackingAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FLock: TMemMutex;
@@ -46,14 +45,14 @@ type
     function MapLookup(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
     procedure MapInsert(aKey: PtrUInt; aSize: SizeUInt; aAllocId: QWord; const aTag: string);
     function MapDelete(aKey: PtrUInt; out aSize: SizeUInt; out aAllocId: QWord; out aTag: string): Boolean;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(aInner: IAllocator);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 设置当前分配标签（后续分配将使用此标签） }
     procedure SetTag(const ATag: string);
@@ -68,7 +67,7 @@ type
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -312,7 +311,7 @@ end;
 
 { --- IAllocator implementation --- }
 
-function TTrackingAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TTrackingAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
@@ -327,7 +326,7 @@ begin
   end;
 end;
 
-function TTrackingAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TTrackingAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
@@ -342,12 +341,14 @@ begin
   end;
 end;
 
-function TTrackingAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TTrackingAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LOldSize: SizeUInt;
   LOldAllocId: QWord;
   LOldTag: string;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   Result := FInner.ReallocMem(APtr, ASize);
   FLock.Acquire;
   try
@@ -370,7 +371,7 @@ begin
   end;
 end;
 
-procedure TTrackingAllocator.DoFreeMem(APtr: Pointer);
+procedure TTrackingAllocator.FreeMem(APtr: Pointer); inline;
 var
   LSize: SizeUInt;
   LAllocId: QWord;
@@ -382,7 +383,7 @@ begin
   try
     if not MapDelete(PtrUInt(APtr), LSize, LAllocId, LTag) then
       raise EDoubleFree.Create(aeDoubleFree,
-        'TTrackingAllocator.DoFreeMem: pointer not tracked (double-free or foreign pointer)');
+        'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
     try
       FInner.FreeMem(APtr);
     except
@@ -471,7 +472,7 @@ begin
   FCurrentTag := ATag;
 end;
 
-function TTrackingAllocator.Traits: TAllocatorTraits;
+function TTrackingAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
