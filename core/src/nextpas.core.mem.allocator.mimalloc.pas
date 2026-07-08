@@ -5,8 +5,8 @@ unit nextpas.core.mem.allocator.mimalloc;
 interface
 
 uses
-  nextpas.core.errors,
-  nextpas.core.mem.allocator.base
+  nextpas.core.mem.intf,
+  nextpas.core.errors
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,nextpas.core.mem.allocator.mimalloc.loader
   ,nextpas.core.platform.dl
@@ -18,16 +18,19 @@ type
    * TMimallocAllocator
    * @desc 使用 mimalloc 库的 IAllocator 实现
    *}
-  TMimallocAllocator = class(TAllocator)
-  protected
-    function  DoGetMem(ASize: SizeUInt): Pointer; override;
-    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
+  TMimallocAllocator = class(TInterfacedObject, IAllocator)
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     {** 查询 mimalloc 分配的实际可用大小（独立方法，非 IAllocator 接口） }
     function  UsableSize(APtr: Pointer): SizeUInt;
-    function  Traits: TAllocatorTraits; override;
+    function  Traits: TAllocatorTraits; inline;
   end;
 
 function TryGetMimallocAllocator(out A: IAllocator): Boolean;
@@ -107,7 +110,7 @@ uses
 {$ENDIF}
 
 var
-  _MimallocAllocatorObj: TAllocator = nil;
+  _MimallocAllocatorObj: TInterfacedObject = nil;
   _MimallocAllocatorIntf: IAllocator = nil;
   GAllocatorLock: TPlatformMutex;
 
@@ -133,28 +136,28 @@ begin
   Result := True;
 end;
 
-function TMimallocAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TMimallocAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_malloc(ASize);
 end;
 
-function TMimallocAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TMimallocAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_calloc(1, ASize);
 end;
 
-function TMimallocAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TMimallocAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_realloc(APtr, ASize);
 end;
 
-procedure TMimallocAllocator.DoFreeMem(APtr: Pointer);
+procedure TMimallocAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError,
@@ -168,12 +171,12 @@ begin
     Result := 0;
 end;
 
-function TMimallocAllocator.Traits: TAllocatorTraits;
+function TMimallocAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
   // mimalloc semantics:
   // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
   Result.ZeroInitialized := True;
+  Result.ThreadSafe := False;
 end;
 
 function GetMimallocAllocator: IAllocator;
