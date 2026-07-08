@@ -199,6 +199,9 @@ procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 429 Too Many Requests JSON error response. }
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -1031,6 +1034,12 @@ function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', AMessage);
+end;
+
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_TOO_MANY_REQUESTS, 'too_many_requests', AMessage);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);

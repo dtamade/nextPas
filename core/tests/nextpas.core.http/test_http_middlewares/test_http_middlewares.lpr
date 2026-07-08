@@ -20,6 +20,7 @@ uses
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.requestid,
   nextpas.core.http.middleware.cachecontrol,
+  nextpas.core.http.middleware.ratelimit,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -101,6 +102,12 @@ end;
 
 procedure TMockResponseWriter.Flush;
 begin
+end;
+
+function MakeRateLimitOpts(AMax, AWindow: Int32): TRateLimitOptions;
+begin
+  Result.MaxRequests := AMax;
+  Result.WindowSeconds := AWindow;
 end;
 
 { TMockRequest }
@@ -1238,6 +1245,140 @@ begin
   CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'), 'header set');
 end;
 
+{ RateLimit tests }
+
+procedure TestRateLimitAllowsUnderLimit;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(10, 60))]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called under limit');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestRateLimitSetsHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(5, 60))]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('5', LWObj.GetHeaders.Get('x-ratelimit-limit'), 'limit header');
+  Check(LWObj.GetHeaders.Get('x-ratelimit-remaining') <> '', 'remaining header set');
+  Check(LWObj.GetHeaders.Get('x-ratelimit-reset') <> '', 'reset header set');
+end;
+
+procedure TestRateLimitBlocksAfterLimit;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LI: Int32;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(3, 60))]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'returns 429 after limit');
+  Check(Pos('too_many_requests', LWObj.Body) > 0, 'body has error code');
+end;
+
+procedure TestRateLimitDefaultOptions;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('100', LWObj.GetHeaders.Get('x-ratelimit-limit'), 'default limit 100');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'default allows request');
+end;
+
+procedure TestRateLimitNegativeMaxRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    RateLimitMiddlewareWith(MakeRateLimitOpts(-1, 60));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on negative max requests');
+end;
+
+procedure TestRateLimitZeroWindowRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    RateLimitMiddlewareWith(MakeRateLimitOpts(10, 0));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on zero window');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1292,5 +1433,12 @@ begin
   T.Test('CacheControl: MaxAge convenience', @TestMaxAgeMiddlewareSetsHeader);
   T.Test('CacheControl: negative MaxAge raises', @TestMaxAgeNegativeRaises);
   T.Test('CacheControl: handler still called', @TestCacheControlHandlerStillCalled);
+  { RateLimit }
+  T.Test('RateLimit: allows under limit', @TestRateLimitAllowsUnderLimit);
+  T.Test('RateLimit: sets rate limit headers', @TestRateLimitSetsHeaders);
+  T.Test('RateLimit: blocks after limit exceeded', @TestRateLimitBlocksAfterLimit);
+  T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
+  T.Test('RateLimit: negative max raises', @TestRateLimitNegativeMaxRaises);
+  T.Test('RateLimit: zero window raises', @TestRateLimitZeroWindowRaises);
   if not T.Run then Halt(1);
 end.
