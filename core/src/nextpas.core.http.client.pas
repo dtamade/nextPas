@@ -267,6 +267,18 @@ function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
+{** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc PUT with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc PATCH with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -2426,6 +2438,66 @@ begin
   try
     HttpEnsureSuccess(LResp);
     Result := HttpReadResponseBodyBytes(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Post(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Put(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Patch(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Delete(AUrl);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
     raise;

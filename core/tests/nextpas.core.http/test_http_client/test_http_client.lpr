@@ -8465,6 +8465,116 @@ begin
   Check(LCaught, 'WithRetry(-1) raises EArgumentError');
 end;
 
+{ HttpPostString/PutString/PatchString/DeleteString tests }
+
+procedure TestHttpPostStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPostString(LClient, 'http://localhost/test', 'text/plain', 'hello');
+  CheckEqual('', LBody, 'PostString returns empty body from 200');
+end;
+
+procedure TestHttpPostStringRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpPostString(LClient, 'http://localhost/error', 'text/plain', 'body');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'PostString raises EHttpError on 404');
+end;
+
+procedure TestHttpPutStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPutString(LClient, 'http://localhost/test', 'application/json', '{}');
+  CheckEqual('', LBody, 'PutString returns empty body from 200');
+end;
+
+procedure TestHttpPutStringRaisesOn500;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpPutString(LClient, 'http://localhost/error', 'text/plain', 'body');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('500', E.Message) > 0);
+  end;
+  Check(LCaught, 'PutString raises EHttpError on 500');
+end;
+
+procedure TestHttpPatchStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPatchString(LClient, 'http://localhost/test', 'text/plain', 'patch');
+  CheckEqual('', LBody, 'PatchString returns empty body from 200');
+end;
+
+procedure TestHttpDeleteStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpDeleteString(LClient, 'http://localhost/test');
+  CheckEqual('', LBody, 'DeleteString returns empty body from 200');
+end;
+
+procedure TestHttpDeleteStringRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpDeleteString(LClient, 'http://localhost/error');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'DeleteString raises EHttpError on 404');
+end;
+
 { Main }
 
 begin
@@ -8773,5 +8883,12 @@ begin
   T.Test('WithRetry(0) means no retry', @TestWithRetryZeroMeansNoRetry);
   T.Test('WithRetry chains with WithBearerAuth', @TestWithRetryChainsWithAuth);
   T.Test('WithRetry rejects negative count', @TestWithRetryRejectsNegative);
+  T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
+  T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
+  T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);
+  T.Test('PutString raises on 500', @TestHttpPutStringRaisesOn500);
+  T.Test('PatchString returns body on 200', @TestHttpPatchStringSuccess);
+  T.Test('DeleteString returns body on 200', @TestHttpDeleteStringSuccess);
+  T.Test('DeleteString raises on 404', @TestHttpDeleteStringRaisesOn404);
   if not T.Run then Halt(1);
 end.

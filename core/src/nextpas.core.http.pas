@@ -326,6 +326,18 @@ function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes; inline;
+{** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc PUT with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc PATCH with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -840,6 +852,30 @@ end;
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 begin
   Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
+end;
+
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPostString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPutString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPatchString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
+begin
+  Result := nextpas.core.http.client.HttpDeleteString(AClient, AUrl);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;
