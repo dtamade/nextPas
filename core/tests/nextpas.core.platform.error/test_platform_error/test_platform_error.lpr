@@ -542,6 +542,42 @@ begin
   Check(platform_error_category(PLATFORM_ERR_CONNREFUSED) = ecIO, 'CONNREFUSED is ecIO');
 end;
 
+procedure TestIntrConstant;
+begin
+  CheckEqual(Int64(4), Int64(PLATFORM_ERR_INTR), 'PLATFORM_ERR_INTR = 4');
+end;
+
+procedure TestNospcConstant;
+begin
+  CheckEqual(Int64(28), Int64(PLATFORM_ERR_NOSPC), 'PLATFORM_ERR_NOSPC = 28');
+end;
+
+procedure TestIntrMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_INTR, @Buf[0], 64) > 0, 'INTR message');
+  Check(Pos('interrupted', Buf) > 0, 'contains "interrupted"');
+end;
+
+procedure TestNospcMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_NOSPC, @Buf[0], 64) > 0, 'NOSPC message');
+  Check(Pos('no space', Buf) > 0, 'contains "no space"');
+end;
+
+procedure TestIntrCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_INTR) = ecInterrupted, 'INTR is ecInterrupted');
+end;
+
+procedure TestNospcCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_NOSPC) = ecResourceExhausted, 'NOSPC is ecResourceExhausted');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.error');
   T.Test('ENOENT message', @TestENOENT);
@@ -612,5 +648,11 @@ begin
   T.Test('NOSYS category is ecNotSupported', @TestNosysCategory);
   T.Test('CONNRESET category is ecIO', @TestConnresetCategory);
   T.Test('CONNREFUSED category is ecIO', @TestConnrefusedCategory);
+  T.Test('new INTR constant is 4', @TestIntrConstant);
+  T.Test('new NOSPC constant is 28', @TestNospcConstant);
+  T.Test('INTR message', @TestIntrMessage);
+  T.Test('NOSPC message', @TestNospcMessage);
+  T.Test('INTR category is ecInterrupted', @TestIntrCategory);
+  T.Test('NOSPC category is ecResourceExhausted', @TestNospcCategory);
   if not T.Run then Halt(1);
 end.
