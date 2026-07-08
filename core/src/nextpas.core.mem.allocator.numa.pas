@@ -26,8 +26,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 最大支持的 NUMA 节点数 }
@@ -48,18 +47,21 @@ type
    *  NUMA 感知分配器。根据当前 CPU 将分配路由到对应 NUMA 节点的分配器。
    *  非 NUMA 系统自动降级为单一 fallback 分配器。
    *}
-  TNumaAllocator = class(TAllocator)
+  TNumaAllocator = class(TInterfacedObject, IAllocator)
   private
     FTopology: TNumaTopology;
     FNodeAllocators: array[0..MAX_NUMA_NODES - 1] of IAllocator;
     FFallback: IAllocator;
     function GetCurrentNode: Integer;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     {** 创建 NUMA 分配器。
      *  ADefault: 默认分配器（用于节点无专属分配器时的 fallback）。
      *  拓扑自动检测。 }
@@ -75,7 +77,7 @@ type
     {** 是否为 NUMA 系统 (NodeCount > 1) }
     function IsNuma: Boolean;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 {** 读取系统 NUMA 拓扑 (从 sysfs) }
@@ -256,22 +258,22 @@ begin
     Result := 0;
 end;
 
-function TNumaAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TNumaAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := GetNodeAllocator(GetCurrentNode).GetMem(ASize);
 end;
 
-function TNumaAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TNumaAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := GetNodeAllocator(GetCurrentNode).AllocMem(ASize);
 end;
 
-function TNumaAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TNumaAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := GetNodeAllocator(GetCurrentNode).ReallocMem(APtr, ASize);
 end;
 
-procedure TNumaAllocator.DoFreeMem(APtr: Pointer);
+procedure TNumaAllocator.FreeMem(APtr: Pointer); inline;
 begin
   { Free goes through fallback — the memory is still valid regardless of node }
   FFallback.FreeMem(APtr);
@@ -282,7 +284,7 @@ begin
   Result := FTopology.NodeCount > 1;
 end;
 
-function TNumaAllocator.Traits: TAllocatorTraits;
+function TNumaAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result := FFallback.Traits;
 end;
