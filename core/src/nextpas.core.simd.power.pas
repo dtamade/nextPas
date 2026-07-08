@@ -224,8 +224,7 @@ end;
 procedure RegisterVSXBackend;
 begin
   {$IFDEF CPUPOWER64}
-  // TODO: Register VSX backend with dispatch system
-  // This requires implementing the full dispatch table
+  {$NOTE SIMD-VSX: VSX backend registration deferred — blocked on FPC PPC64 compiler support}
   {$ENDIF}
 end;
 

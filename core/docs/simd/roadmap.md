@@ -51,34 +51,16 @@
 | G15: 代码组织瘦身 | ✅ 100% | 可维护性 |
 | G19: SysUtils 残留清理 | ✅ 100% | 77→0 |
 | G20: Gather/Scatter 正式化 | ✅ 100% | 正式 API |
-
-### 已完成 (✅) — 2026-07-06 更新
-
-| 目标 | 状态 | 说明 |
-|------|------|------|
-| G1: 核心运算完备性 | ✅ 100% | F32/F64/Integer batch 操作 |
-| G2: 神经网络推理层 | ✅ 100% | 47 个函数 |
-| G3: 质量保障 | ✅ 100% | 审计/测试/内存 |
-| G4: 文档与可发现性 | ✅ 100% | 文档体系 |
-| G5: 性能验证与基准 | ✅ 100% | 基准测试 |
-| G6: 文本/内存 SIMD 加速 | ✅ 100% | MemEqual, Utf8Validate |
-| G7: GEMM 微内核 | ✅ 100% | 矩阵乘法 |
-| G8: FFT SIMD 化 | ✅ 100% | 信号处理 |
-| G9: RTL 依赖清零 | ✅ 100% | 无 FPC RTL 依赖 |
-| G10: 高级计算 | ✅ 100% | parallel/quant/NEON |
-| G11: SIMD 深化 | ✅ 100% | INT8 dot/RealFft |
-| G12: 算法层 | ✅ 100% | Winograd/Attention/Strassen |
-| G13: SIMD contract qualification | ✅ 100% | 合规路线图 |
-| G14: 维护可持续性 | ✅ 100% | 维护体系 |
-| G15: 代码组织瘦身 | ✅ 100% | 可维护性 |
-| G19: SysUtils 残留清理 | ✅ 100% | 77→0 |
-| G20: Gather/Scatter 正式化 | ✅ 100% | 正式 API |
 | Phase 1: 编译期快速路径 | ✅ 100% | 静态分派宏 (SIMD_STATIC_*) |
 | Phase 2: FP 快速路径 + IEEE 754 | ✅ 100% | SSE2/AVX2 真实 SIMD 指令 |
 | Phase 3: 文件合并 + 命名规范化 | ✅ 100% | 214→88 文件 |
 | Phase 4: 平台扩展 | ✅ 100% | LoongArch/PPC64 QEMU 验证 |
 | Phase 5: Highway 静态调度 | ✅ 100% | SIMD_STATIC_BACKEND 支持 |
 | Phase 6: 类型覆盖扩展 | ✅ 100% | 全类型运算符 |
+| Phase 7: 批量操作深度优化 | ✅ 100% | SSE2/AVX2/AVX512 循环展开 |
+| Phase 8: 基准测试修正 | ✅ 100% | SIMD vs Scalar 对比框架 |
+| Phase 9: 宽向量优化 | ✅ 100% | AVX-512 批量操作 |
+| Phase 10: 内存操作优化 | ✅ 100% | SimdMemCopy/Fill/Compare |
 
 ### 进行中 (⚠️)
 

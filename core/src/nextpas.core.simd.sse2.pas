@@ -372,6 +372,19 @@ function AsciiIEqual_SSE2(a, b: Pointer; len: SizeUInt): Boolean;
 function BytesIndexOf_SSE2(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
 function Utf8Validate_SSE2(p: Pointer; len: SizeUInt): Boolean;
 
+// === SSE4.2 CRC32C Extensions ===
+function CRC32C_8(crc: UInt32; value: Byte): UInt32;
+function CRC32C_16(crc: UInt32; value: UInt16): UInt32;
+function CRC32C_32(crc: UInt32; value: UInt32): UInt32;
+function CRC32C_64(crc: UInt64; value: UInt64): UInt64;
+function CRC32C_Buffer(const data: Pointer; len: SizeUInt; initial: UInt32): UInt32;
+
+// === SSE4.2 String Search Extensions ===
+function FindFirstOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+function FindFirstNotOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+
 implementation
 
 uses
@@ -2746,7 +2759,7 @@ function MemEqual_SSE2(a, b: Pointer; len: SizeUInt): LongBool;
 var
   pa, pb: PByte;
   i: SizeUInt;
-  maskA, maskB: Integer;
+  LResult: Boolean;
 begin
   {$PUSH}{$Q-}{$R-}  // Disable overflow/range checks for SIMD loop
   if len = 0 then
@@ -2765,9 +2778,10 @@ begin
   pb := PByte(b);
   i := 0;
 
-  // Process 16 bytes at a time using SSE2
-  while i + 16 <= len do
+  // Process 32 bytes at a time using 2x SSE2 registers
+  while i + 32 <= len do
   begin
+    LResult := False;
     asm
       mov   rax, pa
       mov   rdx, pb
@@ -2776,11 +2790,49 @@ begin
       movdqu xmm0, [rax]
       movdqu xmm1, [rdx]
       pcmpeqb xmm0, xmm1
-      pmovmskb eax, xmm0
-      mov   maskA, eax
+      pmovmskb ecx, xmm0
+      cmp   ecx, $FFFF
+      jne   @not_equal_32
+
+      movdqu xmm2, [rax + 16]
+      movdqu xmm3, [rdx + 16]
+      pcmpeqb xmm2, xmm3
+      pmovmskb ecx, xmm2
+      cmp   ecx, $FFFF
+      jne   @not_equal_32
+      mov   byte ptr LResult, 1
+    @not_equal_32:
     end;
 
-    if maskA <> $FFFF then
+    if not LResult then
+    begin
+      Result := False;
+      Exit;
+    end;
+
+    Inc(i, 32);
+  end;
+
+  // Process remaining 16-byte chunk
+  if i + 16 <= len then
+  begin
+    LResult := False;
+    asm
+      mov   rax, pa
+      mov   rdx, pb
+      add   rax, i
+      add   rdx, i
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rdx]
+      pcmpeqb xmm0, xmm1
+      pmovmskb ecx, xmm0
+      cmp   ecx, $FFFF
+      jne   @not_equal_16
+      mov   byte ptr LResult, 1
+    @not_equal_16:
+    end;
+
+    if not LResult then
     begin
       Result := False;
       Exit;
