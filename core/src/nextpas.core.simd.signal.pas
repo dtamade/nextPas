@@ -929,9 +929,9 @@ begin
     aOutput[k].Re := LER + LTwR * LOI + LTwI * LOR;
     aOutput[k].Im := LEI - LTwR * LOR + LTwI * LOI;
 
-    // X[N-k] = conj(X[k]) for real input (but we store N/2+1 points)
-    aOutput[aCount - k].Re := LER - LTwR * LOI - LTwI * LOR;
-    aOutput[aCount - k].Im := -(LEI - LTwR * LOR + LTwI * LOI);
+    // X[N-k] = conj(X[k]) for real input (but we only store N/2+1 points)
+    // The conjugate symmetry means X[N-k] = conj(X[k]), but we don't need to store it
+    // since it's redundant for real input. Only store indices 0..N/2.
   end;
 
   SimdFree(LTwBufI);

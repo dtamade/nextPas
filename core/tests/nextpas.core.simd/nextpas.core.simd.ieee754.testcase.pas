@@ -164,15 +164,15 @@ end;
 
 procedure TIEEE754MaskedVectorAsmStatefulTestCase.BeforeEach;
 begin
-  {inherited SetUp; -- removed}
+  inherited BeforeEach;
   FSavedExceptionMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
 end;
 
 procedure TIEEE754MaskedVectorAsmStatefulTestCase.AfterEach;
 begin
-  {inherited TearDown; -- removed}
   SetExceptionMask(FSavedExceptionMask);
+  inherited AfterEach;
 end;
 
 { TTestCase_IEEE754_F64 - IEEE 754 F64 双精度浮点特殊值专项测试 }
@@ -192,7 +192,7 @@ const
 
 procedure TTestCase_IEEE754_F64.BeforeEach;
 begin
-  {inherited SetUp; -- removed}
+  inherited BeforeEach;
   // 强制使用 Scalar 后端以确保测试一致性
   SetActiveBackend(sbScalar);
 end;

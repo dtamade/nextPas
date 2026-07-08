@@ -9,12 +9,17 @@ unit nextpas.core.simd.signal.testcase;
 interface
 
 uses
-  nextpas.core.test, nextpas.core.simd.signal,
+  Math, nextpas.core.test, nextpas.core.simd.signal,
   nextpas.core.simd.base;
 
 {$M+}
 type
   TTestCase_SimdSignal = class(TTestFixture)
+  private
+    FSavedExceptionMask: TFPUExceptionMask;
+  public
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure Test_HannWindow_Basic;
     procedure Test_HannWindow_Symmetry;
@@ -48,6 +53,21 @@ const
 function NearEqual(A, B, AEps: Single): Boolean;
 begin
   Result := Abs(A - B) <= AEps;
+end;
+
+{ TTestCase_SimdSignal }
+
+procedure TTestCase_SimdSignal.BeforeEach;
+begin
+  inherited BeforeEach;
+  FSavedExceptionMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+end;
+
+procedure TTestCase_SimdSignal.AfterEach;
+begin
+  SetExceptionMask(FSavedExceptionMask);
+  inherited AfterEach;
 end;
 
 { ============================================================================
