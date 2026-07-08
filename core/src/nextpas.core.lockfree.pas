@@ -29,7 +29,8 @@ uses
   nextpas.core.lockfree.bloom,
   nextpas.core.lockfree.lru,
   nextpas.core.lockfree.counter,
-  nextpas.core.lockfree.semaphore;
+  nextpas.core.lockfree.semaphore,
+  nextpas.core.lockfree.mutex;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -179,6 +180,14 @@ type
     @see TConcurrentSemaphore 详细文档和示例
   }
   TConcurrentSemaphore = nextpas.core.lockfree.semaphore.TConcurrentSemaphore;
+
+  {** @desc 并发互斥锁
+    @details 基于原子操作的互斥锁实现。
+      支持 Lock/Unlock/TryLock/LockTimeout。
+      适用于需要互斥访问的场景。
+    @see TConcurrentMutex 详细文档和示例
+  }
+  TConcurrentMutex = nextpas.core.lockfree.mutex.TConcurrentMutex;
 
 implementation
 
