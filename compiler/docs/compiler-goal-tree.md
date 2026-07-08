@@ -603,3 +603,8 @@
   - 零值使用 EmitConstIntSmart 替代 EmitConstIntOfType(0, GetIntType)
   - 确保元素大小和零值使用正确的类型宽度
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第八刀：字符串/数组长度使用 i32
+  - 字符串长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 数组长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 确保长度值使用正确的类型宽度 (i32)
+  - smoke + compiler-pass 49/49 全通过
