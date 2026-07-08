@@ -403,6 +403,20 @@ begin
     'remove non-existent fails');
 end;
 
+procedure TestCopyNonExistent;
+begin
+  Check(platform_fs_copy_file('/tmp/nextpas_nonexistent_src_xyz',
+    '/tmp/nextpas_nonexistent_dst_xyz') <> 0,
+    'copy non-existent fails');
+end;
+
+procedure TestMoveNonExistent;
+begin
+  Check(platform_fs_move_file('/tmp/nextpas_nonexistent_mv_src_xyz',
+    '/tmp/nextpas_nonexistent_mv_dst_xyz') <> 0,
+    'move non-existent fails');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fs');
   T.Test('exists file', @TestExistsFile);
@@ -418,6 +432,8 @@ begin
   T.Test('move_file', @TestMoveFile);
   T.Test('remove_file', @TestRemoveFile);
   T.Test('remove_file non-existent', @TestRemoveFileNonExistent);
+  T.Test('copy non-existent', @TestCopyNonExistent);
+  T.Test('move non-existent', @TestMoveNonExistent);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
   T.Test('read_file_dynamic', @TestReadFile);
