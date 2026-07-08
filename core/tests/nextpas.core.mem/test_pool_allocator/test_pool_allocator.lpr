@@ -4,6 +4,7 @@ program test_pool_allocator;
 
 uses
   nextpas.core.test,
+  nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.allocator;
@@ -11,7 +12,7 @@ uses
 type
   TExceptionProc = procedure;
 
-  TRecordingFallback = class(TAllocator)
+  TRecordingFallback = class(TInterfacedObject, IAllocator)
   private
     FPtrs: array of Pointer;
     function IndexOf(APtr: Pointer): Integer;
@@ -22,11 +23,11 @@ type
     AllocCalls: Integer;
     ReallocCalls: Integer;
     FreeCalls: Integer;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(ADst: Pointer); override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
 var
@@ -72,41 +73,49 @@ begin
   SetLength(FPtrs, LLast);
 end;
 
-function TRecordingFallback.DoGetMem(ASize: SizeUInt): Pointer;
+function TRecordingFallback.GetMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Inc(GetCalls);
   Result := System.GetMem(ASize);
   Track(Result);
 end;
 
-function TRecordingFallback.DoAllocMem(ASize: SizeUInt): Pointer;
+function TRecordingFallback.AllocMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Inc(AllocCalls);
   Result := System.AllocMem(ASize);
   Track(Result);
 end;
 
-function TRecordingFallback.DoReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+function TRecordingFallback.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 var
   LIndex: Integer;
 begin
+  if ASize = 0 then begin FreeMem(ADst); Exit(nil); end;
+  if ADst = nil then Exit(GetMem(ASize));
   Inc(ReallocCalls);
-  if ADst = nil then
-    Exit(DoGetMem(ASize));
-
   LIndex := IndexOf(ADst);
   if LIndex < 0 then
     Exit(nil);
-
   Result := System.ReallocMem(ADst, ASize);
   FPtrs[LIndex] := Result;
 end;
 
-procedure TRecordingFallback.DoFreeMem(ADst: Pointer);
+procedure TRecordingFallback.FreeMem(ADst: Pointer);
 begin
+  if ADst = nil then Exit;
   Inc(FreeCalls);
   if Untrack(ADst) then
     System.FreeMem(ADst);
+end;
+
+function TRecordingFallback.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 procedure CheckRaisesAllocError(AProc: TExceptionProc; AExpected: TAllocError; const AName: string);

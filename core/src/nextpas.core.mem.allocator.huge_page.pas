@@ -52,7 +52,7 @@ type
    *  大页分配使用 mmap(MAP_HUGETLB)，在分配块前存储 8 字节 header
    *  记录大小，用于释放时判断是否为大页。
    *
-   *  线程安全（继承自 TAllocator）。
+   *  线程安全由内部分配器决定。
    *}
   THugePageAllocator = class(TInterfacedObject, IAllocator)
   private

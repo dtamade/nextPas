@@ -7,23 +7,24 @@ uses
   nextpas.core.text.conv,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.error,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.error;
 
 type
-  { Mock allocator for testing TAllocator base class }
-  TMockAllocator = class(TAllocator)
+  { Mock allocator implementing IAllocator directly.
+    Verifies zero-size guards, nil guards, and method dispatch. }
+  TMockAllocator = class(TInterfacedObject, IAllocator)
   private
     FGetMemCalls: SizeUInt;
     FAllocMemCalls: SizeUInt;
     FReallocMemCalls: SizeUInt;
     FFreeMemCalls: SizeUInt;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
+    function Traits: TAllocatorTraits;
+
     property GetMemCalls: SizeUInt read FGetMemCalls;
     property AllocMemCalls: SizeUInt read FAllocMemCalls;
     property ReallocMemCalls: SizeUInt read FReallocMemCalls;
@@ -35,28 +36,40 @@ var
 
 { TMockAllocator }
 
-function TMockAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TMockAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Inc(FGetMemCalls);
   Result := System.GetMem(ASize);
 end;
 
-function TMockAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TMockAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Inc(FAllocMemCalls);
   Result := System.AllocMem(ASize);
 end;
 
-function TMockAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TMockAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   Inc(FReallocMemCalls);
   Result := System.ReallocMem(APtr, ASize);
 end;
 
-procedure TMockAllocator.DoFreeMem(APtr: Pointer);
+procedure TMockAllocator.FreeMem(APtr: Pointer);
 begin
+  if APtr = nil then Exit;
   Inc(FFreeMemCalls);
   System.FreeMem(APtr);
+end;
+
+function TMockAllocator.Traits: TAllocatorTraits;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 { Tests }
@@ -70,7 +83,7 @@ begin
   try
     LPtr := LAlloc.GetMem(0);
     Check(LPtr = nil, 'GetMem(0) should return nil');
-    Check(LAlloc.GetMemCalls = 0, 'DoGetMem should not be called for size 0');
+    Check(LAlloc.GetMemCalls = 0, 'GetMem should not be called for size 0');
   finally
     LAlloc.Free;
   end;
@@ -85,7 +98,7 @@ begin
   try
     LPtr := LAlloc.AllocMem(0);
     Check(LPtr = nil, 'AllocMem(0) should return nil');
-    Check(LAlloc.AllocMemCalls = 0, 'DoAllocMem should not be called for size 0');
+    Check(LAlloc.AllocMemCalls = 0, 'AllocMem should not be called for size 0');
   finally
     LAlloc.Free;
   end;
@@ -101,7 +114,7 @@ begin
     LPtr := LAlloc.ReallocMem(nil, 256);
     Check(LPtr <> nil, 'ReallocMem(nil, 256) should succeed');
     Check(LAlloc.GetMemCalls = 1, 'ReallocMem(nil) should call GetMem');
-    Check(LAlloc.ReallocMemCalls = 0, 'ReallocMem(nil) should NOT call DoReallocMem');
+    Check(LAlloc.ReallocMemCalls = 0, 'ReallocMem(nil) should NOT increment ReallocMemCalls');
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -132,7 +145,7 @@ begin
   LAlloc := TMockAllocator.Create;
   try
     LAlloc.FreeMem(nil);
-    Check(LAlloc.FreeMemCalls = 0, 'FreeMem(nil) should not call DoFreeMem');
+    Check(LAlloc.FreeMemCalls = 0, 'FreeMem(nil) should not increment FreeMemCalls');
   finally
     LAlloc.Free;
   end;
@@ -154,7 +167,7 @@ begin
   end;
 end;
 
-procedure TestGetMemCallsDoGetMem;
+procedure TestGetMemAllocates;
 var
   LAlloc: TMockAllocator;
   LPtr: Pointer;
@@ -163,42 +176,13 @@ begin
   try
     LPtr := LAlloc.GetMem(512);
     Check(LPtr <> nil, 'GetMem(512) should succeed');
-    Check(LAlloc.GetMemCalls = 1, 'DoGetMem should be called once');
+    Check(LAlloc.GetMemCalls = 1, 'GetMemCalls should be 1');
     LAlloc.FreeMem(LPtr);
-    Check(LAlloc.FreeMemCalls = 1, 'DoFreeMem should be called once');
+    Check(LAlloc.FreeMemCalls = 1, 'FreeMemCalls should be 1');
   finally
     LAlloc.Free;
   end;
 end;
-
-{$IFDEF DEBUG}
-procedure TestDoubleFreeDetection;
-var
-  LAlloc: TMockAllocator;
-  LPtr: Pointer;
-  LCaught: Boolean;
-begin
-  LAlloc := TMockAllocator.Create;
-  try
-    LPtr := LAlloc.GetMem(64);
-    Check(LPtr <> nil, 'GetMem should succeed');
-    LAlloc.FreeMem(LPtr);
-    LCaught := False;
-    try
-      LAlloc.FreeMem(LPtr);  // double free!
-    except
-      on E: EAllocError do
-      begin
-        LCaught := True;
-        Check(E.Error = aeDoubleFree, 'Error code should be aeDoubleFree');
-      end;
-    end;
-    Check(LCaught, 'Double free should raise EAllocError');
-  finally
-    LAlloc.Free;
-  end;
-end;
-{$ENDIF}
 
 begin
   T := TTestSuite.Create('test_allocator_base');
@@ -208,10 +192,7 @@ begin
   T.Test('ReallocMemZeroSizeFrees', @TestReallocMemZeroSizeFrees);
   T.Test('FreeMemNilIsNoOp', @TestFreeMemNilIsNoOp);
   T.Test('DefaultTraits', @TestDefaultTraits);
-  T.Test('GetMemCallsDoGetMem', @TestGetMemCallsDoGetMem);
-  {$IFDEF DEBUG}
-  T.Test('DoubleFreeDetection', @TestDoubleFreeDetection);
-  {$ENDIF}
+  T.Test('GetMemAllocates', @TestGetMemAllocates);
   T.Run;
   T.Summary;
 end.

@@ -74,8 +74,8 @@ type
 
   TPool = TLocalBlockPool;
 
-function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
-function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator): IFixedSlabPool; overload;
+function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
+function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool; overload;
 function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
@@ -86,12 +86,12 @@ type
     Next: PFreeNode;
   end;
 
-function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator; AMinShift: SizeUInt): IFixedSlabPool;
+function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator, AMinShift);
 end;
 
-function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: TAllocator): IFixedSlabPool;
+function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool;
 begin
   Result := TFixedSlabPool.Create(ACapacity, AAllocator);
 end;

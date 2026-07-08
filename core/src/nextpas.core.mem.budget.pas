@@ -28,8 +28,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** 内存预算事件 }
@@ -84,21 +83,21 @@ type
    *  分配前检查是否超过硬限制，超过则返回 nil。
    *  分配后更新预算，超过软限制时触发回调。
    *}
-  TBudgetAllocator = class(TAllocator)
+  TBudgetAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FBudget: TMemoryBudget;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; ABudget: TMemoryBudget);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
+    function Traits: TAllocatorTraits;
+
     property Budget: TMemoryBudget read FBudget;
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -197,8 +196,9 @@ begin
   inherited Destroy;
 end;
 
-function TBudgetAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TBudgetAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   if not FBudget.CheckLimit(ASize) then
     Exit(nil);
   Result := FInner.GetMem(ASize);
@@ -206,8 +206,9 @@ begin
     FBudget.RecordAlloc(ASize);
 end;
 
-function TBudgetAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TBudgetAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   if not FBudget.CheckLimit(ASize) then
     Exit(nil);
   Result := FInner.AllocMem(ASize);
@@ -215,21 +216,19 @@ begin
     FBudget.RecordAlloc(ASize);
 end;
 
-function TBudgetAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TBudgetAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 var
   LOldSize: SizeUInt;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   // Realloc: 先释放旧预算，检查新预算，再分配
-  if APtr <> nil then
-  begin
-    LOldSize := 0; // 精确大小未知，保守估计为 0
-    FBudget.RecordFree(LOldSize);
-  end;
+  LOldSize := 0; // 精确大小未知，保守估计为 0
+  FBudget.RecordFree(LOldSize);
   if not FBudget.CheckLimit(ASize) then
   begin
     // 分配失败，恢复旧预算（近似）
-    if APtr <> nil then
-      FBudget.RecordAlloc(0);
+    FBudget.RecordAlloc(0);
     Exit(nil);
   end;
   Result := FInner.ReallocMem(APtr, ASize);
@@ -237,8 +236,9 @@ begin
     FBudget.RecordAlloc(ASize);
 end;
 
-procedure TBudgetAllocator.DoFreeMem(APtr: Pointer);
+procedure TBudgetAllocator.FreeMem(APtr: Pointer);
 begin
+  if APtr = nil then Exit;
   // FreeMem 不知道精确大小，预算跟踪为近似值
   FInner.FreeMem(APtr);
 end;

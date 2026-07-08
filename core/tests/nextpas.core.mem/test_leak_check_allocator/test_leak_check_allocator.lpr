@@ -6,6 +6,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.mem.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.tracking,
@@ -14,7 +15,7 @@ uses
 var
   T: TTestSuite;
 
-procedure NoLeakProc(AAllocator: TAllocator);
+procedure NoLeakProc(AAllocator: IAllocator);
 var
   LPtr: Pointer;
 begin
@@ -22,7 +23,7 @@ begin
   AAllocator.FreeMem(LPtr);
 end;
 
-procedure LeakProc(AAllocator: TAllocator);
+procedure LeakProc(AAllocator: IAllocator);
 var
   LPtr: Pointer;
 begin
@@ -63,7 +64,7 @@ procedure TestMultipleLeaks;
 var
   LResult: TLeakCheckResult;
 begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: TAllocator)
+  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
   begin
     AAllocator.GetMem(32);
     AAllocator.GetMem(64);
@@ -95,7 +96,7 @@ procedure TestZeroSizeLeak;
 var
   LResult: TLeakCheckResult;
 begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: TAllocator)
+  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
   begin
     AAllocator.GetMem(1);
   end);

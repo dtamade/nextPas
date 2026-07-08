@@ -18,10 +18,10 @@ type
   {** TVirtualArenaAllocator
    *
    *  将 TVirtualArena 包装为 IAllocator 接口。
-   *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
+   *  分配通过 TVirtualArena 的 bump 指针完成，FreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
-   *  注意：DoReallocMem 不支持（arena 不跟踪单个分配大小）。
+   *  注意：ReallocMem 不支持（arena 不跟踪单个分配大小）。
    *  非线程安全。}
   TVirtualArenaAllocator = class(TInterfacedObject, IAllocator)
   private

@@ -796,8 +796,8 @@ var
   I: Integer;
 begin
   { Guard allocator uses mmap guard pages for each allocation.
-    DoAllocMem zeroes the committed region even though Traits.ZeroInitialized
-    is False (it inherits the base TAllocator default). }
+    AllocMem zeroes the committed region even though Traits.ZeroInitialized
+    is False (TGuardAllocator implements this behavior directly). }
   LAllocator := TGuardAllocator.Create;
   try
     LPtr := LAllocator.AllocMem(64);
