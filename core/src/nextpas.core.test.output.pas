@@ -50,11 +50,17 @@ function FormatStatusLine(AStatus: TTestStatus; const AName: string;
   const AReason: string; const AConfig: TTestConfig): string; overload;
 
 { ── FormatFailDetail ──────────────────────────────────────────────────────── }
-{ Returns the indented failure detail line: AnsiDim(msg) or AnsiDim('(assertion failed)')
+{ Returns the indented failure detail line: AnsiRed(msg) or AnsiRed('(assertion failed)')
   if msg is empty. }
 
 function FormatFailDetail(const AMsg: string;
   const AConfig: TTestConfig): string;
+
+{ Print captured log lines (from Ctx.Log) in a visually distinct block.
+  Used on test failure to show diagnostic output without --verbose. }
+
+procedure WriteCapturedLog(const ALines: specialize TArray<string>;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
 
 { ── Meta-Test Helpers (for test programs that verify the framework) ───────── }
 
@@ -69,8 +75,9 @@ procedure SectionHeader(const ATitle: string);
 { ── Per-Test Output ───────────────────────────────────────────────────────── }
 
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
-  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
-  { Write formatted per-test status line to ASink. }
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write formatted per-test status line to ASink. Shows timing for non-zero durations. }
 procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; ADurationMs: Int64;
   const ASink: IOutputSink; const AConfig: TTestConfig);
@@ -356,9 +363,23 @@ end;
 function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
 begin
   if AMsg <> '' then
-    Result := AnsiDim(AMsg, AConfig)
+    Result := AnsiRed(AMsg, AConfig)
   else
-    Result := AnsiDim('(assertion failed)', AConfig);
+    Result := AnsiRed('(assertion failed)', AConfig);
+end;
+
+{ WriteCapturedLog — print captured log lines on failure/error }
+
+procedure WriteCapturedLog(const ALines: specialize TArray<string>;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  I: Integer;
+begin
+  if Length(ALines) = 0 then Exit;
+  ASink.WriteLn('    ' + AnsiDim('─── test log ───', AConfig));
+  for I := 0 to High(ALines) do
+    ASink.WriteLn('    ' + AnsiDim(ALines[I], AConfig));
+  ASink.WriteLn('    ' + AnsiDim('─────────────────', AConfig));
 end;
 
 { Meta-Test Helpers }
@@ -391,14 +412,21 @@ begin
 end;
 
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
-  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  LDurStr: string;
 begin
+  if ADurationMs > 0 then
+    LDurStr := AnsiDim(' (' + FormatDuration(ADurationMs) + ')', AConfig)
+  else
+    LDurStr := '';
   case AStatus of
     tsPassed:
-      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig));
+      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig) + LDurStr);
     tsFailed:
       begin
-        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig));
+        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig) + LDurStr);
         ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
     tsSkipped:
@@ -407,9 +435,9 @@ begin
     tsError:
       begin
         ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
-          ' [unexpected exception]');
+          LDurStr + ' [unexpected exception]');
         if AFailMsg <> '' then
-          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+          ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
   end;
 end;
@@ -447,7 +475,7 @@ begin
         ASink.WriteLn('  ' + AnsiRed('[FAIL]', AConfig) + ' ' +
           AName + AnsiDim(LDurStr, AConfig) + ' [unexpected exception]');
         if AFailMsg <> '' then
-          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+          ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
   end;
 end;
@@ -460,7 +488,8 @@ begin
     WriteTestStatusVerbose(AStatus, AName, AFailMsg, ASkipReason,
       ADurationMs, ASink, AConfig)
   else
-    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason, ASink, AConfig);
+    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason,
+      ADurationMs, ASink, AConfig);
 end;
 
 procedure WriteRetryHint(ACurrent, ATotal: Integer;

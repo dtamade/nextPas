@@ -1309,6 +1309,10 @@ begin
     WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
       LLastFailMsg, LEntry.SkipReason,
       LStart.Elapsed.AsMilliseconds, LOutSink, LConfig);
+    { Auto-print captured log on failure/error — no --verbose needed }
+    if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
+       (LStatus in [tsFailed, tsError]) then
+      WriteCapturedLog(LSubCtx.FLogLines, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);

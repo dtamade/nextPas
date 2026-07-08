@@ -259,6 +259,8 @@ end;
 
 procedure CheckEqual(const AExpected, AActual: string;
   const AMessage: string);
+var
+  LDiffPos, LMin, I: Integer;
 begin
   if AExpected <> AActual then
   begin
@@ -266,7 +268,25 @@ begin
        (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
       FailPrepend(AMessage, StringDiff(AExpected, AActual))
     else
-      FailPrepend(AMessage, 'Expected "' + AExpected + '" but got "' + AActual + '"');
+    begin
+      { Find first differing position for short strings }
+      LMin := Length(AExpected);
+      if Length(AActual) < LMin then LMin := Length(AActual);
+      LDiffPos := 0;
+      for I := 1 to LMin do
+        if AExpected[I] <> AActual[I] then
+        begin
+          LDiffPos := I;
+          Break;
+        end;
+      if LDiffPos = 0 then
+        LDiffPos := LMin + 1; { difference is purely in length }
+      FailPrepend(AMessage,
+        'expected: "' + AExpected + '"'#10 +
+        '  actual: "' + AActual + '"'#10 +
+        '          ' + StringOfChar(' ', LDiffPos - 1) + '^' +
+        ' diff at pos ' + IntToStr(LDiffPos));
+    end;
   end;
 end;
 
@@ -279,7 +299,9 @@ procedure CheckEqual(const AExpected, AActual: Int64;
   const AMessage: string);
 begin
   if AExpected <> AActual then
-    FailPrepend(AMessage, 'Expected ' + IntToStr(AExpected) + ' but got ' + IntToStr(AActual));
+    FailPrepend(AMessage,
+      'expected: ' + IntToStr(AExpected) + #10 +
+      '  actual: ' + IntToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: Int64);
@@ -291,8 +313,9 @@ procedure CheckEqual(const AExpected, AActual: Boolean;
   const AMessage: string);
 begin
   if AExpected <> AActual then
-    FailPrepend(AMessage, 'Expected ' + BoolToStr(AExpected, 'True', 'False') +
-      ' but got ' + BoolToStr(AActual, 'True', 'False'));
+    FailPrepend(AMessage,
+      'expected: ' + BoolToStr(AExpected, 'True', 'False') + #10 +
+      '  actual: ' + BoolToStr(AActual, 'True', 'False'));
 end;
 
 procedure CheckEqual(const AExpected, AActual: Boolean);
