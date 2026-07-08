@@ -3354,7 +3354,7 @@ begin
       else
       begin
         EnsureAlloca(ArrName + '$ptr', GetPtrType);
-        EnsureAlloca(ArrName + '$len', GetIntType);
+        EnsureAlloca(ArrName + '$len', GetIntTypeByWidth(32, True));
         if IsStaticArray then
           EmitStaticArrayBacking(ArrName, ArrLength);
         if (ANode.NodeKind = hnkVarDeclArrRuntime) and (not IsStaticArray) then
@@ -3837,12 +3837,12 @@ begin
       if (I < Length(ParamName)) and (ParamName[I + 1] = 's') then
       begin
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
-        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntTypeByWidth(32, True), False, False);
       end
       else if (I < Length(ParamName)) and (ParamName[I + 1] = 'a') then
       begin
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
-        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntTypeByWidth(32, True), False, False);
       end
       else if (I < Length(ParamName)) and (ParamName[I + 1] = 'v') then
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetPtrType, True, False)
@@ -4114,7 +4114,7 @@ begin
       LenVal := Instr.ResultId;
       SetLength(ArgOps, ArgCount + 2);
       ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
-      ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntType);
+      ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
       Inc(ArgCount, 2);
     end
     else
@@ -4557,7 +4557,7 @@ begin
   Instr.IntrinsicName := 'write_str_var';
   SetLength(Instr.Operands, 2);
   Instr.Operands[0] := MakeTypedOperand(DataPtr, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
   EmitInstr(Instr);
 end;
 
@@ -4637,8 +4637,8 @@ begin
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(DstTs, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(SrcTs, GetPtrType);
-  Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntType);
-  Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
   EmitInstr(Instr);
 end;
 
