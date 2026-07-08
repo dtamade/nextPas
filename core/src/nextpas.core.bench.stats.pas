@@ -581,8 +581,9 @@ function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray; A
 var
   LN: Integer;
   LSumSq, LSumWeighted: Double;
-  LNormFactor: Double;
+  LNormFactor, LInvNm1: Double;
   I: Integer;
+  LDev: Double;
 begin
   // 简化的 Shapiro-Wilk 风格统计量
   // 完整实现需要查表（m_i 系数），这里用线性权重近似。
@@ -598,11 +599,14 @@ begin
   //   Σ w_i^2 = N(N+1) / (3(N-1))
   // 归一化因子 = 1/sqrt(Σ w_i^2)
   LNormFactor := Sqrt(3.0 * (LN - 1) / (LN * (LN + 1)));
+  { 预计算 2/(N-1)，避免循环内除法 }
+  LInvNm1 := 2.0 / (LN - 1);
 
   for I := 0 to LN - 1 do
   begin
-    LSumSq += Sqr(ASorted[I] - AMean);
-    LSumWeighted += (ASorted[I] - AMean) * (LN - 1 - 2 * I) / (LN - 1);
+    LDev := ASorted[I] - AMean;
+    LSumSq += Sqr(LDev);
+    LSumWeighted += LDev * (1.0 - I * LInvNm1);
   end;
 
   if LSumSq < 1e-10 then
