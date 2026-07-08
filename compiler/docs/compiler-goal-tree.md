@@ -593,3 +593,8 @@
   - 使用 SemanticTypeIdToHirTypeId 转换为 HIR 类型
   - 确保变量 alloca 使用声明时的实际类型宽度
   - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第六刀：EmitConstIntSmart 值范围推断类型
+  - 添加 EmitConstIntSmart 函数，根据值范围推断类型 (i8/i16/i32/i64)
+  - 替换 7 处 EmitConstIntOfType(0/1, GetIntType) 为 EmitConstIntSmart
+  - 零值和一值使用最小足够类型
+  - smoke + compiler-pass 49/49 全通过
