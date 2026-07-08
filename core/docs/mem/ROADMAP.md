@@ -156,3 +156,14 @@
 | P27-4 | test_oom_edge | OOM 边界：Bounded/Counting/Fail 极限条件 | 7 |
 
 **模块总计**: 92 allocator 文件 / ~1357 测试
+
+## Phase 28 — 深化测试（Realloc/对齐/组合/碎片化） ✅
+
+| ID | 测试套件 | 描述 | 测试数 |
+|----|----------|------|--------|
+| P28-1 | test_realloc_edge | Realloc 边界：grow/shrink/nil/zero/same-size/multi-grow | 7 |
+| P28-2 | test_alignment_guarantee | 对齐保证：16/32/64/4096 对齐验证 | 7 |
+| P28-3 | test_composition | 分配器组合：Tracking+Aligned+Stats 链式组合 | 5 |
+| P28-4 | test_fragmentation | 碎片化模式（已有）：holes/churn/RSS 测量 | — |
+
+**模块总计**: 92 allocator 文件 / ~1376 测试
