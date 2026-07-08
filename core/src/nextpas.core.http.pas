@@ -16,6 +16,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.url,
   nextpas.core.http.router,
+  nextpas.core.http.router.group,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
@@ -101,6 +102,7 @@ type
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+  THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 
   { Re-export JSON types }
   IJsonDocument = nextpas.core.json.IJsonDocument;
@@ -441,6 +443,9 @@ function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 422 Unprocessable Entity JSON error response. }
 function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
@@ -1180,6 +1185,12 @@ function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteErrorUnprocessableEntity(AW, AMessage);
+end;
+
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorPayloadTooLarge(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;

@@ -32,6 +32,9 @@ uses
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
+var
+  GTestSentinel: TObject;
+
 type
   TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
   private
@@ -2430,8 +2433,8 @@ begin
       LCtx := HttpContextOf(AReq);
       if LCtx <> nil then
       begin
-        LCtx.SetValue('test_key', TObject(LCtx));
-        LGotHas := LCtx.Has('test_key');
+        LCtx.SetValue('test_key', GTestSentinel);
+        LGotHas := LCtx.Has('test_key') and (LCtx.GetValue('test_key') = GTestSentinel);
         LCtx.Remove('test_key');
         LGotHas := LGotHas and (not LCtx.Has('test_key'));
       end;
@@ -2475,9 +2478,88 @@ begin
   Check(HttpContextOf(LReq) = nil, 'context cleaned up after handler');
 end;
 
+{ RateLimit Retry-After test }
+
+procedure TestRateLimitRetryAfterHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LI: Int32;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(2, 60))]
+  );
+  for LI := 1 to 4 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'returns 429');
+  Check(LWObj.FHeaders.Has('retry-after'), 'has Retry-After header');
+  Check(LWObj.FHeaders.Get('retry-after') <> '', 'Retry-After is non-empty');
+end;
+
+{ JSON escaping test — uses HttpWriteErrorResponse directly }
+
+procedure TestErrorResponseJsonEscaping;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWritten := HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST,
+    'test', 'line1'#10'line2 "quoted" \backslash');
+  Check(LWritten > 0, 'wrote response');
+  Check(Pos('\n', LWObj.Body) > 0, 'newline is escaped');
+  Check(Pos('\"quoted\"', LWObj.Body) > 0, 'quotes are escaped');
+  Check(Pos('\\backslash', LWObj.Body) > 0, 'backslash is escaped');
+  Check(Pos('line1', LWObj.Body) > 0, 'original text preserved');
+end;
+
+{ BodyLimit JSON response test }
+
+procedure TestBodyLimitReturnsJson;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(100)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(200);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'returns 413');
+  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
+  Check(Pos('payload_too_large', LWObj.Body) > 0, 'has error code');
+end;
+
 var
   T: TTestSuite;
 begin
+  GTestSentinel := TObject.Create;
   T := TTestSuite.Create('nextpas.core.http.middlewares');
   { Recovery }
   T.Test('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
@@ -2584,5 +2666,12 @@ begin
   T.Test('Context: set and get value', @TestContextMiddlewareSetGetValue);
   T.Test('Context: nil without middleware', @TestContextMiddlewareNilWithoutContext);
   T.Test('Context: cleans up after handler', @TestContextMiddlewareCleansUp);
+  { RateLimit Retry-After }
+  T.Test('RateLimit: 429 includes Retry-After', @TestRateLimitRetryAfterHeader);
+  { JSON escaping }
+  T.Test('ErrorResponse: JSON escaping', @TestErrorResponseJsonEscaping);
+  { BodyLimit JSON }
+  T.Test('BodyLimit: returns JSON error', @TestBodyLimitReturnsJson);
   if not T.Run then Halt(1);
+  GTestSentinel.Free;
 end.

@@ -194,6 +194,7 @@ begin
 
         if GEntries[LIdx].Count > LMax then
         begin
+          AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
           HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
           Exit;
         end;

@@ -40,8 +40,7 @@ begin
       LContentLength := AReq.ContentLength;
       if (LContentLength > 0) and (LContentLength > AMaxBytes) then
       begin
-        HttpWriteResponseString(AW, HTTP_STATUS_PAYLOAD_TOO_LARGE,
-          'text/plain', 'Request body too large');
+        HttpWriteErrorPayloadTooLarge(AW, 'Request body too large');
         Exit;
       end;
       ANext.ServeHTTP(AReq, AW);
