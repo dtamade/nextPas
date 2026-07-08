@@ -49,6 +49,8 @@ type
     constructor Create(const AHirModule: THIRModule);
     destructor Destroy; override;
     function Lower: TMirModule;
+    { 取出 MIR module 所有权（调用者负责释放） }
+    function DetachModule: TMirModule;
   end;
 
 implementation
@@ -348,6 +350,12 @@ begin
     LowerFunction(FHirModule.FunctionAt(I));
 
   Result := FMirModule;
+end;
+
+function THirToMirLowering.DetachModule: TMirModule;
+begin
+  Result := FMirModule;
+  FMirModule := nil;
 end;
 
 end.
