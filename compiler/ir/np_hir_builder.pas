@@ -4108,7 +4108,7 @@ begin
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
+      Instr.TypeId := GetIntTypeByWidth(32, True);
       Instr.IntrinsicName := 'const:' + IntToStr(Length(StrVarName) - 2);
       EmitInstr(Instr);
       LenVal := Instr.ResultId;
