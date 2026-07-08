@@ -14,7 +14,8 @@ uses
   nextpas.core.math.quat,
   nextpas.core.math.transform,
   nextpas.core.math.easing,
-  nextpas.core.math.random;
+  nextpas.core.math.random,
+  nextpas.core.math.batch;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -78,6 +79,45 @@ function BatchLerp(const AStart, AEnd: array of TVec3f;
 function BatchClamp(const AVectors: array of TVec3f;
                     const AMin, AMax: TVec3f;
                     var ADest: array of TVec3f): SizeInt; overload;
+
+{ Batch scalar operations }
+function BatchSinF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchCosF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchTanF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchExpF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchLnF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+function BatchLog10F32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+function BatchLog2F32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchSqrtF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchAbsF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+function BatchNegF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+function BatchCeilF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function BatchFloorF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+function BatchRoundF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+function BatchTruncF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+function BatchLerpF32(const AStart, AEnd: array of Single;
+                      const AT: Single;
+                      var AOutput: array of Single): SizeInt;
+function BatchClampF32(const AInput: array of Single;
+                       const AMin, AMax: Single;
+                       var AOutput: array of Single): SizeInt;
+function BatchScaleOffsetF32(const AInput: array of Single;
+                             const AScale, AOffset: Single;
+                             var AOutput: array of Single): SizeInt;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
@@ -337,6 +377,113 @@ function BatchClamp(const AVectors: array of TVec3f;
                     var ADest: array of TVec3f): SizeInt;
 begin
   Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
+end;
+
+{ Batch scalar operations }
+
+function BatchSinF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSinF32(AInput, AOutput);
+end;
+
+function BatchCosF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchCosF32(AInput, AOutput);
+end;
+
+function BatchTanF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchTanF32(AInput, AOutput);
+end;
+
+function BatchExpF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchExpF32(AInput, AOutput);
+end;
+
+function BatchLnF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLnF32(AInput, AOutput);
+end;
+
+function BatchLog10F32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLog10F32(AInput, AOutput);
+end;
+
+function BatchLog2F32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLog2F32(AInput, AOutput);
+end;
+
+function BatchSqrtF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSqrtF32(AInput, AOutput);
+end;
+
+function BatchAbsF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchAbsF32(AInput, AOutput);
+end;
+
+function BatchNegF32(const AInput: array of Single;
+                    var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchNegF32(AInput, AOutput);
+end;
+
+function BatchCeilF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchCeilF32(AInput, AOutput);
+end;
+
+function BatchFloorF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchFloorF32(AInput, AOutput);
+end;
+
+function BatchRoundF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchRoundF32(AInput, AOutput);
+end;
+
+function BatchTruncF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchTruncF32(AInput, AOutput);
+end;
+
+function BatchLerpF32(const AStart, AEnd: array of Single;
+                      const AT: Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLerpF32(AStart, AEnd, AT, AOutput);
+end;
+
+function BatchClampF32(const AInput: array of Single;
+                       const AMin, AMax: Single;
+                       var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchClampF32(AInput, AMin, AMax, AOutput);
+end;
+
+function BatchScaleOffsetF32(const AInput: array of Single;
+                             const AScale, AOffset: Single;
+                             var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchScaleOffsetF32(AInput, AScale, AOffset, AOutput);
 end;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
