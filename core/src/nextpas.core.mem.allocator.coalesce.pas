@@ -62,7 +62,7 @@ type
    *  空闲块额外链接到空闲链表（按地址排序）。
    *  释放时检查前后块，如果空闲则合并。
    *}
-  TCoalesceAllocator = class(TAllocator)
+  TCoalesceAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FRegionSize: SizeUInt;
@@ -86,11 +86,6 @@ type
     procedure InsertFreeBlock(ABlock: Pointer);
     procedure RemoveFreeBlock(ABlock: Pointer);
     procedure MergeWithNeighbors(ABlock: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建合并空闲块分配器
      *  @param AInner 内部分配器（用于获取内存区域）
@@ -100,14 +95,18 @@ type
       ARegionSize: SizeUInt = COALESCE_DEFAULT_REGION_SIZE);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
+
     {** 获取统计信息 }
     function GetStats: TCoalesceStats;
     {** 已使用字节数 }
     property UsedBytes: SizeUInt read FUsedBytes;
     {** 空闲字节数 }
     property FreeBytes: SizeUInt read FFreeBytes;
-
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -364,7 +363,7 @@ begin
   end;
 end;
 
-function TCoalesceAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCoalesceAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LBlock: Pointer;
   LTotalNeeded: SizeUInt;
@@ -377,7 +376,7 @@ begin
     GrowRegion;
     LBlock := FindFreeBlock(ASize);
     if LBlock = nil then
-      raise EAllocError.Create(aeOutOfMemory, 'TCoalesceAllocator.DoGetMem: allocation failed');
+      raise EAllocError.Create(aeOutOfMemory, 'TCoalesceAllocator.GetMem: allocation failed');
   end;
 
   { 计算实际需要的块大小 }
@@ -402,23 +401,23 @@ begin
   Result := UserPtr(LBlock);
 end;
 
-function TCoalesceAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCoalesceAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TCoalesceAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCoalesceAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LBlock: Pointer;
   LOldSize: SizeUInt;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
@@ -430,15 +429,15 @@ begin
     Exit(APtr);
 
   { 否则分配新块，复制，释放旧块 }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
   begin
     Move(APtr^, Result^, LOldSize);
-    DoFreeMem(APtr);
+    FreeMem(APtr);
   end;
 end;
 
-procedure TCoalesceAllocator.DoFreeMem(APtr: Pointer);
+procedure TCoalesceAllocator.FreeMem(APtr: Pointer); inline;
 var
   LBlock: Pointer;
 begin
@@ -473,9 +472,10 @@ begin
   Result.FragmentCount := FFragmentCount;
 end;
 
-function TCoalesceAllocator.Traits: TAllocatorTraits;
+function TCoalesceAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 
