@@ -674,6 +674,35 @@ begin
     'custom AllowHeaders');
 end;
 
+procedure TestCorsWildcardEchoesRequestHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowHeaders := '*';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Access-Control-Request-Headers', 'X-Custom, Authorization');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('X-Custom, Authorization', LWObj.GetHeaders.Get('Access-Control-Allow-Headers'),
+    'wildcard echoes request headers');
+end;
+
 { === Timeout Tests === }
 
 procedure TestTimeoutFastHandler;
@@ -2858,6 +2887,7 @@ begin
   T.Test('CORS: credentials+wildcard echoes origin', @TestCorsCredentialsWildcardEchoesOrigin);
   T.Test('CORS: MaxAge header', @TestCorsMaxAge);
   T.Test('CORS: custom AllowMethods/AllowHeaders', @TestCorsCustomMethodsHeaders);
+  T.Test('CORS: wildcard echoes request headers', @TestCorsWildcardEchoesRequestHeaders);
   { Timeout }
   T.Test('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
   T.Test('Timeout: slow handler still works', @TestTimeoutSlowHandler);
