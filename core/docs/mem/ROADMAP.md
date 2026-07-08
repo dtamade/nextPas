@@ -135,3 +135,13 @@
 | P25-2 | TMimallocAllocator | mimalloc 不可用时的优雅降级 | 7 |
 
 **模块总计**: 92 allocator 文件 / ~1308 测试
+
+## Phase 26 — 基础设施模块 ✅
+
+| ID | 模块 | 描述 | 测试数 |
+|----|------|------|--------|
+| P26-1 | TMemMutex | 互斥锁 Init/Done/Acquire/Release | 7 |
+| P26-2 | TMemRwLock | 读写锁 AcquireRead/ReleaseRead/AcquireWrite/ReleaseWrite | 9 |
+| P26-3 | mem.error | 错误码、异常类型、对齐验证 | 8 |
+
+**模块总计**: 92 allocator 文件 / ~1332 测试
