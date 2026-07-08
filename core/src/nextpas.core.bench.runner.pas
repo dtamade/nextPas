@@ -909,11 +909,11 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  I, LMaxIters, LN: Integer;
+  I, LMaxIters: Integer;
   LResult: TBenchResult;
-  LSamples: TDoubleArray;
-  LCurrentSamples: TDoubleArray;
-  LCV: Double;
+  { Welford online algorithm for CV }
+  LCount: Integer;
+  LMean, LM2, LDelta, LDelta2, LCV: Double;
 begin
   { B21: Adaptive warmup - measure CV and stop when variance stabilizes }
   if FConfig.AdaptiveWarmup then
@@ -922,8 +922,9 @@ begin
     if LMaxIters <= 0 then
       LMaxIters := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
 
-    SetLength(LSamples, LMaxIters);
-    LN := 0;
+    LMean := 0.0;
+    LM2 := 0.0;
+    LCount := 0;
 
     for I := 1 to LMaxIters do
     begin
@@ -931,18 +932,17 @@ begin
       if LResult.Skipped then
         Break;
 
-      LSamples[LN] := LResult.NsPerOp;
-      Inc(LN);
+      { Welford online update }
+      Inc(LCount);
+      LDelta := LResult.NsPerOp - LMean;
+      LMean := LMean + LDelta / LCount;
+      LDelta2 := LResult.NsPerOp - LMean;
+      LM2 := LM2 + LDelta * LDelta2;
 
       { Need at least 5 samples before checking CV }
-      if LN >= 5 then
+      if (LCount >= 5) and (LMean > 0) then
       begin
-        { Use stats module's CoefficientOfVariation }
-        SetLength(LCurrentSamples, LN);
-        Move(LSamples[0], LCurrentSamples[0], LN * SizeOf(Double));
-        LCV := FStatsAnalyzer.CoefficientOfVariation(LCurrentSamples);
-
-        { Stop if CV below threshold }
+        LCV := Sqrt(LM2 / (LCount - 1)) / LMean;
         if LCV < FConfig.WarmupCVThreshold then
           Break;
       end;
