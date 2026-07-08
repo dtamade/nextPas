@@ -600,6 +600,8 @@ end;
 { ===== 标准正态分布函数 (Phase A/B) ===== }
 
 function NormalCDF(X: Double): Double;
+const
+  LInvSqrt2 = 0.7071067811865475244; { 1/Sqrt(2) }
 var
   LAbsX: Double;
   LT, LResult: Double;
@@ -615,9 +617,9 @@ begin
   LP := 0.3275911;
 
   // 计算 erf(x / sqrt(2))
-  LAbsX := Abs(X) / Sqrt(2.0);
+  LAbsX := Abs(X) * LInvSqrt2;
   LT := 1.0 / (1.0 + LP * LAbsX);
-  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-LAbsX * LAbsX);
+  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-Sqr(LAbsX));
 
   // 转换为 CDF
   if X >= 0 then

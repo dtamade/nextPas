@@ -386,6 +386,21 @@ begin
     'windows get treats zero-length second read as success');
 end;
 
+procedure TestSetNilName;
+begin
+  Check(platform_env_set(nil, PAnsiChar('value')) <> 0, 'set nil name returns error');
+end;
+
+procedure TestUnsetNilName;
+begin
+  Check(platform_env_unset(nil) <> 0, 'unset nil name returns error');
+end;
+
+procedure TestSetNilValue;
+begin
+  Check(platform_env_set(PAnsiChar('NEXTPAS_TEST_NIL'), nil) <> 0, 'set nil value returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.env');
   T.Test('get PATH', @TestGetPath);
@@ -414,5 +429,8 @@ begin
     @TestWindowsExistsClearsLastErrorSourceContract);
   T.Test('windows get clears last-error source contract',
     @TestWindowsGetClearsLastErrorSourceContract);
+  T.Test('set nil name returns error', @TestSetNilName);
+  T.Test('unset nil name returns error', @TestUnsetNilName);
+  T.Test('set nil value returns error', @TestSetNilValue);
   if not T.Run then Halt(1);
 end.

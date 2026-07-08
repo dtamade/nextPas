@@ -285,25 +285,41 @@ var
   I: Integer;
   LMean: Double;
   LSumSq, LCompensation, LNext, LTemp: Double;
+  LDiff: Double;
+  LLen: Integer;
 begin
-  if Length(FData) < 2 then Exit(0);
+  LLen := Length(FData);
+  if LLen < 2 then Exit(0);
 
   LMean := Mean;
   { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
   if IsNaN(LMean) or IsInfinite(LMean) then
     Exit(0);
 
-  { Kahan 补偿求和 for Sqr(x - mean) }
-  LSumSq := 0.0;
-  LCompensation := 0.0;
-  for I := 0 to High(FData) do
+  { Fast path: small arrays use simple summation (avoid Kahan overhead) }
+  if LLen <= 256 then
   begin
-    LNext := Sqr(FData[I] - LMean) - LCompensation;
-    LTemp := LSumSq + LNext;
-    LCompensation := (LTemp - LSumSq) - LNext;
-    LSumSq := LTemp;
+    LSumSq := 0.0;
+    for I := 0 to High(FData) do
+    begin
+      LDiff := FData[I] - LMean;
+      LSumSq := LSumSq + LDiff * LDiff;
+    end;
+  end
+  else
+  begin
+    { Kahan 补偿求和 for Sqr(x - mean) }
+    LSumSq := 0.0;
+    LCompensation := 0.0;
+    for I := 0 to High(FData) do
+    begin
+      LNext := Sqr(FData[I] - LMean) - LCompensation;
+      LTemp := LSumSq + LNext;
+      LCompensation := (LTemp - LSumSq) - LNext;
+      LSumSq := LTemp;
+    end;
   end;
-  Result := LSumSq / (Length(FData) - 1);
+  Result := LSumSq / (LLen - 1);
 end;
 
 function TAdvancedStats.Skewness: Double;
@@ -329,7 +345,7 @@ begin
   for I := 0 to High(FData) do
   begin
     LZ := (FData[I] - LMean) / LStdDev;
-    LSum := LSum + LZ * LZ * LZ;
+    LSum := LSum + LZ * Sqr(LZ);
   end;
 
   // Fisher's g1: unbiased estimator
@@ -365,7 +381,7 @@ begin
   begin
     LDiff := FData[I] - LMean;
     LSum2 := LSum2 + LDiff * LDiff;
-    LSum4 := LSum4 + LDiff * LDiff * LDiff * LDiff;
+    LSum4 := LSum4 + Sqr(LDiff * LDiff);
   end;
 
   if LSum2 = 0 then Exit(0);
@@ -472,30 +488,103 @@ begin
 end;
 
 function TAdvancedStats.DetectOutliers_ModifiedZScore(AThreshold: Double): TOutlierDetection;
+{ MAD (Median Absolute Deviation) 计算优化:
+  FSortedData 已排序，deviations from median 形成两个单调序列：
+  - 左半 (i < medIdx): median - FSortedData[i]，递减 → 逆序遍历得递增
+  - 右半 (i >= medIdx): FSortedData[i] - median，递增
+  用双指针合并找到中位数，O(N) 无需分配+排序。 }
 var
   LMedian: Double;
   LMAD: Double;
   I: Integer;
   LModifiedZ: Double;
   LOutlierCount: Integer;
-  LDeviations: TDoubleArray;
+  LN, LMedIdx, LI, RJ: Integer;
+  LLeftVal, LRightVal: Double;
+  LSteps, LTarget: Integer;
+  LVal: Double;
 begin
   Result := Default(TOutlierDetection);
-  LMedian := Median;
+  EnsureSorted;
+  LMedian := Median; { uses FSortedData, already sorted }
 
-  // Calculate MAD (Median Absolute Deviation)
-  SetLength(LDeviations, Length(FData));
-  for I := 0 to High(FData) do
-    LDeviations[I] := Abs(FData[I] - LMedian);
+  { O(N) MAD: 合并两个单调序列找到 deviations 的中位数 }
+  LN := Length(FSortedData);
+  LMedIdx := LN div 2; { median 的索引 }
 
-  // 使用 QuickSort 排序偏差
-  SortDoubleArray(LDeviations);
+  { 目标: 第 LN div 2 小的 deviation (0-based) }
+  LTarget := LN div 2;
+  LI := LMedIdx - 1;  { 左半从 median-1 向 0 递减 }
+  RJ := LMedIdx + 1;  { 右半从 median+1 向末尾递增 }
 
-  if Length(LDeviations) mod 2 = 0 then
-    LMAD := (LDeviations[Length(LDeviations) div 2 - 1] +
-             LDeviations[Length(LDeviations) div 2]) / 2
+  if LN mod 2 = 1 then
+  begin
+    { 奇数个元素: 找第 LTarget 小的 deviation }
+    LSteps := 0;
+    LMAD := 0;
+    while LSteps <= LTarget do
+    begin
+      if LI >= 0 then
+        LLeftVal := LMedian - FSortedData[LI]
+      else
+        LLeftVal := 1e30; { sentinel: 左半已耗尽 }
+      if RJ < LN then
+        LRightVal := FSortedData[RJ] - LMedian
+      else
+        LRightVal := 1e30; { sentinel: 右半已耗尽 }
+      if LLeftVal <= LRightVal then
+      begin
+        LVal := LLeftVal;
+        Dec(LI);
+      end
+      else
+      begin
+        LVal := LRightVal;
+        Inc(RJ);
+      end;
+      if LSteps = LTarget then
+      begin
+        LMAD := LVal;
+        Break;
+      end;
+      Inc(LSteps);
+    end;
+  end
   else
-    LMAD := LDeviations[Length(LDeviations) div 2];
+  begin
+    { 偶数个元素: 找第 LTarget-1 和第 LTarget 小的 deviation，取平均 }
+    LSteps := 0;
+    LMAD := 0;
+    while LSteps <= LTarget do
+    begin
+      if LI >= 0 then
+        LLeftVal := LMedian - FSortedData[LI]
+      else
+        LLeftVal := 1e30;
+      if RJ < LN then
+        LRightVal := FSortedData[RJ] - LMedian
+      else
+        LRightVal := 1e30;
+      if LLeftVal <= LRightVal then
+      begin
+        LVal := LLeftVal;
+        Dec(LI);
+      end
+      else
+      begin
+        LVal := LRightVal;
+        Inc(RJ);
+      end;
+      if LSteps = LTarget - 1 then
+        LMAD := LVal { 暂存第一个值 }
+      else if LSteps = LTarget then
+      begin
+        LMAD := (LMAD + LVal) / 2.0;
+        Break;
+      end;
+      Inc(LSteps);
+    end;
+  end;
 
   LOutlierCount := 0;
   SetLength(Result.Outliers, Length(FData));
@@ -695,8 +784,9 @@ begin
     LSum := LSum + FData[LDataIndex];
   LObservedMean := LSum / LN;
 
-  // 生成 bootstrap 样本均值
+  // 生成 bootstrap 样本均值 + 同步计数 bias（合并两个 O(B) 循环）
   SetLength(LMeans, LIterations);
+  LCountBelow := 0;
   for LIterationIndex := 0 to LIterations - 1 do
   begin
     LSum := 0.0;
@@ -706,13 +796,11 @@ begin
       LSum := LSum + FData[LDataIndex];
     end;
     LMeans[LIterationIndex] := LSum / LN;
-  end;
-
-  // 步骤 1: 计算偏差修正因子 z0
-  LCountBelow := 0;
-  for LIterationIndex := 0 to LIterations - 1 do
     if LMeans[LIterationIndex] < LObservedMean then
       Inc(LCountBelow);
+  end;
+
+  // 步骤 1: 计算偏差修正因子 z0（LCountBelow 已在上面循环中累计）
   // z0 = Φ^(-1)(#(θ* < θ) / B)
   LZ0 := NormalQuantile((LCountBelow + 0.5) / (LIterations + 1));
 
@@ -725,10 +813,10 @@ begin
   begin
     LDiff := LObservedMean - LMeans[LIterationIndex];
     LDiffSqSum := LDiffSqSum + LDiff * LDiff;
-    LDiffCbSum := LDiffCbSum + LDiff * LDiff * LDiff;
+    LDiffCbSum := LDiffCbSum + Sqr(LDiff) * LDiff;
   end;
   if LDiffSqSum > 0 then
-    LA := LDiffCbSum / (6.0 * Power(LDiffSqSum, 1.5))
+    LA := LDiffCbSum / (6.0 * LDiffSqSum * Sqrt(LDiffSqSum))
   else
     LA := 0.0;
 
@@ -781,7 +869,7 @@ var
   LMeanA, LMeanB, LObservedDiff: Double;
   LI, LJ, LSwap, LTmp: Integer;
   LCount: Integer;
-  LSumA, LSumB: Double;
+  LSumA, LSumB, LTotalSum: Double;
   LValJ, LValSwap: Double;
   LInvNA, LInvNB: Double;
 begin
@@ -835,16 +923,19 @@ begin
   // 优化: 在 shuffle 过程中增量更新分组和 LSumA/LSumB，
   // 避免 shuffle 后再做 O(N) 求和。
   // 初始状态: 前 LNA 个位置为 A 组，后 LNB 个位置为 B 组。
+  // F-12: 预计算总和，消除每迭代 O(LNA+LNB) 重复求和。
+  LTotalSum := 0.0;
+  for LI := 0 to LN - 1 do
+    LTotalSum := LTotalSum + LData[LI];
   LCount := 0;
   for LI := 0 to LIterations - 1 do
   begin
     // 初始化: 前 LNA 个 = A 组，后 LNB 个 = B 组
+    // 优化: 只求 LSumA，LSumB 从总和推导
     LSumA := 0.0;
     for LJ := 0 to LNA - 1 do
       LSumA := LSumA + LData[LPerm[LJ]];
-    LSumB := 0.0;
-    for LJ := LNA to LN - 1 do
-      LSumB := LSumB + LData[LPerm[LJ]];
+    LSumB := LTotalSum - LSumA;
 
     // Fisher-Yates shuffle: 随机打乱排列
     // 每次 swap 后增量更新分组和

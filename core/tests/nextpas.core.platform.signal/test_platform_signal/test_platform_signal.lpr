@@ -125,6 +125,31 @@ begin
   Check(platform_signal_unblock(-1) <> 0, 'unblock signal -1 rejected');
 end;
 
+procedure TestSetNilHandler;
+begin
+  { Setting nil handler should be treated as ignore or return error }
+  Check(platform_signal_set(PLATFORM_SIGUSR1, nil) = 0, 'set nil handler succeeds');
+  platform_signal_reset(PLATFORM_SIGUSR1);
+end;
+
+procedure TestBlockUnblockValidSignal;
+begin
+  Check(platform_signal_block(PLATFORM_SIGUSR1) = 0, 'block SIGUSR1');
+  Check(platform_signal_unblock(PLATFORM_SIGUSR1) = 0, 'unblock SIGUSR1');
+end;
+
+procedure TestResetInvalidSignal;
+begin
+  Check(platform_signal_reset(0) <> 0, 'reset signal 0 rejected');
+  Check(platform_signal_reset(999) <> 0, 'reset signal 999 rejected');
+end;
+
+procedure TestIgnoreInvalidSignal;
+begin
+  Check(platform_signal_ignore(0) <> 0, 'ignore signal 0 rejected');
+  Check(platform_signal_ignore(999) <> 0, 'ignore signal 999 rejected');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.signal');
   T.Test('set handler + deliver', @TestSetHandler);
@@ -139,5 +164,9 @@ begin
   T.Test('invalid signal range', @TestInvalidSignalRange);
   T.Test('block invalid signal', @TestBlockInvalidSignal);
   T.Test('unblock invalid signal', @TestUnblockInvalidSignal);
+  T.Test('set nil handler', @TestSetNilHandler);
+  T.Test('block/unblock valid signal', @TestBlockUnblockValidSignal);
+  T.Test('reset invalid signal', @TestResetInvalidSignal);
+  T.Test('ignore invalid signal', @TestIgnoreInvalidSignal);
   if not T.Run then Halt(1);
 end.

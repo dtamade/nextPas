@@ -13,7 +13,9 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http.message,
-  nextpas.core.http.router;
+  nextpas.core.http.router,
+  nextpas.core.http.router.group,
+  nextpas.core.http.middleware;
 
 var
   T: TTestSuite;
@@ -812,6 +814,82 @@ begin
   end;
 end;
 
+{ RouterGroup tests }
+
+procedure TestRouterGroupPrefix;
+var
+  LRouter: IHttpRouter;
+  LGroup: THttpRouterGroup;
+begin
+  LRouter := NewRouter;
+  LGroup := THttpRouterGroup.Create(LRouter, '/api/v1', []);
+  LGroup.Get('/users', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'users';
+  end);
+  GHandlerCalled := '';
+  LRouter.ServeHTTP(
+    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/users'),
+      hvHttp11, NewHttpHeaders, nil, 0),
+    TMockResponseWriter.Create
+  );
+  CheckEqual('users', GHandlerCalled, 'group route matched at full path');
+end;
+
+procedure TestRouterGroupWithMiddleware;
+var
+  LRouter: IHttpRouter;
+  LGroup: THttpRouterGroup;
+  LMwApplied: Boolean;
+begin
+  LRouter := NewRouter;
+  LMwApplied := False;
+  LGroup := THttpRouterGroup.Create(LRouter, '/api', [
+    MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+    begin
+      Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      begin
+        LMwApplied := True;
+        ANext.ServeHTTP(AReq, AW);
+      end);
+    end)
+  ]);
+  LGroup.Get('/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'test';
+  end);
+  GHandlerCalled := '';
+  LRouter.ServeHTTP(
+    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/test'),
+      hvHttp11, NewHttpHeaders, nil, 0),
+    TMockResponseWriter.Create
+  );
+  Check(LMwApplied, 'group middleware was applied');
+  CheckEqual('test', GHandlerCalled, 'handler was called');
+end;
+
+procedure TestRouterGroupNested;
+var
+  LRouter: IHttpRouter;
+  LApi: THttpRouterGroup;
+  LV1: THttpRouterGroup;
+begin
+  LRouter := NewRouter;
+  LApi := THttpRouterGroup.Create(LRouter, '/api', []);
+  LV1 := LApi.Group('/v1', []);
+  LV1.Get('/items', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'items';
+  end);
+  GHandlerCalled := '';
+  LRouter.ServeHTTP(
+    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/items'),
+      hvHttp11, NewHttpHeaders, nil, 0),
+    TMockResponseWriter.Create
+  );
+  CheckEqual('items', GHandlerCalled, 'nested group route matched');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.router');
   T.Test('Static route match', @TestStaticRouteMatch);
@@ -840,5 +918,9 @@ begin
   T.Test('explicit HEAD route wins over GET fallback',
     @TestExplicitHeadRouteWinsOverGetFallback);
   T.Test('405 lists all methods', @Test405ListsAllMethods);
+  { RouterGroup }
+  T.Test('Group: prefix applied', @TestRouterGroupPrefix);
+  T.Test('Group: middleware applied', @TestRouterGroupWithMiddleware);
+  T.Test('Group: nested prefix', @TestRouterGroupNested);
   if not T.Run then Halt(1);
 end.

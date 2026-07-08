@@ -207,6 +207,29 @@ begin
   platform_dl_close(Lib);
 end;
 
+procedure TestLoadWithRTLD_NOW;
+var
+  Lib: TPlatformLibrary;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_NOW, Lib) = 0, 'open with RTLD_NOW');
+  Check(Lib.Handle <> nil, 'handle not nil');
+  platform_dl_close(Lib);
+end;
+
+procedure TestLoadMultipleLibs;
+var
+  Lib1, Lib2: TPlatformLibrary;
+  Addr1, Addr2: Pointer;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib1) = 0, 'open lib1');
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib2) = 0, 'open lib2');
+  Check(platform_dl_sym(Lib1, 'strlen', Addr1) = 0, 'sym from lib1');
+  Check(platform_dl_sym(Lib2, 'strlen', Addr2) = 0, 'sym from lib2');
+  Check(Addr1 = Addr2, 'same symbol from both libs');
+  platform_dl_close(Lib1);
+  platform_dl_close(Lib2);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.dl');
   T.Test('load libc', @TestLoadLibc);
@@ -226,5 +249,7 @@ begin
   T.Test('load same lib twice', @TestLoadSameLibTwice);
   T.Test('sym after close', @TestSymAfterClose);
   T.Test('error clears after success', @TestErrorClearAfterSuccess);
+  T.Test('load with RTLD_NOW', @TestLoadWithRTLD_NOW);
+  T.Test('load multiple libs', @TestLoadMultipleLibs);
   if not T.Run then Halt(1);
 end.

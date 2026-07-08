@@ -718,6 +718,41 @@ begin
   Check(LExitCode = 0, 'exit code 0');
 end;
 
+procedure TestRunNonZeroExit;
+var
+  LOutBuf: array[0..255] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/false';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/false', @LArgv[0], nil, @LOutBuf[0], 256, LOutLen, LExitCode);
+  Check(LRet = 0, 'run succeeds');
+  Check(LExitCode <> 0, 'false exits non-zero');
+end;
+
+procedure TestProcessPipeCreateAndClose;
+var
+  LRead, LWrite: PtrInt;
+begin
+  Check(platform_process_create_pipe(LRead, LWrite) = 0, 'create pipe');
+  Check(LRead > 0, 'read handle valid');
+  Check(LWrite > 0, 'write handle valid');
+  Check(LRead <> LWrite, 'handles are different');
+  platform_process_close_handle(LRead);
+  platform_process_close_handle(LWrite);
+end;
+
+procedure TestOpenNullWriteMode;
+var
+  LHandle: PtrInt;
+begin
+  Check(platform_process_open_null(True, LHandle) = 0, 'open null for write');
+  Check(LHandle > 0, 'handle valid');
+  platform_process_close_handle(LHandle);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -753,5 +788,8 @@ begin
   T.Test('spawn with env', @TestSpawnWithEnv);
   T.Test('run nil stdout', @TestRunNilStdout);
   T.Test('run nil stderr', @TestRunNilStderr);
+  T.Test('run non-zero exit', @TestRunNonZeroExit);
+  T.Test('pipe create and close', @TestProcessPipeCreateAndClose);
+  T.Test('open null write mode', @TestOpenNullWriteMode);
   if not T.Run then Halt(1);
 end.

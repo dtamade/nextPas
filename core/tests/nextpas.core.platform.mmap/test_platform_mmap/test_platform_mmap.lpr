@@ -527,6 +527,56 @@ begin
   Check(platform_mmap_unlock(M, 0, 1) <> 0, 'unlock on closed map returns error');
 end;
 
+procedure TestMultipleAnonymousMaps;
+var
+  M1, M2: TPlatformMappedFile;
+  P1, P2: PByte;
+  PageSize: UInt64;
+begin
+  PageSize := platform_mmap_page_size;
+  Check(PageSize > 0, 'page size > 0');
+
+  Check(platform_mmap_create_anonymous(PageSize, pmaReadWrite, [pmfPrivate], M1) = 0, 'map1');
+  Check(platform_mmap_create_anonymous(PageSize, pmaReadWrite, [pmfPrivate], M2) = 0, 'map2');
+
+  P1 := PByte(M1.Addr);
+  P2 := PByte(M2.Addr);
+  Check(P1 <> nil, 'map1 addr not nil');
+  Check(P2 <> nil, 'map2 addr not nil');
+  Check(P1 <> P2, 'maps have different addresses');
+
+  { Write distinct patterns and verify isolation }
+  P1^ := $AA;
+  P2^ := $BB;
+  Check(P1^ = $AA, 'map1 pattern');
+  Check(P2^ = $BB, 'map2 pattern');
+
+  platform_mmap_close(M1);
+  platform_mmap_close(M2);
+end;
+
+procedure TestShmRoundTrip;
+var
+  MWrite, MRead: TPlatformMappedFile;
+  ShmName: AnsiString;
+  PWrite, PRead: PByte;
+  I: Integer;
+begin
+  ShmName := '/nextpas_test_shm_roundtrip';
+  Check(platform_shm_create(PAnsiChar(ShmName), 4096, pmaReadWrite, MWrite) = 0, 'shm create');
+  PWrite := PByte(MWrite.Addr);
+  for I := 0 to 255 do
+    PWrite[I] := Byte(I);
+
+  Check(platform_shm_open(PAnsiChar(ShmName), pmaRead, MRead) = 0, 'shm open');
+  PRead := PByte(MRead.Addr);
+  for I := 0 to 255 do
+    Check(PRead[I] = Byte(I), 'shm round-trip byte ' + IntToStr(I));
+
+  platform_mmap_close(MRead);
+  platform_mmap_close(MWrite);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -558,6 +608,8 @@ begin
   T.Test('shm create twice', @TestShmCreateTwice);
   T.Test('lock on closed map', @TestLockNilMap);
   T.Test('unlock on closed map', @TestUnlockNilMap);
+  T.Test('multiple anonymous maps', @TestMultipleAnonymousMaps);
+  T.Test('shm round-trip write/read', @TestShmRoundTrip);
   if not T.Run then Halt(1);
   Cleanup;
 end.

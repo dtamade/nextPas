@@ -16,6 +16,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.url,
   nextpas.core.http.router,
+  nextpas.core.http.router.group,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
@@ -28,6 +29,11 @@ uses
   nextpas.core.http.middleware.ratelimit,
   nextpas.core.http.middleware.healthcheck,
   nextpas.core.http.middleware.metrics,
+  nextpas.core.http.middleware.methodguard,
+  nextpas.core.http.middleware.bodycache,
+  nextpas.core.http.middleware.serverheader,
+  nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.compression,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -67,6 +73,7 @@ type
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IH2StreamControl = nextpas.core.http.intf.IH2StreamControl;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 
@@ -85,6 +92,7 @@ type
   THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
   IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
   THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
+  THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
@@ -95,6 +103,7 @@ type
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+  THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 
   { Re-export JSON types }
   IJsonDocument = nextpas.core.json.IJsonDocument;
@@ -274,6 +283,28 @@ function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware; inline;
 {** @desc Metrics middleware with custom callback. }
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
+{** @desc Method guard middleware — rejects disallowed methods with 405. }
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware; inline;
+{** @desc Body cache middleware — caches request body for re-reading. }
+function BodyCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Metrics middleware with structured fields (method, path, status, duration). }
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware; inline;
+{** @desc Add "Server: nextpas" header to every response. }
+function ServerHeaderMiddleware: IHttpMiddleware; inline;
+{** @desc Add "Server: <ACustomName>" header to every response. }
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware; inline;
+{** @desc Context middleware — wraps requests with IHttpContext for data propagation. }
+function ContextMiddleware: IHttpMiddleware; inline;
+{** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Response compression middleware (gzip/deflate). Compresses responses >= 1024 bytes. }
+function CompressionMiddleware: IHttpMiddleware; inline;
+{** @desc Response compression middleware with custom minimum body size. }
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -368,6 +399,8 @@ procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter); inline;
 procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter); inline;
 {** @desc Write 205 Reset Content response with no body. }
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter); inline;
+{** @desc Write 410 Gone response with no body. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter); inline;
 {** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
@@ -418,6 +451,9 @@ function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 422 Unprocessable Entity JSON error response. }
 function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
@@ -479,6 +515,20 @@ function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string; inline;
 {** @desc HEAD url, ensure 2xx, return response (headers only). Raises on non-2xx. }
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc OPTIONS url, ensure 2xx, return response. Raises on non-2xx. }
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc POST JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PUT JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PATCH JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -729,6 +779,58 @@ end;
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWith(ACallback);
+end;
+
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.methodguard.MethodGuardMiddleware(AAllowed);
+end;
+
+function BodyCacheMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddleware;
+end;
+
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWithFields(ACallback);
+end;
+
+function ServerHeaderMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddleware;
+end;
+
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddlewareWith(ACustomName);
+end;
+
+function ContextMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.context.ContextMiddleware;
+end;
+
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
+end;
+
+function CompressionMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddleware;
+end;
+
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddlewareWith(AMinSize);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
@@ -999,6 +1101,11 @@ begin
   nextpas.core.http.message.HttpWriteResponseResetContent(AW);
 end;
 
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseGone(AW);
+end;
+
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 begin
   Result := nextpas.core.http.message.HttpReadRequestBodyBytes(AReq);
@@ -1102,6 +1209,12 @@ function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteErrorUnprocessableEntity(AW, AMessage);
+end;
+
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorPayloadTooLarge(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
@@ -1276,6 +1389,35 @@ end;
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
   Result := nextpas.core.http.client.HttpHead(AClient, AUrl);
+end;
+
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpOptions(AClient, AUrl);
+end;
+
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPostJson(AClient, AUrl, ABody);
+end;
+
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPutJson(AClient, AUrl, ABody);
+end;
+
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPatchJson(AClient, AUrl, ABody);
+end;
+
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;

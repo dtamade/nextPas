@@ -63,6 +63,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.platform.error,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base
 {$IFDEF NEXTPAS_UNIX}
@@ -303,7 +304,7 @@ begin
   LFallback := BuildSharedFallbackPath(AName);
   LExists := FileExistsByStat(PAnsiChar(LFallback));
   if (not ACreate) and (not LExists) then
-    Exit(2);
+    Exit(PLATFORM_ERR_NOENT);
 
   LSize := ASize;
   Result := platform_mmap_open_file(PAnsiChar(LFallback), AAccess, [pmfShared], LSize, 0, AMap);

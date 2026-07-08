@@ -8610,6 +8610,98 @@ begin
   Check(LCaught, 'HttpHead raises EHttpError on 404');
 end;
 
+procedure TestHttpOptionsSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := HttpOptions(LClient, 'http://localhost/test');
+  Check(LResp <> nil, 'HttpOptions returns response');
+  CheckEqual(200, LResp.StatusCode, 'HttpOptions returns 200');
+end;
+
+procedure TestHttpOptionsRaisesOn403;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_FORBIDDEN;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpOptions(LClient, 'http://localhost/forbidden');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('403', E.Message) > 0);
+  end;
+  Check(LCaught, 'HttpOptions raises EHttpError on 403');
+end;
+
+procedure TestHttpPostJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"key":"value"}');
+  // Should not raise; body is empty from mock transport
+  HttpPostJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpPutJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"id":1}');
+  HttpPutJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpPatchJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"name":"test"}');
+  HttpPatchJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpDeleteJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"id":1}');
+  HttpDeleteJson(LClient, 'http://localhost/test', LDoc);
+end;
+
 { Main }
 
 begin
@@ -8927,5 +9019,11 @@ begin
   T.Test('DeleteString raises on 404', @TestHttpDeleteStringRaisesOn404);
   T.Test('Head returns response on 200', @TestHttpHeadSuccess);
   T.Test('Head raises on 404', @TestHttpHeadRaisesOn404);
+  T.Test('Options returns response on 200', @TestHttpOptionsSuccess);
+  T.Test('Options raises on 403', @TestHttpOptionsRaisesOn403);
+  T.Test('PostJson sends JSON body', @TestHttpPostJsonSuccess);
+  T.Test('PutJson sends JSON body', @TestHttpPutJsonSuccess);
+  T.Test('PatchJson sends JSON body', @TestHttpPatchJsonSuccess);
+  T.Test('DeleteJson sends JSON body', @TestHttpDeleteJsonSuccess);
   if not T.Run then Halt(1);
 end.

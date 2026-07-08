@@ -119,6 +119,30 @@ begin
     Check(S[I] <> #0, 'CPUName has no embedded nulls');
 end;
 
+procedure TestOSNameLength;
+var
+  S: string;
+begin
+  S := OSName;
+  Check(Length(S) > 0, 'OSName length > 0');
+end;
+
+procedure TestCPUNameLength;
+var
+  S: string;
+begin
+  S := CPUName;
+  Check(Length(S) > 0, 'CPUName length > 0');
+end;
+
+procedure TestEndianValid;
+var
+  E: TEndianness;
+begin
+  E := CurrentEndian;
+  Check((E = endLittle) or (E = endBig), 'endian is little or big');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.info');
   T.Test('CurrentOS', @TestCurrentOS);
@@ -131,5 +155,8 @@ begin
   T.Test('OS/CPU/Endian are stable', @TestOSAndCPUAreConstexpr);
   T.Test('OSName has no embedded nulls', @TestOSNameNoEmpty);
   T.Test('CPUName has no embedded nulls', @TestCPUNameNoEmpty);
+  T.Test('OSName length > 0', @TestOSNameLength);
+  T.Test('CPUName length > 0', @TestCPUNameLength);
+  T.Test('Endian is valid', @TestEndianValid);
   if not T.Run then Halt(1);
 end.

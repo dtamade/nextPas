@@ -202,28 +202,44 @@ end;
 
 function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
 var
+  LLen: Integer;
   LSumSq, LCompensation, LNext, LTemp: Double;
+  LDiff: Double;
   I: Integer;
 begin
-  if Length(AData) <= 1 then
+  LLen := Length(AData);
+  if LLen <= 1 then
     Exit(0.0);
 
   {** NaN/Inf guard: avoid FPU exception 207 on NaN arithmetic }
   if IsNan(AMean) or IsInfinite(AMean) then
     Exit(0.0);
 
-  // Kahan compensated summation for Sqr(x - mean)
-  LSumSq := 0.0;
-  LCompensation := 0.0;
-  for I := 0 to High(AData) do
+  { Fast path: small arrays use simple summation (avoid Kahan overhead) }
+  if LLen <= 256 then
   begin
-    LNext := Sqr(AData[I] - AMean) - LCompensation;
-    LTemp := LSumSq + LNext;
-    LCompensation := (LTemp - LSumSq) - LNext;
-    LSumSq := LTemp;
+    LSumSq := 0.0;
+    for I := 0 to High(AData) do
+    begin
+      LDiff := AData[I] - AMean;
+      LSumSq := LSumSq + LDiff * LDiff;
+    end;
+    Result := LSumSq / (LLen - 1);
+  end
+  else
+  begin
+    { Kahan compensated summation for large arrays }
+    LSumSq := 0.0;
+    LCompensation := 0.0;
+    for I := 0 to High(AData) do
+    begin
+      LNext := Sqr(AData[I] - AMean) - LCompensation;
+      LTemp := LSumSq + LNext;
+      LCompensation := (LTemp - LSumSq) - LNext;
+      LSumSq := LTemp;
+    end;
+    Result := LSumSq / (LLen - 1);
   end;
-
-  Result := LSumSq / (Length(AData) - 1);  // 样本方差（除以 n-1）
 end;
 
 function TBenchStatsAnalyzer.ComputeStdDev(const AData: TDoubleArray; AMean: Double): Double;
@@ -320,9 +336,8 @@ var
   LT95, LT99: Double;
   I: Integer;
   { B22: Outlier-aware variables }
-  LFiltered: TDoubleArray;
   LQ1, LQ3, LFenceLow, LFenceHigh: Double;
-  LFilteredCount: Integer;
+  LFilteredCount, LRunStart: Integer;
   LFilteredMean, LFilteredM2, LDeltaF, LDelta2F: Double;
 begin
   LLen := Length(ASamples);
@@ -382,9 +397,8 @@ begin
     LQ3 := Result.P75;
     LFenceLow := LQ1 - OUTLIER_MULTIPLIER * Result.IQR;
     LFenceHigh := LQ3 + OUTLIER_MULTIPLIER * Result.IQR;
-    SetLength(LFiltered, LValidCount);
     LFilteredCount := 0;
-    { Single pass: filter + accumulate sum/sum_sq for mean/stddev }
+    { Single pass: accumulate Welford mean/variance on filtered subset }
     LFilteredMean := 0.0;
     LFilteredM2 := 0.0;
     for I := 0 to High(ASamples) do
@@ -393,7 +407,6 @@ begin
         Continue;
       if (ASamples[I] >= LFenceLow) and (ASamples[I] <= LFenceHigh) then
       begin
-        LFiltered[LFilteredCount] := ASamples[I];
         Inc(LFilteredCount);
         { Welford online update on filtered subset }
         LDeltaF := ASamples[I] - LFilteredMean;
@@ -402,7 +415,6 @@ begin
         LFilteredM2 := LFilteredM2 + LDeltaF * LDelta2F;
       end;
     end;
-    SetLength(LFiltered, LFilteredCount);
     if LFilteredCount > 0 then
     begin
       Result.FilteredCount := LFilteredCount;
@@ -411,8 +423,30 @@ begin
         Result.FilteredStdDev := Sqrt(LFilteredM2 / (LFilteredCount - 1))
       else
         Result.FilteredStdDev := 0.0;
-      SortDoubleArray(LFiltered);
-      Result.FilteredMedian := PercentileSorted(LFiltered, 50);
+      { Filtered median: scan LSorted (already sorted) for values in [LFenceLow, LFenceHigh].
+        Avoids allocating + sorting a separate LFiltered array: O(N) vs O(N log N). }
+      LFilteredCount := 0;
+      I := 0;
+      { Skip values below the fence }
+      while (I <= High(LSorted)) and (LSorted[I] < LFenceLow) do
+        Inc(I);
+      { Count values within the fence — I is now the start index }
+      LRunStart := I;
+      while (I <= High(LSorted)) and (LSorted[I] <= LFenceHigh) do
+      begin
+        Inc(LFilteredCount);
+        Inc(I);
+      end;
+      if LFilteredCount > 0 then
+      begin
+        if LFilteredCount mod 2 = 1 then
+          Result.FilteredMedian := LSorted[LRunStart + LFilteredCount div 2]
+        else
+          Result.FilteredMedian := (LSorted[LRunStart + LFilteredCount div 2 - 1] +
+                                    LSorted[LRunStart + LFilteredCount div 2]) / 2.0;
+      end
+      else
+        Result.FilteredMedian := Result.Median;
     end
     else
     begin
@@ -547,8 +581,9 @@ function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray; A
 var
   LN: Integer;
   LSumSq, LSumWeighted: Double;
-  LNormFactor: Double;
+  LNormFactor, LInvNm1: Double;
   I: Integer;
+  LDev: Double;
 begin
   // 简化的 Shapiro-Wilk 风格统计量
   // 完整实现需要查表（m_i 系数），这里用线性权重近似。
@@ -564,11 +599,14 @@ begin
   //   Σ w_i^2 = N(N+1) / (3(N-1))
   // 归一化因子 = 1/sqrt(Σ w_i^2)
   LNormFactor := Sqrt(3.0 * (LN - 1) / (LN * (LN + 1)));
+  { 预计算 2/(N-1)，避免循环内除法 }
+  LInvNm1 := 2.0 / (LN - 1);
 
   for I := 0 to LN - 1 do
   begin
-    LSumSq += Sqr(ASorted[I] - AMean);
-    LSumWeighted += (ASorted[I] - AMean) * (LN - 1 - 2 * I) / (LN - 1);
+    LDev := ASorted[I] - AMean;
+    LSumSq += Sqr(LDev);
+    LSumWeighted += LDev * (1.0 - I * LInvNm1);
   end;
 
   if LSumSq < 1e-10 then
@@ -620,15 +658,12 @@ var
   LCombined: TDoubleArray;
   LGroup: TInt64Array;   // 0=A, 1=B
   LSortedIdx: TInt64Array;
-  LRanks: TDoubleArray;
   LRankSum1: Double;
   LU1, LU2, LU: Double;
   LMU, LSigma: Double;
   LTieCorrection: Double;
   LZ: Double;
-  LRunStart, LRunEnd, I, K: Integer;
-  LAvgRank: Double;
-
+  LRunStart, LRunEnd, I, K, LRunACount: Integer;
 begin
   LN1 := Length(A);
   LN2 := Length(B);
@@ -680,9 +715,9 @@ begin
   { IntroSort 间接排序（替换原插入排序，处理大样本更高效） }
   SortIndirect(LSortedIdx, LCombined);
 
-  { 3. 分配秩次（并列值取平均秩）+ 并列值修正一次完成 }
-  SetLength(LRanks, LN);
+  { 3. 分配秩次 + 并列值修正 + 秩和一次完成（消除 LRanks 数组） }
   LTieCorrection := 0.0;
+  LRankSum1 := 0.0;
   I := 0;
   while I < LN do
   begin
@@ -693,27 +728,24 @@ begin
           (LCombined[LSortedIdx[LRunEnd + 1]] = LCombined[LSortedIdx[LRunStart]]) do
       Inc(LRunEnd);
 
-    { 平均秩 = (run 开始位置 + run 结束位置 + 2) / 2
-      位置从 0 开始，秩从 1 开始 }
-    LAvgRank := (LRunStart + LRunEnd + 2) / 2.0;
-    for K := LRunStart to LRunEnd do
-      LRanks[LSortedIdx[K]] := LAvgRank;
-
     { 并列值修正：K>1 时累积 tie correction }
     K := LRunEnd - LRunStart + 1;
     if K > 1 then
       LTieCorrection := LTieCorrection + (K * K * K - K);
 
+    { 直接累加组 A 的秩和：乘法替代内循环
+      秩和 = (# of A elements in run) * avgRank，因为并列值秩相同 }
+    LRunACount := 0;
+    for K := LRunStart to LRunEnd do
+      if LGroup[LSortedIdx[K]] = 0 then
+        Inc(LRunACount);
+    if LRunACount > 0 then
+      LRankSum1 := LRankSum1 + LRunACount * (LRunStart + LRunEnd + 2) / 2.0;
+
     I := LRunEnd + 1;
   end;
 
-  { 4. 计算样本 A 的秩和 }
-  LRankSum1 := 0.0;
-  for I := 0 to LN - 1 do
-    if LGroup[I] = 0 then
-      LRankSum1 := LRankSum1 + LRanks[I];
-
-  { 5. 计算 U 统计量 }
+  { 4. 计算 U 统计量 }
   LU1 := LN1 * LN2 + LN1 * (LN1 + 1) / 2.0 - LRankSum1;
   LU2 := LN1 * LN2 - LU1;
   if LU1 < LU2 then
@@ -869,8 +901,7 @@ end;
 function KolmogorovCDF(AX: Double): Double;
 var
   LK: Integer;
-  LSum, LTerm: Double;
-  LK2: Double;
+  LSum, LTerm, LSqrTerm, LSign: Double;
 begin
   if AX <= 0 then
   begin
@@ -888,14 +919,13 @@ begin
   // Kolmogorov 分布: K(x) = 1 - 2 * Σ((-1)^(k-1) * exp(-2 * k^2 * x^2))
   // 使用前 20 项求和（足够精确）
   LSum := 0.0;
+  LSqrTerm := -2.0 * Sqr(AX);
+  LSign := 1.0;
   for LK := 1 to 20 do
   begin
-    LK2 := LK * LK;
-    LTerm := Exp(-2.0 * LK2 * AX * AX);
-    if LK mod 2 = 1 then
-      LSum := LSum + LTerm
-    else
-      LSum := LSum - LTerm;
+    LTerm := Exp(LK * LK * LSqrTerm);
+    LSum := LSum + LSign * LTerm;
+    LSign := -LSign;
   end;
 
   Result := 1.0 - 2.0 * LSum;
@@ -914,7 +944,7 @@ var
   LEmpiricalCDF: Double;
   LTheoreticalCDF: Double;
   LD, LMaxD: Double;
-  LZ: Double;
+  LZ, LInvN, LInvStdDev: Double;
 begin
   Result := Default(TKSTestResult);
 
@@ -952,16 +982,20 @@ begin
   LSorted := Copy(AData);
   SortDoubleArray(LSorted);
 
+  { 预计算倒数，避免循环内除法 }
+  LInvN := 1.0 / LN;
+  LInvStdDev := 1.0 / AStdDev;
+
   // 计算 K-S 统计量 D = max|Fn(x) - F0(x)|
   LMaxD := 0.0;
   for LI := 0 to LN - 1 do
   begin
-    // 经验分布函数 Fn(x) = (i+1) / n
-    LEmpiricalCDF := (LI + 1) / LN;
-
     // 理论分布函数 F0(x) = Φ((x - μ) / σ)
-    LZ := (LSorted[LI] - AMean) / AStdDev;
+    LZ := (LSorted[LI] - AMean) * LInvStdDev;
     LTheoreticalCDF := NormalCDF(LZ);
+
+    // 经验分布函数 Fn(x) = (i+1) / n
+    LEmpiricalCDF := (LI + 1) * LInvN;
 
     // 计算 |Fn(x) - F0(x)|
     LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
@@ -969,7 +1003,7 @@ begin
       LMaxD := LD;
 
     // 也检查 Fn(x-) 的情况
-    LEmpiricalCDF := LI / LN;
+    LEmpiricalCDF := LI * LInvN;
     LD := Abs(LEmpiricalCDF - LTheoreticalCDF);
     if LD > LMaxD then
       LMaxD := LD;
@@ -993,7 +1027,7 @@ var
   LI, LJ: Integer;
   LCDF1, LCDF2: Double;
   LD, LMaxD: Double;
-  LCombinedN: Double;
+  LCombinedN, LInvN1, LInvN2: Double;
 begin
   Result := Default(TKSTestResult);
 
@@ -1017,6 +1051,10 @@ begin
   SortDoubleArray(LSorted1);
   SortDoubleArray(LSorted2);
 
+  { 预计算倒数，避免循环内除法 }
+  LInvN1 := 1.0 / LN1;
+  LInvN2 := 1.0 / LN2;
+
   // 计算 K-S 统计量 D = max|F1(x) - F2(x)|
   LMaxD := 0.0;
   LI := 0;
@@ -1028,8 +1066,8 @@ begin
     if LSorted1[LI] <= LSorted2[LJ] then
     begin
       // 在 x = LSorted1[LI] 处计算两个经验分布函数
-      LCDF1 := (LI + 1) / LN1;
-      LCDF2 := LJ / LN2;  // F2(x-) = j/n2
+      LCDF1 := (LI + 1) * LInvN1;
+      LCDF2 := LJ * LInvN2;  // F2(x-) = j/n2
       LD := Abs(LCDF1 - LCDF2);
       if LD > LMaxD then
         LMaxD := LD;
@@ -1038,8 +1076,8 @@ begin
     else
     begin
       // 在 x = LSorted2[LJ] 处计算两个经验分布函数
-      LCDF1 := LI / LN1;  // F1(x-) = i/n1
-      LCDF2 := (LJ + 1) / LN2;
+      LCDF1 := LI * LInvN1;  // F1(x-) = i/n1
+      LCDF2 := (LJ + 1) * LInvN2;
       LD := Abs(LCDF1 - LCDF2);
       if LD > LMaxD then
         LMaxD := LD;
@@ -1050,7 +1088,7 @@ begin
   // 处理剩余元素
   while LI < LN1 do
   begin
-    LCDF1 := (LI + 1) / LN1;
+    LCDF1 := (LI + 1) * LInvN1;
     LCDF2 := 1.0;
     LD := Abs(LCDF1 - LCDF2);
     if LD > LMaxD then
@@ -1061,7 +1099,7 @@ begin
   while LJ < LN2 do
   begin
     LCDF1 := 1.0;
-    LCDF2 := (LJ + 1) / LN2;
+    LCDF2 := (LJ + 1) * LInvN2;
     LD := Abs(LCDF1 - LCDF2);
     if LD > LMaxD then
       LMaxD := LD;

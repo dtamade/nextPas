@@ -5,6 +5,7 @@ program test_platform_random;
 uses
   nextpas.core.platform.random,
   nextpas.core.platform.error,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var
@@ -159,6 +160,40 @@ begin
   Check(not AllZero, '128 bytes not all zero');
 end;
 
+procedure TestFillLargeBuffer;
+var
+  Buf: array[0..8191] of Byte;
+  I: Int32;
+  AllZero: Boolean;
+begin
+  FillChar(Buf, 8192, 0);
+  Check(platform_random_bytes(@Buf[0], 8192) = 0, 'fill 8KB');
+  AllZero := True;
+  for I := 0 to 8191 do
+    if Buf[I] <> 0 then begin AllZero := False; Break; end;
+  Check(not AllZero, '8KB not all zero');
+end;
+
+procedure TestFillBoundarySizes;
+var
+  Buf: array[0..63] of Byte;
+  Sizes: array[0..7] of PtrUInt;
+  I, J: Int32;
+  AllZero: Boolean;
+begin
+  Sizes[0] := 2; Sizes[1] := 3; Sizes[2] := 5; Sizes[3] := 7;
+  Sizes[4] := 15; Sizes[5] := 17; Sizes[6] := 31; Sizes[7] := 33;
+  for I := 0 to 7 do
+  begin
+    FillChar(Buf, 64, 0);
+    Check(platform_random_bytes(@Buf[0], Sizes[I]) = 0, 'fill ' + IntToStr(Sizes[I]) + ' bytes');
+    AllZero := True;
+    for J := 0 to Int32(Sizes[I]) - 1 do
+      if Buf[J] <> 0 then begin AllZero := False; Break; end;
+    Check(not AllZero, IntToStr(Sizes[I]) + ' bytes not all zero');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.random');
   T.Test('fill 32 bytes non-zero', @TestFill32);
@@ -174,5 +209,7 @@ begin
   T.Test('fill page-aligned (4096)', @TestFillPageAligned);
   T.Test('fill 8 bytes', @TestFill8Bytes);
   T.Test('fill 128 bytes', @TestFill128Bytes);
+  T.Test('fill 8KB large buffer', @TestFillLargeBuffer);
+  T.Test('fill boundary sizes', @TestFillBoundarySizes);
   if not T.Run then Halt(1);
 end.

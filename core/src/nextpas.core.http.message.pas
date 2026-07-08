@@ -225,6 +225,9 @@ procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
 {** @desc Write 205 Reset Content response with no body.
    Instructs client to reset the document view (e.g., clear a form). }
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+{** @desc Write 410 Gone response with no body.
+   Indicates the resource has been permanently removed. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
 {** @desc Write 500 Internal Server Error JSON error response. }
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -236,6 +239,12 @@ function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 422 Unprocessable Entity JSON error response. }
 function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 
 type
@@ -299,6 +308,49 @@ begin
   if Length(ABodyText) > 0 then
     Move(ABodyText[1], LData[0], Length(ABodyText));
   Result := BytesBodyReader(LData);
+end;
+
+{ Escape a string for safe embedding in JSON. Handles ", \, and control chars. }
+function JsonEscapeStr(const AStr: string): string;
+var
+  LI, LJ, LLen: SizeInt;
+  LCh: Char;
+begin
+  LLen := Length(AStr);
+  if LLen = 0 then
+    Exit('');
+  SetLength(Result, LLen * 2); { worst case: every char is escaped }
+  LJ := 1;
+  for LI := 1 to LLen do
+  begin
+    LCh := AStr[LI];
+    case LCh of
+      '"': begin Result[LJ] := '\'; Result[LJ+1] := '"'; Inc(LJ, 2); end;
+      '\': begin Result[LJ] := '\'; Result[LJ+1] := '\'; Inc(LJ, 2); end;
+      #8:  begin Result[LJ] := '\'; Result[LJ+1] := 'b'; Inc(LJ, 2); end;
+      #9:  begin Result[LJ] := '\'; Result[LJ+1] := 't'; Inc(LJ, 2); end;
+      #10: begin Result[LJ] := '\'; Result[LJ+1] := 'n'; Inc(LJ, 2); end;
+      #12: begin Result[LJ] := '\'; Result[LJ+1] := 'f'; Inc(LJ, 2); end;
+      #13: begin Result[LJ] := '\'; Result[LJ+1] := 'r'; Inc(LJ, 2); end;
+    else
+      if Ord(LCh) < 32 then
+      begin
+        Result[LJ] := '\';
+        Result[LJ+1] := 'u';
+        Result[LJ+2] := '0';
+        Result[LJ+3] := '0';
+        Result[LJ+4] := Char(Ord('0') + (Ord(LCh) shr 4));
+        Result[LJ+5] := Char(Ord('0') + (Ord(LCh) and $0F));
+        Inc(LJ, 6);
+      end
+      else
+      begin
+        Result[LJ] := LCh;
+        Inc(LJ);
+      end;
+    end;
+  end;
+  SetLength(Result, LJ - 1);
 end;
 
 function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
@@ -1067,7 +1119,8 @@ function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
 var
   LJson: string;
 begin
-  LJson := '{"error":{"code":"' + ACode + '","message":"' + AMessage + '"}}';
+  LJson := '{"error":{"code":"' + JsonEscapeStr(ACode) +
+    '","message":"' + JsonEscapeStr(AMessage) + '"}}';
   Result := HttpWriteResponseString(AW, AStatus, 'application/json', LJson);
 end;
 
@@ -1119,6 +1172,19 @@ begin
   Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNPROCESSABLE_ENTITY, 'unprocessable_entity', AMessage);
 end;
 
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_PAYLOAD_TOO_LARGE, 'payload_too_large', AMessage);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, 'unsupported_media_type', AMessage);
+end;
+
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
@@ -1153,6 +1219,12 @@ procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
 begin
   RequireResponseWriter(AW);
   AW.WriteHeader(HTTP_STATUS_RESET_CONTENT);
+end;
+
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_GONE);
 end;
 
 { THttpRequestBuilder }

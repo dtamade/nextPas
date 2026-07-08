@@ -68,6 +68,20 @@ function MatSumColsF32(const aA: TSimdF32Matrix): TSimdF32Array;
 function MatMaxRowsF32(const aA: TSimdF32Matrix): TSimdF32Array;
 procedure MatArgMaxRowsF32(const aA: TSimdF32Matrix; aIndices: PInt32);
 
+// Strided dot product for column vectors in row-major matrices
+function ReduceDotStridedF32(aSrc1: PSingle; aStride1: NativeInt;
+  aSrc2: PSingle; aStride2: NativeInt; aCount: SizeUInt): Single;
+
+// Matrix decompositions (Phase 11)
+function QRDecomposeF32(const aA: TSimdF32Matrix;
+  var aQ, aR: TSimdF32Matrix): Boolean;
+function CholeskyDecomposeF32(const aA: TSimdF32Matrix;
+  var aL: TSimdF32Matrix): Boolean;
+function SVDDecomposeF32(const aA: TSimdF32Matrix;
+  var aU, aSigma: TSimdF32Matrix; var aVt: TSimdF32Matrix): Boolean;
+function MatRankF32(const aA: TSimdF32Matrix): SizeUInt;
+function MatPseudoInverseF32(const aA: TSimdF32Matrix): TSimdF32Matrix;
+
 type
   TSimdF64Matrix = record
   private
@@ -106,12 +120,50 @@ function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 implementation
 
 uses
+  Math,
   nextpas.core.simd,
   nextpas.core.simd.linalg.gemm,
   {$IFDEF SIMD_X86_AVAILABLE}
   nextpas.core.simd.linalg.gemm.sse2.blocked,
   {$ENDIF}
-  nextpas.core.simd.cpuinfo;
+  nextpas.core.simd.cpuinfo,
+  nextpas.core.simd.memutils;
+
+// Strided dot product for column vectors in row-major matrices
+// Optimized with prefetch hints
+function ReduceDotStridedF32(aSrc1: PSingle; aStride1: NativeInt;
+  aSrc2: PSingle; aStride2: NativeInt; aCount: SizeUInt): Single;
+var
+  i: SizeUInt;
+  LSum: Single;
+  LP1, LP2: PSingle;
+begin
+  if aCount = 0 then Exit(0);
+
+  LSum := 0;
+  LP1 := aSrc1;
+  LP2 := aSrc2;
+
+  // Prefetch first cache lines
+  Prefetch(LP1);
+  Prefetch(LP2);
+
+  for i := 0 to aCount - 1 do
+  begin
+    // Prefetch every 16 iterations
+    if (i and 15 = 0) and (i + 16 < aCount) then
+    begin
+      Prefetch(PSingle(PByte(LP1) + aStride1 * 16));
+      Prefetch(PSingle(PByte(LP2) + aStride2 * 16));
+    end;
+
+    LSum := LSum + LP1^ * LP2^;
+    LP1 := PSingle(PByte(LP1) + aStride1);
+    LP2 := PSingle(PByte(LP2) + aStride2);
+  end;
+
+  Result := LSum;
+end;
 
 class function TSimdF32Matrix.Create(aRows, aCols: SizeUInt): TSimdF32Matrix;
 begin
@@ -217,38 +269,58 @@ procedure GemvF32(aAlpha: Single; const aA: TSimdF32Matrix;
   const aX: TSimdF32Array; aBeta: Single; var aY: TSimdF32Array);
 var
   r: SizeUInt;
-  LRow: TSimdF32Array;
   LDot: Single;
+  LRowPtr: PSingle;
 begin
   if aA.Rows = 0 then Exit;
-  if (aAlpha = 1.0) and (aBeta = 0.0) then
+
+  for r := 0 to aA.Rows - 1 do
   begin
-    for r := 0 to aA.Rows - 1 do
-    begin
-      LRow := aA.Row(r);
-      aY.Data[r] := LRow.Dot(aX);
-    end;
-  end
-  else
-  begin
-    for r := 0 to aA.Rows - 1 do
-    begin
-      LRow := aA.Row(r);
-      LDot := LRow.Dot(aX);
+    LRowPtr := @aA.Data[r * aA.RowStride];
+    if aX.IsContiguous then
+      LDot := ReduceDotF32(LRowPtr, aX.Data, aA.Cols)
+    else
+      LDot := ReduceDotStridedF32(LRowPtr, SizeOf(Single),
+        aX.Data, aX.Stride * SizeOf(Single), aA.Cols);
+
+    if (aAlpha = 1.0) and (aBeta = 0.0) then
+      aY.Data[r] := LDot
+    else if aBeta = 0.0 then
+      aY.Data[r] := aAlpha * LDot
+    else
       aY.Data[r] := aAlpha * LDot + aBeta * aY.Data[r];
-    end;
   end;
 end;
 
 procedure GemmF32(aAlpha: Single; const aA, aB: TSimdF32Matrix;
   aBeta: Single; var aC: TSimdF32Matrix);
 var
-  r, c: SizeUInt;
+  r, c, k: SizeUInt;
   LRowA: TSimdF32Array;
   LDot: Single;
   LBt: TSimdF32Matrix;
+  LSum: Single;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) or (aB.Cols = 0) then Exit;
+
+  // Fast path: small matrices (≤4x4) with direct computation
+  if (aA.Rows <= 4) and (aA.Cols <= 4) and (aB.Cols <= 4) then
+  begin
+    for r := 0 to aA.Rows - 1 do
+      for c := 0 to aB.Cols - 1 do
+      begin
+        LSum := 0;
+        for k := 0 to aA.Cols - 1 do
+          LSum := LSum + aA.Get(r, k) * aB.Get(k, c);
+        if (aAlpha = 1.0) and (aBeta = 0.0) then
+          aC.Put(r, c, LSum)
+        else if aBeta = 0.0 then
+          aC.Put(r, c, aAlpha * LSum)
+        else
+          aC.Put(r, c, aAlpha * LSum + aBeta * aC.Get(r, c));
+      end;
+    Exit;
+  end;
 
   // Fast path: large matrices with simple alpha=1, beta=0 and contiguous layout
   if (aA.Rows >= GEMM_MR) and (aB.Cols >= GEMM_NR) and (aA.Cols >= 8) and
@@ -756,6 +828,361 @@ function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) then begin Result := 0; Exit; end;
   Result := System.Sqrt(ReduceDotF64(aA.Data, aA.Data, aA.Rows * aA.Cols));
+end;
+
+// ============================================================================
+// Matrix Decompositions (Phase 11)
+// ============================================================================
+
+function QRDecomposeF32(const aA: TSimdF32Matrix;
+  var aQ, aR: TSimdF32Matrix): Boolean;
+var
+  m, n, k, i, j, p: Integer;
+  LNorm, LDot: Single;
+begin
+  Result := False;
+  if (aA.Rows = 0) or (aA.Cols = 0) or
+    (aA.Rows > SizeUInt(High(Integer))) or (aA.Cols > SizeUInt(High(Integer))) then Exit;
+  m := Integer(aA.Rows);
+  n := Integer(aA.Cols);
+  k := m;
+  if n < k then k := n;
+
+  // Q is m×m, R is m×n
+  aQ := TSimdF32Matrix.Zeros(m, m);
+  aR := TSimdF32Matrix.Zeros(m, n);
+
+  // Copy A to Q (first n columns)
+  for j := 0 to n - 1 do
+    for i := 0 to m - 1 do
+      aQ.Put(i, j, aA.Get(i, j));
+
+  // Modified Gram-Schmidt on first k columns
+  for j := 0 to k - 1 do
+  begin
+    // Subtract projections onto previous Q columns
+    for p := 0 to j - 1 do
+    begin
+      // Use strided dot product for column vectors
+      LDot := ReduceDotStridedF32(
+        @aQ.Data[p], aQ.RowStride * SizeOf(Single),  // Column p
+        @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+        m);
+      aR.Put(p, j, LDot);
+      // Update column j: Q[:,j] = Q[:,j] - LDot * Q[:,p]
+      for i := 0 to m - 1 do
+        aQ.Put(i, j, aQ.Get(i, j) - LDot * aQ.Get(i, p));
+    end;
+
+    // Normalize using strided dot product
+    LNorm := System.Sqrt(ReduceDotStridedF32(
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      m));
+    aR.Put(j, j, LNorm);
+
+    if LNorm > 1e-10 then
+      for i := 0 to m - 1 do
+        aQ.Put(i, j, aQ.Get(i, j) / LNorm);
+  end;
+
+  // Fill remaining columns of Q with orthonormal vectors
+  // Use standard basis vectors and orthogonalize against existing Q columns
+  for j := k to m - 1 do
+  begin
+    // Start with standard basis vector e_j
+    for i := 0 to m - 1 do
+      aQ.Put(i, j, 0.0);
+    aQ.Put(j, j, 1.0);
+
+    // Orthogonalize against previous Q columns
+    for p := 0 to j - 1 do
+    begin
+      LDot := ReduceDotStridedF32(
+        @aQ.Data[p], aQ.RowStride * SizeOf(Single),  // Column p
+        @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+        m);
+      for i := 0 to m - 1 do
+        aQ.Put(i, j, aQ.Get(i, j) - LDot * aQ.Get(i, p));
+    end;
+
+    // Normalize
+    LNorm := System.Sqrt(ReduceDotStridedF32(
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
+      m));
+    if LNorm > 1e-10 then
+      for i := 0 to m - 1 do
+        aQ.Put(i, j, aQ.Get(i, j) / LNorm);
+  end;
+
+  // Fill remaining R columns for rectangular A (when n > k)
+  if n > k then
+    for j := k to n - 1 do
+      for p := 0 to k - 1 do
+      begin
+        LDot := 0;
+        for i := 0 to m - 1 do
+          LDot := LDot + aQ.Get(i, p) * aA.Get(i, j);
+        aR.Put(p, j, LDot);
+      end;
+
+  Result := True;
+end;
+
+function CholeskyDecomposeF32(const aA: TSimdF32Matrix;
+  var aL: TSimdF32Matrix): Boolean;
+var
+  n, i, j, k: Integer;
+  LSum: Single;
+begin
+  Result := False;
+  if (aA.Rows = 0) or (aA.Rows <> aA.Cols) or
+    (aA.Rows > SizeUInt(High(Integer))) then Exit;
+  n := Integer(aA.Rows);
+  aL := TSimdF32Matrix.Zeros(n, n);
+
+  for i := 0 to n - 1 do
+  begin
+    for j := 0 to i do
+    begin
+      LSum := 0;
+      for k := 0 to j - 1 do
+        LSum := LSum + aL.Get(i, k) * aL.Get(j, k);
+
+      if i = j then
+      begin
+        LSum := aA.Get(i, i) - LSum;
+        if LSum <= 0 then
+        begin
+          aL.Free;
+          Exit(False); // Not positive definite
+        end;
+        aL.Put(i, j, System.Sqrt(LSum));
+      end
+      else
+        aL.Put(i, j, (aA.Get(i, j) - LSum) / aL.Get(j, j));
+    end;
+  end;
+  Result := True;
+end;
+
+function SVDDecomposeF32(const aA: TSimdF32Matrix;
+  var aU, aSigma: TSimdF32Matrix; var aVt: TSimdF32Matrix): Boolean;
+var
+  m, n, k, i, j, p, q, iter, maxIter: Integer;
+  LTheta, LCos, LSin, LTemp, LApq, LApp, LAqq, LSum: Single;
+  LU, LV, LSigma, LAtA: TSimdF32Matrix;
+  LConverged: Boolean;
+begin
+  Result := False;
+  if (aA.Rows = 0) or (aA.Cols = 0) or
+    (aA.Rows > SizeUInt(High(Integer))) or (aA.Cols > SizeUInt(High(Integer))) then Exit;
+  m := Integer(aA.Rows);
+  n := Integer(aA.Cols);
+  k := m;
+  if n < k then k := n;
+
+  // For small matrices, use A^T A eigenvalue decomposition
+  // SVD: A = U * Sigma * V^T
+  // A^T A = V * Sigma^2 * V^T (eigenvalue decomposition)
+  // U = A * V * Sigma^(-1)
+
+  // Step 1: Compute A^T A (n x n) using strided dot product
+  LAtA := TSimdF32Matrix.Zeros(n, n);
+  for i := 0 to n - 1 do
+    for j := i to n - 1 do
+    begin
+      LSum := ReduceDotStridedF32(
+        @aA.Data[i], aA.RowStride * SizeOf(Single),  // Column i
+        @aA.Data[j], aA.RowStride * SizeOf(Single),  // Column j
+        m);
+      LAtA.Put(i, j, LSum);
+      LAtA.Put(j, i, LSum); // Symmetric
+    end;
+
+  // Step 2: Eigenvalue decomposition of A^T A using Jacobi
+  LV := TSimdF32Matrix.Identity(n);
+  maxIter := 100;
+  for iter := 0 to maxIter - 1 do
+  begin
+    LConverged := True;
+    for p := 0 to n - 2 do
+    begin
+      for q := p + 1 to n - 1 do
+      begin
+        LApp := LAtA.Get(p, p);
+        LApq := LAtA.Get(p, q);
+        LAqq := LAtA.Get(q, q);
+
+        if Abs(LApq) < 1e-10 then Continue;
+        LConverged := False;
+
+        if Abs(LApp - LAqq) < 1e-10 then
+          LTheta := PI / 4
+        else
+          LTheta := 0.5 * Math.ArcTan2(2 * LApq, LApp - LAqq);
+
+        LCos := Cos(LTheta);
+        LSin := Sin(LTheta);
+
+        // Apply rotation to A^T A
+        for i := 0 to n - 1 do
+        begin
+          LTemp := LAtA.Get(i, p);
+          LAtA.Put(i, p, LCos * LTemp - LSin * LAtA.Get(i, q));
+          LAtA.Put(i, q, LSin * LTemp + LCos * LAtA.Get(i, q));
+        end;
+        for i := 0 to n - 1 do
+        begin
+          LTemp := LAtA.Get(p, i);
+          LAtA.Put(p, i, LCos * LTemp - LSin * LAtA.Get(q, i));
+          LAtA.Put(q, i, LSin * LTemp + LCos * LAtA.Get(q, i));
+        end;
+
+        // Apply rotation to V
+        for i := 0 to n - 1 do
+        begin
+          LTemp := LV.Get(i, p);
+          LV.Put(i, p, LCos * LTemp - LSin * LV.Get(i, q));
+          LV.Put(i, q, LSin * LTemp + LCos * LV.Get(i, q));
+        end;
+      end;
+    end;
+    if LConverged then Break;
+  end;
+
+  // Step 3: Extract singular values (sqrt of eigenvalues)
+  LSigma := TSimdF32Matrix.Zeros(k, 1);
+  for i := 0 to k - 1 do
+  begin
+    LTemp := LAtA.Get(i, i);
+    if LTemp < 0 then LTemp := 0; // Numerical stability
+    LSigma.Put(i, 0, System.Sqrt(LTemp));
+  end;
+
+  // Step 4: Sort singular values in descending order
+  for i := 0 to k - 2 do
+    for j := i + 1 to k - 1 do
+      if LSigma.Get(i, 0) < LSigma.Get(j, 0) then
+      begin
+        // Swap singular values
+        LTemp := LSigma.Get(i, 0);
+        LSigma.Put(i, 0, LSigma.Get(j, 0));
+        LSigma.Put(j, 0, LTemp);
+
+        // Swap columns of V
+        for iter := 0 to n - 1 do
+        begin
+          LTemp := LV.Get(iter, i);
+          LV.Put(iter, i, LV.Get(iter, j));
+          LV.Put(iter, j, LTemp);
+        end;
+      end;
+
+  // Step 5: Compute U = A * V * Sigma^(-1)
+  LU := TSimdF32Matrix.Zeros(m, k);
+  for i := 0 to m - 1 do
+    for j := 0 to k - 1 do
+    begin
+      if LSigma.Get(j, 0) > 1e-10 then
+      begin
+        LSum := 0;
+        for p := 0 to n - 1 do
+          LSum := LSum + aA.Get(i, p) * LV.Get(p, j);
+        LU.Put(i, j, LSum / LSigma.Get(j, 0));
+      end
+      else
+        LU.Put(i, j, 0);
+    end;
+
+  // Orthogonalize U columns (Gram-Schmidt)
+  for j := 0 to k - 1 do
+  begin
+    for p := 0 to j - 1 do
+    begin
+      LSum := 0;
+      for i := 0 to m - 1 do
+        LSum := LSum + LU.Get(i, p) * LU.Get(i, j);
+      for i := 0 to m - 1 do
+        LU.Put(i, j, LU.Get(i, j) - LSum * LU.Get(i, p));
+    end;
+    LSum := 0;
+    for i := 0 to m - 1 do
+      LSum := LSum + LU.Get(i, j) * LU.Get(i, j);
+    LSum := System.Sqrt(LSum);
+    if LSum > 1e-10 then
+      for i := 0 to m - 1 do
+        LU.Put(i, j, LU.Get(i, j) / LSum);
+  end;
+
+  aU := LU;
+  aSigma := LSigma;
+  aVt := LV.Transpose;
+  LV.Free;
+  LAtA.Free;
+  Result := True;
+end;
+
+function MatRankF32(const aA: TSimdF32Matrix): SizeUInt;
+var
+  U, S, Vt: TSimdF32Matrix;
+  k, i: Integer;
+  LMaxVal: Single;
+begin
+  Result := 0;
+  if (aA.Rows = 0) or (aA.Cols = 0) then Exit;
+
+  if not SVDDecomposeF32(aA, U, S, Vt) then Exit;
+  k := Integer(S.Rows);
+  if k = 0 then begin U.Free; S.Free; Vt.Free; Exit; end;
+
+  // Find max singular value for threshold
+  LMaxVal := S.Get(0, 0);
+  for i := 1 to k - 1 do
+    if S.Get(i, 0) > LMaxVal then LMaxVal := S.Get(i, 0);
+
+  // Count singular values above threshold
+  for i := 0 to k - 1 do
+    if S.Get(i, 0) > LMaxVal * 1e-6 then
+      Inc(Result);
+
+  U.Free; S.Free; Vt.Free;
+end;
+
+function MatPseudoInverseF32(const aA: TSimdF32Matrix): TSimdF32Matrix;
+var
+  U, S, Vt: TSimdF32Matrix;
+  m, n, k, i, j: Integer;
+  LThreshold: Single;
+begin
+  Result := Default(TSimdF32Matrix);
+  if (aA.Rows = 0) or (aA.Cols = 0) then Exit;
+
+  if not SVDDecomposeF32(aA, U, S, Vt) then Exit;
+  m := Integer(aA.Rows);
+  n := Integer(aA.Cols);
+  k := Integer(S.Rows);
+  if k = 0 then begin U.Free; S.Free; Vt.Free; Exit; end;
+
+  // Threshold for singular values
+  LThreshold := S.Get(0, 0) * 1e-6;
+
+  // Compute V * S^+ * U^T
+  Result := TSimdF32Matrix.Zeros(n, m);
+  for i := 0 to k - 1 do
+  begin
+    if S.Get(i, 0) > LThreshold then
+    begin
+      // Add (1/s_i) * v_i * u_i^T to result
+      for j := 0 to n - 1 do
+        for k := 0 to m - 1 do
+          Result.Put(j, k, Result.Get(j, k) +
+            Vt.Get(i, j) * U.Get(k, i) / S.Get(i, 0));
+    end;
+  end;
+
+  U.Free; S.Free; Vt.Free;
 end;
 
 end.

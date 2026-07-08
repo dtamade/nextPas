@@ -27,6 +27,18 @@ type
   { Header callback for iteration }
   THeaderIterator = reference to procedure(const AName, AValue: string);
 
+  {** Per-request context for middleware-to-handler data propagation.
+     Thread-safe key-value store attached to a request by context middleware.
+     Values are TObject descendants; nil means "not set".
+     Typical keys: 'auth_user', 'request_id', 'trace_id', 'session'. }
+  IHttpContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000000011}']
+    procedure SetValue(const AKey: string; const AValue: TObject);
+    function GetValue(const AKey: string): TObject;
+    function Has(const AKey: string): Boolean;
+    procedure Remove(const AKey: string);
+  end;
+
   IHttpHeaders = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000001}']
     procedure SetHeader(const AName, AValue: string);

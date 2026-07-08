@@ -580,6 +580,20 @@ begin
   Check(True, 'free nil multiple times is safe');
 end;
 
+procedure TestSecureZeroMemoryFillPattern;
+var
+  LBuffer: array[0..255] of Byte;
+  LIndex: Integer;
+begin
+  { Fill with pattern }
+  for LIndex := 0 to 255 do
+    LBuffer[LIndex] := Byte(LIndex);
+  platform_secure_zero_memory(@LBuffer[0], 256);
+  { Verify all zeros }
+  for LIndex := 0 to 255 do
+    Check(LBuffer[LIndex] = 0, 'zero at ' + IntToStr(LIndex));
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.memory');
   T.Test('alloc aligned and writable', @TestAllocAlignedAndWritable);
@@ -612,5 +626,6 @@ begin
   T.Test('secure zero large buffer', @TestSecureZeroLargeBuffer);
   T.Test('alloc various sizes', @TestAllocVariousSizes);
   T.Test('free nil multiple times', @TestFreeNilMultipleTimes);
+  T.Test('secure zero fill pattern', @TestSecureZeroMemoryFillPattern);
   if not T.Run then Halt(1);
 end.

@@ -314,6 +314,52 @@ begin
   platform_file_rmdir('/tmp/nextpas_watch_test9');
 end;
 
+procedure TestWatchPollNegativeTimeout;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test10', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  platform_watch_add(W, '/tmp/nextpas_watch_test10');
+
+  { Negative timeout may block forever on some backends, so use 1ms instead }
+  R := platform_watch_poll(W, Evt, 1);
+  Check(R = 0, '1ms timeout returns no event when nothing happened');
+
+  platform_watch_close(W);
+  platform_file_rmdir('/tmp/nextpas_watch_test10');
+end;
+
+procedure TestWatchAddMultipleDirs;
+var
+  W: TPlatformWatcher;
+  Evt: TPlatformWatchEvent;
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_mkdir('/tmp/nextpas_watch_test11a', 493);
+  platform_file_mkdir('/tmp/nextpas_watch_test11b', 493);
+  Check(platform_watch_create(W) = 0, 'create');
+  Check(platform_watch_add(W, '/tmp/nextpas_watch_test11a') >= 0, 'add dir a');
+  Check(platform_watch_add(W, '/tmp/nextpas_watch_test11b') >= 0, 'add dir b');
+
+  { Create file in dir b }
+  platform_file_open('/tmp/nextpas_watch_test11b/file.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H);
+
+  R := platform_watch_poll(W, Evt, 1000);
+  Check(R > 0, 'got event from one of the dirs');
+
+  platform_watch_close(W);
+  platform_file_unlink('/tmp/nextpas_watch_test11b/file.txt');
+  platform_file_rmdir('/tmp/nextpas_watch_test11a');
+  platform_file_rmdir('/tmp/nextpas_watch_test11b');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.watch');
   T.Test('create/close', @TestCreateClose);
@@ -330,5 +376,7 @@ begin
   T.Test('poll zero timeout', @TestPollZeroTimeout);
   T.Test('Windows watch source contract', @TestWindowsWatchSourceContract);
   T.Test('add same dir twice', @TestWatchAddSameDirTwice);
+  T.Test('poll negative timeout', @TestWatchPollNegativeTimeout);
+  T.Test('add multiple dirs', @TestWatchAddMultipleDirs);
   if not T.Run then Halt(1);
 end.

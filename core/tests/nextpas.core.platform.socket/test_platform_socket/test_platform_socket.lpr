@@ -806,6 +806,94 @@ begin
   platform_socket_close(S);
 end;
 
+procedure TestSendtoNilBuffer;
+var
+  S: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LSent: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, S) = 0, 'create UDP');
+  Check(platform_sockaddr_loopback4(9999, LAddr) = 0, 'addr');
+  Check(platform_socket_sendto(S, nil, 10, 0, @LAddr.Storage, LAddr.Len, LSent) <> 0,
+    'sendto nil buffer returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestRecvNilBuffer;
+var
+  S: TPlatformSocket;
+  LRecvd: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, S) = 0, 'create UDP');
+  Check(platform_socket_recv(S, nil, 10, 0, LRecvd) <> 0,
+    'recv nil buffer returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestSetsockoptInvalidLevel;
+var
+  S: TPlatformSocket;
+  LVal: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  LVal := 1;
+  Check(platform_socket_setsockopt(S, 9999, 9999, @LVal, SizeOf(LVal)) <> 0,
+    'setsockopt with invalid level returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestErrorWouldBlockClassification;
+begin
+  Check(not platform_socket_error_would_block(0), '0 is not would_block');
+  Check(not platform_socket_error_would_block(-1), '-1 is not would_block');
+end;
+
+procedure TestGetsocknameOnConnected;
+var
+  LServer, LClient, LAccepted: TPlatformSocket;
+  LAddr, LServerAddr, LAcceptedAddr: TPlatformSockAddr;
+  LBuf: array[0..7] of AnsiChar;
+  LSent: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LServer) = 0, 'server create');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr port 0');
+  Check(platform_socket_bind(LServer, @LAddr.Storage, LAddr.Len) = 0, 'bind');
+  Check(platform_socket_listen(LServer, 5) = 0, 'listen');
+
+  FillChar(LServerAddr, SizeOf(LServerAddr), 0);
+  LServerAddr.Len := SizeOf(LServerAddr.Storage);
+  Check(platform_socket_getsockname(LServer, @LServerAddr.Storage,
+    @LServerAddr.Len) = 0, 'getsockname server');
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LClient) = 0, 'client create');
+  Check(platform_socket_connect(LClient, @LServerAddr.Storage,
+    LServerAddr.Len) = 0, 'connect');
+
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  Check(platform_socket_accept(LServer, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len, LAccepted) = 0, 'accept');
+
+  { Send data to verify connection works }
+  LBuf := 'verify!';
+  Check(platform_socket_send(LClient, @LBuf[0], 7, 0, LSent) = 0, 'send');
+  Check(LSent = 7, 'sent 7');
+
+  { getsockname on accepted should return client's peer address }
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  LAcceptedAddr.Len := SizeOf(LAcceptedAddr.Storage);
+  Check(platform_socket_getsockname(LAccepted, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len) = 0, 'getsockname on accepted');
+
+  platform_socket_close(LAccepted);
+  platform_socket_close(LClient);
+  platform_socket_close(LServer);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -871,6 +959,13 @@ begin
 
   { Socket nil address }
   T.Test('create nil address', @TestCreateNilAddress);
+
+  { Edge cases }
+  T.Test('sendto nil buffer returns error', @TestSendtoNilBuffer);
+  T.Test('recv nil buffer returns error', @TestRecvNilBuffer);
+  T.Test('setsockopt invalid level', @TestSetsockoptInvalidLevel);
+  T.Test('error_would_block classification', @TestErrorWouldBlockClassification);
+  T.Test('getsockname on connected socket', @TestGetsocknameOnConnected);
 
   if not T.Run then Halt(1);
 end.
