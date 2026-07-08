@@ -5,20 +5,53 @@ unit nextpas.core.platform.env;
 interface
 
 type
+  {** @desc 环境变量枚举回调函数
+      @param AEntry 当前条目（NAME=VALUE 格式）
+      @param AData 用户数据指针
+      @return True 继续枚举，False 停止 *}
   TPlatformEnvEnumerateCallback = function(const AEntry: PAnsiChar;
     AData: Pointer): Boolean;
 
+{** @desc 获取环境变量值
+    @param AName 变量名
+    @param ABuf 输出缓冲区（可为 nil 仅查询长度）
+    @param ABufSize 缓冲区大小
+    @param ALen 输出实际长度
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
   ABufSize: Int32; out ALen: Int32): Int32;
+
+{** @desc 设置环境变量
+    @param AName 变量名
+    @param AValue 变量值
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
+
+{** @desc 删除环境变量
+    @param AName 变量名
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_env_unset(const AName: PAnsiChar): Int32;
+
+{** @desc 检查环境变量是否存在
+    @param AName 变量名
+    @return True 存在 *}
 function platform_env_exists(const AName: PAnsiChar): Boolean;
+
+{** @desc 枚举所有环境变量
+    @param ACallback 回调函数
+    @param AData 用户数据指针
+    @return 0 完成，PLATFORM_ERR_* 错误码 *}
 function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
+
+{** @desc 环境变量名是否区分大小写（Linux/macOS: True, Windows: False）
+    @return True 区分大小写 *}
 function platform_env_names_case_sensitive: Boolean;
 
-{ Convenience: returns env var value as string, '' if not found }
+{** @desc 获取环境变量值（字符串便捷版）
+    @param AName 变量名
+    @return 变量值，不存在返回空字符串 *}
 function platform_env_get_str(const AName: AnsiString): AnsiString;
 
 implementation

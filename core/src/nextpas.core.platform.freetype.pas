@@ -18,8 +18,15 @@ const
   FT_ERR_NOT_LOADED  = -1;
   FT_ERR_LOAD_FAILED = -2;
 
+{** @desc 加载 FreeType 动态库并解析符号（引用计数）
+    @return FT_ERR_OK 成功，FT_ERR_LOAD_FAILED 加载失败 *}
 function ft_load: Int32;
+
+{** @desc 释放 FreeType 引用（引用计数归零时卸载） *}
 procedure ft_unload;
+
+{** @desc 检查 FreeType 是否已加载
+    @return True 已加载 *}
 function ft_is_loaded: Boolean;
 
 implementation
@@ -28,6 +35,11 @@ var
   GLib: TPlatformLibrary;
   GLoaded: Boolean = False;
   GRefCount: Int32 = 0;
+
+function TryLoadSymbol(const AName: PAnsiChar; out APtr: Pointer): Boolean;
+begin
+  Result := platform_dl_sym(GLib, AName, APtr) = 0;
+end;
 
 function ft_load: Int32;
 var
@@ -42,31 +54,31 @@ begin
   if platform_dl_open('libfreetype.so.6', PLATFORM_DL_NOW, GLib) <> 0 then
     Exit(FT_ERR_LOAD_FAILED);
 
-  if platform_dl_sym(GLib, 'FT_Init_FreeType', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Init_FreeType', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Init_FreeType) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_Done_FreeType', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Done_FreeType', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Done_FreeType) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_New_Face', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_New_Face', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_New_Face) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_Done_Face', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Done_Face', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Done_Face) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_Set_Pixel_Sizes', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Set_Pixel_Sizes', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Set_Pixel_Sizes) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_Load_Glyph', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Load_Glyph', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Load_Glyph) := LPtr;
 
-  if platform_dl_sym(GLib, 'FT_Get_Char_Index', LPtr) <> 0 then
+  if not TryLoadSymbol('FT_Get_Char_Index', LPtr) then
   begin ft_unload; Exit(FT_ERR_LOAD_FAILED); end;
   Pointer(FT_Get_Char_Index) := LPtr;
 

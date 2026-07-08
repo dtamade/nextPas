@@ -13,6 +13,7 @@ uses
 const
   PLATFORM_ERR_PERM        = 1;     { Operation not permitted }
   PLATFORM_ERR_NOENT       = 2;     { No such file or directory }
+  PLATFORM_ERR_INTR        = 4;     { Interrupted system call }
   PLATFORM_ERR_IO          = 5;     { I/O error }
   PLATFORM_ERR_BADF        = 9;     { Bad file descriptor }
   PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
@@ -21,6 +22,7 @@ const
   PLATFORM_ERR_EXIST       = 17;    { File exists }
   PLATFORM_ERR_NOTDIR      = 20;    { Not a directory }
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
+  PLATFORM_ERR_NOSPC       = 28;    { No space left on device }
   PLATFORM_ERR_PIPE        = 32;    { Broken pipe }
   PLATFORM_ERR_NOSYS       = 38;    { Function not implemented }
   PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
@@ -93,6 +95,8 @@ begin
       ALen := CopyPlatformErrorMessage('operation not permitted', ABuf, ABufSize);
     PLATFORM_ERR_NOENT:
       ALen := CopyPlatformErrorMessage('no such file or directory', ABuf, ABufSize);
+    PLATFORM_ERR_INTR:
+      ALen := CopyPlatformErrorMessage('interrupted system call', ABuf, ABufSize);
     PLATFORM_ERR_IO:
       ALen := CopyPlatformErrorMessage('input/output error', ABuf, ABufSize);
     PLATFORM_ERR_BADF:
@@ -109,6 +113,8 @@ begin
       ALen := CopyPlatformErrorMessage('not a directory', ABuf, ABufSize);
     PLATFORM_ERR_INVALID:
       ALen := CopyPlatformErrorMessage('invalid argument', ABuf, ABufSize);
+    PLATFORM_ERR_NOSPC:
+      ALen := CopyPlatformErrorMessage('no space left on device', ABuf, ABufSize);
     PLATFORM_ERR_PIPE:
       ALen := CopyPlatformErrorMessage('broken pipe', ABuf, ABufSize);
     PLATFORM_ERR_NOSYS:
@@ -242,8 +248,10 @@ begin
       Exit(ecAlreadyExists);
     PLATFORM_ERR_PERM:
       Exit(ecPermission);
-    PLATFORM_ERR_NOMEM:
+    PLATFORM_ERR_NOMEM, PLATFORM_ERR_NOSPC:
       Exit(ecResourceExhausted);
+    PLATFORM_ERR_INTR:
+      Exit(ecInterrupted);
     PLATFORM_ERR_CONNRESET,
     PLATFORM_ERR_CONNREFUSED:
       Exit(ecIO);

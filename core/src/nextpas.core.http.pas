@@ -34,6 +34,7 @@ uses
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.deadline,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -167,6 +168,7 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED = nextpas.core.http.base.HTTP_STATUS_NOT_IMPLEMENTED;
   HTTP_STATUS_BAD_GATEWAY = nextpas.core.http.base.HTTP_STATUS_BAD_GATEWAY;
   HTTP_STATUS_SERVICE_UNAVAILABLE = nextpas.core.http.base.HTTP_STATUS_SERVICE_UNAVAILABLE;
+  HTTP_STATUS_GATEWAY_TIMEOUT = nextpas.core.http.base.HTTP_STATUS_GATEWAY_TIMEOUT;
 
   { WebSocket opcodes }
   wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
@@ -305,6 +307,11 @@ function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
 {** @desc Write 415 Unsupported Media Type JSON error response. }
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
+{** @desc Write 504 Gateway Timeout JSON error response. }
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Request deadline middleware. Returns 504 if handler exceeds ATimeoutMs. }
+function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -831,6 +838,17 @@ function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
   Result := nextpas.core.http.message.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
+end;
+
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorGatewayTimeout(AW, AMessage);
+end;
+
+function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.deadline.DeadlineMiddleware(ATimeoutMs);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;

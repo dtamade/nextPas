@@ -5,6 +5,7 @@ unit nextpas.core.platform.dl;
 interface
 
 type
+  {** @desc 动态库句柄，封装平台相关的库引用 *}
   TPlatformLibrary = record
   {$IFDEF NEXTPAS_WINDOWS}
     Handle: PtrUInt;
@@ -14,15 +15,38 @@ type
   end;
 
 const
+  {** 延迟绑定（符号首次调用时解析） *}
   PLATFORM_DL_LAZY   = 1;
+  {** 立即绑定（打开时解析所有符号） *}
   PLATFORM_DL_NOW    = 2;
+  {** 全局符号可见（后续加载的库可引用） *}
   PLATFORM_DL_GLOBAL = 4;
 
+{** @desc 打开动态链接库
+    @param APath 库文件路径
+    @param AFlags 打开标志（PLATFORM_DL_*）
+    @param ALib 输出参数，返回库句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
+
+{** @desc 查找动态库中的符号
+    @param ALib 库句柄
+    @param AName 符号名称
+    @param AAddr 输出参数，返回符号地址
+    @return 0 成功，PLATFORM_ERR_NOTFOUND 符号不存在 *}
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
+
+{** @desc 关闭动态库
+    @param ALib 库句柄（关闭后句柄清零）
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
+
+{** @desc 获取动态库操作的错误信息
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 错误信息长度 *}
 function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 implementation

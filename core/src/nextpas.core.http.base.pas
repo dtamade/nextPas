@@ -84,11 +84,20 @@ type
     IdleTimeout: Int64;
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
+    { ShutdownTimeout: max milliseconds to wait for in-flight requests during
+      graceful shutdown. 0 = wait forever (default for backward compat). }
+    ShutdownTimeout: Int64;
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
     class function Default: THttpServerOptions; static;
     function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
+    function WithReadTimeout(const AMs: Int64): THttpServerOptions;
+    function WithWriteTimeout(const AMs: Int64): THttpServerOptions;
+    function WithIdleTimeout(const AMs: Int64): THttpServerOptions;
+    function WithMaxHeaderSize(const ABytes: Int32): THttpServerOptions;
+    function WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
+    function WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -140,6 +149,7 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
   HTTP_STATUS_SERVICE_UNAVAILABLE   = THttpStatus(503);
+  HTTP_STATUS_GATEWAY_TIMEOUT       = THttpStatus(504);
 
   { TCP server backend aliases }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
@@ -248,6 +258,7 @@ begin
     501: Result := 'Not Implemented';
     502: Result := 'Bad Gateway';
     503: Result := 'Service Unavailable';
+    504: Result := 'Gateway Timeout';
   else
     Result := IntToStr(ACode);
   end;
@@ -715,6 +726,7 @@ begin
   Result.IdleTimeout := 30000;
   Result.MaxHeaderSize := 8192;
   Result.MaxBodySize := 4194304;
+  Result.ShutdownTimeout := 0;
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
@@ -726,6 +738,42 @@ begin
   Result := Self;
   Result.Version := AVersion;
   Result.UseRegistryVersion := False;
+end;
+
+function THttpServerOptions.WithReadTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.ReadTimeout := AMs;
+end;
+
+function THttpServerOptions.WithWriteTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.WriteTimeout := AMs;
+end;
+
+function THttpServerOptions.WithIdleTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.IdleTimeout := AMs;
+end;
+
+function THttpServerOptions.WithMaxHeaderSize(const ABytes: Int32): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxHeaderSize := ABytes;
+end;
+
+function THttpServerOptions.WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxBodySize := ABytes;
+end;
+
+function THttpServerOptions.WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.ShutdownTimeout := AMs;
 end;
 
 function THttpServerOptions.EffectiveVersion(

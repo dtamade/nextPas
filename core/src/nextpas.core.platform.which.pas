@@ -4,6 +4,11 @@ unit nextpas.core.platform.which;
 
 interface
 
+{** @desc 在 PATH 环境变量中查找可执行文件
+    @param AName 程序名称（或绝对路径）
+    @param ABuf 输出缓冲区，返回完整路径
+    @param ABufSize 缓冲区大小
+    @return >= 0 路径实际长度，PLATFORM_ERR_ENOENT 未找到 *}
 function platform_which(const AName: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
 

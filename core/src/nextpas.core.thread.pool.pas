@@ -53,6 +53,7 @@ type
     procedure SignalWorkers(const ACount: Integer);
     procedure Shutdown;
     procedure WaitAll;
+    function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
     function GetWorkerCount: Integer;
   end;
 
@@ -320,6 +321,22 @@ begin
   FMutex.Acquire;
   while FPendingTasks > 0 do
     FDoneCondVar.Wait(FMutex);
+  FMutex.Release;
+end;
+
+function TThreadPool.WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
+begin
+  Result := True;
+  FMutex.Acquire;
+  while FPendingTasks > 0 do
+  begin
+    if not FDoneCondVar.WaitTimeout(FMutex, ATimeoutNs) then
+    begin
+      { Timed out — tasks still pending }
+      FMutex.Release;
+      Exit(False);
+    end;
+  end;
   FMutex.Release;
 end;
 

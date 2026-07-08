@@ -17,13 +17,42 @@ type
     pszbPosixExplicitBZero
   );
 
+{** @desc 分配对齐内存
+    @param ASize 字节数
+    @param AAlignment 对齐要求（必须是 2 的幂）
+    @return 内存指针，失败返回 nil *}
 function platform_aligned_alloc(ASize, AAlignment: SizeUInt): Pointer;
+
+{** @desc 重新分配对齐内存
+    @param APtr 原始指针（nil 表示新分配）
+    @param ANewSize 新的字节数
+    @param AAlignment 对齐要求
+    @return 新内存指针，失败返回 nil *}
 function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt): Pointer;
+
+{** @desc 释放对齐内存
+    @param APtr 由 platform_aligned_alloc 分配的指针 *}
 procedure platform_aligned_free(APtr: Pointer);
+
+{** @desc 获取当前使用的对齐分配后端
+    @return TPlatformAlignedAllocBackend 枚举值 *}
 function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
+
+{** @desc 检查是否使用原生对齐分配（非 fallback）
+    @return True 使用原生实现 *}
 function platform_aligned_alloc_is_native: Boolean;
+
+{** @desc 获取安全清零后端
+    @return TPlatformSecureZeroBackend 枚举值 *}
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
+
+{** @desc 检查是否使用原生安全清零
+    @return True 使用原生实现 *}
 function platform_secure_zero_memory_is_native: Boolean;
+
+{** @desc 安全清零内存（不可被编译器优化掉）
+    @param APtr 内存指针
+    @param ASize 字节数 *}
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 
 {**

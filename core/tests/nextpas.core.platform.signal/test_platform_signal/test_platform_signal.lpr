@@ -150,6 +150,28 @@ begin
   Check(platform_signal_ignore(999) <> 0, 'ignore signal 999 rejected');
 end;
 
+procedure TestRaiseSignal;
+begin
+  GHandlerCalled := 0;
+  GLastSignal := 0;
+  platform_signal_set(PLATFORM_SIGUSR1, @MyHandler);
+  Check(platform_signal_raise(PLATFORM_SIGUSR1) = 0, 'raise SIGUSR1');
+  Check(GHandlerCalled = 1, 'handler called after raise');
+  Check(GLastSignal = PLATFORM_SIGUSR1, 'handler got SIGUSR1');
+  platform_signal_reset(PLATFORM_SIGUSR1);
+end;
+
+procedure TestRaiseSIGINT;
+begin
+  GHandlerCalled := 0;
+  GLastSignal := 0;
+  platform_signal_set(PLATFORM_SIGINT, @MyHandler);
+  Check(platform_signal_raise(PLATFORM_SIGINT) = 0, 'raise SIGINT');
+  Check(GHandlerCalled = 1, 'handler called after raise SIGINT');
+  Check(GLastSignal = PLATFORM_SIGINT, 'handler got SIGINT');
+  platform_signal_reset(PLATFORM_SIGINT);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.signal');
   T.Test('set handler + deliver', @TestSetHandler);
@@ -168,5 +190,7 @@ begin
   T.Test('block/unblock valid signal', @TestBlockUnblockValidSignal);
   T.Test('reset invalid signal', @TestResetInvalidSignal);
   T.Test('ignore invalid signal', @TestIgnoreInvalidSignal);
+  T.Test('raise signal', @TestRaiseSignal);
+  T.Test('raise SIGINT', @TestRaiseSIGINT);
   if not T.Run then Halt(1);
 end.

@@ -26,6 +26,7 @@ type
   private
     FStatus: THttpStatus;
     FHeaders: IHttpHeaders;
+    FBody: string;
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
@@ -34,6 +35,7 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
     property Headers: IHttpHeaders read GetHeaders;
+    property Body: string read FBody;
   end;
 
 constructor TMockResponseWriter.Create;
@@ -41,6 +43,7 @@ begin
   inherited Create;
   FStatus := 0;
   FHeaders := NewHttpHeaders;
+  FBody := '';
 end;
 
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -59,7 +62,15 @@ begin
 end;
 
 function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LStr: string;
 begin
+  if ACount > 0 then
+  begin
+    SetLength(LStr, ACount);
+    Move(ABuf, LStr[1], ACount);
+    FBody := FBody + LStr;
+  end;
   Result := ACount;
 end;
 
@@ -789,6 +800,7 @@ var
   LReq: IHttpRequest;
   LUrl: TUrl;
   LWriter: IHttpResponseWriter;
+  LMock: TMockResponseWriter;
   LAllow: string;
 begin
   LRouter := THttpRouter.Create;
@@ -802,13 +814,43 @@ begin
     LUrl := TUrl.Parse('/resource');
     LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
     { Use a mock response writer that captures headers }
-    LWriter := TMockResponseWriter.Create;
+    LMock := TMockResponseWriter.Create;
+    LWriter := LMock;
     LRouter.ServeHTTP(LReq, LWriter);
     CheckEqual(Int64(405), Int64(LWriter.GetStatus), '405 status');
     LAllow := LWriter.GetHeaders.Get('allow');
     Check(Pos('GET', LAllow) > 0, '405 Allow contains GET');
     Check(Pos('HEAD', LAllow) > 0, '405 Allow contains implicit HEAD');
     Check(Pos('POST', LAllow) > 0, '405 Allow contains POST');
+    { Verify JSON error body }
+    Check(Pos('"error"', LMock.Body) > 0, '405 response is JSON');
+    Check(Pos('method_not_allowed', LMock.Body) > 0, '405 has error code');
+  finally
+    LRouter.Free;
+  end;
+end;
+
+procedure Test404ReturnsJsonError;
+var
+  LRouter: THttpRouter;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LWriter: IHttpResponseWriter;
+  LMock: TMockResponseWriter;
+begin
+  LRouter := THttpRouter.Create;
+  try
+    LRouter.Handle(hmGet, '/exists', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end);
+    LUrl := TUrl.Parse('/not-exists');
+    LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+    LMock := TMockResponseWriter.Create;
+    LWriter := LMock;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual(Int64(404), Int64(LWriter.GetStatus), '404 status');
+    Check(Pos('"error"', LMock.Body) > 0, '404 response is JSON');
+    Check(Pos('not_found', LMock.Body) > 0, '404 has error code');
   finally
     LRouter.Free;
   end;
@@ -890,6 +932,48 @@ begin
   CheckEqual('items', GHandlerCalled, 'nested group route matched');
 end;
 
+procedure TestServeHTTPTrailingSlashNormalized;
+var
+  LRouter: IHttpRouter;
+  LW: TMockResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LRouter := NewRouter;
+  LRouter.Get('/api/users', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'users';
+  end);
+
+  { Trailing slash should be normalized away }
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/users/'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('users', GHandlerCalled, '/api/users/ matches /api/users');
+
+  { Multiple trailing slashes should also be normalized }
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/users//'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('users', GHandlerCalled, '/api/users// matches /api/users');
+
+  { Root path stays as / }
+  LRouter := NewRouter;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    GHandlerCalled := 'root';
+  end);
+  GHandlerCalled := '';
+  LW := TMockResponseWriter.Create;
+  LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/'),
+    hvHttp11, NewHttpHeaders, nil, 0);
+  LRouter.ServeHTTP(LReq, LW);
+  CheckEqual('root', GHandlerCalled, '/ matches root');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.router');
   T.Test('Static route match', @TestStaticRouteMatch);
@@ -918,9 +1002,11 @@ begin
   T.Test('explicit HEAD route wins over GET fallback',
     @TestExplicitHeadRouteWinsOverGetFallback);
   T.Test('405 lists all methods', @Test405ListsAllMethods);
+  T.Test('404 returns JSON error', @Test404ReturnsJsonError);
   { RouterGroup }
   T.Test('Group: prefix applied', @TestRouterGroupPrefix);
   T.Test('Group: middleware applied', @TestRouterGroupWithMiddleware);
   T.Test('Group: nested prefix', @TestRouterGroupNested);
+  T.Test('ServeHTTP trailing slash normalized', @TestServeHTTPTrailingSlashNormalized);
   if not T.Run then Halt(1);
 end.
