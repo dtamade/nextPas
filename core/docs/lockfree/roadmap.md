@@ -68,8 +68,11 @@
 | `lockfree.forkjoin` | ForkJoin 并行执行框架 | ✅ 完成 | 112 |
 | `lockfree.cowarray` | 写时复制数组 | ✅ 完成 | 72 |
 | `lockfree.disjointset` | 并查集 (Union-Find) | ✅ 完成 | 1030 |
+| `lockfree.hashtable` | 无锁哈希表 (开放寻址) | ✅ 完成 | 3229 |
+| `lockfree.sortedset` | 并发有序集合 | ✅ 完成 | 2025 |
+| `lockfree.bitset` | 并发位集合 | ✅ 完成 | 10407 |
 
-**规模**: 49 文件, ~22500 行, 21537 测试
+**规模**: 52 文件, ~23500 行, 37404 测试
 
 ---
 
@@ -113,7 +116,10 @@
 | test_lockfree_forkjoin | 112 | ✅ 全绿 |
 | test_lockfree_cowarray | 72 | ✅ 全绿 |
 | test_lockfree_disjointset | 1030 | ✅ 全绿 |
-| **总计** | **21537** | **✅ 全绿** |
+| test_lockfree_hashtable | 3229 | ✅ 全绿 |
+| test_lockfree_sortedset | 2025 | ✅ 全绿 |
+| test_lockfree_bitset | 10407 | ✅ 全绿 |
+| **总计** | **37404** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

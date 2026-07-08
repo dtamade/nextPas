@@ -49,7 +49,10 @@ uses
   nextpas.core.lockfree.msqueue,
   nextpas.core.lockfree.forkjoin,
   nextpas.core.lockfree.cowarray,
-  nextpas.core.lockfree.disjointset;
+  nextpas.core.lockfree.disjointset,
+  nextpas.core.lockfree.hashtable,
+  nextpas.core.lockfree.sortedset,
+  nextpas.core.lockfree.bitset;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -368,6 +371,32 @@ type
   }
   TLockFreeDisjointSet = nextpas.core.lockfree.disjointset.TLockFreeDisjointSet;
   TLockFreeDisjointSetResult = nextpas.core.lockfree.disjointset.TLockFreeDisjointSetResult;
+
+  {** @desc 无锁哈希表（开放寻址）
+    @details 使用 CAS 操作实现无锁并发访问。
+      开放寻址 + 线性探测，2 的幂容量，自动扩容。
+    @see TLockFreeHashTableImpl 详细文档和示例
+  }
+  generic TLockFreeHashTable<TKey, TValue> = class(specialize TLockFreeHashTableImpl<TKey, TValue>)
+  end;
+  TLockFreeHashTableResult = nextpas.core.lockfree.hashtable.TLockFreeHashTableResult;
+
+  {** @desc 并发有序集合
+    @details 基于有序数组实现，写时复制，读无锁。
+      二分查找，支持 Insert/Remove/Contains/Count。
+    @see TConcurrentSortedSetImpl 详细文档和示例
+  }
+  generic TConcurrentSortedSet<T> = class(specialize TConcurrentSortedSetImpl<T>)
+  end;
+  TLockFreeSortedSetResult = nextpas.core.lockfree.sortedset.TLockFreeSortedSetResult;
+
+  {** @desc 并发位集合
+    @details 使用原子 CAS 操作每一位。
+      支持 Set/Clear/Flip/Test/TestAndSet/TestAndClear，自动扩容。
+    @see TConcurrentBitSet 详细文档和示例
+  }
+  TConcurrentBitSet = nextpas.core.lockfree.bitset.TConcurrentBitSet;
+  TLockFreeBitSetResult = nextpas.core.lockfree.bitset.TLockFreeBitSetResult;
 
 implementation
 
