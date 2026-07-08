@@ -98,6 +98,12 @@ type
     {** F-04: 按名称查找条目索引，未找到返回 -1 }
     function FindEntryIndex(const AName: string): Integer;
 
+    {** Add* 方法公共前导：GuardNotRun + Result := Self }
+    function BeginAdd: IBenchSuite;
+
+    {** 创建默认条目（Name + Condition=True） }
+    function MakeDefaultEntry(const AName: string): TBenchEntry;
+
     {** 添加条目到内部数组（公共逻辑提取） }
     procedure AppendEntry(const AEntry: TBenchEntry);
 
@@ -385,6 +391,19 @@ begin
   end;
 end;
 
+function TBenchSuite.BeginAdd: IBenchSuite;
+begin
+  GuardNotRun;
+  Result := Self;
+end;
+
+function TBenchSuite.MakeDefaultEntry(const AName: string): TBenchEntry;
+begin
+  Result := Default(TBenchEntry);
+  Result.Name := AName;
+  Result.Condition := True;
+end;
+
 procedure TBenchSuite.AppendEntry(const AEntry: TBenchEntry);
 begin
   EnsureEntryCapacity;
@@ -414,30 +433,23 @@ function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   GuardFuncAssigned(AFunc, 'Add');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
-  LEntry.Condition := True;
   AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddSimple(const AName: string;
   AFunc: TBenchSimpleFunc): IBenchSuite;
-{ F-03: 存储 SimpleFunc，runner 直接调用 }
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   if not Assigned(AFunc) then
     raise EBenchInvalidParam.Create('TBenchSuite.AddSimple: AFunc must not be nil');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.SimpleFunc := AFunc;
-  LEntry.Condition := True;
   AppendEntry(LEntry);
 end;
 
@@ -446,15 +458,12 @@ function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   GuardFuncAssigned(AFunc, 'AddWithSetup');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
   LEntry.Setup := ASetup;
   LEntry.Teardown := ATeardown;
-  LEntry.Condition := True;
   AppendEntry(LEntry);
 end;
 
@@ -463,11 +472,9 @@ function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   GuardFuncAssigned(AFunc, 'AddWhen');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
   LEntry.Condition := ACondition;
   AppendEntry(LEntry);
@@ -478,16 +485,12 @@ function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   GuardFuncAssigned(AFunc, 'AddParallel');
-  Result := Self;
+  Result := BeginAdd;
   if AThreads <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
-
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
-  LEntry.Condition := True;
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
   AppendEntry(LEntry);
@@ -499,18 +502,15 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
-  GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
   if Length(AParams) = 0 then
     raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
-  Result := Self;
+  Result := BeginAdd;
   for LIndex := 0 to High(AParams) do
   begin
-    LEntry := Default(TBenchEntry);
-    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry := MakeDefaultEntry(AName + '/' + IntToStr(AParams[LIndex]));
     LEntry.ParamFunc := AFunc;
     LEntry.ParamValue := AParams[LIndex];
-    LEntry.Condition := True;
     AppendEntry(LEntry);
   end;
 end;
@@ -522,20 +522,17 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
-  GuardNotRun;
   GuardParamFuncAssigned(AFunc, 'AddRange');
   if Length(AParams) = 0 then
     raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
-  Result := Self;
+  Result := BeginAdd;
   for LIndex := 0 to High(AParams) do
   begin
-    LEntry := Default(TBenchEntry);
-    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry := MakeDefaultEntry(AName + '/' + IntToStr(AParams[LIndex]));
     LEntry.ParamFunc := AFunc;
     LEntry.ParamValue := AParams[LIndex];
     LEntry.Setup := ASetup;
     LEntry.Teardown := ATeardown;
-    LEntry.Condition := True;
     AppendEntry(LEntry);
   end;
 end;
@@ -544,12 +541,9 @@ function TBenchSuite.AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBench
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   GuardLoopFuncAssigned(AFunc, 'AddLoop');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
-  LEntry.Condition := True;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
   AppendEntry(LEntry);
@@ -561,13 +555,10 @@ function TBenchSuite.AddLoopWithContext(const AName: string;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   if not Assigned(AFunc) then
     raise EBenchInvalidParam.Create('TBenchSuite.AddLoopWithContext: function must not be nil');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
-  LEntry.Condition := True;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.IsLoop := True;
   LEntry.LoopContextFunc := AFunc;
   AppendEntry(LEntry);

@@ -104,6 +104,9 @@ type
     { Phase 3: 对象池支持 }
     FUseObjectPool: Boolean;
 
+    {** 公共初始化逻辑（Create/CreateNoEnv 共用） }
+    procedure InitDefaults;
+
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
 
@@ -460,9 +463,8 @@ end;
 
 { TBenchRunner }
 
-constructor TBenchRunner.Create;
+procedure TBenchRunner.InitDefaults;
 begin
-  inherited Create;
   FStatsAnalyzer := TBenchStatsAnalyzer.Create;
   FResultCount := 0;
   FResultCapacity := 0;
@@ -471,20 +473,19 @@ begin
   FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
+end;
+
+constructor TBenchRunner.Create;
+begin
+  inherited Create;
+  InitDefaults;
   LoadConfigFromEnv;
 end;
 
 constructor TBenchRunner.CreateNoEnv;
 begin
   inherited Create;
-  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
-  FResultCount := 0;
-  FResultCapacity := 0;
-  FParallelBridgeFunc := nil;
-  FParallelContextsInitialized := False;
-  FUseObjectPool := False;
-  SetLength(FResults, 0);
-  SetLength(FParallelContexts, 0);
+  InitDefaults;
   FConfig := DefaultBenchConfig;
 end;
 
