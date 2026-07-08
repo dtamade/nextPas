@@ -36,8 +36,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   BATCH_MAX_BLOCKS = 64;
@@ -52,7 +51,7 @@ type
     TotalBlocksFreed: UInt64;
   end;
 
-  TBatchAllocator = class(TAllocator)
+  TBatchAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FBatchAllocCount: UInt64;
@@ -61,12 +60,17 @@ type
     FSingleFreeCount: UInt64;
     FTotalBlocksAlloc: UInt64;
     FTotalBlocksFree: UInt64;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
+
+    function Traits: TAllocatorTraits; inline;
     constructor Create(AInner: IAllocator);
     function BatchAlloc(ASize: SizeUInt; ACount: Integer;
       out ABlocks: array of Pointer): Integer;
@@ -90,28 +94,28 @@ begin
   FTotalBlocksFree := 0;
 end;
 
-function TBatchAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TBatchAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Inc(FSingleAllocCount);
   Inc(FTotalBlocksAlloc);
   Result := FInner.GetMem(ASize);
 end;
 
-function TBatchAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TBatchAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Inc(FSingleAllocCount);
   Inc(FTotalBlocksAlloc);
   Result := FInner.AllocMem(ASize);
 end;
 
-procedure TBatchAllocator.DoFreeMem(APtr: Pointer);
+procedure TBatchAllocator.FreeMem(APtr: Pointer); inline;
 begin
   Inc(FSingleFreeCount);
   Inc(FTotalBlocksFree);
   FInner.FreeMem(APtr);
 end;
 
-function TBatchAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TBatchAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.ReallocMem(APtr, ASize);
 end;
@@ -169,6 +173,13 @@ begin
   Result.SingleFreeCount := FSingleFreeCount;
   Result.TotalBlocksAllocated := FTotalBlocksAlloc;
   Result.TotalBlocksFreed := FTotalBlocksFree;
+end;
+
+
+function TBatchAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
 end;
 
 end.
