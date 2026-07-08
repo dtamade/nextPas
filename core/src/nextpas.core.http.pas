@@ -23,6 +23,7 @@ uses
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.logger,
+  nextpas.core.http.middleware.requestid,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -227,6 +228,10 @@ function ContentTypeMiddleware(
 function LoggerMiddleware: IHttpMiddleware; inline;
 {** @desc Request logging middleware with custom TLogger instance. }
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
+{** @desc Ensure X-Request-Id header on every response (preserves existing, generates UUID if missing). }
+function RequestIdMiddleware: IHttpMiddleware; inline;
+{** @desc Request ID middleware with custom header name. }
+function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -542,6 +547,16 @@ end;
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
+end;
+
+function RequestIdMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddleware;
+end;
+
+function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWith(AHeaderName);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
