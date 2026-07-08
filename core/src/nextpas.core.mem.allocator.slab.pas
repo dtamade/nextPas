@@ -27,8 +27,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** Size class 数量 }
@@ -68,7 +67,7 @@ type
    *
    *  释放时通过 ClassIndex 头部确定 size class。
    *}
-  TSlabAllocator = class(TAllocator)
+  TSlabAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     { Size class 表 }
@@ -88,11 +87,6 @@ type
     procedure InitSizeClasses;
     function FindSizeClass(ASize: SizeUInt): Int32;
     procedure GrowSlab(AClassIndex: Int32);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建 slab 分配器
      *  @param AInner 内部分配器（用于批量获取 slab 页和大对象）
@@ -100,12 +94,16 @@ type
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
+
     {** 获取 slab 统计信息 }
     function GetStats: TSlabStats;
     {** 是否为 slab 管理的小对象 }
     function IsSmallObject(APtr: Pointer): Boolean;
-
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -233,7 +231,7 @@ begin
   Inc(FFreeCounts[AClassIndex], FSizeClasses[AClassIndex].ObjectsPerSlab);
 end;
 
-function TSlabAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TSlabAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LClassIdx: Int32;
   LBlock: Pointer;
@@ -261,24 +259,24 @@ begin
   end;
 end;
 
-function TSlabAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TSlabAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TSlabAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TSlabAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LBlock: Pointer;
   LClassIdx: Int32;
   LOldSize: SizeUInt;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
@@ -296,15 +294,15 @@ begin
     Exit(APtr);
 
   { 否则分配新块，复制，释放旧块 }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
   begin
     Move(APtr^, Result^, LOldSize);
-    DoFreeMem(APtr);
+    FreeMem(APtr);
   end;
 end;
 
-procedure TSlabAllocator.DoFreeMem(APtr: Pointer);
+procedure TSlabAllocator.FreeMem(APtr: Pointer); inline;
 var
   LBlock: Pointer;
   LClassIdx: Int32;
@@ -358,9 +356,10 @@ begin
   Result := (LClassIdx >= 0) and (LClassIdx < SLAB_SIZE_CLASS_COUNT);
 end;
 
-function TSlabAllocator.Traits: TAllocatorTraits;
+function TSlabAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe      := False;
   Result.SupportsRealloc := True;
 end;
 
