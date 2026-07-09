@@ -620,6 +620,56 @@ begin
   end;
 end;
 
+{** P2-5: Verify TrimIdleSegments clears page-map entries for freed segments.
+  After trim, pointers that were in trimmed segments must no longer be
+  routable via the page map (Owns returns False). Without the page-map
+  clear, stale entries would route Release to freed segments. *}
+procedure TestShardedBlockPoolTrimClearsPageMap;
+var
+  LPool: TShardedBlockPool;
+  LPtrs: array[0..511] of Pointer;
+  LTrimmedPtr: Pointer;
+  LIdx: Integer;
+  LTrimmed: SizeInt;
+  LCapBefore, LCapAfter: SizeUInt;
+begin
+  LPool := TShardedBlockPool.Create(64, 64, 1);
+  try
+    // Acquire far more blocks than initial capacity to force multiple segments
+    for LIdx := 0 to High(LPtrs) do
+    begin
+      LPtrs[LIdx] := LPool.Acquire;
+      Check(LPtrs[LIdx] <> nil, 'acquire should succeed');
+    end;
+
+    // The last allocated pointer lives in the newest (tail) segment
+    LTrimmedPtr := LPtrs[High(LPtrs)];
+    Check(LPool.Owns(LTrimmedPtr), 'pointer should be routable before trim');
+
+    // Release all blocks so all segments become idle
+    for LIdx := 0 to High(LPtrs) do
+      LPool.Release(LPtrs[LIdx]);
+
+    LCapBefore := LPool.Capacity;
+    LTrimmed := LPool.TrimIdleSegments;
+    LCapAfter := LPool.Capacity;
+
+    Check(LTrimmed > 0, 'trim should free at least one segment');
+    Check(LCapAfter < LCapBefore, 'capacity should decrease after trim');
+
+    // Core assertion: the page map must no longer route to the freed segment.
+    // Owns calls TryRoute which checks the page map fast path and the
+    // route table. After trim, neither should cover the freed address.
+    Check(not LPool.Owns(LTrimmedPtr),
+      'page map must not route to freed segment after trim');
+
+    // Pool should still function correctly
+    Check(LPool.Acquire <> nil, 'acquire after trim should succeed');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 {** Test TShard padding prevents false sharing (128-byte alignment). *}
 procedure TestShardedBlockPoolFalseSharingPadding;
 var
@@ -757,11 +807,99 @@ begin
   end;
 end;
 
+{ ── P1-2: thread-exit cleanup leaks no cache nodes or cached blocks ── }
+
+const
+  LEAK_TEST_THREAD_COUNT = 4;
+  LEAK_TEST_CACHED_PER_THREAD = 16;
+
+type
+  PThreadCacheLeakWorkerData = ^TThreadCacheLeakWorkerData;
+  TThreadCacheLeakWorkerData = record
+    Pool: TShardedBlockPool;
+    StartFlag: PLongInt;
+    Ptrs: array[0..LEAK_TEST_CACHED_PER_THREAD - 1] of Pointer;
+    Failure: string;
+  end;
+
+function ThreadCacheLeakWorkerProc(AArg: Pointer): Pointer; cdecl;
+var
+  LData: PThreadCacheLeakWorkerData;
+  LIdx: Integer;
+begin
+  LData := PThreadCacheLeakWorkerData(AArg);
+  WaitForStartFlag(LData^.StartFlag);
+
+  try
+    { Acquire blocks into the thread cache, then release them back to the
+      cache (not to the shard). The cache nodes and cached blocks must be
+      reclaimed when this thread exits via the TLS destructor callback. }
+    for LIdx := 0 to LEAK_TEST_CACHED_PER_THREAD - 1 do
+    begin
+      LData^.Ptrs[LIdx] := LData^.Pool.Acquire;
+      if LData^.Ptrs[LIdx] = nil then
+        raise Exception.Create('acquire returned nil in leak test worker');
+    end;
+    { Release back to thread cache — blocks stay cached, not returned to shard }
+    for LIdx := 0 to LEAK_TEST_CACHED_PER_THREAD - 1 do
+      LData^.Pool.Release(LData^.Ptrs[LIdx]);
+  except
+    on E: Exception do
+      LData^.Failure := E.Message;
+  end;
+  Result := nil;
+end;
+
+procedure TestShardedBlockPoolThreadExitCleanup;
+var
+  LConfig: TShardedBlockPoolConfig;
+  LPool: TShardedBlockPool;
+  LThreads: array[0..LEAK_TEST_THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LThreadData: array[0..LEAK_TEST_THREAD_COUNT - 1] of TThreadCacheLeakWorkerData;
+  LStartFlag: LongInt;
+  LIndex: Integer;
+  LInUse: SizeUInt;
+begin
+  LConfig := TShardedBlockPoolConfig.Default(64, 1024, 2);
+  LConfig.ThreadCacheCapacity := LEAK_TEST_CACHED_PER_THREAD;
+  LPool := TShardedBlockPool.Create(LConfig);
+  try
+    Check(LPool.ShardCount >= 1, 'pool should have shards');
+
+    LStartFlag := 0;
+    for LIndex := 0 to High(LThreads) do
+    begin
+      LThreadData[LIndex].Pool := LPool;
+      LThreadData[LIndex].StartFlag := @LStartFlag;
+      LThreadData[LIndex].Failure := '';
+      FillByte(LThreadData[LIndex].Ptrs[0], SizeOf(LThreadData[LIndex].Ptrs), 0);
+      platform_thread_spawn(LThreads[LIndex], @ThreadCacheLeakWorkerProc, @LThreadData[LIndex]);
+    end;
+
+    LStartFlag := 1;
+    for LIndex := 0 to High(LThreads) do
+      platform_thread_wait(LThreads[LIndex]);
+
+    for LIndex := 0 to High(LThreads) do
+      Check(LThreadData[LIndex].Failure = '', 'leak test worker should not fail: ' + LThreadData[LIndex].Failure);
+
+    { After all worker threads have exited, the TLS destructor should have
+      flushed each thread's cache back to the shard pools. InUse must be 0. }
+    LInUse := LPool.InUse;
+    Check(LInUse = 0, 'thread-exit cleanup: InUse should be 0 after worker threads exit (got ' + IntToStr(LInUse) + ')');
+
+    WriteLn('PASS: thread-exit cleanup reclaims cached blocks (P1-2)');
+  finally
+    TObject(LPool).Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.sharded_pools');
   T.Test('sharded blockpool contention', @TestShardedBlockPoolContention);
   T.Test('sharded blockpool rejects duplicate remote release', @TestShardedBlockPoolRejectsDuplicateRemoteRelease);
   T.Test('sharded blockpool thread-cache acquire/release', @TestShardedBlockPoolThreadCacheConfigRejectsDuplicateRelease);
+  T.Test('sharded blockpool thread-exit cleanup (P1-2)', @TestShardedBlockPoolThreadExitCleanup);
   T.Test('sharded slab contention', @TestShardedSlabPoolContention);
   T.Test('sharded slab ownership diagnostics reject interior pointer', @TestShardedSlabOwnershipDiagnosticsRejectInteriorPointer);
   T.Test('sharded slab release and realloc reject interior pointer', @TestShardedSlabReleaseAndReallocRejectInteriorPointer);
@@ -769,6 +907,7 @@ begin
   T.Test('B4-1 stats aggregated after contention', @TestShardedBlockPoolStatsAggregated);
   T.Test('B4-2 sharded slab aligned contention', @TestShardedSlabAllocAlignedContention);
   T.Test('trim idle segments reclaims memory', @TestShardedBlockPoolTrimIdleSegments);
+  T.Test('trim clears page map for freed segments (P2-5)', @TestShardedBlockPoolTrimClearsPageMap);
   T.Test('false sharing padding verification', @TestShardedBlockPoolFalseSharingPadding);
   T.Test('stress test concurrent acquire/release', @TestShardedBlockPoolStress);
   T.Test('GetStats hit rate and utilization', @TestBlockPoolGetStats);

@@ -77,12 +77,15 @@ type
 
 implementation
 
+const
+  SIZE_CLASS_LARGE = -1;
+
 type
   PSizeClassHeader = ^TSizeClassHeader;
   TSizeClassHeader = record
-    ClassIdx: Integer;
-    _Pad: Integer;
-    Next: Pointer;
+    ClassIdx: Integer;      { 0..15 for size class, SIZE_CLASS_LARGE for large }
+    RequestedSize: Integer; { original requested size (capped at MaxInt) }
+    Next: Pointer;          { freelist link (only valid for size-class blocks) }
   end;
 
 const
@@ -149,8 +152,15 @@ begin
   LClassIdx := FindClass(ASize);
   if LClassIdx < 0 then
   begin
+    { Large object: allocate with header so FreeMem/ReallocMem can route correctly }
     Inc(FLargeAllocCount);
-    Exit(FInner.GetMem(ASize));
+    LHeader := PSizeClassHeader(FInner.GetMem(SIZE_CLASS_HEADER + ASize));
+    if LHeader = nil then
+      Exit(nil);
+    LHeader^.ClassIdx := SIZE_CLASS_LARGE;
+    LHeader^.RequestedSize := Integer(ASize);
+    LHeader^.Next := nil;
+    Exit(Pointer(PByte(LHeader) + SIZE_CLASS_HEADER));
   end;
 
   if FFreelists[LClassIdx] = nil then
@@ -188,8 +198,11 @@ begin
     FFreelists[LClassIdx] := LHeader;
     Inc(FFreeCounts[LClassIdx]);
   end
-  else
+  else if LClassIdx = SIZE_CLASS_LARGE then
+  begin
+    FInner.FreeMem(LHeader);
     Inc(FLargeFreeCount);
+  end;
 end;
 
 function TSizeClassAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -210,8 +223,10 @@ begin
   LClassIdx := LHeader^.ClassIdx;
   if (LClassIdx >= 0) and (LClassIdx < SIZE_CLASS_COUNT) then
     LOldSize := FClassSizes[LClassIdx]
+  else if LClassIdx = SIZE_CLASS_LARGE then
+    LOldSize := SizeUInt(LHeader^.RequestedSize)
   else
-    LOldSize := ASize; { unknown for large, just allocate new }
+    Exit(nil); { corrupt header }
 
   if ASize <= LOldSize then
     Exit(APtr);

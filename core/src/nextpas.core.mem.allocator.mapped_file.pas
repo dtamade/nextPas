@@ -66,8 +66,10 @@ type
     FFreeOffset: UInt64;    { 下一个空闲位置的偏移 }
     FAllocCount: UInt32;
     FIsCreator: Boolean;
+    FIsFileBacked: Boolean;
     procedure InitHeader;
     procedure LoadHeader;
+    class function PrepareFileForCreate(APath: PAnsiChar; ASize: UInt64): Boolean; static;
   public
 
     function GetMem(ASize: SizeUInt): Pointer; inline;
@@ -105,7 +107,10 @@ type
 implementation
 
 uses
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.platform.mmap,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base;
 
 const
   MAPPED_FILE_MAGIC = $4D464C41; { 'MFLA' }
@@ -127,6 +132,8 @@ type
 
 constructor TMappedFileAllocator.Create(const AFileName: string; ASize: UInt64;
   ACreate: Boolean);
+var
+  LFilePath: RawByteString;
 begin
   inherited Create;
   FFileName := AFileName;
@@ -135,23 +142,85 @@ begin
   FIsCreator := ACreate;
 
   FMap := TMemoryMap.Create;
-  { 使用匿名映射（不依赖文件系统） }
-  if not FMap.CreateAnonymous(ASize, mmaReadWrite, [mmfPrivate]) then
-    raise EAllocError.Create(aeInvalidLayout,
-      'TMappedFileAllocator.Create: failed to create mapping');
 
-  FBaseAddress := FMap.BaseAddress;
-  InitHeader;
+  if AFileName = '' then
+  begin
+    { No file path: fall back to anonymous mapping (non-persistent) }
+    FIsFileBacked := False;
+    if not FMap.CreateAnonymous(ASize, mmaReadWrite, [mmfPrivate]) then
+      raise EAllocError.Create(aeInvalidLayout,
+        'TMappedFileAllocator.Create: failed to create anonymous mapping');
+    FBaseAddress := FMap.BaseAddress;
+    InitHeader;
+  end
+  else
+  begin
+    { File-backed mapping: persist data to disk }
+    FIsFileBacked := True;
+    LFilePath := RawByteString(AFileName);
+
+    if ACreate then
+    begin
+      { Create mode: create or truncate the file to the requested size }
+      if not PrepareFileForCreate(PAnsiChar(LFilePath), ASize) then
+        raise EAllocError.Create(aeInvalidLayout,
+          'TMappedFileAllocator.Create: failed to prepare file for create');
+    end
+    else
+    begin
+      { Open mode: file must already exist }
+      if not FileExistsByStat(PAnsiChar(LFilePath)) then
+        raise EAllocError.Create(aeInvalidLayout,
+          'TMappedFileAllocator.Create: file does not exist');
+    end;
+
+    if not FMap.OpenFile(AFileName, mmaReadWrite, [mmfShared], ASize, 0) then
+      raise EAllocError.Create(aeInvalidLayout,
+        'TMappedFileAllocator.Create: failed to map file');
+
+    FBaseAddress := FMap.BaseAddress;
+    if ACreate then
+      InitHeader
+    else
+      LoadHeader;
+  end;
 end;
 
 destructor TMappedFileAllocator.Destroy;
 begin
   if FMap <> nil then
   begin
+    { Flush file-backed mappings to disk before closing }
+    if FIsFileBacked and FMap.IsOpen then
+      FMap.Flush;
     FMap.Close;
     FMap.Free;
   end;
   inherited Destroy;
+end;
+
+class function TMappedFileAllocator.PrepareFileForCreate(APath: PAnsiChar;
+  ASize: UInt64): Boolean;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  Result := False;
+  if APath = nil then
+    Exit;
+
+  { Open with create-or-truncate semantics: creates if missing, truncates if exists }
+  if platform_file_open(APath, fomReadWrite, fcmCreateAlways, LHandle) <> 0 then
+    Exit;
+
+  { Extend the file to the requested mapping size }
+  if platform_file_truncate(LHandle, Int64(ASize)) <> 0 then
+  begin
+    platform_file_close(LHandle);
+    Exit;
+  end;
+
+  platform_file_close(LHandle);
+  Result := True;
 end;
 
 procedure TMappedFileAllocator.InitHeader;
@@ -186,19 +255,22 @@ end;
 function TMappedFileAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAlignedSize: SizeUInt;
+  LSizePtr: PSizeUInt;
 begin
   Result := nil;
   if ASize = 0 then Exit;
 
-  { 8 字节对齐 }
-  LAlignedSize := (ASize + 7) and not SizeUInt(7);
+  { 8 字节对齐 + size header }
+  LAlignedSize := (ASize + SizeOf(SizeUInt) + 7) and not SizeUInt(7);
 
   { 检查空间 }
   if FFreeOffset + LAlignedSize > FMappedSize then
     Exit;
 
-  { 分配 }
-  Result := Pointer(PtrUInt(FBaseAddress) + FFreeOffset);
+  { 分配: store size header, then user data }
+  LSizePtr := PSizeUInt(PtrUInt(FBaseAddress) + FFreeOffset);
+  LSizePtr^ := ASize;
+  Result := Pointer(PByte(LSizePtr) + SizeOf(SizeUInt));
   Inc(FFreeOffset, LAlignedSize);
   Inc(FAllocCount);
 
@@ -216,22 +288,28 @@ end;
 
 function TMappedFileAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
-  LOldOffset: UInt64;
+  LOldSize, LCopySize: SizeUInt;
 begin
   if APtr = nil then
     Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    FreeMem(APtr);
+    { bump allocator: cannot free, just return nil }
     Exit(nil);
   end;
 
-  { 简单实现：分配新块，复制 }
+  { Read old requested size from header }
+  LOldSize := PSizeUInt(PByte(APtr) - SizeOf(SizeUInt))^;
+
+  { 分配新块 }
   Result := GetMem(ASize);
   if Result = nil then Exit;
 
-  { 复制旧数据（保守复制 ASize 字节） }
-  Move(APtr^, Result^, ASize);
+  { 复制 min(old, new) }
+  LCopySize := LOldSize;
+  if LCopySize > ASize then
+    LCopySize := ASize;
+  Move(APtr^, Result^, LCopySize);
 
   { 注意：旧块不释放（bump allocator 语义） }
 end;

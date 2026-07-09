@@ -104,6 +104,8 @@ const
   THREAD_CACHE_SIZES: array[0..THREAD_CACHE_CLASS_COUNT - 1] of SizeUInt = (
     8, 16, 32, 64, 128, 256, 512, 1024
   );
+  THREAD_CACHE_HEADER = SizeOf(Byte); { stores class index for correct free routing }
+  THREAD_CACHE_LARGE = 255; { sentinel for large objects }
 
 { --- TThreadCacheAllocator --- }
 
@@ -131,11 +133,11 @@ destructor TThreadCacheAllocator.Destroy;
 var
   LI, LJ: Int32;
 begin
-  { 释放所有缓存块 }
+  { 释放所有缓存块（cached pointers are past header） }
   for LI := 0 to THREAD_CACHE_CLASS_COUNT - 1 do
   begin
     for LJ := 0 to FCachedCounts[LI] - 1 do
-      FInner.FreeMem(FCachedPtrs[LI][LJ]);
+      FInner.FreeMem(PByte(FCachedPtrs[LI][LJ]) - THREAD_CACHE_HEADER);
     FCachedCounts[LI] := 0;
   end;
   FInner := nil;
@@ -165,13 +167,14 @@ end;
 procedure TThreadCacheAllocator.BatchFetch(AClassIdx: Int32);
 var
   LI: Integer;
-  LPtr: Pointer;
+  LRaw: PByte;
 begin
   for LI := 0 to THREAD_CACHE_BATCH_SIZE - 1 do
   begin
-    LPtr := FInner.GetMem(FSizeClasses[AClassIdx]);
-    if LPtr = nil then Break;
-    FCachedPtrs[AClassIdx, FCachedCounts[AClassIdx]] := LPtr;
+    LRaw := PByte(FInner.GetMem(THREAD_CACHE_HEADER + FSizeClasses[AClassIdx]));
+    if LRaw = nil then Break;
+    LRaw^ := Byte(AClassIdx);
+    FCachedPtrs[AClassIdx, FCachedCounts[AClassIdx]] := Pointer(LRaw + THREAD_CACHE_HEADER);
     Inc(FCachedCounts[AClassIdx]);
   end;
   Inc(FBatchFetches);
@@ -180,12 +183,15 @@ end;
 procedure TThreadCacheAllocator.BatchReturn(AClassIdx: Int32);
 var
   LI: Integer;
+  LRaw: PByte;
 begin
   for LI := 0 to THREAD_CACHE_BATCH_SIZE - 1 do
   begin
     if FCachedCounts[AClassIdx] <= 0 then Break;
     Dec(FCachedCounts[AClassIdx]);
-    FInner.FreeMem(FCachedPtrs[AClassIdx, FCachedCounts[AClassIdx]]);
+    { Cached pointers are past header; go back to raw for FInner }
+    LRaw := PByte(FCachedPtrs[AClassIdx, FCachedCounts[AClassIdx]]) - THREAD_CACHE_HEADER;
+    FInner.FreeMem(LRaw);
   end;
   Inc(FBatchReturns);
 end;
@@ -193,19 +199,22 @@ end;
 function TThreadCacheAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LClassIdx: Int32;
+  LRaw: PByte;
 begin
   LClassIdx := FindSizeClass(ASize);
   if LClassIdx < 0 then
   begin
-    { 大对象：直接从内部分配器分配 }
-    Result := FInner.GetMem(ASize);
-    Exit;
+    { 大对象：从内部分配器分配，带 header }
+    LRaw := PByte(FInner.GetMem(THREAD_CACHE_HEADER + ASize));
+    if LRaw = nil then
+      Exit(nil);
+    LRaw^ := THREAD_CACHE_LARGE;
+    Exit(Pointer(LRaw + THREAD_CACHE_HEADER));
   end;
 
-  { 小对象：从线程缓存分配 }
+  { 小对象：从线程缓存分配（缓存中的指针已经 past header） }
   if FCachedCounts[LClassIdx] <= 0 then
   begin
-    { 缓存空，批量获取 }
     BatchFetch(LClassIdx);
     Inc(FCacheMisses);
   end
@@ -218,7 +227,14 @@ begin
     Result := FCachedPtrs[LClassIdx, FCachedCounts[LClassIdx]];
   end
   else
-    Result := FInner.GetMem(ASize);
+  begin
+    { 缓存空，从内部分配器分配，带 header }
+    LRaw := PByte(FInner.GetMem(THREAD_CACHE_HEADER + ASize));
+    if LRaw = nil then
+      Exit(nil);
+    LRaw^ := Byte(LClassIdx);
+    Result := Pointer(LRaw + THREAD_CACHE_HEADER);
+  end;
 end;
 
 function TThreadCacheAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
@@ -238,37 +254,48 @@ begin
     Exit(nil);
   end;
 
-  Result := GetMem(ASize);
-  if Result <> nil then
-  begin
-    Move(APtr^, Result^, ASize);
-    FreeMem(APtr);
-  end;
+  { Delegate to inner which knows the actual block size }
+  Result := FInner.ReallocMem(APtr, ASize);
 end;
 
 procedure TThreadCacheAllocator.FreeMem(APtr: Pointer); inline;
 var
-  LI: Int32;
+  LRaw: PByte;
+  LClassIdx: Int32;
 begin
   if APtr = nil then Exit;
 
-  { 尝试放入缓存（简单策略：遍历所有 size class） }
-  for LI := 0 to THREAD_CACHE_CLASS_COUNT - 1 do
-  begin
-    if FCachedCounts[LI] < THREAD_CACHE_SLOTS then
-    begin
-      FCachedPtrs[LI, FCachedCounts[LI]] := APtr;
-      Inc(FCachedCounts[LI]);
+  LRaw := PByte(APtr) - THREAD_CACHE_HEADER;
+  LClassIdx := Int32(LRaw^);
 
-      { 缓存满时批量释放 }
-      if FCachedCounts[LI] >= THREAD_CACHE_SLOTS then
-        BatchReturn(LI);
-      Exit;
-    end;
+  if LClassIdx = THREAD_CACHE_LARGE then
+  begin
+    { 大对象：直接释放回内部分配器 }
+    FInner.FreeMem(LRaw);
+    Exit;
   end;
 
-  { 所有缓存满，直接释放 }
-  FInner.FreeMem(APtr);
+  if (LClassIdx < 0) or (LClassIdx >= THREAD_CACHE_CLASS_COUNT) then
+  begin
+    { 无效 class，直接释放 }
+    FInner.FreeMem(LRaw);
+    Exit;
+  end;
+
+  { 小对象：放入对应 size class 的缓存 }
+  if FCachedCounts[LClassIdx] < THREAD_CACHE_SLOTS then
+  begin
+    FCachedPtrs[LClassIdx, FCachedCounts[LClassIdx]] := APtr;
+    Inc(FCachedCounts[LClassIdx]);
+
+    { 缓存满时批量释放 }
+    if FCachedCounts[LClassIdx] >= THREAD_CACHE_SLOTS then
+      BatchReturn(LClassIdx);
+    Exit;
+  end;
+
+  { 缓存满，直接释放 }
+  FInner.FreeMem(LRaw);
 end;
 
 function TThreadCacheAllocator.GetStats: TThreadCacheStats;

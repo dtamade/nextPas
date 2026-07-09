@@ -174,7 +174,8 @@ end;
 function TArena2Allocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAlignedOffset: SizeUInt;
-  LAlignedSize: SizeUInt;
+  LTotalSize: SizeUInt;
+  LSizePtr: PSizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -183,24 +184,26 @@ begin
   LAlignedOffset := (FCurrentOffset + FAlignment - 1) and not (FAlignment - 1);
   FWastedBytes := FWastedBytes + UInt64(LAlignedOffset - FCurrentOffset);
 
-  { 计算对齐后的大小 }
-  LAlignedSize := ASize;
+  { size header + user data }
+  LTotalSize := SizeOf(SizeUInt) + ASize;
 
   { 检查当前页是否有足够空间 }
-  if LAlignedOffset + LAlignedSize > FPageSize then
+  if LAlignedOffset + LTotalSize > FPageSize then
   begin
     { 当前页空间不足，需要新页 }
-    if LAlignedSize > FPageSize then
+    if LTotalSize > FPageSize then
       raise EAllocError.Create(aeOutOfMemory,
         'TArena2Allocator.GetMem: allocation size exceeds page size');
     GrowPage;
     LAlignedOffset := 0;
   end;
 
-  { 从当前页分配 }
-  Result := Pointer(PtrUInt(FPages[FCurrentPage]) + LAlignedOffset);
-  FCurrentOffset := LAlignedOffset + LAlignedSize;
-  Inc(FUsedBytes, UInt64(LAlignedSize));
+  { 从当前页分配: store size, return ptr past header }
+  LSizePtr := PSizeUInt(PtrUInt(FPages[FCurrentPage]) + LAlignedOffset);
+  LSizePtr^ := ASize;
+  Result := Pointer(PByte(LSizePtr) + SizeOf(SizeUInt));
+  FCurrentOffset := LAlignedOffset + LTotalSize;
+  Inc(FUsedBytes, UInt64(LTotalSize));
   Inc(FAllocCount);
 end;
 
@@ -212,17 +215,25 @@ begin
 end;
 
 function TArena2Allocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+var
+  LOldSize, LCopySize: SizeUInt;
 begin
-  { Arena 不支持真正的 Realloc，简单实现：分配新块 }
   if APtr = nil then
     Exit(GetMem(ASize));
   if ASize = 0 then
     Exit(nil);
 
+  { Read old size from header }
+  LOldSize := PSizeUInt(PByte(APtr) - SizeOf(SizeUInt))^;
+
   Result := GetMem(ASize);
-  { 注意：无法确定旧块大小，保守复制 }
   if Result <> nil then
-    Move(APtr^, Result^, ASize);
+  begin
+    LCopySize := LOldSize;
+    if LCopySize > ASize then
+      LCopySize := ASize;
+    Move(APtr^, Result^, LCopySize);
+  end;
   { 旧内存不释放（Arena 不支持单个释放） }
 end;
 

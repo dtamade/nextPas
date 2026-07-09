@@ -18,7 +18,8 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.error;
 
 type
   TZeroedAllocator = class(TInterfacedObject, IAllocator)
@@ -43,6 +44,8 @@ uses
 constructor TZeroedAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TZeroedAllocator.Create: AInner must not be nil');
   FInner := AInner;
 end;
 

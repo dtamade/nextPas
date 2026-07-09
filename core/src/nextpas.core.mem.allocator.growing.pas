@@ -496,8 +496,19 @@ var
 begin
   if APtr = nil then
     Exit;
-  { GetMem routes through GGrowingAllocator, so we must scan its centrals. }
-  if GGrowingAllocator <> nil then
+  { Always scan Self's centrals first (this instance may own the block). }
+  for I := MEM_SIZECLASS_COUNT - 1 downto 0 do
+  begin
+    if FCentrals[I].FEntryCount <= 0 then
+      Continue;
+    if FindSpanOwnerThreadId(FCentrals[I], APtr) <> 0 then
+    begin
+      FreeMem(APtr, SizeClasses[I]);
+      Exit;
+    end;
+  end;
+  { If Self is not the global instance and global exists, try it too. }
+  if (GGrowingAllocator <> nil) and (GGrowingAllocator <> Self) then
   begin
     for I := MEM_SIZECLASS_COUNT - 1 downto 0 do
     begin
@@ -505,20 +516,7 @@ begin
         Continue;
       if FindSpanOwnerThreadId(GGrowingAllocator.FCentrals[I], APtr) <> 0 then
       begin
-        FreeMem(APtr, SizeClasses[I]);
-        Exit;
-      end;
-    end;
-  end
-  else
-  begin
-    for I := MEM_SIZECLASS_COUNT - 1 downto 0 do
-    begin
-      if FCentrals[I].FEntryCount <= 0 then
-        Continue;
-      if FindSpanOwnerThreadId(FCentrals[I], APtr) <> 0 then
-      begin
-        FreeMem(APtr, SizeClasses[I]);
+        GGrowingAllocator.FreeMem(APtr, SizeClasses[I]);
         Exit;
       end;
     end;

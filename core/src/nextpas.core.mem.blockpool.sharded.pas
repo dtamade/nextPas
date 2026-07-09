@@ -34,9 +34,8 @@ type
     Pool: TGrowingBlockPoolConfig;
     ShardCount: Integer;              // 0 = auto (CPUCount rounded to pow2)
     ThreadCacheCapacity: Integer;     // 0 = disabled (per-thread pointer cache)
-                                       // NOTE: >0 raises error — thread-exit cleanup not yet implemented.
-                                       // The GetThreadCacheNode/FlushThreadCacheLocked code is present
-                                       // but unreachable until this is resolved.
+                                       // >0 enables per-thread cache with automatic
+                                       // thread-exit cleanup via TLS destructor callback.
     ThreadCacheCheckDoubleFree: Boolean; // enable O(n) scan in cache
     TrackInUse: Boolean;              // accurate InUse/Available via atomic counters (costs per-op atomics)
 
@@ -162,6 +161,7 @@ type
     procedure PageMapPut(aKey: PtrUInt; aBase, aLimit: PByte; aShard: Integer);
     function PageMapLookup(aKey: PtrUInt; out aBase, aLimit: PByte; out aShard: Integer): Boolean; inline;
     procedure IndexSegmentPagesLocked(aShard: Integer; aStart, aEnd: PByte);
+    procedure PageMapRebuildFromRoutesLocked;
 
     procedure IndexShardNewSegmentsLocked(aShard: Integer);
 
@@ -202,6 +202,10 @@ type
       Returns total segments freed. Thread-safe (acquires each shard lock). }
     function TrimIdleSegments: SizeInt;
 
+    { Returns True if aPtr was allocated from this pool and the routing
+      tables still cover its address range. }
+    function Owns(aPtr: Pointer): Boolean;
+
     function ShardCount: Integer; inline;
 
     { Pool utilization and hit-rate statistics. }
@@ -212,7 +216,14 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-
+{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi,
+{$ENDIF}
   nextpas.core.atomic;
 
 var
@@ -237,6 +248,14 @@ var
   GPoolRegistryHead: PPoolRegistryEntry = nil;
   GPoolRegistryLock: TMemMutex;
   GThreadExitKeyInitialized: Boolean = False;
+  GThreadExitKeyCreated: Boolean = False;
+{$IFDEF NEXTPAS_UNIX}
+  GThreadExitKey: pthread_key_t = 0;
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  GThreadExitKey: DWORD = DWORD($FFFFFFFF);
+{$ENDIF}
+  GThreadExitKeyLock: TMemMutex;
 
 procedure PoolRegistryRegister(APool: Pointer; APoolId: UInt64);
 var
@@ -285,15 +304,73 @@ begin
   Result := False;
 end;
 
-{ Thread-exit destructor: flush all thread cache nodes for pools still alive.
+{ Thread-exit cleanup core: flush all thread cache nodes for pools still alive.
+  Called from the platform-specific TLS destructor callback.
   Forward declaration; implementation is after threadvar block. }
-procedure ThreadExitDestructor(AData: Pointer); cdecl; forward;
+procedure ThreadExitCleanupCore(AData: Pointer); forward;
+
+{$IFDEF NEXTPAS_UNIX}
+{ POSIX pthread_key destructor callback: cdecl convention }
+procedure ThreadExitDestructor(AData: Pointer); cdecl;
+begin
+  ThreadExitCleanupCore(AData);
+end;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_WINDOWS}
+{ Windows FLS callback: stdcall convention }
+procedure ThreadExitFlsCallback(AData: Pointer); stdcall;
+begin
+  ThreadExitCleanupCore(AData);
+end;
+{$ENDIF}
 
 procedure EnsureThreadExitKey;
+{$IFDEF NEXTPAS_UNIX}
+var
+  LRc: Int32;
+{$ENDIF}
 begin
   if GThreadExitKeyInitialized then Exit;
+
+  { Init both locks first. TMemMutex.Init is CAS-safe, so concurrent
+    callers won't corrupt the lock state. }
   GPoolRegistryLock.Init;
-  GThreadExitKeyInitialized := True;
+  GThreadExitKeyLock.Init;
+
+  { Serialize the FFI key creation so we don't leak keys under
+    concurrent pool construction. }
+  GThreadExitKeyLock.Acquire;
+  try
+    if GThreadExitKeyInitialized then Exit;
+
+    { Create the TLS key with a destructor callback. On POSIX, pthread_key_create
+      takes a destructor that runs when a thread exits. On Windows, FlsAlloc
+      provides an equivalent fiber-local-storage callback. }
+  {$IFDEF NEXTPAS_UNIX}
+    LRc := pthread_key_create(@GThreadExitKey, @ThreadExitDestructor);
+    if LRc <> 0 then
+    begin
+      GThreadExitKeyCreated := False;
+      Exit;
+    end;
+    GThreadExitKeyCreated := True;
+  {$ENDIF}
+
+  {$IFDEF NEXTPAS_WINDOWS}
+    GThreadExitKey := FlsAlloc(@ThreadExitFlsCallback);
+    if GThreadExitKey = FLS_OUT_OF_INDEXES then
+    begin
+      GThreadExitKeyCreated := False;
+      Exit;
+    end;
+    GThreadExitKeyCreated := True;
+  {$ENDIF}
+
+    GThreadExitKeyInitialized := True;
+  finally
+    GThreadExitKeyLock.Release;
+  end;
 end;
 
 type
@@ -336,14 +413,20 @@ begin
   Result := UInt64(InterlockedExchangeAdd64(PInt64(@GShardedBlockPoolIdGen)^, 1)) + 1;
 end;
 
-{ Thread-exit destructor implementation (forward-declared above). }
-procedure ThreadExitDestructor(AData: Pointer); cdecl;
+{ Thread-exit cleanup core implementation (forward-declared above).
+  Walks the per-thread cache node list and flushes/frees all nodes.
+  Called by the platform-specific TLS destructor callback. }
+procedure ThreadExitCleanupCore(AData: Pointer);
 var
   LNode: TShardedBlockPool.PThreadCacheNode;
   LNext: TShardedBlockPool.PThreadCacheNode;
   LPool: TShardedBlockPool;
 begin
-  LNode := GShardedBlockPoolThreadCacheHead;
+  { AData is the value set via pthread_setspecific/FlsSetValue.
+    We store the thread cache head pointer directly in the TLS slot,
+    so it survives threadvar teardown (FPC zeroes threadvars before
+    running pthread_key destructors on thread exit). }
+  LNode := TShardedBlockPool.PThreadCacheNode(AData);
   while LNode <> nil do
   begin
     LNext := LNode^.Next;
@@ -374,6 +457,26 @@ begin
     LNode := LNext;
   end;
   GShardedBlockPoolThreadCacheHead := nil;
+end;
+
+{ Store the thread cache head pointer in the TLS key slot so that the
+  destructor callback receives it when the thread exits. We must use the
+  TLS slot (not the threadvar) because FPC zeroes threadvars before
+  pthread_key destructors run during thread teardown. }
+procedure SetThreadExitSentinel; inline;
+{$IFDEF NEXTPAS_WINDOWS}
+var
+  LOk: BOOL;
+{$ENDIF}
+begin
+  if not GThreadExitKeyCreated then Exit;
+{$IFDEF NEXTPAS_UNIX}
+  pthread_setspecific(GThreadExitKey, Pointer(GShardedBlockPoolThreadCacheHead));
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  LOk := FlsSetValue(GThreadExitKey, Pointer(GShardedBlockPoolThreadCacheHead));
+  if not LOk then ;  { best-effort; destructor may not fire for this thread }
+{$ENDIF}
 end;
 
 class function TShardedBlockPoolConfig.Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer): TShardedBlockPoolConfig;
@@ -711,6 +814,37 @@ begin
   end;
 end;
 
+procedure TShardedBlockPool.PageMapRebuildFromRoutesLocked;
+var
+  LRouteIdx: SizeInt;
+  LStartKey: PtrUInt;
+  LEndKey: PtrUInt;
+  LKey: PtrUInt;
+  LPages: SizeUInt;
+begin
+  PageMapClear;
+  for LRouteIdx := 0 to High(FRoutes) do
+  begin
+    if (FRoutes[LRouteIdx].Base = nil) or (FRoutes[LRouteIdx].Limit = nil) then
+      Continue;
+    if FRoutes[LRouteIdx].Limit <= FRoutes[LRouteIdx].Base then
+      Continue;
+    LStartKey := PtrUInt(FRoutes[LRouteIdx].Base) shr FPageShift;
+    LEndKey := (PtrUInt(FRoutes[LRouteIdx].Limit) - 1) shr FPageShift;
+    if LEndKey < LStartKey then
+      Continue;
+    LPages := SizeUInt(LEndKey - LStartKey + 1);
+    PageMapGrowIfNeeded(LPages);
+    LKey := LStartKey;
+    while LKey <= LEndKey do
+    begin
+      PageMapPut(LKey, FRoutes[LRouteIdx].Base, FRoutes[LRouteIdx].Limit,
+        FRoutes[LRouteIdx].Shard);
+      Inc(LKey);
+    end;
+  end;
+end;
+
 function TShardedBlockPool.TryRoute(aPtr: Pointer; out aShard: Integer; out aBase: PByte): Boolean;
 var
   LLeft, LRight, LMid: SizeInt;
@@ -1015,6 +1149,7 @@ begin
     LNode^.RemoteBufs := nil;
   LNode^.Next := GShardedBlockPoolThreadCacheHead;
   GShardedBlockPoolThreadCacheHead := LNode;
+  SetThreadExitSentinel;
   GShardedBlockPoolThreadCacheNodeCache.PoolPtr := Pointer(Self);
   GShardedBlockPoolThreadCacheNodeCache.PoolId := FPoolId;
   GShardedBlockPoolThreadCacheNodeCache.Node := LNode;
@@ -1071,7 +1206,7 @@ var
   FPoolId := NextShardedBlockPoolId;
   FCacheEpoch := 1;
   EnsureThreadExitKey;
-  // ThreadCache is now supported with thread-exit cleanup via pthread_key destructor.
+  // ThreadCache with thread-exit cleanup via TLS destructor callback.
   // Limit capacity to prevent excessive memory use.
   if AConfig.ThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
     raise EAllocError.Create(aeInvalidLayout,
@@ -1581,16 +1716,23 @@ begin
               end;
             SetLength(FRoutes, LWrite);
 
-            // Re-add current segments
+            // Re-add current segments to route table
             for LSegIdx := 0 to SizeInt(FShards[LIdx].Pool.SegmentCount) - 1 do
               if FShards[LIdx].Pool.GetSegmentRegion(LSegIdx, LStart, LEnd) then
-              begin
                 RouteInsert(LStart, LEnd, LIdx);
-                IndexSegmentPagesLocked(LIdx, LStart, LEnd);
-              end;
+
+            // Clear stale page-map entries for trimmed segments and rebuild
+            // from the now-correct FRoutes. The page map uses open-addressing
+            // without tombstones, so individual entries cannot be selectively
+            // removed; a full clear + rebuild is the correct approach.
+            PageMapRebuildFromRoutesLocked;
           finally
             RouteWriteUnlock;
           end;
+
+          // Invalidate thread-local route/shard caches so they don't serve
+          // stale entries pointing at freed segments.
+          Inc(FCacheEpoch);
 
           // Update known state
           LNewCap := FShards[LIdx].Pool.Capacity;
@@ -1611,6 +1753,14 @@ begin
       if FShards[LIdx].Pool <> nil then
         InterlockedExchangeAdd64(FTotalCapacity, Int64(FShards[LIdx].Pool.Capacity));
   end;
+end;
+
+function TShardedBlockPool.Owns(aPtr: Pointer): Boolean;
+var
+  LShard: Integer;
+  LBase: PByte;
+begin
+  Result := TryRoute(aPtr, LShard, LBase);
 end;
 
 function TShardedBlockPool.ShardCount: Integer;
@@ -1648,6 +1798,17 @@ end;
 
 finalization
   if GThreadExitKeyInitialized then
+  begin
+{$IFDEF NEXTPAS_UNIX}
+    if GThreadExitKeyCreated then
+      pthread_key_delete(GThreadExitKey);
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+    if GThreadExitKeyCreated then
+      FlsFree(GThreadExitKey);
+{$ENDIF}
     GPoolRegistryLock.Done;
+    GThreadExitKeyLock.Done;
+  end;
 
 end.

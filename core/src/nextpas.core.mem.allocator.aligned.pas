@@ -40,7 +40,7 @@ uses
 
 const
   ALIGNED_DEFAULT_ALIGNMENT = 64;
-  ALIGNED_HEADER_SIZE = SizeOf(Pointer);
+  ALIGNED_HEADER_SIZE = SizeOf(Pointer) + SizeOf(SizeUInt); { raw ptr + requested size }
 
 type
   TAlignedStats = record
@@ -71,6 +71,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.error;
+
 function AlignUp(APtr: Pointer; AAlign: SizeUInt): Pointer;
 var
   LAddr: SizeUInt;
@@ -85,9 +88,14 @@ end;
 constructor TAlignedAllocator.Create(AInner: IAllocator; AAlignment: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TAlignedAllocator.Create: AInner cannot be nil');
   FInner := AInner;
+  { Validate: alignment must be power of 2 and >= SizeOf(Pointer) }
   if AAlignment < SizeOf(Pointer) then
     FAlignment := SizeOf(Pointer)
+  else if (AAlignment and (AAlignment - 1)) <> 0 then
+    raise EAllocError.Create(aeInvalidLayout, 'TAlignedAllocator.Create: alignment must be power of 2')
   else
     FAlignment := AAlignment;
   FAllocCount := 0;
@@ -99,6 +107,7 @@ function TAlignedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LRaw: Pointer;
   LAligned: Pointer;
+  LHdrPtr: PByte;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -108,11 +117,13 @@ begin
   if LRaw = nil then
     Exit(nil);
 
-  { Reserve space for original pointer }
+  { Reserve space for header }
   LAligned := AlignUp(Pointer(PByte(LRaw) + ALIGNED_HEADER_SIZE), FAlignment);
 
-  { Store original pointer before aligned pointer }
-  (PPointer(PByte(LAligned) - ALIGNED_HEADER_SIZE))^ := LRaw;
+  { Store raw pointer and requested size before aligned pointer }
+  LHdrPtr := PByte(LAligned) - ALIGNED_HEADER_SIZE;
+  PPointer(LHdrPtr)^ := LRaw;
+  PSizeUInt(LHdrPtr + SizeOf(Pointer))^ := ASize;
 
   Inc(FAllocCount);
   Inc(FActiveAllocs);
@@ -140,7 +151,8 @@ end;
 
 function TAlignedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
-  LCopySize: SizeUInt;
+  LOldSize, LCopySize: SizeUInt;
+  LHdrPtr: PByte;
 begin
   if ASize = 0 then
   begin
@@ -150,11 +162,15 @@ begin
   if APtr = nil then
     Exit(GetMem(ASize));
 
-  { We don't know old size, allocate new and copy }
+  LHdrPtr := PByte(APtr) - ALIGNED_HEADER_SIZE;
+  LOldSize := PSizeUInt(LHdrPtr + SizeOf(Pointer))^;
+
   Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
-  LCopySize := ASize;
+  LCopySize := LOldSize;
+  if LCopySize > ASize then
+    LCopySize := ASize;
   Move(APtr^, Result^, LCopySize);
   FreeMem(APtr);
 end;
