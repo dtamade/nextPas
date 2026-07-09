@@ -288,6 +288,17 @@ begin
   Check(LResult = '', 'get_str non-existent returns empty');
 end;
 
+procedure TestEnvGetStrEmptyValue;
+var
+  LResult: AnsiString;
+begin
+  Check(platform_env_set('NEXTPAS_TEST_GETSTR_EMPTY', '') = 0, 'set empty get_str value');
+  Check(platform_env_exists('NEXTPAS_TEST_GETSTR_EMPTY'), 'empty get_str var exists');
+  LResult := platform_env_get_str('NEXTPAS_TEST_GETSTR_EMPTY');
+  Check(LResult = '', 'get_str empty value returns empty');
+  platform_env_unset('NEXTPAS_TEST_GETSTR_EMPTY');
+end;
+
 procedure TestEnvGetStrEmptyName;
 var
   LResult: AnsiString;
@@ -421,6 +432,7 @@ begin
   T.Test('names case sensitive', @TestCaseSensitive);
   T.Test('get_str returns value', @TestEnvGetStr);
   T.Test('get_str non-existent returns empty', @TestEnvGetStrNonExistent);
+  T.Test('get_str empty value returns empty', @TestEnvGetStrEmptyValue);
   T.Test('get_str empty name returns empty', @TestEnvGetStrEmptyName);
   T.Test('get_str nil name returns empty', @TestEnvGetStrNilName);
   T.Test('set overwrite multiple times', @TestSetOverwriteMultipleTimes);

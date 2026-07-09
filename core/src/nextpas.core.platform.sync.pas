@@ -518,6 +518,8 @@ end;
 
 function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
+  // Zero-initializing opaque host records with FillChar is the standard Pascal setup
+  // before pthread/SRW init functions write their native state.
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_posix_map_error(
     platform_sync_host_pthread_mutex_init_platform_kind(@AMutex.FOpaque[0], AKind));
@@ -1723,26 +1725,34 @@ end;
 function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;
 var
   LGen: UInt32;
+  LUnlockResult: Int32;
 begin
   Result := platform_mutex_lock(ABarrier.Mutex);
-  if Result <> 0 then Exit;
-  LGen := ABarrier.Generation;
-  Inc(ABarrier.Waiting);
-  if ABarrier.Waiting >= ABarrier.Count then
-  begin
-    ABarrier.Waiting := 0;
-    Inc(ABarrier.Generation);
-    platform_condvar_broadcast(ABarrier.CondVar);
-  end
-  else
-  begin
-    while ABarrier.Generation = LGen do
+  if Result <> 0 then
+    Exit;
+  try
+    LGen := ABarrier.Generation;
+    Inc(ABarrier.Waiting);
+    if ABarrier.Waiting >= ABarrier.Count then
     begin
-      Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
-      if Result <> 0 then Break;
+      ABarrier.Waiting := 0;
+      Inc(ABarrier.Generation);
+      Result := platform_condvar_broadcast(ABarrier.CondVar);
+    end
+    else
+    begin
+      while ABarrier.Generation = LGen do
+      begin
+        Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
+        if Result <> 0 then
+          Break;
+      end;
     end;
+  finally
+    LUnlockResult := platform_mutex_unlock(ABarrier.Mutex);
+    if (Result = 0) and (LUnlockResult <> 0) then
+      Result := LUnlockResult;
   end;
-  platform_mutex_unlock(ABarrier.Mutex);
 end;
 
 { Once implementation }

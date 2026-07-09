@@ -304,6 +304,8 @@ var
   LLen: Int32;
   LRet: Int32;
 begin
+  // Convenience helper intentionally collapses "missing" and "empty" to ''.
+  // Call platform_env_exists first when the distinction matters.
   Result := '';
   if Length(AName) = 0 then Exit;
   LRet := platform_env_get(@AName[1], @LBuf[0], SizeOf(LBuf), LLen);

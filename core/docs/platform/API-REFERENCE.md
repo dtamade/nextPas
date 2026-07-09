@@ -49,7 +49,7 @@
 | `platform_env_exists(AName): Boolean` | 检查环境变量是否存在 |
 | `platform_env_enumerate(ACallback, AUserData): Int32` | 遍历所有环境变量 |
 | `platform_env_names_case_sensitive: Boolean` | 名称是否区分大小写 |
-| `platform_env_get_str(AName): AnsiString` | 获取环境变量(字符串版) |
+| `platform_env_get_str(AName): AnsiString` | 获取环境变量(字符串版，不存在/空值都返回空字符串) |
 
 ## 5. error — 错误处理
 
@@ -58,7 +58,7 @@
 | `platform_error_message(ACode, ABuf, ABufSize): Int32` | 获取错误消息 |
 | `platform_error_category(ACode): TErrorCategory` | 获取错误分类 |
 | `platform_fatal(AMsg)` | 致命错误退出 |
-| `platform_fatal_code(AMsg, ACode)` | 带错误码的致命退出 |
+| `platform_fatal_code(AMsg, ACode)` | 带错误码的致命退出（退出码按低 8 位截断） |
 
 ## 6. fmt — 格式化与解析
 
