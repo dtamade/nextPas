@@ -3028,6 +3028,7 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
+      EmitClassVarFreeCleanupNodes;
       EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
       EmitOwnedStringCleanupNodes(FCurrentRetVarName);
@@ -4085,6 +4086,7 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
+            EmitClassVarFreeCleanupNodes;
             EmitOwnedManagedRecordCleanupNodes;
             EmitOwnedDynArrayCleanupNodes;
             EmitOwnedStringCleanupNodes;
@@ -4101,6 +4103,7 @@ begin
           if EvaluateIntegerConstant(Arg, Value) then
             Operand := IntToStr(Value);
         end;
+        EmitClassVarFreeCleanupNodes;
         EmitOwnedManagedRecordCleanupNodes;
         EmitOwnedDynArrayCleanupNodes;
         EmitOwnedStringCleanupNodes;

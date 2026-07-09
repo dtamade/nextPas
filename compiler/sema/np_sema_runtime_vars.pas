@@ -77,6 +77,8 @@ type
 
     procedure RegisterClassVar(const AName, AClassName: string);
     function LookupClassVar(const AName: string): string;
+    function GetClassVarNames: TStringArray;
+    function GetClassVarTypes: TStringArray;
 
     procedure RegisterRecordVar(const AName, ATypeName: string);
     function IsRecordVar(const AName: string): Boolean;
@@ -361,6 +363,16 @@ begin
     if SameText(FClassVarNames[Idx], AName) then
       Exit(FClassVarTypes[Idx]);
   Result := '';
+end;
+
+function TSemaRuntimeVarRegistry.GetClassVarNames: TStringArray;
+begin
+  Result := FClassVarNames;
+end;
+
+function TSemaRuntimeVarRegistry.GetClassVarTypes: TStringArray;
+begin
+  Result := FClassVarTypes;
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterRecordVar(const AName, ATypeName: string);

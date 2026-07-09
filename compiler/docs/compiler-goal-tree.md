@@ -55,6 +55,7 @@
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
 | **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | ✅ 2026-07-08 |
 | **D1-D8** | Phase 2：后自举时代 — 类型精确 + 调试信息 + 测试扩展 + 多平台（详见下方）                                                     | C8 | ✅ 8/8 完成 |
+| **C3-RAII** | 类变量 RAII 析构注入：`EmitClassVarFreeCleanupNodes` 在 Exit/Halt/过程体结束自动调用 Free，52/52 compiler-pass | C8 | ✅ 2026-07-09 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 **Phase 2 关键路径** = D1 → D3（调试信息）；D1 → D6 → D8（类型精确 → 性能基准）。

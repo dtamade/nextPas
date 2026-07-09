@@ -176,6 +176,7 @@ type
     procedure EmitOwnedDynArrayCleanupNodes;
     function IsManagedRecord(const ATypeName: string): Boolean;
     procedure EmitOwnedManagedRecordCleanupNodes;
+    procedure EmitClassVarFreeCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
     function IsVarParamAtPosition(const ADecl: TGreenNode; APosition: LongInt): Boolean;
@@ -1456,6 +1457,39 @@ var
 begin
   FillOwnershipContext(Ctx);
   np_sema_string_ownership.EmitOwnedManagedRecordCleanupNodes(Ctx);
+end;
+
+procedure TSemanticAnalyzer.EmitClassVarFreeCleanupNodes;
+var
+  I, Value: LongInt;
+  VarName, ClsName, DestroyFuncName, FuncName: string;
+  ClassNames, ClassTypes: TStringArray;
+begin
+  ClassNames := FRuntimeVars.GetClassVarNames;
+  ClassTypes := FRuntimeVars.GetClassVarTypes;
+  for I := 0 to Length(ClassNames) - 1 do
+  begin
+    VarName := ClassNames[I];
+    ClsName := ClassTypes[I];
+    if (VarName = '') or (ClsName = '') then
+      Continue;
+    DestroyFuncName := ClsName + '.Destroy';
+    Value := TypeMetaVmtSlot(ClsName, 'Destroy');
+    if (Value >= 0) and FModel.LookupStringConstValue(
+      ClsName + '$vmt_func_' + IntToStr(Value), FuncName
+    ) then
+      DestroyFuncName := FuncName;
+    FModel.AddTypedHirNode(
+      'object-free-runtime',
+      NPSYSTEM_OBJECT_FREE,
+      0, 0,
+      'var ' + VarName + #10 +
+      'destroy ' + DestroyFuncName + #10 +
+      'cleanup-class ' + ClsName + #10 +
+      'nil-guard true' + #10 +
+      'heap-release true' + #10
+    );
+  end;
 end;
 
 
@@ -6161,6 +6195,7 @@ begin
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
     begin
+      EmitClassVarFreeCleanupNodes;
       EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
       EmitOwnedStringCleanupNodes(RetVarName);
