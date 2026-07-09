@@ -253,11 +253,15 @@ uses
   nextpas.core.platform.windows.utf16;
 {$ENDIF}
 
+const
+  {** @desc 默认文件创建权限（0666 八进制） *}
+  PLATFORM_DEFAULT_FILE_MODE = 438;
+
 {$IFDEF NEXTPAS_UNIX}
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
 begin
-  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, 438, AHandle);
+  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, PLATFORM_DEFAULT_FILE_MODE, AHandle);
 end;
 
 function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
@@ -345,24 +349,13 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
 var
   LWhence: Int32;
-  LResult: Int64;
 begin
   case AOrigin of
     fsoBegin:   LWhence := 0;
     fsoCurrent: LWhence := 1;
     fsoEnd:     LWhence := 2;
   end;
-  LResult := lseek(AHandle.Value, AOffset, LWhence);
-  if LResult < 0 then
-  begin
-    ANewPos := -1;
-    Result := platform_get_errno;
-  end
-  else
-  begin
-    ANewPos := LResult;
-    Result := 0;
-  end;
+  Result := PosixOffToResult(lseek(AHandle.Value, AOffset, LWhence), ANewPos);
 end;
 
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
@@ -875,7 +868,7 @@ end;
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
 begin
-  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, 438, AHandle);
+  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, PLATFORM_DEFAULT_FILE_MODE, AHandle);
 end;
 
 function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;

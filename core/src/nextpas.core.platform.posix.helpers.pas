@@ -76,6 +76,12 @@ function ErrnoIsNoent: Boolean; inline;
     @return True 是 EEXIST *}
 function ErrnoIsExist: Boolean; inline;
 
+{** @desc 将 POSIX off_t 返回值转换为平台结果
+    @param AResult POSIX off_t 返回值（-1 表示失败）
+    @param APos 输出位置值
+    @return 0 成功，否则返回 platform_get_errno *}
+function PosixOffToResult(AResult: Int64; out APos: Int64): Int32; inline;
+
 implementation
 
 function PosixResultToError(AResult: cint): Int32;
@@ -160,6 +166,20 @@ end;
 function ErrnoIsExist: Boolean;
 begin
   Result := platform_get_errno = PLATFORM_ERR_EXIST;
+end;
+
+function PosixOffToResult(AResult: Int64; out APos: Int64): Int32;
+begin
+  if AResult < 0 then
+  begin
+    APos := -1;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    APos := AResult;
+    Result := 0;
+  end;
 end;
 
 end.

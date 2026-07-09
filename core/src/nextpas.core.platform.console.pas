@@ -79,7 +79,8 @@ implementation
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.helpers
   {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.base{$ENDIF};
 
 type
@@ -108,11 +109,12 @@ var
 begin
   ASize.Cols := 0;
   ASize.Rows := 0;
-  if ioctl(AFd, TIOCGWINSZ, @LWin) < 0 then
-    Exit(platform_get_errno);
-  ASize.Cols := Int32(LWin.ws_col);
-  ASize.Rows := Int32(LWin.ws_row);
-  Result := 0;
+  Result := PosixCheck(ioctl(AFd, TIOCGWINSZ, @LWin));
+  if Result = 0 then
+  begin
+    ASize.Cols := Int32(LWin.ws_col);
+    ASize.Rows := Int32(LWin.ws_row);
+  end;
 end;
 
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
@@ -135,7 +137,8 @@ var
 begin
   FillChar(AMode, SizeOf(AMode), 0);
   if isatty(AFd) = 0 then Exit(-1);
-  if tcgetattr(AFd, @LSaved) <> 0 then Exit(platform_get_errno);
+  Result := PosixCheck(tcgetattr(AFd, @LSaved));
+  if Result <> 0 then Exit;
   Move(LSaved, AMode.Opaque[0], SizeOf(TTermios));
   LRaw := LSaved;
   LRaw.c_iflag := LRaw.c_iflag and (not (IGNBRK or BRKINT or PARMRK or ISTRIP
@@ -146,8 +149,7 @@ begin
   LRaw.c_cflag := LRaw.c_cflag or CS8;
   LRaw.c_cc[VMIN] := 0;
   LRaw.c_cc[VTIME] := 0;
-  if tcsetattr(AFd, TCSANOW, @LRaw) <> 0 then Exit(platform_get_errno);
-  Result := 0;
+  Result := PosixCheck(tcsetattr(AFd, TCSANOW, @LRaw));
 end;
 
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
@@ -155,8 +157,7 @@ var
   LSaved: TTermios;
 begin
   Move(AMode.Opaque[0], LSaved, SizeOf(TTermios));
-  if tcsetattr(AFd, TCSANOW, @LSaved) <> 0 then Exit(platform_get_errno);
-  Result := 0;
+  Result := PosixCheck(tcsetattr(AFd, TCSANOW, @LSaved));
 end;
 
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;

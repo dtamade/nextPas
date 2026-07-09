@@ -479,41 +479,31 @@ end;
 function platform_socket_send(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32;
 var
-  LResult: ssize_t;
+  LSent: PtrUInt;
 begin
   ASent := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
-  LResult := send(ASocket.Value, ABuf, size_t(ALen), AFlags);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ASent := Int32(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(send(ASocket.Value, ABuf, size_t(ALen), AFlags), LSent);
+  if Result = 0 then
+    ASent := Int32(LSent);
 end;
 
 function platform_socket_recv(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32;
 var
-  LResult: ssize_t;
+  LRecvd: PtrUInt;
 begin
   ARecvd := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
-  LResult := recv(ASocket.Value, ABuf, size_t(ALen), AFlags);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ARecvd := Int32(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(recv(ASocket.Value, ABuf, size_t(ALen), AFlags), LRecvd);
+  if Result = 0 then
+    ARecvd := Int32(LRecvd);
 end;
 
 function platform_socket_shutdown(const ASocket: TPlatformSocket;
@@ -532,48 +522,32 @@ function platform_socket_sendto(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32;
   AAddr: Pointer; AAddrLen: Int32; out ASent: Int32): Int32;
 var
-  LResult: ssize_t;
+  LSent: PtrUInt;
 begin
   ASent := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
-  LResult := sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen));
-  if LResult < 0 then
-  begin
-    ASent := 0;
-    Result := platform_get_errno;
-  end
-  else
-  begin
-    ASent := Int32(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen)), LSent);
+  if Result = 0 then
+    ASent := Int32(LSent);
 end;
 
 function platform_socket_recvfrom(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32;
   AAddr: Pointer; AAddrLen: Pointer; out ARecvd: Int32): Int32;
 var
-  LResult: ssize_t;
+  LRecvd: PtrUInt;
 begin
   ARecvd := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
-  LResult := recvfrom(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, AAddrLen);
-  if LResult < 0 then
-  begin
-    ARecvd := 0;
-    Result := platform_get_errno;
-  end
-  else
-  begin
-    ARecvd := Int32(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(recvfrom(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, AAddrLen), LRecvd);
+  if Result = 0 then
+    ARecvd := Int32(LRecvd);
 end;
 
 function platform_socket_getsockname(const ASocket: TPlatformSocket;

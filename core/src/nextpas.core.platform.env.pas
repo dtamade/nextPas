@@ -119,20 +119,14 @@ function platform_env_set(const AName: PAnsiChar;
 begin
   if (not platform_env_name_valid(AName)) or (AValue = nil) then
     Exit(PLATFORM_ERR_INVALID);
-  if setenv(AName, AValue, 1) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(setenv(AName, AValue, 1));
 end;
 
 function platform_env_unset(const AName: PAnsiChar): Int32;
 begin
   if not platform_env_name_valid(AName) then
     Exit(PLATFORM_ERR_INVALID);
-  if unsetenv(AName) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(unsetenv(AName));
 end;
 
 function platform_env_exists(const AName: PAnsiChar): Boolean;
