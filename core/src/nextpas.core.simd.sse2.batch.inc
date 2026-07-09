@@ -3,23 +3,6 @@
 // 策略: 主循环 2x 展开 (每次 8 个 float)，标量尾部处理剩余元素
 // ============================================================================
 
-// Thread-local scratch buffers for Tan computation
-// 避免每次调用 SetLength 分配堆内存
-threadvar
-  GTanSinBuf: array of Single;
-  GTanCosBuf: array of Single;
-  GTanBufCapacity: SizeUInt;
-
-procedure EnsureTanScratch(aCount: SizeUInt);
-begin
-  if GTanBufCapacity < aCount then
-  begin
-    GTanBufCapacity := aCount;
-    SetLength(GTanSinBuf, aCount);
-    SetLength(GTanCosBuf, aCount);
-  end;
-end;
-
 procedure SSE2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
   pS1, pS2, pD: PSingle;
@@ -4305,12 +4288,12 @@ begin
   EnsureTanScratch(aCount);
 
   // Compute sin and cos using SIMD
-  SSE2ArraySinF32(aSrc, @GTanSinBuf[0], aCount);
-  SSE2ArrayCosF32(aSrc, @GTanCosBuf[0], aCount);
+  SSE2ArraySinF32(aSrc, GTanSinBuf, aCount);
+  SSE2ArrayCosF32(aSrc, GTanCosBuf, aCount);
 
   // Divide: tan(x) = sin(x) / cos(x)
-  pSin := @GTanSinBuf[0];
-  pCos := @GTanCosBuf[0];
+  pSin := GTanSinBuf;
+  pCos := GTanCosBuf;
   pD := aDst;
 
   asm

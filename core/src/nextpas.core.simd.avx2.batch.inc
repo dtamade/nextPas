@@ -5,23 +5,6 @@
 //        尾部在同一 asm 块内处理 (16/8/4/scalar)
 // ============================================================================
 
-// Thread-local scratch buffers for Tan computation
-// 避免每次调用 SetLength 分配堆内存
-threadvar
-  GTanSinBuf: array of Single;
-  GTanCosBuf: array of Single;
-  GTanBufCapacity: SizeUInt;
-
-procedure EnsureTanScratch(aCount: SizeUInt);
-begin
-  if GTanBufCapacity < aCount then
-  begin
-    GTanBufCapacity := aCount;
-    SetLength(GTanSinBuf, aCount);
-    SetLength(GTanCosBuf, aCount);
-  end;
-end;
-
 procedure AVX2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
   pS1, pS2, pD: PSingle;
@@ -5390,15 +5373,15 @@ begin
   if aCount = 0 then Exit;
 
   // 使用 threadvar 缓冲区，避免每次堆分配
-  EnsureTanScratch(aCount);
+  EnsureAVX2TanScratch(aCount);
 
   // Compute sin and cos using AVX2 SIMD
-  AVX2ArraySinF32(aSrc, @GTanSinBuf[0], aCount);
-  AVX2ArrayCosF32(aSrc, @GTanCosBuf[0], aCount);
+  AVX2ArraySinF32(aSrc, GAVX2TanSinBuf, aCount);
+  AVX2ArrayCosF32(aSrc, GAVX2TanCosBuf, aCount);
 
   // Divide: tan(x) = sin(x) / cos(x)
-  pS := @GTanSinBuf[0];
-  pCos := @GTanCosBuf[0];
+  pS := GAVX2TanSinBuf;
+  pCos := GAVX2TanCosBuf;
   pD := aDst;
 
   asm

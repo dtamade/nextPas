@@ -78,19 +78,25 @@ uses
   nextpas.core.simd.scalar; // For fallback functions
 
 // Thread-local scratch buffers for Tan computation (AVX2 specific)
-// 避免每次调用 SetLength 分配堆内存
+// 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
 threadvar
-  GAVX2TanSinBuf: array of Single;
-  GAVX2TanCosBuf: array of Single;
+  GAVX2TanSinBuf: PSingle;
+  GAVX2TanCosBuf: PSingle;
   GAVX2TanBufCapacity: SizeUInt;
 
 procedure EnsureAVX2TanScratch(aCount: SizeUInt);
 begin
   if GAVX2TanBufCapacity < aCount then
   begin
+    // 释放旧缓冲区
+    if GAVX2TanSinBuf <> nil then
+      FreeMem(GAVX2TanSinBuf);
+    if GAVX2TanCosBuf <> nil then
+      FreeMem(GAVX2TanCosBuf);
+    // 分配新缓冲区
     GAVX2TanBufCapacity := aCount;
-    SetLength(GAVX2TanSinBuf, aCount);
-    SetLength(GAVX2TanCosBuf, aCount);
+    GetMem(GAVX2TanSinBuf, aCount * SizeOf(Single));
+    GetMem(GAVX2TanCosBuf, aCount * SizeOf(Single));
   end;
 end;
 
