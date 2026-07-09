@@ -26,7 +26,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.sizeclass;
 
 const
@@ -52,20 +51,20 @@ type
    *  包装任意 IAllocator，跟踪分配频率模式。
    *  可预测最热门的分配大小并预分配。
    *}
-  TPredictionAllocator = class(TAllocator)
+  TPredictionAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FAllocCounts: array[0..MEM_SIZECLASS_COUNT - 1] of QWord;
     FTotalAllocs: QWord;
     procedure RecordAlloc(ASize: SizeUInt);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 获取 top-N 热门分配大小 }
     function Predict(ATopN: Integer = 8): TPredictionResult;
@@ -76,7 +75,7 @@ type
     {** 总分配次数 }
     property TotalAllocations: QWord read FTotalAllocs;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -117,28 +116,28 @@ begin
   Inc(FTotalAllocs);
 end;
 
-function TPredictionAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TPredictionAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
     RecordAlloc(ASize);
 end;
 
-function TPredictionAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TPredictionAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
     RecordAlloc(ASize);
 end;
 
-function TPredictionAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TPredictionAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.ReallocMem(APtr, ASize);
   if (Result <> nil) and (ASize > 0) then
     RecordAlloc(ASize);
 end;
 
-procedure TPredictionAllocator.DoFreeMem(APtr: Pointer);
+procedure TPredictionAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FInner.FreeMem(APtr);
 end;
@@ -199,13 +198,14 @@ begin
   end;
 end;
 
-function TPredictionAllocator.Traits: TAllocatorTraits;
+function TPredictionAllocator.Traits: TAllocatorTraits; inline;
 begin
   if FInner <> nil then
     Result := FInner.Traits
   else
   begin
     Result.ZeroInitialized := False;
+    Result.ThreadSafe := False;
     Result.SupportsRealloc := True;
   end;
 end;
