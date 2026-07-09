@@ -2810,6 +2810,71 @@ begin
   {$POP}
 end;
 
+function SSE2ReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
+var
+  pS: PSingle;
+  LResult: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then begin Result := 0; Exit; end;
+  pS := aSrc; LResult := pS[0];
+
+  asm
+    mov rax, pS
+    mov r8, aCount
+
+    movups xmm0, [rax]
+    movaps xmm1, xmm0
+
+    cmp r8, 8
+    jb @tail4
+    add rax, 16
+    sub r8, 4
+
+  @loop8:
+    cmp r8, 8
+    jb @tail4_post
+    movups xmm2, [rax]
+    maxps xmm0, xmm2
+    movups xmm3, [rax + 16]
+    maxps xmm1, xmm3
+    add rax, 32
+    sub r8, 8
+    jmp @loop8
+
+  @tail4_post:
+    maxps xmm0, xmm1
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm2, [rax]
+    maxps xmm0, xmm2
+    add rax, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @reduce
+  @scalar_loop:
+    movss xmm2, [rax]
+    maxss xmm0, xmm2
+    add rax, 4
+    dec r8
+    jnz @scalar_loop
+
+  @reduce:
+    movhlps xmm1, xmm0
+    maxps xmm0, xmm1
+    pshufd xmm1, xmm0, $01
+    maxss xmm0, xmm1
+    movss LResult, xmm0
+  end;
+
+  Result := LResult;
+  {$POP}
+end;
+
 function SSE2ReduceDotF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
 var
   pS1, pS2: PDouble;
@@ -3274,6 +3339,67 @@ begin
   @reduce:
     movhlps xmm1, xmm0
     minsd xmm0, xmm1
+    movlps LResult, xmm0
+  end;
+
+  Result := LResult;
+  {$POP}
+end;
+
+function SSE2ReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
+var pS: PDouble; LResult: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then begin Result := 0; Exit; end;
+  pS := aSrc;
+
+  asm
+    mov rax, pS
+    mov r8, aCount
+
+    movupd xmm0, [rax]       // init with first 2 elements (or 1)
+    cmp r8, 2
+    jb @single_init
+    add rax, 16
+    sub r8, 2
+    jmp @check_loop
+  @single_init:
+    movsd xmm0, [rax]
+    movlhps xmm0, xmm0       // duplicate to both lanes
+    add rax, 8
+    dec r8
+
+  @check_loop:
+    cmp r8, 4
+    jb @tail2
+
+  @loop4:
+    movupd xmm1, [rax]
+    maxpd xmm0, xmm1
+    movupd xmm2, [rax + 16]
+    maxpd xmm0, xmm2
+    add rax, 32
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail2:
+    cmp r8, 2
+    jb @tail_scalar
+    movupd xmm1, [rax]
+    maxpd xmm0, xmm1
+    add rax, 16
+    sub r8, 2
+
+  @tail_scalar:
+    test r8, r8
+    jz @reduce
+    movsd xmm1, [rax]
+    maxsd xmm0, xmm1
+
+  @reduce:
+    movhlps xmm1, xmm0
+    maxsd xmm0, xmm1
     movlps LResult, xmm0
   end;
 

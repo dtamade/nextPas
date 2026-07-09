@@ -663,9 +663,11 @@ begin
 
   // F32 reductions
   dispatchTable.ReduceMinF32 := @SSE2ReduceMinF32;
+  dispatchTable.ReduceMaxF32 := @SSE2ReduceMaxF32;
 
   // F64 reductions
   dispatchTable.ReduceMinF64 := @SSE2ReduceMinF64;
+  dispatchTable.ReduceMaxF64 := @SSE2ReduceMaxF64;
 
   // PackSat + NR Refine
   dispatchTable.ArrayPackSatI32toI16 := @SSE2ArrayPackSatI32toI16;
