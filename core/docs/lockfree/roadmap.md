@@ -73,8 +73,12 @@
 | `lockfree.bitset` | 并发位集合 | ✅ 完成 | 10407 |
 | `lockfree.linkedlist` | 并发有序链表 | ✅ 完成 | 1034 |
 | `lockfree.statscounter` | 并发统计计数器 | ✅ 完成 | 42 |
+| `lockfree.consistent_hashring` | 一致性哈希环 | ✅ 完成 | 26 |
+| `lockfree.trie_hmt` | Hash Mapped Trie (HMT) | ✅ 完成 | 33 |
+| `lockfree.intervaltree` | 并发区间树 | ✅ 完成 | 25 |
+| `lockfree.fibheap` | Fibonacci 堆 | ✅ 完成 | 42 |
 
-**规模**: 54 文件, ~24000 行, 38480 测试
+**规模**: 58 文件, ~25000 行, 38606 测试
 
 ---
 
@@ -123,7 +127,11 @@
 | test_lockfree_bitset | 10407 | ✅ 全绿 |
 | test_lockfree_linkedlist | 1034 | ✅ 全绿 |
 | test_lockfree_statscounter | 42 | ✅ 全绿 |
-| **总计** | **38480** | **✅ 全绿** |
+| test_lockfree_consistent_hashring | 26 | ✅ 全绿 |
+| test_lockfree_trie_hmt | 33 | ✅ 全绿 |
+| test_lockfree_intervaltree | 25 | ✅ 全绿 |
+| test_lockfree_fibheap | 42 | ✅ 全绿 |
+| **总计** | **38606** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

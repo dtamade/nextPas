@@ -54,7 +54,11 @@ uses
   nextpas.core.lockfree.sortedset,
   nextpas.core.lockfree.bitset,
   nextpas.core.lockfree.linkedlist,
-  nextpas.core.lockfree.statscounter;
+  nextpas.core.lockfree.statscounter,
+  nextpas.core.lockfree.consistent_hashring,
+  nextpas.core.lockfree.trie_hmt,
+  nextpas.core.lockfree.intervaltree,
+  nextpas.core.lockfree.fibheap;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -415,6 +419,38 @@ type
     @see TConcurrentStatsCounter 详细文档和示例
   }
   TConcurrentStatsCounter = nextpas.core.lockfree.statscounter.TConcurrentStatsCounter;
+
+  {** @desc 一致性哈希环
+    @details 用于分布式系统的虚拟节点哈希环。
+      支持 AddNode/RemoveNode/GetNode/GetNodes。
+    @see TConsistentHashRing 详细文档和示例
+  }
+  TConsistentHashRing = nextpas.core.lockfree.consistent_hashring.TConsistentHashRing;
+  TConsistentHashRingResult = nextpas.core.lockfree.consistent_hashring.TConsistentHashRingResult;
+
+  {** @desc Hash Mapped Trie (HMT)
+    @details 持久化不可变 Trie，支持路径复制和原子快照。
+      适用于持久化映射、版本快照、函数式编程。
+    @see THashMappedTrie 详细文档和示例
+  }
+  THashMappedTrie = nextpas.core.lockfree.trie_hmt.THashMappedTrie;
+  THmtResult = nextpas.core.lockfree.trie_hmt.THmtResult;
+
+  {** @desc 并发区间树
+    @details 基于 AVL 树的区间重叠查询。写用自旋锁，读无锁（COW 快照）。
+      适用于日程安排、IP 范围查找、基因组区间。
+    @see TIntervalTree 详细文档和示例
+  }
+  TIntervalTree = nextpas.core.lockfree.intervaltree.TIntervalTree;
+  TIntervalTreeResult = nextpas.core.lockfree.intervaltree.TIntervalTreeResult;
+
+  {** @desc 并发 Fibonacci 堆
+    @details 摊还 O(1) 插入/合并，O(log n) 提取最小值。
+      适用于 Dijkstra 算法、优先队列合并。
+    @see TLockFreeFibonacciHeap 详细文档和示例
+  }
+  TLockFreeFibonacciHeap = nextpas.core.lockfree.fibheap.TLockFreeFibonacciHeap;
+  TFibHeapResult = nextpas.core.lockfree.fibheap.TFibHeapResult;
 
 implementation
 
