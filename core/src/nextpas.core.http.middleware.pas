@@ -6,7 +6,9 @@ interface
 
 uses
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.sync.intf,
+  nextpas.core.sync.spinlock;
 
 type
   { Function type for creating middleware from a closure }
@@ -30,6 +32,7 @@ type
     FMiddlewares: array of IHttpMiddleware;
     FHandler: IHttpHandler;
     FBuilt: IHttpHandler;
+    FBuildLock: ISpinLock;
     procedure Build;
   public
     constructor Create(const AHandler: IHttpHandler);
@@ -94,6 +97,7 @@ begin
   inherited Create;
   FHandler := AHandler;
   FBuilt := nil;
+  FBuildLock := CreateSpinLock;
 end;
 
 destructor TMiddlewareChain.Destroy;
@@ -102,6 +106,7 @@ var
 begin
   FBuilt := nil;
   FHandler := nil;
+  FBuildLock := nil;
   for LI := 0 to High(FMiddlewares) do
     FMiddlewares[LI] := nil;
   SetLength(FMiddlewares, 0);
@@ -132,7 +137,15 @@ end;
 procedure TMiddlewareChain.ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
 begin
   if FBuilt = nil then
-    Build;
+  begin
+    FBuildLock.Acquire;
+    try
+      if FBuilt = nil then
+        Build;
+    finally
+      FBuildLock.Release;
+    end;
+  end;
   FBuilt.ServeHTTP(AReq, AW);
 end;
 

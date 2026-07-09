@@ -40,6 +40,7 @@ type
     FRecvFlow: TH2FlowState;
     FHeaderFragments: array of AnsiString;
     FHeaderBlock: AnsiString;
+    FHeaderBlockTotalBytes: SizeInt;
     FHeaderStore: TObject;
     FHeadersDecoded: IHttpHeaders;
     FTrailerStore: TObject;
@@ -60,7 +61,7 @@ type
     FDecoder: ^THPackDecoder;
     FMaxHeaderListSize: UInt32;
     FLastHeaderFinalizeResult: TH2HeaderFinalizeResult;
-    procedure AppendHeaderFragment(const AFragment: AnsiString);
+    function AppendHeaderFragment(const AFragment: AnsiString): Boolean;
     procedure ClearPendingHeaderBlock;
     function FinalizeHeaders: TH2HeaderFinalizeResult;
     procedure AppendBodyData(const APayload: AnsiString);
@@ -132,6 +133,11 @@ uses
   nextpas.core.http.headers;
 
 const
+  { Maximum total bytes for HEADERS + CONTINUATION fragments before
+    rejecting.  64 KB is generous for legitimate header blocks; an
+    attacker sending unlimited CONTINUATION frames would hit this. }
+  H2_MAX_HEADER_BLOCK_BYTES: SizeInt = 64 * 1024;
+
   H2_FORBIDDEN_CONNECTION_HEADERS: array[0..3] of AnsiString = (
     'connection',
     'upgrade',
@@ -277,6 +283,7 @@ begin
   FTrailersDecoded := nil;
   FHeaderFragments := nil;
   FHeaderBlock := '';
+  FHeaderBlockTotalBytes := 0;
   FBodyBuffer := nil;
   FBodyReadPos := 0;
   FEndStreamReceived := False;
@@ -305,19 +312,27 @@ begin
   inherited Destroy;
 end;
 
-procedure TH2Stream.AppendHeaderFragment(const AFragment: AnsiString);
+function TH2Stream.AppendHeaderFragment(const AFragment: AnsiString): Boolean;
 var
   LLen: SizeInt;
 begin
   LLen := Length(FHeaderFragments);
+  { Track total bytes across HEADERS + all CONTINUATION fragments.
+    Reject if accumulated bytes exceed limit to prevent memory exhaustion
+    from unlimited CONTINUATION frames. }
+  Inc(FHeaderBlockTotalBytes, Length(AFragment));
+  if FHeaderBlockTotalBytes > H2_MAX_HEADER_BLOCK_BYTES then
+    Exit(False);
   SetLength(FHeaderFragments, LLen + 1);
   FHeaderFragments[LLen] := AFragment;
+  Result := True;
 end;
 
 procedure TH2Stream.ClearPendingHeaderBlock;
 begin
   FHeaderFragments := nil;
   FHeaderBlock := '';
+  FHeaderBlockTotalBytes := 0;
   FEndHeadersReceived := False;
 end;
 
@@ -749,8 +764,13 @@ begin
 
   FHeaderBlock := '';
   FHeaderFragments := nil;
+  FHeaderBlockTotalBytes := 0;
   FLastHeaderFinalizeResult := h2hfrNone;
-  AppendHeaderFragment(LFragment);
+  if not AppendHeaderFragment(LFragment) then
+  begin
+    InternalReset(H2_ERR_ENHANCE_YOUR_CALM);
+    Exit;
+  end;
   FEndHeadersReceived := False;
   ApplyRemoteOpenState;
 
@@ -771,7 +791,11 @@ begin
     Exit;
   end;
 
-  AppendHeaderFragment(APayload);
+  if not AppendHeaderFragment(APayload) then
+  begin
+    InternalReset(H2_ERR_ENHANCE_YOUR_CALM);
+    Exit;
+  end;
   if (AFlags and H2_FLAG_CONTINUATION_END_HEADERS) <> 0 then
     FLastHeaderFinalizeResult := FinalizeHeaders;
 end;
