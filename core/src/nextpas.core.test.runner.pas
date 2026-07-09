@@ -409,7 +409,7 @@ begin
       else if ASuites[I].Tests[J].ShortSkip then
         LSuffix := ' (short-skip)';
       end;
-      LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + LSuffix);
+      LOutSink.WriteLn('  ' + GetDisplayName(ASuites[I].Tests[J]) + LSuffix);
     end;
   end;
   SetLength(AResults, 0);
@@ -1492,6 +1492,10 @@ begin
     LTestResult := MakeTestResult('[setup]', tsError,
       'setup failed: ' + AErrorMsg, 0);
     AppendResult(AResult.Results, LTestResult);
+    { P1 #3: Dispose table-test heap allocations on setup failure path.
+      Without this, early Exit skips CleanupTableAllocations in the normal
+      post-loop path, leaking PTestCase/PTestCaseProc data. }
+    CleanupTableAllocations;
   end;
   AResult.Failed    := 0;
   AResult.Skipped   := ASkipCount;
@@ -1547,7 +1551,7 @@ begin
   Inc(ACounter);
   LTestResult := MakeTestResult(AEntry.Name, AStatus, AMsg, 0);
   AppendResult(AResults, LTestResult);
-  WriteTestOutput(AStatus, AEntry.Name, AMsg, '', 0, AOutSink, AConfig);
+  WriteTestOutput(AStatus, GetDisplayName(AEntry), AMsg, '', 0, AOutSink, AConfig);
   ReportLeakIfAny(AStatus, AConfig);
   Result := True; { caller should Continue }
 end;

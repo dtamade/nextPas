@@ -150,10 +150,13 @@ type
     FSetups  : specialize TArray<TMockCall>;
     FCallOrder: specialize TArray<string>;  { records method names in call order }
     FWhenEntries: specialize TArray<TMockWhenEntry>; { E-09: conditional returns }
+    FWhenMethodNames: specialize TArray<string>; { methods configured only via When }
     procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
     procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
       const AValue: TMockValue);
+    { Track a method name in FWhenMethodNames if not already present }
+    procedure TrackWhenMethod(const AMethodName: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -223,6 +226,7 @@ type
     function Verify(const AMethodName: string): IMockVerify;
 
     { Verify all set-up methods were called at least once.
+      Checks methods configured via Setup.Returns AND Setup.When.
       Fails with a list of uncalled methods if any setup was never invoked. }
     procedure VerifyAll;
 
@@ -464,6 +468,7 @@ begin
   FCalls  := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenMethodNames := nil;
 end;
 
 destructor TMockState.Destroy;
@@ -471,6 +476,7 @@ begin
   FCalls  := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenMethodNames := nil;
   inherited Destroy;
 end;
 
@@ -683,6 +689,7 @@ begin
   if LCap <> LOldLen then SetLength(FWhenEntries, LCap);
   FWhenEntries[LOldLen] := LEntry;
   SetLength(FWhenEntries, LOldLen + 1);
+  TrackWhenMethod(AMethodName);
 end;
 
 function TMockState.FindWhenEntry(const AMethodName: string;
@@ -710,6 +717,17 @@ begin
       Exit(I);
   end;
   Result := -1;
+end;
+
+procedure TMockState.TrackWhenMethod(const AMethodName: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FWhenMethodNames) do
+    if FWhenMethodNames[I] = AMethodName then
+      Exit;
+  SetLength(FWhenMethodNames, Length(FWhenMethodNames) + 1);
+  FWhenMethodNames[High(FWhenMethodNames)] := AMethodName;
 end;
 
 function TMockState.CallCount(const AMethodName: string): Integer;
@@ -784,16 +802,41 @@ begin
   FSetups := nil;
   FCallOrder := nil;
   FWhenEntries := nil;
+  FWhenMethodNames := nil;
 end;
 
 function TMockState.GetSetupMethodNames: specialize TArray<string>;
 var
-  I, LCount: Integer;
+  I, LSetupCount, LWhenCount, LTotal, LOutIdx: Integer;
+  LFound: Boolean;
 begin
-  LCount := Length(FSetups);
-  SetLength(Result, LCount);
-  for I := 0 to LCount - 1 do
-    Result[I] := FSetups[I].MethodName;
+  LSetupCount := Length(FSetups);
+  LWhenCount := Length(FWhenMethodNames);
+  SetLength(Result, LSetupCount + LWhenCount);
+  LOutIdx := 0;
+  { Copy all setup method names }
+  for I := 0 to LSetupCount - 1 do
+  begin
+    Result[LOutIdx] := FSetups[I].MethodName;
+    Inc(LOutIdx);
+  end;
+  { Add When-only method names (not already in FSetups) }
+  for I := 0 to LWhenCount - 1 do
+  begin
+    LFound := False;
+    for LTotal := 0 to LSetupCount - 1 do
+      if FSetups[LTotal].MethodName = FWhenMethodNames[I] then
+      begin
+        LFound := True;
+        Break;
+      end;
+    if not LFound then
+    begin
+      Result[LOutIdx] := FWhenMethodNames[I];
+      Inc(LOutIdx);
+    end;
+  end;
+  SetLength(Result, LOutIdx);
 end;
 
 { ── IMockSetup implementation ──────────────────────────────────────────────── }

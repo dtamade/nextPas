@@ -27,6 +27,7 @@ uses
   nextpas.core.math,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.test.check,
   nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -1292,19 +1293,23 @@ end;
 procedure TestReadWriteFileContents;
 var
   LPath, LContent: string;
+  LStatus: TReadFileStatus;
 begin
   LPath := '/tmp/test_rw_contents_' + IntToStr(Random(1000000000)) + '.txt';
   WriteFileContents(LPath, 'hello world');
-  CheckTrue(ReadFileContents(LPath, LContent), 'ReadFileContents should succeed');
+  CheckTrue(ReadFileContents(LPath, LContent, LStatus), 'ReadFileContents should succeed');
   CheckEqual('hello world', LContent, 'File content');
+  CheckTrue(LStatus = rfsFound, 'Status should be rfsFound');
 end;
 
 procedure TestReadFileContentsNotFound;
 var
   LContent: string;
+  LStatus: TReadFileStatus;
 begin
-  CheckTrue(not ReadFileContents('/tmp/nonexistent_file_12345.txt', LContent),
+  CheckTrue(not ReadFileContents('/tmp/nonexistent_file_12345.txt', LContent, LStatus),
     'ReadFileContents should return False for missing file');
+  CheckTrue(LStatus = rfsNotFound, 'Status should be rfsNotFound');
 end;
 
 { ── R52: CheckMatch / CheckNotMatch ────────────────────────────────────────── }

@@ -19,8 +19,8 @@
        Typos in method names are NOT caught at compile time.
        Verify calls CompareText (case-insensitive) — 'Foo' matches 'foo'.
 
-    ⚠ VerifyAll checks all methods that have When entries (not all recorded calls).
-       If you need to verify a method was called but don't need When, use:
+    VerifyAll checks all methods configured via Setup (Returns/When).
+       If you need to verify a method was called but don't need Setup, use:
        LMock.Verify('MethodName').CalledExactly(1);  // explicit verify
  }
 program test_mock;
@@ -1163,6 +1163,36 @@ begin
   end;
 end;
 
+procedure TestVerifyAllWhenOnly;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { P0 #3: When-only config should be visible to VerifyAll }
+    LM.Setup('Foo').When([MockInt(1)]).ReturnsInt(10);
+    LM.RecordCall('Foo', ['1']);
+    LM.VerifyAll; { should pass — Foo was called }
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyAllWhenOnlyFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { P0 #3: When-only config should be visible to VerifyAll }
+    LM.Setup('Foo').When([MockInt(1)]).ReturnsInt(10);
+    { Don't call Foo — VerifyAll should fail }
+    ExpectFail(procedure begin LM.VerifyAll; end, 'Foo');
+  finally
+    LM.Free;
+  end;
+end;
+
 procedure TestVerifyErrorMessage;
 var
   LM: TMock;
@@ -1533,6 +1563,8 @@ begin
   Suite.Test('TestVerifyAllPass', @TestVerifyAllPass);
   Suite.Test('TestVerifyAllFailUncalled', @TestVerifyAllFailUncalled);
   Suite.Test('TestVerifyAllNoSetups', @TestVerifyAllNoSetups);
+  Suite.Test('TestVerifyAllWhenOnly', @TestVerifyAllWhenOnly);
+  Suite.Test('TestVerifyAllWhenOnlyFail', @TestVerifyAllWhenOnlyFail);
   Suite.Test('TestVerifyErrorMessage', @TestVerifyErrorMessage);
 
   { E-09: Mock When API }

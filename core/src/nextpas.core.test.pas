@@ -233,9 +233,15 @@ procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);
+
+type
+  TReadFileStatus = nextpas.core.test.check.TReadFileStatus;
+
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
-function ReadFileContents(const APath: string; out AContents: string): Boolean;
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean; overload;
+function ReadFileContents(const APath: string; out AContents: string): Boolean; overload;
 procedure WriteFileContents(const APath, AContents: string);
 
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }

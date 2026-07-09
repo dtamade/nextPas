@@ -281,8 +281,12 @@ procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
 
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean;
+begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents, AStatus); end;
 function ReadFileContents(const APath: string; out AContents: string): Boolean;
-begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents); end;
+var LStatus: TReadFileStatus;
+begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents, LStatus); end;
 
 procedure WriteFileContents(const APath, AContents: string);
 begin nextpas.core.test.check.WriteFileContents(APath, AContents); end;

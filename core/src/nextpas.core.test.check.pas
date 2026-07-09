@@ -170,18 +170,27 @@ procedure Skip(const AReason: string = '');
 
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
 
+type
+  {** Result of reading a file. Distinguishes "file doesn't exist" from
+    "file exists but read failed" so callers can handle each case differently. }
+  TReadFileStatus = (rfsFound, rfsNotFound, rfsReadError);
+
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean;
+{ Read entire file to string. Returns True if file was read successfully.
+  AStatus indicates: rfsFound (read OK), rfsNotFound (file doesn't exist),
+  rfsReadError (file exists but couldn't be read). }
+
+procedure WriteFileContents(const APath, AContents: string);
+{ Write string to file, creating directories if needed. }
+
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 { Compare AActual against a saved snapshot file at ASnapshotDir/ASnapshotName.
   If the file does not exist, creates it (first-run auto-approval).
+  If the file exists but cannot be read, fails with an error.
   If the file exists and differs, fails with a diff message.
   Set NEXTPAS_UPDATE_SNAPSHOTS=1 environment variable to auto-update. }
-
-function ReadFileContents(const APath: string; out AContents: string): Boolean;
-{ Read entire file to string. Returns False if file doesn't exist or is empty. }
-
-procedure WriteFileContents(const APath, AContents: string);
-{ Write string to file, creating directories if needed. }
 
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
 
@@ -1007,7 +1016,9 @@ end;
 
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string);
-{ AMessage: expected substring in the exception message (not a failure prefix). }
+{ AMessage: expected substring in the exception message (not a failure prefix).
+  If AMessage is non-empty, the raised exception's Message must contain it.
+  Note: this differs from CheckNoRaise where AMessage is a failure prefix. }
 var
   LRaised: Boolean = False;
 begin
@@ -1036,7 +1047,9 @@ begin
 end;
 
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string);
-{ AMessage: failure message prefix (not exception message content). }
+{ AMessage: failure message prefix (not exception message content).
+  Note: this differs from CheckRaises where AMessage is an exception substring.
+  Here, AMessage is prepended to the failure message if an exception occurs. }
 begin
   if not Assigned(AProc) then
     InternalFail('CheckNoRaise: AProc is nil');
@@ -1069,20 +1082,24 @@ end;
 
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
 
-function ReadFileContents(const APath: string; out AContents: string): Boolean;
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean;
 begin
-  Result := FileExists(APath);
-  if not Result then
+  if not FileExists(APath) then
   begin
     AContents := '';
-    Exit;
+    AStatus := rfsNotFound;
+    Exit(False);
   end;
   try
     AContents := ReadFileText(APath);
+    AStatus := rfsFound;
+    Result := True;
   except
     on E: Exception do
     begin
       AContents := '';
+      AStatus := rfsReadError;
       Result := False;
     end;
   end;
@@ -1099,31 +1116,39 @@ var
   LPath, LExisting: string;
   LShouldUpdate: Boolean;
   LDirCreated: Boolean;
+  LStatus: TReadFileStatus;
 begin
   LPath := ASnapshotDir + DirectorySeparator + ASnapshotName;
   LShouldUpdate := platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
-  if ReadFileContents(LPath, LExisting) then
-  begin
-    if LShouldUpdate then
+  ReadFileContents(LPath, LExisting, LStatus);
+  case LStatus of
+    rfsFound:
     begin
+      if LShouldUpdate then
+      begin
+        WriteFileContents(LPath, AActual);
+        Exit;
+      end;
+      if AActual <> LExisting then
+      begin
+        { Show first difference for debugging }
+        InternalFail('Snapshot mismatch: ' + LPath +
+          ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
+          StringDiff(LExisting, AActual));
+      end;
+    end;
+    rfsNotFound:
+    begin
+      { First run — create snapshot directory tree and file }
+      LDirCreated := ForceDirectories(ASnapshotDir);
+      if not LDirCreated then
+        InternalFail('CheckSnapshot: cannot create directory ' + ASnapshotDir);
       WriteFileContents(LPath, AActual);
-      Exit;
     end;
-    if AActual <> LExisting then
+    rfsReadError:
     begin
-      { Show first difference for debugging }
-      InternalFail('Snapshot mismatch: ' + LPath +
-        ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
-        StringDiff(LExisting, AActual));
+      InternalFail('CheckSnapshot: file exists but cannot be read: ' + LPath);
     end;
-  end
-  else
-  begin
-    { First run — create snapshot directory tree and file }
-    LDirCreated := ForceDirectories(ASnapshotDir);
-    if not LDirCreated then
-      InternalFail('CheckSnapshot: cannot create directory ' + ASnapshotDir);
-    WriteFileContents(LPath, AActual);
   end;
 end;
 
