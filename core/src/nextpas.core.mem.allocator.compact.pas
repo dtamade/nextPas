@@ -284,7 +284,7 @@ begin
       Move(LOldPtr^, LNewPtr^, LSize);
 
     { 通知应用 }
-    if @FOnCompact <> nil then
+    if Assigned(FOnCompact) then
       FOnCompact(LOldPtr, LNewPtr, LSize, FUserData);
 
     { 更新跟踪 }

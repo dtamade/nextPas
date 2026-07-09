@@ -142,22 +142,31 @@ function TOomHandler.TryHandle(ARequestedSize: SizeUInt): Boolean;
 var
   LI: Integer;
   LRetry: Boolean;
+  LSnapshot: array of TOomEvent;
+  LCount: Integer;
 begin
   Result := False;
+  { 复制 handler 快照后释放锁，避免回调内死锁 }
   FLock.Acquire;
   try
-    for LI := 0 to FCount - 1 do
-    begin
-      LRetry := False;
-      FHandlers[LI](ARequestedSize, LRetry);
-      if LRetry then
-      begin
-        Result := True;
-        Break;
-      end;
-    end;
+    LCount := FCount;
+    if LCount = 0 then Exit;
+    SetLength(LSnapshot, LCount);
+    for LI := 0 to LCount - 1 do
+      LSnapshot[LI] := FHandlers[LI];
   finally
     FLock.Release;
+  end;
+  { 在锁外调用回调 }
+  for LI := 0 to LCount - 1 do
+  begin
+    LRetry := False;
+    LSnapshot[LI](ARequestedSize, LRetry);
+    if LRetry then
+    begin
+      Result := True;
+      Break;
+    end;
   end;
 end;
 

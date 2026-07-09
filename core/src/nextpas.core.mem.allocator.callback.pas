@@ -61,21 +61,31 @@ end;
 
 function TCallbackAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FGetMemCallback(ASize)
 end;
 
 function TCallbackAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FAllocMemCallback(ASize)
 end;
 
 function TCallbackAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if APtr = nil then
+    Exit(GetMem(ASize));
+  if ASize = 0 then
+  begin
+    FreeMem(APtr);
+    Exit(nil);
+  end;
   Result := FReallocMemCallback(APtr, ASize)
 end;
 
 procedure TCallbackAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then Exit;
   FFreeMemCallback(APtr)
 end;
 

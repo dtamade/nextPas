@@ -83,6 +83,9 @@ uses
 const
   REGISTRY_MIN_CAP = 16;
 
+var
+  GInstanceLock: TMemMutex;
+
 { 简单哈希函数 }
 function SimpleHash(const S: string): UInt32;
 var
@@ -119,17 +122,27 @@ end;
 
 class function TAllocatorRegistry.Instance: TAllocatorRegistry;
 begin
-  if FInstance = nil then
-    FInstance := TAllocatorRegistry.Create;
-  Result := FInstance;
+  GInstanceLock.Acquire;
+  try
+    if FInstance = nil then
+      FInstance := TAllocatorRegistry.Create;
+    Result := FInstance;
+  finally
+    GInstanceLock.Release;
+  end;
 end;
 
 class procedure TAllocatorRegistry.ReleaseInstance;
 begin
-  if FInstance <> nil then
-  begin
-    FInstance.Free;
-    FInstance := nil;
+  GInstanceLock.Acquire;
+  try
+    if FInstance <> nil then
+    begin
+      FInstance.Free;
+      FInstance := nil;
+    end;
+  finally
+    GInstanceLock.Release;
   end;
 end;
 
@@ -137,17 +150,22 @@ function TAllocatorRegistry.FindIndex(const AName: string): SizeUInt;
 var
   LHash: UInt32;
   LPos: SizeUInt;
+  LSteps: SizeUInt;
 begin
   LHash := SimpleHash(AName);
   LPos := LHash and FMask;
-  while True do
+  LSteps := 0;
+  while LSteps <= FMask do
   begin
     if FNames[LPos] = '' then
       Exit(LPos); { 空槽位，未找到 }
     if FNames[LPos] = AName then
       Exit(LPos); { 找到 }
     LPos := (LPos + 1) and FMask;
+    Inc(LSteps);
   end;
+  { 不应到达：Grow 保证 50% 负载因子，始终有空槽 }
+  Result := LPos;
 end;
 
 procedure TAllocatorRegistry.Grow;
@@ -275,5 +293,12 @@ begin
     FLock.Release;
   end;
 end;
+
+initialization
+  GInstanceLock.Init;
+
+finalization
+  TAllocatorRegistry.ReleaseInstance;
+  GInstanceLock.Done;
 
 end.

@@ -64,7 +64,11 @@ uses
   nextpas.core.mem.pool,
   nextpas.core.mem.pool.allocator,
   nextpas.core.mem.span,
-  nextpas.core.mem.central;
+  nextpas.core.mem.central,
+  nextpas.core.mem.stats,
+  nextpas.core.mem.oom,
+  nextpas.core.mem.registry,
+  nextpas.core.mem.allocator.compact;
 
 type
   // === 基础类型 ===
@@ -141,6 +145,22 @@ type
   TMemoryMap = nextpas.core.mem.memory_map.TMemoryMap;
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
   TMappedSlabAllocator = nextpas.core.mem.mapped_slab_pool.TMappedSlabAllocator;
+
+  // === 统计/监控 ===
+  TAllocSnapshot = nextpas.core.mem.stats.TAllocSnapshot;
+  TAllocStatsCollector = nextpas.core.mem.stats.TAllocStatsCollector;
+  TAllocStatsAllocator = nextpas.core.mem.stats.TAllocStatsAllocator;
+
+  // === OOM 处理 ===
+  TOomEvent = nextpas.core.mem.oom.TOomEvent;
+  TOomHandler = nextpas.core.mem.oom.TOomHandler;
+
+  // === 注册表 ===
+  TAllocatorRegistry = nextpas.core.mem.registry.TAllocatorRegistry;
+
+  // === 碎片整理 ===
+  TCompactAllocator = nextpas.core.mem.allocator.compact.TCompactAllocator;
+  TCompactStats = nextpas.core.mem.allocator.compact.TCompactStats;
 
 function DefaultAllocator: IAllocator; inline;
 

@@ -43,6 +43,7 @@ type
    *  实现者可覆盖以提供 O(1) 批量操作（而非 N 次单体操作）。
    *
    *  @note 默认实现回退到循环调用 IAllocator.GetMem/FreeMem。
+   *  @deprecated 2026-07: 零实现者，待移除。批量优化由 pool/blockpool 子系统承担。
    *}
   IBatchAllocator = interface
     ['{A7F3D2E1-5B8C-4D6E-9F0A-1C2D3E4F5A6B}']
