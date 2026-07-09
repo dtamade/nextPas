@@ -71,7 +71,12 @@ uses
   nextpas.core.lockfree.trie_map,
   nextpas.core.lockfree.skiplist_map,
   nextpas.core.lockfree.ttl_cache,
-  nextpas.core.lockfree.timeseries_ringbuffer;
+  nextpas.core.lockfree.timeseries_ringbuffer,
+  nextpas.core.lockfree.dag,
+  nextpas.core.lockfree.merkle_tree,
+  nextpas.core.lockfree.crdt,
+  nextpas.core.lockfree.actor,
+  nextpas.core.lockfree.rope;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -560,6 +565,49 @@ type
   }
   TTimeSeriesRingBuffer = nextpas.core.lockfree.timeseries_ringbuffer.TTimeSeriesRingBuffer;
   TTSRingResult = nextpas.core.lockfree.timeseries_ringbuffer.TTSRingResult;
+
+  {** @desc Concurrent DAG — 有向无环图
+    @details 拓扑排序、环检测、路径查找。每节点自旋锁保证并发安全。
+    @see TConcurrentDAG 详细文档和示例
+  }
+  TConcurrentDAG = nextpas.core.lockfree.dag.TConcurrentDAG;
+  TDagResult = nextpas.core.lockfree.dag.TDagResult;
+  TDagTopoCallback = nextpas.core.lockfree.dag.TDagTopoCallback;
+
+  {** @desc Merkle Tree — 哈希树
+    @details FNV-1a 哈希，数据完整性验证。
+    @see TMerkleTree 详细文档和示例
+  }
+  TMerkleTree = nextpas.core.lockfree.merkle_tree.TMerkleTree;
+  TMerkleResult = nextpas.core.lockfree.merkle_tree.TMerkleResult;
+
+  {** @desc CRDT — 冲突自由复制数据类型
+    @details G-Counter, PN-Counter, LWW-Register, OR-Set。
+    @see TGCounter/TPNCounter/TLWWRegister/TORSet 详细文档和示例
+  }
+  TGCounter = nextpas.core.lockfree.crdt.TGCounter;
+  TPNCounter = nextpas.core.lockfree.crdt.TPNCounter;
+  TLWWRegister = nextpas.core.lockfree.crdt.TLWWRegister;
+  TORSet = nextpas.core.lockfree.crdt.TORSet;
+  TCRDTResult = nextpas.core.lockfree.crdt.TCRDTResult;
+
+  {** @desc Actor — 消息驱动并发模型
+    @details 每个 Actor 有独立邮箱，按顺序处理消息。
+    @see TActor/TActorSystem 详细文档和示例
+  }
+  TActor = nextpas.core.lockfree.actor.TActor;
+  TActorSystem = nextpas.core.lockfree.actor.TActorSystem;
+  TActorResult = nextpas.core.lockfree.actor.TActorResult;
+  TActorMessage = nextpas.core.lockfree.actor.TActorMessage;
+  TActorHandler = nextpas.core.lockfree.actor.TActorHandler;
+
+  {** @desc Rope — 大字符串数据结构
+    @details 二叉树结构，O(log n) 拼接/切片/插入/删除。
+    @see TRope 详细文档和示例
+  }
+  TRope = nextpas.core.lockfree.rope.TRope;
+  TRopeResult = nextpas.core.lockfree.rope.TRopeResult;
+  TRopeForEachCallback = nextpas.core.lockfree.rope.TRopeForEachCallback;
 
 implementation
 
