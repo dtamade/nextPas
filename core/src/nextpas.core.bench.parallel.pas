@@ -87,7 +87,7 @@ implementation
 
 uses
   nextpas.core.platform.time,
-  SysUtils; { F-02: for Exception class in thread error handling }
+  nextpas.core.exception;
 
 
 

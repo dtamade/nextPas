@@ -14,7 +14,6 @@ unit nextpas.core.bench;
 interface
 
 uses
-  SysUtils,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
