@@ -45,7 +45,8 @@ uses
   nextpas.core.http.server,
   nextpas.core.http.client,
   nextpas.core.http.stream,
-  nextpas.core.http.sse;
+  nextpas.core.http.sse,
+  nextpas.core.http.cookie;
 
 type
   { Re-export base types }
@@ -106,6 +107,11 @@ type
   { Re-export SSE types }
   TSSEvent = nextpas.core.http.sse.TSSEvent;
   ISSEEventWriter = nextpas.core.http.sse.ISSEEventWriter;
+
+  { Re-export cookie types }
+  TSameSite = nextpas.core.http.cookie.TSameSite;
+  TRequestCookies = nextpas.core.http.cookie.TRequestCookies;
+  TSetCookie = nextpas.core.http.cookie.TSetCookie;
 
   { Re-export server/client types }
   THttpServer = nextpas.core.http.server.THttpServer;
@@ -505,6 +511,21 @@ function HttpWriteStream(const AW: IHttpResponseWriter;
 function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
   const AContentLength: Int64; const AReader: IReader;
   const ABufSize: SizeUInt = 32768): Int64; inline;
+
+{ Streaming request body }
+type
+  TChunkCallback = nextpas.core.http.stream.TChunkCallback;
+
+function HttpRequestReadChunks(const ABody: IReader;
+  const ABufSize: SizeUInt; const AOnChunk: TChunkCallback): Int64; inline;
+function HttpRequestReadBody(const ABody: IReader;
+  const AMaxBytes: Int64; const ABufSize: SizeUInt = 32768): TBytes; inline;
+
+{ Cookie helpers }
+function ParseCookies(const AHeaderValue: string): TRequestCookies; inline;
+function BuildSetCookie(const ACookie: TSetCookie): string; inline;
+function MakeCookie(const AName, AValue: string): TSetCookie; inline;
+function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -1339,6 +1360,40 @@ function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
 begin
   Result := nextpas.core.http.stream.HttpWriteStreamWithLength(
     AW, AContentLength, AReader, ABufSize);
+end;
+
+function HttpRequestReadChunks(const ABody: IReader;
+  const ABufSize: SizeUInt; const AOnChunk: TChunkCallback): Int64;
+begin
+  Result := nextpas.core.http.stream.HttpRequestReadChunks(
+    ABody, ABufSize, AOnChunk);
+end;
+
+function HttpRequestReadBody(const ABody: IReader;
+  const AMaxBytes: Int64; const ABufSize: SizeUInt): TBytes;
+begin
+  Result := nextpas.core.http.stream.HttpRequestReadBody(
+    ABody, AMaxBytes, ABufSize);
+end;
+
+function ParseCookies(const AHeaderValue: string): TRequestCookies;
+begin
+  Result := nextpas.core.http.cookie.ParseCookies(AHeaderValue);
+end;
+
+function BuildSetCookie(const ACookie: TSetCookie): string;
+begin
+  Result := nextpas.core.http.cookie.BuildSetCookie(ACookie);
+end;
+
+function MakeCookie(const AName, AValue: string): TSetCookie;
+begin
+  Result := nextpas.core.http.cookie.MakeCookie(AName, AValue);
+end;
+
+function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean;
+begin
+  Result := nextpas.core.http.cookie.ParseSingleCookie(AStr, AName, AValue);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
