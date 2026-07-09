@@ -8,6 +8,34 @@ uses
   nextpas.core.exception;
 
 { Portable platform error codes — canonical definitions
+{*
+ * Error code mapping table:
+ *   PLATFORM_ERR_* constants mirror Linux errno numbers for the focused-runtime
+ *   host. Non-Linux platforms translate native errors via platform_get_errno.
+ *
+ *   POSIX errno mapping (ESysE* constants from platform .errno.inc):
+ *     ESysENOENT  → PLATFORM_ERR_NOENT        (2)
+ *     ESysEPERM   → PLATFORM_ERR_PERM         (1)
+ *     ESysEACCES  → PLATFORM_ERR_PERM         (1)
+ *     ESysEEXIST  → PLATFORM_ERR_EXIST        (17)
+ *     ESysEAGAIN  → PLATFORM_ERR_AGAIN        (11)
+ *     ESysEBUSY   → PLATFORM_ERR_BUSY         (16)
+ *     ESysEINVAL  → PLATFORM_ERR_INVALID      (22)
+ *     ESysENOMEM  → PLATFORM_ERR_NOMEM        (12)
+ *     ESysENOSPC  → PLATFORM_ERR_NOSPC        (28)
+ *     ESysEIO     → ecIO
+ *     ESysEPIPE   → ecIO
+ *     ESysEINTR   → ecInterrupted
+ *     ESysETIMEDOUT → PLATFORM_ERR_TIMEDOUT   (110)
+ *     ESysEOPNOTSUPP → PLATFORM_ERR_UNSUPPORTED (95)
+ *
+ *   Windows ERROR_* mapping:
+ *     ERROR_FILE_NOT_FOUND → ecNotFound
+ *     ERROR_ACCESS_DENIED  → ecPermission
+ *     ERROR_DISK_FULL      → ecResourceExhausted
+ *     ERROR_TIMEOUT        → ecTimeout
+ *     WSAETIMEDOUT         → ecTimeout
+ *}
   Values match Linux errno numbers for the focused-runtime host.
   Non-Linux platforms translate via platform_get_errno. }
 const
@@ -56,7 +84,7 @@ procedure platform_fatal(const AMsg: PAnsiChar);
 
 {** @desc 输出致命错误消息和错误码并终止进程
     @param AMsg 错误消息字符串
-    @param ACode 错误码；传给 Halt 时会按低 8 位截断，负数同样映射到 0..255 *}
+    @param ACode 错误码；Halt 只接收 8-bit 退出码，此处显式做 ACode mod 256 截断 *}
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
@@ -331,6 +359,7 @@ begin
     WSAENOTCONN:
       Result := ecNetwork;
     ERROR_NOT_ENOUGH_MEMORY,
+    ERROR_DISK_FULL,
     ERROR_OUTOFMEMORY,
     WSAENOBUFS:
       Result := ecResourceExhausted;

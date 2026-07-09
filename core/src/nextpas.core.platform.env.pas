@@ -53,6 +53,11 @@ function platform_env_names_case_sensitive: Boolean;
     @param AName 变量名
     @return 变量值；不存在和值为空时都返回空字符串，调用方如需区分请先调用 platform_env_exists *}
 function platform_env_get_str(const AName: AnsiString): AnsiString;
+{** @desc 获取环境变量值（字符串便捷版）
+    @param AName 变量名
+    @return 变量值；不存在和值为空时都返回空字符串。
+    @note 调用方如需区分变量不存在和值为空，请先调用 platform_env_exists。
+         platform_env_get 通过返回 PLATFORM_ERR_NOENT 可区分这两种情况。 *}
 
 implementation
 
@@ -300,6 +305,11 @@ begin
 end;
 
 function platform_env_get_str(const AName: AnsiString): AnsiString;
+{** @desc 获取环境变量值（字符串便捷版）
+    @param AName 变量名
+    @return 变量值；不存在和值为空时都返回空字符串。
+    @note 调用方如需区分变量不存在和值为空，请先调用 platform_env_exists。
+         platform_env_get 通过返回 PLATFORM_ERR_NOENT 可区分这两种情况。 *}
 var
   LBuf: array[0..4095] of AnsiChar;
   LLen: Int32;

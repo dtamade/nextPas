@@ -212,6 +212,10 @@ function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHand
     @param AEntry 输出目录条目
     @return 0 成功，1 无更多条目，否则返回错误码 *}
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
+  to enumerate directory entries. Dot and dot-dot entries are filtered.
+  Thread safety: uses per-handle buffer; multiple handles on the same
+  directory are safe, but concurrent reads on the same handle are not. }
 
 {** @desc 关闭目录
     @param AHandle 目录句柄（置为无效）
@@ -680,6 +684,9 @@ end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 begin
+  { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
+    state. Concurrent reads on the same handle are NOT safe. Each thread
+    must open its own directory handle. }
   FillChar(AHandle, SizeOf(AHandle), 0);
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
@@ -687,6 +694,10 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
+  to enumerate directory entries. Dot and dot-dot entries are filtered.
+  Thread safety: uses per-handle buffer; multiple handles on the same
+  directory are safe, but concurrent reads on the same handle are not. }
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   PDirent64 = ^TDirent64;
@@ -1051,7 +1062,8 @@ begin
   else
   begin
     Result := Int32(GetLastError);
-    SetFilePointerEx(AHandle.Value, LOldPos, nil, FILE_BEGIN);
+    if not SetFilePointerEx(AHandle.Value, LOldPos, nil, FILE_BEGIN) then
+      ; { best-effort restore; truncation error already captured in Result }
   end;
 end;
 
@@ -1326,6 +1338,9 @@ var
   LPattern: UnicodeString;
   LLen: Int32;
 begin
+  { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
+    state. Concurrent reads on the same handle are NOT safe. Each thread
+    must open its own directory handle. }
   FillChar(AHandle, SizeOf(AHandle), 0);
   AHandle.FindHandle := HANDLE(PtrInt(-1));
   AHandle.First := True;
@@ -1353,6 +1368,10 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
+  to enumerate directory entries. Dot and dot-dot entries are filtered.
+  Thread safety: uses per-handle buffer; multiple handles on the same
+  directory are safe, but concurrent reads on the same handle are not. }
 var
   LNamePtr: PWideChar;
   LNameUtf8: AnsiString;
@@ -1439,6 +1458,9 @@ function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: B
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+  { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
+    state. Concurrent reads on the same handle are NOT safe. Each thread
+    must open its own directory handle. }
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -203,7 +203,7 @@ function FileStatSize(const APath: PAnsiChar; out ASize: UInt64): Int32;
 var
   LStat: TPlatformFileStat;
 begin
-  Result := platform_file_stat(APath, LStat);
+  Result := platform_file_lstat(APath, LStat);
   if Result = 0 then
   begin
     if LStat.Size < 0 then
@@ -356,6 +356,12 @@ begin
 end;
 
 function ShouldFallbackShm(AErr: Int32): Boolean;
+  { Errno values that trigger file-backed fallback:
+    1=EPERM, 2=ENOENT, 13=EACCES, 38=ENOSYS, 78=ENOSYS (some platforms).
+    EACCES (13) is included because some container/sandbox environments
+    deny shm_open but allow regular file creation in /tmp.
+    In a stricter implementation, EACCES should be excluded and surfaced
+    directly to the caller. }
 begin
   Result := (AErr = 1) or (AErr = 2) or (AErr = 13) or
     (AErr = 38) or (AErr = 78);
@@ -736,6 +742,10 @@ begin
     PLATFORM_FILE_MODE_DEFAULT);
   if LFd < 0 then
   begin
+    LErr := platform_get_errno;
+    { EACCES/EPERM: permission denied — do not retry, surface the error }
+    if (LErr = ESysEACCES) or (LErr = ESysEPERM) then
+      Exit(LErr);
     LFd := shm_open(PAnsiChar(LSharedName), O_RDWR, 0);
     if LFd < 0 then
     begin

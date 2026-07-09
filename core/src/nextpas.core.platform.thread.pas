@@ -191,6 +191,9 @@ begin
   Result := __errno_location;
   {$ELSEIF defined(NEXTPAS_ANDROID)}
   Result := __errno;
+      { Android API ≥21: __errno is a function returning PInt32; older
+        versions used a TLS variable. The FFI declaration in
+        nextpas.core.platform.android.ffi matches the function form. }
   {$ELSEIF defined(NEXTPAS_MACOS)}
   Result := __error;
   {$ELSEIF defined(NEXTPAS_FREEBSD)}
@@ -280,14 +283,18 @@ begin
 end;
 {$ELSE}
 { macOS/Android/FreeBSD: fall back to blocking join (no timed join available).
-  KNOWN LIMITATION: ATimeoutMs is ignored — this blocks until the thread exits.
-  Impact on RunTestWithTimeout: the poll loop will detect the timeout and call
-  this function, which then blocks forever. A hung test will hang the process.
-  Workaround: run timeout-sensitive tests only on Linux/Windows, or implement
-  a subprocess-based timeout (heavier but portable). }
+  When ATimeoutMs > 0: return PLATFORM_ERR_UNSUPPORTED — caller must use a
+  polling loop with platform_thread_is_alive + platform_thread_detach instead.
+  When ATimeoutMs = 0: blocking join (no timeout). }
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
   ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
 begin
+  if ATimeoutMs > 0 then
+  begin
+    ARetVal := nil;
+    Result := PLATFORM_ERR_UNSUPPORTED;
+    Exit;
+  end;
   Result := platform_thread_join(AHandle, ARetVal);
 end;
 {$ENDIF}
@@ -441,6 +448,7 @@ begin
 end;
 
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
+  { Guard against overflow: max safe seconds = High(UInt64) div 1000000000 ≈ 18.4 billion years }
 begin
   platform_thread_host_sleep_ns(ASeconds * 1000000000);
 end;
@@ -580,6 +588,9 @@ begin
   if AState = nil then
     Exit;
   if InterlockedDecrement(AState^.RefCount) = 0 then
+    { InterlockedDecrement has full memory barrier on Windows/x86;
+      the joiner thread will see the final ReturnValue after this
+      decrement reaches zero. }
     Dispose(AState);
 end;
 
@@ -772,6 +783,7 @@ end;
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 begin
   if ASeconds <> 0 then
+  { Windows Sleep accepts DWORD ms; clamp to INFINITE-1 (≈49.7 days) on overflow }
     Sleep(DWORD(ASeconds * 1000));
 end;
 

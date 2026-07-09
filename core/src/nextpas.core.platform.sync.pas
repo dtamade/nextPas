@@ -278,7 +278,7 @@ end;
 
 {$IFDEF NEXTPAS_UNIX}
 const
-  POSIX_WAIT_BUCKET_COUNT = 64;
+  POSIX_WAIT_BUCKET_COUNT = 256;
   POSIX_WAIT_BUCKET_INIT_SPIN_LIMIT = 1000000;
 
 type
@@ -505,7 +505,9 @@ end;
 
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
 begin
-  Result := (PtrUInt(AAddr) shr 2) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
+  { Multiply by golden ratio to spread address bits more evenly across buckets,
+    reducing thundering-herd risk when callers allocate adjacent addresses. }
+  Result := (PtrUInt(AAddr) * PtrUInt($9E3779B9)) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
 end;
 
 function platform_posix_wait_address_released(
@@ -744,7 +746,12 @@ begin
   if ATimeoutNs = 0 then
     Exit(PLATFORM_ERR_TIMEOUT);
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -831,7 +838,12 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -858,7 +870,12 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -879,7 +896,8 @@ end;
 
 function platform_posix_bucket_index64(AAddr: PInt64): PtrUInt; inline;
 begin
-  Result := (PtrUInt(AAddr) shr 3) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
+  { Same golden-ratio hash for 64-bit addresses. }
+  Result := (PtrUInt(AAddr) * PtrUInt($9E3779B9)) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
 end;
 
 function platform_posix_wait_address_released64(
@@ -912,7 +930,12 @@ begin
   if ATimeoutNs = 0 then
     Exit(PLATFORM_ERR_TIMEOUT);
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -999,7 +1022,12 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -1026,7 +1054,12 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := platform_posix_ensure_wait_buckets;
+  repeat
+    Result := platform_posix_ensure_wait_buckets;
+    if Result <> PLATFORM_ERR_BUSY then
+      Break;
+    platform_sync_host_pthread_yield;
+  until False;
   if Result <> 0 then
     Exit;
 
@@ -1749,6 +1782,8 @@ begin
       ABarrier.Waiting := 0;
       Inc(ABarrier.Generation);
       Result := platform_condvar_broadcast(ABarrier.CondVar);
+      { If broadcast fails, waiting threads may hang. Propagate the error;
+        the caller should treat this as a barrier failure. }
     end
     else
     begin

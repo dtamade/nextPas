@@ -200,6 +200,9 @@ begin
 end;
 
 function IsAsciiDriveLetter(C: AnsiChar): Boolean; inline;
+  { On non-Windows platforms this function is dead code (always returns False).
+    The compiler will optimize it away. Conditional compilation of callers
+    would be a larger refactor; not warranted for this P2 issue. }
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z'));
@@ -496,6 +499,9 @@ begin
   begin
     if (ABuf = nil) or (ABufSize <= 0) then
       Exit(LTotal);
+  { Large-path branch: duplicates small-path logic inline because stack
+    buffer (1024 bytes) is insufficient. A future refactor could unify
+    by allocating a heap buffer of LTotal bytes. }
     { Copy base prefix }
     LPos := LBaseLen;
     if LPos >= ABufSize then LPos := ABufSize - 1;
@@ -998,6 +1004,9 @@ begin
     AppendTargetPart(LTargetParts[LPartIndex]);
   end;
   LRel[LPos] := #0;
+  { Result is constructed from normalized components; no redundant
+    separators or dot segments should appear. If edge cases are found,
+    run the result through platform_path_normalize as a post-pass. }
   Result := CopyToBuf(@LRel[0], LRequired, ABuf, ABufSize);
 end;
 
