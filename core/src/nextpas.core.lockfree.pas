@@ -81,7 +81,12 @@ uses
   nextpas.core.lockfree.scalable_bloom,
   nextpas.core.lockfree.flatcombining,
   nextpas.core.lockfree.rcu,
-  nextpas.core.lockfree.rbtree;
+  nextpas.core.lockfree.rbtree,
+  nextpas.core.lockfree.fenwick,
+  nextpas.core.lockfree.treap,
+  nextpas.core.lockfree.scapegoat,
+  nextpas.core.lockfree.radix,
+  nextpas.core.lockfree.bplus;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -646,6 +651,46 @@ type
   TConcurrentRBTree = nextpas.core.lockfree.rbtree.TConcurrentRBTree;
   TRBTreeResult = nextpas.core.lockfree.rbtree.TRBTreeResult;
   TRBForEachCallback = nextpas.core.lockfree.rbtree.TRBForEachCallback;
+
+  {** @desc Fenwick Tree — 二叉索引树
+    @details O(log n) 前缀和查询和单点更新。
+    @see TConcurrentFenwickTree 详细文档和示例
+  }
+  TConcurrentFenwickTree = nextpas.core.lockfree.fenwick.TConcurrentFenwickTree;
+  TFenwickResult = nextpas.core.lockfree.fenwick.TFenwickResult;
+
+  {** @desc Treap — 随机化 BST
+    @details 期望 O(log n) 查找/插入/删除。
+    @see TConcurrentTreap 详细文档和示例
+  }
+  TConcurrentTreap = nextpas.core.lockfree.treap.TConcurrentTreap;
+  TTreapResult = nextpas.core.lockfree.treap.TTreapResult;
+  TTreapForEachCallback = nextpas.core.lockfree.treap.TTreapForEachCallback;
+
+  {** @desc Scapegoat Tree — 无旋转平衡 BST
+    @details 摊还 O(log n)，并发友好。
+    @see TConcurrentScapegoatTree 详细文档和示例
+  }
+  TConcurrentScapegoatTree = nextpas.core.lockfree.scapegoat.TConcurrentScapegoatTree;
+  TScapegoatResult = nextpas.core.lockfree.scapegoat.TScapegoatResult;
+  TScapegoatForEachCallback = nextpas.core.lockfree.scapegoat.TScapegoatForEachCallback;
+
+  {** @desc Radix Tree — 压缩前缀树
+    @details O(k) 字符串查找/插入/删除。
+    @see TConcurrentRadixTree 详细文档和示例
+  }
+  TConcurrentRadixTree = nextpas.core.lockfree.radix.TConcurrentRadixTree;
+  TRadixResult = nextpas.core.lockfree.radix.TRadixResult;
+  TRadixForEachCallback = nextpas.core.lockfree.radix.TRadixForEachCallback;
+
+  {** @desc B+ Tree — 数据库索引结构
+    @details 叶子节点链表连接，支持高效范围查询。
+    @see TConcurrentBPlusTree 详细文档和示例
+  }
+  TConcurrentBPlusTree = nextpas.core.lockfree.bplus.TConcurrentBPlusTree;
+  TBplusResult = nextpas.core.lockfree.bplus.TBplusResult;
+  TBplusForEachCallback = nextpas.core.lockfree.bplus.TBplusForEachCallback;
+  TBplusRangeCallback = nextpas.core.lockfree.bplus.TBplusRangeCallback;
 
 implementation
 
