@@ -83,9 +83,6 @@ const
 
 implementation
 
-uses
-  nextpas.core.text.conv;
-
 function SizeClassIndex(ASize: SizeUInt): Integer;
 begin
   if ASize <= 8 then Exit(0);
@@ -142,6 +139,8 @@ var
   LCount: SizeUInt;
   LPtr: PPointer;
   I: SizeUInt;
+  LSlotSizeStr: string;
+  LCountStr: string;
 begin
   LSlotSize := FSlotSizes[AClass];
   { 每页能容纳的 slot 数 (至少 1) }
@@ -151,9 +150,13 @@ begin
 
   LPage := GetMem(LSlotSize * LCount);
   if LPage = nil then
+  begin
+    Str(LSlotSize, LSlotSizeStr);
+    Str(LCount, LCountStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
       'TSizeClassPool.AllocatePage: out of memory (slot_size=' +
-      IntToStr(Int64(LSlotSize)) + ', count=' + IntToStr(Int64(LCount)) + ')');
+      LSlotSizeStr + ', count=' + LCountStr + ')');
+  end;
 
   { 记录页 }
   if FPageCounts[AClass] >= Length(FPages[AClass]) then
@@ -181,11 +184,15 @@ end;
 function TSizeClassPool.ClassIndexForSize(ASize: SizeUInt): TSizeClassIndex;
 var
   LIdx: Integer;
+  LASizeStr: string;
 begin
   LIdx := SizeClassIndex(ASize);
   if LIdx < 0 then
+  begin
+    Str(ASize, LASizeStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TSizeClassPool.ClassIndexForSize: size ' + IntToStr(Int64(ASize)) + ' exceeds max size class (512)');
+      'TSizeClassPool.ClassIndexForSize: size ' + LASizeStr + ' exceeds max size class (512)');
+  end;
   Result := TSizeClassIndex(LIdx);
 end;
 

@@ -70,8 +70,7 @@ type
 implementation
 
 uses
-  nextpas.core.mem.error,
-  nextpas.core.text.conv;
+  nextpas.core.mem.error;
 
 const
   HEADER_SIZE = 128;
@@ -420,6 +419,8 @@ var
   LBlockStride: UInt32;
   LPage: PMappedSlabPage;
   LBlock: PMappedSlabBlockHeader;
+  LPageIndexStr: string;
+  LTotalPagesStr: string;
 begin
   if aPtr = nil then Exit;
   if not IsValid then
@@ -433,8 +434,12 @@ begin
   LBlockOffset := LPayloadOffset - SizeOf(TMappedSlabBlockHeader);
   LPageIndex := LBlockOffset div FPageSize;
   if LPageIndex >= LHeader^.TotalPages then
+  begin
+    Str(LPageIndex, LPageIndexStr);
+    Str(LHeader^.TotalPages, LTotalPagesStr);
     raise EAllocError.Create(aeInvalidPointer,
-      'TMappedSlabAllocator.FreeBlock: page index out of range (' + IntToStr(LPageIndex) + '/' + IntToStr(LHeader^.TotalPages) + ')');
+      'TMappedSlabAllocator.FreeBlock: page index out of range (' + LPageIndexStr + '/' + LTotalPagesStr + ')');
+  end;
 
   LPage := PMappedSlabPage(GetPageDescriptor(LPageIndex));
   if (LPage^.BlockSize = 0) or (LPage^.Generation <> LHeader^.ResetGeneration) then

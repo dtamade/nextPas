@@ -12,7 +12,7 @@ mem 模块有三套命名体系，分别服务于不同语义场景：
 | 体系 | 方法签名 | 适用场景 | 接口/类型 |
 |------|----------|----------|-----------|
 | **Alloc/Free** | `Alloc(ASize): Pointer` | Arena 线性分配（只前进，Reset 释放全部） | `IArena`, `TLocalArena`, `TChunkedArena` |
-| **GetMem/FreeMem** | `GetMem(ASize): Pointer` | 通用分配器（单独释放每块） | `IAllocator`, `TAllocator`, `TSlabPool` |
+| **GetMem/FreeMem** | `GetMem(ASize): Pointer` | 通用分配器（单独释放每块） | `IAllocator`, `TSlabPool` |
 | **Acquire/Release** | `Acquire(out APtr): Boolean` | 固定大小池（O(1) 分配/释放） | `IPool`, `IBlockPool`, `TLocalBlockPool` |
 
 ## 选择决策树

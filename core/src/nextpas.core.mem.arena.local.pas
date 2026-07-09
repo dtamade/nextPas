@@ -64,8 +64,7 @@ type
 implementation
 
 uses
-  nextpas.core.mem.stack_guard,
-  nextpas.core.text.conv;
+  nextpas.core.mem.stack_guard;
 
 { TLocalArena }
 
@@ -75,6 +74,8 @@ begin
 end;
 
 constructor TLocalArena.Create(const ACapacity: SizeUInt; const AAllocator: IAllocator);
+var
+  LCapStr: string;
 begin
   inherited Create;
   FAllocator := ResolveAllocator(AAllocator);
@@ -82,8 +83,11 @@ begin
   begin
     FBacking := FAllocator.GetMem(ACapacity);
     if FBacking = nil then
+    begin
+      Str(ACapacity, LCapStr);
       raise EOutOfMemory.Create(aeOutOfMemory,
-        'TLocalArena.Create: out of memory (requested ' + IntToStr(Int64(ACapacity)) + ' bytes)');
+        'TLocalArena.Create: out of memory (requested ' + LCapStr + ' bytes)');
+    end;
   end
   else
     FBacking := nil;

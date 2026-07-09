@@ -80,9 +80,6 @@ function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
 
-uses
-  nextpas.core.text.conv;
-
 type
   PFreeNode = ^TFreeNode;
   TFreeNode = record
@@ -136,6 +133,9 @@ var
   LNode: PFreeNode;
   LTotalSize: SizeUInt;
   LBitWords: SizeUInt;
+  LBlockSizeStr: string;
+  LBlockCountStr: string;
+  LTotalSizeStr: string;
 begin
   inherited Create;
   LActualBlockSize := ABlockSize;
@@ -148,15 +148,22 @@ begin
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
+  begin
+    Str(LActualBlockSize, LBlockSizeStr);
+    Str(ABlockCount, LBlockCountStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TLocalBlockPool.Create: size overflow (block_size=' + IntToStr(Int64(LActualBlockSize)) + ', count=' + IntToStr(Int64(ABlockCount)) + ')');
+      'TLocalBlockPool.Create: size overflow (block_size=' + LBlockSizeStr + ', count=' + LBlockCountStr + ')');
+  end;
   if FAllocator <> nil then
     FBacking := FAllocator.GetMem(LTotalSize)
   else
     FBacking := GetMem(LTotalSize);
   if FBacking = nil then
+  begin
+    Str(LTotalSize, LTotalSizeStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TLocalBlockPool.Create: out of memory (requested ' + IntToStr(Int64(LTotalSize)) + ' bytes)');
+      'TLocalBlockPool.Create: out of memory (requested ' + LTotalSizeStr + ' bytes)');
+  end;
   ZeroMem(FBacking, LTotalSize);
 
   { 初始化位图：所有块标记为 free（位=1） }

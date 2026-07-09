@@ -32,7 +32,7 @@
 **目标**: Arena 内碎片整理，压缩活跃分配减少内存占用。
 
 ```pascal
-TCompactAllocator = class(TAllocator)
+TCompactAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator; AThreshold: Double = 0.3);
   function FragmentationRatio: Double;
   function Compact: SizeUInt;  // 返回释放的字节数
@@ -56,7 +56,7 @@ end;
 **目标**: 运行时原子替换分配器，支持无缝切换。
 
 ```pascal
-THotswapAllocator = class(TAllocator)
+THotswapAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInitial: IAllocator);
   procedure Swap(ANew: IAllocator);
   function Current: IAllocator;
@@ -80,7 +80,7 @@ end;
 **目标**: 内存映射文件分配器，支持持久化数据。
 
 ```pascal
-TMappedFileAllocator = class(TAllocator)
+TMappedFileAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(const AFileName: string; ASize: UInt64;
     ACreate: Boolean = True);
   function IsMapped: Boolean;
@@ -107,7 +107,7 @@ end;
 **目标**: 采样分配器，每 N 次分配记录一次，用于性能分析。
 
 ```pascal
-TSamplingAllocator = class(TAllocator)
+TSamplingAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator; ASampleRate: UInt32 = 1000);
   function SampleCount: UInt64;
   function TotalAllocs: UInt64;

@@ -134,7 +134,7 @@ end;
 **实现**: `TSentinelAllocator` — 轻量级哨兵守卫分配器
 
 ```pascal
-TSentinelAllocator = class(TAllocator)
+TSentinelAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator; AQuarantineDepth: Integer = 256);
   function QuarantineCount: Integer;
   procedure DrainQuarantine;
@@ -169,7 +169,7 @@ end;
 // 当前问题：collections 使用 DefaultAllocator，不继承 Arena
 // 解决方案：TLocalArena 实现 IAllocator，自动传播
 
-TLocalArenaAllocator = class(TAllocator)
+TLocalArenaAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AArena: IArena);
   // IAllocator 方法委托给 IArena
 end;
@@ -183,9 +183,9 @@ end;
 ### P3-2: Scoped Allocator
 
 ```pascal
-TScopedAllocator = class(TAllocator)
+TScopedAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator);
-  destructor Destroy; override;
+  destructor Destroy;
   // 内部分配记录，析构时自动释放
 end;
 ```
@@ -247,7 +247,7 @@ end;
 **已实现**: `TNumaAllocator` — NUMA 感知分配器
 
 ```pascal
-TNumaAllocator = class(TAllocator)
+TNumaAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(ADefault: IAllocator);
   procedure SetNodeAllocator(ANode: Integer; AAlloc: IAllocator);
   function IsNuma: Boolean;
@@ -264,7 +264,7 @@ end;
 **已实现**: `TPredictionAllocator` — 分配频率跟踪器
 
 ```pascal
-TPredictionAllocator = class(TAllocator)
+TPredictionAllocator = class(TInterfacedObject, IAllocator)
   function Predict(ATopN: Integer = 8): TPredictionResult;
   procedure PreAllocate(ATopN: Integer = 4; ACountPerClass: Word = 8);
   procedure ResetStats;

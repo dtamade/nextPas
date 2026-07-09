@@ -150,8 +150,7 @@ type
 implementation
 
 uses
-  nextpas.core.mem.utils,
-  nextpas.core.text.conv;
+  nextpas.core.mem.utils;
 
 const
   FB_MAP_MIN_CAP = 32;
@@ -224,11 +223,15 @@ var
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
+  LCapStr: string;
 begin
   LOldCap := FMask + 1;
   if LOldCap > High(SizeUInt) shr 1 then
+  begin
+    Str(LOldCap, LCapStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TFallbackAllocator.MapGrow: capacity overflow (current=' + IntToStr(Int64(LOldCap)) + ')');
+      'TFallbackAllocator.MapGrow: capacity overflow (current=' + LCapStr + ')');
+  end;
   LOldKeys := FKeys;
   LOldSources := FSources;
   LOldSizes := FSizes;

@@ -431,7 +431,7 @@ function AllocCount: SizeUInt;
 
 ```pascal
 type
-  TVirtualArenaAllocator = class(TAllocator)
+  TVirtualArenaAllocator = class(TInterfacedObject, IAllocator)
   public
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     procedure Reset;

@@ -200,7 +200,7 @@ end;
 
 **问题**: `NEXTPAS_CORE_STRICT_NULL_FREE` 用 `raise EArgumentNil` 实现，但 `nextpas.core.base` 不一定可用。
 
-**修复**: 改用 `Assert(False, 'TAllocator.FreeMem: ADst must not be nil')`，消除对 base 的依赖。提交 `1e610af02`。
+**修复**: 改用 `Assert(False, 'FreeMem: ADst must not be nil')`，消除对 base 的依赖。提交 `1e610af02`。
 
 ---
 

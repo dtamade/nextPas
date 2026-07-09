@@ -40,7 +40,7 @@ THugePageStats = record
   HugePageCount: UInt64;  // 使用的大页数
 end;
 
-THugePageAllocator = class(TAllocator)
+THugePageAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator; APageSize: THugePageSize = hps2MB;
     AThreshold: SizeUInt = 2 * 1024 * 1024);
   function IsHugePage(APtr: Pointer): Boolean;
@@ -122,7 +122,7 @@ end;
 **目标**: 录制分配模式，回放用于调试和性能分析。
 
 ```pascal
-TReplayAllocator = class(TAllocator)
+TReplayAllocator = class(TInterfacedObject, IAllocator)
   constructor Create(AInner: IAllocator; AMaxRecords: SizeUInt = 1000000);
   procedure StartRecording;
   procedure StopRecording;

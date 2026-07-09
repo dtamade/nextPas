@@ -47,7 +47,7 @@ lock surface，同时把真实宿主原语继续收敛在 `platform.sync`。它�
 
 Allocator 侧：
 
-- `nextpas.core.mem.allocator.base` — `TAllocator` 抽象基类 + `IAllocator` 定义
+- `nextpas.core.mem.allocator.base` — `IAllocator` 类型别名 + `TAllocatorTraits`
 - `nextpas.core.mem.allocator.rtl` — FPC RTL GetMem/FreeMem 后端
 - `nextpas.core.mem.allocator.crt` — C runtime malloc/free 后端（条件编译）
 - `nextpas.core.mem.allocator.callback` — 回调委托后端
@@ -206,7 +206,7 @@ type
   - `MEM_POISON_FREED` ($DE): 释放后内存毒化，暴露 use-after-free
   - `MEM_POISON_ALLOC` ($AB): 新分配内存毒化，暴露未初始化读取
   - 池层 (TFixedPool, TGrowingBlockPool, TBlockPool) 在 Release/FreeMem 时毒化
-  - 分配器基类 (TAllocator) 在 GetMem 时毒化
+  - 分配器在 GetMem 时毒化（通过 `DebugPoisonAlloc` 工具函数）
 
 ## 四类 arena 的定位
 

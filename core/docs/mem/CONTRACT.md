@@ -69,19 +69,18 @@ end;
 
 ### 1.2 核心类型
 
-#### `TAllocator`（`nextpas.core.mem.allocator.base`）
+#### `IAllocator`（`nextpas.core.mem.intf`）
 
-抽象基类，实现 `IAllocator`。所有具体分配器的基类。
+接口定义，所有具体分配器实现此接口。
 
 **公开方法**：
-- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 基类处理 nil/0 守卫后委托给 Do*
-- `Traits` — 返回默认特征
+- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 分配器直接实现
+- `Traits` — 返回分配器特征
 
-**Do* 模板方法**（子类 override）：
-- `DoGetMem(ASize)` — 抽象，必须实现
-- `DoAllocMem(ASize)` — 抽象，必须实现
-- `DoReallocMem(APtr, ASize)` — 抽象，必须实现
-- `DoFreeMem(APtr)` — 抽象，必须实现
+**实现模式**：
+- 所有分配器继承 `TInterfacedObject` 并实现 `IAllocator`
+- 热路径方法标记 `inline`，直接调用时零开销
+- 通过接口调用时走 vtable（2 次间接跳转）
 
 #### `TAllocatorTraits`（`nextpas.core.mem.intf`）
 
@@ -138,8 +137,8 @@ constructor EOutOfMemory.CreateMsg(const aMsg: string);
 
 - **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetRtlAllocator fallback 保证）
 - **[INV-2]** 对齐参数必须是 2 的幂（`IsPowerOfTwo` 验证）
-- **[INV-3]** `TAllocator` 子类的 `DoGetMem` 返回 nil 表示 OOM（不抛异常）
-- **[INV-4]** `TAllocator` 子类的 `DoFreeMem(nil)` 必须安全（基类保证 nil 不传入）
+- **[INV-3]** `IAllocator` 实现的 `GetMem` 返回 nil 表示 OOM（不抛异常）
+- **[INV-4]** `IAllocator` 实现的 `FreeMem(nil)` 必须安全（调用方保证 nil 不传入）
 
 ### Arena 不变量
 
@@ -245,7 +244,7 @@ Exception
 ### 5.1 所有权模型
 
 ```
-分配器（TAllocator 子类）
+分配器（IAllocator 实现）
   ├── 拥有：内部 buffer、pool、segment
   ├── 调用方拥有：GetMem/AllocMem 返回的内存块
   └── 调用方负责：FreeMem 释放
@@ -259,7 +258,7 @@ Arena（IArena 实现）
 ### 5.2 生命周期
 
 ```
-TAllocator 子类：
+IAllocator 实现：
   Create → [GetMem/FreeMem 循环] → Destroy
     └── FAllocator 通过内联 nil→GetRtlAllocator fallback 绑定，生命周期跟随调用方
 
