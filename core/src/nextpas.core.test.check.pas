@@ -929,7 +929,7 @@ procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
   const AMessage: string);
 begin
   if Length(ANeedle) = 0 then
-    Exit;
+    FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) empty string');
   if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) > 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
 end;
