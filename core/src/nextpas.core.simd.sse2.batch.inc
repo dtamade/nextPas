@@ -1,6 +1,6 @@
 // ============================================================================
 // SSE2 Batch Array Operations
-// 策略: 主循环 2x 展开 (每次 8 个 float)，标量尾部处理剩余元素
+// 策略: 主循环 8x 展开 (每次 32 个 float)，预取优化，标量尾部处理剩余元素
 // ============================================================================
 
 procedure SSE2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -19,10 +19,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     addps xmm0, [rdx]
     movups [rcx], xmm0
@@ -39,8 +94,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -101,10 +154,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    mulps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    mulps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    mulps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    mulps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    mulps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    mulps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     mulps xmm0, [rdx]
     movups [rcx], xmm0
@@ -121,8 +229,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -802,10 +908,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    subps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    subps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    subps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    subps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    subps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    subps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     subps xmm0, [rdx]
     movups [rcx], xmm0
@@ -822,8 +983,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -884,10 +1043,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    divps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    divps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    divps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    divps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    divps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    divps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    divps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     divps xmm0, [rdx]
     movups [rcx], xmm0
@@ -904,8 +1118,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
