@@ -1032,9 +1032,14 @@ begin
         if LRunResult.Results[J].Status = tsError then
           Inc(LSuiteErrors);
 
+      { Guard against negative: when runner sets Failed=0 but has tsError results }
+      if LRunResult.Failed > LSuiteErrors then
+        LRunResult.Failed := LRunResult.Failed - LSuiteErrors
+      else
+        LRunResult.Failed := 0;
       LSb.AppendStr('  <testsuite name="' + XmlEscape(LSuiteName) +
         '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
-        '" failures="' + IntToStr(LRunResult.Failed - LSuiteErrors) +
+        '" failures="' + IntToStr(LRunResult.Failed) +
         '" errors="' + IntToStr(LSuiteErrors) +
         '" skipped="' + IntToStr(LRunResult.Skipped) + '">' + LineEnding);
 

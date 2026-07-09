@@ -1429,6 +1429,13 @@ begin
   try
     if Assigned(Setup) then Setup else SetupClosure();
   except
+    on E: ETestSkipped do
+    begin
+      { Intentional skip from setup — mark all tests as skipped, not failed }
+      ASkipCount := Length(Tests);
+      AErrorMsg := E.Message;
+      Result := True; { not an error, just a skip }
+    end;
     on E: Exception do
     begin
       ResolveErrSink(AConfig).WriteLn(
@@ -2002,6 +2009,7 @@ begin
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
+  TotalDuration := 0;
   SetLength(AResults, Length(Suites));
 
   for LIter := 1 to LRepeatAll do

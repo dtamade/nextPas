@@ -61,7 +61,8 @@ procedure CheckContains(const AHaystack, ANeedle: string;
 procedure CheckContainsCI(const AHaystack, ANeedle: string);
 procedure CheckContainsCI(const AHaystack, ANeedle: string;
   const AMessage: string); overload;
-{ Fails if AHaystack contains ANeedle. Empty needle is a no-op (always passes). }
+{ Fails if AHaystack contains ANeedle. Empty needle matches everything, so
+  CheckNotContains with empty needle always fails. }
 procedure CheckNotContains(const AHaystack, ANeedle: string);
 procedure CheckNotContains(const AHaystack, ANeedle: string;
   const AMessage: string); overload;
@@ -83,11 +84,13 @@ procedure CheckEndsWith(const AStr, ASuffix: string;
 procedure CheckEndsWithCI(const AStr, ASuffix: string);
 procedure CheckEndsWithCI(const AStr, ASuffix: string;
   const AMessage: string); overload;
-{ Fails if AStr starts with APrefix. Empty prefix is a no-op (always passes). }
+{ Fails if AStr starts with APrefix. Empty prefix matches everything, so
+  CheckNotStartsWith with empty prefix always fails. }
 procedure CheckNotStartsWith(const AStr, APrefix: string);
 procedure CheckNotStartsWith(const AStr, APrefix: string;
   const AMessage: string); overload;
-{ Fails if AStr ends with ASuffix. Empty suffix is a no-op (always passes). }
+{ Fails if AStr ends with ASuffix. Empty suffix matches everything, so
+  CheckNotEndsWith with empty suffix always fails. }
 procedure CheckNotEndsWith(const AStr, ASuffix: string);
 procedure CheckNotEndsWith(const AStr, ASuffix: string;
   const AMessage: string); overload;

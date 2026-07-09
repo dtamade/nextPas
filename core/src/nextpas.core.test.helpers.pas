@@ -68,16 +68,24 @@ uses
 
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
+var
+  LRaised: Boolean = False;
 begin
   try
     AProc;
-    Fail('expected assertion failure');
   except
+    on E: ETestSkipped do
+      raise;
     on E: EAssertionFailed do
+    begin
+      LRaised := True;
       if AContains <> '' then
         Check(Pos(AContains, E.Message) > 0,
           'expected "' + AContains + '" in "' + E.Message + '"');
+    end;
   end;
+  if not LRaised then
+    Fail('expected assertion failure but nothing raised');
 end;
 
 procedure ExpectFailWith(AProc: TTestClosure;
@@ -154,7 +162,8 @@ begin
   LDir := LBaseDir + 'nextpas_tmp_' +
     IntToStr(Int64(@AProc)) + '_' +
     IntToStr(GetTickCount64);
-  ForceDirectories(LDir);
+  if not ForceDirectories(LDir) then
+    InternalFail('WithTempDir: cannot create directory ' + LDir);
   try
     AProc(LDir);
   finally

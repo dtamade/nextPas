@@ -550,13 +550,10 @@ var
   LTypedArgs: TMockValues;
   LWhenIdx: Integer;
 begin
-  if Length(AArgs) > 0 then
-  begin
-    BuildTypedStringArgs(AArgs, LTypedArgs);
-    LWhenIdx := FindWhenEntry(AMethodName, LTypedArgs);
-    if LWhenIdx >= 0 then
-      Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
-  end;
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LWhenIdx := FindWhenEntry(AMethodName, LTypedArgs);
+  if LWhenIdx >= 0 then
+    Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
   Result := GetReturn(AMethodName);
 end;
 
@@ -565,12 +562,9 @@ function TMockState.GetReturn(const AMethodName: string;
 var
   LWhenIdx: Integer;
 begin
-  if Length(AArgs) > 0 then
-  begin
-    LWhenIdx := FindWhenEntry(AMethodName, AArgs);
-    if LWhenIdx >= 0 then
-      Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
-  end;
+  LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+  if LWhenIdx >= 0 then
+    Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
   Result := GetReturn(AMethodName);
 end;
 
@@ -580,12 +574,9 @@ var
   I, LWhenIdx: Integer;
 begin
   { E-09: Check When entries first (parameter-dependent returns) }
-  if Length(AArgs) > 0 then
-  begin
-    LWhenIdx := FindWhenEntry(AMethodName, AArgs);
-    if LWhenIdx >= 0 then
-      Exit(FWhenEntries[LWhenIdx].ReturnValue);
-  end;
+  LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+  if LWhenIdx >= 0 then
+    Exit(FWhenEntries[LWhenIdx].ReturnValue);
   for I := High(FSetups) downto 0 do
   begin
     if FSetups[I].MethodName = AMethodName then
