@@ -83,6 +83,8 @@ function TDualAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LHeader: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if IsSmall(ASize) then
   begin
     LHeader := PByte(FSmall.GetMem(ASize + DUAL_HEADER_SIZE));

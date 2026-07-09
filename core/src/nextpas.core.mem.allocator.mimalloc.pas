@@ -138,6 +138,8 @@ end;
 
 function TMimallocAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_malloc(ASize);
@@ -145,6 +147,8 @@ end;
 
 function TMimallocAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_calloc(1, ASize);
@@ -152,6 +156,8 @@ end;
 
 function TMimallocAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+  begin FreeMem(APtr); Exit(nil); end;
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
   Result := _mi_realloc(APtr, ASize);
@@ -159,6 +165,8 @@ end;
 
 procedure TMimallocAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then
+    Exit;
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError,
       'TMimallocAllocator.FreeMem: mimalloc library unavailable (was previously loaded)');

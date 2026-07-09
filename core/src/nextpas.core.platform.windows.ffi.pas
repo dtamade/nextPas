@@ -110,6 +110,29 @@ function TlsSetValue(dwTlsIndex: DWORD; lpTlsValue: Pointer): BOOL; stdcall; ext
     @return 值指针 *}
 function TlsGetValue(dwTlsIndex: DWORD): Pointer; stdcall; external 'kernel32' name 'TlsGetValue';
 
+{ FLS (Fiber Local Storage) - supports per-thread destructor callback }
+
+{** @desc 分配 FLS 索引（支持析构回调）
+    @param lpCallback 析构回调函数（线程退出时调用）
+    @return FLS 索引，FLS_OUT_OF_INDEXES 失败 *}
+function FlsAlloc(lpCallback: TFlsCallbackFunction): DWORD; stdcall; external 'kernel32' name 'FlsAlloc';
+
+{** @desc 释放 FLS 索引
+    @param dwFlsIndex FLS 索引
+    @return TRUE 成功 *}
+function FlsFree(dwFlsIndex: DWORD): BOOL; stdcall; external 'kernel32' name 'FlsFree';
+
+{** @desc 设置 FLS 值
+    @param dwFlsIndex FLS 索引
+    @param lpFlsValue 值
+    @return TRUE 成功 *}
+function FlsSetValue(dwFlsIndex: DWORD; lpFlsValue: Pointer): BOOL; stdcall; external 'kernel32' name 'FlsSetValue';
+
+{** @desc 获取 FLS 值
+    @param dwFlsIndex FLS 索引
+    @return 值指针 *}
+function FlsGetValue(dwFlsIndex: DWORD): Pointer; stdcall; external 'kernel32' name 'FlsGetValue';
+
 { InterlockedDecrement/Increment are provided by FPC's System unit as
   compiler intrinsics (FPC_INTERLOCKEDDECREMENT etc.). Declaring them
   from kernel32 breaks Wine compatibility since Wine doesn't export

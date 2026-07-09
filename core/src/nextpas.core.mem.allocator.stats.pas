@@ -112,6 +112,8 @@ function TStatsAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LPtr: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
   LPtr := PByte(FInner.GetMem(STATS_HEADER_SIZE + ASize));
   if LPtr = nil then
     Exit(nil);

@@ -196,6 +196,7 @@ type
   PMEMORY_BASIC_INFORMATION = ^MEMORY_BASIC_INFORMATION;
 
   TWinThreadStartRoutine = function(lpThreadParameter: Pointer): DWORD; stdcall;
+  TFlsCallbackFunction = procedure(lpFlsData: Pointer); stdcall;
   PPlatformWindowsThreadState = ^TPlatformWindowsThreadState;
   TPlatformWindowsThreadState = record
     Handle: HANDLE;
@@ -228,6 +229,7 @@ const
   STILL_ACTIVE = DWORD($103);
   ERROR_TIMEOUT = DWORD(1460);
   TLS_OUT_OF_INDEXES = DWORD($FFFFFFFF);
+  FLS_OUT_OF_INDEXES = DWORD($FFFFFFFF);
   DUPLICATE_CLOSE_SOURCE = DWORD(1);
   SYNCHRONIZE = DWORD($100000);
   PROCESS_TERMINATE = DWORD($0001);

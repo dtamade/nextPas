@@ -97,7 +97,7 @@ begin
     LAlloc.GetMem(1024);
     LStats := LAlloc.GetStats;
     Check(LStats.MappedSize = TEST_SIZE, 'mapped size should match');
-    Check(LStats.AllocatedBytes = 1024, 'allocated bytes should be 1024');
+    Check(LStats.AllocatedBytes = 1032, 'allocated bytes should be 1032 (1024 + 8 size header, 8-aligned)');
     Check(LStats.AllocCount = 1, 'alloc count should be 1');
   finally
     LAlloc.Free;
@@ -132,6 +132,54 @@ begin
   end;
 end;
 
+procedure TestFileBackedCreate;
+var
+  LAlloc: TMappedFileAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := TMappedFileAllocator.Create('/tmp/npas_mmap_test.bin', TEST_SIZE, True);
+  try
+    Check(LAlloc.IsMapped, 'should be mapped');
+    Check(LAlloc.MappedSize = TEST_SIZE, 'mapped size should match');
+    LPtr := LAlloc.GetMem(1024);
+    Check(LPtr <> nil, 'alloc should succeed');
+    PInt32(LPtr)^ := $12345678;
+    LAlloc.Flush;
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestFileBackedReopen;
+var
+  LAlloc: TMappedFileAllocator;
+  LStats: TMappedFileStats;
+begin
+  { Open the file created by TestFileBackedCreate }
+  LAlloc := TMappedFileAllocator.Create('/tmp/npas_mmap_test.bin', TEST_SIZE, False);
+  try
+    Check(LAlloc.IsMapped, 'should be mapped');
+    LStats := LAlloc.GetStats;
+    Check(LStats.AllocCount = 1, 'alloc count should be 1 after reopen');
+    Check(LStats.AllocatedBytes = 1032, 'allocated bytes should be 1032 (1024 + 8 size header, 8-aligned)');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
+procedure TestFileBackedTruncate;
+var
+  LAlloc: TMappedFileAllocator;
+begin
+  { Create with ACreate=True should truncate existing file }
+  LAlloc := TMappedFileAllocator.Create('/tmp/npas_mmap_test.bin', TEST_SIZE, True);
+  try
+    Check(LAlloc.GetStats.AllocCount = 0, 'alloc count should be 0 after truncate-create');
+  finally
+    LAlloc.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('test_mapped_file');
   T.Test('create_and_destroy', @TestCreateAndDestroy);
@@ -141,6 +189,9 @@ begin
   T.Test('stats', @TestStats);
   T.Test('flush', @TestFlush);
   T.Test('traits', @TestTraits);
+  T.Test('file_backed_create', @TestFileBackedCreate);
+  T.Test('file_backed_reopen', @TestFileBackedReopen);
+  T.Test('file_backed_truncate', @TestFileBackedTruncate);
   T.Run;
   T.Summary;
 end.
