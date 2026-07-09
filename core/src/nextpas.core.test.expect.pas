@@ -81,6 +81,10 @@ type
     function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
     { String array comparison: element-wise equality. }
     function ToEqualStrArray(const AExpected: array of string): IExpectation;
+    { Array containment: value must exist in the array.
+      Works for ekIntArray and ekStrArray kinds. }
+    function ToContainInt(const AValue: Int64): IExpectation;
+    function ToContainStr(const AValue: string): IExpectation;
     { Set membership: value must be one of the given values. }
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
@@ -128,6 +132,18 @@ type
     ekIntArray, ekStrArray
   );
 
+const
+  KindNames: array[TExpectationKind] of string = (
+    'string', 'integer', 'boolean', 'pointer', 'proc', 'double', 'bytes',
+    'int array', 'string array'
+  );
+  FactoryHints: array[TExpectationKind] of string = (
+    'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
+    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)', 'ExpectBytes(b)',
+    'ExpectArrayOfInt(arr)', 'ExpectArrayOfStr(arr)'
+  );
+
+type
   TExpectation = class(TInterfacedObject, IExpectation)
   private
     FKind       : TExpectationKind;
@@ -222,6 +238,8 @@ type
     function ToMatch(const APattern: string): IExpectation;
     function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
     function ToEqualStrArray(const AExpected: array of string): IExpectation;
+    function ToContainInt(const AValue: Int64): IExpectation;
+    function ToContainStr(const AValue: string): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -327,16 +345,6 @@ end;
 
 procedure TExpectation.RequireKind(AKind: TExpectationKind;
   const AMethod: string);
-const
-  KindNames: array[TExpectationKind] of string = (
-    'string', 'integer', 'boolean', 'pointer', 'proc', 'double', 'bytes',
-    'int array', 'string array'
-  );
-  FactoryHints: array[TExpectationKind] of string = (
-    'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
-    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)', 'ExpectBytes(b)',
-    'ExpectArrayOfInt(arr)', 'ExpectArrayOfStr(arr)'
-  );
 begin
   if FKind <> AKind then
     InternalFail(AMethod + ' requires ' + KindNames[AKind] +
@@ -549,12 +557,25 @@ begin
 end;
 
 function TExpectation.ToHaveLength(const AExpected: NativeInt): IExpectation;
+var
+  LActual: NativeInt;
 begin
-  RequireKind(ekString, 'ToHaveLength');
-  CheckMatch(Length(FStrValue) = AExpected,
-    'String should not have length ' + IntToStr(AExpected),
+  case FKind of
+    ekString:   LActual := Length(FStrValue);
+    ekIntArray: LActual := Length(FIntArrayValue);
+    ekStrArray: LActual := Length(FStrArrayValue);
+    ekBytes:    LActual := Length(FBytesValue);
+  else
+    InternalFail('ToHaveLength requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LActual = AExpected,
+    'should not have length ' + IntToStr(AExpected),
     'Expected length ' + IntToStr(AExpected) +
-      ' but got ' + IntToStr(Length(FStrValue)));
+      ' but got ' + IntToStr(LActual));
   Result := Self;
 end;
 
@@ -1061,8 +1082,9 @@ begin
   begin
     LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(FIntArrayValue));
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
+    CheckMatch(False, LMsg, LMsg);
+    Result := Self;
+    Exit;
   end;
   LMin := Length(AExpected);
   LDiffIdx := -1;
@@ -1077,17 +1099,12 @@ begin
     LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
       ': expected ' + IntToStr(AExpected[LDiffIdx]) +
       ' but got ' + IntToStr(FIntArrayValue[LDiffIdx]);
-    if FNegated then Exit(Self); { differ = pass for negated }
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
+    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
   end
-  else if FNegated then
-  begin
-    LMsg := 'Expected arrays to differ but both are identical (' +
-      IntToStr(LMin) + ' elements)';
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
-  end;
+  else
+    CheckMatch(True,
+      'Expected arrays to differ but both are identical (' +
+        IntToStr(LMin) + ' elements)', '');
   Result := Self;
 end;
 
@@ -1101,9 +1118,9 @@ begin
   begin
     LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(FStrArrayValue));
-    if FNegated then Exit(Self);
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
+    CheckMatch(False, LMsg, LMsg);
+    Result := Self;
+    Exit;
   end;
   LMin := Length(AExpected);
   LDiffIdx := -1;
@@ -1118,17 +1135,50 @@ begin
     LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':' +
       #10'  expected: "' + AExpected[LDiffIdx] + '"' +
       #10'    actual: "' + FStrArrayValue[LDiffIdx] + '"';
-    if FNegated then Exit(Self);
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
+    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
   end
-  else if FNegated then
-  begin
-    LMsg := 'Expected arrays to differ but both are identical (' +
-      IntToStr(LMin) + ' elements)';
-    if FMessage <> '' then InternalFail(FMessage + ': ' + LMsg)
-    else InternalFail(LMsg);
-  end;
+  else
+    CheckMatch(True,
+      'Expected arrays to differ but both are identical (' +
+        IntToStr(LMin) + ' elements)', '');
+  Result := Self;
+end;
+
+function TExpectation.ToContainInt(const AValue: Int64): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekIntArray, 'ToContainInt');
+  LFound := False;
+  for I := 0 to High(FIntArrayValue) do
+    if FIntArrayValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Array should not contain ' + IntToStr(AValue),
+    'Array does not contain ' + IntToStr(AValue));
+  Result := Self;
+end;
+
+function TExpectation.ToContainStr(const AValue: string): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekStrArray, 'ToContainStr');
+  LFound := False;
+  for I := 0 to High(FStrArrayValue) do
+    if FStrArrayValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Array should not contain "' + AValue + '"',
+    'Array does not contain "' + AValue + '"');
   Result := Self;
 end;
 
