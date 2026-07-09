@@ -116,8 +116,13 @@
 | `lockfree.misragries` | Misra-Gries (流式频繁项检测) | ✅ 完成 | 6 |
 | `lockfree.robinhood` | Robin Hood Hash Map (后向位移哈希) | ✅ 完成 | 6 |
 | `lockfree.unrolled_list` | Concurrent Unrolled List (缓存友好链表) | ✅ 完成 | 7 |
+| `lockfree.leakybucket` | Leaky Bucket (漏桶限流) | ✅ 完成 | 4 |
+| `lockfree.xorfilter` | XOR Filter (紧凑成员过滤) | ✅ 完成 | 3 |
+| `lockfree.slidingwindow` | Sliding Window Counter (滑动窗口限流) | ✅ 完成 | 4 |
+| `lockfree.reservoirsampling` | Reservoir Sampling (流式采样) | ✅ 完成 | 5 |
+| `lockfree.leftright` | Left-Right (双副本并发) | ✅ 完成 | 3 |
 
-**规模**: 98 文件, ~36500 行, 84 数据结构
+**规模**: 102 文件, ~38000 行, 89 数据结构
 
 ---
 
