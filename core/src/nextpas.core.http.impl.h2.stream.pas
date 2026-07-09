@@ -291,6 +291,7 @@ begin
   FRecvFlow.Init(ARecvWindowSize);
   FConnectionFlow := @AConnectionFlow;
   FDecoder := @ADecoder;
+  FMaxHeaderListSize := AMaxHeaderListSize;
   FHeaderStore := nil;
   FHeadersDecoded := nil;
   FTrailerStore := nil;
@@ -519,8 +520,13 @@ begin
 
     if FMaxHeaderListSize > 0 then
     begin
-      LHeaderListSize := LHeaderListSize + UInt64(LHeaders[LIndex].Name.Len) +
-        UInt64(LHeaders[LIndex].Value.Len) + 32;
+      { Saturating-add guard to prevent UInt64 overflow }
+      if LHeaderListSize > High(UInt64) - (UInt64(LHeaders[LIndex].Name.Len) +
+         UInt64(LHeaders[LIndex].Value.Len) + 32) then
+        LHeaderListSize := High(UInt64)
+      else
+        LHeaderListSize := LHeaderListSize + UInt64(LHeaders[LIndex].Name.Len) +
+          UInt64(LHeaders[LIndex].Value.Len) + 32;
       if LHeaderListSize > UInt64(FMaxHeaderListSize) then
       begin
         if not LIsTrailerSection then

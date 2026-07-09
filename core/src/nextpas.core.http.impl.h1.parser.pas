@@ -163,7 +163,7 @@ const
   { Hard safety cap for parser internal buffer growth (100 MB).
     The BodyLimit middleware is the primary size control; this prevents
     unbounded allocation if the middleware is not configured. }
-  PARSER_BODY_MAX_CAPACITY: SizeUInt = 100 * 1024 * 1024;
+  PARSER_BODY_MAX_CAPACITY: SizeUInt = 32 * 1024 * 1024;
 
 function LowerTrim(const AValue: string): string; inline;
 begin

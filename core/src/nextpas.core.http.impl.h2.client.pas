@@ -1051,8 +1051,8 @@ begin
   if LPayloadLen = 0 then
     Exit;
   { Prevent memory DoS from unbounded body accumulation }
-  if (FOptions.MaxHeaderListSize > 0) and
-     (AResponse.BodyLen + LPayloadLen > FOptions.MaxHeaderListSize * 4) then
+  if (FOptions.MaxResponseBodySize > 0) and
+     (AResponse.BodyLen + LPayloadLen > SizeInt(FOptions.MaxResponseBodySize)) then
     raise EHttpError.Create('HTTP/2 response body too large');
   LOldLen := Length(AResponse.Body);
   SetLength(AResponse.Body, LOldLen + LPayloadLen);
@@ -1369,6 +1369,10 @@ begin
         raise EHttpError.Create('HTTP/2 response incomplete: connection closed');
       DispatchFrame(LFrame, LStreamID, FActiveStreams[LStreamIndex].Flow,
         LResponse);
+      { RFC 9113 §6.8: GOAWAY indicates the server is shutting down.
+        If we receive GOAWAY while waiting for a response, abort immediately. }
+      if FGoawayReceived and (not LResponse.EndStream) then
+        raise EHttpError.Create('HTTP/2 GOAWAY received during response');
       if LResponse.PendingWindowUpdate > 0 then
       begin
         SendWindowUpdate(LStreamID, LResponse.PendingWindowUpdate);

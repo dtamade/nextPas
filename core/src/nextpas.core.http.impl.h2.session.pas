@@ -1153,6 +1153,10 @@ var
 begin
   if not H2DecodeRstStream(AFrame.Payload, LErrorCode) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_FRAME_SIZE_ERROR, True));
+  { RFC 9113 §6.10: If the stream is reset while a CONTINUATION sequence
+    is pending, clear the pending state to avoid stale expectations. }
+  if FPendingContinuationStreamID = AFrame.Header.StreamID then
+    FPendingContinuationStreamID := 0;
   LStream := FStreams.FindAndRemove(AFrame.Header.StreamID);
   if LStream <> nil then
     try

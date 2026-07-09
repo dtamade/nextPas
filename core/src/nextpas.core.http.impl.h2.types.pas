@@ -186,6 +186,8 @@ type
     InitialConnectionWindowSize: UInt32;
     MaxFrameSize: UInt32;
     MaxHeaderListSize: UInt32;
+    { Maximum response body size in bytes. 0 = unlimited (not recommended). }
+    MaxResponseBodySize: UInt32;
     PingTimeout: Int64;
     TLSContext: ISSLContext;
     class function Default: TH2ClientTransportOptions; static;
@@ -379,6 +381,7 @@ begin
   Result.InitialConnectionWindowSize := H2_DEFAULT_INITIAL_WINDOW_SIZE;
   Result.MaxFrameSize := H2_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxHeaderListSize := H2_DEFAULT_MAX_HEADER_LIST_SIZE;
+  Result.MaxResponseBodySize := 64 * 1024 * 1024; { 64MB default }
   Result.PingTimeout := 5000;
   Result.TLSContext := nil;
 end;
