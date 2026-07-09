@@ -19,12 +19,14 @@ uses
   nextpas.core.platform.files.base;
 
 type
+  {** @desc 目录遍历操作枚举 *}
   TPlatformWalkAction = (
     pwaContinue,
     pwaSkipSubtree,
     pwaStop
   );
 
+  {** @desc 目录遍历条目 *}
   TPlatformWalkEntry = record
     Path: PAnsiChar;
     PathLen: Int32;
@@ -35,46 +37,147 @@ type
     ErrorCode: Int32;
   end;
 
+  {** @desc 目录遍历回调函数类型 *}
   TPlatformWalkCallback = function(const AEntry: TPlatformWalkEntry;
     AUserData: Pointer): TPlatformWalkAction;
 
 const
+  {** @desc 遍历完成 *}
   PLATFORM_WALK_COMPLETED = 0;
+  {** @desc 遍历被停止 *}
   PLATFORM_WALK_STOPPED   = 1;
+  {** @desc 遍历参数错误 *}
   PLATFORM_WALK_BADARGS   = -1;
+  {** @desc 最大遍历深度 *}
   PLATFORM_WALK_MAX_DEPTH = 256;
+  {** @desc 短读错误 *}
   PLATFORM_FS_SHORT_READ_ERROR = -6;
-  PLATFORM_FS_PATH_TOO_LONG = -7;  { Also defined as PLATFORM_ERR_PATH_TOO_LONG in error.pas }
-  PLATFORM_FS_READ_CHUNK_SIZE = 65536; { 64KB initial chunk for dynamic read }
+  {** @desc 路径过长错误 *}
+  PLATFORM_FS_PATH_TOO_LONG = -7;
+  {** @desc 动态读取初始块大小（64KB） *}
+  PLATFORM_FS_READ_CHUNK_SIZE = 65536;
 
+{** @desc 检查路径是否存在
+    @param APath 路径
+    @return True 存在 *}
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
+
+{** @desc 检查路径是否为普通文件
+    @param APath 路径
+    @return True 是普通文件 *}
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
+
+{** @desc 检查路径是否为目录
+    @param APath 路径
+    @return True 是目录 *}
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
+
+{** @desc 检查路径是否可执行
+    @param APath 路径
+    @return True 可执行 *}
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+
+{** @desc 获取文件大小
+    @param APath 文件路径
+    @param ASize 输出文件大小
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
+
+{** @desc 获取临时目录路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 创建临时文件（已废弃，请使用 platform_fs_mktemp_handle）
+    @param APrefix 文件名前缀
+    @param ASuffix 文件名后缀
+    @param APathBuf 输出路径缓冲区
+    @param APathBufLen 路径缓冲区大小
+    @param AFd 输出文件描述符
+    @return 0 成功 *}
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32; deprecated 'Use platform_fs_mktemp_handle instead';
+
+{** @desc 创建临时文件（返回文件句柄）
+    @param APrefix 文件名前缀
+    @param ASuffix 文件名后缀
+    @param APathBuf 输出路径缓冲区
+    @param APathBufLen 路径缓冲区大小
+    @param AHandle 输出文件句柄
+    @return 0 成功 *}
 function platform_fs_mktemp_handle(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 递归创建目录（类似 mkdir -p）
+    @param APath 目录路径
+    @param AMode 目录权限
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
+
+{** @desc 复制文件
+    @param ASrc 源文件路径
+    @param ADst 目标文件路径
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+
+{** @desc 移动文件（rename 或 copy+delete）
+    @param ASrc 源文件路径
+    @param ADst 目标文件路径
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_move_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+
+{** @desc 删除文件
+    @param APath 文件路径
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_remove_file(const APath: PAnsiChar): Int32;
 
-{ Convenience: remove empty directory }
+{** @desc 删除空目录
+    @param APath 目录路径
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_remove_dir(const APath: PAnsiChar): Int32;
 
-{ Convenience: rename file or directory }
+{** @desc 重命名文件或目录
+    @param AOldPath 原路径
+    @param ANewPath 新路径
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 
+{** @desc 原子写入文件（写入临时文件后 rename）
+    @param APath 目标文件路径
+    @param AData 数据指针
+    @param ALen 数据长度
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
+
+{** @desc 读取整个文件到内存（自动分配缓冲区）
+    @param APath 文件路径
+    @param AData 输出数据指针（需调用 platform_fs_free_buf 释放）
+    @param ALen 输出数据长度
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
+
+{** @desc 读取文件到预分配缓冲区
+    @param APath 文件路径
+    @param ABuf 预分配缓冲区
+    @param ABufCapacity 缓冲区容量
+    @param ALen 输出实际读取长度
+    @return 0 成功，否则返回错误码 *}
 function platform_fs_read_file_into(const APath: PAnsiChar;
   ABuf: Pointer; ABufCapacity: PtrUInt; out ALen: PtrUInt): Int32;
+
+{** @desc 释放 platform_fs_read_file 分配的缓冲区
+    @param AData 数据指针 *}
 procedure platform_fs_free_buf(AData: Pointer);
+
+{** @desc 递归遍历目录树
+    @param ARoot 根目录路径
+    @param ACallback 遍历回调函数
+    @param AUserData 用户数据指针
+    @param AFollowSymlinks 是否跟随符号链接
+    @return 0 完成，1 被停止，负值错误 *}
 function platform_fs_walk(const ARoot: PAnsiChar;
   ACallback: TPlatformWalkCallback; AUserData: Pointer;
   AFollowSymlinks: Boolean): Int32;

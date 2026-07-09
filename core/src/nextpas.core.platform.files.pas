@@ -19,42 +19,200 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.error;
 
+{** @desc 打开文件
+    @param APath 文件路径
+    @param AMode 打开模式（只读/只写/读写）
+    @param ACreate 创建模式
+    @param AHandle 输出文件句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 打开文件（扩展参数）
+    @param APath 文件路径
+    @param AMode 打开模式
+    @param ACreate 创建模式
+    @param AAppend 是否追加模式
+    @param ASync 是否同步模式
+    @param APerm 文件权限
+    @param AHandle 输出文件句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 关闭文件
+    @param AHandle 文件句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 读取文件数据
+    @param AHandle 文件句柄
+    @param ABuf 读取缓冲区
+    @param ALen 读取长度
+    @param ABytesRead 输出实际读取字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
+
+{** @desc 写入文件数据
+    @param AHandle 文件句柄
+    @param ABuf 写入缓冲区
+    @param ALen 写入长度
+    @param ABytesWritten 输出实际写入字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+
+{** @desc 从指定偏移读取文件数据（不影响文件位置）
+    @param AHandle 文件句柄
+    @param ABuf 读取缓冲区
+    @param ALen 读取长度
+    @param AOffset 文件偏移
+    @param ABytesRead 输出实际读取字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+
+{** @desc 从指定偏移写入文件数据（不影响文件位置）
+    @param AHandle 文件句柄
+    @param ABuf 写入缓冲区
+    @param ALen 写入长度
+    @param AOffset 文件偏移
+    @param ABytesWritten 输出实际写入字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+
+{** @desc 定位文件位置
+    @param AHandle 文件句柄
+    @param AOffset 偏移量
+    @param AOrigin 定位原点（Begin/Current/End）
+    @param ANewPos 输出新位置
+    @return 0 成功，否则返回错误码 *}
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
+
+{** @desc 同步文件到磁盘
+    @param AHandle 文件句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 截断文件到指定大小（通过句柄）
+    @param AHandle 文件句柄
+    @param ASize 目标大小
+    @return 0 成功，否则返回错误码 *}
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
+
+{** @desc 获取文件状态（通过路径，跟随符号链接）
+    @param APath 文件路径
+    @param AStat 输出文件状态
+    @return 0 成功，否则返回错误码 *}
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+
+{** @desc 获取文件状态（通过路径，不跟随符号链接）
+    @param APath 文件路径
+    @param AStat 输出文件状态
+    @return 0 成功，否则返回错误码 *}
 function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+
+{** @desc 获取文件状态（通过句柄）
+    @param AHandle 文件句柄
+    @param AStat 输出文件状态
+    @return 0 成功，否则返回错误码 *}
 function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;
+
+{** @desc 修改文件权限
+    @param APath 文件路径
+    @param AMode 新权限
+    @return 0 成功，否则返回错误码 *}
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+
+{** @desc 截断文件到指定大小（通过路径）
+    @param APath 文件路径
+    @param ASize 目标大小
+    @return 0 成功，否则返回错误码 *}
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
+
+{** @desc 创建目录
+    @param APath 目录路径
+    @param AMode 目录权限
+    @return 0 成功，否则返回错误码 *}
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
+
+{** @desc 删除空目录
+    @param APath 目录路径
+    @return 0 成功，否则返回错误码 *}
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
+
+{** @desc 删除文件
+    @param APath 文件路径
+    @return 0 成功，否则返回错误码 *}
 function platform_file_unlink(const APath: PAnsiChar): Int32;
+
+{** @desc 重命名文件或目录
+    @param AOldPath 原路径
+    @param ANewPath 新路径
+    @return 0 成功，否则返回错误码 *}
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+
+{** @desc 获取当前工作目录
+    @param ABuf 输出缓冲区
+    @param ASize 缓冲区大小
+    @return 缓冲区指针，失败返回 nil *}
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
+
+{** @desc 更改当前工作目录
+    @param APath 目标目录路径
+    @return 0 成功，否则返回错误码 *}
 function platform_file_chdir(const APath: PAnsiChar): Int32;
+
+{** @desc 获取文件锁（阻塞）
+    @param AHandle 文件句柄
+    @param AExclusive True 独占锁，False 共享锁
+    @return 0 成功，否则返回错误码 *}
 function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+
+{** @desc 尝试获取文件锁（非阻塞）
+    @param AHandle 文件句柄
+    @param AExclusive True 独占锁，False 共享锁
+    @return 0 成功，PLATFORM_ERR_BUSY 锁被占用 *}
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+
+{** @desc 释放文件锁
+    @param AHandle 文件句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
+
+{** @desc 创建符号链接
+    @param ATarget 链接目标
+    @param ALinkPath 链接路径
+    @return 0 成功，否则返回错误码 *}
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
+
+{** @desc 读取符号链接目标
+    @param APath 符号链接路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @param ALen 输出实际长度
+    @return 0 成功，否则返回错误码 *}
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
+
+{** @desc 打开目录
+    @param APath 目录路径
+    @param AHandle 输出目录句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+
+{** @desc 读取目录条目
+    @param AHandle 目录句柄
+    @param AEntry 输出目录条目
+    @return 0 成功，1 无更多条目，否则返回错误码 *}
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+
+{** @desc 关闭目录
+    @param AHandle 目录句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 
 implementation

@@ -31,42 +31,152 @@ const
   PLATFORM_ERR_TIMEOUT = nextpas.core.platform.error.PLATFORM_ERR_TIMEOUT;
 
 { Mutex }
+
+{** @desc 初始化互斥锁
+    @param AMutex 互斥锁句柄
+    @param AKind 锁类型（PLATFORM_MUTEX_NORMAL/ERRORCHECK/RECURSIVE）
+    @return 0 成功，否则返回错误码 *}
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32 = PLATFORM_MUTEX_ERRORCHECK): Int32;
+
+{** @desc 销毁互斥锁
+    @param AMutex 互斥锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
+
+{** @desc 加锁（阻塞）
+    @param AMutex 互斥锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
+
+{** @desc 尝试加锁（非阻塞）
+    @param AMutex 互斥锁句柄
+    @return 0 成功，PLATFORM_ERR_BUSY 锁被占用 *}
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
+
+{** @desc 解锁
+    @param AMutex 互斥锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 
 { RWLock }
+
+{** @desc 初始化读写锁
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_init(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 销毁读写锁
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 获取读锁（阻塞）
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 尝试获取读锁（非阻塞）
+    @param ARwLock 读写锁句柄
+    @return 0 成功，PLATFORM_ERR_BUSY 锁被占用 *}
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 获取写锁（阻塞）
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 尝试获取写锁（非阻塞）
+    @param ARwLock 读写锁句柄
+    @return 0 成功，PLATFORM_ERR_BUSY 锁被占用 *}
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 释放读锁
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
+
+{** @desc 释放写锁
+    @param ARwLock 读写锁句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 
 { CondVar }
+
+{** @desc 初始化条件变量
+    @param ACondVar 条件变量句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
+
+{** @desc 销毁条件变量
+    @param ACondVar 条件变量句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
+
+{** @desc 等待条件变量（阻塞）
+    @param ACondVar 条件变量句柄
+    @param AMutex 互斥锁句柄（原子释放并等待）
+    @return 0 成功，否则返回错误码 *}
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;
+
+{** @desc 带超时等待条件变量
+    @param ACondVar 条件变量句柄
+    @param AMutex 互斥锁句柄
+    @param ATimeoutNs 超时时间（纳秒）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
+
+{** @desc 唤醒一个等待线程
+    @param ACondVar 条件变量句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
+
+{** @desc 唤醒所有等待线程
+    @param ACondVar 条件变量句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 
 { Address-wait (portable futex abstraction) }
+
+{** @desc 等待 32 位地址值变化（futex 语义）
+    @param AAddr 监视的地址
+    @param AExpected 期望值（值不匹配时立即返回）
+    @param ATimeoutNs 超时时间（纳秒）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+
+{** @desc 唤醒一个等待 32 位地址的线程
+    @param AAddr 监视的地址
+    @return 0 成功，否则返回错误码 *}
 function platform_wake_address_one(AAddr: PInt32): Int32;
+
+{** @desc 唤醒所有等待 32 位地址的线程
+    @param AAddr 监视的地址
+    @return 0 成功，否则返回错误码 *}
 function platform_wake_address_all(AAddr: PInt32): Int32;
 
 { 64-bit address-wait (bucket-based on Linux/POSIX, native on Windows) }
+
+{** @desc 等待 64 位地址值变化（futex 语义）
+    @param AAddr 监视的地址
+    @param AExpected 期望值（值不匹配时立即返回）
+    @param ATimeoutNs 超时时间（纳秒）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
+
+{** @desc 唤醒一个等待 64 位地址的线程
+    @param AAddr 监视的地址
+    @return 0 成功，否则返回错误码 *}
 function platform_wake_address_one64(AAddr: PInt64): Int32;
+
+{** @desc 唤醒所有等待 64 位地址的线程
+    @param AAddr 监视的地址
+    @return 0 成功，否则返回错误码 *}
 function platform_wake_address_all64(AAddr: PInt64): Int32;
 
 { Barrier - synchronize N threads at a rendezvous point }
+
 type
+  {** @desc 屏障（同步 N 个线程） *}
   TPlatformBarrier = record
     Count: Int32;
     Waiting: Int32;
@@ -75,8 +185,20 @@ type
     CondVar: TPlatformCondVar;
   end;
 
+{** @desc 初始化屏障
+    @param ABarrier 屏障句柄
+    @param ACount 需要同步的线程数
+    @return 0 成功，否则返回错误码 *}
 function platform_barrier_init(var ABarrier: TPlatformBarrier; ACount: Int32): Int32;
+
+{** @desc 销毁屏障
+    @param ABarrier 屏障句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_barrier_destroy(var ABarrier: TPlatformBarrier): Int32;
+
+{** @desc 等待屏障（阻塞直到所有线程到达）
+    @param ABarrier 屏障句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;
 
 { Once - execute a function exactly once }

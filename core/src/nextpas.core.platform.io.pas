@@ -7,17 +7,64 @@ interface
 uses
   nextpas.core.platform.io.base;
 
+{** @desc 创建 I/O 多路复用器
+    @param APoller 输出复用器句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
+
+{** @desc 关闭 I/O 多路复用器
+    @param APoller 复用器句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_close(var APoller: TPlatformPoller): Int32;
+
+{** @desc 添加文件描述符到复用器
+    @param APoller 复用器句柄
+    @param AFd 文件描述符
+    @param AEvents 关注的事件
+    @param AUserData 用户数据指针
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_add(var APoller: TPlatformPoller; AFd: PtrUInt;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
+
+{** @desc 修改文件描述符的关注事件
+    @param APoller 复用器句柄
+    @param AFd 文件描述符
+    @param AEvents 新的关注事件
+    @param AUserData 用户数据指针
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: PtrUInt;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
+
+{** @desc 从复用器移除文件描述符
+    @param APoller 复用器句柄
+    @param AFd 文件描述符
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: PtrUInt): Int32;
+
+{** @desc 启用唤醒机制（eventfd/pipe/socketpair）
+    @param APoller 复用器句柄
+    @param AUserData 用户数据指针
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_enable_wake(var APoller: TPlatformPoller;
   AUserData: Pointer): Int32;
+
+{** @desc 唤醒阻塞在 poller_wait 的线程
+    @param APoller 复用器句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+
+{** @desc 排空唤醒事件
+    @param APoller 复用器句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
+
+{** @desc 等待 I/O 事件
+    @param APoller 复用器句柄
+    @param AEntries 输出事件数组
+    @param AMaxEntries 数组最大容量
+    @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
+    @param ACount 输出事件数量
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;
