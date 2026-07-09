@@ -804,14 +804,15 @@ begin
   // z0 = Φ^(-1)(#(θ* < θ) / B)
   LZ0 := NormalQuantile((LCountBelow + 0.5) / (LIterations + 1));
 
-  // 步骤 2: 计算加速因子 a
+  // 步骤 2: 计算加速因子 a（jackknife leave-one-out 估计）
   // a = Σ(θ_(.) - θ_(i))^3 / (6 * (Σ(θ_(.) - θ_(i))^2)^(3/2))
-  // 使用 jackknife 估计
+  // θ_(i) = 不含第 i 个样本的均值
   LDiffSqSum := 0.0;
   LDiffCbSum := 0.0;
-  for LIterationIndex := 0 to LIterations - 1 do
+  for LDataIndex := 0 to LN - 1 do
   begin
-    LDiff := LObservedMean - LMeans[LIterationIndex];
+    // θ_(i) = (n*θ_(.) - x_i) / (n-1)
+    LDiff := LObservedMean - (LN * LObservedMean - FData[LDataIndex]) / (LN - 1);
     LDiffSqSum := LDiffSqSum + LDiff * LDiff;
     LDiffCbSum := LDiffCbSum + Sqr(LDiff) * LDiff;
   end;
@@ -977,46 +978,98 @@ begin
 end;
 
 function TAdvancedStats.TestNormalityByMoments: TNormalityTest;
+{ D'Agostino-Pearson K2 正态性检验
+  K2 = Z_skewness^2 + Z_kurtosis^2 ~ χ²(2)
+  参考: D'Agostino, R.B. (1971), "An omnibus test of normality for moderate and large samples" }
 var
   LCount: Integer;
-  LNormalityScore: Double;
+  LGamma1, LGamma2: Double;
+  LWSq, LA, LB, LC, LZSkew: Double;
+  LMu2, LSigma2, LTerm1, LTerm2, LZKurt: Double;
+  LP, LK2, LCubeArg: Double;
 begin
   LCount := Length(FData);
 
-  // 简化的正态性启发式检验（基于偏度和峰度）
-  // 注意：这不是真正的 Shapiro-Wilk 检验，而是一个简化的启发式方法
-  if LCount < 3 then
+  if LCount < 8 then
   begin
     Result.IsNormal := True;
     Result.ApproximatePValue := 1.0;
-    Result.TestStatistic := 1.0;
-    Result.Method := 'Insufficient data';
+    Result.TestStatistic := 0.0;
+    Result.Method := 'Insufficient data (n<8)';
     Exit;
   end;
 
-  // 基于偏度和峰度的简化评分
-  // 理想的正态分布：偏度=0，峰度=0
-  LNormalityScore := 1.0 - (Abs(Skewness) + Abs(Kurtosis)) / 2;
-
-  Result.TestStatistic := LNormalityScore;
-  Result.Method := 'Moments-based heuristic (skewness+kurtosis)';
-
-  // 简化的决策规则
-  if LNormalityScore > 0.8 then
+  { Z_skewness: D'Agostino (1970) 变换 }
+  LGamma1 := Skewness;
+  // sqrt((n+1)(n+3) / (6(n-2)))
+  LB := Sqrt((LCount + 1) * (LCount + 3) / (6.0 * (LCount - 2)));
+  // 3(n^2+27n-70)(n+1)(n+3) / ((n-2)(n+5)(n+7)(n+9))
+  LC := 3.0 * (Sqr(LCount) + 27.0 * LCount - 70.0) * (LCount + 1) * (LCount + 3) /
+        ((LCount - 2) * (LCount + 5) * (LCount + 7) * (LCount + 9));
+  // W^2 = -1 + sqrt(2(C-1))
+  LWSq := -1.0 + Sqrt(2.0 * (LC - 1.0));
+  // delta = 1/sqrt(ln(sqrt(W^2)))
+  // alpha = sqrt(2/(W^2-1))
+  if LWSq > 1.001 then
   begin
-    Result.IsNormal := True;
-    Result.ApproximatePValue := 0.5;
-  end
-  else if LNormalityScore > 0.6 then
-  begin
-    Result.IsNormal := True;
-    Result.ApproximatePValue := 0.1;
+    LA := Sqrt(2.0 / (LWSq - 1.0));
+    LZSkew := LB * (LGamma1 / Sqrt(LWSq - 1.0) + Sqrt(1.0 / (LWSq - 1.0)));
+    // 使用双曲反正切: Z = (1/alpha) * asinh(Gamma1/(alpha*sqrt(W^2-1)))
+    // 简化为: Z = LB * ln(Gamma1/LA + sqrt((Gamma1/LA)^2 + 1))
+    if Abs(LGamma1) > 1e-15 then
+      LZSkew := LB * Ln(Abs(LGamma1) / LA + Sqrt(Sqr(LGamma1 / LWSq) + 1.0))
+    else
+      LZSkew := 0.0;
   end
   else
+    LZSkew := 0.0;
+
+  { Z_kurtosis: Anscombe-Glynn (1983) 变换 }
+  LGamma2 := Kurtosis;
+  // E[K] = 3(n-1)/(n+1)
+  LMu2 := 3.0 * (LCount - 1) / (LCount + 1);
+  // Var[K] = 24n(n-2)(n-3) / ((n+1)^2(n+3)(n+5))
+  LSigma2 := 24.0 * LCount * (LCount - 2) * (LCount - 3) /
+              (Sqr(LCount + 1.0) * (LCount + 3) * (LCount + 5));
+  // Term1 = (6(n^2-5n+2)/((n+7)(n+9))) * sqrt(6(n+3)(n+5)/(n(n-2)(n-3)))
+  LTerm1 := 6.0 * (Sqr(LCount) - 5.0 * LCount + 2.0) / ((LCount + 7) * (LCount + 9)) *
+            Sqrt(6.0 * (LCount + 3) * (LCount + 5) / (LCount * (LCount - 2) * (LCount - 3)));
+  // Term2 = 6 + 8/LTerm1 * (2/LTerm1 + sqrt(1 + 4/LTerm1^2))
+  if Abs(LTerm1) > 1e-15 then
+    LTerm2 := 6.0 + 8.0 / LTerm1 * (2.0 / LTerm1 + Sqrt(1.0 + 4.0 / Sqr(LTerm1)))
+  else
+    LTerm2 := 6.0;
+  // Z = ((1 - 2/(9*Term2)) - ((1-2/Term2)/(1+((Kurtosis-LMu2)/sqrt(Var) - LTerm1)/sqrt(LTerm2)))^(1/3))
+  //     / sqrt(2/(9*Term2))
+  LP := (LGamma2 - LMu2) / Sqrt(LSigma2);
+  if Abs(LTerm2) > 1e-15 then
   begin
-    Result.IsNormal := False;
-    Result.ApproximatePValue := BENCH_SIGNIFICANCE_ALPHA_HIGH;
-  end;
+    // cube root via Exp(Ln(x)/3) — Power 不在 uses 中
+    LCubeArg := (1.0 - 2.0 / LTerm2) / (1.0 + (LP - LTerm1) / Sqrt(LTerm2));
+    if LCubeArg > 0 then
+      LZKurt := ((1.0 - 2.0 / (9.0 * LTerm2)) - Exp(Ln(LCubeArg) / 3.0)) /
+                Sqrt(2.0 / (9.0 * LTerm2))
+    else if LCubeArg < 0 then
+      LZKurt := ((1.0 - 2.0 / (9.0 * LTerm2)) + Exp(Ln(-LCubeArg) / 3.0)) /
+                Sqrt(2.0 / (9.0 * LTerm2))
+    else
+      LZKurt := (1.0 - 2.0 / (9.0 * LTerm2)) / Sqrt(2.0 / (9.0 * LTerm2));
+  end
+  else
+    LZKurt := 0.0;
+
+  { K2 = Z_skewness^2 + Z_kurtosis^2 ~ χ²(2) }
+  LK2 := Sqr(LZSkew) + Sqr(LZKurt);
+
+  // χ²(2) 的 p-value: P = exp(-K2/2)（指数分布 CDF）
+  Result.TestStatistic := LK2;
+  Result.Method := 'D''Agostino-Pearson K2';
+  Result.ApproximatePValue := Exp(-LK2 / 2.0);
+  if Result.ApproximatePValue > 1.0 then
+    Result.ApproximatePValue := 1.0;
+  if Result.ApproximatePValue < 0 then
+    Result.ApproximatePValue := 0;
+  Result.IsNormal := Result.ApproximatePValue >= BENCH_SIGNIFICANCE_ALPHA;
 end;
 
 {** PF-04: compute mean + variance of external data array.
