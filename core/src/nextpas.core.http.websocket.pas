@@ -14,9 +14,17 @@ uses
   nextpas.core.http.intf;
 
 type
+  { Callback to validate WebSocket Origin header during upgrade.
+    Return True to accept, False to reject with 403.
+    AOrigin is the raw Origin header value (empty if absent). }
+  TWebSocketOriginCheck = function(const AOrigin: string): Boolean;
+
   TWebSocketOptions = record
     MaxFrameSize: Int64;
     MaxMessageSize: Int64;
+    { If set, called during upgrade to validate the Origin header.
+      When nil, all origins are accepted (no validation). }
+    OnCheckOrigin: TWebSocketOriginCheck;
     class function Default: TWebSocketOptions; static;
   end;
 
@@ -128,6 +136,7 @@ class function TWebSocketOptions.Default: TWebSocketOptions;
 begin
   Result.MaxFrameSize := WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxMessageSize := WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+  Result.OnCheckOrigin := nil;
 end;
 
 function IsOWS(const ACh: Char): Boolean;
@@ -326,6 +335,13 @@ begin
   ValidateHandshakeKey(LKey);
   if LVersion <> '13' then
     raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
+
+  { Origin validation }
+  if Assigned(AOptions.OnCheckOrigin) then
+  begin
+    if not AOptions.OnCheckOrigin(AReq.Headers.Get('origin')) then
+      raise EHttpError.Create('WebSocket: origin not allowed');
+  end;
 
   { Hijack the connection }
   if not Supports(AW, IHttpHijacker, LHijacker) then

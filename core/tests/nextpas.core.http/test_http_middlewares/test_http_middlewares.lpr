@@ -41,12 +41,13 @@ var
   GTestSentinel: TObject;
 
 type
-  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpResponseBodyBytes)
   private
     FStatus: THttpStatus;
     FBody: string;
     FBodyBytes: TBytes;
     FHeaders: IHttpHeaders;
+    FBodyBytesWritten: Int64;
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
@@ -54,6 +55,7 @@ type
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    function GetBodyBytesWritten: Int64;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
@@ -95,6 +97,7 @@ begin
   FBody := '';
   FBodyBytes := nil;
   FHeaders := NewHttpHeaders;
+  FBodyBytesWritten := 0;
 end;
 
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -126,11 +129,17 @@ begin
   SetLength(FBodyBytes, LOldLen + ACount);
   if ACount > 0 then
     Move(ABuf, FBodyBytes[LOldLen], ACount);
+  Inc(FBodyBytesWritten, Int64(ACount));
   Result := ACount;
 end;
 
 procedure TMockResponseWriter.Flush;
 begin
+end;
+
+function TMockResponseWriter.GetBodyBytesWritten: Int64;
+begin
+  Result := FBodyBytesWritten;
 end;
 
 function MakeRateLimitOpts(AMax, AWindow: Int32): TRateLimitOptions;
@@ -2428,6 +2437,35 @@ begin
   CheckEqual(1234, LMetrics.RequestBytes, 'request bytes tracked');
 end;
 
+procedure TestMetricsTracksResponseBytes;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write('hello world'[1], 11);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request');
+  CheckEqual(11, LMetrics.ResponseBytes, 'response bytes tracked');
+end;
+
 procedure TestDecompressGzipBody;
 var
   LHandler: IHttpHandler;
@@ -3094,6 +3132,7 @@ begin
   T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
   T.Test('Metrics: tracks request bytes', @TestMetricsTracksRequestBytes);
+  T.Test('Metrics: tracks response bytes', @TestMetricsTracksResponseBytes);
   T.Test('Decompress: gzip body', @TestDecompressGzipBody);
   T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
   { ServerHeader }
