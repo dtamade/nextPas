@@ -100,8 +100,13 @@
 | `lockfree.flatcombining` | Flat Combining (批量操作) | ✅ 完成 | 5 |
 | `lockfree.rcu` | RCU (Read-Copy-Update) | ✅ 完成 | 7 |
 | `lockfree.rbtree` | Red-Black Tree (自平衡BST) | ✅ 完成 | 10 |
+| `lockfree.fenwick` | Fenwick Tree (二叉索引树) | ✅ 完成 | 5 |
+| `lockfree.treap` | Treap (随机化BST) | ✅ 完成 | 7 |
+| `lockfree.scapegoat` | Scapegoat Tree (无旋转平衡BST) | ✅ 完成 | 7 |
+| `lockfree.radix` | Radix Tree (压缩前缀树) | ✅ 完成 | 7 |
+| `lockfree.bplus` | B+ Tree (数据库索引) | ⚠️ 有泄漏 | 8 |
 
-**规模**: 82 文件, ~30000 行, 43069 测试, 68 数据结构
+**规模**: 87 文件, ~33000 行, 73 数据结构
 
 ---
 
@@ -450,6 +455,18 @@ L3: nextpas.core.lockfree.* (数据结构)
 | Red-Black Tree | 自平衡 BST，O(log n) | 10 |
 
 **总计**: 82 文件, ~30000 行, 43069 测试, 68 数据结构
+
+### 4.24 Phase 8 新增数据结构 (2026-07-06)
+
+| 结构 | 描述 | 测试 |
+|------|------|------|
+| Fenwick Tree | 二叉索引树，O(log n) 前缀和 | 5 |
+| Treap | 随机化 BST，期望 O(log n) | 7 |
+| Scapegoat Tree | 无旋转平衡 BST，摊还 O(log n) | 7 |
+| Radix Tree | 压缩前缀树，O(k) 字符串查找 | 7 |
+| B+ Tree | 数据库索引结构，范围查询 | 8 (有泄漏待修复) |
+
+**总计**: 87 文件, ~33000 行, 73 数据结构
 
 | 结构 | 描述 | 测试 |
 |------|------|------|
