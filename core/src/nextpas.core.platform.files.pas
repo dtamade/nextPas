@@ -1037,13 +1037,19 @@ end;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
 var
   LNewPos: Int64;
+  LOldPos: Int64;
 begin
+  if not SetFilePointerEx(AHandle.Value, 0, @LOldPos, FILE_CURRENT) then
+    Exit(Int32(GetLastError));
   if not SetFilePointerEx(AHandle.Value, ASize, @LNewPos, FILE_BEGIN) then
-    Exit(-1);
+    Exit(Int32(GetLastError));
   if SetEndOfFile(AHandle.Value) then
     Result := 0
   else
+  begin
     Result := Int32(GetLastError);
+    SetFilePointerEx(AHandle.Value, LOldPos, nil, FILE_BEGIN);
+  end;
 end;
 
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;

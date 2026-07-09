@@ -325,7 +325,7 @@ function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
     @param AProtocol 协议号
     @param ASocket1 输出第一个套接字
     @param ASocket2 输出第二个套接字
-    @return 0 成功，否则返回错误码 *}
+    @return 0 成功，否则返回错误码；Windows 当前返回 PLATFORM_ERR_UNSUPPORTED *}
 function platform_socket_pair(ADomain, AType, AProtocol: Int32;
   out ASocket1, ASocket2: TPlatformSocket): Int32;
 
@@ -447,7 +447,7 @@ end;
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
 begin
   if ASocket.Value < 0 then
-    Exit(0);
+    Exit(PLATFORM_ERR_INVALID_HANDLE);
   Result := PosixCheck(close(ASocket.Value));
   ASocket.Value := -1;
 end;
@@ -858,7 +858,8 @@ end;
 
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
 begin
-  if ASocket.Value = PtrUInt(-1) then Exit(0);
+  if ASocket.Value = PtrUInt(-1) then
+    Exit(PLATFORM_ERR_INVALID_HANDLE);
   if closesocket(TSocket(ASocket.Value)) = 0 then
     Result := 0
   else
@@ -1037,6 +1038,7 @@ end;
 
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 type
+  { FPC's winsock bindings in this toolchain do not expose addrinfo/getaddrinfo. }
   TWinAddrInfo = record
     ai_flags: Int32;
     ai_family: Int32;

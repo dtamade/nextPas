@@ -24,7 +24,10 @@ type
     psUnknown
   );
 
-  {** @desc 进程运行结果 *}
+  {** @desc 进程运行结果
+      ExitCode 语义：
+      - 正常退出时为程序返回码（POSIX 通常是 0..125，Windows 为进程原始退出码）
+      - POSIX 被信号终止时编码为 128 + signal，遵循常见 shell 约定 *}
   TPlatformProcessResult = record
     Status: TPlatformProcessStatus;
     ExitCode: Int32;
