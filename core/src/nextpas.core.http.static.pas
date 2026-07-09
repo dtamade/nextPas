@@ -26,6 +26,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.fs.base,
+  nextpas.core.fs.path,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.time.format,
@@ -431,6 +432,7 @@ var
   LIfModifiedSince: string;
   LStart, LEnd: Int64;
   LFileSize: Int64;
+  LEscapedName: string;
 begin
   try
     if not nextpas.core.fs.Exists(AFilePath) then
@@ -488,8 +490,15 @@ begin
     AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
     AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
     if ADownloadName <> '' then
+    begin
+      { RFC 6266: Content-Disposition filename needs quoted-string escaping.
+        Escape backslashes and double quotes to prevent header injection. }
+      LEscapedName := ADownloadName;
+      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '\', '\\', True);
+      LEscapedName := nextpas.core.text.conv.StringReplace(LEscapedName, '"', '\"', True);
       AW.GetHeaders.SetHeader('content-disposition',
-        'attachment; filename="' + ADownloadName + '"');
+        'attachment; filename="' + LEscapedName + '"');
+    end;
 
     { Range request support }
     if AReq <> nil then
@@ -541,6 +550,8 @@ begin
   var
     LRelative: string;
     LFullPath: string;
+    LNormalizedRoot: string;
+    LNormalizedFull: string;
   begin
     { Try wildcard param first, fall back to URL path }
     LRelative := AReq.PathParam('filepath');
@@ -569,6 +580,18 @@ begin
     end;
     { Build full path }
     LFullPath := ARoot + '/' + LRelative;
+    { Security: verify resolved path stays within root directory.
+      This prevents symlink-based directory traversal attacks. }
+    LNormalizedRoot := FsPathClean(FsPathAbs(ARoot));
+    LNormalizedFull := FsPathClean(FsPathAbs(LFullPath));
+    if not (Length(LNormalizedFull) >= Length(LNormalizedRoot)) or
+       (System.Copy(LNormalizedFull, 1, Length(LNormalizedRoot)) <> LNormalizedRoot) then
+    begin
+      AW.GetHeaders.SetHeader('content-length', '9');
+      AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
+      AW.Write(PAnsiChar('Forbidden')^, 9);
+      Exit;
+    end;
     ServeFileContentEx(LFullPath, AReq, AW, '');
   end;
 end;

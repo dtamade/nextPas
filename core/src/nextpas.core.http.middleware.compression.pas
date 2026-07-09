@@ -37,6 +37,8 @@ uses
 
 const
   DEFAULT_MIN_COMPRESS_SIZE = 1024;
+  { Maximum buffer size for compression middleware to prevent memory DoS }
+  MAX_COMPRESS_BUFFER_SIZE: SizeUInt = 64 * 1024 * 1024; { 64 MB }
 
 type
   { Buffered response writer that captures body in memory.
@@ -111,6 +113,9 @@ procedure TBufferedResponseWriter.EnsureCapacity(AExtra: SizeUInt);
 var
   LNewCap: SizeUInt;
 begin
+  { Prevent memory DoS from unbounded buffering }
+  if FBodyLen + AExtra > MAX_COMPRESS_BUFFER_SIZE then
+    raise EHttpError.Create('Response body too large for compression buffering');
   if FBodyLen + AExtra > SizeUInt(Length(FBody)) then
   begin
     LNewCap := SizeUInt(Length(FBody)) * 2;
@@ -158,13 +163,13 @@ var
   LCompressed: TBytes;
   LBodyBytes: TBytes;
 begin
-  if not FHeadersWritten then
-    FReal.WriteHeader(FStatus)
-  else
-    FReal.WriteHeader(FStatus);
-
   if FBodyLen = 0 then
+  begin
+    { No body — just write status and content-length: 0 }
+    FReal.GetHeaders.SetHeader('content-length', '0');
+    FReal.WriteHeader(FStatus);
     Exit;
+  end;
 
   if AEncoding <> '' then
   begin
@@ -179,26 +184,31 @@ begin
       { Only use compressed version if actually smaller }
       if Length(LCompressed) < FBodyLen then
       begin
+        { Set headers BEFORE WriteHeader — H1ResponseWriter commits headers on WriteHeader }
         FReal.GetHeaders.SetHeader('content-encoding', AEncoding);
         FReal.GetHeaders.SetHeader('content-length', IntToStr(Length(LCompressed)));
         FReal.GetHeaders.SetHeader('vary', 'Accept-Encoding');
+        FReal.WriteHeader(FStatus);
         FReal.Write(LCompressed[0], Length(LCompressed));
       end
       else
       begin
         { Compression didn't help — write uncompressed }
         FReal.GetHeaders.SetHeader('content-length', IntToStr(FBodyLen));
+        FReal.WriteHeader(FStatus);
         FReal.Write(FBody[0], FBodyLen);
       end;
     except
       { Compression failed — write uncompressed }
       FReal.GetHeaders.SetHeader('content-length', IntToStr(FBodyLen));
+      FReal.WriteHeader(FStatus);
       FReal.Write(FBody[0], FBodyLen);
     end;
   end
   else
   begin
     FReal.GetHeaders.SetHeader('content-length', IntToStr(FBodyLen));
+    FReal.WriteHeader(FStatus);
     FReal.Write(FBody[0], FBodyLen);
   end;
 end;
