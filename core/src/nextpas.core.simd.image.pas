@@ -687,3 +687,123 @@ begin
 end;
 
 end.
+
+// ============================================================================
+// Image Filtering: Mean Filter and Gaussian Filter
+// ============================================================================
+
+procedure MeanFilter3x3(const aSrc: TSimdImage; var aDst: TSimdImage);
+var
+  x, y: SizeUInt;
+  ky, kx: Integer;
+  sx, sy: Integer;
+  pRow: PByte;
+  LSum: Integer;
+  LCount: Integer;
+begin
+  if (aSrc.Format <> spfGray8) or (aDst.Format <> spfGray8) then Exit;
+  if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
+
+  for y := 0 to aSrc.Height - 1 do
+  begin
+    for x := 0 to aSrc.Width - 1 do
+    begin
+      LSum := 0;
+      LCount := 0;
+      for ky := -1 to 1 do
+        for kx := -1 to 1 do
+        begin
+          sy := Integer(y) + ky;
+          sx := Integer(x) + kx;
+          if (sy >= 0) and (sy < Integer(aSrc.Height)) and
+             (sx >= 0) and (sx < Integer(aSrc.Width)) then
+          begin
+            pRow := aSrc.RowPtr(SizeUInt(sy));
+            LSum := LSum + pRow[sx];
+            Inc(LCount);
+          end;
+        end;
+      aDst.RowPtr(y)[x] := Byte(LSum div LCount);
+    end;
+  end;
+end;
+
+procedure GaussianFilter3x3(const aSrc: TSimdImage; var aDst: TSimdImage);
+const
+  // Gaussian kernel 3x3 (sigma ≈ 0.85)
+  Kernel: array[0..8] of Single = (
+    1/16, 2/16, 1/16,
+    2/16, 4/16, 2/16,
+    1/16, 2/16, 1/16
+  );
+var
+  x, y: SizeUInt;
+  ky, kx: Integer;
+  sx, sy: Integer;
+  pRow: PByte;
+  LSum: Single;
+begin
+  if (aSrc.Format <> spfGray8) or (aDst.Format <> spfGray8) then Exit;
+  if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
+
+  for y := 0 to aSrc.Height - 1 do
+  begin
+    for x := 0 to aSrc.Width - 1 do
+    begin
+      LSum := 0;
+      for ky := -1 to 1 do
+        for kx := -1 to 1 do
+        begin
+          sy := Integer(y) + ky;
+          sx := Integer(x) + kx;
+          if (sy >= 0) and (sy < Integer(aSrc.Height)) and
+             (sx >= 0) and (sx < Integer(aSrc.Width)) then
+          begin
+            pRow := aSrc.RowPtr(SizeUInt(sy));
+            LSum := LSum + pRow[sx] * Kernel[(ky+1)*3 + (kx+1)];
+          end;
+        end;
+      if LSum < 0 then LSum := 0;
+      if LSum > 255 then LSum := 255;
+      aDst.RowPtr(y)[x] := Byte(Round(LSum));
+    end;
+  end;
+end;
+
+procedure MeanFilter5x5(const aSrc: TSimdImage; var aDst: TSimdImage);
+var
+  x, y: SizeUInt;
+  ky, kx: Integer;
+  sx, sy: Integer;
+  pRow: PByte;
+  LSum: Integer;
+  LCount: Integer;
+begin
+  if (aSrc.Format <> spfGray8) or (aDst.Format <> spfGray8) then Exit;
+  if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
+
+  for y := 0 to aSrc.Height - 1 do
+  begin
+    for x := 0 to aSrc.Width - 1 do
+    begin
+      LSum := 0;
+      LCount := 0;
+      for ky := -2 to 2 do
+        for kx := -2 to 2 do
+        begin
+          sy := Integer(y) + ky;
+          sx := Integer(x) + kx;
+          if (sy >= 0) and (sy < Integer(aSrc.Height)) and
+             (sx >= 0) and (sx < Integer(aSrc.Width)) then
+          begin
+            pRow := aSrc.RowPtr(SizeUInt(sy));
+            LSum := LSum + pRow[sx];
+            Inc(LCount);
+          end;
+        end;
+      aDst.RowPtr(y)[x] := Byte(LSum div LCount);
+    end;
+  end;
+end;
+
+end.
