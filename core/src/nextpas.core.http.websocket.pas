@@ -316,7 +316,7 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
-  LUpgrade, LKey, LVersion: string;
+  LUpgrade, LKey, LVersion, LOrigin: string;
   LConnectionValues, LKeyValues: TStringArray;
   LAccept: string;
   LResp: string;
@@ -343,10 +343,19 @@ begin
     raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
 
   { Origin validation }
+  LOrigin := AReq.Headers.Get('origin');
   if Assigned(AOptions.OnCheckOrigin) then
   begin
-    if not AOptions.OnCheckOrigin(AReq.Headers.Get('origin')) then
+    if not AOptions.OnCheckOrigin(LOrigin) then
       raise EHttpError.Create('WebSocket: origin not allowed');
+  end
+  else
+  begin
+    { Default: reject Origin: null (common non-browser bypass technique).
+      Browsers always send a valid Origin; `null` typically indicates
+      a sandboxed iframe or a non-browser client trying to evade checks. }
+    if LOrigin = 'null' then
+      raise EHttpError.Create('WebSocket: Origin: null not allowed by default');
   end;
 
   { Hijack the connection }

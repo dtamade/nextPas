@@ -23,6 +23,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.text.conv;
@@ -101,6 +102,14 @@ function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
 var
   LState: TCorsState;
 begin
+  { Security: reject wildcard origins with credentials. Echoing back any Origin
+    when AllowCredentials=true is worse than `*` — it bypasses the browser's
+    same-origin protection entirely. Require explicit origin list for credentials. }
+  if AOptions.AllowCredentials and (AOptions.AllowOrigins = '*') then
+    raise EArgumentError.Create(
+      'CORS: AllowOrigins="*" with AllowCredentials=true is not allowed. ' +
+      'Use an explicit origin list when credentials are required.');
+
   LState := ParseOrigins(AOptions.AllowOrigins);
   LState.AllowMethods := AOptions.AllowMethods;
   LState.AllowHeaders := AOptions.AllowHeaders;

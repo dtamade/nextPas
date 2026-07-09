@@ -243,6 +243,64 @@ begin
     + ' GMT';
 end;
 
+{ Parse HTTP date string (RFC 7231 §7.1.1.1) to Unix timestamp.
+  Accepts: "Sun, 06 Nov 1994 08:49:37 GMT" (preferred)
+  Returns 0 on parse failure. }
+function ParseHttpDate(const ADate: string): Int64;
+var
+  LLen, LPos, LMonth, LI: Integer;
+  LDay, LYear, LHour, LMinute, LSecond: Integer;
+  LMonthStr: string;
+  LDT: TOffsetDateTime;
+begin
+  Result := 0;
+  LLen := Length(ADate);
+  { Minimum: "Sun, 06 Nov 1994 08:49:37 GMT" = 29 chars }
+  if LLen < 29 then Exit;
+
+  { Skip day-name and comma+space: "Sun, " = 5 chars }
+  LPos := 5;
+
+  { Parse day (2 digits) }
+  if (LPos + 2 > LLen) then Exit;
+  LDay := (Ord(ADate[LPos + 1]) - Ord('0')) * 10 + (Ord(ADate[LPos + 2]) - Ord('0'));
+  Inc(LPos, 3); { skip day + space }
+
+  { Parse month (3 chars) }
+  if (LPos + 3 > LLen) then Exit;
+  LMonthStr := Copy(ADate, LPos, 3);
+  LMonth := 0;
+  for LI := 1 to 12 do
+    if LMonthStr = MONTH_NAMES[LI] then
+    begin
+      LMonth := LI;
+      Break;
+    end;
+  if LMonth = 0 then Exit;
+  Inc(LPos, 4); { skip month + space }
+
+  { Parse year (4 digits) }
+  if (LPos + 4 > LLen) then Exit;
+  LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
+         + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
+         + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
+         + (Ord(ADate[LPos + 3]) - Ord('0'));
+  Inc(LPos, 5); { skip year + space }
+
+  { Parse hour:minute:second }
+  if (LPos + 8 > LLen) then Exit;
+  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
+  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
+  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
+
+  try
+    LDT := TOffsetDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond, 0, TOffset.Utc);
+    Result := LDT.ToUnixSeconds;
+  except
+    Result := 0;
+  end;
+end;
+
 { Generate ETag from file size and modification time.
   Format: "size-mtime" hex pair for strong ETag. }
 function GenerateETag(ASize: Int64; AModTime: Int64): string;
@@ -406,8 +464,9 @@ begin
       LIfModifiedSince := AReq.GetHeaders.Get('if-modified-since');
       if (LIfNoneMatch = '') and (LIfModifiedSince <> '') then
       begin
-        { Simplified: if header matches Last-Modified, return 304 }
-        if LIfModifiedSince = LLastModified then
+        { RFC 7232 §3.3: parse date and compare timestamps.
+          Return 304 if the resource has not been modified since the given date. }
+        if LInfo.ModTime <= ParseHttpDate(LIfModifiedSince) then
         begin
           AW.GetHeaders.SetHeader('etag', LETag);
           AW.GetHeaders.SetHeader('last-modified', LLastModified);

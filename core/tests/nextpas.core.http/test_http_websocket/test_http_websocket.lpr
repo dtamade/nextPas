@@ -2884,6 +2884,52 @@ begin
   end;
 end;
 
+{ Test: Origin: null rejected by default (no OnCheckOrigin) }
+procedure TestOriginNullRejectedByDefault;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+begin
+  LRouter := THttpRouter.Create;
+  { No OnCheckOrigin set — default behavior should reject Origin: null }
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: null'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 403', LResp) > 0, 'Origin: null must be rejected by default');
+    Check(Pos('HTTP/1.1 101', LResp) = 0, 'Origin: null must not upgrade');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 begin
   T := TTestSuite.Create('http.websocket');
@@ -2928,5 +2974,6 @@ begin
   T.Test('CloseFrame', @TestCloseFrame);
   T.Test('OriginValidationRejectsDisallowed', @TestOriginValidationRejectsDisallowed);
   T.Test('OriginValidationAcceptsAllowed', @TestOriginValidationAcceptsAllowed);
+  T.Test('OriginNullRejectedByDefault', @TestOriginNullRejectedByDefault);
   if not T.Run then Halt(1);
 end.

@@ -605,36 +605,22 @@ begin
     'disallowed origin gets no ACAO');
 end;
 
-procedure TestCorsCredentialsWildcardEchoesOrigin;
+procedure TestCorsCredentialsWildcardRejected;
 var
-  LHandler: IHttpHandler;
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReq: TMockRequest;
-  LReqIntf: IHttpRequest;
   LOpts: TCorsOptions;
+  LRaised: Boolean;
 begin
   LOpts := TCorsOptions.Default;
   LOpts.AllowOrigins := '*';
   LOpts.AllowCredentials := True;
-  LHandler := Chain(
-    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      AW.WriteHeader(HTTP_STATUS_OK);
-    end),
-    [CorsMiddleware(LOpts)]
-  );
-  LReq := TMockRequest.Create(hmGet, '/api');
-  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
-  LReqIntf := LReq;
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LHandler.ServeHTTP(LReqIntf, LW);
-  CheckEqual('http://example.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
-    'credentials+wildcard echoes concrete origin, not *');
-  CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'),
-    'credentials header present');
-  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for echoed origin');
+  LRaised := False;
+  try
+    CorsMiddleware(LOpts);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'AllowOrigins="*" + AllowCredentials=true must be rejected');
 end;
 
 procedure TestCorsMaxAge;
@@ -3281,7 +3267,7 @@ begin
   T.Test('CORS: AllowCredentials header', @TestCorsCredentials);
   T.Test('CORS: specific origin allowed + Vary', @TestCorsSpecificOriginAllowed);
   T.Test('CORS: specific origin denied', @TestCorsSpecificOriginDenied);
-  T.Test('CORS: credentials+wildcard echoes origin', @TestCorsCredentialsWildcardEchoesOrigin);
+  T.Test('CORS: credentials+wildcard rejected', @TestCorsCredentialsWildcardRejected);
   T.Test('CORS: MaxAge header', @TestCorsMaxAge);
   T.Test('CORS: custom AllowMethods/AllowHeaders', @TestCorsCustomMethodsHeaders);
   T.Test('CORS: wildcard echoes request headers', @TestCorsWildcardEchoesRequestHeaders);
