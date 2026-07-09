@@ -23,11 +23,11 @@
 | C2 | **permissive overload resolution** (选第一个候选) |    | compiler/sema | 3d |   C8 临时方案 |
 | C3 | **Pipeline 阶段模糊** (sema 做了 ir 的活) |    | compiler/sema+ir | 5d |   边界重划 |
 | C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d |   改为独立 unit |
-| C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d |   方案已有 |
-| C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d |   依赖 C5 |
+| C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d | ✅ 2026-07-06 |
+| C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d | ✅ 2026-07-06 |
 | C7 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d |   方案已有 |
 | C8 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d |   方案已有 |
-| C9 | **c2p_win32_compat** (平台排除) |    | compiler | 1d |   最后残留 |
+| C9 | **c2p_win32_compat** (平台排除) |    | compiler | 1d | ✅ 2026-07-06 |
 
 ### Core 框架
 
