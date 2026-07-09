@@ -70,6 +70,7 @@ end;
  *}
 procedure Test_Baseline_Save;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LPath: string;
 begin
@@ -78,7 +79,8 @@ begin
   LPath := 'test-baseline-' + IntToStr(Random(10000)) + '.json';
 
   { 创建测试结果 }
-  LResults := TBenchSuite.Create('RegressionTest')
+  LSuite := TBenchSuite.Create('RegressionTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -99,6 +101,7 @@ end;
  *}
 procedure Test_Baseline_Load;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LPath: string;
   LLoaded: Boolean;
@@ -108,7 +111,8 @@ begin
   LPath := 'test-baseline-' + IntToStr(Random(10000)) + '.json';
 
   { 创建测试结果 }
-  LResults := TBenchSuite.Create('RegressionTest')
+  LSuite := TBenchSuite.Create('RegressionTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -118,12 +122,13 @@ begin
   LResults.SaveToJSON(LPath);
 
   { 尝试加载基线 }
-  LLoaded := TBenchSuite.Create('LoadTest')
-    .TryLoadBaseline(LPath);
+  LSuite := TBenchSuite.Create('LoadTest');
+  LLoaded := LSuite.TryLoadBaseline(LPath);
 
   if LLoaded then
   begin
-    LResults := TBenchSuite.Create('LoadTest')
+    LSuite := TBenchSuite.Create('LoadTest');
+    LResults := LSuite
       .Add('Benchmark', @BenchExample)
       .Run;
 
@@ -141,11 +146,13 @@ end;
  *}
 procedure Test_Threshold_Detection;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
 begin
   WriteLn('  + threshold_detection');
 
-  LResults := TBenchSuite.Create('ThresholdTest')
+  LSuite := TBenchSuite.Create('ThresholdTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -160,12 +167,14 @@ end;
  *}
 procedure Test_Environment_Info;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LJSON: string;
 begin
   WriteLn('  + environment_info');
 
-  LResults := TBenchSuite.Create('EnvTest')
+  LSuite := TBenchSuite.Create('EnvTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -183,12 +192,14 @@ end;
  *}
 procedure Test_Report_Formats;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LConsole, LJSON, LTSV: string;
 begin
   WriteLn('  + report_formats');
 
-  LResults := TBenchSuite.Create('ReportTest')
+  LSuite := TBenchSuite.Create('ReportTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -211,6 +222,7 @@ end;
  *}
 procedure Test_Timeline_Append;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LPath: string;
 begin
@@ -218,7 +230,8 @@ begin
 
   LPath := 'test-timeline-' + IntToStr(Random(10000)) + '.jsonl';
 
-  LResults := TBenchSuite.Create('TimelineTest')
+  LSuite := TBenchSuite.Create('TimelineTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -239,12 +252,14 @@ end;
  *}
 procedure Test_Benchstat_Format;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LBenchstat: string;
 begin
   WriteLn('  + benchstat_format');
 
-  LResults := TBenchSuite.Create('BenchstatTest')
+  LSuite := TBenchSuite.Create('BenchstatTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -262,12 +277,14 @@ end;
  *}
 procedure Test_HTML_Report;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LHTML: string;
 begin
   WriteLn('  + html_report');
 
-  LResults := TBenchSuite.Create('HTMLTest')
+  LSuite := TBenchSuite.Create('HTMLTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(100))
     .SetMinSamples(5)
     .Add('Benchmark', @BenchExample)
@@ -285,12 +302,14 @@ end;
  *}
 procedure Test_RunParallel;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LAll: TBenchResultArray;
 begin
   WriteLn('  + run_parallel');
 
-  LResults := TBenchSuite.Create('ParallelTest')
+  LSuite := TBenchSuite.Create('ParallelTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(3)
     .Add('Benchmark1', @BenchExample)
@@ -317,6 +336,7 @@ end;
  *}
 procedure Test_Custom_Metrics;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LAll: TBenchResultArray;
   LFound: Boolean;
@@ -324,7 +344,8 @@ var
 begin
   WriteLn('  + custom_metrics');
 
-  LResults := TBenchSuite.Create('CustomMetricsTest')
+  LSuite := TBenchSuite.Create('CustomMetricsTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(3)
     .Add('Benchmark', @BenchWithMetrics)
@@ -351,12 +372,14 @@ end;
  *}
 procedure Test_ToSummary;
 var
+  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LSummary: string;
 begin
   WriteLn('  + to_summary');
 
-  LResults := TBenchSuite.Create('SummaryTest')
+  LSuite := TBenchSuite.Create('SummaryTest');
+  LResults := LSuite
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(3)
     .Add('Benchmark', @BenchExample)

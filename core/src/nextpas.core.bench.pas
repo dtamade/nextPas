@@ -35,8 +35,6 @@ type
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
   TInt64Array = nextpas.core.bench.base.TInt64Array;
   TBaselineData = nextpas.core.bench.base.TBaselineData;
-  {** @deprecated Use TBaselineData instead. }
-  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
   TMatrixResult = nextpas.core.bench.base.TMatrixResult;
@@ -149,9 +147,7 @@ type
     function LoadBaseline(const APath: string): IBenchSuite;
     function TryLoadBaseline(const APath: string): Boolean;
     function SetFilter(const AFilter: string): IBenchSuite;
-    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
-    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
     {** B21: 启用自适应预热 }
     function SetAdaptiveWarmup(AEnabled: Boolean;
       ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
@@ -750,15 +746,6 @@ begin
   FFilter := AFilter;
 end;
 
-function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
-begin
-  GuardNotRun;
-  Result := Self;
-  if ATimeoutMs < 0 then
-    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: timeout must be >= 0');
-  FConfig.TimeoutMs := ATimeoutMs;
-end;
-
 function TBenchSuite.SetTimeout(ADuration: TDuration): IBenchSuite;
 begin
   GuardNotRun;
@@ -766,13 +753,6 @@ begin
   if ADuration.AsMilliseconds < 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: duration must be >= 0');
   FConfig.TimeoutMs := ADuration.AsMilliseconds;
-end;
-
-function TBenchSuite.EnableObjectPool(AEnabled: Boolean): IBenchSuite;
-begin
-  GuardNotRun;
-  Result := Self;
-  FRunner.EnableObjectPool(AEnabled);
 end;
 
 function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;

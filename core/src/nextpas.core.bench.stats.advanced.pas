@@ -1015,7 +1015,7 @@ begin
   else
   begin
     Result.IsNormal := False;
-    Result.ApproximatePValue := 0.01;
+    Result.ApproximatePValue := BENCH_SIGNIFICANCE_ALPHA_HIGH;
   end;
 end;
 

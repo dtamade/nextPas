@@ -497,19 +497,19 @@ end;
 function TBenchStatsAnalyzer.TInvAlpha(ADF, AAlpha: Double): Double;
 begin
   // DS-04: map common alpha values to lookup tables; fallback to 95%
-  if AAlpha <= 0.01 then
+  if AAlpha <= BENCH_SIGNIFICANCE_ALPHA_HIGH then
     Result := TInvLookup(ADF, TINV99_DATA, Z_SCORE_99)
-  else if AAlpha <= 0.05 then
+  else if AAlpha <= BENCH_SIGNIFICANCE_ALPHA then
     Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95)
   else
-    // alpha > 0.05: use 95% critical value (conservative)
+    // alpha > BENCH_SIGNIFICANCE_ALPHA: use 95% critical value (conservative)
     Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95);
 end;
 
 function TBenchStatsAnalyzer.HasHeuristicDifference(const A, B: TBenchStats): Boolean;
 begin
-  // 默认 95% 置信水平 (alpha = 0.05)
-  Result := HasHeuristicDifferenceAt(A, B, 0.05);
+  // 默认 95% 置信水平 (alpha = BENCH_SIGNIFICANCE_ALPHA)
+  Result := HasHeuristicDifferenceAt(A, B, BENCH_SIGNIFICANCE_ALPHA);
 end;
 
 {** Welch's t-test 统计量和自由度计算（HasHeuristicDifference/ComputeApproximatePValue 共用）

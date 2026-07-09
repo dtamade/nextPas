@@ -266,6 +266,7 @@ const
 
   {** 统一显著性阈值常量 }
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
+  BENCH_SIGNIFICANCE_ALPHA_HIGH = 0.01;  // 高显著性 alpha 水平 (99% 置信)
   BENCH_MATRIX_DIFF_THRESHOLD = 0.05;    // ratio 启发式阈值 (baseline 无原始样本时)
 
   {** 环境变量名 }
@@ -689,7 +690,7 @@ begin
   AZ := Abs(AZ);
   if AZ > 6.0 then
     Exit(0.000001)
-  else if AZ < 0.01 then
+  else if AZ < BENCH_SIGNIFICANCE_ALPHA_HIGH then
     Exit(1.0);
   LT := 1.0 / (1.0 + 0.2316419 * AZ);
   LK := 0.3989422804014327 * Exp(-0.5 * AZ * AZ);
