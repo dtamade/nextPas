@@ -80,6 +80,9 @@ function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
 
+uses
+  nextpas.core.text.conv;
+
 type
   PFreeNode = ^TFreeNode;
   TFreeNode = record

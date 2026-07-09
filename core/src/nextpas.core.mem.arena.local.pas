@@ -64,7 +64,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.stack_guard;
+  nextpas.core.mem.stack_guard,
+  nextpas.core.text.conv;
 
 { TLocalArena }
 

@@ -150,7 +150,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.text.conv;
 
 const
   FB_MAP_MIN_CAP = 32;

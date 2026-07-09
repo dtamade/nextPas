@@ -83,6 +83,9 @@ const
 
 implementation
 
+uses
+  nextpas.core.text.conv;
+
 function SizeClassIndex(ASize: SizeUInt): Integer;
 begin
   if ASize <= 8 then Exit(0);
