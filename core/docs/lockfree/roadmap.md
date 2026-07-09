@@ -111,8 +111,13 @@
 | `lockfree.adjmap` | Adjacency Map (加权图+Dijkstra) | ✅ 完成 | 5 |
 | `lockfree.matrix` | Concurrent Matrix (矩阵运算) | ✅ 完成 | 7 |
 | `lockfree.wrr` | Weighted Round Robin (负载均衡) | ✅ 完成 | 6 |
+| `lockfree.elimination_stack` | Elimination Backoff Stack (消除回退栈) | ✅ 完成 | 5 |
+| `lockfree.versionvector` | Version Vector (分布式因果跟踪) | ✅ 完成 | 8 |
+| `lockfree.misragries` | Misra-Gries (流式频繁项检测) | ✅ 完成 | 6 |
+| `lockfree.robinhood` | Robin Hood Hash Map (后向位移哈希) | ✅ 完成 | 6 |
+| `lockfree.unrolled_list` | Concurrent Unrolled List (缓存友好链表) | ✅ 完成 | 7 |
 
-**规模**: 93 文件, ~35000 行, 79 数据结构
+**规模**: 98 文件, ~36500 行, 84 数据结构
 
 ---
 
