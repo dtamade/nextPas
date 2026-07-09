@@ -10,7 +10,8 @@ program test_bench_regression;
 
 uses
   cthreads,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.bench,
   nextpas.core.time.base;
 
