@@ -31,7 +31,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 type
@@ -41,7 +40,7 @@ type
    *  内部维护分配记录数组，FreeMem 时移除记录。
    *  析构时遍历剩余记录并释放。
    *}
-  TScopedAllocator = class(TAllocator)
+  TScopedAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FLock: TMemMutex;
@@ -50,14 +49,14 @@ type
     FActiveBytes: SizeUInt;
     procedure Track(APtr: Pointer);
     procedure Untrack(APtr: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
 
     {** 提前释放所有已跟踪的分配（不销毁分配器） }
     procedure Reset;
@@ -67,7 +66,7 @@ type
     {** 当前跟踪的总字节数（近似值） }
     function TrackedBytes: SizeUInt;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -127,7 +126,7 @@ begin
   end;
 end;
 
-function TScopedAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TScopedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.GetMem(ASize);
   if Result <> nil then
@@ -137,7 +136,7 @@ begin
   end;
 end;
 
-function TScopedAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TScopedAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
@@ -147,7 +146,7 @@ begin
   end;
 end;
 
-function TScopedAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TScopedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   // Realloc: 旧指针 untrack，新指针 track
   if APtr <> nil then
@@ -157,7 +156,7 @@ begin
     Track(Result);
 end;
 
-procedure TScopedAllocator.DoFreeMem(APtr: Pointer);
+procedure TScopedAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr <> nil then
     Untrack(APtr);
@@ -196,7 +195,7 @@ begin
   Result := SizeUInt(FActiveBytes);
 end;
 
-function TScopedAllocator.Traits: TAllocatorTraits;
+function TScopedAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result := FInner.Traits;
 end;
