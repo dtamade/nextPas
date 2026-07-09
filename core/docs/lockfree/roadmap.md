@@ -86,8 +86,12 @@
 | `lockfree.counting_bloom` | Counting Bloom Filter | ✅ 完成 | 1027 |
 | `lockfree.lru_cache` | Concurrent LRU Cache | ✅ 完成 | 27 |
 | `lockfree.deque_lf` | Lock-Free Deque | ✅ 完成 | 43 |
+| `lockfree.trie_map` | Concurrent Trie Map | ✅ 完成 | 230 |
+| `lockfree.skiplist_map` | Concurrent SkipList Map | ✅ 完成 | 222 |
+| `lockfree.ttl_cache` | TTL Cache (带过期) | ✅ 完成 | 223 |
+| `lockfree.timeseries_ringbuffer` | Time Series Ring Buffer | ✅ 完成 | 23 |
 
-**规模**: 67 文件, ~27000 行, 42217 测试
+**规模**: 71 文件, ~28000 行, 42915 测试, 58 数据结构
 
 ---
 
@@ -149,7 +153,11 @@
 | test_lockfree_counting_bloom | 1027 | ✅ 全绿 |
 | test_lockfree_lru_cache | 27 | ✅ 全绿 |
 | test_lockfree_deque_lf | 43 | ✅ 全绿 |
-| **总计** | **42217** | **✅ 全绿** |
+| test_lockfree_trie_map | 230 | ✅ 全绿 |
+| test_lockfree_skiplist_map | 222 | ✅ 全绿 |
+| test_lockfree_ttl_cache | 223 | ✅ 全绿 |
+| test_lockfree_timeseries_ringbuffer | 23 | ✅ 全绿 |
+| **总计** | **42915** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
@@ -408,6 +416,17 @@ L3: nextpas.core.lockfree.* (数据结构)
 | LockFreeDeque | 双端队列 (PushLeft/Right) | 43 |
 
 **总计**: 67 文件, ~27000 行, 42217 测试, 54 数据结构
+
+### 4.21 Phase 5 新增数据结构 (2026-07-06)
+
+| 结构 | 描述 | 测试 |
+|------|------|------|
+| TrieMap | 并发字典树映射，O(k) 查找/插入/删除 | 230 |
+| SkipListMap | 并发有序映射，O(log n) 查找/插入/删除 | 222 |
+| TTLCache | 带过期时间的并发缓存，支持 per-entry TTL | 223 |
+| TimeSeriesRingBuffer | 时间序列环形缓冲区，支持 TTL 过期和范围查询 | 23 |
+
+**总计**: 71 文件, ~28000 行, 42915 测试, 58 数据结构
 
 ---
 
