@@ -67,7 +67,11 @@ uses
   nextpas.core.lockfree.roaring_bitmap,
   nextpas.core.lockfree.counting_bloom,
   nextpas.core.lockfree.lru_cache,
-  nextpas.core.lockfree.deque_lf;
+  nextpas.core.lockfree.deque_lf,
+  nextpas.core.lockfree.trie_map,
+  nextpas.core.lockfree.skiplist_map,
+  nextpas.core.lockfree.ttl_cache,
+  nextpas.core.lockfree.timeseries_ringbuffer;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -526,6 +530,36 @@ type
   }
   TLockFreeDeque = nextpas.core.lockfree.deque_lf.TLockFreeDeque;
   TDequeResult = nextpas.core.lockfree.deque_lf.TDequeResult;
+
+  {** @desc Concurrent Trie Map — 并发字典树映射
+    @details O(k) 查找/插入/删除，k = key 长度。16-way 分支。
+    @see TConcurrentTrieMap 详细文档和示例
+  }
+  TConcurrentTrieMap = nextpas.core.lockfree.trie_map.TConcurrentTrieMap;
+  TTrieMapResult = nextpas.core.lockfree.trie_map.TTrieMapResult;
+  TTrieMapForEachCallback = nextpas.core.lockfree.trie_map.TTrieMapForEachCallback;
+
+  {** @desc Concurrent SkipList Map — 并发有序映射
+    @details O(log n) 查找/插入/删除，基于跳表。支持有序遍历。
+    @see TConcurrentSkipListMap 详细文档和示例
+  }
+  TConcurrentSkipListMap = nextpas.core.lockfree.skiplist_map.TConcurrentSkipListMap;
+  TSkipListMapResult = nextpas.core.lockfree.skiplist_map.TSkipListMapResult;
+  TSkipListMapForEachCallback = nextpas.core.lockfree.skiplist_map.TSkipListMapForEachCallback;
+
+  {** @desc TTL Cache — 带过期时间的并发缓存
+    @details 支持全局默认 TTL 和 per-entry TTL。惰性清理过期条目。
+    @see TTTLCache 详细文档和示例
+  }
+  TTTLCache = nextpas.core.lockfree.ttl_cache.TTTLCache;
+  TTTLCacheResult = nextpas.core.lockfree.ttl_cache.TTTLCacheResult;
+
+  {** @desc Time Series Ring Buffer — 时间序列环形缓冲区
+    @details 固定容量环形缓冲区，每个条目带时间戳。支持 TTL 过期和时间范围查询。
+    @see TTimeSeriesRingBuffer 详细文档和示例
+  }
+  TTimeSeriesRingBuffer = nextpas.core.lockfree.timeseries_ringbuffer.TTimeSeriesRingBuffer;
+  TTSRingResult = nextpas.core.lockfree.timeseries_ringbuffer.TTSRingResult;
 
 implementation
 
