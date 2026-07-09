@@ -97,7 +97,12 @@ uses
   nextpas.core.lockfree.versionvector,
   nextpas.core.lockfree.misragries,
   nextpas.core.lockfree.robinhood,
-  nextpas.core.lockfree.unrolled_list;
+  nextpas.core.lockfree.unrolled_list,
+  nextpas.core.lockfree.leakybucket,
+  nextpas.core.lockfree.xorfilter,
+  nextpas.core.lockfree.slidingwindow,
+  nextpas.core.lockfree.reservoirsampling,
+  nextpas.core.lockfree.leftright;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -784,6 +789,42 @@ type
   generic TConcurrentUnrolledList<T> = class(specialize TConcurrentUnrolledListImpl<T>)
   end;
   TUnrolledResult = nextpas.core.lockfree.unrolled_list.TUnrolledResult;
+
+  {** @desc Leaky Bucket — 漏桶限流器
+    @details 恒定速率输出，与 TokenBucket 互补。
+    @see TLeakyBucket 详细文档和示例
+  }
+  TLeakyBucket = nextpas.core.lockfree.leakybucket.TLeakyBucket;
+  TLeakyBucketResult = nextpas.core.lockfree.leakybucket.TLeakyBucketResult;
+
+  {** @desc XOR Filter — 紧凑静态成员过滤器
+    @details 比 Bloom Filter 更紧凑，假阳性率 ~0.02%。
+    @see TXorFilter 详细文档和示例
+  }
+  TXorFilter = nextpas.core.lockfree.xorfilter.TXorFilter;
+  TXorFilterResult = nextpas.core.lockfree.xorfilter.TXorFilterResult;
+
+  {** @desc Sliding Window Counter — 滑动窗口限流器
+    @details 结合当前窗口和上一个窗口的加权计数，比固定窗口更准确。
+    @see TSlidingWindowLimiter 详细文档和示例
+  }
+  TSlidingWindowLimiter = nextpas.core.lockfree.slidingwindow.TSlidingWindowLimiter;
+  TSlidingWindowResult = nextpas.core.lockfree.slidingwindow.TSlidingWindowResult;
+
+  {** @desc Reservoir Sampling — 流式等概率采样
+    @details 固定内存处理无限流，每个元素等概率 k/n 被选中。
+    @see TReservoirSamplerImpl 详细文档和示例
+  }
+  generic TReservoirSampler<T> = class(specialize TReservoirSamplerImpl<T>)
+  end;
+  TReservoirResult = nextpas.core.lockfree.reservoirsampling.TReservoirResult;
+
+  {** @desc Left-Right — 双副本并发控制
+    @details 读无锁，写等待读者完成后翻转。比 RCU 更结构化。
+    @see TLeftRight 详细文档和示例
+  }
+  TLeftRight = nextpas.core.lockfree.leftright.TLeftRight;
+  TLeftRightResult = nextpas.core.lockfree.leftright.TLeftRightResult;
 
 implementation
 
