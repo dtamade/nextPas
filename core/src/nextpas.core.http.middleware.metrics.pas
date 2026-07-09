@@ -31,6 +31,8 @@ type
     Status4xx: Int64;
     Status5xx: Int64;
     TotalDurationUs: Int64;
+    RequestBytes: Int64;
+    ResponseBytes: Int64;
   end;
 
   {** Thread-safe metrics collector. Pass to MetricsMiddleware, then read via Snapshot. }
@@ -39,6 +41,8 @@ type
     function Snapshot: THttpMetrics;
     procedure Reset;
     procedure RecordRequest(const AStatus: Int64; const ADurationUs: Int64);
+    procedure RecordRequestWithBytes(const AStatus: Int64; const ADurationUs: Int64;
+      const ARequestBytes: Int64; const AResponseBytes: Int64);
   end;
 
 {** @desc Create a new metrics collector. Thread-safe. }
@@ -78,6 +82,8 @@ type
     function Snapshot: THttpMetrics;
     procedure Reset;
     procedure RecordRequest(const AStatus: Int64; const ADurationUs: Int64);
+    procedure RecordRequestWithBytes(const AStatus: Int64; const ADurationUs: Int64;
+      const ARequestBytes: Int64; const AResponseBytes: Int64);
   end;
 
 constructor THttpMetricsCollector.Create;
@@ -115,10 +121,18 @@ end;
 
 procedure THttpMetricsCollector.RecordRequest(const AStatus: Int64; const ADurationUs: Int64);
 begin
+  RecordRequestWithBytes(AStatus, ADurationUs, 0, 0);
+end;
+
+procedure THttpMetricsCollector.RecordRequestWithBytes(const AStatus: Int64;
+  const ADurationUs: Int64; const ARequestBytes: Int64; const AResponseBytes: Int64);
+begin
   EnterCriticalSection(FLock);
   try
     Inc(FMetrics.TotalRequests);
     Inc(FMetrics.TotalDurationUs, ADurationUs);
+    Inc(FMetrics.RequestBytes, ARequestBytes);
+    Inc(FMetrics.ResponseBytes, AResponseBytes);
     if (AStatus >= 200) and (AStatus < 300) then
       Inc(FMetrics.Status2xx)
     else if (AStatus >= 300) and (AStatus < 400) then
@@ -155,7 +169,8 @@ begin
       LStart := TInstant.Now;
       ANext.ServeHTTP(AReq, AW);
       LDuration := LStart.Elapsed;
-      LCollector.RecordRequest(Int64(AW.GetStatus), LDuration.AsMicroseconds);
+      LCollector.RecordRequestWithBytes(Int64(AW.GetStatus),
+        LDuration.AsMicroseconds, AReq.ContentLength, 0);
     end);
   end);
 end;

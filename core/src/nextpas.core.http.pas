@@ -34,6 +34,7 @@ uses
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
   nextpas.core.http.message,
   nextpas.core.json,
@@ -304,6 +305,8 @@ function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
 function CompressionMiddleware: IHttpMiddleware; inline;
 {** @desc Response compression middleware with custom minimum body size. }
 function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
+{** @desc Request body decompression middleware (gzip/deflate). }
+function DecompressMiddleware(const AMaxSize: Int64 = 0): IHttpMiddleware; inline;
 {** @desc Write 415 Unsupported Media Type JSON error response. }
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -832,6 +835,11 @@ end;
 function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.compression.CompressionMiddlewareWith(AMinSize);
+end;
+
+function DecompressMiddleware(const AMaxSize: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.decompress.DecompressMiddleware(AMaxSize);
 end;
 
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;

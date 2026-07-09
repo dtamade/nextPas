@@ -30,7 +30,10 @@ uses
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
+  nextpas.core.compress,
+  nextpas.core.text.conv,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
@@ -67,6 +70,7 @@ type
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
     procedure SetBodyReader(const ABody: IReader);
+    procedure SetBodyBytes(const AData: TBytes);
     procedure SetHeader(const AName, AValue: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
@@ -155,6 +159,12 @@ end;
 procedure TMockRequest.SetBodyReader(const ABody: IReader);
 begin
   FBodyReader := ABody;
+end;
+
+procedure TMockRequest.SetBodyBytes(const AData: TBytes);
+begin
+  FBodyReader := CreateBytesStreamFrom(AData) as IReader;
+  FContentLength := Length(AData);
 end;
 
 procedure TMockRequest.SetHeader(const AName, AValue: string);
@@ -2389,6 +2399,125 @@ begin
   Check(LRaised, 'raises on nil callback');
 end;
 
+procedure TestMetricsTracksRequestBytes;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(1234);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request');
+  CheckEqual(1234, LMetrics.RequestBytes, 'request bytes tracked');
+end;
+
+procedure TestDecompressGzipBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGotBody: string;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  I: Integer;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: IReader;
+      LBuf: array[0..255] of Byte;
+      LN: SizeUInt;
+    begin
+      LBody := AReq.Body;
+      if LBody <> nil then
+      begin
+        LN := LBody.Read(LBuf[0], SizeOf(LBuf));
+        SetLength(LGotBody, LN);
+        Move(LBuf[0], LGotBody[1], LN);
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware]
+  );
+  { Create gzip-compressed body }
+  SetLength(LPlain, 11);
+  for I := 0 to 10 do
+    LPlain[I] := Byte('hello world'[I + 1]);
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello world', LGotBody, 'gzip body decompressed');
+  CheckEqual(200, LWObj.GetStatus, 'decompress succeeds');
+end;
+
+procedure TestDecompressPassesThroughPlain;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGotBody: string;
+  LBody: TBytes;
+  I: Integer;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: IReader;
+      LBuf: array[0..255] of Byte;
+      LN: SizeUInt;
+    begin
+      LBody := AReq.Body;
+      if LBody <> nil then
+      begin
+        LN := LBody.Read(LBuf[0], SizeOf(LBuf));
+        SetLength(LGotBody, LN);
+        Move(LBuf[0], LGotBody[1], LN);
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(5);
+  SetLength(LBody, 5);
+  for I := 0 to 4 do
+    LBody[I] := Byte('hello'[I + 1]);
+  LReq.SetBodyBytes(LBody);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello', LGotBody, 'plain body passes through');
+  CheckEqual(200, LWObj.GetStatus, 'plain request succeeds');
+end;
+
 { ServerHeader middleware tests }
 
 procedure TestServerHeaderDefault;
@@ -2964,6 +3093,9 @@ begin
   { MetricsWithFields }
   T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
+  T.Test('Metrics: tracks request bytes', @TestMetricsTracksRequestBytes);
+  T.Test('Decompress: gzip body', @TestDecompressGzipBody);
+  T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
   { ServerHeader }
   T.Test('ServerHeader: default nextpas', @TestServerHeaderDefault);
   T.Test('ServerHeader: custom name', @TestServerHeaderCustom);
