@@ -34,7 +34,7 @@
 | # | 债务 | 严重度 | 范围 | 预估 | 状态 |
 |---|------|--------|------|------|------|
 | L1 | **mail 模块契约缺失** (L3 2/3 → 3/3) |    | core/docs | 0.5d | ✅ 2026-07-06 |
-| L2 | **TInterfacedObject 替代** (TRefCountedObject) |    | core/base | 5d |   方案已有 |
+| L2 | **TInterfacedObject 替代** (TRefCountedObject) |    | core/base | 5d | ✅ 2026-07-06 |
 | L3 | **TThread 替代** (TWorkerThread) |    | core/thread | 3d |   方案已有 |
 | L4 | **StrComp SysUtils 依赖** (lhash.pas) |    | core/base | 0.25d | ✅ 2026-07-06 |
 | L5 | **泛型构造器传播** (collections, crypto.*) |    | compiler/sema | 10d |   未开始 |
