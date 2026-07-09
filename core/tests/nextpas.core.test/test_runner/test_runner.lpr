@@ -2184,6 +2184,37 @@ begin
     PassTest('TestCache');
   end;
 
+  { ── R48: Cache key filter pattern difference ────────────────────────────── }
+
+  SectionHeader('R48: Cache key filter difference');
+
+  begin
+    LCache := TTestCache.Create('.nextpas/test-cache-test-r48');
+    LCacheConfig1 := DefaultConfig;
+    LCacheConfig1.FilterPattern := 'test_alpha';
+    LCacheConfig2 := DefaultConfig;
+    LCacheConfig2.FilterPattern := 'test_beta';
+    LCacheKey1 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    LCacheKey2 := LCache.ComputeKey([], '3.3.1', LCacheConfig2);
+    if LCacheKey1 = LCacheKey2 then
+      FailTest('CacheKey: different filter patterns should produce different keys');
+    { Same filter should produce same key }
+    LCacheKey3 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    if LCacheKey1 <> LCacheKey3 then
+      FailTest('CacheKey: same inputs should produce same key');
+    { Different tag filter should produce different key }
+    LCacheConfig1 := DefaultConfig;
+    LCacheConfig1.TagFilter := 'fast';
+    LCacheConfig2 := DefaultConfig;
+    LCacheConfig2.TagFilter := 'slow';
+    LCacheKey1 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    LCacheKey2 := LCache.ComputeKey([], '3.3.1', LCacheConfig2);
+    if LCacheKey1 = LCacheKey2 then
+      FailTest('CacheKey: different tag filters should produce different keys');
+    LCache.Invalidate;
+    PassTest('CacheKey filter difference');
+  end;
+
   { ── T-13b: Cache integration in runner ─────────────────────────────────── }
 
   SectionHeader('T-13b: Cache integration in runner');

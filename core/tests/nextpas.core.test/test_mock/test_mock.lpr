@@ -19,8 +19,8 @@
        Typos in method names are NOT caught at compile time.
        Verify calls CompareText (case-insensitive) — 'Foo' matches 'foo'.
 
-    ⚠ VerifyAll checks all methods that have When entries (not all recorded calls).
-       If you need to verify a method was called but don't need When, use:
+    VerifyAll checks all methods configured via Setup (Returns/When).
+       If you need to verify a method was called but don't need Setup, use:
        LMock.Verify('MethodName').CalledExactly(1);  // explicit verify
  }
 program test_mock;
@@ -1163,6 +1163,36 @@ begin
   end;
 end;
 
+procedure TestVerifyAllWhenOnly;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { P0 #3: When-only config should be visible to VerifyAll }
+    LM.Setup('Foo').When([MockInt(1)]).ReturnsInt(10);
+    LM.RecordCall('Foo', ['1']);
+    LM.VerifyAll; { should pass — Foo was called }
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyAllWhenOnlyFail;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    { P0 #3: When-only config should be visible to VerifyAll }
+    LM.Setup('Foo').When([MockInt(1)]).ReturnsInt(10);
+    { Don't call Foo — VerifyAll should fail }
+    ExpectFail(procedure begin LM.VerifyAll; end, 'Foo');
+  finally
+    LM.Free;
+  end;
+end;
+
 procedure TestVerifyErrorMessage;
 var
   LM: TMock;
@@ -1173,8 +1203,8 @@ begin
     LM.Setup('Baz').Returns('qux');
     LM.RecordCall('Foo', []);
     LM.RecordCall('Baz', []);
-    { Verify wrong count — error message should include actual calls }
-    ExpectFail(procedure begin LM.Verify('Foo').CalledExactly(5); end, 'actual calls');
+    { Verify wrong count — error message should include call details }
+    ExpectFail(procedure begin LM.Verify('Foo').CalledExactly(5); end, 'calls to Foo');
   finally
     LM.Free;
   end;
@@ -1273,6 +1303,141 @@ begin
   WithMock(@TestWhenResetAllClearsImpl);
 end;
 
+{ ── R48: Mock type safety - all types coverage ───────────────────────────── }
+
+procedure TestCalledWithBoolTypeImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Check', [MockBool(True)]);
+  AMock.Verify('Check').CalledWith([MockBool(True)]);
+end;
+
+procedure TestCalledWithBoolType;
+begin
+  WithMock(@TestCalledWithBoolTypeImpl);
+end;
+
+procedure TestCalledWithBoolTypeMismatchImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Check', [MockBool(True)]);
+  { MockStr('true') should NOT match MockBool(True) }
+  AMock.Verify('Check').CalledWith([MockStr('true')]);
+  CheckTrue(False, 'Should fail: MockStr(''true'') ≠ MockBool(True)');
+end;
+
+procedure TestCalledWithBoolTypeMismatch;
+begin
+  ExpectFailWithMock(@TestCalledWithBoolTypeMismatchImpl);
+end;
+
+procedure TestCalledWithDoubleTypeImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Calc', [MockDouble(3.14)]);
+  AMock.Verify('Calc').CalledWith([MockDouble(3.14)]);
+end;
+
+procedure TestCalledWithDoubleType;
+begin
+  WithMock(@TestCalledWithDoubleTypeImpl);
+end;
+
+procedure TestCalledWithDoubleTypeMismatchImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Calc', [MockDouble(3.14)]);
+  { MockStr('3.14') should NOT match MockDouble(3.14) }
+  AMock.Verify('Calc').CalledWith([MockStr('3.14')]);
+  CheckTrue(False, 'Should fail: MockStr(''3.14'') ≠ MockDouble(3.14)');
+end;
+
+procedure TestCalledWithDoubleTypeMismatch;
+begin
+  ExpectFailWithMock(@TestCalledWithDoubleTypeMismatchImpl);
+end;
+
+procedure TestCalledExactlyWithMultipleTypedArgsImpl(AMock: TMock);
+begin
+  AMock.RecordCallTyped('Op', [MockInt(1), MockStr('a')]);
+  AMock.RecordCallTyped('Op', [MockInt(1), MockStr('a')]);
+  AMock.RecordCallTyped('Op', [MockInt(2), MockStr('b')]);
+  AMock.Verify('Op').CalledExactlyWith(2, [MockInt(1), MockStr('a')]);
+end;
+
+procedure TestCalledExactlyWithMultipleTypedArgs;
+begin
+  WithMock(@TestCalledExactlyWithMultipleTypedArgsImpl);
+end;
+
+{ ── R51: VerifyNoMoreInteractions ───────────────────────────────────────────── }
+
+procedure TestVerifyNoMoreInteractionsPass;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Baz', []);
+    { All set-up methods called, no unexpected calls }
+    LM.VerifyNoMoreInteractions;
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailUncalled;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    { Baz was never called }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'never called');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailUnexpected;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Bar', []);  { Bar was never set up }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'unexpected');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestVerifyNoMoreInteractionsFailBoth;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.Setup('Baz').Returns('qux');
+    LM.RecordCall('Foo', []);
+    LM.RecordCall('Qux', []);  { Baz uncalled, Qux unexpected }
+    ExpectFail(procedure begin
+      LM.VerifyNoMoreInteractions;
+    end, 'never called');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1363,6 +1528,19 @@ begin
   Suite.Test('TestCalledExactlyWithTypedSuccess', @TestCalledExactlyWithTypedSuccess);
   Suite.Test('TestCalledExactlyWithTypedFail', @TestCalledExactlyWithTypedFail);
 
+  { R48: Mock type safety - all types coverage }
+  Suite.Test('TestCalledWithBoolType', @TestCalledWithBoolType);
+  Suite.Test('TestCalledWithBoolTypeMismatch', @TestCalledWithBoolTypeMismatch);
+  Suite.Test('TestCalledWithDoubleType', @TestCalledWithDoubleType);
+  Suite.Test('TestCalledWithDoubleTypeMismatch', @TestCalledWithDoubleTypeMismatch);
+  Suite.Test('TestCalledExactlyWithMultipleTypedArgs', @TestCalledExactlyWithMultipleTypedArgs);
+
+  { R51: VerifyNoMoreInteractions }
+  Suite.Test('TestVerifyNoMoreInteractionsPass', @TestVerifyNoMoreInteractionsPass);
+  Suite.Test('TestVerifyNoMoreInteractionsFailUncalled', @TestVerifyNoMoreInteractionsFailUncalled);
+  Suite.Test('TestVerifyNoMoreInteractionsFailUnexpected', @TestVerifyNoMoreInteractionsFailUnexpected);
+  Suite.Test('TestVerifyNoMoreInteractionsFailBoth', @TestVerifyNoMoreInteractionsFailBoth);
+
   { G2: Mock type paths }
   Suite.Test('TestRecordCallTypedAllTypes', @TestRecordCallTypedAllTypes);
   Suite.Test('TestGetReturnIntEmptyString', @TestGetReturnIntEmptyString);
@@ -1385,6 +1563,8 @@ begin
   Suite.Test('TestVerifyAllPass', @TestVerifyAllPass);
   Suite.Test('TestVerifyAllFailUncalled', @TestVerifyAllFailUncalled);
   Suite.Test('TestVerifyAllNoSetups', @TestVerifyAllNoSetups);
+  Suite.Test('TestVerifyAllWhenOnly', @TestVerifyAllWhenOnly);
+  Suite.Test('TestVerifyAllWhenOnlyFail', @TestVerifyAllWhenOnlyFail);
   Suite.Test('TestVerifyErrorMessage', @TestVerifyErrorMessage);
 
   { E-09: Mock When API }

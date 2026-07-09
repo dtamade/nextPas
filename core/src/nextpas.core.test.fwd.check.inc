@@ -251,6 +251,20 @@ begin nextpas.core.test.check.CheckNaN(AValue, AMessage); end;
 procedure CheckNotNaN(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotNaN(AValue, AMessage); end;
 
+procedure CheckMatch(const APattern, AStr: string);
+begin nextpas.core.test.check.CheckMatch(APattern, AStr); end;
+
+procedure CheckMatch(const APattern, AStr: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckMatch(APattern, AStr, AMessage); end;
+
+procedure CheckNotMatch(const APattern, AStr: string);
+begin nextpas.core.test.check.CheckNotMatch(APattern, AStr); end;
+
+procedure CheckNotMatch(const APattern, AStr: string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckNotMatch(APattern, AStr, AMessage); end;
+
 procedure Fail(const AMessage: string);
 begin nextpas.core.test.check.Fail(AMessage); end;
 
@@ -267,8 +281,12 @@ procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 begin nextpas.core.test.check.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName); end;
 
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean;
+begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents, AStatus); end;
 function ReadFileContents(const APath: string; out AContents: string): Boolean;
-begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents); end;
+var LStatus: TReadFileStatus;
+begin Result := nextpas.core.test.check.ReadFileContents(APath, AContents, LStatus); end;
 
 procedure WriteFileContents(const APath, AContents: string);
 begin nextpas.core.test.check.WriteFileContents(APath, AContents); end;
@@ -280,8 +298,77 @@ procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
   const AMessage: string);
 begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual, AMessage); end;
 
+procedure CheckArrayEqual(const AExpected, AActual: array of string);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual); end;
+
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckArrayEqual(AExpected, AActual, AMessage); end;
+
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string);
 begin nextpas.core.test.check.CheckIsNil(AValue, AMessage); end;
 
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string);
 begin nextpas.core.test.check.CheckIsNotNil(AValue, AMessage); end;
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue); end;
+
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue); end;
+
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue); end;
+
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
+
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
+
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;
+
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
+
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string);
+begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;
+
+procedure CheckSorted(const AArray: array of Int64);
+begin nextpas.core.test.check.CheckSorted(AArray); end;
+
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckSorted(AArray, AMessage); end;
+
+procedure CheckSorted(const AArray: array of string);
+begin nextpas.core.test.check.CheckSorted(AArray); end;
+
+procedure CheckSorted(const AArray: array of string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckSorted(AArray, AMessage); end;

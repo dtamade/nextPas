@@ -8,6 +8,7 @@ program test_subtests;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.test;
 
 var
@@ -407,6 +408,67 @@ begin
     end);
 end;
 
+{ ── R51: TempDir tests ──────────────────────────────────────────────────────── }
+
+procedure TestTempDirCreation(constref Ctx: ITestContext);
+var
+  LDir: string;
+begin
+  Ctx.Run('creates temp dir',
+    procedure
+    begin
+      LDir := Ctx.TempDir;
+      CheckTrue(LDir <> '', 'TempDir should not be empty');
+      CheckTrue(DirectoryExists(LDir), 'TempDir should exist');
+    end);
+  Ctx.Run('returns same dir on second access',
+    procedure
+    var
+      LDir2: string;
+    begin
+      LDir2 := Ctx.TempDir;
+      CheckEqual(Ctx.TempDir, LDir2, 'TempDir should return same path');
+    end);
+  Ctx.Run('can create files in temp dir',
+    procedure
+    var
+      LFilePath: string;
+      LF: TextFile;
+    begin
+      LFilePath := Ctx.TempDir + '/test_file.txt';
+      AssignFile(LF, LFilePath);
+      Rewrite(LF);
+      WriteLn(LF, 'hello');
+      CloseFile(LF);
+      CheckTrue(FileExists(LFilePath), 'file should exist in temp dir');
+    end);
+end;
+
+{ ── R52: WithTempDir helper ─────────────────────────────────────────────────── }
+
+procedure TestWithTempDirProc(const ADir: string);
+var
+  LF: TextFile;
+begin
+  CheckTrue(ADir <> '', 'dir should not be empty');
+  CheckTrue(DirectoryExists(ADir), 'dir should exist');
+  { Create a file inside }
+  AssignFile(LF, ADir + '/test.txt');
+  Rewrite(LF);
+  WriteLn(LF, 'hello');
+  CloseFile(LF);
+  CheckTrue(FileExists(ADir + '/test.txt'), 'file should exist');
+end;
+
+procedure TestWithTempDir;
+var
+  LCreated: Boolean;
+begin
+  LCreated := False;
+  WithTempDir(@TestWithTempDirProc);
+  CheckTrue(True, 'WithTempDir completed');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -435,6 +497,8 @@ begin
   LSuite.TestSubtest('ITestContext.Skip',    @TestContextSkipRaises);
   LSuite.TestSubtest('subtest duration',     @TestSubtestDuration);
   LSuite.TestSubtest('closure subtest',      @TestClosureSubtest);
+  LSuite.TestSubtest('TempDir',              @TestTempDirCreation);
+  LSuite.Test('WithTempDir',                   @TestWithTempDir);
 
   if not LSuite.Run then
   begin
@@ -452,13 +516,13 @@ begin
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
   WriteLn(AnsiBold('AfterEach count: '), GAfterEachCount);
   { BeforeEach/AfterEach should have been called exactly once per registered test }
-  if GBeforeEachCount <> 13 then
+  if GBeforeEachCount <> 15 then
   begin
-    FailTest('expected exactly 13 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
+    FailTest('expected exactly 15 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
   end;
-  if GAfterEachCount <> 13 then
+  if GAfterEachCount <> 15 then
   begin
-    FailTest('expected exactly 13 AfterEach calls, got ' + IntToStr(GAfterEachCount));
+    FailTest('expected exactly 15 AfterEach calls, got ' + IntToStr(GAfterEachCount));
   end;
 
   { ── Verify subtest failure propagation ────────────────────────────────────── }

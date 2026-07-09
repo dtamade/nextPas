@@ -36,6 +36,12 @@ type
 { ── TTestContext (for subtest execution) ───────────────────────────────────── }
 
 type
+  TEnvBackup = record
+    Name     : string;
+    OldValue : string;
+    HadValue : Boolean;
+  end;
+
   TTestContext = class(TInterfacedObject, ITestContext)
   public
     FTestName : string;
@@ -48,6 +54,8 @@ type
     FFailedNames: specialize TArray<string>;
     FLogLines : specialize TArray<string>;
     FCleanups : specialize TArray<TTestClosure>;
+    FTempDir  : string;  { lazy-created temp directory, auto-cleaned }
+    FEnvBackups: specialize TArray<TEnvBackup>;  { saved env vars for restore }
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
     destructor Destroy; override;
     procedure Run(const AName: string; AProc: TTestProc);
@@ -62,11 +70,25 @@ type
     procedure OnCleanup(AProc: TTestClosure);
     procedure ClearLog;
     property  LogLines: specialize TArray<string> read FLogLines;
+    { TempDir: lazy-created temporary directory for this test.
+      Created on first access, auto-cleaned when the test context is destroyed.
+      Each test gets its own isolated directory. }
+    function  GetTempDir: string;
+    property  TempDir: string read GetTempDir;
+    { Environment variable isolation }
+    procedure SetEnv(const AName, AValue: string);
+    procedure UnsetEnv(const AName: string);
     procedure ExecuteSubtests;
     procedure RunCleanups;
+    procedure RestoreEnvVars;
   end;
 
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.platform.env,
+  nextpas.core.fs;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TTestResultAppender                                                          }
@@ -116,6 +138,15 @@ begin
   FOnResult := nil;
   FFailedNames := nil;
   FLogLines := nil;
+  { Restore environment variables before cleanup }
+  RestoreEnvVars;
+  FEnvBackups := nil;
+  { Safety net: remove temp dir if RunCleanups wasn't called }
+  if FTempDir <> '' then
+  begin
+    RemoveAll(FTempDir);
+    FTempDir := '';
+  end;
   inherited Destroy;
 end;
 
@@ -207,6 +238,82 @@ end;
 procedure TTestContext.ClearLog;
 begin
   FLogLines := nil;
+end;
+
+function TTestContext.GetTempDir: string;
+var
+  LBaseDir: string;
+begin
+  if FTempDir = '' then
+  begin
+    { Create under system temp dir with test name sanitised for filesystem }
+    LBaseDir := platform_env_get_str('TMPDIR');
+    if LBaseDir = '' then
+      LBaseDir := '/tmp';
+    LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+    FTempDir := LBaseDir + 'nextpas_test_' +
+      StringReplace(FTestName, '/', '_', [rfReplaceAll]) + '_' +
+      IntToStr(Int64(Pointer(Self)));  { unique per instance }
+    ForceDirectories(FTempDir);
+    { Register cleanup to remove temp dir after test }
+    OnCleanup(procedure
+    begin
+      if FTempDir <> '' then
+      begin
+        RemoveAll(FTempDir);
+        FTempDir := '';
+      end;
+    end);
+  end;
+  Result := FTempDir;
+end;
+
+procedure TTestContext.SetEnv(const AName, AValue: string);
+var
+  LBackup: TEnvBackup;
+  LExisting: AnsiString;
+begin
+  { Save current value for restore }
+  LBackup.Name := AName;
+  LExisting := platform_env_get_str(AnsiString(AName));
+  LBackup.HadValue := LExisting <> '';
+  LBackup.OldValue := string(LExisting);
+  SetLength(FEnvBackups, Length(FEnvBackups) + 1);
+  FEnvBackups[High(FEnvBackups)] := LBackup;
+  { Set new value }
+  platform_env_set(PAnsiChar(AnsiString(AName)), PAnsiChar(AnsiString(AValue)));
+end;
+
+procedure TTestContext.UnsetEnv(const AName: string);
+var
+  LBackup: TEnvBackup;
+  LExisting: AnsiString;
+begin
+  { Save current value for restore }
+  LBackup.Name := AName;
+  LExisting := platform_env_get_str(AnsiString(AName));
+  LBackup.HadValue := LExisting <> '';
+  LBackup.OldValue := string(LExisting);
+  SetLength(FEnvBackups, Length(FEnvBackups) + 1);
+  FEnvBackups[High(FEnvBackups)] := LBackup;
+  { Unset }
+  platform_env_unset(PAnsiChar(AnsiString(AName)));
+end;
+
+procedure TTestContext.RestoreEnvVars;
+var
+  I: Integer;
+  LBackup: TEnvBackup;
+begin
+  for I := High(FEnvBackups) downto 0 do
+  begin
+    LBackup := FEnvBackups[I];
+    if LBackup.HadValue then
+      platform_env_set(PAnsiChar(AnsiString(LBackup.Name)),
+        PAnsiChar(AnsiString(LBackup.OldValue)))
+    else
+      platform_env_unset(PAnsiChar(AnsiString(LBackup.Name)));
+  end;
 end;
 
 { ── Internal helpers ────────────────────────────────────────────────────────── }
@@ -342,39 +449,38 @@ begin
       end
       else if LEntry.Kind = ekTableTest then
       begin
-        PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
-        WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          LOutSink, FConfig);
-        Inc(FSubPass);
+        { Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+          has disposed TableCase/TableProc. Skip gracefully on re-run. }
+        if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+        begin
+          LStatus := tsSkipped;
+          LMsg := 'table data already disposed (--count re-run)';
+          WriteSubtestStatus(tsSkipped, LEntry.Name, '', LMsg, '',
+            LOutSink, FConfig);
+          Inc(FSubSkip);
+        end
+        else
+        begin
+          PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+            LOutSink, FConfig);
+          Inc(FSubPass);
+        end;
       end
       else if LEntry.Kind = ekShouldFail then
       begin
-        try
-          if Assigned(LEntry.Closure) then
-            LEntry.Closure()
-          else
-            LEntry.Proc;
-          { No exception = unexpected success }
-          LStatus := tsFailed;
-          if LEntry.ShouldFailMsg <> '' then
-            LMsg := 'Expected failure (' + LEntry.ShouldFailMsg +
-              ') but test passed'
-          else
-            LMsg := 'Expected failure but test passed';
+        RunShouldFailEntry(LEntry, LStatus, LMsg);
+        if LStatus = tsSkipped then
+          HandleSubtestSkipped(LEntry.Name, LMsg,
+            LOutSink, FConfig, LStatus, LMsg, FSubSkip)
+        else if LStatus = tsFailed then
           RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
-            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
-        except
-          on E: ETestSkipped do
-            HandleSubtestSkipped(LEntry.Name, E.Message,
-              LOutSink, FConfig, LStatus, LMsg, FSubSkip);
-          on E: Exception do
-          begin
-            { Expected failure — subtest passes }
-            LStatus := tsPassed;
-            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-              LOutSink, FConfig);
-            Inc(FSubPass);
-          end;
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines)
+        else
+        begin
+          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+            LOutSink, FConfig);
+          Inc(FSubPass);
         end;
       end
       else

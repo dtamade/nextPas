@@ -27,6 +27,7 @@ uses
   nextpas.core.math,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.test.check,
   nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -955,8 +956,9 @@ end;
 
 procedure TestCheckNotStartsWithEmpty;
 begin
-  { Empty prefix is a no-op (always passes) }
-  CheckNotStartsWith('hello', '');
+  { Empty prefix matches everything, so NotStartsWith should fail }
+  ExpectFail(procedure begin CheckNotStartsWith('hello', ''); end,
+    'should not start with empty string');
 end;
 
 procedure TestCheckNotEndsWithPass;
@@ -972,8 +974,9 @@ end;
 
 procedure TestCheckNotEndsWithEmpty;
 begin
-  { Empty suffix is a no-op (always passes) }
-  CheckNotEndsWith('hello', '');
+  { Empty suffix matches everything, so NotEndsWith should fail }
+  ExpectFail(procedure begin CheckNotEndsWith('hello', ''); end,
+    'should not end with empty string');
 end;
 
 procedure TestCheckContainsCIPass;
@@ -1158,8 +1161,11 @@ begin
 end;
 
 procedure TestCheckArrayEqualEmpty;
+var
+  LA: array of Int64;
 begin
-  CheckArrayEqual([], []);
+  SetLength(LA, 0);
+  CheckArrayEqual(LA, LA);
 end;
 
 procedure TestCheckArrayEqualWithMessage;
@@ -1167,6 +1173,81 @@ begin
   ExpectFail(procedure begin
     CheckArrayEqual([10, 20], [10, 30], 'my array');
   end, 'my array');
+end;
+
+procedure TestCheckArrayEqualStringPass;
+begin
+  CheckArrayEqual(['a', 'b', 'c'], ['a', 'b', 'c']);
+end;
+
+procedure TestCheckArrayEqualStringFailLength;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['a', 'b'], ['a', 'b', 'c']);
+  end, 'length');
+end;
+
+procedure TestCheckArrayEqualStringFailValue;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['hello', 'world'], ['hello', 'wurld']);
+  end, 'differ');
+end;
+
+procedure TestCheckArrayEqualStringEmpty;
+var
+  LA, LB: array of string;
+begin
+  SetLength(LA, 0);
+  SetLength(LB, 0);
+  CheckArrayEqual(LA, LB);
+end;
+
+procedure TestCheckArrayEqualStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['a', 'b'], ['a', 'c'], 'my string array');
+  end, 'my string array');
+end;
+
+{ ── R60: CheckArrayContains/NotContains for TBytes ───────────────────────── }
+
+procedure TestCheckArrayContainsBytePass;
+begin
+  CheckArrayContains(TBytes([$01, $02, $03]), $02);
+end;
+
+procedure TestCheckArrayContainsByteFail;
+begin
+  ExpectFail(procedure begin
+    CheckArrayContains(TBytes([$01, $02]), $FF);
+  end, '$FF');
+end;
+
+procedure TestCheckArrayContainsByteWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayContains(TBytes([$01, $02]), $FF, 'byte context');
+  end, 'byte context');
+end;
+
+procedure TestCheckArrayNotContainsBytePass;
+begin
+  CheckArrayNotContains(TBytes([$01, $02]), $FF);
+end;
+
+procedure TestCheckArrayNotContainsByteFail;
+begin
+  ExpectFail(procedure begin
+    CheckArrayNotContains(TBytes([$01, $02, $03]), $02);
+  end, '$02');
+end;
+
+procedure TestCheckArrayNotContainsByteWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayNotContains(TBytes([$01, $02]), $01, 'no byte');
+  end, 'no byte');
 end;
 
 { ── v8.0c: Interface Nil Check Tests ──────────────────────────────────────── }
@@ -1212,19 +1293,56 @@ end;
 procedure TestReadWriteFileContents;
 var
   LPath, LContent: string;
+  LStatus: TReadFileStatus;
 begin
   LPath := '/tmp/test_rw_contents_' + IntToStr(Random(1000000000)) + '.txt';
   WriteFileContents(LPath, 'hello world');
-  CheckTrue(ReadFileContents(LPath, LContent), 'ReadFileContents should succeed');
+  CheckTrue(ReadFileContents(LPath, LContent, LStatus), 'ReadFileContents should succeed');
   CheckEqual('hello world', LContent, 'File content');
+  CheckTrue(LStatus = rfsFound, 'Status should be rfsFound');
 end;
 
 procedure TestReadFileContentsNotFound;
 var
   LContent: string;
+  LStatus: TReadFileStatus;
 begin
-  CheckTrue(not ReadFileContents('/tmp/nonexistent_file_12345.txt', LContent),
+  CheckTrue(not ReadFileContents('/tmp/nonexistent_file_12345.txt', LContent, LStatus),
     'ReadFileContents should return False for missing file');
+  CheckTrue(LStatus = rfsNotFound, 'Status should be rfsNotFound');
+end;
+
+{ ── R52: CheckMatch / CheckNotMatch ────────────────────────────────────────── }
+
+procedure TestCheckMatchPass;
+begin
+  CheckMatch('\d+', 'hello123world');
+end;
+
+procedure TestCheckMatchFail;
+begin
+  ExpectFail(procedure begin
+    CheckMatch('^\d+$', 'hello');
+  end, 'match pattern');
+end;
+
+procedure TestCheckMatchWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckMatch('\d+', 'no digits here', 'should have digits');
+  end, 'should have digits');
+end;
+
+procedure TestCheckNotMatchPass;
+begin
+  CheckNotMatch('^\d+$', 'hello');
+end;
+
+procedure TestCheckNotMatchFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotMatch('\d+', 'hello123');
+  end, 'NOT to match');
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -1409,6 +1527,11 @@ begin
   LSuite.Test('ArrayEqual fail value',     @TestCheckArrayEqualFailValue);
   LSuite.Test('ArrayEqual empty',          @TestCheckArrayEqualEmpty);
   LSuite.Test('ArrayEqual+msg',            @TestCheckArrayEqualWithMessage);
+  LSuite.Test('ArrayEqual string pass',    @TestCheckArrayEqualStringPass);
+  LSuite.Test('ArrayEqual string fail len',@TestCheckArrayEqualStringFailLength);
+  LSuite.Test('ArrayEqual string fail val',@TestCheckArrayEqualStringFailValue);
+  LSuite.Test('ArrayEqual string empty',   @TestCheckArrayEqualStringEmpty);
+  LSuite.Test('ArrayEqual string+msg',     @TestCheckArrayEqualStringWithMessage);
 
   { v8.0c: Interface nil checks }
   LSuite.Test('IsNil pass',               @TestCheckIsNilPass);
@@ -1419,6 +1542,21 @@ begin
   { Audit round 4: File I/O utilities }
   LSuite.Test('ReadWriteFileContents',    @TestReadWriteFileContents);
   LSuite.Test('ReadFileNotFound',         @TestReadFileContentsNotFound);
+
+  { R52: Regex matching }
+  LSuite.Test('Match pass',              @TestCheckMatchPass);
+  LSuite.Test('Match fail',              @TestCheckMatchFail);
+  LSuite.Test('Match+msg',               @TestCheckMatchWithMessage);
+  LSuite.Test('NotMatch pass',           @TestCheckNotMatchPass);
+  LSuite.Test('NotMatch fail',           @TestCheckNotMatchFail);
+
+  { R60: CheckArrayContains/NotContains for TBytes }
+  LSuite.Test('ArrayContains byte pass',   @TestCheckArrayContainsBytePass);
+  LSuite.Test('ArrayContains byte fail',   @TestCheckArrayContainsByteFail);
+  LSuite.Test('ArrayContains byte+msg',    @TestCheckArrayContainsByteWithMessage);
+  LSuite.Test('ArrayNotContains byte pass',@TestCheckArrayNotContainsBytePass);
+  LSuite.Test('ArrayNotContains byte fail',@TestCheckArrayNotContainsByteFail);
+  LSuite.Test('ArrayNotContains byte+msg', @TestCheckArrayNotContainsByteWithMessage);
 
   if not LSuite.Run then
   begin

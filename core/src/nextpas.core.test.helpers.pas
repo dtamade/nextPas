@@ -21,10 +21,20 @@ uses
 
 type
   TMockProc = procedure(AMock: TMock);
+  TTempDirProc = procedure(const ADir: string);
 
 { Verify closure raises EAssertionFailed.
   Optional AContains: substring check on the message. }
 procedure ExpectFail(AProc: TTestClosure;
+  const AContains: string = '');
+
+{ Verify closure raises AExceptionClass (or subclass).
+  Optional AContains: substring check on the message.
+  Example:
+    ExpectFailWith(procedure begin raise EConvertError.Create('bad'); end,
+      EConvertError, 'bad'); }
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
   const AContains: string = '');
 
 { Create TMock, run AProc, free mock — even on exception. }
@@ -39,19 +49,66 @@ procedure ExpectFailWithMock(AProc: TMockProc;
   Returns the sink so the caller can read captured output. }
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 
+{ Create a temporary directory, run AProc(dir), then delete it.
+  The directory is always cleaned up, even on exception.
+  Example:
+    WithTempDir(procedure(const Dir: string)
+    begin
+      WriteFileContents(Dir + '/test.txt', 'hello');
+      CheckTrue(FileExists(Dir + '/test.txt'));
+    end); }
+procedure WithTempDir(AProc: TTempDirProc);
+
 implementation
+
+uses
+  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.platform.env;
 
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
+var
+  LRaised: Boolean = False;
 begin
   try
     AProc;
-    Fail('expected assertion failure');
   except
+    on E: ETestSkipped do
+      raise;
     on E: EAssertionFailed do
+    begin
+      LRaised := True;
       if AContains <> '' then
         Check(Pos(AContains, E.Message) > 0,
           'expected "' + AContains + '" in "' + E.Message + '"');
+    end;
+  end;
+  if not LRaised then
+    Fail('expected assertion failure but nothing raised');
+end;
+
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string);
+begin
+  if AExceptionClass = nil then
+    InternalFail('ExpectFailWith: AExceptionClass is nil');
+  try
+    AProc;
+    Fail('expected ' + AExceptionClass.ClassName + ' but nothing raised');
+  except
+    on E: ETestSkipped do
+      raise;
+    on E: Exception do
+    begin
+      if not (E is AExceptionClass) then
+        InternalFail('Expected ' + AExceptionClass.ClassName +
+          ' but got ' + E.ClassName + ': ' + E.Message);
+      if AContains <> '' then
+        Check(Pos(AContains, E.Message) > 0,
+          'expected "' + AContains + '" in "' + E.Message + '"');
+    end;
   end;
 end;
 
@@ -90,6 +147,32 @@ begin
   Result.OutSink := ASink;
   Result.ErrSink := ASink;
   Result.AnsiMode := amOff;
+end;
+
+procedure WithTempDir(AProc: TTempDirProc);
+var
+  LBaseDir, LDir: string;
+begin
+  LBaseDir := platform_env_get_str('TMPDIR');
+  if LBaseDir = '' then
+    LBaseDir := '/tmp';
+  LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+  { Use address + counter to avoid collisions across concurrent calls.
+    Int64(@AProc) is unique per closure; GetTickCount64 adds temporal uniqueness. }
+  LDir := LBaseDir + 'nextpas_tmp_' +
+    IntToStr(Int64(@AProc)) + '_' +
+    IntToStr(GetTickCount64);
+  if not ForceDirectories(LDir) then
+    InternalFail('WithTempDir: cannot create directory ' + LDir);
+  try
+    AProc(LDir);
+  finally
+    try
+      RemoveAll(LDir);
+    except
+      { Cleanup failure should not mask the original test exception }
+    end;
+  end;
 end;
 
 end.

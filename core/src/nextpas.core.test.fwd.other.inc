@@ -44,6 +44,11 @@ procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
 begin nextpas.core.test.helpers.ExpectFail(AProc, AContains); end;
 
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFailWith(AProc, AExceptionClass, AContains); end;
+
 procedure WithMock(AProc: TMockProc);
 begin nextpas.core.test.helpers.WithMock(AProc); end;
 
@@ -53,6 +58,9 @@ begin nextpas.core.test.helpers.ExpectFailWithMock(AProc, AContains); end;
 
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
+
+procedure WithTempDir(AProc: TTempDirProc);
+begin nextpas.core.test.helpers.WithTempDir(AProc); end;
 
 { ── Forward to test.prop ──────────────────────────────────────────────────── }
 

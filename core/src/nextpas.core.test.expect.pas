@@ -77,6 +77,26 @@ type
     function ToBeNotNaN: IExpectation;
     { Byte array comparison: element-wise equality. }
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    { Int64 array comparison: element-wise equality. }
+    function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+    { String array comparison: element-wise equality. }
+    function ToEqualStrArray(const AExpected: array of string): IExpectation;
+    { Array containment: value must exist in the array.
+      Works for ekIntArray and ekStrArray kinds. }
+    function ToContainInt(const AValue: Int64): IExpectation;
+    function ToContainStr(const AValue: string): IExpectation;
+    { Byte array containment: value must exist in the bytes. }
+    function ToContain(const AValue: Byte): IExpectation;
+    { Emptiness check: works for strings, arrays, and bytes.
+      ToBeEmpty passes when length = 0. ToBeNotEmpty passes when length > 0. }
+    function ToBeEmpty: IExpectation;
+    function ToBeNotEmpty: IExpectation;
+    { Set membership: value must be one of the given values. }
+    function ToBeOneOf(const AValues: array of string): IExpectation;
+    function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+    function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+    { Regex matching: value must match the pattern. }
+    function ToMatch(const APattern: string): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -92,11 +112,21 @@ function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
+function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
+function ExpectArrayOfStr(const AValues: array of string): IExpectation;
 
 implementation
 
 uses
-  nextpas.core.math.scalar; { IsNan for Double comparison NaN guards }
+  nextpas.core.math.scalar, { IsNan for Double comparison NaN guards }
+  nextpas.core.regex;       { RegexIsMatch for ToMatch }
+
+{ ── Local helpers ─────────────────────────────────────────────────────────── }
+
+function MaxI(A, B: Integer): Integer;
+begin
+  if A > B then Result := A else Result := B;
+end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
@@ -104,9 +134,22 @@ uses
 
 type
   TExpectationKind = (
-    ekString, ekInt64, ekBool, ekPointer, ekProc, ekDouble, ekBytes
+    ekString, ekInt64, ekBool, ekPointer, ekProc, ekDouble, ekBytes,
+    ekIntArray, ekStrArray
   );
 
+const
+  KindNames: array[TExpectationKind] of string = (
+    'string', 'integer', 'boolean', 'pointer', 'proc', 'double', 'bytes',
+    'int array', 'string array'
+  );
+  FactoryHints: array[TExpectationKind] of string = (
+    'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
+    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)', 'ExpectBytes(b)',
+    'ExpectArrayOfInt(arr)', 'ExpectArrayOfStr(arr)'
+  );
+
+type
   TExpectation = class(TInterfacedObject, IExpectation)
   private
     FKind       : TExpectationKind;
@@ -119,6 +162,8 @@ type
     FBytesValue : TBytes;
     FNegated    : Boolean;
     FMessage    : string;
+    FIntArrayValue : specialize TArray<Int64>;
+    FStrArrayValue : specialize TArray<string>;
   public
     constructor CreateStr(const AValue: string);
     constructor CreateInt(const AValue: Int64);
@@ -127,6 +172,8 @@ type
     constructor CreateProc(AProc: TTestProc);
     constructor CreateDouble(const AValue: Double);
     constructor CreateBytes(const AValue: TBytes);
+    constructor CreateIntArray(const AValues: array of Int64);
+    constructor CreateStrArray(const AValues: array of string);
 
     procedure RequireKind(AKind: TExpectationKind;
       const AMethod: string);
@@ -135,6 +182,9 @@ type
       const ANegMsg, APosMsg: string);
       { Core negation check: fail with ANegMsg if (FNegated and AIsMatch)
         or with APosMsg if (not FNegated and not AIsMatch). }
+    function CloneSelf: TExpectation;
+      { Create a heap copy of this expectation, preserving all state.
+        Used by Not_ and WithMessage to avoid duplicating the kind-case. }
 
     { IExpectation }
     { Not_: returns a NEW expectation with negated assertion.
@@ -191,6 +241,17 @@ type
     { New: WithMessage, ToEqualBytes, ToFailUnexpected }
     function WithMessage(const AMessage: string): IExpectation;
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
+    function ToBeOneOf(const AValues: array of string): IExpectation;
+    function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+    function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+    function ToMatch(const APattern: string): IExpectation;
+    function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+    function ToEqualStrArray(const AExpected: array of string): IExpectation;
+    function ToContainInt(const AValue: Int64): IExpectation;
+    function ToContainStr(const AValue: string): IExpectation;
+    function ToContain(const AValue: Byte): IExpectation;
+    function ToBeEmpty: IExpectation;
+    function ToBeNotEmpty: IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -250,34 +311,58 @@ begin
   FNegated   := False;
 end;
 
+constructor TExpectation.CreateIntArray(const AValues: array of Int64);
+var
+  I: Integer;
+begin
+  inherited Create;
+  FKind  := ekIntArray;
+  FNegated := False;
+  SetLength(FIntArrayValue, Length(AValues));
+  for I := 0 to High(AValues) do
+    FIntArrayValue[I] := AValues[I];
+end;
+
+constructor TExpectation.CreateStrArray(const AValues: array of string);
+var
+  I: Integer;
+begin
+  inherited Create;
+  FKind  := ekStrArray;
+  FNegated := False;
+  SetLength(FStrArrayValue, Length(AValues));
+  for I := 0 to High(AValues) do
+    FStrArrayValue[I] := AValues[I];
+end;
+
+function TExpectation.CloneSelf: TExpectation;
+begin
+  case FKind of
+    ekString:   Result := TExpectation.CreateStr(FStrValue);
+    ekInt64:    Result := TExpectation.CreateInt(FIntValue);
+    ekBool:     Result := TExpectation.CreateBool(FBoolValue);
+    ekPointer:  Result := TExpectation.CreatePtr(FPtrValue);
+    ekProc:     Result := TExpectation.CreateProc(FProcValue);
+    ekDouble:   Result := TExpectation.CreateDouble(FDoubleValue);
+    ekBytes:    Result := TExpectation.CreateBytes(FBytesValue);
+    ekIntArray: Result := TExpectation.CreateIntArray(FIntArrayValue);
+    ekStrArray: Result := TExpectation.CreateStrArray(FStrArrayValue);
+  end;
+  Result.FNegated := FNegated;
+  Result.FMessage := FMessage;
+end;
+
 function TExpectation.Not_: IExpectation;
 var
   LCopy: TExpectation;
 begin
-  case FKind of
-    ekString:  LCopy := TExpectation.CreateStr(FStrValue);
-    ekInt64:   LCopy := TExpectation.CreateInt(FIntValue);
-    ekBool:    LCopy := TExpectation.CreateBool(FBoolValue);
-    ekPointer: LCopy := TExpectation.CreatePtr(FPtrValue);
-    ekProc:    LCopy := TExpectation.CreateProc(FProcValue);
-    ekDouble:  LCopy := TExpectation.CreateDouble(FDoubleValue);
-    ekBytes:   LCopy := TExpectation.CreateBytes(FBytesValue);
-  end;
+  LCopy := CloneSelf;
   LCopy.FNegated := not FNegated;
-  LCopy.FMessage := FMessage;
   Result := LCopy;
 end;
 
 procedure TExpectation.RequireKind(AKind: TExpectationKind;
   const AMethod: string);
-const
-  KindNames: array[TExpectationKind] of string = (
-    'string', 'integer', 'boolean', 'pointer', 'proc', 'double', 'bytes'
-  );
-  FactoryHints: array[TExpectationKind] of string = (
-    'ExpectStr(s)', 'ExpectInt(n)', 'ExpectBool(b)',
-    'ExpectPtr(p)', 'ExpectProc(p)', 'ExpectDouble(d)', 'ExpectBytes(b)'
-  );
 begin
   if FKind <> AKind then
     InternalFail(AMethod + ' requires ' + KindNames[AKind] +
@@ -311,11 +396,66 @@ begin
 end;
 
 function TExpectation.ToEqual(const AExpected: string): IExpectation;
+var
+  LMin, LDiffAt, I: Integer;
+  LDiffDetail: string;
 begin
   RequireKind(ekString, 'ToEqual(string)');
-  CheckMatch(FStrValue = AExpected,
-    'Expected "' + FStrValue + '" not to equal "' + AExpected + '"',
-    'Expected "' + AExpected + '" but got "' + FStrValue + '"');
+  if FStrValue = AExpected then
+  begin
+    if FNegated then
+    begin
+      if FMessage <> '' then
+        InternalFail(FMessage + ': Expected "' + FStrValue + '" not to equal "' + AExpected + '"')
+      else
+        InternalFail('Expected "' + FStrValue + '" not to equal "' + AExpected + '"');
+    end;
+  end
+  else
+  begin
+    if not FNegated then
+    begin
+      { Find first differing position }
+      LDiffAt := 0;
+      LMin := Length(AExpected);
+      if Length(FStrValue) < LMin then
+        LMin := Length(FStrValue);
+      for I := 1 to LMin do
+        if FStrValue[I] <> AExpected[I] then
+        begin
+          LDiffAt := I;
+          Break;
+        end;
+      if LDiffAt = 0 then
+        LDiffAt := LMin + 1; { one string is prefix of the other }
+      { Build diff detail — short strings get ^ pointer, long strings get context }
+      if (Length(AExpected) <= 40) and (Length(FStrValue) <= 40) and
+         (Pos(#10, AExpected) = 0) and (Pos(#10, FStrValue) = 0) then
+      begin
+        { Short string: show full value with ^ pointer }
+        LDiffDetail :=
+          '  expected: "' + AExpected + '"'#10 +
+          '    actual: "' + FStrValue + '"'#10 +
+          '            ' + StringOfChar(' ', LDiffAt - 1) + '^' +
+          ' diff at pos ' + IntToStr(LDiffAt);
+      end
+      else
+      begin
+        { Long string: show context window around first difference }
+        LDiffDetail := 'Strings differ at position ' + IntToStr(LDiffAt) + ':' +
+          #10'  expected: ...' +
+          Copy(AExpected, MaxI(1, LDiffAt - 10), 21) + '...' +
+          #10'    actual: ...' +
+          Copy(FStrValue, MaxI(1, LDiffAt - 10), 21) + '...' +
+          #10'  (lengths: ' + IntToStr(Length(AExpected)) +
+          ' vs ' + IntToStr(Length(FStrValue)) + ')';
+      end;
+      if FMessage <> '' then
+        InternalFail(FMessage + ': ' + LDiffDetail)
+      else
+        InternalFail(LDiffDetail);
+    end;
+  end;
   Result := Self;
 end;
 
@@ -394,18 +534,9 @@ begin
 end;
 
 function TExpectation.ToEndWith(const ASuffix: string): IExpectation;
-var
-  LMatch: Boolean;
-  LLen: Integer;
 begin
   RequireKind(ekString, 'ToEndWith');
-  LLen := Length(ASuffix);
-  if LLen = 0 then
-    LMatch := True
-  else
-    LMatch := (Length(FStrValue) >= LLen) and
-              (Copy(FStrValue, Length(FStrValue) - LLen + 1, LLen) = ASuffix);
-  CheckMatch(LMatch,
+  CheckMatch(StrEndsWith(FStrValue, ASuffix),
     '"' + FStrValue + '" should not end with "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with "' + ASuffix + '"');
   Result := Self;
@@ -444,12 +575,25 @@ begin
 end;
 
 function TExpectation.ToHaveLength(const AExpected: NativeInt): IExpectation;
+var
+  LActual: NativeInt;
 begin
-  RequireKind(ekString, 'ToHaveLength');
-  CheckMatch(Length(FStrValue) = AExpected,
-    'String should not have length ' + IntToStr(AExpected),
+  case FKind of
+    ekString:   LActual := Length(FStrValue);
+    ekIntArray: LActual := Length(FIntArrayValue);
+    ekStrArray: LActual := Length(FStrArrayValue);
+    ekBytes:    LActual := Length(FBytesValue);
+  else
+    InternalFail('ToHaveLength requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LActual = AExpected,
+    'should not have length ' + IntToStr(AExpected),
     'Expected length ' + IntToStr(AExpected) +
-      ' but got ' + IntToStr(Length(FStrValue)));
+      ' but got ' + IntToStr(LActual));
   Result := Self;
 end;
 
@@ -662,11 +806,15 @@ end;
 { ── TExpectation: Case-insensitive string ──────────────────────────────────── }
 
 function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
+var
+  LFound: Boolean;
 begin
   RequireKind(ekString, 'ToContainCI');
   if Length(ASubstr) = 0 then
-    Exit(Self); { empty needle matches everything — consistent with ToContain }
-  CheckMatch(Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0,
+    LFound := True { empty needle matches everything }
+  else
+    LFound := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
+  CheckMatch(LFound,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
   Result := Self;
@@ -686,10 +834,7 @@ end;
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToEndWithCI');
-  CheckMatch(
-    (Length(FStrValue) >= Length(ASuffix)) and
-    (LowerCase(Copy(FStrValue, Length(FStrValue) - Length(ASuffix) + 1,
-     Length(ASuffix))) = LowerCase(ASuffix)),
+  CheckMatch(StrEndsWith(LowerCase(FStrValue), LowerCase(ASuffix)),
     '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
   Result := Self;
@@ -815,16 +960,7 @@ function TExpectation.WithMessage(const AMessage: string): IExpectation;
 var
   LCopy: TExpectation;
 begin
-  case FKind of
-    ekString:  LCopy := TExpectation.CreateStr(FStrValue);
-    ekInt64:   LCopy := TExpectation.CreateInt(FIntValue);
-    ekBool:    LCopy := TExpectation.CreateBool(FBoolValue);
-    ekPointer: LCopy := TExpectation.CreatePtr(FPtrValue);
-    ekProc:    LCopy := TExpectation.CreateProc(FProcValue);
-    ekDouble:  LCopy := TExpectation.CreateDouble(FDoubleValue);
-    ekBytes:   LCopy := TExpectation.CreateBytes(FBytesValue);
-  end;
-  LCopy.FNegated := FNegated;
+  LCopy := CloneSelf;
   LCopy.FMessage := AMessage;
   Result := LCopy;
 end;
@@ -840,8 +976,9 @@ begin
   LExpLen := Length(AExpected);
   if LActLen <> LExpLen then
   begin
-    CheckMatch(FNegated, { always fails for positive }
-      'Expected different byte array but both have length ' + IntToStr(LActLen),
+    CheckMatch(False,
+      'Expected same byte array but lengths differ (' +
+        IntToStr(LExpLen) + ' vs ' + IntToStr(LActLen) + ')',
       'Expected ' + IntToStr(LExpLen) + ' bytes but got ' + IntToStr(LActLen));
     Result := Self;
     Exit;
@@ -869,6 +1006,254 @@ begin
     end;
   { All bytes match }
   CheckMatch(True, '', '');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOf(const AValues: array of string): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekString, 'ToBeOneOf');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AValues[I] + '"';
+    if FStrValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    '"' + FStrValue + '" should not be one of [' + LList + ']',
+    '"' + FStrValue + '" is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekInt64, 'ToBeOneOfInt');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AValues[I]);
+    if FIntValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    IntToStr(FIntValue) + ' should not be one of [' + LList + ']',
+    IntToStr(FIntValue) + ' is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+  LList: string;
+begin
+  RequireKind(ekBool, 'ToBeOneOfBool');
+  LFound := False;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + BoolToStr(AValues[I], 'True', 'False');
+    if FBoolValue = AValues[I] then
+      LFound := True;
+  end;
+  CheckMatch(LFound,
+    BoolToStr(FBoolValue, 'True', 'False') + ' should not be one of [' + LList + ']',
+    BoolToStr(FBoolValue, 'True', 'False') + ' is not one of [' + LList + ']');
+  Result := Self;
+end;
+
+function TExpectation.ToMatch(const APattern: string): IExpectation;
+begin
+  RequireKind(ekString, 'ToMatch');
+  CheckMatch(RegexIsMatch(APattern, FStrValue),
+    '"' + FStrValue + '" should not match pattern "' + APattern + '"',
+    '"' + FStrValue + '" does not match pattern "' + APattern + '"');
+  Result := Self;
+end;
+
+function TExpectation.ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+var
+  I, LMin, LDiffIdx: Integer;
+  LMsg: string;
+begin
+  RequireKind(ekIntArray, 'ToEqualIntArray');
+  if Length(FIntArrayValue) <> Length(AExpected) then
+  begin
+    LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(FIntArrayValue));
+    CheckMatch(False, LMsg, LMsg);
+    Result := Self;
+    Exit;
+  end;
+  LMin := Length(AExpected);
+  LDiffIdx := -1;
+  for I := 0 to LMin - 1 do
+    if FIntArrayValue[I] <> AExpected[I] then
+    begin
+      LDiffIdx := I;
+      Break;
+    end;
+  if LDiffIdx >= 0 then
+  begin
+    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
+      ': expected ' + IntToStr(AExpected[LDiffIdx]) +
+      ' but got ' + IntToStr(FIntArrayValue[LDiffIdx]);
+    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+  end
+  else
+    CheckMatch(True,
+      'Expected arrays to differ but both are identical (' +
+        IntToStr(LMin) + ' elements)', '');
+  Result := Self;
+end;
+
+function TExpectation.ToEqualStrArray(const AExpected: array of string): IExpectation;
+var
+  I, LMin, LDiffIdx: Integer;
+  LMsg: string;
+begin
+  RequireKind(ekStrArray, 'ToEqualStrArray');
+  if Length(FStrArrayValue) <> Length(AExpected) then
+  begin
+    LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(FStrArrayValue));
+    CheckMatch(False, LMsg, LMsg);
+    Result := Self;
+    Exit;
+  end;
+  LMin := Length(AExpected);
+  LDiffIdx := -1;
+  for I := 0 to LMin - 1 do
+    if FStrArrayValue[I] <> AExpected[I] then
+    begin
+      LDiffIdx := I;
+      Break;
+    end;
+  if LDiffIdx >= 0 then
+  begin
+    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':' +
+      #10'  expected: "' + AExpected[LDiffIdx] + '"' +
+      #10'    actual: "' + FStrArrayValue[LDiffIdx] + '"';
+    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+  end
+  else
+    CheckMatch(True,
+      'Expected arrays to differ but both are identical (' +
+        IntToStr(LMin) + ' elements)', '');
+  Result := Self;
+end;
+
+function TExpectation.ToContainInt(const AValue: Int64): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekIntArray, 'ToContainInt');
+  LFound := False;
+  for I := 0 to High(FIntArrayValue) do
+    if FIntArrayValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Array should not contain ' + IntToStr(AValue),
+    'Array does not contain ' + IntToStr(AValue));
+  Result := Self;
+end;
+
+function TExpectation.ToContainStr(const AValue: string): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekStrArray, 'ToContainStr');
+  LFound := False;
+  for I := 0 to High(FStrArrayValue) do
+    if FStrArrayValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Array should not contain "' + AValue + '"',
+    'Array does not contain "' + AValue + '"');
+  Result := Self;
+end;
+
+function TExpectation.ToContain(const AValue: Byte): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekBytes, 'ToContain(byte)');
+  LFound := False;
+  for I := 0 to High(FBytesValue) do
+    if FBytesValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Bytes should not contain $' + IntToHex(AValue, 2),
+    'Bytes does not contain $' + IntToHex(AValue, 2));
+  Result := Self;
+end;
+
+function TExpectation.ToBeEmpty: IExpectation;
+var
+  LLen: NativeInt;
+begin
+  case FKind of
+    ekString:   LLen := Length(FStrValue);
+    ekIntArray: LLen := Length(FIntArrayValue);
+    ekStrArray: LLen := Length(FStrArrayValue);
+    ekBytes:    LLen := Length(FBytesValue);
+  else
+    InternalFail('ToBeEmpty requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LLen = 0,
+    'Expected non-empty but got empty',
+    'Expected empty but got ' + IntToStr(LLen) + ' element(s)');
+  Result := Self;
+end;
+
+function TExpectation.ToBeNotEmpty: IExpectation;
+var
+  LLen: NativeInt;
+begin
+  case FKind of
+    ekString:   LLen := Length(FStrValue);
+    ekIntArray: LLen := Length(FIntArrayValue);
+    ekStrArray: LLen := Length(FStrArrayValue);
+    ekBytes:    LLen := Length(FBytesValue);
+  else
+    InternalFail('ToBeNotEmpty requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LLen > 0,
+    'Expected empty but got ' + IntToStr(LLen) + ' element(s)',
+    'Expected non-empty but got empty');
   Result := Self;
 end;
 
@@ -930,6 +1315,16 @@ end;
 function ExpectBytes(const AValue: TBytes): IExpectation;
 begin
   Result := TExpectation.CreateBytes(AValue);
+end;
+
+function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
+begin
+  Result := TExpectation.CreateIntArray(AValues);
+end;
+
+function ExpectArrayOfStr(const AValues: array of string): IExpectation;
+begin
+  Result := TExpectation.CreateStrArray(AValues);
 end;
 
 end.

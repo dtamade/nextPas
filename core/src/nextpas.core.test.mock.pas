@@ -127,6 +127,9 @@ type
     { Verify exactly N calls were made with typed matching arguments }
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of TMockValue): IMockVerify;
+    { Return the actual call count for this method (no assertion).
+      Useful for conditional logic: if Mock.Verify('Foo').Count > 0 then ... }
+    function  Count: Integer;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -147,10 +150,13 @@ type
     FSetups  : specialize TArray<TMockCall>;
     FCallOrder: specialize TArray<string>;  { records method names in call order }
     FWhenEntries: specialize TArray<TMockWhenEntry>; { E-09: conditional returns }
+    FWhenMethodNames: specialize TArray<string>; { methods configured only via When }
     procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
     procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
       const AValue: TMockValue);
+    { Track a method name in FWhenMethodNames if not already present }
+    procedure TrackWhenMethod(const AMethodName: string);
   public
     constructor Create;
     destructor Destroy; override;
@@ -160,7 +166,11 @@ type
     procedure RecordCallTyped(const AMethodName: string;
       const AArgs: array of TMockValue);
     { Get return value for a method, or '' if not configured }
-    function GetReturn(const AMethodName: string): string;
+    function GetReturn(const AMethodName: string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of TMockValue): string; overload;
     function GetReturnTyped(const AMethodName: string;
       const AArgs: array of TMockValue): TMockValue;
     function GetReturnInt64(const AMethodName: string;
@@ -216,8 +226,14 @@ type
     function Verify(const AMethodName: string): IMockVerify;
 
     { Verify all set-up methods were called at least once.
+      Checks methods configured via Setup.Returns AND Setup.When.
       Fails with a list of uncalled methods if any setup was never invoked. }
     procedure VerifyAll;
+
+    { Verify that every set-up method was called at least once AND no calls
+      were made to methods that were never set up.
+      Stricter than VerifyAll — catches unexpected/spurious calls. }
+    procedure VerifyNoMoreInteractions;
 
     { Record a method call (called by generated stubs or manual recording).
       Example: Mock.RecordCall('Foo', ['arg1', 'arg2']); }
@@ -228,7 +244,11 @@ type
 
     { Get the configured return value for a method.
       Returns '' if not configured. }
-    function GetReturn(const AMethodName: string): string;
+    function GetReturn(const AMethodName: string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of TMockValue): string; overload;
 
     { Get the configured return value as Int64. Returns 0 if not configured. }
     function GetReturnInt(const AMethodName: string): Int64; overload;
@@ -258,6 +278,19 @@ type
     procedure ResetCalls;
     { Reset all recorded calls AND setup configurations }
     procedure ResetAll;
+
+    { Get formatted call history for debugging.
+      Returns all recorded calls with arguments and return values:
+        Foo('a', 'b') => 'result'
+        Bar('c') => (void)
+      Useful for test failure diagnostics. }
+    function GetCallHistory: string;
+
+    { Verify methods were called in the given order (by call order tracking).
+      Each method in AMethods must appear after the previous one in the
+      recorded call order. Methods don't need to be consecutive.
+      Example: Mock.VerifyInOrder(['Init', 'Process', 'Finish']); }
+    procedure VerifyInOrder(const AMethods: array of string);
 
     { Access to the raw state for advanced usage }
     property State: TMockState read FState;
@@ -435,6 +468,7 @@ begin
   FCalls  := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenMethodNames := nil;
 end;
 
 destructor TMockState.Destroy;
@@ -442,6 +476,7 @@ begin
   FCalls  := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenMethodNames := nil;
   inherited Destroy;
 end;
 
@@ -515,18 +550,39 @@ begin
   Result := '';
 end;
 
+function TMockState.GetReturn(const AMethodName: string;
+  const AArgs: array of string): string;
+var
+  LTypedArgs: TMockValues;
+  LWhenIdx: Integer;
+begin
+  BuildTypedStringArgs(AArgs, LTypedArgs);
+  LWhenIdx := FindWhenEntry(AMethodName, LTypedArgs);
+  if LWhenIdx >= 0 then
+    Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
+  Result := GetReturn(AMethodName);
+end;
+
+function TMockState.GetReturn(const AMethodName: string;
+  const AArgs: array of TMockValue): string;
+var
+  LWhenIdx: Integer;
+begin
+  LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+  if LWhenIdx >= 0 then
+    Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
+  Result := GetReturn(AMethodName);
+end;
+
 function TMockState.GetReturnTyped(const AMethodName: string;
   const AArgs: array of TMockValue): TMockValue;
 var
   I, LWhenIdx: Integer;
 begin
   { E-09: Check When entries first (parameter-dependent returns) }
-  if Length(AArgs) > 0 then
-  begin
-    LWhenIdx := FindWhenEntry(AMethodName, AArgs);
-    if LWhenIdx >= 0 then
-      Exit(FWhenEntries[LWhenIdx].ReturnValue);
-  end;
+  LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+  if LWhenIdx >= 0 then
+    Exit(FWhenEntries[LWhenIdx].ReturnValue);
   for I := High(FSetups) downto 0 do
   begin
     if FSetups[I].MethodName = AMethodName then
@@ -633,6 +689,7 @@ begin
   if LCap <> LOldLen then SetLength(FWhenEntries, LCap);
   FWhenEntries[LOldLen] := LEntry;
   SetLength(FWhenEntries, LOldLen + 1);
+  TrackWhenMethod(AMethodName);
 end;
 
 function TMockState.FindWhenEntry(const AMethodName: string;
@@ -660,6 +717,17 @@ begin
       Exit(I);
   end;
   Result := -1;
+end;
+
+procedure TMockState.TrackWhenMethod(const AMethodName: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FWhenMethodNames) do
+    if FWhenMethodNames[I] = AMethodName then
+      Exit;
+  SetLength(FWhenMethodNames, Length(FWhenMethodNames) + 1);
+  FWhenMethodNames[High(FWhenMethodNames)] := AMethodName;
 end;
 
 function TMockState.CallCount(const AMethodName: string): Integer;
@@ -734,16 +802,41 @@ begin
   FSetups := nil;
   FCallOrder := nil;
   FWhenEntries := nil;
+  FWhenMethodNames := nil;
 end;
 
 function TMockState.GetSetupMethodNames: specialize TArray<string>;
 var
-  I, LCount: Integer;
+  I, LSetupCount, LWhenCount, LTotal, LOutIdx: Integer;
+  LFound: Boolean;
 begin
-  LCount := Length(FSetups);
-  SetLength(Result, LCount);
-  for I := 0 to LCount - 1 do
-    Result[I] := FSetups[I].MethodName;
+  LSetupCount := Length(FSetups);
+  LWhenCount := Length(FWhenMethodNames);
+  SetLength(Result, LSetupCount + LWhenCount);
+  LOutIdx := 0;
+  { Copy all setup method names }
+  for I := 0 to LSetupCount - 1 do
+  begin
+    Result[LOutIdx] := FSetups[I].MethodName;
+    Inc(LOutIdx);
+  end;
+  { Add When-only method names (not already in FSetups) }
+  for I := 0 to LWhenCount - 1 do
+  begin
+    LFound := False;
+    for LTotal := 0 to LSetupCount - 1 do
+      if FSetups[LTotal].MethodName = FWhenMethodNames[I] then
+      begin
+        LFound := True;
+        Break;
+      end;
+    if not LFound then
+    begin
+      Result[LOutIdx] := FWhenMethodNames[I];
+      Inc(LOutIdx);
+    end;
+  end;
+  SetLength(Result, LOutIdx);
 end;
 
 { ── IMockSetup implementation ──────────────────────────────────────────────── }
@@ -914,6 +1007,7 @@ type
       const AArgs: array of string): IMockVerify;
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of TMockValue): IMockVerify;
+    function  Count: Integer;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -923,25 +1017,60 @@ begin
   FMethod := AMethod;
 end;
 
+function FormatCallDetail(AState: TMockState; const AMethod: string): string;
+{ Build a human-readable list of all calls to AMethod with their arguments.
+  Example: "  Foo('a', 'b')\n  Foo('c')" }
+var
+  I, J: Integer;
+  LCall: TMockCall;
+  LFound: Boolean;
+begin
+  Result := '';
+  LFound := False;
+  for I := 0 to High(AState.Calls) do
+  begin
+    LCall := AState.Calls[I];
+    if LCall.MethodName <> AMethod then
+      Continue;
+    if not LFound then
+    begin
+      Result := #10 + '  calls to ' + AMethod + ':';
+      LFound := True;
+    end;
+    Result := Result + #10 + '    ' + AMethod + '(';
+    for J := 0 to High(LCall.Args) do
+    begin
+      if J > 0 then Result := Result + ', ';
+      Result := Result + '"' + LCall.Args[J] + '"';
+    end;
+    Result := Result + ')';
+  end;
+  { Also list all calls if method was never called, to help spot typos }
+  if not LFound then
+  begin
+    for I := 0 to High(AState.Calls) do
+    begin
+      if I = 0 then
+        Result := #10 + '  all recorded calls:';
+      Result := Result + #10 + '    ' + AState.Calls[I].MethodName + '(';
+      for J := 0 to High(AState.Calls[I].Args) do
+      begin
+        if J > 0 then Result := Result + ', ';
+        Result := Result + '"' + AState.Calls[I].Args[J] + '"';
+      end;
+      Result := Result + ')';
+    end;
+  end;
+end;
+
 procedure TMockVerifier.CheckCount(AActual, AExpected: Integer;
   const AQualifier: string; APasses: Boolean);
-var
-  LHistory: string;
-  I: Integer;
 begin
   if not APasses then
-  begin
-    LHistory := '';
-    if Length(FState.Calls) > 0 then
-    begin
-      LHistory := '; actual calls:';
-      for I := 0 to High(FState.Calls) do
-        LHistory := LHistory + ' ' + FState.Calls[I].MethodName;
-    end;
     InternalFail('Expected ' + FMethod + ' called ' + AQualifier + ' ' +
       IntToStr(AExpected) + ' time(s), but was called ' +
-      IntToStr(AActual) + ' time(s)' + LHistory);
-  end;
+      IntToStr(AActual) + ' time(s)' +
+      FormatCallDetail(FState, FMethod));
 end;
 
 procedure TMockVerifier.CalledExactly(ACount: Integer);
@@ -1097,6 +1226,11 @@ begin
   Result := Self;
 end;
 
+function TMockVerifier.Count: Integer;
+begin
+  Result := FState.CallCount(FMethod);
+end;
+
 { ── TMock ─────────────────────────────────────────────────────────────────── }
 
 constructor TMock.Create;
@@ -1140,6 +1274,54 @@ begin
     InternalFail('VerifyAll: set-up methods never called: ' + LUncalled);
 end;
 
+procedure TMock.VerifyNoMoreInteractions;
+var
+  LSetupNames: specialize TArray<string>;
+  LUncalled, LUnexpected: string;
+  I, J: Integer;
+  LFound: Boolean;
+begin
+  LSetupNames := FState.GetSetupMethodNames;
+  { Check: all set-up methods were called }
+  LUncalled := '';
+  for I := 0 to High(LSetupNames) do
+    if FState.CallCount(LSetupNames[I]) = 0 then
+    begin
+      if LUncalled <> '' then LUncalled := LUncalled + ', ';
+      LUncalled := LUncalled + LSetupNames[I];
+    end;
+  { Check: no calls to un-set-up methods }
+  LUnexpected := '';
+  for I := 0 to High(FState.Calls) do
+  begin
+    LFound := False;
+    for J := 0 to High(LSetupNames) do
+      if FState.Calls[I].MethodName = LSetupNames[J] then
+      begin
+        LFound := True;
+        Break;
+      end;
+    if not LFound then
+    begin
+      if LUnexpected <> '' then LUnexpected := LUnexpected + ', ';
+      LUnexpected := LUnexpected + FState.Calls[I].MethodName;
+    end;
+  end;
+  { Report }
+  if (LUncalled <> '') or (LUnexpected <> '') then
+  begin
+    if (LUncalled <> '') and (LUnexpected <> '') then
+      InternalFail('VerifyNoMoreInteractions: set-up methods never called: ' +
+        LUncalled + '; unexpected calls: ' + LUnexpected)
+    else if LUncalled <> '' then
+      InternalFail('VerifyNoMoreInteractions: set-up methods never called: ' +
+        LUncalled)
+    else
+      InternalFail('VerifyNoMoreInteractions: unexpected calls to methods ' +
+        'not set up: ' + LUnexpected);
+  end;
+end;
+
 procedure TMock.RecordCall(const AMethodName: string;
   const AArgs: array of string);
 begin
@@ -1155,6 +1337,18 @@ end;
 function TMock.GetReturn(const AMethodName: string): string;
 begin
   Result := FState.GetReturn(AMethodName);
+end;
+
+function TMock.GetReturn(const AMethodName: string;
+  const AArgs: array of string): string;
+begin
+  Result := FState.GetReturn(AMethodName, AArgs);
+end;
+
+function TMock.GetReturn(const AMethodName: string;
+  const AArgs: array of TMockValue): string;
+begin
+  Result := FState.GetReturn(AMethodName, AArgs);
 end;
 
 function TMock.GetReturnInt(const AMethodName: string): Int64;
@@ -1248,6 +1442,88 @@ end;
 procedure TMock.ResetAll;
 begin
   FState.ResetAll;
+end;
+
+function TMock.GetCallHistory: string;
+var
+  I, J: Integer;
+  LCall: TMockCall;
+  LSb: specialize TArray<string>;
+begin
+  if Length(FState.Calls) = 0 then
+  begin
+    Result := '(no calls recorded)';
+    Exit;
+  end;
+  LSb := nil;
+  for I := 0 to High(FState.Calls) do
+  begin
+    LCall := FState.Calls[I];
+    SetLength(LSb, Length(LSb) + 1);
+    LSb[High(LSb)] := '  ' + LCall.MethodName + '(';
+    for J := 0 to High(LCall.Args) do
+    begin
+      if J > 0 then LSb[High(LSb)] := LSb[High(LSb)] + ', ';
+      LSb[High(LSb)] := LSb[High(LSb)] + '"' + LCall.Args[J] + '"';
+    end;
+    LSb[High(LSb)] := LSb[High(LSb)] + ')';
+    if LCall.HasResult then
+      LSb[High(LSb)] := LSb[High(LSb)] + ' => "' + LCall.ResultValue + '"'
+    else
+      LSb[High(LSb)] := LSb[High(LSb)] + ' => (void)';
+  end;
+  Result := '';
+  for I := 0 to High(LSb) do
+  begin
+    if I > 0 then Result := Result + #10;
+    Result := Result + LSb[I];
+  end;
+end;
+
+procedure TMock.VerifyInOrder(const AMethods: array of string);
+var
+  I, J, LOrderIdx: Integer;
+  LOrder: specialize TArray<string>;
+  LActual: string;
+begin
+  if Length(AMethods) < 2 then
+  begin
+    if Length(AMethods) = 1 then
+      { Single method: just verify it was called }
+      Verify(AMethods[0]).CalledAtLeast(1);
+    Exit;
+  end;
+  LOrder := FState.CallOrder;
+  LOrderIdx := 0;
+  for I := 0 to High(LOrder) do
+  begin
+    if LOrderIdx > High(AMethods) then
+      Break;
+    if LOrder[I] = AMethods[LOrderIdx] then
+      Inc(LOrderIdx);
+  end;
+  if LOrderIdx <= High(AMethods) then
+  begin
+    { Build expected order string for error message }
+    LActual := '';
+    for I := 0 to High(AMethods) do
+    begin
+      if I > 0 then LActual := LActual + ' -> ';
+      LActual := LActual + AMethods[I];
+    end;
+    { Build actual call order }
+    LActual := LActual + #10'  actual call order: ';
+    J := 0;
+    for I := 0 to High(LOrder) do
+    begin
+      if I > 0 then LActual := LActual + ' -> ';
+      LActual := LActual + LOrder[I];
+      Inc(J);
+    end;
+    if J = 0 then
+      LActual := LActual + '(no calls recorded)';
+    InternalFail('VerifyInOrder: expected call order ' + LActual);
+  end;
 end;
 
 end.

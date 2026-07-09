@@ -148,6 +148,13 @@ type
       failure (Go t.Cleanup() equivalent). Handlers execute in LIFO order. }
     procedure Cleanup(AProc: TTestProc);
     procedure Cleanup(AProc: TTestClosure);
+    { Tag: apply tags to all tests currently registered in this suite.
+      Call after registering tests to bulk-tag them.
+      Example:
+        Suite.Test('A', @TestA);
+        Suite.Test('B', @TestB);
+        Suite.Tag('integration');  // A and B both get 'integration' tag }
+    procedure Tag(const ATags: array of string);
     { ⚠️ With* methods return a NEW record — you MUST assign the return value:
         Suite := Suite.WithSetup(Proc);  // ✅ correct
         Suite.WithSetup(Proc);           // ❌ BUG: changes discarded
@@ -210,7 +217,10 @@ type
     TotalPass: Integer;
     TotalFail: Integer;
     TotalSkip: Integer;
+    TotalDuration: Int64;  { total execution time in milliseconds }
     HasRun   : Boolean;
+    LastResults: specialize TArray<TTestRunResult>;
+      { Stored by RunAllIterLoop for failure summary in Summary. }
 
     class function Create(const AName: string): TSuiteRunner; static;
     procedure Add(const ASuite: TTestSuite);
@@ -399,7 +409,7 @@ begin
       else if ASuites[I].Tests[J].ShortSkip then
         LSuffix := ' (short-skip)';
       end;
-      LOutSink.WriteLn('  ' + ASuites[I].Tests[J].Name + LSuffix);
+      LOutSink.WriteLn('  ' + GetDisplayName(ASuites[I].Tests[J]) + LSuffix);
     end;
   end;
   SetLength(AResults, 0);
@@ -435,46 +445,32 @@ begin
 end;
 
 { ── Generic array capacity growth ───────────────────────────────────────────── }
+{ Grow AArray capacity if needed. Returns old length (= insertion index).
+  FPC doesn't support generic standalone functions, so we need4 overloads.
+  Each body is identical — GrowCapacity computes geometric growth. }
 
 function GrowArrayLen(var AArray: specialize TArray<Pointer>; AInitCap: Integer): Integer;
-{ Grow AArray capacity if needed. Returns old length (= insertion index). }
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<TObject>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<Integer>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 function GrowArrayLen(var AArray: specialize TArray<TTestSuite>; AInitCap: Integer): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(AArray);
-  LCap := GrowCapacity(LOldLen, AInitCap);
-  if LCap <> LOldLen then SetLength(AArray, LCap);
-  Result := LOldLen;
+  Result := Length(AArray);
+  SetLength(AArray, GrowCapacity(Result, AInitCap));
 end;
 
 procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
@@ -871,6 +867,24 @@ begin
   SetLength(EachCleanups, LIdx + 1);
 end;
 
+procedure TTestSuite.Tag(const ATags: array of string);
+var
+  I, J, LOldLen: Integer;
+  LNewTags: specialize TArray<string>;
+begin
+  if Length(ATags) = 0 then Exit;
+  for I := 0 to High(Tests) do
+  begin
+    LOldLen := Length(Tests[I].Tags);
+    SetLength(LNewTags, LOldLen + Length(ATags));
+    for J := 0 to LOldLen - 1 do
+      LNewTags[J] := Tests[I].Tags[J];
+    for J := 0 to High(ATags) do
+      LNewTags[LOldLen + J] := ATags[J];
+    Tests[I].Tags := LNewTags;
+  end;
+end;
+
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
 begin
   Result := Self;
@@ -972,12 +986,14 @@ var
   LIdx: Integer;
   LRunStart: TInstant;
   LRunTimeout: TDuration;
+  LSuiteStart: TInstant;  { suite-level duration tracking }
   LCache: TTestCache;
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
   LCacheHit: Boolean;
 begin
   ApplyCLIArgs;
+  LSuiteStart := TInstant.Now;
   AResult := TTestRunResult.Create(Name);
   LPass := 0;
   LFail := 0;
@@ -1323,6 +1339,10 @@ begin
     WriteTestOutput(LStatus, LProgressPrefix + LDisplayName,
       LLastFailMsg, LEntry.SkipReason,
       LStart.Elapsed.AsMilliseconds, LOutSink, LConfig);
+    { Auto-print captured log on failure/error — no --verbose needed }
+    if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
+       (LStatus in [tsFailed, tsError]) then
+      WriteCapturedLog(LSubCtx.FLogLines, LOutSink, LConfig);
 
     LLastFailMsg := '';
     ReportLeakIfAny(LStatus, LConfig);
@@ -1372,6 +1392,7 @@ begin
     calls CleanupTableAllocations after the full run. }
   CleanupTableAllocations;
 
+  AResult.Duration := LSuiteStart.Elapsed.AsMilliseconds;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1408,6 +1429,13 @@ begin
   try
     if Assigned(Setup) then Setup else SetupClosure();
   except
+    on E: ETestSkipped do
+    begin
+      { Intentional skip from setup — mark all tests as skipped, not failed }
+      ASkipCount := Length(Tests);
+      AErrorMsg := E.Message;
+      Result := True; { not an error, just a skip }
+    end;
     on E: Exception do
     begin
       ResolveErrSink(AConfig).WriteLn(
@@ -1430,12 +1458,9 @@ begin
       WriteWarning('teardown error: ' + E.Message,
         ResolveErrSink(AConfig), AConfig);
   end;
-  { R4-12: Nil-out after execution to prevent double-free if the same
-    suite is run twice on the same runner (e.g. fixture teardown that frees
-    an object). Without this, the second run would call the closure again
-    on an already-freed object. }
-  Teardown := nil;
-  TeardownClosure := nil;
+  { Note: Do NOT nil-out Teardown/TeardownClosure here.
+    RepeatAllCount re-runs the same suite, and teardown must run each time.
+    The fixture owner is responsible for preventing double-free. }
 end;
 
 procedure TTestSuite.HandleSetupFailure(var AResult: TTestRunResult;
@@ -1459,7 +1484,20 @@ begin
     end;
     ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
   end;
-  AResult.Failed    := 1;
+  { Append a synthetic setup-failure entry so JUnit/JSON exporters can
+    distinguish "setup failed" from "all tests individually skipped".
+    The tsError status is counted separately by JUnitXML. }
+  if APopulateResults then
+  begin
+    LTestResult := MakeTestResult('[setup]', tsError,
+      'setup failed: ' + AErrorMsg, 0);
+    AppendResult(AResult.Results, LTestResult);
+    { P1 #3: Dispose table-test heap allocations on setup failure path.
+      Without this, early Exit skips CleanupTableAllocations in the normal
+      post-loop path, leaking PTestCase/PTestCaseProc data. }
+    CleanupTableAllocations;
+  end;
+  AResult.Failed    := 0;
   AResult.Skipped   := ASkipCount;
   AResult.AllPassed := False;
   HasRun        := True;
@@ -1513,7 +1551,7 @@ begin
   Inc(ACounter);
   LTestResult := MakeTestResult(AEntry.Name, AStatus, AMsg, 0);
   AppendResult(AResults, LTestResult);
-  WriteTestOutput(AStatus, AEntry.Name, AMsg, '', 0, AOutSink, AConfig);
+  WriteTestOutput(AStatus, GetDisplayName(AEntry), AMsg, '', 0, AOutSink, AConfig);
   ReportLeakIfAny(AStatus, AConfig);
   Result := True; { caller should Continue }
 end;
@@ -1912,7 +1950,9 @@ begin
   Result.TotalPass := 0;
   Result.TotalFail := 0;
   Result.TotalSkip := 0;
+  Result.TotalDuration := 0;
   Result.HasRun    := False;
+  Result.LastResults := nil;
 end;
 
 procedure TSuiteRunner.Add(const ASuite: TTestSuite);
@@ -1973,6 +2013,7 @@ begin
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
+  TotalDuration := 0;
   SetLength(AResults, Length(Suites));
 
   for LIter := 1 to LRepeatAll do
@@ -1986,6 +2027,8 @@ begin
       TotalPass := 0;
       TotalFail := 0;
       TotalSkip := 0;
+      LAllPassed := True; { Reset for next iteration — stale False from prior iter
+        would trigger FailFast immediately, skipping all suites }
     end;
     LStart := TInstant.Now;
     for I := 0 to High(Suites) do
@@ -2004,6 +2047,7 @@ begin
       Inc(TotalPass, Suites[I].LastPass);
       Inc(TotalFail, Suites[I].LastFail);
       Inc(TotalSkip, Suites[I].LastSkip);
+      Inc(TotalDuration, LSuiteResult.Duration);
       if (not LAllPassed) and LFailFast then
       begin
         LOutSink.WriteLn(AnsiYellow(
@@ -2028,6 +2072,7 @@ begin
     Suites[I].CleanupTableAllocations;
 
   HasRun := True;
+  LastResults := AResults;
   Result := LAllPassed;
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
@@ -2051,16 +2096,72 @@ procedure TSuiteRunner.Summary;
 var
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
+  LSuite: TTestRunResult;
+  LRes: TTestResult;
+  I, J, LFailIdx, LTotal: Integer;
+  LPassRate: Double;
+  LPassRateStr: string;
 begin
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
+  LTotal := TotalPass + TotalFail + TotalSkip;
   LOutSink.WriteLn('');
   LOutSink.WriteLn(AnsiBold('=== Summary ===', LConfig));
   LOutSink.WriteLn('  Suites: ' + IntToStr(Length(Suites)));
-  LOutSink.WriteLn(
-    '  Passed: ' + IntToStr(TotalPass) +
-    ', Failed: ' + IntToStr(TotalFail) +
-    ', Skipped: ' + IntToStr(TotalSkip));
+  if LTotal > 0 then
+  begin
+    LPassRate := (TotalPass / LTotal) * 100.0;
+    LPassRateStr := FormatFloat('0.0', LPassRate) + '%';
+    { Color-coded pass rate: green ≥90%, yellow ≥70%, red <70% }
+    if LPassRate >= 90.0 then
+      LPassRateStr := AnsiGreen(LPassRateStr, LConfig)
+    else if LPassRate >= 70.0 then
+      LPassRateStr := AnsiYellow(LPassRateStr, LConfig)
+    else
+      LPassRateStr := AnsiRed(LPassRateStr, LConfig);
+    LOutSink.WriteLn(
+      '  Passed: ' + IntToStr(TotalPass) +
+      ', Failed: ' + IntToStr(TotalFail) +
+      ', Skipped: ' + IntToStr(TotalSkip) +
+      ' (' + LPassRateStr + ' pass rate)');
+  end
+  else
+    LOutSink.WriteLn(
+      '  Passed: ' + IntToStr(TotalPass) +
+      ', Failed: ' + IntToStr(TotalFail) +
+      ', Skipped: ' + IntToStr(TotalSkip));
+  { Total duration }
+  LOutSink.WriteLn('  Duration: ' + FormatDuration(TotalDuration));
+
+  { Failure summary: list all failed/error tests with details }
+  if (TotalFail > 0) and (Length(LastResults) > 0) then
+  begin
+    LOutSink.WriteLn('');
+    LOutSink.WriteLn(AnsiBold('=== Failures ===', LConfig));
+    LFailIdx := 0;
+    for I := 0 to High(LastResults) do
+    begin
+      LSuite := LastResults[I];
+      for J := 0 to High(LSuite.Results) do
+      begin
+        LRes := LSuite.Results[J];
+        if LRes.Status in [tsFailed, tsError] then
+        begin
+          Inc(LFailIdx);
+          LOutSink.WriteLn('');
+          LOutSink.WriteLn('  ' + AnsiBold(IntToStr(LFailIdx) + ')', LConfig) +
+            ' ' + AnsiCyan(LSuite.SuiteName, LConfig) +
+            ' > ' + AnsiRed(LRes.Name, LConfig));
+          if LRes.Message <> '' then
+            LOutSink.WriteLn('    ' + FormatFailDetail(LRes.Message, LConfig));
+        end;
+      end;
+    end;
+    LOutSink.WriteLn('');
+    LOutSink.WriteLn(
+      AnsiDim('  ' + IntToStr(LFailIdx) + ' failure(s) in ' +
+        IntToStr(TotalPass + TotalFail + TotalSkip) + ' tests', LConfig));
+  end;
 end;
 
 function TSuiteRunner.AllPassed: Boolean;

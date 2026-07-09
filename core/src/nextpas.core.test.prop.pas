@@ -1842,16 +1842,15 @@ begin
       LBlockLen := 1 + LRng.NextIntRange(0, 7)
     else
       LBlockLen := 1 + LRng.NextIntRange(0, LLen div 2);
+    { Re-choose LPos: must fit LBlockLen bytes from LPos }
+    LPos := LRng.NextIntRange(0, LLen - LBlockLen);
     LPos2 := LRng.NextIntRange(0, LLen - LBlockLen);
-    if LPos + LBlockLen <= LLen then
+    { Swap bytes at LPos and LPos2 }
+    for I := 0 to LBlockLen - 1 do
     begin
-      { Swap bytes at LPos and LPos2 }
-      for I := 0 to LBlockLen - 1 do
-      begin
-        LTmp := Result[LPos + I];
-        Result[LPos + I] := Result[LPos2 + I];
-        Result[LPos2 + I] := LTmp;
-      end;
+      LTmp := Result[LPos + I];
+      Result[LPos + I] := Result[LPos2 + I];
+      Result[LPos2 + I] := LTmp;
     end;
   end;
 end;

@@ -107,6 +107,8 @@ function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
+function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
+function ExpectArrayOfStr(const AValues: array of string): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
 
@@ -218,18 +220,70 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+
+{ ── Regex Matching ──────────────────────────────────────────────────────────── }
+procedure CheckMatch(const APattern, AStr: string); overload;
+procedure CheckMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+procedure CheckNotMatch(const APattern, AStr: string); overload;
+procedure CheckNotMatch(const APattern, AStr: string;
+  const AMessage: string); overload;
+
 procedure Fail(const AMessage: string);
 procedure FailUnexpected(const E: Exception);
 procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);
+
+type
+  TReadFileStatus = nextpas.core.test.check.TReadFileStatus;
+
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
-function ReadFileContents(const APath: string; out AContents: string): Boolean;
+function ReadFileContents(const APath: string; out AContents: string;
+  out AStatus: TReadFileStatus): Boolean; overload;
+function ReadFileContents(const APath: string; out AContents: string): Boolean; overload;
 procedure WriteFileContents(const APath, AContents: string);
 
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64); overload;
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
+  const AMessage: string); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of string); overload;
+procedure CheckArrayEqual(const AExpected, AActual: array of string;
+  const AMessage: string); overload;
+
+{ ── Array Containment ──────────────────────────────────────────────────────── }
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string); overload;
+procedure CheckArrayNotContains(const AArray: array of string;
+  const AValue: string; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64); overload;
+procedure CheckArrayNotContains(const AArray: array of Int64;
+  const AValue: Int64; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
+
+{ ── Array Sorted Checks ───────────────────────────────────────────────────── }
+procedure CheckSorted(const AArray: array of Int64); overload;
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string); overload;
+procedure CheckSorted(const AArray: array of string); overload;
+procedure CheckSorted(const AArray: array of string;
   const AMessage: string); overload;
 
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
@@ -360,15 +414,20 @@ function MockDouble(const AValue: Double): TMockValue;
 
 type
   TMockProc = nextpas.core.test.helpers.TMockProc;
+  TTempDirProc = nextpas.core.test.helpers.TTempDirProc;
 
 { ── Re-exported functions from test.helpers ─────────────────────────────── }
 
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string = '');
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string = '');
 procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
+procedure WithTempDir(AProc: TTempDirProc);
 
 { ── Re-exported types from test.prop ───────────────────────────────────────── }
 

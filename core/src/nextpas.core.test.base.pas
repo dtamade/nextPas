@@ -35,6 +35,14 @@ type
     procedure LogF(const AFormat: string; const AArgs: array of const);
     procedure OnCleanup(AProc: TTestProc);
     procedure OnCleanup(AProc: TTestClosure);
+    { TempDir: lazy-created temporary directory for this test.
+      Created on first access, auto-cleaned when the test context is destroyed. }
+    function  GetTempDir: string;
+    property  TempDir: string read GetTempDir;
+    { Environment variable isolation: set/unset env vars for this test.
+      Original values are saved and automatically restored when the test ends. }
+    procedure SetEnv(const AName, AValue: string);
+    procedure UnsetEnv(const AName: string);
   end;
 
   TSubtestProc = procedure(constref Ctx: ITestContext);
@@ -84,6 +92,7 @@ type
     Failed    : Integer;
     Skipped   : Integer;
     AllPassed : Boolean;
+    Duration  : Int64;   { suite execution time in milliseconds }
     Results   : TTestResults;
     SlowTests : TTestResults;  { top N slowest tests, populated by runner }
     class function Create(const ASuiteName: string): TTestRunResult; static;
@@ -223,6 +232,8 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
+function  StrEndsWith(const AStr, ASuffix: string): Boolean;
+  { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
 procedure IncByStatus(AStatus: TTestStatus;
   var APass, AFail, ASkip: Integer);
   { Increment the appropriate counter based on test status. }
@@ -254,6 +265,7 @@ begin
   Result.Failed    := 0;
   Result.Skipped   := 0;
   Result.AllPassed := True;
+  Result.Duration  := 0;
   Result.Results   := nil;
   Result.SlowTests := nil;
 end;
@@ -278,6 +290,7 @@ begin
   AEntry.ShouldFailClass := nil;
   AEntry.ShouldFailContains := '';
   AEntry.ShortSkip   := False;
+  AEntry.Sequential  := False;
   AEntry.TableCase   := nil;
   AEntry.TableProc   := nil;
 end;
@@ -736,6 +749,18 @@ begin
     Exit(True); { empty prefix matches everything — consistent with Contains/EndsWith }
   Result := (Length(S) >= Length(APrefix)) and
             (Copy(S, 1, Length(APrefix)) = APrefix);
+end;
+
+function StrEndsWith(const AStr, ASuffix: string): Boolean;
+var
+  LStrLen, LSuffixLen: Integer;
+begin
+  LSuffixLen := Length(ASuffix);
+  if LSuffixLen = 0 then
+    Exit(True);
+  LStrLen := Length(AStr);
+  Result := (LStrLen >= LSuffixLen) and
+    (Copy(AStr, LStrLen - LSuffixLen + 1, LSuffixLen) = ASuffix);
 end;
 
 procedure IncByStatus(AStatus: TTestStatus;

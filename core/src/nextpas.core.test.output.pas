@@ -50,11 +50,17 @@ function FormatStatusLine(AStatus: TTestStatus; const AName: string;
   const AReason: string; const AConfig: TTestConfig): string; overload;
 
 { ── FormatFailDetail ──────────────────────────────────────────────────────── }
-{ Returns the indented failure detail line: AnsiDim(msg) or AnsiDim('(assertion failed)')
+{ Returns the indented failure detail line: AnsiRed(msg) or AnsiRed('(assertion failed)')
   if msg is empty. }
 
 function FormatFailDetail(const AMsg: string;
   const AConfig: TTestConfig): string;
+
+{ Print captured log lines (from Ctx.Log) in a visually distinct block.
+  Used on test failure to show diagnostic output without --verbose. }
+
+procedure WriteCapturedLog(const ALines: specialize TArray<string>;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
 
 { ── Meta-Test Helpers (for test programs that verify the framework) ───────── }
 
@@ -69,8 +75,9 @@ procedure SectionHeader(const ATitle: string);
 { ── Per-Test Output ───────────────────────────────────────────────────────── }
 
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
-  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
-  { Write formatted per-test status line to ASink. }
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Write formatted per-test status line to ASink. Shows timing for non-zero durations. }
 procedure WriteTestStatusVerbose(AStatus: TTestStatus; const AName, AFailMsg,
   ASkipReason: string; ADurationMs: Int64;
   const ASink: IOutputSink; const AConfig: TTestConfig);
@@ -91,6 +98,9 @@ procedure WriteWarning(const AMsg: string;
 procedure WriteSuiteHeader(const AName, ASuffix: string;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write blank line + bold '> Name (suffix)' suite header to ASink. }
+procedure WriteSuiteHeaderEx(const AName: string; ATestCount: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Enhanced suite header with test count: '> SuiteName (15 tests)' }
 procedure WriteSlowTests(const ASlowTests: TTestResults;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write slow test report: '  Slowest tests:' followed by top N entries. }
@@ -354,11 +364,40 @@ end;
 { FormatFailDetail — failure message with assertion-failed fallback }
 
 function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
+var
+  LBracketPos: Integer;
+  LMsg, LTrace: string;
 begin
-  if AMsg <> '' then
-    Result := AnsiDim(AMsg, AConfig)
+  if AMsg = '' then
+    Exit(AnsiRed('(assertion failed)', AConfig));
+  { Extract [file:line] trace appended by AppendTestTrace.
+    Pattern: 'message [file:line]' — find last ' [' and split. }
+  LBracketPos := Length(AMsg) - 1;
+  while (LBracketPos > 1) and not ((AMsg[LBracketPos] = ' ') and (AMsg[LBracketPos + 1] = '[')) do
+    Dec(LBracketPos);
+  if LBracketPos > 1 then
+  begin
+    LMsg := Copy(AMsg, 1, LBracketPos - 1);
+    LTrace := Copy(AMsg, LBracketPos + 1, MaxInt);
+    Result := AnsiRed(LMsg, AConfig) + #10 +
+      '    ' + AnsiDim(LTrace, AConfig);
+  end
   else
-    Result := AnsiDim('(assertion failed)', AConfig);
+    Result := AnsiRed(AMsg, AConfig);
+end;
+
+{ WriteCapturedLog — print captured log lines on failure/error }
+
+procedure WriteCapturedLog(const ALines: specialize TArray<string>;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  I: Integer;
+begin
+  if Length(ALines) = 0 then Exit;
+  ASink.WriteLn('    ' + AnsiDim('─── test log ───', AConfig));
+  for I := 0 to High(ALines) do
+    ASink.WriteLn('    ' + AnsiDim(ALines[I], AConfig));
+  ASink.WriteLn('    ' + AnsiDim('─────────────────', AConfig));
 end;
 
 { Meta-Test Helpers }
@@ -391,14 +430,21 @@ begin
 end;
 
 procedure WriteTestStatus(AStatus: TTestStatus; const AName, AFailMsg,
-  ASkipReason: string; const ASink: IOutputSink; const AConfig: TTestConfig);
+  ASkipReason: string; ADurationMs: Int64;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  LDurStr: string;
 begin
+  if ADurationMs > 0 then
+    LDurStr := AnsiDim(' (' + FormatDuration(ADurationMs) + ')', AConfig)
+  else
+    LDurStr := '';
   case AStatus of
     tsPassed:
-      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig));
+      ASink.WriteLn('  ' + FormatStatusLine(tsPassed, AName, AConfig) + LDurStr);
     tsFailed:
       begin
-        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig));
+        ASink.WriteLn('  ' + FormatStatusLine(tsFailed, AName, AConfig) + LDurStr);
         ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
     tsSkipped:
@@ -407,9 +453,9 @@ begin
     tsError:
       begin
         ASink.WriteLn('  ' + FormatStatusLine(tsError, AName, AConfig) +
-          ' [unexpected exception]');
+          LDurStr + ' [unexpected exception]');
         if AFailMsg <> '' then
-          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+          ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
   end;
 end;
@@ -447,7 +493,7 @@ begin
         ASink.WriteLn('  ' + AnsiRed('[FAIL]', AConfig) + ' ' +
           AName + AnsiDim(LDurStr, AConfig) + ' [unexpected exception]');
         if AFailMsg <> '' then
-          ASink.WriteLn('    ' + AnsiDim(AFailMsg, AConfig));
+          ASink.WriteLn('    ' + FormatFailDetail(AFailMsg, AConfig));
       end;
   end;
 end;
@@ -460,7 +506,8 @@ begin
     WriteTestStatusVerbose(AStatus, AName, AFailMsg, ASkipReason,
       ADurationMs, ASink, AConfig)
   else
-    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason, ASink, AConfig);
+    WriteTestStatus(AStatus, AName, AFailMsg, ASkipReason,
+      ADurationMs, ASink, AConfig);
 end;
 
 procedure WriteRetryHint(ACurrent, ATotal: Integer;
@@ -485,6 +532,22 @@ begin
     AnsiBold('> ', AConfig) +
     AnsiCyan(AName, AConfig) +
     AnsiDim(' (' + ASuffix + ')', AConfig));
+end;
+
+procedure WriteSuiteHeaderEx(const AName: string; ATestCount: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  LSuffix: string;
+begin
+  if ATestCount = 1 then
+    LSuffix := '1 test'
+  else
+    LSuffix := IntToStr(ATestCount) + ' tests';
+  ASink.WriteLn('');
+  ASink.WriteLn(
+    AnsiBold('> ', AConfig) +
+    AnsiCyan(AName, AConfig) +
+    AnsiDim(' (' + LSuffix + ')', AConfig));
 end;
 
 function FormatDuration(AMillis: Int64): string;
@@ -941,8 +1004,13 @@ begin
       for J := 0 to High(AResults[I].Results) do
         if AResults[I].Results[J].Status = tsError then
           Inc(LTotalErrors);
-    { Subtract errors from failures count — they were counted in Failed by runner }
-    LTotalFailures := LTotalFailures - LTotalErrors;
+    { Subtract errors from failures count — they were counted in Failed by runner.
+      Guard against negative: when runner sets Failed=0 but has tsError results,
+      don't go below zero. }
+    if LTotalFailures > LTotalErrors then
+      LTotalFailures := LTotalFailures - LTotalErrors
+    else
+      LTotalFailures := 0;
 
     LSb.AppendStr('<testsuites name="' + XmlEscape(ASuiteName) +
       '" tests="' + IntToStr(LTotalTests) +
@@ -964,9 +1032,14 @@ begin
         if LRunResult.Results[J].Status = tsError then
           Inc(LSuiteErrors);
 
+      { Guard against negative: when runner sets Failed=0 but has tsError results }
+      if LRunResult.Failed > LSuiteErrors then
+        LRunResult.Failed := LRunResult.Failed - LSuiteErrors
+      else
+        LRunResult.Failed := 0;
       LSb.AppendStr('  <testsuite name="' + XmlEscape(LSuiteName) +
         '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
-        '" failures="' + IntToStr(LRunResult.Failed - LSuiteErrors) +
+        '" failures="' + IntToStr(LRunResult.Failed) +
         '" errors="' + IntToStr(LSuiteErrors) +
         '" skipped="' + IntToStr(LRunResult.Skipped) + '">' + LineEnding);
 

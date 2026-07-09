@@ -1550,6 +1550,110 @@ begin
   CheckTrue(Length(LSlow) = 0, 'all zero duration should return empty');
 end;
 
+{ ── R48: FormatDuration boundary tests ────────────────────────────────────── }
+
+procedure TestFormatDurationZero;
+begin
+  CheckEqual('0ms', FormatDuration(0));
+end;
+
+procedure TestFormatDuration999ms;
+begin
+  CheckEqual('999ms', FormatDuration(999));
+end;
+
+procedure TestFormatDurationExactSecond;
+begin
+  CheckEqual('1s', FormatDuration(1000));
+end;
+
+procedure TestFormatDuration1050ms;
+begin
+  CheckEqual('1.05s', FormatDuration(1050));
+end;
+
+procedure TestFormatDuration1100ms;
+begin
+  CheckEqual('1.1s', FormatDuration(1100));
+end;
+
+procedure TestFormatDurationLarge;
+begin
+  CheckEqual('10s', FormatDuration(10000));
+  CheckEqual('1.5s', FormatDuration(1500));
+  CheckEqual('99.9s', FormatDuration(99900));
+end;
+
+procedure TestFormatDurationEdgeCases;
+begin
+  CheckEqual('1ms', FormatDuration(1));
+  CheckEqual('100ms', FormatDuration(100));
+  CheckEqual('2s', FormatDuration(2000));
+  CheckEqual('2.5s', FormatDuration(2500));
+end;
+
+{ ── R48: Glob nested brace tests ──────────────────────────────────────────── }
+
+procedure TestGlobNestedBraces;
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+  { Nested brace expansion: {a,{b,c}} → a, b, c }
+  SetTestFilter('test_{a,{b,c}}');
+  CheckTrue(MatchesFilter('test_a', LConfig), 'nested brace: matches a');
+  CheckTrue(MatchesFilter('test_b', LConfig), 'nested brace: matches b');
+  CheckTrue(MatchesFilter('test_c', LConfig), 'nested brace: matches c');
+  CheckFalse(MatchesFilter('test_d', LConfig), 'nested brace: no match d');
+  SetTestFilter('');
+end;
+
+procedure TestGlobEmptyAlternative;
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+  { Empty alternative in braces: {,a,b} → empty, a, b }
+  SetTestFilter('test_{,a,b}');
+  CheckTrue(MatchesFilter('test_', LConfig), 'empty alt: matches empty');
+  CheckTrue(MatchesFilter('test_a', LConfig), 'empty alt: matches a');
+  CheckTrue(MatchesFilter('test_b', LConfig), 'empty alt: matches b');
+  CheckFalse(MatchesFilter('test_c', LConfig), 'empty alt: no match c');
+  SetTestFilter('');
+end;
+
+procedure TestGlobBraceWithWildcard;
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+  { Brace + wildcard combination }
+  SetTestFilter('test_{a,b}*');
+  CheckTrue(MatchesFilter('test_abc', LConfig), 'brace+wildcard: matches a*');
+  CheckTrue(MatchesFilter('test_bxyz', LConfig), 'brace+wildcard: matches b*');
+  CheckTrue(MatchesFilter('test_a', LConfig), 'brace+wildcard: matches bare a');
+  CheckFalse(MatchesFilter('test_cxyz', LConfig), 'brace+wildcard: no match c');
+  SetTestFilter('');
+end;
+
+procedure TestGlobBraceWithQuestion;
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+  { Brace + question mark combination }
+  SetTestFilter('test_{a,b}?');
+  CheckTrue(MatchesFilter('test_ax', LConfig), 'brace+?: matches a?');
+  CheckTrue(MatchesFilter('test_bz', LConfig), 'brace+?: matches b?');
+  CheckFalse(MatchesFilter('test_a', LConfig), 'brace+?: no match bare a');
+  CheckFalse(MatchesFilter('test_cx', LConfig), 'brace+?: no match c');
+  SetTestFilter('');
+end;
+
 var
   Suite: TTestSuite;
   Runner: TSuiteRunner;
@@ -1637,6 +1741,21 @@ begin
   Suite.Test('TestRunnerTagsOverload',        @TestRunnerTagsOverload);
   Suite.Test('Hierarchical filter matching',  @TestHierarchicalFilter);
   Suite.Test('GetTopSlowest',                 @TestGetTopSlowest);
+
+  { R48: FormatDuration boundary tests }
+  Suite.Test('FormatDuration zero',           @TestFormatDurationZero);
+  Suite.Test('FormatDuration 999ms',          @TestFormatDuration999ms);
+  Suite.Test('FormatDuration exact second',   @TestFormatDurationExactSecond);
+  Suite.Test('FormatDuration 1050ms',         @TestFormatDuration1050ms);
+  Suite.Test('FormatDuration 1100ms',         @TestFormatDuration1100ms);
+  Suite.Test('FormatDuration large',          @TestFormatDurationLarge);
+  Suite.Test('FormatDuration edge cases',     @TestFormatDurationEdgeCases);
+
+  { R48: Glob nested brace tests }
+  Suite.Test('Glob nested braces',            @TestGlobNestedBraces);
+  Suite.Test('Glob empty alternative',        @TestGlobEmptyAlternative);
+  Suite.Test('Glob brace with wildcard',      @TestGlobBraceWithWildcard);
+  Suite.Test('Glob brace with question',      @TestGlobBraceWithQuestion);
 
   Runner := TSuiteRunner.Create('output-tests');
   Runner.Add(Suite);

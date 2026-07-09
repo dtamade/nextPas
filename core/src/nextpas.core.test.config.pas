@@ -22,7 +22,7 @@ type
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
     ckBench, ckBenchTime, ckBenchMem, ckRun,
-    ckBenchSave, ckBenchCompare);
+    ckBenchSave, ckBenchCompare, ckCache);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -324,7 +324,8 @@ begin
     Result.BenchEnabled := Result.BenchEnabled or LDefaults.BenchEnabled;
   if not (ckBenchMem in GExplicit) then
     Result.BenchMem := Result.BenchMem or LDefaults.BenchMem;
-  Result.CacheEnabled := Result.CacheEnabled or LDefaults.CacheEnabled;
+  if not (ckCache in GExplicit) then
+    Result.CacheEnabled := Result.CacheEnabled or LDefaults.CacheEnabled;
 end;
 
 function ResolveOutSink(const AConfig: TTestConfig): IOutputSink;
@@ -502,6 +503,7 @@ end;
 procedure SetDefaultCacheEnabled(AEnabled: Boolean);
 begin
   GDefaultConfig.CacheEnabled := AEnabled;
+  Include(GExplicit, ckCache);
 end;
 
 procedure SetDefaultCacheDir(const ADir: string);
@@ -936,7 +938,20 @@ begin
   LHash := (LHash xor Ord(AConfig.ShuffleSeed <> 0)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.ShortMode)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.VerboseMode)) * 1099511628211;
-  LHash := (LHash xor Ord(AConfig.FilterPattern <> '')) * 1099511628211;
+  { RetryCount/TimeoutMs affect pass/fail outcomes — different values may
+    produce different results, must affect cache key to avoid false hits }
+  LHash := (LHash xor AConfig.RetryCount) * 1099511628211;
+  LHash := (LHash xor Integer(AConfig.TimeoutMs and $7FFFFFFF)) * 1099511628211;
+  { Hash filter pattern content, not just its existence — different patterns
+    must produce different cache keys to avoid false cache hits }
+  for I := 1 to Length(AConfig.FilterPattern) do
+    LHash := (LHash xor Ord(AConfig.FilterPattern[I])) * 1099511628211;
+  { Hash tag filter — different tags select different tests, must affect cache key }
+  for I := 1 to Length(AConfig.TagFilter) do
+    LHash := (LHash xor Ord(AConfig.TagFilter[I])) * 1099511628211;
+  { Hash run pattern — different patterns select different tests, must affect cache key }
+  for I := 1 to Length(AConfig.RunPattern) do
+    LHash := (LHash xor Ord(AConfig.RunPattern[I])) * 1099511628211;
   Result := IntToHex(LHash, 16);
 end;
 
