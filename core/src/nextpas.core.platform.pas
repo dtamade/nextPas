@@ -14,15 +14,38 @@ type
   TCPUArch = nextpas.core.platform.base.TCPUArch;
   TEndianness = nextpas.core.platform.base.TEndianness;
 
+{** @desc 获取当前操作系统类型
+    @return TOSKind 枚举值 *}
 function CurrentOS: TOSKind; inline;
+
+{** @desc 获取当前 CPU 架构
+    @return TCPUArch 枚举值 *}
 function CurrentCPU: TCPUArch; inline;
+
+{** @desc 获取当前字节序
+    @return TEndianness 枚举值 *}
 function CurrentEndian: TEndianness; inline;
+
+{** @desc 获取操作系统名称字符串
+    @return 操作系统名称 *}
 function OSName: string; inline;
+
+{** @desc 获取 CPU 架构名称字符串
+    @return CPU 架构名称 *}
 function CPUName: string; inline;
 
 { Time }
+
+{** @desc 获取单调时钟时间（纳秒）
+    @return 纳秒时间戳 *}
 function platform_monotonic_ns: UInt64; inline;
+
+{** @desc 获取实时时钟时间（纳秒）
+    @return 纳秒时间戳 *}
 function platform_realtime_ns: UInt64; inline;
+
+{** @desc 获取单调时钟分辨率（纳秒）
+    @return 分辨率纳秒数 *}
 function platform_monotonic_resolution_ns: UInt64; inline;
 
 implementation
