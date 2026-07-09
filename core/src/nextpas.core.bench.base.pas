@@ -62,7 +62,8 @@ type
     RawSamples: TDoubleArray;
     {** 自定义指标 }
     CustomMetrics: TCustomMetricArray;
-    {** B22: Outlier-aware statistics }
+    {** B22: Outlier-aware statistics
+     *  当前始终为 'Tukey'/1.5，未来可扩展 ZScore/ModifiedZScore }
     OutlierMethod: string;
     OutlierThreshold: Double;
     FilteredMean: Double;
@@ -273,6 +274,9 @@ const
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
   BENCH_SIGNIFICANCE_ALPHA_HIGH = 0.01;  // 高显著性 alpha 水平 (99% 置信)
   BENCH_MATRIX_DIFF_THRESHOLD = 0.05;    // ratio 启发式阈值 (baseline 无原始样本时)
+
+  {** 时间单位常量 }
+  NANOSECONDS_PER_SECOND = 1000000000;
 
   {** 环境变量名 }
   BENCH_ENV_FILTER = 'NEXTPAS_BENCH_FILTER';
@@ -902,6 +906,7 @@ begin
   Result.AdaptiveWarmup := BENCH_DEFAULT_ADAPTIVE_WARMUP;
   Result.WarmupCVThreshold := BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
   Result.WarmupMaxIterations := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
+  { P1-14: Output 默认由调用方初始化（Create/CreateNoEnv），此处不设 }
 end;
 
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;

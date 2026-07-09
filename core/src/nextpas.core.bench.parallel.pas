@@ -252,7 +252,7 @@ begin
       FResults.NsPerOp := 0;
 
     if FResults.NsPerOp > 0 then
-      FResults.OpsPerSec := 1000000000 / FResults.NsPerOp
+      FResults.OpsPerSec := NANOSECONDS_PER_SECOND / FResults.NsPerOp
     else
       FResults.OpsPerSec := 0;
 

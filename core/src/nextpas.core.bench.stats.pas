@@ -1011,9 +1011,46 @@ begin
 
   Result.Statistic := LMaxD;
 
-  // 计算 p-value（使用渐近分布）
-  // 对于大样本，√n * D 服从 Kolmogorov 分布
-  Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LN) * LMaxD);
+  // p-value: Lilliefors 修正（参数从数据估计时，K-S 分布偏移）
+  // 修正公式: D_adj = D * (1 + 0.12/sqrt(n) + 0.11/n)
+  // 用 Kolmogorov 分布计算修正后的 p-value
+  if LN >= 30 then
+    // 大样本: 使用 Lilliefors 修正因子
+    Result.PValue := 1.0 - KolmogorovCDF(Sqrt(LN) * LMaxD * (1.0 + 0.12 / Sqrt(LN) + 0.11 / LN))
+  else if LN >= 5 then
+  begin
+    // 小样本: 使用 Lilliefors α=0.05 临界值（Lilliefors 1967）
+    // 直接写为 if-chain，避免 IfThen 依赖
+    if      (LN =  5) and (LMaxD > 0.337) then Result.PValue := 0.04
+    else if (LN =  6) and (LMaxD > 0.319) then Result.PValue := 0.04
+    else if (LN =  7) and (LMaxD > 0.300) then Result.PValue := 0.04
+    else if (LN =  8) and (LMaxD > 0.285) then Result.PValue := 0.04
+    else if (LN =  9) and (LMaxD > 0.271) then Result.PValue := 0.04
+    else if (LN = 10) and (LMaxD > 0.258) then Result.PValue := 0.04
+    else if (LN = 11) and (LMaxD > 0.249) then Result.PValue := 0.04
+    else if (LN = 12) and (LMaxD > 0.242) then Result.PValue := 0.04
+    else if (LN = 13) and (LMaxD > 0.234) then Result.PValue := 0.04
+    else if (LN = 14) and (LMaxD > 0.227) then Result.PValue := 0.04
+    else if (LN = 15) and (LMaxD > 0.220) then Result.PValue := 0.04
+    else if (LN = 16) and (LMaxD > 0.213) then Result.PValue := 0.04
+    else if (LN = 17) and (LMaxD > 0.206) then Result.PValue := 0.04
+    else if (LN = 18) and (LMaxD > 0.199) then Result.PValue := 0.04
+    else if (LN = 19) and (LMaxD > 0.193) then Result.PValue := 0.04
+    else if (LN = 20) and (LMaxD > 0.190) then Result.PValue := 0.04
+    else if (LN = 21) and (LMaxD > 0.187) then Result.PValue := 0.04
+    else if (LN = 22) and (LMaxD > 0.184) then Result.PValue := 0.04
+    else if (LN = 23) and (LMaxD > 0.181) then Result.PValue := 0.04
+    else if (LN = 24) and (LMaxD > 0.178) then Result.PValue := 0.04
+    else if (LN = 25) and (LMaxD > 0.175) then Result.PValue := 0.04
+    else if (LN = 26) and (LMaxD > 0.172) then Result.PValue := 0.04
+    else if (LN = 27) and (LMaxD > 0.169) then Result.PValue := 0.04
+    else if (LN = 28) and (LMaxD > 0.167) then Result.PValue := 0.04
+    else if (LN = 29) and (LMaxD > 0.165) then Result.PValue := 0.04
+    else Result.PValue := 0.5;
+  end
+  else
+    // n<5: 无可靠检验
+    Result.PValue := 0.5;
 
   // 判断是否显著（α=0.05）
   Result.IsSignificant := Result.PValue < 0.05;

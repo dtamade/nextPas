@@ -289,6 +289,14 @@ type
      *  nil 时自动创建控制台写入器（默认行为）。 }
     function SetOutput(const AWriter: ILineWriter): IBenchSuite;
 
+    {** 启用自适应预热：当最近窗口的 CV < 阈值时提前停止预热。 }
+    function SetAdaptiveWarmup(AEnabled: Boolean;
+      ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
+      AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS): IBenchSuite;
+
+    {** 设置进度回调（每个基准开始/完成时调用）。 }
+    function SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
+
     {** Phase 3: 批量并行运行独立基准。
      *  独立基准（非并行基准）可以在多个线程中同时运行。
      *  AThreadCount: 并行线程数，默认为 CPU 核心数。

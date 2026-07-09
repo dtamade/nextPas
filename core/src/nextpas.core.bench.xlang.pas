@@ -292,7 +292,7 @@ begin
         else if LCombinedUnit = 'ms/op' then
           Result := LValue * 1000000
         else if LCombinedUnit = 's/op' then
-          Result := LValue * 1000000000;
+          Result := LValue * NANOSECONDS_PER_SECOND;
       end;
     end;
     Exit;
@@ -308,7 +308,7 @@ begin
   else if LUnit = 'ms/op' then
     Result := LValue * 1000000
   else if LUnit = 's/op' then
-    Result := LValue * 1000000000;
+    Result := LValue * NANOSECONDS_PER_SECOND;
 end;
 
 { ParseGoBenchLine }
@@ -369,7 +369,7 @@ begin
   Result.TotalNs := SafeDeriveTotalNs(LNsPerOp, LIterations);
   Result.NsPerOp := LNsPerOp;
   if LNsPerOp > 0 then
-    Result.OpsPerSec := 1000000000 / LNsPerOp
+    Result.OpsPerSec := NANOSECONDS_PER_SECOND / LNsPerOp
   else
     Result.OpsPerSec := 0;
   Result.BytesPerOp := LBytesPerOp;
@@ -459,7 +459,7 @@ begin
   else if LUnit = 'ns' then LMultiplier := 1
   else if LUnit = 'us' then LMultiplier := 1000
   else if LUnit = 'ms' then LMultiplier := 1000000
-  else if LUnit = 's' then LMultiplier := 1000000000;
+  else if LUnit = 's' then LMultiplier := NANOSECONDS_PER_SECOND;
 
   // Validate mean > 0 after unit conversion (TG-15)
   // A zero or negative mean indicates invalid/meaningless benchmark data.
@@ -479,7 +479,7 @@ begin
   Result.Outliers := 0;
   Result.SampleCount := 1;
   if Result.NsPerOp > 0 then
-    Result.OpsPerSec := 1000000000 / Result.NsPerOp
+    Result.OpsPerSec := NANOSECONDS_PER_SECOND / Result.NsPerOp
   else
     Result.OpsPerSec := 0;
 end;
@@ -527,7 +527,7 @@ begin
   Result.Iterations := LIterations;
   Result.TotalNs := SafeDeriveTotalNs(LNsPerOp, LIterations);
   if LNsPerOp > 0 then
-    Result.OpsPerSec := 1000000000 / LNsPerOp
+    Result.OpsPerSec := NANOSECONDS_PER_SECOND / LNsPerOp
   else
     Result.OpsPerSec := 0;
 end;

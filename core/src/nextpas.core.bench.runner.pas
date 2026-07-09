@@ -149,7 +149,6 @@ type
 
     {** 输出一行 — 通过 Output ILineWriter }
     procedure EmitLine(const ALine: string);
-    procedure EmitLineStdErr(const ALine: string);
 
     {** 从环境变量加载配置 }
     procedure LoadConfigFromEnv;
@@ -488,6 +487,9 @@ begin
   inherited Create;
   InitDefaults;
   FConfig := DefaultBenchConfig;
+  { P1-14: CreateNoEnv 路径也必须初始化 Output，避免 EmitLine NPE }
+  if FConfig.Output = nil then
+    FConfig.Output := CreateConsoleWriter;
 end;
 
 destructor TBenchRunner.Destroy;
@@ -695,7 +697,7 @@ begin
 
   // 并行基准自动跳过内存跟踪
   if ATrackMemory and (not FConfig.Quiet) then
-    EmitLineStdErr('  WARNING: Memory tracking disabled for parallel benchmark "' + AEntry.Name + '"');
+    EmitLine('  WARNING: Memory tracking disabled for parallel benchmark "' + AEntry.Name + '"');
 
   LPerThreadIterations := AIters div AEntry.ParallelThreads;
   if (AIters mod AEntry.ParallelThreads) <> 0 then
@@ -967,6 +969,7 @@ function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
+  LLastTrackedSample: TBenchResult;
   LMinSamples, LSampleCount: Integer;
   LProbeNsPerOp: Double;
   LTargetNs: UInt64;
@@ -974,6 +977,7 @@ var
   I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
+  LLastTrackedSample := Default(TBenchResult);
 
   // PF-17: enforce MinSamples >= 1 to prevent empty arrays
   LMinSamples := FConfig.MinSamples;
@@ -985,8 +989,8 @@ begin
     这是 Rust criterion 的核心方法：预热后自动校准采样数量。 }
   LSampleCount := LMinSamples;
 
-  { 先做一次探测采样 }
-  LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking);
+  { 先做一次探测采样（不启用内存追踪，避免污染时间测量） }
+  LMeasurement := ExecuteEntry(AEntry, AIters, False);
   AFirstSample := LMeasurement;
 
   if LMeasurement.Skipped then
@@ -1043,12 +1047,22 @@ begin
     else
       LSamples[I] := 0.0;
 
+    { 保存最后一次带内存追踪的采样结果 }
+    if FConfig.EnableMemoryTracking and (I = LSampleCount - 1) then
+      LLastTrackedSample := LMeasurement;
+
     if LMeasurement.Skipped then
     begin
       SetLength(LSamples, I + 1);
       Break;
     end;
   end;
+
+  { 将最后一次带内存追踪的采样的内存 stats 复制到 AFirstSample }
+  if LLastTrackedSample.BytesPerOp > 0 then
+    AFirstSample.BytesPerOp := LLastTrackedSample.BytesPerOp;
+  if LLastTrackedSample.AllocsPerOp > 0 then
+    AFirstSample.AllocsPerOp := LLastTrackedSample.AllocsPerOp;
 
   Result := LSamples;
 end;
@@ -1071,7 +1085,7 @@ end;
 function TBenchRunner.ComputeOpsPerSec(ANsPerOp: Double): Double;
 begin
   if ANsPerOp > 0 then
-    Result := 1000000000.0 / ANsPerOp
+    Result := NANOSECONDS_PER_SECOND / ANsPerOp
   else
     Result := 0.0;
 end;
@@ -1107,10 +1121,10 @@ begin
     Result := FormatFloat('0.0', ANs) + ' ns'
   else if ANs < 1000000.0 then
     Result := FormatFloat('0.00', ANs / 1000.0) + ' µs'
-  else if ANs < 1000000000.0 then
+  else if ANs < NANOSECONDS_PER_SECOND then
     Result := FormatFloat('0.00', ANs / 1000000.0) + ' ms'
   else
-    Result := FormatFloat('0.000', ANs / 1000000000.0) + ' s';
+    Result := FormatFloat('0.000', ANs / NANOSECONDS_PER_SECOND) + ' s';
 end;
 
 {** 格式化吞吐量（自动选择单位：ops/K/M/G） }
@@ -1120,10 +1134,10 @@ begin
     Result := FormatFloat('0', AOps) + ' ops/s'
   else if AOps < 1000000.0 then
     Result := FormatFloat('0.0', AOps / 1000.0) + ' Kops/s'
-  else if AOps < 1000000000.0 then
+  else if AOps < NANOSECONDS_PER_SECOND then
     Result := FormatFloat('0.0', AOps / 1000000.0) + ' Mops/s'
   else
-    Result := FormatFloat('0.0', AOps / 1000000000.0) + ' Gops/s';
+    Result := FormatFloat('0.0', AOps / NANOSECONDS_PER_SECOND) + ' Gops/s';
 end;
 
 {** 格式化大数字（带千位分隔符） }
@@ -1147,12 +1161,6 @@ end;
 
 procedure TBenchRunner.EmitLine(const ALine: string);
 begin
-  FConfig.Output.WriteLine(ALine);
-end;
-
-procedure TBenchRunner.EmitLineStdErr(const ALine: string);
-begin
-  { 注意：当前统一使用 Output，不再区分 stderr }
   FConfig.Output.WriteLine(ALine);
 end;
 

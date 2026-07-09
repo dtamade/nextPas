@@ -161,7 +161,7 @@ end;
 
 constructor TBenchRun.Create;
 begin
-  Create(TBenchConfig(Default(TBenchConfig)));
+  Create(DefaultBenchConfig);
 end;
 
 constructor TBenchRun.Create(const AConfig: TBenchConfig);
@@ -244,6 +244,17 @@ begin
     AThreadCount := LEntryCount;
   if AThreadCount < 1 then
     AThreadCount := 1;
+
+  { 确保结果数组容量足够 }
+  if LEntryCount > FCapacity then
+  begin
+    FreeResults;
+    FreeMem(FResults);
+    FCapacity := LEntryCount;
+    FResults := GetMem(FCapacity * SizeOf(PBenchRunResult));
+  end;
+  FResultIdx := 0;
+  FillChar(FResults^, FCapacity * SizeOf(PBenchRunResult), 0);
 
   SetLength(LWorkers, LEntryCount);
   SetLength(LHandles, LEntryCount);

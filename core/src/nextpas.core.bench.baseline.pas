@@ -342,17 +342,9 @@ end;
 
 procedure TBaselineManager.LoadFromFile(const AFileName: string);
 begin
-  try
-    LoadFromJSON(FsReadFileText(AFileName));
-  except
-    on E: Exception do
-    begin
-      if Pos('No such file', E.Message) > 0 then
-        raise EBenchBaselineNotFound.CreateFmt('Baseline file not found: %s', [AFileName])
-      else
-        raise;
-    end;
-  end;
+  if not FileExists(AFileName) then
+    raise EBenchBaselineNotFound.CreateFmt('Baseline file not found: %s', [AFileName]);
+  LoadFromJSON(FsReadFileText(AFileName));
 end;
 
 function TBaselineManager.ToJSON: string;
@@ -460,7 +452,7 @@ begin
       // ST-26: fallback to legacy "timestamp" field (seconds → nanoseconds)
       LField := LItem.ObjectGet('timestamp');
       if LField.IsInt then
-        LBaseline.TimestampNs := UInt64(LField.AsInt) * 1000000000
+        LBaseline.TimestampNs := UInt64(LField.AsInt) * NANOSECONDS_PER_SECOND
       else
         LBaseline.TimestampNs := 0;
     end;
