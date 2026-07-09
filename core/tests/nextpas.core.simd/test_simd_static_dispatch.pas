@@ -1,8 +1,11 @@
 {
   test_simd_static_dispatch.pas
 
-  Benchmark comparing static dispatch vs runtime dispatch performance.
-  Measures the overhead elimination from Phase 5 static dispatch.
+  Test SIMD static dispatch functionality.
+  This test verifies that:
+  1. Static dispatch macros work correctly
+  2. Backend priority configuration works
+  3. Vectorization hints compile without errors
 }
 
 {$mode objfpc}{$H+}
@@ -20,6 +23,9 @@ type
     procedure Test_F32x4_Dot_Performance;
     procedure Test_F64x2_Add_Performance;
     procedure Test_BatchAdd_Performance;
+    procedure Test_BatchMul_Performance;
+    procedure Test_MemEqual_Performance;
+    procedure Test_ReduceMax_Performance;
   end;
 
 procedure TTestCase_StaticDispatch.Test_StaticDispatch_Enabled;
@@ -138,6 +144,101 @@ begin
 
   // Log performance
   WriteLn(Format('ArrayAddF32(%d): %d iterations in %.1f ms (%.2f ns/elem)', [ARRAY_SIZE, ITERATIONS, ElapsedMs,
+     ElapsedMs * 1000000 / (ITERATIONS * ARRAY_SIZE)]));
+end;
+
+procedure TTestCase_StaticDispatch.Test_BatchMul_Performance;
+var
+  src1, src2, dst: array[0..1023] of Single;
+  i: Integer;
+  StartTime: TDateTime;
+  ElapsedMs: Double;
+const
+  ITERATIONS = 100000;
+  ARRAY_SIZE = 1024;
+begin
+  // Initialize arrays
+  for i := 0 to ARRAY_SIZE - 1 do
+  begin
+    src1[i] := 1.5;
+    src2[i] := 2.5;
+  end;
+
+  StartTime := Now;
+  for i := 1 to ITERATIONS do
+  begin
+    ArrayMulF32(@src1[0], @src2[0], @dst[0], ARRAY_SIZE);
+  end;
+  ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
+
+  // Verify correctness
+  CheckTrue(Abs(dst[0] - 3.75) < 0.001, 'BatchMul correctness check');
+
+  // Log performance
+  WriteLn(Format('ArrayMulF32(%d): %d iterations in %.1f ms (%.2f ns/elem)', [ARRAY_SIZE, ITERATIONS, ElapsedMs,
+     ElapsedMs * 1000000 / (ITERATIONS * ARRAY_SIZE)]));
+end;
+
+procedure TTestCase_StaticDispatch.Test_MemEqual_Performance;
+var
+  buf1, buf2: array[0..4095] of Byte;
+  i: Integer;
+  StartTime: TDateTime;
+  ElapsedMs: Double;
+  Match: Boolean;
+const
+  ITERATIONS = 100000;
+  BUF_SIZE = 4096;
+begin
+  // Initialize buffers
+  for i := 0 to BUF_SIZE - 1 do
+  begin
+    buf1[i] := i mod 256;
+    buf2[i] := i mod 256;
+  end;
+
+  StartTime := Now;
+  for i := 1 to ITERATIONS do
+  begin
+    Match := MemEqual(@buf1[0], @buf2[0], BUF_SIZE);
+  end;
+  ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
+
+  // Verify correctness
+  CheckTrue(Match = True, 'MemEqual correctness check');
+
+  // Log performance
+  WriteLn(Format('MemEqual(%d): %d iterations in %.1f ms (%.2f ns/elem)', [BUF_SIZE, ITERATIONS, ElapsedMs,
+     ElapsedMs * 1000000 / (ITERATIONS * BUF_SIZE)]));
+end;
+
+procedure TTestCase_StaticDispatch.Test_ReduceMax_Performance;
+var
+  src: array[0..1023] of Single;
+  i: Integer;
+  StartTime: TDateTime;
+  ElapsedMs: Double;
+  MaxVal: Single;
+const
+  ITERATIONS = 100000;
+  ARRAY_SIZE = 1024;
+begin
+  // Initialize array
+  for i := 0 to ARRAY_SIZE - 1 do
+    src[i] := Sin(i * 0.1);
+
+  StartTime := Now;
+  for i := 1 to ITERATIONS do
+  begin
+    MaxVal := ReduceMaxF32(@src[0], ARRAY_SIZE);
+  end;
+  ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
+
+  // Verify correctness
+  CheckTrue(MaxVal > 0.9, 'ReduceMax correctness check');
+
+  // Log performance
+  WriteLn(Format('ReduceMaxF32(%d): %d iterations in %.1f ms (%.2f ns/elem)', [ARRAY_SIZE, ITERATIONS, ElapsedMs,
      ElapsedMs * 1000000 / (ITERATIONS * ARRAY_SIZE)]));
 end;
 
