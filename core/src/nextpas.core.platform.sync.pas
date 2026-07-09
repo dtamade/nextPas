@@ -518,6 +518,8 @@ end;
 
 function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
+  // Zero-initializing opaque host records with FillChar is the standard Pascal setup
+  // before pthread/SRW init functions write their native state.
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_posix_map_error(
     platform_sync_host_pthread_mutex_init_platform_kind(@AMutex.FOpaque[0], AKind));
@@ -1723,26 +1725,34 @@ end;
 function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;
 var
   LGen: UInt32;
+  LUnlockResult: Int32;
 begin
   Result := platform_mutex_lock(ABarrier.Mutex);
-  if Result <> 0 then Exit;
-  LGen := ABarrier.Generation;
-  Inc(ABarrier.Waiting);
-  if ABarrier.Waiting >= ABarrier.Count then
-  begin
-    ABarrier.Waiting := 0;
-    Inc(ABarrier.Generation);
-    platform_condvar_broadcast(ABarrier.CondVar);
-  end
-  else
-  begin
-    while ABarrier.Generation = LGen do
+  if Result <> 0 then
+    Exit;
+  try
+    LGen := ABarrier.Generation;
+    Inc(ABarrier.Waiting);
+    if ABarrier.Waiting >= ABarrier.Count then
     begin
-      Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
-      if Result <> 0 then Break;
+      ABarrier.Waiting := 0;
+      Inc(ABarrier.Generation);
+      Result := platform_condvar_broadcast(ABarrier.CondVar);
+    end
+    else
+    begin
+      while ABarrier.Generation = LGen do
+      begin
+        Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
+        if Result <> 0 then
+          Break;
+      end;
     end;
+  finally
+    LUnlockResult := platform_mutex_unlock(ABarrier.Mutex);
+    if (Result = 0) and (LUnlockResult <> 0) then
+      Result := LUnlockResult;
   end;
-  platform_mutex_unlock(ABarrier.Mutex);
 end;
 
 { Once implementation }
@@ -1764,35 +1774,32 @@ type
 function platform_once_exec(var AOnce: TPlatformOnce; AProc: Pointer): Int32;
 var
   LProc: TOnceProc;
-  LCond: TPlatformCondVar;
+  LUnlockResult: Int32;
 begin
   if AProc = nil then
     Exit(PLATFORM_ERR_INVALID);
+  if InterlockedCompareExchange(AOnce.State, 2, 2) = 2 then
+    Exit(0);
   Result := platform_mutex_lock(AOnce.Mutex);
-  if Result <> 0 then Exit;
-  if AOnce.State = 0 then
-  begin
-    AOnce.State := 1;
-    platform_mutex_unlock(AOnce.Mutex);
-    LProc := TOnceProc(AProc);
-    LProc;
-    platform_mutex_lock(AOnce.Mutex);
-    AOnce.State := 2;
-    { Wake any waiters }
-    platform_condvar_init(LCond);
-    platform_condvar_broadcast(LCond);
-    platform_condvar_destroy(LCond);
-  end
-  else if AOnce.State = 1 then
-  begin
-    { Another thread is executing, wait for it }
-    platform_condvar_init(LCond);
-    while AOnce.State = 1 do
-      platform_condvar_wait(LCond, AOnce.Mutex);
-    platform_condvar_destroy(LCond);
+  if Result <> 0 then
+    Exit;
+  try
+    if AOnce.State = 0 then
+    begin
+      InterlockedExchange(AOnce.State, 1);
+      LProc := TOnceProc(AProc);
+      try
+        LProc;
+      finally
+        InterlockedExchange(AOnce.State, 2);
+      end;
+    end;
+    Result := 0;
+  finally
+    LUnlockResult := platform_mutex_unlock(AOnce.Mutex);
+    if (Result = 0) and (LUnlockResult <> 0) then
+      Result := LUnlockResult;
   end;
-  platform_mutex_unlock(AOnce.Mutex);
-  Result := 0;
 end;
 
 end.

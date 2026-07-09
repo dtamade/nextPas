@@ -198,7 +198,8 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
     PLATFORM_IPPROTO_TCP, S) = 0, 'create');
   Check(platform_socket_close(S) = 0, 'close first');
-  Check(platform_socket_close(S) = 0, 'close second (safe no-op)');
+  Check(platform_socket_close(S) = PLATFORM_ERR_INVALID_HANDLE,
+    'close second returns invalid handle');
 end;
 
 procedure TestConnectRefused;

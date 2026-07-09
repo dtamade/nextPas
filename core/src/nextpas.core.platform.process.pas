@@ -46,6 +46,24 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 
+{** @desc 运行进程并同时捕获 stdout/stderr
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AStdoutBuf stdout 缓冲区
+    @param AStdoutBufLen stdout 缓冲区长度
+    @param AStdoutLen stdout 实际读取字节数
+    @param AStderrBuf stderr 缓冲区
+    @param AStderrBufLen stderr 缓冲区长度
+    @param AStderrLen stderr 实际读取字节数
+    @param AExitCode 输出进程退出码
+    @return 0 成功，否则返回错误码 *}
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
+  out AExitCode: Int32): Int32;
+
 {** @desc 等待进程结束（可选超时）
     @param AProc 进程句柄
     @param AResult 输出进程结果
@@ -107,6 +125,7 @@ implementation
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.helpers,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.time
 {$IFDEF NEXTPAS_LINUX}
@@ -199,12 +218,17 @@ end;
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
 var
   LFd: cint;
+  LHandle: Int32;
 begin
   if AForWrite then
     LFd := open('/dev/null', 1, 0)
   else
     LFd := open('/dev/null', 0, 0);
-  Result := PosixFdToHandle(LFd, AHandle);
+  Result := PosixFdToHandle(LFd, LHandle);
+  if Result = 0 then
+    AHandle := LHandle
+  else
+    AHandle := -1;
 end;
 
 function platform_process_close_handle(var AHandle: PtrInt): Int32;

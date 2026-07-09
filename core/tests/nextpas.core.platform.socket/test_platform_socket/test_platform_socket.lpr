@@ -790,9 +790,8 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
     'create TCP');
   Check(platform_socket_close(S) = 0, 'close');
-  { Second close should return error or be safe no-op }
-  platform_socket_close(S);
-  Check(True, 'double close handled without crash');
+  Check(platform_socket_close(S) = PLATFORM_ERR_INVALID_HANDLE,
+    'double close returns invalid handle');
 end;
 
 procedure TestCreateNilAddress;

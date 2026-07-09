@@ -84,6 +84,20 @@ function PosixOffToResult(AResult: Int64; out APos: Int64): Int32; inline;
 
 implementation
 
+uses
+  {$IFDEF NEXTPAS_LINUX}
+  nextpas.core.platform.linux.base
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  nextpas.core.platform.darwin.base
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  nextpas.core.platform.freebsd.base
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  nextpas.core.platform.android.base
+  {$ELSE}
+  nextpas.core.platform.unix.base
+  {$ENDIF}
+  ;
+
 function PosixResultToError(AResult: cint): Int32;
 begin
   if AResult < 0 then
@@ -150,22 +164,33 @@ end;
 
 function ErrnoIsIntr: Boolean;
 begin
-  Result := platform_get_errno = PLATFORM_ERR_INTR;
+  Result := platform_get_errno = ESysEINTR;
 end;
 
 function ErrnoIsAgain: Boolean;
 begin
-  Result := platform_get_errno = PLATFORM_ERR_AGAIN;
+  Result := platform_get_errno = ESysEAGAIN;
 end;
 
 function ErrnoIsNoent: Boolean;
 begin
+  { Keep errno truth on nextPas-owned host tables instead of importing FPC
+    baseunix directly. Android/generic Unix only expose a smaller ESys* subset
+    today, so ENOENT/EEXIST fall back to the canonical platform codes there. }
+  {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Result := platform_get_errno = ESysENOENT;
+  {$ELSE}
   Result := platform_get_errno = PLATFORM_ERR_NOENT;
+  {$ENDIF}
 end;
 
 function ErrnoIsExist: Boolean;
 begin
+  {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Result := platform_get_errno = ESysEEXIST;
+  {$ELSE}
   Result := platform_get_errno = PLATFORM_ERR_EXIST;
+  {$ENDIF}
 end;
 
 function PosixOffToResult(AResult: Int64; out APos: Int64): Int32;

@@ -51,7 +51,7 @@ function platform_env_names_case_sensitive: Boolean;
 
 {** @desc 获取环境变量值（字符串便捷版）
     @param AName 变量名
-    @return 变量值，不存在返回空字符串 *}
+    @return 变量值；不存在和值为空时都返回空字符串，调用方如需区分请先调用 platform_env_exists *}
 function platform_env_get_str(const AName: AnsiString): AnsiString;
 
 implementation
@@ -304,6 +304,8 @@ var
   LLen: Int32;
   LRet: Int32;
 begin
+  // Convenience helper intentionally collapses "missing" and "empty" to ''.
+  // Call platform_env_exists first when the distinction matters.
   Result := '';
   if Length(AName) = 0 then Exit;
   LRet := platform_env_get(@AName[1], @LBuf[0], SizeOf(LBuf), LLen);

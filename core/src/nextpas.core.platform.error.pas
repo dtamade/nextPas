@@ -36,6 +36,7 @@ const
   PLATFORM_ERR_EEXIST      = PLATFORM_ERR_EXIST;
   PLATFORM_ERR_ENOTDIR     = PLATFORM_ERR_NOTDIR;
   PLATFORM_ERR_TIMEOUT     = PLATFORM_ERR_TIMEDOUT;
+  PLATFORM_ERR_INVALID_HANDLE = PLATFORM_ERR_BADF;
 
 {** @desc 获取平台错误码对应的错误消息
     @param ACode 错误码
@@ -55,7 +56,7 @@ procedure platform_fatal(const AMsg: PAnsiChar);
 
 {** @desc 输出致命错误消息和错误码并终止进程
     @param AMsg 错误消息字符串
-    @param ACode 错误码 *}
+    @param ACode 错误码；传给 Halt 时会按低 8 位截断，负数同样映射到 0..255 *}
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
@@ -274,8 +275,6 @@ begin
   end;
 
   case ACode of
-    0:
-      Result := ecNone;
     {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     ESysENOENT:
       Result := ecNotFound;
@@ -423,6 +422,8 @@ begin
   end;
   WriteStderr(@LBuf[0], LCodeLen);
   WriteStderr(')'#10, 2);
+  // FPC/Delphi Halt ultimately uses an 8-bit process status on POSIX, so keep
+  // the truncation explicit for both positive and negative error codes.
   System.Halt(ACode and $FF);
 end;
 

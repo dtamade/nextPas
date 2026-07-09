@@ -159,9 +159,6 @@ uses
   ;
 
 const
-  PLATFORM_MMAP_EBADF = 9;
-  PLATFORM_MMAP_EINVAL = 22;
-  PLATFORM_MMAP_ENOMEM = 12;
   PLATFORM_MMAP_INVALID_HANDLE = PtrInt(-1);
 
 procedure ResetMap(out AMap: TPlatformMappedFile);
@@ -297,12 +294,12 @@ var
   LPageSize: UInt64;
 begin
   if (ASize = 0) or (not MapFitsPtrUInt(ASize)) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
   { POSIX requires offset to be page-aligned }
   LPageSize := platform_mmap_page_size;
   if (LPageSize > 0) and ((AOffset mod LPageSize) <> 0) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
   LAddr := mmap(nil, PtrUInt(ASize), PosixProtection(AAccess),
     PosixMapFlags(AFlags), AFd, Int64(AOffset));
@@ -443,7 +440,7 @@ var
 begin
   ResetMap(AMap);
   if APath = nil then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
   Result := FileStatSize(APath, LSize);
   if Result <> 0 then Exit;
   Result := platform_mmap_open_file(APath, pmaRead, [pmfPrivate], 0, 0, AMap);
@@ -459,7 +456,7 @@ var
 begin
   ResetMap(AMap);
   if APath = nil then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
   Result := OpenMappedFileHandle(APath, AAccess, LFile, LFileSize);
   if Result <> 0 then Exit;
@@ -472,12 +469,12 @@ begin
   if LMapSize = 0 then
   begin
     platform_file_close(LFile);
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   if not MapFitsPtrUInt(LMapSize) then
   begin
     platform_file_close(LFile);
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
   end;
 
   if LFileSize < LMapSize then
@@ -486,6 +483,8 @@ begin
     if Result <> 0 then
     begin
       platform_file_close(LFile);
+      LFile := PLATFORM_FILE_INVALID_HANDLE;
+      ResetMap(AMap);
       Exit;
     end;
   end;
@@ -536,7 +535,7 @@ function platform_mmap_create_anonymous(ASize: UInt64; AAccess: TPlatformMapAcce
 begin
   ResetMap(AMap);
   if (ASize = 0) or (not MapFitsPtrUInt(ASize)) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
 {$IFDEF NEXTPAS_UNIX}
   Result := PosixMapFd(-1, ASize, 0, AAccess, AFlags + [pmfAnonymous], AMap);
@@ -550,7 +549,11 @@ begin
   AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
     nil, WindowsProtection(AAccess), UInt64High(ASize), UInt64Low(ASize), nil));
   if AMap.MapHandle = 0 then
-    Exit(Int32(GetLastError));
+  begin
+    Result := Int32(GetLastError);
+    ResetMap(AMap);
+    Exit;
+  end;
 
   AMap.Addr := MapViewOfFile(HANDLE(PtrUInt(AMap.MapHandle)), WindowsMapAccess(AAccess),
     0, 0, PtrUInt(ASize));
@@ -582,7 +585,7 @@ var
   LSize: PtrUInt;
 begin
   if not CheckedRange(AMap, AOffset, ASize, LPtr, LSize) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
 {$IFDEF NEXTPAS_UNIX}
   Result := PosixCheck(msync(LPtr, LSize, MS_SYNC));
@@ -605,7 +608,7 @@ var
   LSize: PtrUInt;
 begin
   if not CheckedRange(AMap, AOffset, ASize, LPtr, LSize) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
 {$IFDEF NEXTPAS_UNIX}
   Result := PosixCheck(mlock(LPtr, LSize));
@@ -628,7 +631,7 @@ var
   LSize: PtrUInt;
 begin
   if not CheckedRange(AMap, AOffset, ASize, LPtr, LSize) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
 {$IFDEF NEXTPAS_UNIX}
   Result := PosixCheck(munlock(LPtr, LSize));
@@ -652,7 +655,7 @@ var
 {$ENDIF}
 begin
   if (not AMap.IsOpen) or (AMap.Addr = nil) then
-    Exit(PLATFORM_MMAP_EBADF);
+    Exit(PLATFORM_ERR_BADF);
 
   LResult := 0;
 {$IFDEF NEXTPAS_UNIX}
@@ -723,7 +726,7 @@ var
 begin
   ResetMap(AMap);
   if (AName = nil) or (AName^ = #0) or (ASize = 0) or (not MapFitsPtrUInt(ASize)) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
   LName := string(AName);
 {$IFDEF NEXTPAS_UNIX}
@@ -750,6 +753,7 @@ begin
     if Result <> 0 then
     begin
       platform_file_close(LHandle);
+      LFd := -1;
       shm_unlink(PAnsiChar(LSharedName));
       ResetMap(AMap);
       Exit;
@@ -823,7 +827,7 @@ var
 begin
   ResetMap(AMap);
   if (AName = nil) or (AName^ = #0) then
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
 
   LName := string(AName);
 {$IFDEF NEXTPAS_UNIX}
@@ -851,7 +855,7 @@ begin
   if LStat.Size <= 0 then
   begin
     platform_file_close(LHandle);
-    Exit(PLATFORM_MMAP_EINVAL);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   LSize := UInt64(LStat.Size);
 

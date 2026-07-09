@@ -138,7 +138,7 @@ return stub values.
 | `platform_env_exists` | Check if variable exists |
 | `platform_env_enumerate` | Iterate all variables via callback |
 | `platform_env_names_case_sensitive` | Whether names are case-sensitive |
-| `platform_env_get_str` | Get as AnsiString (convenience) |
+| `platform_env_get_str` | Get as AnsiString (missing and empty both return `''`) |
 | `platform_env_name_valid` | Validate variable name |
 
 ### platform.path — Path Operations
@@ -280,7 +280,7 @@ return stub values.
 |----------|-------------|
 | `platform_error_message` | Get error message string |
 | `platform_error_category` | Classify error (general/io/net/process/memory/thread/sync) |
-| `platform_fatal/fatal_code` | Fatal error with message (stderr + exit) |
+| `platform_fatal/fatal_code` | Fatal error with message (stderr + exit; code is masked to low 8 bits) |
 
 ## Cross-platform Status
 
