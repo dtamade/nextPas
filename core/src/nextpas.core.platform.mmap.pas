@@ -350,7 +350,7 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
+  LBase := StringReplace(LBase, '/', '_', True);
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';
