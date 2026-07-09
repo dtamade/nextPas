@@ -1100,6 +1100,51 @@ begin
   Inc(FResultCount);
 end;
 
+{** 格式化时间（自动选择单位：ns/µs/ms/s） }
+function FormatTimeAuto(ANs: Double): string;
+begin
+  if ANs < 1000.0 then
+    Result := FormatFloat('0.0', ANs) + ' ns'
+  else if ANs < 1000000.0 then
+    Result := FormatFloat('0.00', ANs / 1000.0) + ' µs'
+  else if ANs < 1000000000.0 then
+    Result := FormatFloat('0.00', ANs / 1000000.0) + ' ms'
+  else
+    Result := FormatFloat('0.000', ANs / 1000000000.0) + ' s';
+end;
+
+{** 格式化吞吐量（自动选择单位：ops/K/M/G） }
+function FormatOpsAuto(AOps: Double): string;
+begin
+  if AOps < 1000.0 then
+    Result := FormatFloat('0', AOps) + ' ops/s'
+  else if AOps < 1000000.0 then
+    Result := FormatFloat('0.0', AOps / 1000.0) + ' Kops/s'
+  else if AOps < 1000000000.0 then
+    Result := FormatFloat('0.0', AOps / 1000000.0) + ' Mops/s'
+  else
+    Result := FormatFloat('0.0', AOps / 1000000000.0) + ' Gops/s';
+end;
+
+{** 格式化大数字（带千位分隔符） }
+function FormatIntWithSep(AValue: Int64): string;
+var
+  LStr: string;
+  LLen, I, LPos: Integer;
+begin
+  LStr := IntToStr(AValue);
+  LLen := Length(LStr);
+  Result := '';
+  LPos := 0;
+  for I := LLen downto 1 do
+  begin
+    if (LPos > 0) and (LPos mod 3 = 0) then
+      Result := ',' + Result;
+    Result := LStr[I] + Result;
+    Inc(LPos);
+  end;
+end;
+
 procedure TBenchRunner.EmitLine(const ALine: string);
 begin
   FConfig.Output.WriteLine(ALine);
@@ -1210,9 +1255,9 @@ begin
 
     if not FConfig.Quiet then
       EmitLine('  ' + PadRight(LEntry.Name, 40) +
-        IntToStr(LIters) + ' iters' +
-        FormatFloat('0.0', LStats.Mean) + ' ns/op' +
-        FormatFloat('0', Result.OpsPerSec) + ' ops/s' +
+        FormatIntWithSep(LIters) + ' iters  ' +
+        FormatTimeAuto(LStats.Mean) + '/op  ' +
+        FormatOpsAuto(Result.OpsPerSec) + '  ' +
         FormatFloat('0.0', LStats.StdDev) + ' stddev');
   finally
     if Assigned(LEntry.Teardown) then
@@ -1334,8 +1379,8 @@ begin
         '  SKIPPED: ' + FResults[I].SkipReason)
     else
       EmitLine('  ' + PadRight(FResults[I].Name, 40) +
-        FormatFloat('0.0', FResults[I].NsPerOp) + ' ns/op' +
-        FormatFloat('0', FResults[I].OpsPerSec) + ' ops/s');
+        FormatTimeAuto(FResults[I].NsPerOp) + '/op  ' +
+        FormatOpsAuto(FResults[I].OpsPerSec));
   end;
 end;
 
