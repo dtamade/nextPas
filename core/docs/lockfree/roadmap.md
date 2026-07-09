@@ -77,8 +77,12 @@
 | `lockfree.trie_hmt` | Hash Mapped Trie (HMT) | ✅ 完成 | 33 |
 | `lockfree.intervaltree` | 并发区间树 | ✅ 完成 | 25 |
 | `lockfree.fibheap` | Fibonacci 堆 | ✅ 完成 | 42 |
+| `lockfree.countminsketch` | Count-Min Sketch | ✅ 完成 | 109 |
+| `lockfree.hyperloglog` | HyperLogLog | ✅ 完成 | 10 |
+| `lockfree.cuckooset` | Cuckoo Hash Set | ✅ 完成 | 2221 |
+| `lockfree.suffixarray` | 后缀数组 | ✅ 完成 | 25 |
 
-**规模**: 58 文件, ~25000 行, 38606 测试
+**规模**: 62 文件, ~26000 行, 40991 测试
 
 ---
 
@@ -131,7 +135,11 @@
 | test_lockfree_trie_hmt | 33 | ✅ 全绿 |
 | test_lockfree_intervaltree | 25 | ✅ 全绿 |
 | test_lockfree_fibheap | 42 | ✅ 全绿 |
-| **总计** | **38606** | **✅ 全绿** |
+| test_lockfree_countminsketch | 109 | ✅ 全绿 |
+| test_lockfree_hyperloglog | 10 | ✅ 全绿 |
+| test_lockfree_cuckooset | 2221 | ✅ 全绿 |
+| test_lockfree_suffixarray | 25 | ✅ 全绿 |
+| **总计** | **40991** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 

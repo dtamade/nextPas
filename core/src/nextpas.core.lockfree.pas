@@ -58,7 +58,11 @@ uses
   nextpas.core.lockfree.consistent_hashring,
   nextpas.core.lockfree.trie_hmt,
   nextpas.core.lockfree.intervaltree,
-  nextpas.core.lockfree.fibheap;
+  nextpas.core.lockfree.fibheap,
+  nextpas.core.lockfree.countminsketch,
+  nextpas.core.lockfree.hyperloglog,
+  nextpas.core.lockfree.cuckooset,
+  nextpas.core.lockfree.suffixarray;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -451,6 +455,37 @@ type
   }
   TLockFreeFibonacciHeap = nextpas.core.lockfree.fibheap.TLockFreeFibonacciHeap;
   TFibHeapResult = nextpas.core.lockfree.fibheap.TFibHeapResult;
+
+  {** @desc Count-Min Sketch
+    @details 概率频率估计器，O(1) 更新和查询。
+      适用于网络流量分析、频率估计、限流。
+    @see TCountMinSketch 详细文档和示例
+  }
+  TCountMinSketch = nextpas.core.lockfree.countminsketch.TCountMinSketch;
+
+  {** @desc HyperLogLog
+    @details 概率基数估计器，标准误差 1.04/sqrt(2^p)。
+      适用于唯一计数、基数估计。
+    @see THyperLogLog 详细文档和示例
+  }
+  THyperLogLog = nextpas.core.lockfree.hyperloglog.THyperLogLog;
+
+  {** @desc Cuckoo Hash Set
+    @details O(1) 最坏情况查找的并发集合。
+      双哈希表 + 布谷鸟驱逐，写用自旋锁，读无锁。
+    @see TCuckooSet 详细文档和示例
+  }
+  TCuckooSet = nextpas.core.lockfree.cuckooset.TCuckooSet;
+  TCuckooSetResult = nextpas.core.lockfree.cuckooset.TCuckooSetResult;
+
+  {** @desc 后缀数组
+    @details 预排序后缀索引，O(m log n) 模式搜索。
+      适用于全文搜索、模式匹配、生物信息学。
+    @see TSuffixArray 详细文档和示例
+  }
+  TSuffixArray = nextpas.core.lockfree.suffixarray.TSuffixArray;
+  TSuffixArrayResult = nextpas.core.lockfree.suffixarray.TSuffixArrayResult;
+  TSuffixArrayMatch = nextpas.core.lockfree.suffixarray.TSuffixArrayMatch;
 
 implementation
 

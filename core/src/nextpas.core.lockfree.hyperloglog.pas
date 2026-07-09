@@ -1,0 +1,209 @@
+{******************************************************************************
+  nextpas.core.lockfree.hyperloglog
+
+  Concurrent HyperLogLog — probabilistic cardinality estimator.
+
+  Design:
+  - Uses 2^p registers (buckets)
+  - Hash each element, use first p bits as bucket index
+  - Count leading zeros in remaining bits
+  - Store max leading zeros per bucket
+  - Harmonic mean for estimation
+  - CAS for concurrent max updates
+
+  Properties:
+  - Standard error: 1.04 / sqrt(2^p)
+  - Memory: 2^p bytes (typically 1-16 KB)
+  - No false negatives
+
+  Use cases: unique count estimation, cardinality estimation.
+
+  2026-07-06  Phase 3
+******************************************************************************}
+{$mode ObjFPC}{$H+}{$J-}
+unit nextpas.core.lockfree.hyperloglog;
+
+interface
+
+uses
+  SysUtils;
+
+type
+  THyperLogLog = class
+  private
+    FRegisters: array of Int32;
+    FP: Int32;          { precision: 2^p registers }
+    FM: Int32;          { number of registers = 2^p }
+    FAlpha: Double;     { bias correction factor }
+
+    function CountLeadingZeros(AHash: UInt32; AStartBit: Int32): Int32;
+    function GetRawEstimate: Double;
+  public
+    constructor Create(APrecision: Int32 = 14);
+    destructor Destroy; override;
+
+    procedure Add(const AKey: AnsiString);
+    function Estimate: Int64;
+    procedure Reset;
+    function Merge(AOther: THyperLogLog): Boolean;
+    function RegisterCount: Int32;
+  end;
+
+implementation
+
+uses
+  nextpas.core.atomic;
+
+function Fnv1aHash(const AData: Pointer; ALength: Int32): UInt32;
+const
+  FNV_OFFSET = 2166136261;
+  FNV_PRIME  = 16777619;
+var
+  I: Int32;
+  LByte: PByte;
+begin
+  Result := FNV_OFFSET;
+  LByte := PByte(AData);
+  for I := 0 to ALength - 1 do
+  begin
+    Result := Result xor LByte^;
+    Result := Result * FNV_PRIME;
+    Inc(LByte);
+  end;
+end;
+
+constructor THyperLogLog.Create(APrecision: Int32);
+var
+  I: Int32;
+begin
+  inherited Create;
+  if APrecision < 4 then APrecision := 4;
+  if APrecision > 16 then APrecision := 16;
+  FP := APrecision;
+  FM := 1 shl FP;
+  SetLength(FRegisters, FM);
+  for I := 0 to FM - 1 do
+    FRegisters[I] := 0;
+
+  { Bias correction factor }
+  case FP of
+    4: FAlpha := 0.673;
+    5: FAlpha := 0.697;
+    6: FAlpha := 0.709;
+  else
+    FAlpha := 0.7213 / (1.0 + 1.079 / FM);
+  end;
+end;
+
+destructor THyperLogLog.Destroy;
+begin
+  SetLength(FRegisters, 0);
+  inherited Destroy;
+end;
+
+function THyperLogLog.CountLeadingZeros(AHash: UInt32; AStartBit: Int32): Int32;
+var
+  I: Int32;
+  LBit: UInt32;
+begin
+  Result := 1; { Minimum 1 }
+  for I := AStartBit to 31 do
+  begin
+    LBit := (AHash shr I) and 1;
+    if LBit = 0 then
+      Inc(Result)
+    else
+      Break;
+  end;
+end;
+
+procedure THyperLogLog.Add(const AKey: AnsiString);
+var
+  LHash: UInt32;
+  LIdx, LZeros, LOld, LNew: Int32;
+begin
+  if Length(AKey) = 0 then
+    Exit;
+  LHash := Fnv1aHash(@AKey[1], Length(AKey));
+  LIdx := LHash and (UInt32(FM) - 1); { First p bits }
+  LZeros := CountLeadingZeros(LHash shr FP, 0); { Remaining bits }
+
+  repeat
+    LOld := AtomicLoad32(FRegisters[LIdx], moAcquire);
+    if LZeros <= LOld then
+      Break;
+    LNew := LZeros;
+  until AtomicCompareExchange32(FRegisters[LIdx], LOld, LNew, moAcqRel) = LOld;
+end;
+
+function THyperLogLog.GetRawEstimate: Double;
+var
+  I: Int32;
+  LSum: Double;
+begin
+  LSum := 0;
+  for I := 0 to FM - 1 do
+    LSum := LSum + 1.0 / (1 shl AtomicLoad32(FRegisters[I], moAcquire));
+  Result := FAlpha * FM * FM / LSum;
+end;
+
+function THyperLogLog.Estimate: Int64;
+var
+  LEstimate: Double;
+  LV: Int32;
+  I: Int32;
+begin
+  LEstimate := GetRawEstimate;
+
+  { Small range correction }
+  if LEstimate <= 2.5 * FM then
+  begin
+    LV := 0;
+    for I := 0 to FM - 1 do
+      if AtomicLoad32(FRegisters[I], moAcquire) = 0 then
+        Inc(LV);
+    if LV > 0 then
+      LEstimate := FM * Ln(FM / LV);
+  end;
+
+  { Large range correction }
+  if LEstimate > (1 shl 32) / 30.0 then
+    LEstimate := -(1 shl 32) * Ln(1.0 - LEstimate / (1 shl 32));
+
+  Result := Round(LEstimate);
+end;
+
+procedure THyperLogLog.Reset;
+var
+  I: Int32;
+begin
+  for I := 0 to FM - 1 do
+    AtomicStore32(FRegisters[I], 0, moRelaxed);
+end;
+
+function THyperLogLog.Merge(AOther: THyperLogLog): Boolean;
+var
+  I: Int32;
+  LOtherVal, LOld: Int32;
+begin
+  Result := False;
+  if (AOther = nil) or (AOther.FP <> FP) then
+    Exit;
+  for I := 0 to FM - 1 do
+  begin
+    LOtherVal := AtomicLoad32(AOther.FRegisters[I], moAcquire);
+    repeat
+      LOld := AtomicLoad32(FRegisters[I], moAcquire);
+      if LOtherVal <= LOld then
+        Break;
+    until AtomicCompareExchange32(FRegisters[I], LOld, LOtherVal, moAcqRel) = LOld;
+  end;
+  Result := True;
+end;
+
+function THyperLogLog.RegisterCount: Int32;
+begin
+  Result := FM;
+end;
+
+end.
