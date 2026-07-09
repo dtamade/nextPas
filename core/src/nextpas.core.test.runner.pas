@@ -987,6 +987,8 @@ var
   LRunStart: TInstant;
   LRunTimeout: TDuration;
   LSuiteStart: TInstant;  { suite-level duration tracking }
+  LBeforeEachPassed: Boolean;
+  LBeforeEachFailMsg: string;
   LCache: TTestCache;
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
@@ -1059,6 +1061,13 @@ begin
   begin
     HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
     Result := False;
+    Exit;
+  end;
+  { R4-01: ETestSkipped from setup — skip all tests, don't fall through }
+  if LSkip > 0 then
+  begin
+    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
+    Result := True;
     Exit;
   end;
 
@@ -1137,6 +1146,10 @@ begin
       Continue;
     end;
 
+    { R4-03: track whether BeforeEach passed; on failure still run AfterEach/EachCleanups }
+    LBeforeEachPassed := True;
+    LBeforeEachFailMsg := '';
+
     { BeforeEach (only for non-skipped tests) }
     if Assigned(BeforeEach) or Assigned(BeforeEachClosure) then
     begin
@@ -1145,21 +1158,27 @@ begin
       except
         on E: ETestSkipped do
         begin
-          EmitResult(tsSkipped, LEntry, E.Message, LSkip,
-            AResult.Results, LOutSink, LConfig);
-          Continue;
+          LBeforeEachPassed := False;
+          LStatus := tsSkipped;
+          LBeforeEachFailMsg := E.Message;
         end;
         on E: Exception do
         begin
+          LBeforeEachPassed := False;
           LStatus := tsError;
-          LLastFailMsg := E.Message;
-          EmitResult(tsError, LEntry, 'beforeEach failed: ' + E.Message,
-            LFail, AResult.Results, LOutSink, LConfig);
-          Continue;
+          LBeforeEachFailMsg := 'beforeEach failed: ' + E.Message;
         end;
       end;
     end;
 
+    if not LBeforeEachPassed then
+    begin
+      { R4-03: BeforeEach failed — skip test execution but still run AfterEach/EachCleanups }
+      LLastFailMsg := LBeforeEachFailMsg;
+      IncByStatus(LStatus, LPass, LFail, LSkip);
+    end
+    else
+    begin
     LStart := TInstant.Now;
     LDisplayName := GetDisplayName(LEntry);
     if LEntry.Kind = ekTest then
@@ -1277,6 +1296,7 @@ begin
         IncByStatus(LStatus, LPass, LFail, LSkip);
       end;
     end;
+    end; { R4-03: end if LBeforeEachPassed }
 
     { AfterEach }
     if Assigned(AfterEach) or Assigned(AfterEachClosure) then
@@ -1492,12 +1512,13 @@ begin
     LTestResult := MakeTestResult('[setup]', tsError,
       'setup failed: ' + AErrorMsg, 0);
     AppendResult(AResult.Results, LTestResult);
-    { P1 #3: Dispose table-test heap allocations on setup failure path.
-      Without this, early Exit skips CleanupTableAllocations in the normal
-      post-loop path, leaking PTestCase/PTestCaseProc data. }
-    CleanupTableAllocations;
   end;
-  AResult.Failed    := 0;
+  { R4-04: Cleanup table-test allocations on setup failure path (both serial
+    and parallel). Without this, early Exit skips CleanupTableAllocations in
+    the normal post-loop path, leaking PTestCase/PTestCaseProc data. }
+  CleanupTableAllocations;
+  { R4-08: Failed=1 to match the [setup] tsError entry }
+  AResult.Failed    := 1;
   AResult.Skipped   := ASkipCount;
   AResult.AllPassed := False;
   HasRun        := True;
@@ -1637,6 +1658,13 @@ begin
   begin
     HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
     Result := False;
+    Exit;
+  end;
+  { R4-01: ETestSkipped from setup — skip all tests, don't fall through }
+  if LSkip > 0 then
+  begin
+    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
+    Result := True;
     Exit;
   end;
 

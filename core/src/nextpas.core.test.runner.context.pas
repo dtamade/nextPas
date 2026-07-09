@@ -276,7 +276,8 @@ begin
   { Save current value for restore }
   LBackup.Name := AName;
   LExisting := platform_env_get_str(AnsiString(AName));
-  LBackup.HadValue := LExisting <> '';
+  { R4-06: use platform_env_exists to distinguish "empty" from "missing" }
+  LBackup.HadValue := platform_env_exists(PAnsiChar(AnsiString(AName)));
   LBackup.OldValue := string(LExisting);
   SetLength(FEnvBackups, Length(FEnvBackups) + 1);
   FEnvBackups[High(FEnvBackups)] := LBackup;
@@ -292,7 +293,8 @@ begin
   { Save current value for restore }
   LBackup.Name := AName;
   LExisting := platform_env_get_str(AnsiString(AName));
-  LBackup.HadValue := LExisting <> '';
+  { R4-06: use platform_env_exists to distinguish "empty" from "missing" }
+  LBackup.HadValue := platform_env_exists(PAnsiChar(AnsiString(AName)));
   LBackup.OldValue := string(LExisting);
   SetLength(FEnvBackups, Length(FEnvBackups) + 1);
   FEnvBackups[High(FEnvBackups)] := LBackup;
