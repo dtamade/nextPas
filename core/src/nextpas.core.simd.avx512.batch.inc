@@ -3460,3 +3460,323 @@ begin
   end;
   {$POP}
 end;
+
+// ============================================================================
+// U32 Batch Operations (same as I32 - add/sub/and/or/xor are identical)
+// ============================================================================
+
+procedure AVX512ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    vmovdqu32 zmm0, [rax]
+    vpaddd zmm0, zmm0, [rdx]
+    vmovdqu32 [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    add r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    vmovdqu32 zmm0, [rax]
+    vpsubd zmm0, zmm0, [rdx]
+    vmovdqu32 [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    sub r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    // AVX-512 没有 vpmuludq for 16xU32, 使用标量
+    mov r9d, [rax]
+    imul r9d, [rdx]
+    mov [rcx], r9d
+    mov r9d, [rax + 4]
+    imul r9d, [rdx + 4]
+    mov [rcx + 4], r9d
+    mov r9d, [rax + 8]
+    imul r9d, [rdx + 8]
+    mov [rcx + 8], r9d
+    mov r9d, [rax + 12]
+    imul r9d, [rdx + 12]
+    mov [rcx + 12], r9d
+    mov r9d, [rax + 16]
+    imul r9d, [rdx + 16]
+    mov [rcx + 16], r9d
+    mov r9d, [rax + 20]
+    imul r9d, [rdx + 20]
+    mov [rcx + 20], r9d
+    mov r9d, [rax + 24]
+    imul r9d, [rdx + 24]
+    mov [rcx + 24], r9d
+    mov r9d, [rax + 28]
+    imul r9d, [rdx + 28]
+    mov [rcx + 28], r9d
+    mov r9d, [rax + 32]
+    imul r9d, [rdx + 32]
+    mov [rcx + 32], r9d
+    mov r9d, [rax + 36]
+    imul r9d, [rdx + 36]
+    mov [rcx + 36], r9d
+    mov r9d, [rax + 40]
+    imul r9d, [rdx + 40]
+    mov [rcx + 40], r9d
+    mov r9d, [rax + 44]
+    imul r9d, [rdx + 44]
+    mov [rcx + 44], r9d
+    mov r9d, [rax + 48]
+    imul r9d, [rdx + 48]
+    mov [rcx + 48], r9d
+    mov r9d, [rax + 52]
+    imul r9d, [rdx + 52]
+    mov [rcx + 52], r9d
+    mov r9d, [rax + 56]
+    imul r9d, [rdx + 56]
+    mov [rcx + 56], r9d
+    mov r9d, [rax + 60]
+    imul r9d, [rdx + 60]
+    mov [rcx + 60], r9d
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    imul r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    vmovdqu32 zmm0, [rax]
+    vpandd zmm0, zmm0, [rdx]
+    vmovdqu32 [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    and r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    vmovdqu32 zmm0, [rax]
+    vpord zmm0, zmm0, [rdx]
+    vmovdqu32 [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    or r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var
+  pA, pB, pC: PUInt32;
+  n: SizeUInt;
+begin
+  pA := aSrc1; pB := aSrc2; pC := aDst; n := aCount;
+  {$PUSH}{$ASMMODE INTEL}
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov rcx, pC
+    mov r8, n
+
+    cmp r8, 16
+    jb @tail
+
+  @loop16:
+    vmovdqu32 zmm0, [rax]
+    vpxord zmm0, zmm0, [rdx]
+    vmovdqu32 [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail:
+    test r8, r8
+    jz @done
+  @scalar:
+    mov r9d, [rax]
+    xor r9d, [rdx]
+    mov [rcx], r9d
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
