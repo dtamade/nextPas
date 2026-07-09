@@ -4,7 +4,15 @@ unit nextpas.core.platform.windows.math;
 
 interface
 
+{** @desc 将 Windows 性能计数器值转换为纳秒
+    @param ACounter 计数器值
+    @param AFrequency 计数器频率（Hz）
+    @return 纳秒值，溢出返回 High(UInt64) *}
 function windows_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64; inline;
+
+{** @desc 从频率计算 Windows 性能计数器分辨率（纳秒）
+    @param AFrequency 频率（Hz）
+    @return 分辨率（纳秒） *}
 function windows_qpc_resolution_ns(const AFrequency: UInt64): UInt64; inline;
 
 implementation

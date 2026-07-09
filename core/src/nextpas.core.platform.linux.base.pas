@@ -8,38 +8,48 @@ uses
   nextpas.core.platform.posix.base;
 
 const
+  {** @desc Linux pthread 令牌大小 *}
   PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
 
 type
+  {** @desc Linux pthread 令牌对齐记录 *}
   TPlatformPThreadTokenAlign = record
     Value: pthread_t;
   end;
 
+  {** @desc Linux pthread 互斥锁对齐记录 *}
   TPlatformPThreadMutexAlign = record
     Value: pthread_mutex_t;
   end;
 
+  {** @desc Linux pthread 读写锁对齐记录 *}
   TPlatformPThreadRwLockAlign = record
     Value: pthread_rwlock_t;
   end;
 
+  {** @desc Linux pthread 条件变量对齐记录 *}
   TPlatformPThreadCondVarAlign = record
     Value: pthread_cond_t;
   end;
 
+  {** @desc Linux 进程 ID 类型 *}
   TPlatformProcessId = pid_t;
 
+  {** @desc Linux 信号集类型 *}
   TPlatformLinuxSignalSet = record
     Words: array[0..1] of PtrUInt;
   end;
   PPlatformLinuxSignalSet = ^TPlatformLinuxSignalSet;
 
+  {** @desc Linux 信号处理器函数类型 *}
   TPlatformLinuxSigActionHandler = procedure(
     ASignal: Int32;
     AInfo: Pointer;
     AContext: Pointer); cdecl;
+  {** @desc Linux 信号恢复器函数类型 *}
   TPlatformLinuxSigRestorer = procedure; cdecl;
 
+  {** @desc Linux 信号动作结构体 *}
   TPlatformLinuxSigAction = record
     sa_handler: TPlatformLinuxSigActionHandler;
     sa_flags: PtrUInt;
@@ -48,6 +58,7 @@ type
   end;
   PPlatformLinuxSigAction = ^TPlatformLinuxSigAction;
 
+  {** @desc Linux 文件状态结构体（AArch64） *}
   {$IFDEF NEXTPAS_AARCH64}
   TPlatformLinuxStat = record
     st_dev: UInt64;
@@ -72,6 +83,7 @@ type
     __unused5a: UInt32;
   end;
   {$ELSE}
+  {** @desc Linux 文件状态结构体（x86_64） *}
   TPlatformLinuxStat = record
     st_dev: UInt64;
     st_ino: UInt64;

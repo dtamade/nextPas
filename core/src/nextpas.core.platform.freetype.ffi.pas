@@ -2,45 +2,55 @@ unit nextpas.core.platform.freetype.ffi;
 
 {$I nextpas.core.settings.inc}
 
-// FreeType 2 FFI declarations — minimal subset for glyph rasterization.
-//
-// Types, constants, and typed function pointer globals for the subset
-// of libfreetype needed for:
-//   - Loading TrueType/OpenType font files
-//   - Setting pixel sizes
-//   - Loading and rendering glyphs to grayscale bitmaps
-//
-// All struct offsets verified against gcc offsetof on x86_64.
-// Zero implementation logic — the companion unit
-// nextpas.core.platform.freetype handles loading.
+{**
+ * FreeType 2 FFI declarations — 最小子集用于字形光栅化
+ *
+ * 类型、常量和类型化函数指针全局变量，用于 libfreetype 的以下功能：
+ *   - 加载 TrueType/OpenType 字体文件
+ *   - 设置像素大小
+ *   - 加载和渲染字形到位图
+ *
+ * 所有结构体偏移量已在 x86_64 上通过 gcc offsetof 验证。
+ * 零实现逻辑 — 伴生单元 nextpas.core.platform.freetype 处理加载。
+ *}
 
 interface
 
 {$PACKRECORDS 1}
 
 type
-  { Opaque FreeType handles. }
+  {** @desc FreeType 库句柄（不透明） *}
   FT_Library  = type Pointer;
+  {** @desc FreeType 字体面句柄（不透明） *}
   FT_Face     = type Pointer;
+  {** @desc FreeType 编码类型 *}
   FT_Encoding = type UInt32;
 
-  { Scalar types — verified against gcc sizeof. }
+  { 标量类型 — 已通过 gcc sizeof 验证 }
+  {** @desc FreeType 错误码 *}
   FT_Error = type Int32;
+  {** @desc FreeType 无符号整数 *}
   FT_UInt  = type UInt32;
+  {** @desc FreeType 有符号整数 *}
   FT_Int   = type Int32;
+  {** @desc FreeType 长整型 *}
   FT_Long  = type Int64;
+  {** @desc FreeType 无符号长整型 *}
   FT_ULong = type UInt64;
-  FT_Fixed = type Int64;       { 16.16 fixed point }
-  FT_Pos   = type Int64;       { 26.6 fixed point }
+  {** @desc FreeType 16.16 定点数 *}
+  FT_Fixed = type Int64;
+  {** @desc FreeType 26.6 定点数 *}
+  FT_Pos   = type Int64;
+  {** @desc FreeType 26.6 定点数（用于字体大小） *}
   FT_F26Dot6 = type Int64;
 
-  { 2D vector — 16 bytes, verified. }
+  {** @desc 2D 向量 — 16 字节 *}
   FT_Vector = record
     X: FT_Pos;
     Y: FT_Pos;
   end;
 
-  { Glyph metrics — 40 bytes, verified. }
+  {** @desc 字形度量 — 40 字节 *}
   FT_Glyph_Metrics = record
     Width: FT_Pos;             { offset 0 }
     Height: FT_Pos;            { offset 8 }
@@ -52,8 +62,8 @@ type
     VertAdvance: FT_Pos;
   end;
 
-  { Bitmap descriptor — 40 bytes, gcc verified.
-    PACKRECORDS 1 requires explicit padding for pointer alignment. }
+  {** @desc 位图描述符 — 40 字节
+      @note PACKRECORDS 1 需要显式填充以满足指针对齐 *}
   FT_Bitmap = record
     Rows: UInt32;              { offset 0 }
     Width: UInt32;             { offset 4 }
@@ -67,12 +77,13 @@ type
     Palette: Pointer;          { offset 32 }
   end;
 
+  {** @desc FreeType 通用结构体 *}
   FT_Generic = record
     Data: Pointer;
     Finalizer: Pointer;
   end;
 
-  { Pointer types for indirect access. }
+  { 指针类型用于间接访问 }
   PFT_GlyphSlotRec = ^FT_GlyphSlotRec;
   PFT_Bitmap = ^FT_Bitmap;
   PFT_Glyph_Metrics = ^FT_Glyph_Metrics;

@@ -8,47 +8,65 @@ uses
   nextpas.core.platform.posix.base;
 
 const
+  {** @desc macOS pthread 令牌大小 *}
   PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
 
 type
+  {** @desc macOS pthread 令牌对齐记录 *}
   TPlatformPThreadTokenAlign = record
     Value: pthread_t;
   end;
 
+  {** @desc macOS pthread 互斥锁对齐记录 *}
   TPlatformPThreadMutexAlign = record
     Value: pthread_mutex_t;
   end;
 
+  {** @desc macOS pthread 读写锁对齐记录 *}
   TPlatformPThreadRwLockAlign = record
     Value: pthread_rwlock_t;
   end;
 
+  {** @desc macOS pthread 条件变量对齐记录 *}
   TPlatformPThreadCondVarAlign = record
     Value: pthread_cond_t;
   end;
 
+  {** @desc macOS 进程 ID 类型 *}
   TPlatformProcessId = pid_t;
 
+  {** @desc macOS 设备号类型 *}
   TPlatformDarwinDev = UInt32;
+  {** @desc macOS inode 号类型 *}
   TPlatformDarwinIno = UInt64;
+  {** @desc macOS 文件模式类型 *}
   TPlatformDarwinMode = UInt16;
+  {** @desc macOS 硬链接计数类型 *}
   TPlatformDarwinNLink = UInt16;
+  {** @desc macOS 用户 ID 类型 *}
   TPlatformDarwinUid = UInt32;
+  {** @desc macOS 组 ID 类型 *}
   TPlatformDarwinGid = UInt32;
+  {** @desc macOS 文件偏移类型 *}
   TPlatformDarwinOff = Int64;
+  {** @desc macOS 时间类型 *}
   TPlatformDarwinTime = Int64;
+  {** @desc macOS 长整型 *}
   TPlatformDarwinLong = Int64;
 
+  {** @desc macOS 信号集类型 *}
   TPlatformDarwinSignalSet = record
     Words: array[0..0] of UInt32;
   end;
   PPlatformDarwinSignalSet = ^TPlatformDarwinSignalSet;
 
+  {** @desc macOS 信号处理器函数类型 *}
   TPlatformDarwinSigActionHandler = procedure(
     ASignal: Int32;
     AInfo: Pointer;
     AContext: Pointer); cdecl;
 
+  {** @desc macOS 信号动作结构体 *}
   TPlatformDarwinSigAction = record
     sa_handler: TPlatformDarwinSigActionHandler;
     sa_mask: TPlatformDarwinSignalSet;
@@ -56,6 +74,7 @@ type
   end;
   PPlatformDarwinSigAction = ^TPlatformDarwinSigAction;
 
+  {** @desc macOS 文件状态结构体 *}
   TPlatformDarwinStat = record
     st_dev: TPlatformDarwinDev;
     st_mode: TPlatformDarwinMode;

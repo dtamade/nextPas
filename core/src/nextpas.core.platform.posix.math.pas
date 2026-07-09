@@ -8,23 +8,73 @@ uses
   nextpas.core.platform.posix.base;
 
 const
+  {** @desc 每秒纳秒数 *}
   PLATFORM_POSIX_NANOSECONDS_PER_SECOND = UInt64(1000000000);
 
+{** @desc 将 timespec 转换为纳秒（UInt64 版本）
+    @param ATime timespec 指针
+    @return 纳秒值，溢出返回 High(UInt64) *}
 function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+
+{** @desc 向 timespec 添加纳秒
+    @param ATime 输入/输出 timespec
+    @param ANanoseconds 添加的纳秒数 *}
 procedure platform_posix_timespec_add_ns(var ATime: timespec; const ANanoseconds: UInt64); inline;
+
+{** @desc 计算到截止时间的剩余纳秒数
+    @param ADeadline 截止时间
+    @param ANow 当前时间
+    @return 剩余纳秒数，已过期返回 0 *}
 function platform_posix_timespec_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   const ANow: PTimeSpec): UInt64; inline;
+
+{** @desc 从 wait 状态提取退出状态码
+    @param AStatus wait 返回的状态
+    @return 退出状态码 *}
 function platform_posix_wait_exit_status(const AStatus: Int32): Int32; inline;
+
+{** @desc 从 wait 状态提取终止信号
+    @param AStatus wait 返回的状态
+    @return 信号编号 *}
 function platform_posix_wait_term_signal(const AStatus: Int32): Int32; inline;
+
+{** @desc 从 wait 状态提取停止信号
+    @param AStatus wait 返回的状态
+    @return 信号编号 *}
 function platform_posix_wait_stop_signal(const AStatus: Int32): Int32; inline;
+
+{** @desc 检查进程是否正常退出
+    @param AStatus wait 返回的状态
+    @return True 正常退出 *}
 function platform_posix_wait_if_exited(const AStatus: Int32): Boolean; inline;
+
+{** @desc 检查进程是否被信号终止
+    @param AStatus wait 返回的状态
+    @return True 被信号终止 *}
 function platform_posix_wait_if_signaled(const AStatus: Int32): Boolean; inline;
+
+{** @desc 检查进程是否被停止
+    @param AStatus wait 返回的状态
+    @return True 被停止 *}
 function platform_posix_wait_if_stopped(const AStatus: Int32): Boolean; inline;
+
+{** @desc 检查进程是否生成了核心转储
+    @param AStatus wait 返回的状态
+    @return True 生成了核心转储 *}
 function platform_posix_wait_core_dumped(const AStatus: Int32): Boolean; inline;
+
+{** @desc 组合退出码和信号为 wait 状态
+    @param AReturnCode 退出码
+    @param ASignal 信号编号
+    @return wait 状态值 *}
 function platform_posix_wait_exit_code(
   const AReturnCode: Int32;
   const ASignal: Int32): Int32; inline;
+
+{** @desc 组合停止信号为 wait 状态
+    @param ASignal 信号编号
+    @return wait 状态值 *}
 function platform_posix_wait_stop_code(const ASignal: Int32): Int32; inline;
 
 implementation

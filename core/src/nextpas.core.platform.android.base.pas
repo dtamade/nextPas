@@ -8,38 +8,48 @@ uses
   nextpas.core.platform.posix.base;
 
 const
+  {** @desc Android pthread 令牌大小 *}
   PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
 
 type
+  {** @desc Android pthread 令牌对齐记录 *}
   TPlatformPThreadTokenAlign = record
     Value: pthread_t;
   end;
 
+  {** @desc Android pthread 互斥锁对齐记录 *}
   TPlatformPThreadMutexAlign = record
     Value: pthread_mutex_t;
   end;
 
+  {** @desc Android pthread 读写锁对齐记录 *}
   TPlatformPThreadRwLockAlign = record
     Value: pthread_rwlock_t;
   end;
 
+  {** @desc Android pthread 条件变量对齐记录 *}
   TPlatformPThreadCondVarAlign = record
     Value: pthread_cond_t;
   end;
 
+  {** @desc Android 进程 ID 类型 *}
   TPlatformProcessId = pid_t;
 
+  {** @desc Android 信号集类型 *}
   TPlatformAndroidSignalSet = record
     Words: array[0..1] of PtrUInt;
   end;
   PPlatformAndroidSignalSet = ^TPlatformAndroidSignalSet;
 
+  {** @desc Android 信号处理器函数类型 *}
   TPlatformAndroidSigActionHandler = procedure(
     ASignal: Int32;
     AInfo: Pointer;
     AContext: Pointer); cdecl;
+  {** @desc Android 信号恢复器函数类型 *}
   TPlatformAndroidSigRestorer = procedure; cdecl;
 
+  {** @desc Android 信号动作结构体 *}
   TPlatformAndroidSigAction = record
     sa_handler: TPlatformAndroidSigActionHandler;
     sa_flags: PtrUInt;
