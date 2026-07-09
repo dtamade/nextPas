@@ -942,8 +942,16 @@ procedure TH2ClientConnection.AppendResponseHeaderFragment(
   var AResponse: TH2ResponseState; const AFragment: AnsiString);
 var
   LLen: SizeInt;
+  LTotalBytes: SizeInt;
+  LI: SizeInt;
 begin
   LLen := Length(AResponse.HeaderFragments);
+  { Calculate total header bytes to prevent memory DoS }
+  LTotalBytes := Length(AFragment);
+  for LI := 0 to LLen - 1 do
+    Inc(LTotalBytes, Length(AResponse.HeaderFragments[LI]));
+  if (FOptions.MaxHeaderListSize > 0) and (LTotalBytes > FOptions.MaxHeaderListSize) then
+    raise EHttpError.Create('HTTP/2 response headers too large');
   SetLength(AResponse.HeaderFragments, LLen + 1);
   AResponse.HeaderFragments[LLen] := AFragment;
 end;
@@ -959,6 +967,10 @@ var
   LStatusText: string;
   LStatusValue: Int64;
   LValueStr: AnsiString;
+  LStatusSeen: Boolean;
+  LRegularSeen: Boolean;
+  LNameLower: AnsiString;
+  LJ: SizeInt;
 begin
   if AResponse.HeadersDecoded then
     Exit;
@@ -984,6 +996,8 @@ begin
     AResponse.Headers := TH2OwnedHeaders(AResponse.HeadersStore);
   end;
   LStatusText := '';
+  LStatusSeen := False;
+  LRegularSeen := False;
   for LI := 0 to High(LHeaders) do
   begin
     if LHeaders[LI].Name.Ptr = nil then
@@ -991,10 +1005,35 @@ begin
     SetString(LNameStr, LHeaders[LI].Name.Ptr, LHeaders[LI].Name.Len);
     SetString(LValueStr, LHeaders[LI].Value.Ptr, LHeaders[LI].Value.Len);
     if LNameStr = ':status' then
-      LStatusText := string(LValueStr)
+    begin
+      { RFC 9113 §8.1: only :status pseudo-header allowed in response }
+      if LStatusSeen or LRegularSeen then
+        raise EHttpError.Create('HTTP/2 invalid response pseudo-header order');
+      LStatusText := string(LValueStr);
+      LStatusSeen := True;
+    end
+    else if (Length(LNameStr) > 0) and (LNameStr[1] = ':') then
+    begin
+      { No other pseudo-headers allowed in response }
+      raise EHttpError.Create('HTTP/2 invalid response pseudo-header: ' + string(LNameStr));
+    end
     else
+    begin
+      LRegularSeen := True;
+      { RFC 9113 §8.2: field names MUST be lowercase }
+      for LJ := 1 to Length(LNameStr) do
+        if (LNameStr[LJ] >= 'A') and (LNameStr[LJ] <= 'Z') then
+          raise EHttpError.Create('HTTP/2 response header not lowercase: ' + string(LNameStr));
+      { Reject connection-specific headers }
+      if (LNameStr = 'connection') or (LNameStr = 'upgrade') or
+         (LNameStr = 'keep-alive') or (LNameStr = 'proxy-connection') or
+         (LNameStr = 'transfer-encoding') then
+        raise EHttpError.Create('HTTP/2 forbidden response header: ' + string(LNameStr));
+      if (LNameStr = 'te') and (LValueStr <> 'trailers') then
+        raise EHttpError.Create('HTTP/2 invalid TE header value');
       TH2OwnedHeaders(AResponse.HeadersStore).Add(string(LNameStr),
         string(LValueStr));
+    end;
   end;
   if (LStatusText = '') or (not TryStrToInt64(LStatusText, LStatusValue)) then
     raise EHttpError.Create('HTTP/2 response missing valid :status');
@@ -1011,6 +1050,10 @@ begin
   LPayloadLen := Length(APayload);
   if LPayloadLen = 0 then
     Exit;
+  { Prevent memory DoS from unbounded body accumulation }
+  if (FOptions.MaxHeaderListSize > 0) and
+     (AResponse.BodyLen + LPayloadLen > FOptions.MaxHeaderListSize * 4) then
+    raise EHttpError.Create('HTTP/2 response body too large');
   LOldLen := Length(AResponse.Body);
   SetLength(AResponse.Body, LOldLen + LPayloadLen);
   Move(APayload[1], AResponse.Body[LOldLen], LPayloadLen);

@@ -802,6 +802,45 @@ begin
     AValue := 0;
 end;
 
+{ Safe integer decoding with overflow protection for inline use in DecodeView.
+  Decodes an integer from ABlock starting at APos with APrefixBits width.
+  Returns True on success, False on overflow or bounds error. }
+function DecodeIntegerSafe(const ABlock: AnsiString; var APos: SizeInt;
+  APrefixBits: Byte; out AValue: UInt32): Boolean;
+var
+  LPrefixMask: UInt32;
+  LByte: Byte;
+  LShift: Byte;
+  LChunk: UInt32;
+begin
+  Result := False;
+  AValue := 0;
+  LPrefixMask := (UInt32(1) shl APrefixBits) - 1;
+  if APos > Length(ABlock) then
+    Exit;
+  LByte := Byte(ABlock[APos]);
+  Inc(APos);
+  AValue := LByte and LPrefixMask;
+  if AValue < LPrefixMask then
+    Exit(True);
+  LShift := 0;
+  repeat
+    if APos > Length(ABlock) then
+      Exit;
+    LByte := Byte(ABlock[APos]);
+    Inc(APos);
+    LChunk := UInt32(LByte and $7F);
+    if LShift > 28 then
+      Exit;
+    if LChunk > ((High(UInt32) - AValue) shr LShift) then
+      Exit;
+    AValue := AValue + (LChunk shl LShift);
+    if (LByte and $80) = 0 then
+      Exit(True);
+    Inc(LShift, 7);
+  until False;
+end;
+
 function THPackDecoder.DecodeString(const ABlock: AnsiString; var APos: SizeInt;
   out AStr: AnsiString): Boolean; inline;
 var
@@ -809,25 +848,15 @@ var
   LLen: UInt32;
   LHuffman: Boolean;
   LBuf: array[0..255] of AnsiChar;
-  LOutLen, LShift: SizeInt;
+  LOutLen: SizeInt;
 begin
   Result := False;
   if APos > Length(ABlock) then Exit;
   LByte := Byte(ABlock[APos]);
   LHuffman := (LByte and $80) <> 0;
-  { Inline 7-bit integer: reads byte once instead of DecodeInteger re-reading }
-  LLen := LByte and $7F;
-  Inc(APos);
-  if LLen = $7F then
-  begin
-    LShift := 0;
-    repeat
-      LByte := Byte(ABlock[APos]);
-      Inc(APos);
-      LLen := LLen + ((LByte and $7F) shl LShift);
-      Inc(LShift, 7);
-    until (LByte and $80) = 0;
-  end;
+  { Use safe integer decoding with overflow protection }
+  if not DecodeIntegerSafe(ABlock, APos, 7, LLen) then
+    Exit;
   if APos + SizeInt(LLen) - 1 > Length(ABlock) then Exit;
   if LHuffman then
   begin
@@ -882,15 +911,8 @@ begin
       Inc(LPos);
       if LIndex = $7F then
       begin
-        LShift := 0;
-        repeat
-          if LPos > LBlockLen then
-            Exit;
-          LByte := Byte(ABlock[LPos]);
-          Inc(LPos);
-          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
-          Inc(LShift, 7);
-        until (LByte and $80) = 0;
+        if not DecodeIntegerSafe(ABlock, LPos, 7, LIndex) then
+          Exit;
       end;
       if LIndex = 0 then
         Exit;
@@ -930,15 +952,8 @@ begin
       Inc(LPos);
       if LIndex = $3F then
       begin
-        LShift := 0;
-        repeat
-          if LPos > LBlockLen then
-            Exit;
-          LByte := Byte(ABlock[LPos]);
-          Inc(LPos);
-          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
-          Inc(LShift, 7);
-        until (LByte and $80) = 0;
+        if not DecodeIntegerSafe(ABlock, LPos, 7, LIndex) then
+          Exit;
       end;
     end
     else if (LByte and $F0) = $00 then
@@ -949,15 +964,8 @@ begin
       Inc(LPos);
       if LIndex = $0F then
       begin
-        LShift := 0;
-        repeat
-          if LPos > LBlockLen then
-            Exit;
-          LByte := Byte(ABlock[LPos]);
-          Inc(LPos);
-          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
-          Inc(LShift, 7);
-        until (LByte and $80) = 0;
+        if not DecodeIntegerSafe(ABlock, LPos, 7, LIndex) then
+          Exit;
       end;
     end
     else if (LByte and $F0) = $10 then
@@ -968,15 +976,8 @@ begin
       Inc(LPos);
       if LIndex = $0F then
       begin
-        LShift := 0;
-        repeat
-          if LPos > LBlockLen then
-            Exit;
-          LByte := Byte(ABlock[LPos]);
-          Inc(LPos);
-          LIndex := LIndex + (UInt32(LByte and $7F) shl LShift);
-          Inc(LShift, 7);
-        until (LByte and $80) = 0;
+        if not DecodeIntegerSafe(ABlock, LPos, 7, LIndex) then
+          Exit;
       end;
     end
     else

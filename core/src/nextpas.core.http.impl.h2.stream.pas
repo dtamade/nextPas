@@ -138,11 +138,12 @@ const
     attacker sending unlimited CONTINUATION frames would hit this. }
   H2_MAX_HEADER_BLOCK_BYTES: SizeInt = 64 * 1024;
 
-  H2_FORBIDDEN_CONNECTION_HEADERS: array[0..3] of AnsiString = (
+  H2_FORBIDDEN_CONNECTION_HEADERS: array[0..4] of AnsiString = (
     'connection',
     'upgrade',
     'keep-alive',
-    'proxy-connection'
+    'proxy-connection',
+    'transfer-encoding'
   );
 
   H2_FORBIDDEN_TRAILER_HEADERS: array[0..4] of AnsiString = (
@@ -188,6 +189,19 @@ begin
     Exit(False);
   for LI := 0 to ASpan.Len - 1 do
     if ASpan.Ptr[LI] <> AValue[LI + 1] then
+      Exit(False);
+  Result := True;
+end;
+
+{ RFC 9113 §8.2: field names MUST be lowercase. Returns False if any byte is A-Z. }
+function H2HeaderNameIsLowercase(const AName: TH2ByteSpan): Boolean;
+var
+  LI: SizeInt;
+begin
+  if AName.Ptr = nil then
+    Exit(True);
+  for LI := 0 to AName.Len - 1 do
+    if (AName.Ptr[LI] >= 'A') and (AName.Ptr[LI] <= 'Z') then
       Exit(False);
   Result := True;
 end;
@@ -462,6 +476,12 @@ begin
       else
       begin
         LPseudoSectionClosed := True;
+        { RFC 9113 §8.2: field names MUST be lowercase }
+        if not H2HeaderNameIsLowercase(LHeaders[LIndex].Name) then
+        begin
+          InternalReset(H2_ERR_PROTOCOL_ERROR);
+          Exit(h2hfrProtocolError);
+        end;
         if ByteSpanEquals(LHeaders[LIndex].Name, 'host') then
           LHostSeen := True
         else if IsForbiddenConnectionHeader(LHeaders[LIndex].Name) then
@@ -482,10 +502,19 @@ begin
       InternalReset(H2_ERR_PROTOCOL_ERROR);
       Exit(h2hfrProtocolError);
     end
-    else if IsForbiddenTrailerHeader(LHeaders[LIndex].Name) then
+    else
     begin
-      InternalReset(H2_ERR_PROTOCOL_ERROR);
-      Exit(h2hfrProtocolError);
+      { RFC 9113 §8.2: field names MUST be lowercase }
+      if not H2HeaderNameIsLowercase(LHeaders[LIndex].Name) then
+      begin
+        InternalReset(H2_ERR_PROTOCOL_ERROR);
+        Exit(h2hfrProtocolError);
+      end;
+      if IsForbiddenTrailerHeader(LHeaders[LIndex].Name) then
+      begin
+        InternalReset(H2_ERR_PROTOCOL_ERROR);
+        Exit(h2hfrProtocolError);
+      end;
     end;
 
     if FMaxHeaderListSize > 0 then

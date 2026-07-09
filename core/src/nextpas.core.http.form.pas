@@ -410,6 +410,7 @@ var
   LBoundary: string;
   LParts: array of string;
   LCount, LI: Integer;
+  LEscapedName, LEscapedFieldName, LEscapedFileName: string;
 
   procedure AddPart(const S: string);
   begin
@@ -429,15 +430,30 @@ begin
   SetLength(LParts, Length(AFields) + Length(AFiles) + 2);
 
   for LI := 0 to High(AFields) do
+  begin
+    { RFC 6266: Content-Disposition name needs quoted-string escaping }
+    LEscapedName := AFields[LI].Name;
+    LEscapedName := StringReplace(LEscapedName, '\', '\\', [rfReplaceAll]);
+    LEscapedName := StringReplace(LEscapedName, '"', '\"', [rfReplaceAll]);
     AddPart('--' + LBoundary + #13#10 +
-            'Content-Disposition: form-data; name="' + AFields[LI].Name + '"' + #13#10 +
+            'Content-Disposition: form-data; name="' + LEscapedName + '"' + #13#10 +
             #13#10 + AFields[LI].Value + #13#10);
+  end;
 
   for LI := 0 to High(AFiles) do
+  begin
+    { RFC 6266: Content-Disposition filename needs quoted-string escaping }
+    LEscapedFieldName := AFiles[LI].FieldName;
+    LEscapedFieldName := StringReplace(LEscapedFieldName, '\', '\\', [rfReplaceAll]);
+    LEscapedFieldName := StringReplace(LEscapedFieldName, '"', '\"', [rfReplaceAll]);
+    LEscapedFileName := AFiles[LI].FileName;
+    LEscapedFileName := StringReplace(LEscapedFileName, '\', '\\', [rfReplaceAll]);
+    LEscapedFileName := StringReplace(LEscapedFileName, '"', '\"', [rfReplaceAll]);
     AddPart('--' + LBoundary + #13#10 +
-            'Content-Disposition: form-data; name="' + AFiles[LI].FieldName + '"; filename="' + AFiles[LI].FileName + '"' + #13#10 +
+            'Content-Disposition: form-data; name="' + LEscapedFieldName + '"; filename="' + LEscapedFileName + '"' + #13#10 +
             'Content-Type: ' + AFiles[LI].ContentType + #13#10 +
             #13#10 + AFiles[LI].Content + #13#10);
+  end;
 
   AddPart('--' + LBoundary + '--');
 

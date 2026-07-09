@@ -196,6 +196,12 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message;
 
+{** Hard limit on accumulated read buffer to prevent memory exhaustion.
+    16 MB is generous for legitimate traffic; an attacker sending tiny
+    frames that never complete would hit this long before OOM. }
+const
+  H2_READ_BUFFER_HARD_LIMIT: SizeInt = 16 * 1024 * 1024;
+
 function H2PrefaceResult(const AStatus: TH2PrefaceStatus;
   const AConsumed: SizeUInt; const AErrorCode: UInt32; out AOutConsumed: SizeUInt;
   out AOutErrorCode: UInt32): TH2PrefaceStatus;
@@ -771,12 +777,6 @@ begin
   QueueSettingsAck;
   Result := True;
 end;
-
-{** Hard limit on accumulated read buffer to prevent memory exhaustion.
-    16 MB is generous for legitimate traffic; an attacker sending tiny
-    frames that never complete would hit this long before OOM. }
-const
-  H2_READ_BUFFER_HARD_LIMIT: SizeInt = 16 * 1024 * 1024;
 
 function TH2ServerSession.DecodeNextFrame(out AFrame: TH2Frame;
   out AConsumed: SizeUInt): Boolean;
@@ -1378,10 +1378,23 @@ begin
   if AHeaders <> nil then
     AHeaders.ForEach(
       procedure(const AName, AValue: string)
+      var
+        LLowerName: string;
+        LJ: Integer;
       begin
         if (AName = '') or (AName[1] = ':') then
           Exit;
-        LHeaderList[LHeaderCount].Name := StringToAnsi(AName);
+        { RFC 9113 §8.2: field names MUST be lowercase }
+        LLowerName := LowerCase(AName);
+        { Reject connection-specific headers that are forbidden in HTTP/2 }
+        if (LLowerName = 'connection') or (LLowerName = 'upgrade') or
+           (LLowerName = 'keep-alive') or (LLowerName = 'proxy-connection') or
+           (LLowerName = 'transfer-encoding') then
+          Exit;
+        { TE header is only allowed with value "trailers" }
+        if (LLowerName = 'te') and (LowerCase(AValue) <> 'trailers') then
+          Exit;
+        LHeaderList[LHeaderCount].Name := StringToAnsi(LLowerName);
         LHeaderList[LHeaderCount].Value := StringToAnsi(AValue);
         Inc(LHeaderCount);
       end);
