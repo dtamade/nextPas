@@ -39,6 +39,10 @@ type
       Created on first access, auto-cleaned when the test context is destroyed. }
     function  GetTempDir: string;
     property  TempDir: string read GetTempDir;
+    { Environment variable isolation: set/unset env vars for this test.
+      Original values are saved and automatically restored when the test ends. }
+    procedure SetEnv(const AName, AValue: string);
+    procedure UnsetEnv(const AName: string);
   end;
 
   TSubtestProc = procedure(constref Ctx: ITestContext);

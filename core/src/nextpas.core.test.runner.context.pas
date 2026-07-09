@@ -36,6 +36,12 @@ type
 { ── TTestContext (for subtest execution) ───────────────────────────────────── }
 
 type
+  TEnvBackup = record
+    Name     : string;
+    OldValue : string;
+    HadValue : Boolean;
+  end;
+
   TTestContext = class(TInterfacedObject, ITestContext)
   public
     FTestName : string;
@@ -49,6 +55,7 @@ type
     FLogLines : specialize TArray<string>;
     FCleanups : specialize TArray<TTestClosure>;
     FTempDir  : string;  { lazy-created temp directory, auto-cleaned }
+    FEnvBackups: specialize TArray<TEnvBackup>;  { saved env vars for restore }
     constructor Create(const ATestName: string; const AConfig: TTestConfig);
     destructor Destroy; override;
     procedure Run(const AName: string; AProc: TTestProc);
@@ -68,8 +75,12 @@ type
       Each test gets its own isolated directory. }
     function  GetTempDir: string;
     property  TempDir: string read GetTempDir;
+    { Environment variable isolation }
+    procedure SetEnv(const AName, AValue: string);
+    procedure UnsetEnv(const AName: string);
     procedure ExecuteSubtests;
     procedure RunCleanups;
+    procedure RestoreEnvVars;
   end;
 
 implementation
@@ -127,6 +138,9 @@ begin
   FOnResult := nil;
   FFailedNames := nil;
   FLogLines := nil;
+  { Restore environment variables before cleanup }
+  RestoreEnvVars;
+  FEnvBackups := nil;
   { Safety net: remove temp dir if RunCleanups wasn't called }
   if FTempDir <> '' then
   begin
@@ -252,6 +266,54 @@ begin
     end);
   end;
   Result := FTempDir;
+end;
+
+procedure TTestContext.SetEnv(const AName, AValue: string);
+var
+  LBackup: TEnvBackup;
+  LExisting: AnsiString;
+begin
+  { Save current value for restore }
+  LBackup.Name := AName;
+  LExisting := platform_env_get_str(AnsiString(AName));
+  LBackup.HadValue := LExisting <> '';
+  LBackup.OldValue := string(LExisting);
+  SetLength(FEnvBackups, Length(FEnvBackups) + 1);
+  FEnvBackups[High(FEnvBackups)] := LBackup;
+  { Set new value }
+  platform_env_set(PAnsiChar(AnsiString(AName)), PAnsiChar(AnsiString(AValue)));
+end;
+
+procedure TTestContext.UnsetEnv(const AName: string);
+var
+  LBackup: TEnvBackup;
+  LExisting: AnsiString;
+begin
+  { Save current value for restore }
+  LBackup.Name := AName;
+  LExisting := platform_env_get_str(AnsiString(AName));
+  LBackup.HadValue := LExisting <> '';
+  LBackup.OldValue := string(LExisting);
+  SetLength(FEnvBackups, Length(FEnvBackups) + 1);
+  FEnvBackups[High(FEnvBackups)] := LBackup;
+  { Unset }
+  platform_env_unset(PAnsiChar(AnsiString(AName)));
+end;
+
+procedure TTestContext.RestoreEnvVars;
+var
+  I: Integer;
+  LBackup: TEnvBackup;
+begin
+  for I := High(FEnvBackups) downto 0 do
+  begin
+    LBackup := FEnvBackups[I];
+    if LBackup.HadValue then
+      platform_env_set(PAnsiChar(AnsiString(LBackup.Name)),
+        PAnsiChar(AnsiString(LBackup.OldValue)))
+    else
+      platform_env_unset(PAnsiChar(AnsiString(LBackup.Name)));
+  end;
 end;
 
 { ── Internal helpers ────────────────────────────────────────────────────────── }

@@ -264,6 +264,13 @@ type
     { Reset all recorded calls AND setup configurations }
     procedure ResetAll;
 
+    { Get formatted call history for debugging.
+      Returns all recorded calls with arguments and return values:
+        Foo('a', 'b') => 'result'
+        Bar('c') => (void)
+      Useful for test failure diagnostics. }
+    function GetCallHistory: string;
+
     { Access to the raw state for advanced usage }
     property State: TMockState read FState;
   end;
@@ -1336,6 +1343,42 @@ end;
 procedure TMock.ResetAll;
 begin
   FState.ResetAll;
+end;
+
+function TMock.GetCallHistory: string;
+var
+  I, J: Integer;
+  LCall: TMockCall;
+  LSb: specialize TArray<string>;
+begin
+  if Length(FState.Calls) = 0 then
+  begin
+    Result := '(no calls recorded)';
+    Exit;
+  end;
+  LSb := nil;
+  for I := 0 to High(FState.Calls) do
+  begin
+    LCall := FState.Calls[I];
+    SetLength(LSb, Length(LSb) + 1);
+    LSb[High(LSb)] := '  ' + LCall.MethodName + '(';
+    for J := 0 to High(LCall.Args) do
+    begin
+      if J > 0 then LSb[High(LSb)] := LSb[High(LSb)] + ', ';
+      LSb[High(LSb)] := LSb[High(LSb)] + '"' + LCall.Args[J] + '"';
+    end;
+    LSb[High(LSb)] := LSb[High(LSb)] + ')';
+    if LCall.HasResult then
+      LSb[High(LSb)] := LSb[High(LSb)] + ' => "' + LCall.ResultValue + '"'
+    else
+      LSb[High(LSb)] := LSb[High(LSb)] + ' => (void)';
+  end;
+  Result := '';
+  for I := 0 to High(LSb) do
+  begin
+    if I > 0 then Result := Result + #10;
+    Result := Result + LSb[I];
+  end;
 end;
 
 end.

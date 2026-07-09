@@ -98,6 +98,9 @@ procedure WriteWarning(const AMsg: string;
 procedure WriteSuiteHeader(const AName, ASuffix: string;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write blank line + bold '> Name (suffix)' suite header to ASink. }
+procedure WriteSuiteHeaderEx(const AName: string; ATestCount: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+  { Enhanced suite header with test count: '> SuiteName (15 tests)' }
 procedure WriteSlowTests(const ASlowTests: TTestResults;
   const ASink: IOutputSink; const AConfig: TTestConfig);
   { Write slow test report: '  Slowest tests:' followed by top N entries. }
@@ -529,6 +532,22 @@ begin
     AnsiBold('> ', AConfig) +
     AnsiCyan(AName, AConfig) +
     AnsiDim(' (' + ASuffix + ')', AConfig));
+end;
+
+procedure WriteSuiteHeaderEx(const AName: string; ATestCount: Integer;
+  const ASink: IOutputSink; const AConfig: TTestConfig);
+var
+  LSuffix: string;
+begin
+  if ATestCount = 1 then
+    LSuffix := '1 test'
+  else
+    LSuffix := IntToStr(ATestCount) + ' tests';
+  ASink.WriteLn('');
+  ASink.WriteLn(
+    AnsiBold('> ', AConfig) +
+    AnsiCyan(AName, AConfig) +
+    AnsiDim(' (' + LSuffix + ')', AConfig));
 end;
 
 function FormatDuration(AMillis: Int64): string;
