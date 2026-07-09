@@ -28,8 +28,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 默认初始块数 }
@@ -61,7 +60,7 @@ type
    *
    *  @warning 不支持 ReallocMem（固定大小块无法调整大小）
    *}
-  TPoolAllocator = class(TAllocator)
+  TPoolAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FBlockSize: SizeUInt;
@@ -80,11 +79,6 @@ type
     procedure GrowPool(AGrowCount: UInt64);
     function PopFree: Pointer;
     procedure PushFree(APtr: Pointer);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建固定大小块池分配器
      *  @param AInner 内部分配器（用于批量获取内存）
@@ -95,6 +89,11 @@ type
       AInitialCount: UInt64 = POOL_DEFAULT_INITIAL_COUNT);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+
     {** 获取池统计信息 }
     function GetStats: TPoolStats;
     {** 块大小 }
@@ -104,7 +103,7 @@ type
     {** 总块数 }
     property TotalBlockCount: UInt64 read FTotalBlocks;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -218,7 +217,7 @@ begin
   Inc(FFreeCount);
 end;
 
-function TPoolAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   { 忽略 ASize，使用固定块大小 }
   if FFreeHead = nil then
@@ -228,14 +227,14 @@ begin
     Inc(FAllocCount);
 end;
 
-function TPoolAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TPoolAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, FBlockSize, 0);
 end;
 
-function TPoolAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   { 固定大小块不支持 Realloc }
   raise EAllocError.Create(aeInvalidLayout,
@@ -243,7 +242,7 @@ begin
   Result := nil;
 end;
 
-procedure TPoolAllocator.DoFreeMem(APtr: Pointer);
+procedure TPoolAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr = nil then Exit;
   PushFree(APtr);
@@ -261,9 +260,10 @@ begin
   Result.GrowCount := FGrowCount;
 end;
 
-function TPoolAllocator.Traits: TAllocatorTraits;
+function TPoolAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := False;
 end;
 
