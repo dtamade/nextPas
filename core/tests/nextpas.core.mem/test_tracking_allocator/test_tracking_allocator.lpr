@@ -297,7 +297,7 @@ end;
 { --- RunTestWithLeakCheck tests --- }
 
 { 有意泄漏的回调 }
-procedure DoLeakTest(AAllocator: TAllocator);
+procedure DoLeakTest(AAllocator: IAllocator);
 var
   LP: Pointer;
 begin
@@ -306,7 +306,7 @@ begin
 end;
 
 { 不泄漏的回调 }
-procedure DoNoLeakTest(AAllocator: TAllocator);
+procedure DoNoLeakTest(AAllocator: IAllocator);
 var
   LP: Pointer;
 begin

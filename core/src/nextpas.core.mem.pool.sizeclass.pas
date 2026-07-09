@@ -23,7 +23,7 @@ interface
 
 uses
   nextpas.core.mem.base,
-  nextpas.core.text,
+
   nextpas.core.mem.error;
 
 const
@@ -82,6 +82,9 @@ const
   SIZE_CLASSES: array[TSizeClassIndex] of SizeUInt = (8, 16, 32, 64, 128, 256, 512);
 
 implementation
+
+uses
+  nextpas.core.text.conv;
 
 function SizeClassIndex(ASize: SizeUInt): Integer;
 begin

@@ -18,7 +18,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.error,
   nextpas.core.mem.secure,
-  nextpas.core.text,
+
   nextpas.core.mem.pool.fixed_slab.nginx;
 
 type
@@ -687,7 +687,6 @@ end;
 function TFixedSlabPool.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := True;
-  Result.ThreadSafe      := False;
   Result.SupportsRealloc := True;
 end;
 

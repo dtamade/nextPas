@@ -5,10 +5,10 @@ unit nextpas.core.mem.allocator.arena;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
@@ -18,32 +18,30 @@ type
   {** TVirtualArenaAllocator
    *
    *  将 TVirtualArena 包装为 IAllocator 接口。
-   *  分配通过 TVirtualArena 的 bump 指针完成，DoFreeMem 为 no-op。
+   *  分配通过 TVirtualArena 的 bump 指针完成，FreeMem 为 no-op。
    *  Reset 方法一次性释放所有内存。
    *
-   *  注意：DoReallocMem 不支持（arena 不跟踪单个分配大小）。
+   *  注意：ReallocMem 不支持（arena 不跟踪单个分配大小）。
    *  非线程安全。}
-  TVirtualArenaAllocator = class(TAllocator)
+  TVirtualArenaAllocator = class(TInterfacedObject, IAllocator)
   private
     FArena: TVirtualArena;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建 TVirtualArenaAllocator }
     constructor Create(AAlignment: SizeUInt = DEFAULT_ALIGNMENT);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
 
     {** 重置 Arena（保留 mmap 映射，从头开始分配） }
     procedure Reset;
 
     {** 直接访问内部 TVirtualArena }
     property Arena: TVirtualArena read FArena;
-
-    {** IAllocator traits }
-    function Traits: TAllocatorTraits; override;
   end;
 
 {** 兼容性别名 }
@@ -95,23 +93,23 @@ begin
   inherited Destroy;
 end;
 
-function TVirtualArenaAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FArena.Alloc(ASize);
 end;
 
-function TVirtualArenaAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := FArena.AllocZeroed(ASize);
 end;
 
-function TVirtualArenaAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TVirtualArenaAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   raise EAllocError.Create(aeReallocNotSupported,
     'TVirtualArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
 end;
 
-procedure TVirtualArenaAllocator.DoFreeMem(APtr: Pointer);
+procedure TVirtualArenaAllocator.FreeMem(APtr: Pointer); inline;
 begin
   { Arena 不支持单个释放 — no-op }
 end;
@@ -121,7 +119,7 @@ begin
   FArena.Reset;
 end;
 
-function TVirtualArenaAllocator.Traits: TAllocatorTraits;
+function TVirtualArenaAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe      := False;

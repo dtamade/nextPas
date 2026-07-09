@@ -28,7 +28,7 @@ uses
   nextpas.core.mem.error,
   nextpas.core.mem.intf,
   nextpas.core.mem.arena.base,
-  nextpas.core.text,
+
   nextpas.core.mem.arena.intf;
 
 type
@@ -150,7 +150,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.text.conv;
 
 const
   FB_MAP_MIN_CAP = 32;
@@ -450,8 +451,7 @@ begin
     Result.ZeroInitialized := True;
   if LFallbackTraits.SupportsRealloc then
     Result.SupportsRealloc := True;
-  { Fallback 内部 hash map 无同步保护，覆盖 primary 的 ThreadSafe 声明 }
-  Result.ThreadSafe := False;
+  { ThreadSafe 继承基类默认 False（内部 hash map 无同步保护） }
 end;
 
 { ---------------------------------------------------------------------------

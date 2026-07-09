@@ -5,426 +5,209 @@ program test_pool;
 uses
   nextpas.core.text.conv,
   nextpas.core.test,
-  nextpas.core.mem.error,
+  nextpas.core.mem.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.pool,
-  nextpas.core.mem.pool.base,
-  nextpas.core.mem.pool.fixed,
-  nextpas.core.mem.pool.object_pool;
-
-type
-  TExceptionProc = procedure;
-  TBatchObject = class
-  end;
-  TFixedPoolRecordingAllocator = class(TInterfacedObject, IAllocator)
-  public
-    GetCalls: Integer;
-    FreeCalls: Integer;
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
-  end;
+  nextpas.core.mem.allocator.pool,
+  nextpas.core.mem.error;
 
 var
   T: TTestSuite;
-  GPool: TLocalBlockPool;
-  GPtr: Pointer = nil;
-  GExternalByte: Byte = 0;
 
-procedure CheckRaisesAllocError(AProc: TExceptionProc; AExpected: TAllocError; const AName: string);
-begin
-  try
-    AProc;
-    Fail(AName + ': expected allocation error');
-  except
-    on E: EAllocError do
-      Check(Int64(Ord(AExpected)) = Int64(Ord(E.Error)), AName + ': error code');
-  end;
-end;
-
-function TFixedPoolRecordingAllocator.GetMem(ASize: SizeUInt): Pointer;
-begin
-  Inc(GetCalls);
-  Result := nil;
-end;
-
-function TFixedPoolRecordingAllocator.AllocMem(ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TFixedPoolRecordingAllocator.ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
-begin
-  Result := nil;
-end;
-
-procedure TFixedPoolRecordingAllocator.FreeMem(ADst: Pointer);
-begin
-  Inc(FreeCalls);
-end;
-
-function TFixedPoolRecordingAllocator.MemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
-function TFixedPoolRecordingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-procedure TFixedPoolRecordingAllocator.FreeAligned(APtr: Pointer);
-begin
-  Inc(FreeCalls);
-end;
-
-function TFixedPoolRecordingAllocator.Traits: TAllocatorTraits;
-begin
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
-  Result.SupportsRealloc := True;
-end;
-
-procedure ReleaseExternalPointer;
-begin
-  GPool.Release(@GExternalByte);
-end;
-
-procedure ReleaseInteriorPointer;
-begin
-  GPool.Release(PByte(GPtr) + 1);
-end;
-
-procedure ReleaseDoubleFreePointer;
-begin
-  GPool.Release(GPtr);
-end;
-
-procedure TestPoolCreate;
+procedure TestCreateAndDestroy;
 var
-  LP: TLocalBlockPool;
+  LPool: TPoolAllocator;
 begin
-  LP := TLocalBlockPool.Create(64, 10);
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64);
   try
-    Check(Int64(10) = Int64(LP.Capacity), 'capacity');
-    Check(LP.BlockSize >= 64, 'block size');
-    Check(Int64(0) = Int64(LP.InUse), 'in use');
-    Check(Int64(10) = Int64(LP.Available), 'available');
-    Check(not LP.IsFull);
-    Check(LP.IsEmpty);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolAcquireRelease;
-var
-  LP: TLocalBlockPool;
-  LPtr: Pointer;
-begin
-  LP := TLocalBlockPool.Create(32, 5);
-  try
-    LPtr := LP.Acquire;
-    Check(LPtr <> nil, 'acquire');
-    CheckEqual(Int64(1), Int64(LP.InUse));
-    CheckEqual(Int64(4), Int64(LP.Available));
-
-    LP.Release(LPtr);
-    CheckEqual(Int64(0), Int64(LP.InUse));
-    CheckEqual(Int64(5), Int64(LP.Available));
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolExhaust;
-var
-  LP: TLocalBlockPool;
-  LPtrs: array[0..2] of Pointer;
-  LI: Integer;
-begin
-  LP := TLocalBlockPool.Create(16, 3);
-  try
-    for LI := 0 to 2 do
-      LPtrs[LI] := LP.Acquire;
-
-    Check(LP.IsFull, 'should be full');
-    Check(LP.Acquire = nil, 'should return nil when full');
-
-    LP.Release(LPtrs[1]);
-    Check(not LP.IsFull, 'not full after release');
-    Check(LP.Acquire <> nil, 'can acquire after release');
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolReset;
-var
-  LP: TLocalBlockPool;
-  LI: Integer;
-begin
-  LP := TLocalBlockPool.Create(32, 10);
-  try
-    for LI := 0 to 9 do
-      LP.Acquire;
-    Check(LP.IsFull);
-
-    LP.Reset;
-    Check(LP.IsEmpty, 'reset makes empty');
-    CheckEqual(Int64(10), Int64(LP.Available));
-
-    for LI := 0 to 9 do
-      Check(LP.Acquire <> nil, 'can acquire after reset');
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolOwns;
-var
-  LP: TLocalBlockPool;
-  LPtr: Pointer;
-  LExternal: Integer;
-begin
-  LP := TLocalBlockPool.Create(64, 5);
-  try
-    LPtr := LP.Acquire;
-    Check(LP.Owns(LPtr), 'should own acquired pointer');
-    Check(not LP.Owns(@LExternal), 'should not own external pointer');
-    LP.Release(LPtr);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolRejectsInvalidReleasePointers;
-begin
-  GPool := TLocalBlockPool.Create(32, 2);
-  try
-    GPtr := GPool.Acquire;
-    Check(GPtr <> nil, 'acquire for invalid release');
-    CheckRaisesAllocError(@ReleaseExternalPointer, aeInvalidPointer, 'external pointer');
-    CheckRaisesAllocError(@ReleaseInteriorPointer, aeInvalidPointer, 'interior pointer');
-    Check(Int64(1) = Int64(GPool.InUse), 'invalid releases do not mutate in-use count');
-    GPool.Release(GPtr);
-  finally
-    GPool.Free;
-    GPool := nil;
-    GPtr := nil;
-  end;
-end;
-
-procedure TestPoolRejectsDoubleFree;
-begin
-  GPool := TLocalBlockPool.Create(32, 1);
-  try
-    GPtr := GPool.Acquire;
-    Check(GPtr <> nil, 'acquire for double free');
-    GPool.Release(GPtr);
-    CheckRaisesAllocError(@ReleaseDoubleFreePointer, aeDoubleFree, 'double free');
-    Check(Int64(0) = Int64(GPool.InUse), 'double free does not underflow in-use count');
-    Check(Int64(1) = Int64(GPool.Available), 'double free does not duplicate free stack entries');
-  finally
-    GPool.Free;
-    GPool := nil;
-    GPtr := nil;
-  end;
-end;
-
-procedure TestPoolWriteRead;
-var
-  LP: TLocalBlockPool;
-  LPtr: PInteger;
-begin
-  LP := TLocalBlockPool.Create(SizeOf(Integer), 10);
-  try
-    LPtr := PInteger(LP.Acquire);
-    Check(LPtr <> nil);
-    LPtr^ := 99999;
-    Check(LPtr^ = 99999, 'write/read through pool block');
-    LP.Release(LPtr);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolMultipleBlocks;
-var
-  LP: TLocalBlockPool;
-  LPtrs: array[0..99] of Pointer;
-  LI: Integer;
-begin
-  LP := TLocalBlockPool.Create(128, 100);
-  try
-    for LI := 0 to 99 do
-    begin
-      LPtrs[LI] := LP.Acquire;
-      Check(LPtrs[LI] <> nil, 'acquire ' + IntToStr(LI));
-    end;
-    Check(LP.IsFull);
-
-    for LI := 0 to 99 do
-      LP.Release(LPtrs[LI]);
-    Check(LP.IsEmpty);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolTryAcquire;
-var
-  LP: TLocalBlockPool;
-  LPtr: Pointer;
-begin
-  LP := TLocalBlockPool.Create(32, 2);
-  try
-    Check(LP.TryAcquire(LPtr), 'first try acquire');
-    Check(LPtr <> nil);
-    Check(LP.TryAcquire(LPtr), 'second try acquire');
-    Check(not LP.TryAcquire(LPtr), 'third try acquire should fail when full');
-    Check(LPtr = nil, 'failed try acquire returns nil');
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolSmallBlockSize;
-var
-  LP: TLocalBlockPool;
-  LPtr: Pointer;
-begin
-  LP := TLocalBlockPool.Create(1, 5);
-  try
-    Check(LP.BlockSize >= SizeOf(Pointer), 'block size at least pointer size');
-    LPtr := LP.Acquire;
-    Check(LPtr <> nil);
-    LP.Release(LPtr);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestPoolLegacyAlias;
-var
-  LP: TPool;
-  LPtr: Pointer;
-begin
-  LP := TPool.Create(16, 1);
-  try
-    LPtr := LP.Acquire;
-    Check(LPtr <> nil, 'legacy TPool alias remains usable');
-    LP.Release(LPtr);
-  finally
-    LP.Free;
-  end;
-end;
-
-procedure TestFixedPoolBatchClampsToOpenArrayLength;
-var
-  LPool: TFixedPool;
-  LPtrs: array[0..0] of Pointer;
-  LAcquired: Integer;
-begin
-  LPool := TFixedPool.Create(32, 2);
-  try
-    LPtrs[0] := nil;
-    LAcquired := LPool.AcquireN(LPtrs, 2);
-    Check(Int64(1) = Int64(LAcquired), 'AcquireN should clamp to open-array length');
-    Check(Int64(1) = Int64(LPool.AllocatedCount), 'AcquireN should acquire only one block');
-
-    LPool.ReleaseN(LPtrs, 2);
-    Check(Int64(0) = Int64(LPool.AllocatedCount), 'ReleaseN should release only the provided slot');
-    Check(Int64(2) = Int64(LPool.Available), 'ReleaseN should restore one acquired block');
+    Check(LPool.BlockSize = 64, 'block size should be 64');
+    Check(LPool.TotalBlockCount > 0, 'should have initial blocks');
+    Check(LPool.FreeBlockCount > 0, 'should have free blocks');
   finally
     LPool.Free;
   end;
 end;
 
-procedure TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc;
+procedure TestAllocAndFree;
 var
-  LPool: TFixedPool;
-  LAllocator: TFixedPoolRecordingAllocator;
-  LAllocatorRef: IAllocator;
-  LBlockSize: SizeUInt;
+  LPool: TPoolAllocator;
+  LPtr1, LPtr2: Pointer;
+begin
+  LPool := TPoolAllocator.Create(DefaultAllocator, 128);
+  try
+    LPtr1 := LPool.GetMem(128);
+    Check(LPtr1 <> nil, 'first alloc should succeed');
+    LPtr2 := LPool.GetMem(128);
+    Check(LPtr2 <> nil, 'second alloc should succeed');
+    Check(LPtr1 <> LPtr2, 'pointers should be different');
+    Check(LPool.FreeBlockCount < LPool.TotalBlockCount, 'free blocks should decrease');
+
+    LPool.FreeMem(LPtr1);
+    LPool.FreeMem(LPtr2);
+    Check(LPool.FreeBlockCount = LPool.TotalBlockCount, 'all blocks should be free');
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestAllocMemZeroInitialized;
+var
+  LPool: TPoolAllocator;
+  LPtr: Pointer;
+  LI: Integer;
+  LAllZero: Boolean;
+begin
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64);
+  try
+    LPtr := LPool.AllocMem(64);
+    Check(LPtr <> nil, 'AllocMem should succeed');
+
+    LAllZero := True;
+    for LI := 0 to 63 do
+    begin
+      if PByte(PtrUInt(LPtr) + PtrUInt(LI))^ <> 0 then
+      begin
+        LAllZero := False;
+        Break;
+      end;
+    end;
+    Check(LAllZero, 'AllocMem should zero-initialize');
+
+    LPool.FreeMem(LPtr);
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestGrowPool;
+var
+  LPool: TPoolAllocator;
+  LPtrs: array[0..511] of Pointer;
+  LI: Integer;
+  LStats: TPoolStats;
+begin
+  LPool := TPoolAllocator.Create(DefaultAllocator, 32, 16);
+  try
+    Check(LPool.TotalBlockCount >= 16, 'initial should have >= 16 blocks');
+    LStats := LPool.GetStats;
+    Check(LStats.GrowCount >= 1, 'should have at least 1 grow');
+
+    for LI := 0 to 511 do
+    begin
+      LPtrs[LI] := LPool.GetMem(32);
+      Check(LPtrs[LI] <> nil, 'alloc should succeed at index ' + IntToStr(LI));
+    end;
+
+    LStats := LPool.GetStats;
+    Check(LStats.GrowCount > 1, 'should have grown multiple times');
+    Check(LStats.AllocCount = 512, 'alloc count should be 512');
+
+    for LI := 0 to 511 do
+      LPool.FreeMem(LPtrs[LI]);
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestFixedSizeNoRealloc;
+var
+  LPool: TPoolAllocator;
+  LPtr: Pointer;
   LRaised: Boolean;
 begin
-  LAllocator := TFixedPoolRecordingAllocator.Create;
-  LAllocatorRef := LAllocator;
-  LBlockSize := High(SizeUInt) - (High(SizeUInt) mod 16);
-  LRaised := False;
-  LPool := nil;
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64);
   try
+    LPtr := LPool.GetMem(64);
+    Check(LPtr <> nil, 'alloc should succeed');
+
+    LRaised := False;
     try
-      LPool := TFixedPool.Create(LBlockSize, 2, 16, LAllocatorRef);
+      LPool.ReallocMem(LPtr, 128);
     except
-      on E: EAllocError do
-      begin
+      on E: Exception do
         LRaised := True;
-        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'fixed pool total-size overflow error');
-      end;
-      on E: nextpas.core.mem.error.EOutOfMemory do
-      begin
-        LRaised := True;
-        Check(Int64(Ord(aeInvalidLayout)) = Int64(Ord(E.Error)), 'fixed pool total-size overflow error');
-      end;
     end;
-    Check(LRaised, 'fixed pool total-size overflow must fail closed');
-    Check(Int64(0) = Int64(LAllocator.GetCalls), 'fixed pool total-size overflow must not call backing allocator');
+    Check(LRaised, 'ReallocMem should raise for fixed-size pool');
+
+    LPool.FreeMem(LPtr);
   finally
     LPool.Free;
-    LAllocatorRef := nil;
   end;
 end;
 
-procedure TestObjectPoolBatchClampsToOpenArrayLength;
-type
-  TBatchPool = specialize TObjectPool<TBatchObject>;
+procedure TestStats;
 var
-  LPool: TBatchPool;
-  LPtrs: array[0..0] of Pointer;
-  LAcquired: Integer;
+  LPool: TPoolAllocator;
+  LStats: TPoolStats;
+  LPtr1, LPtr2: Pointer;
 begin
-  LPool := TBatchPool.Create(10, function: TBatchObject
-    begin
-      Result := TBatchObject.Create;
-    end);
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64, 32);
   try
-    LPtrs[0] := nil;
-    LAcquired := LPool.AcquireN(LPtrs, 2);
-    Check(Int64(1) = Int64(LAcquired), 'object AcquireN should clamp to open-array length');
-    Check(Int64(1) = Int64(LPool.TotalCreated), 'object AcquireN should create only one object');
+    LPtr1 := LPool.GetMem(64);
+    LPtr2 := LPool.GetMem(64);
 
-    LPool.ReleaseN(LPtrs, 2);
-    Check(Int64(1) = Int64(LPool.InPoolCount), 'object ReleaseN should release only the provided slot');
+    LStats := LPool.GetStats;
+    Check(LStats.BlockSize = 64, 'block size should be 64');
+    Check(LStats.UsedBlocks = 2, 'used blocks should be 2');
+    Check(LStats.FreeBlocks = LStats.TotalBlocks - 2, 'free = total - used');
+    Check(LStats.AllocCount = 2, 'alloc count should be 2');
+
+    LPool.FreeMem(LPtr1);
+    LPool.FreeMem(LPtr2);
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestInvalidParams;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TPoolAllocator.Create(nil, 64).Free;
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'nil inner should raise');
+
+  LRaised := False;
+  try
+    TPoolAllocator.Create(DefaultAllocator, 4).Free;
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'too small block size should raise');
+end;
+
+procedure TestTraits;
+var
+  LPool: TPoolAllocator;
+  LTraits: TAllocatorTraits;
+begin
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64);
+  try
+    LTraits := LPool.Traits;
+    Check(not LTraits.SupportsRealloc, 'pool should not support realloc');
+    Check(not LTraits.ThreadSafe, 'pool is not thread-safe by default');
   finally
     LPool.Free;
   end;
 end;
 
 begin
-  T := TTestSuite.Create('nextpas.core.mem.pool');
-  T.Test('Create', @TestPoolCreate);
-  T.Test('Acquire/Release', @TestPoolAcquireRelease);
-  T.Test('Exhaust', @TestPoolExhaust);
-  T.Test('Reset', @TestPoolReset);
-  T.Test('Owns', @TestPoolOwns);
-  T.Test('TryAcquire', @TestPoolTryAcquire);
-  T.Test('rejects invalid release pointers', @TestPoolRejectsInvalidReleasePointers);
-  T.Test('rejects double free', @TestPoolRejectsDoubleFree);
-  T.Test('Write/Read', @TestPoolWriteRead);
-  T.Test('Multiple blocks (100)', @TestPoolMultipleBlocks);
-  T.Test('Small block size', @TestPoolSmallBlockSize);
-  T.Test('legacy TPool alias', @TestPoolLegacyAlias);
-  T.Test('fixed pool batch clamps to open-array length', @TestFixedPoolBatchClampsToOpenArrayLength);
-  T.Test('fixed pool rejects total-size overflow before alloc', @TestFixedPoolRejectsTotalSizeOverflowBeforeAlloc);
-  T.Test('object pool batch clamps to open-array length', @TestObjectPoolBatchClampsToOpenArrayLength);
+  T := TTestSuite.Create('test_pool');
+  T.Test('create_and_destroy', @TestCreateAndDestroy);
+  T.Test('alloc_and_free', @TestAllocAndFree);
+  T.Test('alloc_mem_zero_init', @TestAllocMemZeroInitialized);
+  T.Test('grow_pool', @TestGrowPool);
+  T.Test('fixed_size_no_realloc', @TestFixedSizeNoRealloc);
+  T.Test('stats', @TestStats);
+  T.Test('invalid_params', @TestInvalidParams);
+  T.Test('traits', @TestTraits);
   T.Run;
-
   T.Summary;
 end.

@@ -6,14 +6,14 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.base,          // AlignUp (QA-003: 去重)
-  nextpas.core.mem.allocator.base,
-  nextpas.core.mem.memory_map,
-  nextpas.core.text,
+    nextpas.core.mem.memory_map,
+
   nextpas.core.mem.mutex;
 
 type
-  TMemoryMapAllocator = class(TAllocator)
+  TMemoryMapAllocator = class(TInterfacedObject, IAllocator)
   private
     FMap: TMemoryMap;
     FBase: PByte;
@@ -25,15 +25,18 @@ type
     procedure FreeLocked(APtr: Pointer);
     function FindBlockForPayload(APtr: Pointer; out aBlock: Pointer; out aHeaderOffset: UInt64): Boolean;
     function PointerToOffset(APtr: Pointer; out aOffset: UInt64): Boolean;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
     constructor CreateAnonymous(aReservationSize: UInt64);
     destructor Destroy; override;
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
 
     property ReservationSize: SizeUInt read FReservationSize;
   end;
@@ -333,7 +336,7 @@ begin
   inherited Destroy;
 end;
 
-function TMemoryMapAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TMemoryMapAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   FLock.Acquire;
   try
@@ -343,7 +346,7 @@ begin
   end;
 end;
 
-function TMemoryMapAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TMemoryMapAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   FLock.Acquire;
   try
@@ -355,7 +358,7 @@ begin
   end;
 end;
 
-function TMemoryMapAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TMemoryMapAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LHeaderOffset: UInt64;
   LOldBlockPtr: Pointer;
@@ -389,7 +392,7 @@ begin
   end;
 end;
 
-procedure TMemoryMapAllocator.DoFreeMem(APtr: Pointer);
+procedure TMemoryMapAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FLock.Acquire;
   try
@@ -399,9 +402,8 @@ begin
   end;
 end;
 
-function TMemoryMapAllocator.Traits: TAllocatorTraits;
+function TMemoryMapAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
 end;

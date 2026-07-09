@@ -28,7 +28,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 type
@@ -68,21 +67,21 @@ type
    *  包装任意 IAllocator，分配失败时触发 OOM handler 链。
    *  成功路径零额外开销（直接委托内部分配器）。
    *}
-  TOomAllocator = class(TAllocator)
+  TOomAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FOomHandler: TOomHandler;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator; AOomHandler: TOomHandler);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
+    function Traits: TAllocatorTraits;
+
     property OomHandler: TOomHandler read FOomHandler;
-    function Traits: TAllocatorTraits; override;
   end;
 
 implementation
@@ -188,30 +187,35 @@ begin
   inherited Destroy;
 end;
 
-function TOomAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TOomAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FInner.GetMem(ASize);
   // 分配失败时触发 OOM handler 链，最多重试一次
-  if (Result = nil) and (ASize > 0) and FOomHandler.TryHandle(ASize) then
+  if (Result = nil) and FOomHandler.TryHandle(ASize) then
     Result := FInner.GetMem(ASize);
 end;
 
-function TOomAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TOomAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FInner.AllocMem(ASize);
-  if (Result = nil) and (ASize > 0) and FOomHandler.TryHandle(ASize) then
+  if (Result = nil) and FOomHandler.TryHandle(ASize) then
     Result := FInner.AllocMem(ASize);
 end;
 
-function TOomAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TOomAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   Result := FInner.ReallocMem(APtr, ASize);
-  if (Result = nil) and (ASize > 0) and FOomHandler.TryHandle(ASize) then
+  if (Result = nil) and FOomHandler.TryHandle(ASize) then
     Result := FInner.ReallocMem(APtr, ASize);
 end;
 
-procedure TOomAllocator.DoFreeMem(APtr: Pointer);
+procedure TOomAllocator.FreeMem(APtr: Pointer);
 begin
+  if APtr = nil then Exit;
   FInner.FreeMem(APtr);
 end;
 

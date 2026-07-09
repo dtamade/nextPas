@@ -36,7 +36,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl,   // ResolveAllocator
-  nextpas.core.text,
+
   nextpas.core.mem.error;
 
 type

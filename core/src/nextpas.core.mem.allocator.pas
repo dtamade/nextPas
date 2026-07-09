@@ -34,9 +34,8 @@ uses
   ;
 
 type
-  // 门面导出：接口与抽象基类
+  // 门面导出：接口与类型别名
   IAllocator = nextpas.core.mem.allocator.base.IAllocator;
-  TAllocator = nextpas.core.mem.allocator.base.TAllocator;
   TMemAllocator = nextpas.core.mem.allocator.base.TMemAllocator;
 
   // 回调类型重导出（从 callback_allocator 单元）

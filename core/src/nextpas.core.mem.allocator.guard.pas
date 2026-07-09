@@ -26,20 +26,20 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {** Guard page allocator. Each allocation is surrounded by
       unmapped pages — any out-of-bounds access triggers SIGSEGV.
 
       @warning 性能极低（每次分配 3 个 mmap 系统调用），仅用于调试/安全测试。 }
-  TGuardAllocator = class(TAllocator)
+  TGuardAllocator = class(TInterfacedObject, IAllocator)
   public
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -90,7 +90,7 @@ end;
 
 { --- TGuardAllocator --- }
 
-function TGuardAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TGuardAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LCommittedSize, LTotalSize: SizeUInt;
   LBase: Pointer;
@@ -125,21 +125,22 @@ begin
   Result := Pointer(PtrUInt(LCommitBase) + HeaderSize);
 end;
 
-function TGuardAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TGuardAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TGuardAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TGuardAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LHdr: PGuardHeader;
   LOldSize: SizeUInt;
   LCopySize: SizeUInt;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
     raise EAllocError.Create(aeInvalidPointer,
@@ -147,7 +148,7 @@ begin
   LOldSize := LHdr^.UserSize;
 
   { Allocate new, copy, free old }
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result = nil then
     Exit;
   if LOldSize < ASize then
@@ -156,10 +157,10 @@ begin
     LCopySize := ASize;
   if LCopySize > 0 then
     Move(APtr^, Result^, LCopySize);
-  DoFreeMem(APtr);
+  FreeMem(APtr);
 end;
 
-procedure TGuardAllocator.DoFreeMem(APtr: Pointer);
+procedure TGuardAllocator.FreeMem(APtr: Pointer); inline;
 var
   LHdr: PGuardHeader;
 begin
@@ -173,10 +174,11 @@ begin
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;
 
-function TGuardAllocator.Traits: TAllocatorTraits;
+function TGuardAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
+  Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 end.

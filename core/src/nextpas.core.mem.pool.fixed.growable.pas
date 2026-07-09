@@ -11,7 +11,7 @@ uses
   nextpas.core.mem.utils,         // CalcGeometricGrowth
   nextpas.core.mem.error,
   nextpas.core.mem.pool.base,     // IPool (decoupled)
-  nextpas.core.text,
+
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.rtl;   // ResolveAllocator
 

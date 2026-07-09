@@ -30,8 +30,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.utils,
-  nextpas.core.mem.pool.fixed,
-  nextpas.core.text;
+  nextpas.core.mem.pool.fixed;
 
 type
   {**
@@ -89,18 +88,18 @@ type
     destructor Destroy; override;
 
     // IAllocator
-    function GetMem(ASize: SizeUInt): Pointer;
-    function AllocMem(ASize: SizeUInt): Pointer;
-    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
-    procedure FreeMem(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-    procedure FreeAligned(APtr: Pointer);
-    function Traits: TAllocatorTraits;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function MemSize(APtr: Pointer): SizeUInt; inline;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; inline;
+    procedure FreeAligned(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
     // 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
-    function GetMemSize(APtr: Pointer): SizeUInt;
-    function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
-    function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+    function GetMemSize(APtr: Pointer): SizeUInt; inline;
+    function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
+    function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
 
     // 统计
     property BlockSize: SizeUInt read FBlockSize;
@@ -428,7 +427,7 @@ end;
 
 { TPoolAllocator — IAllocator }
 
-function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer;
+function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -450,7 +449,7 @@ begin
   Result := AllocFallback(ASize, 0, False);
 end;
 
-function TPoolAllocator.AllocMem(ASize: SizeUInt): Pointer;
+function TPoolAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -460,7 +459,7 @@ begin
     ZeroMem(Result, ASize);
 end;
 
-function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
   LAlloc: TPoolAllocatorAlloc;
   LCopySize: SizeUInt;
@@ -516,7 +515,7 @@ begin
   end;
 end;
 
-procedure TPoolAllocator.FreeMem(APtr: Pointer);
+procedure TPoolAllocator.FreeMem(APtr: Pointer); inline;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
@@ -534,7 +533,7 @@ begin
     FFallback.FreeMem(APtr);
 end;
 
-function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt;
+function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt; inline;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
@@ -546,7 +545,7 @@ begin
     Result := 0;
 end;
 
-function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+function TPoolAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
@@ -572,7 +571,7 @@ begin
   Result := AllocFallback(ASize, AAlignment, True);
 end;
 
-procedure TPoolAllocator.FreeAligned(APtr: Pointer);
+procedure TPoolAllocator.FreeAligned(APtr: Pointer); inline;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
@@ -590,14 +589,13 @@ begin
     FFallback.FreeMem(APtr);
 end;
 
-function TPoolAllocator.Traits: TAllocatorTraits;
+function TPoolAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
-  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 
-function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt;
+function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt; inline;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
@@ -609,13 +607,13 @@ begin
     Result := 0;
 end;
 
-function TPoolAllocator.TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+function TPoolAllocator.TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
 begin
   APtr := GetMem(ASize);
   Result := (APtr <> nil) or (ASize = 0);
 end;
 
-function TPoolAllocator.TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+function TPoolAllocator.TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
 begin
   APtr := AllocMem(ASize);
   Result := (APtr <> nil) or (ASize = 0);

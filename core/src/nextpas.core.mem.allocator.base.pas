@@ -1,10 +1,9 @@
 unit nextpas.core.mem.allocator.base;
 {**
- * @desc Allocator 基类和类型定义。
+ * @desc Allocator 类型定义。
  *
- * @note Canonical IAllocator 定义在 nextpas.core.mem.intf。
- *       本单元提供 TAllocator/TMemAllocator 基类便利层。
- *       门面 mem.pas 统一 re-export mem.intf 的 IAllocator。
+ * @note TAllocator 基类已移除，所有 allocator 直接实现 IAllocator 接口。
+ *       本单元保留类型别名以兼容现有引用。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -22,87 +21,6 @@ type
   IAllocator = nextpas.core.mem.intf.IAllocator;
   TMemAllocator = nextpas.core.mem.intf.IAllocator;
 
-  {**
-   * TAllocator
-   *
-   * @desc 内存分配器的抽象基类, 实现了 IAllocator 接口
-   *}
-  TAllocator = class(TInterfacedObject, IAllocator)
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; virtual; abstract;
-    function DoAllocMem(ASize: SizeUInt): Pointer; virtual; abstract;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; virtual; abstract;
-    procedure DoFreeMem(APtr: Pointer); virtual; abstract;
-  public
-    function  GetMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  AllocMem(ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    procedure FreeMem(APtr: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
-    function  Traits: TAllocatorTraits; virtual;
-  end;
-
-
 implementation
-
-{$PUSH}
-{$WARN 4055 OFF} // pointer/ordinal conversions in aligned alloc helpers
-
-function TAllocator.Traits: TAllocatorTraits;
-begin
-  // 基类缺省值：
-  // - ThreadSafe=True: 大多数 RTL 分配器线程安全
-  // - ZeroInitialized=False: GetMem 不保证零填充
-  Result.ZeroInitialized := False;
-  Result.ThreadSafe      := True;
-  Result.SupportsRealloc := True;
-end;
-
-function TAllocator.GetMem(ASize: SizeUInt): Pointer;
-begin
-  if ASize = 0 then
-    Exit(nil);
-  Result := DoGetMem(ASize);
-  {$IFDEF DEBUG}
-  if Result <> nil then
-    FillChar(Result^, ASize, MEM_POISON_ALLOC);
-  {$ENDIF}
-end;
-
-function TAllocator.AllocMem(ASize: SizeUInt): Pointer;
-begin
-  if ASize = 0 then
-    Exit(nil);
-  Result := DoAllocMem(ASize);
-end;
-
-function TAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
-begin
-  if ASize = 0 then
-  begin
-    if APtr <> nil then
-      DoFreeMem(APtr);
-    Exit(nil);
-  end;
-  if APtr = nil then
-    Exit(GetMem(ASize));
-  Result := DoReallocMem(APtr, ASize);
-end;
-
-procedure TAllocator.FreeMem(APtr: Pointer);
-begin
-  if APtr = nil then
-  begin
-    {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
-    Assert(False, 'TAllocator.FreeMem: APtr must not be nil');
-    {$ELSE}
-    Exit;
-    {$ENDIF}
-  end;
-  // Note: No poison here — subclasses with known block size (TFixedPool, TGrowingBlockPool)
-  // poison freed memory in their own Release/FreeMem for better accuracy.
-  DoFreeMem(APtr);
-end;
-
-{$POP}
 
 end.

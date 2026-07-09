@@ -35,7 +35,6 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 type
@@ -96,7 +95,7 @@ type
    *  注意：FreeMem 不跟踪字节数（需要额外存储），
    *  只跟踪分配/释放次数和峰值。直方图跟踪分配大小分布。
    *}
-  TAllocStatsAllocator = class(TAllocator)
+  TAllocStatsAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FCollector: TAllocStatsCollector;
@@ -112,17 +111,18 @@ type
     procedure RecordAlloc(ASize: SizeUInt);
     procedure RecordFree;
     procedure UpdatePeak(var APeak: Int64; ANew: Int64);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建统计包装器。
      *  ACollector 非 nil 时注册到该收集器，nil 时不注册。 }
     constructor Create(AInner: IAllocator; ATrackHistogram: Boolean = False;
       ACollector: TAllocStatsCollector = nil);
     destructor Destroy; override;
+
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(APtr: Pointer);
+    function Traits: TAllocatorTraits;
 
     {** 获取当前快照 }
     function Snapshot: TAllocSnapshot;
@@ -132,8 +132,6 @@ type
     procedure ResetStats;
     {** 内部分配器 }
     property Inner: IAllocator read FInner;
-
-    function Traits: TAllocatorTraits; override;
   end;
 
 {** 默认全局收集器 — 所有 TAllocStatsAllocator 默认注册到这里 }
@@ -387,34 +385,37 @@ begin
   InterlockedExchangeAdd64(FActiveAllocs, -1);
 end;
 
-function TAllocStatsAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TAllocStatsAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FInner.GetMem(ASize);
   if Result <> nil then
     RecordAlloc(ASize);
 end;
 
-function TAllocStatsAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TAllocStatsAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then Exit(nil);
   Result := FInner.AllocMem(ASize);
   if Result <> nil then
     RecordAlloc(ASize);
 end;
 
-function TAllocStatsAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TAllocStatsAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
+  if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
+  if APtr = nil then Exit(GetMem(ASize));
   // ReallocMem 统计：释放旧 + 分配新
-  if APtr <> nil then
-    RecordFree;
+  RecordFree;
   Result := FInner.ReallocMem(APtr, ASize);
   if (Result <> nil) and (ASize > 0) then
     RecordAlloc(ASize);
 end;
 
-procedure TAllocStatsAllocator.DoFreeMem(APtr: Pointer);
+procedure TAllocStatsAllocator.FreeMem(APtr: Pointer);
 begin
-  if APtr <> nil then
-    RecordFree;
+  if APtr = nil then Exit;
+  RecordFree;
   FInner.FreeMem(APtr);
 end;
 

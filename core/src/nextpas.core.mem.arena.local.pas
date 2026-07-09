@@ -11,7 +11,7 @@ uses
   nextpas.core.mem.allocator.rtl,  // ResolveAllocator
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
-  nextpas.core.text,
+
   nextpas.core.mem.arena.intf;
 
 type
@@ -64,7 +64,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.stack_guard;
+  nextpas.core.mem.stack_guard,
+  nextpas.core.text.conv;
 
 { TLocalArena }
 

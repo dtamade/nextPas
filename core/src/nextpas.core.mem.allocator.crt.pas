@@ -5,22 +5,25 @@ unit nextpas.core.mem.allocator.crt;
 interface
 
 uses
-  nextpas.core.errors,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf,
+  nextpas.core.errors;
 
 type
   {**
    * TCrtAllocator
    * @desc 使用 C 运行时库 (CRT) 内存管理器实现的 IAllocator 具体类
    *}
-  TCrtAllocator = class(TAllocator)
-  protected
-    function  DoGetMem(ASize: SizeUInt): Pointer; override;
-    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
+  TCrtAllocator = class(TInterfacedObject, IAllocator)
   public
-    function  Traits: TAllocatorTraits; override;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+
+    procedure FreeMem(APtr: Pointer); inline;
+    function  Traits: TAllocatorTraits; inline;
   end;
 
 function GetCrtAllocator: IAllocator;
@@ -37,38 +40,38 @@ function  crt_realloc(APtr: Pointer; ASize: SizeUInt): Pointer; cdecl external {
 procedure crt_free(APtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
 
 var
-  _CrtAllocatorObj: TAllocator = nil;
+  _CrtAllocatorObj: TInterfacedObject = nil;
   _CrtAllocatorIntf: IAllocator = nil;
   GCrtAllocLock: TPlatformMutex;
 
-function TCrtAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TCrtAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := crt_malloc(ASize);
 end;
 
-function TCrtAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TCrtAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := crt_calloc(1, ASize);
 end;
 
-function TCrtAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TCrtAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := crt_realloc(APtr, ASize);
 end;
 
-procedure TCrtAllocator.DoFreeMem(APtr: Pointer);
+procedure TCrtAllocator.FreeMem(APtr: Pointer); inline;
 begin
   crt_free(APtr);
 end;
 
-function TCrtAllocator.Traits: TAllocatorTraits;
+function TCrtAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
   // CRT semantics:
   // - AllocMem uses calloc path => zero initialized; GetMem not guaranteed
   // - No native aligned API exposed via this allocator
   // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
+  Result.ThreadSafe := False;
 end;
 
 function GetCrtAllocator: IAllocator;

@@ -5,11 +5,11 @@ unit nextpas.core.mem.allocator.leak_check;
 interface
 
 uses
-  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.intf,
   nextpas.core.mem.allocator.tracking;
 
 type
-  TAllocatorTestProc = procedure(AAllocator: TAllocator);
+  TAllocatorTestProc = procedure(AAllocator: IAllocator);
 
   TLeakCheckResult = record
     HasLeaks: Boolean;
@@ -19,7 +19,7 @@ type
   end;
 
 function RunTestWithLeakCheck(ATest: TAllocatorTestProc;
-  AInnerAllocator: TAllocator = nil): TLeakCheckResult;
+  AInnerAllocator: IAllocator = nil): TLeakCheckResult;
 
 implementation
 
@@ -27,15 +27,15 @@ uses
   nextpas.core.mem.allocator.rtl;
 
 function RunTestWithLeakCheck(ATest: TAllocatorTestProc;
-  AInnerAllocator: TAllocator): TLeakCheckResult;
+  AInnerAllocator: IAllocator): TLeakCheckResult;
 var
-  LInner: TAllocator;
+  LInner: IAllocator;
   LTracker: TTrackingAllocator;
 begin
   if AInnerAllocator <> nil then
     LInner := AInnerAllocator
   else
-    LInner := GetRtlAllocator as TAllocator;
+    LInner := GetRtlAllocator;
 
   LTracker := TTrackingAllocator.Create(LInner);
   try

@@ -33,11 +33,11 @@ type
     FBuf: PAnsiChar;
     FLen: SizeUInt;
     FCap: SizeUInt;
-    FAllocator: TAllocator;
+    FAllocator: IAllocator;
     procedure Grow(const ANeeded: SizeUInt);
   public
     procedure Init(const AInitialCap: SizeUInt = 256);
-    procedure InitWith(const AInitialCap: SizeUInt; const AAllocator: TAllocator);
+    procedure InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
     procedure Done;
 
     procedure AppendByte(const AByte: Byte); inline;
@@ -223,7 +223,7 @@ begin
     FBuf := nil;
 end;
 
-procedure TBufStringBuilder.InitWith(const AInitialCap: SizeUInt; const AAllocator: TAllocator);
+procedure TBufStringBuilder.InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
 begin
   FLen := 0;
   FAllocator := AAllocator;

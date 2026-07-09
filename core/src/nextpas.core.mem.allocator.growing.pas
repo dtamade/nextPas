@@ -15,7 +15,7 @@ uses
   nextpas.core.mem.shuffle;
 
 type
-  {** Unified growing allocator (TAllocator subclass).
+  {** Unified growing allocator.
       Routes allocations through:
         small (≤ MEM_SIZECLASS_MAX) → TLS cache → central pool → new span
         large (> MEM_SIZECLASS_MAX) → direct GetMem
@@ -374,7 +374,7 @@ begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
       Result := Pointer(LNode);
-      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_ALLOC);{$ENDIF}
       Exit(Result);
     end;
   end
@@ -388,7 +388,7 @@ begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
       Result := Pointer(LNode);
-      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_ALLOC);{$ENDIF}
       Exit(Result);
     end;
   end
@@ -401,7 +401,7 @@ begin
       GThreadCache.FHeads[LIndex] := LNode^.FNext;
       Dec(GThreadCache.FCounts[LIndex]);
       Result := Pointer(LNode);
-      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_FREED);{$ENDIF}
+      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_ALLOC);{$ENDIF}
       Exit(Result);
     end;
   end;
@@ -420,7 +420,7 @@ begin
     System.GetMem(Result, ASize);
   {$IFDEF DEBUG}
   if Result <> nil then
-    FillChar(Result^, ASize, MEM_POISON_FREED);
+    FillChar(Result^, ASize, MEM_POISON_ALLOC);
   {$ENDIF}
 end;
 {$pop}

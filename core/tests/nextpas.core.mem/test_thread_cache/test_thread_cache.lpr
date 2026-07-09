@@ -3,216 +3,169 @@ program test_thread_cache;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.base,
-  nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.test,
-  nextpas.core.mem.sizeclass,
-  nextpas.core.mem.cache.thread;
+  nextpas.core.mem.base,
+  nextpas.core.mem.intf,
+  nextpas.core.mem.default,
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.allocator.thread_cache,
+  nextpas.core.mem.error;
 
 var
   T: TTestSuite;
 
-{ Simple backing store: pre-allocated blocks for refill/flush.
-  Each block is SizeOf(Pointer) bytes (intrusive free-list node).
-  BLOCK_SPACING bytes between block starts to avoid false sharing. }
-const
-  BLOCK_SPACING = SizeOf(Pointer);
-  BACKING_POOL_SIZE = 128;
-
+procedure TestCreateAndDestroy;
 var
-  { Each class pool holds BACKING_POOL_SIZE pointer-sized blocks. }
-  GPools: array[0..MEM_SIZECLASS_COUNT - 1] of array[0..BACKING_POOL_SIZE * BLOCK_SPACING - 1] of Byte;
-  GAllocCount: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
-  GFreeCount: array[0..MEM_SIZECLASS_COUNT - 1] of Word;
-
-function MockRefill(AIndex: Int32; ACount: Word; ABlocks: PPointer): Word;
-var
-  I: Word;
+  LCache: TThreadCacheAllocator;
 begin
-  Result := 0;
-  for I := 0 to ACount - 1 do
-  begin
-    if GAllocCount[AIndex] >= BACKING_POOL_SIZE then
-      Break;
-    PPointer(PByte(@GPools[AIndex]) + GAllocCount[AIndex] * BLOCK_SPACING)^ := nil;
-    ABlocks^ := @GPools[AIndex][GAllocCount[AIndex] * BLOCK_SPACING];
-    Inc(ABlocks);
-    Inc(GAllocCount[AIndex]);
-    Inc(Result);
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    Check(LCache <> nil, 'cache should be created');
+  finally
+    LCache.Free;
   end;
 end;
 
-procedure MockFlush(AIndex: Int32; ACount: Word; ABlocks: PPointer);
+procedure TestSmallObjectAlloc;
 var
-  I: Word;
+  LCache: TThreadCacheAllocator;
+  LPtr1, LPtr2: Pointer;
 begin
-  for I := 0 to ACount - 1 do
-  begin
-    Inc(GFreeCount[AIndex]);
-    Inc(ABlocks);
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    LPtr1 := LCache.GetMem(32);
+    Check(LPtr1 <> nil, 'first alloc should succeed');
+
+    LPtr2 := LCache.GetMem(32);
+    Check(LPtr2 <> nil, 'second alloc should succeed');
+    Check(LPtr2 <> LPtr1, 'pointers should differ');
+
+    LCache.FreeMem(LPtr1);
+    LCache.FreeMem(LPtr2);
+  finally
+    LCache.Free;
   end;
 end;
 
-procedure ResetMocks;
+procedure TestLargeObjectAlloc;
 var
-  I: Int32;
-begin
-  for I := 0 to MEM_SIZECLASS_COUNT - 1 do
-  begin
-    GAllocCount[I] := 0;
-    GFreeCount[I] := 0;
-  end;
-end;
-
-{ --- Tests --- }
-
-procedure TestInit;
-var
-  LCache: TThreadCache;
-  I: Int32;
-begin
-  ThreadCacheInit(LCache);
-  for I := 0 to MEM_SIZECLASS_COUNT - 1 do
-  begin
-    Check(ThreadCacheCount(LCache, I) = 0, 'class ' + IntToStr(I) + ' empty');
-  end;
-  WriteLn('PASS: init');
-end;
-
-procedure TestAllocFromEmpty;
-var
-  LCache: TThreadCache;
-begin
-  ThreadCacheInit(LCache);
-  Check(ThreadCacheAlloc(LCache, 0) = nil, 'alloc from empty returns nil');
-  WriteLn('PASS: alloc from empty');
-end;
-
-procedure TestRefillAndAlloc;
-var
-  LCache: TThreadCache;
+  LCache: TThreadCacheAllocator;
   LPtr: Pointer;
 begin
-  ResetMocks;
-  ThreadCacheInit(LCache);
-  ThreadCacheRefill(LCache, 0, @MockRefill);
-  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL, 'count = batch after refill');
-  LPtr := ThreadCacheAlloc(LCache, 0);
-  Check(LPtr <> nil, 'alloc after refill non-nil');
-  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL - 1, 'count decreased');
-  WriteLn('PASS: refill and alloc');
-end;
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    { 2048 > max size class (1024) }
+    LPtr := LCache.GetMem(2048);
+    Check(LPtr <> nil, 'large alloc should succeed');
 
-procedure TestFreeAndFlush;
-var
-  LCache: TThreadCache;
-  LBlocks: array[0..3] of Pointer;
-  I: Integer;
-begin
-  ResetMocks;
-  ThreadCacheInit(LCache);
-  { Refill some blocks. }
-  ThreadCacheRefill(LCache, 0, @MockRefill);
-  { Alloc all. }
-  for I := 0 to CACHE_ADAPTIVE_BATCH_SMALL - 1 do
-    LBlocks[0] := ThreadCacheAlloc(LCache, 0);
-  Check(ThreadCacheCount(LCache, 0) = 0, 'empty after alloc all');
-  { Now refill again and alloc one to free. }
-  ThreadCacheRefill(LCache, 0, @MockRefill);
-  LBlocks[0] := ThreadCacheAlloc(LCache, 0);
-  Check(ThreadCacheFree(LCache, 0, LBlocks[0]), 'free succeeds');
-  Check(ThreadCacheCount(LCache, 0) = CACHE_ADAPTIVE_BATCH_SMALL, 'count after free');
-  { Flush. }
-  GFreeCount[0] := 0;
-  ThreadCacheFlush(LCache, 0, @MockFlush);
-  Check(GFreeCount[0] > 0, 'flush called');
-  WriteLn('PASS: free and flush');
-end;
-
-procedure TestFlushTrigger;
-var
-  LCache: TThreadCache;
-  I: Integer;
-  LBlock: Pointer;
-begin
-  ResetMocks;
-  ThreadCacheInit(LCache);
-  { Fill the cache to CACHE_MAX_LIST_SIZE via refill + alloc cycle. }
-  for I := 1 to CACHE_MAX_LIST_SIZE + 1 do
-  begin
-    if ThreadCacheCount(LCache, 0) = 0 then
-      ThreadCacheRefill(LCache, 0, @MockRefill);
-    LBlock := ThreadCacheAlloc(LCache, 0);
-    if LBlock = nil then
-      Break;
-    ThreadCacheFree(LCache, 0, LBlock);
+    LCache.FreeMem(LPtr);
+  finally
+    LCache.Free;
   end;
-  { Try one more free — should fail (cache full). }
-  ThreadCacheRefill(LCache, 0, @MockRefill);
-  LBlock := ThreadCacheAlloc(LCache, 0);
-  if LBlock <> nil then
-  begin
-    { Fill up. }
-    for I := 1 to CACHE_MAX_LIST_SIZE do
+end;
+
+procedure TestCacheHit;
+var
+  LCache: TThreadCacheAllocator;
+  LPtrs: array[0..15] of Pointer;
+  LI: Integer;
+  LStats: TThreadCacheStats;
+begin
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    { Allocate and free to fill cache }
+    for LI := 0 to 15 do
     begin
-      if ThreadCacheCount(LCache, 0) >= CACHE_MAX_LIST_SIZE then
-        Break;
-      ThreadCacheRefill(LCache, 0, @MockRefill);
-      LBlock := ThreadCacheAlloc(LCache, 0);
-      if LBlock <> nil then
-        ThreadCacheFree(LCache, 0, LBlock);
+      LPtrs[LI] := LCache.GetMem(64);
+      Check(LPtrs[LI] <> nil, 'alloc should succeed');
     end;
-    { Now the next free should fail. }
-    ThreadCacheRefill(LCache, 0, @MockRefill);
-    LBlock := ThreadCacheAlloc(LCache, 0);
-    if LBlock <> nil then
-      Check(not ThreadCacheFree(LCache, 0, LBlock), 'free fails when cache full');
+
+    for LI := 0 to 15 do
+      LCache.FreeMem(LPtrs[LI]);
+
+    { Next alloc should hit cache }
+    LPtrs[0] := LCache.GetMem(64);
+    Check(LPtrs[0] <> nil, 'alloc after fill should succeed');
+
+    LStats := LCache.GetStats;
+    Check(LStats.CacheHits > 0, 'should have cache hits');
+
+    LCache.FreeMem(LPtrs[0]);
+  finally
+    LCache.Free;
   end;
-  WriteLn('PASS: flush trigger');
 end;
 
-procedure TestMultipleSizeClasses;
+procedure TestAllocMemZeroInit;
 var
-  LCache: TThreadCache;
-  LPtr0, LPtr1: Pointer;
+  LCache: TThreadCacheAllocator;
+  LPtr: Pointer;
+  LI: Integer;
+  LAllZero: Boolean;
 begin
-  ResetMocks;
-  ThreadCacheInit(LCache);
-  ThreadCacheRefill(LCache, 0, @MockRefill);
-  ThreadCacheRefill(LCache, 5, @MockRefill);
-  LPtr0 := ThreadCacheAlloc(LCache, 0);
-  LPtr1 := ThreadCacheAlloc(LCache, 5);
-  Check(LPtr0 <> nil, 'class 0 alloc non-nil');
-  Check(LPtr1 <> nil, 'class 5 alloc non-nil');
-  Check(LPtr0 <> LPtr1, 'different classes return different blocks');
-  WriteLn('PASS: multiple size classes');
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    LPtr := LCache.AllocMem(32);
+    Check(LPtr <> nil, 'AllocMem should succeed');
+
+    LAllZero := True;
+    for LI := 0 to 31 do
+    begin
+      if PByte(PtrUInt(LPtr) + PtrUInt(LI))^ <> 0 then
+      begin
+        LAllZero := False;
+        Break;
+      end;
+    end;
+    Check(LAllZero, 'AllocMem should zero-initialize');
+
+    LCache.FreeMem(LPtr);
+  finally
+    LCache.Free;
+  end;
 end;
 
-procedure TestInvalidIndex;
+procedure TestStats;
 var
-  LCache: TThreadCache;
+  LCache: TThreadCacheAllocator;
+  LStats: TThreadCacheStats;
 begin
-  ThreadCacheInit(LCache);
-  Check(ThreadCacheAlloc(LCache, -1) = nil, 'alloc -1 returns nil');
-  Check(ThreadCacheAlloc(LCache, MEM_SIZECLASS_COUNT) = nil, 'alloc OOB returns nil');
-  Check(not ThreadCacheFree(LCache, -1, nil), 'free -1 returns false');
-  WriteLn('PASS: invalid index');
+  LCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try
+    LCache.GetMem(32);
+    LCache.GetMem(64);
+
+    LStats := LCache.GetStats;
+    Check(LStats.BatchFetches > 0, 'should have batch fetches');
+  finally
+    LCache.Free;
+  end;
 end;
 
-{ --- Main --- }
+procedure TestNilInner;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TThreadCacheAllocator.Create(nil).Free;
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'nil inner should raise');
+end;
 
 begin
-  T := TTestSuite.Create('thread_cache');
-
-  T.Test('init', @TestInit);
-  T.Test('alloc_from_empty', @TestAllocFromEmpty);
-  T.Test('refill_and_alloc', @TestRefillAndAlloc);
-  T.Test('free_and_flush', @TestFreeAndFlush);
-  T.Test('flush_trigger', @TestFlushTrigger);
-  T.Test('multiple_size_classes', @TestMultipleSizeClasses);
-  T.Test('invalid_index', @TestInvalidIndex);
-
+  T := TTestSuite.Create('test_thread_cache');
+  T.Test('create_and_destroy', @TestCreateAndDestroy);
+  T.Test('small_object_alloc', @TestSmallObjectAlloc);
+  T.Test('large_object_alloc', @TestLargeObjectAlloc);
+  T.Test('cache_hit', @TestCacheHit);
+  T.Test('alloc_mem_zero_init', @TestAllocMemZeroInit);
+  T.Test('stats', @TestStats);
+  T.Test('nil_inner', @TestNilInner);
   T.Run;
   T.Summary;
 end.
