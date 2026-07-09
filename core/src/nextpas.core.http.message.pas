@@ -1071,19 +1071,49 @@ begin
     raise EHttpError.Create('HTTP request body contains invalid JSON');
 end;
 
+{ Escape a string for safe inclusion in an HTML attribute context.
+  Prevents XSS by encoding characters that could break out of attributes. }
+function HtmlEscapeAttr(const S: string): string;
+var
+  I, LLen, LOut: SizeInt;
+  LBuf: string;
+begin
+  LLen := Length(S);
+  LOut := 0;
+  SetLength(LBuf, LLen * 6); { worst case: every char → '&xxxxx;' }
+  for I := 1 to LLen do
+  begin
+    case S[I] of
+      '&': begin System.Move('&amp;', LBuf[LOut + 1], 5); Inc(LOut, 5); end;
+      '"': begin System.Move('&quot;', LBuf[LOut + 1], 6); Inc(LOut, 6); end;
+      '<': begin System.Move('&lt;', LBuf[LOut + 1], 4); Inc(LOut, 4); end;
+      '>': begin System.Move('&gt;', LBuf[LOut + 1], 4); Inc(LOut, 4); end;
+      '''': begin System.Move('&#39;', LBuf[LOut + 1], 5); Inc(LOut, 5); end;
+    else
+      begin LBuf[LOut + 1] := S[I]; Inc(LOut); end;
+    end;
+  end;
+  SetLength(LBuf, LOut);
+  Result := LBuf;
+end;
+
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
 var
-  LBody: string;
+  LBody, LEscaped: string;
 begin
   RequireResponseWriter(AW);
   if not HttpStatusIsRedirect(AStatus) then
     raise EHttpError.Create('HttpRedirect requires a 3xx redirect status');
   if ALocation = '' then
     raise EArgumentError.Create('HttpRedirect location must not be empty');
+  { Reject protocol-relative URLs to prevent open redirect }
+  if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
+    raise EArgumentError.Create('HttpRedirect: protocol-relative URL not allowed');
   AW.GetHeaders.SetHeader('location', ALocation);
-  LBody := '<html><body>Redirecting to <a href="' + ALocation + '">' +
-    ALocation + '</a></body></html>';
+  LEscaped := HtmlEscapeAttr(ALocation);
+  LBody := '<html><body>Redirecting to <a href="' + LEscaped + '">' +
+    LEscaped + '</a></body></html>';
   HttpWriteResponseString(AW, AStatus, 'text/html', LBody);
 end;
 

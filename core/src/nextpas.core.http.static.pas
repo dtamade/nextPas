@@ -190,8 +190,13 @@ begin
   if ARelative[1] = '/' then Exit(False);
   { Reject Windows path separators before file lookup. }
   for LI := 1 to LLen do
+  begin
     if ARelative[LI] = '\' then
       Exit(False);
+    { Reject percent-encoded characters after URL decode — prevents double encoding attacks }
+    if ARelative[LI] = '%' then
+      Exit(False);
+  end;
   { Reject any '..' component }
   LI := 1;
   while LI <= LLen do
