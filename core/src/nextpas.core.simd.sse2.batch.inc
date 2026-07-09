@@ -4837,9 +4837,76 @@ begin
 end;
 
 procedure SSE2ArraySignF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+const
+  ONE: Single = 1.0;
+  MINUS_ONE: Single = -1.0;
+var
+  pS, pD: PSingle;
+  LOne, LMinusOne: Single;
 begin
-  // Delegate to scalar implementation (sign is branchy)
-  ScalarArraySignF32(aSrc, aDst, aCount);
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc;
+  pD := aDst;
+  LOne := ONE;
+  LMinusOne := MINUS_ONE;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm2, [LOne]       // 1.0
+    shufps xmm2, xmm2, 0    // broadcast to all lanes
+    movss xmm3, [LMinusOne]  // -1.0
+    shufps xmm3, xmm3, 0    // broadcast to all lanes
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]       // load src
+    xorps xmm1, xmm1         // 0.0
+    movaps xmm4, xmm0        // copy src
+    cmpnleps xmm4, xmm1      // src > 0 (NOT src <= 0) => mask in xmm4
+    movaps xmm5, xmm0        // copy src
+    cmpltps xmm5, xmm1       // src < 0 => mask in xmm5
+    andps xmm4, xmm2          // 1.0 where src > 0
+    andps xmm5, xmm3          // -1.0 where src < 0
+    orps xmm4, xmm5           // combine
+    movups [rcx], xmm4
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    xorps xmm1, xmm1
+    comiss xmm0, xmm1
+    ja @positive
+    jb @negative
+    // zero case
+    movss [rcx], xmm1
+    jmp @next
+  @positive:
+    movss [rcx], xmm2
+    jmp @next
+  @negative:
+    movss [rcx], xmm3
+  @next:
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
 end;
 
 procedure SSE2ArrayStepF32(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
