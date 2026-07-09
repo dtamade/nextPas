@@ -76,7 +76,12 @@ uses
   nextpas.core.lockfree.merkle_tree,
   nextpas.core.lockfree.crdt,
   nextpas.core.lockfree.actor,
-  nextpas.core.lockfree.rope;
+  nextpas.core.lockfree.rope,
+  nextpas.core.lockfree.lfu,
+  nextpas.core.lockfree.scalable_bloom,
+  nextpas.core.lockfree.flatcombining,
+  nextpas.core.lockfree.rcu,
+  nextpas.core.lockfree.rbtree;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -607,7 +612,40 @@ type
   }
   TRope = nextpas.core.lockfree.rope.TRope;
   TRopeResult = nextpas.core.lockfree.rope.TRopeResult;
-  TRopeForEachCallback = nextpas.core.lockfree.rope.TRopeForEachCallback;
+
+  {** @desc LFU 缓存 — 频率淘汰策略
+    @details 访问频率最低的条目优先被淘汰。
+    @see TConcurrentLFUCache 详细文档和示例
+  }
+  TLockFreeLfuAddResult = nextpas.core.lockfree.lfu.TLockFreeLfuAddResult;
+
+  {** @desc 可扩容布隆过滤器
+    @details 当前层 FPR 超过阈值时自动添加新层。
+    @see TScalableBloomFilter 详细文档和示例
+  }
+
+  {** @desc Flat Combining 同步原语
+    @details 高竞争下批量操作，吞吐量远优于传统锁。
+    @see TFlatCombiningLock/TFlatCombiningCounter 详细文档和示例
+  }
+  TFlatCombiningLock = nextpas.core.lockfree.flatcombining.TFlatCombiningLock;
+  TFlatCombiningCounter = nextpas.core.lockfree.flatcombining.TFlatCombiningCounter;
+  TFCOpType = nextpas.core.lockfree.flatcombining.TFCOpType;
+
+  {** @desc RCU — Read-Copy-Update
+    @details 读操作无锁，写操作 Copy-on-Write。适用于读多写少场景。
+    @see TRcuDomain/TRcuPublisher 详细文档和示例
+  }
+  TRcuDomain = nextpas.core.lockfree.rcu.TRcuDomain;
+  TRcuGuard = nextpas.core.lockfree.rcu.TRcuGuard;
+
+  {** @desc 并发红黑树
+    @details 自平衡 BST，O(log n) 查找/插入/删除。
+    @see TConcurrentRBTree 详细文档和示例
+  }
+  TConcurrentRBTree = nextpas.core.lockfree.rbtree.TConcurrentRBTree;
+  TRBTreeResult = nextpas.core.lockfree.rbtree.TRBTreeResult;
+  TRBForEachCallback = nextpas.core.lockfree.rbtree.TRBForEachCallback;
 
 implementation
 

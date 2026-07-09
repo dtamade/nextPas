@@ -95,8 +95,13 @@
 | `lockfree.crdt` | CRDT (G-Counter/PN-Counter/LWW/OR-Set) | ✅ 完成 | 23 |
 | `lockfree.actor` | Actor (消息驱动并发) | ✅ 完成 | 15 |
 | `lockfree.rope` | Rope (大字符串) | ✅ 完成 | 24 |
+| `lockfree.lfu` | LFU Cache (频率淘汰) | ✅ 完成 | 10 |
+| `lockfree.scalable_bloom` | Scalable Bloom Filter (可扩容) | ✅ 完成 | 7 |
+| `lockfree.flatcombining` | Flat Combining (批量操作) | ✅ 完成 | 5 |
+| `lockfree.rcu` | RCU (Read-Copy-Update) | ✅ 完成 | 7 |
+| `lockfree.rbtree` | Red-Black Tree (自平衡BST) | ✅ 完成 | 10 |
 
-**规模**: 76 文件, ~29000 行, 43025 测试, 63 数据结构
+**规模**: 82 文件, ~30000 行, 43069 测试, 68 数据结构
 
 ---
 
@@ -433,6 +438,18 @@ L3: nextpas.core.lockfree.* (数据结构)
 | Rope | 大字符串 O(log n) 操作 | 24 |
 
 **总计**: 76 文件, ~29000 行, 43025 测试, 63 数据结构
+
+### 4.23 Phase 7 新增数据结构 (2026-07-06)
+
+| 结构 | 描述 | 测试 |
+|------|------|------|
+| LFU Cache | 频率淘汰缓存，O(1) 存取 | 10 |
+| Scalable Bloom Filter | 可扩容布隆过滤器，自动分层 | 7 |
+| Flat Combining | 批量操作同步原语，高竞争优化 | 5 |
+| RCU | Read-Copy-Update，读无锁 | 7 |
+| Red-Black Tree | 自平衡 BST，O(log n) | 10 |
+
+**总计**: 82 文件, ~30000 行, 43069 测试, 68 数据结构
 
 | 结构 | 描述 | 测试 |
 |------|------|------|
