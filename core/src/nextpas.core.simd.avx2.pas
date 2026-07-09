@@ -77,6 +77,23 @@ uses
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar; // For fallback functions
 
+// Thread-local scratch buffers for Tan computation (AVX2 specific)
+// 避免每次调用 SetLength 分配堆内存
+threadvar
+  GAVX2TanSinBuf: array of Single;
+  GAVX2TanCosBuf: array of Single;
+  GAVX2TanBufCapacity: SizeUInt;
+
+procedure EnsureAVX2TanScratch(aCount: SizeUInt);
+begin
+  if GAVX2TanBufCapacity < aCount then
+  begin
+    GAVX2TanBufCapacity := aCount;
+    SetLength(GAVX2TanSinBuf, aCount);
+    SetLength(GAVX2TanCosBuf, aCount);
+  end;
+end;
+
 function AVX2CmpGtI32x4(const a, b: TVecI32x4): TMask4; forward;
 function AVX2CmpGtI16x8(const a, b: TVecI16x8): TMask8; forward;
 function AVX2CmpGtI8x16(const a, b: TVecI8x16): TMask16; forward;
