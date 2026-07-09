@@ -916,6 +916,10 @@ begin
   if FConfig.Output = nil then
     FConfig.Output := CreateConsoleWriter;
 
+  { 输出版本头 }
+  if not FConfig.Quiet then
+    FConfig.Output.WriteLine('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
+
   if (FEntryCount = 0) and (not FConfig.Quiet) then
     FConfig.Output.WriteLine('WARNING: TBenchSuite.Run called with no registered entries');
 
