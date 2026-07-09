@@ -87,13 +87,21 @@ procedure ScalarArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayAtan2F32(aY, aX, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayHypotF32(aX, aY, aDst: PSingle; aCount: SizeUInt);
 // === Batch Array Operations - Rounding F32 ===
 procedure ScalarArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayFractF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 // === Batch Array Operations - Interpolation F32 ===
 procedure ScalarArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+// === Batch Array Operations - Utility F32 ===
+procedure ScalarArrayModF32(aSrc, aDst: PSingle; aCount: SizeUInt; aDivisor: Single);
+procedure ScalarArraySignF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayStepF32(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
 // === Batch Array Operations - Integer ===
 procedure ScalarArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 procedure ScalarArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);

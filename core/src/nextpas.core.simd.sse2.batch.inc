@@ -4668,3 +4668,188 @@ begin
   end;
   {$POP}
 end;
+
+// ============================================================================
+// New SSE2 Batch Operations: Atan2, Hypot, Fract, Mod, Sign, Step, Smoothstep
+// ============================================================================
+
+procedure SSE2ArrayAtan2F32(aY, aX, aDst: PSingle; aCount: SizeUInt);
+begin
+  // Delegate to scalar implementation (atan2 is complex to vectorize)
+  ScalarArrayAtan2F32(aY, aX, aDst, aCount);
+end;
+
+procedure SSE2ArrayHypotF32(aX, aY, aDst: PSingle; aCount: SizeUInt);
+var
+  pX, pY, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pX := aX; pY := aY; pD := aDst;
+
+  asm
+    mov rax, pX
+    mov rdx, pY
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]     // x
+    movups xmm1, [rdx]     // y
+    mulps xmm0, xmm0       // x*x
+    mulps xmm1, xmm1       // y*y
+    addps xmm0, xmm1       // x*x + y*y
+    sqrtps xmm0, xmm0      // sqrt(x*x + y*y)
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    movss xmm1, [rdx]
+    mulss xmm0, xmm0
+    mulss xmm1, xmm1
+    addss xmm0, xmm1
+    sqrtss xmm0, xmm0
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayFractF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    roundps xmm1, xmm0, 3  // Truncate
+    subps xmm0, xmm1       // fract = x - trunc(x)
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    roundss xmm1, xmm0, 3  // Truncate
+    subss xmm0, xmm1
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayModF32(aSrc, aDst: PSingle; aCount: SizeUInt; aDivisor: Single);
+var
+  pS, pD: PSingle;
+  LDiv: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  LDiv := aDivisor;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm1, [LDiv]
+    shufps xmm1, xmm1, 0
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    movaps xmm2, xmm0
+    divps xmm2, xmm1       // x / divisor
+    roundps xmm2, xmm2, 3  // trunc(x / divisor)
+    mulps xmm2, xmm1       // trunc(x / divisor) * divisor
+    subps xmm0, xmm2       // x - trunc(x / divisor) * divisor
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    movss xmm2, xmm0
+    divss xmm2, xmm1
+    roundss xmm2, xmm2, 3
+    mulss xmm2, xmm1
+    subss xmm0, xmm2
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySignF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+begin
+  // Delegate to scalar implementation (sign is branchy)
+  ScalarArraySignF32(aSrc, aDst, aCount);
+end;
+
+procedure SSE2ArrayStepF32(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
+begin
+  // Delegate to scalar implementation (step is branchy)
+  ScalarArrayStepF32(aEdge, aSrc, aDst, aCount);
+end;
+
+procedure SSE2ArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
+begin
+  // Delegate to scalar implementation (smoothstep is complex)
+  ScalarArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst, aCount);
+end;

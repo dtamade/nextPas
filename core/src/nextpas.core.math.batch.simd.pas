@@ -93,6 +93,35 @@ function BatchScaleOffsetSimdF32(const AInput: array of Single;
                                  const AScale, AOffset: Single;
                                  var AOutput: array of Single): SizeInt;
 
+{** Batch arc tangent of y/x (SIMD-ready). *}
+function BatchAtan2SimdF32(const AY, AX: array of Single;
+                           var AOutput: array of Single): SizeInt;
+
+{** Batch hypotenuse (SIMD-ready). Computes sqrt(x*x + y*y). *}
+function BatchHypotSimdF32(const AX, AY: array of Single;
+                           var AOutput: array of Single): SizeInt;
+
+{** Batch fractional part (SIMD-ready). Computes x - trunc(x). *}
+function BatchFractSimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+
+{** Batch modulo (SIMD-ready). Computes x mod divisor. *}
+function BatchModSimdF32(const AInput: array of Single;
+                         const ADivisor: Single;
+                         var AOutput: array of Single): SizeInt;
+
+{** Batch sign (SIMD-ready). Returns -1, 0, or 1. *}
+function BatchSignSimdF32(const AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+
+{** Batch step function (SIMD-ready). Returns 0 if x < edge, 1 otherwise. *}
+function BatchStepSimdF32(const AEdge, AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+
+{** Batch smoothstep (SIMD-ready). Hermite interpolation between 0 and 1. *}
+function BatchSmoothstepSimdF32(const AEdge0, AEdge1, AInput: array of Single;
+                                var AOutput: array of Single): SizeInt;
+
 implementation
 
 uses
@@ -125,6 +154,24 @@ begin
   Result := L1;
   if L2 < Result then
     Result := L2;
+  if LOut < Result then
+    Result := LOut;
+end;
+
+{ Helper: compute min count from three input arrays and one output array }
+function MinArrayCount4(const A1, A2, A3, AOutput: array of Single): SizeInt; inline;
+var
+  L1, L2, L3, LOut: SizeInt;
+begin
+  L1 := Length(A1);
+  L2 := Length(A2);
+  L3 := Length(A3);
+  LOut := Length(AOutput);
+  Result := L1;
+  if L2 < Result then
+    Result := L2;
+  if L3 < Result then
+    Result := L3;
   if LOut < Result then
     Result := LOut;
 end;
@@ -350,6 +397,91 @@ begin
   LCount := MinArrayCount(AInput, AOutput);
   if LCount > 0 then
     ArrayLinearF32(@AInput[0], @AOutput[0], LCount, AScale, AOffset);
+  Result := LCount;
+end;
+
+{ BatchAtan2SimdF32 - uses ArrayAtan2F32 }
+function BatchAtan2SimdF32(const AY, AX: array of Single;
+                           var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AY, AX, AOutput);
+  if LCount > 0 then
+    ArrayAtan2F32(@AY[0], @AX[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ BatchHypotSimdF32 - uses ArrayHypotF32 }
+function BatchHypotSimdF32(const AX, AY: array of Single;
+                           var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AX, AY, AOutput);
+  if LCount > 0 then
+    ArrayHypotF32(@AX[0], @AY[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ BatchFractSimdF32 - uses ArrayFractF32 }
+function BatchFractSimdF32(const AInput: array of Single;
+                           var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayFractF32(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ BatchModSimdF32 - uses ArrayModF32 }
+function BatchModSimdF32(const AInput: array of Single;
+                         const ADivisor: Single;
+                         var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayModF32(@AInput[0], @AOutput[0], LCount, ADivisor);
+  Result := LCount;
+end;
+
+{ BatchSignSimdF32 - uses ArraySignF32 }
+function BatchSignSimdF32(const AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySignF32(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ BatchStepSimdF32 - uses ArrayStepF32 }
+function BatchStepSimdF32(const AEdge, AInput: array of Single;
+                          var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AEdge, AInput, AOutput);
+  if LCount > 0 then
+    ArrayStepF32(@AEdge[0], @AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ BatchSmoothstepSimdF32 - uses ArraySmoothstepF32 }
+function BatchSmoothstepSimdF32(const AEdge0, AEdge1, AInput: array of Single;
+                                var AOutput: array of Single): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount4(AEdge0, AEdge1, AInput, AOutput);
+  if LCount > 0 then
+    ArraySmoothstepF32(@AEdge0[0], @AEdge1[0], @AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 

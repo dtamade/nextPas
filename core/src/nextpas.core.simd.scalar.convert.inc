@@ -692,3 +692,85 @@ begin
   for i := 0 to aCount - 1 do
     aDst[i] := aStart[i] + aT * (aEnd[i] - aStart[i]);
 end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayAtan2F32(aY, aX, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aY = nil) or (aX = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := ArcTan2(aY[i], aX[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayHypotF32(aX, aY, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aX = nil) or (aY = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Sqrt(aX[i] * aX[i] + aY[i] * aY[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayFractF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc[i] - Trunc(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayModF32(aSrc, aDst: PSingle; aCount: SizeUInt; aDivisor: Single);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc[i] - aDivisor * Trunc(aSrc[i] / aDivisor);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArraySignF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt; v: Single;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    v := aSrc[i];
+    if v > 0 then
+      aDst[i] := 1.0
+    else if v < 0 then
+      aDst[i] := -1.0
+    else
+      aDst[i] := 0.0;
+  end;
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayStepF32(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aEdge = nil) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    if aSrc[i] < aEdge[i] then
+      aDst[i] := 0.0
+    else
+      aDst[i] := 1.0;
+  end;
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt; t, v: Single;
+begin
+  if (aCount = 0) or (aEdge0 = nil) or (aEdge1 = nil) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    v := (aSrc[i] - aEdge0[i]) / (aEdge1[i] - aEdge0[i]);
+    if v < 0 then v := 0;
+    if v > 1 then v := 1;
+    t := v * v;
+    aDst[i] := t * (3 - 2 * v);
+  end;
+end;
