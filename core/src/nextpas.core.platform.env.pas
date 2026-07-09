@@ -169,6 +169,7 @@ var
 begin
   ALen := 0;
   if ABuf = nil then
+    { ABuf=nil queries length only; copy helper leaves the nil buffer untouched. }
     ABufSize := 0;
   if not platform_env_name_valid(AName) then
     Exit(Int32(ERROR_INVALID_NAME));

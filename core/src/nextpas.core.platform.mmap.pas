@@ -546,7 +546,7 @@ begin
   end;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
+  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(INVALID_HANDLE_VALUE),
     nil, WindowsProtection(AAccess), UInt64High(ASize), UInt64Low(ASize), nil));
   if AMap.MapHandle = 0 then
   begin
@@ -663,6 +663,7 @@ begin
     LResult := platform_get_errno;
   if AMap.FileHandle <> PLATFORM_MMAP_INVALID_HANDLE then
   begin
+    { munmap failure is rare; still closes the file descriptor to avoid leaks. }
     LFile.Value := cint(AMap.FileHandle);
     platform_file_close(LFile);
   end;
@@ -774,7 +775,7 @@ begin
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   LWinName := WindowsSharedName(LName);
-  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(PtrUInt(INVALID_HANDLE_VALUE)),
+  AMap.MapHandle := PtrInt(CreateFileMappingA(HANDLE(INVALID_HANDLE_VALUE),
     nil, WindowsSharedProtection(AAccess), UInt64High(ASize), UInt64Low(ASize),
     PAnsiChar(LWinName)));
   if AMap.MapHandle = 0 then

@@ -345,6 +345,15 @@ begin
     'spawn_fds must preserve exec-error pipe write fd while closing child fds');
 end;
 
+procedure TestWindowsRunCaptureStdoutOnlySourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  Check(Pos('Windows implementation currently captures stdout only', LSource) > 0,
+    'run_capture interface docs must state Windows stdout-only limitation');
+end;
+
 procedure TestSpawnFdsClosesHighInheritedFd;
 var
   LDevNull: Int32;
@@ -770,6 +779,8 @@ begin
   T.Test('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
   T.Test('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
   T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
+  T.Test('run_capture Windows stdout-only source contract',
+    @TestWindowsRunCaptureStdoutOnlySourceContract);
   T.Test('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
   T.Test('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
   T.Test('process signal', @TestProcessSignal);

@@ -5,6 +5,8 @@ program test_platform_thread;
 uses
   nextpas.core.thread.init,
 
+  nextpas.core.fs,
+  nextpas.core.fs.util,
   nextpas.core.test,
   nextpas.core.platform.thread;
 
@@ -14,6 +16,17 @@ var
 var
   GThreadResult: PtrUInt = 0;
   GDetachedThreadResult: PtrUInt = 0;
+
+function LoadSourceText(const ARelativePath: string): string;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  Result := FsReadFileText(ARelativePath);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
 
 function SimpleThread(AArg: Pointer): Pointer; cdecl;
 begin
@@ -421,6 +434,15 @@ begin
   Check(True, 'sleep_ns(1000) completes');
 end;
 
+procedure TestSleepSecSafeRangeSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.thread.pas');
+  CheckContains(LSource, 'sleep_sec safe range',
+    'sleep_sec must document overflow-safe input range');
+end;
+
 procedure TestThreadWaitWithoutSpawn;
 var
   LRec: TPlatformThreadRecord;
@@ -485,6 +507,8 @@ begin
   T.Test('TLS multiple keys', @TestTlsMultipleKeys);
   T.Test('Thread create nil proc', @TestThreadCreateNilProc);
   T.Test('sleep_ns short', @TestThreadSleepNsShort);
+  T.Test('sleep_sec safe range source contract',
+    @TestSleepSecSafeRangeSourceContract);
   T.Test('Thread wait without spawn', @TestThreadWaitWithoutSpawn);
   T.Test('Thread is_alive after wait', @TestThreadIsAliveAfterWait);
   T.Test('Thread spawn nil arg', @TestThreadSpawnNilArg);

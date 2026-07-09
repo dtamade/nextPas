@@ -145,6 +145,7 @@ begin
   if LPid = 0 then
   begin
     { child }
+    { posix_exit is _exit; the forked child must not run Pascal finalizers. }
     close(LErrPipe[0]);
 
     if setsid < 0 then

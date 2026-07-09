@@ -133,7 +133,7 @@ function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
 
 {** @desc 关闭套接字
-    @param ASocket 要关闭的套接字（置为无效）
+    @param ASocket 要关闭的套接字（close 后执行 best-effort invalidate）
     @return 0 成功，否则返回错误码 *}
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
 
@@ -708,6 +708,7 @@ begin
     Move(AAddr^, LAddr^.sin6_addr, 16)
   else
     FillChar(LAddr^.sin6_addr, 16, 0);
+  { sin6_scope_id is host byte order. }
   LAddr^.sin6_scope_id := AScopeId;
   AResult.Len := SizeOf(sockaddr_in6);
   Result := 0;
@@ -1199,6 +1200,7 @@ begin
     Move(AAddr^, LAddr^.sin6_addr, 16)
   else
     FillChar(LAddr^.sin6_addr, 16, 0);
+  { sin6_scope_id is host byte order. }
   LAddr^.sin6_scope_id := AScopeId;
   AResult.Len := SizeOf(sockaddr_in6);
   Result := 0;

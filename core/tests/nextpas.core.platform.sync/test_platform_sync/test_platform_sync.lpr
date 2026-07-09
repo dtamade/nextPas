@@ -4,6 +4,8 @@ program test_platform_sync;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
   nextpas.core.test,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync;
@@ -13,6 +15,35 @@ var
 
 const
   WAIT_PENDING = -999999;
+
+function LoadSourceText(const ARelativePath: string): string;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  Result := FsReadFileText(ARelativePath);
+end;
+
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
+
+procedure CheckTokenBefore(const ASource, ALeftToken, ARightToken, AMessage: string);
+var
+  LLeft, LRight: SizeInt;
+begin
+  LLeft := Pos(ALeftToken, ASource);
+  LRight := Pos(ARightToken, ASource);
+  Check(LLeft > 0, AMessage + ' left token exists: ' + ALeftToken);
+  Check(LRight > 0, AMessage + ' right token exists: ' + ARightToken);
+  Check(LLeft < LRight, AMessage);
+end;
 
 {$IFDEF NEXTPAS_LINUX}
 type
@@ -938,6 +969,58 @@ begin
   Check(LRet <> 0, 'wait64 on nil address returns error');
 end;
 
+procedure TestPosixFallbackZeroTimeoutPollsBeforeBucketInit;
+var
+  LSource: string;
+  LWait32: string;
+  LWait64: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.sync.pas');
+  LWait32 := SourceSlice(LSource,
+    'function platform_posix_wait_address_fallback(',
+    'function platform_posix_wake_address_one_fallback');
+  LWait64 := SourceSlice(LSource,
+    'function platform_posix_wait_address_fallback64(',
+    'function platform_posix_wake_address_one_fallback64');
+
+  CheckTokenBefore(LWait32, 'ATimeoutNs = 0',
+    'Result := platform_posix_ensure_wait_buckets',
+    'wait32 zero-timeout poll must not initialize fallback buckets');
+  CheckTokenBefore(LWait64, 'ATimeoutNs = 0',
+    'Result := platform_posix_ensure_wait_buckets',
+    'wait64 zero-timeout poll must not initialize fallback buckets');
+end;
+
+procedure TestBarrierWaitErrorPathDecrementsWaiting;
+var
+  LSource: string;
+  LBarrierWait: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.sync.pas');
+  LBarrierWait := SourceSlice(LSource,
+    'function platform_barrier_wait(var ABarrier: TPlatformBarrier): Int32;',
+    '{ Once implementation }');
+
+  Check(Pos('Dec(ABarrier.Waiting)', LBarrierWait) > 0,
+    'barrier wait error path must decrement Waiting before leaving');
+end;
+
+procedure TestPosixWaitBucketInitSpinHasLimit;
+var
+  LSource: string;
+  LEnsure: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.sync.pas');
+  LEnsure := SourceSlice(LSource,
+    'function platform_posix_ensure_wait_buckets: Int32;',
+    '{ Mutex }');
+
+  Check(Pos('POSIX_WAIT_BUCKET_INIT_SPIN_LIMIT', LEnsure) > 0,
+    'wait-bucket initialization spin must have a finite limit');
+  Check(Pos('PLATFORM_ERR_BUSY', LEnsure) > 0,
+    'wait-bucket initialization spin exhaustion must return an error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -986,5 +1069,11 @@ begin
   {$ENDIF}
   T.Test('Address wait nil address', @TestAddressWaitNilAddress);
   T.Test('Address64 wait nil address', @TestAddress64WaitNilAddress);
+  T.Test('POSIX fallback zero-timeout polls before bucket init',
+    @TestPosixFallbackZeroTimeoutPollsBeforeBucketInit);
+  T.Test('Barrier wait error path decrements Waiting',
+    @TestBarrierWaitErrorPathDecrementsWaiting);
+  T.Test('POSIX wait-bucket init spin has limit',
+    @TestPosixWaitBucketInitSpinHasLimit);
   if not T.Run then Halt(1);
 end.
