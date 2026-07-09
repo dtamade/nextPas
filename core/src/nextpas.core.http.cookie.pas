@@ -95,6 +95,38 @@ const
     Prevents memory exhaustion from malicious headers with thousands of pairs. }
   MAX_COOKIE_COUNT = 512;
 
+{ RFC 6265 §4.1.1: Cookie name must be a valid token (no control chars,
+  no separators).  Reject names containing characters that could inject
+  additional Set-Cookie attributes or split HTTP headers. }
+function IsValidCookieName(const S: string): Boolean;
+var
+  I: SizeInt;
+begin
+  if Length(S) = 0 then
+    Exit(False);
+  for I := 1 to Length(S) do
+    case S[I] of
+      #0..#31, #127, ' ', ';', ',', '"', '\', '(', ')', '<', '>',
+      '@', ':', '/', '[', ']', '?', '=', '{', '}':
+        Exit(False);
+    end;
+  Result := True;
+end;
+
+{ RFC 6265 §4.1.1: Cookie value (unquoted) must not contain control
+  characters, spaces, commas, semicolons, or backslashes. }
+function IsValidCookieValue(const S: string): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 1 to Length(S) do
+    case S[I] of
+      #0..#31, #127, ' ', ';', ',', '"', '\':
+        Exit(False);
+    end;
+  Result := True;
+end;
+
 { ParseCookies }
 
 function ParseCookies(const AHeaderValue: string): TRequestCookies;
@@ -319,6 +351,10 @@ end;
 
 function MakeCookie(const AName, AValue: string): TSetCookie;
 begin
+  if not IsValidCookieName(AName) then
+    raise ECore.Create('Invalid cookie name: contains forbidden characters');
+  if not IsValidCookieValue(AValue) then
+    raise ECore.Create('Invalid cookie value: contains forbidden characters');
   Result := Default(TSetCookie);
   Result.Name := AName;
   Result.Value := AValue;

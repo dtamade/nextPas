@@ -95,7 +95,7 @@ type
     FEncoder: THPackEncoder;
     FPrefaceValidated: Boolean;
     FServerSettingsSent: Boolean;
-    FPeerSettingsAcked: Boolean;
+    FPeerSettingsReceived: Boolean;
     FGoawayReceived: Boolean;
     FGoawaySent: Boolean;
     FLastSeenPeerStreamID: UInt32;
@@ -506,7 +506,7 @@ begin
   FWriteBuffer := '';
   FPrefaceValidated := False;
   FServerSettingsSent := False;
-  FPeerSettingsAcked := False;
+  FPeerSettingsReceived := False;
   FGoawayReceived := False;
   FGoawaySent := False;
   FLastSeenPeerStreamID := 0;
@@ -771,7 +771,7 @@ begin
 
   Delete(FReadBuffer, 1, LConsumed);
   FPrefaceValidated := True;
-  FPeerSettingsAcked := True;
+  FPeerSettingsReceived := True;
   FState := h2sesActive;
   EnsureServerHandshakeFramesQueued;
   QueueSettingsAck;
@@ -842,6 +842,19 @@ end;
 function TH2ServerSession.HandleFrame(const AFrame: TH2Frame): Boolean;
 begin
   Result := True;
+  { RFC 9113 §3.4: Before receiving a valid SETTINGS frame from the peer,
+    only SETTINGS frames are allowed.  Any other frame type is a
+    connection error (PROTOCOL_ERROR). }
+  if not FPeerSettingsReceived then
+  begin
+    if AFrame.Header.FrameType <> H2_FRAME_SETTINGS then
+    begin
+      QueueGoaway(FLastSeenPeerStreamID, H2_ERR_PROTOCOL_ERROR);
+      FShutdownErrorCode := H2_ERR_PROTOCOL_ERROR;
+      FState := h2sesClosed;
+      Exit(False);
+    end;
+  end;
   { RFC 9113 §6.10: During a pending CONTINUATION sequence, only
     CONTINUATION frames for the same stream are allowed.  Any other
     frame type is a connection error (PROTOCOL_ERROR). }
