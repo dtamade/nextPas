@@ -105,8 +105,14 @@
 | `lockfree.scapegoat` | Scapegoat Tree (无旋转平衡BST) | ✅ 完成 | 7 |
 | `lockfree.radix` | Radix Tree (压缩前缀树) | ✅ 完成 | 7 |
 | `lockfree.bplus` | B+ Tree (数据库索引) | ⚠️ 有泄漏 | 8 |
+| `lockfree.tdigest` | T-Digest (流式分位数) | ✅ 完成 | 4 |
+| `lockfree.spacesaving` | Space-Saving (Top-K) | ✅ 完成 | 3 |
+| `lockfree.arccache` | ARC Cache (自适应缓存) | ✅ 完成 | 4 |
+| `lockfree.adjmap` | Adjacency Map (加权图+Dijkstra) | ✅ 完成 | 5 |
+| `lockfree.matrix` | Concurrent Matrix (矩阵运算) | ✅ 完成 | 7 |
+| `lockfree.wrr` | Weighted Round Robin (负载均衡) | ✅ 完成 | 6 |
 
-**规模**: 87 文件, ~33000 行, 73 数据结构
+**规模**: 93 文件, ~35000 行, 79 数据结构
 
 ---
 
