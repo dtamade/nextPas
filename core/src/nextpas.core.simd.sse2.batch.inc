@@ -138,6 +138,216 @@ begin
   {$POP}
 end;
 
+// ============================================================================
+// SSE2 Non-Temporal Store Variant
+// Use when dst won't be read again soon (e.g., output buffers, transforms)
+// Provides ~2x bandwidth for large arrays that exceed L2 cache
+// ============================================================================
+
+procedure SSE2ArrayAddF32_NT(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    // NT stores require 16-byte aligned destination
+    test rcx, 15
+    jnz @unaligned_fallback
+
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movntps [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movntps [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movntps [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movntps [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movntps [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movntps [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
+    cmp r8, 16
+    jb @tail8
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movntps [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movntps [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+    jmp @tail_scalar
+
+  @unaligned_fallback:
+    // Fallback: use regular stores when dst not 16-byte aligned
+    cmp r8, 32
+    jb @uf_tail16
+  @uf_loop32:
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @uf_loop32
+  @uf_tail16:
+    cmp r8, 16
+    jb @tail8
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    addss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    sfence  // 确保 NT 写入完成
+  end;
+  {$POP}
+end;
+
+// Smart 选择: 大数据用 NT，小数据用普通
+procedure SSE2ArrayAddF32_Smart(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+const
+  NT_THRESHOLD = 16384; // 64KB = 16384 floats (exceeds L1 cache)
+begin
+  if aCount >= NT_THRESHOLD then
+    SSE2ArrayAddF32_NT(aSrc1, aSrc2, aDst, aCount)
+  else
+    SSE2ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
 procedure SSE2ArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
   pS1, pS2, pD: PSingle;
