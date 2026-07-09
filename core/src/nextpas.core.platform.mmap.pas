@@ -584,10 +584,7 @@ begin
     Exit(PLATFORM_MMAP_EINVAL);
 
 {$IFDEF NEXTPAS_UNIX}
-  if msync(LPtr, LSize, MS_SYNC) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(msync(LPtr, LSize, MS_SYNC));
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   if FlushViewOfFile(LPtr, LSize) then
@@ -610,10 +607,7 @@ begin
     Exit(PLATFORM_MMAP_EINVAL);
 
 {$IFDEF NEXTPAS_UNIX}
-  if mlock(LPtr, LSize) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(mlock(LPtr, LSize));
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   if VirtualLock(LPtr, LSize) then
@@ -636,10 +630,7 @@ begin
     Exit(PLATFORM_MMAP_EINVAL);
 
 {$IFDEF NEXTPAS_UNIX}
-  if munlock(LPtr, LSize) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(munlock(LPtr, LSize));
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   if VirtualUnlock(LPtr, LSize) then

@@ -188,32 +188,32 @@ var
 begin
   AReadHandle := -1;
   AWriteHandle := -1;
-  if pipe(@LPipe[0]) <> 0 then
-    Exit(platform_get_errno);
-  AReadHandle := LPipe[0];
-  AWriteHandle := LPipe[1];
-  Result := 0;
+  Result := PosixCheck(pipe(@LPipe[0]));
+  if Result = 0 then
+  begin
+    AReadHandle := LPipe[0];
+    AWriteHandle := LPipe[1];
+  end;
 end;
 
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+var
+  LFd: cint;
 begin
   if AForWrite then
-    AHandle := open('/dev/null', 1, 0)
+    LFd := open('/dev/null', 1, 0)
   else
-    AHandle := open('/dev/null', 0, 0);
-  if AHandle < 0 then
-    Exit(platform_get_errno);
-  Result := 0;
+    LFd := open('/dev/null', 0, 0);
+  Result := PosixFdToHandle(LFd, AHandle);
 end;
 
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 begin
   if AHandle < 0 then
     Exit(0);
-  if close(Int32(AHandle)) <> 0 then
-    Exit(platform_get_errno);
-  AHandle := -1;
-  Result := 0;
+  Result := PosixCheck(close(cint(AHandle)));
+  if Result = 0 then
+    AHandle := -1;
 end;
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;

@@ -47,40 +47,42 @@ implementation
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.helpers;
 
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 var
   LFds: array[0..1] of Int32;
 begin
   FillChar(APipe, SizeOf(APipe), 0);
-  if pipe(@LFds[0]) <> 0 then
-    Exit(platform_get_errno);
-  APipe.ReadFd := LFds[0];
-  APipe.WriteFd := LFds[1];
-  Result := 0;
+  Result := PosixCheck(pipe(@LFds[0]));
+  if Result = 0 then
+  begin
+    APipe.ReadFd := LFds[0];
+    APipe.WriteFd := LFds[1];
+  end;
 end;
 
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.ReadFd < 0 then Exit(PLATFORM_ERR_BADF);
-  close(Int32(APipe.ReadFd));
-  APipe.ReadFd := -1;
-  Result := 0;
+  Result := PosixCheck(close(cint(APipe.ReadFd)));
+  if Result = 0 then
+    APipe.ReadFd := -1;
 end;
 
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.WriteFd < 0 then Exit(PLATFORM_ERR_BADF);
-  close(Int32(APipe.WriteFd));
-  APipe.WriteFd := -1;
-  Result := 0;
+  Result := PosixCheck(close(cint(APipe.WriteFd)));
+  if Result = 0 then
+    APipe.WriteFd := -1;
 end;
 
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;
 begin
-  if APipe.ReadFd >= 0 then close(Int32(APipe.ReadFd));
-  if APipe.WriteFd >= 0 then close(Int32(APipe.WriteFd));
+  if APipe.ReadFd >= 0 then close(cint(APipe.ReadFd));
+  if APipe.WriteFd >= 0 then close(cint(APipe.WriteFd));
   APipe.ReadFd := -1;
   APipe.WriteFd := -1;
   Result := 0;
@@ -88,10 +90,7 @@ end;
 
 function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 begin
-  if dup2(Int32(AOldFd), Int32(ANewFd)) < 0 then
-    Result := platform_get_errno
-  else
-    Result := 0;
+  Result := PosixCheck(dup2(cint(AOldFd), cint(ANewFd)));
 end;
 {$ENDIF}
 
