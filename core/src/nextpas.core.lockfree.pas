@@ -62,7 +62,12 @@ uses
   nextpas.core.lockfree.countminsketch,
   nextpas.core.lockfree.hyperloglog,
   nextpas.core.lockfree.cuckooset,
-  nextpas.core.lockfree.suffixarray;
+  nextpas.core.lockfree.suffixarray,
+  nextpas.core.lockfree.persistent_vector,
+  nextpas.core.lockfree.roaring_bitmap,
+  nextpas.core.lockfree.counting_bloom,
+  nextpas.core.lockfree.lru_cache,
+  nextpas.core.lockfree.deque_lf;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -486,6 +491,41 @@ type
   TSuffixArray = nextpas.core.lockfree.suffixarray.TSuffixArray;
   TSuffixArrayResult = nextpas.core.lockfree.suffixarray.TSuffixArrayResult;
   TSuffixArrayMatch = nextpas.core.lockfree.suffixarray.TSuffixArrayMatch;
+
+  {** @desc 持久化不可变向量
+    @details O(n) append/assoc，O(1) nth。所有操作返回新向量。
+    @see TPersistentVector 详细文档和示例
+  }
+  TPersistentVector = nextpas.core.lockfree.persistent_vector.TPersistentVector;
+  TPVectorResult = nextpas.core.lockfree.persistent_vector.TPVectorResult;
+
+  {** @desc Roaring Bitmap
+    @details 压缩位图，支持 AND/OR/XOR 集合操作。
+    @see TRoaringBitmap 详细文档和示例
+  }
+  TRoaringBitmap = nextpas.core.lockfree.roaring_bitmap.TRoaringBitmap;
+  TRBResult = nextpas.core.lockfree.roaring_bitmap.TRBResult;
+
+  {** @desc Counting Bloom Filter
+    @details 支持删除的布隆过滤器，原子计数器。
+    @see TCountingBloomFilter 详细文档和示例
+  }
+  TCountingBloomFilter = nextpas.core.lockfree.counting_bloom.TCountingBloomFilter;
+  TCBFResult = nextpas.core.lockfree.counting_bloom.TCBFResult;
+
+  {** @desc Concurrent LRU Cache (AnsiString 专用)
+    @details 线程安全的最近最少使用缓存，哈希表+双向链表。AnsiString 键值。
+    @see TConcurrentStringLRUCache 详细文档和示例
+  }
+  TConcurrentStringLRUCache = nextpas.core.lockfree.lru_cache.TConcurrentLRUCache;
+  TStringLRUCacheResult = nextpas.core.lockfree.lru_cache.TLRUCacheResult;
+
+  {** @desc Lock-Free Deque
+    @details 双端队列，支持 PushLeft/PushRight/PopLeft/PopRight。
+    @see TLockFreeDeque 详细文档和示例
+  }
+  TLockFreeDeque = nextpas.core.lockfree.deque_lf.TLockFreeDeque;
+  TDequeResult = nextpas.core.lockfree.deque_lf.TDequeResult;
 
 implementation
 
