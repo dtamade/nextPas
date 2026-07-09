@@ -186,19 +186,22 @@ end;
 function TMappedFileAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAlignedSize: SizeUInt;
+  LSizePtr: PSizeUInt;
 begin
   Result := nil;
   if ASize = 0 then Exit;
 
-  { 8 字节对齐 }
-  LAlignedSize := (ASize + 7) and not SizeUInt(7);
+  { 8 字节对齐 + size header }
+  LAlignedSize := (ASize + SizeOf(SizeUInt) + 7) and not SizeUInt(7);
 
   { 检查空间 }
   if FFreeOffset + LAlignedSize > FMappedSize then
     Exit;
 
-  { 分配 }
-  Result := Pointer(PtrUInt(FBaseAddress) + FFreeOffset);
+  { 分配: store size header, then user data }
+  LSizePtr := PSizeUInt(PtrUInt(FBaseAddress) + FFreeOffset);
+  LSizePtr^ := ASize;
+  Result := Pointer(PByte(LSizePtr) + SizeOf(SizeUInt));
   Inc(FFreeOffset, LAlignedSize);
   Inc(FAllocCount);
 
@@ -216,22 +219,28 @@ end;
 
 function TMappedFileAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 var
-  LOldOffset: UInt64;
+  LOldSize, LCopySize: SizeUInt;
 begin
   if APtr = nil then
     Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    FreeMem(APtr);
+    { bump allocator: cannot free, just return nil }
     Exit(nil);
   end;
 
-  { 简单实现：分配新块，复制 }
+  { Read old requested size from header }
+  LOldSize := PSizeUInt(PByte(APtr) - SizeOf(SizeUInt))^;
+
+  { 分配新块 }
   Result := GetMem(ASize);
   if Result = nil then Exit;
 
-  { 复制旧数据（保守复制 ASize 字节） }
-  Move(APtr^, Result^, ASize);
+  { 复制 min(old, new) }
+  LCopySize := LOldSize;
+  if LCopySize > ASize then
+    LCopySize := ASize;
+  Move(APtr^, Result^, LCopySize);
 
   { 注意：旧块不释放（bump allocator 语义） }
 end;

@@ -80,6 +80,16 @@ implementation
 uses
   nextpas.core.mem.error;
 
+type
+  PHotswapHeader = ^THotswapHeader;
+  THotswapHeader = record
+    Origin: Pointer;        { raw pointer to the IAllocator that allocated this block }
+    RequestedSize: SizeUInt; { original requested size }
+  end;
+
+const
+  HOTSWAP_HEADER = SizeOf(THotswapHeader);
+
 { THotswapAllocator }
 
 constructor THotswapAllocator.Create(AInitial: IAllocator);
@@ -116,23 +126,68 @@ begin
 end;
 
 function THotswapAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
+var
+  LHeader: PHotswapHeader;
 begin
-  Result := FCurrent.GetMem(ASize);
+  LHeader := PHotswapHeader(FCurrent.GetMem(HOTSWAP_HEADER + ASize));
+  if LHeader = nil then
+    Exit(nil);
+  LHeader^.Origin := Pointer(FCurrent);
+  LHeader^.RequestedSize := ASize;
+  Result := Pointer(PByte(LHeader) + HOTSWAP_HEADER);
 end;
 
 function THotswapAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := FCurrent.AllocMem(ASize);
+  Result := GetMem(ASize);
+  if Result <> nil then
+    FillChar(Result^, ASize, 0);
 end;
 
 function THotswapAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+var
+  LHeader: PHotswapHeader;
+  LOrigin: IAllocator;
+  LOldSize, LCopySize: SizeUInt;
 begin
-  Result := FCurrent.ReallocMem(APtr, ASize);
+  if ASize = 0 then
+  begin
+    FreeMem(APtr);
+    Exit(nil);
+  end;
+  if APtr = nil then
+    Exit(GetMem(ASize));
+
+  LHeader := PHotswapHeader(PByte(APtr) - HOTSWAP_HEADER);
+  LOrigin := IAllocator(LHeader^.Origin);
+  LOldSize := LHeader^.RequestedSize;
+
+  if ASize <= LOldSize then
+  begin
+    { In-place: reallocate via origin, update header }
+    Result := LOrigin.ReallocMem(LHeader, HOTSWAP_HEADER + ASize);
+    if Result = nil then
+      Exit(nil);
+    PHotswapHeader(Result)^.RequestedSize := ASize;
+    Exit(Pointer(PByte(Result) + HOTSWAP_HEADER));
+  end;
+
+  Result := GetMem(ASize);
+  if Result = nil then
+    Exit(nil);
+  LCopySize := LOldSize;
+  Move(APtr^, Result^, LCopySize);
+  LOrigin.FreeMem(LHeader);
 end;
 
 procedure THotswapAllocator.FreeMem(APtr: Pointer); inline;
+var
+  LHeader: PHotswapHeader;
 begin
-  FCurrent.FreeMem(APtr);
+  if APtr = nil then
+    Exit;
+  LHeader := PHotswapHeader(PByte(APtr) - HOTSWAP_HEADER);
+  IAllocator(LHeader^.Origin).FreeMem(LHeader);
 end;
 
 function THotswapAllocator.Traits: TAllocatorTraits; inline;

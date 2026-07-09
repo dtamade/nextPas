@@ -40,7 +40,7 @@ uses
 
 const
   CASCADE_MAX_ALLOCATORS = 8;
-  CASCADE_HEADER_SIZE = SizeOf(Integer);
+  CASCADE_HEADER_SIZE = SizeOf(Integer) * 2; { AllocatorIdx + RequestedSize }
 
 type
   TCascadeStats = record
@@ -97,6 +97,8 @@ var
   I: Integer;
   LPtr: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Inc(FAllocAttempts);
   for I := 0 to FAllocatorCount - 1 do
   begin
@@ -104,6 +106,7 @@ begin
     if LPtr <> nil then
     begin
       PInteger(LPtr)^ := I;
+      PInteger(LPtr + SizeOf(Integer))^ := Integer(ASize);
       Inc(FAllocatorHits[I]);
       Exit(Pointer(LPtr + CASCADE_HEADER_SIZE));
     end;
@@ -150,12 +153,15 @@ begin
   if (LIdx < 0) or (LIdx >= FAllocatorCount) then
     Exit(nil);
 
-  { Allocate new block via cascade, copy, free old }
+  LOldSize := SizeUInt(PInteger(LOldPtr + SizeOf(Integer))^);
+
+  { Allocate new block via cascade, copy min(old, new) }
   Result := GetMem(ASize);
   if Result = nil then
     Exit(nil);
-  { Copy old data — we don't know exact old size, copy up to new size }
-  LCopySize := ASize;
+  LCopySize := LOldSize;
+  if LCopySize > ASize then
+    LCopySize := ASize;
   Move(APtr^, Result^, LCopySize);
   FreeMem(APtr);
 end;

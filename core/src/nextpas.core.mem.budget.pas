@@ -28,7 +28,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.error;
 
 type
   {** 内存预算事件 }
@@ -189,6 +190,10 @@ end;
 constructor TBudgetAllocator.Create(AInner: IAllocator; ABudget: TMemoryBudget);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TBudgetAllocator.Create: AInner must not be nil');
+  if ABudget = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TBudgetAllocator.Create: ABudget must not be nil');
   FInner := AInner;
   FBudget := ABudget;
 end;

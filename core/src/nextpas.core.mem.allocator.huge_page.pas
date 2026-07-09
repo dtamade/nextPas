@@ -244,6 +244,9 @@ begin
 end;
 
 function THugePageAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+var
+  LHdr: PHugeHeader;
+  LOldSize, LCopySize: SizeUInt;
 begin
   if APtr = nil then
     Exit(GetMem(ASize));
@@ -253,11 +256,16 @@ begin
     Exit(nil);
   end;
 
+  LHdr := PHugeHeader(PByte(APtr) - HUGE_HEADER_SIZE);
+  LOldSize := LHdr^.AllocSize;
+
   Result := GetMem(ASize);
   if Result = nil then Exit;
 
-  { 保守复制：按新大小复制（旧块可能更大或更小） }
-  Move(APtr^, Result^, ASize);
+  LCopySize := LOldSize;
+  if LCopySize > ASize then
+    LCopySize := ASize;
+  Move(APtr^, Result^, LCopySize);
   FreeMem(APtr);
 end;
 

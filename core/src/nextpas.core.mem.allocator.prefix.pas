@@ -36,7 +36,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.error;
 
 const
   PREFIX_SIZE = SizeOf(SizeUInt);
@@ -75,6 +76,8 @@ implementation
 constructor TPrefixAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TPrefixAllocator.Create: AInner must not be nil');
   FInner := AInner;
   FAllocCount := 0;
   FFreeCount := 0;

@@ -36,7 +36,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.error;
 
 type
   TFailStats = record
@@ -77,6 +78,8 @@ implementation
 constructor TFailAllocator.Create(AInner: IAllocator; AFailAt: UInt64);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TFailAllocator.Create: AInner must not be nil');
   FInner := AInner;
   FFailAt := AFailAt;
   FTotalAttempts := 0;

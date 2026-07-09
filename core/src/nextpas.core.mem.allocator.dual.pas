@@ -127,22 +127,16 @@ begin
   LHeader := PByte(APtr) - DUAL_HEADER_SIZE;
   LOldTag := LHeader^;
 
-  // If same category, try in-place realloc
-  if (LOldTag = DUAL_TAG_SMALL) and IsSmall(ASize) then
-  begin
-    if LOldTag = DUAL_TAG_SMALL then
-      LOldAllocator := FSmall
-    else
-      LOldAllocator := FLarge;
-    // For simplicity, allocate new and copy
-  end;
+  if LOldTag = DUAL_TAG_SMALL then
+    LOldAllocator := FSmall
+  else
+    LOldAllocator := FLarge;
 
-  Result := GetMem(ASize);
-  if Result <> nil then
-  begin
-    Move(APtr^, Result^, ASize);
-    FreeMem(APtr);
-  end;
+  { Delegate to old allocator which knows the actual block size }
+  Result := LOldAllocator.ReallocMem(LHeader, DUAL_HEADER_SIZE + ASize);
+  if Result = nil then
+    Exit(nil);
+  Result := Pointer(PByte(Result) + DUAL_HEADER_SIZE);
 end;
 
 procedure TDualAllocator.FreeMem(APtr: Pointer); inline;

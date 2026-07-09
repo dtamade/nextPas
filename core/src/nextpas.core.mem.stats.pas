@@ -35,7 +35,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.mutex;
+  nextpas.core.mem.mutex,
+  nextpas.core.mem.error;
 
 type
   {** 分配快照 — 当前分配状态的只读视图 }
@@ -314,6 +315,8 @@ constructor TAllocStatsAllocator.Create(AInner: IAllocator;
   ATrackHistogram: Boolean; ACollector: TAllocStatsCollector);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TAllocStatsAllocator.Create: AInner must not be nil');
   FInner := AInner;
   FTrackHistogram := ATrackHistogram;
   FCollector := ACollector;
@@ -450,6 +453,7 @@ begin
 end;
 
 initialization
+  GDefaultCollector := TAllocStatsCollector.Create;
 
 finalization
   FreeAndNil(GDefaultCollector);

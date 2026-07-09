@@ -181,25 +181,28 @@ end;
 
 function TStackAllocator.InternalAlloc(ASize: SizeUInt): Pointer;
 var
-  LAlignedSize: SizeUInt;
+  LTotalSize: SizeUInt;
+  LSizePtr: PSizeUInt;
 begin
-  { 对齐到 8 字节 }
-  LAlignedSize := (ASize + 7) and not SizeUInt(7);
+  { size header + user data, aligned to 8 }
+  LTotalSize := (SizeOf(SizeUInt) + ASize + 7) and not SizeUInt(7);
 
   { 检查当前区域是否有足够空间 }
-  if FCurrentOffset + LAlignedSize > FRegionSize then
+  if FCurrentOffset + LTotalSize > FRegionSize then
   begin
     { 当前区域空间不足，需要新区域 }
-    if LAlignedSize > FRegionSize then
+    if LTotalSize > FRegionSize then
       raise EAllocError.Create(aeOutOfMemory,
         'TStackAllocator.InternalAlloc: allocation size exceeds region size');
     GrowRegion;
   end;
 
-  { 从当前区域分配 }
-  Result := Pointer(PtrUInt(FRegions[FCurrentRegion]) + FCurrentOffset);
-  Inc(FCurrentOffset, LAlignedSize);
-  Inc(FTotalUsed, LAlignedSize);
+  { 从当前区域分配: store size, return ptr past header }
+  LSizePtr := PSizeUInt(PtrUInt(FRegions[FCurrentRegion]) + FCurrentOffset);
+  LSizePtr^ := ASize;
+  Result := Pointer(PByte(LSizePtr) + SizeOf(SizeUInt));
+  Inc(FCurrentOffset, LTotalSize);
+  Inc(FTotalUsed, LTotalSize);
   Inc(FAllocCount);
 end;
 
@@ -216,17 +219,25 @@ begin
 end;
 
 function TStackAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+var
+  LOldSize, LCopySize: SizeUInt;
 begin
   { 栈式分配器不支持真正的 Realloc }
-  { 简单实现：分配新块，复制旧数据 }
   if APtr = nil then
     Exit(GetMem(ASize));
   if ASize = 0 then
     Exit(nil);
 
+  LOldSize := PSizeUInt(PByte(APtr) - SizeOf(SizeUInt))^;
+
   Result := GetMem(ASize);
   if Result <> nil then
-    Move(APtr^, Result^, ASize);  { 保守复制 }
+  begin
+    LCopySize := LOldSize;
+    if LCopySize > ASize then
+      LCopySize := ASize;
+    Move(APtr^, Result^, LCopySize);
+  end;
   { 注意：旧内存不会被释放（栈式分配器不支持单独释放） }
 end;
 

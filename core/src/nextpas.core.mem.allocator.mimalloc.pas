@@ -197,9 +197,13 @@ begin
 end;
 function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 begin
+  A := nil;
+  { Verify the library is actually loadable before returning the allocator }
+  if not EnsureMimallocLoaded then
+    Exit(False);
   try
     A := GetMimallocAllocator;
-    Result := True;
+    Result := A <> nil;
   except
     A := nil;
     Result := False;

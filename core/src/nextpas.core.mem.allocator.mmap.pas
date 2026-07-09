@@ -365,6 +365,14 @@ var
   LOldBlock: PMemoryMapBlockHeader;
   LCopySize: SizeUInt;
 begin
+  if ASize = 0 then
+  begin
+    FreeMem(APtr);
+    Exit(nil);
+  end;
+  if APtr = nil then
+    Exit(GetMem(ASize));
+
   FLock.Acquire;
   try
     if not FindBlockForPayload(APtr, LOldBlockPtr, LHeaderOffset) then
@@ -406,7 +414,7 @@ function TMemoryMapAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
-  Result.SupportsRealloc := False;
+  Result.SupportsRealloc := True;
 end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;

@@ -81,6 +81,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem.error;
+
 const
   BITS_PER_UINT32 = 32;
 
@@ -90,8 +93,11 @@ constructor TBitmapAllocator.Create(AInner: IAllocator; ASlotSize: SizeUInt;
   ASlotCount: SizeUInt);
 var
   LBitmapWords: SizeUInt;
+  LTotalSize: SizeUInt;
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TBitmapAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   if ASlotSize < 8 then
     FSlotSize := 8
@@ -102,11 +108,18 @@ begin
   else
     FSlotCount := ASlotCount;
 
+  { Overflow guard: FSlotSize * FSlotCount must not wrap }
+  LTotalSize := FSlotSize * FSlotCount;
+  if (FSlotCount > 0) and (LTotalSize div FSlotCount <> FSlotSize) then
+    raise EAllocError.Create(aeOutOfMemory, 'TBitmapAllocator.Create: size overflow');
+
   LBitmapWords := (FSlotCount + BITS_PER_UINT32 - 1) div BITS_PER_UINT32;
   SetLength(FBitmap, LBitmapWords);
   FillChar(FBitmap[0], LBitmapWords * SizeOf(UInt32), 0);
 
-  FData := PByte(FInner.GetMem(FSlotSize * FSlotCount));
+  FData := PByte(FInner.GetMem(LTotalSize));
+  if FData = nil then
+    raise EAllocError.Create(aeOutOfMemory, 'TBitmapAllocator.Create: backing allocation failed');
   FUsedSlots := 0;
   FAllocCount := 0;
   FFreeCount := 0;
