@@ -104,7 +104,8 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.client,
-  nextpas.core.http.impl.tls.stream;
+  nextpas.core.http.impl.tls.stream,
+  nextpas.core.tls.random;
 
 type
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
@@ -637,11 +638,8 @@ begin
   { RFC 6455 §5.3: Client frames MUST be masked }
   if FIsClient then
   begin
-    { Generate random mask key }
-    LMaskKey[0] := Byte(Random(256));
-    LMaskKey[1] := Byte(Random(256));
-    LMaskKey[2] := Byte(Random(256));
-    LMaskKey[3] := Byte(Random(256));
+    { Generate cryptographically secure random mask key }
+    SecureRandomBytes(@LMaskKey[0], 4);
 
     if LPayloadLen < 126 then
     begin
@@ -780,11 +778,9 @@ end;
 function GenerateWebSocketKey: string;
 var
   LBytes: TBytes;
-  I: Integer;
 begin
   SetLength(LBytes, 16);
-  for I := 0 to 15 do
-    LBytes[I] := Byte(Random(256));
+  SecureRandomBytes(@LBytes[0], 16);
   Result := Base64Encode(LBytes);
 end;
 

@@ -27,6 +27,10 @@ type
   TRateLimitOptions = record
     MaxRequests: Int32;
     WindowSeconds: Int32;
+    { If True, read client IP from X-Forwarded-For / X-Real-IP headers.
+      Only enable when behind a trusted reverse proxy that sets these headers.
+      Default: False (use RemoteAddr only). }
+    TrustProxyHeaders: Boolean;
   end;
 
 {** @desc Rate limit middleware with default 100 requests per 60 seconds. }
@@ -63,6 +67,7 @@ type
     FCleanupCounter: Int32;
     FMaxRequests: Int32;
     FWindowSeconds: Int32;
+    FTrustProxyHeaders: Boolean;
     procedure CleanupExpiredEntries(ANow: Int64);
     function FindOrCreateEntry(const AIP: string; ANow: Int64): Int32;
   public
@@ -87,6 +92,7 @@ begin
   inherited Create;
   FMaxRequests := AOptions.MaxRequests;
   FWindowSeconds := AOptions.WindowSeconds;
+  FTrustProxyHeaders := AOptions.TrustProxyHeaders;
   FCleanupCounter := 0;
   InitCriticalSection(FLock);
 end;
@@ -142,24 +148,28 @@ begin
   Result := LLen;
 end;
 
-function ExtractClientIP(const AReq: IHttpRequest): string;
+function ExtractClientIP(const AReq: IHttpRequest;
+  ATrustProxyHeaders: Boolean): string;
 var
   LForwarded: string;
   LPos: SizeInt;
 begin
-  LForwarded := AReq.GetHeaders.Get('x-forwarded-for');
-  if LForwarded <> '' then
+  if ATrustProxyHeaders then
   begin
-    LPos := Pos(',', LForwarded);
-    if LPos > 0 then
-      Result := Trim(Copy(LForwarded, 1, LPos - 1))
-    else
-      Result := Trim(LForwarded);
-    Exit;
+    LForwarded := AReq.GetHeaders.Get('x-forwarded-for');
+    if LForwarded <> '' then
+    begin
+      LPos := Pos(',', LForwarded);
+      if LPos > 0 then
+        Result := Trim(Copy(LForwarded, 1, LPos - 1))
+      else
+        Result := Trim(LForwarded);
+      Exit;
+    end;
+    Result := AReq.GetHeaders.Get('x-real-ip');
+    if Result <> '' then
+      Exit;
   end;
-  Result := AReq.GetHeaders.Get('x-real-ip');
-  if Result <> '' then
-    Exit;
   Result := AReq.GetRemoteAddr;
 end;
 
@@ -174,7 +184,7 @@ var
   LReset: Int64;
 begin
   Result := True;
-  LIP := ExtractClientIP(AReq);
+  LIP := ExtractClientIP(AReq, FTrustProxyHeaders);
   LNow := NowEpoch;
 
   EnterCriticalSection(FLock);
