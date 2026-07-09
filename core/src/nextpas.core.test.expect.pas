@@ -85,6 +85,12 @@ type
       Works for ekIntArray and ekStrArray kinds. }
     function ToContainInt(const AValue: Int64): IExpectation;
     function ToContainStr(const AValue: string): IExpectation;
+    { Byte array containment: value must exist in the bytes. }
+    function ToContain(const AValue: Byte): IExpectation;
+    { Emptiness check: works for strings, arrays, and bytes.
+      ToBeEmpty passes when length = 0. ToBeNotEmpty passes when length > 0. }
+    function ToBeEmpty: IExpectation;
+    function ToBeNotEmpty: IExpectation;
     { Set membership: value must be one of the given values. }
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
@@ -240,6 +246,9 @@ type
     function ToEqualStrArray(const AExpected: array of string): IExpectation;
     function ToContainInt(const AValue: Int64): IExpectation;
     function ToContainStr(const AValue: string): IExpectation;
+    function ToContain(const AValue: Byte): IExpectation;
+    function ToBeEmpty: IExpectation;
+    function ToBeNotEmpty: IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -1179,6 +1188,69 @@ begin
   CheckMatch(LFound,
     'Array should not contain "' + AValue + '"',
     'Array does not contain "' + AValue + '"');
+  Result := Self;
+end;
+
+function TExpectation.ToContain(const AValue: Byte): IExpectation;
+var
+  I: Integer;
+  LFound: Boolean;
+begin
+  RequireKind(ekBytes, 'ToContain(byte)');
+  LFound := False;
+  for I := 0 to High(FBytesValue) do
+    if FBytesValue[I] = AValue then
+    begin
+      LFound := True;
+      Break;
+    end;
+  CheckMatch(LFound,
+    'Bytes should not contain $' + IntToHex(AValue, 2),
+    'Bytes does not contain $' + IntToHex(AValue, 2));
+  Result := Self;
+end;
+
+function TExpectation.ToBeEmpty: IExpectation;
+var
+  LLen: NativeInt;
+begin
+  case FKind of
+    ekString:   LLen := Length(FStrValue);
+    ekIntArray: LLen := Length(FIntArrayValue);
+    ekStrArray: LLen := Length(FStrArrayValue);
+    ekBytes:    LLen := Length(FBytesValue);
+  else
+    InternalFail('ToBeEmpty requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LLen = 0,
+    'Expected non-empty but got empty',
+    'Expected empty but got ' + IntToStr(LLen) + ' element(s)');
+  Result := Self;
+end;
+
+function TExpectation.ToBeNotEmpty: IExpectation;
+var
+  LLen: NativeInt;
+begin
+  case FKind of
+    ekString:   LLen := Length(FStrValue);
+    ekIntArray: LLen := Length(FIntArrayValue);
+    ekStrArray: LLen := Length(FStrArrayValue);
+    ekBytes:    LLen := Length(FBytesValue);
+  else
+    InternalFail('ToBeNotEmpty requires string, array, or bytes expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+    Result := Self;
+    Exit;
+  end;
+  CheckMatch(LLen > 0,
+    'Expected empty but got ' + IntToStr(LLen) + ' element(s)',
+    'Expected non-empty but got empty');
   Result := Self;
 end;
 

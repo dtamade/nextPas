@@ -209,6 +209,11 @@ procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64); overload;
 procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
+{ Check that AValue exists in a byte array. }
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
 
 { Check that AValue does NOT exist in AArray. }
 procedure CheckArrayNotContains(const AArray: array of string;
@@ -219,6 +224,11 @@ procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64); overload;
 procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
+{ Check that AValue does NOT exist in a byte array. }
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
 
 { ── Array Sorted Checks ───────────────────────────────────────────────────── }
 
@@ -1290,6 +1300,45 @@ begin
     if AArray[I] = AValue then
       FailPrepend(AMessage, 'Expected array NOT to contain ' + IntToStr(AValue) +
         ' but found at index ' + IntToStr(I));
+end;
+
+{ CheckArrayContains for TBytes }
+
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  FailPrepend(AMessage, 'Expected bytes to contain $' + IntToHex(AValue, 2) +
+    ' but not found (length ' + IntToStr(Length(AArray)) + ')');
+end;
+
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte);
+begin
+  CheckArrayContains(AArray, AValue, '');
+end;
+
+{ CheckArrayNotContains for TBytes }
+
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      FailPrepend(AMessage, 'Expected bytes NOT to contain $' + IntToHex(AValue, 2) +
+        ' but found at index ' + IntToStr(I));
+end;
+
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte);
+begin
+  CheckArrayNotContains(AArray, AValue, '');
 end;
 
 { ── Array Sorted Checks ───────────────────────────────────────────────────── }

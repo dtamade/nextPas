@@ -255,6 +255,10 @@ procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64); overload;
 procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
 procedure CheckArrayNotContains(const AArray: array of string;
   const AValue: string); overload;
 procedure CheckArrayNotContains(const AArray: array of string;
@@ -263,6 +267,10 @@ procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64); overload;
 procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte); overload;
+procedure CheckArrayNotContains(const AArray: array of Byte;
+  AValue: Byte; const AMessage: string); overload;
 
 { ── Array Sorted Checks ───────────────────────────────────────────────────── }
 procedure CheckSorted(const AArray: array of Int64); overload;
