@@ -42,7 +42,7 @@ function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenM
   APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 
 {** @desc 关闭文件
-    @param AHandle 文件句柄（置为无效）
+    @param AHandle 文件句柄（close 后执行 best-effort invalidate）
     @return 0 成功，否则返回错误码 *}
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 
@@ -195,6 +195,7 @@ function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiC
     @param ABuf 输出缓冲区
     @param ABufSize 缓冲区大小
     @param ALen 输出实际长度
+    @note Windows readlink returns the final pathname, not the raw reparse target.
     @return 0 成功，否则返回错误码 *}
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 
@@ -911,7 +912,7 @@ end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 begin
   if AHandle.Value = HANDLE(PtrInt(-1)) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_BADF);
   if CloseHandle(AHandle.Value) then
     Result := 0
   else
@@ -1106,7 +1107,6 @@ end;
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
 const
   FILE_ATTRIBUTE_READONLY = $1;
-  FILE_ATTRIBUTE_NORMAL = $80;
 var
   LData: WIN32_FILE_ATTRIBUTE_DATA;
   LAttr: DWORD;
@@ -1290,6 +1290,7 @@ var
   LUtf8: AnsiString;
   LStart: Int32;
 begin
+  { Windows readlink returns the final pathname reported by GetFinalPathNameByHandleW. }
   ALen := 0;
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);

@@ -646,6 +646,67 @@ begin
   Check(platform_file_close(H) <> 0, 'close invalid handle returns error');
 end;
 
+procedure TestWindowsCloseInvalidHandleSourceContract;
+var
+  LSource: string;
+  LWindowsSection: string;
+  LCloseSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  LWindowsSection := SourceSlice(LSource,
+    'LPath: UnicodeString;' + LineEnding + 'begin' + LineEnding +
+    '  if not platform_windows_utf8_to_wide_checked(APath, LPath) then',
+    '{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}');
+  LCloseSource := SourceSlice(LWindowsSection,
+    'function platform_file_close(var AHandle: TPlatformFileHandle): Int32;',
+    'function platform_file_read');
+
+  CheckContains(LCloseSource, 'Exit(PLATFORM_ERR_BADF)',
+    'Windows invalid file handle close must use platform badf error');
+  CheckAbsent(LCloseSource, 'Exit(-1)',
+    'Windows invalid file handle close must not return raw -1');
+end;
+
+procedure TestFileCloseBestEffortInvalidateSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  CheckContains(LSource, 'best-effort invalidate',
+    'file close must document invalidation after close failure');
+end;
+
+procedure TestWindowsReadlinkFinalPathnameSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  CheckContains(LSource, 'Windows readlink returns the final pathname',
+    'Windows readlink semantics must be documented');
+end;
+
+procedure TestCreateTimeCtimeSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.base.pas');
+  CheckContains(LSource, 'POSIX CreateTime maps st_ctime',
+    'CreateTime must document POSIX ctime mapping');
+  CheckContains(LSource, 'status-change time',
+    'CreateTime must document ctime as status-change time');
+end;
+
+procedure TestWindowsChmodUsesFileAttributeNormalSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
+  CheckContains(LSource, 'FILE_ATTRIBUTE_NORMAL',
+    'Windows chmod must use named FILE_ATTRIBUTE_NORMAL');
+  CheckAbsent(LSource, 'FILE_ATTRIBUTE_NORMAL = $80',
+    'Windows chmod must not redeclare FILE_ATTRIBUTE_NORMAL magic value');
+end;
+
 procedure TestFstatInvalidHandleReturnsError;
 var
   H: TPlatformFileHandle;
@@ -772,6 +833,16 @@ begin
   T.Test('readlink nil buffer returns error', @TestReadlinkNilBufferReturnsError);
   T.Test('dir_open nil path returns error', @TestDirOpenNilPathReturnsError);
   T.Test('close invalid handle returns error', @TestCloseInvalidHandleReturnsError);
+  T.Test('Windows close invalid handle source contract',
+    @TestWindowsCloseInvalidHandleSourceContract);
+  T.Test('file close best-effort invalidate source contract',
+    @TestFileCloseBestEffortInvalidateSourceContract);
+  T.Test('Windows readlink final pathname source contract',
+    @TestWindowsReadlinkFinalPathnameSourceContract);
+  T.Test('CreateTime ctime source contract',
+    @TestCreateTimeCtimeSourceContract);
+  T.Test('Windows chmod FILE_ATTRIBUTE_NORMAL source contract',
+    @TestWindowsChmodUsesFileAttributeNormalSourceContract);
   T.Test('fstat invalid handle returns error', @TestFstatInvalidHandleReturnsError);
   T.Test('truncate invalid handle returns error', @TestTruncateInvalidHandleReturnsError);
   T.Test('sync invalid handle returns error', @TestSyncInvalidHandleReturnsError);

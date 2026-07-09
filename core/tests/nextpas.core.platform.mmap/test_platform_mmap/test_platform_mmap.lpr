@@ -555,6 +555,28 @@ begin
   platform_mmap_close(M2);
 end;
 
+procedure TestMunmapFailureCleanupSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.mmap.pas');
+  CheckContains(LSource, 'munmap failure is rare',
+    'mmap close must document munmap failure cleanup policy');
+  CheckContains(LSource, 'still closes the file descriptor',
+    'mmap close must document fd cleanup after munmap failure');
+end;
+
+procedure TestWindowsAnonymousMappingCastSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.mmap.pas');
+  CheckContains(LSource, 'createfilemappinga(handle(invalid_handle_value)',
+    'Windows anonymous mapping must use direct invalid-handle cast');
+  Check(Pos('handle(ptruint(invalid_handle_value))', LSource) = 0,
+    'Windows anonymous mapping must not use redundant PtrUInt conversion');
+end;
+
 procedure TestShmRoundTrip;
 var
   MWrite, MRead: TPlatformMappedFile;
@@ -609,6 +631,10 @@ begin
   T.Test('lock on closed map', @TestLockNilMap);
   T.Test('unlock on closed map', @TestUnlockNilMap);
   T.Test('multiple anonymous maps', @TestMultipleAnonymousMaps);
+  T.Test('munmap failure cleanup source contract',
+    @TestMunmapFailureCleanupSourceContract);
+  T.Test('Windows anonymous mapping cast source contract',
+    @TestWindowsAnonymousMappingCastSourceContract);
   T.Test('shm round-trip write/read', @TestShmRoundTrip);
   if not T.Run then Halt(1);
   Cleanup;

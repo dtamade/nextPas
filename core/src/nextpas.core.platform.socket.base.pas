@@ -82,7 +82,7 @@ function platform_ipv4_parse(const AAddr: string): UInt32;
 var
   LPart: UInt32;
   LShift: Integer;
-  LIdx, LLen, LStart: Integer;
+  LIdx, LLen, LStart, LPartIdx, LSegments: Integer;
   LCh: Char;
 begin
   Result := 0;
@@ -90,23 +90,32 @@ begin
   if LLen = 0 then Exit;
   LShift := 24;
   LStart := 1;
+  LSegments := 0;
   for LIdx := 1 to LLen + 1 do
   begin
     if (LIdx > LLen) or (AAddr[LIdx] = '.') then
     begin
-      LPart := 0;
-      for LStart := LStart to LIdx - 1 do
+      if (LIdx = LStart) or (LSegments = 4) then
       begin
-        LCh := AAddr[LStart];
+        Result := 0;
+        Exit;
+      end;
+      LPart := 0;
+      for LPartIdx := LStart to LIdx - 1 do
+      begin
+        LCh := AAddr[LPartIdx];
         if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
         LPart := LPart * 10 + Ord(LCh) - Ord('0');
       end;
       if LPart > 255 then begin Result := 0; Exit; end;
       Result := Result or (LPart shl LShift);
+      Inc(LSegments);
       Dec(LShift, 8);
       LStart := LIdx + 1;
     end;
   end;
+  if LSegments <> 4 then
+    Result := 0;
 end;
 
 function platform_ipv4_to_string(AIP: UInt32): string;

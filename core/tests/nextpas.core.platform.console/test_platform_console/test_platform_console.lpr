@@ -202,6 +202,17 @@ begin
     'Windows console branch must not document raw/io/wait as stubs');
 end;
 
+procedure TestPosixConsoleLinuxOnlySourceContract;
+var
+  LConsole: string;
+begin
+  LConsole := LoadSourceText('src/nextpas.core.platform.console.pas');
+  CheckContains(LConsole, 'posix raw/read/write/wait support is linux-only',
+    'console docs must state POSIX raw/read/write/wait Linux-only support');
+  CheckContains(LConsole, 'macos/freebsd return platform_err_unsupported',
+    'console docs must state macOS/FreeBSD unsupported behavior');
+end;
+
 procedure TestReadFromPipe;
 var
   LPipe: TPlatformPipe;
@@ -311,6 +322,8 @@ begin
   T.Test('enable ansi', @TestEnableAnsi);
   T.Test('pipe not terminal', @TestPipeNotTerminal);
   T.Test('Windows console source contract', @TestWindowsConsoleSourceContract);
+  T.Test('POSIX console Linux-only source contract',
+    @TestPosixConsoleLinuxOnlySourceContract);
   T.Test('get size fd', @TestGetSizeFd);
   T.Test('set raw / restore raw', @TestSetRawRestore);
   T.Test('write stdout', @TestWriteStdout);

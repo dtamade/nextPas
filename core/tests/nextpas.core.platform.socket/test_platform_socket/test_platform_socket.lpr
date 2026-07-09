@@ -10,6 +10,7 @@ uses
   nextpas.core.fs.util,
   nextpas.core.text.conv,
   nextpas.core.test,
+  nextpas.core.platform.error,
   nextpas.core.platform.socket
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base
@@ -27,6 +28,17 @@ type
 
 var
   T: TTestSuite;
+
+function LoadSourceText(const ARelativePath: string): string;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  Result := FsReadFileText(ARelativePath);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
 
 function SockIsValid(const ASock: TPlatformSocket): Boolean;
 begin
@@ -161,7 +173,7 @@ begin
   Check(platform_socket_close(LServer) = 0, 'close server');
 end;
 
-{ 4. Double close is safe (first close invalidates) }
+{ 4. Double close reports invalid handle after first close invalidates }
 procedure TestDoubleClose;
 var
   S: TPlatformSocket;
@@ -170,8 +182,9 @@ begin
     PLATFORM_IPPROTO_TCP, S) = 0, 'create for double close');
   Check(platform_socket_close(S) = 0, 'first close');
   Check(S.Value = PLATFORM_INVALID_SOCKET.Value, 'invalidated after first close');
-  { Second close should be safe with invalid socket }
-  Check(platform_socket_close(S) = 0, 'second close safe');
+  Check(platform_socket_close(S) = PLATFORM_ERR_INVALID_HANDLE,
+    'second close returns invalid handle');
+  Check(S.Value = PLATFORM_INVALID_SOCKET.Value, 'still invalid after second close');
 end;
 
 { 5. Recv on closed socket returns error }
@@ -708,6 +721,10 @@ begin
   CheckEqual(Int64($C0A80001), Int64(platform_ipv4_parse('192.168.0.1')), '192.168.0.1');
   CheckEqual(Int64(0), Int64(platform_ipv4_parse('')), 'empty string');
   CheckEqual(Int64(0), Int64(platform_ipv4_parse('0.0.0.0')), '0.0.0.0');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('1.2.3')), 'missing segment');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('1.2.3.4.5')), 'extra segment');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('1..2.3')), 'empty middle segment');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('1.2.3.')), 'empty trailing segment');
 end;
 
 procedure TestIpv4ToString;
@@ -893,6 +910,24 @@ begin
   platform_socket_close(LServer);
 end;
 
+procedure TestSocketCloseBestEffortInvalidateSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.socket.pas');
+  CheckContains(LSource, 'best-effort invalidate',
+    'socket close must document invalidation after close failure');
+end;
+
+procedure TestIpv6ScopeIdHostByteOrderSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.socket.pas');
+  CheckContains(LSource, 'sin6_scope_id is host byte order',
+    'IPv6 scope id byte order must be documented');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -965,6 +1000,10 @@ begin
   T.Test('setsockopt invalid level', @TestSetsockoptInvalidLevel);
   T.Test('error_would_block classification', @TestErrorWouldBlockClassification);
   T.Test('getsockname on connected socket', @TestGetsocknameOnConnected);
+  T.Test('socket close best-effort invalidate source contract',
+    @TestSocketCloseBestEffortInvalidateSourceContract);
+  T.Test('IPv6 scope id host byte order source contract',
+    @TestIpv6ScopeIdHostByteOrderSourceContract);
 
   if not T.Run then Halt(1);
 end.

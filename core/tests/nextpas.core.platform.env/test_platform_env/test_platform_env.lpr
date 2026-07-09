@@ -397,6 +397,15 @@ begin
     'windows get treats zero-length second read as success');
 end;
 
+procedure TestWindowsGetNilBufferSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.env.pas');
+  CheckContains(LSource, 'ABuf=nil queries length only',
+    'windows get nil buffer behavior must be documented');
+end;
+
 procedure TestSetNilName;
 begin
   Check(platform_env_set(nil, PAnsiChar('value')) <> 0, 'set nil name returns error');
@@ -441,6 +450,8 @@ begin
     @TestWindowsExistsClearsLastErrorSourceContract);
   T.Test('windows get clears last-error source contract',
     @TestWindowsGetClearsLastErrorSourceContract);
+  T.Test('windows get nil buffer source contract',
+    @TestWindowsGetNilBufferSourceContract);
   T.Test('set nil name returns error', @TestSetNilName);
   T.Test('unset nil name returns error', @TestUnsetNilName);
   T.Test('set nil value returns error', @TestSetNilValue);

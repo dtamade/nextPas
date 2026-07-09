@@ -47,6 +47,7 @@ function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
 
 {** @desc 运行进程并同时捕获 stdout/stderr
+    @note Windows implementation currently captures stdout only; stderr 长度返回 0。
     @param APath 可执行文件路径
     @param AArgv 参数数组（以 nil 结尾）
     @param ACwd 工作目录（nil 表示继承当前目录）

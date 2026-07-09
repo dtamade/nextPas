@@ -3,6 +3,8 @@ program test_platform_pty;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.fs,
+  nextpas.core.fs.util,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.platform.pty.base,
@@ -16,6 +18,17 @@ uses
 
 var
   T: TTestSuite;
+
+function LoadSourceText(const ARelativePath: string): string;
+begin
+  Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
+  Result := FsReadFileText(ARelativePath);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
 
 {$IFDEF NEXTPAS_UNIX}
 procedure TestOpenClose;
@@ -422,6 +435,15 @@ begin
 end;
 {$ENDIF}
 
+procedure TestPosixExitSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.pty.pas');
+  CheckContains(LSource, 'posix_exit is _exit',
+    'pty child failure path must document posix_exit semantics');
+end;
+
 begin
   T := TTestSuite.Create('platform.pty');
 {$IFDEF NEXTPAS_UNIX}
@@ -443,5 +465,6 @@ begin
 {$ELSE}
   T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}
+  T.Test('posix_exit source contract', @TestPosixExitSourceContract);
   if not T.Run then Halt(1);
 end.

@@ -279,6 +279,7 @@ end;
 {$IFDEF NEXTPAS_UNIX}
 const
   POSIX_WAIT_BUCKET_COUNT = 64;
+  POSIX_WAIT_BUCKET_INIT_SPIN_LIMIT = 1000000;
 
 type
   TPosixWaitBucket = record
@@ -583,6 +584,8 @@ begin
 end;
 
 function platform_posix_ensure_wait_buckets: Int32;
+var
+  LSpins: Int32;
 begin
   if InterlockedCompareExchange(GPosixWaitBucketsState, 0, 0) = 2 then
     Exit(GPosixWaitBucketsInitResult);
@@ -594,8 +597,14 @@ begin
     Exit(GPosixWaitBucketsInitResult);
   end;
 
+  LSpins := 0;
   while InterlockedCompareExchange(GPosixWaitBucketsState, 0, 0) <> 2 do
+  begin
+    if LSpins >= POSIX_WAIT_BUCKET_INIT_SPIN_LIMIT then
+      Exit(PLATFORM_ERR_BUSY);
+    Inc(LSpins);
     platform_sync_host_pthread_yield;
+  end;
   Result := GPosixWaitBucketsInitResult;
 end;
 
@@ -732,6 +741,9 @@ begin
   if Result <> 0 then
     Exit;
 
+  if ATimeoutNs = 0 then
+    Exit(PLATFORM_ERR_TIMEOUT);
+
   Result := platform_posix_ensure_wait_buckets;
   if Result <> 0 then
     Exit;
@@ -748,8 +760,6 @@ begin
   try
     if AAddr^ <> AExpected then
       Result := PLATFORM_ERR_AGAIN
-    else if ATimeoutNs = 0 then
-      Result := PLATFORM_ERR_TIMEOUT
     else
     begin
       Inc(LBucket^.Waiters);
@@ -899,6 +909,9 @@ begin
   if Result <> 0 then
     Exit;
 
+  if ATimeoutNs = 0 then
+    Exit(PLATFORM_ERR_TIMEOUT);
+
   Result := platform_posix_ensure_wait_buckets;
   if Result <> 0 then
     Exit;
@@ -915,8 +928,6 @@ begin
   try
     if AAddr^ <> AExpected then
       Result := PLATFORM_ERR_AGAIN
-    else if ATimeoutNs = 0 then
-      Result := PLATFORM_ERR_TIMEOUT
     else
     begin
       Inc(LBucket^.Waiters);
@@ -1745,7 +1756,10 @@ begin
       begin
         Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
         if Result <> 0 then
+        begin
+          Dec(ABarrier.Waiting);
           Break;
+        end;
       end;
     end;
   finally

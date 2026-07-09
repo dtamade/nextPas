@@ -41,6 +41,7 @@ type
     Mode: UInt32;
     ModTime: Int64;
     AccessTime: Int64;
+    { POSIX CreateTime maps st_ctime, which is status-change time. }
     CreateTime: Int64;
     Uid: UInt32;
     Gid: UInt32;

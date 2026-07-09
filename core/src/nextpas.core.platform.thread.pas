@@ -60,7 +60,8 @@ procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
 
 {** @desc 线程休眠（秒）
-    @param ASeconds 休眠秒数 *}
+    @param ASeconds 休眠秒数
+    @note sleep_sec safe range: POSIX converts to nanoseconds, Windows converts to DWORD milliseconds. *}
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 
 { TLS - Thread Local Storage }
