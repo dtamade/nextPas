@@ -4969,7 +4969,114 @@ begin
 end;
 
 procedure SSE2ArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
+const
+  THREE: Single = 3.0;
+  TWO: Single = 2.0;
+  ZERO: Single = 0.0;
+  ONE_VAL: Single = 1.0;
+var
+  pE0, pE1, pS, pD: PSingle;
+  LThree, LTwo, LZero, LOne: Single;
 begin
-  // Delegate to scalar implementation (smoothstep is complex)
-  ScalarArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst, aCount);
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE0 := aEdge0;
+  pE1 := aEdge1;
+  pS := aSrc;
+  pD := aDst;
+  LThree := THREE;
+  LTwo := TWO;
+  LZero := ZERO;
+  LOne := ONE_VAL;
+
+  asm
+    mov r9, pE0       // edge0
+    mov r10, pE1      // edge1
+    mov rax, pS       // src
+    mov rcx, pD       // dst
+    mov r8, aCount
+    movss xmm4, [LThree]
+    shufps xmm4, xmm4, 0   // 3.0 broadcast
+    movss xmm5, [LTwo]
+    shufps xmm5, xmm5, 0   // 2.0 broadcast
+    movss xmm6, [LZero]
+    shufps xmm6, xmm6, 0   // 0.0 broadcast
+    movss xmm7, [LOne]
+    shufps xmm7, xmm7, 0   // 1.0 broadcast
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    // v = (src - edge0) / (edge1 - edge0)
+    movups xmm0, [rax]       // src
+    movups xmm1, [r9]        // edge0
+    movups xmm2, [r10]       // edge1
+    subps xmm0, xmm1         // src - edge0
+    subps xmm2, xmm1         // edge1 - edge0
+    divps xmm0, xmm2         // (src - edge0) / (edge1 - edge0)
+
+    // clamp v to [0, 1]
+    maxps xmm0, xmm6         // v = max(v, 0)
+    minps xmm0, xmm7         // v = min(v, 1)
+
+    // t = v * v
+    movaps xmm1, xmm0
+    mulps xmm1, xmm1         // t = v*v
+
+    // result = t * (3 - 2*v)
+    movaps xmm2, xmm4        // 3.0
+    movaps xmm3, xmm5        // 2.0
+    mulps xmm3, xmm0         // 2*v
+    subps xmm2, xmm3         // 3 - 2*v
+    mulps xmm1, xmm2         // t * (3 - 2*v)
+
+    movups [rcx], xmm1
+    add r9, 16
+    add r10, 16
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    // v = (src - edge0) / (edge1 - edge0)
+    movss xmm0, [rax]
+    movss xmm1, [r9]
+    movss xmm2, [r10]
+    subss xmm0, xmm1
+    subss xmm2, xmm1
+    divss xmm0, xmm2
+
+    // clamp
+    maxps xmm0, xmm6
+    minps xmm0, xmm7
+
+    // t = v*v
+    movaps xmm1, xmm0
+    mulss xmm1, xmm1
+
+    // result = t * (3 - 2*v)
+    movaps xmm2, xmm4
+    movaps xmm3, xmm5
+    mulss xmm3, xmm0
+    subss xmm2, xmm3
+    mulss xmm1, xmm2
+
+    movss [rcx], xmm1
+    add r9, 4
+    add r10, 4
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
 end;
