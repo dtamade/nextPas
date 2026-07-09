@@ -105,6 +105,13 @@ uses
   nextpas.core.math.scalar, { IsNan for Double comparison NaN guards }
   nextpas.core.regex;       { RegexIsMatch for ToMatch }
 
+{ ── Local helpers ─────────────────────────────────────────────────────────── }
+
+function MaxI(A, B: Integer): Integer;
+begin
+  if A > B then Result := A else Result := B;
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -322,11 +329,60 @@ begin
 end;
 
 function TExpectation.ToEqual(const AExpected: string): IExpectation;
+var
+  LMin, LDiffAt, I: Integer;
+  LDiffDetail: string;
 begin
   RequireKind(ekString, 'ToEqual(string)');
-  CheckMatch(FStrValue = AExpected,
-    'Expected "' + FStrValue + '" not to equal "' + AExpected + '"',
-    'Expected "' + AExpected + '" but got "' + FStrValue + '"');
+  if FStrValue = AExpected then
+  begin
+    if FNegated then
+    begin
+      if FMessage <> '' then
+        InternalFail(FMessage + ': Expected "' + FStrValue + '" not to equal "' + AExpected + '"')
+      else
+        InternalFail('Expected "' + FStrValue + '" not to equal "' + AExpected + '"');
+    end;
+  end
+  else
+  begin
+    if not FNegated then
+    begin
+      { Find first differing position }
+      LDiffAt := -1;
+      LMin := Length(AExpected);
+      if Length(FStrValue) < LMin then
+        LMin := Length(FStrValue);
+      for I := 1 to LMin do
+        if FStrValue[I] <> AExpected[I] then
+        begin
+          LDiffAt := I;
+          Break;
+        end;
+      if LDiffAt < 0 then
+        LDiffAt := LMin + 1; { one string is prefix of the other }
+      { Build diff detail }
+      LDiffDetail := '  Diff at position ' + IntToStr(LDiffAt) + ':';
+      if LDiffAt <= Length(AExpected) then
+        LDiffDetail := LDiffDetail + #10'  Expected: ...' +
+          Copy(AExpected, MaxI(1, LDiffAt - 8), 17) + '...'
+      else
+        LDiffDetail := LDiffDetail + #10'  Expected: (length ' +
+          IntToStr(Length(AExpected)) + ')';
+      if LDiffAt <= Length(FStrValue) then
+        LDiffDetail := LDiffDetail + #10'  Actual:   ...' +
+          Copy(FStrValue, MaxI(1, LDiffAt - 8), 17) + '...'
+      else
+        LDiffDetail := LDiffDetail + #10'  Actual:   (length ' +
+          IntToStr(Length(FStrValue)) + ')';
+      if FMessage <> '' then
+        InternalFail(FMessage + ': Expected "' + AExpected +
+          '" but got "' + FStrValue + '"' + #10 + LDiffDetail)
+      else
+        InternalFail('Expected "' + AExpected +
+          '" but got "' + FStrValue + '"' + #10 + LDiffDetail);
+    end;
+  end;
   Result := Self;
 end;
 
