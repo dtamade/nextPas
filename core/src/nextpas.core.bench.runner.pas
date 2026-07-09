@@ -967,6 +967,7 @@ function TBenchRunner.CollectEntrySamples(const AEntry: TBenchEntry; AIters: Int
 var
   LSamples: TDoubleArray;
   LMeasurement: TBenchResult;
+  LLastTrackedSample: TBenchResult;
   LMinSamples, LSampleCount: Integer;
   LProbeNsPerOp: Double;
   LTargetNs: UInt64;
@@ -974,6 +975,7 @@ var
   I: Integer;
 begin
   AFirstSample := Default(TBenchResult);
+  LLastTrackedSample := Default(TBenchResult);
 
   // PF-17: enforce MinSamples >= 1 to prevent empty arrays
   LMinSamples := FConfig.MinSamples;
@@ -985,8 +987,8 @@ begin
     这是 Rust criterion 的核心方法：预热后自动校准采样数量。 }
   LSampleCount := LMinSamples;
 
-  { 先做一次探测采样 }
-  LMeasurement := ExecuteEntry(AEntry, AIters, FConfig.EnableMemoryTracking);
+  { 先做一次探测采样（不启用内存追踪，避免污染时间测量） }
+  LMeasurement := ExecuteEntry(AEntry, AIters, False);
   AFirstSample := LMeasurement;
 
   if LMeasurement.Skipped then
@@ -1043,12 +1045,22 @@ begin
     else
       LSamples[I] := 0.0;
 
+    { 保存最后一次带内存追踪的采样结果 }
+    if FConfig.EnableMemoryTracking and (I = LSampleCount - 1) then
+      LLastTrackedSample := LMeasurement;
+
     if LMeasurement.Skipped then
     begin
       SetLength(LSamples, I + 1);
       Break;
     end;
   end;
+
+  { 将最后一次带内存追踪的采样的内存 stats 复制到 AFirstSample }
+  if LLastTrackedSample.BytesPerOp > 0 then
+    AFirstSample.BytesPerOp := LLastTrackedSample.BytesPerOp;
+  if LLastTrackedSample.AllocsPerOp > 0 then
+    AFirstSample.AllocsPerOp := LLastTrackedSample.AllocsPerOp;
 
   Result := LSamples;
 end;

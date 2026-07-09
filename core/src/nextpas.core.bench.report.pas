@@ -146,6 +146,9 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.json.writer;
 
+const
+  HexDigits: array[0..15] of Char = '0123456789ABCDEF';
+
 { 辅助函数：行缓冲区操作 — 基于 TStringBuilder }
 
 procedure BufferAddLine(var ABuf: TLineBuffer; const ALine: string);
@@ -344,12 +347,13 @@ var
   I, LLen: Integer;
   LBuilder: TStringBuilder;
   LNeedsEscape: Boolean;
+  LCode: Byte;
 begin
   LLen := Length(AStr);
   { Fast path: check if any character needs escaping }
   LNeedsEscape := False;
   for I := 1 to LLen do
-    if AStr[I] in [#92, '"', #0, #8, #9, #10, #12, #13] then
+    if (AStr[I] <= #31) or (AStr[I] = '\') or (AStr[I] = '"') then
     begin
       LNeedsEscape := True;
       Break;
@@ -364,14 +368,22 @@ begin
       case AStr[I] of
         '\': LBuilder.AppendStr('\\');
         '"': LBuilder.AppendStr('\"');
-        #0: LBuilder.AppendStr('\u0000');
         #8: LBuilder.AppendStr('\b');
+        #9: LBuilder.AppendStr('\t');
         #10: LBuilder.AppendStr('\n');
         #12: LBuilder.AppendStr('\f');
         #13: LBuilder.AppendStr('\r');
-        #9: LBuilder.AppendStr('\t');
       else
-        LBuilder.AppendChar(AStr[I]);
+        if AStr[I] <= #31 then
+        begin
+          { JSON spec: all U+0000..U+001F must be \uXXXX }
+          LCode := Byte(AStr[I]);
+          LBuilder.AppendStr('\u00');
+          LBuilder.AppendChar(HexDigits[LCode shr 4]);
+          LBuilder.AppendChar(HexDigits[LCode and $0F]);
+        end
+        else
+          LBuilder.AppendChar(AStr[I]);
       end;
     end;
     Result := LBuilder.ToString;
