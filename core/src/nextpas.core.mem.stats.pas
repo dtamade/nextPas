@@ -405,18 +405,19 @@ function TAllocStatsAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointe
 begin
   if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then Exit(GetMem(ASize));
-  // ReallocMem 统计：释放旧 + 分配新
-  RecordFree;
   Result := FInner.ReallocMem(APtr, ASize);
-  if (Result <> nil) and (ASize > 0) then
+  if Result <> nil then
+  begin
+    RecordFree;
     RecordAlloc(ASize);
+  end;
 end;
 
 procedure TAllocStatsAllocator.FreeMem(APtr: Pointer);
 begin
   if APtr = nil then Exit;
-  RecordFree;
   FInner.FreeMem(APtr);
+  RecordFree;
 end;
 
 function TAllocStatsAllocator.Snapshot: TAllocSnapshot;

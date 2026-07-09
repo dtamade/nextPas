@@ -260,15 +260,15 @@ var
   LI: SizeUInt;
   LOldPtr, LNewPtr: Pointer;
   LSize: SizeUInt;
-  LCopySize: SizeUInt;
 begin
   Result := 0;
   if FAllocCount = 0 then Exit;
 
+  { 无回调时禁止搬迁：调用方无法得知新指针，旧指针会变悬挂 }
+  if not Assigned(FOnCompact) then Exit;
+
   Inc(FTotalCompactions);
 
-  { 简单压缩：重新分配每个块到新位置 }
-  { 这会触发内部分配器的碎片整理 }
   for LI := 0 to FAllocCount - 1 do
   begin
     LOldPtr := FAllocPtrs[LI];
@@ -283,9 +283,8 @@ begin
     if LSize > 0 then
       Move(LOldPtr^, LNewPtr^, LSize);
 
-    { 通知应用 }
-    if Assigned(FOnCompact) then
-      FOnCompact(LOldPtr, LNewPtr, LSize, FUserData);
+    { 通知应用更新指针 }
+    FOnCompact(LOldPtr, LNewPtr, LSize, FUserData);
 
     { 更新跟踪 }
     FAllocPtrs[LI] := LNewPtr;
@@ -314,6 +313,7 @@ begin
   else
   begin
     Result.ZeroInitialized := False;
+    Result.ThreadSafe := False;
     Result.SupportsRealloc := False;
   end;
 end;

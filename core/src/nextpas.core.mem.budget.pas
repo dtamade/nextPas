@@ -82,6 +82,10 @@ type
    *  包装任意 IAllocator，添加内存预算检查。
    *  分配前检查是否超过硬限制，超过则返回 nil。
    *  分配后更新预算，超过软限制时触发回调。
+   *
+   *  @note 已知限制：IAllocator 不暴露 MemSizeOf，FreeMem 无法回收预算。
+   *        预算只跟踪分配量（单调递增），适合作为分配上限保护。
+   *        如需精确跟踪，请配合 TAllocStatsAllocator 使用。
    *}
   TBudgetAllocator = class(TInterfacedObject, IAllocator)
   private
@@ -217,20 +221,13 @@ begin
 end;
 
 function TBudgetAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
-var
-  LOldSize: SizeUInt;
 begin
   if ASize = 0 then begin FreeMem(APtr); Exit(nil); end;
   if APtr = nil then Exit(GetMem(ASize));
-  // Realloc: 先释放旧预算，检查新预算，再分配
-  LOldSize := 0; // 精确大小未知，保守估计为 0
-  FBudget.RecordFree(LOldSize);
+  { Realloc：无法回收旧块预算（IAllocator 不暴露 MemSizeOf），
+    仅检查新大小是否超出硬限制。 }
   if not FBudget.CheckLimit(ASize) then
-  begin
-    // 分配失败，恢复旧预算（近似）
-    FBudget.RecordAlloc(0);
     Exit(nil);
-  end;
   Result := FInner.ReallocMem(APtr, ASize);
   if Result <> nil then
     FBudget.RecordAlloc(ASize);
@@ -239,7 +236,8 @@ end;
 procedure TBudgetAllocator.FreeMem(APtr: Pointer);
 begin
   if APtr = nil then Exit;
-  // FreeMem 不知道精确大小，预算跟踪为近似值
+  { IAllocator 不暴露 MemSizeOf，无法回收预算。
+    预算只跟踪分配量（单调递增）。 }
   FInner.FreeMem(APtr);
 end;
 

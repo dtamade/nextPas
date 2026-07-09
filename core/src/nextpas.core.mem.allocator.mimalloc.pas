@@ -173,10 +173,9 @@ end;
 
 function TMimallocAllocator.Traits: TAllocatorTraits; inline;
 begin
-  // mimalloc semantics:
-  // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := False;
+  Result.ThreadSafe := True;
+  Result.SupportsRealloc := True;
 end;
 
 function GetMimallocAllocator: IAllocator;

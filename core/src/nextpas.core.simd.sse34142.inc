@@ -761,7 +761,7 @@ begin
     // edx = haystack chunk length (up to 16)
 
     mov r8, rax           // Current haystack pointer
-    mov r9, LLen          // Remaining haystack length
+    movsxd r9, LLen       // Remaining haystack length (sign-extend Integer to 64-bit)
 
   @search_loop:
     cmp r9, 0

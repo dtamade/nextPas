@@ -406,6 +406,7 @@ function TMemoryMapAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := True;
   Result.ThreadSafe := True;
+  Result.SupportsRealloc := False;
 end;
 
 function CreateAnonymousMemoryMapAllocator(aReservationSize: UInt64): IAllocator;

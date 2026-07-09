@@ -68,7 +68,9 @@ uses
   nextpas.core.mem.stats,
   nextpas.core.mem.oom,
   nextpas.core.mem.registry,
-  nextpas.core.mem.allocator.compact;
+  nextpas.core.mem.allocator.compact,
+  nextpas.core.mem.allocator.callback,
+  nextpas.core.mem.budget;
 
 type
   // === 基础类型 ===
@@ -161,6 +163,19 @@ type
   // === 碎片整理 ===
   TCompactAllocator = nextpas.core.mem.allocator.compact.TCompactAllocator;
   TCompactStats = nextpas.core.mem.allocator.compact.TCompactStats;
+
+  // === OOM 分配器 ===
+  TOomAllocator = nextpas.core.mem.oom.TOomAllocator;
+
+  // === 回调分配器 ===
+  TGetMemCallback = nextpas.core.mem.allocator.callback.TGetMemCallback;
+  TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;
+  TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
+  TFreeMemCallback = nextpas.core.mem.allocator.callback.TFreeMemCallback;
+
+  // === 预算管理 ===
+  TMemoryBudget = nextpas.core.mem.budget.TMemoryBudget;
+  TBudgetAllocator = nextpas.core.mem.budget.TBudgetAllocator;
 
 function DefaultAllocator: IAllocator; inline;
 

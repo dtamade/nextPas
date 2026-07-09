@@ -143,6 +143,7 @@ function TFailAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := False;
 end;
 
 end.

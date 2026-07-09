@@ -82,6 +82,8 @@ uses
 
 const
   REGISTRY_MIN_CAP = 16;
+  { 开放定址哈希表的墓碑标记：已删除但需要跳过的槽位 }
+  TOMBSTONE = #1;
 
 var
   GInstanceLock: TMemMutex;
@@ -151,21 +153,43 @@ var
   LHash: UInt32;
   LPos: SizeUInt;
   LSteps: SizeUInt;
+  LFirstTombstone: SizeUInt;
+  LHasTombstone: Boolean;
 begin
   LHash := SimpleHash(AName);
   LPos := LHash and FMask;
   LSteps := 0;
+  LHasTombstone := False;
   while LSteps <= FMask do
   begin
     if FNames[LPos] = '' then
-      Exit(LPos); { 空槽位，未找到 }
-    if FNames[LPos] = AName then
+    begin
+      { 空槽位：key 不存在 }
+      if LHasTombstone then
+        Exit(LFirstTombstone); { 返回墓碑位置供插入 }
+      Exit(LPos);
+    end;
+    if FNames[LPos] = TOMBSTONE then
+    begin
+      { 墓碑：记录第一个墓碑位置，继续搜索 }
+      if not LHasTombstone then
+      begin
+        LFirstTombstone := LPos;
+        LHasTombstone := True;
+      end;
+    end
+    else if FNames[LPos] = AName then
+    begin
       Exit(LPos); { 找到 }
+    end;
     LPos := (LPos + 1) and FMask;
     Inc(LSteps);
   end;
   { 不应到达：Grow 保证 50% 负载因子，始终有空槽 }
-  Result := LPos;
+  if LHasTombstone then
+    Result := LFirstTombstone
+  else
+    Result := LPos;
 end;
 
 procedure TAllocatorRegistry.Grow;
@@ -190,7 +214,7 @@ begin
 
   for LI := 0 to LOldCap - 1 do
   begin
-    if LOldNames[LI] <> '' then
+    if (LOldNames[LI] <> '') and (LOldNames[LI] <> TOMBSTONE) then
     begin
       LPos := FindIndex(LOldNames[LI]);
       FNames[LPos] := LOldNames[LI];
@@ -215,9 +239,9 @@ begin
     if (FCount + 1) > ((FMask + 1) shr 1) then
       Grow;
     LPos := FindIndex(AName);
-    if FNames[LPos] = '' then
+    if (FNames[LPos] = '') or (FNames[LPos] = TOMBSTONE) then
     begin
-      { 新注册 }
+      { 新注册（或重用墓碑槽位） }
       FNames[LPos] := AName;
       FAllocators[LPos] := AAllocator;
       Inc(FCount);
@@ -248,7 +272,7 @@ begin
   FLock.Acquire;
   try
     LPos := FindIndex(AName);
-    if FNames[LPos] <> '' then
+    if FNames[LPos] = AName then
     begin
       AAllocator := FAllocators[LPos];
       Result := True;
@@ -265,9 +289,9 @@ begin
   FLock.Acquire;
   try
     LPos := FindIndex(AName);
-    if FNames[LPos] <> '' then
+    if FNames[LPos] = AName then
     begin
-      FNames[LPos] := '';
+      FNames[LPos] := TOMBSTONE;
       FAllocators[LPos] := nil;
       if FCount > 0 then
         Dec(FCount);

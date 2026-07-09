@@ -105,6 +105,8 @@ end;
 
 procedure TOomHandler.Register(AHandler: TOomEvent);
 begin
+  if not Assigned(AHandler) then
+    raise EArgumentNil.Create('TOomHandler.Register: AHandler must not be nil');
   FLock.Acquire;
   try
     if FCount >= Length(FHandlers) then
@@ -184,6 +186,10 @@ end;
 
 constructor TOomAllocator.Create(AInner: IAllocator; AOomHandler: TOomHandler);
 begin
+  if AInner = nil then
+    raise EArgumentNil.Create('TOomAllocator.Create: AInner must not be nil');
+  if AOomHandler = nil then
+    raise EArgumentNil.Create('TOomAllocator.Create: AOomHandler must not be nil');
   inherited Create;
   FInner := AInner;
   FOomHandler := AOomHandler;
