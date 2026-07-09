@@ -179,3 +179,25 @@
 | P0-5 | THugePageAllocator | 无锁但声明 ThreadSafe:=True → 移除 |
 | P0-6 | THotswapAllocator | 无锁但声明 ThreadSafe:=True → 移除 |
 | QA-1 | 12 个测试文件 | Assert → Check（统一断言 API） |
+
+## Phase 内联架构重构 ✅
+
+**目标**: 消除 TAllocator 虚方法基类，所有 allocator 改为 `TInterfacedObject + IAllocator + inline`
+
+| 批次 | 数量 | 分配器 | 状态 |
+|------|------|--------|------|
+| 基础设施 | — | 工具函数提取 + TAllocator 删除 | ✅ |
+| P0 | 5 | pool, pool2, bitmap, coalesce, slab | ✅ |
+| P1 | 10 | bump, stack, arena, arena2, freelist, size_class, page, watermark, sliding | ✅ |
+| P2 | 15 | guard, sentinel, tracking, aligned, bounded, prefix, logging, debug_alloc, stats, compact, sampling, replay, zeroed, cow, counting | ✅ |
+| P3 | 29 | 其余全部（cascade, dual, fail, mimalloc, mmap, numa, hotswap 等） | ✅ |
+| 清理 | — | TAllocator 基类删除 + 修复 IntToStr 缺失引用 | ✅ |
+
+**架构变化**:
+- `TAllocator` 基类已删除
+- 59 个 allocator 全部 `TInterfacedObject + IAllocator + inline`
+- 热路径：直接具体类型调用 → 内联展开，零跳转
+- 组合路径：IAllocator 接口 → 2 次跳转
+- 共享逻辑：`DebugPoisonAlloc`/`DebugRecordFree` 工具函数
+
+**测试**: 31/31 套件全绿
