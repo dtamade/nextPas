@@ -5,42 +5,50 @@ unit nextpas.core.platform.x11.ffi;
   {$ERROR 'X11 FFI event offsets are x86_64-only'}
 {$ENDIF}
 
-// X11 and GLX FFI type and function pointer declarations.
-//
-// Types, constants, and typed function pointer globals for the subset
-// of libX11 and GLX needed by nextPas/core window management and GL context
-// creation. Zero implementation logic -- the companion units
-// nextpas.core.platform.x11 and nextpas.core.gpu.gl handle loading.
-//
-// TX11Event is a flat 192-byte buffer matching C's union XEvent.
-// All event field access goes through byte-offset helpers in x11.pas.
-// This is the correct model for C unions in Pascal -- named fields
-// would create false precision since different event types reuse offsets.
+{**
+ * X11 和 GLX FFI 类型和函数指针声明
+ *
+ * 类型、常量和类型化函数指针全局变量，用于 libX11 和 GLX 的以下功能：
+ *   - 窗口管理
+ *   - GL 上下文创建
+ *
+ * TX11Event 是一个 192 字节的扁平缓冲区，匹配 C 的 union XEvent。
+ * 所有事件字段访问通过 x11.pas 中的字节偏移辅助函数进行。
+ * 这是 Pascal 中处理 C 联合体的正确模型 — 命名字段会产生错误的精度，
+ * 因为不同的事件类型重用偏移量。
+ *}
 
 interface
 
 type
-  { Opaque X11 handles. Sizes verified against gcc sizeof. }
-  TX11Display = type Pointer;   // 8 bytes
-  TX11Window  = type UInt64;    // 8 bytes (C unsigned long)
-  TX11Colormap = type UInt64;   // 8 bytes
-  TX11Atom     = type UInt64;   // 8 bytes (C unsigned long)
-  TX11KeyCode  = type UInt32;   // 4 bytes (C unsigned int in XKeyEvent.keycode)
-  TX11KeySym   = type UInt64;   // 8 bytes (C unsigned long KeySym)
+  {** @desc X11 Display 句柄（不透明，8 字节） *}
+  TX11Display = type Pointer;
+  {** @desc X11 Window ID（8 字节，C unsigned long） *}
+  TX11Window  = type UInt64;
+  {** @desc X11 Colormap ID（8 字节） *}
+  TX11Colormap = type UInt64;
+  {** @desc X11 Atom（8 字节，C unsigned long） *}
+  TX11Atom     = type UInt64;
+  {** @desc X11 KeyCode（4 字节，C unsigned int） *}
+  TX11KeyCode  = type UInt32;
+  {** @desc X11 KeySym（8 字节，C unsigned long） *}
+  TX11KeySym   = type UInt64;
+  {** @desc X11 Status *}
   TX11Status   = type Int32;
 
-  { Pointer types used by function signatures and event helpers }
+  { 指针类型用于函数签名和事件辅助函数 }
   PTX11KeySym = ^TX11KeySym;
   PTX11Atom = ^TX11Atom;
   PTX11Window = ^TX11Window;
   PPByte = ^PByte;
 
-  { GLX opaque handles. Sizes verified against gcc sizeof. }
-  TGLXContext   = type Pointer;  { 8 bytes }
-  TGLXFBConfig  = type Pointer;  { 8 bytes -- pointer to opaque struct }
+  {** @desc GLX 上下文句柄（不透明，8 字节） *}
+  TGLXContext   = type Pointer;
+  {** @desc GLX 帧缓冲配置句柄（不透明，8 字节） *}
+  TGLXFBConfig  = type Pointer;
   PTGLXFBConfig = ^TGLXFBConfig;
 
-  { XVisualInfo pointer -- used by GLX to return matching visuals. }
+  {** @desc XVisualInfo 结构体 — 用于 GLX 返回匹配的可视化配置 *}
   PXVisualInfo = ^TXVisualInfo;
   TXVisualInfo = record
     Visual: Pointer;     { offset 0: XVisualInfo* visual }
@@ -55,17 +63,16 @@ type
     BitsPerRGB: Int32;   { offset 60 }
   end;                   { total 64 bytes, matches C XVisualInfo on x86_64 }
 
-  { XEvent buffer -- 192 bytes on x86_64, matches C union XEvent.
-    C declares: long pad[24] = 24 * 8 = 192 bytes.
-    We use a flat byte array; all field access goes through offset helpers.
-    Verified: gcc sizeof(XEvent) = 192, FPC SizeOf(TX11Event) = 192. }
+  {** @desc XEvent 缓冲区 — x86_64 上 192 字节，匹配 C union XEvent
+      @note C 声明: long pad[24] = 24 * 8 = 192 bytes
+      @note 使用扁平字节数组；所有字段访问通过偏移辅助函数进行 *}
   TX11Event = array[0..191] of Byte;
 
 const
-  { Compile-time size assertion }
+  {** @desc XEvent 编译时大小断言 *}
   X11_EVENT_EXPECTED_SIZE = 192;
 
-  { X event types }
+  {** @desc X 事件类型 *}
   X11_KEY_PRESS      = 2;
   X11_KEY_RELEASE    = 3;
   X11_BUTTON_PRESS   = 4;

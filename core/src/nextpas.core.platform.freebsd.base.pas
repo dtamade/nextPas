@@ -8,47 +8,65 @@ uses
   nextpas.core.platform.posix.base;
 
 const
+  {** @desc FreeBSD pthread 令牌大小 *}
   PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
 
 type
+  {** @desc FreeBSD pthread 令牌对齐记录 *}
   TPlatformPThreadTokenAlign = record
     Value: pthread_t;
   end;
 
+  {** @desc FreeBSD pthread 互斥锁对齐记录 *}
   TPlatformPThreadMutexAlign = record
     Value: pthread_mutex_t;
   end;
 
+  {** @desc FreeBSD pthread 读写锁对齐记录 *}
   TPlatformPThreadRwLockAlign = record
     Value: pthread_rwlock_t;
   end;
 
+  {** @desc FreeBSD pthread 条件变量对齐记录 *}
   TPlatformPThreadCondVarAlign = record
     Value: pthread_cond_t;
   end;
 
+  {** @desc FreeBSD 进程 ID 类型 *}
   TPlatformProcessId = pid_t;
 
+  {** @desc FreeBSD 设备号类型 *}
   TPlatformFreeBSDDev = UInt64;
+  {** @desc FreeBSD inode 号类型 *}
   TPlatformFreeBSDIno = UInt64;
+  {** @desc FreeBSD 文件模式类型 *}
   TPlatformFreeBSDMode = UInt16;
+  {** @desc FreeBSD 硬链接计数类型 *}
   TPlatformFreeBSDNLink = UInt64;
+  {** @desc FreeBSD 用户 ID 类型 *}
   TPlatformFreeBSDUid = UInt32;
+  {** @desc FreeBSD 组 ID 类型 *}
   TPlatformFreeBSDGid = UInt32;
+  {** @desc FreeBSD 文件偏移类型 *}
   TPlatformFreeBSDOff = Int64;
+  {** @desc FreeBSD 时间类型 *}
   TPlatformFreeBSDTime = Int64;
+  {** @desc FreeBSD 长整型 *}
   TPlatformFreeBSDLong = Int64;
 
+  {** @desc FreeBSD 信号集类型 *}
   TPlatformFreeBSDSignalSet = record
     Words: array[0..3] of Int32;
   end;
   PPlatformFreeBSDSignalSet = ^TPlatformFreeBSDSignalSet;
 
+  {** @desc FreeBSD 信号处理器函数类型 *}
   TPlatformFreeBSDSigActionHandler = procedure(
     ASignal: Int32;
     AInfo: Pointer;
     AContext: Pointer); cdecl;
 
+  {** @desc FreeBSD 信号动作结构体 *}
   TPlatformFreeBSDSigAction = record
     sa_handler: TPlatformFreeBSDSigActionHandler;
     sa_flags: Int32;
@@ -56,6 +74,7 @@ type
   end;
   PPlatformFreeBSDSigAction = ^TPlatformFreeBSDSigAction;
 
+  {** @desc FreeBSD 文件状态结构体 *}
   TPlatformFreeBSDStat = record
     st_dev: TPlatformFreeBSDDev;
     st_ino: TPlatformFreeBSDIno;

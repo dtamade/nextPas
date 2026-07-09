@@ -426,73 +426,54 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.helpers,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.base{$ENDIF}
   {$IFDEF NEXTPAS_MACOS}nextpas.core.platform.darwin.base{$ENDIF}
   {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
   ;
 
-{** @desc 将 POSIX 调用结果转换为平台错误码
-    @param AResult POSIX 调用返回值（0 表示成功）
-    @return 0 成功，否则返回 platform_get_errno *}
-function PosixResultToError(AResult: cint): Int32; inline;
+{ 套接字描述符转换辅助函数 }
+function FdToSocket(AFd: cint; out ASocket: TPlatformSocket): Int32; inline;
 begin
-  if AResult = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
-end;
-
-{** @desc 将 POSIX 文件描述符转换为平台错误码（负值表示错误）
-    @param AFd POSIX 文件描述符
-    @param AHandle 输出句柄
-    @return 0 成功，否则返回 platform_get_errno *}
-function PosixFdToHandle(AFd: cint; out AHandle: TPlatformSocket): Int32; inline;
-begin
-  if AFd < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    AHandle.Value := AFd;
-    Result := 0;
-  end;
+  Result := PosixFdToHandle(AFd, ASocket.Value);
 end;
 
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
 begin
-  Result := PosixFdToHandle(socket(ADomain, AType, AProtocol), ASocket);
+  Result := FdToSocket(socket(ADomain, AType, AProtocol), ASocket);
 end;
 
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
 begin
   if ASocket.Value < 0 then
     Exit(0);
-  Result := PosixResultToError(close(ASocket.Value));
+  Result := PosixCheck(close(ASocket.Value));
   ASocket.Value := -1;
 end;
 
 function platform_socket_bind(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Int32): Int32;
 begin
-  Result := PosixResultToError(bind(ASocket.Value, AAddr, socklen_t(AAddrLen)));
+  Result := PosixCheck(bind(ASocket.Value, AAddr, socklen_t(AAddrLen)));
 end;
 
 function platform_socket_listen(const ASocket: TPlatformSocket;
   ABacklog: Int32): Int32;
 begin
-  Result := PosixResultToError(listen(ASocket.Value, ABacklog));
+  Result := PosixCheck(listen(ASocket.Value, ABacklog));
 end;
 
 function platform_socket_accept(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32;
 begin
-  Result := PosixFdToHandle(accept(ASocket.Value, AAddr, AAddrLen), AClient);
+  Result := FdToSocket(accept(ASocket.Value, AAddr, AAddrLen), AClient);
 end;
 
 function platform_socket_connect(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Int32): Int32;
 begin
-  Result := PosixResultToError(connect(ASocket.Value, AAddr, socklen_t(AAddrLen)));
+  Result := PosixCheck(connect(ASocket.Value, AAddr, socklen_t(AAddrLen)));
 end;
 
 function platform_socket_send(const ASocket: TPlatformSocket;
@@ -538,13 +519,13 @@ end;
 function platform_socket_shutdown(const ASocket: TPlatformSocket;
   AHow: Int32): Int32;
 begin
-  Result := PosixResultToError(nextpas.core.platform.posix.ffi.shutdown(ASocket.Value, AHow));
+  Result := PosixCheck(nextpas.core.platform.posix.ffi.shutdown(ASocket.Value, AHow));
 end;
 
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
 begin
-  Result := PosixResultToError(setsockopt(ASocket.Value, ALevel, AOptName, AOptVal, socklen_t(AOptLen)));
+  Result := PosixCheck(setsockopt(ASocket.Value, ALevel, AOptName, AOptVal, socklen_t(AOptLen)));
 end;
 
 function platform_socket_sendto(const ASocket: TPlatformSocket;
@@ -598,13 +579,13 @@ end;
 function platform_socket_getsockname(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
 begin
-  Result := PosixResultToError(getsockname(ASocket.Value, AAddr, AAddrLen));
+  Result := PosixCheck(getsockname(ASocket.Value, AAddr, AAddrLen));
 end;
 
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
 begin
-  Result := PosixResultToError(getpeername(ASocket.Value, AAddr, AAddrLen));
+  Result := PosixCheck(getpeername(ASocket.Value, AAddr, AAddrLen));
 end;
 
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;

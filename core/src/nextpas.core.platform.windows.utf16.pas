@@ -7,18 +7,59 @@ interface
 uses
   nextpas.core.platform.windows.base;
 
+{** @desc 将 UTF-8 字符串转换为 UTF-16 宽字符串
+    @param AText UTF-8 字符串
+    @return UTF-16 宽字符串，失败返回空字符串 *}
 function platform_windows_utf8_to_wide(const AText: PAnsiChar): UnicodeString;
+
+{** @desc 将 UTF-8 字符串转换为 UTF-16 宽字符串（带错误检查）
+    @param AText UTF-8 字符串
+    @param AWide 输出 UTF-16 宽字符串
+    @return True 成功，False 失败 *}
 function platform_windows_utf8_to_wide_checked(const AText: PAnsiChar;
   out AWide: UnicodeString): Boolean;
+
+{** @desc 将 UTF-16 宽字符串转换为 UTF-8 字符串
+    @param AText UTF-16 宽字符串
+    @return UTF-8 字符串，失败返回空字符串 *}
 function platform_windows_wide_to_utf8(const AText: PWideChar): AnsiString;
+
+{** @desc 将 UTF-16 宽字符串转换为 UTF-8 字符串（带错误检查）
+    @param AText UTF-16 宽字符串
+    @param AUtf8 输出 UTF-8 字符串
+    @return True 成功，False 失败 *}
 function platform_windows_wide_to_utf8_checked(const AText: PWideChar;
   out AUtf8: AnsiString): Boolean;
+
+{** @desc 将 UTF-8 字符串复制到缓冲区
+    @param AText UTF-8 字符串
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_windows_copy_utf8_to_buffer(const AText: AnsiString;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 将 UTF-16 宽字符串转换为 UTF-8 并写入缓冲区
+    @param AText UTF-16 宽字符串
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @param ALen 输出实际长度
+    @return True 成功，False 失败 *}
 function platform_windows_wide_to_utf8_buffer(const AText: PWideChar;
   ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Boolean;
+
+{** @desc 将环境变量数组转换为 UTF-16 宽字符串块
+    @param AEnvp 环境变量数组（以 nil 结尾）
+    @param ABlock 输出宽字符串块
+    @return True 成功，False 失败 *}
 function platform_windows_envp_to_wide_block(const AEnvp: PPAnsiChar;
   out ABlock: UnicodeString): Boolean;
+
+{** @desc 将参数数组转换为命令行字符串
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACmd 输出命令行字符串
+    @return True 成功，False 失败 *}
 function platform_windows_argv_to_command_line(const APath: PAnsiChar;
   AArgv: PPAnsiChar; out ACmd: UnicodeString): Boolean;
 

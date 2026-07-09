@@ -5,58 +5,72 @@ unit nextpas.core.platform.console;
 interface
 
 type
+  {** @desc 控制台尺寸结构体 *}
   TPlatformConsoleSize = record
     Cols: Int32;
     Rows: Int32;
   end;
 
-  {**
-   * @desc raw 模式保存状态的不透明载体。
-   *
-   * 接口层不暴露宿主 termios 类型；实现层把 @Opaque[0] 转为 PTermios。
-   * 128 字节足以容纳各宿主 termios（Linux 60 字节、macOS 更小、Windows
-   * 两个 DWORD），留足余量。
-   *}
+  {** @desc raw 模式保存状态的不透明载体
+      @note 接口层不暴露宿主 termios 类型；实现层把 Opaque[0] 转为 PTermios
+      @note 128 字节足以容纳各宿主 termios（Linux 60 字节、macOS 更小、Windows 两个 DWORD） *}
   TPlatformConsoleMode = record
     Opaque: array[0..127] of Byte;
   end;
 
-  { wait_readable 的三态结果 }
+  {** @desc wait_readable 的三态结果 *}
   TPlatformConsoleWait = (cwReadable, cwTimeout, cwInterrupted, cwError);
 
+{** @desc 检查文件描述符是否为终端
+    @param AFd 文件描述符
+    @return True 是终端 *}
 function platform_console_is_terminal(AFd: Int32): Boolean;
+
+{** @desc 获取控制台尺寸（stdout）
+    @param ASize 输出控制台尺寸
+    @return 0 成功，否则返回错误码 *}
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
+
+{** @desc 获取控制台尺寸（指定文件描述符）
+    @param AFd 文件描述符
+    @param ASize 输出控制台尺寸
+    @return 0 成功，否则返回错误码 *}
 function platform_console_get_size_fd(AFd: Int32; out ASize: TPlatformConsoleSize): Int32;
+
+{** @desc 启用 ANSI 转义序列支持（Windows）
+    @return 0 成功，否则返回错误码 *}
 function platform_console_enable_ansi: Int32;
 
-{**
- * @desc 进入 raw 模式。保存当前 termios 到 AMode，设置 raw flags。
- * @return 0 成功，非 0 失败（errno 或 -1）
- *}
+{** @desc 进入 raw 模式
+    @param AFd 文件描述符
+    @param AMode 输出保存的状态
+    @return 0 成功，否则返回错误码 *}
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
 
-{**
- * @desc 恢复先前由 set_raw 保存的 termios。
- *}
+{** @desc 恢复先前由 set_raw 保存的终端状态
+    @param AFd 文件描述符
+    @param AMode 保存的状态
+    @return 0 成功，否则返回错误码 *}
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
 
-{**
- * @desc 从 fd 读字节，遇 EINTR 自动重试。
- * @return 读取字节数（>=0），出错返回 -1
- *}
+{** @desc 从文件描述符读取字节（遇 EINTR 自动重试）
+    @param AFd 文件描述符
+    @param ABuf 输出缓冲区
+    @param ACount 请求字节数
+    @return 读取字节数，-1 失败 *}
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 
-{**
- * @desc 向 fd 写字节，遇 EINTR 重试、short-write 续写直到全部写完。
- * @return 写入字节数（= ACount 表示全部成功），出错返回 -1
- *}
+{** @desc 向文件描述符写入字节（遇 EINTR 重试、short-write 续写）
+    @param AFd 文件描述符
+    @param ABuf 写入缓冲区
+    @param ACount 写入字节数
+    @return 写入字节数，-1 失败 *}
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 
-{**
- * @desc 等待 fd 可读，最多 ATimeoutMs 毫秒。
- * @return cwReadable / cwTimeout / cwInterrupted（被信号打断）/ cwError
- * @note 不在内部重试 EINTR——调用方据此消费信号 pending 状态后自行决定重试。
- *}
+{** @desc 等待文件描述符可读
+    @param AFd 文件描述符
+    @param ATimeoutMs 超时时间（毫秒）
+    @return TPlatformConsoleWait 结果枚举 *}
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 
 implementation

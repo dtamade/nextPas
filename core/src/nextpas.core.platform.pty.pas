@@ -10,19 +10,42 @@ interface
 uses
   nextpas.core.platform.pty.base;
 
+{** @desc 打开伪终端对
+    @param ASize 终端尺寸
+    @param APty 输出伪终端句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_pty_open(const ASize: TPlatformPtySize;
   out APty: TPlatformPty): Int32;
 
+{** @desc 在伪终端中启动子进程
+    @param APty 伪终端句柄
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param AEnvp 环境变量数组（nil 表示继承）
+    @param ACwd 工作目录（nil 表示继承）
+    @param APid 输出子进程 PID
+    @param AFailStage 输出失败阶段
+    @return 0 成功，否则返回错误码 *}
 function platform_pty_spawn(var APty: TPlatformPty;
   const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar;
   const ACwd: PAnsiChar; out APid: Int32;
   out AFailStage: TPlatformPtySpawnStage): Int32;
 
+{** @desc 调整伪终端尺寸
+    @param APty 伪终端句柄
+    @param ASize 新尺寸
+    @return 0 成功，否则返回错误码 *}
 function platform_pty_resize(var APty: TPlatformPty;
   const ASize: TPlatformPtySize): Int32;
 
+{** @desc 关闭伪终端
+    @param APty 伪终端句柄（置为空）
+    @return 0 成功，否则返回错误码 *}
 function platform_pty_close(var APty: TPlatformPty): Int32;
 
+{** @desc 获取伪终端主文件描述符
+    @param APty 伪终端句柄
+    @return 主文件描述符，-1 无效 *}
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 
 implementation

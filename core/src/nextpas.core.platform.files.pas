@@ -220,7 +220,8 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.helpers
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
   , nextpas.core.platform.linux.ffi
@@ -239,48 +240,10 @@ uses
 {$ENDIF}
   ;
 
-{** @desc 将 POSIX 调用结果转换为平台错误码
-    @param AResult POSIX 调用返回值（0 表示成功）
-    @return 0 成功，否则返回 platform_get_errno *}
-function PosixResultToError(AResult: cint): Int32; inline;
+{ 文件描述符转换辅助函数 }
+function FdToFileHandle(AFd: cint; out AHandle: TPlatformFileHandle): Int32; inline;
 begin
-  if AResult = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
-end;
-
-{** @desc 将 POSIX 文件描述符转换为平台错误码（负值表示错误）
-    @param AFd POSIX 文件描述符
-    @param AHandle 输出句柄
-    @return 0 成功，否则返回 platform_get_errno *}
-function PosixFdToHandle(AFd: cint; out AHandle: TPlatformFileHandle): Int32; inline;
-begin
-  if AFd < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    AHandle.Value := AFd;
-    Result := 0;
-  end;
-end;
-
-{** @desc 将 POSIX ssize_t 结果转换为平台错误码（负值表示错误）
-    @param AResult POSIX 调用返回值
-    @param ACount 输出实际字节数
-    @return 0 成功，否则返回 platform_get_errno *}
-function PosixSsizeToResult(AResult: PtrInt; out ACount: PtrUInt): Int32; inline;
-begin
-  if AResult < 0 then
-  begin
-    ACount := 0;
-    Result := platform_get_errno;
-  end
-  else
-  begin
-    ACount := PtrUInt(AResult);
-    Result := 0;
-  end;
+  Result := PosixFdToHandle(AFd, AHandle.Value);
 end;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
@@ -323,14 +286,14 @@ begin
   if ASync then
     LFlags := LFlags or O_SYNC;
   LFlags := LFlags or O_CLOEXEC;
-  Result := PosixFdToHandle(open(APath, LFlags, APerm), AHandle);
+  Result := FdToFileHandle(open(APath, LFlags, APerm), AHandle);
 end;
 
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 begin
   if AHandle.Value < 0 then
     Exit(PLATFORM_ERR_BADF);
-  Result := PosixResultToError(close(AHandle.Value));
+  Result := PosixCheck(close(AHandle.Value));
   AHandle.Value := -1;
 end;
 
@@ -404,18 +367,12 @@ end;
 
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 begin
-  if fsync(AHandle.Value) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(fsync(AHandle.Value));
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
 begin
-  if ftruncate(AHandle.Value, ASize) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(ftruncate(AHandle.Value, ASize));
 end;
 
 function ClassifyDirEntryDType(ADType: Byte): TPlatformFileType;
@@ -598,60 +555,42 @@ function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if chmod(APath, AMode) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(chmod(APath, AMode));
 end;
 
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if truncate(APath, ASize) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(truncate(APath, ASize));
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if mkdir(APath, AMode) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(mkdir(APath, AMode));
 end;
 
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if rmdir(APath) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(rmdir(APath));
 end;
 
 function platform_file_unlink(const APath: PAnsiChar): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if unlink(APath) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(unlink(APath));
 end;
 
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 begin
   if (AOldPath = nil) or (ANewPath = nil) then
     Exit(PLATFORM_ERR_INVALID);
-  if rename(AOldPath, ANewPath) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(rename(AOldPath, ANewPath));
 end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
@@ -665,10 +604,7 @@ function platform_file_chdir(const APath: PAnsiChar): Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if chdir(APath) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(chdir(APath));
 end;
 
 function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
@@ -679,10 +615,7 @@ begin
     LFlags := LOCK_EX
   else
     LFlags := LOCK_SH;
-  if nextpas.core.platform.posix.ffi.flock(AHandle.Value, LFlags) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(nextpas.core.platform.posix.ffi.flock(AHandle.Value, LFlags));
 end;
 
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
@@ -711,10 +644,7 @@ function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiC
 begin
   if (ATarget = nil) or (ALinkPath = nil) then
     Exit(PLATFORM_ERR_INVALID);
-  if symlink(ATarget, ALinkPath) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixCheck(symlink(ATarget, ALinkPath));
 end;
 
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
@@ -747,7 +677,7 @@ begin
   end;
   LResult := readlink(APath, ABuf, LCopyLen);
   if LResult < 0 then
-    Exit(platform_get_errno);
+    Exit(PosixCheck(-1));
   ABuf[LResult] := #0;
   Result := 0;
 end;
@@ -757,11 +687,7 @@ begin
   FillChar(AHandle, SizeOf(AHandle), 0);
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  AHandle.Fd := open(APath, O_RDONLY or O_DIRECTORY, 0);
-  if AHandle.Fd < 0 then
-    Result := platform_get_errno
-  else
-    Result := 0;
+  Result := PosixFdToHandle(open(APath, O_RDONLY or O_DIRECTORY, 0), AHandle.Fd);
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
@@ -937,14 +863,11 @@ function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
   if AHandle.Fd >= 0 then
   begin
-    if close(AHandle.Fd) = 0 then
-      Result := 0
-    else
-      Result := platform_get_errno;
+    Result := PosixCheck(close(AHandle.Fd));
     AHandle.Fd := -1;
   end
   else
-    Result := 9;
+    Result := PLATFORM_ERR_BADF;
 end;
 {$ENDIF}
 

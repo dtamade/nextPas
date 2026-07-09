@@ -7,10 +7,10 @@ interface
 uses
   nextpas.core.platform.posix.base;
 
-{ Modern Linux syscalls (kernel 5.x+) }
+{ 现代 Linux 系统调用（内核 5.x+） }
 
 const
-  // io_uring setup flags
+  {** @desc io_uring 设置标志 *}
   IORING_SETUP_IOPOLL     = 1 shl 0;
   IORING_SETUP_SQPOLL     = 1 shl 1;
   IORING_SETUP_SQ_AFF     = 1 shl 2;
@@ -26,13 +26,13 @@ const
   IORING_SETUP_SINGLE_ISSUER = 1 shl 12;
   IORING_SETUP_DEFER_TASKRUN = 1 shl 13;
 
-  // io_uring enter flags
+  {** @desc io_uring 进入标志 *}
   IORING_ENTER_GETEVENTS  = 1 shl 0;
   IORING_ENTER_SQ_WAKEUP  = 1 shl 1;
   IORING_ENTER_SQ_WAIT    = 1 shl 2;
   IORING_ENTER_EXT_ARG    = 1 shl 3;
 
-  // io_uring register opcodes
+  {** @desc io_uring 注册操作码 *}
   IORING_REGISTER_BUFFERS = 0;
   IORING_UNREGISTER_BUFFERS = 1;
   IORING_REGISTER_FILES   = 2;
@@ -43,7 +43,7 @@ const
   IORING_REGISTER_EVENTFD_ASYNC = 7;
   IORING_REGISTER_PROBE   = 8;
 
-  // io_uring SQE opcodes
+  {** @desc io_uring SQE 操作码 *}
   IORING_OP_NOP       = 0;
   IORING_OP_READV     = 1;
   IORING_OP_WRITEV    = 2;
@@ -76,7 +76,7 @@ const
   IORING_OP_SYMLINKAT = 38;
   IORING_OP_LINKAT    = 39;
 
-  // memfd_create flags
+  {** @desc memfd_create 标志 *}
   MFD_CLOEXEC       = 1;
   MFD_ALLOW_SEALING = 2;
   MFD_HUGETLB       = 4;
