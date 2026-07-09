@@ -685,12 +685,23 @@ begin
   dispatchTable.ArrayAtan2F32 := @SSE2ArrayAtan2F32;
   dispatchTable.ArrayHypotF32 := @SSE2ArrayHypotF32;
 
-  // Rounding
-  dispatchTable.ArrayCeilF32 := @SSE2ArrayCeilF32;
-  dispatchTable.ArrayFloorF32 := @SSE2ArrayFloorF32;
-  dispatchTable.ArrayRoundF32 := @SSE2ArrayRoundF32;
-  dispatchTable.ArrayTruncF32 := @SSE2ArrayTruncF32;
-  dispatchTable.ArrayFractF32 := @SSE2ArrayFractF32;
+  // Rounding - SSE4.1 roundps 指令，纯 SSE2 CPU 使用标量回退
+  if HasSSE41 then
+  begin
+    dispatchTable.ArrayCeilF32 := @SSE2ArrayCeilF32;
+    dispatchTable.ArrayFloorF32 := @SSE2ArrayFloorF32;
+    dispatchTable.ArrayRoundF32 := @SSE2ArrayRoundF32;
+    dispatchTable.ArrayTruncF32 := @SSE2ArrayTruncF32;
+    dispatchTable.ArrayFractF32 := @SSE2ArrayFractF32;
+  end
+  else
+  begin
+    dispatchTable.ArrayCeilF32 := @ScalarArrayCeilF32;
+    dispatchTable.ArrayFloorF32 := @ScalarArrayFloorF32;
+    dispatchTable.ArrayRoundF32 := @ScalarArrayRoundF32;
+    dispatchTable.ArrayTruncF32 := @ScalarArrayTruncF32;
+    dispatchTable.ArrayFractF32 := @ScalarArrayFractF32;
+  end;
 
   // Interpolation
   dispatchTable.ArrayLerpF32 := @SSE2ArrayLerpF32;
