@@ -13,36 +13,47 @@ type
   TPlatformCounterValue = nextpas.core.platform.time.base.TPlatformCounterValue;
   TPlatformCounterFrequency = nextpas.core.platform.time.base.TPlatformCounterFrequency;
 
-{ Monotonic clock in nanoseconds. Never moves backward and is not affected by
-  wall-clock adjustments. Returns 0 only if the host clock is unavailable. }
+{** @desc 获取单调时钟时间（纳秒，永不回退）
+    @return 单调递增时间戳（纳秒） *}
 function platform_monotonic_ns: TPlatformTimeNanoseconds; inline;
 
-{ Realtime clock in nanoseconds since the Unix epoch. This can jump if the
-  system clock is adjusted. }
+{** @desc 获取实时时钟时间（纳秒，UTC）
+    @return 实时时间戳（纳秒） *}
 function platform_realtime_ns: TPlatformTimeNanoseconds; inline;
 
-{ Conservative monotonic clock resolution in nanoseconds. The returned value is
-  never smaller than 1ns and does not overstate precision. }
+{** @desc 获取单调时钟分辨率（纳秒，保守估计）
+    @return 时钟分辨率（纳秒） *}
 function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds; inline;
 
-{ Convert a host counter value to nanoseconds without intermediate overflow. }
+{** @desc 将性能计数器值转换为纳秒
+    @param ACounter 计数器值
+    @param AFrequency 计数器频率（Hz）
+    @return 纳秒值 *}
 function platform_qpc_to_ns(
   const ACounter: TPlatformCounterValue;
   const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds; inline;
 
-{ Convert a counter frequency to a conservative nanosecond resolution. }
+{** @desc 从频率计算分辨率（纳秒）
+    @param AFrequency 频率（Hz）
+    @return 分辨率（纳秒） *}
 function platform_resolution_from_frequency_ns(
   const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds; inline;
 
-{ Convert a POSIX timespec pair to saturated nanoseconds. }
+{** @desc 将 timespec 结构转换为纳秒
+    @param ASec 秒
+    @param ANsec 纳秒
+    @return 总纳秒值 *}
 function platform_timespec_to_ns(
   const ASec: Int64;
   const ANsec: Int64): TPlatformTimeNanoseconds; inline;
 
-{ Get the local UTC offset in seconds (e.g. +28800 for UTC+8). }
+{** @desc 获取本地 UTC 偏移量（秒）
+    @return UTC 偏移量（如 UTC+8 返回 +28800） *}
 function platform_utc_offset_seconds: Int32;
 
-{ Break down realtime nanoseconds (since Unix epoch) into UTC components. }
+{** @desc 将实时时间戳分解为 UTC 时间组件
+    @param ANs 实时时间戳（纳秒）
+    @param AResult 输出时间分解结构 *}
 procedure platform_time_breakdown_utc(ANs: TPlatformTimeNanoseconds;
   out AResult: TPlatformTimeBreakdown);
 
