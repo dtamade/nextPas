@@ -279,7 +279,6 @@ var
   LResultWritten: Boolean;
   LTotalRetries: Integer;
   LRetriesLeft: Integer;
-  LSkippedByBeforeEach: Boolean;
   LTimeoutMs: Integer;
   LOutSink: IOutputSink;
   LErrSink: IOutputSink;
@@ -297,7 +296,6 @@ begin
   LSkipReason := '';
   LStart := TInstant.Now; { set before BeforeEach so duration is correct on skip }
   LResultWritten := False;
-  LSkippedByBeforeEach := False;
   LTimeoutMs := GetTestTimeout(LConfig);
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
@@ -326,7 +324,6 @@ begin
       begin
         LStatus := tsSkipped;
         LSkipReason := E.Message;
-        LSkippedByBeforeEach := True;
       end;
       on E: Exception do
       begin
