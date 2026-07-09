@@ -9,7 +9,6 @@ program test_test_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.test.bench,
   nextpas.core.bench,
   nextpas.core.time.base;
