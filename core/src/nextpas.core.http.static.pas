@@ -32,6 +32,8 @@ uses
   nextpas.core.time.date,
   nextpas.core.time.timeofday,
   nextpas.core.time.offsetdatetime,
+  nextpas.core.time.datetime,
+  nextpas.core.time.timezone,
   nextpas.core.io.base,
   nextpas.core.fs,
   nextpas.core.io,
@@ -268,7 +270,7 @@ begin
 
   { Parse month (3 chars) }
   if (LPos + 3 > LLen) then Exit;
-  LMonthStr := Copy(ADate, LPos, 3);
+  LMonthStr := System.Copy(ADate, LPos, 3);
   LMonth := 0;
   for LI := 1 to 12 do
     if LMonthStr = MONTH_NAMES[LI] then
@@ -294,7 +296,9 @@ begin
   LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
 
   try
-    LDT := TOffsetDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond, 0, TOffset.Utc);
+    LDT := TOffsetDateTime.Create(
+      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
+      TUtcOffset.UTC);
     Result := LDT.ToUnixSeconds;
   except
     Result := 0;
