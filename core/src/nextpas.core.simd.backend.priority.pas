@@ -13,6 +13,9 @@ type
   TSimdBackendPriorityOrder = array[0..9] of TSimdBackend;
 
 const
+  { Default backend priority order.
+    Users can override this by defining SIMD_CUSTOM_BACKEND_PRIORITY
+    and providing their own array. }
   SIMD_BACKEND_PRIORITY_ORDER: TSimdBackendPriorityOrder = (
     sbAVX512,
     sbAVX2,
@@ -26,7 +29,14 @@ const
     sbScalar
   );
 
+{ Get numeric priority value for a backend (higher = preferred) }
 function GetSimdBackendPriorityValue(ABackend: TSimdBackend): Integer;
+
+{ Get the preferred backend from available backends }
+function GetPreferredBackend(const AAvailable: array of TSimdBackend): TSimdBackend;
+
+{ Check if a backend is preferred over another }
+function IsBackendPreferred(ABackend, AOther: TSimdBackend): Boolean;
 
 implementation
 
@@ -45,6 +55,34 @@ begin
     sbAVX2: Result := 80;
     sbAVX512: Result := 90;
   end;
+end;
+
+function GetPreferredBackend(const AAvailable: array of TSimdBackend): TSimdBackend;
+var
+  LBest, LCurrent: TSimdBackend;
+  LBestPriority, LPriority: Integer;
+  LIndex: Integer;
+begin
+  LBest := sbScalar;
+  LBestPriority := -1;
+
+  for LIndex := Low(AAvailable) to High(AAvailable) do
+  begin
+    LCurrent := AAvailable[LIndex];
+    LPriority := GetSimdBackendPriorityValue(LCurrent);
+    if LPriority > LBestPriority then
+    begin
+      LBest := LCurrent;
+      LBestPriority := LPriority;
+    end;
+  end;
+
+  Result := LBest;
+end;
+
+function IsBackendPreferred(ABackend, AOther: TSimdBackend): Boolean;
+begin
+  Result := GetSimdBackendPriorityValue(ABackend) > GetSimdBackendPriorityValue(AOther);
 end;
 
 end.
