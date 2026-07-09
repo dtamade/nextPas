@@ -406,6 +406,9 @@ type
 
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string = '');
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string = '');
 procedure WithMock(AProc: TMockProc);
 procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');

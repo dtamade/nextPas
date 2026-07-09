@@ -28,6 +28,15 @@ type
 procedure ExpectFail(AProc: TTestClosure;
   const AContains: string = '');
 
+{ Verify closure raises AExceptionClass (or subclass).
+  Optional AContains: substring check on the message.
+  Example:
+    ExpectFailWith(procedure begin raise EConvertError.Create('bad'); end,
+      EConvertError, 'bad'); }
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string = '');
+
 { Create TMock, run AProc, free mock — even on exception. }
 procedure WithMock(AProc: TMockProc);
 
@@ -68,6 +77,28 @@ begin
       if AContains <> '' then
         Check(Pos(AContains, E.Message) > 0,
           'expected "' + AContains + '" in "' + E.Message + '"');
+  end;
+end;
+
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string);
+begin
+  try
+    AProc;
+    Fail('expected ' + AExceptionClass.ClassName + ' but nothing raised');
+  except
+    on E: ETestSkipped do
+      raise;
+    on E: Exception do
+    begin
+      if not (E is AExceptionClass) then
+        InternalFail('Expected ' + AExceptionClass.ClassName +
+          ' but got ' + E.ClassName + ': ' + E.Message);
+      if AContains <> '' then
+        Check(Pos(AContains, E.Message) > 0,
+          'expected "' + AContains + '" in "' + E.Message + '"');
+    end;
   end;
 end;
 

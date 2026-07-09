@@ -44,6 +44,11 @@ procedure ExpectFail(AProc: TTestClosure;
   const AContains: string);
 begin nextpas.core.test.helpers.ExpectFail(AProc, AContains); end;
 
+procedure ExpectFailWith(AProc: TTestClosure;
+  AExceptionClass: ExceptClass;
+  const AContains: string);
+begin nextpas.core.test.helpers.ExpectFailWith(AProc, AExceptionClass, AContains); end;
+
 procedure WithMock(AProc: TMockProc);
 begin nextpas.core.test.helpers.WithMock(AProc); end;
 

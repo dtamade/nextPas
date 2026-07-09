@@ -127,6 +127,9 @@ type
     { Verify exactly N calls were made with typed matching arguments }
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of TMockValue): IMockVerify;
+    { Return the actual call count for this method (no assertion).
+      Useful for conditional logic: if Mock.Verify('Foo').Count > 0 then ... }
+    function  Count: Integer;
   end;
 
 { ── Mock State ────────────────────────────────────────────────────────────── }
@@ -932,6 +935,7 @@ type
       const AArgs: array of string): IMockVerify;
     function  CalledExactlyWith(ACount: Integer;
       const AArgs: array of TMockValue): IMockVerify;
+    function  Count: Integer;
   end;
 
 constructor TMockVerifier.Create(AState: TMockState; const AMethod: string);
@@ -1148,6 +1152,11 @@ begin
       IntToStr(ACount) + ' times with ' + FormatMockArgs(AArgs) +
       ', but was called ' + IntToStr(LCount) + ' times');
   Result := Self;
+end;
+
+function TMockVerifier.Count: Integer;
+begin
+  Result := FState.CallCount(FMethod);
 end;
 
 { ── TMock ─────────────────────────────────────────────────────────────────── }

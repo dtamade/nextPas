@@ -148,6 +148,13 @@ type
       failure (Go t.Cleanup() equivalent). Handlers execute in LIFO order. }
     procedure Cleanup(AProc: TTestProc);
     procedure Cleanup(AProc: TTestClosure);
+    { Tag: apply tags to all tests currently registered in this suite.
+      Call after registering tests to bulk-tag them.
+      Example:
+        Suite.Test('A', @TestA);
+        Suite.Test('B', @TestB);
+        Suite.Tag('integration');  // A and B both get 'integration' tag }
+    procedure Tag(const ATags: array of string);
     { ⚠️ With* methods return a NEW record — you MUST assign the return value:
         Suite := Suite.WithSetup(Proc);  // ✅ correct
         Suite.WithSetup(Proc);           // ❌ BUG: changes discarded
@@ -858,6 +865,24 @@ begin
   LIdx := GrowCleanups(EachCleanups);
   EachCleanups[LIdx] := AProc;
   SetLength(EachCleanups, LIdx + 1);
+end;
+
+procedure TTestSuite.Tag(const ATags: array of string);
+var
+  I, J, LOldLen: Integer;
+  LNewTags: specialize TArray<string>;
+begin
+  if Length(ATags) = 0 then Exit;
+  for I := 0 to High(Tests) do
+  begin
+    LOldLen := Length(Tests[I].Tags);
+    SetLength(LNewTags, LOldLen + Length(ATags));
+    for J := 0 to LOldLen - 1 do
+      LNewTags[J] := Tests[I].Tags[J];
+    for J := 0 to High(ATags) do
+      LNewTags[LOldLen + J] := ATags[J];
+    Tests[I].Tags := LNewTags;
+  end;
 end;
 
 function TTestSuite.WithConfig(const AConfig: TTestConfig): TTestSuite;
