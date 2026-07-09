@@ -370,6 +370,13 @@ begin
   else
     LVariance := 0.0;
 
+  { 全 NaN 输入：返回零值统计，避免 NaN 传播 }
+  if LValidCount = 0 then
+  begin
+    Result := Default(TBenchStats);
+    Exit;
+  end;
+
   Result.Mean := LMean;
   if LVariance > 0 then
     Result.StdDev := Sqrt(LVariance)

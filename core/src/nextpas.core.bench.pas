@@ -834,15 +834,17 @@ begin
     begin
       if not FEntries[I].Condition then
       begin
-        LResults[I] := Default(TBenchResult);
-        LResults[I].Name := FEntries[I].Name;
-        LResults[I].Executed := True;
-        LResults[I].Skipped := True;
+        LResults[LResultCount] := Default(TBenchResult);
+        LResults[LResultCount].Name := FEntries[I].Name;
+        LResults[LResultCount].Executed := True;
+        LResults[LResultCount].Skipped := True;
       end
       else
-        LResults[I] := FRunner.RunOne(FEntries[I]);
-      Inc(LResultCount);
+        LResults[LResultCount] := FRunner.RunOne(FEntries[I]);
+      if LResults[LResultCount].Executed then
+        Inc(LResultCount);
     end;
+    SetLength(LResults, LResultCount);
     Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
     Exit;
   end;

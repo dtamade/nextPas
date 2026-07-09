@@ -1145,13 +1145,20 @@ function FormatIntWithSep(AValue: Int64): string;
 var
   LStr: string;
   LLen, I, LPos: Integer;
+  LNeg: Boolean;
 begin
   LStr := IntToStr(AValue);
   LLen := Length(LStr);
+  LNeg := (LLen > 0) and (LStr[1] = '-');
   Result := '';
   LPos := 0;
   for I := LLen downto 1 do
   begin
+    if LStr[I] = '-' then
+    begin
+      Result := '-' + Result;
+      Continue;
+    end;
     if (LPos > 0) and (LPos mod 3 = 0) then
       Result := ',' + Result;
     Result := LStr[I] + Result;
