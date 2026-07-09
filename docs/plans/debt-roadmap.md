@@ -22,7 +22,7 @@
 | C1 | **TSemanticAnalyzer God Class** (279 方法/1 class) |    | compiler/sema | 10d |   架构重构 |
 | C2 | **permissive overload resolution** (选第一个候选) |    | compiler/sema | 3d | ✅ 2026-07-06 |
 | C3 | **Pipeline 阶段模糊** (sema 做了 ir 的活) |    | compiler/sema+ir | 5d |   边界重划 |
-| C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d |   改为独立 unit |
+| C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d | ✅ 2026-07-06 |
 | C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d | ✅ 2026-07-06 |
 | C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d | ✅ 2026-07-06 |
 | C7 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d | ✅ 2026-07-06 |
