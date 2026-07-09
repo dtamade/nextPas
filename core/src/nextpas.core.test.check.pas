@@ -220,6 +220,18 @@ procedure CheckArrayNotContains(const AArray: array of Int64;
 procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
 
+{ ── Array Sorted Checks ───────────────────────────────────────────────────── }
+
+{ Check that an Int64 array is sorted in ascending order (non-decreasing). }
+procedure CheckSorted(const AArray: array of Int64); overload;
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string); overload;
+
+{ Check that a string array is sorted in ascending order (non-decreasing). }
+procedure CheckSorted(const AArray: array of string); overload;
+procedure CheckSorted(const AArray: array of string;
+  const AMessage: string); overload;
+
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 
 { Check that an interface reference is nil. }
@@ -1278,6 +1290,42 @@ begin
     if AArray[I] = AValue then
       FailPrepend(AMessage, 'Expected array NOT to contain ' + IntToStr(AValue) +
         ' but found at index ' + IntToStr(I));
+end;
+
+{ ── Array Sorted Checks ───────────────────────────────────────────────────── }
+
+procedure CheckSorted(const AArray: array of Int64);
+begin
+  CheckSorted(AArray, '');
+end;
+
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 1 to High(AArray) do
+    if AArray[I] < AArray[I - 1] then
+      FailPrepend(AMessage,
+        'Array not sorted at index ' + IntToStr(I) +
+        ': ' + IntToStr(AArray[I - 1]) + ' > ' + IntToStr(AArray[I]));
+end;
+
+procedure CheckSorted(const AArray: array of string);
+begin
+  CheckSorted(AArray, '');
+end;
+
+procedure CheckSorted(const AArray: array of string;
+  const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 1 to High(AArray) do
+    if AArray[I] < AArray[I - 1] then
+      FailPrepend(AMessage,
+        'Array not sorted at index ' + IntToStr(I) +
+        ': "' + AArray[I - 1] + '" > "' + AArray[I] + '"');
 end;
 
 end.

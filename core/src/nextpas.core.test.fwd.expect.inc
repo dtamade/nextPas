@@ -23,3 +23,9 @@ begin Result := nextpas.core.test.expect.ExpectProc(AProc); end;
 
 function ExpectBytes(const AValue: TBytes): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectBytes(AValue); end;
+
+function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectArrayOfInt(AValues); end;
+
+function ExpectArrayOfStr(const AValues: array of string): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectArrayOfStr(AValues); end;

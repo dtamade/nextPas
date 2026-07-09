@@ -107,6 +107,8 @@ function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
+function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
+function ExpectArrayOfStr(const AValues: array of string): IExpectation;
 
 { ── Re-exported functions from test.check ─────────────────────────────────── }
 
@@ -261,6 +263,14 @@ procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64); overload;
 procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string); overload;
+
+{ ── Array Sorted Checks ───────────────────────────────────────────────────── }
+procedure CheckSorted(const AArray: array of Int64); overload;
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string); overload;
+procedure CheckSorted(const AArray: array of string); overload;
+procedure CheckSorted(const AArray: array of string;
+  const AMessage: string); overload;
 
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');

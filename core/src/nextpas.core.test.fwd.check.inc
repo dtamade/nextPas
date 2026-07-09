@@ -338,3 +338,17 @@ begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue); end;
 procedure CheckArrayNotContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string);
 begin nextpas.core.test.check.CheckArrayNotContains(AArray, AValue, AMessage); end;
+
+procedure CheckSorted(const AArray: array of Int64);
+begin nextpas.core.test.check.CheckSorted(AArray); end;
+
+procedure CheckSorted(const AArray: array of Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckSorted(AArray, AMessage); end;
+
+procedure CheckSorted(const AArray: array of string);
+begin nextpas.core.test.check.CheckSorted(AArray); end;
+
+procedure CheckSorted(const AArray: array of string;
+  const AMessage: string);
+begin nextpas.core.test.check.CheckSorted(AArray, AMessage); end;

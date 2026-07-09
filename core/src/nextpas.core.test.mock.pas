@@ -271,6 +271,12 @@ type
       Useful for test failure diagnostics. }
     function GetCallHistory: string;
 
+    { Verify methods were called in the given order (by call order tracking).
+      Each method in AMethods must appear after the previous one in the
+      recorded call order. Methods don't need to be consecutive.
+      Example: Mock.VerifyInOrder(['Init', 'Process', 'Finish']); }
+    procedure VerifyInOrder(const AMethods: array of string);
+
     { Access to the raw state for advanced usage }
     property State: TMockState read FState;
   end;
@@ -1378,6 +1384,52 @@ begin
   begin
     if I > 0 then Result := Result + #10;
     Result := Result + LSb[I];
+  end;
+end;
+
+procedure TMock.VerifyInOrder(const AMethods: array of string);
+var
+  I, J, LOrderIdx: Integer;
+  LOrder: specialize TArray<string>;
+  LActual: string;
+begin
+  if Length(AMethods) < 2 then
+  begin
+    if Length(AMethods) = 1 then
+      { Single method: just verify it was called }
+      Verify(AMethods[0]).CalledAtLeast(1);
+    Exit;
+  end;
+  LOrder := FState.CallOrder;
+  LOrderIdx := 0;
+  for I := 0 to High(LOrder) do
+  begin
+    if LOrderIdx > High(AMethods) then
+      Break;
+    if LOrder[I] = AMethods[LOrderIdx] then
+      Inc(LOrderIdx);
+  end;
+  if LOrderIdx <= High(AMethods) then
+  begin
+    { Build expected order string for error message }
+    LActual := '';
+    for I := 0 to High(AMethods) do
+    begin
+      if I > 0 then LActual := LActual + ' -> ';
+      LActual := LActual + AMethods[I];
+    end;
+    { Build actual call order }
+    LActual := LActual + #10'  actual call order: ';
+    J := 0;
+    for I := 0 to High(LOrder) do
+    begin
+      if I > 0 then LActual := LActual + ' -> ';
+      LActual := LActual + LOrder[I];
+      Inc(J);
+    end;
+    if J = 0 then
+      LActual := LActual + '(no calls recorded)';
+    InternalFail('VerifyInOrder: expected call order ' + LActual);
   end;
 end;
 
