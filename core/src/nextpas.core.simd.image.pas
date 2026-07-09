@@ -610,4 +610,80 @@ begin
   {$endif}
 end;
 
+// ============================================================================
+// Color Conversion: RGB ↔ YUV
+// ============================================================================
+
+procedure RgbToYuv(const aSrc: TSimdImage; var aDst: TSimdImage);
+var
+  x, y: SizeUInt;
+  pSrc, pDst: PByte;
+  R, G, B: Byte;
+  Y, U, V: Integer;
+begin
+  if (aSrc.Format <> spfRGB24) or (aDst.Format <> spfRGB24) then Exit;
+  if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
+
+  for y := 0 to aSrc.Height - 1 do
+  begin
+    pSrc := aSrc.RowPtr(y);
+    pDst := aDst.RowPtr(y);
+    for x := 0 to aSrc.Width - 1 do
+    begin
+      R := pSrc[x * 3];
+      G := pSrc[x * 3 + 1];
+      B := pSrc[x * 3 + 2];
+
+      // RGB → YUV (BT.601)
+      Y := Round(0.299 * R + 0.587 * G + 0.114 * B);
+      U := Round(-0.169 * R - 0.331 * G + 0.500 * B + 128);
+      V := Round(0.500 * R - 0.419 * G - 0.081 * B + 128);
+
+      if Y < 0 then Y := 0; if Y > 255 then Y := 255;
+      if U < 0 then U := 0; if U > 255 then U := 255;
+      if V < 0 then V := 0; if V > 255 then V := 255;
+
+      pDst[x * 3] := Byte(Y);
+      pDst[x * 3 + 1] := Byte(U);
+      pDst[x * 3 + 2] := Byte(V);
+    end;
+  end;
+end;
+
+procedure YuvToRgb(const aSrc: TSimdImage; var aDst: TSimdImage);
+var
+  x, y: SizeUInt;
+  pSrc, pDst: PByte;
+  Y, U, V: Integer;
+  R, G, B: Integer;
+begin
+  if (aSrc.Format <> spfRGB24) or (aDst.Format <> spfRGB24) then Exit;
+  if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
+
+  for y := 0 to aSrc.Height - 1 do
+  begin
+    pSrc := aSrc.RowPtr(y);
+    pDst := aDst.RowPtr(y);
+    for x := 0 to aSrc.Width - 1 do
+    begin
+      Y := pSrc[x * 3];
+      U := pSrc[x * 3 + 1] - 128;
+      V := pSrc[x * 3 + 2] - 128;
+
+      // YUV → RGB (BT.601)
+      R := Round(Y + 1.402 * V);
+      G := Round(Y - 0.344 * U - 0.714 * V);
+      B := Round(Y + 1.772 * U);
+
+      if R < 0 then R := 0; if R > 255 then R := 255;
+      if G < 0 then G := 0; if G > 255 then G := 255;
+      if B < 0 then B := 0; if B > 255 then B := 255;
+
+      pDst[x * 3] := Byte(R);
+      pDst[x * 3 + 1] := Byte(G);
+      pDst[x * 3 + 2] := Byte(B);
+    end;
+  end;
+end;
+
 end.
