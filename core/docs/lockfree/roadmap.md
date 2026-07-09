@@ -90,8 +90,13 @@
 | `lockfree.skiplist_map` | Concurrent SkipList Map | ✅ 完成 | 222 |
 | `lockfree.ttl_cache` | TTL Cache (带过期) | ✅ 完成 | 223 |
 | `lockfree.timeseries_ringbuffer` | Time Series Ring Buffer | ✅ 完成 | 23 |
+| `lockfree.dag` | Concurrent DAG (有向无环图) | ✅ 完成 | 32 |
+| `lockfree.merkle_tree` | Merkle Tree (哈希树) | ✅ 完成 | 16 |
+| `lockfree.crdt` | CRDT (G-Counter/PN-Counter/LWW/OR-Set) | ✅ 完成 | 23 |
+| `lockfree.actor` | Actor (消息驱动并发) | ✅ 完成 | 15 |
+| `lockfree.rope` | Rope (大字符串) | ✅ 完成 | 24 |
 
-**规模**: 71 文件, ~28000 行, 42915 测试, 58 数据结构
+**规模**: 76 文件, ~29000 行, 43025 测试, 63 数据结构
 
 ---
 
@@ -417,7 +422,17 @@ L3: nextpas.core.lockfree.* (数据结构)
 
 **总计**: 67 文件, ~27000 行, 42217 测试, 54 数据结构
 
-### 4.21 Phase 5 新增数据结构 (2026-07-06)
+### 4.22 Phase 6 新增数据结构 (2026-07-06)
+
+| 结构 | 描述 | 测试 |
+|------|------|------|
+| DAG | 有向无环图，拓扑排序+环检测 | 32 |
+| MerkleTree | 哈希树，数据完整性验证 | 16 |
+| CRDT | G-Counter/PN-Counter/LWW-Register/OR-Set | 23 |
+| Actor | 消息驱动并发模型 | 15 |
+| Rope | 大字符串 O(log n) 操作 | 24 |
+
+**总计**: 76 文件, ~29000 行, 43025 测试, 63 数据结构
 
 | 结构 | 描述 | 测试 |
 |------|------|------|
