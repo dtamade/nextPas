@@ -1,0 +1,3 @@
+error: Syntax error, "END" expected but end-of-file found
+fixture: tests/compiler/fail/unclosed_block_fail.pas
+classification: expected-compile-failure
