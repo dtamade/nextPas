@@ -5826,3 +5826,1248 @@ begin
   end;
   {$POP}
 end;
+
+// ============================================================================
+// I8 Batch Operations
+// ============================================================================
+
+procedure SSE2ArrayAddI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddb xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddb xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; add r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubb xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubb xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; sub r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail_scalar
+  @loop16:
+    // SSE2 没有 pmullb for 16xI8, 使用标量
+    // 注意：imul 不能直接对 8 位寄存器和内存操作数运算，需要先加载到 32 位寄存器
+    movzx r9d, byte [rax]; movzx r10d, byte [rdx]; imul r9d, r10d; mov [rcx], r9b
+    movzx r9d, byte [rax + 1]; movzx r10d, byte [rdx + 1]; imul r9d, r10d; mov [rcx + 1], r9b
+    movzx r9d, byte [rax + 2]; movzx r10d, byte [rdx + 2]; imul r9d, r10d; mov [rcx + 2], r9b
+    movzx r9d, byte [rax + 3]; movzx r10d, byte [rdx + 3]; imul r9d, r10d; mov [rcx + 3], r9b
+    movzx r9d, byte [rax + 4]; movzx r10d, byte [rdx + 4]; imul r9d, r10d; mov [rcx + 4], r9b
+    movzx r9d, byte [rax + 5]; movzx r10d, byte [rdx + 5]; imul r9d, r10d; mov [rcx + 5], r9b
+    movzx r9d, byte [rax + 6]; movzx r10d, byte [rdx + 6]; imul r9d, r10d; mov [rcx + 6], r9b
+    movzx r9d, byte [rax + 7]; movzx r10d, byte [rdx + 7]; imul r9d, r10d; mov [rcx + 7], r9b
+    movzx r9d, byte [rax + 8]; movzx r10d, byte [rdx + 8]; imul r9d, r10d; mov [rcx + 8], r9b
+    movzx r9d, byte [rax + 9]; movzx r10d, byte [rdx + 9]; imul r9d, r10d; mov [rcx + 9], r9b
+    movzx r9d, byte [rax + 10]; movzx r10d, byte [rdx + 10]; imul r9d, r10d; mov [rcx + 10], r9b
+    movzx r9d, byte [rax + 11]; movzx r10d, byte [rdx + 11]; imul r9d, r10d; mov [rcx + 11], r9b
+    movzx r9d, byte [rax + 12]; movzx r10d, byte [rdx + 12]; imul r9d, r10d; mov [rcx + 12], r9b
+    movzx r9d, byte [rax + 13]; movzx r10d, byte [rdx + 13]; imul r9d, r10d; mov [rcx + 13], r9b
+    movzx r9d, byte [rax + 14]; movzx r10d, byte [rdx + 14]; imul r9d, r10d; mov [rcx + 14], r9b
+    movzx r9d, byte [rax + 15]; movzx r10d, byte [rdx + 15]; imul r9d, r10d; mov [rcx + 15], r9b
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    movzx r9d, byte [rax]; movzx r10d, byte [rdx]; imul r9d, r10d; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; and r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; or r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; xor r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// U8 Batch Operations (same as I8 - add/sub/and/or/xor are identical)
+// ============================================================================
+
+procedure SSE2ArrayAddU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddb xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddb xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; paddb xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; add r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubb xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubb xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubb xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; psubb xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; sub r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail_scalar
+  @loop16:
+    // SSE2 没有 pmullb for 16xU8, 使用标量
+    // 注意：mul 指令在 x86 中是对 al 寄存器进行操作的，需要使用 movzx + imul
+    movzx r9d, byte [rax]; movzx r10d, byte [rdx]; imul r9d, r10d; mov [rcx], r9b
+    movzx r9d, byte [rax + 1]; movzx r10d, byte [rdx + 1]; imul r9d, r10d; mov [rcx + 1], r9b
+    movzx r9d, byte [rax + 2]; movzx r10d, byte [rdx + 2]; imul r9d, r10d; mov [rcx + 2], r9b
+    movzx r9d, byte [rax + 3]; movzx r10d, byte [rdx + 3]; imul r9d, r10d; mov [rcx + 3], r9b
+    movzx r9d, byte [rax + 4]; movzx r10d, byte [rdx + 4]; imul r9d, r10d; mov [rcx + 4], r9b
+    movzx r9d, byte [rax + 5]; movzx r10d, byte [rdx + 5]; imul r9d, r10d; mov [rcx + 5], r9b
+    movzx r9d, byte [rax + 6]; movzx r10d, byte [rdx + 6]; imul r9d, r10d; mov [rcx + 6], r9b
+    movzx r9d, byte [rax + 7]; movzx r10d, byte [rdx + 7]; imul r9d, r10d; mov [rcx + 7], r9b
+    movzx r9d, byte [rax + 8]; movzx r10d, byte [rdx + 8]; imul r9d, r10d; mov [rcx + 8], r9b
+    movzx r9d, byte [rax + 9]; movzx r10d, byte [rdx + 9]; imul r9d, r10d; mov [rcx + 9], r9b
+    movzx r9d, byte [rax + 10]; movzx r10d, byte [rdx + 10]; imul r9d, r10d; mov [rcx + 10], r9b
+    movzx r9d, byte [rax + 11]; movzx r10d, byte [rdx + 11]; imul r9d, r10d; mov [rcx + 11], r9b
+    movzx r9d, byte [rax + 12]; movzx r10d, byte [rdx + 12]; imul r9d, r10d; mov [rcx + 12], r9b
+    movzx r9d, byte [rax + 13]; movzx r10d, byte [rdx + 13]; imul r9d, r10d; mov [rcx + 13], r9b
+    movzx r9d, byte [rax + 14]; movzx r10d, byte [rdx + 14]; imul r9d, r10d; mov [rcx + 14], r9b
+    movzx r9d, byte [rax + 15]; movzx r10d, byte [rdx + 15]; imul r9d, r10d; mov [rcx + 15], r9b
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    movzx r9d, byte [rax]; movzx r10d, byte [rdx]; imul r9d, r10d; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; and r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; or r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt8;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 64; jb @tail32
+  @loop64:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 64; cmp r8, 64; jae @loop64
+  @tail32:
+    cmp r8, 32; jb @tail16
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 32
+  @tail16:
+    cmp r8, 16; jb @tail_scalar
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 16
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9b, [rax]; xor r9b, [rdx]; mov [rcx], r9b
+    add rax, 1; add rdx, 1; add rcx, 1; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// I16 Batch Operations
+// ============================================================================
+
+procedure SSE2ArrayAddI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddw xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddw xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; add r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubw xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubw xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; sub r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; and r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; or r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; xor r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// U16 Batch Operations (same as I16 - add/sub/and/or/xor are identical)
+// ============================================================================
+
+procedure SSE2ArrayAddU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddw xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddw xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; paddw xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; add r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubw xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubw xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubw xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; psubw xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; sub r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 8; jb @tail_scalar
+  @loop8:
+    // SSE2 没有 pmullw for 8xU16, 使用标量
+    movzx r9d, word [rax]; movzx r10d, word [rdx]; imul r9d, r10d; mov [rcx], r9w
+    movzx r9d, word [rax + 2]; movzx r10d, word [rdx + 2]; imul r9d, r10d; mov [rcx + 2], r9w
+    movzx r9d, word [rax + 4]; movzx r10d, word [rdx + 4]; imul r9d, r10d; mov [rcx + 4], r9w
+    movzx r9d, word [rax + 6]; movzx r10d, word [rdx + 6]; imul r9d, r10d; mov [rcx + 6], r9w
+    movzx r9d, word [rax + 8]; movzx r10d, word [rdx + 8]; imul r9d, r10d; mov [rcx + 8], r9w
+    movzx r9d, word [rax + 10]; movzx r10d, word [rdx + 10]; imul r9d, r10d; mov [rcx + 10], r9w
+    movzx r9d, word [rax + 12]; movzx r10d, word [rdx + 12]; imul r9d, r10d; mov [rcx + 12], r9w
+    movzx r9d, word [rax + 14]; movzx r10d, word [rdx + 14]; imul r9d, r10d; mov [rcx + 14], r9w
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8; cmp r8, 8; jae @loop8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    movzx r9d, word [rax]; movzx r10d, word [rdx]; imul r9d, r10d; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; and r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; or r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt16;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 32; jb @tail16
+  @loop32:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 32; cmp r8, 32; jae @loop32
+  @tail16:
+    cmp r8, 16; jb @tail8
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 16
+  @tail8:
+    cmp r8, 8; jb @tail_scalar
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 8
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9w, [rax]; xor r9w, [rdx]; mov [rcx], r9w
+    add rax, 2; add rdx, 2; add rcx, 2; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// I64 Batch Operations
+// ============================================================================
+
+procedure SSE2ArrayAddI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddq xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddq xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; paddq xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; add r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubq xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubq xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; psubq xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; sub r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 4; jb @tail_scalar
+  @loop4:
+    // SSE2 没有 pmuludq for 4xI64, 使用标量
+    mov r9, [rax]; imul r9, [rdx]; mov [rcx], r9
+    mov r9, [rax + 8]; imul r9, [rdx + 8]; mov [rcx + 8], r9
+    mov r9, [rax + 16]; imul r9, [rdx + 16]; mov [rcx + 16], r9
+    mov r9, [rax + 24]; imul r9, [rdx + 24]; mov [rcx + 24], r9
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 4; cmp r8, 4; jae @loop4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; imul r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; pand xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; and r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; por xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; or r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; pxor xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; xor r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// U64 Batch Operations (same as I64 - add/sub/and/or/xor are identical)
+// ============================================================================
+
+procedure SSE2ArrayAddU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddq xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddq xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; paddq xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; paddq xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; add r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubq xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubq xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubq xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; psubq xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; psubq xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; sub r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 4; jb @tail_scalar
+  @loop4:
+    // SSE2 没有 pmuludq for 4xU64, 使用标量
+    // 注意：mul 指令只能对 rax 寄存器操作，使用 imul 替代
+    mov r9, [rax]; imul r9, [rdx]; mov [rcx], r9
+    mov r9, [rax + 8]; imul r9, [rdx + 8]; mov [rcx + 8], r9
+    mov r9, [rax + 16]; imul r9, [rdx + 16]; mov [rcx + 16], r9
+    mov r9, [rax + 24]; imul r9, [rdx + 24]; mov [rcx + 24], r9
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 4; cmp r8, 4; jae @loop4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; imul r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; pand xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; and r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; por xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; or r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt64;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail2
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail2:
+    cmp r8, 2; jb @tail_scalar
+    movq xmm0, [rax]; movq xmm1, [rdx]; pxor xmm0, xmm1; movq [rcx], xmm0
+    add rax, 8; add rdx, 8; add rcx, 8; sub r8, 2
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9, [rax]; xor r9, [rdx]; mov [rcx], r9
+    add rax, 8; add rdx, 8; add rcx, 8; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;

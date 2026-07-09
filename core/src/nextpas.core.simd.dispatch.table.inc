@@ -817,6 +817,53 @@
     ArrayOrU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
     ArrayXorU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
 
+    // === Batch Array Operations - I8 ===
+    ArrayAddI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+    ArraySubI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+    ArrayMulI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+    ArrayAndI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+    ArrayOrI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+    ArrayXorI8: procedure(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt);
+
+    // === Batch Array Operations - U8 ===
+    ArrayAddU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+    ArraySubU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+    ArrayMulU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+    ArrayAndU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+    ArrayOrU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+    ArrayXorU8: procedure(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt);
+
+    // === Batch Array Operations - I16 ===
+    ArrayAddI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+    ArraySubI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+    ArrayAndI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+    ArrayOrI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+    ArrayXorI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
+
+    // === Batch Array Operations - U16 ===
+    ArrayAddU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+    ArraySubU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+    ArrayMulU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+    ArrayAndU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+    ArrayOrU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+    ArrayXorU16: procedure(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt);
+
+    // === Batch Array Operations - I64 ===
+    ArrayAddI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+    ArraySubI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+    ArrayMulI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+    ArrayAndI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+    ArrayOrI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+    ArrayXorI64: procedure(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt);
+
+    // === Batch Array Operations - U64 ===
+    ArrayAddU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+    ArraySubU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+    ArrayMulU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+    ArrayAndU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+    ArrayOrU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+    ArrayXorU64: procedure(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt);
+
     // === Batch Array Operations - Type Conversion ===
     ArrayF32toI32: procedure(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
     ArrayI32toF32: procedure(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
