@@ -238,6 +238,50 @@ uses
   , nextpas.core.platform.android.ffi
 {$ENDIF}
   ;
+
+{** @desc 将 POSIX 调用结果转换为平台错误码
+    @param AResult POSIX 调用返回值（0 表示成功）
+    @return 0 成功，否则返回 platform_get_errno *}
+function PosixResultToError(AResult: cint): Int32; inline;
+begin
+  if AResult = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+{** @desc 将 POSIX 文件描述符转换为平台错误码（负值表示错误）
+    @param AFd POSIX 文件描述符
+    @param AHandle 输出句柄
+    @return 0 成功，否则返回 platform_get_errno *}
+function PosixFdToHandle(AFd: cint; out AHandle: TPlatformFileHandle): Int32; inline;
+begin
+  if AFd < 0 then
+    Result := platform_get_errno
+  else
+  begin
+    AHandle.Value := AFd;
+    Result := 0;
+  end;
+end;
+
+{** @desc 将 POSIX ssize_t 结果转换为平台错误码（负值表示错误）
+    @param AResult POSIX 调用返回值
+    @param ACount 输出实际字节数
+    @return 0 成功，否则返回 platform_get_errno *}
+function PosixSsizeToResult(AResult: PtrInt; out ACount: PtrUInt): Int32; inline;
+begin
+  if AResult < 0 then
+  begin
+    ACount := 0;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    ACount := PtrUInt(AResult);
+    Result := 0;
+  end;
+end;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
 uses
@@ -279,102 +323,59 @@ begin
   if ASync then
     LFlags := LFlags or O_SYNC;
   LFlags := LFlags or O_CLOEXEC;
-  AHandle.Value := open(APath, LFlags, APerm);
-  if AHandle.Value < 0 then
-    Result := platform_get_errno
-  else
-    Result := 0;
+  Result := PosixFdToHandle(open(APath, LFlags, APerm), AHandle);
 end;
 
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 begin
   if AHandle.Value < 0 then
     Exit(PLATFORM_ERR_BADF);
-  if close(AHandle.Value) = 0 then
-    Result := 0
-  else
-    Result := platform_get_errno;
+  Result := PosixResultToError(close(AHandle.Value));
   AHandle.Value := -1;
 end;
 
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
-var
-  LResult: PtrInt;
 begin
   ABytesRead := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen = 0 then
     Exit(0);
-  LResult := read(AHandle.Value, ABuf, ALen);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ABytesRead := PtrUInt(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(read(AHandle.Value, ABuf, ALen), ABytesRead);
 end;
 
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;
-var
-  LResult: PtrInt;
 begin
   ABytesWritten := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen = 0 then
     Exit(0);
-  LResult := write(AHandle.Value, ABuf, ALen);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ABytesWritten := PtrUInt(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(write(AHandle.Value, ABuf, ALen), ABytesWritten);
 end;
 
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
-var
-  LResult: PtrInt;
 begin
   ABytesRead := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen = 0 then
     Exit(0);
-  LResult := pread(AHandle.Value, ABuf, ALen, AOffset);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ABytesRead := PtrUInt(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(pread(AHandle.Value, ABuf, ALen, AOffset), ABytesRead);
 end;
 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
-var
-  LResult: PtrInt;
 begin
   ABytesWritten := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen = 0 then
     Exit(0);
-  LResult := pwrite(AHandle.Value, ABuf, ALen, AOffset);
-  if LResult < 0 then
-    Result := platform_get_errno
-  else
-  begin
-    ABytesWritten := PtrUInt(LResult);
-    Result := 0;
-  end;
+  Result := PosixSsizeToResult(pwrite(AHandle.Value, ABuf, ALen, AOffset), ABytesWritten);
 end;
 
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
