@@ -252,6 +252,14 @@ begin
   LWorker := PBenchWorkerThread(AArg);
   for I := 0 to LWorker^.EntryCount - 1 do
   begin
+    if not LWorker^.Entries[I].Condition then
+    begin
+      LWorker^.Results[I] := Default(TBenchResult);
+      LWorker^.Results[I].Name := LWorker^.Entries[I].Name;
+      LWorker^.Results[I].Executed := True;
+      LWorker^.Results[I].Skipped := True;
+      Continue;
+    end;
     LWorker^.Results[I] := LWorker^.Runner.RunOne(LWorker^.Entries[I]);
     if LWorker^.Results[I].Executed then
       Inc(LWorker^.ResultCount);
@@ -260,7 +268,7 @@ end;
 
 procedure InitWorkerThread(var AWorker: TBenchWorkerThread;
   const ASrcEntries: array of TBenchEntry; ASrcOffset, AEntryCount: Integer;
-  const AConfig: TBenchConfig);
+  const AConfig: TBenchConfig; const AFilter: string);
 var
   I: Integer;
 begin
@@ -272,6 +280,8 @@ begin
   AWorker.Config := AConfig;
   AWorker.Runner := TBenchRunner.CreateNoEnv;
   AWorker.Runner.SetConfig(AConfig);
+  if AFilter <> '' then
+    AWorker.Runner.SetFilter(AFilter);
 
   AWorker.ResultCount := 0;
   SetLength(AWorker.Results, AEntryCount);
@@ -765,29 +775,21 @@ end;
 
 function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;
   ACVThreshold: Double; AMaxIterations: Integer): IBenchSuite;
-var
-  LConfig: TBenchConfig;
 begin
   GuardNotRun;
   Result := Self;
-  LConfig := FRunner.Config;
-  LConfig.AdaptiveWarmup := AEnabled;
+  FConfig.AdaptiveWarmup := AEnabled;
   if ACVThreshold > 0 then
-    LConfig.WarmupCVThreshold := ACVThreshold;
+    FConfig.WarmupCVThreshold := ACVThreshold;
   if AMaxIterations > 0 then
-    LConfig.WarmupMaxIterations := AMaxIterations;
-  FRunner.Config := LConfig;
+    FConfig.WarmupMaxIterations := AMaxIterations;
 end;
 
 function TBenchSuite.SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
-var
-  LConfig: TBenchConfig;
 begin
   GuardNotRun;
   Result := Self;
-  LConfig := FRunner.Config;
-  LConfig.OnProgress := ACallback;
-  FRunner.Config := LConfig;
+  FConfig.OnProgress := ACallback;
 end;
 
 function TBenchSuite.RunParallel(AThreadCount: Integer): IBenchResults;
@@ -855,7 +857,7 @@ begin
     if I < LRemainder then
       Inc(LCount);
 
-    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, LWorkerConfig);
+    InitWorkerThread(LWorkers[I], FEntries, LStartIdx, LCount, LWorkerConfig, FFilter);
     Inc(LStartIdx, LCount);
   end;
 
@@ -1365,6 +1367,7 @@ var
   LCell: TMatrixCell;
   LRatios: array of TDoubleArray;
   LRatioCounts: array of Integer;
+  LMatched: Boolean;
   I, J: Integer;
 begin
   LNCols := Length(ABaselines);
@@ -1384,7 +1387,7 @@ begin
     LRatioCounts[J] := 0;
   end;
 
-  { 对每个当前结果，查找匹配的基线并计算 ratio }
+  { 对每个当前结果，按 name 匹配基线并计算 ratio }
   SetLength(Result.Rows, FResultCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1400,48 +1403,59 @@ begin
     LRow.CurrentAllocsPerOp := FResults[I].AllocsPerOp;
     SetLength(LRow.Cells, LNCols);
 
+    LMatched := LNCols = 0; { 无基线时默认显示所有结果 }
     for J := 0 to LNCols - 1 do
     begin
       LCell := Default(TMatrixCell);
-      if ABaselines[J].NsPerOp > 0 then
+      { 按 name 匹配：只与同名基线对比 }
+      if ABaselines[J].Name = FResults[I].Name then
       begin
         LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
-        LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
-          { R3-04: baseline 无原始样本，用 ratio 阈值替代统计检验 }
-          LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-          LCell.SignificanceThreshold := BENCH_MATRIX_DIFF_THRESHOLD;
-        end
+        if ABaselines[J].NsPerOp > 0 then
+          LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp
         else
-        begin
           LCell.Ratio := 1.0;
-          LCell.IsSignificant := False;
-          LCell.SignificanceThreshold := 1.0;
-        end;
-
-        LRow.Cells[J] := LCell;
+        LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+        LCell.SignificanceThreshold := BENCH_MATRIX_DIFF_THRESHOLD;
+        LMatched := True;
 
         { 收集 ratio 用于计算几何均值 }
-        LRatios[J][LRatioCounts[J]] := LCell.Ratio;
-        Inc(LRatioCounts[J]);
+        if ABaselines[J].NsPerOp > 0 then
+        begin
+          LRatios[J][LRatioCounts[J]] := LCell.Ratio;
+          Inc(LRatioCounts[J]);
+        end;
+      end
+      else
+      begin
+        LCell.Ratio := 1.0;
+        LCell.IsSignificant := False;
+        LCell.SignificanceThreshold := 1.0;
       end;
+      LRow.Cells[J] := LCell;
+    end;
 
+    { 只有匹配到至少一个基线时才加入结果 }
+    if LMatched then
+    begin
       Result.Rows[LIdx] := LRow;
       Inc(LIdx);
     end;
-    SetLength(Result.Rows, LIdx);
+  end;
+  SetLength(Result.Rows, LIdx);
 
-    { 计算每列的几何均值 }
-    SetLength(Result.GeometricMeanRatios, LNCols);
-    for J := 0 to LNCols - 1 do
+  { 计算每列的几何均值 }
+  SetLength(Result.GeometricMeanRatios, LNCols);
+  for J := 0 to LNCols - 1 do
+  begin
+    if LRatioCounts[J] > 0 then
     begin
-      if LRatioCounts[J] > 0 then
-      begin
-        SetLength(LRatios[J], LRatioCounts[J]);
-        Result.GeometricMeanRatios[J] := FStatsAnalyzer.GeometricMean(LRatios[J]);
-      end
-      else
-        Result.GeometricMeanRatios[J] := 1.0;
-    end;
+      SetLength(LRatios[J], LRatioCounts[J]);
+      Result.GeometricMeanRatios[J] := FStatsAnalyzer.GeometricMean(LRatios[J]);
+    end
+    else
+      Result.GeometricMeanRatios[J] := 1.0;
+  end;
 end;
 
 function TBenchResults.ToMatrixReport(

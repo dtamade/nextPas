@@ -47,7 +47,7 @@ end;
 procedure TestMatrix_Basic3Baselines;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..2] of TBaselineData;
+  LBaselines: array[0..5] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -55,44 +55,41 @@ begin
   LResults[0] := MakeResult('Sort', 100.0);
   LResults[1] := MakeResult('Hash', 200.0);
 
-  { 三个历史基线 }
-  LBaselines[0] := MakeBaseline('v1.0', 120.0);   { Sort 比 v1.0 快 }
-  LBaselines[1] := MakeBaseline('v1.1', 95.0);    { Sort 比 v1.1 慢 }
-  LBaselines[2] := MakeBaseline('v2.0', 100.0);   { Sort 与 v2.0 相同 }
+  { 三个历史基线版本 × 两个 benchmark = 6 条基线 }
+  LBaselines[0] := MakeBaseline('Sort', 120.0);   { Sort v1.0 }
+  LBaselines[1] := MakeBaseline('Hash', 250.0);   { Hash v1.0 }
+  LBaselines[2] := MakeBaseline('Sort', 95.0);    { Sort v1.1 }
+  LBaselines[3] := MakeBaseline('Hash', 180.0);   { Hash v1.1 }
+  LBaselines[4] := MakeBaseline('Sort', 100.0);   { Sort v2.0 }
+  LBaselines[5] := MakeBaseline('Hash', 200.0);   { Hash v2.0 }
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
     LMatrix := LRes.CompareMultipleBaselines(LBaselines);
 
-    { 验证维度 }
-    Check(Length(LMatrix.BaselineNames) = 3, 'Matrix has 3 baseline columns');
+    { 验证维度: 6 列 (3 版本 × 2 benchmark), 2 行 }
+    Check(Length(LMatrix.BaselineNames) = 6, 'Matrix has 6 baseline columns');
     Check(Length(LMatrix.Rows) = 2, 'Matrix has 2 rows');
-    Check(Length(LMatrix.GeometricMeanRatios) = 3, 'GeoMean has 3 values');
+    Check(Length(LMatrix.GeometricMeanRatios) = 6, 'GeoMean has 6 values');
 
-    { 验证基线名称 }
-    Check(LMatrix.BaselineNames[0] = 'v1.0', 'Baseline 0 name = v1.0');
-    Check(LMatrix.BaselineNames[1] = 'v1.1', 'Baseline 1 name = v1.1');
-    Check(LMatrix.BaselineNames[2] = 'v2.0', 'Baseline 2 name = v2.0');
-
-    { 验证 Sort 行: current=100 / v1.0=120 = 0.833... }
+    { 验证 Sort 行: current=100, 匹配 Sort 基线 }
     Check(LMatrix.Rows[0].Name = 'Sort', 'Row 0 name = Sort');
     Check(Abs(LMatrix.Rows[0].CurrentNsPerOp - 100.0) < 0.01, 'Sort current = 100');
+    { Sort/Sort@120 = 0.833 }
     Check(Abs(LMatrix.Rows[0].Cells[0].Ratio - 100.0/120.0) < 0.001,
-      'Sort/v1.0 ratio = 0.833');
-    Check(Abs(LMatrix.Rows[0].Cells[1].Ratio - 100.0/95.0) < 0.001,
-      'Sort/v1.1 ratio = 1.053');
-    Check(Abs(LMatrix.Rows[0].Cells[2].Ratio - 1.0) < 0.001,
-      'Sort/v2.0 ratio = 1.0');
+      'Sort/Sort@120 ratio = 0.833');
+    { Hash 基线不匹配 Sort → ratio=1.0 }
+    Check(Abs(LMatrix.Rows[0].Cells[1].Ratio - 1.0) < 0.001,
+      'Sort/Hash@250 ratio = 1.0 (no match)');
 
-    { 验证 Hash 行: current=200 / v1.0=120 = 1.667... }
+    { 验证 Hash 行: current=200, 匹配 Hash 基线 }
     Check(LMatrix.Rows[1].Name = 'Hash', 'Row 1 name = Hash');
-    Check(Abs(LMatrix.Rows[1].Cells[0].Ratio - 200.0/120.0) < 0.001,
-      'Hash/v1.0 ratio = 1.667');
-
-    { 验证几何均值 }
-    { v1.0 列: geo_mean(100/120, 200/120) = geo_mean(0.833, 1.667) = sqrt(0.833*1.667) }
-    Check(LMatrix.GeometricMeanRatios[0] > 0.9, 'GeoMean v1.0 > 0.9');
-    Check(LMatrix.GeometricMeanRatios[0] < 1.5, 'GeoMean v1.0 < 1.5');
+    { Sort 基线不匹配 Hash → ratio=1.0 }
+    Check(Abs(LMatrix.Rows[1].Cells[0].Ratio - 1.0) < 0.001,
+      'Hash/Sort@120 ratio = 1.0 (no match)');
+    { Hash/Hash@250 = 0.8 }
+    Check(Abs(LMatrix.Rows[1].Cells[1].Ratio - 200.0/250.0) < 0.001,
+      'Hash/Hash@250 ratio = 0.8');
   finally
     LRes.Free;
   end;
@@ -108,7 +105,7 @@ var
   LMatrix: TMatrixResult;
 begin
   LResults[0] := MakeResult('Fast', 50.0);
-  LBaselines[0] := MakeBaseline('baseline', 100.0);
+  LBaselines[0] := MakeBaseline('Fast', 100.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -158,7 +155,7 @@ begin
   LResults[1] := MakeResult('Skipped', 200.0);
   LResults[1].Skipped := True;
 
-  LBaselines[0] := MakeBaseline('base', 100.0);
+  LBaselines[0] := MakeBaseline('Active', 100.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -176,26 +173,28 @@ end;
 procedure TestMatrix_GeometricMeanAccuracy;
 var
   LResults: array[0..2] of TBenchResult;
-  LBaselines: array[0..0] of TBaselineData;
+  LBaselines: array[0..2] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
   LExpected: Double;
 begin
-  { 三个 benchmark，同一个基线 100ns }
+  { 三个 benchmark，每个基线 100ns }
   LResults[0] := MakeResult('A', 80.0);   { ratio 0.8 }
   LResults[1] := MakeResult('B', 100.0);  { ratio 1.0 }
   LResults[2] := MakeResult('C', 125.0);  { ratio 1.25 }
 
-  LBaselines[0] := MakeBaseline('base', 100.0);
+  LBaselines[0] := MakeBaseline('A', 100.0);
+  LBaselines[1] := MakeBaseline('B', 100.0);
+  LBaselines[2] := MakeBaseline('C', 100.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
     LMatrix := LRes.CompareMultipleBaselines(LBaselines);
 
-    { geo_mean(0.8, 1.0, 1.25) = (0.8 * 1.0 * 1.25)^(1/3) = 1.0^(1/3) = 1.0 }
-    LExpected := 1.0;
-    Check(Abs(LMatrix.GeometricMeanRatios[0] - LExpected) < 0.001,
-      'GeoMean(0.8, 1.0, 1.25) = 1.0');
+    { 每列只有一个匹配: A→0.8, B→1.0, C→1.25 }
+    Check(Abs(LMatrix.GeometricMeanRatios[0] - 0.8) < 0.001, 'GeoMean A = 0.8');
+    Check(Abs(LMatrix.GeometricMeanRatios[1] - 1.0) < 0.001, 'GeoMean B = 1.0');
+    Check(Abs(LMatrix.GeometricMeanRatios[2] - 1.25) < 0.001, 'GeoMean C = 1.25');
   finally
     LRes.Free;
   end;
@@ -206,7 +205,7 @@ end;
 procedure TestMatrix_2x3;
 var
   LResults: array[0..2] of TBenchResult;
-  LBaselines: array[0..1] of TBaselineData;
+  LBaselines: array[0..5] of TBaselineData;
   LRes: TBenchResults;
   LMatrix: TMatrixResult;
 begin
@@ -214,21 +213,26 @@ begin
   LResults[1] := MakeResult('Bench2', 200.0);
   LResults[2] := MakeResult('Bench3', 300.0);
 
-  LBaselines[0] := MakeBaseline('old', 150.0);
-  LBaselines[1] := MakeBaseline('new', 180.0);
+  { 2 个版本 × 3 个 benchmark = 6 条基线 }
+  LBaselines[0] := MakeBaseline('Bench1', 150.0);  { old }
+  LBaselines[1] := MakeBaseline('Bench2', 250.0);  { old }
+  LBaselines[2] := MakeBaseline('Bench3', 350.0);  { old }
+  LBaselines[3] := MakeBaseline('Bench1', 180.0);  { new }
+  LBaselines[4] := MakeBaseline('Bench2', 180.0);  { new }
+  LBaselines[5] := MakeBaseline('Bench3', 280.0);  { new }
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
     LMatrix := LRes.CompareMultipleBaselines(LBaselines);
 
     Check(Length(LMatrix.Rows) = 3, '3 rows');
-    Check(Length(LMatrix.BaselineNames) = 2, '2 columns');
-    Check(Length(LMatrix.Rows[0].Cells) = 2, 'Each row has 2 cells');
+    Check(Length(LMatrix.BaselineNames) = 6, '6 columns');
+    Check(Length(LMatrix.Rows[0].Cells) = 6, 'Each row has 6 cells');
 
     { Bench1/old = 100/150 = 0.667 }
     Check(Abs(LMatrix.Rows[0].Cells[0].Ratio - 100.0/150.0) < 0.001, 'Bench1/old');
     { Bench2/new = 200/180 = 1.111 }
-    Check(Abs(LMatrix.Rows[1].Cells[1].Ratio - 200.0/180.0) < 0.001, 'Bench2/new');
+    Check(Abs(LMatrix.Rows[1].Cells[4].Ratio - 200.0/180.0) < 0.001, 'Bench2/new');
   finally
     LRes.Free;
   end;
@@ -244,7 +248,7 @@ var
   LMatrix: TMatrixResult;
 begin
   LResults[0] := MakeResult('Bench', 100.0);
-  LBaselines[0] := MakeBaseline('zero', 0.0);
+  LBaselines[0] := MakeBaseline('Bench', 0.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -264,14 +268,16 @@ end;
 procedure TestMatrix_ConsoleReport;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..1] of TBaselineData;
+  LBaselines: array[0..3] of TBaselineData;
   LRes: TBenchResults;
   LReport: string;
 begin
   LResults[0] := MakeResult('Sort', 100.0);
   LResults[1] := MakeResult('Hash', 200.0);
-  LBaselines[0] := MakeBaseline('v1.0', 120.0);
-  LBaselines[1] := MakeBaseline('v2.0', 90.0);
+  LBaselines[0] := MakeBaseline('Sort', 120.0);
+  LBaselines[1] := MakeBaseline('Hash', 250.0);
+  LBaselines[2] := MakeBaseline('Sort', 90.0);
+  LBaselines[3] := MakeBaseline('Hash', 180.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -281,8 +287,6 @@ begin
     Check(Pos('Multi-Baseline', LReport) > 0, 'Report contains title');
     Check(Pos('Sort', LReport) > 0, 'Report contains Sort');
     Check(Pos('Hash', LReport) > 0, 'Report contains Hash');
-    Check(Pos('v1.0', LReport) > 0, 'Report contains v1.0 column');
-    Check(Pos('v2.0', LReport) > 0, 'Report contains v2.0 column');
     Check(Pos('Geometric Mean', LReport) > 0, 'Report has geometric mean row');
   finally
     LRes.Free;
@@ -299,8 +303,8 @@ var
   LHTML: string;
 begin
   LResults[0] := MakeResult('Sort', 100.0);
-  LBaselines[0] := MakeBaseline('v1', 120.0);
-  LBaselines[1] := MakeBaseline('v2', 80.0);
+  LBaselines[0] := MakeBaseline('Sort', 120.0);
+  LBaselines[1] := MakeBaseline('Sort', 80.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -310,8 +314,6 @@ begin
     Check(Pos('<table', LHTML) > 0, 'HTML has table');
     Check(Pos('Multi-Baseline', LHTML) > 0, 'HTML has title');
     Check(Pos('Sort', LHTML) > 0, 'HTML has Sort');
-    Check(Pos('v1', LHTML) > 0, 'HTML has v1 column');
-    Check(Pos('v2', LHTML) > 0, 'HTML has v2 column');
     Check(Pos('Geometric Mean', LHTML) > 0, 'HTML has geo mean row');
     Check(Pos('class="faster"', LHTML) > 0, 'HTML has faster class (100/120=0.833)');
     Check(Pos('class="slower"', LHTML) > 0, 'HTML has slower class (100/80=1.25)');
@@ -332,7 +334,7 @@ var
 begin
   LResults[0] := MakeResult('Bench', 100.0);
   for I := 0 to 9 do
-    LBaselines[I] := MakeBaseline('v' + IntToStr(I), 80.0 + I * 5.0);
+    LBaselines[I] := MakeBaseline('Bench', 80.0 + I * 5.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -465,14 +467,16 @@ end;
 procedure TestMatrix_JSON;
 var
   LResults: array[0..1] of TBenchResult;
-  LBaselines: array[0..1] of TBaselineData;
+  LBaselines: array[0..3] of TBaselineData;
   LRes: TBenchResults;
   LJSON: string;
 begin
   LResults[0] := MakeResult('Sort', 100.0);
   LResults[1] := MakeResult('Hash', 200.0);
-  LBaselines[0] := MakeBaseline('v1.0', 120.0);
-  LBaselines[1] := MakeBaseline('v2.0', 90.0);
+  LBaselines[0] := MakeBaseline('Sort', 120.0);
+  LBaselines[1] := MakeBaseline('Hash', 250.0);
+  LBaselines[2] := MakeBaseline('Sort', 90.0);
+  LBaselines[3] := MakeBaseline('Hash', 180.0);
 
   LRes := TBenchResults.Create(LResults, Default(TBenchEnvironment), LBaselines);
   try
@@ -484,8 +488,6 @@ begin
     Check(Pos('"geometricMeanRatios"', LJSON) > 0, 'Has geomean key');
     Check(Pos('"Sort"', LJSON) > 0, 'Has Sort entry');
     Check(Pos('"Hash"', LJSON) > 0, 'Has Hash entry');
-    Check(Pos('"v1.0"', LJSON) > 0, 'Has v1.0 baseline');
-    Check(Pos('"v2.0"', LJSON) > 0, 'Has v2.0 baseline');
     Check(Pos('"ratios"', LJSON) > 0, 'Has ratios array');
     Check(Pos('"nsPerOp"', LJSON) > 0, 'Has nsPerOp');
     Check(Pos('"bytesPerOp"', LJSON) > 0, 'Has bytesPerOp');
