@@ -92,7 +92,12 @@ uses
   nextpas.core.lockfree.arccache,
   nextpas.core.lockfree.adjmap,
   nextpas.core.lockfree.matrix,
-  nextpas.core.lockfree.wrr;
+  nextpas.core.lockfree.wrr,
+  nextpas.core.lockfree.elimination_stack,
+  nextpas.core.lockfree.versionvector,
+  nextpas.core.lockfree.misragries,
+  nextpas.core.lockfree.robinhood,
+  nextpas.core.lockfree.unrolled_list;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -741,6 +746,44 @@ type
   }
   TWRR = nextpas.core.lockfree.wrr.TWRRImpl;
   TWRRStatus = nextpas.core.lockfree.wrr.TWRRStatus;
+
+  {** @desc Elimination Backoff Stack — 消除回退栈
+    @details Treiber stack 优化版，高争用下 2-3x 性能提升。
+    @see TEliminationStackImpl 详细文档和示例
+  }
+  generic TEliminationStack<T> = class(specialize TEliminationStackImpl<T>)
+  end;
+  TEliminationStackResult = nextpas.core.lockfree.elimination_stack.TEliminationStackResult;
+
+  {** @desc Version Vector — 分布式因果跟踪
+    @details Map<NodeId, Counter>，判断 happens-before 关系。
+    @see TVersionVector 详细文档和示例
+  }
+  TVersionVector = nextpas.core.lockfree.versionvector.TVersionVector;
+  TVVCompareResult = nextpas.core.lockfree.versionvector.TVVCompareResult;
+  TVVEntry = nextpas.core.lockfree.versionvector.TVVEntry;
+
+  {** @desc Misra-Gries — 流式频繁项检测
+    @details 维护 k 个计数器，保证找到频率 > n/(k+1) 的所有项。
+    @see TMisraGries 详细文档和示例
+  }
+  TMisraGries = nextpas.core.lockfree.misragries.TMisraGries;
+  TMisraGriesResult = nextpas.core.lockfree.misragries.TMisraGriesResult;
+
+  {** @desc Robin Hood Hash Map — 后向位移哈希表
+    @details 开放寻址 + Robin Hood 插入，减少探测方差。
+    @see TRobinHoodMap 详细文档和示例
+  }
+  TRobinHoodMap = nextpas.core.lockfree.robinhood.TRobinHoodMap;
+  TRobinHoodResult = nextpas.core.lockfree.robinhood.TRobinHoodResult;
+
+  {** @desc Concurrent Unrolled Linked List — 缓存友好有序链表
+    @details 每节点存多个元素，减少指针开销。
+    @see TConcurrentUnrolledListImpl 详细文档和示例
+  }
+  generic TConcurrentUnrolledList<T> = class(specialize TConcurrentUnrolledListImpl<T>)
+  end;
+  TUnrolledResult = nextpas.core.lockfree.unrolled_list.TUnrolledResult;
 
 implementation
 
