@@ -961,6 +961,8 @@ var
   LDir, LFile: string;
   LLines: TStringArray;
   LSafeName: string;
+  LUnescaped: string;
+  LPos: Integer;
   K: Integer;
 begin
   Result := False;
@@ -986,6 +988,29 @@ begin
       Exit;
     end;
     AEntry.Message := LLines[1];
+    { R5-07: unescape newlines in cached message (manual, no SysUtils) }
+    begin
+      LUnescaped := '';
+      LPos := 1;
+      while LPos <= Length(AEntry.Message) do
+      begin
+        if (AEntry.Message[LPos] = '\') and (LPos < Length(AEntry.Message)) then
+        begin
+          Inc(LPos);
+          case AEntry.Message[LPos] of
+            'n': LUnescaped := LUnescaped + LineEnding;
+            'r': LUnescaped := LUnescaped + #13;
+            '\': LUnescaped := LUnescaped + '\';
+          else
+            LUnescaped := LUnescaped + '\' + AEntry.Message[LPos];
+          end;
+        end
+        else
+          LUnescaped := LUnescaped + AEntry.Message[LPos];
+        Inc(LPos);
+      end;
+      AEntry.Message := LUnescaped;
+    end;
     AEntry.Duration := StrToInt64Def(LLines[2], 0);
     if Length(LLines) >= 4 then
       AEntry.Time := StrToInt64Def(LLines[3], 0)
@@ -1002,6 +1027,7 @@ procedure TTestCache.Put(const AKey: string; ATestName: string;
 var
   LDir, LFile: string;
   LSafeName: string;
+  LEscapedMsg: string;
   K: Integer;
 begin
   LDir := CacheDir + '/' + AKey;
@@ -1012,10 +1038,21 @@ begin
     if (LSafeName[K] = '/') or (LSafeName[K] = '\') then
       LSafeName[K] := '_';
   LFile := LDir + '/' + LSafeName + '.cache';
+  { R5-07: escape newlines in message to preserve cache format integrity.
+    Backslash-first: replace \ -> \\, then #10 -> \n, #13 -> \r }
+  LEscapedMsg := '';
+  for K := 1 to Length(AEntry.Message) do
+    case AEntry.Message[K] of
+      '\': LEscapedMsg := LEscapedMsg + '\\';
+      #10: LEscapedMsg := LEscapedMsg + '\n';
+      #13: LEscapedMsg := LEscapedMsg + '\r';
+    else
+      LEscapedMsg := LEscapedMsg + AEntry.Message[K];
+    end;
   try
     WriteFileText(LFile,
       IntToStr(AEntry.Status) + LineEnding +
-      AEntry.Message + LineEnding +
+      LEscapedMsg + LineEnding +
       IntToStr(AEntry.Duration) + LineEnding +
       IntToStr(AEntry.Time));
   except

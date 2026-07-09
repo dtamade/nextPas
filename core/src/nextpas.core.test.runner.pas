@@ -1001,7 +1001,7 @@ begin
   LFail := 0;
   LSkip := 0;
   LLastFailMsg := '';
-  LAppender := TTestResultAppender.Create;
+  LAppender := nil; { R5-24: will be created inside try block to prevent leak }
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
   LErrSink := ResolveErrSink(LConfig);
@@ -1033,6 +1033,7 @@ begin
   else
     LProgressTotal := 0;
   try
+  LAppender := TTestResultAppender.Create;
 
   LRunStart := TInstant.Now;
   if LConfig.RunTimeoutSec > 0 then
@@ -1171,6 +1172,9 @@ begin
       end;
     end;
 
+    { R5-02: set LStart before BeforeEach check so all paths have valid duration }
+    LStart := TInstant.Now;
+
     if not LBeforeEachPassed then
     begin
       { R4-03: BeforeEach failed — skip test execution but still run AfterEach/EachCleanups }
@@ -1179,7 +1183,6 @@ begin
     end
     else
     begin
-    LStart := TInstant.Now;
     LDisplayName := GetDisplayName(LEntry);
     if LEntry.Kind = ekTest then
     begin
