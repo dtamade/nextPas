@@ -24,7 +24,8 @@ PROJECTS := \
 	test_http_websocket_client \
 	test_http_fuzz \
 	test_http_https_redirect \
-	test_http_cookie
+	test_http_cookie \
+	test_http_hsts
 
 .PHONY: test clean $(PROJECTS)
 

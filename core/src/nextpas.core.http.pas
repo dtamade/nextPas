@@ -36,6 +36,7 @@ uses
   nextpas.core.http.middleware.compression,
   nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
+  nextpas.core.http.middleware.hsts,
   nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log,
@@ -103,6 +104,9 @@ type
   TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
+
+  { Re-export HSTS types }
+  THstsOptions = nextpas.core.http.middleware.hsts.THstsOptions;
 
   { Re-export SSE types }
   TSSEvent = nextpas.core.http.sse.TSSEvent;
@@ -329,6 +333,10 @@ function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Request deadline middleware. Returns 504 if handler exceeds ATimeoutMs. }
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
+{** @desc HSTS middleware — adds Strict-Transport-Security header (1 year, includeSubDomains). }
+function HstsMiddleware: IHttpMiddleware; inline;
+{** @desc HSTS middleware with custom options (max-age, includeSubDomains, preload). }
+function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -897,6 +905,16 @@ end;
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.deadline.DeadlineMiddleware(ATimeoutMs);
+end;
+
+function HstsMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.hsts.HstsMiddleware;
+end;
+
+function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.hsts.HstsMiddlewareWith(AOptions);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
