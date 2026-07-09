@@ -149,7 +149,6 @@ type
 
     {** 输出一行 — 通过 Output ILineWriter }
     procedure EmitLine(const ALine: string);
-    procedure EmitLineStdErr(const ALine: string);
 
     {** 从环境变量加载配置 }
     procedure LoadConfigFromEnv;
@@ -488,6 +487,9 @@ begin
   inherited Create;
   InitDefaults;
   FConfig := DefaultBenchConfig;
+  { P1-14: CreateNoEnv 路径也必须初始化 Output，避免 EmitLine NPE }
+  if FConfig.Output = nil then
+    FConfig.Output := CreateConsoleWriter;
 end;
 
 destructor TBenchRunner.Destroy;
@@ -695,7 +697,7 @@ begin
 
   // 并行基准自动跳过内存跟踪
   if ATrackMemory and (not FConfig.Quiet) then
-    EmitLineStdErr('  WARNING: Memory tracking disabled for parallel benchmark "' + AEntry.Name + '"');
+    EmitLine('  WARNING: Memory tracking disabled for parallel benchmark "' + AEntry.Name + '"');
 
   LPerThreadIterations := AIters div AEntry.ParallelThreads;
   if (AIters mod AEntry.ParallelThreads) <> 0 then
@@ -1083,7 +1085,7 @@ end;
 function TBenchRunner.ComputeOpsPerSec(ANsPerOp: Double): Double;
 begin
   if ANsPerOp > 0 then
-    Result := 1000000000.0 / ANsPerOp
+    Result := NANOSECONDS_PER_SECOND / ANsPerOp
   else
     Result := 0.0;
 end;
@@ -1119,10 +1121,10 @@ begin
     Result := FormatFloat('0.0', ANs) + ' ns'
   else if ANs < 1000000.0 then
     Result := FormatFloat('0.00', ANs / 1000.0) + ' µs'
-  else if ANs < 1000000000.0 then
+  else if ANs < NANOSECONDS_PER_SECOND then
     Result := FormatFloat('0.00', ANs / 1000000.0) + ' ms'
   else
-    Result := FormatFloat('0.000', ANs / 1000000000.0) + ' s';
+    Result := FormatFloat('0.000', ANs / NANOSECONDS_PER_SECOND) + ' s';
 end;
 
 {** 格式化吞吐量（自动选择单位：ops/K/M/G） }
@@ -1132,10 +1134,10 @@ begin
     Result := FormatFloat('0', AOps) + ' ops/s'
   else if AOps < 1000000.0 then
     Result := FormatFloat('0.0', AOps / 1000.0) + ' Kops/s'
-  else if AOps < 1000000000.0 then
+  else if AOps < NANOSECONDS_PER_SECOND then
     Result := FormatFloat('0.0', AOps / 1000000.0) + ' Mops/s'
   else
-    Result := FormatFloat('0.0', AOps / 1000000000.0) + ' Gops/s';
+    Result := FormatFloat('0.0', AOps / NANOSECONDS_PER_SECOND) + ' Gops/s';
 end;
 
 {** 格式化大数字（带千位分隔符） }
@@ -1159,12 +1161,6 @@ end;
 
 procedure TBenchRunner.EmitLine(const ALine: string);
 begin
-  FConfig.Output.WriteLine(ALine);
-end;
-
-procedure TBenchRunner.EmitLineStdErr(const ALine: string);
-begin
-  { 注意：当前统一使用 Output，不再区分 stderr }
   FConfig.Output.WriteLine(ALine);
 end;
 

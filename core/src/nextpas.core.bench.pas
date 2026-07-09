@@ -991,6 +991,12 @@ begin
     end
     else
       LRunResult := FRunner.RunOne(FEntries[I]);
+    { P1-15: RunOne 可能耗时很长，完成后也检查 suite 超时 }
+    if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
+    begin
+      LRunResult.Skipped := True;
+      LRunResult.SkipReason := 'Timeout exceeded';
+    end;
     if LRunResult.Executed then
     begin
       LResults[LResultCount] := LRunResult;
@@ -1109,23 +1115,23 @@ begin
         LBaseStats.Mean := FBaselines[LJ].NsPerOp;
         { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
         LBaseStats.StdDev := FResults[I].StdDev;
-          LBaseStats.SampleCount := FResults[I].SampleCount;
+        LBaseStats.SampleCount := FResults[I].SampleCount;
 
-          LPValue := FStatsAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
-          LComparisons[LIdx].HasStatisticalTest := True;
-          LComparisons[LIdx].ApproximatePValue := LPValue;
-          LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
-        end
-        else
-        begin
-          { 采样不足，退回启发式判断 }
-          LComparisons[LIdx].HasStatisticalTest := False;
-          LComparisons[LIdx].IsSignificant :=
-            Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-          LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
-        end;
+        LPValue := FStatsAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
+        LComparisons[LIdx].HasStatisticalTest := True;
+        LComparisons[LIdx].ApproximatePValue := LPValue;
+        LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
+      end
+      else
+      begin
+        { 采样不足，退回启发式判断 }
+        LComparisons[LIdx].HasStatisticalTest := False;
+        LComparisons[LIdx].IsSignificant :=
+          Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+        LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
+      end;
 
-        Inc(LCount);
+      Inc(LCount);
       end;
   finally
     LMap.Free;

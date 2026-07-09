@@ -306,10 +306,10 @@ begin
     Result := FormatNumber(ANs, 1) + ' ns'
   else if ANs < 1000000 then
     Result := FormatNumber(ANs / 1000.0, 2) + ' µs' { ST-19: Unicode micro sign }
-  else if ANs < 1000000000 then
+  else if ANs < NANOSECONDS_PER_SECOND then
     Result := FormatNumber(ANs / 1000000.0, 2) + ' ms'
   else
-    Result := FormatNumber(ANs / 1000000000.0, 3) + ' s';
+    Result := FormatNumber(ANs / NANOSECONDS_PER_SECOND, 3) + ' s';
 end;
 
 { 格式化吞吐量 (bytes/s → 人类可读) }
