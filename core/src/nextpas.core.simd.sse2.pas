@@ -2801,8 +2801,61 @@ begin
   pb := PByte(b);
   i := 0;
 
-  // Process 32 bytes at a time using 2x SSE2 registers
-  while i + 32 <= len do
+  // Process 64 bytes at a time using 4x SSE2 registers
+  while i + 64 <= len do
+  begin
+    LResult := False;
+    asm
+      mov   rax, pa
+      mov   rdx, pb
+      add   rax, i
+      add   rdx, i
+      // 预取下一批数据
+      prefetchnta [rax + 128]
+      prefetchnta [rdx + 128]
+      // 第 1 组 (0-15)
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rdx]
+      pcmpeqb xmm0, xmm1
+      pmovmskb ecx, xmm0
+      cmp   ecx, $FFFF
+      jne   @not_equal_64
+      // 第 2 组 (16-31)
+      movdqu xmm2, [rax + 16]
+      movdqu xmm3, [rdx + 16]
+      pcmpeqb xmm2, xmm3
+      pmovmskb ecx, xmm2
+      cmp   ecx, $FFFF
+      jne   @not_equal_64
+      // 第 3 组 (32-47)
+      movdqu xmm4, [rax + 32]
+      movdqu xmm5, [rdx + 32]
+      pcmpeqb xmm4, xmm5
+      pmovmskb ecx, xmm4
+      cmp   ecx, $FFFF
+      jne   @not_equal_64
+      // 第 4 组 (48-63)
+      movdqu xmm6, [rax + 48]
+      movdqu xmm7, [rdx + 48]
+      pcmpeqb xmm6, xmm7
+      pmovmskb ecx, xmm6
+      cmp   ecx, $FFFF
+      jne   @not_equal_64
+      mov   byte ptr LResult, 1
+    @not_equal_64:
+    end;
+
+    if not LResult then
+    begin
+      Result := False;
+      Exit;
+    end;
+
+    Inc(i, 64);
+  end;
+
+  // Process remaining 32-byte chunk
+  if i + 32 <= len then
   begin
     LResult := False;
     asm
