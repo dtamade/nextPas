@@ -269,7 +269,7 @@ begin
     { Thread finished — clean up state }
     Dispose(LState);
   end
-  else if Result = 110 then { ETIMEDOUT }
+  else if Result = ESysETIMEDOUT then 
   begin
     Result := 1; { Caller decides: detach or re-try }
   end

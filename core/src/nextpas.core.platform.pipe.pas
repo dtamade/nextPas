@@ -48,14 +48,28 @@ uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.helpers;
+  nextpas.core.platform.posix.helpers
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  , nextpas.core.platform.linux.ffi
+  {$ENDIF}
+  ;
 
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 var
   LFds: array[0..1] of Int32;
 begin
   FillChar(APipe, SizeOf(APipe), 0);
+{$IFDEF NEXTPAS_LINUX}
+  Result := PosixCheck(pipe2(@LFds[0], O_CLOEXEC));
+{$ELSE}
   Result := PosixCheck(pipe(@LFds[0]));
+  if Result = 0 then
+  begin
+    fcntl(cint(LFds[0]), F_SETFD, FD_CLOEXEC);
+    fcntl(cint(LFds[1]), F_SETFD, FD_CLOEXEC);
+  end;
+{$ENDIF}
   if Result = 0 then
   begin
     APipe.ReadFd := LFds[0];
@@ -67,16 +81,14 @@ function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.ReadFd < 0 then Exit(PLATFORM_ERR_BADF);
   Result := PosixCheck(close(cint(APipe.ReadFd)));
-  if Result = 0 then
-    APipe.ReadFd := -1;
+  APipe.ReadFd := -1;
 end;
 
 function platform_pipe_close_write(var APipe: TPlatformPipe): Int32;
 begin
   if APipe.WriteFd < 0 then Exit(PLATFORM_ERR_BADF);
   Result := PosixCheck(close(cint(APipe.WriteFd)));
-  if Result = 0 then
-    APipe.WriteFd := -1;
+  APipe.WriteFd := -1;
 end;
 
 function platform_pipe_close(var APipe: TPlatformPipe): Int32;

@@ -1411,13 +1411,13 @@ var
   _WaitOnAddress: TWaitOnAddressFunc = nil;
   _WakeByAddressSingle: TWakeByAddressSingleProc = nil;
   _WakeByAddressAll: TWakeByAddressAllProc = nil;
-  _WaitAddressResolved: Boolean = False;
+  _WaitAddressResolved: LongInt = 0;
 
 procedure ResolveWaitAddress;
 var
   LLib: HMODULE;
 begin
-  if _WaitAddressResolved then
+  if InterlockedCompareExchange(_WaitAddressResolved, 0, 0) <> 0 then
     Exit;
   LLib := GetModuleHandleW('kernel32');
   if LLib <> nil then
@@ -1426,7 +1426,7 @@ begin
     _WakeByAddressSingle := TWakeByAddressSingleProc(GetProcAddress(LLib, 'WakeByAddressSingle'));
     _WakeByAddressAll := TWakeByAddressAllProc(GetProcAddress(LLib, 'WakeByAddressAll'));
   end;
-  _WaitAddressResolved := True;
+  InterlockedExchange(_WaitAddressResolved, 1);
 end;
 
 function platform_sync_windows_wait_address_i32(
@@ -1757,7 +1757,8 @@ begin
         Result := platform_condvar_wait(ABarrier.CondVar, ABarrier.Mutex);
         if Result <> 0 then
         begin
-          Dec(ABarrier.Waiting);
+          if ABarrier.Waiting > 0 then
+            Dec(ABarrier.Waiting);
           Break;
         end;
       end;

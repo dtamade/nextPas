@@ -51,6 +51,7 @@ function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
     @param ABuf 读取缓冲区
     @param ALen 读取长度
     @param ABytesRead 输出实际读取字节数
+    @note 不处理 EINTR — 信号中断时直接返回错误码，调用者如需可靠读取需自行重试。
     @return 0 成功，否则返回错误码 *}
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesRead: PtrUInt): Int32;
@@ -60,6 +61,7 @@ function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
     @param ABuf 写入缓冲区
     @param ALen 写入长度
     @param ABytesWritten 输出实际写入字节数
+    @note 不处理 EINTR — 信号中断时直接返回错误码，调用者如需可靠写入需自行重试。
     @return 0 成功，否则返回错误码 *}
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32;

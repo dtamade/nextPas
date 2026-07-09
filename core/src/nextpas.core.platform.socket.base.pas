@@ -104,6 +104,7 @@ begin
       for LPartIdx := LStart to LIdx - 1 do
       begin
         LCh := AAddr[LPartIdx];
+        if LPart > 255 then begin Result := 0; Exit; end;
         if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
         LPart := LPart * 10 + Ord(LCh) - Ord('0');
       end;
