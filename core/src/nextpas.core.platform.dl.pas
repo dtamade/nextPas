@@ -89,10 +89,21 @@ begin
   { nil path = load self (dlopen(NULL, ...) semantics) }
   ALib.Handle := dlopen(APath, MapFlags(AFlags));
   if ALib.Handle = nil then
-    Result := PLATFORM_ERR_ENOENT // caller uses platform_dl_error for details
+  begin
+    { Map errno to a more specific error when possible;
+      caller can always use platform_dl_error for the full message. }
+    case platform_get_errno of
+      ESysENOENT: Result := PLATFORM_ERR_NOENT;
+      ESysEACCES: Result := PLATFORM_ERR_PERM;
+      ESysENOMEM: Result := PLATFORM_ERR_NOMEM;
+    else
+      Result := PLATFORM_ERR_NOENT;
+    end;
+  end
   else
     Result := 0;
 end;
+
 
 function platform_dl_sym(const ALib: TPlatformLibrary;
   const AName: PAnsiChar; out AAddr: Pointer): Int32;
@@ -165,7 +176,14 @@ var
 begin
   FillChar(ALib, SizeOf(ALib), 0);
   if APath = nil then
-    Exit(PLATFORM_ERR_INVALID); { Windows: nil path is invalid }
+  begin
+    { nil path = load self: GetModuleHandleW(nil) returns the handle
+      of the calling process, equivalent to dlopen(NULL, ...). }
+    ALib.Handle := PtrUInt(GetModuleHandleW(nil));
+    if ALib.Handle = 0 then
+      Exit(Int32(GetLastError));
+    Exit(0);
+  end;
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));

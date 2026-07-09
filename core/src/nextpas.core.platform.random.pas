@@ -74,6 +74,9 @@ begin
   while LDone < ALen do
   begin
     LRet := PtrInt(getrandom(Pointer(PtrUInt(ABuf) + LDone), ALen - LDone, 0));
+    { getrandom(flags=0) blocks until sufficient entropy is available;
+      on early boot this may stall indefinitely. Non-critical paths
+      should use GRND_NONBLOCK and fall back to /dev/urandom. }
     if LRet < 0 then
       Exit(platform_get_errno);
     if LRet = 0 then

@@ -148,7 +148,15 @@ var
 begin
   LOpenMax := sysconf(PLATFORM_SC_OPEN_MAX);
   if LOpenMax <= 3 then
-    Exit(PLATFORM_CHILD_FD_FALLBACK_MAX);
+  begin
+    Result := PLATFORM_CHILD_FD_FALLBACK_MAX;
+    Exit;
+  end;
+  if LOpenMax > PLATFORM_CHILD_FD_FALLBACK_MAX then
+  begin
+    Result := PLATFORM_CHILD_FD_FALLBACK_MAX;
+    Exit;
+  end;
   if LOpenMax > High(Int32) then
     Exit(High(Int32));
   Result := Int32(LOpenMax) - 1;
@@ -580,6 +588,103 @@ begin
   Result := 0;
 end;
 
+function ReadTwoPipes(AStdoutFd, AStderrFd: Int32;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32): Int32;
+var
+  LPollFds: array[0..1] of pollfd;
+  LRet, LN: PtrInt;
+  LAnyOpen: Boolean;
+begin
+  AStdoutLen := 0;
+  AStderrLen := 0;
+
+  { Set non-blocking on both fds }
+  fcntl(AStdoutFd, F_SETFL, fcntl(AStdoutFd, F_GETFL, 0) or O_NONBLOCK);
+  fcntl(AStderrFd, F_SETFL, fcntl(AStderrFd, F_GETFL, 0) or O_NONBLOCK);
+
+  repeat
+    FillChar(LPollFds[0], SizeOf(LPollFds), 0);
+    LAnyOpen := False;
+
+    if AStdoutLen < AStdoutBufLen then
+    begin
+      LPollFds[0].fd := AStdoutFd;
+      LPollFds[0].events := POLLIN;
+      LAnyOpen := True;
+    end
+    else
+      LPollFds[0].fd := -1;
+
+    if AStderrLen < AStderrBufLen then
+    begin
+      LPollFds[1].fd := AStderrFd;
+      LPollFds[1].events := POLLIN;
+      LAnyOpen := True;
+    end
+    else
+      LPollFds[1].fd := -1;
+
+    if not LAnyOpen then
+      Break;
+
+    LRet := poll(@LPollFds[0], 2, -1);
+    if LRet < 0 then
+    begin
+      if platform_get_errno = ESysEINTR then
+        Continue;
+      Exit(platform_get_errno);
+    end;
+    if LRet = 0 then
+      Continue;
+
+    { Read stdout }
+    if (LPollFds[0].revents and POLLIN) <> 0 then
+    begin
+      LN := read(AStdoutFd, @AStdoutBuf[AStdoutLen], AStdoutBufLen - AStdoutLen);
+      if LN < 0 then
+      begin
+        if platform_get_errno <> ESysEAGAIN then
+          Exit(platform_get_errno);
+      end
+      else if LN = 0 then
+      begin
+        { stdout EOF — mark as full so we stop polling it }
+        AStdoutLen := AStdoutBufLen;
+      end
+      else
+        Inc(AStdoutLen, Int32(LN));
+    end;
+    if (LPollFds[0].revents and (POLLHUP or POLLERR)) <> 0 then
+      AStdoutLen := AStdoutBufLen; { mark as done }
+
+    { Read stderr }
+    if (LPollFds[1].revents and POLLIN) <> 0 then
+    begin
+      LN := read(AStderrFd, @AStderrBuf[AStderrLen], AStderrBufLen - AStderrLen);
+      if LN < 0 then
+      begin
+        if platform_get_errno <> ESysEAGAIN then
+          Exit(platform_get_errno);
+      end
+      else if LN = 0 then
+      begin
+        AStderrLen := AStderrBufLen;
+      end
+      else
+        Inc(AStderrLen, Int32(LN));
+    end;
+    if (LPollFds[1].revents and (POLLHUP or POLLERR)) <> 0 then
+      AStderrLen := AStderrBufLen; { mark as done }
+  until False;
+
+  if AStdoutLen < AStdoutBufLen then
+    AStdoutBuf[AStdoutLen] := #0;
+  if AStderrLen < AStderrBufLen then
+    AStderrBuf[AStderrLen] := #0;
+  Result := 0;
+end;
+
 function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar;
   AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
@@ -631,10 +736,9 @@ begin
   end;
 
   try
-    Result := ReadPipeFully(LStdoutPipe[0], AStdoutBuf, AStdoutBufLen, AStdoutLen);
-    if Result <> 0 then
-      Exit;
-    Result := ReadPipeFully(LStderrPipe[0], AStderrBuf, AStderrBufLen, AStderrLen);
+    Result := ReadTwoPipes(LStdoutPipe[0], LStderrPipe[0],
+      AStdoutBuf, AStdoutBufLen, AStdoutLen,
+      AStderrBuf, AStderrBufLen, AStderrLen);
     if Result <> 0 then
       Exit;
   finally

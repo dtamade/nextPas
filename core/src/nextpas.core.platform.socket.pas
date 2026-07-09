@@ -283,7 +283,7 @@ function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
 {** @desc 构造 IPv4 sockaddr_in 结构
     @param APort 端口号（主机字节序）
-    @param AAddr IPv4 地址（网络字节序）
+    @param AAddr IPv4 地址（主机字节序）
     @param AResult 输出 sockaddr 结构
     @return 0 成功 *}
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -432,6 +432,9 @@ uses
   {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
   ;
 
+const
+  SOCK_CLOEXEC_LOCAL = $02000000;
+
 { 套接字描述符转换辅助函数 }
 function FdToSocket(AFd: cint; out ASocket: TPlatformSocket): Int32; inline;
 begin
@@ -440,8 +443,17 @@ end;
 
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
+var
+  LFd: cint;
 begin
-  Result := FdToSocket(socket(ADomain, AType, AProtocol), ASocket);
+  LFd := socket(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol);
+  if (LFd < 0) and (platform_get_errno = ESysEINVAL) then
+  begin
+    LFd := socket(ADomain, AType, AProtocol);
+    if LFd >= 0 then
+      fcntl(LFd, F_SETFD, FD_CLOEXEC);
+  end;
+  Result := FdToSocket(LFd, ASocket);
 end;
 
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
@@ -755,11 +767,28 @@ function platform_socket_pair(ADomain, AType, AProtocol: Int32;
 var
   LSv: array[0..1] of cint;
 begin
-  if socketpair(ADomain, AType, AProtocol, @LSv[0]) <> 0 then
+  if socketpair(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol, @LSv[0]) <> 0 then
   begin
-    ASocket1.Value := -1;
-    ASocket2.Value := -1;
-    Exit(platform_get_errno);
+    if platform_get_errno = ESysEINVAL then
+    begin
+      if socketpair(ADomain, AType, AProtocol, @LSv[0]) = 0 then
+      begin
+        fcntl(LSv[0], F_SETFD, FD_CLOEXEC);
+        fcntl(LSv[1], F_SETFD, FD_CLOEXEC);
+      end
+      else
+      begin
+        ASocket1.Value := -1;
+        ASocket2.Value := -1;
+        Exit(platform_get_errno);
+      end;
+    end
+    else
+    begin
+      ASocket1.Value := -1;
+      ASocket2.Value := -1;
+      Exit(platform_get_errno);
+    end;
   end;
   ASocket1.Value := LSv[0];
   ASocket2.Value := LSv[1];
@@ -1039,7 +1068,10 @@ end;
 
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 type
-  { FPC's winsock bindings in this toolchain do not expose addrinfo/getaddrinfo. }
+  { FPC's winsock bindings in this toolchain do not expose addrinfo/getaddrinfo.
+    Local TWinAddrInfo definition is used to call the raw WinSock getaddrinfo
+    without relying on FPC RTL's ws2_32 header. This avoids potential ABI
+    mismatches between FPC's bundled addrinfo layout and the system ws2_32. }
   TWinAddrInfo = record
     ai_flags: Int32;
     ai_family: Int32;
@@ -1174,7 +1206,7 @@ begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
   LAddr^.sin_family := AF_INET;
-  LAddr^.sin_port := htons(APort);
+  LAddr^.sin_port := platform_htons(APort);
   LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
   AResult.Len := SizeOf(sockaddr_in);
   Result := 0;
@@ -1194,7 +1226,7 @@ begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
   LAddr^.sin6_family := AF_INET6;
-  LAddr^.sin6_port := htons(APort);
+  LAddr^.sin6_port := platform_htons(APort);
   LAddr^.sin6_flowinfo := 0;
   if AAddr <> nil then
     Move(AAddr^, LAddr^.sin6_addr, 16)

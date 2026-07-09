@@ -497,20 +497,30 @@ begin
   { Fallback to read/write if sendfile failed }
   if LR <> 0 then
   begin
-    platform_file_seek(LSrcH, 0, fsoBegin, LNewPos);
-    platform_file_seek(LDstH, 0, fsoBegin, LNewPos);
+    { Continue from where sendfile left off using pread/pwrite
+      to avoid data corruption from restarting at file beginning. }
+    LRead := 0;
+    repeat
+      LR := platform_file_pread(LSrcH, @LBuf[0], SizeOf(LBuf), LTotal, LRead);
+      if (LR <> 0) or (LRead = 0) then Break;
+      LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
+      if LR <> 0 then Break;
+      Inc(LTotal, Int64(LRead));
+    until LTotal >= LStat.Size;
+    if LTotal >= LStat.Size then
+      LR := 0;
+  end;
 {$ENDIF}
 
-  { Standard read/write loop }
+  { Non-Linux: standard read/write loop }
+{$IFNDEF NEXTPAS_LINUX}
   repeat
     LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
     if (LR <> 0) or (LRead = 0) then Break;
     LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
   until LR <> 0;
-
-{$IFDEF NEXTPAS_LINUX}
-  end;
 {$ENDIF}
+
 
   LCloseR := platform_file_close(LDstH);
   if (LR = 0) and (LCloseR <> 0) then
@@ -986,4 +996,3 @@ begin
 end;
 
 end.
-

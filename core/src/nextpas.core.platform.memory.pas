@@ -41,6 +41,11 @@ function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 {** @desc 检查是否使用原生对齐分配（非 fallback）
     @return True 使用原生实现 *}
 function platform_aligned_alloc_is_native: Boolean;
+{ On Windows, returns True (uses _aligned_malloc from CRT). On POSIX,
+  returns True (uses posix_memalign). On unsupported platforms,
+  returns False (uses SysGetMem fallback). There is no runtime
+  detection of _aligned_malloc availability on Windows; if the CRT
+  does not provide it, the call will fail at link time. }
 
 {** @desc 获取安全清零后端
     @return TPlatformSecureZeroBackend 枚举值 *}
@@ -183,6 +188,11 @@ begin
 end;
 
 function platform_aligned_alloc_is_native: Boolean;
+{ On Windows, returns True (uses _aligned_malloc from CRT). On POSIX,
+  returns True (uses posix_memalign). On unsupported platforms,
+  returns False (uses SysGetMem fallback). There is no runtime
+  detection of _aligned_malloc availability on Windows; if the CRT
+  does not provide it, the call will fail at link time. }
 begin
   Result := platform_aligned_alloc_backend <> paabFallback;
 end;
@@ -213,6 +223,12 @@ end;
   native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam
   secure-zero-forced-compile-truth=source-contract
   windows-runtime-ready=false
+  fallback-barrier-caveat=ReadWriteBarrier prevents compiler reordering but
+    is not a full hardware memory fence. On weakly-ordered architectures
+    (ARM, POWER) this may not prevent hardware reordering of the zero-fill
+    with subsequent sensitive-data stores. For cryptographic key zeroing
+    prefer the POSIX explicit_bzero backend or use an explicit hardware
+    fence (e.g. __sync_synchronize on GCC/Clang).
 }
 procedure platform_secure_zero_memory(APtr: Pointer; ASize: SizeUInt);
 begin
@@ -418,6 +434,10 @@ begin
   nextpas.core.platform.windows.ffi.VirtualFree(APtr, PtrUInt(ASize), WINDOWS_MEM_DECOMMIT);
 {$ELSEIF defined(NEXTPAS_UNIX)}
   { MADV_DONTNEED tells kernel pages can be reclaimed; address range stays mapped }
+      { MADV_DONTNEED semantics vary: on Linux it immediately discards pages
+        (subsequent access gets zero-filled pages); on FreeBSD/macOS
+        MADV_FREE lazily frees pages (subsequent access may still see old
+        data until reclaimed). Use MADV_FREE when available for lazy reclaim. }
   nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_DONTNEED);
 {$ENDIF}
 end;
