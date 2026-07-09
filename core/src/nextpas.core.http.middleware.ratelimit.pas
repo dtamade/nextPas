@@ -11,6 +11,9 @@ unit nextpas.core.http.middleware.ratelimit;
  *
  *       Client IP is read from X-Forwarded-For (first entry) or X-Real-IP
  *       header, falling back to RemoteAddr.
+ *
+ *       Each middleware instance maintains its own isolated rate-limit state,
+ *       so different routes can have independent limits.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -51,10 +54,23 @@ type
     WindowStart: Int64;
   end;
 
-var
-  GEntries: array of TLimitEntry;
-  GEntriesLock: TRTLCriticalSection;
-  GCleanupCounter: Int32;
+  { Instance-scoped rate limit state. Each middleware call creates its own
+    TRateLimitState, so different routes/servers have independent limits. }
+  TRateLimitState = class
+  private
+    FEntries: array of TLimitEntry;
+    FLock: TRTLCriticalSection;
+    FCleanupCounter: Int32;
+    FMaxRequests: Int32;
+    FWindowSeconds: Int32;
+    procedure CleanupExpiredEntries(ANow: Int64);
+    function FindOrCreateEntry(const AIP: string; ANow: Int64): Int32;
+  public
+    constructor Create(const AOptions: TRateLimitOptions);
+    destructor Destroy; override;
+    function ProcessRequest(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter): Boolean;
+  end;
 
 const
   CLEANUP_INTERVAL = 64;
@@ -64,25 +80,66 @@ begin
   Result := TOffsetDateTime.NowUtc.ToUnixSeconds;
 end;
 
-{ Remove entries whose window has expired. Called every CLEANUP_INTERVAL requests
-  to prevent unbounded memory growth. }
-procedure CleanupExpiredEntries(ANow: Int64; AWindowSec: Int32);
+{ TRateLimitState }
+
+constructor TRateLimitState.Create(const AOptions: TRateLimitOptions);
+begin
+  inherited Create;
+  FMaxRequests := AOptions.MaxRequests;
+  FWindowSeconds := AOptions.WindowSeconds;
+  FCleanupCounter := 0;
+  InitCriticalSection(FLock);
+end;
+
+destructor TRateLimitState.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  inherited Destroy;
+end;
+
+procedure TRateLimitState.CleanupExpiredEntries(ANow: Int64);
 var
   LI, LWrite, LLen: Int32;
 begin
-  LLen := Length(GEntries);
+  LLen := Length(FEntries);
   LWrite := 0;
   for LI := 0 to LLen - 1 do
   begin
-    if ANow - GEntries[LI].WindowStart < Int64(AWindowSec) then
+    if ANow - FEntries[LI].WindowStart < Int64(FWindowSeconds) then
     begin
       if LWrite <> LI then
-        GEntries[LWrite] := GEntries[LI];
+        FEntries[LWrite] := FEntries[LI];
       Inc(LWrite);
     end;
   end;
   if LWrite < LLen then
-    SetLength(GEntries, LWrite);
+    SetLength(FEntries, LWrite);
+end;
+
+function TRateLimitState.FindOrCreateEntry(const AIP: string;
+  ANow: Int64): Int32;
+var
+  LI: Int32;
+  LLen: Int32;
+begin
+  LLen := Length(FEntries);
+  for LI := 0 to LLen - 1 do
+  begin
+    if FEntries[LI].IP = AIP then
+    begin
+      if ANow - FEntries[LI].WindowStart >= Int64(FWindowSeconds) then
+      begin
+        FEntries[LI].Count := 0;
+        FEntries[LI].WindowStart := ANow;
+      end;
+      Exit(LI);
+    end;
+  end;
+  SetLength(FEntries, LLen + 1);
+  FEntries[LLen].IP := AIP;
+  FEntries[LLen].Count := 0;
+  FEntries[LLen].WindowStart := ANow;
+  Result := LLen;
 end;
 
 function ExtractClientIP(const AReq: IHttpRequest): string;
@@ -106,30 +163,53 @@ begin
   Result := AReq.GetRemoteAddr;
 end;
 
-function FindOrCreateEntry(const AIP: string; ANow: Int64;
-  AWindowSec: Int32): Int32;
+{ Returns True if request is allowed, False if rate-limited (429 already written). }
+function TRateLimitState.ProcessRequest(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter): Boolean;
 var
-  LI: Int32;
-  LLen: Int32;
+  LIP: string;
+  LIdx: Int32;
+  LNow: Int64;
+  LRemaining: Int32;
+  LReset: Int64;
 begin
-  LLen := Length(GEntries);
-  for LI := 0 to LLen - 1 do
-  begin
-    if GEntries[LI].IP = AIP then
+  Result := True;
+  LIP := ExtractClientIP(AReq);
+  LNow := NowEpoch;
+
+  EnterCriticalSection(FLock);
+  try
+    LIdx := FindOrCreateEntry(LIP, LNow);
+    Inc(FEntries[LIdx].Count);
+    LRemaining := FMaxRequests - FEntries[LIdx].Count;
+    if LRemaining < 0 then
+      LRemaining := 0;
+    LReset := Int64(FWindowSeconds) - (LNow - FEntries[LIdx].WindowStart);
+    if LReset < 0 then
+      LReset := 0;
+
+    { Periodic cleanup: every CLEANUP_INTERVAL requests, evict expired entries
+      to prevent unbounded memory growth. }
+    Inc(FCleanupCounter);
+    if FCleanupCounter >= CLEANUP_INTERVAL then
     begin
-      if ANow - GEntries[LI].WindowStart >= Int64(AWindowSec) then
-      begin
-        GEntries[LI].Count := 0;
-        GEntries[LI].WindowStart := ANow;
-      end;
-      Exit(LI);
+      FCleanupCounter := 0;
+      CleanupExpiredEntries(LNow);
     end;
+
+    AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(FMaxRequests)));
+    AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));
+    AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(LReset));
+
+    if FEntries[LIdx].Count > FMaxRequests then
+    begin
+      AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
+      HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
+      Result := False;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
   end;
-  SetLength(GEntries, LLen + 1);
-  GEntries[LLen].IP := AIP;
-  GEntries[LLen].Count := 0;
-  GEntries[LLen].WindowStart := ANow;
-  Result := LLen;
 end;
 
 function RateLimitMiddleware: IHttpMiddleware;
@@ -143,73 +223,24 @@ end;
 
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
 var
-  LMax: Int32;
-  LWindow: Int32;
+  LState: TRateLimitState;
 begin
   if AOptions.MaxRequests <= 0 then
     raise EArgumentError.Create('rate limit max requests must be positive');
   if AOptions.WindowSeconds <= 0 then
     raise EArgumentError.Create('rate limit window seconds must be positive');
 
-  LMax := AOptions.MaxRequests;
-  LWindow := AOptions.WindowSeconds;
+  { Each middleware instance gets its own state — no global variables. }
+  LState := TRateLimitState.Create(AOptions);
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    var
-      LIP: string;
-      LIdx: Int32;
-      LNow: Int64;
-      LRemaining: Int32;
-      LReset: Int64;
     begin
-      LIP := ExtractClientIP(AReq);
-      LNow := NowEpoch;
-
-      EnterCriticalSection(GEntriesLock);
-      try
-        LIdx := FindOrCreateEntry(LIP, LNow, LWindow);
-        Inc(GEntries[LIdx].Count);
-        LRemaining := LMax - GEntries[LIdx].Count;
-        if LRemaining < 0 then
-          LRemaining := 0;
-        LReset := Int64(LWindow) - (LNow - GEntries[LIdx].WindowStart);
-        if LReset < 0 then
-          LReset := 0;
-
-        { Periodic cleanup: every CLEANUP_INTERVAL requests, evict expired entries
-          to prevent unbounded memory growth. }
-        Inc(GCleanupCounter);
-        if GCleanupCounter >= CLEANUP_INTERVAL then
-        begin
-          GCleanupCounter := 0;
-          CleanupExpiredEntries(LNow, LWindow);
-        end;
-
-        AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(LMax)));
-        AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));
-        AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(LReset));
-
-        if GEntries[LIdx].Count > LMax then
-        begin
-          AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
-          HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
-          Exit;
-        end;
-      finally
-        LeaveCriticalSection(GEntriesLock);
-      end;
-
-      ANext.ServeHTTP(AReq, AW);
+      if LState.ProcessRequest(AReq, AW) then
+        ANext.ServeHTTP(AReq, AW);
     end);
   end);
 end;
-
-initialization
-  InitCriticalSection(GEntriesLock);
-
-finalization
-  DoneCriticalSection(GEntriesLock);
 
 end.
