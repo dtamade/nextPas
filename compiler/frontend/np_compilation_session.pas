@@ -25,6 +25,7 @@ uses
   np_query_database,
   np_file_change_detector,
   np_parallel_scheduler,
+  np_incremental_cache,
   np_mir_to_llvm, nextpas_json_helpers;
 
 type
@@ -89,6 +90,7 @@ type
     FQueryDB: TQueryDatabase;
     FFileDetector: TFileChangeDetector;
     FScheduler: TParallelScheduler;
+    FIncrementalCache: TIncrementalCache;
     FMirModule: TMirModule;
     FMirStatus: string;
     FBackendPlan: TBackendPlan;

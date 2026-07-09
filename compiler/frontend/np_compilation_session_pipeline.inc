@@ -429,6 +429,7 @@ var
   Analyzer: TSemanticAnalyzer;
   CacheKey: string;
   CachedModel: TObject;
+  DiskModel: TSemanticModel;
 begin
   { Query cache: if we already analyzed this file, skip }
   CacheKey := 'semantic:' + FSourceDatabase.RootSourceCanonicalPath;
@@ -439,6 +440,27 @@ begin
     FSemanticStatus := FSemanticModel.Status;
     { Do NOT call ResetSemanticState — it would free the cached model }
     Exit;
+  end;
+
+  { Check persistent disk cache }
+  if FIncrementalCache.HasCache(
+    FSourceDatabase.RootSourceCanonicalPath,
+    FSourceDatabase.RootSourceText,
+    []) then
+  begin
+    if FIncrementalCache.Load(
+      FSourceDatabase.RootSourceCanonicalPath,
+      FSourceDatabase.RootSourceText,
+      [],
+      DiskModel) then
+    begin
+      FSemanticModel := DiskModel;
+      FSemanticStatus := FSemanticModel.Status;
+      { Store in-memory cache too }
+      if FSemanticStatus = 'ready' then
+        FQueryDB.Store(CacheKey, FSemanticModel);
+      Exit;
+    end;
   end;
 
   ResetSemanticState;
@@ -465,7 +487,15 @@ begin
       FSemanticStatus := FSemanticModel.Status;
       { Cache for incremental compilation — query DB owns the reference }
       if FSemanticStatus = 'ready' then
+      begin
         FQueryDB.Store(CacheKey, FSemanticModel);
+        { Save to persistent disk cache }
+        FIncrementalCache.Save(
+          FSourceDatabase.RootSourceCanonicalPath,
+          FSourceDatabase.RootSourceText,
+          [],
+          FSemanticModel);
+      end;
     end;
   finally
     Analyzer.Free;

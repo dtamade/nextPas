@@ -118,6 +118,10 @@ begin
   FQueryDB := TQueryDatabase.Create;
   FFileDetector := TFileChangeDetector.Create;
   FScheduler := nil;  { Created on-demand for parallel builds }
+  FIncrementalCache := TIncrementalCache.Create(
+    ExtractFileDir(FOptions.BuildContext.ResolvedSourcePath) + '/.nextpas/cache'
+  );
+  FIncrementalCache.Enabled := FOptions.Incremental;
   FMirStatus := 'deferred';
   FBackendPlan := nil;
   FBackendStatus := 'deferred';
@@ -148,6 +152,7 @@ begin
   FDiagnosticsSink.Free;
   FSourceDatabase.Free;
   if FScheduler <> nil then FScheduler.Free;
+  FIncrementalCache.Free;
   FFileDetector.Free;
   FQueryDB.Free;
   inherited Destroy;
