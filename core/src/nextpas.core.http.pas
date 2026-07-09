@@ -43,7 +43,9 @@ uses
   nextpas.core.http.form,
   nextpas.core.http.websocket,
   nextpas.core.http.server,
-  nextpas.core.http.client;
+  nextpas.core.http.client,
+  nextpas.core.http.stream,
+  nextpas.core.http.sse;
 
 type
   { Re-export base types }
@@ -100,6 +102,10 @@ type
   TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
+
+  { Re-export SSE types }
+  TSSEvent = nextpas.core.http.sse.TSSEvent;
+  ISSEEventWriter = nextpas.core.http.sse.ISSEEventWriter;
 
   { Re-export server/client types }
   THttpServer = nextpas.core.http.server.THttpServer;
@@ -488,6 +494,17 @@ function ConnectWebSocket(const AClient: IHttpClient;
 function ConnectWebSocket(const AClient: IHttpClient;
   const AUrl: string;
   const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
+
+{ SSE (Server-Sent Events) }
+function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter; inline;
+function MakeSSEvent(const AType, AData, AId: string): TSSEvent; inline;
+
+{ Streaming responses }
+function HttpWriteStream(const AW: IHttpResponseWriter;
+  const AReader: IReader; const ABufSize: SizeUInt = 32768): Int64; inline;
+function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
+  const AContentLength: Int64; const AReader: IReader;
+  const ABufSize: SizeUInt = 32768): Int64; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -1298,6 +1315,30 @@ function ConnectWebSocket(const AClient: IHttpClient;
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl, AOptions);
+end;
+
+function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
+begin
+  Result := nextpas.core.http.sse.StartSSE(AW);
+end;
+
+function MakeSSEvent(const AType, AData, AId: string): TSSEvent;
+begin
+  Result := nextpas.core.http.sse.MakeSSEvent(AType, AData, AId);
+end;
+
+function HttpWriteStream(const AW: IHttpResponseWriter;
+  const AReader: IReader; const ABufSize: SizeUInt): Int64;
+begin
+  Result := nextpas.core.http.stream.HttpWriteStream(AW, AReader, ABufSize);
+end;
+
+function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
+  const AContentLength: Int64; const AReader: IReader;
+  const ABufSize: SizeUInt): Int64;
+begin
+  Result := nextpas.core.http.stream.HttpWriteStreamWithLength(
+    AW, AContentLength, AReader, ABufSize);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
