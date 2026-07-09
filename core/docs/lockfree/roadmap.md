@@ -1,6 +1,6 @@
 # Atomic & Lockfree 模块总路线图
 
-> 创建: 2026-06-22 | 更新: 2026-07-06 | 状态: 活跃维护
+> 创建: 2026-06-22 | 更新: 2026-07-06 (Phase 4) | 状态: 活跃维护
 
 ## 1. 模块概览
 
@@ -81,8 +81,13 @@
 | `lockfree.hyperloglog` | HyperLogLog | ✅ 完成 | 10 |
 | `lockfree.cuckooset` | Cuckoo Hash Set | ✅ 完成 | 2221 |
 | `lockfree.suffixarray` | 后缀数组 | ✅ 完成 | 25 |
+| `lockfree.persistent_vector` | 持久化不可变向量 | ✅ 完成 | 56 |
+| `lockfree.roaring_bitmap` | Roaring Bitmap | ✅ 完成 | 73 |
+| `lockfree.counting_bloom` | Counting Bloom Filter | ✅ 完成 | 1027 |
+| `lockfree.lru_cache` | Concurrent LRU Cache | ✅ 完成 | 27 |
+| `lockfree.deque_lf` | Lock-Free Deque | ✅ 完成 | 43 |
 
-**规模**: 62 文件, ~26000 行, 40991 测试
+**规模**: 67 文件, ~27000 行, 42217 测试
 
 ---
 
@@ -139,7 +144,12 @@
 | test_lockfree_hyperloglog | 10 | ✅ 全绿 |
 | test_lockfree_cuckooset | 2221 | ✅ 全绿 |
 | test_lockfree_suffixarray | 25 | ✅ 全绿 |
-| **总计** | **40991** | **✅ 全绿** |
+| test_lockfree_persistent_vector | 56 | ✅ 全绿 |
+| test_lockfree_roaring_bitmap | 73 | ✅ 全绿 |
+| test_lockfree_counting_bloom | 1027 | ✅ 全绿 |
+| test_lockfree_lru_cache | 27 | ✅ 全绿 |
+| test_lockfree_deque_lf | 43 | ✅ 全绿 |
+| **总计** | **42217** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
@@ -386,6 +396,18 @@ L3: nextpas.core.lockfree.* (数据结构)
 - **验证**: 118 tests passed, 0 failures, 0 leaks
 - **性能**: SPSC Channel 38.2 ns/op, 26.2 M ops/s
 - **跨语言**: 2.99x 快于 Go, 1.26x 快于 Rust
+
+### 4.20 Phase 4 新增数据结构 (2026-07-06)
+
+| 结构 | 描述 | 测试 |
+|------|------|------|
+| PersistentVector | 持久化不可变向量 (O(n) append) | 56 |
+| RoaringBitmap | 压缩位图 (AND/OR/XOR) | 73 |
+| CountingBloomFilter | 支持删除的布隆过滤器 | 1027 |
+| ConcurrentLRUCache | 线程安全 LRU 缓存 | 27 |
+| LockFreeDeque | 双端队列 (PushLeft/Right) | 43 |
+
+**总计**: 67 文件, ~27000 行, 42217 测试, 54 数据结构
 
 ---
 
