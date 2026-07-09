@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
 > 模块负责人: Claude (test worktree)
-> 最后更新: 2026-07-06
-> 治理状态: v7.0c, 14 模块, 10 测试套件, ~360 测试
+> 最后更新: 2026-07-09
+> 治理状态: v8.0, 18 源文件, 12 测试套件, ~735 测试 (不含 stress)
 
 ## Overview
 
@@ -33,6 +33,7 @@
 - **Mock framework**: `TMock` with setup/verify/typed values/call ordering
 - **RTTI discovery**: `DiscoverTests` auto-discovers published methods
 - **Benchmarking**: `Bench` + adaptive N scaling (Go testing.B equivalent)
+- **Property testing**: QuickCheck-style `Prop()` with generators, coverage-guided fuzzing, automatic shrinking
 - **Structured results**: `RunWithResult` / `RunAllWithResult` for programmatic result access
 - **Test caching**: `TTestCache` FNV-1a hash-based result caching (`--cache` CLI flag)
 - **Sequential opt-in**: `TestSeq()` for tests that must run serially (Go `t.Parallel()` inverse)
@@ -465,24 +466,25 @@ ls core/tests/nextpas.core.test/
 ## Architecture
 
 ```
-test.pas (facade, 610 lines) — 纯 re-export, 无逻辑
-  ├── test.base (600)      — L0: 类型, 异常, GExecState, InternalFail/Skip
-  ├── test.config (546)    — L0: TTestConfig, IOutputSink, SetDefault*/Get*
-  ├── test.check (404)     — L1: 20+ Check*/Fail/Skip procedures
-  ├── test.expect (627)    — L1: IExpectation + 6 工厂 + 30+ To* methods
-  ├── test.output (1092)   — L2: ANSI + 过滤 + JUnit XML + 泄漏报告
+test.pas (facade, 537 lines) — 纯 re-export, 无逻辑
+  ├── test.base (836)      — L0: 类型, 异常, GExecState, InternalFail/Skip
+  ├── test.config (1099)   — L0: TTestConfig, IOutputSink, TTestCache, TBufferSink
+  ├── test.check (1414)    — L1: 40+ Check*/Fail/Skip procedures (含 CI/Double/Array 变体)
+  ├── test.expect (1330)   — L1: IExpectation + 6 工厂 + 40+ To* methods (含 CI/Double 变体)
+  ├── test.output (1166)   — L2: ANSI + 过滤 + JUnit XML + 泄漏报告
   ├── test.output.json (185)  — L2: JSON 输出
-  ├── test.output.tap (131)   — L2: TAP v13 输出
-  ├── test.runner (2392)   — L3: TTestSuite + TSuiteRunner
-  ├── test.discovery (154) — L4: RTTI 自动发现
-  └── test.mock (820)      — L4: Mock 框架
+  ├── test.output.tap (123)   — L2: TAP v13 输出
+  ├── test.runner (2225)   — L3: TTestSuite + TSuiteRunner + retry/shuffle/failfast
+  ├── test.runner.cli (408)   — L3: CLI 参数解析 (--filter, --bench, --cache 等)
+  ├── test.discovery (177) — L4: RTTI 自动发现
+  ├── test.mock (1529)     — L4: Mock 框架 (TMock + 期望验证 + 调用历史)
+  ├── test.prop (2704)     — L4: 属性测试 + 模糊测试 + 语料库 + shrinking
+  ├── test.helpers (178)   — L4: ExpectFail, WithMock, MakeBufferConfig 辅助
+  └── test.bench (206)     — L4: 测试框架与 bench 模块集成
 
 内部模块 (不在 facade re-export):
-  ├── test.runner.context (460)   — 子测试上下文 (TTestContext)
-  └── test.runner.parallel (573)  — 并行执行 (ParallelWorkerProc)
-
-废弃:
-  └── testing.pas (130) — 向后兼容, 禁止新代码使用
+  ├── test.runner.context (579)   — 子测试上下文 (TTestContext + SetEnv/UnsetEnv)
+  └── test.runner.parallel (521)  — 并行执行 (ParallelWorkerProc + timeout watchdog)
 
 Dependency graph:
   L0: base ← config (独立, 互不依赖)
@@ -491,11 +493,15 @@ Dependency graph:
   L2: output ← base, config, text.conv, text.builder, fs
       output.json ← base, output, text.conv
       output.tap ← base, output, text.conv
-  L3: runner ← base, check, config, output, atomic, sync, thread.*, platform.*
+  L3: runner ← base, check, config, output, atomic, sync, thread.*, platform.*, time.cpu
+      runner.cli ← config, output, text.conv
       runner.context ← base, config, output
       runner.parallel ← base, config, output
   L4: discovery ← base, runner
       mock ← base, text.conv
+      prop ← base, text.conv
+      helpers ← base, config, mock
+      bench ← base, bench (nextpas.core.bench)
   门面: test ← all above
 
 ## Dependencies
@@ -520,17 +526,19 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 
 | Test Suite | Tests | Coverage |
 |-----------|-------|----------|
-| test_assertions | 28 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern edge cases |
-| test_expect | 69 | IExpectation (15+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + ExpectDouble/ToBeNear/ToNotBeNear |
-| test_runner | 33 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable |
+| test_assertions | 157 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
+| test_expect | 173 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array variants |
+| test_runner | 118 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable, retry, shuffle, failfast |
+| test_parallel | 54 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult, cleanup |
+| test_lifecycle | 36 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, EachCleanups |
+| test_stress | 10000+ | Stress tests (excluded from normal count) |
+| test_output | 81 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP |
+| test_mock | 80 | TMock setup/verify, typed values, call ordering, CalledWith (13 known ExpectFailWithMock design failures) |
+| test_advanced | 19 | Retry, shuffle, failfast, short mode, verbose, progress, timeout |
+| test_diagnostics | 15 | Test filter, tag filter, timeout |
 | test_subtests | 10 | Nested subtests, RunNested API, 3-level failure propagation |
-| test_parallel | 24 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult |
-| test_lifecycle | ~15 | Setup/Teardown, BeforeEach/AfterEach, Cleanup |
-| test_mock | ~20 | TMock setup/verify, typed values, call ordering, CalledWith |
-| test_output | ~10 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML |
-| test_diagnostics | ~10 | Test filter, tag filter, timeout |
-| test_advanced | ~15 | Retry, shuffle, failfast, short mode, verbose, progress |
-| **Total** | **~234** | |
+| test_prop | ~10 | Property testing generators, fuzzing, corpus, shrinking |
+| **Total** | **~735** | (不含 stress: 10000+) |
 
 ---
 
@@ -545,12 +553,11 @@ L1 断言层:  check.pas, expect.pas
             ↓ 只依赖 L0
 L2 输出层:  output.pas, output.json.pas, output.tap.pas
             ↓ 依赖 L0
-L3 执行层:  runner.pas, runner.context.pas, runner.parallel.pas
+L3 执行层:  runner.pas, runner.cli.pas, runner.context.pas, runner.parallel.pas
             ↓ 依赖 L0-L2
-L4 扩展层:  discovery.pas, mock.pas
+L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
             ↓ 依赖 L0 + L3
 门面:       test.pas — 纯 re-export，无逻辑
-废弃:       testing.pas — 向后兼容，禁止新代码使用
 ```
 
 ### 依赖规则
@@ -654,7 +661,7 @@ L4 扩展层:  discovery.pas, mock.pas
 | `RegisterStub`, `RegisterFixture` | **Internal** | 注册辅助 |
 | `ParseFilter`, `ParseTag` | **Internal** | CLI 解析 |
 
-#### L4: discovery.pas + mock.pas
+#### L4: discovery.pas + mock.pas + prop.pas + helpers.pas + bench.pas
 
 | 符号 | 稳定性 | 说明 |
 |------|--------|------|
@@ -663,6 +670,10 @@ L4 扩展层:  discovery.pas, mock.pas
 | `TMock`, `TMockState` | Stable | Mock 对象 |
 | `TMockValue`, `MockStr/Int/Bool/Double` | Stable | Mock 值 |
 | `IMockSetup`, `IMockVerify` | Stable | Mock 接口 |
+| `Prop`, `PropInt`, `PropString`, `PropBytes` | Stable | 属性测试入口 |
+| `GenInt`, `GenString`, `GenBytes`, `GenArray`, `GenOneOf` | Stable | 生成器工厂 |
+| `IPropTracker`, `IFuzzCorpus` | Stable | 覆盖跟踪 + 语料库 |
+| `ExpectFail`, `WithMock`, `ExpectFailWithMock` | Stable | 测试辅助 |
 
 ### 工程代码契约
 
@@ -708,37 +719,42 @@ L4 扩展层:  discovery.pas, mock.pas
 
 | 文件 | 行数 | 层 | 职责 |
 |------|------|----|------|
-| test.base.pas | 600 | L0 | 基础类型、异常、内部状态 |
-| test.config.pas | 546 | L0 | TTestConfig、IOutputSink |
-| test.check.pas | 404 | L1 | Check* 断言 API |
-| test.expect.pas | 627 | L1 | IExpectation fluent API |
-| test.output.pas | 1092 | L2 | ANSI、过滤、JUnit XML |
+| test.base.pas | 836 | L0 | 基础类型、异常、内部状态 |
+| test.config.pas | 1099 | L0 | TTestConfig、IOutputSink、TTestCache、TBufferSink |
+| test.check.pas | 1414 | L1 | Check* 断言 API (40+ 方法, 含 CI/Double/Array 变体) |
+| test.expect.pas | 1330 | L1 | IExpectation fluent API (40+ 方法) |
+| test.output.pas | 1166 | L2 | ANSI、过滤、JUnit XML、泄漏报告 |
 | test.output.json.pas | 185 | L2 | JSON 输出 |
-| test.output.tap.pas | 131 | L2 | TAP v13 输出 |
-| test.runner.pas | 2392 | L3 | TTestSuite、TSuiteRunner |
-| test.runner.context.pas | 460 | L3 | 子测试上下文 |
-| test.runner.parallel.pas | 573 | L3 | 并行执行 |
-| test.discovery.pas | 154 | L4 | RTTI 自动发现 |
-| test.mock.pas | 820 | L4 | Mock 框架 |
-| test.pas | 610 | 门面 | 纯 re-export |
-| testing.pas | 130 | 废弃 | 向后兼容 |
-| **总计** | **8724** | | |
+| test.output.tap.pas | 123 | L2 | TAP v13 输出 |
+| test.runner.pas | 2225 | L3 | TTestSuite、TSuiteRunner、retry/shuffle/failfast |
+| test.runner.cli.pas | 408 | L3 | CLI 参数解析 |
+| test.runner.context.pas | 579 | L3 | 子测试上下文、TTestResultAppender |
+| test.runner.parallel.pas | 521 | L3 | 并行执行、timeout watchdog |
+| test.discovery.pas | 177 | L4 | RTTI 自动发现 |
+| test.mock.pas | 1529 | L4 | Mock 框架 |
+| test.prop.pas | 2704 | L4 | 属性测试、模糊测试、语料库 |
+| test.helpers.pas | 178 | L4 | 测试辅助 (ExpectFail, WithMock) |
+| test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
+| test.pas | 537 | 门面 | 纯 re-export |
+| **总计** | **14680** | | |
 
 ### 测试覆盖矩阵
 
 | 套件 | 模块覆盖 | 测试数 |
 |------|----------|--------|
-| test_assertions | check.pas, expect.pas | 28 |
-| test_expect | expect.pas | 69 |
-| test_runner | runner.pas | 33 |
+| test_assertions | check.pas, expect.pas | 157 |
+| test_expect | expect.pas | 173 |
+| test_runner | runner.pas | 118 |
+| test_parallel | runner.parallel.pas | 54 |
+| test_lifecycle | runner.pas (setup/teardown) | 36 |
+| test_stress | runner.pas (stress) | 10000+ |
+| test_output | output.pas, output.json.pas, output.tap.pas | 81 |
+| test_mock | mock.pas | 80 |
+| test_advanced | runner.pas (advanced) | 19 |
+| test_diagnostics | runner.pas (filter/timeout) | 15 |
 | test_subtests | runner.pas (subtests) | 10 |
-| test_parallel | runner.parallel.pas | 24 |
-| test_lifecycle | runner.pas (setup/teardown) | ~15 |
-| test_mock | mock.pas | ~20 |
-| test_output | output.pas | ~10 |
-| test_diagnostics | runner.pas (filter/timeout) | ~10 |
-| test_advanced | runner.pas (advanced) | ~15 |
-| **总计** | | **~234** |
+| test_prop | prop.pas | ~10 |
+| **总计** | | **~735** (不含 stress) |
 
 ### 文档索引
 

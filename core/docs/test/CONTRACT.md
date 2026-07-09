@@ -1,10 +1,10 @@
 # nextpas.core.test 代码契约
 
-**模块路径**：`core/src/nextpas.core.test*.pas`（16 个源文件）
-**层级**：L1（依赖 L0: base, text, sync, atomic, platform）
+**模块路径**：`core/src/nextpas.core.test*.pas`（18 个源文件）
+**层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-04
-**版本**：6.7
+**最后更新**：2026-07-09
+**版本**：v8.0
 
 ---
 
@@ -12,22 +12,23 @@
 
 | 文件 | 职责 | LOC |
 |------|------|-----|
-| test.pas | 门面：re-export 所有公共 API | ~309 |
-| test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~736 |
-| test.check.pas | 过程式 Check* 断言 API（30+ 方法） | ~709 |
-| test.expect.pas | 流式 IExpectation 接口 + TExpectation 实现 | ~776 |
-| test.mock.pas | TMock/TMockState 手动 Mock 框架 | ~881 |
-| test.config.pas | TTestConfig record (22 字段) + IOutputSink + 配置解析 | ~563 |
-| test.runner.pas | TTestSuite/TSuiteRunner + 串行/并行执行 + Benchmark | ~1988 |
-| test.runner.cli.pas | CLI 参数解析（16 个 flag） | ~374 |
-| test.runner.parallel.pas | 并行 worker + timeout watchdog | ~528 |
-| test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender | ~471 |
-| test.discovery.pas | RTTI VMT 方法表扫描自动发现测试 | ~153 |
-| test.output.pas | ANSI 辅助、glob 匹配、JUnit XML、泄漏报告 | ~1094 |
+| test.pas | 门面：re-export 所有公共 API | ~537 |
+| test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~836 |
+| test.check.pas | 过程式 Check* 断言 API（40+ 方法, 含 CI/Double/Array 变体） | ~1414 |
+| test.expect.pas | 流式 IExpectation 接口 + TExpectation 实现（40+ 方法） | ~1330 |
+| test.mock.pas | TMock/TMockState 手动 Mock 框架（期望验证 + 调用历史） | ~1529 |
+| test.config.pas | TTestConfig record + IOutputSink + TTestCache + TBufferSink | ~1099 |
+| test.runner.pas | TTestSuite/TSuiteRunner + 串行/并行执行 + retry/shuffle/failfast | ~2225 |
+| test.runner.cli.pas | CLI 参数解析（--filter, --bench, --cache 等） | ~408 |
+| test.runner.parallel.pas | 并行 worker + timeout watchdog | ~521 |
+| test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender + SetEnv/UnsetEnv | ~579 |
+| test.discovery.pas | RTTI VMT 方法表扫描自动发现测试 | ~177 |
+| test.output.pas | ANSI 辅助、glob 匹配、JUnit XML、泄漏报告 | ~1166 |
 | test.output.json.pas | JSON 输出格式 | ~185 |
 | test.output.tap.pas | TAP v13 输出格式 | ~123 |
-| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~95 |
-| testing.pas | **DEPRECATED** v1 兼容层（371 外部调用者，待迁移） | ~133 |
+| test.prop.pas | 属性测试 + 模糊测试 + 语料库 + shrinking | ~2704 |
+| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~178 |
+| test.bench.pas | 测试框架与 bench 模块集成 | ~206 |
 
 ---
 
