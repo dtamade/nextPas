@@ -3121,6 +3121,65 @@ begin
     'stream with length sets content-length header');
 end;
 
+procedure TestHttpRequestReadChunksCollectsData;
+var
+  LData: TBytes;
+  LReader: TMockReader;
+  LN: Int64;
+  LChunks: Integer;
+  LTotalBytes: Integer;
+  I: Integer;
+begin
+  SetLength(LData, 100);
+  for I := 0 to 99 do
+    LData[I] := Byte(I);
+  LReader := TMockReader.Create(LData);
+  LChunks := 0;
+  LTotalBytes := 0;
+  LN := HttpRequestReadChunks(LReader as IReader, 32,
+    procedure(const AChunk: TBytes; ACount: SizeUInt)
+    begin
+      Inc(LChunks);
+      Inc(LTotalBytes, Integer(ACount));
+    end);
+  CheckEqual(100, LN, 'read chunks returns total bytes');
+  CheckEqual(4, LChunks, 'read chunks calls callback 4 times (100/32=4)');
+  CheckEqual(100, LTotalBytes, 'read chunks total bytes in callbacks');
+end;
+
+procedure TestHttpRequestReadBodyCollectsAll;
+var
+  LData: TBytes;
+  LReader: TMockReader;
+  LBody: TBytes;
+  I: Integer;
+begin
+  SetLength(LData, 80);
+  for I := 0 to 79 do
+    LData[I] := Byte(I + 10);
+  LReader := TMockReader.Create(LData);
+  LBody := HttpRequestReadBody(LReader as IReader, 1000, 32);
+  CheckEqual(80, Length(LBody), 'read body returns all bytes');
+  CheckEqual(10, Integer(LBody[0]), 'read body first byte correct');
+  CheckEqual(89, Integer(LBody[79]), 'read body last byte correct');
+end;
+
+procedure TestHttpRequestReadBodyRespectsMaxBytes;
+var
+  LData: TBytes;
+  LReader: TMockReader;
+begin
+  SetLength(LData, 100);
+  LReader := TMockReader.Create(LData);
+  try
+    HttpRequestReadBody(LReader as IReader, 50, 32);
+    Check(False, 'should have raised');
+  except
+    on E: EHttpError do
+      Check(Pos('exceeds maximum', E.Message) > 0, 'error mentions max size');
+  end;
+end;
+
 { SSE tests }
 procedure TestSSEEventWriterWritesEvents;
 var
@@ -3336,6 +3395,9 @@ begin
   T.Test('Stream: copies data', @TestHttpWriteStreamCopiesData);
   T.Test('Stream: empty reader', @TestHttpWriteStreamEmptyReader);
   T.Test('Stream: with length sets header', @TestHttpWriteStreamWithLengthSetsHeader);
+  T.Test('Stream: read chunks collects data', @TestHttpRequestReadChunksCollectsData);
+  T.Test('Stream: read body collects all', @TestHttpRequestReadBodyCollectsAll);
+  T.Test('Stream: read body respects max', @TestHttpRequestReadBodyRespectsMaxBytes);
   { SSE }
   T.Test('SSE: writes events', @TestSSEEventWriterWritesEvents);
   T.Test('SSE: writes event type and id', @TestSSEEventWriterWritesEventType);

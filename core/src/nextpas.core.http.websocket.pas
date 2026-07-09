@@ -46,6 +46,11 @@ type
   IWebSocket = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-600000000001}']
     function ReadFrame: TWebSocketFrame;
+    { Read a complete message, handling continuation frames automatically.
+      Auto-responds to Ping frames with Pong (per RFC 6455).
+      Returns the aggregated message (text or binary).
+      Raises EHttpError on protocol errors or connection close. }
+    function ReadMessage: TWebSocketFrame;
     procedure WriteText(const AData: string);
     procedure WriteBinary(const AData: string);
     procedure Ping(const AData: string);
@@ -122,6 +127,7 @@ type
     constructor Create(const AReader: IReader; const AWriter: IWriter;
       const AOptions: TWebSocketOptions; AIsClient: Boolean = False);
     function ReadFrame: TWebSocketFrame;
+    function ReadMessage: TWebSocketFrame;
     procedure WriteText(const AData: string);
     procedure WriteBinary(const AData: string);
     procedure Ping(const AData: string);
@@ -529,6 +535,78 @@ begin
         FFragmentTextPayload := Result.Payload
       else
         FFragmentTextPayload := '';
+    end;
+  end;
+end;
+
+function TWebSocketImpl.ReadMessage: TWebSocketFrame;
+var
+  LFrame: TWebSocketFrame;
+  LPayload: string;
+begin
+  { Read frames until we get a complete data message }
+  while True do
+  begin
+    LFrame := ReadFrame;
+
+    case LFrame.Opcode of
+      wsOpPing:
+      begin
+        { RFC 6455 §5.5.2: MUST respond to Ping with Pong }
+        Pong(LFrame.Payload);
+        { Continue reading for the actual message }
+      end;
+
+      wsOpPong:
+      begin
+        { Unsolicited pong — ignore and continue }
+      end;
+
+      wsOpClose:
+      begin
+        { Close frame — pass it through }
+        Result := LFrame;
+        Exit;
+      end;
+
+      wsOpText, wsOpBinary:
+      begin
+        if LFrame.Fin then
+        begin
+          { Single-frame message — return directly }
+          Result := LFrame;
+          Exit;
+        end
+        else
+        begin
+          { First fragment — collect continuation frames }
+          LPayload := LFrame.Payload;
+          while True do
+          begin
+            LFrame := ReadFrame;
+            if LFrame.Opcode = wsOpPing then
+            begin
+              Pong(LFrame.Payload);
+              Continue;
+            end;
+            if LFrame.Opcode = wsOpPong then
+              Continue;
+            if LFrame.Opcode <> wsOpContinuation then
+              raise EHttpError.Create('WebSocket: expected continuation frame');
+            LPayload := LPayload + LFrame.Payload;
+            if LFrame.Fin then
+            begin
+              Result.Opcode := wsOpText; { Original opcode was text or binary }
+              Result.Fin := True;
+              Result.Payload := LPayload;
+              Exit;
+            end;
+          end;
+        end;
+      end;
+
+      wsOpContinuation:
+        raise EHttpError.Create('WebSocket: unexpected continuation frame');
     end;
   end;
 end;
