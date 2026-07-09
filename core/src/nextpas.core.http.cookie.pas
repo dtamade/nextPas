@@ -90,6 +90,11 @@ implementation
 uses
   nextpas.core.text.conv;
 
+const
+  { Maximum number of cookies to parse from a single Cookie header.
+    Prevents memory exhaustion from malicious headers with thousands of pairs. }
+  MAX_COOKIE_COUNT = 512;
+
 { ParseCookies }
 
 function ParseCookies(const AHeaderValue: string): TRequestCookies;
@@ -106,7 +111,7 @@ begin
     Exit;
   end;
 
-  { First pass: count pairs }
+  { First pass: count pairs (capped to prevent memory exhaustion) }
   LCount := 0;
   LI := 1;
   while LI <= LLen do
@@ -116,6 +121,7 @@ begin
       Inc(LI);
     if LI > LLen then Break;
     Inc(LCount);
+    if LCount >= MAX_COOKIE_COUNT then Break;
     { Skip to next ';' }
     while (LI <= LLen) and (AHeaderValue[LI] <> ';') do
       Inc(LI);

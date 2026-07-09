@@ -1652,6 +1652,35 @@ begin
   CheckEqual('/perm', LM.GetHeaders.Get('location'), 'location header');
 end;
 
+procedure TestRedirectHtmlEscapesXssPayload;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirect(LW, HTTP_STATUS_FOUND, '/page?q="><script>alert(1)</script>');
+  { Verify the HTML body does NOT contain raw <script> tag }
+  Check(Pos('<script>', LM.Body) = 0, 'XSS payload must be HTML-escaped');
+  { Verify the escaped form is present }
+  Check(Pos('&lt;script&gt;', LM.Body) > 0, 'script tags are escaped');
+  Check(Pos('&quot;', LM.Body) > 0, 'double quotes are escaped');
+end;
+
+procedure TestRedirectRejectsProtocolRelativeUrl;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpRedirect(nil, HTTP_STATUS_FOUND, '//evil.com/steal');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Protocol-relative URL must be rejected to prevent open redirect');
+end;
+
 { HttpWriteErrorResponse tests }
 
 procedure TestErrorResponseSetsJsonContentType;
@@ -2178,6 +2207,10 @@ begin
     @TestRedirectTemporaryRedirect);
   T.Test('Redirect: PermanentRedirect 308',
     @TestRedirectPermanentRedirect);
+  T.Test('Redirect: HTML escapes XSS payload',
+    @TestRedirectHtmlEscapesXssPayload);
+  T.Test('Redirect: rejects protocol-relative URL',
+    @TestRedirectRejectsProtocolRelativeUrl);
   T.Test('ErrorResponse sets JSON content-type',
     @TestErrorResponseSetsJsonContentType);
   T.Test('ErrorResponse body has code and message',

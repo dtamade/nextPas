@@ -321,6 +321,32 @@ begin
   end;
 end;
 
+{ ===== Test 7b: ServeDir double-encoded path traversal blocked ===== }
+procedure TestServeDirDoubleEncodedTraversalRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/files/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Double-encoded: %252e%252e → after first decode becomes %2e%2e → should be rejected }
+    LResp := SendRawRequest(LPort, 'GET /files/%252e%252e/etc/passwd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Double-encoded traversal must be rejected');
+    { Also test %252f variant }
+    LResp := SendRawRequest(LPort, 'GET /files/..%252f..%252fetc%252fpasswd HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Double-encoded slash traversal must be rejected');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Test 8: ServeDir missing file returns 404 ===== }
 procedure TestServeDirMissing;
 var
@@ -650,6 +676,8 @@ begin
       @TestServeDirBackslashTraversalRejected);
     T.Test('ServeDir URL-encoded traversal rejected',
       @TestServeDirUrlEncodedTraversalRejected);
+    T.Test('ServeDir double-encoded traversal rejected',
+      @TestServeDirDoubleEncodedTraversalRejected);
     T.Test('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Test('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
     T.Test('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);

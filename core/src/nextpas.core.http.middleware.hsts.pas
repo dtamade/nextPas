@@ -77,8 +77,16 @@ begin
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LScheme: string;
     begin
-      AW.GetHeaders.SetHeader('strict-transport-security', LHeader);
+      { RFC 6797 §7.2: UA MUST ignore HSTS header received over HTTP.
+        Check request scheme; also honor X-Forwarded-Proto for reverse proxies. }
+      LScheme := AReq.Headers.Get('x-forwarded-proto');
+      if LScheme = '' then
+        LScheme := AReq.Url.Scheme;
+      if LScheme = 'https' then
+        AW.GetHeaders.SetHeader('strict-transport-security', LHeader);
       ANext.ServeHTTP(AReq, AW);
     end);
   end);

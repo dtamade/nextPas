@@ -160,6 +160,10 @@ const
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
     'Unsupported `Transfer-Encoding` request coding';
   BODY_TOO_LARGE_REASON = 'HTTP body buffer too large';
+  { Hard safety cap for parser internal buffer growth (100 MB).
+    The BodyLimit middleware is the primary size control; this prevents
+    unbounded allocation if the middleware is not configured. }
+  PARSER_BODY_MAX_CAPACITY: SizeUInt = 100 * 1024 * 1024;
 
 function LowerTrim(const AValue: string): string; inline;
 begin
@@ -601,6 +605,9 @@ begin
       Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
     LRequired := LSelf.FBodySize + p2;
     if LRequired > SizeUInt(High(SizeInt)) then
+      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+    { Safety cap: reject if body would exceed hard limit }
+    if LRequired > PARSER_BODY_MAX_CAPACITY then
       Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
     LSelf.EnsureBodyCapacity(LRequired);
     Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
