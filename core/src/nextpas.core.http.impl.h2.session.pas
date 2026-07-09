@@ -702,6 +702,16 @@ var
   LRead: SizeUInt;
   LOldLen: SizeInt;
 begin
+  { Reject if read buffer has grown beyond hard limit — prevents memory
+    exhaustion from an attacker sending tiny fragments that never form
+    a complete frame. }
+  if Length(FReadBuffer) >= H2_READ_BUFFER_HARD_LIMIT then
+  begin
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
+    FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
+    FState := h2sesClosed;
+    Exit(False);
+  end;
   ArmReadDeadline(FOptions.ReadTimeout);
   LRead := FConn.Read(LBuf[0], SizeOf(LBuf));
   if LRead = 0 then
@@ -762,13 +772,46 @@ begin
   Result := True;
 end;
 
+{** Hard limit on accumulated read buffer to prevent memory exhaustion.
+    16 MB is generous for legitimate traffic; an attacker sending tiny
+    frames that never complete would hit this long before OOM. }
+const
+  H2_READ_BUFFER_HARD_LIMIT: SizeInt = 16 * 1024 * 1024;
+
 function TH2ServerSession.DecodeNextFrame(out AFrame: TH2Frame;
   out AConsumed: SizeUInt): Boolean;
+var
+  LHeader: TH2FrameHeader;
+  LDeclaredPayloadLen: SizeUInt;
 begin
   Result := False;
   AFrame := Default(TH2Frame);
   AConsumed := 0;
   if Length(FReadBuffer) < H2_FRAME_HEADER_SIZE then
+    Exit(False);
+  { Early reject: parse 9-byte header and check declared payload length
+    against negotiated MAX_FRAME_SIZE BEFORE allocating payload memory.
+    This prevents a client from declaring a 16 MB frame that would be
+    copied into memory before validation. }
+  if not H2DecodeFrameHeader(@FReadBuffer[1], H2_FRAME_HEADER_SIZE, LHeader) then
+    Exit(False);
+  LDeclaredPayloadLen := SizeUInt(LHeader.Len);
+  if LDeclaredPayloadLen > H2_ABSOLUTE_MAX_FRAME_SIZE then
+  begin
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_FRAME_SIZE_ERROR);
+    FShutdownErrorCode := H2_ERR_FRAME_SIZE_ERROR;
+    FState := h2sesClosed;
+    Exit(False);
+  end;
+  if LDeclaredPayloadLen > SizeUInt(FRemoteSettings.MaxFrameSize) then
+  begin
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_FRAME_SIZE_ERROR);
+    FShutdownErrorCode := H2_ERR_FRAME_SIZE_ERROR;
+    FState := h2sesClosed;
+    Exit(False);
+  end;
+  { Not enough data yet for the full frame — wait for more }
+  if SizeUInt(H2_FRAME_HEADER_SIZE) + LDeclaredPayloadLen > SizeUInt(Length(FReadBuffer)) then
     Exit(False);
   Result := H2DecodeFrame(@FReadBuffer[1], Length(FReadBuffer), AFrame,
     AConsumed);
@@ -799,6 +842,18 @@ end;
 function TH2ServerSession.HandleFrame(const AFrame: TH2Frame): Boolean;
 begin
   Result := True;
+  { RFC 9113 §6.10: During a pending CONTINUATION sequence, only
+    CONTINUATION frames for the same stream are allowed.  Any other
+    frame type is a connection error (PROTOCOL_ERROR). }
+  if (FPendingContinuationStreamID <> 0) and
+     ((AFrame.Header.FrameType <> H2_FRAME_CONTINUATION) or
+      (AFrame.Header.StreamID <> FPendingContinuationStreamID)) then
+  begin
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_PROTOCOL_ERROR);
+    FShutdownErrorCode := H2_ERR_PROTOCOL_ERROR;
+    FState := h2sesClosed;
+    Exit(False);
+  end;
   case AFrame.Header.FrameType of
     H2_FRAME_SETTINGS:
       Result := HandleSettings(AFrame);
@@ -1187,8 +1242,9 @@ begin
     end);
   if LAuthority <> '' then
     LHeaders.SetHeader('host', LAuthority);
-  if LScheme <> '' then
-    LHeaders.SetHeader('x-forwarded-proto', LScheme);
+  { RFC 9113 §8.1.2.3: :scheme is informational; never trust it for
+    x-forwarded-proto since clients can set it to 'https' over cleartext.
+    Only a trusted reverse proxy should inject x-forwarded-proto. }
   LRequest := THttpRequest.CreateFromRequestTarget(LMethod, LPath, hvHttp2,
     LHeaders, LBody, Int64(Length(AStream.BodyBuffer)));
   if AStream.Trailers <> nil then

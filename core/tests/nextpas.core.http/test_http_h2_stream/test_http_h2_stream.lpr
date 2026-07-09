@@ -1057,6 +1057,40 @@ begin
   end;
 end;
 
+procedure TestHeaderBlockByteLimitResetsStream;
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LStream: TH2Stream;
+  LHeaders: array[0..3] of THPackHeader;
+  LHugeValue: AnsiString;
+  LFragment1, LFragment2: AnsiString;
+begin
+  LConnectionFlow.Init(8192, 8192);
+  LDecoder.Init;
+  LStream := TH2Stream.Create(67, 4096, 4096, LConnectionFlow, LDecoder);
+  try
+    { Create a header block that exceeds H2_MAX_HEADER_BLOCK_BYTES (64 KB)
+      by splitting across HEADERS + CONTINUATION frames. }
+    FillMinimalRequestHeaders(LHeaders);
+    { First fragment: normal headers }
+    LFragment1 := EncodeHeaders(LHeaders);
+    LStream.OnHeaders(0, LFragment1); { no END_HEADERS → expects CONTINUATION }
+    Check(not LStream.ResetReceived, 'first fragment accepted');
+
+    { Second fragment: huge padding to exceed 64 KB limit }
+    SetLength(LHugeValue, 70000);
+    FillChar(LHugeValue[1], 70000, 'X');
+    LFragment2 := LHugeValue;
+    LStream.OnContinuation(H2_FLAG_CONTINUATION_END_HEADERS, LFragment2);
+    Check(LStream.ResetReceived, 'oversized header block resets stream');
+    CheckEqual(Int64(H2_ERR_ENHANCE_YOUR_CALM), Int64(LStream.ResetCode),
+      'oversized header block uses ENHANCE_YOUR_CALM');
+  finally
+    LStream.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.stream');
   T.Test('Headers with END_STREAM decode and transition',
@@ -1142,5 +1176,8 @@ begin
     @TestDataBeforeHeaders);
   T.Test('Empty HPACK block does not set headers',
     @TestEmptyHeadersBlock);
+  { -- New tests: header block byte limit -- }
+  T.Test('Header block byte limit resets stream on overflow',
+    @TestHeaderBlockByteLimitResetsStream);
   if not T.Run then Halt(1);
 end.

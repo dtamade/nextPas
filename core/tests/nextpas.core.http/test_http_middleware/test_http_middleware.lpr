@@ -608,6 +608,32 @@ begin
   CheckEqual('[wrapped]hello', LWObj.Body, 'body composed from middleware + handler');
 end;
 
+procedure TestChainLazyBuild;
+var
+  LChainIntf: IHttpHandler;
+  LChain: TMiddlewareChain;
+  LReq: IHttpRequest;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LI: Integer;
+begin
+  { Verify that lazy Build works correctly when ServeHTTP is called
+    multiple times — the chain should build once and reuse. }
+  LChain := TMiddlewareChain.Create(TTagHandler.Create('core;', 0));
+  LChain.Use(TTagMiddleware.Create('A'));
+  LChain.Use(TTagMiddleware.Create('B'));
+  LChainIntf := LChain;
+  for LI := 0 to 9 do
+  begin
+    ResetLog;
+    LReq := TMockRequest.Create(hmGet, '/');
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LChainIntf.ServeHTTP(LReq, LW);
+    CheckEqual('A>B>core;<B;<A;', GLog, 'lazy build iteration ' + IntToStr(LI));
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -623,5 +649,6 @@ begin
   T.Test('Middleware short-circuits', @TestMiddlewareShortCircuit);
   T.Test('Empty chain passthrough', @TestEmptyChainPassthrough);
   T.Test('Middleware writes body', @TestMiddlewareWritesBody);
+  T.Test('Chain lazy build is thread-safe', @TestChainLazyBuild);
   if not T.Run then Halt(1);
 end.
