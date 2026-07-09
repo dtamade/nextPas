@@ -594,4 +594,52 @@ begin SIMD_STATIC_ArrayAddI32(aSrc1, aSrc2, aDst, aCount); end;
 procedure ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 begin SIMD_STATIC_ArraySubI32(aSrc1, aSrc2, aDst, aCount); end;
 
+// === Batch Array Operations - U32 ===
+
+procedure ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArrayAddU32(aSrc1, aSrc2, aDst, aCount); end;
+
+procedure ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArraySubU32(aSrc1, aSrc2, aDst, aCount); end;
+
+procedure ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArrayMulU32(aSrc1, aSrc2, aDst, aCount); end;
+
+procedure ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArrayAndU32(aSrc1, aSrc2, aDst, aCount); end;
+
+procedure ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArrayOrU32(aSrc1, aSrc2, aDst, aCount); end;
+
+procedure ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+begin SIMD_STATIC_ArrayXorU32(aSrc1, aSrc2, aDst, aCount); end;
+
+// === Memory Operations ===
+
+function MemEqual(a, b: Pointer; len: SizeUInt): LongBool;
+begin Result := SIMD_STATIC_MemEqual(a, b, len); end;
+
+function MemFindByte(a: Pointer; aValue: Byte; aLen: SizeUInt): Pointer;
+begin Result := SIMD_STATIC_MemFindByte(a, aValue, aLen); end;
+
+function SumBytes(p: Pointer; len: SizeUInt): UInt64;
+begin Result := SIMD_STATIC_SumBytes(p, len); end;
+
+function CountByte(p: Pointer; len: SizeUInt; value: Byte): SizeUInt;
+begin Result := SIMD_STATIC_CountByte(p, len, value); end;
+
+// === Reduce Operations - Min/Max ===
+
+function ReduceMinF32(aSrc: PSingle; aCount: SizeUInt): Single;
+begin Result := SIMD_STATIC_ReduceMinF32(aSrc, aCount); end;
+
+function ReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
+begin Result := SIMD_STATIC_ReduceMaxF32(aSrc, aCount); end;
+
+function ReduceMinF64(aSrc: PDouble; aCount: SizeUInt): Double;
+begin Result := SIMD_STATIC_ReduceMinF64(aSrc, aCount); end;
+
+function ReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
+begin Result := SIMD_STATIC_ReduceMaxF64(aSrc, aCount); end;
+
 {$ENDIF} // SIMD_STATIC_BACKEND
