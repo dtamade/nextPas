@@ -20,16 +20,9 @@ interface
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init,
-  {$ENDIF}
-  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time.cpu, Math,
-  fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
-  nextpas.core.simd.backend.adapter,
-  nextpas.core.simd.runtime,
-  nextpas.core.simd.dispatch;
+  nextpas.core.thread.init, {$ENDIF}
+  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time.cpu, Math, nextpas.core.test, nextpas.core.simd, nextpas.core.simd.testcase,
+  nextpas.core.simd.base, nextpas.core.simd.backend.adapter, nextpas.core.simd.runtime, nextpas.core.simd.dispatch;
 
 type
   TSimdStatefulTestCase = class(TSimdVectorAsmStatefulTestCase)
@@ -373,8 +366,7 @@ type
     procedure Execute; override;
   public
     constructor Create(aIterations: Integer; aBackend: TSimdBackend;
-      const aExpectedNameA, aExpectedNameB, aExpectedDescriptionA,
-      aExpectedDescriptionB: AnsiString);
+      const aExpectedNameA, aExpectedNameB, aExpectedDescriptionA, aExpectedDescriptionB: AnsiString);
     property Success: Boolean read FSuccess;
     property ErrorMsg: string read FErrorMsg;
   end;
@@ -396,8 +388,7 @@ type
   public
     constructor Create(aIterations: Integer; aBackend: TSimdBackend;
       aExpectedCapsEnabled, aExpectedCapsDisabled: UInt64;
-      aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive,
-      aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
+      aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive, aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
     property Success: Boolean read FSuccess;
     property ErrorMsg: string read FErrorMsg;
   end;
@@ -637,13 +628,10 @@ end;
 
 function DescribeBackendInfoLocal(const aInfo: TSimdBackendInfo): string;
 begin
-  Result := Format('backend=%s available=%s caps=%d priority=%d name=%s',
-    [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available),
-     CapabilitiesToAbiBitsLocal(aInfo.Capabilities), aInfo.Priority, aInfo.Name]);
+  Result := Format('backend=%s available=%s caps=%d priority=%d name=%s', [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available), CapabilitiesToAbiBitsLocal(aInfo.Capabilities), aInfo.Priority, aInfo.Name]);
 end;
 
-function DispatchTableRepresentativeSliceMatchesLocal(const aTable,
-  aExpected: TSimdDispatchTable): Boolean;
+function DispatchTableRepresentativeSliceMatchesLocal(const aTable, aExpected: TSimdDispatchTable): Boolean;
 begin
   Result := (aTable.Backend = aExpected.Backend) and
     BackendInfoMatchesLocal(aTable.BackendInfo, aExpected.BackendInfo) and
@@ -681,8 +669,7 @@ begin
   Result := Result + ']';
 end;
 
-function RuntimeSnapshotMatchesLocal(const aSnapshot,
-  aExpected: TSimdRuntimeSnapshot): Boolean;
+function RuntimeSnapshotMatchesLocal(const aSnapshot, aExpected: TSimdRuntimeSnapshot): Boolean;
 begin
   Result := (aSnapshot.CurrentBackend = aExpected.CurrentBackend) and
     BackendInfoMatchesLocal(aSnapshot.CurrentBackendInfo, aExpected.CurrentBackendInfo) and
@@ -694,12 +681,8 @@ end;
 function DescribeRuntimeSnapshotLocal(const aSnapshot: TSimdRuntimeSnapshot): string;
 begin
   Result := Format(
-    'backend=%s info=(%s) registered=%s dispatchable=%s best=%s',
-    [ConcurrentBackendName(aSnapshot.CurrentBackend),
-     DescribeBackendInfoLocal(aSnapshot.CurrentBackendInfo),
-     DescribeBackendArrayLocal(aSnapshot.RegisteredBackends),
-     DescribeBackendArrayLocal(aSnapshot.DispatchableBackends),
-     ConcurrentBackendName(aSnapshot.BestDispatchableBackend)]);
+    'backend=%s info=(%s) registered=%s dispatchable=%s best=%s', [ConcurrentBackendName(aSnapshot.CurrentBackend), DescribeBackendInfoLocal(aSnapshot.CurrentBackendInfo), DescribeBackendArrayLocal(aSnapshot.RegisteredBackends),
+     DescribeBackendArrayLocal(aSnapshot.DispatchableBackends), ConcurrentBackendName(aSnapshot.BestDispatchableBackend)]);
 end;
 
 function DescribeBackendArrayStatesLocal(const aStates: TSimdBackendArrayStates): string;
@@ -716,8 +699,7 @@ begin
   Result := Result + '}';
 end;
 
-function BuildRegisteredBackendSnapshotLocal(const aBaseRegistered,
-  aRegistrationOrder: TSimdBackendArray; aRegisteredCount: Integer): TSimdBackendArray;
+function BuildRegisteredBackendSnapshotLocal(const aBaseRegistered, aRegistrationOrder: TSimdBackendArray; aRegisteredCount: Integer): TSimdBackendArray;
 var
   LPresent: array[TSimdBackend] of Boolean;
   LBackend: TSimdBackend;
@@ -811,8 +793,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f',
-                           [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -858,8 +839,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f',
-                           [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -906,8 +886,7 @@ begin
 
       if Abs(actual - expected) > DOUBLE_EPSILON * Abs(expected) + DOUBLE_EPSILON then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.10f, got %.10f',
-                           [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := Format('Worker %d, iter %d: expected %.10f, got %.10f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -955,8 +934,7 @@ begin
       // 验证后端一致性
       if dt^.Backend <> backend then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: backend mismatch (table=%d, active=%d)',
-                           [FWorkerIndex, i, Ord(dt^.Backend), Ord(backend)]);
+        FErrorMsg := Format('Worker %d, iter %d: backend mismatch (table=%d, active=%d)', [FWorkerIndex, i, Ord(dt^.Backend), Ord(backend)]);
         Exit;
       end;
 
@@ -1024,8 +1002,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f',
-                           [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -1070,8 +1047,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f',
-                           [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -1241,8 +1217,7 @@ begin
       LCurrent := IsVectorAsmEnabled;
       if LCurrent <> LExpected then
       begin
-        FErrorMsg := Format('toggle mismatch at iter %d: expected=%s got=%s',
-          [LIndex, BoolToStr(LExpected), BoolToStr(LCurrent)]);
+        FErrorMsg := Format('toggle mismatch at iter %d: expected=%s got=%s', [LIndex, BoolToStr(LExpected), BoolToStr(LCurrent)]);
         Exit;
       end;
 
@@ -1397,20 +1372,17 @@ begin
       end;
       if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
-        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
+        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
       if LApi^.AbiVersionMajor <> LExpectedAbiMajor then
       begin
-        FErrorMsg := Format('public api AbiVersionMajor torn at iter %d: expected=%d got=%d',
-          [LIndex, LExpectedAbiMajor, LApi^.AbiVersionMajor]);
+        FErrorMsg := Format('public api AbiVersionMajor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMajor, LApi^.AbiVersionMajor]);
         Exit;
       end;
       if LApi^.AbiVersionMinor <> LExpectedAbiMinor then
       begin
-        FErrorMsg := Format('public api AbiVersionMinor torn at iter %d: expected=%d got=%d',
-          [LIndex, LExpectedAbiMinor, LApi^.AbiVersionMinor]);
+        FErrorMsg := Format('public api AbiVersionMinor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMinor, LApi^.AbiVersionMinor]);
         Exit;
       end;
       if (LApi^.AbiSignatureHi <> LExpectedSigHi) or (LApi^.AbiSignatureLo <> LExpectedSigLo) then
@@ -1420,14 +1392,12 @@ begin
       end;
       if LApi^.ActiveBackendId > UInt32(Ord(High(TSimdBackend))) then
       begin
-        FErrorMsg := Format('public api ActiveBackendId out of range at iter %d: %d',
-          [LIndex, LApi^.ActiveBackendId]);
+        FErrorMsg := Format('public api ActiveBackendId out of range at iter %d: %d', [LIndex, LApi^.ActiveBackendId]);
         Exit;
       end;
       if (LApi^.ActiveFlags and LExpectedFlags) <> LExpectedFlags then
       begin
-        FErrorMsg := Format('public api ActiveFlags missing registered/dispatchable/active bits at iter %d: %d',
-          [LIndex, LApi^.ActiveFlags]);
+        FErrorMsg := Format('public api ActiveFlags missing registered/dispatchable/active bits at iter %d: %d', [LIndex, LApi^.ActiveFlags]);
         Exit;
       end;
       if (not Assigned(LApi^.MemEqual)) or
@@ -1503,8 +1473,7 @@ begin
 end;
 
 constructor TPublicAbiBackendTextReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
-  const aExpectedNameA, aExpectedNameB, aExpectedDescriptionA,
-  aExpectedDescriptionB: AnsiString);
+  const aExpectedNameA, aExpectedNameB, aExpectedDescriptionA, aExpectedDescriptionB: AnsiString);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -1537,14 +1506,12 @@ begin
       end;
       if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
-        FErrorMsg := Format('backend pod info StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
+        FErrorMsg := Format('backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
       begin
-        FErrorMsg := Format('backend pod info BackendId torn at iter %d: expected=%d got=%d',
-          [LIndex, Ord(FBackend), LInfo.BackendId]);
+        FErrorMsg := Format('backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
         Exit;
       end;
 
@@ -1555,9 +1522,7 @@ begin
       if (not LMatchesA) and (not LMatchesB) then
       begin
         FErrorMsg := Format(
-          'backend pod info mixed snapshot at iter %d: caps=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)',
-          [LIndex, LInfo.CapabilityBits, LInfo.Flags, FExpectedCapsA, FExpectedFlagsA,
-           FExpectedCapsB, FExpectedFlagsB]);
+          'backend pod info mixed snapshot at iter %d: caps=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)', [LIndex, LInfo.CapabilityBits, LInfo.Flags, FExpectedCapsA, FExpectedFlagsA, FExpectedCapsB, FExpectedFlagsB]);
         Exit;
       end;
     end;
@@ -1597,8 +1562,7 @@ begin
       if (LNameText <> FExpectedNameA) and (LNameText <> FExpectedNameB) then
       begin
         FErrorMsg := Format(
-          'backend text getter mixed name snapshot at iter %d: got=%s expectedA=%s expectedB=%s',
-          [LIndex, string(LNameText), string(FExpectedNameA), string(FExpectedNameB)]);
+          'backend text getter mixed name snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, string(LNameText), string(FExpectedNameA), string(FExpectedNameB)]);
         Exit;
       end;
 
@@ -1617,9 +1581,7 @@ begin
          (LDescriptionText <> FExpectedDescriptionB) then
       begin
         FErrorMsg := Format(
-          'backend text getter mixed description snapshot at iter %d: got=%s expectedA=%s expectedB=%s',
-          [LIndex, string(LDescriptionText), string(FExpectedDescriptionA),
-           string(FExpectedDescriptionB)]);
+          'backend text getter mixed description snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, string(LDescriptionText), string(FExpectedDescriptionA), string(FExpectedDescriptionB)]);
         Exit;
       end;
     end;
@@ -1682,8 +1644,7 @@ end;
 
 constructor TCurrentBackendPodInfoReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   aExpectedCapsEnabled, aExpectedCapsDisabled: UInt64;
-  aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive,
-  aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
+  aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive, aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -1714,10 +1675,7 @@ begin
          (LBackend <> FExpectedBackendB) then
       begin
         FErrorMsg := Format(
-          'current backend mixed snapshot at iter %d: got=%s expectedA=%s expectedB=%s',
-          [LIndex, ConcurrentBackendName(LBackend),
-           ConcurrentBackendName(FExpectedBackendA),
-           ConcurrentBackendName(FExpectedBackendB)]);
+          'current backend mixed snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, ConcurrentBackendName(LBackend), ConcurrentBackendName(FExpectedBackendA), ConcurrentBackendName(FExpectedBackendB)]);
         Exit;
       end;
     end;
@@ -1744,10 +1702,7 @@ begin
       if (not BackendInfoMatchesLocal(LInfo, FExpectedInfoA)) and
          (not BackendInfoMatchesLocal(LInfo, FExpectedInfoB)) then
       begin
-        FErrorMsg := Format('current backend info mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)',
-          [LIndex, DescribeBackendInfoLocal(LInfo),
-           DescribeBackendInfoLocal(FExpectedInfoA),
-           DescribeBackendInfoLocal(FExpectedInfoB)]);
+        FErrorMsg := Format('current backend info mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)', [LIndex, DescribeBackendInfoLocal(LInfo), DescribeBackendInfoLocal(FExpectedInfoA), DescribeBackendInfoLocal(FExpectedInfoB)]);
         Exit;
       end;
     end;
@@ -1775,10 +1730,7 @@ begin
          (not RuntimeSnapshotMatchesLocal(LSnapshot, FExpectedSnapshotB)) then
       begin
         FErrorMsg := Format(
-          'runtime snapshot mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)',
-          [LIndex,
-           DescribeRuntimeSnapshotLocal(LSnapshot),
-           DescribeRuntimeSnapshotLocal(FExpectedSnapshotA),
+          'runtime snapshot mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)', [LIndex, DescribeRuntimeSnapshotLocal(LSnapshot), DescribeRuntimeSnapshotLocal(FExpectedSnapshotA),
            DescribeRuntimeSnapshotLocal(FExpectedSnapshotB)]);
         Exit;
       end;
@@ -1807,17 +1759,9 @@ begin
          (not DispatchTableRepresentativeSliceMatchesLocal(LObservedTable, FExpectedTableB)) then
       begin
         FErrorMsg := Format(
-          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]',
-          [LIndex,
-           DescribeBackendInfoLocal(LObservedTable.BackendInfo),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4)),
-           BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4)),
-           BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4))]);
+          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]', [LIndex, DescribeBackendInfoLocal(LObservedTable.BackendInfo), BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4)),
+           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4)), BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4)),
+           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4))]);
         Exit;
       end;
     end;
@@ -1850,14 +1794,12 @@ begin
       end;
       if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
-        FErrorMsg := Format('current backend pod info StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
+        FErrorMsg := Format('current backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
       begin
-        FErrorMsg := Format('current backend pod info BackendId torn at iter %d: expected=%d got=%d',
-          [LIndex, Ord(FBackend), LInfo.BackendId]);
+        FErrorMsg := Format('current backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
         Exit;
       end;
 
@@ -1872,10 +1814,7 @@ begin
          (not LMatchesDisabledInactive) then
       begin
         FErrorMsg := Format(
-          'current backend pod info mixed snapshot at iter %d: caps=%d flags=%d expected={enabled-active=(%d,%d) | enabled-inactive=(%d,%d) | disabled-inactive=(%d,%d)}',
-          [LIndex, LInfo.CapabilityBits, LInfo.Flags,
-           FExpectedCapsEnabled, FExpectedFlagsEnabledActive,
-           FExpectedCapsEnabled, FExpectedFlagsEnabledInactive,
+          'current backend pod info mixed snapshot at iter %d: caps=%d flags=%d expected={enabled-active=(%d,%d) | enabled-inactive=(%d,%d) | disabled-inactive=(%d,%d)}', [LIndex, LInfo.CapabilityBits, LInfo.Flags, FExpectedCapsEnabled, FExpectedFlagsEnabledActive, FExpectedCapsEnabled, FExpectedFlagsEnabledInactive,
            FExpectedCapsDisabled, FExpectedFlagsDisabledInactive]);
         Exit;
       end;
@@ -1921,10 +1860,7 @@ begin
          (not SameBackendArrayLocal(LDispatchableView, FExpectedListDisabled)) then
       begin
         FErrorMsg := Format(
-          'dispatchable helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s',
-          [LIndex, DescribeBackendArrayLocal(LDispatchableView),
-           DescribeBackendArrayLocal(FExpectedListEnabled),
-           DescribeBackendArrayLocal(FExpectedListDisabled)]);
+          'dispatchable helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s', [LIndex, DescribeBackendArrayLocal(LDispatchableView), DescribeBackendArrayLocal(FExpectedListEnabled), DescribeBackendArrayLocal(FExpectedListDisabled)]);
         Exit;
       end;
 
@@ -1932,18 +1868,14 @@ begin
          (not SameBackendArrayLocal(LAvailableView, FExpectedListDisabled)) then
       begin
         FErrorMsg := Format(
-          'available helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s',
-          [LIndex, DescribeBackendArrayLocal(LAvailableView),
-           DescribeBackendArrayLocal(FExpectedListEnabled),
-           DescribeBackendArrayLocal(FExpectedListDisabled)]);
+          'available helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s', [LIndex, DescribeBackendArrayLocal(LAvailableView), DescribeBackendArrayLocal(FExpectedListEnabled), DescribeBackendArrayLocal(FExpectedListDisabled)]);
         Exit;
       end;
 
       if (LBestBackend <> FExpectedBestEnabled) and (LBestBackend <> FExpectedBestDisabled) then
       begin
         FErrorMsg := Format(
-          'best dispatchable backend mixed snapshot at iter %d: got=%d expectedEnabled=%d expectedDisabled=%d',
-          [LIndex, Ord(LBestBackend), Ord(FExpectedBestEnabled), Ord(FExpectedBestDisabled)]);
+          'best dispatchable backend mixed snapshot at iter %d: got=%d expectedEnabled=%d expectedDisabled=%d', [LIndex, Ord(LBestBackend), Ord(FExpectedBestEnabled), Ord(FExpectedBestDisabled)]);
         Exit;
       end;
     end;
@@ -2044,9 +1976,7 @@ begin
       if not LMatchesState then
       begin
         FErrorMsg := Format(
-          'registered backend list mixed snapshot at iter %d: got=%s expectedStates=%s',
-          [LIndex, DescribeBackendArrayLocal(LRegistered),
-           DescribeBackendArrayStatesLocal(FExpectedStates)]);
+          'registered backend list mixed snapshot at iter %d: got=%s expectedStates=%s', [LIndex, DescribeBackendArrayLocal(LRegistered), DescribeBackendArrayStatesLocal(FExpectedStates)]);
         Exit;
       end;
     end;
@@ -2084,8 +2014,7 @@ begin
       end;
       if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
-        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
+        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
 
@@ -2096,9 +2025,7 @@ begin
       if (not LMatchesA) and (not LMatchesB) then
       begin
         FErrorMsg := Format(
-          'public api active metadata mixed snapshot at iter %d: id=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)',
-          [LIndex, LApi^.ActiveBackendId, LApi^.ActiveFlags,
-           Ord(FExpectedBackendA), FExpectedFlagsA, Ord(FExpectedBackendB), FExpectedFlagsB]);
+          'public api active metadata mixed snapshot at iter %d: id=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)', [LIndex, LApi^.ActiveBackendId, LApi^.ActiveFlags, Ord(FExpectedBackendA), FExpectedFlagsA, Ord(FExpectedBackendB), FExpectedFlagsB]);
         Exit;
       end;
 
@@ -2291,7 +2218,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent F32x4 Add failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent F32x4 Add failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_F32x4_Mul;
@@ -2325,7 +2252,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent F32x4 Mul failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent F32x4 Mul failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_F64x2_Operations;
@@ -2359,7 +2286,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent F64x2 Operations failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent F64x2 Operations failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_Compound_Operations;
@@ -2393,7 +2320,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent Compound Operations failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent Compound Operations failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_Dispatch_Access;
@@ -2427,7 +2354,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent Dispatch Access failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent Dispatch Access failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_Backend_Query;
@@ -2466,7 +2393,7 @@ begin
     threads[i].Free;
   end;
 
-  AssertTrue('Concurrent backend query failed', allSuccess);
+  CheckTrue(allSuccess, 'Concurrent backend query failed');
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_VectorAsmToggle_DispatchRead;
@@ -2513,7 +2440,7 @@ begin
       end;
     end;
 
-    AssertTrue('Concurrent VectorAsm toggle/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent VectorAsm toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex].Free;
@@ -2573,7 +2500,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent VectorAsm multi-writer/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent VectorAsm multi-writer/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -2635,7 +2562,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent public API toggle/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent public API toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -2699,8 +2626,7 @@ begin
         WRITER_ITERATIONS, LBackend, LOriginalTable, LDisabledTable);
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex] := TPublicAbiPodInfoReadWorker.Create(
-        READER_ITERATIONS, LBackend, LExpectedCapsEnabled, LExpectedCapsDisabled,
-        LExpectedFlagsEnabled, LExpectedFlagsDisabled);
+        READER_ITERATIONS, LBackend, LExpectedCapsEnabled, LExpectedCapsDisabled, LExpectedFlagsEnabled, LExpectedFlagsDisabled);
 
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Start;
@@ -2727,8 +2653,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent public ABI backend pod info/register read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent public ABI backend pod info/register read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -2842,8 +2767,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent public ABI backend text/register read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent public ABI backend text/register read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -2906,15 +2830,12 @@ begin
     RegisterBackend(LBackend, LDisabledTable);
     LFallbackBackend := GetCurrentBackend;
     LFallbackInfo := GetCurrentBackendInfo;
-    AssertTrue('Disabled current backend should reselect away from the mutated backend',
-      LFallbackBackend <> LBackend);
+    CheckTrue(LFallbackBackend <> LBackend, 'Disabled current backend should reselect away from the mutated backend');
     LExpectedFlagsDisabled := BuildExpectedAbiFlagsLocal(
-      LFallbackBackend, IsBackendAvailableOnCPU(LFallbackBackend), True,
-      LFallbackInfo.Available and IsBackendAvailableOnCPU(LFallbackBackend), True);
+      LFallbackBackend, IsBackendAvailableOnCPU(LFallbackBackend), True, LFallbackInfo.Available and IsBackendAvailableOnCPU(LFallbackBackend), True);
 
     RegisterBackend(LBackend, LOriginalTable);
-    AssertEquals('Restored backend should become current again',
-      Ord(LBackend), Ord(GetCurrentBackend));
+    CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Restored backend should become current again');
 
     SetLength(LWriters, WRITER_THREADS);
     SetLength(LReaders, READER_THREADS);
@@ -2923,8 +2844,7 @@ begin
         WRITER_ITERATIONS, LBackend, LOriginalTable, LDisabledTable);
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex] := TPublicApiActiveMetadataReadWorker.Create(
-        READER_ITERATIONS, LBackend, LFallbackBackend,
-        LExpectedFlagsEnabled, LExpectedFlagsDisabled);
+        READER_ITERATIONS, LBackend, LFallbackBackend, LExpectedFlagsEnabled, LExpectedFlagsDisabled);
 
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Start;
@@ -2951,7 +2871,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent public-api-active-metadata register/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent public-api-active-metadata register/read failed: ' + LErrorMsgs);
   finally
     if LBackend <> sbScalar then
       RegisterBackend(LBackend, LOriginalTable);
@@ -2996,16 +2916,14 @@ begin
     LExpectedEnabledBackend := GetCurrentBackend;
     LCurrentInfo := GetCurrentBackendInfo;
     LExpectedEnabledFlags := BuildExpectedAbiFlagsLocal(
-      LExpectedEnabledBackend, IsBackendAvailableOnCPU(LExpectedEnabledBackend), True,
-      LCurrentInfo.Available and IsBackendAvailableOnCPU(LExpectedEnabledBackend), True);
+      LExpectedEnabledBackend, IsBackendAvailableOnCPU(LExpectedEnabledBackend), True, LCurrentInfo.Available and IsBackendAvailableOnCPU(LExpectedEnabledBackend), True);
 
     SetVectorAsmEnabled(False);
     ResetToAutomaticBackend;
     LExpectedDisabledBackend := GetCurrentBackend;
     LCurrentInfo := GetCurrentBackendInfo;
     LExpectedDisabledFlags := BuildExpectedAbiFlagsLocal(
-      LExpectedDisabledBackend, IsBackendAvailableOnCPU(LExpectedDisabledBackend), True,
-      LCurrentInfo.Available and IsBackendAvailableOnCPU(LExpectedDisabledBackend), True);
+      LExpectedDisabledBackend, IsBackendAvailableOnCPU(LExpectedDisabledBackend), True, LCurrentInfo.Available and IsBackendAvailableOnCPU(LExpectedDisabledBackend), True);
 
     if (LExpectedEnabledBackend = LExpectedDisabledBackend) and
        (LExpectedEnabledFlags = LExpectedDisabledFlags) then
@@ -3017,8 +2935,7 @@ begin
       LWriters[LIndex] := TVectorAsmMultiToggleWorker.Create(WRITER_ITERATIONS, LIndex);
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex] := TPublicApiActiveMetadataReadWorker.Create(
-        READER_ITERATIONS, LExpectedEnabledBackend, LExpectedDisabledBackend,
-        LExpectedEnabledFlags, LExpectedDisabledFlags);
+        READER_ITERATIONS, LExpectedEnabledBackend, LExpectedDisabledBackend, LExpectedEnabledFlags, LExpectedDisabledFlags);
 
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Start;
@@ -3045,8 +2962,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent public-api-active-metadata toggle/read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent public-api-active-metadata toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -3121,9 +3037,7 @@ begin
         WRITER_ITERATIONS, LBackend, LOriginalTable, LDisabledTable);
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex] := TCurrentBackendPodInfoReadWorker.Create(
-        READER_ITERATIONS, LBackend, LExpectedCapsEnabled, LExpectedCapsDisabled,
-        LExpectedFlagsEnabledActive, LExpectedFlagsEnabledInactive,
-        LExpectedFlagsDisabledInactive);
+        READER_ITERATIONS, LBackend, LExpectedCapsEnabled, LExpectedCapsDisabled, LExpectedFlagsEnabledActive, LExpectedFlagsEnabledInactive, LExpectedFlagsDisabledInactive);
 
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Start;
@@ -3150,8 +3064,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent current-backend public ABI pod info/register read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent current-backend public ABI pod info/register read failed: ' + LErrorMsgs);
   finally
     if LBackend <> sbScalar then
       RegisterBackend(LBackend, LOriginalTable);
@@ -3206,12 +3119,10 @@ begin
 
     RegisterBackend(LBackend, LDisabledTable);
     LExpectedDisabledBackend := GetCurrentBackend;
-    AssertTrue('Disabled current backend should reselect away from the mutated backend',
-      LExpectedDisabledBackend <> LBackend);
+    CheckTrue(LExpectedDisabledBackend <> LBackend, 'Disabled current backend should reselect away from the mutated backend');
 
     RegisterBackend(LBackend, LOriginalTable);
-    AssertEquals('Restored backend should become current again',
-      Ord(LBackend), Ord(GetCurrentBackend));
+    CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Restored backend should become current again');
 
     SetLength(LWriters, WRITER_THREADS);
     SetLength(LReaders, READER_THREADS);
@@ -3247,7 +3158,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent current-backend register/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent current-backend register/read failed: ' + LErrorMsgs);
   finally
     if LBackend <> sbScalar then
       RegisterBackend(LBackend, LOriginalTable);
@@ -3305,12 +3216,10 @@ begin
 
     RegisterBackend(LBackend, LDisabledTable);
     LExpectedDisabledInfo := GetCurrentBackendInfo;
-    AssertTrue('Disabled current backend should reselect away from the mutated backend',
-      LExpectedDisabledInfo.Backend <> LBackend);
+    CheckTrue(LExpectedDisabledInfo.Backend <> LBackend, 'Disabled current backend should reselect away from the mutated backend');
 
     RegisterBackend(LBackend, LOriginalTable);
-    AssertEquals('Restored backend should become current again',
-      Ord(LBackend), Ord(GetCurrentBackend));
+    CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Restored backend should become current again');
 
     SetLength(LWriters, WRITER_THREADS);
     SetLength(LReaders, READER_THREADS);
@@ -3346,7 +3255,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent current-backend-info register/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent current-backend-info register/read failed: ' + LErrorMsgs);
   finally
     if LBackend <> sbScalar then
       RegisterBackend(LBackend, LOriginalTable);
@@ -3375,8 +3284,7 @@ var
   LDisabledTable: TSimdDispatchTable;
   LScalarTable: TSimdDispatchTable;
 
-  function IsScalarBackedForRepresentativeSlots(const aBackendTable,
-    aScalarTable: TSimdDispatchTable): Boolean;
+  function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
     Result :=
       (Pointer(aBackendTable.AddF32x4) = Pointer(aScalarTable.AddF32x4)) and
@@ -3448,7 +3356,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent backend-ops register/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent backend-ops register/read failed: ' + LErrorMsgs);
   finally
     if LBackend <> sbScalar then
       RegisterBackend(LBackend, LOriginalTable);
@@ -3526,8 +3434,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent current-backend-info toggle/read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent current-backend-info toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -3603,8 +3510,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent current-backend toggle/read failed: ' + LErrorMsgs,
-      LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent current-backend toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -3658,8 +3564,7 @@ begin
       LWriters[LIndex] := TVectorAsmMultiToggleWorker.Create(WRITER_ITERATIONS, LIndex);
     for LIndex := 0 to High(LReaders) do
       LReaders[LIndex] := TDispatchableHelpersReadWorker.Create(
-        READER_ITERATIONS, LExpectedEnabledList, LExpectedDisabledList,
-        LExpectedEnabledBest, LExpectedDisabledBest);
+        READER_ITERATIONS, LExpectedEnabledList, LExpectedDisabledList, LExpectedEnabledBest, LExpectedDisabledBest);
 
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Start;
@@ -3686,7 +3591,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent dispatchable helper toggle/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent dispatchable helper toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -3762,7 +3667,7 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent runtime-snapshot toggle/read failed: ' + LErrorMsgs, LAllSuccess);
+    CheckTrue(LAllSuccess, 'Concurrent runtime-snapshot toggle/read failed: ' + LErrorMsgs);
   finally
     for LIndex := 0 to High(LWriters) do
       LWriters[LIndex].Free;
@@ -3806,8 +3711,7 @@ begin
   if Length(LRegistrationOrder) < 2 then
     Exit;
 
-  AssertTrue('Scalar backend should be registered before first-registration concurrent test',
-    TryGetRegisteredBackendDispatchTable(sbScalar, LSeedTable));
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LSeedTable), 'Scalar backend should be registered before first-registration concurrent test');
   LSeedTable.BackendInfo.Available := False;
   LSeedTable.BackendInfo.Capabilities := [];
 
@@ -3855,11 +3759,8 @@ begin
         LErrorMsgs := LErrorMsgs + LReaders[LIndex].ErrorMsg + '; ';
       end;
 
-    AssertTrue('Concurrent registered-backend-list first-register/read failed: ' + LErrorMsgs,
-      LAllSuccess);
-    AssertTrue('Final registered backend list should reach the fully registered state after first registrations',
-      SameBackendArrayLocal(nextpas.core.simd.GetRegisteredBackendList,
-        LExpectedStates[High(LExpectedStates)]));
+    CheckTrue(LAllSuccess, 'Concurrent registered-backend-list first-register/read failed: ' + LErrorMsgs);
+    CheckTrue(SameBackendArrayLocal(nextpas.core.simd.GetRegisteredBackendList, LExpectedStates[High(LExpectedStates)]), 'Final registered backend list should reach the fully registered state after first registrations');
   finally
     LWriter.Free;
     for LIndex := 0 to High(LReaders) do
@@ -3931,30 +3832,27 @@ begin
         LReaders[LIndex] := nil;
       end;
 
-      AssertTrue('Dispatch mixed control round ' + IntToStr(LRound) + ' failed: ' + LErrorMsgs, LAllSuccess);
+      CheckTrue(LAllSuccess, 'Dispatch mixed control round ' + IntToStr(LRound) + ' failed: ' + LErrorMsgs);
 
       ResetToAutomaticBackend;
       LDispatch := GetDispatchTable;
-      AssertTrue('Post-round dispatch should be available',
-        (LDispatch <> nil) and Assigned(LDispatch^.AddF32x4) and
-        Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4));
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.AddF32x4) and
+        Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4),
+        'Post-round dispatch should be available');
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
       LC := LDispatch^.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
-      AssertTrue('Post-round AddF32x4 sanity mismatch on round ' + IntToStr(LRound),
-        Abs(LValue - 3.0) <= FLOAT_EPSILON);
+      CheckTrue(Abs(LValue - 3.0) <= FLOAT_EPSILON, 'Post-round AddF32x4 sanity mismatch on round ' + IntToStr(LRound));
 
       LProbe := MakeSplatF32x4(-1.75);
       LC := LDispatch^.RoundF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
-      AssertTrue('Post-round RoundF32x4 sanity mismatch on round ' + IntToStr(LRound),
-        Abs(LValue - (-2.0)) <= FLOAT_EPSILON);
+      CheckTrue(Abs(LValue - (-2.0)) <= FLOAT_EPSILON, 'Post-round RoundF32x4 sanity mismatch on round ' + IntToStr(LRound));
       LC := LDispatch^.TruncF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
-      AssertTrue('Post-round TruncF32x4 sanity mismatch on round ' + IntToStr(LRound),
-        Abs(LValue - (-1.0)) <= FLOAT_EPSILON);
+      CheckTrue(Abs(LValue - (-1.0)) <= FLOAT_EPSILON, 'Post-round TruncF32x4 sanity mismatch on round ' + IntToStr(LRound));
 
       SetLength(LWorkers, 0);
       SetLength(LReaders, 0);
@@ -4000,7 +3898,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent Mixed MathOps failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent Mixed MathOps failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Concurrent_Reduction_Operations;
@@ -4034,7 +3932,7 @@ begin
     workers[i].Free;
   end;
 
-  AssertTrue('Concurrent Reduction Operations failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Concurrent Reduction Operations failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Stress_Concurrent_SIMD;
@@ -4071,10 +3969,9 @@ begin
     workers[i].Free;
   end;
 
-  WriteLn(Format('  Stress test completed: %d threads, %d total SIMD operations',
-                [STRESS_THREAD_COUNT, totalOps]));
+  WriteLn(Format('  Stress test completed: %d threads, %d total SIMD operations', [STRESS_THREAD_COUNT, totalOps]));
 
-  AssertTrue('Stress Concurrent SIMD failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Stress Concurrent SIMD failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Stress_LongRunning;
@@ -4122,10 +4019,9 @@ begin
     Inc(iterations);
   end;
 
-  WriteLn(Format('  Long-running test: %d iterations in %d seconds',
-                [iterations, LONG_RUNNING_SECONDS]));
+  WriteLn(Format('  Long-running test: %d iterations in %d seconds', [iterations, LONG_RUNNING_SECONDS]));
 
-  AssertTrue('Long-running stress test failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Long-running stress test failed: ' + errorMsgs);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Stress_RapidThreadCreation;
@@ -4161,7 +4057,7 @@ begin
 
   WriteLn(Format('  Rapid thread creation: %d threads created/destroyed', [RAPID_ITERATIONS]));
 
-  AssertTrue('Rapid thread creation failed: ' + errorMsg, allSuccess);
+  CheckTrue(allSuccess, 'Rapid thread creation failed: ' + errorMsg);
 end;
 
 procedure TTestCase_SimdConcurrent.Test_Stress_LargeData_Concurrent;
@@ -4195,13 +4091,8 @@ begin
     threads[i].Free;
   end;
 
-  AssertTrue('Large data concurrent processing failed: ' + errorMsgs, allSuccess);
+  CheckTrue(allSuccess, 'Large data concurrent processing failed: ' + errorMsgs);
 end;
 
-initialization
-  RegisterTest(TTestCase_SimdConcurrent);
-  RegisterTest(TTestCase_SimdConcurrentPublicAbi);
-  RegisterTest(TTestCase_SimdConcurrentFramework);
-  RegisterTest(TTestCase_SimdConcurrentRegistration);
 
 end.

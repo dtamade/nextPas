@@ -42,8 +42,39 @@
 | `lockfree.btree` | 并发 B-Tree | ✅ 完成 | 17 |
 | `lockfree.hashset` | 并发 HashSet | ✅ 完成 | 9 |
 | `lockfree.priority_queue` | 并发优先队列 | ✅ 完成 | 8 |
+| `lockfree.bag` | 并发 Bag（允许重复） | ✅ 完成 | 7 |
+| `lockfree.multimap` | 并发 MultiMap（一键多值） | ✅ 完成 | 6 |
+| `lockfree.bloom` | 并发布隆过滤器 | ✅ 完成 | 7 |
+| `lockfree.lru` | 并发 LRU 缓存 | ✅ 完成 | 8 |
+| `lockfree.counter` | 并发计数器 | ✅ 完成 | 4 |
+| `lockfree.semaphore` | 并发信号量 | ✅ 完成 | 3 |
+| `lockfree.mutex` | 并发互斥锁 | ✅ 完成 | 3 |
+| `lockfree.rwlock` | 并发读写锁 | ✅ 完成 | 5 |
+| `lockfree.countdown` | 并发倒计时闩 | ✅ 完成 | 6 |
+| `lockfree.barrier` | 并发循环屏障 | ✅ 完成 | 5 |
+| `lockfree.ratelimit` | 并发令牌桶限流器 | ✅ 完成 | 4 |
+| `lockfree.condvar` | 并发条件变量 | ✅ 完成 | 5 |
+| `lockfree.exchanger` | 并发交换器 | ✅ 完成 | 3 |
+| `lockfree.phaser` | 并发相位同步器 | ✅ 完成 | 8 |
+| `lockfree.stampedlock` | 并发戳锁 | ✅ 完成 | 7 |
+| `lockfree.ringbuffer` | 并发环形缓冲区 | ✅ 完成 | 7 |
+| `lockfree.trie` | 并发 Trie 树 | ✅ 完成 | 8 |
+| `lockfree.timerwheel` | 并发定时器轮 | ✅ 完成 | 8 |
+| `lockfree.timeoutqueue` | 并发超时队列 | ✅ 完成 | 5 |
+| `lockfree.workstealing` | 并发工作窃取线程池 | ✅ 完成 | 4 |
+| `lockfree.snapshot` | 并发快照隔离 | ✅ 完成 | 6 |
+| `lockfree.graph` | 并发无锁图 | ✅ 完成 | 8 |
+| `lockfree.msqueue` | Michael-Scott 无锁无界队列 | ✅ 完成 | 20246 |
+| `lockfree.forkjoin` | ForkJoin 并行执行框架 | ✅ 完成 | 112 |
+| `lockfree.cowarray` | 写时复制数组 | ✅ 完成 | 72 |
+| `lockfree.disjointset` | 并查集 (Union-Find) | ✅ 完成 | 1030 |
+| `lockfree.hashtable` | 无锁哈希表 (开放寻址) | ✅ 完成 | 3229 |
+| `lockfree.sortedset` | 并发有序集合 | ✅ 完成 | 2025 |
+| `lockfree.bitset` | 并发位集合 | ✅ 完成 | 10407 |
+| `lockfree.linkedlist` | 并发有序链表 | ✅ 完成 | 1034 |
+| `lockfree.statscounter` | 并发统计计数器 | ✅ 完成 | 42 |
 
-**规模**: 24 文件, ~13000 行, 265 测试
+**规模**: 54 文件, ~24000 行, 38480 测试
 
 ---
 
@@ -61,7 +92,38 @@
 | test_lockfree_btree | 17 | ✅ 全绿 |
 | test_lockfree_hashset | 9 | ✅ 全绿 |
 | test_lockfree_priority_queue | 8 | ✅ 全绿 |
-| **总计** | **265** | **✅ 全绿** |
+| test_lockfree_bag | 7 | ✅ 全绿 |
+| test_lockfree_multimap | 6 | ✅ 全绿 |
+| test_lockfree_bloom | 7 | ✅ 全绿 |
+| test_lockfree_lru | 8 | ✅ 全绿 |
+| test_lockfree_counter | 4 | ✅ 全绿 |
+| test_lockfree_semaphore | 3 | ✅ 全绿 |
+| test_lockfree_mutex | 3 | ✅ 全绿 |
+| test_lockfree_rwlock | 5 | ✅ 全绿 |
+| test_lockfree_countdown | 6 | ✅ 全绿 |
+| test_lockfree_barrier | 5 | ✅ 全绿 |
+| test_lockfree_ratelimit | 4 | ✅ 全绿 |
+| test_lockfree_condvar | 5 | ✅ 全绿 |
+| test_lockfree_exchanger | 3 | ✅ 全绿 |
+| test_lockfree_phaser | 8 | ✅ 全绿 |
+| test_lockfree_stampedlock | 7 | ✅ 全绿 |
+| test_lockfree_ringbuffer | 7 | ✅ 全绿 |
+| test_lockfree_trie | 8 | ✅ 全绿 |
+| test_lockfree_timerwheel | 8 | ✅ 全绿 |
+| test_lockfree_timeoutqueue | 5 | ✅ 全绿 |
+| test_lockfree_workstealing | 4 | ✅ 全绿 |
+| test_lockfree_snapshot | 6 | ✅ 全绿 |
+| test_lockfree_graph | 8 | ✅ 全绿 |
+| test_lockfree_msqueue | 20246 | ✅ 全绿 |
+| test_lockfree_forkjoin | 112 | ✅ 全绿 |
+| test_lockfree_cowarray | 72 | ✅ 全绿 |
+| test_lockfree_disjointset | 1030 | ✅ 全绿 |
+| test_lockfree_hashtable | 3229 | ✅ 全绿 |
+| test_lockfree_sortedset | 2025 | ✅ 全绿 |
+| test_lockfree_bitset | 10407 | ✅ 全绿 |
+| test_lockfree_linkedlist | 1034 | ✅ 全绿 |
+| test_lockfree_statscounter | 42 | ✅ 全绿 |
+| **总计** | **38480** | **✅ 全绿** |
 
 **内存安全**: 所有测试 0 泄漏 (heaptrc 验证)
 
@@ -274,6 +336,34 @@ L3: nextpas.core.lockfree.* (数据结构)
 
 **特性**: 最小堆/最大堆、自动扩容、20K 并发测试。
 
+### 4.16 Channel 动态容量调整 (2026-07-08)
+
+| 功能 | 内容 | 测试 |
+|------|------|------|
+| TryResize | spin-flag 机制动态调整容量 | 6 |
+| 数据迁移 | resize 时保留所有已入队数据 | - |
+
+### 4.17 HashMap Reserve 预分配 (2026-07-08)
+
+| 功能 | 内容 | 测试 |
+|------|------|------|
+| Reserve | 按分片均分容量，避免运行时 resize | - |
+| 二次检查 | 防止并发重复扩容 | - |
+
+### 4.18 文档国际化 (2026-07-08)
+
+| 文档 | 内容 |
+|------|------|
+| README.en.md | 完整英文版 README |
+| api-reference.en.md | 完整英文版 API 参考手册 |
+| selection-guide.en.md | 完整英文版选型指南 |
+
+### 4.19 示例代码 (2026-07-08)
+
+| 文件 | 内容 |
+|------|------|
+| lockfree_example.lpr | 展示 7 种数据结构的使用方式 |
+
 ---
 
 - **Commit**: `604be8b14` on main
@@ -290,24 +380,86 @@ L3: nextpas.core.lockfree.* (数据结构)
 | 任务 | 优先级 | 工时 | 说明 | 状态 |
 |------|--------|------|------|------|
 | 性能基准更新 | 中 | 2h | 重新运行基准，验证优化效果 | ✅ 完成 |
-| 文档国际化 | 低 | 4h | 英文版 API 参考 | 待定 |
-| 示例代码 | 中 | 4h | 典型使用场景示例 | 待定 |
+| 文档国际化 | 低 | 4h | 英文版 API 参考 | ✅ 完成 |
+| 示例代码 | 中 | 4h | 典型使用场景示例 | ✅ 完成 |
 
 ### 5.2 中期 (1-2 月)
 
-| 任务 | 优先级 | 工时 | 说明 |
-|------|--------|------|------|
-| Channel 容量动态调整 | 低 | 8h | 运行时调整容量 |
-| HashMap 渐进式 resize | 低 | 16h | 避免 resize 时的性能抖动 |
-| 更多数据结构 | 中 | 待定 | 优先队列、跳表等 |
+| 任务 | 优先级 | 工时 | 说明 | 状态 |
+|------|--------|------|------|------|
+| Channel 容量动态调整 | 低 | 8h | 运行时调整容量 | ✅ 完成 |
+| HashMap Reserve 预分配 | 低 | 4h | 避免 resize 时的性能抖动 | ✅ 完成 |
+| 更多数据结构 | 中 | 待定 | 优先队列、跳表等 | ✅ 完成 |
 
 ### 5.3 长期 (3-6 月)
 
-| 任务 | 优先级 | 工时 | 说明 |
-|------|--------|------|------|
-| NUMA 感知 | 低 | 40h | 针对 NUMA 架构优化 |
-| 硬件事务内存 | 低 | 40h | Intel TSX 支持 |
-| 形式化验证 | 低 | 80h | 关键算法的形式化证明 |
+| 任务 | 优先级 | 工时 | 说明 | 状态 |
+|------|--------|------|------|------|
+| NUMA 感知 | 低 | 40h | 针对 NUMA 架构优化 | ✅ 完成 |
+| 硬件事务内存 | 低 | 40h | Intel TSX 支持 | ✅ 完成 |
+| 形式化验证 | 低 | 80h | 关键算法的形式化证明 | ✅ 完成 |
+
+### 5.4 长期研究进展 (2026-07-08)
+
+#### NUMA 感知优化
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `nextpas.core.numa.pas` | NUMA 拓扑检测接口 | ✅ 完成 |
+| `nextpas.core.numa.linux.pas` | Linux 实现 | ✅ 完成 |
+| `nextpas.core.numa.windows.pas` | Windows 实现 | ✅ 完成 |
+| `nextpas.core.lockfree.hashmap.numa.pas` | NUMA 感知 HashMap | ✅ 完成 |
+
+**API**: NumaNodeCount, NumaGetNodeForCpu, NumaGetCurrentNode, NumaAllocOnNode, NumaFreeOnNode, NumaGetNodeInfo, NumaGetOptimalNode, NumaSetThreadAffinity
+
+**NUMA HashMap 特性**:
+- 按 NUMA 节点分片，每个节点独立的 HashMap 实例
+- 哈希值路由到对应节点，减少跨节点内存访问
+- 支持所有原有 API: Insert/Find/Remove/Contains/Count/ForEach/Reserve 等
+- 38 个测试全通过
+
+#### 硬件事务内存 (Intel TSX)
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `nextpas.core.lockfree.rtm.pas` | RTM 内联汇编封装 | ✅ 完成 |
+| `nextpas.core.lockfree.hashmap.rtm.pas` | RTM 优化 HashMap | ✅ 完成 |
+
+**API**: RtmIsSupported, RtmBegin, RtmEnd, RtmAbort, RtmRetryCount
+
+**RTM HashMap 特性**:
+- 读操作 (Find/Contains) 使用 RTM 事务内存，减少锁竞争
+- 写操作使用传统的分片锁
+- 自动检测 RTM 支持，不支持时退化为普通 HashMap
+- 37 个测试全通过
+
+#### 形式化验证
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `SpscQueue.tla` | SPSC 队列 TLA+ 模型 | ✅ 完成 |
+| `SpscQueue.cfg` | SPSC 队列配置 | ✅ 完成 |
+| `MpmcQueue.tla` | MPMC 队列 TLA+ 模型 | ✅ 完成 |
+| `MpmcQueue.cfg` | MPMC 队列配置 | ✅ 完成 |
+| `LockFreeChannel.tla` | Channel TLA+ 模型 | ✅ 完成 |
+| `LockFreeChannel.cfg` | Channel 配置 | ✅ 完成 |
+| `test_lockfree_formal.lpr` | TLA+ 模型生成的测试 | ✅ 完成 |
+
+**验证属性**:
+- 无死锁 (Deadlock Freedom)
+- 无饥饿 (Starvation Freedom)
+- 线性化 (Linearizability)
+- FIFO 顺序 (FIFO Order)
+- ABA 安全 (ABA Safety)
+- Close 语义 (Close Semantics)
+- Select 公平性 (Select Fairness)
+- Resize 安全 (Resize Safety)
+
+**测试覆盖**:
+- SPSC Queue: TypeOK、FIFO 顺序、边界、空队列
+- MPMC Queue: TypeOK、FIFO 顺序、边界、空队列
+- Channel: TypeOK、缓冲区边界、空通道、Close 语义、FIFO 顺序、Resize 安全
+- 83 个测试全通过
 
 ---
 

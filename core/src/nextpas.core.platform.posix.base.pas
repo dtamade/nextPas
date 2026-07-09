@@ -8,18 +8,22 @@ interface
 {$I nextpas.core.platform.ctypes.inc}
 
 type
+  {** @desc 设备号类型 *}
   dev_t    = cuint64;
   TDev     = dev_t;
   pDev     = ^dev_t;
 
+  {** @desc inode 号类型（32 位） *}
   ino_t    = clong;
   TIno     = ino_t;
   pIno     = ^ino_t;
 
+  {** @desc inode 号类型（64 位） *}
   ino64_t  = cuint64;
   TIno64   = ino64_t;
   pIno64   = ^ino64_t;
 
+  {** @desc 文件模式类型（权限位） *}
 {$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64)}
   mode_t   = cint;
 {$ELSE}
@@ -28,22 +32,27 @@ type
   TMode    = mode_t;
   pMode    = ^mode_t;
 
+  {** @desc 硬链接计数类型 *}
   nlink_t  = cuint32;
   TnLink   = nlink_t;
   pnLink   = ^nlink_t;
 
+  {** @desc 文件偏移类型（32 位） *}
   off_t    = cint64;
   TOff     = off_t;
   pOff     = ^off_t;
 
+  {** @desc 文件偏移类型（64 位） *}
   off64_t  = cint64;
   TOff64   = off64_t;
   pOff64   = ^off64_t;
 
+  {** @desc 进程 ID 类型 *}
   pid_t    = cint;
   TPid     = pid_t;
   pPid     = ^pid_t;
 
+  {** @desc 大小类型 *}
 {$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64)}
   size_t   = cuint64;
   ssize_t  = cint64;
@@ -58,25 +67,32 @@ type
   TSize    = size_t;
   pSize    = ^size_t;
   psize_t  = pSize;
+  {** @desc 有符号大小类型 *}
   TSSize   = ssize_t;
   pSSize   = ^ssize_t;
+  {** @desc 时钟类型 *}
   TClock   = clock_t;
   pClock   = ^clock_t;
+  {** @desc 时间类型 *}
   pTime    = ^time_t;
   ptime_t  = ^time_t;
 
+  {** @desc 用户 ID 类型 *}
   uid_t    = cuint32;
   TUid     = uid_t;
   pUid     = ^uid_t;
 
+  {** @desc 组 ID 类型 *}
   gid_t    = cuint32;
   TGid     = gid_t;
   pGid     = ^gid_t;
 
+  {** @desc 套接字地址长度类型 *}
   socklen_t = cuint32;
   TSockLen  = socklen_t;
   pSockLen  = ^socklen_t;
 
+  {** @desc ioctl 请求类型 *}
   TIOCtlRequest = culong;
 
   TPlatformFileDescriptor = cint;

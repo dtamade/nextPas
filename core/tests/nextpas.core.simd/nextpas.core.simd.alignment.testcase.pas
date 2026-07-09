@@ -6,12 +6,12 @@ unit nextpas.core.simd.alignment.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.base;
 
+{$M+}
 type
-  TTestCase_Alignment = class(TTestCase)
+  TTestCase_Alignment = class(TTestFixture)
   published
     procedure Test_F32x4_UnalignedLoad_NoFault;
     procedure Test_F32x4_AlignedLoad_Correctness;
@@ -30,10 +30,10 @@ var
 begin
   for i := 0 to 31 do buf[i] := i * 1.0;
   v := VecF32x4Load(@buf[1]);
-  AssertEquals('Unaligned[0]', 1.0, v.f[0], 0.0001);
-  AssertEquals('Unaligned[1]', 2.0, v.f[1], 0.0001);
-  AssertEquals('Unaligned[2]', 3.0, v.f[2], 0.0001);
-  AssertEquals('Unaligned[3]', 4.0, v.f[3], 0.0001);
+  CheckNear(1.0, v.f[0], 0.0001, 'Unaligned[0]');
+  CheckNear(2.0, v.f[1], 0.0001, 'Unaligned[1]');
+  CheckNear(3.0, v.f[2], 0.0001, 'Unaligned[2]');
+  CheckNear(4.0, v.f[3], 0.0001, 'Unaligned[3]');
 end;
 
 procedure TTestCase_Alignment.Test_F32x4_AlignedLoad_Correctness;
@@ -44,10 +44,10 @@ var
 begin
   for i := 0 to 7 do buf[i] := (i + 1) * 10.0;
   v := VecF32x4LoadAligned(@buf[0]);
-  AssertEquals('Aligned[0]', 10.0, v.f[0], 0.0001);
-  AssertEquals('Aligned[1]', 20.0, v.f[1], 0.0001);
-  AssertEquals('Aligned[2]', 30.0, v.f[2], 0.0001);
-  AssertEquals('Aligned[3]', 40.0, v.f[3], 0.0001);
+  CheckNear(10.0, v.f[0], 0.0001, 'Aligned[0]');
+  CheckNear(20.0, v.f[1], 0.0001, 'Aligned[1]');
+  CheckNear(30.0, v.f[2], 0.0001, 'Aligned[2]');
+  CheckNear(40.0, v.f[3], 0.0001, 'Aligned[3]');
 end;
 
 procedure TTestCase_Alignment.Test_F32x4_UnalignedStore_NoFault;
@@ -59,10 +59,10 @@ begin
   for i := 0 to 31 do buf[i] := 0.0;
   v.f[0] := 1.0; v.f[1] := 2.0; v.f[2] := 3.0; v.f[3] := 4.0;
   VecF32x4Store(@buf[3], v);
-  AssertEquals('UnalignedStore[3]', 1.0, buf[3], 0.0001);
-  AssertEquals('UnalignedStore[4]', 2.0, buf[4], 0.0001);
-  AssertEquals('UnalignedStore[5]', 3.0, buf[5], 0.0001);
-  AssertEquals('UnalignedStore[6]', 4.0, buf[6], 0.0001);
+  CheckNear(1.0, buf[3], 0.0001, 'UnalignedStore[3]');
+  CheckNear(2.0, buf[4], 0.0001, 'UnalignedStore[4]');
+  CheckNear(3.0, buf[5], 0.0001, 'UnalignedStore[5]');
+  CheckNear(4.0, buf[6], 0.0001, 'UnalignedStore[6]');
 end;
 
 procedure TTestCase_Alignment.Test_F32x4_AlignedVsUnaligned_Parity;
@@ -75,7 +75,7 @@ begin
   vAligned := VecF32x4LoadAligned(@buf[0]);
   vUnaligned := VecF32x4Load(@buf[0]);
   for i := 0 to 3 do
-    AssertEquals('Parity[' + IntToStr(i) + ']', vAligned.f[i], vUnaligned.f[i], 0.0);
+    CheckNear(vAligned.f[i], vUnaligned.f[i], 0.0, 'Parity[' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_Alignment.Test_F32x4_OffsetLoad_AllOffsets;
@@ -89,12 +89,9 @@ begin
   begin
     v := VecF32x4Load(@buf[offset]);
     for i := 0 to 3 do
-      AssertEquals('Offset' + IntToStr(offset) + '[' + IntToStr(i) + ']',
-        Single(offset + i), v.f[i], 0.0001);
+      CheckNear(Single(offset + i), v.f[i], 0.0001, 'Offset' + IntToStr(offset) + '[' + IntToStr(i) + ']');
   end;
 end;
 
-initialization
-  RegisterTest(TTestCase_Alignment);
 
 end.

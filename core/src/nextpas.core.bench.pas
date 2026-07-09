@@ -35,8 +35,6 @@ type
   TDoubleArray = nextpas.core.bench.base.TDoubleArray;
   TInt64Array = nextpas.core.bench.base.TInt64Array;
   TBaselineData = nextpas.core.bench.base.TBaselineData;
-  {** @deprecated Use TBaselineData instead. }
-  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
   TMatrixRow = nextpas.core.bench.base.TMatrixRow;
   TMatrixResult = nextpas.core.bench.base.TMatrixResult;
@@ -91,12 +89,19 @@ type
     procedure EnsureBaselineCapacity;
 
     {** 验证函数指针非 nil (P0-1) }
-    procedure GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
-    procedure GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
-    procedure GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
+    procedure GuardAssigned(APtr: Pointer; const AMethod: string);
 
     {** F-04: 按名称查找条目索引，未找到返回 -1 }
     function FindEntryIndex(const AName: string): Integer;
+
+    {** Add* 方法公共前导：GuardNotRun + Result := Self }
+    function BeginAdd: IBenchSuite;
+
+    {** 创建默认条目（Name + Condition=True） }
+    function MakeDefaultEntry(const AName: string): TBenchEntry;
+
+    {** 添加条目到内部数组（公共逻辑提取） }
+    procedure AppendEntry(const AEntry: TBenchEntry);
 
   public
     constructor Create(const ASuiteName: string);
@@ -142,9 +147,7 @@ type
     function LoadBaseline(const APath: string): IBenchSuite;
     function TryLoadBaseline(const APath: string): Boolean;
     function SetFilter(const AFilter: string): IBenchSuite;
-    function SetTimeout(ATimeoutMs: Int64): IBenchSuite;
     function SetTimeout(ADuration: TDuration): IBenchSuite;
-    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
     {** B21: 启用自适应预热 }
     function SetAdaptiveWarmup(AEnabled: Boolean;
       ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
@@ -164,6 +167,7 @@ type
     FBaselines: array of TBaselineData;
     FBaselineCount: Integer;
     FReportGenerator: IBenchReportGenerator;
+    FStatsAnalyzer: TBenchStatsAnalyzer;
 
     {** 生成基线对比 }
     function GenerateComparisons: TBenchComparisonArray;
@@ -287,12 +291,6 @@ begin
   inherited Create;
   if ASuiteName = '' then
     raise EBenchInvalidParam.Create('TBenchSuite.Create: suite name must not be empty');
-  FEntryCount := 0;
-  FEntryCapacity := 0;
-  SetLength(FEntries, 0);
-  FBaselineCount := 0;
-  FBaselineCapacity := 0;
-  SetLength(FBaselines, 0);
 
   FRunner := TBenchRunner.Create;
   FConfig := FRunner.GetConfig;
@@ -300,7 +298,6 @@ begin
 
   FReportGenerator := TBenchReportGenerator.Create;
   FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
-  FHasRun := False;
 end;
 
 {** ST-11: 使用自定义配置创建，跳过环境变量加载 }
@@ -309,12 +306,6 @@ begin
   inherited Create;
   if ASuiteName = '' then
     raise EBenchInvalidParam.Create('TBenchSuite.CreateWithConfig: suite name must not be empty');
-  FEntryCount := 0;
-  FEntryCapacity := 0;
-  SetLength(FEntries, 0);
-  FBaselineCount := 0;
-  FBaselineCapacity := 0;
-  SetLength(FBaselines, 0);
 
   FConfig := AConfig;
   FConfig.SuiteName := ASuiteName;
@@ -322,7 +313,6 @@ begin
   FRunner := TBenchRunner.CreateNoEnv;
   FReportGenerator := TBenchReportGenerator.Create;
   FReportGenerator.SetMaxDetailCount(FConfig.MaxDetailCount);
-  FHasRun := False;
 end;
 
 destructor TBenchSuite.Destroy;
@@ -382,21 +372,29 @@ begin
   end;
 end;
 
-procedure TBenchSuite.GuardFuncAssigned(AFunc: TBenchFunc; const AMethod: string);
+function TBenchSuite.BeginAdd: IBenchSuite;
 begin
-  if not Assigned(AFunc) then
-    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+  GuardNotRun;
+  Result := Self;
 end;
 
-procedure TBenchSuite.GuardParamFuncAssigned(AFunc: TBenchParamFunc; const AMethod: string);
+function TBenchSuite.MakeDefaultEntry(const AName: string): TBenchEntry;
 begin
-  if not Assigned(AFunc) then
-    raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
+  Result := Default(TBenchEntry);
+  Result.Name := AName;
+  Result.Condition := True;
 end;
 
-procedure TBenchSuite.GuardLoopFuncAssigned(AFunc: TBenchLoopFunc; const AMethod: string);
+procedure TBenchSuite.AppendEntry(const AEntry: TBenchEntry);
 begin
-  if not Assigned(AFunc) then
+  EnsureEntryCapacity;
+  FEntries[FEntryCount] := AEntry;
+  Inc(FEntryCount);
+end;
+
+procedure TBenchSuite.GuardAssigned(APtr: Pointer; const AMethod: string);
+begin
+  if APtr = nil then
     raise EBenchInvalidParam.CreateFmt('TBenchSuite.%s: function must not be nil', [AMethod]);
 end;
 
@@ -404,37 +402,24 @@ function TBenchSuite.Add(const AName: string; AFunc: TBenchFunc): IBenchSuite;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
-  GuardFuncAssigned(AFunc, 'Add');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  GuardAssigned(AFunc, 'Add');
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
-  LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddSimple(const AName: string;
   AFunc: TBenchSimpleFunc): IBenchSuite;
-{ F-03: 存储 SimpleFunc，runner 直接调用 }
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   if not Assigned(AFunc) then
     raise EBenchInvalidParam.Create('TBenchSuite.AddSimple: AFunc must not be nil');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.SimpleFunc := AFunc;
-  LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
@@ -442,19 +427,13 @@ function TBenchSuite.AddWithSetup(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
-  GuardFuncAssigned(AFunc, 'AddWithSetup');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  GuardAssigned(AFunc, 'AddWithSetup');
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
   LEntry.Setup := ASetup;
   LEntry.Teardown := ATeardown;
-  LEntry.Condition := True;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
@@ -462,17 +441,12 @@ function TBenchSuite.AddWhen(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
-  GuardFuncAssigned(AFunc, 'AddWhen');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  GuardAssigned(AFunc, 'AddWhen');
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
   LEntry.Condition := ACondition;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
@@ -480,22 +454,15 @@ function TBenchSuite.AddParallel(const AName: string; AFunc: TBenchFunc;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
-  GuardFuncAssigned(AFunc, 'AddParallel');
-  Result := Self;
+  GuardAssigned(AFunc, 'AddParallel');
+  Result := BeginAdd;
   if AThreads <= 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.AddParallel: thread count must be > 0');
-
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.Func := AFunc;
-  LEntry.Condition := True;
   LEntry.EnableParallel := True;
   LEntry.ParallelThreads := AThreads;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.AddRange(const AName: string; AFunc: TBenchParamFunc;
@@ -504,22 +471,16 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
-  GuardNotRun;
-  GuardParamFuncAssigned(AFunc, 'AddRange');
+  GuardAssigned(AFunc, 'AddRange');
   if Length(AParams) = 0 then
     raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
-  Result := Self;
+  Result := BeginAdd;
   for LIndex := 0 to High(AParams) do
   begin
-    LEntry := Default(TBenchEntry);
-    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry := MakeDefaultEntry(AName + '/' + IntToStr(AParams[LIndex]));
     LEntry.ParamFunc := AFunc;
     LEntry.ParamValue := AParams[LIndex];
-    LEntry.Condition := True;
-
-    EnsureEntryCapacity;
-    FEntries[FEntryCount] := LEntry;
-    Inc(FEntryCount);
+    AppendEntry(LEntry);
   end;
 end;
 
@@ -530,24 +491,18 @@ var
   LEntry: TBenchEntry;
   LIndex: Integer;
 begin
-  GuardNotRun;
-  GuardParamFuncAssigned(AFunc, 'AddRange');
+  GuardAssigned(AFunc, 'AddRange');
   if Length(AParams) = 0 then
     raise EBenchInvalidParam.Create('AddRange: AParams must not be empty');
-  Result := Self;
+  Result := BeginAdd;
   for LIndex := 0 to High(AParams) do
   begin
-    LEntry := Default(TBenchEntry);
-    LEntry.Name := AName + '/' + IntToStr(AParams[LIndex]);
+    LEntry := MakeDefaultEntry(AName + '/' + IntToStr(AParams[LIndex]));
     LEntry.ParamFunc := AFunc;
     LEntry.ParamValue := AParams[LIndex];
     LEntry.Setup := ASetup;
     LEntry.Teardown := ATeardown;
-    LEntry.Condition := True;
-
-    EnsureEntryCapacity;
-    FEntries[FEntryCount] := LEntry;
-    Inc(FEntryCount);
+    AppendEntry(LEntry);
   end;
 end;
 
@@ -555,18 +510,12 @@ function TBenchSuite.AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBench
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
-  GuardLoopFuncAssigned(AFunc, 'AddLoop');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
-  LEntry.Condition := True;
+  GuardAssigned(AFunc, 'AddLoop');
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.IsLoop := True;
   LEntry.LoopFunc := AFunc;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 {** F-01: AddLoopWithContext — loop with IBenchContext access }
@@ -575,19 +524,13 @@ function TBenchSuite.AddLoopWithContext(const AName: string;
 var
   LEntry: TBenchEntry;
 begin
-  GuardNotRun;
   if not Assigned(AFunc) then
     raise EBenchInvalidParam.Create('TBenchSuite.AddLoopWithContext: function must not be nil');
-  Result := Self;
-  LEntry := Default(TBenchEntry);
-  LEntry.Name := AName;
-  LEntry.Condition := True;
+  Result := BeginAdd;
+  LEntry := MakeDefaultEntry(AName);
   LEntry.IsLoop := True;
   LEntry.LoopContextFunc := AFunc;
-
-  EnsureEntryCapacity;
-  FEntries[FEntryCount] := LEntry;
-  Inc(FEntryCount);
+  AppendEntry(LEntry);
 end;
 
 function TBenchSuite.Clear: IBenchSuite;
@@ -770,17 +713,8 @@ begin
   GuardNotRun;
   Result := Self;
   LManager := TBaselineManager.Create;
-  try
-    LManager.LoadFromFile(APath);
-  except
-    on E: EBenchBaselineNotFound do
-      raise;
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to load baseline from "%s": %s', [APath, E.Message]);
-  end;
+  LManager.LoadFromFile(APath);
   LBaselines := LManager.GetAllBaselines;
-
-  // 将加载的基线添加到 suite（F-08: 保留完整字段）
   for I := 0 to High(LBaselines) do
     AddBaselineData(LBaselines[I]);
 end;
@@ -795,17 +729,13 @@ begin
   Result := False;
   try
     LManager := TBaselineManager.Create;
-    try
-      LManager.LoadFromFile(APath);
-    except
-      Exit;
-    end;
+    LManager.LoadFromFile(APath);
     LBaselines := LManager.GetAllBaselines;
     for I := 0 to High(LBaselines) do
       AddBaselineData(LBaselines[I]);
     Result := True;
   except
-    Exit;
+    { swallow all errors — TryLoadBaseline returns False on failure }
   end;
 end;
 
@@ -816,15 +746,6 @@ begin
   FFilter := AFilter;
 end;
 
-function TBenchSuite.SetTimeout(ATimeoutMs: Int64): IBenchSuite;
-begin
-  GuardNotRun;
-  Result := Self;
-  if ATimeoutMs < 0 then
-    raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: timeout must be >= 0');
-  FConfig.TimeoutMs := ATimeoutMs;
-end;
-
 function TBenchSuite.SetTimeout(ADuration: TDuration): IBenchSuite;
 begin
   GuardNotRun;
@@ -832,13 +753,6 @@ begin
   if ADuration.AsMilliseconds < 0 then
     raise EBenchInvalidParam.Create('TBenchSuite.SetTimeout: duration must be >= 0');
   FConfig.TimeoutMs := ADuration.AsMilliseconds;
-end;
-
-function TBenchSuite.EnableObjectPool(AEnabled: Boolean): IBenchSuite;
-begin
-  GuardNotRun;
-  Result := Self;
-  FRunner.EnableObjectPool(AEnabled);
 end;
 
 function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;
@@ -912,7 +826,7 @@ begin
       if LResults[I].Executed then
         Inc(LResultCount);
     end;
-    Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+    Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
     Exit;
   end;
 
@@ -972,7 +886,7 @@ begin
   LEnvironment := GetEnvironment;
 
   { 构建结果对象 }
-  Result := TBenchResults.Create(LResults, LEnvironment, FBaselines);
+  Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
 end;
 
 function TBenchSuite.Run: IBenchResults;
@@ -1083,6 +997,7 @@ begin
   { F-18: 构造时一次性设置结果和环境，避免每次 To* 方法重复拷贝 }
   FReportGenerator.SetResults(FResults);
   FReportGenerator.SetEnvironment(FEnvironment);
+  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
 end;
 
 destructor TBenchResults.Destroy;
@@ -1090,6 +1005,7 @@ begin
   SetLength(FResults, 0);
   SetLength(FBaselines, 0);
   FReportGenerator := nil;
+  FStatsAnalyzer.Free;
   inherited Destroy;
 end;
 
@@ -1100,7 +1016,6 @@ var
   LComparisons: array of TBenchComparison;
   LCount: Integer;
   LIdx: Integer;
-  LAnalyzer: TBenchStatsAnalyzer;
   LBaseStats, LCurrStats: TBenchStats;
   LPValue: Double;
   LMap: TBaselineMap;
@@ -1121,39 +1036,37 @@ begin
     for I := 0 to FBaselineCount - 1 do
       LMap.Put(FBaselines[I].Name, I);
 
-    LAnalyzer := TBenchStatsAnalyzer.Create;
-    try
-      for I := 0 to FResultCount - 1 do
+    for I := 0 to FResultCount - 1 do
+    begin
+      // O(1) 查找匹配的基线
+      if not LMap.TryGetValue(FResults[I].Name, LJ) then
+        Continue;
+
+      LIdx := LCount;
+      LComparisons[LIdx].BaselineName := FBaselines[LJ].Name;
+      LComparisons[LIdx].BaselineNsPerOp := FBaselines[LJ].NsPerOp;
+      LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
+
+      if FBaselines[LJ].NsPerOp > 0 then
+        LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[LJ].NsPerOp
+      else
+        LComparisons[LIdx].Ratio := 1.0;
+
+      { Welch's t-test: 用当前结果的采样统计量与基线做对比 }
+      if (FResults[I].SampleCount > 1) and (FResults[I].StdDev > 0) then
       begin
-        // O(1) 查找匹配的基线
-        if not LMap.TryGetValue(FResults[I].Name, LJ) then
-          Continue;
+        LCurrStats := Default(TBenchStats);
+        LCurrStats.Mean := FResults[I].NsPerOp;
+        LCurrStats.StdDev := FResults[I].StdDev;
+        LCurrStats.SampleCount := FResults[I].SampleCount;
 
-        LIdx := LCount;
-        LComparisons[LIdx].BaselineName := FBaselines[LJ].Name;
-        LComparisons[LIdx].BaselineNsPerOp := FBaselines[LJ].NsPerOp;
-        LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
-
-        if FBaselines[LJ].NsPerOp > 0 then
-          LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[LJ].NsPerOp
-        else
-          LComparisons[LIdx].Ratio := 1.0;
-
-        { Welch's t-test: 用当前结果的采样统计量与基线做对比 }
-        if (FResults[I].SampleCount > 1) and (FResults[I].StdDev > 0) then
-        begin
-          LCurrStats := Default(TBenchStats);
-          LCurrStats.Mean := FResults[I].NsPerOp;
-          LCurrStats.StdDev := FResults[I].StdDev;
-          LCurrStats.SampleCount := FResults[I].SampleCount;
-
-          LBaseStats := Default(TBenchStats);
-          LBaseStats.Mean := FBaselines[LJ].NsPerOp;
-          { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
-          LBaseStats.StdDev := FResults[I].StdDev;
+        LBaseStats := Default(TBenchStats);
+        LBaseStats.Mean := FBaselines[LJ].NsPerOp;
+        { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
+        LBaseStats.StdDev := FResults[I].StdDev;
           LBaseStats.SampleCount := FResults[I].SampleCount;
 
-          LPValue := LAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
+          LPValue := FStatsAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
           LComparisons[LIdx].HasStatisticalTest := True;
           LComparisons[LIdx].ApproximatePValue := LPValue;
           LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
@@ -1169,9 +1082,6 @@ begin
 
         Inc(LCount);
       end;
-    finally
-      LAnalyzer.Free;
-    end;
   finally
     LMap.Free;
   end;
@@ -1333,7 +1243,6 @@ function TBenchResults.CompareTwoResults(const ANameA, ANameB: string): TBenchCo
 var
   LA, LB: TBenchResult;
   LFoundA, LFoundB: Boolean;
-  LAnalyzer: TBenchStatsAnalyzer;
   LPValue: Double;
 begin
   Result := Default(TBenchComparison);
@@ -1359,15 +1268,10 @@ begin
   { Mann-Whitney U 检验：需要两组原始样本 }
   if (Length(LA.RawSamples) > 1) and (Length(LB.RawSamples) > 1) then
   begin
-    LAnalyzer := TBenchStatsAnalyzer.Create;
-    try
-      LPValue := LAnalyzer.ComputeMannWhitneyPValue(LA.RawSamples, LB.RawSamples);
-      Result.HasStatisticalTest := True;
-      Result.ApproximatePValue := LPValue;
-      Result.IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
-    finally
-      LAnalyzer.Free;
-    end;
+    LPValue := FStatsAnalyzer.ComputeMannWhitneyPValue(LA.RawSamples, LB.RawSamples);
+    Result.HasStatisticalTest := True;
+    Result.ApproximatePValue := LPValue;
+    Result.IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
   end
   else
   begin
@@ -1389,12 +1293,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       LManager.AddBaselineFromResult(FResults[I], AGitHash);
   end;
-  try
-    LManager.SaveToFile(APath);
-  except
-    on E: Exception do
-      raise EBenchError.CreateFmt('Failed to save baseline to "%s": %s', [APath, E.Message]);
-  end;
+  LManager.SaveToFile(APath);
 end;
 
 procedure TBenchResults.AppendToTimeline(const APath: string);
@@ -1444,7 +1343,6 @@ end;
 function TBenchResults.CompareMultipleBaselines(
   const ABaselines: array of TBaselineData): TMatrixResult;
 var
-  LAnalyzer: TBenchStatsAnalyzer;
   LNCols: Integer;
   LIdx: Integer;
   LRow: TMatrixRow;
@@ -1470,31 +1368,29 @@ begin
     LRatioCounts[J] := 0;
   end;
 
-  LAnalyzer := TBenchStatsAnalyzer.Create;
-  try
-    { 对每个当前结果，查找匹配的基线并计算 ratio }
-    SetLength(Result.Rows, FResultCount);
-    LIdx := 0;
-    for I := 0 to FResultCount - 1 do
+  { 对每个当前结果，查找匹配的基线并计算 ratio }
+  SetLength(Result.Rows, FResultCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Skipped then
+      Continue;
+
+    LRow := Default(TMatrixRow);
+    LRow.Name := FResults[I].Name;
+    LRow.CurrentNsPerOp := FResults[I].NsPerOp;
+    LRow.CurrentStdDev := FResults[I].StdDev;
+    LRow.CurrentBytesPerOp := FResults[I].BytesPerOp;
+    LRow.CurrentAllocsPerOp := FResults[I].AllocsPerOp;
+    SetLength(LRow.Cells, LNCols);
+
+    for J := 0 to LNCols - 1 do
     begin
-      if FResults[I].Skipped then
-        Continue;
-
-      LRow := Default(TMatrixRow);
-      LRow.Name := FResults[I].Name;
-      LRow.CurrentNsPerOp := FResults[I].NsPerOp;
-      LRow.CurrentStdDev := FResults[I].StdDev;
-      LRow.CurrentBytesPerOp := FResults[I].BytesPerOp;
-      LRow.CurrentAllocsPerOp := FResults[I].AllocsPerOp;
-      SetLength(LRow.Cells, LNCols);
-
-      for J := 0 to LNCols - 1 do
+      LCell := Default(TMatrixCell);
+      if ABaselines[J].NsPerOp > 0 then
       begin
-        LCell := Default(TMatrixCell);
-        if ABaselines[J].NsPerOp > 0 then
-        begin
-          LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
-          LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
+        LCell.BaselineNsPerOp := ABaselines[J].NsPerOp;
+        LCell.Ratio := FResults[I].NsPerOp / ABaselines[J].NsPerOp;
           { R3-04: baseline 无原始样本，用 ratio 阈值替代统计检验 }
           LCell.IsSignificant := Abs(LCell.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
           LCell.SignificanceThreshold := BENCH_MATRIX_DIFF_THRESHOLD;
@@ -1525,14 +1421,11 @@ begin
       if LRatioCounts[J] > 0 then
       begin
         SetLength(LRatios[J], LRatioCounts[J]);
-        Result.GeometricMeanRatios[J] := LAnalyzer.GeometricMean(LRatios[J]);
+        Result.GeometricMeanRatios[J] := FStatsAnalyzer.GeometricMean(LRatios[J]);
       end
       else
         Result.GeometricMeanRatios[J] := 1.0;
     end;
-  finally
-    LAnalyzer.Free;
-  end;
 end;
 
 function TBenchResults.ToMatrixReport(

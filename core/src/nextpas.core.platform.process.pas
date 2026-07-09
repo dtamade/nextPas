@@ -7,26 +7,95 @@ interface
 uses
   nextpas.core.platform.process.base;
 
+{** @desc 创建子进程
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param AEnvp 环境变量数组（nil 表示继承当前环境）
+    @param AProc 输出进程句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
+
+{** @desc 创建子进程并重定向标准 I/O
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param AEnvp 环境变量数组（nil 表示继承当前环境）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AChildStdin 子进程 stdin 文件描述符（-1 表示不重定向）
+    @param AChildStdout 子进程 stdout 文件描述符（-1 表示不重定向）
+    @param AChildStderr 子进程 stderr 文件描述符（-1 表示不重定向）
+    @param AProc 输出进程句柄
+    @param AFailStage 输出失败阶段
+    @return 0 成功，否则返回错误码 *}
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
   out AProc: TPlatformProcess;
   out AFailStage: TPlatformProcessSpawnStage): Int32;
+
+{** @desc 运行进程并捕获 stdout 输出
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AOutBuf 输出缓冲区
+    @param AOutBufLen 缓冲区长度
+    @param AOutLen 输出实际读取字节数
+    @param AExitCode 输出进程退出码
+    @return 0 成功，否则返回错误码 *}
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
   const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
   out AOutLen: Int32; out AExitCode: Int32): Int32;
+
+{** @desc 等待进程结束（可选超时）
+    @param AProc 进程句柄
+    @param AResult 输出进程结果
+    @param ATimeoutMs 超时时间（毫秒，0 表示无限等待）
+    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
+
+{** @desc 非阻塞检查进程是否结束
+    @param AProc 进程句柄
+    @param AResult 输出进程结果
+    @return 0 成功（进程已结束或仍在运行） *}
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
+
+{** @desc 分离进程（不再等待其结束）
+    @param AProc 进程句柄（置为空） *}
 procedure platform_process_detach(var AProc: TPlatformProcess);
+
+{** @desc 向进程发送信号
+    @param AProc 进程句柄
+    @param ASignal 信号编号
+    @return 0 成功，否则返回错误码 *}
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
+
+{** @desc 强制终止进程（SIGKILL）
+    @param AProc 进程句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
+
+{** @desc 获取进程 ID
+    @param AProc 进程句柄
+    @return 进程 ID *}
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
+
+{** @desc 创建管道（用于进程间通信）
+    @param AReadHandle 输出读端文件描述符
+    @param AWriteHandle 输出写端文件描述符
+    @return 0 成功，否则返回错误码 *}
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
+
+{** @desc 打开 /dev/null
+    @param AForWrite True 打开用于写入，False 打开用于读取
+    @param AHandle 输出文件描述符
+    @return 0 成功，否则返回错误码 *}
 function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrInt): Int32;
+
+{** @desc 关闭文件描述符
+    @param AHandle 文件描述符（置为 -1）
+    @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
 implementation
@@ -462,6 +531,96 @@ begin
   if Result = 0 then
     AExitCode := LResult.ExitCode;
 end;
+
+function ReadPipeFully(AFd: Int32; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+var
+  LN: PtrInt;
+begin
+  ALen := 0;
+  if ABufLen <= 0 then
+    Exit(0);
+  repeat
+    LN := read(AFd, @ABuf[ALen], ABufLen - ALen);
+    if LN < 0 then
+    begin
+      if platform_get_errno = ESysEINTR then
+        Continue;
+      Exit(platform_get_errno);
+    end;
+    if LN > 0 then
+      Inc(ALen, Int32(LN));
+  until (LN = 0) or (ALen >= ABufLen);
+  if ALen < ABufLen then
+    ABuf[ALen] := #0;
+  Result := 0;
+end;
+
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
+  out AExitCode: Int32): Int32;
+var
+  LProc: TPlatformProcess;
+  LResult: TPlatformProcessResult;
+  LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+  LDevNullRead: Int32;
+  LFailStage: TPlatformProcessSpawnStage;
+begin
+  AStdoutLen := 0;
+  AStderrLen := 0;
+  AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
+  LStderrPipe[0] := -1; LStderrPipe[1] := -1;
+  LDevNullRead := -1;
+
+  if pipe(@LStdoutPipe[0]) <> 0 then
+    Exit(platform_get_errno);
+  if pipe(@LStderrPipe[0]) <> 0 then
+  begin
+    Result := platform_get_errno;
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    Exit;
+  end;
+  LDevNullRead := open('/dev/null', 0, 0);
+  if LDevNullRead < 0 then
+  begin
+    Result := platform_get_errno;
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    close(LStderrPipe[0]); close(LStderrPipe[1]);
+    Exit;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd, LDevNullRead,
+    LStdoutPipe[1], LStderrPipe[1], LProc, LFailStage);
+  close(LDevNullRead);
+  close(LStdoutPipe[1]);
+  close(LStderrPipe[1]);
+  if Result <> 0 then
+  begin
+    close(LStdoutPipe[0]);
+    close(LStderrPipe[0]);
+    Exit;
+  end;
+
+  try
+    Result := ReadPipeFully(LStdoutPipe[0], AStdoutBuf, AStdoutBufLen, AStdoutLen);
+    if Result <> 0 then
+      Exit;
+    Result := ReadPipeFully(LStderrPipe[0], AStderrBuf, AStderrBufLen, AStderrLen);
+    if Result <> 0 then
+      Exit;
+  finally
+    close(LStdoutPipe[0]);
+    close(LStderrPipe[0]);
+  end;
+
+  Result := platform_process_wait(LProc, LResult);
+  if Result = 0 then
+    AExitCode := LResult.ExitCode;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -791,6 +950,18 @@ begin
   if Result = 0 then
     AExitCode := LResult.ExitCode;
 end;
+
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
+  out AExitCode: Int32): Int32;
+begin
+  AStderrLen := 0;
+  AExitCode := -1;
+  Result := platform_process_run(APath, AArgv, ACwd,
+    AStdoutBuf, AStdoutBufLen, AStdoutLen, AExitCode);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -816,6 +987,10 @@ function platform_process_close_handle(var AHandle: PtrInt): Int32;
 begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
 begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AChildStdin, AChildStdout, AChildStderr: PtrInt; out AProc: TPlatformProcess; out AFailStage: TPlatformProcessSpawnStage): Int32;
+begin FillChar(AProc, SizeOf(AProc), 0); AFailStage := pssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32; AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32; out AExitCode: Int32): Int32;
+begin AStdoutLen := 0; AStderrLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.

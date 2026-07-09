@@ -3,23 +3,23 @@ program run_tests;
 {$mode objfpc}{$H+}
 
 uses
+  {$IFDEF UNIX}
+  nextpas.core.thread.init,
+  {$ENDIF}
   Classes, SysUtils,
-  fpcunit, testregistry, consoletestrunner,
+  nextpas.core.test,
   test_base,
   test_openssl_core_unit;
 
 var
-  App: TSuiteRunner;
-
+  LRunner: TSuiteRunner;
 begin
-  DefaultFormat := fPlain;
-  DefaultRunAllTests := True;
-  
-  App := TSuiteRunner.Create(nil);
-  try
-    App.Initialize;
-    App.Run;
-  finally
-    App.Free;
-  end;
+  LRunner := TSuiteRunner.Create('fafafa.ssl Tests');
+  LRunner.Add(DiscoverTests(TTestOpenSSLCore.Create, 'OpenSSLCore'));
+  LRunner.RunAll;
+  LRunner.Summary;
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
 end.

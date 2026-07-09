@@ -640,6 +640,304 @@ begin
     'wait64 with 0 timeout returns timeout when value = expected');
 end;
 
+procedure TestBarrierBasic;
+var
+  LBarrier: TPlatformBarrier;
+  LRet: Int32;
+begin
+  LRet := platform_barrier_init(LBarrier, 1);
+  CheckEqual(Int64(0), Int64(LRet), 'barrier_init(1) succeeds');
+
+  LRet := platform_barrier_wait(LBarrier);
+  CheckEqual(Int64(0), Int64(LRet), 'barrier_wait with count=1 returns immediately');
+
+  LRet := platform_barrier_destroy(LBarrier);
+  CheckEqual(Int64(0), Int64(LRet), 'barrier_destroy succeeds');
+end;
+
+type
+  TBarrierState = record
+    Barrier: Pointer;
+    Ready: Int32;
+    WaitRet: Int32;
+  end;
+
+function BarrierThread(AArg: Pointer): Pointer; cdecl;
+var
+  LState: ^TBarrierState;
+begin
+  LState := Pointer(AArg);
+  InterLockedExchange(LState^.Ready, 1);
+  LState^.WaitRet := platform_barrier_wait(TPlatformBarrier(LState^.Barrier^));
+  Result := nil;
+end;
+
+procedure TestBarrierMultiThread;
+var
+  LBarrier: TPlatformBarrier;
+  LState: array[0..2] of TBarrierState;
+  LHandles: array[0..2] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LRet: Int32;
+  LI: Integer;
+begin
+  LRet := platform_barrier_init(LBarrier, 4); { 3 threads + main }
+  CheckEqual(Int64(0), Int64(LRet), 'barrier_init(4)');
+
+  for LI := 0 to 2 do
+  begin
+    LState[LI].Barrier := @LBarrier;
+    LState[LI].Ready := 0;
+    LState[LI].WaitRet := -1;
+    CheckEqual(Int64(0), Int64(platform_thread_create(LHandles[LI], @BarrierThread, @LState[LI])),
+      'create barrier thread');
+  end;
+
+  { Wait for all threads to be ready }
+  for LI := 0 to 2 do
+    WaitForReady(LState[LI].Ready, 'barrier thread ready');
+
+  { Main thread also waits on barrier - this should release all }
+  LRet := platform_barrier_wait(LBarrier);
+  CheckEqual(Int64(0), Int64(LRet), 'main barrier_wait');
+
+  for LI := 0 to 2 do
+  begin
+    CheckEqual(Int64(0), Int64(platform_thread_join(LHandles[LI], LRetVal)),
+      'join barrier thread');
+    CheckEqual(Int64(0), Int64(LState[LI].WaitRet),
+      'barrier thread wait returned 0');
+  end;
+
+  platform_barrier_destroy(LBarrier);
+end;
+
+procedure TestBarrierInvalidCount;
+var
+  LBarrier: TPlatformBarrier;
+  LRet: Int32;
+begin
+  LRet := platform_barrier_init(LBarrier, 0);
+  Check(LRet <> 0, 'barrier_init(0) fails');
+
+  LRet := platform_barrier_init(LBarrier, -1);
+  Check(LRet <> 0, 'barrier_init(-1) fails');
+end;
+
+var
+  GOnceCounter: Int32 = 0;
+
+procedure OnceCallback; cdecl;
+begin
+  InterLockedIncrement(GOnceCounter);
+end;
+
+procedure TestOnceBasic;
+var
+  LOnce: TPlatformOnce;
+  LRet: Int32;
+begin
+  GOnceCounter := 0;
+  LRet := platform_once_init(LOnce);
+  CheckEqual(Int64(0), Int64(LRet), 'once_init succeeds');
+
+  LRet := platform_once_exec(LOnce, @OnceCallback);
+  CheckEqual(Int64(0), Int64(LRet), 'once_exec first call');
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'callback called once');
+
+  LRet := platform_once_exec(LOnce, @OnceCallback);
+  CheckEqual(Int64(0), Int64(LRet), 'once_exec second call');
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'callback still called once');
+
+  LRet := platform_once_destroy(LOnce);
+  CheckEqual(Int64(0), Int64(LRet), 'once_destroy succeeds');
+end;
+
+procedure TestOnceNilCallback;
+var
+  LOnce: TPlatformOnce;
+  LRet: Int32;
+begin
+  LRet := platform_once_init(LOnce);
+  CheckEqual(Int64(0), Int64(LRet), 'once_init');
+
+  LRet := platform_once_exec(LOnce, nil);
+  Check(LRet <> 0, 'once_exec(nil) fails');
+
+  platform_once_destroy(LOnce);
+end;
+
+procedure TestMutexInitDestroyCycle;
+var
+  LMutex: TPlatformMutex;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_mutex_init(LMutex);
+    platform_mutex_lock(LMutex);
+    platform_mutex_unlock(LMutex);
+    platform_mutex_destroy(LMutex);
+  end;
+  Check(True, 'mutex init/lock/unlock/destroy cycle 10 times');
+end;
+
+procedure TestRwLockInitDestroyCycle;
+var
+  LRwLock: TPlatformRwLock;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_rwlock_init(LRwLock);
+    platform_rwlock_rdlock(LRwLock);
+    platform_rwlock_rdunlock(LRwLock);
+    platform_rwlock_wrlock(LRwLock);
+    platform_rwlock_wrunlock(LRwLock);
+    platform_rwlock_destroy(LRwLock);
+  end;
+  Check(True, 'rwlock init/rdlock/rdunlock/wrlock/wrunlock/destroy cycle 10 times');
+end;
+
+procedure TestCondVarInitDestroyCycle;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    platform_mutex_init(LMutex);
+    platform_condvar_init(LCond);
+    platform_condvar_signal(LCond);
+    platform_condvar_broadcast(LCond);
+    platform_condvar_destroy(LCond);
+    platform_mutex_destroy(LMutex);
+  end;
+  Check(True, 'condvar init/signal/broadcast/destroy cycle 10 times');
+end;
+
+procedure TestMutexTryLockSuccess;
+var
+  LMutex: TPlatformMutex;
+  LRet: Int32;
+begin
+  platform_mutex_init(LMutex);
+  LRet := platform_mutex_trylock(LMutex);
+  Check(LRet = 0, 'trylock on unlocked mutex succeeds');
+  platform_mutex_unlock(LMutex);
+  platform_mutex_destroy(LMutex);
+end;
+
+procedure TestRwLockMultipleReaders;
+var
+  LRwLock: TPlatformRwLock;
+begin
+  platform_rwlock_init(LRwLock);
+  { Multiple read locks should succeed }
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'first rdlock');
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'second rdlock');
+  Check(platform_rwlock_rdlock(LRwLock) = 0, 'third rdlock');
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_rdunlock(LRwLock);
+  platform_rwlock_destroy(LRwLock);
+  Check(True, 'multiple concurrent readers');
+end;
+
+procedure TestCondVarSignalNoWaiter;
+var
+  LMutex: TPlatformMutex;
+  LCond: TPlatformCondVar;
+begin
+  platform_mutex_init(LMutex);
+  platform_condvar_init(LCond);
+  { Signal with no waiter should be no-op }
+  platform_condvar_signal(LCond);
+  platform_condvar_broadcast(LCond);
+  platform_condvar_destroy(LCond);
+  platform_mutex_destroy(LMutex);
+  Check(True, 'signal with no waiter is no-op');
+end;
+
+procedure TestBarrierInitDestroyCycle;
+var
+  LBarrier: TPlatformBarrier;
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+  begin
+    Check(platform_barrier_init(LBarrier, 1) = 0, 'barrier_init');
+    platform_barrier_destroy(LBarrier);
+  end;
+  Check(True, 'barrier init/destroy cycle 10 times');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+var
+  GOnceFlag: Int32 = 0;
+
+procedure TestOnceCallback;
+begin
+  GOnceFlag := 1;
+end;
+
+function TestBarrierThread(AArg: Pointer): Pointer; cdecl;
+var
+  LBarrier: Pointer;
+begin
+  LBarrier := AArg;
+  platform_barrier_wait(TPlatformBarrier(LBarrier^));
+  Result := nil;
+end;
+
+procedure TestOnceExecWithCallback;
+var
+  LOnce: TPlatformOnce;
+begin
+  GOnceFlag := 0;
+  Check(platform_once_init(LOnce) = 0, 'once_init');
+  Check(platform_once_exec(LOnce, @TestOnceCallback) = 0, 'once_exec');
+  CheckEqual(Int64(1), Int64(GOnceFlag), 'callback was executed');
+  { Second exec should be no-op }
+  GOnceFlag := 99;
+  Check(platform_once_exec(LOnce, @TestOnceCallback) = 0, 'once_exec second time');
+  CheckEqual(Int64(99), Int64(GOnceFlag), 'callback not executed second time');
+  platform_once_destroy(LOnce);
+end;
+
+procedure TestBarrierCount2WithThread;
+var
+  LBarrier: TPlatformBarrier;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+begin
+  Check(platform_barrier_init(LBarrier, 2) = 0, 'barrier_init count=2');
+  Check(platform_thread_create(LHandle, @TestBarrierThread, @LBarrier) = 0, 'create thread');
+  { Both threads must reach barrier }
+  platform_barrier_wait(LBarrier);
+  Check(platform_thread_join(LHandle, LRetVal) = 0, 'join thread');
+  platform_barrier_destroy(LBarrier);
+  Check(True, 'barrier count=2 with thread');
+end;
+{$ENDIF}
+
+procedure TestAddressWaitNilAddress;
+var
+  LRet: Int32;
+begin
+  LRet := platform_wait_address32(nil, 0, 1000000);
+  Check(LRet <> 0, 'wait on nil address returns error');
+end;
+
+procedure TestAddress64WaitNilAddress;
+var
+  LRet: Int32;
+begin
+  LRet := platform_wait_address64(nil, 0, 1000000);
+  Check(LRet <> 0, 'wait64 on nil address returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.sync');
   T.Test('Public error constants', @TestPublicErrorConstants);
@@ -670,5 +968,23 @@ begin
   T.Test('CondVar timedwait zero timeout', @TestCondVarTimedWaitZeroTimeout);
   T.Test('Address wait zero timeout', @TestAddressWaitZeroTimeout);
   T.Test('Address64 wait zero timeout', @TestAddress64WaitZeroTimeout);
+  T.Test('Barrier basic', @TestBarrierBasic);
+  T.Test('Barrier multi-thread', @TestBarrierMultiThread);
+  T.Test('Barrier invalid count', @TestBarrierInvalidCount);
+  T.Test('Once basic', @TestOnceBasic);
+  T.Test('Once nil callback', @TestOnceNilCallback);
+  T.Test('Mutex init/destroy cycle', @TestMutexInitDestroyCycle);
+  T.Test('RwLock init/destroy cycle', @TestRwLockInitDestroyCycle);
+  T.Test('CondVar init/destroy cycle', @TestCondVarInitDestroyCycle);
+  T.Test('Mutex trylock success', @TestMutexTryLockSuccess);
+  T.Test('RwLock multiple readers', @TestRwLockMultipleReaders);
+  T.Test('CondVar signal no waiter', @TestCondVarSignalNoWaiter);
+  T.Test('Barrier init/destroy cycle', @TestBarrierInitDestroyCycle);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('Once exec with callback', @TestOnceExecWithCallback);
+  T.Test('Barrier count=2 with thread', @TestBarrierCount2WithThread);
+  {$ENDIF}
+  T.Test('Address wait nil address', @TestAddressWaitNilAddress);
+  T.Test('Address64 wait nil address', @TestAddress64WaitNilAddress);
   if not T.Run then Halt(1);
 end.

@@ -4557,6 +4557,153 @@ begin
 end;
 
 { ============================================================ }
+{ Channel dynamic resize tests                                  }
+{ ============================================================ }
+
+procedure TestChannelResizeGrow;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    { Fill to capacity }
+    Check(LCh.TrySend(10), 'send 1');
+    Check(LCh.TrySend(20), 'send 2');
+    Check(LCh.TrySend(30), 'send 3');
+    Check(LCh.TrySend(40), 'send 4');
+    Check(not LCh.TrySend(50), 'full before resize');
+    CheckEqual(Int64(4), Int64(LCh.Capacity), 'capacity=4 before resize');
+    { Grow to 16 }
+    Check(LCh.TryResize(16), 'resize to 16');
+    CheckEqual(Int64(16), Int64(LCh.Capacity), 'capacity=16 after resize');
+    { Now we can send more }
+    Check(LCh.TrySend(50), 'send after grow 1');
+    Check(LCh.TrySend(60), 'send after grow 2');
+    { Verify all data preserved }
+    Check(LCh.TryReceive(LV), 'recv 1');
+    CheckEqual(Int64(10), Int64(LV), 'value 1');
+    Check(LCh.TryReceive(LV), 'recv 2');
+    CheckEqual(Int64(20), Int64(LV), 'value 2');
+    Check(LCh.TryReceive(LV), 'recv 3');
+    CheckEqual(Int64(30), Int64(LV), 'value 3');
+    Check(LCh.TryReceive(LV), 'recv 4');
+    CheckEqual(Int64(40), Int64(LV), 'value 4');
+    Check(LCh.TryReceive(LV), 'recv 5');
+    CheckEqual(Int64(50), Int64(LV), 'value 5');
+    Check(LCh.TryReceive(LV), 'recv 6');
+    CheckEqual(Int64(60), Int64(LV), 'value 6');
+    Check(not LCh.TryReceive(LV), 'empty after drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelResizeShrink;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(16);
+  try
+    Check(LCh.TrySend(10), 'send 1');
+    Check(LCh.TrySend(20), 'send 2');
+    Check(LCh.TrySend(30), 'send 3');
+    Check(LCh.TrySend(40), 'send 4');
+    CheckEqual(Int64(16), Int64(LCh.Capacity), 'capacity=16 before resize');
+    { Shrink to 4 (same as current data count) }
+    Check(LCh.TryResize(4), 'resize to 4');
+    CheckEqual(Int64(4), Int64(LCh.Capacity), 'capacity=4 after resize');
+    { Data should still be there }
+    Check(LCh.TryReceive(LV), 'recv 1');
+    CheckEqual(Int64(10), Int64(LV), 'value 1');
+    Check(LCh.TryReceive(LV), 'recv 2');
+    CheckEqual(Int64(20), Int64(LV), 'value 2');
+    Check(LCh.TryReceive(LV), 'recv 3');
+    CheckEqual(Int64(30), Int64(LV), 'value 3');
+    Check(LCh.TryReceive(LV), 'recv 4');
+    CheckEqual(Int64(40), Int64(LV), 'value 4');
+    Check(not LCh.TryReceive(LV), 'empty after drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelResizeEmpty;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.TryResize(8), 'resize empty channel');
+    CheckEqual(Int64(8), Int64(LCh.Capacity), 'capacity=8 after resize');
+    Check(LCh.IsEmpty, 'still empty');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelResizeSameCapacity;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    LCh.TrySend(42);
+    Check(LCh.TryResize(4), 'resize to same capacity');
+    CheckEqual(Int64(4), Int64(LCh.Capacity), 'capacity unchanged');
+    Check(LCh.TryReceive(LV), 'data preserved');
+    CheckEqual(Int64(42), Int64(LV), 'value preserved');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelResizeWhileFull;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    { Fill completely }
+    LCh.TrySend(1);
+    LCh.TrySend(2);
+    LCh.TrySend(3);
+    LCh.TrySend(4);
+    Check(not LCh.TrySend(5), 'full before resize');
+    { Grow while full }
+    Check(LCh.TryResize(8), 'resize while full');
+    Check(LCh.TrySend(5), 'can send after grow');
+    Check(LCh.TrySend(6), 'can send more');
+    { Drain all 6 }
+    Check(LCh.TryReceive(LV) and (LV = 1), 'v1');
+    Check(LCh.TryReceive(LV) and (LV = 2), 'v2');
+    Check(LCh.TryReceive(LV) and (LV = 3), 'v3');
+    Check(LCh.TryReceive(LV) and (LV = 4), 'v4');
+    Check(LCh.TryReceive(LV) and (LV = 5), 'v5');
+    Check(LCh.TryReceive(LV) and (LV = 6), 'v6');
+    Check(not LCh.TryReceive(LV), 'empty');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelResizeClosed;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    LCh.Close;
+    Check(not LCh.TryResize(8), 'resize after close fails');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Edge-case: Selector with single channel                       }
 { ============================================================ }
 
@@ -6095,6 +6242,14 @@ begin
   T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
   T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
+
+  T.Test('Channel resize grow', @TestChannelResizeGrow);
+  T.Test('Channel resize shrink', @TestChannelResizeShrink);
+  T.Test('Channel resize empty', @TestChannelResizeEmpty);
+  T.Test('Channel resize same capacity', @TestChannelResizeSameCapacity);
+  T.Test('Channel resize while full', @TestChannelResizeWhileFull);
+  T.Test('Channel resize closed', @TestChannelResizeClosed);
+
   T.Test('Selector single channel', @TestSelectorSingleChannel);
   T.Test('EBR many guards', @TestEbrManyGuards);
 

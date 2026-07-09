@@ -50,10 +50,10 @@
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
 | **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | ✅ 2026-06-25      |
 | **C6-A** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce）                                                      | C5    | ✅ 2026-06-25      |
-| **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ⬜ (C6-H7~H17 部分完成) |
-| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ⬜ (C7-prep opt可配置已完成) |
+| **C6-B** | string ownership 收尾：record/array element string store, string field cleanup on object free                                | C5,C6-A | ✅ 2026-06-13 (H7~H17 全完成) |
+| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6-A | ✅ 2026-07-06 (O2/LTO + 多目标 IR smoke) |
 | **C8-prep** | 自举探针：用 nextPas 编译 `core/` 模块，83% 通过（~83/100），7 gaps 已修复，25 remaining（12 parser + 13 semantic） | C6-A | ✅ 2026-06-26 |
-| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | 🏁 里程碑          |
+| **C8** | 根据差距清单逐一修复，直到自举成功                                                                                              | C8-prep | ✅ 2026-07-08 |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -530,3 +530,89 @@
   剩余 25 个 gaps（12 parser + 13 semantic）记录在
   `docs/plans/2026-06-26-c8-prep-gap-list.md`。
   16/16 compiler-pass 测试全绿，无回归。
+- 2026-07-06 架构调优：
+  - sema 拆分：14246→6632 行（-53%），提取 `np_sema_validation.inc`（501 行）、
+    `np_sema_codegen.inc`（5314 行）、`np_sema_declaration.inc`（1848 行）
+  - 错误诊断增强：`np_diagnostics_enhanced` 接入 sema，未声明标识符
+    "Did you mean?" 建议（Levenshtein ≤3）+ 类型不匹配错误显示类型名
+  - MIR pass manager 接入主管道：HIR→MIR→passes→LLVM 路径贯通，
+    `DetachModule` 修复 double-free，`OptLevel` 传递到 `RegisterMirPassesForLevel`
+  - 死代码清理：删除 `compiler/query/`（4 文件 952 行）
+  - 增量编译验证通过：全量/增量构建产出二进制一致
+  - 49/49 compiler-pass + 23/23 MIR + 11 groups smoke 全绿
+- 2026-07-06 C7 完成：多目标 IR smoke 验证。创建 linux-aarch64 目标配置
+  （triple=aarch64-unknown-linux-gnu, datalayout=e-m:e-i8:8:32...），
+  LLVM IR 正确生成，opt -O2 通过。x86_64 native + aarch64 cross 双目标验证。
+- 2026-07-06 C8 进展：LLVM 后端全量扫描 core/ 门面模块，56/56 全通过。
+  FPC 后端因泛型语法（`<T>`）不兼容失败，LLVM 后端完全支持。
+  自举路径明确为 LLVM 后端。下一步：扩展到子模块 + 编译器自编译。
+- 2026-07-06 C8 自举探针：编译器自身（226 units, 1032 symbols）成功编译到
+  LLVM IR，opt -O2 + llc 均通过。linker 失败因缺少 runtime 库符号
+  （np_process_init, np_unit_init_* 等），需配置工具链链接 rtl/runtime/。
+  瓶颈：LLVM 工具链配置，非编译器前端问题。
+- 2026-07-08 C8 自举成功：LLVM 后端全链路通过。
+  - unit_init/fini 从 declare 改为 define 空桩（226 units）
+  - runtime libnprt.a 构建修复（allocator.ll 冗余 declare）
+  - 自举验证：226 units → IR → opt -O2 → llc → ld + libnprt.a → ELF executable
+  - smoke 测试全通过（77/77）
+  - C8 退出标准满足：编译器可用 LLVM 后端编译自身并产出可执行文件。
+- 2026-07-08 Debt 1 架构升级：EncodeRuntimeIntExprFoldCore 直接产出 ExprId
+  - 提取 Core(ANode, out ABlob, out AExprId) 内部方法
+  - 消除从 blob 解析 ExprId 的 hack（原 3-param 重载用 StrToIntDef 解析）
+  - 所有 ExprId > 0 分支同步设置 AExprId
+  - 2-param/3-param 重载均委托 Core
+  - smoke + selfhost 全通过
+- 2026-07-08 Debt 1 批量迁移：辅助函数 + 10 种模式结构化
+  - 添加 6 个辅助函数: TryEmitIntLiteral/TryEmitStringLiteral/TryEmitNilLiteral/
+    TryEmitExcLoad/TryEmitSymbolValue/TryEmitFieldSelf
+  - 迁移 nil → shekNilLiteral, exc_load → shekIntrinsic('exc_load')
+  - 迁移 True/False → shekIntLiteral(1/0), char literal → shekIntLiteral
+  - 迁移 EvaluateIntegerConstant → shekIntLiteral
+  - 迁移 5 个 field self 模式 → shekField
+  - 非 ExprId blob 赋值: 109 → 63 (减少 42%)
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 前两刀：变量加载+声明类型传递
+  - EmitExprVar: 变量加载使用 FindAllocaType(AArg) 替代硬编码 GetIntType (i64)
+  - var-decl-runtime: 传递变量的 TypeId 给 HIR builder，用于正确创建 alloca 类型
+  - 确保变量 alloca 使用声明时的实际类型宽度（如 Integer→i32）
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第三刀：算术运算使用操作数类型
+  - EmitExprUnaryOp: 使用操作数类型替代硬编码 GetIntType
+  - EmitExprBinOp: 使用操作数类型，优先选择更宽的类型
+  - 确保算术运算结果类型与操作数匹配
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第四刀：EmitExprInt 值范围推断类型
+  - EmitExprInt: 根据值范围推断类型 (i8/i16/i32/i64)
+  - 小值 (-128~127) 使用 i8, 中值 (-32768~32767) 使用 i16
+  - 大值 (-2147483648~2147483647) 使用 i32, 超大值使用 i64
+  - 使用 PushTyped 传递类型信息到栈
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第五刀：ProcessAssign 使用语义模型类型
+  - ProcessAssign: 创建 alloca 时从语义模型查找变量类型
+  - 使用 FindSymbolByName 获取变量符号，再获取 TypeId
+  - 使用 SemanticTypeIdToHirTypeId 转换为 HIR 类型
+  - 确保变量 alloca 使用声明时的实际类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第六刀：EmitConstIntSmart 值范围推断类型
+  - 添加 EmitConstIntSmart 函数，根据值范围推断类型 (i8/i16/i32/i64)
+  - 替换 7 处 EmitConstIntOfType(0/1, GetIntType) 为 EmitConstIntSmart
+  - 零值和一值使用最小足够类型
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第七刀：元素大小使用 i64 + 零值使用 EmitConstIntSmart
+  - 元素大小 (8 bytes) 使用 GetIntTypeByWidth(64, True) 替代 GetIntType
+  - 零值使用 EmitConstIntSmart 替代 EmitConstIntOfType(0, GetIntType)
+  - 确保元素大小和零值使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第八刀：字符串/数组长度使用 i32
+  - 字符串长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 数组长度存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 确保长度值使用正确的类型宽度 (i32)
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第九刀：deref 使用栈类型
+  - deref 操作使用 PopTyped 获取指针指向的类型
+  - 确保指针解引用使用正确的类型宽度
+  - smoke + compiler-pass 49/49 全通过
+- 2026-07-08 Debt 2 第十刀：动态数组长度使用 i32
+  - 动态数组长度加载/存储使用 GetIntTypeByWidth(32, True) 替代 GetIntType
+  - 确保动态数组长度操作使用正确的类型宽度 (i32)
+  - smoke + compiler-pass 49/49 全通过

@@ -10,7 +10,8 @@ uses
   nextpas.core.net.base,
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.url;
+  nextpas.core.http.url,
+  nextpas.core.json;
 
 type
   THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions)
@@ -157,6 +158,97 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyBytes: TBytes): IHttpResponse; overload;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
+{** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+{** @desc Write binary response: sets content-type and content-length, writes TBytes body. }
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
+{** @desc Write HTML response: sets text/html content-type, writes string body. }
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
+{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+{** @desc Write a redirect response with Location header and optional HTML body.
+   AStatus should be a 3xx code (301/302/303/307/308). }
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
+{** @desc 301 Moved Permanently redirect. }
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 302 Found redirect (temporary, method may change to GET). }
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 303 See Other redirect (always changes method to GET). }
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 307 Temporary Redirect (preserves method and body). }
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 308 Permanent Redirect (preserves method and body). }
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}.
+   Sets content-type application/json. }
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+{** @desc Write 400 Bad Request JSON error response. }
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 401 Unauthorized JSON error response. }
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 403 Forbidden JSON error response. }
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 404 Not Found JSON error response. }
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 204 No Content response. Raises if body is non-empty. }
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+{** @desc Write 200 OK response with no body. Sets status to 200 and writes empty body. }
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+{** @desc Write 201 Created response with no body. Sets status to 201 and writes empty body.
+   Use for POST requests that successfully create a resource. }
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
+{** @desc Write 202 Accepted response with no body. Sets status to 202 and writes empty body.
+   Use for async operations that have been accepted for processing. }
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
+{** @desc Write 304 Not Modified response with no body.
+   Use for conditional requests where the resource hasn't changed. }
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+{** @desc Write 205 Reset Content response with no body.
+   Instructs client to reset the document view (e.g., clear a form). }
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+{** @desc Write 410 Gone response with no body.
+   Indicates the resource has been permanently removed. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+{** @desc Write 500 Internal Server Error JSON error response. }
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 429 Too Many Requests JSON error response. }
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 409 Conflict JSON error response. }
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 422 Unprocessable Entity JSON error response. }
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 504 Gateway Timeout JSON error response. }
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 type
   { Fluent builder for HTTP requests.
@@ -219,6 +311,49 @@ begin
   if Length(ABodyText) > 0 then
     Move(ABodyText[1], LData[0], Length(ABodyText));
   Result := BytesBodyReader(LData);
+end;
+
+{ Escape a string for safe embedding in JSON. Handles ", \, and control chars. }
+function JsonEscapeStr(const AStr: string): string;
+var
+  LI, LJ, LLen: SizeInt;
+  LCh: Char;
+begin
+  LLen := Length(AStr);
+  if LLen = 0 then
+    Exit('');
+  SetLength(Result, LLen * 2); { worst case: every char is escaped }
+  LJ := 1;
+  for LI := 1 to LLen do
+  begin
+    LCh := AStr[LI];
+    case LCh of
+      '"': begin Result[LJ] := '\'; Result[LJ+1] := '"'; Inc(LJ, 2); end;
+      '\': begin Result[LJ] := '\'; Result[LJ+1] := '\'; Inc(LJ, 2); end;
+      #8:  begin Result[LJ] := '\'; Result[LJ+1] := 'b'; Inc(LJ, 2); end;
+      #9:  begin Result[LJ] := '\'; Result[LJ+1] := 't'; Inc(LJ, 2); end;
+      #10: begin Result[LJ] := '\'; Result[LJ+1] := 'n'; Inc(LJ, 2); end;
+      #12: begin Result[LJ] := '\'; Result[LJ+1] := 'f'; Inc(LJ, 2); end;
+      #13: begin Result[LJ] := '\'; Result[LJ+1] := 'r'; Inc(LJ, 2); end;
+    else
+      if Ord(LCh) < 32 then
+      begin
+        Result[LJ] := '\';
+        Result[LJ+1] := 'u';
+        Result[LJ+2] := '0';
+        Result[LJ+3] := '0';
+        Result[LJ+4] := Char(Ord('0') + (Ord(LCh) shr 4));
+        Result[LJ+5] := Char(Ord('0') + (Ord(LCh) and $0F));
+        Inc(LJ, 6);
+      end
+      else
+      begin
+        Result[LJ] := LCh;
+        Inc(LJ);
+      end;
+    end;
+  end;
+  SetLength(Result, LJ - 1);
 end;
 
 function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
@@ -837,6 +972,268 @@ begin
   AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(ABody))));
   AW.WriteHeader(AStatus);
   Result := WriteAllResponseBodyString(AW, ABody);
+end;
+
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+begin
+  Result := HttpWriteResponseString(AW, AStatus, 'application/json',
+    JsonStringify(AValue));
+end;
+
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
+var
+  LLen: SizeUInt;
+  LTotal: SizeUInt;
+  LWritten: SizeUInt;
+begin
+  RequireResponseWriter(AW);
+  if HttpStatusIsInformational(AStatus) then
+    raise EHttpError.Create(
+      'HTTP response bytes helper requires a final response status');
+  if ResponseStatusMustNotHaveBody(AStatus) then
+  begin
+    if (ABody <> nil) and (Length(ABody) > 0) then
+      raise EHttpError.Create('HTTP response status must not include a body');
+    AW.WriteHeader(AStatus);
+    Exit(0);
+  end;
+
+  LLen := SizeUInt(Length(ABody));
+  if AContentType <> '' then
+    AW.GetHeaders.SetHeader('content-type', AContentType);
+  AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(LLen)));
+  AW.WriteHeader(AStatus);
+  LTotal := 0;
+  while LTotal < LLen do
+  begin
+    LWritten := AW.Write(ABody[LTotal], LLen - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('HTTP response writer made zero progress');
+    if LWritten > LLen - LTotal then
+      raise EIOError.Create('HTTP response writer over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
+  Result := LTotal;
+end;
+
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
+begin
+  Result := HttpWriteResponseString(AW, AStatus, 'text/html; charset=utf-8', ABody);
+end;
+
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+var
+  LBody: IReader;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LTotal: SizeUInt;
+begin
+  if AReq = nil then
+    raise EArgumentError.Create('HTTP request is nil');
+  LBody := AReq.Body;
+  if LBody = nil then
+    Exit(nil);
+  Result := nil;
+  LTotal := 0;
+  repeat
+    LN := LBody.Read(LBuf[0], SizeUInt(Length(LBuf)));
+    if LN > 0 then
+    begin
+      SetLength(Result, LTotal + LN);
+      Move(LBuf[0], Result[LTotal], LN);
+      Inc(LTotal, LN);
+    end;
+  until LN = 0;
+end;
+
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+var
+  LBody: TBytes;
+begin
+  LBody := HttpReadRequestBodyBytes(AReq);
+  Result := '';
+  SetLength(Result, Length(LBody));
+  if Length(LBody) > 0 then
+    Move(LBody[0], Result[1], Length(LBody));
+end;
+
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+var
+  LBody: string;
+begin
+  LBody := HttpReadRequestBodyString(AReq);
+  Result := JsonParse(LBody);
+  if (Result <> nil) and Result.HasError then
+    raise EHttpError.Create('HTTP request body contains invalid JSON');
+end;
+
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
+var
+  LBody: string;
+begin
+  RequireResponseWriter(AW);
+  if not HttpStatusIsRedirect(AStatus) then
+    raise EHttpError.Create('HttpRedirect requires a 3xx redirect status');
+  if ALocation = '' then
+    raise EArgumentError.Create('HttpRedirect location must not be empty');
+  AW.GetHeaders.SetHeader('location', ALocation);
+  LBody := '<html><body>Redirecting to <a href="' + ALocation + '">' +
+    ALocation + '</a></body></html>';
+  HttpWriteResponseString(AW, AStatus, 'text/html', LBody);
+end;
+
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_MOVED_PERMANENTLY, ALocation);
+end;
+
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_FOUND, ALocation);
+end;
+
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_SEE_OTHER, ALocation);
+end;
+
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_TEMPORARY_REDIRECT, ALocation);
+end;
+
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  HttpRedirect(AW, HTTP_STATUS_PERMANENT_REDIRECT, ALocation);
+end;
+
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+var
+  LJson: string;
+begin
+  LJson := '{"error":{"code":"' + JsonEscapeStr(ACode) +
+    '","message":"' + JsonEscapeStr(AMessage) + '"}}';
+  Result := HttpWriteResponseString(AW, AStatus, 'application/json', LJson);
+end;
+
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_BAD_REQUEST, 'bad_request', AMessage);
+end;
+
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNAUTHORIZED, 'unauthorized', AMessage);
+end;
+
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_FORBIDDEN, 'forbidden', AMessage);
+end;
+
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_NOT_FOUND, 'not_found', AMessage);
+end;
+
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_INTERNAL_SERVER_ERROR, 'internal_error', AMessage);
+end;
+
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_TOO_MANY_REQUESTS, 'too_many_requests', AMessage);
+end;
+
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_CONFLICT, 'conflict', AMessage);
+end;
+
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNPROCESSABLE_ENTITY, 'unprocessable_entity', AMessage);
+end;
+
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_PAYLOAD_TOO_LARGE, 'payload_too_large', AMessage);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, 'unsupported_media_type', AMessage);
+end;
+
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := HttpWriteErrorResponse(AW, HTTP_STATUS_GATEWAY_TIMEOUT, 'gateway_timeout', AMessage);
+end;
+
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+end;
+
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_OK);
+end;
+
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_CREATED);
+end;
+
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_ACCEPTED);
+end;
+
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+end;
+
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_RESET_CONTENT);
+end;
+
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  RequireResponseWriter(AW);
+  AW.WriteHeader(HTTP_STATUS_GONE);
 end;
 
 { THttpRequestBuilder }

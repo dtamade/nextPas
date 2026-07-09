@@ -88,7 +88,8 @@ end;
 procedure TTcpThreadedServer.EnsureRuntimeContext;
 begin
   if FWorkerHandoff = nil then
-    CreateTcpServerRuntimeContext(FWorkerHandoff, FSessionContext);
+    CreateTcpServerRuntimeContext(FWorkerHandoff, FSessionContext,
+      FOptions.ShutdownTimeoutNs);
 end;
 
 procedure TTcpThreadedServer.ListenAndServe(const AAddr: string;

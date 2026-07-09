@@ -532,6 +532,368 @@ begin
   Check(not platform_socket_error_timed_out(0), 'errno 0 is not timed_out');
 end;
 
+procedure TestSocketPair;
+var
+  S1, S2: TPlatformSocket;
+  LRet: Int32;
+const
+  { AF_UNIX = 1 on Linux }
+  TEST_AF_UNIX = 1;
+begin
+  LRet := platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2);
+  Check(LRet = 0, 'socketpair succeeds');
+  Check(SockIsValid(S1), 'socket1 valid');
+  Check(SockIsValid(S2), 'socket2 valid');
+  Check(S1.Value <> S2.Value, 'sockets are different');
+
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
+
+procedure TestSetTcpNoDelay;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_tcp_nodelay(S, True);
+  Check(LRet = 0, 'set_tcp_nodelay(true) succeeds');
+
+  LRet := platform_socket_set_tcp_nodelay(S, False);
+  Check(LRet = 0, 'set_tcp_nodelay(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetReuseAddr;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_reuseaddr(S, True);
+  Check(LRet = 0, 'set_reuseaddr(true) succeeds');
+
+  LRet := platform_socket_set_reuseaddr(S, False);
+  Check(LRet = 0, 'set_reuseaddr(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetKeepAlive;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_keepalive(S, True);
+  Check(LRet = 0, 'set_keepalive(true) succeeds');
+
+  LRet := platform_socket_set_keepalive(S, False);
+  Check(LRet = 0, 'set_keepalive(false) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestSetLinger;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  LRet := platform_socket_set_linger(S, True, 5);
+  Check(LRet = 0, 'set_linger(true, 5) succeeds');
+
+  LRet := platform_socket_set_linger(S, False, 0);
+  Check(LRet = 0, 'set_linger(false, 0) succeeds');
+
+  platform_socket_close(S);
+end;
+
+procedure TestGetSockOpt;
+var
+  S: TPlatformSocket;
+  LRet: Int32;
+  LVal: Int32;
+  LLen: Int32;
+begin
+  LRet := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S);
+  Check(LRet = 0, 'create TCP');
+
+  { Test getsockopt with SO_REUSEADDR }
+  LLen := SizeOf(Int32);
+  LRet := platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR,
+    @LVal, @LLen);
+  Check(LRet = 0, 'getsockopt SO_REUSEADDR succeeds');
+
+  platform_socket_close(S);
+end;
+
+{ 28. set_recvbuf }
+procedure TestSetRecvBuf;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_recvbuf(S, 65536) = 0, 'set recvbuf 64K');
+  platform_socket_close(S);
+end;
+
+{ 29. set_sendbuf }
+procedure TestSetSendBuf;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_sendbuf(S, 65536) = 0, 'set sendbuf 64K');
+  platform_socket_close(S);
+end;
+
+{ 30. get_error on fresh socket }
+procedure TestGetError;
+var
+  S: TPlatformSocket;
+  LErr: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_get_error(S, LErr) = 0, 'get_error succeeds');
+  Check(LErr = 0, 'fresh socket has no pending error');
+  platform_socket_close(S);
+end;
+
+{ 31. recvbuf/sendbuf round-trip verification }
+procedure TestRecvBufSendBufRoundTrip;
+var
+  S: TPlatformSocket;
+  LVal: Int32;
+  LLen: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(platform_socket_set_recvbuf(S, 32768) = 0, 'set recvbuf 32K');
+  Check(platform_socket_set_sendbuf(S, 32768) = 0, 'set sendbuf 32K');
+  { Verify via getsockopt }
+  LLen := SizeOf(LVal);
+  Check(platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_RCVBUF,
+    @LVal, @LLen) = 0, 'getsockopt RCVBUF');
+  { Linux doubles the value }
+  Check(LVal >= 32768, 'rcvbuf >= 32K');
+  LLen := SizeOf(LVal);
+  Check(platform_socket_getsockopt(S, PLATFORM_SOL_SOCKET, PLATFORM_SO_SNDBUF,
+    @LVal, @LLen) = 0, 'getsockopt SNDBUF');
+  Check(LVal >= 32768, 'sndbuf >= 32K');
+  platform_socket_close(S);
+end;
+
+procedure TestIpv4Parse;
+begin
+  CheckEqual(Int64($01020304), Int64(platform_ipv4_parse('1.2.3.4')), '1.2.3.4');
+  CheckEqual(Int64($7F000001), Int64(platform_ipv4_parse('127.0.0.1')), '127.0.0.1');
+  CheckEqual(Int64($C0A80001), Int64(platform_ipv4_parse('192.168.0.1')), '192.168.0.1');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('')), 'empty string');
+  CheckEqual(Int64(0), Int64(platform_ipv4_parse('0.0.0.0')), '0.0.0.0');
+end;
+
+procedure TestIpv4ToString;
+begin
+  Check(platform_ipv4_to_string($01020304) = '1.2.3.4', '0x01020304');
+  Check(platform_ipv4_to_string($7F000001) = '127.0.0.1', '0x7F000001');
+  Check(platform_ipv4_to_string($C0A80001) = '192.168.0.1', '0xC0A80001');
+  Check(platform_ipv4_to_string(0) = '0.0.0.0', 'zero');
+end;
+
+procedure TestIpv4RoundTrip;
+var
+  LIP: UInt32;
+begin
+  LIP := platform_ipv4_parse('10.0.0.1');
+  Check(platform_ipv4_to_string(LIP) = '10.0.0.1', 'round-trip 10.0.0.1');
+  LIP := platform_ipv4_parse('255.255.255.255');
+  Check(platform_ipv4_to_string(LIP) = '255.255.255.255', 'round-trip 255.255.255.255');
+end;
+
+procedure TestSockaddrIpv4RoundTrip;
+var
+  LSockAddr: sockaddr_in;
+  LLen: Int32;
+  LIP: UInt32;
+  LPort: UInt16;
+begin
+  Check(platform_sockaddr_from_ipv4($C0A80001, 8080, LSockAddr, LLen) = 0,
+    'from_ipv4 success');
+  Check(LLen = SizeOf(sockaddr_in), 'len = sizeof(sockaddr_in)');
+  Check(LSockAddr.sin_family = PLATFORM_AF_INET, 'family = AF_INET');
+  platform_sockaddr_to_ipv4(LSockAddr, LIP, LPort);
+  CheckEqual(Int64($C0A80001), Int64(LIP), 'IP round-trip');
+  CheckEqual(Int64(8080), Int64(LPort), 'port round-trip');
+end;
+
+
+procedure TestSocketPairDataExchange;
+var
+  S1, S2: TPlatformSocket;
+  LSent, LRecvd: Int32;
+  LBuf: array[0..31] of AnsiChar;
+const
+  TEST_AF_UNIX = 1;
+begin
+  Check(platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2) = 0,
+    'socketpair');
+  Check(platform_socket_send(S1, PAnsiChar('pair_data'), 9, 0, LSent) = 0, 'send');
+  Check(LSent = 9, 'sent 9');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recv(S2, @LBuf[0], 32, 0, LRecvd) = 0, 'recv');
+  Check(LRecvd = 9, 'recv 9');
+  Check(LBuf[0] = 'p', 'data[0]');
+  Check(LBuf[8] = 'a', 'data[8]');
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
+
+procedure TestSocketPairShutdown;
+var
+  S1, S2: TPlatformSocket;
+  LRecvd: Int32;
+  LBuf: array[0..7] of Byte;
+const
+  TEST_AF_UNIX = 1;
+begin
+  Check(platform_socket_pair(TEST_AF_UNIX, PLATFORM_SOCK_STREAM, 0, S1, S2) = 0,
+    'socketpair');
+  Check(platform_socket_shutdown(S1, PLATFORM_SHUT_WR) = 0, 'shutdown write');
+  Check(platform_socket_recv(S2, @LBuf[0], 8, 0, LRecvd) = 0, 'recv after shutdown');
+  Check(LRecvd = 0, 'recv returns 0 = EOF');
+  platform_socket_close(S1);
+  platform_socket_close(S2);
+end;
+
+procedure TestCloseAlreadyClosedSocket;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  Check(platform_socket_close(S) = 0, 'close');
+  { Second close should return error or be safe no-op }
+  platform_socket_close(S);
+  Check(True, 'double close handled without crash');
+end;
+
+procedure TestCreateNilAddress;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  { Bind to nil address should fail gracefully }
+  Check(platform_socket_bind(S, nil, 0) <> 0, 'bind nil address returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestSendtoNilBuffer;
+var
+  S: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LSent: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, S) = 0, 'create UDP');
+  Check(platform_sockaddr_loopback4(9999, LAddr) = 0, 'addr');
+  Check(platform_socket_sendto(S, nil, 10, 0, @LAddr.Storage, LAddr.Len, LSent) <> 0,
+    'sendto nil buffer returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestRecvNilBuffer;
+var
+  S: TPlatformSocket;
+  LRecvd: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, S) = 0, 'create UDP');
+  Check(platform_socket_recv(S, nil, 10, 0, LRecvd) <> 0,
+    'recv nil buffer returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestSetsockoptInvalidLevel;
+var
+  S: TPlatformSocket;
+  LVal: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, S) = 0,
+    'create TCP');
+  LVal := 1;
+  Check(platform_socket_setsockopt(S, 9999, 9999, @LVal, SizeOf(LVal)) <> 0,
+    'setsockopt with invalid level returns error');
+  platform_socket_close(S);
+end;
+
+procedure TestErrorWouldBlockClassification;
+begin
+  Check(not platform_socket_error_would_block(0), '0 is not would_block');
+  Check(not platform_socket_error_would_block(-1), '-1 is not would_block');
+end;
+
+procedure TestGetsocknameOnConnected;
+var
+  LServer, LClient, LAccepted: TPlatformSocket;
+  LAddr, LServerAddr, LAcceptedAddr: TPlatformSockAddr;
+  LBuf: array[0..7] of AnsiChar;
+  LSent: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LServer) = 0, 'server create');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr port 0');
+  Check(platform_socket_bind(LServer, @LAddr.Storage, LAddr.Len) = 0, 'bind');
+  Check(platform_socket_listen(LServer, 5) = 0, 'listen');
+
+  FillChar(LServerAddr, SizeOf(LServerAddr), 0);
+  LServerAddr.Len := SizeOf(LServerAddr.Storage);
+  Check(platform_socket_getsockname(LServer, @LServerAddr.Storage,
+    @LServerAddr.Len) = 0, 'getsockname server');
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LClient) = 0, 'client create');
+  Check(platform_socket_connect(LClient, @LServerAddr.Storage,
+    LServerAddr.Len) = 0, 'connect');
+
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  Check(platform_socket_accept(LServer, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len, LAccepted) = 0, 'accept');
+
+  { Send data to verify connection works }
+  LBuf := 'verify!';
+  Check(platform_socket_send(LClient, @LBuf[0], 7, 0, LSent) = 0, 'send');
+  Check(LSent = 7, 'sent 7');
+
+  { getsockname on accepted should return client's peer address }
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  LAcceptedAddr.Len := SizeOf(LAcceptedAddr.Storage);
+  Check(platform_socket_getsockname(LAccepted, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len) = 0, 'getsockname on accepted');
+
+  platform_socket_close(LAccepted);
+  platform_socket_close(LClient);
+  platform_socket_close(LServer);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.socket.focused_runtime');
 
@@ -567,6 +929,43 @@ begin
   { API coverage }
   T.Test('getpeername on connected pair', @TestGetPeerName);
   T.Test('error_timed_out classification', @TestErrorTimedOut);
+
+  { Convenience functions }
+  T.Test('socketpair', @TestSocketPair);
+  T.Test('set_tcp_nodelay', @TestSetTcpNoDelay);
+  T.Test('set_reuseaddr', @TestSetReuseAddr);
+  T.Test('set_keepalive', @TestSetKeepAlive);
+  T.Test('set_linger', @TestSetLinger);
+  T.Test('getsockopt', @TestGetSockOpt);
+
+  { New convenience functions }
+  T.Test('set_recvbuf', @TestSetRecvBuf);
+  T.Test('set_sendbuf', @TestSetSendBuf);
+  T.Test('get_error', @TestGetError);
+  T.Test('recvbuf/sendbuf round-trip', @TestRecvBufSendBufRoundTrip);
+
+  { IPv4 helper functions }
+  T.Test('ipv4_parse', @TestIpv4Parse);
+  T.Test('ipv4_to_string', @TestIpv4ToString);
+  T.Test('ipv4 parse+to_string round-trip', @TestIpv4RoundTrip);
+  T.Test('sockaddr_from/to_ipv4 round-trip', @TestSockaddrIpv4RoundTrip);
+
+  { Socketpair data exchange }
+  T.Test('socketpair data exchange', @TestSocketPairDataExchange);
+  T.Test('socketpair shutdown', @TestSocketPairShutdown);
+
+  { Socket close already closed }
+  T.Test('close already closed socket', @TestCloseAlreadyClosedSocket);
+
+  { Socket nil address }
+  T.Test('create nil address', @TestCreateNilAddress);
+
+  { Edge cases }
+  T.Test('sendto nil buffer returns error', @TestSendtoNilBuffer);
+  T.Test('recv nil buffer returns error', @TestRecvNilBuffer);
+  T.Test('setsockopt invalid level', @TestSetsockoptInvalidLevel);
+  T.Test('error_would_block classification', @TestErrorWouldBlockClassification);
+  T.Test('getsockname on connected socket', @TestGetsocknameOnConnected);
 
   if not T.Run then Halt(1);
 end.

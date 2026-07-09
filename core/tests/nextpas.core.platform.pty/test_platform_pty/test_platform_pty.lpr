@@ -4,6 +4,7 @@ program test_platform_pty;
 
 uses
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.platform.pty.base,
   nextpas.core.platform.pty
 {$IFDEF NEXTPAS_UNIX}
@@ -336,6 +337,60 @@ begin
   platform_pty_close(LPty);
   waitpid(LPid, nil, 0);
 end;
+
+procedure TestResizeMultiple;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  I: Int32;
+begin
+  Check(platform_pty_open(LSize, LPty) = 0, 'open');
+  for I := 0 to 9 do
+  begin
+    LSize.FCols := 80 + I;
+    LSize.FRows := 24 + I;
+    Check(platform_pty_resize(LPty, LSize) = 0, 'resize ' + IntToStr(I));
+  end;
+  platform_pty_close(LPty);
+end;
+
+procedure TestOpenCloseCycle;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  I: Int32;
+begin
+  LSize.FCols := 80;
+  LSize.FRows := 24;
+  LSize.FXPixel := 0;
+  LSize.FYPixel := 0;
+  for I := 0 to 9 do
+  begin
+    Check(platform_pty_open(LSize, LPty) = 0, 'open ' + IntToStr(I));
+    platform_pty_close(LPty);
+  end;
+end;
+
+procedure TestSpawnNilArgv;
+var
+  LPty: TPlatformPty;
+  LSize: TPlatformPtySize;
+  LPid, LRc: Int32;
+  LStage: TPlatformPtySpawnStage;
+begin
+  LSize.FCols := 80; LSize.FRows := 24;
+  LSize.FXPixel := 0; LSize.FYPixel := 0;
+  Check(platform_pty_open(LSize, LPty) = 0, 'open');
+  { nil argv is passed to execvp — behavior is implementation-defined }
+  LRc := platform_pty_spawn(LPty, '/bin/true', nil, nil, nil, LPid, LStage);
+  { We just verify it doesn't crash; result depends on platform }
+  Check(True, 'spawn with nil argv did not crash');
+  if LRc = 0 then
+    platform_pty_close(LPty)
+  else
+    platform_pty_close(LPty);
+end;
+
 {$ELSE}
 function NeverRunShapeOnly: Boolean;
 begin
@@ -382,6 +437,9 @@ begin
   T.Test('TestResizeAfterClose', @TestResizeAfterClose);
   T.Test('TestSpawnWithEnv', @TestSpawnWithEnv);
   T.Test('TestSpawnLargeOutput', @TestSpawnLargeOutput);
+  T.Test('TestResizeMultiple', @TestResizeMultiple);
+  T.Test('TestOpenCloseCycle', @TestOpenCloseCycle);
+  T.Test('TestSpawnNilArgv', @TestSpawnNilArgv);
 {$ELSE}
   T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}

@@ -13,7 +13,29 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.json;
+
+type
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  private
+    FHeaders: IHttpHeaders;
+    FStatus: THttpStatus;
+    FBody: string;
+    FBodyBytes: TBytes;
+    FStatusWritten: Boolean;
+  public
+    constructor Create;
+    procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
+    function GetHeaders: IHttpHeaders;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Flush;
+    property Status: THttpStatus read FStatus;
+    property Body: string read FBody;
+    property BodyBytes: TBytes read FBodyBytes;
+    property StatusWritten: Boolean read FStatusWritten;
+  end;
 
 var
   T: TTestSuite;
@@ -1167,6 +1189,838 @@ begin
   Check(LRaised, 'invalid absolute request-target direct path raises EHttpError');
 end;
 
+{ TMockResponseWriter }
+
+constructor TMockResponseWriter.Create;
+begin
+  inherited Create;
+  FHeaders := NewHttpHeaders;
+  FStatus := HTTP_STATUS_OK;
+  FStatusWritten := False;
+  FBody := '';
+  FBodyBytes := nil;
+end;
+
+procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
+begin
+  FStatus := AStatus;
+  FStatusWritten := True;
+end;
+
+function TMockResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
+end;
+
+function TMockResponseWriter.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LPrev: SizeInt;
+  LPrevBytes: SizeUInt;
+begin
+  LPrev := SizeInt(Length(FBody));
+  SetLength(FBody, LPrev + SizeInt(ACount));
+  Move(ABuf, FBody[LPrev + 1], ACount);
+  LPrevBytes := SizeUInt(Length(FBodyBytes));
+  SetLength(FBodyBytes, LPrevBytes + ACount);
+  Move(ABuf, FBodyBytes[LPrevBytes], ACount);
+  Result := ACount;
+end;
+
+procedure TMockResponseWriter.Flush;
+begin
+end;
+
+{ HttpWriteResponseJson tests }
+
+procedure TestWriteResponseJsonSetsContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+  LWritten: SizeUInt;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('{"key":"value"}');
+  LWritten := HttpWriteResponseJson(LW, HTTP_STATUS_OK, LDoc.Root);
+  Check(LM.StatusWritten, 'WriteResponseJson writes status');
+  CheckEqual(200, Int32(LM.Status), 'WriteResponseJson status is 200');
+  CheckEqual('application/json', LM.FHeaders.Get('content-type'),
+    'WriteResponseJson sets application/json content-type');
+  Check(LWritten > 0, 'WriteResponseJson returns non-zero bytes written');
+  Check(Pos('"key"', LM.Body) > 0, 'WriteResponseJson body contains JSON key');
+end;
+
+procedure TestWriteResponseJsonSerializesValue;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('[1,2,3]');
+  HttpWriteResponseJson(LW, HTTP_STATUS_CREATED, LDoc.Root);
+  CheckEqual(201, Int32(LM.Status), 'WriteResponseJson status is 201');
+  Check(Pos('[1,2,3]', LM.Body) > 0, 'WriteResponseJson serializes array');
+end;
+
+procedure TestWriteResponseJsonEmptyObject;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LDoc: IJsonDocument;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LDoc := JsonParse('{}');
+  HttpWriteResponseJson(LW, HTTP_STATUS_OK, LDoc.Root);
+  CheckEqual('{}', LM.Body, 'WriteResponseJson serializes empty object');
+end;
+
+{ HttpWriteResponseBytes tests }
+
+procedure TestWriteResponseBytesSetsHeaders;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 3);
+  LData[0] := $DE; LData[1] := $AD; LData[2] := $BE;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  CheckEqual(HTTP_STATUS_OK, LM.Status, 'status');
+  CheckEqual('application/octet-stream', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual('3', LM.GetHeaders.Get('content-length'), 'content-length');
+  CheckTrue(LM.StatusWritten, 'header written');
+end;
+
+procedure TestWriteResponseBytesWritesBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 4);
+  LData[0] := $01; LData[1] := $02; LData[2] := $03; LData[3] := $04;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  CheckEqual(4, Length(LM.BodyBytes), 'body length');
+  CheckEqual($01, LM.BodyBytes[0], 'byte 0');
+  CheckEqual($02, LM.BodyBytes[1], 'byte 1');
+  CheckEqual($03, LM.BodyBytes[2], 'byte 2');
+  CheckEqual($04, LM.BodyBytes[3], 'byte 3');
+end;
+
+procedure TestWriteResponseBytesEmptyBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_OK, 'application/octet-stream', nil);
+  CheckEqual('0', LM.GetHeaders.Get('content-length'), 'content-length');
+  CheckEqual(0, Length(LM.BodyBytes), 'empty body');
+end;
+
+procedure TestWriteResponseBytesNoBodyStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseBytes(LW, HTTP_STATUS_NO_CONTENT, '', nil);
+  CheckEqual(HTTP_STATUS_NO_CONTENT, LM.Status, 'status');
+  CheckEqual('', LM.GetHeaders.Get('content-length'), 'no content-length');
+end;
+
+procedure TestWriteResponseBytesNoBodyStatusWithBodyRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LData: TBytes;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  SetLength(LData, 1);
+  LData[0] := $FF;
+  LRaised := False;
+  try
+    HttpWriteResponseBytes(LW, HTTP_STATUS_NO_CONTENT, '', LData);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on no-body status with body');
+end;
+
+procedure TestWriteResponseBytesNilWriterRaises;
+var
+  LData: TBytes;
+  LRaised: Boolean;
+begin
+  SetLength(LData, 1);
+  LData[0] := $00;
+  LRaised := False;
+  try
+    HttpWriteResponseBytes(nil, HTTP_STATUS_OK, 'application/octet-stream', LData);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on nil writer');
+end;
+
+{ HttpReadRequestBody* tests }
+
+procedure TestReadRequestBodyBytesReadsBody;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LData: TBytes;
+begin
+  SetLength(LData, 5);
+  Move('hello'[1], LData[0], 5);
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/octet-stream', LData);
+  LBody := HttpReadRequestBodyBytes(LReq);
+  CheckEqual(Int64(5), Int64(Length(LBody)), 'ReadRequestBodyBytes length');
+  CheckEqual(Byte(Ord('h')), LBody[0], 'ReadRequestBodyBytes first byte');
+  CheckEqual(Byte(Ord('o')), LBody[4], 'ReadRequestBodyBytes last byte');
+end;
+
+procedure TestReadRequestBodyStringReadsBody;
+var
+  LReq: IHttpRequest;
+  LBody: string;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'text/plain', 'hello world');
+  LBody := HttpReadRequestBodyString(LReq);
+  CheckEqual('hello world', LBody, 'ReadRequestBodyString content');
+end;
+
+procedure TestReadRequestBodyJsonParsesObject;
+var
+  LReq: IHttpRequest;
+  LDoc: IJsonDocument;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '{"key":"value"}');
+  LDoc := HttpReadRequestBodyJson(LReq);
+  Check(LDoc <> nil, 'ReadRequestBodyJson returns document');
+  Check(LDoc.Root.IsValid, 'ReadRequestBodyJson returns valid root');
+  CheckEqual('value', LDoc.Root.ObjectGet('key').AsStr.ToString,
+    'ReadRequestBodyJson parses key');
+end;
+
+procedure TestReadRequestBodyJsonParsesArray;
+var
+  LReq: IHttpRequest;
+  LDoc: IJsonDocument;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '[1,2,3]');
+  LDoc := HttpReadRequestBodyJson(LReq);
+  Check(LDoc <> nil, 'ReadRequestBodyJson array returns document');
+  Check(LDoc.Root.IsArray, 'ReadRequestBodyJson root is array');
+  CheckEqual(Int64(3), Int64(LDoc.Root.ArrayLen), 'ReadRequestBodyJson array length');
+end;
+
+procedure TestReadRequestBodyBytesNilBodyReturnsNil;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+begin
+  LReq := NewGetRequest('/no-body');
+  LBody := HttpReadRequestBodyBytes(LReq);
+  Check(LBody = nil, 'ReadRequestBodyBytes nil body returns nil');
+end;
+
+procedure TestReadRequestBodyStringNilBodyReturnsEmpty;
+var
+  LReq: IHttpRequest;
+  LBody: string;
+begin
+  LReq := NewGetRequest('/no-body');
+  LBody := HttpReadRequestBodyString(LReq);
+  CheckEqual('', LBody, 'ReadRequestBodyString nil body returns empty');
+end;
+
+procedure TestReadRequestBodyBytesNilRequestRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpReadRequestBodyBytes(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyBytes nil request raises');
+end;
+
+procedure TestReadRequestBodyStringNilRequestRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpReadRequestBodyString(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyString nil request raises');
+end;
+
+procedure TestReadRequestBodyJsonInvalidJsonRaises;
+var
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/json', '{invalid');
+  LRaised := False;
+  try
+    HttpReadRequestBodyJson(LReq);
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadRequestBodyJson invalid JSON raises');
+end;
+
+procedure TestReadRequestBodyBytesEmptyBodyReturnsNil;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+begin
+  LReq := NewRequest(hmPost, 'http://example.com/api',
+    'application/octet-stream', '');
+  LBody := HttpReadRequestBodyBytes(LReq);
+  Check(LBody = nil, 'ReadRequestBodyBytes empty body returns nil');
+end;
+
+{ HttpRedirect tests }
+
+procedure TestRedirectSetsLocationAndStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirect(LW, HTTP_STATUS_FOUND, '/new-page');
+  CheckEqual(Int64(302), Int64(LM.Status), 'status 302');
+  CheckEqual('/new-page', LM.GetHeaders.Get('location'), 'location header');
+  Check(Pos('/new-page', LM.Body) > 0, 'body contains location');
+end;
+
+procedure TestRedirect301Permanent;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirect(LW, HTTP_STATUS_MOVED_PERMANENTLY, 'https://example.com');
+  CheckEqual(Int64(301), Int64(LM.Status), 'status 301');
+  CheckEqual('https://example.com', LM.GetHeaders.Get('location'), 'location');
+end;
+
+procedure TestRedirectNonRedirectStatusRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LRaised := False;
+  try
+    HttpRedirect(LW, HTTP_STATUS_OK, '/page');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on non-redirect status');
+end;
+
+procedure TestRedirectEmptyLocationRaises;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+  LRaised: Boolean;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  LRaised := False;
+  try
+    HttpRedirect(LW, HTTP_STATUS_FOUND, '');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on empty location');
+end;
+
+procedure TestRedirectNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpRedirect(nil, HTTP_STATUS_FOUND, '/page');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on nil writer');
+end;
+
+procedure TestRedirectMovedPermanently;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectMovedPermanently(LW, 'https://example.com/new');
+  CheckEqual(Int64(301), Int64(LM.Status), 'status 301');
+  CheckEqual('https://example.com/new', LM.GetHeaders.Get('location'), 'location header');
+  Check(Pos('Redirecting', LM.Body) > 0, 'body contains redirect html');
+end;
+
+procedure TestRedirectFound;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectFound(LW, '/other');
+  CheckEqual(Int64(302), Int64(LM.Status), 'status 302');
+  CheckEqual('/other', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectSeeOther;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectSeeOther(LW, '/result');
+  CheckEqual(Int64(303), Int64(LM.Status), 'status 303');
+  CheckEqual('/result', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectTemporaryRedirect;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectTemporaryRedirect(LW, '/temp');
+  CheckEqual(Int64(307), Int64(LM.Status), 'status 307');
+  CheckEqual('/temp', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+procedure TestRedirectPermanentRedirect;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpRedirectPermanentRedirect(LW, '/perm');
+  CheckEqual(Int64(308), Int64(LM.Status), 'status 308');
+  CheckEqual('/perm', LM.GetHeaders.Get('location'), 'location header');
+end;
+
+{ HttpWriteErrorResponse tests }
+
+procedure TestErrorResponseSetsJsonContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST, 'invalid_input', 'Missing field');
+  CheckEqual('application/json', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
+end;
+
+procedure TestErrorResponseBodyFormat;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorResponse(LW, HTTP_STATUS_NOT_FOUND, 'not_found', 'Item not found');
+  Check(Pos('"code":"not_found"', LM.Body) > 0, 'body contains code');
+  Check(Pos('"message":"Item not found"', LM.Body) > 0, 'body contains message');
+end;
+
+procedure TestErrorBadRequest;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorBadRequest(LW, 'Invalid JSON');
+  CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
+  Check(Pos('"code":"bad_request"', LM.Body) > 0, 'code is bad_request');
+end;
+
+procedure TestErrorUnauthorized;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorUnauthorized(LW, 'Token expired');
+  CheckEqual(Int64(401), Int64(LM.Status), 'status 401');
+  Check(Pos('"code":"unauthorized"', LM.Body) > 0, 'code is unauthorized');
+end;
+
+procedure TestErrorForbidden;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorForbidden(LW, 'Access denied');
+  CheckEqual(Int64(403), Int64(LM.Status), 'status 403');
+  Check(Pos('"code":"forbidden"', LM.Body) > 0, 'code is forbidden');
+end;
+
+procedure TestErrorNotFound;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorNotFound(LW, 'User not found');
+  CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
+  Check(Pos('"code":"not_found"', LM.Body) > 0, 'code is not_found');
+end;
+
+procedure TestErrorInternal;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorInternal(LW, 'Something broke');
+  CheckEqual(Int64(500), Int64(LM.Status), 'status 500');
+  Check(Pos('"code":"internal_error"', LM.Body) > 0, 'code is internal_error');
+end;
+
+procedure TestNoContentSets204;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseNoContent(LW);
+  CheckEqual(Int64(204), Int64(LM.Status), 'status 204');
+  CheckEqual('', LM.Body, 'no body written');
+  Check(LM.StatusWritten, 'WriteHeader was called');
+end;
+
+procedure TestNoContentNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseNoContent(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestHtmlSetsContentType;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_OK, '<h1>Hello</h1>');
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('text/html; charset=utf-8', LM.GetHeaders.Get('content-type'), 'content-type is text/html');
+  CheckEqual('<h1>Hello</h1>', LM.Body, 'body is HTML');
+end;
+
+procedure TestHtmlWritesStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_NOT_FOUND, '<p>Not Found</p>');
+  CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
+  Check(Pos('text/html', LM.GetHeaders.Get('content-type')) > 0, 'content-type has text/html');
+end;
+
+procedure TestHtmlEmptyBody;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_OK, '');
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('', LM.Body, 'empty body');
+  CheckEqual('0', LM.GetHeaders.Get('content-length'), 'content-length 0');
+end;
+
+procedure TestHtmlNoBodyStatus;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseHtml(LW, HTTP_STATUS_NO_CONTENT, '');
+  CheckEqual(Int64(204), Int64(LM.Status), 'status 204');
+end;
+
+procedure TestHtmlNoBodyStatusWithBodyRaises;
+var
+  LRaised: Boolean;
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LRaised := False;
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  try
+    HttpWriteResponseHtml(LW, HTTP_STATUS_NO_CONTENT, '<p>oops</p>');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on no-body status with body');
+end;
+
+procedure TestErrorTooManyRequests;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorTooManyRequests(LW, 'Slow down');
+  CheckEqual(Int64(429), Int64(LM.Status), 'status 429');
+  Check(Pos('"code":"too_many_requests"', LM.Body) > 0, 'code is too_many_requests');
+  Check(Pos('Slow down', LM.Body) > 0, 'message preserved');
+end;
+
+procedure TestErrorConflict;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorConflict(LW, 'Resource already exists');
+  CheckEqual(Int64(409), Int64(LM.Status), 'status 409');
+  Check(Pos('"code":"conflict"', LM.Body) > 0, 'code is conflict');
+  Check(Pos('Resource already exists', LM.Body) > 0, 'message preserved');
+end;
+
+procedure TestErrorUnprocessableEntity;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteErrorUnprocessableEntity(LW, 'Validation failed');
+  CheckEqual(Int64(422), Int64(LM.Status), 'status 422');
+  Check(Pos('"code":"unprocessable_entity"', LM.Body) > 0, 'code is unprocessable_entity');
+  Check(Pos('Validation failed', LM.Body) > 0, 'message preserved');
+end;
+
+procedure TestOkSets200;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseOk(LW);
+  CheckEqual(Int64(200), Int64(LM.Status), 'status 200');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestOkNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseOk(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestCreatedSets201;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseCreated(LW);
+  CheckEqual(Int64(201), Int64(LM.Status), 'status 201');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestCreatedNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseCreated(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestAcceptedSets202;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseAccepted(LW);
+  CheckEqual(Int64(202), Int64(LM.Status), 'status 202');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestAcceptedNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseAccepted(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestNotModifiedSets304;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseNotModified(LW);
+  CheckEqual(Int64(304), Int64(LM.Status), 'status 304');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestNotModifiedNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseNotModified(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestResetContentSets205;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseResetContent(LW);
+  CheckEqual(Int64(205), Int64(LM.Status), 'status 205');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestResetContentNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseResetContent(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
+procedure TestGoneSets410;
+var
+  LW: IHttpResponseWriter;
+  LM: TMockResponseWriter;
+begin
+  LM := TMockResponseWriter.Create;
+  LW := LM;
+  HttpWriteResponseGone(LW);
+  CheckEqual(Int64(410), Int64(LM.Status), 'status 410');
+  CheckEqual('', LM.Body, 'no body');
+end;
+
+procedure TestGoneNilWriterRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HttpWriteResponseGone(nil);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil writer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.message');
   T.Test('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -1266,5 +2120,119 @@ begin
     @TestRequestDirectPathAccessorTargetForms);
   T.Test('Request direct path/raw-query invalid absolute target raises',
     @TestRequestDirectPathAccessorInvalidAbsoluteTargetRaises);
+  T.Test('WriteResponseJson sets content-type and status',
+    @TestWriteResponseJsonSetsContentType);
+  T.Test('WriteResponseJson serializes value',
+    @TestWriteResponseJsonSerializesValue);
+  T.Test('WriteResponseJson empty object',
+    @TestWriteResponseJsonEmptyObject);
+  T.Test('WriteResponseBytes sets headers',
+    @TestWriteResponseBytesSetsHeaders);
+  T.Test('WriteResponseBytes writes body',
+    @TestWriteResponseBytesWritesBody);
+  T.Test('WriteResponseBytes empty body',
+    @TestWriteResponseBytesEmptyBody);
+  T.Test('WriteResponseBytes no-body status',
+    @TestWriteResponseBytesNoBodyStatus);
+  T.Test('WriteResponseBytes no-body status with body raises',
+    @TestWriteResponseBytesNoBodyStatusWithBodyRaises);
+  T.Test('WriteResponseBytes nil writer raises',
+    @TestWriteResponseBytesNilWriterRaises);
+  T.Test('ReadRequestBodyBytes reads body',
+    @TestReadRequestBodyBytesReadsBody);
+  T.Test('ReadRequestBodyString reads body',
+    @TestReadRequestBodyStringReadsBody);
+  T.Test('ReadRequestBodyJson parses object',
+    @TestReadRequestBodyJsonParsesObject);
+  T.Test('ReadRequestBodyJson parses array',
+    @TestReadRequestBodyJsonParsesArray);
+  T.Test('ReadRequestBodyBytes nil body returns nil',
+    @TestReadRequestBodyBytesNilBodyReturnsNil);
+  T.Test('ReadRequestBodyString nil body returns empty',
+    @TestReadRequestBodyStringNilBodyReturnsEmpty);
+  T.Test('ReadRequestBodyBytes nil request raises',
+    @TestReadRequestBodyBytesNilRequestRaises);
+  T.Test('ReadRequestBodyString nil request raises',
+    @TestReadRequestBodyStringNilRequestRaises);
+  T.Test('ReadRequestBodyJson invalid JSON raises',
+    @TestReadRequestBodyJsonInvalidJsonRaises);
+  T.Test('ReadRequestBodyBytes empty body returns nil',
+    @TestReadRequestBodyBytesEmptyBodyReturnsNil);
+  T.Test('Redirect sets location and status',
+    @TestRedirectSetsLocationAndStatus);
+  T.Test('Redirect 301 permanent',
+    @TestRedirect301Permanent);
+  T.Test('Redirect non-redirect status raises',
+    @TestRedirectNonRedirectStatusRaises);
+  T.Test('Redirect empty location raises',
+    @TestRedirectEmptyLocationRaises);
+  T.Test('Redirect nil writer raises',
+    @TestRedirectNilWriterRaises);
+  T.Test('Redirect: MovedPermanently 301',
+    @TestRedirectMovedPermanently);
+  T.Test('Redirect: Found 302',
+    @TestRedirectFound);
+  T.Test('Redirect: SeeOther 303',
+    @TestRedirectSeeOther);
+  T.Test('Redirect: TemporaryRedirect 307',
+    @TestRedirectTemporaryRedirect);
+  T.Test('Redirect: PermanentRedirect 308',
+    @TestRedirectPermanentRedirect);
+  T.Test('ErrorResponse sets JSON content-type',
+    @TestErrorResponseSetsJsonContentType);
+  T.Test('ErrorResponse body has code and message',
+    @TestErrorResponseBodyFormat);
+  T.Test('ErrorResponse 400 Bad Request',
+    @TestErrorBadRequest);
+  T.Test('ErrorResponse 401 Unauthorized',
+    @TestErrorUnauthorized);
+  T.Test('ErrorResponse 403 Forbidden',
+    @TestErrorForbidden);
+  T.Test('ErrorResponse 404 Not Found',
+    @TestErrorNotFound);
+  T.Test('ErrorResponse 500 Internal',
+    @TestErrorInternal);
+  T.Test('NoContent: sets 204 status',
+    @TestNoContentSets204);
+  T.Test('NoContent: nil writer raises',
+    @TestNoContentNilWriterRaises);
+  T.Test('Ok: sets 200 status',
+    @TestOkSets200);
+  T.Test('Ok: nil writer raises',
+    @TestOkNilWriterRaises);
+  T.Test('Created: sets 201 status',
+    @TestCreatedSets201);
+  T.Test('Created: nil writer raises',
+    @TestCreatedNilWriterRaises);
+  T.Test('Accepted: sets 202 status',
+    @TestAcceptedSets202);
+  T.Test('Accepted: nil writer raises',
+    @TestAcceptedNilWriterRaises);
+  T.Test('NotModified: sets 304 status',
+    @TestNotModifiedSets304);
+  T.Test('NotModified: nil writer raises',
+    @TestNotModifiedNilWriterRaises);
+  T.Test('ResetContent: sets 205 status',
+    @TestResetContentSets205);
+  T.Test('ResetContent: nil writer raises',
+    @TestResetContentNilWriterRaises);
+  T.Test('Html: sets text/html content-type',
+    @TestHtmlSetsContentType);
+  T.Test('Html: writes status and body',
+    @TestHtmlWritesStatus);
+  T.Test('Html: empty body',
+    @TestHtmlEmptyBody);
+  T.Test('Html: no-body status',
+    @TestHtmlNoBodyStatus);
+  T.Test('Html: no-body status with body raises',
+    @TestHtmlNoBodyStatusWithBodyRaises);
+  T.Test('ErrorResponse 429 Too Many Requests',
+    @TestErrorTooManyRequests);
+  T.Test('ErrorResponse 409 Conflict',
+    @TestErrorConflict);
+  T.Test('ErrorResponse 422 Unprocessable Entity',
+    @TestErrorUnprocessableEntity);
+  T.Test('Gone: sets 410 status', @TestGoneSets410);
+  T.Test('Gone: nil writer raises', @TestGoneNilWriterRaises);
   if not T.Run then Halt(1);
 end.

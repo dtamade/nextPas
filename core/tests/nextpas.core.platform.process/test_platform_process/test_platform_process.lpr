@@ -628,6 +628,131 @@ begin
   Check(LResult.Status = psSignaled, 'process signaled');
 end;
 
+procedure TestProcessKillExitedProcess;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn('/bin/true', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn true');
+
+  { Wait for process to exit }
+  LRet := platform_process_wait(LProc, LResult, 5000);
+  Check(LRet = 0, 'wait for true');
+  Check(LResult.Status = psExited, 'true exited');
+
+  { Kill on already exited process should succeed or return error }
+  LRet := platform_process_kill(LProc);
+  { Some systems return ESRCH, others succeed }
+  Check(True, 'kill on exited process handled');
+end;
+
+procedure TestProcessSignalZero;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sleep';
+  LArgv[1] := '0.1';
+  LArgv[2] := nil;
+  LRet := platform_process_spawn('/bin/sleep', @LArgv[0], nil, LProc);
+  Check(LRet = 0, 'spawn sleep');
+
+  { Signal 0 checks if process exists without sending signal }
+  LRet := platform_process_signal(LProc, 0);
+  Check(LRet = 0, 'signal 0 on running process succeeds');
+
+  { Wait for process }
+  platform_process_wait(LProc, LResult, 5000);
+end;
+
+procedure TestSpawnWithEnv;
+var
+  LProc: TPlatformProcess;
+  LArgv: array[0..1] of PAnsiChar;
+  LEnv: array[0..1] of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+
+  LEnv[0] := 'NEXTPAS_TEST_ENV_VAR=hello_env_123';
+  LEnv[1] := nil;
+
+  LRet := platform_process_spawn('/bin/true', @LArgv[0], @LEnv[0], LProc);
+  Check(LRet = 0, 'spawn with env');
+  platform_process_wait(LProc, LResult, 5000);
+end;
+
+procedure TestRunNilStdout;
+var
+  LResult: TPlatformProcessResult;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/true', @LArgv[0], nil, nil, 0, LRet, LResult.ExitCode);
+  Check(LRet = 0, 'run with nil stdout');
+  Check(LResult.ExitCode = 0, 'exit code 0');
+end;
+
+procedure TestRunNilStderr;
+var
+  LOutBuf: array[0..255] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/true';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/true', @LArgv[0], nil, @LOutBuf[0], 256, LOutLen, LExitCode);
+  Check(LRet = 0, 'run with nil stderr');
+  Check(LExitCode = 0, 'exit code 0');
+end;
+
+procedure TestRunNonZeroExit;
+var
+  LOutBuf: array[0..255] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/false';
+  LArgv[1] := nil;
+  LRet := platform_process_run('/bin/false', @LArgv[0], nil, @LOutBuf[0], 256, LOutLen, LExitCode);
+  Check(LRet = 0, 'run succeeds');
+  Check(LExitCode <> 0, 'false exits non-zero');
+end;
+
+procedure TestProcessPipeCreateAndClose;
+var
+  LRead, LWrite: PtrInt;
+begin
+  Check(platform_process_create_pipe(LRead, LWrite) = 0, 'create pipe');
+  Check(LRead > 0, 'read handle valid');
+  Check(LWrite > 0, 'write handle valid');
+  Check(LRead <> LWrite, 'handles are different');
+  platform_process_close_handle(LRead);
+  platform_process_close_handle(LWrite);
+end;
+
+procedure TestOpenNullWriteMode;
+var
+  LHandle: PtrInt;
+begin
+  Check(platform_process_open_null(True, LHandle) = 0, 'open null for write');
+  Check(LHandle > 0, 'handle valid');
+  platform_process_close_handle(LHandle);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
@@ -658,5 +783,13 @@ begin
   T.Test('wait timeout', @TestWaitTimeout);
   T.Test('try_wait on exited process', @TestTryWaitOnExitedProcess);
   T.Test('signal various signals', @TestSignalVariousSignals);
+  T.Test('kill exited process', @TestProcessKillExitedProcess);
+  T.Test('signal 0 checks existence', @TestProcessSignalZero);
+  T.Test('spawn with env', @TestSpawnWithEnv);
+  T.Test('run nil stdout', @TestRunNilStdout);
+  T.Test('run nil stderr', @TestRunNilStderr);
+  T.Test('run non-zero exit', @TestRunNonZeroExit);
+  T.Test('pipe create and close', @TestProcessPipeCreateAndClose);
+  T.Test('open null write mode', @TestOpenNullWriteMode);
   if not T.Run then Halt(1);
 end.

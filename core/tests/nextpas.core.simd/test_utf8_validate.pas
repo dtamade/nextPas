@@ -3,8 +3,7 @@ program test_utf8_validate;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.simd.base,
+  nextpas.core.text.conv, nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
 function Utf8Validate(p: Pointer; len: SizeUInt): Boolean;

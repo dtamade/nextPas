@@ -15,6 +15,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
+  nextpas.core.json,
   nextpas.core.http.intf;
 
 type
@@ -65,6 +66,7 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
   { Decorator that adds Authorization header to every request }
@@ -108,6 +110,7 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
   { Decorator that adds an arbitrary header to every request }
@@ -154,6 +157,7 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
   { Decorator that overrides per-request options (timeout, redirect behavior) }
@@ -199,6 +203,51 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
+  end;
+
+  { Decorator that retries failed requests with exponential backoff }
+  TRetryClient = class(TInterfacedObject, IHttpClient)
+  private
+    FInner: IHttpClient;
+    FMaxRetries: Int32;
+    function DoBodyRequest(const AMethod: THttpMethod;
+      const AUrl, AContentType, ABody: string): IHttpResponse;
+  public
+    constructor Create(const AInner: IHttpClient; const AMaxRetries: Int32);
+    function Send(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
+    function Get(const AUrl: string): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Delete(const AUrl: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Head(const AUrl: string): IHttpResponse;
+    function Options(const AUrl: string): IHttpResponse;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+    function WithBearerAuth(const AToken: string): IHttpClient;
+    function WithHeader(const AName, AValue: string): IHttpClient;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithMaxRedirects(const AMaxRetries: Int32): IHttpClient;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -219,6 +268,36 @@ function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
+{** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc PUT with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc PATCH with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+{** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
+{** @desc HEAD url, ensure 2xx, return response (headers only, no body). Raises on non-2xx.
+   Useful for checking resource existence or reading Content-Length/ETag headers. }
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+{** @desc OPTIONS url, ensure 2xx, return response. Raises on non-2xx.
+   Useful for CORS preflight or discovering allowed methods. }
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+{** @desc POST JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc PUT JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc PATCH JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -234,8 +313,8 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
-  nextpas.core.json,
-  nextpas.core.http.impl.registry;
+  nextpas.core.http.impl.registry,
+  nextpas.core.platform.thread;
 
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
 begin
@@ -1095,6 +1174,11 @@ begin
     Default(THttpRequestOptions).WithFollowRedirects(AFollow));
 end;
 
+function THttpClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
+end;
+
 { TAuthClient }
 
 constructor TAuthClient.Create(const AInner: IHttpClient; const AAuthHeader: string);
@@ -1320,6 +1404,11 @@ function TAuthClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
 begin
   Result := TOptionsOverrideClient.Create(Self,
     Default(THttpRequestOptions).WithFollowRedirects(AFollow));
+end;
+
+function TAuthClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
 { THeaderClient }
@@ -1569,6 +1658,11 @@ function THeaderClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
 begin
   Result := TOptionsOverrideClient.Create(Self,
     Default(THttpRequestOptions).WithFollowRedirects(AFollow));
+end;
+
+function THeaderClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
 { TOptionsOverrideClient }
@@ -1857,6 +1951,263 @@ begin
   Result := TOptionsOverrideClient.Create(FInner, LOpts);
 end;
 
+function TOptionsOverrideClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
+end;
+
+{ TRetryClient }
+
+constructor TRetryClient.Create(const AInner: IHttpClient; const AMaxRetries: Int32);
+begin
+  inherited Create;
+  FInner := AInner;
+  if AMaxRetries < 0 then
+    raise EArgumentError.Create('Retry count must not be negative');
+  FMaxRetries := AMaxRetries;
+end;
+
+function TRetryClient.Send(const AReq: IHttpRequest): IHttpResponse;
+var
+  LAttempt: Int32;
+  LBackoffMs: Int64;
+begin
+  Result := FInner.Send(AReq);
+  for LAttempt := 1 to FMaxRetries do
+  begin
+    if (Result = nil) or (Result.StatusCode < 500) or (Result.StatusCode > 599) then
+      Exit;
+    HttpReleaseResponseBody(Result);
+    LBackoffMs := 100 shl (LAttempt - 1); // 100, 200, 400, 800, ...
+    if LBackoffMs > 5000 then
+      LBackoffMs := 5000;
+    platform_thread_sleep_ns(UInt64(LBackoffMs) * 1000000);
+    Result := FInner.Send(AReq);
+  end;
+end;
+
+procedure TRetryClient.CloseIdleConnections;
+begin
+  FInner.CloseIdleConnections;
+end;
+
+function TRetryClient.Get(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
+  Result := Send(LReq);
+end;
+
+function TRetryClient.DoBodyRequest(const AMethod: THttpMethod;
+  const AUrl, AContentType, ABody: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Post(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Post(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
+end;
+
+function TRetryClient.Post(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Put(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Put(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
+end;
+
+function TRetryClient.Put(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Delete(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Delete(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Delete(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
+end;
+
+function TRetryClient.Delete(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Patch(const AUrl, AContentType: string;
+  const ABody: IReader): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Patch(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
+end;
+
+function TRetryClient.Patch(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Head(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
+  Result := Send(LReq);
+end;
+
+function TRetryClient.Options(const AUrl: string): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
+  Result := Send(LReq);
+end;
+
+function TRetryClient.PostForm(const AUrl: string;
+  const AFields: TFormFieldArray): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded',
+    EncodeUrlEncodedForm(AFields));
+end;
+
+function TRetryClient.PostJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TRetryClient.PutJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TRetryClient.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TRetryClient.DeleteJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function TRetryClient.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
+    AContentLength);
+  Result := Send(LReq);
+end;
+
+function TRetryClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function TRetryClient.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
+end;
+
+function TRetryClient.WithHeader(const AName, AValue: string): IHttpClient;
+begin
+  Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function TRetryClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
+end;
+
+function TRetryClient.WithMaxRedirects(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithMaxRedirects(AMaxRetries));
+end;
+
+function TRetryClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
+end;
+
+function TRetryClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
+end;
+
 { Factory functions }
 
 function NewHttpClient: IHttpClient;
@@ -2105,6 +2456,138 @@ begin
   try
     HttpEnsureSuccess(LResp);
     Result := HttpReadResponseBodyBytes(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Post(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Put(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Patch(AUrl, AContentType, ABody);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Delete(AUrl);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := AClient.Head(AUrl);
+  HttpEnsureSuccess(Result);
+end;
+
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := AClient.Options(AUrl);
+  HttpEnsureSuccess(Result);
+end;
+
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := AClient.Delete(AUrl, 'application/json', ABody.Stringify);
+  try
+    HttpEnsureSuccess(LResp);
+    Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
     raise;

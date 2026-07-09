@@ -89,6 +89,7 @@ type
     FConfig: TBenchConfig;
     FFilter: string;
     FFilterLower: string; { PF-08: cached lowercase filter }
+    FFilterIsGlob: Boolean; { 预计算：filter 是否含 glob 字符 }
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
     FResultCount: Integer;
@@ -101,8 +102,8 @@ type
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
-    { Phase 3: 对象池支持 }
-    FUseObjectPool: Boolean;
+    {** 公共初始化逻辑（Create/CreateNoEnv 共用） }
+    procedure InitDefaults;
 
     {** 热身 }
     procedure WarmupEntry(const AEntry: TBenchEntry);
@@ -130,14 +131,18 @@ type
     {** 校准条目迭代次数 }
     function CalibrateEntryIterations(const AEntry: TBenchEntry): Int64;
 
-    {** 计算单次操作时间（纳秒） }
+    {** 从上下文和内存统计填充结果（公共逻辑） }
+    procedure PopulateResult(var AResult: TBenchResult;
+      const AContext: TBenchContext; ATrackMemory: Boolean);
+
+    {** 计算单操作时间（纳秒） }
     function ComputeNsPerOp(ATotalNs: UInt64; AIters: Int64): Double;
 
     {** 计算每秒操作数 }
     function ComputeOpsPerSec(ANsPerOp: Double): Double;
 
-    {** 检查是否应该运行 }
-    function ShouldRun(const AName: string): Boolean;
+    {** 检查是否应该运行（ALowerName 为预计算的小写名称） }
+    function ShouldRun(const AName: string; const ALowerName: string): Boolean;
 
     {** 添加结果 }
     procedure AddResult(const AResult: TBenchResult);
@@ -180,9 +185,6 @@ type
     function GetConfig: TBenchConfig;
     procedure SetFilter(const AFilter: string);
 
-    {** Phase 3: 启用对象池以减少分配开销 }
-    procedure EnableObjectPool(AEnabled: Boolean = True);
-
     {** B21: 启用自适应预热 }
     procedure SetAdaptiveWarmup(AEnabled: Boolean;
       ACVThreshold: Double = BENCH_DEFAULT_WARMUP_CV_THRESHOLD;
@@ -209,8 +211,7 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel,
-  nextpas.core.bench.pool;
+  nextpas.core.bench.parallel;
 
 {** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
@@ -231,6 +232,7 @@ var
   LContextObj: TBenchContext;
   LIteration: Int64;
   LRunner: TBenchRunner;
+  LTargetCtx: TBenchContext;
 begin
   { F-01: runner instance accessed via file-scope GBridgeRunner }
   LRunner := GBridgeRunner;
@@ -264,13 +266,14 @@ begin
      Assigned(LRunner.FParallelContexts[AThreadId]) then
   begin
     { F-01: write to pre-created context instead of creating new one }
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetIterations(LContextObj.GetIterations);
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetBytes(LContextObj.GetBytesPerOp);
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).SetAllocs(LContextObj.GetAllocsPerOp);
+    LTargetCtx := LRunner.FParallelContexts[AThreadId] as TBenchContext;
+    LTargetCtx.SetIterations(LContextObj.GetIterations);
+    LTargetCtx.SetBytes(LContextObj.GetBytesPerOp);
+    LTargetCtx.SetAllocs(LContextObj.GetAllocsPerOp);
     if LContextObj.IsSkipped then
-      (LRunner.FParallelContexts[AThreadId] as TBenchContext).Skip(LContextObj.GetSkipReason);
+      LTargetCtx.Skip(LContextObj.GetSkipReason);
     // CR-10: Propagate elapsed ns from bridge context to parallel context
-    (LRunner.FParallelContexts[AThreadId] as TBenchContext).FElapsedNs := LContextObj.GetElapsedNs;
+    LTargetCtx.FElapsedNs := LContextObj.GetElapsedNs;
   end;
 end;
 
@@ -456,31 +459,28 @@ end;
 
 { TBenchRunner }
 
-constructor TBenchRunner.Create;
+procedure TBenchRunner.InitDefaults;
 begin
-  inherited Create;
   FStatsAnalyzer := TBenchStatsAnalyzer.Create;
   FResultCount := 0;
   FResultCapacity := 0;
   FParallelBridgeFunc := nil;
   FParallelContextsInitialized := False;
-  FUseObjectPool := False;
   SetLength(FResults, 0);
   SetLength(FParallelContexts, 0);
+end;
+
+constructor TBenchRunner.Create;
+begin
+  inherited Create;
+  InitDefaults;
   LoadConfigFromEnv;
 end;
 
 constructor TBenchRunner.CreateNoEnv;
 begin
   inherited Create;
-  FStatsAnalyzer := TBenchStatsAnalyzer.Create;
-  FResultCount := 0;
-  FResultCapacity := 0;
-  FParallelBridgeFunc := nil;
-  FParallelContextsInitialized := False;
-  FUseObjectPool := False;
-  SetLength(FResults, 0);
-  SetLength(FParallelContexts, 0);
+  InitDefaults;
   FConfig := DefaultBenchConfig;
 end;
 
@@ -516,6 +516,7 @@ end;
 procedure TBenchRunner.LoadConfigFromEnv;
 var
   LValue: string;
+  LLower: string;
   LTmp: Int64;
 begin
   // 加载默认配置
@@ -555,17 +556,24 @@ begin
 
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
   if LValue <> '' then
-    if (LValue = '1') or (LowerCase(LValue) = 'true') or (LowerCase(LValue) = 'yes') or (LowerCase(LValue) = 'on') then
+  begin
+    LLower := LowerCase(LValue);
+    if (LValue = '1') or (LLower = 'true') or (LLower = 'yes') or (LLower = 'on') then
       FConfig.Quiet := True;
+  end;
 
   { DS-08: BENCH_ENV_MEMTRACK with positive semantics (1=yes, 0=no) }
   LValue := GetEnvironmentVariable(BENCH_ENV_MEMTRACK);
   if LValue <> '' then
-    if (LValue = '0') or (LowerCase(LValue) = 'false') or (LowerCase(LValue) = 'no') then
+  begin
+    LLower := LowerCase(LValue);
+    if (LValue = '0') or (LLower = 'false') or (LLower = 'no') then
       FConfig.EnableMemoryTracking := False;
+  end;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
   FFilterLower := LowerCase(FFilter); { PF-08 }
+  FFilterIsGlob := (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0);
 end;
 
 function TBenchRunner.MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
@@ -605,12 +613,35 @@ begin
     Result := ExecuteSequentialEntry(AEntry, AIters, ATrackMemory);
 end;
 
+procedure TBenchRunner.PopulateResult(var AResult: TBenchResult;
+  const AContext: TBenchContext; ATrackMemory: Boolean);
+var
+  LMemoryStats: TMemoryStats;
+begin
+  AResult.Iterations := AContext.GetIterations;
+  AResult.TotalNs := platform_monotonic_ns - AContext.GetStartNs;
+  AResult.BytesPerOp := AContext.GetBytesPerOp;
+  AResult.AllocsPerOp := AContext.GetAllocsPerOp;
+  AResult.Skipped := AContext.IsSkipped;
+  AResult.SkipReason := AContext.GetSkipReason;
+
+  if ATrackMemory then
+  begin
+    LMemoryStats := GetGlobalMemoryStats;
+    if (AResult.Iterations > 0) and (AResult.BytesPerOp = 0) then
+      AResult.BytesPerOp := Ceil(LMemoryStats.AllocBytes / AResult.Iterations);
+    if (AResult.Iterations > 0) and (AResult.AllocsPerOp = 0) then
+      AResult.AllocsPerOp := Ceil(LMemoryStats.AllocCount / AResult.Iterations);
+  end;
+
+  AResult.CustomMetrics := AContext.GetCustomMetrics;
+end;
+
 function TBenchRunner.ExecuteLoopEntry(const AEntry: TBenchEntry; AIters: Int64;
   ATrackMemory: Boolean): TBenchResult;
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
-  LMemoryStats: TMemoryStats;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -634,24 +665,7 @@ begin
       else
         AEntry.LoopFunc(AIters);
 
-      Result.Iterations := AIters;
-      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
-      Result.BytesPerOp := LContextObj.GetBytesPerOp;
-      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
-      Result.Skipped := LContextObj.IsSkipped;
-      Result.SkipReason := LContextObj.GetSkipReason;
-
-      if ATrackMemory then
-      begin
-        LMemoryStats := GetGlobalMemoryStats;
-        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
-          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
-          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-      end;
-
-      { 复制自定义指标 }
-      Result.CustomMetrics := LContextObj.GetCustomMetrics;
+      PopulateResult(Result, LContextObj, ATrackMemory);
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
@@ -667,6 +681,7 @@ var
   LParallelResult: TParallelBenchResult;
   LPerThreadIterations: Int64;
   I: SizeInt;
+  LCtx: TBenchContext;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
@@ -717,22 +732,27 @@ begin
     begin
       if Assigned(FParallelContexts[I]) then
       begin
-        if (FParallelContexts[I] as TBenchContext).GetBytesPerOp > Result.BytesPerOp then
-          Result.BytesPerOp := (FParallelContexts[I] as TBenchContext).GetBytesPerOp;
-        if (FParallelContexts[I] as TBenchContext).GetAllocsPerOp > Result.AllocsPerOp then
-          Result.AllocsPerOp := (FParallelContexts[I] as TBenchContext).GetAllocsPerOp;
+        LCtx := FParallelContexts[I] as TBenchContext;
+        if LCtx.GetBytesPerOp > Result.BytesPerOp then
+          Result.BytesPerOp := LCtx.GetBytesPerOp;
+        if LCtx.GetAllocsPerOp > Result.AllocsPerOp then
+          Result.AllocsPerOp := LCtx.GetAllocsPerOp;
       end;
     end;
 
     // 检查是否有任何线程跳过了
     for I := 0 to High(FParallelContexts) do
     begin
-      if Assigned(FParallelContexts[I]) and (FParallelContexts[I] as TBenchContext).IsSkipped then
+      if Assigned(FParallelContexts[I]) then
       begin
-        Result.Skipped := True;
-        Result.SkipReason := (FParallelContexts[I] as TBenchContext).GetSkipReason;
-        Result.Iterations := (FParallelContexts[I] as TBenchContext).GetIterations * AEntry.ParallelThreads;
-        Break;
+        LCtx := FParallelContexts[I] as TBenchContext;
+        if LCtx.IsSkipped then
+        begin
+          Result.Skipped := True;
+          Result.SkipReason := LCtx.GetSkipReason;
+          Result.Iterations := LCtx.GetIterations * AEntry.ParallelThreads;
+          Break;
+        end;
       end;
     end;
   finally
@@ -745,26 +765,14 @@ function TBenchRunner.ExecuteSequentialEntry(const AEntry: TBenchEntry; AIters: 
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
-  LMemoryStats: TMemoryStats;
   LIter: Int64;
-  LFromPool: Boolean;
 begin
   Result := Default(TBenchResult);
   Result.Executed := True;
   Result.Name := AEntry.Name;
 
-  { Phase 3: 从对象池获取或创建新对象 }
-  LFromPool := FUseObjectPool and (GBenchContextPool <> nil);
-  if LFromPool then
-  begin
-    LContextObj := GBenchContextPool.Acquire;
-    LContext := LContextObj;
-  end
-  else
-  begin
-    LContext := TBenchContext.Create;
-    LContextObj := LContext as TBenchContext;
-  end;
+  LContextObj := TBenchContext.Create;
+  LContext := LContextObj;
 
   LContextObj.SetName(AEntry.Name);
   try
@@ -790,34 +798,13 @@ begin
           Break;
       end;
 
-      Result.Iterations := LContextObj.GetIterations;
-      Result.TotalNs := platform_monotonic_ns - LContextObj.GetStartNs;
-      Result.BytesPerOp := LContextObj.GetBytesPerOp;
-      Result.AllocsPerOp := LContextObj.GetAllocsPerOp;
-      Result.Skipped := LContextObj.IsSkipped;
-      Result.SkipReason := LContextObj.GetSkipReason;
-
-      if ATrackMemory then
-      begin
-        LMemoryStats := GetGlobalMemoryStats;
-        if (Result.Iterations > 0) and (Result.BytesPerOp = 0) then
-          Result.BytesPerOp := Ceil(LMemoryStats.AllocBytes / Result.Iterations);
-        if (Result.Iterations > 0) and (Result.AllocsPerOp = 0) then
-          Result.AllocsPerOp := Ceil(LMemoryStats.AllocCount / Result.Iterations);
-      end;
-
-      { 复制自定义指标 }
-      Result.CustomMetrics := LContextObj.GetCustomMetrics;
+      PopulateResult(Result, LContextObj, ATrackMemory);
     finally
       if ATrackMemory then
         DisableGlobalMemoryTracking;
     end;
   finally
-    { Phase 3: 归还到对象池或释放 }
-    if LFromPool then
-      GBenchContextPool.Release(LContextObj)
-    else
-      LContext := nil;
+    LContext := nil;
   end;
 end;
 
@@ -916,11 +903,11 @@ end;
 
 procedure TBenchRunner.WarmupEntry(const AEntry: TBenchEntry);
 var
-  I, J, LMaxIters: Integer;
+  I, LMaxIters: Integer;
   LResult: TBenchResult;
-  LSamples: TDoubleArray;
-  LMean, LStdDev, LCV, LDiff: Double;
-  LN: Integer;
+  { Welford online algorithm for CV }
+  LCount: Integer;
+  LMean, LM2, LDelta, LDelta2, LCV: Double;
 begin
   { B21: Adaptive warmup - measure CV and stop when variance stabilizes }
   if FConfig.AdaptiveWarmup then
@@ -929,8 +916,9 @@ begin
     if LMaxIters <= 0 then
       LMaxIters := BENCH_DEFAULT_WARMUP_MAX_ITERATIONS;
 
-    SetLength(LSamples, LMaxIters);
-    LN := 0;
+    LMean := 0.0;
+    LM2 := 0.0;
+    LCount := 0;
 
     for I := 1 to LMaxIters do
     begin
@@ -938,33 +926,17 @@ begin
       if LResult.Skipped then
         Break;
 
-      LSamples[LN] := LResult.NsPerOp;
-      Inc(LN);
+      { Welford online update }
+      Inc(LCount);
+      LDelta := LResult.NsPerOp - LMean;
+      LMean := LMean + LDelta / LCount;
+      LDelta2 := LResult.NsPerOp - LMean;
+      LM2 := LM2 + LDelta * LDelta2;
 
       { Need at least 5 samples before checking CV }
-      if LN >= 5 then
+      if (LCount >= 5) and (LMean > 0) then
       begin
-        { Compute mean and stddev of current samples }
-        LMean := 0;
-        for J := 0 to LN - 1 do
-          LMean := LMean + LSamples[J];
-        LMean := LMean / LN;
-
-        LStdDev := 0;
-        for J := 0 to LN - 1 do
-        begin
-          LDiff := LSamples[J] - LMean;
-          LStdDev := LStdDev + LDiff * LDiff;
-        end;
-        LStdDev := Sqrt(LStdDev / LN);
-
-        { CV = StdDev / Mean }
-        if LMean > 0 then
-          LCV := LStdDev / LMean
-        else
-          LCV := 0;
-
-        { Stop if CV below threshold }
+        LCV := Sqrt(LM2 / (LCount - 1)) / LMean;
         if LCV < FConfig.WarmupCVThreshold then
           Break;
       end;
@@ -1098,15 +1070,14 @@ begin
     Result := 0.0;
 end;
 
-function TBenchRunner.ShouldRun(const AName: string): Boolean;
+function TBenchRunner.ShouldRun(const AName: string; const ALowerName: string): Boolean;
 begin
   if FFilterLower = '' then
     Exit(True);
-  { Glob 模式：filter 包含 * 或 ? 时使用 GlobMatch }
-  if (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0) then
-    Result := GlobMatch(FFilterLower, LowerCase(AName))
+  if FFilterIsGlob then
+    Result := GlobMatch(FFilterLower, ALowerName)
   else
-    Result := Pos(FFilterLower, LowerCase(AName)) > 0; { PF-08: 子串匹配 }
+    Result := Pos(FFilterLower, ALowerName) > 0; { PF-08: 子串匹配 }
 end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);
@@ -1140,12 +1111,14 @@ var
   LMeasurement: TBenchResult;
   LStartNs: UInt64;
   LTimeoutMs: Int64;
+  LLowerName: string;
 begin
   LEntry := AEntry;
   Result := Default(TBenchResult);
   Result.Name := LEntry.Name;
 
-  if not ShouldRun(LEntry.Name) then
+  LLowerName := LowerCase(LEntry.Name);
+  if not ShouldRun(LEntry.Name, LLowerName) then
   begin
     Exit;
   end;
@@ -1299,13 +1272,7 @@ procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
   FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
-end;
-
-procedure TBenchRunner.EnableObjectPool(AEnabled: Boolean);
-begin
-  FUseObjectPool := AEnabled;
-  if AEnabled then
-    InitGlobalPool;
+  FFilterIsGlob := (Pos('*', AFilter) > 0) or (Pos('?', AFilter) > 0);
 end;
 
 procedure TBenchRunner.SetAdaptiveWarmup(AEnabled: Boolean;

@@ -2778,6 +2778,112 @@ begin
   end;
 end;
 
+{ Origin check callbacks (must be standalone, not nested) }
+function RejectAllOrigins(const AOrigin: string): Boolean;
+begin
+  Result := False;
+end;
+
+function AcceptAllOrigins(const AOrigin: string): Boolean;
+begin
+  Result := True;
+end;
+
+{ Test: Origin validation rejects disallowed origin }
+procedure TestOriginValidationRejectsDisallowed;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LOptions: TWebSocketOptions;
+    LWs: IWebSocket;
+  begin
+    LOptions := TWebSocketOptions.Default;
+    LOptions.OnCheckOrigin := @RejectAllOrigins;
+    try
+      LWs := UpgradeWebSocket(AReq, AW, LOptions);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://evil.com'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 403', LResp) > 0, 'origin-reject: should get 403');
+    Check(Pos('HTTP/1.1 101', LResp) = 0, 'origin-reject: should not upgrade');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test: Origin validation accepts allowed origin }
+procedure TestOriginValidationAcceptsAllowed;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LOptions: TWebSocketOptions;
+    LWs: IWebSocket;
+  begin
+    LOptions := TWebSocketOptions.Default;
+    LOptions.OnCheckOrigin := @AcceptAllOrigins;
+    try
+      LWs := UpgradeWebSocket(AReq, AW, LOptions);
+      LWs.Close(1000, 'ok');
+    except
+      on E: EHttpError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://example.com'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 101', LResp) > 0, 'origin-accept: should get 101');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 begin
   T := TTestSuite.Create('http.websocket');
@@ -2820,5 +2926,7 @@ begin
   T.Test('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
   T.Test('BinaryFrame', @TestBinaryFrame);
   T.Test('CloseFrame', @TestCloseFrame);
+  T.Test('OriginValidationRejectsDisallowed', @TestOriginValidationRejectsDisallowed);
+  T.Test('OriginValidationAcceptsAllowed', @TestOriginValidationAcceptsAllowed);
   if not T.Run then Halt(1);
 end.

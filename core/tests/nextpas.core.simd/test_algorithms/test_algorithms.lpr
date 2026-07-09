@@ -5,18 +5,19 @@ program test_algorithms;
 uses
   nextpas.core.thread.init,
   Classes,
-  fpcunit, testregistry, consoletestrunner,
+  nextpas.core.test,
   nextpas.core.simd,
   nextpas.core.simd.algorithms.testcase;
 
 var
-  App: TSuiteRunner;
+  LRunner: TSuiteRunner;
 begin
-  App := TSuiteRunner.Create(nil);
-  try
-    App.Initialize;
-    App.Run;
-  finally
-    App.Free;
-  end;
+  LRunner := TSuiteRunner.Create('Algorithms Tests');
+  LRunner.Add(DiscoverTests(TTestCase_SimdAlgorithms.Create, 'TTestCase_SimdAlgorithms'));
+  LRunner.RunAll;
+  LRunner.Summary;
+  if LRunner.TotalFail > 0 then
+    ExitCode := 1
+  else
+    ExitCode := 0;
 end.

@@ -1,5 +1,7 @@
 # nextpas.core.lockfree
 
+[English](README.en.md)
+
 `nextpas.core.lockfree` 提供 nextpas.core 内部可复用的 lock-free-oriented / non-blocking fast-path
 数据结构。当前模块优先服务 runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、
 Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标平台底层 atomic 操作本身
@@ -25,15 +27,18 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
 | `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
 | `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，基于分片锁的并发 HashMap。                                        |
+| `nextpas.core.lockfree.bag`      | `TLockFreeBag<T>`，基于 MPMC 队列的并发 Bag，允许重复元素。                                        |
+| `nextpas.core.lockfree.multimap` | `TLockFreeMultiMap<TKey, TValue>`，基于分片锁的并发 MultiMap，一键多值。                          |
+| `nextpas.core.lockfree.bloom`   | `TConcurrentBloomFilter<T>`，基于多个哈希函数的并发布隆过滤器。                                  |
 | `nextpas.core.lockfree.channel`  | `TLockFreeChannel<T>`，有界无锁 Channel，序列号驱动的 MPMC 通道。                                  |
 | `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`，单生产者单消费者有界 Channel，专为 1P1C 优化。                    |
 | `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
 
 `nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
 `TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
-`TLockFreeSelector<T>` so consumers can use the public lockfree surface without
-importing implementation submodules directly.
+`TLockFreeBag<T>`, `TLockFreeMultiMap<TKey, TValue>`, `TConcurrentBloomFilter<T>`, `THazardDomain`,
+`TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`, `TLockFreeSelector<T>`
+so consumers can use the public lockfree surface without importing implementation submodules directly.
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
 bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
@@ -91,6 +96,9 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
 `TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
+`TLockFreeBag<T>` permits multiple concurrent producers and consumers; based on MPMC queue, allows duplicate elements. FIFO order is preserved. `Close` prevents new additions but existing elements can still be retrieved.
+`TLockFreeMultiMap<TKey, TValue>` permits multiple concurrent producers and consumers; based on sharded HashMap, each key can have multiple values. `Close` prevents new additions but existing data can still be read and removed.
+`TConcurrentBloomFilter<T>` permits multiple concurrent producers and consumers; based on multiple hash functions. `Add` and `Contains` are lock-free. `Close` prevents new additions but existing data can still be queried. May have false positives but no false negatives.
 
 ## Linearization points
 

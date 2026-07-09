@@ -1098,6 +1098,9 @@ function VecI16x32ShiftRightArith(const a: TVecI16x32; count: Integer): TVecI16x
 function VecI16x32CmpEq(const a, b: TVecI16x32): TMask32; inline;
 function VecI16x32CmpLt(const a, b: TVecI16x32): TMask32; inline;
 function VecI16x32CmpGt(const a, b: TVecI16x32): TMask32; inline;
+function VecI16x32CmpLe(const a, b: TVecI16x32): TMask32; inline;
+function VecI16x32CmpGe(const a, b: TVecI16x32): TMask32; inline;
+function VecI16x32CmpNe(const a, b: TVecI16x32): TMask32; inline;
 function VecI16x32Min(const a, b: TVecI16x32): TVecI16x32; inline;
 function VecI16x32Max(const a, b: TVecI16x32): TVecI16x32; inline;
 
@@ -1112,6 +1115,9 @@ function VecI8x64AndNot(const a, b: TVecI8x64): TVecI8x64; inline;
 function VecI8x64CmpEq(const a, b: TVecI8x64): TMask64; inline;
 function VecI8x64CmpLt(const a, b: TVecI8x64): TMask64; inline;
 function VecI8x64CmpGt(const a, b: TVecI8x64): TMask64; inline;
+function VecI8x64CmpLe(const a, b: TVecI8x64): TMask64; inline;
+function VecI8x64CmpGe(const a, b: TVecI8x64): TMask64; inline;
+function VecI8x64CmpNe(const a, b: TVecI8x64): TMask64; inline;
 function VecI8x64Min(const a, b: TVecI8x64): TVecI8x64; inline;
 function VecI8x64Max(const a, b: TVecI8x64): TVecI8x64; inline;
 
@@ -1125,6 +1131,9 @@ function VecU8x64Not(const a: TVecU8x64): TVecU8x64; inline;
 function VecU8x64CmpEq(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64CmpLt(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64CmpGt(const a, b: TVecU8x64): TMask64; inline;
+function VecU8x64CmpLe(const a, b: TVecU8x64): TMask64; inline;
+function VecU8x64CmpGe(const a, b: TVecU8x64): TMask64; inline;
+function VecU8x64CmpNe(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64Min(const a, b: TVecU8x64): TVecU8x64; inline;
 function VecU8x64Max(const a, b: TVecU8x64): TVecU8x64; inline;
 
@@ -1287,10 +1296,10 @@ function VecF64x4Make(x, y, z, w: Double): TVecF64x4; inline;
 {** Linear interpolation. @returns(result[i] = a[i] + t * (b[i] - a[i])) *}
 function VecF64x4Lerp(const a, b: TVecF64x4; t: Double): TVecF64x4; inline;
 
-// Batch Array F64 Extensions (inline facade, no dispatch slot)
-procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt); inline;
-procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
-procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
+// Batch Array F64 Extensions (dispatch-through)
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt);
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
@@ -1861,6 +1870,27 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   Result := LDispatch^.ReduceMaxF64(aSrc, aCount);
+end;
+
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst, aCount);
+end;
+
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMinF64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMaxF64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 // === Transcendental F32 Batch Implementation ===

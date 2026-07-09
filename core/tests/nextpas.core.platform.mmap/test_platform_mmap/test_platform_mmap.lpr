@@ -419,6 +419,164 @@ begin
   platform_file_unlink(PATH);
 end;
 
+procedure TestPageSize;
+var
+  LSize: UInt64;
+begin
+  LSize := platform_mmap_page_size;
+  Check(LSize >= 4096, 'page size >= 4096');
+  Check(LSize <= 65536, 'page size <= 65536');
+  { Must be power of 2 }
+  Check((LSize and (LSize - 1)) = 0, 'page size is power of 2');
+end;
+
+procedure TestAnonymousMapZeroSize;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_create_anonymous(0, pmaReadWrite, [pmfPrivate], M);
+  Check(R <> 0, 'zero-size anonymous map returns error');
+end;
+
+procedure TestMapNilPath;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_file(nil, M);
+  Check(R <> 0, 'nil path returns error');
+end;
+
+procedure TestFlushNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_flush(M, 0, 1) <> 0, 'flush on closed map returns error');
+end;
+
+procedure TestAnonymousMapMultiPage;
+var
+  M: TPlatformMappedFile;
+  LSize: UInt64;
+  I: Int32;
+begin
+  LSize := platform_mmap_page_size * 4;
+  Check(platform_mmap_create_anonymous(LSize, pmaReadWrite, [pmfPrivate], M) = 0,
+    'multi-page anonymous map');
+  Check(M.Addr <> nil, 'multi-page addr');
+  Check(M.Size = LSize, 'multi-page size');
+  { Write pattern across pages }
+  for I := 0 to 255 do
+    PByte(PtrUInt(M.Addr) + PtrUInt(I * 16))^ := Byte(I);
+  { Verify pattern }
+  for I := 0 to 255 do
+    Check(PByte(PtrUInt(M.Addr) + PtrUInt(I * 16))^ = Byte(I),
+      'multi-page byte ' + IntToStr(I));
+  Check(platform_mmap_close(M) = 0, 'multi-page close');
+end;
+
+procedure TestAnonymousMapReadOnly;
+var
+  M: TPlatformMappedFile;
+  R: Int32;
+begin
+  R := platform_mmap_create_anonymous(4096, pmaRead, [pmfPrivate], M);
+  Check(R = 0, 'read-only anonymous map');
+  Check(M.Addr <> nil, 'read-only addr');
+  { Read should succeed }
+  Check(PByte(M.Addr)^ = PByte(M.Addr)^, 'read succeeds');
+  Check(platform_mmap_close(M) = 0, 'read-only close');
+end;
+
+procedure TestShmCreateTwice;
+var
+  A, B: TPlatformMappedFile;
+  LName: string;
+begin
+  LName := 'nextpas_test_shm_twice_' + IntToStr(PtrUInt(@A));
+  Check(platform_shm_create(PAnsiChar(LName), 4096, pmaReadWrite, A) = 0,
+    'first create');
+  { Second create with same name may fail or succeed depending on implementation }
+  B.Addr := nil;
+  platform_shm_create(PAnsiChar(LName), 4096, pmaReadWrite, B);
+  { Cleanup }
+  if B.Addr <> nil then
+    platform_shm_close(B);
+  platform_shm_close(A);
+  Check(True, 'double shm_create handled without crash');
+end;
+
+procedure TestLockNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_lock(M, 0, 1) <> 0, 'lock on closed map returns error');
+end;
+
+procedure TestUnlockNilMap;
+var
+  M: TPlatformMappedFile;
+begin
+  FillChar(M, SizeOf(M), 0);
+  M.IsOpen := False;
+  Check(platform_mmap_unlock(M, 0, 1) <> 0, 'unlock on closed map returns error');
+end;
+
+procedure TestMultipleAnonymousMaps;
+var
+  M1, M2: TPlatformMappedFile;
+  P1, P2: PByte;
+  PageSize: UInt64;
+begin
+  PageSize := platform_mmap_page_size;
+  Check(PageSize > 0, 'page size > 0');
+
+  Check(platform_mmap_create_anonymous(PageSize, pmaReadWrite, [pmfPrivate], M1) = 0, 'map1');
+  Check(platform_mmap_create_anonymous(PageSize, pmaReadWrite, [pmfPrivate], M2) = 0, 'map2');
+
+  P1 := PByte(M1.Addr);
+  P2 := PByte(M2.Addr);
+  Check(P1 <> nil, 'map1 addr not nil');
+  Check(P2 <> nil, 'map2 addr not nil');
+  Check(P1 <> P2, 'maps have different addresses');
+
+  { Write distinct patterns and verify isolation }
+  P1^ := $AA;
+  P2^ := $BB;
+  Check(P1^ = $AA, 'map1 pattern');
+  Check(P2^ = $BB, 'map2 pattern');
+
+  platform_mmap_close(M1);
+  platform_mmap_close(M2);
+end;
+
+procedure TestShmRoundTrip;
+var
+  MWrite, MRead: TPlatformMappedFile;
+  ShmName: AnsiString;
+  PWrite, PRead: PByte;
+  I: Integer;
+begin
+  ShmName := '/nextpas_test_shm_roundtrip';
+  Check(platform_shm_create(PAnsiChar(ShmName), 4096, pmaReadWrite, MWrite) = 0, 'shm create');
+  PWrite := PByte(MWrite.Addr);
+  for I := 0 to 255 do
+    PWrite[I] := Byte(I);
+
+  Check(platform_shm_open(PAnsiChar(ShmName), pmaRead, MRead) = 0, 'shm open');
+  PRead := PByte(MRead.Addr);
+  for I := 0 to 255 do
+    Check(PRead[I] = Byte(I), 'shm round-trip byte ' + IntToStr(I));
+
+  platform_mmap_close(MRead);
+  platform_mmap_close(MWrite);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.mmap');
   T.Test('map file + verify content', @TestMapFile);
@@ -441,6 +599,17 @@ begin
   T.Test('open non-existent shared memory', @TestShmOpenNonExistent);
   T.Test('anonymous map read/write', @TestAnonymousMapReadWrite);
   T.Test('large file integrity', @TestMapLargeFileIntegrity);
+  T.Test('page size is valid power of 2', @TestPageSize);
+  T.Test('anonymous map zero size', @TestAnonymousMapZeroSize);
+  T.Test('map nil path', @TestMapNilPath);
+  T.Test('flush on closed map', @TestFlushNilMap);
+  T.Test('anonymous map multi-page', @TestAnonymousMapMultiPage);
+  T.Test('anonymous map read-only', @TestAnonymousMapReadOnly);
+  T.Test('shm create twice', @TestShmCreateTwice);
+  T.Test('lock on closed map', @TestLockNilMap);
+  T.Test('unlock on closed map', @TestUnlockNilMap);
+  T.Test('multiple anonymous maps', @TestMultipleAnonymousMaps);
+  T.Test('shm round-trip write/read', @TestShmRoundTrip);
   if not T.Run then Halt(1);
   Cleanup;
 end.

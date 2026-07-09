@@ -9,10 +9,8 @@ unit nextpas.core.simd.saturating.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base;
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base;
 
 type
   // ✅ P2: 饱和算术测试 - 验证溢出/下溢边界行为
@@ -66,7 +64,7 @@ begin
   end;
   r := VecI8x16SatAdd(a, b);
   for j := 0 to 15 do
-    AssertEquals('I8 normal add element ' + IntToStr(j), 30, r.i[j]);
+    CheckEqual(30, r.i[j], 'I8 normal add element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I8x16SatAdd_Overflow;
@@ -82,7 +80,7 @@ begin
   end;
   r := VecI8x16SatAdd(a, b);
   for j := 0 to 15 do
-    AssertEquals('I8 overflow should saturate to 127', 127, r.i[j]);
+    CheckEqual(127, r.i[j], 'I8 overflow should saturate to 127');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I8x16SatSub_Normal;
@@ -98,7 +96,7 @@ begin
   end;
   r := VecI8x16SatSub(a, b);
   for j := 0 to 15 do
-    AssertEquals('I8 normal sub element ' + IntToStr(j), 30, r.i[j]);
+    CheckEqual(30, r.i[j], 'I8 normal sub element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I8x16SatSub_Underflow;
@@ -114,7 +112,7 @@ begin
   end;
   r := VecI8x16SatSub(a, b);
   for j := 0 to 15 do
-    AssertEquals('I8 underflow should saturate to -128', -128, r.i[j]);
+    CheckEqual(-128, r.i[j], 'I8 underflow should saturate to -128');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I8x16Sat_Boundary;
@@ -136,9 +134,9 @@ begin
   a.i[2] := 127;  b.i[2] := 127;
 
   r := VecI8x16SatAdd(a, b);
-  AssertEquals('127 + 1 should saturate to 127', 127, r.i[0]);
-  AssertEquals('-128 + 1 should be -127', -127, r.i[1]);
-  AssertEquals('127 + 127 should saturate to 127', 127, r.i[2]);
+  CheckEqual(127, r.i[0], '127 + 1 should saturate to 127');
+  CheckEqual(-127, r.i[1], '-128 + 1 should be -127');
+  CheckEqual(127, r.i[2], '127 + 127 should saturate to 127');
 end;
 
 // === I16x8 有符号 16 位饱和算术测试 ===
@@ -155,7 +153,7 @@ begin
   end;
   r := VecI16x8SatAdd(a, b);
   for j := 0 to 7 do
-    AssertEquals('I16 normal add element ' + IntToStr(j), 3000, r.i[j]);
+    CheckEqual(3000, r.i[j], 'I16 normal add element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I16x8SatAdd_Overflow;
@@ -171,7 +169,7 @@ begin
   end;
   r := VecI16x8SatAdd(a, b);
   for j := 0 to 7 do
-    AssertEquals('I16 overflow should saturate to 32767', 32767, r.i[j]);
+    CheckEqual(32767, r.i[j], 'I16 overflow should saturate to 32767');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I16x8SatSub_Normal;
@@ -186,7 +184,7 @@ begin
   end;
   r := VecI16x8SatSub(a, b);
   for j := 0 to 7 do
-    AssertEquals('I16 normal sub element ' + IntToStr(j), 3000, r.i[j]);
+    CheckEqual(3000, r.i[j], 'I16 normal sub element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I16x8SatSub_Underflow;
@@ -202,7 +200,7 @@ begin
   end;
   r := VecI16x8SatSub(a, b);
   for j := 0 to 7 do
-    AssertEquals('I16 underflow should saturate to -32768', -32768, r.i[j]);
+    CheckEqual(-32768, r.i[j], 'I16 underflow should saturate to -32768');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_I16x8Sat_Boundary;
@@ -222,9 +220,9 @@ begin
   a.i[2] := 32767; b.i[2] := 32767;
 
   r := VecI16x8SatAdd(a, b);
-  AssertEquals('32767 + 1 should saturate to 32767', 32767, r.i[0]);
-  AssertEquals('-32768 + 1 should be -32767', -32767, r.i[1]);
-  AssertEquals('32767 + 32767 should saturate to 32767', 32767, r.i[2]);
+  CheckEqual(32767, r.i[0], '32767 + 1 should saturate to 32767');
+  CheckEqual(-32767, r.i[1], '-32768 + 1 should be -32767');
+  CheckEqual(32767, r.i[2], '32767 + 32767 should saturate to 32767');
 end;
 
 // === U8x16 无符号 8 位饱和算术测试 ===
@@ -241,7 +239,7 @@ begin
   end;
   r := VecU8x16SatAdd(a, b);
   for j := 0 to 15 do
-    AssertEquals('U8 normal add element ' + IntToStr(j), 30, r.u[j]);
+    CheckEqual(30, r.u[j], 'U8 normal add element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U8x16SatAdd_Overflow;
@@ -257,7 +255,7 @@ begin
   end;
   r := VecU8x16SatAdd(a, b);
   for j := 0 to 15 do
-    AssertEquals('U8 overflow should saturate to 255', 255, r.u[j]);
+    CheckEqual(255, r.u[j], 'U8 overflow should saturate to 255');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U8x16SatSub_Normal;
@@ -272,7 +270,7 @@ begin
   end;
   r := VecU8x16SatSub(a, b);
   for j := 0 to 15 do
-    AssertEquals('U8 normal sub element ' + IntToStr(j), 30, r.u[j]);
+    CheckEqual(30, r.u[j], 'U8 normal sub element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U8x16SatSub_Underflow;
@@ -288,7 +286,7 @@ begin
   end;
   r := VecU8x16SatSub(a, b);
   for j := 0 to 15 do
-    AssertEquals('U8 underflow should saturate to 0', 0, r.u[j]);
+    CheckEqual(0, r.u[j], 'U8 underflow should saturate to 0');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U8x16Sat_Boundary;
@@ -310,14 +308,14 @@ begin
   a.u[2] := 255; b.u[2] := 255;
 
   r := VecU8x16SatAdd(a, b);
-  AssertEquals('255 + 1 should saturate to 255', 255, r.u[0]);
-  AssertEquals('0 + 1 should be 1', 1, r.u[1]);
-  AssertEquals('255 + 255 should saturate to 255', 255, r.u[2]);
+  CheckEqual(255, r.u[0], '255 + 1 should saturate to 255');
+  CheckEqual(1, r.u[1], '0 + 1 should be 1');
+  CheckEqual(255, r.u[2], '255 + 255 should saturate to 255');
 
   // 测试减法下溢
   r := VecU8x16SatSub(a, b);
-  AssertEquals('255 - 1 should be 254', 254, r.u[0]);
-  AssertEquals('0 - 1 should saturate to 0', 0, r.u[1]);
+  CheckEqual(254, r.u[0], '255 - 1 should be 254');
+  CheckEqual(0, r.u[1], '0 - 1 should saturate to 0');
 end;
 
 // === U16x8 无符号 16 位饱和算术测试 ===
@@ -334,7 +332,7 @@ begin
   end;
   r := VecU16x8SatAdd(a, b);
   for j := 0 to 7 do
-    AssertEquals('U16 normal add element ' + IntToStr(j), 3000, r.u[j]);
+    CheckEqual(3000, r.u[j], 'U16 normal add element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U16x8SatAdd_Overflow;
@@ -350,7 +348,7 @@ begin
   end;
   r := VecU16x8SatAdd(a, b);
   for j := 0 to 7 do
-    AssertEquals('U16 overflow should saturate to 65535', 65535, r.u[j]);
+    CheckEqual(65535, r.u[j], 'U16 overflow should saturate to 65535');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U16x8SatSub_Normal;
@@ -365,7 +363,7 @@ begin
   end;
   r := VecU16x8SatSub(a, b);
   for j := 0 to 7 do
-    AssertEquals('U16 normal sub element ' + IntToStr(j), 3000, r.u[j]);
+    CheckEqual(3000, r.u[j], 'U16 normal sub element ' + IntToStr(j));
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U16x8SatSub_Underflow;
@@ -381,7 +379,7 @@ begin
   end;
   r := VecU16x8SatSub(a, b);
   for j := 0 to 7 do
-    AssertEquals('U16 underflow should saturate to 0', 0, r.u[j]);
+    CheckEqual(0, r.u[j], 'U16 underflow should saturate to 0');
 end;
 
 procedure TTestCase_SaturatingArithmetic.Test_U16x8Sat_Boundary;
@@ -398,16 +396,14 @@ begin
   a.u[7] := 0; b.u[7] := 0;
 
   r := VecU16x8SatAdd(a, b);
-  AssertEquals('65535 + 1 should saturate to 65535', 65535, r.u[0]);
-  AssertEquals('0 + 1 should be 1', 1, r.u[1]);
-  AssertEquals('65535 + 65535 should saturate to 65535', 65535, r.u[2]);
+  CheckEqual(65535, r.u[0], '65535 + 1 should saturate to 65535');
+  CheckEqual(1, r.u[1], '0 + 1 should be 1');
+  CheckEqual(65535, r.u[2], '65535 + 65535 should saturate to 65535');
 
   r := VecU16x8SatSub(a, b);
-  AssertEquals('65535 - 1 should be 65534', 65534, r.u[0]);
-  AssertEquals('0 - 1 should saturate to 0', 0, r.u[1]);
+  CheckEqual(65534, r.u[0], '65535 - 1 should be 65534');
+  CheckEqual(0, r.u[1], '0 - 1 should saturate to 0');
 end;
 
-initialization
-  RegisterTest(TTestCase_SaturatingArithmetic);
 
 end.

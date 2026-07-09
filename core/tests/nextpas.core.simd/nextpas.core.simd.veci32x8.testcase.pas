@@ -9,10 +9,8 @@ unit nextpas.core.simd.veci32x8.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base,
   nextpas.core.simd.ops;
 
 type
@@ -78,14 +76,14 @@ begin
 
   r := VecI32x8Add(a, b);
 
-  AssertEquals('I32x8 Add [0]', 11, r.i[0]);
-  AssertEquals('I32x8 Add [1]', 22, r.i[1]);
-  AssertEquals('I32x8 Add [2]', 33, r.i[2]);
-  AssertEquals('I32x8 Add [3]', 44, r.i[3]);
-  AssertEquals('I32x8 Add [4]', 55, r.i[4]);
-  AssertEquals('I32x8 Add [5]', 66, r.i[5]);
-  AssertEquals('I32x8 Add [6]', 77, r.i[6]);
-  AssertEquals('I32x8 Add [7]', 88, r.i[7]);
+  CheckEqual(11, r.i[0], 'I32x8 Add [0]');
+  CheckEqual(22, r.i[1], 'I32x8 Add [1]');
+  CheckEqual(33, r.i[2], 'I32x8 Add [2]');
+  CheckEqual(44, r.i[3], 'I32x8 Add [3]');
+  CheckEqual(55, r.i[4], 'I32x8 Add [4]');
+  CheckEqual(66, r.i[5], 'I32x8 Add [5]');
+  CheckEqual(77, r.i[6], 'I32x8 Add [6]');
+  CheckEqual(88, r.i[7], 'I32x8 Add [7]');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Sub;
@@ -101,14 +99,14 @@ begin
 
   r := VecI32x8Sub(a, b);
 
-  AssertEquals('I32x8 Sub [0]', 90, r.i[0]);
-  AssertEquals('I32x8 Sub [1]', 180, r.i[1]);
-  AssertEquals('I32x8 Sub [2]', 270, r.i[2]);
-  AssertEquals('I32x8 Sub [3]', 360, r.i[3]);
-  AssertEquals('I32x8 Sub [4]', 450, r.i[4]);
-  AssertEquals('I32x8 Sub [5]', 540, r.i[5]);
-  AssertEquals('I32x8 Sub [6]', 630, r.i[6]);
-  AssertEquals('I32x8 Sub [7]', 720, r.i[7]);
+  CheckEqual(90, r.i[0], 'I32x8 Sub [0]');
+  CheckEqual(180, r.i[1], 'I32x8 Sub [1]');
+  CheckEqual(270, r.i[2], 'I32x8 Sub [2]');
+  CheckEqual(360, r.i[3], 'I32x8 Sub [3]');
+  CheckEqual(450, r.i[4], 'I32x8 Sub [4]');
+  CheckEqual(540, r.i[5], 'I32x8 Sub [5]');
+  CheckEqual(630, r.i[6], 'I32x8 Sub [6]');
+  CheckEqual(720, r.i[7], 'I32x8 Sub [7]');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Mul;
@@ -124,14 +122,14 @@ begin
 
   r := VecI32x8Mul(a, b);
 
-  AssertEquals('I32x8 Mul [0]', 6, r.i[0]);    // 2*3
-  AssertEquals('I32x8 Mul [1]', 12, r.i[1]);   // 3*4
-  AssertEquals('I32x8 Mul [2]', 20, r.i[2]);   // 4*5
-  AssertEquals('I32x8 Mul [3]', 30, r.i[3]);   // 5*6
-  AssertEquals('I32x8 Mul [4]', 42, r.i[4]);   // 6*7
-  AssertEquals('I32x8 Mul [5]', 56, r.i[5]);   // 7*8
-  AssertEquals('I32x8 Mul [6]', 72, r.i[6]);   // 8*9
-  AssertEquals('I32x8 Mul [7]', 90, r.i[7]);   // 9*10
+  CheckEqual(6, r.i[0], 'I32x8 Mul [0]');    // 2*3
+  CheckEqual(12, r.i[1], 'I32x8 Mul [1]');   // 3*4
+  CheckEqual(20, r.i[2], 'I32x8 Mul [2]');   // 4*5
+  CheckEqual(30, r.i[3], 'I32x8 Mul [3]');   // 5*6
+  CheckEqual(42, r.i[4], 'I32x8 Mul [4]');   // 6*7
+  CheckEqual(56, r.i[5], 'I32x8 Mul [5]');   // 7*8
+  CheckEqual(72, r.i[6], 'I32x8 Mul [6]');   // 8*9
+  CheckEqual(90, r.i[7], 'I32x8 Mul [7]');   // 9*10
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Neg;
@@ -145,14 +143,14 @@ begin
 
   r := -a;  // 使用运算符重载
 
-  AssertEquals('I32x8 Neg [0]', -10, r.i[0]);
-  AssertEquals('I32x8 Neg [1]', -20, r.i[1]);
-  AssertEquals('I32x8 Neg [2]', -30, r.i[2]);
-  AssertEquals('I32x8 Neg [3]', -40, r.i[3]);
-  AssertEquals('I32x8 Neg [4]', -50, r.i[4]);
-  AssertEquals('I32x8 Neg [5]', -60, r.i[5]);
-  AssertEquals('I32x8 Neg [6]', -70, r.i[6]);
-  AssertEquals('I32x8 Neg [7]', -80, r.i[7]);
+  CheckEqual(-10, r.i[0], 'I32x8 Neg [0]');
+  CheckEqual(-20, r.i[1], 'I32x8 Neg [1]');
+  CheckEqual(-30, r.i[2], 'I32x8 Neg [2]');
+  CheckEqual(-40, r.i[3], 'I32x8 Neg [3]');
+  CheckEqual(-50, r.i[4], 'I32x8 Neg [4]');
+  CheckEqual(-60, r.i[5], 'I32x8 Neg [5]');
+  CheckEqual(-70, r.i[6], 'I32x8 Neg [6]');
+  CheckEqual(-80, r.i[7], 'I32x8 Neg [7]');
 
   // 测试负数取负变正
   for i := 0 to 7 do
@@ -161,7 +159,7 @@ begin
   r := -a;
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Neg negative [' + IntToStr(i) + ']', i + 1, r.i[i]);
+    CheckEqual(i + 1, r.i[i], 'I32x8 Neg negative [' + IntToStr(i) + ']');
 end;
 
 // === 位运算测试 ===
@@ -180,7 +178,7 @@ begin
   r := VecI32x8And(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 And [' + IntToStr(i) + ']', Int32($0F000F00), r.i[i]);
+    CheckEqual(Int32($0F000F00), r.i[i], 'I32x8 And [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Or;
@@ -197,7 +195,7 @@ begin
   r := VecI32x8Or(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Or [' + IntToStr(i) + ']', Int32($FFFF0000), r.i[i]);
+    CheckEqual(Int32($FFFF0000), r.i[i], 'I32x8 Or [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Xor;
@@ -214,7 +212,7 @@ begin
   r := VecI32x8Xor(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Xor [' + IntToStr(i) + ']', Int32($F0F0F0F0), r.i[i]);
+    CheckEqual(Int32($F0F0F0F0), r.i[i], 'I32x8 Xor [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Not;
@@ -228,7 +226,7 @@ begin
   r := VecI32x8Not(a);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Not [' + IntToStr(i) + ']', Int32($F0F0F0F0), r.i[i]);
+    CheckEqual(Int32($F0F0F0F0), r.i[i], 'I32x8 Not [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_AndNot;
@@ -247,7 +245,7 @@ begin
 
   // NOT($F0F0F0F0) AND $FFFFFFFF = $0F0F0F0F
   for i := 0 to 7 do
-    AssertEquals('I32x8 AndNot [' + IntToStr(i) + ']', Int32($0F0F0F0F), r.i[i]);
+    CheckEqual(Int32($0F0F0F0F), r.i[i], 'I32x8 AndNot [' + IntToStr(i) + ']');
 end;
 
 // === 移位测试 ===
@@ -264,7 +262,7 @@ begin
   r := VecI32x8ShiftLeft(a, 4);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 ShiftLeft [' + IntToStr(i) + ']', 16, r.i[i]);
+    CheckEqual(16, r.i[i], 'I32x8 ShiftLeft [' + IntToStr(i) + ']');
 
   // 测试不同的值
   for i := 0 to 7 do
@@ -272,10 +270,10 @@ begin
 
   r := VecI32x8ShiftLeft(a, 2);
 
-  AssertEquals('I32x8 ShiftLeft 1<<2', 4, r.i[0]);
-  AssertEquals('I32x8 ShiftLeft 2<<2', 8, r.i[1]);
-  AssertEquals('I32x8 ShiftLeft 3<<2', 12, r.i[2]);
-  AssertEquals('I32x8 ShiftLeft 8<<2', 32, r.i[7]);
+  CheckEqual(4, r.i[0], 'I32x8 ShiftLeft 1<<2');
+  CheckEqual(8, r.i[1], 'I32x8 ShiftLeft 2<<2');
+  CheckEqual(12, r.i[2], 'I32x8 ShiftLeft 3<<2');
+  CheckEqual(32, r.i[7], 'I32x8 ShiftLeft 8<<2');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_ShiftRight;
@@ -290,7 +288,7 @@ begin
   r := VecI32x8ShiftRight(a, 4);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 ShiftRight [' + IntToStr(i) + ']', 16, r.i[i]);
+    CheckEqual(16, r.i[i], 'I32x8 ShiftRight [' + IntToStr(i) + ']');
 
   // 测试算术右移（负数）
   for i := 0 to 7 do
@@ -300,7 +298,7 @@ begin
 
   // 算术右移保持符号位
   for i := 0 to 7 do
-    AssertEquals('I32x8 ShiftRightArith negative [' + IntToStr(i) + ']', -4, r.i[i]);
+    CheckEqual(-4, r.i[i], 'I32x8 ShiftRightArith negative [' + IntToStr(i) + ']');
 end;
 
 // === 比较测试 ===
@@ -324,14 +322,14 @@ begin
   m := VecI32x8CmpEq(a, b);
 
   // 检查相等的位置
-  AssertTrue('I32x8 CmpEq [0] should be equal', (m and (1 shl 0)) <> 0);
-  AssertTrue('I32x8 CmpEq [1] should be equal', (m and (1 shl 1)) <> 0);
-  AssertFalse('I32x8 CmpEq [2] should not be equal', (m and (1 shl 2)) <> 0);
-  AssertTrue('I32x8 CmpEq [3] should be equal', (m and (1 shl 3)) <> 0);
-  AssertTrue('I32x8 CmpEq [4] should be equal', (m and (1 shl 4)) <> 0);
-  AssertFalse('I32x8 CmpEq [5] should not be equal', (m and (1 shl 5)) <> 0);
-  AssertTrue('I32x8 CmpEq [6] should be equal', (m and (1 shl 6)) <> 0);
-  AssertTrue('I32x8 CmpEq [7] should be equal', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'I32x8 CmpEq [0] should be equal');
+  CheckTrue((m and (1 shl 1)) <> 0, 'I32x8 CmpEq [1] should be equal');
+  CheckFalse((m and (1 shl 2)) <> 0, 'I32x8 CmpEq [2] should not be equal');
+  CheckTrue((m and (1 shl 3)) <> 0, 'I32x8 CmpEq [3] should be equal');
+  CheckTrue((m and (1 shl 4)) <> 0, 'I32x8 CmpEq [4] should be equal');
+  CheckFalse((m and (1 shl 5)) <> 0, 'I32x8 CmpEq [5] should not be equal');
+  CheckTrue((m and (1 shl 6)) <> 0, 'I32x8 CmpEq [6] should be equal');
+  CheckTrue((m and (1 shl 7)) <> 0, 'I32x8 CmpEq [7] should be equal');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_CmpLt;
@@ -349,14 +347,14 @@ begin
   m := VecI32x8CmpLt(a, b);
 
   // a[0..3] < 4, a[4..7] >= 4
-  AssertTrue('I32x8 CmpLt [0] should be less', (m and (1 shl 0)) <> 0);
-  AssertTrue('I32x8 CmpLt [1] should be less', (m and (1 shl 1)) <> 0);
-  AssertTrue('I32x8 CmpLt [2] should be less', (m and (1 shl 2)) <> 0);
-  AssertTrue('I32x8 CmpLt [3] should be less', (m and (1 shl 3)) <> 0);
-  AssertFalse('I32x8 CmpLt [4] should not be less', (m and (1 shl 4)) <> 0);
-  AssertFalse('I32x8 CmpLt [5] should not be less', (m and (1 shl 5)) <> 0);
-  AssertFalse('I32x8 CmpLt [6] should not be less', (m and (1 shl 6)) <> 0);
-  AssertFalse('I32x8 CmpLt [7] should not be less', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'I32x8 CmpLt [0] should be less');
+  CheckTrue((m and (1 shl 1)) <> 0, 'I32x8 CmpLt [1] should be less');
+  CheckTrue((m and (1 shl 2)) <> 0, 'I32x8 CmpLt [2] should be less');
+  CheckTrue((m and (1 shl 3)) <> 0, 'I32x8 CmpLt [3] should be less');
+  CheckFalse((m and (1 shl 4)) <> 0, 'I32x8 CmpLt [4] should not be less');
+  CheckFalse((m and (1 shl 5)) <> 0, 'I32x8 CmpLt [5] should not be less');
+  CheckFalse((m and (1 shl 6)) <> 0, 'I32x8 CmpLt [6] should not be less');
+  CheckFalse((m and (1 shl 7)) <> 0, 'I32x8 CmpLt [7] should not be less');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_CmpGt;
@@ -374,14 +372,14 @@ begin
   m := VecI32x8CmpGt(a, b);
 
   // a[0..3] <= 3, a[4..7] > 3
-  AssertFalse('I32x8 CmpGt [0] should not be greater', (m and (1 shl 0)) <> 0);
-  AssertFalse('I32x8 CmpGt [1] should not be greater', (m and (1 shl 1)) <> 0);
-  AssertFalse('I32x8 CmpGt [2] should not be greater', (m and (1 shl 2)) <> 0);
-  AssertFalse('I32x8 CmpGt [3] should not be greater', (m and (1 shl 3)) <> 0);
-  AssertTrue('I32x8 CmpGt [4] should be greater', (m and (1 shl 4)) <> 0);
-  AssertTrue('I32x8 CmpGt [5] should be greater', (m and (1 shl 5)) <> 0);
-  AssertTrue('I32x8 CmpGt [6] should be greater', (m and (1 shl 6)) <> 0);
-  AssertTrue('I32x8 CmpGt [7] should be greater', (m and (1 shl 7)) <> 0);
+  CheckFalse((m and (1 shl 0)) <> 0, 'I32x8 CmpGt [0] should not be greater');
+  CheckFalse((m and (1 shl 1)) <> 0, 'I32x8 CmpGt [1] should not be greater');
+  CheckFalse((m and (1 shl 2)) <> 0, 'I32x8 CmpGt [2] should not be greater');
+  CheckFalse((m and (1 shl 3)) <> 0, 'I32x8 CmpGt [3] should not be greater');
+  CheckTrue((m and (1 shl 4)) <> 0, 'I32x8 CmpGt [4] should be greater');
+  CheckTrue((m and (1 shl 5)) <> 0, 'I32x8 CmpGt [5] should be greater');
+  CheckTrue((m and (1 shl 6)) <> 0, 'I32x8 CmpGt [6] should be greater');
+  CheckTrue((m and (1 shl 7)) <> 0, 'I32x8 CmpGt [7] should be greater');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_CmpLe;
@@ -399,14 +397,14 @@ begin
   m := VecI32x8CmpLe(a, b);
 
   // a[0..4] <= 4, a[5..7] > 4
-  AssertTrue('I32x8 CmpLe [0] should be <=', (m and (1 shl 0)) <> 0);
-  AssertTrue('I32x8 CmpLe [1] should be <=', (m and (1 shl 1)) <> 0);
-  AssertTrue('I32x8 CmpLe [2] should be <=', (m and (1 shl 2)) <> 0);
-  AssertTrue('I32x8 CmpLe [3] should be <=', (m and (1 shl 3)) <> 0);
-  AssertTrue('I32x8 CmpLe [4] should be <=', (m and (1 shl 4)) <> 0);
-  AssertFalse('I32x8 CmpLe [5] should not be <=', (m and (1 shl 5)) <> 0);
-  AssertFalse('I32x8 CmpLe [6] should not be <=', (m and (1 shl 6)) <> 0);
-  AssertFalse('I32x8 CmpLe [7] should not be <=', (m and (1 shl 7)) <> 0);
+  CheckTrue((m and (1 shl 0)) <> 0, 'I32x8 CmpLe [0] should be <=');
+  CheckTrue((m and (1 shl 1)) <> 0, 'I32x8 CmpLe [1] should be <=');
+  CheckTrue((m and (1 shl 2)) <> 0, 'I32x8 CmpLe [2] should be <=');
+  CheckTrue((m and (1 shl 3)) <> 0, 'I32x8 CmpLe [3] should be <=');
+  CheckTrue((m and (1 shl 4)) <> 0, 'I32x8 CmpLe [4] should be <=');
+  CheckFalse((m and (1 shl 5)) <> 0, 'I32x8 CmpLe [5] should not be <=');
+  CheckFalse((m and (1 shl 6)) <> 0, 'I32x8 CmpLe [6] should not be <=');
+  CheckFalse((m and (1 shl 7)) <> 0, 'I32x8 CmpLe [7] should not be <=');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_CmpGe;
@@ -424,14 +422,14 @@ begin
   m := VecI32x8CmpGe(a, b);
 
   // a[0..2] < 3, a[3..7] >= 3
-  AssertFalse('I32x8 CmpGe [0] should not be >=', (m and (1 shl 0)) <> 0);
-  AssertFalse('I32x8 CmpGe [1] should not be >=', (m and (1 shl 1)) <> 0);
-  AssertFalse('I32x8 CmpGe [2] should not be >=', (m and (1 shl 2)) <> 0);
-  AssertTrue('I32x8 CmpGe [3] should be >=', (m and (1 shl 3)) <> 0);
-  AssertTrue('I32x8 CmpGe [4] should be >=', (m and (1 shl 4)) <> 0);
-  AssertTrue('I32x8 CmpGe [5] should be >=', (m and (1 shl 5)) <> 0);
-  AssertTrue('I32x8 CmpGe [6] should be >=', (m and (1 shl 6)) <> 0);
-  AssertTrue('I32x8 CmpGe [7] should be >=', (m and (1 shl 7)) <> 0);
+  CheckFalse((m and (1 shl 0)) <> 0, 'I32x8 CmpGe [0] should not be >=');
+  CheckFalse((m and (1 shl 1)) <> 0, 'I32x8 CmpGe [1] should not be >=');
+  CheckFalse((m and (1 shl 2)) <> 0, 'I32x8 CmpGe [2] should not be >=');
+  CheckTrue((m and (1 shl 3)) <> 0, 'I32x8 CmpGe [3] should be >=');
+  CheckTrue((m and (1 shl 4)) <> 0, 'I32x8 CmpGe [4] should be >=');
+  CheckTrue((m and (1 shl 5)) <> 0, 'I32x8 CmpGe [5] should be >=');
+  CheckTrue((m and (1 shl 6)) <> 0, 'I32x8 CmpGe [6] should be >=');
+  CheckTrue((m and (1 shl 7)) <> 0, 'I32x8 CmpGe [7] should be >=');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_CmpNe;
@@ -453,14 +451,14 @@ begin
   m := VecI32x8CmpNe(a, b);
 
   // 检查不相等的位置
-  AssertFalse('I32x8 CmpNe [0] should be equal', (m and (1 shl 0)) <> 0);
-  AssertTrue('I32x8 CmpNe [1] should not be equal', (m and (1 shl 1)) <> 0);
-  AssertFalse('I32x8 CmpNe [2] should be equal', (m and (1 shl 2)) <> 0);
-  AssertFalse('I32x8 CmpNe [3] should be equal', (m and (1 shl 3)) <> 0);
-  AssertTrue('I32x8 CmpNe [4] should not be equal', (m and (1 shl 4)) <> 0);
-  AssertFalse('I32x8 CmpNe [5] should be equal', (m and (1 shl 5)) <> 0);
-  AssertFalse('I32x8 CmpNe [6] should be equal', (m and (1 shl 6)) <> 0);
-  AssertTrue('I32x8 CmpNe [7] should not be equal', (m and (1 shl 7)) <> 0);
+  CheckFalse((m and (1 shl 0)) <> 0, 'I32x8 CmpNe [0] should be equal');
+  CheckTrue((m and (1 shl 1)) <> 0, 'I32x8 CmpNe [1] should not be equal');
+  CheckFalse((m and (1 shl 2)) <> 0, 'I32x8 CmpNe [2] should be equal');
+  CheckFalse((m and (1 shl 3)) <> 0, 'I32x8 CmpNe [3] should be equal');
+  CheckTrue((m and (1 shl 4)) <> 0, 'I32x8 CmpNe [4] should not be equal');
+  CheckFalse((m and (1 shl 5)) <> 0, 'I32x8 CmpNe [5] should be equal');
+  CheckFalse((m and (1 shl 6)) <> 0, 'I32x8 CmpNe [6] should be equal');
+  CheckTrue((m and (1 shl 7)) <> 0, 'I32x8 CmpNe [7] should not be equal');
 end;
 
 // === Min/Max 测试 ===
@@ -480,14 +478,14 @@ begin
 
   // min(0, 35)=0, min(10, 35)=10, min(20, 35)=20, min(30, 35)=30
   // min(40, 35)=35, min(50, 35)=35, min(60, 35)=35, min(70, 35)=35
-  AssertEquals('I32x8 Min [0]', 0, r.i[0]);
-  AssertEquals('I32x8 Min [1]', 10, r.i[1]);
-  AssertEquals('I32x8 Min [2]', 20, r.i[2]);
-  AssertEquals('I32x8 Min [3]', 30, r.i[3]);
-  AssertEquals('I32x8 Min [4]', 35, r.i[4]);
-  AssertEquals('I32x8 Min [5]', 35, r.i[5]);
-  AssertEquals('I32x8 Min [6]', 35, r.i[6]);
-  AssertEquals('I32x8 Min [7]', 35, r.i[7]);
+  CheckEqual(0, r.i[0], 'I32x8 Min [0]');
+  CheckEqual(10, r.i[1], 'I32x8 Min [1]');
+  CheckEqual(20, r.i[2], 'I32x8 Min [2]');
+  CheckEqual(30, r.i[3], 'I32x8 Min [3]');
+  CheckEqual(35, r.i[4], 'I32x8 Min [4]');
+  CheckEqual(35, r.i[5], 'I32x8 Min [5]');
+  CheckEqual(35, r.i[6], 'I32x8 Min [6]');
+  CheckEqual(35, r.i[7], 'I32x8 Min [7]');
 
   // 测试负数
   for i := 0 to 7 do
@@ -499,7 +497,7 @@ begin
   r := VecI32x8Min(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Min negative [' + IntToStr(i) + ']', -i, r.i[i]);
+    CheckEqual(-i, r.i[i], 'I32x8 Min negative [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Max;
@@ -517,14 +515,14 @@ begin
 
   // max(0, 35)=35, max(10, 35)=35, max(20, 35)=35, max(30, 35)=35
   // max(40, 35)=40, max(50, 35)=50, max(60, 35)=60, max(70, 35)=70
-  AssertEquals('I32x8 Max [0]', 35, r.i[0]);
-  AssertEquals('I32x8 Max [1]', 35, r.i[1]);
-  AssertEquals('I32x8 Max [2]', 35, r.i[2]);
-  AssertEquals('I32x8 Max [3]', 35, r.i[3]);
-  AssertEquals('I32x8 Max [4]', 40, r.i[4]);
-  AssertEquals('I32x8 Max [5]', 50, r.i[5]);
-  AssertEquals('I32x8 Max [6]', 60, r.i[6]);
-  AssertEquals('I32x8 Max [7]', 70, r.i[7]);
+  CheckEqual(35, r.i[0], 'I32x8 Max [0]');
+  CheckEqual(35, r.i[1], 'I32x8 Max [1]');
+  CheckEqual(35, r.i[2], 'I32x8 Max [2]');
+  CheckEqual(35, r.i[3], 'I32x8 Max [3]');
+  CheckEqual(40, r.i[4], 'I32x8 Max [4]');
+  CheckEqual(50, r.i[5], 'I32x8 Max [5]');
+  CheckEqual(60, r.i[6], 'I32x8 Max [6]');
+  CheckEqual(70, r.i[7], 'I32x8 Max [7]');
 
   // 测试负数
   for i := 0 to 7 do
@@ -536,7 +534,7 @@ begin
   r := VecI32x8Max(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Max negative [' + IntToStr(i) + ']', 0, r.i[i]);
+    CheckEqual(0, r.i[i], 'I32x8 Max negative [' + IntToStr(i) + ']');
 end;
 
 // === 工具函数测试 ===
@@ -551,14 +549,14 @@ begin
     v.i[i] := 42;
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Splat [' + IntToStr(i) + ']', 42, v.i[i]);
+    CheckEqual(42, v.i[i], 'I32x8 Splat [' + IntToStr(i) + ']');
 
   // 测试负数
   for i := 0 to 7 do
     v.i[i] := -12345;
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Splat negative [' + IntToStr(i) + ']', -12345, v.i[i]);
+    CheckEqual(-12345, v.i[i], 'I32x8 Splat negative [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_Zero;
@@ -574,7 +572,7 @@ begin
   FillChar(v, SizeOf(v), 0);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 Zero [' + IntToStr(i) + ']', 0, v.i[i]);
+    CheckEqual(0, v.i[i], 'I32x8 Zero [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_LoadStore;
@@ -592,19 +590,19 @@ begin
 
   // 验证加载
   for i := 0 to 7 do
-    AssertEquals('I32x8 Load [' + IntToStr(i) + ']', src[i], v.i[i]);
+    CheckEqual(src[i], v.i[i], 'I32x8 Load [' + IntToStr(i) + ']');
 
   // 存储到目标
   Move(v, dst[0], SizeOf(v));
 
   // 验证存储
   for i := 0 to 7 do
-    AssertEquals('I32x8 Store [' + IntToStr(i) + ']', src[i], dst[i]);
+    CheckEqual(src[i], dst[i], 'I32x8 Store [' + IntToStr(i) + ']');
 end;
 
 procedure TTestCase_VecI32x8.Test_VecI32x8_SizeOf;
 begin
-  AssertEquals('TVecI32x8 should be 32 bytes (256 bits)', 32, SizeOf(TVecI32x8));
+  CheckEqual(32, SizeOf(TVecI32x8), 'TVecI32x8 should be 32 bytes (256 bits)');
 end;
 
 // === 边界测试 ===
@@ -625,8 +623,7 @@ begin
   r := VecI32x8Add(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 positive overflow [' + IntToStr(i) + ']',
-                 Low(Int32), r.i[i]);  // 应该回绕到 -2147483648
+    CheckEqual(Low(Int32), r.i[i], 'I32x8 positive overflow [' + IntToStr(i) + ']');  // 应该回绕到 -2147483648
 
   // 测试负溢出：MinInt32 - 1 应该回绕到 MaxInt32
   for i := 0 to 7 do
@@ -638,8 +635,7 @@ begin
   r := VecI32x8Sub(a, b);
 
   for i := 0 to 7 do
-    AssertEquals('I32x8 negative overflow [' + IntToStr(i) + ']',
-                 High(Int32), r.i[i]);  // 应该回绕到 2147483647
+    CheckEqual(High(Int32), r.i[i], 'I32x8 negative overflow [' + IntToStr(i) + ']');  // 应该回绕到 2147483647
 
   // 测试乘法溢出
   for i := 0 to 7 do
@@ -652,7 +648,7 @@ begin
 
   // 65536 * 65536 = 2^32，超过 Int32 范围，应该回绕
   for i := 0 to 7 do
-    AssertEquals('I32x8 mul overflow [' + IntToStr(i) + ']', 0, r.i[i]);
+    CheckEqual(0, r.i[i], 'I32x8 mul overflow [' + IntToStr(i) + ']');
 end;
 {$POP}
 
@@ -675,17 +671,17 @@ begin
   r := VecI32x8Min(a, b);
 
   for i := 0 to 3 do
-    AssertEquals('I32x8 Min MaxInt32 vs 0 [' + IntToStr(i) + ']', 0, r.i[i]);
+    CheckEqual(0, r.i[i], 'I32x8 Min MaxInt32 vs 0 [' + IntToStr(i) + ']');
   for i := 4 to 7 do
-    AssertEquals('I32x8 Min MinInt32 vs 0 [' + IntToStr(i) + ']', Low(Int32), r.i[i]);
+    CheckEqual(Low(Int32), r.i[i], 'I32x8 Min MinInt32 vs 0 [' + IntToStr(i) + ']');
 
   // 测试 Max
   r := VecI32x8Max(a, b);
 
   for i := 0 to 3 do
-    AssertEquals('I32x8 Max MaxInt32 vs 0 [' + IntToStr(i) + ']', High(Int32), r.i[i]);
+    CheckEqual(High(Int32), r.i[i], 'I32x8 Max MaxInt32 vs 0 [' + IntToStr(i) + ']');
   for i := 4 to 7 do
-    AssertEquals('I32x8 Max MinInt32 vs 0 [' + IntToStr(i) + ']', 0, r.i[i]);
+    CheckEqual(0, r.i[i], 'I32x8 Max MinInt32 vs 0 [' + IntToStr(i) + ']');
 
   // 测试比较极值
   for i := 0 to 7 do
@@ -695,7 +691,7 @@ begin
   end;
 
   m := VecI32x8CmpEq(a, b);
-  AssertEquals('All MaxInt32 should be equal', $FF, m);
+  CheckEqual($FF, m, 'All MaxInt32 should be equal');
 
   for i := 0 to 7 do
   begin
@@ -704,7 +700,7 @@ begin
   end;
 
   m := VecI32x8CmpEq(a, b);
-  AssertEquals('All MinInt32 should be equal', $FF, m);
+  CheckEqual($FF, m, 'All MinInt32 should be equal');
 
   // 测试 MinInt32 < MaxInt32
   for i := 0 to 7 do
@@ -714,11 +710,9 @@ begin
   end;
 
   m := VecI32x8CmpLt(a, b);
-  AssertEquals('MinInt32 should be less than MaxInt32', $FF, m);
+  CheckEqual($FF, m, 'MinInt32 should be less than MaxInt32');
 end;
 
 
-initialization
-  RegisterTest(TTestCase_VecI32x8);
 
 end.

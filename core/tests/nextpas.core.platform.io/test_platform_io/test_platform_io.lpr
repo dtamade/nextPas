@@ -666,6 +666,64 @@ begin
 end;
 {$ENDIF}
 
+procedure TestAddSameFdTwice;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+  LRet: Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipeFd[0], [peReadable], nil) = 0, 'add first');
+  LRet := platform_poller_add(P, LPipeFd[0], [peReadable], nil);
+  Check(LRet <> 0, 'add same fd twice returns error');
+
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
+procedure TestPollerAddNilUserData;
+var
+  P: TPlatformPoller;
+  LPipeFd: array[0..1] of Int32;
+begin
+  Check(pipe(@LPipeFd[0]) = 0, 'pipe');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipeFd[0], [peReadable], nil) = 0, 'add with nil userdata');
+  Check(platform_poller_remove(P, LPipeFd[0]) = 0, 'remove');
+  close(LPipeFd[0]);
+  close(LPipeFd[1]);
+  platform_poller_close(P);
+end;
+
+procedure TestPollerWaitMultipleFds;
+var
+  P: TPlatformPoller;
+  LPipeFd1: array[0..1] of Int32;
+  LPipeFd2: array[0..1] of Int32;
+  LEntries: array[0..1] of TPlatformPollEntry;
+  LCount, LRet: Int32;
+begin
+  Check(pipe(@LPipeFd1[0]) = 0, 'pipe1');
+  Check(pipe(@LPipeFd2[0]) = 0, 'pipe2');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipeFd1[0], [peReadable], nil) = 0, 'add fd1');
+  Check(platform_poller_add(P, LPipeFd2[0], [peReadable], nil) = 0, 'add fd2');
+
+  { Write to both pipes }
+  Check(write(LPipeFd1[1], PAnsiChar('a'), 1) = 1, 'write fd1');
+  Check(write(LPipeFd2[1], PAnsiChar('b'), 1) = 1, 'write fd2');
+
+  LRet := platform_poller_wait(P, @LEntries[0], 2, 1000, LCount);
+  Check(LRet = 0, 'wait returns 0');
+  Check(LCount >= 2, 'got events from both fds');
+
+  close(LPipeFd1[0]); close(LPipeFd1[1]);
+  close(LPipeFd2[0]); close(LPipeFd2[1]);
+  platform_poller_close(P);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.io');
   T.Test('create/close', @TestCreateClose);
@@ -691,6 +749,9 @@ begin
   T.Test('wait zero max entries', @TestWaitZeroMaxEntries);
   T.Test('wake without enable', @TestWakeWithoutEnable);
   T.Test('drain wake without enable', @TestDrainWakeWithoutEnable);
+  T.Test('add same fd twice', @TestAddSameFdTwice);
+  T.Test('add nil userdata', @TestPollerAddNilUserData);
+  T.Test('wait multiple fds', @TestPollerWaitMultipleFds);
   {$ENDIF}
   if not T.Run then Halt(1);
 end.

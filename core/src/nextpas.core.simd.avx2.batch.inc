@@ -4445,6 +4445,10 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // NT stores require 32-byte aligned destination
+    test rcx, 31
+    jnz @unaligned_fallback
+
     cmp r8, 32
     jb @tail8
 
@@ -4480,6 +4484,43 @@ begin
     sub r8, 8
     cmp r8, 8
     jae @tail8
+    jmp @tail_scalar
+
+  @unaligned_fallback:
+    // Fallback: use regular stores when dst not 32-byte aligned
+    cmp r8, 32
+    jb @uf_tail8
+  @uf_loop32:
+    vmovups ymm0, [rax]
+    vaddps ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @uf_loop32
+  @uf_tail8:
+    cmp r8, 8
+    jb @tail_scalar
+    vmovups ymm0, [rax]
+    vaddps ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @uf_tail8
 
   @tail_scalar:
     test r8, r8
@@ -4818,4 +4859,216 @@ begin
     vzeroupper
   end;
   {$POP}
+end;
+
+// ============================================================================
+// AVX2 F64 Batch: Min, Max, Fma
+// ============================================================================
+
+procedure AVX2ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail4
+
+  @loop16:
+    vmovupd ymm0, [rax]
+    vminpd ymm0, ymm0, [rdx]
+    vmovupd [rcx], ymm0
+    vmovupd ymm1, [rax + 32]
+    vminpd ymm1, ymm1, [rdx + 32]
+    vmovupd [rcx + 32], ymm1
+    vmovupd ymm2, [rax + 64]
+    vminpd ymm2, ymm2, [rdx + 64]
+    vmovupd [rcx + 64], ymm2
+    vmovupd ymm3, [rax + 96]
+    vminpd ymm3, ymm3, [rdx + 96]
+    vmovupd [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovupd ymm0, [rax]
+    vminpd ymm0, ymm0, [rdx]
+    vmovupd [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 4
+    cmp r8, 4
+    jae @tail4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vminsd xmm0, xmm0, [rdx]
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 16
+    jb @tail4
+
+  @loop16:
+    vmovupd ymm0, [rax]
+    vmaxpd ymm0, ymm0, [rdx]
+    vmovupd [rcx], ymm0
+    vmovupd ymm1, [rax + 32]
+    vmaxpd ymm1, ymm1, [rdx + 32]
+    vmovupd [rcx + 32], ymm1
+    vmovupd ymm2, [rax + 64]
+    vmaxpd ymm2, ymm2, [rdx + 64]
+    vmovupd [rcx + 64], ymm2
+    vmovupd ymm3, [rax + 96]
+    vmaxpd ymm3, ymm3, [rdx + 96]
+    vmovupd [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 16
+    cmp r8, 16
+    jae @loop16
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovupd ymm0, [rax]
+    vmaxpd ymm0, ymm0, [rdx]
+    vmovupd [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 4
+    cmp r8, 4
+    jae @tail4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vmaxsd xmm0, xmm0, [rdx]
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+var
+  pA, pB, pC, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pA := aA; pB := aB; pC := aC; pD := aDst;
+
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov r9, pC
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    vmovupd ymm0, [rax]
+    vmovupd ymm1, [rdx]
+    vmovupd ymm2, [r9]
+    vfmadd213pd ymm0, ymm1, ymm2
+    vmovupd [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add r9, 32
+    add rcx, 32
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vmovsd xmm1, [rdx]
+    vmovsd xmm2, [r9]
+    vfmadd213sd xmm0, xmm1, xmm2
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add r9, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// Smart ArrayAddF32: 自动选择最佳实现
+// - 小数组 (<4KB/1024 floats): 使用普通版本 (cache-friendly)
+// - 大数组 (>=4KB): 使用非时态版本 (bypass cache)
+// ============================================================================
+
+procedure AVX2ArrayAddF32_Smart(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+const
+  NT_THRESHOLD = 16384; // 64KB = 16384 floats (exceeds L1 cache)
+begin
+  if aCount >= NT_THRESHOLD then
+    AVX2ArrayAddF32_NT(aSrc1, aSrc2, aDst, aCount)
+  else
+    AVX2ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
 end;

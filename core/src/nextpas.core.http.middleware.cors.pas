@@ -111,7 +111,7 @@ begin
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
-      LOrigin, LAllowOrigin: string;
+      LOrigin, LAllowOrigin, LRequestHeaders: string;
     begin
       LOrigin := AReq.Headers.Get('Origin');
       if LOrigin = '' then
@@ -158,7 +158,20 @@ begin
         AW.Headers.SetHeader('Vary', 'Origin');
 
       AW.Headers.SetHeader('Access-Control-Allow-Methods', LState.AllowMethods);
-      AW.Headers.SetHeader('Access-Control-Allow-Headers', LState.AllowHeaders);
+
+      { When AllowHeaders is '*', echo back the request's Access-Control-Request-Headers.
+        This lets the browser send any headers the client requested. }
+      if (LState.AllowHeaders = '*') and (AReq.Method = hmOptions) then
+      begin
+        LRequestHeaders := AReq.Headers.Get('Access-Control-Request-Headers');
+        if LRequestHeaders <> '' then
+          AW.Headers.SetHeader('Access-Control-Allow-Headers', LRequestHeaders)
+        else
+          AW.Headers.SetHeader('Access-Control-Allow-Headers', '*');
+      end
+      else
+        AW.Headers.SetHeader('Access-Control-Allow-Headers', LState.AllowHeaders);
+
       if LState.MaxAge > 0 then
         AW.Headers.SetHeader('Access-Control-Max-Age', IntToStr(Int64(LState.MaxAge)));
       if LState.AllowCredentials then

@@ -12,7 +12,8 @@ uses
   np_target_facts,
   np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_llvm_emitter, nextpas_json_helpers,
-  np_hir_to_mir, np_mir_model, np_mir_to_llvm;
+  np_hir_to_mir, np_mir_model, np_mir_to_llvm,
+  np_mir_optimize, np_mir_pass_registry;
 
 type
   TBackendArtifact = record
@@ -125,6 +126,7 @@ type
     FOutputDirPath: string;
     FRootKindName: string;
     FNoFold: Boolean;
+    FOptLevel: string;
     FPlan: TBackendPlan;
     function BackendIntermediateRootPath: string;
   public
@@ -135,7 +137,8 @@ type
       const AArtifactRootPath: string;
       const AOutputDirPath: string;
       const ARootKindName: string;
-      const ANoFold: Boolean
+      const ANoFold: Boolean;
+      const AOptLevel: string
     );
     destructor Destroy; override;
     procedure Plan;
@@ -501,7 +504,8 @@ constructor TBackendPlanner.Create(
   const AArtifactRootPath: string;
   const AOutputDirPath: string;
   const ARootKindName: string;
-  const ANoFold: Boolean
+  const ANoFold: Boolean;
+  const AOptLevel: string
 );
 begin
   inherited Create;
@@ -512,6 +516,7 @@ begin
   FOutputDirPath := AOutputDirPath;
   FRootKindName := ARootKindName;
   FNoFold := ANoFold;
+  FOptLevel := AOptLevel;
   FPlan := TBackendPlan.Create;
 end;
 
@@ -547,6 +552,8 @@ var
   HirEmitter: THIRLlvmEmitter;
   Lowering: THirToMirLowering;
   LlvmTranslator: TMirToLlvmTranslator;
+  MirModule: TMirModule;
+  PassManager: TMirPassManager;
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
@@ -617,17 +624,32 @@ begin
       HirBuilder.Build;
       if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
       begin
-        { Opt-in: HIR -> MIR -> LLVM IR pipeline }
+        { Opt-in: HIR -> MIR -> MIR passes -> LLVM IR pipeline }
         Lowering := THirToMirLowering.Create(HirBuilder.Module);
         try
-          LlvmTranslator := TMirToLlvmTranslator.Create(Lowering.Lower);
-          try
-            LlvmTranslator.SaveToFile(LlvmIrArtifactPath);
-          finally
-            LlvmTranslator.Free;
-          end;
+          Lowering.Lower;
+          MirModule := Lowering.DetachModule;
         finally
           Lowering.Free;
+        end;
+
+        { Run MIR optimization passes }
+        if not FNoFold then
+        begin
+          PassManager := TMirPassManager.Create;
+          try
+            RegisterMirPassesForLevel(PassManager, FOptLevel);
+            PassManager.RunAll(MirModule);
+          finally
+            PassManager.Free;
+          end;
+        end;
+
+        LlvmTranslator := TMirToLlvmTranslator.Create(MirModule);
+        try
+          LlvmTranslator.SaveToFile(LlvmIrArtifactPath);
+        finally
+          LlvmTranslator.Free;
         end;
       end
       else

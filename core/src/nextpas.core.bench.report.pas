@@ -184,10 +184,22 @@ end;
 { TSV 辅助：将 Tab/换行替换为空格，防止破坏 TSV 结构 }
 function SanitizeTSVField(const AStr: string): string;
 var
-  I: Integer;
+  I, LLen: Integer;
+  LNeedsSanitize: Boolean;
 begin
-  SetLength(Result, Length(AStr));
-  for I := 1 to Length(AStr) do
+  LLen := Length(AStr);
+  { 快速路径：检查是否需要替换 }
+  LNeedsSanitize := False;
+  for I := 1 to LLen do
+    if AStr[I] in [#9, #10, #13] then
+    begin
+      LNeedsSanitize := True;
+      Break;
+    end;
+  if not LNeedsSanitize then
+    Exit(AStr);
+  SetLength(Result, LLen);
+  for I := 1 to LLen do
     if AStr[I] in [#9, #10, #13] then
       Result[I] := ' '
     else
@@ -329,12 +341,25 @@ end;
 
 function TBenchReportGenerator.EscapeJSON(const AStr: string): string;
 var
-  I: Integer;
+  I, LLen: Integer;
   LBuilder: TStringBuilder;
+  LNeedsEscape: Boolean;
 begin
-  LBuilder.Init(Length(AStr) + 16);
+  LLen := Length(AStr);
+  { Fast path: check if any character needs escaping }
+  LNeedsEscape := False;
+  for I := 1 to LLen do
+    if AStr[I] in [#92, '"', #0, #8, #9, #10, #12, #13] then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+  if not LNeedsEscape then
+    Exit(AStr);
+
+  LBuilder.Init(LLen + 16);
   try
-    for I := 1 to Length(AStr) do
+    for I := 1 to LLen do
     begin
       case AStr[I] of
         '\': LBuilder.AppendStr('\\');
@@ -357,12 +382,25 @@ end;
 
 function TBenchReportGenerator.EscapeHTML(const AStr: string): string;
 var
-  I: Integer;
+  I, LLen: Integer;
   LBuilder: TStringBuilder;
+  LNeedsEscape: Boolean;
 begin
-  LBuilder.Init(Length(AStr) + 16);
+  LLen := Length(AStr);
+  { Fast path: check if any character needs escaping }
+  LNeedsEscape := False;
+  for I := 1 to LLen do
+    if AStr[I] in ['&', '<', '>', '"', #39] then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+  if not LNeedsEscape then
+    Exit(AStr);
+
+  LBuilder.Init(LLen + 16);
   try
-    for I := 1 to Length(AStr) do
+    for I := 1 to LLen do
     begin
       case AStr[I] of
         '&': LBuilder.AppendStr('&amp;');

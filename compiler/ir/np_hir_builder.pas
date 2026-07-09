@@ -179,6 +179,7 @@ type
     function EmitConstFloat(const AValue: Double): THIRValueId;
     function GetFloatType: THIRTypeId;
     function EmitConstInt(const AValue: Int64): THIRValueId;
+    function EmitConstIntSmart(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
     function EmitNullPtrValue: THIRValueId;
@@ -733,6 +734,22 @@ begin
   Result := EmitConstIntOfType(AValue, GetIntType);
 end;
 
+{ 根据值范围推断类型的整数常量 }
+function THIRBuilder.EmitConstIntSmart(const AValue: Int64): THIRValueId;
+var
+  IntType: THIRTypeId;
+begin
+  if (AValue >= -128) and (AValue <= 127) then
+    IntType := GetIntTypeByWidth(8, True)
+  else if (AValue >= -32768) and (AValue <= 32767) then
+    IntType := GetIntTypeByWidth(16, True)
+  else if (AValue >= -2147483648) and (AValue <= 2147483647) then
+    IntType := GetIntTypeByWidth(32, True)
+  else
+    IntType := GetIntType;
+  Result := EmitConstIntOfType(AValue, IntType);
+end;
+
 function THIRBuilder.EmitConstIntOfType(const AValue: Int64;
   const ATypeId: THIRTypeId): THIRValueId;
 var
@@ -850,9 +867,9 @@ begin
     EmitStore(GetPtrType, Instr.ResultId, PtrSlot);
   if LenSlot <> 0 then
   begin
-    LenValue := EmitConstIntOfType(ALength, GetIntType);
+    LenValue := EmitConstIntOfType(ALength, GetIntTypeByWidth(32, True));
     if LenValue <> 0 then
-      EmitStore(GetIntType, LenValue, LenSlot);
+      EmitStore(GetIntTypeByWidth(32, True), LenValue, LenSlot);
   end;
 end;
 
@@ -867,11 +884,11 @@ begin
   if (PtrSlot = 0) or (LenSlot = 0) then
     Exit;
   NullPtr := EmitNullPtrValue;
-  ZeroLen := EmitConstIntOfType(0, GetIntType);
+  ZeroLen := EmitConstIntSmart(0);
   if (NullPtr = 0) or (ZeroLen = 0) then
     Exit;
   EmitStore(GetPtrType, NullPtr, PtrSlot);
-  EmitStore(GetIntType, ZeroLen, LenSlot);
+  EmitStore(GetIntTypeByWidth(32, True), ZeroLen, LenSlot);
 end;
 
 function THIRBuilder.NormalizeArrayIndexValue(const AArrayName: string;
@@ -1599,7 +1616,7 @@ begin
 
   if AExpr.Kind = shekVirtualCall then
   begin
-    SlotValue := EmitConstIntOfType(0, GetIntType);
+    SlotValue := EmitConstIntSmart(0);
     if SlotValue = 0 then
       Exit(False);
 
@@ -2187,14 +2204,28 @@ end;
 procedure THIRBuilder.EmitExprInt(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
+  Value: Int64;
+  Code: LongInt;
+  IntType: THIRTypeId;
 begin
+  Val(AArg, Value, Code);
+  if Code <> 0 then
+    IntType := GetIntType
+  else if (Value >= -128) and (Value <= 127) then
+    IntType := GetIntTypeByWidth(8, True)
+  else if (Value >= -32768) and (Value <= 32767) then
+    IntType := GetIntTypeByWidth(16, True)
+  else if (Value >= -2147483648) and (Value <= 2147483647) then
+    IntType := GetIntTypeByWidth(32, True)
+  else
+    IntType := GetIntType;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := IntType;
   Instr.IntrinsicName := 'const:' + AArg;
   EmitInstr(Instr);
-  S.Push(Instr.ResultId);
+  S.PushTyped(Instr.ResultId, IntType);
 end;
 
 procedure THIRBuilder.EmitExprNull(var S: TExprStack);
@@ -2242,12 +2273,12 @@ begin
     if IsVarParamAlloca(AArg) then
     begin
       V := EmitLoad(GetPtrType, V);
-      S.Push(EmitLoad(GetIntType, V));
+      S.Push(EmitLoad(FindAllocaType(AArg), V));
     end
     else if FindAllocaType(AArg) = GetPtrType then
       S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
     else
-      S.Push(EmitLoad(GetIntType, V));
+      S.Push(EmitLoad(FindAllocaType(AArg), V));
   end
   else if FSemaModel.LookupConstValue(AArg, ConstVal) then
   begin
@@ -2520,26 +2551,45 @@ procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
   const AIntrinsic: string);
 var
   Instr: THIRInstr;
+  OperandType: THIRTypeId;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := AKind;
-  Instr.TypeId := GetIntType;
+  Instr.Operands[0] := MakeTypedOperand(S.Pop, OperandType);
+  if OperandType <> 0 then
+    Instr.TypeId := OperandType
+  else
+    Instr.TypeId := GetIntType;
   if AIntrinsic <> '' then
     Instr.IntrinsicName := AIntrinsic;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(S.Pop);
   EmitInstr(Instr);
-  S.Push(Instr.ResultId);
+  S.PushTyped(Instr.ResultId, Instr.TypeId);
 end;
 
 procedure THIRBuilder.EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
 var
   Lhs, Rhs: THIRValueId;
+  LhsType, RhsType, ResultType: THIRTypeId;
 begin
-  Rhs := S.Pop;
-  Lhs := S.Pop;
-  S.Push(EmitBinOp(AKind, GetIntType, Lhs, Rhs));
+  Rhs := S.PopTyped(RhsType);
+  Lhs := S.PopTyped(LhsType);
+  { 使用操作数类型，优先选择更宽的类型 }
+  if (LhsType <> 0) and (RhsType <> 0) then
+  begin
+    if FModule.Types.GetType(LhsType).BitWidth >= FModule.Types.GetType(RhsType).BitWidth then
+      ResultType := LhsType
+    else
+      ResultType := RhsType;
+  end
+  else if LhsType <> 0 then
+    ResultType := LhsType
+  else if RhsType <> 0 then
+    ResultType := RhsType
+  else
+    ResultType := GetIntType;
+  S.PushTyped(EmitBinOp(AKind, ResultType, Lhs, Rhs), ResultType);
 end;
 
 procedure THIRBuilder.EmitExprCmp(var S: TExprStack; const AArg: string);
@@ -2589,7 +2639,7 @@ begin
 
   if SameText(AArg, 'ne') then
   begin
-    OneVal := EmitConstIntOfType(1, GetIntType);
+    OneVal := EmitConstIntSmart(1);
     if OneVal = 0 then
       Exit;
     ResultVal := EmitBinOp(hikSub, GetIntType, OneVal, ResultVal);
@@ -3037,6 +3087,7 @@ var
   Instr: THIRInstr;
   ExprId: LongInt;
   ExprResult: THIRExprResult;
+  OperandType: THIRTypeId;
 begin
   Result := 0;
   ATypeId := 0;
@@ -3135,8 +3186,11 @@ begin
     else if Token = 'varref' then EmitExprVarRef(S, Arg)
     else if Token = 'deref' then
     begin
-      V := S.Pop;
-      S.Push(EmitLoad(GetIntType, V));
+      V := S.PopTyped(OperandType);
+      if OperandType <> 0 then
+        S.PushTyped(EmitLoad(OperandType, V), OperandType)
+      else
+        S.Push(EmitLoad(GetIntType, V));
     end
     else if Token = 'recvar' then EmitExprRecVar(S, Arg)
     else if Token = 'is' then EmitExprIs(S, Arg)
@@ -3170,13 +3224,13 @@ begin
       end;
       V := FindAlloca(Arg + '$len');
       if V <> 0 then
-        S.Push(EmitLoad(GetIntType, V))
+        S.Push(EmitLoad(FindAllocaType(Arg + '$len'), V))
       else
       begin
         EnsureAlloca(Arg + '$len', GetIntType);
         V := FindAlloca(Arg + '$len');
         if V <> 0 then
-          S.Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(FindAllocaType(Arg + '$len'), V));
       end;
     end
     else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
@@ -3386,6 +3440,8 @@ var
   VarName, Blob, RealName: string;
   V, Addr, PtrVal: THIRValueId;
   StoreType, ValueType: THIRTypeId;
+  LSymId: LongInt;
+  LTypeId: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
@@ -3411,7 +3467,18 @@ begin
   Addr := FindAlloca(VarName);
   if Addr = 0 then
   begin
-    EnsureAlloca(VarName, GetIntType);
+    { 尝试从语义模型获取变量类型 }
+    LSymId := FSemaModel.FindSymbolByName(VarName);
+    if LSymId > 0 then
+    begin
+      LTypeId := SemanticTypeIdToHirTypeId(FSemaModel.SymbolAt(LSymId - 1).TypeId);
+      if LTypeId <> 0 then
+        EnsureAlloca(VarName, LTypeId)
+      else
+        EnsureAlloca(VarName, GetIntType);
+    end
+    else
+      EnsureAlloca(VarName, GetIntType);
     Addr := FindAlloca(VarName);
   end;
   if (V <> 0) and (Addr <> 0) then
@@ -4412,7 +4479,7 @@ begin
         Instr.TypeId := GetIntType;
         SetLength(Instr.Operands, 2);
         Instr.Operands[0] := MakeTypedOperand(FetchAddResult, GetIntType);
-        OneVal := EmitConstIntOfType(1, GetIntType);
+        OneVal := EmitConstIntSmart(1);
         Instr.Operands[1] := MakeTypedOperand(OneVal, GetIntType);
         EmitInstr(Instr);
       end;
@@ -4630,8 +4697,8 @@ begin
   if TsSlot <> 0 then
   begin
     LenSlot := EmitTStringLen(TsSlot);
-    EnsureAlloca(TempName + '$len', GetIntType);
-    EmitStore(GetIntType, LenSlot, FindAlloca(TempName + '$len'));
+    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(32, True));
+    EmitStore(GetIntTypeByWidth(32, True), LenSlot, FindAlloca(TempName + '$len'));
   end;
 end;
 
@@ -4678,12 +4745,12 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then
     Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  OldLenVal := EmitLoad(GetIntType, LenAlloca);
+  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4699,7 +4766,7 @@ begin
   PtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, PtrVal, PtrAlloca);
-  EmitStore(GetIntType, SizeVal, LenAlloca);
+  EmitStore(GetIntTypeByWidth(32, True), SizeVal, LenAlloca);
 end;
 
 function THIRBuilder.FieldSlotPtr(AObjectPtr: THIRValueId;
@@ -4774,7 +4841,7 @@ begin
   if ElemSizeStr <> '' then
     ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then Exit;
 
   PtrSlot := FieldSlotPtr(ReceiverPtr, FieldIdx);
@@ -4782,7 +4849,7 @@ begin
   if (PtrSlot = 0) or (LenSlot = 0) then Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrSlot);
-  OldLenVal := EmitLoad(GetIntType, LenSlot);
+  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4798,7 +4865,7 @@ begin
   NewPtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, NewPtrVal, PtrSlot);
-  EmitStore(GetIntType, NewLenVal, LenSlot);
+  EmitStore(GetIntTypeByWidth(32, True), NewLenVal, LenSlot);
 end;
 
 procedure THIRBuilder.ProcessDynArrayCleanup(const ANode: TTypedHirNode);
@@ -4828,11 +4895,11 @@ begin
     Exit;
 
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  LenVal := EmitLoad(GetIntType, LenAlloca);
+  LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
   if ElemSizeBlob <> '' then
     ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
   if ElemSizeVal = 0 then
     Exit;
 
@@ -4913,7 +4980,7 @@ begin
       if FieldPtr <> 0 then
         EmitTStringFini(FieldPtr);
 
-      ZeroVal := EmitConstIntOfType(0, GetIntType);
+      ZeroVal := EmitConstIntSmart(0);
       if ZeroVal <> 0 then
       begin
         for Offset := 0 to 2 do
@@ -4931,7 +4998,7 @@ begin
       LenSlot := FieldSlotPtr(RecPtr, FieldIdx + 1);
       if (PtrSlot <> 0) and (LenSlot <> 0) then
       begin
-        ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+        ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
         FillChar(Instr, SizeOf(Instr), 0);
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikIntrinsic;
@@ -5078,7 +5145,7 @@ begin
     EmitInstr(Instr);
 
     NullVal := EmitNullPtrValue;
-    ZeroVal := EmitConstIntOfType(0, GetIntType);
+    ZeroVal := EmitConstIntSmart(0);
     if (NullVal <> 0) and (ZeroVal <> 0) then
     begin
       EmitStore(GetPtrType, NullVal, PtrSlot);
@@ -5219,7 +5286,7 @@ begin
     Instr.IntrinsicName := 'null';
     EmitInstr(Instr);
     NullVal := Instr.ResultId;
-    ZeroVal := EmitConstIntOfType(0, GetIntType);
+    ZeroVal := EmitConstIntSmart(0);
     EmitStore(GetPtrType, NullVal, PtrSlot);
     EmitStore(GetIntType, ZeroVal, LenSlot);
   end;

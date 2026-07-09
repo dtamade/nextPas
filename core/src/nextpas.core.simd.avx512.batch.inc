@@ -2869,6 +2869,204 @@ begin
 end;
 
 // ============================================================================
+// AVX-512 F64 Batch: Min, Max, Fma
+// ============================================================================
+
+procedure AVX512ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 32
+    jb @tail8
+
+  @loop32:
+    vmovupd zmm0, [rax]
+    vminpd zmm0, zmm0, [rdx]
+    vmovupd [rcx], zmm0
+    vmovupd zmm1, [rax + 64]
+    vminpd zmm1, zmm1, [rdx + 64]
+    vmovupd [rcx + 64], zmm1
+    vmovupd zmm2, [rax + 128]
+    vminpd zmm2, zmm2, [rdx + 128]
+    vmovupd [rcx + 128], zmm2
+    vmovupd zmm3, [rax + 192]
+    vminpd zmm3, zmm3, [rdx + 192]
+    vmovupd [rcx + 192], zmm3
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail8:
+    cmp r8, 8
+    jb @tail_scalar
+    vmovupd zmm0, [rax]
+    vminpd zmm0, zmm0, [rdx]
+    vmovupd [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 8
+    cmp r8, 8
+    jae @tail8
+    jmp @tail_scalar
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vminsd xmm0, xmm0, [rdx]
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 32
+    jb @tail8
+
+  @loop32:
+    vmovupd zmm0, [rax]
+    vmaxpd zmm0, zmm0, [rdx]
+    vmovupd [rcx], zmm0
+    vmovupd zmm1, [rax + 64]
+    vmaxpd zmm1, zmm1, [rdx + 64]
+    vmovupd [rcx + 64], zmm1
+    vmovupd zmm2, [rax + 128]
+    vmaxpd zmm2, zmm2, [rdx + 128]
+    vmovupd [rcx + 128], zmm2
+    vmovupd zmm3, [rax + 192]
+    vmaxpd zmm3, zmm3, [rdx + 192]
+    vmovupd [rcx + 192], zmm3
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail8:
+    cmp r8, 8
+    jb @tail_scalar
+    vmovupd zmm0, [rax]
+    vmaxpd zmm0, zmm0, [rdx]
+    vmovupd [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 8
+    cmp r8, 8
+    jae @tail8
+    jmp @tail_scalar
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vmaxsd xmm0, xmm0, [rdx]
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX512ArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+var
+  pA, pB, pC, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pA := aA; pB := aB; pC := aC; pD := aDst;
+
+  asm
+    mov rax, pA
+    mov rdx, pB
+    mov r9, pC
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail_scalar
+
+  @loop8:
+    vmovupd zmm0, [rax]
+    vmovupd zmm1, [rdx]
+    vmovupd zmm2, [r9]
+    vfmadd213pd zmm0, zmm1, zmm2
+    vmovupd [rcx], zmm0
+    add rax, 64
+    add rdx, 64
+    add r9, 64
+    add rcx, 64
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    vmovsd xmm0, [rax]
+    vmovsd xmm1, [rdx]
+    vmovsd xmm2, [r9]
+    vfmadd213sd xmm0, xmm1, xmm2
+    vmovsd [rcx], xmm0
+    add rax, 8
+    add rdx, 8
+    add r9, 8
+    add rcx, 8
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+// ============================================================================
 // AVX-512 ArrayRcpF32 — vrcp14ps (14-bit precision, no NR needed for most uses)
 // ============================================================================
 

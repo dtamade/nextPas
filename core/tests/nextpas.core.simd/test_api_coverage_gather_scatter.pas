@@ -4,10 +4,8 @@ program test_api_coverage_gather_scatter;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.exception,
-  nextpas.core.base,
-  nextpas.core.simd.base,
-  nextpas.core.simd,
+  nextpas.core.exception, nextpas.core.base,
+  nextpas.core.simd.base, nextpas.core.simd,
   nextpas.core.simd.api_coverage.support;
 
 procedure TestGatherScatterFacade;

@@ -175,6 +175,9 @@ begin
   dispatchTable.CmpEqI16x32 := @AVX512CmpEqI16x32;
   dispatchTable.CmpLtI16x32 := @AVX512CmpLtI16x32;
   dispatchTable.CmpGtI16x32 := @AVX512CmpGtI16x32;
+  dispatchTable.CmpLeI16x32 := @AVX512CmpLeI16x32;
+  dispatchTable.CmpGeI16x32 := @AVX512CmpGeI16x32;
+  dispatchTable.CmpNeI16x32 := @AVX512CmpNeI16x32;
   dispatchTable.MinI16x32 := @AVX512MinI16x32;
   dispatchTable.MaxI16x32 := @AVX512MaxI16x32;
 
@@ -189,6 +192,9 @@ begin
   dispatchTable.CmpEqI8x64 := @AVX512CmpEqI8x64;
   dispatchTable.CmpLtI8x64 := @AVX512CmpLtI8x64;
   dispatchTable.CmpGtI8x64 := @AVX512CmpGtI8x64;
+  dispatchTable.CmpLeI8x64 := @AVX512CmpLeI8x64;
+  dispatchTable.CmpGeI8x64 := @AVX512CmpGeI8x64;
+  dispatchTable.CmpNeI8x64 := @AVX512CmpNeI8x64;
   dispatchTable.MinI8x64 := @AVX512MinI8x64;
   dispatchTable.MaxI8x64 := @AVX512MaxI8x64;
 
@@ -202,6 +208,9 @@ begin
   dispatchTable.CmpEqU8x64 := @AVX512CmpEqU8x64;
   dispatchTable.CmpLtU8x64 := @AVX512CmpLtU8x64;
   dispatchTable.CmpGtU8x64 := @AVX512CmpGtU8x64;
+  dispatchTable.CmpLeU8x64 := @AVX512CmpLeU8x64;
+  dispatchTable.CmpGeU8x64 := @AVX512CmpGeU8x64;
+  dispatchTable.CmpNeU8x64 := @AVX512CmpNeU8x64;
   dispatchTable.MinU8x64 := @AVX512MinU8x64;
   dispatchTable.MaxU8x64 := @AVX512MaxU8x64;
 
@@ -340,6 +349,9 @@ begin
   dispatchTable.ArrayAddScalarF64 := @AVX512ArrayAddScalarF64;
   dispatchTable.ArrayClampF64 := @AVX512ArrayClampF64;
   dispatchTable.ArrayLinearF64 := @AVX512ArrayLinearF64;
+  dispatchTable.ArrayMinF64 := @AVX512ArrayMinF64;
+  dispatchTable.ArrayMaxF64 := @AVX512ArrayMaxF64;
+  dispatchTable.ArrayFmaF64 := @AVX512ArrayFmaF64;
 
   // === Integer Batch (512-bit / 16 x Int32) ===
   dispatchTable.ArrayAddI32 := @AVX512ArrayAddI32;

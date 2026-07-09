@@ -8,13 +8,12 @@
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  nextpas.core.test,
-  nextpas.core.simd.base,
-  nextpas.core.simd;
+  SysUtils, nextpas.core.test,
+  nextpas.core.simd.base, nextpas.core.simd;
 
+{$M+}
 type
-  TTestCase_StaticDispatch = class(TTestCase)
+  TTestCase_StaticDispatch = class(TTestFixture)
   published
     procedure Test_StaticDispatch_Enabled;
     procedure Test_F32x4_Add_Performance;
@@ -55,12 +54,10 @@ begin
   ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
 
   // Verify correctness
-  CheckTrue(Abs(VecF32x4Extract(c, 0) - 3.0 * ITERATIONS) < 1.0,
-    'F32x4Add correctness check');
+  CheckTrue(Abs(VecF32x4Extract(c, 0) - 3.0 * ITERATIONS) < 1.0, 'F32x4Add correctness check');
 
   // Log performance
-  WriteLn(Format('F32x4Add: %d iterations in %.1f ms (%.2f ns/op)',
-    [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
+  WriteLn(Format('F32x4Add: %d iterations in %.1f ms (%.2f ns/op)', [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
 end;
 
 procedure TTestCase_StaticDispatch.Test_F32x4_Dot_Performance;
@@ -85,8 +82,7 @@ begin
   ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
 
   // Log performance
-  WriteLn(Format('F32x4Dot: %d iterations in %.1f ms (%.2f ns/op)',
-    [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
+  WriteLn(Format('F32x4Dot: %d iterations in %.1f ms (%.2f ns/op)', [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
 end;
 
 procedure TTestCase_StaticDispatch.Test_F64x2_Add_Performance;
@@ -110,8 +106,7 @@ begin
   ElapsedMs := (Now - StartTime) * 24 * 60 * 60 * 1000;
 
   // Log performance
-  WriteLn(Format('F64x2Add: %d iterations in %.1f ms (%.2f ns/op)',
-    [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
+  WriteLn(Format('F64x2Add: %d iterations in %.1f ms (%.2f ns/op)', [ITERATIONS, ElapsedMs, ElapsedMs * 1000000 / ITERATIONS]));
 end;
 
 procedure TTestCase_StaticDispatch.Test_BatchAdd_Performance;
@@ -142,8 +137,7 @@ begin
   CheckTrue(Abs(dst[0] - 3.0) < 0.001, 'BatchAdd correctness check');
 
   // Log performance
-  WriteLn(Format('ArrayAddF32(%d): %d iterations in %.1f ms (%.2f ns/elem)',
-    [ARRAY_SIZE, ITERATIONS, ElapsedMs,
+  WriteLn(Format('ArrayAddF32(%d): %d iterations in %.1f ms (%.2f ns/elem)', [ARRAY_SIZE, ITERATIONS, ElapsedMs,
      ElapsedMs * 1000000 / (ITERATIONS * ARRAY_SIZE)]));
 end;
 

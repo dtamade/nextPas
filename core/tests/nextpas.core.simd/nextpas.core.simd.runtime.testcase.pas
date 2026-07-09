@@ -6,12 +6,9 @@ unit nextpas.core.simd.runtime.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, fpcunit, testregistry,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
-  nextpas.core.simd.cpuinfo,
-  nextpas.core.simd.dispatch,
+  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base,
+  nextpas.core.simd.cpuinfo, nextpas.core.simd.dispatch,
   nextpas.core.simd.runtime;
 
 type
@@ -38,10 +35,9 @@ class procedure TTestCase_RuntimeAPI.AssertBackendArrayEquals(const aMessage: st
 var
   LIndex: Integer;
 begin
-  AssertEquals(aMessage + ' length', Length(aExpected), Length(aActual));
+  CheckEqual(Length(aExpected), Length(aActual), aMessage + ' length');
   for LIndex := 0 to High(aExpected) do
-    AssertEquals(aMessage + ' item[' + IntToStr(LIndex) + ']',
-      Ord(aExpected[LIndex]), Ord(aActual[LIndex]));
+    CheckEqual(Ord(aExpected[LIndex]), Ord(aActual[LIndex]), aMessage + ' item[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeCurrentBackend_View_Matches_LegacyFacade;
@@ -51,30 +47,20 @@ var
   LRuntimeInfo: TSimdBackendInfo;
 begin
   LDispatch := GetDispatchTable;
-  AssertTrue('GetDispatchTable should be assigned', LDispatch <> nil);
+  CheckTrue(LDispatch <> nil, 'GetDispatchTable should be assigned');
 
-  AssertEquals('runtime current backend should match legacy facade helper',
-    Ord(nextpas.core.simd.GetCurrentBackend),
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend));
-  AssertEquals('runtime current backend should match dispatch snapshot backend',
-    Ord(LDispatch^.Backend),
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend));
+  CheckEqual(Ord(nextpas.core.simd.GetCurrentBackend), Ord(nextpas.core.simd.runtime.GetCurrentBackend), 'runtime current backend should match legacy facade helper');
+  CheckEqual(Ord(LDispatch^.Backend), Ord(nextpas.core.simd.runtime.GetCurrentBackend), 'runtime current backend should match dispatch snapshot backend');
 
   LLegacyInfo := nextpas.core.simd.GetCurrentBackendInfo;
   LRuntimeInfo := nextpas.core.simd.runtime.GetCurrentBackendInfo;
 
-  AssertEquals('runtime backend info backend should match legacy helper',
-    Ord(LLegacyInfo.Backend), Ord(LRuntimeInfo.Backend));
-  AssertEquals('runtime backend info name should match legacy helper',
-    LLegacyInfo.Name, LRuntimeInfo.Name);
-  AssertEquals('runtime backend info description should match legacy helper',
-    LLegacyInfo.Description, LRuntimeInfo.Description);
-  AssertEquals('runtime backend info availability should match legacy helper',
-    LLegacyInfo.Available, LRuntimeInfo.Available);
-  AssertEquals('runtime backend info priority should match legacy helper',
-    LLegacyInfo.Priority, LRuntimeInfo.Priority);
-  AssertTrue('runtime backend info capabilities should match legacy helper',
-    LLegacyInfo.Capabilities = LRuntimeInfo.Capabilities);
+  CheckEqual(Ord(LLegacyInfo.Backend), Ord(LRuntimeInfo.Backend), 'runtime backend info backend should match legacy helper');
+  CheckEqual(LLegacyInfo.Name, LRuntimeInfo.Name, 'runtime backend info name should match legacy helper');
+  CheckEqual(LLegacyInfo.Description, LRuntimeInfo.Description, 'runtime backend info description should match legacy helper');
+  CheckEqual(LLegacyInfo.Available, LRuntimeInfo.Available, 'runtime backend info availability should match legacy helper');
+  CheckEqual(LLegacyInfo.Priority, LRuntimeInfo.Priority, 'runtime backend info priority should match legacy helper');
+  CheckTrue(LLegacyInfo.Capabilities = LRuntimeInfo.Capabilities, 'runtime backend info capabilities should match legacy helper');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeDispatchableView_Matches_LegacyFacadeAliases;
@@ -88,44 +74,28 @@ begin
   LLegacyDispatchable := nextpas.core.simd.GetDispatchableBackendList;
   LLegacyAvailable := nextpas.core.simd.GetAvailableBackendList;
 
-  AssertBackendArrayEquals('runtime dispatchable backends should match legacy dispatchable helper',
-    LLegacyDispatchable, LRuntimeDispatchable);
-  AssertBackendArrayEquals('runtime dispatchable backends should match legacy available alias',
-    LLegacyAvailable, LRuntimeDispatchable);
-  AssertEquals('runtime best dispatchable backend should match legacy helper',
-    Ord(nextpas.core.simd.GetBestDispatchableBackend),
-    Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend));
+  AssertBackendArrayEquals('runtime dispatchable backends should match legacy dispatchable helper', LLegacyDispatchable, LRuntimeDispatchable);
+  AssertBackendArrayEquals('runtime dispatchable backends should match legacy available alias', LLegacyAvailable, LRuntimeDispatchable);
+  CheckEqual(Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend), 'runtime best dispatchable backend should match legacy helper');
 
   for LIndex := 0 to High(LRuntimeDispatchable) do
   begin
-    AssertTrue('dispatchable backend should remain CPU-supported',
-      IsBackendSupportedOnCPU(LRuntimeDispatchable[LIndex]));
-    AssertTrue('dispatchable backend should remain registered in binary',
-      nextpas.core.simd.runtime.IsBackendRegisteredInBinary(LRuntimeDispatchable[LIndex]));
+    CheckTrue(IsBackendSupportedOnCPU(LRuntimeDispatchable[LIndex]), 'dispatchable backend should remain CPU-supported');
+    CheckTrue(nextpas.core.simd.runtime.IsBackendRegisteredInBinary(LRuntimeDispatchable[LIndex]), 'dispatchable backend should remain registered in binary');
   end;
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeControlPlane_SwitchAndReset_Match_LegacyFacade;
 begin
-  AssertTrue('TrySetCurrentBackend(sbScalar) should succeed',
-    nextpas.core.simd.runtime.TrySetCurrentBackend(sbScalar));
-  AssertEquals('runtime current backend should switch to Scalar',
-    Ord(sbScalar), Ord(nextpas.core.simd.runtime.GetCurrentBackend));
-  AssertEquals('legacy current backend should track runtime switch',
-    Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentBackend));
-  AssertEquals('dispatch snapshot should track runtime switch',
-    Ord(sbScalar), Ord(GetDispatchTable^.Backend));
+  CheckTrue(nextpas.core.simd.runtime.TrySetCurrentBackend(sbScalar), 'TrySetCurrentBackend(sbScalar) should succeed');
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.runtime.GetCurrentBackend), 'runtime current backend should switch to Scalar');
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentBackend), 'legacy current backend should track runtime switch');
+  CheckEqual(Ord(sbScalar), Ord(GetDispatchTable^.Backend), 'dispatch snapshot should track runtime switch');
 
   nextpas.core.simd.runtime.ResetCurrentBackendSelection;
-  AssertEquals('runtime reset should restore automatic best backend',
-    Ord(nextpas.core.simd.GetBestDispatchableBackend),
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend));
-  AssertEquals('legacy current backend should track runtime reset',
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend),
-    Ord(nextpas.core.simd.GetCurrentBackend));
-  AssertEquals('dispatch snapshot should track runtime reset',
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend),
-    Ord(GetDispatchTable^.Backend));
+  CheckEqual(Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.runtime.GetCurrentBackend), 'runtime reset should restore automatic best backend');
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(nextpas.core.simd.GetCurrentBackend), 'legacy current backend should track runtime reset');
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(GetDispatchTable^.Backend), 'dispatch snapshot should track runtime reset');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_FacadeCpuCapability_View_Uses_Canonical_Cpuinfo_Semantics;
@@ -140,39 +110,24 @@ begin
   LFacadeCPUInfo := nextpas.core.simd.GetCPUInformation;
   LCanonicalCPUInfo := nextpas.core.simd.cpuinfo.GetCPUInfo;
 
-  AssertEquals('facade canonical GetCPUInfo should match legacy GetCPUInformation arch',
-    Ord(LFacadeCPUInfo.Arch), Ord(LFacadeCanonicalCPUInfo.Arch));
-  AssertEquals('facade canonical GetCPUInfo should match legacy GetCPUInformation vendor',
-    LFacadeCPUInfo.Vendor, LFacadeCanonicalCPUInfo.Vendor);
-  AssertEquals('facade canonical GetCPUInfo should match legacy GetCPUInformation model',
-    LFacadeCPUInfo.Model, LFacadeCanonicalCPUInfo.Model);
+  CheckEqual(Ord(LFacadeCPUInfo.Arch), Ord(LFacadeCanonicalCPUInfo.Arch), 'facade canonical GetCPUInfo should match legacy GetCPUInformation arch');
+  CheckEqual(LFacadeCPUInfo.Vendor, LFacadeCanonicalCPUInfo.Vendor, 'facade canonical GetCPUInfo should match legacy GetCPUInformation vendor');
+  CheckEqual(LFacadeCPUInfo.Model, LFacadeCanonicalCPUInfo.Model, 'facade canonical GetCPUInfo should match legacy GetCPUInformation model');
 
-  AssertEquals('facade CPU info arch should match canonical cpuinfo getter',
-    Ord(LCanonicalCPUInfo.Arch), Ord(LFacadeCanonicalCPUInfo.Arch));
-  AssertEquals('facade CPU info vendor should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.Vendor, LFacadeCanonicalCPUInfo.Vendor);
-  AssertEquals('facade CPU info model should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.Model, LFacadeCanonicalCPUInfo.Model);
-  AssertEquals('facade CPU logical core count should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.LogicalCores, LFacadeCanonicalCPUInfo.LogicalCores);
-  AssertEquals('facade CPU physical core count should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.PhysicalCores, LFacadeCanonicalCPUInfo.PhysicalCores);
-  AssertEquals('facade CPU OSXSAVE flag should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.OSXSAVE, LFacadeCanonicalCPUInfo.OSXSAVE);
-  AssertEquals('facade CPU XCR0 should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.XCR0, LFacadeCanonicalCPUInfo.XCR0);
-  AssertTrue('facade CPU raw generic features should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.GenericRaw = LFacadeCanonicalCPUInfo.GenericRaw);
-  AssertTrue('facade CPU usable generic features should match canonical cpuinfo getter',
-    LCanonicalCPUInfo.GenericUsable = LFacadeCanonicalCPUInfo.GenericUsable);
+  CheckEqual(Ord(LCanonicalCPUInfo.Arch), Ord(LFacadeCanonicalCPUInfo.Arch), 'facade CPU info arch should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.Vendor, LFacadeCanonicalCPUInfo.Vendor, 'facade CPU info vendor should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.Model, LFacadeCanonicalCPUInfo.Model, 'facade CPU info model should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.LogicalCores, LFacadeCanonicalCPUInfo.LogicalCores, 'facade CPU logical core count should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.PhysicalCores, LFacadeCanonicalCPUInfo.PhysicalCores, 'facade CPU physical core count should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.OSXSAVE, LFacadeCanonicalCPUInfo.OSXSAVE, 'facade CPU OSXSAVE flag should match canonical cpuinfo getter');
+  CheckEqual(LCanonicalCPUInfo.XCR0, LFacadeCanonicalCPUInfo.XCR0, 'facade CPU XCR0 should match canonical cpuinfo getter');
+  CheckTrue(LCanonicalCPUInfo.GenericRaw = LFacadeCanonicalCPUInfo.GenericRaw, 'facade CPU raw generic features should match canonical cpuinfo getter');
+  CheckTrue(LCanonicalCPUInfo.GenericUsable = LFacadeCanonicalCPUInfo.GenericUsable, 'facade CPU usable generic features should match canonical cpuinfo getter');
 
   LFacadeSupported := nextpas.core.simd.GetSupportedBackendList;
   LCanonicalSupported := nextpas.core.simd.cpuinfo.GetSupportedBackendList;
-  AssertBackendArrayEquals('facade supported backend list should stay on canonical cpuinfo semantics',
-    LCanonicalSupported, LFacadeSupported);
-  AssertEquals('facade best supported backend should match canonical cpuinfo getter',
-    Ord(nextpas.core.simd.cpuinfo.GetBestSupportedBackend),
-    Ord(nextpas.core.simd.GetBestSupportedBackend));
+  AssertBackendArrayEquals('facade supported backend list should stay on canonical cpuinfo semantics', LCanonicalSupported, LFacadeSupported);
+  CheckEqual(Ord(nextpas.core.simd.cpuinfo.GetBestSupportedBackend), Ord(nextpas.core.simd.GetBestSupportedBackend), 'facade best supported backend should match canonical cpuinfo getter');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeSnapshot_Canonical_Name_Aliases_Legacy_Subunit_Name;
@@ -183,26 +138,16 @@ begin
   LCanonicalSnapshot := nextpas.core.simd.runtime.GetCurrentRuntimeSnapshot;
   LLegacySnapshot := nextpas.core.simd.runtime.GetCurrentSimdRuntimeSnapshot;
 
-  AssertEquals('runtime snapshot canonical getter should match legacy alias current backend',
-    Ord(LLegacySnapshot.CurrentBackend), Ord(LCanonicalSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot canonical getter should match legacy alias backend info backend',
-    Ord(LLegacySnapshot.CurrentBackendInfo.Backend), Ord(LCanonicalSnapshot.CurrentBackendInfo.Backend));
-  AssertEquals('runtime snapshot canonical getter should match legacy alias backend info name',
-    LLegacySnapshot.CurrentBackendInfo.Name, LCanonicalSnapshot.CurrentBackendInfo.Name);
-  AssertEquals('runtime snapshot canonical getter should match legacy alias backend info description',
-    LLegacySnapshot.CurrentBackendInfo.Description, LCanonicalSnapshot.CurrentBackendInfo.Description);
-  AssertEquals('runtime snapshot canonical getter should match legacy alias backend info availability',
-    LLegacySnapshot.CurrentBackendInfo.Available, LCanonicalSnapshot.CurrentBackendInfo.Available);
-  AssertEquals('runtime snapshot canonical getter should match legacy alias backend info priority',
-    LLegacySnapshot.CurrentBackendInfo.Priority, LCanonicalSnapshot.CurrentBackendInfo.Priority);
-  AssertTrue('runtime snapshot canonical getter should match legacy alias backend info capabilities',
-    LLegacySnapshot.CurrentBackendInfo.Capabilities = LCanonicalSnapshot.CurrentBackendInfo.Capabilities);
-  AssertBackendArrayEquals('runtime snapshot canonical getter should match legacy alias registered backends',
-    LLegacySnapshot.RegisteredBackends, LCanonicalSnapshot.RegisteredBackends);
-  AssertBackendArrayEquals('runtime snapshot canonical getter should match legacy alias dispatchable backends',
-    LLegacySnapshot.DispatchableBackends, LCanonicalSnapshot.DispatchableBackends);
-  AssertEquals('runtime snapshot canonical getter should match legacy alias best dispatchable backend',
-    Ord(LLegacySnapshot.BestDispatchableBackend), Ord(LCanonicalSnapshot.BestDispatchableBackend));
+  CheckEqual(Ord(LLegacySnapshot.CurrentBackend), Ord(LCanonicalSnapshot.CurrentBackend), 'runtime snapshot canonical getter should match legacy alias current backend');
+  CheckEqual(Ord(LLegacySnapshot.CurrentBackendInfo.Backend), Ord(LCanonicalSnapshot.CurrentBackendInfo.Backend), 'runtime snapshot canonical getter should match legacy alias backend info backend');
+  CheckEqual(LLegacySnapshot.CurrentBackendInfo.Name, LCanonicalSnapshot.CurrentBackendInfo.Name, 'runtime snapshot canonical getter should match legacy alias backend info name');
+  CheckEqual(LLegacySnapshot.CurrentBackendInfo.Description, LCanonicalSnapshot.CurrentBackendInfo.Description, 'runtime snapshot canonical getter should match legacy alias backend info description');
+  CheckEqual(LLegacySnapshot.CurrentBackendInfo.Available, LCanonicalSnapshot.CurrentBackendInfo.Available, 'runtime snapshot canonical getter should match legacy alias backend info availability');
+  CheckEqual(LLegacySnapshot.CurrentBackendInfo.Priority, LCanonicalSnapshot.CurrentBackendInfo.Priority, 'runtime snapshot canonical getter should match legacy alias backend info priority');
+  CheckTrue(LLegacySnapshot.CurrentBackendInfo.Capabilities = LCanonicalSnapshot.CurrentBackendInfo.Capabilities, 'runtime snapshot canonical getter should match legacy alias backend info capabilities');
+  AssertBackendArrayEquals('runtime snapshot canonical getter should match legacy alias registered backends', LLegacySnapshot.RegisteredBackends, LCanonicalSnapshot.RegisteredBackends);
+  AssertBackendArrayEquals('runtime snapshot canonical getter should match legacy alias dispatchable backends', LLegacySnapshot.DispatchableBackends, LCanonicalSnapshot.DispatchableBackends);
+  CheckEqual(Ord(LLegacySnapshot.BestDispatchableBackend), Ord(LCanonicalSnapshot.BestDispatchableBackend), 'runtime snapshot canonical getter should match legacy alias best dispatchable backend');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_FacadeRuntimeSnapshot_View_Matches_Runtime_Subunit;
@@ -213,50 +158,33 @@ begin
   LFacadeSnapshot := nextpas.core.simd.GetCurrentRuntimeSnapshot;
   LRuntimeSnapshot := nextpas.core.simd.runtime.GetCurrentRuntimeSnapshot;
 
-  AssertEquals('facade runtime snapshot current backend should match runtime subunit snapshot',
-    Ord(LRuntimeSnapshot.CurrentBackend), Ord(LFacadeSnapshot.CurrentBackend));
-  AssertEquals('facade runtime snapshot backend info backend should match runtime subunit snapshot',
-    Ord(LRuntimeSnapshot.CurrentBackendInfo.Backend), Ord(LFacadeSnapshot.CurrentBackendInfo.Backend));
-  AssertEquals('facade runtime snapshot backend info name should match runtime subunit snapshot',
-    LRuntimeSnapshot.CurrentBackendInfo.Name, LFacadeSnapshot.CurrentBackendInfo.Name);
-  AssertEquals('facade runtime snapshot backend info description should match runtime subunit snapshot',
-    LRuntimeSnapshot.CurrentBackendInfo.Description, LFacadeSnapshot.CurrentBackendInfo.Description);
-  AssertEquals('facade runtime snapshot backend info availability should match runtime subunit snapshot',
-    LRuntimeSnapshot.CurrentBackendInfo.Available, LFacadeSnapshot.CurrentBackendInfo.Available);
-  AssertEquals('facade runtime snapshot backend info priority should match runtime subunit snapshot',
-    LRuntimeSnapshot.CurrentBackendInfo.Priority, LFacadeSnapshot.CurrentBackendInfo.Priority);
-  AssertTrue('facade runtime snapshot backend info capabilities should match runtime subunit snapshot',
-    LRuntimeSnapshot.CurrentBackendInfo.Capabilities = LFacadeSnapshot.CurrentBackendInfo.Capabilities);
-  AssertBackendArrayEquals('facade runtime snapshot registered backends should match runtime subunit snapshot',
-    LRuntimeSnapshot.RegisteredBackends, LFacadeSnapshot.RegisteredBackends);
-  AssertBackendArrayEquals('facade runtime snapshot dispatchable backends should match runtime subunit snapshot',
-    LRuntimeSnapshot.DispatchableBackends, LFacadeSnapshot.DispatchableBackends);
-  AssertEquals('facade runtime snapshot best dispatchable backend should match runtime subunit snapshot',
-    Ord(LRuntimeSnapshot.BestDispatchableBackend), Ord(LFacadeSnapshot.BestDispatchableBackend));
+  CheckEqual(Ord(LRuntimeSnapshot.CurrentBackend), Ord(LFacadeSnapshot.CurrentBackend), 'facade runtime snapshot current backend should match runtime subunit snapshot');
+  CheckEqual(Ord(LRuntimeSnapshot.CurrentBackendInfo.Backend), Ord(LFacadeSnapshot.CurrentBackendInfo.Backend), 'facade runtime snapshot backend info backend should match runtime subunit snapshot');
+  CheckEqual(LRuntimeSnapshot.CurrentBackendInfo.Name, LFacadeSnapshot.CurrentBackendInfo.Name, 'facade runtime snapshot backend info name should match runtime subunit snapshot');
+  CheckEqual(LRuntimeSnapshot.CurrentBackendInfo.Description, LFacadeSnapshot.CurrentBackendInfo.Description, 'facade runtime snapshot backend info description should match runtime subunit snapshot');
+  CheckEqual(LRuntimeSnapshot.CurrentBackendInfo.Available, LFacadeSnapshot.CurrentBackendInfo.Available, 'facade runtime snapshot backend info availability should match runtime subunit snapshot');
+  CheckEqual(LRuntimeSnapshot.CurrentBackendInfo.Priority, LFacadeSnapshot.CurrentBackendInfo.Priority, 'facade runtime snapshot backend info priority should match runtime subunit snapshot');
+  CheckTrue(LRuntimeSnapshot.CurrentBackendInfo.Capabilities = LFacadeSnapshot.CurrentBackendInfo.Capabilities, 'facade runtime snapshot backend info capabilities should match runtime subunit snapshot');
+  AssertBackendArrayEquals('facade runtime snapshot registered backends should match runtime subunit snapshot', LRuntimeSnapshot.RegisteredBackends, LFacadeSnapshot.RegisteredBackends);
+  AssertBackendArrayEquals('facade runtime snapshot dispatchable backends should match runtime subunit snapshot', LRuntimeSnapshot.DispatchableBackends, LFacadeSnapshot.DispatchableBackends);
+  CheckEqual(Ord(LRuntimeSnapshot.BestDispatchableBackend), Ord(LFacadeSnapshot.BestDispatchableBackend), 'facade runtime snapshot best dispatchable backend should match runtime subunit snapshot');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_FacadeRuntimeControlPlane_Wrappers_Interoperate_With_Legacy_Aliases;
 begin
-  AssertTrue('facade TrySetCurrentBackend(sbScalar) should succeed',
-    nextpas.core.simd.TrySetCurrentBackend(sbScalar));
-  AssertEquals('runtime subunit getter should track facade TrySetCurrentBackend',
-    Ord(sbScalar), Ord(nextpas.core.simd.runtime.GetCurrentBackend));
-  AssertEquals('facade runtime snapshot should track facade TrySetCurrentBackend',
-    Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentRuntimeSnapshot.CurrentBackend));
+  CheckTrue(nextpas.core.simd.TrySetCurrentBackend(sbScalar), 'facade TrySetCurrentBackend(sbScalar) should succeed');
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.runtime.GetCurrentBackend), 'runtime subunit getter should track facade TrySetCurrentBackend');
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentRuntimeSnapshot.CurrentBackend), 'facade runtime snapshot should track facade TrySetCurrentBackend');
 
   nextpas.core.simd.ResetBackendSelection;
-  AssertEquals('legacy ResetBackendSelection should restore best dispatchable backend after facade TrySetCurrentBackend',
-    Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.GetCurrentBackend));
+  CheckEqual(Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.GetCurrentBackend), 'legacy ResetBackendSelection should restore best dispatchable backend after facade TrySetCurrentBackend');
 
   nextpas.core.simd.ForceBackend(sbScalar);
-  AssertEquals('facade GetCurrentBackend should track legacy ForceBackend',
-    Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentBackend));
-  AssertEquals('facade runtime snapshot should track legacy ForceBackend',
-    Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentRuntimeSnapshot.CurrentBackend));
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentBackend), 'facade GetCurrentBackend should track legacy ForceBackend');
+  CheckEqual(Ord(sbScalar), Ord(nextpas.core.simd.GetCurrentRuntimeSnapshot.CurrentBackend), 'facade runtime snapshot should track legacy ForceBackend');
 
   nextpas.core.simd.ResetCurrentBackendSelection;
-  AssertEquals('facade ResetCurrentBackendSelection should restore best dispatchable backend after legacy ForceBackend',
-    Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.GetCurrentBackend));
+  CheckEqual(Ord(nextpas.core.simd.GetBestDispatchableBackend), Ord(nextpas.core.simd.GetCurrentBackend), 'facade ResetCurrentBackendSelection should restore best dispatchable backend after legacy ForceBackend');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeSnapshot_View_Matches_Runtime_And_Legacy_Helpers;
@@ -267,64 +195,41 @@ begin
   LSnapshot := nextpas.core.simd.runtime.GetCurrentRuntimeSnapshot;
   LDispatch := GetDispatchTable;
 
-  AssertTrue('GetDispatchTable should be assigned', LDispatch <> nil);
-  AssertEquals('runtime snapshot current backend should match runtime getter',
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot current backend should match legacy facade getter',
-    Ord(nextpas.core.simd.GetCurrentBackend), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot current backend should match dispatch snapshot backend',
-    Ord(LDispatch^.Backend), Ord(LSnapshot.CurrentBackend));
+  CheckTrue(LDispatch <> nil, 'GetDispatchTable should be assigned');
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot current backend should match runtime getter');
+  CheckEqual(Ord(nextpas.core.simd.GetCurrentBackend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot current backend should match legacy facade getter');
+  CheckEqual(Ord(LDispatch^.Backend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot current backend should match dispatch snapshot backend');
 
-  AssertEquals('runtime snapshot backend info backend should match snapshot backend',
-    Ord(LSnapshot.CurrentBackend), Ord(LSnapshot.CurrentBackendInfo.Backend));
-  AssertEquals('runtime snapshot backend info name should match runtime getter',
-    nextpas.core.simd.runtime.GetCurrentBackendInfo.Name, LSnapshot.CurrentBackendInfo.Name);
-  AssertEquals('runtime snapshot backend info description should match runtime getter',
-    nextpas.core.simd.runtime.GetCurrentBackendInfo.Description, LSnapshot.CurrentBackendInfo.Description);
-  AssertEquals('runtime snapshot backend info availability should match runtime getter',
-    nextpas.core.simd.runtime.GetCurrentBackendInfo.Available, LSnapshot.CurrentBackendInfo.Available);
-  AssertEquals('runtime snapshot backend info priority should match runtime getter',
-    nextpas.core.simd.runtime.GetCurrentBackendInfo.Priority, LSnapshot.CurrentBackendInfo.Priority);
-  AssertTrue('runtime snapshot backend info capabilities should match runtime getter',
-    LSnapshot.CurrentBackendInfo.Capabilities = nextpas.core.simd.runtime.GetCurrentBackendInfo.Capabilities);
+  CheckEqual(Ord(LSnapshot.CurrentBackend), Ord(LSnapshot.CurrentBackendInfo.Backend), 'runtime snapshot backend info backend should match snapshot backend');
+  CheckEqual(nextpas.core.simd.runtime.GetCurrentBackendInfo.Name, LSnapshot.CurrentBackendInfo.Name, 'runtime snapshot backend info name should match runtime getter');
+  CheckEqual(nextpas.core.simd.runtime.GetCurrentBackendInfo.Description, LSnapshot.CurrentBackendInfo.Description, 'runtime snapshot backend info description should match runtime getter');
+  CheckEqual(nextpas.core.simd.runtime.GetCurrentBackendInfo.Available, LSnapshot.CurrentBackendInfo.Available, 'runtime snapshot backend info availability should match runtime getter');
+  CheckEqual(nextpas.core.simd.runtime.GetCurrentBackendInfo.Priority, LSnapshot.CurrentBackendInfo.Priority, 'runtime snapshot backend info priority should match runtime getter');
+  CheckTrue(LSnapshot.CurrentBackendInfo.Capabilities = nextpas.core.simd.runtime.GetCurrentBackendInfo.Capabilities, 'runtime snapshot backend info capabilities should match runtime getter');
 
-  AssertBackendArrayEquals('runtime snapshot registered backends should match runtime getter',
-    nextpas.core.simd.runtime.GetRegisteredBackendList, LSnapshot.RegisteredBackends);
-  AssertBackendArrayEquals('runtime snapshot dispatchable backends should match runtime getter',
-    nextpas.core.simd.runtime.GetDispatchableBackendList, LSnapshot.DispatchableBackends);
-  AssertEquals('runtime snapshot best dispatchable backend should match runtime getter',
-    Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend),
-    Ord(LSnapshot.BestDispatchableBackend));
+  AssertBackendArrayEquals('runtime snapshot registered backends should match runtime getter', nextpas.core.simd.runtime.GetRegisteredBackendList, LSnapshot.RegisteredBackends);
+  AssertBackendArrayEquals('runtime snapshot dispatchable backends should match runtime getter', nextpas.core.simd.runtime.GetDispatchableBackendList, LSnapshot.DispatchableBackends);
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend), Ord(LSnapshot.BestDispatchableBackend), 'runtime snapshot best dispatchable backend should match runtime getter');
 end;
 
 procedure TTestCase_RuntimeAPI.Test_RuntimeSnapshot_Switch_Tracks_ControlPlane_And_Dispatch;
 var
   LSnapshot: TSimdRuntimeSnapshot;
 begin
-  AssertTrue('TrySetCurrentBackend(sbScalar) should succeed in runtime snapshot test',
-    nextpas.core.simd.runtime.TrySetCurrentBackend(sbScalar));
+  CheckTrue(nextpas.core.simd.runtime.TrySetCurrentBackend(sbScalar), 'TrySetCurrentBackend(sbScalar) should succeed in runtime snapshot test');
 
   LSnapshot := nextpas.core.simd.runtime.GetCurrentRuntimeSnapshot;
-  AssertEquals('runtime snapshot current backend should switch to Scalar',
-    Ord(sbScalar), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot backend info backend should switch to Scalar',
-    Ord(sbScalar), Ord(LSnapshot.CurrentBackendInfo.Backend));
-  AssertEquals('runtime snapshot should match dispatch snapshot backend after switch',
-    Ord(GetDispatchTable^.Backend), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot should match runtime getter after switch',
-    Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(LSnapshot.CurrentBackend));
+  CheckEqual(Ord(sbScalar), Ord(LSnapshot.CurrentBackend), 'runtime snapshot current backend should switch to Scalar');
+  CheckEqual(Ord(sbScalar), Ord(LSnapshot.CurrentBackendInfo.Backend), 'runtime snapshot backend info backend should switch to Scalar');
+  CheckEqual(Ord(GetDispatchTable^.Backend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot should match dispatch snapshot backend after switch');
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetCurrentBackend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot should match runtime getter after switch');
 
   nextpas.core.simd.runtime.ResetCurrentBackendSelection;
   LSnapshot := nextpas.core.simd.runtime.GetCurrentRuntimeSnapshot;
-  AssertEquals('runtime snapshot reset should restore automatic current backend',
-    Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot should match dispatch snapshot backend after reset',
-    Ord(GetDispatchTable^.Backend), Ord(LSnapshot.CurrentBackend));
-  AssertEquals('runtime snapshot backend info backend should match reset backend',
-    Ord(LSnapshot.CurrentBackend), Ord(LSnapshot.CurrentBackendInfo.Backend));
+  CheckEqual(Ord(nextpas.core.simd.runtime.GetBestDispatchableBackend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot reset should restore automatic current backend');
+  CheckEqual(Ord(GetDispatchTable^.Backend), Ord(LSnapshot.CurrentBackend), 'runtime snapshot should match dispatch snapshot backend after reset');
+  CheckEqual(Ord(LSnapshot.CurrentBackend), Ord(LSnapshot.CurrentBackendInfo.Backend), 'runtime snapshot backend info backend should match reset backend');
 end;
 
-initialization
-  RegisterTest(TTestCase_RuntimeAPI);
 
 end.

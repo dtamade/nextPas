@@ -227,6 +227,82 @@ begin
   platform_pipe_close(LPipe);
 end;
 
+procedure TestWriteNilBuffer;
+var
+  R: Int32;
+begin
+  R := platform_console_write(1, nil, 4);
+  Check(R <> 0, 'write nil buffer fails');
+end;
+
+procedure TestWriteZeroLength;
+var
+  LBuf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  LBuf[0] := 't';
+  R := platform_console_write(1, @LBuf[0], 0);
+  Check(R = 0, 'write zero length returns 0');
+end;
+
+procedure TestReadZeroLength;
+var
+  LBuf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  R := platform_console_read(0, @LBuf[0], 0);
+  Check(R = 0, 'read zero length returns 0');
+end;
+
+procedure TestReadNilBuffer;
+var
+  R: Int32;
+begin
+  { On Unix, read(nil) may return -1 (EFAULT) or crash; just verify it doesn't hang }
+  R := platform_console_read(0, nil, 4);
+  Check(True, 'read nil buffer did not hang');
+end;
+
+procedure TestWaitReadableInvalidFd;
+var
+  LWait: TPlatformConsoleWait;
+begin
+  LWait := platform_console_wait_readable(-1, 10);
+  { On some systems, invalid fd may return cwTimeout instead of cwError }
+  Check(LWait in [cwError, cwTimeout], 'wait on invalid fd returns error or timeout');
+end;
+
+procedure TestGetSizeInvalidFd;
+var
+  Size: TPlatformConsoleSize;
+  R: Int32;
+begin
+  R := platform_console_get_size_fd(-1, Size);
+  Check(R <> 0, 'get_size on invalid fd fails');
+end;
+
+procedure TestSetRawInvalidFd;
+var
+  LMode: TPlatformConsoleMode;
+  R: Int32;
+begin
+  R := platform_console_set_raw(-1, LMode);
+  Check(R <> 0, 'set_raw on invalid fd fails');
+end;
+
+procedure TestWriteLargeBuffer;
+var
+  Buf: array[0..4095] of AnsiChar;
+  R: Int32;
+  I: Integer;
+begin
+  for I := 0 to 4095 do
+    Buf[I] := AnsiChar(Ord('A') + (I mod 26));
+  R := platform_console_write(1, @Buf[0], 4096);
+  Check(R >= 0, 'write large buffer succeeds');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.console');
   T.Test('is_terminal stdout', @TestIsTerminalStdout);
@@ -241,5 +317,13 @@ begin
   T.Test('write invalid fd', @TestWriteInvalidFd);
   T.Test('wait readable pipe', @TestWaitReadablePipe);
   T.Test('read from pipe', @TestReadFromPipe);
+  T.Test('write nil buffer', @TestWriteNilBuffer);
+  T.Test('write zero length', @TestWriteZeroLength);
+  T.Test('read zero length', @TestReadZeroLength);
+  T.Test('read nil buffer', @TestReadNilBuffer);
+  T.Test('wait readable invalid fd', @TestWaitReadableInvalidFd);
+  T.Test('get size invalid fd', @TestGetSizeInvalidFd);
+  T.Test('set_raw invalid fd', @TestSetRawInvalidFd);
+  T.Test('write large buffer', @TestWriteLargeBuffer);
   if not T.Run then Halt(1);
 end.

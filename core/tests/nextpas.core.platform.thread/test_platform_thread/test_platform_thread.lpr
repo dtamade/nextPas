@@ -301,6 +301,160 @@ begin
   Check(not platform_thread_is_alive(LRec), 'thread not alive after wait');
 end;
 
+procedure TestThreadSetNameGetName;
+var
+  LRet: Int32;
+  LBuf: array[0..255] of AnsiChar;
+begin
+  LRet := platform_thread_set_name('test_thread');
+  {$IFDEF NEXTPAS_LINUX}
+  CheckEqual(Int64(0), Int64(LRet), 'set_name succeeds on Linux');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRet := platform_thread_get_name(@LBuf[0], 256);
+  CheckEqual(Int64(0), Int64(LRet), 'get_name succeeds on Linux');
+  Check(LBuf[0] <> #0, 'get_name returns non-empty');
+  {$ELSE}
+  Check(LRet <> 0, 'set_name returns unsupported on non-Linux');
+  {$ENDIF}
+end;
+
+procedure TestThreadSetNameNil;
+var
+  LRet: Int32;
+begin
+  LRet := platform_thread_set_name(nil);
+  Check(LRet <> 0, 'set_name(nil) returns error');
+end;
+
+procedure TestThreadGetNameNil;
+var
+  LRet: Int32;
+begin
+  LRet := platform_thread_get_name(nil, 256);
+  Check(LRet <> 0, 'get_name(nil buf) returns error');
+end;
+
+procedure TestThreadGetNameSmallBuf;
+var
+  LRet: Int32;
+  LBuf: array[0..3] of AnsiChar;
+begin
+  LRet := platform_thread_set_name('test_thread');
+  {$IFDEF NEXTPAS_LINUX}
+  CheckEqual(Int64(0), Int64(LRet), 'set_name');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRet := platform_thread_get_name(@LBuf[0], 4);
+  CheckEqual(Int64(0), Int64(LRet), 'get_name with small buf');
+  Check(LBuf[0] <> #0, 'get_name returns content');
+  Check(LBuf[3] = #0, 'get_name null-terminates within buf');
+  {$ENDIF}
+end;
+
+procedure TestSleepMs;
+var
+  LStart, LEnd: UInt64;
+begin
+  LStart := platform_thread_id; { just to have a timestamp reference }
+  platform_thread_sleep_ms(10);
+  LEnd := platform_thread_id;
+  { Just verify it doesn't crash - actual timing is hard to test }
+  Check(True, 'sleep_ms completes');
+end;
+
+procedure TestSleepSec;
+var
+  LStart, LEnd: UInt64;
+begin
+  LStart := platform_thread_id;
+  platform_thread_sleep_sec(0);
+  LEnd := platform_thread_id;
+  Check(True, 'sleep_sec(0) completes immediately');
+end;
+
+procedure TestSleepNsZero;
+begin
+  platform_thread_sleep_ns(0);
+  Check(True, 'sleep_ns(0) completes immediately');
+end;
+
+procedure TestSleepMsZero;
+begin
+  platform_thread_sleep_ms(0);
+  Check(True, 'sleep_ms(0) completes immediately');
+end;
+
+procedure TestThreadYieldMultiple;
+var
+  LI: Int32;
+begin
+  for LI := 0 to 9 do
+    platform_thread_yield;
+  Check(True, 'multiple yields complete without crash');
+end;
+
+procedure TestTlsMultipleKeys;
+var
+  LKey1, LKey2: TPlatformTLSKey;
+begin
+  Check(platform_tls_create(LKey1) = 0, 'create key1');
+  Check(platform_tls_create(LKey2) = 0, 'create key2');
+  Check(platform_tls_set(LKey1, Pointer(111)) = 0, 'set key1');
+  Check(platform_tls_set(LKey2, Pointer(222)) = 0, 'set key2');
+  CheckEqual(Int64(111), Int64(PtrUInt(platform_tls_get(LKey1))), 'get key1');
+  CheckEqual(Int64(222), Int64(PtrUInt(platform_tls_get(LKey2))), 'get key2');
+  platform_tls_destroy(LKey1);
+  platform_tls_destroy(LKey2);
+end;
+
+procedure TestThreadCreateNilProc;
+var
+  LHandle: TPlatformThreadHandle;
+  LRet: Int32;
+begin
+  LRet := platform_thread_create(LHandle, nil, nil);
+  Check(LRet <> 0, 'create with nil proc returns error');
+end;
+
+procedure TestThreadSleepNsShort;
+begin
+  platform_thread_sleep_ns(1000); { 1 microsecond }
+  Check(True, 'sleep_ns(1000) completes');
+end;
+
+procedure TestThreadWaitWithoutSpawn;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  FillChar(LRec, SizeOf(LRec), 0);
+  Check(platform_thread_wait(LRec) <> 0, 'wait without spawn returns error');
+end;
+
+procedure TestThreadIsAliveAfterWait;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  FillChar(LRec, SizeOf(LRec), 0);
+  Check(not platform_thread_is_alive(LRec), 'not alive before spawn');
+  Check(platform_thread_spawn(LRec, @FastThread, nil) = 0, 'spawn');
+  Check(platform_thread_is_alive(LRec), 'alive after spawn');
+  Check(platform_thread_wait(LRec) = 0, 'wait');
+  Check(not platform_thread_is_alive(LRec), 'not alive after wait');
+end;
+
+function NilArgThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Check(AArg = nil, 'arg is nil as expected');
+  Result := nil;
+end;
+
+procedure TestThreadSpawnNilArg;
+var
+  LRec: TPlatformThreadRecord;
+begin
+  Check(platform_thread_spawn(LRec, @NilArgThread, nil) = 0, 'spawn with nil arg');
+  Check(platform_thread_wait(LRec) = 0, 'wait');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.thread');
   T.Test('Thread create and join', @TestThreadCreateJoin);
@@ -319,5 +473,20 @@ begin
   T.Test('TLS set/get nil', @TestTlsSetGetNil);
   T.Test('Thread spawn and wait', @TestThreadSpawnAndWait);
   T.Test('Thread is alive after detach', @TestThreadIsAliveAfterDetach);
+  T.Test('Thread set_name/get_name', @TestThreadSetNameGetName);
+  T.Test('Thread set_name(nil)', @TestThreadSetNameNil);
+  T.Test('Thread get_name(nil)', @TestThreadGetNameNil);
+  T.Test('Thread get_name small buf', @TestThreadGetNameSmallBuf);
+  T.Test('sleep_ms', @TestSleepMs);
+  T.Test('sleep_sec', @TestSleepSec);
+  T.Test('sleep_ns(0)', @TestSleepNsZero);
+  T.Test('sleep_ms(0)', @TestSleepMsZero);
+  T.Test('yield multiple', @TestThreadYieldMultiple);
+  T.Test('TLS multiple keys', @TestTlsMultipleKeys);
+  T.Test('Thread create nil proc', @TestThreadCreateNilProc);
+  T.Test('sleep_ns short', @TestThreadSleepNsShort);
+  T.Test('Thread wait without spawn', @TestThreadWaitWithoutSpawn);
+  T.Test('Thread is_alive after wait', @TestThreadIsAliveAfterWait);
+  T.Test('Thread spawn nil arg', @TestThreadSpawnNilArg);
   if not T.Run then Halt(1);
 end.

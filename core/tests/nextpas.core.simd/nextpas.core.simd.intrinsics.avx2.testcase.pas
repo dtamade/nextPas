@@ -7,15 +7,12 @@ unit nextpas.core.simd.intrinsics.avx2.testcase;
 interface
 
 uses
-  nextpas.core.exception,
-  nextpas.core.text.conv,
-  fpcunit, testregistry,
-  nextpas.core.errors,
-  nextpas.core.simd.intrinsics.base,
-  nextpas.core.simd.intrinsics.avx2;
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test, nextpas.core.errors,
+  nextpas.core.simd.intrinsics.base, nextpas.core.simd.intrinsics.avx2;
 
+{$M+}
 type
-  TTestCase_AVX2IntrinsicsFallback = class(TTestCase)
+  TTestCase_AVX2IntrinsicsFallback = class(TTestFixture)
   published
     procedure Test_SetZero_AllLanesAndViews;
     procedure Test_LoadStoreSetAndBroadcastSemantics;
@@ -139,16 +136,16 @@ begin
   LResult := avx2_setzero_si256;
 
   for LIndex := 0 to 3 do
-    AssertEquals('setzero.u64[' + IntToStr(LIndex) + ']', QWord(0), LResult.m256i_u64[LIndex]);
+    CheckEqual(QWord(0), LResult.m256i_u64[LIndex], 'setzero.u64[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 7 do
-    AssertEquals('setzero.i32[' + IntToStr(LIndex) + ']', 0, LResult.m256i_i32[LIndex]);
+    CheckEqual(0, LResult.m256i_i32[LIndex], 'setzero.i32[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 31 do
-    AssertEquals('setzero.u8[' + IntToStr(LIndex) + ']', 0, LResult.m256i_u8[LIndex]);
+    CheckEqual(0, LResult.m256i_u8[LIndex], 'setzero.u8[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 3 do
-    AssertEquals('setzero.f64[' + IntToStr(LIndex) + ']', 0.0, LResult.m256_f64[LIndex], 0.0);
+    CheckNear(0.0, LResult.m256_f64[LIndex], 0.0, 'setzero.f64[' + IntToStr(LIndex) + ']');
 end;
 
 
@@ -170,29 +167,25 @@ begin
   avx2_store_si256(LStored, LSource);
   LLoaded := avx2_load_si256(@LStored);
   for LIndex := 0 to 3 do
-    AssertEquals('load/store aligned u64[' + IntToStr(LIndex) + ']',
-      LSource.m256i_u64[LIndex],
-      LLoaded.m256i_u64[LIndex]);
+    CheckEqual(LSource.m256i_u64[LIndex], LLoaded.m256i_u64[LIndex], 'load/store aligned u64[' + IntToStr(LIndex) + ']');
 
   FillChar(LStored, SizeOf(LStored), $A5);
   avx2_storeu_si256(LStored, LSource);
   LLoaded := avx2_loadu_si256(@LStored);
   for LIndex := 0 to 3 do
-    AssertEquals('load/store unaligned u64[' + IntToStr(LIndex) + ']',
-      LSource.m256i_u64[LIndex],
-      LLoaded.m256i_u64[LIndex]);
+    CheckEqual(LSource.m256i_u64[LIndex], LLoaded.m256i_u64[LIndex], 'load/store unaligned u64[' + IntToStr(LIndex) + ']');
 
   LSet := avx2_set1_epi32(-1234567);
   for LIndex := 0 to 7 do
-    AssertEquals('set1_epi32[' + IntToStr(LIndex) + ']', -1234567, LSet.m256i_i32[LIndex]);
+    CheckEqual(-1234567, LSet.m256i_i32[LIndex], 'set1_epi32[' + IntToStr(LIndex) + ']');
 
   LSet := avx2_set1_epi16(-1234);
   for LIndex := 0 to 15 do
-    AssertEquals('set1_epi16[' + IntToStr(LIndex) + ']', -1234, LSet.m256i_i16[LIndex]);
+    CheckEqual(-1234, LSet.m256i_i16[LIndex], 'set1_epi16[' + IntToStr(LIndex) + ']');
 
   LSet := avx2_set1_epi8(-12);
   for LIndex := 0 to 31 do
-    AssertEquals('set1_epi8[' + IntToStr(LIndex) + ']', -12, LSet.m256i_i8[LIndex]);
+    CheckEqual(-12, LSet.m256i_i8[LIndex], 'set1_epi8[' + IntToStr(LIndex) + ']');
 
   LSource128 := Default(TM128);
   LSource128.m128_f32[0] := 3.25;
@@ -201,14 +194,14 @@ begin
   LSource128.m128_f32[3] := 9.25;
   LBroadcast := avx2_broadcastss_ps(LSource128);
   for LIndex := 0 to 7 do
-    AssertEquals('broadcastss_ps[' + IntToStr(LIndex) + ']', 3.25, LBroadcast.m256_f32[LIndex], 0.0001);
+    CheckNear(3.25, LBroadcast.m256_f32[LIndex], 0.0001, 'broadcastss_ps[' + IntToStr(LIndex) + ']');
 
   LSource128 := Default(TM128);
   LSource128.m128d_f64[0] := -7.5;
   LSource128.m128d_f64[1] := 42.0;
   LBroadcast := avx2_broadcastsd_pd(LSource128);
   for LIndex := 0 to 3 do
-    AssertEquals('broadcastsd_pd[' + IntToStr(LIndex) + ']', -7.5, LBroadcast.m256_f64[LIndex], 0.0000001);
+    CheckNear(-7.5, LBroadcast.m256_f64[LIndex], 0.0000001, 'broadcastsd_pd[' + IntToStr(LIndex) + ']');
 
   LSource128 := Default(TM128);
   for LIndex := 0 to 3 do
@@ -216,13 +209,9 @@ begin
 
   LBroadcast := avx2_broadcastsi128_si256(LSource128);
   for LIndex := 0 to 3 do
-    AssertEquals('broadcastsi128 low[' + IntToStr(LIndex) + ']',
-      LSource128.m128i_i32[LIndex],
-      LBroadcast.m256i_i32[LIndex]);
+    CheckEqual(LSource128.m128i_i32[LIndex], LBroadcast.m256i_i32[LIndex], 'broadcastsi128 low[' + IntToStr(LIndex) + ']');
   for LIndex := 0 to 3 do
-    AssertEquals('broadcastsi128 high[' + IntToStr(LIndex) + ']',
-      LSource128.m128i_i32[LIndex],
-      LBroadcast.m256i_i32[LIndex + 4]);
+    CheckEqual(LSource128.m128i_i32[LIndex], LBroadcast.m256i_i32[LIndex + 4], 'broadcastsi128 high[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_AddSub_LaneSemantics;
@@ -246,12 +235,8 @@ begin
   LSub := avx2_sub_epi32(LA, LB);
   for LIndex := 0 to 7 do
   begin
-    AssertEquals('add_epi32[' + IntToStr(LIndex) + ']',
-      LA.m256i_i32[LIndex] + LB.m256i_i32[LIndex],
-      LAdd.m256i_i32[LIndex]);
-    AssertEquals('sub_epi32[' + IntToStr(LIndex) + ']',
-      LA.m256i_i32[LIndex] - LB.m256i_i32[LIndex],
-      LSub.m256i_i32[LIndex]);
+    CheckEqual(LA.m256i_i32[LIndex] + LB.m256i_i32[LIndex], LAdd.m256i_i32[LIndex], 'add_epi32[' + IntToStr(LIndex) + ']');
+    CheckEqual(LA.m256i_i32[LIndex] - LB.m256i_i32[LIndex], LSub.m256i_i32[LIndex], 'sub_epi32[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 15 do
@@ -264,12 +249,8 @@ begin
   LSub := avx2_sub_epi16(LA, LB);
   for LIndex := 0 to 15 do
   begin
-    AssertEquals('add_epi16[' + IntToStr(LIndex) + ']',
-      LA.m256i_i16[LIndex] + LB.m256i_i16[LIndex],
-      LAdd.m256i_i16[LIndex]);
-    AssertEquals('sub_epi16[' + IntToStr(LIndex) + ']',
-      LA.m256i_i16[LIndex] - LB.m256i_i16[LIndex],
-      LSub.m256i_i16[LIndex]);
+    CheckEqual(LA.m256i_i16[LIndex] + LB.m256i_i16[LIndex], LAdd.m256i_i16[LIndex], 'add_epi16[' + IntToStr(LIndex) + ']');
+    CheckEqual(LA.m256i_i16[LIndex] - LB.m256i_i16[LIndex], LSub.m256i_i16[LIndex], 'sub_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 31 do
@@ -282,24 +263,18 @@ begin
   LSub := avx2_sub_epi8(LA, LB);
   for LIndex := 0 to 31 do
   begin
-    AssertEquals('add_epi8[' + IntToStr(LIndex) + ']',
-      LA.m256i_i8[LIndex] + LB.m256i_i8[LIndex],
-      LAdd.m256i_i8[LIndex]);
-    AssertEquals('sub_epi8[' + IntToStr(LIndex) + ']',
-      LA.m256i_i8[LIndex] - LB.m256i_i8[LIndex],
-      LSub.m256i_i8[LIndex]);
+    CheckEqual(LA.m256i_i8[LIndex] + LB.m256i_i8[LIndex], LAdd.m256i_i8[LIndex], 'add_epi8[' + IntToStr(LIndex) + ']');
+    CheckEqual(LA.m256i_i8[LIndex] - LB.m256i_i8[LIndex], LSub.m256i_i8[LIndex], 'sub_epi8[' + IntToStr(LIndex) + ']');
   end;
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Bitwise_TruthTablesAndAndNotSemantics;
 const
   LEFT_VALUES: array[0..7] of Cardinal = (
-    $00000000, $FFFFFFFF, $AAAAAAAA, $55555555,
-    $12345678, $87654321, $0F0F0F0F, $F0F0F0F0
+    $00000000, $FFFFFFFF, $AAAAAAAA, $55555555, $12345678, $87654321, $0F0F0F0F, $F0F0F0F0
   );
   RIGHT_VALUES: array[0..7] of Cardinal = (
-    $FFFFFFFF, $00000000, $CCCCCCCC, $33333333,
-    $87654321, $12345678, $FF00FF00, $00FF00FF
+    $FFFFFFFF, $00000000, $CCCCCCCC, $33333333, $87654321, $12345678, $FF00FF00, $00FF00FF
   );
 var
   LA: TM256;
@@ -325,23 +300,13 @@ begin
 
   for LIndex := 0 to 7 do
   begin
-    AssertEquals('and_si256[' + IntToStr(LIndex) + ']',
-      LA.m256i_u32[LIndex] and LB.m256i_u32[LIndex],
-      LAnd.m256i_u32[LIndex]);
-    AssertEquals('andnot_si256[' + IntToStr(LIndex) + ']',
-      (not LA.m256i_u32[LIndex]) and LB.m256i_u32[LIndex],
-      LAndNot.m256i_u32[LIndex]);
-    AssertEquals('or_si256[' + IntToStr(LIndex) + ']',
-      LA.m256i_u32[LIndex] or LB.m256i_u32[LIndex],
-      LOr.m256i_u32[LIndex]);
-    AssertEquals('xor_si256[' + IntToStr(LIndex) + ']',
-      LA.m256i_u32[LIndex] xor LB.m256i_u32[LIndex],
-      LXor.m256i_u32[LIndex]);
+    CheckEqual(LA.m256i_u32[LIndex] and LB.m256i_u32[LIndex], LAnd.m256i_u32[LIndex], 'and_si256[' + IntToStr(LIndex) + ']');
+    CheckEqual((not LA.m256i_u32[LIndex]) and LB.m256i_u32[LIndex], LAndNot.m256i_u32[LIndex], 'andnot_si256[' + IntToStr(LIndex) + ']');
+    CheckEqual(LA.m256i_u32[LIndex] or LB.m256i_u32[LIndex], LOr.m256i_u32[LIndex], 'or_si256[' + IntToStr(LIndex) + ']');
+    CheckEqual(LA.m256i_u32[LIndex] xor LB.m256i_u32[LIndex], LXor.m256i_u32[LIndex], 'xor_si256[' + IntToStr(LIndex) + ']');
 
     // (~a & b) 与 (a & b) 互斥，按位并后应还原 b。
-    AssertEquals('and/or identity[' + IntToStr(LIndex) + ']',
-      LB.m256i_u32[LIndex],
-      LAnd.m256i_u32[LIndex] or LAndNot.m256i_u32[LIndex]);
+    CheckEqual(LB.m256i_u32[LIndex], LAnd.m256i_u32[LIndex] or LAndNot.m256i_u32[LIndex], 'and/or identity[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -371,14 +336,14 @@ begin
   for LIndex := 0 to 7 do
   begin
     if LA.m256i_i32[LIndex] = LB.m256i_i32[LIndex] then
-      AssertEquals('cmpeq_epi32[' + IntToStr(LIndex) + ']', Cardinal($FFFFFFFF), LEq.m256i_u32[LIndex])
+      CheckEqual(Cardinal($FFFFFFFF), LEq.m256i_u32[LIndex], 'cmpeq_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpeq_epi32[' + IntToStr(LIndex) + ']', Cardinal(0), LEq.m256i_u32[LIndex]);
+      CheckEqual(Cardinal(0), LEq.m256i_u32[LIndex], 'cmpeq_epi32[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i32[LIndex] > LB.m256i_i32[LIndex] then
-      AssertEquals('cmpgt_epi32[' + IntToStr(LIndex) + ']', Cardinal($FFFFFFFF), LGt.m256i_u32[LIndex])
+      CheckEqual(Cardinal($FFFFFFFF), LGt.m256i_u32[LIndex], 'cmpgt_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpgt_epi32[' + IntToStr(LIndex) + ']', Cardinal(0), LGt.m256i_u32[LIndex]);
+      CheckEqual(Cardinal(0), LGt.m256i_u32[LIndex], 'cmpgt_epi32[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 15 do
@@ -396,14 +361,14 @@ begin
   for LIndex := 0 to 15 do
   begin
     if LA.m256i_i16[LIndex] = LB.m256i_i16[LIndex] then
-      AssertEquals('cmpeq_epi16[' + IntToStr(LIndex) + ']', Word($FFFF), LEq.m256i_u16[LIndex])
+      CheckEqual(Word($FFFF), LEq.m256i_u16[LIndex], 'cmpeq_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpeq_epi16[' + IntToStr(LIndex) + ']', Word(0), LEq.m256i_u16[LIndex]);
+      CheckEqual(Word(0), LEq.m256i_u16[LIndex], 'cmpeq_epi16[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i16[LIndex] > LB.m256i_i16[LIndex] then
-      AssertEquals('cmpgt_epi16[' + IntToStr(LIndex) + ']', Word($FFFF), LGt.m256i_u16[LIndex])
+      CheckEqual(Word($FFFF), LGt.m256i_u16[LIndex], 'cmpgt_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpgt_epi16[' + IntToStr(LIndex) + ']', Word(0), LGt.m256i_u16[LIndex]);
+      CheckEqual(Word(0), LGt.m256i_u16[LIndex], 'cmpgt_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 31 do
@@ -421,14 +386,14 @@ begin
   for LIndex := 0 to 31 do
   begin
     if LA.m256i_i8[LIndex] = LB.m256i_i8[LIndex] then
-      AssertEquals('cmpeq_epi8[' + IntToStr(LIndex) + ']', Byte($FF), LEq.m256i_u8[LIndex])
+      CheckEqual(Byte($FF), LEq.m256i_u8[LIndex], 'cmpeq_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpeq_epi8[' + IntToStr(LIndex) + ']', Byte(0), LEq.m256i_u8[LIndex]);
+      CheckEqual(Byte(0), LEq.m256i_u8[LIndex], 'cmpeq_epi8[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i8[LIndex] > LB.m256i_i8[LIndex] then
-      AssertEquals('cmpgt_epi8[' + IntToStr(LIndex) + ']', Byte($FF), LGt.m256i_u8[LIndex])
+      CheckEqual(Byte($FF), LGt.m256i_u8[LIndex], 'cmpgt_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('cmpgt_epi8[' + IntToStr(LIndex) + ']', Byte(0), LGt.m256i_u8[LIndex]);
+      CheckEqual(Byte(0), LGt.m256i_u8[LIndex], 'cmpgt_epi8[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -457,14 +422,14 @@ begin
   for LIndex := 0 to 7 do
   begin
     if LA.m256i_i32[LIndex] = LB.m256i_i32[LIndex] then
-      AssertEquals('edge.cmpeq_epi32[' + IntToStr(LIndex) + ']', Cardinal($FFFFFFFF), LEq.m256i_u32[LIndex])
+      CheckEqual(Cardinal($FFFFFFFF), LEq.m256i_u32[LIndex], 'edge.cmpeq_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpeq_epi32[' + IntToStr(LIndex) + ']', Cardinal(0), LEq.m256i_u32[LIndex]);
+      CheckEqual(Cardinal(0), LEq.m256i_u32[LIndex], 'edge.cmpeq_epi32[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i32[LIndex] > LB.m256i_i32[LIndex] then
-      AssertEquals('edge.cmpgt_epi32[' + IntToStr(LIndex) + ']', Cardinal($FFFFFFFF), LGt.m256i_u32[LIndex])
+      CheckEqual(Cardinal($FFFFFFFF), LGt.m256i_u32[LIndex], 'edge.cmpgt_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpgt_epi32[' + IntToStr(LIndex) + ']', Cardinal(0), LGt.m256i_u32[LIndex]);
+      CheckEqual(Cardinal(0), LGt.m256i_u32[LIndex], 'edge.cmpgt_epi32[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 15 do
@@ -490,14 +455,14 @@ begin
   for LIndex := 0 to 15 do
   begin
     if LA.m256i_i16[LIndex] = LB.m256i_i16[LIndex] then
-      AssertEquals('edge.cmpeq_epi16[' + IntToStr(LIndex) + ']', Word($FFFF), LEq.m256i_u16[LIndex])
+      CheckEqual(Word($FFFF), LEq.m256i_u16[LIndex], 'edge.cmpeq_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpeq_epi16[' + IntToStr(LIndex) + ']', Word(0), LEq.m256i_u16[LIndex]);
+      CheckEqual(Word(0), LEq.m256i_u16[LIndex], 'edge.cmpeq_epi16[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i16[LIndex] > LB.m256i_i16[LIndex] then
-      AssertEquals('edge.cmpgt_epi16[' + IntToStr(LIndex) + ']', Word($FFFF), LGt.m256i_u16[LIndex])
+      CheckEqual(Word($FFFF), LGt.m256i_u16[LIndex], 'edge.cmpgt_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpgt_epi16[' + IntToStr(LIndex) + ']', Word(0), LGt.m256i_u16[LIndex]);
+      CheckEqual(Word(0), LGt.m256i_u16[LIndex], 'edge.cmpgt_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 31 do
@@ -519,14 +484,14 @@ begin
   for LIndex := 0 to 31 do
   begin
     if LA.m256i_i8[LIndex] = LB.m256i_i8[LIndex] then
-      AssertEquals('edge.cmpeq_epi8[' + IntToStr(LIndex) + ']', Byte($FF), LEq.m256i_u8[LIndex])
+      CheckEqual(Byte($FF), LEq.m256i_u8[LIndex], 'edge.cmpeq_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpeq_epi8[' + IntToStr(LIndex) + ']', Byte(0), LEq.m256i_u8[LIndex]);
+      CheckEqual(Byte(0), LEq.m256i_u8[LIndex], 'edge.cmpeq_epi8[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i8[LIndex] > LB.m256i_i8[LIndex] then
-      AssertEquals('edge.cmpgt_epi8[' + IntToStr(LIndex) + ']', Byte($FF), LGt.m256i_u8[LIndex])
+      CheckEqual(Byte($FF), LGt.m256i_u8[LIndex], 'edge.cmpgt_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('edge.cmpgt_epi8[' + IntToStr(LIndex) + ']', Byte(0), LGt.m256i_u8[LIndex]);
+      CheckEqual(Byte(0), LGt.m256i_u8[LIndex], 'edge.cmpgt_epi8[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -554,14 +519,14 @@ begin
   for LIndex := 0 to 7 do
   begin
     if LA.m256i_i32[LIndex] < LB.m256i_i32[LIndex] then
-      AssertEquals('min_epi32[' + IntToStr(LIndex) + ']', LA.m256i_i32[LIndex], LMin.m256i_i32[LIndex])
+      CheckEqual(LA.m256i_i32[LIndex], LMin.m256i_i32[LIndex], 'min_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('min_epi32[' + IntToStr(LIndex) + ']', LB.m256i_i32[LIndex], LMin.m256i_i32[LIndex]);
+      CheckEqual(LB.m256i_i32[LIndex], LMin.m256i_i32[LIndex], 'min_epi32[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i32[LIndex] > LB.m256i_i32[LIndex] then
-      AssertEquals('max_epi32[' + IntToStr(LIndex) + ']', LA.m256i_i32[LIndex], LMax.m256i_i32[LIndex])
+      CheckEqual(LA.m256i_i32[LIndex], LMax.m256i_i32[LIndex], 'max_epi32[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('max_epi32[' + IntToStr(LIndex) + ']', LB.m256i_i32[LIndex], LMax.m256i_i32[LIndex]);
+      CheckEqual(LB.m256i_i32[LIndex], LMax.m256i_i32[LIndex], 'max_epi32[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 15 do
@@ -577,14 +542,14 @@ begin
   for LIndex := 0 to 15 do
   begin
     if LA.m256i_i16[LIndex] < LB.m256i_i16[LIndex] then
-      AssertEquals('min_epi16[' + IntToStr(LIndex) + ']', LA.m256i_i16[LIndex], LMin.m256i_i16[LIndex])
+      CheckEqual(LA.m256i_i16[LIndex], LMin.m256i_i16[LIndex], 'min_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('min_epi16[' + IntToStr(LIndex) + ']', LB.m256i_i16[LIndex], LMin.m256i_i16[LIndex]);
+      CheckEqual(LB.m256i_i16[LIndex], LMin.m256i_i16[LIndex], 'min_epi16[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i16[LIndex] > LB.m256i_i16[LIndex] then
-      AssertEquals('max_epi16[' + IntToStr(LIndex) + ']', LA.m256i_i16[LIndex], LMax.m256i_i16[LIndex])
+      CheckEqual(LA.m256i_i16[LIndex], LMax.m256i_i16[LIndex], 'max_epi16[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('max_epi16[' + IntToStr(LIndex) + ']', LB.m256i_i16[LIndex], LMax.m256i_i16[LIndex]);
+      CheckEqual(LB.m256i_i16[LIndex], LMax.m256i_i16[LIndex], 'max_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 31 do
@@ -600,14 +565,14 @@ begin
   for LIndex := 0 to 31 do
   begin
     if LA.m256i_i8[LIndex] < LB.m256i_i8[LIndex] then
-      AssertEquals('min_epi8[' + IntToStr(LIndex) + ']', LA.m256i_i8[LIndex], LMin.m256i_i8[LIndex])
+      CheckEqual(LA.m256i_i8[LIndex], LMin.m256i_i8[LIndex], 'min_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('min_epi8[' + IntToStr(LIndex) + ']', LB.m256i_i8[LIndex], LMin.m256i_i8[LIndex]);
+      CheckEqual(LB.m256i_i8[LIndex], LMin.m256i_i8[LIndex], 'min_epi8[' + IntToStr(LIndex) + ']');
 
     if LA.m256i_i8[LIndex] > LB.m256i_i8[LIndex] then
-      AssertEquals('max_epi8[' + IntToStr(LIndex) + ']', LA.m256i_i8[LIndex], LMax.m256i_i8[LIndex])
+      CheckEqual(LA.m256i_i8[LIndex], LMax.m256i_i8[LIndex], 'max_epi8[' + IntToStr(LIndex) + ']')
     else
-      AssertEquals('max_epi8[' + IntToStr(LIndex) + ']', LB.m256i_i8[LIndex], LMax.m256i_i8[LIndex]);
+      CheckEqual(LB.m256i_i8[LIndex], LMax.m256i_i8[LIndex], 'max_epi8[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -630,9 +595,7 @@ begin
   end;
   LResult := avx2_mullo_epi32(LA, LB);
   for LIndex := 0 to 7 do
-    AssertEquals('mullo_epi32[' + IntToStr(LIndex) + ']',
-      LA.m256i_i32[LIndex] * LB.m256i_i32[LIndex],
-      LResult.m256i_i32[LIndex]);
+    CheckEqual(LA.m256i_i32[LIndex] * LB.m256i_i32[LIndex], LResult.m256i_i32[LIndex], 'mullo_epi32[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 15 do
   begin
@@ -641,9 +604,7 @@ begin
   end;
   LResult := avx2_mullo_epi16(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('mullo_epi16[' + IntToStr(LIndex) + ']',
-      LA.m256i_i16[LIndex] * LB.m256i_i16[LIndex],
-      LResult.m256i_i16[LIndex]);
+    CheckEqual(LA.m256i_i16[LIndex] * LB.m256i_i16[LIndex], LResult.m256i_i16[LIndex], 'mullo_epi16[' + IntToStr(LIndex) + ']');
 
   LA.m256i_i16[0] := -30000;  LB.m256i_i16[0] := 2;
   LA.m256i_i16[1] := 30000;   LB.m256i_i16[1] := 2;
@@ -664,9 +625,7 @@ begin
   for LIndex := 0 to 15 do
   begin
     LProductI64 := Int64(LA.m256i_i16[LIndex]) * Int64(LB.m256i_i16[LIndex]);
-    AssertEquals('mulhi_epi16[' + IntToStr(LIndex) + ']',
-      SmallInt(LProductI64 shr 16),
-      LResult.m256i_i16[LIndex]);
+    CheckEqual(SmallInt(LProductI64 shr 16), LResult.m256i_i16[LIndex], 'mulhi_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   LA.m256i_u16[0] := 65535;  LB.m256i_u16[0] := 65535;
@@ -683,9 +642,7 @@ begin
   for LIndex := 0 to 15 do
   begin
     LProductU64 := QWord(LA.m256i_u16[LIndex]) * QWord(LB.m256i_u16[LIndex]);
-    AssertEquals('mulhi_epu16[' + IntToStr(LIndex) + ']',
-      Word((LProductU64 shr 16) and QWord($FFFF)),
-      LResult.m256i_u16[LIndex]);
+    CheckEqual(Word((LProductU64 shr 16) and QWord($FFFF)), LResult.m256i_u16[LIndex], 'mulhi_epu16[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -723,16 +680,13 @@ begin
         LExceptionClass := E.ClassName;
       end;
     end;
-    AssertTrue('overflow.mullo_epi32 should raise arithmetic-check exception in checked builds (got=' + LExceptionClass + ')',
-      LRaised);
+    CheckTrue(LRaised, 'overflow.mullo_epi32 should raise arithmetic-check exception in checked builds (got=' + LExceptionClass + ')');
   end
   else
   begin
     LResult := avx2_mullo_epi32(LA, LB);
     for LIndex := 0 to 7 do
-      AssertEquals('overflow.mullo_epi32[' + IntToStr(LIndex) + ']',
-        MulLoI32Unchecked(LA.m256i_i32[LIndex], LB.m256i_i32[LIndex]),
-        LResult.m256i_i32[LIndex]);
+      CheckEqual(MulLoI32Unchecked(LA.m256i_i32[LIndex], LB.m256i_i32[LIndex]), LResult.m256i_i32[LIndex], 'overflow.mullo_epi32[' + IntToStr(LIndex) + ']');
   end;
 
   LA.m256i_i16[0] := High(SmallInt);  LB.m256i_i16[0] := High(SmallInt);
@@ -765,23 +719,18 @@ begin
         LExceptionClass := E.ClassName;
       end;
     end;
-    AssertTrue('overflow.mullo_epi16 should raise arithmetic-check exception in checked builds (got=' + LExceptionClass + ')',
-      LRaised);
+    CheckTrue(LRaised, 'overflow.mullo_epi16 should raise arithmetic-check exception in checked builds (got=' + LExceptionClass + ')');
   end
   else
   begin
     LResult := avx2_mullo_epi16(LA, LB);
     for LIndex := 0 to 15 do
-      AssertEquals('overflow.mullo_epi16[' + IntToStr(LIndex) + ']',
-        MulLoI16Unchecked(LA.m256i_i16[LIndex], LB.m256i_i16[LIndex]),
-        LResult.m256i_i16[LIndex]);
+      CheckEqual(MulLoI16Unchecked(LA.m256i_i16[LIndex], LB.m256i_i16[LIndex]), LResult.m256i_i16[LIndex], 'overflow.mullo_epi16[' + IntToStr(LIndex) + ']');
   end;
 
   LResult := avx2_mulhi_epi16(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('overflow.mulhi_epi16[' + IntToStr(LIndex) + ']',
-      MulHiI16Signed(LA.m256i_i16[LIndex], LB.m256i_i16[LIndex]),
-      LResult.m256i_i16[LIndex]);
+    CheckEqual(MulHiI16Signed(LA.m256i_i16[LIndex], LB.m256i_i16[LIndex]), LResult.m256i_i16[LIndex], 'overflow.mulhi_epi16[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 15 do
   begin
@@ -795,9 +744,7 @@ begin
 
   LResult := avx2_mulhi_epu16(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('overflow.mulhi_epu16[' + IntToStr(LIndex) + ']',
-      MulHiU16(LA.m256i_u16[LIndex], LB.m256i_u16[LIndex]),
-      LResult.m256i_u16[LIndex]);
+    CheckEqual(MulHiU16(LA.m256i_u16[LIndex], LB.m256i_u16[LIndex]), LResult.m256i_u16[LIndex], 'overflow.mulhi_epu16[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_ShiftVar_CountClampingSemantics;
@@ -831,24 +778,24 @@ begin
   LCount.m256i_i32[7] := 63;
 
   LResult := avx2_sllv_epi32(LA, LCount);
-  AssertTrue('sllv_epi32[0]', LResult.m256i_u32[0] = 1);
-  AssertTrue('sllv_epi32[1]', LResult.m256i_u32[1] = 0);
-  AssertTrue('sllv_epi32[2]', LResult.m256i_u32[2] = 12);
-  AssertTrue('sllv_epi32[3]', LResult.m256i_u32[3] = $80000000);
-  AssertTrue('sllv_epi32[4]', LResult.m256i_u32[4] = 0);
-  AssertTrue('sllv_epi32[5]', LResult.m256i_u32[5] = 0);
-  AssertTrue('sllv_epi32[6]', LResult.m256i_u32[6] = 0);
-  AssertTrue('sllv_epi32[7]', LResult.m256i_u32[7] = 0);
+  CheckTrue(LResult.m256i_u32[0] = 1, 'sllv_epi32[0]');
+  CheckTrue(LResult.m256i_u32[1] = 0, 'sllv_epi32[1]');
+  CheckTrue(LResult.m256i_u32[2] = 12, 'sllv_epi32[2]');
+  CheckTrue(LResult.m256i_u32[3] = $80000000, 'sllv_epi32[3]');
+  CheckTrue(LResult.m256i_u32[4] = 0, 'sllv_epi32[4]');
+  CheckTrue(LResult.m256i_u32[5] = 0, 'sllv_epi32[5]');
+  CheckTrue(LResult.m256i_u32[6] = 0, 'sllv_epi32[6]');
+  CheckTrue(LResult.m256i_u32[7] = 0, 'sllv_epi32[7]');
 
   LResult := avx2_srlv_epi32(LA, LCount);
-  AssertTrue('srlv_epi32[0]', LResult.m256i_u32[0] = 1);
-  AssertTrue('srlv_epi32[1]', LResult.m256i_u32[1] = $40000000);
-  AssertTrue('srlv_epi32[2]', LResult.m256i_u32[2] = 0);
-  AssertTrue('srlv_epi32[3]', LResult.m256i_u32[3] = 0);
-  AssertTrue('srlv_epi32[4]', LResult.m256i_u32[4] = 0);
-  AssertTrue('srlv_epi32[5]', LResult.m256i_u32[5] = 0);
-  AssertTrue('srlv_epi32[6]', LResult.m256i_u32[6] = 0);
-  AssertTrue('srlv_epi32[7]', LResult.m256i_u32[7] = 0);
+  CheckTrue(LResult.m256i_u32[0] = 1, 'srlv_epi32[0]');
+  CheckTrue(LResult.m256i_u32[1] = $40000000, 'srlv_epi32[1]');
+  CheckTrue(LResult.m256i_u32[2] = 0, 'srlv_epi32[2]');
+  CheckTrue(LResult.m256i_u32[3] = 0, 'srlv_epi32[3]');
+  CheckTrue(LResult.m256i_u32[4] = 0, 'srlv_epi32[4]');
+  CheckTrue(LResult.m256i_u32[5] = 0, 'srlv_epi32[5]');
+  CheckTrue(LResult.m256i_u32[6] = 0, 'srlv_epi32[6]');
+  CheckTrue(LResult.m256i_u32[7] = 0, 'srlv_epi32[7]');
 
   LA.m256i_i32[0] := 1;
   LA.m256i_i32[1] := -1;
@@ -860,14 +807,14 @@ begin
   LA.m256i_i32[7] := 123456789;
 
   LResult := avx2_srav_epi32(LA, LCount);
-  AssertEquals('srav_epi32[0]', 1, LResult.m256i_i32[0]);
-  AssertEquals('srav_epi32[1]', -1, LResult.m256i_i32[1]);
-  AssertEquals('srav_epi32[2]', -536870912, LResult.m256i_i32[2]);
-  AssertEquals('srav_epi32[3]', 0, LResult.m256i_i32[3]);
-  AssertEquals('srav_epi32[4]', -1, LResult.m256i_i32[4]);
-  AssertEquals('srav_epi32[5]', 0, LResult.m256i_i32[5]);
-  AssertEquals('srav_epi32[6]', -1, LResult.m256i_i32[6]);
-  AssertEquals('srav_epi32[7]', 0, LResult.m256i_i32[7]);
+  CheckEqual(1, LResult.m256i_i32[0], 'srav_epi32[0]');
+  CheckEqual(-1, LResult.m256i_i32[1], 'srav_epi32[1]');
+  CheckEqual(-536870912, LResult.m256i_i32[2], 'srav_epi32[2]');
+  CheckEqual(0, LResult.m256i_i32[3], 'srav_epi32[3]');
+  CheckEqual(-1, LResult.m256i_i32[4], 'srav_epi32[4]');
+  CheckEqual(0, LResult.m256i_i32[5], 'srav_epi32[5]');
+  CheckEqual(-1, LResult.m256i_i32[6], 'srav_epi32[6]');
+  CheckEqual(0, LResult.m256i_i32[7], 'srav_epi32[7]');
 
   LA.m256i_u64[0] := 1;
   LA.m256i_u64[1] := HIGH_BIT_U64;
@@ -880,16 +827,16 @@ begin
   LCount.m256i_u64[3] := 64;
 
   LResult := avx2_sllv_epi64(LA, LCount);
-  AssertTrue('sllv_epi64[0]', LResult.m256i_u64[0] = 1);
-  AssertTrue('sllv_epi64[1]', LResult.m256i_u64[1] = 0);
-  AssertTrue('sllv_epi64[2]', LResult.m256i_u64[2] = HIGH_BIT_U64);
-  AssertTrue('sllv_epi64[3]', LResult.m256i_u64[3] = 0);
+  CheckTrue(LResult.m256i_u64[0] = 1, 'sllv_epi64[0]');
+  CheckTrue(LResult.m256i_u64[1] = 0, 'sllv_epi64[1]');
+  CheckTrue(LResult.m256i_u64[2] = HIGH_BIT_U64, 'sllv_epi64[2]');
+  CheckTrue(LResult.m256i_u64[3] = 0, 'sllv_epi64[3]');
 
   LResult := avx2_srlv_epi64(LA, LCount);
-  AssertTrue('srlv_epi64[0]', LResult.m256i_u64[0] = 1);
-  AssertTrue('srlv_epi64[1]', LResult.m256i_u64[1] = NEXT_HIGH_BIT_U64);
-  AssertTrue('srlv_epi64[2]', LResult.m256i_u64[2] = 0);
-  AssertTrue('srlv_epi64[3]', LResult.m256i_u64[3] = 0);
+  CheckTrue(LResult.m256i_u64[0] = 1, 'srlv_epi64[0]');
+  CheckTrue(LResult.m256i_u64[1] = NEXT_HIGH_BIT_U64, 'srlv_epi64[1]');
+  CheckTrue(LResult.m256i_u64[2] = 0, 'srlv_epi64[2]');
+  CheckTrue(LResult.m256i_u64[3] = 0, 'srlv_epi64[3]');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_ShiftVar_ExceptionalCounts_BitPatternSemantics;
@@ -952,15 +899,11 @@ begin
 
   LResult := avx2_sllv_epi32(LA, LCount);
   for LIndex := 0 to 7 do
-    AssertEquals('sllv exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedSll[LIndex]),
-      QWord(LResult.m256i_u32[LIndex]));
+    CheckEqual(QWord(LExpectedSll[LIndex]), QWord(LResult.m256i_u32[LIndex]), 'sllv exceptional[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_srlv_epi32(LA, LCount);
   for LIndex := 0 to 7 do
-    AssertEquals('srlv exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedSrl[LIndex]),
-      QWord(LResult.m256i_u32[LIndex]));
+    CheckEqual(QWord(LExpectedSrl[LIndex]), QWord(LResult.m256i_u32[LIndex]), 'srlv exceptional[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 7 do
   begin
@@ -979,9 +922,7 @@ begin
 
   LResult := avx2_srav_epi32(LA, LCount);
   for LIndex := 0 to 7 do
-    AssertEquals('srav exceptional[' + IntToStr(LIndex) + ']',
-      LExpectedSra[LIndex],
-      LResult.m256i_i32[LIndex]);
+    CheckEqual(LExpectedSra[LIndex], LResult.m256i_i32[LIndex], 'srav exceptional[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather_LoadsExpectedValues;
@@ -1012,19 +953,19 @@ begin
 
   LResult := avx2_gather_epi32(@LDataI32[0], LIndices256, SizeOf(LongInt));
   for LIndex := 0 to 7 do
-    AssertEquals('gather_epi32[' + IntToStr(LIndex) + ']', LDataI32[INDEX_PATTERN_256[LIndex]], LResult.m256i_i32[LIndex]);
+    CheckEqual(LDataI32[INDEX_PATTERN_256[LIndex]], LResult.m256i_i32[LIndex], 'gather_epi32[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_gather_epi64(@LDataI64[0], LIndices128, SizeOf(Int64));
   for LIndex := 0 to 3 do
-    AssertEquals('gather_epi64[' + IntToStr(LIndex) + ']', LDataI64[INDEX_PATTERN_128[LIndex]], LResult.m256i_i64[LIndex]);
+    CheckEqual(LDataI64[INDEX_PATTERN_128[LIndex]], LResult.m256i_i64[LIndex], 'gather_epi64[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_gather_ps(@LDataF32[0], LIndices256, SizeOf(Single));
   for LIndex := 0 to 7 do
-    AssertEquals('gather_ps[' + IntToStr(LIndex) + ']', LDataF32[INDEX_PATTERN_256[LIndex]], LResult.m256_f32[LIndex], 0.0001);
+    CheckNear(LDataF32[INDEX_PATTERN_256[LIndex]], LResult.m256_f32[LIndex], 0.0001, 'gather_ps[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_gather_pd(@LDataF64[0], LIndices128, SizeOf(Double));
   for LIndex := 0 to 3 do
-    AssertEquals('gather_pd[' + IntToStr(LIndex) + ']', LDataF64[INDEX_PATTERN_128[LIndex]], LResult.m256_f64[LIndex], 0.0000001);
+    CheckNear(LDataF64[INDEX_PATTERN_128[LIndex]], LResult.m256_f64[LIndex], 0.0000001, 'gather_pd[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather_RejectsInvalidArguments;
@@ -1046,7 +987,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1055,7 +996,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'invalid scale should raise EArgumentError');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather_ScaleVariantsAndNegativeIndices;
@@ -1085,9 +1026,7 @@ begin
 
     LResult := avx2_gather_epi32(@LDataI32[0], LIndices, LScale);
     for LIndex := 0 to 7 do
-      AssertEquals('gather scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex),
-        LDataI32[TARGET_OFFSETS[LIndex] div SizeOf(LongInt)],
-        LResult.m256i_i32[LIndex]);
+      CheckEqual(LDataI32[TARGET_OFFSETS[LIndex] div SizeOf(LongInt)], LResult.m256i_i32[LIndex], 'gather scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex));
   end;
 
   LCenter := @LDataI32[12];
@@ -1102,9 +1041,7 @@ begin
 
   LResult := avx2_gather_epi32(LCenter, LIndices, SizeOf(LongInt));
   for LIndex := 0 to 7 do
-    AssertEquals('gather negative idx=' + IntToStr(LIndex),
-      LDataI32[8 + LIndex],
-      LResult.m256i_i32[LIndex]);
+    CheckEqual(LDataI32[8 + LIndex], LResult.m256i_i32[LIndex], 'gather negative idx=' + IntToStr(LIndex));
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather64AndPD_NegativeIndices;
@@ -1132,17 +1069,17 @@ begin
 
   LCenterI64 := @LDataI64[12];
   LResult := avx2_gather_epi64(LCenterI64, LIndices, SizeOf(Int64));
-  AssertEquals('gather_epi64 negative[0]', LDataI64[9], LResult.m256i_i64[0]);
-  AssertEquals('gather_epi64 negative[1]', LDataI64[11], LResult.m256i_i64[1]);
-  AssertEquals('gather_epi64 negative[2]', LDataI64[12], LResult.m256i_i64[2]);
-  AssertEquals('gather_epi64 negative[3]', LDataI64[14], LResult.m256i_i64[3]);
+  CheckEqual(LDataI64[9], LResult.m256i_i64[0], 'gather_epi64 negative[0]');
+  CheckEqual(LDataI64[11], LResult.m256i_i64[1], 'gather_epi64 negative[1]');
+  CheckEqual(LDataI64[12], LResult.m256i_i64[2], 'gather_epi64 negative[2]');
+  CheckEqual(LDataI64[14], LResult.m256i_i64[3], 'gather_epi64 negative[3]');
 
   LCenterF64 := @LDataF64[12];
   LResult := avx2_gather_pd(LCenterF64, LIndices, SizeOf(Double));
-  AssertEquals('gather_pd negative[0]', LDataF64[9], LResult.m256_f64[0], 0.0000001);
-  AssertEquals('gather_pd negative[1]', LDataF64[11], LResult.m256_f64[1], 0.0000001);
-  AssertEquals('gather_pd negative[2]', LDataF64[12], LResult.m256_f64[2], 0.0000001);
-  AssertEquals('gather_pd negative[3]', LDataF64[14], LResult.m256_f64[3], 0.0000001);
+  CheckNear(LDataF64[9], LResult.m256_f64[0], 0.0000001, 'gather_pd negative[0]');
+  CheckNear(LDataF64[11], LResult.m256_f64[1], 0.0000001, 'gather_pd negative[1]');
+  CheckNear(LDataF64[12], LResult.m256_f64[2], 0.0000001, 'gather_pd negative[2]');
+  CheckNear(LDataF64[14], LResult.m256_f64[3], 0.0000001, 'gather_pd negative[3]');
 
   LRaised := False;
   try
@@ -1151,7 +1088,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'gather_epi64 nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1160,7 +1097,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'gather_pd invalid scale should raise EArgumentError');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather64AndPD_ScaleVariants;
@@ -1208,16 +1145,11 @@ begin
 
     LResult := avx2_gather_epi64(LBaseI64, LIndices, LScale);
     for LIndex := 0 to 3 do
-      AssertEquals('gather_epi64 scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex),
-        LExpectedI64[LIndex],
-        LResult.m256i_i64[LIndex]);
+      CheckEqual(LExpectedI64[LIndex], LResult.m256i_i64[LIndex], 'gather_epi64 scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex));
 
     LResult := avx2_gather_pd(LBaseF64, LIndices, LScale);
     for LIndex := 0 to 3 do
-      AssertEquals('gather_pd scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex),
-        LExpectedF64[LIndex],
-        LResult.m256_f64[LIndex],
-        0.0000001);
+      CheckNear(LExpectedF64[LIndex], LResult.m256_f64[LIndex], 0.0000001, 'gather_pd scale=' + IntToStr(LScale) + ' idx=' + IntToStr(LIndex));
   end;
 end;
 
@@ -1250,7 +1182,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi32 nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'gather_epi32 nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1259,7 +1191,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'gather_epi64 nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1268,7 +1200,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_ps nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'gather_ps nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1277,7 +1209,7 @@ begin
     on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd nil base should raise ENullReferenceError', LRaised);
+  CheckTrue(LRaised, 'gather_pd nil base should raise ENullReferenceError');
 
   LRaised := False;
   try
@@ -1286,7 +1218,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi32 invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'gather_epi32 invalid scale should raise EArgumentError');
 
   LRaised := False;
   try
@@ -1295,7 +1227,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'gather_epi64 invalid scale should raise EArgumentError');
 
   LRaised := False;
   try
@@ -1304,7 +1236,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_ps invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'gather_ps invalid scale should raise EArgumentError');
 
   LRaised := False;
   try
@@ -1313,7 +1245,7 @@ begin
     on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd invalid scale should raise EArgumentError', LRaised);
+  CheckTrue(LRaised, 'gather_pd invalid scale should raise EArgumentError');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Pack_SaturatingSemantics;
@@ -1370,11 +1302,11 @@ begin
 
   LResult := avx2_packs_epi32(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('packs_epi32[' + IntToStr(LIndex) + ']', LExpectedI16[LIndex], LResult.m256i_i16[LIndex]);
+    CheckEqual(LExpectedI16[LIndex], LResult.m256i_i16[LIndex], 'packs_epi32[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_packus_epi32(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('packus_epi32[' + IntToStr(LIndex) + ']', LExpectedU16[LIndex], LResult.m256i_u16[LIndex]);
+    CheckEqual(LExpectedU16[LIndex], LResult.m256i_u16[LIndex], 'packus_epi32[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 15 do
   begin
@@ -1400,11 +1332,11 @@ begin
 
   LResult := avx2_packs_epi16(LA, LB);
   for LIndex := 0 to 31 do
-    AssertEquals('packs_epi16[' + IntToStr(LIndex) + ']', LExpectedI8[LIndex], LResult.m256i_i8[LIndex]);
+    CheckEqual(LExpectedI8[LIndex], LResult.m256i_i8[LIndex], 'packs_epi16[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_packus_epi16(LA, LB);
   for LIndex := 0 to 31 do
-    AssertEquals('packus_epi16[' + IntToStr(LIndex) + ']', LExpectedU8[LIndex], LResult.m256i_u8[LIndex]);
+    CheckEqual(LExpectedU8[LIndex], LResult.m256i_u8[LIndex], 'packus_epi16[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Pack_LaneIsolationExtremes;
@@ -1461,11 +1393,11 @@ begin
 
   LResult := avx2_packs_epi32(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('packs_epi32 lane isolation[' + IntToStr(LIndex) + ']', LExpectedI16[LIndex], LResult.m256i_i16[LIndex]);
+    CheckEqual(LExpectedI16[LIndex], LResult.m256i_i16[LIndex], 'packs_epi32 lane isolation[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_packus_epi32(LA, LB);
   for LIndex := 0 to 15 do
-    AssertEquals('packus_epi32 lane isolation[' + IntToStr(LIndex) + ']', LExpectedU16[LIndex], LResult.m256i_u16[LIndex]);
+    CheckEqual(LExpectedU16[LIndex], LResult.m256i_u16[LIndex], 'packus_epi32 lane isolation[' + IntToStr(LIndex) + ']');
 
   LA.m256i_i16[0] := 200;
   LA.m256i_i16[1] := -200;
@@ -1509,11 +1441,11 @@ begin
 
   LResult := avx2_packs_epi16(LA, LB);
   for LIndex := 0 to 31 do
-    AssertEquals('packs_epi16 lane isolation[' + IntToStr(LIndex) + ']', LExpectedI8[LIndex], LResult.m256i_i8[LIndex]);
+    CheckEqual(LExpectedI8[LIndex], LResult.m256i_i8[LIndex], 'packs_epi16 lane isolation[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_packus_epi16(LA, LB);
   for LIndex := 0 to 31 do
-    AssertEquals('packus_epi16 lane isolation[' + IntToStr(LIndex) + ']', LExpectedU8[LIndex], LResult.m256i_u8[LIndex]);
+    CheckEqual(LExpectedU8[LIndex], LResult.m256i_u8[LIndex], 'packus_epi16 lane isolation[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Pack_ExceptionalExtremes_NoArithmeticException;
@@ -1551,9 +1483,9 @@ begin
   LExceptionClass := '';
   try
     LResult := avx2_packs_epi32(LA, LB);
-    AssertEquals('packs_epi32 high saturation', SmallInt(High(SmallInt)), LResult.m256i_i16[0]);
+    CheckEqual(SmallInt(High(SmallInt)), LResult.m256i_i16[0], 'packs_epi32 high saturation');
     LResult := avx2_packus_epi32(LA, LB);
-    AssertEquals('packus_epi32 unsigned saturation', QWord(High(Word)), QWord(LResult.m256i_u16[0]));
+    CheckEqual(QWord(High(Word)), QWord(LResult.m256i_u16[0]), 'packus_epi32 unsigned saturation');
   except
     on E: Exception do
     begin
@@ -1561,7 +1493,7 @@ begin
       LExceptionClass := E.ClassName;
     end;
   end;
-  AssertFalse('pack*_epi32 should not raise arithmetic exception (got=' + LExceptionClass + ')', LRaised);
+  CheckFalse(LRaised, 'pack*_epi32 should not raise arithmetic exception (got=' + LExceptionClass + ')');
 
   for LIndex := 0 to 15 do
   begin
@@ -1585,9 +1517,9 @@ begin
   LExceptionClass := '';
   try
     LResult := avx2_packs_epi16(LA, LB);
-    AssertEquals('packs_epi16 high saturation', ShortInt(High(ShortInt)), LResult.m256i_i8[0]);
+    CheckEqual(ShortInt(High(ShortInt)), LResult.m256i_i8[0], 'packs_epi16 high saturation');
     LResult := avx2_packus_epi16(LA, LB);
-    AssertEquals('packus_epi16 unsigned saturation', QWord(High(Byte)), QWord(LResult.m256i_u8[0]));
+    CheckEqual(QWord(High(Byte)), QWord(LResult.m256i_u8[0]), 'packus_epi16 unsigned saturation');
   except
     on E: Exception do
     begin
@@ -1595,7 +1527,7 @@ begin
       LExceptionClass := E.ClassName;
     end;
   end;
-  AssertFalse('pack*_epi16 should not raise arithmetic exception (got=' + LExceptionClass + ')', LRaised);
+  CheckFalse(LRaised, 'pack*_epi16 should not raise arithmetic exception (got=' + LExceptionClass + ')');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Unpack_LaneSemantics;
@@ -1622,23 +1554,23 @@ begin
   LLo := avx2_unpacklo_epi32(LA, LB);
   LHi := avx2_unpackhi_epi32(LA, LB);
 
-  AssertEquals('unpacklo_epi32[0]', 0, LLo.m256i_i32[0]);
-  AssertEquals('unpacklo_epi32[1]', 100, LLo.m256i_i32[1]);
-  AssertEquals('unpacklo_epi32[2]', 1, LLo.m256i_i32[2]);
-  AssertEquals('unpacklo_epi32[3]', 101, LLo.m256i_i32[3]);
-  AssertEquals('unpacklo_epi32[4]', 4, LLo.m256i_i32[4]);
-  AssertEquals('unpacklo_epi32[5]', 104, LLo.m256i_i32[5]);
-  AssertEquals('unpacklo_epi32[6]', 5, LLo.m256i_i32[6]);
-  AssertEquals('unpacklo_epi32[7]', 105, LLo.m256i_i32[7]);
+  CheckEqual(0, LLo.m256i_i32[0], 'unpacklo_epi32[0]');
+  CheckEqual(100, LLo.m256i_i32[1], 'unpacklo_epi32[1]');
+  CheckEqual(1, LLo.m256i_i32[2], 'unpacklo_epi32[2]');
+  CheckEqual(101, LLo.m256i_i32[3], 'unpacklo_epi32[3]');
+  CheckEqual(4, LLo.m256i_i32[4], 'unpacklo_epi32[4]');
+  CheckEqual(104, LLo.m256i_i32[5], 'unpacklo_epi32[5]');
+  CheckEqual(5, LLo.m256i_i32[6], 'unpacklo_epi32[6]');
+  CheckEqual(105, LLo.m256i_i32[7], 'unpacklo_epi32[7]');
 
-  AssertEquals('unpackhi_epi32[0]', 2, LHi.m256i_i32[0]);
-  AssertEquals('unpackhi_epi32[1]', 102, LHi.m256i_i32[1]);
-  AssertEquals('unpackhi_epi32[2]', 3, LHi.m256i_i32[2]);
-  AssertEquals('unpackhi_epi32[3]', 103, LHi.m256i_i32[3]);
-  AssertEquals('unpackhi_epi32[4]', 6, LHi.m256i_i32[4]);
-  AssertEquals('unpackhi_epi32[5]', 106, LHi.m256i_i32[5]);
-  AssertEquals('unpackhi_epi32[6]', 7, LHi.m256i_i32[6]);
-  AssertEquals('unpackhi_epi32[7]', 107, LHi.m256i_i32[7]);
+  CheckEqual(2, LHi.m256i_i32[0], 'unpackhi_epi32[0]');
+  CheckEqual(102, LHi.m256i_i32[1], 'unpackhi_epi32[1]');
+  CheckEqual(3, LHi.m256i_i32[2], 'unpackhi_epi32[2]');
+  CheckEqual(103, LHi.m256i_i32[3], 'unpackhi_epi32[3]');
+  CheckEqual(6, LHi.m256i_i32[4], 'unpackhi_epi32[4]');
+  CheckEqual(106, LHi.m256i_i32[5], 'unpackhi_epi32[5]');
+  CheckEqual(7, LHi.m256i_i32[6], 'unpackhi_epi32[6]');
+  CheckEqual(107, LHi.m256i_i32[7], 'unpackhi_epi32[7]');
 
   for LIndex := 0 to 15 do
   begin
@@ -1656,19 +1588,11 @@ begin
 
     for LInner := 0 to 3 do
     begin
-      AssertEquals('unpacklo_epi16.a[' + IntToStr((LLane * 4) + LInner) + ']',
-        LA.m256i_i16[LSrcOffset + LInner],
-        LLo.m256i_i16[LDstOffset + (LInner * 2)]);
-      AssertEquals('unpacklo_epi16.b[' + IntToStr((LLane * 4) + LInner) + ']',
-        LB.m256i_i16[LSrcOffset + LInner],
-        LLo.m256i_i16[LDstOffset + (LInner * 2) + 1]);
+      CheckEqual(LA.m256i_i16[LSrcOffset + LInner], LLo.m256i_i16[LDstOffset + (LInner * 2)], 'unpacklo_epi16.a[' + IntToStr((LLane * 4) + LInner) + ']');
+      CheckEqual(LB.m256i_i16[LSrcOffset + LInner], LLo.m256i_i16[LDstOffset + (LInner * 2) + 1], 'unpacklo_epi16.b[' + IntToStr((LLane * 4) + LInner) + ']');
 
-      AssertEquals('unpackhi_epi16.a[' + IntToStr((LLane * 4) + LInner) + ']',
-        LA.m256i_i16[LSrcOffset + 4 + LInner],
-        LHi.m256i_i16[LDstOffset + (LInner * 2)]);
-      AssertEquals('unpackhi_epi16.b[' + IntToStr((LLane * 4) + LInner) + ']',
-        LB.m256i_i16[LSrcOffset + 4 + LInner],
-        LHi.m256i_i16[LDstOffset + (LInner * 2) + 1]);
+      CheckEqual(LA.m256i_i16[LSrcOffset + 4 + LInner], LHi.m256i_i16[LDstOffset + (LInner * 2)], 'unpackhi_epi16.a[' + IntToStr((LLane * 4) + LInner) + ']');
+      CheckEqual(LB.m256i_i16[LSrcOffset + 4 + LInner], LHi.m256i_i16[LDstOffset + (LInner * 2) + 1], 'unpackhi_epi16.b[' + IntToStr((LLane * 4) + LInner) + ']');
     end;
   end;
 
@@ -1688,19 +1612,11 @@ begin
 
     for LInner := 0 to 7 do
     begin
-      AssertEquals('unpacklo_epi8.a[' + IntToStr((LLane * 8) + LInner) + ']',
-        LA.m256i_i8[LSrcOffset + LInner],
-        LLo.m256i_i8[LDstOffset + (LInner * 2)]);
-      AssertEquals('unpacklo_epi8.b[' + IntToStr((LLane * 8) + LInner) + ']',
-        LB.m256i_i8[LSrcOffset + LInner],
-        LLo.m256i_i8[LDstOffset + (LInner * 2) + 1]);
+      CheckEqual(LA.m256i_i8[LSrcOffset + LInner], LLo.m256i_i8[LDstOffset + (LInner * 2)], 'unpacklo_epi8.a[' + IntToStr((LLane * 8) + LInner) + ']');
+      CheckEqual(LB.m256i_i8[LSrcOffset + LInner], LLo.m256i_i8[LDstOffset + (LInner * 2) + 1], 'unpacklo_epi8.b[' + IntToStr((LLane * 8) + LInner) + ']');
 
-      AssertEquals('unpackhi_epi8.a[' + IntToStr((LLane * 8) + LInner) + ']',
-        LA.m256i_i8[LSrcOffset + 8 + LInner],
-        LHi.m256i_i8[LDstOffset + (LInner * 2)]);
-      AssertEquals('unpackhi_epi8.b[' + IntToStr((LLane * 8) + LInner) + ']',
-        LB.m256i_i8[LSrcOffset + 8 + LInner],
-        LHi.m256i_i8[LDstOffset + (LInner * 2) + 1]);
+      CheckEqual(LA.m256i_i8[LSrcOffset + 8 + LInner], LHi.m256i_i8[LDstOffset + (LInner * 2)], 'unpackhi_epi8.a[' + IntToStr((LLane * 8) + LInner) + ']');
+      CheckEqual(LB.m256i_i8[LSrcOffset + 8 + LInner], LHi.m256i_i8[LDstOffset + (LInner * 2) + 1], 'unpackhi_epi8.b[' + IntToStr((LLane * 8) + LInner) + ']');
     end;
   end;
 end;
@@ -1759,13 +1675,9 @@ begin
 
   for LIndex := 0 to 7 do
   begin
-    AssertEquals('unpacklo_epi32 sentinel[' + IntToStr(LIndex) + ']',
-      LExpectedLo32[LIndex],
-      LLo.m256i_i32[LIndex]);
+    CheckEqual(LExpectedLo32[LIndex], LLo.m256i_i32[LIndex], 'unpacklo_epi32 sentinel[' + IntToStr(LIndex) + ']');
 
-    AssertEquals('unpackhi_epi32 sentinel[' + IntToStr(LIndex) + ']',
-      LExpectedHi32[LIndex],
-      LHi.m256i_i32[LIndex]);
+    CheckEqual(LExpectedHi32[LIndex], LHi.m256i_i32[LIndex], 'unpackhi_epi32 sentinel[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -1818,12 +1730,8 @@ begin
   LHi := avx2_unpackhi_epi8(LA, LB);
   for LIndex := 0 to 31 do
   begin
-    AssertEquals('unpacklo_epi8 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedLo8[LIndex]),
-      QWord(LLo.m256i_u8[LIndex]));
-    AssertEquals('unpackhi_epi8 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedHi8[LIndex]),
-      QWord(LHi.m256i_u8[LIndex]));
+    CheckEqual(QWord(LExpectedLo8[LIndex]), QWord(LLo.m256i_u8[LIndex]), 'unpacklo_epi8 exceptional[' + IntToStr(LIndex) + ']');
+    CheckEqual(QWord(LExpectedHi8[LIndex]), QWord(LHi.m256i_u8[LIndex]), 'unpackhi_epi8 exceptional[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 15 do
@@ -1851,12 +1759,8 @@ begin
   LHi := avx2_unpackhi_epi16(LA, LB);
   for LIndex := 0 to 15 do
   begin
-    AssertEquals('unpacklo_epi16 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedLo16[LIndex]),
-      QWord(LLo.m256i_u16[LIndex]));
-    AssertEquals('unpackhi_epi16 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedHi16[LIndex]),
-      QWord(LHi.m256i_u16[LIndex]));
+    CheckEqual(QWord(LExpectedLo16[LIndex]), QWord(LLo.m256i_u16[LIndex]), 'unpacklo_epi16 exceptional[' + IntToStr(LIndex) + ']');
+    CheckEqual(QWord(LExpectedHi16[LIndex]), QWord(LHi.m256i_u16[LIndex]), 'unpackhi_epi16 exceptional[' + IntToStr(LIndex) + ']');
   end;
 
   for LIndex := 0 to 7 do
@@ -1885,12 +1789,8 @@ begin
   LHi := avx2_unpackhi_epi32(LA, LB);
   for LIndex := 0 to 7 do
   begin
-    AssertEquals('unpacklo_epi32 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedLo32[LIndex]),
-      QWord(LLo.m256i_u32[LIndex]));
-    AssertEquals('unpackhi_epi32 exceptional[' + IntToStr(LIndex) + ']',
-      QWord(LExpectedHi32[LIndex]),
-      QWord(LHi.m256i_u32[LIndex]));
+    CheckEqual(QWord(LExpectedLo32[LIndex]), QWord(LLo.m256i_u32[LIndex]), 'unpacklo_epi32 exceptional[' + IntToStr(LIndex) + ']');
+    CheckEqual(QWord(LExpectedHi32[LIndex]), QWord(LHi.m256i_u32[LIndex]), 'unpackhi_epi32 exceptional[' + IntToStr(LIndex) + ']');
   end;
 end;
 
@@ -1910,10 +1810,10 @@ begin
   LA.m256i_i64[3] := 40;
 
   LResult := avx2_permute4x64_epi64(LA, $1B); // reverse order
-  AssertEquals('permute4x64_epi64[0]', 40, LResult.m256i_i64[0]);
-  AssertEquals('permute4x64_epi64[1]', 30, LResult.m256i_i64[1]);
-  AssertEquals('permute4x64_epi64[2]', 20, LResult.m256i_i64[2]);
-  AssertEquals('permute4x64_epi64[3]', 10, LResult.m256i_i64[3]);
+  CheckEqual(40, LResult.m256i_i64[0], 'permute4x64_epi64[0]');
+  CheckEqual(30, LResult.m256i_i64[1], 'permute4x64_epi64[1]');
+  CheckEqual(20, LResult.m256i_i64[2], 'permute4x64_epi64[2]');
+  CheckEqual(10, LResult.m256i_i64[3], 'permute4x64_epi64[3]');
 
   LA.m256_f64[0] := 1.5;
   LA.m256_f64[1] := 2.5;
@@ -1921,10 +1821,10 @@ begin
   LA.m256_f64[3] := 4.5;
 
   LResult := avx2_permute4x64_pd(LA, $4E); // [2,3,0,1]
-  AssertEquals('permute4x64_pd[0]', 3.5, LResult.m256_f64[0], 0.0000001);
-  AssertEquals('permute4x64_pd[1]', 4.5, LResult.m256_f64[1], 0.0000001);
-  AssertEquals('permute4x64_pd[2]', 1.5, LResult.m256_f64[2], 0.0000001);
-  AssertEquals('permute4x64_pd[3]', 2.5, LResult.m256_f64[3], 0.0000001);
+  CheckNear(3.5, LResult.m256_f64[0], 0.0000001, 'permute4x64_pd[0]');
+  CheckNear(4.5, LResult.m256_f64[1], 0.0000001, 'permute4x64_pd[1]');
+  CheckNear(1.5, LResult.m256_f64[2], 0.0000001, 'permute4x64_pd[2]');
+  CheckNear(2.5, LResult.m256_f64[3], 0.0000001, 'permute4x64_pd[3]');
 
   for LIndex := 0 to 7 do
   begin
@@ -1934,7 +1834,7 @@ begin
 
   LResult := avx2_permutevar8x32_epi32(LA, LIdx);
   for LIndex := 0 to 7 do
-    AssertEquals('permutevar8x32_epi32[' + IntToStr(LIndex) + ']', 17 - LIndex, LResult.m256i_i32[LIndex]);
+    CheckEqual(17 - LIndex, LResult.m256i_i32[LIndex], 'permutevar8x32_epi32[' + IntToStr(LIndex) + ']');
 
   for LIndex := 0 to 7 do
     LA.m256_f32[LIndex] := 0.5 + LIndex;
@@ -1948,14 +1848,14 @@ begin
   LIdx.m256i_i32[7] := 4;
 
   LResult := avx2_permutevar8x32_ps(LA, LIdx);
-  AssertEquals('permutevar8x32_ps[0]', 0.5, LResult.m256_f32[0], 0.0001);
-  AssertEquals('permutevar8x32_ps[1]', 0.5, LResult.m256_f32[1], 0.0001);
-  AssertEquals('permutevar8x32_ps[2]', 7.5, LResult.m256_f32[2], 0.0001);
-  AssertEquals('permutevar8x32_ps[3]', 7.5, LResult.m256_f32[3], 0.0001);
-  AssertEquals('permutevar8x32_ps[4]', 3.5, LResult.m256_f32[4], 0.0001);
-  AssertEquals('permutevar8x32_ps[5]', 3.5, LResult.m256_f32[5], 0.0001);
-  AssertEquals('permutevar8x32_ps[6]', 4.5, LResult.m256_f32[6], 0.0001);
-  AssertEquals('permutevar8x32_ps[7]', 4.5, LResult.m256_f32[7], 0.0001);
+  CheckNear(0.5, LResult.m256_f32[0], 0.0001, 'permutevar8x32_ps[0]');
+  CheckNear(0.5, LResult.m256_f32[1], 0.0001, 'permutevar8x32_ps[1]');
+  CheckNear(7.5, LResult.m256_f32[2], 0.0001, 'permutevar8x32_ps[2]');
+  CheckNear(7.5, LResult.m256_f32[3], 0.0001, 'permutevar8x32_ps[3]');
+  CheckNear(3.5, LResult.m256_f32[4], 0.0001, 'permutevar8x32_ps[4]');
+  CheckNear(3.5, LResult.m256_f32[5], 0.0001, 'permutevar8x32_ps[5]');
+  CheckNear(4.5, LResult.m256_f32[6], 0.0001, 'permutevar8x32_ps[6]');
+  CheckNear(4.5, LResult.m256_f32[7], 0.0001, 'permutevar8x32_ps[7]');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_PermuteVar_IndexMasking;
@@ -1987,16 +1887,11 @@ begin
 
   LResult := avx2_permutevar8x32_epi32(LA, LIdx);
   for LIndex := 0 to 7 do
-    AssertEquals('permutevar8x32_epi32 mask[' + IntToStr(LIndex) + ']',
-      LA.m256i_i32[EXPECTED_INDICES[LIndex]],
-      LResult.m256i_i32[LIndex]);
+    CheckEqual(LA.m256i_i32[EXPECTED_INDICES[LIndex]], LResult.m256i_i32[LIndex], 'permutevar8x32_epi32 mask[' + IntToStr(LIndex) + ']');
 
   LResult := avx2_permutevar8x32_ps(LA, LIdx);
   for LIndex := 0 to 7 do
-    AssertEquals('permutevar8x32_ps mask[' + IntToStr(LIndex) + ']',
-      LA.m256_f32[EXPECTED_INDICES[LIndex]],
-      LResult.m256_f32[LIndex],
-      0.0001);
+    CheckNear(LA.m256_f32[EXPECTED_INDICES[LIndex]], LResult.m256_f32[LIndex], 0.0001, 'permutevar8x32_ps mask[' + IntToStr(LIndex) + ']');
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Permute4x64_Imm8Combinations;
@@ -2029,14 +1924,9 @@ begin
     begin
       LSourceIndex := (LImm shr (LDstIndex * 2)) and 3;
 
-      AssertEquals('permute4x64_epi64 imm=' + IntToStr(LImm) + ' dst=' + IntToStr(LDstIndex),
-        LA.m256i_i64[LSourceIndex],
-        LResultI64.m256i_i64[LDstIndex]);
+      CheckEqual(LA.m256i_i64[LSourceIndex], LResultI64.m256i_i64[LDstIndex], 'permute4x64_epi64 imm=' + IntToStr(LImm) + ' dst=' + IntToStr(LDstIndex));
 
-      AssertEquals('permute4x64_pd imm=' + IntToStr(LImm) + ' dst=' + IntToStr(LDstIndex),
-        LA.m256_f64[LSourceIndex],
-        LResultF64.m256_f64[LDstIndex],
-        0.0000001);
+      CheckNear(LA.m256_f64[LSourceIndex], LResultF64.m256_f64[LDstIndex], 0.0000001, 'permute4x64_pd imm=' + IntToStr(LImm) + ' dst=' + IntToStr(LDstIndex));
     end;
   end;
 end;
@@ -2044,8 +1934,7 @@ end;
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Permute_ExceptionalIndexBitPatterns;
 const
   INDEX_BITS: array[0..7] of DWord = (
-    $FFFFFFFF, $80000000, $7FFFFFFF, $12345678,
-    $00000008, $0000000F, $FFFFFFF0, $FFFFFFF7
+    $FFFFFFFF, $80000000, $7FFFFFFF, $12345678, $00000008, $0000000F, $FFFFFFF0, $FFFFFFF7
   );
 var
   LA: TM256;
@@ -2068,23 +1957,16 @@ begin
   for LIndex := 0 to 7 do
   begin
     LExpectedIndex := Integer(INDEX_BITS[LIndex] and 7);
-    AssertEquals('permutevar8x32_epi32 exceptional[' + IntToStr(LIndex) + ']',
-      LA.m256i_i32[LExpectedIndex],
-      LResult.m256i_i32[LIndex]);
+    CheckEqual(LA.m256i_i32[LExpectedIndex], LResult.m256i_i32[LIndex], 'permutevar8x32_epi32 exceptional[' + IntToStr(LIndex) + ']');
   end;
 
   LResult := avx2_permutevar8x32_ps(LA, LIdx);
   for LIndex := 0 to 7 do
   begin
     LExpectedIndex := Integer(INDEX_BITS[LIndex] and 7);
-    AssertEquals('permutevar8x32_ps exceptional[' + IntToStr(LIndex) + ']',
-      LA.m256_f32[LExpectedIndex],
-      LResult.m256_f32[LIndex],
-      0.0001);
+    CheckNear(LA.m256_f32[LExpectedIndex], LResult.m256_f32[LIndex], 0.0001, 'permutevar8x32_ps exceptional[' + IntToStr(LIndex) + ']');
   end;
 end;
 
-initialization
-  RegisterTest(TTestCase_AVX2IntrinsicsFallback);
 
 end.

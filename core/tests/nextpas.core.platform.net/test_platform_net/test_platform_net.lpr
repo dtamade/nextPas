@@ -215,6 +215,200 @@ begin
   platform_socket_close(S);
 end;
 
+procedure TestIpv6UdpSendRecv;
+var
+  LSender, LRecver: TPlatformSocket;
+  LAddr, LRecvAddr: TPlatformSockAddr;
+  LBuf: array[0..31] of AnsiChar;
+  LSent, LRecvd: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET6, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LRecver) = 0, 'create ipv6 recver');
+  Check(platform_sockaddr_loopback6(0, LAddr) = 0, 'ipv6 addr');
+  if platform_socket_bind(LRecver, @LAddr.Storage, LAddr.Len) <> 0 then
+  begin
+    platform_socket_close(LRecver);
+    Check(True, 'IPv6 not available, skipped');
+    Exit;
+  end;
+
+  LRecvAddr.Len := SizeOf(LRecvAddr.Storage);
+  FillChar(LRecvAddr.Storage, SizeOf(LRecvAddr.Storage), 0);
+  Check(platform_socket_getsockname(LRecver, @LRecvAddr.Storage,
+    @LRecvAddr.Len) = 0, 'getsockname ipv6');
+
+  Check(platform_socket_create(PLATFORM_AF_INET6, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LSender) = 0, 'create ipv6 sender');
+  LBuf := 'ipv6_udp';
+  Check(platform_socket_sendto(LSender, @LBuf[0], 8, 0,
+    @LRecvAddr.Storage, LRecvAddr.Len, LSent) = 0, 'sendto ipv6');
+  Check(LSent = 8, 'sent 8');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recvfrom(LRecver, @LBuf[0], 32, 0,
+    @LRecvAddr.Storage, @LRecvAddr.Len, LRecvd) = 0, 'recvfrom ipv6');
+  Check(LRecvd = 8, 'recv 8');
+  Check(LBuf[0] = 'i', 'data[0]');
+
+  platform_socket_close(LSender);
+  platform_socket_close(LRecver);
+end;
+
+procedure TestCreateInvalidFamily;
+var
+  S: TPlatformSocket;
+begin
+  { Invalid address family should fail }
+  Check(platform_socket_create(999, PLATFORM_SOCK_STREAM, 0, S) <> 0,
+    'invalid family returns error');
+end;
+
+procedure TestCreateInvalidType;
+var
+  S: TPlatformSocket;
+begin
+  { Invalid socket type should fail }
+  Check(platform_socket_create(PLATFORM_AF_INET, 999, 0, S) <> 0,
+    'invalid type returns error');
+end;
+
+procedure TestShutdownInvalidSocket;
+var
+  S: TPlatformSocket;
+begin
+  { Shutdown on closed socket should fail gracefully }
+  S.Value := -1;
+  platform_socket_shutdown(S, PLATFORM_SHUT_WR);
+  Check(True, 'shutdown on invalid socket did not crash');
+end;
+
+procedure TestIpv4SendtoRecvfrom;
+var
+  LSender, LRecver: TPlatformSocket;
+  LAddr, LRecvAddr: TPlatformSockAddr;
+  LBuf: array[0..31] of AnsiChar;
+  LSent, LRecvd: Int32;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LRecver) = 0, 'create recver');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr');
+  Check(platform_socket_bind(LRecver, @LAddr.Storage, LAddr.Len) = 0, 'bind');
+
+  Check(GetBoundSocketAddress(LRecver, LRecvAddr) = 0, 'assigned receiver port');
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, LSender) = 0, 'create sender');
+  LBuf := 'v4_sendto';
+  Check(platform_socket_sendto(LSender, @LBuf[0], 9, 0,
+    @LRecvAddr.Storage, LRecvAddr.Len, LSent) = 0, 'sendto');
+  Check(LSent = 9, 'sent 9');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recvfrom(LRecver, @LBuf[0], 32, 0,
+    @LRecvAddr.Storage, @LRecvAddr.Len, LRecvd) = 0, 'recvfrom');
+  Check(LRecvd = 9, 'recv 9');
+  Check(LBuf[0] = 'v', 'data[0]');
+
+  platform_socket_close(LSender);
+  platform_socket_close(LRecver);
+end;
+
+procedure TestGetsocknameOnAccepted;
+var
+  LServer, LClient, LAccepted: TPlatformSocket;
+  LAddr, LServerAddr, LAcceptedAddr, LClientAddr: TPlatformSockAddr;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LServer) = 0, 'server create');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr port 0');
+  Check(platform_socket_bind(LServer, @LAddr.Storage, LAddr.Len) = 0, 'bind');
+  Check(platform_socket_listen(LServer, 5) = 0, 'listen');
+
+  Check(GetBoundSocketAddress(LServer, LServerAddr) = 0, 'server port');
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LClient) = 0, 'client create');
+  Check(platform_socket_connect(LClient, @LServerAddr.Storage,
+    LServerAddr.Len) = 0, 'connect');
+
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  Check(platform_socket_accept(LServer, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len, LAccepted) = 0, 'accept');
+
+  { accepted socket should have a local address }
+  FillChar(LAcceptedAddr, SizeOf(LAcceptedAddr), 0);
+  LAcceptedAddr.Len := SizeOf(LAcceptedAddr.Storage);
+  Check(platform_socket_getsockname(LAccepted, @LAcceptedAddr.Storage,
+    @LAcceptedAddr.Len) = 0, 'getsockname on accepted');
+
+  { client should know its peer }
+  FillChar(LClientAddr, SizeOf(LClientAddr), 0);
+  LClientAddr.Len := SizeOf(LClientAddr.Storage);
+  Check(platform_socket_getpeername(LClient, @LClientAddr.Storage,
+    @LClientAddr.Len) = 0, 'getpeername on client');
+
+  platform_socket_close(LAccepted);
+  platform_socket_close(LClient);
+  platform_socket_close(LServer);
+end;
+
+procedure TestTcpSendtoFails;
+var
+  LServer, LClient: TPlatformSocket;
+  LAddr, LServerAddr: TPlatformSockAddr;
+  LSent: Int32;
+  LBuf: array[0..7] of AnsiChar;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LServer) = 0, 'server create');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr');
+  Check(platform_socket_bind(LServer, @LAddr.Storage, LAddr.Len) = 0, 'bind');
+  Check(platform_socket_listen(LServer, 5) = 0, 'listen');
+
+  Check(GetBoundSocketAddress(LServer, LServerAddr) = 0, 'server port');
+
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LClient) = 0, 'client create');
+  Check(platform_socket_connect(LClient, @LServerAddr.Storage,
+    LServerAddr.Len) = 0, 'connect');
+
+  { sendto on a connected TCP socket should still work (address is ignored) }
+  LBuf := 'tcp_sto';
+  Check(platform_socket_sendto(LClient, @LBuf[0], 7, 0,
+    @LServerAddr.Storage, LServerAddr.Len, LSent) = 0, 'sendto on TCP');
+  Check(LSent = 7, 'sent 7');
+
+  platform_socket_close(LClient);
+  platform_socket_close(LServer);
+end;
+
+procedure TestLoopback4Addr;
+var
+  LAddr: TPlatformSockAddr;
+begin
+  Check(platform_sockaddr_loopback4(8080, LAddr) = 0, 'loopback4 port 8080');
+  Check(LAddr.Len > 0, 'addr len > 0');
+end;
+
+procedure TestLoopback6Addr;
+var
+  LAddr: TPlatformSockAddr;
+begin
+  Check(platform_sockaddr_loopback6(9090, LAddr) = 0, 'loopback6 port 9090');
+  Check(LAddr.Len > 0, 'addr len > 0');
+end;
+
+procedure TestErrorWouldBlock;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, S) = 0, 'create');
+  Check(not platform_socket_error_would_block(0), '0 is not would_block');
+  Check(not platform_socket_error_would_block(-1), '-1 is not would_block');
+  platform_socket_close(S);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.net');
   T.Test('create/close TCP', @TestCreateClose);
@@ -225,5 +419,15 @@ begin
   T.Test('UDP send/recv', @TestUDPSendRecv);
   T.Test('double close', @TestDoubleClose);
   T.Test('connect refused', @TestConnectRefused);
+  T.Test('IPv6 UDP send/recv', @TestIpv6UdpSendRecv);
+  T.Test('create invalid family', @TestCreateInvalidFamily);
+  T.Test('create invalid type', @TestCreateInvalidType);
+  T.Test('shutdown invalid socket', @TestShutdownInvalidSocket);
+  T.Test('loopback4 addr', @TestLoopback4Addr);
+  T.Test('loopback6 addr', @TestLoopback6Addr);
+  T.Test('IPv4 sendto/recvfrom', @TestIpv4SendtoRecvfrom);
+  T.Test('getsockname on accepted', @TestGetsocknameOnAccepted);
+  T.Test('TCP sendto works', @TestTcpSendtoFails);
+  T.Test('error_would_block classification', @TestErrorWouldBlock);
   if not T.Run then Halt(1);
 end.

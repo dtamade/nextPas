@@ -23,11 +23,11 @@ program test_ieee754_compliance;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.simd,
-  nextpas.core.test;
+  nextpas.core.simd, nextpas.core.test;
 
+{$M+}
 type
-  TTestIEEE754 = class(TTestCase)
+  TTestIEEE754 = class(TTestFixture)
   published
     procedure TestNaNPropagation_Add;
     procedure TestNaNPropagation_Sub;

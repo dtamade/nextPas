@@ -49,8 +49,6 @@ type
   TBenchComparisonArray = nextpas.core.bench.base.TBenchComparisonArray;
   {** 从 base 模块 re-export 基线数据类型 }
   TBaselineData = nextpas.core.bench.base.TBaselineData;
-  {** @deprecated Use TBaselineData instead. Kept for backward compatibility. }
-  TBenchBaseline = nextpas.core.bench.base.TBaselineData;
 
   {** 从 base 模块 re-export 多基线矩阵类型 }
   TMatrixCell = nextpas.core.bench.base.TMatrixCell;
@@ -281,21 +279,10 @@ type
      *  匹配不区分大小写。 }
     function SetFilter(const AFilter: string): IBenchSuite;
 
-    {** 设置整体超时（毫秒），超时后跳过剩余 benchmark (ST-04)。
-     *  0 = 不超时（默认）。超时在 benchmark 条目之间检查，不中断正在执行的条目。
-     *  F-05: 参数类型统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。
-     *  @deprecated 请使用 SetTimeout(ADuration: TDuration) 重载。 }
-    function SetTimeout(ATimeoutMs: Int64): IBenchSuite; deprecated 'use SetTimeout(TDuration)';
-
     {** 设置整体超时（TDuration 便利重载）。
      *  内部转换为毫秒存储。0 = 不超时（默认）。
      *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
     function SetTimeout(ADuration: TDuration): IBenchSuite;
-
-    {** Phase 3: 启用对象池以减少分配开销。
-     *  启用后，TBenchContext 对象会被复用而不是每次创建新对象。
-     *  适用于高频基准测试场景。 }
-    function EnableObjectPool(AEnabled: Boolean = True): IBenchSuite;
 
     {** Phase 3: 批量并行运行独立基准。
      *  独立基准（非并行基准）可以在多个线程中同时运行。
@@ -436,6 +423,10 @@ type
 
     {** 计算标准差 }
     function StdDev(const AData: TDoubleArray): Double;
+
+    {** 变异系数 CV = StdDev / Mean（用于自适应预热收敛判断）
+     *  @returns CV 值；Mean <= 0 时返回 0 }
+    function CoefficientOfVariation(const AData: TDoubleArray): Double;
 
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;

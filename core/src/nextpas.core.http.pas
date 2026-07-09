@@ -16,11 +16,29 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.url,
   nextpas.core.http.router,
+  nextpas.core.http.router.group,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.bodylimit,
+  nextpas.core.http.middleware.contenttype,
+  nextpas.core.http.middleware.logger,
+  nextpas.core.http.middleware.requestid,
+  nextpas.core.http.middleware.cachecontrol,
+  nextpas.core.http.middleware.ratelimit,
+  nextpas.core.http.middleware.healthcheck,
+  nextpas.core.http.middleware.metrics,
+  nextpas.core.http.middleware.methodguard,
+  nextpas.core.http.middleware.bodycache,
+  nextpas.core.http.middleware.serverheader,
+  nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.decompress,
+  nextpas.core.http.middleware.deadline,
   nextpas.core.http.message,
+  nextpas.core.json,
+  nextpas.core.log,
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
@@ -57,6 +75,8 @@ type
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IH2StreamControl = nextpas.core.http.intf.IH2StreamControl;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  IHttpResponseBodyBytes = nextpas.core.http.intf.IHttpResponseBodyBytes;
+  IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 
@@ -67,8 +87,17 @@ type
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
   TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
+  TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
+  TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
+  TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
+  TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
+  THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
+  IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
+  THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
+  THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
+  TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
 
@@ -78,6 +107,13 @@ type
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+  THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
+
+  { Re-export JSON types }
+  IJsonDocument = nextpas.core.json.IJsonDocument;
+
+  { Re-export log types }
+  TLogger = nextpas.core.log.TLogger;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -124,6 +160,7 @@ const
   HTTP_STATUS_CONFLICT = nextpas.core.http.base.HTTP_STATUS_CONFLICT;
   HTTP_STATUS_GONE = nextpas.core.http.base.HTTP_STATUS_GONE;
   HTTP_STATUS_PAYLOAD_TOO_LARGE = nextpas.core.http.base.HTTP_STATUS_PAYLOAD_TOO_LARGE;
+  HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = nextpas.core.http.base.HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE;
   HTTP_STATUS_EXPECTATION_FAILED = nextpas.core.http.base.HTTP_STATUS_EXPECTATION_FAILED;
   HTTP_STATUS_UNPROCESSABLE_ENTITY = nextpas.core.http.base.HTTP_STATUS_UNPROCESSABLE_ENTITY;
   HTTP_STATUS_TOO_MANY_REQUESTS = nextpas.core.http.base.HTTP_STATUS_TOO_MANY_REQUESTS;
@@ -134,6 +171,7 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED = nextpas.core.http.base.HTTP_STATUS_NOT_IMPLEMENTED;
   HTTP_STATUS_BAD_GATEWAY = nextpas.core.http.base.HTTP_STATUS_BAD_GATEWAY;
   HTTP_STATUS_SERVICE_UNAVAILABLE = nextpas.core.http.base.HTTP_STATUS_SERVICE_UNAVAILABLE;
+  HTTP_STATUS_GATEWAY_TIMEOUT = nextpas.core.http.base.HTTP_STATUS_GATEWAY_TIMEOUT;
 
   { WebSocket opcodes }
   wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
@@ -204,10 +242,81 @@ function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware; 
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware; inline;
 {** @desc Catch exceptions and return 500 }
 function RecoveryMiddleware: IHttpMiddleware; inline;
+{** @desc Catch exceptions and return 500, calling AOnError for each exception. }
+function RecoveryMiddlewareWith(const AOnError: TRecoveryCallback): IHttpMiddleware; inline;
 {** @desc Add X-Response-Time header (duration in ms) }
 function ResponseTimeMiddleware: IHttpMiddleware; inline;
+{** @desc Reject requests with Content-Length > AMaxBytes (returns 413). }
+function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware; inline;
+{** @desc Reject POST/PUT/PATCH requests with unaccepted Content-Type (returns 415). }
+function ContentTypeMiddleware(
+  const AAccepted: array of string): IHttpMiddleware; inline;
+{** @desc Request logging middleware using structured logger (method, path, status, duration). }
+function LoggerMiddleware: IHttpMiddleware; inline;
+{** @desc Request logging middleware with custom TLogger instance. }
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
+{** @desc Ensure X-Request-Id header on every response (preserves existing, generates UUID if missing). }
+function RequestIdMiddleware: IHttpMiddleware; inline;
+{** @desc Request ID middleware with custom header name. }
+function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware; inline;
+{** @desc Request ID middleware with custom header name and ID generator callback. }
+function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
+  const AGenerator: TRequestIdGenerator): IHttpMiddleware; inline;
+{** @desc Set Cache-Control header on every response. }
+function CacheControlMiddleware(const AValue: string): IHttpMiddleware; inline;
+{** @desc Cache-Control: no-cache, no-store, must-revalidate. }
+function NoCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Cache-Control: public, max-age=N. }
+function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware; inline;
+{** @desc Rate limit middleware (100 req/60s per IP). }
+function RateLimitMiddleware: IHttpMiddleware; inline;
+{** @desc Rate limit middleware with custom options. }
+function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
+{** @desc Conditional middleware — apply AMiddleware only when APredicate returns True. }
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+{** @desc Health check middleware at /healthz — returns 200 OK with {"status":"ok"}. }
+function HealthCheckMiddleware: IHttpMiddleware; inline;
+{** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
+function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware; inline;
+{** @desc Create a new thread-safe metrics collector. }
+function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
+{** @desc Metrics middleware — records request counts and durations. }
+function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware; inline;
+{** @desc Metrics middleware with custom callback. }
+function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
+{** @desc Method guard middleware — rejects disallowed methods with 405. }
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware; inline;
+{** @desc Body cache middleware — caches request body for re-reading. }
+function BodyCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Metrics middleware with structured fields (method, path, status, duration). }
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware; inline;
+{** @desc Add "Server: nextpas" header to every response. }
+function ServerHeaderMiddleware: IHttpMiddleware; inline;
+{** @desc Add "Server: <ACustomName>" header to every response. }
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware; inline;
+{** @desc Context middleware — wraps requests with IHttpContext for data propagation. }
+function ContextMiddleware: IHttpMiddleware; inline;
+{** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Response compression middleware (gzip/deflate). Compresses responses >= 1024 bytes. }
+function CompressionMiddleware: IHttpMiddleware; inline;
+{** @desc Response compression middleware with custom minimum body size. }
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
+{** @desc Request body decompression middleware (gzip/deflate). }
+function DecompressMiddleware(const AMaxSize: Int64 = 0): IHttpMiddleware; inline;
+{** @desc Write 415 Unsupported Media Type JSON error response. }
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 504 Gateway Timeout JSON error response. }
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Request deadline middleware. Returns 504 if handler exceeds ATimeoutMs. }
+function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -280,6 +389,84 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyBytes: TBytes): IHttpResponse; overload; inline;
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt; inline;
+{** @desc Write JSON response: sets application/json content-type, serializes value, writes body. }
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt; inline;
+{** @desc Write binary response: sets content-type and content-length, writes TBytes body. }
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt; inline;
+{** @desc Write HTML response: sets text/html content-type, writes string body. }
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt; inline;
+{** @desc Write 204 No Content response. }
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter); inline;
+{** @desc Write 200 OK response with no body. }
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter); inline;
+{** @desc Write 201 Created response with no body. }
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter); inline;
+{** @desc Write 202 Accepted response with no body. }
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter); inline;
+{** @desc Write 304 Not Modified response with no body. }
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter); inline;
+{** @desc Write 205 Reset Content response with no body. }
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter); inline;
+{** @desc Write 410 Gone response with no body. }
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter); inline;
+{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
+{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string; inline;
+{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inline;
+{** @desc Write a redirect response with Location header and HTML body. }
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string); inline;
+{** @desc 301 Moved Permanently redirect. }
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 302 Found redirect (temporary, method may change to GET). }
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 303 See Other redirect (always changes method to GET). }
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 307 Temporary Redirect (preserves method and body). }
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc 308 Permanent Redirect (preserves method and body). }
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string); inline;
+{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}. }
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt; inline;
+{** @desc Write 400 Bad Request JSON error response. }
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 401 Unauthorized JSON error response. }
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 403 Forbidden JSON error response. }
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 404 Not Found JSON error response. }
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 500 Internal Server Error JSON error response. }
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 429 Too Many Requests JSON error response. }
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 409 Conflict JSON error response. }
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 422 Unprocessable Entity JSON error response. }
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
+{** @desc Write 413 Payload Too Large JSON error response. }
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt; inline;
 
 { Static helpers }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
@@ -326,6 +513,34 @@ function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes; inline;
+{** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc PUT with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc PATCH with body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string; inline;
+{** @desc DELETE url, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string; inline;
+{** @desc HEAD url, ensure 2xx, return response (headers only). Raises on non-2xx. }
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc OPTIONS url, ensure 2xx, return response. Raises on non-2xx. }
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse; inline;
+{** @desc POST JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PUT JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc PATCH JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
@@ -469,14 +684,181 @@ begin
   Result := nextpas.core.http.middleware.recovery.RecoveryMiddleware;
 end;
 
+function RecoveryMiddlewareWith(const AOnError: TRecoveryCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.recovery.RecoveryMiddlewareWith(AOnError);
+end;
+
 function ResponseTimeMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.timeout.ResponseTimeMiddleware;
 end;
 
+function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodylimit.BodyLimitMiddleware(AMaxBytes);
+end;
+
+function ContentTypeMiddleware(
+  const AAccepted: array of string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.contenttype.ContentTypeMiddleware(AAccepted);
+end;
+
+function LoggerMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
+end;
+
+function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
+end;
+
+function RequestIdMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddleware;
+end;
+
+function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWith(AHeaderName);
+end;
+
+function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
+  const AGenerator: TRequestIdGenerator): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWithGenerator(AHeaderName, AGenerator);
+end;
+
+function CacheControlMiddleware(const AValue: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.CacheControlMiddleware(AValue);
+end;
+
+function NoCacheMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.NoCacheMiddleware;
+end;
+
+function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.cachecontrol.MaxAgeMiddleware(ASeconds);
+end;
+
+function RateLimitMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddleware;
+end;
+
+function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddlewareWith(AOptions);
+end;
+
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 begin
   Result := nextpas.core.http.middleware.Chain(AHandler, AMiddlewares);
+end;
+
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.WhenMiddleware(APredicate, AMiddleware);
+end;
+
+function HealthCheckMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddleware;
+end;
+
+function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddlewareAt(APath);
+end;
+
+function NewHttpMetricsCollector: IHttpMetricsCollector;
+begin
+  Result := nextpas.core.http.middleware.metrics.NewHttpMetricsCollector;
+end;
+
+function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddleware(ACollector);
+end;
+
+function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWith(ACallback);
+end;
+
+function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.methodguard.MethodGuardMiddleware(AAllowed);
+end;
+
+function BodyCacheMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddleware;
+end;
+
+function MetricsMiddlewareWithFields(
+  const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWithFields(ACallback);
+end;
+
+function ServerHeaderMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddleware;
+end;
+
+function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddlewareWith(ACustomName);
+end;
+
+function ContextMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.context.ContextMiddleware;
+end;
+
+function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
+end;
+
+function CompressionMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddleware;
+end;
+
+function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.compression.CompressionMiddlewareWith(AMinSize);
+end;
+
+function DecompressMiddleware(const AMaxSize: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.decompress.DecompressMiddleware(AMaxSize);
+end;
+
+function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
+end;
+
+function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorGatewayTimeout(AW, AMessage);
+end;
+
+function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.deadline.DeadlineMiddleware(ATimeoutMs);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
@@ -697,6 +1079,172 @@ begin
     AContentType, ABody);
 end;
 
+function HttpWriteResponseJson(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseJson(AW, AStatus, AValue);
+end;
+
+function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const AContentType: string;
+  const ABody: TBytes): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseBytes(AW, AStatus,
+    AContentType, ABody);
+end;
+
+function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ABody: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteResponseHtml(AW, AStatus, ABody);
+end;
+
+procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseNoContent(AW);
+end;
+
+procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseOk(AW);
+end;
+
+procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseCreated(AW);
+end;
+
+procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseAccepted(AW);
+end;
+
+procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseNotModified(AW);
+end;
+
+procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseResetContent(AW);
+end;
+
+procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
+begin
+  nextpas.core.http.message.HttpWriteResponseGone(AW);
+end;
+
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyBytes(AReq);
+end;
+
+function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyString(AReq);
+end;
+
+function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyJson(AReq);
+end;
+
+procedure HttpRedirect(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirect(AW, AStatus, ALocation);
+end;
+
+procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectMovedPermanently(AW, ALocation);
+end;
+
+procedure HttpRedirectFound(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectFound(AW, ALocation);
+end;
+
+procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectSeeOther(AW, ALocation);
+end;
+
+procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectTemporaryRedirect(AW, ALocation);
+end;
+
+procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
+  const ALocation: string);
+begin
+  nextpas.core.http.message.HttpRedirectPermanentRedirect(AW, ALocation);
+end;
+
+function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
+  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorResponse(AW, AStatus, ACode, AMessage);
+end;
+
+function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorBadRequest(AW, AMessage);
+end;
+
+function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnauthorized(AW, AMessage);
+end;
+
+function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorForbidden(AW, AMessage);
+end;
+
+function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorNotFound(AW, AMessage);
+end;
+
+function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorInternal(AW, AMessage);
+end;
+
+function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorTooManyRequests(AW, AMessage);
+end;
+
+function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorConflict(AW, AMessage);
+end;
+
+function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorUnprocessableEntity(AW, AMessage);
+end;
+
+function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
+  const AMessage: string): SizeUInt;
+begin
+  Result := nextpas.core.http.message.HttpWriteErrorPayloadTooLarge(AW, AMessage);
+end;
+
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeFile(APath);
@@ -840,6 +1388,64 @@ end;
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 begin
   Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
+end;
+
+function HttpPostString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPostString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpPutString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPutString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpPatchString(const AClient: IHttpClient;
+  const AUrl, AContentType, ABody: string): string;
+begin
+  Result := nextpas.core.http.client.HttpPatchString(AClient, AUrl, AContentType, ABody);
+end;
+
+function HttpDeleteString(const AClient: IHttpClient;
+  const AUrl: string): string;
+begin
+  Result := nextpas.core.http.client.HttpDeleteString(AClient, AUrl);
+end;
+
+function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpHead(AClient, AUrl);
+end;
+
+function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpOptions(AClient, AUrl);
+end;
+
+function HttpPostJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPostJson(AClient, AUrl, ABody);
+end;
+
+function HttpPutJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPutJson(AClient, AUrl, ABody);
+end;
+
+function HttpPatchJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpPatchJson(AClient, AUrl, ABody);
+end;
+
+function HttpDeleteJson(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): string;
+begin
+  Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;

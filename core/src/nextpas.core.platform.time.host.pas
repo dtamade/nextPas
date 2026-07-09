@@ -7,14 +7,36 @@ interface
 uses
   nextpas.core.platform.time.base;
 
+{** @desc 获取单调时钟时间（纳秒）
+    @return 单调递增时间戳（纳秒） *}
 function platform_monotonic_ns: TPlatformTimeNanoseconds;
+
+{** @desc 获取实时时钟时间（纳秒，UTC）
+    @return 实时时间戳（纳秒） *}
 function platform_realtime_ns: TPlatformTimeNanoseconds;
+
+{** @desc 获取单调时钟分辨率（纳秒）
+    @return 时钟分辨率（纳秒） *}
 function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds;
+
+{** @desc 将性能计数器值转换为纳秒
+    @param ACounter 计数器值
+    @param AFrequency 计数器频率（Hz）
+    @return 纳秒值 *}
 function platform_qpc_to_ns(
   const ACounter: TPlatformCounterValue;
   const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds;
+
+{** @desc 从频率计算分辨率（纳秒）
+    @param AFrequency 频率（Hz）
+    @return 分辨率（纳秒） *}
 function platform_resolution_from_frequency_ns(
   const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds;
+
+{** @desc 将 timespec 结构转换为纳秒
+    @param ASec 秒
+    @param ANsec 纳秒
+    @return 总纳秒值 *}
 function platform_timespec_to_ns(
   const ASec: Int64;
   const ANsec: Int64): TPlatformTimeNanoseconds;

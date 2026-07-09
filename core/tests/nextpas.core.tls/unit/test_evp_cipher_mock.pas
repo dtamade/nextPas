@@ -17,12 +17,12 @@ unit test_evp_cipher_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   openssl_evp_cipher_interface;
 
 type
   { TTestEVPCipherMock - Test suite for EVP cipher mock }
-  TTestEVPCipherMock = class(TTestCase)
+  TTestEVPCipherMock = class(TTestFixture)
   private
     FCipher: IEVPCipher;
     FMock: TEVPCipherMock;
@@ -31,8 +31,8 @@ type
     function GetTestIV(aSize: Integer): TBytes;
     function GetTestData(aSize: Integer): TBytes;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // Basic encryption tests
     procedure TestEncrypt_ShouldSucceed_WithAES256CBC;
@@ -113,18 +113,18 @@ end;
 
 { Setup and teardown }
 
-procedure TTestEVPCipherMock.SetUp;
+procedure TTestEVPCipherMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FMock := TEVPCipherMock.Create;
   FCipher := FMock as IEVPCipher;
 end;
 
-procedure TTestEVPCipherMock.TearDown;
+procedure TTestEVPCipherMock.AfterEach;
 begin
   FCipher := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 { Basic encryption tests }
@@ -143,9 +143,9 @@ begin
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should have output', 16, Length(LResult.Output));
-  AssertEquals('Encryption count', 1, FMock.GetEncryptCallCount);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Output), 'Should have output');
+  CheckEqual(1, FMock.GetEncryptCallCount, 'Encryption count');
 end;
 
 procedure TTestEVPCipherMock.TestEncrypt_ShouldSucceed_WithAES128ECB;
@@ -162,9 +162,9 @@ begin
   LResult := FCipher.Encrypt(caAES128, cmECB, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertTrue('Algorithm should be AES128', FMock.GetLastAlgorithm = caAES128);
-  AssertTrue('Mode should be ECB', FMock.GetLastMode = cmECB);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckTrue(FMock.GetLastAlgorithm = caAES128, 'Algorithm should be AES128');
+  CheckTrue(FMock.GetLastMode = cmECB, 'Mode should be ECB');
 end;
 
 procedure TTestEVPCipherMock.TestEncrypt_ShouldSucceed_WithChaCha20;
@@ -181,8 +181,8 @@ begin
   LResult := FCipher.Encrypt(caChaCha20, cmCTR, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should have output', 64, Length(LResult.Output));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.Output), 'Should have output');
 end;
 
 procedure TTestEVPCipherMock.TestEncrypt_ShouldSucceed_WithCamellia256CBC;
@@ -199,8 +199,8 @@ begin
   LResult := FCipher.Encrypt(caCamellia256, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertTrue('Algorithm should be Camellia256', FMock.GetLastAlgorithm = caCamellia256);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckTrue(FMock.GetLastAlgorithm = caCamellia256, 'Algorithm should be Camellia256');
 end;
 
 procedure TTestEVPCipherMock.TestEncrypt_ShouldSucceed_WithSM4CBC;
@@ -217,8 +217,8 @@ begin
   LResult := FCipher.Encrypt(caSM4, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertTrue('Algorithm should be SM4', FMock.GetLastAlgorithm = caSM4);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckTrue(FMock.GetLastAlgorithm = caSM4, 'Algorithm should be SM4');
 end;
 
 { Basic decryption tests }
@@ -237,9 +237,9 @@ begin
   LResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should have output', 16, Length(LResult.Output));
-  AssertEquals('Decrypt count', 1, FMock.GetDecryptCallCount);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Output), 'Should have output');
+  CheckEqual(1, FMock.GetDecryptCallCount, 'Decrypt count');
 end;
 
 procedure TTestEVPCipherMock.TestDecrypt_ShouldReverseEncryption;
@@ -258,13 +258,13 @@ begin
   LDecResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LEncResult.Output);
   
   // Assert
-  AssertTrue('Encrypt should succeed', LEncResult.Success);
-  AssertTrue('Decrypt should succeed', LDecResult.Success);
-  AssertEquals('Should restore plaintext length', Length(LPlaintext), Length(LDecResult.Output));
+  CheckTrue(LEncResult.Success, 'Encrypt should succeed');
+  CheckTrue(LDecResult.Success, 'Decrypt should succeed');
+  CheckEqual(Length(LPlaintext), Length(LDecResult.Output), 'Should restore plaintext length');
   
   // Verify roundtrip (mock uses XOR, so encrypt then decrypt should restore)
   for i := 0 to High(LPlaintext) do
-    AssertEquals('Byte ' + IntToStr(i) + ' should match', LPlaintext[i], LDecResult.Output[i]);
+    CheckEqual(LPlaintext[i], LDecResult.Output[i], 'Byte ' + IntToStr(i) + ' should match');
 end;
 
 { AEAD tests }
@@ -284,9 +284,9 @@ begin
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should have output', 16, Length(LResult.Output));
-  AssertEquals('AEAD count', 1, FMock.GetAEADCallCount);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Output), 'Should have output');
+  CheckEqual(1, FMock.GetAEADCallCount, 'AEAD count');
 end;
 
 procedure TTestEVPCipherMock.TestEncryptAEAD_ShouldGenerateTag;
@@ -304,9 +304,9 @@ begin
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertTrue('Should generate tag', Length(LResult.Tag) > 0);
-  AssertEquals('Tag should be 16 bytes', 16, Length(LResult.Tag));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckTrue(Length(LResult.Tag) > 0, 'Should generate tag');
+  CheckEqual(16, Length(LResult.Tag), 'Tag should be 16 bytes');
 end;
 
 procedure TTestEVPCipherMock.TestDecryptAEAD_ShouldSucceed_WithValidTag;
@@ -327,8 +327,8 @@ begin
   LResult := FCipher.DecryptAEAD(caAES256, cmGCM, LKey, LIV, LCiphertext, LTag, LAAD);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should have output', 16, Length(LResult.Output));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Output), 'Should have output');
 end;
 
 procedure TTestEVPCipherMock.TestEncryptAEAD_ShouldSucceed_WithChaCha20Poly1305;
@@ -346,9 +346,9 @@ begin
   LResult := FCipher.EncryptAEAD(caChaCha20Poly1305, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertTrue('Algorithm should be ChaCha20Poly1305', FMock.GetLastAlgorithm = caChaCha20Poly1305);
-  AssertTrue('Should have tag', Length(LResult.Tag) > 0);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckTrue(FMock.GetLastAlgorithm = caChaCha20Poly1305, 'Algorithm should be ChaCha20Poly1305');
+  CheckTrue(Length(LResult.Tag) > 0, 'Should have tag');
 end;
 
 { Error handling tests }
@@ -368,9 +368,9 @@ begin
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated encryption failure', LResult.ErrorMessage);
-  AssertEquals('Output should be empty', 0, Length(LResult.Output));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated encryption failure', LResult.ErrorMessage, 'Error message');
+  CheckEqual(0, Length(LResult.Output), 'Output should be empty');
 end;
 
 procedure TTestEVPCipherMock.TestDecrypt_ShouldFail_WhenConfigured;
@@ -388,8 +388,8 @@ begin
   LResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertTrue('Should have error message', LResult.ErrorMessage <> '');
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckTrue(LResult.ErrorMessage <> '', 'Should have error message');
 end;
 
 procedure TTestEVPCipherMock.TestEncryptAEAD_ShouldFail_WhenConfigured;
@@ -408,45 +408,45 @@ begin
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Tag should be empty on failure', 0, Length(LResult.Tag));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual(0, Length(LResult.Tag), 'Tag should be empty on failure');
 end;
 
 { Parameter validation tests }
 
 procedure TTestEVPCipherMock.TestGetKeySize_ShouldReturnCorrectSize_ForAES128;
 begin
-  AssertEquals('AES-128 key size', 16, FCipher.GetKeySize(caAES128));
+  CheckEqual(16, FCipher.GetKeySize(caAES128), 'AES-128 key size');
 end;
 
 procedure TTestEVPCipherMock.TestGetKeySize_ShouldReturnCorrectSize_ForAES256;
 begin
-  AssertEquals('AES-256 key size', 32, FCipher.GetKeySize(caAES256));
+  CheckEqual(32, FCipher.GetKeySize(caAES256), 'AES-256 key size');
 end;
 
 procedure TTestEVPCipherMock.TestGetKeySize_ShouldReturnCorrectSize_ForChaCha20;
 begin
-  AssertEquals('ChaCha20 key size', 32, FCipher.GetKeySize(caChaCha20));
+  CheckEqual(32, FCipher.GetKeySize(caChaCha20), 'ChaCha20 key size');
 end;
 
 procedure TTestEVPCipherMock.TestGetIVSize_ShouldReturnZero_ForECBMode;
 begin
-  AssertEquals('ECB mode IV size', 0, FCipher.GetIVSize(caAES256, cmECB));
+  CheckEqual(0, FCipher.GetIVSize(caAES256, cmECB), 'ECB mode IV size');
 end;
 
 procedure TTestEVPCipherMock.TestGetIVSize_ShouldReturn12_ForGCMMode;
 begin
-  AssertEquals('GCM mode IV size', 12, FCipher.GetIVSize(caAES256, cmGCM));
+  CheckEqual(12, FCipher.GetIVSize(caAES256, cmGCM), 'GCM mode IV size');
 end;
 
 procedure TTestEVPCipherMock.TestGetBlockSize_ShouldReturn16_ForAES;
 begin
-  AssertEquals('AES block size', 16, FCipher.GetBlockSize(caAES256));
+  CheckEqual(16, FCipher.GetBlockSize(caAES256), 'AES block size');
 end;
 
 procedure TTestEVPCipherMock.TestGetBlockSize_ShouldReturn1_ForChaCha20;
 begin
-  AssertEquals('ChaCha20 block size (stream)', 1, FCipher.GetBlockSize(caChaCha20));
+  CheckEqual(1, FCipher.GetBlockSize(caChaCha20), 'ChaCha20 block size (stream)');
 end;
 
 { Call counting tests }
@@ -466,8 +466,8 @@ begin
   FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertEquals('Encrypt call count', 2, FMock.GetEncryptCallCount);
-  AssertEquals('Operation count', 2, FCipher.GetOperationCount);
+  CheckEqual(2, FMock.GetEncryptCallCount, 'Encrypt call count');
+  CheckEqual(2, FCipher.GetOperationCount, 'Operation count');
 end;
 
 procedure TTestEVPCipherMock.TestDecrypt_ShouldIncrementCounter;
@@ -484,7 +484,7 @@ begin
   FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
   
   // Assert
-  AssertEquals('Decrypt call count', 1, FMock.GetDecryptCallCount);
+  CheckEqual(1, FMock.GetDecryptCallCount, 'Decrypt call count');
 end;
 
 procedure TTestEVPCipherMock.TestAEAD_ShouldIncrementCounter;
@@ -502,7 +502,7 @@ begin
   FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertEquals('AEAD call count', 1, FMock.GetAEADCallCount);
+  CheckEqual(1, FMock.GetAEADCallCount, 'AEAD call count');
 end;
 
 procedure TTestEVPCipherMock.TestResetStatistics_ShouldClearCounters;
@@ -521,9 +521,9 @@ begin
   FCipher.ResetStatistics;
   
   // Assert
-  AssertEquals('Operation count after reset', 0, FCipher.GetOperationCount);
-  AssertEquals('Encrypt count after reset', 0, FMock.GetEncryptCallCount);
-  AssertEquals('Decrypt count after reset', 0, FMock.GetDecryptCallCount);
+  CheckEqual(0, FCipher.GetOperationCount, 'Operation count after reset');
+  CheckEqual(0, FMock.GetEncryptCallCount, 'Encrypt count after reset');
+  CheckEqual(0, FMock.GetDecryptCallCount, 'Decrypt count after reset');
 end;
 
 { Custom output tests }
@@ -546,10 +546,10 @@ begin
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Custom output length', 16, Length(LResult.Output));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Output), 'Custom output length');
   for i := 0 to 15 do
-    AssertEquals('Custom byte ' + IntToStr(i), $FF, LResult.Output[i]);
+    CheckEqual($FF, LResult.Output[i], 'Custom byte ' + IntToStr(i));
 end;
 
 procedure TTestEVPCipherMock.TestEncryptAEAD_ShouldUseCustomTag_WhenSet;
@@ -571,10 +571,10 @@ begin
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Custom tag length', 16, Length(LResult.Tag));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Tag), 'Custom tag length');
   for i := 0 to 15 do
-    AssertEquals('Custom tag byte ' + IntToStr(i), $DD, LResult.Tag[i]);
+    CheckEqual($DD, LResult.Tag[i], 'Custom tag byte ' + IntToStr(i));
 end;
 
 { Padding tests }
@@ -585,16 +585,13 @@ begin
   FCipher.SetPadding(False);
   
   // Assert
-  AssertFalse('Padding should be disabled', FCipher.GetPadding);
+  CheckFalse(FCipher.GetPadding, 'Padding should be disabled');
 end;
 
 procedure TTestEVPCipherMock.TestGetPadding_ShouldReturnDefault;
 begin
   // Assert (default is True)
-  AssertTrue('Default padding should be enabled', FCipher.GetPadding);
+  CheckTrue(FCipher.GetPadding, 'Default padding should be enabled');
 end;
-
-initialization
-  RegisterTest(TTestEVPCipherMock);
 
 end.

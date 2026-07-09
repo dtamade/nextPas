@@ -16,12 +16,12 @@ unit test_evp_digest_mock;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   openssl_evp_digest_interface;
 
 type
   { TTestEVPDigestMock - Test suite for EVP digest mock }
-  TTestEVPDigestMock = class(TTestCase)
+  TTestEVPDigestMock = class(TTestFixture)
   private
     FDigest: IEVPDigest;
     FMock: TEVPDigestMock;
@@ -29,8 +29,8 @@ type
     function GetTestData(aSize: Integer): TBytes;
     function BytesToHex(const aBytes: TBytes): string;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // Single-shot digest tests
     procedure TestDigest_ShouldSucceed_WithSHA256;
@@ -98,18 +98,18 @@ end;
 
 { Setup and teardown }
 
-procedure TTestEVPDigestMock.SetUp;
+procedure TTestEVPDigestMock.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FMock := TEVPDigestMock.Create;
   FDigest := FMock as IEVPDigest;
 end;
 
-procedure TTestEVPDigestMock.TearDown;
+procedure TTestEVPDigestMock.AfterEach;
 begin
   FDigest := nil;
   FMock := nil;
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 { Single-shot digest tests }
@@ -126,10 +126,10 @@ begin
   LResult := FDigest.Digest(daSHA256, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes', 32, Length(LResult.Hash));
-  AssertEquals('Digest call count', 1, FMock.GetDigestCallCount);
-  AssertTrue('Last algorithm should be SHA256', FMock.GetLastAlgorithm = daSHA256);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.Hash), 'Should return 32 bytes');
+  CheckEqual(1, FMock.GetDigestCallCount, 'Digest call count');
+  CheckTrue(FMock.GetLastAlgorithm = daSHA256, 'Last algorithm should be SHA256');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldSucceed_WithSHA512;
@@ -144,8 +144,8 @@ begin
   LResult := FDigest.Digest(daSHA512, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.Hash), 'Should return 64 bytes');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldSucceed_WithMD5;
@@ -160,8 +160,8 @@ begin
   LResult := FDigest.Digest(daMD5, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 16 bytes', 16, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(16, Length(LResult.Hash), 'Should return 16 bytes');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldSucceed_WithBLAKE2b512;
@@ -176,8 +176,8 @@ begin
   LResult := FDigest.Digest(daBLAKE2b512, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 64 bytes', 64, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(64, Length(LResult.Hash), 'Should return 64 bytes');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldSucceed_WithSM3;
@@ -192,8 +192,8 @@ begin
   LResult := FDigest.Digest(daSM3, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes (SM3)', 32, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.Hash), 'Should return 32 bytes (SM3)');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldSucceed_WithSHA3_256;
@@ -208,8 +208,8 @@ begin
   LResult := FDigest.Digest(daSHA3_256, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return 32 bytes (SHA3-256)', 32, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.Hash), 'Should return 32 bytes (SHA3-256)');
 end;
 
 procedure TTestEVPDigestMock.TestDigest_ShouldReturnCorrectSize_ForAllAlgorithms;
@@ -222,22 +222,22 @@ begin
   
   // Act & Assert - Test multiple algorithms
   LResult := FDigest.Digest(daMD5, LData);
-  AssertEquals('MD5 size', 16, Length(LResult.Hash));
+  CheckEqual(16, Length(LResult.Hash), 'MD5 size');
   
   LResult := FDigest.Digest(daSHA1, LData);
-  AssertEquals('SHA1 size', 20, Length(LResult.Hash));
+  CheckEqual(20, Length(LResult.Hash), 'SHA1 size');
   
   LResult := FDigest.Digest(daSHA224, LData);
-  AssertEquals('SHA224 size', 28, Length(LResult.Hash));
+  CheckEqual(28, Length(LResult.Hash), 'SHA224 size');
   
   LResult := FDigest.Digest(daSHA256, LData);
-  AssertEquals('SHA256 size', 32, Length(LResult.Hash));
+  CheckEqual(32, Length(LResult.Hash), 'SHA256 size');
   
   LResult := FDigest.Digest(daSHA384, LData);
-  AssertEquals('SHA384 size', 48, Length(LResult.Hash));
+  CheckEqual(48, Length(LResult.Hash), 'SHA384 size');
   
   LResult := FDigest.Digest(daSHA512, LData);
-  AssertEquals('SHA512 size', 64, Length(LResult.Hash));
+  CheckEqual(64, Length(LResult.Hash), 'SHA512 size');
 end;
 
 { Empty data tests }
@@ -254,9 +254,9 @@ begin
   LResult := FDigest.Digest(daSHA256, LData);
   
   // Assert
-  AssertTrue('Should succeed with empty data', LResult.Success);
-  AssertEquals('Should still return hash', 32, Length(LResult.Hash));
-  AssertEquals('Last data size should be 0', 0, FMock.GetLastDataSize);
+  CheckTrue(LResult.Success, 'Should succeed with empty data');
+  CheckEqual(32, Length(LResult.Hash), 'Should still return hash');
+  CheckEqual(0, FMock.GetLastDataSize, 'Last data size should be 0');
 end;
 
 { Incremental digest tests }
@@ -269,8 +269,8 @@ begin
   LResult := FDigest.DigestInit(daSHA256);
   
   // Assert
-  AssertTrue('Should return true', LResult);
-  AssertEquals('Init call count', 1, FMock.GetInitCallCount);
+  CheckTrue(LResult, 'Should return true');
+  CheckEqual(1, FMock.GetInitCallCount, 'Init call count');
 end;
 
 procedure TTestEVPDigestMock.TestDigestInit_ShouldSetInitializedState;
@@ -279,7 +279,7 @@ begin
   FDigest.DigestInit(daSHA256);
   
   // Assert
-  AssertTrue('Should be initialized', FMock.IsInitialized);
+  CheckTrue(FMock.IsInitialized, 'Should be initialized');
 end;
 
 procedure TTestEVPDigestMock.TestDigestUpdate_ShouldReturnFalse_WhenNotInitialized;
@@ -294,7 +294,7 @@ begin
   LResult := FDigest.DigestUpdate(LData);
   
   // Assert
-  AssertFalse('Should return false when not initialized', LResult);
+  CheckFalse(LResult, 'Should return false when not initialized');
 end;
 
 procedure TTestEVPDigestMock.TestDigestUpdate_ShouldReturnTrue_WhenInitialized;
@@ -310,8 +310,8 @@ begin
   LResult := FDigest.DigestUpdate(LData);
   
   // Assert
-  AssertTrue('Should return true when initialized', LResult);
-  AssertEquals('Update count', 1, FDigest.GetUpdateCount);
+  CheckTrue(LResult, 'Should return true when initialized');
+  CheckEqual(1, FDigest.GetUpdateCount, 'Update count');
 end;
 
 procedure TTestEVPDigestMock.TestDigestUpdate_ShouldAccumulateData;
@@ -328,8 +328,8 @@ begin
   FDigest.DigestUpdate(LData2);
   
   // Assert
-  AssertEquals('Should accumulate data', 80, FMock.GetAccumulatedDataSize);
-  AssertEquals('Update count', 2, FDigest.GetUpdateCount);
+  CheckEqual(80, FMock.GetAccumulatedDataSize, 'Should accumulate data');
+  CheckEqual(2, FDigest.GetUpdateCount, 'Update count');
 end;
 
 procedure TTestEVPDigestMock.TestDigestFinal_ShouldReturnFalse_WhenNotInitialized;
@@ -340,7 +340,7 @@ begin
   LResult := FDigest.DigestFinal;
   
   // Assert
-  AssertFalse('Should return false when not initialized', LResult.Success);
+  CheckFalse(LResult.Success, 'Should return false when not initialized');
 end;
 
 procedure TTestEVPDigestMock.TestDigestFinal_ShouldComputeHash_FromAccumulatedData;
@@ -357,10 +357,10 @@ begin
   LResult := FDigest.DigestFinal;
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Should return hash', 32, Length(LResult.Hash));
-  AssertEquals('Final call count', 1, FMock.GetFinalCallCount);
-  AssertFalse('Should clear initialized state', FMock.IsInitialized);
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.Hash), 'Should return hash');
+  CheckEqual(1, FMock.GetFinalCallCount, 'Final call count');
+  CheckFalse(FMock.IsInitialized, 'Should clear initialized state');
 end;
 
 procedure TTestEVPDigestMock.TestDigestIncrementalEqualsOneShot;
@@ -389,14 +389,13 @@ begin
   LIncrementalResult := FDigest.DigestFinal;
   
   // Assert - Both should produce same hash
-  AssertTrue('One-shot should succeed', LOneShotResult.Success);
-  AssertTrue('Incremental should succeed', LIncrementalResult.Success);
-  AssertEquals('Hash sizes should match', Length(LOneShotResult.Hash), Length(LIncrementalResult.Hash));
+  CheckTrue(LOneShotResult.Success, 'One-shot should succeed');
+  CheckTrue(LIncrementalResult.Success, 'Incremental should succeed');
+  CheckEqual(Length(LOneShotResult.Hash), Length(LIncrementalResult.Hash), 'Hash sizes should match');
   
   // Compare hashes byte by byte
   for i := 0 to High(LOneShotResult.Hash) do
-    AssertEquals('Hash byte ' + IntToStr(i) + ' should match', 
-                 LOneShotResult.Hash[i], LIncrementalResult.Hash[i]);
+    CheckEqual(LOneShotResult.Hash[i], LIncrementalResult.Hash[i], 'Hash byte ' + IntToStr(i) + ' should match');
 end;
 
 { Error handling tests }
@@ -414,9 +413,9 @@ begin
   LResult := FDigest.Digest(daSHA256, LData);
   
   // Assert
-  AssertFalse('Should fail', LResult.Success);
-  AssertEquals('Error message', 'Simulated digest failure', LResult.ErrorMessage);
-  AssertEquals('Hash should be empty', 0, Length(LResult.Hash));
+  CheckFalse(LResult.Success, 'Should fail');
+  CheckEqual('Simulated digest failure', LResult.ErrorMessage, 'Error message');
+  CheckEqual(0, Length(LResult.Hash), 'Hash should be empty');
 end;
 
 procedure TTestEVPDigestMock.TestDigestInit_ShouldFail_WhenConfigured;
@@ -430,8 +429,8 @@ begin
   LResult := FDigest.DigestInit(daSHA256);
   
   // Assert
-  AssertFalse('Should fail', LResult);
-  AssertFalse('Should not be initialized', FMock.IsInitialized);
+  CheckFalse(LResult, 'Should fail');
+  CheckFalse(FMock.IsInitialized, 'Should not be initialized');
 end;
 
 procedure TTestEVPDigestMock.TestDigestUpdate_ShouldFail_WhenConfigured;
@@ -448,33 +447,33 @@ begin
   LResult := FDigest.DigestUpdate(LData);
   
   // Assert
-  AssertFalse('Should fail', LResult);
+  CheckFalse(LResult, 'Should fail');
 end;
 
 { Algorithm queries }
 
 procedure TTestEVPDigestMock.TestGetDigestSize_ShouldReturnCorrectSize_ForSHA256;
 begin
-  AssertEquals('SHA-256 digest size', 32, FDigest.GetDigestSize(daSHA256));
+  CheckEqual(32, FDigest.GetDigestSize(daSHA256), 'SHA-256 digest size');
 end;
 
 procedure TTestEVPDigestMock.TestGetDigestSize_ShouldReturnCorrectSize_ForSHA512;
 begin
-  AssertEquals('SHA-512 digest size', 64, FDigest.GetDigestSize(daSHA512));
+  CheckEqual(64, FDigest.GetDigestSize(daSHA512), 'SHA-512 digest size');
 end;
 
 procedure TTestEVPDigestMock.TestGetBlockSize_ShouldReturnCorrectSize_ForSHA256;
 begin
-  AssertEquals('SHA-256 block size', 64, FDigest.GetBlockSize(daSHA256));
+  CheckEqual(64, FDigest.GetBlockSize(daSHA256), 'SHA-256 block size');
 end;
 
 procedure TTestEVPDigestMock.TestGetAlgorithmName_ShouldReturnCorrectName;
 begin
-  AssertEquals('SHA-256 name', 'SHA-256', FDigest.GetAlgorithmName(daSHA256));
-  AssertEquals('SHA-512 name', 'SHA-512', FDigest.GetAlgorithmName(daSHA512));
-  AssertEquals('MD5 name', 'MD5', FDigest.GetAlgorithmName(daMD5));
-  AssertEquals('BLAKE2b-512 name', 'BLAKE2b-512', FDigest.GetAlgorithmName(daBLAKE2b512));
-  AssertEquals('SM3 name', 'SM3', FDigest.GetAlgorithmName(daSM3));
+  CheckEqual('SHA-256', FDigest.GetAlgorithmName(daSHA256), 'SHA-256 name');
+  CheckEqual('SHA-512', FDigest.GetAlgorithmName(daSHA512), 'SHA-512 name');
+  CheckEqual('MD5', FDigest.GetAlgorithmName(daMD5), 'MD5 name');
+  CheckEqual('BLAKE2b-512', FDigest.GetAlgorithmName(daBLAKE2b512), 'BLAKE2b-512 name');
+  CheckEqual('SM3', FDigest.GetAlgorithmName(daSM3), 'SM3 name');
 end;
 
 { Statistics tracking }
@@ -491,8 +490,8 @@ begin
   FDigest.Digest(daSHA512, LData);
   
   // Assert
-  AssertEquals('Operation count', 2, FDigest.GetOperationCount);
-  AssertEquals('Digest call count', 2, FMock.GetDigestCallCount);
+  CheckEqual(2, FDigest.GetOperationCount, 'Operation count');
+  CheckEqual(2, FMock.GetDigestCallCount, 'Digest call count');
 end;
 
 procedure TTestEVPDigestMock.TestDigestUpdate_ShouldIncrementUpdateCount;
@@ -509,7 +508,7 @@ begin
   FDigest.DigestUpdate(LData);
   
   // Assert
-  AssertEquals('Update count', 3, FDigest.GetUpdateCount);
+  CheckEqual(3, FDigest.GetUpdateCount, 'Update count');
 end;
 
 procedure TTestEVPDigestMock.TestResetStatistics_ShouldClearCounters;
@@ -526,10 +525,10 @@ begin
   FDigest.ResetStatistics;
   
   // Assert
-  AssertEquals('Operation count after reset', 0, FDigest.GetOperationCount);
-  AssertEquals('Update count after reset', 0, FDigest.GetUpdateCount);
-  AssertEquals('Digest call count after reset', 0, FMock.GetDigestCallCount);
-  AssertEquals('Init call count after reset', 0, FMock.GetInitCallCount);
+  CheckEqual(0, FDigest.GetOperationCount, 'Operation count after reset');
+  CheckEqual(0, FDigest.GetUpdateCount, 'Update count after reset');
+  CheckEqual(0, FMock.GetDigestCallCount, 'Digest call count after reset');
+  CheckEqual(0, FMock.GetInitCallCount, 'Init call count after reset');
 end;
 
 { Custom hash injection }
@@ -551,13 +550,10 @@ begin
   LResult := FDigest.Digest(daSHA256, LData);
   
   // Assert
-  AssertTrue('Should succeed', LResult.Success);
-  AssertEquals('Custom hash length', 32, Length(LResult.Hash));
+  CheckTrue(LResult.Success, 'Should succeed');
+  CheckEqual(32, Length(LResult.Hash), 'Custom hash length');
   for i := 0 to 31 do
-    AssertEquals('Custom hash byte ' + IntToStr(i), $FF, LResult.Hash[i]);
+    CheckEqual($FF, LResult.Hash[i], 'Custom hash byte ' + IntToStr(i));
 end;
-
-initialization
-  RegisterTest(TTestEVPDigestMock);
 
 end.

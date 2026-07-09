@@ -292,6 +292,79 @@ begin
 {$ENDIF}
 end;
 
+procedure TestJoinNilBase;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_join(nil, 'file.pas', @Buf[0], 256);
+  Check(R <> 0, 'nil base returns error');
+end;
+
+procedure TestJoinNilChild;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_join('/tmp', nil, @Buf[0], 256);
+  Check(R <> 0, 'nil child returns error');
+end;
+
+procedure TestDirnameNilPath;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_dirname(nil, @Buf[0], 256);
+  Check(R >= 0, 'nil dirname does not crash');
+end;
+
+procedure TestBasenameNilPath;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_basename(nil, @Buf[0], 256);
+  Check(R >= 0, 'nil basename does not crash');
+end;
+
+procedure TestNormalizeEmpty;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_normalize('', @Buf[0], 256);
+  Check(BufEq(@Buf[0], ''), 'normalize empty = empty');
+end;
+
+procedure TestSmallBufferTruncation;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_path_join('/usr', 'bin', @Buf[0], 4);
+  Check(R >= 0, 'small buffer returns non-negative');
+  Check(Buf[3] = #0, 'small buffer null terminated');
+end;
+
+procedure TestJoinEmptyChild;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_join('/tmp', '', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/tmp'), 'empty child returns base');
+end;
+
+procedure TestExtensionPtrPtr;
+var
+  P: PAnsiChar;
+  L: Int32;
+begin
+  platform_path_extension_ptr(nil, P, L);
+  Check(L = 0, 'nil extension_ptr len = 0');
+  Check(P = nil, 'nil extension_ptr ptr = nil');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.path');
   T.Test('join basic', @TestJoinBasic);
@@ -318,5 +391,13 @@ begin
   T.Test('trim_sep', @TestTrimSep);
   T.Test('same_file_name', @TestSameFileName);
   T.Test('relative', @TestRelative);
+  T.Test('join nil base', @TestJoinNilBase);
+  T.Test('join nil child', @TestJoinNilChild);
+  T.Test('dirname nil path', @TestDirnameNilPath);
+  T.Test('basename nil path', @TestBasenameNilPath);
+  T.Test('normalize empty', @TestNormalizeEmpty);
+  T.Test('small buffer truncation', @TestSmallBufferTruncation);
+  T.Test('join empty child', @TestJoinEmptyChild);
+  T.Test('extension_ptr nil path', @TestExtensionPtrPtr);
   if not T.Run then Halt(1);
 end.

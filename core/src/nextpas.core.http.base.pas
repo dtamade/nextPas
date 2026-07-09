@@ -84,11 +84,24 @@ type
     IdleTimeout: Int64;
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
+    { ShutdownTimeout: max milliseconds to wait for in-flight requests during
+      graceful shutdown. 0 = wait forever (default for backward compat). }
+    ShutdownTimeout: Int64;
+    { MaxRequestsPerConnection: max requests on a single keep-alive connection.
+      After this many requests, the server sends Connection: close. 0 = unlimited. }
+    MaxRequestsPerConnection: Int32;
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
     class function Default: THttpServerOptions; static;
     function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
+    function WithReadTimeout(const AMs: Int64): THttpServerOptions;
+    function WithWriteTimeout(const AMs: Int64): THttpServerOptions;
+    function WithIdleTimeout(const AMs: Int64): THttpServerOptions;
+    function WithMaxHeaderSize(const ABytes: Int32): THttpServerOptions;
+    function WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
+    function WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
+    function WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -128,6 +141,7 @@ const
   HTTP_STATUS_LENGTH_REQUIRED       = THttpStatus(411);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
   HTTP_STATUS_URI_TOO_LONG          = THttpStatus(414);
+  HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = THttpStatus(415);
   HTTP_STATUS_RANGE_NOT_SATISFIABLE = THttpStatus(416);
   HTTP_STATUS_EXPECTATION_FAILED    = THttpStatus(417);
   HTTP_STATUS_UNPROCESSABLE_ENTITY  = THttpStatus(422);
@@ -139,6 +153,7 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
   HTTP_STATUS_SERVICE_UNAVAILABLE   = THttpStatus(503);
+  HTTP_STATUS_GATEWAY_TIMEOUT       = THttpStatus(504);
 
   { TCP server backend aliases }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
@@ -236,6 +251,7 @@ begin
     410: Result := 'Gone';
     413: Result := 'Payload Too Large';
     414: Result := 'URI Too Long';
+    415: Result := 'Unsupported Media Type';
     416: Result := 'Range Not Satisfiable';
     417: Result := 'Expectation Failed';
     422: Result := 'Unprocessable Entity';
@@ -246,6 +262,7 @@ begin
     501: Result := 'Not Implemented';
     502: Result := 'Bad Gateway';
     503: Result := 'Service Unavailable';
+    504: Result := 'Gateway Timeout';
   else
     Result := IntToStr(ACode);
   end;
@@ -713,6 +730,8 @@ begin
   Result.IdleTimeout := 30000;
   Result.MaxHeaderSize := 8192;
   Result.MaxBodySize := 4194304;
+  Result.ShutdownTimeout := 0;
+  Result.MaxRequestsPerConnection := 0;
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
@@ -724,6 +743,48 @@ begin
   Result := Self;
   Result.Version := AVersion;
   Result.UseRegistryVersion := False;
+end;
+
+function THttpServerOptions.WithReadTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.ReadTimeout := AMs;
+end;
+
+function THttpServerOptions.WithWriteTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.WriteTimeout := AMs;
+end;
+
+function THttpServerOptions.WithIdleTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.IdleTimeout := AMs;
+end;
+
+function THttpServerOptions.WithMaxHeaderSize(const ABytes: Int32): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxHeaderSize := ABytes;
+end;
+
+function THttpServerOptions.WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxBodySize := ABytes;
+end;
+
+function THttpServerOptions.WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
+begin
+  Result := Self;
+  Result.ShutdownTimeout := AMs;
+end;
+
+function THttpServerOptions.WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
+begin
+  Result := Self;
+  Result.MaxRequestsPerConnection := AMax;
 end;
 
 function THttpServerOptions.EffectiveVersion(

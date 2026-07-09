@@ -23,6 +23,7 @@ type
     IdleTimeout: Int64;
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
+    MaxRequestsPerConnection: Int32;
   end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
@@ -209,6 +210,7 @@ type
     FPollReadDeadlineIsIdle: Boolean;
     FPollWriteDeadline: TDeadline;
     FParserIsSnapshot: Boolean;
+    FRequestCount: Int32;
     procedure ArmPollReadDeadline(const ATimeoutMs: Int64;
       const AIsIdle: Boolean);
     procedure ArmPollRequestReadDeadline;
@@ -919,6 +921,7 @@ begin
   FPollReadDeadlineIsIdle := False;
   FPollWriteDeadline := TDeadline.Infinite;
   FParserIsSnapshot := False;
+  FRequestCount := 0;
   if FStreamRuntime <> nil then
     ArmPollRequestReadDeadline;
 end;
@@ -1209,6 +1212,12 @@ begin
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
+    { Increment request count and enforce MaxRequestsPerConnection }
+    Inc(FRequestCount);
+    if (FOptions.MaxRequestsPerConnection > 0) and
+       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
+      FKeepAlive := False;
+
   except
     on E: Exception do
     begin
@@ -1308,6 +1317,12 @@ begin
     end;
 
     LW.Flush;
+
+    { Increment request count and enforce MaxRequestsPerConnection }
+    Inc(FRequestCount);
+    if (FOptions.MaxRequestsPerConnection > 0) and
+       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
+      LKeepAlive := False;
 
     ACloseAfterDrain := not LKeepAlive;
   except

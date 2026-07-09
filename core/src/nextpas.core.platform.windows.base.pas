@@ -5,40 +5,69 @@ unit nextpas.core.platform.windows.base;
 interface
 
 type
+  {** @desc 无符号 8 位整数 *}
   BYTE = UInt8;
+  {** @desc 无符号 16 位整数 *}
   WORD = UInt16;
+  {** @desc 无符号 32 位整数 *}
   UINT = UInt32;
+  {** @desc 无符号 32 位整数 *}
   DWORD = UInt32;
+  {** @desc 有符号 32 位整数 *}
   LONG = Int32;
+  {** @desc 无符号 32 位整数 *}
   ULONG = UInt32;
+  {** @desc 有符号 64 位整数 *}
   LONGLONG = Int64;
+  {** @desc Windows 布尔类型 *}
   WINBOOL = LongBool;
+  {** @desc 布尔类型 *}
   BOOL = WINBOOL;
+  {** @desc 句柄类型（不透明指针） *}
   HANDLE = Pointer;
   PHANDLE = ^HANDLE;
+  {** @desc 函数指针类型 *}
   FARPROC = Pointer;
+  {** @desc 模块句柄类型 *}
   HMODULE = HANDLE;
+  {** @desc void 指针类型 *}
   LPVOID = Pointer;
+  {** @desc ANSI 字符串指针类型 *}
   LPCSTR = PAnsiChar;
+  {** @desc 可修改 ANSI 字符串指针类型 *}
   LPSTR = PAnsiChar;
+  {** @desc Unicode 字符串指针类型 *}
   LPCWSTR = PWideChar;
+  {** @desc 可修改 Unicode 字符串指针类型 *}
   LPWSTR = PWideChar;
+  {** @desc DWORD 指针类型 *}
   LPDWORD = ^DWORD;
+  {** @desc LONG 指针类型 *}
   PLONG = ^LONG;
+  {** @desc 64 位整数指针类型 *}
   PINT64 = System.PInt64;
+  {** @desc BYTE 指针类型 *}
   LPBYTE = ^BYTE;
+  {** @desc LPSTR 指针类型 *}
   PLPSTR = ^LPSTR;
+  {** @desc LPWSTR 指针类型 *}
   PLPWSTR = ^LPWSTR;
+  {** @desc SRW 锁类型（轻量读写锁） *}
   SRWLOCK = Pointer;
+  {** @desc 条件变量类型 *}
   CONDITION_VARIABLE = Pointer;
+  {** @desc Windows 线程入口函数类型 *}
   TPlatformWindowsThreadProc = function(AArg: Pointer): Pointer; cdecl;
+  {** @desc 控制台信号处理函数类型 *}
   TConsoleCtrlHandlerRoutine = function(dwCtrlType: DWORD): WINBOOL; stdcall;
 
+  {** @desc 文件时间结构（100 纳秒精度） *}
   FILETIME = record
     dwLowDateTime: DWORD;
     dwHighDateTime: DWORD;
   end;
 
+  {** @desc 64 位整数结构（高低双字或四字） *}
   LARGE_INTEGER = record
     case Byte of
       0: (
@@ -49,12 +78,14 @@ type
   end;
   PLARGE_INTEGER = ^LARGE_INTEGER;
 
+  {** @desc 文件属性信息级别枚举 *}
   GET_FILEEX_INFO_LEVELS = (
     GetFileExInfoStandard,
     GetFileExMaxInfoLevel
   );
   PGET_FILEEX_INFO_LEVELS = ^GET_FILEEX_INFO_LEVELS;
 
+  {** @desc 文件属性数据结构 *}
   WIN32_FILE_ATTRIBUTE_DATA = packed record
     dwFileAttributes: DWORD;
     ftCreationTime: FILETIME;
@@ -65,6 +96,7 @@ type
   end;
   PWIN32_FILE_ATTRIBUTE_DATA = ^WIN32_FILE_ATTRIBUTE_DATA;
 
+  {** @desc 文件句柄信息结构 *}
   BY_HANDLE_FILE_INFORMATION = record
     dwFileAttributes: DWORD;
     ftCreationTime: FILETIME;

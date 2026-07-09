@@ -315,6 +315,17 @@ type
     property CapturedTimeoutMs: Int64 read FCapturedTimeoutMs;
   end;
 
+  TRetryTestTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FFailCount: Int32;
+    FCalls: Int32;
+    FFailStatus: THttpStatus;
+  public
+    constructor Create(const AFailCount: Int32; const AFailStatus: THttpStatus);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Int32 read FCalls;
+  end;
+
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
@@ -404,6 +415,7 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -1769,6 +1781,31 @@ begin
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
+{ TRetryTestTransport }
+
+constructor TRetryTestTransport.Create(const AFailCount: Int32;
+  const AFailStatus: THttpStatus);
+begin
+  inherited Create;
+  FFailCount := AFailCount;
+  FFailStatus := AFailStatus;
+  FCalls := 0;
+end;
+
+function TRetryTestTransport.RoundTrip(
+  const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  Inc(FCalls);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  if FCalls <= FFailCount then
+    Result := NewResponse(FFailStatus, LHeaders, nil)
+  else
+    Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
+end;
+
 constructor TRedirectBodyReleaseTransport.Create;
 begin
   inherited Create;
@@ -2053,6 +2090,11 @@ begin
 end;
 
 function TDownloadClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
 begin
   Result := Self;
 end;
@@ -8319,6 +8361,347 @@ begin
   Check(LCaught, 'GetBytes raises EHttpError on 500');
 end;
 
+{ WithRetry tests }
+
+procedure TestWithRetrySucceedsAfterRetries;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(2, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  Check(LResp <> nil, 'Retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'Retry eventually succeeds');
+  CheckEqual(3, LTransport.Calls, 'Retry makes 3 calls total (2 fail + 1 success)');
+end;
+
+procedure TestWithRetryStopsOnSuccess;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(0, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  Check(LResp <> nil, 'Returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'First attempt succeeds');
+  CheckEqual(1, LTransport.Calls, 'Only 1 call when first succeeds');
+end;
+
+procedure TestWithRetryStopsOn4xx;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(5, HTTP_STATUS_NOT_FOUND);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  Check(LResp <> nil, 'Returns response');
+  CheckEqual(404, Int32(LResp.StatusCode), 'Returns 404 without retrying');
+  CheckEqual(1, LTransport.Calls, 'Only 1 call for 4xx');
+end;
+
+procedure TestWithRetryExhaustsRetries;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(10, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, 'Returns response');
+  CheckEqual(503, Int32(LResp.StatusCode), 'Returns 503 after exhausting retries');
+  CheckEqual(3, LTransport.Calls, 'Makes 3 calls (1 initial + 2 retries)');
+end;
+
+procedure TestWithRetryZeroMeansNoRetry;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(5, HTTP_STATUS_BAD_GATEWAY);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(0).Get('http://localhost/test');
+  Check(LResp <> nil, 'Returns response');
+  CheckEqual(502, Int32(LResp.StatusCode), 'Returns 502 with 0 retries');
+  CheckEqual(1, LTransport.Calls, 'Only 1 call with 0 retries');
+end;
+
+procedure TestWithRetryChainsWithAuth;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithBearerAuth('token123').WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, 'Chained retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'Chained retry eventually succeeds');
+  CheckEqual(2, LTransport.Calls, 'Makes 2 calls (1 fail + 1 success)');
+end;
+
+procedure TestWithRetryRejectsNegative;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRetryTestTransport.Create(0, HTTP_STATUS_OK);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    LClient.WithRetry(-1);
+  except
+    on E: EArgumentError do
+      LCaught := Pos('negative', E.Message) > 0;
+  end;
+  Check(LCaught, 'WithRetry(-1) raises EArgumentError');
+end;
+
+{ HttpPostString/PutString/PatchString/DeleteString tests }
+
+procedure TestHttpPostStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPostString(LClient, 'http://localhost/test', 'text/plain', 'hello');
+  CheckEqual('', LBody, 'PostString returns empty body from 200');
+end;
+
+procedure TestHttpPostStringRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpPostString(LClient, 'http://localhost/error', 'text/plain', 'body');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'PostString raises EHttpError on 404');
+end;
+
+procedure TestHttpPutStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPutString(LClient, 'http://localhost/test', 'application/json', '{}');
+  CheckEqual('', LBody, 'PutString returns empty body from 200');
+end;
+
+procedure TestHttpPutStringRaisesOn500;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpPutString(LClient, 'http://localhost/error', 'text/plain', 'body');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('500', E.Message) > 0);
+  end;
+  Check(LCaught, 'PutString raises EHttpError on 500');
+end;
+
+procedure TestHttpPatchStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpPatchString(LClient, 'http://localhost/test', 'text/plain', 'patch');
+  CheckEqual('', LBody, 'PatchString returns empty body from 200');
+end;
+
+procedure TestHttpDeleteStringSuccess;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := HttpDeleteString(LClient, 'http://localhost/test');
+  CheckEqual('', LBody, 'DeleteString returns empty body from 200');
+end;
+
+procedure TestHttpDeleteStringRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpDeleteString(LClient, 'http://localhost/error');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'DeleteString raises EHttpError on 404');
+end;
+
+procedure TestHttpHeadSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := HttpHead(LClient, 'http://localhost/test');
+  Check(LResp <> nil, 'HttpHead returns response');
+  CheckEqual(200, LResp.StatusCode, 'HttpHead returns 200');
+end;
+
+procedure TestHttpHeadRaisesOn404;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpHead(LClient, 'http://localhost/missing');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0);
+  end;
+  Check(LCaught, 'HttpHead raises EHttpError on 404');
+end;
+
+procedure TestHttpOptionsSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := HttpOptions(LClient, 'http://localhost/test');
+  Check(LResp <> nil, 'HttpOptions returns response');
+  CheckEqual(200, LResp.StatusCode, 'HttpOptions returns 200');
+end;
+
+procedure TestHttpOptionsRaisesOn403;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_FORBIDDEN;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    HttpOptions(LClient, 'http://localhost/forbidden');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('403', E.Message) > 0);
+  end;
+  Check(LCaught, 'HttpOptions raises EHttpError on 403');
+end;
+
+procedure TestHttpPostJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"key":"value"}');
+  // Should not raise; body is empty from mock transport
+  HttpPostJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpPutJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"id":1}');
+  HttpPutJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpPatchJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"name":"test"}');
+  HttpPatchJson(LClient, 'http://localhost/test', LDoc);
+end;
+
+procedure TestHttpDeleteJsonSuccess;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_OK;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := JsonParse('{"id":1}');
+  HttpDeleteJson(LClient, 'http://localhost/test', LDoc);
+end;
+
 { Main }
 
 begin
@@ -8620,5 +9003,27 @@ begin
   T.Test('GetString raises on 404', @TestHttpGetStringRaisesOn404);
   T.Test('GetBytes returns body on 200', @TestHttpGetBytesSuccess);
   T.Test('GetBytes raises on 500', @TestHttpGetBytesRaisesOn500);
+  T.Test('WithRetry succeeds after retries', @TestWithRetrySucceedsAfterRetries);
+  T.Test('WithRetry stops on first success', @TestWithRetryStopsOnSuccess);
+  T.Test('WithRetry does not retry on 4xx', @TestWithRetryStopsOn4xx);
+  T.Test('WithRetry exhausts retries on 5xx', @TestWithRetryExhaustsRetries);
+  T.Test('WithRetry(0) means no retry', @TestWithRetryZeroMeansNoRetry);
+  T.Test('WithRetry chains with WithBearerAuth', @TestWithRetryChainsWithAuth);
+  T.Test('WithRetry rejects negative count', @TestWithRetryRejectsNegative);
+  T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
+  T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
+  T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);
+  T.Test('PutString raises on 500', @TestHttpPutStringRaisesOn500);
+  T.Test('PatchString returns body on 200', @TestHttpPatchStringSuccess);
+  T.Test('DeleteString returns body on 200', @TestHttpDeleteStringSuccess);
+  T.Test('DeleteString raises on 404', @TestHttpDeleteStringRaisesOn404);
+  T.Test('Head returns response on 200', @TestHttpHeadSuccess);
+  T.Test('Head raises on 404', @TestHttpHeadRaisesOn404);
+  T.Test('Options returns response on 200', @TestHttpOptionsSuccess);
+  T.Test('Options raises on 403', @TestHttpOptionsRaisesOn403);
+  T.Test('PostJson sends JSON body', @TestHttpPostJsonSuccess);
+  T.Test('PutJson sends JSON body', @TestHttpPutJsonSuccess);
+  T.Test('PatchJson sends JSON body', @TestHttpPatchJsonSuccess);
+  T.Test('DeleteJson sends JSON body', @TestHttpDeleteJsonSuccess);
   if not T.Run then Halt(1);
 end.

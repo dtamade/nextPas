@@ -5,6 +5,7 @@ unit nextpas.core.platform.mmap;
 interface
 
 type
+  {** @desc 内存映射访问模式 *}
   TPlatformMapAccess = (
     pmaRead,
     pmaWrite,
@@ -12,6 +13,7 @@ type
     pmaCopyOnWrite
   );
 
+  {** @desc 内存映射标志 *}
   TPlatformMapFlag = (
     pmfShared,
     pmfPrivate,
@@ -19,8 +21,10 @@ type
     pmfFixed,
     pmfLocked
   );
+  {** @desc 内存映射标志集合 *}
   TPlatformMapFlags = set of TPlatformMapFlag;
 
+  {** @desc 内存映射文件句柄 *}
   TPlatformMappedFile = record
     Addr: Pointer;
     Size: PtrUInt;
@@ -37,32 +41,98 @@ type
     BackingPath: string;
   end;
 
+{** @desc 映射整个文件到内存（只读）
+    @param APath 文件路径
+    @param AMap 输出映射句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_file(const APath: PAnsiChar; out AMap: TPlatformMappedFile): Int32;
+
+{** @desc 打开并映射文件到内存（可配置访问模式和标志）
+    @param APath 文件路径
+    @param AAccess 访问模式
+    @param AFlags 映射标志
+    @param ASize 映射大小（0 表示整个文件）
+    @param AOffset 文件偏移
+    @param AMap 输出映射句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_open_file(const APath: PAnsiChar; AAccess: TPlatformMapAccess;
   AFlags: TPlatformMapFlags; ASize: UInt64; AOffset: UInt64;
   out AMap: TPlatformMappedFile): Int32;
+
+{** @desc 创建匿名内存映射
+    @param ASize 映射大小
+    @param AAccess 访问模式
+    @param AFlags 映射标志
+    @param AMap 输出映射句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_create_anonymous(ASize: UInt64; AAccess: TPlatformMapAccess;
   AFlags: TPlatformMapFlags; out AMap: TPlatformMappedFile): Int32;
+
+{** @desc 刷新内存映射到磁盘
+    @param AMap 映射句柄
+    @param AOffset 偏移
+    @param ASize 大小
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_flush(var AMap: TPlatformMappedFile; AOffset: UInt64;
   ASize: UInt64): Int32;
+
+{** @desc 锁定内存映射区域（防止换出）
+    @param AMap 映射句柄
+    @param AOffset 偏移
+    @param ASize 大小
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_lock(var AMap: TPlatformMappedFile; AOffset: UInt64;
   ASize: UInt64): Int32;
+
+{** @desc 解锁内存映射区域
+    @param AMap 映射句柄
+    @param AOffset 偏移
+    @param ASize 大小
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_unlock(var AMap: TPlatformMappedFile; AOffset: UInt64;
   ASize: UInt64): Int32;
+
+{** @desc 关闭内存映射
+    @param AMap 映射句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_mmap_close(var AMap: TPlatformMappedFile): Int32;
+
+{** @desc 获取系统内存页大小
+    @return 内存页大小（字节） *}
 function platform_mmap_page_size: UInt64;
+
+{** @desc 检查文件是否存在（通过 stat）
+    @param APath 文件路径
+    @return True 文件存在 *}
 function FileExistsByStat(const APath: PAnsiChar): Boolean;
 
+{** @desc 创建共享内存对象
+    @param AName 共享内存名称
+    @param ASize 大小
+    @param AAccess 访问模式
+    @param AMap 输出映射句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_shm_create(const AName: PAnsiChar; ASize: UInt64;
   AAccess: TPlatformMapAccess; out AMap: TPlatformMappedFile): Int32;
+
+{** @desc 打开共享内存对象
+    @param AName 共享内存名称
+    @param AAccess 访问模式
+    @param AMap 输出映射句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_shm_open(const AName: PAnsiChar; AAccess: TPlatformMapAccess;
   out AMap: TPlatformMappedFile): Int32;
+
+{** @desc 关闭共享内存对象
+    @param AMap 映射句柄（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_shm_close(var AMap: TPlatformMappedFile): Int32;
 
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.platform.error,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base
 {$IFDEF NEXTPAS_UNIX}
@@ -303,7 +373,7 @@ begin
   LFallback := BuildSharedFallbackPath(AName);
   LExists := FileExistsByStat(PAnsiChar(LFallback));
   if (not ACreate) and (not LExists) then
-    Exit(2);
+    Exit(PLATFORM_ERR_NOENT);
 
   LSize := ASize;
   Result := platform_mmap_open_file(PAnsiChar(LFallback), AAccess, [pmfShared], LSize, 0, AMap);

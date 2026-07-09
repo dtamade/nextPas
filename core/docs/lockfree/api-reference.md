@@ -2,6 +2,8 @@
 
 > 更新: 2026-07-06
 
+[English](api-reference.en.md)
+
 ## 原子类型 (nextpas.core.atomic)
 
 ### TAtomicInt32 / TAtomicInt64
@@ -595,6 +597,737 @@ end;
 - 不支持 `default` 分支（需要时直接 TrySend/TryReceive）
 - poll + backoff 策略（纯用户态轮询，不使用内核 wait address）
 - `AddSend` 存储值副本，Select 成功后才实际发送
+
+---
+
+## Bag (nextpas.core.lockfree.bag)
+
+```pascal
+type
+  TLockFreeBagAddResult = (arAdded, arFull, arClosed);
+
+  generic TLockFreeBag<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryAdd(const AValue: T): TLockFreeBagAddResult;
+    function TryTake(out AValue: T): Boolean;
+    function AddWait(const AValue: T): Boolean;
+    function TakeWait(out AValue: T): Boolean;
+    function AddTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    function TakeTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    function Capacity: PtrUInt;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+**特点**:
+- 基于 MPMC 队列实现，允许重复元素
+- FIFO 顺序（先进先出）
+- AddWait/TakeWait 阻塞等待
+- AddTimeout/TakeTimeout 超时等待
+- Close 后不能再添加，但可以取出已有元素
+- 适用于任务队列、工作池等场景
+
+**使用示例**:
+
+```pascal
+var
+  LBag: specialize TLockFreeBag<Integer>;
+  LValue: Integer;
+begin
+  LBag := specialize TLockFreeBag<Integer>.Create(1024);
+  try
+    // 添加元素（允许重复）
+    LBag.TryAdd(42);
+    LBag.TryAdd(42);  // 可以重复
+
+    // 取出元素
+    if LBag.TryTake(LValue) then
+      WriteLn('Got: ', LValue);  // 42
+
+    // 关闭
+    LBag.Close;
+  finally
+    LBag.Free;
+  end;
+end;
+```
+
+---
+
+## MultiMap (nextpas.core.lockfree.multimap)
+
+```pascal
+type
+  TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
+
+  generic TLockFreeMultiMap<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt = 16);
+    function Add(const AKey: TKey; const AValue: TValue): TLockFreeMultiMapAddResult;
+    function Find(const AKey: TKey; out AValues: array of TValue): Integer;
+    function Contains(const AKey: TKey): Boolean;
+    function Remove(const AKey: TKey): Boolean;
+    function RemoveValue(const AKey: TKey; const AValue: TValue): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function Count: PtrUInt;
+    function KeyCount: PtrUInt;
+  end;
+```
+
+**特点**:
+- 基于分片锁 HashMap，每个键对应一个值列表
+- 支持一个键添加多个值
+- Remove 删除整个键，RemoveValue 删除特定值
+- Close 后不能添加，但可以读取和删除
+- 适用于索引、标签系统等场景
+
+**使用示例**:
+
+```pascal
+var
+  LMap: specialize TLockFreeMultiMap<String, Integer>;
+  LValues: array[0..9] of Integer;
+  LCount: Integer;
+begin
+  LMap := specialize TLockFreeMultiMap<String, Integer>.Create(16);
+  try
+    // 添加键值对（一个键可以有多个值）
+    LMap.Add('tag1', 100);
+    LMap.Add('tag1', 200);
+    LMap.Add('tag2', 300);
+
+    // 查找键的所有值
+    LCount := LMap.Find('tag1', LValues);
+    // LCount = 2, LValues[0] = 100, LValues[1] = 200
+
+    // 删除特定值
+    LMap.RemoveValue('tag1', 100);
+
+    // 删除整个键
+    LMap.Remove('tag2');
+  finally
+    LMap.Free;
+  end;
+end;
+```
+
+---
+
+## Bloom Filter (nextpas.core.lockfree.bloom)
+
+```pascal
+type
+  generic TConcurrentBloomFilter<T> = class
+    constructor Create(const AExpectedItems: PtrUInt = 10000; const AFalsePositiveRate: Double = 0.01);
+    function Add(const AValue: T): Boolean;
+    function Contains(const AValue: T): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function BitCount: PtrUInt;
+    function HashCount: Integer;
+  end;
+```
+
+**特点**:
+- 基于多个哈希函数的概率数据结构
+- 可能存在假阳性（false positive），但不会有假阴性（false negative）
+- 空间效率高，适合大规模数据去重
+- 适用于缓存、去重、快速成员检查等场景
+
+**使用示例**:
+
+```pascal
+var
+  LBloom: specialize TConcurrentBloomFilter<Integer>;
+begin
+  // 创建布隆过滤器：期望 10000 个元素，1% 假阳性率
+  LBloom := specialize TConcurrentBloomFilter<Integer>.Create(10000, 0.01);
+  try
+    // 添加元素
+    LBloom.Add(42);
+    LBloom.Add(100);
+
+    // 检查元素是否存在
+    if LBloom.Contains(42) then
+      WriteLn('42 might exist');  // 可能存在（假阳性可能）
+
+    // 检查不存在的元素
+    if not LBloom.Contains(999) then
+      WriteLn('999 definitely does not exist');  // 一定不存在
+  finally
+    LBloom.Free;
+  end;
+end;
+```
+
+**参数说明**:
+- `AExpectedItems`: 期望存储的元素数量
+- `AFalsePositiveRate`: 期望的假阳性率（0-1 之间）
+- 位数组大小和哈希函数数量会自动计算
+
+---
+
+## LRU Cache (nextpas.core.lockfree.lru)
+
+```pascal
+type
+  TLockFreeLruResult = (lrAdded, lrUpdated, lrFull, lrClosed);
+
+  generic TConcurrentLruCache<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function Get(const AKey: TKey; out AValue: TValue): Boolean;
+    function Put(const AKey: TKey; const AValue: TValue): TLockFreeLruResult;
+    function Remove(const AKey: TKey): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+---
+
+## Counter (nextpas.core.lockfree.counter)
+
+```pascal
+type
+  TConcurrentCounter = class
+    constructor Create(const AInitialValue: Int64 = 0);
+    function Increment: Int64;      // 返回新值
+    function Decrement: Int64;      // 返回新值
+    function Add(const AValue: Int64): Int64;
+    function Sub(const AValue: Int64): Int64;
+    function Load: Int64;
+    procedure Store(const AValue: Int64);
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## Semaphore (nextpas.core.lockfree.semaphore)
+
+```pascal
+type
+  TLockFreeSemaphoreAcquireResult = (saAcquired, saFull, saClosed, saTimeout);
+
+  TConcurrentSemaphore = class
+    constructor Create(const AMaxPermits: Int64);
+    function TryAcquire: Boolean;
+    function Acquire: Boolean;
+    function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Release;
+    procedure Close;
+    function IsClosed: Boolean;
+    function AvailablePermits: Int64;
+    function MaxPermits: Int64;
+  end;
+```
+
+---
+
+## Mutex (nextpas.core.lockfree.mutex)
+
+```pascal
+type
+  TLockFreeMutexLockResult = (mlLocked, mlClosed, mlTimeout);
+
+  TConcurrentMutex = class
+    constructor Create;
+    function TryLock: Boolean;
+    function Lock: Boolean;
+    function LockTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Unlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsLocked: Boolean;
+  end;
+```
+
+---
+
+## RwLock (nextpas.core.lockfree.rwlock)
+
+```pascal
+type
+  TConcurrentRwLock = class
+    constructor Create;
+    function TryReadLock: Boolean;
+    function ReadLock: Boolean;
+    function TryWriteLock: Boolean;
+    function WriteLock: Boolean;
+    procedure ReadUnlock;
+    procedure WriteUnlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+---
+
+## CountdownLatch (nextpas.core.lockfree.countdown)
+
+```pascal
+type
+  TCountDownLatch = class
+    constructor Create(const AInitialCount: Int64);
+    procedure Done;
+    procedure DoneN(const AN: Int64);
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function GetCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## CyclicBarrier (nextpas.core.lockfree.barrier)
+
+```pascal
+type
+  TCyclicBarrierWaitResult = (bwArrived, bwClosed, bwTimeout, bwBroken);
+
+  TCyclicBarrier = class
+    constructor Create(const AParties: Int64);
+    function Await: TCyclicBarrierWaitResult;
+    function AwaitTimeout(const ATimeoutNs: Int64): TCyclicBarrierWaitResult;
+    function GetParties: Int64;
+    function GetNumberWaiting: Int64;
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+---
+
+## Rate Limiter (nextpas.core.lockfree.ratelimit)
+
+```pascal
+type
+  TLockFreeRateLimiterResult = (rlAllowed, rlRejected, rlClosed);
+
+  TTokenBucketLimiter = class
+    constructor Create(const ARatePerSecond: Double; const ABurst: Double);
+    function TryAcquire: TLockFreeRateLimiterResult;
+    function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetRate: Double;
+    function GetBurst: Double;
+  end;
+```
+
+---
+
+## Condition Variable (nextpas.core.lockfree.condvar)
+
+```pascal
+type
+  TConditionVariableWaitResult = (cvSignaled, cvClosed, cvTimeout);
+
+  TConditionVariable = class
+    constructor Create;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): TConditionVariableWaitResult;
+    procedure Signal;
+    procedure Broadcast;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetWaiterCount: Int32;
+  end;
+```
+
+---
+
+## Exchanger (nextpas.core.lockfree.exchanger)
+
+```pascal
+type
+  TLockFreeExchangeResult = (exExchanged, exClosed, exTimeout);
+
+  generic TExchangerImpl<T> = class
+    constructor Create;
+    function Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
+    function ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 两个线程交换值的同步点
+- 线程 A Exchange(A) 阻塞等待，线程 B Exchange(B) 阻塞等待
+- 两方到达后交换值，各自拿到对方的值
+- 适用场景：双线程管道、一对一通信
+
+---
+
+## Phaser (nextpas.core.lockfree.phaser)
+
+```pascal
+type
+  TLockFreePhaserArriveResult = (paArrived, paAdvanced, paClosed, paTimeout);
+
+  TPhaser = class
+    constructor Create(const AParties: Int64 = 0);
+    function Register: Int64;
+    function Arrive: Int64;
+    function ArriveAndAwaitAdvance: Int64;
+    function ArriveAndDeregister: Int64;
+    function AwaitAdvance(const APhase: Int64): TLockFreePhaserArriveResult;
+    function AwaitAdvanceTimeout(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
+    function GetPhase: Int64;
+    function GetParties: Int64;
+    function GetArrived: Int64;
+    function GetUnarrived: Int64;
+    procedure Terminate;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsTerminated: Boolean;
+  end;
+```
+
+**特点**:
+- 灵活的同步屏障，支持动态注册/注销
+- 每个相位(phase)有 N 个参与方，所有到达后进入下一相位
+- 支持多相位连续同步
+- 适用场景：分阶段并行计算、动态任务分组
+
+---
+
+## StampedLock (nextpas.core.lockfree.stampedlock)
+
+```pascal
+type
+  TStampedLock = class
+    constructor Create;
+    function ReadLock: Int64;
+    function TryReadLock: Int64;
+    function TryReadLockTimeout(const ATimeoutNs: Int64): Int64;
+    function WriteLock: Int64;
+    function TryWriteLock: Int64;
+    function TryWriteLockTimeout(const ATimeoutNs: Int64): Int64;
+    function TryOptimisticRead: Int64;
+    function Validate(const AStamp: Int64): Boolean;
+    procedure UnlockRead(const AStamp: Int64);
+    procedure UnlockWrite(const AStamp: Int64);
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+**特点**:
+- 乐观读锁 + 悲观读写锁
+- TryOptimisticRead 无锁读取，Validate 验证一致性
+- 读多写少场景比 RwLock 更高效
+- 单 Int64 状态编码（高32位=版本，低32位=锁状态）
+
+---
+
+## Ring Buffer (nextpas.core.lockfree.ringbuffer)
+
+```pascal
+type
+  TLockFreeRingBufferResult = (rbWritten, rbFull, rbEmpty, rbClosed);
+
+  generic TRingBufferImpl<T> = class
+    constructor Create(const ACapacity: Int64);
+    function TryWrite(const AValue: T): TLockFreeRingBufferResult;
+    function TryRead(out AValue: T): TLockFreeRingBufferResult;
+    function WriteWait(const AValue: T): TLockFreeRingBufferResult;
+    function ReadWait(out AValue: T): TLockFreeRingBufferResult;
+    function WriteTimeout(const AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function ReadTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function Count: Int64;
+    function GetCapacity: Int64;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 固定大小 FIFO 队列，基于数组
+- 容量自动取整到 2 的幂，位掩码取模
+- MPMC 安全，head/tail 双指针 CAS
+- 适用场景：生产者-消费者、日志缓冲、实时系统
+
+---
+
+## Concurrent Trie (nextpas.core.lockfree.trie)
+
+```pascal
+type
+  TLockFreeTrieResult = (trInserted, trUpdated, trDeleted, trNotFound, trClosed);
+
+  generic TConcurrentTrieImpl<TValue> = class
+    constructor Create;
+    function Insert(const AKey: string; const AValue: TValue): TLockFreeTrieResult;
+    function Find(const AKey: string; out AValue: TValue): Boolean;
+    function Delete(const AKey: string): TLockFreeTrieResult;
+    function Contains(const AKey: string): Boolean;
+    function GetCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 基于前缀树的并发键值存储
+- 每节点自旋锁保证并发安全
+- 支持前缀匹配、自动补全
+- 适用场景：IP 路由、字典、自动补全
+
+---
+
+## Timer Wheel (nextpas.core.lockfree.timerwheel)
+
+```pascal
+type
+  TTimerCallback = procedure(AData: Pointer);
+  TLockFreeTimerResult = (twScheduled, twCancelled, twClosed, twNotFound);
+
+  TTimerWheel = class
+    constructor Create(const ASlotCount: Int64; const ATickIntervalNs: Int64);
+    function Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
+    function Cancel(const ATimerId: Int64): TLockFreeTimerResult;
+    procedure Tick;
+    procedure TickN(const AN: Int64);
+    function ProcessExpired: Int64;
+    function GetCurrentSlot: Int64;
+    function GetTotalTicks: Int64;
+    function GetTickIntervalNs: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 环形数组 + 轮次计数实现定时器
+- 每个 tick 推进一个槽位，到期执行回调
+- 适用场景：超时管理、心跳检测、定时任务调度
+
+---
+
+## Timeout Queue (nextpas.core.lockfree.timeoutqueue)
+
+```pascal
+type
+  TLockFreeTimeoutQueueResult = (tqDequeued, tqTimeout, tqEmpty, tqClosed);
+
+  generic TTimeoutQueueImpl<T> = class
+    constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeTimeoutQueueResult;
+    function GetCount: Int64;
+    function GetCapacity: Int64;
+    function GetTimeoutNs: Int64;
+    function IsEmpty: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 固定大小 MPMC 队列，支持超时等待
+- DequeueTimeout 支持超时返回
+- 适用场景：请求超时、任务调度、生产者-消费者
+
+---
+
+## Work Stealing Pool (nextpas.core.lockfree.workstealing)
+
+```pascal
+type
+  TWorkStealingTask = procedure(AData: Pointer);
+  TLockFreeWorkStealingResult = (wsSubmitted, wsStolen, wsEmpty, wsClosed);
+
+  TWorkStealingPool = class
+    constructor Create(const AWorkerCount: Int64);
+    function Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
+    function Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
+    function GetWorkerCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 每个工作线程有自己的双端队列
+- 本地任务 LIFO push/pop，窃取任务 FIFO steal
+- 最小化竞争，适合任务并行场景
+- 适用场景：任务调度、并行计算、fork-join
+
+---
+
+## Snapshot Isolation (nextpas.core.lockfree.snapshot)
+
+```pascal
+type
+  TSnapshotResult = (srCommitted, srAborted, srConflict, srNotFound, srClosed);
+
+  generic TSnapshotIsolationImpl<TValue> = class
+    constructor Create;
+    function BeginSnapshot: Int64;
+    function Read(const AKey: string; const ASnapshotTs: Int64; out AValue: TValue): TSnapshotResult;
+    function Write(const AKey: string; const AValue: TValue; const ATransactionTs: Int64): TSnapshotResult;
+    function Commit(const ATransactionTs: Int64): TSnapshotResult;
+    function Abort(const ATransactionTs: Int64): TSnapshotResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetCurrentTimestamp: Int64;
+  end;
+```
+
+**特点**:
+- 每个事务看到数据库在事务开始时的快照
+- 支持多版本并发控制 (MVCC)
+- 读操作不阻塞写操作，写操作不阻塞读操作
+- 适用场景：数据库事务、并发状态管理
+
+---
+
+## Graph (nextpas.core.lockfree.graph)
+
+```pascal
+type
+  TLockFreeGraphResult = (grAdded, grRemoved, grNotFound, grExists, grClosed);
+
+  TLockFreeGraph = class
+    constructor Create;
+    function AddVertex(AId: Int64): TLockFreeGraphResult;
+    function RemoveVertex(AId: Int64): TLockFreeGraphResult;
+    function AddEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function RemoveEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function HasEdge(AFromId, AToId: Int64): Boolean;
+    function GetVertexCount: Int64;
+    function GetEdgeCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**特点**:
+- 基于邻接表的并发图数据结构
+- 每顶点自旋锁保证并发安全
+- 支持有向图，添加/删除顶点和边
+- 适用场景：社交网络、依赖分析、路径查找
+
+---
+
+### TLockFreeMsQueue\<T\> (nextpas.core.lockfree.msqueue)
+
+```pascal
+type
+  generic TLockFreeMsQueue<T> = class
+    constructor Create(ACapacity: Int32 = 64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function ApproxCount: Int64;
+    function IsEmpty: Boolean;
+  end;
+```
+
+**特点**:
+- Michael-Scott 经典无锁无界 MPMC 队列
+- index-based 节点池，自动扩容
+- Sentinel 节点简化空队列边界处理
+- 适用场景：高吞吐消息队列、生产者-消费者模式
+
+---
+
+### TLockFreeForkJoinPool (nextpas.core.lockfree.forkjoin)
+
+```pascal
+type
+  TLockFreeForkJoinPool = class
+    constructor Create(AWorkerCount: Int32 = 4);
+    function Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
+    function PopOrSteal(AWorkerId: Int32; out ATask: TForkJoinTask): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function WorkerCount: Int32;
+    function ApproxPendingCount: Int64;
+    function ApproxCompletedCount: Int64;
+  end;
+```
+
+**特点**:
+- 类似 Java ForkJoinPool 的并行执行框架
+- 每个工作者有本地双端队列
+- 本地任务 LIFO 执行，窃取任务 FIFO 执行
+- 适用场景：递归分治、并行计算、MapReduce
+
+---
+
+### TCopyOnWriteArray\<T\> (nextpas.core.lockfree.cowarray)
+
+```pascal
+type
+  generic TCopyOnWriteArray<T> = class
+    function Get(AIndex: Int32; out AValue: T): TLockFreeCowArrayResult;
+    function Count: Int32;
+    function IsEmpty: Boolean;
+    function Append(const AValue: T): TLockFreeCowArrayResult;
+    function SetItem(AIndex: Int32; const AValue: T): TLockFreeCowArrayResult;
+    function Delete(AIndex: Int32): TLockFreeCowArrayResult;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Snapshot: TItems;
+  end;
+```
+
+**特点**:
+- 读无锁，写时复制整个数组
+- 线程安全的快照语义
+- 适用场景：读多写极少（配置列表、监听器列表）
+
+---
+
+### TLockFreeDisjointSet (nextpas.core.lockfree.disjointset)
+
+```pascal
+type
+  TLockFreeDisjointSet = class
+    constructor Create(ACapacity: Int32 = 64);
+    function MakeSet: Int32;
+    function Find(AIdx: Int32): Int32;
+    function Union(AIdx1, AIdx2: Int32): TLockFreeDisjointSetResult;
+    function Connected(AIdx1, AIdx2: Int32): Boolean;
+    function Count: Int32;
+  end;
+```
+
+**特点**:
+- 路径压缩 + 按秩合并，均摊 O(α(n)) ≈ O(1)
+- 自动扩容
+- 适用场景：动态连通性查询、聚类、图算法、Kruskal 最小生成树
 
 ---
 

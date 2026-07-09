@@ -84,6 +84,10 @@ begin
     raise EArgumentError.Create('http server max header size must not be negative');
   if AOptions.MaxBodySize < 0 then
     raise EArgumentError.Create('http server max body size must not be negative');
+  if AOptions.ShutdownTimeout < 0 then
+    raise EArgumentError.Create('http server shutdown timeout must not be negative');
+  if AOptions.MaxRequestsPerConnection < 0 then
+    raise EArgumentError.Create('http server max requests per connection must not be negative');
 end;
 
 constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;
@@ -161,6 +165,7 @@ begin
       AOptions.EffectiveVersion(GetDefaultServerVersion), AOptions);
   LTcpOptions := TTcpServerOptions.Default;
   LTcpOptions.Backend := AOptions.Backend;
+  LTcpOptions.ShutdownTimeoutNs := AOptions.ShutdownTimeout * 1000000;
   FTcpServer := NewTcpServer(LTcpOptions);
   FConnHandler := THttpConnHandler.Create(FTransport, FHandler);
 end;

@@ -1,7 +1,7 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**更新**: 2026-07-08
+**更新**: 2026-07-08 (v1.2: breakdown_utc 月份循环修复)
 **版本**: v1.1
 **模块数**: 24
 **API数**: ~1067
@@ -110,6 +110,10 @@
 | `platform_fs_write_all(AHandle, AData, ASize): Int32` | 写入全部数据 |
 | `platform_fs_read_all(AHandle, ABuf, ABufSize): Int32` | 读取全部数据 |
 | `platform_fs_read_until_eof(AHandle, out AData, out ASize): Int32` | 读取到 EOF |
+| `platform_fs_move_file(ASrc, ADst): Int32` | 移动文件（rename 或 copy+delete） |
+| `platform_fs_remove_file(APath): Int32` | 删除文件 |
+| `platform_fs_remove_dir(APath): Int32` | 删除空目录 |
+| `platform_fs_rename(AOldPath, ANewPath): Int32` | 重命名文件或目录 |
 
 ## 9. info — 系统信息
 
@@ -266,6 +270,9 @@
 | `platform_socket_set_reuseaddr(ASocket, AEnable): Int32` | 设置 SO_REUSEADDR |
 | `platform_socket_set_keepalive(ASocket, AEnable): Int32` | 设置 SO_KEEPALIVE |
 | `platform_socket_set_linger(ASocket, AEnable, ALingerSec): Int32` | 设置 SO_LINGER |
+| `platform_socket_set_recvbuf(ASocket, ASize): Int32` | 设置 SO_RCVBUF 接收缓冲区 |
+| `platform_socket_set_sendbuf(ASocket, ASize): Int32` | 设置 SO_SNDBUF 发送缓冲区 |
+| `platform_socket_get_error(ASocket, out AError): Int32` | 获取 SO_ERROR 待处理错误 |
 | `platform_socket_error_would_block(AError): Boolean` | 是否为阻塞错误 |
 | `platform_socket_error_timed_out(AError): Boolean` | 是否为超时错误 |
 | `platform_sockaddr_ipv4(APort, AAddr): TPlatformSockAddr` | 构造 IPv4 地址 |
@@ -313,11 +320,15 @@
 | `platform_thread_id: UInt64` | 获取线程 ID |
 | `platform_thread_yield` | 让出 CPU |
 | `platform_thread_sleep_ns(ANanoseconds)` | 纳秒级睡眠 |
+| `platform_thread_sleep_ms(AMilliseconds)` | 毫秒级睡眠 |
+| `platform_thread_sleep_sec(ASeconds)` | 秒级睡眠 |
 | `platform_tls_create(out AKey): Int32` | 创建 TLS key |
 | `platform_tls_destroy(AKey): Int32` | 销毁 TLS key |
 | `platform_tls_set(AKey, AValue): Int32` | 设置 TLS 值 |
 | `platform_tls_get(AKey): Pointer` | 获取 TLS 值 |
 | `platform_cpu_count: Int32` | 获取 CPU 核心数 |
+| `platform_thread_set_name(AName): Int32` | 设置当前线程名称（Linux prctl） |
+| `platform_thread_get_name(ABuf, ABufSize): Int32` | 获取当前线程名称 |
 
 ## 23. time — 时间操作
 

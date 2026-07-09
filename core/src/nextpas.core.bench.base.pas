@@ -266,6 +266,7 @@ const
 
   {** 统一显著性阈值常量 }
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
+  BENCH_SIGNIFICANCE_ALPHA_HIGH = 0.01;  // 高显著性 alpha 水平 (99% 置信)
   BENCH_MATRIX_DIFF_THRESHOLD = 0.05;    // ratio 启发式阈值 (baseline 无原始样本时)
 
   {** 环境变量名 }
@@ -344,6 +345,10 @@ function NormalCDF(X: Double): Double;
 
 {** 标准正态分位数函数（逆 CDF，Peter Acklam 逼近，精度 ~1.15e-9） }
 function NormalQuantile(AP: Double): Double;
+
+{** z-score 转双侧 p-value（Hastings 近似，精度 ~1e-5）
+ *  用于 Mann-Whitney U、Welch t-test 等场景。 }
+function ZToPValue(AZ: Double): Double;
 
 implementation
 
@@ -596,6 +601,8 @@ end;
 { ===== 标准正态分布函数 (Phase A/B) ===== }
 
 function NormalCDF(X: Double): Double;
+const
+  LInvSqrt2 = 0.7071067811865475244; { 1/Sqrt(2) }
 var
   LAbsX: Double;
   LT, LResult: Double;
@@ -611,9 +618,9 @@ begin
   LP := 0.3275911;
 
   // 计算 erf(x / sqrt(2))
-  LAbsX := Abs(X) / Sqrt(2.0);
+  LAbsX := Abs(X) * LInvSqrt2;
   LT := 1.0 / (1.0 + LP * LAbsX);
-  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-LAbsX * LAbsX);
+  LResult := 1.0 - (((((LA5 * LT + LA4) * LT) + LA3) * LT + LA2) * LT + LA1) * LT * Exp(-Sqr(LAbsX));
 
   // 转换为 CDF
   if X >= 0 then
@@ -673,6 +680,25 @@ begin
     Result := -(((((LC1 * LQ + LC2) * LQ + LC3) * LQ + LC4) * LQ + LC5) * LQ + LC6) /
                ((((LD1 * LQ + LD2) * LQ + LD3) * LQ + LD4) * LQ + 1.0);
   end;
+end;
+
+function ZToPValue(AZ: Double): Double;
+{ Hastings 近似: p ≈ 2 * (1 - Φ(|z|))，双侧检验 }
+var
+  LT, LK, LP: Double;
+begin
+  AZ := Abs(AZ);
+  if AZ > 6.0 then
+    Exit(0.000001)
+  else if AZ < BENCH_SIGNIFICANCE_ALPHA_HIGH then
+    Exit(1.0);
+  LT := 1.0 / (1.0 + 0.2316419 * AZ);
+  LK := 0.3989422804014327 * Exp(-0.5 * AZ * AZ);
+  LP := LK * (LT * (0.319381530 + LT * (-0.356563782 + LT * (1.781477937 +
+        LT * (-1.821255978 + LT * 1.330274429)))));
+  Result := 2.0 * LP;
+  if Result > 1.0 then Result := 1.0;
+  if Result < 0.000001 then Result := 0.000001;
 end;
 
 { NaN 安全分区: 将 NaN 值移到数组末尾，返回非 NaN 元素个数 }

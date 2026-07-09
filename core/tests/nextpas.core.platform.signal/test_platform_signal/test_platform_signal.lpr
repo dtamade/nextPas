@@ -102,6 +102,76 @@ begin
   platform_signal_reset(PLATFORM_SIGUSR1);
 end;
 
+procedure TestInvalidSignalRange;
+begin
+  { Signal 0 is invalid }
+  Check(platform_signal_set(0, @MyHandler) <> 0, 'signal 0 rejected');
+  { Very large signal number should fail gracefully }
+  Check(platform_signal_set(999, @MyHandler) <> 0, 'signal 999 rejected');
+  Check(platform_signal_set(-1, @MyHandler) <> 0, 'signal -1 rejected');
+end;
+
+procedure TestBlockInvalidSignal;
+begin
+  Check(platform_signal_block(0) <> 0, 'block signal 0 rejected');
+  Check(platform_signal_block(999) <> 0, 'block signal 999 rejected');
+  Check(platform_signal_block(-1) <> 0, 'block signal -1 rejected');
+end;
+
+procedure TestUnblockInvalidSignal;
+begin
+  Check(platform_signal_unblock(0) <> 0, 'unblock signal 0 rejected');
+  Check(platform_signal_unblock(999) <> 0, 'unblock signal 999 rejected');
+  Check(platform_signal_unblock(-1) <> 0, 'unblock signal -1 rejected');
+end;
+
+procedure TestSetNilHandler;
+begin
+  { Setting nil handler should be treated as ignore or return error }
+  Check(platform_signal_set(PLATFORM_SIGUSR1, nil) = 0, 'set nil handler succeeds');
+  platform_signal_reset(PLATFORM_SIGUSR1);
+end;
+
+procedure TestBlockUnblockValidSignal;
+begin
+  Check(platform_signal_block(PLATFORM_SIGUSR1) = 0, 'block SIGUSR1');
+  Check(platform_signal_unblock(PLATFORM_SIGUSR1) = 0, 'unblock SIGUSR1');
+end;
+
+procedure TestResetInvalidSignal;
+begin
+  Check(platform_signal_reset(0) <> 0, 'reset signal 0 rejected');
+  Check(platform_signal_reset(999) <> 0, 'reset signal 999 rejected');
+end;
+
+procedure TestIgnoreInvalidSignal;
+begin
+  Check(platform_signal_ignore(0) <> 0, 'ignore signal 0 rejected');
+  Check(platform_signal_ignore(999) <> 0, 'ignore signal 999 rejected');
+end;
+
+procedure TestRaiseSignal;
+begin
+  GHandlerCalled := 0;
+  GLastSignal := 0;
+  platform_signal_set(PLATFORM_SIGUSR1, @MyHandler);
+  Check(platform_signal_raise(PLATFORM_SIGUSR1) = 0, 'raise SIGUSR1');
+  Check(GHandlerCalled = 1, 'handler called after raise');
+  Check(GLastSignal = PLATFORM_SIGUSR1, 'handler got SIGUSR1');
+  platform_signal_reset(PLATFORM_SIGUSR1);
+end;
+
+procedure TestRaiseSIGINT;
+begin
+  GHandlerCalled := 0;
+  GLastSignal := 0;
+  platform_signal_set(PLATFORM_SIGINT, @MyHandler);
+  Check(platform_signal_raise(PLATFORM_SIGINT) = 0, 'raise SIGINT');
+  Check(GHandlerCalled = 1, 'handler called after raise SIGINT');
+  Check(GLastSignal = PLATFORM_SIGINT, 'handler got SIGINT');
+  platform_signal_reset(PLATFORM_SIGINT);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.signal');
   T.Test('set handler + deliver', @TestSetHandler);
@@ -113,5 +183,14 @@ begin
   T.Test('multiple signals', @TestMultipleSignals);
   T.Test('handler receives correct signal', @TestHandlerSignalArg);
   T.Test('ignore signal', @TestIgnoreSignal);
+  T.Test('invalid signal range', @TestInvalidSignalRange);
+  T.Test('block invalid signal', @TestBlockInvalidSignal);
+  T.Test('unblock invalid signal', @TestUnblockInvalidSignal);
+  T.Test('set nil handler', @TestSetNilHandler);
+  T.Test('block/unblock valid signal', @TestBlockUnblockValidSignal);
+  T.Test('reset invalid signal', @TestResetInvalidSignal);
+  T.Test('ignore invalid signal', @TestIgnoreInvalidSignal);
+  T.Test('raise signal', @TestRaiseSignal);
+  T.Test('raise SIGINT', @TestRaiseSIGINT);
   if not T.Run then Halt(1);
 end.

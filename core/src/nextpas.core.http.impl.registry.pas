@@ -96,6 +96,7 @@ begin
   LH1Options.IdleTimeout := AOptions.IdleTimeout;
   LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
   LH1Options.MaxBodySize := AOptions.MaxBodySize;
+  LH1Options.MaxRequestsPerConnection := AOptions.MaxRequestsPerConnection;
   Result := NewH1ServerTransport(LH1Options);
 end;
 

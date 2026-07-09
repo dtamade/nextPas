@@ -6,14 +6,10 @@ unit nextpas.core.simd.imageproc.testcase;
 interface
 
 uses
-  nextpas.core.exception,
-  nextpas.core.text.conv,
-  fpcunit,
-  testregistry,
-  nextpas.core.errors,
-  nextpas.core.simd,
-  nextpas.core.simd.testcase,
-  nextpas.core.simd.base,
+  nextpas.core.exception, nextpas.core.text.conv,
+  nextpas.core.test,
+  nextpas.core.errors, nextpas.core.simd,
+  nextpas.core.simd.testcase, nextpas.core.simd.base,
   nextpas.core.simd.imageproc;
 
 type
@@ -27,9 +23,9 @@ type
     procedure FillImage(var aImg: TImage; const aValues: array of Byte);
     procedure AssertPixelRGBEquals(const aMessage: string; const aPixel: TVecF32x4;
       aR, aG, aB, aA: Double);
-  protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+  public
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure Test_ImageAdd_Saturates_Grayscale;
     procedure Test_ImageSubtract_ClampsToZero_Grayscale;
@@ -98,9 +94,9 @@ type
 
 implementation
 
-procedure TTestCase_ImageProc.SetUp;
+procedure TTestCase_ImageProc.BeforeEach;
 begin
-  inherited SetUp;
+  {{inherited SetUp; -- removed} -- removed}
   FillChar(FSrc1, SizeOf(FSrc1), 0);
   FillChar(FSrc2, SizeOf(FSrc2), 0);
   FillChar(FDest, SizeOf(FDest), 0);
@@ -108,13 +104,13 @@ begin
   SetImageBlendAlphaMode(ibamStraight);
 end;
 
-procedure TTestCase_ImageProc.TearDown;
+procedure TTestCase_ImageProc.AfterEach;
 begin
   SetImageBlendAlphaMode(FPreviousBlendAlphaMode);
   FreeImage(FSrc1);
   FreeImage(FSrc2);
   FreeImage(FDest);
-  inherited TearDown;
+  {{inherited TearDown; -- removed} -- removed}
 end;
 
 procedure TTestCase_ImageProc.FillImage(var aImg: TImage; const aValues: array of Byte);
@@ -122,7 +118,7 @@ var
   LI: Integer;
   LData: PByte;
 begin
-  AssertEquals('Image data size mismatch', Length(aValues), aImg.DataSize);
+  CheckEqual(Length(aValues), aImg.DataSize, 'Image data size mismatch');
   LData := aImg.Data;
   for LI := 0 to High(aValues) do
     LData[LI] := aValues[LI];
@@ -131,10 +127,10 @@ end;
 procedure TTestCase_ImageProc.AssertPixelRGBEquals(const aMessage: string;
   const aPixel: TVecF32x4; aR, aG, aB, aA: Double);
 begin
-  AssertEquals(aMessage + ' R', aR, Double(aPixel.f[0]), 0.01);
-  AssertEquals(aMessage + ' G', aG, Double(aPixel.f[1]), 0.01);
-  AssertEquals(aMessage + ' B', aB, Double(aPixel.f[2]), 0.01);
-  AssertEquals(aMessage + ' A', aA, Double(aPixel.f[3]), 0.01);
+  CheckNear(aR, Double(aPixel.f[0]), 0.01, aMessage + ' R');
+  CheckNear(aG, Double(aPixel.f[1]), 0.01, aMessage + ' G');
+  CheckNear(aB, Double(aPixel.f[2]), 0.01, aMessage + ' B');
+  CheckNear(aA, Double(aPixel.f[3]), 0.01, aMessage + ' A');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageAdd_Saturates_Grayscale;
@@ -149,8 +145,8 @@ begin
   ImageAdd(FDest, FSrc1, FSrc2);
 
   LData := FDest.Data;
-  AssertEquals('add[0]', 255, Integer(LData[0]));
-  AssertEquals('add[1]', 255, Integer(LData[1]));
+  CheckEqual(255, Integer(LData[0]), 'add[0]');
+  CheckEqual(255, Integer(LData[1]), 'add[1]');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageSubtract_ClampsToZero_Grayscale;
@@ -165,8 +161,8 @@ begin
   ImageSubtract(FDest, FSrc1, FSrc2);
 
   LData := FDest.Data;
-  AssertEquals('sub[0]', 0, Integer(LData[0]));
-  AssertEquals('sub[1]', 140, Integer(LData[1]));
+  CheckEqual(0, Integer(LData[0]), 'sub[0]');
+  CheckEqual(140, Integer(LData[1]), 'sub[1]');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageAdd_SimdChunkBoundary_Grayscale;
@@ -189,7 +185,7 @@ begin
 
   LDataDest := FDest.Data;
   for LI := 0 to 16 do
-    AssertEquals('simd add saturate at ' + IntToStr(LI), 255, Integer(LDataDest[LI]));
+    CheckEqual(255, Integer(LDataDest[LI]), 'simd add saturate at ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageSubtract_SimdChunkBoundary_Grayscale;
@@ -212,7 +208,7 @@ begin
 
   LDataDest := FDest.Data;
   for LI := 0 to 16 do
-    AssertEquals('simd sub floor at ' + IntToStr(LI), 0, Integer(LDataDest[LI]));
+    CheckEqual(0, Integer(LDataDest[LI]), 'simd sub floor at ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageMultiply_Clamps_RGB24;
@@ -225,9 +221,9 @@ begin
   ImageMultiply(FDest, FSrc1, 1.5);
 
   LData := FDest.Data;
-  AssertEquals('mul R', 255, Integer(LData[0]));
-  AssertEquals('mul G', 15, Integer(LData[1]));
-  AssertEquals('mul B', 150, Integer(LData[2]));
+  CheckEqual(255, Integer(LData[0]), 'mul R');
+  CheckEqual(15, Integer(LData[1]), 'mul G');
+  CheckEqual(150, Integer(LData[2]), 'mul B');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaHalf_Grayscale;
@@ -242,8 +238,8 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend[0]', 60, Integer(LData[0]));
-  AssertEquals('blend[1]', 150, Integer(LData[1]));
+  CheckEqual(60, Integer(LData[0]), 'blend[0]');
+  CheckEqual(150, Integer(LData[1]), 'blend[1]');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_RGBA32_AlphaModes;
@@ -258,18 +254,18 @@ begin
   SetImageBlendAlphaMode(ibamStraight);
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
   LData := FDest.Data;
-  AssertEquals('straight R', 67, Integer(LData[0]));
-  AssertEquals('straight G', 100, Integer(LData[1]));
-  AssertEquals('straight B', 33, Integer(LData[2]));
-  AssertEquals('straight A', 192, Integer(LData[3]));
+  CheckEqual(67, Integer(LData[0]), 'straight R');
+  CheckEqual(100, Integer(LData[1]), 'straight G');
+  CheckEqual(33, Integer(LData[2]), 'straight B');
+  CheckEqual(192, Integer(LData[3]), 'straight A');
 
   SetImageBlendAlphaMode(ibamPremultiplied);
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
   LData := FDest.Data;
-  AssertEquals('premul R', 50, Integer(LData[0]));
-  AssertEquals('premul G', 125, Integer(LData[1]));
-  AssertEquals('premul B', 50, Integer(LData[2]));
-  AssertEquals('premul A', 192, Integer(LData[3]));
+  CheckEqual(50, Integer(LData[0]), 'premul R');
+  CheckEqual(125, Integer(LData[1]), 'premul G');
+  CheckEqual(50, Integer(LData[2]), 'premul B');
+  CheckEqual(192, Integer(LData[3]), 'premul A');
 end;
 
 procedure TTestCase_ImageProc.Test_RGBToGrayscale_And_GrayscaleToRGB;
@@ -283,14 +279,14 @@ begin
   RGBToGrayscale(FDest, FSrc1);
 
   LGray := FDest.Data;
-  AssertEquals('gray', 54, Integer(LGray[0]));
+  CheckEqual(54, Integer(LGray[0]), 'gray');
 
   GrayscaleToRGB(FSrc2, FDest);
 
   LRgb := FSrc2.Data;
-  AssertEquals('rgb R', 54, Integer(LRgb[0]));
-  AssertEquals('rgb G', 54, Integer(LRgb[1]));
-  AssertEquals('rgb B', 54, Integer(LRgb[2]));
+  CheckEqual(54, Integer(LRgb[0]), 'rgb R');
+  CheckEqual(54, Integer(LRgb[1]), 'rgb G');
+  CheckEqual(54, Integer(LRgb[2]), 'rgb B');
 end;
 
 procedure TTestCase_ImageProc.Test_GetSetPixelRGB_RoundTrip_RGBA32;
@@ -313,17 +309,16 @@ begin
   AssertPixelRGBEquals('roundtrip', LOutColor, 10, 20, 30, 40);
 
   LData := FSrc1.Data;
-  AssertEquals('raw R', 10, Integer(LData[0]));
-  AssertEquals('raw G', 20, Integer(LData[1]));
-  AssertEquals('raw B', 30, Integer(LData[2]));
-  AssertEquals('raw A', 40, Integer(LData[3]));
+  CheckEqual(10, Integer(LData[0]), 'raw R');
+  CheckEqual(20, Integer(LData[1]), 'raw G');
+  CheckEqual(30, Integer(LData[2]), 'raw B');
+  CheckEqual(40, Integer(LData[3]), 'raw A');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_Identity_Grayscale;
 const
   LIdentityKernel: TKernel3x3 = (
-    0, 0, 0,
-    0, 1, 0,
+    0, 0, 0, 0, 1, 0,
     0, 0, 0
   );
 var
@@ -331,24 +326,22 @@ var
 begin
   FSrc1 := CreateImage(3, 3, ifGrayscale);
   FillImage(FSrc1, [
-    1, 2, 3,
-    4, 5, 6,
+    1, 2, 3, 4, 5, 6,
     7, 8, 9
   ]);
 
   ApplyConvolution3x3(FDest, FSrc1, LIdentityKernel);
 
   LData := FDest.Data;
-  AssertEquals('center', 5, Integer(LData[4]));
-  AssertEquals('border top-left', 1, Integer(LData[0]));
-  AssertEquals('border bottom-right', 9, Integer(LData[8]));
+  CheckEqual(5, Integer(LData[4]), 'center');
+  CheckEqual(1, Integer(LData[0]), 'border top-left');
+  CheckEqual(9, Integer(LData[8]), 'border bottom-right');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_Identity_RGB24;
 const
   LIdentityKernel: TKernel3x3 = (
-    0, 0, 0,
-    0, 1, 0,
+    0, 0, 0, 0, 1, 0,
     0, 0, 0
   );
 var
@@ -357,8 +350,7 @@ var
 begin
   FSrc1 := CreateImage(3, 3, ifRGB24);
   FillImage(FSrc1, [
-     1,  2,  3,   4,  5,  6,   7,  8,  9,
-    10, 11, 12,  13, 14, 15,  16, 17, 18,
+     1,  2,  3,   4,  5,  6,   7,  8,  9, 10, 11, 12,  13, 14, 15,  16, 17, 18,
     19, 20, 21,  22, 23, 24,  25, 26, 27
   ]);
 
@@ -366,20 +358,19 @@ begin
 
   LData := FDest.Data;
   LCenterBase := (1 * 3 + 1) * 3;
-  AssertEquals('center R', 13, Integer(LData[LCenterBase + 0]));
-  AssertEquals('center G', 14, Integer(LData[LCenterBase + 1]));
-  AssertEquals('center B', 15, Integer(LData[LCenterBase + 2]));
-  AssertEquals('border R', 1, Integer(LData[0]));
-  AssertEquals('border G', 2, Integer(LData[1]));
-  AssertEquals('border B', 3, Integer(LData[2]));
+  CheckEqual(13, Integer(LData[LCenterBase + 0]), 'center R');
+  CheckEqual(14, Integer(LData[LCenterBase + 1]), 'center G');
+  CheckEqual(15, Integer(LData[LCenterBase + 2]), 'center B');
+  CheckEqual(1, Integer(LData[0]), 'border R');
+  CheckEqual(2, Integer(LData[1]), 'border G');
+  CheckEqual(3, Integer(LData[2]), 'border B');
 end;
 
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_InPlace_Equals_OutOfPlace_Grayscale;
 const
   LKernel: TKernel3x3 = (
-     0, -1,  0,
-    -1,  5, -1,
+     0, -1,  0, -1,  5, -1,
      0, -1,  0
   );
 var
@@ -403,15 +394,13 @@ begin
 
   LOutData := FDest.Data;
   for LI := 0 to FDest.DataSize - 1 do
-    AssertEquals('conv in-place gray equals out-place ' + IntToStr(LI),
-      Integer(LOutData[LI]), Integer(LSrcData2[LI]));
+    CheckEqual(Integer(LOutData[LI]), Integer(LSrcData2[LI]), 'conv in-place gray equals out-place ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_InPlace_Equals_OutOfPlace_RGBA32;
 const
   LKernel: TKernel3x3 = (
-    1 / 16, 2 / 16, 1 / 16,
-    2 / 16, 4 / 16, 2 / 16,
+    1 / 16, 2 / 16, 1 / 16, 2 / 16, 4 / 16, 2 / 16,
     1 / 16, 2 / 16, 1 / 16
   );
 var
@@ -440,8 +429,7 @@ begin
 
   LOutData := FDest.Data;
   for LI := 0 to FDest.DataSize - 1 do
-    AssertEquals('conv in-place rgba equals out-place ' + IntToStr(LI),
-      Integer(LOutData[LI]), Integer(LSrcData2[LI]));
+    CheckEqual(Integer(LOutData[LI]), Integer(LSrcData2[LI]), 'conv in-place rgba equals out-place ' + IntToStr(LI));
 end;
 procedure TTestCase_ImageProc.Test_ApplyGaussianBlur_SeparableCenter_Grayscale;
 var
@@ -449,16 +437,15 @@ var
 begin
   FSrc1 := CreateImage(3, 3, ifGrayscale);
   FillImage(FSrc1, [
-    0,   0, 0,
-    0, 255, 0,
+    0,   0, 0, 0, 255, 0,
     0,   0, 0
   ]);
 
   ApplyGaussianBlur(FDest, FSrc1);
 
   LData := FDest.Data;
-  AssertEquals('gaussian center', 64, Integer(LData[4]));
-  AssertEquals('gaussian border unchanged', 0, Integer(LData[0]));
+  CheckEqual(64, Integer(LData[4]), 'gaussian center');
+  CheckEqual(0, Integer(LData[0]), 'gaussian border unchanged');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyBrightness_Contrast_Gamma_RGB24;
@@ -473,9 +460,9 @@ begin
   ApplyGamma(FSrc1, 1.0);
 
   LData := FSrc1.Data;
-  AssertEquals('post R', 120, Integer(LData[0]));
-  AssertEquals('post G', 140, Integer(LData[1]));
-  AssertEquals('post B', 160, Integer(LData[2]));
+  CheckEqual(120, Integer(LData[0]), 'post R');
+  CheckEqual(140, Integer(LData[1]), 'post G');
+  CheckEqual(160, Integer(LData[2]), 'post B');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageMultiply_FactorOne_CopyExact_RGB24;
@@ -490,7 +477,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 5 do
-    AssertEquals('mul x1 copy ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'mul x1 copy ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageMultiply_FactorZero_PreserveAlpha_RGBA32;
@@ -503,10 +490,10 @@ begin
   ImageMultiply(FDest, FSrc1, 0.0);
 
   LData := FDest.Data;
-  AssertEquals('mul0 R', 0, Integer(LData[0]));
-  AssertEquals('mul0 G', 0, Integer(LData[1]));
-  AssertEquals('mul0 B', 0, Integer(LData[2]));
-  AssertEquals('mul0 A preserve', 77, Integer(LData[3]));
+  CheckEqual(0, Integer(LData[0]), 'mul0 R');
+  CheckEqual(0, Integer(LData[1]), 'mul0 G');
+  CheckEqual(0, Integer(LData[2]), 'mul0 B');
+  CheckEqual(77, Integer(LData[3]), 'mul0 A preserve');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyBrightness_PreserveAlpha_RGBA32;
@@ -519,10 +506,10 @@ begin
   ApplyBrightness(FSrc1, 30.0);
 
   LData := FSrc1.Data;
-  AssertEquals('brightness R', 130, Integer(LData[0]));
-  AssertEquals('brightness G', 130, Integer(LData[1]));
-  AssertEquals('brightness B', 130, Integer(LData[2]));
-  AssertEquals('brightness A preserve', 66, Integer(LData[3]));
+  CheckEqual(130, Integer(LData[0]), 'brightness R');
+  CheckEqual(130, Integer(LData[1]), 'brightness G');
+  CheckEqual(130, Integer(LData[2]), 'brightness B');
+  CheckEqual(66, Integer(LData[3]), 'brightness A preserve');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyContrast_PreserveAlpha_RGBA32;
@@ -535,10 +522,10 @@ begin
   ApplyContrast(FSrc1, 1.5);
 
   LData := FSrc1.Data;
-  AssertEquals('contrast R', 131, Integer(LData[0]));
-  AssertEquals('contrast G', 128, Integer(LData[1]));
-  AssertEquals('contrast B', 125, Integer(LData[2]));
-  AssertEquals('contrast A preserve', 77, Integer(LData[3]));
+  CheckEqual(131, Integer(LData[0]), 'contrast R');
+  CheckEqual(128, Integer(LData[1]), 'contrast G');
+  CheckEqual(125, Integer(LData[2]), 'contrast B');
+  CheckEqual(77, Integer(LData[3]), 'contrast A preserve');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyGamma_PreserveAlpha_RGBA32;
@@ -551,10 +538,10 @@ begin
   ApplyGamma(FSrc1, 2.0);
 
   LData := FSrc1.Data;
-  AssertEquals('gamma R', 128, Integer(LData[0]));
-  AssertEquals('gamma G', 181, Integer(LData[1]));
-  AssertEquals('gamma B', 255, Integer(LData[2]));
-  AssertEquals('gamma A preserve', 42, Integer(LData[3]));
+  CheckEqual(128, Integer(LData[0]), 'gamma R');
+  CheckEqual(181, Integer(LData[1]), 'gamma G');
+  CheckEqual(255, Integer(LData[2]), 'gamma B');
+  CheckEqual(42, Integer(LData[3]), 'gamma A preserve');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyBrightness_ClampNegative_Grayscale;
@@ -567,7 +554,7 @@ begin
   ApplyBrightness(FSrc1, -30.0);
 
   LData := FSrc1.Data;
-  AssertEquals('brightness clamp negative', 0, Integer(LData[0]));
+  CheckEqual(0, Integer(LData[0]), 'brightness clamp negative');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyContrast_ZeroToMid_Grayscale;
@@ -580,7 +567,7 @@ begin
   ApplyContrast(FSrc1, 0.0);
 
   LData := FSrc1.Data;
-  AssertEquals('contrast zero to 128', 128, Integer(LData[0]));
+  CheckEqual(128, Integer(LData[0]), 'contrast zero to 128');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyGamma_Invalid_Throws;
@@ -598,7 +585,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('gamma <= 0 should raise', LRaised);
+  CheckTrue(LRaised, 'gamma <= 0 should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaZero_CopySource1_RGB24;
@@ -615,7 +602,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 5 do
-    AssertEquals('blend alpha0 copy src1 ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'blend alpha0 copy src1 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaOne_CopySource2_RGB24;
@@ -632,7 +619,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 5 do
-    AssertEquals('blend alpha1 copy src2 ' + IntToStr(LI), Integer(FSrc2.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc2.Data[LI]), Integer(LData[LI]), 'blend alpha1 copy src2 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaZero_CopySource1_RGBA32_Straight;
@@ -650,7 +637,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 3 do
-    AssertEquals('rgba straight alpha0 copy src1 ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'rgba straight alpha0 copy src1 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaOne_CopySource2_RGBA32_Straight;
@@ -668,7 +655,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 3 do
-    AssertEquals('rgba straight alpha1 copy src2 ' + IntToStr(LI), Integer(FSrc2.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc2.Data[LI]), Integer(LData[LI]), 'rgba straight alpha1 copy src2 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaZero_CopySource1_RGBA32_Premult;
@@ -686,7 +673,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 3 do
-    AssertEquals('rgba premult alpha0 copy src1 ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'rgba premult alpha0 copy src1 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaOne_CopySource2_RGBA32_Premult;
@@ -704,7 +691,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 3 do
-    AssertEquals('rgba premult alpha1 copy src2 ' + IntToStr(LI), Integer(FSrc2.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc2.Data[LI]), Integer(LData[LI]), 'rgba premult alpha1 copy src2 ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_NonRGBA_Quarter_Grayscale;
@@ -719,7 +706,7 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.25);
 
   LData := FDest.Data;
-  AssertEquals('blend quarter gray', 70, Integer(LData[0]));
+  CheckEqual(70, Integer(LData[0]), 'blend quarter gray');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_RGBA32_Premult_Quarter;
@@ -735,10 +722,10 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.25);
 
   LData := FDest.Data;
-  AssertEquals('premult quarter R', 80, Integer(LData[0]));
-  AssertEquals('premult quarter G', 88, Integer(LData[1]));
-  AssertEquals('premult quarter B', 25, Integer(LData[2]));
-  AssertEquals('premult quarter A', 175, Integer(LData[3]));
+  CheckEqual(80, Integer(LData[0]), 'premult quarter R');
+  CheckEqual(88, Integer(LData[1]), 'premult quarter G');
+  CheckEqual(25, Integer(LData[2]), 'premult quarter B');
+  CheckEqual(175, Integer(LData[3]), 'premult quarter A');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_RGBA32_Straight_OpaqueQuarter;
@@ -754,10 +741,10 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.25);
 
   LData := FDest.Data;
-  AssertEquals('straight opaque quarter R', 80, Integer(LData[0]));
-  AssertEquals('straight opaque quarter G', 88, Integer(LData[1]));
-  AssertEquals('straight opaque quarter B', 25, Integer(LData[2]));
-  AssertEquals('straight opaque quarter A', 255, Integer(LData[3]));
+  CheckEqual(80, Integer(LData[0]), 'straight opaque quarter R');
+  CheckEqual(88, Integer(LData[1]), 'straight opaque quarter G');
+  CheckEqual(25, Integer(LData[2]), 'straight opaque quarter B');
+  CheckEqual(255, Integer(LData[3]), 'straight opaque quarter A');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaClamp_LowHigh_RGB24;
@@ -773,12 +760,12 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, -2.0);
   LData := FDest.Data;
   for LI := 0 to 5 do
-    AssertEquals('blend clamp low ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'blend clamp low ' + IntToStr(LI));
 
   ImageBlend(FDest, FSrc1, FSrc2, 3.0);
   LData := FDest.Data;
   for LI := 0 to 5 do
-    AssertEquals('blend clamp high ' + IntToStr(LI), Integer(FSrc2.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc2.Data[LI]), Integer(LData[LI]), 'blend clamp high ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_SetPixelRGB_Grayscale_Weighted;
@@ -797,7 +784,7 @@ begin
   SetPixelRGB(FSrc1, 0, 0, LColor);
 
   LData := FSrc1.Data;
-  AssertEquals('weighted grayscale from red', 54, Integer(LData[0]));
+  CheckEqual(54, Integer(LData[0]), 'weighted grayscale from red');
 end;
 
 procedure TTestCase_ImageProc.Test_GetPixelRGB_Grayscale_ReturnsReplicated;
@@ -826,7 +813,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('get pixel out of range should raise', LRaised);
+  CheckTrue(LRaised, 'get pixel out of range should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_SetPixelRGB_OutOfRange_Raises;
@@ -851,7 +838,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('set pixel out of range should raise', LRaised);
+  CheckTrue(LRaised, 'set pixel out of range should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_CreateImage_NegativeSize_Raises;
@@ -866,7 +853,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('negative size should raise', LRaised);
+  CheckTrue(LRaised, 'negative size should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageAdd_Mismatch_Raises;
@@ -886,7 +873,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('image add mismatch should raise', LRaised);
+  CheckTrue(LRaised, 'image add mismatch should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_Mismatch_Raises;
@@ -906,7 +893,7 @@ begin
       LRaised := True;
   end;
 
-  AssertTrue('image blend mismatch should raise', LRaised);
+  CheckTrue(LRaised, 'image blend mismatch should raise');
 end;
 
 procedure TTestCase_ImageProc.Test_RGBToGrayscale_FromRGBA32;
@@ -919,7 +906,7 @@ begin
   RGBToGrayscale(FDest, FSrc1);
 
   LData := FDest.Data;
-  AssertEquals('rgba to gray', 19, Integer(LData[0]));
+  CheckEqual(19, Integer(LData[0]), 'rgba to gray');
 end;
 
 procedure TTestCase_ImageProc.Test_GrayscaleToRGB_FullChannelReplication;
@@ -932,19 +919,18 @@ begin
   GrayscaleToRGB(FDest, FSrc1);
 
   LData := FDest.Data;
-  AssertEquals('pixel0 r', 5, Integer(LData[0]));
-  AssertEquals('pixel0 g', 5, Integer(LData[1]));
-  AssertEquals('pixel0 b', 5, Integer(LData[2]));
-  AssertEquals('pixel1 r', 200, Integer(LData[3]));
-  AssertEquals('pixel1 g', 200, Integer(LData[4]));
-  AssertEquals('pixel1 b', 200, Integer(LData[5]));
+  CheckEqual(5, Integer(LData[0]), 'pixel0 r');
+  CheckEqual(5, Integer(LData[1]), 'pixel0 g');
+  CheckEqual(5, Integer(LData[2]), 'pixel0 b');
+  CheckEqual(200, Integer(LData[3]), 'pixel1 r');
+  CheckEqual(200, Integer(LData[4]), 'pixel1 g');
+  CheckEqual(200, Integer(LData[5]), 'pixel1 b');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_SmallImage_NoChange;
 const
   LKernel: TKernel3x3 = (
-    1, 2, 1,
-    2, 4, 2,
+    1, 2, 1, 2, 4, 2,
     1, 2, 1
   );
 var
@@ -958,14 +944,13 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to 3 do
-    AssertEquals('small image no change ' + IntToStr(LI), Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'small image no change ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyConvolution3x3_RGBA_AlphaPreserved;
 const
   LKernel: TKernel3x3 = (
-    0, 0, 0,
-    0, 1, 0,
+    0, 0, 0, 0, 1, 0,
     0, 0, 0
   );
 var
@@ -992,7 +977,7 @@ begin
   for LI := 0 to 8 do
   begin
     LBase := LI * 4;
-    AssertEquals('rgba conv alpha preserve ' + IntToStr(LI), Integer(LSrcData[LBase + 3]), Integer(LDestData[LBase + 3]));
+    CheckEqual(Integer(LSrcData[LBase + 3]), Integer(LDestData[LBase + 3]), 'rgba conv alpha preserve ' + IntToStr(LI));
   end;
 end;
 
@@ -1016,9 +1001,9 @@ begin
   LData := FDest.Data;
   for LI := 0 to FDest.Width * FDest.Height - 1 do
   begin
-    AssertEquals('gaussian constant r ' + IntToStr(LI), 77, Integer(LData[LI * 3 + 0]));
-    AssertEquals('gaussian constant g ' + IntToStr(LI), 88, Integer(LData[LI * 3 + 1]));
-    AssertEquals('gaussian constant b ' + IntToStr(LI), 99, Integer(LData[LI * 3 + 2]));
+    CheckEqual(77, Integer(LData[LI * 3 + 0]), 'gaussian constant r ' + IntToStr(LI));
+    CheckEqual(88, Integer(LData[LI * 3 + 1]), 'gaussian constant g ' + IntToStr(LI));
+    CheckEqual(99, Integer(LData[LI * 3 + 2]), 'gaussian constant b ' + IntToStr(LI));
   end;
 end;
 
@@ -1029,11 +1014,11 @@ begin
 
   FreeImage(FSrc1);
 
-  AssertEquals('free width', 0, FSrc1.Width);
-  AssertEquals('free height', 0, FSrc1.Height);
-  AssertEquals('free data size', 0, FSrc1.DataSize);
-  AssertTrue('free data nil', FSrc1.Data = nil);
-  AssertEquals('free format reset', Integer(ifRGB24), Integer(FSrc1.Format));
+  CheckEqual(0, FSrc1.Width, 'free width');
+  CheckEqual(0, FSrc1.Height, 'free height');
+  CheckEqual(0, FSrc1.DataSize, 'free data size');
+  CheckTrue(FSrc1.Data = nil, 'free data nil');
+  CheckEqual(Integer(ifRGB24), Integer(FSrc1.Format), 'free format reset');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageMultiply_NegativeFactor_GrayscaleZero;
@@ -1046,8 +1031,8 @@ begin
   ImageMultiply(FDest, FSrc1, -1.0);
 
   LData := FDest.Data;
-  AssertEquals('mul negative gray 0', 0, Integer(LData[0]));
-  AssertEquals('mul negative gray 1', 0, Integer(LData[1]));
+  CheckEqual(0, Integer(LData[0]), 'mul negative gray 0');
+  CheckEqual(0, Integer(LData[1]), 'mul negative gray 1');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageMultiply_NegativeFactor_RGBAAlphaPreserved;
@@ -1060,14 +1045,14 @@ begin
   ImageMultiply(FDest, FSrc1, -0.25);
 
   LData := FDest.Data;
-  AssertEquals('mul negative rgba p0 r', 0, Integer(LData[0]));
-  AssertEquals('mul negative rgba p0 g', 0, Integer(LData[1]));
-  AssertEquals('mul negative rgba p0 b', 0, Integer(LData[2]));
-  AssertEquals('mul negative rgba p0 a', 40, Integer(LData[3]));
-  AssertEquals('mul negative rgba p1 r', 0, Integer(LData[4]));
-  AssertEquals('mul negative rgba p1 g', 0, Integer(LData[5]));
-  AssertEquals('mul negative rgba p1 b', 0, Integer(LData[6]));
-  AssertEquals('mul negative rgba p1 a', 230, Integer(LData[7]));
+  CheckEqual(0, Integer(LData[0]), 'mul negative rgba p0 r');
+  CheckEqual(0, Integer(LData[1]), 'mul negative rgba p0 g');
+  CheckEqual(0, Integer(LData[2]), 'mul negative rgba p0 b');
+  CheckEqual(40, Integer(LData[3]), 'mul negative rgba p0 a');
+  CheckEqual(0, Integer(LData[4]), 'mul negative rgba p1 r');
+  CheckEqual(0, Integer(LData[5]), 'mul negative rgba p1 g');
+  CheckEqual(0, Integer(LData[6]), 'mul negative rgba p1 b');
+  CheckEqual(230, Integer(LData[7]), 'mul negative rgba p1 a');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyGamma_Identity_Grayscale;
@@ -1088,7 +1073,7 @@ begin
 
   LData := FSrc1.Data;
   for LI := 0 to 3 do
-    AssertEquals('gamma identity gray ' + IntToStr(LI), Integer(LExpect[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(LExpect[LI]), Integer(LData[LI]), 'gamma identity gray ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyBrightness_ClampHigh_Grayscale;
@@ -1101,7 +1086,7 @@ begin
   ApplyBrightness(FSrc1, 20.0);
 
   LData := FSrc1.Data;
-  AssertEquals('brightness clamp high', 255, Integer(LData[0]));
+  CheckEqual(255, Integer(LData[0]), 'brightness clamp high');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyContrast_HighClamp_Grayscale;
@@ -1114,7 +1099,7 @@ begin
   ApplyContrast(FSrc1, 2.0);
 
   LData := FSrc1.Data;
-  AssertEquals('contrast high clamp', 255, Integer(LData[0]));
+  CheckEqual(255, Integer(LData[0]), 'contrast high clamp');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaHalf_RGB24_Deterministic;
@@ -1129,9 +1114,9 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend half rgb deterministic r', 60, Integer(LData[0]));
-  AssertEquals('blend half rgb deterministic g', 70, Integer(LData[1]));
-  AssertEquals('blend half rgb deterministic b', 80, Integer(LData[2]));
+  CheckEqual(60, Integer(LData[0]), 'blend half rgb deterministic r');
+  CheckEqual(70, Integer(LData[1]), 'blend half rgb deterministic g');
+  CheckEqual(80, Integer(LData[2]), 'blend half rgb deterministic b');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaHalf_Grayscale_Deterministic;
@@ -1146,7 +1131,7 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend half gray deterministic', 60, Integer(LData[0]));
+  CheckEqual(60, Integer(LData[0]), 'blend half gray deterministic');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaHalf_BankersRounding_RGB24;
@@ -1161,9 +1146,9 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend half bankers rgb r', 0, Integer(LData[0]));
-  AssertEquals('blend half bankers rgb g', 4, Integer(LData[1]));
-  AssertEquals('blend half bankers rgb b', 4, Integer(LData[2]));
+  CheckEqual(0, Integer(LData[0]), 'blend half bankers rgb r');
+  CheckEqual(4, Integer(LData[1]), 'blend half bankers rgb g');
+  CheckEqual(4, Integer(LData[2]), 'blend half bankers rgb b');
 end;
 
 procedure TTestCase_ImageProc.Test_ImageBlend_AlphaHalf_BankersRounding_Grayscale;
@@ -1178,7 +1163,7 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend half bankers gray', 0, Integer(LData[0]));
+  CheckEqual(0, Integer(LData[0]), 'blend half bankers gray');
 end;
 
 
@@ -1194,7 +1179,7 @@ begin
   ImageBlend(FDest, FSrc1, FSrc2, 0.5);
 
   LData := FDest.Data;
-  AssertEquals('blend half lut odd-even gray', 1, Integer(LData[0]));
+  CheckEqual(1, Integer(LData[0]), 'blend half lut odd-even gray');
 end;
 procedure TTestCase_ImageProc.Test_ApplyBrightness_Zero_NoChange_RGB24;
 var
@@ -1207,14 +1192,14 @@ begin
   ApplyBrightness(FSrc1, 0.0);
 
   LData := FSrc1.Data;
-  AssertEquals('brightness zero r0', 1, Integer(LData[0]));
-  AssertEquals('brightness zero g0', 2, Integer(LData[1]));
-  AssertEquals('brightness zero b0', 3, Integer(LData[2]));
+  CheckEqual(1, Integer(LData[0]), 'brightness zero r0');
+  CheckEqual(2, Integer(LData[1]), 'brightness zero g0');
+  CheckEqual(3, Integer(LData[2]), 'brightness zero b0');
   for LI := 3 to 5 do
-    AssertTrue('brightness zero keep tail ' + IntToStr(LI), LData[LI] > 0);
-  AssertEquals('brightness zero r1', 100, Integer(LData[3]));
-  AssertEquals('brightness zero g1', 150, Integer(LData[4]));
-  AssertEquals('brightness zero b1', 200, Integer(LData[5]));
+    CheckTrue(LData[LI] > 0, 'brightness zero keep tail ' + IntToStr(LI));
+  CheckEqual(100, Integer(LData[3]), 'brightness zero r1');
+  CheckEqual(150, Integer(LData[4]), 'brightness zero g1');
+  CheckEqual(200, Integer(LData[5]), 'brightness zero b1');
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyContrast_One_NoChange_Grayscale;
@@ -1234,7 +1219,7 @@ begin
 
   LData := FSrc1.Data;
   for LI := 0 to 2 do
-    AssertEquals('contrast one keep gray ' + IntToStr(LI), Integer(LExpect[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(LExpect[LI]), Integer(LData[LI]), 'contrast one keep gray ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplyGamma_One_NoChange_RGBA32;
@@ -1255,7 +1240,7 @@ begin
 
   LData := FSrc1.Data;
   for LI := 0 to 3 do
-    AssertEquals('gamma one keep rgba ' + IntToStr(LI), Integer(LExpect[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(LExpect[LI]), Integer(LData[LI]), 'gamma one keep rgba ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplySharpen_ConstantImage_Grayscale_Unchanged;
@@ -1272,7 +1257,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to FDest.DataSize - 1 do
-    AssertEquals('sharpen constant gray keep ' + IntToStr(LI), 77, Integer(LData[LI]));
+    CheckEqual(77, Integer(LData[LI]), 'sharpen constant gray keep ' + IntToStr(LI));
 end;
 
 procedure TTestCase_ImageProc.Test_ApplySharpen_RGBA_AlphaPreserved;
@@ -1300,8 +1285,7 @@ begin
   for LI := 0 to 8 do
   begin
     LBase := LI * 4;
-    AssertEquals('sharpen rgba alpha preserve ' + IntToStr(LI),
-      Integer(LSrcData[LBase + 3]), Integer(LDestData[LBase + 3]));
+    CheckEqual(Integer(LSrcData[LBase + 3]), Integer(LDestData[LBase + 3]), 'sharpen rgba alpha preserve ' + IntToStr(LI));
   end;
 end;
 
@@ -1326,9 +1310,9 @@ begin
     begin
       LIndex := LY * FDest.Width + LX;
       if (LX = 0) or (LY = 0) or (LX = FDest.Width - 1) or (LY = FDest.Height - 1) then
-        AssertEquals('edge constant border keep ' + IntToStr(LIndex), 100, Integer(LData[LIndex]))
+        CheckEqual(100, Integer(LData[LIndex]), 'edge constant border keep ' + IntToStr(LIndex))
       else
-        AssertEquals('edge constant interior zero ' + IntToStr(LIndex), 0, Integer(LData[LIndex]));
+        CheckEqual(0, Integer(LData[LIndex]), 'edge constant interior zero ' + IntToStr(LIndex));
     end;
   end;
 end;
@@ -1345,10 +1329,7 @@ begin
 
   LData := FDest.Data;
   for LI := 0 to FDest.DataSize - 1 do
-    AssertEquals('edge small image no change ' + IntToStr(LI),
-      Integer(FSrc1.Data[LI]), Integer(LData[LI]));
+    CheckEqual(Integer(FSrc1.Data[LI]), Integer(LData[LI]), 'edge small image no change ' + IntToStr(LI));
 end;
-initialization
-  RegisterTest(TTestCase_ImageProc);
 
 end.

@@ -86,10 +86,81 @@ end;
 
 procedure GemmBlockedF32_NEON(AA, AB, AC: PSingle;
   AM, AN, AK, ALdA, ALdB, ALdC: SizeUInt);
+const
+  MC = 64;  // Block size for M dimension
+  KC = 256; // Block size for K dimension
+  NC = 512; // Block size for N dimension
+var
+  i, j, k, ii, jj, kk: SizeUInt;
+  LBi, LBj: SizeUInt;
+  LPackA: array[0..MC*KC-1] of Single;
+  LPackB: array[0..KC*NC-1] of Single;
+  LPA, LPB: PSingle;
+  LSrcA, LSrcB: PSingle;
+  LRemM, LRemN, LRemK: SizeUInt;
 begin
-  // Placeholder: will implement full blocked tiling using NEON microkernel
-  // For now, fall back to scalar
-  // TODO: implement with PackA/PackB + GemmMicro4x8F32_NEON_Zero
+  if (AM = 0) or (AN = 0) or (AK = 0) then Exit;
+
+  // Blocked GEMM with packing
+  for jj := 0 to AN - 1 do
+  begin
+    LRemN := AN - jj;
+    if LRemN > NC then LRemN := NC;
+
+    for kk := 0 to AK - 1 do
+    begin
+      LRemK := AK - kk;
+      if LRemK > KC then LRemK := KC;
+
+      // Pack B[kk..kk+LRemK, jj..jj+LRemN] into LPackB
+      LPB := @LPackB[0];
+      for k := 0 to LRemK - 1 do
+      begin
+        LSrcB := AB + (kk + k) * ALdB + jj;
+        for j := 0 to LRemN - 1 do
+        begin
+          LPB^ := LSrcB^;
+          Inc(LPB);
+          Inc(LSrcB);
+        end;
+      end;
+
+      for ii := 0 to AM - 1 do
+      begin
+        LRemM := AM - ii;
+        if LRemM > MC then LRemM := MC;
+
+        // Pack A[ii..ii+LRemM, kk..kk+LRemK] into LPackA
+        LPA := @LPackA[0];
+        for i := 0 to LRemM - 1 do
+        begin
+          LSrcA := AA + (ii + i) * ALdA + kk;
+          for k := 0 to LRemK - 1 do
+          begin
+            LPA^ := LSrcA^;
+            Inc(LPA);
+            Inc(LSrcA);
+          end;
+        end;
+
+        // Call microkernel for each 4x8 block
+        LPA := @LPackA[0];
+        LPB := @LPackB[0];
+        for i := 0 to LRemM div GEMM_MR_NEON - 1 do
+        begin
+          for j := 0 to LRemN div GEMM_NR_NEON - 1 do
+          begin
+            GemmMicro4x8F32_NEON_Zero(
+              LPA + i * GEMM_MR_NEON * LRemK,
+              LPB + j * GEMM_NR_NEON * LRemK,
+              AC + (ii + i * GEMM_MR_NEON) * ALdC + jj + j * GEMM_NR_NEON,
+              LRemK, ALdC, ALdC
+            );
+          end;
+        end;
+      end;
+    end;
+  end;
 end;
 {$ENDIF}
 

@@ -30,6 +30,39 @@ uses
   nextpas.core.platform.socket,
   nextpas.core.platform.thread;
 
+procedure TestServerOptionsBuilder;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  CheckEqual(30000, LOpts.IdleTimeout, 'default idle timeout');
+  CheckEqual(8192, LOpts.MaxHeaderSize, 'default max header size');
+  CheckEqual(4194304, LOpts.MaxBodySize, 'default max body size');
+  CheckEqual(0, LOpts.ShutdownTimeout, 'default shutdown timeout');
+
+  LOpts := LOpts.WithReadTimeout(5000);
+  CheckEqual(5000, LOpts.ReadTimeout, 'WithReadTimeout');
+
+  LOpts := LOpts.WithWriteTimeout(10000);
+  CheckEqual(10000, LOpts.WriteTimeout, 'WithWriteTimeout');
+
+  LOpts := LOpts.WithIdleTimeout(60000);
+  CheckEqual(60000, LOpts.IdleTimeout, 'WithIdleTimeout');
+
+  LOpts := LOpts.WithMaxHeaderSize(16384);
+  CheckEqual(16384, LOpts.MaxHeaderSize, 'WithMaxHeaderSize');
+
+  LOpts := LOpts.WithMaxBodySize(8388608);
+  CheckEqual(8388608, LOpts.MaxBodySize, 'WithMaxBodySize');
+
+  LOpts := LOpts.WithShutdownTimeout(5000);
+  CheckEqual(5000, LOpts.ShutdownTimeout, 'WithShutdownTimeout');
+
+  { Builder preserves other fields }
+  CheckEqual(5000, LOpts.ReadTimeout, 'builder preserves ReadTimeout');
+  CheckEqual(10000, LOpts.WriteTimeout, 'builder preserves WriteTimeout');
+end;
+
 var
   T: TTestSuite;
 
@@ -12167,6 +12200,55 @@ begin
 end;
 {$ENDIF}
 
+procedure TestMaxRequestsPerConnection;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LReq: string;
+  LOptions: THttpServerOptions;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/test', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write('ok', 2);
+  end);
+  LOptions := THttpServerOptions.Default
+    .WithMaxRequestsPerConnection(2);
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOptions, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+
+      { First request — should succeed with keep-alive }
+      LReq := 'GET /test HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: keep-alive'#13#10#13#10;
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp) > 0, 'first request 200');
+      Check(Pos('connection: keep-alive', LowerCase(LResp)) > 0,
+        'first response has keep-alive');
+
+      { Second request — should succeed but with Connection: close }
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp) > 0, 'second request 200');
+      Check(Pos('connection: close', LowerCase(LResp)) > 0,
+        'second response has connection: close');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -12671,5 +12753,7 @@ begin
   T.Test('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
   T.Test('Hijack exception does not write 500 or close handler connection',
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection);
+  T.Test('Server options builder', @TestServerOptionsBuilder);
+  T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
   if not T.Run then Halt(1);
 end.

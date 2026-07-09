@@ -19,7 +19,7 @@ unit test_openssl_core_unit;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   test_base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
@@ -31,8 +31,8 @@ type
   private
     FSavedLoadedState: Boolean;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     // 库状态测试
     procedure TestIsLoaded_AfterLoad_ShouldReturnTrue;
@@ -57,34 +57,32 @@ implementation
 
 { TTestOpenSSLCore }
 
-procedure TTestOpenSSLCore.SetUp;
+procedure TTestOpenSSLCore.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
   FSavedLoadedState := TOpenSSLLoader.IsModuleLoaded(osmCore);
 end;
 
-procedure TTestOpenSSLCore.TearDown;
+procedure TTestOpenSSLCore.AfterEach;
 begin
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 procedure TTestOpenSSLCore.TestIsLoaded_AfterLoad_ShouldReturnTrue;
 begin
   LoadOpenSSLCore;
-  AssertTrue('TOpenSSLLoader.IsModuleLoaded(osmCore) should return true after LoadOpenSSLCore',
-             TOpenSSLLoader.IsModuleLoaded(osmCore));
+  CheckTrue(TOpenSSLLoader.IsModuleLoaded(osmCore), 'TOpenSSLLoader.IsModuleLoaded(osmCore) should return true after LoadOpenSSLCore');
 end;
 
 procedure TTestOpenSSLCore.TestIsLoaded_BeforeLoad_ShouldReturnFalse;
 begin
   if FSavedLoadedState then
   begin
-    Ignore('Precondition not met: OpenSSL core is already loaded at test start');
+    Skip('Precondition not met: OpenSSL core is already loaded at test start');
     Exit;
   end;
 
-  AssertFalse('TOpenSSLLoader.IsModuleLoaded(osmCore) should return false before LoadOpenSSLCore',
-             TOpenSSLLoader.IsModuleLoaded(osmCore));
+  CheckFalse(TOpenSSLLoader.IsModuleLoaded(osmCore), 'TOpenSSLLoader.IsModuleLoaded(osmCore) should return false before LoadOpenSSLCore');
 end;
 
 procedure TTestOpenSSLCore.TestGetVersion_WhenLoaded_ShouldReturnValidString;
@@ -95,11 +93,8 @@ begin
 
   Version := GetOpenSSLVersionString;
 
-  AssertTrue('Version string should not be empty', Version <> '');
-  AssertTrue('Version should contain version number or dll name',
-             (Pos('3.', Version) > 0) or
-             (Pos('libcrypto', Version) > 0) or
-             (Pos('OpenSSL', Version) > 0));
+  CheckTrue(Version <> '', 'Version string should not be empty');
+  CheckTrue((Pos('3.', Version) > 0) or (Pos('libcrypto', Version) > 0) or (Pos('OpenSSL', Version) > 0), 'Version should contain version number or dll name');
 end;
 
 procedure TTestOpenSSLCore.TestGetVersion_WhenNotLoaded_ShouldReturnEmptyOrError;
@@ -109,7 +104,7 @@ var
 begin
   if FSavedLoadedState then
   begin
-    Ignore('Precondition not met: OpenSSL core is already loaded at test start');
+    Skip('Precondition not met: OpenSSL core is already loaded at test start');
     Exit;
   end;
 
@@ -123,11 +118,7 @@ begin
       RaisedException := True;
   end;
 
-  AssertTrue('When core is not loaded, call should raise or return empty/unknown version',
-    RaisedException or
-    (Trim(Version) = '') or
-    (Pos('unknown', LowerCase(Version)) > 0) or
-    (Pos('not loaded', LowerCase(Version)) > 0));
+  CheckTrue(RaisedException or (Trim(Version) = '') or (Pos('unknown', LowerCase(Version)) > 0) or (Pos('not loaded', LowerCase(Version)) > 0), 'When core is not loaded, call should raise or return empty/unknown version');
 end;
 
 procedure TTestOpenSSLCore.TestLoadMultipleTimes_ShouldBeIdempotent;
@@ -143,10 +134,9 @@ begin
   SecondLoadResult := TOpenSSLLoader.IsModuleLoaded(osmCore);
   SecondVersion := GetOpenSSLVersionString;
 
-  AssertTrue('Should be loaded after first call', FirstLoadResult);
-  AssertTrue('Should still be loaded after second call', SecondLoadResult);
-  AssertEquals('Version should be same after multiple loads',
-               FirstVersion, SecondVersion);
+  CheckTrue(FirstLoadResult, 'Should be loaded after first call');
+  CheckTrue(SecondLoadResult, 'Should still be loaded after second call');
+  CheckEqual(FirstVersion, SecondVersion, 'Version should be same after multiple loads');
 end;
 
 procedure TTestOpenSSLCore.TestGetCryptoLibHandle_WhenLoaded_ShouldReturnNonZero;
@@ -155,7 +145,7 @@ var
 begin
   LoadOpenSSLCore;
   Handle := GetCryptoLibHandle;
-  AssertTrue('Crypto lib handle should be non-zero', Handle <> NilHandle);
+  CheckTrue(Handle <> NilHandle, 'Crypto lib handle should be non-zero');
 end;
 
 procedure TTestOpenSSLCore.TestGetSSLLibHandle_WhenLoaded_ShouldReturnNonZero;
@@ -164,7 +154,7 @@ var
 begin
   LoadOpenSSLCore;
   Handle := GetSSLLibHandle;
-  AssertTrue('SSL lib handle should be non-zero', Handle <> NilHandle);
+  CheckTrue(Handle <> NilHandle, 'SSL lib handle should be non-zero');
 end;
 
 procedure TTestOpenSSLCore.TestLoadCrypto_WhenCryptoFreeAvailable_ShouldExposeOpenSSLFree;
@@ -173,13 +163,9 @@ begin
   LoadOpenSSLCrypto;
 
   if Assigned(CRYPTO_free) then
-    AssertTrue('OPENSSL_free should be assigned when CRYPTO_free is available',
-               Assigned(OPENSSL_free))
+    CheckTrue(Assigned(OPENSSL_free), 'OPENSSL_free should be assigned when CRYPTO_free is available');
   else
-    Ignore('CRYPTO_free is unavailable in current OpenSSL build');
+    Skip('CRYPTO_free is unavailable in current OpenSSL build');
 end;
-
-initialization
-  RegisterTest(TTestOpenSSLCore);
 
 end.

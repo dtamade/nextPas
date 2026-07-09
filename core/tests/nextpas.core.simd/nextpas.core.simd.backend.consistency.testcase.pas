@@ -5,10 +5,8 @@ unit nextpas.core.simd.backend.consistency.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, Math,
-  nextpas.core.simd.base,
-  nextpas.core.simd.fixturehelpers,
-  nextpas.core.simd.dispatch,
+  nextpas.core.exception, nextpas.core.text.conv, Math, nextpas.core.simd.base,
+  nextpas.core.simd.fixturehelpers, nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar;
 
 // =============================================================================
@@ -158,8 +156,7 @@ procedure RestoreBackendConsistencyState(const aState: TSimdSavedBackendState);
 begin
   if not RestoreSavedBackendStateAndVerify(aState.Backend, @GetActiveBackend) then
     raise Exception.CreateFmt(
-      'Backend consistency helper failed to restore previous backend selection (expected=%d, actual=%d)',
-      [Ord(aState.Backend), Ord(GetActiveBackend)]);
+      'Backend consistency helper failed to restore previous backend selection (expected=%d, actual=%d)', [Ord(aState.Backend), Ord(GetActiveBackend)]);
 end;
 
 function BeginBackendConsistencyTest(const aTestName: string;
@@ -200,11 +197,9 @@ end;
 function FormatConsistencyFailureText(const aResult: TConsistencyTestResult;
   const aDetailIndent: string): string;
 begin
-  Result := Format('%s / %s - %s',
-    [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
+  Result := Format('%s / %s - %s', [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
   if aResult.MaxDiff > 0 then
-    Result := Result + LineEnding + Format('%sMax diff: %g at index %d',
-      [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
+    Result := Result + LineEnding + Format('%sMax diff: %g at index %d', [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
 end;
 
 // =============================================================================
@@ -219,8 +214,7 @@ var
   maxDiff: Double;
   diffIdx: Integer;
 begin
-  if not BeginBackendConsistencyTest('F32x4 Arithmetic', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('F32x4 Arithmetic', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -316,8 +310,7 @@ var
   maxDiff: Double;
   diffIdx: Integer;
 begin
-  if not BeginBackendConsistencyTest('F32x4 Math', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('F32x4 Math', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -412,8 +405,7 @@ var
   a, b: TVecF32x4;
   expectedMask, actualMask: TMask4;
 begin
-  if not BeginBackendConsistencyTest('F32x4 Comparison', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('F32x4 Comparison', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -431,8 +423,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpEqF32x4 mask mismatch: expected $%x, got $%x',
-        [expectedMask, actualMask]);
+      Result.ErrorMessage := Format('CmpEqF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -447,8 +438,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpLtF32x4 mask mismatch: expected $%x, got $%x',
-        [expectedMask, actualMask]);
+      Result.ErrorMessage := Format('CmpLtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -463,8 +453,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpGtF32x4 mask mismatch: expected $%x, got $%x',
-        [expectedMask, actualMask]);
+      Result.ErrorMessage := Format('CmpGtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -484,8 +473,7 @@ var
   a: TVecF32x4;
   expectedVal, actualVal: Single;
 begin
-  if not BeginBackendConsistencyTest('F32x4 Reduction', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('F32x4 Reduction', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -502,8 +490,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceAddF32x4 mismatch: expected %f, got %f',
-        [expectedVal, actualVal]);
+      Result.ErrorMessage := Format('ReduceAddF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -519,8 +506,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMinF32x4 mismatch: expected %f, got %f',
-        [expectedVal, actualVal]);
+      Result.ErrorMessage := Format('ReduceMinF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -536,8 +522,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMaxF32x4 mismatch: expected %f, got %f',
-        [expectedVal, actualVal]);
+      Result.ErrorMessage := Format('ReduceMaxF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -553,8 +538,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMulF32x4 mismatch: expected %f, got %f',
-        [expectedVal, actualVal]);
+      Result.ErrorMessage := Format('ReduceMulF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -575,8 +559,7 @@ var
   a, b, expected, actual: TVecI32x4;
   diffIdx: Integer;
 begin
-  if not BeginBackendConsistencyTest('I32x4 Arithmetic', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('I32x4 Arithmetic', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -594,8 +577,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AddI32x4 mismatch at [%d]: expected %d, got %d',
-        [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := Format('AddI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -611,8 +593,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SubI32x4 mismatch at [%d]: expected %d, got %d',
-        [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := Format('SubI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -628,8 +609,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MulI32x4 mismatch at [%d]: expected %d, got %d',
-        [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := Format('MulI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -650,8 +630,7 @@ var
   a, b, expected, actual: TVecI32x4;
   diffIdx: Integer;
 begin
-  if not BeginBackendConsistencyTest('I32x4 Bitwise', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('I32x4 Bitwise', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -742,8 +721,7 @@ var
   expectedIdx, actualIdx: PtrInt;
   expectedSum, actualSum: UInt64;
 begin
-  if not BeginBackendConsistencyTest('Facade MemOps', backend, Result,
-    LOriginalState) then
+  if not BeginBackendConsistencyTest('Facade MemOps', backend, Result, LOriginalState) then
     Exit;
 
   try
@@ -796,8 +774,7 @@ begin
     if expectedIdx <> actualIdx then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MemFindByte mismatch: expected %d, got %d',
-        [expectedIdx, actualIdx]);
+      Result.ErrorMessage := Format('MemFindByte mismatch: expected %d, got %d', [expectedIdx, actualIdx]);
       Exit;
     end;
 
@@ -812,8 +789,7 @@ begin
     if expectedSum <> actualSum then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SumBytes mismatch: expected %d, got %d',
-        [expectedSum, actualSum]);
+      Result.ErrorMessage := Format('SumBytes mismatch: expected %d, got %d', [expectedSum, actualSum]);
       Exit;
     end;
 
@@ -829,12 +805,9 @@ end;
 function RunAllConsistencyTests: TConsistencyTestResults;
 const
   CTestFuncs: array[0..6] of TConsistencyTestFunc = (
-    @TestF32x4Arithmetic,
-    @TestF32x4Math,
-    @TestF32x4Comparison,
-    @TestF32x4Reduction,
-    @TestI32x4Arithmetic,
-    @TestI32x4Bitwise,
+    @TestF32x4Arithmetic, @TestF32x4Math,
+    @TestF32x4Comparison, @TestF32x4Reduction,
+    @TestI32x4Arithmetic, @TestI32x4Bitwise,
     @TestFacadeMemOps
   );
 var
@@ -880,8 +853,7 @@ begin
 
     if IsConsistencyTestSkipped(results[i]) then
     begin
-      WriteLn(Format('[SKIP] %s / %s - %s',
-        [backendName, results[i].TestName, results[i].ErrorMessage]));
+      WriteLn(Format('[SKIP] %s / %s - %s', [backendName, results[i].TestName, results[i].ErrorMessage]));
       Inc(skipCount);
     end
     else if results[i].Passed then

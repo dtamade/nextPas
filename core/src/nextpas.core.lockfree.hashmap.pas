@@ -77,7 +77,6 @@ type
   private
     FShards: array of TShard;
     FShardCount: PtrUInt;
-    function HashKey(const AKey: TKey): PtrUInt;
     function ShardIndex(const AKey: TKey): PtrUInt;
     procedure ShardLock(var AShard: TShard);
     procedure ShardUnlock(var AShard: TShard);
@@ -89,6 +88,8 @@ type
     procedure ShardResize(var AShard: TShard);
     function ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
   public
+    {** @desc 计算键的哈希值 }
+    function HashKey(const AKey: TKey): PtrUInt;
     {** @desc 创建分片锁 HashMap }
     constructor Create(const AInitialCapacity: PtrUInt = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;
@@ -150,6 +151,10 @@ type
 
     {** @desc 清空所有元素 }
     procedure Clear;
+    {** @desc 预分配容量，确保可容纳 ACount 个元素而不触发 resize
+      @param ACount 预期元素数量
+      @note 按分片均分容量，每个分片独立扩容 }
+    procedure Reserve(const ACount: PtrUInt);
   end;
 
   generic TShardedHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>)
@@ -764,6 +769,63 @@ begin
         FShards[LShardIdx].Entries[LEntryIdx].Value := Default(TValue);
       end;
       FShards[LShardIdx].Count := 0;
+      { 标记写结束: 版本号+1 变回偶数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    finally
+      ShardWriteUnlock(FShards[LShardIdx]);
+    end;
+  end;
+end;
+
+procedure TShardedHashMapImpl.Reserve(const ACount: PtrUInt);
+var
+  LShardIdx: PtrUInt;
+  LPerShard: PtrUInt;
+  LCap: PtrUInt;
+  LI: PtrUInt;
+  LOldEntries: array of TEntry;
+  LOldCapacity: PtrUInt;
+  LIdx: PtrUInt;
+begin
+  if ACount = 0 then
+    Exit;
+  { 计算每个分片需要的容量: 按 load factor 反算 }
+  LPerShard := (ACount + FShardCount - 1) div FShardCount;
+  { 向上对齐到 2 的幂，至少 4 }
+  LCap := 4;
+  while LCap * HASHMAP_LOAD_FACTOR_NUM < LPerShard * HASHMAP_LOAD_FACTOR_DEN do
+    LCap := LCap * 2;
+  for LShardIdx := 0 to FShardCount - 1 do
+  begin
+    if FShards[LShardIdx].Capacity >= LCap then
+      Continue; { 已经足够大 }
+    ShardWriteLock(FShards[LShardIdx]);
+    try
+      { 标记写开始: 版本号+1 变为奇数 }
+      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      { 二次检查: 可能已被其他线程扩容 }
+      if FShards[LShardIdx].Capacity < LCap then
+      begin
+        { 保存旧表，重新分配 }
+        LOldEntries := FShards[LShardIdx].Entries;
+        LOldCapacity := FShards[LShardIdx].Capacity;
+        FShards[LShardIdx].Capacity := LCap;
+        FShards[LShardIdx].Mask := LCap - 1;
+        SetLength(FShards[LShardIdx].Entries, LCap);
+        for LI := 0 to LCap - 1 do
+          FShards[LShardIdx].Entries[LI].State := esEmpty;
+        { 迁移旧数据 }
+        for LI := 0 to LOldCapacity - 1 do
+        begin
+          if LOldEntries[LI].State = esOccupied then
+          begin
+            LIdx := PtrUInt(HashKey(LOldEntries[LI].Key)) and FShards[LShardIdx].Mask;
+            while FShards[LShardIdx].Entries[LIdx].State = esOccupied do
+              LIdx := (LIdx + 1) and FShards[LShardIdx].Mask;
+            FShards[LShardIdx].Entries[LIdx] := LOldEntries[LI];
+          end;
+        end;
+      end;
       { 标记写结束: 版本号+1 变回偶数 }
       AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
     finally

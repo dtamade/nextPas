@@ -74,6 +74,9 @@ procedure ScalarArrayMulScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar
 procedure ScalarArrayAddScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
 procedure ScalarArrayClampF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
 procedure ScalarArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 // === Batch Array Operations - Transcendental F32 ===
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -340,6 +343,9 @@ function ScalarShiftRightArithI16x32(const a: TVecI16x32; count: Integer): TVecI
 function ScalarCmpEqI16x32(const a, b: TVecI16x32): TMask32;
 function ScalarCmpLtI16x32(const a, b: TVecI16x32): TMask32;
 function ScalarCmpGtI16x32(const a, b: TVecI16x32): TMask32;
+function ScalarCmpLeI16x32(const a, b: TVecI16x32): TMask32;
+function ScalarCmpGeI16x32(const a, b: TVecI16x32): TMask32;
+function ScalarCmpNeI16x32(const a, b: TVecI16x32): TMask32;
 function ScalarMinI16x32(const a, b: TVecI16x32): TVecI16x32;
 function ScalarMaxI16x32(const a, b: TVecI16x32): TVecI16x32;
 // I8x64 Arithmetic/Bitwise/Comparison/MinMax (512-bit)
@@ -353,6 +359,9 @@ function ScalarAndNotI8x64(const a, b: TVecI8x64): TVecI8x64;
 function ScalarCmpEqI8x64(const a, b: TVecI8x64): TMask64;
 function ScalarCmpLtI8x64(const a, b: TVecI8x64): TMask64;
 function ScalarCmpGtI8x64(const a, b: TVecI8x64): TMask64;
+function ScalarCmpLeI8x64(const a, b: TVecI8x64): TMask64;
+function ScalarCmpGeI8x64(const a, b: TVecI8x64): TMask64;
+function ScalarCmpNeI8x64(const a, b: TVecI8x64): TMask64;
 function ScalarMinI8x64(const a, b: TVecI8x64): TVecI8x64;
 function ScalarMaxI8x64(const a, b: TVecI8x64): TVecI8x64;
 // U8x64 Arithmetic/Bitwise/Comparison/MinMax (512-bit)
@@ -365,6 +374,9 @@ function ScalarNotU8x64(const a: TVecU8x64): TVecU8x64;
 function ScalarCmpEqU8x64(const a, b: TVecU8x64): TMask64;
 function ScalarCmpLtU8x64(const a, b: TVecU8x64): TMask64;
 function ScalarCmpGtU8x64(const a, b: TVecU8x64): TMask64;
+function ScalarCmpLeU8x64(const a, b: TVecU8x64): TMask64;
+function ScalarCmpGeU8x64(const a, b: TVecU8x64): TMask64;
+function ScalarCmpNeU8x64(const a, b: TVecU8x64): TMask64;
 function ScalarMinU8x64(const a, b: TVecU8x64): TVecU8x64;
 function ScalarMaxU8x64(const a, b: TVecU8x64): TVecU8x64;
 // Comparison

@@ -5,25 +5,49 @@ program test_http_middlewares;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http.middleware,
+  nextpas.core.http.message,
+  nextpas.core.io.memory,
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.bodylimit,
+  nextpas.core.http.middleware.contenttype,
+  nextpas.core.http.middleware.requestid,
+  nextpas.core.http.middleware.cachecontrol,
+  nextpas.core.http.middleware.ratelimit,
+  nextpas.core.http.middleware.healthcheck,
+  nextpas.core.http.middleware.metrics,
+  nextpas.core.http.middleware.methodguard,
+  nextpas.core.http.middleware.bodycache,
+  nextpas.core.http.middleware.serverheader,
+  nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.compression,
+  nextpas.core.http.middleware.decompress,
+  nextpas.core.http.middleware.deadline,
+  nextpas.core.compress,
+  nextpas.core.text.conv,
   nextpas.core.time.base,
   nextpas.core.time.sleep;
 
+var
+  GTestSentinel: TObject;
+
 type
-  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpResponseBodyBytes)
   private
     FStatus: THttpStatus;
     FBody: string;
+    FBodyBytes: TBytes;
     FHeaders: IHttpHeaders;
+    FBodyBytesWritten: Int64;
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
@@ -31,8 +55,10 @@ type
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    function GetBodyBytesWritten: Int64;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
+    property BodyBytes: TBytes read FBodyBytes;
   end;
 
   TMockRequest = class(TInterfacedObject, IHttpRequest)
@@ -40,8 +66,14 @@ type
     FMethod: THttpMethod;
     FUrl: TUrl;
     FHeaders: IHttpHeaders;
+    FContentLength: Int64;
+    FBodyReader: IReader;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
+    procedure SetContentLength(const AValue: Int64);
+    procedure SetBodyReader(const ABody: IReader);
+    procedure SetBodyBytes(const AData: TBytes);
+    procedure SetHeader(const AName, AValue: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
@@ -63,7 +95,9 @@ begin
   inherited Create;
   FStatus := 0;
   FBody := '';
+  FBodyBytes := nil;
   FHeaders := NewHttpHeaders;
+  FBodyBytesWritten := 0;
 end;
 
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -84,16 +118,34 @@ end;
 function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LStr: string;
+  LOldLen: SizeUInt;
 begin
   SetLength(LStr, ACount);
   if ACount > 0 then
     Move(ABuf, LStr[1], ACount);
   FBody := FBody + LStr;
+  { Also capture raw bytes for binary data verification }
+  LOldLen := SizeUInt(Length(FBodyBytes));
+  SetLength(FBodyBytes, LOldLen + ACount);
+  if ACount > 0 then
+    Move(ABuf, FBodyBytes[LOldLen], ACount);
+  Inc(FBodyBytesWritten, Int64(ACount));
   Result := ACount;
 end;
 
 procedure TMockResponseWriter.Flush;
 begin
+end;
+
+function TMockResponseWriter.GetBodyBytesWritten: Int64;
+begin
+  Result := FBodyBytesWritten;
+end;
+
+function MakeRateLimitOpts(AMax, AWindow: Int32): TRateLimitOptions;
+begin
+  Result.MaxRequests := AMax;
+  Result.WindowSeconds := AWindow;
 end;
 
 { TMockRequest }
@@ -105,6 +157,28 @@ begin
   FUrl := Default(TUrl);
   FUrl.Path := APath;
   FHeaders := NewHttpHeaders;
+  FContentLength := 0;
+end;
+
+procedure TMockRequest.SetContentLength(const AValue: Int64);
+begin
+  FContentLength := AValue;
+end;
+
+procedure TMockRequest.SetBodyReader(const ABody: IReader);
+begin
+  FBodyReader := ABody;
+end;
+
+procedure TMockRequest.SetBodyBytes(const AData: TBytes);
+begin
+  FBodyReader := CreateBytesStreamFrom(AData) as IReader;
+  FContentLength := Length(AData);
+end;
+
+procedure TMockRequest.SetHeader(const AName, AValue: string);
+begin
+  FHeaders.SetHeader(AName, AValue);
 end;
 
 function TMockRequest.GetMethod: THttpMethod;
@@ -126,10 +200,10 @@ function TMockRequest.GetHeaders: IHttpHeaders;
 begin Result := FHeaders; end;
 
 function TMockRequest.GetBody: IReader;
-begin Result := nil; end;
+begin Result := FBodyReader; end;
 
 function TMockRequest.GetContentLength: Int64;
-begin Result := 0; end;
+begin Result := FContentLength; end;
 
 function TMockRequest.GetTrailers: IHttpHeaders;
 begin Result := nil; end;
@@ -164,7 +238,8 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500');
-  CheckEqual('Internal Server Error', LWObj.Body, 'recovery returns generic body');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'recovery returns JSON error code');
+  Check(Pos('Internal Server Error', LWObj.Body) > 0, 'recovery returns generic message');
   Check(Pos('password', LWObj.Body) = 0, 'body does not expose field names');
   Check(Pos('secret', LWObj.Body) = 0, 'body does not expose secret values');
 end;
@@ -213,8 +288,89 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(500), Int64(LWObj.Status), 'recovery returns 500 for detailed error');
-  CheckEqual('Internal Server Error', LWObj.Body, 'recovery hides detailed body');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'recovery returns JSON error code');
   Check(Pos('detailed error info', LWObj.Body) = 0, 'body does not expose exception message');
+end;
+
+procedure TestRecoveryWithCallbackReceivesException;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCaughtMsg: string;
+  LCallbackCalled: Boolean;
+begin
+  LCaughtMsg := '';
+  LCallbackCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('boom');
+    end),
+    [RecoveryMiddlewareWith(procedure(E: Exception)
+    begin
+      LCaughtMsg := E.Message;
+      LCallbackCalled := True;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/err');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LCallbackCalled, 'callback was called');
+  CheckEqual('boom', LCaughtMsg, 'callback received exception message');
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'still returns 500');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'body is JSON error');
+end;
+
+procedure TestRecoveryWithNilCallbackBehavesLikeSilent;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('should be swallowed');
+    end),
+    [RecoveryMiddlewareWith(nil)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/err');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(500), Int64(LWObj.Status), 'nil callback still returns 500');
+  Check(Pos('"internal_error"', LWObj.Body) > 0, 'nil callback still returns JSON error');
+end;
+
+procedure TestRecoveryWithSuccessPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCallbackCalled: Boolean;
+begin
+  LCallbackCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RecoveryMiddlewareWith(procedure(E: Exception)
+    begin
+      LCallbackCalled := True;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/ok');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(not LCallbackCalled, 'callback not called on success');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'success passes through');
 end;
 
 { === Logger Tests === }
@@ -537,6 +693,35 @@ begin
     'custom AllowHeaders');
 end;
 
+procedure TestCorsWildcardEchoesRequestHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TCorsOptions;
+begin
+  LOpts := TCorsOptions.Default;
+  LOpts.AllowHeaders := '*';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'http://example.com');
+  LReq.GetHeaders.SetHeader('Access-Control-Request-Headers', 'X-Custom, Authorization');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('X-Custom, Authorization', LWObj.GetHeaders.Get('Access-Control-Allow-Headers'),
+    'wildcard echoes request headers');
+end;
+
 { === Timeout Tests === }
 
 procedure TestTimeoutFastHandler;
@@ -551,7 +736,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/fast');
   LWObj := TMockResponseWriter.Create;
@@ -575,7 +760,7 @@ begin
       TSleep.ForDuration(TDuration.FromMilliseconds(50));
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/slow');
   LWObj := TMockResponseWriter.Create;
@@ -599,7 +784,7 @@ begin
     begin
       AW.WriteHeader(HTTP_STATUS_OK);
     end),
-    [TimeoutMiddleware]
+    [ResponseTimeMiddleware]
   );
   LReq := TMockRequest.Create(hmGet, '/check');
   LWObj := TMockResponseWriter.Create;
@@ -609,14 +794,2252 @@ begin
   Check(Pos('ms', LVal) > 0, 'X-Response-Time contains ms suffix');
 end;
 
+{ === BodyLimit Tests === }
+
+procedure TestBodyLimitUnderLimitPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(512);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'under limit passes through');
+end;
+
+procedure TestBodyLimitOverLimitRejects;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(2048);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'over limit returns 413');
+  Check(Pos('too large', LWObj.Body) > 0, 'body contains error message');
+end;
+
+procedure TestBodyLimitExactLimitPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(1024);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'exact limit passes through');
+end;
+
+procedure TestBodyLimitNoContentLengthPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'no content-length passes through');
+end;
+
+procedure TestBodyLimitZeroContentLengthPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(1024)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(0);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'zero content-length passes through');
+end;
+
+procedure TestBodyLimitRejectsHandlerNotCalled;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(100)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(999);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'reject returns 413');
+  Check(not LHandlerCalled, 'handler not called when rejected');
+end;
+
+{ ContentTypeMiddleware tests }
+
+procedure TestContentTypeAcceptedPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'application/json');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for accepted type');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestContentTypeRejectedReturns415;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'handler not called for rejected type');
+  CheckEqual(Int64(415), Int64(LWObj.Status), 'status 415');
+end;
+
+procedure TestContentTypeIgnoresParams;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'application/json; charset=utf-8');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when params match');
+end;
+
+procedure TestContentTypeGetSkipsCheck;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for GET even with wrong type');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestContentTypeEmptyAllowsAny;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware([])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.GetHeaders.SetHeader('content-type', 'anything/at-all');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when accepted list empty');
+end;
+
+procedure TestContentTypeMissingPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called when no content-type');
+end;
+
+{ RequestIdMiddleware tests }
+
+procedure TestRequestIdGeneratesId;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LRequestId: string;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LRequestId := LWObj.GetHeaders.Get('x-request-id');
+  Check(LRequestId <> '', 'request id is set');
+  Check(Length(LRequestId) = 36, 'request id is UUID format');
+end;
+
+procedure TestRequestIdPreservesExisting;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('x-request-id', 'my-trace-123');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('my-trace-123', LWObj.GetHeaders.Get('x-request-id'), 'preserves existing id');
+end;
+
+procedure TestRequestIdCustomHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LRequestId: string;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWith('x-correlation-id')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LRequestId := LWObj.GetHeaders.Get('x-correlation-id');
+  Check(LRequestId <> '', 'custom header is set');
+  CheckEqual('', LWObj.GetHeaders.Get('x-request-id'), 'default header not set');
+end;
+
+procedure TestRequestIdUniquePerRequest;
+var
+  LHandler: IHttpHandler;
+  LW1, LW2: TMockResponseWriter;
+  LWIntf1, LWIntf2: IHttpResponseWriter;
+  LReq1, LReq2: TMockRequest;
+  LReqIntf1, LReqIntf2: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddleware]
+  );
+  LReq1 := TMockRequest.Create(hmGet, '/a');
+  LReqIntf1 := LReq1;
+  LW1 := TMockResponseWriter.Create;
+  LWIntf1 := LW1;
+  LHandler.ServeHTTP(LReqIntf1, LWIntf1);
+  LReq2 := TMockRequest.Create(hmGet, '/b');
+  LReqIntf2 := LReq2;
+  LW2 := TMockResponseWriter.Create;
+  LWIntf2 := LW2;
+  LHandler.ServeHTTP(LReqIntf2, LWIntf2);
+  Check(LW1.GetHeaders.Get('x-request-id') <> LW2.GetHeaders.Get('x-request-id'),
+    'different requests get different ids');
+end;
+
+procedure TestRequestIdWithGeneratorUsesCustom;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCallCount: Int32;
+begin
+  LCallCount := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      Inc(LCallCount);
+      Result := 'custom-id-' + IntToStr(LCallCount);
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('custom-id-1', LWObj.GetHeaders.Get('x-request-id'), 'uses custom generator');
+  CheckEqual(1, LCallCount, 'generator called once');
+end;
+
+procedure TestRequestIdWithGeneratorPreservesExisting;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGeneratorCalled: Boolean;
+begin
+  LGeneratorCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      LGeneratorCalled := True;
+      Result := 'should-not-be-used';
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('x-request-id', 'existing-id');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('existing-id', LWObj.GetHeaders.Get('x-request-id'), 'preserves existing');
+  Check(not LGeneratorCalled, 'generator not called when existing id present');
+end;
+
+procedure TestRequestIdWithGeneratorCustomHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-trace-id', function: string
+    begin
+      Result := 'trace-123';
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('trace-123', LWObj.GetHeaders.Get('x-trace-id'), 'custom header with custom generator');
+  CheckEqual('', LWObj.GetHeaders.Get('x-request-id'), 'default header not set');
+end;
+
+procedure TestRequestIdWithGeneratorUniquePerRequest;
+var
+  LHandler: IHttpHandler;
+  LW1, LW2: TMockResponseWriter;
+  LWIntf1, LWIntf2: IHttpResponseWriter;
+  LReq1, LReq2: TMockRequest;
+  LReqIntf1, LReqIntf2: IHttpRequest;
+  LCounter: Int32;
+begin
+  LCounter := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RequestIdMiddlewareWithGenerator('x-request-id', function: string
+    begin
+      Inc(LCounter);
+      Result := 'req-' + IntToStr(LCounter);
+    end)]
+  );
+  LReq1 := TMockRequest.Create(hmGet, '/a');
+  LReqIntf1 := LReq1;
+  LW1 := TMockResponseWriter.Create;
+  LWIntf1 := LW1;
+  LHandler.ServeHTTP(LReqIntf1, LWIntf1);
+  LReq2 := TMockRequest.Create(hmGet, '/b');
+  LReqIntf2 := LReq2;
+  LW2 := TMockResponseWriter.Create;
+  LWIntf2 := LW2;
+  LHandler.ServeHTTP(LReqIntf2, LWIntf2);
+  CheckEqual('req-1', LW1.GetHeaders.Get('x-request-id'), 'first request gets req-1');
+  CheckEqual('req-2', LW2.GetHeaders.Get('x-request-id'), 'second request gets req-2');
+end;
+
+{ CacheControlMiddleware tests }
+
+procedure TestCacheControlSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CacheControlMiddleware('public, max-age=3600')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('public, max-age=3600', LWObj.GetHeaders.Get('cache-control'), 'cache-control header');
+end;
+
+procedure TestNoCacheMiddlewareSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [NoCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('no-cache, no-store, must-revalidate', LWObj.GetHeaders.Get('cache-control'), 'no-cache header');
+end;
+
+procedure TestMaxAgeMiddlewareSetsHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MaxAgeMiddleware(86400)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('public, max-age=86400', LWObj.GetHeaders.Get('cache-control'), 'max-age header');
+end;
+
+procedure TestMaxAgeNegativeRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MaxAgeMiddleware(-1);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  CheckTrue(LRaised, 'raises on negative max-age');
+end;
+
+procedure TestCacheControlHandlerStillCalled;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CacheControlMiddleware('no-cache')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler still called');
+  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'), 'header set');
+end;
+
+{ RateLimit tests }
+
+procedure TestRateLimitAllowsUnderLimit;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(10, 60))]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called under limit');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+procedure TestRateLimitSetsHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(5, 60))]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('5', LWObj.GetHeaders.Get('x-ratelimit-limit'), 'limit header');
+  Check(LWObj.GetHeaders.Get('x-ratelimit-remaining') <> '', 'remaining header set');
+  Check(LWObj.GetHeaders.Get('x-ratelimit-reset') <> '', 'reset header set');
+end;
+
+procedure TestRateLimitBlocksAfterLimit;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LI: Int32;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(3, 60))]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'returns 429 after limit');
+  Check(Pos('too_many_requests', LWObj.Body) > 0, 'body has error code');
+end;
+
+procedure TestRateLimitDefaultOptions;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('100', LWObj.GetHeaders.Get('x-ratelimit-limit'), 'default limit 100');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'default allows request');
+end;
+
+procedure TestRateLimitNegativeMaxRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    RateLimitMiddlewareWith(MakeRateLimitOpts(-1, 60));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on negative max requests');
+end;
+
+procedure TestRateLimitZeroWindowRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    RateLimitMiddlewareWith(MakeRateLimitOpts(10, 0));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on zero window');
+end;
+
+{ WhenMiddleware tests }
+
+procedure TestWhenMiddlewareAppliesWhenTrue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := True;
+      end,
+      CacheControlMiddleware('no-cache')
+    )]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'), 'middleware applied when predicate true');
+end;
+
+procedure TestWhenMiddlewareSkipsWhenFalse;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := False;
+      end,
+      CacheControlMiddleware('no-cache')
+    )]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('cache-control'), 'middleware skipped when predicate false');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'handler still called');
+end;
+
+procedure TestWhenMiddlewarePathBased;
+var
+  LHandler: IHttpHandler;
+  LW1Obj, LW2Obj: TMockResponseWriter;
+  LW1, LW2: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := Pos('/api/', AReq.Path) = 1;
+      end,
+      CacheControlMiddleware('public, max-age=3600')
+    )]
+  );
+  { /api/ path — should apply }
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LW1Obj := TMockResponseWriter.Create;
+  LW1 := LW1Obj;
+  LHandler.ServeHTTP(LReqIntf, LW1);
+  CheckEqual('public, max-age=3600', LW1Obj.GetHeaders.Get('cache-control'), 'applied for /api/ path');
+  { /healthz path — should skip }
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LW2Obj := TMockResponseWriter.Create;
+  LW2 := LW2Obj;
+  LHandler.ServeHTTP(LReqIntf, LW2);
+  CheckEqual('', LW2Obj.GetHeaders.Get('cache-control'), 'skipped for /healthz path');
+end;
+
+procedure TestWhenMiddlewareNilPredicateRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    WhenMiddleware(nil, CacheControlMiddleware('no-cache'));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil predicate');
+end;
+
+procedure TestWhenMiddlewareNilMiddlewareRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    WhenMiddleware(
+      function(const AReq: IHttpRequest): Boolean
+      begin
+        Result := True;
+      end,
+      nil
+    );
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil middleware');
+end;
+
+{ HealthCheck tests }
+
+procedure TestHealthCheckDefaultPath;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'returns 200');
+  Check(Pos('"status":"ok"', LWObj.Body) > 0, 'body has status ok');
+  Check(Pos('application/json', LWObj.GetHeaders.Get('content-type')) > 0, 'content-type is json');
+end;
+
+procedure TestHealthCheckNonHealthPathPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for non-health path');
+  CheckEqual(Int64(404), Int64(LWObj.Status), 'status from handler');
+end;
+
+procedure TestHealthCheckPostMethodPassesThrough;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
+    end),
+    [HealthCheckMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for POST /healthz');
+  CheckEqual(Int64(405), Int64(LWObj.Status), 'status from handler');
+end;
+
+procedure TestHealthCheckCustomPath;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('/ready')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/ready');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'returns 200 for custom path');
+  Check(Pos('"status":"ok"', LWObj.Body) > 0, 'body has status ok');
+end;
+
+procedure TestHealthCheckCustomPathDefaultPathPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('/ready')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'handler called for /healthz when custom path is /ready');
+end;
+
+procedure TestHealthCheckEmptyPathDefaults;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    end),
+    [HealthCheckMiddlewareAt('')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/healthz');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'empty path defaults to /healthz');
+end;
+
+{ Metrics tests }
+
+procedure TestMetricsCountsRequests;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request counted');
+  CheckEqual(1, LMetrics.Status2xx, 'one 2xx');
+  CheckEqual(0, LMetrics.Status4xx, 'zero 4xx');
+end;
+
+procedure TestMetricsCountsMultipleRequests;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+  LI: Int32;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(5, LMetrics.TotalRequests, 'five requests counted');
+  CheckEqual(5, LMetrics.Status2xx, 'five 2xx');
+end;
+
+procedure TestMetricsCountsByStatusClass;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+  LStatusCode: Int32;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LStatusCode := 404;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(THttpStatus(LStatusCode));
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  { 200 }
+  LStatusCode := 200;
+  LReq := TMockRequest.Create(hmGet, '/ok');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  { 404 }
+  LStatusCode := 404;
+  LReq := TMockRequest.Create(hmGet, '/not-found');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  { 500 }
+  LStatusCode := 500;
+  LReq := TMockRequest.Create(hmGet, '/error');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(3, LMetrics.TotalRequests, 'three requests');
+  CheckEqual(1, LMetrics.Status2xx, 'one 2xx');
+  CheckEqual(0, LMetrics.Status3xx, 'zero 3xx');
+  CheckEqual(1, LMetrics.Status4xx, 'one 4xx');
+  CheckEqual(1, LMetrics.Status5xx, 'one 5xx');
+end;
+
+procedure TestMetricsReset;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'before reset');
+  LCollector.Reset;
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(0, LMetrics.TotalRequests, 'after reset');
+  CheckEqual(0, LMetrics.Status2xx, '2xx reset');
+end;
+
+procedure TestMetricsTracksDuration;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCollector: IHttpMetricsCollector;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/slow');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  Check(LMetrics.TotalDurationUs > 0, 'duration tracked');
+end;
+
+procedure TestMetricsNilCollectorRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddleware(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil collector');
+end;
+
+procedure TestMetricsWithCallbackInvoked;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+  LStatus: Int64;
+begin
+  LCalled := False;
+  LStatus := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LCalled := True;
+      LStatus := AStatus;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'callback invoked');
+  CheckEqual(200, LStatus, 'status passed to callback');
+end;
+
+procedure TestMetricsWithCallbackMultiple;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCount: Int32;
+  LI: Int32;
+begin
+  LCount := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      Inc(LCount);
+    end)]
+  );
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(5, LCount, 'callback called 5 times');
+end;
+
+procedure TestMetricsWithCallbackDuration;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LDuration: Int64;
+begin
+  LDuration := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LDuration := ADurationUs;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LDuration >= 0, 'duration is non-negative');
+end;
+
+procedure TestMetricsWithNilCallbackRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddlewareWith(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil callback');
+end;
+
+procedure TestMethodGuardAllowsGetMethod;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called for allowed method');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMethodGuardRejectsPostMethod;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LCalled, 'handler not called for disallowed method');
+  CheckEqual(405, LWObj.FStatus, 'status 405');
+end;
+
+procedure TestMethodGuardSetsAllowHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet, hmPost, hmPut])]
+  );
+  LReq := TMockRequest.Create(hmDelete, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(405, LWObj.FStatus, 'status 405');
+  Check(LWObj.FHeaders.Get('allow') <> '', 'Allow header set');
+  Check(Pos('GET', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains GET');
+  Check(Pos('POST', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains POST');
+  Check(Pos('PUT', LWObj.FHeaders.Get('allow')) > 0, 'Allow contains PUT');
+end;
+
+procedure TestMethodGuardMultipleMethodsAllowed;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet, hmPost])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called for second allowed method');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMethodGuardOptionsMethodRejected;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MethodGuardMiddleware([hmGet])]
+  );
+  LReq := TMockRequest.Create(hmOptions, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(405, LWObj.FStatus, 'OPTIONS rejected with 405');
+end;
+
+procedure TestBodyCacheMiddlewareCachesBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LReadBody: string;
+  LBodyBytes: TBytes;
+begin
+  LBodyBytes := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      // Read body twice — should work because BodyCacheMiddleware cached it
+      LReadBody := HttpReadRequestBodyString(AReq);
+      // Second read should also succeed
+      LReadBody := HttpReadRequestBodyString(AReq);
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetBodyReader(CreateBytesStreamFrom(LBodyBytes) as IReader);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello', LReadBody, 'body cached and readable');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestBodyCacheMiddlewareNilBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+begin
+  LCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyCacheMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'handler called with nil body');
+  CheckEqual(200, LWObj.FStatus, 'status 200');
+end;
+
+procedure TestMetricsWithFieldsCallbackInvoked;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCalled: Boolean;
+  LMethod: string;
+  LPath: string;
+  LStatus: Int64;
+begin
+  LCalled := False;
+  LMethod := '';
+  LPath := '';
+  LStatus := 0;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddlewareWithFields(procedure(const AMethod: string; const APath: string;
+      const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      LCalled := True;
+      LMethod := AMethod;
+      LPath := APath;
+      LStatus := AStatus;
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/users');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LCalled, 'callback invoked');
+  CheckEqual('GET', LMethod, 'method passed');
+  CheckEqual('/api/users', LPath, 'path passed');
+  CheckEqual(200, LStatus, 'status passed');
+end;
+
+procedure TestMetricsWithFieldsNilCallbackRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    MetricsMiddlewareWithFields(nil);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'raises on nil callback');
+end;
+
+procedure TestMetricsTracksRequestBytes;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(1234);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request');
+  CheckEqual(1234, LMetrics.RequestBytes, 'request bytes tracked');
+end;
+
+procedure TestMetricsTracksResponseBytes;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write('hello world'[1], 11);
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'one request');
+  CheckEqual(11, LMetrics.ResponseBytes, 'response bytes tracked');
+end;
+
+procedure TestDecompressGzipBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGotBody: string;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  I: Integer;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: IReader;
+      LBuf: array[0..255] of Byte;
+      LN: SizeUInt;
+    begin
+      LBody := AReq.Body;
+      if LBody <> nil then
+      begin
+        LN := LBody.Read(LBuf[0], SizeOf(LBuf));
+        SetLength(LGotBody, LN);
+        Move(LBuf[0], LGotBody[1], LN);
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware]
+  );
+  { Create gzip-compressed body }
+  SetLength(LPlain, 11);
+  for I := 0 to 10 do
+    LPlain[I] := Byte('hello world'[I + 1]);
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello world', LGotBody, 'gzip body decompressed');
+  CheckEqual(200, LWObj.GetStatus, 'decompress succeeds');
+end;
+
+procedure TestDecompressPassesThroughPlain;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LGotBody: string;
+  LBody: TBytes;
+  I: Integer;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: IReader;
+      LBuf: array[0..255] of Byte;
+      LN: SizeUInt;
+    begin
+      LBody := AReq.Body;
+      if LBody <> nil then
+      begin
+        LN := LBody.Read(LBuf[0], SizeOf(LBuf));
+        SetLength(LGotBody, LN);
+        Move(LBuf[0], LGotBody[1], LN);
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(5);
+  SetLength(LBody, 5);
+  for I := 0 to 4 do
+    LBody[I] := Byte('hello'[I + 1]);
+  LReq.SetBodyBytes(LBody);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('hello', LGotBody, 'plain body passes through');
+  CheckEqual(200, LWObj.GetStatus, 'plain request succeeds');
+end;
+
+{ ServerHeader middleware tests }
+
+procedure TestServerHeaderDefault;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ServerHeaderMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual('nextpas', LWObj.FHeaders.Get('server'), 'default server header');
+end;
+
+procedure TestServerHeaderCustom;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ServerHeaderMiddlewareWith('myapp/1.0')]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual('myapp/1.0', LWObj.FHeaders.Get('server'), 'custom server header');
+end;
+
+{ Context middleware tests }
+
+procedure TestContextMiddlewareCreatesContext;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LCtxFound: Boolean;
+begin
+  LCtxFound := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LCtx: IHttpContext;
+    begin
+      LCtx := HttpContextOf(AReq);
+      LCtxFound := LCtx <> nil;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LCtxFound, 'context was created');
+end;
+
+procedure TestContextMiddlewareSetGetValue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LGotHas: Boolean;
+begin
+  LGotHas := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LCtx: IHttpContext;
+    begin
+      LCtx := HttpContextOf(AReq);
+      if LCtx <> nil then
+      begin
+        LCtx.SetValue('test_key', GTestSentinel);
+        LGotHas := LCtx.Has('test_key') and (LCtx.GetValue('test_key') = GTestSentinel);
+        LCtx.Remove('test_key');
+        LGotHas := LGotHas and (not LCtx.Has('test_key'));
+      end;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LGotHas, 'set/has/remove works');
+end;
+
+procedure TestContextMiddlewareNilWithoutContext;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := TMockRequest.Create(hmGet, '/test');
+  Check(HttpContextOf(LReq) = nil, 'returns nil without context middleware');
+end;
+
+procedure TestContextMiddlewareCleansUp;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/test');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(HttpContextOf(LReq) = nil, 'context cleaned up after handler');
+end;
+
+{ RateLimit Retry-After test }
+
+procedure TestRateLimitRetryAfterHeader;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LI: Int32;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(2, 60))]
+  );
+  for LI := 1 to 4 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+  end;
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'returns 429');
+  Check(LWObj.FHeaders.Has('retry-after'), 'has Retry-After header');
+  Check(LWObj.FHeaders.Get('retry-after') <> '', 'Retry-After is non-empty');
+end;
+
+{ JSON escaping test — uses HttpWriteErrorResponse directly }
+
+procedure TestErrorResponseJsonEscaping;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWritten: SizeUInt;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWritten := HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST,
+    'test', 'line1'#10'line2 "quoted" \backslash');
+  Check(LWritten > 0, 'wrote response');
+  Check(Pos('\n', LWObj.Body) > 0, 'newline is escaped');
+  Check(Pos('\"quoted\"', LWObj.Body) > 0, 'quotes are escaped');
+  Check(Pos('\\backslash', LWObj.Body) > 0, 'backslash is escaped');
+  Check(Pos('line1', LWObj.Body) > 0, 'original text preserved');
+end;
+
+{ BodyLimit JSON response test }
+
+procedure TestBodyLimitReturnsJson;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyLimitMiddleware(100)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/upload');
+  LReq.SetContentLength(200);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(413), Int64(LWObj.Status), 'returns 413');
+  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
+  Check(Pos('payload_too_large', LWObj.Body) > 0, 'has error code');
+end;
+
+{ Compression middleware tests }
+
+procedure TestCompressionGzipCompressesLargeBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  { Build a large compressible body (> 1024 bytes) }
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+  CheckEqual('gzip', LWObj.FHeaders.Get('content-encoding'), 'has gzip encoding');
+  Check(Length(LWObj.BodyBytes) < Length(LBigBody), 'compressed body smaller');
+end;
+
+procedure TestCompressionSkipsSmallBody;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('small')^, 5);
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding for small body');
+end;
+
+procedure TestCompressionSkipsWithoutAcceptEncoding;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'application/json');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api/data');
+  { No Accept-Encoding header }
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding without Accept-Encoding');
+  CheckEqual(Length(LBigBody), Length(LWObj.BodyBytes), 'body uncompressed');
+end;
+
+procedure TestCompressionSkipsNonCompressibleType;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'binary data here!!! ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'image/png');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/image.png');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.FHeaders.Get('content-encoding'), 'no encoding for image/png');
+end;
+
+procedure TestCompressionDeflateSupported;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+  I: Int32;
+begin
+  LBigBody := '';
+  for I := 1 to 200 do
+    LBigBody := LBigBody + 'Hello World 1234567890 ';
+
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/html');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      if Length(LBigBody) > 0 then
+        AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/page');
+  LReq.SetHeader('accept-encoding', 'deflate');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('deflate', LWObj.FHeaders.Get('content-encoding'), 'deflate encoding');
+  Check(Length(LWObj.BodyBytes) < Length(LBigBody), 'deflate body smaller');
+end;
+
+procedure TestContentTypeReturnsJson415;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContentTypeMiddleware(['application/json'])]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api/data');
+  LReq.SetHeader('content-type', 'text/plain');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(415), Int64(LWObj.Status), 'returns 415');
+  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
+  Check(Pos('unsupported_media_type', LWObj.Body) > 0, 'has error code');
+end;
+
+{ Deadline middleware tests }
+
+procedure TestDeadlineFastHandlerPasses;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('fast')^, 4);
+    end),
+    [DeadlineMiddleware(5000)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/fast');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'fast handler returns 200');
+  CheckEqual('fast', LWObj.Body, 'fast handler body preserved');
+end;
+
+procedure TestDeadlineSlowHandlerTimesOut;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      { Simulate slow handler }
+      Sleep(200);
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('slow response')^, 13);
+    end),
+    [DeadlineMiddleware(50)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/slow');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(504), Int64(LWObj.Status), 'slow handler returns 504');
+  Check(Pos('gateway_timeout', LWObj.Body) > 0, 'has timeout error code');
+end;
+
+procedure TestDeadlineZeroRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    DeadlineMiddleware(0);
+  except
+    on E: EArgumentError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'zero timeout raises EArgumentError');
+end;
+
 var
   T: TTestSuite;
 begin
+  GTestSentinel := TObject.Create;
   T := TTestSuite.Create('nextpas.core.http.middlewares');
   { Recovery }
   T.Test('Recovery: handler raises → 500', @TestRecoveryHandlerRaises);
   T.Test('Recovery: handler succeeds → passthrough', @TestRecoveryHandlerSucceeds);
   T.Test('Recovery: exception details hidden', @TestRecoveryHidesExceptionDetails);
+  T.Test('RecoveryWith: callback receives exception', @TestRecoveryWithCallbackReceivesException);
+  T.Test('RecoveryWith: nil callback behaves like silent', @TestRecoveryWithNilCallbackBehavesLikeSilent);
+  T.Test('RecoveryWith: success passes through', @TestRecoveryWithSuccessPassesThrough);
   { Logger }
   T.Test('Logger: calls next handler', @TestLoggerCallsNext);
   T.Test('Logger: preserves status', @TestLoggerPreservesStatus);
@@ -631,9 +3054,113 @@ begin
   T.Test('CORS: credentials+wildcard echoes origin', @TestCorsCredentialsWildcardEchoesOrigin);
   T.Test('CORS: MaxAge header', @TestCorsMaxAge);
   T.Test('CORS: custom AllowMethods/AllowHeaders', @TestCorsCustomMethodsHeaders);
+  T.Test('CORS: wildcard echoes request headers', @TestCorsWildcardEchoesRequestHeaders);
   { Timeout }
   T.Test('Timeout: fast handler has X-Response-Time', @TestTimeoutFastHandler);
   T.Test('Timeout: slow handler still works', @TestTimeoutSlowHandler);
   T.Test('Timeout: X-Response-Time has ms suffix', @TestTimeoutResponseTimeValue);
+  { BodyLimit }
+  T.Test('BodyLimit: under limit passes through', @TestBodyLimitUnderLimitPasses);
+  T.Test('BodyLimit: over limit returns 413', @TestBodyLimitOverLimitRejects);
+  T.Test('BodyLimit: exact limit passes through', @TestBodyLimitExactLimitPasses);
+  T.Test('BodyLimit: no content-length passes through', @TestBodyLimitNoContentLengthPasses);
+  T.Test('BodyLimit: zero content-length passes through', @TestBodyLimitZeroContentLengthPasses);
+  T.Test('BodyLimit: handler not called on reject', @TestBodyLimitRejectsHandlerNotCalled);
+  { ContentType }
+  T.Test('ContentType: accepted type passes through', @TestContentTypeAcceptedPasses);
+  T.Test('ContentType: rejected type returns 415', @TestContentTypeRejectedReturns415);
+  T.Test('ContentType: ignores charset parameters', @TestContentTypeIgnoresParams);
+  T.Test('ContentType: GET request skips check', @TestContentTypeGetSkipsCheck);
+  T.Test('ContentType: empty accepted allows any', @TestContentTypeEmptyAllowsAny);
+  T.Test('ContentType: missing content-type passes', @TestContentTypeMissingPasses);
+  { RequestId }
+  T.Test('RequestId: generates UUID id', @TestRequestIdGeneratesId);
+  T.Test('RequestId: preserves existing id', @TestRequestIdPreservesExisting);
+  T.Test('RequestId: custom header name', @TestRequestIdCustomHeader);
+  T.Test('RequestId: unique per request', @TestRequestIdUniquePerRequest);
+  T.Test('RequestIdWithGenerator: uses custom generator', @TestRequestIdWithGeneratorUsesCustom);
+  T.Test('RequestIdWithGenerator: preserves existing', @TestRequestIdWithGeneratorPreservesExisting);
+  T.Test('RequestIdWithGenerator: custom header', @TestRequestIdWithGeneratorCustomHeader);
+  T.Test('RequestIdWithGenerator: unique per request', @TestRequestIdWithGeneratorUniquePerRequest);
+  { CacheControl }
+  T.Test('CacheControl: sets header on response', @TestCacheControlSetsHeader);
+  T.Test('CacheControl: NoCache convenience', @TestNoCacheMiddlewareSetsHeader);
+  T.Test('CacheControl: MaxAge convenience', @TestMaxAgeMiddlewareSetsHeader);
+  T.Test('CacheControl: negative MaxAge raises', @TestMaxAgeNegativeRaises);
+  T.Test('CacheControl: handler still called', @TestCacheControlHandlerStillCalled);
+  { RateLimit }
+  T.Test('RateLimit: allows under limit', @TestRateLimitAllowsUnderLimit);
+  T.Test('RateLimit: sets rate limit headers', @TestRateLimitSetsHeaders);
+  T.Test('RateLimit: blocks after limit exceeded', @TestRateLimitBlocksAfterLimit);
+  T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
+  T.Test('RateLimit: negative max raises', @TestRateLimitNegativeMaxRaises);
+  T.Test('RateLimit: zero window raises', @TestRateLimitZeroWindowRaises);
+  { WhenMiddleware }
+  T.Test('When: applies when predicate true', @TestWhenMiddlewareAppliesWhenTrue);
+  T.Test('When: skips when predicate false', @TestWhenMiddlewareSkipsWhenFalse);
+  T.Test('When: path-based conditional', @TestWhenMiddlewarePathBased);
+  T.Test('When: nil predicate raises', @TestWhenMiddlewareNilPredicateRaises);
+  T.Test('When: nil middleware raises', @TestWhenMiddlewareNilMiddlewareRaises);
+  { HealthCheck }
+  T.Test('HealthCheck: default /healthz returns 200', @TestHealthCheckDefaultPath);
+  T.Test('HealthCheck: non-health path passes through', @TestHealthCheckNonHealthPathPassesThrough);
+  T.Test('HealthCheck: POST method passes through', @TestHealthCheckPostMethodPassesThrough);
+  T.Test('HealthCheck: custom path', @TestHealthCheckCustomPath);
+  T.Test('HealthCheck: custom path ignores /healthz', @TestHealthCheckCustomPathDefaultPathPasses);
+  T.Test('HealthCheck: empty path defaults to /healthz', @TestHealthCheckEmptyPathDefaults);
+  { Metrics }
+  T.Test('Metrics: counts requests', @TestMetricsCountsRequests);
+  T.Test('Metrics: counts multiple requests', @TestMetricsCountsMultipleRequests);
+  T.Test('Metrics: counts by status class', @TestMetricsCountsByStatusClass);
+  T.Test('Metrics: reset clears counters', @TestMetricsReset);
+  T.Test('Metrics: tracks duration', @TestMetricsTracksDuration);
+  T.Test('Metrics: nil collector raises', @TestMetricsNilCollectorRaises);
+  T.Test('MetricsWith: callback invoked', @TestMetricsWithCallbackInvoked);
+  T.Test('MetricsWith: callback called multiple times', @TestMetricsWithCallbackMultiple);
+  T.Test('MetricsWith: callback receives duration', @TestMetricsWithCallbackDuration);
+  T.Test('MetricsWith: nil callback raises', @TestMetricsWithNilCallbackRaises);
+  { MethodGuard }
+  T.Test('MethodGuard: allows GET method', @TestMethodGuardAllowsGetMethod);
+  T.Test('MethodGuard: rejects POST method', @TestMethodGuardRejectsPostMethod);
+  T.Test('MethodGuard: sets Allow header on 405', @TestMethodGuardSetsAllowHeader);
+  T.Test('MethodGuard: multiple methods allowed', @TestMethodGuardMultipleMethodsAllowed);
+  T.Test('MethodGuard: OPTIONS rejected', @TestMethodGuardOptionsMethodRejected);
+  { BodyCache }
+  T.Test('BodyCache: caches body for re-reading', @TestBodyCacheMiddlewareCachesBody);
+  T.Test('BodyCache: nil body passes through', @TestBodyCacheMiddlewareNilBody);
+  { MetricsWithFields }
+  T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
+  T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
+  T.Test('Metrics: tracks request bytes', @TestMetricsTracksRequestBytes);
+  T.Test('Metrics: tracks response bytes', @TestMetricsTracksResponseBytes);
+  T.Test('Decompress: gzip body', @TestDecompressGzipBody);
+  T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
+  { ServerHeader }
+  T.Test('ServerHeader: default nextpas', @TestServerHeaderDefault);
+  T.Test('ServerHeader: custom name', @TestServerHeaderCustom);
+  { Context }
+  T.Test('Context: creates context', @TestContextMiddlewareCreatesContext);
+  T.Test('Context: set and get value', @TestContextMiddlewareSetGetValue);
+  T.Test('Context: nil without middleware', @TestContextMiddlewareNilWithoutContext);
+  T.Test('Context: cleans up after handler', @TestContextMiddlewareCleansUp);
+  { RateLimit Retry-After }
+  T.Test('RateLimit: 429 includes Retry-After', @TestRateLimitRetryAfterHeader);
+  { JSON escaping }
+  T.Test('ErrorResponse: JSON escaping', @TestErrorResponseJsonEscaping);
+  { BodyLimit JSON }
+  T.Test('BodyLimit: returns JSON error', @TestBodyLimitReturnsJson);
+  { Compression }
+  T.Test('Compression: gzip compresses large body', @TestCompressionGzipCompressesLargeBody);
+  T.Test('Compression: skips small body', @TestCompressionSkipsSmallBody);
+  T.Test('Compression: skips without Accept-Encoding', @TestCompressionSkipsWithoutAcceptEncoding);
+  T.Test('Compression: skips non-compressible type', @TestCompressionSkipsNonCompressibleType);
+  T.Test('Compression: deflate supported', @TestCompressionDeflateSupported);
+  { ContentType JSON }
+  T.Test('ContentType: returns JSON 415', @TestContentTypeReturnsJson415);
+  { Deadline }
+  T.Test('Deadline: fast handler passes', @TestDeadlineFastHandlerPasses);
+  T.Test('Deadline: slow handler times out', @TestDeadlineSlowHandlerTimesOut);
+  T.Test('Deadline: zero timeout raises', @TestDeadlineZeroRaises);
   if not T.Run then Halt(1);
+  GTestSentinel.Free;
 end.

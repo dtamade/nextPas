@@ -4,16 +4,49 @@ unit nextpas.core.platform.socket;
 
 interface
 
-{$IFDEF NEXTPAS_UNIX}
 uses
+  nextpas.core.platform.socket.base,
+{$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.error;
 {$ENDIF}
-
 {$IFDEF NEXTPAS_WINDOWS}
-uses
   nextpas.core.platform.windows.base;
 {$ENDIF}
+
+{ Re-export byte-order helpers from socket.base }
+
+{** @desc 主机字节序转网络字节序（16 位）
+    @param AHost 主机字节序值
+    @return 网络字节序值 *}
+function platform_htons(AHost: UInt16): UInt16; inline;
+
+{** @desc 主机字节序转网络字节序（32 位）
+    @param AHost 主机字节序值
+    @return 网络字节序值 *}
+function platform_htonl(AHost: UInt32): UInt32; inline;
+
+{** @desc 网络字节序转主机字节序（16 位）
+    @param ANet 网络字节序值
+    @return 主机字节序值 *}
+function platform_ntohs(ANet: UInt16): UInt16; inline;
+
+{** @desc 网络字节序转主机字节序（32 位）
+    @param ANet 网络字节序值
+    @return 主机字节序值 *}
+function platform_ntohl(ANet: UInt32): UInt32; inline;
+
+{ Re-export IPv4 helpers from socket.base }
+
+{** @desc 解析 IPv4 地址字符串为 32 位整数
+    @param AAddr 点分十进制地址（如 "192.168.1.1"）
+    @return 网络字节序 IPv4 地址，解析失败返回 0 *}
+function platform_ipv4_parse(const AAddr: string): UInt32;
+
+{** @desc 将 32 位 IPv4 地址转为点分十进制字符串
+    @param AIP 网络字节序 IPv4 地址
+    @return 点分十进制字符串 *}
+function platform_ipv4_to_string(AIP: UInt32): string;
 
 const
 {$IFDEF NEXTPAS_WINDOWS}
@@ -30,6 +63,9 @@ const
   PLATFORM_SO_LINGER   = $0080;
   PLATFORM_SO_RCVTIMEO = $1006;
   PLATFORM_SO_SNDTIMEO = $1005;
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
   PLATFORM_TCP_NODELAY  = $0001;
   PLATFORM_SHUT_RD     = 0;
   PLATFORM_SHUT_WR     = 1;
@@ -56,121 +92,334 @@ const
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
   PLATFORM_SO_RCVTIMEO = 20;
   PLATFORM_SO_SNDTIMEO = 21;
+{$IFDEF NEXTPAS_MACOS}
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SO_RCVBUF   = $1002;
+  PLATFORM_SO_SNDBUF   = $1001;
+  PLATFORM_SO_ERROR    = $1007;
+{$ELSE}
+  PLATFORM_SO_RCVBUF   = 8;
+  PLATFORM_SO_SNDBUF   = 7;
+  PLATFORM_SO_ERROR    = 4;
+{$ENDIF}
   PLATFORM_TCP_NODELAY  = TCP_NODELAY;
   PLATFORM_SHUT_RD     = SHUT_RD;
   PLATFORM_SHUT_WR     = SHUT_WR;
   PLATFORM_SHUT_RDWR   = SHUT_RDWR;
 {$ENDIF}
 
+{ Re-export types from socket.base for backward compatibility }
 type
-  TPlatformSocket = record
-  {$IFDEF NEXTPAS_WINDOWS}
-    Value: PtrUInt;
-  {$ELSE}
-    Value: cint;
-  {$ENDIF}
-  end;
-
-  TPlatformSockAddr = packed record
-    Storage: array[0..127] of Byte;
-    Len: Int32;
-  end;
+  TPlatformSocket = nextpas.core.platform.socket.base.TPlatformSocket;
+  TPlatformSockAddr = nextpas.core.platform.socket.base.TPlatformSockAddr;
 
 const
-  PLATFORM_INVALID_SOCKET: TPlatformSocket = (
-  {$IFDEF NEXTPAS_WINDOWS}
-    Value: PtrUInt(-1)
-  {$ELSE}
-    Value: -1
-  {$ENDIF}
-  );
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_INVALID_SOCKET: TPlatformSocket = (Value: PtrUInt(-1));
+{$ELSE}
+  PLATFORM_INVALID_SOCKET: TPlatformSocket = (Value: -1);
+{$ENDIF}
 
+{** @desc 创建套接字
+    @param ADomain 地址族（PLATFORM_AF_INET 等）
+    @param AType 套接字类型（PLATFORM_SOCK_STREAM 等）
+    @param AProtocol 协议号（0 表示自动选择）
+    @param ASocket 输出套接字句柄
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
+
+{** @desc 关闭套接字
+    @param ASocket 要关闭的套接字（置为无效）
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_close(var ASocket: TPlatformSocket): Int32;
+
+{** @desc 绑定套接字到地址
+    @param ASocket 套接字句柄
+    @param AAddr 地址结构指针
+    @param AAddrLen 地址结构长度
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_bind(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Int32): Int32;
+
+{** @desc 开始监听连接
+    @param ASocket 套接字句柄
+    @param ABacklog 等待队列最大长度
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_listen(const ASocket: TPlatformSocket;
   ABacklog: Int32): Int32;
+
+{** @desc 接受传入连接
+    @param ASocket 监听套接字
+    @param AAddr 输出客户端地址（可为 nil）
+    @param AAddrLen 地址长度指针（可为 nil）
+    @param AClient 输出客户端套接字
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_accept(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32;
+
+{** @desc 连接到远程地址
+    @param ASocket 套接字句柄
+    @param AAddr 目标地址结构指针
+    @param AAddrLen 地址结构长度
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_connect(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Int32): Int32;
+
+{** @desc 发送数据
+    @param ASocket 套接字句柄
+    @param ABuf 数据缓冲区
+    @param ALen 数据长度
+    @param AFlags 发送标志
+    @param ASent 输出实际发送字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_send(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32;
+
+{** @desc 接收数据
+    @param ASocket 套接字句柄
+    @param ABuf 接收缓冲区
+    @param ALen 缓冲区长度
+    @param AFlags 接收标志
+    @param ARecvd 输出实际接收字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_recv(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32;
+
+{** @desc 关闭套接字的读/写/读写端
+    @param ASocket 套接字句柄
+    @param AHow 关闭方向（PLATFORM_SHUT_RD/WR/RDWR）
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_shutdown(const ASocket: TPlatformSocket;
   AHow: Int32): Int32;
+
+{** @desc 设置套接字选项
+    @param ASocket 套接字句柄
+    @param ALevel 选项级别
+    @param AOptName 选项名称
+    @param AOptVal 选项值指针
+    @param AOptLen 选项值长度
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
+
+{** @desc 发送数据到指定地址（UDP）
+    @param ASocket 套接字句柄
+    @param ABuf 数据缓冲区
+    @param ALen 数据长度
+    @param AFlags 发送标志
+    @param AAddr 目标地址指针
+    @param AAddrLen 地址结构长度
+    @param ASent 输出实际发送字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_sendto(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32;
   AAddr: Pointer; AAddrLen: Int32; out ASent: Int32): Int32;
+
+{** @desc 从指定地址接收数据（UDP）
+    @param ASocket 套接字句柄
+    @param ABuf 接收缓冲区
+    @param ALen 缓冲区长度
+    @param AFlags 接收标志
+    @param AAddr 输出来源地址指针
+    @param AAddrLen 地址长度指针
+    @param ARecvd 输出实际接收字节数
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_recvfrom(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32;
   AAddr: Pointer; AAddrLen: Pointer; out ARecvd: Int32): Int32;
+
+{** @desc 获取套接字本地地址
+    @param ASocket 套接字句柄
+    @param AAddr 输出地址缓冲区
+    @param AAddrLen 地址长度指针
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_getsockname(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
+
+{** @desc 获取套接字对端地址
+    @param ASocket 套接字句柄
+    @param AAddr 输出地址缓冲区
+    @param AAddrLen 地址长度指针
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
+
+{** @desc 解析主机名为 IPv4 地址
+    @param AHost 主机名字符串
+    @param AAddr 输出网络字节序 IPv4 地址
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
+
+{** @desc 设置套接字为非阻塞模式
+    @param ASocket 套接字句柄
+    @param ANonBlock True 设为非阻塞，False 设为阻塞
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
+
+{** @desc 设置套接字超时
+    @param ASocket 套接字句柄
+    @param AOptName 选项名（PLATFORM_SO_RCVTIMEO 或 PLATFORM_SO_SNDTIMEO）
+    @param ATimeoutMs 超时时间（毫秒）
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
   const AOptName: Int32; const ATimeoutMs: Int64): Int32;
+
+{** @desc 判断错误是否为"would block"（非阻塞 I/O 无数据）
+    @param AError 错误码
+    @return True 表示 would block *}
 function platform_socket_error_would_block(const AError: Int32): Boolean;
+
+{** @desc 判断错误是否为超时
+    @param AError 错误码
+    @return True 表示超时 *}
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
 { Sockaddr helpers (from net layer merge) }
+
+{** @desc 构造 IPv4 sockaddr_in 结构
+    @param APort 端口号（主机字节序）
+    @param AAddr IPv4 地址（网络字节序）
+    @param AResult 输出 sockaddr 结构
+    @return 0 成功 *}
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
   out AResult: TPlatformSockAddr): Int32;
+
+{** @desc 构造 IPv4 回环地址 sockaddr 结构
+    @param APort 端口号（主机字节序）
+    @param AResult 输出 sockaddr 结构
+    @return 0 成功 *}
 function platform_sockaddr_loopback4(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
+
+{** @desc 构造 IPv6 sockaddr_in6 结构
+    @param APort 端口号（主机字节序）
+    @param AAddr IPv6 地址字节指针（16 字节）
+    @param AScopeId 作用域 ID
+    @param AResult 输出 sockaddr 结构
+    @return 0 成功 *}
 function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte;
   AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32;
+
+{** @desc 构造 IPv6 回环地址 sockaddr 结构
+    @param APort 端口号（主机字节序）
+    @param AResult 输出 sockaddr 结构
+    @return 0 成功 *}
 function platform_sockaddr_loopback6(APort: UInt16;
   out AResult: TPlatformSockAddr): Int32;
+
+{** @desc 解析主机名为 IPv6 地址
+    @param AHost 主机名字符串
+    @param AAddr 输出 IPv6 地址缓冲区（16 字节）
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
   AAddr: PByte): Int32;
 
-{ Socket pair - create connected pair of sockets }
+{** @desc 创建已连接的套接字对
+    @param ADomain 地址族
+    @param AType 套接字类型
+    @param AProtocol 协议号
+    @param ASocket1 输出第一个套接字
+    @param ASocket2 输出第二个套接字
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_pair(ADomain, AType, AProtocol: Int32;
   out ASocket1, ASocket2: TPlatformSocket): Int32;
 
-{ Get socket option }
+{** @desc 获取套接字选项
+    @param ASocket 套接字句柄
+    @param ALevel 选项级别
+    @param AOptName 选项名称
+    @param AOptVal 输出选项值缓冲区
+    @param AOptLen 输入缓冲区长度，输出实际长度
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_getsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32;
 
 { Convenience: TCP_NODELAY }
+
+{** @desc 设置 TCP_NODELAY 选项（禁用 Nagle 算法）
+    @param ASocket 套接字句柄
+    @param AEnable True 启用，False 禁用
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket;
   const AEnable: Boolean): Int32;
 
 { Convenience: SO_REUSEADDR }
+
+{** @desc 设置 SO_REUSEADDR 选项（允许地址重用）
+    @param ASocket 套接字句柄
+    @param AEnable True 启用，False 禁用
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket;
   const AEnable: Boolean): Int32;
 
 { Convenience: SO_KEEPALIVE }
+
+{** @desc 设置 SO_KEEPALIVE 选项（TCP 保活）
+    @param ASocket 套接字句柄
+    @param AEnable True 启用，False 禁用
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_keepalive(const ASocket: TPlatformSocket;
   const AEnable: Boolean): Int32;
 
 { Convenience: SO_LINGER }
+
+{** @desc 设置 SO_LINGER 选项（关闭时等待数据发送）
+    @param ASocket 套接字句柄
+    @param AEnable True 启用，False 禁用
+    @param ALingerSec 等待秒数
+    @return 0 成功，否则返回错误码 *}
 function platform_socket_set_linger(const ASocket: TPlatformSocket;
   const AEnable: Boolean; const ALingerSec: Int32): Int32;
 
+{ Convenience: SO_RCVBUF }
+
+{** @desc 设置接收缓冲区大小
+    @param ASocket 套接字句柄
+    @param ASize 缓冲区大小（字节）
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+
+{ Convenience: SO_SNDBUF }
+
+{** @desc 设置发送缓冲区大小
+    @param ASocket 套接字句柄
+    @param ASize 缓冲区大小（字节）
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+
+{ Convenience: SO_ERROR (get pending error) }
+
+{** @desc 获取套接字待处理错误
+    @param ASocket 套接字句柄
+    @param AError 输出错误码
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
+
 { IPv4 helpers for net layer }
+
+{** @desc 从 IPv4 地址和端口构造 sockaddr_in
+    @param AIP IPv4 地址（网络字节序）
+    @param APort 端口号（主机字节序）
+    @param ASockAddr 输出 sockaddr_in 结构
+    @param ALen 输出地址结构长度
+    @return 0 成功 *}
 function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
   out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
+
+{** @desc 从 sockaddr_in 提取 IPv4 地址和端口
+    @param ASockAddr sockaddr_in 结构
+    @param AIP 输出 IPv4 地址（网络字节序）
+    @param APort 输出端口号（主机字节序） *}
 procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
   out AIP: UInt32; out APort: UInt16);
-function platform_ipv4_parse(const AAddr: string): UInt32;
-function platform_ipv4_to_string(AIP: UInt32): string;
-
-{ Byte-order helpers }
-function platform_htons(AHost: UInt16): UInt16; inline;
-function platform_htonl(AHost: UInt32): UInt32; inline;
-function platform_ntohs(ANet: UInt16): UInt16; inline;
-function platform_ntohl(ANet: UInt32): UInt32; inline;
 
 implementation
 
@@ -426,29 +675,36 @@ begin
   Result := AError = ESysETIMEDOUT;
 end;
 
-{ --- sockaddr helpers --- }
+{ --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
 begin
-  Result := ((AHost and $FF) shl 8) or ((AHost shr 8) and $FF);
+  Result := nextpas.core.platform.socket.base.platform_htons(AHost);
 end;
 
 function platform_htonl(AHost: UInt32): UInt32; inline;
 begin
-  Result := ((AHost and $FF) shl 24) or
-            ((AHost and $FF00) shl 8) or
-            ((AHost shr 8) and $FF00) or
-            ((AHost shr 24) and $FF);
+  Result := nextpas.core.platform.socket.base.platform_htonl(AHost);
 end;
 
 function platform_ntohs(ANet: UInt16): UInt16; inline;
 begin
-  Result := platform_htons(ANet);
+  Result := nextpas.core.platform.socket.base.platform_ntohs(ANet);
 end;
 
 function platform_ntohl(ANet: UInt32): UInt32; inline;
 begin
-  Result := platform_htonl(ANet);
+  Result := nextpas.core.platform.socket.base.platform_ntohl(ANet);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+begin
+  Result := nextpas.core.platform.socket.base.platform_ipv4_parse(AAddr);
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+begin
+  Result := nextpas.core.platform.socket.base.platform_ipv4_to_string(AIP);
 end;
 
 function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
@@ -467,64 +723,6 @@ procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
 begin
   AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
   APort := platform_ntohs(ASockAddr.sin_port);
-end;
-
-function platform_ipv4_parse(const AAddr: string): UInt32;
-var
-  LPart: UInt32;
-  LShift: Integer;
-  LIdx, LLen, LStart: Integer;
-  LCh: Char;
-begin
-  Result := 0;
-  LLen := Length(AAddr);
-  if LLen = 0 then Exit;
-  LShift := 24;
-  LStart := 1;
-  for LIdx := 1 to LLen + 1 do
-  begin
-    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
-    begin
-      LPart := 0;
-      for LStart := LStart to LIdx - 1 do
-      begin
-        LCh := AAddr[LStart];
-        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
-        LPart := LPart * 10 + Ord(LCh) - Ord('0');
-      end;
-      if LPart > 255 then begin Result := 0; Exit; end;
-      Result := Result or (LPart shl LShift);
-      Dec(LShift, 8);
-      LStart := LIdx + 1;
-    end;
-  end;
-end;
-
-function platform_ipv4_to_string(AIP: UInt32): string;
-
-  function OctetToStr(AVal: UInt32): string;
-  var
-    LBuf: array[0..3] of Char;
-    LLen, LI: Integer;
-    LDigit: UInt32;
-  begin
-    LLen := 0;
-    repeat
-      LDigit := AVal mod 10;
-      LBuf[LLen] := Chr(Ord('0') + LDigit);
-      Inc(LLen);
-      AVal := AVal div 10;
-    until AVal = 0;
-    SetLength(Result, LLen);
-    for LI := 0 to LLen - 1 do
-      Result[LI + 1] := LBuf[LLen - 1 - LI];
-  end;
-
-begin
-  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
-            OctetToStr((AIP shr 16) and $FF) + '.' +
-            OctetToStr((AIP shr 8) and $FF) + '.' +
-            OctetToStr(AIP and $FF);
 end;
 
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -666,6 +864,30 @@ begin
   LLinger.l_linger := ALingerSec;
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
     PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
+end;
+
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_RCVBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_SNDBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
+var
+  LLen: cint;
+begin
+  LLen := SizeOf(AError);
+  Result := platform_socket_getsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_ERROR, @AError, @LLen);
 end;
 
 {$ENDIF}
@@ -942,29 +1164,36 @@ begin
   Result := AError = WSAETIMEDOUT;
 end;
 
-{ --- sockaddr helpers --- }
+{ --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
 begin
-  Result := ((AHost and $FF) shl 8) or ((AHost shr 8) and $FF);
+  Result := nextpas.core.platform.socket.base.platform_htons(AHost);
 end;
 
 function platform_htonl(AHost: UInt32): UInt32; inline;
 begin
-  Result := ((AHost and $FF) shl 24) or
-            ((AHost and $FF00) shl 8) or
-            ((AHost shr 8) and $FF00) or
-            ((AHost shr 24) and $FF);
+  Result := nextpas.core.platform.socket.base.platform_htonl(AHost);
 end;
 
 function platform_ntohs(ANet: UInt16): UInt16; inline;
 begin
-  Result := platform_htons(ANet);
+  Result := nextpas.core.platform.socket.base.platform_ntohs(ANet);
 end;
 
 function platform_ntohl(ANet: UInt32): UInt32; inline;
 begin
-  Result := platform_htonl(ANet);
+  Result := nextpas.core.platform.socket.base.platform_ntohl(ANet);
+end;
+
+function platform_ipv4_parse(const AAddr: string): UInt32;
+begin
+  Result := nextpas.core.platform.socket.base.platform_ipv4_parse(AAddr);
+end;
+
+function platform_ipv4_to_string(AIP: UInt32): string;
+begin
+  Result := nextpas.core.platform.socket.base.platform_ipv4_to_string(AIP);
 end;
 
 function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
@@ -983,64 +1212,6 @@ procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
 begin
   AIP := platform_ntohl(ASockAddr.sin_addr.s_addr);
   APort := platform_ntohs(ASockAddr.sin_port);
-end;
-
-function platform_ipv4_parse(const AAddr: string): UInt32;
-var
-  LPart: UInt32;
-  LShift: Integer;
-  LIdx, LLen, LStart: Integer;
-  LCh: Char;
-begin
-  Result := 0;
-  LLen := Length(AAddr);
-  if LLen = 0 then Exit;
-  LShift := 24;
-  LStart := 1;
-  for LIdx := 1 to LLen + 1 do
-  begin
-    if (LIdx > LLen) or (AAddr[LIdx] = '.') then
-    begin
-      LPart := 0;
-      for LStart := LStart to LIdx - 1 do
-      begin
-        LCh := AAddr[LStart];
-        if (LCh < '0') or (LCh > '9') then begin Result := 0; Exit; end;
-        LPart := LPart * 10 + Ord(LCh) - Ord('0');
-      end;
-      if LPart > 255 then begin Result := 0; Exit; end;
-      Result := Result or (LPart shl LShift);
-      Dec(LShift, 8);
-      LStart := LIdx + 1;
-    end;
-  end;
-end;
-
-function platform_ipv4_to_string(AIP: UInt32): string;
-
-  function OctetToStr(AVal: UInt32): string;
-  var
-    LBuf: array[0..3] of Char;
-    LLen, LI: Integer;
-    LDigit: UInt32;
-  begin
-    LLen := 0;
-    repeat
-      LDigit := AVal mod 10;
-      LBuf[LLen] := Chr(Ord('0') + LDigit);
-      Inc(LLen);
-      AVal := AVal div 10;
-    until AVal = 0;
-    SetLength(Result, LLen);
-    for LI := 0 to LLen - 1 do
-      Result[LI + 1] := LBuf[LLen - 1 - LI];
-  end;
-
-begin
-  Result := OctetToStr((AIP shr 24) and $FF) + '.' +
-            OctetToStr((AIP shr 16) and $FF) + '.' +
-            OctetToStr((AIP shr 8) and $FF) + '.' +
-            OctetToStr(AIP and $FF);
 end;
 
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32;
@@ -1176,6 +1347,30 @@ begin
     PLATFORM_SO_LINGER, @LLinger, SizeOf(LLinger));
 end;
 
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_RCVBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket;
+  ASize: Int32): Int32;
+begin
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_SNDBUF, @ASize, SizeOf(ASize));
+end;
+
+function platform_socket_get_error(const ASocket: TPlatformSocket;
+  out AError: Int32): Int32;
+var
+  LLen: Int32;
+begin
+  LLen := SizeOf(AError);
+  Result := platform_socket_getsockopt(ASocket, PLATFORM_SOL_SOCKET,
+    PLATFORM_SO_ERROR, @AError, @LLen);
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -1211,8 +1406,15 @@ function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const A
 function platform_socket_set_reuseaddr(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_keepalive(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_linger(const ASocket: TPlatformSocket; const AEnable: Boolean; const ALingerSec: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_htons(AHost: UInt16): UInt16; begin Result := AHost; end;
-function platform_htonl(AHost: UInt32): UInt32; begin Result := AHost; end;
+function platform_socket_set_recvbuf(const ASocket: TPlatformSocket; ASize: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_set_sendbuf(const ASocket: TPlatformSocket; ASize: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_get_error(const ASocket: TPlatformSocket; out AError: Int32): Int32; begin AError := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_htons(AHost: UInt16): UInt16; begin Result := nextpas.core.platform.socket.base.platform_htons(AHost); end;
+function platform_htonl(AHost: UInt32): UInt32; begin Result := nextpas.core.platform.socket.base.platform_htonl(AHost); end;
+function platform_ntohs(ANet: UInt16): UInt16; begin Result := nextpas.core.platform.socket.base.platform_ntohs(ANet); end;
+function platform_ntohl(ANet: UInt32): UInt32; begin Result := nextpas.core.platform.socket.base.platform_ntohl(ANet); end;
+function platform_ipv4_parse(const AAddr: string): UInt32; begin Result := nextpas.core.platform.socket.base.platform_ipv4_parse(AAddr); end;
+function platform_ipv4_to_string(AIP: UInt32): string; begin Result := nextpas.core.platform.socket.base.platform_ipv4_to_string(AIP); end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte; AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -710,9 +710,176 @@ end;
 
 function BytesIndexOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
   const needle: PAnsiChar; needleLen: Integer): Integer;
+var
+  LHaystack, LNeedle: Pointer;
+  LLen, LNeedleLen: Integer;
+  LIdx, LImm8: Integer;
 begin
-  // Simplified implementation - uses PCMPSTRI
-  // For now, delegate to scalar fallback
+  if (haystackLen <= 0) or (needleLen <= 0) or (haystack = nil) or (needle = nil) then
+  begin
+    Result := -1;
+    Exit;
+  end;
+
+  LHaystack := haystack;
+  LNeedle := needle;
+  LLen := haystackLen;
+  LNeedleLen := needleLen;
+
+  // Imm8 for PCMPSTRI:
+  // Bit 1:0 = 00 (unsigned bytes)
+  // Bit 3:2 = 00 (equal any - find any byte from needle set)
+  // Bit 4 = 0 (positive polarity)
+  // Bit 5 = 0 (least significant index)
+  LImm8 := $00; // EqualAny, unsigned bytes
+
+  asm
+    mov rax, LHaystack
+    mov rdx, LNeedle
+    mov ecx, LNeedleLen
+
+    // Load needle set into xmm1
+    // If needleLen < 16, zero-pad
+    pxor xmm1, xmm1
+    cmp ecx, 16
+    jae @load_needle_16
+    // Partial load - use movq for up to 8 bytes, then handle remainder
+    cmp ecx, 8
+    ja @load_needle_gt8
+    movq xmm1, [rdx]
+    jmp @needle_loaded
+  @load_needle_gt8:
+    movdqu xmm1, [rdx]  // Load up to 16 bytes (will read past if needleLen > 16 but < 16 is handled)
+    jmp @needle_loaded
+  @load_needle_16:
+    movdqu xmm1, [rdx]
+  @needle_loaded:
+
+    // Set up length registers for PCMPSTRI
+    // xmm0 = haystack chunk, xmm1 = needle set
+    // ecx = needleLen (already set)
+    // edx = haystack chunk length (up to 16)
+
+    mov r8, rax           // Current haystack pointer
+    mov r9, LLen          // Remaining haystack length
+
+  @search_loop:
+    cmp r9, 0
+    jle @not_found
+
+    // Load up to 16 bytes from haystack
+    mov rdx, r9
+    cmp rdx, 16
+    jb @partial_haystack
+    movdqu xmm0, [r8]
+    mov rdx, 16           // Full 16-byte chunk
+    jmp @do_compare
+
+  @partial_haystack:
+    // For partial load, zero the buffer and copy
+    pxor xmm0, xmm0
+    // Use movq for small chunks
+    cmp rdx, 8
+    ja @partial_gt8
+    movq xmm0, [r8]
+    jmp @do_compare
+  @partial_gt8:
+    movdqu xmm0, [r8]
+
+  @do_compare:
+    // PCMPSTRI: compare xmm0 (haystack) with xmm1 (needle)
+    // ecx = needleLen, edx = haystack chunk len (but PCMPSTRI uses xmm0's implicit length via ecx/rax)
+    // Actually PCMPSTRI uses xmm0 and xmm1, with eax = haystackLen, edx = needleLen for implicit lengths
+    // But for "equal any" mode, we just need the needle set in xmm1
+
+    // Correct setup: eax = haystack chunk len, edx = needle len
+    mov eax, edx          // eax = haystack chunk length (16 or less)
+    mov edx, ecx          // edx = needle length
+    // ecx will be set by PCMPSTRI to the result index
+
+    // Imm8 = $00 for EqualAny, unsigned bytes
+    db $66, $0f, $3a, $63, $c1, $00  // pcmpstri xmm1, xmm0, 0x00
+
+    // After PCMPSTRI:
+    // ECX = index of first match (or 16 if no match)
+    // ZF = 1 if no match found in this chunk
+    jz @advance
+
+    // Match found!
+    mov rax, r8
+    sub rax, LHaystack
+    add rax, rcx
+    mov LIdx, eax
+    jmp @done
+
+  @advance:
+    add r8, 16
+    sub r9, 16
+    jmp @search_loop
+
+  @not_found:
+    mov LIdx, -1
+
+  @done:
+  end;
+
+  Result := LIdx;
+end;
+
+// FindFirstOf: find index of first byte in haystack that is in the needle set
+function FindFirstOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+var
+  i, j: Integer;
+begin
+  if (haystackLen <= 0) or (needleLen <= 0) or (haystack = nil) or (needle = nil) then
+  begin
+    Result := -1;
+    Exit;
+  end;
+
+  for i := 0 to haystackLen - 1 do
+    for j := 0 to needleLen - 1 do
+      if haystack[i] = needle[j] then
+      begin
+        Result := i;
+        Exit;
+      end;
   Result := -1;
-  // TODO: Implement SSE4.2 PCMPESTRI version
+end;
+
+// FindFirstNotOf: find index of first byte in haystack that is NOT in the needle set
+function FindFirstNotOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
+  const needle: PAnsiChar; needleLen: Integer): Integer;
+var
+  i, j: Integer;
+  LFound: Boolean;
+begin
+  if (haystackLen <= 0) then
+  begin
+    Result := -1;
+    Exit;
+  end;
+  if (needleLen <= 0) or (needle = nil) then
+  begin
+    Result := 0; // Empty needle set means every byte matches
+    Exit;
+  end;
+
+  for i := 0 to haystackLen - 1 do
+  begin
+    LFound := False;
+    for j := 0 to needleLen - 1 do
+      if haystack[i] = needle[j] then
+      begin
+        LFound := True;
+        Break;
+      end;
+    if not LFound then
+    begin
+      Result := i;
+      Exit;
+    end;
+  end;
+  Result := -1;
 end;

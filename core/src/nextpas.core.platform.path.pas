@@ -6,42 +6,140 @@ interface
 
 const
 {$IFDEF NEXTPAS_WINDOWS}
+  {** @desc 路径分隔符（Windows: \） *}
   PLATFORM_PATH_SEP = '\';
+  {** @desc 备用路径分隔符（Windows: /） *}
   PLATFORM_PATH_ALT_SEP = '/';
 {$ELSE}
   PLATFORM_PATH_SEP = '/';
   PLATFORM_PATH_ALT_SEP = '/';
 {$ENDIF}
+  {** @desc 扩展名分隔符 *}
   PLATFORM_EXT_SEP = '.';
 
+{** @desc 连接两个路径段
+    @param ABase 基础路径
+    @param AChild 子路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_join(const ABase, AChild: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 连接三个路径段
+    @param A 第一段
+    @param B 第二段
+    @param C 第三段
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_join3(const A, B, C: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取路径的目录部分
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_dirname(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取路径的文件名部分
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_basename(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取文件名部分的指针和长度（零拷贝）
+    @param APath 输入路径
+    @param AStart 输出文件名起始指针
+    @param ALen 输出文件名长度
+    @return 0 成功 *}
 function platform_path_basename_ptr(const APath: PAnsiChar;
   out AStart: PAnsiChar; out ALen: Int32): Int32;
+
+{** @desc 获取文件扩展名（含点号）
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_extension(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取文件扩展名的指针和长度（零拷贝）
+    @param APath 输入路径
+    @param AStart 输出扩展名起始指针
+    @param ALen 输出扩展名长度
+    @return 0 成功 *}
 function platform_path_extension_ptr(const APath: PAnsiChar;
   out AStart: PAnsiChar; out ALen: Int32): Int32;
+
+{** @desc 更改文件扩展名
+    @param APath 输入路径
+    @param ANewExt 新扩展名（含点号）
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 检查路径是否为绝对路径
+    @param APath 输入路径
+    @return True 绝对路径 *}
 function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
+
+{** @desc 检查路径是否为根路径
+    @param APath 输入路径
+    @return True 根路径 *}
 function platform_path_is_root(const APath: PAnsiChar): Boolean;
+
+{** @desc 规范化路径（移除 . 和 ..）
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_normalize(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 计算相对路径
+    @param ABase 基础路径
+    @param ATarget 目标路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_relative(const ABase, ATarget: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 解析路径为绝对路径（resolve . 和 ..）
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_resolve(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 确保路径以分隔符结尾
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_ensure_sep(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 移除路径末尾的分隔符
+    @param APath 输入路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 写入字节数 *}
 function platform_path_trim_sep(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 比较两个文件名是否相同（不区分大小写取决于平台）
+    @param ALeft 左侧文件名
+    @param ARight 右侧文件名
+    @return True 相同 *}
 function platform_path_same_file_name(const ALeft, ARight: PAnsiChar): Boolean;
 
 implementation

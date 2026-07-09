@@ -359,6 +359,164 @@ begin
     'read_file must not ignore close failure after full read');
 end;
 
+procedure TestMktempHandle;
+var
+  LPath: array[0..255] of AnsiChar;
+  LHandle: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  FillChar(LPath, SizeOf(LPath), 0);
+  R := platform_fs_mktemp_handle('npfstest_', '.tmp', @LPath[0], 256, LHandle);
+  Check(R = 0, 'mktemp_handle returns success');
+  Check(LPath[0] <> #0, 'path is filled');
+  Check(platform_fs_is_file(@LPath[0]), 'temp file exists');
+  { Write to handle to verify it's valid }
+  Check(platform_file_write(LHandle, @R, SizeOf(R), LWritten) = 0, 'write to handle');
+  Check(LWritten = SizeOf(R), 'wrote correct bytes');
+  Check(platform_file_close(LHandle) = 0, 'close handle');
+  platform_file_unlink(@LPath[0]);
+end;
+
+procedure TestMoveFile;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  Size: Int64;
+const
+  SRC = '/tmp/nextpas_move_src.txt';
+  DST = '/tmp/nextpas_move_dst.txt';
+begin
+  platform_file_unlink(SRC);
+  platform_file_unlink(DST);
+  platform_file_open(SRC, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('move me'), 7, W);
+  platform_file_close(H);
+  Check(platform_fs_move_file(SRC, DST) = 0, 'move_file succeeds');
+  Check(platform_fs_is_file(DST), 'dst exists');
+  Check(not platform_fs_exists(SRC), 'src removed');
+  Check(platform_fs_file_size(DST, Size) = 0, 'stat dst');
+  Check(Size = 7, 'dst size = 7');
+  platform_file_unlink(DST);
+end;
+
+procedure TestRemoveFile;
+const
+  PATH = '/tmp/nextpas_remove_test.txt';
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('bye'), 3, W);
+  platform_file_close(H);
+  Check(platform_fs_is_file(PATH), 'file exists before remove');
+  Check(platform_fs_remove_file(PATH) = 0, 'remove_file succeeds');
+  Check(not platform_fs_exists(PATH), 'file removed');
+end;
+
+procedure TestRemoveFileNonExistent;
+begin
+  Check(platform_fs_remove_file('/tmp/nextpas_nonexistent_rm_xyz') <> 0,
+    'remove non-existent fails');
+end;
+
+procedure TestCopyNonExistent;
+begin
+  Check(platform_fs_copy_file('/tmp/nextpas_nonexistent_src_xyz',
+    '/tmp/nextpas_nonexistent_dst_xyz') <> 0,
+    'copy non-existent fails');
+end;
+
+procedure TestMoveNonExistent;
+begin
+  Check(platform_fs_move_file('/tmp/nextpas_nonexistent_mv_src_xyz',
+    '/tmp/nextpas_nonexistent_mv_dst_xyz') <> 0,
+    'move non-existent fails');
+end;
+
+procedure TestRemoveDir;
+const
+  DIR = '/tmp/nextpas_test_rmdir';
+begin
+  platform_fs_mkdir_p(DIR, $1FF); { 0777 }
+  Check(platform_fs_is_dir(DIR), 'dir created');
+  Check(platform_fs_remove_dir(DIR) = 0, 'remove_dir succeeds');
+  Check(not platform_fs_exists(DIR), 'dir removed');
+end;
+
+procedure TestRemoveDirNonExistent;
+begin
+  Check(platform_fs_remove_dir('/tmp/nextpas_nonexistent_rmdir_xyz') <> 0,
+    'remove non-existent dir fails');
+end;
+
+procedure TestRename;
+const
+  SRC = '/tmp/nextpas_test_rename_src';
+  DST = '/tmp/nextpas_test_rename_dst';
+  DATA = 'rename test data';
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LSize: Int64;
+begin
+  { Create source file }
+  platform_file_open(SRC, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar(DATA), Length(DATA), LWritten);
+  platform_file_close(H);
+  Check(platform_fs_exists(SRC), 'src exists before rename');
+  { Rename }
+  Check(platform_fs_rename(SRC, DST) = 0, 'rename succeeds');
+  Check(not platform_fs_exists(SRC), 'src gone after rename');
+  Check(platform_fs_exists(DST), 'dst exists after rename');
+  Check(platform_fs_file_size(DST, LSize) = 0, 'get dst size');
+  Check(LSize = Length(DATA), 'dst size matches');
+  { Cleanup }
+  platform_file_unlink(DST);
+end;
+
+procedure TestRenameNonExistent;
+begin
+  Check(platform_fs_rename('/tmp/nextpas_nonexistent_rename_xyz',
+    '/tmp/nextpas_rename_dst_xyz') <> 0,
+    'rename non-existent fails');
+end;
+
+procedure TestExistsNilPath;
+begin
+  Check(not platform_fs_exists(nil), 'exists nil returns false');
+end;
+
+procedure TestIsFileNilPath;
+begin
+  Check(not platform_fs_is_file(nil), 'is_file nil returns false');
+end;
+
+procedure TestIsDirNilPath;
+begin
+  Check(not platform_fs_is_dir(nil), 'is_dir nil returns false');
+end;
+
+procedure TestTempDirNotNil;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_fs_temp_dir(@Buf[0], 256);
+  Check(R > 0, 'temp_dir returns length > 0');
+  Check(Buf[0] <> #0, 'temp_dir not empty');
+end;
+
+procedure TestFileSizeNonExistent;
+var
+  LSize: Int64;
+begin
+  Check(platform_fs_file_size('/tmp/nextpas_nonexistent_size_xyz', LSize) <> 0,
+    'file_size non-existent returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.fs');
   T.Test('exists file', @TestExistsFile);
@@ -371,11 +529,26 @@ begin
   T.Test('mktemp unique', @TestMktempUnique);
   T.Test('mkdir_p', @TestMkdirP);
   T.Test('copy_file', @TestCopyFile);
+  T.Test('move_file', @TestMoveFile);
+  T.Test('remove_file', @TestRemoveFile);
+  T.Test('remove_file non-existent', @TestRemoveFileNonExistent);
+  T.Test('copy non-existent', @TestCopyNonExistent);
+  T.Test('move non-existent', @TestMoveNonExistent);
+  T.Test('remove_dir', @TestRemoveDir);
+  T.Test('remove_dir non-existent', @TestRemoveDirNonExistent);
+  T.Test('rename', @TestRename);
+  T.Test('rename non-existent', @TestRenameNonExistent);
   T.Test('write_atomic', @TestWriteAtomic);
   T.Test('read_file_into', @TestReadFileInto);
   T.Test('read_file_dynamic', @TestReadFile);
   T.Test('read_file non-existent', @TestReadFileNonExistent);
   T.Test('is_executable', @TestIsExecutable);
   T.Test('file I/O contract', @TestFileIoContract);
+  T.Test('mktemp_handle creates file', @TestMktempHandle);
+  T.Test('exists nil path', @TestExistsNilPath);
+  T.Test('is_file nil path', @TestIsFileNilPath);
+  T.Test('is_dir nil path', @TestIsDirNilPath);
+  T.Test('temp_dir returns valid path', @TestTempDirNotNil);
+  T.Test('file_size non-existent', @TestFileSizeNonExistent);
   if not T.Run then Halt(1);
 end.

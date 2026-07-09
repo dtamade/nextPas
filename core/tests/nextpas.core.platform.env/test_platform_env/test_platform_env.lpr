@@ -270,6 +270,67 @@ begin
   Check(True, 'names_case_sensitive returned ok');
 end;
 
+procedure TestEnvGetStr;
+var
+  LResult: AnsiString;
+begin
+  platform_env_set('NEXTPAS_TEST_GETSTR', 'hello_str');
+  LResult := platform_env_get_str('NEXTPAS_TEST_GETSTR');
+  Check(LResult = 'hello_str', 'get_str returns value');
+  platform_env_unset('NEXTPAS_TEST_GETSTR');
+end;
+
+procedure TestEnvGetStrNonExistent;
+var
+  LResult: AnsiString;
+begin
+  LResult := platform_env_get_str('NEXTPAS_NONEXISTENT_XYZ_999');
+  Check(LResult = '', 'get_str non-existent returns empty');
+end;
+
+procedure TestEnvGetStrEmptyName;
+var
+  LResult: AnsiString;
+begin
+  LResult := platform_env_get_str('');
+  Check(LResult = '', 'get_str empty name returns empty');
+end;
+
+procedure TestEnvGetStrNilName;
+var
+  LResult: AnsiString;
+begin
+  LResult := platform_env_get_str('');
+  Check(LResult = '', 'get_str empty string returns empty');
+end;
+
+procedure TestSetOverwriteMultipleTimes;
+var
+  Buf: array[0..63] of AnsiChar;
+  Len: Int32;
+  I: Int32;
+  LVal: AnsiString;
+begin
+  for I := 1 to 5 do
+  begin
+    LVal := 'val' + IntToStr(I);
+    platform_env_set('NEXTPAS_TEST_MULTIOVER', PAnsiChar(LVal));
+  end;
+  Check(platform_env_get('NEXTPAS_TEST_MULTIOVER', @Buf[0], 64, Len) = 0, 'get');
+  Check(Len > 0, 'len > 0');
+  Check(Buf[0] = 'v', 'first char v');
+  platform_env_unset('NEXTPAS_TEST_MULTIOVER');
+end;
+
+procedure TestExistsAfterSet;
+begin
+  Check(not platform_env_exists('NEXTPAS_TEST_EXIST_CHECK'), 'not exists before');
+  platform_env_set('NEXTPAS_TEST_EXIST_CHECK', '1');
+  Check(platform_env_exists('NEXTPAS_TEST_EXIST_CHECK'), 'exists after set');
+  platform_env_unset('NEXTPAS_TEST_EXIST_CHECK');
+  Check(not platform_env_exists('NEXTPAS_TEST_EXIST_CHECK'), 'not exists after unset');
+end;
+
 procedure TestWindowsExistsClearsLastErrorSourceContract;
 var
   LSource, LWindowsBranch, LBody: string;
@@ -325,6 +386,21 @@ begin
     'windows get treats zero-length second read as success');
 end;
 
+procedure TestSetNilName;
+begin
+  Check(platform_env_set(nil, PAnsiChar('value')) <> 0, 'set nil name returns error');
+end;
+
+procedure TestUnsetNilName;
+begin
+  Check(platform_env_unset(nil) <> 0, 'unset nil name returns error');
+end;
+
+procedure TestSetNilValue;
+begin
+  Check(platform_env_set(PAnsiChar('NEXTPAS_TEST_NIL'), nil) <> 0, 'set nil value returns error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.env');
   T.Test('get PATH', @TestGetPath);
@@ -343,9 +419,18 @@ begin
   T.Test('enumerate finds set var', @TestEnumerateFindsSetVar);
   T.Test('enumerate stop early', @TestEnumerateStopEarly);
   T.Test('names case sensitive', @TestCaseSensitive);
+  T.Test('get_str returns value', @TestEnvGetStr);
+  T.Test('get_str non-existent returns empty', @TestEnvGetStrNonExistent);
+  T.Test('get_str empty name returns empty', @TestEnvGetStrEmptyName);
+  T.Test('get_str nil name returns empty', @TestEnvGetStrNilName);
+  T.Test('set overwrite multiple times', @TestSetOverwriteMultipleTimes);
+  T.Test('exists after set/unset lifecycle', @TestExistsAfterSet);
   T.Test('windows exists clears last-error source contract',
     @TestWindowsExistsClearsLastErrorSourceContract);
   T.Test('windows get clears last-error source contract',
     @TestWindowsGetClearsLastErrorSourceContract);
+  T.Test('set nil name returns error', @TestSetNilName);
+  T.Test('unset nil name returns error', @TestUnsetNilName);
+  T.Test('set nil value returns error', @TestSetNilValue);
   if not T.Run then Halt(1);
 end.

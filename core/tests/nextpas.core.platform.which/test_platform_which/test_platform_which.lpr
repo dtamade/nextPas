@@ -152,6 +152,83 @@ begin
 end;
 {$ENDIF}
 
+procedure TestEmptyName;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_which('', @Buf[0], 256);
+  Check(R = PLATFORM_ERR_INVALID, 'empty name returns PLATFORM_ERR_INVALID');
+end;
+
+procedure TestRelativeName;
+var
+  Buf: array[0..511] of AnsiChar;
+  R: Int32;
+begin
+  { sh should be findable via PATH }
+  R := platform_which('sh', @Buf[0], 512);
+  Check(R > 0, 'relative name found via PATH');
+  Check(Buf[0] = '/', 'result is absolute path');
+end;
+
+procedure TestNilBufferReturnsLength;
+var
+  R: Int32;
+begin
+  R := platform_which('sh', nil, 0);
+  Check(R > 0, 'nil buffer returns required length');
+end;
+
+procedure TestNilName;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_which(nil, @Buf[0], 256);
+  Check(R = PLATFORM_ERR_INVALID, 'nil name returns PLATFORM_ERR_INVALID');
+end;
+
+procedure TestSmallBufferTruncates;
+var
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  FillChar(Buf, SizeOf(Buf), Ord('?'));
+  R := platform_which('ls', @Buf[0], 4);
+  Check(R > 0, 'small buffer returns required length');
+  Check(Buf[3] = #0, 'small buffer null terminated');
+end;
+
+procedure TestFindMultipleCommands;
+var
+  Buf: array[0..511] of AnsiChar;
+  R1, R2: Int32;
+begin
+  R1 := platform_which('sh', @Buf[0], 512);
+  Check(R1 > 0, 'find sh');
+  FillChar(Buf, SizeOf(Buf), 0);
+  R2 := platform_which('ls', @Buf[0], 512);
+  Check(R2 > 0, 'find ls');
+  { Both should resolve to different paths }
+  Check(platform_fs_is_file(@Buf[0]), 'ls path exists');
+end;
+
+procedure TestWhichWithVeryLongName;
+var
+  Buf: array[0..511] of AnsiChar;
+  LongName: array[0..255] of AnsiChar;
+  I: Integer;
+  R: Int32;
+begin
+  { A 200-char name should not exist in PATH }
+  for I := 0 to 199 do
+    LongName[I] := AnsiChar(Ord('a') + (I mod 26));
+  LongName[200] := #0;
+  R := platform_which(@LongName[0], @Buf[0], 512);
+  Check(R = PLATFORM_ERR_ENOENT, 'very long name not found');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.which');
   T.Test('find sh', @TestFindSh);
@@ -164,5 +241,12 @@ begin
 {$IFDEF NEXTPAS_LINUX}
   T.Test('long PATH finds tail entry', @TestLongPathFindsTailEntry);
 {$ENDIF}
+  T.Test('empty name', @TestEmptyName);
+  T.Test('relative name via PATH', @TestRelativeName);
+  T.Test('nil buffer returns length', @TestNilBufferReturnsLength);
+  T.Test('nil name returns error', @TestNilName);
+  T.Test('small buffer truncates', @TestSmallBufferTruncates);
+  T.Test('find multiple commands', @TestFindMultipleCommands);
+  T.Test('very long name not found', @TestWhichWithVeryLongName);
   if not T.Run then Halt(1);
 end.

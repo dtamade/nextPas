@@ -416,6 +416,168 @@ begin
     'Unknown POSIX code maps to ecInternal');
 end;
 
+procedure TestNewPermConstant;
+begin
+  CheckEqual(Int64(1), Int64(PLATFORM_ERR_PERM), 'PLATFORM_ERR_PERM = 1');
+end;
+
+procedure TestNewIoConstant;
+begin
+  CheckEqual(Int64(5), Int64(PLATFORM_ERR_IO), 'PLATFORM_ERR_IO = 5');
+end;
+
+procedure TestNewNomemConstant;
+begin
+  CheckEqual(Int64(12), Int64(PLATFORM_ERR_NOMEM), 'PLATFORM_ERR_NOMEM = 12');
+end;
+
+procedure TestNewPipeConstant;
+begin
+  CheckEqual(Int64(32), Int64(PLATFORM_ERR_PIPE), 'PLATFORM_ERR_PIPE = 32');
+end;
+
+procedure TestNewNosysConstant;
+begin
+  CheckEqual(Int64(38), Int64(PLATFORM_ERR_NOSYS), 'PLATFORM_ERR_NOSYS = 38');
+end;
+
+procedure TestNewConnresetConstant;
+begin
+  CheckEqual(Int64(104), Int64(PLATFORM_ERR_CONNRESET), 'PLATFORM_ERR_CONNRESET = 104');
+end;
+
+procedure TestNewConnrefusedConstant;
+begin
+  CheckEqual(Int64(111), Int64(PLATFORM_ERR_CONNREFUSED), 'PLATFORM_ERR_CONNREFUSED = 111');
+end;
+
+procedure TestPermMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_PERM, @Buf[0], 64) > 0, 'PERM message');
+  Check(Pos('not permitted', Buf) > 0, 'contains "not permitted"');
+end;
+
+procedure TestIoMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_IO, @Buf[0], 64) > 0, 'IO message');
+  Check(Pos('input/output', Buf) > 0, 'contains "input/output"');
+end;
+
+procedure TestNomemMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_NOMEM, @Buf[0], 64) > 0, 'NOMEM message');
+  Check(Pos('out of memory', Buf) > 0, 'contains "out of memory"');
+end;
+
+procedure TestPipeMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_PIPE, @Buf[0], 64) > 0, 'PIPE message');
+  Check(Pos('broken pipe', Buf) > 0, 'contains "broken pipe"');
+end;
+
+procedure TestNosysMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_NOSYS, @Buf[0], 64) > 0, 'NOSYS message');
+  Check(Pos('not implemented', Buf) > 0, 'contains "not implemented"');
+end;
+
+procedure TestConnresetMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_CONNRESET, @Buf[0], 64) > 0, 'CONNRESET message');
+  Check(Pos('reset', Buf) > 0, 'contains "reset"');
+end;
+
+procedure TestConnrefusedMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_CONNREFUSED, @Buf[0], 64) > 0, 'CONNREFUSED message');
+  Check(Pos('refused', Buf) > 0, 'contains "refused"');
+end;
+
+procedure TestPermCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_PERM) = ecPermission, 'PERM is ecPermission');
+end;
+
+procedure TestIoCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_IO) = ecIO, 'IO is ecIO');
+end;
+
+procedure TestNomemCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_NOMEM) = ecResourceExhausted, 'NOMEM is ecResourceExhausted');
+end;
+
+procedure TestPipeCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_PIPE) = ecIO, 'PIPE is ecIO');
+end;
+
+procedure TestNosysCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_NOSYS) = ecNotSupported, 'NOSYS is ecNotSupported');
+end;
+
+procedure TestConnresetCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_CONNRESET) = ecIO, 'CONNRESET is ecIO');
+end;
+
+procedure TestConnrefusedCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_CONNREFUSED) = ecIO, 'CONNREFUSED is ecIO');
+end;
+
+procedure TestIntrConstant;
+begin
+  CheckEqual(Int64(4), Int64(PLATFORM_ERR_INTR), 'PLATFORM_ERR_INTR = 4');
+end;
+
+procedure TestNospcConstant;
+begin
+  CheckEqual(Int64(28), Int64(PLATFORM_ERR_NOSPC), 'PLATFORM_ERR_NOSPC = 28');
+end;
+
+procedure TestIntrMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_INTR, @Buf[0], 64) > 0, 'INTR message');
+  Check(Pos('interrupted', Buf) > 0, 'contains "interrupted"');
+end;
+
+procedure TestNospcMessage;
+var
+  Buf: array[0..63] of AnsiChar;
+begin
+  Check(platform_error_message(PLATFORM_ERR_NOSPC, @Buf[0], 64) > 0, 'NOSPC message');
+  Check(Pos('no space', Buf) > 0, 'contains "no space"');
+end;
+
+procedure TestIntrCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_INTR) = ecInterrupted, 'INTR is ecInterrupted');
+end;
+
+procedure TestNospcCategory;
+begin
+  Check(platform_error_category(PLATFORM_ERR_NOSPC) = ecResourceExhausted, 'NOSPC is ecResourceExhausted');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.error');
   T.Test('ENOENT message', @TestENOENT);
@@ -465,5 +627,32 @@ begin
   T.Test('POSIX ECONNREFUSED(111) maps to ecIO', @TestPosixCategoryEconnrefused);
   T.Test('POSIX EINTR(4) maps to ecInterrupted', @TestPosixCategoryEintr);
   T.Test('Unknown POSIX code maps to ecInternal', @TestPosixCategoryUnknown);
+  T.Test('new PERM constant is 1', @TestNewPermConstant);
+  T.Test('new IO constant is 5', @TestNewIoConstant);
+  T.Test('new NOMEM constant is 12', @TestNewNomemConstant);
+  T.Test('new PIPE constant is 32', @TestNewPipeConstant);
+  T.Test('new NOSYS constant is 38', @TestNewNosysConstant);
+  T.Test('new CONNRESET constant is 104', @TestNewConnresetConstant);
+  T.Test('new CONNREFUSED constant is 111', @TestNewConnrefusedConstant);
+  T.Test('PERM message', @TestPermMessage);
+  T.Test('IO message', @TestIoMessage);
+  T.Test('NOMEM message', @TestNomemMessage);
+  T.Test('PIPE message', @TestPipeMessage);
+  T.Test('NOSYS message', @TestNosysMessage);
+  T.Test('CONNRESET message', @TestConnresetMessage);
+  T.Test('CONNREFUSED message', @TestConnrefusedMessage);
+  T.Test('PERM category is ecPermission', @TestPermCategory);
+  T.Test('IO category is ecIO', @TestIoCategory);
+  T.Test('NOMEM category is ecResourceExhausted', @TestNomemCategory);
+  T.Test('PIPE category is ecIO', @TestPipeCategory);
+  T.Test('NOSYS category is ecNotSupported', @TestNosysCategory);
+  T.Test('CONNRESET category is ecIO', @TestConnresetCategory);
+  T.Test('CONNREFUSED category is ecIO', @TestConnrefusedCategory);
+  T.Test('new INTR constant is 4', @TestIntrConstant);
+  T.Test('new NOSPC constant is 28', @TestNospcConstant);
+  T.Test('INTR message', @TestIntrMessage);
+  T.Test('NOSPC message', @TestNospcMessage);
+  T.Test('INTR category is ecInterrupted', @TestIntrCategory);
+  T.Test('NOSPC category is ecResourceExhausted', @TestNospcCategory);
   if not T.Run then Halt(1);
 end.

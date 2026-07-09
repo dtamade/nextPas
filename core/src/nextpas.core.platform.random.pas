@@ -4,7 +4,15 @@ unit nextpas.core.platform.random;
 
 interface
 
+{** @desc 生成加密安全的随机字节
+    @param ABuf 输出缓冲区
+    @param ALen 需要的随机字节数
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_random_bytes(ABuf: Pointer; ALen: PtrUInt): Int32;
+
+{** @desc 生成随机 UInt64 值（便捷函数）
+    @return 随机 64 位无符号整数 *}
+function platform_random_u64: UInt64;
 
 implementation
 
@@ -45,6 +53,12 @@ begin
     Exit(True);
   end;
   Result := False;
+end;
+
+function platform_random_u64: UInt64;
+begin
+  if platform_random_bytes(@Result, SizeOf(Result)) <> 0 then
+    Result := 0;
 end;
 
 {$IFDEF NEXTPAS_LINUX}

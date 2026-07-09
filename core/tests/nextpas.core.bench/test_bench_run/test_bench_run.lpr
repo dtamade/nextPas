@@ -15,46 +15,14 @@ uses
   nextpas.core.bench.intf,
   nextpas.core.bench.runner,
   nextpas.core.bench.run,
+  nextpas.core.bench.test_helpers,
   nextpas.core.time.base;
 
 { --------------------------------------------------------------------- }
 {  Test Helpers }
 { --------------------------------------------------------------------- }
 
-procedure NoOpBench(const ACtx: IBenchContext);
-begin
-  { 空操作 }
-end;
-
-procedure BusyBench(const ACtx: IBenchContext);
-var
-  I, S: Integer;
-begin
-  S := 0;
-  for I := 1 to 1000 do
-    S := S + I;
-  ACtx.SetBytes(S);
-end;
-
-function MakeEntry(const AName: string; AFunc: TBenchFunc): TBenchEntry;
-begin
-  Result := Default(TBenchEntry);
-  Result.Name := AName;
-  Result.Func := AFunc;
-  Result.ParamFunc := nil;
-  Result.ParamValue := 0;
-  Result.IsLoop := False;
-  Result.LoopFunc := nil;
-  Result.LoopContextFunc := nil;
-  Result.Setup := nil;
-  Result.Teardown := nil;
-  Result.Condition := True;
-  Result.EnableParallel := False;
-  Result.ParallelThreads := 0;
-  Result.TimeoutMs := 0;
-  Result.CollectRawSamples := False;
-  Result.SimpleFunc := nil;
-end;
+{ MakeBenchEntry, NoOpBench, BusyBench 现在来自 nextpas.core.bench.test_helpers }
 
 { --------------------------------------------------------------------- }
 {  AllocBenchResult / FreeBenchResult }
@@ -237,7 +205,7 @@ begin
   LConfig.MinDurationNs := 100000;
   LRun := TBenchRun.Create(LConfig);
   try
-    LResults := LRun.RunAll([MakeEntry('Single', @NoOpBench)], 1);
+    LResults := LRun.RunAll([MakeBenchEntry('Single', @NoOpBench)], 1);
     Check(Length(LResults) = 1, 'RunAll returns 1 result');
     Check(LResults[0].Executed, 'Single entry executed');
     Check(LResults[0].Name = 'Single', 'Single entry name');
@@ -260,9 +228,9 @@ begin
   LRun := TBenchRun.Create(LConfig);
   try
     LResults := LRun.RunAll([
-      MakeEntry('Bench_A', @NoOpBench),
-      MakeEntry('Bench_B', @BusyBench),
-      MakeEntry('Bench_C', @NoOpBench)
+      MakeBenchEntry('Bench_A', @NoOpBench),
+      MakeBenchEntry('Bench_B', @BusyBench),
+      MakeBenchEntry('Bench_C', @NoOpBench)
     ], 2);
 
     Check(Length(LResults) = 3, 'RunAll returns 3 results');
@@ -294,7 +262,7 @@ begin
   try
     SetLength(LEntries, 8);
     for I := 0 to 7 do
-      LEntries[I] := MakeEntry('Thread_' + IntToStr(I), @NoOpBench);
+      LEntries[I] := MakeBenchEntry('Thread_' + IntToStr(I), @NoOpBench);
 
     LResults := LRun.RunAll(LEntries, 4);
     Check(Length(LResults) = 8, '8 entries with 4 threads returns 8 results');
@@ -318,8 +286,8 @@ begin
   LRun := TBenchRun.Create(LConfig);
   try
     LResults := LRun.RunAll([
-      MakeEntry('Over1', @NoOpBench),
-      MakeEntry('Over2', @NoOpBench)
+      MakeBenchEntry('Over1', @NoOpBench),
+      MakeBenchEntry('Over2', @NoOpBench)
     ], 8);
     Check(Length(LResults) = 2, '2 entries with 8 threads returns 2 results');
   finally
@@ -339,7 +307,7 @@ begin
   LConfig.MinDurationNs := 10000000; { 10ms }
   LRun := TBenchRun.Create(LConfig);
   try
-    LResults := LRun.RunAll([MakeEntry('Busy', @BusyBench)], 1);
+    LResults := LRun.RunAll([MakeBenchEntry('Busy', @BusyBench)], 1);
     Check(Length(LResults) = 1, '1 result');
     Check(LResults[0].Executed, 'Executed');
     Check(LResults[0].NsPerOp > 0, 'NsPerOp > 0');

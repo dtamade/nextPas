@@ -7,22 +7,55 @@ interface
 uses
   nextpas.core.exception;
 
-{ Portable platform error codes — canonical definitions }
+{ Portable platform error codes — canonical definitions
+  Values match Linux errno numbers for the focused-runtime host.
+  Non-Linux platforms translate via platform_get_errno. }
 const
-  PLATFORM_ERR_EEXIST      = 17;    { File exists }
-  PLATFORM_ERR_ENOENT      = 2;     { No such file or directory }
-  PLATFORM_ERR_ENOTDIR     = 20;    { Not a directory }
-  PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
-  PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
+  PLATFORM_ERR_PERM        = 1;     { Operation not permitted }
+  PLATFORM_ERR_NOENT       = 2;     { No such file or directory }
+  PLATFORM_ERR_INTR        = 4;     { Interrupted system call }
+  PLATFORM_ERR_IO          = 5;     { I/O error }
   PLATFORM_ERR_BADF        = 9;     { Bad file descriptor }
+  PLATFORM_ERR_AGAIN       = 11;    { Resource temporarily unavailable }
+  PLATFORM_ERR_NOMEM       = 12;    { Out of memory }
+  PLATFORM_ERR_BUSY        = 16;    { Device or resource busy }
+  PLATFORM_ERR_EXIST       = 17;    { File exists }
+  PLATFORM_ERR_NOTDIR      = 20;    { Not a directory }
   PLATFORM_ERR_INVALID     = 22;    { Invalid argument }
+  PLATFORM_ERR_NOSPC       = 28;    { No space left on device }
+  PLATFORM_ERR_PIPE        = 32;    { Broken pipe }
+  PLATFORM_ERR_NOSYS       = 38;    { Function not implemented }
   PLATFORM_ERR_UNSUPPORTED = 95;    { Operation not supported }
-  PLATFORM_ERR_TIMEOUT     = 110;   { Operation timed out }
+  PLATFORM_ERR_CONNRESET   = 104;   { Connection reset by peer }
+  PLATFORM_ERR_CONNREFUSED = 111;   { Connection refused }
+  PLATFORM_ERR_TIMEDOUT    = 110;   { Operation timed out }
   PLATFORM_ERR_PATH_TOO_LONG = -7;  { Path exceeds PLATFORM_FS_MAX_PATH }
 
+  { Aliases for backward compatibility }
+  PLATFORM_ERR_ENOENT      = PLATFORM_ERR_NOENT;
+  PLATFORM_ERR_EEXIST      = PLATFORM_ERR_EXIST;
+  PLATFORM_ERR_ENOTDIR     = PLATFORM_ERR_NOTDIR;
+  PLATFORM_ERR_TIMEOUT     = PLATFORM_ERR_TIMEDOUT;
+
+{** @desc 获取平台错误码对应的错误消息
+    @param ACode 错误码
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return 实际写入字节数 *}
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 获取错误码的错误类别
+    @param ACode 错误码
+    @return 错误类别枚举 *}
 function platform_error_category(ACode: Int32): TErrorCategory;
+
+{** @desc 输出致命错误消息并终止进程
+    @param AMsg 错误消息字符串 *}
 procedure platform_fatal(const AMsg: PAnsiChar);
+
+{** @desc 输出致命错误消息和错误码并终止进程
+    @param AMsg 错误消息字符串
+    @param ACode 错误码 *}
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
@@ -74,24 +107,42 @@ function TryPlatformErrorTokenMessage(ACode: Int32; ABuf: PAnsiChar;
 begin
   Result := True;
   case ACode of
-    PLATFORM_ERR_INVALID:
-      ALen := CopyPlatformErrorMessage('invalid argument', ABuf, ABufSize);
-    PLATFORM_ERR_UNSUPPORTED:
-      ALen := CopyPlatformErrorMessage('operation not supported', ABuf, ABufSize);
-    PLATFORM_ERR_TIMEOUT:
-      ALen := CopyPlatformErrorMessage('operation timed out', ABuf, ABufSize);
-    PLATFORM_ERR_AGAIN:
-      ALen := CopyPlatformErrorMessage('resource temporarily unavailable', ABuf, ABufSize);
-    PLATFORM_ERR_BUSY:
-      ALen := CopyPlatformErrorMessage('device or resource busy', ABuf, ABufSize);
+    PLATFORM_ERR_PERM:
+      ALen := CopyPlatformErrorMessage('operation not permitted', ABuf, ABufSize);
+    PLATFORM_ERR_NOENT:
+      ALen := CopyPlatformErrorMessage('no such file or directory', ABuf, ABufSize);
+    PLATFORM_ERR_INTR:
+      ALen := CopyPlatformErrorMessage('interrupted system call', ABuf, ABufSize);
+    PLATFORM_ERR_IO:
+      ALen := CopyPlatformErrorMessage('input/output error', ABuf, ABufSize);
     PLATFORM_ERR_BADF:
       ALen := CopyPlatformErrorMessage('bad file descriptor', ABuf, ABufSize);
-    PLATFORM_ERR_EEXIST:
+    PLATFORM_ERR_AGAIN:
+      ALen := CopyPlatformErrorMessage('resource temporarily unavailable', ABuf, ABufSize);
+    PLATFORM_ERR_NOMEM:
+      ALen := CopyPlatformErrorMessage('out of memory', ABuf, ABufSize);
+    PLATFORM_ERR_BUSY:
+      ALen := CopyPlatformErrorMessage('device or resource busy', ABuf, ABufSize);
+    PLATFORM_ERR_EXIST:
       ALen := CopyPlatformErrorMessage('file already exists', ABuf, ABufSize);
-    PLATFORM_ERR_ENOENT:
-      ALen := CopyPlatformErrorMessage('no such file or directory', ABuf, ABufSize);
-    PLATFORM_ERR_ENOTDIR:
+    PLATFORM_ERR_NOTDIR:
       ALen := CopyPlatformErrorMessage('not a directory', ABuf, ABufSize);
+    PLATFORM_ERR_INVALID:
+      ALen := CopyPlatformErrorMessage('invalid argument', ABuf, ABufSize);
+    PLATFORM_ERR_NOSPC:
+      ALen := CopyPlatformErrorMessage('no space left on device', ABuf, ABufSize);
+    PLATFORM_ERR_PIPE:
+      ALen := CopyPlatformErrorMessage('broken pipe', ABuf, ABufSize);
+    PLATFORM_ERR_NOSYS:
+      ALen := CopyPlatformErrorMessage('function not implemented', ABuf, ABufSize);
+    PLATFORM_ERR_UNSUPPORTED:
+      ALen := CopyPlatformErrorMessage('operation not supported', ABuf, ABufSize);
+    PLATFORM_ERR_CONNRESET:
+      ALen := CopyPlatformErrorMessage('connection reset by peer', ABuf, ABufSize);
+    PLATFORM_ERR_CONNREFUSED:
+      ALen := CopyPlatformErrorMessage('connection refused', ABuf, ABufSize);
+    PLATFORM_ERR_TIMEDOUT:
+      ALen := CopyPlatformErrorMessage('operation timed out', ABuf, ABufSize);
     PLATFORM_ERR_PATH_TOO_LONG:
       ALen := CopyPlatformErrorMessage('path too long', ABuf, ABufSize);
   else
@@ -191,23 +242,35 @@ end;
 function platform_error_category(ACode: Int32): TErrorCategory;
 begin
   case ACode of
+    0:
+      Exit(ecNone);
     PLATFORM_ERR_INVALID, PLATFORM_ERR_PATH_TOO_LONG:
       Exit(ecInvalidArgument);
-    PLATFORM_ERR_UNSUPPORTED:
+    PLATFORM_ERR_UNSUPPORTED, PLATFORM_ERR_NOSYS:
       Exit(ecNotSupported);
-    PLATFORM_ERR_TIMEOUT:
+    PLATFORM_ERR_TIMEDOUT:
       Exit(ecTimeout);
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY:
       Exit(ecWouldBlock);
-    PLATFORM_ERR_BADF:
+    PLATFORM_ERR_BADF,
+    PLATFORM_ERR_IO,
+    PLATFORM_ERR_PIPE:
       Exit(ecIO);
-    PLATFORM_ERR_ENOENT:
+    PLATFORM_ERR_NOENT,
+    PLATFORM_ERR_NOTDIR:
       Exit(ecNotFound);
-    PLATFORM_ERR_EEXIST:
+    PLATFORM_ERR_EXIST:
       Exit(ecAlreadyExists);
-    PLATFORM_ERR_ENOTDIR:
-      Exit(ecNotFound);
+    PLATFORM_ERR_PERM:
+      Exit(ecPermission);
+    PLATFORM_ERR_NOMEM, PLATFORM_ERR_NOSPC:
+      Exit(ecResourceExhausted);
+    PLATFORM_ERR_INTR:
+      Exit(ecInterrupted);
+    PLATFORM_ERR_CONNRESET,
+    PLATFORM_ERR_CONNREFUSED:
+      Exit(ecIO);
   end;
 
   case ACode of
@@ -288,17 +351,6 @@ begin
       Result := ecIO;
     ERROR_OPERATION_ABORTED:
       Result := ecInterrupted;
-    {$ENDIF}
-    {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD)}
-    PLATFORM_ERR_INVALID:
-      Result := ecInvalidArgument;
-    PLATFORM_ERR_UNSUPPORTED:
-      Result := ecNotSupported;
-    PLATFORM_ERR_TIMEOUT:
-      Result := ecTimeout;
-    PLATFORM_ERR_AGAIN,
-    PLATFORM_ERR_BUSY:
-      Result := ecWouldBlock;
     {$ENDIF}
   else
     Result := ecInternal;

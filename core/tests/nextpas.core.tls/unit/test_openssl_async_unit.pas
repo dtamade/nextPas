@@ -5,7 +5,7 @@ unit test_openssl_async_unit;
 interface
 
 uses
-  Classes, SysUtils, fpcunit, testregistry,
+  Classes, SysUtils, nextpas.core.test,
   test_base,
   nextpas.core.tls.openssl.api.async;
 
@@ -19,8 +19,8 @@ type
     FSavedGetWaitCtx: TGetWaitCtxFn;
     FSavedGetAllFds: TGetAllFdsFn;
   protected
-    procedure SetUp; override;
-    procedure TearDown; override;
+    procedure BeforeEach; override;
+    procedure AfterEach; override;
   published
     procedure TestWaitForAsyncJob_UnixPendingFD_ShouldReturnFalse;
     procedure TestWaitForAsyncJob_NoFds_ShouldReturnTrue;
@@ -51,9 +51,9 @@ begin
   Result := 1;
 end;
 
-procedure TTestOpenSSLAsync.SetUp;
+procedure TTestOpenSSLAsync.BeforeEach;
 begin
-  inherited SetUp;
+  inherited BeforeEach;
 
   FSavedGetWaitCtx := ASYNC_get_wait_ctx;
   FSavedGetAllFds := ASYNC_WAIT_CTX_get_all_fds;
@@ -62,12 +62,12 @@ begin
   ASYNC_WAIT_CTX_get_all_fds := @StubGetAllFds;
 end;
 
-procedure TTestOpenSSLAsync.TearDown;
+procedure TTestOpenSSLAsync.AfterEach;
 begin
   ASYNC_get_wait_ctx := FSavedGetWaitCtx;
   ASYNC_WAIT_CTX_get_all_fds := FSavedGetAllFds;
 
-  inherited TearDown;
+  inherited AfterEach;
 end;
 
 procedure TTestOpenSSLAsync.TestWaitForAsyncJob_UnixPendingFD_ShouldReturnFalse;
@@ -75,7 +75,7 @@ var
   LResult: Boolean;
 begin
   {$IFNDEF UNIX}
-  Ignore('Unix-only test');
+  Skip('Unix-only test');
   Exit;
   {$ENDIF}
 
@@ -85,8 +85,7 @@ begin
 
   LResult := WaitForAsyncJob(PASYNC_JOB(PtrUInt(1)), 0);
 
-  AssertFalse('Unix WaitForAsyncJob should not return true for pending fd without polling implementation',
-    LResult);
+  CheckFalse(LResult, 'Unix WaitForAsyncJob should not return true for pending fd without polling implementation');
 end;
 
 
@@ -100,11 +99,7 @@ begin
 
   LResult := WaitForAsyncJob(PASYNC_JOB(PtrUInt(1)), 0);
 
-  AssertTrue('WaitForAsyncJob should return true when wait context reports zero fds',
-    LResult);
+  CheckTrue(LResult, 'WaitForAsyncJob should return true when wait context reports zero fds');
 end;
-
-initialization
-  RegisterTest(TTestOpenSSLAsync);
 
 end.

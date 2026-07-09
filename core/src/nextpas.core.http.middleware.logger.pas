@@ -8,7 +8,7 @@ uses
   nextpas.core.http.intf,
   nextpas.core.log;
 
-{ Default logger middleware — uses WriteLn to stderr }
+{ Default logger middleware — uses structured TLogger with method, path, status, duration }
 function LoggerMiddleware: IHttpMiddleware;
 
 { Logger middleware with structured logging via TLogger }

@@ -41,11 +41,18 @@ procedure Convolve1DF32(aSignal: PSingle; aSignalCount: SizeUInt;
 procedure HannWindowF32(aDst: PSingle; aCount: SizeUInt);
 procedure HammingWindowF32(aDst: PSingle; aCount: SizeUInt);
 procedure BlackmanWindowF32(aDst: PSingle; aCount: SizeUInt);
+procedure KaiserWindowF32(aDst: PSingle; aCount: SizeUInt; aAlpha: Single = 3.0);
 
 
 procedure RealFftF32(aInput: PSingle; aOutput: PSimdComplexF32; aCount: SizeUInt);
 procedure FirFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
   aCoeffs: PSingle; aCoeffCount: SizeUInt; aDst: PSingle);
+procedure HighPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aCutoff: Single; aDst: PSingle);
+procedure BandPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+procedure BandStopFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
 procedure ResampleLinearF32(aSrc: PSingle; aSrcCount: SizeUInt;
   aDst: PSingle; aDstCount: SizeUInt);
 procedure CrossCorrelationF32(aX, aY: PSingle; aCount: SizeUInt;
@@ -60,10 +67,30 @@ procedure MagnitudeSpectrumF32(aComplex: PSimdComplexF32; aCount: SizeUInt; aDst
 procedure PowerToDecibelF32(aSrc, aDst: PSingle; aCount: SizeUInt; aRefPower: Single = 1.0);
 procedure PreEmphasisF32(aSrc, aDst: PSingle; aCount: SizeUInt; aCoeff: Single = 0.97);
 
+// Signal generation
+procedure GenerateSineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+procedure GenerateCosineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+
+// Phase 11: Advanced signal processing
+procedure STFTF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aWindow: PSingle;
+  aOutput: PSimdComplexF32; aOutputRows, aOutputCols: PSizeUInt);
+procedure SpectrogramF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aWindow: PSingle;
+  aOutput: PSingle; aOutputRows, aOutputCols: PSizeUInt);
+procedure MelFilterBankF32(aDst: PSingle; aFilterCount, aFftSize: SizeUInt;
+  aSampleRate: Single; aLowFreq, aHighFreq: Single);
+procedure MFCCF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aSampleRate: Single; aCoeffCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aDst: PSingle;
+  aDstRows, aDstCols: PSizeUInt);
+
 implementation
 
 uses
-  nextpas.core.simd.mathutil, nextpas.core.simd;
+  Math, nextpas.core.simd.mathutil, nextpas.core.simd;
 
 {$IFDEF SIMD_X86_AVAILABLE}
 // Process 4 complex butterflies with SSE2
@@ -855,6 +882,194 @@ begin
   aDst[aCount - 1] := 0.0;
 end;
 
+// Kaiser window: w[n] = I0(alpha * sqrt(1 - ((2n/(N-1)) - 1)^2)) / I0(alpha)
+// Uses simplified Bessel function approximation
+procedure KaiserWindowF32(aDst: PSingle; aCount: SizeUInt; aAlpha: Single = 3.0);
+var
+  i, k: SizeUInt;
+  LScale, Lx, Ly: Single;
+  LI0alpha, LTmp, LTerm: Single;
+begin
+  if aCount = 0 then Exit;
+  if aCount = 1 then begin aDst[0] := 1.0; Exit; end;
+
+  // Compute I0(alpha) using series approximation
+  LTmp := 1.0;
+  LTerm := 1.0;
+  for k := 1 to 20 do
+  begin
+    LTerm := LTerm * (aAlpha / 2.0) * (aAlpha / 2.0) / (k * k);
+    LTmp := LTmp + LTerm;
+  end;
+  LI0alpha := LTmp;
+
+  LScale := 2.0 / (aCount - 1);
+  for i := 0 to aCount - 1 do
+  begin
+    Lx := LScale * i - 1.0; // [-1, 1]
+    Ly := aAlpha * System.Sqrt(1.0 - Lx * Lx);
+    // Compute I0(Ly) using series approximation
+    LTmp := 1.0;
+    LTerm := 1.0;
+    for k := 1 to 20 do
+    begin
+      LTerm := LTerm * (Ly / 2.0) * (Ly / 2.0) / (k * k);
+      LTmp := LTmp + LTerm;
+    end;
+    aDst[i] := LTmp / LI0alpha;
+  end;
+end;
+
+// High-pass filter using FFT: zero out low frequencies
+procedure HighPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LCutoffBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  // Use full complex FFT for proper filtering
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer (imaginary = 0)
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  // Forward FFT
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  // Calculate cutoff bin (normalized frequency)
+  LCutoffBin := SizeUInt(Trunc(aCutoff * aSignalCount));
+
+  // Zero out frequencies below cutoff
+  for k := 0 to LCutoffBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  // Inverse FFT
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  // Copy real part to output
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Band-pass filter: keep only frequencies between low and high cutoff
+procedure BandPassFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LLowBin, LHighBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  LLowBin := SizeUInt(Trunc(aLowCutoff * aSignalCount));
+  LHighBin := SizeUInt(Trunc(aHighCutoff * aSignalCount));
+
+  // Zero out frequencies outside band
+  for k := 0 to LLowBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+  for k := LHighBin to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Band-stop (notch) filter: zero out frequencies between low and high cutoff
+procedure BandStopFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aLowCutoff, aHighCutoff: Single; aDst: PSingle);
+var
+  LComplex: PSimdComplexF32;
+  k: SizeUInt;
+  LLowBin, LHighBin: SizeUInt;
+begin
+  if aSignalCount = 0 then Exit;
+
+  LComplex := PSimdComplexF32(SimdAlloc(aSignalCount * SizeOf(TSimdComplexF32)));
+
+  // Copy signal to complex buffer
+  for k := 0 to aSignalCount - 1 do
+  begin
+    LComplex[k].Re := aSignal[k];
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdForward);
+
+  LLowBin := SizeUInt(Trunc(aLowCutoff * aSignalCount));
+  LHighBin := SizeUInt(Trunc(aHighCutoff * aSignalCount));
+
+  // Zero out frequencies inside band
+  for k := LLowBin to LHighBin - 1 do
+  begin
+    LComplex[k].Re := 0;
+    LComplex[k].Im := 0;
+  end;
+
+  FftRadix2F32(LComplex, aSignalCount, sfdInverse);
+
+  for k := 0 to aSignalCount - 1 do
+    aDst[k] := LComplex[k].Re / aSignalCount;
+
+  SimdFree(LComplex);
+end;
+
+// Generate sine wave: x[n] = amplitude * sin(2*pi*freq*n/sampleRate + phase)
+procedure GenerateSineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+var
+  i: SizeUInt;
+  LPhaseInc: Single;
+begin
+  LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aAmplitude * System.Sin(LPhaseInc * i + aPhase);
+end;
+
+// Generate cosine wave: x[n] = amplitude * cos(2*pi*freq*n/sampleRate + phase)
+procedure GenerateCosineF32(aDst: PSingle; aCount: SizeUInt;
+  aFrequency, aSampleRate, aAmplitude: Single; aPhase: Single = 0.0);
+var
+  i: SizeUInt;
+  LPhaseInc: Single;
+begin
+  LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aAmplitude * System.Cos(LPhaseInc * i + aPhase);
+end;
+
 
 // Real FFT using half-size complex FFT trick:
 // Pack N real samples as N/2 complex: z[k] = x[2k] + j*x[2k+1]
@@ -929,9 +1144,9 @@ begin
     aOutput[k].Re := LER + LTwR * LOI + LTwI * LOR;
     aOutput[k].Im := LEI - LTwR * LOR + LTwI * LOI;
 
-    // X[N-k] = conj(X[k]) for real input (but we store N/2+1 points)
-    aOutput[aCount - k].Re := LER - LTwR * LOI - LTwI * LOR;
-    aOutput[aCount - k].Im := -(LEI - LTwR * LOR + LTwI * LOI);
+    // X[N-k] = conj(X[k]) for real input (but we only store N/2+1 points)
+    // The conjugate symmetry means X[N-k] = conj(X[k]), but we don't need to store it
+    // since it's redundant for real input. Only store indices 0..N/2.
   end;
 
   SimdFree(LTwBufI);
@@ -1065,6 +1280,264 @@ begin
   ArrayMulScalarF32(aSrc, LTmp, aCount - 1, aCoeff);
   ArraySubF32(@aSrc[1], LTmp, @aDst[1], aCount - 1);
   SimdFree(LTmp);
+end;
+
+// Phase 11: Advanced signal processing
+
+procedure STFTF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aWindow: PSingle;
+  aOutput: PSimdComplexF32; aOutputRows, aOutputCols: PSizeUInt);
+var
+  LNumFrames, LFrame, i: SizeUInt;
+  LWindowed: PSingle;
+  LComplex: PSimdComplexF32;
+begin
+  if (aSignalCount = 0) or (aWindowSize = 0) or (aHopSize = 0) then
+  begin
+    if aOutputRows <> nil then aOutputRows^ := 0;
+    if aOutputCols <> nil then aOutputCols^ := 0;
+    Exit;
+  end;
+
+  LNumFrames := (aSignalCount - aWindowSize) div aHopSize + 1;
+  if aOutputRows <> nil then aOutputRows^ := LNumFrames;
+  if aOutputCols <> nil then aOutputCols^ := aWindowSize div 2 + 1;
+
+  LWindowed := PSingle(SimdAlloc(aWindowSize * SizeOf(Single)));
+  LComplex := PSimdComplexF32(SimdAlloc(aWindowSize * SizeOf(TSimdComplexF32)));
+
+  for LFrame := 0 to LNumFrames - 1 do
+  begin
+    // Apply window
+    if aWindow <> nil then
+      ArrayMulF32(@aSignal[LFrame * aHopSize], aWindow, LWindowed, aWindowSize)
+    else
+      Move(aSignal[LFrame * aHopSize], LWindowed^, aWindowSize * SizeOf(Single));
+
+    // Convert to complex
+    for i := 0 to aWindowSize - 1 do
+    begin
+      LComplex[i].Re := LWindowed[i];
+      LComplex[i].Im := 0;
+    end;
+
+    // FFT
+    FftRadix2F32(LComplex, aWindowSize, sfdForward);
+
+    // Store output (only first half + 1)
+    Move(LComplex^, PSimdComplexF32(PByte(aOutput) + LFrame * (aWindowSize div 2 + 1) * SizeOf(TSimdComplexF32))^,
+      (aWindowSize div 2 + 1) * SizeOf(TSimdComplexF32));
+  end;
+
+  SimdFree(LWindowed);
+  SimdFree(LComplex);
+end;
+
+procedure SpectrogramF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aWindow: PSingle;
+  aOutput: PSingle; aOutputRows, aOutputCols: PSizeUInt);
+var
+  LNumFrames, LFrame, i: SizeUInt;
+  LWindowed: PSingle;
+  LComplex: PSimdComplexF32;
+  LSpecSize: SizeUInt;
+begin
+  if (aSignalCount = 0) or (aWindowSize = 0) or (aHopSize = 0) then
+  begin
+    if aOutputRows <> nil then aOutputRows^ := 0;
+    if aOutputCols <> nil then aOutputCols^ := 0;
+    Exit;
+  end;
+
+  LNumFrames := (aSignalCount - aWindowSize) div aHopSize + 1;
+  LSpecSize := aWindowSize div 2 + 1;
+  if aOutputRows <> nil then aOutputRows^ := LNumFrames;
+  if aOutputCols <> nil then aOutputCols^ := LSpecSize;
+
+  LWindowed := PSingle(SimdAlloc(aWindowSize * SizeOf(Single)));
+  LComplex := PSimdComplexF32(SimdAlloc(aWindowSize * SizeOf(TSimdComplexF32)));
+
+  for LFrame := 0 to LNumFrames - 1 do
+  begin
+    // Apply window
+    if aWindow <> nil then
+      ArrayMulF32(@aSignal[LFrame * aHopSize], aWindow, LWindowed, aWindowSize)
+    else
+      Move(aSignal[LFrame * aHopSize], LWindowed^, aWindowSize * SizeOf(Single));
+
+    // Convert to complex
+    for i := 0 to aWindowSize - 1 do
+    begin
+      LComplex[i].Re := LWindowed[i];
+      LComplex[i].Im := 0;
+    end;
+
+    // FFT
+    FftRadix2F32(LComplex, aWindowSize, sfdForward);
+
+    // Compute power spectrum
+    PowerSpectrumF32(LComplex, LSpecSize, @aOutput[LFrame * LSpecSize]);
+  end;
+
+  SimdFree(LWindowed);
+  SimdFree(LComplex);
+end;
+
+procedure MelFilterBankF32(aDst: PSingle; aFilterCount, aFftSize: SizeUInt;
+  aSampleRate: Single; aLowFreq, aHighFreq: Single);
+var
+  i, k: SizeUInt;
+  LLowMel, LHighMel, LStep: Single;
+  LMelPoints: array of Single;
+  LFreqPoints: array of Single;
+  LBin: SizeUInt;
+  LStart, LCenter, LEnd: SizeUInt;
+  LVal: Single;
+begin
+  if (aFilterCount = 0) or (aFftSize = 0) or (aSampleRate <= 0) then Exit;
+
+  // Convert Hz to Mel
+  LLowMel := 2595 * Math.Log10(1 + aLowFreq / 700);
+  LHighMel := 2595 * Math.Log10(1 + aHighFreq / 700);
+
+  // Create mel points
+  SetLength(LMelPoints, aFilterCount + 2);
+  SetLength(LFreqPoints, aFilterCount + 2);
+  LStep := (LHighMel - LLowMel) / (aFilterCount + 1);
+
+  for i := 0 to aFilterCount + 1 do
+  begin
+    LMelPoints[i] := LLowMel + i * LStep;
+    LFreqPoints[i] := 700 * (Math.Power(10, LMelPoints[i] / 2595) - 1);
+  end;
+
+  // Initialize output to zero
+  FillChar(aDst^, aFilterCount * (aFftSize div 2 + 1) * SizeOf(Single), 0);
+
+  // Create triangular filters
+  for i := 0 to aFilterCount - 1 do
+  begin
+    LStart := Round(LFreqPoints[i] / aSampleRate * aFftSize);
+    LCenter := Round(LFreqPoints[i + 1] / aSampleRate * aFftSize);
+    LEnd := Round(LFreqPoints[i + 2] / aSampleRate * aFftSize);
+
+    if LStart >= aFftSize div 2 + 1 then Continue;
+    if LEnd > aFftSize div 2 + 1 then LEnd := aFftSize div 2 + 1;
+
+    // Rising slope (check LCenter > LStart to avoid unsigned underflow)
+    if LCenter > LStart then
+    begin
+      for k := LStart to LCenter - 1 do
+      begin
+        if k < aFftSize div 2 + 1 then
+        begin
+          LVal := (k - LStart) / (LCenter - LStart);
+          aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        end;
+      end;
+    end;
+
+    // Falling slope (check LEnd > LCenter to avoid unsigned underflow)
+    if LEnd > LCenter then
+    begin
+      for k := LCenter to LEnd - 1 do
+      begin
+        if k < aFftSize div 2 + 1 then
+        begin
+          LVal := (LEnd - k) / (LEnd - LCenter);
+          aDst[i * (aFftSize div 2 + 1) + k] := LVal;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure MFCCF32(aSignal: PSingle; aSignalCount: SizeUInt;
+  aSampleRate: Single; aCoeffCount: SizeUInt;
+  aWindowSize, aHopSize: SizeUInt; aDst: PSingle;
+  aDstRows, aDstCols: PSizeUInt);
+var
+  LNumFrames, LFrame, i, j: SizeUInt;
+  LSpecSize, LFilterCount: SizeUInt;
+  LWindow: PSingle;
+  LSpectrogram: PSingle;
+  LMelEnergies: PSingle;
+  LFilterBank: PSingle;
+  LLogMel: PSingle;
+  LSum, LVal: Single;
+begin
+  if (aSignalCount = 0) or (aWindowSize = 0) or (aHopSize = 0) or
+    (aCoeffCount = 0) or (aSampleRate <= 0) then
+  begin
+    if aDstRows <> nil then aDstRows^ := 0;
+    if aDstCols <> nil then aDstCols^ := 0;
+    Exit;
+  end;
+
+  LNumFrames := (aSignalCount - aWindowSize) div aHopSize + 1;
+  LSpecSize := aWindowSize div 2 + 1;
+  LFilterCount := aCoeffCount * 2; // Use 2x coefficients for filter bank
+
+  if aDstRows <> nil then aDstRows^ := LNumFrames;
+  if aDstCols <> nil then aDstCols^ := aCoeffCount;
+
+  // Allocate buffers
+  LWindow := PSingle(SimdAlloc(aWindowSize * SizeOf(Single)));
+  LSpectrogram := PSingle(SimdAlloc(LNumFrames * LSpecSize * SizeOf(Single)));
+  LFilterBank := PSingle(SimdAlloc(LFilterCount * LSpecSize * SizeOf(Single)));
+  LMelEnergies := PSingle(SimdAlloc(LFilterCount * SizeOf(Single)));
+  LLogMel := PSingle(SimdAlloc(LFilterCount * SizeOf(Single)));
+
+  // Create Hann window
+  HannWindowF32(LWindow, aWindowSize);
+
+  // Compute spectrogram
+  SpectrogramF32(aSignal, aSignalCount, aWindowSize, aHopSize, LWindow,
+    LSpectrogram, nil, nil);
+
+  // Create Mel filter bank
+  MelFilterBankF32(LFilterBank, LFilterCount, aWindowSize, aSampleRate, 0, aSampleRate / 2);
+
+  // Process each frame
+  for LFrame := 0 to LNumFrames - 1 do
+  begin
+    // Apply Mel filter bank to get Mel energies
+    for i := 0 to LFilterCount - 1 do
+    begin
+      LSum := 0;
+      for j := 0 to LSpecSize - 1 do
+        LSum := LSum + LSpectrogram[LFrame * LSpecSize + j] *
+          LFilterBank[i * LSpecSize + j];
+      LMelEnergies[i] := LSum;
+    end;
+
+    // Log Mel energies
+    for i := 0 to LFilterCount - 1 do
+    begin
+      if LMelEnergies[i] > 1e-10 then
+        LLogMel[i] := SimdLnF32(LMelEnergies[i])
+      else
+        LLogMel[i] := SimdLnF32(1e-10);
+    end;
+
+    // DCT (Type II) to get MFCCs
+    for i := 0 to aCoeffCount - 1 do
+    begin
+      LSum := 0;
+      for j := 0 to LFilterCount - 1 do
+      begin
+        LVal := Cos(PI * i * (2 * j + 1) / (2 * LFilterCount));
+        LSum := LSum + LLogMel[j] * LVal;
+      end;
+      aDst[LFrame * aCoeffCount + i] := LSum;
+    end;
+  end;
+
+  SimdFree(LWindow);
+  SimdFree(LSpectrogram);
+  SimdFree(LFilterBank);
+  SimdFree(LMelEnergies);
+  SimdFree(LLogMel);
 end;
 
 end.

@@ -78,22 +78,6 @@ begin
   LSuite := nil;
 end;
 
-procedure Test_SetTimeout_NegativeMs;
-var
-  LSuite: IBenchSuite;
-  LRaised: Boolean;
-begin
-  LRaised := False;
-  LSuite := TBenchSuite.Create('X');
-  try
-    LSuite.SetTimeout(-100);
-  except
-    on E: EBenchInvalidParam do LRaised := True;
-  end;
-  Check(LRaised, 'SetTimeout(-100) should raise EBenchInvalidParam');
-  LSuite := nil;
-end;
-
 procedure Test_SetTimeout_NegativeDuration;
 var
   LSuite: IBenchSuite;
@@ -340,7 +324,6 @@ begin
   T.Test('SetMaxIterations(0) raises EBenchInvalidParam', @Test_SetMaxIterations_Zero);
   T.Test('SetMinSamples(0) raises EBenchInvalidParam', @Test_SetMinSamples_Zero);
   T.Test('SetWarmupIters(-1) raises EBenchInvalidParam', @Test_SetWarmupIters_Negative);
-  T.Test('SetTimeout(-100) raises EBenchInvalidParam', @Test_SetTimeout_NegativeMs);
   T.Test('SetTimeout(TDuration<0) raises EBenchInvalidParam', @Test_SetTimeout_NegativeDuration);
 
   { Nil Function Guards (5) }

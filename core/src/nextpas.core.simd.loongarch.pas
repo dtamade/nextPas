@@ -222,8 +222,7 @@ end;
 procedure RegisterLASXBackend;
 begin
   {$IFDEF CPULOONGARCH64}
-  // TODO: Register LASX backend with dispatch system
-  // This requires implementing the full dispatch table
+  {$NOTE SIMD-LASX: LASX backend registration deferred — blocked on FPC LoongArch compiler support}
   {$ENDIF}
 end;
 

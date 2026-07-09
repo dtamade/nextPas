@@ -221,8 +221,7 @@ end;
 procedure RegisterMSABackend;
 begin
   {$IFDEF CPUMIPS64}
-  // TODO: Register MSA backend with dispatch system
-  // This requires implementing the full dispatch table
+  {$NOTE SIMD-MSA: MSA backend registration deferred — blocked on FPC MIPS compiler support}
   {$ENDIF}
 end;
 

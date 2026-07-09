@@ -3,10 +3,8 @@ program test_f64_pipeline;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv,
-  nextpas.core.simd,
-  nextpas.core.simd.alloc,
-  nextpas.core.simd.arrays.typed,
+  nextpas.core.text.conv, nextpas.core.simd,
+  nextpas.core.simd.alloc, nextpas.core.simd.arrays.typed,
   nextpas.core.simd.pipeline.f64;
 
 var

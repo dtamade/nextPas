@@ -24,6 +24,12 @@ type
    *}
   TXLangParser = (xlGo, xlRust, xlFPC);
 
+  {** 单行解析函数类型 }
+  TXLangLineParser = function(const ALine: string): TBenchResult;
+
+  {** 行匹配函数类型 }
+  TXLangLineMatcher = function(const ALine: string): Boolean;
+
   {** 解析错误（re-export 自 nextpas.core.exception） }
   EParseError = nextpas.core.exception.EParseError;
 
@@ -68,6 +74,15 @@ type
   {** 获取上次解析时跳过的行数 }
   function GetLastParseSkippedCount: Integer;
 
+  {** 通用行解析函数
+   *  @param AOutput 原始输出文本
+   *  @param ALineParser 单行解析函数
+   *  @param ALineMatcher 行匹配函数（返回 True 表示该行需要解析）
+   *  @return 解析结果数组 }
+  function ParseLines(const AOutput: string;
+    ALineParser: TXLangLineParser;
+    ALineMatcher: TXLangLineMatcher): TBenchResultArray;
+
 implementation
 
 uses
@@ -90,9 +105,30 @@ function SplitLines(const AText: string): TStringArray;
 var
   LNormalized: string;
   LLen, I, LOut: Integer;
+  LHasCR: Boolean;
 begin
-  // 单遍扫描：将 CR/LF 统一为 LF
   LLen := Length(AText);
+  if LLen = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
+  { Fast path: check if any CR exists; if not, split directly }
+  LHasCR := False;
+  for I := 1 to LLen do
+    if AText[I] = #13 then
+    begin
+      LHasCR := True;
+      Break;
+    end;
+  if not LHasCR then
+  begin
+    Result := StringsSplit(AText, #10);
+    Exit;
+  end;
+
+  // CR/LF normalization pass
   SetLength(LNormalized, LLen);
   LOut := 0;
   I := 1;
@@ -119,16 +155,57 @@ begin
   Result := StringsSplit(LNormalized, #10);
 end;
 
-{ Helper: Trim and check empty }
+{ Helper: Trim and check empty — avoid allocation for common case }
 
 function IsEmptyOrComment(const ALine: string): Boolean;
 var
-  LTrimmed: string;
+  LLen, LStart: Integer;
 begin
-  LTrimmed := Trim(ALine);
-  if LTrimmed = '' then
-    Exit(True);
-  Result := LTrimmed[1] = '#';
+  LLen := Length(ALine);
+  { Skip leading whitespace }
+  LStart := 1;
+  while (LStart <= LLen) and (ALine[LStart] in [' ', #9, #10, #13]) do
+    Inc(LStart);
+  if LStart > LLen then
+    Exit(True);  { empty or all-whitespace }
+  Result := ALine[LStart] = '#';
+end;
+
+function ParseLines(const AOutput: string;
+  ALineParser: TXLangLineParser;
+  ALineMatcher: TXLangLineMatcher): TBenchResultArray;
+var
+  LLines: TStringArray;
+  LLine: string;
+  LList: array of TBenchResult;
+  LCount: Integer;
+  LCapacity: Integer;
+begin
+  GLastParseSkippedCount := 0;
+  LList := nil;
+  LCount := 0;
+  LCapacity := 0;
+  LLines := SplitLines(AOutput);
+  for LLine in LLines do
+  begin
+    if IsEmptyOrComment(LLine) then Continue;
+    if not ALineMatcher(LLine) then Continue;
+
+    try
+      if LCount >= LCapacity then
+      begin
+        if LCapacity = 0 then LCapacity := 8
+        else LCapacity := LCapacity * 2;
+        SetLength(LList, LCapacity);
+      end;
+      LList[LCount] := ALineParser(LLine);
+      Inc(LCount);
+    except
+      Inc(GLastParseSkippedCount);
+    end;
+  end;
+  SetLength(LList, LCount);
+  Result := LList;
 end;
 
 { Helper: Safely compute TotalNs = NsPerOp * Iterations
@@ -307,39 +384,26 @@ end;
 
 { ParseGoBenchOutput }
 
-function ParseGoBenchOutput(const AOutput: string): TBenchResultArray;
-var
-  LLines: TStringArray;
-  LLine: string;
-  LList: array of TBenchResult;
-  LCount: Integer;
-  LCapacity: Integer;
-begin
-  GLastParseSkippedCount := 0;
-  LList := nil;
-  LCount := 0;
-  LCapacity := 0;
-  LLines := SplitLines(AOutput);
-  for LLine in LLines do
-  begin
-    if IsEmptyOrComment(LLine) then Continue;
-    if Pos('Benchmark', LLine) <> 1 then Continue;
+{ 行匹配器 }
 
-    try
-      if LCount >= LCapacity then
-      begin
-        if LCapacity = 0 then LCapacity := 8
-        else LCapacity := LCapacity * 2;
-        SetLength(LList, LCapacity);
-      end;
-      LList[LCount] := ParseGoBenchLine(LLine);
-      Inc(LCount);
-    except
-      Inc(GLastParseSkippedCount);
-    end;
-  end;
-  SetLength(LList, LCount);
-  Result := LList;
+function GoLineMatcher(const ALine: string): Boolean;
+begin
+  Result := Pos('Benchmark', ALine) = 1;
+end;
+
+function RustLineMatcher(const ALine: string): Boolean;
+begin
+  Result := Pos('time:', ALine) > 0;
+end;
+
+function FPCLineMatcher(const ALine: string): Boolean;
+begin
+  Result := Pos('NsPerOp', ALine) > 0;
+end;
+
+function ParseGoBenchOutput(const AOutput: string): TBenchResultArray;
+begin
+  Result := ParseLines(AOutput, @ParseGoBenchLine, @GoLineMatcher);
 end;
 
 { ParseRustBenchLine }
@@ -423,38 +487,8 @@ end;
 { ParseRustBenchOutput }
 
 function ParseRustBenchOutput(const AOutput: string): TBenchResultArray;
-var
-  LLines: TStringArray;
-  LLine: string;
-  LList: array of TBenchResult;
-  LCount: Integer;
-  LCapacity: Integer;
 begin
-  GLastParseSkippedCount := 0;
-  LList := nil;
-  LCount := 0;
-  LCapacity := 0;
-  LLines := SplitLines(AOutput);
-  for LLine in LLines do
-  begin
-    if IsEmptyOrComment(LLine) then Continue;
-    if Pos('time:', LLine) = 0 then Continue;
-
-    try
-      if LCount >= LCapacity then
-      begin
-        if LCapacity = 0 then LCapacity := 8
-        else LCapacity := LCapacity * 2;
-        SetLength(LList, LCapacity);
-      end;
-      LList[LCount] := ParseRustBenchLine(LLine);
-      Inc(LCount);
-    except
-      Inc(GLastParseSkippedCount);
-    end;
-  end;
-  SetLength(LList, LCount);
-  Result := LList;
+  Result := ParseLines(AOutput, @ParseRustBenchLine, @RustLineMatcher);
 end;
 
 { ParseFPCBenchLine }
@@ -501,38 +535,8 @@ end;
 { ParseFPCBenchOutput }
 
 function ParseFPCBenchOutput(const AOutput: string): TBenchResultArray;
-var
-  LLines: TStringArray;
-  LLine: string;
-  LList: array of TBenchResult;
-  LCount: Integer;
-  LCapacity: Integer;
 begin
-  GLastParseSkippedCount := 0;
-  LList := nil;
-  LCount := 0;
-  LCapacity := 0;
-  LLines := SplitLines(AOutput);
-  for LLine in LLines do
-  begin
-    if IsEmptyOrComment(LLine) then Continue;
-    if Pos('NsPerOp', LLine) = 0 then Continue;
-
-    try
-      if LCount >= LCapacity then
-      begin
-        if LCapacity = 0 then LCapacity := 8
-        else LCapacity := LCapacity * 2;
-        SetLength(LList, LCapacity);
-      end;
-      LList[LCount] := ParseFPCBenchLine(LLine);
-      Inc(LCount);
-    except
-      Inc(GLastParseSkippedCount);
-    end;
-  end;
-  SetLength(LList, LCount);
-  Result := LList;
+  Result := ParseLines(AOutput, @ParseFPCBenchLine, @FPCLineMatcher);
 end;
 
 { ParseBenchOutput }

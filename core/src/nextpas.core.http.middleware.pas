@@ -12,6 +12,9 @@ type
   { Function type for creating middleware from a closure }
   TMiddlewareWrapFunc = reference to function(const ANext: IHttpHandler): IHttpHandler;
 
+  { Predicate for conditional middleware — returns True to apply, False to skip }
+  TRequestPredicate = reference to function(const AReq: IHttpRequest): Boolean;
+
   { Wraps a THttpHandlerFunc into IHttpHandler }
   TFuncHandler = class(TInterfacedObject, IHttpHandler)
   private
@@ -50,6 +53,22 @@ function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
+
+{** @desc Conditional middleware wrapper. Applies AMiddleware only when
+   APredicate returns True for the request. If the predicate returns False,
+   the request passes through to the next handler unmodified.
+
+   Example: skip auth for health checks
+     WhenMiddleware(
+       function(const AReq: IHttpRequest): Boolean
+       begin
+         Result := AReq.Path <> '/healthz';
+       end,
+       AuthMiddleware
+     ) }
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 
 implementation
 
@@ -181,6 +200,29 @@ begin
     LChain.Free;
     raise;
   end;
+end;
+
+function WhenMiddleware(
+  const APredicate: TRequestPredicate;
+  const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+begin
+  if not Assigned(APredicate) then
+    raise EHttpError.Create('HTTP conditional middleware predicate must not be nil');
+  if AMiddleware = nil then
+    raise EHttpError.Create('HTTP conditional middleware must not be nil');
+  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  var
+    LWrapped: IHttpHandler;
+  begin
+    LWrapped := AMiddleware.Wrap(ANext);
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      if APredicate(AReq) then
+        LWrapped.ServeHTTP(AReq, AW)
+      else
+        ANext.ServeHTTP(AReq, AW);
+    end);
+  end);
 end;
 
 end.
