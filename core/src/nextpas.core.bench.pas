@@ -832,9 +832,16 @@ begin
     LEnvironment := GetEnvironment;
     for I := 0 to FEntryCount - 1 do
     begin
-      LResults[I] := FRunner.RunOne(FEntries[I]);
-      if LResults[I].Executed then
-        Inc(LResultCount);
+      if not FEntries[I].Condition then
+      begin
+        LResults[I] := Default(TBenchResult);
+        LResults[I].Name := FEntries[I].Name;
+        LResults[I].Executed := True;
+        LResults[I].Skipped := True;
+      end
+      else
+        LResults[I] := FRunner.RunOne(FEntries[I]);
+      Inc(LResultCount);
     end;
     Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
     Exit;
@@ -869,10 +876,19 @@ begin
   for I := 0 to LThreadCount - 1 do
     platform_thread_join(LWorkers[I].Handle, LRetVal);
 
-  { 收集结果 }
+  { 收集结果 — 遍历所有条目（包括 skipped 条件条目） }
   LResultCount := 0;
   for I := 0 to LThreadCount - 1 do
-    Inc(LResultCount, LWorkers[I].ResultCount);
+  begin
+    LThreadResults := LWorkers[I].Results;
+    for J := 0 to LWorkers[I].EntryCount - 1 do
+    begin
+      // 条件跳过的条目：Executed=True, Skipped=True → 包含
+      // 过滤跳过的条目：Executed=False → 跳过
+      if LThreadResults[J].Executed then
+        Inc(LResultCount);
+    end;
+  end;
 
   SetLength(LResults, LResultCount);
   LResultCount := 0;
@@ -880,10 +896,13 @@ begin
   for I := 0 to LThreadCount - 1 do
   begin
     LThreadResults := LWorkers[I].Results;
-    for J := 0 to LWorkers[I].ResultCount - 1 do
+    for J := 0 to LWorkers[I].EntryCount - 1 do
     begin
-      LResults[LResultCount] := LThreadResults[J];
-      Inc(LResultCount);
+      if LThreadResults[J].Executed then
+      begin
+        LResults[LResultCount] := LThreadResults[J];
+        Inc(LResultCount);
+      end;
     end;
   end;
 
@@ -938,6 +957,10 @@ begin
 
   for I := 0 to FEntryCount - 1 do
   begin
+    { B23: 进度回调 }
+    if Assigned(FConfig.OnProgress) and (FEntryCount > 0) then
+      FConfig.OnProgress(FEntries[I].Name, I / FEntryCount, 0);
+
     if not FEntries[I].Condition then
       Continue;
 
@@ -977,6 +1000,10 @@ begin
 
   // 截断到实际长度
   SetLength(LResults, LResultCount);
+
+  { B23: 最终进度回调 }
+  if Assigned(FConfig.OnProgress) and (FEntryCount > 0) then
+    FConfig.OnProgress('', 1.0, 0);
 
   // 获取环境信息
   LEnvironment := GetEnvironment;

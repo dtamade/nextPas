@@ -1745,6 +1745,74 @@ begin
 end;
 
 var
+  GProgressCallCount: Integer = 0;
+  GProgressName: string = '';
+
+procedure ProgressCallback(const AName: string; AProgress: Double;
+  AEstimatedRemainingMs: Int64);
+begin
+  Inc(GProgressCallCount);
+  GProgressName := AName;
+end;
+
+procedure TestTBenchSuite_SetOnProgress;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  GProgressCallCount := 0;
+  GProgressName := '';
+
+  LSuite := CreateFastSuite('TestSuite');
+  LSuite.SetOnProgress(@ProgressCallback);
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+
+  LResults := LSuite.Run;
+
+  Check(LResults.Count = 2, 'SetOnProgress: result count = 2');
+  Check(GProgressCallCount > 0, 'SetOnProgress: callback was called');
+  // Callback should be called at least once per benchmark
+  Check(GProgressCallCount >= 2, 'SetOnProgress: called >= 2 times');
+end;
+
+procedure TestTBenchSuite_RunParallel_WithFilter;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  LSuite := CreateFastSuite('TestSuite');
+  LSuite.SetFilter('Fast');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+
+  LResults := LSuite.RunParallel(2);
+
+  Check(LResults.Count = 1, 'RunParallel+Filter: result count = 1');
+  Check(LResults.GetByName('Fast').NsPerOp > 0, 'RunParallel+Filter: Fast NsPerOp > 0');
+  Check(not LResults.TryGetByName('Medium', LResult), 'RunParallel+Filter: Medium filtered out');
+end;
+
+procedure TestTBenchSuite_RunParallel_WithCondition;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LResult: TBenchResult;
+begin
+  LSuite := CreateFastSuite('TestSuite');
+  LSuite.AddWhen('Fast', @BenchFast, True);
+  LSuite.AddWhen('Medium', @BenchMedium, False);
+
+  LResults := LSuite.RunParallel(2);
+
+  Check(LResults.Count = 2, 'RunParallel+Condition: result count = 2');
+  Check(LResults.GetByName('Fast').NsPerOp > 0, 'RunParallel+Condition: Fast NsPerOp > 0');
+  Check(LResults.GetByName('Fast').Executed, 'RunParallel+Condition: Fast executed');
+  Check(LResults.GetByName('Medium').Skipped, 'RunParallel+Condition: Medium skipped');
+end;
+
+var
   T: TTestSuite;
 begin
   GParallelLock := TMutex.Create;
@@ -1807,6 +1875,9 @@ begin
     T.Test('TryRemoveByName (F-10)', @TestTryRemoveByName);
     T.Test('TryLoadBaseline (F-10)', @TestTryLoadBaseline);
     T.Test('SetOutput (ILineWriter)', @TestSetOutput);
+    T.Test('SetOnProgress', @TestTBenchSuite_SetOnProgress);
+    T.Test('RunParallel_WithFilter', @TestTBenchSuite_RunParallel_WithFilter);
+    T.Test('RunParallel_WithCondition', @TestTBenchSuite_RunParallel_WithCondition);
     T.Run;
     T.Summary;
   finally
