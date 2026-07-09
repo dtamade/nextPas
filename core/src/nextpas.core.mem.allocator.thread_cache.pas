@@ -27,8 +27,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.mem.base,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 const
   {** 线程缓存槽位数（每个 size class） }
@@ -62,7 +61,7 @@ type
    *    1. 放入线程本地缓存（无锁）
    *    2. 缓存满：批量释放回内部分配器（有锁）
    *}
-  TThreadCacheAllocator = class(TAllocator)
+  TThreadCacheAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     { Size class 定义 }
@@ -79,20 +78,20 @@ type
     function FindSizeClass(ASize: SizeUInt): Int32;
     procedure BatchFetch(AClassIdx: Int32);
     procedure BatchReturn(AClassIdx: Int32);
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     {** 创建线程缓存分配器 }
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
 
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+
     {** 获取统计信息 }
     function GetStats: TThreadCacheStats;
 
-    function Traits: TAllocatorTraits; override;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -191,7 +190,7 @@ begin
   Inc(FBatchReturns);
 end;
 
-function TThreadCacheAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TThreadCacheAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LClassIdx: Int32;
 begin
@@ -222,32 +221,32 @@ begin
     Result := FInner.GetMem(ASize);
 end;
 
-function TThreadCacheAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TThreadCacheAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
     FillChar(Result^, ASize, 0);
 end;
 
-function TThreadCacheAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TThreadCacheAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   if APtr = nil then
-    Exit(DoGetMem(ASize));
+    Exit(GetMem(ASize));
   if ASize = 0 then
   begin
-    DoFreeMem(APtr);
+    FreeMem(APtr);
     Exit(nil);
   end;
 
-  Result := DoGetMem(ASize);
+  Result := GetMem(ASize);
   if Result <> nil then
   begin
     Move(APtr^, Result^, ASize);
-    DoFreeMem(APtr);
+    FreeMem(APtr);
   end;
 end;
 
-procedure TThreadCacheAllocator.DoFreeMem(APtr: Pointer);
+procedure TThreadCacheAllocator.FreeMem(APtr: Pointer); inline;
 var
   LI: Int32;
 begin
@@ -285,9 +284,10 @@ begin
     Inc(Result.CachedBlockCount, UInt64(FCachedCounts[LI]));
 end;
 
-function TThreadCacheAllocator.Traits: TAllocatorTraits;
+function TThreadCacheAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 
