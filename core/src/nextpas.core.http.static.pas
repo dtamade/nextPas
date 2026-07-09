@@ -100,21 +100,82 @@ var
   LExt: string;
 begin
   LExt := LowerCase(AExt);
-  if LExt = '.html' then Result := 'text/html'
-  else if LExt = '.htm' then Result := 'text/html'
-  else if LExt = '.css' then Result := 'text/css'
-  else if LExt = '.js' then Result := 'application/javascript'
-  else if LExt = '.json' then Result := 'application/json'
+  { Text / markup }
+  if LExt = '.html' then Result := 'text/html; charset=utf-8'
+  else if LExt = '.htm' then Result := 'text/html; charset=utf-8'
+  else if LExt = '.css' then Result := 'text/css; charset=utf-8'
+  else if LExt = '.txt' then Result := 'text/plain; charset=utf-8'
+  else if LExt = '.csv' then Result := 'text/csv; charset=utf-8'
+  else if LExt = '.md' then Result := 'text/markdown; charset=utf-8'
+  else if LExt = '.xml' then Result := 'application/xml'
+  else if LExt = '.svg' then Result := 'image/svg+xml'
+  { JavaScript / JSON / WebAssembly }
+  else if LExt = '.js' then Result := 'application/javascript; charset=utf-8'
+  else if LExt = '.mjs' then Result := 'application/javascript; charset=utf-8'
+  else if LExt = '.json' then Result := 'application/json; charset=utf-8'
+  else if LExt = '.jsonld' then Result := 'application/ld+json'
+  else if LExt = '.wasm' then Result := 'application/wasm'
+  { Images }
   else if LExt = '.png' then Result := 'image/png'
   else if LExt = '.jpg' then Result := 'image/jpeg'
   else if LExt = '.jpeg' then Result := 'image/jpeg'
   else if LExt = '.gif' then Result := 'image/gif'
-  else if LExt = '.svg' then Result := 'image/svg+xml'
-  else if LExt = '.txt' then Result := 'text/plain'
-  else if LExt = '.xml' then Result := 'application/xml'
-  else if LExt = '.pdf' then Result := 'application/pdf'
-  else if LExt = '.wasm' then Result := 'application/wasm'
+  else if LExt = '.webp' then Result := 'image/webp'
+  else if LExt = '.avif' then Result := 'image/avif'
   else if LExt = '.ico' then Result := 'image/x-icon'
+  else if LExt = '.bmp' then Result := 'image/bmp'
+  else if LExt = '.tiff' then Result := 'image/tiff'
+  else if LExt = '.tif' then Result := 'image/tiff'
+  else if LExt = '.heic' then Result := 'image/heic'
+  else if LExt = '.heif' then Result := 'image/heif'
+  else if LExt = '.apng' then Result := 'image/apng'
+  { Fonts }
+  else if LExt = '.woff' then Result := 'font/woff'
+  else if LExt = '.woff2' then Result := 'font/woff2'
+  else if LExt = '.ttf' then Result := 'font/ttf'
+  else if LExt = '.otf' then Result := 'font/otf'
+  else if LExt = '.eot' then Result := 'application/vnd.ms-fontobject'
+  { Audio / Video }
+  else if LExt = '.mp3' then Result := 'audio/mpeg'
+  else if LExt = '.ogg' then Result := 'audio/ogg'
+  else if LExt = '.opus' then Result := 'audio/opus'
+  else if LExt = '.wav' then Result := 'audio/wav'
+  else if LExt = '.flac' then Result := 'audio/flac'
+  else if LExt = '.aac' then Result := 'audio/aac'
+  else if LExt = '.mp4' then Result := 'video/mp4'
+  else if LExt = '.webm' then Result := 'video/webm'
+  else if LExt = '.ogv' then Result := 'video/ogg'
+  else if LExt = '.avi' then Result := 'video/x-msvideo'
+  else if LExt = '.mov' then Result := 'video/quicktime'
+  else if LExt = '.mkv' then Result := 'video/x-matroska'
+  { Documents }
+  else if LExt = '.pdf' then Result := 'application/pdf'
+  else if LExt = '.doc' then Result := 'application/msword'
+  else if LExt = '.docx' then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  else if LExt = '.xls' then Result := 'application/vnd.ms-excel'
+  else if LExt = '.xlsx' then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  else if LExt = '.ppt' then Result := 'application/vnd.ms-powerpoint'
+  else if LExt = '.pptx' then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  { Archives }
+  else if LExt = '.zip' then Result := 'application/zip'
+  else if LExt = '.gz' then Result := 'application/gzip'
+  else if LExt = '.tar' then Result := 'application/x-tar'
+  else if LExt = '.bz2' then Result := 'application/x-bzip2'
+  else if LExt = '.7z' then Result := 'application/x-7z-compressed'
+  else if LExt = '.rar' then Result := 'application/vnd.rar'
+  { Streaming / manifest }
+  else if LExt = '.m3u8' then Result := 'application/vnd.apple.mpegurl'
+  else if LExt = '.mpd' then Result := 'application/dash+xml'
+  else if LExt = '.ts' then Result := 'video/mp2t'
+  { Data interchange }
+  else if LExt = '.yaml' then Result := 'application/yaml'
+  else if LExt = '.yml' then Result := 'application/yaml'
+  else if LExt = '.toml' then Result := 'application/toml'
+  else if LExt = '.geojson' then Result := 'application/geo+json'
+  { Web manifests }
+  else if LExt = '.webmanifest' then Result := 'application/manifest+json'
+  else if LExt = '.webapp' then Result := 'application/x-web-app-manifest+json'
+  { Fallback }
   else Result := 'application/octet-stream';
 end;
 
@@ -357,6 +418,7 @@ begin
     AW.GetHeaders.SetHeader('etag', LETag);
     AW.GetHeaders.SetHeader('last-modified', LLastModified);
     AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
     if ADownloadName <> '' then
       AW.GetHeaders.SetHeader('content-disposition',
         'attachment; filename="' + ADownloadName + '"');

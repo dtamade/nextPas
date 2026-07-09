@@ -596,7 +596,8 @@ begin
             LPayload := LPayload + LFrame.Payload;
             if LFrame.Fin then
             begin
-              Result.Opcode := wsOpText; { Original opcode was text or binary }
+              { Recover original opcode from the first frame }
+              Result.Opcode := FFragmentOpcode;
               Result.Fin := True;
               Result.Payload := LPayload;
               Exit;

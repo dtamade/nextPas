@@ -37,9 +37,8 @@ function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddle
 implementation
 
 uses
-  SysUtils,
-  DateUtils,
   nextpas.core.errors,
+  nextpas.core.time.offsetdatetime,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.message,
@@ -62,7 +61,7 @@ const
 
 function NowEpoch: Int64;
 begin
-  Result := Int64(DateTimeToUnix(Now));
+  Result := TOffsetDateTime.NowUtc.ToUnixSeconds;
 end;
 
 { Remove entries whose window has expired. Called every CLEANUP_INTERVAL requests

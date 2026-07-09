@@ -33,16 +33,51 @@ function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.platform.random,
   nextpas.core.http.middleware;
+
+const
+  HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
 
 function GenerateRequestId: string;
 var
-  LGuid: TGuid;
+  LBytes: array[0..15] of Byte;
+  I: Integer;
 begin
-  CreateGUID(LGuid);
-  Result := GUIDToString(LGuid);
-  Result := Copy(Result, 2, Length(Result) - 2);
+  platform_random_bytes(@LBytes[0], 16);
+  { Set UUID v4 version (4) and variant (10xx) bits }
+  LBytes[6] := (LBytes[6] and $0F) or $40;
+  LBytes[8] := (LBytes[8] and $3F) or $80;
+  SetLength(Result, 36);
+  for I := 0 to 3 do
+  begin
+    Result[I * 2 + 1] := HEX_CHARS[(LBytes[I] shr 4) and $F];
+    Result[I * 2 + 2] := HEX_CHARS[LBytes[I] and $F];
+  end;
+  Result[9] := '-';
+  for I := 4 to 5 do
+  begin
+    Result[I * 2 + 2] := HEX_CHARS[(LBytes[I] shr 4) and $F];
+    Result[I * 2 + 3] := HEX_CHARS[LBytes[I] and $F];
+  end;
+  Result[14] := '-';
+  for I := 6 to 7 do
+  begin
+    Result[I * 2 + 3] := HEX_CHARS[(LBytes[I] shr 4) and $F];
+    Result[I * 2 + 4] := HEX_CHARS[LBytes[I] and $F];
+  end;
+  Result[19] := '-';
+  for I := 8 to 9 do
+  begin
+    Result[I * 2 + 4] := HEX_CHARS[(LBytes[I] shr 4) and $F];
+    Result[I * 2 + 5] := HEX_CHARS[LBytes[I] and $F];
+  end;
+  Result[24] := '-';
+  for I := 10 to 15 do
+  begin
+    Result[I * 2 + 5] := HEX_CHARS[(LBytes[I] shr 4) and $F];
+    Result[I * 2 + 6] := HEX_CHARS[LBytes[I] and $F];
+  end;
 end;
 
 function RequestIdMiddleware: IHttpMiddleware;
