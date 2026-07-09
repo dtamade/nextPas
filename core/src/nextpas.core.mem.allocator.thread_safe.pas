@@ -36,23 +36,21 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.mutex;
 
 type
-  TThreadSafeAllocator = class(TAllocator)
+  TThreadSafeAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
     FLock: TMemMutex;
-  protected
-    function DoGetMem(ASize: SizeUInt): Pointer; override;
-    function DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
   public
     constructor Create(AInner: IAllocator);
     destructor Destroy; override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
   end;
 
 implementation
@@ -72,13 +70,13 @@ begin
   inherited Destroy;
 end;
 
-function TThreadSafeAllocator.Traits: TAllocatorTraits;
+function TThreadSafeAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result := FInner.Traits;
   Result.ThreadSafe := True;
 end;
 
-function TThreadSafeAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TThreadSafeAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   FLock.Acquire;
   try
@@ -88,7 +86,7 @@ begin
   end;
 end;
 
-function TThreadSafeAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TThreadSafeAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   FLock.Acquire;
   try
@@ -98,7 +96,7 @@ begin
   end;
 end;
 
-function TThreadSafeAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TThreadSafeAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   FLock.Acquire;
   try
@@ -108,7 +106,7 @@ begin
   end;
 end;
 
-procedure TThreadSafeAllocator.DoFreeMem(APtr: Pointer);
+procedure TThreadSafeAllocator.FreeMem(APtr: Pointer); inline;
 begin
   FLock.Acquire;
   try
