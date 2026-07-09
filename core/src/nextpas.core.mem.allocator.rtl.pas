@@ -6,21 +6,20 @@ interface
 
 uses
   nextpas.core.errors,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.intf;
 
 type
   {**
    * TRtlAllocator
    * @desc 使用标准 Pascal RTL 内存管理器实现的 IAllocator 具体类
    *}
-  TRtlAllocator = class(TAllocator)
-  protected
-    function  DoGetMem(ASize: SizeUInt): Pointer; override;
-    function  DoAllocMem(ASize: SizeUInt): Pointer; override;
-    function  DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure DoFreeMem(APtr: Pointer); override;
+  TRtlAllocator = class(TInterfacedObject, IAllocator)
   public
-    function  Traits: TAllocatorTraits; override;
+    function  GetMem(ASize: SizeUInt): Pointer; inline;
+    function  AllocMem(ASize: SizeUInt): Pointer; inline;
+    function  ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function  Traits: TAllocatorTraits; inline;
   end;
 
 function GetRtlAllocator: IAllocator;
@@ -33,38 +32,35 @@ uses
   nextpas.core.platform.sync;
 
 var
-  _RTLAllocatorObj: TAllocator = nil;
+  _RTLAllocatorObj: TInterfacedObject = nil;
   _RTLAllocatorIntf: IAllocator = nil;
   GRtlAllocLock: TPlatformMutex;
 
-function TRtlAllocator.DoGetMem(ASize: SizeUInt): Pointer;
+function TRtlAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := System.GetMem(ASize);
 end;
 
-function TRtlAllocator.DoAllocMem(ASize: SizeUInt): Pointer;
+function TRtlAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := System.AllocMem(ASize);
 end;
 
-function TRtlAllocator.DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
+function TRtlAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   Result := System.ReallocMem(APtr, ASize);
 end;
 
-procedure TRtlAllocator.DoFreeMem(APtr: Pointer);
+procedure TRtlAllocator.FreeMem(APtr: Pointer); inline;
 begin
   System.FreeMem(APtr);
 end;
 
-function TRtlAllocator.Traits: TAllocatorTraits;
+function TRtlAllocator.Traits: TAllocatorTraits; inline;
 begin
-  Result := inherited Traits;
-  // RTL Allocator semantics:
-  // - AllocMem zero-initializes; GetMem does not guarantee zero
-  // - No native aligned API exposed via this allocator (use aligned module/bridge)
-  // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := True;
 end;
 
 function GetRtlAllocator: IAllocator;
