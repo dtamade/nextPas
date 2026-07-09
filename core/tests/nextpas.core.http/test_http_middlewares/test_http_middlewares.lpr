@@ -32,6 +32,8 @@ uses
   nextpas.core.http.middleware.compression,
   nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
+  nextpas.core.http.stream,
+  nextpas.core.http.sse,
   nextpas.core.compress,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -3028,6 +3030,175 @@ begin
   Check(LCaught, 'zero timeout raises EArgumentError');
 end;
 
+{ Mock reader for stream tests }
+type
+  TMockReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPos: Int64;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TMockReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 0;
+end;
+
+function TMockReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: Int64;
+begin
+  LRemaining := Int64(Length(FData)) - FPos;
+  if LRemaining <= 0 then
+    Exit(0);
+  if Int64(ACount) > LRemaining then
+    Result := SizeUInt(LRemaining)
+  else
+    Result := ACount;
+  if Result > 0 then
+  begin
+    Move(FData[FPos], ABuf, Result);
+    Inc(FPos, Int64(Result));
+  end;
+end;
+
+{ Stream tests }
+procedure TestHttpWriteStreamCopiesData;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+  LN: Int64;
+  I: Integer;
+begin
+  SetLength(LData, 100);
+  for I := 0 to 99 do
+    LData[I] := Byte(I);
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LReader := TMockReader.Create(LData);
+  LN := HttpWriteStream(LW, LReader as IReader, 32);
+  CheckEqual(100, LN, 'stream copies all bytes');
+  CheckEqual(100, Int64(Length(LWObj.BodyBytes)), 'stream writes to writer');
+end;
+
+procedure TestHttpWriteStreamEmptyReader;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+  LN: Int64;
+begin
+  SetLength(LData, 0);
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LReader := TMockReader.Create(LData);
+  LN := HttpWriteStream(LW, LReader as IReader);
+  CheckEqual(0, LN, 'empty stream writes zero bytes');
+end;
+
+procedure TestHttpWriteStreamWithLengthSetsHeader;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+  LN: Int64;
+begin
+  SetLength(LData, 50);
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LReader := TMockReader.Create(LData);
+  LN := HttpWriteStreamWithLength(LW, 50, LReader as IReader, 16);
+  CheckEqual(50, LN, 'stream with length copies all bytes');
+  CheckEqual('50', LWObj.GetHeaders.Get('content-length'),
+    'stream with length sets content-length header');
+end;
+
+{ SSE tests }
+procedure TestSSEEventWriterWritesEvents;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  Check(LWriter.IsOpen, 'SSE writer is open');
+  LWriter.WriteEventSimple('message', 'hello', '');
+  Check(Pos('data: hello', LWObj.Body) > 0, 'SSE writes data line');
+  LWriter.Close;
+  Check(not LWriter.IsOpen, 'SSE writer is closed after Close');
+end;
+
+procedure TestSSEEventWriterWritesEventType;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteEventSimple('update', '{"x":1}', 'evt-1');
+  Check(Pos('event: update', LWObj.Body) > 0, 'SSE writes event type');
+  Check(Pos('id: evt-1', LWObj.Body) > 0, 'SSE writes event id');
+  Check(Pos('data: {"x":1}', LWObj.Body) > 0, 'SSE writes event data');
+  LWriter.Close;
+end;
+
+procedure TestSSEEventWriterWritesComment;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteComment('heartbeat');
+  Check(Pos(': heartbeat', LWObj.Body) > 0, 'SSE writes comment');
+  LWriter.Close;
+end;
+
+procedure TestSSEEventWriterSetsHeaders;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  CheckEqual('text/event-stream', LWObj.GetHeaders.Get('content-type'),
+    'SSE sets content-type');
+  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'),
+    'SSE sets cache-control');
+  LWriter.Close;
+end;
+
+procedure TestSSEEventWriterMultilineData;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteEventSimple('message', 'line1'#10'line2', '');
+  Check(Pos('data: line1', LWObj.Body) > 0, 'SSE writes first data line');
+  Check(Pos('data: line2', LWObj.Body) > 0, 'SSE writes second data line');
+  LWriter.Close;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -3161,6 +3332,16 @@ begin
   T.Test('Deadline: fast handler passes', @TestDeadlineFastHandlerPasses);
   T.Test('Deadline: slow handler times out', @TestDeadlineSlowHandlerTimesOut);
   T.Test('Deadline: zero timeout raises', @TestDeadlineZeroRaises);
+  { Stream }
+  T.Test('Stream: copies data', @TestHttpWriteStreamCopiesData);
+  T.Test('Stream: empty reader', @TestHttpWriteStreamEmptyReader);
+  T.Test('Stream: with length sets header', @TestHttpWriteStreamWithLengthSetsHeader);
+  { SSE }
+  T.Test('SSE: writes events', @TestSSEEventWriterWritesEvents);
+  T.Test('SSE: writes event type and id', @TestSSEEventWriterWritesEventType);
+  T.Test('SSE: writes comment', @TestSSEEventWriterWritesComment);
+  T.Test('SSE: sets headers', @TestSSEEventWriterSetsHeaders);
+  T.Test('SSE: multiline data', @TestSSEEventWriterMultilineData);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.
