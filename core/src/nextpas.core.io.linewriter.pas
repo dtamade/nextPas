@@ -19,6 +19,12 @@ type
 function CreateLineWriter(const AWriter: IWriter;
   const ALineSep: string = #10): ILineWriter;
 
+{** 创建控制台行写入器（输出到 stdout） }
+function CreateConsoleWriter: ILineWriter;
+
+{** 创建标准错误行写入器（输出到 stderr） }
+function CreateStderrWriter: ILineWriter;
+
 procedure IoWriteLine(const AWriter: IWriter; const ALine: string);
 procedure IoWriteLines(const AWriter: IWriter; const ALines: TStringArray);
 
@@ -35,6 +41,22 @@ type
     FLineSep: string;
   public
     constructor Create(const AInner: IWriter; const ALineSep: string);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure WriteLine(const ALine: string);
+    procedure Flush;
+  end;
+
+  {** 控制台行写入器 — 直接输出到 stdout }
+  TConsoleWriter = class(TInterfacedObject, ILineWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure WriteLine(const ALine: string);
+    procedure Flush;
+  end;
+
+  {** 标准错误行写入器 — 直接输出到 stderr }
+  TStderrWriter = class(TInterfacedObject, ILineWriter)
+  public
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure WriteLine(const ALine: string);
     procedure Flush;
@@ -72,6 +94,52 @@ function CreateLineWriter(const AWriter: IWriter;
   const ALineSep: string): ILineWriter;
 begin
   Result := TLineWriter.Create(AWriter, ALineSep);
+end;
+
+{ ===== TConsoleWriter ===== }
+
+function TConsoleWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  { Write 是二进制接口，控制台场景下不实现 }
+  Result := 0;
+end;
+
+procedure TConsoleWriter.WriteLine(const ALine: string);
+begin
+  WriteLn(ALine);
+end;
+
+procedure TConsoleWriter.Flush;
+begin
+  { stdout 默认行缓冲，无需额外 flush }
+end;
+
+{ ===== TStderrWriter ===== }
+
+function TStderrWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+procedure TStderrWriter.WriteLine(const ALine: string);
+begin
+  WriteLn(StdErr, ALine);
+end;
+
+procedure TStderrWriter.Flush;
+begin
+end;
+
+{ ===== Factory functions ===== }
+
+function CreateConsoleWriter: ILineWriter;
+begin
+  Result := TConsoleWriter.Create;
+end;
+
+function CreateStderrWriter: ILineWriter;
+begin
+  Result := TStderrWriter.Create;
 end;
 
 procedure IoWriteLine(const AWriter: IWriter; const ALine: string);

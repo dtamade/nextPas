@@ -147,7 +147,7 @@ type
     {** 添加结果 }
     procedure AddResult(const AResult: TBenchResult);
 
-    {** 输出一行 — OnOutput 回调或 fallback 到 WriteLn }
+    {** 输出一行 — 通过 Output ILineWriter }
     procedure EmitLine(const ALine: string);
     procedure EmitLineStdErr(const ALine: string);
 
@@ -216,7 +216,8 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.bench.memtrack,
-  nextpas.core.bench.parallel;
+  nextpas.core.bench.parallel,
+  nextpas.core.io.linewriter;
 
 {** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
  *  signature does not allow user data. Safe under DS-13 (single-runner). }
@@ -1101,18 +1102,13 @@ end;
 
 procedure TBenchRunner.EmitLine(const ALine: string);
 begin
-  if Assigned(FConfig.OnOutput) then
-    FConfig.OnOutput(ALine)
-  else
-    WriteLn(ALine);
+  FConfig.Output.WriteLine(ALine);
 end;
 
 procedure TBenchRunner.EmitLineStdErr(const ALine: string);
 begin
-  if Assigned(FConfig.OnOutput) then
-    FConfig.OnOutput(ALine)
-  else
-    WriteLn(StdErr, ALine);
+  { 注意：当前统一使用 Output，不再区分 stderr }
+  FConfig.Output.WriteLine(ALine);
 end;
 
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
@@ -1283,6 +1279,9 @@ end;
 procedure TBenchRunner.SetConfig(const AConfig: TBenchConfig);
 begin
   FConfig := AConfig;
+  { 确保 Output 已初始化 }
+  if FConfig.Output = nil then
+    FConfig.Output := CreateConsoleWriter;
 end;
 
 function TBenchRunner.GetConfig: TBenchConfig;

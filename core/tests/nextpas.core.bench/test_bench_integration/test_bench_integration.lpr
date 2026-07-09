@@ -20,7 +20,8 @@ uses
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.simd.cpuinfo,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.io.linewriter;
 
 type
   TBenchResult = nextpas.core.bench.base.TBenchResult;
@@ -1676,6 +1677,73 @@ begin
   LSuite := nil;
 end;
 
+{ 测试 SetOutput ILineWriter 接口 }
+type
+  TTestLineWriter = class(TInterfacedObject, ILineWriter)
+  private
+    FLines: array of string;
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure WriteLine(const ALine: string);
+    procedure Flush;
+    function GetLines: string;
+  end;
+
+function TTestLineWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+procedure TTestLineWriter.WriteLine(const ALine: string);
+begin
+  SetLength(FLines, Length(FLines) + 1);
+  FLines[High(FLines)] := ALine;
+end;
+
+procedure TTestLineWriter.Flush;
+begin
+end;
+
+function TTestLineWriter.GetLines: string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(FLines) do
+  begin
+    if I > 0 then
+      Result := Result + #10;
+    Result := Result + FLines[I];
+  end;
+end;
+
+procedure TestSetOutput;
+var
+  LWriter: TTestLineWriter;
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+begin
+  LWriter := TTestLineWriter.Create;
+  LSuite := TBenchSuite.Create('SetOutputTest')
+    .SetOutput(LWriter)
+    .SetMinDuration(TDuration.FromMilliseconds(5))
+    .SetMaxIterations(100)
+    .SetMinSamples(3)
+    .SetWarmupIters(1)
+    .AddSimple('Fast', procedure
+    begin
+      { 空操作 }
+    end);
+  LResults := LSuite.Run;
+  Check(LResults <> nil, 'SetOutput: results should not be nil');
+  Check(Length(LWriter.GetLines) > 0, 'SetOutput: output should be captured');
+  Check(Pos('=== nextpas.core.bench v', LWriter.GetLines) > 0,
+    'SetOutput: output should contain version header');
+  LResults := nil;
+  LSuite := nil;
+  LWriter := nil;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -1738,6 +1806,7 @@ begin
     T.Test('AddSimple_Nil (F-03)', @TestAddSimple_Nil);
     T.Test('TryRemoveByName (F-10)', @TestTryRemoveByName);
     T.Test('TryLoadBaseline (F-10)', @TestTryLoadBaseline);
+    T.Test('SetOutput (ILineWriter)', @TestSetOutput);
     T.Run;
     T.Summary;
   finally
