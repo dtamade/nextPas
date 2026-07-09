@@ -26,7 +26,7 @@
 | C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d | ✅ 2026-07-06 |
 | C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d | ✅ 2026-07-06 |
 | C7 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d | ✅ 2026-07-06 |
-| C8 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d |   方案已有 |
+| C8 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d | ✅ 2026-07-06 |
 | C9 | **c2p_win32_compat** (平台排除) |    | compiler | 1d | ✅ 2026-07-06 |
 
 ### Core 框架
