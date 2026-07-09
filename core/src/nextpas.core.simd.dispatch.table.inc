@@ -809,6 +809,14 @@
     ArrayMulI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
     ArrayPackSatI32toI16: procedure(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt);
 
+    // === Batch Array Operations - U32 ===
+    ArrayAddU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+    ArraySubU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+    ArrayMulU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+    ArrayAndU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+    ArrayOrU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+    ArrayXorU32: procedure(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+
     // === Batch Array Operations - Type Conversion ===
     ArrayF32toI32: procedure(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
     ArrayI32toF32: procedure(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
