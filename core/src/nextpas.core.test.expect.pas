@@ -974,8 +974,9 @@ begin
   LExpLen := Length(AExpected);
   if LActLen <> LExpLen then
   begin
-    CheckMatch(FNegated, { always fails for positive }
-      'Expected different byte array but both have length ' + IntToStr(LActLen),
+    CheckMatch(False,
+      'Expected same byte array but lengths differ (' +
+        IntToStr(LExpLen) + ' vs ' + IntToStr(LActLen) + ')',
       'Expected ' + IntToStr(LExpLen) + ' bytes but got ' + IntToStr(LActLen));
     Result := Self;
     Exit;

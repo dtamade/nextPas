@@ -84,6 +84,8 @@ procedure ExpectFailWith(AProc: TTestClosure;
   AExceptionClass: ExceptClass;
   const AContains: string);
 begin
+  if AExceptionClass = nil then
+    InternalFail('ExpectFailWith: AExceptionClass is nil');
   try
     AProc;
     Fail('expected ' + AExceptionClass.ClassName + ' but nothing raised');

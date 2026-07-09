@@ -1128,6 +1128,172 @@ begin
   end, 'pick one');
 end;
 
+{ ── R60: ToBeEmpty/ToBeNotEmpty + ToContain(Byte) + ToMatch + array tests ── }
+
+procedure TestToBeEmptyString;
+begin
+  Expect('').ToBeEmpty;
+  ExpectFail(procedure begin Expect('x').ToBeEmpty; end, 'empty');
+end;
+
+procedure TestToBeNotEmptyString;
+begin
+  Expect('x').ToBeNotEmpty;
+  ExpectFail(procedure begin Expect('').ToBeNotEmpty; end, 'empty');
+end;
+
+procedure TestToBeEmptyIntArray;
+begin
+  ExpectArrayOfInt([]).ToBeEmpty;
+  ExpectFail(procedure begin ExpectArrayOfInt([1]).ToBeEmpty; end, 'empty');
+end;
+
+procedure TestToBeNotEmptyIntArray;
+begin
+  ExpectArrayOfInt([1,2]).ToBeNotEmpty;
+  ExpectFail(procedure begin ExpectArrayOfInt([]).ToBeNotEmpty; end, 'empty');
+end;
+
+procedure TestToBeEmptyStrArray;
+begin
+  ExpectArrayOfStr([]).ToBeEmpty;
+  ExpectFail(procedure begin ExpectArrayOfStr(['a']).ToBeEmpty; end, 'empty');
+end;
+
+procedure TestToBeEmptyBytes;
+begin
+  ExpectBytes(TBytes([])).ToBeEmpty;
+  ExpectFail(procedure begin ExpectBytes(TBytes([$01])).ToBeEmpty; end, 'empty');
+end;
+
+procedure TestToBeNotEmptyBytes;
+begin
+  ExpectBytes(TBytes([$01])).ToBeNotEmpty;
+  ExpectFail(procedure begin ExpectBytes(TBytes([])).ToBeNotEmpty; end, 'empty');
+end;
+
+procedure TestNotToBeEmpty;
+begin
+  Expect('x').Not_.ToBeEmpty;
+  ExpectFail(procedure begin Expect('').Not_.ToBeEmpty; end, 'non-empty');
+end;
+
+procedure TestToEqualIntArrayPass;
+begin
+  ExpectArrayOfInt([1,2,3]).ToEqualIntArray([1,2,3]);
+  ExpectArrayOfInt([]).ToEqualIntArray([]);
+end;
+
+procedure TestToEqualIntArrayFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1,2]).ToEqualIntArray([1,3]);
+  end, 'differ');
+end;
+
+procedure TestToEqualIntArrayDiffLen;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1,2]).ToEqualIntArray([1,2,3]);
+  end, 'length');
+end;
+
+procedure TestToEqualIntArrayNot;
+begin
+  ExpectArrayOfInt([1,2]).Not_.ToEqualIntArray([1,3]);
+  ExpectArrayOfInt([1,2]).Not_.ToEqualIntArray([1,2,3]);
+end;
+
+procedure TestToEqualStrArrayPass;
+begin
+  ExpectArrayOfStr(['a','b']).ToEqualStrArray(['a','b']);
+end;
+
+procedure TestToEqualStrArrayFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['a','b']).ToEqualStrArray(['a','c']);
+  end, 'differ');
+end;
+
+procedure TestToEqualStrArrayNot;
+begin
+  ExpectArrayOfStr(['a','b']).Not_.ToEqualStrArray(['a','c']);
+  ExpectArrayOfStr(['a','b']).Not_.ToEqualStrArray(['a','b','c']);
+end;
+
+procedure TestToContainIntPass;
+begin
+  ExpectArrayOfInt([1,2,3]).ToContainInt(2);
+end;
+
+procedure TestToContainIntFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1,2,3]).ToContainInt(99);
+  end, '99');
+end;
+
+procedure TestToContainIntNot;
+begin
+  ExpectArrayOfInt([1,2,3]).Not_.ToContainInt(99);
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1,2,3]).Not_.ToContainInt(2);
+  end, '2');
+end;
+
+procedure TestToContainStrPass;
+begin
+  ExpectArrayOfStr(['a','b','c']).ToContainStr('b');
+end;
+
+procedure TestToContainStrFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['a','b']).ToContainStr('z');
+  end, 'z');
+end;
+
+procedure TestToContainBytePass;
+begin
+  ExpectBytes(TBytes([$01,$02,$03])).ToContain($02);
+end;
+
+procedure TestToContainByteFail;
+begin
+  ExpectFail(procedure begin
+    ExpectBytes(TBytes([$01,$02])).ToContain($FF);
+  end, '$FF');
+end;
+
+procedure TestToContainByteNot;
+begin
+  ExpectBytes(TBytes([$01,$02])).Not_.ToContain($FF);
+  ExpectFail(procedure begin
+    ExpectBytes(TBytes([$01,$02])).Not_.ToContain($01);
+  end, '$01');
+end;
+
+procedure TestToMatchPass;
+begin
+  ExpectStr('hello123').ToMatch('^\w+\d+$');
+end;
+
+procedure TestToMatchFail;
+begin
+  ExpectFail(procedure begin
+    ExpectStr('hello').ToMatch('^\d+$');
+  end, 'pattern');
+end;
+
+procedure TestToMatchNot;
+begin
+  ExpectStr('hello').Not_.ToMatch('^\d+$');
+  ExpectFail(procedure begin
+    ExpectStr('123').Not_.ToMatch('^\d+$');
+  end, 'pattern');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1325,6 +1491,34 @@ begin
   LSuite.Test('ToBeOneOfBool pass',          @TestToBeOneOfBoolPass);
   LSuite.Test('ToBeOneOfBool fail',          @TestToBeOneOfBoolFail);
   LSuite.Test('ToBeOneOf+WithMessage',       @TestToBeOneOfWithMessage);
+
+  { R60: ToBeEmpty/ToBeNotEmpty + array + byte + regex }
+  LSuite.Test('ToBeEmpty string',          @TestToBeEmptyString);
+  LSuite.Test('ToBeNotEmpty string',       @TestToBeNotEmptyString);
+  LSuite.Test('ToBeEmpty int array',       @TestToBeEmptyIntArray);
+  LSuite.Test('ToBeNotEmpty int array',    @TestToBeNotEmptyIntArray);
+  LSuite.Test('ToBeEmpty str array',       @TestToBeEmptyStrArray);
+  LSuite.Test('ToBeEmpty bytes',           @TestToBeEmptyBytes);
+  LSuite.Test('ToBeNotEmpty bytes',        @TestToBeNotEmptyBytes);
+  LSuite.Test('Not_.ToBeEmpty',            @TestNotToBeEmpty);
+  LSuite.Test('ToEqualIntArray pass',      @TestToEqualIntArrayPass);
+  LSuite.Test('ToEqualIntArray fail',      @TestToEqualIntArrayFail);
+  LSuite.Test('ToEqualIntArray diff len',  @TestToEqualIntArrayDiffLen);
+  LSuite.Test('Not_.ToEqualIntArray',      @TestToEqualIntArrayNot);
+  LSuite.Test('ToEqualStrArray pass',      @TestToEqualStrArrayPass);
+  LSuite.Test('ToEqualStrArray fail',      @TestToEqualStrArrayFail);
+  LSuite.Test('Not_.ToEqualStrArray',      @TestToEqualStrArrayNot);
+  LSuite.Test('ToContainInt pass',         @TestToContainIntPass);
+  LSuite.Test('ToContainInt fail',         @TestToContainIntFail);
+  LSuite.Test('Not_.ToContainInt',         @TestToContainIntNot);
+  LSuite.Test('ToContainStr pass',         @TestToContainStrPass);
+  LSuite.Test('ToContainStr fail',         @TestToContainStrFail);
+  LSuite.Test('ToContain(byte) pass',      @TestToContainBytePass);
+  LSuite.Test('ToContain(byte) fail',      @TestToContainByteFail);
+  LSuite.Test('Not_.ToContain(byte)',      @TestToContainByteNot);
+  LSuite.Test('ToMatch pass',              @TestToMatchPass);
+  LSuite.Test('ToMatch fail',              @TestToMatchFail);
+  LSuite.Test('Not_.ToMatch',              @TestToMatchNot);
 
   if not LSuite.Run then
   begin

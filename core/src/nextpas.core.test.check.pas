@@ -1138,6 +1138,7 @@ begin
     LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(AActual));
     FailPrepend(AMessage, LMsg);
+    Exit;
   end;
 
   LMin := Length(AExpected);
@@ -1192,6 +1193,7 @@ begin
     LMsg := 'Expected array length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(AActual));
     FailPrepend(AMessage, LMsg);
+    Exit;
   end;
 
   LMin := Length(AExpected);

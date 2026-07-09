@@ -1207,6 +1207,46 @@ begin
   end, 'my string array');
 end;
 
+{ ── R60: CheckArrayContains/NotContains for TBytes ───────────────────────── }
+
+procedure TestCheckArrayContainsBytePass;
+begin
+  CheckArrayContains(TBytes([$01, $02, $03]), $02);
+end;
+
+procedure TestCheckArrayContainsByteFail;
+begin
+  ExpectFail(procedure begin
+    CheckArrayContains(TBytes([$01, $02]), $FF);
+  end, '$FF');
+end;
+
+procedure TestCheckArrayContainsByteWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayContains(TBytes([$01, $02]), $FF, 'byte context');
+  end, 'byte context');
+end;
+
+procedure TestCheckArrayNotContainsBytePass;
+begin
+  CheckArrayNotContains(TBytes([$01, $02]), $FF);
+end;
+
+procedure TestCheckArrayNotContainsByteFail;
+begin
+  ExpectFail(procedure begin
+    CheckArrayNotContains(TBytes([$01, $02, $03]), $02);
+  end, '$02');
+end;
+
+procedure TestCheckArrayNotContainsByteWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckArrayNotContains(TBytes([$01, $02]), $01, 'no byte');
+  end, 'no byte');
+end;
+
 { ── v8.0c: Interface Nil Check Tests ──────────────────────────────────────── }
 
 procedure TestCheckIsNilPass;
@@ -1502,6 +1542,14 @@ begin
   LSuite.Test('Match+msg',               @TestCheckMatchWithMessage);
   LSuite.Test('NotMatch pass',           @TestCheckNotMatchPass);
   LSuite.Test('NotMatch fail',           @TestCheckNotMatchFail);
+
+  { R60: CheckArrayContains/NotContains for TBytes }
+  LSuite.Test('ArrayContains byte pass',   @TestCheckArrayContainsBytePass);
+  LSuite.Test('ArrayContains byte fail',   @TestCheckArrayContainsByteFail);
+  LSuite.Test('ArrayContains byte+msg',    @TestCheckArrayContainsByteWithMessage);
+  LSuite.Test('ArrayNotContains byte pass',@TestCheckArrayNotContainsBytePass);
+  LSuite.Test('ArrayNotContains byte fail',@TestCheckArrayNotContainsByteFail);
+  LSuite.Test('ArrayNotContains byte+msg', @TestCheckArrayNotContainsByteWithMessage);
 
   if not LSuite.Run then
   begin
