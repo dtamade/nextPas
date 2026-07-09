@@ -148,3 +148,131 @@
 {$IFDEF SIMD_HAS_512BIT}
   {$DEFINE SIMD_ALIGNMENT := 64}
 {$ENDIF}
+
+{
+  Static dispatch macros for batch operations.
+  When SIMD_STATIC_BACKEND is defined, these macros resolve to backend-specific
+  implementations, eliminating runtime dispatch overhead.
+
+  Usage:
+    {$DEFINE SIMD_STATIC_BACKEND}
+    {$I nextpas.core.simd.backend.select.inc}
+    // Now use SIMD_STATIC_ArrayAddF32 etc.
+}
+
+{$IFDEF SIMD_STATIC_BACKEND}
+
+  {$IFDEF SIMD_STATIC_AVX512}
+    // AVX-512 static dispatch macros
+    {$DEFINE SIMD_STATIC_ArrayAddF32 := AVX512ArrayAddF32}
+    {$DEFINE SIMD_STATIC_ArraySubF32 := AVX512ArraySubF32}
+    {$DEFINE SIMD_STATIC_ArrayMulF32 := AVX512ArrayMulF32}
+    {$DEFINE SIMD_STATIC_ArrayDivF32 := AVX512ArrayDivF32}
+    {$DEFINE SIMD_STATIC_ArrayAddU32 := AVX512ArrayAddU32}
+    {$DEFINE SIMD_STATIC_ArraySubU32 := AVX512ArraySubU32}
+    {$DEFINE SIMD_STATIC_ArrayMulU32 := AVX512ArrayMulU32}
+    {$DEFINE SIMD_STATIC_MemEqual := AVX512MemEqual}
+    {$DEFINE SIMD_STATIC_MemFindByte := AVX512MemFindByte}
+    {$DEFINE SIMD_STATIC_ReduceMinF32 := AVX512ReduceMinF32}
+    {$DEFINE SIMD_STATIC_ReduceMaxF32 := AVX512ReduceMaxF32}
+    {$DEFINE SIMD_STATIC_ReduceSumF32 := AVX512ReduceSumF32}
+    {$DEFINE SIMD_STATIC_ReduceMinF64 := AVX512ReduceMinF64}
+    {$DEFINE SIMD_STATIC_ReduceMaxF64 := AVX512ReduceMaxF64}
+    {$DEFINE SIMD_STATIC_ReduceSumF64 := AVX512ReduceSumF64}
+  {$ELSEIF SIMD_STATIC_AVX2}
+    // AVX2 static dispatch macros
+    {$DEFINE SIMD_STATIC_ArrayAddF32 := AVX2ArrayAddF32}
+    {$DEFINE SIMD_STATIC_ArraySubF32 := AVX2ArraySubF32}
+    {$DEFINE SIMD_STATIC_ArrayMulF32 := AVX2ArrayMulF32}
+    {$DEFINE SIMD_STATIC_ArrayDivF32 := AVX2ArrayDivF32}
+    {$DEFINE SIMD_STATIC_ArrayAddU32 := AVX2ArrayAddU32}
+    {$DEFINE SIMD_STATIC_ArraySubU32 := AVX2ArraySubU32}
+    {$DEFINE SIMD_STATIC_ArrayMulU32 := AVX2ArrayMulU32}
+    {$DEFINE SIMD_STATIC_MemEqual := AVX2MemEqual}
+    {$DEFINE SIMD_STATIC_MemFindByte := AVX2MemFindByte}
+    {$DEFINE SIMD_STATIC_ReduceMinF32 := AVX2ReduceMinF32}
+    {$DEFINE SIMD_STATIC_ReduceMaxF32 := AVX2ReduceMaxF32}
+    {$DEFINE SIMD_STATIC_ReduceSumF32 := AVX2ReduceSumF32}
+    {$DEFINE SIMD_STATIC_ReduceMinF64 := AVX2ReduceMinF64}
+    {$DEFINE SIMD_STATIC_ReduceMaxF64 := AVX2ReduceMaxF64}
+    {$DEFINE SIMD_STATIC_ReduceSumF64 := AVX2ReduceSumF64}
+  {$ELSEIF SIMD_STATIC_SSE2}
+    // SSE2 static dispatch macros
+    {$DEFINE SIMD_STATIC_ArrayAddF32 := SSE2ArrayAddF32}
+    {$DEFINE SIMD_STATIC_ArraySubF32 := SSE2ArraySubF32}
+    {$DEFINE SIMD_STATIC_ArrayMulF32 := SSE2ArrayMulF32}
+    {$DEFINE SIMD_STATIC_ArrayDivF32 := SSE2ArrayDivF32}
+    {$DEFINE SIMD_STATIC_ArrayAddU32 := SSE2ArrayAddU32}
+    {$DEFINE SIMD_STATIC_ArraySubU32 := SSE2ArraySubU32}
+    {$DEFINE SIMD_STATIC_ArrayMulU32 := SSE2ArrayMulU32}
+    {$DEFINE SIMD_STATIC_MemEqual := MemEqual_SSE2}
+    {$DEFINE SIMD_STATIC_MemFindByte := MemFindByte_SSE2}
+    {$DEFINE SIMD_STATIC_ReduceMinF32 := SSE2ReduceMinF32}
+    {$DEFINE SIMD_STATIC_ReduceMaxF32 := SSE2ReduceMaxF32}
+    {$DEFINE SIMD_STATIC_ReduceSumF32 := SSE2ReduceSumF32}
+    {$DEFINE SIMD_STATIC_ReduceMinF64 := SSE2ReduceMinF64}
+    {$DEFINE SIMD_STATIC_ReduceMaxF64 := SSE2ReduceMaxF64}
+    {$DEFINE SIMD_STATIC_ReduceSumF64 := SSE2ReduceSumF64}
+  {$ELSEIF SIMD_STATIC_NEON}
+    // NEON static dispatch macros
+    {$DEFINE SIMD_STATIC_ArrayAddF32 := NEONArrayAddF32}
+    {$DEFINE SIMD_STATIC_ArraySubF32 := NEONArraySubF32}
+    {$DEFINE SIMD_STATIC_ArrayMulF32 := NEONArrayMulF32}
+    {$DEFINE SIMD_STATIC_ArrayDivF32 := NEONArrayDivF32}
+    {$DEFINE SIMD_STATIC_ArrayAddU32 := NEONArrayAddU32}
+    {$DEFINE SIMD_STATIC_ArraySubU32 := NEONArraySubU32}
+    {$DEFINE SIMD_STATIC_ArrayMulU32 := NEONArrayMulU32}
+    {$DEFINE SIMD_STATIC_MemEqual := NEONMemEqual}
+    {$DEFINE SIMD_STATIC_MemFindByte := NEONMemFindByte}
+    {$DEFINE SIMD_STATIC_ReduceMinF32 := NEONReduceMinF32}
+    {$DEFINE SIMD_STATIC_ReduceMaxF32 := NEONReduceMaxF32}
+    {$DEFINE SIMD_STATIC_ReduceSumF32 := NEONReduceSumF32}
+    {$DEFINE SIMD_STATIC_ReduceMinF64 := NEONReduceMinF64}
+    {$DEFINE SIMD_STATIC_ReduceMaxF64 := NEONReduceMaxF64}
+    {$DEFINE SIMD_STATIC_ReduceSumF64 := NEONReduceSumF64}
+  {$ELSE}
+    // Scalar fallback static dispatch macros
+    {$DEFINE SIMD_STATIC_ArrayAddF32 := ScalarArrayAddF32}
+    {$DEFINE SIMD_STATIC_ArraySubF32 := ScalarArraySubF32}
+    {$DEFINE SIMD_STATIC_ArrayMulF32 := ScalarArrayMulF32}
+    {$DEFINE SIMD_STATIC_ArrayDivF32 := ScalarArrayDivF32}
+    {$DEFINE SIMD_STATIC_ArrayAddU32 := ScalarArrayAddU32}
+    {$DEFINE SIMD_STATIC_ArraySubU32 := ScalarArraySubU32}
+    {$DEFINE SIMD_STATIC_ArrayMulU32 := ScalarArrayMulU32}
+    {$DEFINE SIMD_STATIC_MemEqual := ScalarMemEqual}
+    {$DEFINE SIMD_STATIC_MemFindByte := ScalarMemFindByte}
+    {$DEFINE SIMD_STATIC_ReduceMinF32 := ScalarReduceMinF32}
+    {$DEFINE SIMD_STATIC_ReduceMaxF32 := ScalarReduceMaxF32}
+    {$DEFINE SIMD_STATIC_ReduceSumF32 := ScalarReduceSumF32}
+    {$DEFINE SIMD_STATIC_ReduceMinF64 := ScalarReduceMinF64}
+    {$DEFINE SIMD_STATIC_ReduceMaxF64 := ScalarReduceMaxF64}
+    {$DEFINE SIMD_STATIC_ReduceSumF64 := ScalarReduceSumF64}
+  {$ENDIF}
+
+{$ENDIF} // SIMD_STATIC_BACKEND
+
+{
+  Backend priority configuration.
+
+  Users can define SIMD_BACKEND_PRIORITY to specify the preferred backend order.
+  Example:
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'AVX512,AVX2,SSE2,NEON,RVV,Scalar'}
+
+  Default priority: AVX-512 > AVX2 > SSE2 > NEON > RVV > Scalar
+}
+
+{$IF NOT DEFINED(SIMD_BACKEND_PRIORITY)}
+  {$IFDEF SIMD_BACKEND_AVX512}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'AVX512'}
+  {$ELSEIF SIMD_BACKEND_AVX2}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'AVX2'}
+  {$ELSEIF SIMD_BACKEND_SSE2}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'SSE2'}
+  {$ELSEIF SIMD_BACKEND_NEON}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'NEON'}
+  {$ELSEIF SIMD_BACKEND_RVV}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'RVV'}
+  {$ELSE}
+    {$DEFINE SIMD_BACKEND_PRIORITY := 'Scalar'}
+  {$ENDIF}
+{$ENDIF}
