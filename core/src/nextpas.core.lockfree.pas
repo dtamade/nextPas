@@ -54,7 +54,15 @@ uses
   nextpas.core.lockfree.sortedset,
   nextpas.core.lockfree.bitset,
   nextpas.core.lockfree.linkedlist,
-  nextpas.core.lockfree.statscounter;
+  nextpas.core.lockfree.statscounter,
+  nextpas.core.lockfree.consistent_hashring,
+  nextpas.core.lockfree.trie_hmt,
+  nextpas.core.lockfree.intervaltree,
+  nextpas.core.lockfree.fibheap,
+  nextpas.core.lockfree.countminsketch,
+  nextpas.core.lockfree.hyperloglog,
+  nextpas.core.lockfree.cuckooset,
+  nextpas.core.lockfree.suffixarray;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -415,6 +423,69 @@ type
     @see TConcurrentStatsCounter 详细文档和示例
   }
   TConcurrentStatsCounter = nextpas.core.lockfree.statscounter.TConcurrentStatsCounter;
+
+  {** @desc 一致性哈希环
+    @details 用于分布式系统的虚拟节点哈希环。
+      支持 AddNode/RemoveNode/GetNode/GetNodes。
+    @see TConsistentHashRing 详细文档和示例
+  }
+  TConsistentHashRing = nextpas.core.lockfree.consistent_hashring.TConsistentHashRing;
+  TConsistentHashRingResult = nextpas.core.lockfree.consistent_hashring.TConsistentHashRingResult;
+
+  {** @desc Hash Mapped Trie (HMT)
+    @details 持久化不可变 Trie，支持路径复制和原子快照。
+      适用于持久化映射、版本快照、函数式编程。
+    @see THashMappedTrie 详细文档和示例
+  }
+  THashMappedTrie = nextpas.core.lockfree.trie_hmt.THashMappedTrie;
+  THmtResult = nextpas.core.lockfree.trie_hmt.THmtResult;
+
+  {** @desc 并发区间树
+    @details 基于 AVL 树的区间重叠查询。写用自旋锁，读无锁（COW 快照）。
+      适用于日程安排、IP 范围查找、基因组区间。
+    @see TIntervalTree 详细文档和示例
+  }
+  TIntervalTree = nextpas.core.lockfree.intervaltree.TIntervalTree;
+  TIntervalTreeResult = nextpas.core.lockfree.intervaltree.TIntervalTreeResult;
+
+  {** @desc 并发 Fibonacci 堆
+    @details 摊还 O(1) 插入/合并，O(log n) 提取最小值。
+      适用于 Dijkstra 算法、优先队列合并。
+    @see TLockFreeFibonacciHeap 详细文档和示例
+  }
+  TLockFreeFibonacciHeap = nextpas.core.lockfree.fibheap.TLockFreeFibonacciHeap;
+  TFibHeapResult = nextpas.core.lockfree.fibheap.TFibHeapResult;
+
+  {** @desc Count-Min Sketch
+    @details 概率频率估计器，O(1) 更新和查询。
+      适用于网络流量分析、频率估计、限流。
+    @see TCountMinSketch 详细文档和示例
+  }
+  TCountMinSketch = nextpas.core.lockfree.countminsketch.TCountMinSketch;
+
+  {** @desc HyperLogLog
+    @details 概率基数估计器，标准误差 1.04/sqrt(2^p)。
+      适用于唯一计数、基数估计。
+    @see THyperLogLog 详细文档和示例
+  }
+  THyperLogLog = nextpas.core.lockfree.hyperloglog.THyperLogLog;
+
+  {** @desc Cuckoo Hash Set
+    @details O(1) 最坏情况查找的并发集合。
+      双哈希表 + 布谷鸟驱逐，写用自旋锁，读无锁。
+    @see TCuckooSet 详细文档和示例
+  }
+  TCuckooSet = nextpas.core.lockfree.cuckooset.TCuckooSet;
+  TCuckooSetResult = nextpas.core.lockfree.cuckooset.TCuckooSetResult;
+
+  {** @desc 后缀数组
+    @details 预排序后缀索引，O(m log n) 模式搜索。
+      适用于全文搜索、模式匹配、生物信息学。
+    @see TSuffixArray 详细文档和示例
+  }
+  TSuffixArray = nextpas.core.lockfree.suffixarray.TSuffixArray;
+  TSuffixArrayResult = nextpas.core.lockfree.suffixarray.TSuffixArrayResult;
+  TSuffixArrayMatch = nextpas.core.lockfree.suffixarray.TSuffixArrayMatch;
 
 implementation
 
