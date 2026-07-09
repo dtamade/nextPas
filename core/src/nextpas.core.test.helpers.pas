@@ -149,12 +149,20 @@ begin
   if LBaseDir = '' then
     LBaseDir := '/tmp';
   LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
-  LDir := LBaseDir + 'nextpas_tmp_' + IntToStr(Int64(@AProc));
+  { Use address + counter to avoid collisions across concurrent calls.
+    Int64(@AProc) is unique per closure; GetTickCount64 adds temporal uniqueness. }
+  LDir := LBaseDir + 'nextpas_tmp_' +
+    IntToStr(Int64(@AProc)) + '_' +
+    IntToStr(GetTickCount64);
   ForceDirectories(LDir);
   try
     AProc(LDir);
   finally
-    RemoveAll(LDir);
+    try
+      RemoveAll(LDir);
+    except
+      { Cleanup failure should not mask the original test exception }
+    end;
   end;
 end;
 

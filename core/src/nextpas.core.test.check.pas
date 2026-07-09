@@ -681,7 +681,7 @@ procedure CheckNotContains(const AHaystack, ANeedle: string;
   const AMessage: string);
 begin
   if (Length(ANeedle) = 0) then
-    Exit;
+    FailPrepend(AMessage, '"' + AHaystack + '" should not contain empty string');
   if Pos(ANeedle, AHaystack) > 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain "' + ANeedle + '"');
 end;
@@ -961,7 +961,7 @@ procedure CheckNotStartsWith(const AStr, APrefix: string;
   const AMessage: string);
 begin
   if Length(APrefix) = 0 then
-    Exit;
+    FailPrepend(AMessage, '"' + AStr + '" should not start with empty string');
   if StrStartsWith(AStr, APrefix) then
     FailPrepend(AMessage, '"' + AStr + '" should not start with "' + APrefix + '"');
 end;
@@ -977,7 +977,7 @@ procedure CheckNotEndsWith(const AStr, ASuffix: string;
   const AMessage: string);
 begin
   if Length(ASuffix) = 0 then
-    Exit;
+    FailPrepend(AMessage, '"' + AStr + '" should not end with empty string');
   if StrEndsWith(AStr, ASuffix) then
     FailPrepend(AMessage, '"' + AStr + '" should not end with "' + ASuffix + '"');
 end;
@@ -1004,13 +1004,14 @@ end;
 
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string);
+{ AMessage: expected substring in the exception message (not a failure prefix). }
 var
   LRaised: Boolean = False;
 begin
   if AExceptionClass = nil then
-  begin
     InternalFail('CheckRaises: AExceptionClass is nil');
-  end;
+  if not Assigned(AProc) then
+    InternalFail('CheckRaises: AProc is nil');
   try
     AProc;
   except
@@ -1032,7 +1033,10 @@ begin
 end;
 
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string);
+{ AMessage: failure message prefix (not exception message content). }
 begin
+  if not Assigned(AProc) then
+    InternalFail('CheckNoRaise: AProc is nil');
   try
     AProc;
   except
@@ -1089,8 +1093,9 @@ end;
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
 var
-  LPath, LExisting, LUpdateEnv: string;
+  LPath, LExisting: string;
   LShouldUpdate: Boolean;
+  LDirCreated: Boolean;
 begin
   LPath := ASnapshotDir + DirectorySeparator + ASnapshotName;
   LShouldUpdate := platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
@@ -1111,11 +1116,10 @@ begin
   end
   else
   begin
-    { First run — create snapshot directory and file }
-    {$I-}
-    MkDir(ASnapshotDir);
-    {$I+}
-    { Ignore MkDir error if directory already exists }
+    { First run — create snapshot directory tree and file }
+    LDirCreated := ForceDirectories(ASnapshotDir);
+    if not LDirCreated then
+      InternalFail('CheckSnapshot: cannot create directory ' + ASnapshotDir);
     WriteFileContents(LPath, AActual);
   end;
 end;

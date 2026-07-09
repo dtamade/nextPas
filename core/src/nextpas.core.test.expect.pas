@@ -182,6 +182,9 @@ type
       const ANegMsg, APosMsg: string);
       { Core negation check: fail with ANegMsg if (FNegated and AIsMatch)
         or with APosMsg if (not FNegated and not AIsMatch). }
+    function CloneSelf: TExpectation;
+      { Create a heap copy of this expectation, preserving all state.
+        Used by Not_ and WithMessage to avoid duplicating the kind-case. }
 
     { IExpectation }
     { Not_: returns a NEW expectation with negated assertion.
@@ -332,23 +335,29 @@ begin
     FStrArrayValue[I] := AValues[I];
 end;
 
+function TExpectation.CloneSelf: TExpectation;
+begin
+  case FKind of
+    ekString:   Result := TExpectation.CreateStr(FStrValue);
+    ekInt64:    Result := TExpectation.CreateInt(FIntValue);
+    ekBool:     Result := TExpectation.CreateBool(FBoolValue);
+    ekPointer:  Result := TExpectation.CreatePtr(FPtrValue);
+    ekProc:     Result := TExpectation.CreateProc(FProcValue);
+    ekDouble:   Result := TExpectation.CreateDouble(FDoubleValue);
+    ekBytes:    Result := TExpectation.CreateBytes(FBytesValue);
+    ekIntArray: Result := TExpectation.CreateIntArray(FIntArrayValue);
+    ekStrArray: Result := TExpectation.CreateStrArray(FStrArrayValue);
+  end;
+  Result.FNegated := FNegated;
+  Result.FMessage := FMessage;
+end;
+
 function TExpectation.Not_: IExpectation;
 var
   LCopy: TExpectation;
 begin
-  case FKind of
-    ekString:   LCopy := TExpectation.CreateStr(FStrValue);
-    ekInt64:    LCopy := TExpectation.CreateInt(FIntValue);
-    ekBool:     LCopy := TExpectation.CreateBool(FBoolValue);
-    ekPointer:  LCopy := TExpectation.CreatePtr(FPtrValue);
-    ekProc:     LCopy := TExpectation.CreateProc(FProcValue);
-    ekDouble:   LCopy := TExpectation.CreateDouble(FDoubleValue);
-    ekBytes:    LCopy := TExpectation.CreateBytes(FBytesValue);
-    ekIntArray: LCopy := TExpectation.CreateIntArray(FIntArrayValue);
-    ekStrArray: LCopy := TExpectation.CreateStrArray(FStrArrayValue);
-  end;
+  LCopy := CloneSelf;
   LCopy.FNegated := not FNegated;
-  LCopy.FMessage := FMessage;
   Result := LCopy;
 end;
 
@@ -797,11 +806,15 @@ end;
 { ── TExpectation: Case-insensitive string ──────────────────────────────────── }
 
 function TExpectation.ToContainCI(const ASubstr: string): IExpectation;
+var
+  LFound: Boolean;
 begin
   RequireKind(ekString, 'ToContainCI');
   if Length(ASubstr) = 0 then
-    Exit(Self); { empty needle matches everything — consistent with ToContain }
-  CheckMatch(Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0,
+    LFound := True { empty needle matches everything }
+  else
+    LFound := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
+  CheckMatch(LFound,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
   Result := Self;
@@ -947,18 +960,7 @@ function TExpectation.WithMessage(const AMessage: string): IExpectation;
 var
   LCopy: TExpectation;
 begin
-  case FKind of
-    ekString:   LCopy := TExpectation.CreateStr(FStrValue);
-    ekInt64:    LCopy := TExpectation.CreateInt(FIntValue);
-    ekBool:     LCopy := TExpectation.CreateBool(FBoolValue);
-    ekPointer:  LCopy := TExpectation.CreatePtr(FPtrValue);
-    ekProc:     LCopy := TExpectation.CreateProc(FProcValue);
-    ekDouble:   LCopy := TExpectation.CreateDouble(FDoubleValue);
-    ekBytes:    LCopy := TExpectation.CreateBytes(FBytesValue);
-    ekIntArray: LCopy := TExpectation.CreateIntArray(FIntArrayValue);
-    ekStrArray: LCopy := TExpectation.CreateStrArray(FStrArrayValue);
-  end;
-  LCopy.FNegated := FNegated;
+  LCopy := CloneSelf;
   LCopy.FMessage := AMessage;
   Result := LCopy;
 end;

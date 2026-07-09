@@ -685,6 +685,9 @@ begin
   Expect('Hello World').ToContainCI('hello');
   Expect('Hello World').ToContainCI('WORLD');
   ExpectFail(procedure begin Expect('Hello').ToContainCI('xyz'); end);
+  { P0 fix: empty needle with Not_ should fail (empty matches everything) }
+  ExpectFail(procedure begin Expect('abc').Not_.ToContainCI(''); end,
+    'should not contain (ci)');
 end;
 
 procedure TestExpectStartWithCI;

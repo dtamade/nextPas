@@ -955,8 +955,9 @@ end;
 
 procedure TestCheckNotStartsWithEmpty;
 begin
-  { Empty prefix is a no-op (always passes) }
-  CheckNotStartsWith('hello', '');
+  { Empty prefix matches everything, so NotStartsWith should fail }
+  ExpectFail(procedure begin CheckNotStartsWith('hello', ''); end,
+    'should not start with empty string');
 end;
 
 procedure TestCheckNotEndsWithPass;
@@ -972,8 +973,9 @@ end;
 
 procedure TestCheckNotEndsWithEmpty;
 begin
-  { Empty suffix is a no-op (always passes) }
-  CheckNotEndsWith('hello', '');
+  { Empty suffix matches everything, so NotEndsWith should fail }
+  ExpectFail(procedure begin CheckNotEndsWith('hello', ''); end,
+    'should not end with empty string');
 end;
 
 procedure TestCheckContainsCIPass;

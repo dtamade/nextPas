@@ -1004,8 +1004,13 @@ begin
       for J := 0 to High(AResults[I].Results) do
         if AResults[I].Results[J].Status = tsError then
           Inc(LTotalErrors);
-    { Subtract errors from failures count — they were counted in Failed by runner }
-    LTotalFailures := LTotalFailures - LTotalErrors;
+    { Subtract errors from failures count — they were counted in Failed by runner.
+      Guard against negative: when runner sets Failed=0 but has tsError results,
+      don't go below zero. }
+    if LTotalFailures > LTotalErrors then
+      LTotalFailures := LTotalFailures - LTotalErrors
+    else
+      LTotalFailures := 0;
 
     LSb.AppendStr('<testsuites name="' + XmlEscape(ASuiteName) +
       '" tests="' + IntToStr(LTotalTests) +

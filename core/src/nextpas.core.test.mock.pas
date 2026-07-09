@@ -163,7 +163,11 @@ type
     procedure RecordCallTyped(const AMethodName: string;
       const AArgs: array of TMockValue);
     { Get return value for a method, or '' if not configured }
-    function GetReturn(const AMethodName: string): string;
+    function GetReturn(const AMethodName: string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of TMockValue): string; overload;
     function GetReturnTyped(const AMethodName: string;
       const AArgs: array of TMockValue): TMockValue;
     function GetReturnInt64(const AMethodName: string;
@@ -236,7 +240,11 @@ type
 
     { Get the configured return value for a method.
       Returns '' if not configured. }
-    function GetReturn(const AMethodName: string): string;
+    function GetReturn(const AMethodName: string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of string): string; overload;
+    function GetReturn(const AMethodName: string;
+      const AArgs: array of TMockValue): string; overload;
 
     { Get the configured return value as Int64. Returns 0 if not configured. }
     function GetReturnInt(const AMethodName: string): Int64; overload;
@@ -534,6 +542,36 @@ begin
       Exit(FSetups[I].ResultValue);
   end;
   Result := '';
+end;
+
+function TMockState.GetReturn(const AMethodName: string;
+  const AArgs: array of string): string;
+var
+  LTypedArgs: TMockValues;
+  LWhenIdx: Integer;
+begin
+  if Length(AArgs) > 0 then
+  begin
+    BuildTypedStringArgs(AArgs, LTypedArgs);
+    LWhenIdx := FindWhenEntry(AMethodName, LTypedArgs);
+    if LWhenIdx >= 0 then
+      Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
+  end;
+  Result := GetReturn(AMethodName);
+end;
+
+function TMockState.GetReturn(const AMethodName: string;
+  const AArgs: array of TMockValue): string;
+var
+  LWhenIdx: Integer;
+begin
+  if Length(AArgs) > 0 then
+  begin
+    LWhenIdx := FindWhenEntry(AMethodName, AArgs);
+    if LWhenIdx >= 0 then
+      Exit(MockValueToString(FWhenEntries[LWhenIdx].ReturnValue));
+  end;
+  Result := GetReturn(AMethodName);
 end;
 
 function TMockState.GetReturnTyped(const AMethodName: string;
@@ -1265,6 +1303,18 @@ end;
 function TMock.GetReturn(const AMethodName: string): string;
 begin
   Result := FState.GetReturn(AMethodName);
+end;
+
+function TMock.GetReturn(const AMethodName: string;
+  const AArgs: array of string): string;
+begin
+  Result := FState.GetReturn(AMethodName, AArgs);
+end;
+
+function TMock.GetReturn(const AMethodName: string;
+  const AArgs: array of TMockValue): string;
+begin
+  Result := FState.GetReturn(AMethodName, AArgs);
 end;
 
 function TMock.GetReturnInt(const AMethodName: string): Int64;

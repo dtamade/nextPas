@@ -1451,12 +1451,9 @@ begin
       WriteWarning('teardown error: ' + E.Message,
         ResolveErrSink(AConfig), AConfig);
   end;
-  { R4-12: Nil-out after execution to prevent double-free if the same
-    suite is run twice on the same runner (e.g. fixture teardown that frees
-    an object). Without this, the second run would call the closure again
-    on an already-freed object. }
-  Teardown := nil;
-  TeardownClosure := nil;
+  { Note: Do NOT nil-out Teardown/TeardownClosure here.
+    RepeatAllCount re-runs the same suite, and teardown must run each time.
+    The fixture owner is responsible for preventing double-free. }
 end;
 
 procedure TTestSuite.HandleSetupFailure(var AResult: TTestRunResult;
@@ -1480,7 +1477,16 @@ begin
     end;
     ASink.WriteLn('    ' + FormatStatusLine(tsSkipped, Tests[I].Name, AConfig));
   end;
-  AResult.Failed    := 1;
+  { Append a synthetic setup-failure entry so JUnit/JSON exporters can
+    distinguish "setup failed" from "all tests individually skipped".
+    The tsError status is counted separately by JUnitXML. }
+  if APopulateResults then
+  begin
+    LTestResult := MakeTestResult('[setup]', tsError,
+      'setup failed: ' + AErrorMsg, 0);
+    AppendResult(AResult.Results, LTestResult);
+  end;
+  AResult.Failed    := 0;
   AResult.Skipped   := ASkipCount;
   AResult.AllPassed := False;
   HasRun        := True;
