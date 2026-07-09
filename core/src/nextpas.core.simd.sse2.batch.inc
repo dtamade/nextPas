@@ -4910,9 +4910,62 @@ begin
 end;
 
 procedure SSE2ArrayStepF32(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
+const
+  ONE: Single = 1.0;
+var
+  pE, pS, pD: PSingle;
+  LOne: Single;
 begin
-  // Delegate to scalar implementation (step is branchy)
-  ScalarArrayStepF32(aEdge, aSrc, aDst, aCount);
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE := aEdge;
+  pS := aSrc;
+  pD := aDst;
+  LOne := ONE;
+
+  asm
+    mov rax, pS       // src
+    mov rdx, pE       // edge
+    mov rcx, pD       // dst
+    mov r8, aCount
+    movss xmm2, [LOne]  // 1.0
+    shufps xmm2, xmm2, 0
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rdx]       // edge
+    movups xmm1, [rax]       // src
+    cmpps xmm0, xmm1, 2     // edge <= src (LE), equivalent to src >= edge
+    andps xmm0, xmm2         // 1.0 where src >= edge, 0.0 otherwise
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rdx]   // edge
+    movss xmm1, [rax]   // src
+    cmpps xmm0, xmm1, 2 // edge <= src
+    andps xmm0, xmm2
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
 end;
 
 procedure SSE2ArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
