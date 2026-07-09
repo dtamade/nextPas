@@ -16,7 +16,7 @@ uses
   nextpas.core.http.intf;
 
 type
-  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker)
+  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker, IHttpResponseBodyBytes)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -31,6 +31,7 @@ type
     FHasDeclaredContentLength: Boolean;
     FDeclaredContentLength: Int64;
     FContentLengthWritten: Int64;
+    FBodyBytesWritten: Int64;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
@@ -56,6 +57,7 @@ type
     function Hijack: ITcpStream;
     function HasCommitted: Boolean;
     function IsHijacked: Boolean;
+    function GetBodyBytesWritten: Int64;
     property Headers: IHttpHeaders read GetHeaders;
   end;
 
@@ -136,6 +138,7 @@ begin
   FHasDeclaredContentLength := False;
   FDeclaredContentLength := 0;
   FContentLengthWritten := 0;
+  FBodyBytesWritten := 0;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -478,6 +481,7 @@ begin
     WriteAllOrRaise(FWriter, ABuf, ACount);
     Result := ACount;
   end;
+  Inc(FBodyBytesWritten, Int64(Result));
 end;
 
 procedure TH1ResponseWriter.Flush;
@@ -516,6 +520,11 @@ end;
 function TH1ResponseWriter.IsHijacked: Boolean;
 begin
   Result := FHijacked;
+end;
+
+function TH1ResponseWriter.GetBodyBytesWritten: Int64;
+begin
+  Result := FBodyBytesWritten;
 end;
 
 end.

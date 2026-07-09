@@ -75,6 +75,7 @@ type
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IH2StreamControl = nextpas.core.http.intf.IH2StreamControl;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  IHttpResponseBodyBytes = nextpas.core.http.intf.IHttpResponseBodyBytes;
   IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
@@ -96,6 +97,7 @@ type
   THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
   THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
   TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
+  TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
 

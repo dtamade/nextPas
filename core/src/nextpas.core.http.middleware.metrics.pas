@@ -151,6 +151,16 @@ begin
   Result := THttpMetricsCollector.Create;
 end;
 
+function GetResponseBytes(const AW: IHttpResponseWriter): Int64;
+var
+  LBytes: IHttpResponseBodyBytes;
+begin
+  if Supports(AW, IHttpResponseBodyBytes, LBytes) then
+    Result := LBytes.GetBodyBytesWritten
+  else
+    Result := 0;
+end;
+
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
 var
   LCollector: IHttpMetricsCollector;
@@ -170,7 +180,7 @@ begin
       ANext.ServeHTTP(AReq, AW);
       LDuration := LStart.Elapsed;
       LCollector.RecordRequestWithBytes(Int64(AW.GetStatus),
-        LDuration.AsMicroseconds, AReq.ContentLength, 0);
+        LDuration.AsMicroseconds, AReq.ContentLength, GetResponseBytes(AW));
     end);
   end);
 end;
