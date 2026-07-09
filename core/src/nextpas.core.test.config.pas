@@ -960,10 +960,17 @@ function TTestCache.Get(const AKey: string; ATestName: string;
 var
   LDir, LFile: string;
   LLines: TStringArray;
+  LSafeName: string;
+  K: Integer;
 begin
   Result := False;
   LDir := CacheDir + '/' + AKey;
-  LFile := LDir + '/' + ATestName + '.cache';
+  { R4-05: encode path separators in test names to avoid subdirectory creation }
+  LSafeName := ATestName;
+  for K := 1 to Length(LSafeName) do
+    if (LSafeName[K] = '/') or (LSafeName[K] = '\') then
+      LSafeName[K] := '_';
+  LFile := LDir + '/' + LSafeName + '.cache';
   if not FileExists(LFile) then
     Exit;
   try
@@ -994,10 +1001,17 @@ procedure TTestCache.Put(const AKey: string; ATestName: string;
   const AEntry: TCacheEntry);
 var
   LDir, LFile: string;
+  LSafeName: string;
+  K: Integer;
 begin
   LDir := CacheDir + '/' + AKey;
   ForceDirectories(LDir);
-  LFile := LDir + '/' + ATestName + '.cache';
+  { R4-05: encode path separators in test names to avoid subdirectory creation }
+  LSafeName := ATestName;
+  for K := 1 to Length(LSafeName) do
+    if (LSafeName[K] = '/') or (LSafeName[K] = '\') then
+      LSafeName[K] := '_';
+  LFile := LDir + '/' + LSafeName + '.cache';
   try
     WriteFileText(LFile,
       IntToStr(AEntry.Status) + LineEnding +

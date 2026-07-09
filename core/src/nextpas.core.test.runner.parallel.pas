@@ -419,8 +419,8 @@ begin
     until False;
   end;
 
-  if (not LSkippedByBeforeEach) and
-     (Assigned(R^.After) or Assigned(R^.AfterClosure)) then
+  { R4-03: AfterEach always runs, even when BeforeEach skipped/failed }
+  if Assigned(R^.After) or Assigned(R^.AfterClosure) then
   begin
     try
       if Assigned(R^.After) then R^.After else R^.AfterClosure();

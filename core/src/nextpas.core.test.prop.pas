@@ -660,10 +660,18 @@ function TMapIntToStrGenerator.Shrink(const AValue: string): specialize TArray<s
 var
   LParsed: Int64;
   LShrunk: specialize TArray<Int64>;
+  LCode: Integer;
   I, N: Integer;
 begin
-  { Try to reverse-map to Int64, shrink, then map forward }
-  Val(AValue, LParsed);
+  { R4-09: reverse-map via Val; if the string isn't numeric, Shrink is a no-op.
+    This is an inherent limitation of MapIntToStr — the mapping is one-way.
+    Only numeric string mappings (IntToStr-compatible) support shrinking. }
+  Val(AValue, LParsed, LCode);
+  if LCode <> 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
   LShrunk := FSource.Shrink(LParsed);
   N := 0;
   SetLength(Result, Length(LShrunk));
@@ -719,8 +727,9 @@ begin
     if FPred(Result) then
       Exit;
   end;
-  { Fallback: return last generated value even if it doesn't match }
-  Result := FSource.Generate;
+  { R4-07: fail explicitly instead of returning a value that violates the predicate }
+  raise EAssertionFailed.Create(
+    'FilterInt: no matching value after ' + IntToStr(FMaxRetries) + ' retries');
 end;
 
 function TFilterIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
@@ -785,7 +794,9 @@ begin
     if FPred(Result) then
       Exit;
   end;
-  Result := FSource.Generate;
+  { R4-07: fail explicitly instead of returning a value that violates the predicate }
+  raise EAssertionFailed.Create(
+    'FilterString: no matching value after ' + IntToStr(FMaxRetries) + ' retries');
 end;
 
 function TFilterStringGenerator.Shrink(const AValue: string): specialize TArray<string>;
@@ -850,7 +861,9 @@ begin
     if FPred(Result) then
       Exit;
   end;
-  Result := FSource.Generate;
+  { R4-07: fail explicitly instead of returning a value that violates the predicate }
+  raise EAssertionFailed.Create(
+    'FilterBytes: no matching value after ' + IntToStr(FMaxRetries) + ' retries');
 end;
 
 function TFilterBytesGenerator.Shrink(const AValue: TBytes): specialize TArray<TBytes>;
@@ -2597,6 +2610,10 @@ begin
   end;
 end;
 
+{ R4-10: FuzzParallel runs multiple strategies sequentially (not in parallel).
+  The "parallel" name refers to multiple independent strategy workers, each with
+  its own corpus exploration path. Actual thread-level parallelism is not
+  implemented — all workers run in the calling thread. }
 procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
 var
