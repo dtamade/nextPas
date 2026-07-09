@@ -83,6 +83,17 @@ procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayPowF32(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single);
 procedure ScalarArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+// === Batch Array Operations - Rounding F32 ===
+procedure ScalarArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure ScalarArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+// === Batch Array Operations - Interpolation F32 ===
+procedure ScalarArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
 // === Batch Array Operations - Integer ===
 procedure ScalarArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 procedure ScalarArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
@@ -758,7 +769,9 @@ function ScalarSelectF32x8(const mask: TVecU32x8; const a, b: TVecF32x8): TVecF3
 function ScalarSelectF64x4(const mask: TVecU64x4; const a, b: TVecF64x4): TVecF64x4;
 implementation
 uses
-  nextpas.core.simd.mathutil;
+  nextpas.core.simd.mathutil,
+  nextpas.core.math.trig,
+  nextpas.core.math.scalar;
 {$I nextpas.core.simd.scalar.arith.inc}
 {$I nextpas.core.simd.scalar.compare.inc}
 {$I nextpas.core.simd.scalar.math.inc}

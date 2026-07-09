@@ -19,14 +19,17 @@ uses
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.math.base,
+  nextpas.core.math.trig,
+  nextpas.core.math.scalar,
   nextpas.core.math.batch.simd;
 
 const
-  NUM_OPS = 7;
+  NUM_OPS = 16;
   NUM_SIZES = 3;
 
   OP_NAMES: array[0..NUM_OPS - 1] of string = (
-    'Sin', 'Cos', 'Sqrt', 'Abs', 'Exp', 'Lerp', 'Clamp'
+    'Sin', 'Cos', 'Tan', 'SinCos', 'Sqrt', 'Abs', 'Neg', 'Exp',
+    'Log2', 'Log10', 'Ceil', 'Floor', 'Round', 'Trunc', 'Lerp', 'Clamp'
   );
 
   SIZES: array[0..NUM_SIZES - 1] of Int64 = (
@@ -45,6 +48,7 @@ var
   GInputA: array of Single;
   GInputB: array of Single;
   GOutput: array of Single;
+  GOutput2: array of Single;  // For SinCos
 
 { --- Pure Pascal scalar reference implementations --- }
 
@@ -144,6 +148,119 @@ begin
   end;
 end;
 
+procedure ScalarBatchTanF32(const AInput: array of Single;
+                            var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Tan(AInput[I]);
+end;
+
+procedure ScalarBatchSinCosF32(const AInput: array of Single;
+                               var ASinOut, ACosOut: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(ASinOut) then
+    LCount := Length(ASinOut);
+  if LCount > Length(ACosOut) then
+    LCount := Length(ACosOut);
+  for I := 0 to LCount - 1 do
+  begin
+    ASinOut[I] := Sin(AInput[I]);
+    ACosOut[I] := Cos(AInput[I]);
+  end;
+end;
+
+procedure ScalarBatchNegF32(const AInput: array of Single;
+                            var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := -AInput[I];
+end;
+
+procedure ScalarBatchLog2F32(const AInput: array of Single;
+                             var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Ln(AInput[I]) * 1.4426950408889634; // 1/ln(2)
+end;
+
+procedure ScalarBatchLog10F32(const AInput: array of Single;
+                              var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Ln(AInput[I]) * 0.4342944819032518; // 1/ln(10)
+end;
+
+procedure ScalarBatchCeilF32(const AInput: array of Single;
+                             var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Ceil(AInput[I]);
+end;
+
+procedure ScalarBatchFloorF32(const AInput: array of Single;
+                              var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Floor(AInput[I]);
+end;
+
+procedure ScalarBatchRoundF32(const AInput: array of Single;
+                              var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Round(AInput[I]);
+end;
+
+procedure ScalarBatchTruncF32(const AInput: array of Single;
+                              var AOutput: array of Single);
+var
+  I, LCount: SizeInt;
+begin
+  LCount := Length(AInput);
+  if LCount > Length(AOutput) then
+    LCount := Length(AOutput);
+  for I := 0 to LCount - 1 do
+    AOutput[I] := Trunc(AInput[I]);
+end;
+
 { --- Test data initialization --- }
 
 procedure InitTestData(ASize: SizeInt);
@@ -153,6 +270,7 @@ begin
   SetLength(GInputA, ASize);
   SetLength(GInputB, ASize);
   SetLength(GOutput, ASize);
+  SetLength(GOutput2, ASize);
   for I := 0 to ASize - 1 do
   begin
     GInputA[I] := 0.1 + Single(I) * 0.001;
@@ -232,6 +350,96 @@ begin
   BatchClampSimdF32(GInputA, 0.0, 1.0, GOutput);
 end;
 
+procedure BenchTanScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchTanF32(GInputA, GOutput);
+end;
+
+procedure BenchTanSimd(const ACtx: IBenchContext);
+begin
+  BatchTanSimdF32(GInputA, GOutput);
+end;
+
+procedure BenchSinCosScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchSinCosF32(GInputA, GOutput, GOutput2);
+end;
+
+procedure BenchSinCosSimd(const ACtx: IBenchContext);
+begin
+  BatchSinCosSimdF32(GInputA, GOutput, GOutput2);
+end;
+
+procedure BenchNegScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchNegF32(GInputA, GOutput);
+end;
+
+procedure BenchNegSimd(const ACtx: IBenchContext);
+begin
+  BatchNegSimdF32(GInputA, GOutput);
+end;
+
+procedure BenchLog2Scalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchLog2F32(GInputA, GOutput);
+end;
+
+procedure BenchLog2Simd(const ACtx: IBenchContext);
+begin
+  BatchLog2SimdF32(GInputA, GOutput);
+end;
+
+procedure BenchLog10Scalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchLog10F32(GInputA, GOutput);
+end;
+
+procedure BenchLog10Simd(const ACtx: IBenchContext);
+begin
+  BatchLog10SimdF32(GInputA, GOutput);
+end;
+
+procedure BenchCeilScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchCeilF32(GInputA, GOutput);
+end;
+
+procedure BenchCeilSimd(const ACtx: IBenchContext);
+begin
+  BatchCeilSimdF32(GInputA, GOutput);
+end;
+
+procedure BenchFloorScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchFloorF32(GInputA, GOutput);
+end;
+
+procedure BenchFloorSimd(const ACtx: IBenchContext);
+begin
+  BatchFloorSimdF32(GInputA, GOutput);
+end;
+
+procedure BenchRoundScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchRoundF32(GInputA, GOutput);
+end;
+
+procedure BenchRoundSimd(const ACtx: IBenchContext);
+begin
+  BatchRoundSimdF32(GInputA, GOutput);
+end;
+
+procedure BenchTruncScalar(const ACtx: IBenchContext);
+begin
+  ScalarBatchTruncF32(GInputA, GOutput);
+end;
+
+procedure BenchTruncSimd(const ACtx: IBenchContext);
+begin
+  BatchTruncSimdF32(GInputA, GOutput);
+end;
+
 { --- Helper --- }
 
 function FindNsPerOp(const AAll: TBenchResultArray;
@@ -278,12 +486,30 @@ begin
       .Add('Sin/simd' + LSuffix, @BenchSinSimd)
       .Add('Cos/scalar' + LSuffix, @BenchCosScalar)
       .Add('Cos/simd' + LSuffix, @BenchCosSimd)
+      .Add('Tan/scalar' + LSuffix, @BenchTanScalar)
+      .Add('Tan/simd' + LSuffix, @BenchTanSimd)
+      .Add('SinCos/scalar' + LSuffix, @BenchSinCosScalar)
+      .Add('SinCos/simd' + LSuffix, @BenchSinCosSimd)
       .Add('Sqrt/scalar' + LSuffix, @BenchSqrtScalar)
       .Add('Sqrt/simd' + LSuffix, @BenchSqrtSimd)
       .Add('Abs/scalar' + LSuffix, @BenchAbsScalar)
       .Add('Abs/simd' + LSuffix, @BenchAbsSimd)
+      .Add('Neg/scalar' + LSuffix, @BenchNegScalar)
+      .Add('Neg/simd' + LSuffix, @BenchNegSimd)
       .Add('Exp/scalar' + LSuffix, @BenchExpScalar)
       .Add('Exp/simd' + LSuffix, @BenchExpSimd)
+      .Add('Log2/scalar' + LSuffix, @BenchLog2Scalar)
+      .Add('Log2/simd' + LSuffix, @BenchLog2Simd)
+      .Add('Log10/scalar' + LSuffix, @BenchLog10Scalar)
+      .Add('Log10/simd' + LSuffix, @BenchLog10Simd)
+      .Add('Ceil/scalar' + LSuffix, @BenchCeilScalar)
+      .Add('Ceil/simd' + LSuffix, @BenchCeilSimd)
+      .Add('Floor/scalar' + LSuffix, @BenchFloorScalar)
+      .Add('Floor/simd' + LSuffix, @BenchFloorSimd)
+      .Add('Round/scalar' + LSuffix, @BenchRoundScalar)
+      .Add('Round/simd' + LSuffix, @BenchRoundSimd)
+      .Add('Trunc/scalar' + LSuffix, @BenchTruncScalar)
+      .Add('Trunc/simd' + LSuffix, @BenchTruncSimd)
       .Add('Lerp/scalar' + LSuffix, @BenchLerpScalar)
       .Add('Lerp/simd' + LSuffix, @BenchLerpSimd)
       .Add('Clamp/scalar' + LSuffix, @BenchClampScalar)
@@ -348,10 +574,10 @@ begin
 
   WriteLn('  -----------------------------------------------');
   WriteLn;
-  WriteLn('Note: Sin/Cos/Exp use scalar loops in both paths (no SIMD gain expected).');
-  WriteLn('      Sqrt/Abs/Lerp/Clamp use true SIMD intrinsics via dispatch.');
-  WriteLn('      If SIMD < 1.0x, dispatch overhead (atomic_load per call) dominates.');
-  WriteLn('      Fix: cache function pointer outside loop, or use static backend.');
+  WriteLn('Note: All operations use SIMD dispatch via Array* functions.');
+  WriteLn('      Sin/Cos/Tan/Exp/Log2/Log10 use lookup tables or approximations.');
+  WriteLn('      Ceil/Floor/Round/Trunc use SSE4.1 roundps instruction.');
+  WriteLn('      SinCos computes both sin and cos in a single pass.');
   WriteLn;
   WriteLn('Done.');
 end.

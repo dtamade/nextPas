@@ -2,14 +2,12 @@ unit nextpas.core.math.batch.simd;
 {**
  * SIMD-optimized batch math operations.
  *
- * This unit provides SIMD-accelerated wrappers for batch scalar operations,
- * using SSE/AVX intrinsics via nextpas.core.simd for 4-wide F32 processing.
- * Scalar fallback handles remaining elements when count is not a multiple of 4.
+ * This unit provides SIMD-accelerated wrappers for batch scalar operations.
+ * Uses nextpas.core.simd Array* batch functions for O(1) dispatch overhead.
  *
  * Design contract:
  *   - API mirrors nextpas.core.math.batch (same signatures)
- *   - SIMD loop processes 4 elements per iteration via VecF32x4* primitives
- *   - Scalar tail loop handles remaining 0-3 elements
+ *   - Array* functions: single dispatch, internal SIMD loop + scalar tail
  *   - The "Simd" suffix signals SIMD-ready dispatch path
  *}
 
@@ -20,160 +18,77 @@ interface
 uses
   nextpas.core.base;
 
-{** Batch sine (SIMD-ready). Computes sin(x) for each element.
- * @param AInput Input array of angles in radians
- * @param AOutput Output array for sine values
- * @return Number of elements processed
- *}
+{** Batch sine (SIMD-ready). Computes sin(x) for each element. *}
 function BatchSinSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch cosine (SIMD-ready). Computes cos(x) for each element.
- * @param AInput Input array of angles in radians
- * @param AOutput Output array for cosine values
- * @return Number of elements processed
- *}
+{** Batch cosine (SIMD-ready). Computes cos(x) for each element. *}
 function BatchCosSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch tangent (SIMD-ready). Computes tan(x) for each element.
- * @param AInput Input array of angles in radians
- * @param AOutput Output array for tangent values
- * @return Number of elements processed
- *}
+{** Batch tangent (SIMD-ready). Computes tan(x) for each element. *}
 function BatchTanSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch simultaneous sine and cosine (SIMD-ready).
- * Computes both sin(x) and cos(x) in a single pass.
- * @param AInput Input array of angles in radians
- * @param ASinOutput Output array for sine values
- * @param ACosOutput Output array for cosine values
- * @return Number of elements processed
- *}
+{** Batch simultaneous sine and cosine (SIMD-ready). *}
 function BatchSinCosSimdF32(const AInput: array of Single;
                             var ASinOutput, ACosOutput: array of Single): SizeInt;
 
-{** Batch exponential (SIMD-ready). Computes e^x for each element.
- * @param AInput Input array of exponents
- * @param AOutput Output array for exponential values
- * @return Number of elements processed
- *}
+{** Batch exponential (SIMD-ready). Computes e^x for each element. *}
 function BatchExpSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch natural logarithm (SIMD-ready). Computes ln(x) for each element.
- * @param AInput Input array (must be positive)
- * @param AOutput Output array for logarithm values
- * @return Number of elements processed
- *}
+{** Batch natural logarithm (SIMD-ready). Computes ln(x) for each element. *}
 function BatchLnSimdF32(const AInput: array of Single;
                         var AOutput: array of Single): SizeInt;
 
-{** Batch base-2 logarithm (SIMD-ready). Computes log2(x) for each element.
- * @param AInput Input array (must be positive)
- * @param AOutput Output array for logarithm values
- * @return Number of elements processed
- *}
+{** Batch base-2 logarithm (SIMD-ready). Computes log2(x) for each element. *}
 function BatchLog2SimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 
-{** Batch base-10 logarithm (SIMD-ready). Computes log10(x) for each element.
- * @param AInput Input array (must be positive)
- * @param AOutput Output array for logarithm values
- * @return Number of elements processed
- *}
+{** Batch base-10 logarithm (SIMD-ready). Computes log10(x) for each element. *}
 function BatchLog10SimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 
-{** Batch square root (SIMD-ready). Computes sqrt(x) for each element.
- * @param AInput Input array (must be non-negative)
- * @param AOutput Output array for square root values
- * @return Number of elements processed
- *}
+{** Batch square root (SIMD-ready). Computes sqrt(x) for each element. *}
 function BatchSqrtSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 
-{** Batch absolute value (SIMD-ready). Computes |x| for each element.
- * @param AInput Input array
- * @param AOutput Output array for absolute values
- * @return Number of elements processed
- *}
+{** Batch absolute value (SIMD-ready). Computes |x| for each element. *}
 function BatchAbsSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch negation (SIMD-ready). Computes -x for each element.
- * @param AInput Input array
- * @param AOutput Output array for negated values
- * @return Number of elements processed
- *}
+{** Batch negation (SIMD-ready). Computes -x for each element. *}
 function BatchNegSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 
-{** Batch ceiling (SIMD-ready). Computes ceil(x) for each element.
- * @param AInput Input array
- * @param AOutput Output array for ceiling values
- * @return Number of elements processed
- *}
+{** Batch ceiling (SIMD-ready). Computes ceil(x) for each element. *}
 function BatchCeilSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 
-{** Batch floor (SIMD-ready). Computes floor(x) for each element.
- * @param AInput Input array
- * @param AOutput Output array for floor values
- * @return Number of elements processed
- *}
+{** Batch floor (SIMD-ready). Computes floor(x) for each element. *}
 function BatchFloorSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 
-{** Batch round (SIMD-ready). Computes round(x) for each element.
- * @param AInput Input array
- * @param AOutput Output array for rounded values (as Single)
- * @return Number of elements processed
- *}
+{** Batch round (SIMD-ready). Computes round(x) for each element. *}
 function BatchRoundSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 
-{** Batch truncation (SIMD-ready). Computes trunc(x) for each element.
- * @param AInput Input array
- * @param AOutput Output array for truncated values (as Single)
- * @return Number of elements processed
- *}
+{** Batch truncation (SIMD-ready). Computes trunc(x) for each element. *}
 function BatchTruncSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 
-{** Batch linear interpolation (SIMD-ready).
- * Computes lerp(a, b, t) = a + t * (b - a) for each element.
- * Signature matches BatchLerpF32 in nextpas.core.math.batch.
- * @param AStart Start values array
- * @param AEnd End values array
- * @param AT Interpolation factor (scalar, 0..1 typical)
- * @param AOutput Output array for interpolated values
- * @return Number of elements processed
- *}
+{** Batch linear interpolation (SIMD-ready). *}
 function BatchLerpSimdF32(const AStart, AEnd: array of Single;
                           const AT: Single;
                           var AOutput: array of Single): SizeInt;
 
-{** Batch clamp (SIMD-ready). Clamps each element to [AMin, AMax].
- * @param AInput Input array
- * @param AMin Minimum value
- * @param AMax Maximum value
- * @param AOutput Output array for clamped values
- * @return Number of elements processed
- *}
+{** Batch clamp (SIMD-ready). Clamps each element to [AMin, AMax] range. *}
 function BatchClampSimdF32(const AInput: array of Single;
                            const AMin, AMax: Single;
                            var AOutput: array of Single): SizeInt;
 
-{** Batch scale and offset (SIMD-ready).
- * Computes input * scale + offset for each element.
- * @param AInput Input array
- * @param AScale Scale factor
- * @param AOffset Offset value
- * @param AOutput Output array
- * @return Number of elements processed
- *}
+{** Batch scale and offset (SIMD-ready). *}
 function BatchScaleOffsetSimdF32(const AInput: array of Single;
                                  const AScale, AOffset: Single;
                                  var AOutput: array of Single): SizeInt;
@@ -185,382 +100,256 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar;
 
-// -- SIMD-optimized implementations --
-// Each function processes 4 elements per SIMD iteration, scalar fallback for remaining elements.
+{ Helper: compute min count from input/output arrays }
+function MinArrayCount(const AInput: array of Single;
+                      const AOutput: array of Single): SizeInt; inline;
+var
+  LInCount, LOutCount: SizeInt;
+begin
+  LInCount := Length(AInput);
+  LOutCount := Length(AOutput);
+  if LInCount < LOutCount then
+    Result := LInCount
+  else
+    Result := LOutCount;
+end;
 
-{ BatchSinSimdF32 }
+{ Helper: compute min count from two input arrays and one output array }
+function MinArrayCount3(const A1, A2, AOutput: array of Single): SizeInt; inline;
+var
+  L1, L2, LOut: SizeInt;
+begin
+  L1 := Length(A1);
+  L2 := Length(A2);
+  LOut := Length(AOutput);
+  Result := L1;
+  if L2 < Result then
+    Result := L2;
+  if LOut < Result then
+    Result := LOut;
+end;
+
+{ ============================================================================
+  Batch operations using Array* (O(1) dispatch, internal SIMD loop)
+  All functions use native SIMD batch implementations from nextpas.core.simd.
+  ============================================================================ }
+
+{ BatchSinSimdF32 - uses ArraySinF32 }
 function BatchSinSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Sin(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySinF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchCosSimdF32 }
+{ BatchCosSimdF32 - uses ArrayCosF32 }
 function BatchCosSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Cos(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayCosF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchTanSimdF32 }
+{ BatchTanSimdF32 - uses ArrayTanF32 }
 function BatchTanSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Tan(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayTanF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchSinCosSimdF32 — Scalar fallback using Sin/Cos }
+{ BatchSinCosSimdF32 - uses ArraySinCosF32 }
 function BatchSinCosSimdF32(const AInput: array of Single;
                             var ASinOutput, ACosOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(ASinOutput) then
-    LCount := Length(ASinOutput);
-  if LCount > Length(ACosOutput) then
-    LCount := Length(ACosOutput);
-  for i := 0 to LCount - 1 do
-  begin
-    ASinOutput[i] := Sin(AInput[i]);
-    ACosOutput[i] := Cos(AInput[i]);
-  end;
+  LCount := MinArrayCount3(AInput, ASinOutput, ACosOutput);
+  if LCount > 0 then
+    ArraySinCosF32(@AInput[0], @ASinOutput[0], @ACosOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchExpSimdF32 }
+{ BatchExpSimdF32 - uses ArrayExpF32 }
 function BatchExpSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Exp(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayExpF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchLnSimdF32 }
+{ BatchLnSimdF32 - uses ArrayLogF32 (natural log) }
 function BatchLnSimdF32(const AInput: array of Single;
                         var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Ln(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLogF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchLog2SimdF32 }
+{ BatchLog2SimdF32 - uses ArrayLog2F32 }
 function BatchLog2SimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Log2(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLog2F32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchLog10SimdF32 }
+{ BatchLog10SimdF32 - uses ArrayLog10F32 }
 function BatchLog10SimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount: SizeInt;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  for i := 0 to LCount - 1 do
-    AOutput[i] := Log10(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLog10F32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchSqrtSimdF32 — SIMD-optimized via VecF32x4Sqrt (SQRTPS/VSQRTSS) }
+{ BatchSqrtSimdF32 - uses ArraySqrtF32 }
 function BatchSqrtSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Sqrt(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Sqrt(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySqrtF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchAbsSimdF32 — SIMD-optimized via VecF32x4Abs (ANDPS with 0x7FFFFFFF mask) }
+{ BatchAbsSimdF32 - uses ArrayAbsF32 }
 function BatchAbsSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Abs(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Abs(AInput[i]);
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayAbsF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchNegSimdF32 — SIMD-optimized via unary negation (XORPS with 0x80000000 sign bit) }
+{ BatchNegSimdF32 - uses ArrayNegF32 }
 function BatchNegSimdF32(const AInput: array of Single;
                          var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := -LVec;
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := -AInput[i];
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayNegF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchCeilSimdF32 — SIMD-optimized via VecF32x4Ceil (ROUNDPD with +inf rounding) }
+{ BatchCeilSimdF32 - uses ArrayCeilF32 }
 function BatchCeilSimdF32(const AInput: array of Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Ceil(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Single(Ceil(AInput[i]));
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayCeilF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchFloorSimdF32 — SIMD-optimized via VecF32x4Floor (ROUNDPD with -inf rounding) }
+{ BatchFloorSimdF32 - uses ArrayFloorF32 }
 function BatchFloorSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Floor(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Single(Floor(AInput[i]));
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayFloorF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchRoundSimdF32 — SIMD-optimized via VecF32x4Round (ROUNDPD with nearest) }
+{ BatchRoundSimdF32 - uses ArrayRoundF32 }
 function BatchRoundSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Round(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Single(Round(AInput[i]));
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayRoundF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchTruncSimdF32 — SIMD-optimized via VecF32x4Trunc (ROUNDPD with toward-zero) }
+{ BatchTruncSimdF32 - uses ArrayTruncF32 }
 function BatchTruncSimdF32(const AInput: array of Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Trunc(LVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := Single(Trunc(AInput[i]));
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayTruncF32(@AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 
-{ BatchLerpSimdF32 — SIMD-optimized via VecF32x4Fma: lerp(a,b,t) = a + t*(b-a) = fma(t, b-a, a) }
+{ BatchLerpSimdF32 - uses ArrayLerpF32 }
 function BatchLerpSimdF32(const AStart, AEnd: array of Single;
                           const AT: Single;
                           var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LStart, LEnd, LDiff, LT: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LT := VecF32x4Splat(AT);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LStart := VecF32x4Load(@AStart[i]);
-    LEnd := VecF32x4Load(@AEnd[i]);
-    LDiff := VecF32x4Sub(LEnd, LStart);
-    LStart := VecF32x4Fma(LT, LDiff, LStart);
-    VecF32x4Store(@AOutput[i], LStart);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := AStart[i] + AT * (AEnd[i] - AStart[i]);
+  LCount := MinArrayCount3(AStart, AEnd, AOutput);
+  if LCount > 0 then
+    ArrayLerpF32(@AStart[0], @AEnd[0], @AOutput[0], LCount, AT);
   Result := LCount;
 end;
 
-{ BatchClampSimdF32 — SIMD-optimized via VecF32x4Clamp (MINPS+MAXPS) }
+{ BatchClampSimdF32 - uses ArrayClampF32 }
 function BatchClampSimdF32(const AInput: array of Single;
                            const AMin, AMax: Single;
                            var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec, LMinVec, LMaxVec: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LMinVec := VecF32x4Splat(AMin);
-  LMaxVec := VecF32x4Splat(AMax);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Clamp(LVec, LMinVec, LMaxVec);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-  begin
-    if AInput[i] < AMin then
-      AOutput[i] := AMin
-    else if AInput[i] > AMax then
-      AOutput[i] := AMax
-    else
-      AOutput[i] := AInput[i];
-  end;
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayClampF32(@AInput[0], @AOutput[0], LCount, AMin, AMax);
   Result := LCount;
 end;
 
-{ BatchScaleOffsetSimdF32 — SIMD-optimized via VecF32x4Fma: input*scale + offset = fma(input, scale, offset) }
+{ BatchScaleOffsetSimdF32 - uses ArrayLinearF32 (scale * x + bias) }
 function BatchScaleOffsetSimdF32(const AInput: array of Single;
                                  const AScale, AOffset: Single;
                                  var AOutput: array of Single): SizeInt;
 var
-  i, LCount, LSimdEnd: SizeInt;
-  LVec, LScale, LOffset: TVecF32x4;
+  LCount: SizeInt;
 begin
-  LCount := Length(AInput);
-  if LCount > Length(AOutput) then
-    LCount := Length(AOutput);
-  LScale := VecF32x4Splat(AScale);
-  LOffset := VecF32x4Splat(AOffset);
-  LSimdEnd := LCount - (LCount mod 4);
-  i := 0;
-  while i < LSimdEnd do
-  begin
-    LVec := VecF32x4Load(@AInput[i]);
-    LVec := VecF32x4Fma(LVec, LScale, LOffset);
-    VecF32x4Store(@AOutput[i], LVec);
-    Inc(i, 4);
-  end;
-  for i := LSimdEnd to LCount - 1 do
-    AOutput[i] := AInput[i] * AScale + AOffset;
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLinearF32(@AInput[0], @AOutput[0], LCount, AScale, AOffset);
   Result := LCount;
 end;
 

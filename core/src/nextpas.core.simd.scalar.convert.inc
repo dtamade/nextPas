@@ -608,3 +608,87 @@ begin
   end;
 end;
 
+
+{$VECTORIZE OFF}
+procedure ScalarArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Tan(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aSinDst = nil) or (aCosDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    aSinDst[i] := Sin(aSrc[i]);
+    aCosDst[i] := Cos(aSrc[i]);
+  end;
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Log2(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Log10(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Ceil(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Floor(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Round(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Trunc(aSrc[i]);
+end;
+
+{$VECTORIZE OFF}
+procedure ScalarArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aStart = nil) or (aEnd = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aStart[i] + aT * (aEnd[i] - aStart[i]);
+end;

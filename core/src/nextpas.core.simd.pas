@@ -1184,6 +1184,19 @@ procedure ArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 procedure ArrayPowF32(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single); inline;
 procedure ArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 procedure ArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+
+// === Rounding F32 Batch Helpers ===
+procedure ArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+procedure ArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+
+// === Interpolation F32 Batch Helpers ===
+procedure ArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single); inline;
 
 // === Fused Batch Helpers (single-pass, reduced memory traffic) ===
 procedure ArrayLinearF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single); inline;
@@ -1928,6 +1941,69 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   LDispatch^.ArrayCosF32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayTanF32(aSrc, aDst, aCount);
+end;
+
+procedure ArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySinCosF32(aSrc, aSinDst, aCosDst, aCount);
+end;
+
+procedure ArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLog2F32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLog10F32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayCeilF32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayFloorF32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayRoundF32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayTruncF32(aSrc, aDst, aCount);
+end;
+
+procedure ArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLerpF32(aStart, aEnd, aDst, aCount, aT);
 end;
 
 // === Fused Batch Implementation ===

@@ -780,6 +780,19 @@
     ArrayPowF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single);
     ArraySinF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
     ArrayCosF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArrayTanF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArraySinCosF32: procedure(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+    ArrayLog2F32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArrayLog10F32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+    // === Batch Array Operations - Rounding F32 ===
+    ArrayCeilF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArrayFloorF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArrayRoundF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+    ArrayTruncF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+    // === Batch Array Operations - Interpolation F32 ===
+    ArrayLerpF32: procedure(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
 
     // === Batch Array Operations - Integer ===
     ArrayAddI32: procedure(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);

@@ -5072,3 +5072,497 @@ begin
   else
     AVX2ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
 end;
+
+// ============================================================================
+// AVX2 256-bit Rounding Operations (require SSE4.1 roundps)
+// ============================================================================
+
+procedure AVX2ArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vroundps ymm0, ymm0, 2  // Round up (ceil)
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 2
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vroundss xmm0, xmm0, xmm0, 2
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vroundps ymm0, ymm0, 1  // Round down (floor)
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 1
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vroundss xmm0, xmm0, xmm0, 1
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vroundps ymm0, ymm0, 0  // Round to nearest
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 0
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vroundss xmm0, xmm0, xmm0, 0
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vroundps ymm0, ymm0, 3  // Truncate
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 3
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vroundss xmm0, xmm0, xmm0, 3
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// AVX2 256-bit Lerp (Linear Interpolation)
+// ============================================================================
+
+procedure AVX2ArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+var
+  pS1, pS2, pD: PSingle;
+  LT: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aStart; pS2 := aEnd; pD := aDst;
+  LT := aT;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+    vbroadcastss ymm1, [LT]  // Broadcast t to all 8 lanes
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rdx]     // ymm0 = end
+    vsubps ymm0, ymm0, [rax] // ymm0 = end - start
+    vmulps ymm0, ymm0, ymm1  // ymm0 = (end - start) * t
+    vaddps ymm0, ymm0, [rax] // ymm0 = start + (end - start) * t
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rdx]
+    vsubps xmm0, xmm0, [rax]
+    vmulps xmm0, xmm0, xmm1
+    vaddps xmm0, xmm0, [rax]
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rdx]
+    vsubss xmm0, xmm0, [rax]
+    vmulss xmm0, xmm0, xmm1
+    vaddss xmm0, xmm0, [rax]
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// AVX2 256-bit Tan, SinCos, Log2, Log10
+// ============================================================================
+
+procedure AVX2ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pCos, pD: PSingle;
+  LSinBuf, LCosBuf: array of Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+
+  // Allocate temporary buffers for sin and cos
+  SetLength(LSinBuf, aCount);
+  SetLength(LCosBuf, aCount);
+
+  // Compute sin and cos using AVX2 SIMD
+  AVX2ArraySinF32(aSrc, @LSinBuf[0], aCount);
+  AVX2ArrayCosF32(aSrc, @LCosBuf[0], aCount);
+
+  // Divide: tan(x) = sin(x) / cos(x)
+  pS := @LSinBuf[0];
+  pCos := @LCosBuf[0];
+  pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rdx, pCos
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vdivps ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vdivps xmm0, xmm0, [rdx]
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vdivss xmm0, xmm0, [rdx]
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+begin
+  // Compute sin and cos using AVX2 SIMD
+  if aCount = 0 then Exit;
+  AVX2ArraySinF32(aSrc, aSinDst, aCount);
+  AVX2ArrayCosF32(aSrc, aCosDst, aCount);
+end;
+
+procedure AVX2ArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pD: PSingle;
+  LScale: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  // log2(x) = ln(x) * log2(e) = ln(x) * 1.4426950408889634
+  AVX2ArrayLogF32(aSrc, aDst, aCount);
+  LScale := 1.4426950408889634;
+  pS := aDst;
+  pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    vbroadcastss ymm1, [LScale]
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vmulps ymm0, ymm0, ymm1
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vmulps xmm0, xmm0, xmm1
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vmulss xmm0, xmm0, xmm1
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pD: PSingle;
+  LScale: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  // log10(x) = ln(x) * log10(e) = ln(x) * 0.4342944819032518
+  AVX2ArrayLogF32(aSrc, aDst, aCount);
+  LScale := 0.4342944819032518;
+  pS := aDst;
+  pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    vbroadcastss ymm1, [LScale]
+
+    cmp r8, 8
+    jb @tail4
+
+  @loop8:
+    vmovups ymm0, [rax]
+    vmulps ymm0, ymm0, ymm1
+    vmovups [rcx], ymm0
+    add rax, 32
+    add rcx, 32
+    sub r8, 8
+    cmp r8, 8
+    jae @loop8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    vmovups xmm0, [rax]
+    vmulps xmm0, xmm0, xmm1
+    vmovups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    vmovss xmm0, [rax]
+    vmulss xmm0, xmm0, xmm1
+    vmovss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    vzeroupper
+  end;
+  {$POP}
+end;

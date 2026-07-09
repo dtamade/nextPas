@@ -702,6 +702,17 @@ begin
   dispatchTable.ArrayPowF32 := @ScalarArrayPowF32;
   dispatchTable.ArraySinF32 := @ScalarArraySinF32;
   dispatchTable.ArrayCosF32 := @ScalarArrayCosF32;
+  dispatchTable.ArrayTanF32 := @ScalarArrayTanF32;
+  dispatchTable.ArraySinCosF32 := @ScalarArraySinCosF32;
+  dispatchTable.ArrayLog2F32 := @ScalarArrayLog2F32;
+  dispatchTable.ArrayLog10F32 := @ScalarArrayLog10F32;
+  // === Batch Array Operations - Rounding F32 ===
+  dispatchTable.ArrayCeilF32 := @ScalarArrayCeilF32;
+  dispatchTable.ArrayFloorF32 := @ScalarArrayFloorF32;
+  dispatchTable.ArrayRoundF32 := @ScalarArrayRoundF32;
+  dispatchTable.ArrayTruncF32 := @ScalarArrayTruncF32;
+  // === Batch Array Operations - Interpolation F32 ===
+  dispatchTable.ArrayLerpF32 := @ScalarArrayLerpF32;
   // === Batch Array Operations - Integer ===
   dispatchTable.ArrayAddI32 := @ScalarArrayAddI32;
   dispatchTable.ArraySubI32 := @ScalarArraySubI32;

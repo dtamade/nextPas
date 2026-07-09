@@ -501,6 +501,23 @@ begin
   dispatchTable.ReduceMinF32 := @AVX2ReduceMinF32;
   dispatchTable.ReduceMaxF32 := @AVX2ReduceMaxF32;
 
+  // Trig, log, rounding - use AVX2 256-bit implementations where available
+  dispatchTable.ArraySinF32 := @AVX2ArraySinF32;
+  dispatchTable.ArrayCosF32 := @AVX2ArrayCosF32;
+  dispatchTable.ArrayExpF32 := @AVX2ArrayExpF32;
+  dispatchTable.ArrayLogF32 := @AVX2ArrayLogF32;
+  dispatchTable.ArrayPowF32 := @AVX2ArrayPowF32;
+  dispatchTable.ArrayCeilF32 := @AVX2ArrayCeilF32;
+  dispatchTable.ArrayFloorF32 := @AVX2ArrayFloorF32;
+  dispatchTable.ArrayRoundF32 := @AVX2ArrayRoundF32;
+  dispatchTable.ArrayTruncF32 := @AVX2ArrayTruncF32;
+  dispatchTable.ArrayLerpF32 := @AVX2ArrayLerpF32;
+  // These delegate to SSE2 but still use SIMD internally
+  dispatchTable.ArrayTanF32 := @AVX2ArrayTanF32;
+  dispatchTable.ArraySinCosF32 := @AVX2ArraySinCosF32;
+  dispatchTable.ArrayLog2F32 := @AVX2ArrayLog2F32;
+  dispatchTable.ArrayLog10F32 := @AVX2ArrayLog10F32;
+
   // F64 batch
   dispatchTable.ArrayAddF64 := @AVX2ArrayAddF64;
   dispatchTable.ArraySubF64 := @AVX2ArraySubF64;

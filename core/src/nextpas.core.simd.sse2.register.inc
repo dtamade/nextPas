@@ -678,6 +678,19 @@ begin
   dispatchTable.ArraySinF32 := @SSE2ArraySinF32;
   dispatchTable.ArrayCosF32 := @SSE2ArrayCosF32;
   dispatchTable.ArrayPowF32 := @SSE2ArrayPowF32;
+  dispatchTable.ArrayTanF32 := @SSE2ArrayTanF32;
+  dispatchTable.ArraySinCosF32 := @SSE2ArraySinCosF32;
+  dispatchTable.ArrayLog2F32 := @SSE2ArrayLog2F32;
+  dispatchTable.ArrayLog10F32 := @SSE2ArrayLog10F32;
+
+  // Rounding
+  dispatchTable.ArrayCeilF32 := @SSE2ArrayCeilF32;
+  dispatchTable.ArrayFloorF32 := @SSE2ArrayFloorF32;
+  dispatchTable.ArrayRoundF32 := @SSE2ArrayRoundF32;
+  dispatchTable.ArrayTruncF32 := @SSE2ArrayTruncF32;
+
+  // Interpolation
+  dispatchTable.ArrayLerpF32 := @SSE2ArrayLerpF32;
 
   // Fused
   dispatchTable.ArrayLinearF32 := @SSE2ArrayLinearF32;

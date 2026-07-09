@@ -4274,3 +4274,397 @@ begin
   end;
   {$POP}
 end;
+
+// === New Array* F32 Functions ===
+
+procedure SSE2ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pSin, pCos, pD: PSingle;
+  LSinBuf, LCosBuf: array of Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+
+  // Allocate temporary buffers for sin and cos
+  SetLength(LSinBuf, aCount);
+  SetLength(LCosBuf, aCount);
+
+  // Compute sin and cos using SIMD
+  SSE2ArraySinF32(aSrc, @LSinBuf[0], aCount);
+  SSE2ArrayCosF32(aSrc, @LCosBuf[0], aCount);
+
+  // Divide: tan(x) = sin(x) / cos(x)
+  pSin := @LSinBuf[0];
+  pCos := @LCosBuf[0];
+  pD := aDst;
+
+  asm
+    mov rax, pSin
+    mov rdx, pCos
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    divss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+begin
+  // Compute sin and cos using existing SIMD implementations
+  // This is still better than scalar because SSE2ArraySinF32/SSE2ArrayCosF32 use SIMD internally
+  if aCount = 0 then Exit;
+  SSE2ArraySinF32(aSrc, aSinDst, aCount);
+  SSE2ArrayCosF32(aSrc, aCosDst, aCount);
+end;
+
+procedure SSE2ArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pD: PSingle;
+  LScale: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  // log2(x) = ln(x) * log2(e) = ln(x) * 1.4426950408889634
+  SSE2ArrayLogF32(aSrc, aDst, aCount);
+  LScale := 1.4426950408889634;
+  pS := aDst;
+  pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm1, [LScale]
+    shufps xmm1, xmm1, 0
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    mulps xmm0, xmm1
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, xmm1
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var
+  pS, pD: PSingle;
+  LScale: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  // log10(x) = ln(x) * log10(e) = ln(x) * 0.4342944819032518
+  SSE2ArrayLogF32(aSrc, aDst, aCount);
+  LScale := 0.4342944819032518;
+  pS := aDst;
+  pD := aDst;
+
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm1, [LScale]
+    shufps xmm1, xmm1, 0
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    mulps xmm0, xmm1
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    mulss xmm0, xmm1
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    roundps xmm0, xmm0, 2  // Round up (ceil)
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    roundss xmm0, xmm0, 2  // Round up (ceil)
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    sub r8, 1
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    roundps xmm0, xmm0, 1  // Round down (floor)
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    roundss xmm0, xmm0, 1  // Round down (floor)
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    sub r8, 1
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayRoundF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    roundps xmm0, xmm0, 0  // Round to nearest
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    roundss xmm0, xmm0, 0  // Round to nearest
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    sub r8, 1
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+var pS, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  asm
+    mov rax, pS
+    mov rcx, pD
+    mov r8, aCount
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]
+    roundps xmm0, xmm0, 3  // Truncate
+    movups [rcx], xmm0
+    add rax, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]
+    roundss xmm0, xmm0, 3  // Truncate
+    movss [rcx], xmm0
+    add rax, 4
+    add rcx, 4
+    sub r8, 1
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+var pS1, pS2, pD: PSingle; LT: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aStart; pS2 := aEnd; pD := aDst; LT := aT;
+  asm
+    mov rax, pS1
+    mov rbx, pS2
+    mov rcx, pD
+    mov r8, aCount
+    movss xmm7, [LT]
+    shufps xmm7, xmm7, 0  // Broadcast t to all lanes
+
+    cmp r8, 4
+    jb @tail_scalar
+
+  @loop4:
+    movups xmm0, [rax]    // start
+    movups xmm1, [rbx]    // end
+    subps xmm1, xmm0      // diff = end - start
+    mulps xmm1, xmm7      // diff * t
+    addps xmm0, xmm1      // start + diff * t
+    movups [rcx], xmm0
+    add rax, 16
+    add rbx, 16
+    add rcx, 16
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+
+  @scalar_loop:
+    movss xmm0, [rax]     // start
+    movss xmm1, [rbx]     // end
+    subss xmm1, xmm0      // diff = end - start
+    mulss xmm1, xmm7      // diff * t
+    addss xmm0, xmm1      // start + diff * t
+    movss [rcx], xmm0
+    add rax, 4
+    add rbx, 4
+    add rcx, 4
+    sub r8, 1
+    jnz @scalar_loop
+
+  @done:
+  end;
+  {$POP}
+end;
