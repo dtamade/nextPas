@@ -123,6 +123,9 @@ type
     AEstimatedRemainingMs: Int64  // Estimated remaining time in ms
   );
 
+  {** 输出回调 — 替代裸 WriteLn，允许调用方重定向输出 }
+  TBenchOutputCallback = procedure(const ALine: string);
+
   {** 基准配置 - 基准运行参数 }
   TBenchConfig = record
     MinDurationNs: UInt64;
@@ -150,6 +153,8 @@ type
     WarmupMaxIterations: Integer;
     {** B23: Progress callback }
     OnProgress: TBenchProgressCallback;
+    {** 输出回调 — 替代裸 WriteLn，nil 时 fallback 到 WriteLn }
+    OnOutput: TBenchOutputCallback;
   end;
 
   {** 基准结果数组 }

@@ -147,6 +147,10 @@ type
     {** 添加结果 }
     procedure AddResult(const AResult: TBenchResult);
 
+    {** 输出一行 — OnOutput 回调或 fallback 到 WriteLn }
+    procedure EmitLine(const ALine: string);
+    procedure EmitLineStdErr(const ALine: string);
+
     {** 从环境变量加载配置 }
     procedure LoadConfigFromEnv;
     procedure InitParallelContexts(AThreadCount: Integer);
@@ -207,6 +211,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.utils,
   nextpas.core.os.env,
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
@@ -689,7 +694,7 @@ begin
 
   // 并行基准自动跳过内存跟踪
   if ATrackMemory and (not FConfig.Quiet) then
-    WriteLn(StdErr, '  WARNING: Memory tracking disabled for parallel benchmark "', AEntry.Name, '"');
+    EmitLineStdErr('  WARNING: Memory tracking disabled for parallel benchmark "' + AEntry.Name + '"');
 
   LPerThreadIterations := AIters div AEntry.ParallelThreads;
   if (AIters mod AEntry.ParallelThreads) <> 0 then
@@ -1094,6 +1099,22 @@ begin
   Inc(FResultCount);
 end;
 
+procedure TBenchRunner.EmitLine(const ALine: string);
+begin
+  if Assigned(FConfig.OnOutput) then
+    FConfig.OnOutput(ALine)
+  else
+    WriteLn(ALine);
+end;
+
+procedure TBenchRunner.EmitLineStdErr(const ALine: string);
+begin
+  if Assigned(FConfig.OnOutput) then
+    FConfig.OnOutput(ALine)
+  else
+    WriteLn(StdErr, ALine);
+end;
+
 function TBenchRunner.RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
 begin
   if not Assigned(AFunc) then
@@ -1192,10 +1213,11 @@ begin
     AddResult(Result);
 
     if not FConfig.Quiet then
-      WriteLn('  ', LEntry.Name:40, LIters:12, ' iters',
-        LStats.Mean:10:1, ' ns/op',
-        Result.OpsPerSec:14:0, ' ops/s',
-        LStats.StdDev:10:1, ' stddev');
+      EmitLine('  ' + PadRight(LEntry.Name, 40) +
+        IntToStr(LIters) + ' iters' +
+        FormatFloat('0.0', LStats.Mean) + ' ns/op' +
+        FormatFloat('0', Result.OpsPerSec) + ' ops/s' +
+        FormatFloat('0.0', LStats.StdDev) + ' stddev');
   finally
     if Assigned(LEntry.Teardown) then
       LEntry.Teardown(LSetupData);
@@ -1209,7 +1231,7 @@ var
   LStartNs, LNowNs, LEstRemainingMs: UInt64;
 begin
   if not FConfig.Quiet then
-    WriteLn('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
+    EmitLine('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
   LTotal := Length(AEntries);
   if Assigned(FConfig.OnProgress) and (LTotal > 0) then
@@ -1304,16 +1326,17 @@ begin
   if FResultCount = 0 then
     Exit;
 
-  WriteLn;
-  WriteLn('=== Summary ===');
+  EmitLine('');
+  EmitLine('=== Summary ===');
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Skipped then
-      WriteLn('  ', FResults[I].Name:40, '  SKIPPED: ', FResults[I].SkipReason)
+      EmitLine('  ' + PadRight(FResults[I].Name, 40) +
+        '  SKIPPED: ' + FResults[I].SkipReason)
     else
-      WriteLn('  ', FResults[I].Name:40,
-        FResults[I].NsPerOp:10:1, ' ns/op',
-        FResults[I].OpsPerSec:14:0, ' ops/s');
+      EmitLine('  ' + PadRight(FResults[I].Name, 40) +
+        FormatFloat('0.0', FResults[I].NsPerOp) + ' ns/op' +
+        FormatFloat('0', FResults[I].OpsPerSec) + ' ops/s');
   end;
 end;
 
