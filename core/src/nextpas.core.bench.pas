@@ -21,7 +21,8 @@ uses
   nextpas.core.bench.run,
   nextpas.core.bench.report,
   nextpas.core.time.base,
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.io.linewriter;
 
 type
   {** 重新导出类型 }
@@ -153,7 +154,7 @@ type
       AMaxIterations: Integer = BENCH_DEFAULT_WARMUP_MAX_ITERATIONS): IBenchSuite;
     {** B23: Set progress callback }
     function SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
-    function SetOnOutput(ACallback: TBenchOutputCallback): IBenchSuite;
+    function SetOutput(const AWriter: ILineWriter): IBenchSuite;
     function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
@@ -755,11 +756,11 @@ begin
   FConfig.TimeoutMs := ADuration.AsMilliseconds;
 end;
 
-function TBenchSuite.SetOnOutput(ACallback: TBenchOutputCallback): IBenchSuite;
+function TBenchSuite.SetOutput(const AWriter: ILineWriter): IBenchSuite;
 begin
   GuardNotRun;
   Result := Self;
-  FConfig.OnOutput := ACallback;
+  FConfig.Output := AWriter;
 end;
 
 function TBenchSuite.SetAdaptiveWarmup(AEnabled: Boolean;
@@ -911,13 +912,12 @@ begin
   FRunner.SetFilter(FFilter);
   FRunner.ClearResults;
 
+  { 确保 Output 已初始化 }
+  if FConfig.Output = nil then
+    FConfig.Output := CreateConsoleWriter;
+
   if (FEntryCount = 0) and (not FConfig.Quiet) then
-  begin
-    if Assigned(FConfig.OnOutput) then
-      FConfig.OnOutput('WARNING: TBenchSuite.Run called with no registered entries')
-    else
-      WriteLn(StdErr, 'WARNING: TBenchSuite.Run called with no registered entries');
-  end;
+    FConfig.Output.WriteLine('WARNING: TBenchSuite.Run called with no registered entries');
 
   // ST-04: 超时检查初始化
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;

@@ -16,7 +16,8 @@ interface
 uses
   nextpas.core.bench.base,
   nextpas.core.time.base,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.io.linewriter;
 
 type
   {** 双精度浮点数组 }
@@ -284,9 +285,9 @@ type
      *  @raises EBenchInvalidParam 当 ADuration 为负值时 }
     function SetTimeout(ADuration: TDuration): IBenchSuite;
 
-    {** 设置输出回调 — 替代裸 WriteLn，允许调用方重定向输出。
-     *  nil 时 fallback 到 WriteLn（默认行为）。 }
-    function SetOnOutput(ACallback: TBenchOutputCallback): IBenchSuite;
+    {** 设置输出写入器 — 替代裸 WriteLn，允许调用方重定向输出。
+     *  nil 时自动创建控制台写入器（默认行为）。 }
+    function SetOutput(const AWriter: ILineWriter): IBenchSuite;
 
     {** Phase 3: 批量并行运行独立基准。
      *  独立基准（非并行基准）可以在多个线程中同时运行。
