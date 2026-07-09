@@ -138,6 +138,7 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base
   , nextpas.core.platform.posix.ffi
+  , nextpas.core.platform.posix.helpers
   {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
   {$ENDIF}

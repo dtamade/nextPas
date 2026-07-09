@@ -653,6 +653,14 @@ begin
   dispatchTable.ArrayShlI32 := @SSE2ArrayShlI32;
   dispatchTable.ArrayShrI32 := @SSE2ArrayShrI32;
 
+  // U32 batch
+  dispatchTable.ArrayAddU32 := @SSE2ArrayAddU32;
+  dispatchTable.ArraySubU32 := @SSE2ArraySubU32;
+  dispatchTable.ArrayMulU32 := @SSE2ArrayMulU32;
+  dispatchTable.ArrayAndU32 := @SSE2ArrayAndU32;
+  dispatchTable.ArrayOrU32 := @SSE2ArrayOrU32;
+  dispatchTable.ArrayXorU32 := @SSE2ArrayXorU32;
+
   // Type conversion
   dispatchTable.ArrayF32toI32 := @SSE2ArrayF32toI32;
   dispatchTable.ArrayI32toF32 := @SSE2ArrayI32toF32;
@@ -663,9 +671,11 @@ begin
 
   // F32 reductions
   dispatchTable.ReduceMinF32 := @SSE2ReduceMinF32;
+  dispatchTable.ReduceMaxF32 := @SSE2ReduceMaxF32;
 
   // F64 reductions
   dispatchTable.ReduceMinF64 := @SSE2ReduceMinF64;
+  dispatchTable.ReduceMaxF64 := @SSE2ReduceMaxF64;
 
   // PackSat + NR Refine
   dispatchTable.ArrayPackSatI32toI16 := @SSE2ArrayPackSatI32toI16;

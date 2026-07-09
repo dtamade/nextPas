@@ -1,6 +1,6 @@
 // ============================================================================
 // SSE2 Batch Array Operations
-// 策略: 主循环 2x 展开 (每次 8 个 float)，标量尾部处理剩余元素
+// 策略: 主循环 8x 展开 (每次 32 个 float)，预取优化，标量尾部处理剩余元素
 // ============================================================================
 
 procedure SSE2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -19,10 +19,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     addps xmm0, [rdx]
     movups [rcx], xmm0
@@ -39,8 +94,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -85,6 +138,216 @@ begin
   {$POP}
 end;
 
+// ============================================================================
+// SSE2 Non-Temporal Store Variant
+// Use when dst won't be read again soon (e.g., output buffers, transforms)
+// Provides ~2x bandwidth for large arrays that exceed L2 cache
+// ============================================================================
+
+procedure SSE2ArrayAddF32_NT(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  pS1, pS2, pD: PSingle;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+
+  asm
+    mov rax, pS1
+    mov rdx, pS2
+    mov rcx, pD
+    mov r8, aCount
+
+    // NT stores require 16-byte aligned destination
+    test rcx, 15
+    jnz @unaligned_fallback
+
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movntps [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movntps [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movntps [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movntps [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movntps [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movntps [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
+    cmp r8, 16
+    jb @tail8
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movntps [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movntps [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+
+  @tail8:
+    cmp r8, 8
+    jb @tail4
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movntps [rcx + 16], xmm1
+    add rax, 32
+    add rdx, 32
+    add rcx, 32
+    sub r8, 8
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movntps [rcx], xmm0
+    add rax, 16
+    add rdx, 16
+    add rcx, 16
+    sub r8, 4
+    jmp @tail_scalar
+
+  @unaligned_fallback:
+    // Fallback: use regular stores when dst not 16-byte aligned
+    cmp r8, 32
+    jb @uf_tail16
+  @uf_loop32:
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    movups xmm4, [rax + 64]
+    addps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+    movups xmm5, [rax + 80]
+    addps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+    movups xmm6, [rax + 96]
+    addps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+    movups xmm7, [rax + 112]
+    addps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @uf_loop32
+  @uf_tail16:
+    cmp r8, 16
+    jb @tail8
+    movups xmm0, [rax]
+    addps xmm0, [rdx]
+    movups [rcx], xmm0
+    movups xmm1, [rax + 16]
+    addps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+    movups xmm2, [rax + 32]
+    addps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+    movups xmm3, [rax + 48]
+    addps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+    add rax, 64
+    add rdx, 64
+    add rcx, 64
+    sub r8, 16
+
+  @tail_scalar:
+    test r8, r8
+    jz @done
+  @scalar_loop:
+    movss xmm0, [rax]
+    addss xmm0, [rdx]
+    movss [rcx], xmm0
+    add rax, 4
+    add rdx, 4
+    add rcx, 4
+    dec r8
+    jnz @scalar_loop
+
+  @done:
+    sfence  // 确保 NT 写入完成
+  end;
+  {$POP}
+end;
+
+// Smart 选择: 大数据用 NT，小数据用普通
+procedure SSE2ArrayAddF32_Smart(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+const
+  NT_THRESHOLD = 16384; // 64KB = 16384 floats (exceeds L1 cache)
+begin
+  if aCount >= NT_THRESHOLD then
+    SSE2ArrayAddF32_NT(aSrc1, aSrc2, aDst, aCount)
+  else
+    SSE2ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
 procedure SSE2ArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var
   pS1, pS2, pD: PSingle;
@@ -101,10 +364,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    mulps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    mulps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    mulps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    mulps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    mulps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    mulps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    mulps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    mulps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     mulps xmm0, [rdx]
     movups [rcx], xmm0
@@ -121,8 +439,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -802,10 +1118,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    subps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    subps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    subps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    subps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    subps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    subps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    subps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    subps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     subps xmm0, [rdx]
     movups [rcx], xmm0
@@ -822,8 +1193,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -884,10 +1253,65 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 大数组路径: 8x 展开 + 预取
+    cmp r8, 32
+    jb @tail16
+
+  @loop32:
+    // 预取下一批数据 (256 字节 ahead)
+    prefetchnta [rax + 256]
+    prefetchnta [rdx + 256]
+
+    // 第 1 组 (0-3)
+    movups xmm0, [rax]
+    divps xmm0, [rdx]
+    movups [rcx], xmm0
+
+    // 第 2 组 (4-7)
+    movups xmm1, [rax + 16]
+    divps xmm1, [rdx + 16]
+    movups [rcx + 16], xmm1
+
+    // 第 3 组 (8-11)
+    movups xmm2, [rax + 32]
+    divps xmm2, [rdx + 32]
+    movups [rcx + 32], xmm2
+
+    // 第 4 组 (12-15)
+    movups xmm3, [rax + 48]
+    divps xmm3, [rdx + 48]
+    movups [rcx + 48], xmm3
+
+    // 第 5 组 (16-19)
+    movups xmm4, [rax + 64]
+    divps xmm4, [rdx + 64]
+    movups [rcx + 64], xmm4
+
+    // 第 6 组 (20-23)
+    movups xmm5, [rax + 80]
+    divps xmm5, [rdx + 80]
+    movups [rcx + 80], xmm5
+
+    // 第 7 组 (24-27)
+    movups xmm6, [rax + 96]
+    divps xmm6, [rdx + 96]
+    movups [rcx + 96], xmm6
+
+    // 第 8 组 (28-31)
+    movups xmm7, [rax + 112]
+    divps xmm7, [rdx + 112]
+    movups [rcx + 112], xmm7
+
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
+    cmp r8, 32
+    jae @loop32
+
+  @tail16:
     cmp r8, 16
     jb @tail8
-
-  @loop16:
     movups xmm0, [rax]
     divps xmm0, [rdx]
     movups [rcx], xmm0
@@ -904,8 +1328,6 @@ begin
     add rdx, 64
     add rcx, 64
     sub r8, 16
-    cmp r8, 16
-    jae @loop16
 
   @tail8:
     cmp r8, 8
@@ -1913,6 +2335,206 @@ begin
   {$POP}
 end;
 
+// ============================================================================
+// U32 Batch Operations (same as I32 - add/sub/and/or/xor are identical)
+// ============================================================================
+
+procedure SSE2ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; paddd xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddd xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; paddd xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; paddd xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; paddd xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; paddd xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail_scalar
+    movdqu xmm0, [rax]; paddd xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; add r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; psubd xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubd xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; psubd xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; psubd xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; psubd xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; psubd xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail_scalar
+    movdqu xmm0, [rax]; psubd xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; sub r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 4; jb @tail_scalar
+  @loop4:
+    // SSE2 没有 pmuludq for 4xU32, 使用标量
+    mov r9d, [rax]; imul r9d, [rdx]; mov [rcx], r9d
+    mov r9d, [rax + 4]; imul r9d, [rdx + 4]; mov [rcx + 4], r9d
+    mov r9d, [rax + 8]; imul r9d, [rdx + 8]; mov [rcx + 8], r9d
+    mov r9d, [rax + 12]; imul r9d, [rdx + 12]; mov [rcx + 12], r9d
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4; cmp r8, 4; jae @loop4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; imul r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pand xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pand xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pand xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail_scalar
+    movdqu xmm0, [rax]; pand xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; and r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; por xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; por xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; por xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail_scalar
+    movdqu xmm0, [rax]; por xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; or r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt);
+var pS1, pS2, pD: PUInt32;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst;
+  asm
+    mov rax, pS1; mov rdx, pS2; mov rcx, pD; mov r8, aCount
+    cmp r8, 16; jb @tail8
+  @loop16:
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    movdqu xmm2, [rax + 32]; pxor xmm2, [rdx + 32]; movdqu [rcx + 32], xmm2
+    movdqu xmm3, [rax + 48]; pxor xmm3, [rdx + 48]; movdqu [rcx + 48], xmm3
+    add rax, 64; add rdx, 64; add rcx, 64; sub r8, 16; cmp r8, 16; jae @loop16
+  @tail8:
+    cmp r8, 8; jb @tail4
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    movdqu xmm1, [rax + 16]; pxor xmm1, [rdx + 16]; movdqu [rcx + 16], xmm1
+    add rax, 32; add rdx, 32; add rcx, 32; sub r8, 8
+  @tail4:
+    cmp r8, 4; jb @tail_scalar
+    movdqu xmm0, [rax]; pxor xmm0, [rdx]; movdqu [rcx], xmm0
+    add rax, 16; add rdx, 16; add rcx, 16; sub r8, 4
+  @tail_scalar:
+    test r8, r8; jz @done
+  @scalar_loop:
+    mov r9d, [rax]; xor r9d, [rdx]; mov [rcx], r9d
+    add rax, 4; add rdx, 4; add rcx, 4; dec r8; jnz @scalar_loop
+  @done:
+  end;
+  {$POP}
+end;
+
 procedure SSE2ArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
 var i: SizeUInt; pS1, pS2, pD: PInt16;
 begin
@@ -2598,6 +3220,71 @@ begin
   {$POP}
 end;
 
+function SSE2ReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
+var
+  pS: PSingle;
+  LResult: Single;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then begin Result := 0; Exit; end;
+  pS := aSrc; LResult := pS[0];
+
+  asm
+    mov rax, pS
+    mov r8, aCount
+
+    movups xmm0, [rax]
+    movaps xmm1, xmm0
+
+    cmp r8, 8
+    jb @tail4
+    add rax, 16
+    sub r8, 4
+
+  @loop8:
+    cmp r8, 8
+    jb @tail4_post
+    movups xmm2, [rax]
+    maxps xmm0, xmm2
+    movups xmm3, [rax + 16]
+    maxps xmm1, xmm3
+    add rax, 32
+    sub r8, 8
+    jmp @loop8
+
+  @tail4_post:
+    maxps xmm0, xmm1
+
+  @tail4:
+    cmp r8, 4
+    jb @tail_scalar
+    movups xmm2, [rax]
+    maxps xmm0, xmm2
+    add rax, 16
+    sub r8, 4
+
+  @tail_scalar:
+    test r8, r8
+    jz @reduce
+  @scalar_loop:
+    movss xmm2, [rax]
+    maxss xmm0, xmm2
+    add rax, 4
+    dec r8
+    jnz @scalar_loop
+
+  @reduce:
+    movhlps xmm1, xmm0
+    maxps xmm0, xmm1
+    pshufd xmm1, xmm0, $01
+    maxss xmm0, xmm1
+    movss LResult, xmm0
+  end;
+
+  Result := LResult;
+  {$POP}
+end;
+
 function SSE2ReduceDotF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
 var
   pS1, pS2: PDouble;
@@ -3062,6 +3749,67 @@ begin
   @reduce:
     movhlps xmm1, xmm0
     minsd xmm0, xmm1
+    movlps LResult, xmm0
+  end;
+
+  Result := LResult;
+  {$POP}
+end;
+
+function SSE2ReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
+var pS: PDouble; LResult: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then begin Result := 0; Exit; end;
+  pS := aSrc;
+
+  asm
+    mov rax, pS
+    mov r8, aCount
+
+    movupd xmm0, [rax]       // init with first 2 elements (or 1)
+    cmp r8, 2
+    jb @single_init
+    add rax, 16
+    sub r8, 2
+    jmp @check_loop
+  @single_init:
+    movsd xmm0, [rax]
+    movlhps xmm0, xmm0       // duplicate to both lanes
+    add rax, 8
+    dec r8
+
+  @check_loop:
+    cmp r8, 4
+    jb @tail2
+
+  @loop4:
+    movupd xmm1, [rax]
+    maxpd xmm0, xmm1
+    movupd xmm2, [rax + 16]
+    maxpd xmm0, xmm2
+    add rax, 32
+    sub r8, 4
+    cmp r8, 4
+    jae @loop4
+
+  @tail2:
+    cmp r8, 2
+    jb @tail_scalar
+    movupd xmm1, [rax]
+    maxpd xmm0, xmm1
+    add rax, 16
+    sub r8, 2
+
+  @tail_scalar:
+    test r8, r8
+    jz @reduce
+    movsd xmm1, [rax]
+    maxsd xmm0, xmm1
+
+  @reduce:
+    movhlps xmm1, xmm0
+    maxsd xmm0, xmm1
     movlps LResult, xmm0
   end;
 

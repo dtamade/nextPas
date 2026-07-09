@@ -60,7 +60,8 @@ implementation
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.helpers;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
