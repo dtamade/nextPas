@@ -86,7 +86,13 @@ uses
   nextpas.core.lockfree.treap,
   nextpas.core.lockfree.scapegoat,
   nextpas.core.lockfree.radix,
-  nextpas.core.lockfree.bplus;
+  nextpas.core.lockfree.bplus,
+  nextpas.core.lockfree.tdigest,
+  nextpas.core.lockfree.spacesaving,
+  nextpas.core.lockfree.arccache,
+  nextpas.core.lockfree.adjmap,
+  nextpas.core.lockfree.matrix,
+  nextpas.core.lockfree.wrr;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -691,6 +697,50 @@ type
   TBplusResult = nextpas.core.lockfree.bplus.TBplusResult;
   TBplusForEachCallback = nextpas.core.lockfree.bplus.TBplusForEachCallback;
   TBplusRangeCallback = nextpas.core.lockfree.bplus.TBplusRangeCallback;
+
+  {** @desc T-Digest — 流式分位数估计
+    @details P50/P99/P999 高精度估计，监控标配。
+    @see TTDigestImpl 详细文档和示例
+  }
+  TTDigest = nextpas.core.lockfree.tdigest.TTDigestImpl;
+  TTDigestStatus = nextpas.core.lockfree.tdigest.TTDigestStatus;
+
+  {** @desc Space-Saving — Top-K 频繁项检测
+    @details 流式 Heavy Hitters，O(log K) 插入。
+    @see TSpaceSavingImpl 详细文档和示例
+  }
+  TSpaceSaving = nextpas.core.lockfree.spacesaving.TSpaceSavingImpl;
+  TSpaceSavingStatus = nextpas.core.lockfree.spacesaving.TSpaceSavingStatus;
+  TSpaceSavingResult = nextpas.core.lockfree.spacesaving.TSpaceSavingResult;
+
+  {** @desc ARC Cache — 自适应替换缓存
+    @details 比 LRU 更智能，自动平衡 recency/frequency。
+    @see TARCCacheImpl 详细文档和示例
+  }
+  TARCCache = nextpas.core.lockfree.arccache.TARCCacheImpl;
+  TARCCacheStatus = nextpas.core.lockfree.arccache.TARCCacheStatus;
+
+  {** @desc Adjacency Map — 加权图邻接表
+    @details 支持 Dijkstra 最短路径。
+    @see TAdjMapImpl 详细文档和示例
+  }
+  TAdjMap = nextpas.core.lockfree.adjmap.TAdjMapImpl;
+  TAdjMapStatus = nextpas.core.lockfree.adjmap.TAdjMapStatus;
+  TPathResult = nextpas.core.lockfree.adjmap.TPathResult;
+
+  {** @desc Concurrent Matrix — 并发矩阵运算
+    @details 支持 Multiply/Transpose/Inverse/Determinant。
+    @see TMatrixImpl 详细文档和示例
+  }
+  TMatrix = nextpas.core.lockfree.matrix.TMatrixImpl;
+  TMatrixStatus = nextpas.core.lockfree.matrix.TMatrixStatus;
+
+  {** @desc Weighted Round Robin — 加权轮询负载均衡器
+    @details Nginx 平滑加权轮询算法。
+    @see TWRRImpl 详细文档和示例
+  }
+  TWRR = nextpas.core.lockfree.wrr.TWRRImpl;
+  TWRRStatus = nextpas.core.lockfree.wrr.TWRRStatus;
 
 implementation
 
