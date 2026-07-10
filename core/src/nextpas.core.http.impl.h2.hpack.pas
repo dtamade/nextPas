@@ -1010,6 +1010,8 @@ begin
           Inc(LPos);
           if LShift > 28 then
             Exit;
+          if (UInt32(LByte and $7F)) > ((High(UInt32) - LLen) shr LShift) then
+            Exit;
           LLen := LLen + (UInt32(LByte and $7F) shl LShift);
           Inc(LShift, 7);
         until (LByte and $80) = 0;
@@ -1047,6 +1049,8 @@ begin
         LByte := Byte(ABlock[LPos]);
         Inc(LPos);
         if LShift > 28 then
+          Exit;
+        if (UInt32(LByte and $7F)) > ((High(UInt32) - LLen) shr LShift) then
           Exit;
         LLen := LLen + (UInt32(LByte and $7F) shl LShift);
         Inc(LShift, 7);
