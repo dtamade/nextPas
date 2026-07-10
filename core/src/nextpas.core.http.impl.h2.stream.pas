@@ -41,6 +41,8 @@ type
     FHeaderFragments: array of AnsiString;
     FHeaderBlock: AnsiString;
     FHeaderBlockTotalBytes: SizeInt;
+    FFragmentCount: SizeInt;
+    FEmptyFragmentCount: SizeInt;
     FHeaderStore: TObject;
     FHeadersDecoded: IHttpHeaders;
     FTrailerStore: TObject;
@@ -137,6 +139,12 @@ const
     rejecting.  64 KB is generous for legitimate header blocks; an
     attacker sending unlimited CONTINUATION frames would hit this. }
   H2_MAX_HEADER_BLOCK_BYTES: SizeInt = 64 * 1024;
+  { Maximum number of CONTINUATION fragments per header block.
+    Prevents DoS via many tiny fragments that waste memory allocation calls. }
+  H2_MAX_HEADER_FRAGMENTS: SizeInt = 512;
+  { Maximum number of empty CONTINUATION fragments.
+    Prevents DoS via many empty frames that don't contribute to the header block. }
+  H2_MAX_EMPTY_FRAGMENTS: SizeInt = 64;
 
   H2_FORBIDDEN_CONNECTION_HEADERS: array[0..4] of AnsiString = (
     'connection',
@@ -338,6 +346,18 @@ begin
   Inc(FHeaderBlockTotalBytes, Length(AFragment));
   if FHeaderBlockTotalBytes > H2_MAX_HEADER_BLOCK_BYTES then
     Exit(False);
+  { Track fragment count to prevent DoS via many tiny fragments. }
+  Inc(FFragmentCount);
+  if FFragmentCount >= H2_MAX_HEADER_FRAGMENTS then
+    Exit(False);
+  { Track empty fragments separately - many empty CONTINUATION frames
+    are pointless and waste processing time. }
+  if Length(AFragment) = 0 then
+  begin
+    Inc(FEmptyFragmentCount);
+    if FEmptyFragmentCount >= H2_MAX_EMPTY_FRAGMENTS then
+      Exit(False);
+  end;
   SetLength(FHeaderFragments, LLen + 1);
   FHeaderFragments[LLen] := AFragment;
   Result := True;
@@ -348,6 +368,8 @@ begin
   FHeaderFragments := nil;
   FHeaderBlock := '';
   FHeaderBlockTotalBytes := 0;
+  FFragmentCount := 0;
+  FEmptyFragmentCount := 0;
   FEndHeadersReceived := False;
 end;
 
