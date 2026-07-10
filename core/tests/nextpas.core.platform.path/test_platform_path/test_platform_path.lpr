@@ -194,7 +194,7 @@ var
   R: Int32;
 begin
   R := platform_path_resolve('/nonexistent_xyz_path_999', @Buf[0], 256);
-  Check(R = -1, 'non-existent returns -1');
+  Check(R < 0, 'non-existent returns error');
 end;
 
 procedure TestJoin3;

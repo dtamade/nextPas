@@ -140,7 +140,7 @@ var
   LSaved, LRaw: TTermios;
 begin
   FillChar(AMode, SizeOf(AMode), 0);
-  if isatty(AFd) = 0 then Exit(-1);
+  if isatty(AFd) = 0 then Exit(PLATFORM_ERR_INVALID);
   Result := PosixCheck(tcgetattr(AFd, @LSaved));
   if Result <> 0 then Exit;
   Move(LSaved, AMode.Opaque[0], SizeOf(TTermios));
@@ -188,9 +188,9 @@ begin
     if LWrote < 0 then
     begin
       if platform_get_errno = CONSOLE_EINTR then Continue;
-      Exit(-1);
+      Exit(platform_get_errno);
     end;
-    if LWrote = 0 then Exit(-1);
+    if LWrote = 0 then Exit(PLATFORM_ERR_IO);
     Inc(LSent, LWrote);
   end;
   Result := LSent;
@@ -359,10 +359,10 @@ var
 begin
   if ACount <= 0 then Exit(0);
   if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
-  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(PLATFORM_ERR_INVALID_HANDLE);
   LRead := 0;
   if not ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) then
-    Exit(-1);
+    Exit(platform_get_errno);
   Result := Int32(LRead);
 end;
 
@@ -375,16 +375,16 @@ var
 begin
   if ACount <= 0 then Exit(0);
   if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
-  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(PLATFORM_ERR_INVALID_HANDLE);
   LPtr := PByte(ABuf);
   LSent := 0;
   while LSent < ACount do
   begin
     LChunk := 0;
     if not WriteFile(LHandle, @LPtr[LSent], DWORD(ACount - LSent), @LChunk, nil) then
-      Exit(-1);
+      Exit(platform_get_errno);
     LWritten := Int32(LChunk);
-    if LWritten <= 0 then Exit(-1);
+    if LWritten <= 0 then Exit(platform_get_errno);
     Inc(LSent, LWritten);
   end;
   Result := LSent;

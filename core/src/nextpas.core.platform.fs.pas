@@ -565,7 +565,7 @@ begin
     LPathLen := LBaseLen;
     LTmpPath[LPathLen] := '.'; Inc(LPathLen);
     if platform_random_bytes(@LRand[0], 6) <> 0 then
-      Exit(-1);
+      Exit(platform_get_errno);
     for I := 0 to 5 do
     begin
       LTmpPath[LPathLen] := HEX[LRand[I] shr 4]; Inc(LPathLen);
@@ -627,7 +627,7 @@ begin
 
   LTmpLen := platform_fs_temp_dir(@LTmpDir[0], SizeOf(LTmpDir));
   if LTmpLen < 0 then
-    Exit(-1);
+    Exit(LTmpLen);
 
   LPrefixLen := 0;
   if APrefix <> nil then

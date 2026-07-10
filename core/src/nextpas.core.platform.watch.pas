@@ -190,7 +190,7 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
   if AWatcher.WatchCount >= PLATFORM_WATCH_MAX_FDS then
-    Exit(-1);
+    Exit(PLATFORM_ERR_NOSPC);
   LFd := open(APath, O_RDONLY, 0);
   if LFd < 0 then
     Exit(platform_get_errno);

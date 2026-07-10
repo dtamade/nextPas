@@ -80,7 +80,7 @@ begin
     if LRet < 0 then
       Exit(platform_get_errno);
     if LRet = 0 then
-      Exit(-1);
+      Exit(PLATFORM_ERR_IO);
     Inc(LDone, PtrUInt(LRet));
   end;
   Result := 0;
