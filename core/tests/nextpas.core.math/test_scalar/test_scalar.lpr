@@ -17,6 +17,14 @@ uses
   {$FATAL Unsupported Extended floating-point layout}
 {$ENDIF}
 
+const
+  BASE_PI_COMPILE_TIME = nextpas.core.math.base.PI_VALUE;
+  BASE_TWO_PI_COMPILE_TIME = nextpas.core.math.base.TWO_PI;
+  BASE_HALF_PI_COMPILE_TIME = nextpas.core.math.base.HALF_PI;
+  BASE_QUARTER_PI_COMPILE_TIME = nextpas.core.math.base.QUARTER_PI;
+  BASE_DEG_TO_RAD_COMPILE_TIME = nextpas.core.math.base.DEG_TO_RAD;
+  BASE_RAD_TO_DEG_COMPILE_TIME = nextpas.core.math.base.RAD_TO_DEG;
+
 var
   T: TTestSuite;
 
@@ -272,11 +280,30 @@ end;
 
 procedure TestConstants;
 begin
-  CheckNear(3.14159265358979323846, PI_VALUE, 0.000000000000001, 'PI_VALUE');
-  CheckNear(6.28318530717958647692, TWO_PI, 0.000000000000001, 'TWO_PI');
-  CheckNear(1.57079632679489661923, HALF_PI, 0.000000000000001, 'HALF_PI');
-  CheckNear(0.01745329251994329577, DEG_TO_RAD, 0.000000000000001, 'DEG_TO_RAD');
-  CheckNear(57.2957795130823208768, RAD_TO_DEG, 0.000000000000001, 'RAD_TO_DEG');
+  Check(SizeOf(BASE_PI_COMPILE_TIME) = SizeOf(Double),
+    'base PI_VALUE remains a compile-time Double');
+  Check(SizeOf(BASE_TWO_PI_COMPILE_TIME) = SizeOf(Double),
+    'base TWO_PI remains a compile-time Double');
+  Check(SizeOf(BASE_HALF_PI_COMPILE_TIME) = SizeOf(Double),
+    'base HALF_PI remains a compile-time Double');
+  Check(SizeOf(BASE_QUARTER_PI_COMPILE_TIME) = SizeOf(Double),
+    'base QUARTER_PI remains a compile-time Double');
+  Check(SizeOf(BASE_DEG_TO_RAD_COMPILE_TIME) = SizeOf(Double),
+    'base DEG_TO_RAD remains a compile-time Double');
+  Check(SizeOf(BASE_RAD_TO_DEG_COMPILE_TIME) = SizeOf(Double),
+    'base RAD_TO_DEG remains a compile-time Double');
+  CheckNear(3.14159265358979323846, BASE_PI_COMPILE_TIME,
+    0.000000000000001, 'PI_VALUE');
+  CheckNear(6.28318530717958647692, BASE_TWO_PI_COMPILE_TIME,
+    0.000000000000001, 'TWO_PI');
+  CheckNear(1.57079632679489661923, BASE_HALF_PI_COMPILE_TIME,
+    0.000000000000001, 'HALF_PI');
+  CheckNear(0.78539816339744830962, BASE_QUARTER_PI_COMPILE_TIME,
+    0.000000000000001, 'QUARTER_PI');
+  CheckNear(0.01745329251994329577, BASE_DEG_TO_RAD_COMPILE_TIME,
+    0.000000000000001, 'DEG_TO_RAD');
+  CheckNear(57.2957795130823208768, BASE_RAD_TO_DEG_COMPILE_TIME,
+    0.000000000000001, 'RAD_TO_DEG');
 end;
 
 procedure RaiseClampSingleReversedBounds; forward;

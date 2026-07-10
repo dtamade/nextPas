@@ -4,10 +4,13 @@ unit nextpas.core.math.trig;
 
 interface
 
+uses
+  nextpas.core.math.base;
+
 const
-  PI_VALUE: Double = 3.14159265358979323846;
-  TWO_PI: Double = 6.28318530717958647692;
-  HALF_PI: Double = 1.57079632679489661923;
+  PI_VALUE = nextpas.core.math.base.PI_VALUE;
+  TWO_PI = nextpas.core.math.base.TWO_PI;
+  HALF_PI = nextpas.core.math.base.HALF_PI;
 
 {** * Computes the sine of AX (radians).
  * @param AX Angle in radians

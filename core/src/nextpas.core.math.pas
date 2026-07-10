@@ -33,11 +33,11 @@ uses
   nextpas.core.math.batch;
 
 const
-  PI_VALUE: Double = 3.14159265358979323846;
-  TWO_PI: Double = 6.28318530717958647692;
-  HALF_PI: Double = 1.57079632679489661923;
-  DEG_TO_RAD: Double = 0.01745329251994329577;
-  RAD_TO_DEG: Double = 57.2957795130823208768;
+  PI_VALUE = nextpas.core.math.base.PI_VALUE;
+  TWO_PI = nextpas.core.math.base.TWO_PI;
+  HALF_PI = nextpas.core.math.base.HALF_PI;
+  DEG_TO_RAD = nextpas.core.math.base.DEG_TO_RAD;
+  RAD_TO_DEG = nextpas.core.math.base.RAD_TO_DEG;
 
 type
   { vec types }

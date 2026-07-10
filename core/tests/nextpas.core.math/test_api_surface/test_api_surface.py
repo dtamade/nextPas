@@ -97,6 +97,18 @@ REQUIRED_CONTROL_DOC_MARKERS = (
         "The final API rejects a long-term `Vectors` compatibility bridge.",
     ),
     (
+        "docs/math/README.md",
+        "Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.",
+    ),
+    (
+        "docs/math/API.md",
+        "Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.",
+    ),
+    (
         "docs/plans/2026-06-06-math-final-api-migration.md",
         "Current status: M0/M1 complete for current scope; M2 local Linux complete with macOS/Windows host proof pending; M7/M8 partial; M9 not started.",
     ),
@@ -127,6 +139,7 @@ PUBLIC_MATH_SOURCE_PATHS = {
 ROOT_MAKEFILE_PATH = "Makefile"
 MATH_SUITE_MAKEFILE_PATH = "tests/nextpas.core.math/Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
+MATH_BASE_PATH = "src/nextpas.core.math.base.pas"
 API_DOC_PATH = "docs/math/API.md"
 ROOT_FACADE_REEXPORT_EXCLUDE = {
     "src/nextpas.core.math.base.pas",
@@ -169,18 +182,26 @@ REQUIRED_ROOT_FACADE_TYPE_ALIASES = {
     "tfpuexception": "nextpas.core.math.tfpuexception",
     "tfpuexceptionmask": "nextpas.core.math.tfpuexceptionmask",
 }
+REQUIRED_MATH_BASE_CONSTANTS = {
+    "pi_value": ("double", "double(3.14159265358979323846)"),
+    "two_pi": ("double", "double(6.28318530717958647692)"),
+    "half_pi": ("double", "double(1.57079632679489661923)"),
+    "quarter_pi": ("double", "double(0.78539816339744830962)"),
+    "deg_to_rad": ("double", "double(0.01745329251994329577)"),
+    "rad_to_deg": ("double", "double(57.2957795130823208768)"),
+}
 REQUIRED_ROOT_FACADE_CONSTANTS = {
-    "pi_value": ("double", "3.14159265358979323846"),
-    "two_pi": ("double", "6.28318530717958647692"),
-    "half_pi": ("double", "1.57079632679489661923"),
-    "deg_to_rad": ("double", "0.01745329251994329577"),
-    "rad_to_deg": ("double", "57.2957795130823208768"),
+    "pi_value": ("double", "nextpas.core.math.base.pi_value"),
+    "two_pi": ("double", "nextpas.core.math.base.two_pi"),
+    "half_pi": ("double", "nextpas.core.math.base.half_pi"),
+    "deg_to_rad": ("double", "nextpas.core.math.base.deg_to_rad"),
+    "rad_to_deg": ("double", "nextpas.core.math.base.rad_to_deg"),
 }
 ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS = {
     "src/nextpas.core.math.trig.pas": {
-        "pi_value": REQUIRED_ROOT_FACADE_CONSTANTS["pi_value"],
-        "two_pi": REQUIRED_ROOT_FACADE_CONSTANTS["two_pi"],
-        "half_pi": REQUIRED_ROOT_FACADE_CONSTANTS["half_pi"],
+        "pi_value": ("double", "nextpas.core.math.base.pi_value"),
+        "two_pi": ("double", "nextpas.core.math.base.two_pi"),
+        "half_pi": ("double", "nextpas.core.math.base.half_pi"),
     },
 }
 FACADE_TYPE_ALIAS_COMPILE_TEST_PATH = "tests/nextpas.core.math/test_facade/test_facade.lpr"
@@ -1919,6 +1940,7 @@ REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
 }
 REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-scalar-trig", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('scalar and trig re-export'"),
+    RequiredBehaviorTestMarker("facade-compile-time-constant-aliases", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('facade compile-time constant aliases'"),
     RequiredBehaviorTestMarker("facade-rounding", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('facade scalar rounding surface'"),
     RequiredBehaviorTestMarker("facade-new-scalar", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('facade new scalar surface'"),
     RequiredBehaviorTestMarker("facade-vector", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('facade vector surface'"),
@@ -1950,6 +1972,8 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("facade-wrap-error-semantics", "tests/nextpas.core.math/test_facade/test_facade.lpr", "T.Test('facade Wrap error semantics'"),
     RequiredBehaviorTestMarker("facade-fmod-huge-untyped-literals", "tests/nextpas.core.math/test_facade/test_facade.lpr", "facade Fmod huge untyped finite literals choose wide finite remainder path"),
     RequiredBehaviorTestMarker("scalar-constants", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Test('constants'"),
+    RequiredBehaviorTestMarker("base-compile-time-double-constant", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "base PI_VALUE remains a compile-time Double"),
+    RequiredBehaviorTestMarker("trig-compile-time-constant-aliases", "tests/nextpas.core.math/test_trig/test_trig.lpr", "T.Test('compile-time constant aliases'"),
     RequiredBehaviorTestMarker("scalar-min-max-clamp", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Test('min max clamp'"),
     RequiredBehaviorTestMarker("scalar-clamp-nan-value", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double NaN value propagates NaN"),
     RequiredBehaviorTestMarker("scalar-clamp-double-positive-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp Double positive infinity clamps high"),
@@ -2455,6 +2479,7 @@ class PublicConstant:
     unit_name: str
     name: str
     type_name: str
+    initializer: str
     line: int
 
 
@@ -5968,6 +5993,8 @@ def parse_public_routine_statement(unit_name: str, line: int, statement: str) ->
 def parse_public_type_alias_statement(unit_name: str, line: int, statement: str) -> PublicTypeAlias | None:
     if not is_top_level_statement(statement):
         return None
+    if parse_public_constant_statement(unit_name, line, statement) is not None:
+        return None
     normalized = " ".join(statement.split())
     normalized = re.sub(r"^(?:type)\s+", "", normalized, flags=re.IGNORECASE)
     match = re.match(
@@ -5990,16 +6017,39 @@ def parse_public_constant_statement(unit_name: str, line: int, statement: str) -
         return None
     normalized = " ".join(statement.split())
     normalized = re.sub(r"^(?:const)\s+", "", normalized, flags=re.IGNORECASE)
-    match = re.match(
-        r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=",
+    typed_match = re.match(
+        r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=\s*(?P<value>[^;]+)\s*;$",
         normalized,
     )
-    if match is None:
+    if typed_match is not None:
+        return PublicConstant(
+            unit_name=unit_name,
+            name=typed_match.group(1),
+            type_name=normalize_pascal_type(typed_match.group("type")),
+            initializer=normalize_pascal_expression(typed_match.group("value")),
+            line=line,
+        )
+
+    ordinary_match = re.match(
+        r"^([A-Z][A-Z0-9_]*)\s*=\s*(?P<value>[^;]+)\s*;$",
+        normalized,
+    )
+    if ordinary_match is None:
+        return None
+    initializer = normalize_pascal_expression(ordinary_match.group("value"))
+    if re.fullmatch(r"double\(.+\)", initializer):
+        type_name = "double"
+    elif initializer.startswith("nextpas.core.math.base.") and (
+        initializer.rsplit(".", 1)[-1] in REQUIRED_MATH_BASE_CONSTANTS
+    ):
+        type_name = "double"
+    else:
         return None
     return PublicConstant(
         unit_name=unit_name,
-        name=match.group(1),
-        type_name=normalize_pascal_type(match.group("type")),
+        name=ordinary_match.group(1),
+        type_name=type_name,
+        initializer=initializer,
         line=line,
     )
 
@@ -6032,6 +6082,32 @@ def extract_public_constants(text: str) -> list[PublicConstant]:
         if constant is not None:
             constants.append(constant)
     return constants
+
+
+def run_public_constant_parser_self_tests() -> None:
+    text = (
+        "unit nextpas.core.math;\n"
+        "interface\n"
+        "const\n"
+        "  PI_VALUE = nextpas.core.math.base.PI_VALUE;\n"
+        "  TWO_PI = nextpas.core.math.base.TWO_PI;\n"
+        "type\n"
+        "  TVec3f = nextpas.core.math.vec.TVec3f;\n"
+        "implementation\n"
+        "end.\n"
+    )
+    constant_names = {
+        constant.name.lower() for constant in extract_public_constants(text)
+    }
+    if constant_names != {"pi_value", "two_pi"}:
+        raise AssertionError(
+            "public constant parser self-test expected PI_VALUE and TWO_PI"
+        )
+    alias_names = {alias.name.lower() for alias in extract_public_type_aliases(text)}
+    if alias_names != {"tvec3f"}:
+        raise AssertionError(
+            "public constant parser self-test misclassified a constant as a type alias"
+        )
 
 
 def root_facade_alias_targets(root_facade_text: str) -> dict[str, str]:
@@ -6639,23 +6715,10 @@ def root_facade_active_uses(root_facade_text: str) -> set[str]:
 
 
 def root_facade_constant_values(root_facade_text: str) -> dict[str, tuple[str, str]]:
-    values: dict[str, tuple[str, str]] = {}
-    for line, statement in interface_statements(root_facade_text):
-        if not is_top_level_statement(statement):
-            continue
-        normalized = " ".join(statement.split())
-        normalized = re.sub(r"^(?:const)\s+", "", normalized, flags=re.IGNORECASE)
-        match = re.match(
-            r"^([A-Z][A-Z0-9_]*)\s*:\s*(?P<type>[^=;]+)\s*=\s*(?P<value>[^;]+)\s*;$",
-            normalized,
-        )
-        if match is None:
-            continue
-        values[match.group(1).lower()] = (
-            normalize_pascal_type(match.group("type")),
-            normalize_pascal_type(match.group("value")),
-        )
-    return values
+    return {
+        constant.name.lower(): (constant.type_name, constant.initializer)
+        for constant in extract_public_constants(root_facade_text)
+    }
 
 
 def implementation_text_with_line_offset(text: str) -> tuple[str, int]:
@@ -6848,6 +6911,34 @@ def scan_root_facade_contract(root: Path) -> list[Finding]:
             constants[name][0] + "=" + constants[name][1],
         )
 
+    base_path = root / MATH_BASE_PATH
+    base_constants: dict[str, tuple[str, str]] = {}
+    if base_path.is_file():
+        base_constants = root_facade_constant_values(
+            base_path.read_text(encoding="utf-8", errors="replace")
+        )
+    for name, expected in REQUIRED_MATH_BASE_CONSTANTS.items():
+        actual = base_constants.get(name)
+        if actual == expected:
+            continue
+        add_finding(
+            findings,
+            "math-base-constant-drift:" + name,
+            root,
+            base_path,
+            1,
+            expected[0] + "=" + expected[1],
+        )
+    for name in sorted(set(base_constants) - set(REQUIRED_MATH_BASE_CONSTANTS)):
+        add_finding(
+            findings,
+            "math-base-extra-constant:" + name,
+            root,
+            base_path,
+            1,
+            base_constants[name][0] + "=" + base_constants[name][1],
+        )
+
     for rel, expected_constants in ROOT_FACADE_CONSTANT_PARITY_EXPECTATIONS.items():
         parity_path = root / rel
         if not parity_path.is_file():
@@ -6935,6 +7026,20 @@ def run_root_facade_contract_self_tests() -> None:
         src = root / "src"
         src.mkdir(parents=True, exist_ok=True)
         path = src / "nextpas.core.math.pas"
+        (src / "nextpas.core.math.base.pas").write_text(
+            "unit nextpas.core.math.base;\n"
+            "interface\n"
+            "const\n"
+            "  PI_VALUE: Double = 3.0;\n"
+            "  TWO_PI: Double = 6.28318530717958647692;\n"
+            "  HALF_PI: Double = 1.57079632679489661923;\n"
+            "  QUARTER_PI: Double = 0.78539816339744830962;\n"
+            "  DEG_TO_RAD: Double = 0.01745329251994329577;\n"
+            "  RAD_TO_DEG: Double = 57.2957795130823208768;\n"
+            "implementation\n"
+            "end.\n",
+            encoding="utf-8",
+        )
         (src / "nextpas.core.math.scalar.pas").write_text(
             "unit nextpas.core.math.scalar;\n"
             "interface\n"
@@ -7001,6 +7106,7 @@ def run_root_facade_contract_self_tests() -> None:
             "root-facade-disallowed-use:nextpas.core.math.impl.simd",
             "root-facade-type-alias-drift:tvec3f",
             "root-facade-constant-drift:pi_value",
+            "math-base-constant-drift:pi_value",
             "root-facade-forwarder-drift:Sin",
             "root-facade-extra-type-alias:textravec",
             "root-facade-extra-constant:extra_const",
@@ -7588,6 +7694,7 @@ def print_report(report: Report, summary_line: bool, verbose: bool) -> None:
 def main() -> int:
     args = parse_args()
     if args.self_test:
+        run_public_constant_parser_self_tests()
         run_behavior_marker_self_tests()
         run_facade_type_alias_compile_surface_self_tests()
         run_facade_root_import_contract_self_tests()
