@@ -839,7 +839,7 @@ procedure TH2ClientConnection.SendRequestBody(const AStreamID: UInt32;
   const AReq: IHttpRequest; var AStreamFlow: TH2StreamFlowControl;
   var AResponse: TH2ResponseState);
 var
-  LRemaining: UInt32;
+  LRemaining: Int64;
   LRead: SizeUInt;
   LChunkSize: UInt32;
   LCapacity: UInt32;
@@ -850,7 +850,7 @@ begin
   if (AReq.Body = nil) or (AReq.ContentLength <= 0) then
     Exit;
 
-  LRemaining := UInt32(AReq.ContentLength);
+  LRemaining := AReq.ContentLength;
   while LRemaining > 0 do
   begin
     LCapacity := RequestBodySendCapacity(AStreamFlow);
@@ -860,7 +860,8 @@ begin
       LCapacity := RequestBodySendCapacity(AStreamFlow);
     end;
     LChunkSize := MinUInt32(FRemoteSettings.MaxFrameSize, LCapacity);
-    LChunkSize := MinUInt32(LChunkSize, LRemaining);
+    if Int64(LChunkSize) > LRemaining then
+      LChunkSize := UInt32(LRemaining);
     SetLength(LBuffer, LChunkSize);
     LRead := AReq.Body.Read(LBuffer[0], LChunkSize);
     if LRead = 0 then
@@ -1043,6 +1044,8 @@ begin
   end;
   if (LStatusText = '') or (not TryStrToInt64(LStatusText, LStatusValue)) then
     raise EHttpError.Create('HTTP/2 response missing valid :status');
+  if (LStatusValue < 100) or (LStatusValue > 599) then
+    raise EHttpError.Create('HTTP/2 :status out of range: ' + LStatusText);
   AResponse.StatusCode := THttpStatus(LStatusValue);
   AResponse.HeadersDecoded := True;
 end;
@@ -1181,6 +1184,7 @@ begin
   AResponse.HeaderFragments := nil;
   AppendResponseHeaderFragment(AResponse, LFragment);
   AResponse.HeadersComplete := False;
+  AResponse.HeadersDecoded := False;
   if (AFrame.Header.Flags and H2_FLAG_HEADERS_END_HEADERS) <> 0 then
   begin
     AResponse.HeadersComplete := True;
@@ -1614,7 +1618,13 @@ begin
             'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
       end;
       LConn := TH2ClientConnection.Create(LRawConn, FOptions);
-      Result := LConn.RoundTrip(AReq);
+      try
+        Result := LConn.RoundTrip(AReq);
+      except
+        LConn.Close;
+        LConn.Free;
+        raise;
+      end;
     end
     else
     begin
