@@ -170,7 +170,7 @@ Rust/Swift/Scala 3 都用了此模式。Go 编译器没有（Go 编译单位是 
   | 1.2b 抽离 string_ownership [✅ 2026-07-05] | `np_sema_string_ops.inc` (2,243 行) | `compiler/sema/np_sema_string_ownership.pas` | ~2000 | compiler-pass 34/34 |
   | 1.2c 抽离 overload [✅ 2026-07-05] | TSemanticAnalyzer 中 ~1500 行重载解析 | `compiler/sema/np_sema_overload.pas` | ~1500 | compiler-pass 34/34 |
   | 1.2d 抽离 type_check [✅ 2026-07-05] | TSemanticAnalyzer 中 ~1500 行类型检查 | `compiler/sema/np_sema_type_check.pas` | ~1500 | compiler-pass 34/34 |
-  | 1.2e 抽离 hir_lowering [✅ 2026-07-05] | `np_sema_runtime_expr.inc` (3,345 行) | `compiler/sema/np_sema_hir_lowering.pas` | ~3000 | compiler-pass 34/34 |
+  | 1.2e 抽离 hir_lowering [✅ 2026-07-05] | `np_sema_runtime_expr.inc` (3,345 行) | `compiler/lower/np_hir_lowering.pas` | ~3000 | compiler-pass 34/34 |
   | 1.2f 协调器收敛 [✅ 2026-07-05 逻辑分组] | 剩余 TSemanticAnalyzer | `compiler/sema/np_semantic_analyzer.pas` | ~3700 | compiler-pass 34/34 |
 
 **最终 sema/ 目录结构**:
@@ -180,8 +180,10 @@ compiler/sema/
 ├── np_sema_string_ownership.pas   ~2000 行 字符串所有权分析（独立 visitor）
 ├── np_sema_overload.pas           ~1500 行 重载解析（独立可测）
 ├── np_sema_type_check.pas         ~1500 行 类型检查/推导（纯函数）
-├── np_sema_hir_lowering.pas       ~3000 行 AST→HIR 降级（桥接 sema↔ir）
 └── np_semantic_analyzer.pas       ~3700 行 协调器（编排 5 个子模块）
+
+compiler/lower/
+└── np_hir_lowering.pas            ~1250 行 AST→HIR 降级（桥接 sema→ir）
 ```
 
 #### 任务 1.3: 引入 MIR 层 [✅ 2026-07-06] 预估 10 天
@@ -1013,7 +1015,7 @@ a95799137 compiler(p1.4): eliminate Text post-assignment in ParseForStatement
 |--------|--------|---------|----------|------|
 | AL2.1a 提取 overload [✅ 2026-07-06] | 主文件 ~1,500 行重载解析 | `np_sema_overload.pas` | 1,467 | 高（650 方法交叉依赖） |
 | AL2.1b 提取 type_check [✅ 2026-07-06] | 主文件类型检查 | `np_sema_type_check.pas` | 647 (62 funcs) | 高 |
-| AL2.1c 提取 hir_lowering [✅ 2026-07-06] | 主文件 ~1,400 行 AST→HIR | `np_sema_hir_lowering.pas` | 1,246 | 高（2/3 大方法已提取，LowerRuntime* 因状态耦合推迟） |
+| AL2.1c 提取 hir_lowering [✅ 2026-07-06] | 主文件 ~1,400 行 AST→HIR | `compiler/lower/np_hir_lowering.pas` | 1,246 | 高（2/3 大方法已提取，LowerRuntime* 因状态耦合推迟） |
 | AL2.1d 协调器收敛 [✅ 2026-07-06] | 剩余主文件 | `np_semantic_analyzer.pas` | 16,063 | 中 |
 
 **策略**: 测试先行 — 每个提取必须有对应的单元测试覆盖。

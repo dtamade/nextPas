@@ -145,11 +145,13 @@
 ### 目标架构
 
 ```
+lower/ 已实现:
+├── np_hir_lowering            — AST→HIR 降级 (桥接 sema→ir)
+
 sema/ 应拆分为:
 ├── np_sema_type_checker       — 类型检查 + 推导 (纯函数)
 ├── np_sema_overload_resolver  — 重载解析 (独立可测)
 ├── np_sema_builtins           — 内置函数注册表 (数据驱动)
-├── np_sema_hir_lowering       — AST→HIR 降级 (桥接 sema→ir)
 └── np_sema_string_ownership   — 字符串所有权 pass (独立 visitor)
 
 ir/ 应承担:

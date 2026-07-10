@@ -21,7 +21,7 @@ COMPILER_MODULES=(
   "compiler/sema/np_sema_runtime_vars.pas"
   "compiler/sema/np_sema_string_ownership.pas"
   "compiler/sema/np_sema_overload.pas"
-  "compiler/sema/np_sema_hir_lowering.pas"
+  "compiler/lower/np_hir_lowering.pas"
   "compiler/sema/np_sema_builtins.pas"
   "compiler/sema/np_semantic_model.pas"
   "compiler/sema/np_semantic_analyzer.pas"

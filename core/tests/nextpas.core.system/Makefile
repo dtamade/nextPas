@@ -6,27 +6,27 @@ NEXTPAS_RUNTIME_DIR := $(ROOT_DIR)/rtl/runtime/src
 PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-process-runtime-contract-seed
 PROCESS_RUNTIME_CONTRACT_SEED_BINARY := $(PROCESS_RUNTIME_CONTRACT_SEED_BUILD_DIR)/test_semantic_runtime_contract_seed
 PROCESS_RUNTIME_CONTRACT_SEED_SOURCE := $(ROOT_DIR)/tests/semantic/test_semantic_runtime_contract_seed.pas
-PROCESS_RUNTIME_CONTRACT_SEED_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+PROCESS_RUNTIME_CONTRACT_SEED_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-object-free-runtime-contract
 OBJECT_FREE_RUNTIME_CONTRACT_BINARY := $(OBJECT_FREE_RUNTIME_CONTRACT_BUILD_DIR)/test_hir_object_free_contract
 OBJECT_FREE_RUNTIME_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_object_free_contract.pas
-OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 INTERFACE_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-interface-contract
 INTERFACE_CONTRACT_BINARY := $(INTERFACE_CONTRACT_BUILD_DIR)/test_hir_interface_contract
 INTERFACE_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_interface_contract.pas
-INTERFACE_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+INTERFACE_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 FIELD_DYNARRAY_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dynarray-contract
 FIELD_DYNARRAY_CONTRACT_BINARY := $(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)/test_hir_field_dynarray_contract
 FIELD_DYNARRAY_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_contract.pas
-FIELD_DYNARRAY_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+FIELD_DYNARRAY_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 FIELD_DYNARRAY_RUNTIME_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dynarray-runtime-smoke
 FIELD_DYNARRAY_RUNTIME_BINARY := $(FIELD_DYNARRAY_RUNTIME_BUILD_DIR)/test_hir_field_dynarray_release_runtime_smoke
 FIELD_DYNARRAY_RUNTIME_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_release_runtime_smoke.pas
-FIELD_DYNARRAY_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+FIELD_DYNARRAY_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 LARGE_ALLOC_RUNTIME_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-large-alloc-runtime-smoke
 LARGE_ALLOC_RUNTIME_BINARY := $(LARGE_ALLOC_RUNTIME_BUILD_DIR)/test_hir_large_alloc_runtime_smoke
 LARGE_ALLOC_RUNTIME_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_large_alloc_runtime_smoke.pas
-LARGE_ALLOC_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+LARGE_ALLOC_RUNTIME_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-stage0-system-object-free-query
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_BINARY := $(STAGE0_SYSTEM_OBJECT_FREE_QUERY_BUILD_DIR)/nextpas
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_OUTPUT := $(STAGE0_SYSTEM_OBJECT_FREE_QUERY_BUILD_DIR)/system_object_free_query.out
@@ -35,7 +35,7 @@ STAGE0_SYSTEM_OBJECT_FREE_QUERY_SOURCE := tests/fixtures/system_object_free/syst
 STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_SOURCE := tests/fixtures/system_object_free/system_object_free_implicit_binding.pas
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_PASS_MARKER := stage0-query-system-object-free-check=pass
 STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_PASS_MARKER := stage0-query-system-object-free-implicit-check=pass
-STAGE0_SYSTEM_OBJECT_FREE_QUERY_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/targets -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/compiler/backend -Fu$(ROOT_DIR)/compiler/toolchain -Fu$(ROOT_DIR)/tools/stage0 -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+STAGE0_SYSTEM_OBJECT_FREE_QUERY_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/targets -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/compiler/backend -Fu$(ROOT_DIR)/compiler/toolchain -Fu$(ROOT_DIR)/tools/stage0 -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 
 test: test-source-contracts test-facade test-kernel test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query
 
