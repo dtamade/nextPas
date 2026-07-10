@@ -12,10 +12,7 @@ const
   RCU_GRACE_PERIOD_SPIN = 1000;
 
 type
-  {** @desc RCU 读侧保护
-    @details 进入读临界区后，其他线程不能回收旧数据。
-      使用引用计数实现宽限期检测。
-  }
+  {** @desc RCU 读侧保护 }
   TRcuGuard = record
     Domain: Pointer;
     ReaderIndex: Int32;
@@ -24,7 +21,7 @@ type
   {** @desc RCU 域
     @details 管理读侧临界区和宽限期。
       读操作: 无锁 (只读 + Acquire barrier)。
-      写操作: Copy → Modify → Publish (CAS) → 等待宽限期 → Free old。
+      写操作: Copy → Modify → Publish (atomic swap) → 等待宽限期 → Free old。
   }
   TRcuDomain = class
   private
@@ -42,6 +39,18 @@ type
     function IsClosed: Boolean;
   end;
 
+  { Internal heap-allocated node for COW }
+  PRcuValueNode = ^TRcuValueNode;
+  TRcuValueNode = record
+    ValueSize: SizeInt;
+  end;
+
+function RcuAllocNode(ASize: SizeInt): PRcuValueNode;
+procedure RcuFreeNode(ANode: PRcuValueNode);
+procedure RcuCopyToNode(ANode: PRcuValueNode; const ASource; ASize: SizeInt);
+procedure RcuCopyFromNode(ANode: PRcuValueNode; var ADest; ASize: SizeInt);
+
+type
   {** @desc RCU 保护的泛型发布者
     @details 读操作无锁，写操作 Copy-on-Write。
       适用于读多写少的场景。
@@ -49,8 +58,9 @@ type
   generic TRcuPublisherImpl<T> = class
   private
     FDomain: TRcuDomain;
-    FCurrentValue: T;
+    FCurrentNode: PRcuValueNode;
     FClosed: Int32;
+    procedure AllocAndPublish(const AValue: T);
   public
     constructor Create(const AInitialValue: T);
     destructor Destroy; override;
@@ -68,6 +78,34 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.atomic;
+
+var
+  GReaderCounter: Int32;
+
+threadvar
+  GMyReaderId: Int32;
+
+function RcuAllocNode(ASize: SizeInt): PRcuValueNode;
+begin
+  GetMem(Result, SizeOf(TRcuValueNode) + ASize);
+  Result^.ValueSize := ASize;
+end;
+
+procedure RcuFreeNode(ANode: PRcuValueNode);
+begin
+  if ANode <> nil then
+    FreeMem(ANode);
+end;
+
+procedure RcuCopyToNode(ANode: PRcuValueNode; const ASource; ASize: SizeInt);
+begin
+  Move(ASource, (PByte(ANode) + SizeOf(TRcuValueNode))^, ASize);
+end;
+
+procedure RcuCopyFromNode(ANode: PRcuValueNode; var ADest; ASize: SizeInt);
+begin
+  Move((PByte(ANode) + SizeOf(TRcuValueNode))^, ADest, ASize);
+end;
 
 { TRcuDomain }
 
@@ -94,7 +132,9 @@ procedure TRcuDomain.EnterRead(out AGuard: TRcuGuard);
 var
   LIdx: Int32;
 begin
-  LIdx := AtomicFetchAdd32(FNextReader, 1, moRelaxed) mod RCU_MAX_READERS;
+  if GMyReaderId = 0 then
+    GMyReaderId := AtomicFetchAdd32(GReaderCounter, 1, moRelaxed) + 1;
+  LIdx := (GMyReaderId - 1) mod RCU_MAX_READERS;
   AGuard.Domain := Self;
   AGuard.ReaderIndex := LIdx;
   AtomicStore32(FReaderActive[LIdx], 1, moRelease);
@@ -111,25 +151,28 @@ procedure TRcuDomain.Synchronize;
 var
   LI: Integer;
   LSpin: Integer;
+  LDone: Boolean;
 begin
   LSpin := 0;
   while True do
   begin
+    LDone := True;
     for LI := 0 to RCU_MAX_READERS - 1 do
     begin
       if (AtomicLoad32(FReaderActive[LI], moAcquire) <> 0) and
          (AtomicLoad64(FReaderCounts[LI], moAcquire) > 0) then
       begin
-        Inc(LSpin);
-        if LSpin > RCU_GRACE_PERIOD_SPIN then
-        begin
-          ThreadSwitch;
-          LSpin := RCU_GRACE_PERIOD_SPIN;
-        end;
-        Continue;
+        LDone := False;
+        Break;
       end;
     end;
-    Exit;
+    if LDone then
+      Exit;
+    Inc(LSpin);
+    if LSpin > RCU_GRACE_PERIOD_SPIN then
+      ThreadSwitch
+    else
+      CpuPause;
   end;
 end;
 
@@ -145,16 +188,32 @@ end;
 
 { TRcuPublisherImpl }
 
+procedure TRcuPublisherImpl.AllocAndPublish(const AValue: T);
+var
+  LNew, LOld: PRcuValueNode;
+begin
+  LNew := RcuAllocNode(SizeOf(T));
+  RcuCopyToNode(LNew, AValue, SizeOf(T));
+  LOld := PRcuValueNode(AtomicExchangePtr(Pointer(FCurrentNode), Pointer(LNew), moAcqRel));
+  FDomain.Synchronize;
+  RcuFreeNode(LOld);
+end;
+
 constructor TRcuPublisherImpl.Create(const AInitialValue: T);
 begin
   inherited Create;
   FDomain := TRcuDomain.Create;
-  FCurrentValue := AInitialValue;
   FClosed := 0;
+  FCurrentNode := RcuAllocNode(SizeOf(T));
+  RcuCopyToNode(FCurrentNode, AInitialValue, SizeOf(T));
 end;
 
 destructor TRcuPublisherImpl.Destroy;
+var
+  LNode: PRcuValueNode;
 begin
+  LNode := PRcuValueNode(AtomicExchangePtr(Pointer(FCurrentNode), nil, moAcqRel));
+  RcuFreeNode(LNode);
   FDomain.Free;
   inherited Destroy;
 end;
@@ -162,6 +221,7 @@ end;
 function TRcuPublisherImpl.Read(out AValue: T): Boolean;
 var
   LGuard: TRcuGuard;
+  LNode: PRcuValueNode;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
   begin
@@ -169,7 +229,11 @@ begin
     Exit(False);
   end;
   FDomain.EnterRead(LGuard);
-  AValue := FCurrentValue;
+  LNode := PRcuValueNode(AtomicLoadPtr(Pointer(FCurrentNode), moAcquire));
+  if LNode <> nil then
+    RcuCopyFromNode(LNode, AValue, SizeOf(T))
+  else
+    AValue := Default(T);
   FDomain.ExitRead(LGuard);
   Result := True;
 end;
@@ -178,8 +242,7 @@ procedure TRcuPublisherImpl.Update(const AValue: T);
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
-  FCurrentValue := AValue;
-  FDomain.Synchronize;
+  AllocAndPublish(AValue);
 end;
 
 procedure TRcuPublisherImpl.Close;
