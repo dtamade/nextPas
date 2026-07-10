@@ -1077,10 +1077,15 @@ begin
   LDir := CacheDir;
   if (LDir = '') or not DirectoryExists(LDir) then
     Exit;
-  { For now, Clean delegates to Invalidate — full age-based cleanup
-    would require iterating directory entries and checking modification time.
-    This is a TODO for when the fs module exposes a directory iterator. }
-  Invalidate;
+  if AmaxAgeDays <= 0 then
+  begin
+    { age 0 or negative = delete all }
+    Invalidate;
+    Exit;
+  end;
+  { P0 #3 fix: do NOT silently destroy all cache when age filter is requested.
+    Age-based cleanup requires mtime-aware directory iteration from the fs module.
+    Until then, preserve cache to avoid data loss. }
 end;
 
 procedure TTestCache.Invalidate;

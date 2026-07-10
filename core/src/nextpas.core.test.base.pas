@@ -591,6 +591,8 @@ begin
       AStatus := tsSkipped;
       AFailMsg := E.Message;
     end;
+    on E: EAbort do
+      raise;  { P0 #4 fix: user abort — propagate, don't swallow }
     on E: Exception do
     begin
       { Check exception class if specified }

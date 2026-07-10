@@ -154,6 +154,8 @@ begin
     { Heap-allocate a dispatch record per published method.
       Each closure needs its own stub to avoid reference-capture aliasing. }
     New(LPStub);
+    if LPStub = nil then
+      Continue;  { P2 #19 fix: skip method on OOM instead of crash }
     LPStub^.Instance := AFixture;
     LPStub^.CodeAddr := LAddr;
 

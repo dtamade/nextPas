@@ -320,6 +320,9 @@ uses
   nextpas.core.math.random,
   nextpas.core.fs;
 
+threadvar
+  GCoverageWarned: Boolean;  { P2 #14: warn once per thread on out-of-range coverage ID }
+
 { ── String Generator ──────────────────────────────────────────────────────── }
 
 type
@@ -352,6 +355,7 @@ end;
 
 destructor TStringGenerator.Destroy;
 begin
+  { TRandomGen is a pure stack-only record (2x UInt64) — no heap resources to free }
   inherited;
 end;
 
@@ -478,6 +482,7 @@ end;
 
 destructor TIntGenerator.Destroy;
 begin
+  { TRandomGen is a pure stack-only record (2x UInt64) — no heap resources to free }
   inherited;
 end;
 
@@ -617,6 +622,7 @@ end;
 
 destructor TBoolGenerator.Destroy;
 begin
+  { TRandomGen is a pure stack-only record (2x UInt64) — no heap resources to free }
   inherited;
 end;
 
@@ -669,6 +675,7 @@ end;
 
 destructor TBytesGenerator.Destroy;
 begin
+  { TRandomGen is a pure stack-only record (2x UInt64) — no heap resources to free }
   inherited;
 end;
 
@@ -2425,7 +2432,16 @@ var
 begin
   Inc(FTotalHits);
   if (AId < 0) or (AId > 4095) then
+  begin
+    { P2 #14 fix: warn once on out-of-range coverage ID instead of silent discard }
+    if not GCoverageWarned then
+    begin
+      WriteLn(StdErr, 'WARNING: Coverage ID ', AId,
+        ' out of range [0..4095], coverage data discarded');
+      GCoverageWarned := True;
+    end;
     Exit;
+  end;
   LByteIdx := AId shr 3;
   LBitIdx := AId and 7;
   if (FCoverage[LByteIdx] and (1 shl LBitIdx)) = 0 then

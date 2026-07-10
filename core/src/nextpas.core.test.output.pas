@@ -184,16 +184,19 @@ var
   GAnsiChecked: TAtomicBool;
 
 procedure InitAnsi;
+var
+  LExpected: Boolean;
 begin
-  if not GAnsiChecked.Load(mo_acquire) then
+  { P1 #7 fix: use CAS to prevent double initialization by parallel workers }
+  LExpected := False;
+  if not GAnsiChecked.CompareExchangeStrong(LExpected, True) then
+    Exit;  { already initialized by another thread }
+  { Standard: https://no-color.org/ }
+  if GetEnv('NO_COLOR') <> '' then
   begin
-    GAnsiChecked.Store(True, mo_release);
-    { Standard: https://no-color.org/ }
-    if GetEnv('NO_COLOR') <> '' then
-    begin
-      GAnsiEnabled.Store(False, mo_release);
-      Exit;
-    end;
+    GAnsiEnabled.Store(False, mo_release);
+    Exit;
+  end;
     {$IFDEF NEXTPAS_LINUX}
     { Enable ANSI if stdout is a TTY (terminal).
       When piped to a file or non-TTY, disable to avoid escape sequences. }
@@ -210,7 +213,6 @@ begin
       GAnsiEnabled.Store(True, mo_release)
     else if GetEnv('NEXTPAS_COLOR') = '0' then
       GAnsiEnabled.Store(False, mo_release);
-  end;
 end;
 
 function UseAnsi(const AConfig: TTestConfig): Boolean;
@@ -662,14 +664,17 @@ end;
 
 { ── Glob matching (internal) ───────────────────────────────────────────────── }
 
-function MatchesGlob(const AName, APattern: string): Boolean;
+function MatchesGlob(const AName, APattern: string; ADepth: Integer = 0): Boolean;
 { Iterative backtracking glob matcher with brace expansion support.
   Handles '*', '?', and brace groups (alt1,alt2,...).
-  Brace groups can be nested. }
+  Brace groups can be nested. ADepth prevents stack overflow on deep nesting. }
 var
   I, J, LStarI, LStarJ, LDepth, LStart, LEnd: Integer;
   LAlt: string;
 begin
+  { P1 #9 fix: depth guard to prevent stack overflow on malicious brace patterns }
+  if ADepth > 20 then
+    Exit(False);
   { ── Brace expansion ─────────────────────────────────────────────────────── }
   I := 1;
   while I <= Length(APattern) do
@@ -699,7 +704,7 @@ begin
           LAlt := Copy(APattern, 1, I - 1) +
                   Copy(APattern, LStart, J - LStart) +
                   Copy(APattern, LEnd + 1, Length(APattern));
-          if MatchesGlob(AName, LAlt) then
+          if MatchesGlob(AName, LAlt, ADepth + 1) then
             Exit(True);
           LStart := J + 1;
         end
@@ -722,7 +727,7 @@ begin
       LAlt := Copy(APattern, 1, I - 1) +
               Copy(APattern, LStart, LEnd - LStart) +
               Copy(APattern, LEnd + 1, Length(APattern));
-      Exit(MatchesGlob(AName, LAlt));
+      Exit(MatchesGlob(AName, LAlt, ADepth + 1));
     end;
     Inc(I);
   end;
