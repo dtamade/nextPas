@@ -35,6 +35,27 @@ type
     FileType: TPlatformFileType;
     Depth: Int32;
     ErrorCode: Int32;
+    {** @desc 检查是否为普通文件
+        @return True 如果是普通文件 *}
+    function IsRegular: Boolean; inline;
+    {** @desc 检查是否为目录
+        @return True 如果是目录 *}
+    function IsDirectory: Boolean; inline;
+    {** @desc 检查是否为符号链接
+        @return True 如果是符号链接 *}
+    function IsSymlink: Boolean; inline;
+    {** @desc 检查是否有错误
+        @return True 如果有错误 *}
+    function HasError: Boolean; inline;
+    {** @desc 检查是否为当前目录（.）
+        @return True 如果是当前目录 *}
+    function IsCurrentDir: Boolean; inline;
+    {** @desc 检查是否为父目录（..）
+        @return True 如果是父目录 *}
+    function IsParentDir: Boolean; inline;
+    {** @desc 检查是否为隐藏文件（以 . 开头）
+        @return True 如果是隐藏文件 *}
+    function IsHidden: Boolean; inline;
   end;
 
   {** @desc 目录遍历回调函数类型 *}
@@ -195,6 +216,41 @@ uses
   nextpas.core.platform.linux.ffi
 {$ENDIF}
   ;
+
+function TPlatformWalkEntry.IsRegular: Boolean;
+begin
+  Result := FileType = ftRegular;
+end;
+
+function TPlatformWalkEntry.IsDirectory: Boolean;
+begin
+  Result := FileType = ftDirectory;
+end;
+
+function TPlatformWalkEntry.IsSymlink: Boolean;
+begin
+  Result := FileType = ftSymlink;
+end;
+
+function TPlatformWalkEntry.HasError: Boolean;
+begin
+  Result := ErrorCode <> 0;
+end;
+
+function TPlatformWalkEntry.IsCurrentDir: Boolean;
+begin
+  Result := (NameLen = 1) and (Name^ = '.');
+end;
+
+function TPlatformWalkEntry.IsParentDir: Boolean;
+begin
+  Result := (NameLen = 2) and (Name^ = '.') and ((Name + 1)^ = '.');
+end;
+
+function TPlatformWalkEntry.IsHidden: Boolean;
+begin
+  Result := (NameLen > 0) and (Name^ = '.');
+end;
 
 const
   PLATFORM_FS_SHORT_WRITE_ERROR = -5;

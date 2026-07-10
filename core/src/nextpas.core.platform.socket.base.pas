@@ -24,6 +24,12 @@ type
   {$ELSE}
     Value: Int32;
   {$ENDIF}
+    {** @desc 检查套接字是否有效
+        @return True 如果套接字有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查套接字是否无效
+        @return True 如果套接字无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
   {** @desc 通用套接字地址结构（128 字节存储 + 长度） *}
@@ -54,6 +60,24 @@ function platform_ipv4_parse(const AAddr: string): UInt32;
 function platform_ipv4_to_string(AIP: UInt32): string;
 
 implementation
+
+function TPlatformSocket.IsValid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Value <> PtrUInt(-1);
+{$ELSE}
+  Result := Value >= 0;
+{$ENDIF}
+end;
+
+function TPlatformSocket.IsInvalid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Value = PtrUInt(-1);
+{$ELSE}
+  Result := Value < 0;
+{$ENDIF}
+end;
 
 function platform_htons(AHost: UInt16): UInt16;
 begin
