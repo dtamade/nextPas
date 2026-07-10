@@ -101,6 +101,20 @@ end;
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
 var
   LState: TCorsState;
+
+  { Check if AMethod is in the comma-separated AllowMethods list. }
+  function MethodIsAllowed(const AMethod, AAllowMethods: string): Boolean;
+  var
+    LMethods: TStringArray;
+    LI: SizeInt;
+  begin
+    LMethods := AAllowMethods.Split(',');
+    for LI := 0 to High(LMethods) do
+      if LowerCase(Trim(LMethods[LI])) = LowerCase(AMethod) then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   { Security: reject wildcard origins with credentials. Echoing back any Origin
     when AllowCredentials=true is worse than `*` — it bypasses the browser's
@@ -120,7 +134,7 @@ begin
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
-      LOrigin, LAllowOrigin, LRequestHeaders: string;
+      LOrigin, LAllowOrigin, LRequestHeaders, LRequestMethod: string;
     begin
       LOrigin := AReq.Headers.Get('Origin');
       if LOrigin = '' then
@@ -162,9 +176,12 @@ begin
       AW.Headers.SetHeader('Access-Control-Allow-Origin', LAllowOrigin);
 
       { When echoing a specific Origin (not '*'), add Vary: Origin
-        so caches distinguish responses per Origin. }
+        so caches distinguish responses per Origin. Also include
+        Access-Control-Request-Method and Access-Control-Request-Headers
+        since preflight responses vary by these too. }
       if LAllowOrigin <> '*' then
-        AW.Headers.SetHeader('Vary', 'Origin');
+        AW.Headers.SetHeader('Vary',
+          'Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
 
       AW.Headers.SetHeader('Access-Control-Allow-Methods', LState.AllowMethods);
 
@@ -186,9 +203,19 @@ begin
       if LState.AllowCredentials then
         AW.Headers.SetHeader('Access-Control-Allow-Credentials', 'true');
 
-      { Preflight: OPTIONS with Origin -> 204, don't call next }
+      { Preflight: OPTIONS with Origin + Access-Control-Request-Method -> 204 }
       if AReq.Method = hmOptions then
       begin
+        LRequestMethod := AReq.Headers.Get('Access-Control-Request-Method');
+        if LRequestMethod <> '' then
+        begin
+          { Validate the requested method is in the allowed list }
+          if not MethodIsAllowed(LRequestMethod, LState.AllowMethods) then
+          begin
+            AW.WriteHeader(HTTP_STATUS_FORBIDDEN);
+            Exit;
+          end;
+        end;
         AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
         Exit;
       end;

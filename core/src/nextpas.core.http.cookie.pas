@@ -127,6 +127,20 @@ begin
   Result := True;
 end;
 
+{ RFC 6265 §4.1.1: Set-Cookie attribute values must not contain CTLs,
+  semicolons, or spaces to prevent attribute injection. }
+function IsValidCookieAttrValue(const S: string): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 1 to Length(S) do
+    case S[I] of
+      #0..#32, #127, ';':
+        Exit(False);
+    end;
+  Result := True;
+end;
+
 { ParseCookies }
 
 function ParseCookies(const AHeaderValue: string): TRequestCookies;
@@ -208,6 +222,8 @@ begin
 
     if LName <> '' then
     begin
+      if LCount >= MAX_COOKIE_COUNT then
+        Break;
       Result.FPairs[LCount].Name := LName;
       Result.FPairs[LCount].Value := LValue;
       Inc(LCount);
@@ -320,15 +336,12 @@ begin
     raise ECore.Create('Invalid cookie name: contains forbidden characters');
   if not IsValidCookieValue(ACookie.Value) then
     raise ECore.Create('Invalid cookie value: contains forbidden characters');
-  if (ACookie.Domain <> '') and
-     ((Pos(#13, ACookie.Domain) > 0) or (Pos(#10, ACookie.Domain) > 0)) then
-    raise ECore.Create('Invalid cookie domain: contains CRLF');
-  if (ACookie.Path <> '') and
-     ((Pos(#13, ACookie.Path) > 0) or (Pos(#10, ACookie.Path) > 0)) then
-    raise ECore.Create('Invalid cookie path: contains CRLF');
-  if (ACookie.Expires <> '') and
-     ((Pos(#13, ACookie.Expires) > 0) or (Pos(#10, ACookie.Expires) > 0)) then
-    raise ECore.Create('Invalid cookie expires: contains CRLF');
+  if (ACookie.Domain <> '') and (not IsValidCookieAttrValue(ACookie.Domain)) then
+    raise ECore.Create('Invalid cookie domain: contains forbidden characters');
+  if (ACookie.Path <> '') and (not IsValidCookieAttrValue(ACookie.Path)) then
+    raise ECore.Create('Invalid cookie path: contains forbidden characters');
+  if (ACookie.Expires <> '') and (not IsValidCookieAttrValue(ACookie.Expires)) then
+    raise ECore.Create('Invalid cookie expires: contains forbidden characters');
 
   LResult := ACookie.Name + '=' + ACookie.Value;
 

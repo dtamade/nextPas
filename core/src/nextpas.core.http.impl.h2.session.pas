@@ -1087,7 +1087,8 @@ begin
     QueueRstStream(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED);
     if not ConsumeClosedStreamDataConnectionWindow(AFrame) then
       Exit(False);
-    Exit(False);
+    { Stream-level RST sent; continue processing other frames. }
+    Exit(True);
   end;
   LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnData(AFrame.Header.Flags, AFrame.Payload);

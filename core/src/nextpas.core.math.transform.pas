@@ -28,6 +28,13 @@ function Camera2D(const ACenterX, ACenterY, AZoom: Single;
   const AViewportWidth, AViewportHeight: Integer): TMat4f; overload;
 function Camera2D(const ACenterX, ACenterY, AZoom: Double;
   const AViewportWidth, AViewportHeight: Integer): TMat4d; overload;
+{** Camera2D with custom near/far planes }
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Single): TMat4f; overload;
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Double): TMat4d; overload;
 
 implementation
 
@@ -470,6 +477,54 @@ begin
     ACenterX - HalfWidth, ACenterX + HalfWidth,
     ACenterY + HalfHeight, ACenterY - HalfHeight,
     Double(-1000.0), Double(1000.0));
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Single): TMat4f;
+var
+  HalfWidth: Single;
+  HalfHeight: Single;
+begin
+  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
+  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
+  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
+  RequirePositive(AZoom, 'Camera2D: zoom must be positive');
+  RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
+  RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
+  RequireFinite(ANear, 'Camera2D: near plane must be finite');
+  RequireFinite(AFar, 'Camera2D: far plane must be finite');
+
+  HalfWidth := (AViewportWidth * 0.5) / AZoom;
+  HalfHeight := (AViewportHeight * 0.5) / AZoom;
+  Result := Ortho(
+    ACenterX - HalfWidth, ACenterX + HalfWidth,
+    ACenterY + HalfHeight, ACenterY - HalfHeight,
+    ANear, AFar);
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Double): TMat4d;
+var
+  HalfWidth: Double;
+  HalfHeight: Double;
+begin
+  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
+  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
+  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
+  RequirePositive(AZoom, 'Camera2D: zoom must be positive');
+  RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
+  RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
+  RequireFinite(ANear, 'Camera2D: near plane must be finite');
+  RequireFinite(AFar, 'Camera2D: far plane must be finite');
+
+  HalfWidth := (AViewportWidth * 0.5) / AZoom;
+  HalfHeight := (AViewportHeight * 0.5) / AZoom;
+  Result := Ortho(
+    ACenterX - HalfWidth, ACenterX + HalfWidth,
+    ACenterY + HalfHeight, ACenterY - HalfHeight,
+    ANear, AFar);
 end;
 
 end.

@@ -167,10 +167,13 @@ type
 
 {$PUSH}
 {$CODEALIGN RECORDMIN=32}
-  // 512-bit 向量类型 (64-byte payload, 32 字节最小 record 对齐 - FPC 最大支持值)
-  // 注意: AVX-512 aligned load/store 需要 64 字节地址对齐；ordinary record storage
-  //（普通 record、栈变量、数组元素和对象字段）does not guarantee 64-byte address。需要 64 字节地址对齐时，调用方
-  // 必须使用 SimdAlloc(..., sa64)、AlignedAlloc(..., SIMD_ALIGN_64) 或显式 aligned storage。
+  {** 512-bit vector types (64-byte payload)
+    WARNING: RECORDMIN=32 only guarantees 32-byte alignment for record storage.
+    AVX-512 aligned load/store requires 64-byte address alignment.
+    For 64-byte aligned storage, use SimdAlloc(..., sa64) or AlignedAlloc(..., SIMD_ALIGN_64).
+    Ordinary record storage (stack variables, array elements, object fields) does NOT
+    guarantee 64-byte alignment and will cause AVX-512 alignment faults.
+  }
   TVecF32x16 = record
     case Integer of
       0: (f: array[0..15] of Single);

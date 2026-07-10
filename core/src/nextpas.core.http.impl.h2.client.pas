@@ -941,6 +941,9 @@ end;
 
 procedure TH2ClientConnection.AppendResponseHeaderFragment(
   var AResponse: TH2ResponseState; const AFragment: AnsiString);
+const
+  { Hard cap to prevent unlimited memory growth when MaxHeaderListSize = 0 }
+  H2_HEADER_HARD_CAP = 64 * 1024;
 var
   LLen: SizeInt;
   LTotalBytes: SizeInt;
@@ -953,6 +956,8 @@ begin
     Inc(LTotalBytes, Length(AResponse.HeaderFragments[LI]));
   if (FOptions.MaxHeaderListSize > 0) and (LTotalBytes > FOptions.MaxHeaderListSize) then
     raise EHttpError.Create('HTTP/2 response headers too large');
+  if LTotalBytes > H2_HEADER_HARD_CAP then
+    raise EHttpError.Create('HTTP/2 response headers exceed hard cap');
   SetLength(AResponse.HeaderFragments, LLen + 1);
   AResponse.HeaderFragments[LLen] := AFragment;
 end;

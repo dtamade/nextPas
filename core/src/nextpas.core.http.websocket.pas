@@ -333,6 +333,12 @@ begin
     LKey := '';
   LVersion := TrimOWS(AReq.Headers.Get('sec-websocket-version'));
 
+  { RFC 6455 Section 4.1: request must be GET with HTTP/1.1 }
+  if AReq.Method <> hmGet then
+    raise EHttpError.Create('WebSocket upgrade requires GET method');
+  if AReq.Version <> hvHttp11 then
+    raise EHttpError.Create('WebSocket upgrade requires HTTP/1.1');
+
   if LUpgrade <> 'websocket' then
     raise EHttpError.Create('Missing or invalid Upgrade header');
   if not HeaderValuesHaveToken(LConnectionValues, 'upgrade') then
@@ -865,20 +871,22 @@ function FindHeader(const AHeaders: TStringArray; const AName: string): string;
 var
   I: Integer;
   LLine: string;
+  LNameLower: string;
 begin
   Result := '';
+  LNameLower := LowerCase(AName);
   for I := 0 to High(AHeaders) do
   begin
     LLine := AHeaders[I];
     if Length(LLine) > Length(AName) + 1 then
     begin
-      if (Copy(LLine, 1, Length(AName) + 1) = AName + ':') or
-         (Copy(LLine, 1, Length(AName) + 2) = AName + ': ') then
+      if (LowerCase(Copy(LLine, 1, Length(AName) + 1)) = LNameLower + ':') or
+         (LowerCase(Copy(LLine, 1, Length(AName) + 2)) = LNameLower + ': ') then
       begin
         if LLine[Length(AName) + 1] = ':' then
           Result := TrimOWS(Copy(LLine, Length(AName) + 2, MaxInt))
         else
-          Result := TrimOWS(Copy(LLine, Length(AName) + 2, MaxInt));
+          Result := TrimOWS(Copy(LLine, Length(AName) + 3, MaxInt));
         Exit;
       end;
     end;

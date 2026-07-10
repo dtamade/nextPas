@@ -77,6 +77,18 @@ type
       const AW: IHttpResponseWriter): Boolean;
   end;
 
+  { Class-based middleware that owns TRateLimitState and frees it on destruction.
+    Prevents the state + critical section from leaking when the middleware
+    is discarded (the old closure-capture pattern leaked both). }
+  TRateLimitMiddleware = class(TInterfacedObject, IHttpMiddleware)
+  private
+    FState: TRateLimitState;
+  public
+    constructor Create(const AOptions: TRateLimitOptions);
+    destructor Destroy; override;
+    function Wrap(const ANext: IHttpHandler): IHttpHandler;
+  end;
+
 const
   CLEANUP_INTERVAL = 64;
 
@@ -234,24 +246,34 @@ begin
 end;
 
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
-var
-  LState: TRateLimitState;
 begin
   if AOptions.MaxRequests <= 0 then
     raise EArgumentError.Create('rate limit max requests must be positive');
   if AOptions.WindowSeconds <= 0 then
     raise EArgumentError.Create('rate limit window seconds must be positive');
+  Result := TRateLimitMiddleware.Create(AOptions);
+end;
 
-  { Each middleware instance gets its own state — no global variables. }
-  LState := TRateLimitState.Create(AOptions);
+{ TRateLimitMiddleware }
 
-  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+constructor TRateLimitMiddleware.Create(const AOptions: TRateLimitOptions);
+begin
+  inherited Create;
+  FState := TRateLimitState.Create(AOptions);
+end;
+
+destructor TRateLimitMiddleware.Destroy;
+begin
+  FState.Free;
+  inherited Destroy;
+end;
+
+function TRateLimitMiddleware.Wrap(const ANext: IHttpHandler): IHttpHandler;
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      if LState.ProcessRequest(AReq, AW) then
-        ANext.ServeHTTP(AReq, AW);
-    end);
+    if FState.ProcessRequest(AReq, AW) then
+      ANext.ServeHTTP(AReq, AW);
   end);
 end;
 
