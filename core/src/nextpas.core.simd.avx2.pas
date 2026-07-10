@@ -3245,5 +3245,16 @@ end;
 
 {$I nextpas.core.simd.avx2.register.inc}
 
+finalization
+  if GAVX2TanSinBuf <> nil then
+  begin
+    FreeMem(GAVX2TanSinBuf);
+    GAVX2TanSinBuf := nil;
+  end;
+  if GAVX2TanCosBuf <> nil then
+  begin
+    FreeMem(GAVX2TanCosBuf);
+    GAVX2TanCosBuf := nil;
+  end;
 
 end.
