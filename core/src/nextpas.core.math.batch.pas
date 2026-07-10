@@ -5,6 +5,7 @@ unit nextpas.core.math.batch;
 interface
 
 uses
+  nextpas.core.errors,
   nextpas.core.math.base,
   nextpas.core.math.trig;
 
@@ -170,6 +171,76 @@ function BatchScaleOffsetF32(const AInput: array of Single;
                              const AScale, AOffset: Single;
                              var AOutput: array of Single): SizeInt;
 
+{** Batch arc tangent of y/x for Single arrays.
+ * Computes atan2(y, x) for each pair of elements.
+ * @param AY Y component array
+ * @param AX X component array
+ * @param AOutput Output array for arc tangent values
+ * @return Number of elements processed
+ *}
+function BatchAtan2F32(const AY, AX: array of Single;
+                       var AOutput: array of Single): SizeInt;
+
+{** Batch hypotenuse for Single arrays.
+ * Computes sqrt(x*x + y*y) with overflow protection.
+ * @param AX X component array
+ * @param AY Y component array
+ * @param AOutput Output array for hypotenuse values
+ * @return Number of elements processed
+ *}
+function BatchHypotF32(const AX, AY: array of Single;
+                       var AOutput: array of Single): SizeInt;
+
+{** Batch fractional part for Single arrays.
+ * Computes x - trunc(x) for each element.
+ * @param AInput Input array
+ * @param AOutput Output array for fractional parts
+ * @return Number of elements processed
+ *}
+function BatchFractF32(const AInput: array of Single;
+                       var AOutput: array of Single): SizeInt;
+
+{** Batch modulo for Single arrays.
+ * Computes x mod divisor for each element.
+ * @param AInput Input array
+ * @param ADivisor Divisor value
+ * @param AOutput Output array for modulo values
+ * @return Number of elements processed
+ *}
+function BatchModF32(const AInput: array of Single;
+                     const ADivisor: Single;
+                     var AOutput: array of Single): SizeInt;
+
+{** Batch sign for Single arrays.
+ * Returns -1, 0, or 1 for each element.
+ * @param AInput Input array
+ * @param AOutput Output array for sign values
+ * @return Number of elements processed
+ *}
+function BatchSignF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+
+{** Batch step function for Single arrays.
+ * Returns 0 if x < edge, 1 otherwise.
+ * @param AEdge Edge values array
+ * @param AInput Input array
+ * @param AOutput Output array for step values
+ * @return Number of elements processed
+ *}
+function BatchStepF32(const AEdge, AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+
+{** Batch smoothstep for Single arrays.
+ * Hermite interpolation between 0 and 1.
+ * @param AEdge0 Lower edge array
+ * @param AEdge1 Upper edge array
+ * @param AInput Input array
+ * @param AOutput Output array for smoothstep values
+ * @return Number of elements processed
+ *}
+function BatchSmoothstepF32(const AEdge0, AEdge1, AInput: array of Single;
+                            var AOutput: array of Single): SizeInt;
+
 implementation
 
 uses
@@ -286,6 +357,8 @@ function BatchClampF32(const AInput: array of Single;
                        const AMin, AMax: Single;
                        var AOutput: array of Single): SizeInt;
 begin
+  if AMin > AMax then
+    raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
   Result := BatchClampSimdF32(AInput, AMin, AMax, AOutput);
 end;
 
@@ -295,6 +368,56 @@ function BatchScaleOffsetF32(const AInput: array of Single;
                              var AOutput: array of Single): SizeInt;
 begin
   Result := BatchScaleOffsetSimdF32(AInput, AScale, AOffset, AOutput);
+end;
+
+{ BatchAtan2F32 }
+function BatchAtan2F32(const AY, AX: array of Single;
+                       var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchAtan2SimdF32(AY, AX, AOutput);
+end;
+
+{ BatchHypotF32 }
+function BatchHypotF32(const AX, AY: array of Single;
+                       var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchHypotSimdF32(AX, AY, AOutput);
+end;
+
+{ BatchFractF32 }
+function BatchFractF32(const AInput: array of Single;
+                       var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchFractSimdF32(AInput, AOutput);
+end;
+
+{ BatchModF32 }
+function BatchModF32(const AInput: array of Single;
+                     const ADivisor: Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchModSimdF32(AInput, ADivisor, AOutput);
+end;
+
+{ BatchSignF32 }
+function BatchSignF32(const AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchSignSimdF32(AInput, AOutput);
+end;
+
+{ BatchStepF32 }
+function BatchStepF32(const AEdge, AInput: array of Single;
+                      var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchStepSimdF32(AEdge, AInput, AOutput);
+end;
+
+{ BatchSmoothstepF32 }
+function BatchSmoothstepF32(const AEdge0, AEdge1, AInput: array of Single;
+                            var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchSmoothstepSimdF32(AEdge0, AEdge1, AInput, AOutput);
 end;
 
 end.

@@ -716,8 +716,11 @@ begin
   // Interpolation
   dispatchTable.ArrayLerpF32 := @SSE2ArrayLerpF32;
 
-  // Utility
-  dispatchTable.ArrayModF32 := @SSE2ArrayModF32;
+  // Utility — ArrayModF32 uses roundps (SSE4.1), gate with scalar fallback
+  if HasSSE41 then
+    dispatchTable.ArrayModF32 := @SSE2ArrayModF32
+  else
+    dispatchTable.ArrayModF32 := @ScalarArrayModF32;
   dispatchTable.ArraySignF32 := @SSE2ArraySignF32;
   dispatchTable.ArrayStepF32 := @SSE2ArrayStepF32;
   dispatchTable.ArraySmoothstepF32 := @SSE2ArraySmoothstepF32;

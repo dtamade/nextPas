@@ -3870,6 +3870,17 @@ begin
 
   @loop4:
     movups xmm0, [rax]
+
+    // Detect NaN/Inf: abs(x) >= 0x7F800000
+    pcmpeqd xmm5, xmm5
+    psrld xmm5, 1
+    movaps xmm4, xmm0
+    andps xmm4, xmm5            // abs(x)
+    mov r9d, $7F800000
+    movd xmm3, r9d
+    shufps xmm3, xmm3, 0
+    cmpps xmm4, xmm3, 5         // mask: NaN or Inf
+
     minps xmm0, xmm7
     maxps xmm0, xmm6
 
@@ -3909,15 +3920,17 @@ begin
     shufps xmm3, xmm3, 0
     addps xmm2, xmm3
 
-    // 2^n
-    cvtps2dq xmm1, [rax]     // reload... no, we have n in xmm1 already (int)
-    // Actually xmm1 still has n as int from cvtps2dq above
-    // Wait, we did cvtps2dq xmm1, xmm1 then cvtdq2ps xmm2, xmm1
-    // So xmm1 still has n as int32!
+    // 2^n: xmm1 already has n as int32 from cvtps2dq at line 3880
     pslld xmm1, 23
     paddd xmm2, xmm1
 
-    movups [rcx], xmm2
+    // Blend: where NaN/Inf, use original (preserves NaN bit pattern)
+    movups xmm0, [rax]
+    andps xmm0, xmm4           // original where NaN/Inf, 0 elsewhere
+    andnps xmm4, xmm2          // result where NOT NaN/Inf, 0 elsewhere
+    orps xmm0, xmm4            // combined
+
+    movups [rcx], xmm0
     add rax, 16
     add rcx, 16
     sub r8, 4
@@ -4020,6 +4033,35 @@ begin
   @loop4:
     movups xmm0, [rax]
 
+    // === Fast path: check all elements are positive normal ===
+    // Negative check: any sign bit set?
+    pcmpeqd xmm5, xmm5
+    pslld xmm5, 31
+    movaps xmm1, xmm0
+    andps xmm1, xmm5
+    movmskps r9d, xmm1
+    test r9d, r9d
+    jnz @loop4_special
+
+    // Zero/NaN/Inf check: abs(x) must be in (0, 0x7F800000)
+    pcmpeqd xmm5, xmm5
+    psrld xmm5, 1
+    movaps xmm1, xmm0
+    andps xmm1, xmm5           // abs(x)
+    pxor xmm2, xmm2
+    cmpps xmm2, xmm1, 4       // abs != 0
+    movmskps r9d, xmm2
+    cmp r9d, $0F
+    jne @loop4_special
+    mov r9d, $7F800000
+    movd xmm2, r9d
+    shufps xmm2, xmm2, 0
+    cmpps xmm1, xmm2, 1       // abs < Inf
+    movmskps r9d, xmm1
+    cmp r9d, $0F
+    jne @loop4_special
+
+    // All positive normal → SIMD polynomial
     movdqa xmm1, xmm0
     psrld xmm1, 23
     mov r9d, 126
@@ -4043,7 +4085,6 @@ begin
     psrld xmm4, 31
     psubd xmm1, xmm4
 
-    // f = (m-1)/(m+1)
     movaps xmm3, xmm2
     subps xmm3, xmm14
     movaps xmm4, xmm2
@@ -4051,11 +4092,9 @@ begin
     divps xmm3, xmm4
     movaps xmm0, xmm3
 
-    // f2
     movaps xmm2, xmm0
     mulps xmm2, xmm0
 
-    // Horner: 1/7*f2 + 1/5
     movaps xmm3, xmm10
     mulps xmm3, xmm2
     addps xmm3, xmm11
@@ -4072,6 +4111,50 @@ begin
     addps xmm3, xmm4
 
     movups [rcx], xmm3
+    jmp @loop4_advance
+
+  @loop4_special:
+    // FPU fallback: handles negative→NaN, zero→-Inf, NaN→NaN, +Inf→+Inf
+    sub rsp, 8
+    movss xmm0, [rax]
+    movss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    movss xmm0, [rsp]
+    movss [rcx], xmm0
+    movss xmm0, [rax+4]
+    movss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    movss xmm0, [rsp]
+    movss [rcx+4], xmm0
+    movss xmm0, [rax+8]
+    movss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    movss xmm0, [rsp]
+    movss [rcx+8], xmm0
+    movss xmm0, [rax+12]
+    movss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    movss xmm0, [rsp]
+    movss [rcx+12], xmm0
+    add rsp, 8
+
+  @loop4_advance:
     add rax, 16
     add rcx, 16
     sub r8, 4
@@ -5428,10 +5511,12 @@ end;
 procedure SSE2ArrayHypotF32(aX, aY, aDst: PSingle; aCount: SizeUInt);
 var
   pX, pY, pD: PSingle;
+  LOne: Single;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pX := aX; pY := aY; pD := aDst;
+  LOne := 1.0;
 
   asm
     mov rax, pX
@@ -5439,17 +5524,38 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // Stable hypot: max*sqrt(1 + (min/max)^2) — avoids overflow
+    pcmpeqd xmm6, xmm6
+    psrld xmm6, 1           // xmm6 = 0x7FFFFFFF (abs mask)
+    movss xmm7, [LOne]
+    shufps xmm7, xmm7, 0    // xmm7 = [1, 1, 1, 1]
+
     cmp r8, 4
     jb @tail_scalar
 
   @loop4:
     movups xmm0, [rax]     // x
     movups xmm1, [rdx]     // y
-    mulps xmm0, xmm0       // x*x
-    mulps xmm1, xmm1       // y*y
-    addps xmm0, xmm1       // x*x + y*y
-    sqrtps xmm0, xmm0      // sqrt(x*x + y*y)
-    movups [rcx], xmm0
+    // abs
+    movaps xmm2, xmm0
+    andps xmm2, xmm6        // |x|
+    movaps xmm3, xmm1
+    andps xmm3, xmm6        // |y|
+    // max = max(|x|,|y|), min = min(|x|,|y|)
+    movaps xmm4, xmm2
+    maxps xmm4, xmm3        // max
+    minps xmm2, xmm3        // min
+    // r = min/max, result = max * sqrt(1 + r*r)
+    divps xmm2, xmm4        // r (garbage where max=0)
+    mulps xmm2, xmm2        // r*r
+    addps xmm2, xmm7        // 1 + r*r
+    sqrtps xmm2, xmm2
+    mulps xmm2, xmm4        // max * sqrt(1+r*r)
+    // zero where max==0
+    xorps xmm0, xmm0
+    cmpps xmm4, xmm0, 4     // mask: max != 0
+    andps xmm2, xmm4
+    movups [rcx], xmm2
     add rax, 16
     add rdx, 16
     add rcx, 16
@@ -5464,11 +5570,24 @@ begin
   @scalar_loop:
     movss xmm0, [rax]
     movss xmm1, [rdx]
+    andps xmm0, xmm6
+    andps xmm1, xmm6
+    movaps xmm2, xmm0
+    maxss xmm2, xmm1        // max
+    minss xmm0, xmm1        // min
+    xorps xmm3, xmm3
+    comiss xmm2, xmm3
+    je @scalar_zero
+    divss xmm0, xmm2
     mulss xmm0, xmm0
-    mulss xmm1, xmm1
-    addss xmm0, xmm1
+    addss xmm0, xmm7
     sqrtss xmm0, xmm0
+    mulss xmm0, xmm2
     movss [rcx], xmm0
+    jmp @scalar_next
+  @scalar_zero:
+    movss [rcx], xmm3
+  @scalar_next:
     add rax, 4
     add rdx, 4
     add rcx, 4

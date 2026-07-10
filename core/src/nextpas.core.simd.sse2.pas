@@ -3747,18 +3747,45 @@ end;
 
 function SSE2NormalizeF32x4(const a: TVecF32x4): TVecF32x4;
 var
-  len: Single;
+  LMax: Single;
+  LScaled: TVecF32x4;
+  LLen: Single;
 begin
-  len := SSE2LengthWithOptionalZeroW(a, False);
-  Result := SSE2NormalizeByLength(a, len, False);
+  // Stable normalization: scale by max component to avoid overflow
+  LMax := SimdMax(Abs(a.f[0]), SimdMax(Abs(a.f[1]), SimdMax(Abs(a.f[2]), Abs(a.f[3]))));
+  if LMax = 0.0 then
+  begin
+    Result := a;
+    Exit;
+  end;
+  LScaled.f[0] := a.f[0] / LMax;
+  LScaled.f[1] := a.f[1] / LMax;
+  LScaled.f[2] := a.f[2] / LMax;
+  LScaled.f[3] := a.f[3] / LMax;
+  LLen := SSE2LengthWithOptionalZeroW(LScaled, False);
+  Result := SSE2NormalizeByLength(LScaled, LLen, False);
 end;
 
 function SSE2NormalizeF32x3(const a: TVecF32x4): TVecF32x4;
 var
-  len: Single;
+  LMax: Single;
+  LScaled: TVecF32x4;
+  LLen: Single;
 begin
-  len := SSE2LengthWithOptionalZeroW(a, True);
-  Result := SSE2NormalizeByLength(a, len, True);
+  // Stable normalization: scale by max component to avoid overflow
+  LMax := SimdMax(Abs(a.f[0]), SimdMax(Abs(a.f[1]), Abs(a.f[2])));
+  if LMax = 0.0 then
+  begin
+    Result := a;
+    Result.f[3] := 0.0;
+    Exit;
+  end;
+  LScaled.f[0] := a.f[0] / LMax;
+  LScaled.f[1] := a.f[1] / LMax;
+  LScaled.f[2] := a.f[2] / LMax;
+  LScaled.f[3] := 0.0;
+  LLen := SSE2LengthWithOptionalZeroW(LScaled, True);
+  Result := SSE2NormalizeByLength(LScaled, LLen, True);
 end;
 
 // F32x8 扩展函数 - 使用 2x F32x4 仿真

@@ -3619,6 +3619,17 @@ begin
 
   @loop8:
     vmovups ymm0, [rax]
+
+    // Detect NaN/Inf: abs(x) >= 0x7F800000
+    vpcmpeqd ymm3, ymm3, ymm3
+    vpsrld ymm3, ymm3, 1
+    vpand ymm1, ymm0, ymm3      // abs(x)
+    mov r9d, $7F800000
+    vmovd xmm2, r9d
+    vpbroadcastd ymm2, xmm2
+    vcmpps ymm3, ymm1, ymm2, 5  // mask: NaN or Inf
+
+    // Clamp
     vminps ymm0, ymm0, ymm5
     vmaxps ymm0, ymm0, ymm4
 
@@ -3641,6 +3652,10 @@ begin
     vcvtps2dq ymm1, ymm1
     vpslld ymm1, ymm1, 23
     vpaddd ymm2, ymm2, ymm1
+
+    // Blend: where NaN/Inf, use original (preserves NaN bit pattern)
+    vmovups ymm1, [rax]
+    vblendvps ymm2, ymm2, ymm1, ymm3
 
     vmovups [rcx], ymm2
     add rax, 32
@@ -4002,46 +4017,145 @@ begin
   @loop8:
     vmovups ymm0, [rax]
 
-    // e = (bits >> 23) - 126
+    // === Fast path: check all8 elements are positive normal ===
+    // Negative check: any sign bit set?
+    vpcmpeqd ymm5, ymm5, ymm5
+    vpslld ymm5, ymm5, 31
+    vpand ymm1, ymm0, ymm5
+    vmovmskps r9d, ymm1
+    test r9d, r9d
+    jnz @loop8_special
+
+    // Zero/NaN/Inf check
+    vpcmpeqd ymm5, ymm5, ymm5
+    vpsrld ymm5, ymm5, 1
+    vpand ymm1, ymm0, ymm5         // abs(x)
+    vxorps ymm2, ymm2, ymm2
+    vcmpps ymm2, ymm2, ymm1, 4    // abs != 0
+    vmovmskps r9d, ymm2
+    cmp r9d, $FF
+    jne @loop8_special
+    mov r9d, $7F800000
+    vmovd xmm2, r9d
+    vpbroadcastd ymm2, xmm2
+    vcmpps ymm1, ymm1, ymm2, 1    // abs < Inf
+    vmovmskps r9d, ymm1
+    cmp r9d, $FF
+    jne @loop8_special
+
+    // All positive normal → SIMD polynomial
     vpsrld ymm1, ymm0, 23
     mov r9d, 126
     vmovd xmm6, r9d
     vpbroadcastd ymm6, xmm6
     vpsubd ymm1, ymm1, ymm6
 
-    // m = (bits & 0x7FFFFF) | 0x3F000000 → [0.5, 1.0)
     vpand ymm2, ymm0, ymm9
     vpor ymm2, ymm2, ymm8
 
-    // If m < sqrt(2)/2: m*=2, e-=1
     vcmpltps ymm4, ymm2, ymm7
-    vaddps ymm3, ymm2, ymm2       // m*2
+    vaddps ymm3, ymm2, ymm2
     vblendvps ymm2, ymm2, ymm3, ymm4
     vpsrld ymm4, ymm4, 31
-    vpsubd ymm1, ymm1, ymm4       // m ∈ [sqrt2/2, sqrt2)
+    vpsubd ymm1, ymm1, ymm4
 
-    // f = (m - 1) / (m + 1)
-    vsubps ymm3, ymm2, ymm14      // m - 1
-    vaddps ymm4, ymm2, ymm14      // m + 1
-    vdivps ymm0, ymm3, ymm4       // f = (m-1)/(m+1)
+    vsubps ymm3, ymm2, ymm14
+    vaddps ymm4, ymm2, ymm14
+    vdivps ymm0, ymm3, ymm4
 
-    // f² 
-    vmulps ymm2, ymm0, ymm0       // f²
+    vmulps ymm2, ymm0, ymm0
 
-    // 2*(f + f³/3 + f⁵/5 + f⁷/7) via Horner on f²:
-    // = 2*f*(1 + f²*(1/3 + f²*(1/5 + f²*1/7)))
-    vmovaps ymm3, ymm10           // 1/7
-    vfmadd213ps ymm3, ymm2, ymm11 // 1/7*f² + 1/5
-    vfmadd213ps ymm3, ymm2, ymm12 // (..)*f² + 1/3
-    vfmadd213ps ymm3, ymm2, ymm14 // (..)*f² + 1
-    vmulps ymm3, ymm3, ymm0       // * f
-    vmulps ymm3, ymm3, ymm13      // * 2 → ln(m)
+    vmovaps ymm3, ymm10
+    vfmadd213ps ymm3, ymm2, ymm11
+    vfmadd213ps ymm3, ymm2, ymm12
+    vfmadd213ps ymm3, ymm2, ymm14
+    vmulps ymm3, ymm3, ymm0
+    vmulps ymm3, ymm3, ymm13
 
-    // result = ln(m) + e*ln2
     vcvtdq2ps ymm1, ymm1
     vfmadd231ps ymm3, ymm1, ymm15
 
     vmovups [rcx], ymm3
+    jmp @loop8_advance
+
+  @loop8_special:
+    // FPU fallback for8 elements
+    sub rsp, 8
+    vmovss xmm0, [rax]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx], xmm0
+    vmovss xmm0, [rax+4]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+4], xmm0
+    vmovss xmm0, [rax+8]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+8], xmm0
+    vmovss xmm0, [rax+12]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+12], xmm0
+    vmovss xmm0, [rax+16]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+16], xmm0
+    vmovss xmm0, [rax+20]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+20], xmm0
+    vmovss xmm0, [rax+24]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+24], xmm0
+    vmovss xmm0, [rax+28]
+    vmovss [rsp], xmm0
+    fld dword [rsp]
+    fldln2
+    fxch
+    fyl2x
+    fstp dword [rsp]
+    vmovss xmm0, [rsp]
+    vmovss [rcx+28], xmm0
+    add rsp, 8
+
+  @loop8_advance:
     add rax, 32
     add rcx, 32
     sub r8, 8

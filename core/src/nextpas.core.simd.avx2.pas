@@ -75,7 +75,8 @@ implementation
 uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
-  nextpas.core.simd.scalar; // For fallback functions
+  nextpas.core.simd.scalar, // For fallback functions
+  nextpas.core.simd.mathutil; // For SimdMax in stable normalization
 
 // Thread-local scratch buffers for Tan computation (AVX2 specific)
 // 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
@@ -446,18 +447,45 @@ end;
 
 function AVX2NormalizeF32x4(const a: TVecF32x4): TVecF32x4;
 var
-  len: Single;
+  LMax: Single;
+  LScaled: TVecF32x4;
+  LLen: Single;
 begin
-  len := AVX2LengthWithOptionalZeroW(a, False);
-  Result := AVX2NormalizeByLength(a, len, False);
+  // Stable normalization: scale by max component to avoid overflow
+  LMax := SimdMax(Abs(a.f[0]), SimdMax(Abs(a.f[1]), SimdMax(Abs(a.f[2]), Abs(a.f[3]))));
+  if LMax = 0.0 then
+  begin
+    Result := a;
+    Exit;
+  end;
+  LScaled.f[0] := a.f[0] / LMax;
+  LScaled.f[1] := a.f[1] / LMax;
+  LScaled.f[2] := a.f[2] / LMax;
+  LScaled.f[3] := a.f[3] / LMax;
+  LLen := AVX2LengthWithOptionalZeroW(LScaled, False);
+  Result := AVX2NormalizeByLength(LScaled, LLen, False);
 end;
 
 function AVX2NormalizeF32x3(const a: TVecF32x4): TVecF32x4;
 var
-  len: Single;
+  LMax: Single;
+  LScaled: TVecF32x4;
+  LLen: Single;
 begin
-  len := AVX2LengthWithOptionalZeroW(a, True);
-  Result := AVX2NormalizeByLength(a, len, True);
+  // Stable normalization: scale by max component to avoid overflow
+  LMax := SimdMax(Abs(a.f[0]), SimdMax(Abs(a.f[1]), Abs(a.f[2])));
+  if LMax = 0.0 then
+  begin
+    Result := a;
+    Result.f[3] := 0.0;
+    Exit;
+  end;
+  LScaled.f[0] := a.f[0] / LMax;
+  LScaled.f[1] := a.f[1] / LMax;
+  LScaled.f[2] := a.f[2] / LMax;
+  LScaled.f[3] := 0.0;
+  LLen := AVX2LengthWithOptionalZeroW(LScaled, True);
+  Result := AVX2NormalizeByLength(LScaled, LLen, True);
 end;
 
 function AVX2AddF64x2(const a, b: TVecF64x2): TVecF64x2;
