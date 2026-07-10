@@ -221,6 +221,7 @@ type
 implementation
 
 uses
+  SysUtils,
   nextpas.core.fs;
 
 var
@@ -698,9 +699,11 @@ begin
   Inc(LTotal, LLEn * (Length(FLines) - 1));
   SetLength(Result, LTotal);
   LPos := 1;
-  I := Length(FLines[0]);
-  if I > 0 then
+  { P1 #8 fix: guard against empty string — Move on empty string[1] is
+    technically safe on FPC but undefined on other Pascal compilers. }
+  if Length(FLines[0]) > 0 then
   begin
+    I := Length(FLines[0]);
     Move(FLines[0][1], Result[LPos], I);
     Inc(LPos, I);
   end;
@@ -972,8 +975,9 @@ var
   LLines: TStringArray;
   LSafeName: string;
   LUnescaped: string;
-  LPos: Integer;
+  LPos, J: Integer;
   K: Integer;
+  LLE: string;
 begin
   Result := False;
   LDir := CacheDir + '/' + AKey;
@@ -998,25 +1002,49 @@ begin
       Exit;
     end;
     AEntry.Message := LLines[1];
-    { R5-07: unescape newlines in cached message (manual, no SysUtils) }
+    { R5-07: unescape newlines in cached message — pre-allocated for O(n) }
     begin
-      LUnescaped := '';
+      LLE := LineEnding;
       LPos := 1;
+      J := 0;
       while LPos <= Length(AEntry.Message) do
       begin
         if (AEntry.Message[LPos] = '\') and (LPos < Length(AEntry.Message)) then
         begin
           Inc(LPos);
           case AEntry.Message[LPos] of
-            'n': LUnescaped := LUnescaped + LineEnding;
-            'r': LUnescaped := LUnescaped + #13;
-            '\': LUnescaped := LUnescaped + '\';
+            'n': Inc(J, Length(LLE));
+            'r': Inc(J);
+            '\': Inc(J);
           else
-            LUnescaped := LUnescaped + '\' + AEntry.Message[LPos];
+            Inc(J, 2);
           end;
         end
         else
-          LUnescaped := LUnescaped + AEntry.Message[LPos];
+          Inc(J);
+        Inc(LPos);
+      end;
+      SetLength(LUnescaped, J);
+      LPos := 1;
+      J := 1;
+      while LPos <= Length(AEntry.Message) do
+      begin
+        if (AEntry.Message[LPos] = '\') and (LPos < Length(AEntry.Message)) then
+        begin
+          Inc(LPos);
+          case AEntry.Message[LPos] of
+            'n': begin Move(LLE[1], LUnescaped[J], Length(LLE)); Inc(J, Length(LLE)); end;
+            'r': begin LUnescaped[J] := #13; Inc(J); end;
+            '\': begin LUnescaped[J] := '\'; Inc(J); end;
+          else
+            begin LUnescaped[J] := '\'; LUnescaped[J+1] := AEntry.Message[LPos]; Inc(J, 2); end;
+          end;
+        end
+        else
+        begin
+          LUnescaped[J] := AEntry.Message[LPos];
+          Inc(J);
+        end;
         Inc(LPos);
       end;
       AEntry.Message := LUnescaped;
@@ -1073,6 +1101,14 @@ end;
 procedure TTestCache.Clean(AmaxAgeDays: Integer);
 var
   LDir: string;
+  LKeyEntries, LCacheEntries: TDirEntryArray;
+  I, J: Integer;
+  LKeyDir, LCacheFile: string;
+  LAgeSec: Int64;
+  LMaxAgeSec: Int64;
+  LFileAge: LongInt;
+  LNow: LongInt;
+  LEmpty: Boolean;
 begin
   LDir := CacheDir;
   if (LDir = '') or not DirectoryExists(LDir) then
@@ -1083,9 +1119,51 @@ begin
     Invalidate;
     Exit;
   end;
-  { P0 #3 fix: do NOT silently destroy all cache when age filter is requested.
-    Age-based cleanup requires mtime-aware directory iteration from the fs module.
-    Until then, preserve cache to avoid data loss. }
+  LMaxAgeSec := Int64(AmaxAgeDays) * 86400;
+  LNow := DateTimeToFileDate(Now);
+  try
+    LKeyEntries := ReadDir(LDir);
+  except
+    Exit;
+  end;
+  for I := 0 to High(LKeyEntries) do
+  begin
+    if not LKeyEntries[I].IsDir then
+      Continue;
+    LKeyDir := LDir + '/' + LKeyEntries[I].Name;
+    try
+      LCacheEntries := ReadDir(LKeyDir);
+    except
+      Continue;
+    end;
+    LEmpty := True;
+    for J := 0 to High(LCacheEntries) do
+    begin
+      if LCacheEntries[J].IsDir then
+        Continue;
+      LCacheFile := LKeyDir + '/' + LCacheEntries[J].Name;
+      try
+        LFileAge := FileAge(LCacheFile);
+        if LFileAge < 0 then
+          Continue;
+        LAgeSec := Int64(LNow - LFileAge);
+        if LAgeSec > LMaxAgeSec then
+          Remove(LCacheFile)
+        else
+          LEmpty := False;
+      except
+        LEmpty := False;
+      end;
+    end;
+    if LEmpty then
+    begin
+      try
+        Remove(LKeyDir);
+      except
+        { best-effort }
+      end;
+    end;
+  end;
 end;
 
 procedure TTestCache.Invalidate;

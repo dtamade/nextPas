@@ -495,6 +495,11 @@ begin
     end;
     WriteTestOutput(LStatus, LProgressPrefix + R^.Entry.Name,
       LFailMsg, LSkipReason, LDurMs, LOutSink, LConfig);
+    { P2 #11 fix: auto-print captured log on failure/error in parallel mode.
+      Matches serial runner behavior (runner.pas:1363-1365). }
+    if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) and
+       (LStatus in [tsFailed, tsError]) then
+      WriteCapturedLog(LSubCtx.FLogLines, LOutSink, LConfig);
     { Write per-test result inside mutex for safety (skip if already written
       by beforeEach failure path, which sets Duration = 0 directly) }
     if (R^.Res <> nil) and (not LResultWritten) then
@@ -503,8 +508,14 @@ begin
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
           LSkipReason, LDurMs)
       else if LStatus in [tsFailed, tsError] then
+      begin
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
-          LFailMsg, LDurMs)
+          LFailMsg, LDurMs);
+        { P2 #11 fix: populate CapturedLog for parallel tests on failure/error.
+          Without this, parallel test failures lose all diagnostic output from Ctx.Log. }
+        if (LSubCtx <> nil) and (Length(LSubCtx.FLogLines) > 0) then
+          R^.Res^.CapturedLog := LSubCtx.FLogLines;
+      end
       else
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
           '', LDurMs);
@@ -522,8 +533,7 @@ begin
     { Now safe to release GExecState — no callbacks can reference it. }
     if GExecState <> nil then
     begin
-      Finalize(GExecState^);
-      FreeMem(GExecState);
+      Dispose(GExecState);
       GExecState := nil;
     end;
   end;

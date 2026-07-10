@@ -310,9 +310,14 @@ type
   only keep inputs that expand coverage.
   AWorkers: number of workers (1-4, each gets a different strategy).
   AIterationsPerWorker: iterations per worker. }
-procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer = 4;
   AIterationsPerWorker: Integer = 2500);
+
+{ Deprecated: use FuzzMultiStrategy. }
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer = 4;
+  AIterationsPerWorker: Integer = 2500); deprecated 'use FuzzMultiStrategy';
 
 implementation
 
@@ -2403,8 +2408,8 @@ end;
 type
   TCoverageTracker = class(TInterfacedObject, ICoverageTracker)
   private
-    { Bitset for coverage points — supports up to 4096 coverage IDs }
-    FCoverage: array[0..511] of Byte;  { 4096 bits }
+    { Bitset for coverage points — supports up to 32768 coverage IDs }
+    FCoverage: array[0..4095] of Byte;  { 32768 bits }
     FNewCoverage: Boolean;
     FCoverageCount: Integer;
     FTotalHits: Integer;
@@ -2431,13 +2436,13 @@ var
   LByteIdx, LBitIdx: Integer;
 begin
   Inc(FTotalHits);
-  if (AId < 0) or (AId > 4095) then
+  if (AId < 0) or (AId > 32767) then
   begin
     { P2 #14 fix: warn once on out-of-range coverage ID instead of silent discard }
     if not GCoverageWarned then
     begin
       WriteLn(StdErr, 'WARNING: Coverage ID ', AId,
-        ' out of range [0..4095], coverage data discarded');
+        ' out of range [0..32767], coverage data discarded');
       GCoverageWarned := True;
     end;
     Exit;
@@ -2776,11 +2781,11 @@ begin
   end;
 end;
 
-{ R4-10: FuzzParallel runs multiple strategies sequentially (not in parallel).
-  The "parallel" name refers to multiple independent strategy workers, each with
-  its own corpus exploration path. Actual thread-level parallelism is not
-  implemented — all workers run in the calling thread. }
-procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+{ R4-10: FuzzMultiStrategy runs multiple mutation strategies sequentially.
+  Each strategy explores the corpus independently with its own mutation approach.
+  Actual thread-level parallelism is not implemented — all workers run in
+  the calling thread. }
+procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
 var
   LCorpus: array of TBytes;
@@ -2808,7 +2813,7 @@ begin
   LLen := Length(ACorpus);
   if LLen = 0 then
   begin
-    FailTest('FuzzParallel "' + AName + '": corpus is empty');
+    FailTest('FuzzMultiStrategy "' + AName + '": corpus is empty');
     Exit;
   end;
   SetLength(LCorpus, LLen + 16);
@@ -2847,7 +2852,7 @@ begin
           Inc(LFailCount);
           LMin := FuzzMinimize(LInput, ATest);
           LHex := BytesToHexStr(LMin);
-          FailTest('FuzzParallel "' + AName + '" worker ' + IntToStr(W) +
+          FailTest('FuzzMultiStrategy "' + AName + '" worker ' + IntToStr(W) +
             ' (' + IntToStr(Ord(LStrategy)) + ') found failure after ' +
             IntToStr(J) + ' iterations, minimal input (' +
             IntToStr(Length(LMin)) + ' bytes): ' + LHex);
@@ -2857,11 +2862,21 @@ begin
     end;
   end;
 
-  PassTest('FuzzParallel "' + AName + '" passed ' +
+  PassTest('FuzzMultiStrategy "' + AName + '" passed ' +
     IntToStr(AWorkers * AIterationsPerWorker) + ' iterations (' +
     IntToStr(AWorkers) + ' workers), 0 failures, corpus: ' +
     IntToStr(LCorpusCount) + ' items, coverage: ' +
     IntToStr(LTracker.CoverageCount) + ' points');
 end;
+
+{ Deprecated alias }
+{$PUSH}{$WARNINGS OFF}
+procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer;
+  AIterationsPerWorker: Integer);
+begin
+  FuzzMultiStrategy(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker);
+end;
+{$POP}
 
 end.
