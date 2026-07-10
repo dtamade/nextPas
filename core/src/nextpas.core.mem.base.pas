@@ -73,7 +73,7 @@ begin
   if AValue <= 1 then
     Exit(1);
   if AValue > (SizeUInt(1) shl (SizeUInt(SizeOf(SizeUInt) * 8 - 1))) then
-    Exit(AValue); // 无法表示更大的 2 的幂，返回原值 (CS-002)
+    Exit(0); // 无法表示更大的 2 的幂，返回 0 表示溢出
   Result := 1;
   while Result < AValue do
     Result := Result shl 1;
@@ -84,8 +84,11 @@ var
   LPad: SizeUInt;
 begin
   // AAlignment 必须是 2 的幂（调用方保证）
-  // 用 (-AValue) and mask 计算补齐量，全程无溢出 (CS-003)
+  // 用 (-AValue) and mask 计算补齐量
   LPad := (not AValue + 1) and (AAlignment - 1);
+  // 溢出检查：AValue + LPad 不能回绕
+  if AValue > High(SizeUInt) - LPad then
+    Exit(0); // 溢出，返回 0 让调用方处理
   Result := AValue + LPad;
 end;
 
@@ -111,6 +114,8 @@ end;
 
 function Log2UInt(const AValue: SizeUInt): SizeUInt;
 begin
+  if AValue = 0 then
+    Exit(0);
   { Delegate to bitops Bsr — native BSR/CLZ instruction, no loop. }
   if SizeOf(SizeUInt) = 8 then
     Result := SizeUInt(Bsr64(UInt64(AValue)))

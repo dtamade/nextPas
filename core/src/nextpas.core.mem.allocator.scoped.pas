@@ -148,11 +148,19 @@ end;
 
 function TScopedAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
-  // Realloc: 旧指针 untrack，新指针 track
-  if APtr <> nil then
-    Untrack(APtr);
+  // Realloc: 先让内部分配器尝试，成功后再 untrack 旧指针
   Result := FInner.ReallocMem(APtr, ASize);
-  if Result <> nil then
+  if APtr <> nil then
+  begin
+    if Result <> nil then
+    begin
+      // 成功：untrack 旧指针，track 新指针
+      Untrack(APtr);
+      Track(Result);
+    end;
+    // 失败：旧指针仍被跟踪，Reset/Destroy 可以释放它
+  end
+  else if Result <> nil then
     Track(Result);
 end;
 

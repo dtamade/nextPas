@@ -38,16 +38,25 @@ var
 
 function TRtlAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Result := System.GetMem(ASize);
 end;
 
 function TRtlAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Result := System.AllocMem(ASize);
 end;
 
 function TRtlAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+  begin
+    System.FreeMem(APtr);
+    Exit(nil);
+  end;
   Result := System.ReallocMem(APtr, ASize);
 end;
 
