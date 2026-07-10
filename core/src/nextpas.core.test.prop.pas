@@ -342,12 +342,11 @@ begin
     raise EAssertionFailed.Create('GenString: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TStringGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -428,12 +427,11 @@ begin
     raise EAssertionFailed.Create('GenInt: AMin must be <= AMax');
   FMin := AMin;
   FMax := AMax;
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TIntGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -499,12 +497,11 @@ type
 constructor TBoolGenerator.Create;
 begin
   inherited Create;
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TBoolGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -547,12 +544,11 @@ begin
     raise EAssertionFailed.Create('GenBytes: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TBytesGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -920,12 +916,11 @@ begin
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TChoiceIntGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -987,12 +982,11 @@ begin
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TChoiceStringGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -1055,12 +1049,11 @@ begin
   SetLength(FValues, Length(AValues));
   for I := 0 to High(AValues) do
     FValues[I] := AValues[I];
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TChoiceBoolGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -1110,12 +1103,11 @@ begin
   SetLength(FGens, Length(AGens));
   for I := 0 to High(AGens) do
     FGens[I] := AGens[I];
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TOneOfIntGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -1184,12 +1176,11 @@ begin
   SetLength(FGens, Length(AGens));
   for I := 0 to High(AGens) do
     FGens[I] := AGens[I];
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TOneOfStringGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -1256,12 +1247,11 @@ begin
   FGen := AGen;
   FMinLen := AMinLen;
   FMaxLen := AMaxLen;
-  FRng := TRandomGen.Create(0);
+  FRng := TRandomGen.Init(0);
 end;
 
 destructor TArrayGenerator.Destroy;
 begin
-  FRng.Free;
   inherited;
 end;
 
@@ -1749,12 +1739,16 @@ end;
 { ── Mutation-based Fuzzing (v7.2a) ───────────────────────────────────────── }
 
 var
-  GFuzzRng: TRandomGen = nil;
+  GFuzzRng: TRandomGen;
+  GFuzzRngInitialized: Boolean = False;
 
 function GetFuzzRng: TRandomGen;
 begin
-  if GFuzzRng = nil then
-    GFuzzRng := TRandomGen.Create(0);
+  if not GFuzzRngInitialized then
+  begin
+    GFuzzRng := TRandomGen.Init(0);
+    GFuzzRngInitialized := True;
+  end;
   Result := GFuzzRng;
 end;
 
@@ -2697,8 +2691,5 @@ begin
     IntToStr(LCorpusCount) + ' items, coverage: ' +
     IntToStr(LTracker.CoverageCount) + ' points');
 end;
-
-finalization
-  FreeAndNil(GFuzzRng);
 
 end.

@@ -71,7 +71,7 @@ begin
   PrintScaled('view-projection-w-x1000', LClip.W);
   PrintScaled('ease-mid-x1000', EaseInOutQuad(0.5));
 
-  LRng := TRandomGen.Create(123456789);
+  LRng := TRandomGen.Init(123456789);
   LNoise := TNoiseGen.Create(2468);
   try
     LNextInt := LRng.NextInt;
@@ -88,7 +88,6 @@ begin
     PrintScaled('noise-025-x1000', LNoise.Noise1D(0.25));
   finally
     LNoise.Free;
-    LRng.Free;
   end;
 
   WriteLn('math-overview-status=pass');

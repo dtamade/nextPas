@@ -78,9 +78,9 @@ var
   SavedState: TRandomState;
   FirstFromSaved: Integer;
 begin
-  A := TRandomGen.Create(123456789);
-  B := TRandomGen.Create(123456789);
-  try
+  A := TRandomGen.Init(123456789);
+  B := TRandomGen.Init(123456789);
+  begin
     CheckEqual(Int64(1644187685), Int64(A.NextInt), 'seeded sequence first NextInt');
     CheckEqual(Int64(1644187685), Int64(B.NextInt), 'same seed matches first NextInt');
     CheckNear(0.7581309528642696, A.NextDouble, 0.000000000000001,
@@ -92,9 +92,6 @@ begin
     FirstFromSaved := A.NextInt;
     A.State := SavedState;
     CheckEqual(Int64(FirstFromSaved), Int64(A.NextInt), 'state restore is deterministic');
-  finally
-    B.Free;
-    A.Free;
   end;
 end;
 
@@ -104,9 +101,9 @@ var
   FirstInt: Integer;
   FirstDouble: Double;
 begin
-  A := TRandomGen.Create(0);
-  B := TRandomGen.Create(0);
-  try
+  A := TRandomGen.Init(0);
+  B := TRandomGen.Init(0);
+  begin
     FirstInt := A.NextInt;
     CheckEqual(Int64(FirstInt), Int64(B.NextInt),
       'zero seed uses the same deterministic default NextInt sequence');
@@ -120,9 +117,6 @@ begin
       'SetSeed(0) resets the deterministic default NextInt sequence');
     CheckNear(FirstDouble, A.NextDouble, 0.0,
       'SetSeed(0) resets the deterministic default NextDouble sequence');
-  finally
-    B.Free;
-    A.Free;
   end;
 end;
 
@@ -133,8 +127,8 @@ var
   IntValue: Integer;
   FloatValue: Single;
 begin
-  Rng := TRandomGen.Create(42);
-  try
+  Rng := TRandomGen.Init(42);
+  begin
     CheckEqual(Int64(1540949677), Int64(Rng.NextIntRange(Low(Integer), High(Integer))),
       'full integer range keeps signed bounds');
     CheckEqual(Int64(5), Int64(Rng.NextIntRange(5, 5)), 'equal integer range returns bound');
@@ -147,8 +141,6 @@ begin
       FloatValue := Rng.NextFloatRange(-2.0, 2.0);
       Check((FloatValue >= -2.0) and (FloatValue < 2.0), 'float range is half-open');
     end;
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -166,8 +158,8 @@ begin
   MaxState.S0 := High(UInt64);
   MaxState.S1 := 0;
 
-  Rng := TRandomGen.Create(42);
-  try
+  Rng := TRandomGen.Init(42);
+  begin
     Rng.State := ZeroState;
     CheckEqual(Int64(Low(Integer)), Int64(Rng.NextInt),
       'NextInt zero state returns exact signed lower bound');
@@ -204,8 +196,6 @@ begin
     Rng.State := MaxState;
     Check(Rng.NextFloatRange(2.5, 3.5) < 3.5,
       'NextFloatRange max state stays below upper bound');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -217,8 +207,8 @@ begin
   MaxState.S0 := High(UInt64);
   MaxState.S1 := 0;
 
-  Rng := TRandomGen.Create(42);
-  try
+  Rng := TRandomGen.Init(42);
+  begin
     Rng.State := MaxState;
     CheckEqual(Int64(9), Int64(Rng.NextIntRange(0, 9)),
       'NextIntRange rejects modulo-bias tail sample for 10-value span');
@@ -230,8 +220,6 @@ begin
     Rng.State := MaxState;
     CheckEqual(Int64(6), Int64(Rng.Roll(6)),
       'Roll rejects modulo-bias tail sample through NextIntRange');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -244,8 +232,8 @@ var
   I: Integer;
   FloatValue: Single;
 begin
-  Rng := TRandomGen.Create(42);
-  try
+  Rng := TRandomGen.Init(42);
+  begin
     for I := 1 to 8 do
     begin
       FloatValue := Rng.NextFloatRange(LARGE_MIN, LARGE_MAX);
@@ -256,8 +244,6 @@ begin
       Check((FloatValue >= LARGE_MIN) and (FloatValue < LARGE_MAX),
         'large finite float range stays half-open');
     end;
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -273,8 +259,8 @@ begin
   MaxState.S0 := High(UInt64);
   MaxState.S1 := 0;
 
-  Rng := TRandomGen.Create(42);
-  try
+  Rng := TRandomGen.Init(42);
+  begin
     Rng.State := MaxState;
     FloatValue := Rng.NextFloatRange(LARGE_MIN, LARGE_MAX);
     Check(not nextpas.core.math.scalar.IsNaN(FloatValue),
@@ -285,8 +271,6 @@ begin
       'large finite forced max float range stays above lower bound');
     Check(FloatValue < LARGE_MAX,
       'large finite forced max float range stays below upper bound');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -299,16 +283,13 @@ var
   LargeRng: TRandomGen;
   I: Integer;
 begin
-  SmallRng := TRandomGen.Create(2468);
-  LargeRng := TRandomGen.Create(2468);
-  try
+  SmallRng := TRandomGen.Init(2468);
+  LargeRng := TRandomGen.Init(2468);
+  begin
     for I := 1 to 8 do
       CheckEqual(Int64(SmallRng.WeightedChoice(SMALL_WEIGHTS)),
         Int64(LargeRng.WeightedChoice(LARGE_WEIGHTS)),
         'WeightedChoice stays scale-invariant for large finite weights');
-  finally
-    LargeRng.Free;
-    SmallRng.Free;
   end;
 end;
 
@@ -319,8 +300,8 @@ var
   Caught: Boolean;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(1);
-  try
+  Rng := TRandomGen.Init(1);
+  begin
     Weights[0] := 0.0;
     Weights[1] := 0.0;
     Weights[2] := 0.0;
@@ -338,8 +319,6 @@ begin
     Check(Caught, 'WeightedChoice rejects all-zero weights');
     CheckEqual('TRandomGen.WeightedChoice: at least one weight must be positive', ErrorMessage,
       'WeightedChoice reports owner-level all-zero weight message');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -352,16 +331,14 @@ begin
   ZeroPickState.S0 := 0;
   ZeroPickState.S1 := 0;
 
-  Rng := TRandomGen.Create(1);
-  try
+  Rng := TRandomGen.Init(1);
+  begin
     Rng.State := ZeroPickState;
     Weights[0] := 0.0;
     Weights[1] := 0.0;
     Weights[2] := 1.0;
     CheckEqual(Int64(2), Int64(Rng.WeightedChoice(Weights)),
       'WeightedChoice pick=0 skips zero-weight prefixes');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -374,15 +351,13 @@ begin
   MaxPickState.S0 := High(UInt64);
   MaxPickState.S1 := 0;
 
-  Rng := TRandomGen.Create(1);
-  try
+  Rng := TRandomGen.Init(1);
+  begin
     Rng.State := MaxPickState;
     Weights[0] := 16777216.0;
     Weights[1] := 1.0;
     CheckEqual(Int64(1), Int64(Rng.WeightedChoice(Weights)),
       'WeightedChoice max pick keeps a tiny positive tail weight reachable');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -392,8 +367,8 @@ var
   Caught: Boolean;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(7);
-  try
+  Rng := TRandomGen.Init(7);
+  begin
     Caught := False;
     ErrorMessage := '';
     try
@@ -423,8 +398,6 @@ begin
     Check(Caught, 'NextFloatRange rejects Min > Max');
     CheckEqual('TRandomGen.NextFloatRange: AMin must be <= AMax', ErrorMessage,
       'NextFloatRange reports owner-level reversed-range message');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -435,8 +408,8 @@ var
   ErrorClass: string;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(2);
-  try
+  Rng := TRandomGen.Init(2);
+  begin
     Caught := False;
     ErrorClass := '';
     ErrorMessage := '';
@@ -455,8 +428,6 @@ begin
       'RollMultiple maps overflowing total range into the public owner-level exception');
     CheckEqual('TRandomGen.RollMultiple: ADice * ASides must fit Integer', ErrorMessage,
       'RollMultiple reports owner-level total-range message');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -469,8 +440,8 @@ var
   Caught: Boolean;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(98765);
-  try
+  Rng := TRandomGen.Init(98765);
+  begin
     CheckEqual(False, Rng.NextBool(-1.0), 'negative probability clamps to false');
     CheckEqual(False, Rng.NextBool(0.0), 'zero probability returns false');
     CheckEqual(True, Rng.NextBool(1.0), 'one probability returns true');
@@ -522,12 +493,10 @@ begin
     Check(Caught, 'WeightedChoice rejects negative weights');
     CheckEqual('TRandomGen.WeightedChoice: weights must be non-negative', ErrorMessage,
       'WeightedChoice reports owner-level negative-weight message');
-  finally
-    Rng.Free;
   end;
 
-  Rng := TRandomGen.Create(98765);
-  try
+  Rng := TRandomGen.Init(98765);
+  begin
     Values[0] := 1;
     Values[1] := 2;
     Values[2] := 3;
@@ -535,8 +504,6 @@ begin
     Values[4] := 5;
     Rng.Shuffle(Values);
     CheckArray5(2, 1, 5, 4, 3, Values, 'Shuffle is deterministic for a seed');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -545,16 +512,14 @@ var
   Rng: TRandomGen;
   V: TVec2f;
 begin
-  Rng := TRandomGen.Create(123456789);
-  try
+  Rng := TRandomGen.Init(123456789);
+  begin
     CheckNear(0.07632880659408693, Rng.NextGaussian, 0.000001,
       'NextGaussian is deterministic for a seed');
-  finally
-    Rng.Free;
   end;
 
-  Rng := TRandomGen.Create(123456789);
-  try
+  Rng := TRandomGen.Init(123456789);
+  begin
     V := Rng.NextVec2InCircle;
     Check(V.Length <= 1.0, 'NextVec2InCircle stays inside the unit circle');
     CheckNear(-0.40613178, V.X, 0.000001, 'NextVec2InCircle deterministic X');
@@ -564,8 +529,6 @@ begin
     CheckNear(1.0, V.Length, 0.000001, 'NextVec2OnCircle stays on the unit circle');
     CheckNear(0.9906606, V.X, 0.000001, 'NextVec2OnCircle deterministic X');
     CheckNear(-0.1363510, V.Y, 0.000001, 'NextVec2OnCircle deterministic Y');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -578,8 +541,8 @@ begin
   ZeroState.S0 := 0;
   ZeroState.S1 := 0;
 
-  Rng := TRandomGen.Create(1);
-  try
+  Rng := TRandomGen.Init(1);
+  begin
     Rng.State := ZeroState;
     GaussianValue := Rng.NextGaussian;
     Check(not nextpas.core.math.scalar.IsNaN(GaussianValue),
@@ -588,8 +551,6 @@ begin
       'NextGaussian zero-state clamp avoids infinity');
     CheckNear(6.7861404, GaussianValue, 0.000001,
       'NextGaussian zero-state clamp keeps deterministic finite fallback');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -600,8 +561,8 @@ var
   Caught: Boolean;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(123);
-  try
+  Rng := TRandomGen.Init(123);
+  begin
     Caught := False;
     ErrorMessage := '';
     try
@@ -667,8 +628,6 @@ begin
     Check(Caught, 'WeightedChoice rejects infinite weights');
     CheckEqual('TRandomGen.WeightedChoice: weights must be finite', ErrorMessage,
       'WeightedChoice reports owner-level finite-contract message for infinite weight');
-  finally
-    Rng.Free;
   end;
 end;
 
@@ -678,8 +637,8 @@ var
   Caught: Boolean;
   ErrorMessage: string;
 begin
-  Rng := TRandomGen.Create(123);
-  try
+  Rng := TRandomGen.Init(123);
+  begin
     Caught := False;
     ErrorMessage := '';
     try
@@ -724,8 +683,6 @@ begin
     Check(Caught, 'NextBool rejects negative infinite probability');
     CheckEqual('TRandomGen.NextBool: AProbability must be finite', ErrorMessage,
       'NextBool reports public finite-contract message for negative infinity');
-  finally
-    Rng.Free;
   end;
 end;
 
