@@ -31,7 +31,7 @@ type
     FCapacity: PtrUInt;
     FMask: PtrUInt;
     FMaxItems: PtrUInt;
-    FCount: PtrUInt;
+    FCount: Int64;
     FHits: Int64;
     FMisses: Int64;
     FClosed: Int32;
@@ -200,7 +200,7 @@ begin
     UnlockBucket(LIdx);
     Exit(lfUpdated);
   end;
-  if PtrUInt(AtomicLoad64(Int64(FCount), moRelaxed)) >= FMaxItems then
+  if PtrUInt(AtomicLoad64(FCount, moRelaxed)) >= FMaxItems then
   begin
     { Evict the minimum frequency entry }
     UnlockBucket(LIdx);
@@ -208,9 +208,11 @@ begin
     begin
       LockBucket(LMinBucket);
       FBuckets[LMinBucket][LMinEntry].Used := False;
-      AtomicFetchSub64(Int64(FCount), 1, moRelaxed);
+      AtomicFetchSub64(FCount, 1, moRelaxed);
       UnlockBucket(LMinBucket);
     end;
+    if PtrUInt(AtomicLoad64(FCount, moRelaxed)) >= FMaxItems then
+      Exit(lfFull);
     LockBucket(LIdx);
   end;
   LCap := Length(FBuckets[LIdx]);
@@ -222,7 +224,7 @@ begin
       FBuckets[LIdx][LI].Value := AValue;
       FBuckets[LIdx][LI].Frequency := 1;
       FBuckets[LIdx][LI].Used := True;
-      AtomicFetchAdd64(Int64(FCount), 1, moRelaxed);
+      AtomicFetchAdd64(FCount, 1, moRelaxed);
       UnlockBucket(LIdx);
       Exit(lfAdded);
     end;
@@ -232,7 +234,7 @@ begin
   FBuckets[LIdx][LCap].Value := AValue;
   FBuckets[LIdx][LCap].Frequency := 1;
   FBuckets[LIdx][LCap].Used := True;
-  AtomicFetchAdd64(Int64(FCount), 1, moRelaxed);
+  AtomicFetchAdd64(FCount, 1, moRelaxed);
   UnlockBucket(LIdx);
   Result := lfAdded;
 end;
@@ -250,7 +252,7 @@ begin
   if LEntry >= 0 then
   begin
     FBuckets[LIdx][LEntry].Used := False;
-    AtomicFetchSub64(Int64(FCount), 1, moRelaxed);
+    AtomicFetchSub64(FCount, 1, moRelaxed);
     UnlockBucket(LIdx);
     Exit(True);
   end;
@@ -281,7 +283,7 @@ begin
       FBuckets[LI][LJ].Used := False;
     UnlockBucket(LI);
   end;
-  AtomicStore64(Int64(FCount), 0, moRelaxed);
+  AtomicStore64(FCount, 0, moRelaxed);
 end;
 
 procedure TConcurrentLFUCacheImpl.Close;
@@ -296,12 +298,12 @@ end;
 
 function TConcurrentLFUCacheImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad64(Int64(FCount), moRelaxed) = 0;
+  Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
 function TConcurrentLFUCacheImpl.Count: PtrUInt;
 begin
-  Result := PtrUInt(AtomicLoad64(Int64(FCount), moRelaxed));
+  Result := PtrUInt(AtomicLoad64(FCount, moRelaxed));
 end;
 
 function TConcurrentLFUCacheImpl.GetHitRate: Double;

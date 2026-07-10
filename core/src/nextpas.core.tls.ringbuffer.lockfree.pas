@@ -154,6 +154,8 @@ end;
 constructor TLockFreeRingBuffer.Create(ACapacityPowerOf2: Integer);
 begin
   inherited Create;
+  if (ACapacityPowerOf2 < 1) or (ACapacityPowerOf2 >= SizeOf(Integer) * 8) then
+    raise Exception.Create('TLockFreeRingBuffer: capacity power must be between 1 and integer bit width - 1');
 
   // Ensure capacity is power of 2 for fast modulo via bitwise AND
   FCapacity := 1 shl ACapacityPowerOf2;

@@ -37,6 +37,7 @@ type
 
   TTSRingEntry = record
     Timestamp: Int64; { monotonic ms }
+    ExpiresAt: Int64; { 0 = never expires }
     Value: AnsiString;
   end;
 
@@ -64,6 +65,7 @@ type
     procedure Lock; inline;
     procedure Unlock; inline;
     function WrapIdx(AIdx: Int32): Int32; inline;
+    function ComputeExpiresAt(ANow, ATTLMs: Int64): Int64; inline;
     procedure ExpireOldEntries(ANow: Int64);
   public
     constructor Create(ACapacity: Int32 = TSRING_DEFAULT_CAPACITY;
@@ -126,6 +128,13 @@ begin
     Inc(Result, FCapacity);
 end;
 
+function TTimeSeriesRingBuffer.ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;
+begin
+  if ATTLMs <= 0 then
+    Exit(0);
+  Result := ANow + ATTLMs;
+end;
+
 procedure TTimeSeriesRingBuffer.ExpireOldEntries(ANow: Int64);
 var
   LIdx, LExpired: Int32;
@@ -134,9 +143,10 @@ begin
   while (FCount > 0) and (LExpired < FCount) do
   begin
     LIdx := WrapIdx(FHead - FCount + LExpired);
-    if (FDefaultTTL > 0) and
-       (ANow - FBuffer[LIdx].Timestamp > FDefaultTTL) then
+    if (FBuffer[LIdx].ExpiresAt > 0) and (FBuffer[LIdx].ExpiresAt <= ANow) then
     begin
+      FBuffer[LIdx].Timestamp := 0;
+      FBuffer[LIdx].ExpiresAt := 0;
       FBuffer[LIdx].Value := '';
       Inc(LExpired);
     end
@@ -154,6 +164,8 @@ begin
   inherited Create;
   if ACapacity < 1 then ACapacity := TSRING_DEFAULT_CAPACITY;
   FCapacity := ACapacity;
+  if ADefaultTTLMs < 0 then
+    ADefaultTTLMs := 0;
   FDefaultTTL := ADefaultTTLMs;
   FHead := 0;
   FCount := 0;
@@ -182,8 +194,7 @@ begin
   Lock;
   try
     LNow := GetNowMs;
-    if FDefaultTTL > 0 then
-      ExpireOldEntries(LNow);
+    ExpireOldEntries(LNow);
 
     LIdx := WrapIdx(FHead);
     if (FCount >= FCapacity) and (ATTLMs > 0) then
@@ -200,6 +211,7 @@ begin
     end;
 
     FBuffer[LIdx].Timestamp := LNow;
+    FBuffer[LIdx].ExpiresAt := ComputeExpiresAt(LNow, ATTLMs);
     FBuffer[LIdx].Value := AValue;
     FHead := WrapIdx(FHead + 1);
     Inc(FCount);
@@ -216,6 +228,7 @@ var
 begin
   Lock;
   try
+    ExpireOldEntries(GetNowMs);
     LCopy := FCount;
     if ACount < LCopy then
       LCopy := ACount;
@@ -239,6 +252,7 @@ var
 begin
   Lock;
   try
+    ExpireOldEntries(GetNowMs);
     LFound := 0;
     for LI := 0 to FCount - 1 do
     begin
@@ -261,6 +275,7 @@ function TTimeSeriesRingBuffer.Latest(out AEntry: TTSRingEntry): TTSRingResult;
 begin
   Lock;
   try
+    ExpireOldEntries(GetNowMs);
     if FCount = 0 then
       Exit(tsrEmpty);
     AEntry := FBuffer[WrapIdx(FHead - 1)];
@@ -272,7 +287,13 @@ end;
 
 function TTimeSeriesRingBuffer.Count: Int32;
 begin
-  Result := AtomicLoad32(FCount);
+  Lock;
+  try
+    ExpireOldEntries(GetNowMs);
+    Result := FCount;
+  finally
+    Unlock;
+  end;
 end;
 
 function TTimeSeriesRingBuffer.GetCapacity: Int32;
@@ -282,12 +303,12 @@ end;
 
 function TTimeSeriesRingBuffer.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad32(FCount) = 0;
+  Result := Count = 0;
 end;
 
 function TTimeSeriesRingBuffer.IsFull: Boolean;
 begin
-  Result := AtomicLoad32(FCount) >= FCapacity;
+  Result := Count >= FCapacity;
 end;
 
 procedure TTimeSeriesRingBuffer.Clear;
@@ -297,7 +318,11 @@ begin
   Lock;
   try
     for LI := 0 to FCount - 1 do
+    begin
+      FBuffer[WrapIdx(FHead - FCount + LI)].Timestamp := 0;
+      FBuffer[WrapIdx(FHead - FCount + LI)].ExpiresAt := 0;
       FBuffer[WrapIdx(FHead - FCount + LI)].Value := '';
+    end;
     FHead := 0;
     FCount := 0;
   finally
@@ -307,6 +332,8 @@ end;
 
 procedure TTimeSeriesRingBuffer.SetDefaultTTL(ATTLMs: Int64);
 begin
+  if ATTLMs < 0 then
+    ATTLMs := 0;
   AtomicExchange64(FDefaultTTL, ATTLMs);
 end;
 

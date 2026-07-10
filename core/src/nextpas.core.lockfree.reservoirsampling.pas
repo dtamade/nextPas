@@ -80,8 +80,8 @@ begin
   { Non-deterministic seeding: mix pointer addresses for per-instance uniqueness }
   FPRNG_S0 := UInt64(SizeInt(Self)) xor (UInt64(SizeInt(@ACapacity)) shl 17);
   FPRNG_S1 := UInt64(SizeInt(@Self)) xor (UInt64(ACapacity) shl 31);
-  if FPRNG_S0 = 0 then FPRNG_S0 := $DEADBEEFCAFEBABE;
-  if FPRNG_S1 = 0 then FPRNG_S1 := $123456789ABCDEF0;
+  if FPRNG_S0 = 0 then FPRNG_S0 := QWord($DEADBEEFCAFEBABE);
+  if FPRNG_S1 = 0 then FPRNG_S1 := QWord($123456789ABCDEF0);
   { Warm up: skip initial transient }
   NextRandom; NextRandom; NextRandom; NextRandom;
   FLock := 0;
@@ -178,7 +178,8 @@ begin
     else
       LSize := FCapacity;
     SetLength(ASample, LSize);
-    Move(FReservoir[0], ASample[0], LSize * SizeOf(T));
+    if LSize > 0 then
+      Move(FReservoir[0], ASample[0], LSize * SizeOf(T));
   finally
     Unlock;
   end;

@@ -31,11 +31,22 @@ type
       FCount: Int32;
     end;
     PData = ^TData;
+    PRetiredNode = ^TRetiredNode;
+    TRetiredNode = record
+      Data: PData;
+      Next: PRetiredNode;
+    end;
   private
     FData: PData;  // current snapshot
     FClosed: Int32;
+    FRetired: PRetiredNode;
+    FRetiredLock: Int32;
     procedure FreeData(AData: PData);
     function CloneData(AData: PData): PData;
+    procedure LockRetired;
+    procedure UnlockRetired;
+    procedure RetireData(AData: PData);
+    procedure ReleaseRetired;
   public
     constructor Create;
     destructor Destroy; override;
@@ -89,12 +100,64 @@ begin
   FData^.FCount := 0;
   SetLength(FData^.FItems, 0);
   FClosed := 0;
+  FRetired := nil;
+  FRetiredLock := 0;
 end;
 
 destructor TCopyOnWriteArrayImpl.Destroy;
 begin
   FreeData(FData);
+  ReleaseRetired;
   inherited Destroy;
+end;
+
+procedure TCopyOnWriteArrayImpl.LockRetired;
+begin
+  while AtomicCompareExchange32(FRetiredLock, 1, 0, moAcqRel) <> 0 do
+    ThreadSwitch;
+end;
+
+procedure TCopyOnWriteArrayImpl.UnlockRetired;
+begin
+  AtomicStore32(FRetiredLock, 0, moRelease);
+end;
+
+procedure TCopyOnWriteArrayImpl.RetireData(AData: PData);
+var
+  LNode: PRetiredNode;
+begin
+  if AData = nil then
+    Exit;
+  New(LNode);
+  LNode^.Data := AData;
+  LockRetired;
+  try
+    LNode^.Next := FRetired;
+    FRetired := LNode;
+  finally
+    UnlockRetired;
+  end;
+end;
+
+procedure TCopyOnWriteArrayImpl.ReleaseRetired;
+var
+  LNode, LNext: PRetiredNode;
+begin
+  LockRetired;
+  try
+    LNode := FRetired;
+    FRetired := nil;
+  finally
+    UnlockRetired;
+  end;
+
+  while LNode <> nil do
+  begin
+    LNext := LNode^.Next;
+    FreeData(LNode^.Data);
+    Dispose(LNode);
+    LNode := LNext;
+  end;
 end;
 
 function TCopyOnWriteArrayImpl.Get(AIndex: Int32; out AValue: T): TLockFreeCowArrayResult;
@@ -130,12 +193,11 @@ begin
     LNew^.FCount := LOld^.FCount + 1;
     SetLength(LNew^.FItems, LNew^.FCount);
     LNew^.FItems[LNew^.FCount - 1] := AValue;
-  until AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld;
-  // Free old data after CAS succeeds (no readers can be using it after CAS)
-  // Note: in a multi-threaded environment with hazard pointers, we'd retire
-  // the old data. For COW, the old snapshot is safe to free once CAS succeeds
-  // because readers already have their own reference.
-  FreeData(LOld);
+    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+      Break;
+    FreeData(LNew);
+  until False;
+  RetireData(LOld);
   Result := cowOk;
 end;
 
@@ -151,8 +213,11 @@ begin
       Exit(cowIndexOutOfRange);
     LNew := CloneData(LOld);
     LNew^.FItems[AIndex] := AValue;
-  until AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld;
-  FreeData(LOld);
+    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+      Break;
+    FreeData(LNew);
+  until False;
+  RetireData(LOld);
   Result := cowOk;
 end;
 
@@ -167,7 +232,7 @@ begin
     LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
     if (AIndex < 0) or (AIndex >= LOld^.FCount) then
       Exit(cowIndexOutOfRange);
-    LNew := New(PData);
+    New(LNew);
     LNew^.FCount := LOld^.FCount - 1;
     SetLength(LNew^.FItems, LNew^.FCount);
     // Copy elements before deleted index
@@ -176,8 +241,11 @@ begin
     // Copy elements after deleted index
     for I := AIndex to LNew^.FCount - 1 do
       LNew^.FItems[I] := LOld^.FItems[I + 1];
-  until AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld;
-  FreeData(LOld);
+    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+      Break;
+    FreeData(LNew);
+  until False;
+  RetireData(LOld);
   Result := cowOk;
 end;
 
@@ -191,7 +259,7 @@ begin
   LNew^.FCount := 0;
   SetLength(LNew^.FItems, 0);
   LOld := PData(AtomicExchangePtr(Pointer(FData), LNew, moAcqRel));
-  FreeData(LOld);
+  RetireData(LOld);
 end;
 
 procedure TCopyOnWriteArrayImpl.Close;

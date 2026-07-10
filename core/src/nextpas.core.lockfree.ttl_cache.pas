@@ -78,6 +78,7 @@ type
     function EvictLRU: PTTLNode;
     procedure SweepExpired;
     function GetNowMs: Int64;
+    function ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;
     procedure Lock; inline;
     procedure Unlock; inline;
   public
@@ -113,6 +114,13 @@ uses
 function TTTLCache.GetNowMs: Int64;
 begin
   Result := Int64(GetTickCount64);
+end;
+
+function TTTLCache.ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;
+begin
+  if ATTLMs <= 0 then
+    Exit(0);
+  Result := ANow + ATTLMs;
 end;
 
 function TTTLCache.HashKey(const AKey: AnsiString): UInt32;
@@ -243,7 +251,7 @@ begin
   while (LNode <> nil) and (LSwept < TTL_SWEEP_THRESHOLD) do
   begin
     LNext := LNode^.Prev;
-    if LNode^.ExpiresAt <= LNow then
+    if (LNode^.ExpiresAt > 0) and (LNode^.ExpiresAt <= LNow) then
     begin
       RemoveFromBucket(LNode);
       RemoveFromList(LNode);
@@ -262,6 +270,8 @@ begin
   inherited Create;
   if ACapacity < 1 then ACapacity := TTL_DEFAULT_CAPACITY;
   FCapacity := ACapacity;
+  if ADefaultTTLMs < 0 then
+    ADefaultTTLMs := 0;
   FDefaultTTL := ADefaultTTLMs;
   FCount := 0;
   FLock := 0;
@@ -294,7 +304,7 @@ begin
     begin
       LNode^.Value := AValue;
       LNode^.TTL := ATTLMs;
-      LNode^.ExpiresAt := LNow + ATTLMs;
+      LNode^.ExpiresAt := ComputeExpiresAt(LNow, ATTLMs);
       MoveToFront(LNode);
       Exit(ttlOk);
     end;
@@ -318,7 +328,7 @@ begin
     LNode^.Value := AValue;
     LNode^.Hash := HashKey(AKey);
     LNode^.TTL := ATTLMs;
-    LNode^.ExpiresAt := LNow + ATTLMs;
+    LNode^.ExpiresAt := ComputeExpiresAt(LNow, ATTLMs);
 
     InsertIntoBucket(LNode);
     InsertIntoList(LNode);
@@ -341,7 +351,7 @@ begin
       Exit(ttlNotFound);
 
     LNow := GetNowMs;
-    if LNode^.ExpiresAt <= LNow then
+    if (LNode^.ExpiresAt > 0) and (LNode^.ExpiresAt <= LNow) then
     begin
       RemoveFromBucket(LNode);
       RemoveFromList(LNode);
@@ -424,6 +434,8 @@ end;
 
 procedure TTTLCache.SetDefaultTTL(ATTLMs: Int64);
 begin
+  if ATTLMs < 0 then
+    ATTLMs := 0;
   AtomicExchange64(FDefaultTTL, ATTLMs);
 end;
 
