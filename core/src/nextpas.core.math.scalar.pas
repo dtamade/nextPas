@@ -1390,6 +1390,16 @@ begin
   Result := DoubleIsInfinite(AValue);
 end;
 
+function IsFinite(const AValue: Single): Boolean;
+begin
+  Result := (not SingleIsNaN(AValue)) and (not SingleIsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: Double): Boolean;
+begin
+  Result := (not DoubleIsNaN(AValue)) and (not DoubleIsInfinite(AValue));
+end;
+
 function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean;
 begin
   if not ValidComparisonEpsilon(AEpsilon) then
