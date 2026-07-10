@@ -747,11 +747,16 @@ end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const ANilBody: Pointer): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
 begin
   if ANilBody <> nil then
     raise EArgumentError.Create(
       'HTTP nil-body compatibility overload only accepts nil');
-  Result := NewRequest(AMethod, AUrl, TBytes(nil));
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders,
+    BytesBodyReader(nil), 0);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
