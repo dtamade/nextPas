@@ -8,7 +8,7 @@ uses
   nextpas.core.exception;
 
 { Portable platform error codes — canonical definitions
-{*
+ *
  * Error code mapping table:
  *   PLATFORM_ERR_* constants mirror Linux errno numbers for the focused-runtime
  *   host. Non-Linux platforms translate native errors via platform_get_errno.
