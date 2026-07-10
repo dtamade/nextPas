@@ -117,6 +117,60 @@ function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrIn
     @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
+{ Process convenience functions }
+
+{** @desc 运行进程并捕获输出（便利函数）
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AStdoutBuf stdout 缓冲区（nil 表示不捕获）
+    @param AStdoutBufLen stdout 缓冲区长度
+    @param AStderrBuf stderr 缓冲区（nil 表示不捕获）
+    @param AStderrBufLen stderr 缓冲区长度
+    @param AResult 输出执行结果
+    @return 0 成功，否则返回错误码 *}
+function platform_process_run_exec(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32;
+  out AResult: TPlatformProcessExecResult): Int32;
+
+{** @desc 创建带管道的进程（便利函数）
+    @param APath 可执行文件路径
+    @param AArgv 参数数组（以 nil 结尾）
+    @param ACwd 工作目录（nil 表示继承当前目录）
+    @param AOptions 进程选项
+    @param AProc 输出进程句柄
+    @param APipes 输出管道集合
+    @return 0 成功，否则返回错误码 *}
+function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
+  out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+
+{** @desc 向进程 stdin 写入数据
+    @param AStdinWrite stdin 写端文件描述符
+    @param AData 写入数据
+    @param ALen 数据长度
+    @return 写入字节数，-1 失败 *}
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32;
+
+{** @desc 从进程 stdout 读取数据
+    @param AStdoutRead stdout 读端文件描述符
+    @param ABuf 输出缓冲区
+    @param ABufLen 缓冲区长度
+    @return 读取字节数，0 表示 EOF，-1 失败 *}
+function platform_process_read_stdout(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+
+{** @desc 从进程 stderr 读取数据
+    @param AStderrRead stderr 读端文件描述符
+    @param ABuf 输出缓冲区
+    @param ABufLen 缓冲区长度
+    @return 读取字节数，0 表示 EOF，-1 失败 *}
+function platform_process_read_stderr(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -770,6 +824,206 @@ begin
   if Result = 0 then
     AExitCode := LResult.ExitCode;
 end;
+
+function platform_process_run_exec(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32;
+  out AResult: TPlatformProcessExecResult): Int32;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  AResult.ExitCode := -1;
+  AResult.Stdout := AStdoutBuf;
+  AResult.Stderr := AStderrBuf;
+  if (AStdoutBuf <> nil) and (AStdoutBufLen > 0) and
+     (AStderrBuf <> nil) and (AStderrBufLen > 0) then
+    Result := platform_process_run_capture(APath, AArgv, ACwd,
+      AStdoutBuf, AStdoutBufLen, AResult.StdoutLen,
+      AStderrBuf, AStderrBufLen, AResult.StderrLen,
+      AResult.ExitCode)
+  else if (AStdoutBuf <> nil) and (AStdoutBufLen > 0) then
+  begin
+    AResult.StderrLen := 0;
+    Result := platform_process_run(APath, AArgv, ACwd,
+      AStdoutBuf, AStdoutBufLen, AResult.StdoutLen,
+      AResult.ExitCode);
+  end
+  else
+  begin
+    AResult.StdoutLen := 0;
+    AResult.StderrLen := 0;
+    { No capture requested, just spawn and wait }
+    Result := platform_process_run(APath, AArgv, ACwd,
+      nil, 0, AResult.StdoutLen,
+      AResult.ExitCode);
+  end;
+end;
+
+function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
+  out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+var
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of PtrInt;
+  LDevNullRead, LDevNullWrite: PtrInt;
+  LFailStage: TPlatformProcessSpawnStage;
+  LChildStdin, LChildStdout, LChildStderr: PtrInt;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(APipes, SizeOf(APipes), 0);
+  APipes.StdinWrite := -1;
+  APipes.StdoutRead := -1;
+  APipes.StderrRead := -1;
+  LStdinPipe[0] := -1; LStdinPipe[1] := -1;
+  LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
+  LStderrPipe[0] := -1; LStderrPipe[1] := -1;
+  LDevNullRead := -1;
+  LDevNullWrite := -1;
+
+  { Create pipes based on options }
+  if poRedirectStdin in AOptions then
+  begin
+    if platform_process_create_pipe(PtrInt(LStdinPipe[0]), PtrInt(LStdinPipe[1])) <> 0 then
+      Exit(platform_get_errno);
+  end;
+
+  if poCaptureStdout in AOptions then
+  begin
+    if platform_process_create_pipe(PtrInt(LStdoutPipe[0]), PtrInt(LStdoutPipe[1])) <> 0 then
+    begin
+      if LStdinPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[0]));
+      if LStdinPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[1]));
+      Exit(platform_get_errno);
+    end;
+  end;
+
+  if poCaptureStderr in AOptions then
+  begin
+    if platform_process_create_pipe(PtrInt(LStderrPipe[0]), PtrInt(LStderrPipe[1])) <> 0 then
+    begin
+      if LStdinPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[0]));
+      if LStdinPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[1]));
+      if LStdoutPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStdoutPipe[0]));
+      if LStdoutPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStdoutPipe[1]));
+      Exit(platform_get_errno);
+    end;
+  end;
+
+  { Prepare child fd mapping }
+  if poRedirectStdin in AOptions then
+    LChildStdin := PtrInt(LStdinPipe[0])
+  else
+    LChildStdin := -1;
+
+  if poCaptureStdout in AOptions then
+    LChildStdout := PtrInt(LStdoutPipe[1])
+  else
+    LChildStdout := -1;
+
+  if poCaptureStderr in AOptions then
+    LChildStderr := PtrInt(LStderrPipe[1])
+  else
+    LChildStderr := -1;
+
+  { Open /dev/null for non-captured streams }
+  if not (poRedirectStdin in AOptions) then
+  begin
+    LDevNullRead := -1;
+    platform_process_open_null(False, LDevNullRead);
+    LChildStdin := LDevNullRead;
+  end;
+  if not (poCaptureStdout in AOptions) then
+  begin
+    LDevNullWrite := -1;
+    platform_process_open_null(True, LDevNullWrite);
+    LChildStdout := LDevNullWrite;
+  end;
+  if not (poCaptureStderr in AOptions) then
+  begin
+    if LDevNullWrite < 0 then
+      platform_process_open_null(True, LDevNullWrite);
+    LChildStderr := LDevNullWrite;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd,
+    LChildStdin, LChildStdout, LChildStderr,
+    AProc, LFailStage);
+
+  { Close child-side fds and /dev/null handles }
+  if LDevNullRead >= 0 then platform_process_close_handle(LDevNullRead);
+  if LDevNullWrite >= 0 then platform_process_close_handle(LDevNullWrite);
+  if LStdinPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[0]));
+  if LStdoutPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStdoutPipe[1]));
+  if LStderrPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStderrPipe[1]));
+
+  if Result <> 0 then
+  begin
+    { Cleanup parent-side fds on failure }
+    if LStdinPipe[1] >= 0 then platform_process_close_handle(PtrInt(LStdinPipe[1]));
+    if LStdoutPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStdoutPipe[0]));
+    if LStderrPipe[0] >= 0 then platform_process_close_handle(PtrInt(LStderrPipe[0]));
+    Exit;
+  end;
+
+  { Return parent-side fds }
+  if poRedirectStdin in AOptions then
+    APipes.StdinWrite := PtrInt(LStdinPipe[1]);
+  if poCaptureStdout in AOptions then
+    APipes.StdoutRead := PtrInt(LStdoutPipe[0]);
+  if poCaptureStderr in AOptions then
+    APipes.StderrRead := PtrInt(LStderrPipe[0]);
+end;
+
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32;
+var
+  LN: PtrInt;
+begin
+  if (AStdinWrite < 0) or (AData = nil) or (ALen <= 0) then
+    Exit(-1);
+  LN := write(cint(AStdinWrite), AData, ALen);
+  if LN < 0 then
+    Result := -1
+  else
+    Result := Int32(LN);
+end;
+
+function platform_process_read_stdout(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LN: PtrInt;
+begin
+  if (AStdoutRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LN := read(cint(AStdoutRead), ABuf, ABufLen);
+  if LN < 0 then
+  begin
+    if platform_get_errno = ESysEAGAIN then
+      Result := 0
+    else
+      Result := -1;
+  end
+  else
+    Result := Int32(LN);
+end;
+
+function platform_process_read_stderr(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LN: PtrInt;
+begin
+  if (AStderrRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LN := read(cint(AStderrRead), ABuf, ABufLen);
+  if LN < 0 then
+  begin
+    if platform_get_errno = ESysEAGAIN then
+      Result := 0
+    else
+      Result := -1;
+  end
+  else
+    Result := Int32(LN);
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -1130,6 +1384,190 @@ begin
   Result := platform_process_run(APath, AArgv, ACwd,
     AStdoutBuf, AStdoutBufLen, AStdoutLen, AExitCode);
 end;
+
+function platform_process_run_exec(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32;
+  out AResult: TPlatformProcessExecResult): Int32;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  AResult.ExitCode := -1;
+  AResult.Stdout := AStdoutBuf;
+  AResult.Stderr := AStderrBuf;
+  if (AStdoutBuf <> nil) and (AStdoutBufLen > 0) and
+     (AStderrBuf <> nil) and (AStderrBufLen > 0) then
+    Result := platform_process_run_capture(APath, AArgv, ACwd,
+      AStdoutBuf, AStdoutBufLen, AResult.StdoutLen,
+      AStderrBuf, AStderrBufLen, AResult.StderrLen,
+      AResult.ExitCode)
+  else if (AStdoutBuf <> nil) and (AStdoutBufLen > 0) then
+  begin
+    AResult.StderrLen := 0;
+    Result := platform_process_run(APath, AArgv, ACwd,
+      AStdoutBuf, AStdoutBufLen, AResult.StdoutLen,
+      AResult.ExitCode);
+  end
+  else
+  begin
+    AResult.StdoutLen := 0;
+    AResult.StderrLen := 0;
+    Result := platform_process_run(APath, AArgv, ACwd,
+      nil, 0, AResult.StdoutLen,
+      AResult.ExitCode);
+  end;
+end;
+
+function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
+  out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+var
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of PtrInt;
+  LDevNullRead, LDevNullWrite: PtrInt;
+  LFailStage: TPlatformProcessSpawnStage;
+  LChildStdin, LChildStdout, LChildStderr: PtrInt;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(APipes, SizeOf(APipes), 0);
+  APipes.StdinWrite := -1;
+  APipes.StdoutRead := -1;
+  APipes.StderrRead := -1;
+  LStdinPipe[0] := -1; LStdinPipe[1] := -1;
+  LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
+  LStderrPipe[0] := -1; LStderrPipe[1] := -1;
+  LDevNullRead := -1;
+  LDevNullWrite := -1;
+
+  { Create pipes based on options }
+  if poRedirectStdin in AOptions then
+  begin
+    if platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]) <> 0 then
+      Exit(platform_get_errno);
+  end;
+
+  if poCaptureStdout in AOptions then
+  begin
+    if platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]) <> 0 then
+    begin
+      if LStdinPipe[0] >= 0 then platform_process_close_handle(LStdinPipe[0]);
+      if LStdinPipe[1] >= 0 then platform_process_close_handle(LStdinPipe[1]);
+      Exit(platform_get_errno);
+    end;
+  end;
+
+  if poCaptureStderr in AOptions then
+  begin
+    if platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]) <> 0 then
+    begin
+      if LStdinPipe[0] >= 0 then platform_process_close_handle(LStdinPipe[0]);
+      if LStdinPipe[1] >= 0 then platform_process_close_handle(LStdinPipe[1]);
+      if LStdoutPipe[0] >= 0 then platform_process_close_handle(LStdoutPipe[0]);
+      if LStdoutPipe[1] >= 0 then platform_process_close_handle(LStdoutPipe[1]);
+      Exit(platform_get_errno);
+    end;
+  end;
+
+  { Prepare child fd mapping }
+  if poRedirectStdin in AOptions then
+    LChildStdin := LStdinPipe[0]
+  else
+    LChildStdin := -1;
+
+  if poCaptureStdout in AOptions then
+    LChildStdout := LStdoutPipe[1]
+  else
+    LChildStdout := -1;
+
+  if poCaptureStderr in AOptions then
+    LChildStderr := LStderrPipe[1]
+  else
+    LChildStderr := -1;
+
+  { Open NUL for non-captured streams }
+  if not (poRedirectStdin in AOptions) then
+  begin
+    platform_process_open_null(False, LDevNullRead);
+    LChildStdin := LDevNullRead;
+  end;
+  if not (poCaptureStdout in AOptions) then
+  begin
+    platform_process_open_null(True, LDevNullWrite);
+    LChildStdout := LDevNullWrite;
+  end;
+  if not (poCaptureStderr in AOptions) then
+  begin
+    if LDevNullWrite < 0 then
+      platform_process_open_null(True, LDevNullWrite);
+    LChildStderr := LDevNullWrite;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd,
+    LChildStdin, LChildStdout, LChildStderr,
+    AProc, LFailStage);
+
+  { Close child-side fds and NUL handles }
+  if LDevNullRead >= 0 then platform_process_close_handle(LDevNullRead);
+  if LDevNullWrite >= 0 then platform_process_close_handle(LDevNullWrite);
+  if LStdinPipe[0] >= 0 then platform_process_close_handle(LStdinPipe[0]);
+  if LStdoutPipe[1] >= 0 then platform_process_close_handle(LStdoutPipe[1]);
+  if LStderrPipe[1] >= 0 then platform_process_close_handle(LStderrPipe[1]);
+
+  if Result <> 0 then
+  begin
+    { Cleanup parent-side fds on failure }
+    if LStdinPipe[1] >= 0 then platform_process_close_handle(LStdinPipe[1]);
+    if LStdoutPipe[0] >= 0 then platform_process_close_handle(LStdoutPipe[0]);
+    if LStderrPipe[0] >= 0 then platform_process_close_handle(LStderrPipe[0]);
+    Exit;
+  end;
+
+  { Return parent-side fds }
+  if poRedirectStdin in AOptions then
+    APipes.StdinWrite := LStdinPipe[1];
+  if poCaptureStdout in AOptions then
+    APipes.StdoutRead := LStdoutPipe[0];
+  if poCaptureStderr in AOptions then
+    APipes.StderrRead := LStderrPipe[0];
+end;
+
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32;
+var
+  LWritten: DWORD;
+begin
+  if (AStdinWrite < 0) or (AData = nil) or (ALen <= 0) then
+    Exit(-1);
+  if not WriteFile(HANDLE(PtrUInt(AStdinWrite)), AData, DWORD(ALen), @LWritten, nil) then
+    Result := -1
+  else
+    Result := Int32(LWritten);
+end;
+
+function platform_process_read_stdout(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LRead: DWORD;
+begin
+  if (AStdoutRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  if not ReadFile(HANDLE(PtrUInt(AStdoutRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
+    Result := -1
+  else
+    Result := Int32(LRead);
+end;
+
+function platform_process_read_stderr(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LRead: DWORD;
+begin
+  if (AStderrRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  if not ReadFile(HANDLE(PtrUInt(AStderrRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
+    Result := -1
+  else
+    Result := Int32(LRead);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -1159,6 +1597,25 @@ function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar; A
 begin FillChar(AProc, SizeOf(AProc), 0); AFailStage := pssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32; AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32; out AExitCode: Int32): Int32;
 begin AStdoutLen := 0; AStderrLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_run_exec(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar;
+  AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32;
+  AStderrBuf: PAnsiChar; AStderrBufLen: Int32;
+  out AResult: TPlatformProcessExecResult): Int32;
+begin FillChar(AResult, SizeOf(AResult), 0); AResult.ExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
+  out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+begin FillChar(AProc, SizeOf(AProc), 0); FillChar(APipes, SizeOf(APipes), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32;
+begin Result := -1; end;
+function platform_process_read_stdout(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+begin Result := -1; end;
+function platform_process_read_stderr(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+begin Result := -1; end;
 {$ENDIF}
 
 end.

@@ -13,8 +13,57 @@ type
   TPlatformConsoleSize = record
     Cols: Int32;
     Rows: Int32;
+    {** @desc 检查尺寸是否有效（大于 0）
+        @return True 如果尺寸有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查尺寸是否为空
+        @return True 如果行或列为 0 *}
+    function IsEmpty: Boolean; inline;
+    {** @desc 计算总单元格数
+        @return Cols * Rows *}
+    function CellCount: Int32; inline;
   end;
 
+const
+  { ANSI color codes - foreground }
+  PLATFORM_CONSOLE_FG_BLACK   = #27'[30m';
+  PLATFORM_CONSOLE_FG_RED     = #27'[31m';
+  PLATFORM_CONSOLE_FG_GREEN   = #27'[32m';
+  PLATFORM_CONSOLE_FG_YELLOW  = #27'[33m';
+  PLATFORM_CONSOLE_FG_BLUE    = #27'[34m';
+  PLATFORM_CONSOLE_FG_MAGENTA = #27'[35m';
+  PLATFORM_CONSOLE_FG_CYAN    = #27'[36m';
+  PLATFORM_CONSOLE_FG_WHITE   = #27'[37m';
+  PLATFORM_CONSOLE_FG_DEFAULT = #27'[39m';
+
+  { ANSI color codes - background }
+  PLATFORM_CONSOLE_BG_BLACK   = #27'[40m';
+  PLATFORM_CONSOLE_BG_RED     = #27'[41m';
+  PLATFORM_CONSOLE_BG_GREEN   = #27'[42m';
+  PLATFORM_CONSOLE_BG_YELLOW  = #27'[43m';
+  PLATFORM_CONSOLE_BG_BLUE    = #27'[44m';
+  PLATFORM_CONSOLE_BG_MAGENTA = #27'[45m';
+  PLATFORM_CONSOLE_BG_CYAN    = #27'[46m';
+  PLATFORM_CONSOLE_BG_WHITE   = #27'[47m';
+  PLATFORM_CONSOLE_BG_DEFAULT = #27'[49m';
+
+  { ANSI style codes }
+  PLATFORM_CONSOLE_BOLD       = #27'[1m';
+  PLATFORM_CONSOLE_DIM        = #27'[2m';
+  PLATFORM_CONSOLE_ITALIC     = #27'[3m';
+  PLATFORM_CONSOLE_UNDERLINE  = #27'[4m';
+  PLATFORM_CONSOLE_BLINK      = #27'[5m';
+  PLATFORM_CONSOLE_REVERSE    = #27'[7m';
+  PLATFORM_CONSOLE_STRIKETHROUGH = #27'[9m';
+  PLATFORM_CONSOLE_RESET      = #27'[0m';
+
+  { ANSI cursor control }
+  PLATFORM_CONSOLE_CURSOR_HIDE     = #27'[?25l';
+  PLATFORM_CONSOLE_CURSOR_SHOW     = #27'[?25h';
+  PLATFORM_CURSOR_SAVE             = #27'[s';
+  PLATFORM_CURSOR_RESTORE          = #27'[u';
+
+type
   {** @desc raw 模式保存状态的不透明载体
       @note 接口层不暴露宿主 termios 类型；实现层把 Opaque[0] 转为 PTermios
       @note 128 字节足以容纳各宿主 termios（Linux 60 字节、macOS 更小、Windows 两个 DWORD） *}
@@ -77,6 +126,36 @@ function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32
     @return TPlatformConsoleWait 结果枚举 *}
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 
+{ Console convenience functions }
+
+{** @desc 向 stdout 写入字符串
+    @param AStr 字符串指针
+    @param ALen 字符串长度
+    @return 写入字节数，-1 失败 *}
+function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
+
+{** @desc 向 stdout 写入带颜色的字符串
+    @param AStr 字符串指针
+    @param ALen 字符串长度
+    @param AFg 前景色 ANSI 代码
+    @return 写入字节数，-1 失败 *}
+function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
+  const AFg: AnsiString): Int32;
+
+{** @desc 移动光标到指定位置
+    @param ACol 列号（从 0 开始）
+    @param ARow 行号（从 0 开始）
+    @return 0 成功，否则返回错误码 *}
+function platform_console_cursor_move(ACol, ARow: Int32): Int32;
+
+{** @desc 清除当前行
+    @return 0 成功，否则返回错误码 *}
+function platform_console_clear_line: Int32;
+
+{** @desc 清除屏幕
+    @return 0 成功，否则返回错误码 *}
+function platform_console_clear_screen: Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -101,6 +180,21 @@ const
 {$ELSE}
   TIOCGWINSZ = $40087468;
 {$ENDIF}
+
+function TPlatformConsoleSize.IsValid: Boolean;
+begin
+  Result := (Cols > 0) and (Rows > 0);
+end;
+
+function TPlatformConsoleSize.IsEmpty: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
+end;
+
+function TPlatformConsoleSize.CellCount: Int32;
+begin
+  Result := Cols * Rows;
+end;
 
 function platform_console_is_terminal(AFd: Int32): Boolean;
 begin
@@ -216,6 +310,88 @@ begin
     Exit(cwReadable);
   Result := cwError;
 end;
+
+function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
+begin
+  if (AStr = nil) or (ALen <= 0) then
+    Exit(0);
+  Result := platform_console_write(1, AStr, ALen);
+end;
+
+function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
+  const AFg: AnsiString): Int32;
+var
+  LTotal, LWritten: Int32;
+begin
+  LTotal := 0;
+  { Write foreground color }
+  if Length(AFg) > 0 then
+  begin
+    LWritten := platform_console_write(1, PAnsiChar(AFg), Length(AFg));
+    if LWritten < 0 then Exit(LWritten);
+    Inc(LTotal, LWritten);
+  end;
+  { Write text }
+  if (AStr <> nil) and (ALen > 0) then
+  begin
+    LWritten := platform_console_write(1, AStr, ALen);
+    if LWritten < 0 then Exit(LWritten);
+    Inc(LTotal, LWritten);
+  end;
+  { Write reset }
+  LWritten := platform_console_write(1, PAnsiChar(PLATFORM_CONSOLE_RESET), Length(PLATFORM_CONSOLE_RESET));
+  if LWritten < 0 then Exit(LWritten);
+  Inc(LTotal, LWritten);
+  Result := LTotal;
+end;
+
+function platform_console_cursor_move(ACol, ARow: Int32): Int32;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
+begin
+  { ESC[row;colH - cursor position (1-based) }
+  LLen := 0;
+  LBuf[LLen] := #27; Inc(LLen);
+  LBuf[LLen] := '['; Inc(LLen);
+  { Convert row to string }
+  if ARow >= 10 then
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) div 10); Inc(LLen);
+    LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) mod 10); Inc(LLen);
+  end
+  else
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + ARow + 1); Inc(LLen);
+  end;
+  LBuf[LLen] := ';'; Inc(LLen);
+  { Convert col to string }
+  if ACol >= 10 then
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) div 10); Inc(LLen);
+    LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) mod 10); Inc(LLen);
+  end
+  else
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + ACol + 1); Inc(LLen);
+  end;
+  LBuf[LLen] := 'H'; Inc(LLen);
+  Result := platform_console_write(1, @LBuf[0], LLen);
+end;
+
+function platform_console_clear_line: Int32;
+const
+  CLEAR_LINE = #27'[2K';
+begin
+  Result := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+end;
+
+function platform_console_clear_screen: Int32;
+const
+  CLEAR_SCREEN = #27'[2J';
+begin
+  Result := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+end;
 {$ELSE}
 { 非 Linux Unix（macOS/FreeBSD 等）：host base 单元尚未就绪，提供诚实 stub。 }
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
@@ -228,6 +404,17 @@ function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
+function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
+begin Result := -1; end;
+function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
+  const AFg: AnsiString): Int32;
+begin Result := -1; end;
+function platform_console_cursor_move(ACol, ARow: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_clear_line: Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_clear_screen: Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 {$ENDIF}
 
@@ -245,6 +432,21 @@ type
     srWindowLeft, srWindowTop, srWindowRight, srWindowBottom: Int16;
     dwMaxSizeX, dwMaxSizeY: Int16;
   end;
+
+function TPlatformConsoleSize.IsValid: Boolean;
+begin
+  Result := (Cols > 0) and (Rows > 0);
+end;
+
+function TPlatformConsoleSize.IsEmpty: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
+end;
+
+function TPlatformConsoleSize.CellCount: Int32;
+begin
+  Result := Cols * Rows;
+end;
 
 function WindowsConsoleHandleFromFd(AFd: Int32; out AHandle: HANDLE): Int32;
 var
@@ -411,9 +613,97 @@ begin
     Result := cwError;
   end;
 end;
+
+function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
+begin
+  if (AStr = nil) or (ALen <= 0) then
+    Exit(0);
+  Result := platform_console_write(1, AStr, ALen);
+end;
+
+function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
+  const AFg: AnsiString): Int32;
+var
+  LTotal, LWritten: Int32;
+begin
+  LTotal := 0;
+  { Write foreground color }
+  if Length(AFg) > 0 then
+  begin
+    LWritten := platform_console_write(1, PAnsiChar(AFg), Length(AFg));
+    if LWritten < 0 then Exit(LWritten);
+    Inc(LTotal, LWritten);
+  end;
+  { Write text }
+  if (AStr <> nil) and (ALen > 0) then
+  begin
+    LWritten := platform_console_write(1, AStr, ALen);
+    if LWritten < 0 then Exit(LWritten);
+    Inc(LTotal, LWritten);
+  end;
+  { Write reset }
+  LWritten := platform_console_write(1, PAnsiChar(PLATFORM_CONSOLE_RESET), Length(PLATFORM_CONSOLE_RESET));
+  if LWritten < 0 then Exit(LWritten);
+  Inc(LTotal, LWritten);
+  Result := LTotal;
+end;
+
+function platform_console_cursor_move(ACol, ARow: Int32): Int32;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
+begin
+  { ESC[row;colH - cursor position (1-based) }
+  LLen := 0;
+  LBuf[LLen] := #27; Inc(LLen);
+  LBuf[LLen] := '['; Inc(LLen);
+  { Convert row to string }
+  if ARow >= 10 then
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) div 10); Inc(LLen);
+    LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) mod 10); Inc(LLen);
+  end
+  else
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + ARow + 1); Inc(LLen);
+  end;
+  LBuf[LLen] := ';'; Inc(LLen);
+  { Convert col to string }
+  if ACol >= 10 then
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) div 10); Inc(LLen);
+    LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) mod 10); Inc(LLen);
+  end
+  else
+  begin
+    LBuf[LLen] := AnsiChar(Ord('0') + ACol + 1); Inc(LLen);
+  end;
+  LBuf[LLen] := 'H'; Inc(LLen);
+  Result := platform_console_write(1, @LBuf[0], LLen);
+end;
+
+function platform_console_clear_line: Int32;
+const
+  CLEAR_LINE = #27'[2K';
+begin
+  Result := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+end;
+
+function platform_console_clear_screen: Int32;
+const
+  CLEAR_SCREEN = #27'[2J';
+begin
+  Result := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+function TPlatformConsoleSize.IsValid: Boolean;
+begin Result := (Cols > 0) and (Rows > 0); end;
+function TPlatformConsoleSize.IsEmpty: Boolean;
+begin Result := (Cols = 0) or (Rows = 0); end;
+function TPlatformConsoleSize.CellCount: Int32;
+begin Result := Cols * Rows; end;
 function platform_console_is_terminal(AFd: Int32): Boolean;
 begin Result := False; end;
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
@@ -432,6 +722,17 @@ function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
+function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
+begin Result := -1; end;
+function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
+  const AFg: AnsiString): Int32;
+begin Result := -1; end;
+function platform_console_cursor_move(ACol, ARow: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_clear_line: Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_console_clear_screen: Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.
