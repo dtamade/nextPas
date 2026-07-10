@@ -761,6 +761,14 @@ begin
     LU := LU2;
 
   { 6. 正态近似计算 p-value }
+  { 小样本时正态近似不可靠，返回保守 p-value }
+  if (LN1 < 3) or (LN2 < 3) then
+  begin
+    { 对于极小样本（n<3），U 统计量的分布不适合正态近似。
+      返回 1.0 表示"无法检测差异"，避免误导性 p-value。 }
+    Exit(1.0);
+  end;
+
   LMU := LN1 * LN2 / 2.0;
 
   LSigma := Sqrt(LN1 * LN2 / 12.0 *
@@ -1107,7 +1115,7 @@ begin
   // 合并遍历两个排序数组
   while (LI < LN1) and (LJ < LN2) do
   begin
-    if LSorted1[LI] <= LSorted2[LJ] then
+    if LSorted1[LI] < LSorted2[LJ] then
     begin
       // 在 x = LSorted1[LI] 处计算两个经验分布函数
       LCDF1 := (LI + 1) * LInvN1;
@@ -1117,7 +1125,7 @@ begin
         LMaxD := LD;
       Inc(LI);
     end
-    else
+    else if LSorted1[LI] > LSorted2[LJ] then
     begin
       // 在 x = LSorted2[LJ] 处计算两个经验分布函数
       LCDF1 := LI * LInvN1;  // F1(x-) = i/n1
@@ -1125,6 +1133,22 @@ begin
       LD := Abs(LCDF1 - LCDF2);
       if LD > LMaxD then
         LMaxD := LD;
+      Inc(LJ);
+    end
+    else
+    begin
+      // 并列值: 两个样本同时推进，计算两个方向的 D
+      LCDF1 := (LI + 1) * LInvN1;
+      LCDF2 := LJ * LInvN2;
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      LCDF1 := LI * LInvN1;
+      LCDF2 := (LJ + 1) * LInvN2;
+      LD := Abs(LCDF1 - LCDF2);
+      if LD > LMaxD then
+        LMaxD := LD;
+      Inc(LI);
       Inc(LJ);
     end;
   end;
