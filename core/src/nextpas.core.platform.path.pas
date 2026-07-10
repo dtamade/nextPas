@@ -147,6 +147,7 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.error,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
@@ -1022,7 +1023,7 @@ begin
     Exit(PLATFORM_ERR_INVALID);
   LResult := nextpas.core.platform.posix.ffi.realpath(APath, @LResolved[0]);
   if LResult = nil then
-    Exit(-1);
+    Exit(-platform_get_errno);
   LLen := 0;
   while LResolved[LLen] <> #0 do Inc(LLen);
   I := LLen;
@@ -1045,19 +1046,19 @@ begin
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
 
   LLen := GetFullPathNameW(PWideChar(LPath), 0, nil, nil);
   if LLen = 0 then
-    Exit(-1);
+    Exit(-Int32(GetLastError));
   SetLength(LBuf, LLen + 1);
   LLen := GetFullPathNameW(PWideChar(LPath), DWORD(Length(LBuf)),
     @LBuf[0], nil);
   if (LLen = 0) or (LLen >= DWORD(Length(LBuf))) then
-    Exit(-1);
+    Exit(-Int32(GetLastError));
   LBuf[LLen] := #0;
   if not platform_windows_wide_to_utf8_checked(@LBuf[0], LUtf8) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   Result := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
 end;
 {$ENDIF}

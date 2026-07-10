@@ -662,9 +662,9 @@ begin
   if Result <> 0 then
     Exit;
   if LStat.Size < 0 then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if LStat.Size > High(Int32) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   ALen := Int32(LStat.Size);
   LCopyLen := ALen;
   if LCopyLen >= ABufSize then
