@@ -4,6 +4,8 @@ unit nextpas.core.base.utils;
 
 interface
 
+uses nextpas.core.base;
+
 {** 对象生命周期工具 *}
 procedure FreeAndNil(var AObj);
 procedure SafeFree(var AObj); inline;
@@ -26,9 +28,6 @@ function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boole
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
 implementation
-
-uses
-  nextpas.core.base;
 
 procedure FreeAndNil(var AObj);
 var LTemp: TObject;

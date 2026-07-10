@@ -149,6 +149,35 @@ type
     class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
   end;
 
+{ ============================================================ }
+{ Reference-counted object base class                          }
+{ ============================================================ }
+
+type
+  { TRefCountedObject — nextpas-owned reference counting base class
+    Replaces FPC's TInterfacedObject. Uses np_intf_addref/np_intf_release
+    runtime helpers for atomic reference counting.
+
+    Object memory layout (managed by compiler):
+      [prelude:16] [refcount:8] [vmt:8] [fields...]
+
+    Usage:
+      class TMyClass = class(TRefCountedObject, IMyInterface)
+    }
+  TRefCountedObject = class(TObject)
+  private
+    FRefCount: LongInt;
+  protected
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+    class function NewInstance: TObject; override;
+  public
+    function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; virtual;
+    function _AddRef: LongInt; virtual;
+    function _Release: LongInt; virtual;
+    property RefCount: LongInt read FRefCount;
+  end;
+
   THashCode = UInt32;
 
 { ============================================================ }
@@ -397,6 +426,67 @@ end;
 constructor EOverflow.Create(const AMessage: string);
 begin
   inherited Create(AMessage);
+end;
+
+{ TRefCountedObject }
+
+function TRefCountedObject.QueryInterface(constref Aiid: TGuid; out AObj): LongInt;
+begin
+  if GetInterface(Aiid, AObj) then
+    Result := 0 { S_OK }
+  else
+    Result := LongInt($80004002); { E_NOINTERFACE }
+end;
+
+function TRefCountedObject._AddRef: LongInt;
+begin
+  Result := FRefCount;
+  if Result <> 0 then
+  begin
+    if Result > 0 then
+      Result := InterLockedIncrement(FRefCount);
+    Exit;
+  end;
+  FRefCount := 1;
+  Result := 1;
+end;
+
+function TRefCountedObject._Release: LongInt;
+begin
+  Result := FRefCount;
+  if Result <> 1 then
+  begin
+    if Result <= 0 then
+      Exit;
+    Result := InterLockedDecrement(FRefCount);
+    if Result > 0 then
+      Exit;
+  end
+  else
+    Result := 0;
+  FRefCount := -1;
+  Self.Destroy;
+end;
+
+procedure TRefCountedObject.AfterConstruction;
+begin
+  if FRefCount = 1 then
+    FRefCount := 0
+  else
+    InterLockedDecrement(FRefCount);
+end;
+
+procedure TRefCountedObject.BeforeDestruction;
+begin
+  if FRefCount > 0 then
+    RunError(204);
+end;
+
+class function TRefCountedObject.NewInstance: TObject;
+begin
+  Result := inherited NewInstance;
+  if Result <> nil then
+    TRefCountedObject(Result).FRefCount := 1;
 end;
 
 { TPair<TKey, TValue> }
