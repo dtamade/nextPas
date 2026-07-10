@@ -16,6 +16,9 @@ type
     {** @desc 检查尺寸是否有效（大于 0）
         @return True 如果尺寸有效 *}
     function IsValid: Boolean; inline;
+    {** @desc 检查尺寸是否无效（任一维度为 0）
+        @return True 如果尺寸无效 *}
+    function IsInvalid: Boolean; inline;
     {** @desc 检查尺寸是否为空
         @return True 如果行或列为 0 *}
     function IsEmpty: Boolean; inline;
@@ -184,6 +187,11 @@ const
 function TPlatformConsoleSize.IsValid: Boolean;
 begin
   Result := (Cols > 0) and (Rows > 0);
+end;
+
+function TPlatformConsoleSize.IsInvalid: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
 end;
 
 function TPlatformConsoleSize.IsEmpty: Boolean;
@@ -436,6 +444,11 @@ type
 function TPlatformConsoleSize.IsValid: Boolean;
 begin
   Result := (Cols > 0) and (Rows > 0);
+end;
+
+function TPlatformConsoleSize.IsInvalid: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
 end;
 
 function TPlatformConsoleSize.IsEmpty: Boolean;

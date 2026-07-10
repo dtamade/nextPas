@@ -36,6 +36,17 @@ type
   TPlatformSockAddr = packed record
     Storage: array[0..127] of Byte;
     Len: Int32;
+    {** @desc 检查地址是否有效（Len > 0）
+        @return True 如果地址有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查地址是否为 IPv4
+        @return True 如果是 IPv4 地址 *}
+    function IsIPv4: Boolean; inline;
+    {** @desc 检查地址是否为 IPv6
+        @return True 如果是 IPv6 地址 *}
+    function IsIPv6: Boolean; inline;
+    {** @desc 清空地址结构 *}
+    procedure Clear; inline;
   end;
 
 const
@@ -91,6 +102,28 @@ begin
 {$ELSE}
   Result := Value < 0;
 {$ENDIF}
+end;
+
+{ TPlatformSockAddr helper methods }
+
+function TPlatformSockAddr.IsValid: Boolean;
+begin
+  Result := Len > 0;
+end;
+
+function TPlatformSockAddr.IsIPv4: Boolean;
+begin
+  Result := (Len > 0) and (PWord(@Storage[0])^ = 2); { AF_INET = 2 }
+end;
+
+function TPlatformSockAddr.IsIPv6: Boolean;
+begin
+  Result := (Len > 0) and (PWord(@Storage[0])^ = 10); { AF_INET6 = 10 }
+end;
+
+procedure TPlatformSockAddr.Clear;
+begin
+  FillChar(Self, SizeOf(Self), 0);
 end;
 
 function platform_htons(AHost: UInt16): UInt16;

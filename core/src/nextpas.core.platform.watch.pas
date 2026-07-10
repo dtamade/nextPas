@@ -19,6 +19,9 @@ type
     {** @desc 检查监视器是否有效
         @return True 如果监视器有效 *}
     function IsValid: Boolean; inline;
+    {** @desc 检查监视器是否无效
+        @return True 如果监视器无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
   {** @desc 文件系统监视事件 *}
@@ -38,6 +41,12 @@ type
     {** @desc 检查是否为目录修改事件
         @return True 如果是目录修改事件 *}
     function IsDirModified: Boolean; inline;
+    {** @desc 检查是否为创建事件
+        @return True 如果是创建事件 *}
+    function IsCreated: Boolean; inline;
+    {** @desc 检查是否为删除事件
+        @return True 如果是删除事件 *}
+    function IsDeleted: Boolean; inline;
     {** @desc 获取文件名字符串（带长度）
         @return 文件名字符串切片 *}
     function NameStr: AnsiString;
@@ -83,6 +92,11 @@ begin
   Result := Fd >= 0;
 end;
 
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin
   Result := Modified or Created or Deleted;
@@ -96,6 +110,16 @@ end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin
   Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin
+  Result := Created;
+end;
+
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin
+  Result := Deleted;
 end;
 
 function TPlatformWatchEvent.NameStr: AnsiString;
@@ -205,6 +229,16 @@ uses
   nextpas.core.platform.freebsd.ffi;
 {$ENDIF}
 
+function TPlatformWatcher.IsValid: Boolean;
+begin
+  Result := Fd >= 0;
+end;
+
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin
   Result := Modified or Created or Deleted;
@@ -218,6 +252,16 @@ end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin
   Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin
+  Result := Created;
+end;
+
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin
+  Result := Deleted;
 end;
 
 function TPlatformWatchEvent.NameStr: AnsiString;
@@ -328,12 +372,26 @@ end;
 uses
   nextpas.core.platform.windows.base;
 
+function TPlatformWatcher.IsValid: Boolean;
+begin
+  Result := Fd >= 0;
+end;
+
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin Result := Modified or Created or Deleted; end;
 function TPlatformWatchEvent.IsFileModified: Boolean;
 begin Result := Modified and (not IsDir); end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin Result := Modified and IsDir; end;
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin Result := Created; end;
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 

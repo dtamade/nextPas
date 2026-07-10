@@ -51,6 +51,9 @@ type
     {** @desc 检查是否为可写映射
         @return True 如果是可写映射 *}
     function IsWritable: Boolean; inline;
+    {** @desc 检查映射是否为空（Size = 0）
+        @return True 如果映射为空 *}
+    function IsEmpty: Boolean; inline;
   end;
 
 {** @desc 映射整个文件到内存（只读）
@@ -188,6 +191,11 @@ end;
 function TPlatformMappedFile.IsWritable: Boolean;
 begin
   Result := Access in [pmaWrite, pmaReadWrite];
+end;
+
+function TPlatformMappedFile.IsEmpty: Boolean;
+begin
+  Result := Size = 0;
 end;
 
 const

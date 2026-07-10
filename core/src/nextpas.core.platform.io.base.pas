@@ -62,6 +62,9 @@ type
     {** @desc 检查 poller 是否已初始化
         @return True 如果 poller 有效 *}
     function IsValid: Boolean; inline;
+    {** @desc 检查 poller 是否未初始化
+        @return True 如果 poller 无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
 implementation
@@ -77,6 +80,11 @@ begin
 {$ELSE}
   Result := False;
 {$ENDIF}
+end;
+
+function TPlatformPoller.IsInvalid: Boolean;
+begin
+  Result := not IsValid;
 end;
 
 function TPlatformPollEntry.IsReadable: Boolean;

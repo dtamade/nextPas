@@ -22,6 +22,9 @@ type
     {** @desc 检查管道是否完全有效（读写端都有效）
         @return True 如果管道完全有效 *}
     function IsValid: Boolean; inline;
+    {** @desc 检查管道是否无效（任一端无效）
+        @return True 如果管道无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
 {** @desc 创建匿名管道
@@ -77,6 +80,11 @@ end;
 function TPlatformPipe.IsValid: Boolean;
 begin
   Result := (ReadFd >= 0) and (WriteFd >= 0);
+end;
+
+function TPlatformPipe.IsInvalid: Boolean;
+begin
+  Result := (ReadFd < 0) or (WriteFd < 0);
 end;
 
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
