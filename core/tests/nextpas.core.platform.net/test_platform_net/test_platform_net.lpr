@@ -7,6 +7,7 @@ program test_platform_net;
 
 uses
   nextpas.core.platform.socket,
+  nextpas.core.platform.error,
   nextpas.core.test
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base,
