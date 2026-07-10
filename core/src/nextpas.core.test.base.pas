@@ -314,7 +314,7 @@ var
 begin
   LOldLen := Length(AResults);
   LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then
+  if LCap > LOldLen then
     SetLength(AResults, LCap);
   AResults[LOldLen] := AResult;
   LNewLen := LOldLen + 1;
@@ -533,7 +533,7 @@ var
 begin
   LOldLen := Length(AEntries);
   LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then
+  if LCap > LOldLen then
     SetLength(AEntries, LCap);
   AEntries[LOldLen] := AEntry;
   SetLength(AEntries, LOldLen + 1);
@@ -553,7 +553,7 @@ function GrowCapacity(ALen, AInitCap: Integer): Integer;
 begin
   if ALen < AInitCap then
     Result := AInitCap
-  else if ALen < MaxInt div 2 then
+  else if ALen <= MaxInt div 2 then
     Result := ALen * 2
   else
     Result := MaxInt;
@@ -565,7 +565,7 @@ var
 begin
   LOldLen := Length(ACleanups);
   LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(ACleanups, LCap);
+  if LCap > LOldLen then SetLength(ACleanups, LCap);
   Result := LOldLen;
 end;
 
