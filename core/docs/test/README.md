@@ -2,7 +2,7 @@
 
 > 模块负责人: Claude (test worktree)
 > 最后更新: 2026-07-09
-> 治理状态: v8.0, 18 源文件, 12 测试套件, ~735 测试 (不含 stress)
+> 治理状态: v8.0, 17 源文件, 12 测试套件, ~824 测试 (不含 stress)
 
 ## Overview
 
@@ -529,16 +529,16 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 | test_assertions | 157 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
 | test_expect | 173 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array variants |
 | test_runner | 118 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable, retry, shuffle, failfast |
+| test_mock | 93 | TMock setup/verify, typed values, call ordering, CalledWith |
+| test_output | 81 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP |
+| test_prop | 76 | Property testing generators, fuzzing, corpus, shrinking |
 | test_parallel | 54 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult, cleanup |
 | test_lifecycle | 36 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, EachCleanups |
-| test_stress | 10000+ | Stress tests (excluded from normal count) |
-| test_output | 81 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP |
-| test_mock | 80 | TMock setup/verify, typed values, call ordering, CalledWith (13 known ExpectFailWithMock design failures) |
 | test_advanced | 19 | Retry, shuffle, failfast, short mode, verbose, progress, timeout |
-| test_diagnostics | 15 | Test filter, tag filter, timeout |
-| test_subtests | 10 | Nested subtests, RunNested API, 3-level failure propagation |
-| test_prop | ~10 | Property testing generators, fuzzing, corpus, shrinking |
-| **Total** | **~735** | (不含 stress: 10000+) |
+| test_diagnostics | 15 | Error vs failure distinction, JUnit/TAP/JSON diagnostic output |
+| test_subtests | 2 | Nested subtests, RunNested API |
+| test_stress | 10000+ | Stress tests (excluded from normal count) |
+| **Total** | **~824** | (不含 stress: 10000+) |
 
 ---
 
@@ -732,11 +732,11 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test.runner.parallel.pas | 521 | L3 | 并行执行、timeout watchdog |
 | test.discovery.pas | 177 | L4 | RTTI 自动发现 |
 | test.mock.pas | 1529 | L4 | Mock 框架 |
-| test.prop.pas | 2704 | L4 | 属性测试、模糊测试、语料库 |
+| test.prop.pas | 2695 | L4 | 属性测试、模糊测试、语料库 |
 | test.helpers.pas | 178 | L4 | 测试辅助 (ExpectFail, WithMock) |
 | test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
 | test.pas | 537 | 门面 | 纯 re-export |
-| **总计** | **14680** | | |
+| **总计** | **15208** | | |
 
 ### 测试覆盖矩阵
 
@@ -745,16 +745,16 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test_assertions | check.pas, expect.pas | 157 |
 | test_expect | expect.pas | 173 |
 | test_runner | runner.pas | 118 |
+| test_mock | mock.pas | 93 |
+| test_output | output.pas, output.json.pas, output.tap.pas | 81 |
+| test_prop | prop.pas | 76 |
 | test_parallel | runner.parallel.pas | 54 |
 | test_lifecycle | runner.pas (setup/teardown) | 36 |
-| test_stress | runner.pas (stress) | 10000+ |
-| test_output | output.pas, output.json.pas, output.tap.pas | 81 |
-| test_mock | mock.pas | 80 |
 | test_advanced | runner.pas (advanced) | 19 |
-| test_diagnostics | runner.pas (filter/timeout) | 15 |
-| test_subtests | runner.pas (subtests) | 10 |
-| test_prop | prop.pas | ~10 |
-| **总计** | | **~735** (不含 stress) |
+| test_diagnostics | runner.pas (diagnostics) | 15 |
+| test_subtests | runner.pas (subtests) | 2 |
+| test_stress | runner.pas (stress) | 10000+ |
+| **总计** | | **~824** (不含 stress) |
 
 ### 文档索引
 
