@@ -15,6 +15,7 @@ uses
   nextpas.core.test.base,
   nextpas.core.test.config,
   nextpas.core.test.output,
+  nextpas.core.test.runner.context,
   nextpas.core.sync.intf,
   nextpas.core.platform.thread,
   nextpas.core.time,
@@ -137,7 +138,17 @@ begin
   LRec^.ErrorMsg := '';
   LRec^.Status := tsPassed;
 
-  platform_thread_create(LHandle, @TimeoutWorker, LRec);
+  { P1 fix: check thread creation result — invalid handle would cause
+    undefined behavior in timed-join and detach. }
+  if platform_thread_create(LHandle, @TimeoutWorker, LRec) <> 0 then
+  begin
+    AStatus := tsError;
+    AMsg := 'failed to create timeout worker thread';
+    Finalize(LRec^);
+    FreeMem(LRec);
+    Result := False;
+    Exit;
+  end;
 
   { C-02: Use timed-join instead of poll loop — blocks efficiently via
     pthread_timedjoin_np, no CPU waste, instant detection on completion. }
@@ -285,6 +296,8 @@ var
   LCIdx: Integer;
   LDurMs: Int64;
   LProgressPrefix: string;
+  LSubCtx: TTestContext;
+  LRepeatCount, LRepeatI: Integer;
 begin
   Result := nil;
   R := PThreadRec(AArg);
@@ -299,6 +312,13 @@ begin
   LTimeoutMs := GetTestTimeout(LConfig);
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
+  { P1 fix: install TTestContext in parallel workers so Ctx.Log, Ctx.OnCleanup,
+    Ctx.TempDir, and Ctx.SetEnv work for regular tests under RunParallel. }
+  if R^.Entry.Kind = ekTest then
+  begin
+    LSubCtx := TTestContext.Create(R^.Entry.Name, LConfig);
+    SetCurrentTestContext(LSubCtx);
+  end;
   try
 
   { Subtests are not supported in parallel mode — skip gracefully }
@@ -348,6 +368,15 @@ begin
 
   if LStatus = tsPassed then
   begin
+    { P2 fix: add RepeatCount support to parallel workers.
+      Mirrors serial RunWithResult repeat logic — run test N times,
+      report the last result. }
+    if R^.Entry.RepeatCount > 1 then
+      LRepeatCount := R^.Entry.RepeatCount
+    else
+      LRepeatCount := 1;
+    for LRepeatI := 1 to LRepeatCount do
+    begin
     { R4-04: Retry loop — mirrors serial RunWithResult retry logic }
     LTotalRetries := R^.Entry.RetryCount;
     if LTotalRetries = 0 then
@@ -414,6 +443,7 @@ begin
         SafeRelease(R^.Mtx, LConfig);
       end;
     until False;
+    end; { end repeat loop }
   end;
 
   { R4-03: AfterEach always runs, even when BeforeEach skipped/failed }
@@ -492,6 +522,9 @@ begin
       FreeMem(GExecState);
       GExecState := nil;
     end;
+    { P1 fix: release TTestContext installed for parallel workers. }
+    SetCurrentTestContext(nil);
+    LSubCtx := nil;
   end;
   except
     { Top-level catch: prevent worker thread exceptions from crashing the process.

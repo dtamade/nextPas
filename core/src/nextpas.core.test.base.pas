@@ -635,6 +635,9 @@ end;
 procedure ClassifyTestException(E: Exception;
   out AStatus: TTestStatus; out AMsg: string);
 begin
+  { Check specific subtypes first, before the broad EAbort check.
+    ETestSkipped and EAssertionFailed both descend from EAbort,
+    so the EAbort guard must come AFTER them. }
   if E is ETestSkipped then
   begin
     AStatus := tsSkipped;
@@ -644,6 +647,13 @@ begin
   begin
     AStatus := tsFailed;
     AMsg := AppendTestTrace(E.Message);
+  end
+  else if E is EAbort then
+  begin
+    { P1 fix: re-raise EAbort — user aborts must propagate, not be swallowed
+      as tsError. This matches the public contract that EAbort bypasses the
+      test framework's exception handling. }
+    raise E;
   end
   else
   begin

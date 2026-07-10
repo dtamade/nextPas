@@ -365,22 +365,33 @@ end;
 
 function FormatFailDetail(const AMsg: string; const AConfig: TTestConfig): string;
 var
-  LBracketPos: Integer;
+  LBracketPos, LColonPos: Integer;
   LMsg, LTrace: string;
 begin
   if AMsg = '' then
     Exit(AnsiRed('(assertion failed)', AConfig));
   { Extract [file:line] trace appended by AppendTestTrace.
-    Pattern: 'message [file:line]' — find last ' [' and split. }
+    Pattern: 'message [file:line]' — find last ' [' and split.
+    P2 #20 fix: validate that trace contains ':' (file:line pattern) to avoid
+    misclassifying brackets in assertion messages like "Expected [1] got [2]". }
   LBracketPos := Length(AMsg) - 1;
   while (LBracketPos > 1) and not ((AMsg[LBracketPos] = ' ') and (AMsg[LBracketPos + 1] = '[')) do
     Dec(LBracketPos);
   if LBracketPos > 1 then
   begin
-    LMsg := Copy(AMsg, 1, LBracketPos - 1);
     LTrace := Copy(AMsg, LBracketPos + 1, MaxInt);
-    Result := AnsiRed(LMsg, AConfig) + #10 +
-      '    ' + AnsiDim(LTrace, AConfig);
+    { Validate trace looks like [file:line] — must contain ':' and end with ']' }
+    LColonPos := Pos(':', LTrace);
+    if (LColonPos > 2) and (Length(LTrace) > 2) and
+       (LTrace[Length(LTrace)] = ']') and
+       (LColonPos < Length(LTrace) - 1) then
+    begin
+      LMsg := Copy(AMsg, 1, LBracketPos - 1);
+      Result := AnsiRed(LMsg, AConfig) + #10 +
+        '    ' + AnsiDim(LTrace, AConfig);
+    end
+    else
+      Result := AnsiRed(AMsg, AConfig);
   end
   else
     Result := AnsiRed(AMsg, AConfig);
@@ -1011,6 +1022,8 @@ begin
       LTotalFailures := LTotalFailures - LTotalErrors
     else
       LTotalFailures := 0;
+    { P2 #19 fix: include errors in total test count }
+    LTotalTests := LTotalTests + LTotalErrors;
 
     LSb.AppendStr('<testsuites name="' + XmlEscape(ASuiteName) +
       '" tests="' + IntToStr(LTotalTests) +
@@ -1037,8 +1050,9 @@ begin
         LRunResult.Failed := LRunResult.Failed - LSuiteErrors
       else
         LRunResult.Failed := 0;
+      { P2 #19 fix: include errors in per-suite test count }
       LSb.AppendStr('  <testsuite name="' + XmlEscape(LSuiteName) +
-        '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped) +
+        '" tests="' + IntToStr(LRunResult.Passed + LRunResult.Failed + LRunResult.Skipped + LSuiteErrors) +
         '" failures="' + IntToStr(LRunResult.Failed) +
         '" errors="' + IntToStr(LSuiteErrors) +
         '" skipped="' + IntToStr(LRunResult.Skipped) + '">' + LineEnding);

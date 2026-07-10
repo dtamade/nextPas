@@ -208,7 +208,8 @@ type
     class function Create(const ACacheDir: string): TTestCache; static;
     function  ComputeKey(const ASources: array of string;
                 const ACompilerVersion: string;
-                const AConfig: TTestConfig): string;
+                const AConfig: TTestConfig;
+                const ASuiteName: string = ''): string;
     function  Get(const AKey: string; ATestName: string;
                 out AEntry: TCacheEntry): Boolean;
     procedure Put(const AKey: string; ATestName: string;
@@ -909,16 +910,21 @@ begin
 end;
 
 function TTestCache.ComputeKey(const ASources: array of string;
-  const ACompilerVersion: string; const AConfig: TTestConfig): string;
+  const ACompilerVersion: string; const AConfig: TTestConfig;
+  const ASuiteName: string): string;
 var
   LHash: UInt64;
   I, J: Integer;
   LContent: string;
 begin
-  { Simple hash: combine source file contents + compiler version + config flags }
+  { Simple hash: combine source file paths + contents + compiler version + config flags }
   LHash := 14695981039346656037; { FNV-1a offset basis }
   for I := 0 to High(ASources) do
   begin
+    { P3 #22 fix: hash file path itself (not just contents) to avoid
+      non-injective encoding when different files have same content }
+    for J := 1 to Length(ASources[I]) do
+      LHash := (LHash xor Ord(ASources[I][J])) * 1099511628211;
     try
       if FileExists(ASources[I]) then
       begin
@@ -952,6 +958,10 @@ begin
   { Hash run pattern — different patterns select different tests, must affect cache key }
   for I := 1 to Length(AConfig.RunPattern) do
     LHash := (LHash xor Ord(AConfig.RunPattern[I])) * 1099511628211;
+  { Hash suite name — different suites with same source/config must not collide
+    (P1 fix: cross-suite cache naming collision) }
+  for I := 1 to Length(ASuiteName) do
+    LHash := (LHash xor Ord(ASuiteName[I])) * 1099511628211;
   Result := IntToHex(LHash, 16);
 end;
 
