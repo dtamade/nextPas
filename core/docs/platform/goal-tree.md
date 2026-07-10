@@ -15,22 +15,23 @@ source-contract or forced-compile only.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across all facade modules | keep gates green |
-| Windows x86_64 | focused-runtime 14 modules; wine-runtime-smoke 20 modules | promote to ci-matrix |
+| Windows x86_64 | focused-runtime 14 modules; wine-runtime-smoke 20 modules; real-Windows runtime gap remains | promote to ci-matrix |
 | macOS / FreeBSD | source-contract and selected compile fragments | runtime evidence |
 | Android | forced-compile fragments | runtime evidence |
 
 ## Evidence Gates
 
 Windows readiness and completion proof is split across:
-- `test_poller_windows_contract` — IOCP/poller source-contract
+- `test_poller_windows_contract` — IOCP/poller source-contract (IOCP read/write operations)
 - `test_poller_windows_compile_gate` — consumer IOCP forced compile
 - `test_platform_windows_poller_compile_gate` — platform readiness poller
 - `test_async` — Linux async consumer runtime
-- `test_platform_resource` — resource limits (Linux runtime, Windows unsupported)
+- `test_platform_resource` — Linux resource limits (Linux runtime, Windows unsupported)
 - `test_platform_memory` / `test_platform_memory_secure_zero_compile_gate` — secure zero
-- `test_platform_files_android_compile` / `test_platform_mmap_android_compile` — Android
+- `test_platform_files_android_compile` / `test_platform_mmap_android_compile` — Android files/mmap forced-compile proof only
 
-These gates prove source shape and forced compile coherence, not Windows runtime behavior.
+These gates prove source shape and forced Windows compile coherence, not Windows runtime behavior.
+Focused runtime gates use heaptrc for leak-proof validation.
 
 ## Wine Runtime Smoke Evidence (20 modules)
 
@@ -75,7 +76,7 @@ args (FPC RTL ParamStr cross-platform), freetype/net (extra deps), pty (Unix-onl
 | --- | --- | --- | --- |
 | P1 Host ABI inventory | Host constants, records, handles | done | keep gap matrix current |
 | P2 Feature facades | 14 portable APIs | focused-runtime on Windows | expand consumer coverage |
-| P3 Readiness lane | platform_poller_*, wake, userdata | Linux runtime; Wine CI matrix | real-Windows CI runner |
+| P3 Readiness lane | platform_poller_*, wake, userdata | Linux runtime; Wine CI matrix; Windows readiness poller | real-Windows CI runner |
 | P4 Completion lane | IOCP/proactor | focused-runtime | promote to ci-matrix |
 | P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile gate |
 | P6 Benchmarks | Performance baseline | 14-operation baseline | cross-platform comparison |
@@ -94,7 +95,7 @@ args (FPC RTL ParamStr cross-platform), freetype/net (extra deps), pty (Unix-onl
 |-----------|--------|--------|
 | P7 macOS/Darwin | Deferred | Requires Darwin cross-compiler toolchain |
 | P8 FreeBSD | Deferred | Requires cross-platform-actions CI |
-| P9 Android | Deferred | NDK + bionic libc + syscall differences |
+| P9 Android | Deferred | NDK + bionic libc + syscall differences; Android resource limits source-contract only |
 
 ## Evidence rules
 

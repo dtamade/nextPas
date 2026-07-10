@@ -183,6 +183,9 @@ type
     Generation: UInt32;
     Mutex: TPlatformMutex;
     CondVar: TPlatformCondVar;
+    {** @desc 检查屏障是否已同步（所有线程已到达）
+        @return True 如果所有线程已到达 *}
+    function IsSynchronized: Boolean; inline;
   end;
 
 {** @desc 初始化屏障
@@ -206,6 +209,9 @@ type
   TPlatformOnce = record
     State: Int32; { 0=uninit, 1=running, 2=done }
     Mutex: TPlatformMutex;
+    {** @desc 检查是否已完成执行
+        @return True 如果已执行完成 *}
+    function IsDone: Boolean; inline;
   end;
 
 function platform_once_init(var AOnce: TPlatformOnce): Int32;
@@ -243,6 +249,18 @@ uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 {$ENDIF}
+
+{ Helper methods }
+
+function TPlatformBarrier.IsSynchronized: Boolean;
+begin
+  Result := (Waiting >= Count) or (Count <= 1);
+end;
+
+function TPlatformOnce.IsDone: Boolean;
+begin
+  Result := InterlockedCompareExchange(State, 2, 2) = 2;
+end;
 
 function platform_sync_validate_address(AAddr: PInt32): Int32; inline;
 begin
