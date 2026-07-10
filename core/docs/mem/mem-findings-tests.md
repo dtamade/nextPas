@@ -129,13 +129,13 @@
   - 边界测试: MutexReleaseWithoutLock, RwLockMultipleReaders, MutexRecursiveAcquire
 - **状态**: 已修复。并发测试覆盖充分。
 
-### [TC-013] test_mapped_ring_buffer_compile_gate Makefile 缺少 clean target
-- **严重度**: minor
+### [TC-013] test_mapped_ring_buffer_compile_gate Makefile 缺少 clean target — ✅ 已关闭
+- **严重度**: minor → 已关闭
 - **维度**: infrastructure
-- **文件**: `test_mapped_ring_buffer_compile_gate/Makefile`
-- **描述**: Makefile 可能缺少 `clean` target（make clean 报错"没有规则可制作目标"）。
-- **影响**: 无法清理构建产物。
-- **建议**: 添加 clean target。
+- **文件**: `core/tests/nextpas.core.io/test_mapped_ring_buffer_compile_gate/Makefile`
+- **描述**: 原 finding 指向迁移期的 mem compatibility gate；deprecated mem wrapper 和该 gate 已在迁移完成后删除。
+- **状态**: 当前 io owner gate 引用 `common_compile_gate.mk`，由共享规则提供 `clean` target，避免每个 compile gate 重复实现清理逻辑。
+- **验证**: `make -C core/tests/nextpas.core.io/test_mapped_ring_buffer_compile_gate clean test` 通过。
 
 ### [TC-014] 缺少模块级顶层 Makefile — ✅ 已修复
 - **严重度**: minor → 已关闭

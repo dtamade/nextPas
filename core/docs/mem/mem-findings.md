@@ -97,7 +97,7 @@
 - TC-010: mem.adapters.pas 适配器无测试
 - TC-011: 缺少 OOM 测试（test_oom 编译失败）
 - TC-012: 并发测试缺竞争压力测试
-- TC-013: mapped_ring_buffer_compile_gate Makefile 缺 clean target
+- TC-013: mapped_ring_buffer compile gate 缺 clean target — ✅ 已关闭（当前 io owner gate 通过共享规则提供 clean）
 - TC-014: 缺少模块级顶层 Makefile
 
 </details>

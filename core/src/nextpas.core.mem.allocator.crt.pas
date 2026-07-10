@@ -68,10 +68,11 @@ function TCrtAllocator.Traits: TAllocatorTraits; inline;
 begin
   // CRT semantics:
   // - AllocMem uses calloc path => zero initialized; GetMem not guaranteed
+  // - Standard CRT allocation entry points are thread-safe
   // - No native aligned API exposed via this allocator
   // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := False;
+  Result.ThreadSafe := True;
   Result.SupportsRealloc := False; // CRT realloc not exposed via this allocator
 end;
 

@@ -123,21 +123,29 @@ end;
 function TBatchAllocator.BatchAlloc(ASize: SizeUInt; ACount: Integer;
   out ABlocks: array of Pointer): Integer;
 var
-  I, LCount: Integer;
+  LI: Integer;
+  LCount: Integer;
 begin
   LCount := ACount;
+  if LCount < 0 then
+    LCount := 0;
   if LCount > BATCH_MAX_BLOCKS then
     LCount := BATCH_MAX_BLOCKS;
   if LCount > Length(ABlocks) then
     LCount := Length(ABlocks);
 
-  for I := 0 to LCount - 1 do
+  for LI := 0 to LCount - 1 do
   begin
-    ABlocks[I] := FInner.GetMem(ASize);
-    if ABlocks[I] = nil then
+    if ASize = 0 then
+      ABlocks[LI] := nil
+    else
     begin
-      LCount := I;
-      Break;
+      ABlocks[LI] := FInner.GetMem(ASize);
+      if ABlocks[LI] = nil then
+      begin
+        LCount := LI;
+        Break;
+      end;
     end;
   end;
 

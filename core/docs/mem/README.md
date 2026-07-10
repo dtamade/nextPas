@@ -12,6 +12,56 @@
 - **接口优雅**：遵循 Rust trait / Go interface 风格的接口设计
 - **生产级质量**：完整的测试覆盖和基准对照
 
+## 接口与 owner 关系
+
+```mermaid
+flowchart LR
+  subgraph contracts[公共契约]
+    IArena
+    IAllocator
+    IPool
+    IMemoryPool
+    IBlockPool
+    IBlockPoolBatch
+  end
+
+  IMemoryPool -->|继承| IPool
+  IBlockPoolBatch -->|继承| IBlockPool
+
+  subgraph implementations[mem 实现与包装器]
+    TLocalArena
+    TChunkedArena
+    TArenaConcurrent
+    TSlabPool
+    TPoolAllocator
+    TAllocStatsAllocator
+  end
+
+  TLocalArena -.实现.-> IArena
+  TChunkedArena -.实现.-> IArena
+  TArenaConcurrent -.实现.-> IArena
+  TSlabPool -.实现.-> IMemoryPool
+  TSlabPool -.实现.-> IAllocator
+  TPoolAllocator -.实现.-> IAllocator
+  TAllocStatsAllocator -.实现并包装.-> IAllocator
+
+  subgraph mappedOwners[映射内存 owner]
+    PlatformMmap[platform.mmap<br/>宿主映射原语]
+    MemMemoryMap[mem.memory_map<br/>内存映射载体]
+    MemMappedSlab[mem.mapped_slab_pool<br/>匿名映射分配器]
+    IoMappedRing[io.mapped.ring_buffer<br/>文件与共享 ring]
+    IoMappedSlab[io.mapped.slab_pool<br/>文件与共享 slab]
+  end
+
+  PlatformMmap --> MemMemoryMap
+  MemMemoryMap --> MemMappedSlab
+  MemMemoryMap --> IoMappedRing
+  MemMemoryMap --> IoMappedSlab
+```
+
+实线表示接口继承或 owner 依赖，虚线表示实现或包装关系。文件与共享映射数据结构归 `io`；
+`mem` 只保留内存原语和匿名映射分配器，不再提供 mapped ring compatibility wrapper。
+
 ## Arena 选择指南
 
 | 场景            | 推荐                           | 原因                        |
@@ -161,6 +211,8 @@ end;
 - **AllocFast 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
 - **大对象生命周期**：不受 mark/reset 影响；`FLargeBlocks` metadata 与对象映射同生命周期，只在 `Release` 时统一释放/关闭
 - **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
+- **工具函数名称**：`nextpas.core.mem.utils.Copy`、`Zero`、`Compare` 保留现有公共名称；
+  同时导入同名符号时必须使用完整单元名调用，避免与 `System` 或其他单元的符号产生歧义
 - `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
 - `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
 - mem 侧 mapped slab API must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
