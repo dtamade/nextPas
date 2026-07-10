@@ -2,6 +2,13 @@ unit nextpas.core.math.easing;
 
 {$I nextpas.core.settings.inc}
 
+{ Easing functions for animation and interpolation.
+  Note: All easing functions operate on Double precision only.
+  For Single precision, cast to Double and back:
+    Result := Single(EaseInQuad(Double(AValue)));
+  This matches the common use case where easing is applied to
+  animation parameters that are typically Double precision. }
+
 interface
 
 type

@@ -290,8 +290,10 @@ type
 
 {$PUSH}
 {$CODEALIGN RECORDMIN=32}
-  // 512-bit F32x16 掩码 (32 字节对齐)
-  // Note: bits 作为独立字段，不与 m 数组重叠
+  {** 512-bit F32x16 mask (32-byte aligned)
+    Note: bits field is separate from m array, not overlapping.
+    For AVX-512 k register compatibility, consider using variant record
+    where bits overlays the low bits of m[] to reduce memory usage. }
   TMaskF32x16 = record
     m: array[0..15] of UInt32;     // 每个元素 0 或 $FFFFFFFF
     bits: UInt16;                   // AVX-512 k 寄存器位模式

@@ -2,6 +2,21 @@ unit nextpas.core.math;
 
 {$I nextpas.core.settings.inc}
 
+{ Math facade unit - provides flat API for all math functions.
+  This unit re-exports functions from sub-units for convenience.
+  For better compile times or to avoid the 1200+ line facade,
+  consider using specific sub-units directly:
+  - nextpas.core.math.scalar (basic math functions)
+  - nextpas.core.math.trig (trigonometric functions)
+  - nextpas.core.math.vec (vector types and operations)
+  - nextpas.core.math.mat (matrix types and operations)
+  - nextpas.core.math.quat (quaternion types and operations)
+  - nextpas.core.math.transform (transformation matrices)
+  - nextpas.core.math.easing (easing functions)
+  - nextpas.core.math.random (random number generation)
+  - nextpas.core.math.batch (batch operations)
+}
+
 interface
 
 uses

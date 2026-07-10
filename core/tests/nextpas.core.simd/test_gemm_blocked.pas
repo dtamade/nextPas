@@ -3,6 +3,12 @@ program test_gemm_blocked;
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
+{ Test blocked GEMM implementation
+  Note: This test verifies correctness of the blocked GEMM implementation.
+  For cross-backend correctness verification, consider adding tests that
+  compare results between SSE2, SSE2-blocked, NEON, Parallel, and Strassen
+  implementations to ensure they produce identical results. }
+
 uses
   nextpas.core.text.conv, nextpas.core.simd,
   nextpas.core.simd.alloc, nextpas.core.simd.arrays.typed,

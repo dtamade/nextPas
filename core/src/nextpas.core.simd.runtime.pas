@@ -77,6 +77,9 @@ var
   g_SimdRuntimeState: TSimdRuntimePublishedState;
   g_SimdRuntimeTargetDispatchPtr: Pointer = nil;
   g_SimdRuntimeTargetVersion: UInt32 = 0;
+  { Lock for backend switching - only used during initialization,
+    not on hot paths. If runtime switching is needed, consider
+    seqlock or RCU pattern to avoid lock contention. }
   g_SimdRuntimeRebindLock: TRTLCriticalSection;
 
 procedure InitializeSimdRuntimePublishedState(out aState: TSimdRuntimePublishedState);

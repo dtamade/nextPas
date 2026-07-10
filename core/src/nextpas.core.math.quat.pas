@@ -632,7 +632,7 @@ end;
 
 function TQuatf.IsNormalized: Boolean;
 begin
-  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < 1e-6;
+  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < SINGLE_QUAT_EPSILON;
 end;
 
 class function TQuatf.FromEuler(const AYaw, APitch, ARoll: Single): TQuatf;
@@ -871,7 +871,7 @@ end;
 
 function TQuatd.IsNormalized: Boolean;
 begin
-  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < 1e-6;
+  Result := Abs(X * X + Y * Y + Z * Z + W * W - 1.0) < DOUBLE_QUAT_EPSILON;
 end;
 
 class function TQuatd.FromEuler(const AYaw, APitch, ARoll: Double): TQuatd;
