@@ -384,6 +384,7 @@ var
   LI: PtrUInt;
   LOldIdx, LNewIdx: PtrUInt;
 begin
+  Result := False;
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   if ANewCapacity = 0 then
@@ -391,39 +392,48 @@ begin
   { Acquire resize flag }
   if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
     Exit(False);
-  { Compute new capacity (power of 2, at least 1) }
-  LNewCap := LockFreeNextPow2(ANewCapacity);
-  if LNewCap < 1 then
-    LNewCap := 1;
-  LNewMask := LNewCap - 1;
-  { Allocate new slots }
-  SetLength(LNewSlots, LNewCap);
-  for LI := 0 to LNewCap - 1 do
-    LNewSlots[LI].Sequence := Int64(LI);
-  { Migrate existing data: read positions first }
-  LSend := AtomicLoad64(FSendPos, moRelaxed);
-  LRecv := AtomicLoad64(FRecvPos, moRelaxed);
-  if LSend > LRecv then
-  begin
-    LCount := PtrUInt(LSend - LRecv);
+  try
+    { Compute new capacity (power of 2, at least 1) }
+    LNewCap := LockFreeNextPow2(ANewCapacity);
+    if LNewCap < 1 then
+      LNewCap := 1;
+    if LNewCap = FCapacity then
+      Exit(True);
+
+    LSend := AtomicLoad64(FSendPos, moRelaxed);
+    LRecv := AtomicLoad64(FRecvPos, moRelaxed);
+    if LSend > LRecv then
+      LCount := PtrUInt(LSend - LRecv)
+    else
+      LCount := 0;
     if LCount > LNewCap then
-      LCount := LNewCap;
-    for LI := 0 to LCount - 1 do
-    begin
-      LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
-      LNewIdx := PtrUInt(LRecv + Int64(LI)) and LNewMask;
-      LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-      { Mark slot as ready for receive: sequence = position + 1 }
-      AtomicStore64(LNewSlots[LNewIdx].Sequence, LRecv + Int64(LI) + 1, moRelease);
-    end;
+      Exit(False);
+
+    LNewMask := LNewCap - 1;
+    { Allocate new slots }
+    SetLength(LNewSlots, LNewCap);
+    for LI := 0 to LNewCap - 1 do
+      LNewSlots[LI].Sequence := Int64(LI);
+
+    { Migrate existing data: read positions first }
+    if LCount > 0 then
+      for LI := 0 to LCount - 1 do
+      begin
+        LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
+        LNewIdx := PtrUInt(LRecv + Int64(LI)) and LNewMask;
+        LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
+        { Mark slot as ready for receive: sequence = position + 1 }
+        AtomicStore64(LNewSlots[LNewIdx].Sequence, LRecv + Int64(LI) + 1, moRelease);
+      end;
+
+    { Swap buffer pointers }
+    FSlots := LNewSlots;
+    FCapacity := LNewCap;
+    FMask := LNewMask;
+    Result := True;
+  finally
+    AtomicStore32(FResizing, 0, moRelease);
   end;
-  { Swap buffer pointers }
-  FSlots := LNewSlots;
-  FCapacity := LNewCap;
-  FMask := LNewMask;
-  { Release resize flag }
-  AtomicStore32(FResizing, 0, moRelease);
-  Result := True;
 end;
 
 end.

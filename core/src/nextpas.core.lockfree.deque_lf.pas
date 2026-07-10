@@ -111,13 +111,13 @@ end;
 
 procedure TLockFreeDeque.AcquireLock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     { spin };
 end;
 
 procedure TLockFreeDeque.ReleaseLock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TLockFreeDeque.IncIdx(AIdx, ADelta: Int32): Int32;

@@ -6,7 +6,8 @@ uses
   SysUtils,
   nextpas.core.lockfree.timeoutqueue,
   nextpas.core.lockfree,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.time.sleep;
 
 type
   TIntTimeoutQueue = specialize TTimeoutQueueImpl<Integer>;
@@ -85,6 +86,27 @@ begin
   end;
 end;
 
+procedure TestTimeoutQueueSkipsExpiredHead;
+var
+  LQueue: TIntTimeoutQueue;
+  LValue: Integer;
+  LResult: TLockFreeTimeoutQueueResult;
+begin
+  LQueue := TIntTimeoutQueue.Create(8, 1000000); // 1ms timeout
+  try
+    Check(LQueue.TryEnqueue(1), 'Should enqueue expired candidate');
+    SleepMs(5);
+    Check(LQueue.TryEnqueue(2), 'Should enqueue fresh value');
+
+    LResult := LQueue.TryDequeue(LValue);
+    Check(tqDequeued = LResult, 'Should dequeue after skipping expired head');
+    CheckEqual(2, LValue, 'Expired head should be skipped');
+    Check(LQueue.IsEmpty, 'Queue should be empty after draining fresh value');
+  finally
+    LQueue.Free;
+  end;
+end;
+
 procedure TestTimeoutQueueClose;
 var
   LQueue: TIntTimeoutQueue;
@@ -128,6 +150,9 @@ begin
 
   TestTimeoutQueueFIFO;
   WriteLn('  + FIFO order');
+
+  TestTimeoutQueueSkipsExpiredHead;
+  WriteLn('  + Expired head skip');
 
   TestTimeoutQueueClose;
   WriteLn('  + Close semantics');

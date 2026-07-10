@@ -17,8 +17,13 @@ type
       适用场景：生产者-消费者、日志缓冲、实时系统。
   }
   generic TRingBufferImpl<T> = class
+  private type
+    TSlot = record
+      Sequence: Int64;
+      Value: T;
+    end;
   private
-    FBuffer: array of T;
+    FSlots: array of TSlot;
     FCapacity: Int64;
     FMask: Int64;
     FHead: Int64;
@@ -63,13 +68,17 @@ begin
 end;
 
 constructor TRingBufferImpl.Create(const ACapacity: Int64);
+var
+  LI: Int64;
 begin
   if ACapacity <= 0 then
     raise EArgumentError.Create('TRingBuffer: capacity must be > 0');
   inherited Create;
   FCapacity := LockFreeNextPow2(ACapacity);
   FMask := FCapacity - 1;
-  SetLength(FBuffer, FCapacity);
+  SetLength(FSlots, FCapacity);
+  for LI := 0 to FCapacity - 1 do
+    FSlots[LI].Sequence := LI;
   FHead := 0;
   FTail := 0;
   FClosed := 0;
@@ -77,36 +86,67 @@ end;
 
 function TRingBufferImpl.TryWrite(const AValue: T): TLockFreeRingBufferResult;
 var
-  LHead, LNext: Int64;
+  LHead: Int64;
+  LTail: Int64;
+  LIdx: Int64;
+  LSeq: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rbClosed);
-  repeat
+  while True do
+  begin
     LHead := AtomicLoad64(FHead, moRelaxed);
-    LNext := (LHead + 1) and FMask;
-    if LNext = AtomicLoad64(FTail, moAcquire) then
+    LTail := AtomicLoad64(FTail, moAcquire);
+    if (LHead - LTail) >= (FCapacity - 1) then
       Exit(rbFull);
-  until AtomicCompareExchange64(FHead, LHead, LNext, moAcqRel) = LHead;
-  FBuffer[LHead] := AValue;
-  Result := rbWritten;
+    LIdx := LHead and FMask;
+    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    if LSeq <> LHead then
+    begin
+      CpuPause;
+      Continue;
+    end;
+    if AtomicCompareExchange64(FHead, LHead, LHead + 1, moAcqRel) = LHead then
+    begin
+      FSlots[LIdx].Value := AValue;
+      AtomicStore64(FSlots[LIdx].Sequence, LHead + 1, moRelease);
+      Exit(rbWritten);
+    end;
+  end;
 end;
 
 function TRingBufferImpl.TryRead(out AValue: T): TLockFreeRingBufferResult;
 var
-  LTail, LNext: Int64;
+  LHead: Int64;
+  LTail: Int64;
+  LIdx: Int64;
+  LSeq: Int64;
 begin
-  repeat
+  while True do
+  begin
     LTail := AtomicLoad64(FTail, moRelaxed);
-    if LTail = AtomicLoad64(FHead, moAcquire) then
+    LHead := AtomicLoad64(FHead, moAcquire);
+    if LTail = LHead then
     begin
       if AtomicLoad32(FClosed, moAcquire) <> 0 then
         Exit(rbClosed);
       Exit(rbEmpty);
     end;
-    LNext := (LTail + 1) and FMask;
-  until AtomicCompareExchange64(FTail, LTail, LNext, moAcqRel) = LTail;
-  AValue := FBuffer[LTail];
-  Result := rbWritten;
+    LIdx := LTail and FMask;
+    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    if LSeq <> (LTail + 1) then
+    begin
+      CpuPause;
+      Continue;
+    end;
+    if AtomicCompareExchange64(FTail, LTail, LTail + 1, moAcqRel) = LTail then
+    begin
+      AValue := FSlots[LIdx].Value;
+      FSlots[LIdx].Value := Default(T);
+      AtomicStore64(FSlots[LIdx].Sequence, LTail + FCapacity, moRelease);
+      Exit(rbWritten);
+    end;
+  end;
 end;
 
 function TRingBufferImpl.WriteWait(const AValue: T): TLockFreeRingBufferResult;
@@ -173,10 +213,10 @@ var
 begin
   LHead := AtomicLoad64(FHead, moAcquire);
   LTail := AtomicLoad64(FTail, moAcquire);
-  if LHead >= LTail then
+  if LHead > LTail then
     Result := LHead - LTail
   else
-    Result := FCapacity - LTail + LHead;
+    Result := 0;
 end;
 
 function TRingBufferImpl.GetCapacity: Int64;
@@ -195,7 +235,7 @@ var
 begin
   LHead := AtomicLoad64(FHead, moAcquire);
   LTail := AtomicLoad64(FTail, moAcquire);
-  Result := ((LHead + 1) and FMask) = LTail;
+  Result := (LHead - LTail) >= (FCapacity - 1);
 end;
 
 procedure TRingBufferImpl.Close;
