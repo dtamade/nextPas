@@ -502,8 +502,10 @@ begin
      (FKeys[LIndex] = AStreamID) then
     Exit(FStreams[LIndex]);
 
-  { Check load factor: (count + 1) / capacity > 3/4? }
-  if (FCount + 1) * LOAD_FACTOR_DEN > FCapacity * LOAD_FACTOR_NUM then
+  { Check load factor: (used + deleted + 1) / capacity > 3/4?
+    Must include FDeletedCount: tombstones consume probe slots, so a table
+    with many deleted entries degrades to O(n) probing unless we rehash. }
+  if (FCount + FDeletedCount + 1) * LOAD_FACTOR_DEN > FCapacity * LOAD_FACTOR_NUM then
   begin
     Grow;
     LIndex := FindSlot(AStreamID);
