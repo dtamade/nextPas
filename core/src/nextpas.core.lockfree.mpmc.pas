@@ -374,12 +374,14 @@ begin
       Inc(Result);
       Continue;
     end;
-    { Reserved LCount positions — fill them }
+    { Reserved LCount positions — track active enqueues and fill them }
+    AtomicFetchAdd32(FActiveEnqueues, LCount, moAcqRel);
     for LI := 0 to LCount - 1 do
     begin
       LIdx := PtrUInt(LPos + Int64(LI)) and FMask;
       FSlots[LIdx].Value := AValues[Result + LI];
       AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos + Int64(LI)), moRelease);
+      LeaveActiveEnqueue;
     end;
     { Notify waiters if needed }
     if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
