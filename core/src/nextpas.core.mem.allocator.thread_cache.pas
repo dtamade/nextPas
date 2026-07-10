@@ -254,8 +254,11 @@ begin
     Exit(nil);
   end;
 
-  { Delegate to inner which knows the actual block size }
-  Result := FInner.ReallocMem(APtr, ASize);
+  { Delegate to inner which knows the actual block size.
+    APtr is past the header; inner expects raw pointer. }
+  Result := FInner.ReallocMem(PByte(APtr) - THREAD_CACHE_HEADER, THREAD_CACHE_HEADER + ASize);
+  if Result <> nil then
+    Result := Pointer(PByte(Result) + THREAD_CACHE_HEADER);
 end;
 
 procedure TThreadCacheAllocator.FreeMem(APtr: Pointer); inline;

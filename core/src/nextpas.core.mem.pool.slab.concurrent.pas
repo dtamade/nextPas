@@ -326,11 +326,14 @@ begin
 end;
 
 procedure TSlabPoolConcurrent.FreeMem(APtr: Pointer);
+var
+  LSize: SizeUInt;
 begin
   if APtr = nil then Exit;
 
-  { 热路径：尝试放回 TLS 缓存（零锁）。FreeMem 条目 size=0，仅作为待归还暂存。 }
-  if TlsCachePush(GTlsSlabCache, APtr, 0, Pointer(Self)) then
+  { 热路径：尝试放回 TLS 缓存（零锁）。存储实际分配大小以便后续 GetMem 匹配。 }
+  LSize := FInner.MemSizeOf(APtr);
+  if TlsCachePush(GTlsSlabCache, APtr, LSize, Pointer(Self)) then
     Exit;
 
   { 冷路径：TLS 缓存已满，批量归还全局池 }

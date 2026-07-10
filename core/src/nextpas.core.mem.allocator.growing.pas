@@ -597,6 +597,9 @@ var
 begin
   if (ACount = 0) or (ABlocks = nil) then
     Exit;
+  { Guard: ASize=0 would produce invalid size class index }
+  if ASize = 0 then
+    Exit;
   { Huge: System.FreeMem per block. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
@@ -620,6 +623,11 @@ begin
   for I := 0 to ACount - 1 do
   begin
     Inc(GThreadCache.FOpCount);
+    if ABlocks^ = nil then
+    begin
+      Inc(ABlocks);
+      Continue;
+    end;
     if GThreadCache.FCounts[LIndex] >= CACHE_ADAPTIVE_MAX_SMALL then
       ThreadCacheFlush(GThreadCache, LIndex, @FlushToCentral);
     LNode := PFreeNode(ABlocks^);

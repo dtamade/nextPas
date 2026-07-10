@@ -418,6 +418,7 @@ begin
   else
   begin
     Result.ZeroInitialized := False;
+    Result.ThreadSafe := False;
     Result.SupportsRealloc := False;
   end;
 end;

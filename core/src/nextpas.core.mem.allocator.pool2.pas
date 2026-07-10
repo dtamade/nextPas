@@ -109,17 +109,29 @@ constructor TPool2Allocator.Create(AInner: IAllocator; ABlockSize: SizeUInt;
   AAlignment: SizeUInt; ACapacity: SizeUInt);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EAllocError.Create(aeInvalidLayout, 'TPool2Allocator.Create: AInner cannot be nil');
   FInner := AInner;
   FBlockSize := ABlockSize;
   if AAlignment < 4 then
     FAlignment := 4
+  else if not IsPowerOfTwo(AAlignment) then
+    raise EAllocError.Create(aeInvalidLayout, 'TPool2Allocator.Create: AAlignment must be power of two')
   else
     FAlignment := AAlignment;
   FAlignedBlockSize := AlignUp(HEADER_SIZE + ABlockSize, FAlignment);
+  if FAlignedBlockSize < HEADER_SIZE + ABlockSize then
+    raise EAllocError.Create(aeOutOfMemory, 'TPool2Allocator.Create: block size overflow');
   if ACapacity < 16 then
     FCapacity := 16
   else
     FCapacity := ACapacity;
+  if FAlignedBlockSize > 0 then
+  begin
+    var LPoolSize := FAlignedBlockSize * FCapacity;
+    if LPoolSize div FAlignedBlockSize <> FCapacity then
+      raise EAllocError.Create(aeOutOfMemory, 'TPool2Allocator.Create: pool size overflow');
+  end;
   FFreeList := nil;
   FFreeCount := 0;
   FTotalBlocks := 0;
@@ -139,6 +151,8 @@ var
 begin
   LPoolSize := FAlignedBlockSize * FCapacity;
   LPool := PByte(FInner.GetMem(LPoolSize));
+  if LPool = nil then
+    raise EAllocError.Create(aeOutOfMemory, 'TPool2Allocator.AllocatePool: allocation failed');
 
   for I := 0 to FCapacity - 1 do
   begin

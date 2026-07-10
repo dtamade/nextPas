@@ -592,6 +592,7 @@ end;
 function TPoolAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 

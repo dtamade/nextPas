@@ -202,6 +202,7 @@ function TGroupAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := True; // delegates to active group's allocator
 end;
 
 end.
