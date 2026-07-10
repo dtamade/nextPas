@@ -294,7 +294,8 @@ begin
     (AName = 'connection') or
     (AName = 'upgrade') or
     (AName = 'keep-alive') or
-    (AName = 'proxy-connection');
+    (AName = 'proxy-connection') or
+    (AName = 'transfer-encoding');
 end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;

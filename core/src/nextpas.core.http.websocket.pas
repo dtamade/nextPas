@@ -939,6 +939,16 @@ begin
   if (LScheme <> 'ws') and (LScheme <> 'wss') then
     raise EHttpError.Create('WebSocket: invalid scheme (expected ws:// or wss://)');
 
+  { Validate host and path for CRLF injection }
+  if (Pos(#13, LHost) > 0) or (Pos(#10, LHost) > 0) then
+    raise EHttpError.Create('WebSocket: CRLF in host');
+  if (Pos(#13, LPath) > 0) or (Pos(#10, LPath) > 0) then
+    raise EHttpError.Create('WebSocket: CRLF in path');
+
+  { Include query string in request target }
+  if LParsedUrl.RawQuery <> '' then
+    LPath := LPath + '?' + LParsedUrl.RawQuery;
+
   { Determine port }
   LPort := LParsedUrl.Port;
   if LPort = 0 then

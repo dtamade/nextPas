@@ -315,6 +315,21 @@ function BuildSetCookie(const ACookie: TSetCookie): string;
 var
   LResult: string;
 begin
+  { Validate all fields to prevent header injection }
+  if not IsValidCookieName(ACookie.Name) then
+    raise ECore.Create('Invalid cookie name: contains forbidden characters');
+  if not IsValidCookieValue(ACookie.Value) then
+    raise ECore.Create('Invalid cookie value: contains forbidden characters');
+  if (ACookie.Domain <> '') and
+     ((Pos(#13, ACookie.Domain) > 0) or (Pos(#10, ACookie.Domain) > 0)) then
+    raise ECore.Create('Invalid cookie domain: contains CRLF');
+  if (ACookie.Path <> '') and
+     ((Pos(#13, ACookie.Path) > 0) or (Pos(#10, ACookie.Path) > 0)) then
+    raise ECore.Create('Invalid cookie path: contains CRLF');
+  if (ACookie.Expires <> '') and
+     ((Pos(#13, ACookie.Expires) > 0) or (Pos(#10, ACookie.Expires) > 0)) then
+    raise ECore.Create('Invalid cookie expires: contains CRLF');
+
   LResult := ACookie.Name + '=' + ACookie.Value;
 
   if ACookie.Domain <> '' then

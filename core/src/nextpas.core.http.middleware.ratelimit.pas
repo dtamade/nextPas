@@ -226,8 +226,10 @@ function RateLimitMiddleware: IHttpMiddleware;
 var
   LOpts: TRateLimitOptions;
 begin
+  LOpts := Default(TRateLimitOptions);
   LOpts.MaxRequests := 100;
   LOpts.WindowSeconds := 60;
+  LOpts.TrustProxyHeaders := False;
   Result := RateLimitMiddlewareWith(LOpts);
 end;
 

@@ -1205,10 +1205,15 @@ begin
     QueueGoaway(FLastSeenPeerStreamID, AErrorCode);
     FShutdownErrorCode := AErrorCode;
     FState := h2sesClosed;
+    Result := False;
   end
   else
+  begin
+    { Stream-level rejection: send RST_STREAM but keep the connection alive.
+      Returning True signals the Run loop to continue processing frames. }
     QueueRstStream(AStreamID, AErrorCode);
-  Result := False;
+    Result := True;
+  end;
 end;
 
 function TH2ServerSession.ExtractPseudoHeader(const AHeaders: IHttpHeaders;
