@@ -85,10 +85,16 @@ function TWatermarkAllocator.AllocateFromRegion(ASize: SizeUInt): Pointer;
 var
   LAligned: SizeUInt;
 begin
-  // Align to 8 bytes
+  if ASize = 0 then
+    Exit(nil);
+  // Align to 8 bytes，检查溢出
   LAligned := (ASize + 7) and not SizeUInt(7);
+  if LAligned < ASize then
+    Exit(nil); // 对联回绕
   if FOffset + LAligned > FRegionSize then
     Exit(nil);
+  if FOffset + LAligned < FOffset then
+    Exit(nil); // 偏移回绕
   Result := FRegion + FOffset;
   Inc(FOffset, LAligned);
   Inc(FStats.AllocCount);

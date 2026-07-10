@@ -181,6 +181,7 @@ begin
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
   LOrigin.FreeMem(LHeader);
+  { LOrigin 是局部 IAllocator 变量，出作用域时自动 _Release，无需显式调用 }
 end;
 
 procedure THotswapAllocator.FreeMem(APtr: Pointer); inline;
