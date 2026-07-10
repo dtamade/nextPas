@@ -59,6 +59,20 @@ function platform_ipv4_parse(const AAddr: string): UInt32;
 { IPv4 address formatting — dotted-decimal string }
 function platform_ipv4_to_string(AIP: UInt32): string;
 
+{** @desc 创建 IPv4 套接字地址结构
+    @param AAddr IPv4 地址（网络字节序）
+    @param APort 端口号（主机字节序）
+    @param ASockAddr 输出套接字地址结构 *}
+procedure platform_sockaddr_ipv4(out ASockAddr: TPlatformSockAddr;
+  AAddr: UInt32; APort: UInt16);
+
+{** @desc 从套接字地址结构获取 IPv4 地址和端口
+    @param ASockAddr 套接字地址结构
+    @param AAddr 输出 IPv4 地址（网络字节序）
+    @param APort 输出端口号（主机字节序） *}
+procedure platform_sockaddr_ipv4_extract(const ASockAddr: TPlatformSockAddr;
+  out AAddr: UInt32; out APort: UInt16);
+
 implementation
 
 function TPlatformSocket.IsValid: Boolean;
@@ -168,6 +182,50 @@ begin
             OctetToStr((AIP shr 16) and $FF) + '.' +
             OctetToStr((AIP shr 8) and $FF) + '.' +
             OctetToStr(AIP and $FF);
+end;
+
+procedure platform_sockaddr_ipv4(out ASockAddr: TPlatformSockAddr;
+  AAddr: UInt32; APort: UInt16);
+type
+  TSockAddrIn = packed record
+    Family: UInt16;
+    Port: UInt16;
+    Addr: UInt32;
+    Zero: array[0..7] of Byte;
+  end;
+var
+  LAddr: TSockAddrIn;
+begin
+  FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  LAddr.Family := 2; { AF_INET }
+  LAddr.Port := platform_htons(APort);
+  LAddr.Addr := AAddr;
+  Move(LAddr, ASockAddr.Storage, SizeOf(LAddr));
+  ASockAddr.Len := SizeOf(LAddr);
+end;
+
+procedure platform_sockaddr_ipv4_extract(const ASockAddr: TPlatformSockAddr;
+  out AAddr: UInt32; out APort: UInt16);
+type
+  TSockAddrIn = packed record
+    Family: UInt16;
+    Port: UInt16;
+    Addr: UInt32;
+    Zero: array[0..7] of Byte;
+  end;
+var
+  LAddr: TSockAddrIn;
+begin
+  AAddr := 0;
+  APort := 0;
+  if ASockAddr.Len < SizeOf(LAddr) then
+    Exit;
+  Move(ASockAddr.Storage, LAddr, SizeOf(LAddr));
+  if LAddr.Family <> 2 then { AF_INET }
+    Exit;
+  AAddr := LAddr.Addr;
+  APort := platform_ntohs(LAddr.Port);
 end;
 
 end.
