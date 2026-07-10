@@ -5,7 +5,12 @@ unit nextpas.core.lockfree.bloom;
 interface
 
 uses
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.math;
+
+const
+  BLOOM_FNV1A_OFFSET_BASIS: PtrUInt = PtrUInt($CBF29CE484222325);
+  BLOOM_FNV1A_PRIME: PtrUInt = PtrUInt($00000100000001B3);
 
 type
   {** @desc 并发布隆过滤器
@@ -45,8 +50,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.atomic,
-  nextpas.core.math;
+  nextpas.core.atomic;
 
 constructor TConcurrentBloomFilterImpl.Create(const AExpectedItems: PtrUInt; const AFalsePositiveRate: Double);
 var
@@ -97,9 +101,9 @@ var
 begin
   // Use FNV-1a with different seeds for different hash functions
   LPtr := @AValue;
-  LH := 14695981039346656037 + PtrUInt(AHashIndex) * 1099511628211;
+  LH := BLOOM_FNV1A_OFFSET_BASIS + PtrUInt(AHashIndex) * BLOOM_FNV1A_PRIME;
   for LI := 0 to SizeOf(T) - 1 do
-    LH := (LH xor PtrUInt(LPtr[LI])) * 1099511628211;
+    LH := (LH xor PtrUInt(LPtr[LI])) * BLOOM_FNV1A_PRIME;
   Result := LH and FBitMask;
 end;
 

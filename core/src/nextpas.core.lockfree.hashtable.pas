@@ -11,6 +11,7 @@ uses
 const
   HASH_TABLE_EMPTY = -1;
   HASH_TABLE_DELETED = -2;
+  HASH_TABLE_RESERVED = 3;
 
 type
   TLockFreeHashTableResult = (
@@ -220,12 +221,13 @@ begin
     LOldState := AtomicLoad32(FSlots[LIdx].FState, moAcquire);
     if (LOldState = 1) and (FSlots[LIdx].FKey = AKey) then
       Exit(htExists);
-    // CAS: claim the slot from empty(0) or deleted(2) to occupied(1)
-    if AtomicCompareExchange32(FSlots[LIdx].FState, LOldState, 1, moAcqRel) = LOldState then
+    // Claim the slot with a reserved state, then publish the fully initialized entry.
+    if ((LOldState = 0) or (LOldState = 2)) and
+       (AtomicCompareExchange32(FSlots[LIdx].FState, LOldState, HASH_TABLE_RESERVED, moAcqRel) = LOldState) then
     begin
-      // Slot claimed successfully — write key+value
       FSlots[LIdx].FKey := AKey;
       FSlots[LIdx].FValue := AValue;
+      AtomicStore32(FSlots[LIdx].FState, 1, moRelease);
       AtomicFetchAdd64(FCount, 1);
       Exit(htOk);
     end;

@@ -11,7 +11,7 @@ uses
   nextpas.core.lockfree.hashmap;
 
 const
-  HASHMAP_NUMA_DEFAULT_SHARD_COUNT = 16;
+  HASHMAP_NUMA_DEFAULT_INITIAL_CAPACITY_PER_NODE = HASHMAP_DEFAULT_CAPACITY;
 
 type
   {**
@@ -41,13 +41,13 @@ type
   private
     FNodeShards: array of TNodeShard;
     FNodeCount: Integer;
-    FShardsPerNode: PtrUInt;
+    FInitialCapacityPerNode: PtrUInt;
     function GetNodeForKey(const AKey: TKey): Integer;
     function GetHashMapForNode(ANode: Integer): THashMap;
   public
     {** @desc 创建 NUMA 感知 HashMap
-      @param AShardsPerNode 每个 NUMA 节点的分片数 }
-    constructor Create(const AShardsPerNode: PtrUInt = HASHMAP_NUMA_DEFAULT_SHARD_COUNT);
+      @param AInitialCapacityPerNode 每个 NUMA 节点内部 HashMap 的初始容量 }
+    constructor Create(const AInitialCapacityPerNode: PtrUInt = HASHMAP_NUMA_DEFAULT_INITIAL_CAPACITY_PER_NODE);
     destructor Destroy; override;
 
     {** @desc 插入或覆盖键值对 }
@@ -111,7 +111,7 @@ begin
   Result := FNodeShards[ANode].HashMap;
 end;
 
-constructor TNumaShardedHashMapImpl.Create(const AShardsPerNode: PtrUInt);
+constructor TNumaShardedHashMapImpl.Create(const AInitialCapacityPerNode: PtrUInt);
 var
   I: Integer;
 begin
@@ -119,12 +119,15 @@ begin
   FNodeCount := NumaNodeCount;
   if FNodeCount < 1 then
     FNodeCount := 1;
-  FShardsPerNode := AShardsPerNode;
+  if AInitialCapacityPerNode = 0 then
+    FInitialCapacityPerNode := HASHMAP_DEFAULT_CAPACITY
+  else
+    FInitialCapacityPerNode := AInitialCapacityPerNode;
   SetLength(FNodeShards, FNodeCount);
   for I := 0 to FNodeCount - 1 do
   begin
     FNodeShards[I].NodeId := I;
-    FNodeShards[I].HashMap := THashMap.Create(FShardsPerNode);
+    FNodeShards[I].HashMap := THashMap.Create(FInitialCapacityPerNode);
   end;
 end;
 

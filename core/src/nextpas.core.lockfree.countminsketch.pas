@@ -50,7 +50,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.errors;
 
 function Fnv1aHash(const AData: Pointer; ALength: Int32; ASeed: UInt32): UInt32;
 const
@@ -74,8 +75,10 @@ var
   I, J: Int32;
 begin
   inherited Create;
-  if ADepth < 1 then ADepth := 4;
-  if AWidth < 1 then AWidth := 1024;
+  if ADepth < 1 then
+    raise EArgumentError.Create('TCountMinSketch: depth must be > 0');
+  if AWidth < 1 then
+    raise EArgumentError.Create('TCountMinSketch: width must be > 0');
   FDepth := ADepth;
   FWidth := AWidth;
   SetLength(FCounters, FDepth, FWidth);
@@ -107,6 +110,8 @@ procedure TCountMinSketch.Add(const AKey: AnsiString; ACount: Int32);
 var
   I, LIdx: Int32;
 begin
+  if ACount <= 0 then
+    Exit;
   for I := 0 to FDepth - 1 do
   begin
     LIdx := Hash(I, AKey) mod UInt32(FWidth);

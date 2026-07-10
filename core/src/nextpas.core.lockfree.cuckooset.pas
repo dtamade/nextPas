@@ -293,55 +293,36 @@ end;
 function TCuckooSet.Contains(const AKey: AnsiString): Boolean;
 var
   LIdx1, LIdx2, LCap: Int32;
-  LVerBefore, LVerAfter: Int32;
 begin
-  LVerBefore := AtomicLoad32(FVersion, moAcquire);
-  { Odd version = resize in progress, fall back to lock }
-  if (LVerBefore and 1) <> 0 then
-  begin
-    AcquireLock;
-    try
-      LCap := FCapacity;
-      LIdx1 := Hash1(AKey) mod UInt32(LCap);
-      LIdx2 := Hash2(AKey) mod UInt32(LCap);
-      Result := (FTable1[LIdx1] = AKey) or (FTable2[LIdx2] = AKey);
-    finally
-      ReleaseLock;
-    end;
-    Exit;
-  end;
-
-  { Lock-free fast path: single atomic read of capacity }
-  LCap := AtomicLoad32(FCapacity, moAcquire);
-  LIdx1 := Hash1(AKey) mod UInt32(LCap);
-  LIdx2 := Hash2(AKey) mod UInt32(LCap);
-  Result := (FTable1[LIdx1] = AKey) or (FTable2[LIdx2] = AKey);
-
-  { Check version didn't change (resize interleaved our read) }
-  LVerAfter := AtomicLoad32(FVersion, moAcquire);
-  if LVerAfter <> LVerBefore then
-  begin
-    { Re-read under lock to get consistent result }
-    AcquireLock;
-    try
-      LCap := FCapacity;
-      LIdx1 := Hash1(AKey) mod UInt32(LCap);
-      LIdx2 := Hash2(AKey) mod UInt32(LCap);
-      Result := (FTable1[LIdx1] = AKey) or (FTable2[LIdx2] = AKey);
-    finally
-      ReleaseLock;
-    end;
+  AcquireLock;
+  try
+    LCap := FCapacity;
+    LIdx1 := Hash1(AKey) mod UInt32(LCap);
+    LIdx2 := Hash2(AKey) mod UInt32(LCap);
+    Result := (FTable1[LIdx1] = AKey) or (FTable2[LIdx2] = AKey);
+  finally
+    ReleaseLock;
   end;
 end;
 
 function TCuckooSet.Count: Int32;
 begin
-  Result := AtomicLoad32(FCount, moAcquire);
+  AcquireLock;
+  try
+    Result := FCount;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function TCuckooSet.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad32(FCount, moAcquire) = 0;
+  AcquireLock;
+  try
+    Result := FCount = 0;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 procedure TCuckooSet.Clear;

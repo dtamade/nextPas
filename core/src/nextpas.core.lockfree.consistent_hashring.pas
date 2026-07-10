@@ -255,16 +255,18 @@ var
   LHash: UInt32;
   LSlot: Int32;
 begin
-  { Lock-free read - ring is stable during reads if we use atomic count }
-  if AtomicLoad32(FCount, moAcquire) = 0 then
-    Exit('');
-
-  LHash := ComputeHash(AKey);
-  LSlot := FindSlot(LHash);
-  if LSlot < 0 then
-    Exit('');
-
-  Result := FNodes[LSlot].Name;
+  AcquireLock;
+  try
+    if FCount = 0 then
+      Exit('');
+    LHash := ComputeHash(AKey);
+    LSlot := FindSlot(LHash);
+    if LSlot < 0 then
+      Exit('');
+    Result := FNodes[LSlot].Name;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function TConsistentHashRing.GetNodes(const AKey: AnsiString; ACount: Int32): specialize TArray<AnsiString>;
@@ -276,58 +278,60 @@ var
   LIsNew: Boolean;
 begin
   SetLength(Result, 0);
-  if (AtomicLoad32(FCount, moAcquire) = 0) or (ACount <= 0) then
-    Exit;
-
-  LHash := ComputeHash(AKey);
-  LSlot := FindSlot(LHash);
-  if LSlot < 0 then
-    Exit;
-
-  SetLength(LSeen, ACount);
-  LSeenCount := 0;
-  SetLength(Result, ACount);
-  LFound := 0;
-
-  I := LSlot;
-  while (LFound < ACount) and (LSeenCount < ACount) do
-  begin
-    if I >= FCount then
-      I := 0;
-
-    { Check if we already have this physical node }
-    LIsNew := True;
-    for K := 0 to LSeenCount - 1 do
-      if LSeen[K] = FNodes[I].Name then
-      begin
-        LIsNew := False;
-        Break;
-      end;
-
-    if LIsNew then
+  AcquireLock;
+  try
+    if (FCount = 0) or (ACount <= 0) then
+      Exit;
+    LHash := ComputeHash(AKey);
+    LSlot := FindSlot(LHash);
+    if LSlot < 0 then
+      Exit;
+    SetLength(LSeen, ACount);
+    LSeenCount := 0;
+    SetLength(Result, ACount);
+    LFound := 0;
+    I := LSlot;
+    while (LFound < ACount) and (LSeenCount < ACount) do
     begin
-      LSeen[LSeenCount] := FNodes[I].Name;
-      Inc(LSeenCount);
-      Result[LFound] := FNodes[I].Name;
-      Inc(LFound);
+      if I >= FCount then
+        I := 0;
+      LIsNew := True;
+      for K := 0 to LSeenCount - 1 do
+        if LSeen[K] = FNodes[I].Name then
+        begin
+          LIsNew := False;
+          Break;
+        end;
+      if LIsNew then
+      begin
+        LSeen[LSeenCount] := FNodes[I].Name;
+        Inc(LSeenCount);
+        Result[LFound] := FNodes[I].Name;
+        Inc(LFound);
+      end;
+      Inc(I);
+      if I = LSlot then
+        Break;
     end;
-
-    Inc(I);
-    if I = LSlot then
-      Break; { Full circle }
+    SetLength(Result, LFound);
+  finally
+    ReleaseLock;
   end;
-
-  SetLength(Result, LFound);
 end;
 
 function TConsistentHashRing.ContainsNode(const AName: AnsiString): Boolean;
 var
   I: Int32;
 begin
-  Result := False;
-  for I := 0 to AtomicLoad32(FCount, moAcquire) - 1 do
-    if FNodes[I].Name = AName then
-      Exit(True);
+  AcquireLock;
+  try
+    Result := False;
+    for I := 0 to FCount - 1 do
+      if FNodes[I].Name = AName then
+        Exit(True);
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function TConsistentHashRing.NodeCount: Int32;
@@ -337,30 +341,39 @@ var
   LNameCount: Int32;
   LIsNew: Boolean;
 begin
-  { Count unique physical nodes }
-  SetLength(LNames, FCount);
-  LNameCount := 0;
-  for I := 0 to FCount - 1 do
-  begin
-    LIsNew := True;
-    for K := 0 to LNameCount - 1 do
-      if LNames[K] = FNodes[I].Name then
-      begin
-        LIsNew := False;
-        Break;
-      end;
-    if LIsNew then
+  AcquireLock;
+  try
+    SetLength(LNames, FCount);
+    LNameCount := 0;
+    for I := 0 to FCount - 1 do
     begin
-      LNames[LNameCount] := FNodes[I].Name;
-      Inc(LNameCount);
+      LIsNew := True;
+      for K := 0 to LNameCount - 1 do
+        if LNames[K] = FNodes[I].Name then
+        begin
+          LIsNew := False;
+          Break;
+        end;
+      if LIsNew then
+      begin
+        LNames[LNameCount] := FNodes[I].Name;
+        Inc(LNameCount);
+      end;
     end;
+    Result := LNameCount;
+  finally
+    ReleaseLock;
   end;
-  Result := LNameCount;
 end;
 
 function TConsistentHashRing.RingSize: Int32;
 begin
-  Result := AtomicLoad32(FCount, moAcquire);
+  AcquireLock;
+  try
+    Result := FCount;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 end.

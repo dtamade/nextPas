@@ -33,8 +33,8 @@ type
     FMap: TMap;
   public
     {** @desc 创建并发 HashSet
-      @param AShardCount 分片数量（默认 16） }
-    constructor Create(const AShardCount: Integer = 16);
+      @param AInitialCapacity 底层 HashMap 的初始容量 }
+    constructor Create(const AInitialCapacity: Integer = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;
 
     {** @desc 插入元素
@@ -65,12 +65,12 @@ type
 
 implementation
 
-constructor TConcurrentHashSetImpl.Create(const AShardCount: Integer);
+constructor TConcurrentHashSetImpl.Create(const AInitialCapacity: Integer);
 begin
   inherited Create;
   if IsManagedType(TKey) then
     raise EArgumentError.Create('TConcurrentHashSet: TKey must be unmanaged');
-  FMap := TMap.Create(AShardCount);
+  FMap := TMap.Create(AInitialCapacity);
 end;
 
 destructor TConcurrentHashSetImpl.Destroy;

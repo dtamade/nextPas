@@ -124,7 +124,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -209,9 +209,12 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
   Lock;
-  GrowIfNeeded;
-  AddToLayer(FLayerCount - 1, AValue);
-  Unlock;
+  try
+    GrowIfNeeded;
+    AddToLayer(FLayerCount - 1, AValue);
+  finally
+    Unlock;
+  end;
 end;
 
 function TScalableBloomFilterImpl.Contains(const AValue: T): Boolean;
@@ -220,26 +223,41 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  for LI := FLayerCount - 1 downto 0 do
-  begin
-    if ContainsInLayer(LI, AValue) then
-      Exit(True);
+  Lock;
+  try
+    for LI := FLayerCount - 1 downto 0 do
+    begin
+      if ContainsInLayer(LI, AValue) then
+        Exit(True);
+    end;
+    Result := False;
+  finally
+    Unlock;
   end;
-  Result := False;
 end;
 
 function TScalableBloomFilterImpl.GetLayerCount: Int32;
 begin
-  Result := AtomicLoad32(FLayerCount, moRelaxed);
+  Lock;
+  try
+    Result := FLayerCount;
+  finally
+    Unlock;
+  end;
 end;
 
 function TScalableBloomFilterImpl.GetTotalCount: Int64;
 var
   LI: Int32;
 begin
-  Result := 0;
-  for LI := 0 to FLayerCount - 1 do
-    Result := Result + AtomicLoad64(FLayers[LI].Count, moRelaxed);
+  Lock;
+  try
+    Result := 0;
+    for LI := 0 to FLayerCount - 1 do
+      Result := Result + AtomicLoad64(FLayers[LI].Count, moRelaxed);
+  finally
+    Unlock;
+  end;
 end;
 
 function TScalableBloomFilterImpl.GetEstimatedFPR: Double;
@@ -247,14 +265,19 @@ var
   LI: Int32;
   LFPR, LLayerFPR: Double;
 begin
-  LFPR := 1.0;
-  LLayerFPR := FFPR;
-  for LI := 0 to FLayerCount - 1 do
-  begin
-    LFPR := LFPR * LLayerFPR;
-    LLayerFPR := LLayerFPR * SCALABLE_BLOOM_TIGHTENING_RATIO;
+  Lock;
+  try
+    LFPR := 1.0;
+    LLayerFPR := FFPR;
+    for LI := 0 to FLayerCount - 1 do
+    begin
+      LFPR := LFPR * LLayerFPR;
+      LLayerFPR := LLayerFPR * SCALABLE_BLOOM_TIGHTENING_RATIO;
+    end;
+    Result := LFPR;
+  finally
+    Unlock;
   end;
-  Result := LFPR;
 end;
 
 procedure TScalableBloomFilterImpl.Close;

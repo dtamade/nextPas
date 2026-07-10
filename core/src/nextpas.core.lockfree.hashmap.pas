@@ -441,28 +441,16 @@ function TShardedHashMapImpl.Find(const AKey: TKey; out AValue: TValue): Boolean
 var
   LShardIdx: PtrUInt;
   LIdx: PtrUInt;
-  LVersion1, LVersion2: Int32;
 begin
   LShardIdx := ShardIndex(AKey);
-  { 无锁乐观读: 使用版本号验证一致性 }
-  repeat
-    LVersion1 := AtomicLoad32(FShards[LShardIdx].Version, moAcquire);
-    { 如果版本号是奇数，表示正在写，等待 }
-    if LVersion1 and 1 <> 0 then
-    begin
-      CpuPause;
-      Continue;
-    end;
-    { 乐观读: 不加锁直接读取 }
+  ShardReadLock(FShards[LShardIdx]);
+  try
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
       AValue := FShards[LShardIdx].Entries[LIdx].Value;
-    { 验证版本号是否一致 }
-    LVersion2 := AtomicLoad32(FShards[LShardIdx].Version, moAcquire);
-    if LVersion1 = LVersion2 then
-      Exit;  { 版本一致，读取有效 }
-    { 版本不一致，重试 }
-  until False;
+  finally
+    ShardReadUnlock(FShards[LShardIdx]);
+  end;
 end;
 
 function TShardedHashMapImpl.Remove(const AKey: TKey): Boolean;
