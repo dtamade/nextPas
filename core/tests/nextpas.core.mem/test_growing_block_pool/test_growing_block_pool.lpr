@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCreateWithDefault;
 var
@@ -383,6 +384,8 @@ begin
   T.Test('TestIBlockPoolBatchInterface', @TestIBlockPoolBatchInterface);
   T.Test('TestAlignment', @TestAlignment);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestNoFailure;
 var
@@ -164,6 +165,8 @@ begin
   T.Test('SetFailAt', @TestSetFailAt);
   T.Test('AllocMemFail', @TestAllocMemFail);
   T.Test('ReallocFail', @TestReallocFail);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

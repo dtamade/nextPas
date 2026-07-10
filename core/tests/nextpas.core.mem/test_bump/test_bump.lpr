@@ -18,6 +18,7 @@ const
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -151,6 +152,8 @@ begin
   T.Test('reset', @TestReset);
   T.Test('stats', @TestStats);
   T.Test('region_growth', @TestRegionGrowth);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

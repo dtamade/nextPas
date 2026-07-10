@@ -30,6 +30,7 @@ const
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── Helpers ── }
 
@@ -234,6 +235,8 @@ begin
   T.Test('soak_fragmentation', @TestSoakFragmentation);
   T.Test('soak_allocfree_ratio', @TestSoakAllocFreeRatio);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

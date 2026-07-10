@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicPredict;
 var
@@ -154,6 +155,8 @@ begin
   T.Test('traits', @TestTraits);
   T.Test('frequency_tracking', @TestFrequencyTracking);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ---------------------------------------------------------------------------
   基本生命周期
@@ -438,8 +439,10 @@ begin
   T.Test('Mixed size classes', @TestMixedSizeClasses);
   T.Test('Alloc stress', @TestAllocStress);
 
-  T.Run;
+  LRunPassed := T.Run;
 
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

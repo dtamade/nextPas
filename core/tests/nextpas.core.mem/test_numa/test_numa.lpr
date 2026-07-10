@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestTopologyDetection;
 var
@@ -150,6 +151,8 @@ begin
   T.Test('traits', @TestTraits);
   T.Test('multiple_allocs', @TestMultipleAllocs);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

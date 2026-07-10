@@ -26,6 +26,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function DefaultAllocatorThreadProc(AArg: Pointer): Pointer; cdecl;
 var
@@ -107,7 +108,9 @@ begin
   T := TTestSuite.Create('nextpas.core.mem.default_allocator');
   T.Test('singleton single-thread', @TestDefaultAllocatorSingletonSingleThread);
   T.Test('concurrent start returns same instance', @TestDefaultAllocatorConcurrentStart);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestTryGetMimallocAllocatorNoLib;
 var
@@ -122,6 +123,8 @@ begin
   T.Test('GetMimallocAllocator', @TestGetMimallocAllocator);
   T.Test('MimallocAllocatorTraits', @TestMimallocAllocatorTraits);
   T.Test('MimallocAllocatorGetMem', @TestMimallocAllocatorGetMem);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

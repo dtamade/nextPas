@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── Basic alloc/free ── }
 
@@ -303,6 +304,8 @@ begin
   T.Test('nil_handling', @TestNilHandling);
   T.Test('traits', @TestTraits);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

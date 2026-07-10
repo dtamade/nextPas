@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure NoLeakProc(AAllocator: IAllocator);
 var
@@ -113,6 +114,8 @@ begin
   T.Test('CustomAllocator', @TestCustomAllocator);
   T.Test('CleanReport', @TestCleanReport);
   T.Test('ZeroSizeLeak', @TestZeroSizeLeak);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

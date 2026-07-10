@@ -124,6 +124,7 @@ begin
 end;
 
 var T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('test_pool2');
   T.Test('basic_alloc', @Test_BasicAlloc);
@@ -133,6 +134,8 @@ begin
   T.Test('double_free_detection', @Test_DoubleFreeDetection);
   T.Test('stats', @Test_Stats);
   T.Test('custom_alignment', @Test_CustomAlignment);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- TOomHandler tests --- }
 
@@ -163,5 +164,8 @@ begin
   T.Test('oom allocator passthrough', @TestOomAllocatorPassthrough);
   T.Test('oom allocator traits', @TestOomAllocatorTraits);
 
-  T.Run;
+  LRunPassed := T.Run;
+  T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

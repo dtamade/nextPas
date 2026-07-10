@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCreateAndDestroy;
 var
@@ -208,6 +209,8 @@ begin
   T.Test('stats', @TestStats);
   T.Test('invalid_params', @TestInvalidParams);
   T.Test('traits', @TestTraits);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

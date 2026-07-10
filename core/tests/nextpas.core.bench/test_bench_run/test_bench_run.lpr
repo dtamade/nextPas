@@ -323,6 +323,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.run');
 
@@ -347,6 +348,8 @@ begin
   T.Test('RunAll.EntriesExceedThreadCount', @Test_RunAll_EntriesExceedThreadCount);
   T.Test('RunAll.WithBusyBench', @Test_RunAll_WithBusyBench);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

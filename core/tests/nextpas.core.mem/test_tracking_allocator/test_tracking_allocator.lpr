@@ -19,6 +19,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   { 全局 tracker 供线程测试使用 }
   GTracker: TTrackingAllocator;
 
@@ -524,8 +525,10 @@ begin
   T.Test('tag_clear_on_free', @TestTagClearOnFree);
   T.Test('tag_with_realloc', @TestTagWithRealloc);
 
-  T.Run;
+  LRunPassed := T.Run;
 
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

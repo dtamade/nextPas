@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── SpanFree double-free detection ── }
 
@@ -681,6 +682,8 @@ begin
   T.Test('realloc_stress', @TestReallocMemStress);
   T.Test('single_param_freemem', @TestSingleParamFreeMem);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

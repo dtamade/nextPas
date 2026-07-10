@@ -102,6 +102,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.adaptive_warmup');
 
@@ -113,6 +114,8 @@ begin
   T.Test('Suite.SetAdaptiveWarmup', @Test_Suite_SetAdaptiveWarmup);
   T.Test('Suite.FixedWarmupFallback', @Test_Suite_FixedWarmupFallback);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

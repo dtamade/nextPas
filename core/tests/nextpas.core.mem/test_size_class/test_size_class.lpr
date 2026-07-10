@@ -141,6 +141,7 @@ begin
 end;
 
 var T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('test_size_class');
   T.Test('basic_alloc', @Test_BasicAlloc);
@@ -150,6 +151,8 @@ begin
   T.Test('large_object_delegation', @Test_LargeObjectDelegation);
   T.Test('stats', @Test_Stats);
   T.Test('many_allocations', @Test_ManyAllocations);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

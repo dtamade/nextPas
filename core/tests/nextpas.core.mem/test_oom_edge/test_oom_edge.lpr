@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBoundedReturnsNil;
 var
@@ -195,6 +196,8 @@ begin
   T.Test('FailAllocatorAtN', @TestFailAllocatorAtN);
   T.Test('FailAllocatorReset', @TestFailAllocatorReset);
   T.Test('BoundedSetLimit', @TestBoundedSetLimit);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

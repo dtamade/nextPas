@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { 辅助函数：生成正态分布数据（Box-Muller 变换） }
 function GenerateNormalData(AMean, AStdDev: Double; ACount: Integer): TDoubleArray;
@@ -262,6 +263,8 @@ begin
   T.Test('KSTestTwoSample_DifferentMeans', @TestKSTestTwoSample_DifferentMeans);
   T.Test('KSTestTwoSample_DifferentSizes', @TestKSTestTwoSample_DifferentSizes);
   T.Test('KSTest_StatisticRange', @TestKSTest_StatisticRange);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

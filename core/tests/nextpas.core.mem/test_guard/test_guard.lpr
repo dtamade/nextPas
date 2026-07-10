@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── Basic alloc/free ── }
 
@@ -333,6 +334,8 @@ begin
   T.Test('multiple_large_allocs (NEW-025)', @TestMultipleLargeAllocs);
   T.Test('free_invalid_pointer (NEW-025)', @TestFreeInvalidPointer);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

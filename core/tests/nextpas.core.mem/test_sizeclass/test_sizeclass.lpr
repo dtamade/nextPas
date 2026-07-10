@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- SizeClassIndex tests --- }
 
@@ -292,6 +293,8 @@ begin
   T.Test('is_sizeclassable', @TestIsSizeClassable);
   T.Test('go_comparison', @TestGoComparison);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

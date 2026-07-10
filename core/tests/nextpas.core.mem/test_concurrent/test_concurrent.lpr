@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── Thread worker data ── }
 
@@ -383,6 +384,8 @@ begin
   T.Test('random_sizes_stress', @TestRandomSizes);
   T.Test('leak_detection', @TestLeakDetection);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

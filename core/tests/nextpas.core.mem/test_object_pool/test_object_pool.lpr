@@ -18,6 +18,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCreateAndDestroy;
 var
@@ -395,7 +396,9 @@ begin
   T.Test('TConfig builder', @TestTConfigBuilder);
   T.Test('MaxSize boundary (R-15)', @TestMaxSizeBoundary);
   T.Test('Double release detection (R-22)', @TestDoubleReleaseDetection);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

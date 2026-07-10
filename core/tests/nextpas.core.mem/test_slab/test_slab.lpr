@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCreateAndDestroy;
 var
@@ -182,6 +183,8 @@ begin
   T.Test('stats', @TestStats);
   T.Test('nil_inner', @TestNilInner);
   T.Test('traits', @TestTraits);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

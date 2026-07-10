@@ -681,6 +681,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   GGenerator := TBenchReportGenerator.Create;
   try
@@ -715,8 +716,10 @@ begin
     T.Test('empty results to HTML', @Test_EmptyResults_ToHTML);
     T.Test('empty results print to console', @Test_EmptyResults_PrintToConsole);
     T.Test('set max detail count', @TestSetMaxDetailCount);
-    T.Run;
+  LRunPassed := T.Run;
     T.Summary;
+  if not LRunPassed then
+    Halt(1);
   finally
     GGenerator.Free;
   end;

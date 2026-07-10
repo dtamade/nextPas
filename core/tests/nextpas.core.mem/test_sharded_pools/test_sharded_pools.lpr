@@ -75,6 +75,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GBlockPool: TShardedBlockPool = nil;
   GBlockPtr: Pointer = nil;
   GSlabPool: TSlabPoolSharded = nil;
@@ -911,7 +912,9 @@ begin
   T.Test('false sharing padding verification', @TestShardedBlockPoolFalseSharingPadding);
   T.Test('stress test concurrent acquire/release', @TestShardedBlockPoolStress);
   T.Test('GetStats hit rate and utilization', @TestBlockPoolGetStats);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GCompactCount: Integer;
 
 procedure OnCompact(AOldPtr, ANewPtr: Pointer; ASize: SizeUInt; AUserData: Pointer);
@@ -180,6 +181,8 @@ begin
   T.Test('compact_stats', @TestCompactStats);
   T.Test('compact_empty', @TestCompactEmpty);
   T.Test('traits', @TestTraits);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -77,6 +77,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GGetMemCalls: Integer = 0;
   GAllocMemCalls: Integer = 0;
   GReallocMemCalls: Integer = 0;
@@ -908,7 +909,9 @@ begin
   T.Test('guard allocator runtime contract', @TestGuardAllocatorRuntimeContract);
   T.Test('no FPC RTL violation in core allocator units', @TestNoFpcRtlViolationInCoreAllocatorUnits);
   T.Test('dual-compiler allocator parity', @TestDualCompilerAllocatorParity);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

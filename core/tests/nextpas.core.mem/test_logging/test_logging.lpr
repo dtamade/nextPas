@@ -23,6 +23,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- 基础生命周期 Basic lifecycle --- }
 
@@ -263,6 +264,8 @@ begin
   T.Test('freemem_nil_noop', @TestFreeMemNilNoOp);
   T.Test('stats', @TestStats);
   T.Test('traits', @TestTraits);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

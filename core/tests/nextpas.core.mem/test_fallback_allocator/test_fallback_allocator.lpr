@@ -47,6 +47,7 @@ begin FillChar(Result, SizeOf(Result), 0); end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ---------------------------------------------------------------------------
   TFallbackAllocator
@@ -553,8 +554,10 @@ begin
   T.Test('FallbackArena free fallbacks', @TestFallbackArenaFreeFallbacks);
   T.Test('FallbackArena aligned fallback (F-01)', @TestFallbackArenaAllocAlignedFallback);
 
-  T.Run;
+  LRunPassed := T.Run;
 
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

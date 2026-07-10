@@ -33,6 +33,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { TMockAllocator }
 
@@ -193,6 +194,8 @@ begin
   T.Test('FreeMemNilIsNoOp', @TestFreeMemNilIsNoOp);
   T.Test('DefaultTraits', @TestDefaultTraits);
   T.Test('GetMemAllocates', @TestGetMemAllocates);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

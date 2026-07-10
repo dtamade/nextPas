@@ -12,6 +12,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GPool: TMappedSlabAllocator = nil;
   GOtherPool: TMappedSlabAllocator = nil;
   GPtr: Pointer = nil;
@@ -194,7 +195,9 @@ begin
   T.Test('invalid and double free', @TestInvalidAndDoubleFree);
   T.Test('cross-pool free', @TestCrossPoolFree);
   T.Test('reset invalidates old pointers', @TestResetInvalidatesOldPointers);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

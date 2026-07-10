@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCreateAndDestroy;
 var
@@ -148,6 +149,8 @@ begin
   T.Test('reset_stats', @TestResetStats);
   T.Test('get_sample_out_of_range', @TestGetSampleOutOfRange);
   T.Test('traits', @TestTraits);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

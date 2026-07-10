@@ -464,6 +464,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.memtrack');
 
@@ -484,6 +485,8 @@ begin
   T.Test('ReAllocMem_Tracking', @Test_ReAllocMem_Tracking);
   T.Test('GlobalMemoryTracker_Singleton', @Test_GlobalMemoryTracker_Singleton);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

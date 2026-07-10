@@ -15,6 +15,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -159,6 +160,8 @@ begin
   T.Test('stats', @TestStats);
   T.Test('mixed_batch_and_single', @TestMixedBatchAndSingle);
   T.Test('batch_alloc_zero_size', @TestBatchAllocZeroSize);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

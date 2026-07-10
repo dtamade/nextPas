@@ -210,6 +210,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.parallel');
 
@@ -227,8 +228,10 @@ begin
   T.Test('ExecuteHeavyWorkload', @Test_Execute_HeavyWorkload);
   T.Test('GetResults', @Test_GetResults);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 
   GCounterLock.Free;
 end.

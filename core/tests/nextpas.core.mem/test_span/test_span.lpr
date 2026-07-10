@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestSpanInit;
 var
@@ -412,6 +413,8 @@ begin
   T.Test('level3_double_free', @TestSpanLevel3DoubleFree);
   T.Test('level3_out_of_bounds', @TestSpanLevel3OutOfBounds);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

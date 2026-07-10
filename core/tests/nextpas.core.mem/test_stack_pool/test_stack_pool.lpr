@@ -14,6 +14,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure CheckPointerAligned(APtr: Pointer; AAlignment: SizeUInt; const AName: string);
 begin
@@ -546,7 +547,9 @@ begin
   T.Test('auto-grow rejects existing allocation', @TestAutoGrowRejectsExistingAllocation);
   T.Test('auto-grow rejects untracked scope allocation', @TestAutoGrowRejectsUntrackedScopeAllocation);
   T.Test('growth precision no rounding error', @TestGrowthPrecisionNoRoundingError);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

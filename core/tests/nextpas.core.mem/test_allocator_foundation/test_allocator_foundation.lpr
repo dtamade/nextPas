@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GGetMemCalls: Integer = 0;
   GAllocMemCalls: Integer = 0;
   GReallocMemCalls: Integer = 0;
@@ -105,7 +106,9 @@ begin
   T.Test('RTL allocator matches canonical singleton', @TestFoundationRtlAllocatorMatchesCanonicalSingleton);
   T.Test('callback allocator routes callbacks', @TestFoundationCallbackAllocatorRoutesCallbacks);
   T.Test('TryGetRtlAllocator returns singleton', @TestTryGetRtlAllocator);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

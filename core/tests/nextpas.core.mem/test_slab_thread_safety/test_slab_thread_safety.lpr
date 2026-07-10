@@ -18,6 +18,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function CrossThreadWorker(AArg: Pointer): Pointer; cdecl;
 var
@@ -103,7 +104,9 @@ begin
   T := TTestSuite.Create('nextpas.core.mem.slab_thread_safety');
   T.Test('cross-thread detection (CS-017)', @TestCrossThreadDetection);
   T.Test('same-thread access OK', @TestSameThreadOK);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

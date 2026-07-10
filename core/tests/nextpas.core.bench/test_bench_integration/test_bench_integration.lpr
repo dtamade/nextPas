@@ -1814,6 +1814,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   GParallelLock := TMutex.Create;
   try
@@ -1878,8 +1879,10 @@ begin
     T.Test('SetOnProgress', @TestTBenchSuite_SetOnProgress);
     T.Test('RunParallel_WithFilter', @TestTBenchSuite_RunParallel_WithFilter);
     T.Test('RunParallel_WithCondition', @TestTBenchSuite_RunParallel_WithCondition);
-    T.Run;
+  LRunPassed := T.Run;
     T.Summary;
+  if not LRunPassed then
+    Halt(1);
   finally
     GParallelLock.Free;
   end;

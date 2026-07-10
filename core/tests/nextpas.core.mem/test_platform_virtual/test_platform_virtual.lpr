@@ -13,6 +13,7 @@ const
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { platform_virtual_reserve tests }
 
@@ -356,6 +357,8 @@ begin
   T.Test('reserve-commit-decommit-release scenario', @TestReserveCommitDecommitRelease);
   T.Test('large 256MB reserve', @TestLargeReserve);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

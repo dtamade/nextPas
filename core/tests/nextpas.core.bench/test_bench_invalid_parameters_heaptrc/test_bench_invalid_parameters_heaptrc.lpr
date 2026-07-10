@@ -316,6 +316,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.invalid_parameters.heaptrc');
 
@@ -353,6 +354,8 @@ begin
   { Post-Run Guard (1) }
   T.Test('GuardNotRun prevents mutation', @Test_GuardNotRun);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

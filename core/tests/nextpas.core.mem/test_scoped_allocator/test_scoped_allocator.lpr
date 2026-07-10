@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -150,6 +151,8 @@ begin
   T.Test('AllocMemZeroed', @TestAllocMemZeroed);
   T.Test('Traits', @TestTraits);
   T.Test('MultipleReset', @TestMultipleReset);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { Test: SizeClassGetScan defaults to False (noscan). }
 procedure TestScanDefault;
@@ -190,6 +191,8 @@ begin
   T.Test('shuffle_small_list', @TestShuffleSmallList);
   T.Test('shuffle_allocator_integration', @TestShuffleAllocatorIntegration);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicGuard;
 begin
@@ -132,6 +133,8 @@ begin
   T.Test('arena_recursion_detection', @TestArenaRecursionDetection);
   T.Test('leave_when_zero', @TestLeaveWhenZero);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

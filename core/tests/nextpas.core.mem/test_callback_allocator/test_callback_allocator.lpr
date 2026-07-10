@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GCallCount: Integer;
 
 function MyGetMem(ASize: SizeUInt): Pointer;
@@ -169,6 +170,8 @@ begin
   T.Test('CreateFunction', @TestCreateFunction);
   T.Test('MultipleAllocs', @TestMultipleAllocs);
   T.Test('FreeNil', @TestFreeNil);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

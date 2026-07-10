@@ -611,6 +611,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('simd.vec-all');
   T.Test('Vec16.CmpEq', @TestVec16CmpEq);
@@ -640,6 +641,8 @@ begin
   T.Test('Vec64.Popcnt', @TestVec64Popcnt);
   T.Test('Vec64.AddWhere', @TestVec64AddWhere);
   T.Test('Vec64.SubWhere', @TestVec64SubWhere);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.
