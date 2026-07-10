@@ -387,6 +387,7 @@ function TH1ResponseWriter.ResponseMustNotHaveBody: Boolean;
 begin
   Result := (FStatus = HTTP_STATUS_NO_CONTENT) or
             (FStatus = HTTP_STATUS_NOT_MODIFIED) or
+            (FStatus = HTTP_STATUS_RESET_CONTENT) or
             ((FStatus div 100) = 1);
 end;
 

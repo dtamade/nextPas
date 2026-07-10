@@ -125,7 +125,7 @@ begin
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
-      LOrigin, LAllowOrigin, LRequestHeaders, LRequestMethod: string;
+      LOrigin, LAllowOrigin, LRequestHeaders, LRequestMethod, LVaryExisting: string;
     begin
       LOrigin := AReq.Headers.Get('Origin');
       if LOrigin = '' then
@@ -169,10 +169,18 @@ begin
       { When echoing a specific Origin (not '*'), add Vary: Origin
         so caches distinguish responses per Origin. Also include
         Access-Control-Request-Method and Access-Control-Request-Headers
-        since preflight responses vary by these too. }
+        since preflight responses vary by these too.
+        Merge with existing Vary to avoid overwriting other cache dimensions. }
       if LAllowOrigin <> '*' then
-        AW.Headers.SetHeader('Vary',
-          'Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+      begin
+        LVaryExisting := AW.Headers.Get('Vary');
+        if LVaryExisting <> '' then
+          AW.Headers.SetHeader('Vary', LVaryExisting +
+            ', Origin, Access-Control-Request-Method, Access-Control-Request-Headers')
+        else
+          AW.Headers.SetHeader('Vary',
+            'Origin, Access-Control-Request-Method, Access-Control-Request-Headers');
+      end;
 
       AW.Headers.SetHeader('Access-Control-Allow-Methods', LState.AllowMethods);
 

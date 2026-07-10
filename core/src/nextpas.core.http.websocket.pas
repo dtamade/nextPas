@@ -375,9 +375,10 @@ begin
   begin
     { Default: reject Origin: null (common non-browser bypass technique).
       Browsers always send a valid Origin; `null` typically indicates
-      a sandboxed iframe or a non-browser client trying to evade checks. }
-    if LOrigin = 'null' then
-      raise EHttpError.Create('WebSocket: Origin: null not allowed by default');
+      a sandboxed iframe or a non-browser client trying to evade checks.
+      Also reject empty Origin as it indicates a non-browser client. }
+    if (LOrigin = 'null') or (LOrigin = '') then
+      raise EHttpError.Create('WebSocket: Origin must be present and non-null');
   end;
 
   { Hijack the connection }
