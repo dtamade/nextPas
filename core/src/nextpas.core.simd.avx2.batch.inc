@@ -430,22 +430,55 @@ begin
     jb @tail16
 
   @loop32:
+    // NaN-safe: detect NaN, replace with min, clamp, blend original NaN back
     vmovups ymm0, [rax]
-    vmaxps ymm0, ymm0, ymm6
-    vminps ymm0, ymm0, ymm7
-    vmovups [rcx], ymm0
-    vmovups ymm1, [rax + 32]
-    vmaxps ymm1, ymm1, ymm6
-    vminps ymm1, ymm1, ymm7
-    vmovups [rcx + 32], ymm1
-    vmovups ymm2, [rax + 64]
-    vmaxps ymm2, ymm2, ymm6
-    vminps ymm2, ymm2, ymm7
-    vmovups [rcx + 64], ymm2
-    vmovups ymm3, [rax + 96]
-    vmaxps ymm3, ymm3, ymm6
-    vminps ymm3, ymm3, ymm7
-    vmovups [rcx + 96], ymm3
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0  // NaN mask
+    vandps ymm3, ymm6, ymm5       // min & NaN_mask
+    vandnps ymm5, ymm5, ymm0      // ~NaN_mask & input
+    vorps ymm5, ymm5, ymm3        // safe_input
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4  // recompute NaN mask
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx], ymm5
+
+    vmovups ymm0, [rax + 32]
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx + 32], ymm5
+
+    vmovups ymm0, [rax + 64]
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx + 64], ymm5
+
+    vmovups ymm0, [rax + 96]
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx + 96], ymm5
+
     add rax, 128
     add rcx, 128
     sub r8, 32
@@ -455,14 +488,31 @@ begin
   @tail16:
     cmp r8, 16
     jb @tail8
+
     vmovups ymm0, [rax]
-    vmaxps ymm0, ymm0, ymm6
-    vminps ymm0, ymm0, ymm7
-    vmovups [rcx], ymm0
-    vmovups ymm1, [rax + 32]
-    vmaxps ymm1, ymm1, ymm6
-    vminps ymm1, ymm1, ymm7
-    vmovups [rcx + 32], ymm1
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx], ymm5
+
+    vmovups ymm0, [rax + 32]
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx + 32], ymm5
+
     add rax, 64
     add rcx, 64
     sub r8, 16
@@ -470,10 +520,19 @@ begin
   @tail8:
     cmp r8, 8
     jb @tail4
+
     vmovups ymm0, [rax]
-    vmaxps ymm0, ymm0, ymm6
-    vminps ymm0, ymm0, ymm7
-    vmovups [rcx], ymm0
+    vmovaps ymm4, ymm0
+    vcmpunordps ymm5, ymm0, ymm0
+    vandps ymm3, ymm6, ymm5
+    vandnps ymm5, ymm5, ymm0
+    vorps ymm5, ymm5, ymm3
+    vmaxps ymm5, ymm5, ymm6
+    vminps ymm5, ymm5, ymm7
+    vcmpunordps ymm3, ymm4, ymm4
+    vblendvps ymm5, ymm5, ymm4, ymm3
+    vmovups [rcx], ymm5
+
     add rax, 32
     add rcx, 32
     sub r8, 8
@@ -481,10 +540,19 @@ begin
   @tail4:
     cmp r8, 4
     jb @tail_scalar
+
     vmovups xmm0, [rax]
-    vmaxps xmm0, xmm0, xmm6
-    vminps xmm0, xmm0, xmm7
-    vmovups [rcx], xmm0
+    vmovaps xmm4, xmm0
+    vcmpunordps xmm5, xmm0, xmm0
+    vandps xmm3, xmm6, xmm5
+    vandnps xmm5, xmm5, xmm0
+    vorps xmm5, xmm5, xmm3
+    vmaxps xmm5, xmm5, xmm6
+    vminps xmm5, xmm5, xmm7
+    vcmpunordps xmm3, xmm4, xmm4
+    vblendvps xmm5, xmm5, xmm4, xmm3
+    vmovups [rcx], xmm5
+
     add rax, 16
     add rcx, 16
     sub r8, 4
@@ -494,9 +562,16 @@ begin
     jz @done
   @scalar_loop:
     vmovss xmm0, [rax]
-    vmaxss xmm0, xmm0, xmm6
-    vminss xmm0, xmm0, xmm7
-    vmovss [rcx], xmm0
+    vmovaps xmm4, xmm0
+    vcmpunordss xmm5, xmm0, xmm0
+    vandps xmm3, xmm6, xmm5
+    vandnps xmm5, xmm5, xmm0
+    vorps xmm5, xmm5, xmm3
+    vmaxss xmm5, xmm5, xmm6
+    vminss xmm5, xmm5, xmm7
+    vcmpunordss xmm3, xmm4, xmm4
+    vblendvps xmm5, xmm5, xmm4, xmm3
+    vmovss [rcx], xmm5
     add rax, 4
     add rcx, 4
     dec r8

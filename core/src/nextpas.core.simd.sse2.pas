@@ -3546,7 +3546,7 @@ begin
   end;
 end;
 
-// Clamp using SSE2 min/max
+// Clamp using SSE2 min/max with NaN preservation
 function SSE2ClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
 var
   pa, pMin, pMax, pr: Pointer;
@@ -3563,9 +3563,21 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     movups xmm2, [rcx]
-    maxps  xmm0, xmm1     // max(a, minVal)
-    minps  xmm0, xmm2     // min(result, maxVal)
-    movups [r8], xmm0
+    movaps xmm3, xmm0      // save original a
+    // NaN-safe: detect NaN, replace with min, clamp, blend back
+    cmpunordps xmm4, xmm0   // NaN mask (no FP signaling)
+    movaps xmm5, xmm1       // minVal
+    andps xmm5, xmm4        // min & NaN_mask
+    andnps xmm4, xmm0       // ~NaN_mask & input
+    orps xmm4, xmm5         // safe_input: NaN replaced with min
+    maxps xmm4, xmm1        // max(safe_input, minVal)
+    minps xmm4, xmm2        // min(result, maxVal)
+    // blend original NaN back
+    cmpunordps xmm5, xmm3   // recompute NaN mask from original
+    andps xmm3, xmm5        // original & NaN_mask
+    andnps xmm5, xmm4       // ~NaN_mask & clamped
+    orps xmm3, xmm5
+    movups [r8], xmm3
   end;
 end;
 

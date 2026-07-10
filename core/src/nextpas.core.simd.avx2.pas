@@ -241,21 +241,28 @@ end;
 
 function AVX2ClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
 begin
-  // 语义对齐：与 ScalarClampF32x4 相同的计算顺序：
-  //   Max(minVal, Min(a, maxVal))
-  // 注意：vmin/vmax 在 NaN 场景下是“返回第二操作数”，因此 operand 顺序必须匹配标量实现。
+  // NaN-safe: detect NaN, replace with min, clamp, blend original NaN back
   asm
     lea     rax, a
     lea     rdx, minVal
     lea     rcx, maxVal
 
     vmovups xmm0, [rax]
-    vminps  xmm0, xmm0, [rcx]   // temp = Min(a, maxVal)  (maxVal as 2nd operand)
-
     vmovups xmm1, [rdx]
-    vmaxps  xmm0, xmm1, xmm0    // result = Max(minVal, temp) (temp as 2nd operand)
+    vmovaps xmm3, xmm0           // save original a
+    // NaN detection before clamping
+    vcmpunordps xmm4, xmm0, xmm0 // NaN mask (no FP signaling)
+    // Replace NaN with min bound
+    vandps  xmm5, xmm1, xmm4     // min & NaN_mask
+    vandnps xmm4, xmm4, xmm0     // ~NaN_mask & input
+    vorps   xmm4, xmm4, xmm5     // safe_input: NaN replaced with min
+    vminps  xmm4, xmm4, [rcx]    // temp = Min(safe_input, maxVal)
+    vmaxps  xmm4, xmm1, xmm4     // result = Max(minVal, temp)
+    // Blend original NaN back
+    vcmpunordps xmm5, xmm3, xmm3 // recompute NaN mask from original
+    vblendvps xmm4, xmm4, xmm3, xmm5
 
-    vmovups [result], xmm0
+    vmovups [result], xmm4
   end;
 end;
 

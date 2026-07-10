@@ -668,22 +668,77 @@ begin
     jb @tail8
 
   @loop16:
+    // NaN-safe clamp: detect NaN, replace with min, clamp, blend original NaN back
+    // Chunk 0-3
     movups xmm0, [rax]
-    maxps xmm0, xmm6
-    minps xmm0, xmm7
-    movups [rcx], xmm0
-    movups xmm1, [rax + 16]
-    maxps xmm1, xmm6
-    minps xmm1, xmm7
-    movups [rcx + 16], xmm1
-    movups xmm2, [rax + 32]
-    maxps xmm2, xmm6
-    minps xmm2, xmm7
-    movups [rcx + 32], xmm2
-    movups xmm3, [rax + 48]
-    maxps xmm3, xmm6
-    minps xmm3, xmm7
-    movups [rcx + 48], xmm3
+    movaps xmm4, xmm0           // save original
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5       // NaN mask (1 where NaN, 0 otherwise)
+    movaps xmm3, xmm6
+    andps xmm3, xmm5            // min_bound & NaN_mask
+    andnps xmm5, xmm0           // ~NaN_mask & input (non-NaN values)
+    orps xmm5, xmm3             // safe_input: NaN replaced with min
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    // blend original NaN back
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3       // recompute NaN mask from original
+    andps xmm4, xmm3            // original & NaN_mask
+    andnps xmm3, xmm5           // ~NaN_mask & clamped
+    orps xmm4, xmm3
+    movups [rcx], xmm4
+
+    movups xmm0, [rax + 16]
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx + 16], xmm4
+
+    movups xmm0, [rax + 32]
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx + 32], xmm4
+
+    movups xmm0, [rax + 48]
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx + 48], xmm4
+
     add rax, 64
     add rcx, 64
     sub r8, 16
@@ -693,14 +748,41 @@ begin
   @tail8:
     cmp r8, 8
     jb @tail4
+
     movups xmm0, [rax]
-    maxps xmm0, xmm6
-    minps xmm0, xmm7
-    movups [rcx], xmm0
-    movups xmm1, [rax + 16]
-    maxps xmm1, xmm6
-    minps xmm1, xmm7
-    movups [rcx + 16], xmm1
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx], xmm4
+
+    movups xmm0, [rax + 16]
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx + 16], xmm4
+
     add rax, 32
     add rcx, 32
     sub r8, 8
@@ -708,10 +790,24 @@ begin
   @tail4:
     cmp r8, 4
     jb @tail_scalar
+
     movups xmm0, [rax]
-    maxps xmm0, xmm6
-    minps xmm0, xmm7
-    movups [rcx], xmm0
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordps xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxps xmm5, xmm6
+    minps xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordps xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movups [rcx], xmm4
+
     add rax, 16
     add rcx, 16
     sub r8, 4
@@ -721,9 +817,21 @@ begin
     jz @done
   @scalar_loop:
     movss xmm0, [rax]
-    maxss xmm0, xmm6
-    minss xmm0, xmm7
-    movss [rcx], xmm0
+    movaps xmm4, xmm0
+    movaps xmm5, xmm0
+    cmpunordss xmm5, xmm5
+    movaps xmm3, xmm6
+    andps xmm3, xmm5
+    andnps xmm5, xmm0
+    orps xmm5, xmm3
+    maxss xmm5, xmm6
+    minss xmm5, xmm7
+    movaps xmm3, xmm4
+    cmpunordss xmm3, xmm3
+    andps xmm4, xmm3
+    andnps xmm3, xmm5
+    orps xmm4, xmm3
+    movss [rcx], xmm4
     add rax, 4
     add rcx, 4
     dec r8

@@ -5,7 +5,8 @@ program test_batch_simd;
 uses
   nextpas.core.test,
   nextpas.core.math.base,
-  nextpas.core.math.batch.simd;
+  nextpas.core.math.batch.simd,
+  Math;
 
 var
   T: TTestSuite;
@@ -321,6 +322,34 @@ begin
   CheckNear(5.0, LOutput[4], 1e-6, 'BatchClampSimdF32 [4]');
 end;
 
+procedure TestBatchClampSimdF32_NaN;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000; // canonical quiet NaN
+  LInput[0] := LNaN;
+  LInput[1] := 5.0;
+  LInput[2] := LNaN;
+  LInput[3] := -5.0;
+  // Mask all FP exceptions during NaN clamp (NaN in SIMD can set status flags)
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchClampSimdF32(LInput, 0.0, 10.0, LOutput);
+  SetExceptionMask(LOldMask);
+  Check(LCount = 4, 'Clamp NaN count');
+  // Verify NaN is preserved via bit pattern (exponent=0xFF, mantissa!=0)
+  Check((PUInt32(@LOutput[0])^ and $7F800000) = $7F800000, 'Clamp NaN [0] exponent');
+  Check((PUInt32(@LOutput[0])^ and $007FFFFF) <> 0, 'Clamp NaN [0] mantissa');
+  CheckNear(5.0, LOutput[1], 1e-6, 'Clamp NaN [1]');
+  Check((PUInt32(@LOutput[2])^ and $7F800000) = $7F800000, 'Clamp NaN [2] exponent');
+  Check((PUInt32(@LOutput[2])^ and $007FFFFF) <> 0, 'Clamp NaN [2] mantissa');
+  CheckNear(0.0, LOutput[3], 1e-6, 'Clamp NaN [3]');
+end;
+
 procedure TestBatchScaleOffsetSimd;
 var
   LInput: array[0..2] of Single;
@@ -384,6 +413,7 @@ begin
   T.Test('BatchTruncSimdF32', @TestBatchTruncSimd);
   T.Test('BatchLerpSimdF32', @TestBatchLerpSimd);
   T.Test('BatchClampSimdF32', @TestBatchClampSimd);
+  T.Test('BatchClampSimdF32 NaN', @TestBatchClampSimdF32_NaN);
   T.Test('BatchScaleOffsetSimdF32', @TestBatchScaleOffsetSimd);
   T.Test('BatchSinSimdF32 Empty', @TestBatchSinEmpty);
   T.Test('BatchSinSimdF32 MismatchedLength', @TestBatchSinMismatchedLength);
