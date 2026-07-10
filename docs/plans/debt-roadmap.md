@@ -1,172 +1,107 @@
-# nextPas 技术债看板
+# 编译器债务路线图
 
 > 最后更新：2026-07-06
-> 用途：统一追踪所有已知技术债，每个 sprint 结束时 review
+> 基于 Codex 战略审查 + 实际验证，与 `selfhost-roadmap.md v3.0` 对齐。
 
-## 看板说明
+## 已完成
 
-| 字段 | 含义 |
-|------|------|
-| **严重度** |   阻塞自举 /   影响多模块 /   局部 /   文档/规范 |
-| **范围** | compiler / core / rtl / 跨模块 |
-| **预估** | 人天 |
+### C 系列（编译器核心能力）— ✅ 全部完成
 
----
-
-## 活跃债务
-
-### 编译器
-
-| # | 债务 | 严重度 | 范围 | 预估 | 状态 |
-|---|------|--------|------|------|------|
-| C1 | **TSemanticAnalyzer God Class** (279 方法/1 class) |    | compiler/sema | 10d | ✅ 2026-07-06 |
-| C2 | **permissive overload resolution** (选第一个候选) |    | compiler/sema | 3d | ✅ 2026-07-06 |
-| C3 | **Pipeline 阶段模糊** (sema 做了 ir 的活) |    | compiler/sema+ir | 5d | ✅ 2026-07-06 |
-| C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d | ✅ 2026-07-06 |
-| C5 | **增量编译** (符号表热缓存) |    | compiler/frontend | 5d | ✅ 2026-07-06 |
-| C6 | **并行编译** (拓扑序分层) |    | compiler/frontend | 3d | ✅ 2026-07-06 |
-| C7 | **Gate 2 unit lifecycle** (@llvm.global_ctors) |    | compiler/ir | 5d | ✅ 2026-07-06 |
-| C8 | **Gate 4 heap manager** (真实 malloc/free) |    | compiler/ir + core/mem | 4.5d | ✅ 2026-07-06 |
-| C9 | **c2p_win32_compat** (平台排除) |    | compiler | 1d | ✅ 2026-07-06 |
-
-### Core 框架
-
-| # | 债务 | 严重度 | 范围 | 预估 | 状态 |
-|---|------|--------|------|------|------|
-| L1 | **mail 模块契约缺失** (L3 2/3 → 3/3) |    | core/docs | 0.5d | ✅ 2026-07-06 |
-| L2 | **TInterfacedObject 替代** (TRefCountedObject) |    | core/base | 5d | ✅ 2026-07-06 |
-| L3 | **TThread 替代** (TWorkerThread) |    | core/thread | 3d | ✅ 2026-07-06 |
-| L4 | **StrComp SysUtils 依赖** (lhash.pas) |    | core/base | 0.25d | ✅ 2026-07-06 |
-| L5 | **泛型构造器传播** (collections, crypto.*) |    | compiler/sema | 10d | ✅ 2026-07-06 |
-| L6 | **Class helper 完整支持** (thread.future, text.format) |    | compiler/sema | 10d |   未开始 |
-
-### 平台/构建
-
-| # | 债务 | 严重度 | 范围 | 预估 | 状态 |
-|---|------|--------|------|------|------|
-| P1 | **platform.pipe** FPC 汇编问题 |    | core/platform | ? |   后续修复 |
-| P2 | **platform.signal** FPC 汇编问题 |    | core/platform | ? |   后续修复 |
-| P3 | **platform.which** FPC 汇编问题 |    | core/platform | ? |   后续修复 |
-| P4 | **simd.sse42** 内联汇编 |    | core/simd | ? |   后续修复 |
-| P5 | **tui.widget.linechart** FPC 汇编问题 |    | core/tui | ? |   后续修复 |
-| P6 | **io.mapped.ring_buffer.sharded** FPC 编译错误 |    | core/io | ? |   后续修复 |
-| P7 | **net.server.runtime** FPC 编译错误 |    | core/net | ? |   后续修复 |
-
----
-
-## 已清偿
-
-| # | 债务 | 清偿日期 |
+| # | 债务 | 完成日期 |
 |---|------|----------|
-| ✅ | IsBuiltinProcedure 重构为注册表 | 2026-06 |
-| ✅ | IsDeferredSystemObjectMember 清理 | 2026-06 |
-| ✅ | sema 17,735 → 12,175 行拆分 | 2026-06 |
-| ✅ | C5 `{$IFDEF}` 预处理器支持 | 2026-07-03 |
-| ✅ | C6-H4 owned string return | 2026-07-03 |
-| ✅ | C7 自举验证 | 2026-07-03 |
-| ✅ | FPC RTL 清零 (0 直接 SysUtils/Classes/System) | 2026-07-03 |
-| ✅ | Exception 自给自足 | 2026-06-24 |
-| ✅ | 平台类型自足 (SizeInt/SizeUInt) | 2026-06-24 |
-| ✅ | 57 模块契约全覆盖 | 2026-07-04 |
-| ✅ | mem 审计 R4+R5 清零 | 2026-07-05 |
-| ✅ | bench 审计 14/17 修复 | 2026-07-05 |
-| ✅ | StrComp (Sprint 1) | 2026-06 |
-| ✅ | Gate 3 process lifecycle | 2026-06 |
-| ✅ | Platform Phase 1-4 (DynLibs/Socket/Windows/Unix) | 2026-06 |
-| ✅ | TThread: platform_thread 迁移 | 2026-06 |
+| C1 | 编译单元级 record 字段解析 | 2026-06-29 |
+| C2 | FPC InlineVar 支持 | 2026-06-29 |
+| C3 | Pipeline 边界重组 (compiler/lower/) | 2026-07-06 |
+| C4 | record 辅助方法 | 2026-06-29 |
+| C5 | {$IFDEF} 条件编译支持 | 2026-07-03 |
+| C6 | owned string return | 2026-07-03 |
+| C7 | 自举验证 | 2026-07-03 |
+| C8 | Sema 深化 (S1-S9) | 2026-06-30 |
+| C9 | HIR→MIR 降低优化 | 2026-07-03 |
+
+### L 系列（语义/平台债务）— ✅ L1-L5 完成
+
+| # | 债务 | 完成日期 |
+|---|------|----------|
+| L1 | 字符串生命周期 (6 阶段) | 2026-06-29 |
+| L2 | FPC RTL 隔离 (Phase A-E) | 2026-06-24 |
+| L3 | Platform 语义绑定 | 2026-06-30 |
+| L4 | Compiler/Platform 集成 | 2026-07-03 |
+| L5 | 泛型构造器传播 | 2026-07-06 |
 
 ---
 
-## Sprint 建议
+## 当前债务
 
-### 当前 Sprint (2026-07-05 起) — 收尾
+### Phase 1 阻塞点：SIMD 汇编排除（1 周）
 
-| 优先级 | 债务 | 理由 |
-|--------|------|------|
-| P0 | C9: c2p_win32_compat | C8 最后残留 |
-| P0 | L1: mail 模块契约 | L3 最后一块 |
-| P1 | C7: Gate 2 unit lifecycle | 自举硬依赖 |
+> ⚠️ 这是真正的自举阻塞点，不是 L6-A。
 
-### 下一 Sprint — 基础设施
+**根因**: unit resolver 编译搜索路径中的所有单元（252 个），包括 `nextpas.core.simd.*`（含 Intel 内联汇编），导致 assembler 失败。
 
-| 优先级 | 债务 | 理由 |
-|--------|------|------|
-| P0 | C8: Gate 4 heap manager | 自举硬依赖 |
-| P1 | C5: 增量编译 | 开发体验质变 |
-| P1 | C1: sema 架构重构 Phase 1 (抽离 builtins) | 降低后续改动风险 |
+**修复方案**:
+1. unit resolver 增加 platform-exclude 机制
+2. SIMD 模块标记为 A 类平台排除
+3. 编译器只编译实际依赖的单元
 
-### 后续 Sprint — 架构偿还
+### L6-A: Class helper 最小解锁（4-6 天）
 
-| 优先级 | 债务 | 理由 |
-|--------|------|------|
-| P0 | C2: permissive overload → 正式 | 正确性 |
-| P1 | C1: sema 架构重构 Phase 2-5 | 持续降低复杂度 |
-| P1 | C3: Pipeline 边界重划 | 清晰职责 |
-| P1 | C4: .inc → 独立 unit | 消除伪架构 |
+> ⚠️ 基于过时信息，实际不是自举阻塞点。保留为后续质量改进。
 
----
+- parser: `helper for TClass` 语法支持（已通过 FPC 实现）
+- sema: 方法调度优先级规则（helper method 优先于原生 method）
+- 解锁模块: thread.future, text.format, text.conv, process.pipe, http.router（已验证可编译）
 
-## 治理关联
+### L6-B: Class helper 完整语义（5-8 天）
 
-- 项目总控: `PLAN.md`
-- 目标树: `docs/plans/goal-tree.md`
-- 自举路线图: `docs/plans/selfhost-roadmap.md`
-- 原始债务方案: `docs/plans/2026-06-18-debt-roadmap.md` (已归档)
+> Phase 5 之后任务，自举链路稳定后再做。
+
+- 冲突解析：多个 helper 的优先级规则
+- import/owner 边界：helper 的作用域管理
+- 完整诊断：helper 相关的错误消息
+- corner cases：嵌套 helper、泛型 helper 等
 
 ---
 
-*最后 review: 2026-07-05*
----
+## 基础设施债务（按新优先级排序）
 
-## 架构诊断 (2026-07-05)
+### 增量编译真实性审计（Phase 0，2-3 天）
 
-### 核心问题：TSemanticAnalyzer God Class
+> 不是"做增量编译"，是审计已有代码是否真的可用。
 
-| 指标 | 当前值 | 健康标准 |
-|------|--------|----------|
-| 方法声明 | 279 | <50 |
-| 方法实现 | 183 | <50 |
-| 文件行数 | 12,255 | <3,000 |
-| include 文件 | 2 (.inc) | 0 |
-| 私有字段 | 60+ | <15 |
+- [ ] 确认 cache/symbol cache 是否接在正式 build path ✅ 已确认
+- [ ] 确认是否覆盖 158 单元目标场景
+- [ ] 确认是否真的把热编译压到 <3s
+- [ ] 如果能力已存在但未产品化，排为 Phase 4 硬化
 
-**职责混乱**：单一 class 同时承担类型检查、重载解析、HIR 生成、字符串所有权、
-内置函数注册、运行时变量种子化、条件编译等 7+ 种职责。
+### Sema 拆分（Phase 3，1-2 周）
 
-### 派生问题
+> 自举链路稳定后再动，沿职责边界拆。
 
-1. **Pipeline 边界模糊** — sema 直接生成 HIR 表达式（`BuildRuntime*` 系列方法），
-   ir/ 中的 HIR Builder 退化为被动数据结构填充器
-2. **.inc 是补丁不是架构** — `np_sema_string_ops.inc` (2,243行) 和
-   `np_sema_runtime_expr.inc` (3,345行) 物理分离但逻辑上仍是同一 class 的方法
-3. **Permissive overload** — 代码中 15+ 处 `{ Permissive: ... }` 注释，
-   是 C8 冲刺的工程妥协，埋在主文件中难以清理
+拆分顺序：helper/member → call/overload → typed expr → lifetime/cleanup
 
-### 目标架构
+### 并行编译（Phase 5，不阻塞主线）
 
-```
-lower/ 已实现:
-├── np_hir_lowering            — AST→HIR 降级 (桥接 sema→ir)
+> 在缓存和错误归因稳定后再提高优先级。
 
-sema/ 应拆分为:
-├── np_sema_type_checker       — 类型检查 + 推导 (纯函数)
-├── np_sema_overload_resolver  — 重载解析 (独立可测)
-├── np_sema_builtins           — 内置函数注册表 (数据驱动)
-└── np_sema_string_ownership   — 字符串所有权 pass (独立 visitor)
-
-ir/ 应承担:
-├── np_hir_builder             — 从 sema 接收指令，不再被动
-└── np_hir_lowering            — HIR 规范化/优化
-```
-
-### 迁移路径
-
-| 阶段 | 内容 | 风险 | 预估 |
-|------|------|------|------|
-| 1 | 抽离 `np_sema_builtins` (~500行) | 极低 | 0.5d |
-| 2 | 抽离 `np_sema_string_ownership` (~2000行) | 低 | 1d |
-| 3 | 抽离 `np_sema_overload_resolver` (~1500行) | 中 | 2d |
-| 4 | 重新设计 sema↔ir 边界 | 高 | 3d |
-| 5 | 清理 permissive overload | 高 | 3d |
+- 自举前更重要的是确定性、错误 attribution、缓存失效边界
+- 保留为实验能力，不作为主线 gate
 
 ---
+
+## 非债务（正式标记 out-of-scope）
+
+| 项目 | 原因 |
+|------|------|
+| winssl (10 模块) | Windows-only，A 类平台排除 |
+| simd.sse42 | SSE4.2 内联汇编，A 类平台排除 |
+| simd.sse2/base/dispatch/cpuinfo | Intel 内联汇编，A 类平台排除 |
+
+---
+
+## 关联
+
+- 自举路线图: `docs/plans/selfhost-roadmap.md v3.0`
+- Phase 0 任务: 状态真相统一 ✅ 已完成
+- Phase 1 任务: SIMD 汇编排除 ← 当前
+- 决策点: 6 个关键决策已确认
