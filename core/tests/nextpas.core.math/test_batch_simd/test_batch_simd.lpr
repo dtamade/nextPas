@@ -393,6 +393,245 @@ begin
   Check(LCount = 1, 'Should return min length');
 end;
 
+{ ============================================================================
+  Boundary value tests: NaN, Inf, -Inf, 0 for each batch function
+  Uses PUInt32 bit-pattern checks for NaN verification
+  ============================================================================ }
+
+function IsNaN(const X: Single): Boolean; inline;
+begin
+  Result := (PUInt32(@X)^ and $7F800000) = $7F800000;
+  if Result then
+    Result := (PUInt32(@X)^ and $007FFFFF) <> 0;
+end;
+
+function IsInf(const X: Single): Boolean; inline;
+begin
+  Result := PUInt32(@X)^ and $7FFFFFFF = $7F800000;
+end;
+
+procedure TestBatchSinSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegInf: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;       // canonical quiet NaN
+  PUInt32(@LPosInf)^ := $7F800000;    // +Inf
+  PUInt32(@LNegInf)^ := $FF800000;    // -Inf
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := LNegInf;
+  LInput[3] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchSinSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Sin boundary count');
+  Check(IsNaN(LOutput[0]), 'Sin(NaN) = NaN');
+  Check(IsNaN(LOutput[1]), 'Sin(+Inf) = NaN');
+  Check(IsNaN(LOutput[2]), 'Sin(-Inf) = NaN');
+  CheckNear(0.0, LOutput[3], 1e-6, 'Sin(0) = 0');
+end;
+
+procedure TestBatchCosSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegInf: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+  PUInt32(@LPosInf)^ := $7F800000;
+  PUInt32(@LNegInf)^ := $FF800000;
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := LNegInf;
+  LInput[3] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchCosSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Cos boundary count');
+  Check(IsNaN(LOutput[0]), 'Cos(NaN) = NaN');
+  Check(IsNaN(LOutput[1]), 'Cos(+Inf) = NaN');
+  Check(IsNaN(LOutput[2]), 'Cos(-Inf) = NaN');
+  CheckNear(1.0, LOutput[3], 1e-6, 'Cos(0) = 1');
+end;
+
+procedure TestBatchTanSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegInf: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+  PUInt32(@LPosInf)^ := $7F800000;
+  PUInt32(@LNegInf)^ := $FF800000;
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := LNegInf;
+  LInput[3] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchTanSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Tan boundary count');
+  Check(IsNaN(LOutput[0]), 'Tan(NaN) = NaN');
+  Check(IsNaN(LOutput[1]), 'Tan(+Inf) = NaN');
+  Check(IsNaN(LOutput[2]), 'Tan(-Inf) = NaN');
+  CheckNear(0.0, LOutput[3], 1e-6, 'Tan(0) = 0');
+end;
+
+procedure TestBatchExpSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegInf: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+  PUInt32(@LPosInf)^ := $7F800000;
+  PUInt32(@LNegInf)^ := $FF800000;
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := LNegInf;
+  LInput[3] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchExpSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Exp boundary count');
+  Check(IsNaN(LOutput[0]), 'Exp(NaN) = NaN');
+  Check(IsInf(LOutput[1]) and (LOutput[1] > 0), 'Exp(+Inf) = +Inf');
+  CheckNear(0.0, LOutput[2], 1e-6, 'Exp(-Inf) = 0');
+  CheckNear(1.0, LOutput[3], 1e-6, 'Exp(0) = 1');
+end;
+
+procedure TestBatchLnSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegOne: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+  PUInt32(@LPosInf)^ := $7F800000;
+  LNegOne := -1.0;
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := 0.0;
+  LInput[3] := LNegOne;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchLnSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Ln boundary count');
+  Check(IsNaN(LOutput[0]), 'Ln(NaN) = NaN');
+  Check(IsInf(LOutput[1]) and (LOutput[1] > 0), 'Ln(+Inf) = +Inf');
+  Check(IsInf(LOutput[2]) and (LOutput[2] < 0), 'Ln(0) = -Inf');
+  Check(IsNaN(LOutput[3]), 'Ln(-1) = NaN');
+end;
+
+procedure TestBatchSqrtSimd_Boundary;
+var
+  LInput: array[0..3] of Single;
+  LOutput: array[0..3] of Single;
+  LCount: SizeInt;
+  LNaN, LPosInf, LNegOne: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+  PUInt32(@LPosInf)^ := $7F800000;
+  LNegOne := -1.0;
+
+  LInput[0] := LNaN;
+  LInput[1] := LPosInf;
+  LInput[2] := LNegOne;
+  LInput[3] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchSqrtSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 4, 'Sqrt boundary count');
+  Check(IsNaN(LOutput[0]), 'Sqrt(NaN) = NaN');
+  Check(IsInf(LOutput[1]) and (LOutput[1] > 0), 'Sqrt(+Inf) = +Inf');
+  Check(IsNaN(LOutput[2]), 'Sqrt(-1) = NaN');
+  CheckNear(0.0, LOutput[3], 1e-6, 'Sqrt(0) = 0');
+end;
+
+procedure TestBatchAbsSimd_Boundary;
+var
+  LInput: array[0..2] of Single;
+  LOutput: array[0..2] of Single;
+  LCount: SizeInt;
+  LNaN: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+
+  LInput[0] := LNaN;
+  LInput[1] := 0.0;
+  LInput[2] := -0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchAbsSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 3, 'Abs boundary count');
+  Check(IsNaN(LOutput[0]), 'Abs(NaN) = NaN');
+  CheckNear(0.0, LOutput[1], 1e-6, 'Abs(0) = 0');
+  CheckNear(0.0, LOutput[2], 1e-6, 'Abs(-0) = 0');
+end;
+
+procedure TestBatchNegSimd_Boundary;
+var
+  LInput: array[0..1] of Single;
+  LOutput: array[0..1] of Single;
+  LCount: SizeInt;
+  LNaN: Single;
+  LOldMask: TFPUExceptionMask;
+begin
+  PUInt32(@LNaN)^ := $7FC00000;
+
+  LInput[0] := LNaN;
+  LInput[1] := 0.0;
+
+  LOldMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  LCount := BatchNegSimdF32(LInput, LOutput);
+  SetExceptionMask(LOldMask);
+
+  Check(LCount = 2, 'Neg boundary count');
+  Check(IsNaN(LOutput[0]), 'Neg(NaN) = NaN');
+  CheckNear(0.0, LOutput[1], 1e-6, 'Neg(0) = 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.batch.simd');
 
@@ -417,6 +656,16 @@ begin
   T.Test('BatchScaleOffsetSimdF32', @TestBatchScaleOffsetSimd);
   T.Test('BatchSinSimdF32 Empty', @TestBatchSinEmpty);
   T.Test('BatchSinSimdF32 MismatchedLength', @TestBatchSinMismatchedLength);
+
+  // Boundary value tests: NaN, Inf, -Inf, 0
+  T.Test('BatchSinSimdF32 Boundary', @TestBatchSinSimd_Boundary);
+  T.Test('BatchCosSimdF32 Boundary', @TestBatchCosSimd_Boundary);
+  T.Test('BatchTanSimdF32 Boundary', @TestBatchTanSimd_Boundary);
+  T.Test('BatchExpSimdF32 Boundary', @TestBatchExpSimd_Boundary);
+  T.Test('BatchLnSimdF32 Boundary', @TestBatchLnSimd_Boundary);
+  T.Test('BatchSqrtSimdF32 Boundary', @TestBatchSqrtSimd_Boundary);
+  T.Test('BatchAbsSimdF32 Boundary', @TestBatchAbsSimd_Boundary);
+  T.Test('BatchNegSimdF32 Boundary', @TestBatchNegSimd_Boundary);
 
   if not T.Run then Halt(1);
 end.

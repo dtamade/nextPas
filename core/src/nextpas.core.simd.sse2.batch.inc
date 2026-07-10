@@ -3979,16 +3979,21 @@ begin
   @loop4:
     movups xmm0, [rax]
 
-    // Detect NaN/Inf: abs(x) >= 0x7F800000
+    // Detect NaN: unord(x, x) is TRUE iff x is NaN
+    movaps xmm4, xmm0
+    cmpunordps xmm4, xmm4         // NaN mask (1 where NaN)
+    // Detect Inf: abs(x) == 0x7F800000
     pcmpeqd xmm5, xmm5
     psrld xmm5, 1
-    movaps xmm4, xmm0
-    andps xmm4, xmm5            // abs(x)
+    movaps xmm3, xmm0
+    andps xmm3, xmm5              // abs(x)
     mov r9d, $7F800000
-    movd xmm3, r9d
-    shufps xmm3, xmm3, 0
-    cmpps xmm4, xmm3, 5         // mask: NaN or Inf
+    movd xmm5, r9d
+    shufps xmm5, xmm5, 0
+    pcmpeqd xmm3, xmm5           // Inf mask (1 where Inf)
+    orps xmm4, xmm3               // combined: NaN or Inf
 
+    // Clamp: minss/maxss return second operand for NaN, so NaN→88.7228
     minps xmm0, xmm7
     maxps xmm0, xmm6
 
@@ -4038,6 +4043,32 @@ begin
     andnps xmm4, xmm2          // result where NOT NaN/Inf, 0 elsewhere
     orps xmm0, xmm4            // combined
 
+    // Fix Exp(-Inf): -Inf should produce 0.0, not -Inf
+    // xmm4 still has the Inf+NaN mask (from andnps above, it's the inverted mask)
+    // Re-detect: original input sign + Inf mask
+    movups xmm2, [rax]         // reload original
+    pcmpeqd xmm3, xmm3
+    pslld xmm3, 31             // 0x80000000 sign mask
+    movaps xmm1, xmm2
+    andps xmm1, xmm3           // sign bits
+    pcmpeqd xmm3, xmm3
+    pslld xmm3, 31             // 0x80000000
+    pcmpeqd xmm1, xmm3         // negative mask (1 where negative)
+    // xmm4 was destroyed, recompute Inf mask
+    // We need the Inf mask. Recompute: abs(x) == 0x7F800000
+    pcmpeqd xmm5, xmm5
+    psrld xmm5, 1              // 0x7FFFFFFF
+    movaps xmm3, xmm2
+    andps xmm3, xmm5           // abs(x)
+    mov r9d, $7F800000
+    movd xmm5, r9d
+    shufps xmm5, xmm5, 0
+    pcmpeqd xmm3, xmm5         // Inf mask
+    andps xmm1, xmm3            // negative AND Inf = -Inf mask
+    // Zero out -Inf lanes
+    andnps xmm1, xmm0           // clear lanes where -Inf
+    movaps xmm0, xmm1
+
     movups [rcx], xmm0
     add rax, 16
     add rcx, 16
@@ -4050,6 +4081,19 @@ begin
     jz @done
   @scalar_loop:
     movss xmm0, [rax]
+    // Check for NaN: unord(x, x) → NaN mask
+    movaps xmm4, xmm0
+    cmpunordss xmm4, xmm4         // NaN mask
+    // Check for Inf: abs(x) == 0x7F800000
+    movaps xmm5, xmm0
+    mov r9d, $7FFFFFFF
+    movd xmm3, r9d
+    andps xmm5, xmm3              // abs(x)
+    mov r9d, $7F800000
+    movd xmm3, r9d
+    pcmpeqd xmm5, xmm3           // Inf mask
+    orps xmm4, xmm5               // combined: NaN or Inf
+    // Clamp (NaN → 88.7228 via minss/maxss, but we'll blend back)
     minss xmm0, xmm7
     maxss xmm0, xmm6
     movaps xmm1, xmm0
@@ -4081,7 +4125,22 @@ begin
     shl r9d, 23
     movd xmm1, r9d
     paddd xmm2, xmm1
-    movss [rcx], xmm2
+    // Blend: where NaN or Inf, use original value
+    movaps xmm3, xmm4
+    andps xmm3, [rax]             // original where NaN/Inf
+    andnps xmm4, xmm2             // result where not NaN/Inf
+    orps xmm4, xmm3
+    // Fix Exp(-Inf): -Inf should produce 0.0
+    // Check if blended result is -Inf ($FF800000)
+    mov r9d, $FF800000
+    movd xmm3, r9d
+    movss xmm0, xmm4
+    movd r9d, xmm0
+    cmp r9d, $FF800000
+    jne @store_exp
+    xorps xmm4, xmm4             // zero out -Inf
+  @store_exp:
+    movss [rcx], xmm4
     add rax, 4
     add rcx, 4
     dec r8

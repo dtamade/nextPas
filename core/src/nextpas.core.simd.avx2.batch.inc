@@ -3695,14 +3695,17 @@ begin
   @loop8:
     vmovups ymm0, [rax]
 
-    // Detect NaN/Inf: abs(x) >= 0x7F800000
-    vpcmpeqd ymm3, ymm3, ymm3
-    vpsrld ymm3, ymm3, 1
-    vpand ymm1, ymm0, ymm3      // abs(x)
+    // Detect NaN: unord(x, x) is TRUE iff x is NaN
+    vcmpps ymm1, ymm0, ymm0, 3   // NaN mask (1 where NaN)
+    // Detect Inf: abs(x) == 0x7F800000
+    vpcmpeqd ymm2, ymm2, ymm2
+    vpsrld ymm2, ymm2, 1         // 0x7FFFFFFF mask
+    vpand ymm3, ymm0, ymm2       // abs(x)
     mov r9d, $7F800000
     vmovd xmm2, r9d
-    vpbroadcastd ymm2, xmm2
-    vcmpps ymm3, ymm1, ymm2, 5  // mask: NaN or Inf
+    vpbroadcastd ymm2, xmm2      // broadcast 0x7F800000
+    vpcmpeqd ymm3, ymm3, ymm2    // Inf mask (1 where Inf)
+    vpor ymm3, ymm1, ymm3         // combined: NaN or Inf
 
     // Clamp
     vminps ymm0, ymm0, ymm5
@@ -3732,6 +3735,22 @@ begin
     vmovups ymm1, [rax]
     vblendvps ymm2, ymm2, ymm1, ymm3
 
+    // Fix Exp(-Inf): -Inf should produce 0.0, not -Inf
+    // Detect -Inf: abs(x) == Inf AND x < 0
+    // ymm3 = Inf+NaN mask (from blend), ymm2 = blended result
+    // Check sign: x & 0x80000000
+    vmovups ymm1, [rax]           // reload original input
+    vpcmpeqd ymm0, ymm0, ymm0
+    vpslld ymm0, ymm0, 31         // 0x80000000 sign mask
+    vpand ymm1, ymm1, ymm0        // sign bits of original input
+    vpcmpeqd ymm0, ymm0, ymm0
+    vpslld ymm0, ymm0, 31         // 0x80000000
+    vpcmpeqd ymm1, ymm1, ymm0     // negative mask (1 where sign bit set)
+    vpand ymm0, ymm1, ymm3        // negative AND Inf = -Inf mask
+    // Zero out -Inf lanes: result = result AND NOT(-Inf_mask)
+    vpandn ymm0, ymm0, ymm2       // clear lanes where -Inf
+    vmovaps ymm2, ymm0
+
     vmovups [rcx], ymm2
     add rax, 32
     add rcx, 32
@@ -3744,6 +3763,17 @@ begin
     jz @done
   @scalar_loop:
     vmovss xmm0, [rax]
+    // Check for NaN: unord(x, x) → NaN mask
+    vcmpps xmm3, xmm0, xmm0, 3   // NaN mask
+    // Check for Inf: abs(x) == 0x7F800000
+    vpcmpeqd xmm1, xmm1, xmm1
+    vpsrld xmm1, xmm1, 1         // 0x7FFFFFFF
+    vpand xmm1, xmm0, xmm1       // abs(x)
+    mov r9d, $7F800000
+    vmovd xmm2, r9d
+    vpcmpeqd xmm1, xmm1, xmm2    // Inf mask
+    vpor xmm3, xmm3, xmm1         // combined: NaN or Inf
+    // Clamp and compute
     vminss xmm0, xmm0, xmm5
     vmaxss xmm0, xmm0, xmm4
     vmulss xmm1, xmm0, xmm15
@@ -3763,6 +3793,14 @@ begin
     shl r9d, 23
     vmovd xmm1, r9d
     vpaddd xmm2, xmm2, xmm1
+    // Blend: where NaN or Inf, use original value
+    vblendvps xmm2, xmm2, [rax], xmm3
+    // Fix Exp(-Inf): -Inf should produce 0.0
+    vmovd r9d, xmm2
+    cmp r9d, $FF800000
+    jne @store_exp
+    vxorps xmm2, xmm2, xmm2     // zero out -Inf
+  @store_exp:
     vmovss [rcx], xmm2
     add rax, 4
     add rcx, 4
