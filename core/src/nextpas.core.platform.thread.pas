@@ -95,6 +95,7 @@ function platform_cpu_count: Int32;
 
 { Thread naming - for debugging }
 
+{$IFDEF NEXTPAS_LINUX}
 {** @desc 设置当前线程名称（用于调试器显示）
     @param AName 线程名称
     @return 0 成功，PLATFORM_ERR_* 错误码 *}
@@ -105,6 +106,7 @@ function platform_thread_set_name(const AName: PAnsiChar): Int32;
     @param ABufSize 缓冲区大小
     @return 名称实际长度 *}
 function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+{$ENDIF}
 
 type
   {**
