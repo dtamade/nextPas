@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts contract
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -124,6 +124,12 @@ self-compile-modules: rebuild-compiler
 
 c8-probe-np-allocator: rebuild-compiler
 	./build/probe_self_compile_module.sh rtl/core/mem/np_allocator.pas
+
+system-projection-check:
+	bash scripts/system-projection.sh check linux-x86_64
+
+system-projection-sync:
+	bash scripts/system-projection.sh sync linux-x86_64
 
 hygiene:
 	./scripts/build-hygiene-check.sh
