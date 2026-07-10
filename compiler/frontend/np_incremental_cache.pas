@@ -5,7 +5,7 @@
  * 通过依赖指纹实现增量编译。
  *
  * 设计：
- *   - 缓存路径: .nextpas/cache/<unit-id>.npc
+ *   - 缓存路径: .nextpas/cache/<sha256(unit-id)>.npc
  *   - 指纹: 源文件内容 SHA256 + 依赖 hash
  *   - 格式: magic(4) + version(4) + fingerprint(32) + data
  *
@@ -369,8 +369,12 @@ begin
 end;
 
 function TIncrementalCache.EntryPath(const AUnitId: string): string;
+var
+  UnitIdHash: TBytes;
 begin
-  Result := FCacheDir + '/' + AUnitId + '.npc';
+  UnitIdHash := HashStr(AUnitId);
+  Result := IncludeTrailingPathDelimiter(FCacheDir) +
+    DigestToHex(UnitIdHash[0], Length(UnitIdHash)) + '.npc';
 end;
 
 function TIncrementalCache.ComputeSourceHash(const ASourceText: string): TBytes;
