@@ -90,6 +90,13 @@ type
 const
   HOTSWAP_HEADER = SizeOf(THotswapHeader);
 
+procedure FreeHeaderBlockAndReleaseOrigin(const AOrigin: IAllocator;
+  const AHeader: PHotswapHeader); inline;
+begin
+  AOrigin.FreeMem(AHeader);
+  AOrigin._Release; { Balance the header-owned reference acquired in GetMem. }
+end;
+
 { THotswapAllocator }
 
 constructor THotswapAllocator.Create(AInitial: IAllocator);
@@ -180,8 +187,7 @@ begin
     Exit(nil);
   LCopySize := LOldSize;
   Move(APtr^, Result^, LCopySize);
-  LOrigin.FreeMem(LHeader);
-  { LOrigin 是局部 IAllocator 变量，出作用域时自动 _Release，无需显式调用 }
+  FreeHeaderBlockAndReleaseOrigin(LOrigin, LHeader);
 end;
 
 procedure THotswapAllocator.FreeMem(APtr: Pointer); inline;
@@ -193,8 +199,7 @@ begin
     Exit;
   LHeader := PHotswapHeader(PByte(APtr) - HOTSWAP_HEADER);
   LOrigin := IAllocator(LHeader^.Origin); { 赋值触发 _AddRef }
-  LOrigin.FreeMem(LHeader);
-  LOrigin._Release; { 释放 GetMem 中存储的裸指针的引用 }
+  FreeHeaderBlockAndReleaseOrigin(LOrigin, LHeader);
 end;
 
 function THotswapAllocator.Traits: TAllocatorTraits; inline;

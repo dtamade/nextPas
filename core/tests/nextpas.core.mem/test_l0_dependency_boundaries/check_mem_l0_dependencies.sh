@@ -4,16 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$ROOT"
 
+ALLOWED_NEXTPAS_UNIT_FAMILIES=(
+  "nextpas.core.atomic"
+  "nextpas.core.base"
+  "nextpas.core.errors"
+  "nextpas.core.exception"
+  "nextpas.core.log.intf"
+  "nextpas.core.math"
+  "nextpas.core.mem"
+  "nextpas.core.platform"
+  "nextpas.core.simd"
+  "nextpas.core.system"
+)
+
 FORBIDDEN_UNITS=(
-  "nextpas.core.sync"
-  "nextpas.core.sync.mutex"
   "nextpas.core.platform.time"
-  "nextpas.core.time.cpu"
-  "nextpas.core.text.conv"
-  "nextpas.core.fs.util"
-  "nextpas.core.os.env"
-  "nextpas.core.path"
-  "nextpas.core.fs.path"
   "SysUtils"
   "Windows"
   "BaseUnix"
@@ -24,14 +29,34 @@ FORBIDDEN_UNITS=(
 KNOWN_DEBT=(
 )
 
+is_allowed_nextpas_unit() {
+  local unit="$1"
+  local family
+  for family in "${ALLOWED_NEXTPAS_UNIT_FAMILIES[@]}"; do
+    if [[ "$unit" == "$family" || "$unit" == "$family".* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 is_forbidden_unit() {
   local unit="$1"
   local forbidden
+
   for forbidden in "${FORBIDDEN_UNITS[@]}"; do
     if [[ "$unit" == "$forbidden" ]]; then
       return 0
     fi
   done
+
+  if [[ "$unit" == nextpas.core.* ]]; then
+    if is_allowed_nextpas_unit "$unit"; then
+      return 1
+    fi
+    return 0
+  fi
+
   return 1
 }
 
@@ -45,6 +70,17 @@ is_known_debt() {
   done
   return 1
 }
+
+assert_forbidden_unit() {
+  local unit="$1"
+  if ! is_forbidden_unit "$unit"; then
+    echo "L0 dependency classifier did not reject: $unit" >&2
+    return 1
+  fi
+}
+
+assert_forbidden_unit "nextpas.core.text"
+assert_forbidden_unit "nextpas.core.platform.time"
 
 tmp_found="$(mktemp)"
 tmp_unknown="$(mktemp)"
