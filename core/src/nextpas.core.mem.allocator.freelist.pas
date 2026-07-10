@@ -108,6 +108,7 @@ begin
     // Freelist hit
     LHeader := PSizeUInt(FBins[LBin]);
     FBins[LBin] := PPointer(LHeader)^;
+    LHeader^ := ASize; // restore size (freelist overwrote it with next ptr)
     Inc(FStats.HitCount);
     Exit(Pointer(PByte(LHeader) + FREELIST_HEADER_SIZE));
   end;

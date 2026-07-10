@@ -118,6 +118,14 @@ begin
     SetLength(FRegions, FRegionCount + 8);
 
   FRegions[FRegionCount] := FInner.GetMem(LNewSize);
+  if FRegions[FRegionCount] = nil then
+  begin
+    { OOM: 设置容量为 0，后续 GetMem 会返回 nil }
+    FCurrentRegion := nil;
+    FCurrentOffset := 0;
+    FCurrentCapacity := 0;
+    Exit;
+  end;
   Inc(FRegionCount);
   FCurrentRegion := FRegions[FRegionCount - 1];
   FCurrentOffset := 0;

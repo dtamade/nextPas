@@ -138,6 +138,9 @@ begin
   inherited Create;
   FFileName := AFileName;
   FMappedSize := ASize;
+  if ASize < MAPPED_FILE_HEADER_SIZE + 64 then
+    raise EAllocError.Create(aeInvalidLayout,
+      'TMappedFileAllocator.Create: ASize must be at least header + 64 bytes');
   FAllocCount := 0;
   FIsCreator := ACreate;
 
@@ -262,10 +265,14 @@ begin
 
   { 8 字节对齐 + size header }
   LAlignedSize := (ASize + SizeOf(SizeUInt) + 7) and not SizeUInt(7);
+  if LAlignedSize < ASize then
+    Exit; // overflow in alignment calculation
 
   { 检查空间 }
   if FFreeOffset + LAlignedSize > FMappedSize then
     Exit;
+  if FFreeOffset + LAlignedSize < FFreeOffset then
+    Exit; // overflow in offset+size
 
   { 分配: store size header, then user data }
   LSizePtr := PSizeUInt(PtrUInt(FBaseAddress) + FFreeOffset);
@@ -358,6 +365,7 @@ end;
 function TMappedFileAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := False;
+  Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
 end;
 

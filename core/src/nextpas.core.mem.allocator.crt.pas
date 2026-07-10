@@ -72,6 +72,7 @@ begin
   // - No MemSize/usable_size available
   Result.ZeroInitialized := True;
   Result.ThreadSafe := False;
+  Result.SupportsRealloc := False; // CRT realloc not exposed via this allocator
 end;
 
 function GetCrtAllocator: IAllocator;

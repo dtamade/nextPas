@@ -35,6 +35,8 @@ const
   POOL_DEFAULT_INITIAL_COUNT = 256;
   {** 默认扩展增量 }
   POOL_DEFAULT_GROW_COUNT = 128;
+  {** 内部 fallback 分配标记（放在用户指针前 1 字节） }
+  POOL_INNER_MAGIC = $A7;
 
 type
   {** 池统计信息 }
@@ -218,8 +220,20 @@ begin
 end;
 
 function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
+var
+  LRaw: PByte;
 begin
-  { 忽略 ASize，使用固定块大小 }
+  { 超过固定块大小的请求，fallback 到内部分配器（带标记头） }
+  if ASize > FBlockSize then
+  begin
+    LRaw := PByte(FInner.GetMem(ASize + 1));
+    if LRaw = nil then
+      Exit(nil);
+    LRaw^ := POOL_INNER_MAGIC;
+    Result := Pointer(LRaw + 1);
+    Inc(FAllocCount);
+    Exit;
+  end;
   if FFreeHead = nil then
     GrowPool(POOL_DEFAULT_GROW_COUNT);
   Result := PopFree;
@@ -245,6 +259,13 @@ end;
 procedure TPoolAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr = nil then Exit;
+  { 检查是否为 inner fallback 分配 }
+  if PByte(APtr)[-1] = POOL_INNER_MAGIC then
+  begin
+    FInner.FreeMem(Pointer(PByte(APtr) - 1));
+    Inc(FFreeCountStat);
+    Exit;
+  end;
   PushFree(APtr);
   Inc(FFreeCountStat);
 end;

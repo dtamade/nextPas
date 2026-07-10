@@ -152,6 +152,9 @@ end;
 destructor TStackAllocator.Destroy;
 begin
   Reset;
+  { Reset 保留第一个 region，析构时需要释放 }
+  if (FRegions <> nil) and (Length(FRegions) > 0) and (FRegions[0] <> nil) then
+    FInner.FreeMem(FRegions[0]);
   SetLength(FRegions, 0);
   FInner := nil;
   inherited Destroy;
