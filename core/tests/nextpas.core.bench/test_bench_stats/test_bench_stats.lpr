@@ -946,6 +946,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   GAnalyzer := TBenchStatsAnalyzer.Create;
   T := TTestSuite.Create('nextpas.core.bench.stats');
@@ -990,6 +991,8 @@ begin
   T.Test('Percentile_RangeValidation', @TestPercentile_RangeValidation);
   T.Test('ComputeStats_EmptyArray (U-12)', @TestComputeStats_EmptyArray);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestArenaCreate;
 var
@@ -303,7 +304,9 @@ begin
   T.Test('Write/Read', @TestArenaWriteRead);
   T.Test('AllocZeroed', @TestArenaZeroed);
   T.Test('TLocalArena class', @TestArenaClassAlias);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

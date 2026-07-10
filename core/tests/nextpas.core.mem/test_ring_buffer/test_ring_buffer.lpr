@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- 基础生命周期 Basic lifecycle --- }
 
@@ -807,6 +808,8 @@ begin
   { Batch wrap-around }
   T.Test('batch push wrap-around', @TestBatchPushWrapAround);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

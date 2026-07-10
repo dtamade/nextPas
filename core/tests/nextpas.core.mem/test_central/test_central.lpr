@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestCentralPoolInit;
 var
@@ -311,6 +312,8 @@ begin
   T.Test('scavenge_fully_free (NEW-024)', @TestScavengeFullyFreeSpans);
   T.Test('scavenge_not_idle_yet (NEW-024)', @TestScavengeNotIdleYet);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

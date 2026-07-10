@@ -705,6 +705,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 begin
   T := TTestSuite.Create('nextpas.core.mem.arena.thread');
@@ -749,8 +750,10 @@ begin
   { 多 Manager 隔离 }
   T.Test('Multi-manager isolation', @TestMultiManagerIsolation);
 
-  T.Run;
+  LRunPassed := T.Run;
 
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

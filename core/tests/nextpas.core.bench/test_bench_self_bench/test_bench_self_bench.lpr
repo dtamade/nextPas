@@ -483,6 +483,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   RandSeed := 42;
 
@@ -513,6 +514,8 @@ begin
   T.Test('BenchSuite_FluentAPI', @TestBenchSuite_FluentAPI);
   T.Test('BenchResults_PrintToConsole', @TestBenchResults_PrintToConsole);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

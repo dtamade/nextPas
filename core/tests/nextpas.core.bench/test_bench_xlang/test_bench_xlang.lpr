@@ -517,6 +517,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.xlang');
 
@@ -578,6 +579,8 @@ begin
   T.Test('go: TotalNs overflow safe', @Test_ParseGoBenchLine_OverflowSafe);
   T.Test('go: TotalNs overflow protection', @Test_ParseGoBenchLine_Overflow);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

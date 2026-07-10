@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestSingleton;
 var
@@ -143,7 +144,9 @@ begin
   T.Test('count', @TestCount);
   T.Test('empty_name_raises', @TestEmptyNameRaises);
   T.Test('nil_allocator_raises', @TestNilAllocatorRaises);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
   TAllocatorRegistry.ReleaseInstance;
 end.

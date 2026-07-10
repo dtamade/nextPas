@@ -23,6 +23,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 const
   SEED = 12345;
@@ -436,7 +437,9 @@ begin
   T.Test('fuzz allocator leak-check', @TestFuzzAllocatorLeakCheck);
   T.Test('fuzz Arena AllocAligned', @TestFuzzArenaAligned);
   T.Test('fuzz mixed allocators', @TestFuzzMixedAllocators);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

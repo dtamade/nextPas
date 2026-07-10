@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function MakeConfig(aBlockSize: SizeUInt = 64;
                     aInitialCapacity: SizeUInt = 4;
@@ -406,7 +407,9 @@ begin
   T.Test('geometric growth strategy', @TestGeometricGrowth);
   T.Test('linear growth strategy', @TestLinearGrowth);
   T.Test('max capacity limit', @TestMaxCapacity);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

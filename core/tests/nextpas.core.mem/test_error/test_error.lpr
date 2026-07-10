@@ -9,6 +9,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestAllocErrorToString;
 begin
@@ -144,6 +145,8 @@ begin
   T.Test('EOutOfMemoryCreateMsg', @TestEOutOfMemoryCreateMsg);
   T.Test('SanitizeRuntimeAlignment', @TestSanitizeRuntimeAlignment);
   T.Test('SanitizeConfigAlignment', @TestSanitizeConfigAlignment);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

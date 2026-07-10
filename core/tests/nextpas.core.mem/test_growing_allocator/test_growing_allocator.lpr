@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestSmallAlloc;
 var
@@ -355,7 +356,9 @@ begin
   T.Test('realloc_shrink', @TestReallocShrink);
   T.Test('realloc_grow_bands', @TestReallocGrowAcrossBands);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
   CleanupDefaultAllocator;
 end.

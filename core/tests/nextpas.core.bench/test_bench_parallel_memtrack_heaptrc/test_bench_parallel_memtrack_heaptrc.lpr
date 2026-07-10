@@ -181,6 +181,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   GParallelLock := TMutex.Create;
   try
@@ -190,8 +191,10 @@ begin
     T.Test('parallel + memtrack combined', @TestParallelMemtrackCombined);
     T.Test('memtrack multiple allocs', @TestMemtrackMultipleAllocs);
     T.Test('memtrack peak bytes', @TestMemtrackPeakBytes);
-    T.Run;
+  LRunPassed := T.Run;
     T.Summary;
+  if not LRunPassed then
+    Halt(1);
   finally
     GParallelLock.Free;
   end;

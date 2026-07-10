@@ -35,6 +35,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GPool: TSlabPool = nil;
   GFixedSlabPool: TFixedSlabPool = nil;
   GFixedSlabFallback: TFixedSlabRecordingAllocator = nil;
@@ -793,7 +794,9 @@ begin
   T.Test('secure free zeros before release (CS-016)', @TestSecureFreeZerosBeforeRelease);
   T.Test('slab reset consistency (C-1)', @TestSlabResetConsistency);
   T.Test('alloc aligned large alignment 64K/128K/1M (C-2)', @TestAllocAlignedLargeAlignment);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

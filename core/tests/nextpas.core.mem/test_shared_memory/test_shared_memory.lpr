@@ -9,6 +9,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function ShmName(AIndex: Integer): string;
 begin
@@ -189,7 +190,9 @@ begin
   T.Test('GetPointer and BaseAddress', @TestGetPointerAndBaseAddress);
   T.Test('Flush', @TestFlush);
   T.Test('Close and Reopen', @TestCloseAndReopen);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

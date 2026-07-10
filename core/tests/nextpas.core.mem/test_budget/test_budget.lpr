@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- TMemoryBudget tests --- }
 
@@ -176,5 +177,8 @@ begin
   T.Test('allocator hard limit', @TestBudgetAllocatorHardLimit);
   T.Test('allocator traits', @TestBudgetAllocatorTraits);
 
-  T.Run;
+  LRunPassed := T.Run;
+  T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

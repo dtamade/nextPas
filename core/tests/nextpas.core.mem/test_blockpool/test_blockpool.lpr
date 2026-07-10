@@ -10,6 +10,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAcquireRelease;
 var Pool: TBlockPool; P1, P2, P3: Pointer;
@@ -326,7 +327,9 @@ begin
   T.Test('capacity=1 boundary', @TestCapacityOne);
   T.Test('alignment=1 (natural)', @TestAlignmentOne);
   T.Test('minimal pool (size=1, cap=1)', @TestMinimalPool);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

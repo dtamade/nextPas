@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function IsAligned(APtr: Pointer; AAlign: SizeUInt): Boolean;
 begin
@@ -157,6 +158,8 @@ begin
   T.Test('AlignedAllocMemZeroed', @TestAlignedAllocMemZeroed);
   T.Test('AlignedSmallAlloc', @TestAlignedSmallAlloc);
   T.Test('AlignedStats', @TestAlignedStats);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

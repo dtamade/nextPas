@@ -67,6 +67,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure WaitForStartFlag(AStartFlag: PLongInt); inline;
 begin
@@ -1169,6 +1170,8 @@ begin
   T.Test('T-04 rwlock multiple readers', @TestRwLockMultipleReaders);
   T.Test('D-2d rwlock write contention', @TestRwLockWriteContention);
   T.Test('D-2e rwlock mixed reader+writer contention', @TestRwLockMixedReaderWriterContention);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -15,6 +15,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -136,6 +137,8 @@ begin
   T.Test('allocator_count', @TestAllocatorCount);
   T.Test('free_releases_memory', @TestFreeReleasesMemory);
   T.Test('alloc_mem', @TestAllocMem);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -268,6 +268,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('bench-phase-b');
 
@@ -290,6 +291,8 @@ begin
   T.Test('BootstrapTestDifference_Empty', @Test_BootstrapTestDifference_Empty);
   T.Test('BootstrapTestDifference_WeakDifference', @Test_BootstrapTestDifference_WeakDifference);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

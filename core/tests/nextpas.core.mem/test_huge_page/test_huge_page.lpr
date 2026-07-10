@@ -126,6 +126,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('test_huge_page');
   T.Test('create_and_destroy', @TestCreateAndDestroy);
@@ -135,6 +136,8 @@ begin
   T.Test('stats', @TestStats);
   T.Test('traits', @TestTraits);
   T.Test('nil_inner_raises', @TestNilInnerRaises);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

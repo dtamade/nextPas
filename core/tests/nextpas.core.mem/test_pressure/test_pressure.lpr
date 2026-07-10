@@ -7,6 +7,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- TMemoryPressure tests --- }
 
@@ -104,5 +105,8 @@ begin
   T.Test('reads meminfo', @TestPressureReadsMemInfo);
   T.Test('callback', @TestPressureCallback);
 
-  T.Run;
+  LRunPassed := T.Run;
+  T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

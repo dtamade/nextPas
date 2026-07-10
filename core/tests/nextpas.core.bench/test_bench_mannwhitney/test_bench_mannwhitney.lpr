@@ -242,6 +242,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   GAnalyzer := TBenchStatsAnalyzer.Create;
   T := TTestSuite.Create('nextpas.core.bench.mannwhitney');
@@ -257,6 +258,8 @@ begin
   T.Test('LargeSample', @TestLargeSample);
   T.Test('MarginalDifference', @TestMarginalDifference);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

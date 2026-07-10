@@ -32,6 +32,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GAllocator: IAllocator = nil;
   GPoolAllocator: TPoolAllocator = nil;
   GFallback: TRecordingFallback = nil;
@@ -355,7 +356,9 @@ begin
   T.Test('interior pool realloc fails without leaking', @TestInteriorPoolReallocFailsWithoutLeaking);
   T.Test('fallback allocations are tracked', @TestFallbackAllocationsAreTracked);
   T.Test('stress many allocs and frees', @TestStressManyAllocsAndFrees);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

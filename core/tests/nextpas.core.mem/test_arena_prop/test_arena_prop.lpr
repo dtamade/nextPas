@@ -356,6 +356,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.mem.prop');
 
@@ -379,5 +380,8 @@ begin
   T.Test('Arena AllocZeroed invariant', @TestArenaAllocZeroedInvariant);
   T.Test('Arena AllocAligned invariant', @TestArenaAllocAlignedInvariant);
 
-  T.Run;
+  LRunPassed := T.Run;
+  T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

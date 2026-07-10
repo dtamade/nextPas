@@ -626,6 +626,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('nextpas.core.bench.stats.advanced');
   T.Test('Create', @Test_Create);
@@ -667,6 +668,8 @@ begin
   T.Test('OutlierSeverity_Moderate', @Test_OutlierSeverity_Moderate);
   T.Test('OutlierSeverity_Severe', @Test_OutlierSeverity_Severe);
   T.Test('OutlierSeverity_ZeroIQR', @Test_OutlierSeverity_ZeroIQR);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- TVirtualArena record tests --- }
 
@@ -889,8 +890,10 @@ begin
   T.Test('reset_hard', @TestResetHard);
   T.Test('alloc_unsafe', @TestAllocFast);
 
-  T.Run;
+  LRunPassed := T.Run;
 
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

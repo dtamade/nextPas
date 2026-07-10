@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestIsOverlapNoOverlap;
 var
@@ -580,7 +581,9 @@ begin
   T.Test('MulHash64 distribution', @TestMulHash64Distribution);
   T.Test('ValidateAlignArg valid', @TestValidateAlignArgValid);
   T.Test('ValidateAlignArg invalid', @TestValidateAlignArgInvalid);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

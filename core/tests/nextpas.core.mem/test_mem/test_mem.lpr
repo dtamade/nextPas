@@ -9,6 +9,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { E1: 验证 facade re-export 的类型可访问且可实例化 }
 
@@ -207,7 +208,9 @@ begin
   T.Test('BlockPoolConcurrent accessible', @TestBlockPoolConcurrentAccessible);
   T.Test('SecureZero accessible', @TestSecureZeroAccessible);
   T.Test('TrackingAllocator accessible', @TestTrackingAllocatorAccessible);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

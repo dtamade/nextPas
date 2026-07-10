@@ -9,6 +9,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GHighFired: Integer;
   GCriticalFired: Integer;
   GLastLevel: TWatermarkLevel;
@@ -174,6 +175,8 @@ begin
   T.Test('no_repeat_firing', @TestNoRepeatFiring);
   T.Test('downgrade_no_callback', @TestDowngradeNoCallback);
   T.Test('nil_handler_ignored', @TestNilHandlerIgnored);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestTrackingOverRtl;
 var
@@ -136,6 +137,8 @@ begin
   T.Test('StatsOverTracking', @TestStatsOverTracking);
   T.Test('TrackingLeakDetection', @TestTrackingLeakDetection);
   T.Test('CompositionChain', @TestCompositionChain);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

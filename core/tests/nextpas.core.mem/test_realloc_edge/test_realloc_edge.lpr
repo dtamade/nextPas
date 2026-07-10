@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestReallocGrow;
 var
@@ -125,6 +126,8 @@ begin
   T.Test('ReallocSameSize', @TestReallocSameSize);
   T.Test('ReallocMultipleGrow', @TestReallocMultipleGrow);
   T.Test('ReallocZeroNil', @TestReallocZeroNil);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

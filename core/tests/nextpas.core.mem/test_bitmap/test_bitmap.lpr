@@ -133,6 +133,7 @@ begin
 end;
 
 var T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('test_bitmap');
   T.Test('basic_alloc', @Test_BasicAlloc);
@@ -142,6 +143,8 @@ begin
   T.Test('exhaust_slots', @Test_ExhaustSlots);
   T.Test('stats', @Test_Stats);
   T.Test('used_slots_tracking', @Test_UsedSlotsTracking);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { Allocate ACount blocks and free them all at AOpCounter. }
 procedure AllocAndFreeAll(var APool: TCentralPool; ACount: Word;
@@ -171,6 +172,8 @@ begin
   T.Test('reused_span_clears_tick', @TestReusedSpanClearsTick);
   T.Test('partial_span_no_tick', @TestPartialSpanNoTick);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -12,6 +12,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 const
   TEST_SIZE = 64 * 1024; { 64KB }
@@ -192,6 +193,8 @@ begin
   T.Test('file_backed_create', @TestFileBackedCreate);
   T.Test('file_backed_reopen', @TestFileBackedReopen);
   T.Test('file_backed_truncate', @TestFileBackedTruncate);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

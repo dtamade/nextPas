@@ -14,6 +14,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 const
   NUM_THREADS = 4;
@@ -162,6 +163,8 @@ begin
   T.Test('ConcurrentMixedSizes', @TestConcurrentMixedSizes);
   T.Test('Traits', @TestTraits);
   T.Test('AllocMemZeroed', @TestAllocMemZeroed);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

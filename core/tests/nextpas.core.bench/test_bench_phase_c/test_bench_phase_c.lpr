@@ -384,6 +384,7 @@ end;
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 begin
   T := TTestSuite.Create('bench-phase-c');
 
@@ -408,6 +409,8 @@ begin
   T.Test('BayesianEstimate_SigmaZero', @Test_BayesianEstimate_SigmaZero);
   T.Test('BayesianEstimate_SigmaZeroConstant', @Test_BayesianEstimate_SigmaZeroConstant);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

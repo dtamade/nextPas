@@ -15,6 +15,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -142,6 +143,8 @@ begin
   T.Test('traits', @TestTraits);
   T.Test('many_allocations', @TestManyAllocations);
   T.Test('inner_allocator', @TestInnerAllocator);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

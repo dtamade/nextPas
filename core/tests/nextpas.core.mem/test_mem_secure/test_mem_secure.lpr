@@ -21,6 +21,7 @@ const
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 function ReadSourceText(const APath: string): string;
 var
@@ -182,7 +183,9 @@ begin
   T.Test('mem.secure delegates to platform.memory', @TestMemSecureDelegatesToPlatformMemory);
   T.Test('windows compile gate uses platform.memory',
     @TestWindowsCompileGateUsesPlatformMemory);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

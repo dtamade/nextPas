@@ -13,6 +13,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { --- TAllocSnapshot tests --- }
 
@@ -457,5 +458,8 @@ begin
   T.Test('collector register/unregister', @TestCollectorRegisterUnregister);
   T.Test('collector aggregates', @TestCollectorAggregates);
 
-  T.Run;
+  LRunPassed := T.Run;
+  T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

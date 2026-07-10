@@ -11,6 +11,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 { ── Basic alloc/free ── }
 
@@ -398,6 +399,8 @@ begin
   T.Test('realloc_shrink', @TestReallocShrink);
   T.Test('drain_on_destroy', @TestDrainOnDestroy);
 
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -15,6 +15,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -156,6 +157,8 @@ begin
   T.Test('nil_size', @TestNilSize);
   T.Test('stats', @TestStats);
   T.Test('realloc_growth', @TestReallocGrowth);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

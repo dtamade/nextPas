@@ -17,6 +17,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GInvocationCount: Int64;
   GFirstObservedIteration: Int64;
   GLastObservedIteration: Int64;
@@ -631,6 +632,8 @@ begin
   T.Test('Run + Summary', @TestRun_Summary);
   T.Test('Summary on empty runner', @TestRun_Summary_Empty);
   T.Test('Per-entry CollectRawSamples (F-04)', @TestPerEntryCollectRawSamples);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

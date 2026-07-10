@@ -15,6 +15,7 @@ uses
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
 
 procedure TestBasicAlloc;
 var
@@ -141,6 +142,8 @@ begin
   T.Test('stats', @TestStats);
   T.Test('set_limit', @TestSetLimit);
   T.Test('peak_tracking', @TestPeakTracking);
-  T.Run;
+  LRunPassed := T.Run;
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.

@@ -13,6 +13,7 @@ type
 
 var
   T: TTestSuite;
+  LRunPassed: Boolean;
   GAllocator: IAllocator = nil;
   GPtr: Pointer = nil;
   GForeignPtr: Pointer = nil;
@@ -209,7 +210,9 @@ begin
   T.Test('invalid and double free', @TestInvalidAndDoubleFree);
   T.Test('capacity exhaustion returns nil', @TestCapacityExhaustionReturnsNil);
   T.Test('coalescing merges adjacent free blocks', @TestCoalescingMergesAdjacentBlocks);
-  T.Run;
+  LRunPassed := T.Run;
 
   T.Summary;
+  if not LRunPassed then
+    Halt(1);
 end.
