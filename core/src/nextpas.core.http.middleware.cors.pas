@@ -26,7 +26,8 @@ uses
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.strings;
 
 type
   TCorsState = record
@@ -98,23 +99,22 @@ begin
   Result.AllowCredentials := False;
 end;
 
+{ Check if AMethod is in the comma-separated AllowMethods list. }
+function MethodIsAllowed(const AMethod, AAllowMethods: string): Boolean;
+var
+  LMethods: TStringArray;
+  LI: SizeInt;
+begin
+  LMethods := StringsSplit(AAllowMethods, ',');
+  for LI := 0 to High(LMethods) do
+    if LowerCase(Trim(LMethods[LI])) = LowerCase(AMethod) then
+      Exit(True);
+  Result := False;
+end;
+
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
 var
   LState: TCorsState;
-
-  { Check if AMethod is in the comma-separated AllowMethods list. }
-  function MethodIsAllowed(const AMethod, AAllowMethods: string): Boolean;
-  var
-    LMethods: TStringArray;
-    LI: SizeInt;
-  begin
-    LMethods := AAllowMethods.Split(',');
-    for LI := 0 to High(LMethods) do
-      if LowerCase(Trim(LMethods[LI])) = LowerCase(AMethod) then
-        Exit(True);
-    Result := False;
-  end;
-
 begin
   { Security: reject wildcard origins with credentials. Echoing back any Origin
     when AllowCredentials=true is worse than `*` — it bypasses the browser's

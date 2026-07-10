@@ -127,15 +127,16 @@ begin
   Result := True;
 end;
 
-{ RFC 6265 §4.1.1: Set-Cookie attribute values must not contain CTLs,
-  semicolons, or spaces to prevent attribute injection. }
+{ RFC 6265 §4.1.1: Set-Cookie attribute values must not contain CTLs
+  or semicolons to prevent attribute injection. Spaces are allowed
+  since date values (Expires) contain them. }
 function IsValidCookieAttrValue(const S: string): Boolean;
 var
   I: SizeInt;
 begin
   for I := 1 to Length(S) do
     case S[I] of
-      #0..#32, #127, ';':
+      #0..#31, #127, ';':
         Exit(False);
     end;
   Result := True;
