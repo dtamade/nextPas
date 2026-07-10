@@ -765,7 +765,7 @@ begin
   if ANilBody <> nil then
     raise EArgumentError.Create(
       'HTTP nil-body compatibility overload only accepts nil');
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), TBytes(nil));
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), Pointer(nil));
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
