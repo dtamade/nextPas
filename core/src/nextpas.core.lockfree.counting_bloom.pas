@@ -127,17 +127,27 @@ end;
 
 function TCountingBloomFilter.Remove(const AKey: AnsiString): TCBFResult;
 var
-  I, LIdx: Int32;
+  I, LIdx, LOld, LDecremented: Int32;
 begin
-  if not Contains(AKey) then
-  begin
-    Result := cbfNotFound;
-    Exit;
-  end;
+  LDecremented := 0;
   for I := 0 to FDepth - 1 do
   begin
     LIdx := HashN(AKey, I) * FDepth + I;
-    AtomicFetchSub32(FCounters[LIdx], 1);
+    repeat
+      LOld := AtomicLoad32(FCounters[LIdx]);
+      if LOld <= 0 then
+      begin
+        { Counter already 0 — element not present or already removed.
+          Roll back previously decremented counters. }
+        for LDecremented := LDecremented - 1 downto 0 do
+        begin
+          LIdx := HashN(AKey, LDecremented) * FDepth + LDecremented;
+          AtomicFetchAdd32(FCounters[LIdx], 1);
+        end;
+        Exit(cbfNotFound);
+      end;
+    until AtomicCompareExchange32(FCounters[LIdx], LOld, LOld - 1) = LOld;
+    Inc(LDecremented);
   end;
   AtomicFetchSub64(FCount, 1);
   Result := cbfOk;

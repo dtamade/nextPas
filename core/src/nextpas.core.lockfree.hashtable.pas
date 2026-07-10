@@ -43,10 +43,12 @@ type
     FCapacity: Int32;
     FCount: Int64;
     FClosed: Int32;
-    FLock: Int32;  // spinlock for expansion
+    FLock: Int32;       // spinlock for expansion
+    FGrowing: Int32;    // 1=grow in progress
 
     function HashKey(const AKey: TKey): UInt32;
     function FindSlot(const AKey: TKey): Int32;
+    procedure WaitForGrow;
     procedure Grow;
   public
     constructor Create(ACapacity: Int32 = 64);
@@ -125,6 +127,12 @@ begin
   Exit(-1);
 end;
 
+procedure TLockFreeHashTableImpl.WaitForGrow;
+begin
+  while AtomicLoad32(FGrowing, moAcquire) <> 0 do
+    CpuPause;
+end;
+
 procedure TLockFreeHashTableImpl.Grow;
 var
   LOldCap, LNewCap, I, LIdx: Int32;
@@ -140,6 +148,8 @@ begin
     AtomicStore32(FLock, 0, moRelease);
     Exit;
   end;
+  // Signal growing in progress
+  AtomicStore32(FGrowing, 1, moRelease);
   // Save old slots
   LOldSlots := Copy(FSlots);
   // Create new larger table
@@ -163,6 +173,7 @@ begin
     end;
   end;
   SetLength(LOldSlots, 0);
+  AtomicStore32(FGrowing, 0, moRelease);
   AtomicStore32(FLock, 0, moRelease);
 end;
 
@@ -182,6 +193,7 @@ begin
   FCount := 0;
   FClosed := 0;
   FLock := 0;
+  FGrowing := 0;
 end;
 
 destructor TLockFreeHashTableImpl.Destroy;
@@ -196,27 +208,36 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(htClosed);
-  // Check if we need to grow
-  if AtomicLoad64(FCount, moRelaxed) * 4 >= FCapacity * 3 then
-    Grow;
-  LIdx := FindSlot(AKey);
-  if LIdx < 0 then
-    Exit(htFull);
-  LOldState := AtomicLoad32(FSlots[LIdx].FState, moAcquire);
-  if (LOldState = 1) and (FSlots[LIdx].FKey = AKey) then
-    Exit(htExists);
-  // Insert: write key+value then CAS state from empty/deleted to occupied
-  FSlots[LIdx].FKey := AKey;
-  FSlots[LIdx].FValue := AValue;
-  AtomicStore32(FSlots[LIdx].FState, 1, moRelease);
-  AtomicFetchAdd64(FCount, 1);
-  Result := htOk;
+  repeat
+    // Wait if grow is in progress
+    WaitForGrow;
+    // Check if we need to grow
+    if AtomicLoad64(FCount, moRelaxed) * 4 >= FCapacity * 3 then
+      Grow;
+    LIdx := FindSlot(AKey);
+    if LIdx < 0 then
+      Exit(htFull);
+    LOldState := AtomicLoad32(FSlots[LIdx].FState, moAcquire);
+    if (LOldState = 1) and (FSlots[LIdx].FKey = AKey) then
+      Exit(htExists);
+    // CAS: claim the slot from empty(0) or deleted(2) to occupied(1)
+    if AtomicCompareExchange32(FSlots[LIdx].FState, LOldState, 1, moAcqRel) = LOldState then
+    begin
+      // Slot claimed successfully — write key+value
+      FSlots[LIdx].FKey := AKey;
+      FSlots[LIdx].FValue := AValue;
+      AtomicFetchAdd64(FCount, 1);
+      Exit(htOk);
+    end;
+    // CAS failed — another thread claimed this slot, retry
+  until False;
 end;
 
 function TLockFreeHashTableImpl.Find(const AKey: TKey; out AValue: TValue): TLockFreeHashTableResult;
 var
   LIdx: Int32;
 begin
+  WaitForGrow;
   LIdx := FindSlot(AKey);
   if LIdx < 0 then
     Exit(htNotFound);
@@ -233,6 +254,7 @@ function TLockFreeHashTableImpl.Remove(const AKey: TKey): TLockFreeHashTableResu
 var
   LIdx: Int32;
 begin
+  WaitForGrow;
   LIdx := FindSlot(AKey);
   if LIdx < 0 then
     Exit(htNotFound);
@@ -250,6 +272,7 @@ function TLockFreeHashTableImpl.Contains(const AKey: TKey): Boolean;
 var
   LIdx: Int32;
 begin
+  WaitForGrow;
   LIdx := FindSlot(AKey);
   Result := (LIdx >= 0) and
             (AtomicLoad32(FSlots[LIdx].FState, moAcquire) = 1) and

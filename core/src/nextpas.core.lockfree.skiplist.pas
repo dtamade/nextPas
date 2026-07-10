@@ -59,11 +59,17 @@ type
     FTail: PSkipListNode;
     FMaxLevel: Integer;
     FSize: Integer;
+    FLock: Int32;  // global read-write lock: 0=unlocked, >0=readers, -1=writer
     {** 读写锁方法 }
     procedure NodeReadLock(var ANode: TSkipListNode);
     procedure NodeReadUnlock(var ANode: TSkipListNode);
     procedure NodeWriteLock(var ANode: TSkipListNode);
     procedure NodeWriteUnlock(var ANode: TSkipListNode);
+    {** 全局读写锁 }
+    procedure GlobalReadLock;
+    procedure GlobalReadUnlock;
+    procedure GlobalWriteLock;
+    procedure GlobalWriteUnlock;
     {** 辅助方法 }
     function RandomLevel: Integer;
     function CompareKeys(const AKey1, AKey2: TKey): Integer;
@@ -138,6 +144,7 @@ begin
 
   FMaxLevel := AMaxLevel;
   FSize := 0;
+  FLock := 0;
 
   { Create head node with maximum level }
   New(FHead);
@@ -256,6 +263,59 @@ begin
   AtomicStore32(ANode.Lock, 0, moRelease);
 end;
 
+procedure TConcurrentSkipListImpl.GlobalReadLock;
+var
+  LLock: Int32;
+  LSpins: Int32;
+begin
+  LSpins := 0;
+  repeat
+    LLock := AtomicLoad32(FLock, moRelaxed);
+    if LLock >= 0 then
+    begin
+      if AtomicCompareExchange32(FLock, LLock, LLock + 1, moAcquire) = LLock then
+        Exit;
+    end;
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+procedure TConcurrentSkipListImpl.GlobalReadUnlock;
+begin
+  AtomicFetchSub32(FLock, 1, moRelease);
+end;
+
+procedure TConcurrentSkipListImpl.GlobalWriteLock;
+var
+  LSpins: Int32;
+begin
+  LSpins := 0;
+  repeat
+    if AtomicCompareExchange32(FLock, 0, -1, moAcquire) = 0 then
+      Exit;
+    Inc(LSpins);
+    if LSpins < 64 then
+      CpuPause
+    else
+    begin
+      LSpins := 0;
+      platform_thread_yield;
+    end;
+  until False;
+end;
+
+procedure TConcurrentSkipListImpl.GlobalWriteUnlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
+end;
+
 procedure TConcurrentSkipListImpl.Insert(const AKey: TKey; const AValue: TValue);
 var
   LUpdate: array[0..SKIPLIST_MAX_LEVEL - 1] of PSkipListNode;
@@ -264,48 +324,51 @@ var
   LLevel: Integer;
   LI: Integer;
 begin
-  { Find position for insertion }
-  LCurrent := FHead;
-  for LI := FMaxLevel - 1 downto 0 do
-  begin
-    LNext := LCurrent^.Next[LI];
-    while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+  GlobalWriteLock;
+  try
+    { Find position for insertion }
+    LCurrent := FHead;
+    for LI := FMaxLevel - 1 downto 0 do
     begin
-      LCurrent := LNext;
       LNext := LCurrent^.Next[LI];
+      while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+      begin
+        LCurrent := LNext;
+        LNext := LCurrent^.Next[LI];
+      end;
+      LUpdate[LI] := LCurrent;
     end;
-    LUpdate[LI] := LCurrent;
+
+    { Check if key already exists }
+    LNext := LCurrent^.Next[0];
+    if (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) = 0) then
+    begin
+      { Update existing node }
+      LNext^.Value := AValue;
+      Exit;
+    end;
+
+    { Create new node }
+    LLevel := RandomLevel;
+    New(LCurrent);
+    LCurrent^.Key := AKey;
+    LCurrent^.Value := AValue;
+    LCurrent^.Level := LLevel;
+    LCurrent^.Lock := 0;
+    for LI := 0 to LLevel - 1 do
+      LCurrent^.Next[LI] := nil;
+
+    { Insert at each level }
+    for LI := 0 to LLevel - 1 do
+    begin
+      LCurrent^.Next[LI] := LUpdate[LI]^.Next[LI];
+      LUpdate[LI]^.Next[LI] := LCurrent;
+    end;
+
+    AtomicFetchAdd32(FSize, 1, moRelaxed);
+  finally
+    GlobalWriteUnlock;
   end;
-
-  { Check if key already exists }
-  LNext := LCurrent^.Next[0];
-  if (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) = 0) then
-  begin
-    { Update existing node }
-    NodeWriteLock(LNext^);
-    LNext^.Value := AValue;
-    NodeWriteUnlock(LNext^);
-    Exit;
-  end;
-
-  { Create new node }
-  LLevel := RandomLevel;
-  New(LCurrent);
-  LCurrent^.Key := AKey;
-  LCurrent^.Value := AValue;
-  LCurrent^.Level := LLevel;
-  LCurrent^.Lock := 0;
-  for LI := 0 to LLevel - 1 do
-    LCurrent^.Next[LI] := nil;
-
-  { Insert at each level }
-  for LI := 0 to LLevel - 1 do
-  begin
-    LCurrent^.Next[LI] := LUpdate[LI]^.Next[LI];
-    LUpdate[LI]^.Next[LI] := LCurrent;
-  end;
-
-  AtomicFetchAdd32(FSize, 1, moRelaxed);
 end;
 
 function TConcurrentSkipListImpl.Find(const AKey: TKey; out AValue: TValue): Boolean;
@@ -314,27 +377,30 @@ var
   LNext: PSkipListNode;
   LI: Integer;
 begin
-  LCurrent := FHead;
-  for LI := FMaxLevel - 1 downto 0 do
-  begin
-    LNext := LCurrent^.Next[LI];
-    while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+  GlobalReadLock;
+  try
+    LCurrent := FHead;
+    for LI := FMaxLevel - 1 downto 0 do
     begin
-      LCurrent := LNext;
       LNext := LCurrent^.Next[LI];
+      while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+      begin
+        LCurrent := LNext;
+        LNext := LCurrent^.Next[LI];
+      end;
     end;
-  end;
 
-  LNext := LCurrent^.Next[0];
-  if (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) = 0) then
-  begin
-    { Lock-free read: just read the value directly }
-    { The value is written atomically by Insert/Update, so we can read it safely }
-    AValue := LNext^.Value;
-    Result := True;
-  end
-  else
-    Result := False;
+    LNext := LCurrent^.Next[0];
+    if (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) = 0) then
+    begin
+      AValue := LNext^.Value;
+      Result := True;
+    end
+    else
+      Result := False;
+  finally
+    GlobalReadUnlock;
+  end;
 end;
 
 function TConcurrentSkipListImpl.Remove(const AKey: TKey): Boolean;
@@ -344,30 +410,35 @@ var
   LNext: PSkipListNode;
   LI: Integer;
 begin
-  { Find node to remove }
-  LCurrent := FHead;
-  for LI := FMaxLevel - 1 downto 0 do
-  begin
-    LNext := LCurrent^.Next[LI];
-    while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+  GlobalWriteLock;
+  try
+    { Find node to remove }
+    LCurrent := FHead;
+    for LI := FMaxLevel - 1 downto 0 do
     begin
-      LCurrent := LNext;
       LNext := LCurrent^.Next[LI];
+      while (LNext <> FTail) and (CompareKeys(LNext^.Key, AKey) < 0) do
+      begin
+        LCurrent := LNext;
+        LNext := LCurrent^.Next[LI];
+      end;
+      LUpdate[LI] := LCurrent;
     end;
-    LUpdate[LI] := LCurrent;
+
+    LNext := LCurrent^.Next[0];
+    if (LNext = FTail) or (CompareKeys(LNext^.Key, AKey) <> 0) then
+      Exit(False);
+
+    { Remove from each level }
+    for LI := 0 to LNext^.Level - 1 do
+      LUpdate[LI]^.Next[LI] := LNext^.Next[LI];
+
+    AtomicFetchSub32(FSize, 1, moRelaxed);
+    FreeNode(LNext);
+    Result := True;
+  finally
+    GlobalWriteUnlock;
   end;
-
-  LNext := LCurrent^.Next[0];
-  if (LNext = FTail) or (CompareKeys(LNext^.Key, AKey) <> 0) then
-    Exit(False);
-
-  { Remove from each level }
-  for LI := 0 to LNext^.Level - 1 do
-    LUpdate[LI]^.Next[LI] := LNext^.Next[LI];
-
-  AtomicFetchSub32(FSize, 1, moRelaxed);
-  FreeNode(LNext);
-  Result := True;
 end;
 
 function TConcurrentSkipListImpl.Contains(const AKey: TKey): Boolean;
@@ -386,12 +457,16 @@ procedure TConcurrentSkipListImpl.ForEach(const ACallback: TForEachCallback);
 var
   LNode: PSkipListNode;
 begin
-  LNode := FHead^.Next[0];
-  while LNode <> FTail do
-  begin
-    { Lock-free read: just read the key and value directly }
-    ACallback(LNode^.Key, LNode^.Value);
-    LNode := LNode^.Next[0];
+  GlobalReadLock;
+  try
+    LNode := FHead^.Next[0];
+    while LNode <> FTail do
+    begin
+      ACallback(LNode^.Key, LNode^.Value);
+      LNode := LNode^.Next[0];
+    end;
+  finally
+    GlobalReadUnlock;
   end;
 end;
 
@@ -399,12 +474,16 @@ procedure TConcurrentSkipListImpl.ForEachCtx(const ACallback: TForEachCtxCallbac
 var
   LNode: PSkipListNode;
 begin
-  LNode := FHead^.Next[0];
-  while LNode <> FTail do
-  begin
-    { Lock-free read: just read the key and value directly }
-    ACallback(LNode^.Key, LNode^.Value, AContext);
-    LNode := LNode^.Next[0];
+  GlobalReadLock;
+  try
+    LNode := FHead^.Next[0];
+    while LNode <> FTail do
+    begin
+      ACallback(LNode^.Key, LNode^.Value, AContext);
+      LNode := LNode^.Next[0];
+    end;
+  finally
+    GlobalReadUnlock;
   end;
 end;
 
@@ -414,25 +493,29 @@ var
   LNext: PSkipListNode;
   LI: Integer;
 begin
-  { Find starting position }
-  LCurrent := FHead;
-  for LI := FMaxLevel - 1 downto 0 do
-  begin
-    LNext := LCurrent^.Next[LI];
-    while (LNext <> FTail) and (CompareKeys(LNext^.Key, AFrom) < 0) do
+  GlobalReadLock;
+  try
+    { Find starting position }
+    LCurrent := FHead;
+    for LI := FMaxLevel - 1 downto 0 do
     begin
-      LCurrent := LNext;
       LNext := LCurrent^.Next[LI];
+      while (LNext <> FTail) and (CompareKeys(LNext^.Key, AFrom) < 0) do
+      begin
+        LCurrent := LNext;
+        LNext := LCurrent^.Next[LI];
+      end;
     end;
-  end;
 
-  { Iterate from start to end }
-  LCurrent := LCurrent^.Next[0];
-  while (LCurrent <> FTail) and (CompareKeys(LCurrent^.Key, ATo) <= 0) do
-  begin
-    { Lock-free read: just read the key and value directly }
-    ACallback(LCurrent^.Key, LCurrent^.Value);
+    { Iterate from start to end }
     LCurrent := LCurrent^.Next[0];
+    while (LCurrent <> FTail) and (CompareKeys(LCurrent^.Key, ATo) <= 0) do
+    begin
+      ACallback(LCurrent^.Key, LCurrent^.Value);
+      LCurrent := LCurrent^.Next[0];
+    end;
+  finally
+    GlobalReadUnlock;
   end;
 end;
 
@@ -441,20 +524,25 @@ var
   LNode, LNext: PSkipListNode;
   LI: Integer;
 begin
-  { Free all nodes except head and tail }
-  LNode := FHead^.Next[0];
-  while LNode <> FTail do
-  begin
-    LNext := LNode^.Next[0];
-    FreeNode(LNode);
-    LNode := LNext;
+  GlobalWriteLock;
+  try
+    { Free all nodes except head and tail }
+    LNode := FHead^.Next[0];
+    while LNode <> FTail do
+    begin
+      LNext := LNode^.Next[0];
+      FreeNode(LNode);
+      LNode := LNext;
+    end;
+
+    { Reset head to point to tail at all levels }
+    for LI := 0 to FMaxLevel - 1 do
+      FHead^.Next[LI] := FTail;
+
+    AtomicStore32(FSize, 0, moRelaxed);
+  finally
+    GlobalWriteUnlock;
   end;
-
-  { Reset head to point to tail at all levels }
-  for LI := 0 to FMaxLevel - 1 do
-    FHead^.Next[LI] := FTail;
-
-  AtomicStore32(FSize, 0, moRelaxed);
 end;
 
 end.
