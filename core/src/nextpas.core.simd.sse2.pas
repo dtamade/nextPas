@@ -3570,8 +3570,8 @@ begin
     andps xmm5, xmm4        // min & NaN_mask
     andnps xmm4, xmm0       // ~NaN_mask & input
     orps xmm4, xmm5         // safe_input: NaN replaced with min
-    maxps xmm4, xmm1        // max(safe_input, minVal)
-    minps xmm4, xmm2        // min(result, maxVal)
+    minps xmm4, xmm2        // temp = Min(safe_input, maxVal)
+    maxps xmm4, xmm1        // result = Max(minVal, temp)
     // blend original NaN back
     cmpunordps xmm5, xmm3   // recompute NaN mask from original
     andps xmm3, xmm5        // original & NaN_mask

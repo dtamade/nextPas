@@ -678,8 +678,8 @@ begin
     andps xmm3, xmm5            // min_bound & NaN_mask
     andnps xmm5, xmm0           // ~NaN_mask & input (non-NaN values)
     orps xmm5, xmm3             // safe_input: NaN replaced with min
-    maxps xmm5, xmm6
-    minps xmm5, xmm7
+    minps xmm5, xmm7            // temp = Min(safe_input, maxVal)
+    maxps xmm5, xmm6            // result = Max(minVal, temp)
     // blend original NaN back
     movaps xmm3, xmm4
     cmpunordps xmm3, xmm3       // recompute NaN mask from original
