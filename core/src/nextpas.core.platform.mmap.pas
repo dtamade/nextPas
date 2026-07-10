@@ -39,6 +39,18 @@ type
     IsFileBacked: Boolean;
     SharedName: string;
     BackingPath: string;
+    {** @desc 检查映射是否有效（已打开且地址非空）
+        @return True 如果映射有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查映射是否无效
+        @return True 如果映射无效 *}
+    function IsInvalid: Boolean; inline;
+    {** @desc 检查是否为只读映射
+        @return True 如果是只读映射 *}
+    function IsReadOnly: Boolean; inline;
+    {** @desc 检查是否为可写映射
+        @return True 如果是可写映射 *}
+    function IsWritable: Boolean; inline;
   end;
 
 {** @desc 映射整个文件到内存（只读）
@@ -157,6 +169,26 @@ uses
   , nextpas.core.platform.windows.ffi
 {$ENDIF}
   ;
+
+function TPlatformMappedFile.IsValid: Boolean;
+begin
+  Result := IsOpen and (Addr <> nil);
+end;
+
+function TPlatformMappedFile.IsInvalid: Boolean;
+begin
+  Result := (not IsOpen) or (Addr = nil);
+end;
+
+function TPlatformMappedFile.IsReadOnly: Boolean;
+begin
+  Result := Access = pmaRead;
+end;
+
+function TPlatformMappedFile.IsWritable: Boolean;
+begin
+  Result := Access in [pmaWrite, pmaReadWrite];
+end;
 
 const
   PLATFORM_MMAP_INVALID_HANDLE = PtrInt(-1);

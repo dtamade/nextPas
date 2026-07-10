@@ -54,6 +54,18 @@ type
     NLink: UInt32;
     Dev: UInt64;
     Ino: UInt64;
+    {** @desc 检查是否为普通文件
+        @return True 如果是普通文件 *}
+    function IsRegular: Boolean; inline;
+    {** @desc 检查是否为目录
+        @return True 如果是目录 *}
+    function IsDirectory: Boolean; inline;
+    {** @desc 检查是否为符号链接
+        @return True 如果是符号链接 *}
+    function IsSymlink: Boolean; inline;
+    {** @desc 检查是否为特殊文件（字符设备、块设备、FIFO、套接字）
+        @return True 如果是特殊文件 *}
+    function IsSpecial: Boolean; inline;
   end;
 
   {** @desc 文件打开模式 *}
@@ -85,6 +97,27 @@ type
     NameLen: Int32;
     FileType: TPlatformFileType;
     Ino: UInt64;
+    {** @desc 检查是否为普通文件
+        @return True 如果是普通文件 *}
+    function IsRegular: Boolean; inline;
+    {** @desc 检查是否为目录
+        @return True 如果是目录 *}
+    function IsDirectory: Boolean; inline;
+    {** @desc 检查是否为符号链接
+        @return True 如果是符号链接 *}
+    function IsSymlink: Boolean; inline;
+    {** @desc 检查是否为特殊文件（字符设备、块设备、FIFO、套接字）
+        @return True 如果是特殊文件 *}
+    function IsSpecial: Boolean; inline;
+    {** @desc 检查是否为当前目录（.）
+        @return True 如果是当前目录 *}
+    function IsCurrentDir: Boolean; inline;
+    {** @desc 检查是否为父目录（..）
+        @return True 如果是父目录 *}
+    function IsParentDir: Boolean; inline;
+    {** @desc 检查是否为隐藏文件（以 . 开头）
+        @return True 如果是隐藏文件 *}
+    function IsHidden: Boolean; inline;
   end;
 
   {** @desc 目录遍历句柄（平台无关封装） *}
@@ -100,6 +133,12 @@ type
     Pos: Int32;
     Len: Int32;
   {$ENDIF}
+    {** @desc 检查目录句柄是否有效
+        @return True 如果句柄有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查目录句柄是否无效
+        @return True 如果句柄无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
 const
@@ -146,6 +185,79 @@ begin
 {$ELSE}
   Result := Value < 0;
 {$ENDIF}
+end;
+
+function TPlatformFileStat.IsRegular: Boolean;
+begin
+  Result := FileType = ftRegular;
+end;
+
+function TPlatformFileStat.IsDirectory: Boolean;
+begin
+  Result := FileType = ftDirectory;
+end;
+
+function TPlatformFileStat.IsSymlink: Boolean;
+begin
+  Result := FileType = ftSymlink;
+end;
+
+function TPlatformFileStat.IsSpecial: Boolean;
+begin
+  Result := FileType in [ftCharDevice, ftBlockDevice, ftFifo, ftSocket];
+end;
+
+function TPlatformDirHandle.IsValid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := FindHandle <> INVALID_HANDLE_VALUE;
+{$ELSE}
+  Result := Fd >= 0;
+{$ENDIF}
+end;
+
+function TPlatformDirHandle.IsInvalid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := FindHandle = INVALID_HANDLE_VALUE;
+{$ELSE}
+  Result := Fd < 0;
+{$ENDIF}
+end;
+
+function TPlatformDirEntry.IsRegular: Boolean;
+begin
+  Result := FileType = ftRegular;
+end;
+
+function TPlatformDirEntry.IsDirectory: Boolean;
+begin
+  Result := FileType = ftDirectory;
+end;
+
+function TPlatformDirEntry.IsSymlink: Boolean;
+begin
+  Result := FileType = ftSymlink;
+end;
+
+function TPlatformDirEntry.IsSpecial: Boolean;
+begin
+  Result := FileType in [ftCharDevice, ftBlockDevice, ftFifo, ftSocket];
+end;
+
+function TPlatformDirEntry.IsCurrentDir: Boolean;
+begin
+  Result := (NameLen = 1) and (Name[0] = '.');
+end;
+
+function TPlatformDirEntry.IsParentDir: Boolean;
+begin
+  Result := (NameLen = 2) and (Name[0] = '.') and (Name[1] = '.');
+end;
+
+function TPlatformDirEntry.IsHidden: Boolean;
+begin
+  Result := (NameLen > 0) and (Name[0] = '.');
 end;
 
 end.

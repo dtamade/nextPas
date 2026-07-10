@@ -47,8 +47,24 @@ type
   {$ELSE}
     Dummy: Int32;
   {$ENDIF}
+    {** @desc 检查 poller 是否已初始化
+        @return True 如果 poller 有效 *}
+    function IsValid: Boolean; inline;
   end;
 
 implementation
+
+function TPlatformPoller.IsValid: Boolean;
+begin
+{$IFDEF NEXTPAS_LINUX}
+  Result := EpollFd >= 0;
+{$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Result := KqueueFd >= 0;
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+  Result := WinsockStarted;
+{$ELSE}
+  Result := False;
+{$ENDIF}
+end;
 
 end.

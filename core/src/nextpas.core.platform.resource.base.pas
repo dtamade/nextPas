@@ -22,6 +22,18 @@ type
   TPlatformResourceLimit = record
     Current: UInt64;
     Maximum: UInt64;
+    {** @desc 检查当前限制是否为无限制
+        @return True 如果当前限制为无限制 *}
+    function IsCurrentUnlimited: Boolean; inline;
+    {** @desc 检查最大限制是否为无限制
+        @return True 如果最大限制为无限制 *}
+    function IsMaximumUnlimited: Boolean; inline;
+    {** @desc 检查是否完全无限制（当前和最大均为无限制）
+        @return True 如果完全无限制 *}
+    function IsUnlimited: Boolean; inline;
+    {** @desc 检查是否有限制（当前或最大不为无限制）
+        @return True 如果有限制 *}
+    function IsLimited: Boolean; inline;
   end;
 
 const
@@ -41,5 +53,27 @@ const
   {$ENDIF}
 
 implementation
+
+function TPlatformResourceLimit.IsCurrentUnlimited: Boolean;
+begin
+  Result := Current = PLATFORM_RESOURCE_LIMIT_INFINITY;
+end;
+
+function TPlatformResourceLimit.IsMaximumUnlimited: Boolean;
+begin
+  Result := Maximum = PLATFORM_RESOURCE_LIMIT_INFINITY;
+end;
+
+function TPlatformResourceLimit.IsUnlimited: Boolean;
+begin
+  Result := (Current = PLATFORM_RESOURCE_LIMIT_INFINITY) and
+            (Maximum = PLATFORM_RESOURCE_LIMIT_INFINITY);
+end;
+
+function TPlatformResourceLimit.IsLimited: Boolean;
+begin
+  Result := (Current <> PLATFORM_RESOURCE_LIMIT_INFINITY) or
+            (Maximum <> PLATFORM_RESOURCE_LIMIT_INFINITY);
+end;
 
 end.
