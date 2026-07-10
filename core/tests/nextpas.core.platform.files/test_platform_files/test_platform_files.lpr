@@ -788,6 +788,23 @@ begin
     'truncate non-existent path returns error');
 end;
 
+procedure TestFileHandleHelperMethods;
+var
+  LValid, LInvalid: TPlatformFileHandle;
+begin
+  LValid := PLATFORM_FILE_INVALID_HANDLE;
+  Check(not LValid.IsValid, 'invalid handle IsValid = false');
+  Check(LValid.IsInvalid, 'invalid handle IsInvalid = true');
+
+  LValid.Value := 0;
+  Check(LValid.IsValid, 'valid handle IsValid = true');
+  Check(not LValid.IsInvalid, 'valid handle IsInvalid = false');
+
+  LValid.Value := 5;
+  Check(LValid.IsValid, 'valid handle IsValid = true');
+  Check(not LValid.IsInvalid, 'valid handle IsInvalid = false');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.files');
   T.Test('open/create/close', @TestOpenCreateClose);
@@ -849,5 +866,6 @@ begin
   T.Test('write large data read back', @TestWriteLargeDataReadBack);
   T.Test('file lock shared', @TestFileLockShared);
   T.Test('truncate_path non-existent', @TestTruncatePathNonExistent);
+  T.Test('file handle IsValid/IsInvalid', @TestFileHandleHelperMethods);
   if not T.Run then Halt(1);
 end.

@@ -277,6 +277,26 @@ begin
 end;
 {$ENDIF}
 
+procedure TestPipeHelperMethods;
+var
+  P: TPlatformPipe;
+begin
+  Check(platform_pipe_create(P) = 0, 'create');
+  Check(P.IsValid, 'valid pipe IsValid');
+  Check(P.IsReadValid, 'valid pipe IsReadValid');
+  Check(P.IsWriteValid, 'valid pipe IsWriteValid');
+
+  platform_pipe_close_read(P);
+  Check(not P.IsValid, 'after close_read IsValid = false');
+  Check(not P.IsReadValid, 'after close_read IsReadValid = false');
+  Check(P.IsWriteValid, 'after close_read IsWriteValid = true');
+
+  platform_pipe_close_write(P);
+  Check(not P.IsValid, 'after close_write IsValid = false');
+  Check(not P.IsReadValid, 'after close_read IsReadValid = false');
+  Check(not P.IsWriteValid, 'after close_write IsWriteValid = false');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.pipe');
   T.Test('create/close', @TestCreateClose);
@@ -295,5 +315,6 @@ begin
   T.Test('pipe close already closed', @TestPipeCloseAlreadyClosed);
   T.Test('pipe write+read multiple chunks', @TestPipeWriteReadMultiple);
   T.Test('Windows pipe source contract', @TestWindowsPipeSourceContract);
+  T.Test('pipe IsValid/IsReadValid/IsWriteValid', @TestPipeHelperMethods);
   if not T.Run then Halt(1);
 end.

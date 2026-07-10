@@ -360,6 +360,20 @@ begin
   platform_file_rmdir('/tmp/nextpas_watch_test11b');
 end;
 
+procedure TestWatcherHelperMethods;
+var
+  W: TPlatformWatcher;
+begin
+  W.Fd := -1;
+  Check(not W.IsValid, 'invalid watcher IsValid = false');
+
+  W.Fd := 0;
+  Check(W.IsValid, 'valid watcher IsValid = true');
+
+  W.Fd := 5;
+  Check(W.IsValid, 'valid watcher IsValid = true');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.watch');
   T.Test('create/close', @TestCreateClose);
@@ -378,5 +392,6 @@ begin
   T.Test('add same dir twice', @TestWatchAddSameDirTwice);
   T.Test('poll negative timeout', @TestWatchPollNegativeTimeout);
   T.Test('add multiple dirs', @TestWatchAddMultipleDirs);
+  T.Test('watcher IsValid', @TestWatcherHelperMethods);
   if not T.Run then Halt(1);
 end.
