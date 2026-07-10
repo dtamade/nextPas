@@ -40,7 +40,7 @@ type
     function FindEntry(AIdx: PtrUInt; AKey: TKey): Integer;
     procedure LockBucket(AIdx: PtrUInt);
     procedure UnlockBucket(AIdx: PtrUInt);
-    function FindMinFreqEntry: TFreqNode;
+    function FindMinFreqEntry(out ABucket: PtrUInt; out AEntry: Integer): Boolean;
   public
     constructor Create(const AMaxItems: PtrUInt = 1000; const ABucketCount: PtrUInt = 16);
     destructor Destroy; override;
@@ -185,9 +185,8 @@ var
   LIdx: PtrUInt;
   LEntry: Integer;
   LCap, LI: Integer;
-  LMinFreq: Int64;
-  LMinIdx: Integer;
   LMinBucket: PtrUInt;
+  LMinEntry: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(lfClosed);
@@ -203,8 +202,16 @@ begin
   end;
   if PtrUInt(AtomicLoad64(Int64(FCount), moRelaxed)) >= FMaxItems then
   begin
+    { Evict the minimum frequency entry }
     UnlockBucket(LIdx);
-    Exit(lfFull);
+    if FindMinFreqEntry(LMinBucket, LMinEntry) then
+    begin
+      LockBucket(LMinBucket);
+      FBuckets[LMinBucket][LMinEntry].Used := False;
+      AtomicFetchSub64(Int64(FCount), 1, moRelaxed);
+      UnlockBucket(LMinBucket);
+    end;
+    LockBucket(LIdx);
   end;
   LCap := Length(FBuckets[LIdx]);
   for LI := 0 to LCap - 1 do
@@ -310,13 +317,14 @@ begin
   Result := Double(LHits) / Double(LTotal);
 end;
 
-function TConcurrentLFUCacheImpl.FindMinFreqEntry: TFreqNode;
+function TConcurrentLFUCacheImpl.FindMinFreqEntry(out ABucket: PtrUInt; out AEntry: Integer): Boolean;
 var
   LI, LJ: PtrUInt;
   LMinFreq: Int64;
 begin
   LMinFreq := High(Int64);
-  Result.Used := False;
+  ABucket := 0;
+  AEntry := -1;
   for LI := 0 to FCapacity - 1 do
   begin
     for LJ := 0 to High(FBuckets[LI]) do
@@ -324,10 +332,12 @@ begin
       if FBuckets[LI][LJ].Used and (FBuckets[LI][LJ].Frequency < LMinFreq) then
       begin
         LMinFreq := FBuckets[LI][LJ].Frequency;
-        Result := FBuckets[LI][LJ];
+        ABucket := LI;
+        AEntry := Integer(LJ);
       end;
     end;
   end;
+  Result := AEntry >= 0;
 end;
 
 end.

@@ -359,11 +359,11 @@ var
   LOldRoot: PBTreeNode;
   LNewRoot: PBTreeNode;
 begin
-  NodeWriteLock(FRoot^);
+  LOldRoot := FRoot;
+  NodeWriteLock(LOldRoot^);
   try
     if FRoot^.KeyCount = BTREE_MAX_KEYS then
     begin
-      LOldRoot := FRoot;
       LNewRoot := CreateNode(False);
       LNewRoot^.Children[0] := LOldRoot;
       SplitChild(LNewRoot, 0);
@@ -371,7 +371,7 @@ begin
     end;
     InsertNonFull(FRoot, AKey, AValue);
   finally
-    NodeWriteUnlock(FRoot^);
+    NodeWriteUnlock(LOldRoot^);
   end;
 end;
 
@@ -654,20 +654,22 @@ end;
 function TConcurrentBTreeImpl.Remove(const AKey: TKey): Boolean;
 var
   LOldRoot: PBTreeNode;
+  LNewChild: PBTreeNode;
 begin
-  NodeWriteLock(FRoot^);
+  LOldRoot := FRoot;
+  NodeWriteLock(LOldRoot^);
   try
     Result := RemoveInternal(FRoot, AKey);
 
     { If root is empty and has children, make first child the new root }
     if (FRoot^.KeyCount = 0) and (not FRoot^.IsLeaf) then
     begin
-      LOldRoot := FRoot;
-      FRoot := FRoot^.Children[0];
-      Dispose(LOldRoot);
+      LNewChild := FRoot^.Children[0];
+      Dispose(FRoot);
+      FRoot := LNewChild;
     end;
   finally
-    NodeWriteUnlock(FRoot^);
+    NodeWriteUnlock(LOldRoot^);
   end;
 end;
 

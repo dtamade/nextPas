@@ -414,25 +414,58 @@ begin
 end;
 
 function TConcurrentBPlusTree.BorrowFromLeft(ALeaf: PBplusNode; ALeft: PBplusNode): Boolean;
+var
+  LI: Integer;
 begin
   if ALeft^.KeyCount <= BPLUS_MIN_KEYS then
     Exit(False);
+  // shift current keys/values right to make room at front
+  for LI := ALeaf^.KeyCount downto 1 do
+  begin
+    ALeaf^.Keys[LI] := ALeaf^.Keys[LI - 1];
+    ALeaf^.Values[LI] := ALeaf^.Values[LI - 1];
+  end;
+  // take last key/value from left node
+  ALeaf^.Keys[0] := ALeft^.Keys[ALeft^.KeyCount - 1];
+  ALeaf^.Values[0] := ALeft^.Values[ALeft^.KeyCount - 1];
   Dec(ALeft^.KeyCount);
   Inc(ALeaf^.KeyCount);
+  Result := True;
 end;
 
 function TConcurrentBPlusTree.BorrowFromRight(ALeaf: PBplusNode; ARight: PBplusNode): Boolean;
+var
+  LI: Integer;
 begin
   if ARight^.KeyCount <= BPLUS_MIN_KEYS then
     Exit(False);
+  // take first key/value from right node
+  ALeaf^.Keys[ALeaf^.KeyCount] := ARight^.Keys[0];
+  ALeaf^.Values[ALeaf^.KeyCount] := ARight^.Values[0];
+  // shift right node's keys/values left
+  for LI := 0 to ARight^.KeyCount - 2 do
+  begin
+    ARight^.Keys[LI] := ARight^.Keys[LI + 1];
+    ARight^.Values[LI] := ARight^.Values[LI + 1];
+  end;
   Inc(ALeaf^.KeyCount);
   Dec(ARight^.KeyCount);
+  Result := True;
 end;
 
 function TConcurrentBPlusTree.MergeLeaves(ALeft: PBplusNode; ARight: PBplusNode): Boolean;
+var
+  LI: Integer;
 begin
   if ALeft^.KeyCount + ARight^.KeyCount > BPLUS_MAX_KEYS then
     Exit(False);
+  // copy all keys/values from right node to left node
+  for LI := 0 to ARight^.KeyCount - 1 do
+  begin
+    ALeft^.Keys[ALeft^.KeyCount + LI] := ARight^.Keys[LI];
+    ALeft^.Values[ALeft^.KeyCount + LI] := ARight^.Values[LI];
+  end;
+  ALeft^.KeyCount := ALeft^.KeyCount + ARight^.KeyCount;
   ALeft^.Next := ARight^.Next;
   FreeNode(ARight);
   Result := True;
