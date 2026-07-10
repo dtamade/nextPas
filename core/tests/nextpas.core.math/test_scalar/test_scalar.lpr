@@ -1056,6 +1056,50 @@ begin
   Check(IsNaN(Fmod(1.0, 0.0)), 'Fmod divide by zero returns NaN');
 end;
 
+procedure TestTotalVarianceDoubleSinglePass;
+var
+  LData: array[0..1] of Double;
+  LResult: Double;
+begin
+  LData[0] := MakeMaxFiniteDouble;
+  LData[1] := LData[0];
+
+  try
+    LResult := TotalVariance(LData);
+  except
+    on E: Exception do
+      Fail('TotalVariance Double raised ' + E.ClassName + ' for repeated maximum finite values');
+  end;
+  Check(LResult = 0.0,
+    'TotalVariance Double repeated maximum finite values');
+end;
+
+procedure TestTotalVarianceSingleDoublePrecisionSinglePass;
+var
+  LLargeData: array[0..1] of Single;
+  LPrecisionData: array[0..4] of Single;
+  LResult: Single;
+begin
+  LLargeData[0] := MakeMaxFiniteSingle;
+  LLargeData[1] := LLargeData[0];
+  try
+    LResult := TotalVariance(LLargeData);
+  except
+    on E: Exception do
+      Fail('TotalVariance Single raised ' + E.ClassName + ' for repeated maximum finite values');
+  end;
+  Check(LResult = Single(0.0),
+    'TotalVariance Single repeated maximum finite values');
+
+  LPrecisionData[0] := Single(10000000.0);
+  LPrecisionData[1] := Single(10000001.0);
+  LPrecisionData[2] := Single(10000002.0);
+  LPrecisionData[3] := Single(10000003.0);
+  LPrecisionData[4] := Single(10000004.0);
+  CheckNear(10.0, TotalVariance(LPrecisionData), 0.0,
+    'TotalVariance Single accumulates in Double precision');
+end;
+
 procedure RaiseGCDLowInt64LowInt64;
 begin
   GCD(Low(Int64), Low(Int64));
@@ -1728,6 +1772,10 @@ begin
   T.Test('scalar IEEE edge contracts', @TestScalarIEEEEdgeContracts);
   T.Test('scalar range boundary edge contracts', @TestScalarRangeBoundaryEdgeContracts);
   T.Test('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
+  T.Test('TotalVariance Double single-pass contracts',
+    @TestTotalVarianceDoubleSinglePass);
+  T.Test('TotalVariance Single Double-precision single-pass contracts',
+    @TestTotalVarianceSingleDoublePrecisionSinglePass);
   T.Test('GCD LCM Int64 boundary contracts', @TestGCDLCMInt64BoundaryContracts);
   T.Test('angle conversions', @TestAngleConversions);
   T.Test('scalar sign and angle edge contracts', @TestSignAndAngleEdgeContracts);

@@ -320,6 +320,7 @@ ROOT_FACADE_FORWARD_TARGETS = {
     "vec3dextend": "vec",
     "vec4dtruncate": "vec",
     "sum": "scalar",
+    "sumtodouble": "scalar",
     "sumint": "scalar",
     "mean": "scalar",
     "variance": "scalar",

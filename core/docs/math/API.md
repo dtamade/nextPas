@@ -150,7 +150,7 @@ Scalar helpers:
 `UInt32` overflow helpers report `High(UInt32)+1` and `High(UInt32)*2` as overflow; `High(UInt32)-1+1` and zero-times-high multiplication in either order return `False` without divide-by-zero.
 `GCD` and `LCM` normalize signs and return non-negative `Int64` results; representable `Low(Int64)`/`High(Int64)` boundary cases succeed, zero LCM returns `0` before overflow checks, and unrepresentable results raise `EArgumentError`.
 
-Statistical helpers: `Sum`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
+Statistical helpers: `Sum`, `SumToDouble`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
 
 Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (scalar batches).
 

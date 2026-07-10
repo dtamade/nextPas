@@ -498,15 +498,37 @@ begin
 end;
 
 function IsOddIntegerValue(const AValue: Double): Boolean;
+const
+  DOUBLE_EXPONENT_BIAS = 1023;
+  DOUBLE_MANTISSA_BITS = 52;
+  DOUBLE_EXPONENT_MASK = UInt64($7FF);
+  DOUBLE_MANTISSA_MASK = UInt64($000FFFFFFFFFFFFF);
 var
-  LExponent: Int64;
+  LBits: UInt64;
+  LIntegerValue: Int64;
+  LMantissa: UInt64;
+  LUnbiasedExponent: Int32;
 begin
-  if (not IsIntegerValue(AValue)) or
-    (AValue < -9223372036854775808.0) or
+  if (AValue < -9223372036854775808.0) or
     (AValue >= 9223372036854775808.0) then
     Exit(False);
-  LExponent := System.Trunc(AValue);
-  Result := (LExponent and 1) <> 0;
+
+  Move(AValue, LBits, SizeOf(LBits));
+  LUnbiasedExponent :=
+    Int32((LBits shr DOUBLE_MANTISSA_BITS) and DOUBLE_EXPONENT_MASK) -
+    DOUBLE_EXPONENT_BIAS;
+  if LUnbiasedExponent >= DOUBLE_MANTISSA_BITS then
+  begin
+    if LUnbiasedExponent > DOUBLE_MANTISSA_BITS then
+      Exit(False);
+    LMantissa := LBits and DOUBLE_MANTISSA_MASK;
+    Exit((LMantissa and UInt64(1)) <> 0);
+  end;
+
+  if not IsIntegerValue(AValue) then
+    Exit(False);
+  LIntegerValue := System.Trunc(AValue);
+  Result := (LIntegerValue and 1) <> 0;
 end;
 
 function PowerWithExpLimits(const ABase, AExponent, AOverflowLimit,
