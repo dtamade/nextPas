@@ -252,17 +252,17 @@ begin
       end
       else
       begin
-        // Read value from next node (not head, which is sentinel)
-        if FNodes[LNextIdx].FHasValue then
-        begin
-          AValue := FNodes[LNextIdx].FValue;
-          Result := True;
-        end;
         // Try to swing head to next node
         LNewHead := Pack(LNextIdx, UnpackTag(LOldHead) + 1);
         if AtomicCompareExchange64(FHead, LOldHead, LNewHead, moAcqRel) = LOldHead then
         begin
-          // Success, free old head (sentinel)
+          // CAS succeeded — read value from next node (now becomes sentinel)
+          if FNodes[LNextIdx].FHasValue then
+          begin
+            AValue := FNodes[LNextIdx].FValue;
+            Result := True;
+          end;
+          // Free old head (sentinel)
           FreeNodeIdx(LHeadIdx);
           AtomicFetchAdd64(FCount, -1);
           Exit;

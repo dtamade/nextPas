@@ -79,19 +79,26 @@ implementation
 function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
 var
   LI: Integer;
+  LOldHead: PSegment;
 begin
-  Result := nil;
-  if (FFreePool <> nil) and (FFreePoolCount > 0) then
-  begin
-    Result := FFreePool;
-    FFreePool := Result^.Next;
-    Dec(FFreePoolCount);
-    Result^.Next := nil;
-    Result^.StartIndex := AStartIndex;
-    for LI := 0 to SEGQUEUE_SEGMENT_CAPACITY - 1 do
-      Result^.Slots[LI].Sequence := AStartIndex + LI;
-    Exit;
-  end;
+  { Try to pop from free pool (CAS-based lock-free stack) }
+  repeat
+    LOldHead := PSegment(AtomicLoadPtr(Pointer(FFreePool), moAcquire));
+    if LOldHead = nil then
+      Break;
+    if AtomicCompareExchangePtr(Pointer(FFreePool),
+      Pointer(LOldHead^.Next), Pointer(LOldHead), moAcqRel) = Pointer(LOldHead) then
+    begin
+      AtomicFetchAdd32(FFreePoolCount, -1, moRelaxed);
+      LOldHead^.Next := nil;
+      LOldHead^.StartIndex := AStartIndex;
+      for LI := 0 to SEGQUEUE_SEGMENT_CAPACITY - 1 do
+        LOldHead^.Slots[LI].Sequence := AStartIndex + LI;
+      Exit(LOldHead);
+    end;
+  until False;
+
+  { Allocate new segment }
   Result := GetMem(SizeOf(TSegment));
   FillChar(Result^, SizeOf(TSegment), 0);
   Result^.StartIndex := AStartIndex;
@@ -143,14 +150,19 @@ class procedure TSegQueueImpl.SegQueueReclaimSegment(const AData: Pointer; const
 var
   LSeg: PSegment;
   LQueue: TSegQueueImpl;
+  LOldHead: PSegment;
 begin
   LQueue := TSegQueueImpl(AUserData);
   LSeg := PSegment(AData);
-  if LQueue.FFreePoolCount < SEGQUEUE_FREE_POOL_LIMIT then
+  if AtomicLoad32(LQueue.FFreePoolCount, moRelaxed) < SEGQUEUE_FREE_POOL_LIMIT then
   begin
-    LSeg^.Next := LQueue.FFreePool;
-    LQueue.FFreePool := LSeg;
-    Inc(LQueue.FFreePoolCount);
+    { Push to free pool using CAS (lock-free stack) }
+    repeat
+      LOldHead := PSegment(AtomicLoadPtr(Pointer(LQueue.FFreePool), moAcquire));
+      LSeg^.Next := LOldHead;
+    until AtomicCompareExchangePtr(Pointer(LQueue.FFreePool),
+      Pointer(LSeg), Pointer(LOldHead), moAcqRel) = Pointer(LOldHead);
+    AtomicFetchAdd32(LQueue.FFreePoolCount, 1, moRelaxed);
   end
   else
     FreeMem(AData);
