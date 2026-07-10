@@ -19,6 +19,9 @@ uses
 var
   T: TTestSuite;
 
+const
+  OUTPUT_DRAIN_PROBE_ARG = '--output-drain-probe';
+
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
   Result := '../../../' + ARelativePath;
@@ -31,6 +34,46 @@ begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
   Result := FsReadFileText(LSourcePath);
+end;
+
+function RunOutputDrainProbe: Int32;
+var
+  LArgv: array[0..3] of PAnsiChar;
+  LRunBuf: array[0..7] of AnsiChar;
+  LStdoutBuf: array[0..7] of AnsiChar;
+  LStderrBuf: array[0..7] of AnsiChar;
+  LRunLen, LRunExitCode: Int32;
+  LStdoutLen, LStderrLen, LExitCode: Int32;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] :=
+    'i=0; while [ $i -lt 16384 ]; do printf 0123456789abcdef; i=$((i+1)); done';
+  LArgv[3] := nil;
+  FillChar(LRunBuf, SizeOf(LRunBuf), 0);
+  FillChar(LStdoutBuf, SizeOf(LStdoutBuf), 0);
+  FillChar(LStderrBuf, SizeOf(LStderrBuf), 0);
+
+  Result := platform_process_run('/bin/sh', @LArgv[0], nil,
+    @LRunBuf[0], SizeOf(LRunBuf), LRunLen, LRunExitCode);
+  if Result <> 0 then
+    Exit(5);
+  if LRunLen <> SizeOf(LRunBuf) then
+    Exit(6);
+  if LRunExitCode <> 0 then
+    Exit(7);
+
+  Result := platform_process_run_capture('/bin/sh', @LArgv[0], nil,
+    @LStdoutBuf[0], SizeOf(LStdoutBuf), LStdoutLen,
+    @LStderrBuf[0], SizeOf(LStderrBuf), LStderrLen, LExitCode);
+  if Result <> 0 then
+    Exit(10);
+  if LStdoutLen <> SizeOf(LStdoutBuf) then
+    Exit(11);
+  if LStderrLen <> 0 then
+    Exit(12);
+  if LExitCode <> 0 then
+    Exit(13);
 end;
 
 procedure SpawnWithPipes(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -310,6 +353,113 @@ begin
   Check(LOutLen = 9, 'run stderr discard captures stdout length');
   Check((LBuf[0] = 's') and (LBuf[8] = 'k'),
     'run stderr discard captures stdout content');
+end;
+
+procedure TestRunCapturePreservesShortLengths;
+var
+  LArgv: array[0..3] of PAnsiChar;
+  LStdoutBuf: array[0..63] of AnsiChar;
+  LStderrBuf: array[0..63] of AnsiChar;
+  LStdoutLen, LStderrLen, LExitCode: Int32;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'printf out; printf err >&2';
+  LArgv[3] := nil;
+  FillChar(LStdoutBuf, SizeOf(LStdoutBuf), 0);
+  FillChar(LStderrBuf, SizeOf(LStderrBuf), 0);
+
+  Check(platform_process_run_capture('/bin/sh', @LArgv[0], nil,
+    @LStdoutBuf[0], SizeOf(LStdoutBuf), LStdoutLen,
+    @LStderrBuf[0], SizeOf(LStderrBuf), LStderrLen, LExitCode) = 0,
+    'run_capture succeeds');
+  CheckEqual(Int64(3), Int64(LStdoutLen),
+    'run_capture preserves actual stdout length after EOF');
+  CheckEqual(Int64(3), Int64(LStderrLen),
+    'run_capture preserves actual stderr length after EOF');
+  Check((LStdoutBuf[0] = 'o') and (LStdoutBuf[2] = 't'),
+    'run_capture preserves stdout content');
+  Check((LStderrBuf[0] = 'e') and (LStderrBuf[2] = 'r'),
+    'run_capture preserves stderr content');
+  CheckEqual(Int64(0), Int64(LExitCode), 'run_capture exit code');
+end;
+
+procedure TestRunRejectsNilOutputBufferWithCapacity;
+var
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..0] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+  LRet: Int32;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'printf output';
+  LArgv[3] := nil;
+
+  LRet := platform_process_run('/bin/sh', @LArgv[0], nil, nil, 16,
+    LOutLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'run rejects nil output buffer with positive capacity');
+  CheckEqual(Int64(0), Int64(LOutLen),
+    'run leaves output length zero after invalid buffer');
+  CheckEqual(Int64(-1), Int64(LExitCode),
+    'run leaves exit code unset after invalid buffer');
+
+  LRet := platform_process_run('/bin/true', nil, nil, @LBuf[0], -1,
+    LOutLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'run rejects negative output capacity');
+end;
+
+procedure TestRunCaptureRejectsInvalidBuffers;
+var
+  LBuf: array[0..15] of AnsiChar;
+  LStdoutLen, LStderrLen, LExitCode: Int32;
+  LRet: Int32;
+begin
+  LRet := platform_process_run_capture('/bin/true', nil, nil,
+    nil, 16, LStdoutLen, @LBuf[0], SizeOf(LBuf), LStderrLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'run_capture rejects nil stdout buffer with positive capacity');
+
+  LRet := platform_process_run_capture('/bin/true', nil, nil,
+    @LBuf[0], SizeOf(LBuf), LStdoutLen, nil, 16, LStderrLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'run_capture rejects nil stderr buffer with positive capacity');
+
+  LRet := platform_process_run_capture('/bin/true', nil, nil,
+    @LBuf[0], -1, LStdoutLen, @LBuf[0], SizeOf(LBuf),
+    LStderrLen, LExitCode);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'run_capture rejects negative output capacity');
+end;
+
+procedure TestRunHelpersDrainAfterBuffersFill;
+var
+  LProc: TPlatformProcess;
+  LResult: TPlatformProcessResult;
+  LArgv: array[0..2] of PAnsiChar;
+  LExePath: string;
+  LRet: Int32;
+begin
+  LExePath := ParamStr(0);
+  LArgv[0] := PAnsiChar(LExePath);
+  LArgv[1] := OUTPUT_DRAIN_PROBE_ARG;
+  LArgv[2] := nil;
+  Check(platform_process_spawn(PAnsiChar(LExePath), @LArgv[0], nil, LProc) = 0,
+    'spawn output drain probe');
+
+  LRet := platform_process_wait(LProc, LResult, 3000);
+  if LRet <> 0 then
+  begin
+    platform_process_kill(LProc);
+    platform_process_wait(LProc, LResult);
+    Check(False,
+      'process run helpers must drain data after caller buffers fill');
+    Exit;
+  end;
+  CheckEqual(Int64(0), Int64(LResult.ExitCode),
+    'output drain probe exits successfully');
 end;
 
 procedure TestCommandEnvAddDuplicatePathUsesFinalResolvedView;
@@ -763,6 +913,12 @@ begin
 end;
 
 begin
+  if (ParamCount = 1) and (ParamStr(1) = OUTPUT_DRAIN_PROBE_ARG) then
+  begin
+    ExitCode := RunOutputDrainProbe;
+    Exit;
+  end;
+
   T := TTestSuite.Create('nextpas.core.platform.process');
   T.Test('spawn /bin/true', @TestSpawnTrue);
   T.Test('spawn /bin/false exit 1', @TestSpawnFalse);
@@ -777,6 +933,14 @@ begin
   T.Test('run: capture output', @TestRun);
   T.Test('run: working directory', @TestRunCwd);
   T.Test('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
+  T.Test('run_capture: preserve short output lengths',
+    @TestRunCapturePreservesShortLengths);
+  T.Test('run: reject nil output buffer with capacity',
+    @TestRunRejectsNilOutputBufferWithCapacity);
+  T.Test('run_capture: reject invalid output buffers',
+    @TestRunCaptureRejectsInvalidBuffers);
+  T.Test('run helpers: drain after output buffers fill',
+    @TestRunHelpersDrainAfterBuffersFill);
   T.Test('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
   T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
   T.Test('run_capture Windows stdout-only source contract',

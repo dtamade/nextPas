@@ -460,6 +460,7 @@ var
   LTotal: Int64;
   LSent: ssize_t;
   LNewPos: Int64;
+  LHasSourceSize: Boolean;
 {$ENDIF}
 begin
   LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
@@ -474,9 +475,10 @@ begin
 {$IFDEF NEXTPAS_LINUX}
   { Linux: try sendfile for zero-copy transfer }
   LR := -1;
-  if platform_file_fstat(LSrcH, LStat) = 0 then
+  LTotal := 0;
+  LHasSourceSize := platform_file_fstat(LSrcH, LStat) = 0;
+  if LHasSourceSize then
   begin
-    LTotal := 0;
     while LTotal < LStat.Size do
     begin
       LSent := nextpas.core.platform.linux.ffi.sendfile(
@@ -502,13 +504,18 @@ begin
     LRead := 0;
     repeat
       LR := platform_file_pread(LSrcH, @LBuf[0], SizeOf(LBuf), LTotal, LRead);
-      if (LR <> 0) or (LRead = 0) then Break;
+      if LR <> 0 then Break;
+      if LRead = 0 then Break;
       LR := platform_fs_write_all(LDstH, @LBuf[0], LRead);
       if LR <> 0 then Break;
       Inc(LTotal, Int64(LRead));
-    until LTotal >= LStat.Size;
-    if LTotal >= LStat.Size then
-      LR := 0;
+      if LHasSourceSize then
+        if LTotal >= LStat.Size then
+          Break;
+    until False;
+    if LHasSourceSize then
+      if LTotal >= LStat.Size then
+        LR := 0;
   end;
 {$ENDIF}
 

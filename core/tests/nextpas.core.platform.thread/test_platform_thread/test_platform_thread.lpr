@@ -28,6 +28,18 @@ begin
   Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+function SourceSlice(const ASource, AStartToken, AEndToken: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := Pos(AStartToken, ASource);
+  Check(LStart > 0, 'source slice start exists: ' + AStartToken);
+  LEnd := Pos(AEndToken, Copy(ASource, LStart + Length(AStartToken),
+    Length(ASource)));
+  Check(LEnd > 0, 'source slice end exists: ' + AEndToken);
+  Result := Copy(ASource, LStart, Length(AStartToken) + LEnd - 1);
+end;
+
 function SimpleThread(AArg: Pointer): Pointer; cdecl;
 begin
   GThreadResult := PtrUInt(AArg) * 2;
@@ -439,8 +451,35 @@ var
   LSource: string;
 begin
   LSource := LoadSourceText('../../../src/nextpas.core.platform.thread.pas');
-  CheckContains(LSource, 'sleep_sec safe range',
-    'sleep_sec must document overflow-safe input range');
+  CheckContains(LSource,
+    'if ASeconds > (UInt64(INFINITE) - 1) div 1000 then',
+    'Windows sleep_sec must test the finite DWORD range before multiplying');
+  CheckContains(LSource, 'Sleep(INFINITE - 1)',
+    'Windows sleep_sec must clamp overflow to INFINITE-1');
+end;
+
+procedure TestThreadStateReleaseSourceContract;
+var
+  LSource: string;
+  LJoinSource: string;
+  LDetachSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.thread.pas');
+  LJoinSource := SourceSlice(LSource,
+    'function platform_thread_host_state_join',
+    'function platform_thread_host_state_detach');
+  LDetachSource := SourceSlice(LSource,
+    'function platform_thread_host_state_detach',
+    '{ GNU extension');
+
+  CheckContains(LJoinSource, 'if Result = 0 then',
+    'pthread join state must only be released after successful join');
+  CheckContains(LJoinSource, 'Dispose(AState)',
+    'pthread join success must release its state');
+  CheckContains(LDetachSource, 'if Result = 0 then',
+    'pthread detach state must only be released after successful detach');
+  CheckContains(LDetachSource, 'Dispose(AState)',
+    'pthread detach success must release its state');
 end;
 
 procedure TestThreadWaitWithoutSpawn;
@@ -509,6 +548,8 @@ begin
   T.Test('sleep_ns short', @TestThreadSleepNsShort);
   T.Test('sleep_sec safe range source contract',
     @TestSleepSecSafeRangeSourceContract);
+  T.Test('thread state release source contract',
+    @TestThreadStateReleaseSourceContract);
   T.Test('Thread wait without spawn', @TestThreadWaitWithoutSpawn);
   T.Test('Thread is_alive after wait', @TestThreadIsAliveAfterWait);
   T.Test('Thread spawn nil arg', @TestThreadSpawnNilArg);

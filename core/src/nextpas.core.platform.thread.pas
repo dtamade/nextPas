@@ -228,7 +228,8 @@ begin
     Exit(PLATFORM_ERR_INVALID);
 
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
-  Dispose(AState);
+  if Result = 0 then
+    Dispose(AState);
 end;
 
 function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
@@ -237,7 +238,8 @@ begin
     Exit(PLATFORM_ERR_INVALID);
 
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
-  Dispose(AState);
+  if Result = 0 then
+    Dispose(AState);
 end;
 
 { GNU extension — available since glibc 2.24 (2016). PTHREAD_TIMEOUT_CLOCK_ID
@@ -782,8 +784,11 @@ end;
 
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 begin
-  if ASeconds <> 0 then
-  { Windows Sleep accepts DWORD ms; clamp to INFINITE-1 (≈49.7 days) on overflow }
+  if ASeconds = 0 then
+    Exit;
+  if ASeconds > (UInt64(INFINITE) - 1) div 1000 then
+    Sleep(INFINITE - 1)
+  else
     Sleep(DWORD(ASeconds * 1000));
 end;
 
