@@ -37,6 +37,7 @@ implementation
 
 uses
   SysUtils,
+  nextpas.core.exception,
   nextpas.core.http.url;
 
 { URL-decode a string, converting + to space }
