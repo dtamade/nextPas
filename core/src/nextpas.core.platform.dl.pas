@@ -12,7 +12,22 @@ type
   {$ELSE}
     Handle: Pointer;
   {$ENDIF}
+    {** @desc 检查库句柄是否有效
+        @return True 如果库句柄有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查库句柄是否无效
+        @return True 如果库句柄无效 *}
+    function IsInvalid: Boolean; inline;
   end;
+
+  {** @desc 动态库打开标志 *}
+  TPlatformDlFlag = (
+    dlfLazy,    {**< 延迟绑定（符号首次调用时解析） *}
+    dlfNow,     {**< 立即绑定（打开时解析所有符号） *}
+    dlfGlobal   {**< 全局符号可见（后续加载的库可引用） *}
+  );
+  {** @desc 动态库打开标志集合 *}
+  TPlatformDlFlags = set of TPlatformDlFlag;
 
 const
   {** 延迟绑定（符号首次调用时解析） *}
@@ -49,6 +64,11 @@ function platform_dl_close(var ALib: TPlatformLibrary): Int32;
     @return 错误信息长度 *}
 function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
+{** @desc 将类型安全的标志集合转换为整数标志
+    @param AFlags 标志集合
+    @return 整数标志值 *}
+function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -68,6 +88,30 @@ uses
   , nextpas.core.platform.freebsd.ffi
 {$ENDIF}
   ;
+
+function TPlatformLibrary.IsValid: Boolean;
+begin
+  Result := Handle <> nil;
+end;
+
+function TPlatformLibrary.IsInvalid: Boolean;
+begin
+  Result := Handle = nil;
+end;
+
+{** @desc 将类型安全的标志集合转换为整数标志
+    @param AFlags 标志集合
+    @return 整数标志值 *}
+function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
+begin
+  Result := 0;
+  if dlfLazy in AFlags then
+    Result := Result or PLATFORM_DL_LAZY;
+  if dlfNow in AFlags then
+    Result := Result or PLATFORM_DL_NOW;
+  if dlfGlobal in AFlags then
+    Result := Result or PLATFORM_DL_GLOBAL;
+end;
 
 function MapFlags(AFlags: Int32): Int32;
 var
@@ -169,6 +213,16 @@ uses
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16;
 
+function TPlatformLibrary.IsValid: Boolean;
+begin
+  Result := Handle <> 0;
+end;
+
+function TPlatformLibrary.IsInvalid: Boolean;
+begin
+  Result := Handle = 0;
+end;
+
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 var
@@ -247,9 +301,27 @@ begin
   ABuf[I] := #0;
   Result := I;
 end;
+
+{** @desc 将类型安全的标志集合转换为整数标志
+    @param AFlags 标志集合
+    @return 整数标志值 *}
+function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
+begin
+  Result := 0;
+  if dlfLazy in AFlags then
+    Result := Result or PLATFORM_DL_LAZY;
+  if dlfNow in AFlags then
+    Result := Result or PLATFORM_DL_NOW;
+  if dlfGlobal in AFlags then
+    Result := Result or PLATFORM_DL_GLOBAL;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+function TPlatformLibrary.IsValid: Boolean;
+begin Result := Handle <> nil; end;
+function TPlatformLibrary.IsInvalid: Boolean;
+begin Result := Handle = nil; end;
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 begin FillChar(ALib, SizeOf(ALib), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
@@ -260,6 +332,8 @@ function platform_dl_close(var ALib: TPlatformLibrary): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 begin if ABuf <> nil then ABuf[0] := #0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_dl_flags_to_int(AFlags: TPlatformDlFlags): Int32;
+begin Result := 0; end;
 {$ENDIF}
 
 end.
