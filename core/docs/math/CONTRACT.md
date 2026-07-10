@@ -132,8 +132,8 @@ end;
 ### 1.7 随机数
 
 ```pascal
-TRandomGen = class
-  constructor Create(ASeed: UInt64 = 0);
+TRandomGen = record
+  class function Init(const ASeed: UInt64 = 0): TRandomGen; static;
   procedure SetSeed(ASeed: UInt64);
   function NextInt: Integer;
   function NextIntRange(AMin, AMax: Integer): Integer;
@@ -203,7 +203,7 @@ end;
 ## 5. 内存管理
 
 - 所有 record 类型为值语义，无堆分配
-- `TRandomGen` 为 class，Create/Destroy 管理
+- `TRandomGen` 为 record，使用 `Init` 初始化，值语义且无需 `Free`
 - 无全局缓存或静态状态
 
 ---

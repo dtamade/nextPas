@@ -33,8 +33,8 @@ class FacadeOnlyConsumerContract:
 
 
 @dataclass(frozen=True)
-class PascalClassContract:
-    class_name: str
+class PascalTypeContract:
+    type_name: str
     public_members: tuple[str, ...]
 
 
@@ -1610,10 +1610,10 @@ PUBLIC_FUNCTION_RE = re.compile(
     re.MULTILINE,
 )
 RANDOM_NOISE_PUBLIC_CONTRACTS = (
-    PascalClassContract(
+    PascalTypeContract(
         "TRandomGen",
         (
-            "constructor Create(const ASeed: UInt64 = 0)",
+            "class function Init(const ASeed: UInt64 = 0): TRandomGen",
             "procedure SetSeed(const ASeed: UInt64)",
             "function NextInt: Integer",
             "function NextIntRange(const AMin, AMax: Integer): Integer",
@@ -1631,7 +1631,7 @@ RANDOM_NOISE_PUBLIC_CONTRACTS = (
             "property State: TRandomState read FState write FState",
         ),
     ),
-    PascalClassContract(
+    PascalTypeContract(
         "TNoiseGen",
         (
             "constructor Create(const ASeed: UInt64 = 0)",
@@ -1835,7 +1835,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "src/nextpas.core.math.random.pas": (
         ("random-state-type", r"\bTRandomState\s*=\s*record\b"),
-        ("random-gen-class", r"\bTRandomGen\s*=\s*class\b"),
+        ("random-gen-record", r"\bTRandomGen\s*=\s*record\b"),
         ("random-next-int-range", r"\bfunction\s+NextIntRange\s*\(\s*const\s+AMin\s*,\s*AMax\s*:\s*Integer\s*\)\s*:\s*Integer\b"),
         ("random-next-float-range", r"\bfunction\s+NextFloatRange\s*\(\s*const\s+AMin\s*,\s*AMax\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("random-next-bool", r"\bfunction\s+NextBool\s*\(\s*const\s+AProbability\s*:\s*Single\s*=\s*0\.5\s*\)\s*:\s*Boolean\b"),
@@ -3339,24 +3339,24 @@ def split_pascal_member_statements(text: str) -> list[str]:
     return statements
 
 
-def class_public_member_sets(text: str) -> dict[str, tuple[int, set[str]]]:
+def type_public_member_sets(text: str) -> dict[str, tuple[int, set[str]]]:
     code = interface_text(text)
-    classes: dict[str, tuple[int, set[str]]] = {}
+    types: dict[str, tuple[int, set[str]]] = {}
     for match in re.finditer(
-        r"(?P<name>T[A-Za-z0-9_]*)\s*=\s*class\b(?P<body>.*?)\bend\s*;",
+        r"(?P<name>T[A-Za-z0-9_]*)\s*=\s*(?:class|record)\b(?P<body>.*?)\bend\s*;",
         code,
         re.IGNORECASE | re.DOTALL,
     ):
-        class_name = match.group("name")
+        type_name = match.group("name")
         body = match.group("body")
-        class_line = line_no_at(code, match.start("name"))
+        type_line = line_no_at(code, match.start("name"))
         public_match = re.search(
             r"\bpublic\b(?P<body>.*?)(?=\b(?:private|protected|public|published)\b|\Z)",
             body,
             re.IGNORECASE | re.DOTALL,
         )
         if public_match is None:
-            classes[class_name.lower()] = (class_line, set())
+            types[type_name.lower()] = (type_line, set())
             continue
 
         public_body = public_match.group("body")
@@ -3367,8 +3367,8 @@ def class_public_member_sets(text: str) -> dict[str, tuple[int, set[str]]]:
                 continue
             if member:
                 members.add(member)
-        classes[class_name.lower()] = (class_line, members)
-    return classes
+        types[type_name.lower()] = (type_line, members)
+    return types
 
 
 def scan_random_noise_public_contract(root: Path, path: Path, text: str) -> list[Finding]:
@@ -3413,26 +3413,26 @@ def scan_random_noise_public_contract(root: Path, path: Path, text: str) -> list
     if rel != "src/nextpas.core.math.random.pas":
         return findings
 
-    class_members = class_public_member_sets(text)
+    type_members = type_public_member_sets(text)
     for contract in RANDOM_NOISE_PUBLIC_CONTRACTS:
-        class_line, actual_members = class_members.get(contract.class_name.lower(), (1, set()))
+        type_line, actual_members = type_members.get(contract.type_name.lower(), (1, set()))
         expected_members = set(contract.public_members)
         for member in sorted(expected_members - actual_members):
             add_finding(
                 findings,
-                "random-noise-missing-public-member:" + contract.class_name + ":" + member,
+                "random-noise-missing-public-member:" + contract.type_name + ":" + member,
                 root,
                 path,
-                class_line,
+                type_line,
                 member,
             )
         for member in sorted(actual_members - expected_members):
             add_finding(
                 findings,
-                "random-noise-extra-public-member:" + contract.class_name + ":" + member,
+                "random-noise-extra-public-member:" + contract.type_name + ":" + member,
                 root,
                 path,
-                class_line,
+                type_line,
                 member,
             )
 
@@ -4014,11 +4014,11 @@ def run_random_noise_public_contract_self_tests() -> None:
             "interface\n"
             "type\n"
             "  TRandomState = record S0: UInt64; S1: UInt64; end;\n"
-            "  TRandomGen = class\n"
+            "  TRandomGen = record\n"
             "  private\n"
             "    FState: TRandomState;\n"
             "  public\n"
-            "    constructor Create(const ASeed: UInt64 = 0);\n"
+            "    class function Init(const ASeed: UInt64 = 0): TRandomGen; static;\n"
             "    procedure SetSeed(const ASeed: UInt64);\n"
             "    function NextInt: Integer;\n"
             "    function NextIntRange(const AMin, AMax: Integer): Integer;\n"

@@ -424,10 +424,13 @@ ranges stay unbiased instead of inheriting modulo bias from raw `UInt64` samples
 
 `TRandomGen` methods:
 
-- Seeding and state: `Create`, `SetSeed`, `State`
+- Seeding and state: `Init`, `SetSeed`, `State`
 - Uniform values: `NextInt`, `NextIntRange`, `NextFloat`, `NextFloatRange`, `NextDouble`
 - Distributions and helpers: `NextBool`, `NextGaussian`, `NextVec2InCircle`, `NextVec2OnCircle`
 - Dice and collections: `Roll`, `RollMultiple`, `WeightedChoice`, `Shuffle`
+
+`TRandomGen` is a record value type. Initialize it with `TRandomGen.Init`; it does not require
+manual `Free`.
 
 `NextFloatRange` returns finite values in the half-open range `[AMin, AMax)` for finite `Single`
 bounds with `AMin < AMax`, including forced maximum samples over very large finite spans.

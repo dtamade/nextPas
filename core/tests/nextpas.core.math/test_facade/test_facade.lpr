@@ -260,14 +260,13 @@ var
   Rng: TRandomGen;
   Noise: TNoiseGen;
 begin
-  Rng := TRandomGen.Create(123456789);
+  Rng := TRandomGen.Init(123456789);
   Noise := TNoiseGen.Create(2468);
   try
     CheckEqual(Int64(1644187685), Int64(Rng.NextInt), 'facade exposes TRandomGen');
     CheckNear(0.146484375, Noise.Noise1D(0.25), 'facade exposes TNoiseGen');
   finally
     Noise.Free;
-    Rng.Free;
   end;
 end;
 
@@ -307,7 +306,8 @@ begin
   LEasing := @EaseLinear;
   LState.S0 := UInt64(1);
   LState.S1 := UInt64(2);
-  LRng := nil;
+  LRng := TRandomGen.Init(0);
+  LRng.State := LState;
   LNoise := nil;
   LFPUExc := exInvalidOp;
   LFPUMask := [exInvalidOp, exZeroDivide];
@@ -319,7 +319,8 @@ begin
   Check((LQuatf.W = 1.0) and (LQuatd.W = 1.0), 'facade quaternion aliases compile');
   Check((LEasing <> nil) and (LEasing(0.5) = 0.5), 'facade easing alias compiles');
   Check((LState.S0 = UInt64(1)) and (LState.S1 = UInt64(2)) and
-    (LRng = nil) and (LNoise = nil), 'facade random aliases compile');
+    (LRng.State.S0 = UInt64(1)) and (LRng.State.S1 = UInt64(2)) and
+    (LNoise = nil), 'facade random aliases compile');
   Check((LFPUExc = exInvalidOp) and (LFPUMask = [exInvalidOp, exZeroDivide]),
     'facade FPU exception aliases compile');
 end;
@@ -699,7 +700,7 @@ begin
     V3dC := QdB.Rotate(V3dA);
     QdB := QdB.Conjugate.Normalize;
 
-    Rng := TRandomGen.Create(1);
+    Rng := TRandomGen.Init(1);
     Noise := TNoiseGen.Create(2);
     try
       Rng.SetSeed(3);
@@ -725,7 +726,6 @@ begin
         Noise.FBM2D(0.25, 0.5, 2) + Noise.FBM3D(0.25, 0.5, 0.75, 2);
     finally
       Noise.Free;
-      Rng.Free;
     end;
 
     if B or (I = Low(Integer)) or (F < -1.0e30) or (D < -1.0e300) or

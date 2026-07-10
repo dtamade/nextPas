@@ -13,12 +13,12 @@ type
     S1: UInt64;
   end;
 
-  TRandomGen = class
+  TRandomGen = record
   private
     FState: TRandomState;
     function NextUInt64: UInt64; inline;
   public
-    constructor Create(const ASeed: UInt64 = 0);
+    class function Init(const ASeed: UInt64 = 0): TRandomGen; static;
     procedure SetSeed(const ASeed: UInt64);
 
     function NextInt: Integer; inline;
@@ -205,10 +205,9 @@ end;
 
 { TRandomGen }
 
-constructor TRandomGen.Create(const ASeed: UInt64);
+class function TRandomGen.Init(const ASeed: UInt64): TRandomGen;
 begin
-  inherited Create;
-  SetSeed(ASeed);
+  Result.SetSeed(ASeed);
 end;
 
 procedure TRandomGen.SetSeed(const ASeed: UInt64);
@@ -457,22 +456,18 @@ var
   J: Integer;
   LTemp: Byte;
 begin
-  LRng := TRandomGen.Create(ASeed);
-  try
-    for I := 0 to 255 do
-      FPerm[I] := Byte(I);
-    for I := 255 downto 1 do
-    begin
-      J := LRng.NextIntRange(0, I);
-      LTemp := FPerm[I];
-      FPerm[I] := FPerm[J];
-      FPerm[J] := LTemp;
-    end;
-    for I := 0 to 255 do
-      FPerm[256 + I] := FPerm[I];
-  finally
-    LRng.Free;
+  LRng := TRandomGen.Init(ASeed);
+  for I := 0 to 255 do
+    FPerm[I] := Byte(I);
+  for I := 255 downto 1 do
+  begin
+    J := LRng.NextIntRange(0, I);
+    LTemp := FPerm[I];
+    FPerm[I] := FPerm[J];
+    FPerm[J] := LTemp;
   end;
+  for I := 0 to 255 do
+    FPerm[256 + I] := FPerm[I];
 end;
 
 function TNoiseGen.Fade(const AT: Double): Double;
