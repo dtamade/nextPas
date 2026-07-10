@@ -421,6 +421,34 @@ function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
 procedure platform_sockaddr_to_ipv4(const ASockAddr: sockaddr_in;
   out AIP: UInt32; out APort: UInt16);
 
+{ Convenience: Create TCP/UDP sockets }
+
+{** @desc 创建 TCP 套接字（IPv4）
+    @param ASocket 输出套接字句柄
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_create_tcp(out ASocket: TPlatformSocket): Int32;
+
+{** @desc 创建 UDP 套接字（IPv4）
+    @param ASocket 输出套接字句柄
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_create_udp(out ASocket: TPlatformSocket): Int32;
+
+{** @desc 创建 TCP 套接字并绑定到 IPv4 地址
+    @param AAddr IPv4 地址（网络字节序）
+    @param APort 端口号（主机字节序）
+    @param ASocket 输出套接字句柄
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_create_tcp_bind(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+
+{** @desc 创建 TCP 套接字并连接到 IPv4 地址
+    @param AAddr IPv4 地址（网络字节序）
+    @param APort 端口号（主机字节序）
+    @param ASocket 输出套接字句柄
+    @return 0 成功，否则返回错误码 *}
+function platform_socket_create_tcp_connect(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
@@ -867,6 +895,52 @@ begin
   LLen := SizeOf(AError);
   Result := platform_socket_getsockopt(ASocket, PLATFORM_SOL_SOCKET,
     PLATFORM_SO_ERROR, @AError, @LLen);
+end;
+
+function platform_socket_create_tcp(out ASocket: TPlatformSocket): Int32;
+begin
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, ASocket);
+end;
+
+function platform_socket_create_udp(out ASocket: TPlatformSocket): Int32;
+begin
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, ASocket);
+end;
+
+function platform_socket_create_tcp_bind(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+var
+  LSockAddr: TPlatformSockAddr;
+begin
+  Result := platform_socket_create_tcp(ASocket);
+  if Result <> 0 then
+    Exit;
+  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
+  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+end;
+
+function platform_socket_create_tcp_connect(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+var
+  LSockAddr: TPlatformSockAddr;
+begin
+  Result := platform_socket_create_tcp(ASocket);
+  if Result <> 0 then
+    Exit;
+  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
+  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
 end;
 
 {$ENDIF}
@@ -1356,6 +1430,52 @@ begin
     PLATFORM_SO_ERROR, @AError, @LLen);
 end;
 
+function platform_socket_create_tcp(out ASocket: TPlatformSocket): Int32;
+begin
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, ASocket);
+end;
+
+function platform_socket_create_udp(out ASocket: TPlatformSocket): Int32;
+begin
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
+    PLATFORM_IPPROTO_UDP, ASocket);
+end;
+
+function platform_socket_create_tcp_bind(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+var
+  LSockAddr: TPlatformSockAddr;
+begin
+  Result := platform_socket_create_tcp(ASocket);
+  if Result <> 0 then
+    Exit;
+  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
+  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+end;
+
+function platform_socket_create_tcp_connect(AAddr: UInt32; APort: UInt16;
+  out ASocket: TPlatformSocket): Int32;
+var
+  LSockAddr: TPlatformSockAddr;
+begin
+  Result := platform_socket_create_tcp(ASocket);
+  if Result <> 0 then
+    Exit;
+  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
+  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -1405,6 +1525,10 @@ function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAd
 function platform_sockaddr_ipv6(APort: UInt16; AAddr: PByte; AScopeId: UInt32; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_sockaddr_loopback6(APort: UInt16; out AResult: TPlatformSockAddr): Int32; begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_resolve_ipv6(const AHost: PAnsiChar; AAddr: PByte): Int32; begin FillChar(AAddr^, 16, 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_create_tcp(out ASocket: TPlatformSocket): Int32; begin ASocket.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_create_udp(out ASocket: TPlatformSocket): Int32; begin ASocket.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_create_tcp_bind(AAddr: UInt32; APort: UInt16; out ASocket: TPlatformSocket): Int32; begin ASocket.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_create_tcp_connect(AAddr: UInt32; APort: UInt16; out ASocket: TPlatformSocket): Int32; begin ASocket.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 {$ENDIF}
 
 end.
