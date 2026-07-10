@@ -970,6 +970,36 @@ begin
     'Power Single negative zero even negative exponent returns +Inf');
 end;
 
+procedure TestPowerLargeIntegerParityContracts;
+const
+  LAST_SMALL_ODD_INTEGER = Double(4503599627370495.0);
+  LARGE_INTEGER_PARITY_THRESHOLD = Double(4503599627370496.0);
+  FIRST_LARGE_ODD_INTEGER = Double(4503599627370497.0);
+  FIRST_LARGE_EVEN_INTEGER = Double(4503599627370498.0);
+  LARGEST_EXACT_ODD_INTEGER = Double(9007199254740991.0);
+  FIRST_SPACED_EVEN_INTEGER = Double(9007199254740992.0);
+  SPACED_EVEN_INTEGER_WITH_MANTISSA_BIT = Double(9007199254740996.0);
+begin
+  CheckNear(-1.0, Power(-1.0, LAST_SMALL_ODD_INTEGER), 0.0,
+    'Power preserves odd parity immediately below 2^52');
+  CheckNear(1.0, Power(-1.0, LARGE_INTEGER_PARITY_THRESHOLD), 0.0,
+    'Power treats 2^52 as even');
+  CheckNear(-1.0, Power(-1.0, FIRST_LARGE_ODD_INTEGER), 0.0,
+    'Power preserves odd parity immediately above 2^52');
+  CheckNear(1.0, Power(-1.0, FIRST_LARGE_EVEN_INTEGER), 0.0,
+    'Power preserves even parity immediately above 2^52');
+  CheckNear(-1.0, Power(-1.0, LARGEST_EXACT_ODD_INTEGER), 0.0,
+    'Power preserves parity for the largest exactly representable odd integer');
+  CheckNear(-1.0, Power(-1.0, -LARGEST_EXACT_ODD_INTEGER), 0.0,
+    'Power preserves parity for a large negative odd integer');
+  CheckNear(1.0, Power(-1.0, FIRST_SPACED_EVEN_INTEGER), 0.0,
+    'Power treats 2^53 as even');
+  CheckNear(1.0, Power(-1.0, SPACED_EVEN_INTEGER_WITH_MANTISSA_BIT), 0.0,
+    'Power treats representable integers above 2^53 as even');
+  CheckNear(1.0, Power(-1.0, -DoublePowerOfTwo63), 0.0,
+    'Power handles the negative Int64 boundary as even');
+end;
+
 procedure TestPowerNegativeFiniteBaseNonIntegerContracts;
 begin
   Check(IsDoubleNaN(Power(-1.0, 0.5)),
@@ -1268,6 +1298,7 @@ begin
   T.Test('log base identity contracts', @TestLogBaseIdentityContracts);
   T.Test('log positive subnormal contracts', @TestLogPositiveSubnormalContracts);
   T.Test('power edge contracts', @TestPowerEdgeContracts);
+  T.Test('power large integer parity contracts', @TestPowerLargeIntegerParityContracts);
   T.Test('power negative finite base non-integer contracts',
     @TestPowerNegativeFiniteBaseNonIntegerContracts);
   T.Test('power non-finite contracts', @TestPowerNonFiniteContracts);

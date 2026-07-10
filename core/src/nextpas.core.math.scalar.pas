@@ -516,34 +516,43 @@ begin
 end;
 
 { TotalVariance - sum of squared deviations from mean (ANOVA definition) }
+{ Uses Welford single-pass algorithm to avoid intermediate overflow }
 function TotalVariance(const AData: array of Double): Double;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Double;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount = 0 then
     Exit(DoubleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff;
+  begin
+    LDelta := AData[i] - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (AData[i] - LMean);
+  end;
+  Result := LS;
 end;
 
 function TotalVariance(const AData: array of Single): Single;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Single;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount = 0 then
     Exit(SingleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff;
+  begin
+    LDelta := Double(AData[i]) - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (Double(AData[i]) - LMean);
+  end;
+  Result := Single(LS);
 end;
 
 { SumSquaredDeviations - alias for TotalVariance }
