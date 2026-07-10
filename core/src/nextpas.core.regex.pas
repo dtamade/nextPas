@@ -63,6 +63,7 @@ type
     function GroupIndexByName(const AName: string): SizeInt;
     function SubexpNames: TStringArray;
     function NumCaptures: UInt32;
+    procedure Free;  { release FDfaCache if allocated }
   end;
 
 function RegexIsMatch(const APattern, AInput: string): Boolean;
@@ -602,6 +603,19 @@ begin
   Result := FProgram.NumCaptures;
 end;
 
+procedure TRegex.Free;
+begin
+  if FDfaCache <> nil then
+  begin
+    { Finalize managed types inside PDfaCache before freeing the block.
+      TDfaCache contains dynamic arrays (Seen, CloseList, NextPCs, Stack)
+      and TDfaState.PCs which must be released. }
+    Finalize(PDfaCache(FDfaCache)^);
+    FreeMem(FDfaCache);
+    FDfaCache := nil;
+  end;
+end;
+
 function TRegex.FindIter(const AInput: string): TRegexIter;
 begin
   Result.FProgram := FProgram;
@@ -652,35 +666,55 @@ function RegexIsMatch(const APattern, AInput: string): Boolean;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.IsMatch(AInput);
+  try
+    Result := R.IsMatch(AInput);
+  finally
+    R.Free;
+  end;
 end;
 
 function RegexFind(const APattern, AInput: string): TMatch;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.Find(AInput);
+  try
+    Result := R.Find(AInput);
+  finally
+    R.Free;
+  end;
 end;
 
 function RegexFindAll(const APattern, AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.FindAll(AInput, AMaxMatches);
+  try
+    Result := R.FindAll(AInput, AMaxMatches);
+  finally
+    R.Free;
+  end;
 end;
 
 function RegexReplaceAll(const APattern, AInput, AReplacement: string): string;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.ReplaceAll(AInput, AReplacement);
+  try
+    Result := R.ReplaceAll(AInput, AReplacement);
+  finally
+    R.Free;
+  end;
 end;
 
 function RegexSplit(const APattern, AInput: string): TStringArray;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.Split(AInput);
+  try
+    Result := R.Split(AInput);
+  finally
+    R.Free;
+  end;
 end;
 
 function RegexQuoteMeta(const AStr: string): string;
