@@ -113,7 +113,7 @@ end;
 
 procedure TCopyOnWriteArrayImpl.LockRetired;
 begin
-  while AtomicCompareExchange32(FRetiredLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FRetiredLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 

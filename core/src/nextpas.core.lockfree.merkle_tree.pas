@@ -33,9 +33,13 @@ type
     FLeaves: PMerkleLeaf;
     FLeafCount: Int32;
     FRootHash: UInt64;
+    FLock: Int32;
     FClosed: Int32;
+    function CalculateRootHash(out ALeavesValid: Boolean): UInt64;
     procedure ComputeRootHash;
     function FnvHash(const AData: AnsiString): UInt64;
+    procedure LockTree;
+    procedure UnlockTree;
   public
     constructor Create;
     destructor Destroy; override;
@@ -73,6 +77,7 @@ begin
   FLeaves := nil;
   FLeafCount := 0;
   FRootHash := 0;
+  FLock := 0;
   FClosed := 0;
 end;
 
@@ -88,35 +93,54 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(mkClosed);
-  New(LLeaf);
-  LLeaf^.Data := AData;
-  LLeaf^.Hash := FnvHash(AData);
-  LLeaf^.Next := FLeaves;
-  FLeaves := LLeaf;
-  Inc(FLeafCount);
-  ComputeRootHash;
-  Result := mkOk;
+  LockTree;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(mkClosed);
+    New(LLeaf);
+    LLeaf^.Data := AData;
+    LLeaf^.Hash := FnvHash(AData);
+    LLeaf^.Next := FLeaves;
+    FLeaves := LLeaf;
+    Inc(FLeafCount);
+    ComputeRootHash;
+    Result := mkOk;
+  finally
+    UnlockTree;
+  end;
 end;
 
-procedure TMerkleTree.ComputeRootHash;
+function TMerkleTree.CalculateRootHash(out ALeavesValid: Boolean): UInt64;
 var
   LHashes: array of UInt64;
+  LHash: UInt64;
   LCount, LI: Int32;
   LLeaf: PMerkleLeaf;
 begin
+  ALeavesValid := True;
   if FLeafCount = 0 then
-  begin
-    FRootHash := 0;
-    Exit;
-  end;
+    Exit(0);
   SetLength(LHashes, FLeafCount);
   LLeaf := FLeaves;
   LI := FLeafCount - 1;
   while LLeaf <> nil do
   begin
-    LHashes[LI] := LLeaf^.Hash;
+    if LI < 0 then
+    begin
+      ALeavesValid := False;
+      Exit(0);
+    end;
+    LHash := FnvHash(LLeaf^.Data);
+    if LHash <> LLeaf^.Hash then
+      ALeavesValid := False;
+    LHashes[LI] := LHash;
     Dec(LI);
     LLeaf := LLeaf^.Next;
+  end;
+  if LI <> -1 then
+  begin
+    ALeavesValid := False;
+    Exit(0);
   end;
   LCount := FLeafCount;
   while LCount > 1 do
@@ -131,17 +155,45 @@ begin
       LHashes[LCount div 2] := LHashes[LCount - 1];
     LCount := (LCount + 1) div 2;
   end;
-  FRootHash := LHashes[0];
+  Result := LHashes[0];
+end;
+
+procedure TMerkleTree.ComputeRootHash;
+var
+  LLeavesValid: Boolean;
+begin
+  FRootHash := CalculateRootHash(LLeavesValid);
+end;
+
+procedure TMerkleTree.LockTree;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TMerkleTree.UnlockTree;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TMerkleTree.GetRootHash: UInt64;
 begin
-  Result := UInt64(AtomicLoad64(Int64(FRootHash), moAcquire));
+  LockTree;
+  try
+    Result := FRootHash;
+  finally
+    UnlockTree;
+  end;
 end;
 
 function TMerkleTree.GetLeafCount: Int32;
 begin
-  Result := FLeafCount;
+  LockTree;
+  try
+    Result := FLeafCount;
+  finally
+    UnlockTree;
+  end;
 end;
 
 function TMerkleTree.GetLeafHash(AIndex: Int32): UInt64;
@@ -149,50 +201,70 @@ var
   LLeaf: PMerkleLeaf;
   LI: Int32;
 begin
-  if (AIndex < 0) or (AIndex >= FLeafCount) then
-    Exit(0);
-  LLeaf := FLeaves;
-  LI := 0;
-  while (LLeaf <> nil) and (LI < FLeafCount - 1 - AIndex) do
-  begin
-    LLeaf := LLeaf^.Next;
-    Inc(LI);
+  LockTree;
+  try
+    if (AIndex < 0) or (AIndex >= FLeafCount) then
+      Exit(0);
+    LLeaf := FLeaves;
+    LI := 0;
+    while (LLeaf <> nil) and (LI < FLeafCount - 1 - AIndex) do
+    begin
+      LLeaf := LLeaf^.Next;
+      Inc(LI);
+    end;
+    if LLeaf <> nil then
+      Result := LLeaf^.Hash
+    else
+      Result := 0;
+  finally
+    UnlockTree;
   end;
-  if LLeaf <> nil then
-    Result := LLeaf^.Hash
-  else
-    Result := 0;
 end;
 
 function TMerkleTree.Verify: Boolean;
 var
-  LSavedRoot: UInt64;
+  LCalculatedRoot: UInt64;
+  LLeavesValid: Boolean;
 begin
-  LSavedRoot := FRootHash;
-  ComputeRootHash;
-  Result := FRootHash = LSavedRoot;
+  LockTree;
+  try
+    LCalculatedRoot := CalculateRootHash(LLeavesValid);
+    Result := LLeavesValid and (LCalculatedRoot = FRootHash);
+  finally
+    UnlockTree;
+  end;
 end;
 
 procedure TMerkleTree.Clear;
 var
   LLeaf, LNext: PMerkleLeaf;
 begin
-  LLeaf := FLeaves;
-  while LLeaf <> nil do
-  begin
-    LNext := LLeaf^.Next;
-    LLeaf^.Data := '';
-    Dispose(LLeaf);
-    LLeaf := LNext;
+  LockTree;
+  try
+    LLeaf := FLeaves;
+    while LLeaf <> nil do
+    begin
+      LNext := LLeaf^.Next;
+      LLeaf^.Data := '';
+      Dispose(LLeaf);
+      LLeaf := LNext;
+    end;
+    FLeaves := nil;
+    FLeafCount := 0;
+    FRootHash := 0;
+  finally
+    UnlockTree;
   end;
-  FLeaves := nil;
-  FLeafCount := 0;
-  FRootHash := 0;
 end;
 
 procedure TMerkleTree.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  LockTree;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    UnlockTree;
+  end;
 end;
 
 function TMerkleTree.IsClosed: Boolean;

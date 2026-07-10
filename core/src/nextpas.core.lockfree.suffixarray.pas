@@ -6,7 +6,7 @@
   Design:
   - Pre-sorted suffix indices for binary search
   - O(m log n) pattern search where m = pattern length, n = text length
-  - Spin lock for build, lock-free search
+  - Spin lock for coherent build/search publication
   - LCP array for enhanced search (optional)
 
   Use cases: full-text search, pattern matching, bioinformatics.
@@ -40,10 +40,13 @@ type
     FLCP: array of Int32;
     FLength: Int32;
     FBuilt: Boolean;
+    FLock: Int32;
 
     function CompareSuffix(AIdx1, AIdx2: Int32): Int32;
     procedure BuildSuffixArray;
     procedure BuildLCP;
+    procedure Lock;
+    procedure Unlock;
   public
     constructor Create;
     destructor Destroy; override;
@@ -69,6 +72,7 @@ begin
   SetLength(FLCP, 0);
   FLength := 0;
   FBuilt := False;
+  FLock := 0;
 end;
 
 destructor TSuffixArray.Destroy;
@@ -98,6 +102,17 @@ begin
   if LLen1 < LLen2 then Exit(-1);
   if LLen1 > LLen2 then Exit(1);
   Result := 0;
+end;
+
+procedure TSuffixArray.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TSuffixArray.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 procedure TSuffixArray.BuildSuffixArray;
@@ -150,16 +165,28 @@ end;
 
 function TSuffixArray.Build(const AText: AnsiString): TSuffixArrayResult;
 begin
-  if Length(AText) = 0 then
-    Exit(sarEmpty);
+  Lock;
+  try
+    if Length(AText) = 0 then
+    begin
+      FText := '';
+      SetLength(FSuffixArray, 0);
+      SetLength(FLCP, 0);
+      FLength := 0;
+      FBuilt := False;
+      Exit(sarEmpty);
+    end;
 
-  FText := AText;
-  FLength := Length(AText);
-  SetLength(FSuffixArray, FLength);
-  BuildSuffixArray;
-  BuildLCP;
-  FBuilt := True;
-  Result := sarOk;
+    FText := AText;
+    FLength := Length(AText);
+    SetLength(FSuffixArray, FLength);
+    BuildSuffixArray;
+    BuildLCP;
+    FBuilt := True;
+    Result := sarOk;
+  finally
+    Unlock;
+  end;
 end;
 
 function TSuffixArray.Search(const APattern: AnsiString): specialize TArray<TSuffixArrayMatch>;
@@ -189,57 +216,58 @@ var
 
 begin
   Result := nil;
-  if not FBuilt or (Length(APattern) = 0) then
-    Exit;
+  Lock;
+  try
+    if not FBuilt or (Length(APattern) = 0) then
+      Exit;
 
-  LPatLen := Length(APattern);
-
-  { Binary search for first match }
-  LLo := 0;
-  LHi := FLength - 1;
-  while LLo <= LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := ComparePrefix(FSuffixArray[LMid]);
-    if LCmp >= 0 then
-      LHi := LMid - 1
-    else
-      LLo := LMid + 1;
-  end;
-  LStart := LLo;
-
-  { Binary search for last match }
-  LLo := LStart;
-  LHi := FLength - 1;
-  while LLo <= LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := ComparePrefix(FSuffixArray[LMid]);
-    if LCmp > 0 then
-      LHi := LMid - 1
-    else
-      LLo := LMid + 1;
-  end;
-  LEnd := LHi;
-
-  { Collect matches }
-  if LStart <= LEnd then
-  begin
-    SetLength(Result, LEnd - LStart + 1);
-    for I := LStart to LEnd do
+    LPatLen := Length(APattern);
+    LLo := 0;
+    LHi := FLength - 1;
+    while LLo <= LHi do
     begin
-      LMatch.Index := FSuffixArray[I];
-      LMatch.Length := LPatLen;
-      Result[I - LStart] := LMatch;
+      LMid := (LLo + LHi) div 2;
+      LCmp := ComparePrefix(FSuffixArray[LMid]);
+      if LCmp >= 0 then
+        LHi := LMid - 1
+      else
+        LLo := LMid + 1;
     end;
-    for I := 0 to High(Result) - 1 do
-      for J := I + 1 to High(Result) do
-        if Result[I].Index > Result[J].Index then
-        begin
-          LMatch := Result[I];
-          Result[I] := Result[J];
-          Result[J] := LMatch;
-        end;
+    LStart := LLo;
+
+    LLo := LStart;
+    LHi := FLength - 1;
+    while LLo <= LHi do
+    begin
+      LMid := (LLo + LHi) div 2;
+      LCmp := ComparePrefix(FSuffixArray[LMid]);
+      if LCmp > 0 then
+        LHi := LMid - 1
+      else
+        LLo := LMid + 1;
+    end;
+    LEnd := LHi;
+
+    if LStart <= LEnd then
+    begin
+      SetLength(Result, LEnd - LStart + 1);
+      for I := LStart to LEnd do
+      begin
+        LMatch.Index := FSuffixArray[I];
+        LMatch.Length := LPatLen;
+        Result[I - LStart] := LMatch;
+      end;
+      for I := 0 to High(Result) - 1 do
+        for J := I + 1 to High(Result) do
+          if Result[I].Index > Result[J].Index then
+          begin
+            LMatch := Result[I];
+            Result[I] := Result[J];
+            Result[J] := LMatch;
+          end;
+    end;
+  finally
+    Unlock;
   end;
 end;
 
@@ -255,12 +283,22 @@ end;
 
 function TSuffixArray.TextLength: Int32;
 begin
-  Result := AtomicLoad32(FLength, moAcquire);
+  Lock;
+  try
+    Result := FLength;
+  finally
+    Unlock;
+  end;
 end;
 
 function TSuffixArray.IsBuilt: Boolean;
 begin
-  Result := FBuilt;
+  Lock;
+  try
+    Result := FBuilt;
+  finally
+    Unlock;
+  end;
 end;
 
 end.

@@ -21,7 +21,7 @@ type
     @details 支持路径压缩 + 按秩合并的并查集数据结构。
       - Find: 路径压缩，均摊 O(α(n)) ≈ O(1)
       - Union: 按秩合并，均摊 O(α(n)) ≈ O(1)
-      - 线程安全：每个操作使用 CAS 循环
+      - 线程安全：自旋锁保护扩容、路径压缩和按秩合并不变量
       - 适用于动态连通性查询、聚类、图算法
   }
   TLockFreeDisjointSet = class
@@ -29,9 +29,11 @@ type
     FParent: array of Int32;  // parent[i] = parent of i (or self if root)
     FRank: array of Int32;    // rank[i] = upper bound on tree height
     FCount: Int32;
-    FLock: Int32;             // spinlock for MakeSet expansion
+    FLock: Int32;
 
     function FindRoot(AIdx: Int32): Int32;
+    procedure LockSet;
+    procedure UnlockSet;
   public
     {** @desc 创建并查集，初始容量为 ACapacity（自动扩容） }
     constructor Create(ACapacity: Int32 = 64);
@@ -89,71 +91,102 @@ begin
   Result := LRoot;
 end;
 
+procedure TLockFreeDisjointSet.LockSet;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TLockFreeDisjointSet.UnlockSet;
+begin
+  AtomicStore32(FLock, 0, moRelease);
+end;
+
 function TLockFreeDisjointSet.MakeSet: Int32;
 var
   LIdx: Int32;
 begin
-  repeat
-    LIdx := AtomicLoad32(FCount, moRelaxed);
+  LockSet;
+  try
+    LIdx := FCount;
     if LIdx >= Length(FParent) then
     begin
-      while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-        CpuPause;
-      if LIdx >= Length(FParent) then
-      begin
-        SetLength(FParent, LIdx * 2);
-        SetLength(FRank, LIdx * 2);
-      end;
-      AtomicStore32(FLock, 0, moRelease);
+      SetLength(FParent, Length(FParent) * 2);
+      SetLength(FRank, Length(FRank) * 2);
     end;
-  until AtomicCompareExchange32(FCount, LIdx, LIdx + 1, moAcqRel) = LIdx;
-  FParent[LIdx] := LIdx;
-  FRank[LIdx] := 0;
-  Result := LIdx;
+    FParent[LIdx] := LIdx;
+    FRank[LIdx] := 0;
+    AtomicStore32(FCount, LIdx + 1, moRelease);
+    Result := LIdx;
+  finally
+    UnlockSet;
+  end;
 end;
 
 function TLockFreeDisjointSet.Find(AIdx: Int32): Int32;
 begin
-  if (AIdx < 0) or (AIdx >= AtomicLoad32(FCount, moAcquire)) then
-    Exit(-1);
-  Result := FindRoot(AIdx);
+  LockSet;
+  try
+    if (AIdx < 0) or (AIdx >= FCount) then
+      Exit(-1);
+    Result := FindRoot(AIdx);
+  finally
+    UnlockSet;
+  end;
 end;
 
 function TLockFreeDisjointSet.Union(AIdx1, AIdx2: Int32): TLockFreeDisjointSetResult;
 var
   LRoot1, LRoot2, LRank1, LRank2: Int32;
 begin
-  if (AIdx1 < 0) or (AIdx1 >= AtomicLoad32(FCount, moAcquire)) then
-    Exit(dsNotFound);
-  if (AIdx2 < 0) or (AIdx2 >= AtomicLoad32(FCount, moAcquire)) then
-    Exit(dsNotFound);
-  LRoot1 := FindRoot(AIdx1);
-  LRoot2 := FindRoot(AIdx2);
-  if LRoot1 = LRoot2 then
-    Exit(dsSameSet);
-  // Union by rank: attach smaller tree under root of larger tree
-  LRank1 := FRank[LRoot1];
-  LRank2 := FRank[LRoot2];
-  if LRank1 < LRank2 then
-    FParent[LRoot1] := LRoot2
-  else if LRank1 > LRank2 then
-    FParent[LRoot2] := LRoot1
-  else
-  begin
-    FParent[LRoot2] := LRoot1;
-    FRank[LRoot1] := LRank1 + 1;
+  LockSet;
+  try
+    if (AIdx1 < 0) or (AIdx1 >= FCount) then
+      Exit(dsNotFound);
+    if (AIdx2 < 0) or (AIdx2 >= FCount) then
+      Exit(dsNotFound);
+    LRoot1 := FindRoot(AIdx1);
+    LRoot2 := FindRoot(AIdx2);
+    if LRoot1 = LRoot2 then
+      Exit(dsSameSet);
+    LRank1 := FRank[LRoot1];
+    LRank2 := FRank[LRoot2];
+    if LRank1 < LRank2 then
+      FParent[LRoot1] := LRoot2
+    else if LRank1 > LRank2 then
+      FParent[LRoot2] := LRoot1
+    else
+    begin
+      FParent[LRoot2] := LRoot1;
+      FRank[LRoot1] := LRank1 + 1;
+    end;
+    Result := dsOk;
+  finally
+    UnlockSet;
   end;
-  Result := dsOk;
 end;
 
 function TLockFreeDisjointSet.Connected(AIdx1, AIdx2: Int32): Boolean;
 begin
-  Result := Find(AIdx1) = Find(AIdx2);
+  LockSet;
+  try
+    if (AIdx1 < 0) or (AIdx1 >= FCount) or
+       (AIdx2 < 0) or (AIdx2 >= FCount) then
+      Exit(False);
+    Result := FindRoot(AIdx1) = FindRoot(AIdx2);
+  finally
+    UnlockSet;
+  end;
 end;
 
 function TLockFreeDisjointSet.Count: Int32;
 begin
-  Result := AtomicLoad32(FCount, moRelaxed);
+  LockSet;
+  try
+    Result := FCount;
+  finally
+    UnlockSet;
+  end;
 end;
 
 end.

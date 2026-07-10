@@ -19,7 +19,7 @@ type
   TForEachCallback = procedure(AIdx: Int32; const AValue: Pointer);
 
   {** @desc 并发链表
-    @details 基于读写锁的并发链表，支持有序插入和遍历。
+    @details 基于自旋锁的并发链表，支持有序插入和遍历。
       - Insert: 有序插入（保持升序）
       - Remove: 删除指定值
       - Contains: 查找是否包含
@@ -39,6 +39,8 @@ type
     FLock: Int32;
 
     procedure FreeList;
+    procedure LockList;
+    procedure UnlockList;
   public
     constructor Create;
     destructor Destroy; override;
@@ -75,6 +77,17 @@ begin
   FHead := nil;
 end;
 
+procedure TConcurrentLinkedListImpl.LockList;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TConcurrentLinkedListImpl.UnlockList;
+begin
+  AtomicStore32(FLock, 0, moRelease);
+end;
+
 constructor TConcurrentLinkedListImpl.Create;
 begin
   inherited Create;
@@ -91,84 +104,81 @@ end;
 
 function TConcurrentLinkedListImpl.Insert(const AValue: T): TLockFreeLinkedListResult;
 var
-  LNode, LPrev, LCurrent, LNew: PNode;
+  LPrev, LCurrent, LNew: PNode;
 begin
-  // Spin lock for write
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
-  // Find insertion point (maintain sorted order)
-  LPrev := nil;
-  LCurrent := FHead;
-  while (LCurrent <> nil) and (LCurrent^.FValue < AValue) do
-  begin
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.FNext;
+  LockList;
+  try
+    LPrev := nil;
+    LCurrent := FHead;
+    while (LCurrent <> nil) and (LCurrent^.FValue < AValue) do
+    begin
+      LPrev := LCurrent;
+      LCurrent := LCurrent^.FNext;
+    end;
+    if (LCurrent <> nil) and (LCurrent^.FValue = AValue) then
+      Exit(llExists);
+    New(LNew);
+    LNew^.FValue := AValue;
+    LNew^.FNext := LCurrent;
+    if LPrev = nil then
+      FHead := LNew
+    else
+      LPrev^.FNext := LNew;
+    AtomicFetchAdd64(FCount, 1);
+    Result := llOk;
+  finally
+    UnlockList;
   end;
-  // Check for duplicate
-  if (LCurrent <> nil) and (LCurrent^.FValue = AValue) then
-  begin
-    AtomicStore32(FLock, 0, moRelease);
-    Exit(llExists);
-  end;
-  // Create and insert new node
-  New(LNew);
-  LNew^.FValue := AValue;
-  LNew^.FNext := LCurrent;
-  if LPrev = nil then
-    FHead := LNew
-  else
-    LPrev^.FNext := LNew;
-  AtomicFetchAdd64(FCount, 1);
-  AtomicStore32(FLock, 0, moRelease);
-  Result := llOk;
 end;
 
 function TConcurrentLinkedListImpl.Remove(const AValue: T): TLockFreeLinkedListResult;
 var
   LPrev, LCurrent: PNode;
 begin
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
-  LPrev := nil;
-  LCurrent := FHead;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.FValue = AValue then
+  LockList;
+  try
+    LPrev := nil;
+    LCurrent := FHead;
+    while LCurrent <> nil do
     begin
-      // Found - remove node
-      if LPrev = nil then
-        FHead := LCurrent^.FNext
-      else
-        LPrev^.FNext := LCurrent^.FNext;
-      Dispose(LCurrent);
-      AtomicFetchAdd64(FCount, -1);
-      AtomicStore32(FLock, 0, moRelease);
-      Exit(llOk);
+      if LCurrent^.FValue = AValue then
+      begin
+        if LPrev = nil then
+          FHead := LCurrent^.FNext
+        else
+          LPrev^.FNext := LCurrent^.FNext;
+        Dispose(LCurrent);
+        AtomicFetchAdd64(FCount, -1);
+        Exit(llOk);
+      end;
+      LPrev := LCurrent;
+      LCurrent := LCurrent^.FNext;
     end;
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.FNext;
+    Result := llNotFound;
+  finally
+    UnlockList;
   end;
-  AtomicStore32(FLock, 0, moRelease);
-  Result := llNotFound;
 end;
 
 function TConcurrentLinkedListImpl.Contains(const AValue: T): Boolean;
 var
   LCurrent: PNode;
 begin
-  // Read lock (spin until write lock is free)
-  while AtomicLoad32(FLock, moAcquire) <> 0 do
-    ;
-  LCurrent := FHead;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.FValue = AValue then
-      Exit(True);
-    if LCurrent^.FValue > AValue then
-      Exit(False);  // List is sorted, no need to continue
-    LCurrent := LCurrent^.FNext;
+  LockList;
+  try
+    LCurrent := FHead;
+    while LCurrent <> nil do
+    begin
+      if LCurrent^.FValue = AValue then
+        Exit(True);
+      if LCurrent^.FValue > AValue then
+        Exit(False);
+      LCurrent := LCurrent^.FNext;
+    end;
+    Result := False;
+  finally
+    UnlockList;
   end;
-  Result := False;
 end;
 
 function TConcurrentLinkedListImpl.Count: Int64;
@@ -186,30 +196,38 @@ var
   LCurrent: PNode;
   I: Int32;
 begin
-  while AtomicLoad32(FLock, moAcquire) <> 0 do
-    ;
-  LCurrent := FHead;
-  I := 0;
-  while LCurrent <> nil do
-  begin
-    if I = AIndex then
+  AValue := Default(T);
+  if AIndex < 0 then
+    Exit(False);
+  LockList;
+  try
+    LCurrent := FHead;
+    I := 0;
+    while LCurrent <> nil do
     begin
-      AValue := LCurrent^.FValue;
-      Exit(True);
+      if I = AIndex then
+      begin
+        AValue := LCurrent^.FValue;
+        Exit(True);
+      end;
+      Inc(I);
+      LCurrent := LCurrent^.FNext;
     end;
-    Inc(I);
-    LCurrent := LCurrent^.FNext;
+    Result := False;
+  finally
+    UnlockList;
   end;
-  Result := False;
 end;
 
 procedure TConcurrentLinkedListImpl.Clear;
 begin
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
-  FreeList;
-  FCount := 0;
-  AtomicStore32(FLock, 0, moRelease);
+  LockList;
+  try
+    FreeList;
+    AtomicStore64(FCount, 0, moRelease);
+  finally
+    UnlockList;
+  end;
 end;
 
 end.

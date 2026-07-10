@@ -5,12 +5,50 @@ program test_lockfree_dag;
 {$modeswitch functionreferences}
 
 uses
+  nextpas.core.thread.init,
+  Classes,
   SysUtils,
+  nextpas.core.atomic,
   nextpas.core.lockfree.dag;
 
 var
   GDag: TConcurrentDAG;
   GPassed, GFailed: Int32;
+
+type
+  TDagEdgeThread = class(TThread)
+  private
+    FDag: TConcurrentDAG;
+    FFromId, FToId: Int64;
+    FReady, FStart: PInt32;
+    FResult: TDagResult;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ADag: TConcurrentDAG; AFromId, AToId: Int64;
+      AReady, AStart: PInt32);
+    property EdgeResult: TDagResult read FResult;
+  end;
+
+constructor TDagEdgeThread.Create(ADag: TConcurrentDAG;
+  AFromId, AToId: Int64; AReady, AStart: PInt32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FDag := ADag;
+  FFromId := AFromId;
+  FToId := AToId;
+  FReady := AReady;
+  FStart := AStart;
+end;
+
+procedure TDagEdgeThread.Execute;
+begin
+  AtomicFetchAdd32(FReady^, 1, moAcqRel);
+  while AtomicLoad32(FStart^, moAcquire) = 0 do
+    CpuPause;
+  FResult := FDag.AddEdge(FFromId, FToId);
+end;
 
 procedure Check(ACondition: Boolean; const AName: string);
 begin
@@ -155,6 +193,106 @@ begin
   end;
 end;
 
+procedure TestTopologicalSortWithSmallBuffer;
+var
+  LSorted: array[0..1] of Int64;
+  LCount: Int32;
+begin
+  WriteLn('--- TestTopologicalSortWithSmallBuffer ---');
+  GDag := TConcurrentDAG.Create;
+  try
+    GDag.AddNode(1);
+    GDag.AddNode(2);
+    GDag.AddNode(3);
+    GDag.AddEdge(1, 2);
+    GDag.AddEdge(2, 3);
+    LCount := GDag.TopologicalSort(LSorted);
+    Check(LCount = 2, 'Small buffer receives a valid topological prefix');
+    Check((LSorted[0] = 1) and (LSorted[1] = 2),
+      'Small-buffer prefix preserves dependency order');
+  finally
+    GDag.Free;
+  end;
+end;
+
+procedure TestEmptySingleAndSelfLoopBoundaries;
+var
+  LSorted: array[0..0] of Int64;
+begin
+  WriteLn('--- TestEmptySingleAndSelfLoopBoundaries ---');
+  GDag := TConcurrentDAG.Create;
+  try
+    Check(GDag.TopologicalSort(LSorted) = 0,
+      'Empty DAG has an empty topological order');
+    Check(not GDag.HasCycle, 'Empty DAG has no cycle');
+    Check(GDag.AddNode(7) = dagOk, 'Add single node');
+    Check(GDag.AddEdge(7, 7) = dagCycle, 'Reject self-loop');
+    Check(GDag.TopologicalSort(LSorted) = 1,
+      'Single node has one-item topological order');
+    Check(LSorted[0] = 7, 'Single-node order contains the node');
+    Check(not GDag.HasCycle, 'Rejected self-loop leaves DAG acyclic');
+  finally
+    GDag.Free;
+  end;
+end;
+
+procedure TestConcurrentOppositeEdgesCannotCreateCycle;
+const
+  CHAIN_LENGTH = 64;
+  ATTEMPTS = 20;
+var
+  LAttempt, LI: Int32;
+  LReady, LStart: Int32;
+  LForward, LReverse: TDagEdgeThread;
+  LSafe: Boolean;
+begin
+  WriteLn('--- TestConcurrentOppositeEdgesCannotCreateCycle ---');
+  LSafe := True;
+  for LAttempt := 1 to ATTEMPTS do
+  begin
+    GDag := TConcurrentDAG.Create;
+    LForward := nil;
+    LReverse := nil;
+    try
+      for LI := 1 to CHAIN_LENGTH do
+      begin
+        GDag.AddNode(LI);
+        GDag.AddNode(1000 + LI);
+      end;
+      for LI := 1 to CHAIN_LENGTH - 1 do
+      begin
+        GDag.AddEdge(LI, LI + 1);
+        GDag.AddEdge(1000 + LI, 1001 + LI);
+      end;
+
+      LReady := 0;
+      LStart := 0;
+      LForward := TDagEdgeThread.Create(GDag, 1, 1001, @LReady, @LStart);
+      LReverse := TDagEdgeThread.Create(GDag, 1001, 1, @LReady, @LStart);
+      LForward.Start;
+      LReverse.Start;
+      while AtomicLoad32(LReady, moAcquire) <> 2 do
+        CpuPause;
+      AtomicStore32(LStart, 1, moRelease);
+      LForward.WaitFor;
+      LReverse.WaitFor;
+
+      if (LForward.EdgeResult = dagOk) and
+         (LReverse.EdgeResult = dagOk) then
+        LSafe := False;
+      if GDag.HasCycle then
+        LSafe := False;
+    finally
+      LForward.Free;
+      LReverse.Free;
+      GDag.Free;
+    end;
+    if not LSafe then
+      Break;
+  end;
+  Check(LSafe, 'Opposite concurrent edges preserve the DAG invariant');
+end;
+
 procedure TestNoCycle;
 begin
   WriteLn('--- TestNoCycle ---');
@@ -247,6 +385,9 @@ begin
   TestHasEdge;
   TestDegree;
   TestTopologicalSort;
+  TestTopologicalSortWithSmallBuffer;
+  TestEmptySingleAndSelfLoopBoundaries;
+  TestConcurrentOppositeEdgesCannotCreateCycle;
   TestNoCycle;
   TestCycleRejected;
   TestRemoveNodeUpdatesInDegree;

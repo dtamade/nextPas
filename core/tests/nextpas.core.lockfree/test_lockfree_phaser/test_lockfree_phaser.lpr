@@ -88,10 +88,32 @@ var
 begin
   LPhaser := TPhaser.Create(3);
   try
-    // 3 parties, deregister 1 -> 2 parties, 1 arrived
+    // Deregistration reduces both registered and unarrived parties.
     LPhase := LPhaser.ArriveAndDeregister;
     CheckEqual(Int64(0), LPhase);
     CheckEqual(Int64(2), LPhaser.GetParties);
+    CheckEqual(Int64(0), LPhaser.GetArrived);
+    CheckEqual(Int64(2), LPhaser.GetUnarrived);
+  finally
+    LPhaser.Free;
+  end;
+end;
+
+procedure TestPhaserDeregisterDoesNotAdvanceRemainingParty;
+var
+  LPhaser: TPhaser;
+begin
+  LPhaser := TPhaser.Create(2);
+  try
+    CheckEqual(Int64(0), LPhaser.ArriveAndDeregister,
+      'Deregistering one of two parties must not advance the phase');
+    CheckEqual(Int64(0), LPhaser.GetPhase);
+    CheckEqual(Int64(1), LPhaser.GetParties);
+    CheckEqual(Int64(0), LPhaser.GetArrived);
+    CheckEqual(Int64(1), LPhaser.GetUnarrived);
+
+    CheckEqual(Int64(1), LPhaser.Arrive,
+      'The remaining party must advance the phase when it arrives');
   finally
     LPhaser.Free;
   end;
@@ -199,6 +221,9 @@ begin
 
   TestPhaserArriveAndDeregister;
   WriteLn('  + ArriveAndDeregister');
+
+  TestPhaserDeregisterDoesNotAdvanceRemainingParty;
+  WriteLn('  + Deregister preserves remaining party');
 
   TestPhaserTwoThreads;
   WriteLn('  + Two thread sync');

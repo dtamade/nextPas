@@ -1,20 +1,15 @@
 unit nextpas.core.lockfree.btree;
 {**
- * @desc Concurrent B-Tree using per-node read-write locks.
+ * @desc Concurrent B-Tree using an instance-wide read-write lock.
  *
- * @note This is NOT a lock-free structure. It uses atomic read-write locks
- *       per node, which provides good performance for range queries.
+ * @note This is NOT a lock-free structure. It uses an atomic read-write lock
+ *       to keep root replacement and node reclamation safe for readers.
  *       Placed in the lockfree namespace because it uses atomic primitives
  *       and follows the same concurrent data structure patterns.
  *
- * @concurrency Thread-safe for single-writer multi-reader scenarios:
- *   - Find/Contains/Count/ForEach/ForEachRange: lock-free reads
- *   - Insert/Remove/Clear: serialized via root write lock
- *
- * @limitations NOT safe for concurrent writes from multiple threads.
- *   The root pointer (FRoot) can change during Insert (root split),
- *   which causes race conditions with lock-coupling approaches.
- *   For true multi-writer concurrency, use TShardedHashMap instead.
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach/ForEachRange: shared read lock
+ *   - Insert/Remove/Clear: exclusive write lock
  *
  * @see libart (C) — Adaptive Radix Tree for comparison
  * @see lmdb (C) — B+Tree for comparison
@@ -54,6 +49,8 @@ type
     {** @desc ForEachCtx 带上下文的回调类型 }
     TForEachCtxCallback = procedure(const AKey: TKey; const AValue: TValue; AContext: Pointer);
   private type
+    TKeyArray = array of TKey;
+    TValueArray = array of TValue;
     PBTreeNode = ^TBTreeNode;
     TBTreeNode = record
       IsLeaf: Boolean;
@@ -61,17 +58,15 @@ type
       Keys: array[0..BTREE_MAX_KEYS - 1] of TKey;
       Values: array[0..BTREE_MAX_KEYS - 1] of TValue;
       Children: array[0..BTREE_ORDER - 1] of PBTreeNode;
-      {** 读写锁: 0=无锁, >0=读锁计数, -1=写锁 }
-      Lock: Int32;
     end;
   private
     FRoot: PBTreeNode;
     FSize: Integer;
-    {** 读写锁方法 }
-    procedure NodeReadLock(var ANode: TBTreeNode);
-    procedure NodeReadUnlock(var ANode: TBTreeNode);
-    procedure NodeWriteLock(var ANode: TBTreeNode);
-    procedure NodeWriteUnlock(var ANode: TBTreeNode);
+    FLock: Int32;
+    procedure GlobalReadLock;
+    procedure GlobalReadUnlock;
+    procedure GlobalWriteLock;
+    procedure GlobalWriteUnlock;
     {** 辅助方法 }
     function CompareKeys(const AKey1, AKey2: TKey): Integer;
     function CreateNode(AIsLeaf: Boolean): PBTreeNode;
@@ -88,9 +83,10 @@ type
     procedure BorrowFromNext(AParent: PBTreeNode; AIndex: Integer);
     procedure MergeChildren(AParent: PBTreeNode; AIndex: Integer);
     function RemoveInternal(ANode: PBTreeNode; const AKey: TKey): Boolean;
-    procedure ForEachNode(ANode: PBTreeNode; const ACallback: TForEachCallback);
-    procedure ForEachNodeCtx(ANode: PBTreeNode; const ACallback: TForEachCtxCallback; AContext: Pointer);
-    procedure ForEachRangeNode(ANode: PBTreeNode; const AFrom, ATo: TKey; const ACallback: TForEachCallback);
+    procedure CollectNode(ANode: PBTreeNode; var AKeys: TKeyArray;
+      var AValues: TValueArray; var ACount: Integer);
+    procedure CollectRangeNode(ANode: PBTreeNode; const AFrom, ATo: TKey;
+      var AKeys: TKeyArray; var AValues: TValueArray; var ACount: Integer);
   public
     {** @desc 创建并发 B-Tree }
     constructor Create;
@@ -154,6 +150,7 @@ begin
 
   FRoot := CreateNode(True);
   FSize := 0;
+  FLock := 0;
 end;
 
 destructor TConcurrentBTreeImpl.Destroy;
@@ -169,7 +166,6 @@ begin
   New(Result);
   Result^.IsLeaf := AIsLeaf;
   Result^.KeyCount := 0;
-  Result^.Lock := 0;
   for LI := 0 to BTREE_MAX_KEYS - 1 do
   begin
     Result^.Keys[LI] := Default(TKey);
@@ -203,17 +199,17 @@ begin
     Result := 0;
 end;
 
-procedure TConcurrentBTreeImpl.NodeReadLock(var ANode: TBTreeNode);
+procedure TConcurrentBTreeImpl.GlobalReadLock;
 var
   LLock: Int32;
   LSpins: Int32;
 begin
   LSpins := 0;
   repeat
-    LLock := AtomicLoad32(ANode.Lock, moRelaxed);
+    LLock := AtomicLoad32(FLock, moRelaxed);
     if LLock >= 0 then
     begin
-      if AtomicCompareExchange32(ANode.Lock, LLock, LLock + 1, moAcquire) = LLock then
+      if AtomicCompareExchange32(FLock, LLock, LLock + 1, moAcquire) = LLock then
         Exit;
     end;
     Inc(LSpins);
@@ -227,18 +223,18 @@ begin
   until False;
 end;
 
-procedure TConcurrentBTreeImpl.NodeReadUnlock(var ANode: TBTreeNode);
+procedure TConcurrentBTreeImpl.GlobalReadUnlock;
 begin
-  AtomicFetchSub32(ANode.Lock, 1, moRelease);
+  AtomicFetchSub32(FLock, 1, moRelease);
 end;
 
-procedure TConcurrentBTreeImpl.NodeWriteLock(var ANode: TBTreeNode);
+procedure TConcurrentBTreeImpl.GlobalWriteLock;
 var
   LSpins: Int32;
 begin
   LSpins := 0;
   repeat
-    if AtomicCompareExchange32(ANode.Lock, 0, -1, moAcquire) = 0 then
+    if AtomicCompareExchange32(FLock, 0, -1, moAcquire) = 0 then
       Exit;
     Inc(LSpins);
     if LSpins < 64 then
@@ -251,9 +247,9 @@ begin
   until False;
 end;
 
-procedure TConcurrentBTreeImpl.NodeWriteUnlock(var ANode: TBTreeNode);
+procedure TConcurrentBTreeImpl.GlobalWriteUnlock;
 begin
-  AtomicStore32(ANode.Lock, 0, moRelease);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 procedure TConcurrentBTreeImpl.SplitChild(AParent: PBTreeNode; AIndex: Integer);
@@ -356,22 +352,20 @@ end;
 
 procedure TConcurrentBTreeImpl.Insert(const AKey: TKey; const AValue: TValue);
 var
-  LOldRoot: PBTreeNode;
   LNewRoot: PBTreeNode;
 begin
-  LOldRoot := FRoot;
-  NodeWriteLock(LOldRoot^);
+  GlobalWriteLock;
   try
     if FRoot^.KeyCount = BTREE_MAX_KEYS then
     begin
       LNewRoot := CreateNode(False);
-      LNewRoot^.Children[0] := LOldRoot;
+      LNewRoot^.Children[0] := FRoot;
       SplitChild(LNewRoot, 0);
       FRoot := LNewRoot;
     end;
     InsertNonFull(FRoot, AKey, AValue);
   finally
-    NodeWriteUnlock(LOldRoot^);
+    GlobalWriteUnlock;
   end;
 end;
 
@@ -380,24 +374,28 @@ var
   LCurrent: PBTreeNode;
   LI: Integer;
 begin
-  LCurrent := FRoot;
-  while True do
-  begin
-    LI := 0;
-    while (LI < LCurrent^.KeyCount) and (CompareKeys(LCurrent^.Keys[LI], AKey) < 0) do
-      Inc(LI);
-
-    if (LI < LCurrent^.KeyCount) and (CompareKeys(LCurrent^.Keys[LI], AKey) = 0) then
+  GlobalReadLock;
+  try
+    LCurrent := FRoot;
+    while True do
     begin
-      { Lock-free read: just read the value directly }
-      AValue := LCurrent^.Values[LI];
-      Exit(True);
+      LI := 0;
+      while (LI < LCurrent^.KeyCount) and (CompareKeys(LCurrent^.Keys[LI], AKey) < 0) do
+        Inc(LI);
+
+      if (LI < LCurrent^.KeyCount) and (CompareKeys(LCurrent^.Keys[LI], AKey) = 0) then
+      begin
+        AValue := LCurrent^.Values[LI];
+        Exit(True);
+      end;
+
+      if LCurrent^.IsLeaf then
+        Exit(False);
+
+      LCurrent := LCurrent^.Children[LI];
     end;
-
-    if LCurrent^.IsLeaf then
-      Exit(False);
-
-    LCurrent := LCurrent^.Children[LI];
+  finally
+    GlobalReadUnlock;
   end;
 end;
 
@@ -653,11 +651,9 @@ end;
 
 function TConcurrentBTreeImpl.Remove(const AKey: TKey): Boolean;
 var
-  LOldRoot: PBTreeNode;
   LNewChild: PBTreeNode;
 begin
-  LOldRoot := FRoot;
-  NodeWriteLock(LOldRoot^);
+  GlobalWriteLock;
   try
     Result := RemoveInternal(FRoot, AKey);
 
@@ -669,7 +665,7 @@ begin
       FRoot := LNewChild;
     end;
   finally
-    NodeWriteUnlock(LOldRoot^);
+    GlobalWriteUnlock;
   end;
 end;
 
@@ -685,7 +681,8 @@ begin
   Result := AtomicLoad32(FSize, moRelaxed);
 end;
 
-procedure TConcurrentBTreeImpl.ForEachNode(ANode: PBTreeNode; const ACallback: TForEachCallback);
+procedure TConcurrentBTreeImpl.CollectNode(ANode: PBTreeNode;
+  var AKeys: TKeyArray; var AValues: TValueArray; var ACount: Integer);
 var
   LI: Integer;
 begin
@@ -695,43 +692,66 @@ begin
   for LI := 0 to ANode^.KeyCount - 1 do
   begin
     if not ANode^.IsLeaf then
-      ForEachNode(ANode^.Children[LI], ACallback);
-    ACallback(ANode^.Keys[LI], ANode^.Values[LI]);
+      CollectNode(ANode^.Children[LI], AKeys, AValues, ACount);
+    AKeys[ACount] := ANode^.Keys[LI];
+    AValues[ACount] := ANode^.Values[LI];
+    Inc(ACount);
   end;
 
   if not ANode^.IsLeaf then
-    ForEachNode(ANode^.Children[ANode^.KeyCount], ACallback);
+    CollectNode(ANode^.Children[ANode^.KeyCount], AKeys, AValues, ACount);
 end;
 
 procedure TConcurrentBTreeImpl.ForEach(const ACallback: TForEachCallback);
-begin
-  ForEachNode(FRoot, ACallback);
-end;
-
-procedure TConcurrentBTreeImpl.ForEachNodeCtx(ANode: PBTreeNode; const ACallback: TForEachCtxCallback; AContext: Pointer);
 var
-  LI: Integer;
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
-  if ANode = nil then
+  if not Assigned(ACallback) then
     Exit;
-
-  for LI := 0 to ANode^.KeyCount - 1 do
-  begin
-    if not ANode^.IsLeaf then
-      ForEachNodeCtx(ANode^.Children[LI], ACallback, AContext);
-    ACallback(ANode^.Keys[LI], ANode^.Values[LI], AContext);
+  GlobalReadLock;
+  try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
+    CollectNode(FRoot, LKeys, LValues, LCount);
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+  finally
+    GlobalReadUnlock;
   end;
-
-  if not ANode^.IsLeaf then
-    ForEachNodeCtx(ANode^.Children[ANode^.KeyCount], ACallback, AContext);
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI]);
 end;
 
-procedure TConcurrentBTreeImpl.ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
+procedure TConcurrentBTreeImpl.ForEachCtx(
+  const ACallback: TForEachCtxCallback; AContext: Pointer);
+var
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
-  ForEachNodeCtx(FRoot, ACallback, AContext);
+  if not Assigned(ACallback) then
+    Exit;
+  GlobalReadLock;
+  try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
+    CollectNode(FRoot, LKeys, LValues, LCount);
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+  finally
+    GlobalReadUnlock;
+  end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI], AContext);
 end;
 
-procedure TConcurrentBTreeImpl.ForEachRangeNode(ANode: PBTreeNode; const AFrom, ATo: TKey; const ACallback: TForEachCallback);
+procedure TConcurrentBTreeImpl.CollectRangeNode(ANode: PBTreeNode;
+  const AFrom, ATo: TKey; var AKeys: TKeyArray;
+  var AValues: TValueArray; var ACount: Integer);
 var
   LI: Integer;
 begin
@@ -742,33 +762,57 @@ begin
   begin
     if not ANode^.IsLeaf then
       if CompareKeys(ANode^.Keys[LI], AFrom) > 0 then
-        ForEachRangeNode(ANode^.Children[LI], AFrom, ATo, ACallback);
+        CollectRangeNode(ANode^.Children[LI], AFrom, ATo,
+          AKeys, AValues, ACount);
 
     if (CompareKeys(ANode^.Keys[LI], AFrom) >= 0) and (CompareKeys(ANode^.Keys[LI], ATo) <= 0) then
-      ACallback(ANode^.Keys[LI], ANode^.Values[LI]);
+    begin
+      AKeys[ACount] := ANode^.Keys[LI];
+      AValues[ACount] := ANode^.Values[LI];
+      Inc(ACount);
+    end;
 
     if CompareKeys(ANode^.Keys[LI], ATo) > 0 then
       Exit;
   end;
 
   if not ANode^.IsLeaf then
-    ForEachRangeNode(ANode^.Children[ANode^.KeyCount], AFrom, ATo, ACallback);
+    CollectRangeNode(ANode^.Children[ANode^.KeyCount], AFrom, ATo,
+      AKeys, AValues, ACount);
 end;
 
 procedure TConcurrentBTreeImpl.ForEachRange(const AFrom, ATo: TKey; const ACallback: TForEachCallback);
+var
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
-  ForEachRangeNode(FRoot, AFrom, ATo, ACallback);
+  if not Assigned(ACallback) then
+    Exit;
+  GlobalReadLock;
+  try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
+    CollectRangeNode(FRoot, AFrom, ATo, LKeys, LValues, LCount);
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+  finally
+    GlobalReadUnlock;
+  end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI]);
 end;
 
 procedure TConcurrentBTreeImpl.Clear;
 begin
-  NodeWriteLock(FRoot^);
+  GlobalWriteLock;
   try
     FreeNode(FRoot);
     FRoot := CreateNode(True);
     AtomicStore32(FSize, 0, moRelaxed);
   finally
-    NodeWriteUnlock(FRoot^);
+    GlobalWriteUnlock;
   end;
 end;
 

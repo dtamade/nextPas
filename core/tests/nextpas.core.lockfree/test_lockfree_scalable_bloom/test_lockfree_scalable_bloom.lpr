@@ -5,8 +5,6 @@ program test_lockfree_scalable_bloom;
 uses
   SysUtils,
   nextpas.core.lockfree.scalable_bloom,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 type
@@ -89,6 +87,31 @@ begin
   end;
 end;
 
+procedure TestSBFFalsePositiveEstimateComposesAcrossLayers;
+var
+  LBF: TIntSBF;
+  LBeforeGrowth: Double;
+  LAfterGrowth: Double;
+  LI: Integer;
+begin
+  LBF := TIntSBF.Create(10, 0.1);
+  try
+    for LI := 1 to 10 do
+      LBF.Add(LI);
+    LBeforeGrowth := LBF.GetEstimatedFPR;
+
+    LBF.Add(11);
+    Check(LBF.GetLayerCount = 2, 'Adding past capacity creates a second layer');
+    LAfterGrowth := LBF.GetEstimatedFPR;
+    Check(LAfterGrowth >= LBeforeGrowth,
+      'Union false-positive probability must not decrease when a layer is added');
+    Check(LAfterGrowth <= 0.1,
+      'Geometric layer allocation must stay within the requested FPR bound');
+  finally
+    LBF.Free;
+  end;
+end;
+
 procedure TestSBFClose;
 var
   LBF: TIntSBF;
@@ -157,6 +180,9 @@ begin
 
   TestSBFFalsePositiveRate;
   WriteLn('  + False positive rate');
+
+  TestSBFFalsePositiveEstimateComposesAcrossLayers;
+  WriteLn('  + Layer FPR composition');
 
   TestSBFClose;
   WriteLn('  + Close semantics');

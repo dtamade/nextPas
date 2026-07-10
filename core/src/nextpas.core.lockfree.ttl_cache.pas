@@ -120,6 +120,8 @@ function TTTLCache.ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;
 begin
   if ATTLMs <= 0 then
     Exit(0);
+  if ATTLMs > High(Int64) - ANow then
+    Exit(High(Int64));
   Result := ANow + ATTLMs;
 end;
 
@@ -137,7 +139,7 @@ end;
 
 procedure TTTLCache.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
     { spin };
 end;
 
@@ -288,7 +290,7 @@ end;
 
 function TTTLCache.Put(const AKey, AValue: AnsiString): TTTLCacheResult;
 begin
-  Result := PutWithTTL(AKey, AValue, FDefaultTTL);
+  Result := PutWithTTL(AKey, AValue, AtomicLoad64(FDefaultTTL, moAcquire));
 end;
 
 function TTTLCache.PutWithTTL(const AKey, AValue: AnsiString; ATTLMs: Int64): TTTLCacheResult;

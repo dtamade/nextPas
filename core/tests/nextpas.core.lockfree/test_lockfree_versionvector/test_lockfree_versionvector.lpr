@@ -3,7 +3,7 @@ program test_lockfree_versionvector;
 {$mode objfpc}{$H+}
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   Classes,
   SysUtils,
   nextpas.core.lockfree.versionvector,
@@ -174,6 +174,90 @@ begin
   end;
 end;
 
+procedure TestMergeCapacityFailureIsExplicit;
+var
+  LA, LB: TVersionVector;
+  LI: Int32;
+  LRaised: Boolean;
+begin
+  LA := TVersionVector.Create;
+  LB := TVersionVector.Create;
+  try
+    for LI := 0 to VV_MAX_NODES - 1 do
+      LA.SetCounter(LI, 1);
+    LB.SetCounter(1000, 1);
+
+    LRaised := False;
+    try
+      LA.Merge(LB);
+    except
+      on Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Merge must not silently drop a causal component');
+  finally
+    LA.Free;
+    LB.Free;
+  end;
+end;
+
+procedure TestCounterDomainValidation;
+var
+  LVV: TVersionVector;
+  LRaised: Boolean;
+begin
+  LVV := TVersionVector.Create;
+  try
+    LRaised := False;
+    try
+      LVV.SetCounter(1, -1);
+    except
+      on Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Negative version counters are rejected');
+
+    LVV.SetCounter(1, High(Int64));
+    LRaised := False;
+    try
+      LVV.Increment(1);
+    except
+      on Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Version counter overflow is rejected');
+    CheckEqual(High(Int64), LVV.GetCounter(1),
+      'Rejected overflow preserves the prior counter');
+  finally
+    LVV.Free;
+  end;
+end;
+
+procedure TestPartialOrderWithMissingZeroEntry;
+var
+  LA, LB: TVersionVector;
+begin
+  LA := TVersionVector.Create;
+  LB := TVersionVector.Create;
+  try
+    LB.SetCounter(7, 0);
+    Check(LA.Compare(LB) = vvEqual,
+      'Missing component is equivalent to explicit zero');
+    Check(LB.Compare(LA) = vvEqual,
+      'Zero equivalence is symmetric');
+
+    LA.Increment(1);
+    LB.Increment(2);
+    Check(LA.Compare(LB) = vvConcurrent,
+      'Independent positive components are concurrent');
+    Check(LB.Compare(LA) = vvConcurrent,
+      'Concurrent relation is symmetric');
+  finally
+    LA.Free;
+    LB.Free;
+  end;
+end;
+
 procedure TestClear;
 var
   LVV: TVersionVector;
@@ -240,6 +324,15 @@ begin
 
   TestMerge;
   WriteLn('  + Merge');
+
+  TestMergeCapacityFailureIsExplicit;
+  WriteLn('  + Merge capacity failure');
+
+  TestCounterDomainValidation;
+  WriteLn('  + Counter domain validation');
+
+  TestPartialOrderWithMissingZeroEntry;
+  WriteLn('  + Partial order missing/zero entries');
 
   TestClear;
   WriteLn('  + Clear');

@@ -4,6 +4,7 @@ program test_lockfree_forkjoin;
 
 uses
   nextpas.core.atomic,
+  nextpas.core.errors,
   nextpas.core.lockfree.forkjoin;
 
 var
@@ -127,6 +128,37 @@ begin
   end;
 end;
 
+procedure TestInvalidWorkerId;
+var
+  LPool: TLockFreeForkJoinPool;
+  LTask: TForkJoinTask;
+  LRaised: Boolean;
+begin
+  WriteLn('--- TestInvalidWorkerId ---');
+  LPool := TLockFreeForkJoinPool.Create(2);
+  try
+    LRaised := False;
+    try
+      LPool.PopOrSteal(-1, LTask);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'negative worker ID raises');
+
+    LRaised := False;
+    try
+      LPool.PopOrSteal(LPool.WorkerCount, LTask);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'worker ID at upper bound raises');
+  finally
+    LPool.Free;
+  end;
+end;
+
 begin
   GTests := 0;
   GPassed := 0;
@@ -137,6 +169,7 @@ begin
   TestMultipleTasks;
   TestClose;
   TestWorkerCount;
+  TestInvalidWorkerId;
 
   WriteLn;
   WriteLn(GPassed, '/', GTests, ' tests passed');

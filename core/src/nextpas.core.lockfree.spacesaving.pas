@@ -84,6 +84,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 { TSpaceSavingImpl }
 
 procedure TSpaceSavingImpl.Lock;
@@ -91,7 +94,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -111,6 +114,8 @@ end;
 constructor TSpaceSavingImpl.Create(AK: UInt32);
 begin
   inherited Create;
+  if AK > UInt32(High(Integer)) then
+    raise EArgumentError.Create('TSpaceSaving: K exceeds High(Integer)');
   if AK < 1 then
     AK := 1;
   FCapacity := AK;
@@ -223,12 +228,16 @@ begin
 
   Lock;
   try
-    Inc(FTotalItems);
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(ssClosed);
+    if FTotalItems < High(UInt64) then
+      Inc(FTotalItems);
 
     LIdx := FindItem(AItem);
     if LIdx >= 0 then
     begin
-      Inc(FEntries[LIdx].FCount);
+      if FEntries[LIdx].FCount < High(UInt64) then
+        Inc(FEntries[LIdx].FCount);
       HeapRebuild;
       Result := ssOk;
       Exit;
@@ -247,8 +256,9 @@ begin
     begin
       LMinIdx := HeapExtractMin;
       FEntries[LMinIdx].FItem := AItem;
-      FEntries[LMinIdx].FCount := FEntries[LMinIdx].FCount + 1;
-      FEntries[LMinIdx].FError := FEntries[LMinIdx].FCount - 1;
+      FEntries[LMinIdx].FError := FEntries[LMinIdx].FCount;
+      if FEntries[LMinIdx].FCount < High(UInt64) then
+        Inc(FEntries[LMinIdx].FCount);
       FHeap[FHeapSize] := LMinIdx;
       Inc(FHeapSize);
       HeapRebuild;
@@ -270,6 +280,8 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(ssClosed);
     if FHeapSize = 0 then
     begin
       AResult.FCount := 0;
@@ -309,7 +321,12 @@ end;
 
 function TSpaceSavingImpl.TotalItems: UInt64;
 begin
-  Result := FTotalItems;
+  Lock;
+  try
+    Result := FTotalItems;
+  finally
+    Unlock;
+  end;
 end;
 
 function TSpaceSavingImpl.GetK: Integer;
@@ -319,7 +336,12 @@ end;
 
 procedure TSpaceSavingImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TSpaceSavingImpl.IsClosed: Boolean;

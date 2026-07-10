@@ -5,8 +5,6 @@ program test_lockfree_matrix;
 uses
   SysUtils,
   nextpas.core.lockfree.matrix,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 procedure TestMatrixBasic;
@@ -65,6 +63,26 @@ begin
     finally
       LC.Free;
     end;
+  finally
+    LA.Free;
+    LB.Free;
+  end;
+end;
+
+procedure TestMatrixInvalidOperands;
+var
+  LA, LB, LResult: TMatrixImpl;
+begin
+  LA := TMatrixImpl.Create(2, 3);
+  LB := TMatrixImpl.Create(2, 2);
+  try
+    LResult := LA;
+    CheckEqual(Ord(mtDimensionMismatch), Ord(LA.Multiply(LB, LResult)));
+    Check(LResult = nil, 'Dimension mismatch clears result matrix');
+
+    LResult := LA;
+    CheckEqual(Ord(mtDimensionMismatch), Ord(LA.Multiply(nil, LResult)));
+    Check(LResult = nil, 'Nil operand clears result matrix');
   finally
     LA.Free;
     LB.Free;
@@ -185,6 +203,9 @@ begin
 
   TestMatrixMultiply;
   WriteLn('  + Multiply');
+
+  TestMatrixInvalidOperands;
+  WriteLn('  + Invalid multiply operands');
 
   TestMatrixTranspose;
   WriteLn('  + Transpose');

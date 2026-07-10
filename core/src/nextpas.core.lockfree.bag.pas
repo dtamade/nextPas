@@ -28,6 +28,7 @@ type
     FMask: PtrUInt;
     // Producer-owned fields (cache line 1)
     FEnqueuePos: Int64;
+    FActiveEnqueues: Int32;
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
@@ -44,6 +45,8 @@ type
     FClosed: Int32;
     class function EmptySequence(const APos: Int64): Int64; static; inline;
     class function FullSequence(const APos: Int64): Int64; static; inline;
+    function ClosedAndNoActiveEnqueues: Boolean; inline;
+    procedure LeaveActiveEnqueue; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
     function TryAdd(const AValue: T): TLockFreeBagAddResult;
@@ -99,6 +102,7 @@ begin
   for LI := 0 to LCap - 1 do
     FSlots[LI].Sequence := EmptySequence(Int64(LI));
   FEnqueuePos := 0;
+  FActiveEnqueues := 0;
   FDequeuePos := 0;
   FClosed := 0;
   FDataEpoch := 0;
@@ -107,39 +111,60 @@ begin
   FSpaceWaiters := 0;
 end;
 
+function TLockFreeBagImpl.ClosedAndNoActiveEnqueues: Boolean;
+begin
+  Result := (AtomicLoad32(FClosed, moAcquire) <> 0) and
+    (AtomicLoad32(FActiveEnqueues, moAcquire) = 0);
+end;
+
+procedure TLockFreeBagImpl.LeaveActiveEnqueue;
+begin
+  if AtomicFetchSub32(FActiveEnqueues, 1, moAcqRel) = 1 then
+  begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      LockFreeWakeAll(@FDataEpoch);
+  end;
+end;
+
 function TLockFreeBagImpl.TryAdd(const AValue: T): TLockFreeBagAddResult;
 var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
 begin
-  while True do
-  begin
+  AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);
+  try
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(arClosed);
-    LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
-    LIdx := PtrUInt(LPos) and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    LExpected := EmptySequence(LPos);
-    LDiff := LSeq - LExpected;
-    if LDiff = 0 then
+    while True do
     begin
-      if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(arClosed);
+      LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
+      LIdx := PtrUInt(LPos) and FMask;
+      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      LExpected := EmptySequence(LPos);
+      LDiff := LSeq - LExpected;
+      if LDiff = 0 then
       begin
-        FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
-        if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
-          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
-        Exit(arAdded);
+        if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
+        begin
+          FSlots[LIdx].Value := AValue;
+          AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
+          if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+            LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+          Exit(arAdded);
+        end;
       end;
-    end
-    else if LDiff < 0 then
-    begin
-      // Full
-      if LPos - FDequeuePos >= Int64(FCapacity) then
-        Exit(arFull);
+      if LDiff < 0 then
+      begin
+        if LPos - AtomicLoad64(FDequeuePos, moAcquire) >= Int64(FCapacity) then
+          Exit(arFull);
+      end;
+      CpuPause;
     end;
-    CpuPause;
+  finally
+    LeaveActiveEnqueue;
   end;
 end;
 
@@ -170,17 +195,15 @@ begin
     end
     else if LDiff < 0 then
     begin
-      // Empty
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      if AtomicLoad32(FClosed, moAcquire) = 0 then
+        Exit(False);
+      if ClosedAndNoActiveEnqueues then
       begin
-        // Check again after close
         LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
         if LSeq = LExpected then
-          Continue; // There's an item, retry
+          Continue;
         Exit(False);
-      end
-      else
-        Exit(False);
+      end;
     end;
     CpuPause;
   end;

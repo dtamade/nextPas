@@ -12,6 +12,8 @@ var
   GSum: Int64;
   GValues: array of Int64;
   GIdx: Integer;
+  GMutatingTree: TConcurrentRBTree;
+  GMutationAttempted: Boolean;
 
 procedure SumCallback(AKey, AValue: Int64);
 begin
@@ -22,6 +24,15 @@ procedure CollectCallback(AKey, AValue: Int64);
 begin
   GValues[GIdx] := AKey;
   Inc(GIdx);
+end;
+
+procedure MutatingCallback(AKey, AValue: Int64);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingTree.Insert(99, 990);
+  end;
 end;
 
 procedure TestRBTreeBasic;
@@ -138,6 +149,25 @@ begin
   end;
 end;
 
+procedure TestRBTreeForEachAllowsMutation;
+var
+  LTree: TConcurrentRBTree;
+begin
+  LTree := TConcurrentRBTree.Create;
+  try
+    LTree.Insert(1, 10);
+    LTree.Insert(2, 20);
+    GMutatingTree := LTree;
+    GMutationAttempted := False;
+    LTree.ForEach(@MutatingCallback);
+    Check(GMutationAttempted, 'Callback should run');
+    Check(LTree.Contains(99), 'Callback insertion should complete');
+  finally
+    GMutatingTree := nil;
+    LTree.Free;
+  end;
+end;
+
 procedure TestRBTreeClear;
 var
   LTree: TConcurrentRBTree;
@@ -240,6 +270,9 @@ begin
 
   TestRBTreeForEach;
   WriteLn('  + ForEach');
+
+  TestRBTreeForEachAllowsMutation;
+  WriteLn('  + ForEach callback mutation');
 
   TestRBTreeClear;
   WriteLn('  + Clear');

@@ -5,8 +5,6 @@ program test_lockfree_bloom;
 uses
   SysUtils,
   nextpas.core.lockfree.bloom,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 type
@@ -108,6 +106,21 @@ begin
   end;
 end;
 
+procedure TestBloomUsesNearestOptimalHashCount;
+var
+  LBloom: TIntBloom;
+  LExpectedHashCount: Integer;
+begin
+  LBloom := TIntBloom.Create(1000, 0.1);
+  try
+    LExpectedHashCount := Round(Double(LBloom.BitCount) / 1000.0 * 0.6931471805599453);
+    CheckEqual(LExpectedHashCount, LBloom.HashCount,
+      'Hash count should use the nearest integer to the theoretical optimum');
+  finally
+    LBloom.Free;
+  end;
+end;
+
 procedure TestBloomClear;
 var
   LBloom: TIntBloom;
@@ -192,6 +205,9 @@ begin
 
   TestBloomFalsePositiveRate;
   WriteLn('  + False positive rate');
+
+  TestBloomUsesNearestOptimalHashCount;
+  WriteLn('  + Optimal hash count');
 
   TestBloomClear;
   WriteLn('  + Clear');

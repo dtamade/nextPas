@@ -26,7 +26,6 @@ type
   TRcuDomain = class
   private
     FReaderCounts: array[0..RCU_MAX_READERS - 1] of Int64;
-    FReaderActive: array[0..RCU_MAX_READERS - 1] of Int32;
     FNextReader: Int32;
     FClosed: Int32;
   public
@@ -119,7 +118,6 @@ begin
   for LI := 0 to RCU_MAX_READERS - 1 do
   begin
     FReaderCounts[LI] := 0;
-    FReaderActive[LI] := 0;
   end;
 end;
 
@@ -137,14 +135,24 @@ begin
   LIdx := (GMyReaderId - 1) mod RCU_MAX_READERS;
   AGuard.Domain := Self;
   AGuard.ReaderIndex := LIdx;
-  AtomicStore32(FReaderActive[LIdx], 1, moRelease);
-  AtomicFetchAdd64(FReaderCounts[LIdx], 1, moRelaxed);
+  AtomicFetchAdd64(FReaderCounts[LIdx], 1, moAcquire);
 end;
 
 procedure TRcuDomain.ExitRead(var AGuard: TRcuGuard);
+var
+  LCount: Int64;
 begin
-  AtomicFetchSub64(FReaderCounts[AGuard.ReaderIndex], 1, moRelaxed);
-  AtomicStore32(FReaderActive[AGuard.ReaderIndex], 0, moRelease);
+  if (AGuard.Domain <> Pointer(Self)) or (AGuard.ReaderIndex < 0) or
+     (AGuard.ReaderIndex >= RCU_MAX_READERS) then
+    Exit;
+  repeat
+    LCount := AtomicLoad64(FReaderCounts[AGuard.ReaderIndex], moAcquire);
+    if LCount <= 0 then
+      Break;
+  until AtomicCompareExchange64(FReaderCounts[AGuard.ReaderIndex], LCount,
+    LCount - 1, moRelease) = LCount;
+  AGuard.Domain := nil;
+  AGuard.ReaderIndex := -1;
 end;
 
 procedure TRcuDomain.Synchronize;
@@ -159,8 +167,7 @@ begin
     LDone := True;
     for LI := 0 to RCU_MAX_READERS - 1 do
     begin
-      if (AtomicLoad32(FReaderActive[LI], moAcquire) <> 0) and
-         (AtomicLoad64(FReaderCounts[LI], moAcquire) > 0) then
+      if AtomicLoad64(FReaderCounts[LI], moAcquire) > 0 then
       begin
         LDone := False;
         Break;

@@ -79,12 +79,15 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 procedure TARCCacheImpl.Lock;
 var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -114,6 +117,8 @@ procedure TARCCacheImpl.DisposeList(AHead: PARCNode);
 var
   LCur, LNext: PARCNode;
 begin
+  if AHead = nil then
+    Exit;
   LCur := AHead^.FNext;
   while LCur <> nil do
   begin
@@ -127,6 +132,8 @@ end;
 constructor TARCCacheImpl.Create(ACapacity: UInt32);
 begin
   inherited Create;
+  if ACapacity > UInt32(High(Integer)) then
+    raise EArgumentError.Create('TARCCache: capacity exceeds High(Integer)');
   if ACapacity < 4 then
     ACapacity := 4;
   FCapacity := ACapacity;
@@ -243,6 +250,9 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(arcClosed);
+
     { Check T1 }
     LNode := FindInList(FT1Head, FT1Tail, AKey);
     if LNode <> nil then
@@ -320,6 +330,9 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(arcClosed);
+
     { Check if key exists in T1 or T2 }
     LNode := FindInList(FT1Head, FT1Tail, AKey);
     if LNode <> nil then
@@ -381,7 +394,12 @@ end;
 
 function TARCCacheImpl.GetSize: Integer;
 begin
-  Result := FT1Size + FT2Size;
+  Lock;
+  try
+    Result := FT1Size + FT2Size;
+  finally
+    Unlock;
+  end;
 end;
 
 function TARCCacheImpl.GetCapacity: Integer;
@@ -391,7 +409,12 @@ end;
 
 procedure TARCCacheImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TARCCacheImpl.IsClosed: Boolean;

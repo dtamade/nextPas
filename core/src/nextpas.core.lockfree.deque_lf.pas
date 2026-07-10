@@ -89,10 +89,13 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.errors;
 
 constructor TLockFreeDeque.Create(ACapacity: Int32);
 begin
+  if ACapacity <= 0 then
+    raise EArgumentError.Create('TLockFreeDeque: capacity must be > 0');
   inherited Create;
   FCapacity := ACapacity;
   SetLength(FData, FCapacity);
@@ -135,6 +138,8 @@ var
   LNewCap, I, LIdx: Int32;
   LNewData: array of AnsiString;
 begin
+  if FCapacity > High(Int32) div 2 then
+    raise EOutOfMemoryError.Create('TLockFreeDeque.Grow: capacity overflow');
   LNewCap := FCapacity * 2;
   SetLength(LNewData, LNewCap);
   { Copy elements in order }

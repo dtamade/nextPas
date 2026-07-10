@@ -65,6 +65,21 @@ begin
   end;
 end;
 
+procedure TestLeakUsesElapsedTime;
+var
+  LB: TLeakyBucket;
+begin
+  LB := TLeakyBucket.Create(20.0, 1.0);
+  try
+    Check(LB.TryAdd = lbAllowed, 'Initial request should fill bucket');
+    Check(LB.TryAdd = lbRejected, 'Full bucket should reject');
+    Sleep(60);
+    Check(LB.TryAdd = lbAllowed, 'Elapsed time should leak one unit');
+  finally
+    LB.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_leakybucket ===');
   WriteLn;
@@ -80,6 +95,9 @@ begin
 
   TestClose;
   WriteLn('  + Close semantics');
+
+  TestLeakUsesElapsedTime;
+  WriteLn('  + Elapsed-time leak');
 
   WriteLn;
   WriteLn('All leaky bucket tests passed!');

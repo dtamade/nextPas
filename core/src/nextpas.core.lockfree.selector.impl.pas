@@ -162,7 +162,15 @@ begin
   FCases[LIdx].SendValuePtr := LCopy;
   FCases[LIdx].DataPtr := LCopy;
   FCases[LIdx].IsSend := True;
-  FCases[LIdx].Channel.SetNotifier(@NotifyChange, Self);
+  try
+    FCases[LIdx].Channel.SetNotifier(@NotifyChange, Self);
+  except
+    Dispose(LCopy);
+    FCases[LIdx].Channel := nil;
+    FCases[LIdx].SendValuePtr := nil;
+    FCases[LIdx].DataPtr := nil;
+    raise;
+  end;
   Inc(FCount);
 end;
 
@@ -177,6 +185,8 @@ function TLockFreeSelectorImpl.PollOnce: PtrInt;
 var
   LI: PtrUInt;
 begin
+  if FCount = 0 then
+    Exit(-1);
   for LI := 0 to FCount - 1 do
   begin
     if FCases[LI].IsSend then
@@ -218,6 +228,13 @@ begin
       LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
       AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
       try
+        LIdx := PollOnce;
+        if LIdx >= 0 then
+        begin
+          Result.Index := LIdx;
+          Result.Completed := True;
+          Exit;
+        end;
         if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
           LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
       finally
@@ -242,7 +259,7 @@ var
   LEpoch: Int32;
   LStart: QWord;
 begin
-  LElapsed := 0;
+  LStart := platform_monotonic_ns;
   LSpins := 0;
   while True do
   begin
@@ -253,6 +270,7 @@ begin
       Result.Completed := True;
       Exit;
     end;
+    LElapsed := Int64(platform_monotonic_ns - LStart);
     if LElapsed >= ATimeoutNs then
       Break;
     Inc(LSpins);
@@ -267,12 +285,19 @@ begin
       LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
       AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
       try
-        if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
+        LIdx := PollOnce;
+        if LIdx >= 0 then
         begin
-          LStart := platform_monotonic_ns;
-          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LWaitNs);
-          Inc(LElapsed, Int64(platform_monotonic_ns - LStart));
+          Result.Index := LIdx;
+          Result.Completed := True;
+          Exit;
         end;
+        LElapsed := Int64(platform_monotonic_ns - LStart);
+        LWaitNs := ATimeoutNs - LElapsed;
+        if LWaitNs > 1000000 then
+          LWaitNs := 1000000;
+        if (LWaitNs > 0) and (AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch) then
+          LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LWaitNs);
       finally
         AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
       end;

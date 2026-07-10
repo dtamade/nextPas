@@ -3,6 +3,7 @@ program test_lockfree_tdigest;
 {$mode objfpc}{$H+}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.tdigest,
   nextpas.core.lockfree,
@@ -99,6 +100,42 @@ begin
   end;
 end;
 
+procedure TestTDigestCompressionPreservesTailOrder;
+var
+  LDigest: TTDigestImpl;
+  LVal: Double;
+  LI: Integer;
+begin
+  LDigest := TTDigestImpl.Create(10);
+  try
+    for LI := 1 to 1000 do
+      CheckEqual(Ord(tdOk), Ord(LDigest.Add(LI)));
+
+    CheckEqual(Ord(tdOk), Ord(LDigest.Quantile(0.99, LVal)));
+    Check(LVal > 950.0, 'Compressed P99 should preserve the upper tail');
+    CheckEqual(Ord(tdOk), Ord(LDigest.Quantile(1.0, LVal)));
+    Check(LVal > 990.0, 'Compressed maximum should remain in the upper tail');
+  finally
+    LDigest.Free;
+  end;
+end;
+
+procedure TestTDigestCompressionUsesQuantileWeight;
+var
+  LSource: TStringList;
+begin
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.tdigest.pas');
+    Check(Pos('LCumulativeWeight', LSource.Text) > 0,
+      'Compression must track cumulative centroid weight');
+    Check(Pos('4.0 * FTotalWeight * LQ * (1.0 - LQ) / FCompression',
+      LSource.Text) > 0, 'Compression must apply the quantile weight bound');
+  finally
+    LSource.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_tdigest ===');
   WriteLn;
@@ -114,6 +151,12 @@ begin
 
   TestTDigestManyValues;
   WriteLn('  + Many values');
+
+  TestTDigestCompressionPreservesTailOrder;
+  WriteLn('  + Compression preserves tail order');
+
+  TestTDigestCompressionUsesQuantileWeight;
+  WriteLn('  + Quantile-weight compression contract');
 
   WriteLn;
   WriteLn('All T-Digest tests passed!');

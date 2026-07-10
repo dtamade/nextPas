@@ -11,6 +11,12 @@ uses
 type
   TConditionVariableWaitResult = (cvSignaled, cvClosed, cvTimeout);
 
+  PConditionWaiter = ^TConditionWaiter;
+  TConditionWaiter = record
+    Next: PConditionWaiter;
+    Notified: Boolean;
+  end;
+
   {** @desc 并发条件变量（Condition Variable）
     @details 配合 TConcurrentMutex 使用，实现条件等待。
       Wait(AMutex) 原子释放锁并自旋等待，被唤醒后重新获取锁。
@@ -19,10 +25,15 @@ type
   }
   TConditionVariable = class
   private
-    FSignalCount: Int64;
-    FBroadcastEpoch: Int64;
+    FStateLock: Int32;
+    FWaiterHead: PConditionWaiter;
     FWaiters: Int32;
     FClosed: Int32;
+    procedure AcquireState;
+    procedure ReleaseState;
+    procedure RemoveWaiter(AWaiter: PConditionWaiter);
+    function WaitInternal(AMutex: TConcurrentMutex; const ATimeoutNs: Int64;
+      const AUseTimeout: Boolean): TConditionVariableWaitResult;
   public
     constructor Create;
 
@@ -48,101 +59,213 @@ uses
   nextpas.core.atomic,
   nextpas.core.time.base;
 
-const
-  SIGNAL_ONE = 1;
-  SIGNAL_ALL = MaxInt;
-
 constructor TConditionVariable.Create;
 begin
   inherited Create;
-  FSignalCount := 0;
-  FBroadcastEpoch := 0;
+  FStateLock := 0;
+  FWaiterHead := nil;
   FWaiters := 0;
   FClosed := 0;
 end;
 
-procedure TConditionVariable.Wait(AMutex: TConcurrentMutex);
+procedure TConditionVariable.AcquireState;
 var
-  LBroadcastEpoch: Int64;
-  LSignalCount: Int64;
+  LSpinCount: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit;
-  AtomicFetchAdd32(FWaiters, 1, moRelaxed);
-  LBroadcastEpoch := AtomicLoad64(FBroadcastEpoch, moAcquire);
-  AMutex.Unlock;
-  try
-    while True do
-    begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
-        Break;
-      if AtomicLoad64(FBroadcastEpoch, moAcquire) <> LBroadcastEpoch then
-        Break;
-      LSignalCount := AtomicLoad64(FSignalCount, moAcquire);
-      if (LSignalCount > 0) and
-         (AtomicCompareExchange64(FSignalCount, LSignalCount, LSignalCount - 1, moAcqRel) = LSignalCount) then
-        Break;
-      CpuPause;
-    end;
-  finally
-    AtomicFetchSub32(FWaiters, 1, moRelaxed);
-    AMutex.Lock;
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FStateLock, 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
   end;
+end;
+
+procedure TConditionVariable.ReleaseState;
+begin
+  AtomicStore32(FStateLock, 0, moRelease);
+end;
+
+procedure TConditionVariable.RemoveWaiter(AWaiter: PConditionWaiter);
+var
+  LCurrent: PConditionWaiter;
+  LPrevious: PConditionWaiter;
+begin
+  LCurrent := FWaiterHead;
+  LPrevious := nil;
+  while (LCurrent <> nil) and (LCurrent <> AWaiter) do
+  begin
+    LPrevious := LCurrent;
+    LCurrent := LCurrent^.Next;
+  end;
+  if LCurrent = nil then
+    Exit;
+  if LPrevious = nil then
+    FWaiterHead := LCurrent^.Next
+  else
+    LPrevious^.Next := LCurrent^.Next;
+  LCurrent^.Next := nil;
+  Dec(FWaiters);
+end;
+
+function TConditionVariable.WaitInternal(AMutex: TConcurrentMutex;
+  const ATimeoutNs: Int64; const AUseTimeout: Boolean): TConditionVariableWaitResult;
+var
+  LWaiter: TConditionWaiter;
+  LRegistered: Boolean;
+  LMutexReleased: Boolean;
+  LDone: Boolean;
+  LSpinCount: Int32;
+  LStart: TInstant;
+begin
+  if AMutex = nil then
+    raise EArgumentError.Create('TConditionVariable.Wait: mutex must not be nil');
+  if AUseTimeout and (ATimeoutNs <= 0) then
+    raise EArgumentError.Create('TConditionVariable.WaitTimeout: timeout must be > 0');
+
+  LRegistered := False;
+  LMutexReleased := False;
+  LWaiter.Next := nil;
+  LWaiter.Notified := False;
+  if AUseTimeout then
+    LStart := TInstant.Now;
+  AcquireState;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(cvClosed);
+    if not AMutex.IsOwnedByCurrentThread then
+      raise EInvalidOperationError.Create(
+        'TConditionVariable.Wait: mutex must be owned by the current thread');
+    if FWaiters = High(Int32) then
+      raise EInvalidOperationError.Create('TConditionVariable: too many waiters');
+    LWaiter.Next := FWaiterHead;
+    FWaiterHead := @LWaiter;
+    Inc(FWaiters);
+    LRegistered := True;
+  finally
+    ReleaseState;
+  end;
+
+  try
+    AMutex.Unlock;
+    LMutexReleased := True;
+    LSpinCount := 0;
+    repeat
+    begin
+      LDone := False;
+      AcquireState;
+      try
+        if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        begin
+          Result := cvClosed;
+          LDone := True;
+        end
+        else if LWaiter.Notified then
+        begin
+          Result := cvSignaled;
+          LDone := True;
+        end
+        else if AUseTimeout and (LStart.Elapsed.AsNanoseconds >= ATimeoutNs) then
+        begin
+          Result := cvTimeout;
+          LDone := True;
+        end;
+        if LDone then
+        begin
+          RemoveWaiter(@LWaiter);
+          LRegistered := False;
+        end;
+      finally
+        ReleaseState;
+      end;
+      if not LDone then
+      begin
+        Inc(LSpinCount);
+        if LSpinCount <= 64 then
+          CpuPause
+        else
+          ThreadSwitch;
+      end;
+    end
+    until LDone;
+  finally
+    if LRegistered then
+    begin
+      AcquireState;
+      try
+        RemoveWaiter(@LWaiter);
+      finally
+        ReleaseState;
+      end;
+    end;
+    if LMutexReleased then
+      AMutex.Lock;
+  end;
+end;
+
+procedure TConditionVariable.Wait(AMutex: TConcurrentMutex);
+begin
+  WaitInternal(AMutex, 0, False);
 end;
 
 function TConditionVariable.WaitTimeout(AMutex: TConcurrentMutex;
   const ATimeoutNs: Int64): TConditionVariableWaitResult;
-var
-  LBroadcastEpoch: Int64;
-  LSignalCount: Int64;
-  LStart: TInstant;
 begin
-  if ATimeoutNs <= 0 then
-    raise EArgumentError.Create('TConditionVariable.WaitTimeout: timeout must be > 0');
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(cvClosed);
-  AtomicFetchAdd32(FWaiters, 1, moRelaxed);
-  LBroadcastEpoch := AtomicLoad64(FBroadcastEpoch, moAcquire);
-  LStart := TInstant.Now;
-  AMutex.Unlock;
-  try
-    while True do
-    begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
-        Exit(cvClosed);
-      if AtomicLoad64(FBroadcastEpoch, moAcquire) <> LBroadcastEpoch then
-        Exit(cvSignaled);
-      LSignalCount := AtomicLoad64(FSignalCount, moAcquire);
-      if (LSignalCount > 0) and
-         (AtomicCompareExchange64(FSignalCount, LSignalCount, LSignalCount - 1, moAcqRel) = LSignalCount) then
-        Exit(cvSignaled);
-      if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
-        Exit(cvTimeout);
-      CpuPause;
-    end;
-  finally
-    AtomicFetchSub32(FWaiters, 1, moRelaxed);
-    AMutex.Lock;
-  end;
+  Result := WaitInternal(AMutex, ATimeoutNs, True);
 end;
 
 procedure TConditionVariable.Signal;
+var
+  LWaiter: PConditionWaiter;
 begin
-  if AtomicLoad32(FWaiters, moAcquire) <= 0 then
-    Exit;
-  AtomicFetchAdd64(FSignalCount, SIGNAL_ONE, moRelease);
+  AcquireState;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
+    LWaiter := FWaiterHead;
+    while LWaiter <> nil do
+    begin
+      if not LWaiter^.Notified then
+      begin
+        LWaiter^.Notified := True;
+        Exit;
+      end;
+      LWaiter := LWaiter^.Next;
+    end;
+  finally
+    ReleaseState;
+  end;
 end;
 
 procedure TConditionVariable.Broadcast;
+var
+  LWaiter: PConditionWaiter;
 begin
-  if AtomicLoad32(FWaiters, moAcquire) <= 0 then
-    Exit;
-  AtomicFetchAdd64(FBroadcastEpoch, 1, moRelease);
+  AcquireState;
+  try
+    if (AtomicLoad32(FClosed, moAcquire) <> 0) or (FWaiters <= 0) then
+      Exit;
+    LWaiter := FWaiterHead;
+    while LWaiter <> nil do
+    begin
+      LWaiter^.Notified := True;
+      LWaiter := LWaiter^.Next;
+    end;
+  finally
+    ReleaseState;
+  end;
 end;
 
 procedure TConditionVariable.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  AcquireState;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    ReleaseState;
+  end;
 end;
 
 function TConditionVariable.IsClosed: Boolean;
@@ -152,7 +275,12 @@ end;
 
 function TConditionVariable.GetWaiterCount: Int32;
 begin
-  Result := AtomicLoad32(FWaiters, moAcquire);
+  AcquireState;
+  try
+    Result := FWaiters;
+  finally
+    ReleaseState;
+  end;
 end;
 
 end.

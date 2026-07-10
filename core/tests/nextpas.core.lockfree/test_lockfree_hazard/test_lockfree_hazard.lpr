@@ -94,12 +94,16 @@ var
   LDomain: THazardDomain;
   LId: PtrUInt;
   LResult: Pointer;
+  LSource: Pointer;
 begin
   LDomain := THazardDomain.Create(2);
   try
     LId := LDomain.RegisterThread;
     LResult := LDomain.Protect(LId, 0, Pointer($DEAD));
     Check(Pointer($DEAD) = LResult, 'Protect returns the pointer');
+    LSource := Pointer($BEEF);
+    LResult := LDomain.ProtectSource(LId, 0, @LSource);
+    Check(Pointer($BEEF) = LResult, 'ProtectSource returns the stable source pointer');
     LDomain.Clear(LId, 0);
     LDomain.Clear(LId, 0);
     LDomain.UnregisterThread(LId);
@@ -343,6 +347,7 @@ var
   LDomain: THazardDomain;
   LGuard: THazardGuard;
   LPtr: Pointer;
+  LSource: Pointer;
   LId: PtrUInt;
 begin
   LDomain := THazardDomain.Create(2);
@@ -352,6 +357,9 @@ begin
     try
       LPtr := LGuard.Protect(Pointer($DEAD));
       Check(Pointer($DEAD) = LPtr, 'Protect returns the pointer');
+      LSource := Pointer($DEAD);
+      LPtr := LGuard.ProtectSource(@LSource);
+      Check(Pointer($DEAD) = LPtr, 'Guard ProtectSource returns the stable source pointer');
       // Retire and collect - protected item should be deferred
       LDomain.Retire(Pointer($DEAD), @HazardReclaimProc);
       LDomain.Retire(Pointer($BEEF), @HazardReclaimProc);

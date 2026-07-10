@@ -50,6 +50,67 @@ begin
   end;
 end;
 
+procedure TestGCounterMergeLaws;
+var
+  LC1, LC2: TGCounter;
+begin
+  WriteLn('--- TestGCounterMergeLaws ---');
+  LC1 := TGCounter.Create(2);
+  LC2 := TGCounter.Create(3);
+  try
+    Check(LC1.Increment(0, -1) = crInvalid,
+      'G-Counter rejects negative increments');
+    Check(LC1.Value = 0, 'Rejected increment preserves value');
+
+    LC1.Increment(0, 5);
+    LC2.Increment(1, 7);
+    LC2.Increment(2, 11);
+    LC1.Merge(LC2);
+    LC2.Merge(LC1);
+    Check(LC1.Value = 23, 'Smaller replica learns every component');
+    Check(LC2.Value = 23, 'Merge is commutative across replica sizes');
+
+    LC1.Merge(LC1);
+    Check(LC1.Value = 23, 'Self-merge is an idempotent no-op');
+  finally
+    LC1.Free;
+    LC2.Free;
+  end;
+end;
+
+procedure TestGCounterTotalOverflowIsAtomic;
+var
+  LC1, LC2: TGCounter;
+  LRaised: Boolean;
+begin
+  WriteLn('--- TestGCounterTotalOverflowIsAtomic ---');
+  LC1 := TGCounter.Create(2);
+  LC2 := TGCounter.Create(2);
+  try
+    Check(LC1.Increment(0, High(Int64)) = crOk,
+      'Maximum representable total is accepted');
+    Check(LC1.Increment(1, 1) = crInvalid,
+      'Increment rejects total-value overflow');
+    Check(LC1.NodeValue(1) = 0,
+      'Rejected total overflow preserves the component');
+
+    LC2.Increment(1, 1);
+    LRaised := False;
+    try
+      LC1.Merge(LC2);
+    except
+      on Exception do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Merge reports an unrepresentable joined total');
+    Check(LC1.NodeValue(1) = 0,
+      'Rejected merge does not partially publish components');
+  finally
+    LC1.Free;
+    LC2.Free;
+  end;
+end;
+
 procedure TestPNCounter;
 var
   LC1, LC2: TPNCounter;
@@ -71,6 +132,23 @@ begin
   finally
     LC1.Free;
     LC2.Free;
+  end;
+end;
+
+procedure TestPNCounterRejectsNegativeAmounts;
+var
+  LC: TPNCounter;
+begin
+  WriteLn('--- TestPNCounterRejectsNegativeAmounts ---');
+  LC := TPNCounter.Create(1);
+  try
+    Check(LC.Increment(0, -1) = crInvalid,
+      'PN increment rejects negative amount');
+    Check(LC.Decrement(0, -1) = crInvalid,
+      'PN decrement rejects negative amount');
+    Check(LC.Value = 0, 'Rejected PN operations preserve value');
+  finally
+    LC.Free;
   end;
 end;
 
@@ -97,6 +175,35 @@ begin
     Check(LVal = 'world', 'Old timestamp rejected');
     LR1.Close;
     Check(LR1.Assign('x', 999) = crClosed, 'Assign after close fails');
+  finally
+    LR1.Free;
+    LR2.Free;
+  end;
+end;
+
+procedure TestLWWRegisterEqualTimestampConverges;
+var
+  LR1, LR2: TLWWRegister;
+  LValue1, LValue2: AnsiString;
+begin
+  WriteLn('--- TestLWWRegisterEqualTimestampConverges ---');
+  LR1 := TLWWRegister.Create;
+  LR2 := TLWWRegister.Create;
+  try
+    LR1.Assign('alpha', 100);
+    LR2.Assign('omega', 100);
+    LR1.Merge(LR2);
+    LR2.Merge(LR1);
+    LR1.Read(LValue1);
+    LR2.Read(LValue2);
+    Check(LValue1 = LValue2,
+      'Equal-timestamp merge order converges to one value');
+    Check(LValue1 = 'omega',
+      'Equal timestamps use deterministic value tie-break');
+
+    LR1.Merge(LR1);
+    LR1.Read(LValue1);
+    Check(LValue1 = 'omega', 'LWW self-merge is idempotent');
   finally
     LR1.Free;
     LR2.Free;
@@ -157,8 +264,12 @@ begin
   GPassed := 0;
   GFailed := 0;
   TestGCounter;
+  TestGCounterMergeLaws;
+  TestGCounterTotalOverflowIsAtomic;
   TestPNCounter;
+  TestPNCounterRejectsNegativeAmounts;
   TestLWWRegister;
+  TestLWWRegisterEqualTimestampConverges;
   TestORSet;
   TestORSetMergePropagatesRemoval;
   WriteLn;

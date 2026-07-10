@@ -50,13 +50,24 @@ type
     function CreateInternal: PBplusNode;
     procedure FreeNode(ANode: PBplusNode);
     function FindLeaf(AKey: Int64): PBplusNode;
-    function SplitLeaf(ALeaf: PBplusNode): PBplusNode;
-    function SplitInternal(AParent: PBplusNode; AIdx: Integer): PBplusNode;
-    procedure InsertInternal(AParent: PBplusNode; AKey: Int64; ARight: PBplusNode);
+    procedure InsertSeparator(AParent: PBplusNode; AIdx: Integer;
+      AKey: Int64; ARight: PBplusNode);
+    procedure SplitChild(AParent: PBplusNode; AIdx: Integer);
+    function InsertUnlocked(AKey, AValue: Int64): TBplusResult;
     function BorrowFromLeft(ALeaf: PBplusNode; ALeft: PBplusNode): Boolean;
     function BorrowFromRight(ALeaf: PBplusNode; ARight: PBplusNode): Boolean;
     function MergeLeaves(ALeft: PBplusNode; ARight: PBplusNode): Boolean;
+    procedure BorrowInternalFromLeft(ANode, ALeft: PBplusNode);
+    procedure BorrowInternalFromRight(ANode, ARight: PBplusNode);
+    procedure MergeInternal(ALeft, ARight: PBplusNode);
+    procedure RemoveChild(AParent: PBplusNode; AChildIdx: Integer);
+    function RefreshSeparators(ANode: PBplusNode): Int64;
     procedure ClearSubtree(ANode: PBplusNode);
+    {$ifdef NEXTPAS_TESTING}
+    function ValidateNode(ANode: PBplusNode; AIsRoot: Boolean; ADepth: Integer;
+      var ALeafDepth: Integer; var AEntryCount: Int64;
+      out AMinKey, AMaxKey: Int64): Boolean;
+    {$endif}
   public
     constructor Create;
     destructor Destroy; override;
@@ -70,6 +81,9 @@ type
     procedure Clear;
     procedure Close;
     function IsClosed: Boolean;
+    {$ifdef NEXTPAS_TESTING}
+    function ValidateInvariants: Boolean;
+    {$endif}
   end;
 
 implementation
@@ -90,7 +104,9 @@ end;
 
 destructor TConcurrentBPlusTree.Destroy;
 begin
-  Clear;
+  ClearSubtree(FRoot);
+  FRoot := nil;
+  FFirstLeaf := nil;
   inherited Destroy;
 end;
 
@@ -99,7 +115,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -153,139 +169,231 @@ begin
   Result := LNode;
 end;
 
-function TConcurrentBPlusTree.SplitLeaf(ALeaf: PBplusNode): PBplusNode;
-var
-  LNewLeaf: PBplusNode;
-  LSplit, LI: Integer;
-begin
-  LNewLeaf := CreateLeaf;
-  LSplit := (ALeaf^.KeyCount + 1) div 2;
-  for LI := LSplit to ALeaf^.KeyCount - 1 do
-  begin
-    LNewLeaf^.Keys[LI - LSplit] := ALeaf^.Keys[LI];
-    LNewLeaf^.Values[LI - LSplit] := ALeaf^.Values[LI];
-  end;
-  LNewLeaf^.KeyCount := ALeaf^.KeyCount - LSplit;
-  ALeaf^.KeyCount := LSplit;
-  LNewLeaf^.Next := ALeaf^.Next;
-  ALeaf^.Next := LNewLeaf;
-  Result := LNewLeaf;
-end;
-
-function TConcurrentBPlusTree.SplitInternal(AParent: PBplusNode; AIdx: Integer): PBplusNode;
-var
-  LChild, LNew: PBplusNode;
-  LSplit, LI: Integer;
-  LMidKey: Int64;
-begin
-  LChild := AParent^.Children[AIdx];
-  LNew := CreateInternal;
-  LSplit := (LChild^.KeyCount + 1) div 2;
-  LMidKey := LChild^.Keys[LSplit];
-  for LI := LSplit + 1 to LChild^.KeyCount - 1 do
-  begin
-    LNew^.Keys[LI - LSplit - 1] := LChild^.Keys[LI];
-    LNew^.Children[LI - LSplit - 1] := LChild^.Children[LI];
-  end;
-  LNew^.Children[LChild^.KeyCount - LSplit - 1] := LChild^.Children[LChild^.KeyCount];
-  LNew^.KeyCount := LChild^.KeyCount - LSplit - 1;
-  LChild^.KeyCount := LSplit;
-  InsertInternal(AParent, LMidKey, LNew);
-  Result := LNew;
-end;
-
-procedure TConcurrentBPlusTree.InsertInternal(AParent: PBplusNode; AKey: Int64; ARight: PBplusNode);
+procedure TConcurrentBPlusTree.InsertSeparator(AParent: PBplusNode;
+  AIdx: Integer; AKey: Int64; ARight: PBplusNode);
 var
   LI: Integer;
 begin
-  LI := AParent^.KeyCount;
-  while (LI > 0) and (AParent^.Keys[LI - 1] > AKey) do
-  begin
-    AParent^.Keys[LI] := AParent^.Keys[LI - 1];
+  for LI := AParent^.KeyCount downto AIdx + 1 do
     AParent^.Children[LI + 1] := AParent^.Children[LI];
-    Dec(LI);
-  end;
-  AParent^.Keys[LI] := AKey;
-  AParent^.Children[LI + 1] := ARight;
+  for LI := AParent^.KeyCount - 1 downto AIdx do
+    AParent^.Keys[LI + 1] := AParent^.Keys[LI];
+  AParent^.Keys[AIdx] := AKey;
+  AParent^.Children[AIdx + 1] := ARight;
   Inc(AParent^.KeyCount);
 end;
 
-function TConcurrentBPlusTree.Insert(AKey, AValue: Int64): TBplusResult;
+procedure TConcurrentBPlusTree.SplitChild(AParent: PBplusNode; AIdx: Integer);
 var
-  LLeaf: PBplusNode;
+  LChild, LNew: PBplusNode;
+  LSplit, LI: Integer;
+  LSeparator: Int64;
+begin
+  LChild := AParent^.Children[AIdx];
+  LSplit := LChild^.KeyCount div 2;
+  if LChild^.IsLeaf then
+  begin
+    LNew := CreateLeaf;
+    for LI := LSplit to LChild^.KeyCount - 1 do
+    begin
+      LNew^.Keys[LI - LSplit] := LChild^.Keys[LI];
+      LNew^.Values[LI - LSplit] := LChild^.Values[LI];
+    end;
+    LNew^.KeyCount := LChild^.KeyCount - LSplit;
+    LChild^.KeyCount := LSplit;
+    LNew^.Next := LChild^.Next;
+    LChild^.Next := LNew;
+    LSeparator := LNew^.Keys[0];
+  end
+  else
+  begin
+    LNew := CreateInternal;
+    LSeparator := LChild^.Keys[LSplit];
+    LNew^.KeyCount := LChild^.KeyCount - LSplit - 1;
+    for LI := 0 to LNew^.KeyCount - 1 do
+      LNew^.Keys[LI] := LChild^.Keys[LSplit + 1 + LI];
+    for LI := 0 to LNew^.KeyCount do
+    begin
+      LNew^.Children[LI] := LChild^.Children[LSplit + 1 + LI];
+      LChild^.Children[LSplit + 1 + LI] := nil;
+    end;
+    LChild^.KeyCount := LSplit;
+  end;
+  InsertSeparator(AParent, AIdx, LSeparator, LNew);
+end;
+
+function TConcurrentBPlusTree.InsertUnlocked(AKey, AValue: Int64): TBplusResult;
+var
+  LNode, LNewRoot: PBplusNode;
   LI, LJ: Integer;
-  LNewRoot, LNewLeaf, LSplitRight: PBplusNode;
-  LMidKey: Int64;
+begin
+  if FRoot^.KeyCount = BPLUS_MAX_KEYS then
+  begin
+    LNewRoot := CreateInternal;
+    LNewRoot^.Children[0] := FRoot;
+    FRoot := LNewRoot;
+    SplitChild(LNewRoot, 0);
+  end;
+
+  LNode := FRoot;
+  while not LNode^.IsLeaf do
+  begin
+    LI := 0;
+    while (LI < LNode^.KeyCount) and (AKey >= LNode^.Keys[LI]) do
+      Inc(LI);
+    if LNode^.Children[LI]^.KeyCount = BPLUS_MAX_KEYS then
+    begin
+      SplitChild(LNode, LI);
+      if AKey >= LNode^.Keys[LI] then
+        Inc(LI);
+    end;
+    LNode := LNode^.Children[LI];
+  end;
+
+  LI := 0;
+  while (LI < LNode^.KeyCount) and (LNode^.Keys[LI] < AKey) do
+    Inc(LI);
+  if (LI < LNode^.KeyCount) and (LNode^.Keys[LI] = AKey) then
+  begin
+    LNode^.Values[LI] := AValue;
+    Exit(bpUpdated);
+  end;
+
+  for LJ := LNode^.KeyCount downto LI + 1 do
+  begin
+    LNode^.Keys[LJ] := LNode^.Keys[LJ - 1];
+    LNode^.Values[LJ] := LNode^.Values[LJ - 1];
+  end;
+  LNode^.Keys[LI] := AKey;
+  LNode^.Values[LI] := AValue;
+  Inc(LNode^.KeyCount);
+  Inc(FCount);
+  Result := bpInserted;
+end;
+
+function TConcurrentBPlusTree.Insert(AKey, AValue: Int64): TBplusResult;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(bpClosed);
   Lock;
-  LLeaf := FindLeaf(AKey);
-  LI := 0;
-  while (LI < LLeaf^.KeyCount) and (LLeaf^.Keys[LI] < AKey) do
-    Inc(LI);
-  if (LI < LLeaf^.KeyCount) and (LLeaf^.Keys[LI] = AKey) then
-  begin
-    LLeaf^.Values[LI] := AValue;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(bpClosed);
+    Result := InsertUnlocked(AKey, AValue);
+  finally
     Unlock;
-    Exit(bpUpdated);
   end;
-  for LJ := LLeaf^.KeyCount downto LI + 1 do
-  begin
-    LLeaf^.Keys[LJ] := LLeaf^.Keys[LJ - 1];
-    LLeaf^.Values[LJ] := LLeaf^.Values[LJ - 1];
-  end;
-  LLeaf^.Keys[LI] := AKey;
-  LLeaf^.Values[LI] := AValue;
-  Inc(LLeaf^.KeyCount);
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
-  if LLeaf^.KeyCount = BPLUS_MAX_KEYS then
-  begin
-    LNewLeaf := SplitLeaf(LLeaf);
-    if LLeaf = FRoot then
-    begin
-      LNewRoot := CreateInternal;
-      LNewRoot^.Keys[0] := LNewLeaf^.Keys[0];
-      LNewRoot^.Children[0] := LLeaf;
-      LNewRoot^.Children[1] := LNewLeaf;
-      LNewRoot^.KeyCount := 1;
-      FRoot := LNewRoot;
-    end
-    else
-    begin
-      InsertInternal(FRoot, LNewLeaf^.Keys[0], LNewLeaf);
-    end;
-  end;
-  Unlock;
-  Result := bpInserted;
 end;
 
 function TConcurrentBPlusTree.Remove(AKey: Int64): TBplusResult;
 var
-  LLeaf: PBplusNode;
-  LI, LJ: Integer;
+  LParents: array[0..63] of PBplusNode;
+  LChildIndices: array[0..63] of Integer;
+  LNode, LParent, LLeft, LRight, LOldRoot: PBplusNode;
+  LDepth, LLevel, LI, LJ, LChildIdx: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(bpClosed);
   Lock;
-  LLeaf := FindLeaf(AKey);
-  LI := 0;
-  while (LI < LLeaf^.KeyCount) and (LLeaf^.Keys[LI] < AKey) do
-    Inc(LI);
-  if (LI >= LLeaf^.KeyCount) or (LLeaf^.Keys[LI] <> AKey) then
-  begin
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(bpClosed);
+
+    LDepth := 0;
+    LNode := FRoot;
+    while not LNode^.IsLeaf do
+    begin
+      LI := 0;
+      while (LI < LNode^.KeyCount) and (AKey >= LNode^.Keys[LI]) do
+        Inc(LI);
+      if LDepth > High(LParents) then
+        Exit(bpNotFound);
+      LParents[LDepth] := LNode;
+      LChildIndices[LDepth] := LI;
+      Inc(LDepth);
+      LNode := LNode^.Children[LI];
+    end;
+
+    LI := 0;
+    while (LI < LNode^.KeyCount) and (LNode^.Keys[LI] < AKey) do
+      Inc(LI);
+    if (LI >= LNode^.KeyCount) or (LNode^.Keys[LI] <> AKey) then
+      Exit(bpNotFound);
+
+    for LJ := LI to LNode^.KeyCount - 2 do
+    begin
+      LNode^.Keys[LJ] := LNode^.Keys[LJ + 1];
+      LNode^.Values[LJ] := LNode^.Values[LJ + 1];
+    end;
+    Dec(LNode^.KeyCount);
+    Dec(FCount);
+
+    LLevel := LDepth - 1;
+    while (LLevel >= 0) and (LNode^.KeyCount < BPLUS_MIN_KEYS) do
+    begin
+      LParent := LParents[LLevel];
+      LChildIdx := LChildIndices[LLevel];
+      LLeft := nil;
+      LRight := nil;
+      if LChildIdx > 0 then
+        LLeft := LParent^.Children[LChildIdx - 1];
+      if LChildIdx < LParent^.KeyCount then
+        LRight := LParent^.Children[LChildIdx + 1];
+
+      if (LLeft <> nil) and (LLeft^.KeyCount > BPLUS_MIN_KEYS) then
+      begin
+        if LNode^.IsLeaf then
+          BorrowFromLeft(LNode, LLeft)
+        else
+          BorrowInternalFromLeft(LNode, LLeft);
+        Break;
+      end;
+
+      if (LRight <> nil) and (LRight^.KeyCount > BPLUS_MIN_KEYS) then
+      begin
+        if LNode^.IsLeaf then
+          BorrowFromRight(LNode, LRight)
+        else
+          BorrowInternalFromRight(LNode, LRight);
+        Break;
+      end;
+
+      if LLeft <> nil then
+      begin
+        if LNode^.IsLeaf then
+          MergeLeaves(LLeft, LNode)
+        else
+          MergeInternal(LLeft, LNode);
+        RemoveChild(LParent, LChildIdx);
+      end
+      else if LRight <> nil then
+      begin
+        if LNode^.IsLeaf then
+          MergeLeaves(LNode, LRight)
+        else
+          MergeInternal(LNode, LRight);
+        RemoveChild(LParent, LChildIdx + 1);
+      end;
+
+      LNode := LParent;
+      Dec(LLevel);
+    end;
+
+    if (not FRoot^.IsLeaf) and (FRoot^.KeyCount = 0) then
+    begin
+      LOldRoot := FRoot;
+      FRoot := FRoot^.Children[0];
+      LOldRoot^.Children[0] := nil;
+      FreeNode(LOldRoot);
+    end;
+    RefreshSeparators(FRoot);
+    FFirstLeaf := FRoot;
+    while not FFirstLeaf^.IsLeaf do
+      FFirstLeaf := FFirstLeaf^.Children[0];
+    Result := bpRemoved;
+  finally
     Unlock;
-    Exit(bpNotFound);
   end;
-  for LJ := LI to LLeaf^.KeyCount - 2 do
-  begin
-    LLeaf^.Keys[LJ] := LLeaf^.Keys[LJ + 1];
-    LLeaf^.Values[LJ] := LLeaf^.Values[LJ + 1];
-  end;
-  Dec(LLeaf^.KeyCount);
-  AtomicFetchSub64(FCount, 1, moRelaxed);
-  Unlock;
-  Result := bpRemoved;
 end;
 
 function TConcurrentBPlusTree.Find(AKey: Int64; out AValue: Int64): Boolean;
@@ -329,54 +437,86 @@ end;
 procedure TConcurrentBPlusTree.ForEach(ACallback: TBplusForEachCallback);
 var
   LLeaf: PBplusNode;
-  LI: Integer;
+  LKeys: array of Int64;
+  LValues: array of Int64;
+  LI, LCount: SizeInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
-  LLeaf := FFirstLeaf;
-  while LLeaf <> nil do
-  begin
-    for LI := 0 to LLeaf^.KeyCount - 1 do
-      ACallback(LLeaf^.Keys[LI], LLeaf^.Values[LI]);
-    LLeaf := LLeaf^.Next;
+  try
+    LCount := FCount;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+    LI := 0;
+    LLeaf := FFirstLeaf;
+    while LLeaf <> nil do
+    begin
+      for LCount := 0 to LLeaf^.KeyCount - 1 do
+      begin
+        LKeys[LI] := LLeaf^.Keys[LCount];
+        LValues[LI] := LLeaf^.Values[LCount];
+        Inc(LI);
+      end;
+      LLeaf := LLeaf^.Next;
+    end;
+    SetLength(LKeys, LI);
+    SetLength(LValues, LI);
+  finally
+    Unlock;
   end;
-  Unlock;
+
+  for LI := 0 to Length(LKeys) - 1 do
+    ACallback(LKeys[LI], LValues[LI]);
 end;
 
 procedure TConcurrentBPlusTree.RangeQuery(ALow, AHigh: Int64; ACallback: TBplusRangeCallback);
 var
   LLeaf: PBplusNode;
-  LI: Integer;
+  LKeys: array of Int64;
+  LValues: array of Int64;
+  LI, LCount: SizeInt;
   LContinue: Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
-  LLeaf := FindLeaf(ALow);
-  LContinue := True;
-  while LLeaf <> nil do
-  begin
-    for LI := 0 to LLeaf^.KeyCount - 1 do
+  try
+    SetLength(LKeys, 0);
+    SetLength(LValues, 0);
+    LLeaf := FindLeaf(ALow);
+    while LLeaf <> nil do
     begin
-      if LLeaf^.Keys[LI] > AHigh then
+      for LI := 0 to LLeaf^.KeyCount - 1 do
       begin
-        Unlock;
-        Exit;
-      end;
-      if LLeaf^.Keys[LI] >= ALow then
-      begin
-        ACallback(LLeaf^.Keys[LI], LLeaf^.Values[LI], LContinue);
-        if not LContinue then
+        if LLeaf^.Keys[LI] > AHigh then
         begin
-          Unlock;
-          Exit;
+          LLeaf := nil;
+          Break;
+        end;
+        if LLeaf^.Keys[LI] >= ALow then
+        begin
+          LCount := Length(LKeys);
+          SetLength(LKeys, LCount + 1);
+          SetLength(LValues, LCount + 1);
+          LKeys[LCount] := LLeaf^.Keys[LI];
+          LValues[LCount] := LLeaf^.Values[LI];
         end;
       end;
+      if LLeaf <> nil then
+        LLeaf := LLeaf^.Next;
     end;
-    LLeaf := LLeaf^.Next;
+  finally
+    Unlock;
   end;
-  Unlock;
+
+  LContinue := True;
+  for LI := 0 to Length(LKeys) - 1 do
+  begin
+    ACallback(LKeys[LI], LValues[LI], LContinue);
+    if not LContinue then
+      Exit;
+  end;
 end;
 
 procedure TConcurrentBPlusTree.ClearSubtree(ANode: PBplusNode);
@@ -412,6 +552,113 @@ function TConcurrentBPlusTree.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
+
+{$ifdef NEXTPAS_TESTING}
+function TConcurrentBPlusTree.ValidateNode(ANode: PBplusNode;
+  AIsRoot: Boolean; ADepth: Integer; var ALeafDepth: Integer;
+  var AEntryCount: Int64; out AMinKey, AMaxKey: Int64): Boolean;
+var
+  LI: Integer;
+  LChildMin, LChildMax, LPreviousMax: Int64;
+begin
+  AMinKey := 0;
+  AMaxKey := 0;
+  if (ANode = nil) or (ANode^.KeyCount < 0) or
+     (ANode^.KeyCount > BPLUS_MAX_KEYS) then
+    Exit(False);
+  if (not AIsRoot) and (ANode^.KeyCount < BPLUS_MIN_KEYS) then
+    Exit(False);
+
+  if ANode^.IsLeaf then
+  begin
+    for LI := 1 to ANode^.KeyCount - 1 do
+      if ANode^.Keys[LI - 1] >= ANode^.Keys[LI] then
+        Exit(False);
+    if ALeafDepth < 0 then
+      ALeafDepth := ADepth
+    else if ALeafDepth <> ADepth then
+      Exit(False);
+    Inc(AEntryCount, ANode^.KeyCount);
+    if ANode^.KeyCount > 0 then
+    begin
+      AMinKey := ANode^.Keys[0];
+      AMaxKey := ANode^.Keys[ANode^.KeyCount - 1];
+    end;
+    Exit(True);
+  end;
+
+  if ANode^.KeyCount = 0 then
+    Exit(False);
+  for LI := 0 to ANode^.KeyCount do
+  begin
+    if not ValidateNode(ANode^.Children[LI], False, ADepth + 1,
+      ALeafDepth, AEntryCount, LChildMin, LChildMax) then
+      Exit(False);
+    if LI = 0 then
+    begin
+      AMinKey := LChildMin;
+      LPreviousMax := LChildMax;
+    end
+    else
+    begin
+      if (LPreviousMax >= LChildMin) or
+         (ANode^.Keys[LI - 1] <> LChildMin) then
+        Exit(False);
+      LPreviousMax := LChildMax;
+    end;
+  end;
+  AMaxKey := LPreviousMax;
+  Result := True;
+end;
+
+function TConcurrentBPlusTree.ValidateInvariants: Boolean;
+var
+  LLeaf, LLeftmost: PBplusNode;
+  LLeafDepth, LI: Integer;
+  LEntryCount, LLeafEntryCount: Int64;
+  LMinKey, LMaxKey, LPreviousKey: Int64;
+  LHasPrevious: Boolean;
+begin
+  Lock;
+  try
+    LLeafDepth := -1;
+    LEntryCount := 0;
+    Result := ValidateNode(FRoot, True, 0, LLeafDepth, LEntryCount,
+      LMinKey, LMaxKey);
+    if not Result or (LEntryCount <> FCount) then
+      Exit(False);
+
+    LLeftmost := FRoot;
+    while (LLeftmost <> nil) and (not LLeftmost^.IsLeaf) do
+      LLeftmost := LLeftmost^.Children[0];
+    if LLeftmost <> FFirstLeaf then
+      Exit(False);
+
+    LLeafEntryCount := 0;
+    LHasPrevious := False;
+    LLeaf := FFirstLeaf;
+    while LLeaf <> nil do
+    begin
+      if not LLeaf^.IsLeaf then
+        Exit(False);
+      for LI := 0 to LLeaf^.KeyCount - 1 do
+      begin
+        if LHasPrevious and (LPreviousKey >= LLeaf^.Keys[LI]) then
+          Exit(False);
+        LPreviousKey := LLeaf^.Keys[LI];
+        LHasPrevious := True;
+        Inc(LLeafEntryCount);
+      end;
+      if LLeafEntryCount > FCount then
+        Exit(False);
+      LLeaf := LLeaf^.Next;
+    end;
+    Result := LLeafEntryCount = FCount;
+  finally
+    Unlock;
+  end;
+end;
+{$endif}
 
 function TConcurrentBPlusTree.BorrowFromLeft(ALeaf: PBplusNode; ALeft: PBplusNode): Boolean;
 var
@@ -469,6 +716,73 @@ begin
   ALeft^.Next := ARight^.Next;
   FreeNode(ARight);
   Result := True;
+end;
+
+procedure TConcurrentBPlusTree.BorrowInternalFromLeft(ANode,
+  ALeft: PBplusNode);
+var
+  LI: Integer;
+begin
+  for LI := ANode^.KeyCount downto 0 do
+    ANode^.Children[LI + 1] := ANode^.Children[LI];
+  ANode^.Children[0] := ALeft^.Children[ALeft^.KeyCount];
+  ALeft^.Children[ALeft^.KeyCount] := nil;
+  Dec(ALeft^.KeyCount);
+  Inc(ANode^.KeyCount);
+end;
+
+procedure TConcurrentBPlusTree.BorrowInternalFromRight(ANode,
+  ARight: PBplusNode);
+var
+  LI: Integer;
+begin
+  ANode^.Children[ANode^.KeyCount + 1] := ARight^.Children[0];
+  Inc(ANode^.KeyCount);
+  for LI := 0 to ARight^.KeyCount - 1 do
+    ARight^.Children[LI] := ARight^.Children[LI + 1];
+  ARight^.Children[ARight^.KeyCount] := nil;
+  Dec(ARight^.KeyCount);
+end;
+
+procedure TConcurrentBPlusTree.MergeInternal(ALeft, ARight: PBplusNode);
+var
+  LOffset, LI: Integer;
+begin
+  LOffset := ALeft^.KeyCount + 1;
+  for LI := 0 to ARight^.KeyCount do
+  begin
+    ALeft^.Children[LOffset + LI] := ARight^.Children[LI];
+    ARight^.Children[LI] := nil;
+  end;
+  ALeft^.KeyCount := ALeft^.KeyCount + ARight^.KeyCount + 1;
+  FreeNode(ARight);
+end;
+
+procedure TConcurrentBPlusTree.RemoveChild(AParent: PBplusNode;
+  AChildIdx: Integer);
+var
+  LI: Integer;
+begin
+  for LI := AChildIdx to AParent^.KeyCount - 1 do
+    AParent^.Children[LI] := AParent^.Children[LI + 1];
+  AParent^.Children[AParent^.KeyCount] := nil;
+  Dec(AParent^.KeyCount);
+end;
+
+function TConcurrentBPlusTree.RefreshSeparators(ANode: PBplusNode): Int64;
+var
+  LI: Integer;
+begin
+  if ANode^.IsLeaf then
+  begin
+    if ANode^.KeyCount = 0 then
+      Exit(0);
+    Exit(ANode^.Keys[0]);
+  end;
+
+  Result := RefreshSeparators(ANode^.Children[0]);
+  for LI := 1 to ANode^.KeyCount do
+    ANode^.Keys[LI - 1] := RefreshSeparators(ANode^.Children[LI]);
 end;
 
 end.

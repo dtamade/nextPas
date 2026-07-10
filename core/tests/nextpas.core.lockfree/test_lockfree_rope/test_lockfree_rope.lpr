@@ -89,6 +89,28 @@ begin
   end;
 end;
 
+procedure TestOverflowCountsAndFailureOutputs;
+var
+  LResult: AnsiString;
+begin
+  WriteLn('--- TestOverflowCountsAndFailureOutputs ---');
+  GRope := TRope.Create;
+  try
+    GRope.Insert(0, 'abcdef');
+    Check(GRope.Delete(1, High(Int32)) = rpOk,
+      'Large delete count clamps to the remaining text');
+    Check(GRope.ToString = 'a', 'Large delete preserves the prefix');
+    Check(GRope.GetLength = 1, 'Large delete keeps a valid length');
+
+    LResult := 'stale';
+    Check(GRope.Substring(-1, 1, LResult) = rpOutOfBounds,
+      'Invalid substring reports out of bounds');
+    Check(LResult = '', 'Invalid substring clears its output');
+  finally
+    GRope.Free;
+  end;
+end;
+
 procedure TestCharAt;
 var
   LChar: AnsiChar;
@@ -184,6 +206,7 @@ begin
   TestInsert;
   TestDelete;
   TestSubstring;
+  TestOverflowCountsAndFailureOutputs;
   TestCharAt;
   TestMultipleInserts;
   TestNestedMiddleInsertAndCharAt;

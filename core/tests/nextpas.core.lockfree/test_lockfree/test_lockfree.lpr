@@ -2075,10 +2075,17 @@ end;
 
 var
   GEbrReclaimCount: Int32;
+  GEbrOrphanDomain: TEbrDomain;
 
 procedure EbrTestReclaimProc(const AData: Pointer; const AUserData: Pointer);
 begin
   AtomicFetchAdd32(GEbrReclaimCount, 1, moSeqCst);
+end;
+
+function EbrOrphanRetireThread(AArg: Pointer): Pointer; cdecl;
+begin
+  GEbrOrphanDomain.Retire(Pointer(1), @EbrTestReclaimProc);
+  Result := nil;
 end;
 
 procedure TestEbrRetireAndCollect;
@@ -2200,6 +2207,40 @@ begin
   LDomain.Retire(Pointer(20), @EbrTestReclaimProc);
   LDomain.Free;
   CheckEqual(Int64(2), Int64(GEbrReclaimCount), 'destroy must reclaim all retired items');
+end;
+
+procedure TestEbrOrphansStayWithOriginDomain;
+var
+  LOtherDomain: TEbrDomain;
+  LGuard: TEbrGuard;
+  LThread: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LReclaimedWhileActive: Int32;
+begin
+  GEbrOrphanDomain := TEbrDomain.Create;
+  LOtherDomain := TEbrDomain.Create;
+  LGuard := TEbrGuard.Acquire(GEbrOrphanDomain);
+  try
+    GEbrReclaimCount := 0;
+    StartThread(LThread, @EbrOrphanRetireThread, nil, 'EBR orphan retire thread');
+    JoinThread(LThread, LRetVal, 'EBR orphan retire thread');
+
+    LOtherDomain.Collect;
+    LReclaimedWhileActive := AtomicLoad32(GEbrReclaimCount, moAcquire);
+
+    LGuard.Release;
+    GEbrOrphanDomain.Collect;
+
+    CheckEqual(Int64(0), Int64(LReclaimedWhileActive),
+      'An unrelated domain must not reclaim origin-domain retirements while its guard is active');
+    CheckEqual(Int64(1), Int64(AtomicLoad32(GEbrReclaimCount, moAcquire)),
+      'Origin domain must reclaim the retirement after its guard leaves');
+  finally
+    LGuard.Release;
+    LOtherDomain.Free;
+    GEbrOrphanDomain.Free;
+    GEbrOrphanDomain := nil;
+  end;
 end;
 
 { Multi-thread stress tests }
@@ -4816,9 +4857,16 @@ const
   MpscSourcePath = '../../../src/nextpas.core.lockfree.mpsc.pas';
   DequeSourcePath = '../../../src/nextpas.core.lockfree.deque.pas';
   WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
+  BarrierSourcePath = '../../../src/nextpas.core.lockfree.barrier.pas';
+  CondVarSourcePath = '../../../src/nextpas.core.lockfree.condvar.pas';
+  SemaphoreSourcePath = '../../../src/nextpas.core.lockfree.semaphore.pas';
+  FlatCombiningSourcePath = '../../../src/nextpas.core.lockfree.flatcombining.pas';
+  WorkStealingSourcePath = '../../../src/nextpas.core.lockfree.workstealing.pas';
+  ForkJoinSourcePath = '../../../src/nextpas.core.lockfree.forkjoin.pas';
   ChannelSourcePath = '../../../src/nextpas.core.lockfree.channel.pas';
   HashMapSourcePath = '../../../src/nextpas.core.lockfree.hashmap.pas';
   HazardSourcePath = '../../../src/nextpas.core.lockfree.hazard.pas';
+  LeftRightSourcePath = '../../../src/nextpas.core.lockfree.leftright.pas';
   BenchMakefilePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/Makefile';
   BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
   BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
@@ -4841,9 +4889,16 @@ var
   LMpscSource: string;
   LDequeSource: string;
   LWaitSource: string;
+  LBarrierSource: string;
+  LCondVarSource: string;
+  LSemaphoreSource: string;
+  LFlatCombiningSource: string;
+  LWorkStealingSource: string;
+  LForkJoinSource: string;
   LChannelSource: string;
   LHashMapSource: string;
   LHazardSource: string;
+  LLeftRightSource: string;
   LBenchMakefile: string;
   LBenchSource: string;
   LRustCompareSource: string;
@@ -4926,9 +4981,16 @@ begin
   LMpscSource := ReadUtf8TextFile(MpscSourcePath);
   LDequeSource := ReadUtf8TextFile(DequeSourcePath);
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+  LBarrierSource := ReadUtf8TextFile(BarrierSourcePath);
+  LCondVarSource := ReadUtf8TextFile(CondVarSourcePath);
+  LSemaphoreSource := ReadUtf8TextFile(SemaphoreSourcePath);
+  LFlatCombiningSource := ReadUtf8TextFile(FlatCombiningSourcePath);
+  LWorkStealingSource := ReadUtf8TextFile(WorkStealingSourcePath);
+  LForkJoinSource := ReadUtf8TextFile(ForkJoinSourcePath);
   LChannelSource := ReadUtf8TextFile(ChannelSourcePath);
   LHashMapSource := ReadUtf8TextFile(HashMapSourcePath);
   LHazardSource := ReadUtf8TextFile(HazardSourcePath);
+  LLeftRightSource := ReadUtf8TextFile(LeftRightSourcePath);
   LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
@@ -5803,6 +5865,52 @@ begin
     'hazard RegisterThread must use AllocMem for zero-init');
   CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
     'hazard UnregisterThread must not blindly nil FThreads');
+  CheckContains(LHazardSource,
+    'AtomicStorePtr(LThread^.HP[AHPIndex], APtr, moRelease);',
+    'hazard Protect must publish its pointer with a release store');
+  CheckContains(LHazardSource,
+    'AtomicLoadPtr(LThread^.HP[LI], moAcquire)',
+    'hazard Collect must scan pointer publications with acquire loads');
+  CheckNotContains(LHazardSource, 'procedure THazardDomain.DrainPendingFree;',
+    'hazard thread records must not be reclaimed by an unprotected list traversal');
+  CheckContains(LHazardSource, 'function THazardDomain.ProtectSource',
+    'hazard domain must expose a publish-and-revalidate source protection loop');
+  CheckBefore(LHazardSource,
+    'IncrementRetiredCount;',
+    'AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease)',
+    'hazard retired count must be published before the retired node becomes collectable');
+  CheckContains(LCondVarSource, 'PConditionWaiter = ^TConditionWaiter;',
+    'condition-variable notifications must be attached to registered waiter lifetimes');
+  CheckNotContains(LCondVarSource, 'FSignalCount:',
+    'condition-variable Signal must not leave a shared token consumable by future waiters');
+  CheckContains(LBarrierSource, 'PBarrierGeneration = ^TBarrierGeneration;',
+    'barrier outcomes must remain attached to a generation until its waiters leave');
+  CheckNotContains(LBarrierSource, 'BARRIER_BROKEN_BIT',
+    'barrier must not retain only one previous generation broken bit');
+  CheckContains(LLeftRightSource,
+    'if AtomicLoad32(FReadIndex, moAcquire) = LReadIdx then' + LineEnding +
+    '      Break;',
+    'left-right readers must revalidate the replica index after publishing their presence');
+  CheckContains(LSemaphoreSource,
+    'AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire)',
+    'semaphore acquire must synchronize with permit release');
+  CheckContains(LSemaphoreSource,
+    'AtomicCompareExchange64(FAvailable, LOld, LOld + 1, moRelease)',
+    'semaphore release must publish protected writes before handing off a permit');
+  CheckContains(LFlatCombiningSource,
+    'AtomicStore32(LPub^.OwnerThreadId, 0, moRelease);',
+    'flat-combining Apply must release its publication slot after consuming the result');
+  CheckNotContains(LFlatCombiningSource, 'Fallback: should not happen with 256 slots',
+    'flat-combining publication exhaustion must wait for a free slot instead of aliasing an active slot');
+  CheckContains(LWorkStealingSource, 'AcquireOwner(LWorkerIndex);',
+    'work-stealing Submit must serialize the single-owner deque push side');
+  CheckContains(LWorkStealingSource, 'AcquireOwner(LQueueIndex);',
+    'work-stealing fallback pop must serialize the single-owner deque pop side');
+  CheckContains(LForkJoinSource,
+    'if (AWorkerId < 0) or (AWorkerId >= FWorkerCount) then',
+    'fork-join PopOrSteal must reject invalid worker IDs before indexing a deque');
+  CheckContains(LWaitSource, 'if (AEpoch = nil) or (AWaiters = nil) then',
+    'lockfree wait helper must reject nil counter addresses before dereferencing them');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
@@ -6191,6 +6299,7 @@ begin
   T.Test('EBR nil guard acquire', @TestEbrNilGuardAcquire);
   T.Test('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
   T.Test('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
+  T.Test('EBR orphan remains with origin domain', @TestEbrOrphansStayWithOriginDomain);
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
   T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);

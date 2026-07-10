@@ -39,11 +39,14 @@ type
   TLockFreeForkJoinPool = class
   private
     FDeques: array of TTaskDeque;
+    FOwnerLocks: array of Int32;
     FWorkerCount: Int32;
     FNextWorker: Int64;  // round-robin for task submission
     FClosed: Int32;
     FTaskCount: Int64;
     FCompletedCount: Int64;
+    procedure AcquireOwner(const AWorkerId: Int32);
+    procedure ReleaseOwner(const AWorkerId: Int32);
   public
     {** @desc 创建 ForkJoin 池
       @param AWorkerCount 工作者线程数（= 队列数） }
@@ -73,6 +76,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 constructor TLockFreeForkJoinPool.Create(AWorkerCount: Int32);
 var
   I: Int32;
@@ -82,8 +88,12 @@ begin
     AWorkerCount := 1;
   FWorkerCount := AWorkerCount;
   SetLength(FDeques, AWorkerCount);
+  SetLength(FOwnerLocks, AWorkerCount);
   for I := 0 to AWorkerCount - 1 do
+  begin
     FDeques[I] := TTaskDeque.Create(64);
+    FOwnerLocks[I] := 0;
+  end;
   FNextWorker := 0;
   FClosed := 0;
   FTaskCount := 0;
@@ -97,7 +107,28 @@ begin
   for I := 0 to FWorkerCount - 1 do
     FDeques[I].Free;
   SetLength(FDeques, 0);
+  SetLength(FOwnerLocks, 0);
   inherited Destroy;
+end;
+
+procedure TLockFreeForkJoinPool.AcquireOwner(const AWorkerId: Int32);
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FOwnerLocks[AWorkerId], 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TLockFreeForkJoinPool.ReleaseOwner(const AWorkerId: Int32);
+begin
+  AtomicStore32(FOwnerLocks[AWorkerId], 0, moRelease);
 end;
 
 function TLockFreeForkJoinPool.Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
@@ -107,11 +138,18 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(fjClosed);
   // Round-robin to next worker
-  LWorkerId := Int32(AtomicFetchAdd64(FNextWorker, 1) mod FWorkerCount);
-  if FDeques[LWorkerId].TryPush(ATask) then
-  begin
-    AtomicFetchAdd64(FTaskCount, 1);
-    Exit(fjOk);
+  LWorkerId := Int32(QWord(AtomicFetchAdd64(FNextWorker, 1)) mod
+    QWord(FWorkerCount));
+  AcquireOwner(LWorkerId);
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(fjClosed);
+    AtomicFetchAdd64(FTaskCount, 1, moRelaxed);
+    if FDeques[LWorkerId].TryPush(ATask) then
+      Exit(fjOk);
+    AtomicFetchSub64(FTaskCount, 1, moRelaxed);
+  finally
+    ReleaseOwner(LWorkerId);
   end;
   Result := fjFull;
 end;
@@ -120,12 +158,19 @@ function TLockFreeForkJoinPool.PopOrSteal(AWorkerId: Int32; out ATask: TForkJoin
 var
   I, LVictim: Int32;
 begin
+  if (AWorkerId < 0) or (AWorkerId >= FWorkerCount) then
+    raise EArgumentError.Create('TLockFreeForkJoinPool.PopOrSteal: invalid worker ID');
   // Try local pop first (LIFO)
-  if FDeques[AWorkerId].TryPop(ATask) then
-  begin
-    AtomicFetchAdd64(FCompletedCount, 1);
-    AtomicFetchAdd64(FTaskCount, -1);
-    Exit(True);
+  AcquireOwner(AWorkerId);
+  try
+    if FDeques[AWorkerId].TryPop(ATask) then
+    begin
+      AtomicFetchAdd64(FCompletedCount, 1);
+      AtomicFetchSub64(FTaskCount, 1);
+      Exit(True);
+    end;
+  finally
+    ReleaseOwner(AWorkerId);
   end;
   // Try stealing from other workers (FIFO)
   for I := 1 to FWorkerCount - 1 do
@@ -134,7 +179,7 @@ begin
     if FDeques[LVictim].TrySteal(ATask) then
     begin
       AtomicFetchAdd64(FCompletedCount, 1);
-      AtomicFetchAdd64(FTaskCount, -1);
+      AtomicFetchSub64(FTaskCount, 1);
       Exit(True);
     end;
   end;

@@ -62,17 +62,19 @@ var
 begin
   LBuf := TIntRingBuffer.Create(4);
   try
-    // Fill buffer (capacity 4, usable 3 due to ring buffer design)
+    // Per-slot sequence generations make all four slots usable.
     LResult := LBuf.TryWrite(1);
     Check(rbWritten = LResult, 'Write 1');
     LResult := LBuf.TryWrite(2);
     Check(rbWritten = LResult, 'Write 2');
     LResult := LBuf.TryWrite(3);
     Check(rbWritten = LResult, 'Write 3');
+    LResult := LBuf.TryWrite(4);
+    Check(rbWritten = LResult, 'Write 4');
 
     // Buffer is full
     Check(LBuf.IsFull, 'Should be full');
-    LResult := LBuf.TryWrite(4);
+    LResult := LBuf.TryWrite(5);
     Check(rbFull = LResult, 'Should return full');
   finally
     LBuf.Free;

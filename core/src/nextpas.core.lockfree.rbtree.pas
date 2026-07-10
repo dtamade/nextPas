@@ -27,6 +27,12 @@ type
       读操作通过 hazard pointer 或直接读取。
   }
   TConcurrentRBTree = class
+  private type
+    TRBEntry = record
+      Key: Int64;
+      Value: Int64;
+    end;
+    TRBEntries = array of TRBEntry;
   private
     FRoot: PRBNode;
     FNil: PRBNode;
@@ -45,7 +51,8 @@ type
     function FindNode(AKey: Int64): PRBNode;
     procedure Transplant(AOld, ANew: PRBNode);
     procedure ClearSubtree(ANode: PRBNode);
-    procedure ForEachSubtree(ANode: PRBNode; ACallback: TRBForEachCallback);
+    procedure CollectSubtree(ANode: PRBNode; var AEntries: TRBEntries;
+      var ACount: SizeInt);
   public
     constructor Create;
     destructor Destroy; override;
@@ -92,7 +99,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -452,22 +459,36 @@ begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-procedure TConcurrentRBTree.ForEachSubtree(ANode: PRBNode; ACallback: TRBForEachCallback);
+procedure TConcurrentRBTree.CollectSubtree(ANode: PRBNode;
+  var AEntries: TRBEntries; var ACount: SizeInt);
 begin
   if ANode = FNil then
     Exit;
-  ForEachSubtree(ANode^.Left, ACallback);
-  ACallback(ANode^.Key, ANode^.Value);
-  ForEachSubtree(ANode^.Right, ACallback);
+  CollectSubtree(ANode^.Left, AEntries, ACount);
+  AEntries[ACount].Key := ANode^.Key;
+  AEntries[ACount].Value := ANode^.Value;
+  Inc(ACount);
+  CollectSubtree(ANode^.Right, AEntries, ACount);
 end;
 
 procedure TConcurrentRBTree.ForEach(ACallback: TRBForEachCallback);
+var
+  LEntries: TRBEntries;
+  LCount, LI: SizeInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
-  ForEachSubtree(FRoot, ACallback);
-  Unlock;
+  try
+    SetLength(LEntries, FCount);
+    LCount := 0;
+    CollectSubtree(FRoot, LEntries, LCount);
+    SetLength(LEntries, LCount);
+  finally
+    Unlock;
+  end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LEntries[LI].Key, LEntries[LI].Value);
 end;
 
 procedure TConcurrentRBTree.ClearSubtree(ANode: PRBNode);

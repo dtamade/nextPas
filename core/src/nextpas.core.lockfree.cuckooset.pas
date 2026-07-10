@@ -1,15 +1,15 @@
 {******************************************************************************
   nextpas.core.lockfree.cuckooset
 
-  Concurrent Cuckoo Hash Set — lock-free set with O(1) worst-case lookup.
+  Concurrent Cuckoo Hash Set - spin-lock-serialized set with O(1) lookup.
 
   Design:
   - Two hash tables with different hash functions
   - Each element has exactly 2 possible locations
   - Lookup: check both locations, O(1) worst-case
   - Insert: if both occupied, evict one and re-insert (cuckoo)
-  - Spin lock for writes, lock-free reads
-  - Auto-resize when load factor > 50%
+  - One spin lock serializes reads, writes, and resize
+  - Auto-resize when the bounded displacement chain cannot place an entry
 
   Use cases: fast membership testing, deduplication.
 
@@ -39,6 +39,7 @@ type
     FCount: Int32;
     FLock: Int32;
     FVersion: Int32; { generation counter: odd = resize in progress, even = stable }
+    FHasEmpty: Boolean;
 
     function Hash1(const AKey: AnsiString): UInt32;
     function Hash2(const AKey: AnsiString): UInt32;
@@ -98,6 +99,7 @@ begin
   FCount := 0;
   FLock := 0;
   FVersion := 0;
+  FHasEmpty := False;
 end;
 
 destructor TCuckooSet.Destroy;
@@ -168,7 +170,7 @@ begin
     FTable1[I] := '';
     FTable2[I] := '';
   end;
-  FCount := 0;
+  FCount := Ord(FHasEmpty);
 
   { Re-insert all elements }
   for I := 0 to LOldCap - 1 do
@@ -255,6 +257,14 @@ function TCuckooSet.Insert(const AKey: AnsiString): TCuckooSetResult;
 begin
   AcquireLock;
   try
+    if AKey = '' then
+    begin
+      if FHasEmpty then
+        Exit(csrExists);
+      FHasEmpty := True;
+      Inc(FCount);
+      Exit(csrOk);
+    end;
     Result := InsertRaw(AKey);
   finally
     ReleaseLock;
@@ -267,6 +277,14 @@ var
 begin
   AcquireLock;
   try
+    if AKey = '' then
+    begin
+      if not FHasEmpty then
+        Exit(csrNotFound);
+      FHasEmpty := False;
+      Dec(FCount);
+      Exit(csrOk);
+    end;
     LIdx1 := Hash1(AKey) mod UInt32(FCapacity);
     LIdx2 := Hash2(AKey) mod UInt32(FCapacity);
 
@@ -296,6 +314,8 @@ var
 begin
   AcquireLock;
   try
+    if AKey = '' then
+      Exit(FHasEmpty);
     LCap := FCapacity;
     LIdx1 := Hash1(AKey) mod UInt32(LCap);
     LIdx2 := Hash2(AKey) mod UInt32(LCap);
@@ -336,6 +356,7 @@ begin
       FTable1[I] := '';
       FTable2[I] := '';
     end;
+    FHasEmpty := False;
     FCount := 0;
   finally
     ReleaseLock;

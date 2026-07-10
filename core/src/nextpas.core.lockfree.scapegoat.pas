@@ -25,6 +25,12 @@ type
       并发友好：旋转时不需要复杂的指针操作。
   }
   TConcurrentScapegoatTree = class
+  private type
+    TScapegoatEntry = record
+      Key: Int64;
+      Value: Int64;
+    end;
+    TScapegoatEntries = array of TScapegoatEntry;
   private
     FRoot: PScapegoatNode;
     FCount: Int64;
@@ -45,7 +51,8 @@ type
     function BuildBalanced(AArray: array of PScapegoatNode; AStart, AEnd: Integer; AParent: PScapegoatNode): PScapegoatNode;
     function FindNode(AKey: Int64): PScapegoatNode;
     procedure ClearSubtree(ANode: PScapegoatNode);
-    procedure ForEachSubtree(ANode: PScapegoatNode; ACallback: TScapegoatForEachCallback);
+    procedure CollectSubtree(ANode: PScapegoatNode;
+      var AEntries: TScapegoatEntries; var ACount: SizeInt);
   public
     constructor Create(const AAlpha: Double = 0.7);
     destructor Destroy; override;
@@ -90,7 +97,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -396,22 +403,36 @@ begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-procedure TConcurrentScapegoatTree.ForEachSubtree(ANode: PScapegoatNode; ACallback: TScapegoatForEachCallback);
+procedure TConcurrentScapegoatTree.CollectSubtree(ANode: PScapegoatNode;
+  var AEntries: TScapegoatEntries; var ACount: SizeInt);
 begin
   if ANode = nil then
     Exit;
-  ForEachSubtree(ANode^.Left, ACallback);
-  ACallback(ANode^.Key, ANode^.Value);
-  ForEachSubtree(ANode^.Right, ACallback);
+  CollectSubtree(ANode^.Left, AEntries, ACount);
+  AEntries[ACount].Key := ANode^.Key;
+  AEntries[ACount].Value := ANode^.Value;
+  Inc(ACount);
+  CollectSubtree(ANode^.Right, AEntries, ACount);
 end;
 
 procedure TConcurrentScapegoatTree.ForEach(ACallback: TScapegoatForEachCallback);
+var
+  LEntries: TScapegoatEntries;
+  LCount, LI: SizeInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
-  ForEachSubtree(FRoot, ACallback);
-  Unlock;
+  try
+    SetLength(LEntries, FCount);
+    LCount := 0;
+    CollectSubtree(FRoot, LEntries, LCount);
+    SetLength(LEntries, LCount);
+  finally
+    Unlock;
+  end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LEntries[LI].Key, LEntries[LI].Value);
 end;
 
 procedure TConcurrentScapegoatTree.ClearSubtree(ANode: PScapegoatNode);

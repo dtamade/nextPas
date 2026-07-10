@@ -41,7 +41,9 @@ type
     amVertexNotFound = 3,
     amEdgeNotFound = 5,
     amNoPath = 6,
-    amFull = 8
+    amInvalidWeight = 7,
+    amFull = 8,
+    amDistanceOverflow = 9
   );
 
   PAdjEdge = ^TAdjEdge;
@@ -173,6 +175,8 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(amClosed);
     if FindVertex(AId) >= 0 then
       Exit(amVertexExists);
 
@@ -196,9 +200,13 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(amClosed);
+  if AWeight < 0 then
+    Exit(amInvalidWeight);
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
       Exit(amVertexNotFound);
@@ -241,6 +249,8 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
       Exit(amVertexNotFound);
@@ -270,33 +280,53 @@ end;
 
 function TAdjMapImpl.GetVertexCount: Integer;
 begin
-  Result := FVertexCount;
+  Lock;
+  try
+    Result := FVertexCount;
+  finally
+    Unlock;
+  end;
 end;
 
 function TAdjMapImpl.GetEdgeCount: Integer;
 var
   LI, LTotal: Integer;
 begin
-  LTotal := 0;
-  for LI := 0 to FVertexCount - 1 do
-    LTotal := LTotal + FVertices[LI].FEdgeCount;
-  Result := LTotal;
+  Lock;
+  try
+    LTotal := 0;
+    for LI := 0 to FVertexCount - 1 do
+      LTotal := LTotal + FVertices[LI].FEdgeCount;
+    Result := LTotal;
+  finally
+    Unlock;
+  end;
 end;
 
 function TAdjMapImpl.Dijkstra(ASource, ATarget: UInt64; out AResult: TPathResult): TAdjMapStatus;
 const
-  INF = High(Int64) div 2;
+  INF = High(Int64);
 var
   LDist: array of Int64;
   LPrev: array of Integer;
   LVisited: array of Boolean;
   LI, LSrcIdx, LDstIdx, LU, LV: Integer;
   LMinDist: Int64;
+  LCandidate: Int64;
   LEdge: PAdjEdge;
   LPathLen: Integer;
+  LDistanceOverflow: Boolean;
 begin
+  AResult.FPathLen := 0;
+  AResult.FDistance := -1;
+  SetLength(AResult.FPath, 0);
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(amClosed);
+
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
       Exit(amVertexNotFound);
@@ -315,6 +345,7 @@ begin
       LVisited[LI] := False;
     end;
     LDist[LSrcIdx] := 0;
+    LDistanceOverflow := False;
 
     for LI := 0 to FVertexCount - 1 do
     begin
@@ -343,10 +374,16 @@ begin
         LV := FindVertex(LEdge^.FTarget);
         if (LV >= 0) and (not LVisited[LV]) then
         begin
-          if LDist[LU] + LEdge^.FWeight < LDist[LV] then
+          if LEdge^.FWeight >= INF - LDist[LU] then
+            LDistanceOverflow := True
+          else
           begin
-            LDist[LV] := LDist[LU] + LEdge^.FWeight;
-            LPrev[LV] := LU;
+            LCandidate := LDist[LU] + LEdge^.FWeight;
+            if LCandidate < LDist[LV] then
+            begin
+              LDist[LV] := LCandidate;
+              LPrev[LV] := LU;
+            end;
           end;
         end;
         LEdge := LEdge^.FNext;
@@ -355,13 +392,13 @@ begin
 
     if LDist[LDstIdx] = INF then
     begin
-      AResult.FPathLen := 0;
-      SetLength(AResult.FPath, 0);
-      AResult.FDistance := -1;
       SetLength(LDist, 0);
       SetLength(LPrev, 0);
       SetLength(LVisited, 0);
-      Result := amNoPath;
+      if LDistanceOverflow then
+        Result := amDistanceOverflow
+      else
+        Result := amNoPath;
       Exit;
     end;
 
@@ -397,7 +434,12 @@ end;
 
 procedure TAdjMapImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TAdjMapImpl.IsClosed: Boolean;

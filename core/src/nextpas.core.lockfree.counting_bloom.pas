@@ -8,8 +8,9 @@
   - Add: increment all hash positions
   - Remove: decrement all hash positions
   - Contains: check if all hash positions > 0
-  - False positives possible, false negatives impossible
-  - Thread-safe: atomic increments/decrements
+  - False positives are possible
+  - No false negatives only when Remove is called for known-added occurrences
+  - Per-counter increments/decrements are atomic; a whole key update is not
 
   2026-07-06  Phase 4
 ******************************************************************************}
@@ -39,6 +40,7 @@ type
    *   - 宽度和深度在创建时固定
    *   - 宽度必须是 2 的幂（用于位运算取模）
    *   - 线程安全：原子计数器
+   *   - 仅删除已成功添加且尚未删除的元素；删除误报键会破坏保证
    *}
   TCountingBloomFilter = class
   private

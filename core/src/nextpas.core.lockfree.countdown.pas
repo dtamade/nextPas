@@ -88,6 +88,8 @@ function TCountDownLatch.WaitTimeout(const ATimeoutNs: Int64): Boolean;
 var
   LStart: TInstant;
 begin
+  if ATimeoutNs <= 0 then
+    raise EArgumentError.Create('TCountDownLatch.WaitTimeout: timeout must be > 0');
   LStart := TInstant.Now;
   while AtomicLoad64(FCount, moAcquire) > 0 do
   begin

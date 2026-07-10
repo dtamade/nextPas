@@ -84,7 +84,7 @@ end;
 
 procedure TMisraGries.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -105,20 +105,23 @@ end;
 
 function TMisraGries.Add(AKey: UInt64): TMisraGriesResult;
 var
-  LIdx, LMinIdx: Int32;
-  LMinCount: Int64;
+  LIdx: Int32;
   LI: Int32;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(mgClosed);
   Lock;
   try
-    Inc(FTotalOps);
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(mgClosed);
+    if FTotalOps < High(Int64) then
+      Inc(FTotalOps);
     { Check if key already tracked }
     LIdx := FindKey(AKey);
     if LIdx >= 0 then
     begin
-      Inc(FEntries[LIdx].Count);
+      if FEntries[LIdx].Count < High(Int64) then
+        Inc(FEntries[LIdx].Count);
       Exit(mgUpdated);
     end;
     { Find empty slot }
@@ -222,7 +225,12 @@ end;
 
 procedure TMisraGries.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TMisraGries.IsClosed: Boolean;

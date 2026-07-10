@@ -2,11 +2,81 @@
 program test_lockfree_suffixarray;
 
 uses
+  nextpas.core.thread.init,
+  Classes,
   SysUtils,
+  nextpas.core.atomic,
   nextpas.core.lockfree.suffixarray;
 
 var
   GPassed, GFailed: Int32;
+
+type
+  TSuffixBuildThread = class(TThread)
+  private
+    FSuffixArray: TSuffixArray;
+    FIterations: Int32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ASuffixArray: TSuffixArray; AIterations: Int32);
+  end;
+
+  TSuffixSearchThread = class(TThread)
+  private
+    FSuffixArray: TSuffixArray;
+    FIterations: Int32;
+    FInvalidSnapshot: PInt32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ASuffixArray: TSuffixArray; AIterations: Int32;
+      AInvalidSnapshot: PInt32);
+  end;
+
+constructor TSuffixBuildThread.Create(ASuffixArray: TSuffixArray;
+  AIterations: Int32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FSuffixArray := ASuffixArray;
+  FIterations := AIterations;
+end;
+
+procedure TSuffixBuildThread.Execute;
+var
+  LI: Int32;
+begin
+  for LI := 1 to FIterations do
+    if Odd(LI) then
+      FSuffixArray.Build(StringOfChar('a', 32))
+    else
+      FSuffixArray.Build(StringOfChar('b', 63));
+end;
+
+constructor TSuffixSearchThread.Create(ASuffixArray: TSuffixArray;
+  AIterations: Int32; AInvalidSnapshot: PInt32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FSuffixArray := ASuffixArray;
+  FIterations := AIterations;
+  FInvalidSnapshot := AInvalidSnapshot;
+end;
+
+procedure TSuffixSearchThread.Execute;
+var
+  LI, LMatchCount: Int32;
+  LMatches: specialize TArray<TSuffixArrayMatch>;
+begin
+  for LI := 1 to FIterations do
+  begin
+    LMatches := FSuffixArray.Search('a');
+    LMatchCount := Length(LMatches);
+    if (LMatchCount <> 0) and (LMatchCount <> 32) then
+      AtomicStore32(FInvalidSnapshot^, 1, moRelease);
+  end;
+end;
 
 procedure Check(ACondition: Boolean; const AName: string);
 begin
@@ -102,6 +172,54 @@ begin
   end;
 end;
 
+procedure Test_EmptyRebuildClearsPublishedState;
+var
+  LSa: TSuffixArray;
+begin
+  WriteLn('--- Empty Rebuild ---');
+  LSa := TSuffixArray.Create;
+  try
+    Check(LSa.Build('banana') = sarOk, 'Initial build succeeds');
+    Check(LSa.Build('') = sarEmpty, 'Empty rebuild reports empty');
+    Check(not LSa.IsBuilt, 'Empty rebuild clears built state');
+    Check(LSa.TextLength = 0, 'Empty rebuild clears text length');
+    Check(Length(LSa.Search('ana')) = 0,
+      'Empty rebuild clears searchable suffixes');
+  finally
+    LSa.Free;
+  end;
+end;
+
+procedure Test_ConcurrentBuildSearchSnapshots;
+var
+  LSa: TSuffixArray;
+  LBuilder: TSuffixBuildThread;
+  LSearcher: TSuffixSearchThread;
+  LInvalidSnapshot: Int32;
+begin
+  WriteLn('--- Concurrent Build/Search ---');
+  LSa := TSuffixArray.Create;
+  LBuilder := nil;
+  LSearcher := nil;
+  try
+    LInvalidSnapshot := 0;
+    LSa.Build(StringOfChar('a', 32));
+    LBuilder := TSuffixBuildThread.Create(LSa, 500);
+    LSearcher := TSuffixSearchThread.Create(LSa, 5000,
+      @LInvalidSnapshot);
+    LBuilder.Start;
+    LSearcher.Start;
+    LBuilder.WaitFor;
+    LSearcher.WaitFor;
+    Check(AtomicLoad32(LInvalidSnapshot, moAcquire) = 0,
+      'Search observes only complete suffix-array publications');
+  finally
+    LBuilder.Free;
+    LSearcher.Free;
+    LSa.Free;
+  end;
+end;
+
 procedure Test_SingleChar;
 var
   LSa: TSuffixArray;
@@ -181,6 +299,8 @@ begin
   Test_Contains;
   Test_Count;
   Test_EmptyBuild;
+  Test_EmptyRebuildClearsPublishedState;
+  Test_ConcurrentBuildSearchSnapshots;
   Test_SingleChar;
   Test_AllSameChar;
   Test_LongText;

@@ -95,6 +95,8 @@ begin
     raise EArgumentError.Create('TConcurrentPriorityQueue: compare function required');
   if AInitialCapacity < 1 then
     raise EArgumentError.Create('TConcurrentPriorityQueue: capacity must be > 0');
+  if AInitialCapacity > MaxInt div SizeOf(T) then
+    raise EArgumentError.Create('TConcurrentPriorityQueue: capacity exceeds allocation limit');
   inherited Create;
   FCompare := ACompare;
   FCapacity := AInitialCapacity;
@@ -121,6 +123,8 @@ var
   LNewCap: Integer;
   LNewData: PHeapArray;
 begin
+  if FCapacity > (MaxInt div SizeOf(T)) div 2 then
+    raise EOutOfMemoryError.Create('TConcurrentPriorityQueue.Grow: capacity overflow');
   LNewCap := FCapacity * 2;
   GetMem(LNewData, LNewCap * SizeOf(T));
   Move(FData^[0], LNewData^[0], FCount * SizeOf(T));
@@ -233,17 +237,32 @@ end;
 
 function TConcurrentPriorityQueueImpl.Count: Integer;
 begin
-  Result := AtomicLoad32(FCount, moRelaxed);
+  platform_mutex_lock(FMutex);
+  try
+    Result := FCount;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
 end;
 
 function TConcurrentPriorityQueueImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad32(FCount, moRelaxed) = 0;
+  platform_mutex_lock(FMutex);
+  try
+    Result := FCount = 0;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
 end;
 
 function TConcurrentPriorityQueueImpl.Capacity: Integer;
 begin
-  Result := AtomicLoad32(FCapacity, moRelaxed);
+  platform_mutex_lock(FMutex);
+  try
+    Result := FCapacity;
+  finally
+    platform_mutex_unlock(FMutex);
+  end;
 end;
 
 end.

@@ -197,7 +197,7 @@ end;
 procedure THashMappedTrie.AcquireLock;
 begin
   repeat
-    if AtomicCompareExchange32(FLock, 1, 0, moAcquire) = 0 then
+    if AtomicCompareExchange32(FLock, 0, 1, moAcquire) = 0 then
       Exit;
     Sleep(0);
   until False;

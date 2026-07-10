@@ -77,7 +77,7 @@ end;
 procedure TestStampedLockOptimisticRead;
 var
   LLock: TStampedLock;
-  LStamp: Int64;
+  LStamp, LWriteStamp: Int64;
 begin
   LLock := TStampedLock.Create;
   try
@@ -88,13 +88,40 @@ begin
 
     // Write lock invalidates optimistic stamp
     LStamp := LLock.TryOptimisticRead;
-    LLock.WriteLock;
+    LWriteStamp := LLock.WriteLock;
     Check(not LLock.Validate(LStamp), 'Stamp should be invalid after write');
-    LLock.UnlockWrite(1);
+    LLock.UnlockWrite(LWriteStamp);
 
     // New optimistic read after write
     LStamp := LLock.TryOptimisticRead;
     Check(LLock.Validate(LStamp), 'New stamp should be valid');
+  finally
+    LLock.Free;
+  end;
+end;
+
+procedure TestStampedLockInvalidUnlocksDoNotCorruptState;
+var
+  LLock: TStampedLock;
+  LReadStamp, LWriteStamp: Int64;
+begin
+  LLock := TStampedLock.Create;
+  try
+    LWriteStamp := LLock.WriteLock;
+    LLock.UnlockWrite(LWriteStamp + 2);
+    Check(LLock.IsWriteLocked, 'Wrong write stamp must not release the lock');
+    LLock.UnlockWrite(LWriteStamp);
+    Check(not LLock.IsWriteLocked, 'Correct write stamp must release the lock');
+    LLock.UnlockWrite(LWriteStamp);
+    Check(not LLock.IsWriteLocked, 'Repeated write unlock must be a no-op');
+
+    LReadStamp := LLock.ReadLock;
+    LLock.UnlockRead(1);
+    Check(LLock.IsReadLocked, 'Wrong read stamp must not decrement the reader count');
+    LLock.UnlockRead(LReadStamp);
+    Check(not LLock.IsReadLocked, 'Correct read stamp must release the reader');
+    LLock.UnlockRead(LReadStamp);
+    Check(not LLock.IsReadLocked, 'Repeated read unlock must not underflow the reader count');
   finally
     LLock.Free;
   end;
@@ -205,6 +232,9 @@ begin
 
   TestStampedLockWriterBlockedByReader;
   WriteLn('  + Writer blocked by reader');
+
+  TestStampedLockInvalidUnlocksDoNotCorruptState;
+  WriteLn('  + Invalid unlocks preserve state');
 
   TestStampedLockClose;
   WriteLn('  + Close semantics');

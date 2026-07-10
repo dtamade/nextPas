@@ -25,9 +25,7 @@ type
   }
   generic TLockFreeMsQueueImpl<T> = class
   private
-    type
-      PT = ^T;
-      TNode = record
+    type TNode = record
         FValue: T;
         FHasValue: Boolean;
         FNext: Int64;  // packed (index:32 | tag:32), index=-1 means nil
@@ -45,12 +43,16 @@ type
     FTail: Int64;        // packed: (index:32 | aba:32)
     FCount: Int64;
     FClosed: Int32;
+    FActiveOperations: Int32;
+    FResizing: Int32;
 
-    function AllocNodeIdx: Int32;
+    function TryAllocNodeIdx(out AIdx: Int32): Boolean;
     procedure FreeNodeIdx(AIdx: Int32);
     function Pack(AIdx, ATag: Int32): Int64;
     function UnpackIdx(APacked: Int64): Int32;
     function UnpackTag(APacked: Int64): Int32;
+    procedure EnterOperation;
+    procedure LeaveOperation;
     procedure Grow;
   public
     constructor Create(ACapacity: Int32 = 64);
@@ -72,6 +74,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 function TLockFreeMsQueueImpl.Pack(AIdx, ATag: Int32): Int64;
 begin
   Result := (Int64(ATag) shl 32) or Int64(UInt32(AIdx));
@@ -87,7 +92,7 @@ begin
   Result := Int32(APacked shr 32);
 end;
 
-function TLockFreeMsQueueImpl.AllocNodeIdx: Int32;
+function TLockFreeMsQueueImpl.TryAllocNodeIdx(out AIdx: Int32): Boolean;
 var
   LOld, LNew: Int64;
   LIdx: Int32;
@@ -96,14 +101,12 @@ begin
     LOld := AtomicLoad64(FFreeHead, moAcquire);
     LIdx := UnpackIdx(LOld);
     if LIdx < 0 then
-    begin
-      Grow;
-      Continue;
-    end;
+      Exit(False);
     LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
   until AtomicCompareExchange64(FFreeHead, LOld, LNew, moAcqRel) = LOld;
   FNodes[LIdx].FHasValue := False;
-  Result := LIdx;
+  AIdx := LIdx;
+  Result := True;
 end;
 
 procedure TLockFreeMsQueueImpl.FreeNodeIdx(AIdx: Int32);
@@ -118,53 +121,103 @@ begin
   until AtomicCompareExchange64(FFreeHead, LOld, LNew, moAcqRel) = LOld;
 end;
 
+procedure TLockFreeMsQueueImpl.EnterOperation;
+begin
+  while True do
+  begin
+    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+      CpuPause;
+    AtomicFetchAdd32(FActiveOperations, 1, moAcqRel);
+    if AtomicLoad32(FResizing, moAcquire) = 0 then
+      Exit;
+    AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+  end;
+end;
+
+procedure TLockFreeMsQueueImpl.LeaveOperation;
+begin
+  AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+end;
+
 procedure TLockFreeMsQueueImpl.Grow;
 var
-  I, LOldCap, LNewCap: Int32;
-  LOld, LNew: Int64;
+  LI: Int32;
+  LOldCap: Int32;
+  LNewCap: Int32;
+  LOldFree: Int64;
+  LNewFree: Int64;
+  LNewNodes: array of TNode;
+  LNewFreeList: array of TFreeNode;
 begin
-  LOldCap := AtomicLoad32(FCapacity, moRelaxed);
-  LNewCap := LOldCap * 2;
-  // Grow node array
-  SetLength(FNodes, LNewCap);
-  // Grow free list array
-  SetLength(FFreeList, LNewCap);
-  // Link new nodes into free list and push them
-  for I := LOldCap to LNewCap - 1 do
+  if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
   begin
-    FNodes[I].FHasValue := False;
-    FNodes[I].FNext := Pack(-1, 0);
-    // Push to free list
-    repeat
-      LOld := AtomicLoad64(FFreeHead, moRelaxed);
-      FFreeList[I].FNext := UnpackIdx(LOld);
-      LNew := Pack(I, UnpackTag(LOld) + 1);
-    until AtomicCompareExchange64(FFreeHead, LOld, LNew, moAcqRel) = LOld;
+    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+      CpuPause;
+    Exit;
   end;
-  AtomicStore32(FCapacity, LNewCap, moRelease);
+  try
+    while AtomicLoad32(FActiveOperations, moAcquire) <> 0 do
+      CpuPause;
+    LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+    if UnpackIdx(LOldFree) >= 0 then
+      Exit;
+
+    LOldCap := AtomicLoad32(FCapacity, moRelaxed);
+    if (LOldCap > High(Int32) div 2) or
+       (LOldCap > (MaxInt div SizeOf(TNode)) div 2) or
+       (LOldCap > (MaxInt div SizeOf(TFreeNode)) div 2) then
+      raise EOutOfMemoryError.Create('TLockFreeMsQueue.Grow: capacity overflow');
+    LNewCap := LOldCap * 2;
+
+    SetLength(LNewNodes, LNewCap);
+    SetLength(LNewFreeList, LNewCap);
+    Move(FNodes[0], LNewNodes[0], LOldCap * SizeOf(TNode));
+    Move(FFreeList[0], LNewFreeList[0], LOldCap * SizeOf(TFreeNode));
+    for LI := LOldCap to LNewCap - 1 do
+    begin
+      LNewNodes[LI].FHasValue := False;
+      LNewNodes[LI].FNext := Pack(-1, 0);
+      if LI < LNewCap - 1 then
+        LNewFreeList[LI].FNext := LI + 1
+      else
+        LNewFreeList[LI].FNext := UnpackIdx(LOldFree);
+    end;
+
+    LNewFree := Pack(LOldCap, UnpackTag(LOldFree) + 1);
+    FNodes := LNewNodes;
+    FFreeList := LNewFreeList;
+    AtomicStore32(FCapacity, LNewCap, moRelaxed);
+    AtomicStore64(FFreeHead, LNewFree, moRelease);
+  finally
+    AtomicStore32(FResizing, 0, moRelease);
+  end;
 end;
 
 constructor TLockFreeMsQueueImpl.Create(ACapacity: Int32);
 var
   I, LSentinel: Int32;
 begin
-  inherited Create;
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TLockFreeMsQueue: T must be unmanaged');
   if ACapacity < 4 then
     ACapacity := 4;
+  if (ACapacity > MaxInt div SizeOf(TNode)) or
+     (ACapacity > MaxInt div SizeOf(TFreeNode)) then
+    raise EArgumentError.Create('TLockFreeMsQueue: capacity exceeds allocation limit');
+  inherited Create;
   SetLength(FNodes, ACapacity);
   SetLength(FFreeList, ACapacity);
-  // Initialize freelist: link all nodes
   for I := 0 to ACapacity - 2 do
     FFreeList[I].FNext := I + 1;
   FFreeList[ACapacity - 1].FNext := -1;
   FCapacity := ACapacity;
-  // Initialize free list head
   FFreeHead := Pack(0, 0);
-  // Allocate sentinel node
-  LSentinel := AllocNodeIdx;
+  FActiveOperations := 0;
+  FResizing := 0;
+  if not TryAllocNodeIdx(LSentinel) then
+    raise EOutOfMemoryError.Create('TLockFreeMsQueue: sentinel allocation failed');
   FNodes[LSentinel].FHasValue := False;
   FNodes[LSentinel].FNext := Pack(-1, 0);
-  // Both head and tail point to sentinel
   FHead := Pack(LSentinel, 0);
   FTail := Pack(LSentinel, 0);
   FCount := 0;
@@ -185,42 +238,49 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  // Allocate a new node and store the value
-  LNodeIdx := AllocNodeIdx;
-  FNodes[LNodeIdx].FValue := AValue;
-  FNodes[LNodeIdx].FHasValue := True;
-  FNodes[LNodeIdx].FNext := Pack(-1, 0);
-  // Enqueue loop
   while True do
   begin
-    LOldTail := AtomicLoad64(FTail, moAcquire);
-    LTailIdx := UnpackIdx(LOldTail);
-    LOldNext := AtomicLoad64(FNodes[LTailIdx].FNext, moAcquire);
-    LNextIdx := UnpackIdx(LOldNext);
-    // Is tail still the tail?
-    if LOldTail = AtomicLoad64(FTail, moAcquire) then
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    EnterOperation;
+    if TryAllocNodeIdx(LNodeIdx) then
+      Break;
+    LeaveOperation;
+    Grow;
+  end;
+  try
+    FNodes[LNodeIdx].FValue := AValue;
+    FNodes[LNodeIdx].FHasValue := True;
+    FNodes[LNodeIdx].FNext := Pack(-1, 0);
+    while True do
     begin
-      if LNextIdx < 0 then
+      LOldTail := AtomicLoad64(FTail, moAcquire);
+      LTailIdx := UnpackIdx(LOldTail);
+      LOldNext := AtomicLoad64(FNodes[LTailIdx].FNext, moAcquire);
+      LNextIdx := UnpackIdx(LOldNext);
+      if LOldTail = AtomicLoad64(FTail, moAcquire) then
       begin
-        // Tail points to last node, try to link new node
-        LNewNext := Pack(LNodeIdx, UnpackTag(LOldNext) + 1);
-        if AtomicCompareExchange64(FNodes[LTailIdx].FNext,
-          LOldNext, LNewNext, moAcqRel) = LOldNext then
+        if LNextIdx < 0 then
         begin
-          // Success, try to swing tail to new node (non-critical)
-          LNewTail := Pack(LNodeIdx, UnpackTag(LOldTail) + 1);
+          LNewNext := Pack(LNodeIdx, UnpackTag(LOldNext) + 1);
+          if AtomicCompareExchange64(FNodes[LTailIdx].FNext,
+            LOldNext, LNewNext, moAcqRel) = LOldNext then
+          begin
+            LNewTail := Pack(LNodeIdx, UnpackTag(LOldTail) + 1);
+            AtomicCompareExchange64(FTail, LOldTail, LNewTail, moAcqRel);
+            AtomicFetchAdd64(FCount, 1);
+            Exit(True);
+          end;
+        end
+        else
+        begin
+          LNewTail := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
           AtomicCompareExchange64(FTail, LOldTail, LNewTail, moAcqRel);
-          AtomicFetchAdd64(FCount, 1);
-          Exit(True);
         end;
-      end
-      else
-      begin
-        // Tail is lagging, help move it forward
-        LNewTail := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
-        AtomicCompareExchange64(FTail, LOldTail, LNewTail, moAcqRel);
       end;
     end;
+  finally
+    LeaveOperation;
   end;
 end;
 
@@ -229,46 +289,51 @@ var
   LHeadIdx, LTailIdx, LNextIdx: Int32;
   LOldHead, LOldTail, LNewHead: Int64;
   LOldNext: Int64;
+  LCandidateValue: T;
+  LHasCandidate: Boolean;
 begin
   Result := False;
-  while True do
-  begin
-    LOldHead := AtomicLoad64(FHead, moAcquire);
-    LHeadIdx := UnpackIdx(LOldHead);
-    LOldTail := AtomicLoad64(FTail, moAcquire);
-    LTailIdx := UnpackIdx(LOldTail);
-    LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
-    LNextIdx := UnpackIdx(LOldNext);
-    // Is head still the head?
-    if LOldHead = AtomicLoad64(FHead, moAcquire) then
+  EnterOperation;
+  try
+    while True do
     begin
-      if LHeadIdx = LTailIdx then
+      LOldHead := AtomicLoad64(FHead, moAcquire);
+      LHeadIdx := UnpackIdx(LOldHead);
+      LOldTail := AtomicLoad64(FTail, moAcquire);
+      LTailIdx := UnpackIdx(LOldTail);
+      LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
+      LNextIdx := UnpackIdx(LOldNext);
+      if LOldHead = AtomicLoad64(FHead, moAcquire) then
       begin
-        if LNextIdx < 0 then
-          Exit(False); // Queue is empty
-        // Tail is lagging, help move it
-        LNewHead := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
-        AtomicCompareExchange64(FTail, LOldTail, LNewHead, moAcqRel);
-      end
-      else
-      begin
-        // Try to swing head to next node
-        LNewHead := Pack(LNextIdx, UnpackTag(LOldHead) + 1);
-        if AtomicCompareExchange64(FHead, LOldHead, LNewHead, moAcqRel) = LOldHead then
+        if LHeadIdx = LTailIdx then
         begin
-          // CAS succeeded — read value from next node (now becomes sentinel)
-          if FNodes[LNextIdx].FHasValue then
+          if LNextIdx < 0 then
+            Exit(False);
+          LNewHead := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
+          AtomicCompareExchange64(FTail, LOldTail, LNewHead, moAcqRel);
+        end
+        else
+        begin
+          LHasCandidate := FNodes[LNextIdx].FHasValue;
+          if LHasCandidate then
+            LCandidateValue := FNodes[LNextIdx].FValue;
+          LNewHead := Pack(LNextIdx, UnpackTag(LOldHead) + 1);
+          if AtomicCompareExchange64(FHead, LOldHead, LNewHead, moAcqRel) = LOldHead then
           begin
-            AValue := FNodes[LNextIdx].FValue;
-            Result := True;
+            if LHasCandidate then
+            begin
+              AValue := LCandidateValue;
+              Result := True;
+            end;
+            FreeNodeIdx(LHeadIdx);
+            AtomicFetchAdd64(FCount, -1);
+            Exit;
           end;
-          // Free old head (sentinel)
-          FreeNodeIdx(LHeadIdx);
-          AtomicFetchAdd64(FCount, -1);
-          Exit;
         end;
       end;
     end;
+  finally
+    LeaveOperation;
   end;
 end;
 
@@ -292,13 +357,18 @@ var
   LHeadIdx, LTailIdx, LNextIdx: Int32;
   LOldHead, LOldTail, LOldNext: Int64;
 begin
-  LOldHead := AtomicLoad64(FHead, moAcquire);
-  LHeadIdx := UnpackIdx(LOldHead);
-  LOldTail := AtomicLoad64(FTail, moAcquire);
-  LTailIdx := UnpackIdx(LOldTail);
-  LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
-  LNextIdx := UnpackIdx(LOldNext);
-  Result := (LHeadIdx = LTailIdx) and (LNextIdx < 0);
+  EnterOperation;
+  try
+    LOldHead := AtomicLoad64(FHead, moAcquire);
+    LHeadIdx := UnpackIdx(LOldHead);
+    LOldTail := AtomicLoad64(FTail, moAcquire);
+    LTailIdx := UnpackIdx(LOldTail);
+    LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
+    LNextIdx := UnpackIdx(LOldNext);
+    Result := (LHeadIdx = LTailIdx) and (LNextIdx < 0);
+  finally
+    LeaveOperation;
+  end;
 end;
 
 end.

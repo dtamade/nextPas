@@ -33,7 +33,6 @@ type
     FTail: Int64;
     FTimeoutNs: Int64;
     FClosed: Int32;
-    class function LockFreeNextPow2(AValue: Int64): Int64; static;
   public
     constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
     function TryEnqueue(const AValue: T): Boolean;
@@ -54,30 +53,20 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic;
 
-class function TTimeoutQueueImpl.LockFreeNextPow2(AValue: Int64): Int64;
-begin
-  if AValue = 0 then
-    Exit(1);
-  Dec(AValue);
-  AValue := AValue or (AValue shr 1);
-  AValue := AValue or (AValue shr 2);
-  AValue := AValue or (AValue shr 4);
-  AValue := AValue or (AValue shr 8);
-  AValue := AValue or (AValue shr 16);
-  AValue := AValue or (AValue shr 32);
-  Result := AValue + 1;
-end;
-
 constructor TTimeoutQueueImpl.Create(const ACapacity: Int64; const ATimeoutNs: Int64);
 var
   LI: Int64;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TTimeoutQueue: T must be unmanaged');
   if ACapacity <= 0 then
     raise EArgumentError.Create('TTimeoutQueue: capacity must be > 0');
+  if ACapacity > (Int64(1) shl 62) then
+    raise EArgumentError.Create('TTimeoutQueue: capacity exceeds signed power-of-two limit');
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TTimeoutQueue: timeout must be > 0');
   inherited Create;
-  FCapacity := LockFreeNextPow2(ACapacity);
+  FCapacity := Int64(LockFreeNextPow2(PtrUInt(ACapacity)));
   FMask := FCapacity - 1;
   SetLength(FSlots, FCapacity);
   for LI := 0 to FCapacity - 1 do
@@ -101,7 +90,7 @@ begin
   begin
     LHead := AtomicLoad64(FHead, moRelaxed);
     LTail := AtomicLoad64(FTail, moAcquire);
-    if (LHead - LTail) >= (FCapacity - 1) then
+    if (LHead - LTail) >= FCapacity then
       Exit(False);
     LIdx := LHead and FMask;
     LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);

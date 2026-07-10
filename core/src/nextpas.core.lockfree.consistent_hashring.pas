@@ -7,7 +7,7 @@
   - Ring is a sorted array of (hash, node-name) pairs
   - Virtual nodes (vnodes) per physical node for even distribution
   - Binary search for lookup: O(log N)
-  - Spin lock for writes, lock-free reads (COW snapshot)
+  - One spin lock serializes reads and writes over a stable sorted array
   - FNV-1a hash for ring positions
 
   Use cases: distributed caching, load balancing, sharding.
@@ -272,7 +272,7 @@ end;
 function TConsistentHashRing.GetNodes(const AKey: AnsiString; ACount: Int32): specialize TArray<AnsiString>;
 var
   LHash: UInt32;
-  LSlot, I, K, LFound: Int32;
+  LSlot, I, K, LFound, LVisited: Int32;
   LSeen: array of AnsiString;
   LSeenCount: Int32;
   LIsNew: Boolean;
@@ -291,7 +291,8 @@ begin
     SetLength(Result, ACount);
     LFound := 0;
     I := LSlot;
-    while (LFound < ACount) and (LSeenCount < ACount) do
+    LVisited := 0;
+    while (LFound < ACount) and (LVisited < FCount) do
     begin
       if I >= FCount then
         I := 0;
@@ -310,8 +311,7 @@ begin
         Inc(LFound);
       end;
       Inc(I);
-      if I = LSlot then
-        Break;
+      Inc(LVisited);
     end;
     SetLength(Result, LFound);
   finally

@@ -10,10 +10,21 @@ uses
 
 var
   GSum: Int64;
+  GMutatingTree: TConcurrentScapegoatTree;
+  GMutationAttempted: Boolean;
 
 procedure SumCallback(AKey, AValue: Int64);
 begin
   GSum := GSum + AValue;
+end;
+
+procedure MutatingCallback(AKey, AValue: Int64);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingTree.Insert(99, 990);
+  end;
 end;
 
 procedure TestScapegoatBasic;
@@ -113,6 +124,25 @@ begin
   end;
 end;
 
+procedure TestScapegoatForEachAllowsMutation;
+var
+  LTree: TConcurrentScapegoatTree;
+begin
+  LTree := TConcurrentScapegoatTree.Create;
+  try
+    LTree.Insert(1, 10);
+    LTree.Insert(2, 20);
+    GMutatingTree := LTree;
+    GMutationAttempted := False;
+    LTree.ForEach(@MutatingCallback);
+    Check(GMutationAttempted, 'Callback should run');
+    Check(LTree.Contains(99), 'Callback insertion should complete');
+  finally
+    GMutatingTree := nil;
+    LTree.Free;
+  end;
+end;
+
 procedure TestScapegoatClose;
 var
   LTree: TConcurrentScapegoatTree;
@@ -166,6 +196,9 @@ begin
 
   TestScapegoatForEach;
   WriteLn('  + ForEach');
+
+  TestScapegoatForEachAllowsMutation;
+  WriteLn('  + ForEach callback mutation');
 
   TestScapegoatClose;
   WriteLn('  + Close semantics');

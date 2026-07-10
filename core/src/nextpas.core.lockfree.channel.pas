@@ -11,6 +11,11 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
+const
+  CHANNEL_NOTIFIER_NONE = 0;
+  CHANNEL_NOTIFIER_ENABLED = 1;
+  CHANNEL_NOTIFIER_DRAINING = 2;
+
 type
   TChannelNotifier = procedure(AData: Pointer) of object;
 
@@ -35,12 +40,21 @@ type
     FDataWaiters: Int32;
     FClosed: Int32;
     FResizing: Int32; { 0 = normal, 1 = resize in progress }
+    FActiveOperations: Int32;
+    FNotifierLock: Int32;
+    FNotifierState: Int32;
+    FNotifierCallbacks: Int32;
     FNotifier: TChannelNotifier;
     FNotifierData: Pointer;
     procedure WakeAllWaiters;
     procedure NotifyData;
     procedure NotifySpace;
-    procedure SpinWhileResizing; inline;
+    procedure NotifySelector;
+    procedure LockNotifier; inline;
+    procedure UnlockNotifier; inline;
+    function SameNotifier(const ALeft, ARight: TChannelNotifier): Boolean; inline;
+    procedure EnterOperation; inline;
+    procedure LeaveOperation; inline;
   public
     {** @desc 创建有界无锁 Channel }
     constructor Create(const ACapacity: PtrUInt);
@@ -113,6 +127,10 @@ begin
   FDataWaiters := 0;
   FClosed := 0;
   FResizing := 0;
+  FActiveOperations := 0;
+  FNotifierLock := 0;
+  FNotifierState := CHANNEL_NOTIFIER_NONE;
+  FNotifierCallbacks := 0;
   FNotifier := nil;
   FNotifierData := nil;
 end;
@@ -130,32 +148,141 @@ procedure TLockFreeChannelImpl.WakeAllWaiters;
 begin
   LockFreeWakeAll(@FSpaceEpoch);
   LockFreeWakeAll(@FDataEpoch);
-  if Assigned(FNotifier) then
-    FNotifier(FNotifierData);
+  NotifySelector;
 end;
 
 procedure TLockFreeChannelImpl.NotifyData;
 begin
-  if Assigned(FNotifier) then
-    FNotifier(FNotifierData);
+  NotifySelector;
 end;
 
 procedure TLockFreeChannelImpl.NotifySpace;
 begin
-  if Assigned(FNotifier) then
-    FNotifier(FNotifierData);
+  NotifySelector;
+end;
+
+procedure TLockFreeChannelImpl.LockNotifier;
+begin
+  while AtomicCompareExchange32(FNotifierLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TLockFreeChannelImpl.UnlockNotifier;
+begin
+  AtomicStore32(FNotifierLock, 0, moRelease);
+end;
+
+function TLockFreeChannelImpl.SameNotifier(const ALeft, ARight: TChannelNotifier): Boolean;
+var
+  LLeftMethod: TMethod;
+  LRightMethod: TMethod;
+begin
+  LLeftMethod := TMethod(ALeft);
+  LRightMethod := TMethod(ARight);
+  Result := (LLeftMethod.Code = LRightMethod.Code) and
+    (LLeftMethod.Data = LRightMethod.Data);
+end;
+
+procedure TLockFreeChannelImpl.NotifySelector;
+var
+  LNotifier: TChannelNotifier;
+  LData: Pointer;
+begin
+  LNotifier := nil;
+  LData := nil;
+  LockNotifier;
+  try
+    if (AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_ENABLED) and
+       Assigned(FNotifier) then
+    begin
+      LNotifier := FNotifier;
+      LData := FNotifierData;
+      AtomicFetchAdd32(FNotifierCallbacks, 1, moAcqRel);
+    end;
+  finally
+    UnlockNotifier;
+  end;
+  if Assigned(LNotifier) then
+    try
+      LNotifier(LData);
+    finally
+      AtomicFetchSub32(FNotifierCallbacks, 1, moAcqRel);
+    end;
 end;
 
 procedure TLockFreeChannelImpl.SetNotifier(ANotifier: TChannelNotifier; AData: Pointer);
 begin
-  FNotifier := ANotifier;
-  FNotifierData := AData;
+  while True do
+  begin
+    LockNotifier;
+    if Assigned(ANotifier) then
+    begin
+      if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_DRAINING then
+      begin
+        UnlockNotifier;
+        CpuPause;
+        Continue;
+      end;
+      if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_ENABLED then
+      begin
+        if SameNotifier(FNotifier, ANotifier) and (FNotifierData = AData) then
+        begin
+          UnlockNotifier;
+          Exit;
+        end;
+        UnlockNotifier;
+        raise EInvalidOperationError.Create(
+          'TLockFreeChannel.SetNotifier: channel already belongs to another selector');
+      end;
+      FNotifier := ANotifier;
+      FNotifierData := AData;
+      AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_ENABLED, moRelaxed);
+      UnlockNotifier;
+      Exit;
+    end;
+
+    if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_DRAINING then
+    begin
+      UnlockNotifier;
+      while AtomicLoad32(FNotifierState, moAcquire) = CHANNEL_NOTIFIER_DRAINING do
+        CpuPause;
+      Continue;
+    end;
+    if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_NONE then
+    begin
+      UnlockNotifier;
+      Exit;
+    end;
+    AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_DRAINING, moRelease);
+    FNotifier := nil;
+    FNotifierData := nil;
+    UnlockNotifier;
+
+    while AtomicLoad32(FNotifierCallbacks, moAcquire) <> 0 do
+      CpuPause;
+    LockNotifier;
+    AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_NONE, moRelease);
+    UnlockNotifier;
+    Exit;
+  end;
 end;
 
-procedure TLockFreeChannelImpl.SpinWhileResizing;
+procedure TLockFreeChannelImpl.EnterOperation;
 begin
-  while AtomicLoad32(FResizing, moAcquire) <> 0 do
-    CpuPause;
+  while True do
+  begin
+    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+      CpuPause;
+    AtomicFetchAdd32(FActiveOperations, 1, moAcqRel);
+    if AtomicLoad32(FResizing, moAcquire) = 0 then
+      Exit;
+    AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+  end;
+end;
+
+procedure TLockFreeChannelImpl.LeaveOperation;
+begin
+  AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
 end;
 
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
@@ -168,44 +295,46 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  SpinWhileResizing;
-  LBackoff := 1;
-  while True do
-  begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      Exit(False);
-    LPos := AtomicLoad64(FSendPos, moRelaxed);
-    LIdx := PtrUInt(LPos) and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    if LSeq = LPos then
+  EnterOperation;
+  try
+    LBackoff := 1;
+    while True do
     begin
-      if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(False);
+      LPos := AtomicLoad64(FSendPos, moRelaxed);
+      LIdx := PtrUInt(LPos) and FMask;
+      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      if LSeq = LPos then
       begin
-        FSlots[LIdx].Value := AValue;
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
-        { Fast path: only notify if there are waiters }
-        if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
-          LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
-        NotifyData;
-        Exit(True);
-      end;
-      { CAS failed — another sender won this slot }
-      if LBackoff < 256 then
-      begin
-        LI := LBackoff + Integer(LPos and 3);
-        repeat
+        if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
+        begin
+          FSlots[LIdx].Value := AValue;
+          AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
+          if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+            LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+          NotifyData;
+          Exit(True);
+        end;
+        if LBackoff < 256 then
+        begin
+          LI := LBackoff + Integer(LPos and 3);
+          repeat
+            CpuPause;
+            Dec(LI);
+          until LI <= 0;
+          LBackoff := LBackoff * 2;
+        end
+        else
           CpuPause;
-          Dec(LI);
-        until LI <= 0;
-        LBackoff := LBackoff * 2;
       end
+      else if LSeq < LPos then
+        Exit(False)
       else
         CpuPause;
-    end
-    else if LSeq < LPos then
-      Exit(False)
-    else
-      CpuPause;
+    end;
+  finally
+    LeaveOperation;
   end;
 end;
 
@@ -218,7 +347,7 @@ begin
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [FCapacity]);
+      raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [Capacity]);
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TrySend(AValue) then
       Exit;
@@ -257,45 +386,47 @@ var
   LBackoff: Integer;
   LI: Integer;
 begin
-  SpinWhileResizing;
-  LBackoff := 1;
-  while True do
-  begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FSendPos, moRelaxed) <= AtomicLoad64(FRecvPos, moRelaxed)) then
-      Exit(False);
-    LPos := AtomicLoad64(FRecvPos, moRelaxed);
-    LIdx := PtrUInt(LPos) and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-    if LSeq = LPos + 1 then
+  EnterOperation;
+  try
+    LBackoff := 1;
+    while True do
     begin
-      if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
+      if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FSendPos, moRelaxed) <= AtomicLoad64(FRecvPos, moRelaxed)) then
+        Exit(False);
+      LPos := AtomicLoad64(FRecvPos, moRelaxed);
+      LIdx := PtrUInt(LPos) and FMask;
+      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      if LSeq = LPos + 1 then
       begin
-        AValue := FSlots[LIdx].Value;
-        FSlots[LIdx].Value := Default(T);
-        AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        { Fast path: only notify if there are waiters }
-        if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
-          LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
-        NotifySpace;
-        Exit(True);
-      end;
-      { CAS failed — another receiver won this slot }
-      if LBackoff < 256 then
-      begin
-        LI := LBackoff + Integer(LPos and 3);
-        repeat
+        if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
+        begin
+          AValue := FSlots[LIdx].Value;
+          FSlots[LIdx].Value := Default(T);
+          AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+          if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+            LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+          NotifySpace;
+          Exit(True);
+        end;
+        if LBackoff < 256 then
+        begin
+          LI := LBackoff + Integer(LPos and 3);
+          repeat
+            CpuPause;
+            Dec(LI);
+          until LI <= 0;
+          LBackoff := LBackoff * 2;
+        end
+        else
           CpuPause;
-          Dec(LI);
-        until LI <= 0;
-        LBackoff := LBackoff * 2;
       end
+      else if LSeq < LPos + 1 then
+        Exit(False)
       else
         CpuPause;
-    end
-    else if LSeq < LPos + 1 then
-      Exit(False)
-    else
-      CpuPause;
+    end;
+  finally
+    LeaveOperation;
   end;
 end;
 
@@ -307,7 +438,7 @@ begin
     Exit(True);
   while True do
   begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FSendPos, moRelaxed) <= AtomicLoad64(FRecvPos, moRelaxed)) then
+    if (AtomicLoad32(FClosed, moAcquire) <> 0) and IsEmpty then
       Exit(False);
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryReceive(AValue) then
@@ -327,7 +458,7 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FSendPos, moRelaxed) <= AtomicLoad64(FRecvPos, moRelaxed)) then
+    if (AtomicLoad32(FClosed, moAcquire) <> 0) and IsEmpty then
       Exit(False);
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
@@ -361,17 +492,27 @@ var
   LSent: Int64;
   LRecv: Int64;
 begin
-  LSent := AtomicLoad64(FSendPos, moRelaxed);
-  LRecv := AtomicLoad64(FRecvPos, moRelaxed);
-  if LSent > LRecv then
-    Result := PtrUInt(LSent - LRecv)
-  else
-    Result := 0;
+  EnterOperation;
+  try
+    LSent := AtomicLoad64(FSendPos, moRelaxed);
+    LRecv := AtomicLoad64(FRecvPos, moRelaxed);
+    if LSent > LRecv then
+      Result := PtrUInt(LSent - LRecv)
+    else
+      Result := 0;
+  finally
+    LeaveOperation;
+  end;
 end;
 
 function TLockFreeChannelImpl.Capacity: PtrUInt;
 begin
-  Result := FCapacity;
+  EnterOperation;
+  try
+    Result := FCapacity;
+  finally
+    LeaveOperation;
+  end;
 end;
 
 function TLockFreeChannelImpl.TryResize(const ANewCapacity: PtrUInt): Boolean;
@@ -393,6 +534,8 @@ begin
   if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
     Exit(False);
   try
+    while AtomicLoad32(FActiveOperations, moAcquire) <> 0 do
+      CpuPause;
     { Compute new capacity (power of 2, at least 1) }
     LNewCap := LockFreeNextPow2(ANewCapacity);
     if LNewCap < 1 then
@@ -420,19 +563,24 @@ begin
       for LI := 0 to LCount - 1 do
       begin
         LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
-        LNewIdx := PtrUInt(LRecv + Int64(LI)) and LNewMask;
+        LNewIdx := LI and LNewMask;
         LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-        { Mark slot as ready for receive: sequence = position + 1 }
-        AtomicStore64(LNewSlots[LNewIdx].Sequence, LRecv + Int64(LI) + 1, moRelease);
+        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelaxed);
       end;
 
-    { Swap buffer pointers }
     FSlots := LNewSlots;
     FCapacity := LNewCap;
     FMask := LNewMask;
+    AtomicStore64(FRecvPos, 0, moRelaxed);
+    AtomicStore64(FSendPos, Int64(LCount), moRelaxed);
     Result := True;
   finally
     AtomicStore32(FResizing, 0, moRelease);
+  end;
+  if Result then
+  begin
+    LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+    NotifySpace;
   end;
 end;
 

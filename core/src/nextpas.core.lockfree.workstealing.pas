@@ -29,9 +29,12 @@ type
   private
     FWorkerCount: Int64;
     FDeques: array of TTaskDeque;
+    FOwnerLocks: array of Int32;
     FNextSubmit: Int64;
     FNextSteal: Int64;
     FClosed: Int32;
+    procedure AcquireOwner(const AWorkerIndex: Int64);
+    procedure ReleaseOwner(const AWorkerIndex: Int64);
   public
     constructor Create(const AWorkerCount: Int64);
     destructor Destroy; override;
@@ -57,8 +60,12 @@ begin
   inherited Create;
   FWorkerCount := AWorkerCount;
   SetLength(FDeques, AWorkerCount);
+  SetLength(FOwnerLocks, AWorkerCount);
   for LI := 0 to AWorkerCount - 1 do
+  begin
     FDeques[LI] := TTaskDeque.Create(64);
+    FOwnerLocks[LI] := 0;
+  end;
   FNextSubmit := 0;
   FNextSteal := 0;
   FClosed := 0;
@@ -71,7 +78,28 @@ begin
   for LI := 0 to High(FDeques) do
     FDeques[LI].Free;
   SetLength(FDeques, 0);
+  SetLength(FOwnerLocks, 0);
   inherited Destroy;
+end;
+
+procedure TWorkStealingPool.AcquireOwner(const AWorkerIndex: Int64);
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FOwnerLocks[AWorkerIndex], 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TWorkStealingPool.ReleaseOwner(const AWorkerIndex: Int64);
+begin
+  AtomicStore32(FOwnerLocks[AWorkerIndex], 0, moRelease);
 end;
 
 function TWorkStealingPool.Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
@@ -83,8 +111,16 @@ begin
     Exit(False);
   LQueuedTask.Task := ATask;
   LQueuedTask.Data := AData;
-  LWorkerIndex := AtomicFetchAdd64(FNextSubmit, 1, moRelaxed) mod FWorkerCount;
-  Result := FDeques[LWorkerIndex].TryPush(LQueuedTask);
+  LWorkerIndex := Int64(QWord(AtomicFetchAdd64(FNextSubmit, 1, moRelaxed)) mod
+    QWord(FWorkerCount));
+  AcquireOwner(LWorkerIndex);
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    Result := FDeques[LWorkerIndex].TryPush(LQueuedTask);
+  finally
+    ReleaseOwner(LWorkerIndex);
+  end;
 end;
 
 function TWorkStealingPool.Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
@@ -98,15 +134,27 @@ begin
     Exit(wsClosed);
   ATask := nil;
   AData := nil;
-  LStartIndex := AtomicFetchAdd64(FNextSteal, 1, moRelaxed) mod FWorkerCount;
+  LStartIndex := Int64(QWord(AtomicFetchAdd64(FNextSteal, 1, moRelaxed)) mod
+    QWord(FWorkerCount));
   for LI := 0 to FWorkerCount - 1 do
   begin
     LQueueIndex := (LStartIndex + LI) mod FWorkerCount;
-    if FDeques[LQueueIndex].TrySteal(LQueuedTask) or FDeques[LQueueIndex].TryPop(LQueuedTask) then
+    if FDeques[LQueueIndex].TrySteal(LQueuedTask) then
     begin
       ATask := LQueuedTask.Task;
       AData := LQueuedTask.Data;
       Exit(wsStolen);
+    end;
+    AcquireOwner(LQueueIndex);
+    try
+      if FDeques[LQueueIndex].TryPop(LQueuedTask) then
+      begin
+        ATask := LQueuedTask.Task;
+        AData := LQueuedTask.Data;
+        Exit(wsStolen);
+      end;
+    finally
+      ReleaseOwner(LQueueIndex);
     end;
   end;
   Result := wsEmpty;
@@ -123,7 +171,14 @@ var
 begin
   AtomicStore32(FClosed, 1, moRelease);
   for LI := 0 to High(FDeques) do
-    FDeques[LI].Close;
+  begin
+    AcquireOwner(LI);
+    try
+      FDeques[LI].Close;
+    finally
+      ReleaseOwner(LI);
+    end;
+  end;
 end;
 
 function TWorkStealingPool.IsClosed: Boolean;

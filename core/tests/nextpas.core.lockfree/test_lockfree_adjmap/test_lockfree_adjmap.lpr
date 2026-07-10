@@ -5,8 +5,6 @@ program test_lockfree_adjmap;
 uses
   SysUtils,
   nextpas.core.lockfree.adjmap,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 procedure TestAdjMapBasic;
@@ -146,6 +144,61 @@ begin
   end;
 end;
 
+procedure TestAdjMapInvalidWeightAndOverflow;
+var
+  LMap: TAdjMapImpl;
+  LResult: TPathResult;
+begin
+  LMap := TAdjMapImpl.Create(8);
+  try
+    LMap.AddVertex(1);
+    LMap.AddVertex(2);
+    LMap.AddVertex(3);
+    CheckEqual(Ord(amInvalidWeight), Ord(LMap.AddEdge(1, 2, -1)));
+    CheckEqual(0, LMap.GetEdgeCount);
+
+    LMap.AddEdge(1, 2, High(Int64) div 2 - 5);
+    LMap.AddEdge(2, 3, High(Int64) - 10);
+    LResult.FPathLen := 2;
+    LResult.FDistance := 123;
+    SetLength(LResult.FPath, 2);
+    CheckEqual(Ord(amDistanceOverflow),
+      Ord(LMap.Dijkstra(1, 3, LResult)));
+    Check(LResult.FPathLen = 0, 'Overflow clears path length');
+    Check(LResult.FDistance = -1, 'Overflow clears distance');
+    Check(Length(LResult.FPath) = 0, 'Overflow clears path storage');
+  finally
+    SetLength(LResult.FPath, 0);
+    LMap.Free;
+  end;
+end;
+
+procedure TestAdjMapBoundaryResults;
+var
+  LMap: TAdjMapImpl;
+  LResult: TPathResult;
+begin
+  LMap := TAdjMapImpl.Create(4);
+  try
+    LMap.AddVertex(7);
+    CheckEqual(Ord(amOk), Ord(LMap.Dijkstra(7, 7, LResult)));
+    Check(LResult.FPathLen = 1, 'Source-to-self path has one vertex');
+    Check(LResult.FDistance = 0, 'Source-to-self distance is zero');
+    SetLength(LResult.FPath, 0);
+
+    LResult.FPathLen := 1;
+    LResult.FDistance := 99;
+    SetLength(LResult.FPath, 1);
+    CheckEqual(Ord(amVertexNotFound), Ord(LMap.Dijkstra(8, 7, LResult)));
+    Check(LResult.FPathLen = 0, 'Missing source clears path length');
+    Check(LResult.FDistance = -1, 'Missing source clears distance');
+    Check(Length(LResult.FPath) = 0, 'Missing source clears path storage');
+  finally
+    SetLength(LResult.FPath, 0);
+    LMap.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_adjmap ===');
   WriteLn;
@@ -164,6 +217,12 @@ begin
 
   TestAdjMapLargeWeights;
   WriteLn('  + Large weights');
+
+  TestAdjMapInvalidWeightAndOverflow;
+  WriteLn('  + Invalid weight and overflow');
+
+  TestAdjMapBoundaryResults;
+  WriteLn('  + Boundary results');
 
   TestAdjMapClose;
   WriteLn('  + Close semantics');

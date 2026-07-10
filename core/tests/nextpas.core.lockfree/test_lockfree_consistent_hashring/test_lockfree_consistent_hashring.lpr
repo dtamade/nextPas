@@ -121,7 +121,7 @@ end;
 
 procedure Test_MinimalDisruption;
 var
-  LBefore: array[0..99] of AnsiString;
+  LBefore: array[0..999] of AnsiString;
   LChanged, I: Int32;
   LAfter: AnsiString;
 begin
@@ -134,23 +134,27 @@ begin
     GRing.AddNode('node-d');
 
     { Record mappings before adding node-e }
-    for I := 0 to 99 do
+    for I := 0 to High(LBefore) do
       LBefore[I] := GRing.GetNode('key-' + IntToStr(I));
 
     GRing.AddNode('node-e');
 
     { Count how many keys changed }
     LChanged := 0;
-    for I := 0 to 99 do
+    for I := 0 to High(LBefore) do
     begin
       LAfter := GRing.GetNode('key-' + IntToStr(I));
       if LAfter <> LBefore[I] then
+      begin
         Inc(LChanged);
+        Check(LAfter = 'node-e', 'Changed keys must migrate to the added node');
+      end;
     end;
 
-    { With 150 vnodes, adding a 5th node should change ~20% of keys }
-    Check(LChanged < 35, 'Adding 5th node changes < 35% of keys');
-    WriteLn(Format('  Disruption: %d/100 keys changed', [LChanged]));
+    { With 150 vnodes, adding a 5th node should change roughly 20% of keys. }
+    Check((LChanged >= 100) and (LChanged <= 300),
+      'Adding 5th node changes 10%-30% of keys');
+    WriteLn(Format('  Disruption: %d/1000 keys changed', [LChanged]));
   finally
     GRing.Free;
   end;
@@ -173,6 +177,41 @@ begin
 
     LNodes := GRing.GetNodes('key1', 5);
     Check(Length(LNodes) = 3, 'GetNodes(key1, 5) returns 3 nodes (all available)');
+
+    LNodes := GRing.GetNodes('', 5);
+    Check(Length(LNodes) = 3,
+      'GetNodes from slot zero terminates after visiting all available nodes');
+  finally
+    GRing.Free;
+  end;
+end;
+
+procedure Test_RemoveOnlyMigratesRemovedNodeKeys;
+var
+  LBefore: array[0..999] of AnsiString;
+  LAfter: AnsiString;
+  LI: Int32;
+begin
+  WriteLn('--- Remove Migration ---');
+  GRing := TConsistentHashRing.Create(150);
+  try
+    GRing.AddNode('node-a');
+    GRing.AddNode('node-b');
+    GRing.AddNode('node-c');
+    GRing.AddNode('node-d');
+    GRing.AddNode('node-e');
+    for LI := 0 to High(LBefore) do
+      LBefore[LI] := GRing.GetNode('remove-key-' + IntToStr(LI));
+
+    Check(GRing.RemoveNode('node-e') = chrOk, 'RemoveNode(node-e) = ok');
+    for LI := 0 to High(LBefore) do
+    begin
+      LAfter := GRing.GetNode('remove-key-' + IntToStr(LI));
+      if LBefore[LI] = 'node-e' then
+        Check(LAfter <> 'node-e', 'Removed-node keys migrate to a surviving node')
+      else
+        Check(LAfter = LBefore[LI], 'Other keys retain their previous owner');
+    end;
   finally
     GRing.Free;
   end;
@@ -222,6 +261,7 @@ begin
   Test_Distribution;
   Test_MinimalDisruption;
   Test_GetNodes;
+  Test_RemoveOnlyMigratesRemovedNodeKeys;
   Test_ContainsNode;
   Test_RingSize;
 

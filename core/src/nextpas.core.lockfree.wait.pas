@@ -29,6 +29,8 @@ const
 
 procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 begin
+  if (AEpoch = nil) or (AWaiters = nil) then
+    Exit;
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
     platform_wake_address_all(AEpoch);
@@ -36,6 +38,8 @@ end;
 
 procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
 begin
+  if (AEpoch = nil) or (AWaiters = nil) then
+    Exit;
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
     platform_wake_address_all(AEpoch);
@@ -46,6 +50,8 @@ procedure LockFreeWaitEvent(AEpoch: PInt32; AWaiters: PInt32;
 var
   LI: Int32;
 begin
+  if (AEpoch = nil) or (AWaiters = nil) then
+    Exit;
   for LI := 0 to SPIN_LIMIT - 1 do
   begin
     if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then
@@ -75,6 +81,8 @@ end;
 
 procedure LockFreeWakeAll(AEpoch: PInt32);
 begin
+  if AEpoch = nil then
+    Exit;
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   platform_wake_address_all(AEpoch);
 end;

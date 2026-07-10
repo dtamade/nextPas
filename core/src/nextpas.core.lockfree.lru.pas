@@ -32,10 +32,13 @@ type
     FCount: PtrUInt;
     FAccessCounter: Int64;
     FClosed: Int32;
+    FMutationLock: Int32;
     // Shard locks (one per bucket)
     FLocks: array of Int32;
     function HashKey(const AKey: TKey): PtrUInt;
     function FindEntry(AIdx: PtrUInt; AKey: TKey): Integer;
+    procedure LockMutation;
+    procedure UnlockMutation;
     procedure LockBucket(AIdx: PtrUInt);
     procedure UnlockBucket(AIdx: PtrUInt);
   public
@@ -81,6 +84,7 @@ begin
   FMaxItems := AMaxItems;
   FCount := 0;
   FAccessCounter := 0;
+  FMutationLock := 0;
   SetLength(FBuckets, LCap);
   SetLength(FLocks, LCap);
   for LI := 0 to LCap - 1 do
@@ -127,9 +131,20 @@ begin
   Result := -1;
 end;
 
+procedure TConcurrentLruCacheImpl.LockMutation;
+begin
+  while AtomicCompareExchange32(FMutationLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TConcurrentLruCacheImpl.UnlockMutation;
+begin
+  AtomicStore32(FMutationLock, 0, moRelease);
+end;
+
 procedure TConcurrentLruCacheImpl.LockBucket(AIdx: PtrUInt);
 begin
-  while AtomicCompareExchange32(FLocks[AIdx], 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
     CpuPause;
 end;
 
@@ -163,74 +178,101 @@ function TConcurrentLruCacheImpl.Put(const AKey: TKey; const AValue: TValue): TL
 var
   LIdx: PtrUInt;
   LEntryIdx: Integer;
+  LMinBucket: PtrUInt;
   LMinIdx: Integer;
   LMinCount: Int64;
+  LFound: Boolean;
+  LBucketIdx: PtrUInt;
   LI: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(lrClosed);
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMutation;
   try
-    // Check if key already exists
-    LEntryIdx := FindEntry(LIdx, AKey);
-    if LEntryIdx >= 0 then
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(lrClosed);
+
+    LIdx := HashKey(AKey) and FMask;
+    LockBucket(LIdx);
+    try
+      LEntryIdx := FindEntry(LIdx, AKey);
+      if LEntryIdx >= 0 then
+      begin
+        FBuckets[LIdx][LEntryIdx].Value := AValue;
+        AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
+        FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
+        Exit(lrUpdated);
+      end;
+    finally
+      UnlockBucket(LIdx);
+    end;
+
+    if FCount >= FMaxItems then
     begin
-      // Update existing
+      LFound := False;
+      LMinBucket := 0;
+      LMinIdx := -1;
+      LMinCount := 0;
+      for LBucketIdx := 0 to FCapacity - 1 do
+      begin
+        LockBucket(LBucketIdx);
+        try
+          for LI := 0 to High(FBuckets[LBucketIdx]) do
+          begin
+            if FBuckets[LBucketIdx][LI].Used and
+               ((not LFound) or (FBuckets[LBucketIdx][LI].AccessCount < LMinCount)) then
+            begin
+              LFound := True;
+              LMinBucket := LBucketIdx;
+              LMinCount := FBuckets[LBucketIdx][LI].AccessCount;
+              LMinIdx := LI;
+            end;
+          end;
+        finally
+          UnlockBucket(LBucketIdx);
+        end;
+      end;
+
+      if not LFound then
+        Exit(lrFull);
+
+      LockBucket(LMinBucket);
+      try
+        FBuckets[LMinBucket][LMinIdx].Used := False;
+        Dec(FCount);
+      finally
+        UnlockBucket(LMinBucket);
+      end;
+    end;
+
+    LockBucket(LIdx);
+    try
+      LEntryIdx := -1;
+      for LI := 0 to High(FBuckets[LIdx]) do
+      begin
+        if not FBuckets[LIdx][LI].Used then
+        begin
+          LEntryIdx := LI;
+          Break;
+        end;
+      end;
+
+      if LEntryIdx < 0 then
+      begin
+        LEntryIdx := Length(FBuckets[LIdx]);
+        SetLength(FBuckets[LIdx], LEntryIdx + 1);
+      end;
+
+      FBuckets[LIdx][LEntryIdx].Key := AKey;
       FBuckets[LIdx][LEntryIdx].Value := AValue;
       AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
       FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
-      Exit(lrUpdated);
+      FBuckets[LIdx][LEntryIdx].Used := True;
+      Inc(FCount);
+      Result := lrAdded;
+    finally
+      UnlockBucket(LIdx);
     end;
-    // Check capacity
-    if FCount >= FMaxItems then
-    begin
-      // Find LRU entry in this bucket
-      LMinIdx := -1;
-      LMinCount := High(Int64);
-      for LI := 0 to High(FBuckets[LIdx]) do
-      begin
-        if FBuckets[LIdx][LI].Used and (FBuckets[LIdx][LI].AccessCount < LMinCount) then
-        begin
-          LMinCount := FBuckets[LIdx][LI].AccessCount;
-          LMinIdx := LI;
-        end;
-      end;
-      if LMinIdx >= 0 then
-      begin
-        // Evict LRU entry
-        FBuckets[LIdx][LMinIdx].Used := False;
-        Dec(FCount);
-      end;
-      if FCount >= FMaxItems then
-        Exit(lrFull);
-    end;
-    // Find empty slot
-    LEntryIdx := -1;
-    for LI := 0 to High(FBuckets[LIdx]) do
-    begin
-      if not FBuckets[LIdx][LI].Used then
-      begin
-        LEntryIdx := LI;
-        Break;
-      end;
-    end;
-    // If no empty slot, expand bucket
-    if LEntryIdx < 0 then
-    begin
-      LEntryIdx := Length(FBuckets[LIdx]);
-      SetLength(FBuckets[LIdx], LEntryIdx + 1);
-    end;
-    // Add new entry
-    FBuckets[LIdx][LEntryIdx].Key := AKey;
-    FBuckets[LIdx][LEntryIdx].Value := AValue;
-    AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
-    FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
-    FBuckets[LIdx][LEntryIdx].Used := True;
-    Inc(FCount);
-    Result := lrAdded;
   finally
-    UnlockBucket(LIdx);
+    UnlockMutation;
   end;
 end;
 
@@ -240,16 +282,21 @@ var
   LEntryIdx: Integer;
 begin
   LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMutation;
   try
-    LEntryIdx := FindEntry(LIdx, AKey);
-    if LEntryIdx < 0 then
-      Exit(False);
-    FBuckets[LIdx][LEntryIdx].Used := False;
-    Dec(FCount);
-    Result := True;
+    LockBucket(LIdx);
+    try
+      LEntryIdx := FindEntry(LIdx, AKey);
+      if LEntryIdx < 0 then
+        Exit(False);
+      FBuckets[LIdx][LEntryIdx].Used := False;
+      Dec(FCount);
+      Result := True;
+    finally
+      UnlockBucket(LIdx);
+    end;
   finally
-    UnlockBucket(LIdx);
+    UnlockMutation;
   end;
 end;
 
@@ -258,22 +305,32 @@ var
   LI: PtrUInt;
   LJ: Integer;
 begin
-  for LI := 0 to FCapacity - 1 do
-  begin
-    LockBucket(LI);
-    try
-      for LJ := 0 to High(FBuckets[LI]) do
-        FBuckets[LI][LJ].Used := False;
-    finally
-      UnlockBucket(LI);
+  LockMutation;
+  try
+    for LI := 0 to FCapacity - 1 do
+    begin
+      LockBucket(LI);
+      try
+        for LJ := 0 to High(FBuckets[LI]) do
+          FBuckets[LI][LJ].Used := False;
+      finally
+        UnlockBucket(LI);
+      end;
     end;
+    FCount := 0;
+  finally
+    UnlockMutation;
   end;
-  FCount := 0;
 end;
 
 procedure TConcurrentLruCacheImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  LockMutation;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    UnlockMutation;
+  end;
 end;
 
 function TConcurrentLruCacheImpl.IsClosed: Boolean;
@@ -283,12 +340,22 @@ end;
 
 function TConcurrentLruCacheImpl.IsEmpty: Boolean;
 begin
-  Result := FCount = 0;
+  LockMutation;
+  try
+    Result := FCount = 0;
+  finally
+    UnlockMutation;
+  end;
 end;
 
 function TConcurrentLruCacheImpl.Count: PtrUInt;
 begin
-  Result := FCount;
+  LockMutation;
+  try
+    Result := FCount;
+  finally
+    UnlockMutation;
+  end;
 end;
 
 function TConcurrentLruCacheImpl.Capacity: PtrUInt;

@@ -7,7 +7,7 @@
   - Open addressing with linear probing
   - Robin Hood insertion: if new element has greater PSL (probe sequence length)
     than existing element, swap them (steal from rich, give to poor)
-  - Reduces variance of probe lengths — worst-case lookup is O(log n)
+  - Reduces probe-length variance; worst-case lookup remains O(n)
   - PSL = distance from ideal bucket position
   - Automatic resize at 75% load factor
   - Concurrent-safe: CAS spin lock
@@ -43,7 +43,7 @@ type
 
   {** @desc Robin Hood 哈希表
     @details 开放寻址 + 后向位移，减少探测序列方差。
-      最坏情况查找 O(log n)，平均 O(1)。
+      最坏情况查找 O(n)，期望平均 O(1)。
       线程安全：CAS 自旋锁。 }
   TRobinHoodMap = class
   private

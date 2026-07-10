@@ -20,7 +20,7 @@ type
     FRate: Double;
     FBurst: Double;
     FTokens: Double;
-    FLastRefillNs: Int64;
+    FLastRefillNs: UInt64;
     FLock: Int32;
     FClosed: Int32;
     procedure Lock;
@@ -39,20 +39,22 @@ type
 implementation
 
 uses
+  Math,
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.time.base;
+  nextpas.core.platform.time;
 
-function GetNowNs: Int64;
+function GetNowNs: UInt64;
 begin
-  Result := TInstant.Now.Elapsed.AsNanoseconds;
+  Result := platform_monotonic_ns;
 end;
 
 constructor TTokenBucketLimiter.Create(const ARatePerSecond: Double; const ABurst: Double);
 begin
-  if ARatePerSecond <= 0 then
+  if IsNan(ARatePerSecond) or IsInfinite(ARatePerSecond) or
+     (ARatePerSecond <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter: rate must be > 0');
-  if ABurst <= 0 then
+  if IsNan(ABurst) or IsInfinite(ABurst) or (ABurst <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter: burst must be > 0');
   inherited Create;
   FRate := ARatePerSecond;
@@ -65,7 +67,7 @@ end;
 
 procedure TTokenBucketLimiter.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -76,19 +78,24 @@ end;
 
 procedure TTokenBucketLimiter.Refill;
 var
-  LNowNs: Int64;
+  LNowNs: UInt64;
+  LElapsedNs: UInt64;
   LElapsed: Double;
-  LNewTokens: Double;
+  LMissingTokens: Double;
 begin
   LNowNs := GetNowNs;
-  LElapsed := (LNowNs - FLastRefillNs) / 1000000000.0;
-  if LElapsed <= 0 then
+  if LNowNs <= FLastRefillNs then
     Exit;
-  LNewTokens := LElapsed * FRate;
-  FTokens := FTokens + LNewTokens;
-  if FTokens > FBurst then
-    FTokens := FBurst;
+  LElapsedNs := LNowNs - FLastRefillNs;
   FLastRefillNs := LNowNs;
+  if FTokens >= FBurst then
+    Exit;
+  LElapsed := Double(LElapsedNs) / 1000000000.0;
+  LMissingTokens := FBurst - FTokens;
+  if LElapsed >= LMissingTokens / FRate then
+    FTokens := FBurst;
+  if FTokens < FBurst then
+    FTokens := FTokens + LElapsed * FRate;
 end;
 
 function TTokenBucketLimiter.TryAcquire: TLockFreeRateLimiterResult;
@@ -98,12 +105,14 @@ end;
 
 function TTokenBucketLimiter.TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
 begin
-  if AN <= 0 then
+  if IsNan(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter.TryAcquireN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rlClosed);
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(rlClosed);
     Refill;
     if FTokens >= AN then
     begin
@@ -119,7 +128,12 @@ end;
 
 procedure TTokenBucketLimiter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TTokenBucketLimiter.IsClosed: Boolean;

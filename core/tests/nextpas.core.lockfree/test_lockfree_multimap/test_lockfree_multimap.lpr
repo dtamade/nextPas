@@ -5,8 +5,6 @@ program test_lockfree_multimap;
 uses
   SysUtils,
   nextpas.core.lockfree.multimap,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 type
@@ -118,6 +116,25 @@ begin
   end;
 end;
 
+procedure TestMultiMapRemoveLastValueRemovesKey;
+var
+  LMap: TIntMultiMap;
+begin
+  LMap := TIntMultiMap.Create(4);
+  try
+    Check(LMap.Add(1, 10) = mmAdded, 'Should add the only value');
+    Check(LMap.RemoveValue(1, 10), 'Should remove the only value');
+    Check(not LMap.Contains(1), 'Removing the last value removes the key');
+    CheckEqual(PtrUInt(0), LMap.Count);
+    CheckEqual(PtrUInt(0), LMap.KeyCount);
+
+    Check(LMap.Add(5, 50) = mmAdded, 'Cluster remains reusable after last-value removal');
+    Check(LMap.Contains(5), 'Reinserted key remains findable');
+  finally
+    LMap.Free;
+  end;
+end;
+
 procedure TestMultiMapClear;
 var
   LMap: TIntMultiMap;
@@ -203,6 +220,9 @@ begin
 
   TestMultiMapRemoveValue;
   WriteLn('  + Remove specific value');
+
+  TestMultiMapRemoveLastValueRemovesKey;
+  WriteLn('  + Remove last value removes key');
 
   TestMultiMapClear;
   WriteLn('  + Clear');
