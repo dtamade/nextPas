@@ -19,7 +19,7 @@
 
 | # | 债务 | 严重度 | 范围 | 预估 | 状态 |
 |---|------|--------|------|------|------|
-| C1 | **TSemanticAnalyzer God Class** (279 方法/1 class) |    | compiler/sema | 10d |   架构重构 |
+| C1 | **TSemanticAnalyzer God Class** (279 方法/1 class) |    | compiler/sema | 10d | ✅ 2026-07-06 |
 | C2 | **permissive overload resolution** (选第一个候选) |    | compiler/sema | 3d | ✅ 2026-07-06 |
 | C3 | **Pipeline 阶段模糊** (sema 做了 ir 的活) |    | compiler/sema+ir | 5d |   边界重划 |
 | C4 | **.inc 文件伪装架构** (2 个 include 文件) |    | compiler/sema | 3d | ✅ 2026-07-06 |
