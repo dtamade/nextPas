@@ -32,13 +32,23 @@ const
   COW_MAX_REFS = 256;
 
 type
-  {** CoW 引用记录 }
+  {** CoW 引用记录（每个引用有唯一标识符）
+   *
+   *  Key:      查找键。原始引用 = 数据指针，共享引用 = 哨兵指针。
+   *  DataPtr:  数据指针。WriteNotify 后可能指向新副本。
+   *  IsShared: 是否为共享引用。
+   *}
   TCowRef = record
-    OriginalPtr: Pointer;   { 原始指针 }
-    DataPtr: Pointer;       { 数据指针（可能共享） }
+    Key: Pointer;           { 查找键（原始 = 数据指针，共享 = 哨兵指针） }
+    DataPtr: Pointer;       { 数据指针 }
     DataSize: SizeUInt;     { 数据大小 }
-    RefCount: Integer;      { 引用计数 }
-    IsShared: Boolean;      { 是否共享 }
+    IsShared: Boolean;      { 是否为共享引用 }
+  end;
+
+  {** 数据引用计数记录 }
+  TCowDataRef = record
+    DataPtr: Pointer;       { 数据指针 }
+    RefCount: Integer;      { 引用计数（原始 + 共享引用总数） }
   end;
 
   {** CoW 统计信息 }
@@ -55,23 +65,29 @@ type
    *  Copy-on-Write 分配器。
    *  多个引用共享同一块内存，写入时自动复制。
    *
-   *  使用模式:
-   *    1. Alloc 获取原始指针
-   *    2. Share 创建共享引用
-   *    3. 写入共享引用时自动复制（通过 WriteNotify）
-   *    4. Free 释放引用
+   *  设计要点:
+   *    - 原始引用：Key = 数据指针，通过 FindRef 查找
+   *    - 共享引用：Key = 哨兵指针（从 FInner 分配的小块内存），通过 FindRef 查找
+   *    - 数据引用计数：独立跟踪每个数据块的引用总数
+   *    - FreeMem：原始引用递减数据引用计数；共享引用释放哨兵并递减
+   *    - WriteNotify：分配新副本，递减原数据引用计数，创建新的独立引用
    *}
   TCowAllocator = class(TInterfacedObject, IAllocator)
   private
     FInner: IAllocator;
-    { 引用表 }
+    { 引用表：每个引用有唯一 Key }
     FRefs: array[0..COW_MAX_REFS - 1] of TCowRef;
+    { 数据引用计数表：跟踪每个数据块的引用总数 }
+    FDataRefs: array[0..COW_MAX_REFS - 1] of TCowDataRef;
     FActiveRefCount: Integer;
     { 统计 }
     FTotalAllocs: UInt64;
     FSharedAllocs: UInt64;
     FCopiedOnWrite: UInt64;
-    function FindRef(APtr: Pointer): Integer;
+    function FindRef(AKey: Pointer): Integer;
+    function FindDataRef(ADataPtr: Pointer): Integer;
+    procedure IncDataRef(ADataPtr: Pointer);
+    procedure DecDataRef(ADataPtr: Pointer);
   public
     {** 创建 CoW 分配器 }
     constructor Create(AInner: IAllocator);
@@ -112,6 +128,7 @@ begin
   FSharedAllocs := 0;
   FCopiedOnWrite := 0;
   FillChar(FRefs, SizeOf(FRefs), 0);
+  FillChar(FDataRefs, SizeOf(FDataRefs), 0);
 end;
 
 destructor TCowAllocator.Destroy;
@@ -121,11 +138,13 @@ begin
   { 释放所有活跃引用的数据 }
   for LI := 0 to COW_MAX_REFS - 1 do
   begin
-    if FRefs[LI].OriginalPtr <> nil then
+    if FRefs[LI].Key <> nil then
     begin
-      if not FRefs[LI].IsShared then
-        FInner.FreeMem(FRefs[LI].DataPtr);
-      FRefs[LI].OriginalPtr := nil;
+      if FRefs[LI].IsShared then
+        FInner.FreeMem(FRefs[LI].Key)  { 释放哨兵指针 }
+      else
+        FInner.FreeMem(FRefs[LI].DataPtr);  { 释放数据 }
+      FRefs[LI].Key := nil;
       FRefs[LI].DataPtr := nil;
     end;
   end;
@@ -133,16 +152,63 @@ begin
   inherited Destroy;
 end;
 
-function TCowAllocator.FindRef(APtr: Pointer): Integer;
+function TCowAllocator.FindRef(AKey: Pointer): Integer;
 var
   LI: Integer;
 begin
   for LI := 0 to COW_MAX_REFS - 1 do
   begin
-    if FRefs[LI].OriginalPtr = APtr then
+    if FRefs[LI].Key = AKey then
       Exit(LI);
   end;
   Result := -1;
+end;
+
+function TCowAllocator.FindDataRef(ADataPtr: Pointer): Integer;
+var
+  LI: Integer;
+begin
+  for LI := 0 to COW_MAX_REFS - 1 do
+  begin
+    if FDataRefs[LI].DataPtr = ADataPtr then
+      Exit(LI);
+  end;
+  Result := -1;
+end;
+
+procedure TCowAllocator.IncDataRef(ADataPtr: Pointer);
+var
+  LI: Integer;
+begin
+  LI := FindDataRef(ADataPtr);
+  if LI >= 0 then
+    Inc(FDataRefs[LI].RefCount)
+  else
+  begin
+    { 新数据，查找空闲槽位 }
+    LI := 0;
+    while (LI < COW_MAX_REFS) and (FDataRefs[LI].DataPtr <> nil) do
+      Inc(LI);
+    if LI >= COW_MAX_REFS then
+      raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.IncDataRef: too many data refs');
+    FDataRefs[LI].DataPtr := ADataPtr;
+    FDataRefs[LI].RefCount := 1;
+  end;
+end;
+
+procedure TCowAllocator.DecDataRef(ADataPtr: Pointer);
+var
+  LI: Integer;
+begin
+  LI := FindDataRef(ADataPtr);
+  if LI < 0 then Exit;
+  Dec(FDataRefs[LI].RefCount);
+  if FDataRefs[LI].RefCount <= 0 then
+  begin
+    FInner.FreeMem(ADataPtr);
+    FDataRefs[LI].DataPtr := nil;
+    FDataRefs[LI].RefCount := 0;
+  end;
 end;
 
 function TCowAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
@@ -151,7 +217,7 @@ var
 begin
   { 查找空闲槽位 }
   LI := 0;
-  while (LI < COW_MAX_REFS) and (FRefs[LI].OriginalPtr <> nil) do
+  while (LI < COW_MAX_REFS) and (FRefs[LI].Key <> nil) do
     Inc(LI);
   if LI >= COW_MAX_REFS then
     raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.GetMem: too many refs');
@@ -162,13 +228,13 @@ begin
     Exit(nil);
 
   FRefs[LI].DataSize := ASize;
-  FRefs[LI].RefCount := 1;
   FRefs[LI].IsShared := False;
+  FRefs[LI].Key := FRefs[LI].DataPtr;
 
-  { 原始指针 = 数据指针（首次分配） }
-  FRefs[LI].OriginalPtr := FRefs[LI].DataPtr;
-  Result := FRefs[LI].OriginalPtr;
+  { 初始化数据引用计数 }
+  IncDataRef(FRefs[LI].DataPtr);
 
+  Result := FRefs[LI].Key;
   Inc(FActiveRefCount);
   Inc(FTotalAllocs);
 end;
@@ -213,22 +279,27 @@ begin
   LIdx := FindRef(APtr);
   if LIdx < 0 then Exit;
 
-  Dec(FRefs[LIdx].RefCount);
-  if FRefs[LIdx].RefCount <= 0 then
+  if FRefs[LIdx].IsShared then
   begin
-    { 最后一个引用，释放数据 }
-    if not FRefs[LIdx].IsShared then
-      FInner.FreeMem(FRefs[LIdx].DataPtr);
-    FRefs[LIdx].OriginalPtr := nil;
-    FRefs[LIdx].DataPtr := nil;
-    FRefs[LIdx].DataSize := 0;
-    Dec(FActiveRefCount);
+    { 共享引用：释放哨兵指针，递减数据引用计数 }
+    DecDataRef(FRefs[LIdx].DataPtr);
+    FInner.FreeMem(FRefs[LIdx].Key);
+  end
+  else
+  begin
+    { 原始引用：递减数据引用计数（可能释放数据） }
+    DecDataRef(FRefs[LIdx].DataPtr);
   end;
+  FRefs[LIdx].Key := nil;
+  FRefs[LIdx].DataPtr := nil;
+  FRefs[LIdx].DataSize := 0;
+  Dec(FActiveRefCount);
 end;
 
 function TCowAllocator.Share(APtr: Pointer): Pointer;
 var
   LIdx, LNewIdx: Integer;
+  LSentinel: PPointer;
 begin
   LIdx := FindRef(APtr);
   if LIdx < 0 then
@@ -236,23 +307,30 @@ begin
 
   { 查找空闲槽位 }
   LNewIdx := 0;
-  while (LNewIdx < COW_MAX_REFS) and (FRefs[LNewIdx].OriginalPtr <> nil) do
+  while (LNewIdx < COW_MAX_REFS) and (FRefs[LNewIdx].Key <> nil) do
     Inc(LNewIdx);
   if LNewIdx >= COW_MAX_REFS then
     raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.Share: too many refs');
 
-  { 创建共享引用 }
+  { 分配哨兵指针作为共享引用的唯一标识 }
+  LSentinel := PPointer(FInner.GetMem(SizeOf(Pointer)));
+  if LSentinel = nil then
+    raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.Share: sentinel alloc failed');
+  LSentinel^ := FRefs[LIdx].DataPtr;
+
+  { 创建共享引用：Key = 哨兵（唯一标识），DataPtr = 共享数据 }
+  FRefs[LNewIdx].Key := Pointer(LSentinel);
   FRefs[LNewIdx].DataPtr := FRefs[LIdx].DataPtr;
   FRefs[LNewIdx].DataSize := FRefs[LIdx].DataSize;
-  FRefs[LNewIdx].RefCount := 1;
   FRefs[LNewIdx].IsShared := True;
-  FRefs[LNewIdx].OriginalPtr := FRefs[LIdx].DataPtr;
 
   { 标记原始引用为共享 }
   FRefs[LIdx].IsShared := True;
-  Inc(FRefs[LIdx].RefCount);
 
-  Result := FRefs[LNewIdx].OriginalPtr;
+  { 增加数据引用计数 }
+  IncDataRef(FRefs[LIdx].DataPtr);
+
+  Result := FRefs[LIdx].DataPtr;
   Inc(FActiveRefCount);
   Inc(FSharedAllocs);
 end;
@@ -275,9 +353,13 @@ begin
     raise EAllocError.Create(aeOutOfMemory, 'TCowAllocator.WriteNotify: copy failed');
 
   Move(FRefs[LIdx].DataPtr^, LNewData^, FRefs[LIdx].DataSize);
+
+  { 递减原数据引用计数，更新为新数据 }
+  DecDataRef(FRefs[LIdx].DataPtr);
   FRefs[LIdx].DataPtr := LNewData;
   FRefs[LIdx].IsShared := False;
-  FRefs[LIdx].OriginalPtr := LNewData;
+  { 保留 Key（哨兵指针），供 FreeMem 查找和释放 }
+  IncDataRef(LNewData);
 
   Inc(FCopiedOnWrite);
   Result := LNewData;
@@ -294,7 +376,7 @@ begin
   Result.SharedBytes := 0;
   for LI := 0 to COW_MAX_REFS - 1 do
   begin
-    if (FRefs[LI].OriginalPtr <> nil) and FRefs[LI].IsShared then
+    if (FRefs[LI].Key <> nil) and FRefs[LI].IsShared then
       Inc(Result.SharedBytes, UInt64(FRefs[LI].DataSize));
   end;
 end;

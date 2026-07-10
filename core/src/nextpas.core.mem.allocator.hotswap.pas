@@ -128,11 +128,14 @@ end;
 function THotswapAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LHeader: PHotswapHeader;
+  LCurrent: IAllocator;
 begin
-  LHeader := PHotswapHeader(FCurrent.GetMem(HOTSWAP_HEADER + ASize));
+  LCurrent := FCurrent;
+  LHeader := PHotswapHeader(LCurrent.GetMem(HOTSWAP_HEADER + ASize));
   if LHeader = nil then
     Exit(nil);
-  LHeader^.Origin := Pointer(FCurrent);
+  LCurrent._AddRef; { 为存储的裸指针增加引用计数 }
+  LHeader^.Origin := Pointer(LCurrent);
   LHeader^.RequestedSize := ASize;
   Result := Pointer(PByte(LHeader) + HOTSWAP_HEADER);
 end;
@@ -183,11 +186,14 @@ end;
 procedure THotswapAllocator.FreeMem(APtr: Pointer); inline;
 var
   LHeader: PHotswapHeader;
+  LOrigin: IAllocator;
 begin
   if APtr = nil then
     Exit;
   LHeader := PHotswapHeader(PByte(APtr) - HOTSWAP_HEADER);
-  IAllocator(LHeader^.Origin).FreeMem(LHeader);
+  LOrigin := IAllocator(LHeader^.Origin); { 赋值触发 _AddRef }
+  LOrigin.FreeMem(LHeader);
+  LOrigin._Release; { 释放 GetMem 中存储的裸指针的引用 }
 end;
 
 function THotswapAllocator.Traits: TAllocatorTraits; inline;
