@@ -1,6 +1,6 @@
 # nextpas.core.platform 代码契约
 
-**模块路径**：`core/src/nextpas.core.platform*.pas`（59 个源文件）
+**模块路径**：`core/src/nextpas.core.platform*.pas`（60 个源文件）
 **层级**：L0（仅依赖 FPC RTL）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-05

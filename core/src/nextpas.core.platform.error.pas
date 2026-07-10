@@ -36,8 +36,6 @@ uses
  *     ERROR_TIMEOUT        → ecTimeout
  *     WSAETIMEDOUT         → ecTimeout
  *}
-  Values match Linux errno numbers for the focused-runtime host.
-  Non-Linux platforms translate via platform_get_errno. }
 const
   PLATFORM_ERR_PERM        = 1;     { Operation not permitted }
   PLATFORM_ERR_NOENT       = 2;     { No such file or directory }

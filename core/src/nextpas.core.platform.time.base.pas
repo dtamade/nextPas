@@ -29,6 +29,13 @@ type
     {** @desc 检查时间是否为空（全零）
         @return True 如果时间为空 *}
     function IsEmpty: Boolean; inline;
+    {** @desc 比较两个时间（返回 -1/0/1）
+        @param AOther 另一个时间
+        @return -1 早于，0 相同，1 晚于 *}
+    function Compare(const AOther: TPlatformTimeBreakdown): Int32;
+    {** @desc 计算星期几（0=周日, 1=周一, ..., 6=周六）
+        @return 星期几 *}
+    function DayOfWeek: Int32;
   end;
 
 implementation
@@ -48,6 +55,43 @@ begin
   Result := (Year = 0) and (Month = 0) and (Day = 0) and
             (Hour = 0) and (Minute = 0) and (Second = 0) and
             (Millisecond = 0);
+end;
+
+function TPlatformTimeBreakdown.Compare(const AOther: TPlatformTimeBreakdown): Int32;
+begin
+  if Year < AOther.Year then Exit(-1);
+  if Year > AOther.Year then Exit(1);
+  if Month < AOther.Month then Exit(-1);
+  if Month > AOther.Month then Exit(1);
+  if Day < AOther.Day then Exit(-1);
+  if Day > AOther.Day then Exit(1);
+  if Hour < AOther.Hour then Exit(-1);
+  if Hour > AOther.Hour then Exit(1);
+  if Minute < AOther.Minute then Exit(-1);
+  if Minute > AOther.Minute then Exit(1);
+  if Second < AOther.Second then Exit(-1);
+  if Second > AOther.Second then Exit(1);
+  if Millisecond < AOther.Millisecond then Exit(-1);
+  if Millisecond > AOther.Millisecond then Exit(1);
+  Result := 0;
+end;
+
+function TPlatformTimeBreakdown.DayOfWeek: Int32;
+var
+  Y, M, D: Int32;
+begin
+  { Zeller's congruence (Gregorian calendar) }
+  Y := Year;
+  M := Month;
+  D := Day;
+  if M < 3 then
+  begin
+    Inc(M, 12);
+    Dec(Y);
+  end;
+  Result := (D + (13 * (M + 1)) div 5 + Y + Y div 4 - Y div 100 + Y div 400) mod 7;
+  { Convert from Zeller's (0=Sat) to standard (0=Sun) }
+  Result := (Result + 6) mod 7;
 end;
 
 end.
