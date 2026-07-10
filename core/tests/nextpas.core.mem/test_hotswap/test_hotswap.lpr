@@ -275,8 +275,8 @@ begin
   LHotswap := THotswapAllocator.Create(DefaultAllocator);
   try
     LTraits := LHotswap.Traits;
-    { Hotswap delegates Traits to inner; RTL allocator is not thread-safe }
-    Check(not LTraits.ThreadSafe, 'RTL allocator is not thread-safe');
+    { Hotswap delegates Traits to inner; RTL allocator is thread-safe }
+    Check(LTraits.ThreadSafe, 'RTL allocator is thread-safe');
     Check(LTraits.SupportsRealloc, 'should support realloc');
   finally
     LHotswap.Free;

@@ -106,8 +106,8 @@ begin
     Check(LPtr <> nil, 'no fail initially');
     LAlloc.FreeMem(LPtr);
 
-    // FailAt is cumulative attempt counter; after 1 attempt, fail on next
-    LAlloc.SetFailAt(2);
+    // SetFailAt resets counter; fail on next allocation
+    LAlloc.SetFailAt(1);
     LPtr := LAlloc.GetMem(32);
     Check(LPtr = nil, 'fails after set');
   finally

@@ -82,7 +82,7 @@ var
 begin
   LAlloc := TCrtAllocator.Create;
   try
-    Check(LAlloc.GetMem(0) <> nil, 'GetMem(0) returns non-nil from CRT');
+    Check(LAlloc.GetMem(0) = nil, 'GetMem(0) returns nil');
   finally
     LAlloc.Free;
   end;

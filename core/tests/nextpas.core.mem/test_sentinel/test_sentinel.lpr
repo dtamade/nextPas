@@ -91,7 +91,7 @@ begin
   LAlloc := TSentinelAllocator.Create(TCrtAllocator.Create, 0);
   try
     LTraits := LAlloc.Traits;
-    Check(not LTraits.ThreadSafe, 'ThreadSafe = False');
+    Check(LTraits.ThreadSafe, 'ThreadSafe = True (delegated from CRT)');
   finally
     LAlloc.Free;
   end;

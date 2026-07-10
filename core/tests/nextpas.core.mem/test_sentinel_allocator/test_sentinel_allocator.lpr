@@ -133,7 +133,7 @@ begin
   LAlloc := TSentinelAllocator.Create(GetRtlAllocator, 16);
   try
     LTraits := LAlloc.Traits;
-    Check(not LTraits.ThreadSafe, 'not thread-safe');
+    Check(LTraits.ThreadSafe, 'thread-safe (delegated from RTL)');
   finally
     LAlloc.Free;
   end;

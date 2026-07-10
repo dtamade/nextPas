@@ -16,6 +16,8 @@ var
   T: TTestSuite;
   LRunPassed: Boolean;
 
+{ Helper procedures for leak check tests }
+
 procedure NoLeakProc(AAllocator: IAllocator);
 var
   LPtr: Pointer;
@@ -31,6 +33,8 @@ begin
   LPtr := AAllocator.GetMem(64);
   // Intentionally not freeing
 end;
+
+{ Test procedures }
 
 procedure TestNoLeak;
 var
@@ -61,16 +65,18 @@ begin
   Check(Pos('block', LResult.Report) > 0, 'report has block info');
 end;
 
+procedure MultiLeakProc(AAllocator: IAllocator);
+begin
+  AAllocator.GetMem(32);
+  AAllocator.GetMem(64);
+  AAllocator.GetMem(128);
+end;
+
 procedure TestMultipleLeaks;
 var
   LResult: TLeakCheckResult;
 begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
-  begin
-    AAllocator.GetMem(32);
-    AAllocator.GetMem(64);
-    AAllocator.GetMem(128);
-  end);
+  LResult := RunTestWithLeakCheck(@MultiLeakProc);
   Check(LResult.HasLeaks, 'has leaks');
   Check(LResult.AllocCount >= 3, 'three leaks');
   Check(LResult.AllocBytes >= 224, 'total bytes');
@@ -93,14 +99,16 @@ begin
   Check(Pos('No leaks', LResult.Report) > 0, 'clean report');
 end;
 
+procedure OneByteLeakProc(AAllocator: IAllocator);
+begin
+  AAllocator.GetMem(1);
+end;
+
 procedure TestZeroSizeLeak;
 var
   LResult: TLeakCheckResult;
 begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
-  begin
-    AAllocator.GetMem(1);
-  end);
+  LResult := RunTestWithLeakCheck(@OneByteLeakProc);
   Check(LResult.HasLeaks, '1 byte leak');
   Check(LResult.AllocBytes >= 1, '1 byte');
 end;

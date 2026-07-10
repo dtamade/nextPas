@@ -132,9 +132,11 @@ var
   LStats: TBumpStats;
   I: Integer;
 begin
-  LAlloc := TBumpAllocator.Create(DefaultAllocator, 256);
+  { Region size minimum is 4096; 64-byte allocs aligned to 64 → 4096/64 = 64 per region.
+    Allocate 65 blocks to force growth to 2 regions. }
+  LAlloc := TBumpAllocator.Create(DefaultAllocator, 4096);
   try
-    for I := 0 to 19 do
+    for I := 0 to 64 do
       LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
     Check(LStats.RegionCount >= 2, 'grew to multiple regions');

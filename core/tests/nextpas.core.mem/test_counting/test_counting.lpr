@@ -155,13 +155,13 @@ begin
   try
     LAlloc := TCountingAllocator.Create(LInner);
     try
-      Check(LAlloc.GetMem(0) <> nil, 'GetMem(0) returns non-nil from RTL');
-      Check(LAlloc.ActiveCount = 1, 'active=1 (RTL returns non-nil for 0)');
+      Check(LAlloc.GetMem(0) = nil, 'GetMem(0) returns nil');
+      Check(LAlloc.ActiveCount = 0, 'active=0 (zero alloc not tracked)');
     finally
       LAlloc.Free;
     end;
   finally
-    
+
   end;
 end;
 

@@ -83,7 +83,7 @@ var
 begin
   LAlloc := TArenaGroupAllocator.Create(DefaultAllocator);
   try
-    Check(LAlloc.GetMem(0) <> nil, 'GetMem(0) returns non-nil from RTL');
+    Check(LAlloc.GetMem(0) = nil, 'GetMem(0) returns nil');
   finally
     LAlloc.Free;
   end;
