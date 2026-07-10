@@ -148,10 +148,16 @@ begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LBuf: TDeadlineResponseWriter;
+      LBufWriter: IHttpResponseWriter;
     begin
       LBuf := TDeadlineResponseWriter.Create(AW, ATimeoutMs);
-      ANext.ServeHTTP(AReq, LBuf);
-      LBuf.Finalize;
+      LBufWriter := LBuf;
+      try
+        ANext.ServeHTTP(AReq, LBufWriter);
+        LBuf.Finalize;
+      finally
+        LBufWriter := nil;
+      end;
     end);
   end);
 end;

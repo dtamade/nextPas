@@ -439,43 +439,15 @@ end;
 
 function Camera2D(const ACenterX, ACenterY, AZoom: Single;
   const AViewportWidth, AViewportHeight: Integer): TMat4f;
-var
-  HalfWidth: Single;
-  HalfHeight: Single;
 begin
-  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
-  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
-  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
-  RequirePositive(AZoom, 'Camera2D: zoom must be positive');
-  RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
-  RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
-
-  HalfWidth := (AViewportWidth * 0.5) / AZoom;
-  HalfHeight := (AViewportHeight * 0.5) / AZoom;
-  Result := Ortho(
-    ACenterX - HalfWidth, ACenterX + HalfWidth,
-    ACenterY + HalfHeight, ACenterY - HalfHeight,
+  Result := Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth, AViewportHeight,
     Single(-1000.0), Single(1000.0));
 end;
 
 function Camera2D(const ACenterX, ACenterY, AZoom: Double;
   const AViewportWidth, AViewportHeight: Integer): TMat4d;
-var
-  HalfWidth: Double;
-  HalfHeight: Double;
 begin
-  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
-  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
-  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
-  RequirePositive(AZoom, 'Camera2D: zoom must be positive');
-  RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
-  RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
-
-  HalfWidth := (AViewportWidth * 0.5) / AZoom;
-  HalfHeight := (AViewportHeight * 0.5) / AZoom;
-  Result := Ortho(
-    ACenterX - HalfWidth, ACenterX + HalfWidth,
-    ACenterY + HalfHeight, ACenterY - HalfHeight,
+  Result := Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth, AViewportHeight,
     Double(-1000.0), Double(1000.0));
 end;
 

@@ -41,6 +41,7 @@ uses
 
 var
   GTestSentinel: TObject;
+  GTrackedWriterDestroyCount: Int32;
 
 type
   TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpResponseBodyBytes)
@@ -67,6 +68,11 @@ type
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
     property WriteHeaderCount: Int32 read FWriteHeaderCount;
+  end;
+
+  TTrackingResponseWriter = class(TMockResponseWriter)
+  public
+    destructor Destroy; override;
   end;
 
   TMockRequest = class(TInterfacedObject, IHttpRequest)
@@ -109,6 +115,12 @@ begin
   FMaxWriteSize := High(SizeUInt);
   FRaiseOnWrite := False;
   FWriteHeaderCount := 0;
+end;
+
+destructor TTrackingResponseWriter.Destroy;
+begin
+  Inc(GTrackedWriterDestroyCount);
+  inherited Destroy;
 end;
 
 procedure TMockResponseWriter.SetMaxWriteSize(const AValue: SizeUInt);
@@ -633,22 +645,39 @@ begin
     'disallowed origin gets no ACAO');
 end;
 
-procedure TestCorsCredentialsWildcardRejected;
+procedure TestCorsCredentialsWildcardEchoesOrigin;
 var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
   LOpts: TCorsOptions;
-  LRaised: Boolean;
 begin
   LOpts := TCorsOptions.Default;
   LOpts.AllowOrigins := '*';
   LOpts.AllowCredentials := True;
-  LRaised := False;
-  try
-    CorsMiddleware(LOpts);
-  except
-    on E: EArgumentError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'AllowOrigins="*" + AllowCredentials=true must be rejected');
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [CorsMiddleware(LOpts)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.GetHeaders.SetHeader('Origin', 'https://credentialed.example');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('https://credentialed.example',
+    LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
+    'credentialed wildcard echoes the concrete Origin');
+  CheckEqual('true', LWObj.GetHeaders.Get('Access-Control-Allow-Credentials'),
+    'credentialed wildcard emits credentials header');
+  CheckEqual('Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+    LWObj.GetHeaders.Get('Vary'),
+    'credentialed wildcard response varies by CORS request fields');
 end;
 
 procedure TestCorsMaxAge;
@@ -3280,6 +3309,32 @@ begin
   Check(LCaught, 'zero timeout raises EArgumentError');
 end;
 
+procedure TestDeadlineReleasesBufferedWriter;
+var
+  LHandler: IHttpHandler;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LDestroyCountBefore: Int32;
+begin
+  LDestroyCountBefore := GTrackedWriterDestroyCount;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(PAnsiChar('done')^, 4);
+    end),
+    [DeadlineMiddleware(5000)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/lifetime');
+  LW := TTrackingResponseWriter.Create;
+  LHandler.ServeHTTP(LReq, LW);
+  LW := nil;
+  LReq := nil;
+  LHandler := nil;
+  CheckEqual(Int64(LDestroyCountBefore + 1), Int64(GTrackedWriterDestroyCount),
+    'deadline releases its buffered writer and real writer');
+end;
+
 { Mock reader for stream tests }
 type
   TMockReader = class(TInterfacedObject, IReader)
@@ -3678,7 +3733,7 @@ begin
   T.Test('CORS: AllowCredentials header', @TestCorsCredentials);
   T.Test('CORS: specific origin allowed + Vary', @TestCorsSpecificOriginAllowed);
   T.Test('CORS: specific origin denied', @TestCorsSpecificOriginDenied);
-  T.Test('CORS: credentials+wildcard rejected', @TestCorsCredentialsWildcardRejected);
+  T.Test('CORS: credentials+wildcard echoes Origin', @TestCorsCredentialsWildcardEchoesOrigin);
   T.Test('CORS: MaxAge header', @TestCorsMaxAge);
   T.Test('CORS: custom AllowMethods/AllowHeaders', @TestCorsCustomMethodsHeaders);
   T.Test('CORS: wildcard echoes request headers', @TestCorsWildcardEchoesRequestHeaders);
@@ -3796,6 +3851,7 @@ begin
   T.Test('Deadline: fast handler passes', @TestDeadlineFastHandlerPasses);
   T.Test('Deadline: slow handler times out', @TestDeadlineSlowHandlerTimesOut);
   T.Test('Deadline: zero timeout raises', @TestDeadlineZeroRaises);
+  T.Test('Deadline: releases buffered writer', @TestDeadlineReleasesBufferedWriter);
   { Stream }
   T.Test('Stream: copies data', @TestHttpWriteStreamCopiesData);
   T.Test('Stream: empty reader', @TestHttpWriteStreamEmptyReader);

@@ -440,6 +440,10 @@ begin
     M4d := nextpas.core.math.RotateZ(Double(0.25));
     M4f := nextpas.core.math.Camera2D(Single(0.0), Single(0.0), Single(1.0), 100, 100);
     M4d := nextpas.core.math.Camera2D(Double(0.0), Double(0.0), Double(1.0), 100, 100);
+    M4f := nextpas.core.math.Camera2D(Single(0.0), Single(0.0), Single(1.0), 100, 100,
+      Single(-10.0), Single(10.0));
+    M4d := nextpas.core.math.Camera2D(Double(0.0), Double(0.0), Double(1.0), 100, 100,
+      Double(-10.0), Double(10.0));
     D := nextpas.core.math.EaseLinear(0.5) + nextpas.core.math.EaseInQuad(0.5) +
       nextpas.core.math.EaseOutQuad(0.5) + nextpas.core.math.EaseInOutQuad(0.5) +
       nextpas.core.math.EaseInCubic(0.5) + nextpas.core.math.EaseOutCubic(0.5) +

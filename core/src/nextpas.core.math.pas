@@ -266,6 +266,12 @@ function Camera2D(const ACenterX, ACenterY, AZoom: Single;
   const AViewportWidth, AViewportHeight: Integer): TMat4f; overload; inline;
 function Camera2D(const ACenterX, ACenterY, AZoom: Double;
   const AViewportWidth, AViewportHeight: Integer): TMat4d; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Single): TMat4f; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Double): TMat4d; overload; inline;
 
 function EaseLinear(const AT: Double): Double; inline;
 function EaseInQuad(const AT: Double): Double; inline;
@@ -1110,6 +1116,22 @@ function Camera2D(const ACenterX, ACenterY, AZoom: Double;
 begin
   Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
     AViewportHeight);
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight, ANear, AFar);
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer;
+  const ANear, AFar: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight, ANear, AFar);
 end;
 
 function EaseLinear(const AT: Double): Double;
