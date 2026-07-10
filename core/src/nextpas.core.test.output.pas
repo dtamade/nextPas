@@ -407,10 +407,10 @@ var
   I: Integer;
 begin
   if Length(ALines) = 0 then Exit;
-  ASink.WriteLn('    ' + AnsiDim('─── test log ───', AConfig));
+  ASink.WriteLn('  ' + AnsiDim('─── test log ───', AConfig));
   for I := 0 to High(ALines) do
-    ASink.WriteLn('    ' + AnsiDim(ALines[I], AConfig));
-  ASink.WriteLn('    ' + AnsiDim('─────────────────', AConfig));
+    ASink.WriteLn('  ' + AnsiDim(ALines[I], AConfig));
+  ASink.WriteLn('  ' + AnsiDim('─────────────────', AConfig));
 end;
 
 { Meta-Test Helpers }
@@ -552,6 +552,7 @@ procedure WriteSuiteHeaderEx(const AName: string; ATestCount: Integer;
 var
   LSuffix: string;
 begin
+  if ATestCount <= 0 then Exit;
   if ATestCount = 1 then
     LSuffix := '1 test'
   else
