@@ -191,7 +191,7 @@ type
     FKeepAlive: Boolean;
     FReadMs: Int64;
     FIdleMs: Int64;
-    FBuf: array[0..4095] of Byte;
+    FBuf: array[0..16383] of Byte;
     FPollSubmitted: Boolean;
     FPollWorkerPending: Boolean;
     FPollCompletionReady: Boolean;
@@ -1401,7 +1401,7 @@ begin
         end
         else
         begin
-          LN := FConn.Read(FBuf[0], 4096);
+          LN := FConn.Read(FBuf[0], 16384);
           if LN = 0 then
           begin
             FKeepAlive := False;

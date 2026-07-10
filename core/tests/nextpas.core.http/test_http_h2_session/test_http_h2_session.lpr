@@ -1563,7 +1563,7 @@ var
   LDecoder: THPackDecoder;
   LFirst: TH2Stream;
   LSecond: TH2Stream;
-  LRemoved: TH2Stream;
+  LFound: TH2Stream;
 begin
   LMap := TH2StreamMap.Create;
   try
@@ -1574,15 +1574,15 @@ begin
     LSecond := LMap.FindOrCreate(3, H2_DEFAULT_INITIAL_WINDOW_SIZE,
       H2_DEFAULT_INITIAL_WINDOW_SIZE, LConnectionFlow, LDecoder);
 
-    LRemoved := LMap.FindAndRemove(1);
-    Check(LRemoved = LFirst, 'FindAndRemove returns the matched stream');
+    LFound := LMap.Find(1);
+    Check(LFound <> nil, 'Find returns the matched stream');
+    Check(LFound = LFirst, 'Find returns correct stream instance');
+    CheckEqual(Int64(1), Int64(LFound.StreamID), 'Found stream has correct ID');
+    LMap.Remove(1);
     CheckEqual(Int64(1), Int64(LMap.ActiveCount),
-      'FindAndRemove removes exactly one active stream');
-    Check(LMap.Find(1) = nil, 'FindAndRemove detaches removed stream from map');
-    Check(LMap.ItemAt(0) = LSecond, 'FindAndRemove compacts remaining streams');
-    CheckEqual(Int64(1), Int64(LRemoved.StreamID),
-      'FindAndRemove returns a still-usable detached stream');
-    LRemoved.Free;
+      'Remove removes exactly one active stream');
+    Check(LMap.Find(1) = nil, 'Remove detaches removed stream from map');
+    Check(LMap.Find(3) = LSecond, 'Other streams remain after remove');
   finally
     LMap.Free;
   end;
@@ -1594,20 +1594,16 @@ var
 begin
   LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
     H2_SESSION_SOURCE_PATH_FROM_ROOT));
-  Check(Pos('procedure RemoveByIndex(const AIndex: SizeInt);', LSource) > 0,
-    'TH2StreamMap declares RemoveByIndex');
-  Check(Pos('function FindAndRemove(const AStreamID: UInt32): TH2Stream;', LSource) > 0,
-    'TH2StreamMap declares FindAndRemove');
-  Check(Pos('procedure TH2StreamMap.RemoveByIndex(const AIndex: SizeInt);', LSource) > 0,
-    'TH2StreamMap implements RemoveByIndex');
-  Check(Pos('function TH2StreamMap.FindAndRemove(const AStreamID: UInt32): TH2Stream;', LSource) > 0,
-    'TH2StreamMap implements FindAndRemove');
-  Check(Pos('RemoveByIndex(LIndex);', LSource) > 0,
-    'FindAndRemove reuses RemoveByIndex extraction path');
-  Check(Pos('FStreams.RemoveByIndex(LStreamIndex);', LSource) > 0,
-    'reset-handling paths remove by known index');
-  Check(Pos('FStreams.FindAndRemove(AFrame.Header.StreamID);', LSource) > 0,
-    'RST_STREAM handling uses FindAndRemove');
+  Check(Pos('SLOT_EMPTY', LSource) > 0,
+    'TH2StreamMap uses hash table with slot states');
+  Check(Pos('SLOT_USED', LSource) > 0,
+    'TH2StreamMap tracks used slots');
+  Check(Pos('FindSlot', LSource) > 0,
+    'TH2StreamMap uses hash-based FindSlot');
+  Check(Pos('FStreams.Remove(', LSource) > 0,
+    'session uses hash-based Remove');
+  Check(Pos('FStreams.Find(', LSource) > 0,
+    'session uses hash-based Find');
 end;
 
 procedure TestSendResponseBodyAvoidsIntermediateBufferCopySourceContract;
@@ -1879,9 +1875,9 @@ begin
     @TestRunDataOnConnectionStreamSendsGoaway);
   T.Test('Run DATA on closed stream restores connection window',
     @TestRunDataOnClosedStreamRestoresConnectionWindow);
-  T.Test('TH2StreamMap FindAndRemove returns detached stream',
+  T.Test('TH2StreamMap Find/Remove returns detached stream',
     @TestStreamMapFindAndRemoveReturnsDetachedStream);
-  T.Test('TH2StreamMap FindAndRemove source contract',
+  T.Test('TH2StreamMap hash map source contract',
     @TestStreamMapFindAndRemoveSourceContract);
   T.Test('HandleData connection stream source contract',
     @TestHandleDataConnectionStreamSourceContract);

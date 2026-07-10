@@ -65,6 +65,9 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.middleware;
 
+const
+  MAX_ROUTE_SEGMENTS = 64;
+
 { Helpers }
 
 function CommonPrefixLen(const A, B: string): SizeInt;
@@ -167,6 +170,8 @@ var
     LP := 1;
     while LP <= Length(AFullPath) do
     begin
+      if LSegCount >= MAX_ROUTE_SEGMENTS then
+        Exit;
       if AFullPath[LP] = '/' then
       begin
         { Collect the '/' plus the following segment text }

@@ -39,12 +39,24 @@ type
   );
 
   TH2StreamMap = class
+  private const
+    INITIAL_CAPACITY = 16;
+    LOAD_FACTOR_NUM = 3; { numerator: 3/4 = 75% }
+    LOAD_FACTOR_DEN = 4;
+    SLOT_EMPTY = 0;
+    SLOT_USED = 1;
+    SLOT_DELETED = 2;
   private
+    FKeys: array of UInt32;
     FStreams: array of TH2Stream;
+    FSlots: array of Byte;
+    FCapacity: SizeInt;
     FCount: SizeInt;
-    function FindIndex(const AStreamID: UInt32): SizeInt;
-    function ExtractByIndex(const AIndex: SizeInt): TH2Stream;
+    FDeletedCount: SizeInt;
+    procedure Grow;
+    function FindSlot(const AStreamID: UInt32): SizeInt;
   public
+    constructor Create;
     destructor Destroy; override;
     function Find(const AStreamID: UInt32): TH2Stream;
     function FindOrCreate(const AStreamID: UInt32;
@@ -52,8 +64,6 @@ type
       var AConnectionFlow: TH2ConnectionFlowControl;
       var ADecoder: THPackDecoder;
       const AMaxHeaderListSize: UInt32 = H2_DEFAULT_MAX_HEADER_LIST_SIZE): TH2Stream;
-    procedure RemoveByIndex(const AIndex: SizeInt);
-    function FindAndRemove(const AStreamID: UInt32): TH2Stream;
     procedure Remove(const AStreamID: UInt32);
     function ActiveCount: SizeInt;
     function AnyPending: Boolean;
@@ -372,43 +382,112 @@ end;
 
 { TH2StreamMap }
 
+constructor TH2StreamMap.Create;
+begin
+  inherited Create;
+  FCapacity := INITIAL_CAPACITY;
+  SetLength(FKeys, FCapacity);
+  SetLength(FStreams, FCapacity);
+  SetLength(FSlots, FCapacity);
+  { FSlots is zero-initialized (SLOT_EMPTY = 0) }
+end;
+
 destructor TH2StreamMap.Destroy;
 begin
   CloseAll(H2_ERR_CANCEL);
+  FKeys := nil;
+  FStreams := nil;
+  FSlots := nil;
   inherited Destroy;
 end;
 
-function TH2StreamMap.FindIndex(const AStreamID: UInt32): SizeInt;
+function TH2StreamMap.FindSlot(const AStreamID: UInt32): SizeInt;
 var
-  LI: SizeInt;
+  LMask: SizeInt;
+  LIndex: SizeInt;
+  LFirstDeleted: SizeInt;
 begin
-  for LI := 0 to FCount - 1 do
-    if FStreams[LI].StreamID = AStreamID then
-      Exit(LI);
-  Result := -1;
+  LMask := FCapacity - 1;
+  LIndex := (AStreamID * 2654435761) and LMask; { Fibonacci hashing }
+  LFirstDeleted := -1;
+  while True do
+  begin
+    case FSlots[LIndex] of
+      SLOT_EMPTY:
+        begin
+          if LFirstDeleted >= 0 then
+            Result := LFirstDeleted
+          else
+            Result := LIndex;
+          Exit;
+        end;
+      SLOT_USED:
+        begin
+          if FKeys[LIndex] = AStreamID then
+          begin
+            Result := LIndex;
+            Exit;
+          end;
+        end;
+      SLOT_DELETED:
+        begin
+          if LFirstDeleted < 0 then
+            LFirstDeleted := LIndex;
+        end;
+    end;
+    LIndex := (LIndex + 1) and LMask;
+  end;
 end;
 
-function TH2StreamMap.ExtractByIndex(const AIndex: SizeInt): TH2Stream;
+procedure TH2StreamMap.Grow;
 var
+  LOldKeys: array of UInt32;
+  LOldStreams: array of TH2Stream;
+  LOldSlots: array of Byte;
+  LOldCapacity: SizeInt;
   LI: SizeInt;
+  LIndex: SizeInt;
+  LMask: SizeInt;
 begin
-  if (AIndex < 0) or (AIndex >= FCount) then
-    Exit(nil);
-  Result := FStreams[AIndex];
-  for LI := AIndex to FCount - 2 do
-    FStreams[LI] := FStreams[LI + 1];
-  Dec(FCount);
-  FStreams[FCount] := nil;
+  LOldKeys := FKeys;
+  LOldStreams := FStreams;
+  LOldSlots := FSlots;
+  LOldCapacity := FCapacity;
+
+  FCapacity := FCapacity * 2;
+  SetLength(FKeys, FCapacity);
+  SetLength(FStreams, FCapacity);
+  SetLength(FSlots, FCapacity);
+  FCount := 0;
+  FDeletedCount := 0;
+  { FSlots is zero-initialized }
+
+  LMask := FCapacity - 1;
+  for LI := 0 to LOldCapacity - 1 do
+  begin
+    if LOldSlots[LI] = SLOT_USED then
+    begin
+      LIndex := (LOldKeys[LI] * 2654435761) and LMask;
+      while FSlots[LIndex] = SLOT_USED do
+        LIndex := (LIndex + 1) and LMask;
+      FKeys[LIndex] := LOldKeys[LI];
+      FStreams[LIndex] := LOldStreams[LI];
+      FSlots[LIndex] := SLOT_USED;
+      Inc(FCount);
+    end;
+  end;
 end;
 
 function TH2StreamMap.Find(const AStreamID: UInt32): TH2Stream;
 var
   LIndex: SizeInt;
 begin
-  LIndex := FindIndex(AStreamID);
-  if LIndex < 0 then
-    Exit(nil);
-  Result := FStreams[LIndex];
+  LIndex := FindSlot(AStreamID);
+  if (LIndex >= 0) and (FSlots[LIndex] = SLOT_USED) and
+     (FKeys[LIndex] = AStreamID) then
+    Result := FStreams[LIndex]
+  else
+    Result := nil;
 end;
 
 function TH2StreamMap.FindOrCreate(const AStreamID: UInt32;
@@ -418,42 +497,41 @@ function TH2StreamMap.FindOrCreate(const AStreamID: UInt32;
 var
   LIndex: SizeInt;
 begin
-  LIndex := FindIndex(AStreamID);
-  if LIndex >= 0 then
+  LIndex := FindSlot(AStreamID);
+  if (LIndex >= 0) and (FSlots[LIndex] = SLOT_USED) and
+     (FKeys[LIndex] = AStreamID) then
     Exit(FStreams[LIndex]);
-  if FCount >= Length(FStreams) then
-    SetLength(FStreams, FCount + 8);
-  FStreams[FCount] := TH2Stream.Create(AStreamID, ASendWindowSize,
+
+  { Check load factor: (count + 1) / capacity > 3/4? }
+  if (FCount + 1) * LOAD_FACTOR_DEN > FCapacity * LOAD_FACTOR_NUM then
+  begin
+    Grow;
+    LIndex := FindSlot(AStreamID);
+  end;
+
+  FKeys[LIndex] := AStreamID;
+  FStreams[LIndex] := TH2Stream.Create(AStreamID, ASendWindowSize,
     ARecvWindowSize, AConnectionFlow, ADecoder, AMaxHeaderListSize);
-  Result := FStreams[FCount];
+  if FSlots[LIndex] = SLOT_DELETED then
+    Dec(FDeletedCount);
+  FSlots[LIndex] := SLOT_USED;
   Inc(FCount);
-end;
-
-procedure TH2StreamMap.RemoveByIndex(const AIndex: SizeInt);
-var
-  LStream: TH2Stream;
-begin
-  LStream := ExtractByIndex(AIndex);
-  if LStream <> nil then
-    LStream.Free;
-end;
-
-function TH2StreamMap.FindAndRemove(const AStreamID: UInt32): TH2Stream;
-var
-  LIndex: SizeInt;
-begin
-  LIndex := FindIndex(AStreamID);
-  if LIndex < 0 then
-    Exit(nil);
-  Result := ExtractByIndex(LIndex);
+  Result := FStreams[LIndex];
 end;
 
 procedure TH2StreamMap.Remove(const AStreamID: UInt32);
 var
   LIndex: SizeInt;
 begin
-  LIndex := FindIndex(AStreamID);
-  RemoveByIndex(LIndex);
+  LIndex := FindSlot(AStreamID);
+  if (LIndex < 0) or (FSlots[LIndex] <> SLOT_USED) or
+     (FKeys[LIndex] <> AStreamID) then
+    Exit;
+  FStreams[LIndex].Free;
+  FStreams[LIndex] := nil;
+  FSlots[LIndex] := SLOT_DELETED;
+  Dec(FCount);
+  Inc(FDeletedCount);
 end;
 
 function TH2StreamMap.ActiveCount: SizeInt;
@@ -467,12 +545,21 @@ begin
 end;
 
 procedure TH2StreamMap.CloseAll(const AErrorCode: UInt32);
+var
+  LI: SizeInt;
 begin
-  while FCount > 0 do
+  for LI := 0 to FCapacity - 1 do
   begin
-    FStreams[FCount - 1].Reset(AErrorCode);
-    RemoveByIndex(FCount - 1);
+    if FSlots[LI] = SLOT_USED then
+    begin
+      FStreams[LI].Reset(AErrorCode);
+      FStreams[LI].Free;
+      FStreams[LI] := nil;
+      FSlots[LI] := SLOT_EMPTY;
+    end;
   end;
+  FCount := 0;
+  FDeletedCount := 0;
 end;
 
 procedure TH2StreamMap.ApplyPeerInitialWindowSize(
@@ -480,15 +567,27 @@ procedure TH2StreamMap.ApplyPeerInitialWindowSize(
 var
   LI: SizeInt;
 begin
-  for LI := 0 to FCount - 1 do
-    FStreams[LI].ApplyPeerInitialWindowSize(ANewInitialWindowSize);
+  for LI := 0 to FCapacity - 1 do
+    if FSlots[LI] = SLOT_USED then
+      FStreams[LI].ApplyPeerInitialWindowSize(ANewInitialWindowSize);
 end;
 
 function TH2StreamMap.ItemAt(const AIndex: SizeInt): TH2Stream;
+var
+  LI, LFound: SizeInt;
 begin
-  if (AIndex < 0) or (AIndex >= FCount) then
-    Exit(nil);
-  Result := FStreams[AIndex];
+  { Iterate hash table to find the AIndex-th active entry }
+  LFound := 0;
+  for LI := 0 to FCapacity - 1 do
+  begin
+    if FSlots[LI] = SLOT_USED then
+    begin
+      if LFound = AIndex then
+        Exit(FStreams[LI]);
+      Inc(LFound);
+    end;
+  end;
+  Result := nil;
 end;
 
 { TH2ServerSession }
@@ -962,14 +1061,13 @@ end;
 function TH2ServerSession.HandleHeaders(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
-  LStreamIndex: SizeInt;
 begin
   if FGoawayReceived or (FState = h2sesShuttingDown) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_REFUSED_STREAM, False));
   if (AFrame.Header.StreamID and 1) = 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
-  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
-  if LStreamIndex < 0 then
+  LStream := FStreams.Find(AFrame.Header.StreamID);
+  if LStream = nil then
   begin
     if AFrame.Header.StreamID <= FLastSeenPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
@@ -983,15 +1081,11 @@ begin
       FConnectionFlow, FDecoder, FLocalSettings.MaxHeaderListSize);
     FLastSeenPeerStreamID := AFrame.Header.StreamID;
   end;
-  if LStreamIndex >= 0 then
-    LStream := FStreams.ItemAt(LStreamIndex)
-  else
-    LStreamIndex := FStreams.ActiveCount - 1;
   LStream.OnHeaders(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.RemoveByIndex(LStreamIndex);
+    FStreams.Remove(LStream.StreamID);
     Exit(True);
   end;
   if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
@@ -1012,20 +1106,18 @@ end;
 function TH2ServerSession.HandleContinuation(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
-  LStreamIndex: SizeInt;
 begin
   if (FPendingContinuationStreamID = 0) or
      (FPendingContinuationStreamID <> AFrame.Header.StreamID) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
-  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
-  if LStreamIndex < 0 then
+  LStream := FStreams.Find(AFrame.Header.StreamID);
+  if LStream = nil then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
-  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnContinuation(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.RemoveByIndex(LStreamIndex);
+    FStreams.Remove(LStream.StreamID);
     Exit(True);
   end;
   if LStream.LastHeaderFinalizeResult = h2hfrHeaderListTooLarge then
@@ -1085,14 +1177,13 @@ end;
 function TH2ServerSession.HandleData(const AFrame: TH2Frame): Boolean;
 var
   LStream: TH2Stream;
-  LStreamIndex: SizeInt;
 begin
   if FPendingContinuationStreamID <> 0 then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_PROTOCOL_ERROR, True));
   if AFrame.Header.StreamID = 0 then
     Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
-  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
-  if LStreamIndex < 0 then
+  LStream := FStreams.Find(AFrame.Header.StreamID);
+  if LStream = nil then
   begin
     QueueRstStream(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED);
     if not ConsumeClosedStreamDataConnectionWindow(AFrame) then
@@ -1100,12 +1191,11 @@ begin
     { Stream-level RST sent; continue processing other frames. }
     Exit(True);
   end;
-  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnData(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.RemoveByIndex(LStreamIndex);
+    FStreams.Remove(LStream.StreamID);
     Exit(True);
   end;
   if LStream.RequestHandled then
@@ -1125,7 +1215,6 @@ function TH2ServerSession.HandleWindowUpdate(const AFrame: TH2Frame): Boolean;
 var
   LIncrement: UInt32;
   LStream: TH2Stream;
-  LStreamIndex: SizeInt;
 begin
   if not H2DecodeWindowUpdate(AFrame.Payload, LIncrement) then
     Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_FRAME_SIZE_ERROR, True));
@@ -1139,15 +1228,14 @@ begin
     ExecuteReadyStreams;
     Exit(True);
   end;
-  LStreamIndex := FStreams.FindIndex(AFrame.Header.StreamID);
-  if LStreamIndex < 0 then
+  LStream := FStreams.Find(AFrame.Header.StreamID);
+  if LStream = nil then
     Exit(True);
-  LStream := FStreams.ItemAt(LStreamIndex);
   LStream.OnWindowUpdate(LIncrement);
   if LStream.ResetReceived then
   begin
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
-    FStreams.RemoveByIndex(LStreamIndex);
+    FStreams.Remove(LStream.StreamID);
     Exit(True);
   end;
   if LStream.RequestHandled then
@@ -1168,13 +1256,12 @@ begin
     is pending, clear the pending state to avoid stale expectations. }
   if FPendingContinuationStreamID = AFrame.Header.StreamID then
     FPendingContinuationStreamID := 0;
-  LStream := FStreams.FindAndRemove(AFrame.Header.StreamID);
+  LStream := FStreams.Find(AFrame.Header.StreamID);
   if LStream <> nil then
-    try
-      LStream.OnRstStream(LErrorCode);
-    finally
-      LStream.Free;
-    end;
+  begin
+    LStream.OnRstStream(LErrorCode);
+    FStreams.Remove(AFrame.Header.StreamID);
+  end;
   Result := True;
 end;
 
