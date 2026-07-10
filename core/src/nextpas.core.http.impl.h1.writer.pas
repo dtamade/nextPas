@@ -490,6 +490,8 @@ procedure TH1ResponseWriter.Flush;
 var
   LFlusher: IFlusher;
 begin
+  if FFinalized then
+    Exit;
   if (not FHeadersSent) and (not FHijacked) then
     WriteHeader(HTTP_STATUS_OK);
   if FChunkedWriter <> nil then
