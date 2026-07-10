@@ -1,12 +1,15 @@
 {**
- * np_sema_hir_lowering.pas
+ * np_hir_lowering.pas
  *
- * AST→HIR 降级模块 — 从 TSemanticAnalyzer 提取
+ * AST→HIR 降级模块 — 从 sema/ 提取到 lower/ 桥接层
+ *
+ * 职责：将 AST 节点降级为 HIR 表达式/语句
+ * 依赖方向：sema → lower → ir
  *
  * 对标：rustc 的 hir_lowering, FPC 的 code generation
  *}
 
-unit np_sema_hir_lowering;
+unit np_hir_lowering;
 
 {$mode objfpc}{$H+}
 
@@ -136,9 +139,9 @@ implementation
 
 { === 标签发射 === }
 
-{$I np_sema_hir_lowering_helpers.inc}
+{$I np_hir_lowering_helpers.inc}
 
-{$I np_sema_hir_lowering_scalar.inc}
+{$I np_hir_lowering_scalar.inc}
 
-{$I np_sema_hir_lowering_bool.inc}
+{$I np_hir_lowering_bool.inc}
 end.

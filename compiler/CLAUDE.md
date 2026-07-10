@@ -7,6 +7,7 @@ compiler/
 ├── frontend/     ← 编译会话、包管理、单元图、搜索路径
 ├── syntax/       ← Lexer、Preprocessor、Green Tree、AST Facade
 ├── sema/         ← 语义分析器、语义模型
+├── lower/        ← AST→HIR 降级桥接层 (sema→ir)
 ├── ir/           ← HIR Builder、HIR Model、LLVM Emitter、Verifier
 ├── backend/      ← 后端计划、代码生成
 ├── diagnostics/  ← 诊断基础设施
@@ -19,8 +20,9 @@ compiler/
 ### 边界规则
 - **frontend** 不依赖 sema/ir/backend（只提供编译会话和解析基础设施）
 - **syntax** 不依赖 sema/ir/backend（纯语法分析）
-- **sema** 依赖 syntax/frontend，不依赖 ir/backend
-- **ir** 依赖 sema/frontend，不依赖 backend
+- **sema** 依赖 syntax/frontend，不依赖 ir/backend/lower
+- **lower** 依赖 sema/ir/frontend（桥接层，AST→HIR 降级）
+- **ir** 依赖 lower/frontend，不依赖 backend
 - **backend** 依赖 ir/frontend
 - **diagnostics** 和 **targets** 被所有模块依赖
 
@@ -40,7 +42,9 @@ compiler/
 骨架模块（AL2 补全）:
 - `np_sema_overload.pas` — 重载解析 (83 行骨架)
 - `np_sema_type_check.pas` — 类型检查 (58 行骨架)
-- `np_sema_hir_lowering.pas` — AST→HIR 降级 (42 行骨架)
+
+已迁移:
+- `np_sema_hir_lowering.pas` → `lower/np_hir_lowering.pas` — AST→HIR 降级 [✅ 2026-07-06]
 
 已删除过时文件:
 - `np_sema_runtime_expr.inc` (3,345 行) — WalkHaltCalls 副本，已与主文件合并

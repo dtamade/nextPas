@@ -875,7 +875,7 @@ var Ctx: TSemaHirLoweringContext;
 begin
   Ctx.Model := FModel;
   Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
-  np_sema_hir_lowering.EmitBlockLabel(Ctx, ALabel);
+  np_hir_lowering.EmitBlockLabel(Ctx, ALabel);
   FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 
@@ -884,7 +884,7 @@ var Ctx: TSemaHirLoweringContext;
 begin
   Ctx.Model := FModel;
   Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
-  np_sema_hir_lowering.EmitGotoLabel(Ctx, ALabel);
+  np_hir_lowering.EmitGotoLabel(Ctx, ALabel);
   FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 destructor TSemanticAnalyzer.Destroy;
