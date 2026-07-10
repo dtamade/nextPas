@@ -140,9 +140,18 @@ procedure TTDigestImpl.CompressInternal;
 var
   LNew: array of TCentroid;
   LNewCount, LI, LNewCap: Integer;
+  LRange, LThreshold: Double;
 begin
   if FCount <= 1 then
     Exit;
+
+  { Compute merge threshold from data range and compression }
+  LRange := FCentroids[FCount - 1].FMean - FCentroids[0].FMean;
+  if LRange < 1e-12 then
+    LRange := 1e-12;
+  LThreshold := LRange / FCompression;
+  if LThreshold < 1e-12 then
+    LThreshold := 1e-12;
 
   LNewCap := FCapacity;
   SetLength(LNew, LNewCap);
@@ -152,7 +161,7 @@ begin
   for LI := 1 to FCount - 1 do
   begin
     if (LNewCount > 0) and
-       (Abs(FCentroids[LI].FMean - LNew[LNewCount - 1].FMean) < 1e-9) then
+       (Abs(FCentroids[LI].FMean - LNew[LNewCount - 1].FMean) < LThreshold) then
     begin
       LNew[LNewCount - 1].FMean :=
         (LNew[LNewCount - 1].FMean * LNew[LNewCount - 1].FCount +
@@ -211,7 +220,7 @@ begin
     end
     else
     begin
-      if FCount >= FCapacity then
+      if (FCount >= FCapacity) or (FCount > Trunc(20.0 * FCompression)) then
         CompressInternal;
       if FCount >= FCapacity then
       begin

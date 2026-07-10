@@ -30,6 +30,7 @@ type
     FValueCount: Int64;
     FCount: Int64;
     FClosed: Int32;
+    FValuesLock: Int32;
     procedure LockNode(ANode: PTrieNode);
     procedure UnlockNode(ANode: PTrieNode);
     procedure FreeNode(ANode: PTrieNode);
@@ -109,15 +110,17 @@ begin
 end;
 
 function TConcurrentTrieImpl.AllocValueIndex: Int64;
-var
-  LOld: Int64;
 begin
-  repeat
-    LOld := AtomicLoad64(FValueCount, moRelaxed);
-    if LOld >= Length(FValues) then
+  while AtomicCompareExchange32(FValuesLock, 0, 1) <> 0 do
+    CpuPause;
+  try
+    if FValueCount >= Length(FValues) then
       SetLength(FValues, Length(FValues) * 2 + 16);
-  until AtomicCompareExchange64(FValueCount, LOld, LOld + 1, moAcqRel) = LOld;
-  Result := LOld;
+    Result := FValueCount;
+    Inc(FValueCount);
+  finally
+    AtomicStore32(FValuesLock, 0, moRelease);
+  end;
 end;
 
 constructor TConcurrentTrieImpl.Create;
@@ -128,6 +131,7 @@ begin
   FValueCount := 0;
   FCount := 0;
   FClosed := 0;
+  FValuesLock := 0;
 end;
 
 destructor TConcurrentTrieImpl.Destroy;
