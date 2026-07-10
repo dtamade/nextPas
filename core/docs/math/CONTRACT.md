@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.math*.pas`（16 个源文件）
 **层级**：L1（依赖 L0: base）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-10
+**版本**：1.1
 
 ---
 
@@ -14,9 +14,9 @@
 
 | 文件 | 职责 |
 |------|------|
-| math.base | TPoint2f/3f, 常量 (PI/TWO_PI/DEG_TO_RAD/RAD_TO_DEG) |
+| math.base | TPoint2f/3f，六个 canonical `Double` 编译期常量 |
 | math.scalar | 标量工具 (IsAddOverflow/IsMulOverflow/Min/Max/Clamp/Abs/Lerp/Sign) |
-| math.trig | 三角函数 (Sin/Cos/Tan/Asin/Acos/Atan/Atan2) |
+| math.trig | 三角函数 (Sin/Cos/Tan/Asin/Acos/Atan/Atan2)，以及 PI/TWO_PI/HALF_PI 编译期 alias |
 | math.vec | TVec2f/2d/3f/3d/4f/4d (packed record, glam 实例方法风格) |
 | math.mat | TMat3f/3d/4f/4d (行主序矩阵) |
 | math.quat | TQuatf/Quatd (四元数) |
@@ -27,6 +27,15 @@
 | math.impl.scalar | 标量 SIMD fallback |
 | math.impl.simd | 平台 SIMD 实现 |
 | math.pas | 门面 re-export |
+
+常量所有权只有一份：`math.base` 以 `NAME = Double(literal);` 声明
+`PI_VALUE`、`TWO_PI`、`HALF_PI`、`QUARTER_PI`、`DEG_TO_RAD` 和 `RAD_TO_DEG`。
+`math.trig` 的三个公共常量与根门面的五个公共常量必须使用
+`NAME = nextpas.core.math.base.NAME;` 编译期 alias，禁止复制数值字面量。
+
+FPC 的 `NAME: Double = literal;` 是 typed constant，不能作为上述 alias 的右值；
+`{$J+}`/`{$J-}` 只控制 typed constant 是否可写，不能改变该语法限制。显式
+`Double(...)` 还保证 ordinary constant 的表达式类型不会被推断为更宽的实数类型。
 
 ### 1.2 向量类型（glam 风格实例方法）
 
@@ -173,6 +182,7 @@ end;
 - **[INV-7]** `Perspective` 要求 AFar > ANear，AAspect > 0
 - **[INV-8]** `TRandomGen` 不是密码学安全的（PRNG，非 CSPRNG）
 - **[INV-9]** SIMD 实现与标量 fallback 数值结果必须一致
+- **[INV-10]** `math.base` 是数学常量字面量的唯一 owner；`math.trig` 和根门面只提供编译期 `Double` alias
 
 ---
 
@@ -230,4 +240,5 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-10 | 1.1 | 固化 `math.base` canonical 常量及 trig/根门面编译期 alias 契约 | Codex |
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |

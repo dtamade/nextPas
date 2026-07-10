@@ -6,6 +6,11 @@ uses
   nextpas.core.test,
   nextpas.core.math.trig;
 
+const
+  TRIG_PI_COMPILE_TIME = nextpas.core.math.trig.PI_VALUE;
+  TRIG_TWO_PI_COMPILE_TIME = nextpas.core.math.trig.TWO_PI;
+  TRIG_HALF_PI_COMPILE_TIME = nextpas.core.math.trig.HALF_PI;
+
 var
   T: TTestSuite;
 
@@ -273,6 +278,22 @@ begin
   CheckNear(PI_VALUE / 4.0, ArcTan2(1.0, 1.0), 0.0001, 'ArcTan2(1,1)=PI/4');
   CheckNear(PI_VALUE / 4.0, ArcTan2(Single(1.0), Single(1.0)), 0.0001,
     'ArcTan2(Single 1,1)=PI/4');
+end;
+
+procedure TestCompileTimeConstantAliases;
+begin
+  Check(SizeOf(TRIG_PI_COMPILE_TIME) = SizeOf(Double),
+    'trig PI_VALUE remains a compile-time Double alias');
+  Check(SizeOf(TRIG_TWO_PI_COMPILE_TIME) = SizeOf(Double),
+    'trig TWO_PI remains a compile-time Double alias');
+  Check(SizeOf(TRIG_HALF_PI_COMPILE_TIME) = SizeOf(Double),
+    'trig HALF_PI remains a compile-time Double alias');
+  Check(SameDoubleBits(TRIG_PI_COMPILE_TIME, nextpas.core.math.trig.PI_VALUE),
+    'trig PI_VALUE alias preserves canonical bits');
+  Check(SameDoubleBits(TRIG_TWO_PI_COMPILE_TIME, nextpas.core.math.trig.TWO_PI),
+    'trig TWO_PI alias preserves canonical bits');
+  Check(SameDoubleBits(TRIG_HALF_PI_COMPILE_TIME, nextpas.core.math.trig.HALF_PI),
+    'trig HALF_PI alias preserves canonical bits');
 end;
 
 procedure TestInverseTrigDomainContracts;
@@ -1224,6 +1245,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.math.trig');
   T.Test('basic trig values', @TestBasicTrigValues);
+  T.Test('compile-time constant aliases', @TestCompileTimeConstantAliases);
   T.Test('inverse trig domain contracts', @TestInverseTrigDomainContracts);
   T.Test('inverse trig non-finite contracts', @TestInverseTrigNonFiniteContracts);
   T.Test('circular trig non-finite contracts', @TestCircularTrigNonFiniteContracts);

@@ -44,6 +44,7 @@ Rejected alternatives:
 Public modules:
 
 - `nextpas.core.math`
+- `nextpas.core.math.base`
 - `nextpas.core.math.scalar`
 - `nextpas.core.math.trig`
 - `nextpas.core.math.vec`
@@ -60,6 +61,18 @@ Internal implementation modules:
 
 The root facade explicitly re-exports public types, constants, and functions.
 Implementation detail modules are not consumer-facing namespaces.
+
+## Constant Ownership
+
+Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric
+literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those
+base constants.
+
+The canonical declarations use `NAME = Double(literal);`, which gives the ordinary constant a
+`Double` expression type and keeps it eligible as an alias source. Re-export declarations use the
+fully qualified form `NAME = nextpas.core.math.base.NAME;`. A typed declaration such as
+`NAME: Double = literal;` is rejected by FPC when used as the source of this alias. The `{$J}`
+directive controls typed-constant writability only and is not an alias mechanism.
 
 ## Platform And Trig Strategy
 

@@ -15,10 +15,13 @@ Use a narrower submodule only when a file intentionally depends on one math fami
 - `nextpas.core.math` is the facade. It re-exports the public scalar, trig, vector, matrix,
   quaternion, transform, easing, and random API. Noise is exposed through
   `nextpas.core.math.random.TNoiseGen`; there is no public `nextpas.core.math.noise` unit.
-- `nextpas.core.math.scalar` owns scalar constants, numeric helpers, float predicates, interpolation,
-  angle conversion, and integer overflow helpers.
+- `nextpas.core.math.base` owns the shared point types and canonical compile-time `Double`
+  constants.
+- `nextpas.core.math.scalar` owns numeric helpers, float predicates, interpolation, angle
+  conversion, and integer overflow helpers.
 - `nextpas.core.math.trig` owns trigonometric, exponential, logarithmic, power, square-root, and
-  related transcendental helpers. Angle conversion belongs to `nextpas.core.math.scalar`.
+  related transcendental helpers. It also exposes the trig-facing constant aliases described
+  below. Angle conversion belongs to `nextpas.core.math.scalar`.
 - `nextpas.core.math.vec` owns packed vector value types.
 - `nextpas.core.math.mat` owns packed matrix value types.
 - `nextpas.core.math.quat` owns packed quaternion value types.
@@ -104,13 +107,24 @@ It intentionally avoids examples, benchmarks, compile-only host gates, and the f
 
 ## Scalar And Trig
 
-Constants:
+The public constant entry points are:
 
-- `PI_VALUE`
-- `TWO_PI`
-- `HALF_PI`
-- `DEG_TO_RAD`
-- `RAD_TO_DEG`
+| Unit | Constants | Role |
+| --- | --- | --- |
+| `nextpas.core.math.base` | `PI_VALUE`, `TWO_PI`, `HALF_PI`, `QUARTER_PI`, `DEG_TO_RAD`, `RAD_TO_DEG` | Canonical declarations |
+| `nextpas.core.math.trig` | `PI_VALUE`, `TWO_PI`, `HALF_PI` | Compile-time aliases to `math.base` |
+| `nextpas.core.math` | `PI_VALUE`, `TWO_PI`, `HALF_PI`, `DEG_TO_RAD`, `RAD_TO_DEG` | Compile-time facade aliases to `math.base` |
+
+Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric
+literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those
+base constants.
+
+The canonical declarations use the ordinary-constant form `PI_VALUE = Double(...);`. The explicit
+conversion keeps the expression type at `Double` instead of allowing a wider real type to be
+inferred. An alias such as `PI_VALUE = nextpas.core.math.base.PI_VALUE;` is legal because its source
+is an ordinary constant. FPC typed constants (`PI_VALUE: Double = ...;`) cannot be used as the
+right-hand side of that alias. `{$J+}` and `{$J-}` only control typed-constant writability and do not
+change this rule.
 
 Scalar helpers:
 

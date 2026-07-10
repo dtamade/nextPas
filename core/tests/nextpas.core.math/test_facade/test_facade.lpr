@@ -8,6 +8,13 @@ uses
   nextpas.core.errors,
   nextpas.core.math;
 
+const
+  FACADE_PI_COMPILE_TIME = nextpas.core.math.PI_VALUE;
+  FACADE_TWO_PI_COMPILE_TIME = nextpas.core.math.TWO_PI;
+  FACADE_HALF_PI_COMPILE_TIME = nextpas.core.math.HALF_PI;
+  FACADE_DEG_TO_RAD_COMPILE_TIME = nextpas.core.math.DEG_TO_RAD;
+  FACADE_RAD_TO_DEG_COMPILE_TIME = nextpas.core.math.RAD_TO_DEG;
+
 var
   T: TTestSuite;
 
@@ -175,6 +182,30 @@ begin
   CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 'facade re-exports Single RadToDeg');
   CheckNear(1.0, Sin(HALF_PI), 'facade re-exports trig Sin');
   CheckNear(1.0, Sin(Single(HALF_PI)), 'facade re-exports Single trig Sin');
+end;
+
+procedure TestFacadeCompileTimeConstantAliases;
+begin
+  Check(SizeOf(FACADE_PI_COMPILE_TIME) = SizeOf(Double),
+    'facade PI_VALUE remains a compile-time Double alias');
+  Check(SizeOf(FACADE_TWO_PI_COMPILE_TIME) = SizeOf(Double),
+    'facade TWO_PI remains a compile-time Double alias');
+  Check(SizeOf(FACADE_HALF_PI_COMPILE_TIME) = SizeOf(Double),
+    'facade HALF_PI remains a compile-time Double alias');
+  Check(SizeOf(FACADE_DEG_TO_RAD_COMPILE_TIME) = SizeOf(Double),
+    'facade DEG_TO_RAD remains a compile-time Double alias');
+  Check(SizeOf(FACADE_RAD_TO_DEG_COMPILE_TIME) = SizeOf(Double),
+    'facade RAD_TO_DEG remains a compile-time Double alias');
+  Check(SameDoubleBits(FACADE_PI_COMPILE_TIME, nextpas.core.math.PI_VALUE),
+    'facade PI_VALUE alias preserves canonical bits');
+  Check(SameDoubleBits(FACADE_TWO_PI_COMPILE_TIME, nextpas.core.math.TWO_PI),
+    'facade TWO_PI alias preserves canonical bits');
+  Check(SameDoubleBits(FACADE_HALF_PI_COMPILE_TIME, nextpas.core.math.HALF_PI),
+    'facade HALF_PI alias preserves canonical bits');
+  Check(SameDoubleBits(FACADE_DEG_TO_RAD_COMPILE_TIME, nextpas.core.math.DEG_TO_RAD),
+    'facade DEG_TO_RAD alias preserves canonical bits');
+  Check(SameDoubleBits(FACADE_RAD_TO_DEG_COMPILE_TIME, nextpas.core.math.RAD_TO_DEG),
+    'facade RAD_TO_DEG alias preserves canonical bits');
 end;
 
 procedure TestFacadeRoundingSurface;
@@ -885,6 +916,8 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.math facade');
   T.Test('scalar and trig re-export', @TestFacadeScalarAndTrig);
+  T.Test('facade compile-time constant aliases',
+    @TestFacadeCompileTimeConstantAliases);
   T.Test('facade Wrap error semantics', @TestFacadeWrapErrorSemantics);
   T.Test('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Test('facade new scalar surface', @TestFacadeNewScalarSurface);

@@ -19,10 +19,13 @@ Detailed behavior contracts live in `API.md`; this README stays compact.
 ## Public Modules
 
 - `nextpas.core.math`: facade that explicitly re-exports the public math API.
-- `nextpas.core.math.scalar`: constants, scalar helpers, rounding, interpolation,
-  predicates, overflow helpers, `GCD`, `LCM`, `Hypot`, and `Fmod`.
+- `nextpas.core.math.base`: shared point types and canonical compile-time `Double`
+  constants.
+- `nextpas.core.math.scalar`: scalar helpers, rounding, interpolation, predicates,
+  overflow helpers, `GCD`, `LCM`, `Hypot`, and `Fmod`.
 - `nextpas.core.math.trig`: `Sin`, `Cos`, `Tan`, inverse trig, `Exp`, `Ln`,
-  `Log2`, `Log10`, `Power`, and `Sqrt`.
+  `Log2`, `Log10`, `Power`, and `Sqrt`, plus compile-time aliases for the common
+  trig constants.
 - `nextpas.core.math.vec`: `TVec2f/3f/4f` and `TVec2d/3d/4d`.
 - `nextpas.core.math.mat`: `TMat3f/4f` and `TMat3d/4d`.
 - `nextpas.core.math.quat`: `TQuatf` and `TQuatd`.
@@ -81,6 +84,9 @@ git status --short --branch
 - `API.md` is the public behavior contract and command reference.
 - `GOAL_TREE.md` is the roadmap/status control map.
 - `FINAL_API_MIGRATION_DESIGN.md` records stable design decisions only.
+- Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric
+  literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those
+  base constants.
 - Public docs must not reintroduce legacy vector bridge type names, old
   `Vectors` imports, or old source paths.
 - Public math value-type methods currently remain scalar. The internal
