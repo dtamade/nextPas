@@ -8,7 +8,6 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.lockfree,
   nextpas.core.lockfree.btree;
 
 type

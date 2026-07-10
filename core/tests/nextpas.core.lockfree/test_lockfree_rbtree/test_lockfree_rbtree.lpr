@@ -5,7 +5,6 @@ program test_lockfree_rbtree;
 uses
   SysUtils,
   nextpas.core.lockfree.rbtree,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

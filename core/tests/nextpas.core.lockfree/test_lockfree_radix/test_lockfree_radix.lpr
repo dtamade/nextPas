@@ -5,7 +5,6 @@ program test_lockfree_radix;
 uses
   SysUtils,
   nextpas.core.lockfree.radix,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

@@ -5,7 +5,6 @@ program test_lockfree_scapegoat;
 uses
   SysUtils,
   nextpas.core.lockfree.scapegoat,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

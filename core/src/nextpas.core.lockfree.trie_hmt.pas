@@ -71,11 +71,14 @@ type
   private
     FRoot: PHmtNode;
     FSize: Int32;
+    FLock: Int32;
 
     function HashKey(const AKey: AnsiString): UInt32;
     function NewLeaf(AHash: UInt32; const AKey, AValue: AnsiString): PHmtNode;
     function NewBranch: PHmtNode;
     function NewCollision(AHash: UInt32; const AKey1, AValue1, AKey2, AValue2: AnsiString): PHmtNode;
+    function SplitLeafNode(ALeaf: PHmtNode; AHash: UInt32; ADepth: Int32;
+      const AKey, AValue: AnsiString): PHmtNode;
 
     function NodeInsert(ANode: PHmtNode; AHash: UInt32; ADepth: Int32;
       const AKey, AValue: AnsiString; out ANew: PHmtNode): THmtResult;
@@ -83,9 +86,11 @@ type
       const AKey: AnsiString; out ANew: PHmtNode): THmtResult;
     function NodeFind(ANode: PHmtNode; AHash: UInt32; ADepth: Int32;
       const AKey: AnsiString; out AValue: AnsiString): Boolean;
+    function NodeContainsReference(ANode, ATarget: PHmtNode): Boolean;
 
     procedure FreeNode(ANode: PHmtNode);
-    function CloneBranch(ANode: PHmtNode): PHmtNode;
+    procedure AcquireLock;
+    procedure ReleaseLock;
   public
     constructor Create;
     destructor Destroy; override;
@@ -133,6 +138,7 @@ begin
   inherited Create;
   FRoot := nil;
   FSize := 0;
+  FLock := 0;
 end;
 
 destructor THashMappedTrie.Destroy;
@@ -188,34 +194,48 @@ begin
   Result^.Collision[1].Value := AValue2;
 end;
 
-function THashMappedTrie.CloneBranch(ANode: PHmtNode): PHmtNode;
-var
-  I: Int32;
+procedure THashMappedTrie.AcquireLock;
 begin
-  if ANode = nil then
-    Exit(nil);
-  New(Result);
-  FillChar(Result^, SizeOf(THmtNode), 0);
-  Result^.Kind := ANode^.Kind;
-  Result^.Count := ANode^.Count;
-  case ANode^.Kind of
-    hnkLeaf:
-    begin
-      Result^.LeafHash := ANode^.LeafHash;
-      Result^.LeafKey := ANode^.LeafKey;
-      Result^.LeafValue := ANode^.LeafValue;
-    end;
-    hnkBranch:
-    begin
-      for I := 0 to HMT_BRANCH_FACTOR - 1 do
-        Result^.Children[I] := ANode^.Children[I];
-    end;
-    hnkCollision:
-    begin
-      SetLength(Result^.Collision, Length(ANode^.Collision));
-      for I := 0 to Length(ANode^.Collision) - 1 do
-        Result^.Collision[I] := ANode^.Collision[I];
-    end;
+  repeat
+    if AtomicCompareExchange32(FLock, 1, 0, moAcquire) = 0 then
+      Exit;
+    Sleep(0);
+  until False;
+end;
+
+procedure THashMappedTrie.ReleaseLock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
+end;
+
+function THashMappedTrie.SplitLeafNode(ALeaf: PHmtNode; AHash: UInt32; ADepth: Int32;
+  const AKey, AValue: AnsiString): PHmtNode;
+var
+  LExistingIdx: Int32;
+  LIncomingIdx: Int32;
+  LChild: PHmtNode;
+begin
+  if (ALeaf = nil) or (ALeaf^.Kind <> hnkLeaf) then
+    Exit(ALeaf);
+
+  if (ADepth >= HMT_MAX_DEPTH) or (ALeaf^.LeafHash = AHash) then
+    Exit(NewCollision(ALeaf^.LeafHash, ALeaf^.LeafKey, ALeaf^.LeafValue, AKey, AValue));
+
+  Result := NewBranch;
+  LExistingIdx := (ALeaf^.LeafHash shr (ADepth * HMT_BRANCH_BITS)) and (HMT_BRANCH_FACTOR - 1);
+  LIncomingIdx := (AHash shr (ADepth * HMT_BRANCH_BITS)) and (HMT_BRANCH_FACTOR - 1);
+  if LExistingIdx = LIncomingIdx then
+  begin
+    LChild := SplitLeafNode(ALeaf, AHash, ADepth + 1, AKey, AValue);
+    Result^.Children[LExistingIdx] := LChild;
+    if LChild <> nil then
+      Result^.Count := 1;
+  end
+  else
+  begin
+    Result^.Children[LExistingIdx] := ALeaf;
+    Result^.Children[LIncomingIdx] := NewLeaf(AHash, AKey, AValue);
+    Result^.Count := 2;
   end;
 end;
 
@@ -228,7 +248,6 @@ var
 begin
   if ANode = nil then
   begin
-    { Empty slot: insert leaf }
     ANew := NewLeaf(AHash, AKey, AValue);
     Exit(hmtOk);
   end;
@@ -238,30 +257,30 @@ begin
     begin
       if ANode^.LeafKey = AKey then
       begin
-        { Update existing key }
-        if ANode^.LeafValue = AValue then
-        begin
-          ANew := ANode;
-          Exit(hmtOk);
-        end;
-        ANew := NewLeaf(AHash, AKey, AValue);
-        Result := hmtOk;
+        ANode^.LeafValue := AValue;
+        ANew := ANode;
+        Exit(hmtOk);
       end
       else if ANode^.LeafHash = AHash then
       begin
-        { Hash collision: create collision node }
-        ANew := NewCollision(AHash, ANode^.LeafKey, ANode^.LeafValue, AKey, AValue);
+        ANode^.Kind := hnkCollision;
+        ANode^.Count := 2;
+        SetLength(ANode^.Collision, 2);
+        ANode^.Collision[0].Hash := ANode^.LeafHash;
+        ANode^.Collision[0].Key := ANode^.LeafKey;
+        ANode^.Collision[0].Value := ANode^.LeafValue;
+        ANode^.Collision[1].Hash := AHash;
+        ANode^.Collision[1].Key := AKey;
+        ANode^.Collision[1].Value := AValue;
+        ANode^.LeafHash := 0;
+        ANode^.LeafKey := '';
+        ANode^.LeafValue := '';
+        ANew := ANode;
         Result := hmtOk;
       end
       else
       begin
-        { Different hash: create branch and split }
-        ANew := NewBranch;
-        LIdx := (ANode^.LeafHash shr (ADepth * HMT_BRANCH_BITS)) and (HMT_BRANCH_FACTOR - 1);
-        ANew^.Children[LIdx] := ANode;
-        LIdx := (AHash shr (ADepth * HMT_BRANCH_BITS)) and (HMT_BRANCH_FACTOR - 1);
-        ANew^.Children[LIdx] := NewLeaf(AHash, AKey, AValue);
-        ANew^.Count := 2;
+        ANew := SplitLeafNode(ANode, AHash, ADepth, AKey, AValue);
         Result := hmtOk;
       end;
     end;
@@ -271,47 +290,36 @@ begin
       LIdx := (AHash shr (ADepth * HMT_BRANCH_BITS)) and (HMT_BRANCH_FACTOR - 1);
       LChild := ANode^.Children[LIdx];
       Result := NodeInsert(LChild, AHash, ADepth + 1, AKey, AValue, LNewChild);
-      if (Result = hmtOk) and (LNewChild <> LChild) then
+      if Result = hmtOk then
       begin
-        { Path copy: clone branch, update one child }
-        ANew := CloneBranch(ANode);
         if (LChild = nil) and (LNewChild <> nil) then
-          Inc(ANew^.Count);
-        ANew^.Children[LIdx] := LNewChild;
+          Inc(ANode^.Count);
+        if (LChild <> nil) and (LNewChild <> LChild) and
+           (not NodeContainsReference(LNewChild, LChild)) then
+          FreeNode(LChild);
+        ANode^.Children[LIdx] := LNewChild;
       end
-      else
-        ANew := ANode;
+      else if LNewChild <> LChild then
+        ANode^.Children[LIdx] := LNewChild;
+      ANew := ANode;
     end;
 
     hnkCollision:
     begin
-      { Check if key exists in collision list }
       for I := 0 to ANode^.Count - 1 do
         if ANode^.Collision[I].Key = AKey then
         begin
-          { Update value in collision list }
-          New(ANew);
-          FillChar(ANew^, SizeOf(THmtNode), 0);
-          ANew^.Kind := hnkCollision;
-          ANew^.Count := ANode^.Count;
-          SetLength(ANew^.Collision, ANew^.Count);
-          for J := 0 to ANode^.Count - 1 do
-            ANew^.Collision[J] := ANode^.Collision[J];
-          ANew^.Collision[I].Value := AValue;
+          ANode^.Collision[I].Value := AValue;
+          ANew := ANode;
           Exit(hmtOk);
         end;
 
-      { Add to collision list }
-      New(ANew);
-      FillChar(ANew^, SizeOf(THmtNode), 0);
-      ANew^.Kind := hnkCollision;
-      ANew^.Count := ANode^.Count + 1;
-      SetLength(ANew^.Collision, ANew^.Count);
-      for I := 0 to ANode^.Count - 1 do
-        ANew^.Collision[I] := ANode^.Collision[I];
-      ANew^.Collision[ANew^.Count - 1].Hash := AHash;
-      ANew^.Collision[ANew^.Count - 1].Key := AKey;
-      ANew^.Collision[ANew^.Count - 1].Value := AValue;
+      SetLength(ANode^.Collision, ANode^.Count + 1);
+      ANode^.Collision[ANode^.Count].Hash := AHash;
+      ANode^.Collision[ANode^.Count].Key := AKey;
+      ANode^.Collision[ANode^.Count].Value := AValue;
+      Inc(ANode^.Count);
+      ANew := ANode;
       Result := hmtOk;
     end;
   else
@@ -357,29 +365,35 @@ begin
         Exit;
       end;
 
-      { Path copy }
-      ANew := CloneBranch(ANode);
-      ANew^.Children[LIdx] := LNewChild;
+      ANode^.Children[LIdx] := LNewChild;
       if (LChild <> nil) and (LNewChild = nil) then
-        Dec(ANew^.Count);
+        Dec(ANode^.Count);
 
-      { Collapse branch with single child }
-      if ANew^.Count <= 1 then
+      if ANode^.Count = 0 then
+      begin
+        Dispose(ANode);
+        ANew := nil;
+        Exit(hmtOk);
+      end;
+
+      if ANode^.Count = 1 then
       begin
         LNonNilCount := 0;
         LOnlyChild := nil;
         for I := 0 to HMT_BRANCH_FACTOR - 1 do
-          if ANew^.Children[I] <> nil then
+          if ANode^.Children[I] <> nil then
           begin
             Inc(LNonNilCount);
-            LOnlyChild := ANew^.Children[I];
+            LOnlyChild := ANode^.Children[I];
           end;
         if LNonNilCount = 1 then
         begin
-          Dispose(ANew);
+          Dispose(ANode);
           ANew := LOnlyChild;
+          Exit(hmtOk);
         end;
       end;
+      ANew := ANode;
     end;
 
     hnkCollision:
@@ -389,25 +403,27 @@ begin
         begin
           if ANode^.Count = 2 then
           begin
-            { Collapse to single leaf }
             J := 1 - I;
-            ANew := NewLeaf(ANode^.Collision[J].Hash, ANode^.Collision[J].Key, ANode^.Collision[J].Value);
+            ANode^.LeafHash := ANode^.Collision[J].Hash;
+            ANode^.LeafKey := ANode^.Collision[J].Key;
+            ANode^.LeafValue := ANode^.Collision[J].Value;
+            SetLength(ANode^.Collision, 0);
+            ANode^.Kind := hnkLeaf;
+            ANode^.Count := 1;
+            ANew := ANode;
           end
           else
           begin
-            { Remove from collision list }
-            New(ANew);
-            FillChar(ANew^, SizeOf(THmtNode), 0);
-            ANew^.Kind := hnkCollision;
-            ANew^.Count := ANode^.Count - 1;
-            SetLength(ANew^.Collision, ANew^.Count);
             J := 0;
             for K := 0 to ANode^.Count - 1 do
               if K <> I then
               begin
-                ANew^.Collision[J] := ANode^.Collision[K];
+                ANode^.Collision[J] := ANode^.Collision[K];
                 Inc(J);
               end;
+            Dec(ANode^.Count);
+            SetLength(ANode^.Collision, ANode^.Count);
+            ANew := ANode;
           end;
           Exit(hmtOk);
         end;
@@ -458,6 +474,23 @@ begin
   end;
 end;
 
+function THashMappedTrie.NodeContainsReference(ANode, ATarget: PHmtNode): Boolean;
+var
+  I: Int32;
+begin
+  if (ANode = nil) or (ATarget = nil) then
+    Exit(False);
+  if ANode = ATarget then
+    Exit(True);
+
+  if ANode^.Kind = hnkBranch then
+    for I := 0 to HMT_BRANCH_FACTOR - 1 do
+      if NodeContainsReference(ANode^.Children[I], ATarget) then
+        Exit(True);
+
+  Result := False;
+end;
+
 procedure THashMappedTrie.FreeNode(ANode: PHmtNode);
 var
   I: Int32;
@@ -482,17 +515,24 @@ var
   LIsUpdate: Boolean;
 begin
   LHash := HashKey(AKey);
-
-  { Check if key already exists (update vs insert) }
-  LIsUpdate := NodeFind(FRoot, LHash, 0, AKey, LExistingValue);
-
-  Result := NodeInsert(FRoot, LHash, 0, AKey, AValue, LNewRoot);
-  if (Result = hmtOk) and (LNewRoot <> FRoot) then
-  begin
-    { Swap root atomically }
-    AtomicStorePtr(Pointer(FRoot), Pointer(LNewRoot), moRelease);
-    if not LIsUpdate then
-      AtomicFetchAdd32(FSize, 1);
+  AcquireLock;
+  try
+    LNewRoot := FRoot;
+    LIsUpdate := NodeFind(FRoot, LHash, 0, AKey, LExistingValue);
+    Result := NodeInsert(FRoot, LHash, 0, AKey, AValue, LNewRoot);
+    if Result = hmtOk then
+    begin
+      if not LIsUpdate then
+        Inc(FSize);
+      if LNewRoot <> FRoot then
+      begin
+        if not NodeContainsReference(LNewRoot, FRoot) then
+          FreeNode(FRoot);
+        FRoot := LNewRoot;
+      end;
+    end;
+  finally
+    ReleaseLock;
   end;
 end;
 
@@ -502,17 +542,27 @@ var
   LNewRoot: PHmtNode;
 begin
   LHash := HashKey(AKey);
-  Result := NodeRemove(FRoot, LHash, 0, AKey, LNewRoot);
-  if (Result = hmtOk) and (LNewRoot <> FRoot) then
-  begin
-    AtomicStorePtr(Pointer(FRoot), Pointer(LNewRoot), moRelease);
-    AtomicFetchAdd32(FSize, -1);
+  AcquireLock;
+  try
+    Result := NodeRemove(FRoot, LHash, 0, AKey, LNewRoot);
+    if Result = hmtOk then
+    begin
+      FRoot := LNewRoot;
+      Dec(FSize);
+    end;
+  finally
+    ReleaseLock;
   end;
 end;
 
 function THashMappedTrie.Find(const AKey: AnsiString; out AValue: AnsiString): Boolean;
 begin
-  Result := NodeFind(FRoot, HashKey(AKey), 0, AKey, AValue);
+  AcquireLock;
+  try
+    Result := NodeFind(FRoot, HashKey(AKey), 0, AKey, AValue);
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function THashMappedTrie.Contains(const AKey: AnsiString): Boolean;
@@ -524,18 +574,33 @@ end;
 
 function THashMappedTrie.Size: Int32;
 begin
-  Result := AtomicLoad32(FSize, moAcquire);
+  AcquireLock;
+  try
+    Result := FSize;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function THashMappedTrie.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad32(FSize, moAcquire) = 0;
+  AcquireLock;
+  try
+    Result := FSize = 0;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function THashMappedTrie.Snapshot: THmtSnapshot;
 begin
-  Result.Root := AtomicLoadPtr(Pointer(FRoot), moAcquire);
-  Result.Size := AtomicLoad32(FSize, moAcquire);
+  AcquireLock;
+  try
+    Result.Root := FRoot;
+    Result.Size := FSize;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 end.

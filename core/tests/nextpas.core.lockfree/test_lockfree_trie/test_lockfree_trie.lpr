@@ -5,7 +5,6 @@ program test_lockfree_trie;
 uses
   SysUtils,
   nextpas.core.lockfree.trie,
-  nextpas.core.lockfree,
   nextpas.core.test;
 
 type
