@@ -301,8 +301,8 @@ begin
   Check(LComparisons[0].CurrentNsPerOp > 0, 'Current NsPerOp > 0');
   Check(Abs(LComparisons[0].Ratio - (LComparisons[0].CurrentNsPerOp / LComparisons[0].BaselineNsPerOp)) < 0.0001,
     'Ratio uses Current/Baseline direction');
-  Check(LComparisons[0].HasStatisticalTest,
-    'Welch t-test available when result has samples');
+  Check(not LComparisons[0].HasStatisticalTest,
+    'Baseline without variance does not claim a statistical test');
 end;
 
 procedure TestTBenchSuite_WithFilter;
@@ -1420,6 +1420,33 @@ begin
   Check(LComparisons[0].BaselineNsPerOp = 75.0, 'AddBaselineData: baseline NsPerOp = 75.0');
 end;
 
+procedure TestCompareWithBaselineWithoutVariance;
+var
+  LResult: TBenchResult;
+  LBaseline: TBaselineData;
+  LResults: IBenchResults;
+  LComparisons: TBenchComparisonArray;
+begin
+  LResult := Default(TBenchResult);
+  LResult.Name := 'NoBaselineVariance';
+  LResult.Executed := True;
+  LResult.NsPerOp := 120.0;
+  LResult.StdDev := 5.0;
+  LResult.SampleCount := 10;
+
+  LBaseline := Default(TBaselineData);
+  LBaseline.Name := LResult.Name;
+  LBaseline.NsPerOp := 100.0;
+
+  LResults := TBenchResults.Create(
+    [LResult], Default(TBenchEnvironment), [LBaseline]);
+  LComparisons := LResults.CompareWithBaseline;
+
+  Check(Length(LComparisons) = 1, 'Missing-variance baseline produces one comparison');
+  Check(not LComparisons[0].HasStatisticalTest,
+    'Missing-variance baseline does not claim a statistical test');
+end;
+
 procedure TestSaveBaseline_RoundTrip;
 var
   LSuite: IBenchSuite;
@@ -1865,6 +1892,7 @@ begin
     T.Test('CreateWithConfig', @TestTBenchSuite_CreateWithConfig);
     T.Test('AddBaselines', @TestTBenchSuite_AddBaselines);
     T.Test('AddBaselineData', @TestAddBaselineData);
+    T.Test('CompareWithBaseline without variance', @TestCompareWithBaselineWithoutVariance);
     T.Test('SaveBaseline_RoundTrip', @TestSaveBaseline_RoundTrip);
     T.Test('AppendToTimeline', @TestAppendToTimeline);
     T.Test('CompareTwoResults', @TestCompareTwoResults);

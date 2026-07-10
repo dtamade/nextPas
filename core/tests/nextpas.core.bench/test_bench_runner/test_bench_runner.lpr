@@ -116,6 +116,14 @@ begin
   end;
 end;
 
+procedure BenchAllocatesOneBlock(const ACtx: IBenchContext);
+var
+  LMemory: Pointer;
+begin
+  GetMem(LMemory, 64);
+  FreeMem(LMemory);
+end;
+
 procedure BenchSkips(const ACtx: IBenchContext);
 begin
   if ACtx <> nil then
@@ -492,6 +500,33 @@ begin
   end;
 end;
 
+procedure TestSingleSampleMemoryTracking;
+var
+  LRunner: TBenchRunner;
+  LConfig: TBenchConfig;
+  LResult: TBenchResult;
+begin
+  LRunner := TBenchRunner.CreateNoEnv;
+  try
+    LConfig := DefaultBenchConfig;
+    LConfig.MinDurationNs := 1;
+    LConfig.MaxIterations := 1;
+    LConfig.MinSamples := 1;
+    LConfig.WarmupIterations := 0;
+    LConfig.EnableMemoryTracking := True;
+    LConfig.Quiet := True;
+    LRunner.SetConfig(LConfig);
+
+    LResult := LRunner.RunOne('SingleSampleMemory', @BenchAllocatesOneBlock);
+
+    Check(LResult.SampleCount = 1, 'Single-sample benchmark reports one timing sample');
+    Check(LResult.AllocsPerOp >= 1, 'Single-sample benchmark captures allocations');
+    Check(LResult.BytesPerOp >= 64, 'Single-sample benchmark captures allocated bytes');
+  finally
+    LRunner.Free;
+  end;
+end;
+
 { === TG-12: RunAll Statistics Completeness === }
 
 procedure TestRunAll_StatisticsComplete;
@@ -628,6 +663,7 @@ begin
   T.Test('Config quiet from env', @TestConfig_QuietEnv);
   T.Test('MeasureNs', @TestMeasureNs);
   T.Test('ClearResults', @TestClearResults);
+  T.Test('Single-sample memory tracking', @TestSingleSampleMemoryTracking);
   T.Test('RunAll statistics completeness (TG-12)', @TestRunAll_StatisticsComplete);
   T.Test('Run + Summary', @TestRun_Summary);
   T.Test('Summary on empty runner', @TestRun_Summary_Empty);

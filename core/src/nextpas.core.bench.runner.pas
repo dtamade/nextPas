@@ -1070,6 +1070,10 @@ begin
     end;
   end;
 
+  { 单样本没有循环尾采样，补一次独立追踪以免污染时间样本 }
+  if FConfig.EnableMemoryTracking and (LSampleCount = 1) then
+    LLastTrackedSample := ExecuteEntry(AEntry, AIters, True);
+
   { 将最后一次带内存追踪的采样的内存 stats 复制到 AFirstSample }
   if LLastTrackedSample.BytesPerOp > 0 then
     AFirstSample.BytesPerOp := LLastTrackedSample.BytesPerOp;
