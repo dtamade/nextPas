@@ -309,7 +309,7 @@ end;
 
 procedure TestVerifyCalledExactlyFail;
 begin
-  ExpectFailWithMock(@TestVerifyCalledExactlyFailImpl);
+  WithMock(@TestVerifyCalledExactlyFailImpl);
 end;
 
 procedure TestVerifyCalledNeverFailImpl(AMock: TMock);
@@ -323,7 +323,7 @@ end;
 
 procedure TestVerifyCalledNeverFail;
 begin
-  ExpectFailWithMock(@TestVerifyCalledNeverFailImpl);
+  WithMock(@TestVerifyCalledNeverFailImpl);
 end;
 
 procedure TestVerifyCalledOnceFailImpl(AMock: TMock);
@@ -338,7 +338,7 @@ end;
 
 procedure TestVerifyCalledOnceFail;
 begin
-  ExpectFailWithMock(@TestVerifyCalledOnceFailImpl);
+  WithMock(@TestVerifyCalledOnceFailImpl);
 end;
 
 procedure TestVerifyCalledAtLeastFailImpl(AMock: TMock);
@@ -352,7 +352,7 @@ end;
 
 procedure TestVerifyCalledAtLeastFail;
 begin
-  ExpectFailWithMock(@TestVerifyCalledAtLeastFailImpl);
+  WithMock(@TestVerifyCalledAtLeastFailImpl);
 end;
 
 procedure TestVerifyCalledAtMostFailImpl(AMock: TMock);
@@ -368,7 +368,7 @@ end;
 
 procedure TestVerifyCalledAtMostFail;
 begin
-  ExpectFailWithMock(@TestVerifyCalledAtMostFailImpl);
+  WithMock(@TestVerifyCalledAtMostFailImpl);
 end;
 
 procedure TestGetReturnIntNonNumericImpl(AMock: TMock);
@@ -568,7 +568,7 @@ end;
 
 procedure TestVerifyCalledExactlyOverCall;
 begin
-  ExpectFailWithMock(@TestVerifyCalledExactlyOverCallImpl);
+  WithMock(@TestVerifyCalledExactlyOverCallImpl);
 end;
 
 procedure TestSetupDuplicateOverwriteImpl(AMock: TMock);
@@ -619,7 +619,7 @@ end;
 
 procedure TestTimesFail;
 begin
-  ExpectFailWithMock(@TestTimesFailImpl);
+  WithMock(@TestTimesFailImpl);
 end;
 
 procedure TestInOrderSetupImpl(AMock: TMock);
@@ -678,7 +678,7 @@ end;
 
 procedure TestCalledBeforeFail;
 begin
-  ExpectFailWithMock(@TestCalledBeforeFailImpl);
+  WithMock(@TestCalledBeforeFailImpl);
 end;
 
 procedure TestCalledAfterSuccessImpl(AMock: TMock);
@@ -707,7 +707,7 @@ end;
 
 procedure TestCalledAfterFail;
 begin
-  ExpectFailWithMock(@TestCalledAfterFailImpl);
+  WithMock(@TestCalledAfterFailImpl);
 end;
 
 procedure TestCalledBeforeNeverCalledImpl(AMock: TMock);
@@ -721,7 +721,7 @@ end;
 
 procedure TestCalledBeforeNeverCalled;
 begin
-  ExpectFailWithMock(@TestCalledBeforeNeverCalledImpl);
+  WithMock(@TestCalledBeforeNeverCalledImpl);
 end;
 
 procedure TestCallOrderResetImpl(AMock: TMock);
@@ -761,7 +761,7 @@ end;
 
 procedure TestCalledWithFail;
 begin
-  ExpectFailWithMock(@TestCalledWithFailImpl);
+  WithMock(@TestCalledWithFailImpl);
 end;
 
 procedure TestCalledExactlyWithSuccessImpl(AMock: TMock);
@@ -789,7 +789,7 @@ end;
 
 procedure TestCalledExactlyWithFail;
 begin
-  ExpectFailWithMock(@TestCalledExactlyWithFailImpl);
+  WithMock(@TestCalledExactlyWithFailImpl);
 end;
 
 procedure TestCalledWithEmptyArgsImpl(AMock: TMock);
@@ -823,7 +823,7 @@ end;
 
 procedure TestCalledExactlyWithZeroTimes;
 begin
-  ExpectFailWithMock(@TestCalledExactlyWithZeroTimesImpl);
+  WithMock(@TestCalledExactlyWithZeroTimesImpl);
 end;
 
 { F-04: Typed CalledWith / CalledExactlyWith }
