@@ -37,7 +37,7 @@
 | L2 | **TInterfacedObject 替代** (TRefCountedObject) |    | core/base | 5d | ✅ 2026-07-06 |
 | L3 | **TThread 替代** (TWorkerThread) |    | core/thread | 3d | ✅ 2026-07-06 |
 | L4 | **StrComp SysUtils 依赖** (lhash.pas) |    | core/base | 0.25d | ✅ 2026-07-06 |
-| L5 | **泛型构造器传播** (collections, crypto.*) |    | compiler/sema | 10d |   未开始 |
+| L5 | **泛型构造器传播** (collections, crypto.*) |    | compiler/sema | 10d | ✅ 2026-07-06 |
 | L6 | **Class helper 完整支持** (thread.future, text.format) |    | compiler/sema | 10d |   未开始 |
 
 ### 平台/构建
