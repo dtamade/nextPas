@@ -87,7 +87,7 @@ threadvar
 
 procedure EnsureAVX2TanScratch(aCount: SizeUInt);
 begin
-  if GAVX2TanBufCapacity < aCount then
+  if (GAVX2TanBufCapacity < aCount) or (aCount < GAVX2TanBufCapacity div 4) then
   begin
     // 释放旧缓冲区
     if GAVX2TanSinBuf <> nil then

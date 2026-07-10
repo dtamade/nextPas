@@ -403,7 +403,7 @@ threadvar
 
 procedure EnsureTanScratch(aCount: SizeUInt);
 begin
-  if GTanBufCapacity < aCount then
+  if (GTanBufCapacity < aCount) or (aCount < GTanBufCapacity div 4) then
   begin
     // 释放旧缓冲区
     if GTanSinBuf <> nil then
