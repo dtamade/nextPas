@@ -313,7 +313,8 @@ function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
 begin
   Result := HttpStatusIsInformational(AStatus) or
     (AStatus = HTTP_STATUS_NO_CONTENT) or
-    (AStatus = HTTP_STATUS_NOT_MODIFIED);
+    (AStatus = HTTP_STATUS_NOT_MODIFIED) or
+    (AStatus = HTTP_STATUS_RESET_CONTENT);
 end;
 
 { TH2ResponseWriter }
