@@ -430,62 +430,78 @@ end;
 function Variance(const AData: array of Double): Double;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Double;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount < 2 then
     Exit(DoubleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff / (LCount - 1);
+  begin
+    LDelta := AData[i] - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (AData[i] - LMean);
+  end;
+  Result := LS / (LCount - 1);
 end;
 
 function Variance(const AData: array of Single): Single;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Single;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount < 2 then
     Exit(SingleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff / (LCount - 1);
+  begin
+    LDelta := Double(AData[i]) - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (Double(AData[i]) - LMean);
+  end;
+  Result := Single(LS / (LCount - 1));
 end;
 
 { PopnVariance - population variance (denominator N) }
 function PopnVariance(const AData: array of Double): Double;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Double;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount = 0 then
     Exit(DoubleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff / LCount;
+  begin
+    LDelta := AData[i] - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (AData[i] - LMean);
+  end;
+  Result := LS / LCount;
 end;
 
 function PopnVariance(const AData: array of Single): Single;
 var
   i, LCount: Integer;
-  LMean, LSumSqDiff: Single;
+  LMean, LS, LDelta: Double;
 begin
   LCount := Length(AData);
   if LCount = 0 then
     Exit(SingleQuietNaN);
-  LMean := Mean(AData);
-  LSumSqDiff := 0.0;
+  LMean := 0.0;
+  LS := 0.0;
   for i := 0 to LCount - 1 do
-    LSumSqDiff := LSumSqDiff + (AData[i] - LMean) * (AData[i] - LMean);
-  Result := LSumSqDiff / LCount;
+  begin
+    LDelta := Double(AData[i]) - LMean;
+    LMean := LMean + LDelta / (i + 1);
+    LS := LS + LDelta * (Double(AData[i]) - LMean);
+  end;
+  Result := Single(LS / LCount);
 end;
 
 { StdDev - sample standard deviation }
