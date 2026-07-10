@@ -514,17 +514,18 @@ begin
   end;
 
   finally
-    { Always dispose thread-local GExecState — even on early Exit paths
-      (ekSubtest, ekSkipped) that skip the normal cleanup below. }
+    { P0 #1 fix: release TTestContext BEFORE GExecState.
+      TTestContext destructor calls RunCleanups, which may indirectly
+      access GExecState via InternalFail/SetTestContext. }
+    SetCurrentTestContext(nil);
+    LSubCtx := nil;
+    { Now safe to release GExecState — no callbacks can reference it. }
     if GExecState <> nil then
     begin
       Finalize(GExecState^);
       FreeMem(GExecState);
       GExecState := nil;
     end;
-    { P1 fix: release TTestContext installed for parallel workers. }
-    SetCurrentTestContext(nil);
-    LSubCtx := nil;
   end;
   except
     { Top-level catch: prevent worker thread exceptions from crashing the process.

@@ -102,6 +102,9 @@ uses
   nextpas.core.platform.env,
   nextpas.core.fs;
 
+var
+  GTempDirCounter: Integer = 0;  { P2 #13: atomic counter for temp dir uniqueness }
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Thread-local test context management                                          }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -280,9 +283,12 @@ begin
     if LBaseDir = '' then
       LBaseDir := '/tmp';
     LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+    { P2 #13 fix: use atomic counter + address for uniqueness — address alone
+      can collide if object is freed and new object reuses the same address. }
     FTempDir := LBaseDir + 'nextpas_test_' +
       StringReplace(FTestName, '/', '_', [rfReplaceAll]) + '_' +
-      IntToStr(Int64(Pointer(Self)));  { unique per instance }
+      IntToStr(Int64(Pointer(Self))) + '_' +
+      IntToStr(InterlockedIncrement(GTempDirCounter));
     ForceDirectories(FTempDir);
     { Register cleanup to remove temp dir after test }
     OnCleanup(procedure
@@ -604,6 +610,9 @@ begin
         ResolveErrSink(FConfig).WriteLn(
           '    ' + AnsiYellow('WARNING cleanup error: ', FConfig) + E.Message);
     end;
+    { P2 #15 fix: release reference immediately to break potential cycles
+      (closure captures Self → Self.FCleanups holds closure) }
+    FCleanups[LIdx] := nil;
   end;
   FCleanups := nil;
 end;
