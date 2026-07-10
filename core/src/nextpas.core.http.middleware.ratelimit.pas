@@ -210,15 +210,6 @@ begin
     if LReset < 0 then
       LReset := 0;
 
-    { Periodic cleanup: every CLEANUP_INTERVAL requests, evict expired entries
-      to prevent unbounded memory growth. }
-    Inc(FCleanupCounter);
-    if FCleanupCounter >= CLEANUP_INTERVAL then
-    begin
-      FCleanupCounter := 0;
-      CleanupExpiredEntries(LNow);
-    end;
-
     AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(FMaxRequests)));
     AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));
     AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(LReset));
@@ -228,6 +219,15 @@ begin
       AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
       HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
       Result := False;
+    end;
+
+    { Periodic cleanup: after we're done using LIdx, evict expired entries
+      to prevent unbounded memory growth. }
+    Inc(FCleanupCounter);
+    if FCleanupCounter >= CLEANUP_INTERVAL then
+    begin
+      FCleanupCounter := 0;
+      CleanupExpiredEntries(LNow);
     end;
   finally
     LeaveCriticalSection(FLock);

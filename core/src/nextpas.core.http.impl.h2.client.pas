@@ -1219,6 +1219,7 @@ procedure TH2ClientConnection.HandleData(const AFrame: TH2Frame;
 var
   LData: AnsiString;
   LDataLen: UInt32;
+  LFrameLen: UInt32;
 begin
   if AFrame.Header.StreamID = 0 then
     FailConnection(H2_ERR_PROTOCOL_ERROR, 'DATA',
@@ -1227,14 +1228,19 @@ begin
     Exit;
   if not ExtractDataPayload(AFrame.Header.Flags, AFrame.Payload, LData) then
     raise EHttpError.Create('HTTP/2 invalid DATA payload');
-  LDataLen := UInt32(Length(LData));
-  if LDataLen > 0 then
+  { Flow control accounts for entire frame payload including padding }
+  LFrameLen := UInt32(Length(AFrame.Payload));
+  if LFrameLen > 0 then
   begin
-    AStreamFlow.RecvWindow.OnDataReceived(LDataLen);
-    FConnectionFlow.RecvWindow.OnDataReceived(LDataLen);
-    AppendResponseBody(AResponse, LData);
-    AStreamFlow.RecvWindow.OnDataConsumed(LDataLen);
-    ConsumeResponseBody(AResponse, LDataLen);
+    AStreamFlow.RecvWindow.OnDataReceived(LFrameLen);
+    FConnectionFlow.RecvWindow.OnDataReceived(LFrameLen);
+    LDataLen := UInt32(Length(LData));
+    if LDataLen > 0 then
+    begin
+      AppendResponseBody(AResponse, LData);
+      AStreamFlow.RecvWindow.OnDataConsumed(LDataLen);
+      ConsumeResponseBody(AResponse, LDataLen);
+    end;
   end;
   if (AFrame.Header.Flags and H2_FLAG_DATA_END_STREAM) <> 0 then
     AResponse.EndStream := True;

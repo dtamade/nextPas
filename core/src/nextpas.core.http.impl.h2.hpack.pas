@@ -886,6 +886,7 @@ var
   LAddDynamic: Boolean;
   LAddName: AnsiString;
   LAddValue: AnsiString;
+  LHuffman: Boolean;
   LSeenHeaderRep: Boolean;
 begin
   Result := False;
@@ -996,6 +997,7 @@ begin
       if LPos > LBlockLen then
         Exit;
       LByte := Byte(ABlock[LPos]);
+      LHuffman := (LByte and $80) <> 0;
       LLen := LByte and $7F;
       Inc(LPos);
       if LLen = $7F then
@@ -1016,7 +1018,7 @@ begin
         Exit;
       if LLen = 0 then
         SetByteSpan(LNameSpan, nil, 0)
-      else if (LByte and $80) <> 0 then
+      else if LHuffman then
       begin
         EnsureScratchCapacity(FScratchPos + (SizeInt(LLen) * 2) + 16);
         if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LLen),
@@ -1033,6 +1035,7 @@ begin
     if LPos > LBlockLen then
       Exit;
     LByte := Byte(ABlock[LPos]);
+    LHuffman := (LByte and $80) <> 0;
     LLen := LByte and $7F;
     Inc(LPos);
     if LLen = $7F then
@@ -1053,7 +1056,7 @@ begin
       Exit;
     if LLen = 0 then
       SetByteSpan(LValueSpan, nil, 0)
-    else if (LByte and $80) <> 0 then
+    else if LHuffman then
     begin
       EnsureScratchCapacity(FScratchPos + (SizeInt(LLen) * 2) + 16);
       if not H2HuffmanDecodeBuf(@ABlock[LPos], SizeInt(LLen),

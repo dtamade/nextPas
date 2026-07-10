@@ -584,6 +584,9 @@ begin
       This prevents symlink-based directory traversal attacks. }
     LNormalizedRoot := FsPathClean(FsPathAbs(ARoot));
     LNormalizedFull := FsPathClean(FsPathAbs(LFullPath));
+    { Ensure root ends with path separator for exact prefix match }
+    if (LNormalizedRoot <> '') and (LNormalizedRoot[Length(LNormalizedRoot)] <> '/') then
+      LNormalizedRoot := LNormalizedRoot + '/';
     if not (Length(LNormalizedFull) >= Length(LNormalizedRoot)) or
        (System.Copy(LNormalizedFull, 1, Length(LNormalizedRoot)) <> LNormalizedRoot) then
     begin

@@ -839,6 +839,7 @@ procedure TH2Stream.OnData(const AFlags: Byte; const APayload: AnsiString);
 var
   LData: AnsiString;
   LDataLen: UInt32;
+  LFrameLen: UInt32;
 begin
   if FResetReceived or (FState = h2ssClosed) then
     Exit;
@@ -850,24 +851,25 @@ begin
     Exit;
   end;
 
-  LDataLen := UInt32(Length(LData));
-  if LDataLen > 0 then
+  { Flow control accounts for entire frame payload including padding }
+  LFrameLen := UInt32(Length(APayload));
+  if LFrameLen > 0 then
   begin
-    if not FRecvFlow.CanReceive(LDataLen) then
+    if not FRecvFlow.CanReceive(LFrameLen) then
     begin
       InternalReset(H2_ERR_FLOW_CONTROL_ERROR);
       Exit;
     end;
     if (FConnectionFlow <> nil) and
-       (not FConnectionFlow^.RecvWindow.CanReceive(LDataLen)) then
+       (not FConnectionFlow^.RecvWindow.CanReceive(LFrameLen)) then
     begin
       InternalReset(H2_ERR_FLOW_CONTROL_ERROR);
       Exit;
     end;
     try
-      FRecvFlow.OnDataReceived(LDataLen);
+      FRecvFlow.OnDataReceived(LFrameLen);
       if FConnectionFlow <> nil then
-        FConnectionFlow^.RecvWindow.OnDataReceived(LDataLen);
+        FConnectionFlow^.RecvWindow.OnDataReceived(LFrameLen);
       AppendBodyData(LData);
     except
       InternalReset(H2_ERR_FLOW_CONTROL_ERROR);

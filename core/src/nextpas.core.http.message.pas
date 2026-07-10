@@ -316,13 +316,26 @@ end;
 { Escape a string for safe embedding in JSON. Handles ", \, and control chars. }
 function JsonEscapeStr(const AStr: string): string;
 var
-  LI, LJ, LLen: SizeInt;
+  LI, LJ, LLen, LOutLen: SizeInt;
   LCh: Char;
 begin
   LLen := Length(AStr);
   if LLen = 0 then
     Exit('');
-  SetLength(Result, LLen * 2); { worst case: every char is escaped }
+  { Pre-scan to calculate exact output length }
+  LOutLen := LLen;
+  for LI := 1 to LLen do
+  begin
+    LCh := AStr[LI];
+    case LCh of
+      '"', '\', #8, #9, #10, #12, #13:
+        Inc(LOutLen); { 2 bytes output instead of 1 }
+    else
+      if Ord(LCh) < 32 then
+        Inc(LOutLen, 5); { \u00XX = 6 bytes instead of 1 }
+    end;
+  end;
+  SetLength(Result, LOutLen);
   LJ := 1;
   for LI := 1 to LLen do
   begin
@@ -794,8 +807,11 @@ begin
   if LHeaders = nil then
     LHeaders := NewHttpHeaders;
   ValidateRequestBodyHeaders(LHeaders, AContentLength);
-  if (ABody <> nil) or (AContentLength > 0) then
-    LHeaders.SetHeader('content-length', IntToStr(AContentLength));
+  if AContentLength > 0 then
+    LHeaders.SetHeader('content-length', IntToStr(AContentLength))
+  else if (ABody <> nil) and (AContentLength = 0) then
+    { Body with unknown length: don't set content-length, let chunked handle it }
+    LHeaders.SetHeader('transfer-encoding', 'chunked');
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
     AContentLength);
 end;
@@ -1385,6 +1401,7 @@ end;
 
 function THttpRequestBuilder.Build: IHttpRequest;
 var
+  LI: SizeInt;
   LUrl: string;
   LHeaders: IHttpHeaders;
   LQueryStr: string;
@@ -1397,7 +1414,9 @@ begin
   if FQueryCount > 0 then
   begin
     SetLength(LQuerySlice, FQueryCount);
-    Move(FQueryParams[0], LQuerySlice[0], FQueryCount * SizeOf(TQueryParam));
+    { Element-by-element copy to properly handle managed string fields }
+    for LI := 0 to FQueryCount - 1 do
+      LQuerySlice[LI] := FQueryParams[LI];
     LQueryStr := EncodeQueryString(LQuerySlice);
     if LQueryStr <> '' then
     begin
