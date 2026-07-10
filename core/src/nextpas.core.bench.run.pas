@@ -194,14 +194,18 @@ end;
 
 procedure TBenchRun.SubmitResult(AResult: PBenchRunResult);
 var
-  LIdx: Int32;
+  LIdx, LExpected: Int32;
 begin
-  LIdx := AtomicFetchAdd32(FResultIdx, 1, moAcqRel);
-  if LIdx >= FCapacity then
-  begin
-    FreeBenchResult(AResult);
-    raise EBenchInvalidParam.Create('TBenchRun: result capacity exceeded');
-  end;
+  { CAS 循环：只在容量内递增，避免溢出后 FResultIdx 越界 }
+  repeat
+    LExpected := AtomicLoad32(FResultIdx, moRelaxed);
+    if LExpected >= FCapacity then
+    begin
+      FreeBenchResult(AResult);
+      raise EBenchInvalidParam.Create('TBenchRun: result capacity exceeded');
+    end;
+    LIdx := LExpected;
+  until AtomicCompareExchange32(FResultIdx, LExpected, LExpected + 1) = LExpected;
   PBenchRunResultSlotArray(FResults)^[LIdx] := AResult;
 end;
 

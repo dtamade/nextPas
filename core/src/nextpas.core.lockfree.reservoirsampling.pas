@@ -42,7 +42,7 @@ type
     FReservoir: TItemArray;
     FCapacity: Int32;
     FCount: Int64;
-    FPRNG: UInt32;
+    FPRNG_S0, FPRNG_S1: UInt64;
     FLock: Int32;
     FClosed: Int32;
     procedure Lock; inline;
@@ -77,7 +77,13 @@ begin
   inherited Create;
   FCapacity := ACapacity;
   FCount := 0;
-  FPRNG := 12345;
+  { Non-deterministic seeding: mix pointer addresses for per-instance uniqueness }
+  FPRNG_S0 := UInt64(SizeInt(Self)) xor (UInt64(SizeInt(@ACapacity)) shl 17);
+  FPRNG_S1 := UInt64(SizeInt(@Self)) xor (UInt64(ACapacity) shl 31);
+  if FPRNG_S0 = 0 then FPRNG_S0 := $DEADBEEFCAFEBABE;
+  if FPRNG_S1 = 0 then FPRNG_S1 := $123456789ABCDEF0;
+  { Warm up: skip initial transient }
+  NextRandom; NextRandom; NextRandom; NextRandom;
   FLock := 0;
   FClosed := 0;
   SetLength(FReservoir, FCapacity);
@@ -95,11 +101,16 @@ begin
 end;
 
 function TReservoirSamplerImpl.NextRandom: UInt32; inline;
+var
+  LS1, LS0: UInt64;
 begin
-  FPRNG := FPRNG xor (FPRNG shl 13);
-  FPRNG := FPRNG xor (FPRNG shr 17);
-  FPRNG := FPRNG xor (FPRNG shl 5);
-  Result := FPRNG;
+  { xorshift128+ — much better statistical quality than xorshift32 }
+  LS0 := FPRNG_S0;
+  LS1 := FPRNG_S1;
+  FPRNG_S0 := LS1;
+  LS0 := LS0 xor (LS0 shl 23);
+  FPRNG_S1 := LS0 xor LS1 xor (LS0 shr 17) xor (LS1 shr 26);
+  Result := UInt32(FPRNG_S1 + LS1);
 end;
 
 function TReservoirSamplerImpl.Add(const AItem: T): TReservoirResult;

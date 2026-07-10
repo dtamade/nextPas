@@ -105,8 +105,7 @@ function Sqrt(const AX: Single): Single; overload; inline;
 implementation
 
 uses
-  nextpas.core.math.impl.scalar,
-  Math;
+  nextpas.core.math.impl.scalar;
 
 const
   DOUBLE_EXP_OVERFLOW_LIMIT: Double = 709.7827128933839731;
@@ -245,7 +244,7 @@ begin
     Exit(DoubleSignedInfinity(False));
   if AX = -HALF_PI then
     Exit(DoubleSignedInfinity(True));
-  Result := Math.Tan(AX);
+  Result := Sin(AX) / Cos(AX);
 end;
 
 function ArcSin(const AX: Single): Single;
