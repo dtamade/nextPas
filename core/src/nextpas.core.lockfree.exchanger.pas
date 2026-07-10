@@ -10,6 +10,14 @@ uses
 type
   TLockFreeExchangeResult = (exExchanged, exClosed, exTimeout);
 
+const
+  EXCHANGER_STATE_EMPTY = 0;
+  EXCHANGER_STATE_RESERVED = 1;
+  EXCHANGER_STATE_READY = 2;
+  EXCHANGER_STATE_CLAIMED = 3;
+  EXCHANGER_STATE_COMPLETED = 4;
+
+type
   {** @desc 并发交换器（Exchanger）
     @details 两个线程交换值的同步点。
       线程 A 调用 Exchange(AValue) 阻塞等待，线程 B 调用 Exchange(BValue) 阻塞等待。
@@ -18,10 +26,9 @@ type
   }
   generic TExchangerImpl<T> = class
   private
-    FSlot0Value: T;
-    FSlot0State: Int32;  // 0=empty, 1=waiting, 2=ready
-    FSlot1Value: T;
-    FSlot1State: Int32;
+    FOfferValue: T;
+    FReplyValue: T;
+    FState: Int32;
     FClosed: Int32;
   public
     constructor Create;
@@ -41,59 +48,51 @@ uses
 constructor TExchangerImpl.Create;
 begin
   inherited Create;
-  FSlot0State := 0;
-  FSlot1State := 0;
+  FState := EXCHANGER_STATE_EMPTY;
   FClosed := 0;
 end;
 
 function TExchangerImpl.Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
-var
-  LOldState: Int32;
 begin
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(exClosed);
 
-    // Try to be the first thread: offer in slot 0, take from slot 1
-    if AtomicCompareExchange32(FSlot0State, 0, 1) = 0 then
+    if AtomicCompareExchange32(FState, EXCHANGER_STATE_EMPTY, EXCHANGER_STATE_RESERVED, moAcqRel) = EXCHANGER_STATE_EMPTY then
     begin
-      FSlot0Value := AValue;
-      AtomicStore32(FSlot0State, 2, moRelease);
+      FOfferValue := AValue;
+      AtomicStore32(FState, EXCHANGER_STATE_READY, moRelease);
 
-      // Wait for slot 1 to become ready
-      while AtomicLoad32(FSlot1State, moAcquire) <> 2 do
+      while True do
       begin
+        case AtomicLoad32(FState, moAcquire) of
+          EXCHANGER_STATE_COMPLETED:
+            begin
+              AOutValue := FReplyValue;
+              AtomicStore32(FState, EXCHANGER_STATE_EMPTY, moRelease);
+              Exit(exExchanged);
+            end;
+          EXCHANGER_STATE_READY:
+            ;
+        else
+          raise EInvalidOperationError.Create('TExchanger.Exchange: invalid exchanger state');
+        end;
+
         if AtomicLoad32(FClosed, moAcquire) <> 0 then
         begin
-          AtomicStore32(FSlot0State, 0, moRelease);
-          Exit(exClosed);
+          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+            Exit(exClosed);
         end;
         CpuPause;
       end;
-
-      AOutValue := FSlot1Value;
-      AtomicStore32(FSlot1State, 0, moRelease);
-      Exit(exExchanged);
     end;
 
-    // Try to be the second thread: take from slot 0, offer in slot 1
-    if AtomicCompareExchange32(FSlot0State, 2, 0) = 2 then
+    if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_CLAIMED, moAcqRel) = EXCHANGER_STATE_READY then
     begin
-      AOutValue := FSlot0Value;
-
-      // Store our value in slot 1
-      while True do
-      begin
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
-          Exit(exClosed);
-        if AtomicCompareExchange32(FSlot1State, 0, 1) = 0 then
-          Break;
-        CpuPause;
-      end;
-
-      FSlot1Value := AValue;
-      AtomicStore32(FSlot1State, 2, moRelease);
+      AOutValue := FOfferValue;
+      FReplyValue := AValue;
+      AtomicStore32(FState, EXCHANGER_STATE_COMPLETED, moRelease);
       Exit(exExchanged);
     end;
 
@@ -104,6 +103,7 @@ end;
 function TExchangerImpl.ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
 var
   LStart: TInstant;
+  LState: Int32;
 begin
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TExchanger.ExchangeTimeout: timeout must be > 0');
@@ -116,50 +116,40 @@ begin
     if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
       Exit(exTimeout);
 
-    // Try to be the first thread
-    if AtomicCompareExchange32(FSlot0State, 0, 1) = 0 then
+    if AtomicCompareExchange32(FState, EXCHANGER_STATE_EMPTY, EXCHANGER_STATE_RESERVED, moAcqRel) = EXCHANGER_STATE_EMPTY then
     begin
-      FSlot0Value := AValue;
-      AtomicStore32(FSlot0State, 2, moRelease);
-
-      while AtomicLoad32(FSlot1State, moAcquire) <> 2 do
-      begin
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
-        begin
-          AtomicStore32(FSlot0State, 0, moRelease);
-          Exit(exClosed);
-        end;
-        if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
-        begin
-          AtomicStore32(FSlot0State, 0, moRelease);
-          Exit(exTimeout);
-        end;
-        CpuPause;
-      end;
-
-      AOutValue := FSlot1Value;
-      AtomicStore32(FSlot1State, 0, moRelease);
-      Exit(exExchanged);
-    end;
-
-    // Try to be the second thread
-    if AtomicCompareExchange32(FSlot0State, 2, 0) = 2 then
-    begin
-      AOutValue := FSlot0Value;
+      FOfferValue := AValue;
+      AtomicStore32(FState, EXCHANGER_STATE_READY, moRelease);
 
       while True do
       begin
+        LState := AtomicLoad32(FState, moAcquire);
+        if LState = EXCHANGER_STATE_COMPLETED then
+        begin
+          AOutValue := FReplyValue;
+          AtomicStore32(FState, EXCHANGER_STATE_EMPTY, moRelease);
+          Exit(exExchanged);
+        end;
+
         if AtomicLoad32(FClosed, moAcquire) <> 0 then
-          Exit(exClosed);
+        begin
+          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+            Exit(exClosed);
+        end;
         if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
-          Exit(exTimeout);
-        if AtomicCompareExchange32(FSlot1State, 0, 1) = 0 then
-          Break;
+        begin
+          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+            Exit(exTimeout);
+        end;
         CpuPause;
       end;
+    end;
 
-      FSlot1Value := AValue;
-      AtomicStore32(FSlot1State, 2, moRelease);
+    if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_CLAIMED, moAcqRel) = EXCHANGER_STATE_READY then
+    begin
+      AOutValue := FOfferValue;
+      FReplyValue := AValue;
+      AtomicStore32(FState, EXCHANGER_STATE_COMPLETED, moRelease);
       Exit(exExchanged);
     end;
 

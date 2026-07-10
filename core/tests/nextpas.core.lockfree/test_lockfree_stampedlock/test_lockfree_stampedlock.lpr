@@ -142,6 +142,26 @@ begin
   end;
 end;
 
+procedure TestStampedLockWriterBlockedByReader;
+var
+  LLock: TStampedLock;
+  LReadStamp: Int64;
+  LWriteStamp: Int64;
+begin
+  LLock := TStampedLock.Create;
+  try
+    LReadStamp := LLock.ReadLock;
+    Check(LReadStamp <> 0, 'Read lock must succeed');
+    Check(LLock.TryWriteLock = 0, 'Writer must not acquire while a reader is active');
+    LLock.UnlockRead(LReadStamp);
+    LWriteStamp := LLock.TryWriteLock;
+    Check(LWriteStamp <> 0, 'Writer should acquire after last reader leaves');
+    LLock.UnlockWrite(LWriteStamp);
+  finally
+    LLock.Free;
+  end;
+end;
+
 procedure TestStampedLockClose;
 var
   LLock: TStampedLock;
@@ -182,6 +202,9 @@ begin
 
   TestStampedLockTryRead;
   WriteLn('  + TryReadLock');
+
+  TestStampedLockWriterBlockedByReader;
+  WriteLn('  + Writer blocked by reader');
 
   TestStampedLockClose;
   WriteLn('  + Close semantics');

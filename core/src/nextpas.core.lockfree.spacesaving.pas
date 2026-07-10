@@ -65,6 +65,7 @@ type
 
     procedure HeapSiftUp(AIdx: Integer);
     procedure HeapSiftDown(AIdx: Integer);
+    procedure HeapRebuild;
     function FindItem(AItem: UInt64): Integer;
     function HeapExtractMin: Integer;
     procedure Lock;
@@ -177,6 +178,16 @@ begin
   end;
 end;
 
+procedure TSpaceSavingImpl.HeapRebuild;
+var
+  LI: Integer;
+begin
+  if FHeapSize <= 1 then
+    Exit;
+  for LI := (FHeapSize div 2) - 1 downto 0 do
+    HeapSiftDown(LI);
+end;
+
 function TSpaceSavingImpl.HeapExtractMin: Integer;
 var
   LMin: Integer;
@@ -218,7 +229,7 @@ begin
     if LIdx >= 0 then
     begin
       Inc(FEntries[LIdx].FCount);
-      HeapSiftDown(0);
+      HeapRebuild;
       Result := ssOk;
       Exit;
     end;
@@ -239,8 +250,8 @@ begin
       FEntries[LMinIdx].FCount := FEntries[LMinIdx].FCount + 1;
       FEntries[LMinIdx].FError := FEntries[LMinIdx].FCount - 1;
       FHeap[FHeapSize] := LMinIdx;
-      HeapSiftUp(FHeapSize);
       Inc(FHeapSize);
+      HeapRebuild;
     end;
 
     Result := ssOk;

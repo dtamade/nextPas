@@ -187,7 +187,15 @@ begin
   else
   begin
     while AtomicLoad32(LPub^.Completed, moAcquire) = 0 do
-      ThreadSwitch;
+    begin
+      if TryAcquire then
+      begin
+        Combine;
+        Release;
+      end
+      else
+        ThreadSwitch;
+    end;
     Result := LPub^.Result;
   end;
 end;

@@ -9,7 +9,6 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
-  nextpas.core.lockfree,
   nextpas.core.lockfree.skiplist;
 
 type

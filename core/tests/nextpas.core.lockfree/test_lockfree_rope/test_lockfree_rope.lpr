@@ -124,6 +124,29 @@ begin
   end;
 end;
 
+procedure TestNestedMiddleInsertAndCharAt;
+var
+  LChar: AnsiChar;
+begin
+  WriteLn('--- TestNestedMiddleInsertAndCharAt ---');
+  GRope := TRope.Create;
+  try
+    GRope.Insert(0, 'abc');
+    GRope.Insert(3, 'def');
+    GRope.Insert(6, 'ghi');
+    GRope.Insert(4, 'X');
+    Check(GRope.ToString = 'abcdXefghi', 'Middle insert into nested rope');
+    Check(GRope.CharAt(4, LChar) = rpOk, 'CharAt on inserted position succeeds');
+    Check(LChar = 'X', 'Inserted character is reachable');
+    Check(GRope.CharAt(8, LChar) = rpOk, 'CharAt near tail succeeds');
+    Check(LChar = 'h', 'Tail traversal uses full left weight');
+    Check(GRope.CharAt(9, LChar) = rpOk, 'CharAt last position succeeds');
+    Check(LChar = 'i', 'Last character remains reachable');
+  finally
+    GRope.Free;
+  end;
+end;
+
 procedure TestClear;
 begin
   WriteLn('--- TestClear ---');
@@ -163,6 +186,7 @@ begin
   TestSubstring;
   TestCharAt;
   TestMultipleInserts;
+  TestNestedMiddleInsertAndCharAt;
   TestClear;
   TestClose;
   WriteLn;

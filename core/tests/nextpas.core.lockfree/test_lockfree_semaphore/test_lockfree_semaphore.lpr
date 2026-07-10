@@ -83,6 +83,26 @@ begin
   end;
 end;
 
+procedure TestSemaphoreReleaseIsBounded;
+var
+  LSemaphore: TConcurrentSemaphore;
+begin
+  LSemaphore := TConcurrentSemaphore.Create(2);
+  try
+    Check(LSemaphore.TryAcquire, 'Should acquire first permit');
+    Check(LSemaphore.TryAcquire, 'Should acquire second permit');
+    CheckEqual(Int64(0), LSemaphore.AvailablePermits);
+
+    LSemaphore.Release;
+    LSemaphore.Release;
+    LSemaphore.Release;
+
+    CheckEqual(Int64(2), LSemaphore.AvailablePermits, 'Release must not exceed max permits');
+  finally
+    LSemaphore.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_semaphore ===');
   WriteLn;
@@ -95,6 +115,9 @@ begin
 
   TestSemaphoreSinglePermit;
   WriteLn('  + Single permit');
+
+  TestSemaphoreReleaseIsBounded;
+  WriteLn('  + Bounded release');
 
   WriteLn;
   WriteLn('All semaphore tests passed!');

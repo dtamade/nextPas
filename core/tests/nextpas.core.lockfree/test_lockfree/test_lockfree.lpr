@@ -4703,6 +4703,37 @@ begin
   end;
 end;
 
+procedure TestChannelResizeRejectShrinkBelowLiveCount;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    Check(LCh.TrySend(10), 'send 1');
+    Check(LCh.TrySend(20), 'send 2');
+    Check(LCh.TrySend(30), 'send 3');
+    Check(LCh.TrySend(40), 'send 4');
+    Check(LCh.TrySend(50), 'send 5');
+    CheckEqual(Int64(5), Int64(LCh.ApproxLen), 'len before rejected shrink');
+    Check(not LCh.TryResize(4), 'resize below live count rejected');
+    CheckEqual(Int64(8), Int64(LCh.Capacity), 'capacity unchanged after rejected shrink');
+    Check(LCh.TryReceive(LV), 'recv 1');
+    CheckEqual(Int64(10), Int64(LV), 'value 1 preserved');
+    Check(LCh.TryReceive(LV), 'recv 2');
+    CheckEqual(Int64(20), Int64(LV), 'value 2 preserved');
+    Check(LCh.TryReceive(LV), 'recv 3');
+    CheckEqual(Int64(30), Int64(LV), 'value 3 preserved');
+    Check(LCh.TryReceive(LV), 'recv 4');
+    CheckEqual(Int64(40), Int64(LV), 'value 4 preserved');
+    Check(LCh.TryReceive(LV), 'recv 5');
+    CheckEqual(Int64(50), Int64(LV), 'value 5 preserved');
+    Check(not LCh.TryReceive(LV), 'empty after preserved drain');
+  finally
+    LCh.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: Selector with single channel                       }
 { ============================================================ }
@@ -6249,6 +6280,7 @@ begin
   T.Test('Channel resize same capacity', @TestChannelResizeSameCapacity);
   T.Test('Channel resize while full', @TestChannelResizeWhileFull);
   T.Test('Channel resize closed', @TestChannelResizeClosed);
+  T.Test('Channel resize reject shrink below live count', @TestChannelResizeRejectShrinkBelowLiveCount);
 
   T.Test('Selector single channel', @TestSelectorSingleChannel);
   T.Test('EBR many guards', @TestEbrManyGuards);

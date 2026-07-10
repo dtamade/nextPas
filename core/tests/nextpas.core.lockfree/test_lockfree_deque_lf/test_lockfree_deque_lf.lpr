@@ -3,6 +3,7 @@ program test_lockfree_deque_lf;
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.lockfree.deque_lf;
 
 var
@@ -235,6 +236,32 @@ begin
   end;
 end;
 
+function ReadTextFile(const APath: string): AnsiString;
+var
+  LStream: TFileStream;
+begin
+  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, LStream.Size);
+    if LStream.Size > 0 then
+      LStream.ReadBuffer(Result[1], LStream.Size);
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure Test_SourceContractCASOrder;
+var
+  LSource: AnsiString;
+begin
+  WriteLn('--- Source Contract ---');
+  LSource := ReadTextFile('../../../src/nextpas.core.lockfree.deque_lf.pas');
+  Check(Pos('AtomicCompareExchange32(FLock, 0, 1', LSource) > 0,
+    'lock acquire CAS order uses expected=0 desired=1');
+  Check(Pos('AtomicStore32(FLock, 0, moRelease);', LSource) > 0,
+    'lock release uses release store');
+end;
+
 begin
   GPassed := 0;
   GFailed := 0;
@@ -247,6 +274,7 @@ begin
   Test_Grow;
   Test_Mixed;
   Test_Clear;
+  Test_SourceContractCASOrder;
   WriteLn;
   WriteLn('Results: ', GPassed, ' passed, ', GFailed, ' failed');
   if GFailed > 0 then

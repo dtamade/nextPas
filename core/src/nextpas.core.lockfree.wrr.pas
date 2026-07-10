@@ -146,7 +146,12 @@ begin
     for LI := 0 to FCount - 1 do
     begin
       if FBackends[LI].FId = AId then
-        Exit(wrrNotFound);
+      begin
+        FTotalWeight := FTotalWeight - FBackends[LI].FWeight + AWeight;
+        FBackends[LI].FWeight := AWeight;
+        FBackends[LI].FCurrent := 0;
+        Exit(wrrOk);
+      end;
     end;
 
     if FCount >= FCapacity then

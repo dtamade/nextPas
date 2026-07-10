@@ -109,6 +109,23 @@ begin
   end;
 end;
 
+procedure TestCountdownDoesNotUnderflow;
+var
+  Latch: TCountDownLatch;
+begin
+  Latch := TCountDownLatch.Create(1);
+  try
+    Latch.Done;
+    Latch.Done;
+    CheckEqual(Int64(0), Latch.GetCount, 'Done must saturate at zero');
+
+    Latch.DoneN(4);
+    CheckEqual(Int64(0), Latch.GetCount, 'DoneN must not drive count negative');
+  finally
+    Latch.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_countdown ===');
   WriteLn;
@@ -130,6 +147,9 @@ begin
 
   TestCountdownTimeout;
   WriteLn('  + Timeout');
+
+  TestCountdownDoesNotUnderflow;
+  WriteLn('  + No underflow');
 
   WriteLn;
   WriteLn('All countdown latch tests passed!');

@@ -49,6 +49,36 @@ begin
   end;
 end;
 
+var
+  GWorkStealingObserved: Pointer;
+
+procedure CaptureTask(AData: Pointer);
+begin
+  GWorkStealingObserved := AData;
+end;
+
+procedure TestWorkStealingStealsSubmittedTask;
+var
+  LPool: TWorkStealingPool;
+  LTask: TWorkStealingTask;
+  LData: Pointer;
+  LResult: TLockFreeWorkStealingResult;
+begin
+  LPool := TWorkStealingPool.Create(2);
+  GWorkStealingObserved := nil;
+  try
+    Check(LPool.Submit(@CaptureTask, Pointer(PtrUInt(1234))), 'Should submit concrete task');
+    LResult := LPool.Steal(LTask, LData);
+    Check(wsStolen = LResult, 'Steal should return a submitted task');
+    Check(Assigned(LTask), 'Stolen task should be assigned');
+    Check(Pointer(PtrUInt(1234)) = LData, 'Payload should round-trip through queue');
+    LTask(LData);
+    Check(Pointer(PtrUInt(1234)) = GWorkStealingObserved, 'Stolen task should execute with original payload');
+  finally
+    LPool.Free;
+  end;
+end;
+
 procedure TestWorkStealingClose;
 var
   LPool: TWorkStealingPool;
@@ -82,6 +112,9 @@ begin
 
   TestWorkStealingSteal;
   WriteLn('  + Steal');
+
+  TestWorkStealingStealsSubmittedTask;
+  WriteLn('  + Steal submitted task');
 
   TestWorkStealingClose;
   WriteLn('  + Close semantics');

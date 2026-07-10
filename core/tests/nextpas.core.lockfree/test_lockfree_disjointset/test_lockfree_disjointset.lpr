@@ -26,12 +26,16 @@ begin
   WriteLn('--- TestBasicMakeSet ---');
   DS := TLockFreeDisjointSet.Create;
   try
+    Check(DS.Count = 0, 'count starts at 0');
     I := DS.MakeSet;
     J := DS.MakeSet;
+    Check(I = 0, 'first set id is 0');
+    Check(J = 1, 'second set id is 1');
     Check(I <> J, 'different IDs');
     Check(DS.Find(I) = I, 'find i = i');
     Check(DS.Find(J) = J, 'find j = j');
     Check(not DS.Connected(I, J), 'not connected initially');
+    Check(DS.Count = 2, 'count tracks created sets');
   finally
     DS.Free;
   end;

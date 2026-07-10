@@ -5,10 +5,12 @@ unit nextpas.core.lockfree.timeoutqueue;
 interface
 
 uses
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.time.base;
 
 type
   TLockFreeTimeoutQueueResult = (tqDequeued, tqTimeout, tqEmpty, tqClosed);
+  TTimeoutQueueInstant = nextpas.core.time.base.TInstant;
 
   {** @desc 并发超时队列（Timeout Queue）
     @details 元素带有过期时间的并发队列。
@@ -17,8 +19,14 @@ type
       适用场景：请求超时、缓存过期、任务调度。
   }
   generic TTimeoutQueueImpl<T> = class
+  private type
+    TSlot = record
+      Sequence: Int64;
+      EnqueuedAt: TTimeoutQueueInstant;
+      Value: T;
+    end;
   private
-    FValues: array of T;
+    FSlots: array of TSlot;
     FCapacity: Int64;
     FMask: Int64;
     FHead: Int64;
@@ -44,8 +52,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.atomic,
-  nextpas.core.time.base;
+  nextpas.core.atomic;
 
 class function TTimeoutQueueImpl.LockFreeNextPow2(AValue: Int64): Int64;
 begin
@@ -62,6 +69,8 @@ begin
 end;
 
 constructor TTimeoutQueueImpl.Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+var
+  LI: Int64;
 begin
   if ACapacity <= 0 then
     raise EArgumentError.Create('TTimeoutQueue: capacity must be > 0');
@@ -70,7 +79,9 @@ begin
   inherited Create;
   FCapacity := LockFreeNextPow2(ACapacity);
   FMask := FCapacity - 1;
-  SetLength(FValues, FCapacity);
+  SetLength(FSlots, FCapacity);
+  for LI := 0 to FCapacity - 1 do
+    FSlots[LI].Sequence := LI;
   FHead := 0;
   FTail := 0;
   FTimeoutNs := ATimeoutNs;
@@ -79,39 +90,79 @@ end;
 
 function TTimeoutQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
-  LHead, LNext: Int64;
+  LHead: Int64;
+  LTail: Int64;
+  LIdx: Int64;
+  LSeq: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  repeat
+  while True do
+  begin
     LHead := AtomicLoad64(FHead, moRelaxed);
-    LNext := (LHead + 1) and FMask;
-    if LNext = AtomicLoad64(FTail, moAcquire) then
+    LTail := AtomicLoad64(FTail, moAcquire);
+    if (LHead - LTail) >= (FCapacity - 1) then
       Exit(False);
-  until AtomicCompareExchange64(FHead, LHead, LNext, moAcqRel) = LHead;
-  FValues[LHead] := AValue;
-  Result := True;
+    LIdx := LHead and FMask;
+    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    if LSeq <> LHead then
+    begin
+      CpuPause;
+      Continue;
+    end;
+    if AtomicCompareExchange64(FHead, LHead, LHead + 1, moAcqRel) = LHead then
+    begin
+      FSlots[LIdx].Value := AValue;
+      FSlots[LIdx].EnqueuedAt := TTimeoutQueueInstant.Now;
+      AtomicStore64(FSlots[LIdx].Sequence, LHead + 1, moRelease);
+      Exit(True);
+    end;
+  end;
 end;
 
 function TTimeoutQueueImpl.TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
 var
-  LTail, LNext: Int64;
+  LHead: Int64;
+  LTail: Int64;
+  LIdx: Int64;
+  LSeq: Int64;
+  LAgeNs: Int64;
+  LNow: TTimeoutQueueInstant;
 begin
   while True do
   begin
-    repeat
-      LTail := AtomicLoad64(FTail, moRelaxed);
-      if LTail = AtomicLoad64(FHead, moAcquire) then
-      begin
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
-          Exit(tqClosed);
-        Exit(tqEmpty);
-      end;
-      LNext := (LTail + 1) and FMask;
-    until AtomicCompareExchange64(FTail, LTail, LNext, moAcqRel) = LTail;
+    LTail := AtomicLoad64(FTail, moRelaxed);
+    LHead := AtomicLoad64(FHead, moAcquire);
+    if LTail = LHead then
+    begin
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(tqClosed);
+      Exit(tqEmpty);
+    end;
 
-    AValue := FValues[LTail];
-    Exit(tqDequeued);
+    LIdx := LTail and FMask;
+    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    if LSeq <> (LTail + 1) then
+    begin
+      CpuPause;
+      Continue;
+    end;
+
+    if AtomicCompareExchange64(FTail, LTail, LTail + 1, moAcqRel) <> LTail then
+      Continue;
+
+    LNow := TTimeoutQueueInstant.Now;
+    LAgeNs := (LNow - FSlots[LIdx].EnqueuedAt).AsNanoseconds;
+    if LAgeNs < FTimeoutNs then
+    begin
+      AValue := FSlots[LIdx].Value;
+      FSlots[LIdx].Value := Default(T);
+      AtomicStore64(FSlots[LIdx].Sequence, LTail + FCapacity, moRelease);
+      Exit(tqDequeued);
+    end;
+
+    FSlots[LIdx].Value := Default(T);
+    AtomicStore64(FSlots[LIdx].Sequence, LTail + FCapacity, moRelease);
   end;
 end;
 
@@ -128,11 +179,11 @@ end;
 
 function TTimeoutQueueImpl.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeTimeoutQueueResult;
 var
-  LStart: TInstant;
+  LStart: TTimeoutQueueInstant;
 begin
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TTimeoutQueue.DequeueTimeout: timeout must be > 0');
-  LStart := TInstant.Now;
+  LStart := TTimeoutQueueInstant.Now;
   while True do
   begin
     Result := TryDequeue(AValue);
@@ -150,10 +201,10 @@ var
 begin
   LHead := AtomicLoad64(FHead, moAcquire);
   LTail := AtomicLoad64(FTail, moAcquire);
-  if LHead >= LTail then
+  if LHead > LTail then
     Result := LHead - LTail
   else
-    Result := FCapacity - LTail + LHead;
+    Result := 0;
 end;
 
 function TTimeoutQueueImpl.GetCapacity: Int64;

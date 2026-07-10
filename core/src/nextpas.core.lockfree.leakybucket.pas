@@ -34,7 +34,10 @@ type
     FBucketSize: Double;   { max water level }
     FLevel: Double;        { current water level }
     FLastLeakNs: Int64;
+    FLock: Int32;
     FClosed: Int32;
+    procedure Lock;
+    procedure Unlock;
     procedure Leak;
   public
     constructor Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
@@ -70,7 +73,19 @@ begin
   FBucketSize := ABucketSize;
   FLevel := 0;
   FLastLeakNs := GetNowNs;
+  FLock := 0;
   FClosed := 0;
+end;
+
+procedure TLeakyBucket.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+    ThreadSwitch;
+end;
+
+procedure TLeakyBucket.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 procedure TLeakyBucket.Leak;
@@ -101,14 +116,19 @@ begin
     raise EArgumentError.Create('TLeakyBucket.TryAddN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(lbClosed);
-  Leak;
-  if FLevel + AN <= FBucketSize then
-  begin
-    FLevel := FLevel + AN;
-    Result := lbAllowed;
-  end
-  else
-    Result := lbRejected;
+  Lock;
+  try
+    Leak;
+    if FLevel + AN <= FBucketSize then
+    begin
+      FLevel := FLevel + AN;
+      Result := lbAllowed;
+    end
+    else
+      Result := lbRejected;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TLeakyBucket.Close;
@@ -133,8 +153,13 @@ end;
 
 function TLeakyBucket.GetLevel: Double;
 begin
-  Leak;
-  Result := FLevel;
+  Lock;
+  try
+    Leak;
+    Result := FLevel;
+  finally
+    Unlock;
+  end;
 end;
 
 end.

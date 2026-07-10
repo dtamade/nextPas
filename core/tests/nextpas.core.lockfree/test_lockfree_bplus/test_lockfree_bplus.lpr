@@ -5,7 +5,6 @@ program test_lockfree_bplus;
 uses
   SysUtils,
   nextpas.core.lockfree.bplus,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

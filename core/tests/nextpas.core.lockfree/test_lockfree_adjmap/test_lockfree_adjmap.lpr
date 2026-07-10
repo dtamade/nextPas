@@ -123,6 +123,29 @@ begin
   end;
 end;
 
+procedure TestAdjMapLargeWeights;
+var
+  LMap: TAdjMapImpl;
+  LResult: TPathResult;
+begin
+  LMap := TAdjMapImpl.Create(8);
+  try
+    LMap.AddVertex(1);
+    LMap.AddVertex(2);
+    LMap.AddVertex(3);
+    LMap.AddEdge(1, 2, 3000000000);
+    LMap.AddEdge(2, 3, 5);
+    LMap.AddEdge(1, 3, 4000000000);
+
+    CheckEqual(Ord(amOk), Ord(LMap.Dijkstra(1, 3, LResult)));
+    CheckEqual(Int64(3000000005), LResult.FDistance);
+    Check(LResult.FPathLen = 3, 'Large-weight path should still choose 1->2->3');
+    SetLength(LResult.FPath, 0);
+  finally
+    LMap.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_adjmap ===');
   WriteLn;
@@ -138,6 +161,9 @@ begin
 
   TestAdjMapRemoveEdge;
   WriteLn('  + Remove edge');
+
+  TestAdjMapLargeWeights;
+  WriteLn('  + Large weights');
 
   TestAdjMapClose;
   WriteLn('  + Close semantics');

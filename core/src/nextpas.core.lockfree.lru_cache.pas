@@ -95,6 +95,8 @@ uses
 constructor TConcurrentLRUCache.Create(ACapacity: Int32);
 begin
   inherited Create;
+  if ACapacity < 1 then
+    ACapacity := LRU_DEFAULT_CAPACITY;
   FCapacity := ACapacity;
   FCount := 0;
   FHead := nil;
@@ -259,7 +261,11 @@ begin
 
     { Evict if at capacity }
     if FCount >= FCapacity then
-      EvictLRU;
+    begin
+      LNode := EvictLRU;
+      if LNode <> nil then
+        Dispose(LNode);
+    end;
 
     { Create new node }
     New(LNode);

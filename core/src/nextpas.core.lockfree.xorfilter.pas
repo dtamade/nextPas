@@ -198,9 +198,13 @@ begin
         H1 := Q1[K];
         H2 := Q2[K];
         FP := FingerPrint(UInt64(AKeys[K]));
-        { Set filter at the peel position: filter[pos] = FP xor filter[h1] xor filter[h2]
-          where pos is the position with degree 1 when this key was peeled. }
-        FFilters[PeelPos[J]] := FP xor FFilters[H0] xor FFilters[H1] xor FFilters[H2];
+        { Only xor the two non-peel positions. The peel slot is assigned here. }
+        if PeelPos[J] = H0 then
+          FFilters[H0] := FP xor FFilters[H1] xor FFilters[H2]
+        else if PeelPos[J] = H1 then
+          FFilters[H1] := FP xor FFilters[H0] xor FFilters[H2]
+        else
+          FFilters[H2] := FP xor FFilters[H0] xor FFilters[H1];
       end;
       Done := True;
       Break;
@@ -232,7 +236,7 @@ end;
 
 procedure TXorFilter.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -248,16 +252,11 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Lock;
-  try
-    LF := FingerPrint(AKey);
-    LH0 := Int32(Hash(AKey, FSeed + 0) mod UInt32(FCapacity));
-    LH1 := Int32(Hash(AKey, FSeed + 1) mod UInt32(FCapacity));
-    LH2 := Int32(Hash(AKey, FSeed + 2) mod UInt32(FCapacity));
-    Result := (FFilters[LH0] xor FFilters[LH1] xor FFilters[LH2]) = LF;
-  finally
-    Unlock;
-  end;
+  LF := FingerPrint(AKey);
+  LH0 := Int32(Hash(AKey, FSeed + 0) mod UInt32(FCapacity));
+  LH1 := Int32(Hash(AKey, FSeed + 1) mod UInt32(FCapacity));
+  LH2 := Int32(Hash(AKey, FSeed + 2) mod UInt32(FCapacity));
+  Result := (FFilters[LH0] xor FFilters[LH1] xor FFilters[LH2]) = LF;
 end;
 
 function TXorFilter.GetCount: Int32;

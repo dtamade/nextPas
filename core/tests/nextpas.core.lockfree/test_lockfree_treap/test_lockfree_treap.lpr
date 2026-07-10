@@ -5,7 +5,6 @@ program test_lockfree_treap;
 uses
   SysUtils,
   nextpas.core.lockfree.treap,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

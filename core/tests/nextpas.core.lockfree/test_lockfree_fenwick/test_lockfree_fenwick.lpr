@@ -5,7 +5,6 @@ program test_lockfree_fenwick;
 uses
   SysUtils,
   nextpas.core.lockfree.fenwick,
-  nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
 

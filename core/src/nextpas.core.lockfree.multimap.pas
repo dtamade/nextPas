@@ -30,12 +30,13 @@ type
     FMask: PtrUInt;
     FCount: Int64;
     FClosed: Int32;
-    // Shard locks (one per bucket)
-    FLocks: array of Int32;
+    FLock: Int32;
     function HashKey(const AKey: TKey): PtrUInt;
-    function FindPair(AKey: TKey): PPair;
-    procedure LockBucket(AIdx: PtrUInt);
-    procedure UnlockBucket(AIdx: PtrUInt);
+    function FindBucketIndex(const AKey: TKey; out AIdx: PtrUInt): Boolean;
+    procedure InsertPairIntoBuckets(APair: PPair);
+    procedure RehashClusterFrom(AStartIdx: PtrUInt);
+    procedure LockMap;
+    procedure UnlockMap;
   public
     constructor Create(const ACapacity: PtrUInt = 16);
     destructor Destroy; override;
@@ -78,14 +79,11 @@ begin
   FCapacity := LCap;
   FMask := LCap - 1;
   SetLength(FBuckets, LCap);
-  SetLength(FLocks, LCap);
   for LI := 0 to LCap - 1 do
-  begin
     FBuckets[LI] := nil;
-    FLocks[LI] := 0;
-  end;
   FCount := 0;
   FClosed := 0;
+  FLock := 0;
 end;
 
 destructor TLockFreeMultiMapImpl.Destroy;
@@ -103,7 +101,6 @@ begin
     end;
   end;
   SetLength(FBuckets, 0);
-  SetLength(FLocks, 0);
   inherited Destroy;
 end;
 
@@ -120,31 +117,57 @@ begin
   Result := LH;
 end;
 
-function TLockFreeMultiMapImpl.FindPair(AKey: TKey): PPair;
+function TLockFreeMultiMapImpl.FindBucketIndex(const AKey: TKey; out AIdx: PtrUInt): Boolean;
+var
+  LStart: PtrUInt;
+begin
+  LStart := HashKey(AKey) and FMask;
+  AIdx := LStart;
+  repeat
+    if FBuckets[AIdx] = nil then
+      Exit(False);
+    if FBuckets[AIdx]^.Key = AKey then
+      Exit(True);
+    AIdx := (AIdx + 1) and FMask;
+  until AIdx = LStart;
+  AIdx := FCapacity;
+  Result := False;
+end;
+
+procedure TLockFreeMultiMapImpl.InsertPairIntoBuckets(APair: PPair);
+var
+  LIdx: PtrUInt;
+begin
+  LIdx := HashKey(APair^.Key) and FMask;
+  while FBuckets[LIdx] <> nil do
+    LIdx := (LIdx + 1) and FMask;
+  FBuckets[LIdx] := APair;
+end;
+
+procedure TLockFreeMultiMapImpl.RehashClusterFrom(AStartIdx: PtrUInt);
 var
   LIdx: PtrUInt;
   LPair: PPair;
 begin
-  LIdx := HashKey(AKey) and FMask;
-  LPair := FBuckets[LIdx];
-  while LPair <> nil do
+  LIdx := AStartIdx;
+  while FBuckets[LIdx] <> nil do
   begin
-    if LPair^.Key = AKey then
-      Exit(LPair);
-    LPair := nil; // Linear probing - for now just check first
+    LPair := FBuckets[LIdx];
+    FBuckets[LIdx] := nil;
+    InsertPairIntoBuckets(LPair);
+    LIdx := (LIdx + 1) and FMask;
   end;
-  Result := nil;
 end;
 
-procedure TLockFreeMultiMapImpl.LockBucket(AIdx: PtrUInt);
+procedure TLockFreeMultiMapImpl.LockMap;
 begin
-  while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     CpuPause;
 end;
 
-procedure TLockFreeMultiMapImpl.UnlockBucket(AIdx: PtrUInt);
+procedure TLockFreeMultiMapImpl.UnlockMap;
 begin
-  AtomicStore32(FLocks[AIdx], 0, moRelease);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TLockFreeMultiMapImpl.Add(const AKey: TKey; const AValue: TValue): TLockFreeMultiMapAddResult;
@@ -155,13 +178,23 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(mmClosed);
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMap;
   try
-    LPair := FBuckets[LIdx];
-    if LPair = nil then
+    if FindBucketIndex(AKey, LIdx) then
     begin
-      // New key
+      LPair := FBuckets[LIdx];
+      LLen := LPair^.Count;
+      if LLen >= Length(LPair^.Values) then
+        SetLength(LPair^.Values, LLen * 2);
+      LPair^.Values[LLen] := AValue;
+      LPair^.Count := LLen + 1;
+      AtomicFetchAdd64(FCount, 1, moRelaxed);
+      Exit(mmAdded);
+    end;
+    if LIdx >= FCapacity then
+      Exit(mmFull);
+    if FBuckets[LIdx] = nil then
+    begin
       New(LPair);
       LPair^.Key := AKey;
       SetLength(LPair^.Values, 4);
@@ -171,21 +204,9 @@ begin
       AtomicFetchAdd64(FCount, 1, moRelaxed);
       Exit(mmAdded);
     end;
-    if LPair^.Key = AKey then
-    begin
-      // Key exists, add value
-      LLen := LPair^.Count;
-      if LLen >= Length(LPair^.Values) then
-        SetLength(LPair^.Values, LLen * 2);
-      LPair^.Values[LLen] := AValue;
-      LPair^.Count := LLen + 1;
-      AtomicFetchAdd64(FCount, 1, moRelaxed);
-      Exit(mmAdded);
-    end;
-    // Collision - for now just fail (simplified implementation)
     Exit(mmFull);
   finally
-    UnlockBucket(LIdx);
+    UnlockMap;
   end;
 end;
 
@@ -196,18 +217,17 @@ var
   LCount: Integer;
   LI: Integer;
 begin
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMap;
   try
-    LPair := FBuckets[LIdx];
-    if (LPair = nil) or (LPair^.Key <> AKey) then
+    if not FindBucketIndex(AKey, LIdx) then
       Exit(0);
+    LPair := FBuckets[LIdx];
     LCount := LPair^.Count;
     for LI := 0 to Min(LCount, Length(AValues)) - 1 do
       AValues[LI] := LPair^.Values[LI];
     Result := LCount;
   finally
-    UnlockBucket(LIdx);
+    UnlockMap;
   end;
 end;
 
@@ -216,13 +236,11 @@ var
   LIdx: PtrUInt;
   LPair: PPair;
 begin
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMap;
   try
-    LPair := FBuckets[LIdx];
-    Result := (LPair <> nil) and (LPair^.Key = AKey);
+    Result := FindBucketIndex(AKey, LIdx);
   finally
-    UnlockBucket(LIdx);
+    UnlockMap;
   end;
 end;
 
@@ -231,19 +249,19 @@ var
   LIdx: PtrUInt;
   LPair: PPair;
 begin
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMap;
   try
-    LPair := FBuckets[LIdx];
-    if (LPair = nil) or (LPair^.Key <> AKey) then
+    if not FindBucketIndex(AKey, LIdx) then
       Exit(False);
+    LPair := FBuckets[LIdx];
     AtomicFetchSub64(FCount, LPair^.Count, moRelaxed);
     SetLength(LPair^.Values, 0);
     Dispose(LPair);
     FBuckets[LIdx] := nil;
+    RehashClusterFrom((LIdx + 1) and FMask);
     Result := True;
   finally
-    UnlockBucket(LIdx);
+    UnlockMap;
   end;
 end;
 
@@ -253,12 +271,11 @@ var
   LPair: PPair;
   LI, LCount: Integer;
 begin
-  LIdx := HashKey(AKey) and FMask;
-  LockBucket(LIdx);
+  LockMap;
   try
-    LPair := FBuckets[LIdx];
-    if (LPair = nil) or (LPair^.Key <> AKey) then
+    if not FindBucketIndex(AKey, LIdx) then
       Exit(False);
+    LPair := FBuckets[LIdx];
     LCount := LPair^.Count;
     for LI := 0 to LCount - 1 do
     begin
@@ -274,7 +291,7 @@ begin
     end;
     Result := False;
   finally
-    UnlockBucket(LIdx);
+    UnlockMap;
   end;
 end;
 
@@ -283,10 +300,10 @@ var
   LI: PtrUInt;
   LPair: PPair;
 begin
-  for LI := 0 to FCapacity - 1 do
-  begin
-    LockBucket(LI);
-    try
+  LockMap;
+  try
+    for LI := 0 to FCapacity - 1 do
+    begin
       LPair := FBuckets[LI];
       if LPair <> nil then
       begin
@@ -295,9 +312,9 @@ begin
         Dispose(LPair);
         FBuckets[LI] := nil;
       end;
-    finally
-      UnlockBucket(LI);
     end;
+  finally
+    UnlockMap;
   end;
 end;
 

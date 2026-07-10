@@ -151,6 +151,24 @@ begin
   end;
 end;
 
+procedure TestTimerWheelExactFullRotation;
+var
+  LWheel: TTimerWheel;
+  LExpired: Int64;
+begin
+  GCallbackCount := 0;
+  LWheel := TTimerWheel.Create(4, 1000000);
+  try
+    LWheel.Schedule(@TestCallback, nil, 4);
+    LWheel.TickN(4);
+    LExpired := LWheel.ProcessExpired;
+    CheckEqual(Int64(1), LExpired, 'Should expire after exactly one full rotation');
+    CheckEqual(Int64(1), GCallbackCount, 'Callback should fire on exact rotation');
+  finally
+    LWheel.Free;
+  end;
+end;
+
 procedure TestTimerWheelClose;
 var
   LWheel: TTimerWheel;
@@ -190,6 +208,9 @@ begin
 
   TestTimerWheelWrapAround;
   WriteLn('  + Wrap-around');
+
+  TestTimerWheelExactFullRotation;
+  WriteLn('  + Exact full rotation');
 
   TestTimerWheelClose;
   WriteLn('  + Close semantics');

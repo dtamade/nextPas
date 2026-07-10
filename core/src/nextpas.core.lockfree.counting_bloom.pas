@@ -74,13 +74,18 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.errors;
 
 constructor TCountingBloomFilter.Create(AWidth, ADepth: Int32);
 var
   LWidth: Int32;
 begin
   inherited Create;
+  if AWidth <= 0 then
+    raise EArgumentError.Create('TCountingBloomFilter: width must be > 0');
+  if ADepth <= 0 then
+    raise EArgumentError.Create('TCountingBloomFilter: depth must be > 0');
   { Round up to power of 2 }
   LWidth := 1;
   while LWidth < AWidth do
@@ -179,8 +184,8 @@ var
   I: Int32;
 begin
   for I := 0 to Length(FCounters) - 1 do
-    FCounters[I] := 0;
-  FCount := 0;
+    AtomicStore32(FCounters[I], 0);
+  AtomicStore64(FCount, 0);
 end;
 
 end.

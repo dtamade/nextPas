@@ -57,9 +57,8 @@ begin
   if ANode = nil then
     Exit(0);
   if ANode^.Left = nil then
-    Result := System.Length(ANode^.Text)
-  else
-    Result := ANode^.Weight;
+    Exit(System.Length(ANode^.Text));
+  Result := ANode^.Weight + NodeLength(ANode^.Right);
 end;
 
 function TRope.BuildNode(const AText: AnsiString): PRopeNode;

@@ -129,7 +129,7 @@ end;
 
 procedure TConcurrentLruCacheImpl.LockBucket(AIdx: PtrUInt);
 begin
-  while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLocks[AIdx], 1, 0) <> 0 do
     CpuPause;
 end;
 
@@ -202,6 +202,8 @@ begin
         FBuckets[LIdx][LMinIdx].Used := False;
         Dec(FCount);
       end;
+      if FCount >= FMaxItems then
+        Exit(lrFull);
     end;
     // Find empty slot
     LEntryIdx := -1;

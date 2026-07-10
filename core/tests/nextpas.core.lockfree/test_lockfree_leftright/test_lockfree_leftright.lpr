@@ -83,6 +83,24 @@ begin
   end;
 end;
 
+procedure TestReaderCountAndReturnedIndex;
+var
+  LR: TLeftRight;
+  LIdx: Int32;
+begin
+  LR := TLeftRight.Create;
+  try
+    CheckEqual(Int32(0), LR.GetReaderCount, 'Initial reader count');
+    LIdx := LR.EnterRead;
+    Check((LIdx = 0) or (LIdx = 1), 'EnterRead should return active data index');
+    CheckEqual(Int32(1), LR.GetReaderCount, 'Reader count increments');
+    LR.ExitRead(LIdx);
+    CheckEqual(Int32(0), LR.GetReaderCount, 'Reader count decrements');
+  finally
+    LR.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_leftright ===');
   WriteLn;
@@ -95,6 +113,9 @@ begin
 
   TestClose;
   WriteLn('  + Close semantics');
+
+  TestReaderCountAndReturnedIndex;
+  WriteLn('  + Reader count/index semantics');
 
   WriteLn;
   WriteLn('All left-right tests passed!');

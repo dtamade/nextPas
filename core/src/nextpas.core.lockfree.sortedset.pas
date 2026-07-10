@@ -34,6 +34,8 @@ type
     FData: PData;
     FLock: Int32;
 
+    procedure Lock;
+    procedure Unlock;
     procedure FreeData(AData: PData);
     function BinarySearch(AData: PData; const AValue: T; out AIdx: Int32): Boolean;
   public
@@ -54,11 +56,24 @@ type
 
 implementation
 
+procedure TConcurrentSortedSetImpl.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+    ;
+end;
+
+procedure TConcurrentSortedSetImpl.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
+end;
+
 procedure TConcurrentSortedSetImpl.FreeData(AData: PData);
 begin
   if AData <> nil then
+  begin
     SetLength(AData^.FItems, 0);
-  Dispose(AData);
+    Dispose(AData);
+  end;
 end;
 
 function TConcurrentSortedSetImpl.BinarySearch(AData: PData; const AValue: T; out AIdx: Int32): Boolean;
@@ -101,81 +116,73 @@ end;
 
 function TConcurrentSortedSetImpl.Insert(const AValue: T): TLockFreeSortedSetResult;
 var
-  LOld, LNew: PData;
   LIdx, I: Int32;
 begin
-  // Spin lock for write
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
-  LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
-  if BinarySearch(LOld, AValue, LIdx) then
-  begin
-    AtomicStore32(FLock, 0, moRelease);
-    Exit(ssetExists);
+  Lock;
+  try
+    if BinarySearch(FData, AValue, LIdx) then
+      Exit(ssetExists);
+
+    Inc(FData^.FCount);
+    SetLength(FData^.FItems, FData^.FCount);
+    for I := FData^.FCount - 1 downto LIdx + 1 do
+      FData^.FItems[I] := FData^.FItems[I - 1];
+    FData^.FItems[LIdx] := AValue;
+    Result := ssetOk;
+  finally
+    Unlock;
   end;
-  // Create new snapshot
-  New(LNew);
-  LNew^.FCount := LOld^.FCount + 1;
-  SetLength(LNew^.FItems, LNew^.FCount);
-  // Copy before insertion point
-  for I := 0 to LIdx - 1 do
-    LNew^.FItems[I] := LOld^.FItems[I];
-  // Insert new element
-  LNew^.FItems[LIdx] := AValue;
-  // Copy after insertion point
-  for I := LIdx + 1 to LNew^.FCount - 1 do
-    LNew^.FItems[I] := LOld^.FItems[I - 1];
-  // Swap
-  AtomicStorePtr(Pointer(FData), LNew, moRelease);
-  FreeData(LOld);
-  AtomicStore32(FLock, 0, moRelease);
-  Result := ssetOk;
 end;
 
 function TConcurrentSortedSetImpl.Remove(const AValue: T): TLockFreeSortedSetResult;
 var
-  LOld, LNew: PData;
   LIdx, I: Int32;
 begin
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
-  LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
-  if not BinarySearch(LOld, AValue, LIdx) then
-  begin
-    AtomicStore32(FLock, 0, moRelease);
-    Exit(ssetNotFound);
+  Lock;
+  try
+    if not BinarySearch(FData, AValue, LIdx) then
+      Exit(ssetNotFound);
+
+    for I := LIdx to FData^.FCount - 2 do
+      FData^.FItems[I] := FData^.FItems[I + 1];
+    Dec(FData^.FCount);
+    SetLength(FData^.FItems, FData^.FCount);
+    Result := ssetOk;
+  finally
+    Unlock;
   end;
-  // Create new snapshot without the element
-  New(LNew);
-  LNew^.FCount := LOld^.FCount - 1;
-  SetLength(LNew^.FItems, LNew^.FCount);
-  for I := 0 to LIdx - 1 do
-    LNew^.FItems[I] := LOld^.FItems[I];
-  for I := LIdx to LNew^.FCount - 1 do
-    LNew^.FItems[I] := LOld^.FItems[I + 1];
-  AtomicStorePtr(Pointer(FData), LNew, moRelease);
-  FreeData(LOld);
-  AtomicStore32(FLock, 0, moRelease);
-  Result := ssetOk;
 end;
 
 function TConcurrentSortedSetImpl.Contains(const AValue: T): Boolean;
 var
-  LData: PData;
   LIdx: Int32;
 begin
-  LData := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
-  Result := BinarySearch(LData, AValue, LIdx);
+  Lock;
+  try
+    Result := BinarySearch(FData, AValue, LIdx);
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentSortedSetImpl.Count: Int32;
 begin
-  Result := PData(AtomicLoadPtr(Pointer(FData), moAcquire))^.FCount;
+  Lock;
+  try
+    Result := FData^.FCount;
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentSortedSetImpl.IsEmpty: Boolean;
 begin
-  Result := PData(AtomicLoadPtr(Pointer(FData), moAcquire))^.FCount = 0;
+  Lock;
+  try
+    Result := FData^.FCount = 0;
+  finally
+    Unlock;
+  end;
 end;
 
 end.

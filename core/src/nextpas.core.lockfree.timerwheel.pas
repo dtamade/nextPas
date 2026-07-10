@@ -31,7 +31,10 @@ type
     FCurrentSlot: Int64;
     FTickIntervalNs: Int64;
     FTotalTicks: Int64;
+    FLock: Int32;
     FClosed: Int32;
+    procedure Lock;
+    procedure Unlock;
   public
     constructor Create(const ASlotCount: Int64; const ATickIntervalNs: Int64);
     function Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
@@ -63,8 +66,20 @@ begin
   FCurrentSlot := 0;
   FTickIntervalNs := ATickIntervalNs;
   FTotalTicks := 0;
+  FLock := 0;
   FClosed := 0;
   SetLength(FSlots, FSlotCount);
+end;
+
+procedure TTimerWheel.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+    ThreadSwitch;
+end;
+
+procedure TTimerWheel.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TTimerWheel.Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
@@ -79,20 +94,25 @@ begin
   if ADelayTicks <= 0 then
     raise EArgumentError.Create('TTimerWheel.Schedule: delay must be > 0');
 
-  LRounds := ADelayTicks div FSlotCount;
-  LTargetSlot := (FCurrentSlot + ADelayTicks) mod FSlotCount;
+  Lock;
+  try
+    LRounds := (ADelayTicks - 1) div FSlotCount;
+    LTargetSlot := (FCurrentSlot + ADelayTicks) mod FSlotCount;
 
-  LEntry.Callback := ACallback;
-  LEntry.Data := AData;
-  LEntry.Rounds := LRounds;
-  LEntry.Active := True;
+    LEntry.Callback := ACallback;
+    LEntry.Data := AData;
+    LEntry.Rounds := LRounds;
+    LEntry.Active := True;
 
-  LLen := Length(FSlots[LTargetSlot]);
-  SetLength(FSlots[LTargetSlot], LLen + 1);
-  FSlots[LTargetSlot][LLen] := LEntry;
+    LLen := Length(FSlots[LTargetSlot]);
+    SetLength(FSlots[LTargetSlot], LLen + 1);
+    FSlots[LTargetSlot][LLen] := LEntry;
 
-  // Timer ID encodes slot and index
-  Result := LTargetSlot * 1000000 + LLen;
+    // Timer ID encodes slot and index
+    Result := LTargetSlot * 1000000 + LLen;
+  finally
+    Unlock;
+  end;
 end;
 
 function TTimerWheel.Cancel(const ATimerId: Int64): TLockFreeTimerResult;
@@ -110,19 +130,29 @@ begin
   if (LIndex < 0) or (LIndex >= Length(FSlots[LSlot])) then
     Exit(twNotFound);
 
-  if FSlots[LSlot][LIndex].Active then
-  begin
-    FSlots[LSlot][LIndex].Active := False;
-    Result := twCancelled;
-  end
-  else
-    Result := twNotFound;
+  Lock;
+  try
+    if FSlots[LSlot][LIndex].Active then
+    begin
+      FSlots[LSlot][LIndex].Active := False;
+      Result := twCancelled;
+    end
+    else
+      Result := twNotFound;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TTimerWheel.Tick;
 begin
-  FCurrentSlot := (FCurrentSlot + 1) mod FSlotCount;
-  AtomicFetchAdd64(FTotalTicks, 1, moRelaxed);
+  Lock;
+  try
+    FCurrentSlot := (FCurrentSlot + 1) mod FSlotCount;
+    AtomicFetchAdd64(FTotalTicks, 1, moRelaxed);
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TTimerWheel.TickN(const AN: Int64);
@@ -141,31 +171,40 @@ var
   LI, LCount: Int64;
   LEntry: TTimerEntry;
 begin
-  Result := 0;
-  LSlot := FCurrentSlot;
-  LCount := Length(FSlots[LSlot]);
+  Lock;
+  try
+    Result := 0;
+    LSlot := FCurrentSlot;
+    LCount := Length(FSlots[LSlot]);
 
-  for LI := 0 to LCount - 1 do
-  begin
-    LEntry := FSlots[LSlot][LI];
-    if not LEntry.Active then
-      Continue;
-    if LEntry.Rounds > 0 then
+    for LI := 0 to LCount - 1 do
     begin
-      Dec(FSlots[LSlot][LI].Rounds);
-      Continue;
+      LEntry := FSlots[LSlot][LI];
+      if not LEntry.Active then
+        Continue;
+      if LEntry.Rounds > 0 then
+      begin
+        Dec(FSlots[LSlot][LI].Rounds);
+        Continue;
+      end;
+      FSlots[LSlot][LI].Active := False;
+      if Assigned(LEntry.Callback) then
+        LEntry.Callback(LEntry.Data);
+      Inc(Result);
     end;
-    // Timer expired
-    FSlots[LSlot][LI].Active := False;
-    if Assigned(LEntry.Callback) then
-      LEntry.Callback(LEntry.Data);
-    Inc(Result);
+  finally
+    Unlock;
   end;
 end;
 
 function TTimerWheel.GetCurrentSlot: Int64;
 begin
-  Result := FCurrentSlot;
+  Lock;
+  try
+    Result := FCurrentSlot;
+  finally
+    Unlock;
+  end;
 end;
 
 function TTimerWheel.GetTotalTicks: Int64;

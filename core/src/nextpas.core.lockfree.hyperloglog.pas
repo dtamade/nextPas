@@ -36,7 +36,7 @@ type
     FM: Int32;          { number of registers = 2^p }
     FAlpha: Double;     { bias correction factor }
 
-    function CountLeadingZeros(AHash: UInt32; AStartBit: Int32): Int32;
+    function CountLeadingZeros(AHash: UInt32; ABitWidth: Int32): Int32;
     function GetRawEstimate: Double;
   public
     constructor Create(APrecision: Int32 = 14);
@@ -101,16 +101,16 @@ begin
   inherited Destroy;
 end;
 
-function THyperLogLog.CountLeadingZeros(AHash: UInt32; AStartBit: Int32): Int32;
+function THyperLogLog.CountLeadingZeros(AHash: UInt32; ABitWidth: Int32): Int32;
 var
   I: Int32;
-  LBit: UInt32;
 begin
-  Result := 1; { Minimum 1 }
-  for I := AStartBit to 31 do
+  if ABitWidth <= 0 then
+    Exit(1);
+  Result := 1;
+  for I := ABitWidth - 1 downto 0 do
   begin
-    LBit := (AHash shr I) and 1;
-    if LBit = 0 then
+    if ((AHash shr I) and 1) = 0 then
       Inc(Result)
     else
       Break;
@@ -125,8 +125,8 @@ begin
   if Length(AKey) = 0 then
     Exit;
   LHash := Fnv1aHash(@AKey[1], Length(AKey));
-  LIdx := LHash and (UInt32(FM) - 1); { First p bits }
-  LZeros := CountLeadingZeros(LHash shr FP, 0); { Remaining bits }
+  LIdx := Int32(LHash and (UInt32(FM) - 1));
+  LZeros := CountLeadingZeros(LHash shr FP, 32 - FP);
 
   repeat
     LOld := AtomicLoad32(FRegisters[LIdx], moAcquire);
@@ -163,7 +163,7 @@ begin
       if AtomicLoad32(FRegisters[I], moAcquire) = 0 then
         Inc(LV);
     if LV > 0 then
-      LEstimate := FM * Ln(FM / LV);
+      LEstimate := FM * Ln(Double(FM) / Double(LV));
   end;
 
   { Large range correction }

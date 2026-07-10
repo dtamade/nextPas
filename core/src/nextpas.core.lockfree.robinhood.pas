@@ -93,7 +93,7 @@ end;
 
 procedure TRobinHoodMap.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 

@@ -19,6 +19,9 @@ type
     FNodes: array of Int64;
     FNodeCount: Int32;
     FClosed: Int32;
+    FLock: Int32;
+    procedure Lock;
+    procedure Unlock;
   public
     constructor Create(ANodeCount: Int32);
     function Increment(ANodeId: Int32; AAmount: Int64): TCRDTResult;
@@ -58,6 +61,9 @@ type
     FValue: AnsiString;
     FTimestamp: Int64;
     FClosed: Int32;
+    FLock: Int32;
+    procedure Lock;
+    procedure Unlock;
   public
     constructor Create;
     function Assign(const AValue: AnsiString; ATimestamp: Int64): TCRDTResult;
@@ -81,9 +87,12 @@ type
     FCount: Int32;
     FCapacity: Int32;
     FClosed: Int32;
+    FLock: Int32;
     class var FGlobalTag: UInt64;
     procedure Grow;
     function FindIndex(const AValue: AnsiString; ATag: UInt64): Int32;
+    procedure Lock;
+    procedure Unlock;
   public
     constructor Create;
     function Add(const AValue: AnsiString): TCRDTResult;
@@ -113,6 +122,18 @@ begin
   for LI := 0 to FNodeCount - 1 do
     FNodes[LI] := 0;
   FClosed := 0;
+  FLock := 0;
+end;
+
+procedure TGCounter.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TGCounter.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TGCounter.Increment(ANodeId: Int32; AAmount: Int64): TCRDTResult;
@@ -121,24 +142,39 @@ begin
     Exit(crClosed);
   if (ANodeId < 0) or (ANodeId >= FNodeCount) then
     Exit(crNotFound);
-  FNodes[ANodeId] := FNodes[ANodeId] + AAmount;
-  Result := crOk;
+  Lock;
+  try
+    FNodes[ANodeId] := FNodes[ANodeId] + AAmount;
+    Result := crOk;
+  finally
+    Unlock;
+  end;
 end;
 
 function TGCounter.Value: Int64;
 var
   LI: Int32;
 begin
-  Result := 0;
-  for LI := 0 to FNodeCount - 1 do
-    Result := Result + FNodes[LI];
+  Lock;
+  try
+    Result := 0;
+    for LI := 0 to FNodeCount - 1 do
+      Result := Result + FNodes[LI];
+  finally
+    Unlock;
+  end;
 end;
 
 function TGCounter.NodeValue(ANodeId: Int32): Int64;
 begin
   if (ANodeId < 0) or (ANodeId >= FNodeCount) then
     Exit(0);
-  Result := FNodes[ANodeId];
+  Lock;
+  try
+    Result := FNodes[ANodeId];
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TGCounter.Merge(const AOther: TGCounter);
@@ -148,11 +184,20 @@ var
 begin
   if AOther = nil then
     Exit;
-  for LI := 0 to FNodeCount - 1 do
-  begin
-    LOther := AOther.FNodes[LI];
-    if LOther > FNodes[LI] then
-      FNodes[LI] := LOther;
+  Lock;
+  AOther.Lock;
+  try
+    for LI := 0 to FNodeCount - 1 do
+    begin
+      if LI >= AOther.FNodeCount then
+        Break;
+      LOther := AOther.FNodes[LI];
+      if LOther > FNodes[LI] then
+        FNodes[LI] := LOther;
+    end;
+  finally
+    AOther.Unlock;
+    Unlock;
   end;
 end;
 
@@ -228,34 +273,63 @@ begin
   FValue := '';
   FTimestamp := 0;
   FClosed := 0;
+  FLock := 0;
+end;
+
+procedure TLWWRegister.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TLWWRegister.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TLWWRegister.Assign(const AValue: AnsiString; ATimestamp: Int64): TCRDTResult;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(crClosed);
-  if ATimestamp > FTimestamp then
-  begin
-    FValue := AValue;
-    FTimestamp := ATimestamp;
+  Lock;
+  try
+    if ATimestamp > FTimestamp then
+    begin
+      FValue := AValue;
+      FTimestamp := ATimestamp;
+    end;
+    Result := crOk;
+  finally
+    Unlock;
   end;
-  Result := crOk;
 end;
 
 function TLWWRegister.Read(out AValue: AnsiString): Int64;
 begin
-  AValue := FValue;
-  Result := FTimestamp;
+  Lock;
+  try
+    AValue := FValue;
+    Result := FTimestamp;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TLWWRegister.Merge(const AOther: TLWWRegister);
 begin
   if AOther = nil then
     Exit;
-  if AOther.FTimestamp > FTimestamp then
-  begin
-    FValue := AOther.FValue;
-    FTimestamp := AOther.FTimestamp;
+  Lock;
+  AOther.Lock;
+  try
+    if AOther.FTimestamp > FTimestamp then
+    begin
+      FValue := AOther.FValue;
+      FTimestamp := AOther.FTimestamp;
+    end;
+  finally
+    AOther.Unlock;
+    Unlock;
   end;
 end;
 
@@ -278,6 +352,18 @@ begin
   SetLength(FAddSet, FCapacity);
   FCount := 0;
   FClosed := 0;
+  FLock := 0;
+end;
+
+procedure TORSet.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TORSet.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 procedure TORSet.Grow;
@@ -303,13 +389,18 @@ function TORSet.Add(const AValue: AnsiString): TCRDTResult;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(crClosed);
-  if FCount >= FCapacity then
-    Grow;
-  FAddSet[FCount].Value := AValue;
-  FAddSet[FCount].Tag := AtomicFetchAdd64(Int64(FGlobalTag), 1, moRelaxed) + 1;
-  FAddSet[FCount].Removed := False;
-  Inc(FCount);
-  Result := crOk;
+  Lock;
+  try
+    if FCount >= FCapacity then
+      Grow;
+    FAddSet[FCount].Value := AValue;
+    FAddSet[FCount].Tag := AtomicFetchAdd64(Int64(FGlobalTag), 1, moRelaxed) + 1;
+    FAddSet[FCount].Removed := False;
+    Inc(FCount);
+    Result := crOk;
+  finally
+    Unlock;
+  end;
 end;
 
 function TORSet.Remove(const AValue: AnsiString): TCRDTResult;
@@ -319,37 +410,52 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(crClosed);
-  LFound := False;
-  for LI := 0 to FCount - 1 do
-    if (FAddSet[LI].Value = AValue) and (not FAddSet[LI].Removed) then
-    begin
-      FAddSet[LI].Removed := True;
-      LFound := True;
-    end;
-  if LFound then
-    Result := crOk
-  else
-    Result := crNotFound;
+  Lock;
+  try
+    LFound := False;
+    for LI := 0 to FCount - 1 do
+      if (FAddSet[LI].Value = AValue) and (not FAddSet[LI].Removed) then
+      begin
+        FAddSet[LI].Removed := True;
+        LFound := True;
+      end;
+    if LFound then
+      Result := crOk
+    else
+      Result := crNotFound;
+  finally
+    Unlock;
+  end;
 end;
 
 function TORSet.Contains(const AValue: AnsiString): Boolean;
 var
   LI: Int32;
 begin
-  for LI := 0 to FCount - 1 do
-    if (FAddSet[LI].Value = AValue) and (not FAddSet[LI].Removed) then
-      Exit(True);
-  Result := False;
+  Lock;
+  try
+    for LI := 0 to FCount - 1 do
+      if (FAddSet[LI].Value = AValue) and (not FAddSet[LI].Removed) then
+        Exit(True);
+    Result := False;
+  finally
+    Unlock;
+  end;
 end;
 
 function TORSet.Count: Int32;
 var
   LI: Int32;
 begin
-  Result := 0;
-  for LI := 0 to FCount - 1 do
-    if not FAddSet[LI].Removed then
-      Inc(Result);
+  Lock;
+  try
+    Result := 0;
+    for LI := 0 to FCount - 1 do
+      if not FAddSet[LI].Removed then
+        Inc(Result);
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TORSet.Merge(const AOther: TORSet);
@@ -358,21 +464,35 @@ var
 begin
   if AOther = nil then
     Exit;
-  for LI := 0 to AOther.FCount - 1 do
-  begin
-    if FindIndex(AOther.FAddSet[LI].Value, AOther.FAddSet[LI].Tag) < 0 then
+  Lock;
+  AOther.Lock;
+  try
+    for LI := 0 to AOther.FCount - 1 do
     begin
-      if FCount >= FCapacity then
-        Grow;
-      FAddSet[FCount] := AOther.FAddSet[LI];
-      Inc(FCount);
+      if FindIndex(AOther.FAddSet[LI].Value, AOther.FAddSet[LI].Tag) < 0 then
+      begin
+        if FCount >= FCapacity then
+          Grow;
+        FAddSet[FCount] := AOther.FAddSet[LI];
+        Inc(FCount);
+      end
+      else if AOther.FAddSet[LI].Removed then
+        FAddSet[FindIndex(AOther.FAddSet[LI].Value, AOther.FAddSet[LI].Tag)].Removed := True;
     end;
+  finally
+    AOther.Unlock;
+    Unlock;
   end;
 end;
 
 procedure TORSet.Clear;
 begin
-  FCount := 0;
+  Lock;
+  try
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TORSet.Close;

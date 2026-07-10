@@ -66,36 +66,32 @@ begin
     LStart := TInstant.Now;
 
   LGen := AtomicLoad64(FGeneration, moAcquire);
+  LOldCount := AtomicFetchSub64(FCount, 1, moAcqRel);
+  if LOldCount = 1 then
+  begin
+    AtomicStore64(FCount, FParties, moRelease);
+    AtomicFetchAdd64(FGeneration, 1, moRelease);
+    Exit(bwArrived);
+  end;
 
-  repeat
+  while AtomicLoad64(FGeneration, moAcquire) = LGen do
+  begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      Exit(bwClosed);
-
-    if LUseTimeout and (LStart.Elapsed.AsNanoseconds >= ATimeoutNs) then
-      Exit(bwTimeout);
-
-    if AtomicLoad64(FGeneration, moAcquire) <> LGen then
-      Exit(bwArrived);
-
-    LOldCount := AtomicFetchSub64(FCount, 1, moAcqRel);
-    if LOldCount = 1 then
     begin
       AtomicStore64(FCount, FParties, moRelease);
       AtomicFetchAdd64(FGeneration, 1, moRelease);
-      Exit(bwArrived);
+      Exit(bwClosed);
     end;
-
-    while AtomicLoad64(FGeneration, moAcquire) = LGen do
+    if LUseTimeout and (LStart.Elapsed.AsNanoseconds >= ATimeoutNs) then
     begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
-        Exit(bwClosed);
-      if LUseTimeout and (LStart.Elapsed.AsNanoseconds >= ATimeoutNs) then
-        Exit(bwTimeout);
-      CpuPause;
+      AtomicStore64(FCount, FParties, moRelease);
+      AtomicFetchAdd64(FGeneration, 1, moRelease);
+      Exit(bwTimeout);
     end;
+    CpuPause;
+  end;
 
-    Exit(bwArrived);
-  until False;
+  Result := bwArrived;
 end;
 
 function TCyclicBarrier.Await: TCyclicBarrierWaitResult;
@@ -129,6 +125,8 @@ end;
 procedure TCyclicBarrier.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+  AtomicStore64(FCount, FParties, moRelease);
+  AtomicFetchAdd64(FGeneration, 1, moRelease);
 end;
 
 function TCyclicBarrier.IsClosed: Boolean;

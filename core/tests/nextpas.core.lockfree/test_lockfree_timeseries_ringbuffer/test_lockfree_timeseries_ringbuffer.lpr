@@ -139,6 +139,25 @@ begin
   end;
 end;
 
+procedure Test_CustomTTLExpiry;
+var
+  LBuf: TTimeSeriesRingBuffer;
+  LEntry: TTSRingEntry;
+begin
+  WriteLn('--- CustomTTLExpiry ---');
+  LBuf := TTimeSeriesRingBuffer.Create(10, 0);
+  try
+    Check(LBuf.AppendWithTTL('short', 5) = tsrOk, 'append short ttl');
+    Check(LBuf.AppendWithTTL('forever', 0) = tsrOk, 'append infinite ttl');
+    Sleep(15);
+    Check(LBuf.Count = 1, 'expired entry removed from count');
+    Check(LBuf.Latest(LEntry) = tsrOk, 'latest survives expiry sweep');
+    Check(LEntry.Value = 'forever', 'infinite ttl entry survives');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   GPassed := 0;
   GFailed := 0;
@@ -149,6 +168,7 @@ begin
   Test_GetRecent;
   Test_GetRange;
   Test_Clear;
+  Test_CustomTTLExpiry;
 
   WriteLn;
   WriteLn('=== TimeSeriesRingBuffer: ', GPassed, ' passed, ', GFailed, ' failed ===');

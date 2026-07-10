@@ -21,7 +21,10 @@ type
     FBurst: Double;
     FTokens: Double;
     FLastRefillNs: Int64;
+    FLock: Int32;
     FClosed: Int32;
+    procedure Lock;
+    procedure Unlock;
     procedure Refill;
   public
     constructor Create(const ARatePerSecond: Double; const ABurst: Double);
@@ -56,7 +59,19 @@ begin
   FBurst := ABurst;
   FTokens := ABurst;
   FLastRefillNs := GetNowNs;
+  FLock := 0;
   FClosed := 0;
+end;
+
+procedure TTokenBucketLimiter.Lock;
+begin
+  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+    ThreadSwitch;
+end;
+
+procedure TTokenBucketLimiter.Unlock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 procedure TTokenBucketLimiter.Refill;
@@ -87,14 +102,19 @@ begin
     raise EArgumentError.Create('TTokenBucketLimiter.TryAcquireN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rlClosed);
-  Refill;
-  if FTokens >= AN then
-  begin
-    FTokens := FTokens - AN;
-    Result := rlAllowed;
-  end
-  else
-    Result := rlRejected;
+  Lock;
+  try
+    Refill;
+    if FTokens >= AN then
+    begin
+      FTokens := FTokens - AN;
+      Result := rlAllowed;
+    end
+    else
+      Result := rlRejected;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TTokenBucketLimiter.Close;

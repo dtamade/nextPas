@@ -3,9 +3,40 @@ program test_lockfree_versionvector;
 {$mode objfpc}{$H+}
 
 uses
+  cthreads,
+  Classes,
   SysUtils,
   nextpas.core.lockfree.versionvector,
   nextpas.core.test;
+
+type
+  TVVIncrementThread = class(TThread)
+  private
+    FVector: TVersionVector;
+    FNodeId: Int32;
+    FIterations: Int32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AVector: TVersionVector; ANodeId, AIterations: Int32);
+  end;
+
+constructor TVVIncrementThread.Create(AVector: TVersionVector; ANodeId, AIterations: Int32);
+begin
+  inherited Create(False);
+  FreeOnTerminate := False;
+  FVector := AVector;
+  FNodeId := ANodeId;
+  FIterations := AIterations;
+end;
+
+procedure TVVIncrementThread.Execute;
+var
+  LI: Int32;
+begin
+  for LI := 1 to FIterations do
+    FVector.Increment(FNodeId);
+end;
 
 procedure TestBasicIncrement;
 var
@@ -161,6 +192,30 @@ begin
   end;
 end;
 
+procedure TestConcurrentIncrement;
+const
+  THREAD_COUNT = 4;
+  ITERATIONS = 2000;
+var
+  LVV: TVersionVector;
+  LThreads: array[0..THREAD_COUNT - 1] of TVVIncrementThread;
+  LI: Int32;
+begin
+  LVV := TVersionVector.Create;
+  try
+    for LI := 0 to High(LThreads) do
+      LThreads[LI] := TVVIncrementThread.Create(LVV, 7, ITERATIONS);
+    for LI := 0 to High(LThreads) do
+    begin
+      LThreads[LI].WaitFor;
+      LThreads[LI].Free;
+    end;
+    CheckEqual(Int64(THREAD_COUNT * ITERATIONS), LVV.GetCounter(7), 'Concurrent increments preserve all updates');
+  finally
+    LVV.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_versionvector ===');
   WriteLn;
@@ -188,6 +243,9 @@ begin
 
   TestClear;
   WriteLn('  + Clear');
+
+  TestConcurrentIncrement;
+  WriteLn('  + Concurrent increment');
 
   WriteLn;
   WriteLn('All version vector tests passed!');
