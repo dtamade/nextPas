@@ -283,6 +283,37 @@ begin
   end;
 end;
 
+procedure TestResetStatsPreservesActiveAllocations;
+var
+  LStats: TAllocStatsAllocator;
+  LPtr: Pointer;
+  LSnap: TAllocSnapshot;
+begin
+  LStats := TAllocStatsAllocator.Create(GetRtlAllocator, True);
+  LPtr := nil;
+  try
+    LPtr := LStats.GetMem(128);
+    LStats.ResetStats;
+
+    LSnap := LStats.Snapshot;
+    Check(LSnap.TotalAllocs = 0, 'reset clears TotalAllocs');
+    Check(LSnap.TotalFrees = 0, 'reset clears TotalFrees');
+    Check(LSnap.ActiveAllocs = 1, 'reset preserves ActiveAllocs');
+    Check(LSnap.PeakAllocs = 1, 'reset keeps PeakAllocs consistent with active allocations');
+    Check(LSnap.TotalBytesAllocated = 0, 'reset clears TotalBytesAllocated');
+
+    LStats.FreeMem(LPtr);
+    LPtr := nil;
+    LSnap := LStats.Snapshot;
+    Check(LSnap.TotalFrees = 1, 'free after reset updates TotalFrees');
+    Check(LSnap.ActiveAllocs = 0, 'free after reset returns ActiveAllocs to zero');
+  finally
+    if LPtr <> nil then
+      LStats.FreeMem(LPtr);
+    LStats.Free;
+  end;
+end;
+
 { --- Snapshot computed properties --- }
 
 procedure TestSnapshotAllocationRate;
@@ -451,6 +482,7 @@ begin
   T.Test('histogram mean size', @TestHistogramMeanSize);
   T.Test('histogram percentile', @TestHistogramPercentile);
   T.Test('reset stats', @TestResetStats);
+  T.Test('reset stats preserves active allocations', @TestResetStatsPreservesActiveAllocations);
   T.Test('snapshot allocation rate', @TestSnapshotAllocationRate);
   T.Test('traits forwards', @TestTraitsForwards);
   T.Test('concurrent alloc', @TestConcurrentAlloc);

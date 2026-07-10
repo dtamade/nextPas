@@ -441,8 +441,7 @@ procedure TAllocStatsAllocator.ResetStats;
 begin
   FTotalAllocs := 0;
   FTotalFrees := 0;
-  FActiveAllocs := 0;
-  FPeakAllocs := 0;
+  FPeakAllocs := FActiveAllocs;
   FTotalBytesAllocated := 0;
   FillChar(FHistogram, SizeOf(FHistogram), 0);
 end;
