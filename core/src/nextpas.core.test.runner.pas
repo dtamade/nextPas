@@ -1399,8 +1399,7 @@ begin
     LAppender.Free;
     if GExecState <> nil then
     begin
-      Finalize(GExecState^);
-      FreeMem(GExecState);
+      Dispose(GExecState);
       GExecState := nil;
     end;
   end;

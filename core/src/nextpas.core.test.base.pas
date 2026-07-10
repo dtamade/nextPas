@@ -808,8 +808,8 @@ procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   if GExecState = nil then
   begin
-    GetMem(GExecState, SizeOf(TTestExecState));
-    FillChar(GExecState^, SizeOf(TTestExecState), 0);
+    New(GExecState);
+    GExecState^ := Default(TTestExecState);
   end;
   GExecState^.SuiteName  := ASuiteName;
   GExecState^.TestName   := ATestName;
@@ -840,8 +840,7 @@ finalization
   GLastTestTrace := '';
   if GExecState <> nil then
   begin
-    Finalize(GExecState^);
-    FreeMem(GExecState);
+    Dispose(GExecState);
     GExecState := nil;
   end;
 
