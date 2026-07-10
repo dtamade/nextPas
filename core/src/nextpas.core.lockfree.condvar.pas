@@ -20,6 +20,7 @@ type
   TConditionVariable = class
   private
     FSignalCount: Int64;
+    FBroadcastEpoch: Int64;
     FWaiters: Int32;
     FClosed: Int32;
   public
@@ -55,23 +56,31 @@ constructor TConditionVariable.Create;
 begin
   inherited Create;
   FSignalCount := 0;
+  FBroadcastEpoch := 0;
   FWaiters := 0;
   FClosed := 0;
 end;
 
 procedure TConditionVariable.Wait(AMutex: TConcurrentMutex);
 var
-  LOldCount: Int64;
+  LBroadcastEpoch: Int64;
+  LSignalCount: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
   AtomicFetchAdd32(FWaiters, 1, moRelaxed);
-  LOldCount := AtomicLoad64(FSignalCount, moAcquire);
+  LBroadcastEpoch := AtomicLoad64(FBroadcastEpoch, moAcquire);
   AMutex.Unlock;
   try
-    while AtomicLoad64(FSignalCount, moAcquire) = LOldCount do
+    while True do
     begin
       if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Break;
+      if AtomicLoad64(FBroadcastEpoch, moAcquire) <> LBroadcastEpoch then
+        Break;
+      LSignalCount := AtomicLoad64(FSignalCount, moAcquire);
+      if (LSignalCount > 0) and
+         (AtomicCompareExchange64(FSignalCount, LSignalCount, LSignalCount - 1, moAcqRel) = LSignalCount) then
         Break;
       CpuPause;
     end;
@@ -84,7 +93,8 @@ end;
 function TConditionVariable.WaitTimeout(AMutex: TConcurrentMutex;
   const ATimeoutNs: Int64): TConditionVariableWaitResult;
 var
-  LOldCount: Int64;
+  LBroadcastEpoch: Int64;
+  LSignalCount: Int64;
   LStart: TInstant;
 begin
   if ATimeoutNs <= 0 then
@@ -92,14 +102,20 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(cvClosed);
   AtomicFetchAdd32(FWaiters, 1, moRelaxed);
-  LOldCount := AtomicLoad64(FSignalCount, moAcquire);
+  LBroadcastEpoch := AtomicLoad64(FBroadcastEpoch, moAcquire);
   LStart := TInstant.Now;
   AMutex.Unlock;
   try
-    while AtomicLoad64(FSignalCount, moAcquire) = LOldCount do
+    while True do
     begin
       if AtomicLoad32(FClosed, moAcquire) <> 0 then
         Exit(cvClosed);
+      if AtomicLoad64(FBroadcastEpoch, moAcquire) <> LBroadcastEpoch then
+        Exit(cvSignaled);
+      LSignalCount := AtomicLoad64(FSignalCount, moAcquire);
+      if (LSignalCount > 0) and
+         (AtomicCompareExchange64(FSignalCount, LSignalCount, LSignalCount - 1, moAcqRel) = LSignalCount) then
+        Exit(cvSignaled);
       if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
         Exit(cvTimeout);
       CpuPause;
@@ -108,17 +124,20 @@ begin
     AtomicFetchSub32(FWaiters, 1, moRelaxed);
     AMutex.Lock;
   end;
-  Result := cvSignaled;
 end;
 
 procedure TConditionVariable.Signal;
 begin
+  if AtomicLoad32(FWaiters, moAcquire) <= 0 then
+    Exit;
   AtomicFetchAdd64(FSignalCount, SIGNAL_ONE, moRelease);
 end;
 
 procedure TConditionVariable.Broadcast;
 begin
-  AtomicFetchAdd64(FSignalCount, SIGNAL_ALL, moRelease);
+  if AtomicLoad32(FWaiters, moAcquire) <= 0 then
+    Exit;
+  AtomicFetchAdd64(FBroadcastEpoch, 1, moRelease);
 end;
 
 procedure TConditionVariable.Close;

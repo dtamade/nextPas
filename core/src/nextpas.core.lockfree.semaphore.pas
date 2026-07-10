@@ -108,8 +108,14 @@ begin
 end;
 
 procedure TConcurrentSemaphore.Release;
+var
+  LOld: Int64;
 begin
-  AtomicFetchAdd64(FAvailable, 1, moRelaxed);
+  repeat
+    LOld := AtomicLoad64(FAvailable, moAcquire);
+    if LOld >= FMaxPermits then
+      Exit;
+  until AtomicCompareExchange64(FAvailable, LOld, LOld + 1, moRelease) = LOld;
 end;
 
 procedure TConcurrentSemaphore.Close;

@@ -159,6 +159,9 @@ begin
 
     { One should be signaled, one should still be waiting }
     Check(LSignaled1 or LSignaled2, 'At least one should be signaled');
+    Check((AtomicLoad32(LDone1, moAcquire) + AtomicLoad32(LDone2, moAcquire)) = 1,
+      'Exactly one waiter should complete after a single Signal');
+    CheckEqual(Int32(1), LCondVar.GetWaiterCount, 'One waiter should remain after a single Signal');
 
     { Signal the second one }
     LCondVar.Signal;

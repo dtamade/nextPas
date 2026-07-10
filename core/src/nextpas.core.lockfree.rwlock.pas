@@ -17,6 +17,7 @@ type
   private
     FState: Int32;  // 0 = unlocked, -1 = write locked, >0 = reader count
     FClosed: Int32;
+    FWriterPending: Int32;
   public
     constructor Create;
     function TryReadLock: Boolean;
@@ -42,6 +43,7 @@ begin
   inherited Create;
   FState := 0;
   FClosed := 0;
+  FWriterPending := 0;
 end;
 
 function TConcurrentRwLock.TryReadLock: Boolean;
@@ -52,9 +54,9 @@ begin
     Exit(False);
   repeat
     LOld := AtomicLoad32(FState, moRelaxed);
-    if LOld < 0 then
+    if (LOld < 0) or (AtomicLoad32(FWriterPending, moAcquire) <> 0) then
       Exit(False);  // Write locked
-  until AtomicCompareExchange32(FState, LOld, LOld + 1, moRelaxed) = LOld;
+  until AtomicCompareExchange32(FState, LOld, LOld + 1, moAcqRel) = LOld;
   Result := True;
 end;
 
@@ -79,19 +81,26 @@ end;
 
 function TConcurrentRwLock.WriteLock: Boolean;
 begin
+  AtomicFetchAdd32(FWriterPending, 1, moAcqRel);
   while True do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    begin
+      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
       Exit(False);
+    end;
     if TryWriteLock then
+    begin
+      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
       Exit(True);
+    end;
     CpuPause;
   end;
 end;
 
 procedure TConcurrentRwLock.ReadUnlock;
 begin
-  AtomicFetchSub32(FState, 1, moRelaxed);
+  AtomicFetchSub32(FState, 1, moRelease);
 end;
 
 procedure TConcurrentRwLock.WriteUnlock;

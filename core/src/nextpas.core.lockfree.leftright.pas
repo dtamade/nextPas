@@ -83,39 +83,20 @@ end;
 
 function TLeftRight.EnterRead: Int32;
 var
-  LIdx: Int32;
-  LOldVal, LNewVal: Int64;
   LReadIdx: Int32;
 begin
-  { Atomically get a reader slot }
-  repeat
-    LIdx := AtomicLoad32(FReaderCount, moAcquire);
-    if LIdx >= LR_MAX_READERS then
-    begin
-      ThreadSwitch;
-      Continue;
-    end;
-  until AtomicCompareExchange32(FReaderCount, LIdx, LIdx + 1, moAcqRel) = LIdx;
-  { Increment the counter for the current read index using CAS }
   LReadIdx := AtomicLoad32(FReadIndex, moAcquire);
-  repeat
-    LOldVal := AtomicLoad64(FReaders[LReadIdx], moAcquire);
-    LNewVal := LOldVal + 1;
-  until AtomicCompareExchange64(FReaders[LReadIdx], LOldVal, LNewVal, moAcqRel) = LOldVal;
-  Result := LIdx;
+  AtomicFetchAdd64(FReaders[LReadIdx], 1, moAcqRel);
+  AtomicFetchAdd32(FReaderCount, 1, moAcqRel);
+  Result := LReadIdx;
 end;
 
 procedure TLeftRight.ExitRead(AIndex: Int32);
-var
-  LOldVal, LNewVal: Int64;
-  LReadIdx: Int32;
 begin
-  { Decrement the counter for the current read index using CAS }
-  LReadIdx := AtomicLoad32(FReadIndex, moAcquire);
-  repeat
-    LOldVal := AtomicLoad64(FReaders[LReadIdx], moAcquire);
-    LNewVal := LOldVal - 1;
-  until AtomicCompareExchange64(FReaders[LReadIdx], LOldVal, LNewVal, moAcqRel) = LOldVal;
+  if (AIndex < 0) or (AIndex > 1) then
+    Exit;
+  AtomicFetchSub64(FReaders[AIndex], 1, moAcqRel);
+  AtomicFetchSub32(FReaderCount, 1, moAcqRel);
 end;
 
 function TLeftRight.HasReaders(AIndex: Int32): Boolean;
@@ -140,7 +121,7 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
   { Acquire write lock }
-  while AtomicCompareExchange32(FWriteLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FWriteLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
   try
     { Step 1: Write to inactive copy }

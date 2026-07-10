@@ -3,11 +3,34 @@ program test_lockfree_rwlock;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.lockfree.rwlock,
   nextpas.core.lockfree,
   nextpas.core.atomic,
   nextpas.core.test;
+
+type
+  PRwLockWriterArgs = ^TRwLockWriterArgs;
+  TRwLockWriterArgs = record
+    Lock: TConcurrentRwLock;
+    Started: PInt32;
+    Acquired: PInt32;
+  end;
+
+function WriterThread(AData: Pointer): PtrInt;
+var
+  LArgs: PRwLockWriterArgs;
+begin
+  LArgs := PRwLockWriterArgs(AData);
+  AtomicStore32(LArgs^.Started^, 1, moRelease);
+  if LArgs^.Lock.WriteLock then
+  begin
+    AtomicStore32(LArgs^.Acquired^, 1, moRelease);
+    LArgs^.Lock.WriteUnlock;
+  end;
+  Result := 0;
+end;
 
 procedure TestRwLockBasic;
 var
@@ -93,6 +116,53 @@ begin
   end;
 end;
 
+procedure TestRwLockWriterPendingBlocksNewReaders;
+var
+  LRwLock: TConcurrentRwLock;
+  LStarted: Int32;
+  LAcquired: Int32;
+  LArgs: TRwLockWriterArgs;
+  LThread: TThreadID;
+  LSpin: Integer;
+begin
+  LRwLock := TConcurrentRwLock.Create;
+  LStarted := 0;
+  LAcquired := 0;
+  try
+    Check(LRwLock.ReadLock, 'Reader should acquire initial lock');
+    LArgs.Lock := LRwLock;
+    LArgs.Started := @LStarted;
+    LArgs.Acquired := @LAcquired;
+    LThread := BeginThread(@WriterThread, @LArgs);
+
+    LSpin := 0;
+    while (AtomicLoad32(LStarted, moAcquire) = 0) and (LSpin < 1000000) do
+    begin
+      CpuPause;
+      Inc(LSpin);
+    end;
+
+    for LSpin := 1 to 256 do
+      CpuPause;
+
+    Check(not LRwLock.TryReadLock, 'New readers must not bypass a waiting writer');
+    CheckEqual(Int32(0), AtomicLoad32(LAcquired, moAcquire), 'Writer must still be pending while reader holds lock');
+
+    LRwLock.ReadUnlock;
+
+    LSpin := 0;
+    while (AtomicLoad32(LAcquired, moAcquire) = 0) and (LSpin < 1000000) do
+    begin
+      CpuPause;
+      Inc(LSpin);
+    end;
+    CheckEqual(Int32(1), AtomicLoad32(LAcquired, moAcquire), 'Writer should acquire once readers drain');
+    WaitForThreadTerminate(LThread, 5000);
+  finally
+    LRwLock.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_rwlock ===');
   WriteLn;
@@ -105,6 +175,9 @@ begin
 
   TestRwLockWriteLock;
   WriteLn('  + Write lock');
+
+  TestRwLockWriterPendingBlocksNewReaders;
+  WriteLn('  + Writer pending blocks new readers');
 
   WriteLn;
   WriteLn('All rwlock tests passed!');

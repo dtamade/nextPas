@@ -46,15 +46,32 @@ begin
 end;
 
 procedure TCountDownLatch.Done;
+var
+  LOld: Int64;
 begin
-  AtomicFetchSub64(FCount, 1, moRelease);
+  repeat
+    LOld := AtomicLoad64(FCount, moAcquire);
+    if LOld <= 0 then
+      Exit;
+  until AtomicCompareExchange64(FCount, LOld, LOld - 1, moRelease) = LOld;
 end;
 
 procedure TCountDownLatch.DoneN(const AN: Int64);
+var
+  LOld: Int64;
+  LNew: Int64;
 begin
   if AN <= 0 then
     raise EArgumentError.Create('TCountDownLatch.DoneN: N must be > 0');
-  AtomicFetchSub64(FCount, AN, moRelease);
+  repeat
+    LOld := AtomicLoad64(FCount, moAcquire);
+    if LOld <= 0 then
+      Exit;
+    if LOld > AN then
+      LNew := LOld - AN
+    else
+      LNew := 0;
+  until AtomicCompareExchange64(FCount, LOld, LNew, moRelease) = LOld;
 end;
 
 procedure TCountDownLatch.Wait;
