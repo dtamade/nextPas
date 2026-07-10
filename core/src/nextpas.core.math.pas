@@ -203,6 +203,7 @@ function Fmod(const AX, AY: Extended): Extended; overload; inline;
 
 function Sum(const AData: array of Double): Double; overload; inline;
 function Sum(const AData: array of Single): Single; overload; inline;
+function SumToDouble(const AData: array of Single): Double; inline;
 function SumInt(const AData: array of Integer): Int64; inline;
 function Mean(const AData: array of Double): Double; overload; inline;
 function Mean(const AData: array of Single): Single; overload; inline;
@@ -817,6 +818,11 @@ end;
 function Sum(const AData: array of Single): Single;
 begin
   Result := nextpas.core.math.scalar.Sum(AData);
+end;
+
+function SumToDouble(const AData: array of Single): Double;
+begin
+  Result := nextpas.core.math.scalar.SumToDouble(AData);
 end;
 
 function SumInt(const AData: array of Integer): Int64;

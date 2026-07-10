@@ -226,6 +226,9 @@ function RoundTo(const AValue: Single; const ADecimals: Integer): Single; overlo
  *}
 function Sum(const AData: array of Double): Double; overload;
 function Sum(const AData: array of Single): Single; overload;
+{** Computes sum of Single array with Double-precision accumulation (Kahan).
+    Use when Single precision is insufficient for large arrays. *}
+function SumToDouble(const AData: array of Single): Double;
 
 {** * Computes the sum of all integer elements in an array.
  * @param AData The input array
@@ -322,10 +325,18 @@ end;
 function Sum(const AData: array of Double): Double;
 var
   i: Integer;
+  LComp: Double;
+  LY, LT: Double;
 begin
   Result := 0.0;
+  LComp := 0.0;
   for i := 0 to Length(AData) - 1 do
-    Result := Result + AData[i];
+  begin
+    LY := AData[i] - LComp;
+    LT := Result + LY;
+    LComp := (LT - Result) - LY;
+    Result := LT;
+  end;
 end;
 
 function Sum(const AData: array of Single): Single;
@@ -335,6 +346,23 @@ begin
   Result := 0.0;
   for i := 0 to Length(AData) - 1 do
     Result := Result + AData[i];
+end;
+
+function SumToDouble(const AData: array of Single): Double;
+var
+  i: Integer;
+  LComp: Double;
+  LY, LT: Double;
+begin
+  Result := 0.0;
+  LComp := 0.0;
+  for i := 0 to High(AData) do
+  begin
+    LY := Double(AData[i]) - LComp;
+    LT := Result + LY;
+    LComp := (LT - Result) - LY;
+    Result := LT;
+  end;
 end;
 
 function SumInt(const AData: array of Integer): Int64;
