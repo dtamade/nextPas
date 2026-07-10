@@ -30,22 +30,24 @@ function RunTestWithLeakCheck(ATest: TAllocatorTestProc;
   AInnerAllocator: IAllocator): TLeakCheckResult;
 var
   LInner: IAllocator;
-  LTracker: TTrackingAllocator;
+  LTracker: IAllocator;
+  LTrackerObj: TTrackingAllocator;
 begin
   if AInnerAllocator <> nil then
     LInner := AInnerAllocator
   else
     LInner := GetRtlAllocator;
 
-  LTracker := TTrackingAllocator.Create(LInner);
+  LTrackerObj := TTrackingAllocator.Create(LInner);
+  LTracker := LTrackerObj;
   try
     ATest(LTracker);
-    Result.AllocCount := LTracker.ActiveAllocCount;
-    Result.AllocBytes := LTracker.ActiveAllocBytes;
-    Result.HasLeaks := LTracker.HasLeaks;
-    Result.Report := LTracker.ReportLeaks;
+    Result.AllocCount := LTrackerObj.ActiveAllocCount;
+    Result.AllocBytes := LTrackerObj.ActiveAllocBytes;
+    Result.HasLeaks := LTrackerObj.HasLeaks;
+    Result.Report := LTrackerObj.ReportLeaks;
   finally
-    LTracker.Free;
+    LTracker := nil;
   end;
 end;
 
