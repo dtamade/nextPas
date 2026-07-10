@@ -98,6 +98,8 @@ function TBoundedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LPtr: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if (FLimitBytes > 0) and (FActiveBytes + ASize > FLimitBytes) then
   begin
     Inc(FRejectedCount);

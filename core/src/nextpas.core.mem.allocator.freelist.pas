@@ -102,6 +102,8 @@ var
   LTotal: SizeUInt;
   LHeader: PSizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
   LBin := FindBin(ASize);
   if (LBin >= 0) and (FBins[LBin] <> nil) then
   begin

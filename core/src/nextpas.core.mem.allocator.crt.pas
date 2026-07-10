@@ -46,6 +46,8 @@ var
 
 function TCrtAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Result := crt_malloc(ASize);
 end;
 

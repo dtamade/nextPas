@@ -454,8 +454,8 @@ begin
     Result.ZeroInitialized := True;
   if LFallbackTraits.SupportsRealloc then
     Result.SupportsRealloc := True;
-  { ThreadSafe: 两个都安全才算安全 }
-  Result.ThreadSafe := FPrimary.Traits.ThreadSafe and LFallbackTraits.ThreadSafe;
+  { ThreadSafe: 内部 hash map 无同步，始终为 False }
+  Result.ThreadSafe := False;
 end;
 
 { ---------------------------------------------------------------------------
