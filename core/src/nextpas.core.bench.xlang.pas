@@ -243,18 +243,24 @@ var
   LEnd: Integer;
 begin
   LKeyEq := AKey + '=';
-  LPos := Pos(LKeyEq, ALine);
-  if LPos > 0 then
+  LPos := 1;
+  while LPos <= Length(ALine) do
   begin
-    LStart := LPos + Length(LKeyEq);
-    // Find next space or end of string
-    LEnd := LStart;
-    while (LEnd <= Length(ALine)) and (ALine[LEnd] <> ' ') do
-      Inc(LEnd);
-    Result := Copy(ALine, LStart, LEnd - LStart);
-  end
-  else
-    Result := '';
+    LPos := Pos(LKeyEq, ALine, LPos);
+    if LPos = 0 then
+      Break;
+    { Anchored: preceding char must be space or line start }
+    if (LPos = 1) or (ALine[LPos - 1] = ' ') then
+    begin
+      LStart := LPos + Length(LKeyEq);
+      LEnd := LStart;
+      while (LEnd <= Length(ALine)) and (ALine[LEnd] <> ' ') do
+        Inc(LEnd);
+      Exit(Copy(ALine, LStart, LEnd - LStart));
+    end;
+    Inc(LPos);
+  end;
+  Result := '';
 end;
 
 { Helper: Parse Go number with unit suffix (e.g., "1234 ns/op", "456 B/op") }
@@ -365,6 +371,7 @@ begin
   end;
 
   Result.Name := LName;
+  Result.Executed := True;
   Result.Iterations := LIterations;
   Result.TotalNs := SafeDeriveTotalNs(LNsPerOp, LIterations);
   Result.NsPerOp := LNsPerOp;
@@ -459,7 +466,8 @@ begin
   else if LUnit = 'ns' then LMultiplier := 1
   else if LUnit = 'us' then LMultiplier := 1000
   else if LUnit = 'ms' then LMultiplier := 1000000
-  else if LUnit = 's' then LMultiplier := NANOSECONDS_PER_SECOND;
+  else if LUnit = 's' then LMultiplier := NANOSECONDS_PER_SECOND
+  else raise EParseError.CreateFmt('Unknown Rust bench time unit "%s": %s', [LUnit, ALine]);
 
   // Validate mean > 0 after unit conversion (TG-15)
   // A zero or negative mean indicates invalid/meaningless benchmark data.
@@ -468,6 +476,7 @@ begin
     raise EParseError.CreateFmt('Rust bench mean is zero or negative: %s', [ALine]);
 
   Result.Name := LName;
+  Result.Executed := True;
   Result.NsPerOp := LMean * LMultiplier;
   Result.Median := Result.NsPerOp;
   Result.StdDev := 0;
@@ -517,6 +526,7 @@ begin
   LIterations := StrToInt64Def(LIterationsStr, 1);
 
   Result.Name := LName;
+  Result.Executed := True;
   Result.NsPerOp := LNsPerOp;
   Result.Median := LNsPerOp;
   Result.StdDev := 0;

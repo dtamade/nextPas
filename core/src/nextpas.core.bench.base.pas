@@ -12,6 +12,7 @@ unit nextpas.core.bench.base;
 interface
 
 uses
+  nextpas.core.exception,
   nextpas.core.io.linewriter;
 
 type
@@ -368,6 +369,7 @@ uses
 
 procedure TXoroshiro128Plus.Init(ASeed: UInt64);
 { SplitMix64: 从单个 64 位种子扩展出两个 64 位状态 }
+{$PUSH}{$Q-}{$R-}  { SplitMix64 依赖无符号回绕语义 }
 var
   LZ: UInt64;
 begin
@@ -383,6 +385,7 @@ begin
   if (S0 = 0) and (S1 = 0) then
     S1 := 1;
 end;
+{$POP}
 
 function TXoroshiro128Plus.Next: UInt64;
 { 参考: https://prng.di.unimi.it/xoroshiro128plus.c }
@@ -402,6 +405,8 @@ var
   LRange, LBound, LRemainder: UInt64;
   LVal: UInt64;
 begin
+  if AMaxExclusive <= 0 then
+    raise EIndexOutOfRangeError.CreateFmt('TXoroshiro128Plus.NextInt: AMaxExclusive must be > 0, got %d', [AMaxExclusive]);
   LRange := UInt64(AMaxExclusive);
   LVal := Next;
   LRemainder := LVal mod LRange;
@@ -501,7 +506,7 @@ procedure DoHeapSort(var AData: TDoubleArray; ALeft, ARight: Integer);
     LRoot := AStart;
     while True do
     begin
-      LChild := 2 * LRoot + 1;
+      LChild := ALeft + 2 * (LRoot - ALeft) + 1;
       if LChild > AEnd then Break;
       if (LChild + 1 <= AEnd) and (AData[LChild] < AData[LChild + 1]) then
         Inc(LChild);

@@ -279,6 +279,8 @@ begin
       LTargetCtx.Skip(LContextObj.GetSkipReason);
     // CR-10: Propagate elapsed ns from bridge context to parallel context
     LTargetCtx.FElapsedNs := LContextObj.GetElapsedNs;
+    // Copy custom metrics from bridge context
+    LTargetCtx.FCustomMetrics := Copy(LContextObj.FCustomMetrics);
   end;
 end;
 
@@ -355,7 +357,10 @@ function TBenchContext.GetElapsed: TDuration;
 var
   LCurrentNs: UInt64;
 begin
-  LCurrentNs := platform_monotonic_ns;
+  if FPausedNs > 0 then
+    LCurrentNs := FPausedNs
+  else
+    LCurrentNs := platform_monotonic_ns;
   if LCurrentNs < FStartNs then
     Exit(TDuration.FromNanoseconds(0));
   Result := TDuration.FromNanoseconds(LCurrentNs - FStartNs);
@@ -450,7 +455,10 @@ procedure TBenchContext.RecordElapsed;
 var
   LCurrentNs: UInt64;
 begin
-  LCurrentNs := platform_monotonic_ns;
+  if FPausedNs > 0 then
+    LCurrentNs := FPausedNs
+  else
+    LCurrentNs := platform_monotonic_ns;
   if LCurrentNs >= FStartNs then
     FElapsedNs := LCurrentNs - FStartNs
   else
@@ -586,11 +594,15 @@ end;
 
 function TBenchRunner.MeasureNs(AFunc: TBenchFunc; AIters: Int64): UInt64;
 begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchRunner.MeasureNs: AFunc must not be nil');
   Result := ExecuteEntry(BuildEntry('', AFunc), AIters, False).TotalNs;
 end;
 
 function TBenchRunner.CalibrateIterations(AFunc: TBenchFunc): Int64;
 begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.Create('TBenchRunner.CalibrateIterations: AFunc must not be nil');
   Result := CalibrateEntryIterations(BuildEntry('', AFunc));
 end;
 
@@ -851,7 +863,7 @@ begin
 
   WarmupEntry(AEntry);
 
-  LIters := 100;
+  LIters := Min(100, LMaxIters);
   repeat
     LProbe := ExecuteEntry(AEntry, LIters, False);
     if LProbe.Skipped then
@@ -1370,6 +1382,8 @@ procedure TBenchRunner.Run(const AName: string; AFunc: TBenchLoopFunc);
 var
   LEntry: TBenchEntry;
 begin
+  if not Assigned(AFunc) then
+    raise EBenchInvalidParam.CreateFmt('TBenchRunner.Run: function must not be nil (name="%s")', [AName]);
   LEntry := Default(TBenchEntry);
   LEntry.Name := AName;
   LEntry.LoopFunc := AFunc;

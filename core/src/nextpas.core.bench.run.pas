@@ -256,7 +256,9 @@ begin
     FreeMem(FResults);
     FCapacity := LEntryCount;
     FResults := GetMem(FCapacity * SizeOf(PBenchRunResult));
-  end;
+  end
+  else
+    FreeResults;  { 重用时释放已有结果，防止内存泄漏 }
   FResultIdx := 0;
   FillChar(FResults^, FCapacity * SizeOf(PBenchRunResult), 0);
 

@@ -396,12 +396,15 @@ var
   LItem: TJsonValue;
   LField: TJsonValue;
   LBaseline: TBaselineData;
+  LBaselinesArray: array of TBaselineData;
+  LCount: UInt32;
   I: UInt32;
 begin
-  ClearBaselines;
-
   if Trim(AJSON) = '' then
+  begin
+    ClearBaselines;
     Exit;
+  end;
 
   LDocument := JsonParse(AJSON);
   if (LDocument = nil) or LDocument.HasError then
@@ -410,9 +413,15 @@ begin
   LRoot := LDocument.Root;
   LBaselines := LRoot.ObjectGet('baselines');
   if not LBaselines.IsArray then
+  begin
+    ClearBaselines;
     Exit;
+  end;
 
-  for I := 0 to LBaselines.ArrayLen - 1 do
+  LCount := LBaselines.ArrayLen;
+  SetLength(LBaselinesArray, LCount);
+
+  for I := 0 to LCount - 1 do
   begin
     LItem := LBaselines.ArrayGet(I);
     if not LItem.IsObject then
@@ -469,8 +478,13 @@ begin
     if LField.IsStr then
       LBaseline.Notes := LField.AsStr.ToString;
 
-    AddBaseline(LBaseline);
+    LBaselinesArray[I] := LBaseline;
   end;
+
+  { Strong exception safety: only replace baselines on full success }
+  ClearBaselines;
+  for I := 0 to High(LBaselinesArray) do
+    AddBaseline(LBaselinesArray[I]);
 end;
 
 end.

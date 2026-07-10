@@ -810,6 +810,10 @@ var
 begin
   FHasRun := True;
 
+  { 确保 FRunner 配置与 Suite 同步 }
+  FRunner.SetConfig(FConfig);
+  FRunner.SetFilter(FFilter);
+
   { 确定线程数 }
   if AThreadCount <= 0 then
   begin
@@ -1145,8 +1149,17 @@ begin
 end;
 
 function TBenchResults.GetAll: TBenchResultArray;
+var
+  I: Integer;
 begin
   Result := Copy(FResults, 0, FResultCount);
+  { Deep copy: dynamic array fields (RawSamples, CustomMetrics) share references
+    after shallow Copy; explicitly copy them to prevent aliasing. }
+  for I := 0 to High(Result) do
+  begin
+    Result[I].RawSamples := Copy(Result[I].RawSamples);
+    Result[I].CustomMetrics := Copy(Result[I].CustomMetrics);
+  end;
 end;
 
 function TBenchResults.GetByName(const AName: string): TBenchResult;
