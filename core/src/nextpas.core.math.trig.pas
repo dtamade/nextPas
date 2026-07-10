@@ -238,6 +238,9 @@ begin
 end;
 
 function Tan(const AX: Double): Double;
+var
+  LAbsX: Double;
+  LComplement: Double;
 begin
   if DoubleIsNaN(AX) or DoubleIsInfinite(AX) then
     Exit(DoubleQuietNaN);
@@ -247,6 +250,22 @@ begin
     Exit(DoubleSignedInfinity(False));
   if AX = -HALF_PI then
     Exit(DoubleSignedInfinity(True));
+
+  LAbsX := AbsDouble(AX);
+  { Near ±π/2: use cos(x)/sin(x) for better precision }
+  if LAbsX > 1.5 then
+  begin
+    LComplement := HALF_PI - LAbsX;
+    if AbsDouble(LComplement) < 1e-10 then
+    begin
+      { Very close to π/2, use complementary angle }
+      if AX > 0.0 then
+        Result := Cos(LAbsX) / Sin(LAbsX)
+      else
+        Result := -Cos(LAbsX) / Sin(LAbsX);
+      Exit;
+    end;
+  end;
   Result := Sin(AX) / Cos(AX);
 end;
 

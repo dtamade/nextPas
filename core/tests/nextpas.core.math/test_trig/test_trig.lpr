@@ -1272,6 +1272,33 @@ begin
     'Power Single negative zero negative fractional exponent returns +Inf');
 end;
 
+procedure TestTanPrecisionNearSingularities;
+var
+  LAngle: Double;
+  LExpected: Double;
+  LActual: Double;
+begin
+  { Test Tan precision near π/2 }
+  LAngle := HALF_PI - 1e-10;
+  LExpected := 1.0 / Tan(HALF_PI - LAngle);
+  LActual := Tan(LAngle);
+  Check(IsDoubleFinite(LActual), 'Tan near π/2 stays finite');
+  CheckNear(LExpected, LActual, 0.001, 'Tan near π/2 has good precision');
+
+  { Test Tan precision near -π/2 }
+  LAngle := -HALF_PI + 1e-10;
+  LExpected := -1.0 / Tan(HALF_PI + LAngle);
+  LActual := Tan(LAngle);
+  Check(IsDoubleFinite(LActual), 'Tan near -π/2 stays finite');
+  CheckNear(LExpected, LActual, 0.001, 'Tan near -π/2 has good precision');
+
+  { Test Tan at π/4 (should be exactly 1.0) }
+  CheckNear(1.0, Tan(PI_VALUE / 4.0), 0.0000001, 'Tan(π/4) = 1.0');
+
+  { Test Tan at -π/4 (should be exactly -1.0) }
+  CheckNear(-1.0, Tan(-PI_VALUE / 4.0), 0.0000001, 'Tan(-π/4) = -1.0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.trig');
   T.Test('basic trig values', @TestBasicTrigValues);
@@ -1307,6 +1334,7 @@ begin
   T.Test('Power finite overflow underflow sign contracts',
     @TestPowerFiniteOverflowUnderflowSignContracts);
   T.Test('ArcTan2 finite extreme ratio contracts', @TestArcTan2FiniteExtremeRatioContracts);
+  T.Test('Tan precision near singularities', @TestTanPrecisionNearSingularities);
   T.Test('trig precision domain hardening contracts',
     @TestTrigPrecisionDomainHardeningContracts);
   if not T.Run then Halt(1);
