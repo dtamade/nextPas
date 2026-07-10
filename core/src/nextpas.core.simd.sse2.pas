@@ -5973,4 +5973,16 @@ end;
 
 {$POP}
 
+finalization
+  if GTanSinBuf <> nil then
+  begin
+    FreeMem(GTanSinBuf);
+    GTanSinBuf := nil;
+  end;
+  if GTanCosBuf <> nil then
+  begin
+    FreeMem(GTanCosBuf);
+    GTanCosBuf := nil;
+  end;
+
 end.
