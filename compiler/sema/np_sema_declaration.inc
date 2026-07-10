@@ -1424,6 +1424,10 @@ var
   Decl: TGreenNode;
   GenericMeta: TTypeMetadata;
   HasGenericMeta: Boolean;
+  ParentTypeId: LongInt;
+  ParentName: string;
+  ParentSym: TSemanticSymbol;
+  AlreadyExists: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -1597,6 +1601,44 @@ begin
       end;
       FModel.SetSymbolParamSignature(NewSymbolId, SubstSig);
     end;
+  end;
+  { L5: Propagate constructors from parent types.
+    When a generic class inherits from a base class, the base class constructors
+    must be accessible through the specialized type. Walk the parent chain and
+    copy constructor symbols to the instance type. }
+  ParentTypeId := FModel.TypeAt(GenericTypeId - 1).ParentTypeId;
+  while (ParentTypeId > 0) and (ParentTypeId <= FModel.TypeCount) do
+  begin
+    ParentName := FModel.TypeAt(ParentTypeId - 1).Name;
+    for I := 0 to FModel.SymbolCount - 1 do
+    begin
+      ParentSym := FModel.SymbolAt(I);
+      if SameText(ParentSym.Name, ParentName + '.Create') and
+        SameText(ParentSym.Kind, 'constructor') then
+      begin
+        { Check if instance already has this constructor }
+        AlreadyExists := False;
+        for J := 0 to FModel.SymbolCount - 1 do
+        begin
+          if SameText(FModel.SymbolAt(J).Name, InstanceName + '.Create') and
+            SameText(FModel.SymbolAt(J).Kind, 'constructor') then
+          begin
+            AlreadyExists := True;
+            Break;
+          end;
+        end;
+        if not AlreadyExists then
+        begin
+          NewSymbolId := FModel.AddSymbol(
+            InstanceName + '.Create',
+            'constructor', AOwnerUnitId, AInstanceTypeId, ParentSym.ByteOffset);
+          FModel.SetSymbolParamCount(NewSymbolId, ParentSym.ParamCount);
+          FModel.SetSymbolMinParamCount(NewSymbolId, ParentSym.MinParamCount);
+          FModel.SetSymbolParamSignature(NewSymbolId, ParentSym.ParamSignature);
+        end;
+      end;
+    end;
+    ParentTypeId := FModel.TypeAt(ParentTypeId - 1).ParentTypeId;
   end;
   for I := 0 to FModel.SymbolCount - 1 do
   begin

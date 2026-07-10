@@ -3363,6 +3363,86 @@ begin
   end;
 end;
 
+procedure CheckGenericParentConstructorPropagation;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  I: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  FoundCtor: Boolean;
+begin
+  { L5: 泛型构造器传播 — 基类构造器应通过泛型实例传播 }
+  SourceText :=
+    'program GenericParentCtor;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  TBase = class' + LineEnding +
+    '    FValue: Integer;' + LineEnding +
+    '    constructor Create(AValue: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    'constructor TBase.Create(AValue: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    '  FValue := AValue;' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  generic TWrapper<T> = class(TBase)' + LineEnding +
+    '    FWrapped: T;' + LineEnding +
+    '  end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntWrapper = specialize TWrapper<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  W: TIntWrapper;' + LineEnding +
+    'begin' + LineEnding +
+    '  W := TIntWrapper.Create(42);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-parent-ctor-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-parent-ctor-missing-model');
+    { Verify TIntWrapper.Create symbol exists }
+    FoundCtor := False;
+    for I := 0 to Model.SymbolCount - 1 do
+    begin
+      if SameText(Model.SymbolAt(I).Name, 'TIntWrapper.Create') and
+        SameText(Model.SymbolAt(I).Kind, 'constructor') then
+      begin
+        FoundCtor := True;
+        Break;
+      end;
+    end;
+    if not FoundCtor then
+      Fail('generic-parent-ctor-missing-inherited-create');
+    if Model.BindingCount < 1 then
+      Fail('generic-parent-ctor-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckNestedGenericInstantiation;
 var
   Analyzer: TSemanticAnalyzer;
@@ -16258,6 +16338,7 @@ begin
     CheckGenericWhereClauseConstraint;
     CheckGenericArityMismatchDiagnostic;
     CheckGenericConstructorBinding;
+    CheckGenericParentConstructorPropagation;
     CheckNestedGenericInstantiation;
     CheckGenericParentChainInstantiation;
     CheckGenericSpecializeBeforeBody;
