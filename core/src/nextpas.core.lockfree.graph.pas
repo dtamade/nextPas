@@ -255,33 +255,31 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(grClosed);
   LockGraph;
-  LFromVertex := FindVertex(AFromId);
-  LToVertex := FindVertex(AToId);
-  if (LFromVertex = nil) or (LToVertex = nil) then
-  begin
-    UnlockGraph;
-    Exit(grNotFound);
-  end;
-  LockVertex(LFromVertex);
-  UnlockGraph;
-  // Check if edge already exists
-  LNeighbor := LFromVertex^.Neighbors;
-  while LNeighbor <> nil do
-  begin
-    if LNeighbor^.VertexId = AToId then
-    begin
+  try
+    LFromVertex := FindVertex(AFromId);
+    LToVertex := FindVertex(AToId);
+    if (LFromVertex = nil) or (LToVertex = nil) then
+      Exit(grNotFound);
+    LockVertex(LFromVertex);
+    try
+      LNeighbor := LFromVertex^.Neighbors;
+      while LNeighbor <> nil do
+      begin
+        if LNeighbor^.VertexId = AToId then
+          Exit(grExists);
+        LNeighbor := LNeighbor^.Next;
+      end;
+      LNeighbor := AllocNeighborNode(AToId);
+      LNeighbor^.Next := LFromVertex^.Neighbors;
+      LFromVertex^.Neighbors := LNeighbor;
+      AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
+      Result := grAdded;
+    finally
       UnlockVertex(LFromVertex);
-      Exit(grExists);
     end;
-    LNeighbor := LNeighbor^.Next;
+  finally
+    UnlockGraph;
   end;
-  // Add edge
-  LNeighbor := AllocNeighborNode(AToId);
-  LNeighbor^.Next := LFromVertex^.Neighbors;
-  LFromVertex^.Neighbors := LNeighbor;
-  AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
-  UnlockVertex(LFromVertex);
-  Result := grAdded;
 end;
 
 function TLockFreeGraph.RemoveEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
@@ -292,34 +290,36 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(grClosed);
   LockGraph;
-  LFromVertex := FindVertex(AFromId);
-  if LFromVertex = nil then
-  begin
-    UnlockGraph;
-    Exit(grNotFound);
-  end;
-  LockVertex(LFromVertex);
-  UnlockGraph;
-  LPrev := nil;
-  LCurrent := LFromVertex^.Neighbors;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.VertexId = AToId then
-    begin
-      if LPrev = nil then
-        LFromVertex^.Neighbors := LCurrent^.Next
-      else
-        LPrev^.Next := LCurrent^.Next;
-      Dispose(LCurrent);
-      AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+  try
+    LFromVertex := FindVertex(AFromId);
+    if LFromVertex = nil then
+      Exit(grNotFound);
+    LockVertex(LFromVertex);
+    try
+      LPrev := nil;
+      LCurrent := LFromVertex^.Neighbors;
+      while LCurrent <> nil do
+      begin
+        if LCurrent^.VertexId = AToId then
+        begin
+          if LPrev = nil then
+            LFromVertex^.Neighbors := LCurrent^.Next
+          else
+            LPrev^.Next := LCurrent^.Next;
+          Dispose(LCurrent);
+          AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+          Exit(grRemoved);
+        end;
+        LPrev := LCurrent;
+        LCurrent := LCurrent^.Next;
+      end;
+      Result := grNotFound;
+    finally
       UnlockVertex(LFromVertex);
-      Exit(grRemoved);
     end;
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.Next;
+  finally
+    UnlockGraph;
   end;
-  UnlockVertex(LFromVertex);
-  Result := grNotFound;
 end;
 
 function TLockFreeGraph.HasEdge(AFromId, AToId: Int64): Boolean;
@@ -330,26 +330,26 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   LockGraph;
-  LFromVertex := FindVertex(AFromId);
-  if LFromVertex = nil then
-  begin
-    UnlockGraph;
-    Exit(False);
-  end;
-  LockVertex(LFromVertex);
-  UnlockGraph;
-  LNeighbor := LFromVertex^.Neighbors;
-  while LNeighbor <> nil do
-  begin
-    if LNeighbor^.VertexId = AToId then
-    begin
+  try
+    LFromVertex := FindVertex(AFromId);
+    if LFromVertex = nil then
+      Exit(False);
+    LockVertex(LFromVertex);
+    try
+      LNeighbor := LFromVertex^.Neighbors;
+      while LNeighbor <> nil do
+      begin
+        if LNeighbor^.VertexId = AToId then
+          Exit(True);
+        LNeighbor := LNeighbor^.Next;
+      end;
+      Result := False;
+    finally
       UnlockVertex(LFromVertex);
-      Exit(True);
     end;
-    LNeighbor := LNeighbor^.Next;
+  finally
+    UnlockGraph;
   end;
-  UnlockVertex(LFromVertex);
-  Result := False;
 end;
 
 function TLockFreeGraph.GetVertexCount: Int64;

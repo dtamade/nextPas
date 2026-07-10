@@ -14,7 +14,7 @@
   Properties:
   - Standard error: 1.04 / sqrt(2^p)
   - Memory: 2^p bytes (typically 1-16 KB)
-  - No false negatives
+  - Approximate result may be above or below the exact cardinality
 
   Use cases: unique count estimation, cardinality estimation.
 
@@ -123,8 +123,9 @@ var
   LIdx, LZeros, LOld, LNew: Int32;
 begin
   if Length(AKey) = 0 then
-    Exit;
-  LHash := Fnv1aHash(@AKey[1], Length(AKey));
+    LHash := Fnv1aHash(nil, 0)
+  else
+    LHash := Fnv1aHash(@AKey[1], Length(AKey));
   LIdx := Int32(LHash and (UInt32(FM) - 1));
   LZeros := CountLeadingZeros(LHash shr FP, 32 - FP);
 

@@ -25,6 +25,12 @@ type
       使用随机优先级维护堆性质，同时保持 BST 性质。
   }
   TConcurrentTreap = class
+  private type
+    TTreapEntry = record
+      Key: Int64;
+      Value: Int64;
+    end;
+    TTreapEntries = array of TTreapEntry;
   private
     FRoot: PTreapNode;
     FCount: Int64;
@@ -42,7 +48,8 @@ type
     function DeleteNode(ANode: PTreapNode; AKey: Int64): PTreapNode;
     function FindNode(ANode: PTreapNode; AKey: Int64): PTreapNode;
     procedure ClearSubtree(ANode: PTreapNode);
-    procedure ForEachSubtree(ANode: PTreapNode; ACallback: TTreapForEachCallback);
+    procedure CollectSubtree(ANode: PTreapNode; var AEntries: TTreapEntries;
+      var ACount: SizeInt);
     procedure UpdateSize(ANode: PTreapNode);
   public
     constructor Create;
@@ -85,7 +92,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -331,22 +338,36 @@ begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-procedure TConcurrentTreap.ForEachSubtree(ANode: PTreapNode; ACallback: TTreapForEachCallback);
+procedure TConcurrentTreap.CollectSubtree(ANode: PTreapNode;
+  var AEntries: TTreapEntries; var ACount: SizeInt);
 begin
   if ANode = nil then
     Exit;
-  ForEachSubtree(ANode^.Left, ACallback);
-  ACallback(ANode^.Key, ANode^.Value);
-  ForEachSubtree(ANode^.Right, ACallback);
+  CollectSubtree(ANode^.Left, AEntries, ACount);
+  AEntries[ACount].Key := ANode^.Key;
+  AEntries[ACount].Value := ANode^.Value;
+  Inc(ACount);
+  CollectSubtree(ANode^.Right, AEntries, ACount);
 end;
 
 procedure TConcurrentTreap.ForEach(ACallback: TTreapForEachCallback);
+var
+  LEntries: TTreapEntries;
+  LCount, LI: SizeInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
-  ForEachSubtree(FRoot, ACallback);
-  Unlock;
+  try
+    SetLength(LEntries, FCount);
+    LCount := 0;
+    CollectSubtree(FRoot, LEntries, LCount);
+    SetLength(LEntries, LCount);
+  finally
+    Unlock;
+  end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LEntries[LI].Key, LEntries[LI].Value);
 end;
 
 procedure TConcurrentTreap.ClearSubtree(ANode: PTreapNode);

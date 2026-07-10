@@ -3,10 +3,12 @@ program test_lockfree_spacesaving;
 {$mode objfpc}{$H+}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.spacesaving,
   nextpas.core.lockfree,
   nextpas.core.atomic,
+  nextpas.core.errors,
   nextpas.core.test;
 
 procedure TestSpaceSavingBasic;
@@ -68,6 +70,42 @@ begin
   end;
 end;
 
+procedure TestSpaceSavingRejectsUnrepresentableK;
+var
+  LSS: TSpaceSavingImpl;
+  LRaised: Boolean;
+begin
+  LSS := nil;
+  LRaised := False;
+  try
+    try
+      LSS := TSpaceSavingImpl.Create(High(UInt32));
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+  finally
+    LSS.Free;
+  end;
+  Check(LRaised, 'K above High(Integer) must be rejected');
+end;
+
+procedure TestSpaceSavingCountersSaturate;
+var
+  LSource: TStringList;
+begin
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.spacesaving.pas');
+    Check(Pos('if FTotalItems < High(UInt64) then', LSource.Text) > 0,
+      'Total item count must saturate');
+    Check(Pos('if FEntries[LIdx].FCount < High(UInt64) then', LSource.Text) > 0,
+      'Tracked item count must saturate');
+  finally
+    LSource.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_spacesaving ===');
   WriteLn;
@@ -80,6 +118,12 @@ begin
 
   TestSpaceSavingEmpty;
   WriteLn('  + Empty state');
+
+  TestSpaceSavingCountersSaturate;
+  WriteLn('  + Saturating counter contract');
+
+  TestSpaceSavingRejectsUnrepresentableK;
+  WriteLn('  + Capacity overflow guard');
 
   WriteLn;
   WriteLn('All Space-Saving tests passed!');

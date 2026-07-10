@@ -85,18 +85,39 @@ function TLeftRight.EnterRead: Int32;
 var
   LReadIdx: Int32;
 begin
-  LReadIdx := AtomicLoad32(FReadIndex, moAcquire);
-  AtomicFetchAdd64(FReaders[LReadIdx], 1, moAcqRel);
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(-1);
+  while True do
+  begin
+    LReadIdx := AtomicLoad32(FReadIndex, moAcquire);
+    AtomicFetchAdd64(FReaders[LReadIdx], 1, moAcqRel);
+    if AtomicLoad32(FReadIndex, moAcquire) = LReadIdx then
+      Break;
+    AtomicFetchSub64(FReaders[LReadIdx], 1, moRelease);
+  end;
   AtomicFetchAdd32(FReaderCount, 1, moAcqRel);
   Result := LReadIdx;
 end;
 
 procedure TLeftRight.ExitRead(AIndex: Int32);
+var
+  LReaders: Int64;
+  LTotalReaders: Int32;
 begin
   if (AIndex < 0) or (AIndex > 1) then
     Exit;
-  AtomicFetchSub64(FReaders[AIndex], 1, moAcqRel);
-  AtomicFetchSub32(FReaderCount, 1, moAcqRel);
+  repeat
+    LReaders := AtomicLoad64(FReaders[AIndex], moAcquire);
+    if LReaders <= 0 then
+      Exit;
+  until AtomicCompareExchange64(FReaders[AIndex], LReaders, LReaders - 1,
+    moRelease) = LReaders;
+  repeat
+    LTotalReaders := AtomicLoad32(FReaderCount, moAcquire);
+    if LTotalReaders <= 0 then
+      Exit;
+  until AtomicCompareExchange32(FReaderCount, LTotalReaders,
+    LTotalReaders - 1, moRelease) = LTotalReaders;
 end;
 
 function TLeftRight.HasReaders(AIndex: Int32): Boolean;
@@ -118,12 +139,20 @@ procedure TLeftRight.Write(AWriteCallback: TLeftRightWriteCallback; ACopyCallbac
 var
   LInactive, LActive: Int32;
 begin
+  if not Assigned(AWriteCallback) or not Assigned(ACopyCallback) then
+    raise EArgumentError.Create('TLeftRight.Write: callbacks must not be nil');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
   { Acquire write lock }
   while AtomicCompareExchange32(FWriteLock, 0, 1, moAcqRel) <> 0 do
+  begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
     ThreadSwitch;
+  end;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
     { Step 1: Write to inactive copy }
     LActive := AtomicLoad32(FReadIndex, moAcquire);
     LInactive := 1 - LActive;

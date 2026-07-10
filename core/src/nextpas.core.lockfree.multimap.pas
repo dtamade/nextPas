@@ -10,8 +10,8 @@ uses
 type
   TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
 
-  {** @desc 无锁并发 MultiMap（一个键可以有多个值）
-    @details 基于分片锁 HashMap 实现，每个键对应一个值列表。
+  {** @desc 自旋锁保护的并发 MultiMap（一个键可以有多个值）
+    @details 单个 map 锁串行化访问，每个键对应一个值列表。
       支持 Add/Find/Remove/Contains/Count/ForEach。
       适用于索引、标签系统等场景。
   }
@@ -180,6 +180,8 @@ begin
     Exit(mmClosed);
   LockMap;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(mmClosed);
     if FindBucketIndex(AKey, LIdx) then
     begin
       LPair := FBuckets[LIdx];
@@ -234,7 +236,6 @@ end;
 function TLockFreeMultiMapImpl.Contains(const AKey: TKey): Boolean;
 var
   LIdx: PtrUInt;
-  LPair: PPair;
 begin
   LockMap;
   try
@@ -286,6 +287,13 @@ begin
           Move(LPair^.Values[LI + 1], LPair^.Values[LI], (LCount - LI - 1) * SizeOf(TValue));
         LPair^.Count := LCount - 1;
         AtomicFetchSub64(FCount, 1, moRelaxed);
+        if LPair^.Count = 0 then
+        begin
+          SetLength(LPair^.Values, 0);
+          Dispose(LPair);
+          FBuckets[LIdx] := nil;
+          RehashClusterFrom((LIdx + 1) and FMask);
+        end;
         Exit(True);
       end;
     end;
@@ -320,7 +328,12 @@ end;
 
 procedure TLockFreeMultiMapImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  LockMap;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    UnlockMap;
+  end;
 end;
 
 function TLockFreeMultiMapImpl.IsClosed: Boolean;
@@ -343,13 +356,16 @@ var
   LI: PtrUInt;
   LCount: PtrUInt;
 begin
-  LCount := 0;
-  for LI := 0 to FCapacity - 1 do
-  begin
-    if FBuckets[LI] <> nil then
-      Inc(LCount);
+  LockMap;
+  try
+    LCount := 0;
+    for LI := 0 to FCapacity - 1 do
+      if FBuckets[LI] <> nil then
+        Inc(LCount);
+    Result := LCount;
+  finally
+    UnlockMap;
   end;
-  Result := LCount;
 end;
 
 end.

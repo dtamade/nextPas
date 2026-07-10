@@ -8,6 +8,7 @@ uses
   nextpas.core.lockfree.condvar,
   nextpas.core.lockfree.mutex,
   nextpas.core.lockfree,
+  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.test;
 
@@ -78,6 +79,29 @@ begin
     LResult := LCondVar.WaitTimeout(LMutex, 1000000); // 1ms
     Check(cvTimeout = LResult, 'Should timeout');
     Check(LMutex.IsLocked, 'Mutex should be re-acquired after timeout');
+  finally
+    LMutex.Free;
+    LCondVar.Free;
+  end;
+end;
+
+procedure TestCondVarRejectsUnlockedMutex;
+var
+  LCondVar: TConditionVariable;
+  LMutex: TConcurrentMutex;
+  LRaised: Boolean;
+begin
+  LCondVar := TConditionVariable.Create;
+  LMutex := TConcurrentMutex.Create;
+  try
+    LRaised := False;
+    try
+      LCondVar.WaitTimeout(LMutex, 1000000);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'WaitTimeout must reject a mutex not owned by the caller');
   finally
     LMutex.Free;
     LCondVar.Free;
@@ -193,6 +217,8 @@ var
   LArgs1, LArgs2: TWaiterArgs;
   LT1, LT2: TThreadID;
   LSpin: Integer;
+  LI: Integer;
+  LResult: TConditionVariableWaitResult;
 begin
   LCondVar := TConditionVariable.Create;
   LMutex := TConcurrentMutex.Create;
@@ -223,6 +249,8 @@ begin
 
     { Broadcast should wake all }
     LCondVar.Broadcast;
+    for LI := 1 to 64 do
+      LCondVar.Signal;
 
     { Wait for both to complete }
     LSpin := 0;
@@ -238,6 +266,13 @@ begin
 
     WaitForThreadTerminate(LT1, 5000);
     WaitForThreadTerminate(LT2, 5000);
+
+    LMutex.Lock;
+    LResult := LCondVar.WaitTimeout(LMutex, 1000000);
+    Check(cvTimeout = LResult,
+      'Signals issued after Broadcast must not leak to a future waiter');
+    Check(LMutex.IsLocked, 'Mutex must be re-acquired after the future waiter times out');
+    LMutex.Unlock;
   finally
     LMutex.Free;
     LCondVar.Free;
@@ -277,7 +312,15 @@ begin
     end;
 
     { If Wait properly releases the mutex, we should be able to acquire it }
-    LGotLock := LMutex.TryLock;
+    LSpin := 0;
+    repeat
+      LGotLock := LMutex.TryLock;
+      if not LGotLock then
+      begin
+        CpuPause;
+        Inc(LSpin);
+      end;
+    until LGotLock or (LSpin >= 1000000);
     Check(LGotLock, 'Mutex should be released during Wait');
     if LGotLock then
       LMutex.Unlock;
@@ -311,6 +354,9 @@ begin
 
   TestCondVarWaitTimeout;
   WriteLn('  + Wait timeout');
+
+  TestCondVarRejectsUnlockedMutex;
+  WriteLn('  + Unlocked mutex rejected');
 
   TestCondVarSignalWakesOne;
   WriteLn('  + Signal wakes exactly one waiter');

@@ -36,6 +36,8 @@ const
   MATRIX_BLOCK_SIZE = 16;
 
 type
+  TMatrixData = array of Double;
+
   TMatrixStatus = (
     mtOk = 0,
     mtClosed = 1,
@@ -47,7 +49,7 @@ type
 
   TMatrixImpl = class
   public
-    FData: array of Double;
+    FData: TMatrixData;
     FRows: Integer;
     FCols: Integer;
   private
@@ -56,6 +58,7 @@ type
 
     function Idx(ARow, ACol: Integer): Integer;
     procedure Lock;
+    procedure Snapshot(out ARows, ACols: Integer; out AData: TMatrixData);
     procedure Unlock;
   public
     constructor Create(ARows, ACols: UInt32);
@@ -101,6 +104,19 @@ begin
   AtomicStore32(FLock, 0, moRelease);
 end;
 
+procedure TMatrixImpl.Snapshot(out ARows, ACols: Integer;
+  out AData: TMatrixData);
+begin
+  Lock;
+  try
+    ARows := FRows;
+    ACols := FCols;
+    AData := Copy(FData, 0, Length(FData));
+  finally
+    Unlock;
+  end;
+end;
+
 constructor TMatrixImpl.Create(ARows, ACols: UInt32);
 var
   LI: Integer;
@@ -137,13 +153,16 @@ end;
 
 function TMatrixImpl.Get(ARow, ACol: Integer; out AValue: Double): TMatrixStatus;
 begin
-  if (ARow < 0) or (ARow >= FRows) or (ACol < 0) or (ACol >= FCols) then
-  begin
-    AValue := 0;
-    Exit(mtOutOfBounds);
+  AValue := 0;
+  Lock;
+  try
+    if (ARow < 0) or (ARow >= FRows) or (ACol < 0) or (ACol >= FCols) then
+      Exit(mtOutOfBounds);
+    AValue := FData[Idx(ARow, ACol)];
+    Result := mtOk;
+  finally
+    Unlock;
   end;
-  AValue := FData[Idx(ARow, ACol)];
-  Result := mtOk;
 end;
 
 function TMatrixImpl.Put(ARow, ACol: Integer; AValue: Double): TMatrixStatus;
@@ -155,6 +174,8 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(mtClosed);
     FData[Idx(ARow, ACol)] := AValue;
     Result := mtOk;
   finally
@@ -174,13 +195,28 @@ end;
 
 function TMatrixImpl.Multiply(const AOther: TMatrixImpl; out AResult: TMatrixImpl): TMatrixStatus;
 var
+  LData, LOtherData: TMatrixData;
+  LRows, LCols, LOtherRows, LOtherCols: Integer;
   LI, LJ, LK: Integer;
   LSum: Double;
 begin
-  if FCols <> AOther.FRows then
+  AResult := nil;
+  if AOther = nil then
     Exit(mtDimensionMismatch);
 
-  AResult := TMatrixImpl.Create(FRows, AOther.FCols);
+  Snapshot(LRows, LCols, LData);
+  if AOther = Self then
+  begin
+    LOtherRows := LRows;
+    LOtherCols := LCols;
+    LOtherData := Copy(LData, 0, Length(LData));
+  end
+  else
+    AOther.Snapshot(LOtherRows, LOtherCols, LOtherData);
+  if LCols <> LOtherRows then
+    Exit(mtDimensionMismatch);
+
+  AResult := TMatrixImpl.Create(LRows, LOtherCols);
   if (AResult.FRows = 0) or (AResult.FCols = 0) then
   begin
     AResult.Free;
@@ -188,13 +224,14 @@ begin
     Exit(mtInvalidSize);
   end;
 
-  for LI := 0 to FRows - 1 do
-    for LJ := 0 to AOther.FCols - 1 do
+  for LI := 0 to LRows - 1 do
+    for LJ := 0 to LOtherCols - 1 do
     begin
       LSum := 0;
-      for LK := 0 to FCols - 1 do
-        LSum := LSum + FData[LI * FCols + LK] * AOther.FData[LK * AOther.FCols + LJ];
-      AResult.FData[LI * AOther.FCols + LJ] := LSum;
+      for LK := 0 to LCols - 1 do
+        LSum := LSum + LData[LI * LCols + LK] *
+          LOtherData[LK * LOtherCols + LJ];
+      AResult.FData[LI * LOtherCols + LJ] := LSum;
     end;
 
   Result := mtOk;
@@ -202,9 +239,13 @@ end;
 
 function TMatrixImpl.Transpose(out AResult: TMatrixImpl): TMatrixStatus;
 var
+  LData: TMatrixData;
+  LRows, LCols: Integer;
   LI, LJ: Integer;
 begin
-  AResult := TMatrixImpl.Create(FCols, FRows);
+  AResult := nil;
+  Snapshot(LRows, LCols, LData);
+  AResult := TMatrixImpl.Create(LCols, LRows);
   if (AResult.FRows = 0) or (AResult.FCols = 0) then
   begin
     AResult.Free;
@@ -212,36 +253,31 @@ begin
     Exit(mtInvalidSize);
   end;
 
-  for LI := 0 to FRows - 1 do
-    for LJ := 0 to FCols - 1 do
-      AResult.FData[LJ * FRows + LI] := FData[LI * FCols + LJ];
+  for LI := 0 to LRows - 1 do
+    for LJ := 0 to LCols - 1 do
+      AResult.FData[LJ * LRows + LI] := LData[LI * LCols + LJ];
 
   Result := mtOk;
 end;
 
 function TMatrixImpl.Determinant(out AValue: Double): TMatrixStatus;
 var
-  LMat: array of Double;
+  LMat: TMatrixData;
   LI, LJ, LK, LSign: Integer;
   LPivot, LFactor, LDet: Double;
-  LN: Integer;
+  LRows, LCols, LN: Integer;
 begin
-  if FRows <> FCols then
-  begin
-    AValue := 0;
+  AValue := 0;
+  Snapshot(LRows, LCols, LMat);
+  if LRows <> LCols then
     Exit(mtDimensionMismatch);
-  end;
 
-  LN := FRows;
+  LN := LRows;
   if LN = 0 then
   begin
     AValue := 0;
     Exit(mtInvalidSize);
   end;
-
-  SetLength(LMat, LN * LN);
-  for LI := 0 to LN * LN - 1 do
-    LMat[LI] := FData[LI];
 
   LSign := 1;
   for LI := 0 to LN - 1 do
@@ -293,17 +329,16 @@ end;
 
 function TMatrixImpl.Inverse(out AResult: TMatrixImpl): TMatrixStatus;
 var
-  LAug: array of Double;
-  LI, LJ, LK, LN: Integer;
+  LAug, LData: TMatrixData;
+  LI, LJ, LK, LRows, LCols, LN: Integer;
   LPivot, LFactor: Double;
 begin
-  if FRows <> FCols then
-  begin
-    AResult := nil;
+  AResult := nil;
+  Snapshot(LRows, LCols, LData);
+  if LRows <> LCols then
     Exit(mtDimensionMismatch);
-  end;
 
-  LN := FRows;
+  LN := LRows;
   if LN = 0 then
   begin
     AResult := nil;
@@ -315,7 +350,7 @@ begin
   begin
     for LJ := 0 to LN - 1 do
     begin
-      LAug[LI * LN * 2 + LJ] := FData[LI * LN + LJ];
+      LAug[LI * LN * 2 + LJ] := LData[LI * LN + LJ];
       if LI = LJ then
         LAug[LI * LN * 2 + LN + LJ] := 1.0
       else
@@ -377,7 +412,12 @@ end;
 
 procedure TMatrixImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TMatrixImpl.IsClosed: Boolean;

@@ -18,10 +18,14 @@ type
   }
   TPhaser = class
   private
+    FStateLock: Int32;
     FPhase: Int64;
     FParties: Int64;
     FArrived: Int64;
     FClosed: Int32;
+    procedure AcquireState;
+    procedure ReleaseState;
+    function ArriveInternal(const ADeregister: Boolean; out AWaitPhase: Int64): Int64;
     function AwaitAdvanceInternal(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
   public
     constructor Create(const AParties: Int64 = 0);
@@ -53,54 +57,104 @@ begin
   if AParties < 0 then
     raise EArgumentError.Create('TPhaser: parties must be >= 0');
   inherited Create;
+  FStateLock := 0;
   FPhase := 0;
   FParties := AParties;
   FArrived := 0;
   FClosed := 0;
 end;
 
+procedure TPhaser.AcquireState;
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FStateLock, 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TPhaser.ReleaseState;
+begin
+  AtomicStore32(FStateLock, 0, moRelease);
+end;
+
 function TPhaser.Register: Int64;
 begin
-  AtomicFetchAdd64(FParties, 1, moRelaxed);
-  Result := AtomicLoad64(FPhase, moAcquire);
+  AcquireState;
+  try
+    Result := AtomicLoad64(FPhase, moAcquire);
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
+    if AtomicLoad64(FParties, moRelaxed) = High(Int64) then
+      raise EInvalidOperationError.Create('TPhaser.Register: party count overflow');
+    AtomicFetchAdd64(FParties, 1, moRelease);
+  finally
+    ReleaseState;
+  end;
+end;
+
+function TPhaser.ArriveInternal(const ADeregister: Boolean;
+  out AWaitPhase: Int64): Int64;
+var
+  LArrived: Int64;
+  LParties: Int64;
+begin
+  AcquireState;
+  try
+    AWaitPhase := AtomicLoad64(FPhase, moRelaxed);
+    Result := AWaitPhase;
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
+    LParties := AtomicLoad64(FParties, moRelaxed);
+    LArrived := AtomicLoad64(FArrived, moRelaxed);
+
+    if ADeregister then
+    begin
+      if LParties <= 0 then
+        Exit;
+      Dec(LParties);
+      AtomicStore64(FParties, LParties, moRelaxed);
+    end
+    else if LParties > 0 then
+    begin
+      if LArrived = High(Int64) then
+        raise EInvalidOperationError.Create('TPhaser.Arrive: arrived count overflow');
+      Inc(LArrived);
+      AtomicStore64(FArrived, LArrived, moRelaxed);
+    end;
+
+    if (LParties = 0) or (LArrived >= LParties) then
+    begin
+      AtomicStore64(FArrived, 0, moRelaxed);
+      Result := AWaitPhase + 1;
+      AtomicStore64(FPhase, Result, moRelease);
+    end;
+  finally
+    ReleaseState;
+  end;
 end;
 
 function TPhaser.Arrive: Int64;
 var
-  LOld, LNew, LParties: Int64;
+  LWaitPhase: Int64;
 begin
-  repeat
-    LOld := AtomicLoad64(FArrived, moRelaxed);
-    LNew := LOld + 1;
-  until AtomicCompareExchange64(FArrived, LOld, LNew, moAcqRel) = LOld;
-  LParties := AtomicLoad64(FParties, moAcquire);
-  if LNew >= LParties then
-  begin
-    AtomicStore64(FArrived, 0, moRelease);
-    AtomicFetchAdd64(FPhase, 1, moRelease);
-  end;
-  Result := AtomicLoad64(FPhase, moAcquire);
+  Result := ArriveInternal(False, LWaitPhase);
 end;
 
 function TPhaser.ArriveAndAwaitAdvance: Int64;
 var
-  LPhase, LOld, LNew, LParties: Int64;
+  LPhase: Int64;
 begin
-  LPhase := AtomicLoad64(FPhase, moAcquire);
-  repeat
-    LOld := AtomicLoad64(FArrived, moRelaxed);
-    LNew := LOld + 1;
-  until AtomicCompareExchange64(FArrived, LOld, LNew, moAcqRel) = LOld;
-  LParties := AtomicLoad64(FParties, moAcquire);
-  if LNew >= LParties then
-  begin
-    AtomicStore64(FArrived, 0, moRelease);
-    AtomicFetchAdd64(FPhase, 1, moRelease);
-    Result := LPhase + 1;
+  Result := ArriveInternal(False, LPhase);
+  if Result <> LPhase then
     Exit;
-  end;
 
-  // Wait for phase to advance
   while AtomicLoad64(FPhase, moAcquire) = LPhase do
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
@@ -115,20 +169,9 @@ end;
 
 function TPhaser.ArriveAndDeregister: Int64;
 var
-  LOld, LNew, LParties: Int64;
+  LWaitPhase: Int64;
 begin
-  AtomicFetchSub64(FParties, 1, moRelaxed);
-  repeat
-    LOld := AtomicLoad64(FArrived, moRelaxed);
-    LNew := LOld + 1;
-  until AtomicCompareExchange64(FArrived, LOld, LNew, moAcqRel) = LOld;
-  LParties := AtomicLoad64(FParties, moAcquire);
-  if LNew >= LParties then
-  begin
-    AtomicStore64(FArrived, 0, moRelease);
-    AtomicFetchAdd64(FPhase, 1, moRelease);
-  end;
-  Result := AtomicLoad64(FPhase, moAcquire);
+  Result := ArriveInternal(True, LWaitPhase);
 end;
 
 function TPhaser.AwaitAdvanceInternal(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
@@ -180,7 +223,12 @@ end;
 
 function TPhaser.GetUnarrived: Int64;
 begin
-  Result := AtomicLoad64(FParties, moAcquire) - AtomicLoad64(FArrived, moAcquire);
+  AcquireState;
+  try
+    Result := AtomicLoad64(FParties, moRelaxed) - AtomicLoad64(FArrived, moRelaxed);
+  finally
+    ReleaseState;
+  end;
 end;
 
 procedure TPhaser.Terminate;

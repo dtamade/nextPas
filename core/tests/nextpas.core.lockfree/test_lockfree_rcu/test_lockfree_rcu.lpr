@@ -3,14 +3,33 @@ program test_lockfree_rcu;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.lockfree.rcu,
   nextpas.core.lockfree,
   nextpas.core.atomic,
+  nextpas.core.platform.thread,
   nextpas.core.test;
 
 type
   TIntPublisher = specialize TRcuPublisher<Int64>;
+  PRcuSynchronizeArgs = ^TRcuSynchronizeArgs;
+  TRcuSynchronizeArgs = record
+    Domain: TRcuDomain;
+    Started: PInt32;
+    Done: PInt32;
+  end;
+
+function RcuSynchronizeThread(AArg: Pointer): Pointer; cdecl;
+var
+  LArgs: PRcuSynchronizeArgs;
+begin
+  LArgs := PRcuSynchronizeArgs(AArg);
+  AtomicStore32(LArgs^.Started^, 1, moRelease);
+  LArgs^.Domain.Synchronize;
+  AtomicStore32(LArgs^.Done^, 1, moRelease);
+  Result := nil;
+end;
 
 procedure TestRcuDomainBasic;
 var
@@ -55,6 +74,53 @@ begin
     LDomain.Synchronize;
     // Should complete without hanging
     Check(True, 'Synchronize completed');
+  finally
+    LDomain.Free;
+  end;
+end;
+
+procedure TestRcuSynchronizeWaitsForNestedGuard;
+var
+  LDomain: TRcuDomain;
+  LGuard1, LGuard2: TRcuGuard;
+  LArgs: TRcuSynchronizeArgs;
+  LStarted, LDone: Int32;
+  LThread: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LReturnedEarly: Boolean;
+  LSpin: Integer;
+begin
+  LDomain := TRcuDomain.Create;
+  LStarted := 0;
+  LDone := 0;
+  try
+    LDomain.EnterRead(LGuard1);
+    LDomain.EnterRead(LGuard2);
+    LDomain.ExitRead(LGuard1);
+
+    LArgs.Domain := LDomain;
+    LArgs.Started := @LStarted;
+    LArgs.Done := @LDone;
+    CheckEqual(Int64(0), Int64(platform_thread_create(LThread,
+      @RcuSynchronizeThread, @LArgs)), 'RCU synchronize thread must start');
+
+    for LSpin := 1 to 1000 do
+    begin
+      if AtomicLoad32(LStarted, moAcquire) <> 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    platform_thread_sleep_ns(10000000);
+    LReturnedEarly := AtomicLoad32(LDone, moAcquire) <> 0;
+
+    LDomain.ExitRead(LGuard2);
+    CheckEqual(Int64(0), Int64(platform_thread_join(LThread, LRetVal)),
+      'RCU synchronize thread must join');
+
+    Check(not LReturnedEarly,
+      'Synchronize must not finish while a nested guard remains in the shared reader slot');
+    CheckEqual(Int32(1), AtomicLoad32(LDone, moAcquire),
+      'Synchronize must finish after the final nested guard exits');
   finally
     LDomain.Free;
   end;
@@ -137,6 +203,9 @@ begin
 
   TestRcuDomainSynchronize;
   WriteLn('  + Domain synchronize');
+
+  TestRcuSynchronizeWaitsForNestedGuard;
+  WriteLn('  + Synchronize waits for nested guard');
 
   TestRcuPublisherBasic;
   WriteLn('  + Publisher basic');

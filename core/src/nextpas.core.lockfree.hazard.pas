@@ -18,8 +18,6 @@ type
   THazardThreadRec = record
     Next: PHazardThreadRec;
     HP: array of Pointer;
-    RetiredCount: Int32;
-    Deleted: Int32;  // 0=正常, 1=已逻辑删除（CAS 标记删除模式）
   end;
 
   PHazardRetiredNode = ^THazardRetiredNode;
@@ -46,11 +44,12 @@ type
   private
     FHPCount: PtrUInt;
     FThreads: PHazardThreadRec;
+    FThreadsLock: Int32;
     FRetired: PHazardRetiredNode;
-    FRetiredCount: Int32;
     FGlobalRetiredCount: Int32;
-    {** @desc 物理删除已逻辑删除的线程节点并释放内存 }
-    procedure DrainPendingFree;
+    procedure AcquireThreads;
+    procedure ReleaseThreads;
+    procedure IncrementRetiredCount;
   public
     {** @desc 创建 Hazard Domain（AHPCount 每线程 HP 数） }
     constructor Create(const AHPCount: PtrUInt = HAZARD_DEFAULT_HP_COUNT);
@@ -63,6 +62,9 @@ type
 
     {** @desc 保护指针（返回 APtr，带 memory barrier） }
     function Protect(const AThreadId: PtrUInt; const AHPIndex: PtrUInt; const APtr: Pointer): Pointer;
+    {** @desc Atomically load, publish, and revalidate a replaceable source pointer. }
+    function ProtectSource(const AThreadId: PtrUInt; const AHPIndex: PtrUInt;
+      const ASource: PPointer): Pointer;
     {** @desc 清除保护 }
     procedure Clear(const AThreadId: PtrUInt; const AHPIndex: PtrUInt);
 
@@ -111,6 +113,7 @@ type
     class function Acquire(const ADomain: THazardDomain; const AHPIndex: PtrUInt = 0): THazardGuard; static;
     {** @desc 保护指针（返回 APtr，带 memory barrier） }
     function Protect(const APtr: Pointer): Pointer;
+    function ProtectSource(const ASource: PPointer): Pointer;
     {** @desc 释放守卫：清除保护 + 注销线程（重复调用安全） }
     procedure Release;
   end;
@@ -126,9 +129,41 @@ begin
     raise EArgumentError.Create('THazardDomain: HP count must be > 0');
   FHPCount := AHPCount;
   FThreads := nil;
+  FThreadsLock := 0;
   FRetired := nil;
-  FRetiredCount := 0;
   FGlobalRetiredCount := 0;
+end;
+
+procedure THazardDomain.AcquireThreads;
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FThreadsLock, 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure THazardDomain.ReleaseThreads;
+begin
+  AtomicStore32(FThreadsLock, 0, moRelease);
+end;
+
+procedure THazardDomain.IncrementRetiredCount;
+var
+  LCount: Int32;
+begin
+  repeat
+    LCount := AtomicLoad32(FGlobalRetiredCount, moAcquire);
+    if LCount = High(Int32) then
+      raise EInvalidOperationError.Create('THazardDomain.Retire: retired count overflow');
+  until AtomicCompareExchange32(FGlobalRetiredCount, LCount, LCount + 1,
+    moAcqRel) = LCount;
 end;
 
 destructor THazardDomain.Destroy;
@@ -170,28 +205,48 @@ begin
   SetLength(LThread^.HP, FHPCount);
   for LI := 0 to FHPCount - 1 do
     LThread^.HP[LI] := nil;
-  LThread^.RetiredCount := 0;
-  LThread^.Deleted := 0;
-  repeat
-    LThread^.Next := PHazardThreadRec(AtomicLoadPtr(Pointer(FThreads), moRelaxed));
-  until AtomicCompareExchangePtr(Pointer(FThreads), LThread^.Next, LThread, moRelease) = LThread^.Next;
+  AcquireThreads;
+  try
+    LThread^.Next := FThreads;
+    FThreads := LThread;
+  finally
+    ReleaseThreads;
+  end;
   Result := PtrUInt(LThread);
 end;
 
 procedure THazardDomain.UnregisterThread(const AThreadId: PtrUInt);
 var
   LThread: PHazardThreadRec;
+  LCurrent: PHazardThreadRec;
+  LPrevious: PHazardThreadRec;
   LI: PtrUInt;
 begin
   LThread := PHazardThreadRec(AThreadId);
   if LThread = nil then
     Exit;
-  // 1. 清除 HP（必须在标记 Deleted 之前）
-  for LI := 0 to FHPCount - 1 do
-    LThread^.HP[LI] := nil;
-  // 2. 原子标记为已删除（mo_release 保证 HP 清除对后续读者可见）
-  //    不修改链表结构，不释放内存 —— 延迟到 Collect 中的 DrainPendingFree 处理
-  AtomicStore32(LThread^.Deleted, 1, moRelease);
+  AcquireThreads;
+  try
+    LPrevious := nil;
+    LCurrent := FThreads;
+    while (LCurrent <> nil) and (LCurrent <> LThread) do
+    begin
+      LPrevious := LCurrent;
+      LCurrent := LCurrent^.Next;
+    end;
+    if LCurrent = nil then
+      Exit;
+    if LPrevious = nil then
+      FThreads := LCurrent^.Next
+    else
+      LPrevious^.Next := LCurrent^.Next;
+    for LI := 0 to FHPCount - 1 do
+      AtomicStorePtr(LCurrent^.HP[LI], nil, moRelease);
+    SetLength(LCurrent^.HP, 0);
+    FreeMem(LCurrent);
+  finally
+    ReleaseThreads;
+  end;
 end;
 
 function THazardDomain.Protect(const AThreadId: PtrUInt; const AHPIndex: PtrUInt; const APtr: Pointer): Pointer;
@@ -210,9 +265,24 @@ begin
     Result := APtr;
     Exit;
   end;
-  LThread^.HP[AHPIndex] := APtr;
-  AtomicThreadFence(moSeqCst);
+  AtomicStorePtr(LThread^.HP[AHPIndex], APtr, moRelease);
   Result := APtr;
+end;
+
+function THazardDomain.ProtectSource(const AThreadId: PtrUInt;
+  const AHPIndex: PtrUInt; const ASource: PPointer): Pointer;
+var
+  LThread: PHazardThreadRec;
+begin
+  if ASource = nil then
+    raise EArgumentError.Create('THazardDomain.ProtectSource: source must not be nil');
+  LThread := PHazardThreadRec(AThreadId);
+  if (LThread = nil) or (AHPIndex >= FHPCount) then
+    raise EArgumentError.Create('THazardDomain.ProtectSource: invalid thread or HP index');
+  repeat
+    Result := AtomicLoadPtr(ASource^, moAcquire);
+    AtomicStorePtr(LThread^.HP[AHPIndex], Result, moRelease);
+  until AtomicLoadPtr(ASource^, moAcquire) = Result;
 end;
 
 procedure THazardDomain.Clear(const AThreadId: PtrUInt; const AHPIndex: PtrUInt);
@@ -228,8 +298,7 @@ begin
   {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
     Exit;
-  AtomicThreadFence(moSeqCst);
-  LThread^.HP[AHPIndex] := nil;
+  AtomicStorePtr(LThread^.HP[AHPIndex], nil, moRelease);
 end;
 
 procedure THazardDomain.Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
@@ -242,10 +311,15 @@ begin
   LNode^.Data := AData;
   LNode^.Reclaim := AReclaim;
   LNode^.UserData := AUserData;
+  try
+    IncrementRetiredCount;
+  except
+    FreeMem(LNode);
+    raise;
+  end;
   repeat
     LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
   until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease) = LNode^.Next;
-  AtomicFetchAdd32(FGlobalRetiredCount, 1, moRelaxed);
   // 不遍历线程链表触发 Collect（避免并发修改链表导致悬空指针）
   // Collect 由调用者显式触发，或在 Destroy 中统一回收
 end;
@@ -259,10 +333,35 @@ var
   LThread: PHazardThreadRec;
   LProtected: Boolean;
   LI: PtrUInt;
+  LHazardIndex: PtrUInt;
+  LHazards: array of Pointer;
+  LHazardCount: PtrUInt;
   LReclaimCount: Int32;
 begin
-  // 0. 先清理已逻辑删除的线程节点
-  DrainPendingFree;
+  LHazardCount := 0;
+  AcquireThreads;
+  try
+    LThread := FThreads;
+    while LThread <> nil do
+    begin
+      Inc(LHazardCount, FHPCount);
+      LThread := LThread^.Next;
+    end;
+    SetLength(LHazards, LHazardCount);
+    LHazardIndex := 0;
+    LThread := FThreads;
+    while LThread <> nil do
+    begin
+      for LI := 0 to FHPCount - 1 do
+      begin
+        LHazards[LHazardIndex] := AtomicLoadPtr(LThread^.HP[LI], moAcquire);
+        Inc(LHazardIndex);
+      end;
+      LThread := LThread^.Next;
+    end;
+  finally
+    ReleaseThreads;
+  end;
 
   LList := PHazardRetiredNode(AtomicExchangePtr(Pointer(FRetired), nil, moAcqRel));
   if LList = nil then
@@ -273,27 +372,15 @@ begin
   while LNode <> nil do
   begin
     LProtected := False;
-    LThread := FThreads;
-    while LThread <> nil do
-    begin
-      // 跳过已逻辑删除的线程
-      if AtomicLoad32(LThread^.Deleted, moAcquire) <> 0 then
+    if LHazardCount > 0 then
+      for LHazardIndex := 0 to LHazardCount - 1 do
       begin
-        LThread := LThread^.Next;
-        Continue;
-      end;
-      for LI := 0 to FHPCount - 1 do
-      begin
-        if LThread^.HP[LI] = LNode^.Data then
+        if LHazards[LHazardIndex] = LNode^.Data then
         begin
           LProtected := True;
           Break;
         end;
       end;
-      if LProtected then
-        Break;
-      LThread := LThread^.Next;
-    end;
     if LProtected then
     begin
       LPrev := LNode;
@@ -330,79 +417,22 @@ var
   LThread: PHazardThreadRec;
 begin
   Result := 0;
-  LThread := FThreads;
-  while LThread <> nil do
-  begin
-    // 跳过已逻辑删除的线程
-    if AtomicLoad32(LThread^.Deleted, moAcquire) = 0 then
+  AcquireThreads;
+  try
+    LThread := FThreads;
+    while LThread <> nil do
+    begin
       Inc(Result);
-    LThread := LThread^.Next;
+      LThread := LThread^.Next;
+    end;
+  finally
+    ReleaseThreads;
   end;
 end;
 
 function THazardDomain.RetiredCount: PtrUInt;
 begin
-  Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moRelaxed));
-end;
-
-procedure THazardDomain.DrainPendingFree;
-var
-  LPrev: PHazardThreadRec;
-  LNode: PHazardThreadRec;
-  LNext: PHazardThreadRec;
-  LToFreeHead: PHazardThreadRec;
-  LToFreeTail: PHazardThreadRec;
-begin
-  LToFreeHead := nil;
-  LToFreeTail := nil;
-  LPrev := nil;
-  LNode := FThreads;
-  while LNode <> nil do
-  begin
-    LNext := LNode^.Next;
-    if AtomicLoad32(LNode^.Deleted, moAcquire) <> 0 then
-    begin
-      // 尝试 CAS 物理删除
-      if LPrev = nil then
-      begin
-        if AtomicCompareExchangePtr(Pointer(FThreads), LNode, LNext, moRelease) = LNode then
-        begin
-          // 成功将链表头跳过 LNode
-          LNode^.Next := LToFreeHead;
-          LToFreeHead := LNode;
-          if LToFreeTail = nil then
-            LToFreeTail := LNode;
-          // LPrev 不变（仍为 nil）
-          LNode := LNext;
-          Continue;
-        end;
-      end
-      else
-      begin
-        if AtomicCompareExchangePtr(Pointer(LPrev^.Next), LNode, LNext, moRelease) = LNode then
-        begin
-          LNode^.Next := LToFreeHead;
-          LToFreeHead := LNode;
-          if LToFreeTail = nil then
-            LToFreeTail := LNode;
-          LNode := LNext;
-          Continue;
-        end;
-      end;
-      // CAS 失败：前驱也被删除或链表被并发修改，跳过本轮
-    end;
-    LPrev := LNode;
-    LNode := LNext;
-  end;
-  // 释放上一轮收集的待释放节点
-  LNode := LToFreeHead;
-  while LNode <> nil do
-  begin
-    LNext := LNode^.Next;
-    SetLength(LNode^.HP, 0);
-    FreeMem(LNode);
-    LNode := LNext;
-  end;
+  Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moAcquire));
 end;
 
 { THazardGuard }
@@ -427,6 +457,16 @@ begin
     Result := FDomain.Protect(FThreadId, FHPIndex, APtr)
   else
     Result := APtr;
+end;
+
+function THazardGuard.ProtectSource(const ASource: PPointer): Pointer;
+begin
+  if ASource = nil then
+    raise EArgumentError.Create('THazardGuard.ProtectSource: source must not be nil');
+  if FActive and (FDomain <> nil) then
+    Result := FDomain.ProtectSource(FThreadId, FHPIndex, ASource)
+  else
+    Result := AtomicLoadPtr(ASource^, moAcquire);
 end;
 
 procedure THazardGuard.Release;

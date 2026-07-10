@@ -5,12 +5,12 @@
 
   Design:
   - Similar to Bloom Filter: tests set membership with false positives
-  - Space: ~1.23 * n bytes (vs Bloom's ~1.44 * n bits at 1% FPR)
+  - Slot count: ~1.33 * n plus padding; slots currently use UInt32 storage
   - Construction: graph-based peeling algorithm with 3 hash positions per key
   - Lookup: XOR 3 fingerprints, compare with key hash
-  - False positive rate: ~0.02% (1/256) for 8-bit fingerprints
+  - False positive rate: ~0.39% (1/256) for 8-bit fingerprints
   - Static: requires all keys at construction time
-  - Concurrent-safe: CAS spin lock (read-heavy workload)
+  - Immutable after construction; lookup reads three fingerprint slots
 
   Theory: Graf & Lemire "XOR Filters: Faster and Smaller Than Bloom Filters"
 
@@ -32,9 +32,9 @@ type
   TXorFilterResult = (xfOk, xfNotFound, xfFalsePositive, xfClosed);
 
   {** @desc XOR 布隆过滤器
-    @details 比 Bloom Filter 更紧凑，查找只需 1 次内存访问。
+    @details 静态成员过滤器；每次查找读取 3 个指纹槽位。
       静态构建：需要在构造时提供所有键。
-      假阳性率 ~0.02% (8-bit 指纹)。 }
+      假阳性率约 0.39% (8-bit 指纹)。 }
   TXorFilter = class
   private
     FFilters: array of UInt32;

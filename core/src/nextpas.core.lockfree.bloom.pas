@@ -17,7 +17,7 @@ type
     @details 基于多个哈希函数的概率数据结构。
       支持 Add/Contains/Clear/Count。
       适用于快速成员检查、去重等场景。
-      注意：可能存在假阳性（false positive），但不会有假阴性（false negative）。
+      注意：可能存在假阳性；仅执行 Add/Contains 且不并发 Clear 时不会有假阴性。
   }
   generic TConcurrentBloomFilterImpl<T> = class
   private
@@ -54,6 +54,7 @@ uses
 
 constructor TConcurrentBloomFilterImpl.Create(const AExpectedItems: PtrUInt; const AFalsePositiveRate: Double);
 var
+  LRequiredBitCount: Double;
   LBitCount: PtrUInt;
   LHashCount: Integer;
   LWords: PtrUInt;
@@ -65,14 +66,20 @@ begin
   if (AFalsePositiveRate <= 0) or (AFalsePositiveRate >= 1) then
     raise EArgumentError.Create('TConcurrentBloomFilter: false positive rate must be between 0 and 1');
   inherited Create;
-  // Calculate optimal bit count: m = -n * ln(p) / (ln(2)^2)
-  LBitCount := PtrUInt(Trunc(-Double(AExpectedItems) * Ln(AFalsePositiveRate) / (Ln(2) * Ln(2))));
+  // Calculate minimum bit count: m = ceil(-n * ln(p) / ln(2)^2)
+  LRequiredBitCount := -Double(AExpectedItems) * Ln(AFalsePositiveRate) /
+    (Ln(2) * Ln(2));
+  if LRequiredBitCount > Double(High(PtrUInt)) then
+    raise EArgumentError.Create('TConcurrentBloomFilter: requested capacity is too large');
+  LBitCount := PtrUInt(Trunc(LRequiredBitCount));
+  if Double(LBitCount) < LRequiredBitCount then
+    Inc(LBitCount);
   // Round up to power of 2
   LBitCount := LockFreeNextPow2(LBitCount);
   if LBitCount < 64 then
     LBitCount := 64;
   // Calculate optimal hash count: k = (m/n) * ln(2)
-  LHashCount := Integer(Trunc(Double(LBitCount) / Double(AExpectedItems) * Ln(2)));
+  LHashCount := Integer(Round(Double(LBitCount) / Double(AExpectedItems) * Ln(2)));
   if LHashCount < 1 then
     LHashCount := 1;
   if LHashCount > 16 then

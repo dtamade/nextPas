@@ -56,6 +56,8 @@ begin
     LOld := AtomicLoad32(FState, moRelaxed);
     if (LOld < 0) or (AtomicLoad32(FWriterPending, moAcquire) <> 0) then
       Exit(False);  // Write locked
+    if LOld = High(Int32) then
+      Exit(False);
   until AtomicCompareExchange32(FState, LOld, LOld + 1, moAcqRel) = LOld;
   Result := True;
 end;
@@ -99,13 +101,19 @@ begin
 end;
 
 procedure TConcurrentRwLock.ReadUnlock;
+var
+  LOld: Int32;
 begin
-  AtomicFetchSub32(FState, 1, moRelease);
+  repeat
+    LOld := AtomicLoad32(FState, moAcquire);
+    if LOld <= 0 then
+      Exit;
+  until AtomicCompareExchange32(FState, LOld, LOld - 1, moRelease) = LOld;
 end;
 
 procedure TConcurrentRwLock.WriteUnlock;
 begin
-  AtomicStore32(FState, 0, moRelease);
+  AtomicCompareExchange32(FState, -1, 0, moRelease);
 end;
 
 procedure TConcurrentRwLock.Close;

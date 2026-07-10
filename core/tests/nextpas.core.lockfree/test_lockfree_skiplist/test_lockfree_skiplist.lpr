@@ -144,12 +144,23 @@ var
   GForEachKeys: array[0..2] of Integer;
   GForEachValues: array[0..2] of Integer;
   GForEachIdx: Integer;
+  GMutatingSkipList: TIntIntSkipList;
+  GMutationAttempted: Boolean;
 
 procedure ForEachCallback(const AKey: Integer; const AValue: Integer);
 begin
   GForEachKeys[GForEachIdx] := AKey;
   GForEachValues[GForEachIdx] := AValue;
   Inc(GForEachIdx);
+end;
+
+procedure MutatingForEachCallback(const AKey: Integer; const AValue: Integer);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingSkipList.Insert(99, 990);
+  end;
 end;
 
 procedure TestSkipListForEach;
@@ -173,6 +184,25 @@ begin
     CheckEqual(3, GForEachKeys[2], 'key 2');
     CheckEqual(30, GForEachValues[2], 'value 2');
   finally
+    LS.Free;
+  end;
+end;
+
+procedure TestSkipListForEachAllowsMutation;
+var
+  LS: TIntIntSkipList;
+begin
+  LS := TIntIntSkipList.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    GMutatingSkipList := LS;
+    GMutationAttempted := False;
+    LS.ForEach(@MutatingForEachCallback);
+    Check(GMutationAttempted, 'callback should run');
+    Check(LS.Contains(99), 'callback insertion should complete');
+  finally
+    GMutatingSkipList := nil;
     LS.Free;
   end;
 end;
@@ -873,6 +903,7 @@ begin
   T.Test('Contains', @TestSkipListContains);
   T.Test('Count', @TestSkipListCount);
   T.Test('ForEach', @TestSkipListForEach);
+  T.Test('ForEach callback mutation', @TestSkipListForEachAllowsMutation);
   T.Test('ForEachRange', @TestSkipListForEachRange);
   T.Test('Clear', @TestSkipListClear);
   T.Test('Many keys stress', @TestSkipListManyKeys);

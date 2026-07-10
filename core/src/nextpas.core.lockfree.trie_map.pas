@@ -299,7 +299,7 @@ end;
 
 procedure TConcurrentTrieMap.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
     { spin };
 end;
 

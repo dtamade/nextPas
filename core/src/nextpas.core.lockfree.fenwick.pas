@@ -63,7 +63,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then

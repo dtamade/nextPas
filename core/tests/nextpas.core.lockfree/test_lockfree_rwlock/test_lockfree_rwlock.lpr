@@ -163,6 +163,24 @@ begin
   end;
 end;
 
+procedure TestRwLockInvalidUnlocksDoNotUnderflow;
+var
+  LRwLock: TConcurrentRwLock;
+begin
+  LRwLock := TConcurrentRwLock.Create;
+  try
+    LRwLock.ReadUnlock;
+    CheckEqual(Int32(0), LRwLock.ReaderCount,
+      'ReadUnlock without a reader must not underflow state');
+    Check(LRwLock.TryWriteLock, 'Invalid read unlock must not create a phantom writer');
+    LRwLock.WriteUnlock;
+    LRwLock.WriteUnlock;
+    Check(not LRwLock.IsWriteLocked, 'Repeated write unlock must leave the lock unlocked');
+  finally
+    LRwLock.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_rwlock ===');
   WriteLn;
@@ -178,6 +196,9 @@ begin
 
   TestRwLockWriterPendingBlocksNewReaders;
   WriteLn('  + Writer pending blocks new readers');
+
+  TestRwLockInvalidUnlocksDoNotUnderflow;
+  WriteLn('  + Invalid unlocks preserve state');
 
   WriteLn;
   WriteLn('All rwlock tests passed!');

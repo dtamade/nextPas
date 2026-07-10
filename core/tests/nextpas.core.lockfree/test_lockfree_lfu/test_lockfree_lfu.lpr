@@ -4,6 +4,7 @@ program test_lockfree_lfu;
 
 uses
   SysUtils,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.lfu,
   nextpas.core.lockfree,
   nextpas.core.atomic,
@@ -11,6 +12,47 @@ uses
 
 type
   TIntLFU = specialize TConcurrentLFUCache<Int64, Int64>;
+
+const
+  LFU_CONCURRENT_THREADS = 8;
+  LFU_CONCURRENT_ROUNDS = 256;
+
+var
+  GConcurrentLfu: TIntLFU;
+  GLfuBarrierCount: Int32;
+  GLfuBarrierGeneration: Int32;
+  GLfuPutErrors: Int32;
+
+procedure LfuBarrier;
+var
+  LGeneration: Int32;
+begin
+  LGeneration := AtomicLoad32(GLfuBarrierGeneration, moAcquire);
+  if AtomicFetchAdd32(GLfuBarrierCount, 1, moAcqRel) = LFU_CONCURRENT_THREADS - 1 then
+  begin
+    AtomicStore32(GLfuBarrierCount, 0, moRelease);
+    AtomicFetchAdd32(GLfuBarrierGeneration, 1, moAcqRel);
+  end
+  else
+    while AtomicLoad32(GLfuBarrierGeneration, moAcquire) = LGeneration do
+      CpuPause;
+end;
+
+function ConcurrentLfuPutWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LRound: Integer;
+  LResult: TLockFreeLfuAddResult;
+begin
+  Result := nil;
+  for LRound := 1 to LFU_CONCURRENT_ROUNDS do
+  begin
+    LfuBarrier;
+    LResult := GConcurrentLfu.Put(LRound + 1, LRound + 1);
+    if (LResult <> lfAdded) and (LResult <> lfUpdated) then
+      AtomicFetchAdd32(GLfuPutErrors, 1, moRelaxed);
+    LfuBarrier;
+  end;
+end;
 
 procedure TestLfuBasic;
 var
@@ -192,6 +234,49 @@ begin
   end;
 end;
 
+procedure TestLfuConcurrentCapacityAndUniqueness;
+var
+  LHandles: array[0..LFU_CONCURRENT_THREADS - 1] of TPlatformThreadHandle;
+  LThreadIdx: Integer;
+  LKey: Integer;
+  LLiveKeys: Integer;
+  LReturnValue: Pointer;
+begin
+  GConcurrentLfu := TIntLFU.Create(1, 64);
+  GLfuBarrierCount := 0;
+  GLfuBarrierGeneration := 0;
+  GLfuPutErrors := 0;
+  try
+    CheckEqual(Ord(lfAdded), Ord(GConcurrentLfu.Put(1, 1)));
+    for LThreadIdx := 0 to LFU_CONCURRENT_THREADS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_create(
+        LHandles[LThreadIdx], @ConcurrentLfuPutWorker, nil)));
+    for LThreadIdx := 0 to LFU_CONCURRENT_THREADS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_join(
+        LHandles[LThreadIdx], LReturnValue)));
+
+    CheckEqual(Int64(0), Int64(AtomicLoad32(GLfuPutErrors, moAcquire)));
+    CheckEqual(PtrUInt(1), GConcurrentLfu.Count);
+
+    LLiveKeys := 0;
+    for LKey := 1 to LFU_CONCURRENT_ROUNDS + 1 do
+    begin
+      if GConcurrentLfu.Contains(LKey) then
+      begin
+        Inc(LLiveKeys);
+        Check(GConcurrentLfu.Remove(LKey), 'Live key should be removable');
+        Check(not GConcurrentLfu.Contains(LKey),
+          'A single remove must eliminate every instance of the key');
+      end;
+    end;
+    CheckEqual(Int64(1), Int64(LLiveKeys));
+    CheckEqual(PtrUInt(0), GConcurrentLfu.Count);
+  finally
+    GConcurrentLfu.Free;
+    GConcurrentLfu := nil;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_lfu ===');
   WriteLn;
@@ -225,6 +310,9 @@ begin
 
   TestLfuMultipleBuckets;
   WriteLn('  + Multiple buckets');
+
+  TestLfuConcurrentCapacityAndUniqueness;
+  WriteLn('  + Concurrent capacity and key uniqueness');
 
   WriteLn;
   WriteLn('All LFU cache tests passed!');

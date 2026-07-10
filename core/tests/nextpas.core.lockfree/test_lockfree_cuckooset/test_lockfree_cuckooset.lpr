@@ -89,6 +89,27 @@ begin
   end;
 end;
 
+procedure Test_EmptyKey;
+var
+  LSet: TCuckooSet;
+begin
+  WriteLn('--- Empty Key ---');
+  LSet := TCuckooSet.Create(4);
+  try
+    Check(not LSet.Contains(''), 'empty set does not contain empty key');
+    Check(LSet.Insert('') = csrOk, 'Insert(empty) = ok');
+    Check(LSet.Contains(''), 'Contains(empty) = true after insert');
+    Check(LSet.Count = 1, 'Count = 1 after empty insert');
+    Check(LSet.Insert('') = csrExists, 'Insert(empty) again = exists');
+    Check(LSet.Remove('') = csrOk, 'Remove(empty) = ok');
+    Check(not LSet.Contains(''), 'Contains(empty) = false after remove');
+    Check(LSet.Count = 0, 'Count = 0 after empty remove');
+    Check(LSet.Remove('') = csrNotFound, 'Remove(empty) again = not found');
+  finally
+    LSet.Free;
+  end;
+end;
+
 procedure Test_LargeScale;
 var
   LSet: TCuckooSet;
@@ -138,6 +159,7 @@ begin
   Test_InsertContains;
   Test_Remove;
   Test_Clear;
+  Test_EmptyKey;
   Test_LargeScale;
   Test_AutoResize;
 

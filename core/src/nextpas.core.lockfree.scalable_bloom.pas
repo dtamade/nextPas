@@ -45,6 +45,9 @@ type
     function HashValue(const AValue: T; ASeed: UInt64): UInt64;
     procedure AddToLayer(ALayerIdx: Int32; const AValue: T);
     function ContainsInLayer(ALayerIdx: Int32; const AValue: T): Boolean;
+    function LayerFalsePositiveRate(ALayerIdx: Int32): Double;
+    procedure InitializeLayer(var ALayer: TBloomLayer; ACapacity: Int64;
+      const AFalsePositiveRate: Double);
     procedure GrowIfNeeded;
   public
     constructor Create(const AExpectedItems: Int64 = SCALABLE_BLOOM_DEFAULT_ITEMS;
@@ -69,9 +72,6 @@ uses
   nextpas.core.atomic;
 
 constructor TScalableBloomFilterImpl.Create(const AExpectedItems: Int64; const AFPR: Double);
-var
-  LBitCount: Int64;
-  LHashCount: Int32;
 begin
   if IsManagedType(T) then
     raise EArgumentError.Create('TScalableBloomFilter: T must be unmanaged');
@@ -86,17 +86,7 @@ begin
   FLock := 0;
   FLayerCount := 1;
   SetLength(FLayers, 1);
-  LBitCount := -Round(AExpectedItems * Ln(AFPR) / (Ln(2) * Ln(2)));
-  if LBitCount < 64 then
-    LBitCount := 64;
-  LHashCount := Round(Double(LBitCount) / Double(AExpectedItems) * Ln(2));
-  if LHashCount < 1 then
-    LHashCount := 1;
-  FLayers[0].BitCount := LBitCount;
-  FLayers[0].HashCount := LHashCount;
-  FLayers[0].Count := 0;
-  FLayers[0].Capacity := AExpectedItems;
-  SetLength(FLayers[0].Bits, (LBitCount + 63) div 64);
+  InitializeLayer(FLayers[0], AExpectedItems, LayerFalsePositiveRate(0));
 end;
 
 destructor TScalableBloomFilterImpl.Destroy;
@@ -141,6 +131,40 @@ begin
   AtomicStore32(FLock, 0, moRelease);
 end;
 
+function TScalableBloomFilterImpl.LayerFalsePositiveRate(ALayerIdx: Int32): Double;
+begin
+  Result := FFPR * (1.0 - SCALABLE_BLOOM_TIGHTENING_RATIO) *
+    Power(SCALABLE_BLOOM_TIGHTENING_RATIO, ALayerIdx);
+end;
+
+procedure TScalableBloomFilterImpl.InitializeLayer(var ALayer: TBloomLayer;
+  ACapacity: Int64; const AFalsePositiveRate: Double);
+var
+  LRequiredBitCount: Double;
+  LBitCount: Int64;
+  LHashCount: Int32;
+begin
+  LRequiredBitCount := -Double(ACapacity) * Ln(AFalsePositiveRate) /
+    (Ln(2) * Ln(2));
+  if LRequiredBitCount > Double(High(Int64) - 63) then
+    raise EArgumentError.Create('TScalableBloomFilter: layer is too large');
+  LBitCount := Trunc(LRequiredBitCount);
+  if Double(LBitCount) < LRequiredBitCount then
+    Inc(LBitCount);
+  if LBitCount < 64 then
+    LBitCount := 64;
+  LHashCount := Round(Double(LBitCount) / Double(ACapacity) * Ln(2));
+  if LHashCount < 1 then
+    LHashCount := 1;
+
+  ALayer := Default(TBloomLayer);
+  ALayer.BitCount := LBitCount;
+  ALayer.HashCount := LHashCount;
+  ALayer.Count := 0;
+  ALayer.Capacity := ACapacity;
+  SetLength(ALayer.Bits, (LBitCount + 63) div 64);
+end;
+
 procedure TScalableBloomFilterImpl.AddToLayer(ALayerIdx: Int32; const AValue: T);
 var
   LI: Int32;
@@ -175,33 +199,19 @@ var
   LNewIdx: Int32;
   LNewItems: Int64;
   LNewFPR: Double;
-  LBitCount: Int64;
-  LHashCount: Int32;
-  LI: Int32;
+  LNewLayer: TBloomLayer;
 begin
   if FLayers[FLayerCount - 1].Count < FLayers[FLayerCount - 1].Capacity then
     Exit;
   LNewIdx := FLayerCount;
-  Inc(FLayerCount);
-  if LNewIdx >= Length(FLayers) then
-    SetLength(FLayers, LNewIdx + 1);
-  LNewItems := FLayers[0].Capacity;
-  for LI := 1 to LNewIdx do
-    LNewItems := LNewItems * SCALABLE_BLOOM_GROWTH_FACTOR;
-  LNewFPR := FFPR;
-  for LI := 1 to LNewIdx do
-    LNewFPR := LNewFPR * SCALABLE_BLOOM_TIGHTENING_RATIO;
-  LBitCount := -Round(LNewItems * Ln(LNewFPR) / (Ln(2) * Ln(2)));
-  if LBitCount < 64 then
-    LBitCount := 64;
-  LHashCount := Round(Double(LBitCount) / Double(LNewItems) * Ln(2));
-  if LHashCount < 1 then
-    LHashCount := 1;
-  FLayers[LNewIdx].BitCount := LBitCount;
-  FLayers[LNewIdx].HashCount := LHashCount;
-  FLayers[LNewIdx].Count := 0;
-  FLayers[LNewIdx].Capacity := LNewItems;
-  SetLength(FLayers[LNewIdx].Bits, (LBitCount + 63) div 64);
+  if FLayers[LNewIdx - 1].Capacity > High(Int64) div SCALABLE_BLOOM_GROWTH_FACTOR then
+    raise EArgumentError.Create('TScalableBloomFilter: layer capacity overflow');
+  LNewItems := FLayers[LNewIdx - 1].Capacity * SCALABLE_BLOOM_GROWTH_FACTOR;
+  LNewFPR := LayerFalsePositiveRate(LNewIdx);
+  InitializeLayer(LNewLayer, LNewItems, LNewFPR);
+  SetLength(FLayers, LNewIdx + 1);
+  FLayers[LNewIdx] := LNewLayer;
+  FLayerCount := LNewIdx + 1;
 end;
 
 procedure TScalableBloomFilterImpl.Add(const AValue: T);
@@ -210,6 +220,8 @@ begin
     Exit;
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
     GrowIfNeeded;
     AddToLayer(FLayerCount - 1, AValue);
   finally
@@ -225,6 +237,8 @@ begin
     Exit(False);
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
     for LI := FLayerCount - 1 downto 0 do
     begin
       if ContainsInLayer(LI, AValue) then
@@ -263,18 +277,18 @@ end;
 function TScalableBloomFilterImpl.GetEstimatedFPR: Double;
 var
   LI: Int32;
-  LFPR, LLayerFPR: Double;
+  LNoFalsePositive: Double;
+  LLayerFPR: Double;
 begin
   Lock;
   try
-    LFPR := 1.0;
-    LLayerFPR := FFPR;
+    LNoFalsePositive := 1.0;
     for LI := 0 to FLayerCount - 1 do
     begin
-      LFPR := LFPR * LLayerFPR;
-      LLayerFPR := LLayerFPR * SCALABLE_BLOOM_TIGHTENING_RATIO;
+      LLayerFPR := LayerFalsePositiveRate(LI);
+      LNoFalsePositive := LNoFalsePositive * (1.0 - LLayerFPR);
     end;
-    Result := LFPR;
+    Result := 1.0 - LNoFalsePositive;
   finally
     Unlock;
   end;
@@ -282,7 +296,12 @@ end;
 
 procedure TScalableBloomFilterImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TScalableBloomFilterImpl.IsClosed: Boolean;

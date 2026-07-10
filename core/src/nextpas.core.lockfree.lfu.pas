@@ -35,9 +35,12 @@ type
     FHits: Int64;
     FMisses: Int64;
     FClosed: Int32;
+    FMutationLock: Int32;
     FLocks: array of Int32;
     function HashKey(const AKey: TKey): PtrUInt;
     function FindEntry(AIdx: PtrUInt; AKey: TKey): Integer;
+    procedure LockMutation;
+    procedure UnlockMutation;
     procedure LockBucket(AIdx: PtrUInt);
     procedure UnlockBucket(AIdx: PtrUInt);
     function FindMinFreqEntry(out ABucket: PtrUInt; out AEntry: Integer): Boolean;
@@ -87,6 +90,7 @@ begin
   FHits := 0;
   FMisses := 0;
   FClosed := 0;
+  FMutationLock := 0;
   SetLength(FBuckets, LCap);
   SetLength(FLocks, LCap);
   for LI := 0 to LCap - 1 do
@@ -131,12 +135,23 @@ begin
   Result := -1;
 end;
 
+procedure TConcurrentLFUCacheImpl.LockMutation;
+begin
+  while AtomicCompareExchange32(FMutationLock, 0, 1, moAcqRel) <> 0 do
+    CpuPause;
+end;
+
+procedure TConcurrentLFUCacheImpl.UnlockMutation;
+begin
+  AtomicStore32(FMutationLock, 0, moRelease);
+end;
+
 procedure TConcurrentLFUCacheImpl.LockBucket(AIdx: PtrUInt);
 var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLocks[AIdx], 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -188,55 +203,69 @@ var
   LMinBucket: PtrUInt;
   LMinEntry: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(lfClosed);
-  LIdx := HashKey(AKey);
-  LockBucket(LIdx);
-  LEntry := FindEntry(LIdx, AKey);
-  if LEntry >= 0 then
-  begin
-    FBuckets[LIdx][LEntry].Value := AValue;
-    AtomicFetchAdd64(FBuckets[LIdx][LEntry].Frequency, 1, moRelaxed);
-    UnlockBucket(LIdx);
-    Exit(lfUpdated);
-  end;
-  if PtrUInt(AtomicLoad64(FCount, moRelaxed)) >= FMaxItems then
-  begin
-    { Evict the minimum frequency entry }
-    UnlockBucket(LIdx);
-    if FindMinFreqEntry(LMinBucket, LMinEntry) then
-    begin
-      LockBucket(LMinBucket);
-      FBuckets[LMinBucket][LMinEntry].Used := False;
-      AtomicFetchSub64(FCount, 1, moRelaxed);
-      UnlockBucket(LMinBucket);
+  LockMutation;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(lfClosed);
+
+    LIdx := HashKey(AKey);
+    LockBucket(LIdx);
+    try
+      LEntry := FindEntry(LIdx, AKey);
+      if LEntry >= 0 then
+      begin
+        FBuckets[LIdx][LEntry].Value := AValue;
+        AtomicFetchAdd64(FBuckets[LIdx][LEntry].Frequency, 1, moRelaxed);
+        Exit(lfUpdated);
+      end;
+    finally
+      UnlockBucket(LIdx);
     end;
+
+    if PtrUInt(AtomicLoad64(FCount, moRelaxed)) >= FMaxItems then
+    begin
+      if not FindMinFreqEntry(LMinBucket, LMinEntry) then
+        Exit(lfFull);
+      LockBucket(LMinBucket);
+      try
+        FBuckets[LMinBucket][LMinEntry].Used := False;
+        AtomicFetchSub64(FCount, 1, moRelaxed);
+      finally
+        UnlockBucket(LMinBucket);
+      end;
+    end;
+
     if PtrUInt(AtomicLoad64(FCount, moRelaxed)) >= FMaxItems then
       Exit(lfFull);
+
     LockBucket(LIdx);
-  end;
-  LCap := Length(FBuckets[LIdx]);
-  for LI := 0 to LCap - 1 do
-  begin
-    if not FBuckets[LIdx][LI].Used then
-    begin
-      FBuckets[LIdx][LI].Key := AKey;
-      FBuckets[LIdx][LI].Value := AValue;
-      FBuckets[LIdx][LI].Frequency := 1;
-      FBuckets[LIdx][LI].Used := True;
+    try
+      LCap := Length(FBuckets[LIdx]);
+      for LI := 0 to LCap - 1 do
+      begin
+        if not FBuckets[LIdx][LI].Used then
+        begin
+          FBuckets[LIdx][LI].Key := AKey;
+          FBuckets[LIdx][LI].Value := AValue;
+          FBuckets[LIdx][LI].Frequency := 1;
+          FBuckets[LIdx][LI].Used := True;
+          AtomicFetchAdd64(FCount, 1, moRelaxed);
+          Exit(lfAdded);
+        end;
+      end;
+      SetLength(FBuckets[LIdx], LCap * 2);
+      FBuckets[LIdx][LCap].Key := AKey;
+      FBuckets[LIdx][LCap].Value := AValue;
+      FBuckets[LIdx][LCap].Frequency := 1;
+      FBuckets[LIdx][LCap].Used := True;
       AtomicFetchAdd64(FCount, 1, moRelaxed);
+      Result := lfAdded;
+    finally
       UnlockBucket(LIdx);
-      Exit(lfAdded);
     end;
+  finally
+    UnlockMutation;
   end;
-  SetLength(FBuckets[LIdx], LCap * 2);
-  FBuckets[LIdx][LCap].Key := AKey;
-  FBuckets[LIdx][LCap].Value := AValue;
-  FBuckets[LIdx][LCap].Frequency := 1;
-  FBuckets[LIdx][LCap].Used := True;
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
-  UnlockBucket(LIdx);
-  Result := lfAdded;
 end;
 
 function TConcurrentLFUCacheImpl.Remove(const AKey: TKey): Boolean;
@@ -244,20 +273,25 @@ var
   LIdx: PtrUInt;
   LEntry: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
-    Exit(False);
-  LIdx := HashKey(AKey);
-  LockBucket(LIdx);
-  LEntry := FindEntry(LIdx, AKey);
-  if LEntry >= 0 then
-  begin
-    FBuckets[LIdx][LEntry].Used := False;
-    AtomicFetchSub64(FCount, 1, moRelaxed);
-    UnlockBucket(LIdx);
-    Exit(True);
+  LockMutation;
+  try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    LIdx := HashKey(AKey);
+    LockBucket(LIdx);
+    try
+      LEntry := FindEntry(LIdx, AKey);
+      if LEntry < 0 then
+        Exit(False);
+      FBuckets[LIdx][LEntry].Used := False;
+      AtomicFetchSub64(FCount, 1, moRelaxed);
+      Result := True;
+    finally
+      UnlockBucket(LIdx);
+    end;
+  finally
+    UnlockMutation;
   end;
-  UnlockBucket(LIdx);
-  Result := False;
 end;
 
 function TConcurrentLFUCacheImpl.Contains(const AKey: TKey): Boolean;
@@ -276,19 +310,32 @@ procedure TConcurrentLFUCacheImpl.Clear;
 var
   LI, LJ: PtrUInt;
 begin
-  for LI := 0 to FCapacity - 1 do
-  begin
-    LockBucket(LI);
-    for LJ := 0 to High(FBuckets[LI]) do
-      FBuckets[LI][LJ].Used := False;
-    UnlockBucket(LI);
+  LockMutation;
+  try
+    for LI := 0 to FCapacity - 1 do
+    begin
+      LockBucket(LI);
+      try
+        for LJ := 0 to High(FBuckets[LI]) do
+          FBuckets[LI][LJ].Used := False;
+      finally
+        UnlockBucket(LI);
+      end;
+    end;
+    AtomicStore64(FCount, 0, moRelaxed);
+  finally
+    UnlockMutation;
   end;
-  AtomicStore64(FCount, 0, moRelaxed);
 end;
 
 procedure TConcurrentLFUCacheImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  LockMutation;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    UnlockMutation;
+  end;
 end;
 
 function TConcurrentLFUCacheImpl.IsClosed: Boolean;
@@ -323,23 +370,32 @@ function TConcurrentLFUCacheImpl.FindMinFreqEntry(out ABucket: PtrUInt; out AEnt
 var
   LI, LJ: PtrUInt;
   LMinFreq: Int64;
+  LFound: Boolean;
 begin
-  LMinFreq := High(Int64);
+  LMinFreq := 0;
+  LFound := False;
   ABucket := 0;
   AEntry := -1;
   for LI := 0 to FCapacity - 1 do
   begin
-    for LJ := 0 to High(FBuckets[LI]) do
-    begin
-      if FBuckets[LI][LJ].Used and (FBuckets[LI][LJ].Frequency < LMinFreq) then
+    LockBucket(LI);
+    try
+      for LJ := 0 to High(FBuckets[LI]) do
       begin
-        LMinFreq := FBuckets[LI][LJ].Frequency;
-        ABucket := LI;
-        AEntry := Integer(LJ);
+        if FBuckets[LI][LJ].Used and
+           ((not LFound) or (FBuckets[LI][LJ].Frequency < LMinFreq)) then
+        begin
+          LFound := True;
+          LMinFreq := FBuckets[LI][LJ].Frequency;
+          ABucket := LI;
+          AEntry := Integer(LJ);
+        end;
       end;
+    finally
+      UnlockBucket(LI);
     end;
   end;
-  Result := AEntry >= 0;
+  Result := LFound;
 end;
 
 end.

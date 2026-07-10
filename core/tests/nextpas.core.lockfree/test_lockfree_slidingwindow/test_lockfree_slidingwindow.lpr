@@ -5,6 +5,7 @@ program test_lockfree_slidingwindow;
 uses
   SysUtils,
   nextpas.core.lockfree.slidingwindow,
+  nextpas.core.errors,
   nextpas.core.test;
 
 procedure TestBasicAllow;
@@ -65,6 +66,41 @@ begin
   end;
 end;
 
+procedure TestWindowAdvancesWithElapsedTime;
+var
+  SW: TSlidingWindowLimiter;
+begin
+  SW := TSlidingWindowLimiter.Create(1, 20);
+  try
+    Check(SW.TryAcquire = swAllowed, 'Initial request should be allowed');
+    Check(SW.TryAcquire = swRejected, 'Current window should be full');
+    Sleep(50);
+    Check(SW.TryAcquire = swAllowed, 'Two elapsed windows should clear prior weight');
+  finally
+    SW.Free;
+  end;
+end;
+
+procedure TestWindowRejectsNanosecondOverflow;
+var
+  SW: TSlidingWindowLimiter;
+  LRaised: Boolean;
+begin
+  SW := nil;
+  LRaised := False;
+  try
+    try
+      SW := TSlidingWindowLimiter.Create(1, High(Int64));
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+  finally
+    SW.Free;
+  end;
+  Check(LRaised, 'Window milliseconds must fit the nanosecond representation');
+end;
+
 begin
   WriteLn('=== test_lockfree_slidingwindow ===');
   WriteLn;
@@ -80,6 +116,12 @@ begin
 
   TestClose;
   WriteLn('  + Close semantics');
+
+  TestWindowRejectsNanosecondOverflow;
+  WriteLn('  + Window nanosecond overflow guard');
+
+  TestWindowAdvancesWithElapsedTime;
+  WriteLn('  + Elapsed-time window advance');
 
   WriteLn;
   WriteLn('All sliding window tests passed!');

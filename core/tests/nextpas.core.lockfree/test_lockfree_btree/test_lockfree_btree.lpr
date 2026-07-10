@@ -116,12 +116,23 @@ var
   GForEachKeys: array[0..2] of Integer;
   GForEachValues: array[0..2] of Integer;
   GForEachIdx: Integer;
+  GMutatingTree: TIntIntBTree;
+  GMutationAttempted: Boolean;
 
 procedure ForEachCallback(const AKey: Integer; const AValue: Integer);
 begin
   GForEachKeys[GForEachIdx] := AKey;
   GForEachValues[GForEachIdx] := AValue;
   Inc(GForEachIdx);
+end;
+
+procedure MutatingForEachCallback(const AKey: Integer; const AValue: Integer);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingTree.Insert(99, 990);
+  end;
 end;
 
 procedure TestBTreeForEach;
@@ -145,6 +156,28 @@ begin
     CheckEqual(3, GForEachKeys[2], 'key 2');
     CheckEqual(30, GForEachValues[2], 'value 2');
   finally
+    LS.Free;
+  end;
+end;
+
+procedure TestBTreeForEachAllowsMutation;
+var
+  LS: TIntIntBTree;
+begin
+  LS := TIntIntBTree.Create;
+  try
+    LS.Insert(1, 10);
+    LS.Insert(2, 20);
+    GMutatingTree := LS;
+    GMutationAttempted := False;
+
+    LS.ForEach(@MutatingForEachCallback);
+
+    Check(GMutationAttempted, 'callback should run');
+    Check(LS.Contains(99), 'callback insertion should complete');
+    CheckEqual(3, LS.Count, 'count after callback insertion');
+  finally
+    GMutatingTree := nil;
     LS.Free;
   end;
 end;
@@ -514,6 +547,7 @@ begin
   T.Test('Contains', @TestBTreeContains);
   T.Test('Count', @TestBTreeCount);
   T.Test('ForEach', @TestBTreeForEach);
+  T.Test('ForEach callback mutation', @TestBTreeForEachAllowsMutation);
   T.Test('ForEachRange', @TestBTreeForEachRange);
   T.Test('Clear', @TestBTreeClear);
   T.Test('Many keys stress', @TestBTreeManyKeys);

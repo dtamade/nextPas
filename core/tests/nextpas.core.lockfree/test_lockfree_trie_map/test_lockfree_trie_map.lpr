@@ -198,6 +198,32 @@ begin
   end;
 end;
 
+procedure Test_ForEachAllowsMutation;
+var
+  LMap: TConcurrentTrieMap;
+  LMutationAttempted: Boolean;
+begin
+  WriteLn('--- ForEachAllowsMutation ---');
+  LMap := TConcurrentTrieMap.Create;
+  try
+    LMap.Insert('a', '1');
+    LMap.Insert('b', '2');
+    LMutationAttempted := False;
+    LMap.ForEach(procedure(const AKey, AValue: AnsiString)
+    begin
+      if not LMutationAttempted then
+      begin
+        LMutationAttempted := True;
+        LMap.Insert('z', '26');
+      end;
+    end);
+    Check(LMutationAttempted, 'callback should run');
+    Check(LMap.Contains('z'), 'callback insertion should complete');
+  finally
+    LMap.Free;
+  end;
+end;
+
 begin
   GPassed := 0;
   GFailed := 0;
@@ -211,6 +237,7 @@ begin
   Test_Clear;
   Test_ForEach;
   Test_HashCollision;
+  Test_ForEachAllowsMutation;
 
   WriteLn;
   WriteLn('=== TrieMap: ', GPassed, ' passed, ', GFailed, ' failed ===');

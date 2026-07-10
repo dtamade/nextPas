@@ -33,15 +33,16 @@ type
   TSlidingWindowLimiter = class
   private
     FWindowMs: Int64;
+    FWindowNs: UInt64;
     FLimit: Int64;
     FCurrentCount: Int64;
     FPreviousCount: Int64;
-    FWindowStartNs: Int64;
+    FWindowStartNs: UInt64;
     FLock: Int32;
     FClosed: Int32;
     procedure Lock;
     procedure Unlock;
-    procedure AdvanceWindow(ANowNs: Int64);
+    procedure AdvanceWindow(ANowNs: UInt64);
   public
     constructor Create(const ALimitPerWindow: Int64; const AWindowMs: Int64);
     function TryAcquire: TSlidingWindowResult;
@@ -58,11 +59,11 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.time.base;
+  nextpas.core.platform.time;
 
-function GetNowNs: Int64;
+function GetNowNs: UInt64;
 begin
-  Result := TInstant.Now.Elapsed.AsNanoseconds;
+  Result := platform_monotonic_ns;
 end;
 
 constructor TSlidingWindowLimiter.Create(const ALimitPerWindow: Int64; const AWindowMs: Int64);
@@ -71,8 +72,11 @@ begin
     raise EArgumentError.Create('TSlidingWindowLimiter: limit must be > 0');
   if AWindowMs <= 0 then
     raise EArgumentError.Create('TSlidingWindowLimiter: window must be > 0');
+  if UInt64(AWindowMs) > High(UInt64) div 1000000 then
+    raise EArgumentError.Create('TSlidingWindowLimiter: window is too large');
   inherited Create;
   FWindowMs := AWindowMs;
+  FWindowNs := UInt64(AWindowMs) * 1000000;
   FLimit := ALimitPerWindow;
   FCurrentCount := 0;
   FPreviousCount := 0;
@@ -83,7 +87,7 @@ end;
 
 procedure TSlidingWindowLimiter.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -92,31 +96,26 @@ begin
   AtomicStore32(FLock, 0, moRelease);
 end;
 
-procedure TSlidingWindowLimiter.AdvanceWindow(ANowNs: Int64);
+procedure TSlidingWindowLimiter.AdvanceWindow(ANowNs: UInt64);
 var
-  LWindowNs: Int64;
-  LElapsedWindows: Int64;
+  LElapsedWindows: UInt64;
 begin
-  LWindowNs := FWindowMs * 1000000;
-  if LWindowNs <= 0 then
-    Exit;
   if ANowNs <= FWindowStartNs then
     Exit;
-  LElapsedWindows := (ANowNs - FWindowStartNs) div LWindowNs;
-  if LElapsedWindows <= 0 then
+  LElapsedWindows := (ANowNs - FWindowStartNs) div FWindowNs;
+  if LElapsedWindows = 0 then
     Exit;
   if LElapsedWindows = 1 then
     FPreviousCount := FCurrentCount;
   if LElapsedWindows > 1 then
     FPreviousCount := 0;
   FCurrentCount := 0;
-  Inc(FWindowStartNs, LElapsedWindows * LWindowNs);
+  FWindowStartNs := FWindowStartNs + LElapsedWindows * FWindowNs;
 end;
 
 function TSlidingWindowLimiter.GetEffectiveCount: Double;
 var
-  LNowNs: Int64;
-  LWindowNs: Int64;
+  LNowNs: UInt64;
   LElapsed: Double;
   LWeight: Double;
 begin
@@ -124,8 +123,7 @@ begin
   try
     LNowNs := GetNowNs;
     AdvanceWindow(LNowNs);
-    LWindowNs := FWindowMs * 1000000;
-    LElapsed := (LNowNs - FWindowStartNs) / LWindowNs;
+    LElapsed := Double(LNowNs - FWindowStartNs) / Double(FWindowNs);
     if LElapsed > 1.0 then
       LElapsed := 1.0;
     if LElapsed < 0.0 then
@@ -144,9 +142,8 @@ end;
 
 function TSlidingWindowLimiter.TryAcquireN(AN: Int64): TSlidingWindowResult;
 var
-  LNowNs: Int64;
+  LNowNs: UInt64;
   LEffective: Double;
-  LWindowNs: Int64;
   LElapsed: Double;
 begin
   if AN <= 0 then
@@ -155,16 +152,19 @@ begin
     Exit(swClosed);
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(swClosed);
+    if AN > FLimit then
+      Exit(swRejected);
     LNowNs := GetNowNs;
     AdvanceWindow(LNowNs);
-    LWindowNs := FWindowMs * 1000000;
-    LElapsed := (LNowNs - FWindowStartNs) / LWindowNs;
+    LElapsed := Double(LNowNs - FWindowStartNs) / Double(FWindowNs);
     if LElapsed > 1.0 then
       LElapsed := 1.0;
     if LElapsed < 0.0 then
       LElapsed := 0.0;
     LEffective := FCurrentCount + FPreviousCount * (1.0 - LElapsed);
-    if LEffective + AN <= FLimit then
+    if (AN <= FLimit - FCurrentCount) and (LEffective + AN <= FLimit) then
     begin
       FCurrentCount := FCurrentCount + AN;
       Result := swAllowed;
@@ -188,7 +188,12 @@ end;
 
 procedure TSlidingWindowLimiter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TSlidingWindowLimiter.IsClosed: Boolean;

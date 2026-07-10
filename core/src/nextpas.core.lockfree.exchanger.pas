@@ -47,6 +47,8 @@ uses
 
 constructor TExchangerImpl.Create;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TExchanger: T must be unmanaged');
   inherited Create;
   FState := EXCHANGER_STATE_EMPTY;
   FClosed := 0;
@@ -74,6 +76,8 @@ begin
               Exit(exExchanged);
             end;
           EXCHANGER_STATE_READY:
+            ;
+          EXCHANGER_STATE_CLAIMED:
             ;
         else
           raise EInvalidOperationError.Create('TExchanger.Exchange: invalid exchanger state');

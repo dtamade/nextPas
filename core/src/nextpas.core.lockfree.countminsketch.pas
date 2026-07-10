@@ -11,8 +11,8 @@
   - Reset clears all counters
 
   Properties:
-  - No false negatives
-  - Overestimates, never underestimates
+  - Positive completed updates overestimate because of hash collisions
+  - Saturating counters cap estimates at High(Int32)
   - Memory: O(depth * width * 4 bytes)
 
   Use cases: network traffic analysis, frequency estimation, rate limiting.
@@ -36,6 +36,7 @@ type
     FSeeds: array of UInt32;
 
     function Hash(AIndex: Int32; const AKey: AnsiString): UInt32;
+    procedure SaturatingAdd(var ACounter: Int32; const ACount: Int32);
   public
     constructor Create(ADepth, AWidth: Int32);
     destructor Destroy; override;
@@ -106,6 +107,22 @@ begin
     Result := Fnv1aHash(@AKey[1], Length(AKey), FSeeds[AIndex]);
 end;
 
+procedure TCountMinSketch.SaturatingAdd(var ACounter: Int32; const ACount: Int32);
+var
+  LOld: Int32;
+  LNew: Int32;
+begin
+  repeat
+    LOld := AtomicLoad32(ACounter, moRelaxed);
+    if LOld >= High(Int32) - ACount then
+      LNew := High(Int32)
+    else
+      LNew := LOld + ACount;
+    if LNew = LOld then
+      Exit;
+  until AtomicCompareExchange32(ACounter, LOld, LNew, moAcqRel) = LOld;
+end;
+
 procedure TCountMinSketch.Add(const AKey: AnsiString; ACount: Int32);
 var
   I, LIdx: Int32;
@@ -115,7 +132,7 @@ begin
   for I := 0 to FDepth - 1 do
   begin
     LIdx := Hash(I, AKey) mod UInt32(FWidth);
-    AtomicFetchAdd32(FCounters[I, LIdx], ACount);
+    SaturatingAdd(FCounters[I, LIdx], ACount);
   end;
 end;
 

@@ -26,6 +26,7 @@ type
     {$PUSH} {$WARN 05029 OFF}
     FPadFree: TCacheLinePad;
     {$POP}
+    FCount: Int64;
     FClosed: Int32;
     function PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
     function UnpackIdx(ATagged: Int64): Int32; inline;
@@ -82,6 +83,7 @@ begin
   FSlots[FCapacity - 1].Next := -1;
   FTop := PackTagIdx(-1, 0);
   FFreeHead := PackTagIdx(0, 0);
+  FCount := 0;
   FClosed := 0;
 end;
 
@@ -100,6 +102,7 @@ begin
     LNewFree := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldFree) + 1);
   until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
 
+  AtomicFetchAdd64(FCount, 1, moRelaxed);
   FSlots[LIdx].Value := AValue;
 
   repeat
@@ -123,6 +126,7 @@ begin
     LNewTop := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldTop) + 1);
   until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
 
+  AtomicFetchSub64(FCount, 1, moRelaxed);
   AValue := FSlots[LIdx].Value;
   FSlots[LIdx].Value := Default(T);
 

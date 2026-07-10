@@ -3,6 +3,7 @@ program test_lockfree_msqueue;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.errors,
   nextpas.core.lockfree.msqueue;
 
 type
@@ -139,22 +140,22 @@ begin
   end;
 end;
 
-procedure TestStrings;
+procedure TestManagedTypeRejected;
 var
   LQ: specialize TLockFreeMsQueueImpl<string>;
-  LVal: string;
+  LRaised: Boolean;
 begin
-  WriteLn('--- TestStrings ---');
-  LQ := specialize TLockFreeMsQueueImpl<string>.Create;
+  WriteLn('--- TestManagedTypeRejected ---');
+  LQ := nil;
+  LRaised := False;
   try
-    LQ.TryEnqueue('hello');
-    LQ.TryEnqueue('world');
-    Check(LQ.TryDequeue(LVal) and (LVal = 'hello'), 'first string');
-    Check(LQ.TryDequeue(LVal) and (LVal = 'world'), 'second string');
-    Check(LQ.IsEmpty, 'empty');
-  finally
-    LQ.Free;
+    LQ := specialize TLockFreeMsQueueImpl<string>.Create;
+  except
+    on E: EArgumentError do
+      LRaised := True;
   end;
+  LQ.Free;
+  Check(LRaised, 'managed element type rejected');
 end;
 
 begin
@@ -167,7 +168,7 @@ begin
   TestClose;
   TestAlternatingEnqueueDequeue;
   TestSum;
-  TestStrings;
+  TestManagedTypeRejected;
 
   WriteLn;
   WriteLn(GPassed, '/', GTests, ' tests passed');

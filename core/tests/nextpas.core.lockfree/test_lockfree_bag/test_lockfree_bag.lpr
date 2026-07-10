@@ -5,12 +5,29 @@ program test_lockfree_bag;
 uses
   SysUtils,
   nextpas.core.lockfree.bag,
-  nextpas.core.lockfree,
-  nextpas.core.atomic,
   nextpas.core.test;
 
 type
   TIntBag = specialize TLockFreeBag<Int64>;
+
+function ReadBagSource: string;
+var
+  LFile: TextFile;
+  LLine: string;
+begin
+  Result := '';
+  AssignFile(LFile, '../../../src/nextpas.core.lockfree.bag.pas');
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + LineEnding;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+end;
 
 procedure TestBagBasic;
 var
@@ -207,6 +224,21 @@ begin
   end;
 end;
 
+procedure TestBagClosePublicationContract;
+var
+  LSource: string;
+begin
+  LSource := ReadBagSource;
+  Check(Pos('FActiveEnqueues: Int32', LSource) > 0,
+    'Bag tracks admitted producers across Close');
+  Check(Pos('function ClosedAndNoActiveEnqueues', LSource) > 0,
+    'Bag closed-empty checks active producers');
+  Check(Pos('AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel)', LSource) > 0,
+    'Bag enters the admitted-producer interval before checking Close');
+  Check(Pos('LPos - FDequeuePos', LSource) = 0,
+    'Bag full detection must not read dequeue position non-atomically');
+end;
+
 begin
   WriteLn('=== test_lockfree_bag ===');
   WriteLn;
@@ -231,6 +263,9 @@ begin
 
   TestBagCapacityPowerOf2;
   WriteLn('  + Capacity power of 2');
+
+  TestBagClosePublicationContract;
+  WriteLn('  + Close publication contract');
 
   WriteLn;
   WriteLn('All bag tests passed!');

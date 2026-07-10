@@ -2,6 +2,7 @@
 program test_lockfree_persistent_vector;
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.persistent_vector;
 
@@ -20,6 +21,16 @@ begin
     Inc(GFailed);
     WriteLn('  FAIL: ', AName);
   end;
+end;
+
+procedure AppendAndReplace(var AVector: TPersistentVector;
+  const AValue: AnsiString);
+var
+  LNext: TPersistentVector;
+begin
+  LNext := AVector.Append(AValue);
+  AVector.Free;
+  AVector := LNext;
 end;
 
 procedure Test_Empty;
@@ -163,9 +174,9 @@ begin
   WriteLn('--- Assoc ---');
   LV := TPersistentVector.Create;
   try
-    LV := LV.Append('a');
-    LV := LV.Append('b');
-    LV := LV.Append('c');
+    AppendAndReplace(LV, 'a');
+    AppendAndReplace(LV, 'b');
+    AppendAndReplace(LV, 'c');
     Check(LV.Count = 3, '3 appends count = 3');
 
     LV2 := LV.Assoc(1, 'B');
@@ -196,7 +207,7 @@ begin
   WriteLn('--- Assoc OutOfBounds ---');
   LV := TPersistentVector.Create;
   try
-    LV := LV.Append('x');
+    AppendAndReplace(LV, 'x');
     LV2 := LV.Assoc(5, 'y');
     Check(LV2 = nil, 'Assoc out of bounds returns nil');
     LV2 := LV.Assoc(-1, 'y');
@@ -221,7 +232,7 @@ begin
   WriteLn('--- Nth OutOfBounds ---');
   LV := TPersistentVector.Create;
   try
-    LV := LV.Append('x');
+    AppendAndReplace(LV, 'x');
     Check(LV.Nth(1, LVal) = pvOutOfBounds, 'Nth(1) out of bounds');
     Check(LV.Nth(-1, LVal) = pvOutOfBounds, 'Nth(-1) out of bounds');
 
@@ -246,7 +257,7 @@ begin
   LV := TPersistentVector.Create;
   try
     for I := 0 to 4 do
-      LV := LV.Append('v' + IntToStr(I));
+      AppendAndReplace(LV, 'v' + IntToStr(I));
     LArr := LV.ToArray;
     Check(Length(LArr) = 5, 'ToArray length = 5');
     for I := 0 to 4 do
@@ -272,10 +283,10 @@ begin
   LV1 := TPersistentVector.Create;
   LV2 := TPersistentVector.Create;
   try
-    LV1 := LV1.Append('a');
-    LV1 := LV1.Append('b');
-    LV2 := LV2.Append('c');
-    LV2 := LV2.Append('d');
+    AppendAndReplace(LV1, 'a');
+    AppendAndReplace(LV1, 'b');
+    AppendAndReplace(LV2, 'c');
+    AppendAndReplace(LV2, 'd');
 
     LV3 := LV1.Concat(LV2);
     Check(LV3.Count = 4, 'concat count = 4');
@@ -336,6 +347,79 @@ begin
   end;
 end;
 
+procedure Test_CowPathCopyAndReleaseOrder;
+var
+  LBase, LNext, LLeftBranch, LRightBranch, LAppended: TPersistentVector;
+  LI: Int32;
+  LValue: AnsiString;
+begin
+  WriteLn('--- COW Path Copy And Release Order ---');
+  LBase := TPersistentVector.Create;
+  LLeftBranch := nil;
+  LRightBranch := nil;
+  LAppended := nil;
+  try
+    for LI := 0 to 69 do
+    begin
+      LNext := LBase.Append('v' + IntToStr(LI));
+      LBase.Free;
+      LBase := LNext;
+    end;
+
+    LLeftBranch := LBase.Assoc(0, 'left');
+    LRightBranch := LBase.Assoc(69, 'right');
+    LAppended := LLeftBranch.Append('tail');
+
+    LBase.Free;
+    LBase := nil;
+    Check(LLeftBranch.Nth(69, LValue) = pvOk,
+      'Left branch remains readable after base release');
+    Check(LValue = 'v69', 'Unmodified tail chunk remains intact');
+    Check(LRightBranch.Nth(0, LValue) = pvOk,
+      'Right branch remains readable after base release');
+    Check(LValue = 'v0', 'Unmodified head chunk remains intact');
+
+    LLeftBranch.Free;
+    LLeftBranch := nil;
+    Check(LAppended.Nth(0, LValue) = pvOk,
+      'Appended version survives parent release');
+    Check(LValue = 'left', 'Copied head path keeps branch update');
+    Check(LAppended.Nth(70, LValue) = pvOk,
+      'Appended version exposes new tail');
+    Check(LValue = 'tail', 'New tail value is intact');
+  finally
+    LBase.Free;
+    LLeftBranch.Free;
+    LRightBranch.Free;
+    LAppended.Free;
+  end;
+end;
+
+procedure Test_CowImplementationContract;
+var
+  LSource: TStringList;
+  LText: AnsiString;
+begin
+  WriteLn('--- COW Implementation Contract ---');
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.persistent_vector.pas');
+    LText := LSource.Text;
+    Check(Pos('PVectorChunk', LText) > 0,
+      'Persistent vector stores reference-counted chunks');
+    Check(Pos('RefCount: Int32', LText) > 0,
+      'Chunk ownership has an explicit reference count');
+    Check(Pos('RetainChunk', LText) > 0,
+      'Unchanged chunks are retained across versions');
+    Check(Pos('ReleaseChunk', LText) > 0,
+      'Old versions release shared chunks');
+    Check(Pos('CloneChunk', LText) > 0,
+      'Only the modified chunk is cloned');
+  finally
+    LSource.Free;
+  end;
+end;
+
 begin
   GPassed := 0;
   GFailed := 0;
@@ -350,6 +434,8 @@ begin
   Test_ToArray;
   Test_Concat;
   Test_Immutability;
+  Test_CowPathCopyAndReleaseOrder;
+  Test_CowImplementationContract;
   WriteLn;
   WriteLn('Results: ', GPassed, ' passed, ', GFailed, ' failed');
   if GFailed > 0 then

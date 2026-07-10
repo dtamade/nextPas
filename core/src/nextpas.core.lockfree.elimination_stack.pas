@@ -9,7 +9,7 @@
   - On CAS failure, thread enters elimination array instead of retrying
   - Push threads store values, Pop threads take values
   - Matching push/pop in elimination array completes without touching top
-  - Random slot selection via fast PRNG (xorshift32)
+  - Atomic round-robin slot selection
   - Timeout-based slot expiration (avoid abandoned slots)
 
   Theory: Hendler et al. "A Lock-Free Stack with Elimination Backoff"
@@ -34,6 +34,7 @@ const
   ELIM_STATE_PUSH   = 1;
   ELIM_STATE_READY   = 2;
   ELIM_STATE_POP    = 3;
+  ELIM_STATE_CANCELLED = 4;
 
 type
   TEliminationStackResult = (esPushed, esPopped, esEliminated, esFull, esEmpty, esClosed);
@@ -71,14 +72,13 @@ type
     FPadElim: TCacheLinePad;
     {$POP}
     { State }
+    FCount: Int64;
     FClosed: Int32;
-    FPRNG: UInt32;
     { Pack/unpack for tagged pointers }
     function PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
     function UnpackIdx(ATagged: Int64): Int32; inline;
     function UnpackTag(ATagged: Int64): UInt32; inline;
-    { PRNG }
-    function NextRandom: UInt32; inline;
+    function NextSlotIndex: Int32; inline;
     { Helpers }
     procedure SpinWait; inline;
   public
@@ -116,12 +116,10 @@ begin
   Result := UInt32((ATagged shr 32) and $FFFFFFFF);
 end;
 
-function TEliminationStackImpl.NextRandom: UInt32; inline;
+function TEliminationStackImpl.NextSlotIndex: Int32; inline;
 begin
-  FPRNG := FPRNG xor (FPRNG shl 13);
-  FPRNG := FPRNG xor (FPRNG shr 17);
-  FPRNG := FPRNG xor (FPRNG shl 5);
-  Result := FPRNG;
+  Result := Int32(UInt32(AtomicFetchAdd32(FNextSlot, 1, moRelaxed)) mod
+    UInt32(FElimSize));
 end;
 
 procedure TEliminationStackImpl.SpinWait; inline;
@@ -129,7 +127,11 @@ var
   LJ: Int32;
 begin
   for LJ := 0 to LOCKFREE_SPIN_COUNT - 1 do
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then Exit;
+  begin
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit;
+    CpuPause;
+  end;
 end;
 
 constructor TEliminationStackImpl.Create(const ACapacity: PtrUInt; const AElimSize: Int32);
@@ -161,8 +163,8 @@ begin
     FElimination[LI].State := ELIM_STATE_EMPTY;
   FNextSlot := 0;
   { State }
+  FCount := 0;
   FClosed := 0;
-  FPRNG := 12345; { Fixed seed for deterministic behavior }
 end;
 
 function TEliminationStackImpl.TryPush(const AValue: T): TEliminationStackResult;
@@ -183,6 +185,7 @@ begin
 
   if LIdx <> -1 then
   begin
+    AtomicFetchAdd64(FCount, 1, moRelaxed);
     FSlots[LIdx].Value := AValue;
     repeat
       LOldTop := AtomicLoad64(FTop, moAcquire);
@@ -191,44 +194,69 @@ begin
     until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
     Exit(esPushed);
   end;
-  { Step 2: Stack full or CAS failed — try elimination array }
-  LSlotIdx := Int32(NextRandom mod UInt32(FElimSize));
-  LState := AtomicLoad32(FElimination[LSlotIdx].State, moAcquire);
-  if LState = ELIM_STATE_EMPTY then
+
+  LSlotIdx := NextSlotIndex;
+  if AtomicCompareExchange32(FElimination[LSlotIdx].State,
+    ELIM_STATE_EMPTY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_EMPTY then
   begin
-    if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_EMPTY then
+    FElimination[LSlotIdx].Value := AValue;
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
     begin
-      FElimination[LSlotIdx].Value := AValue;
-      AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_READY, moRelease);
-      { Wait for a pop thread to take it }
-      LSpinCount := 0;
-      while AtomicLoad32(FElimination[LSlotIdx].State, moAcquire) = ELIM_STATE_READY do
-      begin
-        Inc(LSpinCount);
-        if LSpinCount >= ELIM_SPIN_TIMEOUT then
-        begin
-          { Timeout: try to reclaim slot }
-          if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_READY, ELIM_STATE_EMPTY, moAcqRel) = ELIM_STATE_READY then
-            Exit(esFull);
-          { Someone else took it }
+      FElimination[LSlotIdx].Value := Default(T);
+      AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+      Exit(esClosed);
+    end;
+    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_READY, moRelease);
+    LSpinCount := 0;
+    while True do
+    begin
+      LState := AtomicLoad32(FElimination[LSlotIdx].State, moAcquire);
+      case LState of
+        ELIM_STATE_EMPTY,
+        ELIM_STATE_POP:
           Exit(esEliminated);
-        end;
-        SpinWait;
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
-          Exit(esClosed);
+        ELIM_STATE_CANCELLED:
+          begin
+            AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+            Exit(esClosed);
+          end;
       end;
-      { Slot state changed from READY — pop thread took it }
-      Exit(esEliminated);
+
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      begin
+        if AtomicCompareExchange32(FElimination[LSlotIdx].State,
+          ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+        begin
+          FElimination[LSlotIdx].Value := Default(T);
+          AtomicFetchSub64(FCount, 1, moRelaxed);
+          AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+          Exit(esClosed);
+        end;
+      end;
+
+      Inc(LSpinCount);
+      if LSpinCount >= ELIM_SPIN_TIMEOUT then
+      begin
+        if AtomicCompareExchange32(FElimination[LSlotIdx].State,
+          ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+        begin
+          FElimination[LSlotIdx].Value := Default(T);
+          AtomicFetchSub64(FCount, 1, moRelaxed);
+          AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+          Exit(esFull);
+        end;
+      end;
+      SpinWait;
     end;
   end;
-  { Slot not available — fallback }
   Result := esFull;
 end;
 
 function TEliminationStackImpl.TryPop(out AValue: T): TEliminationStackResult;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
-  LIdx, LSlotIdx, LState, LSpinCount: Int32;
+  LIdx, LSlotIdx: Int32;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(esClosed);
@@ -243,6 +271,7 @@ begin
 
   if LIdx <> -1 then
   begin
+    AtomicFetchSub64(FCount, 1, moRelaxed);
     AValue := FSlots[LIdx].Value;
     FSlots[LIdx].Value := Default(T);
     repeat
@@ -252,63 +281,33 @@ begin
     until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
     Exit(esPopped);
   end;
-  { Step 2: Stack empty — try elimination array to find a push }
-  LSlotIdx := Int32(NextRandom mod UInt32(FElimSize));
-  LState := AtomicLoad32(FElimination[LSlotIdx].State, moAcquire);
-  if LState = ELIM_STATE_READY then
+
+  LSlotIdx := NextSlotIndex;
+  if AtomicCompareExchange32(FElimination[LSlotIdx].State,
+    ELIM_STATE_READY, ELIM_STATE_POP, moAcqRel) = ELIM_STATE_READY then
   begin
-    if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_READY, ELIM_STATE_POP, moAcqRel) = ELIM_STATE_READY then
-    begin
-      AValue := FElimination[LSlotIdx].Value;
-      FElimination[LSlotIdx].Value := Default(T);
-      AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
-      Exit(esEliminated);
-    end;
-  end;
-  { No ready slot — try waiting briefly for a push thread }
-  LSlotIdx := Int32(NextRandom mod UInt32(FElimSize));
-  if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, ELIM_STATE_POP, moAcqRel) = ELIM_STATE_EMPTY then
-  begin
-    { We claimed an empty slot — wait for a push thread }
-    LSpinCount := 0;
-    while AtomicLoad32(FElimination[LSlotIdx].State, moAcquire) = ELIM_STATE_POP do
-    begin
-      Inc(LSpinCount);
-      if LSpinCount >= ELIM_SPIN_TIMEOUT then
-      begin
-        { Timeout: release slot }
-        if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_POP, ELIM_STATE_EMPTY, moAcqRel) = ELIM_STATE_POP then
-          Exit(esEmpty);
-        { Someone filled it while we were timing out }
-        AValue := FElimination[LSlotIdx].Value;
-        FElimination[LSlotIdx].Value := Default(T);
-        AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
-        Exit(esEliminated);
-      end;
-      SpinWait;
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      begin
-        AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_POP, ELIM_STATE_EMPTY, moAcqRel);
-        Exit(esClosed);
-      end;
-    end;
-    { State changed from POP — push thread filled it }
-    if AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_READY, ELIM_STATE_POP, moAcqRel) = ELIM_STATE_READY then
-    begin
-      AValue := FElimination[LSlotIdx].Value;
-      FElimination[LSlotIdx].Value := Default(T);
-      AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
-      Exit(esEliminated);
-    end;
-    { Race condition — someone else took it }
-    AtomicCompareExchange32(FElimination[LSlotIdx].State, ELIM_STATE_POP, ELIM_STATE_EMPTY, moAcqRel);
+    AValue := FElimination[LSlotIdx].Value;
+    FElimination[LSlotIdx].Value := Default(T);
+    AtomicFetchSub64(FCount, 1, moRelaxed);
+    AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+    Exit(esEliminated);
   end;
   Result := esEmpty;
 end;
 
 procedure TEliminationStackImpl.Close;
+var
+  LI: Int32;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+  for LI := 0 to FElimSize - 1 do
+    if AtomicCompareExchange32(FElimination[LI].State,
+      ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+    begin
+      FElimination[LI].Value := Default(T);
+      AtomicFetchSub64(FCount, 1, moRelaxed);
+      AtomicStore32(FElimination[LI].State, ELIM_STATE_CANCELLED, moRelease);
+    end;
 end;
 
 function TEliminationStackImpl.IsClosed: Boolean;
@@ -318,23 +317,18 @@ end;
 
 function TEliminationStackImpl.IsEmpty: Boolean;
 begin
-  Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
+  Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
 function TEliminationStackImpl.ApproxCount: PtrUInt;
 var
-  LIdx: Int32;
-  LCount: PtrUInt;
+  LCount: Int64;
 begin
-  LCount := 0;
-  LIdx := UnpackIdx(AtomicLoad64(FTop, moAcquire));
-  while LIdx <> -1 do
-  begin
-    Inc(LCount);
-    if LCount > FCapacity then Break;
-    LIdx := FSlots[LIdx].Next;
-  end;
-  Result := LCount;
+  LCount := AtomicLoad64(FCount, moRelaxed);
+  if LCount > 0 then
+    Result := PtrUInt(LCount)
+  else
+    Result := 0;
 end;
 
 function TEliminationStackImpl.ElimArraySize: Int32;

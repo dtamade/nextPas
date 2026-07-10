@@ -3,12 +3,43 @@ program test_lockfree_merkle_tree;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
+  Classes,
   SysUtils,
   nextpas.core.lockfree.merkle_tree;
 
 var
   GTree: TMerkleTree;
   GPassed, GFailed: Int32;
+
+type
+  TMerkleAddThread = class(TThread)
+  private
+    FTree: TMerkleTree;
+    FStartIndex, FCount: Int32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ATree: TMerkleTree; AStartIndex, ACount: Int32);
+  end;
+
+constructor TMerkleAddThread.Create(ATree: TMerkleTree;
+  AStartIndex, ACount: Int32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FTree := ATree;
+  FStartIndex := AStartIndex;
+  FCount := ACount;
+end;
+
+procedure TMerkleAddThread.Execute;
+var
+  LI: Int32;
+begin
+  for LI := 0 to FCount - 1 do
+    FTree.AddLeaf('leaf-' + IntToStr(FStartIndex + LI));
+end;
 
 procedure Check(ACondition: Boolean; const AName: string);
 begin
@@ -135,6 +166,35 @@ begin
   end;
 end;
 
+procedure TestConcurrentAddLeaf;
+const
+  THREAD_COUNT = 4;
+  LEAVES_PER_THREAD = 200;
+var
+  LThreads: array[0..THREAD_COUNT - 1] of TMerkleAddThread;
+  LI: Int32;
+begin
+  WriteLn('--- TestConcurrentAddLeaf ---');
+  GTree := TMerkleTree.Create;
+  try
+    for LI := 0 to High(LThreads) do
+      LThreads[LI] := TMerkleAddThread.Create(GTree,
+        LI * LEAVES_PER_THREAD, LEAVES_PER_THREAD);
+    for LI := 0 to High(LThreads) do
+      LThreads[LI].Start;
+    for LI := 0 to High(LThreads) do
+    begin
+      LThreads[LI].WaitFor;
+      LThreads[LI].Free;
+    end;
+    Check(GTree.GetLeafCount = THREAD_COUNT * LEAVES_PER_THREAD,
+      'Concurrent additions publish every leaf');
+    Check(GTree.Verify, 'Concurrent additions propagate a valid root');
+  finally
+    GTree.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_merkle_tree ===');
   GPassed := 0;
@@ -146,6 +206,7 @@ begin
   TestClear;
   TestClose;
   TestGetLeafHash;
+  TestConcurrentAddLeaf;
   WriteLn;
   WriteLn('Results: ', GPassed, ' passed, ', GFailed, ' failed');
   if GFailed > 0 then

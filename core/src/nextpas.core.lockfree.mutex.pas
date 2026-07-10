@@ -19,6 +19,7 @@ type
   private
     FLocked: Int32;
     FClosed: Int32;
+    FOwnerThreadId: Int64;
   public
     constructor Create;
     function TryLock: Boolean;
@@ -28,6 +29,7 @@ type
     procedure Close;
     function IsClosed: Boolean;
     function IsLocked: Boolean;
+    function IsOwnedByCurrentThread: Boolean;
   end;
 
 implementation
@@ -35,6 +37,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.platform.thread,
   nextpas.core.time.base;
 
 constructor TConcurrentMutex.Create;
@@ -42,13 +45,16 @@ begin
   inherited Create;
   FLocked := 0;
   FClosed := 0;
+  FOwnerThreadId := 0;
 end;
 
 function TConcurrentMutex.TryLock: Boolean;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Result := AtomicCompareExchange32(FLocked, 0, 1) = 0;
+  Result := AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0;
+  if Result then
+    AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
 end;
 
 function TConcurrentMutex.Lock: Boolean;
@@ -57,8 +63,11 @@ begin
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    if AtomicCompareExchange32(FLocked, 0, 1) = 0 then
+    if AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0 then
+    begin
+      AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
       Exit(True);
+    end;
     CpuPause;
   end;
 end;
@@ -73,8 +82,11 @@ begin
   begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    if AtomicCompareExchange32(FLocked, 0, 1) = 0 then
+    if AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0 then
+    begin
+      AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
       Exit(True);
+    end;
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(False);
@@ -84,6 +96,9 @@ end;
 
 procedure TConcurrentMutex.Unlock;
 begin
+  if AtomicLoad64(FOwnerThreadId, moAcquire) <> Int64(platform_thread_id) then
+    Exit;
+  AtomicStore64(FOwnerThreadId, 0, moRelaxed);
   AtomicStore32(FLocked, 0, moRelease);
 end;
 
@@ -100,6 +115,12 @@ end;
 function TConcurrentMutex.IsLocked: Boolean;
 begin
   Result := AtomicLoad32(FLocked, moAcquire) <> 0;
+end;
+
+function TConcurrentMutex.IsOwnedByCurrentThread: Boolean;
+begin
+  Result := IsLocked and
+    (AtomicLoad64(FOwnerThreadId, moAcquire) = Int64(platform_thread_id));
 end;
 
 end.

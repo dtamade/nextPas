@@ -7,6 +7,7 @@ uses
   SysUtils,
   nextpas.core.lockfree.flatcombining,
   nextpas.core.lockfree,
+  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.test;
 
@@ -93,6 +94,26 @@ begin
     CheckEqual(Int64(0), LCounter.Sub(100));
   finally
     LCounter.Free;
+  end;
+end;
+
+procedure TestFCLockRejectsNilTarget;
+var
+  LLock: TFlatCombiningLock;
+  LRaised: Boolean;
+begin
+  LLock := nil;
+  LRaised := False;
+  try
+    try
+      LLock := TFlatCombiningLock.Create(nil);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Nil target must raise EArgumentError');
+  finally
+    LLock.Free;
   end;
 end;
 
@@ -183,6 +204,9 @@ begin
 
   TestFCCounterAddSub;
   WriteLn('  + Add/Sub');
+
+  TestFCLockRejectsNilTarget;
+  WriteLn('  + Nil target rejected');
 
   TestFCCounterConcurrent;
   WriteLn('  + Concurrent 4 threads');

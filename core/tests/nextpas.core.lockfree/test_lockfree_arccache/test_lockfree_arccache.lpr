@@ -7,6 +7,7 @@ uses
   nextpas.core.lockfree.arccache,
   nextpas.core.lockfree,
   nextpas.core.atomic,
+  nextpas.core.errors,
   nextpas.core.test;
 
 procedure TestARCCacheBasic;
@@ -84,6 +85,26 @@ begin
   end;
 end;
 
+procedure TestARCCacheRejectsUnrepresentableCapacity;
+var
+  LCache: TARCCacheImpl;
+  LRaised: Boolean;
+begin
+  LCache := nil;
+  LRaised := False;
+  try
+    try
+      LCache := TARCCacheImpl.Create(High(UInt32));
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+  finally
+    LCache.Free;
+  end;
+  Check(LRaised, 'Capacity above High(Integer) must be rejected');
+end;
+
 begin
   WriteLn('=== test_lockfree_arccache ===');
   WriteLn;
@@ -99,6 +120,9 @@ begin
 
   TestARCCacheClose;
   WriteLn('  + Close semantics');
+
+  TestARCCacheRejectsUnrepresentableCapacity;
+  WriteLn('  + Capacity overflow guard');
 
   WriteLn;
   WriteLn('All ARC Cache tests passed!');

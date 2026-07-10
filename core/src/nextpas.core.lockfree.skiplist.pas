@@ -45,6 +45,8 @@ type
     {** @desc ForEachCtx 带上下文的回调类型 }
     TForEachCtxCallback = procedure(const AKey: TKey; const AValue: TValue; AContext: Pointer);
   private type
+    TKeyArray = array of TKey;
+    TValueArray = array of TValue;
     PSkipListNode = ^TSkipListNode;
     TSkipListNode = record
       Key: TKey;
@@ -456,45 +458,80 @@ end;
 procedure TConcurrentSkipListImpl.ForEach(const ACallback: TForEachCallback);
 var
   LNode: PSkipListNode;
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
+  if not Assigned(ACallback) then
+    Exit;
   GlobalReadLock;
   try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
     LNode := FHead^.Next[0];
     while LNode <> FTail do
     begin
-      ACallback(LNode^.Key, LNode^.Value);
+      LKeys[LCount] := LNode^.Key;
+      LValues[LCount] := LNode^.Value;
+      Inc(LCount);
       LNode := LNode^.Next[0];
     end;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
   finally
     GlobalReadUnlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI]);
 end;
 
 procedure TConcurrentSkipListImpl.ForEachCtx(const ACallback: TForEachCtxCallback; AContext: Pointer);
 var
   LNode: PSkipListNode;
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
+  if not Assigned(ACallback) then
+    Exit;
   GlobalReadLock;
   try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
     LNode := FHead^.Next[0];
     while LNode <> FTail do
     begin
-      ACallback(LNode^.Key, LNode^.Value, AContext);
+      LKeys[LCount] := LNode^.Key;
+      LValues[LCount] := LNode^.Value;
+      Inc(LCount);
       LNode := LNode^.Next[0];
     end;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
   finally
     GlobalReadUnlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI], AContext);
 end;
 
 procedure TConcurrentSkipListImpl.ForEachRange(const AFrom, ATo: TKey; const ACallback: TForEachCallback);
 var
   LCurrent: PSkipListNode;
   LNext: PSkipListNode;
-  LI: Integer;
+  LKeys: TKeyArray;
+  LValues: TValueArray;
+  LCount, LI: Integer;
 begin
+  if not Assigned(ACallback) then
+    Exit;
   GlobalReadLock;
   try
+    SetLength(LKeys, FSize);
+    SetLength(LValues, FSize);
+    LCount := 0;
     { Find starting position }
     LCurrent := FHead;
     for LI := FMaxLevel - 1 downto 0 do
@@ -511,12 +548,18 @@ begin
     LCurrent := LCurrent^.Next[0];
     while (LCurrent <> FTail) and (CompareKeys(LCurrent^.Key, ATo) <= 0) do
     begin
-      ACallback(LCurrent^.Key, LCurrent^.Value);
+      LKeys[LCount] := LCurrent^.Key;
+      LValues[LCount] := LCurrent^.Value;
+      Inc(LCount);
       LCurrent := LCurrent^.Next[0];
     end;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
   finally
     GlobalReadUnlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LKeys[LI], LValues[LI]);
 end;
 
 procedure TConcurrentSkipListImpl.Clear;

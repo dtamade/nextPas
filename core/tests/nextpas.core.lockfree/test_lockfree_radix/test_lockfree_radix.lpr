@@ -3,10 +3,24 @@ program test_lockfree_radix;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
   SysUtils,
   nextpas.core.lockfree.radix,
   nextpas.core.atomic,
   nextpas.core.test;
+
+var
+  GMutatingTree: TConcurrentRadixTree;
+  GMutationAttempted: Boolean;
+
+procedure MutatingCallback(const AKey: AnsiString; AValue: Int64);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingTree.Insert('z', 26);
+  end;
+end;
 
 procedure TestRadixBasic;
 var
@@ -145,6 +159,25 @@ begin
   end;
 end;
 
+procedure TestRadixForEachAllowsMutation;
+var
+  LTree: TConcurrentRadixTree;
+begin
+  LTree := TConcurrentRadixTree.Create;
+  try
+    LTree.Insert('a', 1);
+    LTree.Insert('b', 2);
+    GMutatingTree := LTree;
+    GMutationAttempted := False;
+    LTree.ForEach(@MutatingCallback);
+    Check(GMutationAttempted, 'Callback should run');
+    Check(LTree.Contains('z'), 'Callback insertion should complete');
+  finally
+    GMutatingTree := nil;
+    LTree.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_radix ===');
   WriteLn;
@@ -169,6 +202,9 @@ begin
 
   TestRadixEmptyKey;
   WriteLn('  + Empty key');
+
+  TestRadixForEachAllowsMutation;
+  WriteLn('  + ForEach callback mutation');
 
   WriteLn;
   WriteLn('All radix tree tests passed!');

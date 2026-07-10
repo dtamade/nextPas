@@ -12,6 +12,21 @@ uses
 type
   TIntLru = specialize TConcurrentLruCache<Int64, Int64>;
 
+function BucketForKey(const AKey: Int64; const AMask: PtrUInt): PtrUInt;
+var
+  LByte: PByte;
+  LHash: QWord;
+  LI: Integer;
+begin
+  LByte := @AKey;
+  LHash := QWord(14695981039346656037);
+  for LI := 0 to SizeOf(AKey) - 1 do
+  begin
+    LHash := (LHash xor LByte[LI]) * QWord(1099511628211);
+  end;
+  Result := PtrUInt(LHash) and AMask;
+end;
+
 procedure TestLruBasic;
 var
   LLru: TIntLru;
@@ -138,6 +153,32 @@ begin
   end;
 end;
 
+procedure TestLruEvictsAcrossBuckets;
+var
+  LLru: TIntLru;
+  LFirstKey: Int64;
+  LSecondKey: Int64;
+  LValue: Int64;
+begin
+  LFirstKey := 1;
+  LSecondKey := 2;
+  while BucketForKey(LSecondKey, 15) = BucketForKey(LFirstKey, 15) do
+    Inc(LSecondKey);
+
+  LLru := TIntLru.Create(1, 16);
+  try
+    Check(LLru.Put(LFirstKey, 10) = lrAdded, 'Should add first key');
+    Check(LLru.Put(LSecondKey, 20) = lrAdded,
+      'Full cache should evict globally, not reject a different bucket');
+    CheckEqual(PtrUInt(1), LLru.Count);
+    Check(not LLru.Get(LFirstKey, LValue), 'Old key should be evicted');
+    Check(LLru.Get(LSecondKey, LValue), 'New key should be present');
+    CheckEqual(Int64(20), LValue);
+  finally
+    LLru.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_lru ===');
   WriteLn;
@@ -159,6 +200,9 @@ begin
 
   TestLruClose;
   WriteLn('  + Close semantics');
+
+  TestLruEvictsAcrossBuckets;
+  WriteLn('  + Cross-bucket eviction');
 
   WriteLn;
   WriteLn('All LRU cache tests passed!');

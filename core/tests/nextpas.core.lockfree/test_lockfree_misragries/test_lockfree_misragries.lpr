@@ -3,6 +3,7 @@ program test_lockfree_misragries;
 {$mode objfpc}{$H+}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.misragries,
   nextpas.core.test;
@@ -122,6 +123,22 @@ begin
   end;
 end;
 
+procedure TestCountersSaturateAtInt64Max;
+var
+  LSource: TStringList;
+begin
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.misragries.pas');
+    Check(Pos('if FTotalOps < High(Int64) then', LSource.Text) > 0,
+      'Total operation count must saturate');
+    Check(Pos('if FEntries[LIdx].Count < High(Int64) then', LSource.Text) > 0,
+      'Tracked item count must saturate');
+  finally
+    LSource.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_misragries ===');
   WriteLn;
@@ -143,6 +160,9 @@ begin
 
   TestGetTopK;
   WriteLn('  + GetTopK');
+
+  TestCountersSaturateAtInt64Max;
+  WriteLn('  + Saturating counter contract');
 
   WriteLn;
   WriteLn('All Misra-Gries tests passed!');

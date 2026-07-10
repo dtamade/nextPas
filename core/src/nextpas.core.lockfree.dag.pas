@@ -62,6 +62,7 @@ type
     function GetEdgeCount: Int64;
     function InDegree(AId: Int64): Int32;
     function OutDegree(AId: Int64): Int32;
+    { Returns -1 if the stored graph contains a cycle. }
     function TopologicalSort(out ASorted: array of Int64): Int32;
     function HasCycle: Boolean;
     procedure Clear;
@@ -314,43 +315,36 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(dagClosed);
   LockDag;
-  LFrom := FindNode(AFromId);
-  if LFrom = nil then
-  begin
-    UnlockDag;
-    Exit(dagNotFound);
-  end;
-  LTo := FindNode(AToId);
-  if LTo = nil then
-  begin
-    UnlockDag;
-    Exit(dagNotFound);
-  end;
-  LockNode(LFrom);
-  UnlockDag;
-  { Check duplicate }
-  LEdge := LFrom^.OutEdges;
-  while LEdge <> nil do
-  begin
-    if LEdge^.TargetId = AToId then
-    begin
+  try
+    LFrom := FindNode(AFromId);
+    if LFrom = nil then
+      Exit(dagNotFound);
+    LTo := FindNode(AToId);
+    if LTo = nil then
+      Exit(dagNotFound);
+    LockNode(LFrom);
+    try
+      LEdge := LFrom^.OutEdges;
+      while LEdge <> nil do
+      begin
+        if LEdge^.TargetId = AToId then
+          Exit(dagExists);
+        LEdge := LEdge^.Next;
+      end;
+      if (AFromId = AToId) or HasPathLocked(AToId, AFromId) then
+        Exit(dagCycle);
+      LEdge := AllocDagEdge(AToId);
+      LEdge^.Next := LFrom^.OutEdges;
+      LFrom^.OutEdges := LEdge;
+      AtomicFetchAdd32(LTo^.InCount, 1, moRelaxed);
+      AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
+      Result := dagOk;
+    finally
       UnlockNode(LFrom);
-      Exit(dagExists);
     end;
-    LEdge := LEdge^.Next;
+  finally
+    UnlockDag;
   end;
-  if (AFromId = AToId) or HasPathLocked(AToId, AFromId) then
-  begin
-    UnlockNode(LFrom);
-    Exit(dagCycle);
-  end;
-  LEdge := AllocDagEdge(AToId);
-  LEdge^.Next := LFrom^.OutEdges;
-  LFrom^.OutEdges := LEdge;
-  AtomicFetchAdd32(LTo^.InCount, 1, moRelaxed);
-  AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
-  UnlockNode(LFrom);
-  Result := dagOk;
 end;
 
 function TConcurrentDAG.RemoveEdge(AFromId, AToId: Int64): TDagResult;
@@ -361,41 +355,40 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(dagClosed);
   LockDag;
-  LFrom := FindNode(AFromId);
-  if LFrom = nil then
-  begin
-    UnlockDag;
-    Exit(dagNotFound);
-  end;
-  LTo := FindNode(AToId);
-  if LTo = nil then
-  begin
-    UnlockDag;
-    Exit(dagNotFound);
-  end;
-  LockNode(LFrom);
-  UnlockDag;
-  LPrev := nil;
-  LCurrent := LFrom^.OutEdges;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.TargetId = AToId then
-    begin
-      if LPrev = nil then
-        LFrom^.OutEdges := LCurrent^.Next
-      else
-        LPrev^.Next := LCurrent^.Next;
-      AtomicFetchSub32(LTo^.InCount, 1, moRelaxed);
-      AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
-      Dispose(LCurrent);
+  try
+    LFrom := FindNode(AFromId);
+    if LFrom = nil then
+      Exit(dagNotFound);
+    LTo := FindNode(AToId);
+    if LTo = nil then
+      Exit(dagNotFound);
+    LockNode(LFrom);
+    try
+      LPrev := nil;
+      LCurrent := LFrom^.OutEdges;
+      while LCurrent <> nil do
+      begin
+        if LCurrent^.TargetId = AToId then
+        begin
+          if LPrev = nil then
+            LFrom^.OutEdges := LCurrent^.Next
+          else
+            LPrev^.Next := LCurrent^.Next;
+          AtomicFetchSub32(LTo^.InCount, 1, moRelaxed);
+          AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+          Dispose(LCurrent);
+          Exit(dagOk);
+        end;
+        LPrev := LCurrent;
+        LCurrent := LCurrent^.Next;
+      end;
+      Result := dagNotFound;
+    finally
       UnlockNode(LFrom);
-      Exit(dagOk);
     end;
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.Next;
+  finally
+    UnlockDag;
   end;
-  UnlockNode(LFrom);
-  Result := dagNotFound;
 end;
 
 function TConcurrentDAG.HasEdge(AFromId, AToId: Int64): Boolean;
@@ -406,26 +399,26 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   LockDag;
-  LFrom := FindNode(AFromId);
-  if LFrom = nil then
-  begin
-    UnlockDag;
-    Exit(False);
-  end;
-  LockNode(LFrom);
-  UnlockDag;
-  LEdge := LFrom^.OutEdges;
-  while LEdge <> nil do
-  begin
-    if LEdge^.TargetId = AToId then
-    begin
+  try
+    LFrom := FindNode(AFromId);
+    if LFrom = nil then
+      Exit(False);
+    LockNode(LFrom);
+    try
+      LEdge := LFrom^.OutEdges;
+      while LEdge <> nil do
+      begin
+        if LEdge^.TargetId = AToId then
+          Exit(True);
+        LEdge := LEdge^.Next;
+      end;
+      Result := False;
+    finally
       UnlockNode(LFrom);
-      Exit(True);
     end;
-    LEdge := LEdge^.Next;
+  finally
+    UnlockDag;
   end;
-  UnlockNode(LFrom);
-  Result := False;
 end;
 
 function TConcurrentDAG.GetNodeCount: Int64;
@@ -443,11 +436,14 @@ var
   LNode: PDagNode;
 begin
   LockDag;
-  LNode := FindNode(AId);
-  UnlockDag;
-  if LNode = nil then
-    Exit(-1);
-  Result := AtomicLoad32(LNode^.InCount, moAcquire);
+  try
+    LNode := FindNode(AId);
+    if LNode = nil then
+      Exit(-1);
+    Result := AtomicLoad32(LNode^.InCount, moAcquire);
+  finally
+    UnlockDag;
+  end;
 end;
 
 function TConcurrentDAG.OutDegree(AId: Int64): Int32;
@@ -456,92 +452,109 @@ var
   LEdge: PDagEdge;
 begin
   LockDag;
-  LNode := FindNode(AId);
-  UnlockDag;
-  if LNode = nil then
-    Exit(-1);
-  Result := 0;
-  LockNode(LNode);
-  LEdge := LNode^.OutEdges;
-  while LEdge <> nil do
-  begin
-    Inc(Result);
-    LEdge := LEdge^.Next;
+  try
+    LNode := FindNode(AId);
+    if LNode = nil then
+      Exit(-1);
+    Result := 0;
+    LockNode(LNode);
+    try
+      LEdge := LNode^.OutEdges;
+      while LEdge <> nil do
+      begin
+        Inc(Result);
+        LEdge := LEdge^.Next;
+      end;
+    finally
+      UnlockNode(LNode);
+    end;
+  finally
+    UnlockDag;
   end;
-  UnlockNode(LNode);
 end;
 
 function TConcurrentDAG.TopologicalSort(out ASorted: array of Int64): Int32;
 var
   LInDeg: array of Int32;
   LIds: array of Int64;
-  LCount, LI, LJ: Int32;
+  LOrder: array of Int64;
+  LCount, LProcessed, LWriteCount, LI: Int32;
   LNode: PDagNode;
   LEdge: PDagEdge;
   LQueue: array of Int64;
   LQHead, LQTail: Int32;
   LCurrent: Int64;
 begin
-  LCount := AtomicLoad64(FNodeCount, moAcquire);
-  if LCount <= 0 then
-    Exit(0);
-  if LCount > Length(ASorted) then
-    LCount := Length(ASorted);
-  SetLength(LInDeg, LCount);
-  SetLength(LIds, LCount);
-  SetLength(LQueue, LCount);
-  { Collect nodes and in-degrees }
   LockDag;
-  LI := 0;
-  LNode := FRoot;
-  while (LNode <> nil) and (LI < LCount) do
-  begin
-    LIds[LI] := LNode^.Id;
-    LInDeg[LI] := AtomicLoad32(LNode^.InCount, moAcquire);
-    Inc(LI);
-    LNode := LNode^.Next;
-  end;
-  LCount := LI;
-  { Kahn's algorithm }
-  LQHead := 0;
-  LQTail := 0;
-  for LI := 0 to LCount - 1 do
-    if LInDeg[LI] = 0 then
+  try
+    LCount := FNodeCount;
+    if LCount <= 0 then
+      Exit(0);
+    SetLength(LInDeg, LCount);
+    SetLength(LIds, LCount);
+    SetLength(LOrder, LCount);
+    SetLength(LQueue, LCount);
+
+    LI := 0;
+    LNode := FRoot;
+    while (LNode <> nil) and (LI < LCount) do
     begin
-      LQueue[LQTail] := LIds[LI];
-      Inc(LQTail);
+      LIds[LI] := LNode^.Id;
+      LInDeg[LI] := LNode^.InCount;
+      Inc(LI);
+      LNode := LNode^.Next;
     end;
-  Result := 0;
-  while LQHead < LQTail do
-  begin
-    LCurrent := LQueue[LQHead];
-    Inc(LQHead);
-    ASorted[Result] := LCurrent;
-    Inc(Result);
-    LNode := FindNode(LCurrent);
-    if LNode <> nil then
-    begin
-      LockNode(LNode);
-      LEdge := LNode^.OutEdges;
-      while LEdge <> nil do
+    LCount := LI;
+
+    LQHead := 0;
+    LQTail := 0;
+    for LI := 0 to LCount - 1 do
+      if LInDeg[LI] = 0 then
       begin
-        for LI := 0 to LCount - 1 do
-          if LIds[LI] = LEdge^.TargetId then
-          begin
-            Dec(LInDeg[LI]);
-            if LInDeg[LI] = 0 then
-            begin
-              LQueue[LQTail] := LIds[LI];
-              Inc(LQTail);
-            end;
-            Break;
-          end;
-        LEdge := LEdge^.Next;
+        LQueue[LQTail] := LIds[LI];
+        Inc(LQTail);
       end;
-      UnlockNode(LNode);
+
+    LProcessed := 0;
+    while LQHead < LQTail do
+    begin
+      LCurrent := LQueue[LQHead];
+      Inc(LQHead);
+      LOrder[LProcessed] := LCurrent;
+      Inc(LProcessed);
+      LNode := FindNode(LCurrent);
+      if LNode <> nil then
+      begin
+        LEdge := LNode^.OutEdges;
+        while LEdge <> nil do
+        begin
+          for LI := 0 to LCount - 1 do
+            if LIds[LI] = LEdge^.TargetId then
+            begin
+              Dec(LInDeg[LI]);
+              if LInDeg[LI] = 0 then
+              begin
+                LQueue[LQTail] := LIds[LI];
+                Inc(LQTail);
+              end;
+              Break;
+            end;
+          LEdge := LEdge^.Next;
+        end;
+      end;
     end;
+
+    if LProcessed <> LCount then
+      Exit(-1);
+    LWriteCount := LProcessed;
+    if LWriteCount > Length(ASorted) then
+      LWriteCount := Length(ASorted);
+    for LI := 0 to LWriteCount - 1 do
+      ASorted[LI] := LOrder[LI];
+    Result := LWriteCount;
+  finally
+    UnlockDag;
   end;
-  UnlockDag;
 end;
 
 function TConcurrentDAG.HasCycleDFS(AId: Int64; var AVisited, AStack: array of Int64;
@@ -610,34 +623,35 @@ var
   LI: Int32;
   LAlreadyVisited: Boolean;
 begin
-  LCount := AtomicLoad64(FNodeCount, moAcquire);
-  if LCount <= 1 then
-    Exit(False);
-  SetLength(LVisited, LCount);
-  SetLength(LStack, LCount);
-  LVisitedCount := 0;
-  LStackCount := 0;
   LockDag;
-  LNode := FRoot;
-  while LNode <> nil do
-  begin
-    LAlreadyVisited := False;
-    for LI := 0 to LVisitedCount - 1 do
-      if LVisited[LI] = LNode^.Id then
-      begin
-        LAlreadyVisited := True;
-        Break;
-      end;
-    if not LAlreadyVisited then
-      if HasCycleDFS(LNode^.Id, LVisited, LStack, LVisitedCount, LStackCount) then
-      begin
-        UnlockDag;
-        Exit(True);
-      end;
-    LNode := LNode^.Next;
+  try
+    LCount := FNodeCount;
+    if LCount = 0 then
+      Exit(False);
+    SetLength(LVisited, LCount);
+    SetLength(LStack, LCount);
+    LVisitedCount := 0;
+    LStackCount := 0;
+    LNode := FRoot;
+    while LNode <> nil do
+    begin
+      LAlreadyVisited := False;
+      for LI := 0 to LVisitedCount - 1 do
+        if LVisited[LI] = LNode^.Id then
+        begin
+          LAlreadyVisited := True;
+          Break;
+        end;
+      if not LAlreadyVisited then
+        if HasCycleDFS(LNode^.Id, LVisited, LStack, LVisitedCount,
+          LStackCount) then
+          Exit(True);
+      LNode := LNode^.Next;
+    end;
+    Result := False;
+  finally
+    UnlockDag;
   end;
-  UnlockDag;
-  Result := False;
 end;
 
 procedure TConcurrentDAG.Clear;

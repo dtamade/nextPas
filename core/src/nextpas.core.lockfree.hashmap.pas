@@ -18,6 +18,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.platform.thread;
 
 const
@@ -329,14 +330,12 @@ procedure TShardedHashMapImpl.ShardResize(var AShard: TShard);
 var
   LOldEntries: array of TEntry;
   LOldCapacity: PtrUInt;
-  LOldMask: PtrUInt;
   LI: PtrUInt;
   LIdx: PtrUInt;
   LNewCapacity: PtrUInt;
 begin
   LOldEntries := AShard.Entries;
   LOldCapacity := AShard.Capacity;
-  LOldMask := AShard.Mask;
   LNewCapacity := LOldCapacity * 2;
   AShard.Capacity := LNewCapacity;
   AShard.Mask := LNewCapacity - 1;
@@ -386,6 +385,7 @@ begin
   LCap := AInitialCapacity;
   if LCap < 4 then
     LCap := 4;
+  LCap := LockFreeNextPow2(LCap);
   FShardCount := HASHMAP_DEFAULT_SHARD_COUNT;
   SetLength(FShards, FShardCount);
   for LI := 0 to FShardCount - 1 do

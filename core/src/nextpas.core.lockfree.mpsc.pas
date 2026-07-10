@@ -36,7 +36,7 @@ type
     FStub: TNode;
     FConstructed: Boolean;
     FClosed: Int32;
-    FCount: Int32;
+    FCount: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
@@ -127,8 +127,8 @@ begin
   LNode^.Value := AValue;
   LNode^.Next := nil;
   LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
+  AtomicFetchAdd64(FCount, 1, moRelaxed);
   AtomicStoreNode(LPrev^.Next, LNode, mo_release);
-  AtomicFetchAdd32(FCount, 1, moRelaxed);
   { Fast path: only notify if there are waiters }
   if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
@@ -161,7 +161,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    AtomicFetchSub32(FCount, 1, moRelaxed);
+    AtomicFetchSub64(FCount, 1, moRelaxed);
     Result := True;
     Exit;
   end;
@@ -176,7 +176,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    AtomicFetchSub32(FCount, 1, moRelaxed);
+    AtomicFetchSub64(FCount, 1, moRelaxed);
     Result := True;
     Exit;
   end;
@@ -247,8 +247,14 @@ begin
 end;
 
 function TMpscQueueImpl.ApproxCount: PtrUInt;
+var
+  LCount: Int64;
 begin
-  Result := PtrUInt(AtomicLoad32(FCount, moRelaxed));
+  LCount := AtomicLoad64(FCount, moRelaxed);
+  if LCount > 0 then
+    Result := PtrUInt(LCount)
+  else
+    Result := 0;
 end;
 
 end.

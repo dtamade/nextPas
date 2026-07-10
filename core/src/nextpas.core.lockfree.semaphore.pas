@@ -59,7 +59,7 @@ begin
     LOld := AtomicLoad64(FAvailable, moRelaxed);
     if LOld <= 0 then
       Exit(False);
-  until AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moRelaxed) = LOld;
+  until AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld;
   Result := True;
 end;
 
@@ -77,7 +77,7 @@ begin
       CpuPause;
       Continue;
     end;
-    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moRelaxed) = LOld then
+    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld then
       Exit(True);
   end;
 end;
@@ -102,7 +102,7 @@ begin
       CpuPause;
       Continue;
     end;
-    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moRelaxed) = LOld then
+    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld then
       Exit(True);
   end;
 end;

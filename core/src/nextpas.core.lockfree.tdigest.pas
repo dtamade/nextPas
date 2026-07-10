@@ -77,7 +77,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -140,37 +140,42 @@ procedure TTDigestImpl.CompressInternal;
 var
   LNew: array of TCentroid;
   LNewCount, LI, LNewCap: Integer;
-  LRange, LThreshold: Double;
+  LCumulativeWeight: UInt64;
+  LCombinedWeight: UInt64;
+  LQ: Double;
+  LMaxWeight: Double;
 begin
   if FCount <= 1 then
     Exit;
-
-  { Compute merge threshold from data range and compression }
-  LRange := FCentroids[FCount - 1].FMean - FCentroids[0].FMean;
-  if LRange < 1e-12 then
-    LRange := 1e-12;
-  LThreshold := LRange / FCompression;
-  if LThreshold < 1e-12 then
-    LThreshold := 1e-12;
 
   LNewCap := FCapacity;
   SetLength(LNew, LNewCap);
   LNew[0] := FCentroids[0];
   LNewCount := 1;
+  LCumulativeWeight := 0;
 
   for LI := 1 to FCount - 1 do
   begin
-    if (LNewCount > 0) and
-       (Abs(FCentroids[LI].FMean - LNew[LNewCount - 1].FMean) < LThreshold) then
+    if FCentroids[LI].FCount <= High(UInt64) - LNew[LNewCount - 1].FCount then
+      LCombinedWeight := LNew[LNewCount - 1].FCount + FCentroids[LI].FCount
+    else
+      LCombinedWeight := High(UInt64);
+    LQ := (LCumulativeWeight + Double(LCombinedWeight) * 0.5) / FTotalWeight;
+    LMaxWeight := 4.0 * FTotalWeight * LQ * (1.0 - LQ) / FCompression;
+    if LMaxWeight < 1.0 then
+      LMaxWeight := 1.0;
+
+    if Double(LCombinedWeight) <= LMaxWeight then
     begin
       LNew[LNewCount - 1].FMean :=
         (LNew[LNewCount - 1].FMean * LNew[LNewCount - 1].FCount +
          FCentroids[LI].FMean * FCentroids[LI].FCount) /
-        (LNew[LNewCount - 1].FCount + FCentroids[LI].FCount);
-      LNew[LNewCount - 1].FCount := LNew[LNewCount - 1].FCount + FCentroids[LI].FCount;
+        LCombinedWeight;
+      LNew[LNewCount - 1].FCount := LCombinedWeight;
     end
     else
     begin
+      LCumulativeWeight := LCumulativeWeight + LNew[LNewCount - 1].FCount;
       if LNewCount >= LNewCap then
       begin
         LNewCap := LNewCap + LNewCap div 4 + 10;
@@ -191,13 +196,16 @@ end;
 
 function TTDigestImpl.Add(AValue: Double): TTDigestStatus;
 var
-  LPos, LI: Integer;
+  LPos, LI, LNewCapacity: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(tdClosed);
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(tdClosed);
+
     LPos := FindInsertPos(AValue);
 
     { Try to merge with adjacent centroid if values are very close }
@@ -221,27 +229,21 @@ begin
     else
     begin
       if (FCount >= FCapacity) or (FCount > Trunc(20.0 * FCompression)) then
+      begin
         CompressInternal;
+        LPos := FindInsertPos(AValue);
+      end;
       if FCount >= FCapacity then
       begin
-        { Last resort: merge with closest centroid }
-        if LPos >= FCount then
-          Dec(LPos);
-        if LPos < 0 then
-          LPos := 0;
-        FCentroids[LPos].FMean :=
-          (FCentroids[LPos].FMean * FCentroids[LPos].FCount + AValue) /
-          (FCentroids[LPos].FCount + 1);
-        FCentroids[LPos].FCount := FCentroids[LPos].FCount + 1;
-      end
-      else
-      begin
-        for LI := FCount downto LPos + 1 do
-          FCentroids[LI] := FCentroids[LI - 1];
-        FCentroids[LPos].FMean := AValue;
-        FCentroids[LPos].FCount := 1;
-        Inc(FCount);
+        LNewCapacity := FCapacity + FCapacity div 2 + 1;
+        SetLength(FCentroids, LNewCapacity);
+        FCapacity := LNewCapacity;
       end;
+      for LI := FCount downto LPos + 1 do
+        FCentroids[LI] := FCentroids[LI - 1];
+      FCentroids[LPos].FMean := AValue;
+      FCentroids[LPos].FCount := 1;
+      Inc(FCount);
     end;
 
     Inc(FTotalWeight);
@@ -259,8 +261,6 @@ var
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(tdClosed);
-  if FTotalWeight = 0 then
-    Exit(tdEmpty);
   if (AQ < 0.0) or (AQ > 1.0) then
   begin
     AValue := 0;
@@ -269,6 +269,10 @@ begin
 
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(tdClosed);
+    if FTotalWeight = 0 then
+      Exit(tdEmpty);
     if FCount = 0 then
     begin
       AValue := 0;
@@ -299,7 +303,12 @@ end;
 
 function TTDigestImpl.Count: UInt64;
 begin
-  Result := FTotalWeight;
+  Lock;
+  try
+    Result := FTotalWeight;
+  finally
+    Unlock;
+  end;
 end;
 
 function TTDigestImpl.GetCompression: Double;
@@ -309,7 +318,12 @@ end;
 
 procedure TTDigestImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TTDigestImpl.IsClosed: Boolean;

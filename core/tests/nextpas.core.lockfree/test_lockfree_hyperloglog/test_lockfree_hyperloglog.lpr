@@ -90,6 +90,22 @@ begin
   end;
 end;
 
+procedure Test_EmptyStringIsAValidElement;
+var
+  LHll: THyperLogLog;
+begin
+  WriteLn('--- Empty String ---');
+  LHll := THyperLogLog.Create(14);
+  try
+    LHll.Add('');
+    Check(LHll.Estimate = 1, 'empty string contributes one unique element');
+    LHll.Add('');
+    Check(LHll.Estimate = 1, 'duplicate empty string does not increase cardinality');
+  finally
+    LHll.Free;
+  end;
+end;
+
 procedure Test_Reset;
 var
   LHll: THyperLogLog;
@@ -169,6 +185,7 @@ begin
   Test_BasicEstimate;
   Test_UniqueCount;
   Test_Duplicates;
+  Test_EmptyStringIsAValidElement;
   Test_Reset;
   Test_Merge;
   Test_SmallPrecision;

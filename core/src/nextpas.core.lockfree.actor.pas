@@ -40,6 +40,10 @@ type
     FState: TActorState;
     FHandler: TActorHandler;
     FLock: Int32;
+    FProcessing: Int32;
+    FProcessingThreadId: QWord;
+    procedure AcquireLock;
+    procedure ReleaseLock;
     procedure ProcessMailbox;
   public
     constructor Create(AId: Int64; AHandler: TActorHandler; AMaxMailbox: Int32 = 1024);
@@ -61,6 +65,8 @@ type
     FCapacity: Int32;
     FNextId: Int64;
     FLock: Int32;
+    procedure AcquireLock;
+    procedure ReleaseLock;
   public
     constructor Create;
     destructor Destroy; override;
@@ -74,12 +80,16 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.errors,
+  nextpas.core.atomic,
+  nextpas.core.platform.thread;
 
 { TActor }
 
 constructor TActor.Create(AId: Int64; AHandler: TActorHandler; AMaxMailbox: Int32);
 begin
+  if AMaxMailbox <= 0 then
+    raise EArgumentError.Create('TActor: max mailbox must be > 0');
   inherited Create;
   FId := AId;
   FMailHead := nil;
@@ -89,12 +99,35 @@ begin
   FState := asRunning;
   FHandler := AHandler;
   FLock := 0;
+  FProcessing := 0;
+  FProcessingThreadId := 0;
+end;
+
+procedure TActor.AcquireLock;
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TActor.ReleaseLock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 destructor TActor.Destroy;
 var
   LNode, LNext: PMessageNode;
 begin
+  Stop;
   LNode := FMailHead;
   while LNode <> nil do
   begin
@@ -109,25 +142,47 @@ end;
 function TActor.Send(const AMsg: TActorMessage): TActorResult;
 var
   LNode: PMessageNode;
+  LAccepted: Boolean;
+  LShouldProcess: Boolean;
 begin
-  if FState <> asRunning then
-    Exit(arStopped);
-  if FMailCount >= FMaxMailbox then
-    Exit(arMailboxFull);
   New(LNode);
   LNode^.Msg := AMsg;
   LNode^.Next := nil;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    CpuPause;
-  if FMailTail <> nil then
-    FMailTail^.Next := LNode
-  else
-    FMailHead := LNode;
-  FMailTail := LNode;
-  Inc(FMailCount);
-  AtomicStore32(FLock, 0, moRelease);
-  ProcessMailbox;
-  Result := arOk;
+  LAccepted := False;
+  LShouldProcess := False;
+  AcquireLock;
+  try
+    if FState <> asRunning then
+      Result := arStopped
+    else if FMailCount >= FMaxMailbox then
+      Result := arMailboxFull
+    else
+    begin
+      if FMailTail <> nil then
+        FMailTail^.Next := LNode
+      else
+        FMailHead := LNode;
+      FMailTail := LNode;
+      Inc(FMailCount);
+      LAccepted := True;
+      Result := arOk;
+      if FProcessing = 0 then
+      begin
+        FProcessing := 1;
+        FProcessingThreadId := platform_thread_id;
+        LShouldProcess := True;
+      end;
+    end;
+  finally
+    ReleaseLock;
+  end;
+  if not LAccepted then
+  begin
+    LNode^.Msg.Data := '';
+    Dispose(LNode);
+  end
+  else if LShouldProcess then
+    ProcessMailbox;
 end;
 
 procedure TActor.ProcessMailbox;
@@ -136,35 +191,49 @@ var
 begin
   while True do
   begin
-    while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-      CpuPause;
+    AcquireLock;
     LNode := FMailHead;
-    if LNode <> nil then
+    if LNode = nil then
     begin
-      FMailHead := LNode^.Next;
-      if FMailHead = nil then
-        FMailTail := nil;
-      Dec(FMailCount);
-      AtomicStore32(FLock, 0, moRelease);
-      try
-        if Assigned(FHandler) then
-          FHandler(LNode^.Msg);
-      finally
-        LNode^.Msg.Data := '';
-        Dispose(LNode);
-      end;
-    end
-    else
-    begin
-      AtomicStore32(FLock, 0, moRelease);
-      Break;
+      FProcessingThreadId := 0;
+      FProcessing := 0;
+      if FState = asStopping then
+        FState := asStopped;
+      ReleaseLock;
+      Exit;
     end;
+    FMailHead := LNode^.Next;
+    if FMailHead = nil then
+      FMailTail := nil;
+    Dec(FMailCount);
+    ReleaseLock;
+    try
+      if Assigned(FHandler) then
+        FHandler(LNode^.Msg);
+    except
+      LNode^.Msg.Data := '';
+      Dispose(LNode);
+      AcquireLock;
+      FProcessingThreadId := 0;
+      FProcessing := 0;
+      if (FState = asStopping) and (FMailHead = nil) then
+        FState := asStopped;
+      ReleaseLock;
+      raise;
+    end;
+    LNode^.Msg.Data := '';
+    Dispose(LNode);
   end;
 end;
 
 function TActor.MailCount: Int32;
 begin
-  Result := AtomicLoad32(FMailCount, moAcquire);
+  AcquireLock;
+  try
+    Result := FMailCount;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function TActor.GetId: Int64;
@@ -174,14 +243,48 @@ end;
 
 function TActor.GetState: TActorState;
 begin
-  Result := FState;
+  AcquireLock;
+  try
+    Result := FState;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 procedure TActor.Stop;
+var
+  LCurrentThreadId: QWord;
+  LOwnsProcessing: Boolean;
+  LShouldProcess: Boolean;
 begin
-  FState := asStopping;
-  ProcessMailbox;
-  FState := asStopped;
+  LCurrentThreadId := platform_thread_id;
+  while True do
+  begin
+    LOwnsProcessing := False;
+    LShouldProcess := False;
+    AcquireLock;
+    try
+      if FState = asStopped then
+        Exit;
+      FState := asStopping;
+      if FProcessing = 0 then
+      begin
+        FProcessing := 1;
+        FProcessingThreadId := LCurrentThreadId;
+        LShouldProcess := True;
+      end
+      else
+        LOwnsProcessing := FProcessingThreadId = LCurrentThreadId;
+    finally
+      ReleaseLock;
+    end;
+    if LShouldProcess then
+      ProcessMailbox
+    else if LOwnsProcessing then
+      Exit
+    else
+      ThreadSwitch;
+  end;
 end;
 
 { TActorSystem }
@@ -194,6 +297,26 @@ begin
   FCount := 0;
   FNextId := 1;
   FLock := 0;
+end;
+
+procedure TActorSystem.AcquireLock;
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TActorSystem.ReleaseLock;
+begin
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 destructor TActorSystem.Destroy;
@@ -211,17 +334,21 @@ var
   LId: Int64;
 begin
   LId := AtomicFetchAdd64(FNextId, 1, moRelaxed);
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    CpuPause;
-  if FCount >= FCapacity then
-  begin
-    FCapacity := FCapacity * 2;
-    SetLength(FActors, FCapacity);
+  AcquireLock;
+  try
+    if FCount >= FCapacity then
+    begin
+      if FCapacity > High(Int32) div 2 then
+        raise EInvalidOperationError.Create('TActorSystem.Spawn: actor capacity overflow');
+      FCapacity := FCapacity * 2;
+      SetLength(FActors, FCapacity);
+    end;
+    Result := TActor.Create(LId, AHandler, AMaxMailbox);
+    FActors[FCount] := Result;
+    Inc(FCount);
+  finally
+    ReleaseLock;
   end;
-  Result := TActor.Create(LId, AHandler, AMaxMailbox);
-  FActors[FCount] := Result;
-  Inc(FCount);
-  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TActorSystem.Find(AId: Int64): TActor;
@@ -229,9 +356,14 @@ var
   LI: Int32;
 begin
   Result := nil;
-  for LI := 0 to FCount - 1 do
-    if FActors[LI].GetId = AId then
-      Exit(FActors[LI]);
+  AcquireLock;
+  try
+    for LI := 0 to FCount - 1 do
+      if FActors[LI].GetId = AId then
+        Exit(FActors[LI]);
+  finally
+    ReleaseLock;
+  end;
 end;
 
 function TActorSystem.Send(AFromId, AToId: Int64; const AData: AnsiString): TActorResult;
@@ -250,14 +382,28 @@ end;
 procedure TActorSystem.StopAll;
 var
   LI: Int32;
+  LActors: array of TActor;
 begin
-  for LI := 0 to FCount - 1 do
-    FActors[LI].Stop;
+  AcquireLock;
+  try
+    SetLength(LActors, FCount);
+    for LI := 0 to FCount - 1 do
+      LActors[LI] := FActors[LI];
+  finally
+    ReleaseLock;
+  end;
+  for LI := 0 to High(LActors) do
+    LActors[LI].Stop;
 end;
 
 function TActorSystem.Count: Int32;
 begin
-  Result := FCount;
+  AcquireLock;
+  try
+    Result := FCount;
+  finally
+    ReleaseLock;
+  end;
 end;
 
 end.

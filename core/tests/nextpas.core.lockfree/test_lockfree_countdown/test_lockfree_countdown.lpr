@@ -4,6 +4,7 @@ program test_lockfree_countdown;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.lockfree.countdown,
   nextpas.core.lockfree,
   nextpas.core.test;
@@ -126,6 +127,36 @@ begin
   end;
 end;
 
+procedure TestCountdownTimeoutMustBePositive;
+var
+  Latch: TCountDownLatch;
+  LGotZeroError: Boolean;
+  LGotNegativeError: Boolean;
+begin
+  Latch := TCountDownLatch.Create(1);
+  try
+    LGotZeroError := False;
+    try
+      Latch.WaitTimeout(0);
+    except
+      on E: EArgumentError do
+        LGotZeroError := True;
+    end;
+    Check(LGotZeroError, 'WaitTimeout(0) must raise EArgumentError');
+
+    LGotNegativeError := False;
+    try
+      Latch.WaitTimeout(-1);
+    except
+      on E: EArgumentError do
+        LGotNegativeError := True;
+    end;
+    Check(LGotNegativeError, 'WaitTimeout(-1) must raise EArgumentError');
+  finally
+    Latch.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_countdown ===');
   WriteLn;
@@ -150,6 +181,9 @@ begin
 
   TestCountdownDoesNotUnderflow;
   WriteLn('  + No underflow');
+
+  TestCountdownTimeoutMustBePositive;
+  WriteLn('  + Positive timeout validation');
 
   WriteLn;
   WriteLn('All countdown latch tests passed!');

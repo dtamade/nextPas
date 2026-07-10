@@ -8,7 +8,9 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  TCRDTResult = (crOk, crNotFound, crClosed);
+  TCRDTResult = (crOk, crNotFound, crClosed, crInvalid);
+
+  TInt64Array = array of Int64;
 
   {** @desc G-Counter (只增计数器)
     @details 多节点合并取最大值。每个节点独立计数，合并时取各节点最大值之和。
@@ -22,6 +24,7 @@ type
     FLock: Int32;
     procedure Lock;
     procedure Unlock;
+    procedure Snapshot(out ANodes: TInt64Array);
   public
     constructor Create(ANodeCount: Int32);
     function Increment(ANodeId: Int32; AAmount: Int64): TCRDTResult;
@@ -64,6 +67,7 @@ type
     FLock: Int32;
     procedure Lock;
     procedure Unlock;
+    procedure Snapshot(out AValue: AnsiString; out ATimestamp: Int64);
   public
     constructor Create;
     function Assign(const AValue: AnsiString; ATimestamp: Int64): TCRDTResult;
@@ -78,12 +82,15 @@ type
       使用唯一标签避免删除丢失。
   }
   TORSet = class
-  private
-    FAddSet: array of record
+  private type
+    TEntry = record
       Value: AnsiString;
       Tag: UInt64;
       Removed: Boolean;
     end;
+    TEntries = array of TEntry;
+  private
+    FAddSet: TEntries;
     FCount: Int32;
     FCapacity: Int32;
     FClosed: Int32;
@@ -93,6 +100,7 @@ type
     function FindIndex(const AValue: AnsiString; ATag: UInt64): Int32;
     procedure Lock;
     procedure Unlock;
+    procedure Snapshot(out AEntries: TEntries);
   public
     constructor Create;
     function Add(const AValue: AnsiString): TCRDTResult;
@@ -108,7 +116,15 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.atomic;
+
+function TryAddCounterValue(var ATotal: Int64; AValue: Int64): Boolean;
+begin
+  Result := (AValue >= 0) and (AValue <= High(Int64) - ATotal);
+  if Result then
+    ATotal := ATotal + AValue;
+end;
 
 { TGCounter }
 
@@ -117,6 +133,8 @@ var
   LI: Int32;
 begin
   inherited Create;
+  if ANodeCount <= 0 then
+    raise EArgumentError.Create('TGCounter: node count must be positive');
   FNodeCount := ANodeCount;
   SetLength(FNodes, FNodeCount);
   for LI := 0 to FNodeCount - 1 do
@@ -136,14 +154,39 @@ begin
   AtomicStore32(FLock, 0, moRelease);
 end;
 
+procedure TGCounter.Snapshot(out ANodes: TInt64Array);
+var
+  LI: Int32;
+begin
+  Lock;
+  try
+    SetLength(ANodes, FNodeCount);
+    for LI := 0 to FNodeCount - 1 do
+      ANodes[LI] := FNodes[LI];
+  finally
+    Unlock;
+  end;
+end;
+
 function TGCounter.Increment(ANodeId: Int32; AAmount: Int64): TCRDTResult;
+var
+  LI: Int32;
+  LTotal: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(crClosed);
   if (ANodeId < 0) or (ANodeId >= FNodeCount) then
     Exit(crNotFound);
+  if AAmount < 0 then
+    Exit(crInvalid);
   Lock;
   try
+    LTotal := 0;
+    for LI := 0 to FNodeCount - 1 do
+      if not TryAddCounterValue(LTotal, FNodes[LI]) then
+        Exit(crInvalid);
+    if AAmount > High(Int64) - LTotal then
+      Exit(crInvalid);
     FNodes[ANodeId] := FNodes[ANodeId] + AAmount;
     Result := crOk;
   finally
@@ -167,11 +210,12 @@ end;
 
 function TGCounter.NodeValue(ANodeId: Int32): Int64;
 begin
-  if (ANodeId < 0) or (ANodeId >= FNodeCount) then
-    Exit(0);
   Lock;
   try
-    Result := FNodes[ANodeId];
+    if (ANodeId < 0) or (ANodeId >= FNodeCount) then
+      Result := 0
+    else
+      Result := FNodes[ANodeId];
   finally
     Unlock;
   end;
@@ -179,24 +223,42 @@ end;
 
 procedure TGCounter.Merge(const AOther: TGCounter);
 var
-  LI: Int32;
-  LOther: Int64;
+  LI, LJoinedCount: Int32;
+  LJoinedValue, LTotal: Int64;
+  LOtherNodes: TInt64Array;
 begin
-  if AOther = nil then
+  if (AOther = nil) or (AOther = Self) then
     Exit;
+  AOther.Snapshot(LOtherNodes);
   Lock;
-  AOther.Lock;
   try
-    for LI := 0 to FNodeCount - 1 do
+    LJoinedCount := FNodeCount;
+    if Length(LOtherNodes) > LJoinedCount then
+      LJoinedCount := Length(LOtherNodes);
+    LTotal := 0;
+    for LI := 0 to LJoinedCount - 1 do
     begin
-      if LI >= AOther.FNodeCount then
-        Break;
-      LOther := AOther.FNodes[LI];
-      if LOther > FNodes[LI] then
-        FNodes[LI] := LOther;
+      if LI < FNodeCount then
+        LJoinedValue := FNodes[LI]
+      else
+        LJoinedValue := 0;
+      if (LI < Length(LOtherNodes)) and
+         (LOtherNodes[LI] > LJoinedValue) then
+        LJoinedValue := LOtherNodes[LI];
+      if not TryAddCounterValue(LTotal, LJoinedValue) then
+        raise EArgumentError.Create(
+          'TGCounter: merged value exceeds Int64 range');
     end;
+
+    if Length(LOtherNodes) > FNodeCount then
+    begin
+      SetLength(FNodes, Length(LOtherNodes));
+      FNodeCount := Length(LOtherNodes);
+    end;
+    for LI := 0 to High(LOtherNodes) do
+      if LOtherNodes[LI] > FNodes[LI] then
+        FNodes[LI] := LOtherNodes[LI];
   finally
-    AOther.Unlock;
     Unlock;
   end;
 end;
@@ -287,13 +349,25 @@ begin
   AtomicStore32(FLock, 0, moRelease);
 end;
 
+procedure TLWWRegister.Snapshot(out AValue: AnsiString; out ATimestamp: Int64);
+begin
+  Lock;
+  try
+    AValue := FValue;
+    ATimestamp := FTimestamp;
+  finally
+    Unlock;
+  end;
+end;
+
 function TLWWRegister.Assign(const AValue: AnsiString; ATimestamp: Int64): TCRDTResult;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(crClosed);
   Lock;
   try
-    if ATimestamp > FTimestamp then
+    if (ATimestamp > FTimestamp) or
+       ((ATimestamp = FTimestamp) and (AValue > FValue)) then
     begin
       FValue := AValue;
       FTimestamp := ATimestamp;
@@ -316,19 +390,22 @@ begin
 end;
 
 procedure TLWWRegister.Merge(const AOther: TLWWRegister);
+var
+  LOtherValue: AnsiString;
+  LOtherTimestamp: Int64;
 begin
-  if AOther = nil then
+  if (AOther = nil) or (AOther = Self) then
     Exit;
+  AOther.Snapshot(LOtherValue, LOtherTimestamp);
   Lock;
-  AOther.Lock;
   try
-    if AOther.FTimestamp > FTimestamp then
+    if (LOtherTimestamp > FTimestamp) or
+       ((LOtherTimestamp = FTimestamp) and (LOtherValue > FValue)) then
     begin
-      FValue := AOther.FValue;
-      FTimestamp := AOther.FTimestamp;
+      FValue := LOtherValue;
+      FTimestamp := LOtherTimestamp;
     end;
   finally
-    AOther.Unlock;
     Unlock;
   end;
 end;
@@ -364,6 +441,20 @@ end;
 procedure TORSet.Unlock;
 begin
   AtomicStore32(FLock, 0, moRelease);
+end;
+
+procedure TORSet.Snapshot(out AEntries: TEntries);
+var
+  LI: Int32;
+begin
+  Lock;
+  try
+    SetLength(AEntries, FCount);
+    for LI := 0 to FCount - 1 do
+      AEntries[LI] := FAddSet[LI];
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TORSet.Grow;
@@ -460,27 +551,28 @@ end;
 
 procedure TORSet.Merge(const AOther: TORSet);
 var
-  LI: Int32;
+  LEntries: TEntries;
+  LI, LIdx: Int32;
 begin
-  if AOther = nil then
+  if (AOther = nil) or (AOther = Self) then
     Exit;
+  AOther.Snapshot(LEntries);
   Lock;
-  AOther.Lock;
   try
-    for LI := 0 to AOther.FCount - 1 do
+    for LI := 0 to High(LEntries) do
     begin
-      if FindIndex(AOther.FAddSet[LI].Value, AOther.FAddSet[LI].Tag) < 0 then
+      LIdx := FindIndex(LEntries[LI].Value, LEntries[LI].Tag);
+      if LIdx < 0 then
       begin
         if FCount >= FCapacity then
           Grow;
-        FAddSet[FCount] := AOther.FAddSet[LI];
+        FAddSet[FCount] := LEntries[LI];
         Inc(FCount);
       end
-      else if AOther.FAddSet[LI].Removed then
-        FAddSet[FindIndex(AOther.FAddSet[LI].Value, AOther.FAddSet[LI].Tag)].Removed := True;
+      else if LEntries[LI].Removed then
+        FAddSet[LIdx].Removed := True;
     end;
   finally
-    AOther.Unlock;
     Unlock;
   end;
 end;

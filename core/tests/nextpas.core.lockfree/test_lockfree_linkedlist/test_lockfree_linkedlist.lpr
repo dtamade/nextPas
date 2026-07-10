@@ -3,14 +3,83 @@ program test_lockfree_linkedlist;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,
+  Classes,
   SysUtils,
+  nextpas.core.atomic,
   nextpas.core.lockfree.linkedlist;
 
 type
   TIntLinkedList = specialize TConcurrentLinkedListImpl<Integer>;
 
+  TListWriterThread = class(TThread)
+  private
+    FList: TIntLinkedList;
+    FIterations: Int32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AList: TIntLinkedList; AIterations: Int32);
+  end;
+
+  TListReaderThread = class(TThread)
+  private
+    FList: TIntLinkedList;
+    FIterations: Int32;
+    FInvalidOutput: PInt32;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AList: TIntLinkedList; AIterations: Int32;
+      AInvalidOutput: PInt32);
+  end;
+
 var
   GTests, GPassed: Integer;
+
+constructor TListWriterThread.Create(AList: TIntLinkedList;
+  AIterations: Int32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FList := AList;
+  FIterations := AIterations;
+end;
+
+procedure TListWriterThread.Execute;
+var
+  LI, LValue: Int32;
+begin
+  for LI := 1 to FIterations do
+  begin
+    LValue := LI mod 64;
+    FList.Insert(LValue);
+    FList.Remove(LValue);
+  end;
+end;
+
+constructor TListReaderThread.Create(AList: TIntLinkedList;
+  AIterations: Int32; AInvalidOutput: PInt32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FList := AList;
+  FIterations := AIterations;
+  FInvalidOutput := AInvalidOutput;
+end;
+
+procedure TListReaderThread.Execute;
+var
+  LI, LValue: Int32;
+begin
+  for LI := 1 to FIterations do
+  begin
+    FList.Contains(LI mod 64);
+    LValue := -1;
+    if (not FList.Get(0, LValue)) and (LValue <> 0) then
+      AtomicStore32(FInvalidOutput^, 1, moRelease);
+  end;
+end;
 
 procedure Check(ACond: Boolean; const AName: string);
 begin
@@ -143,7 +212,9 @@ begin
   WriteLn('--- TestGet ---');
   LL := TIntLinkedList.Create;
   try
+    LVal := 123;
     Check(not LL.Get(0, LVal), 'get from empty');
+    Check(LVal = 0, 'failed get clears output');
     LL.Insert(10);
     LL.Insert(20);
     Check(LL.Get(0, LVal) and (LVal = 10), 'get 0');
@@ -151,6 +222,36 @@ begin
     Check(not LL.Get(2, LVal), 'get out of range');
     Check(not LL.Get(-1, LVal), 'get negative');
   finally
+    LL.Free;
+  end;
+end;
+
+procedure TestConcurrentReadWrite;
+const
+  ITERATIONS = 20000;
+var
+  LL: TIntLinkedList;
+  LWriter: TListWriterThread;
+  LReader: TListReaderThread;
+  LInvalidOutput: Int32;
+begin
+  WriteLn('--- TestConcurrentReadWrite ---');
+  LL := TIntLinkedList.Create;
+  LWriter := nil;
+  LReader := nil;
+  try
+    LInvalidOutput := 0;
+    LWriter := TListWriterThread.Create(LL, ITERATIONS);
+    LReader := TListReaderThread.Create(LL, ITERATIONS, @LInvalidOutput);
+    LWriter.Start;
+    LReader.Start;
+    LWriter.WaitFor;
+    LReader.WaitFor;
+    Check(AtomicLoad32(LInvalidOutput, moAcquire) = 0,
+      'Concurrent failed reads keep deterministic output');
+  finally
+    LWriter.Free;
+    LReader.Free;
     LL.Free;
   end;
 end;
@@ -224,6 +325,7 @@ begin
   TestRemoveHead;
   TestRemoveAll;
   TestGet;
+  TestConcurrentReadWrite;
   TestClear;
   TestManyInserts;
   TestInsertRemoveInsert;

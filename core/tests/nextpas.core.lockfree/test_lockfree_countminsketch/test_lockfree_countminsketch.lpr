@@ -111,6 +111,23 @@ begin
   end;
 end;
 
+procedure Test_CounterSaturatesInsteadOfWrapping;
+var
+  LSketch: TCountMinSketch;
+begin
+  WriteLn('--- Counter Saturation ---');
+  LSketch := TCountMinSketch.Create(4, 1024);
+  try
+    LSketch.Add('overflow', High(Int32));
+    Check(LSketch.Estimate('overflow') = High(Int32), 'counter reaches Int32 maximum');
+    LSketch.Add('overflow', 1);
+    Check(LSketch.Estimate('overflow') = High(Int32),
+      'counter saturates instead of wrapping negative');
+  finally
+    LSketch.Free;
+  end;
+end;
+
 begin
   GPassed := 0;
   GFailed := 0;
@@ -121,6 +138,7 @@ begin
   Test_Reset;
   Test_Dimensions;
   Test_OverEstimate;
+  Test_CounterSaturatesInsteadOfWrapping;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPassed, GFailed]));

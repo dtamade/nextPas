@@ -2,6 +2,7 @@
 program test_lockfree_ttl_cache;
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.ttl_cache;
 
@@ -130,6 +131,40 @@ begin
   end;
 end;
 
+procedure Test_ExpiredEntryCleanup;
+var
+  LCache: TTTLCache;
+  LVal: AnsiString;
+begin
+  WriteLn('--- ExpiredEntryCleanup ---');
+  LCache := TTTLCache.Create(4, 60000);
+  try
+    Check(LCache.PutWithTTL('short', 'value', 1) = ttlOk, 'put short ttl');
+    Sleep(5);
+    Check(LCache.Get('short', LVal) = ttlExpired, 'expired get removes entry');
+    Check(LCache.Count = 0, 'expired entry decrements count');
+  finally
+    LCache.Free;
+  end;
+end;
+
+procedure Test_DeadlineAndDefaultTTLContracts;
+var
+  LSource: TStringList;
+begin
+  WriteLn('--- DeadlineAndDefaultTTLContracts ---');
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.ttl_cache.pas');
+    Check(Pos('AtomicLoad64(FDefaultTTL, moAcquire)', LSource.Text) > 0,
+      'default TTL is read atomically');
+    Check(Pos('ATTLMs > High(Int64) - ANow', LSource.Text) > 0,
+      'expiration deadline addition is saturated');
+  finally
+    LSource.Free;
+  end;
+end;
+
 procedure Test_MultipleKeys;
 var
   LCache: TTTLCache;
@@ -162,6 +197,8 @@ begin
   Test_Remove;
   Test_Eviction;
   Test_CustomTTL;
+  Test_ExpiredEntryCleanup;
+  Test_DeadlineAndDefaultTTLContracts;
   Test_MultipleKeys;
 
   WriteLn;

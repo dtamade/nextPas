@@ -47,6 +47,7 @@ type
     procedure Lock; inline;
     procedure Unlock; inline;
     function FindNode(AId: Int32): Int32;
+    procedure ValidateCounter(ACounter: Int64);
     procedure Snapshot(out AEntries: array of TVVEntry; out ACount: Int32);
   public
     constructor Create;
@@ -109,12 +110,20 @@ begin
   Result := -1;
 end;
 
+procedure TVersionVector.ValidateCounter(ACounter: Int64);
+begin
+  if ACounter < 0 then
+    raise EArgumentError.Create('TVersionVector: counter must be non-negative');
+end;
+
 procedure TVersionVector.Snapshot(out AEntries: array of TVVEntry; out ACount: Int32);
 var
   LI: Int32;
 begin
   Lock;
   try
+    if Length(AEntries) < FCount then
+      raise EArgumentError.Create('TVersionVector: destination is too small');
     ACount := FCount;
     for LI := 0 to FCount - 1 do
       AEntries[LI] := FEntries[LI];
@@ -131,7 +140,11 @@ begin
   try
     LIdx := FindNode(AId);
     if LIdx >= 0 then
+    begin
+      if FEntries[LIdx].Counter = High(Int64) then
+        raise EArgumentError.Create('TVersionVector: counter overflow');
       Inc(FEntries[LIdx].Counter)
+    end
     else if FCount < VV_MAX_NODES then
     begin
       FEntries[FCount].NodeId := AId;
@@ -149,6 +162,7 @@ procedure TVersionVector.SetCounter(AId: Int32; ACounter: Int64);
 var
   LIdx: Int32;
 begin
+  ValidateCounter(ACounter);
   Lock;
   try
     LIdx := FindNode(AId);
@@ -241,13 +255,33 @@ procedure TVersionVector.Merge(AOther: TVersionVector);
 var
   LOtherEntries: array[0..VV_MAX_NODES - 1] of TVVEntry;
   LOtherCount: Int32;
-  LI, LIdx: Int32;
+  LI, LJ, LIdx, LNewCount: Int32;
+  LKnown: Boolean;
 begin
   if AOther = nil then
     Exit;
   AOther.Snapshot(LOtherEntries, LOtherCount);
   Lock;
   try
+    LNewCount := 0;
+    for LI := 0 to LOtherCount - 1 do
+    begin
+      LKnown := FindNode(LOtherEntries[LI].NodeId) >= 0;
+      if not LKnown then
+      begin
+        for LJ := 0 to LI - 1 do
+          if LOtherEntries[LJ].NodeId = LOtherEntries[LI].NodeId then
+          begin
+            LKnown := True;
+            Break;
+          end;
+        if not LKnown then
+          Inc(LNewCount);
+      end;
+    end;
+    if LNewCount > VV_MAX_NODES - FCount then
+      raise EArgumentError.Create('TVersionVector: max nodes reached during merge');
+
     for LI := 0 to LOtherCount - 1 do
     begin
       LIdx := FindNode(LOtherEntries[LI].NodeId);
@@ -256,7 +290,7 @@ begin
         if LOtherEntries[LI].Counter > FEntries[LIdx].Counter then
           FEntries[LIdx].Counter := LOtherEntries[LI].Counter;
       end
-      else if FCount < VV_MAX_NODES then
+      else
       begin
         FEntries[FCount].NodeId := LOtherEntries[LI].NodeId;
         FEntries[FCount].Counter := LOtherEntries[LI].Counter;

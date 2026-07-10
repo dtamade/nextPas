@@ -10,10 +10,21 @@ uses
 
 var
   GSum: Int64;
+  GMutatingTreap: TConcurrentTreap;
+  GMutationAttempted: Boolean;
 
 procedure SumCallback(AKey, AValue: Int64);
 begin
   GSum := GSum + AValue;
+end;
+
+procedure MutatingCallback(AKey, AValue: Int64);
+begin
+  if not GMutationAttempted then
+  begin
+    GMutationAttempted := True;
+    GMutatingTreap.Insert(99, 990);
+  end;
 end;
 
 procedure TestTreapBasic;
@@ -113,6 +124,25 @@ begin
   end;
 end;
 
+procedure TestTreapForEachAllowsMutation;
+var
+  LTreap: TConcurrentTreap;
+begin
+  LTreap := TConcurrentTreap.Create;
+  try
+    LTreap.Insert(1, 10);
+    LTreap.Insert(2, 20);
+    GMutatingTreap := LTreap;
+    GMutationAttempted := False;
+    LTreap.ForEach(@MutatingCallback);
+    Check(GMutationAttempted, 'Callback should run');
+    Check(LTreap.Contains(99), 'Callback insertion should complete');
+  finally
+    GMutatingTreap := nil;
+    LTreap.Free;
+  end;
+end;
+
 procedure TestTreapClose;
 var
   LTreap: TConcurrentTreap;
@@ -166,6 +196,9 @@ begin
 
   TestTreapForEach;
   WriteLn('  + ForEach');
+
+  TestTreapForEachAllowsMutation;
+  WriteLn('  + ForEach callback mutation');
 
   TestTreapClose;
   WriteLn('  + Close semantics');

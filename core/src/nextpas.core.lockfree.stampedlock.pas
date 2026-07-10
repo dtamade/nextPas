@@ -225,17 +225,28 @@ begin
 end;
 
 procedure TStampedLock.UnlockRead(const AStamp: Int64);
+var
+  LState: Int64;
 begin
-  if AStamp = 0 then
+  if (AStamp = 0) or ((AStamp and STAMPED_LOCK_WRITE_BIT) <> 0) or
+     ((AStamp and STAMPED_LOCK_READERS_MASK) = 0) then
     Exit;
-  AtomicFetchSub64(FState, STAMPED_LOCK_READ_UNIT, moRelease);
+  repeat
+    LState := AtomicLoad64(FState, moAcquire);
+    if ((LState and STAMPED_LOCK_WRITE_BIT) <> 0) or
+       ((LState and STAMPED_LOCK_READERS_MASK) = 0) or
+       ((LState and STAMPED_LOCK_VERSION_MASK) <>
+        (AStamp and STAMPED_LOCK_VERSION_MASK)) then
+      Exit;
+  until AtomicCompareExchange64(FState, LState,
+    LState - STAMPED_LOCK_READ_UNIT, moRelease) = LState;
 end;
 
 procedure TStampedLock.UnlockWrite(const AStamp: Int64);
 begin
-  if AStamp = 0 then
+  if (AStamp = 0) or ((AStamp and STAMPED_LOCK_WRITE_BIT) = 0) then
     Exit;
-  AtomicFetchAdd64(FState, 1, moRelease);
+  AtomicCompareExchange64(FState, AStamp, AStamp + 1, moRelease);
 end;
 
 procedure TStampedLock.Close;

@@ -33,7 +33,7 @@ type
     FLeakRate: Double;     { units per second }
     FBucketSize: Double;   { max water level }
     FLevel: Double;        { current water level }
-    FLastLeakNs: Int64;
+    FLastLeakNs: UInt64;
     FLock: Int32;
     FClosed: Int32;
     procedure Lock;
@@ -53,20 +53,22 @@ type
 implementation
 
 uses
+  Math,
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.time.base;
+  nextpas.core.platform.time;
 
-function GetNowNs: Int64;
+function GetNowNs: UInt64;
 begin
-  Result := TInstant.Now.Elapsed.AsNanoseconds;
+  Result := platform_monotonic_ns;
 end;
 
 constructor TLeakyBucket.Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
 begin
-  if ALeakRatePerSecond <= 0 then
+  if IsNan(ALeakRatePerSecond) or IsInfinite(ALeakRatePerSecond) or
+     (ALeakRatePerSecond <= 0) then
     raise EArgumentError.Create('TLeakyBucket: leak rate must be > 0');
-  if ABucketSize <= 0 then
+  if IsNan(ABucketSize) or IsInfinite(ABucketSize) or (ABucketSize <= 0) then
     raise EArgumentError.Create('TLeakyBucket: bucket size must be > 0');
   inherited Create;
   FLeakRate := ALeakRatePerSecond;
@@ -79,7 +81,7 @@ end;
 
 procedure TLeakyBucket.Lock;
 begin
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -90,19 +92,22 @@ end;
 
 procedure TLeakyBucket.Leak;
 var
-  LNowNs: Int64;
+  LNowNs: UInt64;
+  LElapsedNs: UInt64;
   LElapsed: Double;
-  LLeaked: Double;
 begin
   LNowNs := GetNowNs;
-  LElapsed := (LNowNs - FLastLeakNs) / 1000000000.0;
-  if LElapsed <= 0 then
+  if LNowNs <= FLastLeakNs then
     Exit;
-  LLeaked := LElapsed * FLeakRate;
-  FLevel := FLevel - LLeaked;
-  if FLevel < 0 then
-    FLevel := 0;
+  LElapsedNs := LNowNs - FLastLeakNs;
   FLastLeakNs := LNowNs;
+  if FLevel <= 0 then
+    Exit;
+  LElapsed := Double(LElapsedNs) / 1000000000.0;
+  if LElapsed >= FLevel / FLeakRate then
+    FLevel := 0;
+  if FLevel > 0 then
+    FLevel := FLevel - LElapsed * FLeakRate;
 end;
 
 function TLeakyBucket.TryAdd: TLeakyBucketResult;
@@ -112,14 +117,16 @@ end;
 
 function TLeakyBucket.TryAddN(const AN: Double): TLeakyBucketResult;
 begin
-  if AN <= 0 then
+  if IsNan(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TLeakyBucket.TryAddN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(lbClosed);
   Lock;
   try
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(lbClosed);
     Leak;
-    if FLevel + AN <= FBucketSize then
+    if AN <= FBucketSize - FLevel then
     begin
       FLevel := FLevel + AN;
       Result := lbAllowed;
@@ -133,7 +140,12 @@ end;
 
 procedure TLeakyBucket.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  Lock;
+  try
+    AtomicStore32(FClosed, 1, moRelease);
+  finally
+    Unlock;
+  end;
 end;
 
 function TLeakyBucket.IsClosed: Boolean;

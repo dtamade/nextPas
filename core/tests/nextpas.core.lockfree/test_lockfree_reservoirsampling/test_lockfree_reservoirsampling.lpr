@@ -3,6 +3,7 @@ program test_lockfree_reservoirsampling;
 {$mode objfpc}{$H+}
 
 uses
+  Classes,
   SysUtils,
   nextpas.core.lockfree.reservoirsampling,
   nextpas.core.test;
@@ -100,6 +101,62 @@ begin
   end;
 end;
 
+procedure TestRecreatedSamplersUseDistinctStreams;
+var
+  LFirst: TIntReservoir;
+  LSecond: TIntReservoir;
+  LFirstSample: array of Int64;
+  LSecondSample: array of Int64;
+  LI: Integer;
+  LIdentical: Boolean;
+begin
+  LFirst := TIntReservoir.Create(16);
+  try
+    for LI := 1 to 256 do
+      LFirst.Add(LI);
+    LFirst.GetSample(LFirstSample);
+  finally
+    LFirst.Free;
+  end;
+
+  LSecond := TIntReservoir.Create(16);
+  try
+    for LI := 1 to 256 do
+      LSecond.Add(LI);
+    LSecond.GetSample(LSecondSample);
+  finally
+    LSecond.Free;
+  end;
+
+  LIdentical := Length(LFirstSample) = Length(LSecondSample);
+  if LIdentical then
+    for LI := 0 to High(LFirstSample) do
+      if LFirstSample[LI] <> LSecondSample[LI] then
+      begin
+        LIdentical := False;
+        Break;
+      end;
+  Check(not LIdentical, 'Recreated samplers must not repeat the same PRNG stream');
+end;
+
+procedure TestReservoirUsesUnbiasedUInt64Draws;
+var
+  LSource: TStringList;
+begin
+  LSource := TStringList.Create;
+  try
+    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.reservoirsampling.pas');
+    Check(Pos('function NextRandom: UInt64', LSource.Text) > 0,
+      'Reservoir PRNG must expose all 64 random bits');
+    Check(Pos('function NextRandomBounded', LSource.Text) > 0,
+      'Reservoir must use rejection sampling for bounded draws');
+    Check(Pos('mod UInt32(LIdx + 1)', LSource.Text) = 0,
+      'Reservoir stream bound must not narrow at 2^32');
+  finally
+    LSource.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_reservoirsampling ===');
   WriteLn;
@@ -118,6 +175,12 @@ begin
 
   TestClear;
   WriteLn('  + Clear');
+
+  TestRecreatedSamplersUseDistinctStreams;
+  WriteLn('  + Recreated sampler seed diversity');
+
+  TestReservoirUsesUnbiasedUInt64Draws;
+  WriteLn('  + Unbiased UInt64 bounded draws');
 
   WriteLn;
   WriteLn('All reservoir sampling tests passed!');

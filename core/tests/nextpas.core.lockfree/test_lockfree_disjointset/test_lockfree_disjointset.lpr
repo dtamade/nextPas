@@ -3,11 +3,68 @@ program test_lockfree_disjointset;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,
+  Classes,
   SysUtils,
+  nextpas.core.atomic,
   nextpas.core.lockfree.disjointset;
 
 var
   GTests, GPassed: Integer;
+
+type
+  TUnionThread = class(TThread)
+  private
+    FSet: TLockFreeDisjointSet;
+    FPairCount: Int32;
+    FReverse: Boolean;
+    FReady, FStart, FDone: PInt32;
+    FResults: array of TLockFreeDisjointSetResult;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ASet: TLockFreeDisjointSet; APairCount: Int32;
+      AReverse: Boolean; AReady, AStart, ADone: PInt32);
+    function ResultAt(AIndex: Int32): TLockFreeDisjointSetResult;
+  end;
+
+constructor TUnionThread.Create(ASet: TLockFreeDisjointSet;
+  APairCount: Int32; AReverse: Boolean; AReady, AStart, ADone: PInt32);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FSet := ASet;
+  FPairCount := APairCount;
+  FReverse := AReverse;
+  FReady := AReady;
+  FStart := AStart;
+  FDone := ADone;
+  SetLength(FResults, APairCount);
+end;
+
+procedure TUnionThread.Execute;
+var
+  LI, LLeft, LRight: Int32;
+begin
+  for LI := 0 to FPairCount - 1 do
+  begin
+    AtomicFetchAdd32(FReady^, 1, moAcqRel);
+    while AtomicLoad32(FStart^, moAcquire) <= LI do
+      CpuPause;
+    LLeft := LI * 2;
+    LRight := LLeft + 1;
+    if FReverse then
+      FResults[LI] := FSet.Union(LRight, LLeft)
+    else
+      FResults[LI] := FSet.Union(LLeft, LRight);
+    AtomicFetchAdd32(FDone^, 1, moAcqRel);
+  end;
+end;
+
+function TUnionThread.ResultAt(AIndex: Int32): TLockFreeDisjointSetResult;
+begin
+  Result := FResults[AIndex];
+end;
 
 procedure Check(ACond: Boolean; const AName: string);
 begin
@@ -175,6 +232,10 @@ begin
     Check(DS.Find(999) = -1, 'find nonexistent');
     Check(DS.Union(999, 0) = dsNotFound, 'union nonexistent');
     Check(DS.Union(0, 999) = dsNotFound, 'union nonexistent reverse');
+    Check(not DS.Connected(999, 1000),
+      'distinct missing elements are not connected');
+    Check(not DS.Connected(-1, -2),
+      'negative missing elements are not connected');
   finally
     DS.Free;
   end;
@@ -206,6 +267,59 @@ begin
   end;
 end;
 
+procedure TestConcurrentOppositeUnion;
+const
+  PAIR_COUNT = 2000;
+var
+  DS: TLockFreeDisjointSet;
+  LForward, LReverse: TUnionThread;
+  LReady, LStart, LDone, LI: Int32;
+  LValid: Boolean;
+begin
+  WriteLn('--- TestConcurrentOppositeUnion ---');
+  DS := TLockFreeDisjointSet.Create(16);
+  LForward := nil;
+  LReverse := nil;
+  try
+    for LI := 1 to PAIR_COUNT * 2 do
+      DS.MakeSet;
+    LReady := 0;
+    LStart := 0;
+    LDone := 0;
+    LForward := TUnionThread.Create(DS, PAIR_COUNT, False,
+      @LReady, @LStart, @LDone);
+    LReverse := TUnionThread.Create(DS, PAIR_COUNT, True,
+      @LReady, @LStart, @LDone);
+    LForward.Start;
+    LReverse.Start;
+    for LI := 0 to PAIR_COUNT - 1 do
+    begin
+      while AtomicLoad32(LReady, moAcquire) < (LI + 1) * 2 do
+        CpuPause;
+      AtomicStore32(LStart, LI + 1, moRelease);
+      while AtomicLoad32(LDone, moAcquire) < (LI + 1) * 2 do
+        CpuPause;
+    end;
+    LForward.WaitFor;
+    LReverse.WaitFor;
+
+    LValid := True;
+    for LI := 0 to PAIR_COUNT - 1 do
+      if ((LForward.ResultAt(LI) = dsOk) and
+          (LReverse.ResultAt(LI) = dsOk)) or
+         (not DS.Connected(LI * 2, LI * 2 + 1)) then
+      begin
+        LValid := False;
+        Break;
+      end;
+    Check(LValid, 'Concurrent opposite unions preserve a rooted forest');
+  finally
+    LForward.Free;
+    LReverse.Free;
+    DS.Free;
+  end;
+end;
+
 begin
   GTests := 0;
   GPassed := 0;
@@ -218,6 +332,7 @@ begin
   TestLargeScale;
   TestNotFound;
   TestStress;
+  TestConcurrentOppositeUnion;
 
   WriteLn;
   WriteLn(GPassed, '/', GTests, ' tests passed');

@@ -3,9 +3,11 @@ program test_lockfree_ratelimit;
 {$mode objfpc}{$H+}
 
 uses
+  Math,
   SysUtils,
   nextpas.core.lockfree.ratelimit,
   nextpas.core.lockfree,
+  nextpas.core.errors,
   nextpas.core.test;
 
 procedure TestRateLimiterBasic;
@@ -102,6 +104,47 @@ begin
   end;
 end;
 
+procedure TestRateLimiterRefillsFromElapsedTime;
+var
+  LLimiter: TTokenBucketLimiter;
+begin
+  LLimiter := TTokenBucketLimiter.Create(20.0, 1.0);
+  try
+    Check(LLimiter.TryAcquire = rlAllowed, 'Initial burst token should be available');
+    Check(LLimiter.TryAcquire = rlRejected, 'Exhausted bucket should reject');
+    Sleep(60);
+    Check(LLimiter.TryAcquire = rlAllowed, 'Elapsed time should refill one token');
+  finally
+    LLimiter.Free;
+  end;
+end;
+
+procedure TestRateLimiterRejectsNonFiniteInputs;
+var
+  LLimiter: TTokenBucketLimiter;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    LLimiter := TTokenBucketLimiter.Create(NaN, 1.0);
+    LLimiter.Free;
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'NaN rate must be rejected');
+
+  LRaised := False;
+  try
+    LLimiter := TTokenBucketLimiter.Create(1.0, Infinity);
+    LLimiter.Free;
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Infinite burst must be rejected');
+end;
+
 begin
   WriteLn('=== test_lockfree_ratelimit ===');
   WriteLn;
@@ -117,6 +160,12 @@ begin
 
   TestRateLimiterAcquireN;
   WriteLn('  + AcquireN');
+
+  TestRateLimiterRejectsNonFiniteInputs;
+  WriteLn('  + Finite input validation');
+
+  TestRateLimiterRefillsFromElapsedTime;
+  WriteLn('  + Elapsed-time refill');
 
   WriteLn;
   WriteLn('All rate limiter tests passed!');
