@@ -289,6 +289,16 @@ begin
     Result := ARight;
 end;
 
+{ RFC 9113 §6.5.2: SETTINGS_MAX_CONCURRENT_STREAMS default is100.
+  A value of0 means "not advertised" and should use the RFC default. }
+function EffectiveMaxConcurrentStreams(const ASettings: TH2Settings): UInt32;
+begin
+  if ASettings.MaxConcurrentStreams = 0 then
+    Result := 100
+  else
+    Result := ASettings.MaxConcurrentStreams;
+end;
+
 function AnsiToString(const AValue: AnsiString): string; inline;
 begin
   Result := string(AValue);
@@ -963,8 +973,7 @@ begin
   begin
     if AFrame.Header.StreamID <= FLastSeenPeerStreamID then
       Exit(RejectFrame(AFrame.Header.StreamID, H2_ERR_STREAM_CLOSED, False));
-    if (FLocalSettings.MaxConcurrentStreams > 0) and
-       (FStreams.ActiveCount >= FLocalSettings.MaxConcurrentStreams) then
+    if FStreams.ActiveCount >= EffectiveMaxConcurrentStreams(FLocalSettings) then
     begin
       QueueRstStream(AFrame.Header.StreamID, H2_ERR_REFUSED_STREAM);
       Exit(True);

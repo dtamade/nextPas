@@ -364,8 +364,14 @@ begin
       LRest := '';
     end;
 
-    // Check for userinfo (@)
-    LAtPos := Pos('@', LAuthority);
+    // Check for userinfo (@) — use last @ per RFC 3986
+    LAtPos := 0;
+    for LI := Length(LAuthority) downto 1 do
+      if LAuthority[LI] = '@' then
+      begin
+        LAtPos := LI;
+        Break;
+      end;
     if LAtPos > 0 then
     begin
       Result.UserInfo := Copy(LAuthority, 1, LAtPos - 1);
