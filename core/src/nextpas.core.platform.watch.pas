@@ -29,6 +29,18 @@ type
     Modified: Boolean;
     Created: Boolean;
     Deleted: Boolean;
+    {** @desc 检查是否有任何事件
+        @return True 如果有任何事件 *}
+    function HasAnyEvent: Boolean; inline;
+    {** @desc 检查是否为文件修改事件
+        @return True 如果是修改事件 *}
+    function IsFileModified: Boolean; inline;
+    {** @desc 检查是否为目录修改事件
+        @return True 如果是目录修改事件 *}
+    function IsDirModified: Boolean; inline;
+    {** @desc 获取文件名字符串（带长度）
+        @return 文件名字符串切片 *}
+    function NameStr: AnsiString;
   end;
 
 {** @desc 创建文件系统监视器
@@ -69,6 +81,26 @@ uses
 function TPlatformWatcher.IsValid: Boolean;
 begin
   Result := Fd >= 0;
+end;
+
+function TPlatformWatchEvent.HasAnyEvent: Boolean;
+begin
+  Result := Modified or Created or Deleted;
+end;
+
+function TPlatformWatchEvent.IsFileModified: Boolean;
+begin
+  Result := Modified and (not IsDir);
+end;
+
+function TPlatformWatchEvent.IsDirModified: Boolean;
+begin
+  Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.NameStr: AnsiString;
+begin
+  SetString(Result, PAnsiChar(@Name[0]), NameLen);
 end;
 
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
@@ -173,6 +205,26 @@ uses
   nextpas.core.platform.freebsd.ffi;
 {$ENDIF}
 
+function TPlatformWatchEvent.HasAnyEvent: Boolean;
+begin
+  Result := Modified or Created or Deleted;
+end;
+
+function TPlatformWatchEvent.IsFileModified: Boolean;
+begin
+  Result := Modified and (not IsDir);
+end;
+
+function TPlatformWatchEvent.IsDirModified: Boolean;
+begin
+  Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.NameStr: AnsiString;
+begin
+  SetString(Result, PAnsiChar(@Name[0]), NameLen);
+end;
+
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
   FillChar(AWatcher, SizeOf(AWatcher), 0);
@@ -276,6 +328,15 @@ end;
 uses
   nextpas.core.platform.windows.base;
 
+function TPlatformWatchEvent.HasAnyEvent: Boolean;
+begin Result := Modified or Created or Deleted; end;
+function TPlatformWatchEvent.IsFileModified: Boolean;
+begin Result := Modified and (not IsDir); end;
+function TPlatformWatchEvent.IsDirModified: Boolean;
+begin Result := Modified and IsDir; end;
+function TPlatformWatchEvent.NameStr: AnsiString;
+begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
+
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
   AWatcher.Fd := -1;
@@ -301,6 +362,14 @@ end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
+function TPlatformWatchEvent.HasAnyEvent: Boolean;
+begin Result := Modified or Created or Deleted; end;
+function TPlatformWatchEvent.IsFileModified: Boolean;
+begin Result := Modified and (not IsDir); end;
+function TPlatformWatchEvent.IsDirModified: Boolean;
+begin Result := Modified and IsDir; end;
+function TPlatformWatchEvent.NameStr: AnsiString;
+begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;

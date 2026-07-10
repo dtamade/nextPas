@@ -917,8 +917,13 @@ begin
   Result := platform_socket_create_tcp(ASocket);
   if Result <> 0 then
     Exit;
-  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
-  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  Result := platform_sockaddr_ipv4(APort, AAddr, LSockAddr);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, Int32(LSockAddr.Len));
   if Result <> 0 then
   begin
     platform_socket_close(ASocket);
@@ -934,8 +939,13 @@ begin
   Result := platform_socket_create_tcp(ASocket);
   if Result <> 0 then
     Exit;
-  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
-  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  Result := platform_sockaddr_ipv4(APort, AAddr, LSockAddr);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, Int32(LSockAddr.Len));
   if Result <> 0 then
   begin
     platform_socket_close(ASocket);
@@ -1450,8 +1460,13 @@ begin
   Result := platform_socket_create_tcp(ASocket);
   if Result <> 0 then
     Exit;
-  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
-  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  Result := platform_sockaddr_ipv4(APort, AAddr, LSockAddr);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+  Result := platform_socket_bind(ASocket, @LSockAddr.Storage, Int32(LSockAddr.Len));
   if Result <> 0 then
   begin
     platform_socket_close(ASocket);
@@ -1467,8 +1482,13 @@ begin
   Result := platform_socket_create_tcp(ASocket);
   if Result <> 0 then
     Exit;
-  platform_sockaddr_ipv4(LSockAddr, AAddr, APort);
-  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, LSockAddr.Len);
+  Result := platform_sockaddr_ipv4(APort, AAddr, LSockAddr);
+  if Result <> 0 then
+  begin
+    platform_socket_close(ASocket);
+    Exit;
+  end;
+  Result := platform_socket_connect(ASocket, @LSockAddr.Storage, Int32(LSockAddr.Len));
   if Result <> 0 then
   begin
     platform_socket_close(ASocket);

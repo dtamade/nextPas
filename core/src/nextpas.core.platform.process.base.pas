@@ -82,6 +82,27 @@ type
     Reserved: array[0..2] of UInt8;
     ErrNo: Int32;
   end;
+
+  {** @desc 进程创建选项 *}
+  TPlatformProcessOption = (
+    poCaptureStdout,   {**< 捕获 stdout 输出 *}
+    poCaptureStderr,   {**< 捕获 stderr 输出 *}
+    poRedirectStdin    {**< 重定向 stdin *}
+  );
+  TPlatformProcessOptions = set of TPlatformProcessOption;
+
+  {** @desc 进程执行结果（便利结构） *}
+  TPlatformProcessExecResult = record
+    ExitCode: Int32;
+    Stdout: PAnsiChar;
+    StdoutLen: Int32;
+    Stderr: PAnsiChar;
+    StderrLen: Int32;
+    {** @desc 检查进程是否成功退出
+        @return True 如果退出码为 0 *}
+    function IsSuccess: Boolean; inline;
+  end;
+
 implementation
 
 function TPlatformProcess.IsValid: Boolean;
@@ -130,6 +151,11 @@ end;
 function TPlatformProcessPipes.HasInvalid: Boolean;
 begin
   Result := (StdinWrite < 0) or (StdoutRead < 0) or (StderrRead < 0);
+end;
+
+function TPlatformProcessExecResult.IsSuccess: Boolean;
+begin
+  Result := ExitCode = 0;
 end;
 
 end.

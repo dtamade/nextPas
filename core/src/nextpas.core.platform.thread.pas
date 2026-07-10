@@ -114,6 +114,12 @@ type
    *}
   TPlatformThreadRecord = record
     Handle: TPlatformThreadHandle;
+    {** @desc 检查线程是否已启动且未等待
+        @return True 如果线程句柄有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查线程是否未启动或已等待
+        @return True 如果线程句柄无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
 {** @desc 创建并启动线程
@@ -849,6 +855,16 @@ function platform_cpu_count: Int32; begin Result := 1; end;
 {$ENDIF}{$ENDIF}
 
 { TPlatformThreadRecord helpers }
+
+function TPlatformThreadRecord.IsValid: Boolean;
+begin
+  Result := Handle <> nil;
+end;
+
+function TPlatformThreadRecord.IsInvalid: Boolean;
+begin
+  Result := Handle = nil;
+end;
 
 function platform_thread_spawn(out ARec: TPlatformThreadRecord;
   AProc: TPlatformThreadProc; AArg: Pointer): Int32;

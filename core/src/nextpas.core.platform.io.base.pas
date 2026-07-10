@@ -22,6 +22,18 @@ type
     Events: TPlatformPollEvents;
     REvents: TPlatformPollEvents;
     UserData: Pointer;
+    {** @desc 检查是否可读
+        @return True 如果有可读事件 *}
+    function IsReadable: Boolean; inline;
+    {** @desc 检查是否可写
+        @return True 如果有可写事件 *}
+    function IsWritable: Boolean; inline;
+    {** @desc 检查是否有错误
+        @return True 如果有错误事件 *}
+    function HasError: Boolean; inline;
+    {** @desc 检查是否挂起
+        @return True 如果有挂起事件 *}
+    function IsHangup: Boolean; inline;
   end;
   PPlatformPollEntry = ^TPlatformPollEntry;
 
@@ -65,6 +77,26 @@ begin
 {$ELSE}
   Result := False;
 {$ENDIF}
+end;
+
+function TPlatformPollEntry.IsReadable: Boolean;
+begin
+  Result := peReadable in REvents;
+end;
+
+function TPlatformPollEntry.IsWritable: Boolean;
+begin
+  Result := peWritable in REvents;
+end;
+
+function TPlatformPollEntry.HasError: Boolean;
+begin
+  Result := peError in REvents;
+end;
+
+function TPlatformPollEntry.IsHangup: Boolean;
+begin
+  Result := (peHangup in REvents) or (peReadHangup in REvents);
 end;
 
 end.
