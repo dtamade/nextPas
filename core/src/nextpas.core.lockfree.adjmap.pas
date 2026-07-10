@@ -98,7 +98,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 1, 0) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -290,7 +290,8 @@ var
   LDist: array of Int64;
   LPrev: array of Integer;
   LVisited: array of Boolean;
-  LI, LSrcIdx, LDstIdx, LU, LV, LMinDist: Integer;
+  LI, LSrcIdx, LDstIdx, LU, LV: Integer;
+  LMinDist: Int64;
   LEdge: PAdjEdge;
   LPathLen: Integer;
 begin
@@ -318,13 +319,13 @@ begin
     for LI := 0 to FVertexCount - 1 do
     begin
       LU := -1;
-      LMinDist := 0;
+      LMinDist := INF;
       for LV := 0 to FVertexCount - 1 do
       begin
-        if (not LVisited[LV]) and ((LU < 0) or (LDist[LV] < LMinDist)) then
+        if (not LVisited[LV]) and (LDist[LV] < LMinDist) then
         begin
           LU := LV;
-          LMinDist := Integer(LDist[LV]);
+          LMinDist := LDist[LV];
         end;
       end;
 

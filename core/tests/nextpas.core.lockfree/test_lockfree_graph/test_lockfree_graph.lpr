@@ -92,6 +92,32 @@ begin
     // Non-existent vertex
     LResult := LGraph.AddEdge(99, 1);
     Check(grNotFound = LResult, 'Should not find vertex');
+
+    LResult := LGraph.AddEdge(1, 99);
+    Check(grNotFound = LResult, 'Should reject edge to missing target');
+  finally
+    LGraph.Free;
+  end;
+end;
+
+procedure TestGraphRemoveVertexCleansEdges;
+var
+  LGraph: TLockFreeGraph;
+begin
+  LGraph := TLockFreeGraph.Create;
+  try
+    LGraph.AddVertex(1);
+    LGraph.AddVertex(2);
+    LGraph.AddVertex(3);
+    LGraph.AddEdge(1, 2);
+    LGraph.AddEdge(2, 3);
+    LGraph.AddEdge(3, 2);
+
+    CheckEqual(Int64(3), LGraph.GetEdgeCount, 'Edge count before vertex delete');
+    Check(grRemoved = LGraph.RemoveVertex(2), 'Remove vertex with incoming and outgoing edges');
+    CheckEqual(Int64(0), LGraph.GetEdgeCount, 'Removing vertex should remove all attached edges');
+    Check(not LGraph.HasEdge(1, 2), 'Incoming edge should be removed');
+    Check(not LGraph.HasEdge(3, 2), 'Second incoming edge should be removed');
   finally
     LGraph.Free;
   end;
@@ -189,6 +215,9 @@ begin
 
   TestGraphRemoveVertex;
   WriteLn('  + Remove vertex');
+
+  TestGraphRemoveVertexCleansEdges;
+  WriteLn('  + Remove vertex cleans edges');
 
   TestGraphAddEdge;
   WriteLn('  + Add edge');

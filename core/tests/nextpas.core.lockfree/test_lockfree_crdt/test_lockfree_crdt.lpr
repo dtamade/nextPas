@@ -132,6 +132,26 @@ begin
   end;
 end;
 
+procedure TestORSetMergePropagatesRemoval;
+var
+  LS1, LS2: TORSet;
+begin
+  WriteLn('--- TestORSetMergePropagatesRemoval ---');
+  LS1 := TORSet.Create;
+  LS2 := TORSet.Create;
+  try
+    LS1.Add('x');
+    LS2.Merge(LS1);
+    Check(LS2.Contains('x'), 'Peer sees replicated add');
+    LS2.Remove('x');
+    LS1.Merge(LS2);
+    Check(not LS1.Contains('x'), 'Observed removal should propagate across merge');
+  finally
+    LS1.Free;
+    LS2.Free;
+  end;
+end;
+
 begin
   WriteLn('=== test_lockfree_crdt ===');
   GPassed := 0;
@@ -140,6 +160,7 @@ begin
   TestPNCounter;
   TestLWWRegister;
   TestORSet;
+  TestORSetMergePropagatesRemoval;
   WriteLn;
   WriteLn('Results: ', GPassed, ' passed, ', GFailed, ' failed');
   if GFailed > 0 then

@@ -171,6 +171,7 @@ function TPersistentVector.ToArray: specialize TArray<AnsiString>;
 var
   I: Int32;
 begin
+  Result := nil;
   SetLength(Result, FCount);
   for I := 0 to FCount - 1 do
     Result[I] := FData[I];

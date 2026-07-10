@@ -28,7 +28,7 @@ type
   private
     FParent: array of Int32;  // parent[i] = parent of i (or self if root)
     FRank: array of Int32;    // rank[i] = upper bound on tree height
-    FCapacity: Int32;
+    FCount: Int32;
     FLock: Int32;             // spinlock for MakeSet expansion
 
     function FindRoot(AIdx: Int32): Int32;
@@ -53,21 +53,13 @@ type
 implementation
 
 constructor TLockFreeDisjointSet.Create(ACapacity: Int32);
-var
-  I: Int32;
 begin
   inherited Create;
   if ACapacity < 16 then
     ACapacity := 16;
   SetLength(FParent, ACapacity);
   SetLength(FRank, ACapacity);
-  // Initialize each element as its own set
-  for I := 0 to ACapacity - 1 do
-  begin
-    FParent[I] := I;
-    FRank[I] := 0;
-  end;
-  FCapacity := ACapacity;
+  FCount := 0;
   FLock := 0;
 end;
 
@@ -100,18 +92,13 @@ end;
 function TLockFreeDisjointSet.MakeSet: Int32;
 var
   LIdx: Int32;
-  LOldLock: Int32;
 begin
-  // Atomic increment of capacity using CAS
   repeat
-    LIdx := AtomicLoad32(FCapacity, moRelaxed);
+    LIdx := AtomicLoad32(FCount, moRelaxed);
     if LIdx >= Length(FParent) then
     begin
-      // Need to grow - use spin lock
-      repeat
-        LOldLock := AtomicLoad32(FLock, moRelaxed);
-      until AtomicCompareExchange32(FLock, 0, 1, moAcqRel) = 0;
-      // Double-check
+      while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+        CpuPause;
       if LIdx >= Length(FParent) then
       begin
         SetLength(FParent, LIdx * 2);
@@ -119,8 +106,7 @@ begin
       end;
       AtomicStore32(FLock, 0, moRelease);
     end;
-  until AtomicCompareExchange32(FCapacity, LIdx, LIdx + 1, moAcqRel) = LIdx;
-  // Initialize new element
+  until AtomicCompareExchange32(FCount, LIdx, LIdx + 1, moAcqRel) = LIdx;
   FParent[LIdx] := LIdx;
   FRank[LIdx] := 0;
   Result := LIdx;
@@ -128,7 +114,7 @@ end;
 
 function TLockFreeDisjointSet.Find(AIdx: Int32): Int32;
 begin
-  if (AIdx < 0) or (AIdx >= AtomicLoad32(FCapacity, moAcquire)) then
+  if (AIdx < 0) or (AIdx >= AtomicLoad32(FCount, moAcquire)) then
     Exit(-1);
   Result := FindRoot(AIdx);
 end;
@@ -137,9 +123,9 @@ function TLockFreeDisjointSet.Union(AIdx1, AIdx2: Int32): TLockFreeDisjointSetRe
 var
   LRoot1, LRoot2, LRank1, LRank2: Int32;
 begin
-  if (AIdx1 < 0) or (AIdx1 >= AtomicLoad32(FCapacity, moAcquire)) then
+  if (AIdx1 < 0) or (AIdx1 >= AtomicLoad32(FCount, moAcquire)) then
     Exit(dsNotFound);
-  if (AIdx2 < 0) or (AIdx2 >= AtomicLoad32(FCapacity, moAcquire)) then
+  if (AIdx2 < 0) or (AIdx2 >= AtomicLoad32(FCount, moAcquire)) then
     Exit(dsNotFound);
   LRoot1 := FindRoot(AIdx1);
   LRoot2 := FindRoot(AIdx2);
@@ -167,7 +153,7 @@ end;
 
 function TLockFreeDisjointSet.Count: Int32;
 begin
-  Result := AtomicLoad32(FCapacity, moRelaxed);
+  Result := AtomicLoad32(FCount, moRelaxed);
 end;
 
 end.

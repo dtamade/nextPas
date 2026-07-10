@@ -171,6 +171,41 @@ begin
   end;
 end;
 
+procedure TestCycleRejected;
+begin
+  WriteLn('--- TestCycleRejected ---');
+  GDag := TConcurrentDAG.Create;
+  try
+    GDag.AddNode(1);
+    GDag.AddNode(2);
+    GDag.AddNode(3);
+    Check(GDag.AddEdge(1, 2) = dagOk, 'Add edge 1->2');
+    Check(GDag.AddEdge(2, 3) = dagOk, 'Add edge 2->3');
+    Check(GDag.AddEdge(3, 1) = dagCycle, 'Reject edge that creates cycle');
+    Check(not GDag.HasCycle, 'Graph remains acyclic');
+  finally
+    GDag.Free;
+  end;
+end;
+
+procedure TestRemoveNodeUpdatesInDegree;
+begin
+  WriteLn('--- TestRemoveNodeUpdatesInDegree ---');
+  GDag := TConcurrentDAG.Create;
+  try
+    GDag.AddNode(1);
+    GDag.AddNode(2);
+    GDag.AddNode(3);
+    GDag.AddEdge(1, 2);
+    GDag.AddEdge(2, 3);
+    Check(GDag.InDegree(3) = 1, 'Node 3 starts with indegree 1');
+    Check(GDag.RemoveNode(2) = dagOk, 'Remove middle node');
+    Check(GDag.InDegree(3) = 0, 'Removing source should decrement target indegree');
+  finally
+    GDag.Free;
+  end;
+end;
+
 procedure TestClear;
 begin
   WriteLn('--- TestClear ---');
@@ -213,6 +248,8 @@ begin
   TestDegree;
   TestTopologicalSort;
   TestNoCycle;
+  TestCycleRejected;
+  TestRemoveNodeUpdatesInDegree;
   TestClear;
   TestClose;
   WriteLn;

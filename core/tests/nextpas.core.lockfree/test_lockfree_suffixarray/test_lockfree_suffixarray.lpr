@@ -37,6 +37,8 @@ begin
     { Search for 'ana' — should find at positions 1 and 3 }
     LMatches := LSa.Search('ana');
     Check(Length(LMatches) = 2, 'Search(ana) returns 2 matches');
+    Check(LMatches[0].Index = 1, 'Search(ana) first match at 1');
+    Check(LMatches[1].Index = 3, 'Search(ana) second match at 3');
 
     { Search for 'ban' — should find at position 0 }
     LMatches := LSa.Search('ban');

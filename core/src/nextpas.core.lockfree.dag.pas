@@ -41,6 +41,8 @@ type
     FLock: Int32;
     FClosed: Int32;
     function FindNode(AId: Int64): PDagNode;
+    function HasPathLocked(AStartId, ATargetId: Int64): Boolean;
+    function RemoveIncomingEdgesLocked(ATargetId: Int64): Int64;
     procedure LockDag;
     procedure UnlockDag;
     procedure LockNode(ANode: PDagNode);
@@ -116,6 +118,88 @@ begin
   end;
 end;
 
+function TConcurrentDAG.HasPathLocked(AStartId, ATargetId: Int64): Boolean;
+var
+  LVisited: array of Int64;
+  LStack: array of Int64;
+  LVisitedCount, LStackCount: Int32;
+
+  function AlreadySeen(AId: Int64; const AItems: array of Int64; ACount: Int32): Boolean;
+  var
+    LI: Int32;
+  begin
+    for LI := 0 to ACount - 1 do
+      if AItems[LI] = AId then
+        Exit(True);
+    Result := False;
+  end;
+
+  function Visit(AId: Int64): Boolean;
+  var
+    LNode: PDagNode;
+    LEdge: PDagEdge;
+  begin
+    if AId = ATargetId then
+      Exit(True);
+    if AlreadySeen(AId, LVisited, LVisitedCount) then
+      Exit(False);
+    LVisited[LVisitedCount] := AId;
+    Inc(LVisitedCount);
+    LNode := FindNode(AId);
+    if LNode = nil then
+      Exit(False);
+    LStack[LStackCount] := AId;
+    Inc(LStackCount);
+    LEdge := LNode^.OutEdges;
+    while LEdge <> nil do
+    begin
+      if Visit(LEdge^.TargetId) then
+        Exit(True);
+      LEdge := LEdge^.Next;
+    end;
+    Dec(LStackCount);
+    Result := False;
+  end;
+
+begin
+  SetLength(LVisited, AtomicLoad64(FNodeCount, moAcquire));
+  SetLength(LStack, Length(LVisited));
+  LVisitedCount := 0;
+  LStackCount := 0;
+  Result := Visit(AStartId);
+end;
+
+function TConcurrentDAG.RemoveIncomingEdgesLocked(ATargetId: Int64): Int64;
+var
+  LNode: PDagNode;
+  LPrevEdge, LEdge, LNextEdge: PDagEdge;
+begin
+  Result := 0;
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    LPrevEdge := nil;
+    LEdge := LNode^.OutEdges;
+    while LEdge <> nil do
+    begin
+      LNextEdge := LEdge^.Next;
+      if LEdge^.TargetId = ATargetId then
+      begin
+        if LPrevEdge = nil then
+          LNode^.OutEdges := LNextEdge
+        else
+          LPrevEdge^.Next := LNextEdge;
+        Dispose(LEdge);
+        Inc(Result);
+      end
+      else
+        LPrevEdge := LEdge;
+      LEdge := LNextEdge;
+    end;
+    LNode := LNode^.Next;
+  end;
+end;
+
 procedure TConcurrentDAG.LockNode(ANode: PDagNode);
 begin
   while AtomicCompareExchange32(ANode^.Lock, 0, 1) <> 0 do
@@ -178,7 +262,8 @@ function TConcurrentDAG.RemoveNode(AId: Int64): TDagResult;
 var
   LPrev, LCurrent: PDagNode;
   LTarget: PDagNode;
-  LEdge, LPrevEdge, LNextEdge: PDagEdge;
+  LEdge, LNextEdge: PDagEdge;
+  LRemovedEdges: Int64;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(dagClosed);
@@ -194,42 +279,20 @@ begin
         FRoot := LCurrent^.Next
       else
         LPrev^.Next := LCurrent^.Next;
-      { Remove all edges pointing to this node from other nodes }
-      LTarget := FRoot;
-      while LTarget <> nil do
-      begin
-        LockNode(LTarget);
-        LPrevEdge := nil;
-        LEdge := LTarget^.OutEdges;
-        while LEdge <> nil do
-        begin
-          LNextEdge := LEdge^.Next;
-          if LEdge^.TargetId = AId then
-          begin
-            if LPrevEdge = nil then
-              LTarget^.OutEdges := LNextEdge
-            else
-              LPrevEdge^.Next := LNextEdge;
-            Dec(LTarget^.InCount);
-            AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
-            Dispose(LEdge);
-          end
-          else
-            LPrevEdge := LEdge;
-          LEdge := LNextEdge;
-        end;
-        UnlockNode(LTarget);
-        LTarget := LTarget^.Next;
-      end;
-      { Remove all outgoing edges from this node }
+      LRemovedEdges := RemoveIncomingEdgesLocked(AId);
       LEdge := LCurrent^.OutEdges;
       while LEdge <> nil do
       begin
         LNextEdge := LEdge^.Next;
-        AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+        LTarget := FindNode(LEdge^.TargetId);
+        if LTarget <> nil then
+          AtomicFetchSub32(LTarget^.InCount, 1, moRelaxed);
+        Inc(LRemovedEdges);
         Dispose(LEdge);
         LEdge := LNextEdge;
       end;
+      if LRemovedEdges > 0 then
+        AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
       LCurrent^.OutEdges := nil;
       Dispose(LCurrent);
       AtomicFetchSub64(FNodeCount, 1, moRelaxed);
@@ -275,6 +338,11 @@ begin
       Exit(dagExists);
     end;
     LEdge := LEdge^.Next;
+  end;
+  if (AFromId = AToId) or HasPathLocked(AToId, AFromId) then
+  begin
+    UnlockNode(LFrom);
+    Exit(dagCycle);
   end;
   LEdge := AllocDagEdge(AToId);
   LEdge^.Next := LFrom^.OutEdges;

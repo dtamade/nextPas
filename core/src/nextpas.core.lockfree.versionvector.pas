@@ -47,6 +47,7 @@ type
     procedure Lock; inline;
     procedure Unlock; inline;
     function FindNode(AId: Int32): Int32;
+    procedure Snapshot(out AEntries: array of TVVEntry; out ACount: Int32);
   public
     constructor Create;
     procedure Increment(AId: Int32);
@@ -85,11 +86,11 @@ var
 begin
   for LJ := 0 to LOCKFREE_SPIN_COUNT do
   begin
-    if AtomicCompareExchange32(FLock, 1, 0, moAcqRel) = 0 then
+    if AtomicCompareExchange32(FLock, 0, 1, moAcqRel) = 0 then
       Exit;
   end;
   { Spin-wait }
-  while AtomicCompareExchange32(FLock, 1, 0, moAcqRel) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
     ThreadSwitch;
 end;
 
@@ -106,6 +107,20 @@ begin
     if FEntries[LI].NodeId = AId then
       Exit(LI);
   Result := -1;
+end;
+
+procedure TVersionVector.Snapshot(out AEntries: array of TVVEntry; out ACount: Int32);
+var
+  LI: Int32;
+begin
+  Lock;
+  try
+    ACount := FCount;
+    for LI := 0 to FCount - 1 do
+      AEntries[LI] := FEntries[LI];
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TVersionVector.Increment(AId: Int32);
@@ -170,44 +185,46 @@ end;
 
 function TVersionVector.Compare(AOther: TVersionVector): TVVCompareResult;
 var
+  LSelfEntries: array[0..VV_MAX_NODES - 1] of TVVEntry;
+  LOtherEntries: array[0..VV_MAX_NODES - 1] of TVVEntry;
+  LSelfCount, LOtherCount: Int32;
   LSelfLess, LAOtherLess: Boolean;
   LI, LIdx: Int32;
+  function FindInSnapshot(const AEntries: array of TVVEntry; ACount, AId: Int32): Int32;
+  var
+    LJ: Int32;
+  begin
+    for LJ := 0 to ACount - 1 do
+      if AEntries[LJ].NodeId = AId then
+        Exit(LJ);
+    Result := -1;
+  end;
 begin
-  { Snapshot both vectors }
-  Lock;
-  try
-    { Copy self }
-    LSelfLess := False;
-    LAOtherLess := False;
-    { Check self entries against other }
-    for LI := 0 to FCount - 1 do
+  Snapshot(LSelfEntries, LSelfCount);
+  if AOther <> nil then
+    AOther.Snapshot(LOtherEntries, LOtherCount)
+  else
+    LOtherCount := 0;
+  LSelfLess := False;
+  LAOtherLess := False;
+  for LI := 0 to LSelfCount - 1 do
+  begin
+    LIdx := FindInSnapshot(LOtherEntries, LOtherCount, LSelfEntries[LI].NodeId);
+    if LIdx >= 0 then
     begin
-      LIdx := AOther.FindNode(FEntries[LI].NodeId);
-      if LIdx >= 0 then
-      begin
-        if FEntries[LI].Counter < AOther.FEntries[LIdx].Counter then
-          LSelfLess := True;
-        if FEntries[LI].Counter > AOther.FEntries[LIdx].Counter then
-          LAOtherLess := True;
-      end
-      else
-      begin
-        if FEntries[LI].Counter > 0 then
-          LAOtherLess := True;
-      end;
-    end;
-    { Check other entries not in self }
-    for LI := 0 to AOther.FCount - 1 do
-    begin
-      LIdx := FindNode(AOther.FEntries[LI].NodeId);
-      if LIdx < 0 then
-      begin
-        if AOther.FEntries[LI].Counter > 0 then
-          LSelfLess := True;
-      end;
-    end;
-  finally
-    Unlock;
+      if LSelfEntries[LI].Counter < LOtherEntries[LIdx].Counter then
+        LSelfLess := True;
+      if LSelfEntries[LI].Counter > LOtherEntries[LIdx].Counter then
+        LAOtherLess := True;
+    end
+    else if LSelfEntries[LI].Counter > 0 then
+      LAOtherLess := True;
+  end;
+  for LI := 0 to LOtherCount - 1 do
+  begin
+    LIdx := FindInSnapshot(LSelfEntries, LSelfCount, LOtherEntries[LI].NodeId);
+    if (LIdx < 0) and (LOtherEntries[LI].Counter > 0) then
+      LSelfLess := True;
   end;
   { Determine result }
   if LSelfLess and LAOtherLess then
@@ -222,22 +239,27 @@ end;
 
 procedure TVersionVector.Merge(AOther: TVersionVector);
 var
+  LOtherEntries: array[0..VV_MAX_NODES - 1] of TVVEntry;
+  LOtherCount: Int32;
   LI, LIdx: Int32;
 begin
+  if AOther = nil then
+    Exit;
+  AOther.Snapshot(LOtherEntries, LOtherCount);
   Lock;
   try
-    for LI := 0 to AOther.FCount - 1 do
+    for LI := 0 to LOtherCount - 1 do
     begin
-      LIdx := FindNode(AOther.FEntries[LI].NodeId);
+      LIdx := FindNode(LOtherEntries[LI].NodeId);
       if LIdx >= 0 then
       begin
-        if AOther.FEntries[LI].Counter > FEntries[LIdx].Counter then
-          FEntries[LIdx].Counter := AOther.FEntries[LI].Counter;
+        if LOtherEntries[LI].Counter > FEntries[LIdx].Counter then
+          FEntries[LIdx].Counter := LOtherEntries[LI].Counter;
       end
       else if FCount < VV_MAX_NODES then
       begin
-        FEntries[FCount].NodeId := AOther.FEntries[LI].NodeId;
-        FEntries[FCount].Counter := AOther.FEntries[LI].Counter;
+        FEntries[FCount].NodeId := LOtherEntries[LI].NodeId;
+        FEntries[FCount].Counter := LOtherEntries[LI].Counter;
         Inc(FCount);
       end;
     end;
@@ -257,23 +279,21 @@ begin
 end;
 
 procedure TVersionVector.CopyTo(out AEntries: array of TVVEntry; out ACount: Int32);
+begin
+  Snapshot(AEntries, ACount);
+end;
+
+procedure TVersionVector.Clear;
 var
   LI: Int32;
 begin
   Lock;
   try
-    ACount := FCount;
     for LI := 0 to FCount - 1 do
-      AEntries[LI] := FEntries[LI];
-  finally
-    Unlock;
-  end;
-end;
-
-procedure TVersionVector.Clear;
-begin
-  Lock;
-  try
+    begin
+      FEntries[LI].NodeId := -1;
+      FEntries[LI].Counter := 0;
+    end;
     FCount := 0;
   finally
     Unlock;

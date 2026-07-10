@@ -188,7 +188,7 @@ var
   end;
 
 begin
-  SetLength(Result, 0);
+  Result := nil;
   if not FBuilt or (Length(APattern) = 0) then
     Exit;
 
@@ -232,6 +232,14 @@ begin
       LMatch.Length := LPatLen;
       Result[I - LStart] := LMatch;
     end;
+    for I := 0 to High(Result) - 1 do
+      for J := I + 1 to High(Result) do
+        if Result[I].Index > Result[J].Index then
+        begin
+          LMatch := Result[I];
+          Result[I] := Result[J];
+          Result[J] := LMatch;
+        end;
   end;
 end;
 
