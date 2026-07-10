@@ -20,6 +20,12 @@ type
   {$ELSE}
     Value: cint;
   {$ENDIF}
+    {** @desc 检查句柄是否有效
+        @return True 如果句柄有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查句柄是否无效
+        @return True 如果句柄无效 *}
+    function IsInvalid: Boolean; inline;
   end;
 
   {** @desc 文件类型枚举 *}
@@ -123,5 +129,23 @@ const
   PLATFORM_DT_SOCK = 12;
 
 implementation
+
+function TPlatformFileHandle.IsValid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Value <> HANDLE(PtrInt(-1));
+{$ELSE}
+  Result := Value >= 0;
+{$ENDIF}
+end;
+
+function TPlatformFileHandle.IsInvalid: Boolean;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := Value = HANDLE(PtrInt(-1));
+{$ELSE}
+  Result := Value < 0;
+{$ENDIF}
+end;
 
 end.

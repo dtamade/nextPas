@@ -13,6 +13,15 @@ type
     ReadHandle: PtrUInt;
     WriteHandle: PtrUInt;
   {$ENDIF}
+    {** @desc 检查管道读端是否有效
+        @return True 如果读端有效 *}
+    function IsReadValid: Boolean; inline;
+    {** @desc 检查管道写端是否有效
+        @return True 如果写端有效 *}
+    function IsWriteValid: Boolean; inline;
+    {** @desc 检查管道是否完全有效（读写端都有效）
+        @return True 如果管道完全有效 *}
+    function IsValid: Boolean; inline;
   end;
 
 {** @desc 创建匿名管道
@@ -54,6 +63,21 @@ uses
   , nextpas.core.platform.linux.ffi
   {$ENDIF}
   ;
+
+function TPlatformPipe.IsReadValid: Boolean;
+begin
+  Result := ReadFd >= 0;
+end;
+
+function TPlatformPipe.IsWriteValid: Boolean;
+begin
+  Result := WriteFd >= 0;
+end;
+
+function TPlatformPipe.IsValid: Boolean;
+begin
+  Result := (ReadFd >= 0) and (WriteFd >= 0);
+end;
 
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 var

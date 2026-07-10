@@ -16,6 +16,9 @@ type
     WatchFds: array[0..PLATFORM_WATCH_MAX_FDS - 1] of Int32;
     WatchCount: Int32;
   {$ENDIF}
+    {** @desc 检查监视器是否有效
+        @return True 如果监视器有效 *}
+    function IsValid: Boolean; inline;
   end;
 
   {** @desc 文件系统监视事件 *}
@@ -62,6 +65,11 @@ uses
   nextpas.core.platform.error,
   nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
+
+function TPlatformWatcher.IsValid: Boolean;
+begin
+  Result := Fd >= 0;
+end;
 
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
