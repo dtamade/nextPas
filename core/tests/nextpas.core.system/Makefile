@@ -126,6 +126,9 @@ test-stage0-system-object-free-query:
 	  fi; \
 	  cat "$$output"; \
 	  object_free_offset="$$(awk 'BEGIN { offset = 0 } { idx = index($$0, "Worker.Free"); if (idx > 0) { print offset + idx + length("Worker.") - 1; exit } offset += length($$0) + 1 }' "$(ROOT_DIR)/$$source_rel")"; \
+	  require_pattern '^query-symbols=\[.*"name":"System".*"kind":"unit".*"ownerUnitId":"system"' "$$output" "$$label-missing-system-unit-symbol"; \
+	  require_pattern '^query-symbols=\[.*"name":"TWorker".*"kind":"type"' "$$output" "$$label-missing-tworker-symbol"; \
+	  require_pattern '^query-symbols=\[.*"name":"Worker".*"kind":"variable"' "$$output" "$$label-missing-worker-variable"; \
 	  require_pattern '^query-symbols=\[.*"name":"TObject".*"kind":"type".*"ownerUnitId":"system".*"ownerUnitName":"System"' "$$output" "$$label-missing-object-type-symbol"; \
 	  require_pattern '^query-symbols=\[.*"name":"TObject.Free".*"kind":"method".*"ownerUnitId":"system".*"ownerUnitName":"System".*"paramCount":0' "$$output" "$$label-missing-object-free-symbol"; \
 	  require_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Free\".*\"ownerUnitId\":\"$$owner_unit_id\".*\"byteOffset\":$$object_free_offset.*\"targetSymbolId\":[1-9][0-9]*" "$$output" "$$label-missing-object-free-binding"; \
@@ -137,31 +140,8 @@ test-stage0-system-object-free-query:
 	  require_pattern '^toolchain-plan-status=deferred$$' "$$output" "$$label-missing-deferred-toolchain"; \
 	  printf '%s\n' "$$pass_marker"; \
 	}; \
-	run_implicit_query() { \
-	  label="$$1"; \
-	  source_rel="$$2"; \
-	  output="$$3"; \
-	  pass_marker="$$4"; \
-	  printf '%s-check=running\n' "$$label"; \
-	  printf '%s-command=%s query symbols %s --target %s --workspace %s\n' "$$label" "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_BINARY)" "$$source_rel" "$(TARGET_ID)" "$(ROOT_DIR)"; \
-	  if ! (cd "$(ROOT_DIR)" && NEXTPAS_REPO_ROOT="$(ROOT_DIR)" "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_BINARY)" query symbols "$$source_rel" --target "$(TARGET_ID)" --workspace "$(ROOT_DIR)" >"$$output" 2>&1); then \
-	    cat "$$output"; \
-	    echo "[FAIL] $$label-failed" >&2; \
-	    exit 1; \
-	  fi; \
-	  cat "$$output"; \
-	  require_pattern '^query-symbols=.*"name":"System".*"kind":"unit".*"ownerUnitId":"system"' "$$output" "$$label-missing-system-unit-symbol"; \
-	  require_pattern '^query-symbols=.*"name":"TWorker".*"kind":"type"' "$$output" "$$label-missing-tworker-symbol"; \
-	  require_pattern '^query-symbols=.*"name":"Worker".*"kind":"variable"' "$$output" "$$label-missing-worker-variable"; \
-	  require_pattern '^query-bindings=\[\]' "$$output" "$$label-expected-empty-bindings"; \
-	  require_pattern '^query-definitions=\[\]' "$$output" "$$label-expected-empty-definitions"; \
-	  require_pattern '^mir-status=deferred$$' "$$output" "$$label-missing-deferred-mir"; \
-	  require_pattern '^backend-plan-status=deferred$$' "$$output" "$$label-missing-deferred-backend"; \
-	  require_pattern '^toolchain-plan-status=deferred$$' "$$output" "$$label-missing-deferred-toolchain"; \
-	  printf '%s\n' "$$pass_marker"; \
-	}; \
 	run_query stage0-query-system-object-free "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_SOURCE)" "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_OUTPUT)" systemobjectfreebinding "$(STAGE0_SYSTEM_OBJECT_FREE_QUERY_PASS_MARKER)"; \
-	run_implicit_query stage0-query-system-object-free-implicit "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_SOURCE)" "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_OUTPUT)" "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_PASS_MARKER)"
+	run_query stage0-query-system-object-free-implicit "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_SOURCE)" "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_OUTPUT)" systemobjectfreeimplicitbinding "$(STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_PASS_MARKER)"
 
 clean:
 	$(MAKE) -C test_system_facade clean
