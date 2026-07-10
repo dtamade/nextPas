@@ -1586,4 +1586,9 @@ begin
     PassTest('ALL PASSED')
   else
     FailTest('SOME FAILED');
+
+  { Release closures before heaptrc reports }
+  Runner := Default(TSuiteRunner);
+  Suite := Default(TTestSuite);
+  LResults := nil;
 end.

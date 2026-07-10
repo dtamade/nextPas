@@ -1525,9 +1525,13 @@ begin
 
   if not LSuite.Run then
   begin
+    Finalize(LSuite);
     WriteLn;
     FailTest('SOME TESTS FAILED');
   end;
   WriteLn;
   PassTest('ALL PASSED');
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
+  Finalize(LSuite);
 end.

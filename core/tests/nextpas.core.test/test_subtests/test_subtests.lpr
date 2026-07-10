@@ -736,4 +736,9 @@ begin
 
   WriteLn;
   PassTest('ALL PASSED');
+
+  { Release closures before heaptrc reports }
+  LFailSuite := Default(TTestSuite);
+  LOutSink := nil;
+  LErrSink := nil;
 end.
