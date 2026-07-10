@@ -476,6 +476,7 @@ begin
   FCalls  := nil;
   FSetups := nil;
   FCallOrder := nil;
+  FWhenEntries := nil;      { P2 #15 fix: clear conditional returns }
   FWhenMethodNames := nil;
   inherited Destroy;
 end;

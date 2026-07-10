@@ -338,6 +338,11 @@ type
 constructor TStringGenerator.Create(AMinLen, AMaxLen: Integer);
 begin
   inherited Create;
+  { P2 fix: reject negative lengths — allocation APIs don't accept negative sizes }
+  if AMinLen < 0 then
+    raise EAssertionFailed.Create('GenString: AMinLen must be >= 0');
+  if AMaxLen < 0 then
+    raise EAssertionFailed.Create('GenString: AMaxLen must be >= 0');
   if AMinLen > AMaxLen then
     raise EAssertionFailed.Create('GenString: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
@@ -362,42 +367,83 @@ end;
 
 function TStringGenerator.Shrink(const AValue: string): specialize TArray<string>;
 var
-  LLen: Integer;
+  LLen, LCount: Integer;
 begin
   LLen := Length(AValue);
+
+  { P2 #13 fix: domain check — if length out of [FMinLen, FMaxLen], shrink toward range }
+  if (LLen < FMinLen) or (LLen > FMaxLen) then
+  begin
+    SetLength(Result, 1);
+    if LLen < FMinLen then
+      Result[0] := StringOfChar('a', FMinLen)
+    else
+      Result[0] := Copy(AValue, 1, FMaxLen);
+    Exit;
+  end;
+
   if LLen = 0 then
   begin
     SetLength(Result, 0);
     Exit;
   end;
+
+  LCount := 0;
   SetLength(Result, 8);
-  { Try empty }
-  Result[0] := '';
-  { Try half }
-  Result[1] := Copy(AValue, 1, LLen div 2);
-  { Try remove last char }
-  Result[2] := Copy(AValue, 1, LLen - 1);
-  { Try replace all chars with 'a' }
-  Result[3] := StringOfChar('a', LLen);
-  { Try remove first char }
-  if LLen > 1 then
-    Result[4] := Copy(AValue, 2, LLen - 1)
-  else
-    Result[4] := '';
-  { Try remove middle char }
-  if LLen > 2 then
-    Result[5] := Copy(AValue, 1, LLen div 2) + Copy(AValue, LLen div 2 + 2, LLen)
-  else
-    Result[5] := '';
-  { Try shorter lengths }
-  if LLen > 3 then
-    Result[6] := StringOfChar('a', LLen - 1)
-  else
-    Result[6] := '';
-  if LLen > 5 then
-    Result[7] := StringOfChar('a', LLen div 2)
-  else
-    Result[7] := '';
+
+  { Try empty (only if FMinLen = 0) }
+  if FMinLen = 0 then
+  begin
+    Result[LCount] := '';
+    Inc(LCount);
+  end;
+
+  { Try half (check min length) }
+  if LLen div 2 >= FMinLen then
+  begin
+    Result[LCount] := Copy(AValue, 1, LLen div 2);
+    Inc(LCount);
+  end;
+
+  { Try remove last char (check min length) }
+  if (LLen - 1 >= FMinLen) then
+  begin
+    Result[LCount] := Copy(AValue, 1, LLen - 1);
+    Inc(LCount);
+  end;
+
+  { Try replace all chars with 'a' (same length, always in domain) }
+  Result[LCount] := StringOfChar('a', LLen);
+  Inc(LCount);
+
+  { Try remove first char (check min length) }
+  if (LLen > 1) and (LLen - 1 >= FMinLen) then
+  begin
+    Result[LCount] := Copy(AValue, 2, LLen - 1);
+    Inc(LCount);
+  end;
+
+  { Try remove middle char (check min length) }
+  if (LLen > 2) and (LLen - 1 >= FMinLen) then
+  begin
+    Result[LCount] := Copy(AValue, 1, LLen div 2) + Copy(AValue, LLen div 2 + 2, LLen);
+    Inc(LCount);
+  end;
+
+  { Try shorter lengths (check min length) }
+  if (LLen > 3) and (LLen - 1 >= FMinLen) then
+  begin
+    Result[LCount] := StringOfChar('a', LLen - 1);
+    Inc(LCount);
+  end;
+
+  if (LLen > 5) and (LLen div 2 >= FMinLen) then
+  begin
+    Result[LCount] := StringOfChar('a', LLen div 2);
+    Inc(LCount);
+  end;
+
+  SetLength(Result, LCount);
 end;
 
 function TStringGenerator.Name: string;
@@ -444,35 +490,104 @@ begin
     Result := FMin
   else
   begin
-    LRange := UInt64(FMax - FMin) + 1;
-    { Build 64-bit random from two 32-bit halves }
-    LHi := UInt64(FRng.NextIntRange(0, MaxInt));
-    LLo := UInt64(FRng.NextIntRange(0, MaxInt));
-    Result := FMin + Int64(((LHi shl 32) or LLo) mod LRange);
+    { P2 fix: handle full Int64 range without overflow.
+      When FMin=Low(Int64) and FMax=High(Int64), FMax-FMin overflows.
+      Use modular arithmetic on the full 64-bit random value. }
+    if (FMin = Low(Int64)) and (FMax = High(Int64)) then
+    begin
+      LHi := UInt64(FRng.NextIntRange(0, MaxInt));
+      LLo := UInt64(FRng.NextIntRange(0, MaxInt));
+      Result := Int64((LHi shl 32) or LLo);
+    end
+    else
+    begin
+      LRange := UInt64(FMax - FMin) + 1;
+      { Build 64-bit random from two 32-bit halves }
+      LHi := UInt64(FRng.NextIntRange(0, MaxInt));
+      LLo := UInt64(FRng.NextIntRange(0, MaxInt));
+      Result := FMin + Int64(((LHi shl 32) or LLo) mod LRange);
+    end;
   end;
 end;
 
 function TIntGenerator.Shrink(const AValue: Int64): specialize TArray<Int64>;
 var
-  LTarget: Int64;
+  LTarget, LMid, LQuarter: Int64;
+  LCount: Integer;
 begin
+  { P2 #13 fix: domain check — if AValue is out of [FMin, FMax], shrink toward range }
+  if (AValue < FMin) or (AValue > FMax) then
+  begin
+    SetLength(Result, 1);
+    if AValue < FMin then
+      Result[0] := FMin
+    else
+      Result[0] := FMax;
+    Exit;
+  end;
+
   { Shrink toward the "simplest" value: FMin if positive, 0 otherwise }
   if FMin > 0 then
     LTarget := FMin
+  else if FMax < 0 then
+    LTarget := FMax
   else
     LTarget := 0;
+
+  { P2 #13 fix: clamp target to [FMin, FMax] }
+  if LTarget < FMin then LTarget := FMin;
+  if LTarget > FMax then LTarget := FMax;
+
+  { P2 #13 fix: avoid cycle — if AValue already equals target, no useful shrink }
+  if AValue = LTarget then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  LCount := 0;
   SetLength(Result, 4);
-  { Try simplest value }
-  Result[0] := LTarget;
+
+  { Try simplest value (in domain) }
+  Result[LCount] := LTarget;
+  Inc(LCount);
+
   { Try halfway between current and simplest }
-  Result[1] := LTarget + (AValue - LTarget) div 2;
-  { Try one step toward simplest }
+  LMid := LTarget + (AValue - LTarget) div 2;
+  if (LMid >= FMin) and (LMid <= FMax) and (LMid <> AValue) then
+  begin
+    Result[LCount] := LMid;
+    Inc(LCount);
+  end;
+
+  { Try one step toward simplest (in domain) }
   if AValue > LTarget then
-    Result[2] := AValue - 1
+  begin
+    if AValue - 1 >= FMin then
+    begin
+      Result[LCount] := AValue - 1;
+      Inc(LCount);
+    end;
+  end
   else
-    Result[2] := AValue + 1;
+  begin
+    if AValue + 1 <= FMax then
+    begin
+      Result[LCount] := AValue + 1;
+      Inc(LCount);
+    end;
+  end;
+
   { Try halfway between simplest and midpoint (faster convergence) }
-  Result[3] := LTarget + (AValue - LTarget) div 4;
+  LQuarter := LTarget + (AValue - LTarget) div 4;
+  if (LQuarter >= FMin) and (LQuarter <= FMax) and (LQuarter <> AValue) and
+     (LQuarter <> LMid) then
+  begin
+    Result[LCount] := LQuarter;
+    Inc(LCount);
+  end;
+
+  SetLength(Result, LCount);
 end;
 
 function TIntGenerator.Name: string;
@@ -540,6 +655,11 @@ type
 constructor TBytesGenerator.Create(AMinLen, AMaxLen: Integer);
 begin
   inherited Create;
+  { P2 fix: reject negative lengths — allocation APIs don't accept negative sizes }
+  if AMinLen < 0 then
+    raise EAssertionFailed.Create('GenBytes: AMinLen must be >= 0');
+  if AMaxLen < 0 then
+    raise EAssertionFailed.Create('GenBytes: AMaxLen must be >= 0');
   if AMinLen > AMaxLen then
     raise EAssertionFailed.Create('GenBytes: AMinLen must be <= AMaxLen');
   FMinLen := AMinLen;
@@ -564,24 +684,60 @@ end;
 
 function TBytesGenerator.Shrink(const AValue: TBytes): specialize TArray<TBytes>;
 var
-  LLen: Integer;
+  LLen, LCount: Integer;
 begin
   LLen := Length(AValue);
+
+  { P2 #13 fix: domain check — if length out of [FMinLen, FMaxLen], shrink toward range }
+  if (LLen < FMinLen) or (LLen > FMaxLen) then
+  begin
+    SetLength(Result, 1);
+    if LLen < FMinLen then
+    begin
+      SetLength(Result[0], FMinLen);
+      FillChar(Result[0][0], FMinLen, 0);
+    end
+    else
+    begin
+      SetLength(Result[0], FMaxLen);
+      Move(AValue[0], Result[0][0], FMaxLen);
+    end;
+    Exit;
+  end;
+
   if LLen = 0 then
   begin
     SetLength(Result, 0);
     Exit;
   end;
+
+  LCount := 0;
   SetLength(Result, 3);
-  { Try empty }
-  SetLength(Result[0], 0);
-  { Try half }
-  SetLength(Result[1], LLen div 2);
-  Move(AValue[0], Result[1][0], LLen div 2);
-  { Try remove last byte }
-  SetLength(Result[2], LLen - 1);
-  if LLen > 1 then
-    Move(AValue[0], Result[2][0], LLen - 1);
+
+  { Try empty (only if FMinLen = 0) }
+  if FMinLen = 0 then
+  begin
+    SetLength(Result[LCount], 0);
+    Inc(LCount);
+  end;
+
+  { Try half (check min length) }
+  if LLen div 2 >= FMinLen then
+  begin
+    SetLength(Result[LCount], LLen div 2);
+    Move(AValue[0], Result[LCount][0], LLen div 2);
+    Inc(LCount);
+  end;
+
+  { Try remove last byte (check min length) }
+  if (LLen > 1) and (LLen - 1 >= FMinLen) then
+  begin
+    SetLength(Result[LCount], LLen - 1);
+    Move(AValue[0], Result[LCount][0], LLen - 1);
+    Inc(LCount);
+  end;
+
+  SetLength(Result, LCount);
 end;
 
 function TBytesGenerator.Name: string;

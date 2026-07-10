@@ -42,6 +42,18 @@ type
     HadValue : Boolean;
   end;
 
+{ Thread-local test context management — used by both serial and parallel
+  execution paths to install TTestContext for Ctx.Log, Ctx.OnCleanup, etc. }
+
+threadvar
+  GCurrentTestContextObj: TObject;
+
+procedure SetCurrentTestContext(AContext: TObject);
+  { Install or clear the thread-local TTestContext. Pass nil to clear. }
+function GetCurrentTestContext: TObject;
+  { Retrieve the current thread-local TTestContext (nil if none). }
+
+type
   TTestContext = class(TInterfacedObject, ITestContext)
   public
     FTestName : string;
@@ -91,6 +103,20 @@ uses
   nextpas.core.fs;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
+{ Thread-local test context management                                          }
+{ ═════════════════════════════════════════════════════════════════════════════ }
+
+procedure SetCurrentTestContext(AContext: TObject);
+begin
+  GCurrentTestContextObj := AContext;
+end;
+
+function GetCurrentTestContext: TObject;
+begin
+  Result := GCurrentTestContextObj;
+end;
+
+{ ═════════════════════════════════════════════════════════════════════════════ }
 { TTestResultAppender                                                          }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
@@ -124,6 +150,9 @@ destructor TTestContext.Destroy;
 var
   I: Integer;
 begin
+  { P1 fix: execute cleanup callbacks registered via Ctx.OnCleanup.
+    Without this, regular tests (non-subtests) would have their cleanups dropped. }
+  RunCleanups;
   { Explicitly release closures — FPC may not finalize managed fields
     in classes destroyed via reference counting. }
   for I := 0 to High(FSubtests) do
@@ -563,6 +592,9 @@ procedure TTestContext.RunCleanups;
 var
   LIdx: Integer;
 begin
+  { Guard against double execution — destructor also calls RunCleanups }
+  if FCleanups = nil then
+    Exit;
   for LIdx := High(FCleanups) downto 0 do
   begin
     try

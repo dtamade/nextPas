@@ -58,7 +58,8 @@ var
 begin
   LSuite := TTestSuite.Create('My Tests');
   LSuite.Test('basic math', @TestMath);
-  LSuite.Run;
+  if not LSuite.Run then
+    Halt(1);
 end.
 ```
 

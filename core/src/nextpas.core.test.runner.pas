@@ -177,13 +177,15 @@ type
     function  WithEachCleanup(AProc: TTestProc): TTestSuite; overload;
     function  WithEachCleanup(AProc: TTestClosure): TTestSuite; overload;
     function  Run: Boolean;
-    function  RunWithResult(out AResult: TTestRunResult): Boolean;
+    function  RunWithResult(out AResult: TTestRunResult;
+      ADeferCleanup: Boolean = False): Boolean;
     function  RunParallel(APool: IThreadPool): Boolean;
       { Note: APool is currently unused — parallel mode uses BeginThread directly
         to ensure FPC properly initializes per-thread state. Reserved for future
         thread pool integration. }
     function  RunParallelWithResult(APool: IThreadPool;
-      out AResult: TTestRunResult): Boolean;
+      out AResult: TTestRunResult;
+      ADeferCleanup: Boolean = False): Boolean;
     procedure Summary;
     function  AllPassed: Boolean;
     { Dispose table test data, stubs, and fixtures. FCleanupDone guard
@@ -196,7 +198,8 @@ type
     procedure HandleSetupFailure(var AResult: TTestRunResult;
                 ASkipCount: Integer; const AErrorMsg: string;
                 const ASink: IOutputSink; const AConfig: TTestConfig;
-                APopulateResults: Boolean);
+                APopulateResults: Boolean;
+                ADeferCleanup: Boolean = False);
     procedure FinalizeResults(const AConfig: TTestConfig;
                 var AResult: TTestRunResult;
                 APass, AFail, ASkip: Integer);
@@ -270,8 +273,7 @@ uses
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.fs,
-  nextpas.core.time.base,
-  nextpas.core.bench.memtrack;
+  nextpas.core.time.base;
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
@@ -295,18 +297,10 @@ var
   GStubCleanupI: Integer;
   GMainThreadId: UInt64;
 
-threadvar
-  GCurrentTestContextObj: TObject;
-
-procedure SetCurrentTestContext(AContext: TObject);
-begin
-  GCurrentTestContextObj := AContext;
-end;
-
 function Ctx: ITestContext;
 begin
-  if (GCurrentTestContextObj = nil) or
-     (not Supports(GCurrentTestContextObj, ITestContext, Result)) then
+  if (GetCurrentTestContext = nil) or
+     (not Supports(GetCurrentTestContext, ITestContext, Result)) then
     raise Exception.Create(
       'No active test context — Ctx can only be called from within a running test.' +
       ' If called from a parallel worker, ensure BeforeEach has completed.');
@@ -958,7 +952,8 @@ begin
   Result := RunWithResult(LResult);
 end;
 
-function TTestSuite.RunWithResult(out AResult: TTestRunResult): Boolean;
+function TTestSuite.RunWithResult(out AResult: TTestRunResult;
+  ADeferCleanup: Boolean): Boolean;
 var
   I, J: Integer;
   LEntry: TTestEntry;
@@ -1015,7 +1010,7 @@ begin
       LCache := TTestCache.Create(LConfig.CacheDir)
     else
       LCache := TTestCache.Create('.nextpas/test-cache');
-    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig, Name);
   end
   else
   begin
@@ -1060,15 +1055,17 @@ begin
   { Suite-level setup (uses shared helper) }
   if not RunSetup(LConfig, LSkip, LLastFailMsg) then
   begin
-    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
+    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True, ADeferCleanup);
     Result := False;
     Exit;
   end;
-  { R4-01: ETestSkipped from setup — skip all tests, don't fall through }
+  { R4-01: ETestSkipped from setup — skip all tests, don't fall through.
+    Return False because the suite didn't pass (AllPassed=False, Failed=1).
+    P1 fix: setup skip semantic contradiction. }
   if LSkip > 0 then
   begin
-    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True);
-    Result := True;
+    HandleSetupFailure(AResult, LSkip, LLastFailMsg, LOutSink, LConfig, True, ADeferCleanup);
+    Result := False;
     Exit;
   end;
 
@@ -1412,8 +1409,12 @@ begin
     Must be called before FinalizeResults so that --count=N re-runs can
     skip already-disposed entries via the nil guard in the test loop.
     FCleanupDone guard prevents double-free when RunAllWithResult also
-    calls CleanupTableAllocations after the full run. }
-  CleanupTableAllocations;
+    calls CleanupTableAllocations after the full run.
+    ADeferCleanup=True skips cleanup here — caller must call
+    CleanupTableAllocations after all iterations complete (P1 fix:
+    table repeat run skips). }
+  if not ADeferCleanup then
+    CleanupTableAllocations;
 
   AResult.Duration := LSuiteStart.Elapsed.AsMilliseconds;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
@@ -1489,7 +1490,7 @@ end;
 procedure TTestSuite.HandleSetupFailure(var AResult: TTestRunResult;
   ASkipCount: Integer; const AErrorMsg: string;
   const ASink: IOutputSink; const AConfig: TTestConfig;
-  APopulateResults: Boolean);
+  APopulateResults: Boolean; ADeferCleanup: Boolean);
 { Shared setup-failure handler for RunWithResult and RunParallelWithResult.
   APopulateResults: True for serial (populates AResult.Results with skipped entries),
   False for parallel (output only). }
@@ -1518,8 +1519,11 @@ begin
   end;
   { R4-04: Cleanup table-test allocations on setup failure path (both serial
     and parallel). Without this, early Exit skips CleanupTableAllocations in
-    the normal post-loop path, leaking PTestCase/PTestCaseProc data. }
-  CleanupTableAllocations;
+    the normal post-loop path, leaking PTestCase/PTestCaseProc data.
+    ADeferCleanup=True skips cleanup — caller must call CleanupTableAllocations
+    after all iterations complete. }
+  if not ADeferCleanup then
+    CleanupTableAllocations;
   { R4-08: Failed=1 to match the [setup] tsError entry }
   AResult.Failed    := 1;
   AResult.Skipped   := ASkipCount;
@@ -1581,7 +1585,7 @@ begin
 end;
 
 function TTestSuite.RunParallelWithResult(APool: IThreadPool;
-  out AResult: TTestRunResult): Boolean;
+  out AResult: TTestRunResult; ADeferCleanup: Boolean): Boolean;
 var
   LTotal: Integer;
   LPass, LFail, LSkip: Integer;
@@ -1621,7 +1625,7 @@ begin
       LCache := TTestCache.Create(LConfig.CacheDir)
     else
       LCache := TTestCache.Create('.nextpas/test-cache');
-    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig);
+    LCacheKey := LCache.ComputeKey(SourceFiles, GetCompilerVersion, LConfig, Name);
   end
   else
   begin
@@ -1635,10 +1639,11 @@ begin
 
   { Empty suite guard: skip thread spawn + batch dispatch entirely.
     Without this, the while-loop falls through with LBatchStart=0=LTotal,
-    but the array allocation + thread-join scan still runs on garbage. }
+    but the array allocation + thread-join scan still runs on garbage.
+    Skip both setup and teardown for empty suites — no tests to run means
+    no lifecycle hooks needed (P1 fix: empty parallel suite order inversion). }
   if LTotal = 0 then
   begin
-    RunTeardown(LConfig);
     FinalizeResults(LConfig, AResult, 0, 0, 0);
     Result := LastRunPassed;
     Exit;
@@ -1659,15 +1664,17 @@ begin
   { Suite-level setup (serial, uses shared helper) }
   if not RunSetup(LConfig, LSkip, LErrorMsg) then
   begin
-    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
+    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False, ADeferCleanup);
     Result := False;
     Exit;
   end;
-  { R4-01: ETestSkipped from setup — skip all tests, don't fall through }
+  { R4-01: ETestSkipped from setup — skip all tests, don't fall through.
+    Return False because the suite didn't pass (AllPassed=False, Failed=1).
+    P1 fix: setup skip semantic contradiction. }
   if LSkip > 0 then
   begin
-    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False);
-    Result := True;
+    HandleSetupFailure(AResult, LSkip, LErrorMsg, LOutSink, LConfig, False, ADeferCleanup);
+    Result := False;
     Exit;
   end;
 
@@ -1856,7 +1863,8 @@ begin
     end;
   end;
 
-  CleanupTableAllocations;
+  if not ADeferCleanup then
+    CleanupTableAllocations;
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;
@@ -1988,12 +1996,36 @@ end;
 
 procedure TSuiteRunner.Add(const ASuite: TTestSuite);
 var
-  LIdx: Integer;
+  LIdx, I: Integer;
+  LPCase: PTestCase;
+  LPProc: PTestCaseProc;
 begin
   LIdx := GrowArrayLen(Suites, 4);
   Suites[LIdx] := ASuite;
   Suites[LIdx].Tests := Copy(ASuite.Tests, 0, Length(ASuite.Tests));
   Suites[LIdx].EachCleanups := Copy(ASuite.EachCleanups, 0, Length(ASuite.EachCleanups));
+  { Deep copy table payloads — original and runner must own independent copies
+    so CleanupTableAllocations on the runner doesn't leave the original with
+    dangling pointers (P0 fix: raw-owner aliasing). }
+  for I := 0 to High(Suites[LIdx].Tests) do
+  begin
+    if Suites[LIdx].Tests[I].Kind = ekTableTest then
+    begin
+      if Suites[LIdx].Tests[I].TableCase <> nil then
+      begin
+        GetMem(LPCase, SizeOf(TTestCase));
+        FillChar(LPCase^, SizeOf(TTestCase), 0);
+        LPCase^ := PTestCase(Suites[LIdx].Tests[I].TableCase)^;
+        Suites[LIdx].Tests[I].TableCase := LPCase;
+      end;
+      if Suites[LIdx].Tests[I].TableProc <> nil then
+      begin
+        New(LPProc);
+        LPProc^ := PTestCaseProc(Suites[LIdx].Tests[I].TableProc)^;
+        Suites[LIdx].Tests[I].TableProc := LPProc;
+      end;
+    end;
+  end;
   SetLength(Suites, LIdx + 1);
 end;
 
@@ -2016,7 +2048,7 @@ function TSuiteRunner.RunAllIterLoop(
   AIsParallel: Boolean; APool: IThreadPool): Boolean;
 var
   I, LIter, LRepeatAll: Integer;
-  LAllPassed: Boolean;
+  LAllPassed, LOverallPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
@@ -2029,7 +2061,7 @@ begin
 
   if GetListMode(LConfig) then
   begin
-    HasRun := True;
+    { P2 #17 fix: --list only lists tests, doesn't run them. Don't set HasRun. }
     Exit(WriteListMode(Suites, LConfig, AResults));
   end;
 
@@ -2041,6 +2073,7 @@ begin
   WriteRunnerBanner(Name, LConfig, LOutSink, AIsParallel);
 
   LAllPassed := True;
+  LOverallPassed := True;  { Accumulates across all iterations — never reset }
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
@@ -2066,12 +2099,12 @@ begin
     begin
       if AIsParallel then
       begin
-        if not Suites[I].RunParallelWithResult(APool, LSuiteResult) then
+        if not Suites[I].RunParallelWithResult(APool, LSuiteResult, True) then
           LAllPassed := False;
       end
       else
       begin
-        if not Suites[I].RunWithResult(LSuiteResult) then
+        if not Suites[I].RunWithResult(LSuiteResult, True) then
           LAllPassed := False;
       end;
       AResults[I] := LSuiteResult;
@@ -2097,6 +2130,8 @@ begin
       LOutSink.WriteLn(AnsiDim(
         '  Iteration ' + IntToStr(LIter) + ' completed in ' +
         FormatDuration(LStart.Elapsed.AsMilliseconds), LConfig));
+    if not LAllPassed then
+      LOverallPassed := False;  { Accumulate: any failed iteration → overall fail }
   end;
 
   for I := 0 to High(Suites) do
@@ -2104,7 +2139,7 @@ begin
 
   HasRun := True;
   LastResults := AResults;
-  Result := LAllPassed;
+  Result := LOverallPassed;
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
 end;
