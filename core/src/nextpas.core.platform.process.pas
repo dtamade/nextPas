@@ -137,6 +137,11 @@ uses
 {$ENDIF}
   ;
 
+function IsInvalidOutputBuffer(ABuf: PAnsiChar; ABufLen: Int32): Boolean; inline;
+begin
+  Result := (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0));
+end;
+
 const
   WNOHANG = 1;
   PLATFORM_CHILD_FD_FIRST = 3;
@@ -499,10 +504,13 @@ var
   LFailStage: TPlatformProcessSpawnStage;
   LN: PtrInt;
   LTotal: Int32;
+  LDiscard: array[0..4095] of Byte;
 begin
   AOutLen := 0;
   AExitCode := -1;
   if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if IsInvalidOutputBuffer(AOutBuf, AOutBufLen) then
     Exit(PLATFORM_ERR_INVALID);
   LStdoutPipe[0] := -1;
   LStdoutPipe[1] := -1;
@@ -543,16 +551,19 @@ begin
   try
     LTotal := 0;
     repeat
-      LN := read(LStdoutPipe[0], @AOutBuf[LTotal], AOutBufLen - LTotal);
+      if LTotal < AOutBufLen then
+        LN := read(LStdoutPipe[0], @AOutBuf[LTotal], AOutBufLen - LTotal)
+      else
+        LN := read(LStdoutPipe[0], @LDiscard[0], SizeOf(LDiscard));
       if LN < 0 then
       begin
         if platform_get_errno = ESysEINTR then
           Continue;
         Break;
       end;
-      if LN > 0 then
+      if (LN > 0) and (LTotal < AOutBufLen) then
         Inc(LTotal, Int32(LN));
-    until (LN = 0) or (LTotal >= AOutBufLen);
+    until LN = 0;
     if LTotal < AOutBufLen then
       AOutBuf[LTotal] := #0;
     AOutLen := LTotal;
@@ -595,9 +606,16 @@ var
   LPollFds: array[0..1] of pollfd;
   LRet, LN: PtrInt;
   LAnyOpen: Boolean;
+  LStdoutEOF, LStderrEOF: Boolean;
+  LDiscard: array[0..4095] of Byte;
 begin
   AStdoutLen := 0;
   AStderrLen := 0;
+  if IsInvalidOutputBuffer(AStdoutBuf, AStdoutBufLen) or
+     IsInvalidOutputBuffer(AStderrBuf, AStderrBufLen) then
+    Exit(PLATFORM_ERR_INVALID);
+  LStdoutEOF := False;
+  LStderrEOF := False;
 
   { Set non-blocking on both fds }
   fcntl(AStdoutFd, F_SETFL, fcntl(AStdoutFd, F_GETFL, 0) or O_NONBLOCK);
@@ -607,7 +625,7 @@ begin
     FillChar(LPollFds[0], SizeOf(LPollFds), 0);
     LAnyOpen := False;
 
-    if AStdoutLen < AStdoutBufLen then
+    if not LStdoutEOF then
     begin
       LPollFds[0].fd := AStdoutFd;
       LPollFds[0].events := POLLIN;
@@ -616,7 +634,7 @@ begin
     else
       LPollFds[0].fd := -1;
 
-    if AStderrLen < AStderrBufLen then
+    if not LStderrEOF then
     begin
       LPollFds[1].fd := AStderrFd;
       LPollFds[1].events := POLLIN;
@@ -639,43 +657,42 @@ begin
       Continue;
 
     { Read stdout }
-    if (LPollFds[0].revents and POLLIN) <> 0 then
+    if (LPollFds[0].revents and (POLLIN or POLLHUP or POLLERR)) <> 0 then
     begin
-      LN := read(AStdoutFd, @AStdoutBuf[AStdoutLen], AStdoutBufLen - AStdoutLen);
+      if AStdoutLen < AStdoutBufLen then
+        LN := read(AStdoutFd, @AStdoutBuf[AStdoutLen],
+          AStdoutBufLen - AStdoutLen)
+      else
+        LN := read(AStdoutFd, @LDiscard[0], SizeOf(LDiscard));
       if LN < 0 then
       begin
         if platform_get_errno <> ESysEAGAIN then
           Exit(platform_get_errno);
       end
       else if LN = 0 then
-      begin
-        { stdout EOF — mark as full so we stop polling it }
-        AStdoutLen := AStdoutBufLen;
-      end
-      else
+        LStdoutEOF := True
+      else if AStdoutLen < AStdoutBufLen then
         Inc(AStdoutLen, Int32(LN));
     end;
-    if (LPollFds[0].revents and (POLLHUP or POLLERR)) <> 0 then
-      AStdoutLen := AStdoutBufLen; { mark as done }
 
     { Read stderr }
-    if (LPollFds[1].revents and POLLIN) <> 0 then
+    if (LPollFds[1].revents and (POLLIN or POLLHUP or POLLERR)) <> 0 then
     begin
-      LN := read(AStderrFd, @AStderrBuf[AStderrLen], AStderrBufLen - AStderrLen);
+      if AStderrLen < AStderrBufLen then
+        LN := read(AStderrFd, @AStderrBuf[AStderrLen],
+          AStderrBufLen - AStderrLen)
+      else
+        LN := read(AStderrFd, @LDiscard[0], SizeOf(LDiscard));
       if LN < 0 then
       begin
         if platform_get_errno <> ESysEAGAIN then
           Exit(platform_get_errno);
       end
       else if LN = 0 then
-      begin
-        AStderrLen := AStderrBufLen;
-      end
-      else
+        LStderrEOF := True
+      else if AStderrLen < AStderrBufLen then
         Inc(AStderrLen, Int32(LN));
     end;
-    if (LPollFds[1].revents and (POLLHUP or POLLERR)) <> 0 then
-      AStderrLen := AStderrBufLen; { mark as done }
   until False;
 
   if AStdoutLen < AStdoutBufLen then
@@ -701,6 +718,9 @@ begin
   AStderrLen := 0;
   AExitCode := -1;
   if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if IsInvalidOutputBuffer(AStdoutBuf, AStdoutBufLen) or
+     IsInvalidOutputBuffer(AStderrBuf, AStderrBufLen) then
     Exit(PLATFORM_ERR_INVALID);
   LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
   LStderrPipe[0] := -1; LStderrPipe[1] := -1;
@@ -758,6 +778,11 @@ uses
   nextpas.core.platform.windows.ffi,
   nextpas.core.platform.windows.utf16,
   nextpas.core.platform.error;
+
+function IsInvalidOutputBuffer(ABuf: PAnsiChar; ABufLen: Int32): Boolean; inline;
+begin
+  Result := (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0));
+end;
 
 function CreateWindowsProcess(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AInheritHandles: Boolean;
@@ -1000,10 +1025,13 @@ var
   LNulPath: UnicodeString;
   LRead: DWORD;
   LTotal: Int32;
+  LDiscard: array[0..4095] of Byte;
 begin
   AOutLen := 0;
   AExitCode := -1;
   if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if IsInvalidOutputBuffer(AOutBuf, AOutBufLen) then
     Exit(PLATFORM_ERR_INVALID);
   LStdoutRd := HANDLE(PtrInt(-1));
   LStdoutWr := HANDLE(PtrInt(-1));
@@ -1062,12 +1090,19 @@ begin
     LTotal := 0;
     repeat
       LRead := 0;
-      if not ReadFile(LStdoutRd, @AOutBuf[LTotal],
-        DWORD(AOutBufLen - LTotal), @LRead, nil) then
+      if LTotal < AOutBufLen then
+      begin
+        if not ReadFile(LStdoutRd, @AOutBuf[LTotal],
+          DWORD(AOutBufLen - LTotal), @LRead, nil) then
+          Break;
+        if LRead > 0 then
+          Inc(LTotal, Int32(LRead));
+      end
+      else if not ReadFile(LStdoutRd, @LDiscard[0],
+        DWORD(SizeOf(LDiscard)), @LRead, nil) then
         Break;
       if LRead = 0 then Break;
-      Inc(LTotal, Int32(LRead));
-    until LTotal >= AOutBufLen;
+    until False;
     if LTotal < AOutBufLen then
       AOutBuf[LTotal] := #0;
     AOutLen := LTotal;
@@ -1086,8 +1121,12 @@ function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
   out AExitCode: Int32): Int32;
 begin
+  AStdoutLen := 0;
   AStderrLen := 0;
   AExitCode := -1;
+  if IsInvalidOutputBuffer(AStdoutBuf, AStdoutBufLen) or
+     IsInvalidOutputBuffer(AStderrBuf, AStderrBufLen) then
+    Exit(PLATFORM_ERR_INVALID);
   Result := platform_process_run(APath, AArgv, ACwd,
     AStdoutBuf, AStdoutBufLen, AStdoutLen, AExitCode);
 end;

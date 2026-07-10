@@ -290,11 +290,30 @@ procedure TestFileIoContract;
 var
   LSource: string;
   LAtomicSource: string;
+  LCopySource: string;
+  LTotalInitPos: SizeInt;
+  LFStatPos: SizeInt;
 begin
   LSource := LoadSourceText('../../../src/nextpas.core.platform.fs.pas');
   LAtomicSource := SourceSlice(LSource,
     'function platform_fs_write_atomic',
     'function platform_fs_mktemp');
+  LCopySource := SourceSlice(LSource,
+    '{ Linux: try sendfile for zero-copy transfer }',
+    '{ Non-Linux: standard read/write loop }');
+  LTotalInitPos := Pos('LTotal := 0;', LCopySource);
+  LFStatPos := Pos('LHasSourceSize := platform_file_fstat(LSrcH, LStat) = 0;',
+    LCopySource);
+  Check(LTotalInitPos > 0,
+    'copy_file must initialize the Linux byte total');
+  Check(LFStatPos > 0,
+    'copy_file Linux fast path must retain its fstat guard');
+  Check(LTotalInitPos < LFStatPos,
+    'copy_file must initialize the byte total before fstat can fail');
+  CheckContains(LCopySource, 'if LHasSourceSize then',
+    'copy_file must guard every source-size-dependent path');
+  CheckAbsent(LCopySource, 'until LTotal >= LStat.Size',
+    'copy_file must not read unknown source size after fstat failure');
   CheckContains(LSource, 'function platform_fs_write_all',
     'platform.fs must centralize full-write retry');
   CheckContains(LSource, 'PLATFORM_FS_SHORT_WRITE_ERROR',
