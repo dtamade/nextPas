@@ -141,7 +141,8 @@ begin
   Result := Length(AFields) > 0;
 end;
 
-{ Find boundary in multipart body. Returns position of '--' prefix, or 0 if not found. }
+{ Find boundary in multipart body. Returns position of '--' prefix, or 0 if not found.
+  RFC 2046: boundary must be at start of line (preceded by CRLF) or at body start. }
 function FindBoundary(const ABody, ABoundary: string; AStart: Integer): Integer;
 var
   LBoundaryLen, LBodyLen: Integer;
@@ -153,7 +154,12 @@ begin
   begin
     if (ABody[Result] = '-') and (ABody[Result + 1] = '-') and
        (Copy(ABody, Result + 2, LBoundaryLen) = ABoundary) then
-      Exit;
+    begin
+      { Boundary must be at start of line: body start or preceded by CRLF }
+      if (Result = 1) or
+         ((Result >= 3) and (ABody[Result - 2] = #13) and (ABody[Result - 1] = #10)) then
+        Exit;
+    end;
     Inc(Result);
   end;
   Result := 0;
@@ -403,6 +409,18 @@ begin
     Result[LI] := CHARS[1 + Random(Length(CHARS))];
 end;
 
+{ Validate that a string contains no CR/LF/NUL characters (injection prevention) }
+function RejectCRLF(const AValue, AFieldName: string): string;
+var
+  LI: Integer;
+begin
+  for LI := 1 to Length(AValue) do
+    if AValue[LI] in [#13, #10, #0] then
+      raise EArgumentError.Create(
+        AFieldName + ' must not contain CR/LF/NUL characters');
+  Result := AValue;
+end;
+
 { Encode multipart/form-data body }
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string): string;
@@ -422,7 +440,7 @@ var
 
 begin
   if ABoundary <> '' then
-    LBoundary := ABoundary
+    LBoundary := RejectCRLF(ABoundary, 'boundary')
   else
     LBoundary := GenerateBoundary;
 
@@ -432,7 +450,7 @@ begin
   for LI := 0 to High(AFields) do
   begin
     { RFC 6266: Content-Disposition name needs quoted-string escaping }
-    LEscapedName := AFields[LI].Name;
+    LEscapedName := RejectCRLF(AFields[LI].Name, 'field name');
     LEscapedName := StringReplace(LEscapedName, '\', '\\', [rfReplaceAll]);
     LEscapedName := StringReplace(LEscapedName, '"', '\"', [rfReplaceAll]);
     AddPart('--' + LBoundary + #13#10 +
@@ -443,15 +461,15 @@ begin
   for LI := 0 to High(AFiles) do
   begin
     { RFC 6266: Content-Disposition filename needs quoted-string escaping }
-    LEscapedFieldName := AFiles[LI].FieldName;
+    LEscapedFieldName := RejectCRLF(AFiles[LI].FieldName, 'file field name');
     LEscapedFieldName := StringReplace(LEscapedFieldName, '\', '\\', [rfReplaceAll]);
     LEscapedFieldName := StringReplace(LEscapedFieldName, '"', '\"', [rfReplaceAll]);
-    LEscapedFileName := AFiles[LI].FileName;
+    LEscapedFileName := RejectCRLF(AFiles[LI].FileName, 'file name');
     LEscapedFileName := StringReplace(LEscapedFileName, '\', '\\', [rfReplaceAll]);
     LEscapedFileName := StringReplace(LEscapedFileName, '"', '\"', [rfReplaceAll]);
     AddPart('--' + LBoundary + #13#10 +
             'Content-Disposition: form-data; name="' + LEscapedFieldName + '"; filename="' + LEscapedFileName + '"' + #13#10 +
-            'Content-Type: ' + AFiles[LI].ContentType + #13#10 +
+            'Content-Type: ' + RejectCRLF(AFiles[LI].ContentType, 'content type') + #13#10 +
             #13#10 + AFiles[LI].Content + #13#10);
   end;
 
