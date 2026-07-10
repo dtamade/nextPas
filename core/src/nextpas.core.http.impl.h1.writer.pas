@@ -450,7 +450,8 @@ begin
   WriteStatusLine;
   WriteHeaderBlock;
   FHeadersSent := True;
-  if FHeaders.Get('transfer-encoding') = 'chunked' then
+  { Check if chunked encoding is present (case-insensitive, may have multiple codings) }
+  if Pos('chunked', LowerCase(FHeaders.Get('transfer-encoding'))) > 0 then
     FChunkedWriter := TChunkedWriter.Create(FWriter);
 end;
 
