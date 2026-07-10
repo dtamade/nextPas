@@ -107,15 +107,62 @@ begin
   FOpen := True;
 end;
 
+procedure ValidateSSEFieldValue(const AFieldName, AValue: string;
+  const ARejectNull: Boolean);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(AValue) do
+  begin
+    if AValue[LI] in [#10, #13] then
+      raise EArgumentError.Create('SSE ' + AFieldName + ' must not contain line breaks');
+    if ARejectNull and (AValue[LI] = #0) then
+      raise EArgumentError.Create('SSE ' + AFieldName + ' must not contain null bytes');
+  end;
+end;
+
+function NormalizeSSELineEndings(const AValue: string): string;
+var
+  LI, LOut: SizeInt;
+begin
+  SetLength(Result, Length(AValue));
+  LI := 1;
+  LOut := 0;
+  while LI <= Length(AValue) do
+  begin
+    Inc(LOut);
+    if AValue[LI] = #13 then
+    begin
+      Result[LOut] := #10;
+      if (LI < Length(AValue)) and (AValue[LI + 1] = #10) then
+        Inc(LI);
+    end
+    else
+      Result[LOut] := AValue[LI];
+    Inc(LI);
+  end;
+  SetLength(Result, LOut);
+end;
+
 procedure TSSEEventWriter.WriteRaw(const ALine: string);
 var
   LLine: string;
+  LTotal, LWritten, LRemaining: SizeUInt;
 begin
   if not FOpen then
     raise EHttpError.Create('SSE: stream already closed');
   LLine := ALine + #10;
-  if Length(LLine) > 0 then
-    FWriter.Write(LLine[1], SizeUInt(Length(LLine)));
+  LTotal := 0;
+  while LTotal < SizeUInt(Length(LLine)) do
+  begin
+    LRemaining := SizeUInt(Length(LLine)) - LTotal;
+    LWritten := FWriter.Write(LLine[LTotal + 1], LRemaining);
+    if LWritten = 0 then
+      raise EIOError.Create('SSE: response writer made zero progress');
+    if LWritten > LRemaining then
+      raise EIOError.Create('SSE: response writer over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
 end;
 
 procedure TSSEEventWriter.WriteEvent(const AEvent: TSSEvent);
@@ -124,6 +171,10 @@ var
 begin
   if not FOpen then
     raise EHttpError.Create('SSE: stream already closed');
+  if AEvent.Retry < 0 then
+    raise EArgumentError.Create('SSE retry must not be negative');
+  ValidateSSEFieldValue('event name', AEvent.Event, False);
+  ValidateSSEFieldValue('event id', AEvent.Id, True);
 
   { Retry }
   if AEvent.Retry > 0 then
@@ -138,18 +189,28 @@ begin
     WriteRaw('id: ' + AEvent.Id);
 
   { Data — split on newlines per SSE spec }
-  LLines := AEvent.Data;
-  while LLines <> '' do
+  LLines := NormalizeSSELineEndings(AEvent.Data);
+  if LLines = '' then
+    WriteRaw('data: ')
+  else
   begin
-    if Pos(#10, LLines) > 0 then
+    while True do
     begin
-      WriteRaw('data: ' + Copy(LLines, 1, Pos(#10, LLines) - 1));
-      LLines := Copy(LLines, Pos(#10, LLines) + 1, MaxInt);
-    end
-    else
-    begin
-      WriteRaw('data: ' + LLines);
-      LLines := '';
+      if Pos(#10, LLines) > 0 then
+      begin
+        WriteRaw('data: ' + Copy(LLines, 1, Pos(#10, LLines) - 1));
+        LLines := Copy(LLines, Pos(#10, LLines) + 1, MaxInt);
+        if LLines = '' then
+        begin
+          WriteRaw('data: ');
+          Break;
+        end;
+      end
+      else
+      begin
+        WriteRaw('data: ' + LLines);
+        Break;
+      end;
     end;
   end;
 
@@ -166,12 +227,29 @@ begin
 end;
 
 procedure TSSEEventWriter.WriteComment(const AComment: string);
+var
+  LLines: string;
 begin
-  WriteRaw(': ' + AComment);
+  LLines := NormalizeSSELineEndings(AComment);
+  while True do
+  begin
+    if Pos(#10, LLines) > 0 then
+    begin
+      WriteRaw(': ' + Copy(LLines, 1, Pos(#10, LLines) - 1));
+      LLines := Copy(LLines, Pos(#10, LLines) + 1, MaxInt);
+    end
+    else
+    begin
+      WriteRaw(': ' + LLines);
+      Break;
+    end;
+  end;
 end;
 
 procedure TSSEEventWriter.WriteRetry(const AMs: Int64);
 begin
+  if AMs < 0 then
+    raise EArgumentError.Create('SSE retry must not be negative');
   WriteRaw('retry: ' + IntToStr(AMs));
 end;
 

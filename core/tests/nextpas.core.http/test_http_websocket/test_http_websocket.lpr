@@ -393,6 +393,19 @@ begin
     'standalone WebSocket base uses RFC 6455 GUID');
 end;
 
+procedure TestWebSocketWriteAllSourceContract;
+var
+  LHttpSource: string;
+begin
+  LHttpSource := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
+  Check(SourceHas(LHttpSource, 'IoWriteAll(LConn'),
+    'server handshake must handle short writes');
+  Check(SourceHas(LHttpSource, 'IoWriteAll(FWriter'),
+    'websocket frames must handle short writes');
+  Check(SourceHas(LHttpSource, 'IoWriteAll(LWriter'),
+    'client handshake must handle short writes');
+end;
+
 { Test 2: Handshake fails without Upgrade header }
 procedure TestHandshakeNoUpgrade;
 var
@@ -768,6 +781,131 @@ begin
     finally
       LConn.Close;
     end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestReadMessagePreservesFragmentedOpcode;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LFrame1, LFrame2, LCombined: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadStart: Integer;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LMessage: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    LMessage := LWs.ReadMessage;
+    if LMessage.Opcode = wsOpText then
+      LWs.WriteText('text')
+    else
+      LWs.WriteText('wrong');
+    LWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+    LFrame1 := BuildMaskedFrameWithFin($01, 'hel', False);
+    LFrame2 := BuildMaskedFrame($00, 'lo');
+    LCombined := LReq + LFrame1 + LFrame2;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LCombined[1], SizeUInt(Length(LCombined)));
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Pos(#13#10#13#10, LResp) > 0) and
+            (Length(LResp) >= Pos(#13#10#13#10, LResp) + 4 + 6) or
+            (LN = 0);
+
+      LPayloadStart := Pos(#13#10#13#10, LResp) + 4;
+      Check(LPayloadStart >= 5, 'fragmented message: headers complete');
+      Check(Ord(LResp[LPayloadStart]) = $81,
+        'fragmented message: response is text');
+      LPayloadLen := Ord(LResp[LPayloadStart + 1]) and $7F;
+      CheckEqual('text', Copy(LResp, LPayloadStart + 2, LPayloadLen),
+        'ReadMessage preserves original text opcode');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestNegativeWebSocketOptionsRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+  LOptions: TWebSocketOptions;
+begin
+  LOptions := TWebSocketOptions.Default;
+  LOptions.MaxFrameSize := -1;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    try
+      LWs := UpgradeWebSocket(AReq, AW, LOptions);
+      LWs.Close(1000, '');
+    except
+      on E: EArgumentError do
+      begin
+        AW.GetHeaders.SetHeader('content-length', '0');
+        AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
+      end;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      #13#10, 256);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'negative websocket limits rejected before hijack');
+    Check(Pos('HTTP/1.1 101', LResp) = 0,
+      'invalid options must not upgrade connection');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -2936,6 +3074,8 @@ begin
   T.Test('HandshakeSuccess', @TestHandshakeSuccess);
   T.Test('WebSocketAcceptGuidSourceContract',
     @TestWebSocketAcceptGuidSourceContract);
+  T.Test('WebSocketWriteAllSourceContract',
+    @TestWebSocketWriteAllSourceContract);
   T.Test('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Test('HandshakeNoKey', @TestHandshakeNoKey);
   T.Test('HandshakeInvalidKeyRejected', @TestHandshakeInvalidKeyRejected);
@@ -2945,6 +3085,10 @@ begin
     @TestHandshakeAcceptsDuplicateConnectionUpgradeToken);
   T.Test('TextFrameEcho', @TestTextFrameEcho);
   T.Test('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
+  T.Test('ReadMessagePreservesFragmentedOpcode',
+    @TestReadMessagePreservesFragmentedOpcode);
+  T.Test('NegativeWebSocketOptionsRejected',
+    @TestNegativeWebSocketOptionsRejected);
   T.Test('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
     @TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket);
   T.Test('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);

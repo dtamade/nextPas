@@ -50,8 +50,13 @@ type
     FBodyBytes: TBytes;
     FHeaders: IHttpHeaders;
     FBodyBytesWritten: Int64;
+    FMaxWriteSize: SizeUInt;
+    FRaiseOnWrite: Boolean;
+    FWriteHeaderCount: Int32;
   public
     constructor Create;
+    procedure SetMaxWriteSize(const AValue: SizeUInt);
+    procedure SetRaiseOnWrite(const AValue: Boolean);
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -61,6 +66,7 @@ type
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
+    property WriteHeaderCount: Int32 read FWriteHeaderCount;
   end;
 
   TMockRequest = class(TInterfacedObject, IHttpRequest)
@@ -100,10 +106,24 @@ begin
   FBodyBytes := nil;
   FHeaders := NewHttpHeaders;
   FBodyBytesWritten := 0;
+  FMaxWriteSize := High(SizeUInt);
+  FRaiseOnWrite := False;
+  FWriteHeaderCount := 0;
+end;
+
+procedure TMockResponseWriter.SetMaxWriteSize(const AValue: SizeUInt);
+begin
+  FMaxWriteSize := AValue;
+end;
+
+procedure TMockResponseWriter.SetRaiseOnWrite(const AValue: Boolean);
+begin
+  FRaiseOnWrite := AValue;
 end;
 
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
+  Inc(FWriteHeaderCount);
   FStatus := AStatus;
 end;
 
@@ -121,18 +141,24 @@ function TMockResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt
 var
   LStr: string;
   LOldLen: SizeUInt;
+  LWriteCount: SizeUInt;
 begin
-  SetLength(LStr, ACount);
-  if ACount > 0 then
-    Move(ABuf, LStr[1], ACount);
+  if FRaiseOnWrite then
+    raise EIOError.Create('mock response write failed');
+  LWriteCount := ACount;
+  if LWriteCount > FMaxWriteSize then
+    LWriteCount := FMaxWriteSize;
+  SetLength(LStr, LWriteCount);
+  if LWriteCount > 0 then
+    Move(ABuf, LStr[1], LWriteCount);
   FBody := FBody + LStr;
   { Also capture raw bytes for binary data verification }
   LOldLen := SizeUInt(Length(FBodyBytes));
-  SetLength(FBodyBytes, LOldLen + ACount);
-  if ACount > 0 then
-    Move(ABuf, FBodyBytes[LOldLen], ACount);
-  Inc(FBodyBytesWritten, Int64(ACount));
-  Result := ACount;
+  SetLength(FBodyBytes, LOldLen + LWriteCount);
+  if LWriteCount > 0 then
+    Move(ABuf, FBodyBytes[LOldLen], LWriteCount);
+  Inc(FBodyBytesWritten, Int64(LWriteCount));
+  Result := LWriteCount;
 end;
 
 procedure TMockResponseWriter.Flush;
@@ -531,6 +557,7 @@ var
   LOpts: TCorsOptions;
 begin
   LOpts := TCorsOptions.Default;
+  LOpts.AllowOrigins := 'http://example.com';
   LOpts.AllowCredentials := True;
   LHandler := Chain(
     HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -574,7 +601,8 @@ begin
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual('https://trusted.com', LWObj.GetHeaders.Get('Access-Control-Allow-Origin'),
     'specific origin echoed');
-  CheckEqual('Origin', LWObj.GetHeaders.Get('Vary'), 'Vary: Origin for specific origin');
+  CheckEqual('Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+    LWObj.GetHeaders.Get('Vary'), 'specific origin response varies by CORS request fields');
 end;
 
 procedure TestCorsSpecificOriginDenied;
@@ -2544,6 +2572,93 @@ begin
   CheckEqual(200, LWObj.GetStatus, 'plain request succeeds');
 end;
 
+procedure TestDecompressEnforcesOutputLimit;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  LHandlerCalled: Boolean;
+  I: Integer;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware(32)]
+  );
+  SetLength(LPlain, 256);
+  for I := 0 to High(LPlain) do
+    LPlain[I] := Ord('A');
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'oversize decompressed body must not reach handler');
+  CheckEqual(Int64(400), Int64(LWObj.GetStatus), 'oversize decompressed body rejected');
+  Check(Pos('decompressed size exceeds limit', LWObj.Body) = 0,
+    'compression internals are not exposed');
+end;
+
+procedure TestDecompressRejectsNegativeLimit;
+begin
+  try
+    DecompressMiddleware(-1);
+    Check(False, 'negative decompression limit must raise');
+  except
+    on E: EArgumentError do
+      Check(True, 'negative decompression limit rejected');
+  end;
+end;
+
+procedure TestDecompressPreservesDuplicateHeaders;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  LValues: TStringArray;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LValues := AReq.Headers.GetAll('x-duplicate');
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware(1024)]
+  );
+  SetLength(LPlain, 1);
+  LPlain[0] := Ord('x');
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.GetHeaders.Add('x-duplicate', 'one');
+  LReq.GetHeaders.Add('x-duplicate', 'two');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(2), Int64(Length(LValues)), 'duplicate headers preserved');
+  CheckEqual('one', LValues[0], 'first duplicate value preserved');
+  CheckEqual('two', LValues[1], 'second duplicate value preserved');
+end;
+
 { ServerHeader middleware tests }
 
 procedure TestServerHeaderDefault;
@@ -2922,6 +3037,155 @@ begin
   Check(Length(LWObj.BodyBytes) < Length(LBigBody), 'deflate body smaller');
 end;
 
+procedure TestCompressionHonorsQZero;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+begin
+  LBigBody := StringOfChar('A', 4096);
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/data');
+  LReq.SetHeader('accept-encoding', 'gzip;q=0, deflate;q=0');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('', LWObj.GetHeaders.Get('content-encoding'),
+    'q=0 encodings are not selected');
+  CheckEqual(Int64(Length(LBigBody)), Int64(Length(LWObj.BodyBytes)),
+    'q=0 response remains uncompressed');
+end;
+
+procedure TestCompressionChoosesHighestQuality;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+begin
+  LBigBody := StringOfChar('B', 4096);
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/data');
+  LReq.SetHeader('accept-encoding', 'gzip;q=0.2, deflate;q=0.8');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('deflate', LWObj.GetHeaders.Get('content-encoding'),
+    'highest quality supported encoding selected');
+end;
+
+procedure TestCompressionPreservesExistingVary;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+begin
+  LBigBody := StringOfChar('C', 4096);
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain');
+      AW.GetHeaders.SetHeader('vary', 'Origin');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('Origin, Accept-Encoding', LWObj.GetHeaders.Get('vary'),
+    'compression appends to Vary');
+end;
+
+procedure TestCompressionDoesNotRetryCommittedWriteFailure;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBigBody: string;
+begin
+  LBigBody := StringOfChar('D', 4096);
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.GetHeaders.SetHeader('content-type', 'text/plain');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBigBody[1], Length(LBigBody));
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/data');
+  LReq.SetHeader('accept-encoding', 'gzip');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LWObj.SetRaiseOnWrite(True);
+  LW := LWObj;
+  try
+    LHandler.ServeHTTP(LReqIntf, LW);
+    Check(False, 'downstream write failure must propagate');
+  except
+    on E: EIOError do
+      Check(True, 'downstream write failure propagated');
+  end;
+  CheckEqual(Int64(1), Int64(LWObj.WriteHeaderCount),
+    'committed response is not written a second time');
+end;
+
+procedure TestCompressionOmitsContentLengthForNoContent;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+    end),
+    [CompressionMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/empty');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(204), Int64(LWObj.Status), 'status remains 204');
+  Check(not LWObj.GetHeaders.Has('content-length'),
+    '204 response does not gain content-length');
+end;
+
 procedure TestContentTypeReturnsJson415;
 var
   LHandler: IHttpHandler;
@@ -3107,6 +3371,97 @@ begin
     'stream with length sets content-length header');
 end;
 
+procedure TestHttpWriteStreamHandlesShortWrites;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+  LN: Int64;
+  I: Integer;
+begin
+  SetLength(LData, 100);
+  for I := 0 to High(LData) do
+    LData[I] := Byte(I);
+  LWObj := TMockResponseWriter.Create;
+  LWObj.SetMaxWriteSize(3);
+  LW := LWObj;
+  LReader := TMockReader.Create(LData);
+  LN := HttpWriteStream(LW, LReader as IReader, 32);
+  CheckEqual(Int64(100), LN, 'short writes still copy all bytes');
+  CheckEqual(Int64(100), Int64(Length(LWObj.BodyBytes)),
+    'short writes do not truncate response');
+end;
+
+procedure TestHttpWriteStreamWithLengthHandlesShortWrites;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+  LN: Int64;
+begin
+  SetLength(LData, 50);
+  LWObj := TMockResponseWriter.Create;
+  LWObj.SetMaxWriteSize(2);
+  LW := LWObj;
+  LReader := TMockReader.Create(LData);
+  LN := HttpWriteStreamWithLength(LW, 50, LReader as IReader, 16);
+  CheckEqual(Int64(50), LN, 'length stream handles short writes');
+  CheckEqual(Int64(50), Int64(Length(LWObj.BodyBytes)),
+    'length stream does not truncate response');
+end;
+
+procedure TestHttpStreamRejectsZeroBufferSize;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReader: TMockReader;
+  LData: TBytes;
+begin
+  SetLength(LData, 1);
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+
+  LReader := TMockReader.Create(LData);
+  try
+    HttpWriteStream(LW, LReader as IReader, 0);
+    Check(False, 'HttpWriteStream zero buffer must raise');
+  except
+    on E: EArgumentError do Check(True, 'HttpWriteStream zero buffer rejected');
+  end;
+
+  LReader := TMockReader.Create(LData);
+  try
+    HttpWriteStreamWithLength(LW, 1, LReader as IReader, 0);
+    Check(False, 'HttpWriteStreamWithLength zero buffer must raise');
+  except
+    on E: EArgumentError do Check(True,
+      'HttpWriteStreamWithLength zero buffer rejected');
+  end;
+
+  LReader := TMockReader.Create(LData);
+  try
+    HttpRequestReadChunks(LReader as IReader, 0,
+      procedure(const AChunk: TBytes; ACount: SizeUInt)
+      begin
+      end);
+    Check(False, 'HttpRequestReadChunks zero buffer must raise');
+  except
+    on E: EArgumentError do Check(True,
+      'HttpRequestReadChunks zero buffer rejected');
+  end;
+
+  LReader := TMockReader.Create(LData);
+  try
+    HttpRequestReadBody(LReader as IReader, 1, 0);
+    Check(False, 'HttpRequestReadBody zero buffer must raise');
+  except
+    on E: EArgumentError do Check(True,
+      'HttpRequestReadBody zero buffer rejected');
+  end;
+end;
+
 procedure TestHttpRequestReadChunksCollectsData;
 var
   LData: TBytes;
@@ -3244,6 +3599,62 @@ begin
   LWriter.Close;
 end;
 
+procedure TestSSEEventWriterHandlesShortWrites;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LWObj.SetMaxWriteSize(2);
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteEventSimple('message', 'hello', '');
+  Check(Pos('event: message'#10, LWObj.Body) > 0,
+    'SSE event line survives short writes');
+  Check(Pos('data: hello'#10#10, LWObj.Body) > 0,
+    'SSE data and terminator survive short writes');
+end;
+
+procedure TestSSEEventWriterSplitsCarriageReturnData;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteEventSimple('message', 'line1'#13'line2', '');
+  Check(Pos('data: line1'#10, LWObj.Body) > 0,
+    'SSE writes first CR-delimited data line');
+  Check(Pos('data: line2'#10, LWObj.Body) > 0,
+    'SSE writes second CR-delimited data line');
+end;
+
+procedure TestSSEEventWriterRejectsFieldInjection;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  try
+    LWriter.WriteEventSimple('message'#10'id: injected', 'body', '');
+    Check(False, 'SSE event name newline must raise');
+  except
+    on E: EArgumentError do Check(True, 'SSE event name injection rejected');
+  end;
+  try
+    LWriter.WriteEventSimple('message', 'body', 'ok'#13#10'retry: 1');
+    Check(False, 'SSE id newline must raise');
+  except
+    on E: EArgumentError do Check(True, 'SSE id injection rejected');
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -3351,6 +3762,9 @@ begin
   T.Test('Metrics: tracks response bytes', @TestMetricsTracksResponseBytes);
   T.Test('Decompress: gzip body', @TestDecompressGzipBody);
   T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
+  T.Test('Decompress: enforces output limit', @TestDecompressEnforcesOutputLimit);
+  T.Test('Decompress: rejects negative limit', @TestDecompressRejectsNegativeLimit);
+  T.Test('Decompress: preserves duplicate headers', @TestDecompressPreservesDuplicateHeaders);
   { ServerHeader }
   T.Test('ServerHeader: default nextpas', @TestServerHeaderDefault);
   T.Test('ServerHeader: custom name', @TestServerHeaderCustom);
@@ -3371,6 +3785,11 @@ begin
   T.Test('Compression: skips without Accept-Encoding', @TestCompressionSkipsWithoutAcceptEncoding);
   T.Test('Compression: skips non-compressible type', @TestCompressionSkipsNonCompressibleType);
   T.Test('Compression: deflate supported', @TestCompressionDeflateSupported);
+  T.Test('Compression: honors q=0', @TestCompressionHonorsQZero);
+  T.Test('Compression: chooses highest quality', @TestCompressionChoosesHighestQuality);
+  T.Test('Compression: preserves Vary', @TestCompressionPreservesExistingVary);
+  T.Test('Compression: committed write failure is not retried', @TestCompressionDoesNotRetryCommittedWriteFailure);
+  T.Test('Compression: 204 omits content-length', @TestCompressionOmitsContentLengthForNoContent);
   { ContentType JSON }
   T.Test('ContentType: returns JSON 415', @TestContentTypeReturnsJson415);
   { Deadline }
@@ -3381,6 +3800,9 @@ begin
   T.Test('Stream: copies data', @TestHttpWriteStreamCopiesData);
   T.Test('Stream: empty reader', @TestHttpWriteStreamEmptyReader);
   T.Test('Stream: with length sets header', @TestHttpWriteStreamWithLengthSetsHeader);
+  T.Test('Stream: handles short writes', @TestHttpWriteStreamHandlesShortWrites);
+  T.Test('Stream: with length handles short writes', @TestHttpWriteStreamWithLengthHandlesShortWrites);
+  T.Test('Stream: rejects zero buffer size', @TestHttpStreamRejectsZeroBufferSize);
   T.Test('Stream: read chunks collects data', @TestHttpRequestReadChunksCollectsData);
   T.Test('Stream: read body collects all', @TestHttpRequestReadBodyCollectsAll);
   T.Test('Stream: read body respects max', @TestHttpRequestReadBodyRespectsMaxBytes);
@@ -3390,6 +3812,9 @@ begin
   T.Test('SSE: writes comment', @TestSSEEventWriterWritesComment);
   T.Test('SSE: sets headers', @TestSSEEventWriterSetsHeaders);
   T.Test('SSE: multiline data', @TestSSEEventWriterMultilineData);
+  T.Test('SSE: handles short writes', @TestSSEEventWriterHandlesShortWrites);
+  T.Test('SSE: splits CR data lines', @TestSSEEventWriterSplitsCarriageReturnData);
+  T.Test('SSE: rejects field injection', @TestSSEEventWriterRejectsFieldInjection);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

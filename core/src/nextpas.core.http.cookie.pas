@@ -105,11 +105,15 @@ begin
   if Length(S) = 0 then
     Exit(False);
   for I := 1 to Length(S) do
+  begin
+    if Ord(S[I]) > 126 then
+      Exit(False);
     case S[I] of
       #0..#31, #127, ' ', ';', ',', '"', '\', '(', ')', '<', '>',
       '@', ':', '/', '[', ']', '?', '=', '{', '}':
         Exit(False);
     end;
+  end;
   Result := True;
 end;
 
@@ -120,10 +124,14 @@ var
   I: SizeInt;
 begin
   for I := 1 to Length(S) do
+  begin
+    if Ord(S[I]) > 126 then
+      Exit(False);
     case S[I] of
       #0..#31, #127, ' ', ';', ',', '"', '\':
         Exit(False);
     end;
+  end;
   Result := True;
 end;
 
@@ -135,10 +143,14 @@ var
   I: SizeInt;
 begin
   for I := 1 to Length(S) do
+  begin
+    if Ord(S[I]) > 126 then
+      Exit(False);
     case S[I] of
       #0..#31, #127, ';':
         Exit(False);
     end;
+  end;
   Result := True;
 end;
 

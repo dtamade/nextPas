@@ -100,6 +100,7 @@ uses
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.io.util,
   nextpas.core.http.url,
   nextpas.core.http.headers,
   nextpas.core.http.message,
@@ -144,6 +145,14 @@ begin
   Result.MaxFrameSize := WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxMessageSize := WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
   Result.OnCheckOrigin := nil;
+end;
+
+procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
+begin
+  if AOptions.MaxFrameSize < 0 then
+    raise EArgumentError.Create('WebSocket max frame size must not be negative');
+  if AOptions.MaxMessageSize < 0 then
+    raise EArgumentError.Create('WebSocket max message size must not be negative');
 end;
 
 function IsOWS(const ACh: Char): Boolean;
@@ -324,6 +333,12 @@ var
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
 begin
+  if AReq = nil then
+    raise EArgumentError.Create('WebSocket upgrade request is nil');
+  if AW = nil then
+    raise EArgumentError.Create('WebSocket upgrade response writer is nil');
+  ValidateWebSocketOptions(AOptions);
+
   LUpgrade := LowerTrimOWS(AReq.Headers.Get('upgrade'));
   LConnectionValues := AReq.Headers.GetAll('connection');
   LKeyValues := AReq.Headers.GetAll('sec-websocket-key');
@@ -377,7 +392,12 @@ begin
            'Connection: Upgrade'#13#10 +
            'Sec-WebSocket-Accept: ' + LAccept + #13#10 +
            #13#10;
-  LConn.Write(LResp[1], SizeUInt(Length(LResp)));
+  try
+    IoWriteAll(LConn as IWriter, LResp[1], SizeUInt(Length(LResp)));
+  except
+    LConn.Close;
+    raise;
+  end;
 
   Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions);
 end;
@@ -485,6 +505,8 @@ begin
 
   if SizeExceedsLimit(LPayloadLen, FOptions.MaxFrameSize) then
     raise EHttpError.Create('WebSocket: frame too large');
+  if LPayloadLen > UInt64(High(SizeInt)) then
+    raise EHttpError.Create('WebSocket: frame exceeds platform capacity');
   if LOpcode in [Byte(wsOpText), Byte(wsOpBinary)] then
   begin
     if SizeExceedsLimit(LPayloadLen, FOptions.MaxMessageSize) then
@@ -559,6 +581,7 @@ function TWebSocketImpl.ReadMessage: TWebSocketFrame;
 var
   LFrame: TWebSocketFrame;
   LPayload: string;
+  LMessageOpcode: TWebSocketOpcode;
 begin
   { Read frames until we get a complete data message }
   while True do
@@ -596,6 +619,7 @@ begin
         else
         begin
           { First fragment — collect continuation frames }
+          LMessageOpcode := LFrame.Opcode;
           LPayload := LFrame.Payload;
           while True do
           begin
@@ -607,13 +631,17 @@ begin
             end;
             if LFrame.Opcode = wsOpPong then
               Continue;
+            if LFrame.Opcode = wsOpClose then
+            begin
+              Result := LFrame;
+              Exit;
+            end;
             if LFrame.Opcode <> wsOpContinuation then
               raise EHttpError.Create('WebSocket: expected continuation frame');
             LPayload := LPayload + LFrame.Payload;
             if LFrame.Fin then
             begin
-              { Recover original opcode from the first frame }
-              Result.Opcode := FFragmentOpcode;
+              Result.Opcode := LMessageOpcode;
               Result.Fin := True;
               Result.Payload := LPayload;
               Exit;
@@ -670,7 +698,10 @@ begin
     else
     begin
       LHdr[1] := $80 or 127; { MASK bit set }
-      LHdr[2] := 0; LHdr[3] := 0; LHdr[4] := 0; LHdr[5] := 0;
+      LHdr[2] := Byte(UInt64(LPayloadLen) shr 56);
+      LHdr[3] := Byte(UInt64(LPayloadLen) shr 48);
+      LHdr[4] := Byte(UInt64(LPayloadLen) shr 40);
+      LHdr[5] := Byte(UInt64(LPayloadLen) shr 32);
       LHdr[6] := Byte(LPayloadLen shr 24);
       LHdr[7] := Byte(LPayloadLen shr 16);
       LHdr[8] := Byte(LPayloadLen shr 8);
@@ -679,11 +710,11 @@ begin
       { Mask key goes after 10-byte header }
     end;
 
-    FWriter.Write(LHdr[0], SizeUInt(LHdrLen));
+    IoWriteAll(FWriter, LHdr[0], SizeUInt(LHdrLen));
 
     { Write mask key if 64-bit length }
     if LPayloadLen >= 65536 then
-      FWriter.Write(LMaskKey[0], 4);
+      IoWriteAll(FWriter, LMaskKey[0], 4);
 
     { Write masked payload }
     if LPayloadLen > 0 then
@@ -691,7 +722,7 @@ begin
       SetLength(LMaskedPayload, LPayloadLen);
       for I := 0 to LPayloadLen - 1 do
         LMaskedPayload[I + 1] := Chr(Ord(APayload[I + 1]) xor LMaskKey[I mod 4]);
-      FWriter.Write(LMaskedPayload[1], LPayloadLen);
+      IoWriteAll(FWriter, LMaskedPayload[1], LPayloadLen);
     end;
   end
   else
@@ -712,7 +743,10 @@ begin
     else
     begin
       LHdr[1] := 127;
-      LHdr[2] := 0; LHdr[3] := 0; LHdr[4] := 0; LHdr[5] := 0;
+      LHdr[2] := Byte(UInt64(LPayloadLen) shr 56);
+      LHdr[3] := Byte(UInt64(LPayloadLen) shr 48);
+      LHdr[4] := Byte(UInt64(LPayloadLen) shr 40);
+      LHdr[5] := Byte(UInt64(LPayloadLen) shr 32);
       LHdr[6] := Byte(LPayloadLen shr 24);
       LHdr[7] := Byte(LPayloadLen shr 16);
       LHdr[8] := Byte(LPayloadLen shr 8);
@@ -720,15 +754,15 @@ begin
       LHdrLen := 10;
     end;
 
-    FWriter.Write(LHdr[0], SizeUInt(LHdrLen));
+    IoWriteAll(FWriter, LHdr[0], SizeUInt(LHdrLen));
     if LPayloadLen > 0 then
-      FWriter.Write(APayload[1], LPayloadLen);
+      IoWriteAll(FWriter, APayload[1], LPayloadLen);
   end;
 end;
 
 procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
 begin
-  if not FOpen then
+  if not IsOpen then
     raise EHttpError.Create('WebSocket: connection closed');
   if AOpcode in [wsOpClose, wsOpPing, wsOpPong] then
     ValidateControlPayloadSize(APayload);
@@ -807,14 +841,21 @@ end;
 
 procedure ReadHttpResponse(const AReader: IReader;
   out AStatusCode: Integer; out AHeaders: TStringArray);
+const
+  MAX_STATUS_LINE_SIZE = 4096;
+  MAX_HEADER_LINE_SIZE = 8192;
+  MAX_HEADER_BYTES = 65536;
+  MAX_HEADER_COUNT = 256;
 var
   LLine: string;
   LCh: Char;
   LLen: Integer;
   LHeaderCount: Integer;
+  LHeaderBytes: SizeUInt;
 begin
   AStatusCode := 0;
   LHeaderCount := 0;
+  LHeaderBytes := 0;
   SetLength(AHeaders, 16);
 
   { Read status line }
@@ -825,7 +866,9 @@ begin
       raise EHttpError.Create('WebSocket: unexpected end of stream reading response');
     if LCh <> #10 then
       LLine := LLine + LCh;
-  until (LCh = #10) or (Length(LLine) > 4096);
+  until (LCh = #10) or (Length(LLine) > MAX_STATUS_LINE_SIZE);
+  if Length(LLine) > MAX_STATUS_LINE_SIZE then
+    raise EHttpError.Create('WebSocket: HTTP status line too large');
 
   { Remove trailing CR }
   if (Length(LLine) > 0) and (LLine[Length(LLine)] = #13) then
@@ -847,7 +890,9 @@ begin
         raise EHttpError.Create('WebSocket: unexpected end of stream reading headers');
       if LCh <> #10 then
         LLine := LLine + LCh;
-    until (LCh = #10) or (Length(LLine) > 8192);
+    until (LCh = #10) or (Length(LLine) > MAX_HEADER_LINE_SIZE);
+    if Length(LLine) > MAX_HEADER_LINE_SIZE then
+      raise EHttpError.Create('WebSocket: HTTP response header line too large');
 
     { Remove trailing CR }
     if (Length(LLine) > 0) and (LLine[Length(LLine)] = #13) then
@@ -856,6 +901,12 @@ begin
     { Empty line marks end of headers }
     if LLine = '' then
       Break;
+
+    Inc(LHeaderBytes, SizeUInt(Length(LLine)) + 2);
+    if LHeaderBytes > MAX_HEADER_BYTES then
+      raise EHttpError.Create('WebSocket: HTTP response headers too large');
+    if LHeaderCount >= MAX_HEADER_COUNT then
+      raise EHttpError.Create('WebSocket: too many HTTP response headers');
 
     { Store header }
     if LHeaderCount >= Length(AHeaders) then
@@ -884,10 +935,13 @@ begin
          (LowerCase(Copy(LLine, 1, Length(AName) + 2)) = LNameLower + ': ') then
       begin
         if LLine[Length(AName) + 1] = ':' then
-          Result := TrimOWS(Copy(LLine, Length(AName) + 2, MaxInt))
+          LLine := TrimOWS(Copy(LLine, Length(AName) + 2, MaxInt))
         else
-          Result := TrimOWS(Copy(LLine, Length(AName) + 3, MaxInt));
-        Exit;
+          LLine := TrimOWS(Copy(LLine, Length(AName) + 3, MaxInt));
+        if Result = '' then
+          Result := LLine
+        else
+          Result := Result + ', ' + LLine;
       end;
     end;
   end;
@@ -934,6 +988,7 @@ begin
     raise EArgumentError.Create('WebSocket client is nil');
   if AUrl = '' then
     raise EArgumentError.Create('WebSocket URL is empty');
+  ValidateWebSocketOptions(AOptions);
 
   { Parse URL }
   LParsedUrl := TUrl.Parse(AUrl);
@@ -1003,7 +1058,7 @@ begin
               #13#10;
 
   { Send upgrade request }
-  LWriter.Write(LRequest[1], SizeUInt(Length(LRequest)));
+  IoWriteAll(LWriter, LRequest[1], SizeUInt(Length(LRequest)));
 
   { Read response }
   ReadHttpResponse(LReader, LStatusCode, LHeaders);
@@ -1016,9 +1071,9 @@ begin
   LConnection := LowerCase(FindHeader(LHeaders, 'Connection'));
   LAcceptHeader := FindHeader(LHeaders, 'Sec-WebSocket-Accept');
 
-  if LUpgrade <> 'websocket' then
+  if not HeaderValueHasToken(LUpgrade, 'websocket') then
     raise EHttpError.Create('WebSocket: invalid Upgrade header');
-  if LConnection <> 'upgrade' then
+  if not HeaderValueHasToken(LConnection, 'upgrade') then
     raise EHttpError.Create('WebSocket: invalid Connection header');
   if LAcceptHeader = '' then
     raise EHttpError.Create('WebSocket: missing Sec-WebSocket-Accept header');

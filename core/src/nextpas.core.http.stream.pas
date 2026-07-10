@@ -59,6 +59,34 @@ uses
   nextpas.core.errors,
   nextpas.core.text.conv;
 
+procedure ValidateBufferSize(const AContext: string; const ABufSize: SizeUInt);
+begin
+  if ABufSize = 0 then
+    raise EArgumentError.Create(AContext + ': buffer size must be positive');
+  if ABufSize > SizeUInt(High(SizeInt)) then
+    raise EArgumentError.Create(AContext + ': buffer size exceeds platform capacity');
+end;
+
+procedure WriteAllResponse(const AW: IHttpResponseWriter; const ABuf;
+  const ACount: SizeUInt);
+var
+  LBuffer: PByte;
+  LTotal, LWritten, LRemaining: SizeUInt;
+begin
+  LBuffer := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LRemaining := ACount - LTotal;
+    LWritten := AW.Write(LBuffer[LTotal], LRemaining);
+    if LWritten = 0 then
+      raise EIOError.Create('HTTP response writer made zero progress');
+    if LWritten > LRemaining then
+      raise EIOError.Create('HTTP response writer over-reported progress');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
 function HttpWriteStream(const AW: IHttpResponseWriter;
   const AReader: IReader; const ABufSize: SizeUInt): Int64;
 var
@@ -69,6 +97,7 @@ begin
     raise EArgumentError.Create('HttpWriteStream: response writer is nil');
   if AReader = nil then
     raise EArgumentError.Create('HttpWriteStream: reader is nil');
+  ValidateBufferSize('HttpWriteStream', ABufSize);
 
   SetLength(LBuf, ABufSize);
   Result := 0;
@@ -76,7 +105,11 @@ begin
     LN := AReader.Read(LBuf[0], ABufSize);
     if LN > 0 then
     begin
-      AW.Write(LBuf[0], LN);
+      if LN > ABufSize then
+        raise EIOError.Create('HttpWriteStream: reader over-reported progress');
+      if Int64(LN) > High(Int64) - Result then
+        raise EIOError.Create('HttpWriteStream: byte count overflow');
+      WriteAllResponse(AW, LBuf[0], LN);
       Inc(Result, Int64(LN));
     end;
   until LN = 0;
@@ -97,6 +130,7 @@ begin
     raise EArgumentError.Create('HttpWriteStreamWithLength: reader is nil');
   if AContentLength < 0 then
     raise EArgumentError.Create('HttpWriteStreamWithLength: negative content length');
+  ValidateBufferSize('HttpWriteStreamWithLength', ABufSize);
 
   AW.GetHeaders.SetHeader('content-length', IntToStr(AContentLength));
 
@@ -112,7 +146,9 @@ begin
     LN := AReader.Read(LBuf[0], LToRead);
     if LN = 0 then
       raise EIOError.Create('HttpWriteStreamWithLength: unexpected end of stream');
-    AW.Write(LBuf[0], LN);
+    if LN > LToRead then
+      raise EIOError.Create('HttpWriteStreamWithLength: reader over-reported progress');
+    WriteAllResponse(AW, LBuf[0], LN);
     Inc(Result, Int64(LN));
     Dec(LRemaining, Int64(LN));
   end;
@@ -128,6 +164,7 @@ begin
     raise EArgumentError.Create('HttpRequestReadChunks: body reader is nil');
   if not Assigned(AOnChunk) then
     raise EArgumentError.Create('HttpRequestReadChunks: callback is nil');
+  ValidateBufferSize('HttpRequestReadChunks', ABufSize);
 
   SetLength(LBuf, ABufSize);
   Result := 0;
@@ -135,6 +172,10 @@ begin
     LN := ABody.Read(LBuf[0], ABufSize);
     if LN > 0 then
     begin
+      if LN > ABufSize then
+        raise EIOError.Create('HttpRequestReadChunks: reader over-reported progress');
+      if Int64(LN) > High(Int64) - Result then
+        raise EIOError.Create('HttpRequestReadChunks: byte count overflow');
       AOnChunk(LBuf, LN);
       Inc(Result, Int64(LN));
     end;
@@ -155,6 +196,7 @@ begin
     raise EArgumentError.Create('HttpRequestReadBody: body reader is nil');
   if AMaxBytes < 0 then
     raise EArgumentError.Create('HttpRequestReadBody: negative max bytes');
+  ValidateBufferSize('HttpRequestReadBody', ABufSize);
 
   SetLength(LBuf, ABufSize);
   LResultLen := 0;
@@ -166,6 +208,10 @@ begin
     LN := ABody.Read(LBuf[0], ABufSize);
     if LN > 0 then
     begin
+      if LN > ABufSize then
+        raise EIOError.Create('HttpRequestReadBody: reader over-reported progress');
+      if Int64(LN) > High(Int64) - LTotal then
+        raise EIOError.Create('HttpRequestReadBody: byte count overflow');
       Inc(LTotal, Int64(LN));
       if LTotal > AMaxBytes then
         raise EHttpError.CreateFmt(

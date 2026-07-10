@@ -4,6 +4,7 @@ program test_http_cookie;
 
 uses
   nextpas.core.test,
+  nextpas.core.base,
   nextpas.core.http.cookie;
 
 procedure TestParseSimpleCookie;
@@ -222,6 +223,37 @@ begin
   CheckEqual('', LValue, 'value empty');
 end;
 
+procedure TestMakeCookieRejectsNonAsciiName;
+begin
+  try
+    MakeCookie('na' + #$C3#$A9, 'value');
+    Check(False, 'non-ASCII cookie name must raise');
+  except
+    on E: ECore do Check(True, 'non-ASCII cookie name rejected');
+  end;
+end;
+
+procedure TestMakeCookieRejectsNonAsciiValue;
+begin
+  try
+    MakeCookie('name', 'caf' + #$C3#$A9);
+    Check(False, 'non-ASCII cookie value must raise');
+  except
+    on E: ECore do Check(True, 'non-ASCII cookie value rejected');
+  end;
+end;
+
+procedure TestBuildCookieRejectsNonAsciiAttribute;
+begin
+  try
+    BuildSetCookie(MakeCookie('name', 'value').WithDomain(
+      'ex' + #$C3#$A4 + 'mple.com'));
+    Check(False, 'non-ASCII cookie attribute must raise');
+  except
+    on E: ECore do Check(True, 'non-ASCII cookie attribute rejected');
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -248,5 +280,8 @@ begin
   T.Test('SameSiteValues', @TestSameSiteValues);
   T.Test('GetPair', @TestGetPair);
   T.Test('GetPairOutOfRange', @TestGetPairOutOfRange);
+  T.Test('MakeCookieRejectsNonAsciiName', @TestMakeCookieRejectsNonAsciiName);
+  T.Test('MakeCookieRejectsNonAsciiValue', @TestMakeCookieRejectsNonAsciiValue);
+  T.Test('BuildCookieRejectsNonAsciiAttribute', @TestBuildCookieRejectsNonAsciiAttribute);
   if not T.Run then Halt(1);
 end.
