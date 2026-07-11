@@ -37,7 +37,7 @@ end,
   nextpas.core.mem.allocator.base;
 
 type
-  TCountingAllocator = class(TAllocator)
+  TCountingAllocator = class(TInterfacedObject, IAllocator)
   private
     FAllocCount: SizeUInt;
     FDeallocCount: SizeUInt;
