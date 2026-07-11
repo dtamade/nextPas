@@ -98,6 +98,17 @@ uses
 
 {$I nextpas.core.text.unicode.collate.inc}
 
+{ 内联字节比较：避免依赖 SysUtils.BytesEqual }
+function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to ALen - 1 do
+    if A[I] <> B[I] then
+      Exit(False);
+  Result := True;
+end;
+
 var
   FUnicodeCollator: IUnicodeCollator;
   FCollatorCS: TRTLCriticalSection;
@@ -347,6 +358,10 @@ var
 begin
   if A = B then
     Exit(0);
+  if A = '' then
+    Exit(-1);
+  if B = '' then
+    Exit(1);
 
   // NFD 规范化
   LNormalizedA := NFD(A);
@@ -372,6 +387,11 @@ begin
   LPrefixLen := Length(APrefix);
   if LPrefixLen > Length(AText) then
     Exit(False);
+  if LPrefixLen = 0 then
+    Exit(True);
+  // 零拷贝：直接比较前缀字节，避免 Copy 堆分配
+  if BytesEqual(@AText[1], @APrefix[1], LPrefixLen) then
+    Exit(True);
   Result := Compare(Copy(AText, 1, LPrefixLen), APrefix) = 0;
 end;
 
@@ -383,6 +403,11 @@ begin
   LTextLen := Length(AText);
   if LSuffixLen > LTextLen then
     Exit(False);
+  if LSuffixLen = 0 then
+    Exit(True);
+  // 零拷贝：直接比较后缀字节，避免 Copy 堆分配
+  if BytesEqual(@AText[LTextLen - LSuffixLen + 1], @ASuffix[1], LSuffixLen) then
+    Exit(True);
   Result := Compare(Copy(AText, LTextLen - LSuffixLen + 1, LSuffixLen), ASuffix) = 0;
 end;
 
@@ -390,6 +415,9 @@ function TUnicodeCollator.IndexOf(const AText, ASubstring: string): SizeInt;
 var
   LI, LTextLen, LSubByteLen: SizeInt;
   LDecode: TUTF8DecodeResult;
+  LSubNorm: string;
+  LSubWeights: TWeightArray;
+  LSubNormLen: SizeInt;
 begin
   if Length(ASubstring) = 0 then
     Exit(1);
@@ -398,10 +426,19 @@ begin
   if LSubByteLen > LTextLen then
     Exit(0);
 
+  // 预计算子串的规范化形式和权重（避免每次迭代重复计算）
+  LSubNorm := NFD(ASubstring);
+  LSubWeights := CollectWeights(LSubNorm);
+  LSubNormLen := Length(LSubNorm);
+
   LI := 1;
   while LI <= LTextLen - LSubByteLen + 1 do
   begin
-    if Compare(Copy(AText, LI, LSubByteLen), ASubstring) = 0 then
+    // 快速路径：字节级相等
+    if BytesEqual(@AText[LI], @ASubstring[1], LSubByteLen) then
+      Exit(LI);
+    // 慢速路径：collation 比较（仅对子串做 NFD + 权重收集）
+    if CompareWeights(CollectWeights(NFD(Copy(AText, LI, LSubByteLen))), LSubWeights) = 0 then
       Exit(LI);
     LDecode := UTF8Decode(@AText[LI], LTextLen - LI + 1);
     if LDecode.ByteLen > 0 then

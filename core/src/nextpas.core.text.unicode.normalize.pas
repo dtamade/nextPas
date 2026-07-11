@@ -535,59 +535,10 @@ begin
   Result := True;
 end;
 
-function QuickCheckNFC(const s: string): Boolean;
-var
-  LIter: TUTF8Iterator;
-  LCp: UInt32;
-  LPrevCcc: Byte;
-  LCcc: Byte;
-  LStarter: TUnicodeCodepoint;
-  LHasStarter: Boolean;
-  LComposed: TUnicodeCodepoint;
-begin
-  // QuickCheck NFC: 检查是否已经是 NFC 形式
-  // 条件：combining class 非递减 + 没有可组合的 starter+combining 对
-  if s = '' then
-    Exit(True);
-  if IsAsciiString(s) then
-    Exit(True);
-
-  LPrevCcc := 0;
-  LHasStarter := False;
-  LStarter := 0;
-  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
-  while LIter.Next(LCp) do
-  begin
-    LCcc := GetCanonicalCombiningClass(LCp);
-
-    // 检查 combining class 顺序
-    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
-      Exit(False);
-
-    // 检查是否可以组合
-    if LCcc = 0 then
-    begin
-      // 新的 starter
-      LStarter := LCp;
-      LHasStarter := True;
-    end
-    else if LHasStarter then
-    begin
-      // combining mark: 检查 starter + combining 是否可以组合
-      // 条件：前一个 CCC 为 0 或 < 当前 CCC（即 combining mark 未被阻塞）
-      if (LPrevCcc = 0) or (LPrevCcc < LCcc) then
-      begin
-        if FindComposition(LStarter, LCp, LComposed) and (LComposed <> LStarter) then
-          Exit(False); // 可以组合但没有组合，不是 NFC
-      end;
-    end;
-
-    LPrevCcc := LCcc;
-  end;
-  Result := True;
-end;
-
-function QuickCheckNFKC(const s: string): Boolean;
+{ QuickCheck composed forms: 公共逻辑 }
+{ ACheckCompatibility=True  → NFKC（检查 kind=2 兼容分解） }
+{ ACheckCompatibility=False → NFC  （仅检查组合可能性） }
+function QuickCheckComposed(const s: string; const ACheckCompatibility: Boolean): Boolean;
 var
   LIter: TUTF8Iterator;
   LCp: UInt32;
@@ -598,8 +549,6 @@ var
   LHasStarter: Boolean;
   LComposed: TUnicodeCodepoint;
 begin
-  // QuickCheck NFKC: 检查是否已经是 NFKC 形式
-  // 条件：无兼容分解(kind=2) + combining class 非递减 + 无可组合 starter+combining 对
   if s = '' then
     Exit(True);
   if IsAsciiString(s) then
@@ -611,10 +560,13 @@ begin
   LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
   while LIter.Next(LCp) do
   begin
-    // 检查是否有兼容分解（kind=2）
-    LKind := GetDecompositionKind(LCp);
-    if LKind = 2 then
-      Exit(False); // 有兼容分解字符，不是 NFKC
+    // NFKC: 检查兼容分解（kind=2）
+    if ACheckCompatibility then
+    begin
+      LKind := GetDecompositionKind(LCp);
+      if LKind = 2 then
+        Exit(False);
+    end;
 
     LCcc := GetCanonicalCombiningClass(LCp);
 
@@ -640,6 +592,16 @@ begin
     LPrevCcc := LCcc;
   end;
   Result := True;
+end;
+
+function QuickCheckNFC(const s: string): Boolean;
+begin
+  Result := QuickCheckComposed(s, False);
+end;
+
+function QuickCheckNFKC(const s: string): Boolean;
+begin
+  Result := QuickCheckComposed(s, True);
 end;
 
 { TCodepointBuffer }

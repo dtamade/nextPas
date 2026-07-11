@@ -95,6 +95,18 @@ begin
   LResults := SegmentSentences('你好．世界！');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Fullwidth period + fullwidth excl');
 
+  // 测试 ?! 序列合并为一个句子
+  LResults := SegmentSentences('Really?! Yes.');
+  CheckEqual(Int64(2), Int64(Length(LResults)), '?! merged as one sentence');
+
+  // 测试 !? 序列
+  LResults := SegmentSentences('No way!? Indeed.');
+  CheckEqual(Int64(2), Int64(Length(LResults)), '!? merged as one sentence');
+
+  // 测试 ... 后跟 ?!
+  LResults := SegmentSentences('Wait... Really?! OK.');
+  CheckEqual(Int64(3), Int64(Length(LResults)), '... then ?! then period');
+
   // 测试 CJK 单词分割（每个表意文字是独立的词）
   LResults := SegmentWords('你好世界');
   CheckEqual(Int64(4), Int64(Length(LResults)), 'CJK: 4 separate words');

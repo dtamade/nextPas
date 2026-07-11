@@ -412,7 +412,6 @@ var
   LCategory: TGeneralCategory;
   LInWord: Boolean;
   LDecode: TUTF8DecodeResult;
-  LPrevCategory: TGeneralCategory;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -424,7 +423,6 @@ begin
   // 跳过非单词字符
   Result := APos;
   LInWord := False;
-  LPrevCategory := gcuUnassigned;
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
@@ -467,7 +465,6 @@ begin
     begin
       // 连字符可以是单词的一部分（如 "well-known"）
       // 但需要检查下一个字符是否是字母
-      LPrevCategory := LCategory;
       Inc(Result, LDecode.ByteLen);
       // 如果连字符后面不是字母，则单词在此结束
       if Result <= LLen then
@@ -489,7 +486,6 @@ begin
         Break;
     end;
 
-    LPrevCategory := LCategory;
     Inc(Result, LDecode.ByteLen);
   end;
 end;
@@ -611,13 +607,20 @@ begin
       begin
         Inc(Result, LDecode.ByteLen);
         LInSentence := True;
-        // 跳过连续相同的句子终止符（如 ... 三个句号）
+        // 跳过连续句子终止符（如 ... ?! !? 等）
         while Result <= LLen do
         begin
           LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-          if (LDecode.ByteLen = 0) or (LDecode.CodePoint <> LCodepoint) then
+          if LDecode.ByteLen = 0 then
             Break;
-          Inc(Result, LDecode.ByteLen);
+          LCodepoint := LDecode.CodePoint;
+          case LCodepoint of
+            $002E, $003F, $0021, $3002, $FF01, $FF0E, $FF1F,
+            $2026, $FE12, $FE15, $FE16, $FE52, $FE57, $FE5F:
+              Inc(Result, LDecode.ByteLen);
+          else
+            Break;
+          end;
         end;
         // 遇到句子结束符后，跳过结尾引号/括号再停止
         while Result <= LLen do

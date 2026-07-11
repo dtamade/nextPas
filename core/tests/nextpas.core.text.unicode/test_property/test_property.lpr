@@ -278,6 +278,73 @@ begin
   Check(IsAlpha($10400), 'Deseret AY alpha');
 end;
 
+{ === HasBinaryProperty === }
+
+procedure TestHasBinaryProperty;
+begin
+  // ASCII letters have Alphabetic property
+  Check(HasBinaryProperty(Ord('A'), ubpAlphabetic), 'A Alphabetic');
+  Check(HasBinaryProperty(Ord('z'), ubpAlphabetic), 'z Alphabetic');
+  Check(not HasBinaryProperty(Ord('0'), ubpAlphabetic), '0 not Alphabetic');
+  // Uppercase property
+  Check(HasBinaryProperty(Ord('A'), ubpUppercase), 'A Uppercase');
+  Check(not HasBinaryProperty(Ord('a'), ubpUppercase), 'a not Uppercase');
+  // Lowercase property
+  Check(HasBinaryProperty(Ord('a'), ubpLowercase), 'a Lowercase');
+  Check(not HasBinaryProperty(Ord('A'), ubpLowercase), 'A not Lowercase');
+  // CJK
+  Check(HasBinaryProperty($4E2D, ubpAlphabetic), 'CJK Alphabetic');
+  Check(not HasBinaryProperty($4E2D, ubpUppercase), 'CJK not Uppercase');
+  // SMP
+  Check(HasBinaryProperty($1D400, ubpUppercase), 'Math Bold A Uppercase');
+  Check(HasBinaryProperty($1D41A, ubpLowercase), 'Math Bold a Lowercase');
+end;
+
+{ === GetGraphemeBreakProperty === }
+
+procedure TestGraphemeBreakProperty;
+begin
+  // CR/LF
+  CheckEqual(Int64(Ord(gbpCR)), Int64(Ord(GetGraphemeBreakProperty($000D))), 'CR GBP');
+  CheckEqual(Int64(Ord(gbpLF)), Int64(Ord(GetGraphemeBreakProperty($000A))), 'LF GBP');
+  // Control
+  CheckEqual(Int64(Ord(gbpControl)), Int64(Ord(GetGraphemeBreakProperty($0000))), 'NUL GBP');
+  CheckEqual(Int64(Ord(gbpControl)), Int64(Ord(GetGraphemeBreakProperty($007F))), 'DEL GBP');
+  // Extend (combining marks)
+  CheckEqual(Int64(Ord(gbpExtend)), Int64(Ord(GetGraphemeBreakProperty($0301))), 'combining acute GBP');
+  // Regional Indicator (flags)
+  CheckEqual(Int64(Ord(gbpRegionalIndicator)), Int64(Ord(GetGraphemeBreakProperty($1F1E6))), 'RI GBP');
+  // ZWJ
+  CheckEqual(Int64(Ord(gbpZWJ)), Int64(Ord(GetGraphemeBreakProperty($200D))), 'ZWJ GBP');
+  // SpacingMark
+  Check(GetGraphemeBreakProperty($0903) = gbpSpacingMark, 'Devanagari sign visarga SpacingMark');
+end;
+
+{ === Property Combinations === }
+
+procedure TestPropertyCombinations;
+begin
+  // IsAlpha AND IsUpper = IsUpper (uppercase is subset of alpha)
+  Check(IsUpper(Ord('A')) = (IsAlpha(Ord('A')) and IsUpper(Ord('A'))), 'A: Upper ⊂ Alpha');
+  Check(IsLower(Ord('a')) = (IsAlpha(Ord('a')) and IsLower(Ord('a'))), 'a: Lower ⊂ Alpha');
+  // IsDigit implies IsNumber
+  Check(IsDigit(Ord('0')) = (IsNumber(Ord('0')) and IsDigit(Ord('0'))), '0: Digit ⊂ Number');
+  // IsMark is disjoint from IsLetter
+  Check(not (IsMark($0301) and IsLetter($0301)), 'Mark ∩ Letter = ∅ for combining acute');
+  // IsSeparator is disjoint from IsLetter
+  Check(not (IsSeparator($2003) and IsLetter($2003)), 'Separator ∩ Letter = ∅ for EM SPACE');
+  // IsControl is disjoint from IsLetter
+  Check(not (IsControl($0000) and IsLetter($0000)), 'Control ∩ Letter = ∅ for NUL');
+  // Surrogate is not any property
+  Check(not IsAlpha($D800), 'surrogate not alpha');
+  Check(not IsDigit($D800), 'surrogate not digit');
+  Check(not IsUpper($D800), 'surrogate not upper');
+  Check(not IsLower($D800), 'surrogate not lower');
+  Check(not IsWhitespace($D800), 'surrogate not whitespace');
+  Check(not IsPunctuation($D800), 'surrogate not punctuation');
+  Check(not IsSymbol($D800), 'surrogate not symbol');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode');
   T.Test('IsUpper', @TestIsUpper);
@@ -296,5 +363,8 @@ begin
   T.Test('CaseMapping', @TestCaseMapping);
   T.Test('BoundaryCases', @TestBoundaryCases);
   T.Test('SmpDeep', @TestSmpDeep);
+  T.Test('HasBinaryProperty', @TestHasBinaryProperty);
+  T.Test('GraphemeBreakProperty', @TestGraphemeBreakProperty);
+  T.Test('PropertyCombinations', @TestPropertyCombinations);
   if not T.Run then Halt(1);
 end.
