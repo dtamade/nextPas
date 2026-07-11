@@ -149,6 +149,7 @@ type
 
   // === 统计/监控 ===
   TAllocSnapshot = nextpas.core.mem.stats.TAllocSnapshot;
+  TAllocHistogram = nextpas.core.mem.stats.TAllocHistogram;
   TAllocStatsCollector = nextpas.core.mem.stats.TAllocStatsCollector;
   TAllocStatsAllocator = nextpas.core.mem.stats.TAllocStatsAllocator;
 
