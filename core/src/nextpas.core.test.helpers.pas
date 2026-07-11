@@ -76,8 +76,10 @@ procedure WithTempFile(AProc: TTempFileProc; const AExt: string = '.tmp');
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.path,
   nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.platform.env;
 
 procedure ExpectFail(AProc: TTestClosure;
