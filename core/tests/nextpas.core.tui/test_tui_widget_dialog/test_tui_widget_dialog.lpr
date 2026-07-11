@@ -112,8 +112,72 @@ begin
   LDialog := TDialog.New('Confirm', 'Delete file?').WithButtons(['Yes', 'No']);
   LArea := TRect.Make(0, 0, 40, 10);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LDialog.Render(LArea, LBuf);
-  Check(True, 'Should render dialog');
+  try
+    LDialog.Render(LArea, LBuf);
+    Check(True, 'Should render dialog');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestDialogRenderNoButtons;
+var
+  LDialog: IDialog;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LDialog := TDialog.New('Info', 'Just a message');
+  LArea := TRect.Make(0, 0, 30, 8);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LDialog.Render(LArea, LBuf);
+    Check(True, 'Should render dialog without buttons');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestDialogRenderSmallArea;
+var
+  LDialog: IDialog;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LDialog := TDialog.New('T', 'B').WithButtons(['OK']);
+  LArea := TRect.Make(0, 0, 5, 3);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LDialog.Render(LArea, LBuf);
+    Check(True, 'Should render dialog in small area');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestDialogSelectedBoundary;
+var
+  LDialog: IDialog;
+begin
+  LDialog := TDialog.New('Title', 'Body').WithButtons(['A', 'B', 'C']).WithSelected(2);
+  Check(LDialog <> nil, 'Should set selected to last button');
+  LDialog := TDialog.New('Title', 'Body').WithButtons(['A', 'B']).WithSelected(0);
+  Check(LDialog <> nil, 'Should set selected to first button');
+end;
+
+procedure TestDialogEmptyTitle;
+var
+  LDialog: IDialog;
+begin
+  LDialog := TDialog.New('', 'Body text');
+  Check(LDialog <> nil, 'Should create dialog with empty title');
+end;
+
+procedure TestDialogEmptyBody;
+var
+  LDialog: IDialog;
+begin
+  LDialog := TDialog.New('Title', '');
+  Check(LDialog <> nil, 'Should create dialog with empty body');
 end;
 
 procedure TestDialogBuilderChaining;
@@ -149,6 +213,11 @@ begin
   T.Test('TDialog.WithDimBackground', @TestDialogWithDimBackground);
   T.Test('TDialog.WithSelected', @TestDialogWithSelected);
   T.Test('TDialog.Render', @TestDialogRender);
+  T.Test('TDialog.Render no buttons', @TestDialogRenderNoButtons);
+  T.Test('TDialog.Render small area', @TestDialogRenderSmallArea);
+  T.Test('TDialog selected boundary', @TestDialogSelectedBoundary);
+  T.Test('TDialog empty title', @TestDialogEmptyTitle);
+  T.Test('TDialog empty body', @TestDialogEmptyBody);
   T.Test('TDialog builder chaining', @TestDialogBuilderChaining);
   if not T.Run then Halt(1);
 end.
