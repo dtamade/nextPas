@@ -13,7 +13,8 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
   nextpas.core.net.udp,
-  nextpas.core.net.resolve;
+  nextpas.core.net.resolve,
+  nextpas.core.net.async.tcp;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
@@ -25,6 +26,8 @@ type
   ITcpStream = nextpas.core.net.intf.ITcpStream;
   ITcpListener = nextpas.core.net.intf.ITcpListener;
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
+  IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
+  IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
