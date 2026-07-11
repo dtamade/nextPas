@@ -20,6 +20,8 @@ uses
 {$I nextpas.core.text.unicode.block.inc}
 
 function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
+var
+  LLo, LHi, LMid: SizeInt;
 begin
   // 快速路径：ASCII 范围是 Basic Latin
   if ACp <= $007F then
@@ -28,8 +30,20 @@ begin
     Exit;
   end;
 
-  // 查找 Block 属性表
-  // TODO: 实现基于数据表的查找
+  // 二分查找 Block 属性表
+  LLo := 0;
+  LHi := BLOCK_RANGES_COUNT - 1;
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < BLOCK_RANGES[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > BLOCK_RANGES[LMid].Hi then
+      LLo := LMid + 1
+    else
+      Exit(TUnicodeBlock(BLOCK_RANGES[LMid].Block));
+  end;
+
   Result := ubNoBlock;
 end;
 

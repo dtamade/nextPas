@@ -20,6 +20,8 @@ uses
 {$I nextpas.core.text.unicode.script.inc}
 
 function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript;
+var
+  LLo, LHi, LMid: SizeInt;
 begin
   // 快速路径：ASCII 范围通常是 Common 或 Latin
   if ACp <= $007F then
@@ -39,8 +41,20 @@ begin
     Exit;
   end;
 
-  // 查找 Script 属性表
-  // TODO: 实现基于数据表的查找
+  // 二分查找 Script 属性表
+  LLo := 0;
+  LHi := SCRIPT_RANGES_COUNT - 1;
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < SCRIPT_RANGES[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > SCRIPT_RANGES[LMid].Hi then
+      LLo := LMid + 1
+    else
+      Exit(TUnicodeScript(SCRIPT_RANGES[LMid].Script));
+  end;
+
   Result := usUnknown;
 end;
 
