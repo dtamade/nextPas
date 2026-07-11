@@ -209,7 +209,7 @@ var
 begin
   FillChar(APipe, SizeOf(APipe), 0);
   if not CreatePipe(@LRead, @LWrite, nil, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   APipe.ReadHandle := PtrUInt(LRead);
   APipe.WriteHandle := PtrUInt(LWrite);
   APipe.ReadFd := PtrInt(LRead);

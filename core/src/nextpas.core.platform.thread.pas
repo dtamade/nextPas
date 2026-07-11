@@ -602,7 +602,7 @@ uses
 
 function platform_thread_windows_last_error_i32: Int32; inline;
 begin
-  Result := Int32(GetLastError);
+  Result := platform_get_last_error;
 end;
 
 function platform_thread_windows_create_handle(

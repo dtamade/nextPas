@@ -574,7 +574,7 @@ begin
     WindowsProtection(AAccess), UInt64High(LMapSize), UInt64Low(LMapSize), nil));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     platform_file_close(LFile);
     ResetMap(AMap);
     Exit;
@@ -584,7 +584,7 @@ begin
     UInt64High(AOffset), UInt64Low(AOffset), PtrUInt(LMapSize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     platform_file_close(LFile);
     ResetMap(AMap);
@@ -622,7 +622,7 @@ begin
     nil, WindowsProtection(AAccess), UInt64High(ASize), UInt64Low(ASize), nil));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     ResetMap(AMap);
     Exit;
   end;
@@ -631,7 +631,7 @@ begin
     0, 0, PtrUInt(ASize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -666,7 +666,7 @@ begin
   if FlushViewOfFile(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -689,7 +689,7 @@ begin
   if VirtualLock(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -712,7 +712,7 @@ begin
   if VirtualUnlock(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -752,7 +752,7 @@ begin
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   if not UnmapViewOfFile(AMap.Addr) then
-    LResult := Int32(GetLastError);
+    LResult := platform_get_last_error;
   if AMap.MapHandle <> PLATFORM_MMAP_INVALID_HANDLE then
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
   if AMap.FileHandle <> PLATFORM_MMAP_INVALID_HANDLE then
@@ -856,7 +856,7 @@ begin
     PAnsiChar(LWinName)));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     ResetMap(AMap);
     Exit;
   end;
@@ -866,7 +866,7 @@ begin
     0, 0, PtrUInt(ASize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -956,7 +956,7 @@ begin
     AMap.MapHandle := PtrInt(OpenFileMappingA(FILE_MAP_READ, False, PAnsiChar(LWinName)));
     if AMap.MapHandle = 0 then
     begin
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
       ResetMap(AMap);
       Exit;
     end;
@@ -966,7 +966,7 @@ begin
     0, 0, 0);
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -974,7 +974,7 @@ begin
 
   if VirtualQuery(AMap.Addr, @LMemInfo, SizeOf(LMemInfo)) = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     UnmapViewOfFile(AMap.Addr);
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);

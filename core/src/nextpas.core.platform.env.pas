@@ -198,7 +198,7 @@ begin
     DWORD(Length(LValue)));
   LLastError := GetLastError;
   if (LResult = 0) and (LLastError <> ERROR_SUCCESS) then
-    Exit(Int32(LLastError));
+    Exit(platform_get_last_error);
   LValue[LResult] := #0;
   if not platform_windows_wide_to_utf8_checked(@LValue[0], LUtf8) then
     Exit(PLATFORM_ERR_INVALID);

@@ -321,7 +321,7 @@ begin
   if LLen = 0 then
   begin
     ABuf[0] := #0;
-    Exit(Int32(LErr));
+    Exit(platform_map_windows_error_code(LErr));
   end;
   I := Int32(LLen);
   while (I > 0) and ((ABuf[I-1] = #13) or (ABuf[I-1] = #10)) do

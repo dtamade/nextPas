@@ -672,7 +672,7 @@ type
 
 function WindowsSocketError: Int32; inline;
 begin
-  Result := Int32(WSAGetLastError);
+  Result := platform_get_last_error;
 end;
 
 function EnsureWinsockReady: Int32;

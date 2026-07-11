@@ -1293,7 +1293,7 @@ end;
 
 function platform_sync_windows_last_error_i32: Int32; inline;
 begin
-  Result := Int32(GetLastError);
+  Result := platform_get_last_error;
 end;
 
 function platform_sync_windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;

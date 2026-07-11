@@ -92,6 +92,12 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 function platform_get_last_error: Int32;
 
 
+{$IFDEF NEXTPAS_WINDOWS}
+{** @desc 将 Windows 原生错误码映射为 PLATFORM_ERR_* 可移植错误码 *}
+
+function platform_map_windows_error_code(const AErr: DWORD): Int32;
+{$ENDIF}
+
 implementation
 
 {$IF defined(NEXTPAS_UNIX)}
@@ -123,12 +129,9 @@ uses
   nextpas.core.platform.windows.ffi
   ;
 
-function platform_get_last_error: Int32;
-var
-  LErr: DWORD;
+function platform_map_windows_error_code(const AErr: DWORD): Int32;
 begin
-  LErr := GetLastError;
-  case LErr of
+  case AErr of
     ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND: Result := PLATFORM_ERR_NOENT;
     ERROR_ACCESS_DENIED:                        Result := PLATFORM_ERR_PERM;
     ERROR_FILE_EXISTS, ERROR_ALREADY_EXISTS:    Result := PLATFORM_ERR_EXIST;
@@ -155,8 +158,16 @@ begin
     WSAECONNABORTED:                            Result := PLATFORM_ERR_CONNRESET;
     WSAHOST_NOT_FOUND:                          Result := PLATFORM_ERR_NOENT;
   else
-    Result := Int32(LErr);
+    Result := Int32(AErr);
   end;
+end;
+
+function platform_get_last_error: Int32;
+var
+  LErr: DWORD;
+begin
+  LErr := GetLastError;
+  Result := platform_map_windows_error_code(LErr);
 end;
 
 
