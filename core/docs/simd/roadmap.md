@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-06 (Phase 7-11 规划)
+> 最后更新: 2026-07-11 (Phase 10 内存操作优化)
 
 ## 当前状态
 
@@ -189,7 +189,7 @@
 - 测试: 1645 tests 全部通过
 - 实现: 完整的多宽度 SIMD 支持
 
-### Phase 10: 内存操作优化 ✅ (2026-07-06 完成)
+### Phase 10: 内存操作优化 ✅ (2026-07-06 完成 + 优化)
 
 **目标**: 通过 nextpas.core 抽象层优化内存操作
 
@@ -201,6 +201,7 @@
 **已完成**:
 1. ✅ SIMD 优化的 AlignedMemCopy
    - SimdMemCopy_SSE2: 64字节批量拷贝 (4x16B)
+   - 大数组优化 (>4KB): 128字节展开 (8x16B) + prefetchnta 预取
    - 通过 AlignedMemCopy 调用
 
 2. ✅ SIMD 优化的 AlignedMemFill
@@ -211,6 +212,11 @@
    - AlignedMemCopy/AlignedMemFill 现在使用 SIMD 优化
    - 新增公开 API: SimdMemCopy/SimdMemFill/SimdMemCompare
    - 保持 API 兼容性
+
+**性能优化** (2026-07-11):
+- SimdMemCopy_SSE2 大数组 (>4KB) 使用 128 字节展开
+- 添加 prefetchnta 预取下一条缓存线
+- 提升大内存拷贝的缓存命中率
 
 **验证**:
 - 测试: 1645 tests 全部通过
