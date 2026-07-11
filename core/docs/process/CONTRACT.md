@@ -18,7 +18,7 @@ process.command     ← ICommand builder（链式 API）
 process.child       ← IChild 接口（Wait/Kill/TakeStdin...）
 process.pipe        ← TPipeReader/TPipeWriter（IReader/IWriter over fd）
 process.pathresolve ← PATH 搜索逻辑（ResolveExecutablePath）
-process.pas         ← 门面（Run/RunIn/Capture/Command）
+process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath）
 ```
 
 ### 1.2 核心函数
@@ -29,6 +29,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command）
 | `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出 |
 | `RunIn(APath, AArgs, ADir): TProcessOutput` | 同步执行，指定工作目录 |
 | `Capture(APath, AArgs): string` | 同步执行，只返回 stdout |
+| `LookPath(AName): string` | 在 PATH 中搜索可执行文件 |
 | `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置 |
 | `ICommand.Spawn: IChild` | 异步启动子进程 |
 | `ICommand.Output: TProcessOutput` | 同步执行并捕获 |
@@ -83,11 +84,11 @@ process.pas         ← 门面（Run/RunIn/Capture/Command）
 
 | 测试文件 | 测试数 | 说明 |
 |----------|--------|------|
-| test_process | 173 | 全面 API 测试（spawn/wait/env/timeout/pipe） |
+| test_process | 177 | 全面 API 测试（spawn/wait/env/timeout/pipe/lookpath） |
 | test_process_command | 47 | ICommand builder 测试 |
 | test_process_deep | 20 | 深度测试（timeout/large output/multiple） |
 | test_process_pipe_contract | 17 | 管道契约测试（EINTR/EAGAIN/broken pipe） |
-| **合计** | **4 个测试目录** | **257** |
+| **合计** | **4 个测试目录** | **261** |
 
 ---
 

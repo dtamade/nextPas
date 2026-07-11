@@ -11,7 +11,8 @@ uses
   nextpas.core.text.base,
   nextpas.core.process.base,
   nextpas.core.process.child,
-  nextpas.core.process.command;
+  nextpas.core.process.command,
+  nextpas.core.process.pathresolve;
 
 type
   TStdio = nextpas.core.process.base.TStdio;
@@ -48,8 +49,23 @@ function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
 {** @desc 执行子进程并返回 stdout 文本 *}
 function Capture(const APath: string; const AArgs: array of string): string;
+{**
+ * @desc 在 PATH 中搜索可执行文件（类似 Go 的 exec.LookPath）
+ *
+ * @params
+ *   AName  可执行文件名（如 'fpc'）或绝对/相对路径
+ *
+ * @return 找到的完整路径；未找到时抛出 EProcessError
+ *
+ * @note 如果 AName 已包含目录部分，直接返回不搜索
+ * @note 使用当前进程的 PATH 环境变量
+ *}
+function LookPath(const AName: string): string;
 
 implementation
+
+uses
+  nextpas.core.os.env;
 
 function Command(const APath: string): ICommand;
 begin
@@ -73,6 +89,19 @@ var
 begin
   LOutput := Run(APath, AArgs);
   Result := LOutput.StdOut;
+end;
+
+function LookPath(const AName: string): string;
+var
+  LEnv: TStringArray;
+  LResolved: string;
+begin
+  LEnv := EnvironmentVariables;
+  LResolved := ResolveExecutablePath(AName, LEnv);
+  if (LResolved = AName) and
+    not CommandPathHasDirectoryPart(AName) then
+    raise EProcessError.Create('executable not found in PATH: ' + AName);
+  Result := LResolved;
 end;
 
 end.

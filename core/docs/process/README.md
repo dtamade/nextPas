@@ -16,6 +16,9 @@ var Code := Command('/bin/true').Status;  // 0
 
 // 只要 stdout 文本
 var Text := Capture('/usr/bin/fpc', ['--version']);
+
+// 查找 PATH 中的可执行文件
+var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
 ```
 
 ## Builder 模式
@@ -108,11 +111,12 @@ Command('/bin/env').EnvAdd('MY_VAR', 'my_value').Output;
 ## 模块结构
 
 ```
-nextpas.core.process.pas          ← 门面（Run/RunIn/Capture/Command）
+nextpas.core.process.pas          ← 门面（Run/RunIn/Capture/Command/LookPath）
 nextpas.core.process.base.pas     ← 类型（TStdio/TProcessOutput/EProcessError）
 nextpas.core.process.command.pas  ← ICommand builder
 nextpas.core.process.child.pas    ← IChild 接口（Wait/Kill/TakeStdin...）
 nextpas.core.process.pipe.pas     ← TPipeReader/TPipeWriter（IReader/IWriter over fd）
+nextpas.core.process.pathresolve.pas ← PATH 搜索逻辑（ResolveExecutablePath）
 ```
 
 ## 设计决策
@@ -133,4 +137,4 @@ make -C core/tests/nextpas.core.process/test_process_deep clean test
 make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-257 个测试，覆盖所有公共 API，heaptrc 零泄漏。
+261 个测试，覆盖所有公共 API，heaptrc 零泄漏。

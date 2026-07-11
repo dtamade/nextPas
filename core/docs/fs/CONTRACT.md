@@ -25,14 +25,16 @@ fs.pas           ← 门面 re-export
 
 | 领域 | 函数 | 说明 |
 |------|------|------|
-| 路径 | Join, ExtractFileName, ExtractExt, ChangeExt, IsAbsolute | 路径组合/解析 |
-| 文件 | ReadAllText, ReadAllBytes, WriteAllText, WriteAllBytes | 文件读写 |
-| 文件 | CopyFile, DeleteFile, RenameFile, FileExists | 文件操作 |
-| 目录 | CreateDir, CreateDirAll, RemoveDir, DirectoryExists | 目录操作 |
-| 遍历 | ListDir, ListDirRecursive | 目录遍历 |
-| 信息 | FileSize, FileAge, FileIsReadOnly | 文件属性 |
+| 路径 | PathJoin, PathDir, PathBase, PathExt, PathIsAbs | 路径组合/解析 |
+| 文件 | ReadFile, ReadFileText, ReadFileLines, WriteFile, WriteFileText | 文件读写 |
+| 文件 | CopyFile, DeleteFile, RenameFile, Exists | 文件操作 |
+| 目录 | Mkdir, MkdirAll, Remove, RemoveAll | 目录操作 |
+| 遍历 | ReadDir, OpenDir, Walk | 目录遍历 |
+| 信息 | FileSize, Stat, Lstat, IsDir, IsFile | 文件属性 |
 | Glob | GlobMatch, FsGlob | 通配符匹配 |
-| 临时 | GetTempDir, CreateTempFile | 临时文件 |
+| 临时 | GetTempDir, TempFile | 临时文件 |
+| 符号链接 | Symlink, Readlink | 符号链接操作 |
+| 其他 | Chmod, Truncate, Rename, WriteAtomic | 其他操作 |
 
 ---
 
@@ -64,8 +66,8 @@ fs.pas           ← 门面 re-export
 
 ## 5. 内存管理
 
-- ReadAllText/ReadAllBytes 分配返回内容，调用方负责释放
-- ListDir 返回 TStringArray，调用方负责释放
+- ReadFile/ReadFileText/ReadFileLines 分配返回内容，调用方负责释放
+- ReadDir 返回 TDirEntryArray，调用方负责释放
 - 无全局缓存
 
 ---

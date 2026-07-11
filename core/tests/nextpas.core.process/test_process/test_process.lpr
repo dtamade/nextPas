@@ -1064,6 +1064,30 @@ begin
 end;
 
 
+procedure TestLookPath;
+var
+  LPath: string;
+begin
+  { LookPath finds common system binaries }
+  LPath := LookPath('sh');
+  Check('LookPath sh — not empty', LPath <> '');
+  Check('LookPath sh — contains sh', Pos('sh', LPath) > 0);
+
+  { LookPath finds absolute path }
+  LPath := LookPath('/bin/sh');
+  Check('LookPath /bin/sh — returns same path', LPath = '/bin/sh');
+
+  { LookPath raises for non-existent binary }
+  try
+    LookPath('nonexistent_binary_12345');
+    Check('LookPath nonexistent — should raise', False);
+  except
+    on E: EProcessError do
+      Check('LookPath nonexistent — correct exception', True);
+  end;
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -1123,6 +1147,7 @@ begin
   TestCaptureMultiLine;
   TestRunInNonexistentDir;
   TestRunLargeOutput;
+  TestLookPath;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
