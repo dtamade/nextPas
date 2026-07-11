@@ -538,6 +538,25 @@ begin
   dispatchTable.ArrayMaxF64 := @AVX2ArrayMaxF64;
   dispatchTable.ArrayFmaF64 := @AVX2ArrayFmaF64;
 
+  // F64 extended batch
+  dispatchTable.ArrayAxpyF64 := @AVX2ArrayAxpyF64;
+  dispatchTable.ArrayRcpF64 := @AVX2ArrayRcpF64;
+  dispatchTable.ArrayRsqrtF64 := @AVX2ArrayRsqrtF64;
+  dispatchTable.ArrayTanF64 := @AVX2ArrayTanF64;
+  dispatchTable.ArraySignF64 := @AVX2ArraySignF64;
+  dispatchTable.ArrayFractF64 := @AVX2ArrayFractF64;
+  dispatchTable.ArrayModF64 := @AVX2ArrayModF64;
+  dispatchTable.ArrayPowF64 := @AVX2ArrayPowF64;
+  dispatchTable.ArrayLerpF64 := @AVX2ArrayLerpF64;
+  dispatchTable.ArrayReLUF64 := @AVX2ArrayReLUF64;
+  dispatchTable.ArrayAbsDiffF64 := @AVX2ArrayAbsDiffF64;
+  dispatchTable.ArrayNormF64 := @AVX2ArrayNormF64;
+  dispatchTable.ArrayLinearReLUF64 := @AVX2ArrayLinearReLUF64;
+  dispatchTable.ArrayStepF64 := @AVX2ArrayStepF64;
+  dispatchTable.ArraySmoothstepF64 := @AVX2ArraySmoothstepF64;
+  dispatchTable.ArrayAtan2F64 := @AVX2ArrayAtan2F64;
+  dispatchTable.ArrayHypotF64 := @AVX2ArrayHypotF64;
+
   // Integer batch
   dispatchTable.ArrayAddI32 := @AVX2ArrayAddI32;
   dispatchTable.ArraySubI32 := @AVX2ArraySubI32;
