@@ -337,6 +337,8 @@ begin
     Exit(ESysEINVAL);
   LEvents := nil;
   GetMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(epoll_event));
+  if LEvents = nil then
+    Exit(ESysENOMEM);
   try
     LN := epoll_wait(APoller.EpollFd, LEvents, AMaxEntries, ATimeoutMs);
     if LN < 0 then
@@ -510,6 +512,8 @@ begin
   end;
   LEvents := nil;
   GetMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(TKEvent));
+  if LEvents = nil then
+    Exit(ESysENOMEM);
   try
     LN := kevent(APoller.KqueueFd, nil, 0, LEvents, AMaxEntries, LTimeoutPtr);
     if LN < 0 then
@@ -1001,6 +1005,8 @@ begin
 
   LPollFds := nil;
   GetMem(LPollFds, SizeUInt(APoller.Count) * SizeOf(TWSAPollFd));
+  if LPollFds = nil then
+    Exit(Int32(ERROR_NOT_ENOUGH_MEMORY));
   try
     LEntries := WindowsPollEntries(APoller);
     for LI := 0 to APoller.Count - 1 do
