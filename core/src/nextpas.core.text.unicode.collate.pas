@@ -68,7 +68,8 @@ uses
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.casefold,
   nextpas.core.text.unicode.props,
-  nextpas.core.text.unicode.base;
+  nextpas.core.text.unicode.base,
+  nextpas.core.text.utf8;
 
 var
   FUnicodeCollator: IUnicodeCollator;
@@ -107,6 +108,7 @@ var
   LI, LJ: SizeInt;
   LCodepointA, LCodepointB: TUnicodeCodepoint;
   LCategoryA, LCategoryB: TGeneralCategory;
+  LDecodeA, LDecodeB: TUTF8DecodeResult;
 begin
   // 规范化输入
   LA := NFD(A);
@@ -118,8 +120,19 @@ begin
   while (LI <= Length(LA)) and (LJ <= Length(LB)) do
   begin
     // 解码 UTF-8 字符
-    LCodepointA := 0; // TODO: 实现 UTF-8 解码
-    LCodepointB := 0; // TODO: 实现 UTF-8 解码
+    LDecodeA := UTF8Decode(@LA[LI], Length(LA) - LI + 1);
+    LDecodeB := UTF8Decode(@LB[LJ], Length(LB) - LJ + 1);
+
+    if (LDecodeA.ByteLen = 0) or (LDecodeB.ByteLen = 0) then
+    begin
+      // 无效的 UTF-8 序列，跳过
+      if LDecodeA.ByteLen = 0 then Inc(LI) else Inc(LI, LDecodeA.ByteLen);
+      if LDecodeB.ByteLen = 0 then Inc(LJ) else Inc(LJ, LDecodeB.ByteLen);
+      Continue;
+    end;
+
+    LCodepointA := LDecodeA.CodePoint;
+    LCodepointB := LDecodeB.CodePoint;
 
     // 根据排序强度比较
     case FOptions.Strength of
@@ -176,8 +189,8 @@ begin
       end;
     end;
 
-    Inc(LI);
-    Inc(LJ);
+    Inc(LI, LDecodeA.ByteLen);
+    Inc(LJ, LDecodeB.ByteLen);
   end;
 
   // 长度比较
@@ -195,6 +208,8 @@ var
   LI: SizeInt;
   LCodepoint: TUnicodeCodepoint;
   LKey: TCollationKey;
+  LDecode: TUTF8DecodeResult;
+  LKeyPos: SizeInt;
 begin
   // 规范化输入
   LNormalized := NFD(AText);
@@ -202,23 +217,35 @@ begin
   // 简单实现：生成基本排序键
   SetLength(LKey, Length(LNormalized) * 4); // 预分配空间
   LI := 1;
+  LKeyPos := 0;
   while LI <= Length(LNormalized) do
   begin
     // 解码 UTF-8 字符
-    LCodepoint := 0; // TODO: 实现 UTF-8 解码
+    LDecode := UTF8Decode(@LNormalized[LI], Length(LNormalized) - LI + 1);
+    if LDecode.ByteLen = 0 then
+    begin
+      // 无效的 UTF-8 序列，跳过一个字节
+      Inc(LI);
+      Continue;
+    end;
+    LCodepoint := LDecode.CodePoint;
 
     // 生成排序键
     // TODO: 实现完整的 Unicode Collation Algorithm
-    LKey[LI - 1] := Byte(LCodepoint and $FF);
-    LKey[LI] := Byte((LCodepoint shr 8) and $FF);
-    LKey[LI + 1] := Byte((LCodepoint shr 16) and $FF);
-    LKey[LI + 2] := Byte((LCodepoint shr 24) and $FF);
+    if LKeyPos + 4 <= Length(LKey) then
+    begin
+      LKey[LKeyPos] := Byte(LCodepoint and $FF);
+      LKey[LKeyPos + 1] := Byte((LCodepoint shr 8) and $FF);
+      LKey[LKeyPos + 2] := Byte((LCodepoint shr 16) and $FF);
+      LKey[LKeyPos + 3] := Byte((LCodepoint shr 24) and $FF);
+      Inc(LKeyPos, 4);
+    end;
 
-    Inc(LI, 4);
+    Inc(LI, LDecode.ByteLen);
   end;
 
   // 调整长度
-  SetLength(LKey, LI - 1);
+  SetLength(LKey, LKeyPos);
   Result := LKey;
 end;
 

@@ -36,45 +36,39 @@ procedure TestSegmentation;
 var
   LResults: TSegmentResultArray;
 begin
-  // 测试文本分割（简化版本，因为 UTF-8 解码尚未实现）
+  // 测试文本分割
   LResults := SegmentGraphemeClusters('Hello');
   CheckEqual(Int64(5), Int64(Length(LResults)), 'Hello has 5 grapheme clusters');
 
-  // 注意：由于 UTF-8 解码尚未实现，单词分割可能不准确
   LResults := SegmentWords('Hello World');
-  // 暂时注释掉这个测试，因为 UTF-8 解码尚未实现
-  // CheckEqual(Int64(2), Int64(Length(LResults)), 'Hello World has 2 words');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Hello World has 2 words');
 
   LResults := SegmentLines('Line1' + #10 + 'Line2');
-  // 暂时注释掉这个测试，因为 UTF-8 解码尚未实现
-  // CheckEqual(Int64(2), Int64(Length(LResults)), 'Two lines');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Two lines');
 
   LResults := SegmentSentences('Hello. World!');
-  // 暂时注释掉这个测试，因为 UTF-8 解码尚未实现
-  // CheckEqual(Int64(2), Int64(Length(LResults)), 'Two sentences');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Two sentences');
 end;
 
 procedure TestCollation;
 var
   LCollator: IUnicodeCollator;
 begin
-  // 测试排序规则（简化版本，因为 UTF-8 解码尚未实现）
+  // 测试排序规则
   LCollator := UnicodeCollator;
 
-  // 注意：由于 UTF-8 解码尚未实现，排序规则可能不准确
-  // 暂时注释掉这些测试，因为 UTF-8 解码尚未实现
-  // Check(LCollator.Compare('a', 'b') < 0, 'a < b');
-  // Check(LCollator.Compare('b', 'a') > 0, 'b > a');
-  // Check(LCollator.Compare('a', 'a') = 0, 'a = a');
-  // Check(LCollator.Equals('a', 'a'), 'a equals a');
-  // Check(not LCollator.Equals('a', 'b'), 'a not equals b');
-  // Check(LCollator.StartsWith('Hello', 'He'), 'Hello starts with He');
-  // Check(not LCollator.StartsWith('Hello', 'Wo'), 'Hello not starts with Wo');
-  // Check(LCollator.EndsWith('Hello', 'lo'), 'Hello ends with lo');
-  // Check(not LCollator.EndsWith('Hello', 'He'), 'Hello not ends with He');
-  // Check(LCollator.Contains('Hello World', 'World'), 'Hello World contains World');
-  // Check(not LCollator.Contains('Hello World', 'xyz'), 'Hello World not contains xyz');
-  // CheckEqual(Int64(7), Int64(LCollator.IndexOf('Hello World', 'World')), 'World at position 7');
+  Check(LCollator.Compare('a', 'b') < 0, 'a < b');
+  Check(LCollator.Compare('b', 'a') > 0, 'b > a');
+  Check(LCollator.Compare('a', 'a') = 0, 'a = a');
+  Check(LCollator.Equals('a', 'a'), 'a equals a');
+  Check(not LCollator.Equals('a', 'b'), 'a not equals b');
+  Check(LCollator.StartsWith('Hello', 'He'), 'Hello starts with He');
+  Check(not LCollator.StartsWith('Hello', 'Wo'), 'Hello not starts with Wo');
+  Check(LCollator.EndsWith('Hello', 'lo'), 'Hello ends with lo');
+  Check(not LCollator.EndsWith('Hello', 'He'), 'Hello not ends with He');
+  Check(LCollator.Contains('Hello World', 'World'), 'Hello World contains World');
+  Check(not LCollator.Contains('Hello World', 'xyz'), 'Hello World not contains xyz');
+  CheckEqual(Int64(7), Int64(LCollator.IndexOf('Hello World', 'World')), 'World at position 7');
 end;
 
 procedure TestEnhancedProperties;

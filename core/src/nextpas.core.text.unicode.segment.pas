@@ -59,7 +59,8 @@ implementation
 
 uses
   nextpas.core.text.unicode.props,
-  nextpas.core.text.unicode.base;
+  nextpas.core.text.unicode.base,
+  nextpas.core.text.utf8;
 
 var
   FUnicodeSegmenter: IUnicodeSegmenter;
@@ -189,6 +190,7 @@ var
   LLen: SizeInt;
   LCodepoint: TUnicodeCodepoint;
   LCategory: TGeneralCategory;
+  LDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -202,17 +204,24 @@ begin
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
-    LCodepoint := 0; // TODO: 实现 UTF-8 解码
+    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if LDecode.ByteLen = 0 then
+    begin
+      // 无效的 UTF-8 序列，跳过一个字节
+      Inc(Result);
+      Continue;
+    end;
+    LCodepoint := LDecode.CodePoint;
     LCategory := GetGeneralCategory(LCodepoint);
 
     // 如果不是组合标记，停止
     if not (LCategory in [gcuNonspacingMark, gcuSpacingMark, gcuEnclosingMark]) then
     begin
-      Inc(Result);
+      Inc(Result, LDecode.ByteLen);
       Break;
     end;
 
-    Inc(Result);
+    Inc(Result, LDecode.ByteLen);
   end;
 end;
 
@@ -222,6 +231,7 @@ var
   LCodepoint: TUnicodeCodepoint;
   LCategory: TGeneralCategory;
   LInWord: Boolean;
+  LDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -236,7 +246,14 @@ begin
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
-    LCodepoint := 0; // TODO: 实现 UTF-8 解码
+    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if LDecode.ByteLen = 0 then
+    begin
+      // 无效的 UTF-8 序列，跳过一个字节
+      Inc(Result);
+      Continue;
+    end;
+    LCodepoint := LDecode.CodePoint;
     LCategory := GetGeneralCategory(LCodepoint);
 
     // 判断是否是单词字符
@@ -253,7 +270,7 @@ begin
         Break;
     end;
 
-    Inc(Result);
+    Inc(Result, LDecode.ByteLen);
   end;
 end;
 
@@ -261,6 +278,7 @@ function TUnicodeSegmenter.NextLine(const AText: string; const APos: SizeInt): S
 var
   LLen: SizeInt;
   LCodepoint: TUnicodeCodepoint;
+  LDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -274,44 +292,51 @@ begin
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
-    LCodepoint := 0; // TODO: 实现 UTF-8 解码
+    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if LDecode.ByteLen = 0 then
+    begin
+      // 无效的 UTF-8 序列，跳过一个字节
+      Inc(Result);
+      Continue;
+    end;
+    LCodepoint := LDecode.CodePoint;
 
     // 检查行分隔符
     case LCodepoint of
       $000A: // LF
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         Break;
       end;
       $000D: // CR
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         // 检查 CRLF
         if (Result <= LLen) then
         begin
-          LCodepoint := 0; // TODO: 实现 UTF-8 解码
-          if LCodepoint = $000A then
-            Inc(Result);
+          LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+          if (LDecode.ByteLen > 0) and (LDecode.CodePoint = $000A) then
+            Inc(Result, LDecode.ByteLen);
         end;
         Break;
       end;
       $0085: // NEL
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         Break;
       end;
       $2028: // LS
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         Break;
       end;
       $2029: // PS
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         Break;
       end;
     else
-      Inc(Result);
+      Inc(Result, LDecode.ByteLen);
     end;
   end;
 end;
@@ -322,6 +347,7 @@ var
   LCodepoint: TUnicodeCodepoint;
   LCategory: TGeneralCategory;
   LInSentence: Boolean;
+  LDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -336,7 +362,14 @@ begin
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
-    LCodepoint := 0; // TODO: 实现 UTF-8 解码
+    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if LDecode.ByteLen = 0 then
+    begin
+      // 无效的 UTF-8 序列，跳过一个字节
+      Inc(Result);
+      Continue;
+    end;
+    LCodepoint := LDecode.CodePoint;
     LCategory := GetGeneralCategory(LCodepoint);
 
     // 检查句子结束符
@@ -345,8 +378,10 @@ begin
       $003F, // ?
       $0021: // !
       begin
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
         LInSentence := True;
+        // 遇到句子结束符后停止
+        Break;
       end;
       $000A, // LF
       $000D, // CR
@@ -356,10 +391,10 @@ begin
       begin
         if LInSentence then
           Break;
-        Inc(Result);
+        Inc(Result, LDecode.ByteLen);
       end;
     else
-      Inc(Result);
+      Inc(Result, LDecode.ByteLen);
     end;
   end;
 end;
