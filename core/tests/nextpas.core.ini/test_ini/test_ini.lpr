@@ -12,24 +12,23 @@ uses
   nextpas.core.test;
 
 var
-  T: TTestSuite,
-  nextpas.core.mem.allocator.base;
+  T: TTestSuite;
 
 type
-  TFailingReallocateAllocator = class(TAllocator)
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
   private
     FFailOnReallocateCall: SizeUInt;
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSizeOf(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
 constructor TFailingReallocateAllocator.Create(
@@ -77,7 +76,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function .MemSizeOf(APtr: Pointer): SizeUInt;
+function TFailingReallocateAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
@@ -98,8 +97,6 @@ begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 { === Basic Read/Write Tests === }
@@ -692,7 +689,7 @@ var
   Ini: TIniFile;
   LRaised: Boolean;
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
   LAllocator := LAllocatorObj;

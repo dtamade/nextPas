@@ -56,6 +56,8 @@ uses
 constructor TCountingAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentNil.Create('TCountingAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   FillChar(FStats, SizeOf(FStats), 0);
 end;

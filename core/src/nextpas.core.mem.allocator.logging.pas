@@ -57,6 +57,8 @@ uses
 constructor TLoggingAllocator.Create(AInner: IAllocator; ALogProc: TLogProc);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentNil.Create('TLoggingAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   FLogProc := ALogProc;
   FillChar(FStats, SizeOf(FStats), 0);
