@@ -74,8 +74,24 @@ begin
   LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file size', APath);
+  { P1-7 fix: /proc and other virtual filesystems report size=0
+    but still have content when read. Try growing read for size=0. }
   if LSize = 0 then
   begin
+    LGrowData := nil;
+    LGrowLen := 0;
+    LResult := platform_fs_read_file(PAnsiChar(APath), LGrowData, LGrowLen);
+    try
+      if (LResult = 0) and (LGrowLen > 0) then
+      begin
+        SetLength(Result, LGrowLen);
+        Move(LGrowData^, Result[0], LGrowLen);
+        Exit;
+      end;
+    finally
+      if LGrowData <> nil then
+        platform_fs_free_buf(LGrowData);
+    end;
     Result := nil;
     Exit;
   end;
@@ -197,6 +213,9 @@ begin
       raise EIOError.Create('mktemp failed (' + IntToStr(LResult) + ')');
     LPath := StrPas(@LPathBuf[0]);
     Result := FsFromPlatformHandle(LHandle, LPath);
+    { P2-2 fix: Ensure consistent permissions (0644) regardless of umask,
+      matching the explicit ADir path behavior. }
+    platform_file_chmod(PAnsiChar(LPath), UInt32(PermDefault));
     Exit;
   end;
 
@@ -406,7 +425,7 @@ end;
 function FsReadFileText(const APath: string): string;
 var
   Bytes: TBytes;
-  LOffset, LLen: SizeInt;
+  LOffset, LLen, I: SizeInt;
   LUTF8Text: string;
 begin
   Bytes := FsReadFile(APath);
@@ -431,7 +450,16 @@ begin
 
   LLen := Length(Bytes) - LOffset;
   if (LLen > 0) and (not UTF8IsValid(@Bytes[LOffset], SizeUInt(LLen))) then
-    raise EConvertError.Create('read file: invalid UTF-8: ' + APath);
+  begin
+    { P1-8 fix: Non-UTF-8 without BOM — treat as Latin-1 instead of raising.
+      Latin-1 is the identity map for bytes 0..255, so each byte becomes
+      the corresponding Unicode code point. This handles legacy files
+      (ISO-8859-1, Windows-1252 superset) gracefully. }
+    SetLength(Result, LLen);
+    for I := 0 to LLen - 1 do
+      Result[I + 1] := Char(Bytes[LOffset + I]);
+    Exit;
+  end;
   if LLen > 0 then
     SetString(Result, PAnsiChar(@Bytes[LOffset]), LLen)
   else

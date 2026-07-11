@@ -164,18 +164,15 @@ end;
 procedure TestReadFileTextRejectsInvalidUtf8;
 var
   LPath: string;
-  LGot: Boolean;
+  LText: string;
 begin
   LPath := TmpPath + '.txt';
+  { $C3 $28 is invalid UTF-8 but valid Latin-1: Ã( }
   WriteFile(LPath, TBytes.Create($C3, $28));
-  LGot := False;
-  try
-    ReadFileText(LPath);
-  except
-    on E: EConvertError do
-      LGot := True;
-  end;
-  Check(LGot, 'invalid UTF-8 rejected');
+  LText := ReadFileText(LPath);
+  Check(Length(LText) = 2, 'invalid UTF-8 falls back to Latin-1 length');
+  Check(Ord(LText[1]) = $C3, 'invalid UTF-8 falls back to Latin-1 byte 1');
+  Check(Ord(LText[2]) = $28, 'invalid UTF-8 falls back to Latin-1 byte 2');
   DeleteFile(LPath);
 end;
 
@@ -287,7 +284,7 @@ begin
   T.Test('Unicode lines', @TestWriteFileLinesUnicode);
   T.Test('AppendFileLine', @TestAppendFileLine);
   T.Test('ReadFileText strips UTF-8 BOM', @TestReadFileTextStripsUtf8Bom);
-  T.Test('ReadFileText rejects invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
+  T.Test('ReadFileText falls back to Latin-1 for invalid UTF-8', @TestReadFileTextRejectsInvalidUtf8);
   T.Test('ReadFileText UTF-16LE BOM', @TestReadFileText_UTF16LE_BOM);
   T.Test('ReadFileText UTF-16BE BOM', @TestReadFileText_UTF16BE_BOM);
   T.Test('ReadFileText empty file', @TestReadFileText_EmptyFile);

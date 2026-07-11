@@ -296,12 +296,15 @@ var
   LRead: ssize_t;
   LErr: Int32;
 begin
+  { P1-4 fix: Loop until EAGAIN/EOF for better throughput.
+    Previously exited after first successful read, forcing a full
+    poll→read→poll cycle per chunk. Now drains all available data. }
   repeat
     LRead := nextpas.core.platform.posix.ffi.read(AHandle, @LBuf[0], SizeOf(LBuf));
     if LRead > 0 then
     begin
       AppendPipeChunk(ATarget, ACount, LBuf[0], LRead);
-      Exit(False);
+      Continue;
     end;
     if LRead = 0 then
       Exit(True);

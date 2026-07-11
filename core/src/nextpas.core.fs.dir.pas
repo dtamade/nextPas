@@ -236,44 +236,95 @@ begin
 end;
 
 function FsRemoveAll(const APath: string): Boolean;
+const
+  OP_UNLINK = 0;
+  OP_READDIR = 1;
+  OP_RMDIR = 2;
+type
+  TPathItem = record
+    Path: string;
+    Op: Integer;
+  end;
 var
+  LStack: array of TPathItem;
+  LStackTop: Integer;
   LIter: IDirIterator;
   LEntry: TDirEntry;
   LChild: string;
   LResult: Int32;
+  LCurrent: TPathItem;
 begin
   if IsUnsafeRemoveAllRoot(APath) then
     raise EInvalidOperationError.Create('removeall refused unsafe root: ' + APath);
+
+  { P2-7 fix: Iterative post-order traversal using explicit stack to avoid
+    stack overflow on deeply nested directories (e.g. node_modules).
+
+    Strategy: push OP_READDIR for directories. When popped, read children,
+    push OP_RMDIR for self, then push children (dirs as OP_READDIR,
+    files as OP_UNLINK). Stack is LIFO so: children processed first,
+    then rmdir. }
   if not IsRealDir(APath) then
   begin
     LResult := platform_file_unlink(PAnsiChar(APath));
-    if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then  { ENOENT is fine: nothing to remove }
+    if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then
       RaiseFsError(LResult, 'removeall', APath);
     Exit(True);
   end;
 
-  LIter := FsOpenDir(APath);
-  while LIter.Next do
+  SetLength(LStack, 64);
+  LStackTop := 0;
+  LStack[0].Path := APath;
+  LStack[0].Op := OP_READDIR;
+
+  while LStackTop >= 0 do
   begin
-    LEntry := LIter.Entry;
-    if (LEntry.Name = '.') or (LEntry.Name = '..') then
-      Continue;
-    LChild := JoinChildPath(APath, LEntry.Name);
-    if IsRealDir(LChild) then
-    begin
-      FsRemoveAll(LChild);
-    end
-    else
-    begin
-      LResult := platform_file_unlink(PAnsiChar(LChild));
-      if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then  { ENOENT: vanished between readdir and unlink }
-        RaiseFsError(LResult, 'removeall', LChild);
+    LCurrent := LStack[LStackTop];
+    Dec(LStackTop);
+
+    case LCurrent.Op of
+      OP_UNLINK:
+      begin
+        LResult := platform_file_unlink(PAnsiChar(LCurrent.Path));
+        if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then
+          RaiseFsError(LResult, 'removeall', LCurrent.Path);
+      end;
+      OP_RMDIR:
+      begin
+        LResult := platform_file_rmdir(PAnsiChar(LCurrent.Path));
+        if LResult <> 0 then
+          RaiseFsError(LResult, 'removeall', LCurrent.Path);
+      end;
+      OP_READDIR:
+      begin
+        { Push rmdir sentinel for this directory }
+        if LStackTop >= Length(LStack) - 1 then
+          SetLength(LStack, Length(LStack) * 2);
+        Inc(LStackTop);
+        LStack[LStackTop].Path := LCurrent.Path;
+        LStack[LStackTop].Op := OP_RMDIR;
+
+        { Push children }
+        LIter := FsOpenDir(LCurrent.Path);
+        while LIter.Next do
+        begin
+          LEntry := LIter.Entry;
+          if (LEntry.Name = '.') or (LEntry.Name = '..') then
+            Continue;
+          LChild := JoinChildPath(LCurrent.Path, LEntry.Name);
+          if LStackTop >= Length(LStack) - 1 then
+            SetLength(LStack, Length(LStack) * 2);
+          Inc(LStackTop);
+          LStack[LStackTop].Path := LChild;
+          if IsRealDir(LChild) then
+            LStack[LStackTop].Op := OP_READDIR
+          else
+            LStack[LStackTop].Op := OP_UNLINK;
+        end;
+        LIter.Close;
+      end;
     end;
   end;
-  LIter.Close;
-  LResult := platform_file_rmdir(PAnsiChar(APath));
-  if LResult <> 0 then
-    RaiseFsError(LResult, 'removeall', APath);
   Result := True;
 end;
 
