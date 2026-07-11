@@ -42,9 +42,9 @@ type
     procedure UnlockRead(const AStamp: Int64);
     procedure UnlockWrite(const AStamp: Int64);
     procedure Close;
-    function IsClosed: Boolean;
-    function IsReadLocked: Boolean;
-    function IsWriteLocked: Boolean;
+    function IsClosed: Boolean; inline;
+    function IsReadLocked: Boolean; inline;
+    function IsWriteLocked: Boolean; inline;
   end;
 
 implementation
@@ -254,12 +254,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TStampedLock.IsClosed: Boolean;
+function TStampedLock.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TStampedLock.IsReadLocked: Boolean;
+function TStampedLock.IsReadLocked: Boolean; inline;
 var
   LState: Int64;
 begin
@@ -267,7 +267,7 @@ begin
   Result := (LState and STAMPED_LOCK_READERS_MASK) <> 0;
 end;
 
-function TStampedLock.IsWriteLocked: Boolean;
+function TStampedLock.IsWriteLocked: Boolean; inline;
 begin
   Result := (AtomicLoad64(FState, moAcquire) and STAMPED_LOCK_WRITE_BIT) <> 0;
 end;

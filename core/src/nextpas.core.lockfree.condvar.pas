@@ -48,7 +48,7 @@ type
     procedure Broadcast;
 
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     function GetWaiterCount: Int32;
   end;
 
@@ -268,7 +268,7 @@ begin
   end;
 end;
 
-function TConditionVariable.IsClosed: Boolean;
+function TConditionVariable.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
