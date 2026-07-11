@@ -68,11 +68,11 @@ type
     function AddEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
     function RemoveEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
     function HasEdge(AFromId, AToId: Int64): Boolean;
-    function GetVertexCount: Int64;
-    function GetEdgeCount: Int64;
+    function GetVertexCount: Int64; inline;
+    function GetEdgeCount: Int64; inline;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -382,12 +382,12 @@ begin
   end;
 end;
 
-function TLockFreeGraph.GetVertexCount: Int64;
+function TLockFreeGraph.GetVertexCount: Int64; inline;
 begin
   Result := AtomicLoad64(FVertexCount, moAcquire);
 end;
 
-function TLockFreeGraph.GetEdgeCount: Int64;
+function TLockFreeGraph.GetEdgeCount: Int64; inline;
 begin
   Result := AtomicLoad64(FEdgeCount, moAcquire);
 end;
@@ -418,7 +418,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TLockFreeGraph.IsClosed: Boolean;
+function TLockFreeGraph.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

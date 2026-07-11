@@ -73,8 +73,8 @@ type
     function AddEdge(AFromId, AToId: Int64): TDagResult;
     function RemoveEdge(AFromId, AToId: Int64): TDagResult;
     function HasEdge(AFromId, AToId: Int64): Boolean;
-    function GetNodeCount: Int64;
-    function GetEdgeCount: Int64;
+    function GetNodeCount: Int64; inline;
+    function GetEdgeCount: Int64; inline;
     function InDegree(AId: Int64): Int32;
     function OutDegree(AId: Int64): Int32;
     { Returns -1 if the stored graph contains a cycle. }
@@ -452,12 +452,12 @@ begin
   end;
 end;
 
-function TConcurrentDAG.GetNodeCount: Int64;
+function TConcurrentDAG.GetNodeCount: Int64; inline;
 begin
   Result := AtomicLoad64(FNodeCount, moAcquire);
 end;
 
-function TConcurrentDAG.GetEdgeCount: Int64;
+function TConcurrentDAG.GetEdgeCount: Int64; inline;
 begin
   Result := AtomicLoad64(FEdgeCount, moAcquire);
 end;

@@ -95,7 +95,7 @@ type
         高频调用场景应缓存结果或改用 TEbrDomain。 }
     function ActiveThreads: PtrUInt;
     {** @desc 退休待回收数 }
-    function RetiredCount: PtrUInt;
+    function RetiredCount: PtrUInt; inline;
   end;
 
   {** @desc Hazard Pointer RAII 守卫（自动 Register/Protect/Clear/Unregister）
@@ -447,7 +447,7 @@ begin
   end;
 end;
 
-function THazardDomain.RetiredCount: PtrUInt;
+function THazardDomain.RetiredCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moAcquire));
 end;
