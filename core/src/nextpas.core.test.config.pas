@@ -214,7 +214,7 @@ type
                 out AEntry: TCacheEntry): Boolean;
     procedure Put(const AKey: string; ATestName: string;
                 const AEntry: TCacheEntry);
-    procedure Clean(AmaxAgeDays: Integer = 30);
+    procedure Clean(AMaxAgeDays: Integer = 30);
     procedure Invalidate;
   end;
 
@@ -1108,7 +1108,7 @@ begin
   end;
 end;
 
-procedure TTestCache.Clean(AmaxAgeDays: Integer);
+procedure TTestCache.Clean(AMaxAgeDays: Integer);
 var
   LDir: string;
   LKeyEntries, LCacheEntries: TDirEntryArray;
@@ -1123,13 +1123,13 @@ begin
   LDir := CacheDir;
   if (LDir = '') or not DirectoryExists(LDir) then
     Exit;
-  if AmaxAgeDays <= 0 then
+  if AMaxAgeDays <= 0 then
   begin
     { age 0 or negative = delete all }
     Invalidate;
     Exit;
   end;
-  LMaxAgeSec := Int64(AmaxAgeDays) * 86400;
+  LMaxAgeSec := Int64(AMaxAgeDays) * 86400;
   LNow := DateTimeToFileDate(Now);
   try
     LKeyEntries := ReadDir(LDir);

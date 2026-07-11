@@ -1209,7 +1209,7 @@ begin
     end;
   CheckMatch(LFound,
     'Bytes should not contain $' + IntToHex(AValue, 2),
-    'Bytes does not contain $' + IntToHex(AValue, 2));
+    'Byte array does not contain $' + IntToHex(AValue, 2));
   Result := Self;
 end;
 
