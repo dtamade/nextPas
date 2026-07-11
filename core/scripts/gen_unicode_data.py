@@ -676,18 +676,18 @@ def build_ccc_tables(records: Dict[int, CodepointData]) -> Tuple[List[List[int]]
     return bmp_table, smp_ranges
 
 
-def parse_allkeys(allkeys_text: str) -> Dict[int, int]:
-    """Parse allkeys.txt → codepoint → primary weight (16-bit).
+def parse_allkeys(allkeys_text: str) -> Dict[int, Tuple[int, int, int]]:
+    """Parse allkeys.txt → codepoint → (primary, secondary, tertiary) weight tuple.
 
     Handles:
-    - Explicit entries: '0041 ; [.0001.0020.0002] # LATIN CAPITAL LETTER A'
+    - Explicit entries: '0041 ; [.0001.0020.0008] # LATIN CAPITAL LETTER A'
     - Implicit weights: '@implicitweights 17000..187FF; FB00 # Tangut'
-    - Multi-CE entries: uses FIRST primary weight only
-    - Codepoint 0000 entries (control chars) → weight 0 (sort to front)
+    - Multi-CE entries: uses FIRST CE only
+    - Codepoint 0000 entries (control chars) → weight (0,0,0) (sort to front)
     """
     import re
 
-    weights: Dict[int, int] = {}
+    weights: Dict[int, Tuple[int, int, int]] = {}
     implicit_ranges: List[Tuple[int, int, int]] = []
 
     for raw_line in allkeys_text.splitlines():
@@ -697,7 +697,6 @@ def parse_allkeys(allkeys_text: str) -> Dict[int, int]:
 
         # Handle @implicitweights
         if line.startswith("@implicitweights"):
-            # Format: @implicitweights 17000..187FF; FB00
             m = re.match(r"@implicitweights\s+([0-9A-Fa-f]+)\.\.([0-9A-Fa-f]+);\s*([0-9A-Fa-f]+)", line)
             if m:
                 lo = int(m.group(1), 16)
@@ -714,37 +713,28 @@ def parse_allkeys(allkeys_text: str) -> Dict[int, int]:
         codepoints_str = parts[0].strip()
         ces_str = parts[1].strip()
 
-        # Parse codepoints (may be multi-codepoint like "0041 0300")
         cp_parts = codepoints_str.split()
-        if not cp_parts:
+        if not cp_parts or len(cp_parts) > 1:
             continue
         cp = int(cp_parts[0], 16)
 
-        # Skip multi-codepoint sequences (we only want single codepoint mappings)
-        if len(cp_parts) > 1:
-            continue
-
-        # Parse first primary weight from collation elements
-        # Format: [.0001.0020.0002] or [.0001.0020.0002][.0000.0021.0002]
-        m = re.search(r"\[\.([0-9A-Fa-f]{4})\.", ces_str)
+        # Parse first CE: [.primary.secondary.tertiary]
+        m = re.search(r"\[\.([0-9A-Fa-f]{4})\.([0-9A-Fa-f]{4})\.([0-9A-Fa-f]{4})\]", ces_str)
         if m:
             primary = int(m.group(1), 16)
-            if primary != 0:  # Skip zero-weight entries (ignorable)
-                weights[cp] = primary
+            secondary = int(m.group(2), 16)
+            tertiary = int(m.group(3), 16)
+            if primary != 0:
+                weights[cp] = (primary, secondary, tertiary)
 
-    # Apply implicit weights from @implicitweights directives
+    # Apply implicit weights (secondary=0x0020, tertiary=0x0002 for implicit)
     for lo, hi, primary in implicit_ranges:
         for cp in range(lo, hi + 1):
             if cp not in weights:
-                weights[cp] = primary
+                weights[cp] = (primary, 0x0020, 0x0002)
 
-    # Assign implicit weights for CJK Unified Ideographs and other common CJK ranges.
-    # These are NOT in allkeys.txt but need a sort order.
-    # We map them into the unused weight space 0x73C3..0xFAFF (between max
-    # explicit diagnostic weight and Tangut implicit weights).
-    # CJK characters sort after all explicit-weight characters.
-    # Within each CJK block, characters sort by codepoint.
-    CJK_WEIGHT_BASE = 0x73C3  # first unused weight after diagnostic range max
+    # Assign implicit weights for CJK Unified Ideographs
+    CJK_WEIGHT_BASE = 0x73C3
     cjk_ranges = [
         (0x3400, 0x4DC0),   # CJK Extension A
         (0x4E00, 0xA000),   # CJK Unified Ideographs
@@ -755,26 +745,37 @@ def parse_allkeys(allkeys_text: str) -> Dict[int, int]:
         for cp in range(lo, hi):
             if cp not in weights:
                 w = CJK_WEIGHT_BASE + offset
-                if w < 0xFB00:  # don't overlap Tangut implicit weights
-                    weights[cp] = w
+                if w < 0xFB00:
+                    weights[cp] = (w, 0x0020, 0x0002)
                 offset += 1
 
     return weights
 
 
-def build_collation_tables(weights: Dict[int, int]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
-    """Build BMP stage-2 table + SMP ranges for collation primary weights."""
+def build_collation_tables(weights: Dict[int, Tuple[int, int, int]]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
+    """Build BMP stage-2 table + SMP ranges for packed collation weights.
+
+    Packed format (UInt32): (primary << 16) | (secondary << 8) | tertiary
+    - Bits 31-16: primary weight (16-bit)
+    - Bits 15-8: secondary weight (8-bit)
+    - Bits 7-0: tertiary weight (8-bit)
+    """
     bmp_table = [[0] * 256 for _ in range(256)]
 
+    def pack(pri: int, sec: int, ter: int) -> int:
+        return (pri << 16) | (sec << 8) | ter
+
     for cp in range(0x10000):
-        val = weights.get(cp, 0)
-        bmp_table[(cp >> 8) & 0xFF][cp & 0xFF] = val
+        w = weights.get(cp, (0, 0, 0))
+        bmp_table[(cp >> 8) & 0xFF][cp & 0xFF] = pack(*w)
 
     smp_ranges: List[Tuple[int, int, int]] = []
     range_start = 0x10000
-    current_val = weights.get(range_start, 0)
+    current_w = weights.get(range_start, (0, 0, 0))
+    current_val = pack(*current_w)
     for cp in range(0x10001, 0x10FFFF + 1):
-        val = weights.get(cp, 0)
+        w = weights.get(cp, (0, 0, 0))
+        val = pack(*w)
         if val != current_val:
             smp_ranges.append((range_start, cp - 1, current_val))
             range_start = cp
@@ -783,11 +784,11 @@ def build_collation_tables(weights: Dict[int, int]) -> Tuple[List[List[int]], Li
     return bmp_table, smp_ranges
 
 
-def pascal_stage2_table_u16(table: List[List[int]], name: str) -> str:
-    """Generate a Pascal const stage-2 table for BMP with UInt16 elements."""
-    lines = [f"  {name}: array[0..255, 0..255] of UInt16 = ("]
+def pascal_stage2_table_u32(table: List[List[int]], name: str) -> str:
+    """Generate a Pascal const stage-2 table for BMP with UInt32 elements."""
+    lines = [f"  {name}: array[0..255, 0..255] of UInt32 = ("]
     for hi in range(256):
-        row = ", ".join(f"${v:04X}" for v in table[hi])
+        row = ", ".join(f"${v:08X}" for v in table[hi])
         sep = "," if hi < 255 else ""
         lines.append(f"    // hi=${hi:02X}")
         lines.append(f"    ({row}){sep}")
@@ -795,14 +796,14 @@ def pascal_stage2_table_u16(table: List[List[int]], name: str) -> str:
     return "\n".join(lines)
 
 
-def pascal_ranges_list_u16(ranges: List[Tuple[int, int, int]], name: str) -> str:
-    """Generate a Pascal const array of TCodepointRange16 with UInt16 values."""
+def pascal_ranges_list_u32(ranges: List[Tuple[int, int, int]], name: str) -> str:
+    """Generate a Pascal const array of TCodepointRange32 with UInt32 values."""
     if not ranges:
-        return f"  {name}: array[0..0] of TCodepointRange16 = ( (0, 0, 0) );"
-    lines = [f"  {name}: array[0..{len(ranges)-1}] of TCodepointRange16 = ("]
+        return f"  {name}: array[0..0] of TCodepointRange32 = ( (0, 0, 0) );"
+    lines = [f"  {name}: array[0..{len(ranges)-1}] of TCodepointRange32 = ("]
     for i, (lo, hi, val) in enumerate(ranges):
         sep = "," if i < len(ranges) - 1 else ""
-        lines.append(f"    (Lo: ${lo:06X}; Hi: ${hi:06X}; Value: ${val:04X}){sep}")
+        lines.append(f"    (Lo: ${lo:06X}; Hi: ${hi:06X}; Value: ${val:08X}){sep}")
     lines.append("  );")
     return "\n".join(lines)
 
@@ -1177,21 +1178,22 @@ const
     print("Step 7/7: Generating collation tables...", file=sys.stderr)
 
     collate_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
-// Collation primary weight data from allkeys.txt (DUCET).
+// Collation weight data from allkeys.txt (DUCET).
 //
-// Each codepoint maps to a 16-bit primary weight.
+// Packed format (UInt32): (primary << 16) | (secondary << 8) | tertiary
+//   Bits 31-16: primary weight (16-bit) — base character ordering
+//   Bits 15-8:  secondary weight (8-bit) — accent differences
+//   Bits 7-0:   tertiary weight (8-bit) — case/kana differences
+//
 // Weight 0 = ignorable (sorts before all other characters).
-// Non-zero weights define the primary sort order.
-//
-// Usage: look up primary weight, generate sort key as sequence of weights.
 
 const
-  // ── BMP Collation Primary Weight (stage-2: [high][low] → UInt16) ──
-{pascal_stage2_table_u16(collate_bmp_table, "COLLATE_BMP_TABLE")}
+  // ── BMP Collation Weights (stage-2: [high][low] → packed UInt32) ──
+{pascal_stage2_table_u32(collate_bmp_table, "COLLATE_BMP_TABLE")}
 
-  // ── SMP Collation Primary Weight Ranges (0x10000-0x10FFFF) ──
+  // ── SMP Collation Weight Ranges (0x10000-0x10FFFF) ──
   COLLATE_SMP_RANGES_COUNT = {len(collate_smp_ranges)};
-{pascal_ranges_list_u16(collate_smp_ranges, "COLLATE_SMP_RANGES")}
+{pascal_ranges_list_u32(collate_smp_ranges, "COLLATE_SMP_RANGES")}
 """
 
     # ── Write files ──

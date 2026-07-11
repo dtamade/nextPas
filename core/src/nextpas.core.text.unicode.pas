@@ -98,7 +98,10 @@ function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
 
 // 排序规则函数
-function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16; inline;
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
+function UnpackPrimary(const AWeight: UInt32): UInt16; inline;
+function UnpackSecondary(const AWeight: UInt32): Byte; inline;
+function UnpackTertiary(const AWeight: UInt32): Byte; inline;
 function UnicodeCollator: IUnicodeCollator; inline;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
 function DefaultCollationOptions: TCollationOptions; inline;
@@ -300,9 +303,24 @@ begin
   Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
 end;
 
-function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16;
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
 begin
-  Result := nextpas.core.text.unicode.collate.GetCollationPrimaryWeight(ACp);
+  Result := nextpas.core.text.unicode.collate.GetCollationWeight(ACp);
+end;
+
+function UnpackPrimary(const AWeight: UInt32): UInt16;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackPrimary(AWeight);
+end;
+
+function UnpackSecondary(const AWeight: UInt32): Byte;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackSecondary(AWeight);
+end;
+
+function UnpackTertiary(const AWeight: UInt32): Byte;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackTertiary(AWeight);
 end;
 
 function UnicodeCollator: IUnicodeCollator;

@@ -16,6 +16,7 @@ type
   TCodepointRange2 = nextpas.core.text.unicode.types.TCodepointRange2;
   TCodepointRange3 = nextpas.core.text.unicode.types.TCodepointRange3;
   TCodepointRange16 = nextpas.core.text.unicode.types.TCodepointRange16;
+  TCodepointRange32 = nextpas.core.text.unicode.types.TCodepointRange32;
   TCaseFoldMap = nextpas.core.text.unicode.types.TCaseFoldMap;
   TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
   TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
@@ -31,6 +32,8 @@ function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of T
   out AValue: Byte): Boolean; inline;
 function FindRange16Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange16;
   out AValue: UInt16): Boolean; inline;
+function FindRange32Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange32;
+  out AValue: UInt32): Boolean; inline;
 
 implementation
 
@@ -82,6 +85,31 @@ end;
 
 function FindRange16Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange16;
   out AValue: UInt16): Boolean;
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < ARanges[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > ARanges[LMid].Hi then
+      LLo := LMid + 1
+    else
+    begin
+      AValue := ARanges[LMid].Value;
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+function FindRange32Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange32;
+  out AValue: UInt32): Boolean;
 var
   LLo: SizeInt;
   LHi: SizeInt;

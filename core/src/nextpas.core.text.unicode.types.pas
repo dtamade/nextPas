@@ -84,6 +84,12 @@ type
     Value: UInt16;
   end;
 
+  TCodepointRange32 = record
+    Lo: TUnicodeCodepoint;
+    Hi: TUnicodeCodepoint;
+    Value: UInt32;
+  end;
+
   TCaseFoldMap = array[0..7] of TUnicodeCodepoint;
 
   TCaseFoldEntry = record
