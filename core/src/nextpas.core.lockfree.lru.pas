@@ -49,10 +49,10 @@ type
     function Remove(const AKey: TKey): Boolean;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     function IsEmpty: Boolean;
     function Count: PtrUInt;
-    function Capacity: PtrUInt;
+    function Capacity: PtrUInt; inline;
   end;
 
   generic TConcurrentLruCache<TKey, TValue> = class(specialize TConcurrentLruCacheImpl<TKey, TValue>)
@@ -346,7 +346,7 @@ begin
   end;
 end;
 
-function TConcurrentLruCacheImpl.IsClosed: Boolean;
+function TConcurrentLruCacheImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
@@ -371,7 +371,7 @@ begin
   end;
 end;
 
-function TConcurrentLruCacheImpl.Capacity: PtrUInt;
+function TConcurrentLruCacheImpl.Capacity: PtrUInt; inline;
 begin
   Result := FMaxItems;
 end;

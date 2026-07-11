@@ -85,13 +85,13 @@ type
     {** 是否包含键 }
     function Contains(const AKey: TKey): Boolean;
     {** 大致数量 }
-    function ApproxCount: Int64;
+    function ApproxCount: Int64; inline;
     {** 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** 关闭 }
     procedure Close;
     {** 是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -358,12 +358,12 @@ begin
   end;
 end;
 
-function TLockFreeHashTableImpl.ApproxCount: Int64;
+function TLockFreeHashTableImpl.ApproxCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-function TLockFreeHashTableImpl.IsEmpty: Boolean;
+function TLockFreeHashTableImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
@@ -378,7 +378,7 @@ begin
   end;
 end;
 
-function TLockFreeHashTableImpl.IsClosed: Boolean;
+function TLockFreeHashTableImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
