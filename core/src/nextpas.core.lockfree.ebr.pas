@@ -54,8 +54,8 @@ type
     procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc;
       const AUserData: Pointer = nil);
     procedure Collect;
-    function ActiveCount: PtrUInt;
-    function RetiredCount: PtrUInt;
+    function ActiveCount: PtrUInt; inline;
+    function RetiredCount: PtrUInt; inline;
   end;
 
   TEbrGuard = record
@@ -180,12 +180,12 @@ begin
     AtomicFetchSub64(FRetiredCount, LReclaimedCount, moAcqRel);
 end;
 
-function TEbrDomain.ActiveCount: PtrUInt;
+function TEbrDomain.ActiveCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad32(FActiveCount, moAcquire));
 end;
 
-function TEbrDomain.RetiredCount: PtrUInt;
+function TEbrDomain.RetiredCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad64(FRetiredCount, moAcquire));
 end;

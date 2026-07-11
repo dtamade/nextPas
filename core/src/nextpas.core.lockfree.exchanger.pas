@@ -50,7 +50,7 @@ type
     function Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
     function ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -181,7 +181,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TExchangerImpl.IsClosed: Boolean;
+function TExchangerImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

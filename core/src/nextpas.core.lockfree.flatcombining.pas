@@ -54,7 +54,7 @@ type
     destructor Destroy; override;
     function Apply(AOp: TFCOpType; AOperand: Int64): Int64;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
   {** @desc 基于 Flat Combining 的并发计数器 }
@@ -72,7 +72,7 @@ type
     function Sub(const AValue: Int64): Int64;
     function GetValue: Int64;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -212,7 +212,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TFlatCombiningLock.IsClosed: Boolean;
+function TFlatCombiningLock.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
@@ -264,7 +264,7 @@ begin
   FLock.Close;
 end;
 
-function TFlatCombiningCounter.IsClosed: Boolean;
+function TFlatCombiningCounter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
