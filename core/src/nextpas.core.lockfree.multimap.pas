@@ -47,10 +47,10 @@ type
     function RemoveValue(const AKey: TKey; const AValue: TValue): Boolean;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function Count: PtrUInt;
-    function KeyCount: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function Count: PtrUInt; inline;
+    function KeyCount: PtrUInt; inline;
   end;
 
   generic TLockFreeMultiMap<TKey, TValue> = class(specialize TLockFreeMultiMapImpl<TKey, TValue>)
@@ -349,17 +349,17 @@ begin
   end;
 end;
 
-function TLockFreeMultiMapImpl.IsClosed: Boolean;
+function TLockFreeMultiMapImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TLockFreeMultiMapImpl.IsEmpty: Boolean;
+function TLockFreeMultiMapImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FCount, moAcquire) = 0;
 end;
 
-function TLockFreeMultiMapImpl.Count: PtrUInt;
+function TLockFreeMultiMapImpl.Count: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad64(FCount, moAcquire));
 end;
