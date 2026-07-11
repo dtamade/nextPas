@@ -696,6 +696,18 @@ begin
   dispatchTable.ArrayAbsF64 := @ScalarArrayAbsF64;
   dispatchTable.ArrayNegF64 := @ScalarArrayNegF64;
   dispatchTable.ArraySqrtF64 := @ScalarArraySqrtF64;
+  // === Batch Array Operations - Transcendental F64 ===
+  dispatchTable.ArraySinF64 := @ScalarArraySinF64;
+  dispatchTable.ArrayCosF64 := @ScalarArrayCosF64;
+  dispatchTable.ArraySinCosF64 := @ScalarArraySinCosF64;
+  dispatchTable.ArrayExpF64 := @ScalarArrayExpF64;
+  dispatchTable.ArrayLogF64 := @ScalarArrayLogF64;
+  dispatchTable.ArrayLog2F64 := @ScalarArrayLog2F64;
+  dispatchTable.ArrayLog10F64 := @ScalarArrayLog10F64;
+  dispatchTable.ArrayCeilF64 := @ScalarArrayCeilF64;
+  dispatchTable.ArrayFloorF64 := @ScalarArrayFloorF64;
+  dispatchTable.ArrayRoundF64 := @ScalarArrayRoundF64;
+  dispatchTable.ArrayTruncF64 := @ScalarArrayTruncF64;
   // === Batch Array Operations - Transcendental F32 ===
   dispatchTable.ArrayExpF32 := @ScalarArrayExpF32;
   dispatchTable.ArrayLogF32 := @ScalarArrayLogF32;

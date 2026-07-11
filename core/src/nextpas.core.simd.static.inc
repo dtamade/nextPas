@@ -1346,6 +1346,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := SSE2ArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := SSE2ReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := SSE2ReduceDotF64}
+  // Transcendental operations (scalar fallback - no SSE2 F64 transcendental impl yet)
+  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_AVX2}
@@ -1361,6 +1373,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := AVX2ArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := AVX2ReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := AVX2ReduceDotF64}
+  // Transcendental operations (scalar fallback - no AVX2 F64 transcendental impl yet)
+  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_AVX512}
@@ -1376,6 +1400,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := AVX512ArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := AVX512ReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := AVX512ReduceDotF64}
+  // Transcendental operations (scalar fallback - no AVX512 F64 transcendental impl yet)
+  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_NEON}
@@ -1391,6 +1427,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := NEONArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := NEONReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := NEONReduceDotF64}
+  // Transcendental operations (scalar fallback - no NEON F64 transcendental impl yet)
+  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_SCALAR}
@@ -1406,6 +1454,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := ScalarArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := ScalarReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := ScalarReduceDotF64}
+  // Transcendental operations
+  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
 {$ENDIF}
 
 {

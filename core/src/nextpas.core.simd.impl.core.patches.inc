@@ -157,32 +157,8 @@ begin
   Result.f[7] := h;
 end;
 
-// === P2 Completeness: Batch Array F64 Extensions (dispatch-through) ===
-
-procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
-var i: SizeUInt;
-begin
-  for i := 0 to aCount - 1 do
-    aDst[i] := System.Exp(aSrc[i]);
-end;
-
-procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
-var i: SizeUInt;
-begin
-  for i := 0 to aCount - 1 do
-    aDst[i] := System.Ln(aSrc[i]);
-end;
-
-procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
-var i: SizeUInt;
-begin
-  for i := 0 to aCount - 1 do
-    aDst[i] := System.Sin(aSrc[i]);
-end;
-
-procedure ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
-var i: SizeUInt;
-begin
-  for i := 0 to aCount - 1 do
-    aDst[i] := System.Cos(aSrc[i]);
-end;
+// === P2 Completeness: Batch Array F64 Transcendental Extensions ===
+// Note: All F64 transcendental operations are now in facade with dispatch
+// ArraySinF64, ArrayCosF64, ArraySinCosF64, ArrayExpF64, ArrayLogF64,
+// ArrayLog2F64, ArrayLog10F64, ArrayCeilF64, ArrayFloorF64, ArrayRoundF64,
+// ArrayTruncF64 are all in nextpas.core.simd.pas

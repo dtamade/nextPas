@@ -1326,6 +1326,13 @@ procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArraySinCosF64(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 
 // === Framework Information ===
 
@@ -1913,6 +1920,85 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   LDispatch^.ArrayMaxF64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+// === Transcendental F64 Batch Implementation ===
+
+procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySinF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayCosF64(aSrc, aDst, aCount);
+end;
+
+procedure ArraySinCosF64(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySinCosF64(aSrc, aSinDst, aCosDst, aCount);
+end;
+
+procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayExpF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLogF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLog2F64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLog10F64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayCeilF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayFloorF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayRoundF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayTruncF64(aSrc, aDst, aCount);
 end;
 
 // === Transcendental F32 Batch Implementation ===

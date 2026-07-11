@@ -77,6 +77,18 @@ procedure ScalarArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aB
 procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+// === Batch Array Operations - Transcendental F64 ===
+procedure ScalarArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArraySinCosF64(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 // === Batch Array Operations - Transcendental F32 ===
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);

@@ -774,6 +774,19 @@
     ArrayMaxF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
     ArrayFmaF64: procedure(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
 
+    // === Batch Array Operations - Transcendental F64 ===
+    ArraySinF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayCosF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArraySinCosF64: procedure(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt);
+    ArrayExpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayLogF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayLog2F64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayLog10F64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayCeilF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayFloorF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayRoundF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayTruncF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+
     // === Batch Array Operations - Transcendental F32 ===
     ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
     ArrayLogF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
