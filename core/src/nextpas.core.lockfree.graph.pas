@@ -167,9 +167,22 @@ begin
 end;
 
 procedure TLockFreeGraph.LockGraph;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TLockFreeGraph.UnlockGraph;

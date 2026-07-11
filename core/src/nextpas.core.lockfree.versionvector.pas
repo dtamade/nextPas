@@ -83,7 +83,7 @@ end;
 
 procedure TVersionVector.Lock;
 var
-  LJ: Int32;
+  LJ, LSpin: Int32;
 begin
   for LJ := 0 to LOCKFREE_SPIN_COUNT do
   begin
@@ -91,8 +91,19 @@ begin
       Exit;
   end;
   { Spin-wait }
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ThreadSwitch;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TVersionVector.Unlock;

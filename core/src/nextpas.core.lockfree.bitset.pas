@@ -77,13 +77,24 @@ end;
 
 procedure TConcurrentBitSet.EnsureCapacity(AIndex: Int32);
 var
-  LNeeded, LOldCount, I: Int32;
+  LNeeded, LOldCount, I, LSpin: Int32;
 begin
+  LSpin := 0;
   LNeeded := (AIndex div 64) + 1;
   if LNeeded <= FWordCount then
     Exit;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
   if LNeeded <= FWordCount then
   begin
     AtomicStore32(FLock, 0, moRelease);

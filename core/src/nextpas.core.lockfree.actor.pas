@@ -301,16 +301,20 @@ end;
 
 procedure TActorSystem.AcquireLock;
 var
-  LSpinCount: Int32;
+  LSpin: Integer;
 begin
-  LSpinCount := 0;
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
   begin
-    Inc(LSpinCount);
-    if LSpinCount <= 64 then
-      CpuPause
-    else
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
       ThreadSwitch;
+    end
+    else
+      CpuPause;
   end;
 end;
 

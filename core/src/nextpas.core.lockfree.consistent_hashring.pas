@@ -66,7 +66,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 { ---------- FNV-1a Hash ---------- }
 
@@ -118,14 +119,21 @@ end;
 
 procedure TConsistentHashRing.AcquireLock;
 var
-  LOld: Int32;
+  LSpin: Integer;
 begin
-  repeat
-    LOld := AtomicCompareExchange32(FLock, 0, 1, moAcquire);
-    if LOld = 0 then
-      Exit;
-    ThreadSwitch;
-  until False;
+  LSpin := 0;
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConsistentHashRing.ReleaseLock;

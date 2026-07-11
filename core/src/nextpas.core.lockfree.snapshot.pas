@@ -198,12 +198,24 @@ function TSnapshotIsolationImpl.Read(const AKey: AnsiString; const ASnapshotTs: 
 var
   LEntry: PKeyEntry;
   LVer: PSnapshotVersion;
+  LSpin: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(srClosed);
   // 获取锁以确保读取一致性
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
   try
     LEntry := FindKeyEntry(AKey);
     if LEntry = nil then
@@ -229,11 +241,23 @@ function TSnapshotIsolationImpl.Write(const AKey: AnsiString; const AValue: Ansi
 var
   LEntry: PKeyEntry;
   LNewVer: PSnapshotVersion;
+  LSpin: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(srClosed);
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
   try
     LEntry := GetOrCreateKeyEntry(AKey);
     // 检查写-写冲突：是否有其他事务在我们之后写了同一个 key

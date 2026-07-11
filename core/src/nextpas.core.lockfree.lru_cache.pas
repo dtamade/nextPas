@@ -90,7 +90,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 constructor TConcurrentLRUCache.Create(ACapacity: Int32);
 begin
@@ -124,9 +125,22 @@ begin
 end;
 
 procedure TConcurrentLRUCache.AcquireLock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    { spin };
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentLRUCache.ReleaseLock;
