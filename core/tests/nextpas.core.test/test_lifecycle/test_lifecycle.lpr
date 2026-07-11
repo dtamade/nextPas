@@ -117,6 +117,8 @@ begin
   LSuccess := Runner.RunAllWithResult(LResults);
   CheckTrue(LSuccess, 'Closure tests should pass');
   CheckTrue(Runner.TotalPass = 2, 'Expected 2 closures passed');
+  Runner := Default(TSuiteRunner);
+  Suite := Default(TTestSuite);
 end;
 
 procedure TestClosureSetupTeardown;
@@ -145,6 +147,8 @@ begin
   CheckEqual(GSetupCalls, 1);
   CheckEqual(GTeardownCalls, 1);
   CheckEqual(Runner.TotalPass, 2);
+  Runner := Default(TSuiteRunner);
+  Suite := Default(TTestSuite);
 end;
 
 procedure TestClosureBeforeEachAfterEach;
@@ -172,6 +176,8 @@ begin
   CheckTrue(LSuccess, 'Closure hooks should pass');
   CheckEqual(GBeforeEachCalls, 3);
   CheckEqual(GAfterEachCalls, 3);
+  Runner := Default(TSuiteRunner);
+  Suite := Default(TTestSuite);
 end;
 
 procedure SimpleTrue;
@@ -200,6 +206,7 @@ begin
   Suite.TestSubtest('fail-via-ctx', @CtxFailSubtest);
   Suite.RunWithResult(LResult);
   CheckTrue(LResult.Failed >= 1, 'Ctx.Fail should propagate as failure');
+  Suite := Default(TTestSuite);
 end;
 
 { ── ITestContext.Skip ──────────────────────────────────────────────────────── }
@@ -227,6 +234,7 @@ begin
     but should not cause failures either }
   CheckTrue(LResult.Failed = 0, 'Skip in subtest should not cause failure');
   CheckTrue(LResult.AllPassed, 'Suite should pass when subtests only skip');
+  Suite := Default(TTestSuite);
 end;
 
 { ── TSuiteRunner.AllPassed auto-run ─────────────────────────────────────────── }
@@ -246,6 +254,8 @@ begin
   CheckTrue(Runner.HasRun, 'HasRun should be true after AllPassed');
   CheckTrue(LAutoPassed, 'AllPassed should return true');
   CheckTrue(Runner.TotalPass = 1, 'Should have 1 pass after auto-run');
+  Runner := Default(TSuiteRunner);
+  Suite := Default(TTestSuite);
 end;
 
 { ── TTestSuite.Create defaults ─────────────────────────────────────────────── }
@@ -270,6 +280,7 @@ begin
   CheckTrue(Suite.LastPass = 0);
   CheckTrue(Suite.LastFail = 0);
   CheckTrue(Suite.LastSkip = 0);
+  Suite := Default(TTestSuite);
 end;
 
 { ── TSuiteRunner.Create defaults ────────────────────────────────────────────── }
@@ -285,6 +296,7 @@ begin
   CheckTrue(Runner.TotalFail = 0);
   CheckTrue(Runner.TotalSkip = 0);
   CheckFalse(Runner.HasRun);
+  Runner := Default(TSuiteRunner);
 end;
 
 { ── TTestSuite.Skip ────────────────────────────────────────────────────────── }
@@ -302,6 +314,7 @@ begin
   CheckTrue(LResult.Skipped = 2, 'Should have 2 skipped');
   CheckTrue(LResult.Passed = 1, 'Should have 1 pass');
   CheckTrue(LResult.AllPassed, 'AllPassed should be true');
+  Suite := Default(TTestSuite);
 end;
 
 { ── TestTable integration ──────────────────────────────────────────────────── }
@@ -327,6 +340,7 @@ begin
   Suite.RunWithResult(LResult);
   CheckTrue(LResult.Passed = 5, 'Expected 5 table tests');
   CheckTrue(LResult.AllPassed, 'All table tests should pass');
+  Suite := Default(TTestSuite);
 end;
 
 procedure TestTableParallel;
@@ -344,6 +358,7 @@ begin
   LSuccess := Suite.RunParallelWithResult(nil, LResult);
   CheckTrue(LSuccess, 'Parallel table should pass');
   CheckTrue(LResult.Passed = 2, 'Expected 2 parallel table passes');
+  Suite := Default(TTestSuite);
 end;
 
 { ── Closure + Parallel integration ─────────────────────────────────────────── }
@@ -365,6 +380,7 @@ begin
   LSuccess := Suite.RunParallelWithResult(nil, LResult);
   CheckTrue(LSuccess, 'Closure parallel should pass');
   CheckTrue(LResult.Passed = 3, 'Expected 3 parallel closures');
+  Suite := Default(TTestSuite);
 end;
 
 { ── R6-57: Setup failure → Teardown not called ────────────────────────────── }
@@ -386,6 +402,7 @@ begin
   { When Setup fails, Teardown should NOT run (no teardown for partial init) }
   CheckEqual(GSetupFailTeardownCalled, 0);
   CheckTrue(LResult.Failed >= 1, 'Setup failure should count as failure');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── Facade completeness ───────────────────────────────────────────────────── }
