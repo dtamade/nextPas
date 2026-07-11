@@ -337,6 +337,57 @@ begin
 end;
 {$ENDIF}
 
+procedure TestPathMatchStar;
+begin
+  Check(PathMatch('*.txt', 'hello.txt'), '*.txt matches hello.txt');
+  Check(not PathMatch('*.txt', 'hello.log'), '*.txt does not match hello.log');
+  Check(PathMatch('*', 'anything'), '* matches anything');
+  Check(not PathMatch('*', 'path/thing'), '* does not match path/thing');
+  Check(PathMatch('*.pas', 'test.pas'), '*.pas matches test.pas');
+end;
+
+procedure TestPathMatchQuestion;
+begin
+  Check(PathMatch('?.txt', 'a.txt'), '? matches single char');
+  Check(not PathMatch('?.txt', 'ab.txt'), '? does not match two chars');
+  Check(not PathMatch('?.txt', '.txt'), '? does not match empty');
+  Check(PathMatch('foo?.log', 'foo1.log'), 'foo? matches foo1');
+  Check(not PathMatch('foo?.log', 'foo12.log'), 'foo? does not match foo12');
+end;
+
+procedure TestPathMatchCharClass;
+begin
+  Check(PathMatch('[abc]', 'a'), '[abc] matches a');
+  Check(PathMatch('[abc]', 'b'), '[abc] matches b');
+  Check(not PathMatch('[abc]', 'd'), '[abc] does not match d');
+  Check(PathMatch('[a-z]', 'm'), '[a-z] matches m');
+  Check(not PathMatch('[a-z]', 'M'), '[a-z] does not match M');
+  Check(PathMatch('[!abc]', 'd'), '[!abc] matches d');
+  Check(not PathMatch('[!abc]', 'a'), '[!abc] does not match a');
+end;
+
+procedure TestPathMatchEscape;
+begin
+  Check(PathMatch('\*.txt', '*.txt'), 'escaped star matches literally');
+  Check(not PathMatch('\*.txt', 'hello.txt'), 'escaped star does not wildcard');
+end;
+
+procedure TestPathMatchCombined;
+begin
+  Check(PathMatch('test_[0-9].pas', 'test_5.pas'), 'combined pattern matches');
+  Check(not PathMatch('test_[0-9].pas', 'test_ab.pas'), 'combined pattern rejects');
+  Check(PathMatch('**', 'anything'), 'double star matches anything');
+end;
+
+procedure TestPathMatchEdgeCases;
+begin
+  Check(PathMatch('', ''), 'empty matches empty');
+  Check(not PathMatch('', 'x'), 'empty does not match non-empty');
+  Check(not PathMatch('x', ''), 'non-empty does not match empty');
+  Check(PathMatch('abc', 'abc'), 'literal matches literal');
+  Check(not PathMatch('abc', 'abcd'), 'literal does not match longer');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.path');
   T.Test('PathJoin', @TestPathJoin);
@@ -363,6 +414,12 @@ begin
   T.Test('ExtractFilePath source contract', @TestExtractFilePathSourceContract);
   T.Test('PathJoin fallback source contract', @TestPathJoinFallbackSourceContract);
   T.Test('Path delegates platform root contract', @TestPathDelegatesPlatformRootContract);
+  T.Test('PathMatch star', @TestPathMatchStar);
+  T.Test('PathMatch question', @TestPathMatchQuestion);
+  T.Test('PathMatch char class', @TestPathMatchCharClass);
+  T.Test('PathMatch escape', @TestPathMatchEscape);
+  T.Test('PathMatch combined', @TestPathMatchCombined);
+  T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('Windows root wrapper contract', @TestWindowsRootWrapperContract);
 {$ENDIF}

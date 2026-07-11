@@ -36,6 +36,8 @@ function PathRelative(const ABase, ATarget: string): string;
 function PathHasExt(const APath: string): Boolean;
 {** @desc 返回去除扩展名后的路径 *}
 function PathWithoutExt(const APath: string): string;
+{** @desc glob 模式匹配（* 匹配任意非分隔符序列，? 匹配单字符，[a-z] 字符类） *}
+function PathMatch(const APattern, AName: string): Boolean;
 
 { SysUtils-compatible aliases }
 
@@ -150,6 +152,11 @@ end;
 function PathWithoutExt(const APath: string): string;
 begin
   Result := FsPathWithoutExt(APath);
+end;
+
+function PathMatch(const APattern, AName: string): Boolean;
+begin
+  Result := FsPathMatch(APattern, AName);
 end;
 
 { SysUtils-compatible aliases }

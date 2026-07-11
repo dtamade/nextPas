@@ -26,6 +26,7 @@ function FsPathTrimSep(const APath: string): string;
 function FsPathChangeExt(const APath, ANewExt: string): string;
 function FsPathWithoutExt(const APath: string): string;
 function FsSameFileName(const A, B: string): Boolean;
+function FsPathMatch(const APattern, AName: string): Boolean;
 
 implementation
 
@@ -212,6 +213,142 @@ end;
 function FsSameFileName(const A, B: string): Boolean;
 begin
   Result := platform_path_same_file_name(PAnsiChar(A), PAnsiChar(B));
+end;
+
+function FsPathMatch(const APattern, AName: string): Boolean;
+var
+  PI, NI: Integer;
+  PSaved, NSaved: Integer;
+  LP, LN: Integer;
+  LChar, LMin, LMax: Char;
+  LMatched, LNegate: Boolean;
+begin
+  LP := Length(APattern);
+  LN := Length(AName);
+  PI := 1;
+  NI := 1;
+
+  while (PI <= LP) or (NI <= LN) do
+  begin
+    if PI <= LP then
+    begin
+      LChar := APattern[PI];
+
+      { Escape: backslash matches next pattern char literally }
+      if (LChar = '\') and (PI < LP) then
+      begin
+        Inc(PI);
+        if (NI <= LN) and (AName[NI] = APattern[PI]) then
+        begin
+          Inc(PI);
+          Inc(NI);
+          Continue;
+        end;
+        Exit(False);
+      end;
+
+      { Star: match any sequence of non-separator chars }
+      if LChar = '*' then
+      begin
+        Inc(PI);
+        { Collapse consecutive stars }
+        while (PI <= LP) and (APattern[PI] = '*') do
+          Inc(PI);
+        { Star at end matches rest of name (if no separators) }
+        if PI > LP then
+        begin
+          { Check no separators in remaining name }
+          while NI <= LN do
+          begin
+            if (AName[NI] = '/') or (AName[NI] = '\') then
+              Exit(False);
+            Inc(NI);
+          end;
+          Exit(True);
+        end;
+        { Save position and try matching from here }
+        PSaved := PI;
+        NSaved := NI;
+        while NSaved <= LN do
+        begin
+          if (AName[NSaved] = '/') or (AName[NSaved] = '\') then
+            Break;
+          PI := PSaved;
+          NI := NSaved;
+          if FsPathMatch(Copy(APattern, PI, LP - PI + 1),
+            Copy(AName, NI, LN - NI + 1)) then
+            Exit(True);
+          Inc(NSaved);
+        end;
+        Exit(False);
+      end;
+
+      { Question mark: match one non-separator char }
+      if LChar = '?' then
+      begin
+        if (NI > LN) or (AName[NI] = '/') or (AName[NI] = '\') then
+          Exit(False);
+        Inc(PI);
+        Inc(NI);
+        Continue;
+      end;
+
+      { Character class: [a-z], [abc], [!abc], [^abc] }
+      if LChar = '[' then
+      begin
+        Inc(PI);
+        if NI > LN then
+          Exit(False);
+        LNegate := False;
+        if (PI <= LP) and ((APattern[PI] = '!') or (APattern[PI] = '^')) then
+        begin
+          LNegate := True;
+          Inc(PI);
+        end;
+        LMatched := False;
+        LMin := #0;
+        while (PI <= LP) and (APattern[PI] <> ']') do
+        begin
+          if (APattern[PI] = '\') and (PI < LP) then
+            Inc(PI);
+          if (PI + 2 <= LP) and (APattern[PI + 1] = '-') then
+          begin
+            { Range: a-z }
+            LMin := APattern[PI];
+            LMax := APattern[PI + 2];
+            if (LMax = '\') and (PI + 3 <= LP) then
+              LMax := APattern[PI + 3];
+            if (AName[NI] >= LMin) and (AName[NI] <= LMax) then
+              LMatched := True;
+            Inc(PI, 3);
+          end
+          else
+          begin
+            if AName[NI] = APattern[PI] then
+              LMatched := True;
+            Inc(PI);
+          end;
+        end;
+        if LNegate then LMatched := not LMatched;
+        if not LMatched then
+          Exit(False);
+        if (PI <= LP) and (APattern[PI] = ']') then
+          Inc(PI);
+        Inc(NI);
+        Continue;
+      end;
+
+      { Literal match }
+      if (NI > LN) or (AName[NI] <> LChar) then
+        Exit(False);
+      Inc(PI);
+      Inc(NI);
+      Continue;
+    end;
+    { Pattern exhausted but name remains }
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 end.

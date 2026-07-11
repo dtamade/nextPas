@@ -971,6 +971,26 @@ begin
   Check(FsExists(LName), 'temp file exists');
 end;
 
+procedure TestTempDir;
+var
+  LDir: string;
+begin
+  LDir := FsTempDir(GTmpDir, 'testdir_');
+  Check(Pos(GTmpDir + '/testdir_', LDir) = 1, 'temp dir created with prefix');
+  Check(FsIsDir(LDir), 'temp dir is a directory');
+  FsRemoveAll(LDir);
+end;
+
+procedure TestTempDirDefaultLocation;
+var
+  LDir: string;
+begin
+  LDir := FsTempDir('', 'testdir_');
+  Check(FsIsDir(LDir), 'temp dir in system location exists');
+  Check(Pos('testdir_', LDir) > 0, 'temp dir has prefix');
+  FsRemoveAll(LDir);
+end;
+
 procedure TestTempFileSystemDirUsesTypedHandleContract;
 var
   LSource, LStreamSource, LImpl, LBody: string;
@@ -1840,6 +1860,8 @@ begin
     T.Test('Chmod + perm', @TestChmodAndPerm);
     T.Test('Truncate path', @TestTruncatePath);
     T.Test('TempFile in dir', @TestTempFileInDir);
+    T.Test('TempDir', @TestTempDir);
+    T.Test('TempDir default location', @TestTempDirDefaultLocation);
     T.Test('TempFile system dir typed handle contract',
       @TestTempFileSystemDirUsesTypedHandleContract);
     T.Test('TempFile path buffer constant contract',

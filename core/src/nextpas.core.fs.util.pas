@@ -20,6 +20,7 @@ procedure FsWriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 function FsCopyFile(const ASrc, ADst: string): Int64;
 function FsTempFile(const ADir, APattern: string): IFile;
+function FsTempDir(const ADir, APattern: string): string;
 function FsStat(const APath: string): TFileInfo;
 function FsLstat(const APath: string): TFileInfo;
 function FsExists(const APath: string): Boolean;
@@ -41,6 +42,7 @@ uses
   nextpas.core.text.utf8,
   nextpas.core.errors,
   nextpas.core.fs.errors,
+  nextpas.core.platform.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
@@ -240,6 +242,44 @@ begin
     end;
   end;
   raise EIOError.Create('tempfile: exhausted attempts in ' + ADir);
+end;
+
+function FsTempDir(const ADir, APattern: string): string;
+const
+  HEX: array[0..15] of AnsiChar = '0123456789abcdef';
+  MAX_ATTEMPTS = 32;
+var
+  LBase, LPath: string;
+  LRand: array[0..7] of Byte;
+  LHex: string;
+  LI, LAttempt: Integer;
+  LResult: Int32;
+begin
+  if ADir = '' then
+    LBase := GetEnv('TMPDIR');
+  if (ADir = '') and (LBase = '') then
+    LBase := '/tmp';
+  if ADir <> '' then
+    LBase := ADir;
+
+  for LAttempt := 0 to MAX_ATTEMPTS - 1 do
+  begin
+    if platform_random_bytes(@LRand[0], 8) <> 0 then
+      raise EIOError.Create('tempdir: random source failed');
+    SetLength(LHex, 16);
+    for LI := 0 to 7 do
+    begin
+      LHex[LI * 2 + 1] := Char(HEX[(LRand[LI] shr 4) and $F]);
+      LHex[LI * 2 + 2] := Char(HEX[LRand[LI] and $F]);
+    end;
+    LPath := LBase + PLATFORM_PATH_SEP + APattern + LHex;
+    LResult := platform_file_mkdir(PAnsiChar(LPath), UInt32(PermDirDefault));
+    if LResult = 0 then
+      Exit(LPath);
+    if LResult <> PLATFORM_ERR_EXIST then
+      RaiseFsError(LResult, 'tempdir', LPath);
+  end;
+  raise EIOError.Create('tempdir: exhausted attempts in ' + LBase);
 end;
 
 procedure FillFileInfo(const APath: string; const LPlatStat: TPlatformFileStat;

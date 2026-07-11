@@ -113,6 +113,16 @@ function CopyFile(const ASrc, ADst: string): Int64; inline;
  *   APattern  文件名模式（包含 XXXXXX 将被随机字符替换）
  *}
 function TempFile(const ADir, APattern: string): IFile; inline;
+{**
+ * @desc 在指定目录创建临时目录，返回目录路径
+ *
+ * @params
+ *   ADir      目标目录（空字符串使用系统临时目录）
+ *   APattern  目录名前缀
+ *
+ * @return 创建的临时目录完整路径
+ *}
+function TempDir(const ADir, APattern: string): string;
 {** @desc 获取文件状态信息（跟随符号链接） *}
 function Stat(const APath: string): TFileInfo; inline;
 {** @desc 获取文件状态信息（不跟随符号链接） *}
@@ -183,6 +193,8 @@ function PathChangeExt(const APath, ANewExt: string): string; inline;
 function PathWithoutExt(const APath: string): string; inline;
 {** @desc 平台无关的文件名比较 *}
 function SameFileName(const A, B: string): Boolean; inline;
+{** @desc glob 模式匹配（* 匹配任意非分隔符序列，? 匹配单字符，[a-z] 字符类） *}
+function PathMatch(const APattern, AName: string): Boolean; inline;
 {** @desc 获取当前工作目录 *}
 function GetCwd: string; inline;
 {** @desc 设置当前工作目录 *}
@@ -346,6 +358,11 @@ begin
   Result := nextpas.core.fs.util.FsTempFile(ADir, APattern);
 end;
 
+function TempDir(const ADir, APattern: string): string;
+begin
+  Result := nextpas.core.fs.util.FsTempDir(ADir, APattern);
+end;
+
 function Stat(const APath: string): TFileInfo;
 begin
   Result := nextpas.core.fs.util.FsStat(APath);
@@ -504,6 +521,11 @@ end;
 function SameFileName(const A, B: string): Boolean;
 begin
   Result := nextpas.core.fs.path.FsSameFileName(A, B);
+end;
+
+function PathMatch(const APattern, AName: string): Boolean;
+begin
+  Result := nextpas.core.fs.path.FsPathMatch(APattern, AName);
 end;
 
 function GetCwd: string;
