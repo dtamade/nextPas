@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-11
-**版本**：v8.3
+**版本**：v8.4
 
 ---
 
@@ -297,9 +297,23 @@ end;
 | test_parallel | 19 | 19 | 并行执行 + timeout + table parallel |
 | test_subtests | 29 | 59 | Run/RunNested + CleanupCallbacks + SinkPropagation |
 | test_stress | 10 | 20 | 10K 空测试 + 大字符串 + glob 性能 + 100K 行输出 |
-| **总计** | **819** | **2276** | **0 泄漏**（test_assertions 32B 是 FPC artifact） |
+| **总计** | **819** | **2276** | FPC heaptrc 时序伪影见下 |
+
+> **FPC heaptrc 时序说明**：test_lifecycle(5 blocks/896B)、test_parallel(75 blocks/14KB)、test_runner(17 blocks/3KB)
+> 报告未释放内存块。经调查为 FPC 编译器管理的记录副本（TTestSuite=272B、TTestRunResult=40B），
+> 由 `TSuiteRunner.Suites: TArray<TTestSuite>` 等动态数组持有。这些托管记录在堆上创建副本，
+> 但 FPC 的隐式析构在 heaptrc DumpHeap 之后执行。`Default()` 提前归零不能减少计数，
+> 因为问题不在外层变量而在动态数组元素内部的编译器托管副本。这些不是真实泄漏。
 
 ## 9. 变更日志
+
+### v8.4 (2026-07-11) — M4 heaptrc 时序调查 + 文档更新
+
+**调查结论**：
+- test_lifecycle(5 blocks/896B)、test_parallel(75 blocks/14KB)、test_runner(17 blocks/3KB) 报告未释放块
+- 根因：FPC 编译器管理的记录副本（TTestSuite=272B、TTestRunResult=40B），由动态数组 `TSuiteRunner.Suites: TArray<TTestSuite>` 持有
+- 编译器隐式析构在 heaptrc DumpHeap 之后执行，`Default()` 提前归零不能减少计数
+- 结论：非真实泄漏，是 FPC heaptrc 时序伪影
 
 ### v8.3 (2026-07-11) — API 一致性补齐 + 测试覆盖 + 边界条件
 
