@@ -28,6 +28,8 @@ function PathExt(const APath: string): string;
 function PathChangeExt(const APath, ANewExt: string): string;
 {** @desc 判断路径是否为绝对路径 *}
 function PathIsAbsolute(const APath: string): Boolean;
+{** @desc 判断路径是否为相对路径 *}
+function PathIsRelative(const APath: string): Boolean; inline;
 {** @desc 规范化路径（解析 . 和 ..，去除多余分隔符） *}
 function PathNormalize(const APath: string): string;
 {** @desc 计算从 ABase 到 ATarget 的相对路径 *}
@@ -132,6 +134,11 @@ end;
 function PathIsAbsolute(const APath: string): Boolean;
 begin
   Result := FsPathIsAbs(APath);
+end;
+
+function PathIsRelative(const APath: string): Boolean;
+begin
+  Result := not FsPathIsAbs(APath);
 end;
 
 function PathNormalize(const APath: string): string;

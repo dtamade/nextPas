@@ -260,6 +260,22 @@ begin
   CheckEqual('line3', LRead[2], 'FsWriteFileLines line 3');
 end;
 
+procedure TestFsAppendFileLines;
+var
+  LRead: TStringArray;
+begin
+  { Write initial content with trailing newline }
+  FsWriteFileText(GTmpDir + '/applines.txt', 'first'#10);
+  { Append lines }
+  FsAppendFileLines(GTmpDir + '/applines.txt',
+    TStringArray.Create('second', 'third'));
+  LRead := FsReadFileLines(GTmpDir + '/applines.txt');
+  CheckEqual(Int64(3), Int64(Length(LRead)), 'FsAppendFileLines line count');
+  CheckEqual('first', LRead[0], 'FsAppendFileLines line 1');
+  CheckEqual('second', LRead[1], 'FsAppendFileLines line 2');
+  CheckEqual('third', LRead[2], 'FsAppendFileLines line 3');
+end;
+
 procedure TestWriteAtomic;
 var
   LData, LRead: TBytes;
@@ -1893,6 +1909,7 @@ begin
     T.Test('ReadFile/WriteFile', @TestReadWriteFile);
     T.Test('FsWriteFileText', @TestFsWriteFileText);
     T.Test('FsWriteFileLines', @TestFsWriteFileLines);
+    T.Test('FsAppendFileLines', @TestFsAppendFileLines);
     T.Test('WriteAtomic', @TestWriteAtomic);
     T.Test('CopyFile', @TestCopyFile);
 {$IFDEF NEXTPAS_LINUX}

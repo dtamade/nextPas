@@ -750,6 +750,16 @@ begin
   Check('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
 end;
 
+procedure TestCaptureInCombined;
+var
+  LCombined: string;
+begin
+  LCombined := CaptureInCombined('/bin/sh',
+    ['-c', 'echo "cwd:$(pwd)"; echo "err" >&2'], '/');
+  Check('CaptureInCombined — has stdout', Pos('cwd:/', LCombined) > 0);
+  Check('CaptureInCombined — has stderr', Pos('err', LCombined) > 0);
+end;
+
 procedure TestRunInNonexistentDir;
 var LRaised: Boolean;
 begin
@@ -1288,6 +1298,7 @@ begin
   TestCaptureEmpty;
   TestCaptureMultiLine;
   TestCaptureCombined;
+  TestCaptureInCombined;
   TestRunInNonexistentDir;
   TestCaptureIn;
   TestRunLargeOutput;

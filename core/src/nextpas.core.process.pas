@@ -66,6 +66,16 @@ function CaptureIn(const APath: string; const AArgs: array of string;
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
 {**
+ * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
+ *
+ * @params
+ *   APath  可执行文件路径
+ *   AArgs  命令行参数
+ *   ADir   工作目录
+ *}
+function CaptureInCombined(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
+{**
  * @desc 执行子进程，通过 stdin 传入数据，返回输出
  *
  * @params
@@ -243,6 +253,15 @@ var
   LOutput: TProcessOutput;
 begin
   LOutput := Run(APath, AArgs);
+  Result := LOutput.StdOut + LOutput.StdErr;
+end;
+
+function CaptureInCombined(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := RunIn(APath, AArgs, ADir);
   Result := LOutput.StdOut + LOutput.StdErr;
 end;
 

@@ -197,6 +197,15 @@ begin
   Check(PathIsAbsolute('') = False, 'empty');
 end;
 
+procedure TestPathIsRelative;
+begin
+  Check(PathIsRelative('relative/path') = True, 'relative');
+  Check(PathIsRelative('/home/user') = False, 'absolute');
+  Check(PathIsRelative('') = True, 'empty is relative');
+  Check(PathIsRelative('.') = True, 'dot is relative');
+  Check(PathIsRelative('..') = True, 'dotdot is relative');
+end;
+
 procedure TestPathNormalize;
 begin
   Check(PathNormalize('/home/user/../docs') = '/home/docs', 'normalize ..');
@@ -426,6 +435,7 @@ begin
   T.Test('PathChangeExt', @TestPathChangeExt);
   T.Test('PathChangeExt long result', @TestPathChangeExtLongResult);
   T.Test('PathIsAbsolute', @TestPathIsAbsolute);
+  T.Test('PathIsRelative', @TestPathIsRelative);
   T.Test('PathNormalize', @TestPathNormalize);
   T.Test('PathNormalize long result', @TestPathNormalizeLongResult);
   T.Test('PathRelative', @TestPathRelative);
