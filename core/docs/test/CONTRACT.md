@@ -301,17 +301,19 @@ end;
 
 ## 9. 变更日志
 
-### v8.3 (2026-07-11) — API 一致性补齐
+### v8.3 (2026-07-11) — API 一致性补齐 + 测试覆盖
 
 **新增**：
 - `CheckEmpty`/`CheckNotEmpty`：字符串和字节数组空值检查（4 个重载 + 4 个带消息重载）
 - `ToBeSorted`：IExpectation 排序检查（支持 Int64 数组和字符串数组）
+- `test_config` 测试套件（37 tests）：完整覆盖 TTestConfig 默认值、TTestConfigBuilder 全部 22 个 With* 方法、TBufferSink、MakeBufferConfig
 - `test_assertions` 新增 10 个测试：CheckEmpty/CheckNotEmpty 字符串和字节数组
 - `test_expect` 新增 9 个测试：ToBeSorted Int64/字符串通过/失败/空/单元素/相等/否定
 
 **更新**：
 - CONTRACT.md 版本 v8.2 → v8.3
 - README.md API 参考表新增 CheckEmpty/CheckNotEmpty/CheckSorted/CheckIsNil/CheckIsNotNil
+- 测试套件数 13 → 14
 
 ### v8.2 (2026-07-11) — test.bench 测试覆盖 + helpers 增强
 
