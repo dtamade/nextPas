@@ -1,0 +1,82 @@
+# nextpas.core.os.env 代码契约
+
+**模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
+**层级**：L2（依赖 L1: text.base; 委托 platform.env）
+**Owner**：Claude（AI 负责）
+**最后更新**：2026-07-11
+**版本**：1.0
+
+---
+
+## 1. 接口契约
+
+### 1.1 模块定位
+
+环境变量操作的高层 facade。委托给 `nextpas.core.platform.env` 实现平台无关的环境变量访问。
+
+### 1.2 核心函数
+
+| 函数 | 说明 |
+|------|------|
+| `EnvironmentVariables: TStringArray` | 返回所有环境变量（NAME=VALUE 格式） |
+| `GetEnvironmentVariable(AName): string` | 获取环境变量值 |
+| `GetEnv(AName): string` | GetEnvironmentVariable 的简写 |
+| `TryGetEnv(AName, AValue): Boolean` | 尝试获取，返回是否成功 |
+| `HasEnv(AName): Boolean` | 检查环境变量是否存在 |
+| `EnvironmentVariableNamesCaseSensitive: Boolean` | 平台是否区分大小写 |
+| `SetEnv(AName, AValue)` | 设置环境变量 |
+| `UnsetEnv(AName)` | 删除环境变量 |
+| `ExpandEnv(AValue): string` | 展开 ${VAR} 和 $VAR 占位符 |
+
+---
+
+## 2. 不变量
+
+- **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL
+- **[INV-2]** 变量值不能包含 NUL
+- **[INV-3]** 未定义的变量展开为空字符串
+- **[INV-4]** `$` 后无变量名字符时保留原样 `$`
+- **[INV-5]** 未终止的 `${...}` 抛 EArgumentError
+
+---
+
+## 3. 错误处理
+
+| 场景 | 异常 |
+|------|------|
+| 变量名为空 | EArgumentError |
+| 变量名含 `=` | EArgumentError |
+| 变量名/值含 NUL | EArgumentError |
+| 未终止的 `${...}` | EArgumentError |
+| 平台调用失败 | EIOError |
+
+---
+
+## 4. 线程安全
+
+❌ 非线程安全（与 C 标准库 getenv/setenv 一致）。多线程环境下调用方需自行加锁。
+
+---
+
+## 5. 内存管理
+
+- EnvironmentVariables 返回新 TStringArray，调用方负责释放
+- GetEnv/TryGetEnv 返回新 string，调用方负责释放
+- 无全局缓存
+
+---
+
+## 6. 测试覆盖
+
+| 测试文件 | 测试数 | 说明 |
+|----------|--------|------|
+| test_os_env | 24 | Get/Set/Unset/Expand + 边界条件 |
+| **合计** | **1 个测试目录** | **24** |
+
+---
+
+## 变更记录
+
+| 日期 | 版本 | 变更描述 | 作者 |
+|------|------|----------|------|
+| 2026-07-11 | 1.0 | 初始版本 | Claude |
