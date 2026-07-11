@@ -98,7 +98,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.path,
   nextpas.core.platform.env,
   nextpas.core.fs;
 
@@ -286,7 +286,7 @@ begin
     { P2 #13 fix: use atomic counter + address for uniqueness — address alone
       can collide if object is freed and new object reuses the same address. }
     FTempDir := LBaseDir + 'nextpas_test_' +
-      StringReplace(FTestName, '/', '_', [rfReplaceAll]) + '_' +
+      StringReplace(FTestName, '/', '_', True) + '_' +
       IntToStr(Int64(Pointer(Self))) + '_' +
       IntToStr(InterlockedIncrement(GTempDirCounter));
     ForceDirectories(FTempDir);

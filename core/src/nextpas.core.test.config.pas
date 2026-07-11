@@ -223,8 +223,8 @@ type
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.time;
 
 var
   GDefaultConfig: TTestConfig;
@@ -1126,8 +1126,9 @@ var
   LKeyDir, LCacheFile: string;
   LAgeSec: Int64;
   LMaxAgeSec: Int64;
-  LFileAge: LongInt;
-  LNow: LongInt;
+  LFileModSec: Int64;
+  LNowUnix: Int64;
+  LInfo: TFileInfo;
   LEmpty: Boolean;
 begin
   LDir := CacheDir;
@@ -1140,7 +1141,7 @@ begin
     Exit;
   end;
   LMaxAgeSec := Int64(AMaxAgeDays) * 86400;
-  LNow := DateTimeToFileDate(Now);
+  LNowUnix := DateTimeToUnix(DateTimeNow);
   try
     LKeyEntries := ReadDir(LDir);
   except
@@ -1163,10 +1164,11 @@ begin
         Continue;
       LCacheFile := LKeyDir + '/' + LCacheEntries[J].Name;
       try
-        LFileAge := FileAge(LCacheFile);
-        if LFileAge < 0 then
+        LInfo := Stat(LCacheFile);
+        if LInfo.ModTime <= 0 then
           Continue;
-        LAgeSec := Int64(LNow - LFileAge);
+        LFileModSec := LInfo.ModTime div 1000000000;
+        LAgeSec := LNowUnix - LFileModSec;
         if LAgeSec > LMaxAgeSec then
           Remove(LCacheFile)
         else
