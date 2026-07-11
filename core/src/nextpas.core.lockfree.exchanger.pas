@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.exchanger;
+{**
+ * @desc Lock-free Exchanger for two-thread value exchange.
+ *
+ * @details Synchronization point for two threads to exchange values:
+ *   - Exchange: offer value and wait for partner's value
+ *   - Timeout variants for bounded waiting
+ *   - Close semantics for graceful shutdown
+ *
+ * @concurrency Thread-safe for exactly two threads:
+ *   - Exchange: threads block until both arrive
+ *   - Close: safe to call from any thread
+ *
+ * @see Exchanger — two-thread synchronization primitive
+ * @see Java Exchanger — similar exchange mechanism
+ *}
 
 {$I nextpas.core.settings.inc}
 

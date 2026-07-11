@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.deque;
+{**
+ * @desc Lock-free work-stealing deque.
+ *
+ * @details Array-based deque for work-stealing algorithms:
+ *   - Owner thread: LIFO push/pop (cache-friendly)
+ *   - Thief threads: FIFO steal (load balancing)
+ *   - Bounded capacity (power-of-2 required)
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for owner and multiple thieves:
+ *   - TryPush/TryPop: only owner thread can call
+ *   - TrySteal: multiple thief threads compete via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Work Stealing — Blumofe & Leiserson, 1999
+ * @see Cilk — work-stealing based parallel programming
+ *}
 
 {$I nextpas.core.settings.inc}
 

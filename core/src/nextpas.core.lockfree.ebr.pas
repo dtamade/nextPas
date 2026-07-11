@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.ebr;
+{**
+ * @desc Epoch-Based Reclamation (EBR) memory reclamation.
+ *
+ * @details Lock-free memory reclamation using epoch counters:
+ *   - Enter/Leave: register/unregister as active reader
+ *   - Retire: mark memory for future reclamation
+ *   - Collect: reclaim memory when safe (no active readers)
+ *   - Domain-based: multiple independent reclamation domains
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Enter/Leave: per-thread guard management
+ *   - Retire: thread-safe retirement list
+ *   - Collect: safe reclamation when no guards exist
+ *
+ * @see Epoch-Based Reclamation — Fraser, 2004
+ * @see Hazard Pointers — complementary reclamation approach
+ *}
 
 {$I nextpas.core.settings.inc}
 

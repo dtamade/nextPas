@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.forkjoin;
+{**
+ * @desc ForkJoin parallel execution framework.
+ *
+ * @details Work-stealing based parallel task execution:
+ *   - Submit: add task to thread pool
+ *   - Fork/Join: split and merge parallel tasks
+ *   - Work-stealing: idle threads steal from busy threads
+ *   - Close: graceful shutdown with task drain
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Submit: multiple threads can submit tasks concurrently
+ *   - Execute: worker threads process tasks in parallel
+ *   - Close: safe to call from any thread
+ *
+ * @see Fork/Join Framework — divide-and-conquer parallelism
+ * @see Java ForkJoinPool — similar parallel execution framework
+ *}
 
 {$I nextpas.core.settings.inc}
 

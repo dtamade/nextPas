@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.workstealing;
+{**
+ * @desc Work-Stealing thread pool implementation.
+ *
+ * @details Per-thread deques with work stealing:
+ *   - Each worker thread has its own deque
+ *   - Local tasks: LIFO push/pop (cache-friendly)
+ *   - Stolen tasks: FIFO steal (load balancing)
+ *   - Submit: add task to any worker's deque
+ *   - Close: graceful shutdown with task drain
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Submit: multiple threads can submit tasks concurrently
+ *   - Execute: worker threads process tasks in parallel
+ *   - Steal: idle threads steal from busy threads
+ *
+ * @see Work Stealing — Blumofe & Leiserson, 1999
+ * @see Java ForkJoinPool — similar work-stealing implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 

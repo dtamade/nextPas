@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.stack;
+{**
+ * @desc Lock-free bounded LIFO stack.
+ *
+ * @details Array-based stack with free-list recycling:
+ *   - Bounded capacity
+ *   - Non-blocking TryPush/TryPop
+ *   - Close semantics with drain support
+ *   - Cache-line padding for producer/consumer separation
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - TryPush: multiple threads compete via CAS
+ *   - TryPop: multiple threads compete via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Treiber Stack — classic lock-free stack
+ * @see Lock-free data structures — CAS-based algorithms
+ *}
 
 {$I nextpas.core.settings.inc}
 
