@@ -107,7 +107,7 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 | `NFKD` / `NFKC` | 兼容分解/组合 |
 | `IsNormalizedNFD` / `IsNormalizedNFC` | 规范化检查（完整规范化比较） |
 | `IsNormalizedNFKD` / `IsNormalizedNFKC` | 兼容规范化检查 |
-| `QuickCheckNFD` / `QuickCheckNFC` | 快速规范化检查（O(n) 无分配） |
+| `QuickCheckNFD` / `QuickCheckNFKD` / `QuickCheckNFC` | 快速规范化检查（O(n) 无分配） |
 
 **算法要点**:
 1. NFD: 递归分解 → 按 CCC 排序
@@ -274,11 +274,11 @@ end;
 |----------|--------|----------|
 | `test_property` | 6 | 属性查询、类别、二值属性 |
 | `test_case` | 7 | 大小写映射、case fold |
-| `test_normalize` | 10 | NFD/NFC/NFKD/NFKC、QuickCheck |
+| `test_normalize` | 11 | NFD/NFC/NFKD/NFKC、QuickCheck、CCC |
 | `test_enhance` | 6 | Script/Block 属性、便利函数、CJK 分词 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
 | `test_collate` | 13 | DUCET 三级权重、排序键、强度级别、排序方法 |
-| **总计** | **54** | |
+| **总计** | **56** | |
 
 ```bash
 # 运行所有 unicode 测试
