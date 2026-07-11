@@ -27,9 +27,9 @@ type
     function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
     procedure Release;
     procedure Close;
-    function IsClosed: Boolean;
-    function AvailablePermits: Int64;
-    function MaxPermits: Int64;
+    function IsClosed: Boolean; inline;
+    function AvailablePermits: Int64; inline;
+    function MaxPermits: Int64; inline;
   end;
 
 implementation
@@ -123,17 +123,17 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentSemaphore.IsClosed: Boolean;
+function TConcurrentSemaphore.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TConcurrentSemaphore.AvailablePermits: Int64;
+function TConcurrentSemaphore.AvailablePermits: Int64; inline;
 begin
   Result := AtomicLoad64(FAvailable, moAcquire);
 end;
 
-function TConcurrentSemaphore.MaxPermits: Int64;
+function TConcurrentSemaphore.MaxPermits: Int64; inline;
 begin
   Result := FMaxPermits;
 end;
