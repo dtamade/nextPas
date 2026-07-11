@@ -21,6 +21,10 @@ var Text := Capture('/usr/bin/fpc', ['--version']);
 var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
 var Dir := CaptureIn('/bin/pwd', [], '/tmp');
 
+// 在指定目录 + 超时执行
+var Out3 := RunInTimeout('/bin/sleep', ['10'], '/tmp', TDuration.FromSeconds(1));
+var Dir2 := CaptureInTimeout('/bin/pwd', [], '/tmp', TDuration.FromSeconds(5));
+
 // 查找 PATH 中的可执行文件
 var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
 

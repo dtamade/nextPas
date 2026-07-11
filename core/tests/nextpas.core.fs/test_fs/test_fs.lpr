@@ -246,6 +246,20 @@ begin
   CheckEqual('Overwritten', LText, 'FsWriteFileText overwrite');
 end;
 
+procedure TestFsWriteFileLines;
+var
+  LLines: TStringArray;
+  LRead: TStringArray;
+begin
+  LLines := TStringArray.Create('line1', 'line2', 'line3');
+  FsWriteFileLines(GTmpDir + '/writelines.txt', LLines);
+  LRead := FsReadFileLines(GTmpDir + '/writelines.txt');
+  CheckEqual(Int64(3), Int64(Length(LRead)), 'FsWriteFileLines line count');
+  CheckEqual('line1', LRead[0], 'FsWriteFileLines line 1');
+  CheckEqual('line2', LRead[1], 'FsWriteFileLines line 2');
+  CheckEqual('line3', LRead[2], 'FsWriteFileLines line 3');
+end;
+
 procedure TestWriteAtomic;
 var
   LData, LRead: TBytes;
@@ -1873,6 +1887,7 @@ begin
 
     T.Test('ReadFile/WriteFile', @TestReadWriteFile);
     T.Test('FsWriteFileText', @TestFsWriteFileText);
+    T.Test('FsWriteFileLines', @TestFsWriteFileLines);
     T.Test('WriteAtomic', @TestWriteAtomic);
     T.Test('CopyFile', @TestCopyFile);
 {$IFDEF NEXTPAS_LINUX}

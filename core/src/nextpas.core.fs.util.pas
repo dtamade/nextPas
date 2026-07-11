@@ -17,6 +17,8 @@ procedure FsWriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 procedure FsWriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission = PermDefault);
+procedure FsWriteFileLines(const APath: string; const ALines: TStringArray;
+  const APerm: TFilePermission = PermDefault);
 procedure FsAppendFile(const APath: string; const AData: TBytes);
 procedure FsAppendFileText(const APath: string; const AText: string);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
@@ -47,6 +49,7 @@ implementation
 uses
   nextpas.core.text.conv,
   nextpas.core.text.utf8,
+  nextpas.core.text.builder,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.error,
@@ -165,6 +168,25 @@ begin
   if LLen > 0 then
     Move(AText[1], LBytes[0], LLen);
   FsWriteFile(APath, LBytes, APerm);
+end;
+
+procedure FsWriteFileLines(const APath: string; const ALines: TStringArray;
+  const APerm: TFilePermission);
+var
+  LBuilder: TBufStringBuilder;
+  I: Integer;
+begin
+  LBuilder.Init(256);
+  try
+    for I := 0 to High(ALines) do
+    begin
+      LBuilder.AppendStr(ALines[I]);
+      LBuilder.AppendChar(#10);
+    end;
+    FsWriteFileText(APath, LBuilder.ToString, APerm);
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 procedure FsAppendFile(const APath: string; const AData: TBytes);

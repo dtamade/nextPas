@@ -1151,6 +1151,23 @@ begin
   Check('CaptureTimeout — has output', Length(LText) > 0);
 end;
 
+procedure TestRunInTimeout;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunInTimeout('/bin/pwd', [], '/', TDuration.FromSeconds(5));
+  Check('RunInTimeout — exit 0', LOut.ExitCode = 0);
+  Check('RunInTimeout — stdout is /', Trim(LOut.StdOut) = '/');
+end;
+
+procedure TestCaptureInTimeout;
+var
+  LText: string;
+begin
+  LText := CaptureInTimeout('/bin/pwd', [], '/tmp', TDuration.FromSeconds(5));
+  Check('CaptureInTimeout — returns /tmp', Trim(LText) = '/tmp');
+end;
+
 procedure TestRunWithInput;
 var
   LOut: TProcessOutput;
@@ -1267,6 +1284,8 @@ begin
   TestSignal;
   TestRunTimeoutConvenience;
   TestCaptureTimeoutConvenience;
+  TestRunInTimeout;
+  TestCaptureInTimeout;
   TestRunWithInput;
   TestCaptureWithInput;
   TestExecutable;

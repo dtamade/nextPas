@@ -70,6 +70,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `WriteFileText(APath, AText)` | 写入字符串 |
 | `WriteFileLines(APath, ALines)` | 按行写入，自动追加换行 |
 | `FsWriteFileText(APath, AText)` | 写入字符串（fs.util 层） |
+| `FsWriteFileLines(APath, ALines)` | 按行写入，自动追加换行（fs.util 层） |
 | `AppendFile(APath, AData)` | 追加字节数组 |
 | `AppendFileText(APath, AText)` | 追加字符串 |
 | `AppendFileLine(APath, ALine)` | 追加一行文本 |

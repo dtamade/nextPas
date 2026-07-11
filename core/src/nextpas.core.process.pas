@@ -145,6 +145,28 @@ function RunTimeout(const APath: string; const AArgs: array of string;
 function CaptureTimeout(const APath: string; const AArgs: array of string;
   const ATimeout: TDuration): string;
 {**
+ * @desc 在指定工作目录中带超时执行，超时后自动 Kill
+ *
+ * @params
+ *   APath     可执行文件路径
+ *   AArgs     命令行参数
+ *   ADir      工作目录
+ *   ATimeout  超时时间
+ *}
+function RunInTimeout(const APath: string; const AArgs: array of string;
+  const ADir: string; const ATimeout: TDuration): TProcessOutput;
+{**
+ * @desc 在指定工作目录中带超时执行并返回 stdout 文本
+ *
+ * @params
+ *   APath     可执行文件路径
+ *   AArgs     命令行参数
+ *   ADir      工作目录
+ *   ATimeout  超时时间
+ *}
+function CaptureInTimeout(const APath: string; const AArgs: array of string;
+  const ADir: string; const ATimeout: TDuration): string;
+{**
  * @desc 在 PATH 中搜索可执行文件（类似 Go 的 exec.LookPath）
  *
  * @params
@@ -222,6 +244,18 @@ function CaptureTimeout(const APath: string; const AArgs: array of string;
   const ATimeout: TDuration): string;
 begin
   Result := RunTimeout(APath, AArgs, ATimeout).StdOut;
+end;
+
+function RunInTimeout(const APath: string; const AArgs: array of string;
+  const ADir: string; const ATimeout: TDuration): TProcessOutput;
+begin
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Timeout(ATimeout).Output;
+end;
+
+function CaptureInTimeout(const APath: string; const AArgs: array of string;
+  const ADir: string; const ATimeout: TDuration): string;
+begin
+  Result := RunInTimeout(APath, AArgs, ADir, ATimeout).StdOut;
 end;
 
 function RunWithInput(const APath: string; const AArgs: array of string;
