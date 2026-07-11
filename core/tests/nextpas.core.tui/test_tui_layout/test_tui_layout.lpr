@@ -108,6 +108,86 @@ begin
   CheckEqual(Int64(0), Int64(System.Length(LRects)), 'empty constraints empty result');
 end;
 
+procedure TestLayoutDefault;
+var
+  LL: TLayout;
+begin
+  LL := TLayout.Default;
+  Check(LL.Direction = dirVertical, 'default is vertical');
+  CheckEqual(Int64(0), Int64(System.Length(LL.Constraints)), 'default no constraints');
+end;
+
+procedure TestLayoutHorizontal;
+var
+  LL: TLayout;
+  LRects: TRectArray;
+begin
+  LL := TLayout.Horizontal([LengthConstraint(5), LengthConstraint(5)]);
+  Check(LL.Direction = dirHorizontal, 'horizontal direction');
+  LRects := LL.Split(TRect.Make(0, 0, 10, 5));
+  CheckEqual(Int64(5), Int64(LRects[0].Width), 'slot 0 width 5');
+  CheckEqual(Int64(5), Int64(LRects[1].Width), 'slot 1 width 5');
+end;
+
+procedure TestLayoutVertical;
+var
+  LL: TLayout;
+  LRects: TRectArray;
+begin
+  LL := TLayout.Vertical([LengthConstraint(3), LengthConstraint(7)]);
+  Check(LL.Direction = dirVertical, 'vertical direction');
+  LRects := LL.Split(TRect.Make(0, 0, 10, 10));
+  CheckEqual(Int64(3), Int64(LRects[0].Height), 'slot 0 height 3');
+  CheckEqual(Int64(7), Int64(LRects[1].Height), 'slot 1 height 7');
+end;
+
+procedure TestLayoutWithDirection;
+var
+  LL: TLayout;
+begin
+  LL := TLayout.Default.WithDirection(dirHorizontal);
+  Check(LL.Direction = dirHorizontal, 'direction changed');
+end;
+
+procedure TestRatioConstraint;
+var
+  LRects: TRectArray;
+begin
+  { Ratio 1:3 on width 90 -> floor(90*100/3%) = floor(33.3%) = 29 }
+  LRects := HorizontalSplit(TRect.Make(0, 0, 90, 5),
+    [RatioConstraint(1, 3), FillConstraint(1)]);
+  Check(LRects[0].Width >= 29, 'ratio 1/3 ~ 29');
+  Check(LRects[0].Width <= 30, 'ratio 1/3 ~ 30');
+end;
+
+procedure TestSingleConstraint;
+var
+  LRects: TRectArray;
+begin
+  LRects := VerticalSplit(TRect.Make(0, 0, 10, 10), [LengthConstraint(10)]);
+  CheckEqual(Int64(1), Int64(System.Length(LRects)), 'single slot');
+  CheckEqual(Int64(10), Int64(LRects[0].Height), 'full height');
+end;
+
+procedure TestMixedLengthFill;
+var
+  LRects: TRectArray;
+begin
+  LRects := VerticalSplit(TRect.Make(0, 0, 10, 20),
+    [LengthConstraint(5), FillConstraint(1)]);
+  CheckEqual(Int64(5), Int64(LRects[0].Height), 'length 5');
+  CheckEqual(Int64(15), Int64(LRects[1].Height), 'fill gets remaining 15');
+end;
+
+procedure TestFillZeroWeight;
+var
+  LRects: TRectArray;
+begin
+  { FillConstraint(0) should default to weight 1 }
+  LRects := HorizontalSplit(TRect.Make(0, 0, 10, 5), [FillConstraint(0)]);
+  CheckEqual(Int64(10), Int64(LRects[0].Width), 'zero weight fill gets all');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.layout');
   T.Test('length split', @TestLengthSplit);
@@ -119,5 +199,13 @@ begin
   T.Test('adjacent no gap', @TestAdjacentNoGap);
   T.Test('horizontal keeps height', @TestHorizontalKeepsHeight);
   T.Test('empty constraints', @TestEmptyConstraints);
+  T.Test('layout default', @TestLayoutDefault);
+  T.Test('layout horizontal', @TestLayoutHorizontal);
+  T.Test('layout vertical', @TestLayoutVertical);
+  T.Test('layout with direction', @TestLayoutWithDirection);
+  T.Test('ratio constraint', @TestRatioConstraint);
+  T.Test('single constraint', @TestSingleConstraint);
+  T.Test('mixed length fill', @TestMixedLengthFill);
+  T.Test('fill zero weight', @TestFillZeroWeight);
   if not T.Run then Halt(1);
 end.
