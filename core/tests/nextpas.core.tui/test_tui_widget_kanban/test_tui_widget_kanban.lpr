@@ -157,8 +157,70 @@ begin
   LState := TKanbanState.Empty;
   LArea := TRect.Make(0, 0, 60, 10);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LKanban.RenderStateful(LArea, LBuf, LState);
-  Check(True, 'Should render stateful kanban');
+  try
+    LKanban.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render stateful kanban');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestKanbanRenderEmpty;
+var
+  LKanban: IKanban;
+  LState: TKanbanState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LKanban := TKanban.New([MakeColumn('Col', [])]);
+  LState := TKanbanState.Empty;
+  LArea := TRect.Make(0, 0, 30, 5);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LKanban.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render empty kanban');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestKanbanRenderSmallArea;
+var
+  LKanban: IKanban;
+  LState: TKanbanState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LKanban := TKanban.New([MakeColumn('Col', [TKanbanCard.Make('Task')])]);
+  LState := TKanbanState.Empty;
+  LArea := TRect.Make(0, 0, 5, 2);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LKanban.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render in small area');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestKanbanStateMoveDownBoundary;
+var
+  LState: TKanbanState;
+begin
+  LState := TKanbanState.Empty;
+  LState.MoveDown(3);
+  LState.MoveDown(3);
+  LState.MoveDown(3);
+  Check(LState.ActiveCard <= 3, 'Should not exceed card count');
+end;
+
+procedure TestKanbanStateMoveUpBoundary;
+var
+  LState: TKanbanState;
+begin
+  LState := TKanbanState.Empty;
+  LState.MoveUp;
+  Check(LState.ActiveCard = 0, 'Should stay at card 0');
 end;
 
 procedure TestKanbanBuilderChaining;
@@ -201,5 +263,9 @@ begin
   T.Test('TKanban.WithActiveCardStyle', @TestKanbanWithActiveCardStyle);
   T.Test('TKanban.RenderStateful', @TestKanbanRenderStateful);
   T.Test('TKanban builder chaining', @TestKanbanBuilderChaining);
+  T.Test('TKanban render empty', @TestKanbanRenderEmpty);
+  T.Test('TKanban render small area', @TestKanbanRenderSmallArea);
+  T.Test('TKanbanState.MoveDown boundary', @TestKanbanStateMoveDownBoundary);
+  T.Test('TKanbanState.MoveUp boundary', @TestKanbanStateMoveUpBoundary);
   if not T.Run then Halt(1);
 end.
