@@ -119,6 +119,49 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestSingleItem;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
+    LLines: TBufferLines;
+begin
+  LL := TListWidget.FromStrings(['only']);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
+  LState := TListState.Empty;
+  LState.Select(0);
+  try
+    LL.RenderStateful(TRect.Make(0, 0, 8, 1), LBuf, LState);
+    LLines := LBuf.AsLines;
+    Check(Pos('only', LLines[0]) > 0, 'single item rendered');
+    Check(LState.HasSelection, 'has selection');
+  finally LBuf.Free; end;
+end;
+
+procedure TestSelectionBeyondRange;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
+begin
+  LL := TListWidget.FromStrings(['a', 'b']);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  LState := TListState.Empty;
+  LState.Select(99); // Beyond range
+  try
+    LL.RenderStateful(TRect.Make(0, 0, 5, 2), LBuf, LState);
+    Check(True, 'selection beyond range does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWithHighlightStyle;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
+begin
+  LL := TListWidget.FromStrings(['x', 'y'])
+    .WithHighlightStyle(StyleDefault.WithFg(TUI_RED));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  LState := TListState.Empty;
+  LState.Select(0);
+  try
+    LL.RenderStateful(TRect.Make(0, 0, 5, 2), LBuf, LState);
+    Check(True, 'highlight style does not crash');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.list');
   T.Test('simple render', @TestSimpleRender);
@@ -128,5 +171,8 @@ begin
   T.Test('highlight symbol', @TestHighlightSymbol);
   T.Test('as IWidget', @TestAsIWidget);
   T.Test('empty list', @TestEmptyList);
+  T.Test('single item', @TestSingleItem);
+  T.Test('selection beyond range', @TestSelectionBeyondRange);
+  T.Test('with highlight style', @TestWithHighlightStyle);
   if not T.Run then Halt(1);
 end.

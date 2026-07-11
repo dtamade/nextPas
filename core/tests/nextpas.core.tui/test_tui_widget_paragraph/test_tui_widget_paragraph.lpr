@@ -92,6 +92,57 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestRightAlignment;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.New(TText.Raw('Hi')).WithAlignment(caRight);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    LLines := LBuf.AsLines;
+    { 'Hi' width 2, area 10 -> right aligned -> starts at col 8 }
+    Check(LLines[0][9] = 'H', 'H at col 8 (1-indexed 9)');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWrappedShortcut;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('hello world');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 6, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('hello', LLines[0]) > 0, 'wrapped first line');
+    Check(Pos('world', LLines[1]) > 0, 'wrapped second line');
+  finally LBuf.Free; end;
+end;
+
+procedure TestEmptyText;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.FromString('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 5, 1), LBuf);
+    Check(True, 'empty text does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMultiLineNoWrap;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.FromString('line1'#10'line2'#10'line3');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('line1', LLines[0]) > 0, 'line1 rendered');
+    Check(Pos('line2', LLines[1]) > 0, 'line2 rendered');
+    Check(Pos('line3', LLines[2]) > 0, 'line3 rendered');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.paragraph');
   T.Test('simple render', @TestSimpleRender);
@@ -100,5 +151,9 @@ begin
   T.Test('wrap trim', @TestWrapTrim);
   T.Test('scroll y', @TestScrollY);
   T.Test('as IWidget', @TestAsIWidget);
+  T.Test('right alignment', @TestRightAlignment);
+  T.Test('wrapped shortcut', @TestWrappedShortcut);
+  T.Test('empty text', @TestEmptyText);
+  T.Test('multi-line no wrap', @TestMultiLineNoWrap);
   if not T.Run then Halt(1);
 end.

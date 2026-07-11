@@ -128,6 +128,65 @@ begin
   Check(LBlock <> nil, 'chain produces non-nil');
 end;
 
+procedure TestRenderNoBorders;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+begin
+  LBlock := TBlock.New;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 5, 3), LBuf);
+    Check(True, 'no borders render does not crash');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestRenderPartialBorders;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+begin
+  LBlock := TBlock.New.WithBorders([bsTop, bsBottom]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 5, 3), LBuf);
+    Check(True, 'partial borders render does not crash');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestInnerPartialBorders;
+var
+  LBlock: IBlock;
+  LInner: TRect;
+begin
+  LBlock := TBlock.New.WithBorders([bsTop, bsBottom]);
+  LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
+  { Only top and bottom shrink }
+  CheckEqual(Int64(0), Int64(LInner.X), 'x unchanged');
+  CheckEqual(Int64(1), Int64(LInner.Y), 'y shrunk by top');
+  CheckEqual(Int64(10), Int64(LInner.Width), 'w unchanged');
+  CheckEqual(Int64(6), Int64(LInner.Height), 'h shrunk by top+bottom');
+end;
+
+procedure TestRenderSmallArea;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+begin
+  LBlock := TBlock.New.WithBorders(BORDERS_ALL);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 1));
+  try
+    LBlock.Render(TRect.Make(0, 0, 1, 1), LBuf);
+    Check(True, 'tiny area render does not crash');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.block');
   T.Test('render all borders', @TestRenderAllBorders);
@@ -137,5 +196,9 @@ begin
   T.Test('inner title no border', @TestInnerTitleNoBorder);
   T.Test('as IWidget', @TestAsIWidget);
   T.Test('builder chain', @TestBuilderChain);
+  T.Test('render no borders', @TestRenderNoBorders);
+  T.Test('render partial borders', @TestRenderPartialBorders);
+  T.Test('inner partial borders', @TestInnerPartialBorders);
+  T.Test('render small area', @TestRenderSmallArea);
   if not T.Run then Halt(1);
 end.

@@ -3,13 +3,13 @@ program test_tui_widget_sparkline;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.sparkline,
@@ -110,6 +110,87 @@ begin
   Check(LSparkline <> nil, 'Builder chaining should work');
 end;
 
+procedure TestSparklineRenderWithBlock;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LSparkline := TSparkline.New([1.0, 2.0, 3.0])
+    .WithBlock(TBlock.New.WithBorders(BORDERS_ALL));
+  LArea := TRect.Make(0, 0, 10, 3);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LSparkline.Render(LArea, LBuffer);
+    Check(True, 'Render with block does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestSparklineRenderEmptyData;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+begin
+  LSparkline := TSparkline.New([]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 10, 3), LBuffer);
+    Check(True, 'Empty data render does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestSparklineRenderEmptyArea;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+begin
+  LSparkline := TSparkline.New([1.0, 2.0]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 0, 0));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 0, 0), LBuffer);
+    Check(True, 'Empty area render does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestSparklineWithExplicitMax;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  { Max set to 10, data only goes to 5 -> should render at half height }
+  LSparkline := TSparkline.New([5.0]).WithMax(10.0);
+  LArea := TRect.Make(0, 0, 5, 2);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LSparkline.Render(LArea, LBuffer);
+    Check(True, 'Explicit max renders without crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestSparklineSingleDataPoint;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+begin
+  LSparkline := TSparkline.New([42.0]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 5, 2), LBuffer);
+    Check(True, 'Single data point renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.sparkline');
   T.Test('TSparkline.New', @TestSparklineNew);
@@ -119,5 +200,10 @@ begin
   T.Test('TSparkline.WithBlock', @TestSparklineWithBlock);
   T.Test('TSparkline.Render', @TestSparklineRender);
   T.Test('TSparkline builder chaining', @TestSparklineBuilderChaining);
+  T.Test('render with block', @TestSparklineRenderWithBlock);
+  T.Test('render empty data', @TestSparklineRenderEmptyData);
+  T.Test('render empty area', @TestSparklineRenderEmptyArea);
+  T.Test('explicit max', @TestSparklineWithExplicitMax);
+  T.Test('single data point', @TestSparklineSingleDataPoint);
   if not T.Run then Halt(1);
 end.
