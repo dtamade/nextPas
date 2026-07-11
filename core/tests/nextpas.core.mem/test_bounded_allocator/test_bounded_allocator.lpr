@@ -39,10 +39,11 @@ begin
   try
     LPtr := LAlloc.GetMem(64);
     Check(LPtr <> nil, 'first alloc ok');
-    LAlloc.FreeMem(LPtr);
 
     LPtr := LAlloc.GetMem(128);
     Check(LPtr = nil, 'over limit rejected');
+
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;
