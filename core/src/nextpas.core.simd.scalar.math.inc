@@ -113,7 +113,12 @@ function ScalarClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := SimdMax(minVal.f[i], SimdMin(a.f[i], maxVal.f[i]));
+  begin
+    if SimdIsNaN(a.f[i]) then
+      Result.f[i] := a.f[i]  // preserve NaN
+    else
+      Result.f[i] := SimdMax(minVal.f[i], SimdMin(a.f[i], maxVal.f[i]));
+  end;
 end;
 
 // === Wide Vector Math Functions ===
@@ -145,8 +150,10 @@ end;
 
 function ScalarClampF64x2(const a, minVal, maxVal: TVecF64x2): TVecF64x2;
 begin
-  Result.d[0] := SimdMax(minVal.d[0], SimdMin(a.d[0], maxVal.d[0]));
-  Result.d[1] := SimdMax(minVal.d[1], SimdMin(a.d[1], maxVal.d[1]));
+  if SimdIsNaN(a.d[0]) then Result.d[0] := a.d[0]
+  else Result.d[0] := SimdMax(minVal.d[0], SimdMin(a.d[0], maxVal.d[0]));
+  if SimdIsNaN(a.d[1]) then Result.d[1] := a.d[1]
+  else Result.d[1] := SimdMax(minVal.d[1], SimdMin(a.d[1], maxVal.d[1]));
 end;
 
 // F32x8 Math
@@ -218,7 +225,12 @@ function ScalarClampF64x4(const a, minVal, maxVal: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.d[i] := SimdMax(minVal.d[i], SimdMin(a.d[i], maxVal.d[i]));
+  begin
+    if SimdIsNaN(a.d[i]) then
+      Result.d[i] := a.d[i]  // preserve NaN
+    else
+      Result.d[i] := SimdMax(minVal.d[i], SimdMin(a.d[i], maxVal.d[i]));
+  end;
 end;
 
 // F32x16 (512-bit)
