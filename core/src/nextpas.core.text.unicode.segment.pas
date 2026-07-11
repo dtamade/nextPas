@@ -388,6 +388,14 @@ begin
   Result := LPos;
 end;
 
+function IsCJKIdeograph(const ACp: TUnicodeCodepoint): Boolean; inline;
+begin
+  // CJK Unified Ideographs + Extension A + Compatibility Ideographs
+  Result := ((ACp >= $4E00) and (ACp <= $9FFF)) or
+            ((ACp >= $3400) and (ACp <= $4DBF)) or
+            ((ACp >= $F900) and (ACp <= $FAFF));
+end;
+
 function TUnicodeSegmenter.NextWord(const AText: string; const APos: SizeInt): SizeInt;
 var
   LLen: SizeInt;
@@ -424,7 +432,16 @@ begin
     LCategory := GetGeneralCategory(LCodepoint);
 
     // 判断是否是单词字符
-    if LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
+    if IsCJKIdeograph(LCodepoint) then
+    begin
+      // CJK 表意文字：每个字符是独立的词
+      if LInWord then
+        Break; // 前面的非 CJK 词结束
+      // CJK 字符本身就是一个词
+      Inc(Result, LDecode.ByteLen);
+      Break;
+    end
+    else if LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
                      gcuModifierLetter, gcuOtherLetter, gcuDecimalNumber,
                      gcuConnectorPunctuation, gcuOtherNumber] then
     begin

@@ -86,6 +86,16 @@ begin
   // 测试句子后的引号
   LResults := SegmentSentences('He said "Hello." She replied.');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
+
+  // 测试 CJK 单词分割（每个表意文字是独立的词）
+  LResults := SegmentWords('你好世界');
+  CheckEqual(Int64(4), Int64(Length(LResults)), 'CJK: 4 separate words');
+  CheckEqual(Int64(3), Int64(LResults[0].Length), 'CJK: each word is 3 bytes (UTF-8)');
+  CheckEqual(Int64(3), Int64(LResults[1].Length), 'CJK: each word is 3 bytes (UTF-8)');
+
+  // 测试中英混合
+  LResults := SegmentWords('Hello你好World');
+  CheckEqual(Int64(4), Int64(Length(LResults)), 'Mixed: Hello + 你 + 好 + World = 4 words');
 end;
 
 procedure TestCollation;
