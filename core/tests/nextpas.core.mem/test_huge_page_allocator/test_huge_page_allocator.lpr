@@ -83,14 +83,16 @@ end;
 procedure TestStats;
 var
   LAlloc: THugePageAllocator;
+  LPtr: Pointer;
   LStats: THugePageStats;
 begin
   LAlloc := THugePageAllocator.Create(GetRtlAllocator, hps2MB, 2 * 1024 * 1024);
   try
-    LAlloc.GetMem(64);
+    LPtr := LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
     // Small alloc goes directly to inner, no fallback tracking
     Check(LStats.FallbackBytes = 0, 'no fallback for small');
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;

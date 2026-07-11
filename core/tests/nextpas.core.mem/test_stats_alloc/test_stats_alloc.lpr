@@ -114,10 +114,11 @@ procedure TestReset;
 var
   LAlloc: TStatsAllocator;
   LStats: TAllocatorStats;
+  LPtr: Pointer;
 begin
   LAlloc := TStatsAllocator.Create(DefaultAllocator);
   try
-    LAlloc.GetMem(100);
+    LPtr := LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount = 1, 'before reset');
 
@@ -125,6 +126,7 @@ begin
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount = 0, 'after reset');
     Check(LStats.ActiveBytes = 0, 'active = 0');
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;

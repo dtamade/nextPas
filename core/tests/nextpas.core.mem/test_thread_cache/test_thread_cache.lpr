@@ -130,15 +130,18 @@ end;
 procedure TestStats;
 var
   LCache: TThreadCacheAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TThreadCacheStats;
 begin
   LCache := TThreadCacheAllocator.Create(DefaultAllocator);
   try
-    LCache.GetMem(32);
-    LCache.GetMem(64);
+    LPtr1 := LCache.GetMem(32);
+    LPtr2 := LCache.GetMem(64);
 
     LStats := LCache.GetStats;
     Check(LStats.BatchFetches > 0, 'should have batch fetches');
+    LCache.FreeMem(LPtr2);
+    LCache.FreeMem(LPtr1);
   finally
     LCache.Free;
   end;

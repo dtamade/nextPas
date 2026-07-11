@@ -273,22 +273,28 @@ end;
 procedure TCowAllocator.FreeMem(APtr: Pointer); inline;
 var
   LIdx: Integer;
+  LKey: Pointer;
 begin
   if APtr = nil then Exit;
 
   LIdx := FindRef(APtr);
   if LIdx < 0 then Exit;
 
+  LKey := FRefs[LIdx].Key;
+
   if FRefs[LIdx].IsShared then
   begin
     { 共享引用：释放哨兵指针，递减数据引用计数 }
     DecDataRef(FRefs[LIdx].DataPtr);
-    FInner.FreeMem(FRefs[LIdx].Key);
+    FInner.FreeMem(LKey);
   end
   else
   begin
-    { 原始引用：递减数据引用计数（可能释放数据） }
+    { 原始引用或 WriteNotify 后的引用：递减数据引用计数 }
     DecDataRef(FRefs[LIdx].DataPtr);
+    { 如果 Key 是哨兵指针（Share 分配的），也需要释放 }
+    if LKey <> FRefs[LIdx].DataPtr then
+      FInner.FreeMem(LKey);
   end;
   FRefs[LIdx].Key := nil;
   FRefs[LIdx].DataPtr := nil;

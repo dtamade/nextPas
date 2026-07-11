@@ -34,24 +34,26 @@ end;
 procedure TestFailAtN;
 var
   LAlloc: TFailAllocator;
-  LPtr: Pointer;
+  LPtr1, LPtr2, LPtr4: Pointer;
 begin
   // Fail on 3rd allocation
   LAlloc := TFailAllocator.Create(GetRtlAllocator, 3);
   try
-    LPtr := LAlloc.GetMem(32);
-    Check(LPtr <> nil, '1st ok');
+    LPtr1 := LAlloc.GetMem(32);
+    Check(LPtr1 <> nil, '1st ok');
 
-    LPtr := LAlloc.GetMem(32);
-    Check(LPtr <> nil, '2nd ok');
+    LPtr2 := LAlloc.GetMem(32);
+    Check(LPtr2 <> nil, '2nd ok');
 
-    LPtr := LAlloc.GetMem(32);
-    Check(LPtr = nil, '3rd fails');
+    LPtr4 := LAlloc.GetMem(32);
+    Check(LPtr4 = nil, '3rd fails');
 
     // After failing, should succeed again
-    LPtr := LAlloc.GetMem(32);
-    Check(LPtr <> nil, '4th ok');
-    LAlloc.FreeMem(LPtr);
+    LPtr4 := LAlloc.GetMem(32);
+    Check(LPtr4 <> nil, '4th ok');
+    LAlloc.FreeMem(LPtr4);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
   end;
@@ -78,18 +80,22 @@ end;
 procedure TestStats;
 var
   LAlloc: TFailAllocator;
+  LPtr1, LPtr2, LPtr3: Pointer;
   LStats: TFailStats;
 begin
   LAlloc := TFailAllocator.Create(GetRtlAllocator, 2);
   try
-    LAlloc.GetMem(32);  // ok
-    LAlloc.GetMem(32);  // fails
-    LAlloc.GetMem(32);  // ok
+    LPtr1 := LAlloc.GetMem(32);  // ok
+    LPtr2 := LAlloc.GetMem(32);  // fails
+    LPtr3 := LAlloc.GetMem(32);  // ok
 
     LStats := LAlloc.GetStats;
     Check(LStats.TotalAttempts >= 3, 'attempts');
     Check(LStats.FailuresInjected >= 1, 'failures');
     Check(LStats.SuccessfulAllocs >= 2, 'successes');
+    LAlloc.FreeMem(LPtr3);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
   end;
