@@ -616,6 +616,134 @@ function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 function CreateAnonymousMemoryMapAllocator(AReservationSize: UInt64): IAllocator;
 ```
 
+## 高性能分配器
+
+### `TBumpAllocator`
+
+线性分配器，分配 O(1) 无锁。适合请求/帧级生命周期。
+
+```pascal
+constructor Create(AInner: IAllocator; AChunkSize: SizeUInt);
+```
+
+### `TCascadeAllocator`
+
+级联 fallback 链，按优先级尝试多个分配器。
+
+```pascal
+constructor Create(const AAllocators: array of IAllocator);
+```
+
+### `TBitmapAllocator`
+
+位图管理的固定大小槽位池，O(1) 分配释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt; ACapacity: Integer);
+```
+
+### `TBatchAllocator`
+
+批量分配包装器，减少锁频率。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+## 调试/监控分配器
+
+### `TSentinelAllocator`
+
+哨兵守卫分配器，双端哨兵 + 延迟释放 + 校验和，检测越界写入和 double-free。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TGuardAllocator`
+
+Guard page 分配器，每次分配用未映射页包围，越界写入立即 SIGSEGV。
+
+```pascal
+constructor Create;
+```
+
+### `TLeakReportAllocator`
+
+泄漏报告分配器，记录分配调用栈、时间戳、标签聚合。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function Report: TLeakReportResult;
+```
+
+### `TLoggingAllocator`
+
+分配日志分配器，记录所有分配/释放操作。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TDebugAllocator`
+
+调试分配器，毒化释放内存 ($DE) 和新分配内存 ($AB)，检测 use-after-free 和未初始化读取。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TWatermarkAllocator`
+
+高水位线分配器，跟踪峰值内存使用。
+
+```pascal
+constructor Create(AInner: IAllocator);
+property HighWaterMark: SizeUInt;
+```
+
+### `TSamplingAllocator`
+
+采样分配器，按概率采样分配调用栈，用于性能分析。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPrefixAllocator`
+
+前缀分配器，为每次分配添加元数据头。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPredictionAllocator`
+
+预测分配器，跟踪分配频率，预分配高频大小。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TReplayAllocator`
+
+重放分配器，记录分配序列，可重放到目标分配器。
+
+```pascal
+constructor Create(AInner: IAllocator);
+procedure Replay(ATarget: IAllocator);
+```
+
+### `TNumaAllocator`
+
+NUMA 感知分配器，拓扑检测 + 节点路由。
+
+```pascal
+constructor Create(ADefault: IAllocator);
+procedure SetNodeAllocator(ANode: Integer; AAlloc: IAllocator);
+```
+
 ## Pool 类型
 
 ### `IPool`
