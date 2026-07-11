@@ -1132,8 +1132,6 @@ begin
 end;
 
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
-const
-  FILE_ATTRIBUTE_READONLY = $1;
 var
   LData: WIN32_FILE_ATTRIBUTE_DATA;
   LAttr: DWORD;
