@@ -1,6 +1,6 @@
 # nextPas compiler-system 自举主线设计
 
-> 状态：草案，已完成方向确认，待书面审阅
+> 状态：已批准；M0 truth convergence 实施中
 >
 > 第一阶段目标平台：Linux x86_64
 >

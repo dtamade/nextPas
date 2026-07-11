@@ -24,6 +24,23 @@ target facts，而不是自己重做 helper 选择，继续读 `backend-specific
 `render-asset-pipeline-specification.md`。
 如果你要看这份边界在回应 FPC 真源码里的哪些历史耦合，继续读 `fpc-source-grounding-specification.md`。
 
+## System 来源、投影与实现所有权
+
+`rtl/core/system/System.pas` 是唯一的 canonical compiler-root source。它定义 compiler-visible
+root declarations；target-installed 文件和 namespaced facade 都不能再成为第二个 root authority。
+
+| Surface | Owner role | Mutation rule |
+| --- | --- | --- |
+| `rtl/core/system/System.pas` | canonical compiler-root source | edited by compiler-system owner |
+| `units/linux-x86_64/System.pas` | target-installed projection consumed by compiler resolution | changed only by `make system-projection-sync` |
+| `core/src/nextpas.core.system*` | namespaced facade and constants-only contract vocabulary | must not redefine compiler-root truth |
+| `compiler/ir/np_system_contracts.pas` | typed contract inventory | consumes vocabulary; does not implement runtime behavior |
+| `rtl/runtime/` and backend helpers | executable implementation | must map from registered contracts |
+
+`make system-projection-check` 是 required source-truth gate。普通 compiler invocation 只读取
+installed projection，绝不写入 projection 或源码树；只有显式的 `make system-projection-sync`
+可以更新 target-installed copy。
+
 ## 先看 FPC 真源码如何把 init/final 前提散在几层里
 
 这份 runtime bootstrap 规范不是抽象口号，它直接回应这些真实源码事实：

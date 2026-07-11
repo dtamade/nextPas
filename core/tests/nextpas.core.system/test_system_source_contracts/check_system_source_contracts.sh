@@ -599,9 +599,20 @@ require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
 require_file "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_file "docs/system/self-hosting-readiness.md"
+require_file "docs/system/contract-coverage-table.md"
 require_file "src/nextpas.core.system.typinfo.pas"
 require_file "src/nextpas.core.system.sysutils.pas"
 require_file "src/nextpas.core.system.errors.pas"
+require_repo_file "docs/architecture/runtime-bootstrap-specification.md"
+
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "canonical compiler-root source"
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "system-projection-check"
+require_token "docs/system/README.md" "M0 truth convergence"
+require_token "docs/system/README.md" "not self-host ready"
+require_token "docs/system/goal-tree.md" "canonical projection parity"
+require_token "docs/system/self-hosting-readiness.md" "A -> B -> C has not executed"
+require_token "docs/system/contract-coverage-table.md" "typed ledger is authoritative"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -798,6 +809,8 @@ contract_ledger_tmp_dir="$(mktemp -d)"
 trap 'rm -rf -- "$contract_ledger_tmp_dir"' EXIT
 contract_constants="$contract_ledger_tmp_dir/contract-constants"
 ledger_constants="$contract_ledger_tmp_dir/ledger-constants"
+contract_values="$contract_ledger_tmp_dir/contract-values"
+coverage_values="$contract_ledger_tmp_dir/coverage-values"
 awk '
   match($0, /^[ \t]*(NPSYSTEM_[A-Z0-9_]+)[ \t]*=/, parts) {
     print parts[1]
@@ -812,6 +825,44 @@ awk '
 [[ -s "$ledger_constants" ]] || fail "typed ledger semantic-name rows are empty"
 if ! diff -u "$contract_constants" "$ledger_constants"; then
   fail "system contract constants and typed ledger are not one-to-one"
+fi
+awk -F "'" '
+  /^[ \t]*NPSYSTEM_[A-Z0-9_]+[ \t]*=/ && $2 ~ /^np\.system\./ {
+    print $2
+  }
+' "$CORE_ROOT/src/nextpas.core.system.contracts.pas" >"$contract_values"
+if ! awk '
+  $0 == "<!-- ledger-table:start -->" {
+    if (in_table || saw_start) {
+      exit 2
+    }
+    in_table = 1
+    saw_start = 1
+    next
+  }
+  $0 == "<!-- ledger-table:end -->" {
+    if (!in_table || saw_end) {
+      exit 2
+    }
+    in_table = 0
+    saw_end = 1
+    next
+  }
+  in_table && match($0, /^\| `([^`]+)` \|/, parts) {
+    print parts[1]
+  }
+  END {
+    if (!saw_start || !saw_end || in_table) {
+      exit 2
+    }
+  }
+' "$CORE_ROOT/docs/system/contract-coverage-table.md" >"$coverage_values"; then
+  fail "contract coverage ledger table markers are missing or malformed"
+fi
+[[ -s "$contract_values" ]] || fail "system contract string values are empty"
+[[ -s "$coverage_values" ]] || fail "contract coverage ledger rows are empty"
+if ! diff -u "$contract_values" "$coverage_values"; then
+  fail "contract coverage table must match system contract values in declaration order"
 fi
 rm -rf -- "$contract_ledger_tmp_dir"
 trap - EXIT

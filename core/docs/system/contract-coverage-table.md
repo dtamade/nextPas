@@ -1,33 +1,44 @@
 # System Contract Coverage Table
 
-This document records the current coverage state of all live `np.system.*` contracts,
-mapping each contract name to its HIR evidence, LLVM helper evidence, and test coverage.
+The typed ledger is authoritative for contract identity and traceability. This table is its
+human-readable projection; source-contract tests reject missing, extra, or reordered names.
 
-**Purpose**: Provide a single reference for landing candidate preparation and Codex review.
+**Purpose**: Show the current evidence boundary without turning vocabulary or backend helper names
+into readiness claims or public ABI.
 
-## Contract → HIR → Helper → Test Mapping
+## Contract Ledger Projection
 
-| Contract | HIR evidence | LLVM helper | Test coverage | Gap |
-|----------|-------------|-------------|--------------|-----|
-| `np.system.process_init` | `SeedRuntimeContracts` seeds as `runtime-contract` HIR node | No LLVM helper (runtime execution deferred) | `test-process-runtime-contract-seed` (semantic seed proof) | No execution smoke |
-| `np.system.process_fini` | `SeedRuntimeContracts` seeds as `runtime-contract` HIR node | No LLVM helper (runtime execution deferred) | `test-process-runtime-contract-seed` (semantic seed proof) | No execution smoke |
-| `np.system.object_free` | `np_hir_builder.pas` emits `np.system.object_free` intrinsic (nil guard + lifecycle group) | `@np_object_free_release` | stage0 query gate, HIR object-free focused gates | No direct-consume execution smoke |
-| `np.system.object_free.destroy` | `np_hir_builder.pas:3932` sets `IntrinsicName := 'np.system.object_free.destroy'` | Mapped to virtual dispatch (`vcall` intrinsic for Destroy) | HIR object-free focused gates | Direct dispatch path not verified end-to-end |
-| `np.system.object_free.cleanup` | `np_hir_builder.pas:4791` sets `IntrinsicName := 'np.system.object_free.cleanup'` | No dedicated LLVM helper (compiler-planned cleanup, currently field-agnostic) | HIR object-free focused gates | Cleanup semantics not tested with managed fields |
-| `np.system.object_free.release` | `np_hir_builder.pas:3950` sets `IntrinsicName := 'np.system.object_free.release'` | `@np_object_free_release` → `@np_object_release_valid` / `@np_object_release_invalid` | stage0 query gate, LLVM object-free tests | Release path tested but cleanup-before-release ordering not verified |
-| `np.system.interface_addref` | HIR uses `intf_addref` as implementation intrinsic (intentional) | `@np_intf_addref` (line 750) | `test_hir_interface_contract` | **Contract name in docs, impl name in HIR** |
-| `np.system.interface_release` | HIR uses `intf_release` as implementation intrinsic (intentional) | `@np_intf_release` (line 756) | `test_hir_interface_contract` | **Contract name in docs, impl name in HIR** |
-| `np.system.halt` | HIR uses `halt` as implementation intrinsic (intentional) | inline syscall (`movq $60, %rax; syscall`) | No focused test (halt intrinsic verified by source-contract) | **Contract name in docs, impl name in HIR** |
-| `np.system.heap_alloc` | HIR uses `arr_alloc`, `class_alloc` as implementation intrinsics (intentional) | `@np_alloc` (line 686, 698, 1153, 1275), `@np_object_alloc` (line 734) | emitter integration tests (allocator paths covered) | **Contract name in docs, impl names in HIR** |
-| `np.system.heap_free` | HIR uses backend helpers directly (intentional) | `@np_free` (line 1439) | emitter integration tests (allocator paths covered) | **Contract name in docs, impl helpers in backend** |
-| `np.system.unit_init` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
-| `np.system.unit_fini` | Not seeded (future feature) | No LLVM helper | No test | Fully deferred |
-| `np.system.runtime_fault` | Not seeded (future feature) | `@np_allocator_fault`, `@np_dynarray_fault` are partial evidence | No focused lifecycle fault test | Partial evidence only in allocator/dynarray contexts |
-| `np.system.exception_try_push` | HIR uses `try-begin-runtime` / `try-end-runtime` nodes | `@np_try_push` (line 854, 1725) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
-| `np.system.exception_try_pop` | HIR uses `finally-end-runtime` / `except-end-runtime` nodes | `@np_try_pop` (line 868, 1734) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
-| `np.system.exception_raise` | HIR uses `raise-runtime` node | `@np_raise` (line 891, 1780) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
-| `np.system.exception_finally_end` | HIR uses `finally-end-runtime` node | `@np_finally_end` (line 877, 1794) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
-| `np.system.exception_except_end` | HIR uses `except-end-runtime` node | `@np_except_end` (line 886) | `test_hir_exception` | **Contract name in docs, impl nodes in HIR** |
+<!-- ledger-table:start -->
+| Contract | Evidence level | Source / semantic evidence | Runtime mapping | Focused evidence | Current boundary |
+| --- | --- | --- | --- | --- | --- |
+| `np.system.process_init` | HIR | `System.np_process_init`; process-start contract | `np_process_init` | `test_process_lifecycle` | Runtime execution deferred |
+| `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` | Runtime execution deferred |
+| `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
+| `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
+| `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
+| `np.system.string_init` | vocabulary | `System.AnsiString` | deferred | `runtime-contracts.md` | No implementation claim |
+| `np.system.string_fini` | HIR | string cleanup nodes | string release helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
+| `np.system.string_assign` | HIR | string assignment nodes | string assignment helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
+| `np.system.dynarray_init` | vocabulary | System dynamic array | deferred | `runtime-contracts.md` | No implementation claim |
+| `np.system.dynarray_fini` | executable | dynarray cleanup contract | `np_dynarray_release` | `test_hir_dynarray_release_runtime_smoke` | Managed-element coverage remains partial |
+| `np.system.dynarray_set_length` | executable | set-length array contract | `np_dynarray_resize` | `test_hir_dynarray_release_runtime_smoke` | Failure cleanup remains partial |
+| `np.system.interface_addref` | backend | `intf_addref` implementation intrinsic | `np_intf_addref` | `test_hir_interface_contract` | Backend helper, not facade ABI |
+| `np.system.interface_release` | backend | `intf_release` implementation intrinsic | `np_intf_release` | `test_hir_interface_contract` | Backend helper, not facade ABI |
+| `np.system.managed_record_init` | vocabulary | System managed record | deferred | `runtime-contracts.md` | No implementation claim |
+| `np.system.managed_record_fini` | HIR | managed-record cleanup contract | deferred | `test_hir_node_kind` | No executable lifecycle proof |
+| `np.system.heap_alloc` | backend | `arr_alloc` and `class_alloc` | `np_alloc`, `np_object_alloc` | `test_hir_class_alloc_contract` | Allocator owner remains outside System |
+| `np.system.heap_free` | executable | object and array release nodes | `np_free` | `test_hir_large_alloc_runtime_smoke` | Allocation paths are partial evidence |
+| `np.system.object_free` | backend | object-free runtime contract | `np_object_free_release` | `test_hir_object_free_contract` | No full ownership proof |
+| `np.system.object_free.destroy` | HIR | object-free destroy marker | virtual `Destroy` dispatch | `test_hir_object_free_contract` | Direct dispatch not end-to-end proven |
+| `np.system.object_free.cleanup` | HIR | object-free cleanup marker | compiler-planned cleanup | `test_hir_object_free_contract` | Managed-field cleanup unproven |
+| `np.system.object_free.release` | backend | object-free release marker | `np_object_free_release` | `test_hir_object_free_contract` | Cleanup ordering unproven |
+| `np.system.runtime_fault` | backend | fault-specific nodes | allocator and dynarray fault helpers | `runtime-contracts.md` | No focused lifecycle-fault proof |
+| `np.system.exception_try_push` | backend | try-begin runtime contract | `np_try_push` | `test_hir_exception` | No executable unwind proof |
+| `np.system.exception_try_pop` | backend | try-end runtime contract | `np_try_pop` | `test_hir_exception` | No executable unwind proof |
+| `np.system.exception_raise` | backend | raise runtime contract | `np_raise` | `test_hir_exception` | No executable unwind proof |
+| `np.system.exception_finally_end` | backend | finally-end runtime contract | `np_finally_end` | `test_hir_exception` | No executable unwind proof |
+| `np.system.exception_except_end` | backend | except-end runtime contract | `np_except_end` | `test_hir_exception` | No executable unwind proof |
+<!-- ledger-table:end -->
 
 ## Backend-Private Helper Names (NOT Public ABI)
 
@@ -73,10 +84,10 @@ through `nextpas.core.system.typinfo`. Consumers using these are **metadata-sens
 | `nextpas.core.system.typinfo` test suite | `GetTypeKind`, managed array helpers | Test proof under host truth only |
 | Compiler HIR dynarray operations | `InitializeArray` / `FinalizeArray` / `CopyArray` | Compiler-managed type metadata must align with runtime helpers |
 
-## S5.4 Remaining Open Risks
+## Remaining Open Risks
 
-The following risks remain open at the S5.4 boundary. They must be addressed before
-a landing candidate can be declared fully ready.
+The following risks remain open. They must be addressed before the compiler-system bootstrap
+spine can claim executable self-host readiness.
 
 ### Risk 1: TypInfo RTTI Shape Drift
 
@@ -122,12 +133,13 @@ any diagnostic.
 
 **Description**: Process lifecycle has semantic seed proof (`test-process-runtime-contract-seed`)
 but no runtime execution proof. Unit lifecycle (`np.system.unit_init`, `np.system.unit_fini`)
-has no semantic seed and no execution at all. This means the compiler can emit contract names
-but cannot yet drive runtime initialization/finalization ordering.
+has semantic contract evidence but no executable ordering proof. This means the compiler can
+name lifecycle contracts but cannot yet prove runtime initialization/finalization ordering.
 
 **Current mitigations**:
 - `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for program/library/package roots.
-- Integration smoke via `build/verify_local.sh` proves compiler → LLVM → executable for basic program lifecycle.
+- Integration smoke via `build/verify_local.sh` is partial compiler-to-executable evidence; it does not
+  prove the A -> B -> C bootstrap chain or lifecycle ordering.
 - Unit lifecycle is explicitly deferred until the compiler has a UnitGraph consumption path.
 
 **What remains**:
@@ -142,16 +154,16 @@ for self-hosting target.
 ### Risk 4: Exception Boundary Naming Consistency
 
 **Description**: Exception helpers (`@np_try_push`, `@np_try_pop`, `@np_raise`, etc.) are
-backend-private LLVM helpers with no `np.system.*` contract name mapping. They exist in the
-emitter but are not covered by source-contract checks or documentation in `runtime-contracts.md`.
+backend-private LLVM helpers. The typed ledger now maps their `np.system.*` semantic names and
+the source contract verifies that vocabulary, but the mapping is not executable unwind proof.
 
 **Current mitigations**:
-- `lifecycle-contracts.md` documents the exception boundary as a future compiler/runtime contract area.
+- `lifecycle-contracts.md` documents the exception boundary and the typed ledger records its mapping.
 - The helpers are backend-private evidence, not public ABI.
 
 **What remains**:
-- No source-contract check verifying exception helper existence or naming stability.
 - No focused test for exception lowering beyond `test_hir_exception.pas` (which tests HIR shape, not
   runtime behavior).
+- No end-to-end exception unwind, failure-path, or ABI-stability proof.
 
 **Severity**: Low — exception helpers are backend-private and not in the `np.system.*` facade scope.
