@@ -4811,6 +4811,47 @@ begin
   end;
 end;
 
+{ HashMap boundary conditions }
+
+procedure TestHashMapFindEmpty;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Find(1, LV), 'find in empty returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapRemoveEmpty;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Remove(1), 'remove from empty returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapContainsMissing;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Contains(1), 'contains missing returns false');
+    LM.Insert(1, 10);
+    Check(LM.Contains(1), 'contains existing returns true');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: Channel capacity=2                                 }
 { ============================================================ }
@@ -6788,6 +6829,9 @@ begin
   T.Test('Stack push full', @TestStackPushFull);
   T.Test('HashMap single key stress', @TestHashMapSingleKeyStress);
   T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
+  T.Test('HashMap Find empty', @TestHashMapFindEmpty);
+  T.Test('HashMap Remove empty', @TestHashMapRemoveEmpty);
+  T.Test('HashMap Contains missing', @TestHashMapContainsMissing);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
   T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
 
