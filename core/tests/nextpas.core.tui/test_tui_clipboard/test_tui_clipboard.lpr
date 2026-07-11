@@ -161,6 +161,69 @@ begin
     Check(Length(LClip.ExternalTool) > 0, 'External method has tool name');
 end;
 
+procedure TestGetOSC52CopyTwoBytes;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  // Base64("AB") = "QUI=" (1 pad)
+  LResult := LClip.GetOSC52Copy('AB');
+  Check(Pos('QUI=', LResult) > 0, 'Two bytes base64 (1 pad)');
+  Check(Pos(#27']52;c;', LResult) = 1, 'Two bytes: prefix');
+  Check(Pos(#27'\', LResult) > 0, 'Two bytes: suffix');
+end;
+
+procedure TestGetOSC52CopyFourBytes;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  // Base64("test") = "dGVzdA==" (no padding)
+  LResult := LClip.GetOSC52Copy('test');
+  Check(Pos('dGVzdA==', LResult) > 0, 'Four bytes base64');
+end;
+
+procedure TestGetOSC52CopyZeroes;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  LResult := LClip.GetOSC52Copy(#0#0#0);
+  Check(Pos(#27']52;c;', LResult) = 1, 'Zeroes: prefix');
+  Check(Pos(#27'\', LResult) > 0, 'Zeroes: suffix');
+end;
+
+procedure TestGetOSC52CopyAllPrintable;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+  LText: AnsiString;
+  I: Integer;
+begin
+  LClip.Method := cmNone;
+  SetLength(LText, 95);
+  for I := 32 to 126 do
+    LText[I - 31] := Chr(I);
+  LResult := LClip.GetOSC52Copy(LText);
+  Check(Pos(#27']52;c;', LResult) = 1, 'All printable: prefix');
+  Check(Pos(#27'\', LResult) > 0, 'All printable: suffix');
+  Check(Length(LResult) > 130, 'All printable: encoded length');
+end;
+
+procedure TestGetOSC52CopyOneByte;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  // Base64("A") = "QQ==" (2 pads)
+  LResult := LClip.GetOSC52Copy('A');
+  Check(Pos('QQ==', LResult) > 0, 'One byte: 2 pad chars');
+end;
+
 begin
   T := TTestSuite.Create('tui_clipboard');
   T.Test('GetOSC52Copy empty text', @TestGetOSC52CopyEmpty);
@@ -176,5 +239,10 @@ begin
   T.Test('GetOSC52Copy special chars', @TestGetOSC52CopySpecialChars);
   T.Test('GetOSC52Copy newlines', @TestGetOSC52CopyNewlines);
   T.Test('Detect method valid', @TestDetectMethodValid);
+  T.Test('GetOSC52Copy two bytes', @TestGetOSC52CopyTwoBytes);
+  T.Test('GetOSC52Copy four bytes', @TestGetOSC52CopyFourBytes);
+  T.Test('GetOSC52Copy zeroes', @TestGetOSC52CopyZeroes);
+  T.Test('GetOSC52Copy all printable', @TestGetOSC52CopyAllPrintable);
+  T.Test('GetOSC52Copy one byte padding', @TestGetOSC52CopyOneByte);
   if not T.Run then Halt(1);
 end.

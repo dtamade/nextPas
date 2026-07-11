@@ -361,6 +361,187 @@ begin
   Check(G.Cells[0].Width <= 15, 'AtMost constraint respected');
 end;
 
+{ === Deepened Tests === }
+
+procedure TestLayoutGrid3x3;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.Grid(3, 3);
+  G := P.Layout(TRect.Make(0, 0, 31, 16));
+  CheckEqual(3, G.ColCount, '3x3 col count');
+  CheckEqual(3, G.RowCount, '3x3 row count');
+  // All cells should have positive dimensions
+  Check(G.Cells[0].Width > 0, '3x3 cell 0,0 w');
+  Check(G.Cells[4].Width > 0, '3x3 cell 1,1 w');
+  Check(G.Cells[8].Width > 0, '3x3 cell 2,2 w');
+end;
+
+procedure TestLayoutFillConstraint;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.New([FillConstraint(1), FillConstraint(2)], [MinConstraint(0)]);
+  P.WithEdges(PanelEdgesNone);
+  G := P.Layout(TRect.Make(0, 0, 30, 10));
+  // Weight 2 column should be wider than weight 1
+  Check(G.Cells[1].Width > G.Cells[0].Width, 'fill weight 2 > weight 1');
+end;
+
+procedure TestLayoutMinHeight;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.New([MinConstraint(0)], [MinConstraint(0)]);
+  P.WithMinHeight(0, 8);
+  P.WithEdges(PanelEdgesNone);
+  G := P.Layout(TRect.Make(0, 0, 20, 10));
+  Check(G.Cells[0].Height >= 8, 'min height enforced');
+end;
+
+procedure TestLayoutVSepVisible;
+var
+  P: IPanel;
+  Buf: TBuffer;
+begin
+  P := TPanel.Grid(2, 1);
+  P.WithVSepVisible(0, False);
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 5));
+  try
+    P.Render(TRect.Make(0, 0, 10, 5), Buf);
+    Check(True, 'vsep hidden renders ok');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestLayoutVSepStartRow;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.Grid(2, 3);
+  P.WithVSepStartRow(1);
+  G := P.Layout(TRect.Make(0, 0, 21, 16));
+  Check(G.ColOffsets[1] > 0, 'vsep start row set');
+end;
+
+procedure TestLayoutHSepStartCol;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.Grid(3, 2);
+  P.WithHSepStartCol(1);
+  G := P.Layout(TRect.Make(0, 0, 31, 11));
+  Check(G.RowOffsets[1] > 0, 'hsep start col set');
+end;
+
+procedure TestRenderSmallArea;
+var
+  P: IPanel;
+  Buf: TBuffer;
+begin
+  P := TPanel.Grid(2, 2);
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 3));
+  try
+    P.Render(TRect.Make(0, 0, 3, 3), Buf);
+    Check(True, 'small area renders without crash');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestRenderDebugMode;
+var
+  P: IPanel;
+  Buf: TBuffer;
+  LLines: TBufferLines;
+begin
+  P := TPanel.Grid(2, 2);
+  P.WithDebug(True);
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 15, 9));
+  try
+    P.Render(TRect.Make(0, 0, 15, 9), Buf);
+    LLines := Buf.AsLines;
+    Check(Length(LLines) > 0, 'debug mode has output');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestLayoutColWeight;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.Grid(2, 1);
+  P.WithColWeight(0, 3);
+  P.WithColWeight(1, 1);
+  P.WithEdges(PanelEdgesNone);
+  G := P.Layout(TRect.Make(0, 0, 40, 10));
+  // Weight 3 should be ~3x wider than weight 1
+  Check(G.Cells[0].Width > G.Cells[1].Width, 'col weight 3 > 1');
+end;
+
+procedure TestLayoutRowWeight;
+var
+  P: IPanel;
+  G: TPanelGrid;
+begin
+  P := TPanel.Grid(1, 2);
+  P.WithRowWeight(0, 3);
+  P.WithRowWeight(1, 1);
+  P.WithEdges(PanelEdgesNone);
+  G := P.Layout(TRect.Make(0, 0, 20, 40));
+  Check(G.Cells[0].Height > G.Cells[2].Height, 'row weight 3 > 1');
+end;
+
+procedure TestPanelCellPaddedOversized;
+var
+  P: IPanel;
+  G: TPanelGrid;
+  Cell: TRect;
+begin
+  P := TPanel.New([MinConstraint(0)], [MinConstraint(0)]);
+  P.WithPadding(5);
+  P.WithEdges(PanelEdgesNone);
+  G := P.Layout(TRect.Make(0, 0, 6, 4));
+  Cell := PanelCellPadded(TPanel(P), G, 0, 0);
+  // 5*2=10 > 6, so padding > cell → zero-size cell
+  Check(Cell.Width <= G.Cells[0].Width, 'padded w <= original');
+end;
+
+procedure TestHitTestSepHorizontal;
+var
+  P: IPanel;
+  G: TPanelGrid;
+  Hit: TSepHit;
+begin
+  P := TPanel.Grid(1, 2);
+  G := P.Layout(TRect.Make(0, 0, 10, 11));
+  // Hit horizontal separator
+  Hit := PanelHitTestSep(G, 5, G.RowOffsets[1] - 1);
+  Check(Hit.Found, 'hsep found');
+  Check(Hit.IsHorizontal, 'horizontal separator');
+end;
+
+procedure TestHitTestSepNotFound;
+var
+  P: IPanel;
+  G: TPanelGrid;
+  Hit: TSepHit;
+begin
+  P := TPanel.Grid(2, 2);
+  G := P.Layout(TRect.Make(0, 0, 21, 11));
+  // Hit center of a cell (not a separator)
+  Hit := PanelHitTestSep(G, G.Cells[0].X + 1, G.Cells[0].Y + 1);
+  Check(not Hit.Found, 'center of cell is not separator');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.panel');
 
@@ -404,6 +585,21 @@ begin
   { Builder pattern tests }
   T.Test('builder chaining', @TestBuilderChaining);
   T.Test('builder min max constraints', @TestBuilderMinMaxConstraints);
+
+  { Deepened tests }
+  T.Test('layout grid 3x3', @TestLayoutGrid3x3);
+  T.Test('layout fill constraint', @TestLayoutFillConstraint);
+  T.Test('layout min height', @TestLayoutMinHeight);
+  T.Test('layout vsep visible', @TestLayoutVSepVisible);
+  T.Test('layout vsep start row', @TestLayoutVSepStartRow);
+  T.Test('layout hsep start col', @TestLayoutHSepStartCol);
+  T.Test('render small area', @TestRenderSmallArea);
+  T.Test('render debug mode', @TestRenderDebugMode);
+  T.Test('layout col weight', @TestLayoutColWeight);
+  T.Test('layout row weight', @TestLayoutRowWeight);
+  T.Test('padded oversized padding', @TestPanelCellPaddedOversized);
+  T.Test('hit test horizontal sep', @TestHitTestSepHorizontal);
+  T.Test('hit test not found', @TestHitTestSepNotFound);
 
   if not T.Run then Halt(1);
 end.
