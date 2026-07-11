@@ -102,6 +102,46 @@ begin
   end;
 end;
 
+procedure AssertTypeParentMutationRejectsInvalidGraphs;
+var
+  ChildTypeId: LongInt;
+  Model: TSemanticModel;
+  ParentTypeId: LongInt;
+begin
+  Model := TSemanticModel.Create;
+  try
+    ParentTypeId := Model.AddType('TInvariantParent', 'class');
+    ChildTypeId := Model.AddType('TInvariantChild', 'class');
+
+    Model.SetTypeParent(ChildTypeId, ParentTypeId);
+    if Model.TypeAt(ChildTypeId - 1).ParentTypeId <> ParentTypeId then
+      Fail('valid-parent-assignment-rejected');
+
+    Model.SetTypeParent(ChildTypeId, ChildTypeId);
+    if Model.TypeAt(ChildTypeId - 1).ParentTypeId <> ParentTypeId then
+      Fail('self-parent-overwrote-valid-parent');
+
+    Model.SetTypeParent(ParentTypeId, ChildTypeId);
+    if Model.TypeAt(ParentTypeId - 1).ParentTypeId <> 0 then
+      Fail('indirect-parent-cycle-accepted');
+
+    Model.SetTypeParent(ChildTypeId, Model.TypeCount + 1);
+    if Model.TypeAt(ChildTypeId - 1).ParentTypeId <> ParentTypeId then
+      Fail('out-of-range-parent-overwrote-valid-parent');
+
+    Model.SetTypeParent(ChildTypeId, 0);
+    if Model.TypeAt(ChildTypeId - 1).ParentTypeId <> 0 then
+      Fail('parent-clear-rejected');
+
+    Model.SetTypeParent(ChildTypeId, ParentTypeId);
+    Model.SetTypeParent(ChildTypeId, -1);
+    if Model.TypeAt(ChildTypeId - 1).ParentTypeId <> ParentTypeId then
+      Fail('negative-parent-overwrote-valid-parent');
+  finally
+    Model.Free;
+  end;
+end;
+
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -113,6 +153,8 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
+  AssertTypeParentMutationRejectsInvalidGraphs;
+
   if ParamCount <> 1 then
     Fail('expected-system-source-path');
   SystemPath := ExpandFileName(ParamStr(1));
