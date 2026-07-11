@@ -18,8 +18,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.lockfree.base,
-  nextpas.core.platform.thread;
+  nextpas.core.lockfree.base;
 
 const
   HASHMAP_DEFAULT_SHARD_COUNT = 16;
@@ -226,7 +225,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   end;
 end;
@@ -273,7 +272,7 @@ begin
     begin
       LSpins := 0;
       LBackoff := 1;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -301,7 +300,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;

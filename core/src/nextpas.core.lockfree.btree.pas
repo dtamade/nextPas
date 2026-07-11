@@ -22,8 +22,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.lockfree.base,
-  nextpas.core.platform.thread;
+  nextpas.core.lockfree.base;
 
 const
   BTREE_ORDER = 64; { Maximum number of keys per node }
@@ -219,7 +218,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -243,7 +242,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
