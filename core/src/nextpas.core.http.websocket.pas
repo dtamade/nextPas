@@ -1055,8 +1055,13 @@ begin
               'Upgrade: websocket'#13#10 +
               'Connection: Upgrade'#13#10 +
               'Sec-WebSocket-Key: ' + LKey + #13#10 +
-              'Sec-WebSocket-Version: 13'#13#10 +
-              #13#10;
+              'Sec-WebSocket-Version: 13'#13#10;
+  { Origin header: required by server-side default validation (RFC 6455 §4.1) }
+  if LScheme = 'wss' then
+    LRequest := LRequest + 'Origin: https://' + LHost + #13#10
+  else
+    LRequest := LRequest + 'Origin: http://' + LHost + #13#10;
+  LRequest := LRequest + #13#10;
 
   { Send upgrade request }
   IoWriteAll(LWriter, LRequest[1], SizeUInt(Length(LRequest)));
