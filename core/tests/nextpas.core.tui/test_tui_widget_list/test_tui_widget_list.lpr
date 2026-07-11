@@ -162,6 +162,65 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestListStateNextPrevious;
+var LState: TListState;
+begin
+  LState := TListState.Empty;
+  LState.Select(0);
+  LState.Next(5);
+  Check(LState.Selected = 1, 'Next → index 1');
+  LState.Next(5);
+  Check(LState.Selected = 2, 'Next → index 2');
+  LState.Previous;
+  Check(LState.Selected = 1, 'Previous → index 1');
+end;
+
+procedure TestListStateFirstLast;
+var LState: TListState;
+begin
+  LState := TListState.Empty;
+  LState.Select(3);
+  LState.First;
+  Check(LState.Selected = 0, 'First → index 0');
+  LState.Last(10);
+  Check(LState.Selected = 9, 'Last(10) → index 9');
+end;
+
+procedure TestListStateClearSelection;
+var LState: TListState;
+begin
+  LState := TListState.Empty;
+  LState.Select(2);
+  Check(LState.HasSelection, 'HasSelection after Select');
+  LState.ClearSelection;
+  Check(not LState.HasSelection, 'No selection after Clear');
+end;
+
+procedure TestListItemFromString;
+var LItem: TListItem;
+begin
+  LItem := TListItem.FromString('hello');
+  Check(LItem.Content = 'hello', 'FromString sets content');
+end;
+
+procedure TestListStateNextBoundary;
+var LState: TListState;
+begin
+  LState := TListState.Empty;
+  LState.Select(4);
+  LState.Next(5); // at last item, Next should clamp
+  Check(LState.Selected = 4, 'Next at boundary stays at 4');
+end;
+
+procedure TestListStatePreviousBoundary;
+var LState: TListState;
+begin
+  LState := TListState.Empty;
+  LState.Select(0);
+  LState.Previous; // at first item, Previous should clamp
+  Check(LState.Selected = 0, 'Previous at 0 stays at 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.list');
   T.Test('simple render', @TestSimpleRender);
@@ -174,5 +233,11 @@ begin
   T.Test('single item', @TestSingleItem);
   T.Test('selection beyond range', @TestSelectionBeyondRange);
   T.Test('with highlight style', @TestWithHighlightStyle);
+  T.Test('ListState Next/Previous', @TestListStateNextPrevious);
+  T.Test('ListState First/Last', @TestListStateFirstLast);
+  T.Test('ListState ClearSelection', @TestListStateClearSelection);
+  T.Test('ListItem FromString', @TestListItemFromString);
+  T.Test('ListState Next boundary', @TestListStateNextBoundary);
+  T.Test('ListState Previous boundary', @TestListStatePreviousBoundary);
   if not T.Run then Halt(1);
 end.

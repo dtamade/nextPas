@@ -220,6 +220,87 @@ begin
   Check(LResult = prNeedMore, 'Empty buffer should need more');
 end;
 
+procedure TestParseOneDelete;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[3~';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Should parse Delete');
+  Check(LEvent.Key.Code = kcDelete, 'Should be kcDelete');
+end;
+
+procedure TestParseOnePageUp;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[5~';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Should parse PageUp');
+  Check(LEvent.Key.Code = kcPageUp, 'Should be kcPageUp');
+end;
+
+procedure TestParseOnePageDown;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[6~';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Should parse PageDown');
+  Check(LEvent.Key.Code = kcPageDown, 'Should be kcPageDown');
+end;
+
+procedure TestParseOneInsert;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[2~';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Should parse Insert');
+  Check(LEvent.Key.Code = kcInsert, 'Should be kcInsert');
+end;
+
+procedure TestParseOneEscKey;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  // Esc alone (at EOF) should produce kcEsc
+  LBuf := #27;
+  LResult := ParseOne(LBuf[1], Length(LBuf), True, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Esc at EOF should succeed');
+  Check(LEvent.Key.Code = kcEsc, 'Should be kcEsc');
+end;
+
+procedure TestParseOneCtrlC;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #3; // Ctrl+C
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Should parse Ctrl+C');
+  Check(LEvent.Key.Code = kcChar, 'Ctrl+C should be kcChar');
+  Check(LEvent.Key.Ch = Ord('c'), 'Char should be c');
+  Check(kmCtrl in LEvent.Key.Modifiers, 'Should have Ctrl modifier');
+end;
+
 begin
   T := TTestSuite.Create('tui_input');
   T.Test('ParseOne printable ASCII', @TestParseOnePrintableAscii);
@@ -238,5 +319,11 @@ begin
   T.Test('ParseOne Home', @TestParseOneHome);
   T.Test('ParseOne End', @TestParseOneEnd);
   T.Test('ParseOne empty buffer', @TestParseOneEmpty);
+  T.Test('ParseOne Delete', @TestParseOneDelete);
+  T.Test('ParseOne PageUp', @TestParseOnePageUp);
+  T.Test('ParseOne PageDown', @TestParseOnePageDown);
+  T.Test('ParseOne Insert', @TestParseOneInsert);
+  T.Test('ParseOne Esc key', @TestParseOneEscKey);
+  T.Test('ParseOne Ctrl+C', @TestParseOneCtrlC);
   if not T.Run then Halt(1);
 end.

@@ -143,6 +143,70 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestLeftAlignmentDefault;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.FromString('Hi');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    LLines := LBuf.AsLines;
+    // Left alignment: 'H' at col 0
+    Check(LLines[0][1] = 'H', 'Left aligned: H at col 0');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWithStyle;
+var LP: IParagraph; LBuf: TBuffer;
+  LStyle: TStyle;
+begin
+  LStyle.Fg := IndexedColor(3);
+  LP := TParagraph.FromString('styled').WithStyle(LStyle);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    Check(True, 'WithStyle renders without crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollYZero;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.New(TText.FromString('first'#10'second'))
+    .WithScrollY(0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 2), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('first', LLines[0]) > 0, 'ScrollY(0) shows first line');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollYBeyondContent;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.New(TText.FromString('only'))
+    .WithScrollY(100);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 2), LBuf);
+    Check(True, 'ScrollY beyond content does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWrapMultiLine;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('ab cd ef gh');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 4));
+  try
+    LP.Render(TRect.Make(0, 0, 5, 4), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('ab', LLines[0]) > 0, 'wrap: first line has ab');
+    Check(Pos('cd', LLines[1]) > 0, 'wrap: second line has cd');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.paragraph');
   T.Test('simple render', @TestSimpleRender);
@@ -155,5 +219,10 @@ begin
   T.Test('wrapped shortcut', @TestWrappedShortcut);
   T.Test('empty text', @TestEmptyText);
   T.Test('multi-line no wrap', @TestMultiLineNoWrap);
+  T.Test('left alignment default', @TestLeftAlignmentDefault);
+  T.Test('with style', @TestWithStyle);
+  T.Test('scroll y zero', @TestScrollYZero);
+  T.Test('scroll y beyond content', @TestScrollYBeyondContent);
+  T.Test('wrap multi-line', @TestWrapMultiLine);
   if not T.Run then Halt(1);
 end.

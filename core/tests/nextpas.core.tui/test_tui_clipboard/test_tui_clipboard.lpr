@@ -111,6 +111,56 @@ begin
   Check(LEnd - LStart > 7, 'has content between prefix and suffix');
 end;
 
+procedure TestCopyNoneReturnsFalse;
+var
+  LClip: TClipboard;
+begin
+  LClip.Method := cmNone;
+  Check(not LClip.Copy('test'), 'Copy with cmNone should return False');
+end;
+
+procedure TestPasteNoneReturnsEmpty;
+var
+  LClip: TClipboard;
+begin
+  LClip.Method := cmNone;
+  Check(LClip.Paste = '', 'Paste with cmNone should return empty');
+end;
+
+procedure TestGetOSC52CopySpecialChars;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  LResult := LClip.GetOSC52Copy('<>&"''');
+  Check(Pos(#27']52;c;', LResult) = 1, 'Special chars: prefix present');
+  Check(Pos(#27'\', LResult) > 0, 'Special chars: suffix present');
+  // Should contain base64 encoded content
+  Check(Length(LResult) > 10, 'Special chars: has encoded content');
+end;
+
+procedure TestGetOSC52CopyNewlines;
+var
+  LClip: TClipboard;
+  LResult: AnsiString;
+begin
+  LClip.Method := cmNone;
+  LResult := LClip.GetOSC52Copy('line1' + #10 + 'line2');
+  Check(Pos(#27']52;c;', LResult) = 1, 'Newlines: prefix present');
+  Check(Pos(#27'\', LResult) > 0, 'Newlines: suffix present');
+end;
+
+procedure TestDetectMethodValid;
+var
+  LClip: TClipboard;
+begin
+  LClip := TClipboard.Detect;
+  Check(LClip.Method in [cmOSC52, cmExternal, cmNone], 'Detect: valid method');
+  if LClip.Method = cmExternal then
+    Check(Length(LClip.ExternalTool) > 0, 'External method has tool name');
+end;
+
 begin
   T := TTestSuite.Create('tui_clipboard');
   T.Test('GetOSC52Copy empty text', @TestGetOSC52CopyEmpty);
@@ -121,5 +171,10 @@ begin
   T.Test('GetOSC52Copy three bytes', @TestGetOSC52CopyThreeBytes);
   T.Test('GetOSC52Copy long text', @TestGetOSC52CopyLongText);
   T.Test('GetOSC52Copy structure', @TestGetOSC52CopyStructure);
+  T.Test('Copy with cmNone returns False', @TestCopyNoneReturnsFalse);
+  T.Test('Paste with cmNone returns empty', @TestPasteNoneReturnsEmpty);
+  T.Test('GetOSC52Copy special chars', @TestGetOSC52CopySpecialChars);
+  T.Test('GetOSC52Copy newlines', @TestGetOSC52CopyNewlines);
+  T.Test('Detect method valid', @TestDetectMethodValid);
   if not T.Run then Halt(1);
 end.
