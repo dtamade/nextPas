@@ -643,6 +643,25 @@ begin
   dispatchTable.ArrayMulF64 := @SSE2ArrayMulF64;
   dispatchTable.ArrayDivF64 := @SSE2ArrayDivF64;
 
+  // F64 extended batch operations
+  dispatchTable.ArrayAxpyF64 := @SSE2ArrayAxpyF64;
+  dispatchTable.ArrayRcpF64 := @SSE2ArrayRcpF64;
+  dispatchTable.ArrayRsqrtF64 := @SSE2ArrayRsqrtF64;
+  dispatchTable.ArrayTanF64 := @SSE2ArrayTanF64;
+  dispatchTable.ArraySignF64 := @SSE2ArraySignF64;
+  dispatchTable.ArrayFractF64 := @SSE2ArrayFractF64;
+  dispatchTable.ArrayModF64 := @SSE2ArrayModF64;
+  dispatchTable.ArrayPowF64 := @SSE2ArrayPowF64;
+  dispatchTable.ArrayLerpF64 := @SSE2ArrayLerpF64;
+  dispatchTable.ArrayReLUF64 := @SSE2ArrayReLUF64;
+  dispatchTable.ArrayAbsDiffF64 := @SSE2ArrayAbsDiffF64;
+  dispatchTable.ArrayNormF64 := @SSE2ArrayNormF64;
+  dispatchTable.ArrayLinearReLUF64 := @SSE2ArrayLinearReLUF64;
+  dispatchTable.ArrayStepF64 := @SSE2ArrayStepF64;
+  dispatchTable.ArraySmoothstepF64 := @SSE2ArraySmoothstepF64;
+  dispatchTable.ArrayAtan2F64 := @SSE2ArrayAtan2F64;
+  dispatchTable.ArrayHypotF64 := @SSE2ArrayHypotF64;
+
   // Integer batch
   dispatchTable.ArrayAddI32 := @SSE2ArrayAddI32;
   dispatchTable.ArraySubI32 := @SSE2ArraySubI32;

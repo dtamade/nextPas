@@ -1358,24 +1358,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
-  // F64 Extended operations (scalar fallback)
-  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
-  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
-  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
-  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
-  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
-  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
-  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
-  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
-  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
-  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
-  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
-  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
-  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
-  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
-  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
-  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
-  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
+  // F64 Extended operations (SSE2 SIMD)
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := SSE2ArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := SSE2ArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := SSE2ArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := SSE2ArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := SSE2ArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := SSE2ArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := SSE2ArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := SSE2ArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := SSE2ArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := SSE2ArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := SSE2ArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := SSE2ArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := SSE2ArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := SSE2ArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := SSE2ArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := SSE2ArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := SSE2ArrayHypotF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_AVX2}
