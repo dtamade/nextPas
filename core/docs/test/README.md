@@ -530,7 +530,7 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 | test_assertions | 157 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
 | test_expect | 173 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array variants |
 | test_runner | 118 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable, retry, shuffle, failfast |
-| test_mock | 99 | TMock setup/verify, typed values, call ordering, CalledWith, CalledInOrder |
+| test_mock | 106 | TMock setup/verify, typed values, call ordering, CalledWith, CalledInOrder, VerifyInOrder, GetCallHistory |
 | test_output | 81 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP |
 | test_prop | 76 | Property testing generators, fuzzing, corpus, shrinking |
 | test_parallel | 54 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult, cleanup |
@@ -746,7 +746,7 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test_assertions | check.pas, expect.pas | 157 |
 | test_expect | expect.pas | 173 |
 | test_runner | runner.pas | 118 |
-| test_mock | mock.pas | 99 |
+| test_mock | mock.pas | 106 |
 | test_output | output.pas, output.json.pas, output.tap.pas | 81 |
 | test_prop | prop.pas | 76 |
 | test_parallel | runner.parallel.pas | 54 |
