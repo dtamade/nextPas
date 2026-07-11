@@ -3,13 +3,13 @@ program test_tui_widget_linechart;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.linechart,
@@ -157,6 +157,68 @@ begin
   Check(LChart <> nil, 'Builder chaining should work');
 end;
 
+procedure TestLineChartRenderEmpty;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TLineChart.New([]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 20, 10), LBuffer);
+    Check(True, 'Empty linechart renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestLineChartRenderWithBlock;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+  LSeries: array[0..0] of TDataSeries;
+begin
+  LSeries[0] := TDataSeries.Create('S', [1.0, 2.0, 3.0]);
+  LChart := TLineChart.New(LSeries).WithBlock(TBlock.New.WithBorders(BORDERS_ALL));
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 20, 10), LBuffer);
+    Check(True, 'Linechart with block renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestLineChartRenderEmptyArea;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TLineChart.New([TDataSeries.Create('S', [1.0])]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 0, 0));
+  try
+    LChart.Render(TRect.Make(0, 0, 0, 0), LBuffer);
+    Check(True, 'Empty area does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestLineChartSinglePoint;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TLineChart.New([TDataSeries.Create('S', [42.0])]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 5));
+  try
+    LChart.Render(TRect.Make(0, 0, 10, 5), LBuffer);
+    Check(True, 'Single data point renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.linechart');
   T.Test('TDataSeries.Create', @TestDataSeriesCreate);
@@ -171,5 +233,9 @@ begin
   T.Test('TLineChart.WithBlock', @TestLineChartWithBlock);
   T.Test('TLineChart.Render', @TestLineChartRender);
   T.Test('TLineChart builder chaining', @TestLineChartBuilderChaining);
+  T.Test('render empty', @TestLineChartRenderEmpty);
+  T.Test('render with block', @TestLineChartRenderWithBlock);
+  T.Test('render empty area', @TestLineChartRenderEmptyArea);
+  T.Test('single data point', @TestLineChartSinglePoint);
   if not T.Run then Halt(1);
 end.

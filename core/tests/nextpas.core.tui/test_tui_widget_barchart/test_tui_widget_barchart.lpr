@@ -3,13 +3,13 @@ program test_tui_widget_barchart;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.barchart,
@@ -166,6 +166,54 @@ begin
   Check(LChart <> nil, 'Builder chaining should work');
 end;
 
+procedure TestBarChartRenderEmpty;
+var
+  LChart: IBarChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TBarChart.New([]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 20, 10), LBuffer);
+    Check(True, 'Empty barchart renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestBarChartRenderWithBlock;
+var
+  LChart: IBarChart;
+  LBuffer: TBuffer;
+  LBars: array[0..1] of TBarData;
+begin
+  LBars[0] := TBarData.Make('A', 10.0);
+  LBars[1] := TBarData.Make('B', 20.0);
+  LChart := TBarChart.New(LBars).WithBlock(TBlock.New.WithBorders(BORDERS_ALL));
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 20, 10), LBuffer);
+    Check(True, 'Barchart with block renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestBarChartRenderEmptyArea;
+var
+  LChart: IBarChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TBarChart.New([TBarData.Make('A', 10.0)]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 0, 0));
+  try
+    LChart.Render(TRect.Make(0, 0, 0, 0), LBuffer);
+    Check(True, 'Empty area does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.barchart');
   T.Test('TBarData.Make', @TestBarDataMake);
@@ -181,5 +229,8 @@ begin
   T.Test('TBarChart.WithBlock', @TestBarChartWithBlock);
   T.Test('TBarChart.Render', @TestBarChartRender);
   T.Test('TBarChart builder chaining', @TestBarChartBuilderChaining);
+  T.Test('render empty', @TestBarChartRenderEmpty);
+  T.Test('render with block', @TestBarChartRenderWithBlock);
+  T.Test('render empty area', @TestBarChartRenderEmptyArea);
   if not T.Run then Halt(1);
 end.
