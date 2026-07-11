@@ -1839,6 +1839,13 @@ begin
       case LReadResult of
         tsiorWouldBlock:
           begin
+            if FPollReadDeadline.IsExpired then
+            begin
+              ClearPollReadDeadline;
+              FKeepAlive := False;
+              ANextEvents := [];
+              Exit(tsprDone);
+            end;
             ANextEvents := [peReadable];
             Exit(tsprWait);
           end;
