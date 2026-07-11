@@ -548,6 +548,7 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
 {$IFDEF NEXTPAS_LINUX}
   if __fxstat(1, AHandle.Value, LStat) <> 0 then
     Exit(platform_get_errno);

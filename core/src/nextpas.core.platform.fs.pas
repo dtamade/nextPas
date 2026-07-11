@@ -469,7 +469,7 @@ begin
     Inc(LLen);
   end;
   LBuf[LLen] := #0;
-  if LLen >= 4095 then Exit(-36); { ENAMETOOLONG }
+  if LLen >= 4095 then Exit(PLATFORM_ERR_INVALID); { path too long }
 
   I := 1;
   while I <= LLen do
