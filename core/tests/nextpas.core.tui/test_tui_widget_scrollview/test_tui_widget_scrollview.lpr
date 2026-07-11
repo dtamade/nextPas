@@ -62,11 +62,67 @@ begin Check(TScrollView.New.WithShowScrollbar(True) <> nil, 'WithShowScrollbar')
 
 procedure TestRender;
 var B: TBuffer; A: TRect;
-begin A := TRect.Make(0, 0, 30, 10); B := TBuffer.CreateEmpty(A); TScrollView.New.Render(A, B); Check(True, 'Render'); end;
+begin
+  A := TRect.Make(0, 0, 30, 10);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TScrollView.New.Render(A, B);
+    Check(True, 'Render');
+  finally
+    B.Free;
+  end;
+end;
 
 procedure TestRenderStateful;
 var B: TBuffer; A: TRect; S: TScrollViewState;
-begin A := TRect.Make(0, 0, 30, 10); B := TBuffer.CreateEmpty(A); S := TScrollViewState.Empty; TScrollView.New.RenderStateful(A, B, S); Check(True, 'RenderStateful'); end;
+begin
+  A := TRect.Make(0, 0, 30, 10);
+  B := TBuffer.CreateEmpty(A);
+  try
+    S := TScrollViewState.Empty;
+    TScrollView.New.RenderStateful(A, B, S);
+    Check(True, 'RenderStateful');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestRenderEmpty;
+var B: TBuffer; A: TRect; S: TScrollViewState;
+begin
+  A := TRect.Make(0, 0, 20, 5);
+  B := TBuffer.CreateEmpty(A);
+  try
+    S := TScrollViewState.Empty;
+    TScrollView.New.RenderStateful(A, B, S);
+    Check(True, 'Render empty scrollview');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestRenderSmallArea;
+var B: TBuffer; A: TRect;
+begin
+  A := TRect.Make(0, 0, 3, 2);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TScrollView.New.Render(A, B);
+    Check(True, 'Render in small area');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestStateScrollDownMultiple;
+var S: TScrollViewState;
+begin
+  S := TScrollViewState.Empty;
+  S.ScrollDown(5);
+  S.ScrollDown(5);
+  S.ScrollDown(5);
+  Check(S.OffsetY = 15, 'Should be 15 after 3x5');
+end;
 
 procedure TestBuilderChaining;
 var S1, S2: TStyle;
@@ -90,5 +146,8 @@ begin
   T.Test('Render', @TestRender);
   T.Test('RenderStateful', @TestRenderStateful);
   T.Test('Builder chaining', @TestBuilderChaining);
+  T.Test('Render empty', @TestRenderEmpty);
+  T.Test('Render small area', @TestRenderSmallArea);
+  T.Test('StateScrollDown multiple', @TestStateScrollDownMultiple);
   if not T.Run then Halt(1);
 end.
