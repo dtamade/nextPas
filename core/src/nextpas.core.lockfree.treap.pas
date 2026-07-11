@@ -270,15 +270,15 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(trClosed);
   Lock;
-  LOldCount := FCount;
-  FRoot := InsertNode(FRoot, AKey, AValue);
-  if FCount > LOldCount then
-  begin
+  try
+    LOldCount := FCount;
+    FRoot := InsertNode(FRoot, AKey, AValue);
+    if FCount > LOldCount then
+      Exit(trInserted);
+    Result := trUpdated;
+  finally
     Unlock;
-    Exit(trInserted);
   end;
-  Unlock;
-  Result := trUpdated;
 end;
 
 function TConcurrentTreap.Remove(AKey: Int64): TTreapResult;
@@ -288,15 +288,15 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(trClosed);
   Lock;
-  LOldCount := FCount;
-  FRoot := DeleteNode(FRoot, AKey);
-  if FCount < LOldCount then
-  begin
+  try
+    LOldCount := FCount;
+    FRoot := DeleteNode(FRoot, AKey);
+    if FCount < LOldCount then
+      Exit(trRemoved);
+    Result := trNotFound;
+  finally
     Unlock;
-    Exit(trRemoved);
   end;
-  Unlock;
-  Result := trNotFound;
 end;
 
 function TConcurrentTreap.Find(AKey: Int64; out AValue: Int64): Boolean;
@@ -309,16 +309,18 @@ begin
     Exit(False);
   end;
   Lock;
-  LNode := FindNode(FRoot, AKey);
-  if LNode <> nil then
-  begin
-    AValue := LNode^.Value;
+  try
+    LNode := FindNode(FRoot, AKey);
+    if LNode <> nil then
+    begin
+      AValue := LNode^.Value;
+      Exit(True);
+    end;
+    AValue := 0;
+    Result := False;
+  finally
     Unlock;
-    Exit(True);
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentTreap.Contains(AKey: Int64): Boolean;
@@ -328,9 +330,12 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   Lock;
-  LNode := FindNode(FRoot, AKey);
-  Unlock;
-  Result := LNode <> nil;
+  try
+    LNode := FindNode(FRoot, AKey);
+    Result := LNode <> nil;
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentTreap.GetCount: Int64;
@@ -382,10 +387,13 @@ end;
 procedure TConcurrentTreap.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := nil;
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := nil;
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentTreap.Close;

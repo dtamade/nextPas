@@ -382,8 +382,11 @@ begin
   SetLength(LPairs, LCount);
   LCount := 0;
   Lock;
-  CollectSubtree(FRoot, '', LPairs, LCount);
-  Unlock;
+  try
+    CollectSubtree(FRoot, '', LPairs, LCount);
+  finally
+    Unlock;
+  end;
   for LI := 0 to LCount - 1 do
     ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
@@ -402,10 +405,13 @@ end;
 procedure TConcurrentRadixTree.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := CreateNode('');
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := CreateNode('');
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentRadixTree.Close;

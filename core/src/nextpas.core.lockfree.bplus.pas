@@ -407,19 +407,21 @@ begin
     Exit(False);
   end;
   Lock;
-  LLeaf := FindLeaf(AKey);
-  for LI := 0 to LLeaf^.KeyCount - 1 do
-  begin
-    if LLeaf^.Keys[LI] = AKey then
+  try
+    LLeaf := FindLeaf(AKey);
+    for LI := 0 to LLeaf^.KeyCount - 1 do
     begin
-      AValue := LLeaf^.Values[LI];
-      Unlock;
-      Exit(True);
+      if LLeaf^.Keys[LI] = AKey then
+      begin
+        AValue := LLeaf^.Values[LI];
+        Exit(True);
+      end;
     end;
+    AValue := 0;
+    Result := False;
+  finally
+    Unlock;
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentBPlusTree.Contains(AKey: Int64): Boolean;
@@ -536,11 +538,14 @@ end;
 procedure TConcurrentBPlusTree.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := CreateLeaf;
-  FFirstLeaf := FRoot;
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := CreateLeaf;
+    FFirstLeaf := FRoot;
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentBPlusTree.Close;

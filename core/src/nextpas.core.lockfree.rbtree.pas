@@ -339,34 +339,36 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rbClosed);
   Lock;
-  LParent := FNil;
-  LCurrent := FRoot;
-  while LCurrent <> FNil do
-  begin
-    LParent := LCurrent;
-    if AKey = LCurrent^.Key then
+  try
+    LParent := FNil;
+    LCurrent := FRoot;
+    while LCurrent <> FNil do
     begin
-      LCurrent^.Value := AValue;
-      Unlock;
-      Exit(rbUpdated);
-    end
-    else if AKey < LCurrent^.Key then
-      LCurrent := LCurrent^.Left
+      LParent := LCurrent;
+      if AKey = LCurrent^.Key then
+      begin
+        LCurrent^.Value := AValue;
+        Exit(rbUpdated);
+      end
+      else if AKey < LCurrent^.Key then
+        LCurrent := LCurrent^.Left
+      else
+        LCurrent := LCurrent^.Right;
+    end;
+    LNew := CreateNode(AKey, AValue, rbRed);
+    LNew^.Parent := LParent;
+    if LParent = FNil then
+      FRoot := LNew
+    else if AKey < LParent^.Key then
+      LParent^.Left := LNew
     else
-      LCurrent := LCurrent^.Right;
+      LParent^.Right := LNew;
+    InsertFixup(LNew);
+    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    Result := rbInserted;
+  finally
+    Unlock;
   end;
-  LNew := CreateNode(AKey, AValue, rbRed);
-  LNew^.Parent := LParent;
-  if LParent = FNil then
-    FRoot := LNew
-  else if AKey < LParent^.Key then
-    LParent^.Left := LNew
-  else
-    LParent^.Right := LNew;
-  InsertFixup(LNew);
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
-  Unlock;
-  Result := rbInserted;
 end;
 
 function TConcurrentRBTree.Remove(AKey: Int64): TRBTreeResult;
@@ -377,47 +379,47 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rbClosed);
   Lock;
-  LNode := FindNode(AKey);
-  if LNode = nil then
-  begin
-    Unlock;
-    Exit(rbNotFound);
-  end;
-  LColor := LNode^.Color;
-  if LNode^.Left = FNil then
-  begin
-    LChild := LNode^.Right;
-    Transplant(LNode, LNode^.Right);
-  end
-  else if LNode^.Right = FNil then
-  begin
-    LChild := LNode^.Left;
-    Transplant(LNode, LNode^.Left);
-  end
-  else
-  begin
-    LSuccessor := FindMin(LNode^.Right);
-    LColor := LSuccessor^.Color;
-    LChild := LSuccessor^.Right;
-    if LSuccessor^.Parent = LNode then
-      LChild^.Parent := LSuccessor
+  try
+    LNode := FindNode(AKey);
+    if LNode = nil then
+      Exit(rbNotFound);
+    LColor := LNode^.Color;
+    if LNode^.Left = FNil then
+    begin
+      LChild := LNode^.Right;
+      Transplant(LNode, LNode^.Right);
+    end
+    else if LNode^.Right = FNil then
+    begin
+      LChild := LNode^.Left;
+      Transplant(LNode, LNode^.Left);
+    end
     else
     begin
-      Transplant(LSuccessor, LSuccessor^.Right);
-      LSuccessor^.Right := LNode^.Right;
-      LSuccessor^.Right^.Parent := LSuccessor;
+      LSuccessor := FindMin(LNode^.Right);
+      LColor := LSuccessor^.Color;
+      LChild := LSuccessor^.Right;
+      if LSuccessor^.Parent = LNode then
+        LChild^.Parent := LSuccessor
+      else
+      begin
+        Transplant(LSuccessor, LSuccessor^.Right);
+        LSuccessor^.Right := LNode^.Right;
+        LSuccessor^.Right^.Parent := LSuccessor;
+      end;
+      Transplant(LNode, LSuccessor);
+      LSuccessor^.Left := LNode^.Left;
+      LSuccessor^.Left^.Parent := LSuccessor;
+      LSuccessor^.Color := LNode^.Color;
     end;
-    Transplant(LNode, LSuccessor);
-    LSuccessor^.Left := LNode^.Left;
-    LSuccessor^.Left^.Parent := LSuccessor;
-    LSuccessor^.Color := LNode^.Color;
+    FreeNode(LNode);
+    if LColor = rbBlack then
+      DeleteFixup(LChild);
+    AtomicFetchSub64(FCount, 1, moRelaxed);
+    Result := rbRemoved;
+  finally
+    Unlock;
   end;
-  FreeNode(LNode);
-  if LColor = rbBlack then
-    DeleteFixup(LChild);
-  AtomicFetchSub64(FCount, 1, moRelaxed);
-  Unlock;
-  Result := rbRemoved;
 end;
 
 function TConcurrentRBTree.Find(AKey: Int64; out AValue: Int64): Boolean;
@@ -430,16 +432,18 @@ begin
     Exit(False);
   end;
   Lock;
-  LNode := FindNode(AKey);
-  if LNode <> nil then
-  begin
-    AValue := LNode^.Value;
+  try
+    LNode := FindNode(AKey);
+    if LNode <> nil then
+    begin
+      AValue := LNode^.Value;
+      Exit(True);
+    end;
+    AValue := 0;
+    Result := False;
+  finally
     Unlock;
-    Exit(True);
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentRBTree.Contains(AKey: Int64): Boolean;
@@ -449,9 +453,12 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   Lock;
-  LNode := FindNode(AKey);
-  Unlock;
-  Result := LNode <> nil;
+  try
+    LNode := FindNode(AKey);
+    Result := LNode <> nil;
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentRBTree.GetCount: Int64;
@@ -503,10 +510,13 @@ end;
 procedure TConcurrentRBTree.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := FNil;
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := FNil;
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentRBTree.Close;

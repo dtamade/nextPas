@@ -213,17 +213,17 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(grClosed);
   LockGraph;
-  if FindVertex(AId) <> nil then
-  begin
+  try
+    if FindVertex(AId) <> nil then
+      Exit(grExists);
+    LVertex := AllocVertexNode(AId);
+    LVertex^.Next := FRoot;
+    FRoot := LVertex;
+    AtomicFetchAdd64(FVertexCount, 1, moRelaxed);
+    Result := grAdded;
+  finally
     UnlockGraph;
-    Exit(grExists);
   end;
-  LVertex := AllocVertexNode(AId);
-  LVertex^.Next := FRoot;
-  FRoot := LVertex;
-  AtomicFetchAdd64(FVertexCount, 1, moRelaxed);
-  UnlockGraph;
-  Result := grAdded;
 end;
 
 function TLockFreeGraph.RemoveVertex(AId: Int64): TLockFreeGraphResult;
@@ -234,30 +234,32 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(grClosed);
   LockGraph;
-  LPrev := nil;
-  LCurrent := FRoot;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.Id = AId then
+  try
+    LPrev := nil;
+    LCurrent := FRoot;
+    while LCurrent <> nil do
     begin
-      if LPrev = nil then
-        FRoot := LCurrent^.Next
-      else
-        LPrev^.Next := LCurrent^.Next;
-      LRemovedEdges := RemoveIncomingEdgesLocked(AId);
-      LRemovedEdges := LRemovedEdges + CountNeighbors(LCurrent);
-      if LRemovedEdges > 0 then
-        AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
-      FreeVertex(LCurrent);
-      AtomicFetchSub64(FVertexCount, 1, moRelaxed);
-      UnlockGraph;
-      Exit(grRemoved);
+      if LCurrent^.Id = AId then
+      begin
+        if LPrev = nil then
+          FRoot := LCurrent^.Next
+        else
+          LPrev^.Next := LCurrent^.Next;
+        LRemovedEdges := RemoveIncomingEdgesLocked(AId);
+        LRemovedEdges := LRemovedEdges + CountNeighbors(LCurrent);
+        if LRemovedEdges > 0 then
+          AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
+        FreeVertex(LCurrent);
+        AtomicFetchSub64(FVertexCount, 1, moRelaxed);
+        Exit(grRemoved);
+      end;
+      LPrev := LCurrent;
+      LCurrent := LCurrent^.Next;
     end;
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.Next;
+    Result := grNotFound;
+  finally
+    UnlockGraph;
   end;
-  UnlockGraph;
-  Result := grNotFound;
 end;
 
 function TLockFreeGraph.AddEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
@@ -380,17 +382,20 @@ var
   LVertex, LNext: PVertexNode;
 begin
   LockGraph;
-  LVertex := FRoot;
-  while LVertex <> nil do
-  begin
-    LNext := LVertex^.Next;
-    FreeVertex(LVertex);
-    LVertex := LNext;
+  try
+    LVertex := FRoot;
+    while LVertex <> nil do
+    begin
+      LNext := LVertex^.Next;
+      FreeVertex(LVertex);
+      LVertex := LNext;
+    end;
+    FRoot := nil;
+    AtomicStore64(FVertexCount, 0, moRelaxed);
+    AtomicStore64(FEdgeCount, 0, moRelaxed);
+  finally
+    UnlockGraph;
   end;
-  FRoot := nil;
-  AtomicStore64(FVertexCount, 0, moRelaxed);
-  AtomicStore64(FEdgeCount, 0, moRelaxed);
-  UnlockGraph;
 end;
 
 procedure TLockFreeGraph.Close;
