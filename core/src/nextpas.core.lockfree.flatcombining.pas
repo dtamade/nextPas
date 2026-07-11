@@ -109,7 +109,7 @@ end;
 
 function TFlatCombiningLock.TryAcquire: Boolean;
 begin
-  Result := AtomicCompareExchange32(FLock, 0, 1) = 0;
+  Result := AtomicCompareExchange32(FLock, 0, 1, moAcqRel) = 0;
 end;
 
 procedure TFlatCombiningLock.Release;
