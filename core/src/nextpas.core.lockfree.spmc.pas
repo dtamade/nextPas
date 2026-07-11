@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.spmc;
+{**
+ * @desc Lock-free Single-Producer Multi-Consumer bounded queue.
+ *
+ * @details Sequence-based SPMC queue using cache-line padding:
+ *   - Bounded capacity (power-of-2 required)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking EnqueueWait/DequeueWait with timeout variants
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for single producer and multiple consumers:
+ *   - Enqueue: only producer thread can call
+ *   - Dequeue: multiple consumer threads compete via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see SPMC queue — single producer, multiple consumers
+ * @see Dmitry Vyukov SPMC queue — lock-free bounded queue
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.flatcombining;
+{**
+ * @desc Flat Combining synchronization primitive.
+ *
+ * @details Lock-free synchronization using publication arrays:
+ *   - Threads publish operations in a shared publication array
+ *   - One thread combines and executes all pending operations
+ *   - Reduces cache contention compared to traditional locks
+ *   - Supports Incr/Decr/Add/Sub/Read operations
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Incr/Decr/Add/Sub/Read: publish and wait for completion
+ *   - Close: safe to call from any thread
+ *
+ * @see Flat Combining — Hendler et al., 2010
+ * @see Lock-free synchronization — publication array pattern
+ *}
 
 {$I nextpas.core.settings.inc}
 

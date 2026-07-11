@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.barrier;
+{**
+ * @desc Concurrent Cyclic Barrier with generation tracking.
+ *
+ * @details Synchronization barrier for multiple threads:
+ *   - Wait: block until all parties arrive
+ *   - Timeout variants for bounded waiting
+ *   - Generation tracking for reuse
+ *   - Close semantics for graceful shutdown
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Wait: threads block until all parties arrive
+ *   - Close: safe to call from any thread
+ *
+ * @see Cyclic Barrier — reusable synchronization point
+ * @see Java CyclicBarrier — similar barrier implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 

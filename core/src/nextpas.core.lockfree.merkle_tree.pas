@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.merkle_tree;
+{**
+ * @desc Concurrent Merkle Hash Tree with per-tree spin lock.
+ *
+ * @details FNV-1a based Merkle tree for data integrity:
+ *   - AddLeaf/RemoveLeaf: manage leaf nodes
+ *   - GetRootHash: compute root hash for integrity verification
+ *   - GenerateProof/VerifyProof: Merkle proof generation and verification
+ *   - UpdateLeaf: incremental hash updates
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - GetRootHash/GenerateProof/VerifyProof: shared read access
+ *   - AddLeaf/RemoveLeaf/UpdateLeaf: exclusive write lock
+ *
+ * @see Merkle Tree — hash tree for data integrity
+ * @see Blockchain — distributed ledger using Merkle trees
+ *}
 
 {$I nextpas.core.settings.inc}
 
