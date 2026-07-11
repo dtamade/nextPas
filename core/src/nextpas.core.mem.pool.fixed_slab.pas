@@ -107,14 +107,12 @@ type
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(APtr: Pointer);
     procedure SecureFree(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
 
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     procedure FreeAligned(APtr: Pointer);
 
     function Traits: TAllocatorTraits;
-
-    function MemSizeOf(APtr: Pointer): SizeUInt;
 
     function Owns(APtr: Pointer): Boolean;
     function PageShift: SizeUInt; inline;
@@ -738,11 +736,6 @@ begin
   end
   else
     Result := 0;
-end;
-
-function TFixedSlabPool.MemSize(APtr: Pointer): SizeUInt;
-begin
-  Result := MemSizeOf(APtr);
 end;
 
 function TFixedSlabPool.GetMem(ASize: SizeUInt): Pointer;

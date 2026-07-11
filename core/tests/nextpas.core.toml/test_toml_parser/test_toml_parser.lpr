@@ -98,7 +98,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function TFailingReallocateAllocator.MemSize(APtr: Pointer): SizeUInt;
+function .MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
@@ -170,7 +170,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function TFailingAllocateAllocator.MemSize(APtr: Pointer): SizeUInt;
+function .MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;

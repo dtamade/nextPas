@@ -92,7 +92,7 @@ begin
   System.FreeMem(ADst);
 end;
 
-function TCountingAllocator.MemSize(APtr: Pointer): SizeUInt;
+function .MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;

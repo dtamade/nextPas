@@ -110,7 +110,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -849,7 +849,7 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.MemSize(APtr: Pointer): SizeUInt;
+function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := MemSizeOf(APtr);
 end;
@@ -925,10 +925,6 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
-var
-  LShard: Integer;
-  LIsFallback: Boolean;
 begin
   if APtr = nil then Exit(0);
   if not TryRouteShardIndex(APtr, LShard, LIsFallback) then Exit(0);

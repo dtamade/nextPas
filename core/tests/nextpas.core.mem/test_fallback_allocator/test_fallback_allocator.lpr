@@ -38,7 +38,7 @@ procedure TOomAllocator.FreeMem(ADst: Pointer);
 begin end;
 procedure TOomAllocator.FreeAligned(APtr: Pointer);
 begin end;
-function TOomAllocator.MemSize(APtr: Pointer): SizeUInt;
+function .MemSizeOf(APtr: Pointer): SizeUInt;
 begin Result := 0; end;
 function TOomAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
 begin Result := nil; end;
