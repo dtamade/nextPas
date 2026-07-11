@@ -818,6 +818,16 @@ begin
   FTable^.ArrayRsqrtF64(aSrc, aDst, aCount);
 end;
 
+procedure TBatchF64Accessor.ArrayRcpRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRcpRefineF64(aSrc, aDst, aCount);
+end;
+
+procedure TBatchF64Accessor.ArrayRsqrtRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRsqrtRefineF64(aSrc, aDst, aCount);
+end;
+
 procedure TBatchF64Accessor.ArrayMulScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
 begin
   FTable^.ArrayMulScalarF64(aSrc, aDst, aCount, aScalar);

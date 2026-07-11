@@ -93,6 +93,8 @@ procedure ScalarArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRcpRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRsqrtRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);

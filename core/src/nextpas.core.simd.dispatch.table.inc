@@ -791,6 +791,8 @@
     ArrayAxpyF64: procedure(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
     ArrayRcpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
     ArrayRsqrtF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayRcpRefineF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayRsqrtRefineF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
     ArrayTanF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
     ArraySignF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
     ArrayFractF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);

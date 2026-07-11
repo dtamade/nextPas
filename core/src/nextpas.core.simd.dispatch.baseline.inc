@@ -712,6 +712,8 @@ begin
   dispatchTable.ArrayAxpyF64 := @ScalarArrayAxpyF64;
   dispatchTable.ArrayRcpF64 := @ScalarArrayRcpF64;
   dispatchTable.ArrayRsqrtF64 := @ScalarArrayRsqrtF64;
+  dispatchTable.ArrayRcpRefineF64 := @ScalarArrayRcpRefineF64;
+  dispatchTable.ArrayRsqrtRefineF64 := @ScalarArrayRsqrtRefineF64;
   dispatchTable.ArrayTanF64 := @ScalarArrayTanF64;
   dispatchTable.ArraySignF64 := @ScalarArraySignF64;
   dispatchTable.ArrayFractF64 := @ScalarArrayFractF64;

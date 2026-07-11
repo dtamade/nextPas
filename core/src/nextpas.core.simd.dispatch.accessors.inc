@@ -195,6 +195,8 @@ type
     procedure ArraySqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayRcp(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayRsqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+    procedure ArrayRcpRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+    procedure ArrayRsqrtRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayMulScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
     procedure ArrayAddScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
     procedure ArrayClamp(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double); inline;

@@ -910,6 +910,24 @@ begin
 end;
 
 
+procedure ScalarArrayRcpRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := 1.0 / aSrc[i];
+end;
+
+
+procedure ScalarArrayRsqrtRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := 1.0 / System.Sqrt(aSrc[i]);
+end;
+
+
 procedure ScalarArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 var i: SizeUInt;
 begin

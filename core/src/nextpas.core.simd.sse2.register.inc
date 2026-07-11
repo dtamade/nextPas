@@ -647,6 +647,8 @@ begin
   dispatchTable.ArrayAxpyF64 := @SSE2ArrayAxpyF64;
   dispatchTable.ArrayRcpF64 := @SSE2ArrayRcpF64;
   dispatchTable.ArrayRsqrtF64 := @SSE2ArrayRsqrtF64;
+  dispatchTable.ArrayRcpRefineF64 := @ScalarArrayRcpRefineF64;
+  dispatchTable.ArrayRsqrtRefineF64 := @ScalarArrayRsqrtRefineF64;
   dispatchTable.ArrayTanF64 := @SSE2ArrayTanF64;
   dispatchTable.ArraySignF64 := @SSE2ArraySignF64;
   dispatchTable.ArrayFractF64 := @SSE2ArrayFractF64;
