@@ -249,6 +249,70 @@ begin
   CheckEqual(Int64(GetCollationWeight($0301)), Int64(0), 'Combining mark weight is 0');
 end;
 
+procedure TestSortKeyConsistency;
+var
+  LCollator: IUnicodeCollator;
+  LKeyA, LKeyB: TCollationKey;
+  LI: SizeInt;
+begin
+  // Sort key comparison must agree with direct Compare
+  LCollator := UnicodeCollator;
+
+  LKeyA := LCollator.GetSortKey('hello');
+  LKeyB := LCollator.GetSortKey('world');
+  Check(LCollator.Compare('hello', 'world') < 0, 'hello < world');
+
+  // Sort key byte comparison must agree
+  if Length(LKeyA) < Length(LKeyB) then
+    for LI := 0 to Length(LKeyA) - 1 do
+    begin
+      if LKeyA[LI] < LKeyB[LI] then begin Check(True, 'sort key bytes confirm hello < world'); Break; end;
+      if LKeyA[LI] > LKeyB[LI] then begin Check(False, 'sort key bytes disagree'); Break; end;
+    end
+  else
+    for LI := 0 to Length(LKeyB) - 1 do
+    begin
+      if LKeyA[LI] < LKeyB[LI] then begin Check(True, 'sort key bytes confirm hello < world'); Break; end;
+      if LKeyA[LI] > LKeyB[LI] then begin Check(False, 'sort key bytes disagree'); Break; end;
+    end;
+
+  // Sort key for same string must be identical
+  LKeyA := LCollator.GetSortKey('test');
+  LKeyB := LCollator.GetSortKey('test');
+  CheckEqual(Length(LKeyA), Length(LKeyB), 'same string sort key length');
+  for LI := 0 to Length(LKeyA) - 1 do
+    CheckEqual(Int64(LKeyA[LI]), Int64(LKeyB[LI]), 'same string sort key bytes');
+end;
+
+procedure TestStrengthLevels;
+var
+  LPrimaryOpts, LSecondaryOpts, LTertiaryOpts: TCollationOptions;
+  LPrimaryCol, LSecondaryCol, LTertiaryCol: IUnicodeCollator;
+begin
+  // Primary: ignore case and accents
+  LPrimaryOpts := DefaultCollationOptions;
+  LPrimaryOpts.Strength := csPrimary;
+  LPrimaryCol := UnicodeCollatorWithOptions(LPrimaryOpts);
+  CheckEqual(LPrimaryCol.Compare('a', 'A'), 0, 'a == A (primary)');
+  CheckEqual(LPrimaryCol.Compare('á', 'a'), 0, 'á == a (primary)');
+
+  // Secondary: distinguish accents, ignore case
+  LSecondaryOpts := DefaultCollationOptions;
+  LSecondaryOpts.Strength := csSecondary;
+  LSecondaryCol := UnicodeCollatorWithOptions(LSecondaryOpts);
+  // á decomposes to a + combining acute; combining acute is ignorable (weight 0)
+  // So á == a at ALL levels including secondary
+  CheckEqual(LSecondaryCol.Compare('a', 'á'), 0, 'á == a (secondary, combining ignorable)');
+  // à decomposes to a + combining grave; also ignorable
+  CheckEqual(LSecondaryCol.Compare('a', 'à'), 0, 'à == a (secondary, combining ignorable)');
+
+  // Tertiary: distinguish case
+  LTertiaryOpts := DefaultCollationOptions;
+  LTertiaryOpts.Strength := csTertiary;
+  LTertiaryCol := UnicodeCollatorWithOptions(LTertiaryOpts);
+  Check(LTertiaryCol.Compare('a', 'A') <> 0, 'a != A (tertiary)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.collate');
   T.Test('WeightLookup', @TestWeightLookup);
@@ -262,5 +326,7 @@ begin
   T.Test('EmptyAndEdgeCases', @TestEmptyAndEdgeCases);
   T.Test('IgnorableCharacters', @TestIgnorableCharacters);
   T.Test('WeightPacking', @TestWeightPacking);
+  T.Test('SortKeyConsistency', @TestSortKeyConsistency);
+  T.Test('StrengthLevels', @TestStrengthLevels);
   if not T.Run then Halt(1);
 end.

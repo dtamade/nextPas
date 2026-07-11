@@ -40,10 +40,27 @@ type
     function Contains(const AText, ASubstring: string): Boolean;
   end;
 
+type
+  // 单遍收集的权重三元组
+  TWeightTriple = record
+    Primary: UInt16;
+    Secondary: Byte;
+    Tertiary: Byte;
+  end;
+
+  // 权重数组（预分配，避免每级重复迭代）
+  TWeightArray = array of TWeightTriple;
+
   // 排序器实现（基于 DUCET 三级权重）
   TUnicodeCollator = class(TInterfacedObject, IUnicodeCollator)
   private
     FOptions: TCollationOptions;
+    // 单遍收集所有权重
+    function CollectWeights(const ANormalized: string): TWeightArray;
+    // 从权重数组生成排序键
+    function WeightsToSortKey(const AWeights: TWeightArray): TCollationKey;
+    // 从权重数组逐级比较（避免生成完整排序键）
+    function CompareWeights(const AWeightsA, AWeightsB: TWeightArray): Integer;
   public
     constructor Create(const AOptions: TCollationOptions);
     function Compare(const A, B: string): Integer;
@@ -140,35 +157,21 @@ begin
   FOptions := AOptions;
 end;
 
-function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
+function TUnicodeCollator.CollectWeights(const ANormalized: string): TWeightArray;
 var
-  LNormalized: string;
   LIter: TUTF8Iterator;
   LCp: UInt32;
   LWeight: UInt32;
+  LCount: SizeInt;
+  LCapacity: SizeInt;
+  LWeights: TWeightArray;
   LPrimary: UInt16;
-  LSecondary: Byte;
-  LTertiary: Byte;
-  LKeyPos: SizeInt;
-  LKey: TCollationKey;
-  LPrimaryCount: SizeInt;
 begin
-  if AText = '' then
-  begin
-    SetLength(Result, 0);
-    Exit;
-  end;
+  LCapacity := Length(ANormalized) div 2 + 1;
+  SetLength(LWeights, LCapacity);
+  LCount := 0;
 
-  // NFD 规范化
-  LNormalized := NFD(AText);
-
-  // 预分配：每个码点最多 2+2+2 字节权重 + 分隔符 + 终止符
-  SetLength(LKey, (Length(LNormalized) div 2 + 1) * 8 + 4);
-  LKeyPos := 0;
-  LPrimaryCount := 0;
-
-  // ── Level 1: Primary weights ──
-  LIter.Init(PByte(PAnsiChar(LNormalized)), SizeUInt(Length(LNormalized)));
+  LIter.Init(PByte(PAnsiChar(ANormalized)), SizeUInt(Length(ANormalized)));
   while LIter.Next(LCp) do
   begin
     LWeight := GetCollationWeight(LCp);
@@ -179,88 +182,77 @@ begin
     if LPrimary = 0 then
       Continue;
 
-    if LKeyPos + 2 > Length(LKey) then
-      SetLength(LKey, Length(LKey) * 2);
-
-    LKey[LKeyPos] := Byte(LPrimary shr 8);
-    LKey[LKeyPos + 1] := Byte(LPrimary and $FF);
-    Inc(LKeyPos, 2);
-    Inc(LPrimaryCount);
-  end;
-
-  // Primary level separator
-  if LKeyPos + 1 > Length(LKey) then
-    SetLength(LKey, LKeyPos + 1);
-  LKey[LKeyPos] := $01;  // level separator
-  Inc(LKeyPos);
-
-  // ── Level 2: Secondary weights (if strength >= csSecondary) ──
-  if FOptions.Strength >= csSecondary then
-  begin
-    LIter.Init(PByte(PAnsiChar(LNormalized)), SizeUInt(Length(LNormalized)));
-    while LIter.Next(LCp) do
+    if LCount >= LCapacity then
     begin
-      LWeight := GetCollationWeight(LCp);
-      if LWeight = 0 then
-        Continue;
-
-      LPrimary := UnpackPrimary(LWeight);
-      if LPrimary = 0 then
-        Continue;
-
-      LSecondary := UnpackSecondary(LWeight);
-
-      if LKeyPos + 2 > Length(LKey) then
-        SetLength(LKey, Length(LKey) * 2);
-
-      // Secondary weights are 0x0020-0x0127, encode as 2 bytes
-      LKey[LKeyPos] := Byte(LSecondary shr 8);
-      LKey[LKeyPos + 1] := Byte(LSecondary and $FF);
-      Inc(LKeyPos, 2);
+      LCapacity := LCapacity * 2;
+      SetLength(LWeights, LCapacity);
     end;
 
-    // Secondary level separator
-    if LKeyPos + 1 > Length(LKey) then
-      SetLength(LKey, LKeyPos + 1);
+    LWeights[LCount].Primary := LPrimary;
+    LWeights[LCount].Secondary := UnpackSecondary(LWeight);
+    LWeights[LCount].Tertiary := UnpackTertiary(LWeight);
+    Inc(LCount);
+  end;
+
+  SetLength(LWeights, LCount);
+  Result := LWeights;
+end;
+
+function TUnicodeCollator.WeightsToSortKey(const AWeights: TWeightArray): TCollationKey;
+var
+  LKeyPos: SizeInt;
+  LKey: TCollationKey;
+  LI: SizeInt;
+  LLen: SizeInt;
+begin
+  LLen := Length(AWeights);
+  // 预分配：每级 N*2 字节 + 分隔符 + 终止符
+  if FOptions.Strength >= csTertiary then
+    SetLength(LKey, LLen * 6 + 4)
+  else if FOptions.Strength >= csSecondary then
+    SetLength(LKey, LLen * 4 + 3)
+  else
+    SetLength(LKey, LLen * 2 + 2);
+
+  LKeyPos := 0;
+
+  // ── Level 1: Primary weights ──
+  for LI := 0 to LLen - 1 do
+  begin
+    LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
+    LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
+    Inc(LKeyPos, 2);
+  end;
+  LKey[LKeyPos] := $01;
+  Inc(LKeyPos);
+
+  // ── Level 2: Secondary weights ──
+  if FOptions.Strength >= csSecondary then
+  begin
+    for LI := 0 to LLen - 1 do
+    begin
+      LKey[LKeyPos] := 0;
+      LKey[LKeyPos + 1] := AWeights[LI].Secondary;
+      Inc(LKeyPos, 2);
+    end;
     LKey[LKeyPos] := $01;
     Inc(LKeyPos);
   end;
 
-  // ── Level 3: Tertiary weights (if strength >= csTertiary) ──
+  // ── Level 3: Tertiary weights ──
   if FOptions.Strength >= csTertiary then
   begin
-    LIter.Init(PByte(PAnsiChar(LNormalized)), SizeUInt(Length(LNormalized)));
-    while LIter.Next(LCp) do
+    for LI := 0 to LLen - 1 do
     begin
-      LWeight := GetCollationWeight(LCp);
-      if LWeight = 0 then
-        Continue;
-
-      LPrimary := UnpackPrimary(LWeight);
-      if LPrimary = 0 then
-        Continue;
-
-      LTertiary := UnpackTertiary(LWeight);
-
-      if LKeyPos + 2 > Length(LKey) then
-        SetLength(LKey, Length(LKey) * 2);
-
-      // Tertiary weights are 0x0002-0x001E, encode as 2 bytes
-      LKey[LKeyPos] := Byte(LTertiary shr 8);
-      LKey[LKeyPos + 1] := Byte(LTertiary and $FF);
+      LKey[LKeyPos] := 0;
+      LKey[LKeyPos + 1] := AWeights[LI].Tertiary;
       Inc(LKeyPos, 2);
     end;
-
-    // Tertiary level separator
-    if LKeyPos + 1 > Length(LKey) then
-      SetLength(LKey, LKeyPos + 1);
     LKey[LKeyPos] := $01;
     Inc(LKeyPos);
   end;
 
   // Terminator
-  if LKeyPos + 1 > Length(LKey) then
-    SetLength(LKey, LKeyPos + 1);
   LKey[LKeyPos] := $00;
   Inc(LKeyPos);
 
@@ -268,35 +260,95 @@ begin
   Result := LKey;
 end;
 
+function TUnicodeCollator.CompareWeights(const AWeightsA, AWeightsB: TWeightArray): Integer;
+var
+  LLenA, LLenB, LMin: SizeInt;
+  LI: SizeInt;
+begin
+  LLenA := Length(AWeightsA);
+  LLenB := Length(AWeightsB);
+  if LLenA < LLenB then
+    LMin := LLenA
+  else
+    LMin := LLenB;
+
+  // ── Level 1: Primary ──
+  for LI := 0 to LMin - 1 do
+  begin
+    if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
+      Exit(-1);
+    if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
+      Exit(1);
+  end;
+  if LLenA < LLenB then Exit(-1);
+  if LLenA > LLenB then Exit(1);
+
+  // ── Level 2: Secondary ──
+  if FOptions.Strength >= csSecondary then
+  begin
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
+        Exit(-1);
+      if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
+        Exit(1);
+    end;
+  end;
+
+  // ── Level 3: Tertiary ──
+  if FOptions.Strength >= csTertiary then
+  begin
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].Tertiary < AWeightsB[LI].Tertiary then
+        Exit(-1);
+      if AWeightsA[LI].Tertiary > AWeightsB[LI].Tertiary then
+        Exit(1);
+    end;
+  end;
+
+  Result := 0;
+end;
+
+function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
+var
+  LNormalized: string;
+  LWeights: TWeightArray;
+begin
+  if AText = '' then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  // NFD 规范化
+  LNormalized := NFD(AText);
+
+  // 单遍收集所有权重
+  LWeights := CollectWeights(LNormalized);
+
+  // 从权重数组生成排序键
+  Result := WeightsToSortKey(LWeights);
+end;
+
 function TUnicodeCollator.Compare(const A, B: string): Integer;
 var
-  LKeyA, LKeyB: TCollationKey;
-  LLen: SizeInt;
-  LI: SizeInt;
+  LNormalizedA, LNormalizedB: string;
+  LWeightsA, LWeightsB: TWeightArray;
 begin
   if A = B then
     Exit(0);
 
-  LKeyA := GetSortKey(A);
-  LKeyB := GetSortKey(B);
+  // NFD 规范化
+  LNormalizedA := NFD(A);
+  LNormalizedB := NFD(B);
 
-  LLen := Length(LKeyA);
-  if Length(LKeyB) < LLen then
-    LLen := Length(LKeyB);
+  // 单遍收集权重
+  LWeightsA := CollectWeights(LNormalizedA);
+  LWeightsB := CollectWeights(LNormalizedB);
 
-  for LI := 0 to LLen - 1 do
-  begin
-    if LKeyA[LI] < LKeyB[LI] then
-      Exit(-1);
-    if LKeyA[LI] > LKeyB[LI] then
-      Exit(1);
-  end;
-
-  if Length(LKeyA) < Length(LKeyB) then
-    Exit(-1);
-  if Length(LKeyA) > Length(LKeyB) then
-    Exit(1);
-  Result := 0;
+  // 逐级比较（不需要生成完整排序键）
+  Result := CompareWeights(LWeightsA, LWeightsB);
 end;
 
 function TUnicodeCollator.Equals(const A, B: string): Boolean;

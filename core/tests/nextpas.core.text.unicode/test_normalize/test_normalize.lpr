@@ -105,6 +105,42 @@ begin
   Check(not IsNormalizedNFC(Utf8Of([$0065, $0301])), 'decomposed e acute is not normalized NFC');
 end;
 
+procedure TestNFKDAndNFKC;
+begin
+  // NFKD/NFKC 检查
+  Check(IsNormalizedNFKD('ASCII'), 'ASCII is NFKD');
+  Check(IsNormalizedNFKC('ASCII'), 'ASCII is NFKC');
+  Check(not IsNormalizedNFKD(Utf8Of([$210C])), 'black-letter H is not NFKD');
+  Check(IsNormalizedNFKD('H'), 'H is NFKD');
+  Check(not IsNormalizedNFKC(Utf8Of([$210C])), 'black-letter H is not NFKC');
+  Check(IsNormalizedNFKC('H'), 'H is NFKC');
+  // Hangul
+  Check(IsNormalizedNFKD(Utf8Of([$1100, $1161, $11A8])), 'Hangul decomposed is NFKD');
+  Check(not IsNormalizedNFKD(Utf8Of([$AC01])), 'Hangul composed is not NFKD');
+end;
+
+procedure TestQuickCheck;
+var
+  LDecomposed: string;
+begin
+  // QuickCheck NFD
+  Check(QuickCheckNFD(''), 'empty is NFD');
+  Check(QuickCheckNFD('ASCII'), 'ASCII is NFD');
+  LDecomposed := Utf8Of([$0061, $0306, $0301]);
+  Check(QuickCheckNFD(LDecomposed), 'decomposed a+breve+acute is NFD');
+  Check(not QuickCheckNFD(Utf8Of([$00E9])), 'precomposed e acute is not NFD');
+
+  // QuickCheck NFC
+  Check(QuickCheckNFC(''), 'empty is NFC');
+  Check(QuickCheckNFC('ASCII'), 'ASCII is NFC');
+  Check(QuickCheckNFC(Utf8Of([$00E9])), 'precomposed e acute is NFC');
+  Check(not QuickCheckNFC(Utf8Of([$0065, $0301])), 'decomposed e acute is not NFC');
+
+  // QuickCheck should agree with full check
+  CheckEqual(QuickCheckNFD(LDecomposed), IsNormalizedNFD(LDecomposed), 'QuickCheck NFD agrees');
+  CheckEqual(QuickCheckNFC(Utf8Of([$00E9])), IsNormalizedNFC(Utf8Of([$00E9])), 'QuickCheck NFC agrees');
+end;
+
 procedure TestBoundaryBehavior;
 begin
   CheckEqual(Utf8Of([$10FFFF]), NFD(Utf8Of([$10FFFF])), 'max codepoint stays stable in NFD');
@@ -124,6 +160,8 @@ begin
   T.Test('Hangul normalization', @TestHangulNormalization);
   T.Test('ASCII and empty inputs', @TestAsciiAndEmpty);
   T.Test('idempotence and quick checks', @TestIdempotenceAndQuickChecks);
+  T.Test('NFKD and NFKC checks', @TestNFKDAndNFKC);
+  T.Test('QuickCheck functions', @TestQuickCheck);
   T.Test('boundary behavior', @TestBoundaryBehavior);
   if not T.Run then Halt(1);
 end.

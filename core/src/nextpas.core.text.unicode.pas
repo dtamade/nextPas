@@ -89,6 +89,10 @@ function NFKD(const s: string): string; inline;
 function NFKC(const s: string): string; inline;
 function IsNormalizedNFD(const s: string): Boolean; inline;
 function IsNormalizedNFC(const s: string): Boolean; inline;
+function IsNormalizedNFKD(const s: string): Boolean; inline;
+function IsNormalizedNFKC(const s: string): Boolean; inline;
+function QuickCheckNFD(const s: string): Boolean; inline;
+function QuickCheckNFC(const s: string): Boolean; inline;
 
 // 文本分割函数
 function UnicodeSegmenter: IUnicodeSegmenter; inline;
@@ -276,6 +280,26 @@ end;
 function IsNormalizedNFC(const s: string): Boolean;
 begin
   Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(s);
+end;
+
+function IsNormalizedNFKD(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKD(s);
+end;
+
+function IsNormalizedNFKC(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKC(s);
+end;
+
+function QuickCheckNFD(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFD(s);
+end;
+
+function QuickCheckNFC(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(s);
 end;
 
 function UnicodeSegmenter: IUnicodeSegmenter;

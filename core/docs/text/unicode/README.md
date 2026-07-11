@@ -105,11 +105,14 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 | `NFD` | 规范分解 |
 | `NFC` | 规范组合（Hangul + canonical composition） |
 | `NFKD` / `NFKC` | 兼容分解/组合 |
-| `IsNormalizedNFD` / `IsNormalizedNFC` | 规范化检查 |
+| `IsNormalizedNFD` / `IsNormalizedNFC` | 规范化检查（完整规范化比较） |
+| `IsNormalizedNFKD` / `IsNormalizedNFKC` | 兼容规范化检查 |
+| `QuickCheckNFD` / `QuickCheckNFC` | 快速规范化检查（O(n) 无分配） |
 
 **算法要点**:
 1. NFD: 递归分解 → 按 CCC 排序
 2. NFC: NFD → Hangul 组合 → canonical composition（CCC 间隔检查）
+3. QuickCheck: 检查 combining class 顺序 + 可组合对（无内存分配，比完整规范化快得多）
 
 ### segment — 文本分割（UAX #29）
 
@@ -142,11 +145,15 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 | `IUnicodeCollator.GetSortKey` | 生成排序键 |
 | `IUnicodeCollator.Equals` / `StartsWith` / `EndsWith` / `Contains` / `IndexOf` | 语义操作 |
 
-**排序键格式**: NFD 规范化 → 三级权重排序键
+**排序键格式**: NFD 规范化 → 单遍权重收集 → 三级权重排序键
 - Level 1: 主权重（2 字节大端）— 基础字符排序
 - Level 2: 次权重（2 字节大端）— 变音差异
 - Level 3: 三级权重（2 字节大端）— 大小写/假名差异
 - 级别分隔符: 0x01，终止符: 0x00
+
+**性能优化**:
+- `GetSortKey`: 单遍收集所有权重（`CollectWeights`），然后写入各级（避免 3 次迭代）
+- `Compare`: 直接逐级比较权重数组（避免生成完整排序键）
 
 **打包权重格式**: `(primary << 16) | (secondary << 8) | tertiary`
 
@@ -265,11 +272,11 @@ end;
 |----------|--------|----------|
 | `test_property` | 6 | 属性查询、类别、二值属性 |
 | `test_case` | 7 | 大小写映射、case fold |
-| `test_normalize` | 8 | NFD/NFC/NFKD/NFKC |
+| `test_normalize` | 10 | NFD/NFC/NFKD/NFKC、QuickCheck |
 | `test_enhance` | 5 | Script/Block 属性 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
-| `test_collate` | 11 | DUCET 三级权重、排序键、排序方法 |
-| **总计** | **50** | |
+| `test_collate` | 13 | DUCET 三级权重、排序键、强度级别、排序方法 |
+| **总计** | **54** | |
 
 ```bash
 # 运行所有 unicode 测试

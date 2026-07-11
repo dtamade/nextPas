@@ -15,6 +15,13 @@ function NFKD(const s: string): string;
 function NFKC(const s: string): string;
 function IsNormalizedNFD(const s: string): Boolean;
 function IsNormalizedNFC(const s: string): Boolean;
+function IsNormalizedNFKD(const s: string): Boolean;
+function IsNormalizedNFKC(const s: string): Boolean;
+
+// 快速检查：返回 True 表示确定已规范化，False 表示可能未规范化
+// 比完整规范化快得多，适合"先快速检查再决定是否规范化"的模式
+function QuickCheckNFD(const s: string): Boolean;
+function QuickCheckNFC(const s: string): Boolean;
 
 implementation
 
@@ -432,6 +439,101 @@ end;
 function IsNormalizedNFC(const s: string): Boolean;
 begin
   Result := NFC(s) = s;
+end;
+
+function IsNormalizedNFKD(const s: string): Boolean;
+begin
+  Result := NFKD(s) = s;
+end;
+
+function IsNormalizedNFKC(const s: string): Boolean;
+begin
+  Result := NFKC(s) = s;
+end;
+
+function QuickCheckNFD(const s: string): Boolean;
+var
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LPrevCcc: Byte;
+  LCcc: Byte;
+  LKind: Byte;
+begin
+  // QuickCheck NFD: 检查是否已经是 NFD 形式
+  // 条件：没有可分解字符 + combining class 非递减
+  if s = '' then
+    Exit(True);
+  if IsAsciiString(s) then
+    Exit(True);
+
+  LPrevCcc := 0;
+  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  while LIter.Next(LCp) do
+  begin
+    // 检查是否可以分解（canonical 或 compatibility）
+    LKind := GetDecompositionKind(LCp);
+    if LKind <> 0 then
+      Exit(False); // 有可分解字符，肯定不是 NFD
+
+    // 检查 combining class 顺序
+    LCcc := GetCanonicalCombiningClass(LCp);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
+      Exit(False); // combining class 递减，不是 NFD
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
+end;
+
+function QuickCheckNFC(const s: string): Boolean;
+var
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LPrevCcc: Byte;
+  LCcc: Byte;
+  LStarter: TUnicodeCodepoint;
+  LHasStarter: Boolean;
+  LComposed: TUnicodeCodepoint;
+begin
+  // QuickCheck NFC: 检查是否已经是 NFC 形式
+  // 条件：combining class 非递减 + 没有可组合的 starter+combining 对
+  if s = '' then
+    Exit(True);
+  if IsAsciiString(s) then
+    Exit(True);
+
+  LPrevCcc := 0;
+  LHasStarter := False;
+  LStarter := 0;
+  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  while LIter.Next(LCp) do
+  begin
+    LCcc := GetCanonicalCombiningClass(LCp);
+
+    // 检查 combining class 顺序
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
+      Exit(False);
+
+    // 检查是否可以组合
+    if LCcc = 0 then
+    begin
+      // 新的 starter
+      LStarter := LCp;
+      LHasStarter := True;
+    end
+    else if LHasStarter then
+    begin
+      // combining mark: 检查 starter + combining 是否可以组合
+      // 条件：前一个 CCC 为 0 或 < 当前 CCC（即 combining mark 未被阻塞）
+      if (LPrevCcc = 0) or (LPrevCcc < LCcc) then
+      begin
+        if FindComposition(LStarter, LCp, LComposed) and (LComposed <> LStarter) then
+          Exit(False); // 可以组合但没有组合，不是 NFC
+      end;
+    end;
+
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
 end;
 
 { TCodepointBuffer }
