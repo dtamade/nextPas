@@ -134,13 +134,21 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 
 | 函数/类型 | 用途 |
 |-----------|------|
-| `GetCollationPrimaryWeight` | 获取码点的 DUCET 主权重 |
+| `GetCollationWeight` | 获取码点的 DUCET 打包权重（UInt32） |
+| `UnpackPrimary` / `UnpackSecondary` / `UnpackTertiary` | 解包权重分量 |
 | `UnicodeCollator` | 全局排序器实例 |
+| `UnicodeCollatorWithOptions` | 自定义排序选项的排序器 |
 | `IUnicodeCollator.Compare` | 字符串比较 |
 | `IUnicodeCollator.GetSortKey` | 生成排序键 |
 | `IUnicodeCollator.Equals` / `StartsWith` / `EndsWith` / `Contains` / `IndexOf` | 语义操作 |
 
-**排序键格式**: NFD 规范化 → 每码点 2 字节大端主权重 → 0x0001 终止符
+**排序键格式**: NFD 规范化 → 三级权重排序键
+- Level 1: 主权重（2 字节大端）— 基础字符排序
+- Level 2: 次权重（2 字节大端）— 变音差异
+- Level 3: 三级权重（2 字节大端）— 大小写/假名差异
+- 级别分隔符: 0x01，终止符: 0x00
+
+**打包权重格式**: `(primary << 16) | (secondary << 8) | tertiary`
 
 **覆盖范围**:
 - 39,749 个 DUCET 显式条目
@@ -260,8 +268,8 @@ end;
 | `test_normalize` | 8 | NFD/NFC/NFKD/NFKC |
 | `test_enhance` | 5 | Script/Block 属性 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
-| `test_collate` | 10 | DUCET 权重、排序键、排序方法 |
-| **总计** | **49** | |
+| `test_collate` | 11 | DUCET 三级权重、排序键、排序方法 |
+| **总计** | **50** | |
 
 ```bash
 # 运行所有 unicode 测试
