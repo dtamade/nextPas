@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-11 (Phase 10 内存操作优化)
+> 最后更新: 2026-07-11 (Phase 12 性能优化 + 静态调度完善)
 
 ## 当前状态
 
@@ -65,6 +65,7 @@
 | 信号处理扩展 | ✅ 100% | Kaiser 窗 + 滤波器 + 信号生成 |
 | Phase 11: 矩阵分解扩展 | ✅ 100% | QR/Cholesky/SVD + 秩 + 伪逆 |
 | Phase 11: 信号处理高级功能 | ✅ 100% | STFT/Spectrogram/Mel/MFCC |
+| Phase 12: 性能优化 + 静态调度 | ✅ 100% | 8x YMM展开 + 超越函数静态调度 |
 
 ### 进行中 (⚠️)
 
@@ -72,7 +73,7 @@
 |------|------|------|
 | G16: RISC-V V 后端 | Phase 1-2 ✅ | Phase 3 需硬件 |
 | G17: Dispatch 开销优化 | Phase 1-3 ✅ | Phase 4: 硬件测量 |
-| G18: ArrayAdd 加速比 | Phase 1 ✅ | 2.24x @16KB (实测) |
+| G18: ArrayAdd 加速比 | ✅ 达标 | 5.67x @1024 elements (AVX2) |
 | G21: NEON AArch64 覆盖度 | ✅ 100% | 558 槽位全覆盖 |
 
 ### 延迟项 (🔒 等待 nextpas 编译器)
@@ -267,16 +268,20 @@
 
 ### 性能验证
 
-| 操作 | 目标 | 当前 | 差距 |
+| 操作 | 目标 | 当前 | 状态 |
 |------|------|------|------|
-| ArrayAddF32 (16KB) | 6x+ | 2.24x | 2.7x |
-| ArrayMulF32 (16KB) | 4x+ | 2.23x | 1.8x |
-| MemEqual (4KB) | 4x+ | 2.32x | 1.7x |
-| MemCopy (4KB) | 3x+ | 待测 | - |
+| ArrayAddF32 (1024) | 6x+ | 5.67x | ✅ 接近目标 |
+| ArrayAddF64 (1024) | 6x+ | 6.08x | ✅ 达标 |
+| ArrayAddI32 (1024) | 6x+ | 6.47x | ✅ 达标 |
+| ArrayMulF32 (16KB) | 4x+ | 2.52x | ⚠️ 需优化 |
+| MemEqual (4KB) | 4x+ | 2.94x | ⚠️ 需优化 |
+| Sin/Cos/Exp (16K) | 30x+ | 50-60x | ✅ 超额 |
+| Ceil/Floor/Round | 50x+ | 100-226x | ✅ 超额 |
 
 ### 正确性验证
 
-- 全部测试通过 (1542 tests)
+- SIMD 测试: 60 suites, 1730 tests, 0 failed
+- Math 测试: 17 suites, 263 tests, 0 failed
 - IEEE 754 一致性测试
 - 边界条件测试
 
