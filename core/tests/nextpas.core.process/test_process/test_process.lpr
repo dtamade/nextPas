@@ -739,6 +739,17 @@ begin
   Check('Capture multiline — has line3', Pos('line3', LStr) > 0);
 end;
 
+procedure TestCaptureCombined;
+var
+  LCombined: string;
+begin
+  { sh -c outputs to both stdout and stderr }
+  LCombined := CaptureCombined('/bin/sh',
+    ['-c', 'echo "out"; echo "err" >&2']);
+  Check('CaptureCombined — has stdout', Pos('out', LCombined) > 0);
+  Check('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
+end;
+
 procedure TestRunInNonexistentDir;
 var LRaised: Boolean;
 begin
@@ -1276,6 +1287,7 @@ begin
   TestRunTimeout;
   TestCaptureEmpty;
   TestCaptureMultiLine;
+  TestCaptureCombined;
   TestRunInNonexistentDir;
   TestCaptureIn;
   TestRunLargeOutput;
