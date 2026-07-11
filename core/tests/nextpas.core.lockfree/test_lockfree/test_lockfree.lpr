@@ -4973,6 +4973,51 @@ begin
   Check(LGot, 'SegQueue managed type rejected');
 end;
 
+{ SegQueue boundary conditions }
+
+procedure TestSegQueueTryDequeueEmpty;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueTryDequeueClosed;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    LQ.Enqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueTryEnqueueClosed;
+var
+  LQ: TIntSegQueue;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestLockFreeSourceContracts;
 const
   LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
@@ -6501,6 +6546,9 @@ begin
   T.Test('Channel SPSC wrap-around', @TestChannelSpscWrapAround);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
+  T.Test('SegQueue TryDequeue empty', @TestSegQueueTryDequeueEmpty);
+  T.Test('SegQueue TryDequeue closed', @TestSegQueueTryDequeueClosed);
+  T.Test('SegQueue TryEnqueue closed', @TestSegQueueTryEnqueueClosed);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
 
