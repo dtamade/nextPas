@@ -35,7 +35,7 @@ type
     procedure ExitRead(var AGuard: TRcuGuard);
     procedure Synchronize;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
   { Internal heap-allocated node for COW }
@@ -66,7 +66,7 @@ type
     function Read(out AValue: T): Boolean;
     procedure Update(const AValue: T);
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
   generic TRcuPublisher<T> = class(specialize TRcuPublisherImpl<T>)
@@ -188,7 +188,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TRcuDomain.IsClosed: Boolean;
+function TRcuDomain.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

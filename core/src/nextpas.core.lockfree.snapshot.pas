@@ -54,8 +54,8 @@ type
     function Commit(const ATransactionTs: Int64): TSnapshotResult;
     function Abort(const ATransactionTs: Int64): TSnapshotResult;
     procedure Close;
-    function IsClosed: Boolean;
-    function GetCurrentTimestamp: Int64;
+    function IsClosed: Boolean; inline;
+    function GetCurrentTimestamp: Int64; inline;
   end;
 
 implementation
@@ -303,12 +303,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TSnapshotIsolationImpl.IsClosed: Boolean;
+function TSnapshotIsolationImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TSnapshotIsolationImpl.GetCurrentTimestamp: Int64;
+function TSnapshotIsolationImpl.GetCurrentTimestamp: Int64; inline;
 begin
   Result := AtomicLoad64(FTimestamp, moAcquire);
 end;
