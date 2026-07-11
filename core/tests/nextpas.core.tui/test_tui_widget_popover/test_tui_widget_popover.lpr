@@ -183,6 +183,73 @@ begin
   Check(LPopover <> nil, 'Builder chaining should work');
 end;
 
+procedure TestPopoverRenderHidden;
+var
+  LPopover: IPopover;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+  LState: TPopoverState;
+begin
+  LPopover := TPopover.New(['Item 1']);
+  LArea := TRect.Make(0, 0, 20, 10);
+  LAnchor := TRect.Make(5, 5, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LState := TPopoverState.Hidden;
+    LPopover.RenderStateful(LAnchor, LArea, LBuffer, LState);
+    Check(True, 'Render hidden popover should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestPopoverRenderEmpty;
+var
+  LPopover: IPopover;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LPopover := TPopover.New([]);
+  LArea := TRect.Make(0, 0, 15, 8);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LPopover.Render(LArea, LBuffer);
+    Check(True, 'Render empty popover should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestPopoverRenderSmallArea;
+var
+  LPopover: IPopover;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LPopover := TPopover.New(['X']);
+  LArea := TRect.Make(0, 0, 3, 2);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LPopover.Render(LArea, LBuffer);
+    Check(True, 'Render in small area should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestPopoverStateShowHideMultiple;
+var
+  LState: TPopoverState;
+begin
+  LState := TPopoverState.Hidden;
+  LState.Show;
+  Check(LState.Visible, 'Should be visible');
+  LState.Hide;
+  Check(not LState.Visible, 'Should be hidden');
+  LState.Show;
+  Check(LState.Visible, 'Should be visible again');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.popover');
   T.Test('TPopoverAnchor enum', @TestPopoverAnchorEnum);
@@ -200,5 +267,9 @@ begin
   T.Test('TPopover.Render', @TestPopoverRender);
   T.Test('TPopover.RenderStateful', @TestPopoverRenderStateful);
   T.Test('TPopover builder chaining', @TestPopoverBuilderChaining);
+  T.Test('TPopover render hidden', @TestPopoverRenderHidden);
+  T.Test('TPopover render empty', @TestPopoverRenderEmpty);
+  T.Test('TPopover render small area', @TestPopoverRenderSmallArea);
+  T.Test('TPopoverState show hide multiple', @TestPopoverStateShowHideMultiple);
   if not T.Run then Halt(1);
 end.
