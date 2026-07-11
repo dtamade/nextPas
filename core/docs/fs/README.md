@@ -126,6 +126,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `SetCwd(APath)` | 设置当前工作目录 |
 | `GetEnv(AName)` | 获取环境变量 |
 | `GetTempDir` | 获取系统临时目录 |
+| `SameFileName(A, B)` | 比较文件名是否相同（平台相关大小写规则） |
 
 ## 测试
 
