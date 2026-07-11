@@ -120,6 +120,28 @@ function RunWithInputString(const APath: string; const AArgs: array of string;
 function CaptureWithInputString(const APath: string; const AArgs: array of string;
   const AStdin: string): string;
 {**
+ * @desc 在指定工作目录中执行子进程，通过 stdin 传入数据，返回 stdout 文本
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   ADir     工作目录
+ *   AStdin   传入 stdin 的数据
+ *}
+function CaptureInWithInput(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: TBytes): string;
+{**
+ * @desc 在指定工作目录中执行子进程，通过 stdin 传入字符串，返回 stdout 文本
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   ADir     工作目录
+ *   AStdin   传入 stdin 的字符串
+ *}
+function CaptureInWithInputString(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: string): string;
+{**
  * @desc 在指定工作目录中执行子进程，通过 stdin 传入数据，返回输出
  *
  * @params
@@ -362,6 +384,18 @@ function CaptureWithInputString(const APath: string; const AArgs: array of strin
   const AStdin: string): string;
 begin
   Result := RunWithInputString(APath, AArgs, AStdin).StdOut;
+end;
+
+function CaptureInWithInput(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: TBytes): string;
+begin
+  Result := RunInWithInput(APath, AArgs, ADir, AStdin).StdOut;
+end;
+
+function CaptureInWithInputString(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: string): string;
+begin
+  Result := RunInWithInputString(APath, AArgs, ADir, AStdin).StdOut;
 end;
 
 function RunInWithInput(const APath: string; const AArgs: array of string;

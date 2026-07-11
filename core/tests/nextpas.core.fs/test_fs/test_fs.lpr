@@ -3,8 +3,9 @@ program test_fs;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
   nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
@@ -71,17 +72,10 @@ end;
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
-  LSourcePath := ExpandFileName('../../../' + ARelativePath);
-  Check(FileExists(LSourcePath), 'source exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  LSourcePath := FsPathAbs('../../../' + ARelativePath);
+  Check(FsExists(LSourcePath), 'source exists: ' + ARelativePath);
+  Result := FsReadFileText(LSourcePath);
 end;
 
 function ExtractFunctionBody(const ASource, AStartToken, ANextToken: string): string;
@@ -122,7 +116,7 @@ end;
 
 procedure SetupTmpDir;
 begin
-  GTmpDir := '/tmp/nextpas_fs_test_' + IntToStr(GetProcessID);
+  GTmpDir := '/tmp/nextpas_fs_test_' + IntToStr(getpid);
   nextpas.core.fs.MkdirAll(GTmpDir);
 end;
 

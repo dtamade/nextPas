@@ -338,8 +338,7 @@ begin
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
         ValidateEnvName(LName);
-        LResolved := GetEnvironmentVariable(LName);
-        if LResolved = '' then
+        if not TryGetEnv(LName, LResolved) then
           LBuilder.AppendStr(ADefault)
         else
           LBuilder.AppendStr(LResolved);
@@ -357,8 +356,7 @@ begin
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
-          LResolved := GetEnvironmentVariable(LName);
-          if LResolved = '' then
+          if not TryGetEnv(LName, LResolved) then
             LBuilder.AppendStr(ADefault)
           else
             LBuilder.AppendStr(LResolved);

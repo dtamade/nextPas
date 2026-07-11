@@ -3,9 +3,10 @@ program test_path;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
+  nextpas.core.fs.util,
+  nextpas.core.fs.path,
   nextpas.core.path;
 
 var
@@ -14,17 +15,10 @@ var
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
-  LSourcePath := ExpandFileName('../../../' + ARelativePath);
-  Check(FileExists(LSourcePath), 'source exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  LSourcePath := FsPathAbs('../../../' + ARelativePath);
+  Check(FsExists(LSourcePath), 'source exists: ' + ARelativePath);
+  Result := FsReadFileText(LSourcePath);
 end;
 
 function ExtractFunctionBody(const ASource, AStartToken, ANextToken: string): string;

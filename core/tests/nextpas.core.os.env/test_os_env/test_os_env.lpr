@@ -283,6 +283,15 @@ begin
   UnsetEnv('NEXTPAS_TEST_EXPDEF');
 end;
 
+procedure TestExpandEnvWithDefault_EmptyValue;
+begin
+  SetEnv('NEXTPAS_TEST_EXPDEF_EMPTY', '');
+  // Empty value is defined, should NOT use default
+  CheckEqual('', ExpandEnvWithDefault('$NEXTPAS_TEST_EXPDEF_EMPTY', 'NOPE'),
+    'ExpandEnvWithDefault empty value does not use default');
+  UnsetEnv('NEXTPAS_TEST_EXPDEF_EMPTY');
+end;
+
 procedure TestExpandEnvStrict;
 var
   LRaised: Boolean;
@@ -375,6 +384,7 @@ begin
   T.Test('UserConfigDir', @TestUserConfigDir);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
+  T.Test('ExpandEnvWithDefault_EmptyValue', @TestExpandEnvWithDefault_EmptyValue);
   T.Test('ExpandEnvStrict', @TestExpandEnvStrict);
   T.Test('ExpandEnvStrict_BraceSyntax', @TestExpandEnvStrict_BraceSyntax);
   T.Test('ExpandEnvStrict_EmptyValue', @TestExpandEnvStrict_EmptyValue);

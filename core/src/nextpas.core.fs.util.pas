@@ -660,9 +660,16 @@ begin
 end;
 
 procedure FsEnsureFile(const APath: string);
+var
+  LFile: IFile;
 begin
-  if not FsExists(APath) then
-    FsWriteFile(APath, nil);
+  try
+    LFile := FsOpenFile(APath, [fmWrite, fmCreate, fmExclusive], PermDefault);
+    LFile.Close;
+  except
+    on E: EAlreadyExistsError do
+      { File already exists — this is the desired state, ignore. };
+  end;
 end;
 
 function FsGetTempDir: string;

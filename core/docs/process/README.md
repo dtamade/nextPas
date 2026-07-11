@@ -51,6 +51,11 @@ var Text := CaptureWithInput('/bin/cat', [], Input);
 // 通过 stdin 传入字符串
 var Text := CaptureWithInputString('/bin/cat', [], 'hello world');
 
+// 在指定目录 + stdin 传入数据
+var Out4 := RunInWithInput('/bin/cat', [], '/tmp', Input);
+var Text4 := CaptureInWithInput('/bin/cat', [], '/tmp', Input);
+var Text5 := CaptureInWithInputString('/bin/cat', [], '/tmp', 'hello dir');
+
 // 获取当前进程可执行文件路径
 var ExePath := Executable;
 ```

@@ -3,7 +3,13 @@ program test_process;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.fs.util,
+  nextpas.core.fs.path,
+  nextpas.core.fs.dir,
+  nextpas.core.fs,
+  nextpas.core.platform.thread,
   nextpas.core.process,
   nextpas.core.time.base,
   nextpas.core.process.base,
@@ -21,17 +27,10 @@ procedure Check(const AName: string; ACondition: Boolean); forward;
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
-  LSourcePath := ExpandFileName('../../../' + ARelativePath);
-  Check('Source exists — ' + ARelativePath, FileExists(LSourcePath));
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  LSourcePath := FsPathAbs('../../../' + ARelativePath);
+  Check('Source exists — ' + ARelativePath, FsExists(LSourcePath));
+  Result := FsReadFileText(LSourcePath);
 end;
 
 function ExtractMethodBody(const ASource, AStartToken, ANextToken: string): string;
@@ -209,12 +208,11 @@ procedure TestSpawnDetach;
 var
   LChild: IChild;
   LPath: string;
-  LOut: TStringList;
+  LContent: string;
 begin
-  LPath := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas-process-detach-' + IntToStr(GetProcessID) + '.txt';
-  if FileExists(LPath) then
-    DeleteFile(LPath);
+  LPath := FsGetTempDir + '/nextpas-process-detach-' + IntToStr(getpid) + '.txt';
+  if FsExists(LPath) then
+    FsRemove(LPath);
 
   LChild := Command('/bin/sh')
     .Args(['-c', 'sleep 0.1; printf detached > "' + LPath + '"'])
@@ -222,19 +220,13 @@ begin
   LChild.Detach;
   LChild := nil;
 
-  Sleep(300);
-  Check('Detach — child survives handle release', FileExists(LPath));
-  if FileExists(LPath) then
+  platform_thread_sleep_ms(300);
+  Check('Detach — child survives handle release', FsExists(LPath));
+  if FsExists(LPath) then
   begin
-    LOut := TStringList.Create;
-    try
-      LOut.LoadFromFile(LPath);
-      Check('Detach — child completed work',
-        (LOut.Count = 1) and (LOut[0] = 'detached'));
-    finally
-      LOut.Free;
-      DeleteFile(LPath);
-    end;
+    LContent := FsReadFileText(LPath);
+    Check('Detach — child completed work', LContent = 'detached');
+    FsRemove(LPath);
   end
   else
     Check('Detach — child completed work', False);
@@ -872,19 +864,13 @@ end;
 
 function OpenFdCount: Integer;
 var
-  LSearch: TSearchRec;
+  LEntries: TDirEntryArray;
 begin
-  Result := 0;
-  if FindFirst('/proc/self/fd/*', faAnyFile, LSearch) = 0 then
-  begin
-    repeat
-      if (LSearch.Name <> '.') and (LSearch.Name <> '..') then
-        Inc(Result);
-    until FindNext(LSearch) <> 0;
-    FindClose(LSearch);
-  end
+  LEntries := FsReadDir('/proc/self/fd');
+  if LEntries = nil then
+    Result := -1
   else
-    Result := -1;
+    Result := Length(LEntries);
 end;
 
 procedure ExpectProcessErrorNoFdLeak(const AName: string; const AProc: TProcedure);
@@ -953,16 +939,15 @@ var
   LRaised: Boolean;
 begin
   LToolName := 'nextpas_process_path_shadow';
-  LTempRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas-process-path-shadow-' + IntToStr(GetProcessID);
-  LShadowDir := IncludeTrailingPathDelimiter(LTempRoot) + 'shadow';
-  LRealDir := IncludeTrailingPathDelimiter(LTempRoot) + 'real';
-  LShadowPath := IncludeTrailingPathDelimiter(LShadowDir) + LToolName;
-  LRealPath := IncludeTrailingPathDelimiter(LRealDir) + LToolName;
-  if DirectoryExists(LTempRoot) then
-    RemoveDir(LTempRoot);
-  ForceDirectories(LShadowDir);
-  ForceDirectories(LRealDir);
+  LTempRoot := FsGetTempDir + '/nextpas-process-path-shadow-' + IntToStr(getpid);
+  LShadowDir := LTempRoot + '/shadow';
+  LRealDir := LTempRoot + '/real';
+  LShadowPath := LShadowDir + '/' + LToolName;
+  LRealPath := LRealDir + '/' + LToolName;
+  if FsIsDir(LTempRoot) then
+    FsRemove(LTempRoot);
+  FsMkdirAll(LShadowDir);
+  FsMkdirAll(LRealDir);
   try
     AssignFile(LFile, LShadowPath);
     Rewrite(LFile);
@@ -991,16 +976,16 @@ begin
       Check('Env replace + PATH skips non-executable shadow — found executable target',
         Pos('shadow-resolved', LOut.StdOut) > 0);
   finally
-    if FileExists(LShadowPath) then
-      DeleteFile(LShadowPath);
-    if FileExists(LRealPath) then
-      DeleteFile(LRealPath);
-    if DirectoryExists(LShadowDir) then
-      RemoveDir(LShadowDir);
-    if DirectoryExists(LRealDir) then
-      RemoveDir(LRealDir);
-    if DirectoryExists(LTempRoot) then
-      RemoveDir(LTempRoot);
+    if FsExists(LShadowPath) then
+      FsRemove(LShadowPath);
+    if FsExists(LRealPath) then
+      FsRemove(LRealPath);
+    if FsIsDir(LShadowDir) then
+      FsRemove(LShadowDir);
+    if FsIsDir(LRealDir) then
+      FsRemove(LRealDir);
+    if FsIsDir(LTempRoot) then
+      FsRemove(LTempRoot);
   end;
 end;
 
@@ -1025,13 +1010,12 @@ var
   LRaised: Boolean;
 begin
   LToolName := 'nextpas_process_dir_path_tool';
-  LTempRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'nextpas-process-dir-path-' + IntToStr(GetProcessID);
-  LToolDir := IncludeTrailingPathDelimiter(LTempRoot) + 'tools';
-  LToolPath := IncludeTrailingPathDelimiter(LToolDir) + LToolName;
-  if DirectoryExists(LTempRoot) then
-    RemoveDir(LTempRoot);
-  ForceDirectories(LToolDir);
+  LTempRoot := FsGetTempDir + '/nextpas-process-dir-path-' + IntToStr(getpid);
+  LToolDir := LTempRoot + '/tools';
+  LToolPath := LToolDir + '/' + LToolName;
+  if FsIsDir(LTempRoot) then
+    FsRemove(LTempRoot);
+  FsMkdirAll(LToolDir);
   try
     AssignFile(LFile, LToolPath);
     Rewrite(LFile);
@@ -1056,12 +1040,12 @@ begin
       Check('Env replace + Dir relative PATH — resolved from command dir',
         Pos('dir-path-resolved', LOut.StdOut) > 0);
   finally
-    if FileExists(LToolPath) then
-      DeleteFile(LToolPath);
-    if DirectoryExists(LToolDir) then
-      RemoveDir(LToolDir);
-    if DirectoryExists(LTempRoot) then
-      RemoveDir(LTempRoot);
+    if FsExists(LToolPath) then
+      FsRemove(LToolPath);
+    if FsIsDir(LToolDir) then
+      FsRemove(LToolDir);
+    if FsIsDir(LTempRoot) then
+      FsRemove(LTempRoot);
   end;
 end;
 
@@ -1238,7 +1222,7 @@ begin
   LPath := Executable;
   Check('Executable — not empty', Length(LPath) > 0);
   Check('Executable — starts with /', LPath[1] = '/');
-  Check('Executable — file exists', FileExists(LPath));
+  Check('Executable — file exists', FsExists(LPath));
 end;
 
 procedure TestCaptureWithInputString;
@@ -1257,6 +1241,24 @@ begin
   LOut := RunInWithInputString('/bin/cat', [], '/tmp', 'from stdin');
   Check('RunInWithInputString — exit 0', LOut.ExitCode = 0);
   Check('RunInWithInputString — contains input', Pos('stdin', LOut.StdOut) > 0);
+end;
+
+procedure TestCaptureInWithInput;
+var
+  LText: string;
+  LInput: TBytes;
+begin
+  LInput := TBytes.Create(Ord('h'), Ord('i'));
+  LText := CaptureInWithInput('/bin/cat', [], '/tmp', LInput);
+  Check('CaptureInWithInput — contains input', Pos('hi', LText) > 0);
+end;
+
+procedure TestCaptureInWithInputString;
+var
+  LText: string;
+begin
+  LText := CaptureInWithInputString('/bin/cat', [], '/tmp', 'hello dir');
+  Check('CaptureInWithInputString — contains input', Pos('hello dir', LText) > 0);
 end;
 
 
@@ -1336,6 +1338,8 @@ begin
   TestExecutable;
   TestCaptureWithInputString;
   TestRunInWithInputString;
+  TestCaptureInWithInput;
+  TestCaptureInWithInputString;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
