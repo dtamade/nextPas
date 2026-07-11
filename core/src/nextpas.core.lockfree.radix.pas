@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.radix;
+{**
+ * @desc Concurrent Radix Tree (Compressed Prefix Tree) with per-tree lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Radix Tree — O(k) string operations, k = key length
+ * @see Patricia Tree — similar compressed trie structure
+ *}
 
 {$I nextpas.core.settings.inc}
 

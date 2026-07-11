@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.scapegoat;
+{**
+ * @desc Concurrent Scapegoat Tree with per-tree spin lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Scapegoat Tree — rotation-free balanced BST
+ * @see Galperin & Rivest, 1993 — original paper
+ *}
 
 {$I nextpas.core.settings.inc}
 

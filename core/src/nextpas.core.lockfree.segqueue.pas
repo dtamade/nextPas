@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.segqueue;
+{**
+ * @desc Lock-free unbounded MPMC queue using linked segments.
+ *
+ * @details Segment-based queue with dynamic growth:
+ *   - Unbounded capacity (grows by allocating segments)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking Enqueue with segment allocation
+ *   - Close semantics with drain support
+ *   - EBR-based memory reclamation for safe segment deallocation
+ *
+ * @concurrency Thread-safe for multiple producers and consumers:
+ *   - Enqueue: producers compete for slots via CAS
+ *   - Dequeue: consumers compete for data via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Michael & Scott queue — classic lock-free queue design
+ * @see Segment-based queues — cache-friendly unbounded queue
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.hashtable;
+{**
+ * @desc Lock-free Hash Table with open addressing and linear probing.
+ *
+ * @details Active-reader gate for lock-free reads, writer spin lock for writes:
+ *   - Open addressing with linear probing for collision resolution
+ *   - Power-of-2 capacity with bit-mask modulo
+ *   - Insert/Find/Remove/Contains operations
+ *   - Dynamic resize support
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains: lock-free reads via active-reader gate
+ *   - Insert/Remove: exclusive writer lock
+ *   - Resize: coordinated with active readers
+ *
+ * @see Open Addressing — collision resolution strategy
+ * @see Linear Probing — cache-friendly probing sequence
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.graph;
+{**
+ * @desc Concurrent Graph with per-vertex locks.
+ *
+ * @note This is NOT a lock-free structure. It uses per-vertex atomic locks
+ *       for fine-grained concurrency control.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - FindVertex/HasEdge/BFS/DFS: shared read locks
+ *   - AddVertex/RemoveVertex/AddEdge/RemoveEdge: exclusive write locks
+ *
+ * @see Adjacency List — space-efficient sparse graph representation
+ * @see Graph algorithms — BFS, DFS, shortest path
+ *}
 
 {$I nextpas.core.settings.inc}
 

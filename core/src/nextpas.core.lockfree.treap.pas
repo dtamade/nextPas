@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.treap;
+{**
+ * @desc Concurrent Treap (Randomized BST) with per-tree spin lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Treap — tree + heap, randomized balanced BST
+ * @see Aragon & Seidel, 1989 — original paper
+ *}
 
 {$I nextpas.core.settings.inc}
 

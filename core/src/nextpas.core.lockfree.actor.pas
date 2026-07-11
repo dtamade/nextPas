@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.actor;
+{**
+ * @desc Actor model implementation with MPSC mailbox.
+ *
+ * @details Message-driven concurrency model:
+ *   - Each Actor has an independent mailbox (MPSC queue)
+ *   - Messages are processed sequentially by the actor
+ *   - Supports Spawn/Send/Ask/Stop lifecycle
+ *   - ActorSystem manages actor creation and supervision
+ *
+ * @concurrency Thread-safe message passing:
+ *   - Send: multiple threads can send messages concurrently
+ *   - Process: actor processes messages one at a time
+ *   - Stop: graceful shutdown with drain support
+ *
+ * @see Erlang/OTP — actor model reference implementation
+ * @see Akka (Scala/JVM) — similar actor system design
+ *}
 
 {$I nextpas.core.settings.inc}
 
