@@ -145,7 +145,7 @@ end;
 
 procedure TConcurrentLRUCache.ReleaseLock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TConcurrentLRUCache.FindNode(const AKey: AnsiString): PLruNode;

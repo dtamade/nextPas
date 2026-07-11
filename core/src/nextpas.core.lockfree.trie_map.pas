@@ -328,7 +328,7 @@ end;
 
 procedure TConcurrentTrieMap.Unlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 constructor TConcurrentTrieMap.Create;

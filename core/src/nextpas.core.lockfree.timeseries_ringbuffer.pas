@@ -132,7 +132,7 @@ end;
 
 procedure TTimeSeriesRingBuffer.Unlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TTimeSeriesRingBuffer.WrapIdx(AIdx: Int32): Int32;

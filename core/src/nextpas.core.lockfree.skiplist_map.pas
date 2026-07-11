@@ -175,7 +175,7 @@ end;
 
 procedure TConcurrentSkipListMap.GlobalUnlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 constructor TConcurrentSkipListMap.Create(AMaxLevel: Int32);

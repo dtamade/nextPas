@@ -159,7 +159,7 @@ end;
 
 procedure TTTLCache.Unlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TTTLCache.FindNode(const AKey: AnsiString): PTTLNode;
