@@ -1124,6 +1124,28 @@ begin
   Check('CaptureTimeout — has output', Length(LText) > 0);
 end;
 
+procedure TestRunWithInput;
+var
+  LOut: TProcessOutput;
+  LInput: TBytes;
+begin
+  { cat echoes stdin to stdout }
+  LInput := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
+  LOut := RunWithInput('/bin/cat', [], LInput);
+  Check('RunWithInput — exit 0', LOut.ExitCode = 0);
+  Check('RunWithInput — stdout has data', Length(LOut.StdOut) > 0);
+end;
+
+procedure TestCaptureWithInput;
+var
+  LText: string;
+  LInput: TBytes;
+begin
+  LInput := TBytes.Create(Ord('w'), Ord('o'), Ord('r'), Ord('l'), Ord('d'));
+  LText := CaptureWithInput('/bin/cat', [], LInput);
+  Check('CaptureWithInput — has output', Length(LText) > 0);
+end;
+
 
 begin
   LPassed := 0;
@@ -1188,6 +1210,8 @@ begin
   TestSignal;
   TestRunTimeoutConvenience;
   TestCaptureTimeoutConvenience;
+  TestRunWithInput;
+  TestCaptureWithInput;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

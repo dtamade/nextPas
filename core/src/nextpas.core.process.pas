@@ -8,6 +8,8 @@ unit nextpas.core.process;
 interface
 
 uses
+  nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.text.base,
   nextpas.core.time.base,
   nextpas.core.process.base,
@@ -50,6 +52,26 @@ function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
 {** @desc 执行子进程并返回 stdout 文本 *}
 function Capture(const APath: string; const AArgs: array of string): string;
+{**
+ * @desc 执行子进程，通过 stdin 传入数据，返回输出
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   AStdin   传入 stdin 的数据
+ *}
+function RunWithInput(const APath: string; const AArgs: array of string;
+  const AStdin: TBytes): TProcessOutput;
+{**
+ * @desc 执行子进程，通过 stdin 传入数据，返回 stdout 文本
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   AStdin   传入 stdin 的数据
+ *}
+function CaptureWithInput(const APath: string; const AArgs: array of string;
+  const AStdin: TBytes): string;
 {**
  * @desc 带超时的同步执行，超时后自动 Kill
  *
@@ -122,6 +144,27 @@ function CaptureTimeout(const APath: string; const AArgs: array of string;
   const ATimeout: TDuration): string;
 begin
   Result := RunTimeout(APath, AArgs, ATimeout).StdOut;
+end;
+
+function RunWithInput(const APath: string; const AArgs: array of string;
+  const AStdin: TBytes): TProcessOutput;
+var
+  LChild: IChild;
+  LStdin: IWriter;
+begin
+  LChild := TCommand.New(APath).Args(AArgs).Stdin(stPiped)
+    .Stdout(stPiped).Stderr(stPiped).Spawn;
+  LStdin := LChild.TakeStdin;
+  if (LStdin <> nil) and (Length(AStdin) > 0) then
+    LStdin.Write(AStdin[0], Length(AStdin));
+  LStdin := nil;
+  Result := LChild.WaitWithOutput;
+end;
+
+function CaptureWithInput(const APath: string; const AArgs: array of string;
+  const AStdin: TBytes): string;
+begin
+  Result := RunWithInput(APath, AArgs, AStdin).StdOut;
 end;
 
 function LookPath(const AName: string): string;
