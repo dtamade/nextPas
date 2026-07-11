@@ -132,10 +132,13 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 ```bash
 make -C core/tests/nextpas.core.fs/test_fs clean test
 make -C core/tests/nextpas.core.fs/test_fs_facade clean test
-make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
+make -C core/tests/nextpas.core.fs/test_fs_glob clean test
 make -C core/tests/nextpas.core.fs/test_fs_idir clean test
+make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
 make -C core/tests/nextpas.core.fs/test_fs_text clean test
 ```
+
+179 个测试，heaptrc 零泄漏。
 
 ## 基准
 

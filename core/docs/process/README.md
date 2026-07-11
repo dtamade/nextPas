@@ -101,8 +101,9 @@ Command('/bin/env').EnvAdd('MY_VAR', 'my_value').Output;
 
 注意：
 - 不设置 Env/EnvAdd 时，子进程自动继承父进程的完整环境（通过 execvp）
-- 一旦调用 Env 或 EnvAdd，子进程环境被完全替换为指定的变量列表（不继承父进程）
-- 如需继承+覆盖，需手动读取父进程环境再合并
+- 调用 Env 时，子进程环境被完全替换为指定的变量列表（不继承父进程）
+- 调用 EnvAdd 时，继承父进程环境并追加/覆盖指定变量
+- 混合使用 Env + EnvAdd 时，Env 优先（完全替换模式）
 
 ## 模块结构
 
@@ -126,8 +127,10 @@ nextpas.core.process.pipe.pas     ← TPipeReader/TPipeWriter（IReader/IWriter 
 ## 测试
 
 ```bash
-cd tests/nextpas.core.process/test_process
-make run
+make -C core/tests/nextpas.core.process/test_process clean test
+make -C core/tests/nextpas.core.process/test_process_command clean test
+make -C core/tests/nextpas.core.process/test_process_deep clean test
+make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-40 个测试，覆盖所有公共 API，heaptrc 零泄漏。
+257 个测试，覆盖所有公共 API，heaptrc 零泄漏。
