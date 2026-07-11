@@ -23,6 +23,10 @@ function IsNormalizedNFKC(const s: string): Boolean;
 function QuickCheckNFD(const s: string): Boolean;
 function QuickCheckNFC(const s: string): Boolean;
 
+// 获取码点的 Canonical Combining Class (CCC)
+// 0 = starter, 1-240 = combining mark ordering
+function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
+
 implementation
 
 uses

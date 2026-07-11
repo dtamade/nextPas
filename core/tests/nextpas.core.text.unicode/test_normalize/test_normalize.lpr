@@ -151,6 +151,26 @@ begin
     'surrogate-like UTF-8 bytes stay replacement chars after NFC');
 end;
 
+procedure TestCanonicalCombiningClass;
+begin
+  // Starter characters have CCC = 0
+  CheckEqual(Int64(GetCanonicalCombiningClass(Ord('A'))), Int64(0), 'A CCC = 0');
+  CheckEqual(Int64(GetCanonicalCombiningClass(Ord('a'))), Int64(0), 'a CCC = 0');
+  CheckEqual(Int64(GetCanonicalCombiningClass($4E2D)), Int64(0), '中 CCC = 0');
+
+  // Combining marks have CCC > 0
+  Check(GetCanonicalCombiningClass($0301) > 0, 'combining acute CCC > 0'); // U+0301
+  Check(GetCanonicalCombiningClass($0308) > 0, 'combining diaeresis CCC > 0'); // U+0308
+
+  // CCC values: combining acute (230) and combining diaeresis (230) both ABOVE
+  CheckEqual(Int64(GetCanonicalCombiningClass($0301)), Int64(230), 'combining acute CCC = 230');
+  CheckEqual(Int64(GetCanonicalCombiningClass($0308)), Int64(230), 'combining diaeresis CCC = 230');
+
+  // Different CCC: combining cedilla (202) vs combining acute (230)
+  Check(GetCanonicalCombiningClass($0327) <> GetCanonicalCombiningClass($0301),
+    'cedilla and acute have different CCC');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.normalize');
   T.Test('canonical decomposition', @TestCanonicalDecomposition);
@@ -163,5 +183,6 @@ begin
   T.Test('NFKD and NFKC checks', @TestNFKDAndNFKC);
   T.Test('QuickCheck functions', @TestQuickCheck);
   T.Test('boundary behavior', @TestBoundaryBehavior);
+  T.Test('canonical combining class', @TestCanonicalCombiningClass);
   if not T.Run then Halt(1);
 end.

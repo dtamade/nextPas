@@ -93,6 +93,7 @@ function IsNormalizedNFKD(const s: string): Boolean; inline;
 function IsNormalizedNFKC(const s: string): Boolean; inline;
 function QuickCheckNFD(const s: string): Boolean; inline;
 function QuickCheckNFC(const s: string): Boolean; inline;
+function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
 
 // 文本分割函数
 function UnicodeSegmenter: IUnicodeSegmenter; inline;
@@ -305,6 +306,11 @@ end;
 function QuickCheckNFC(const s: string): Boolean;
 begin
   Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(s);
+end;
+
+function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
+begin
+  Result := nextpas.core.text.unicode.normalize.GetCanonicalCombiningClass(ACp);
 end;
 
 function UnicodeSegmenter: IUnicodeSegmenter;

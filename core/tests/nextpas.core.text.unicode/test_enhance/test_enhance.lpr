@@ -87,6 +87,14 @@ begin
   LResults := SegmentSentences('He said "Hello." She replied.');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
 
+  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）
+  LResults := SegmentSentences('Wait' + #$E2#$80#$A6 + ' Really?');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Ellipsis + question');
+
+  // 测试全角句号
+  LResults := SegmentSentences('你好．世界！');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Fullwidth period + fullwidth excl');
+
   // 测试 CJK 单词分割（每个表意文字是独立的词）
   LResults := SegmentWords('你好世界');
   CheckEqual(Int64(4), Int64(Length(LResults)), 'CJK: 4 separate words');
